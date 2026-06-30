@@ -14,9 +14,13 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import {
   Pencil, Mail, Eye, Search, Plus, Copy, Trash2,
   Variable, CheckCircle2, XCircle, Loader2,
-  ClipboardList, Link2, FileText,
+  ClipboardList, Link2, FileText, Building2, UserCog, Lock,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import {
+  PLANTILLAS_ONBOARDING_PROTEGIDAS,
+  destinoDePlantilla,
+} from "@/features/rrhh/lib/plantillas-onboarding";
 import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 import { CuestionariosVacanteManager } from "./CuestionariosVacanteManager";
 import { DocumentosPlantillaTab } from "./DocumentosPlantillaTab";
@@ -114,6 +118,9 @@ function PlantillaEditorDialog({
 
   const previewVars = { ...VARIABLES_RECLUTAMIENTO_EJEMPLO, empresa_nombre: empresaNombre };
 
+  // Destino del correo: gestoría / RRHH llevan aviso informativo en el editor.
+  const destino = plantilla ? destinoDePlantilla(plantilla.nombre) : "candidato";
+
   const handleSave = () => {
     startTransition(async () => {
       const res = plantilla
@@ -160,6 +167,25 @@ function PlantillaEditorDialog({
         <ScrollArea className="max-h-[calc(90vh-210px)]">
           {tab === "editar" ? (
             <div className="px-6 py-5 space-y-5">
+              {/* Aviso de destino: la gestoría / RRHH no son el candidato. */}
+              {destino === "gestoria" && (
+                <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5">
+                  <Building2 className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
+                  <p className="text-xs text-amber-800 leading-relaxed">
+                    Este correo se envía a la <strong>gestoría</strong>, no al candidato. Es una plantilla del
+                    sistema y no se puede borrar.
+                  </p>
+                </div>
+              )}
+              {destino === "rrhh" && (
+                <div className="flex items-start gap-2 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2.5">
+                  <UserCog className="h-4 w-4 text-sky-600 mt-0.5 shrink-0" />
+                  <p className="text-xs text-sky-800 leading-relaxed">
+                    Este correo es un <strong>aviso interno a RRHH</strong>, no al candidato. Es una plantilla del
+                    sistema y no se puede borrar.
+                  </p>
+                </div>
+              )}
               <div className="flex items-center gap-2">
                 <Switch checked={activa} onCheckedChange={setActiva} />
                 <Label className="text-xs">
@@ -446,13 +472,26 @@ function PlantillasEmailTab() {
       ) : (
         <Card className="overflow-hidden">
           <CardContent className="p-0">
-            {filtered.map((p) => (
+            {filtered.map((p) => {
+              const destino = destinoDePlantilla(p.nombre);
+              const protegida = PLANTILLAS_ONBOARDING_PROTEGIDAS.has(p.nombre);
+              return (
               <div key={p.id} className="flex items-center justify-between px-5 py-4 border-b border-border last:border-0 hover:bg-muted/20 transition-colors">
                 <div className="flex items-center gap-4 flex-1 min-w-0">
                   <Mail className="h-4 w-4 text-muted-foreground shrink-0" />
                   <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2 mb-0.5">
+                    <div className="flex items-center gap-2 mb-0.5 flex-wrap">
                       <span className="text-sm font-medium text-foreground truncate">{p.nombre}</span>
+                      {destino === "gestoria" && (
+                        <Badge variant="outline" className="text-[10px] gap-1 bg-amber-50 text-amber-700 border-amber-200" title="Este correo se envía a la gestoría">
+                          <Building2 className="h-3 w-3" /> Gestoría
+                        </Badge>
+                      )}
+                      {destino === "rrhh" && (
+                        <Badge variant="outline" className="text-[10px] gap-1 bg-sky-50 text-sky-700 border-sky-200" title="Aviso interno a RRHH">
+                          <UserCog className="h-3 w-3" /> RRHH
+                        </Badge>
+                      )}
                     </div>
                     <div className="text-xs text-muted-foreground truncate">
                       <span className="font-medium">Asunto:</span> {p.asunto}
@@ -477,18 +516,28 @@ function PlantillasEmailTab() {
                   <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleDuplicate(p)} title="Duplicar">
                     <Copy className="h-3.5 w-3.5" />
                   </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                    onClick={() => handleDelete(p)}
-                    title="Eliminar"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
+                  {protegida ? (
+                    <span
+                      className="inline-flex h-8 w-8 items-center justify-center text-muted-foreground/50 cursor-not-allowed"
+                      title="Plantilla del sistema · no se puede borrar"
+                    >
+                      <Lock className="h-3.5 w-3.5" />
+                    </span>
+                  ) : (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                      onClick={() => handleDelete(p)}
+                      title="Eliminar"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  )}
                 </div>
               </div>
-            ))}
+              );
+            })}
           </CardContent>
         </Card>
       )}

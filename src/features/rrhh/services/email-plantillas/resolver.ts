@@ -18,17 +18,13 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { sustituirVariablesReclutamiento } from "@/features/rrhh/lib/reclutamiento-email";
 
-/** Nombres reservados de las plantillas del onboarding (1 por correo). */
-export const PLANTILLAS_ONBOARDING = {
-  gestoriaAlta: "Gestoría · alta de contrato",
-  gestoriaRecordatorio: "Gestoría · recordatorio de contrato",
-  contratoInterno: "Contrato interno (a firmar)",
-  contratoOficial: "Contrato oficial (a firmar)",
-  pruebaAviso: "Aviso de periodo de prueba (RRHH)",
-} as const;
-
-export type PlantillaOnboardingNombre =
-  (typeof PLANTILLAS_ONBOARDING)[keyof typeof PLANTILLAS_ONBOARDING];
+// Los nombres reservados viven en un archivo de constantes puras (cliente +
+// servidor). Se reexportan aquí para no romper los imports existentes.
+export {
+  PLANTILLAS_ONBOARDING,
+  type PlantillaOnboardingNombre,
+} from "@/features/rrhh/lib/plantillas-onboarding";
+import type { PlantillaOnboardingNombre } from "@/features/rrhh/lib/plantillas-onboarding";
 
 export interface PlantillaResuelta {
   asunto: string;

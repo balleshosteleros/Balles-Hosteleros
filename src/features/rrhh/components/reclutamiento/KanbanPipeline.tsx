@@ -16,6 +16,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Dialog,
   DialogContent,
@@ -28,12 +29,14 @@ import {
   ArrowLeft, Mail, MailCheck, MapPin,
   GripVertical, Send, X, UsersRound, CheckCircle2,
   MinusCircle, XCircle, Star, CalendarDays, Eye, FileText,
+  Building2, UserCog,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
   enviarReclutamientoFaseEmail,
   previewReclutamientoFaseEmail,
-  estadosConEmailDeVacante,
+  plantillasPorEstadoDeVacante,
+  type PlantillaFaseInfo,
 } from "@/features/rrhh/actions/reclutamiento-email-plantillas-actions";
 import { parsearEnlacesCuerpo } from "@/features/rrhh/lib/reclutamiento-email";
 import { CandidatoDetailModal } from "@/features/rrhh/components/reclutamiento/CandidatoDetailModal";
@@ -210,11 +213,114 @@ function CandidatoCard({
   );
 }
 
+// ─── Icono informativo del destino de un correo ─────────────────
+// Gestoría = edificio · RRHH = persona con engranaje. El candidato no lleva
+// icono (es el destinatario por defecto).
+function DestinoIcon({ destino }: { destino: PlantillaFaseInfo["destino"] }) {
+  if (destino === "gestoria") {
+    return (
+      <span
+        className="inline-flex items-center gap-0.5 rounded bg-amber-100 px-1 py-0.5 text-[9px] font-medium text-amber-700"
+        title="Este correo se envía a la gestoría, no al candidato"
+      >
+        <Building2 className="h-2.5 w-2.5" /> Gestoría
+      </span>
+    );
+  }
+  if (destino === "rrhh") {
+    return (
+      <span
+        className="inline-flex items-center gap-0.5 rounded bg-sky-100 px-1 py-0.5 text-[9px] font-medium text-sky-700"
+        title="Este correo es un aviso interno a RRHH, no al candidato"
+      >
+        <UserCog className="h-2.5 w-2.5" /> RRHH
+      </span>
+    );
+  }
+  return null;
+}
+
+// ─── Icono de email de una columna (con popover de plantillas) ──
+// Verde si la fase tiene algún correo activo; gris si no hay ninguno. Al pulsar
+// muestra el nombre de la(s) plantilla(s) asociada(s) y a quién se envía cada una.
+function EmailFaseIcon({
+  estadoLabel,
+  plantillas,
+}: {
+  estadoLabel: string;
+  plantillas: PlantillaFaseInfo[];
+}) {
+  const tieneAlgunaActiva = plantillas.some((p) => p.activa);
+  const sinPlantillas = plantillas.length === 0;
+
+  const boton = sinPlantillas ? (
+    <Mail
+      className="h-3 w-3 text-muted-foreground/40 ml-auto shrink-0"
+      aria-label="Esta fase no tiene correo asignado"
+    />
+  ) : tieneAlgunaActiva ? (
+    <MailCheck className="h-3 w-3 text-emerald-600" aria-hidden />
+  ) : (
+    <Mail className="h-3 w-3 text-muted-foreground/60" aria-hidden />
+  );
+
+  if (sinPlantillas) {
+    // Sin plantillas: solo el icono gris, sin popover (no hay nada que mostrar).
+    return boton;
+  }
+
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className="ml-auto shrink-0 rounded p-0.5 hover:bg-muted transition-colors"
+          aria-label={`Ver correos de la fase ${estadoLabel}`}
+          title={`Correos de ${estadoLabel}`}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {boton}
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-72 p-3" onClick={(e) => e.stopPropagation()}>
+        <p className="text-[11px] font-semibold text-foreground mb-2">
+          {plantillas.length === 1 ? "Correo de esta fase" : `Correos de esta fase (${plantillas.length})`}
+        </p>
+        <div className="space-y-1.5">
+          {plantillas.map((p, i) => (
+            <div
+              key={`${p.nombre}-${i}`}
+              className="flex items-start gap-2 rounded-md border border-border bg-muted/20 px-2 py-1.5"
+            >
+              {p.activa ? (
+                <MailCheck className="h-3.5 w-3.5 text-emerald-600 mt-0.5 shrink-0" />
+              ) : (
+                <Mail className="h-3.5 w-3.5 text-muted-foreground/50 mt-0.5 shrink-0" />
+              )}
+              <div className="min-w-0 flex-1">
+                <p className={`text-xs leading-snug break-words ${p.activa ? "text-foreground" : "text-muted-foreground line-through"}`}>
+                  {p.nombre}
+                </p>
+                <div className="mt-1 flex flex-wrap items-center gap-1">
+                  <DestinoIcon destino={p.destino} />
+                  {!p.activa && (
+                    <span className="text-[9px] text-muted-foreground">Desactivada — no se envía</span>
+                  )}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 // ─── Estado Column (inside a phase) ─────────────────────────────
 function EstadoColumn({
   estado,
   candidatos,
-  tieneEmail,
+  plantillas,
   mostrarContador,
   compact = false,
   onDragStart,
@@ -223,7 +329,7 @@ function EstadoColumn({
 }: {
   estado: EstadoReclutamiento;
   candidatos: Candidato[];
-  tieneEmail: boolean;
+  plantillas: PlantillaFaseInfo[];
   mostrarContador: boolean;
   /** Banda inferior (Descartado): tira de baja altura para no robar espacio. */
   compact?: boolean;
@@ -249,17 +355,7 @@ function EstadoColumn({
         {mostrarContador && (
           <Badge variant="secondary" className="text-[10px] h-4 px-1.5 font-bold shrink-0">{candidatos.length}</Badge>
         )}
-        {tieneEmail ? (
-          <MailCheck
-            className="h-3 w-3 text-emerald-600 ml-auto shrink-0"
-            aria-label="Esta fase tiene email configurado"
-          />
-        ) : (
-          <Mail
-            className="h-3 w-3 text-muted-foreground/40 ml-auto shrink-0"
-            aria-label="Esta fase no tiene email configurado"
-          />
-        )}
+        <EmailFaseIcon estadoLabel={cfg.label} plantillas={plantillas} />
       </div>
 
       {/* Cards */}
@@ -281,7 +377,7 @@ function EstadoColumn({
 function FaseGroup({
   fasePrincipal,
   candidatos,
-  estadosConEmail,
+  plantillasPorEstado,
   mostrarContador,
   compact = false,
   onDragStart,
@@ -290,7 +386,7 @@ function FaseGroup({
 }: {
   fasePrincipal: FasePrincipal;
   candidatos: Candidato[];
-  estadosConEmail: Set<string>;
+  plantillasPorEstado: Record<string, PlantillaFaseInfo[]>;
   mostrarContador: boolean;
   /** Banda inferior horizontal (Descartado) en vez de columna alta. */
   compact?: boolean;
@@ -331,7 +427,7 @@ function FaseGroup({
             key={est}
             estado={est}
             candidatos={candidatosPorEstado[est]}
-            tieneEmail={estadosConEmail.has(est)}
+            plantillas={plantillasPorEstado[est] ?? []}
             mostrarContador={mostrarContador}
             compact={compact}
             onDragStart={onDragStart}
@@ -488,14 +584,15 @@ export function KanbanPipeline({ vacante, vacantes = [], onBack, onUpdateCandida
     [onMoved],
   );
 
-  // Estados (columnas) de esta vacante que tienen un email activo configurado:
-  // se marca con un check verde en la cabecera de cada columna.
-  const [estadosConEmail, setEstadosConEmail] = useState<Set<string>>(new Set());
+  // Plantillas de email asociadas a cada estado de esta vacante. Pinta el icono
+  // de cada columna (verde si hay correo activo) y, al pulsarlo, lista las
+  // plantillas y a quién se envían (candidato · gestoría · RRHH).
+  const [plantillasPorEstado, setPlantillasPorEstado] = useState<Record<string, PlantillaFaseInfo[]>>({});
   useEffect(() => {
     let cancel = false;
-    estadosConEmailDeVacante(vacante.id)
-      .then((ests) => { if (!cancel) setEstadosConEmail(new Set(ests)); })
-      .catch(() => { if (!cancel) setEstadosConEmail(new Set()); });
+    plantillasPorEstadoDeVacante(vacante.id)
+      .then((map) => { if (!cancel) setPlantillasPorEstado(map); })
+      .catch(() => { if (!cancel) setPlantillasPorEstado({}); });
     return () => { cancel = true; };
   }, [vacante.id]);
 
@@ -658,7 +755,7 @@ export function KanbanPipeline({ vacante, vacantes = [], onBack, onUpdateCandida
               key={fase}
               fasePrincipal={fase}
               candidatos={candidatosVisibles.filter((c) => getFasePrincipal(c.fase) === fase)}
-              estadosConEmail={estadosConEmail}
+              plantillasPorEstado={plantillasPorEstado}
               mostrarContador={mostrarContador}
               onDragStart={handleDragStart}
               onDrop={handleDrop}
@@ -672,7 +769,7 @@ export function KanbanPipeline({ vacante, vacantes = [], onBack, onUpdateCandida
           <FaseGroup
             fasePrincipal="descartado"
             candidatos={candidatosVisibles.filter((c) => getFasePrincipal(c.fase) === "descartado")}
-            estadosConEmail={estadosConEmail}
+            plantillasPorEstado={plantillasPorEstado}
             mostrarContador={mostrarContador}
             compact
             onDragStart={handleDragStart}

@@ -7,6 +7,12 @@ import { sendEmail } from "@/lib/email/send";
 import { sustituirVariablesReclutamiento, parsearEnlacesCuerpo } from "@/features/rrhh/lib/reclutamiento-email";
 import { type EstadoReclutamiento } from "@/features/rrhh/data/reclutamiento";
 import { getReclutamientoConfigGeneral } from "@/features/rrhh/actions/gestoria-actions";
+import {
+  PLANTILLAS_RESERVADAS_POR_ESTADO,
+  PLANTILLAS_ONBOARDING_PROTEGIDAS,
+  destinoDePlantilla,
+  type DestinoPlantilla,
+} from "@/features/rrhh/lib/plantillas-onboarding";
 
 /**
  * Biblioteca de plantillas de email del RECLUTAMIENTO. Cada plantilla es SUELTA
@@ -133,6 +139,18 @@ export async function toggleReclutamientoEmailPlantillaActiva(
 export async function deleteReclutamientoEmailPlantilla(id: string): Promise<ActionResult> {
   const { supabase, empresaId } = await ctx();
   if (!empresaId) return { ok: false, error: "Sin empresa activa" };
+
+  // Las plantillas reservadas del onboarding (gestoría, contratos, prueba) NUNCA
+  // se pueden borrar: las dispara el sistema. Defensa en servidor además de la UI.
+  const { data: actual } = await supabase
+    .from("reclutamiento_email_plantillas")
+    .select("nombre")
+    .eq("id", id)
+    .eq("empresa_id", empresaId)
+    .maybeSingle();
+  if (actual?.nombre && PLANTILLAS_ONBOARDING_PROTEGIDAS.has(actual.nombre as string)) {
+    return { ok: false, error: "Esta plantilla es del sistema y no se puede borrar" };
+  }
 
   // Limpia las referencias a esta plantilla en las plantillas de estado y en las
   // vacantes para no dejar asociaciones colgando.
@@ -414,6 +432,129 @@ export async function estadosConEmailDeVacante(
   return Object.entries(idPorEstado)
     .filter(([, id]) => activos.has(id))
     .map(([estado]) => estado);
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Detalle de plantillas por estado (para el popover del icono de email)
+// ─────────────────────────────────────────────────────────────────────────
+/** Una plantilla asociada a un estado del pipeline. */
+export interface PlantillaFaseInfo {
+  /** Nombre visible de la plantilla. */
+  nombre: string;
+  /** Si está activa (se envía). Las inactivas se listan en gris. */
+  activa: boolean;
+  /** Destinatario real: candidato, gestoría o RRHH (icono informativo). */
+  destino: DestinoPlantilla;
+}
+
+/**
+ * Devuelve, por cada estado del pipeline de una vacante, la LISTA de plantillas
+ * de email que envía ese estado (con su nombre, si está activa y su destino).
+ * Combina:
+ *   · La plantilla de estado asociada (override de la vacante o plantilla de
+ *     estados / predeterminada de la empresa) → 1 correo al candidato.
+ *   · Las plantillas RESERVADAS del onboarding que dispara el sistema en fases
+ *     fijas (Contratación: alta a gestoría + contrato interno + contrato
+ *     oficial; Prueba: aviso a RRHH).
+ *
+ * Se usa en el Kanban para mostrar, al pulsar el icono de email de una columna,
+ * QUÉ correo(s) se envían y a quién.
+ */
+export async function plantillasPorEstadoDeVacante(
+  vacanteId: string,
+): Promise<Record<string, PlantillaFaseInfo[]>> {
+  const { supabase, empresaId } = await ctx();
+  if (!empresaId || !vacanteId) return {};
+
+  const out: Record<string, PlantillaFaseInfo[]> = {};
+  const push = (estado: string, info: PlantillaFaseInfo) => {
+    (out[estado] ??= []).push(info);
+  };
+
+  // 1) Plantilla de estado asociada a cada estado (correo al candidato).
+  const { data: vac } = await supabase
+    .from("vacantes")
+    .select("plantilla_estado_id, email_plantillas")
+    .eq("id", vacanteId)
+    .maybeSingle();
+
+  const overrides = (vac?.email_plantillas ?? {}) as Record<string, string | null>;
+
+  let plantillaEstadoId = (vac?.plantilla_estado_id as string | null) ?? null;
+  if (!plantillaEstadoId) {
+    const { data: def } = await supabase
+      .from("reclutamiento_plantillas_estado")
+      .select("id")
+      .eq("empresa_id", empresaId)
+      .eq("es_predeterminada", true)
+      .maybeSingle();
+    plantillaEstadoId = (def?.id as string | null) ?? null;
+  }
+
+  const emailPorEstadoPlantilla: Record<string, string | null> = {};
+  if (plantillaEstadoId) {
+    const { data: pt } = await supabase
+      .from("reclutamiento_plantillas_estado")
+      .select("estados")
+      .eq("id", plantillaEstadoId)
+      .maybeSingle();
+    const items = (pt?.estados ?? []) as Array<{ key: string; email_plantilla_id?: string | null }>;
+    for (const it of items) emailPorEstadoPlantilla[it.key] = it.email_plantilla_id ?? null;
+  }
+
+  const idPorEstado: Record<string, string> = {};
+  const keys = new Set([...Object.keys(overrides), ...Object.keys(emailPorEstadoPlantilla)]);
+  for (const k of keys) {
+    const id = overrides[k] ?? emailPorEstadoPlantilla[k] ?? null;
+    if (id) idPorEstado[k] = id;
+  }
+
+  // 2) Nombres reservados del onboarding a buscar por nombre.
+  const nombresReservados = [
+    ...new Set(Object.values(PLANTILLAS_RESERVADAS_POR_ESTADO).flat()),
+  ];
+
+  // Carga en bloque todas las plantillas implicadas (por id y por nombre).
+  const ids = [...new Set(Object.values(idPorEstado))];
+  const { data: porId } = ids.length
+    ? await supabase
+        .from("reclutamiento_email_plantillas")
+        .select("id, nombre, activa")
+        .eq("empresa_id", empresaId)
+        .in("id", ids)
+    : { data: [] as Array<{ id: string; nombre: string; activa: boolean }> };
+  const { data: porNombre } = nombresReservados.length
+    ? await supabase
+        .from("reclutamiento_email_plantillas")
+        .select("nombre, activa")
+        .eq("empresa_id", empresaId)
+        .in("nombre", nombresReservados)
+    : { data: [] as Array<{ nombre: string; activa: boolean }> };
+
+  const tplById = new Map(
+    (porId ?? []).map((t) => [t.id as string, { nombre: t.nombre as string, activa: !!t.activa }]),
+  );
+  const tplByNombre = new Map(
+    (porNombre ?? []).map((t) => [t.nombre as string, !!t.activa]),
+  );
+
+  // 2a) Plantilla de estado → correo al candidato.
+  for (const [estado, id] of Object.entries(idPorEstado)) {
+    const t = tplById.get(id);
+    if (t) push(estado, { nombre: t.nombre, activa: t.activa, destino: destinoDePlantilla(t.nombre) });
+  }
+
+  // 2b) Plantillas reservadas del sistema por fase fija.
+  for (const [estado, nombres] of Object.entries(PLANTILLAS_RESERVADAS_POR_ESTADO)) {
+    for (const nombre of nombres) {
+      // No duplicar si la plantilla de estado ya apuntaba al mismo nombre.
+      if ((out[estado] ?? []).some((p) => p.nombre === nombre)) continue;
+      const activa = tplByNombre.has(nombre) ? tplByNombre.get(nombre)! : true;
+      push(estado, { nombre, activa, destino: destinoDePlantilla(nombre) });
+    }
+  }
+
+  return out;
 }
 
 // ─── Envío del correo al cambiar de fase ────────────────────────
