@@ -30,6 +30,11 @@ export const VARIABLES_RECLUTAMIENTO: VariableReclutamiento[] = [
   { variable: "{{enlace_documentacion}}", descripcion: "Enlace personal para que el candidato suba su documentación (solo plantilla Documentación)", grupo: "Candidato" },
   { variable: "{{enlace_formacion}}", descripcion: "Enlace de acceso a la formación (configurable en Ajustes → RRHH → Reclutamiento; solo plantilla Formación)", grupo: "Candidato" },
   { variable: "{{prueba_duracion_dias}}", descripcion: "Duración del periodo de prueba en días (configurable; solo plantilla Prueba)", grupo: "Candidato" },
+  { variable: "{{prueba_dias_transcurridos}}", descripcion: "Días que lleva el trabajador en prueba (solo plantilla «Aviso de periodo de prueba»)", grupo: "Candidato" },
+  { variable: "{{prueba_dias_restantes}}", descripcion: "Días que le quedan de periodo de prueba (solo plantilla «Aviso de periodo de prueba»)", grupo: "Candidato" },
+  { variable: "{{prueba_fecha_inicio}}", descripcion: "Fecha de inicio del periodo de prueba (solo plantilla «Aviso de periodo de prueba»)", grupo: "Candidato" },
+  { variable: "{{prueba_fecha_fin}}", descripcion: "Fecha prevista de fin del periodo de prueba (solo plantilla «Aviso de periodo de prueba»)", grupo: "Candidato" },
+  { variable: "{{gestoria_datos}}", descripcion: "Tabla con los datos del trabajador para la gestoría (solo plantilla «Gestoría · alta de contrato»)", grupo: "Candidato" },
   // ── Vacante / puesto ──
   { variable: "{{vacante_nombre}}", descripcion: "Nombre de la vacante", grupo: "Vacante" },
   { variable: "{{vacante_ubicacion}}", descripcion: "Ubicación de la vacante", grupo: "Vacante" },

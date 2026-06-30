@@ -62,15 +62,31 @@ export type InvitacionFirmaInput = {
   enviadoPor: string;
   token: string;
   expiraEn: Date;
+  /**
+   * Personalización opcional del correo (PRP-070). La usan el contrato interno y
+   * el oficial para tomar asunto/intro de una plantilla EDITABLE. El botón de
+   * firma, el aviso de caducidad y el diseño se mantienen. Si no se pasa, el
+   * correo usa los textos estándar (resto de firmas: bajas, etc.).
+   */
+  asuntoOverride?: string | null;
+  /** Párrafo(s) introductorios en texto plano (se renderizan a HTML). */
+  introOverride?: string | null;
 };
 
 export async function enviarInvitacionFirma(input: InvitacionFirmaInput): Promise<SendEmailResult> {
   const url = `${APP_URL}/firmar/${encodeURIComponent(input.token)}`;
   const tz = await zonaDeEmpresa(input.empresaId);
   const expira = formatFechaHoraEnZona(input.expiraEn.toISOString(), tz);
+
+  // Intro: por defecto el texto estándar; si hay override (plantilla editable),
+  // se usan esos párrafos. El bloque del documento + botón de firma se mantiene.
+  const introHtml = input.introOverride
+    ? input.introOverride.split(/\n{2,}/).map((p) => `<p>${esc(p).replace(/\n/g, "<br/>")}</p>`).join("")
+    : `<p>Hola ${esc(input.empleadoNombre)},</p>
+       <p>La dirección de ${esc(input.empresaNombre)} te ha enviado un documento para firma electrónica:</p>`;
+
   const cuerpoHtml = `
-    <p>Hola ${esc(input.empleadoNombre)},</p>
-    <p>La dirección de ${esc(input.empresaNombre)} te ha enviado un documento para firma electrónica:</p>
+    ${introHtml}
     <p style="margin:12px 0;padding:12px 14px;background:#f1f5f9;border-left:3px solid #6366f1;font-weight:500;color:#0f172a;">
       ${esc(input.tituloDocumento)}
     </p>
@@ -82,18 +98,21 @@ export async function enviarInvitacionFirma(input: InvitacionFirmaInput): Promis
     <p style="font-size:13px;color:#64748b;">El enlace es personal y de un solo uso. Caduca el <strong>${esc(expira)}</strong>.</p>
     <p style="font-size:13px;color:#64748b;">Si no esperabas este correo, ignóralo o contacta con RRHH de ${esc(input.empresaNombre)}.</p>
   `;
+  const introText = input.introOverride
+    ? `${input.introOverride}\n\n`
+    : `Hola ${input.empleadoNombre},\n\n` +
+      `La dirección de ${input.empresaNombre} te ha enviado un documento para firma electrónica:\n`;
   const text =
-    `Hola ${input.empleadoNombre},\n\n` +
-    `La dirección de ${input.empresaNombre} te ha enviado un documento para firma electrónica:\n` +
+    introText +
     `  ${input.tituloDocumento}\n\n` +
     `Firma aquí: ${url}\n` +
     `Enlace personal y de un solo uso. Caduca el ${expira}.\n`;
 
   return sendEmail({
     to: input.to,
-    subject: `Documento para firmar — ${input.tituloDocumento}`,
+    subject: input.asuntoOverride?.trim() || `Documento para firmar — ${input.tituloDocumento}`,
     html: shellHtml({
-      titulo: "Documento para firmar",
+      titulo: input.asuntoOverride?.trim() || "Documento para firmar",
       cuerpoHtml,
       footerEmpresa: input.empresaNombre,
     }),

@@ -417,15 +417,41 @@ export async function enviarAltaGestoria(empleadoId: string, opts?: { forzar?: b
     const botonHtml = tk.ok ? botonSubidaContratoHtml(tk.token) : "";
     const enlaceText = tk.ok ? `\n\nSubir el contrato firmado: ${urlSubidaContrato(tk.token)}` : "";
 
-    const subject = `Alta de contrato · ${nombre} · ${empresaNombre}`;
-    const html = `
+    // Tabla de datos del trabajador (se inyecta donde el cuerpo ponga {{gestoria_datos}}).
+    const tablaHtml = `<table style="border-collapse:collapse;font-size:14px">${filasHtml}</table>`;
+
+    // Plantilla editable «Gestoría · alta de contrato» (UI Plantillas de email).
+    const { resolverPlantillaOnboarding, cuerpoOnboardingAHtml, PLANTILLAS_ONBOARDING } = await import(
+      "@/features/rrhh/services/email-plantillas/resolver"
+    );
+    const vars: Record<string, string> = {
+      candidato_nombre: emp.nombre ?? "",
+      candidato_nombre_completo: nombre,
+      empresa_nombre: empresaNombre,
+      gestoria_datos: "", // se reemplaza por la tabla tras renderizar el cuerpo
+    };
+    const tpl = await resolverPlantillaOnboarding(admin, empresaId, PLANTILLAS_ONBOARDING.gestoriaAlta, vars);
+
+    let subject: string;
+    let html: string;
+    let text: string;
+    if (tpl) {
+      subject = tpl.asunto;
+      // El cuerpo editable inserta la tabla en {{gestoria_datos}} (o al final si no está).
+      const cuerpoHtml = tpl.cuerpo.includes("{{gestoria_datos}}")
+        ? cuerpoOnboardingAHtml(tpl.cuerpo.replace("{{gestoria_datos}}", " ")).replace(" ", tablaHtml)
+        : `${cuerpoOnboardingAHtml(tpl.cuerpo)}${tablaHtml}`;
+      html = `${cuerpoHtml}${botonHtml}`;
+      text = `${tpl.cuerpo.replace("{{gestoria_datos}}", `\n${filasText}`)}${enlaceText}`;
+    } else {
+      subject = `Alta de contrato · ${nombre} · ${empresaNombre}`;
+      html = `
       <p>Solicitud de alta de contrato para el siguiente trabajador:</p>
-      <table style="border-collapse:collapse;font-size:14px">
-        ${filasHtml}
-      </table>
+      ${tablaHtml}
       ${botonHtml}
       <p style="color:#888;font-size:12px">Enviado automáticamente desde el sistema de ${empresaNombre}.</p>`;
-    const text = `Alta de contrato\n${filasText}${enlaceText}`;
+      text = `Alta de contrato\n${filasText}${enlaceText}`;
+    }
 
     const res = await sendEmail({ to, subject, html, text, empresaId });
     if (!res.ok) return { ok: false, error: "No se pudo enviar el email (revisa el SMTP)." };

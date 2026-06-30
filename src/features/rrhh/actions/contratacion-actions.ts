@@ -42,7 +42,7 @@ export interface ContratarInput {
   /**
    * Fase/estado en que queda el candidato tras crear el empleado. Por defecto
    * (compat) pasa a `seleccionado`/`empleado`. Al entrar en Contratación se pasa
-   * `{ fase: "contratacion", estado: "alta_enviada" }`.
+   * `{ fase: "contratacion", estado: "contratacion" }`.
    */
   destino?: { fase: string; estado: string };
 }
@@ -169,6 +169,8 @@ export async function contratarCandidato(input: ContratarInput): Promise<Contrat
   // las columnas Prueba y Empleado. La entrada en Contratación es ahora el punto
   // canónico donde se materializa el empleado (firmas + alta requieren empleado).
   const ESTADOS_CONTRATACION = new Set([
+    "contratacion",
+    // legacy (compat con datos antiguos)
     "alta_pendiente_revision", "alta_enviada", "contrato_interno_firmado",
     "contrato_oficial_subido", "contrato_oficial_firmado", "alta_completada",
   ]);

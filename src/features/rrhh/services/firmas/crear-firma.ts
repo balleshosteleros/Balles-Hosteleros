@@ -38,6 +38,12 @@ export interface CrearFirmaInternoInput {
   /** Para audit log (opcional). */
   ip?: string | null;
   userAgent?: string | null;
+  /**
+   * Personalización opcional del correo de invitación (PRP-070): asunto e intro
+   * tomados de una plantilla editable. Si no se pasan, se usa el correo estándar.
+   */
+  emailAsunto?: string | null;
+  emailIntro?: string | null;
 }
 
 export type CrearFirmaInternoResult =
@@ -184,6 +190,8 @@ export async function crearFirmaInterno(
       enviadoPor: enviadoPorNombre,
       token,
       expiraEn: expira,
+      asuntoOverride: input.emailAsunto ?? null,
+      introOverride: input.emailIntro ?? null,
     });
 
     await registrarEvento({

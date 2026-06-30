@@ -231,4 +231,81 @@ Un saludo,
 {{empresa_nombre}}`,
     activa: true,
   },
+
+  // ───────────────────────────────────── ONBOARDING (PRP-070) ──
+  // Correos del flujo de contratación, editables desde «Plantillas de email».
+  // Sus NOMBRES son reservados (los lee el resolver de onboarding); si los
+  // renombras, el sistema usará el texto por defecto del código.
+
+  // ── Alta a la gestoría ──
+  {
+    nombre: "Gestoría · alta de contrato",
+    asunto: "Alta de contrato · {{candidato_nombre_completo}} · {{empresa_nombre}}",
+    cuerpo: `Hola,
+
+Os enviamos los datos del alta de contrato del siguiente trabajador para que tramitéis su alta:
+
+{{gestoria_datos}}
+
+Cuando tengáis el contrato preparado, podéis adjuntarlo con el botón de más abajo.
+
+Gracias,
+{{empresa_nombre}}`,
+    activa: true,
+  },
+
+  // ── Recordatorio a la gestoría ──
+  {
+    nombre: "Gestoría · recordatorio de contrato",
+    asunto: "Pendiente: contrato de {{candidato_nombre_completo}} sin subir · {{empresa_nombre}}",
+    cuerpo: `Hola,
+
+Os recordamos que el contrato de {{candidato_nombre_completo}} sigue pendiente de subir.
+
+Mientras no subáis el contrato firmado, el trabajador no lo recibe y no puede firmarlo, lo que bloquea su alta. Os agradeceríamos que lo completéis cuanto antes.
+
+Gracias,
+{{empresa_nombre}}`,
+    activa: true,
+  },
+
+  // ── Contrato interno (a firmar por el trabajador) ──
+  {
+    nombre: "Contrato interno (a firmar)",
+    asunto: "Firma tu contrato interno · {{empresa_nombre}}",
+    cuerpo: `Hola {{candidato_nombre}},
+
+Hemos iniciado tu proceso de alta. Antes de empezar a trabajar debes leer y firmar el contrato interno de la empresa, que recoge las normas, compromisos y confirmaciones de tu incorporación.
+
+Tiene validez interna entre la empresa y tú. Puedes leerlo y firmarlo desde el botón que encontrarás en este correo.
+
+Un saludo,
+{{empresa_nombre}}`,
+    activa: true,
+  },
+
+  // ── Contrato oficial (a firmar por el trabajador) ──
+  {
+    nombre: "Contrato oficial (a firmar)",
+    asunto: "Firma tu contrato laboral · {{empresa_nombre}}",
+    cuerpo: `Hola {{candidato_nombre}},
+
+Tu contrato laboral oficial ya está disponible para firmar. Puedes leerlo y firmarlo desde el botón que encontrarás en este correo.
+
+Un saludo,
+{{empresa_nombre}}`,
+    activa: true,
+  },
+
+  // ── Aviso a RRHH durante el periodo de prueba ──
+  {
+    nombre: "Aviso de periodo de prueba (RRHH)",
+    asunto: "Periodo de prueba de {{candidato_nombre_completo}}: revisa su evolución · {{empresa_nombre}}",
+    cuerpo: `{{candidato_nombre_completo}} lleva {{prueba_dias_transcurridos}} días en periodo de prueba.
+
+Le quedan {{prueba_dias_restantes}} días para finalizar el periodo configurado ({{prueba_duracion_dias}} días). Inicio: {{prueba_fecha_inicio}} · Fin previsto: {{prueba_fecha_fin}}.
+
+Revisa su evolución antes de confirmar su continuidad.`,
+    activa: true,
+  },
 ];

@@ -16,27 +16,34 @@ export type FasePrincipal =
   | "seleccionado";
 
 // ─── Estado interno (columna dentro de la fase) ─────────────────
+// El pipeline tiene 8 columnas: 4 de Selección + las 4 del Onboarding
+// (formacion, contratacion, prueba, empleado) + las de Descartado.
+// El detalle del avance dentro de «contratacion» (alta a gestoría, contrato
+// interno/oficial firmado…) NO es un estado de columna: se gestiona de forma
+// automática por dentro y se ve en la ficha, no en el pipeline.
 export type EstadoReclutamiento =
   | "nuevo"
   | "elegido"
   | "papelera"
   | "entrevista"
   | "documentacion"
+  // ── Onboarding (4 columnas) ──
   | "formacion"
-  // ── Fase Contratación (alta + firma de contratos) ──
+  | "contratacion"
+  | "prueba"
+  | "empleado"
+  // ── Descartado ──
+  | "no_se_presenta"
+  | "suspenso_formacion"
+  // ── Estados legacy (historial antiguo; mapean a Formación / Contratación) ──
+  | "teorica"
+  | "practica"
   | "alta_pendiente_revision"
   | "alta_enviada"
   | "contrato_interno_firmado"
   | "contrato_oficial_subido"
   | "contrato_oficial_firmado"
-  | "alta_completada"
-  | "prueba"
-  | "empleado"
-  | "no_se_presenta"
-  | "suspenso_formacion"
-  // ── Estados legacy (historial antiguo; mapean a Formación) ──
-  | "teorica"
-  | "practica";
+  | "alta_completada";
 
 // Keep old alias for backward compat in places that just need the estado
 export type FaseReclutamiento = EstadoReclutamiento;
@@ -108,8 +115,9 @@ const FORMACION_CONFIG: FasePrincipalConfig = {
   color: "hsl(145, 63%, 42%)",
   colorFrom: "hsl(145, 70%, 50%)",
   colorTo: "hsl(145, 55%, 35%)",
-  // `teorica`/`practica` son legacy: se renderizan bajo Formación.
-  estados: ["formacion", "teorica", "practica"],
+  // Una sola columna. `teorica`/`practica` son legacy y NO se muestran como
+  // columnas (se mapean a «formacion» vía getFasePrincipal para el historial).
+  estados: ["formacion"],
 };
 
 const CONTRATACION_CONFIG: FasePrincipalConfig = {
@@ -117,14 +125,10 @@ const CONTRATACION_CONFIG: FasePrincipalConfig = {
   color: "hsl(38, 92%, 50%)",
   colorFrom: "hsl(38, 95%, 56%)",
   colorTo: "hsl(28, 85%, 46%)",
-  estados: [
-    "alta_pendiente_revision",
-    "alta_enviada",
-    "contrato_interno_firmado",
-    "contrato_oficial_subido",
-    "contrato_oficial_firmado",
-    "alta_completada",
-  ],
+  // Una sola columna. El avance interno (alta a gestoría, contrato interno y
+  // oficial firmados) se gestiona automáticamente y se ve en la ficha, no como
+  // columnas. Los antiguos sub-estados son legacy y se mapean a «contratacion».
+  estados: ["contratacion"],
 };
 
 const PRUEBA_CONFIG: FasePrincipalConfig = {
@@ -175,37 +179,41 @@ export const ESTADOS_CONFIG: Record<EstadoReclutamiento, { label: string; color:
   papelera: { label: "Papelera", color: "hsl(0, 72%, 51%)", icono: "🗑️" },
   entrevista: { label: "Entrevista", color: "hsl(220, 70%, 55%)", icono: "📋" },
   documentacion: { label: "Documentación", color: "hsl(220, 70%, 55%)", icono: "📄" },
-  // ── Formación (unifica teórica + práctica) ──
+  // ── Onboarding: 4 columnas ──
   formacion: { label: "Formación", color: "hsl(145, 63%, 42%)", icono: "🎓" },
-  // ── Contratación (ámbar) ──
-  alta_pendiente_revision: { label: "Pendiente de revisión", color: "hsl(38, 92%, 50%)", icono: "🔎" },
-  alta_enviada: { label: "Alta enviada", color: "hsl(38, 92%, 50%)", icono: "📨" },
-  contrato_interno_firmado: { label: "Contrato interno firmado", color: "hsl(38, 92%, 50%)", icono: "✍️" },
-  contrato_oficial_subido: { label: "Contrato oficial subido", color: "hsl(38, 92%, 50%)", icono: "📎" },
-  contrato_oficial_firmado: { label: "Contrato oficial firmado", color: "hsl(38, 92%, 50%)", icono: "✅" },
-  alta_completada: { label: "Alta completada", color: "hsl(38, 92%, 50%)", icono: "🏁" },
-  // ── Prueba (morado) ──
+  contratacion: { label: "Contratación", color: "hsl(38, 92%, 50%)", icono: "📝" },
   prueba: { label: "Prueba", color: "hsl(265, 60%, 55%)", icono: "⏳" },
-  // ── Empleado (verde) ──
   empleado: { label: "Empleado", color: "hsl(145, 63%, 42%)", icono: "👤" },
   // ── Descartado ──
   no_se_presenta: { label: "No se presenta", color: "hsl(0, 72%, 51%)", icono: "📋" },
   suspenso_formacion: { label: "Suspenso Formación", color: "hsl(0, 72%, 51%)", icono: "📋" },
-  // ── Legacy (mapean visualmente a Formación) ──
-  teorica: { label: "Teórica", color: "hsl(145, 63%, 42%)", icono: "📋" },
-  practica: { label: "Práctica", color: "hsl(145, 63%, 42%)", icono: "📋" },
+  // ── Legacy (mapean visualmente a su columna nueva; NO se muestran) ──
+  teorica: { label: "Formación", color: "hsl(145, 63%, 42%)", icono: "🎓" },
+  practica: { label: "Formación", color: "hsl(145, 63%, 42%)", icono: "🎓" },
+  alta_pendiente_revision: { label: "Contratación", color: "hsl(38, 92%, 50%)", icono: "📝" },
+  alta_enviada: { label: "Contratación", color: "hsl(38, 92%, 50%)", icono: "📝" },
+  contrato_interno_firmado: { label: "Contratación", color: "hsl(38, 92%, 50%)", icono: "📝" },
+  contrato_oficial_subido: { label: "Contratación", color: "hsl(38, 92%, 50%)", icono: "📝" },
+  contrato_oficial_firmado: { label: "Contratación", color: "hsl(38, 92%, 50%)", icono: "📝" },
+  alta_completada: { label: "Contratación", color: "hsl(38, 92%, 50%)", icono: "📝" },
 };
+
+// Estados legacy → su columna nueva (para getFasePrincipal e historial).
+const LEGACY_A_FORMACION = new Set<EstadoReclutamiento>(["teorica", "practica"]);
+const LEGACY_A_CONTRATACION = new Set<EstadoReclutamiento>([
+  "alta_pendiente_revision", "alta_enviada", "contrato_interno_firmado",
+  "contrato_oficial_subido", "contrato_oficial_firmado", "alta_completada",
+]);
 
 // Flat order of all estados (for legacy compat)
 export const FASES_ORDER: EstadoReclutamiento[] = [
   "nuevo", "elegido", "entrevista", "documentacion",
-  "formacion",
+  "formacion", "contratacion", "prueba", "empleado",
+  "papelera", "no_se_presenta", "suspenso_formacion",
+  // legacy (no se muestran como columnas; siguen siendo válidos en BD/historial)
+  "teorica", "practica",
   "alta_pendiente_revision", "alta_enviada", "contrato_interno_firmado",
   "contrato_oficial_subido", "contrato_oficial_firmado", "alta_completada",
-  "prueba", "empleado",
-  "papelera", "no_se_presenta", "suspenso_formacion",
-  // legacy
-  "teorica", "practica",
 ];
 
 // Legacy alias
@@ -214,6 +222,8 @@ export const FASES_CONFIG = ESTADOS_CONFIG;
 // ─── Helper: get the fase principal (canónica) for a given estado ──
 export function getFasePrincipal(estado: EstadoReclutamiento): FasePrincipal {
   if (SELECCION_CONFIG.estados.includes(estado)) return "seleccion";
+  if (LEGACY_A_FORMACION.has(estado)) return "formacion";
+  if (LEGACY_A_CONTRATACION.has(estado)) return "contratacion";
   if (FORMACION_CONFIG.estados.includes(estado)) return "formacion";
   if (CONTRATACION_CONFIG.estados.includes(estado)) return "contratacion";
   if (PRUEBA_CONFIG.estados.includes(estado)) return "prueba";
@@ -248,17 +258,18 @@ export function estadoRequiereResenas(estado: EstadoReclutamiento): boolean {
 // ha llegado el momento, o se le está descartando).
 const ESTADOS_REQUIEREN_DOCUMENTACION = new Set<EstadoReclutamiento>([
   "formacion",
+  "contratacion",
+  "prueba",
+  "empleado",
+  // legacy
+  "teorica",
+  "practica",
   "alta_pendiente_revision",
   "alta_enviada",
   "contrato_interno_firmado",
   "contrato_oficial_subido",
   "contrato_oficial_firmado",
   "alta_completada",
-  "prueba",
-  "empleado",
-  // legacy
-  "teorica",
-  "practica",
 ]);
 
 /** ¿Mover a este estado exige tener la documentación del candidato completa? */
@@ -431,8 +442,10 @@ export const EMAIL_PLANTILLAS_FASE: Record<EstadoReclutamiento, { asunto: string
   entrevista: { asunto: "Convocatoria a entrevista", cuerpo: "Queremos invitarte a una entrevista. En breve recibirás los detalles de fecha y hora.", activo: true },
   documentacion: { asunto: "Documentación necesaria para tu incorporación", cuerpo: "Para continuar con tu incorporación necesitamos que nos aportes tu documentación. Te enviaremos un enlace para subirla.", activo: true },
   formacion: { asunto: "Accede a tu formación", cuerpo: "Has pasado a la fase de formación. Antes de continuar con el proceso debes completar toda la formación: conocerás la empresa, las normas internas, la forma de trabajar y lo que esperamos del puesto. Es obligatoria. Cuando la termines, revisaremos tu avance para continuar.", activo: true },
-  // Estados internos de Contratación: no envían email automático al candidato
-  // (el flujo lo gestionan los disparadores de la fase). Inactivos por defecto.
+  // Contratación: el email al candidato es el del contrato interno; el alta a la
+  // gestoría y el contrato oficial tienen sus propias plantillas (no por estado).
+  contratacion: { asunto: "Pasas a contratación", cuerpo: "Comenzamos con tu contratación. Recibirás los documentos que debes firmar antes de incorporarte.", activo: true },
+  // Estados legacy de Contratación (ya no son columnas; inactivos).
   alta_pendiente_revision: { asunto: "Revisión de tu alta", cuerpo: "Estamos revisando tus datos para tramitar tu alta.", activo: false },
   alta_enviada: { asunto: "Tu alta está en marcha", cuerpo: "Hemos iniciado el proceso de tu alta.", activo: false },
   contrato_interno_firmado: { asunto: "Contrato interno firmado", cuerpo: "Hemos recibido tu contrato interno firmado.", activo: false },
@@ -526,7 +539,7 @@ export function calcularMetricasEmbudo(candidatos: Candidato[]): MetricasEmbudo 
     grupoDescartado: { count: descartadoCount, porcentaje: pct(descartadoCount) },
     progreso: [
       ...SELECCION_CONFIG.estados.map(filaEstado),
-      ...FORMACION_CONFIG.estados.filter((e) => e === "formacion").map(filaEstado),
+      ...FORMACION_CONFIG.estados.map(filaEstado),
       ...CONTRATACION_CONFIG.estados.map(filaEstado),
       ...PRUEBA_CONFIG.estados.map(filaEstado),
       ...EMPLEADO_CONFIG.estados.map(filaEstado),
@@ -577,12 +590,7 @@ const CADENA_PROGRESO: EstadoReclutamiento[] = [
   "entrevista",
   "documentacion",
   "formacion",
-  "alta_pendiente_revision",
-  "alta_enviada",
-  "contrato_interno_firmado",
-  "contrato_oficial_subido",
-  "contrato_oficial_firmado",
-  "alta_completada",
+  "contratacion",
   "prueba",
   "empleado",
 ];

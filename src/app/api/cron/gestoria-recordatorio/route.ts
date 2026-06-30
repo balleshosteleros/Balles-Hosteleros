@@ -83,17 +83,44 @@ export async function GET(request: Request) {
     const enlace = urlRecordatorioContrato(tokenHash);
     const to = [cfg.email, cfg.emailCc].filter(Boolean).join(", ");
 
-    const subject = `⚠️ Pendiente: contrato de ${nombre} sin subir · ${empresaNombre}`;
-    const html = `
+    // Botón de subida (funcional): se añade SIEMPRE al final del html, haya o no plantilla.
+    const botonHtml = botonRecordatorioContratoHtml(tokenHash);
+
+    // Plantilla editable «Gestoría · recordatorio de contrato» (UI Plantillas de email).
+    const { resolverPlantillaOnboarding, cuerpoOnboardingAHtml, PLANTILLAS_ONBOARDING } = await import(
+      "@/features/rrhh/services/email-plantillas/resolver"
+    );
+    const vars: Record<string, string> = {
+      candidato_nombre_completo: nombre,
+      empresa_nombre: empresaNombre,
+    };
+    const tpl = await resolverPlantillaOnboarding(
+      admin,
+      empresaId,
+      PLANTILLAS_ONBOARDING.gestoriaRecordatorio,
+      vars,
+    );
+
+    let subject: string;
+    let html: string;
+    let text: string;
+    if (tpl) {
+      subject = tpl.asunto;
+      html = `${cuerpoOnboardingAHtml(tpl.cuerpo)}${botonHtml}`;
+      text = `${tpl.cuerpo}\n\nSúbelo aquí: ${enlace}`;
+    } else {
+      subject = `⚠️ Pendiente: contrato de ${nombre} sin subir · ${empresaNombre}`;
+      html = `
       <p>Os recordamos que el <b>contrato de ${nombre}</b>${emp?.dni_nie ? ` (DNI/NIE ${emp.dni_nie})` : ""}
       <b>sigue pendiente de subir</b>.</p>
       <p style="color:#b91c1c">
         Mientras no subáis el contrato firmado, <b>el trabajador no lo recibe y no puede firmarlo</b>,
         lo que bloquea el alta. Es importante completarlo cuanto antes.
       </p>
-      ${botonRecordatorioContratoHtml(tokenHash)}
+      ${botonHtml}
       <p style="color:#888;font-size:12px">Enviado automáticamente desde el sistema de ${empresaNombre}.</p>`;
-    const text = `Recordatorio: el contrato de ${nombre} sigue pendiente de subir. Súbelo aquí: ${enlace}`;
+      text = `Recordatorio: el contrato de ${nombre} sigue pendiente de subir. Súbelo aquí: ${enlace}`;
+    }
 
     const res = await sendEmail({ to, subject, html, text, empresaId });
     if (!res.ok) continue;

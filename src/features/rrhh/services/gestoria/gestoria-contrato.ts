@@ -12,6 +12,7 @@ import { generarToken, hashToken, compararToken } from "@/features/rrhh/services
 import { emitirNotificacion } from "@/features/notificaciones/actions/notificaciones-actions";
 import { crearFirmaInterno } from "@/features/rrhh/services/firmas/crear-firma";
 import { getReclutamientoConfigPorEmpresa } from "@/features/rrhh/actions/gestoria-config-server";
+import { resolverPlantillaOnboarding, PLANTILLAS_ONBOARDING } from "@/features/rrhh/services/email-plantillas/resolver";
 
 const BUCKET_STAGING = "contratos-gestoria";
 const MAX_PDF_BYTES = 10 * 1024 * 1024;
@@ -197,7 +198,15 @@ export async function procesarSubidaContrato(
   if (upErr) return { ok: false, error: `No se pudo guardar el contrato: ${upErr.message}`, status: 500 };
 
   // 2) Solicitud de FIRMA para el trabajador (Firmas envía el email al empleado).
+  // PRP-070: asunto + intro del correo desde la plantilla editable «Contrato
+  // oficial (a firmar)». El diseño y el botón de firma se mantienen.
   const enviadoPor = await resolverEnviadoPor(admin, row.empresa_id);
+  const { data: empresaRow } = await admin
+    .from("empresas").select("nombre").eq("id", row.empresa_id).maybeSingle();
+  const tplOficial = await resolverPlantillaOnboarding(
+    admin, row.empresa_id, PLANTILLAS_ONBOARDING.contratoOficial,
+    { candidato_nombre: (emp?.nombre as string) ?? "", empresa_nombre: (empresaRow?.nombre as string) ?? "" },
+  );
   const firma = await crearFirmaInterno({
     empresaId: row.empresa_id,
     empleadoId: row.empleado_id,
@@ -210,6 +219,8 @@ export async function procesarSubidaContrato(
     observaciones: "Contrato subido por la gestoría tras el alta.",
     enviadoPorUserId: enviadoPor,
     enviadoPorNombre: "RRHH",
+    emailAsunto: tplOficial?.asunto ?? null,
+    emailIntro: tplOficial?.cuerpo ?? null,
   });
 
   // 3) Marca el token consumido + traza (incluso si la firma falló, el PDF está).

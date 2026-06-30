@@ -53,23 +53,15 @@ export const RECLUTAMIENTO_PLANTILLA_ESTADOS_SEED: PlantillaEstadoSeed = {
     { key: "elegido", label: "Elegido", color: "hsl(220, 70%, 55%)", fase: "seleccion", orden: 2, defaultEmailNombre: "Elegido" },
     { key: "entrevista", label: "Entrevista", color: "hsl(220, 70%, 55%)", fase: "seleccion", orden: 3, defaultEmailNombre: "Entrevista" },
     { key: "documentacion", label: "Documentación", color: "hsl(220, 70%, 55%)", fase: "seleccion", orden: 4, defaultEmailNombre: "Documentación" },
-    // ── Fase Formación (unifica teórica + práctica) ──
+    // ── Onboarding: 4 columnas (Formación · Contratación · Prueba · Empleado) ──
     { key: "formacion", label: "Formación", color: "hsl(145, 63%, 42%)", fase: "formacion", orden: 5, defaultEmailNombre: "Formación" },
-    // ── Fase Contratación (alta + firma de contratos) ──
-    { key: "alta_pendiente_revision", label: "Pendiente de revisión", color: "hsl(38, 92%, 50%)", fase: "contratacion", orden: 6 },
-    { key: "alta_enviada", label: "Alta enviada", color: "hsl(38, 92%, 50%)", fase: "contratacion", orden: 7 },
-    { key: "contrato_interno_firmado", label: "Contrato interno firmado", color: "hsl(38, 92%, 50%)", fase: "contratacion", orden: 8 },
-    { key: "contrato_oficial_subido", label: "Contrato oficial subido", color: "hsl(38, 92%, 50%)", fase: "contratacion", orden: 9 },
-    { key: "contrato_oficial_firmado", label: "Contrato oficial firmado", color: "hsl(38, 92%, 50%)", fase: "contratacion", orden: 10 },
-    { key: "alta_completada", label: "Alta completada", color: "hsl(38, 92%, 50%)", fase: "contratacion", orden: 11 },
-    // ── Fase Prueba ──
-    { key: "prueba", label: "Prueba", color: "hsl(265, 60%, 55%)", fase: "prueba", orden: 12, defaultEmailNombre: "Prueba" },
-    // ── Fase Empleado (contratado) ──
-    { key: "empleado", label: "Empleado", color: "hsl(145, 63%, 42%)", fase: "empleado", orden: 13, defaultEmailNombre: "Empleado" },
+    { key: "contratacion", label: "Contratación", color: "hsl(38, 92%, 50%)", fase: "contratacion", orden: 6, defaultEmailNombre: "Contratación" },
+    { key: "prueba", label: "Prueba", color: "hsl(265, 60%, 55%)", fase: "prueba", orden: 7, defaultEmailNombre: "Prueba" },
+    { key: "empleado", label: "Empleado", color: "hsl(145, 63%, 42%)", fase: "empleado", orden: 8, defaultEmailNombre: "Empleado" },
     // ── Fase Descartado (todos heredan el color oficial de la fase) ──
-    { key: "papelera", label: "Papelera", color: "hsl(0, 72%, 51%)", fase: "descartado", orden: 14, defaultEmailNombre: "Papelera" },
-    { key: "no_se_presenta", label: "No se presenta", color: "hsl(0, 72%, 51%)", fase: "descartado", orden: 15, defaultEmailNombre: "No se presenta" },
-    { key: "suspenso_formacion", label: "Suspenso Formación", color: "hsl(0, 72%, 51%)", fase: "descartado", orden: 16, defaultEmailNombre: "Suspenso Formación" },
+    { key: "papelera", label: "Papelera", color: "hsl(0, 72%, 51%)", fase: "descartado", orden: 9, defaultEmailNombre: "Papelera" },
+    { key: "no_se_presenta", label: "No se presenta", color: "hsl(0, 72%, 51%)", fase: "descartado", orden: 10, defaultEmailNombre: "No se presenta" },
+    { key: "suspenso_formacion", label: "Suspenso Formación", color: "hsl(0, 72%, 51%)", fase: "descartado", orden: 11, defaultEmailNombre: "Suspenso Formación" },
   ],
 };
 

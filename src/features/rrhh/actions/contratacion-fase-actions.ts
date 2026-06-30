@@ -12,7 +12,7 @@
  *      módulo de Firmas (Email 3).
  *   3. Notifica a RRHH (contratación iniciada / contrato interno enviado).
  *
- * El candidato queda en `{ fase: "contratacion", estado: "alta_enviada" }`.
+ * El candidato queda en `{ fase: "contratacion", estado: "contratacion" }`.
  *
  * El contrato OFICIAL ya está cubierto por el flujo de gestoría existente
  * (`procesarSubidaContrato`): cuando la gestoría sube el PDF, se manda a firmar
@@ -75,7 +75,7 @@ export async function iniciarContratacion(
     localId: input.localId,
     emailEmpresa: input.emailEmpresa ?? null,
     enviarAcceso: false,
-    destino: { fase: "contratacion", estado: "alta_enviada" },
+    destino: { fase: "contratacion", estado: "contratacion" },
   });
   if (!contratado.ok || !contratado.empleadoId) {
     return { ok: false, error: contratado.error ?? "No se pudo iniciar la contratación" };
@@ -111,6 +111,16 @@ export async function iniciarContratacion(
       cuerpo: (cfg.contrato_interno_plantilla as string | null) ?? null,
     });
 
+    // PRP-070: asunto + intro del correo de firma desde la plantilla editable
+    // «Contrato interno (a firmar)» (UI Plantillas de email). El diseño y el
+    // botón de firma se mantienen. Fallback al correo estándar si no existe.
+    const { resolverPlantillaOnboarding, PLANTILLAS_ONBOARDING } = await import(
+      "@/features/rrhh/services/email-plantillas/resolver"
+    );
+    const tplInterno = await resolverPlantillaOnboarding(
+      admin, empresaId, PLANTILLAS_ONBOARDING.contratoInterno,
+      { candidato_nombre: emp?.nombre ?? "", empresa_nombre: (empresa?.nombre as string) ?? "" },
+    );
     const firma = await crearFirmaInterno({
       empresaId,
       empleadoId,
@@ -123,6 +133,8 @@ export async function iniciarContratacion(
       observaciones: "Contrato interno previo a la incorporación (PRP-070).",
       enviadoPorUserId: user.id,
       enviadoPorNombre: "RRHH",
+      emailAsunto: tplInterno?.asunto ?? null,
+      emailIntro: tplInterno?.cuerpo ?? null,
     });
     contratoInternoEnviado = firma.ok;
 
