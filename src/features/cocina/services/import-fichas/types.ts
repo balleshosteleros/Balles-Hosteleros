@@ -78,4 +78,6 @@ export interface PreviewResult {
   /** Todas las líneas, agrupables por plato en la UI. */
   lineas: PreviewLinea[];
   saltadas: string[];
+  /** Catálogo de candidatos (para el combobox de corrección en la UI). */
+  candidatos: Candidato[];
 }

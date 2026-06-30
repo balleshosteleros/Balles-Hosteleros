@@ -70,5 +70,6 @@ export function construirPreview(
     },
     lineas,
     saltadas: parseResult.saltadas,
+    candidatos,
   };
 }
