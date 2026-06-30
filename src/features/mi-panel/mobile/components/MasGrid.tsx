@@ -15,6 +15,7 @@ import {
   Files,
   FileSearch,
   Network,
+  PackageCheck,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -35,6 +36,7 @@ const ITEMS: Item[] = [
   { href: "/m/condiciones", label: "Condiciones", icon: ClipboardCheck, hue: 192 },
   { href: "/m/documentos", label: "Documentos", icon: Files, hue: 192 },
   { href: "/m/solicitudes", label: "Solicitudes", icon: Inbox, hue: 192 },
+  { href: "/m/albaranes", label: "Albaranes", icon: PackageCheck, hue: 192 },
   { href: "/m/comunicados", label: "Comunicados", icon: Megaphone, hue: 231 },
   { href: "/m/encuestas", label: "Encuestas", icon: ClipboardList, hue: 231 },
   { href: "/m/cuestionarios", label: "Cuestionarios", icon: FileQuestion, hue: 231 },
