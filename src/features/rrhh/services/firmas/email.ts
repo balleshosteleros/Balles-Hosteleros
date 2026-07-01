@@ -87,11 +87,11 @@ export async function enviarInvitacionFirma(input: InvitacionFirmaInput): Promis
 
   const cuerpoHtml = `
     ${introHtml}
-    <p style="margin:12px 0;padding:12px 14px;background:#f1f5f9;border-left:3px solid #6366f1;font-weight:500;color:#0f172a;">
+    <p style="margin:12px 0;padding:12px 14px;background:#f0fdf4;border-left:3px solid #16a34a;font-weight:500;color:#0f172a;">
       ${esc(input.tituloDocumento)}
     </p>
     <p style="text-align:center;margin:24px 0;">
-      <a href="${url}" style="display:inline-block;background:#6366f1;color:#ffffff;text-decoration:none;padding:12px 22px;border-radius:8px;font-weight:500;">
+      <a href="${url}" style="display:inline-block;background:#16a34a;color:#ffffff;text-decoration:none;padding:13px 26px;border-radius:10px;font-weight:600;font-size:15px;">
         Firmar documento
       </a>
     </p>
@@ -138,7 +138,7 @@ export async function enviarCodigoOTP(input: CodigoOTPInput): Promise<SendEmailR
     <p>Hola ${esc(input.empleadoNombre)},</p>
     <p>Para confirmar la firma del documento <strong>${esc(input.tituloDocumento)}</strong> introduce este código en la página de firma:</p>
     <p style="text-align:center;margin:20px 0;">
-      <span style="display:inline-block;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:32px;letter-spacing:8px;padding:14px 22px;background:#0f172a;color:#fde68a;border-radius:10px;">
+      <span style="display:inline-block;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:32px;letter-spacing:8px;padding:14px 22px;background:#16a34a;color:#ffffff;border-radius:10px;font-weight:700;">
         ${esc(input.codigo)}
       </span>
     </p>

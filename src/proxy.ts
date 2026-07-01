@@ -37,7 +37,21 @@ function modulosPermitidos(modulo: string): string[] {
   return MODULO_ALIASES[moduloNorm] ?? [moduloNorm]
 }
 
+// Rutas PÚBLICAS bajo prefijos protegidos: enlaces tokenizados que abren
+// personas SIN cuenta en el sistema (no requieren login ni rol). El token de un
+// solo uso ya es la autorización. P.ej. la gestoría externa sube el contrato
+// firmado desde `/gestoria/contrato/<token>` sin entrar al sistema.
+const RUTAS_PUBLICAS_TOKENIZADAS = [
+  '/gestoria/contrato/', // subida de contrato por la gestoría (token único)
+]
+
+function esRutaPublicaTokenizada(pathname: string): boolean {
+  return RUTAS_PUBLICAS_TOKENIZADAS.some((p) => pathname.startsWith(p))
+}
+
 function moduloRequerido(pathname: string): string | null {
+  // Las rutas públicas tokenizadas nunca exigen módulo/login.
+  if (esRutaPublicaTokenizada(pathname)) return null
   for (const [prefijo, modulo] of MODULO_POR_PREFIJO) {
     if (pathname === prefijo || pathname.startsWith(prefijo + '/')) {
       return modulo

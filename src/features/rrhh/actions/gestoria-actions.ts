@@ -330,12 +330,42 @@ export async function saveCamposFormularioCandidatura(input: CamposFormularioCon
 
 const eur = (n: number) => (Number(n) || 0).toLocaleString("es-ES", { style: "currency", currency: "EUR", minimumFractionDigits: 0 });
 
-export async function enviarAltaGestoria(empleadoId: string, opts?: { forzar?: boolean }) {
+export async function enviarAltaGestoria(
+  empleadoId: string,
+  opts?: { forzar?: boolean; empresaIdOverride?: string },
+) {
   try {
-    const { supabase, empresaId } = await getCtx();
+    let supabase: Awaited<ReturnType<typeof getCtx>>["supabase"];
+    let empresaId: string | null;
+    if (opts?.empresaIdOverride) {
+      // Sin sesión (cron/prueba): usa service role + empresaId explícito.
+      supabase = createAdminClient() as unknown as Awaited<ReturnType<typeof getCtx>>["supabase"];
+      empresaId = opts.empresaIdOverride;
+    } else {
+      ({ supabase, empresaId } = await getCtx());
+    }
     if (!empresaId) return { ok: false, error: "No autenticado" };
 
-    const cfg = await getReclutamientoConfig();
+    // Config: con sesión usa getReclutamientoConfig; sin sesión (override) la lee
+    // por empresa con service role.
+    const cfg = opts?.empresaIdOverride
+      ? await (async () => {
+          const { data } = await (supabase as ReturnType<typeof createAdminClient>)
+            .from("reclutamiento_config")
+            .select("gestoria_email, gestoria_email_cc, gestoria_envio_auto, gestoria_campos, notif_alta_gestoria")
+            .eq("empresa_id", empresaId)
+            .maybeSingle();
+          return {
+            data: {
+              gestoria_email: (data?.gestoria_email as string | null) ?? "",
+              gestoria_email_cc: (data?.gestoria_email_cc as string | null) ?? "",
+              gestoria_envio_auto: (data?.gestoria_envio_auto as boolean | null) ?? true,
+              gestoria_campos: normalizarGestoriaCampos(data?.gestoria_campos),
+              notif_alta_gestoria: (data?.notif_alta_gestoria as boolean | null) ?? true,
+            },
+          };
+        })()
+      : await getReclutamientoConfig();
 
     // Toggle de envío automático: si está desactivado y no se fuerza, no se envía.
     if (!cfg.data.gestoria_envio_auto && !opts?.forzar) {

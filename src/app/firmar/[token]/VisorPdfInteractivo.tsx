@@ -21,6 +21,11 @@ type Props = {
   pdfUrl: string;
   onConfirm: (data: { trazoBase64: string; posicion: PosicionFirma }) => void;
   submitting?: boolean;
+  /**
+   * Si viene, la firma se coloca automáticamente en esa posición y NO es
+   * arrastrable (el candidato solo dibuja y firma). Null = colocación manual.
+   */
+  posicionFija?: PosicionFirma | null;
 };
 
 const PAGE_RENDER_WIDTH = 600;
@@ -38,7 +43,8 @@ function detectarMovil(): boolean {
   return /Mobi|Android|iPhone|iPad|iPod/i.test(ua) || coarsePointer;
 }
 
-export function VisorPdfInteractivo({ pdfUrl, onConfirm, submitting }: Props) {
+export function VisorPdfInteractivo({ pdfUrl, onConfirm, submitting, posicionFija }: Props) {
+  const fija = posicionFija ?? null;
   const [numPages, setNumPages] = useState(0);
   const [trazoPng, setTrazoPng] = useState<string | null>(null);
   const [aplicada, setAplicada] = useState(false);
@@ -108,7 +114,15 @@ export function VisorPdfInteractivo({ pdfUrl, onConfirm, submitting }: Props) {
     const png = canvasRef.current!.toDataURL("image/png");
     setTrazoPng(png);
     setAplicada(true);
-    // Posición inicial: centro de la primera página renderizada
+    // Con posición FIJA: colocar la firma en la página/porcentajes indicados.
+    if (fija && pageGeom[fija.pagina]) {
+      const g = pageGeom[fija.pagina];
+      const xPx = fija.xPct * PAGE_RENDER_WIDTH;
+      const yPx = g.top + fija.yPct * g.height;
+      setPos({ pagina: fija.pagina, xPx, yPx });
+      return;
+    }
+    // Posición inicial (manual): centro de la primera página renderizada.
     if (pageGeom[1]) {
       const top = pageGeom[1].top;
       const xPx = PAGE_RENDER_WIDTH / 2 - FIRMA_DEFAULT_WIDTH / 2;
@@ -127,6 +141,7 @@ export function VisorPdfInteractivo({ pdfUrl, onConfirm, submitting }: Props) {
   }
 
   function onFirmaPointerDown(e: React.PointerEvent<HTMLDivElement>) {
+    if (fija) return; // posición fija: no se puede arrastrar
     if (!pos) return;
     e.currentTarget.setPointerCapture(e.pointerId);
     const wrap = pagesWrapRef.current!.getBoundingClientRect();
@@ -151,7 +166,13 @@ export function VisorPdfInteractivo({ pdfUrl, onConfirm, submitting }: Props) {
   }
 
   function confirmar() {
-    if (!trazoPng || !pos) return;
+    if (!trazoPng) return;
+    // Posición FIJA: usa los porcentajes indicados directamente (sin arrastre).
+    if (fija) {
+      onConfirm({ trazoBase64: trazoPng, posicion: fija });
+      return;
+    }
+    if (!pos) return;
     const geom = pageGeom[pos.pagina];
     if (!geom) return;
     const xPct = pos.xPx / PAGE_RENDER_WIDTH;

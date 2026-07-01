@@ -240,8 +240,17 @@ export function FirmaPublicaView({
     <div className="min-h-screen bg-zinc-50">
       <header className="border-b border-zinc-200 bg-white">
         <div className="max-w-5xl mx-auto px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <FileSignature className="h-5 w-5 text-indigo-600" />
+          <div className="flex items-center gap-3">
+            {documento.empresa.logoUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={documento.empresa.logoUrl}
+                alt={documento.empresa.nombre}
+                className="h-10 w-10 rounded-lg object-contain"
+              />
+            ) : (
+              <FileSignature className="h-5 w-5 text-emerald-600" />
+            )}
             <div>
               <div className="text-sm font-semibold text-zinc-900">
                 {documento.empresa.nombre}
@@ -266,13 +275,16 @@ export function FirmaPublicaView({
             <div className="px-1 pb-2">
               <div className="text-sm font-semibold text-zinc-900">{documento.titulo}</div>
               <div className="text-xs text-zinc-500 mt-0.5">
-                Dibuja tu firma a la derecha y arrástrala al PDF.
+                {documento.posicionFirmaDefault
+                  ? "Dibuja tu firma a la derecha. Ya está colocada en su sitio."
+                  : "Dibuja tu firma a la derecha y arrástrala al PDF."}
               </div>
             </div>
             <VisorPdfInteractivo
               pdfUrl={documento.pdfUrl}
               onConfirm={ejecutarFirmaManuscrita}
               submitting={firmando}
+              posicionFija={documento.posicionFirmaDefault}
             />
           </>
         ) : (

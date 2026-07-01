@@ -135,6 +135,9 @@ export async function iniciarContratacion(
       enviadoPorNombre: "RRHH",
       emailAsunto: tplInterno?.asunto ?? null,
       emailIntro: tplInterno?.cuerpo ?? null,
+      // Firma colocada automáticamente sobre la zona "Firmado" del contrato
+      // privado (lo genera el sistema, sabemos dónde va). El candidato no arrastra.
+      posicionFirmaDefault: { pagina: 1, xPct: 0.10, yPct: 0.82, anchoPct: 0.32 },
     });
     contratoInternoEnviado = firma.ok;
 

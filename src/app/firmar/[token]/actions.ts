@@ -63,7 +63,9 @@ export type AbrirDocumentoResult =
         expiraEn: string;
         observaciones: string | null;
         empleado: { nombre: string; emailEnmascarado: string | null };
-        empresa: { nombre: string };
+        empresa: { nombre: string; logoUrl: string | null };
+        /** Posición por defecto de la firma (si el documento la trae): { pagina, xPct, yPct, anchoPct }. */
+        posicionFirmaDefault: { pagina: number; xPct: number; yPct: number; anchoPct: number } | null;
         /** Zona horaria de la empresa, para mostrar fechas al firmante (PRP-069). */
         zonaHoraria: string;
         enviadoPor: string;
@@ -100,7 +102,7 @@ export async function abrirDocumento(token: string): Promise<AbrirDocumentoResul
     const { data: doc } = await admin
       .from("firmas_documentos")
       .select(
-        "id, titulo, tipo, modalidad, validez, estado, expira_en, observaciones, empleado_id, empresa_id, enviado_por, enviado_en, pdf_original_path",
+        "id, titulo, tipo, modalidad, validez, estado, expira_en, observaciones, empleado_id, empresa_id, enviado_por, enviado_en, pdf_original_path, posicion_firma_default",
       )
       .eq("id", documentoId)
       .maybeSingle();
@@ -120,7 +122,7 @@ export async function abrirDocumento(token: string): Promise<AbrirDocumentoResul
       .maybeSingle();
     const { data: empresa } = await admin
       .from("empresas")
-      .select("nombre, logo_url, config_operativa")
+      .select("nombre, logo_url, isotipo_url, config_operativa")
       .eq("id", doc.empresa_id)
       .maybeSingle();
     const { data: enviadoPorUser } = await admin
@@ -160,7 +162,13 @@ export async function abrirDocumento(token: string): Promise<AbrirDocumentoResul
         expiraEn: doc.expira_en as string,
         observaciones: (doc.observaciones as string | null) ?? null,
         empleado: { nombre: empleadoNombre, emailEnmascarado: enmascararEmail(emailEmp) },
-        empresa: { nombre: (empresa?.nombre as string) ?? "Empresa" },
+        empresa: {
+          nombre: (empresa?.nombre as string) ?? "Empresa",
+          // Mismo criterio que los correos: prefiere isotipo, si no logo.
+          logoUrl: ((empresa?.isotipo_url as string | null) || (empresa?.logo_url as string | null)) ?? null,
+        },
+        posicionFirmaDefault:
+          (doc.posicion_firma_default as { pagina: number; xPct: number; yPct: number; anchoPct: number } | null) ?? null,
         zonaHoraria:
           ((empresa?.config_operativa as Record<string, unknown> | null)?.zonaHoraria as string | undefined)?.trim() ||
           "Europe/Madrid",
@@ -203,7 +211,7 @@ export async function solicitarOTP(token: string): Promise<SolicitarOtpResult> {
       .maybeSingle();
     const { data: empresa } = await admin
       .from("empresas")
-      .select("nombre, logo_url, config_operativa")
+      .select("nombre, logo_url, isotipo_url, config_operativa")
       .eq("id", doc.empresa_id)
       .maybeSingle();
 
@@ -444,7 +452,7 @@ export async function firmarDocumento(input: FirmarDocumentoInput): Promise<Firm
       .maybeSingle();
     const { data: empresa } = await admin
       .from("empresas")
-      .select("nombre, logo_url, config_operativa")
+      .select("nombre, logo_url, isotipo_url, config_operativa")
       .eq("id", doc.empresa_id)
       .maybeSingle();
     const { data: enviadoPorUser } = await admin

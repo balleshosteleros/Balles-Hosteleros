@@ -44,6 +44,12 @@ export interface CrearFirmaInternoInput {
    */
   emailAsunto?: string | null;
   emailIntro?: string | null;
+  /**
+   * Posición por defecto de la firma (PRP-070): { pagina, xPct, yPct, anchoPct }.
+   * Si se pasa, la pantalla de firma coloca la firma YA POSICIONADA y FIJA (el
+   * candidato no la arrastra). Null = el candidato la coloca a mano (compat).
+   */
+  posicionFirmaDefault?: { pagina: number; xPct: number; yPct: number; anchoPct: number } | null;
 }
 
 export type CrearFirmaInternoResult =
@@ -130,6 +136,7 @@ export async function crearFirmaInterno(
         enviado_en: ahora.toISOString(),
         expira_en: expira.toISOString(),
         observaciones,
+        posicion_firma_default: input.posicionFirmaDefault ?? null,
       })
       .select("id")
       .single();

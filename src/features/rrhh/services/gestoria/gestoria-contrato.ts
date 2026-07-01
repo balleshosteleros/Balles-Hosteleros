@@ -107,7 +107,8 @@ export async function crearTokenContratoGestoria(
   params: { empresaId: string; empleadoId: string; plazoDias?: number },
 ): Promise<{ ok: true; token: string; tokenId: string } | { ok: false; error: string }> {
   try {
-    const plazoDias = Math.max(1, Math.min(90, params.plazoDias ?? 30));
+    // Máximo 7 días: el enlace de subida de contrato caduca pronto por seguridad.
+    const plazoDias = Math.max(1, Math.min(7, params.plazoDias ?? 7));
     const token = generarToken();
     const tokenHash = hashToken(token);
     const expira = new Date(Date.now() + plazoDias * 86_400_000).toISOString();
@@ -207,6 +208,17 @@ export async function procesarSubidaContrato(
     admin, row.empresa_id, PLANTILLAS_ONBOARDING.contratoOficial,
     { candidato_nombre: (emp?.nombre as string) ?? "", empresa_nombre: (empresaRow?.nombre as string) ?? "" },
   );
+
+  // Posición por defecto de la firma: al pie de la ÚLTIMA página del contrato.
+  // (No detectamos texto: los contratos escaneados no lo permiten de forma fiable.)
+  let ultimaPagina = 1;
+  try {
+    const { PDFDocument } = await import("pdf-lib");
+    const doc = await PDFDocument.load(buffer, { ignoreEncryption: true });
+    ultimaPagina = Math.max(1, doc.getPageCount());
+  } catch { /* si falla, página 1 */ }
+  const posicionOficial = { pagina: ultimaPagina, xPct: 0.10, yPct: 0.85, anchoPct: 0.32 };
+
   const firma = await crearFirmaInterno({
     empresaId: row.empresa_id,
     empleadoId: row.empleado_id,
@@ -221,6 +233,7 @@ export async function procesarSubidaContrato(
     enviadoPorNombre: "RRHH",
     emailAsunto: tplOficial?.asunto ?? null,
     emailIntro: tplOficial?.cuerpo ?? null,
+    posicionFirmaDefault: posicionOficial,
   });
 
   // 3) Marca el token consumido + traza (incluso si la firma falló, el PDF está).

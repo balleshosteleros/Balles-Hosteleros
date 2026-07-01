@@ -19,7 +19,9 @@ export type UpdateSessionResult = {
 }
 
 const AUTH_PATHS = ['/', '/callback', '/auth/confirm', '/forgot-password', '/update-password', '/check-email', '/acceso-demo']
-const PUBLIC_PREFIXES = ['/carta', '/__site', '/api/google/connect', '/empleo', '/api/empleo', '/documentacion', '/api/documentacion', '/firmar', '/inspectores', '/inspecciones/verificar', '/v', '/r', '/api/visita']
+const PUBLIC_PREFIXES = ['/carta', '/__site', '/api/google/connect', '/empleo', '/api/empleo', '/documentacion', '/api/documentacion', '/firmar', '/inspectores', '/inspecciones/verificar', '/v', '/r', '/api/visita',
+  // Subida de contrato por la gestoría externa (enlace tokenizado, sin cuenta).
+  '/gestoria/contrato', '/api/gestoria/contrato']
 
 function isAuthPath(pathname: string) {
   if (pathname === '/') return true
