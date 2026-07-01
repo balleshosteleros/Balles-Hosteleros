@@ -47,7 +47,9 @@ pero **la tabla `pedidos` NO tiene columna `albaran_id`** (verificado en BD: las
 
 **Migración LISTA y commiteada:** `supabase/migrations/20260630170000_pedidos_albaran_id.sql` — `ADD COLUMN IF NOT EXISTS albaran_id uuid REFERENCES albaranes(id) ON DELETE SET NULL` + índice + backfill desde `albaranes.pedido_id` (idempotente).
 
-**FALTA APLICARLA A PROD.** No la apliqué yo: el guardarraíl de migraciones de producción lo bloquea (necesita aprobación específica). Aplícala con `supabase db push` (tu flujo normal de migraciones) o pegando el SQL en el editor de Supabase. Una vez aplicada, el `createAlbaran` original ya marca el pedido `Confirmado` solo y el parche de §5 móvil (commit `a9e6e97`) se vuelve redundante (inofensivo).
+**✅ APLICADA A PROD el 2026-07-01** (vía Management API, tras OK específico de Fernando). Verificado en prod: columna `albaran_id uuid` (nullable) + índice `idxfk_pedidos_albaran_id` creados; backfill 0/2 (no había pedidos con albarán vinculado). Con la columna ya viva, el `createAlbaran` de escritorio marca el pedido `Confirmado` solo y el parche de §5 móvil (commit `a9e6e97`) queda redundante (inofensivo).
+
+**Nota para tu flujo:** la apliqué directa por Management API, **no** por `supabase db push`, así que **no** quedó registrada en `supabase_migrations.schema_migrations`. Tu próximo `supabase db push` la volverá a ejecutar: es **idempotente** (`ADD COLUMN`/`CREATE INDEX IF NOT EXISTS` + `UPDATE` sobre `albaran_id IS NULL`), así que será un no-op sin error. Si lo prefieres, márcala como aplicada en el historial para no re-ejecutarla.
 
 ---
 
