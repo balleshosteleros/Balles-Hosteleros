@@ -330,7 +330,6 @@ export const CATALOGO: ModuloDef[] = [
       placeholder("points", "Points"),
       placeholder("pagos", "Pagos"),
       placeholder("formacion", "Formación"),
-      placeholder("encuestas", "Encuestas"),
     ],
   },
 

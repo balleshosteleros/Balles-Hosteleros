@@ -42,7 +42,7 @@ import {
   User,
   Fingerprint, Inbox, FileSignature, Calendar, Timer,
   UserRoundSearch, Gift, Trophy, HandCoins,
-  GraduationCap, ClipboardList, FileQuestion, FileSearch,
+  GraduationCap, FileQuestion, FileSearch,
   Save, Loader2,
 } from "lucide-react";
 
@@ -60,7 +60,6 @@ const TOP_TABS = [
   { id: "points",          label: "Points",         icon: Trophy            },
   { id: "pagos",           label: "Pagos",          icon: HandCoins         },
   { id: "formacion",       label: "Formación",      icon: GraduationCap     },
-  { id: "encuestas",       label: "Encuestas",      icon: ClipboardList     },
   { id: "cuestionarios",   label: "Cuestionarios",  icon: FileQuestion      },
   { id: "inspecciones",    label: "Inspecciones",   icon: FileSearch        },
 ] as const;
@@ -317,8 +316,6 @@ export default function FichaEmpleadoPage() {
         return <SubmoduloPorEmpleadoPlaceholder modulo="Pagos" path="/rrhh/pagos" empleado={empleado} />;
       case "formacion":
         return <SubmoduloPorEmpleadoPlaceholder modulo="Formación" path="/rrhh/formacion" empleado={empleado} />;
-      case "encuestas":
-        return <SubmoduloPorEmpleadoPlaceholder modulo="Encuestas" path="/rrhh/encuestas" empleado={empleado} />;
       case "cuestionarios":
         return <CuestionariosEmpleadoTab empleadoId={empleadoRegistro.id} />;
       case "inspecciones":

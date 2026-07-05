@@ -7,7 +7,6 @@ export type EstadoResena =
 
 export type OrigenResena =
   | "manual"
-  | "encuesta"
   | "qr"
   | "carta"
   | "google"
@@ -28,7 +27,7 @@ export interface Resena {
   creado_por: string | null;
   created_at: string;
   updated_at: string;
-  // Ingesta externa (Google / encuestas / etc.)
+  // Ingesta externa (Google / QR / etc.)
   external_id: string | null;
   autor_avatar: string | null;
   autor_url: string | null;
@@ -220,7 +219,6 @@ export const ESTADO_LABEL: Record<EstadoResena, string> = Object.fromEntries(
 
 export const ORIGEN_LABEL: Record<OrigenResena, string> = {
   manual: "Manual",
-  encuesta: "Encuesta",
   qr: "QR en mesa",
   carta: "Carta digital",
   google: "Google",

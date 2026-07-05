@@ -87,7 +87,6 @@ export const miPanelSubs: SubItem[] = [
   { title: "FICHAJES", url: "/mi-panel/fichajes", icon: Fingerprint },
   { title: "FORMACIÓN", url: "/mi-panel/formacion", icon: GraduationCap, badge: "2ª fase" },
   { title: "CONDICIONES", url: "/mi-panel/condiciones", icon: ClipboardCheck },
-  { title: "ENCUESTAS", url: "/mi-panel/encuestas", icon: ClipboardList },
   { title: "CUESTIONARIOS", url: "/mi-panel/cuestionarios", icon: FileQuestion },
   { title: "SOLICITUDES", url: "/mi-panel/ausencias", icon: Inbox },
   { title: "COMUNICADOS", url: "/mi-panel/comunicados", icon: Megaphone },
@@ -163,7 +162,6 @@ export const rrhhSubs: SubItem[] = [
   { title: "PAGOS", url: "/rrhh/pagos", icon: HandCoins },
   { title: "PUESTOS", url: "/rrhh/puestos", icon: Banknote },
   { title: "FORMACIÓN", url: "/rrhh/formacion", icon: GraduationCap, badge: "2ª fase" },
-  { title: "ENCUESTAS", url: "/rrhh/encuestas", icon: ClipboardList },
 ];
 
 export const marketingSubs: SubItem[] = [

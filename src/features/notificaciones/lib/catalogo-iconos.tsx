@@ -14,7 +14,6 @@ import {
   Megaphone,
   CalendarClock,
   ListChecks,
-  ClipboardList,
   Bell,
   type LucideIcon,
 } from "lucide-react";
@@ -30,7 +29,6 @@ const ICONOS: Record<string, LucideIcon> = {
   vencimiento: CalendarClock,
   cronograma: ListChecks,
   comunicado: Megaphone,
-  encuesta: ClipboardList,
 };
 
 /** Resuelve el componente de icono por su clave del catálogo. */

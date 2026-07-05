@@ -24,7 +24,6 @@ export type TipoNotificacion =
   | "vencimiento"
   | "cronograma"
   | "comunicado"
-  | "encuesta"
   // Flujo alta a gestoría → contrato → firma (PRP-068)
   | "gestoria_alta_enviada"
   | "gestoria_recordatorio"
@@ -132,14 +131,6 @@ export const TIPOS_NOTIFICACION: Record<TipoNotificacion, TipoMeta> = {
     icono: "comunicado",
     color: "text-indigo-600",
     badge: "bg-indigo-100 text-indigo-700",
-    accionLabel: "Visto",
-    requiereAccion: false,
-  },
-  encuesta: {
-    label: "Encuesta",
-    icono: "encuesta",
-    color: "text-fuchsia-600",
-    badge: "bg-fuchsia-100 text-fuchsia-700",
     accionLabel: "Visto",
     requiereAccion: false,
   },
