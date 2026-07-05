@@ -110,6 +110,9 @@ interface CandidatoRow {
   email: string;
   telefono: string | null;
   dni_nie: string | null;
+  iban: string | null;
+  num_seguridad_social: string | null;
+  documentacion_completada_at: string | null;
   fase: string;
   estado: string;
   promovido_at: string | null;
@@ -202,7 +205,7 @@ export async function contratarCandidato(input: ContratarInput): Promise<Contrat
   // 1. Cargar candidato
   const { data: cand, error: candErr } = await admin
     .from("candidatos")
-    .select("id, empresa_id, nombre, apellidos, email, telefono, dni_nie, fase, estado, promovido_at, vacante_id")
+    .select("id, empresa_id, nombre, apellidos, email, telefono, dni_nie, iban, num_seguridad_social, documentacion_completada_at, fase, estado, promovido_at, vacante_id")
     .eq("id", input.candidatoId)
     .eq("empresa_id", empresaId)
     .maybeSingle<CandidatoRow>();
@@ -229,6 +232,22 @@ export async function contratarCandidato(input: ContratarInput): Promise<Contrat
   if (!input.puestoId) return { ok: false, error: "Selecciona el puesto." };
   if (!input.primerDia) return { ok: false, error: "Indica el primer día de trabajo." };
   if (!input.localId) return { ok: false, error: "Asigna un local al nuevo empleado." };
+
+  // Datos completos OBLIGATORIOS para contratar: un candidato no puede convertirse
+  // en empleado sin su documentación identificativa (DNI/NIE, IBAN, nº Seguridad
+  // Social) ni sin haber completado el paso de Documentación. Se valida en el
+  // SERVIDOR para que sea imposible saltárselo (el bloqueo del Kanban es solo UI).
+  const faltan: string[] = [];
+  if (!cand.dni_nie?.trim()) faltan.push("DNI/NIE");
+  if (!cand.iban?.trim()) faltan.push("IBAN");
+  if (!cand.num_seguridad_social?.trim()) faltan.push("nº de Seguridad Social");
+  if (!cand.documentacion_completada_at) faltan.push("documentación completada");
+  if (faltan.length > 0) {
+    return {
+      ok: false,
+      error: `No se puede contratar a ${`${cand.nombre} ${cand.apellidos ?? ""}`.trim()}: faltan datos obligatorios (${faltan.join(", ")}). Completa la documentación del candidato antes de contratar.`,
+    };
+  }
 
   // 2. Puesto + área del departamento + condiciones del nivel
   const { data: puesto } = await admin
