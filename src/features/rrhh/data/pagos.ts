@@ -15,6 +15,9 @@ export interface PagoEmpleado {
   horasExtras: number;
   bonus: number;
   propinaMantenimiento: number;
+  // Coste de Seguridad Social. INFORMATIVO: no entra en el `total` del pago.
+  ssEmpleado: number; // lo que paga el trabajador (descontado de su nómina)
+  ssEmpresa: number; // lo que paga la empresa por el trabajador
   total: number;
   pagado: boolean;
   // Confirmacion de liquidacion: enviada -> bloqueada; aceptada -> el empleado la
@@ -30,6 +33,9 @@ export interface ResumenPagos {
   totalAjustes: number; // suma con signo de los ajustes
   totalExtras: number;
   totalBonus: number;
+  totalSsEmpleado: number;
+  totalSsEmpresa: number;
+  totalSs: number; // empleado + empresa
   totalFinal: number;
   positivo: number;
   negativo: number;
@@ -51,6 +57,9 @@ export function getResumenPagos(pagos: PagoEmpleado[]): ResumenPagos {
   const ajustesNegativos = pagos.reduce((s, p) => s + Math.max(0, -p.ajuste), 0);
   const totalExtras = pagos.reduce((s, p) => s + p.horasExtras, 0);
   const totalBonus = pagos.reduce((s, p) => s + p.bonus, 0);
+  const totalSsEmpleado = pagos.reduce((s, p) => s + p.ssEmpleado, 0);
+  const totalSsEmpresa = pagos.reduce((s, p) => s + p.ssEmpresa, 0);
+  const totalSs = totalSsEmpleado + totalSsEmpresa;
   const totalFinal = pagos.reduce((s, p) => s + p.total, 0);
   const positivo = totalPagos + totalPropinas + totalExtras + totalBonus + ajustesPositivos;
   const negativo = ajustesNegativos;
@@ -58,5 +67,10 @@ export function getResumenPagos(pagos: PagoEmpleado[]): ResumenPagos {
   const prestamos = Math.round(ajustesNegativos * 0.4);
   const propinasAcumuladas = totalPropinas + pagos.reduce((s, p) => s + p.propinaMantenimiento, 0);
 
-  return { totalPagos, totalNomina, totalPropinas, totalAjustes, totalExtras, totalBonus, totalFinal, positivo, negativo, efectivoAhorro, prestamos, propinasAcumuladas };
+  return { totalPagos, totalNomina, totalPropinas, totalAjustes, totalExtras, totalBonus, totalSsEmpleado, totalSsEmpresa, totalSs, totalFinal, positivo, negativo, efectivoAhorro, prestamos, propinasAcumuladas };
+}
+
+/** Coste total de Seguridad Social de un pago (empleado + empresa). Informativo. */
+export function costeSSTotal(p: PagoEmpleado): number {
+  return Math.round((p.ssEmpleado + p.ssEmpresa) * 100) / 100;
 }

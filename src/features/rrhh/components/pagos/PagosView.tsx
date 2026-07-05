@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useMemo, useEffect, useCallback, type ReactNode } from "react";
+import { useState, useMemo, useEffect, useCallback, useRef, type ReactNode } from "react";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
-import { getResumenPagos, type PagoEmpleado, type PagoArea } from "@/features/rrhh/data/pagos";
+import { getResumenPagos, costeSSTotal, type PagoEmpleado, type PagoArea } from "@/features/rrhh/data/pagos";
+import { normalizarDniNie } from "@/features/rrhh/lib/documentacion-validacion";
 import {
   listEmpleadosParaPagos,
   loadPagos,
@@ -29,7 +30,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { Edit2, Banknote, TrendingUp, TrendingDown, PiggyBank, HandCoins, Wallet, Settings, Send, Lock, Unlock, CheckCircle2, Clock } from "lucide-react";
+import { Edit2, Banknote, TrendingUp, TrendingDown, PiggyBank, HandCoins, Wallet, Settings, Send, Lock, Unlock, CheckCircle2, Clock, Upload } from "lucide-react";
 import {
   SubmoduleToolbar,
   aplicarFiltrosToolbar,
@@ -85,6 +86,8 @@ function fromGuardado(
     horasExtras: g.horasExtras,
     bonus: g.bonus,
     propinaMantenimiento: g.propinaMantenimiento,
+    ssEmpleado: g.ssEmpleado,
+    ssEmpresa: g.ssEmpresa,
     total: g.total,
     pagado: g.pagado,
     confirmacionEnviadaAt: g.confirmacionEnviadaAt,
@@ -106,6 +109,8 @@ function toGuardado(p: PagoEmpleado): PagoGuardado {
     horasExtras: p.horasExtras,
     bonus: p.bonus,
     propinaMantenimiento: p.propinaMantenimiento,
+    ssEmpleado: p.ssEmpleado,
+    ssEmpresa: p.ssEmpresa,
     total: p.total,
     pagado: p.pagado,
     confirmacionEnviadaAt: p.confirmacionEnviadaAt,
@@ -129,6 +134,8 @@ function nuevoPagoVacio(empleadoId: string, empleadoNombre: string, area: PagoAr
     horasExtras: 0,
     bonus: 0,
     propinaMantenimiento: 0,
+    ssEmpleado: 0,
+    ssEmpresa: 0,
     total: 0,
     pagado: false,
     confirmacionEnviadaAt: null,
@@ -150,9 +157,15 @@ export function PagosView() {
   const [showConfig, setShowConfig] = useState(false);
   const [filtroArea, setFiltroArea] = useState<"todos" | PagoArea>("todos");
   const [enviando, setEnviando] = useState(false);
+  const [subiendoNominas, setSubiendoNominas] = useState(false);
+  const [progresoNominas, setProgresoNominas] = useState({ hechas: 0, total: 0 });
   const [esDirector, setEsDirector] = useState(false);
   const [notifCfg, setNotifCfg] = useState<NotifLiquidacionesConfig | null>(null);
   const { confirm, dialog: confirmDialog } = useConfirmDelete();
+  const nominasInputRef = useRef<HTMLInputElement>(null);
+  // DNI/NIE de cada empleado (empleadoId -> dni normalizado) para emparejar nóminas
+  // de forma inequívoca. Se llena al cargar; los ex-empleados sin ficha no tienen.
+  const dniPorEmpleado = useRef<Map<string, string>>(new Map());
 
   useGlobalLoadingSync(loading);
 
@@ -180,6 +193,12 @@ export function PagosView() {
     for (const g of resPagos.data) {
       if (g.empleadoId) guardadosPorEmp.set(g.empleadoId, g);
       else guardadosSinEmp.push(g);
+    }
+
+    // Índice de DNI/NIE por empleado (normalizado) para emparejar nóminas.
+    dniPorEmpleado.current = new Map();
+    for (const e of resEmp.data) {
+      if (e.dniNie) dniPorEmpleado.current.set(e.empleadoId, normalizarDniNie(e.dniNie));
     }
 
     // Empleados activos: fila guardada si existe, si no fila vacía.
@@ -264,6 +283,93 @@ export function PagosView() {
 
   const pagarBloqueado = (p: PagoEmpleado): boolean =>
     !p.pagado && !!notifCfg?.requiereAprobacion && !p.confirmacionAceptadaAt;
+
+  // Subida masiva de nóminas: por cada archivo, la IA lee la SS (empleado/empresa),
+  // el DNI/NIE y el nombre del trabajador. Se empareja con su fila por DNI/NIE
+  // (inequívoco); si el empleado no tiene DNI registrado o la nómina no lo trae, se
+  // usa el nombre como respaldo. La SS es informativa: no toca el total del pago.
+  // Los pagos ya enviados (bloqueados) se saltan.
+  const subirNominas = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    const lista = Array.from(files);
+    setSubiendoNominas(true);
+    setProgresoNominas({ hechas: 0, total: lista.length });
+
+    const norm = (s: string) =>
+      s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
+    const filasActuales = pagosPorRango[claveRango] ?? [];
+
+    // Índice principal por DNI/NIE (empleadoId -> dni normalizado guardado en el ref).
+    const porDni = new Map<string, PagoEmpleado>();
+    // Índice de respaldo por nombre normalizado.
+    const porNombre = new Map<string, PagoEmpleado>();
+    for (const p of filasActuales) {
+      const dni = dniPorEmpleado.current.get(p.empleadoId);
+      if (dni) porDni.set(dni, p);
+      porNombre.set(norm(p.empleadoNombre), p);
+    }
+
+    let emparejadas = 0;
+    let sinEmparejar = 0;
+    let fallos = 0;
+
+    for (const file of lista) {
+      try {
+        const fd = new FormData();
+        fd.set("archivo", file);
+        const res = await fetch("/api/nominas/extraer", { method: "POST", body: fd });
+        const data = await res.json();
+        if (!data.ok) {
+          fallos++;
+          setProgresoNominas((prev) => ({ ...prev, hechas: prev.hechas + 1 }));
+          continue;
+        }
+
+        // 1º por DNI/NIE (identificador único). 2º por nombre como respaldo.
+        const dniIa = data.dniNie ? normalizarDniNie(String(data.dniNie)) : "";
+        let fila = dniIa ? porDni.get(dniIa) : undefined;
+        if (!fila) {
+          const nombreIa = norm(String(data.nombre ?? ""));
+          fila = porNombre.get(nombreIa);
+          if (!fila && nombreIa) {
+            for (const [k, v] of porNombre) {
+              if (k.includes(nombreIa) || nombreIa.includes(k)) { fila = v; break; }
+            }
+          }
+        }
+        if (!fila) {
+          sinEmparejar++;
+          setProgresoNominas((prev) => ({ ...prev, hechas: prev.hechas + 1 }));
+          continue;
+        }
+        if (fila.confirmacionEnviadaAt) {
+          // Liquidación ya enviada: no se puede modificar.
+          setProgresoNominas((prev) => ({ ...prev, hechas: prev.hechas + 1 }));
+          continue;
+        }
+
+        const actualizado: PagoEmpleado = {
+          ...fila,
+          ssEmpleado: Number(data.ssEmpleado) || 0,
+          ssEmpresa: Number(data.ssEmpresa) || 0,
+        };
+        setPagos((prev) => prev.map((x) => (x.id === actualizado.id ? actualizado : x)));
+        await savePago(periodo, toGuardado(actualizado));
+        emparejadas++;
+      } catch (e) {
+        console.error("[pagos] subirNominas:", e);
+        fallos++;
+      }
+      setProgresoNominas((prev) => ({ ...prev, hechas: prev.hechas + 1 }));
+    }
+
+    setSubiendoNominas(false);
+    const partes = [`${emparejadas} nómina${emparejadas === 1 ? "" : "s"} leída${emparejadas === 1 ? "" : "s"}`];
+    if (sinEmparejar > 0) partes.push(`${sinEmparejar} sin empleado`);
+    if (fallos > 0) partes.push(`${fallos} con error`);
+    if (emparejadas > 0) toast.success(partes.join(" · "));
+    else toast.error(partes.join(" · ") || "No se pudo leer ninguna nómina.");
+  };
 
   const guardarEdicion = (datos: Partial<PagoEmpleado>) => {
     if (!editando) return;
@@ -377,6 +483,9 @@ export function PagosView() {
     { campo: "horasExtras", label: "H.Extras" },
     { campo: "bonus", label: "Bonus" },
     { campo: "propinaMantenimiento", label: "Prop. Mant." },
+    { campo: "ssEmpleado", label: "SS Empleado" },
+    { campo: "ssEmpresa", label: "SS Empresa" },
+    { campo: "ssTotal", label: "Total SS" },
     { campo: "total", label: "Total" },
     { campo: "pagado", label: "Pagado" },
     { campo: "confirmacion", label: "Confirmación" },
@@ -431,6 +540,21 @@ export function PagosView() {
     propinaMantenimiento: {
       th: <TableHead key="propinaMantenimiento" className="text-right">Prop. Mant.</TableHead>,
       td: (p) => <TableCell key="propinaMantenimiento" className="text-right tabular-nums">{p.propinaMantenimiento > 0 ? fmt(p.propinaMantenimiento) : "—"}</TableCell>,
+    },
+    ssEmpleado: {
+      th: <TableHead key="ssEmpleado" className="text-right">SS Empleado</TableHead>,
+      td: (p) => <TableCell key="ssEmpleado" className="text-right tabular-nums">{p.ssEmpleado > 0 ? fmt(p.ssEmpleado) : "—"}</TableCell>,
+    },
+    ssEmpresa: {
+      th: <TableHead key="ssEmpresa" className="text-right">SS Empresa</TableHead>,
+      td: (p) => <TableCell key="ssEmpresa" className="text-right tabular-nums">{p.ssEmpresa > 0 ? fmt(p.ssEmpresa) : "—"}</TableCell>,
+    },
+    ssTotal: {
+      th: <TableHead key="ssTotal" className="text-right">Total SS</TableHead>,
+      td: (p) => {
+        const t = costeSSTotal(p);
+        return <TableCell key="ssTotal" className="text-right tabular-nums font-medium">{t > 0 ? fmt(t) : "—"}</TableCell>;
+      },
     },
     total: {
       th: <TableHead key="total" className="text-right font-bold">Total</TableHead>,
@@ -513,8 +637,31 @@ export function PagosView() {
           onToday={calRange.goToToday}
           isToday={calRange.isToday}
         />
+        <input
+          ref={nominasInputRef}
+          type="file"
+          multiple
+          accept="application/pdf,image/png,image/jpeg,image/webp,image/heic,image/heif"
+          className="hidden"
+          onChange={(e) => {
+            void subirNominas(e.target.files);
+            e.target.value = "";
+          }}
+        />
         <Button
+          variant="outline"
           className="ml-auto gap-2"
+          onClick={() => nominasInputRef.current?.click()}
+          disabled={subiendoNominas}
+          title="Sube las nóminas del mes; la IA lee el coste de Seguridad Social de cada una"
+        >
+          <Upload className="h-4 w-4" />
+          {subiendoNominas
+            ? `Leyendo nóminas… ${progresoNominas.hechas}/${progresoNominas.total}`
+            : "Subir nóminas (SS)"}
+        </Button>
+        <Button
+          className="gap-2"
           onClick={() =>
             enviarConfirmaciones(
               pagos.filter((p) => !p.confirmacionEnviadaAt).map((p) => p.empleadoId),
@@ -685,6 +832,9 @@ export function PagosView() {
                     <TableCell className="text-right tabular-nums">{fmt(resumen.totalExtras)}</TableCell>
                     <TableCell className="text-right tabular-nums">{fmt(resumen.totalBonus)}</TableCell>
                     <TableCell className="text-right tabular-nums">{fmt(pagosFiltrados.reduce((s, p) => s + p.propinaMantenimiento, 0))}</TableCell>
+                    <TableCell className="text-right tabular-nums">{resumen.totalSsEmpleado > 0 ? fmt(resumen.totalSsEmpleado) : "—"}</TableCell>
+                    <TableCell className="text-right tabular-nums">{resumen.totalSsEmpresa > 0 ? fmt(resumen.totalSsEmpresa) : "—"}</TableCell>
+                    <TableCell className="text-right tabular-nums font-medium">{resumen.totalSs > 0 ? fmt(resumen.totalSs) : "—"}</TableCell>
                     <TableCell className="text-right tabular-nums font-bold">{fmt(resumen.totalFinal)}</TableCell>
                     <TableCell className="text-center"><Badge variant={pagosFiltrados.every((p) => p.pagado) ? "default" : "secondary"} className="text-[10px]">{pagosFiltrados.filter((p) => p.pagado).length}/{pagosFiltrados.length}</Badge></TableCell>
                     <TableCell className="text-center"><Badge variant="secondary" className="text-[10px]">{pagosFiltrados.filter((p) => p.confirmacionEnviadaAt).length}/{pagosFiltrados.length}</Badge></TableCell>
@@ -715,6 +865,7 @@ function EditForm({ pago, onSave }: { pago: PagoEmpleado; onSave: (d: Partial<Pa
     { key: "pago", label: "Pago" }, { key: "nomina", label: "Nómina" }, { key: "propina", label: "Propina" },
     { key: "ajuste", label: "Ajuste (+/−)" }, { key: "horasExtras", label: "H. Extras" },
     { key: "bonus", label: "Bonus" }, { key: "propinaMantenimiento", label: "Propina Mant." },
+    { key: "ssEmpleado", label: "SS Empleado" }, { key: "ssEmpresa", label: "SS Empresa" },
   ];
   return (
     <div className="space-y-4">
@@ -726,6 +877,13 @@ function EditForm({ pago, onSave }: { pago: PagoEmpleado; onSave: (d: Partial<Pa
           </div>
         ))}
       </div>
+      <p className="text-xs text-muted-foreground">
+        Total coste Seguridad Social:{" "}
+        <span className="font-medium text-foreground">
+          {costeSSTotal(form).toLocaleString("es-ES", { minimumFractionDigits: 0, maximumFractionDigits: 2 })} €
+        </span>{" "}
+        (informativo, no afecta al total del pago).
+      </p>
       <DialogFooter><Button onClick={() => onSave(form)}>Guardar</Button></DialogFooter>
     </div>
   );

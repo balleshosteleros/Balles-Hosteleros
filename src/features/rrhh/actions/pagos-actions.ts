@@ -22,6 +22,7 @@ export type EmpleadoArea = "administrativa" | "operativa";
 export interface EmpleadoPagoRow {
   empleadoId: string;
   empleadoNombre: string;
+  dniNie: string | null; // para emparejar nóminas de forma inequívoca
   puesto: string | null;
   area: EmpleadoArea;
 }
@@ -43,7 +44,7 @@ export async function listEmpleadosParaPagos(): Promise<{ ok: boolean; data: Emp
 
     const { data, error } = await supabase
       .from("empleados")
-      .select("id, nombre, apellidos, puesto, estado, user_id, empresa_id, departamentos(nombre, area)")
+      .select("id, nombre, apellidos, puesto, estado, user_id, empresa_id, dni_nie, departamentos(nombre, area)")
       .or(filtro)
       .eq("estado", "Activo")
       .order("nombre", { ascending: true });
@@ -84,6 +85,7 @@ export async function listEmpleadosParaPagos(): Promise<{ ok: boolean; data: Emp
       return {
         empleadoId: e.id as string,
         empleadoNombre: `${(e.nombre as string) ?? ""} ${(e.apellidos as string) ?? ""}`.trim(),
+        dniNie: (e.dni_nie as string | null) ?? null,
         puesto,
         area,
       };
@@ -115,6 +117,8 @@ export interface PagoGuardado {
   horasExtras: number;
   bonus: number;
   propinaMantenimiento: number;
+  ssEmpleado: number;
+  ssEmpresa: number;
   total: number;
   pagado: boolean;
   confirmacionEnviadaAt: string | null;
@@ -134,6 +138,8 @@ type PagoDbRow = {
   horas_extras: number | string;
   bonus: number | string;
   propina_mes_anterior: number | string;
+  ss_empleado: number | string;
+  ss_empresa: number | string;
   total: number | string;
   pagado: boolean;
   confirmacion_enviada_at: string | null;
@@ -141,7 +147,7 @@ type PagoDbRow = {
 };
 
 const PAGO_COLS =
-  "empleado_id, empleado_nombre, fijo, pago, nomina, horas_reales, horas_trabajadas, propina, ajuste, horas_extras, bonus, propina_mes_anterior, total, pagado, confirmacion_enviada_at, confirmacion_aceptada_at";
+  "empleado_id, empleado_nombre, fijo, pago, nomina, horas_reales, horas_trabajadas, propina, ajuste, horas_extras, bonus, propina_mes_anterior, ss_empleado, ss_empresa, total, pagado, confirmacion_enviada_at, confirmacion_aceptada_at";
 
 function dbToPago(r: PagoDbRow): PagoGuardado {
   return {
@@ -157,6 +163,8 @@ function dbToPago(r: PagoDbRow): PagoGuardado {
     horasExtras: Number(r.horas_extras),
     bonus: Number(r.bonus),
     propinaMantenimiento: Number(r.propina_mes_anterior),
+    ssEmpleado: Number(r.ss_empleado),
+    ssEmpresa: Number(r.ss_empresa),
     total: Number(r.total),
     pagado: r.pagado,
     confirmacionEnviadaAt: r.confirmacion_enviada_at,
@@ -219,6 +227,8 @@ export async function savePago(
         horas_extras: row.horasExtras,
         bonus: row.bonus,
         propina_mes_anterior: row.propinaMantenimiento,
+        ss_empleado: row.ssEmpleado,
+        ss_empresa: row.ssEmpresa,
         total: row.total,
         pagado: row.pagado,
         created_by: userId,

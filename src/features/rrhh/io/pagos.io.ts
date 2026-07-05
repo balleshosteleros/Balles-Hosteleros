@@ -16,6 +16,8 @@ const pagoSchema = z.object({
   horasExtras: z.number(),
   bonus: z.number(),
   propinaMantenimiento: z.number(),
+  ssEmpleado: z.number(),
+  ssEmpresa: z.number(),
   total: z.number(),
   pagado: z.boolean(),
 });
@@ -41,6 +43,8 @@ export const pagosIO: ModuleIO<PagoEmpleado> = {
     { key: "horasExtras", label: "Horas extras", type: "number" },
     { key: "bonus", label: "Bonus", type: "number" },
     { key: "propinaMantenimiento", label: "Propina mantenimiento", type: "number" },
+    { key: "ssEmpleado", label: "SS Empleado", type: "number" },
+    { key: "ssEmpresa", label: "SS Empresa", type: "number" },
     { key: "total", label: "Total", type: "number" },
     { key: "pagado", label: "Pagado", type: "boolean" },
     { key: "empleadoId", label: "ID Empleado", hideInImport: true },
