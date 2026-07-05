@@ -5,7 +5,11 @@ import { createClient } from "@/lib/supabase/server";
 import { getEmpresaActivaForUser } from "@/features/empresa/lib/empresa-server";
 import { sendEmail } from "@/lib/email/send";
 import { sustituirVariablesReclutamiento, parsearEnlacesCuerpo } from "@/features/rrhh/lib/reclutamiento-email";
-import { type EstadoReclutamiento } from "@/features/rrhh/data/reclutamiento";
+import {
+  type EstadoReclutamiento,
+  ESTADOS_CONFIG,
+  EMAIL_PLANTILLAS_FASE,
+} from "@/features/rrhh/data/reclutamiento";
 import { getReclutamientoConfigGeneral } from "@/features/rrhh/actions/gestoria-actions";
 import {
   PLANTILLAS_RESERVADAS_POR_ESTADO,
@@ -104,6 +108,24 @@ export async function updateReclutamientoEmailPlantilla(
   if (patch.nombre !== undefined) {
     const n = patch.nombre.trim();
     if (!n) return { ok: false, error: "El nombre no puede estar vacío" };
+    // Las plantillas del sistema no se pueden renombrar: todo el flujo de
+    // onboarding las localiza por su nombre exacto (dispara el correo, pinta el
+    // destinatario, protege del borrado). Solo se bloquea si el nombre cambia
+    // realmente, para no rechazar guardados que no tocan el nombre.
+    const { data: actual } = await supabase
+      .from("reclutamiento_email_plantillas")
+      .select("nombre")
+      .eq("id", id)
+      .eq("empresa_id", empresaId)
+      .maybeSingle();
+    const nombreActual = (actual?.nombre as string | null) ?? null;
+    if (
+      nombreActual &&
+      n !== nombreActual &&
+      PLANTILLAS_ONBOARDING_PROTEGIDAS.has(nombreActual)
+    ) {
+      return { ok: false, error: "El nombre de una plantilla del sistema no se puede cambiar" };
+    }
     update.nombre = n;
   }
   if (patch.asunto !== undefined) {
@@ -542,6 +564,17 @@ export async function plantillasPorEstadoDeVacante(
   for (const [estado, id] of Object.entries(idPorEstado)) {
     const t = tplById.get(id);
     if (t) push(estado, { nombre: t.nombre, activa: t.activa, destino: destinoDePlantilla(t.nombre) });
+  }
+
+  // 2a-bis) Respaldo canónico: si un estado del candidato no tiene plantilla
+  // configurada por la vacante/empresa, mostrar igualmente su correo por defecto
+  // (catálogo `EMAIL_PLANTILLAS_FASE`). Sin esto, las fases sin plantilla de
+  // estados asociada aparecían con el icono en gris y sin popover.
+  for (const [estado, def] of Object.entries(EMAIL_PLANTILLAS_FASE)) {
+    if (!def.activo) continue; // estados legacy/inactivos: no llevan correo
+    if ((out[estado] ?? []).length > 0) continue; // ya resuelto por la vacante
+    const nombre = ESTADOS_CONFIG[estado as EstadoReclutamiento]?.label ?? estado;
+    push(estado, { nombre, activa: true, destino: "candidato" });
   }
 
   // 2b) Plantillas reservadas del sistema por fase fija.

@@ -14,12 +14,13 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import {
   Pencil, Mail, Eye, Search, Plus, Copy, Trash2,
   Variable, CheckCircle2, XCircle, Loader2,
-  ClipboardList, Link2, FileText, Building2, UserCog, Lock,
+  ClipboardList, Link2, FileText, Building2, UserCog, Lock, User,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   PLANTILLAS_ONBOARDING_PROTEGIDAS,
   destinoDePlantilla,
+  etiquetaDestino,
 } from "@/features/rrhh/lib/plantillas-onboarding";
 import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 import { CuestionariosVacanteManager } from "./CuestionariosVacanteManager";
@@ -120,6 +121,10 @@ function PlantillaEditorDialog({
 
   // Destino del correo: gestoría / RRHH llevan aviso informativo en el editor.
   const destino = plantilla ? destinoDePlantilla(plantilla.nombre) : "candidato";
+  // Las plantillas del sistema (gestoría, contratos, prueba) NO pueden renombrarse:
+  // todo el flujo las localiza por su nombre exacto (dispara el correo, pinta el
+  // icono de destino, las protege del borrado). Renombrarlas rompía la conexión.
+  const nombreBloqueado = plantilla ? PLANTILLAS_ONBOARDING_PROTEGIDAS.has(plantilla.nombre) : false;
 
   const handleSave = () => {
     startTransition(async () => {
@@ -167,13 +172,13 @@ function PlantillaEditorDialog({
         <ScrollArea className="max-h-[calc(90vh-210px)]">
           {tab === "editar" ? (
             <div className="px-6 py-5 space-y-5">
-              {/* Aviso de destino: la gestoría / RRHH no son el candidato. */}
+              {/* Aviso de destino: a quién se envía este correo. */}
               {destino === "gestoria" && (
                 <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5">
                   <Building2 className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
                   <p className="text-xs text-amber-800 leading-relaxed">
                     Este correo se envía a la <strong>gestoría</strong>, no al candidato. Es una plantilla del
-                    sistema y no se puede borrar.
+                    sistema: puedes editar el asunto y el texto, pero no cambiar su nombre ni borrarla.
                   </p>
                 </div>
               )}
@@ -182,7 +187,15 @@ function PlantillaEditorDialog({
                   <UserCog className="h-4 w-4 text-sky-600 mt-0.5 shrink-0" />
                   <p className="text-xs text-sky-800 leading-relaxed">
                     Este correo es un <strong>aviso interno a RRHH</strong>, no al candidato. Es una plantilla del
-                    sistema y no se puede borrar.
+                    sistema: puedes editar el asunto y el texto, pero no cambiar su nombre ni borrarla.
+                  </p>
+                </div>
+              )}
+              {destino === "candidato" && (
+                <div className="flex items-start gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5">
+                  <User className="h-4 w-4 text-emerald-600 mt-0.5 shrink-0" />
+                  <p className="text-xs text-emerald-800 leading-relaxed">
+                    Este correo se envía al <strong>candidato registrado</strong> cuando pasa al estado asociado.
                   </p>
                 </div>
               )}
@@ -194,8 +207,23 @@ function PlantillaEditorDialog({
               </div>
 
               <div>
-                <Label className="text-xs">Nombre de la plantilla</Label>
-                <Input value={nombre} onChange={(e) => setNombre(e.target.value)} className="mt-1" placeholder="Ej. Bienvenida al proceso" />
+                <Label className="text-xs flex items-center gap-1.5">
+                  Nombre de la plantilla
+                  {nombreBloqueado && <Lock className="h-3 w-3 text-muted-foreground" />}
+                </Label>
+                <Input
+                  value={nombre}
+                  onChange={(e) => setNombre(e.target.value)}
+                  className="mt-1"
+                  placeholder="Ej. Bienvenida al proceso"
+                  disabled={nombreBloqueado}
+                  title={nombreBloqueado ? "El nombre de una plantilla del sistema no se puede cambiar" : undefined}
+                />
+                {nombreBloqueado && (
+                  <p className="text-[11px] text-muted-foreground mt-1">
+                    El nombre de esta plantilla del sistema es fijo: el flujo la localiza por él para enviar el correo correcto.
+                  </p>
+                )}
               </div>
 
               <div>
@@ -268,7 +296,10 @@ function PlantillaEditorDialog({
               <div className="rounded-lg border border-border bg-card overflow-hidden">
                 <div className="px-4 py-3 bg-muted/30 border-b border-border">
                   <p className="text-xs text-muted-foreground">
-                    <span className="font-medium">Para:</span> {VARIABLES_RECLUTAMIENTO_EJEMPLO.candidato_email}
+                    <span className="font-medium">Para:</span>{" "}
+                    {destino === "candidato"
+                      ? VARIABLES_RECLUTAMIENTO_EJEMPLO.candidato_email
+                      : `${etiquetaDestino(destino)} · dirección configurada en Ajustes → RRHH → Reclutamiento`}
                   </p>
                   <p className="text-xs text-muted-foreground mt-0.5">
                     <span className="font-medium">Asunto:</span> {sustituirVariablesReclutamiento(asunto, previewVars)}
@@ -490,6 +521,11 @@ function PlantillasEmailTab() {
                       {destino === "rrhh" && (
                         <Badge variant="outline" className="text-[10px] gap-1 bg-sky-50 text-sky-700 border-sky-200" title="Aviso interno a RRHH">
                           <UserCog className="h-3 w-3" /> RRHH
+                        </Badge>
+                      )}
+                      {destino === "candidato" && (
+                        <Badge variant="outline" className="text-[10px] gap-1 bg-emerald-50 text-emerald-700 border-emerald-200" title="Este correo se envía al candidato registrado">
+                          <User className="h-3 w-3" /> Candidato
                         </Badge>
                       )}
                     </div>

@@ -53,6 +53,18 @@ export function destinoDePlantilla(nombre: string): DestinoPlantilla {
   return "candidato";
 }
 
+/** Etiqueta legible del destinatario (para badges y vista previa). */
+export function etiquetaDestino(destino: DestinoPlantilla): string {
+  switch (destino) {
+    case "gestoria":
+      return "Gestoría";
+    case "rrhh":
+      return "RRHH (aviso interno)";
+    default:
+      return "Candidato registrado";
+  }
+}
+
 /**
  * Plantillas reservadas que dispara el SISTEMA en una fase concreta del
  * onboarding (no se asocian a estados editables vía `defaultEmailNombre`). Se
