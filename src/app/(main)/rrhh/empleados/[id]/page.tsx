@@ -13,6 +13,7 @@ import {
 } from "@/features/rrhh/components/empleados/GestionEmpleadoCard";
 import { SubmoduloPorEmpleadoPlaceholder } from "@/features/rrhh/components/empleados/SubmoduloPorEmpleadoPlaceholder";
 import { FirmasEmpleadoTab } from "@/features/rrhh/components/empleados/FirmasEmpleadoTab";
+import { DocumentosIdentificativosCard } from "@/features/rrhh/components/empleados/DocumentosIdentificativosCard";
 import { InspeccionesEmpleadoTab } from "@/features/rrhh/components/empleados/InspeccionesEmpleadoTab";
 import { CuestionariosEmpleadoTab } from "@/features/rrhh/components/empleados/CuestionariosEmpleadoTab";
 import { ValidadoresEmpleadoCard } from "@/features/rrhh/components/empleados/ValidadoresEmpleadoCard";
@@ -76,6 +77,7 @@ type EmpleadoBD = {
   email_empresa: string | null;
   telefono: string | null;
   user_id: string;
+  avatar_url: string | null;
   departamento_id: string | null;
   puesto: string | null;
   local_id: string | null;
@@ -85,6 +87,10 @@ type EmpleadoBD = {
   validador_trabajo_id: string | null;
   validador_ausencias_id: string | null;
   calendario_vacaciones_id: string | null;
+  doc_dni_anverso_path: string | null;
+  doc_dni_reverso_path: string | null;
+  doc_iban_path: string | null;
+  doc_ss_path: string | null;
   departamentos?: { nombre: string } | null;
 };
 
@@ -98,6 +104,7 @@ function bdToEmpleadoUI(emp: EmpleadoBD): EmpleadoUI {
     id: emp.id,
     nombre: emp.nombre ?? "",
     apellidos: emp.apellidos ?? "",
+    avatar: emp.avatar_url ?? undefined,
     estado: emp.estado === "Activo" ? "Activo" : "Inactivo",
     horarioTipo: "—",
     horarioSemanal: "—",
@@ -264,6 +271,12 @@ export default function FichaEmpleadoPage() {
               }}
               onUpdated={cargarFicha}
               onDeleted={() => router.push("/rrhh/empleados")}
+            />
+            <DocumentosIdentificativosCard
+              docDniAnversoPath={empleadoRegistro.doc_dni_anverso_path}
+              docDniReversoPath={empleadoRegistro.doc_dni_reverso_path}
+              docIbanPath={empleadoRegistro.doc_iban_path}
+              docSsPath={empleadoRegistro.doc_ss_path}
             />
             </div>
           </div>

@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { CheckCircle2 } from "lucide-react";
+import { CheckCircle2, Clock } from "lucide-react";
 import { fetchDocumentacionPorToken } from "@/features/empleo-publico/services/empleo-fetch";
 import { EmpleoBrandingShell } from "@/features/empleo-publico/components/EmpleoBrandingShell";
 import { FormDocumentacionPublica } from "@/features/empleo-publico/components/FormDocumentacionPublica";
@@ -36,8 +36,17 @@ export default async function DocumentacionPage({
             <CheckCircle2 className="h-14 w-14 mx-auto text-emerald-500" />
             <h2 className="text-lg font-semibold">Documentación recibida</h2>
             <p className="text-sm text-muted-foreground">
-              Ya hemos recibido tu documentación. Si necesitas modificar algo, ponte en
-              contacto con el equipo de Recursos Humanos.
+              Ya hemos recibido tu documentación. Este enlace queda cerrado. Si necesitas
+              modificar algo, ponte en contacto con el equipo de Recursos Humanos.
+            </p>
+          </div>
+        ) : datos.caducada ? (
+          <div className="rounded-lg border bg-card p-8 text-center space-y-3">
+            <Clock className="h-14 w-14 mx-auto text-amber-500" />
+            <h2 className="text-lg font-semibold">Este enlace ha caducado</h2>
+            <p className="text-sm text-muted-foreground">
+              El plazo para aportar tu documentación con este enlace ha finalizado. Escribe
+              al equipo de Recursos Humanos y te enviaremos uno nuevo.
             </p>
           </div>
         ) : (

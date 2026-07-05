@@ -193,6 +193,7 @@ export function FormDocumentacionPublica({ token, empresaSlug }: Props) {
   function validar(): string | null {
     if (!dniAnverso.file) return "Adjunta el anverso de tu DNI/NIE";
     if (!dniReverso.file) return "Adjunta el reverso de tu DNI/NIE";
+    if (!docIban.file) return "Adjunta el documento de tu número de cuenta (IBAN)";
     if (!docSs.file) return "Adjunta el documento de la Seguridad Social";
     if (!fotoPerfil.file) return "Adjunta tu foto de perfil";
     if (!direccion.trim()) return "Indica tu dirección postal";

@@ -21,6 +21,7 @@ import { bienvenidaEmpleadoEmail } from "@/lib/email/templates/bienvenida-emplea
 import { buildRecoveryActionUrl } from "@/lib/auth/recovery-link";
 import { friendlyError } from "@/shared/lib/friendly-errors";
 import { requireAdminUser, altaUsuarioEmpleado } from "@/features/rrhh/services/empleados-core";
+import { copiarDocumentacionCandidatoAEmpleado } from "@/features/rrhh/services/documentacion-candidato-a-empleado";
 import { enviarAltaGestoria } from "@/features/rrhh/actions/gestoria-actions";
 import { revalidatePath } from "next/cache";
 
@@ -291,6 +292,12 @@ export async function contratarCandidato(input: ContratarInput): Promise<Contrat
     await admin.from("candidatos")
       .update({ empleado_id: empleadoExistente.id, fase: destinoFase, estado: destinoEstado }).eq("id", cand.id);
 
+    // Copia la documentación y la foto del candidato a la ficha del empleado
+    // reactivado (se conserva también en reclutamiento). Best-effort.
+    await copiarDocumentacionCandidatoAEmpleado({
+      admin, empresaId, candidatoId: cand.id, empleadoId: empleadoExistente.id, userId: empleadoExistente.user_id,
+    });
+
     // Alta automática a la gestoría (tolerante a fallo: no bloquea la contratación).
     const gestoriaEnviada = await enviarAltaGestoriaSeguro(empleadoExistente.id);
 
@@ -328,6 +335,13 @@ export async function contratarCandidato(input: ContratarInput): Promise<Contrat
 
   await admin.from("candidatos")
     .update({ empleado_id: alta.empleadoId, fase: destinoFase, estado: destinoEstado }).eq("id", cand.id);
+
+  // Copia la documentación y la foto del candidato a la ficha del empleado
+  // (copia física a empleados-docs; la foto se fija como avatar permanente).
+  // Se conserva también en reclutamiento. Best-effort: no bloquea la contratación.
+  await copiarDocumentacionCandidatoAEmpleado({
+    admin, empresaId, candidatoId: cand.id, empleadoId: alta.empleadoId, userId: alta.userId,
+  });
 
   // 6. Email de acceso al trabajador (al email de login = personal u empresa según área).
   //    Se OMITE al entrar en Contratación (enviarAcceso=false): el acceso se

@@ -1,4 +1,4 @@
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Camera } from "lucide-react";
 import { ESTADOS_COLOR, ESTADOS_LABEL, type EmpleadoUI } from "@/features/rrhh/components/empleados/empleado-ui";
@@ -32,6 +32,7 @@ export function FichaEmpleadoHeader({ empleado, onBack, empresas = [] }: Props) 
         </Button>
         <div className="relative group">
           <Avatar className="h-14 w-14 border-2 border-muted">
+            {empleado.avatar ? <AvatarImage src={empleado.avatar} alt={`${empleado.nombre} ${empleado.apellidos}`} /> : null}
             <AvatarFallback className="text-lg font-bold text-white" style={{ backgroundColor: avatarColor(empleado.id) }}>
               {iniciales}
             </AvatarFallback>

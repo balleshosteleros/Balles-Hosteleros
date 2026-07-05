@@ -116,17 +116,36 @@ export async function POST(req: Request) {
     // Resuelve el candidato por su token (única forma de identificarlo sin sesión).
     const { data: cand } = await supabase
       .from("candidatos")
-      .select("id, empresa_id, nombre, apellidos, vacante_id, documentacion_completada_at")
+      .select("id, empresa_id, nombre, apellidos, vacante_id, documentacion_completada_at, documentacion_token_expira_en")
       .eq("documentacion_token", parsed.data.token)
       .maybeSingle();
     if (!cand) {
       return NextResponse.json({ ok: false, error: "Enlace no válido o caducado" }, { status: 404 });
     }
+
+    // El enlace es de UN SOLO USO: si ya se completó, queda cerrado (no se puede
+    // re-subir ni sobrescribir la documentación aportada).
+    if (cand.documentacion_completada_at) {
+      return NextResponse.json(
+        { ok: false, error: "Esta documentación ya se envió. El enlace está cerrado." },
+        { status: 409 },
+      );
+    }
+
+    // Caducidad: pasados los 7 días desde el envío, el enlace deja de ser válido.
+    const expira = cand.documentacion_token_expira_en as string | null;
+    if (expira && new Date(expira).getTime() < Date.now()) {
+      return NextResponse.json(
+        { ok: false, error: "El enlace ha caducado. Pide uno nuevo a Recursos Humanos." },
+        { status: 410 },
+      );
+    }
+
     const candidatoId = cand.id as string;
     const empresaId = cand.empresa_id as string;
 
-    // Documentos: DNI anverso + reverso y SS son obligatorios; el IBAN puede venir
-    // como documento o solo como número tecleado.
+    // Documentos: TODOS son obligatorios para poder enviar (DNI anverso + reverso,
+    // documento del IBAN, documento de la Seguridad Social y foto de perfil).
     const dniAnverso = fd.get("dni_anverso") as File | null;
     const dniReverso = fd.get("dni_reverso") as File | null;
     const docIban = fd.get("doc_iban") as File | null;
@@ -137,6 +156,9 @@ export async function POST(req: Request) {
     }
     if (!dniReverso || dniReverso.size === 0) {
       return NextResponse.json({ ok: false, error: "Falta el documento del DNI/NIE (reverso)" }, { status: 400 });
+    }
+    if (!docIban || docIban.size === 0) {
+      return NextResponse.json({ ok: false, error: "Falta el documento del número de cuenta (IBAN)" }, { status: 400 });
     }
     if (!docSs || docSs.size === 0) {
       return NextResponse.json({ ok: false, error: "Falta el documento de la Seguridad Social" }, { status: 400 });

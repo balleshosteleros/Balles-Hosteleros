@@ -327,6 +327,8 @@ export interface DocumentacionPublica {
   token: string;
   /** true si el candidato ya completó su documentación (vista de "ya enviada"). */
   yaCompletada: boolean;
+  /** true si el enlace ha caducado (pasados los 7 días desde el envío). */
+  caducada: boolean;
 }
 
 /**
@@ -345,10 +347,18 @@ export async function fetchDocumentacionPorToken(
 
     const { data: cand } = await supabase
       .from("candidatos")
-      .select("nombre, apellidos, empresa_id, documentacion_completada_at")
+      .select("nombre, apellidos, empresa_id, documentacion_completada_at, documentacion_token_expira_en")
       .eq("documentacion_token", safe)
       .maybeSingle();
     if (!cand) return null;
+
+    // Caducidad: si hay fecha y ya pasó, el enlace no es válido (salvo que ya
+    // esté completada, en cuyo caso mostramos la vista de "ya enviada").
+    const expira = cand.documentacion_token_expira_en as string | null;
+    const caducada =
+      !cand.documentacion_completada_at &&
+      !!expira &&
+      new Date(expira).getTime() < Date.now();
 
     const { data: emp } = await supabase
       .from("empresas")
@@ -367,6 +377,7 @@ export async function fetchDocumentacionPorToken(
       candidatoNombre: nombre,
       token: safe,
       yaCompletada: !!cand.documentacion_completada_at,
+      caducada,
     };
   } catch (err) {
     console.error("[empleo-fetch] documentacion fatal:", err);

@@ -282,32 +282,17 @@ function EmailFaseIcon({
           {boton}
         </button>
       </PopoverTrigger>
-      <PopoverContent align="end" className="w-72 p-3" onClick={(e) => e.stopPropagation()}>
-        <p className="text-[11px] font-semibold text-foreground mb-2">
-          {plantillas.length === 1 ? "Correo de esta fase" : `Correos de esta fase (${plantillas.length})`}
-        </p>
-        <div className="space-y-1.5">
+      <PopoverContent align="end" className="w-64 p-2" onClick={(e) => e.stopPropagation()}>
+        <div className="space-y-1">
           {plantillas.map((p, i) => (
             <div
               key={`${p.nombre}-${i}`}
-              className="flex items-start gap-2 rounded-md border border-border bg-muted/20 px-2 py-1.5"
+              className="flex items-center gap-2 px-1 py-0.5"
             >
-              {p.activa ? (
-                <MailCheck className="h-3.5 w-3.5 text-emerald-600 mt-0.5 shrink-0" />
-              ) : (
-                <Mail className="h-3.5 w-3.5 text-muted-foreground/50 mt-0.5 shrink-0" />
-              )}
-              <div className="min-w-0 flex-1">
-                <p className={`text-xs leading-snug break-words ${p.activa ? "text-foreground" : "text-muted-foreground line-through"}`}>
-                  {p.nombre}
-                </p>
-                <div className="mt-1 flex flex-wrap items-center gap-1">
-                  <DestinoIcon destino={p.destino} />
-                  {!p.activa && (
-                    <span className="text-[9px] text-muted-foreground">Desactivada — no se envía</span>
-                  )}
-                </div>
-              </div>
+              <span className="min-w-0 flex-1 truncate text-xs text-foreground" title={p.nombre}>
+                {p.nombre}
+              </span>
+              <DestinoIcon destino={p.destino} />
             </div>
           ))}
         </div>

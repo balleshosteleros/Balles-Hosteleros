@@ -24,6 +24,9 @@ export const DOC_TIPOS_CANDIDATO: DocTipoCandidato[] = [
 /** Bucket privado donde se guardan los documentos del candidato. */
 export const BUCKET_DOC_CANDIDATOS = "documentacion-candidatos";
 
+/** Días que el enlace de documentación permanece válido desde su envío. */
+export const DOCUMENTACION_TOKEN_DIAS = 7;
+
 /**
  * Base URL pública del sitio (para construir enlaces en correos). Mismo patrón
  * que el resto de actions de RRHH (firmas, contratación, cuestionarios).
@@ -44,11 +47,19 @@ export function enlaceDocumentacion(token: string): string {
   return `${appBaseUrl()}/documentacion/${token}`;
 }
 
+/** Fecha de caducidad del enlace: ahora + DOCUMENTACION_TOKEN_DIAS días. */
+export function fechaCaducidadDocumentacion(): string {
+  return new Date(
+    Date.now() + DOCUMENTACION_TOKEN_DIAS * 24 * 60 * 60 * 1000,
+  ).toISOString();
+}
+
 /**
  * Devuelve el token de documentación del candidato, generándolo si aún no existe
- * (perezoso). Usa el cliente que reciba (service-role en el flujo público, o el
- * cliente de sesión en el Kanban). Best-effort: si falla la escritura, devuelve
- * el token igualmente para no romper el envío del correo.
+ * (perezoso), y RENUEVA su caducidad a +7 días en cada envío (reenviar el correo
+ * reinicia el plazo). Usa el cliente que reciba (service-role en el flujo
+ * público, o el cliente de sesión en el Kanban). Best-effort: si falla la
+ * escritura, devuelve el token igualmente para no romper el envío del correo.
  */
 export async function asegurarTokenDocumentacion(
   supabase: SupabaseClient,
@@ -62,17 +73,16 @@ export async function asegurarTokenDocumentacion(
     .eq("empresa_id", empresaId)
     .maybeSingle();
 
-  const existente = (cand?.documentacion_token as string | null) ?? null;
-  if (existente) return existente;
+  const token = (cand?.documentacion_token as string | null) ?? crypto.randomUUID();
+  const expira = fechaCaducidadDocumentacion();
 
-  const token = crypto.randomUUID();
   const { error } = await supabase
     .from("candidatos")
-    .update({ documentacion_token: token })
+    .update({ documentacion_token: token, documentacion_token_expira_en: expira })
     .eq("id", candidatoId)
     .eq("empresa_id", empresaId);
   if (error) {
-    console.error("[documentacion] no se pudo generar token:", error.message);
+    console.error("[documentacion] no se pudo generar/renovar token:", error.message);
     return token; // best-effort: el enlace seguirá resolviendo si se persiste en otro intento
   }
   return token;
