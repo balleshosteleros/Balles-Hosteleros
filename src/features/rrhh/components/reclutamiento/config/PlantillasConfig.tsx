@@ -467,7 +467,7 @@ function PlantillasEmailTab() {
         <div>
           <h2 className="text-lg font-bold text-foreground">Plantillas de email</h2>
           <p className="text-sm text-muted-foreground mt-0.5">
-            Biblioteca de correos reutilizables. Asocia cada uno a un estado desde Plantillas de estados o en cada vacante.
+            Biblioteca de correos reutilizables. Asocia cada uno a un estado en cada vacante.
             {!loading && <> {" "}{activasCount} de {plantillas.length} activas.</>}
           </p>
         </div>
