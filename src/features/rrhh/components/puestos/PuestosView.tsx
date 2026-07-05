@@ -8,6 +8,9 @@ import { useTabQuery } from "@/shared/hooks/use-tab-query";
 import { type PuestoSalarial, type NormaSalarial, NORMAS_BASE, DEPARTAMENTOS_DISPONIBLES } from "@/features/rrhh/data/puestos";
 import { listPuestosEmpresa } from "@/features/rrhh/actions/puestos-actions";
 import { crearCronogramaParaPuesto } from "@/features/rrhh/actions/vacantes-actions";
+import { listBonusEmpresa, togglePuestoBonus } from "@/features/rrhh/actions/bonus-actions";
+import type { Bonus } from "@/features/rrhh/data/bonus";
+import { PERIODICIDAD_LABEL } from "@/features/rrhh/data/bonus";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -17,7 +20,7 @@ import {
   ArrowLeft, Plus, Settings, Settings2, DollarSign, Clock, Calendar,
   Briefcase, ChevronRight, Target, FileText, Pencil, ListChecks,
   UtensilsCrossed, ChefHat, Crown, User, Package, Camera, Calculator,
-  CheckCircle2, Scale, Users,
+  CheckCircle2, Scale, Users, Gift, Loader2,
 } from "lucide-react";
 import {
   SubmoduleToolbar,
@@ -396,6 +399,111 @@ function ListView({
   );
 }
 
+// Apartado "Bonus" dentro de la ficha del puesto. Lee/escribe el mismo vínculo
+// (rrhh_bonus_puestos) que el apartado "¿A qué puestos aplica?" de Bonus, por lo
+// que ambos lados quedan siempre sincronizados.
+function BonusDelPuesto({ puestoId }: { puestoId: string }) {
+  const [bonus, setBonus] = useState<Bonus[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [pendingId, setPendingId] = useState<string | null>(null);
+
+  useEffect(() => {
+    let activo = true;
+    setLoading(true);
+    listBonusEmpresa().then((list) => {
+      if (activo) { setBonus(list); setLoading(false); }
+    });
+    return () => { activo = false; };
+  }, [puestoId]);
+
+  const toggle = async (b: Bonus) => {
+    const aplica = b.puestoIds.includes(puestoId);
+    setPendingId(b.id);
+    // Optimista.
+    setBonus((prev) => prev.map((x) => x.id === b.id
+      ? { ...x, puestoIds: aplica ? x.puestoIds.filter((id) => id !== puestoId) : [...x.puestoIds, puestoId] }
+      : x));
+    const res = await togglePuestoBonus(puestoId, b.id, !aplica);
+    setPendingId(null);
+    if (!res.ok) {
+      toast.error(res.error ?? "No se pudo actualizar el bonus");
+      // Revertir.
+      setBonus((prev) => prev.map((x) => x.id === b.id
+        ? { ...x, puestoIds: aplica ? [...x.puestoIds, puestoId] : x.puestoIds.filter((id) => id !== puestoId) }
+        : x));
+    } else {
+      toast.success(!aplica ? `Bonus "${b.nombre}" añadido al puesto` : `Bonus "${b.nombre}" quitado del puesto`);
+    }
+  };
+
+  const aplicados = bonus.filter((b) => b.puestoIds.includes(puestoId));
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base flex items-center gap-2"><Gift className="h-4 w-4" /> Bonus del puesto</CardTitle>
+        <CardDescription>
+          Bonus que recibe este puesto. Ligado al módulo de Bonus: marcar o desmarcar aquí también se refleja allí.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        {loading ? (
+          <div className="flex items-center text-sm text-muted-foreground py-4"><Loader2 className="h-4 w-4 animate-spin mr-2" />Cargando bonus…</div>
+        ) : bonus.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No hay bonus configurados en esta empresa.</p>
+        ) : (
+          <div className="space-y-4">
+            <div>
+              <p className="text-xs font-medium text-muted-foreground mb-1.5">
+                Aplican a este puesto {aplicados.length > 0 && <span>({aplicados.length})</span>}
+              </p>
+              {aplicados.length === 0 ? (
+                <p className="text-sm text-muted-foreground">Ningún bonus asignado todavía. Marca los que apliquen abajo.</p>
+              ) : (
+                <div className="flex flex-wrap gap-1.5">
+                  {aplicados.map((b) => (
+                    <Badge key={b.id} className="gap-1 py-1">
+                      <Gift className="h-3 w-3" />{b.nombre}
+                      <span className="opacity-70">· {PERIODICIDAD_LABEL[b.periodicidad]}</span>
+                    </Badge>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div>
+              <p className="text-xs font-medium text-muted-foreground mb-1.5">Todos los bonus de la empresa</p>
+              <div className="space-y-1.5">
+                {bonus.map((b) => {
+                  const aplica = b.puestoIds.includes(puestoId);
+                  return (
+                    <button
+                      key={b.id}
+                      type="button"
+                      onClick={() => toggle(b)}
+                      disabled={pendingId === b.id}
+                      className={`w-full flex items-center gap-3 rounded-lg border p-2.5 text-left transition-colors ${aplica ? "border-primary/40 bg-primary/5" : "hover:bg-muted/50"}`}
+                    >
+                      <span className={`h-6 w-6 rounded-md flex items-center justify-center shrink-0 ${aplica ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}>
+                        {pendingId === b.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : aplica ? <CheckCircle2 className="h-3.5 w-3.5" /> : <Gift className="h-3.5 w-3.5" />}
+                      </span>
+                      <span className="flex-1 min-w-0">
+                        <span className="text-sm font-medium block truncate">{b.nombre || "Bonus sin nombre"}</span>
+                        <span className="text-xs text-muted-foreground block truncate">{b.tipo || "—"} · {PERIODICIDAD_LABEL[b.periodicidad]}</span>
+                      </span>
+                      <span className="text-xs text-muted-foreground shrink-0">{aplica ? "Aplicado" : "Añadir"}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 function DetalleView({ puesto, onBack }: { puesto: PuestoSalarial; onBack: () => void }) {
   return (
     <div className="space-y-4 p-4 md:p-6">
@@ -522,6 +630,8 @@ function DetalleView({ puesto, onBack }: { puesto: PuestoSalarial; onBack: () =>
           </CardContent>
         </Card>
       )}
+
+      <BonusDelPuesto puestoId={puesto.id} />
 
       <p className="text-xs text-muted-foreground text-right">Última actualización: {puesto.updatedAt}</p>
     </div>

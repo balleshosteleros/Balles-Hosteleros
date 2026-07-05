@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, Fragment, useRef } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   useCronogramasOperativos,
   CronogramaOperativo,
@@ -71,6 +71,7 @@ interface PendingSelector {
 
 export function CronogramasView() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { empresas } = useEmpresa();
   const todosDbIds = useMemo(
     () => empresas.filter((e) => !!e.dbId).map((e) => e.dbId!),
@@ -114,6 +115,19 @@ export function CronogramasView() {
   useEffect(() => {
     listDepartamentos().then((rows) => setDepartamentos(rows ?? []));
   }, []);
+
+  // Apertura directa desde otra pantalla (p. ej. Puestos de RRHH) vía ?rol=.
+  // Preselecciona el cronograma indicado una sola vez y limpia el parámetro
+  // para que volver al listado no lo vuelva a forzar.
+  const rolUrlAplicado = useRef(false);
+  useEffect(() => {
+    if (rolUrlAplicado.current) return;
+    const rolParam = searchParams.get("rol");
+    if (!rolParam) return;
+    rolUrlAplicado.current = true;
+    setSelectedRol(rolParam);
+    router.replace("/direccion/cronogramas");
+  }, [searchParams, router]);
 
   // Departamento al que está asignado el usuario (`profiles.departamento`).
   // Sólo verá los cronogramas de su propio departamento. `null` = aún

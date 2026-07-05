@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { CronogramasView } from "@/features/direccion/components/cronogramas/CronogramasView";
 import { Metadata } from "next";
 
@@ -7,5 +8,11 @@ export const metadata: Metadata = {
 };
 
 export default function CronogramasPage() {
-  return <CronogramasView />;
+  // Suspense: CronogramasView usa useSearchParams (?rol= para abrir directo
+  // el cronograma de un puesto desde RRHH).
+  return (
+    <Suspense fallback={null}>
+      <CronogramasView />
+    </Suspense>
+  );
 }

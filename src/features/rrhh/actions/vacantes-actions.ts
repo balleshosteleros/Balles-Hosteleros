@@ -289,13 +289,27 @@ export async function createPuesto(input: { nombre: string; departamento_id?: st
   try {
     const { supabase, empresaId } = await getContext();
     if (!empresaId) return { ok: false, error: "No autenticado" };
-    if (!input.nombre?.trim()) return { ok: false, error: "El nombre es obligatorio" };
+    const nombre = input.nombre?.trim() ?? "";
+    if (!nombre) return { ok: false, error: "El nombre es obligatorio" };
+
+    // Nombre único por empresa (ignorando mayúsculas/minúsculas y espacios).
+    // Dos puestos deben diferenciarse al menos en una letra.
+    const { data: dup } = await supabase
+      .from("puestos")
+      .select("id")
+      .eq("empresa_id", empresaId)
+      .ilike("nombre", nombre)
+      .limit(1)
+      .maybeSingle();
+    if (dup?.id) {
+      return { ok: false, error: `Ya existe un puesto llamado "${nombre}". Debe diferenciarse al menos en una letra.` };
+    }
 
     const { data, error } = await supabase
       .from("puestos")
       .insert({
         empresa_id: empresaId,
-        nombre: input.nombre.trim(),
+        nombre,
         departamento_id: input.departamento_id ?? null,
         descripcion: input.descripcion ?? null,
       })
@@ -339,8 +353,22 @@ export async function updatePuesto(input: {
 
     const patch: Record<string, unknown> = {};
     if (input.nombre !== undefined) {
-      if (!input.nombre.trim()) return { ok: false, error: "El nombre es obligatorio" };
-      patch.nombre = input.nombre.trim();
+      const nombre = input.nombre.trim();
+      if (!nombre) return { ok: false, error: "El nombre es obligatorio" };
+      // Nombre único por empresa (ignorando mayúsculas/minúsculas y espacios),
+      // excluyendo el propio puesto.
+      const { data: dup } = await supabase
+        .from("puestos")
+        .select("id")
+        .eq("empresa_id", empresaId)
+        .ilike("nombre", nombre)
+        .neq("id", input.id)
+        .limit(1)
+        .maybeSingle();
+      if (dup?.id) {
+        return { ok: false, error: `Ya existe un puesto llamado "${nombre}". Debe diferenciarse al menos en una letra.` };
+      }
+      patch.nombre = nombre;
     }
     if (input.descripcion !== undefined) patch.descripcion = input.descripcion;
     if (input.departamento_id !== undefined) {
