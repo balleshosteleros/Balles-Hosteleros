@@ -1,14 +1,20 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
+import { toast } from "sonner";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import {
   type Bonus, type TablaTramos, type TramoBonus, type ReglaBonus,
   type EstadoBonus, type PeriodicidadBonus, type TipoDestinatario,
-  getBonusPorEmpresa, getConfigBonusEmpresa, getResultadosPorBonus, crearBonusVacio,
+  getConfigBonusEmpresa, getResultadosPorBonus,
   ESTADO_BONUS_LABEL, ESTADO_BONUS_COLOR, PERIODICIDAD_LABEL,
   ESTADO_RESULTADO_LABEL, ESTADO_RESULTADO_COLOR,
 } from "@/features/rrhh/data/bonus";
+import {
+  listBonusEmpresa, crearBonus, actualizarBonus, eliminarBonus,
+} from "@/features/rrhh/actions/bonus-actions";
+import { listPuestosEmpresa } from "@/features/rrhh/actions/puestos-actions";
+import type { PuestoSalarial } from "@/features/rrhh/data/puestos";
 import { DEPARTAMENTOS } from "@/features/rrhh/data/rrhh";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -26,7 +32,7 @@ import {
 import {
   Plus, MoreHorizontal, ArrowLeft, Trash2, TrendingUp, Package, ClipboardCheck,
   Heart, Coins, Gift, AlertTriangle, CreditCard, ShieldCheck, Users, Settings, Settings2, FileText,
-  BarChart3, Eye, Calendar, CheckCircle2, Info,
+  BarChart3, Eye, Calendar, CheckCircle2, Info, Briefcase, Loader2,
 } from "lucide-react";
 import {
   SubmoduleToolbar,
@@ -37,6 +43,7 @@ import {
 } from "@/shared/components/SubmoduleToolbar";
 import { IOActions } from "@/shared/io";
 import { bonusIO } from "@/features/rrhh/io/bonus.io";
+import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 
 const ICON_MAP: Record<string, React.ElementType> = {
   TrendingUp, Package, ClipboardCheck, Heart, Coins, Gift, BarChart3,
@@ -46,10 +53,11 @@ function BonusIcon({ name, className }: { name: string; className?: string }) {
   return <Icon className={className} />;
 }
 
-function ListadoBonus({ bonus, onSelect, onCrear, empresaId }: {
+function ListadoBonus({ bonus, onSelect, onCrear, onEliminar, empresaId }: {
   bonus: Bonus[];
   onSelect: (b: Bonus, tab?: string) => void;
   onCrear: () => void;
+  onEliminar: (b: Bonus) => void;
   empresaId: string;
 }) {
   const eId = empresaId;
@@ -150,7 +158,12 @@ function ListadoBonus({ bonus, onSelect, onCrear, empresaId }: {
                       <DropdownMenuItem>Duplicar</DropdownMenuItem>
                       <DropdownMenuItem>Desactivar</DropdownMenuItem>
                       <DropdownMenuItem>Archivar</DropdownMenuItem>
-                      <DropdownMenuItem className="text-destructive">Eliminar</DropdownMenuItem>
+                      <DropdownMenuItem
+                        className="text-destructive"
+                        onClick={(e) => { e.stopPropagation(); onEliminar(b); }}
+                      >
+                        <Trash2 className="h-4 w-4 mr-2" />Eliminar
+                      </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </div>
@@ -163,8 +176,13 @@ function ListadoBonus({ bonus, onSelect, onCrear, empresaId }: {
   );
 }
 
-function TabDetalles({ bonus, config }: { bonus: Bonus; config: ReturnType<typeof getConfigBonusEmpresa> }) {
+function TabDetalles({ bonus, config, puestos }: {
+  bonus: Bonus;
+  config: ReturnType<typeof getConfigBonusEmpresa>;
+  puestos: PuestoSalarial[];
+}) {
   const b = bonus;
+  const puestosAplica = puestos.filter((p) => b.puestoIds.includes(p.id));
   return (
     <div className="space-y-6 mt-4">
       <div className="grid md:grid-cols-2 gap-4">
@@ -204,6 +222,27 @@ function TabDetalles({ bonus, config }: { bonus: Bonus; config: ReturnType<typeo
           {b.destinatarios.ids.length > 0 && (
             <div className="flex flex-wrap gap-1.5 mt-2">
               {b.destinatarios.ids.map((id) => <Badge key={id} variant="secondary" className="text-xs">{id}</Badge>)}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2"><Briefcase className="h-4 w-4 text-primary" />Puestos a los que aplica</CardTitle>
+          <CardDescription>Ligado al listado de puestos. Se gestiona en la pestaña de configuración.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {puestosAplica.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Este bonus no está vinculado a ningún puesto todavía.</p>
+          ) : (
+            <div className="flex flex-wrap gap-1.5">
+              {puestosAplica.map((p) => (
+                <Badge key={p.id} variant="secondary" className="text-xs gap-1">
+                  <Briefcase className="h-3 w-3" />{p.puesto}
+                  <span className="text-muted-foreground/70">· {p.departamento}</span>
+                </Badge>
+              ))}
             </div>
           )}
         </CardContent>
@@ -375,12 +414,31 @@ function TabResultados({ bonus, empresaId }: { bonus: Bonus; empresaId: string }
   );
 }
 
-function TabConfiguracion({ bonus, config, onChange }: {
+function TabConfiguracion({ bonus, config, puestos, onChange }: {
   bonus: Bonus;
   config: ReturnType<typeof getConfigBonusEmpresa>;
+  puestos: PuestoSalarial[];
   onChange: (p: Partial<Bonus>) => void;
 }) {
   const b = bonus;
+
+  const togglePuesto = (id: string) => {
+    const ids = b.puestoIds.includes(id)
+      ? b.puestoIds.filter((x) => x !== id)
+      : [...b.puestoIds, id];
+    onChange({ puestoIds: ids });
+  };
+
+  // Puestos agrupados por departamento para el selector.
+  const puestosPorDepto = useMemo(() => {
+    const map = new Map<string, PuestoSalarial[]>();
+    for (const p of [...puestos].sort((a, b2) => a.puesto.localeCompare(b2.puesto))) {
+      const arr = map.get(p.departamento) ?? [];
+      arr.push(p);
+      map.set(p.departamento, arr);
+    }
+    return [...map.entries()].sort((a, b2) => a[0].localeCompare(b2[0]));
+  }, [puestos]);
 
   const addTabla = () => {
     const t: TablaTramos = { id: `t-${Date.now()}`, titulo: "", descripcion: "", tramos: [] };
@@ -493,6 +551,56 @@ function TabConfiguracion({ bonus, config, onChange }: {
         </CardContent>
       </Card>
 
+      <Card className="border-primary/20">
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2"><Briefcase className="h-4 w-4 text-primary" />¿A qué puestos aplica?</CardTitle>
+          <CardDescription>
+            Selecciona los puestos que reciben este bonus. Está ligado al listado de puestos: lo que marques aquí aparecerá también en la ficha de cada puesto.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {puestos.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No hay puestos configurados en esta empresa.</p>
+          ) : (
+            <>
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-muted-foreground">
+                  {b.puestoIds.length} puesto{b.puestoIds.length !== 1 ? "s" : ""} seleccionado{b.puestoIds.length !== 1 ? "s" : ""}
+                </span>
+                {b.puestoIds.length > 0 && (
+                  <Button variant="ghost" size="sm" className="h-7 text-xs text-muted-foreground" onClick={() => onChange({ puestoIds: [] })}>
+                    Quitar todos
+                  </Button>
+                )}
+              </div>
+              <div className="space-y-3">
+                {puestosPorDepto.map(([depto, ps]) => (
+                  <div key={depto}>
+                    <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-1.5">{depto}</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {ps.map((p) => {
+                        const activo = b.puestoIds.includes(p.id);
+                        return (
+                          <Badge
+                            key={p.id}
+                            variant={activo ? "default" : "outline"}
+                            className="cursor-pointer gap-1 py-1"
+                            onClick={() => togglePuesto(p.id)}
+                          >
+                            {activo ? <CheckCircle2 className="h-3 w-3" /> : <Briefcase className="h-3 w-3" />}
+                            {p.puesto}
+                          </Badge>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+        </CardContent>
+      </Card>
+
       <div className="space-y-4">
         <h3 className="text-sm font-semibold flex items-center gap-2"><BarChart3 className="h-4 w-4" />Tablas de tramos</h3>
         {b.tablas.map((tabla, tIdx) => (
@@ -565,16 +673,37 @@ function TabConfiguracion({ bonus, config, onChange }: {
   );
 }
 
-function DetalleBonus({ bonus: initial, config, empresaId, onBack, initialTab = "detalles" }: {
+function DetalleBonus({ bonus: initial, config, puestos, empresaId, onBack, onSaved, initialTab = "detalles" }: {
   bonus: Bonus;
   config: ReturnType<typeof getConfigBonusEmpresa>;
+  puestos: PuestoSalarial[];
   empresaId: string;
   onBack: () => void;
+  onSaved: (b: Bonus) => void;
   initialTab?: string;
 }) {
   const [b, setB] = useState<Bonus>(JSON.parse(JSON.stringify(initial)));
   const [tab, setTab] = useState(initialTab);
+  const [saving, setSaving] = useState(false);
   const update = (p: Partial<Bonus>) => setB((prev) => ({ ...prev, ...p }));
+
+  const handleGuardar = async () => {
+    setSaving(true);
+    const res = await actualizarBonus(b.id, {
+      nombre: b.nombre, tipo: b.tipo, descripcion: b.descripcion, objetivo: b.objetivo,
+      explicacion: b.explicacion, estado: b.estado, periodicidad: b.periodicidad,
+      destinatarios: b.destinatarios, destinatariosTexto: b.destinatariosTexto,
+      tablas: b.tablas, reglas: b.reglas, formaPago: b.formaPago, premio: b.premio,
+      puestoIds: b.puestoIds,
+    });
+    setSaving(false);
+    if (res.ok) {
+      toast.success("Bonus guardado");
+      onSaved(b);
+    } else {
+      toast.error(res.error ?? "No se pudo guardar");
+    }
+  };
 
   return (
     <div className="space-y-4">
@@ -593,7 +722,9 @@ function DetalleBonus({ bonus: initial, config, empresaId, onBack, initialTab = 
         </div>
         {tab === "config" && (
           <div className="flex gap-2">
-            <Button>Guardar</Button>
+            <Button onClick={handleGuardar} disabled={saving}>
+              {saving && <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />}Guardar
+            </Button>
           </div>
         )}
       </div>
@@ -606,13 +737,13 @@ function DetalleBonus({ bonus: initial, config, empresaId, onBack, initialTab = 
         </TabsList>
 
         <TabsContent value="detalles">
-          <TabDetalles bonus={b} config={config} />
+          <TabDetalles bonus={b} config={config} puestos={puestos} />
         </TabsContent>
         <TabsContent value="resultados">
           <TabResultados bonus={b} empresaId={empresaId} />
         </TabsContent>
         <TabsContent value="config">
-          <TabConfiguracion bonus={b} config={config} onChange={update} />
+          <TabConfiguracion bonus={b} config={config} puestos={puestos} onChange={update} />
         </TabsContent>
       </Tabs>
     </div>
@@ -622,38 +753,98 @@ function DetalleBonus({ bonus: initial, config, empresaId, onBack, initialTab = 
 export function BonusView() {
   const { empresaActual } = useEmpresa();
   const eId = empresaActual.id;
-  const [bonusList, setBonusList] = useState<Bonus[]>(() => getBonusPorEmpresa(eId));
   const config = getConfigBonusEmpresa(eId);
+  const [bonusList, setBonusList] = useState<Bonus[]>([]);
+  const [puestos, setPuestos] = useState<PuestoSalarial[]>([]);
+  const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<{ bonus: Bonus; tab: string } | null>(null);
+  const { confirm: confirmDelete, dialog: confirmDeleteDialog } = useConfirmDelete();
 
-  const [prevEmpresa, setPrevEmpresa] = useState(eId);
-  if (prevEmpresa !== eId) {
-    setPrevEmpresa(eId);
-    setBonusList(getBonusPorEmpresa(eId));
+  const recargar = useCallback(async () => {
+    const [bonus, res] = await Promise.all([listBonusEmpresa(), listPuestosEmpresa()]);
+    setBonusList(bonus);
+    setPuestos(res.puestos);
+    setLoading(false);
+  }, []);
+
+  useEffect(() => {
+    let activo = true;
+    setLoading(true);
     setSelected(null);
-  }
+    Promise.all([listBonusEmpresa(), listPuestosEmpresa()]).then(([bonus, res]) => {
+      if (!activo) return;
+      setBonusList(bonus);
+      setPuestos(res.puestos);
+      setLoading(false);
+    });
+    return () => { activo = false; };
+  }, [eId]);
 
-  const handleCrear = () => {
-    const nuevo = crearBonusVacio(eId);
-    setBonusList((prev) => [nuevo, ...prev]);
-    setSelected({ bonus: nuevo, tab: "config" });
+  const handleCrear = async () => {
+    const res = await crearBonus({ estado: "borrador", periodicidad: "trimestral", destinatariosTexto: "Todo el equipo" });
+    if (!res.ok || !res.bonus) {
+      toast.error(res.error ?? "No se pudo crear el bonus");
+      return;
+    }
+    setBonusList((prev) => [...prev, res.bonus!]);
+    setSelected({ bonus: res.bonus, tab: "config" });
   };
 
   const handleSelect = (b: Bonus, tab = "detalles") => {
     setSelected({ bonus: b, tab });
   };
 
+  // Al guardar en el detalle: refleja el bonus actualizado en la lista y recarga
+  // los puestos por si cambió el vínculo (sincronización bidireccional).
+  const handleSaved = (b: Bonus) => {
+    setBonusList((prev) => prev.map((x) => (x.id === b.id ? b : x)));
+    setSelected({ bonus: b, tab: "config" });
+  };
+
+  const handleEliminar = async (b: Bonus) => {
+    const ok = await confirmDelete({
+      title: "¿Eliminar bonus?",
+      description: `Se eliminará el bonus "${b.nombre || "Nuevo bonus"}". Esta acción no se puede deshacer.`,
+      confirmLabel: "Eliminar",
+    });
+    if (!ok) return;
+    const res = await eliminarBonus(b.id);
+    if (!res.ok) {
+      toast.error(res.error ?? "No se pudo eliminar");
+      return;
+    }
+    setBonusList((prev) => prev.filter((x) => x.id !== b.id));
+    setSelected((prev) => (prev?.bonus.id === b.id ? null : prev));
+    toast.success("Bonus eliminado");
+  };
+
   if (selected) {
     return (
       <div className="p-4 md:p-6 max-w-5xl mx-auto">
-        <DetalleBonus bonus={selected.bonus} config={config} empresaId={eId} onBack={() => setSelected(null)} initialTab={selected.tab} />
+        <DetalleBonus
+          bonus={selected.bonus}
+          config={config}
+          puestos={puestos}
+          empresaId={eId}
+          onBack={() => { void recargar(); setSelected(null); }}
+          onSaved={handleSaved}
+          initialTab={selected.tab}
+        />
+        {confirmDeleteDialog}
       </div>
     );
   }
 
   return (
     <div className="p-4 md:p-6 max-w-5xl mx-auto">
-      <ListadoBonus bonus={bonusList} onSelect={handleSelect} onCrear={handleCrear} empresaId={eId} />
+      {loading ? (
+        <div className="flex items-center justify-center py-24 text-muted-foreground">
+          <Loader2 className="h-5 w-5 animate-spin mr-2" />Cargando bonus…
+        </div>
+      ) : (
+        <ListadoBonus bonus={bonusList} onSelect={handleSelect} onCrear={handleCrear} onEliminar={handleEliminar} empresaId={eId} />
+      )}
+      {confirmDeleteDialog}
     </div>
   );
 }

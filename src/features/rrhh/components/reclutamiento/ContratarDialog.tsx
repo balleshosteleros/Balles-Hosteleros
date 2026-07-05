@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useTransition } from "react";
 import { toast } from "sonner";
-import { Loader2, UserCheck } from "lucide-react";
+import { Loader2, UserCheck, AlertTriangle } from "lucide-react";
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
@@ -51,6 +51,7 @@ export function ContratarDialog({ open, onOpenChange, candidato, onDone, variant
   const [primerDia, setPrimerDia] = useState(hoy());
   const [localId, setLocalId] = useState("");
   const [emailEmpresa, setEmailEmpresa] = useState("");
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const [pending, startTransition] = useTransition();
 
@@ -68,6 +69,7 @@ export function ContratarDialog({ open, onOpenChange, candidato, onDone, variant
     if (!open || !candidatoId) return;
     setPrimerDia(hoy());
     setEmailEmpresa("");
+    setErrorMsg(null);
     // Default inmediato: el puesto de la vacante sale ya seleccionado aunque el
     // catálogo aún esté cargando (sin esperar al fetch).
     setPuestoId(vacantePuestoId ?? "");
@@ -89,6 +91,7 @@ export function ContratarDialog({ open, onOpenChange, candidato, onDone, variant
     if (!localId) { toast.error("Selecciona el local"); return; }
     if (esAdministrativo && !emailEmpresa.trim()) { toast.error("Los puestos administrativos requieren email de empresa"); return; }
     startTransition(async () => {
+      try {
       if (esIniciar) {
         const res = await iniciarContratacion({
           candidatoId: candidato.id,
@@ -105,10 +108,15 @@ export function ContratarDialog({ open, onOpenChange, candidato, onDone, variant
             ? `${partes.join(" y ").charAt(0).toUpperCase()}${partes.join(" y ").slice(1)} enviados`
             : "Empleado creado";
           toast.success("Contratación iniciada", { description });
+          setErrorMsg(null);
           onDone();
           onOpenChange(false);
         } else {
-          toast.error(res.error ?? "No se pudo iniciar la contratación");
+          // El diálogo NO se cierra: se muestra el error en un banner visible y
+          // basta con volver a pulsar para reintentar en un solo paso.
+          const msg = res.error ?? "No se pudo iniciar la contratación";
+          setErrorMsg(msg);
+          toast.error(msg, { description: "Pulsa «Iniciar contratación» de nuevo para reintentar." });
         }
         return;
       }
@@ -132,13 +140,28 @@ export function ContratarDialog({ open, onOpenChange, candidato, onDone, variant
             description: "Revisa el correo de la gestoría en Ajustes → RRHH → Reclutamiento.",
           });
         }
+        setErrorMsg(null);
         onDone();
         onOpenChange(false);
       } else {
         // El diálogo NO se cierra: los datos siguen rellenos y basta con volver a
-        // pulsar «Contratar» para reintentar en un solo paso.
-        toast.error(res.error ?? "No se pudo contratar", {
+        // pulsar «Contratar» para reintentar en un solo paso. El error se muestra
+        // en un banner visible dentro del diálogo (no solo un toast efímero).
+        const msg = res.error ?? "No se pudo contratar";
+        setErrorMsg(msg);
+        toast.error(msg, {
           description: "Los datos siguen aquí. Pulsa «Contratar» de nuevo para reintentar.",
+        });
+      }
+      } catch (e) {
+        // Fallo inesperado (red, timeout, crash del servidor): avisa SIEMPRE en el
+        // momento y deja el diálogo abierto para reintentar. La reversión del
+        // candidato la hace el servidor; si no llegó a ejecutarse, el reintento
+        // vuelve a lanzarla.
+        const msg = e instanceof Error ? e.message : "Error inesperado al contratar";
+        setErrorMsg(msg);
+        toast.error("No se pudo completar la contratación", {
+          description: `${msg}. Vuelve a intentarlo; si persiste, avisa a soporte.`,
         });
       }
     });
@@ -163,6 +186,20 @@ export function ContratarDialog({ open, onOpenChange, candidato, onDone, variant
         </DialogHeader>
 
         <div className="space-y-4 py-2">
+            {errorMsg && (
+              <div
+                role="alert"
+                className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2.5 text-sm text-destructive"
+              >
+                <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+                <div className="space-y-0.5">
+                  <p className="font-medium">La contratación no se completó y se ha revertido.</p>
+                  <p className="text-xs text-destructive/90">
+                    {errorMsg}. Los datos siguen aquí: pulsa «{esIniciar ? "Iniciar contratación" : "Contratar"}» de nuevo para reintentarlo.
+                  </p>
+                </div>
+              </div>
+            )}
             <div className="space-y-1.5">
               <Label htmlFor="ct-puesto">Puesto</Label>
               <select

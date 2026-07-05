@@ -63,6 +63,8 @@ export interface Bonus {
   formaPago: string;
   premio: string;
   icono: string;
+  /** Puestos (puestos.id) a los que aplica este bonus. Fuente única del vínculo bonus↔puesto. */
+  puestoIds: string[];
 }
 
 export interface ConfigBonusEmpresa {
@@ -72,7 +74,7 @@ export interface ConfigBonusEmpresa {
 
 // ─── Data HABANA ────────────────────────────────────────────────
 
-const bonusHabana: Bonus[] = [
+const bonusHabana: Omit<Bonus, "puestoIds">[] = [
   {
     id: "bh1", empresaId: "habana", nombre: "BALANCE", tipo: "Financiero",
     descripcion: "Bonus basado en el resultado del balance trimestral de la empresa.",
@@ -192,7 +194,7 @@ const bonusHabana: Bonus[] = [
 
 // ─── Data BACANAL ───────────────────────────────────────────────
 
-const bonusBacanal: Bonus[] = [
+const bonusBacanal: Omit<Bonus, "puestoIds">[] = [
   {
     id: "bb1", empresaId: "bacanal", nombre: "BALANCE", tipo: "Financiero",
     descripcion: "Bonus basado en el resultado del balance trimestral.",
@@ -340,9 +342,10 @@ const resultadosBacanal: ResultadoBonus[] = [
 // ─── Public API ─────────────────────────────────────────────────
 
 export function getBonusPorEmpresa(empresaId: string): Bonus[] {
-  if (empresaId === "habana") return bonusHabana;
-  if (empresaId === "bacanal") return bonusBacanal;
-  return [];
+  // Fallback en memoria (solo import/export legacy). La fuente real es la tabla
+  // public.rrhh_bonus vía bonus-actions.ts.
+  const base = empresaId === "habana" ? bonusHabana : empresaId === "bacanal" ? bonusBacanal : [];
+  return base.map((b) => ({ ...b, puestoIds: [] }));
 }
 
 export function getConfigBonusEmpresa(empresaId: string): ConfigBonusEmpresa {
@@ -361,6 +364,6 @@ export function crearBonusVacio(empresaId: string): Bonus {
     id: `bonus-${Date.now()}`, empresaId, nombre: "", tipo: "", descripcion: "", objetivo: "",
     explicacion: "", estado: "borrador", periodicidad: "trimestral",
     destinatarios: { tipo: "todos", ids: [] }, destinatariosTexto: "Todo el equipo",
-    tablas: [], reglas: [], formaPago: "", premio: "", icono: "Gift",
+    tablas: [], reglas: [], formaPago: "", premio: "", icono: "Gift", puestoIds: [],
   };
 }

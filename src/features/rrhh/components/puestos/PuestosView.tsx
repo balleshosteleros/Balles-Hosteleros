@@ -8,6 +8,7 @@ import { useTabQuery } from "@/shared/hooks/use-tab-query";
 import { type PuestoSalarial, type NormaSalarial, NORMAS_BASE, DEPARTAMENTOS_DISPONIBLES } from "@/features/rrhh/data/puestos";
 import { listPuestosEmpresa } from "@/features/rrhh/actions/puestos-actions";
 import { crearCronogramaParaPuesto } from "@/features/rrhh/actions/vacantes-actions";
+import { getCursoDePuesto } from "@/features/formacion/actions/formacion-actions";
 import { listBonusEmpresa, togglePuestoBonus } from "@/features/rrhh/actions/bonus-actions";
 import type { Bonus } from "@/features/rrhh/data/bonus";
 import { PERIODICIDAD_LABEL } from "@/features/rrhh/data/bonus";
@@ -20,7 +21,7 @@ import {
   ArrowLeft, Plus, Settings, Settings2, DollarSign, Clock, Calendar,
   Briefcase, ChevronRight, Target, FileText, Pencil, ListChecks,
   UtensilsCrossed, ChefHat, Crown, User, Package, Camera, Calculator,
-  CheckCircle2, Scale, Users, Gift, Loader2,
+  CheckCircle2, Scale, Users, Gift, Loader2, GraduationCap,
 } from "lucide-react";
 import {
   SubmoduleToolbar,
@@ -184,6 +185,21 @@ function ListView({
       }
     });
   };
+
+  // Formación del puesto (1 puesto = 1 curso): abre el curso de este puesto.
+  // Si el curso no existe todavía, la acción lo crea al vuelo.
+  const [pendingFormId, setPendingFormId] = useState<string | null>(null);
+  const irAFormacion = async (p: PuestoSalarial) => {
+    setPendingFormId(p.id);
+    const res = await getCursoDePuesto(p.id);
+    setPendingFormId(null);
+    if (res.ok && res.cursoId) {
+      router.push(`/rrhh/formacion/curso/${res.cursoId}`);
+    } else {
+      toast.error(res.error ?? "No se pudo abrir la formación");
+    }
+  };
+
   const [busqueda, setBusqueda] = useState("");
   const [filtros, setFiltros] = useState<ToolbarFiltroActivo[]>([]);
   const [orden, setOrden] = useState<ToolbarOrdenActivo | null>(null);
@@ -374,6 +390,17 @@ function ListView({
                     >
                       <ListChecks className={`h-4 w-4 mr-1 ${p.tieneCronograma ? "text-emerald-600" : "text-muted-foreground"}`} />
                       Cronograma
+                    </Button>
+                    <Button
+                      variant="ghost" size="sm" className="h-8 px-2"
+                      onClick={(e) => { e.stopPropagation(); irAFormacion(p); }}
+                      disabled={pendingFormId === p.id}
+                      title="Ver la formación de este puesto"
+                    >
+                      {pendingFormId === p.id
+                        ? <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                        : <GraduationCap className="h-4 w-4 mr-1 text-violet-600" />}
+                      Formación
                     </Button>
                   </div>
                 </Card>

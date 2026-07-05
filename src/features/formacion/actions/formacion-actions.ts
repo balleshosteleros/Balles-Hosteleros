@@ -129,6 +129,54 @@ export async function listPuestosFormacion(): Promise<{ ok: boolean; data: Puest
   }
 }
 
+/**
+ * Devuelve el id del curso de formación de un puesto (relación 1:1). Si aún no
+ * existe (puesto nuevo sin sincronizar), lo crea al vuelo. Usado por el enlace
+ * "Formación" de la ficha del puesto en RRHH.
+ */
+export async function getCursoDePuesto(
+  puestoId: string,
+): Promise<{ ok: boolean; cursoId?: string; error?: string }> {
+  try {
+    const { supabase, empresaId } = await ctx();
+    if (!empresaId) return { ok: false, error: "No autenticado" };
+
+    const { data: existente } = await supabase
+      .from("formacion_cursos")
+      .select("id")
+      .eq("puesto_id", puestoId)
+      .eq("empresa_id", empresaId)
+      .maybeSingle();
+    if (existente?.id) return { ok: true, cursoId: existente.id };
+
+    // No existe: crearlo con el nombre del puesto.
+    const { data: puesto } = await supabase
+      .from("puestos")
+      .select("nombre")
+      .eq("id", puestoId)
+      .maybeSingle();
+
+    const id = crypto.randomUUID();
+    const { error } = await supabase.from("formacion_cursos").insert({
+      id,
+      empresa_id: empresaId,
+      puesto_id: puestoId,
+      ambito: "puesto",
+      titulo: puesto?.nombre ?? "Formación",
+      categoria: "operativa",
+      orden: 0,
+      publicado: true,
+      fecha_publicacion: new Date().toISOString().slice(0, 10),
+      autor: "",
+    });
+    if (error) return { ok: false, error: error.message };
+    return { ok: true, cursoId: id };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Error";
+    return { ok: false, error: msg };
+  }
+}
+
 /** Nombres de los puestos reales del empleado autenticado (principal primero). */
 export async function getMisPuestosNombres(): Promise<{ ok: boolean; data: string[] }> {
   try {
