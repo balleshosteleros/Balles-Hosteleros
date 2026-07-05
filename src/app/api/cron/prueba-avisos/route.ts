@@ -114,11 +114,10 @@ export async function GET(request: Request) {
         (typeof dg.correoGeneral === "string" ? dg.correoGeneral : "");
       const empresaNombre = (empresa?.nombre as string) ?? "la empresa";
 
-      if (correoRrhh) {
-        // Plantilla editable «Aviso de periodo de prueba (RRHH)» (UI Plantillas de email).
-        const { resolverPlantillaOnboarding, cuerpoOnboardingAHtml, PLANTILLAS_ONBOARDING } = await import(
-          "@/features/rrhh/services/email-plantillas/resolver"
-        );
+      {
+        // Plantilla editable del aviso de prueba (UI «Plantillas de email»).
+        const { resolverPlantillaOnboarding, resolverDestinatario, cuerpoOnboardingAHtml, PLANTILLAS_ONBOARDING } =
+          await import("@/features/rrhh/services/email-plantillas/resolver");
         const vars: Record<string, string> = {
           candidato_nombre_completo: nombre,
           empresa_nombre: empresaNombre,
@@ -135,6 +134,13 @@ export async function GET(request: Request) {
           vars,
         );
 
+        // Destinatario configurable (por defecto: RRHH). Sin plantilla, a RRHH.
+        const dst = tpl
+          ? await resolverDestinatario(admin, empresaId, tpl.destino, tpl.destinoEmail, null)
+          : { to: correoRrhh, cc: null };
+        const to = dst.to || correoRrhh;
+        if (!to) continue;
+
         let subject: string;
         let html: string;
         let text: string;
@@ -149,7 +155,7 @@ export async function GET(request: Request) {
           <p style="color:#888;font-size:12px">Enviado automáticamente desde el sistema de ${empresaNombre}.</p>`;
           text = mensaje;
         }
-        const res = await sendEmail({ to: correoRrhh, subject, html, text, empresaId });
+        const res = await sendEmail({ to, subject, html, text, empresaId });
         if (res.ok && canal === "email") avisos++;
       }
     }

@@ -43,12 +43,20 @@
  */
 
 export interface ReclutamientoEmailPlantillaSeed {
-  /** Nombre de la plantilla (identidad de la plantilla dentro de la empresa). */
+  /** Nombre INICIAL de la plantilla (editable por el cliente después). */
   nombre: string;
   asunto: string;
   cuerpo: string;
   /** Si la plantilla envía correo automáticamente por defecto. */
   activa: boolean;
+  /**
+   * CLAVE estable de las plantillas del sistema (onboarding). El flujo las
+   * localiza por aquí, NO por el nombre → el nombre es editable. Las plantillas
+   * libres (asociadas a estados) no llevan clave.
+   */
+  clave?: "gestoria_alta" | "gestoria_recordatorio" | "contrato_interno" | "contrato_oficial" | "prueba_aviso";
+  /** Destinatario por defecto (candidato / gestoria / rrhh). Editable después. */
+  destino?: "candidato" | "gestoria" | "rrhh" | "personalizado";
 }
 
 export const RECLUTAMIENTO_EMAIL_PLANTILLAS_SEED: ReclutamientoEmailPlantillaSeed[] = [
@@ -116,6 +124,10 @@ E. Tu dirección postal y tu fecha de nacimiento.
 
 👉 Entra en este enlace personal y sigue los pasos:
 {{enlace_documentacion}}
+
+⏳ Importante: este enlace caduca a los {{documentacion_dias_validez}} días. Complétalo antes de que expire; si caduca, escríbenos y te enviaremos uno nuevo.
+
+Ten en cuenta que debes adjuntar TODOS los documentos para poder enviarlo, y que una vez enviado el enlace queda cerrado.
 
 Nuestro sistema leerá automáticamente los números de tus documentos y te los mostrará para que los revises y confirmes que son correctos. Es muy rápido.
 
@@ -234,11 +246,13 @@ Un saludo,
 
   // ───────────────────────────────────── ONBOARDING (PRP-070) ──
   // Correos del flujo de contratación, editables desde «Plantillas de email».
-  // Sus NOMBRES son reservados (los lee el resolver de onboarding); si los
-  // renombras, el sistema usará el texto por defecto del código.
+  // El flujo los localiza por su CLAVE estable (no por el nombre): el nombre y el
+  // destinatario son editables sin romper nada.
 
   // ── Alta a la gestoría ──
   {
+    clave: "gestoria_alta",
+    destino: "gestoria",
     nombre: "Gestoría · alta de contrato",
     asunto: "Alta de contrato · {{candidato_nombre_completo}} · {{empresa_nombre}}",
     cuerpo: `Hola,
@@ -256,6 +270,8 @@ Gracias,
 
   // ── Recordatorio a la gestoría ──
   {
+    clave: "gestoria_recordatorio",
+    destino: "gestoria",
     nombre: "Gestoría · recordatorio de contrato",
     asunto: "Pendiente: contrato de {{candidato_nombre_completo}} sin subir · {{empresa_nombre}}",
     cuerpo: `Hola,
@@ -271,6 +287,8 @@ Gracias,
 
   // ── Contrato interno (a firmar por el trabajador) ──
   {
+    clave: "contrato_interno",
+    destino: "candidato",
     nombre: "Contrato interno (a firmar)",
     asunto: "Firma tu contrato interno · {{empresa_nombre}}",
     cuerpo: `Hola {{candidato_nombre}},
@@ -286,6 +304,8 @@ Un saludo,
 
   // ── Contrato oficial (a firmar por el trabajador) ──
   {
+    clave: "contrato_oficial",
+    destino: "candidato",
     nombre: "Contrato oficial (a firmar)",
     asunto: "Firma tu contrato laboral · {{empresa_nombre}}",
     cuerpo: `Hola {{candidato_nombre}},
@@ -299,6 +319,8 @@ Un saludo,
 
   // ── Aviso a RRHH durante el periodo de prueba ──
   {
+    clave: "prueba_aviso",
+    destino: "rrhh",
     nombre: "Aviso de periodo de prueba (RRHH)",
     asunto: "Periodo de prueba de {{candidato_nombre_completo}}: revisa su evolución · {{empresa_nombre}}",
     cuerpo: `{{candidato_nombre_completo}} lleva {{prueba_dias_transcurridos}} días en periodo de prueba.

@@ -12,17 +12,22 @@ import {
 } from "@/features/rrhh/data/reclutamiento";
 import { getReclutamientoConfigGeneral } from "@/features/rrhh/actions/gestoria-actions";
 import {
-  PLANTILLAS_RESERVADAS_POR_ESTADO,
-  PLANTILLAS_ONBOARDING_PROTEGIDAS,
-  destinoDePlantilla,
+  CLAVES_RESERVADAS_POR_ESTADO,
+  CLAVES_ONBOARDING_PROTEGIDAS,
+  NOMBRES_ONBOARDING,
+  normalizarDestino,
   type DestinoPlantilla,
 } from "@/features/rrhh/lib/plantillas-onboarding";
 
 /**
- * Biblioteca de plantillas de email del RECLUTAMIENTO. Cada plantilla es SUELTA
- * (identificada por `nombre`), no está atada a un estado. La asociación
- * email↔estado vive en la plantilla de estados (`estados[].email_plantilla_id`)
- * y, como override por vacante, en `vacantes.email_plantillas`.
+ * Biblioteca de plantillas de email del RECLUTAMIENTO. Cada plantilla es SUELTA,
+ * no está atada a un estado. La asociación email↔estado vive en la plantilla de
+ * estados (`estados[].email_plantilla_id`) y, como override por vacante, en
+ * `vacantes.email_plantillas`.
+ *
+ * · `clave`  — identificador ESTABLE de las plantillas del sistema (o null en las
+ *   libres). El flujo las localiza por aquí, así que el NOMBRE es editable.
+ * · `destino`/`destinoEmail` — a quién se envía este correo.
  */
 export interface ReclutamientoEmailPlantilla {
   id: string;
@@ -30,6 +35,9 @@ export interface ReclutamientoEmailPlantilla {
   asunto: string;
   cuerpo: string;
   activa: boolean;
+  clave: string | null;
+  destino: DestinoPlantilla;
+  destinoEmail: string | null;
 }
 
 type ActionResult = { ok: true } | { ok: false; error: string };
@@ -60,14 +68,41 @@ export async function listReclutamientoEmailPlantillas(): Promise<
 
   const { data, error } = await supabase
     .from("reclutamiento_email_plantillas")
-    .select("id, nombre, asunto, cuerpo, activa")
+    .select("id, nombre, asunto, cuerpo, activa, clave, destino, destino_email")
     .eq("empresa_id", empresaId)
     .order("created_at", { ascending: true });
   if (error) {
     console.error("[reclutamiento-email-plantillas] list:", error.message);
     return [];
   }
-  return (data ?? []) as ReclutamientoEmailPlantilla[];
+  return (data ?? []).map((r) => ({
+    id: r.id as string,
+    nombre: r.nombre as string,
+    asunto: r.asunto as string,
+    cuerpo: r.cuerpo as string,
+    activa: r.activa as boolean,
+    clave: (r.clave as string | null) ?? null,
+    destino: normalizarDestino(r.destino),
+    destinoEmail: (r.destino_email as string | null) ?? null,
+  }));
+}
+
+/**
+ * Valida el destinatario: `personalizado` exige un email; el resto no lleva
+ * `destino_email`. Devuelve el valor normalizado o un error.
+ */
+function normalizarDestinoInput(
+  destino: DestinoPlantilla | undefined,
+  destinoEmail: string | undefined,
+): { destino: DestinoPlantilla; destino_email: string | null } | { error: string } {
+  const d = normalizarDestino(destino);
+  if (d === "personalizado") {
+    const email = (destinoEmail ?? "").trim();
+    if (!email) return { error: "Escribe el email del destinatario personalizado" };
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { error: "El email del destinatario no es válido" };
+    return { destino: d, destino_email: email };
+  }
+  return { destino: d, destino_email: null };
 }
 
 export async function createReclutamientoEmailPlantilla(input: {
@@ -75,6 +110,8 @@ export async function createReclutamientoEmailPlantilla(input: {
   asunto: string;
   cuerpo: string;
   activa?: boolean;
+  destino?: DestinoPlantilla;
+  destinoEmail?: string;
 }): Promise<CreateResult> {
   const nombre = input.nombre.trim();
   const asunto = input.asunto.trim();
@@ -83,12 +120,25 @@ export async function createReclutamientoEmailPlantilla(input: {
   if (!asunto) return { ok: false, error: "El asunto no puede estar vacío" };
   if (!cuerpo) return { ok: false, error: "El cuerpo no puede estar vacío" };
 
+  const dst = normalizarDestinoInput(input.destino, input.destinoEmail);
+  if ("error" in dst) return { ok: false, error: dst.error };
+
   const { supabase, empresaId } = await ctx();
   if (!empresaId) return { ok: false, error: "Sin empresa activa" };
 
   const { data, error } = await supabase
     .from("reclutamiento_email_plantillas")
-    .insert({ empresa_id: empresaId, nombre, asunto, cuerpo, activa: input.activa ?? true })
+    .insert({
+      empresa_id: empresaId,
+      nombre,
+      asunto,
+      cuerpo,
+      activa: input.activa ?? true,
+      destino: dst.destino,
+      destino_email: dst.destino_email,
+      // Las plantillas creadas por el usuario nunca son del sistema.
+      clave: null,
+    })
     .select("id")
     .single();
   if (error) return { ok: false, error: dupMsg(error) };
@@ -99,33 +149,24 @@ export async function createReclutamientoEmailPlantilla(input: {
 
 export async function updateReclutamientoEmailPlantilla(
   id: string,
-  patch: { nombre?: string; asunto?: string; cuerpo?: string; activa?: boolean },
+  patch: {
+    nombre?: string;
+    asunto?: string;
+    cuerpo?: string;
+    activa?: boolean;
+    destino?: DestinoPlantilla;
+    destinoEmail?: string;
+  },
 ): Promise<ActionResult> {
   const { supabase, empresaId } = await ctx();
   if (!empresaId) return { ok: false, error: "Sin empresa activa" };
 
   const update: Record<string, unknown> = { updated_at: new Date().toISOString() };
+  // El nombre YA es editable (el flujo localiza las del sistema por `clave`, no
+  // por el nombre): renombrar aquí se propaga solo a todo el flujo.
   if (patch.nombre !== undefined) {
     const n = patch.nombre.trim();
     if (!n) return { ok: false, error: "El nombre no puede estar vacío" };
-    // Las plantillas del sistema no se pueden renombrar: todo el flujo de
-    // onboarding las localiza por su nombre exacto (dispara el correo, pinta el
-    // destinatario, protege del borrado). Solo se bloquea si el nombre cambia
-    // realmente, para no rechazar guardados que no tocan el nombre.
-    const { data: actual } = await supabase
-      .from("reclutamiento_email_plantillas")
-      .select("nombre")
-      .eq("id", id)
-      .eq("empresa_id", empresaId)
-      .maybeSingle();
-    const nombreActual = (actual?.nombre as string | null) ?? null;
-    if (
-      nombreActual &&
-      n !== nombreActual &&
-      PLANTILLAS_ONBOARDING_PROTEGIDAS.has(nombreActual)
-    ) {
-      return { ok: false, error: "El nombre de una plantilla del sistema no se puede cambiar" };
-    }
     update.nombre = n;
   }
   if (patch.asunto !== undefined) {
@@ -139,6 +180,12 @@ export async function updateReclutamientoEmailPlantilla(
     update.cuerpo = c;
   }
   if (patch.activa !== undefined) update.activa = patch.activa;
+  if (patch.destino !== undefined) {
+    const dst = normalizarDestinoInput(patch.destino, patch.destinoEmail);
+    if ("error" in dst) return { ok: false, error: dst.error };
+    update.destino = dst.destino;
+    update.destino_email = dst.destino_email;
+  }
 
   const { error } = await supabase
     .from("reclutamiento_email_plantillas")
@@ -163,14 +210,15 @@ export async function deleteReclutamientoEmailPlantilla(id: string): Promise<Act
   if (!empresaId) return { ok: false, error: "Sin empresa activa" };
 
   // Las plantillas reservadas del onboarding (gestoría, contratos, prueba) NUNCA
-  // se pueden borrar: las dispara el sistema. Defensa en servidor además de la UI.
+  // se pueden borrar: las dispara el sistema. Se identifican por su CLAVE estable
+  // (no por el nombre, que ahora es editable). Defensa en servidor además de la UI.
   const { data: actual } = await supabase
     .from("reclutamiento_email_plantillas")
-    .select("nombre")
+    .select("clave")
     .eq("id", id)
     .eq("empresa_id", empresaId)
     .maybeSingle();
-  if (actual?.nombre && PLANTILLAS_ONBOARDING_PROTEGIDAS.has(actual.nombre as string)) {
+  if (actual?.clave && CLAVES_ONBOARDING_PROTEGIDAS.has(actual.clave as string)) {
     return { ok: false, error: "Esta plantilla es del sistema y no se puede borrar" };
   }
 
@@ -195,7 +243,7 @@ export async function duplicateReclutamientoEmailPlantilla(id: string): Promise<
 
   const { data: orig } = await supabase
     .from("reclutamiento_email_plantillas")
-    .select("nombre, asunto, cuerpo, activa")
+    .select("nombre, asunto, cuerpo, activa, destino, destino_email")
     .eq("id", id)
     .eq("empresa_id", empresaId)
     .maybeSingle();
@@ -210,11 +258,15 @@ export async function duplicateReclutamientoEmailPlantilla(id: string): Promise<
   let n = 2;
   while (usados.has(nombre)) nombre = `${orig.nombre} (copia) ${n++}`;
 
+  // La copia es SIEMPRE una plantilla libre (clave null en createReclutamiento…),
+  // pero hereda el destinatario configurado.
   return createReclutamientoEmailPlantilla({
     nombre,
     asunto: orig.asunto as string,
     cuerpo: orig.cuerpo as string,
     activa: orig.activa as boolean,
+    destino: normalizarDestino(orig.destino),
+    destinoEmail: (orig.destino_email as string | null) ?? undefined,
   });
 }
 
@@ -269,7 +321,14 @@ async function resolverEmailParaEstado(
   empresaId: string,
   candidatoId: string,
   estado: string,
-): Promise<{ id: string; asunto: string; cuerpo: string; activa: boolean } | null> {
+): Promise<{
+  id: string;
+  asunto: string;
+  cuerpo: string;
+  activa: boolean;
+  destino: DestinoPlantilla;
+  destinoEmail: string | null;
+} | null> {
   const { data: cand } = await supabase
     .from("candidatos")
     .select("vacante_id")
@@ -316,7 +375,7 @@ async function resolverEmailParaEstado(
 
   const { data: tpl } = await supabase
     .from("reclutamiento_email_plantillas")
-    .select("id, asunto, cuerpo, activa")
+    .select("id, asunto, cuerpo, activa, destino, destino_email")
     .eq("id", emailId)
     .eq("empresa_id", empresaId)
     .maybeSingle();
@@ -326,6 +385,8 @@ async function resolverEmailParaEstado(
     asunto: tpl.asunto as string,
     cuerpo: tpl.cuerpo as string,
     activa: tpl.activa as boolean,
+    destino: normalizarDestino(tpl.destino),
+    destinoEmail: (tpl.destino_email as string | null) ?? null,
   };
 }
 
@@ -361,10 +422,11 @@ export async function previewReclutamientoFaseEmail(
       .eq("empresa_id", empresaId)
       .maybeSingle();
     const token = (cand?.documentacion_token as string | null) ?? null;
+    const { enlaceDocumentacion, DOCUMENTACION_TOKEN_DIAS } = await import(
+      "@/features/rrhh/lib/documentacion-candidato"
+    );
+    vars.documentacion_dias_validez = String(DOCUMENTACION_TOKEN_DIAS);
     if (token) {
-      const { enlaceDocumentacion } = await import(
-        "@/features/rrhh/lib/documentacion-candidato"
-      );
       vars.enlace_documentacion = enlaceDocumentacion(token);
     } else {
       vars.enlace_documentacion = "(se generará un enlace personal al enviar)";
@@ -531,39 +593,45 @@ export async function plantillasPorEstadoDeVacante(
     if (id) idPorEstado[k] = id;
   }
 
-  // 2) Nombres reservados del onboarding a buscar por nombre.
-  const nombresReservados = [
-    ...new Set(Object.values(PLANTILLAS_RESERVADAS_POR_ESTADO).flat()),
+  // 2) Claves reservadas del onboarding a buscar por `clave` estable.
+  const clavesReservadas = [
+    ...new Set(Object.values(CLAVES_RESERVADAS_POR_ESTADO).flat()),
   ];
 
-  // Carga en bloque todas las plantillas implicadas (por id y por nombre).
+  // Carga en bloque todas las plantillas implicadas (por id y por clave).
   const ids = [...new Set(Object.values(idPorEstado))];
   const { data: porId } = ids.length
     ? await supabase
         .from("reclutamiento_email_plantillas")
-        .select("id, nombre, activa")
+        .select("id, nombre, activa, destino")
         .eq("empresa_id", empresaId)
         .in("id", ids)
-    : { data: [] as Array<{ id: string; nombre: string; activa: boolean }> };
-  const { data: porNombre } = nombresReservados.length
+    : { data: [] as Array<{ id: string; nombre: string; activa: boolean; destino: string }> };
+  const { data: porClave } = clavesReservadas.length
     ? await supabase
         .from("reclutamiento_email_plantillas")
-        .select("nombre, activa")
+        .select("clave, nombre, activa, destino")
         .eq("empresa_id", empresaId)
-        .in("nombre", nombresReservados)
-    : { data: [] as Array<{ nombre: string; activa: boolean }> };
+        .in("clave", clavesReservadas)
+    : { data: [] as Array<{ clave: string; nombre: string; activa: boolean; destino: string }> };
 
   const tplById = new Map(
-    (porId ?? []).map((t) => [t.id as string, { nombre: t.nombre as string, activa: !!t.activa }]),
+    (porId ?? []).map((t) => [
+      t.id as string,
+      { nombre: t.nombre as string, activa: !!t.activa, destino: normalizarDestino(t.destino) },
+    ]),
   );
-  const tplByNombre = new Map(
-    (porNombre ?? []).map((t) => [t.nombre as string, !!t.activa]),
+  const tplByClave = new Map(
+    (porClave ?? []).map((t) => [
+      t.clave as string,
+      { nombre: t.nombre as string, activa: !!t.activa, destino: normalizarDestino(t.destino) },
+    ]),
   );
 
-  // 2a) Plantilla de estado → correo al candidato.
+  // 2a) Plantilla de estado → su destinatario configurado.
   for (const [estado, id] of Object.entries(idPorEstado)) {
     const t = tplById.get(id);
-    if (t) push(estado, { nombre: t.nombre, activa: t.activa, destino: destinoDePlantilla(t.nombre) });
+    if (t) push(estado, { nombre: t.nombre, activa: t.activa, destino: t.destino });
   }
 
   // 2a-bis) Respaldo canónico: si un estado del candidato no tiene plantilla
@@ -577,13 +645,18 @@ export async function plantillasPorEstadoDeVacante(
     push(estado, { nombre, activa: true, destino: "candidato" });
   }
 
-  // 2b) Plantillas reservadas del sistema por fase fija.
-  for (const [estado, nombres] of Object.entries(PLANTILLAS_RESERVADAS_POR_ESTADO)) {
-    for (const nombre of nombres) {
+  // 2b) Plantillas reservadas del sistema por fase fija (por clave estable).
+  for (const [estado, claves] of Object.entries(CLAVES_RESERVADAS_POR_ESTADO)) {
+    for (const clave of claves) {
+      const t = tplByClave.get(clave);
+      const nombre = t?.nombre ?? NOMBRES_ONBOARDING[clave];
       // No duplicar si la plantilla de estado ya apuntaba al mismo nombre.
       if ((out[estado] ?? []).some((p) => p.nombre === nombre)) continue;
-      const activa = tplByNombre.has(nombre) ? tplByNombre.get(nombre)! : true;
-      push(estado, { nombre, activa, destino: destinoDePlantilla(nombre) });
+      push(estado, {
+        nombre,
+        activa: t ? t.activa : true,
+        destino: t?.destino ?? "candidato",
+      });
     }
   }
 
@@ -638,26 +711,40 @@ export async function enviarReclutamientoFaseEmail(
   const cfg = (await getReclutamientoConfigGeneral()).data;
   const cc = cfg.emails_copia_reclutador ? (user?.email ?? undefined) : undefined;
 
-  // Destinatario.
+  // Destinatario configurado en la plantilla (por defecto, el candidato).
   const { data: cand } = await supabase
     .from("candidatos")
     .select("email")
     .eq("id", candidatoId)
     .eq("empresa_id", empresaId)
     .maybeSingle();
-  const to = (cand?.email as string | null) ?? "";
-  if (!to) return { sent: false, reason: "El candidato no tiene email" };
+  const emailCandidato = (cand?.email as string | null) ?? "";
+  const { resolverDestinatario } = await import(
+    "@/features/rrhh/services/email-plantillas/resolver"
+  );
+  const admin = (await import("@/lib/supabase/admin")).createAdminClient();
+  const dst = await resolverDestinatario(admin, empresaId, tpl.destino, tpl.destinoEmail, emailCandidato);
+  const to = dst.to;
+  if (!to) {
+    return {
+      sent: false,
+      reason:
+        tpl.destino === "candidato"
+          ? "El candidato no tiene email"
+          : "El destinatario configurado en la plantilla no tiene email",
+    };
+  }
 
   const vars = await buildReclutamientoEmailVars(candidatoId);
 
   // Paso «Documentación»: genera (perezosamente) el token del candidato y resuelve
   // el placeholder {{enlace_documentacion}} a su URL pública de subida.
   if (estado === "documentacion") {
-    const { asegurarTokenDocumentacion, enlaceDocumentacion } = await import(
-      "@/features/rrhh/lib/documentacion-candidato"
-    );
+    const { asegurarTokenDocumentacion, enlaceDocumentacion, DOCUMENTACION_TOKEN_DIAS } =
+      await import("@/features/rrhh/lib/documentacion-candidato");
     const token = await asegurarTokenDocumentacion(supabase, candidatoId, empresaId);
     if (token) vars.enlace_documentacion = enlaceDocumentacion(token);
+    vars.documentacion_dias_validez = String(DOCUMENTACION_TOKEN_DIAS);
   }
 
   // Fase «Formación»: resuelve {{enlace_formacion}} con la URL configurada en
@@ -687,9 +774,12 @@ export async function enviarReclutamientoFaseEmail(
       `<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;max-width:600px;margin:0 auto;padding:0 24px 24px"><p style="color:#9ca3af;font-size:12px;line-height:1.5;border-top:1px solid #e5e7eb;margin-top:8px;padding-top:12px">${escapeHtml(pieText)}</p></div>`
     : bodyToHtml(bodyText);
 
+  // CC: copia al reclutador (config) + cc del destinatario (p. ej. gestoría).
+  const ccFinal = [cc, dst.cc].filter(Boolean).join(", ") || undefined;
+
   const res = await sendEmail({
     to,
-    cc,
+    cc: ccFinal,
     subject,
     html,
     text: firma ? `${bodyText}\n\n—\n${pieText}` : bodyText,

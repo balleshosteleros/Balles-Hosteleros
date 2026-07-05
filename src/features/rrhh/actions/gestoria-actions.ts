@@ -372,11 +372,6 @@ export async function enviarAltaGestoria(
       return { ok: true, skipped: true as const };
     }
 
-    const destino = cfg.data.gestoria_email.trim();
-    if (!destino) {
-      return { ok: false, error: "Configura el correo de la gestoría en Ajustes → RRHH → Reclutamiento." };
-    }
-    const to = [destino, cfg.data.gestoria_email_cc.trim()].filter(Boolean).join(", ");
     const campos = cfg.data.gestoria_campos;
 
     const { data: emp } = await supabase
@@ -459,10 +454,9 @@ export async function enviarAltaGestoria(
         ${filasHtml}
       </table>`;
 
-    // Plantilla editable «Gestoría · alta de contrato» (UI Plantillas de email).
-    const { resolverPlantillaOnboarding, cuerpoOnboardingAHtml, PLANTILLAS_ONBOARDING } = await import(
-      "@/features/rrhh/services/email-plantillas/resolver"
-    );
+    // Plantilla editable del alta a la gestoría (UI «Plantillas de email»).
+    const { resolverPlantillaOnboarding, resolverDestinatario, cuerpoOnboardingAHtml, PLANTILLAS_ONBOARDING } =
+      await import("@/features/rrhh/services/email-plantillas/resolver");
     const vars: Record<string, string> = {
       candidato_nombre: emp.nombre ?? "",
       candidato_nombre_completo: nombre,
@@ -470,6 +464,22 @@ export async function enviarAltaGestoria(
       gestoria_datos: "", // se reemplaza por la tabla tras renderizar el cuerpo
     };
     const tpl = await resolverPlantillaOnboarding(admin, empresaId, PLANTILLAS_ONBOARDING.gestoriaAlta, vars);
+
+    // Destinatario configurable en la plantilla (por defecto: gestoría). Si no hay
+    // plantilla (fallback), se envía a la gestoría de la config.
+    const emailCandidato = emp.email_empresa || emp.email_personal || null;
+    const dst = tpl
+      ? await resolverDestinatario(admin, empresaId, tpl.destino, tpl.destinoEmail, emailCandidato)
+      : {
+          to: cfg.data.gestoria_email.trim(),
+          cc: cfg.data.gestoria_email_cc.trim() || null,
+        };
+    if (!dst.to) {
+      return { ok: false, error: "Configura el correo de la gestoría en Ajustes → RRHH → Reclutamiento." };
+    }
+    const to = [dst.to, dst.cc].filter(Boolean).join(", ");
+    // Para el aviso a RRHH: a dónde se envió realmente.
+    const destino = dst.to;
 
     let subject: string;
     let html: string;

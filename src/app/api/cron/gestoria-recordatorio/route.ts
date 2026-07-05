@@ -81,15 +81,13 @@ export async function GET(request: Request) {
 
     const tokenHash = tk.token_hash as string;
     const enlace = urlRecordatorioContrato(tokenHash);
-    const to = [cfg.email, cfg.emailCc].filter(Boolean).join(", ");
 
     // Botón de subida (funcional): se añade SIEMPRE al final del html, haya o no plantilla.
     const botonHtml = botonRecordatorioContratoHtml(tokenHash);
 
-    // Plantilla editable «Gestoría · recordatorio de contrato» (UI Plantillas de email).
-    const { resolverPlantillaOnboarding, cuerpoOnboardingAHtml, PLANTILLAS_ONBOARDING } = await import(
-      "@/features/rrhh/services/email-plantillas/resolver"
-    );
+    // Plantilla editable del recordatorio (UI «Plantillas de email»).
+    const { resolverPlantillaOnboarding, resolverDestinatario, cuerpoOnboardingAHtml, PLANTILLAS_ONBOARDING } =
+      await import("@/features/rrhh/services/email-plantillas/resolver");
     const vars: Record<string, string> = {
       candidato_nombre_completo: nombre,
       empresa_nombre: empresaNombre,
@@ -100,6 +98,14 @@ export async function GET(request: Request) {
       PLANTILLAS_ONBOARDING.gestoriaRecordatorio,
       vars,
     );
+
+    // Destinatario configurable (por defecto: gestoría). Sin plantilla, a la
+    // gestoría de la config.
+    const dst = tpl
+      ? await resolverDestinatario(admin, empresaId, tpl.destino, tpl.destinoEmail, null)
+      : { to: cfg.email, cc: cfg.emailCc || null };
+    const to = [dst.to || cfg.email, dst.cc].filter(Boolean).join(", ");
+    if (!to) continue;
 
     let subject: string;
     let html: string;

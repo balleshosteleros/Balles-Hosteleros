@@ -362,20 +362,28 @@ export async function syncReclutamientoEmailPlantillasAEmpresa(
 ): Promise<{ creadas: number }> {
   const { data: existentes } = await admin
     .from("reclutamiento_email_plantillas")
-    .select("nombre")
+    .select("nombre, clave")
     .eq("empresa_id", empresaId);
-  const setExistentes = new Set(
-    (existentes ?? []).map((r) => r.nombre as string),
+  // Dedup por NOMBRE (plantillas libres) y por CLAVE (plantillas del sistema): una
+  // del sistema renombrada por el cliente sigue existiendo por su clave y NO se
+  // vuelve a sembrar como duplicado.
+  const nombresExistentes = new Set((existentes ?? []).map((r) => r.nombre as string));
+  const clavesExistentes = new Set(
+    (existentes ?? []).map((r) => r.clave as string | null).filter(Boolean) as string[],
   );
 
   const aCrear = RECLUTAMIENTO_EMAIL_PLANTILLAS_SEED
-    .filter((p) => !setExistentes.has(p.nombre))
+    .filter((p) =>
+      p.clave ? !clavesExistentes.has(p.clave) : !nombresExistentes.has(p.nombre),
+    )
     .map((p) => ({
       empresa_id: empresaId,
       nombre: p.nombre,
       asunto: p.asunto,
       cuerpo: p.cuerpo,
       activa: p.activa,
+      clave: p.clave ?? null,
+      destino: p.destino ?? "candidato",
     }));
 
   if (aCrear.length === 0) return { creadas: 0 };

@@ -18,9 +18,10 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
-  PLANTILLAS_ONBOARDING_PROTEGIDAS,
-  destinoDePlantilla,
+  CLAVES_ONBOARDING_PROTEGIDAS,
   etiquetaDestino,
+  OPCIONES_DESTINO,
+  type DestinoPlantilla,
 } from "@/features/rrhh/lib/plantillas-onboarding";
 import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 import { CuestionariosVacanteManager } from "./CuestionariosVacanteManager";
@@ -64,6 +65,8 @@ function PlantillaEditorDialog({
   const [asunto, setAsunto] = useState("");
   const [cuerpo, setCuerpo] = useState("");
   const [activa, setActiva] = useState(true);
+  const [destino, setDestino] = useState<DestinoPlantilla>("candidato");
+  const [destinoEmail, setDestinoEmail] = useState("");
   const [tab, setTab] = useState<"editar" | "preview">(initialTab);
   const [pending, startTransition] = useTransition();
   const cuerpoRef = useRef<HTMLTextAreaElement>(null);
@@ -79,6 +82,8 @@ function PlantillaEditorDialog({
     setAsunto(plantilla?.asunto ?? "");
     setCuerpo(plantilla?.cuerpo ?? "");
     setActiva(plantilla?.activa ?? true);
+    setDestino(plantilla?.destino ?? "candidato");
+    setDestinoEmail(plantilla?.destinoEmail ?? "");
     setTab(initialTab);
   }, [open, plantillaId, plantilla, initialTab]);
 
@@ -119,18 +124,21 @@ function PlantillaEditorDialog({
 
   const previewVars = { ...VARIABLES_RECLUTAMIENTO_EJEMPLO, empresa_nombre: empresaNombre };
 
-  // Destino del correo: gestoría / RRHH llevan aviso informativo en el editor.
-  const destino = plantilla ? destinoDePlantilla(plantilla.nombre) : "candidato";
-  // Las plantillas del sistema (gestoría, contratos, prueba) NO pueden renombrarse:
-  // todo el flujo las localiza por su nombre exacto (dispara el correo, pinta el
-  // icono de destino, las protege del borrado). Renombrarlas rompía la conexión.
-  const nombreBloqueado = plantilla ? PLANTILLAS_ONBOARDING_PROTEGIDAS.has(plantilla.nombre) : false;
+  // Plantilla del sistema (gestoría, contratos, prueba): se identifica por su
+  // CLAVE estable, no por el nombre → el nombre YA es editable y se propaga solo.
+  // Solo se protege del borrado.
+  const esDelSistema = plantilla?.clave ? CLAVES_ONBOARDING_PROTEGIDAS.has(plantilla.clave) : false;
 
   const handleSave = () => {
+    if (destino === "personalizado" && !destinoEmail.trim()) {
+      toast.error("Escribe el email del destinatario personalizado");
+      return;
+    }
     startTransition(async () => {
+      const payload = { nombre, asunto, cuerpo, activa, destino, destinoEmail: destinoEmail.trim() };
       const res = plantilla
-        ? await updateReclutamientoEmailPlantilla(plantilla.id, { nombre, asunto, cuerpo, activa })
-        : await createReclutamientoEmailPlantilla({ nombre, asunto, cuerpo, activa });
+        ? await updateReclutamientoEmailPlantilla(plantilla.id, payload)
+        : await createReclutamientoEmailPlantilla(payload);
       if (res.ok) {
         toast.success(plantilla ? "Plantilla guardada" : "Plantilla creada");
         onOpenChange(false);
@@ -172,30 +180,14 @@ function PlantillaEditorDialog({
         <ScrollArea className="max-h-[calc(90vh-210px)]">
           {tab === "editar" ? (
             <div className="px-6 py-5 space-y-5">
-              {/* Aviso de destino: a quién se envía este correo. */}
-              {destino === "gestoria" && (
-                <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5">
-                  <Building2 className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
-                  <p className="text-xs text-amber-800 leading-relaxed">
-                    Este correo se envía a la <strong>gestoría</strong>, no al candidato. Es una plantilla del
-                    sistema: puedes editar el asunto y el texto, pero no cambiar su nombre ni borrarla.
-                  </p>
-                </div>
-              )}
-              {destino === "rrhh" && (
-                <div className="flex items-start gap-2 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2.5">
-                  <UserCog className="h-4 w-4 text-sky-600 mt-0.5 shrink-0" />
-                  <p className="text-xs text-sky-800 leading-relaxed">
-                    Este correo es un <strong>aviso interno a RRHH</strong>, no al candidato. Es una plantilla del
-                    sistema: puedes editar el asunto y el texto, pero no cambiar su nombre ni borrarla.
-                  </p>
-                </div>
-              )}
-              {destino === "candidato" && (
-                <div className="flex items-start gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5">
-                  <User className="h-4 w-4 text-emerald-600 mt-0.5 shrink-0" />
-                  <p className="text-xs text-emerald-800 leading-relaxed">
-                    Este correo se envía al <strong>candidato registrado</strong> cuando pasa al estado asociado.
+              {/* Nota para plantillas del sistema: se pueden editar y renombrar,
+                  pero no borrar (el flujo las dispara automáticamente). */}
+              {esDelSistema && (
+                <div className="flex items-start gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5">
+                  <Lock className="h-4 w-4 text-slate-500 mt-0.5 shrink-0" />
+                  <p className="text-xs text-slate-700 leading-relaxed">
+                    Plantilla del <strong>sistema</strong>: la dispara el flujo automáticamente. Puedes editar
+                    su nombre, asunto, texto y destinatario, pero no se puede borrar.
                   </p>
                 </div>
               )}
@@ -207,22 +199,41 @@ function PlantillaEditorDialog({
               </div>
 
               <div>
-                <Label className="text-xs flex items-center gap-1.5">
-                  Nombre de la plantilla
-                  {nombreBloqueado && <Lock className="h-3 w-3 text-muted-foreground" />}
-                </Label>
+                <Label className="text-xs">Nombre de la plantilla</Label>
                 <Input
                   value={nombre}
                   onChange={(e) => setNombre(e.target.value)}
                   className="mt-1"
                   placeholder="Ej. Bienvenida al proceso"
-                  disabled={nombreBloqueado}
-                  title={nombreBloqueado ? "El nombre de una plantilla del sistema no se puede cambiar" : undefined}
                 />
-                {nombreBloqueado && (
-                  <p className="text-[11px] text-muted-foreground mt-1">
-                    El nombre de esta plantilla del sistema es fijo: el flujo la localiza por él para enviar el correo correcto.
-                  </p>
+              </div>
+
+              {/* Destinatario: a quién se envía este correo. */}
+              <div>
+                <Label className="text-xs">Se envía a</Label>
+                <Select value={destino} onValueChange={(v) => setDestino(v as DestinoPlantilla)}>
+                  <SelectTrigger className="mt-1 h-9">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {OPCIONES_DESTINO.map((o) => (
+                      <SelectItem key={o.value} value={o.value}>
+                        {o.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-[11px] text-muted-foreground mt-1">
+                  {OPCIONES_DESTINO.find((o) => o.value === destino)?.ayuda}
+                </p>
+                {destino === "personalizado" && (
+                  <Input
+                    value={destinoEmail}
+                    onChange={(e) => setDestinoEmail(e.target.value)}
+                    className="mt-2"
+                    type="email"
+                    placeholder="correo@ejemplo.com"
+                  />
                 )}
               </div>
 
@@ -299,7 +310,9 @@ function PlantillaEditorDialog({
                     <span className="font-medium">Para:</span>{" "}
                     {destino === "candidato"
                       ? VARIABLES_RECLUTAMIENTO_EJEMPLO.candidato_email
-                      : `${etiquetaDestino(destino)} · dirección configurada en Ajustes → RRHH → Reclutamiento`}
+                      : destino === "personalizado"
+                        ? destinoEmail || "(escribe el email personalizado)"
+                        : `${etiquetaDestino(destino)} · correo de Ajustes de la empresa`}
                   </p>
                   <p className="text-xs text-muted-foreground mt-0.5">
                     <span className="font-medium">Asunto:</span> {sustituirVariablesReclutamiento(asunto, previewVars)}
@@ -504,8 +517,8 @@ function PlantillasEmailTab() {
         <Card className="overflow-hidden">
           <CardContent className="p-0">
             {filtered.map((p) => {
-              const destino = destinoDePlantilla(p.nombre);
-              const protegida = PLANTILLAS_ONBOARDING_PROTEGIDAS.has(p.nombre);
+              const destino = p.destino;
+              const protegida = p.clave ? CLAVES_ONBOARDING_PROTEGIDAS.has(p.clave) : false;
               return (
               <div key={p.id} className="flex items-center justify-between px-5 py-4 border-b border-border last:border-0 hover:bg-muted/20 transition-colors">
                 <div className="flex items-center gap-4 flex-1 min-w-0">
@@ -519,13 +532,18 @@ function PlantillasEmailTab() {
                         </Badge>
                       )}
                       {destino === "rrhh" && (
-                        <Badge variant="outline" className="text-[10px] gap-1 bg-sky-50 text-sky-700 border-sky-200" title="Aviso interno a RRHH">
+                        <Badge variant="outline" className="text-[10px] gap-1 bg-sky-50 text-sky-700 border-sky-200" title="Se envía a RRHH">
                           <UserCog className="h-3 w-3" /> RRHH
                         </Badge>
                       )}
                       {destino === "candidato" && (
                         <Badge variant="outline" className="text-[10px] gap-1 bg-emerald-50 text-emerald-700 border-emerald-200" title="Este correo se envía al candidato registrado">
                           <User className="h-3 w-3" /> Candidato
+                        </Badge>
+                      )}
+                      {destino === "personalizado" && (
+                        <Badge variant="outline" className="text-[10px] gap-1 bg-violet-50 text-violet-700 border-violet-200" title={p.destinoEmail ? `Se envía a ${p.destinoEmail}` : "Destinatario personalizado"}>
+                          <Mail className="h-3 w-3" /> {p.destinoEmail || "Personalizado"}
                         </Badge>
                       )}
                     </div>
