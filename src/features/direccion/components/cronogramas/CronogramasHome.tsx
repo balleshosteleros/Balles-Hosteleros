@@ -72,10 +72,13 @@ const DEPTO_CONFIG: Record<string, { icon: React.ElementType; color: string; bg:
 
 function getDeptoConfig(rol: string) {
   const key = rol.toUpperCase().trim();
-  return DEPTO_CONFIG[key] ?? {
-    icon: Briefcase,
+  // Se conserva el icono por departamento, pero el recuadro usa un color
+  // neutro uniforme para todos (sin colores por departamento).
+  const base = DEPTO_CONFIG[key] ?? { icon: Briefcase };
+  return {
+    icon: base.icon,
     color: "text-muted-foreground",
-    bg: "bg-muted/40 border-border",
+    bg: "bg-card border-border",
   };
 }
 
