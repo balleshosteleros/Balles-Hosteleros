@@ -135,7 +135,11 @@ export function ContratarDialog({ open, onOpenChange, candidato, onDone, variant
         onDone();
         onOpenChange(false);
       } else {
-        toast.error(res.error ?? "No se pudo contratar");
+        // El diálogo NO se cierra: los datos siguen rellenos y basta con volver a
+        // pulsar «Contratar» para reintentar en un solo paso.
+        toast.error(res.error ?? "No se pudo contratar", {
+          description: "Los datos siguen aquí. Pulsa «Contratar» de nuevo para reintentar.",
+        });
       }
     });
   }

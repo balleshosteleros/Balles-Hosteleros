@@ -10,6 +10,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getEmpresaActivaForUser } from "@/features/empresa/lib/empresa-server";
 import { sendEmail } from "@/lib/email/send";
+import { escapeHtml } from "@/lib/email/escape-html";
 import {
   crearTokenContratoGestoria,
   botonSubidaContratoHtml,
@@ -427,8 +428,8 @@ export async function enviarAltaGestoria(
     // negrita a la derecha, con separadores suaves (se aprecia como tarjeta).
     const fila = (k: string, v: string | null | undefined) =>
       `<tr>
-        <td style="padding:10px 16px;color:#64748b;font-size:13px;border-bottom:1px solid #eef2f7;white-space:nowrap;">${k}</td>
-        <td style="padding:10px 16px;color:#0f172a;font-weight:600;font-size:14px;border-bottom:1px solid #eef2f7;text-align:right;">${v || "—"}</td>
+        <td style="padding:10px 16px;color:#64748b;font-size:13px;border-bottom:1px solid #eef2f7;white-space:nowrap;">${escapeHtml(k)}</td>
+        <td style="padding:10px 16px;color:#0f172a;font-weight:600;font-size:14px;border-bottom:1px solid #eef2f7;text-align:right;">${escapeHtml(v) || "—"}</td>
       </tr>`;
 
     const filasHtml = GESTORIA_CAMPOS

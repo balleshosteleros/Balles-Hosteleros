@@ -23,7 +23,50 @@ import { friendlyError } from "@/shared/lib/friendly-errors";
 import { requireAdminUser, altaUsuarioEmpleado } from "@/features/rrhh/services/empleados-core";
 import { copiarDocumentacionCandidatoAEmpleado } from "@/features/rrhh/services/documentacion-candidato-a-empleado";
 import { enviarAltaGestoria } from "@/features/rrhh/actions/gestoria-actions";
+import { emitirNotificacion } from "@/features/notificaciones/actions/notificaciones-actions";
 import { revalidatePath } from "next/cache";
+
+/**
+ * Deshace una contratación que quedó a medias: revierte el LOCK del candidato
+ * (`promovido_at`/`promovido_por`/`empleado_id` a null) para que vuelva a ser
+ * CONTRATABLE con un solo clic, y AVISA al equipo de RRHH (área administrativa)
+ * de que la contratación falló y hay que reintentarla. Best-effort: si el aviso
+ * falla, no importa; lo importante es dejar el candidato reintentables.
+ */
+async function revertirContratacionFallida(
+  admin: Admin,
+  empresaId: string,
+  candidatoId: string,
+  nombreCandidato: string,
+  motivo: string,
+): Promise<void> {
+  // 1) Revertir el lock → el candidato vuelve a poder contratarse.
+  try {
+    await admin.from("candidatos")
+      .update({ promovido_at: null, promovido_por: null, empleado_id: null })
+      .eq("id", candidatoId);
+  } catch (e) {
+    console.error("[contratacion] revertir lock:", e);
+  }
+  // 2) Avisar a RRHH (in-app). dedupeKey por candidato: no spamea si se reintenta.
+  try {
+    await emitirNotificacion({
+      empresaId,
+      system: true,
+      tipo: "warning",
+      titulo: `Contratación fallida: ${nombreCandidato}`,
+      mensaje: `No se pudo completar la contratación de ${nombreCandidato} y se ha revertido automáticamente. Vuelve a pulsar «Contratar» para reintentarlo. Motivo: ${motivo}`,
+      segmento: { tipo: "area", area: "ADMINISTRATIVA" },
+      refTabla: "candidatos",
+      refId: candidatoId,
+      accionUrl: "/rrhh/reclutamiento",
+      accionLabel: "Ir a reclutamiento",
+      dedupeKey: `contratacion_fallida:${candidatoId}`,
+    });
+  } catch (e) {
+    console.error("[contratacion] aviso RRHH fallo:", e);
+  }
+}
 
 export interface ContratarInput {
   candidatoId: string;
@@ -266,31 +309,41 @@ export async function contratarCandidato(input: ContratarInput): Promise<Contrat
   const fullName = `${cand.nombre} ${cand.apellidos ?? ""}`.trim();
 
   if (empleadoExistente) {
-    await admin.from("empleados").update({
-      estado: "Activo",
-      fecha_baja: null,
-      departamento_id: puesto.departamento_id,
-      puesto: puesto.nombre as string,
-      fecha_alta: input.primerDia,
-    }).eq("id", empleadoExistente.id);
+    // Pasos CRÍTICOS de la reactivación en un bloque protegido: si algo falla,
+    // revertimos el lock del candidato y avisamos a RRHH para poder reintentar.
+    // (No borramos el empleado: ya existía antes de esta reactivación.)
+    try {
+      await admin.from("empleados").update({
+        estado: "Activo",
+        fecha_baja: null,
+        departamento_id: puesto.departamento_id,
+        puesto: puesto.nombre as string,
+        fecha_alta: input.primerDia,
+      }).eq("id", empleadoExistente.id);
 
-    if (empleadoExistente.user_id) {
-      await admin.from("usuario_empresas")
-        .upsert({ user_id: empleadoExistente.user_id, empresa_id: empresaId }, { onConflict: "user_id,empresa_id" });
-      // Re-sincronizar el ROL del usuario con el nuevo DEPARTAMENTO: el rol es
-      // el departamento (SALA, COCINA…). Si la recontratación cambia de depto,
-      // el rol debe seguirlo. El trigger sync_usuario_rol_id fija rol_id.
-      if (deptoNombre) {
-        await admin.from("usuarios")
-          .update({ rol_label: deptoNombre, departamento: deptoNombre })
-          .eq("user_id", empleadoExistente.user_id);
+      if (empleadoExistente.user_id) {
+        await admin.from("usuario_empresas")
+          .upsert({ user_id: empleadoExistente.user_id, empresa_id: empresaId }, { onConflict: "user_id,empresa_id" });
+        // Re-sincronizar el ROL del usuario con el nuevo DEPARTAMENTO: el rol es
+        // el departamento (SALA, COCINA…). Si la recontratación cambia de depto,
+        // el rol debe seguirlo. El trigger sync_usuario_rol_id fija rol_id.
+        if (deptoNombre) {
+          await admin.from("usuarios")
+            .update({ rol_label: deptoNombre, departamento: deptoNombre })
+            .eq("user_id", empleadoExistente.user_id);
+        }
       }
-    }
-    await vincularPuestoPrincipal(admin, empleadoExistente.id, input.puestoId, puesto.nombre as string, input.primerDia);
-    await guardarSnapshotCondiciones(admin, empresaId, empleadoExistente.id, input.puestoId, puesto.nombre as string, nivelHeredado, input.primerDia, tipoContrato, cond);
+      await vincularPuestoPrincipal(admin, empleadoExistente.id, input.puestoId, puesto.nombre as string, input.primerDia);
+      await guardarSnapshotCondiciones(admin, empresaId, empleadoExistente.id, input.puestoId, puesto.nombre as string, nivelHeredado, input.primerDia, tipoContrato, cond);
 
-    await admin.from("candidatos")
-      .update({ empleado_id: empleadoExistente.id, fase: destinoFase, estado: destinoEstado }).eq("id", cand.id);
+      const { error: markErr } = await admin.from("candidatos")
+        .update({ empleado_id: empleadoExistente.id, fase: destinoFase, estado: destinoEstado }).eq("id", cand.id);
+      if (markErr) throw new Error(markErr.message);
+    } catch (err) {
+      const motivo = err instanceof Error ? err.message : "Error al reactivar el empleado";
+      await revertirContratacionFallida(admin, empresaId, cand.id, fullName, motivo);
+      return { ok: false, error: `La contratación no se completó y se ha revertido. Puedes volver a intentarlo. (${motivo})` };
+    }
 
     // Copia la documentación y la foto del candidato a la ficha del empleado
     // reactivado (se conserva también en reclutamiento). Best-effort.
@@ -324,17 +377,30 @@ export async function contratarCandidato(input: ContratarInput): Promise<Contrat
     localIds: [input.localId],
   });
   if (!alta.ok) {
-    await admin.from("candidatos").update({ promovido_at: null, promovido_por: null }).eq("id", cand.id);
+    // El núcleo no creó el empleado: revierte el lock para poder reintentar y avisa a RRHH.
+    await revertirContratacionFallida(admin, empresaId, cand.id, fullName, alta.error);
     return { ok: false, error: alta.error };
   }
 
-  // Primer día de trabajo + vínculo de puesto + snapshot de condiciones
-  await admin.from("empleados").update({ fecha_alta: input.primerDia }).eq("id", alta.empleadoId);
-  await vincularPuestoPrincipal(admin, alta.empleadoId, input.puestoId, puesto.nombre as string, input.primerDia);
-  await guardarSnapshotCondiciones(admin, empresaId, alta.empleadoId, input.puestoId, puesto.nombre as string, nivelHeredado, input.primerDia, tipoContrato, cond);
+  // Pasos CRÍTICOS restantes (primer día + vínculo de puesto + snapshot + marcar
+  // empleado en el candidato). Si alguno falla, la contratación queda a medias:
+  // borramos el empleado recién creado, revertimos el lock del candidato y
+  // avisamos a RRHH. Así el candidato vuelve a ser contratable con un solo clic.
+  try {
+    await admin.from("empleados").update({ fecha_alta: input.primerDia }).eq("id", alta.empleadoId);
+    await vincularPuestoPrincipal(admin, alta.empleadoId, input.puestoId, puesto.nombre as string, input.primerDia);
+    await guardarSnapshotCondiciones(admin, empresaId, alta.empleadoId, input.puestoId, puesto.nombre as string, nivelHeredado, input.primerDia, tipoContrato, cond);
 
-  await admin.from("candidatos")
-    .update({ empleado_id: alta.empleadoId, fase: destinoFase, estado: destinoEstado }).eq("id", cand.id);
+    const { error: markErr } = await admin.from("candidatos")
+      .update({ empleado_id: alta.empleadoId, fase: destinoFase, estado: destinoEstado }).eq("id", cand.id);
+    if (markErr) throw new Error(markErr.message);
+  } catch (err) {
+    const motivo = err instanceof Error ? err.message : "Error al completar la contratación";
+    // Deshace el empleado a medias (borra auth.user → cascada profiles/roles/empleado).
+    try { await admin.auth.admin.deleteUser(alta.userId); } catch (e) { console.error("[contratacion] rollback deleteUser:", e); }
+    await revertirContratacionFallida(admin, empresaId, cand.id, fullName, motivo);
+    return { ok: false, error: `La contratación no se completó y se ha revertido. Puedes volver a intentarlo. (${motivo})` };
+  }
 
   // Copia la documentación y la foto del candidato a la ficha del empleado
   // (copia física a empleados-docs; la foto se fija como avatar permanente).
