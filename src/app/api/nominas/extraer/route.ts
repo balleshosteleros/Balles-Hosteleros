@@ -51,6 +51,10 @@ const PROMPT =
   "(suma de contingencias comunes, desempleo y formación que se DESCUENTAN de su nómina). Es la parte del empleado.\n" +
   "4. El importe TOTAL del coste de Seguridad Social a cargo de la EMPRESA por ese trabajador " +
   "(aportación empresarial; suele aparecer en el recibo de cotización o en el pie de la nómina). Es la parte de la empresa.\n" +
+  "5. El LÍQUIDO A PERCIBIR (neto que cobra el trabajador; el importe final a pagar tras deducciones). " +
+  "En euros. Es el 'líquido a percibir' o 'total a percibir'.\n" +
+  "6. El PERIODO de la nómina: el mes y año al que corresponde el recibo (aparece como 'del 1 al 30 de junio', " +
+  "año 2026, etc.). Devuélvelo SIEMPRE en formato 'AAAA-MM' (p.ej. junio de 2026 = '2026-06'). Si no lo lees, cadena vacía.\n" +
   "Devuelve los importes como número en euros con punto decimal (p.ej. 123.45), sin el símbolo €. " +
   "Si un dato no aparece con seguridad, usa cadena vacía (texto) o 0 (importes). Responde solo con el JSON pedido.";
 
@@ -74,8 +78,16 @@ const RESPUESTA_SCHEMA = {
       type: "number",
       description: "SS a cargo de la empresa en euros. 0 si no se puede leer.",
     },
+    neto: {
+      type: "number",
+      description: "Líquido a percibir (neto a pagar al trabajador) en euros. 0 si no se lee.",
+    },
+    periodo: {
+      type: "string",
+      description: "Mes del recibo en formato AAAA-MM (p.ej. '2026-06'), o cadena vacía si no se lee.",
+    },
   },
-  required: ["dniNie", "nombre", "ssEmpleado", "ssEmpresa"],
+  required: ["dniNie", "nombre", "ssEmpleado", "ssEmpresa", "neto", "periodo"],
 } as const;
 
 /** Redondea a 2 decimales y descarta valores no finitos o negativos. */
@@ -85,7 +97,25 @@ function importe(v: unknown): number {
   return Math.round(n * 100) / 100;
 }
 
-type IaLeida = { dniNie?: string; nombre?: string; ssEmpleado?: number; ssEmpresa?: number };
+type IaLeida = {
+  dniNie?: string;
+  nombre?: string;
+  ssEmpleado?: number;
+  ssEmpresa?: number;
+  neto?: number;
+  periodo?: string;
+};
+
+/** Normaliza el periodo leído por la IA a 'AAAA-MM' válido, o "" si no cuadra. */
+function normalizarPeriodo(v: unknown): string {
+  const s = String(v ?? "").trim();
+  const m = s.match(/^(\d{4})-(\d{1,2})$/);
+  if (!m) return "";
+  const y = Number(m[1]);
+  const mes = Number(m[2]);
+  if (y < 2000 || y > 2100 || mes < 1 || mes > 12) return "";
+  return `${y}-${String(mes).padStart(2, "0")}`;
+}
 
 /** Una nómina lista para el cliente: datos leídos + su documento en base64. */
 interface NominaResultado {
@@ -93,6 +123,8 @@ interface NominaResultado {
   nombre: string;
   ssEmpleado: number;
   ssEmpresa: number;
+  neto: number;
+  periodo: string;
   mimeType: string;
   archivoBase64: string;
 }
@@ -195,6 +227,8 @@ export async function POST(req: Request) {
           nombre: (data.nombre ?? "").trim(),
           ssEmpleado: importe(data.ssEmpleado),
           ssEmpresa: importe(data.ssEmpresa),
+          neto: importe(data.neto),
+          periodo: normalizarPeriodo(data.periodo),
           mimeType: doc.mimeType,
           archivoBase64: doc.base64,
         });

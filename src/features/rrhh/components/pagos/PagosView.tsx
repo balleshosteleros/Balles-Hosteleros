@@ -17,6 +17,7 @@ import {
 } from "@/features/rrhh/actions/pagos-actions";
 import {
   guardarNominaArchivo,
+  guardarDatosNomina,
   getNominaArchivoUrl,
 } from "@/features/rrhh/actions/nominas-archivo-actions";
 import {
@@ -373,9 +374,14 @@ export function PagosView() {
     let emparejadas = 0;
     let sinEmparejar = 0;
     let fallos = 0;
-    // Nombres/DNI de las nóminas que no se pudieron asignar a ningún empleado,
-    // para avisar exactamente cuáles revisar (falta DNI o el nombre no cuadra).
+    let yaExistian = 0;
+    // Meses (YYYY-MM) distintos del que hay en pantalla donde se guardaron nóminas,
+    // para avisar al usuario ("se guardaron en junio aunque miras julio").
+    const mesesTocados = new Set<string>();
+    // Nombres/DNI de las nóminas que no se pudieron asignar a ningún empleado.
     const noAsignadas: string[] = [];
+    // Nombres de empleados que ya tenían nómina ese mes (no se regraban).
+    const duplicadas: string[] = [];
 
     for (const file of lista) {
       try {
@@ -400,26 +406,55 @@ export function PagosView() {
           if (fila.confirmacionEnviadaAt) continue; // liquidación enviada = inmutable
           if (fila.empleadoId.startsWith("ext-")) continue; // ex-empleado sin ficha
 
-          // 1) Guardar la nómina original en Storage (empareja archivo↔empleado).
-          let nominaPath = fila.nominaPath;
-          if (n.archivoBase64 && n.mimeType) {
-            const gu = await guardarNominaArchivo(periodo, fila.empleadoId, n.archivoBase64, n.mimeType);
-            if (gu.ok && gu.path) nominaPath = gu.path;
-          }
+          // CLAVE: el mes lo dicta la PROPIA nómina (leído por IA), no el que haya
+          // seleccionado en pantalla. Si la IA no lo lee, cae al de la vista.
+          const periodoNomina = /^\d{4}-\d{2}$/.test(String(n.periodo ?? ""))
+            ? String(n.periodo)
+            : periodo;
 
-          // 2) Actualizar SS (informativa) y el path de la nómina.
-          const actualizado: PagoEmpleado = {
-            ...fila,
+          // 1) Guardar la nómina original en Storage. Si ese empleado YA tiene
+          //    nómina ese mes, no se regraba (yaExistia): se avisa.
+          let nominaPath: string | null = null;
+          let bloqueadaExistente = false;
+          if (n.archivoBase64 && n.mimeType) {
+            const gu = await guardarNominaArchivo(periodoNomina, fila.empleadoId, n.archivoBase64, n.mimeType);
+            if (gu.yaExistia) {
+              yaExistian++;
+              duplicadas.push(fila.empleadoNombre);
+              bloqueadaExistente = true;
+            } else if (gu.ok && gu.path) {
+              nominaPath = gu.path;
+            }
+          }
+          if (bloqueadaExistente) continue; // ya tenía nómina ese mes: no tocar sus datos
+
+          // 2) Guardar SS (informativa) + neto (líquido a percibir) en el pago del
+          //    mes de la nómina. Se parte de una fila del empleado en ese periodo.
+          // 2) Guardar SS + neto en el pago del MES DE LA NÓMINA con un update
+          //    parcial (no pisa pago/propina/ajuste/total de ese mes).
+          await guardarDatosNomina(periodoNomina, fila.empleadoId, fila.empleadoNombre, {
+            neto: Number(n.neto) || 0,
             ssEmpleado: Number(n.ssEmpleado) || 0,
             ssEmpresa: Number(n.ssEmpresa) || 0,
-            nominaPath,
-          };
-          setPagos((prev) => prev.map((x) => (x.id === actualizado.id ? actualizado : x)));
-          await savePago(periodo, toGuardado(actualizado));
-          // Mantener el índice al día por si la misma persona sale dos veces.
-          porNombre.set(norm(actualizado.empleadoNombre), actualizado);
-          const dni = dniPorEmpleado.current.get(actualizado.empleadoId);
-          if (dni) porDni.set(dni, actualizado);
+          });
+          mesesTocados.add(periodoNomina);
+          // Si la nómina es del mes que estás viendo, refresca la fila en pantalla.
+          if (periodoNomina === periodo) {
+            const nominaNeta = Number(n.neto) || fila.nomina;
+            setPagos((prev) =>
+              prev.map((x) =>
+                x.id === fila.id
+                  ? {
+                      ...x,
+                      nomina: nominaNeta,
+                      ssEmpleado: Number(n.ssEmpleado) || 0,
+                      ssEmpresa: Number(n.ssEmpresa) || 0,
+                      nominaPath: nominaPath ?? x.nominaPath,
+                    }
+                  : x,
+              ),
+            );
+          }
           emparejadas++;
         }
       } catch (e) {
@@ -429,17 +464,39 @@ export function PagosView() {
       setProgresoNominas((prev) => ({ ...prev, hechas: prev.hechas + 1 }));
     }
 
+    // Si se tocó algún mes distinto del que hay en pantalla, quitar su caché para
+    // que al navegar a ese mes se recargue con lo nuevo.
+    if (mesesTocados.size > 0) {
+      setPagosPorRango((prev) => {
+        const copia = { ...prev };
+        for (const k of Object.keys(copia)) {
+          // Recarga perezosa: borra cachés de otros rangos (se recargan al entrar).
+          if (k !== claveRango) delete copia[k];
+        }
+        return copia;
+      });
+    }
+
     setSubiendoNominas(false);
-    const partes = [`${emparejadas} nómina${emparejadas === 1 ? "" : "s"} leída${emparejadas === 1 ? "" : "s"}`];
+    const partes = [`${emparejadas} nómina${emparejadas === 1 ? "" : "s"} guardada${emparejadas === 1 ? "" : "s"}`];
+    if (yaExistian > 0) partes.push(`${yaExistian} ya subida${yaExistian === 1 ? "" : "s"}`);
     if (sinEmparejar > 0) partes.push(`${sinEmparejar} sin empleado`);
     if (fallos > 0) partes.push(`${fallos} con error`);
-    // Si quedaron nóminas sin asignar, listarlas para que RRHH sepa cuáles revisar
-    // (normalmente por falta de DNI en la ficha o nombre distinto).
-    const descripcion =
-      noAsignadas.length > 0
-        ? `Sin asignar: ${noAsignadas.slice(0, 8).join(", ")}${noAsignadas.length > 8 ? "…" : ""}. Revisa que esos empleados tengan el DNI en su ficha.`
-        : undefined;
-    if (emparejadas > 0) toast.success(partes.join(" · "), { description: descripcion });
+
+    // Aviso claro de a qué MESES fueron (la nómina manda, no la vista).
+    const meses = [...mesesTocados].sort();
+    const nombreMes = (p: string) => {
+      const [y, m] = p.split("-");
+      const MESES = ["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"];
+      return `${MESES[Number(m) - 1] ?? ""} ${y}`.trim();
+    };
+    const lineas: string[] = [];
+    if (meses.length > 0) lineas.push(`Guardadas en: ${meses.map(nombreMes).join(", ")}.`);
+    if (duplicadas.length > 0) lineas.push(`Ya tenían nómina (no se regrabó): ${duplicadas.slice(0, 6).join(", ")}${duplicadas.length > 6 ? "…" : ""}.`);
+    if (noAsignadas.length > 0) lineas.push(`Sin empleado: ${noAsignadas.slice(0, 6).join(", ")}${noAsignadas.length > 6 ? "…" : ""}. Revisa su DNI en la ficha.`);
+    const descripcion = lineas.length > 0 ? lineas.join(" ") : undefined;
+
+    if (emparejadas > 0 || yaExistian > 0) toast.success(partes.join(" · "), { description: descripcion });
     else toast.error(partes.join(" · ") || "No se pudo leer ninguna nómina.", { description: descripcion });
   };
 

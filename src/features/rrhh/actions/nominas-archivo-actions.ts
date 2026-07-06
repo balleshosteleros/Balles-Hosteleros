@@ -38,7 +38,9 @@ export async function guardarNominaArchivo(
   empleadoId: string,
   archivoBase64: string,
   mimeType: string,
-): Promise<{ ok: boolean; path?: string; locked?: boolean; error?: string }> {
+  /** Si ya hay nómina ese mes y esto es false, NO sobrescribe: devuelve yaExistia. */
+  permitirSobrescribir = false,
+): Promise<{ ok: boolean; path?: string; locked?: boolean; yaExistia?: boolean; error?: string }> {
   try {
     const { supabase, empresaId } = await getAppContext();
     if (!empresaId || !empleadoId || empleadoId.startsWith("ext-")) {
@@ -50,12 +52,16 @@ export async function guardarNominaArchivo(
     // Bloqueo: liquidación ya enviada = inmutable (el trigger también lo impide).
     const { data: existente } = await supabase
       .from("rrhh_pagos")
-      .select("id, confirmacion_enviada_at")
+      .select("id, confirmacion_enviada_at, nomina_path")
       .eq("empresa_id", empresaId)
       .eq("empleado_id", empleadoId)
       .eq("periodo", periodo)
       .maybeSingle();
     if (existente?.confirmacion_enviada_at) return { ok: false, locked: true };
+    // Ya tiene nómina adjunta ese mes: no regrabar salvo que se pida expresamente.
+    if (existente?.nomina_path && !permitirSobrescribir) {
+      return { ok: false, yaExistia: true };
+    }
 
     const admin = createAdminClient();
     const path = `${empresaId}/${periodo}/${empleadoId}.${ext}`;
@@ -97,6 +103,59 @@ export async function guardarNominaArchivo(
     return { ok: true, path };
   } catch (err) {
     console.error("[rrhh] guardarNominaArchivo:", err);
+    return { ok: false, error: err instanceof Error ? err.message : "Error" };
+  }
+}
+
+/**
+ * Guarda los DATOS leídos de la nómina (SS empleado/empresa + neto a percibir) en
+ * el pago del empleado para ESE periodo, SIN tocar el resto de columnas (pago,
+ * propina, ajuste, total…). Update parcial idempotente: crea la fila si no existe.
+ * Se usa al subir nóminas para no pisar datos de otros meses.
+ */
+export async function guardarDatosNomina(
+  periodo: string,
+  empleadoId: string,
+  empleadoNombre: string,
+  datos: { neto: number; ssEmpleado: number; ssEmpresa: number },
+): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const { supabase, empresaId } = await getAppContext();
+    if (!empresaId || !empleadoId || empleadoId.startsWith("ext-")) {
+      return { ok: false, error: "Empleado no válido" };
+    }
+    const admin = createAdminClient();
+
+    const { data: existente } = await supabase
+      .from("rrhh_pagos")
+      .select("id, confirmacion_enviada_at")
+      .eq("empresa_id", empresaId)
+      .eq("empleado_id", empleadoId)
+      .eq("periodo", periodo)
+      .maybeSingle();
+    if (existente?.confirmacion_enviada_at) return { ok: false, error: "Liquidación ya enviada" };
+
+    const campos = {
+      nomina: datos.neto,
+      ss_empleado: datos.ssEmpleado,
+      ss_empresa: datos.ssEmpresa,
+    };
+    if (existente?.id) {
+      const { error } = await admin.from("rrhh_pagos").update(campos).eq("id", existente.id);
+      if (error) return { ok: false, error: error.message };
+    } else {
+      const { error } = await admin.from("rrhh_pagos").insert({
+        empresa_id: empresaId,
+        empleado_id: empleadoId,
+        empleado_nombre: empleadoNombre,
+        periodo,
+        ...campos,
+      });
+      if (error) return { ok: false, error: error.message };
+    }
+    return { ok: true };
+  } catch (err) {
+    console.error("[rrhh] guardarDatosNomina:", err);
     return { ok: false, error: err instanceof Error ? err.message : "Error" };
   }
 }
