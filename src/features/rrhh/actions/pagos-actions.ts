@@ -121,6 +121,7 @@ export interface PagoGuardado {
   ssEmpresa: number;
   total: number;
   pagado: boolean;
+  nominaPath: string | null;
   confirmacionEnviadaAt: string | null;
   confirmacionAceptadaAt: string | null;
 }
@@ -142,12 +143,13 @@ type PagoDbRow = {
   ss_empresa: number | string;
   total: number | string;
   pagado: boolean;
+  nomina_path: string | null;
   confirmacion_enviada_at: string | null;
   confirmacion_aceptada_at: string | null;
 };
 
 const PAGO_COLS =
-  "empleado_id, empleado_nombre, fijo, pago, nomina, horas_reales, horas_trabajadas, propina, ajuste, horas_extras, bonus, propina_mes_anterior, ss_empleado, ss_empresa, total, pagado, confirmacion_enviada_at, confirmacion_aceptada_at";
+  "empleado_id, empleado_nombre, fijo, pago, nomina, horas_reales, horas_trabajadas, propina, ajuste, horas_extras, bonus, propina_mes_anterior, ss_empleado, ss_empresa, total, pagado, nomina_path, confirmacion_enviada_at, confirmacion_aceptada_at";
 
 function dbToPago(r: PagoDbRow): PagoGuardado {
   return {
@@ -167,6 +169,7 @@ function dbToPago(r: PagoDbRow): PagoGuardado {
     ssEmpresa: Number(r.ss_empresa),
     total: Number(r.total),
     pagado: r.pagado,
+    nominaPath: r.nomina_path,
     confirmacionEnviadaAt: r.confirmacion_enviada_at,
     confirmacionAceptadaAt: r.confirmacion_aceptada_at,
   };

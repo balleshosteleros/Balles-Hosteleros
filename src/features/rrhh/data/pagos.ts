@@ -20,6 +20,10 @@ export interface PagoEmpleado {
   ssEmpresa: number; // lo que paga la empresa por el trabajador
   total: number;
   pagado: boolean;
+  // Path en Storage (bucket rrhh-nominas) de la nómina original de este empleado
+  // y periodo, o null si aún no se ha adjuntado. La columna "Nómina" muestra un
+  // enlace para verla (URL firmada temporal).
+  nominaPath: string | null;
   // Confirmacion de liquidacion: enviada -> bloqueada; aceptada -> el empleado la
   // acepto desde su app. ISO string o null.
   confirmacionEnviadaAt: string | null;

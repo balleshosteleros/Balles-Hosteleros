@@ -7,10 +7,18 @@ import { revalidatePath } from "next/cache";
 import { listTurnos } from "@/features/rrhh/actions/turnos-actions";
 import { listPatrones } from "@/features/rrhh/actions/patrones-actions";
 import type { Turno } from "@/features/rrhh/data/horarios";
-import { randomUUID } from "crypto";
 
-/** Patrón aplicable a la plantilla: su nombre + la semana de turnos. */
-export type PatronAplicable = { id: string; nombre: string; dias: (string | null)[] };
+/**
+ * Patrón elegible como horario del puesto. Identificado por su FAMILIA (para
+ * seguir siempre a la versión oficial vigente) + su semana de turnos para la
+ * vista previa.
+ */
+export type PatronElegible = {
+  familiaId: string;
+  patronId: string;
+  nombre: string;
+  dias: (string | null)[];
+};
 
 async function getContext() {
   const supabase = await createClient();
@@ -33,57 +41,156 @@ function normaDias(raw: unknown): (string | null)[] {
 }
 
 /**
- * Plantilla de horario del puesto = un `rrhh_patrones` (ligado por puesto_id)
- * con UNA semana de 7 turnos (turnoId | null). Devuelve también el catálogo de
- * turnos (fijos + flexibles) para el lateral del editor.
+ * Horario del puesto = SELECCIÓN de un patrón del catálogo de Horarios. Devuelve
+ * el patrón elegido (por familia), el catálogo de patrones elegibles (oficiales)
+ * y los turnos para pintar la vista previa de cada semana.
+ *
+ * Los patrones elegibles excluyen las plantillas propias de un puesto (legacy,
+ * con `puesto_id`): en el modelo nuevo el puesto solo elige patrones creados en
+ * Horarios, que son compartibles.
  */
-export async function getPlantillaPuesto(puestoId: string): Promise<{
-  plantillaId: string | null;
-  dias: (string | null)[];
+export async function getHorarioPuesto(puestoId: string): Promise<{
+  familiaSeleccionada: string | null;
+  patrones: PatronElegible[];
   turnos: Turno[];
-  patrones: PatronAplicable[];
 }> {
-  const vacio = { plantillaId: null, dias: [...SEMANA_VACIA], turnos: [] as Turno[], patrones: [] as PatronAplicable[] };
+  const vacio = { familiaSeleccionada: null, patrones: [] as PatronElegible[], turnos: [] as Turno[] };
   try {
     const { supabase, empresaId } = await getContext();
     if (!empresaId) return vacio;
 
-    const [turnosRes, patronesRes] = await Promise.all([
+    const [turnosRes, patronesRes, salarioRes, familiasPuestoRes] = await Promise.all([
       listTurnos(empresaId),
       listPatrones(empresaId),
+      supabase
+        .from("puesto_salarios")
+        .select("patron_familia_id")
+        .eq("puesto_id", puestoId)
+        .maybeSingle(),
+      // Familias de patrones ligados a un puesto (legacy) → se excluyen del selector.
+      supabase
+        .from("rrhh_patrones")
+        .select("familia_id")
+        .eq("empresa_id", empresaId)
+        .not("puesto_id", "is", null),
     ]);
+
     const turnos = turnosRes.ok ? turnosRes.data : [];
-    // Patrones que se pueden aplicar a la plantilla (excluye los que son de un puesto).
-    const patrones: PatronAplicable[] = (patronesRes.ok ? patronesRes.data : [])
-      .map((p) => ({ id: p.id, nombre: p.nombre, dias: normaDias(p.semanas?.[0]?.dias ?? []) }));
+    const familiasDePuesto = new Set(
+      ((familiasPuestoRes.data ?? []) as Array<{ familia_id: string }>).map((r) => r.familia_id),
+    );
 
-    const { data: pat } = await supabase
-      .from("rrhh_patrones")
-      .select("id")
-      .eq("puesto_id", puestoId)
-      .eq("es_oficial", true)
-      .maybeSingle();
+    const patrones: PatronElegible[] = (patronesRes.ok ? patronesRes.data : [])
+      .filter((p) => !familiasDePuesto.has(p.familia_id))
+      .map((p) => ({
+        familiaId: p.familia_id,
+        patronId: p.id,
+        nombre: p.nombre,
+        dias: normaDias(p.semanas?.[0]?.dias ?? []),
+      }));
 
-    if (!pat?.id) return { plantillaId: null, dias: [...SEMANA_VACIA], turnos, patrones };
+    const familiaSeleccionada =
+      (salarioRes.data?.patron_familia_id as string | null | undefined) ?? null;
 
-    const { data: sem } = await supabase
-      .from("rrhh_patron_semanas")
-      .select("dias")
-      .eq("patron_id", pat.id)
-      .order("orden")
-      .limit(1)
-      .maybeSingle();
-
-    return { plantillaId: pat.id, dias: normaDias(sem?.dias), turnos, patrones };
+    return { familiaSeleccionada, patrones, turnos };
   } catch (err) {
-    console.error("[rrhh] getPlantillaPuesto:", err);
+    console.error("[rrhh] getHorarioPuesto:", err);
     return vacio;
   }
 }
 
 /**
- * Asigna la plantilla de horario VIGENTE del puesto al empleado, desde la fecha
- * indicada. Si el puesto no tiene plantilla todavía, no hace nada (ok).
+ * Selecciona (o quita, con null) el patrón de horario del puesto. Fuente única:
+ * escribe la familia en `puesto_salarios.patron_familia_id`. Al contratar/vincular
+ * un empleado a este puesto, heredará este patrón.
+ */
+export async function setHorarioPuesto(
+  puestoId: string,
+  familiaId: string | null,
+) {
+  try {
+    const { supabase, empresaId } = await getContext();
+    if (!empresaId) return { ok: false, error: "No autenticado" };
+
+    // Debe existir la fila de condiciones del puesto para guardar el horario.
+    const { data: fila } = await supabase
+      .from("puesto_salarios")
+      .select("id")
+      .eq("puesto_id", puestoId)
+      .maybeSingle();
+    if (!fila?.id) {
+      return { ok: false, error: "Configura primero las condiciones del puesto antes de asignarle un horario." };
+    }
+
+    // Si se selecciona una familia, validar que exista un patrón oficial suyo en la empresa.
+    if (familiaId) {
+      const { data: oficial } = await supabase
+        .from("rrhh_patrones")
+        .select("id")
+        .eq("empresa_id", empresaId)
+        .eq("familia_id", familiaId)
+        .eq("es_oficial", true)
+        .maybeSingle();
+      if (!oficial?.id) return { ok: false, error: "El patrón seleccionado ya no está disponible." };
+    }
+
+    const { error } = await supabase
+      .from("puesto_salarios")
+      .update({ patron_familia_id: familiaId })
+      .eq("id", fila.id);
+    if (error) throw error;
+
+    revalidatePath("/rrhh/puestos");
+    return { ok: true };
+  } catch (err) {
+    console.error("[rrhh] setHorarioPuesto:", err);
+    return { ok: false, error: "No se pudo guardar el horario" };
+  }
+}
+
+/**
+ * Resuelve el patrón oficial vigente que aplica al puesto:
+ *   1º) el patrón elegido en Horarios (familia guardada en puesto_salarios), o
+ *   2º) fallback legacy: una plantilla propia del puesto (rrhh_patrones.puesto_id).
+ * Devuelve el id del patrón oficial vigente, o null si el puesto no tiene horario.
+ */
+async function resolverPatronOficialDelPuesto(
+  supabase: Awaited<ReturnType<typeof getContext>>["supabase"],
+  empresaId: string,
+  puestoId: string,
+): Promise<string | null> {
+  const { data: salario } = await supabase
+    .from("puesto_salarios")
+    .select("patron_familia_id")
+    .eq("puesto_id", puestoId)
+    .maybeSingle();
+
+  const familiaId = (salario?.patron_familia_id as string | null | undefined) ?? null;
+  if (familiaId) {
+    const { data: oficial } = await supabase
+      .from("rrhh_patrones")
+      .select("id")
+      .eq("empresa_id", empresaId)
+      .eq("familia_id", familiaId)
+      .eq("es_oficial", true)
+      .maybeSingle();
+    if (oficial?.id) return oficial.id as string;
+  }
+
+  // Fallback legacy: plantilla propia del puesto.
+  const { data: propio } = await supabase
+    .from("rrhh_patrones")
+    .select("id")
+    .eq("puesto_id", puestoId)
+    .eq("es_oficial", true)
+    .maybeSingle();
+  return (propio?.id as string | undefined) ?? null;
+}
+
+/**
+ * Asigna el horario del puesto al empleado desde la fecha indicada: lo vincula al
+ * patrón oficial vigente que aplica al puesto. Si el puesto no tiene horario, no
+ * hace nada (ok).
  */
 export async function asignarPlantillaPuestoAEmpleado(
   empleadoId: string,
@@ -94,18 +201,13 @@ export async function asignarPlantillaPuestoAEmpleado(
     const { supabase, user, empresaId } = await getContext();
     if (!empresaId || !user) return { ok: false, error: "No autenticado" };
 
-    const { data: pat } = await supabase
-      .from("rrhh_patrones")
-      .select("id")
-      .eq("puesto_id", puestoId)
-      .eq("es_oficial", true)
-      .maybeSingle();
-    if (!pat?.id) return { ok: true, sinPlantilla: true };
+    const patronId = await resolverPatronOficialDelPuesto(supabase, empresaId, puestoId);
+    if (!patronId) return { ok: true, sinPlantilla: true };
 
     const { error } = await supabase
       .from("rrhh_patron_empleados")
       .upsert(
-        { patron_id: pat.id, empleado_id: empleadoId, vigente_desde: vigenteDesde, asignado_por_user_id: user.id },
+        { patron_id: patronId, empleado_id: empleadoId, vigente_desde: vigenteDesde, asignado_por_user_id: user.id },
         { onConflict: "patron_id,empleado_id" },
       );
     if (error) throw error;
@@ -113,159 +215,5 @@ export async function asignarPlantillaPuestoAEmpleado(
   } catch (err) {
     console.error("[rrhh] asignarPlantillaPuestoAEmpleado:", err);
     return { ok: false, error: "No se pudo asignar la plantilla" };
-  }
-}
-
-/** Crea o reemplaza la plantilla semanal (7 turnos) del puesto. */
-export async function guardarPlantillaPuesto(
-  puestoId: string,
-  dias: (string | null)[],
-) {
-  try {
-    const { supabase, user, empresaId } = await getContext();
-    if (!empresaId || !user) return { ok: false, error: "No autenticado" };
-
-    const semana = normaDias(dias);
-
-    // Nombre del puesto + nombre del autor para el patrón.
-    const [{ data: puesto }, { data: usuario }] = await Promise.all([
-      supabase.from("puestos").select("nombre").eq("id", puestoId).maybeSingle(),
-      supabase.from("usuarios").select("nombre, full_name").eq("user_id", user.id).maybeSingle(),
-    ]);
-    const autor = (usuario?.nombre as string | null) ?? (usuario?.full_name as string | null) ?? "—";
-
-    // ¿Ya tiene plantilla?
-    const { data: existente } = await supabase
-      .from("rrhh_patrones")
-      .select("id")
-      .eq("puesto_id", puestoId)
-      .eq("es_oficial", true)
-      .maybeSingle();
-
-    let patronId = existente?.id as string | undefined;
-
-    if (!patronId) {
-      const { data: nuevo, error: insErr } = await supabase
-        .from("rrhh_patrones")
-        .insert({
-          empresa_id: empresaId,
-          puesto_id: puestoId,
-          nombre: `Plantilla · ${(puesto?.nombre as string | null) ?? "Puesto"}`,
-          tipo: "semanal",
-          creado_por_nombre: autor,
-          creado_por_user_id: user.id,
-          familia_id: randomUUID(),
-        })
-        .select("id")
-        .single();
-      if (insErr) throw insErr;
-      patronId = nuevo.id as string;
-    } else {
-      await supabase
-        .from("rrhh_patrones")
-        .update({ updated_at: new Date().toISOString() })
-        .eq("id", patronId);
-    }
-
-    // Reemplaza la semana (orden 0).
-    await supabase.from("rrhh_patron_semanas").delete().eq("patron_id", patronId);
-    const { error: semErr } = await supabase
-      .from("rrhh_patron_semanas")
-      .insert({ patron_id: patronId, orden: 0, dias: semana });
-    if (semErr) throw semErr;
-
-    revalidatePath("/rrhh/puestos");
-    return { ok: true, patronId };
-  } catch (err) {
-    console.error("[rrhh] guardarPlantillaPuesto:", err);
-    return { ok: false, error: "No se pudo guardar la plantilla" };
-  }
-}
-
-/**
- * Crea una NUEVA VERSIÓN de la plantilla del puesto (cambio de horario), desde
- * la fecha indicada. La versión anterior pasa a histórico (con su vigente_hasta)
- * y los empleados asignados se arrastran a la nueva versión (no se rompe el
- * fichaje). Si el puesto aún no tiene plantilla, crea la primera (v1).
- */
-export async function crearVersionPlantillaPuesto(
-  puestoId: string,
-  dias: (string | null)[],
-  vigenteDesde: string,
-) {
-  try {
-    const { supabase, user, empresaId } = await getContext();
-    if (!empresaId || !user) return { ok: false, error: "No autenticado" };
-
-    const semana = normaDias(dias);
-
-    const { data: actual } = await supabase
-      .from("rrhh_patrones")
-      .select("id, familia_id, nombre, empresa_id")
-      .eq("puesto_id", puestoId)
-      .eq("es_oficial", true)
-      .maybeSingle();
-
-    // Sin plantilla previa → la primera versión es un guardado normal.
-    if (!actual?.id) return guardarPlantillaPuesto(puestoId, dias);
-
-    const familiaId = actual.familia_id as string;
-    const { data: maxRow } = await supabase
-      .from("rrhh_patrones")
-      .select("version")
-      .eq("familia_id", familiaId)
-      .eq("empresa_id", empresaId)
-      .order("version", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    const nuevaVersion = ((maxRow?.version as number | undefined) ?? 1) + 1;
-
-    const { data: usuario } = await supabase
-      .from("usuarios").select("nombre, full_name").eq("user_id", user.id).maybeSingle();
-    const autor = (usuario?.nombre as string | null) ?? (usuario?.full_name as string | null) ?? "—";
-
-    // 1) La versión anterior deja de ser oficial y se cierra en la fecha de cambio.
-    await supabase
-      .from("rrhh_patrones")
-      .update({ es_oficial: false, vigente_hasta: vigenteDesde })
-      .eq("id", actual.id);
-
-    // 2) Nueva versión oficial (conserva familia + puesto).
-    const { data: nuevo, error: insErr } = await supabase
-      .from("rrhh_patrones")
-      .insert({
-        empresa_id: empresaId,
-        puesto_id: puestoId,
-        familia_id: familiaId,
-        version: nuevaVersion,
-        es_oficial: true,
-        nombre: actual.nombre as string,
-        tipo: "semanal",
-        creado_por_nombre: autor,
-        creado_por_user_id: user.id,
-        vigente_desde: vigenteDesde,
-      })
-      .select("id")
-      .single();
-    if (insErr) {
-      // Revertir el flag oficial si falla.
-      await supabase.from("rrhh_patrones").update({ es_oficial: true, vigente_hasta: null }).eq("id", actual.id);
-      throw insErr;
-    }
-
-    // 3) Semana de la nueva versión.
-    await supabase.from("rrhh_patron_semanas").insert({ patron_id: nuevo.id, orden: 0, dias: semana });
-
-    // 4) Arrastrar empleados asignados a la nueva versión.
-    await supabase
-      .from("rrhh_patron_empleados")
-      .update({ patron_id: nuevo.id as string })
-      .eq("patron_id", actual.id);
-
-    revalidatePath("/rrhh/puestos");
-    return { ok: true, plantillaId: nuevo.id as string, version: nuevaVersion };
-  } catch (err) {
-    console.error("[rrhh] crearVersionPlantillaPuesto:", err);
-    return { ok: false, error: "No se pudo crear la versión" };
   }
 }

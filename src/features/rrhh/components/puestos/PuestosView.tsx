@@ -10,6 +10,8 @@ import { listPuestosEmpresa } from "@/features/rrhh/actions/puestos-actions";
 import { crearCronogramaParaPuesto } from "@/features/rrhh/actions/vacantes-actions";
 import { getCursoDePuesto } from "@/features/formacion/actions/formacion-actions";
 import { listBonusEmpresa, togglePuestoBonus } from "@/features/rrhh/actions/bonus-actions";
+import { getHorarioPuesto, type PatronElegible } from "@/features/rrhh/actions/puesto-horario-actions";
+import type { Turno } from "@/features/rrhh/data/horarios";
 import type { Bonus } from "@/features/rrhh/data/bonus";
 import { PERIODICIDAD_LABEL } from "@/features/rrhh/data/bonus";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -531,6 +533,76 @@ function BonusDelPuesto({ puestoId }: { puestoId: string }) {
   );
 }
 
+// Horario del puesto dentro de la ficha: muestra el patrón seleccionado en
+// Horarios (nombre + su semana). Es la misma fuente que el diálogo "Horario".
+const DIAS_SEMANA = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
+
+function HorarioDelPuesto({ puestoId }: { puestoId: string }) {
+  const [patron, setPatron] = useState<PatronElegible | null>(null);
+  const [turnos, setTurnos] = useState<Turno[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let activo = true;
+    setLoading(true);
+    getHorarioPuesto(puestoId).then((res) => {
+      if (!activo) return;
+      setTurnos(res.turnos);
+      setPatron(res.patrones.find((p) => p.familiaId === res.familiaSeleccionada) ?? null);
+      setLoading(false);
+    });
+    return () => { activo = false; };
+  }, [puestoId]);
+
+  const turnoById = useMemo(() => {
+    const m = new Map<string, Turno>();
+    turnos.forEach((t) => m.set(t.id, t));
+    return m;
+  }, [turnos]);
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base flex items-center gap-2"><Clock className="h-4 w-4" /> Horario del puesto</CardTitle>
+        <CardDescription>
+          {patron ? `Horario "${patron.nombre}" (creado en Horarios). Se hereda al empleado que se contrate para este puesto.` : "Horario que se hereda al empleado. Se elige con el botón Horario, entre los creados en Horarios."}
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        {loading ? (
+          <div className="flex items-center text-sm text-muted-foreground py-2"><Loader2 className="h-4 w-4 animate-spin mr-2" />Cargando horario…</div>
+        ) : !patron ? (
+          <p className="text-sm text-muted-foreground">Sin horario asignado. Usa el botón «Horario» en la lista de puestos para elegir uno.</p>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                {DIAS_SEMANA.map((d) => <TableHead key={d} className="text-center">{d}</TableHead>)}
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              <TableRow>
+                {patron.dias.map((turnoId, i) => {
+                  const t = turnoId ? turnoById.get(turnoId) : null;
+                  return (
+                    <TableCell key={i} className="text-center">
+                      {t ? (
+                        <Badge className="border-0 text-white" style={{ backgroundColor: t.colorHex }}>{t.codigo}</Badge>
+                      ) : (
+                        <Badge variant="secondary" className="bg-muted text-muted-foreground">LIBRE</Badge>
+                      )}
+                    </TableCell>
+                  );
+                })}
+              </TableRow>
+            </TableBody>
+          </Table>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 function DetalleView({ puesto, onBack }: { puesto: PuestoSalarial; onBack: () => void }) {
   return (
     <div className="space-y-4 p-4 md:p-6">
@@ -595,36 +667,7 @@ function DetalleView({ puesto, onBack }: { puesto: PuestoSalarial; onBack: () =>
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">Distribución semanal</CardTitle>
-          <CardDescription>Horario de referencia por día de la semana</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                {puesto.horarioSemanal.map((h) => (
-                  <TableHead key={h.dia} className="text-center">{h.dia}</TableHead>
-                ))}
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              <TableRow>
-                {puesto.horarioSemanal.map((h) => (
-                  <TableCell key={h.dia} className="text-center">
-                    {h.turno === "LIBRE" ? (
-                      <Badge variant="secondary" className="bg-muted text-muted-foreground">LIBRE</Badge>
-                    ) : (
-                      <span className="text-sm font-medium">{h.turno}</span>
-                    )}
-                  </TableCell>
-                ))}
-              </TableRow>
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+      <HorarioDelPuesto puestoId={puesto.id} />
 
       {puesto.observaciones && (
         <Card>

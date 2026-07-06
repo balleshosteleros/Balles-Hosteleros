@@ -16,6 +16,10 @@ import {
   type PagoGuardado,
 } from "@/features/rrhh/actions/pagos-actions";
 import {
+  guardarNominaArchivo,
+  getNominaArchivoUrl,
+} from "@/features/rrhh/actions/nominas-archivo-actions";
+import {
   getNotifLiquidacionesConfig,
   type NotifLiquidacionesConfig,
 } from "@/features/notificaciones/actions/notif-config-actions";
@@ -90,6 +94,7 @@ function fromGuardado(
     ssEmpresa: g.ssEmpresa,
     total: g.total,
     pagado: g.pagado,
+    nominaPath: g.nominaPath,
     confirmacionEnviadaAt: g.confirmacionEnviadaAt,
     confirmacionAceptadaAt: g.confirmacionAceptadaAt,
   };
@@ -113,6 +118,7 @@ function toGuardado(p: PagoEmpleado): PagoGuardado {
     ssEmpresa: p.ssEmpresa,
     total: p.total,
     pagado: p.pagado,
+    nominaPath: p.nominaPath,
     confirmacionEnviadaAt: p.confirmacionEnviadaAt,
     confirmacionAceptadaAt: p.confirmacionAceptadaAt,
   };
@@ -138,6 +144,7 @@ function nuevoPagoVacio(empleadoId: string, empleadoNombre: string, area: PagoAr
     ssEmpresa: 0,
     total: 0,
     pagado: false,
+    nominaPath: null,
     confirmacionEnviadaAt: null,
     confirmacionAceptadaAt: null,
   };
