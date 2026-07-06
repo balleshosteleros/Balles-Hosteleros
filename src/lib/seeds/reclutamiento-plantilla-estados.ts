@@ -53,6 +53,9 @@ export const RECLUTAMIENTO_PLANTILLA_ESTADOS_SEED: PlantillaEstadoSeed = {
     // ── Onboarding: 1 fase con 4 sub-columnas (Formación · Contratación · Prueba · Empleado) ──
     { key: "formacion", label: "Formación", color: "hsl(145, 63%, 42%)", fase: "onboarding", orden: 5, defaultEmailNombre: "Formación" },
     { key: "contratacion", label: "Contratación", color: "hsl(38, 92%, 50%)", fase: "onboarding", orden: 6, defaultEmailNombre: "Contratación" },
+    // Nota: `formacion` y `contratacion` disparan además correos del sistema por
+    // clave (ver CLAVES_RESERVADAS_POR_ESTADO). El email por defecto de aquí es el
+    // correo genérico que recibe el candidato al entrar en la fase.
     { key: "prueba", label: "Prueba", color: "hsl(265, 60%, 55%)", fase: "onboarding", orden: 7, defaultEmailNombre: "Prueba" },
     { key: "empleado", label: "Empleado", color: "hsl(145, 63%, 42%)", fase: "onboarding", orden: 8, defaultEmailNombre: "Empleado" },
     // ── Fase Descartado (todos heredan el color oficial de la fase) ──

@@ -163,6 +163,31 @@ Cuando termines, Recursos Humanos revisará tu avance para continuar con el proc
     activa: true,
   },
 
+  // ────────────────────────────────────────────────── 5.b Contratación ──
+  // Correo de bienvenida a la fase de contratación. Se envía al candidato al
+  // entrar en el estado `contratacion`, además de los correos del sistema (alta
+  // a la gestoría, recordatorio, contrato interno y oficial).
+  {
+    nombre: "Contratación",
+    asunto: "Iniciamos tu contratación — {{empresa_nombre}}",
+    cuerpo: `Hola {{candidato_nombre}},
+
+¡Enhorabuena! Iniciamos oficialmente tu proceso de contratación en {{empresa_nombre}}. A partir de ahora vamos a gestionar tu alta y la documentación de tu contrato.
+
+Normalmente en un plazo de 1 a 3 días desde la recepción de este correo recibirás DOS documentos para firmar:
+
+1. El CONTRATO LABORAL, con el que se comunica tu alta de forma legal al Estado.
+2. El CONTRATO INTERNO, con el que confirmas que aceptas las políticas internas de la empresa para sus trabajadores.
+
+Cuando te lleguen, revísalos y fírmalos cuanto antes para no retrasar tu incorporación. Es importante que estés atento/a a tu bandeja de entrada (revisa también la carpeta de spam).
+
+Si te surge cualquier duda durante este proceso, escríbenos a {{empresa_email}}.
+
+¡Bienvenido/a, {{candidato_nombre}}! Estamos deseando tenerte en el equipo.
+{{empresa_nombre}}`,
+    activa: true,
+  },
+
   // ────────────────────────────────────────────────────────── 6. Prueba ──
   {
     nombre: "Prueba",

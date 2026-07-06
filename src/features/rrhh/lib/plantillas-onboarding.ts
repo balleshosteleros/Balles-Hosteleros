@@ -96,12 +96,14 @@ export const DESTINO_DEFAULT_POR_CLAVE: Record<ClaveOnboarding, DestinoPlantilla
  * onboarding (no se asocian a estados editables). Se suman a las plantillas de
  * estado al pintar los iconos del pipeline. Se identifican por CLAVE.
  *
- *  · contratacion → alta a la gestoría + contrato interno + contrato oficial.
+ *  · contratacion → alta a la gestoría + recordatorio a la gestoría + contrato
+ *                   interno + contrato oficial.
  *  · prueba       → aviso periódico a RRHH (cron).
  */
 export const CLAVES_RESERVADAS_POR_ESTADO: Record<string, ClaveOnboarding[]> = {
   contratacion: [
     CLAVES_ONBOARDING.gestoriaAlta,
+    CLAVES_ONBOARDING.gestoriaRecordatorio,
     CLAVES_ONBOARDING.contratoInterno,
     CLAVES_ONBOARDING.contratoOficial,
   ],
