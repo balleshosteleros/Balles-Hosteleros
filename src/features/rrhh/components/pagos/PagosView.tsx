@@ -481,7 +481,10 @@ export function PagosView() {
     });
   };
 
-  const fmt = (n: number) => n.toLocaleString("es-ES", { minimumFractionDigits: 0, maximumFractionDigits: 2 }) + " €";
+  // Espacio de NO separación ( ) entre número y € para que "3.731,61 €" nunca
+  // se parta en dos líneas, aunque la columna sea estrecha.
+  const fmt = (n: number) =>
+    n.toLocaleString("es-ES", { minimumFractionDigits: 0, maximumFractionDigits: 2 }) + " €";
 
   // ¿La nómina de este empleado/mes se ha procesado? (tiene documento adjunto o
   // algún importe leído de la nómina). Sirve para distinguir un 0 CALCULADO de un
@@ -502,9 +505,6 @@ export function PagosView() {
   ];
 
   const columnasDef: ToolbarColumna[] = [
-    { campo: "dniNie", label: "DNI/NIE" },
-    { campo: "fijo", label: "Fijo" },
-    { campo: "pago", label: "Pago" },
     { campo: "nomina", label: "Nómina" },
     { campo: "horasReales", label: "H.R" },
     { campo: "horasTrabajadas", label: "H.T" },
@@ -512,7 +512,6 @@ export function PagosView() {
     { campo: "ajuste", label: "Ajuste" },
     { campo: "horasExtras", label: "H.Extras" },
     { campo: "bonus", label: "Bonus" },
-    { campo: "propinaMantenimiento", label: "Prop. Mant." },
     { campo: "ssEmpleado", label: "SS Empleado" },
     { campo: "ssEmpresa", label: "SS Empresa" },
     { campo: "ssTotal", label: "Total SS" },
@@ -524,39 +523,6 @@ export function PagosView() {
   ];
 
   const columnDefs: Record<string, { th: ReactNode; td: (p: PagoEmpleado) => ReactNode }> = {
-    dniNie: {
-      th: <TableHead key="dniNie" className="w-[120px]">DNI/NIE</TableHead>,
-      td: (p) => {
-        const ext = p.empleadoId.startsWith("ext-");
-        return (
-          <TableCell key="dniNie" className="tabular-nums text-xs">
-            {p.dniNie ? (
-              <span className="font-medium">{p.dniNie}</span>
-            ) : ext ? (
-              <span className="text-muted-foreground">—</span>
-            ) : (
-              <Badge
-                variant="outline"
-                className="border-amber-300 bg-amber-50 text-[10px] text-amber-700"
-                title="Sin DNI: la nómina se emparejará por nombre (menos fiable). Complétalo en la ficha del empleado."
-              >
-                Falta DNI
-              </Badge>
-            )}
-          </TableCell>
-        );
-      },
-    },
-    fijo: {
-      th: <TableHead key="fijo" className="text-center w-[60px]">Fijo</TableHead>,
-      td: (p) => (
-        <TableCell key="fijo" className="text-center">{p.fijo ? <Badge variant="secondary" className="text-[10px]">FIJO</Badge> : <span className="text-muted-foreground text-xs">—</span>}</TableCell>
-      ),
-    },
-    pago: {
-      th: <TableHead key="pago" className="text-right whitespace-nowrap">Pago</TableHead>,
-      td: (p) => <TableCell key="pago" className="text-right tabular-nums whitespace-nowrap">{fmt(p.pago)}</TableCell>,
-    },
     nomina: {
       th: <TableHead key="nomina" className="text-right whitespace-nowrap">Nómina</TableHead>,
       td: (p) => <TableCell key="nomina" className="text-right tabular-nums whitespace-nowrap">{fmt(p.nomina)}</TableCell>,
@@ -591,10 +557,6 @@ export function PagosView() {
     bonus: {
       th: <TableHead key="bonus" className="text-right whitespace-nowrap">Bonus</TableHead>,
       td: (p) => <TableCell key="bonus" className="text-right tabular-nums whitespace-nowrap">{p.bonus > 0 ? fmt(p.bonus) : "—"}</TableCell>,
-    },
-    propinaMantenimiento: {
-      th: <TableHead key="propinaMantenimiento" className="text-right whitespace-nowrap">Prop. Mant.</TableHead>,
-      td: (p) => <TableCell key="propinaMantenimiento" className="text-right tabular-nums whitespace-nowrap">{p.propinaMantenimiento > 0 ? fmt(p.propinaMantenimiento) : "—"}</TableCell>,
     },
     ssEmpleado: {
       th: <TableHead key="ssEmpleado" className="text-right whitespace-nowrap">SS Empleado</TableHead>,
@@ -704,17 +666,6 @@ export function PagosView() {
   // Celda de TOTALES por columna (respeta el orden y la visibilidad dinámicos, en
   // paralelo a columnDefs). Sin entrada = celda vacía.
   const totalDefs: Record<string, ReactNode> = {
-    dniNie: (
-      <TableCell key="t-dni" className="text-xs text-muted-foreground">
-        {(() => {
-          const con = pagosFiltrados.filter((p) => p.dniNie && !p.empleadoId.startsWith("ext-")).length;
-          const totalReales = pagosFiltrados.filter((p) => !p.empleadoId.startsWith("ext-")).length;
-          return `${con}/${totalReales} con DNI`;
-        })()}
-      </TableCell>
-    ),
-    fijo: <TableCell key="t-fijo" />,
-    pago: <TableCell key="t-pago" className="text-right tabular-nums">{fmt(resumen.totalPagos)}</TableCell>,
     nomina: <TableCell key="t-nomina" className="text-right tabular-nums">{fmt(resumen.totalNomina)}</TableCell>,
     horasReales: <TableCell key="t-hr" className="text-right tabular-nums">{pagosFiltrados.reduce((s, p) => s + p.horasReales, 0)}h</TableCell>,
     horasTrabajadas: <TableCell key="t-ht" className="text-right tabular-nums">{pagosFiltrados.reduce((s, p) => s + p.horasTrabajadas, 0)}h</TableCell>,
@@ -726,7 +677,6 @@ export function PagosView() {
     ),
     horasExtras: <TableCell key="t-extras" className="text-right tabular-nums">{fmt(resumen.totalExtras)}</TableCell>,
     bonus: <TableCell key="t-bonus" className="text-right tabular-nums">{fmt(resumen.totalBonus)}</TableCell>,
-    propinaMantenimiento: <TableCell key="t-mant" className="text-right tabular-nums">{fmt(pagosFiltrados.reduce((s, p) => s + p.propinaMantenimiento, 0))}</TableCell>,
     ssEmpleado: <TableCell key="t-ssemp" className="text-right tabular-nums whitespace-nowrap">{fmtDato(resumen.totalSsEmpleado, hayNominaProcesada)}</TableCell>,
     ssEmpresa: <TableCell key="t-ssempresa" className="text-right tabular-nums whitespace-nowrap">{fmtDato(resumen.totalSsEmpresa, hayNominaProcesada)}</TableCell>,
     ssTotal: <TableCell key="t-sstotal" className="text-right tabular-nums font-medium whitespace-nowrap">{fmtDato(resumen.totalSs, hayNominaProcesada)}</TableCell>,
@@ -916,7 +866,14 @@ export function PagosView() {
                           boxShadow: `inset 4px 0 0 0 ${palette.border}`,
                         }}
                       >
-                        <TableCell className="font-medium" style={{ color: palette.label }}>{p.empleadoNombre}</TableCell>
+                        <TableCell className="font-medium" style={{ color: palette.label }}>
+                          <div>{p.empleadoNombre}</div>
+                          {p.dniNie ? (
+                            <div className="text-[11px] font-normal tabular-nums text-muted-foreground">{p.dniNie}</div>
+                          ) : !p.empleadoId.startsWith("ext-") ? (
+                            <div className="text-[11px] font-normal text-amber-600">Falta DNI</div>
+                          ) : null}
+                        </TableCell>
                         {columnasRender.map((c) => columnDefs[c.campo]?.td(p))}
                         <TableCell>
                           <div className="flex items-center gap-0.5">
@@ -969,9 +926,9 @@ export function PagosView() {
 function EditForm({ pago, onSave }: { pago: PagoEmpleado; onSave: (d: Partial<PagoEmpleado>) => void }) {
   const [form, setForm] = useState({ ...pago });
   const campos: { key: keyof PagoEmpleado; label: string }[] = [
-    { key: "pago", label: "Pago" }, { key: "nomina", label: "Nómina" }, { key: "propina", label: "Propina" },
+    { key: "nomina", label: "Nómina" }, { key: "propina", label: "Propina" },
     { key: "ajuste", label: "Ajuste (+/−)" }, { key: "horasExtras", label: "H. Extras" },
-    { key: "bonus", label: "Bonus" }, { key: "propinaMantenimiento", label: "Propina Mant." },
+    { key: "bonus", label: "Bonus" },
     { key: "ssEmpleado", label: "SS Empleado" }, { key: "ssEmpresa", label: "SS Empresa" },
     { key: "irpf", label: "IRPF" },
   ];
