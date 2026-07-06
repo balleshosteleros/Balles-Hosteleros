@@ -34,7 +34,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { Edit2, Banknote, TrendingUp, TrendingDown, PiggyBank, HandCoins, Wallet, Settings, Send, Lock, Unlock, CheckCircle2, Clock, Upload } from "lucide-react";
+import { Edit2, Banknote, TrendingUp, TrendingDown, PiggyBank, HandCoins, Wallet, Settings, Send, Lock, Unlock, CheckCircle2, Clock, Upload, FileText } from "lucide-react";
 import {
   SubmoduleToolbar,
   aplicarFiltrosToolbar,
@@ -291,11 +291,13 @@ export function PagosView() {
   const pagarBloqueado = (p: PagoEmpleado): boolean =>
     !p.pagado && !!notifCfg?.requiereAprobacion && !p.confirmacionAceptadaAt;
 
-  // Subida masiva de nóminas: por cada archivo, la IA lee la SS (empleado/empresa),
-  // el DNI/NIE y el nombre del trabajador. Se empareja con su fila por DNI/NIE
-  // (inequívoco); si el empleado no tiene DNI registrado o la nómina no lo trae, se
-  // usa el nombre como respaldo. La SS es informativa: no toca el total del pago.
-  // Los pagos ya enviados (bloqueados) se saltan.
+  // Subida de nóminas. Admite un archivo por empleado O un único PDF con TODAS
+  // las nóminas (una por página): el servidor lo parte en páginas y devuelve una
+  // nómina por página. Por cada nómina, la IA lee DNI/NIE, nombre y SS. Se
+  // empareja con su fila por DNI/NIE (inequívoco) y, si falta, por nombre. Además
+  // de la SS (informativa, no toca el total), se ADJUNTA la nómina original al
+  // empleado (Storage) para poder verla desde la columna "Nómina". Los pagos ya
+  // enviados (bloqueados) se saltan.
   const subirNominas = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
     const lista = Array.from(files);
@@ -316,6 +318,22 @@ export function PagosView() {
       porNombre.set(norm(p.empleadoNombre), p);
     }
 
+    // Empareja una nómina leída con la fila de su empleado (DNI primero, nombre
+    // como respaldo). Devuelve undefined si no encuentra a nadie.
+    const emparejar = (n: { dniNie?: string; nombre?: string }): PagoEmpleado | undefined => {
+      const dniIa = n.dniNie ? normalizarDniNie(String(n.dniNie)) : "";
+      let fila = dniIa ? porDni.get(dniIa) : undefined;
+      if (fila) return fila;
+      const nombreIa = norm(String(n.nombre ?? ""));
+      fila = porNombre.get(nombreIa);
+      if (!fila && nombreIa) {
+        for (const [k, v] of porNombre) {
+          if (k.includes(nombreIa) || nombreIa.includes(k)) { fila = v; break; }
+        }
+      }
+      return fila;
+    };
+
     let emparejadas = 0;
     let sinEmparejar = 0;
     let fallos = 0;
@@ -326,43 +344,43 @@ export function PagosView() {
         fd.set("archivo", file);
         const res = await fetch("/api/nominas/extraer", { method: "POST", body: fd });
         const data = await res.json();
-        if (!data.ok) {
+        if (!data.ok || !Array.isArray(data.nominas)) {
           fallos++;
           setProgresoNominas((prev) => ({ ...prev, hechas: prev.hechas + 1 }));
           continue;
         }
 
-        // 1º por DNI/NIE (identificador único). 2º por nombre como respaldo.
-        const dniIa = data.dniNie ? normalizarDniNie(String(data.dniNie)) : "";
-        let fila = dniIa ? porDni.get(dniIa) : undefined;
-        if (!fila) {
-          const nombreIa = norm(String(data.nombre ?? ""));
-          fila = porNombre.get(nombreIa);
-          if (!fila && nombreIa) {
-            for (const [k, v] of porNombre) {
-              if (k.includes(nombreIa) || nombreIa.includes(k)) { fila = v; break; }
-            }
+        for (const n of data.nominas) {
+          const fila = emparejar(n);
+          if (!fila) {
+            sinEmparejar++;
+            continue;
           }
-        }
-        if (!fila) {
-          sinEmparejar++;
-          setProgresoNominas((prev) => ({ ...prev, hechas: prev.hechas + 1 }));
-          continue;
-        }
-        if (fila.confirmacionEnviadaAt) {
-          // Liquidación ya enviada: no se puede modificar.
-          setProgresoNominas((prev) => ({ ...prev, hechas: prev.hechas + 1 }));
-          continue;
-        }
+          if (fila.confirmacionEnviadaAt) continue; // liquidación enviada = inmutable
+          if (fila.empleadoId.startsWith("ext-")) continue; // ex-empleado sin ficha
 
-        const actualizado: PagoEmpleado = {
-          ...fila,
-          ssEmpleado: Number(data.ssEmpleado) || 0,
-          ssEmpresa: Number(data.ssEmpresa) || 0,
-        };
-        setPagos((prev) => prev.map((x) => (x.id === actualizado.id ? actualizado : x)));
-        await savePago(periodo, toGuardado(actualizado));
-        emparejadas++;
+          // 1) Guardar la nómina original en Storage (empareja archivo↔empleado).
+          let nominaPath = fila.nominaPath;
+          if (n.archivoBase64 && n.mimeType) {
+            const gu = await guardarNominaArchivo(periodo, fila.empleadoId, n.archivoBase64, n.mimeType);
+            if (gu.ok && gu.path) nominaPath = gu.path;
+          }
+
+          // 2) Actualizar SS (informativa) y el path de la nómina.
+          const actualizado: PagoEmpleado = {
+            ...fila,
+            ssEmpleado: Number(n.ssEmpleado) || 0,
+            ssEmpresa: Number(n.ssEmpresa) || 0,
+            nominaPath,
+          };
+          setPagos((prev) => prev.map((x) => (x.id === actualizado.id ? actualizado : x)));
+          await savePago(periodo, toGuardado(actualizado));
+          // Mantener el índice al día por si la misma persona sale dos veces.
+          porNombre.set(norm(actualizado.empleadoNombre), actualizado);
+          const dni = dniPorEmpleado.current.get(actualizado.empleadoId);
+          if (dni) porDni.set(dni, actualizado);
+          emparejadas++;
+        }
       } catch (e) {
         console.error("[pagos] subirNominas:", e);
         fallos++;
@@ -376,6 +394,16 @@ export function PagosView() {
     if (fallos > 0) partes.push(`${fallos} con error`);
     if (emparejadas > 0) toast.success(partes.join(" · "));
     else toast.error(partes.join(" · ") || "No se pudo leer ninguna nómina.");
+  };
+
+  // Abre la nómina original de un empleado en una pestaña nueva (URL firmada).
+  const verNomina = async (p: PagoEmpleado) => {
+    const res = await getNominaArchivoUrl(periodo, p.empleadoId);
+    if (!res.ok) {
+      toast.error(res.error ?? "No se pudo abrir la nómina.");
+      return;
+    }
+    window.open(res.url, "_blank", "noopener,noreferrer");
   };
 
   const guardarEdicion = (datos: Partial<PagoEmpleado>) => {
@@ -494,6 +522,7 @@ export function PagosView() {
     { campo: "ssEmpresa", label: "SS Empresa" },
     { campo: "ssTotal", label: "Total SS" },
     { campo: "total", label: "Total" },
+    { campo: "nominaArchivo", label: "Nómina (doc)" },
     { campo: "pagado", label: "Pagado" },
     { campo: "confirmacion", label: "Confirmación" },
   ];
@@ -567,6 +596,27 @@ export function PagosView() {
       th: <TableHead key="total" className="text-right font-bold">Total</TableHead>,
       td: (p) => <TableCell key="total" className="text-right font-bold tabular-nums">{fmt(p.total)}</TableCell>,
     },
+    nominaArchivo: {
+      th: <TableHead key="nominaArchivo" className="text-center w-[90px]">Nómina</TableHead>,
+      td: (p) => (
+        <TableCell key="nominaArchivo" className="text-center">
+          {p.nominaPath ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 gap-1 text-primary hover:bg-primary/5"
+              onClick={() => void verNomina(p)}
+              title="Ver la nómina original"
+            >
+              <FileText className="h-3.5 w-3.5" />
+              Ver
+            </Button>
+          ) : (
+            <span className="text-muted-foreground text-xs" title="Sin nómina adjunta">—</span>
+          )}
+        </TableCell>
+      ),
+    },
     pagado: {
       th: <TableHead key="pagado" className="text-center w-[120px]">Pagar</TableHead>,
       td: (p) => {
@@ -622,6 +672,32 @@ export function PagosView() {
   const columnasRender = ordenarColumnas(columnasDef, columnasOrden).filter(
     (c) => c.bloqueada || colVisible(columnasVisibles, c.campo),
   );
+
+  // Celda de TOTALES por columna (respeta el orden y la visibilidad dinámicos, en
+  // paralelo a columnDefs). Sin entrada = celda vacía.
+  const totalDefs: Record<string, ReactNode> = {
+    fijo: <TableCell key="t-fijo" />,
+    pago: <TableCell key="t-pago" className="text-right tabular-nums">{fmt(resumen.totalPagos)}</TableCell>,
+    nomina: <TableCell key="t-nomina" className="text-right tabular-nums">{fmt(resumen.totalNomina)}</TableCell>,
+    horasReales: <TableCell key="t-hr" className="text-right tabular-nums">{pagosFiltrados.reduce((s, p) => s + p.horasReales, 0)}h</TableCell>,
+    horasTrabajadas: <TableCell key="t-ht" className="text-right tabular-nums">{pagosFiltrados.reduce((s, p) => s + p.horasTrabajadas, 0)}h</TableCell>,
+    propina: <TableCell key="t-propina" className="text-right tabular-nums">{fmt(resumen.totalPropinas)}</TableCell>,
+    ajuste: (
+      <TableCell key="t-ajuste" className={`text-right tabular-nums ${resumen.totalAjustes < 0 ? "text-destructive" : resumen.totalAjustes > 0 ? "text-emerald-600" : ""}`}>
+        {resumen.totalAjustes === 0 ? "—" : `${resumen.totalAjustes > 0 ? "+" : "−"}${fmt(Math.abs(resumen.totalAjustes))}`}
+      </TableCell>
+    ),
+    horasExtras: <TableCell key="t-extras" className="text-right tabular-nums">{fmt(resumen.totalExtras)}</TableCell>,
+    bonus: <TableCell key="t-bonus" className="text-right tabular-nums">{fmt(resumen.totalBonus)}</TableCell>,
+    propinaMantenimiento: <TableCell key="t-mant" className="text-right tabular-nums">{fmt(pagosFiltrados.reduce((s, p) => s + p.propinaMantenimiento, 0))}</TableCell>,
+    ssEmpleado: <TableCell key="t-ssemp" className="text-right tabular-nums">{resumen.totalSsEmpleado > 0 ? fmt(resumen.totalSsEmpleado) : "—"}</TableCell>,
+    ssEmpresa: <TableCell key="t-ssempresa" className="text-right tabular-nums">{resumen.totalSsEmpresa > 0 ? fmt(resumen.totalSsEmpresa) : "—"}</TableCell>,
+    ssTotal: <TableCell key="t-sstotal" className="text-right tabular-nums font-medium">{resumen.totalSs > 0 ? fmt(resumen.totalSs) : "—"}</TableCell>,
+    total: <TableCell key="t-total" className="text-right tabular-nums font-bold">{fmt(resumen.totalFinal)}</TableCell>,
+    nominaArchivo: <TableCell key="t-nomdoc" className="text-center"><Badge variant="secondary" className="text-[10px]">{pagosFiltrados.filter((p) => p.nominaPath).length}/{pagosFiltrados.length}</Badge></TableCell>,
+    pagado: <TableCell key="t-pagado" className="text-center"><Badge variant={pagosFiltrados.every((p) => p.pagado) ? "default" : "secondary"} className="text-[10px]">{pagosFiltrados.filter((p) => p.pagado).length}/{pagosFiltrados.length}</Badge></TableCell>,
+    confirmacion: <TableCell key="t-conf" className="text-center"><Badge variant="secondary" className="text-[10px]">{pagosFiltrados.filter((p) => p.confirmacionEnviadaAt).length}/{pagosFiltrados.length}</Badge></TableCell>,
+  };
 
   const areaOpciones: { value: "todos" | PagoArea; label: string; palette?: { bg: string; border: string; label: string } }[] = [
     { value: "todos", label: "Todos" },
@@ -829,22 +905,8 @@ export function PagosView() {
                 )}
                 {pagosFiltrados.length > 0 && (
                   <TableRow className="bg-muted/60 font-semibold border-t-2">
-                    <TableCell>TOTALES</TableCell><TableCell />
-                    <TableCell className="text-right tabular-nums">{fmt(resumen.totalPagos)}</TableCell>
-                    <TableCell className="text-right tabular-nums">{fmt(resumen.totalNomina)}</TableCell>
-                    <TableCell className="text-right tabular-nums">{pagosFiltrados.reduce((s, p) => s + p.horasReales, 0)}h</TableCell>
-                    <TableCell className="text-right tabular-nums">{pagosFiltrados.reduce((s, p) => s + p.horasTrabajadas, 0)}h</TableCell>
-                    <TableCell className="text-right tabular-nums">{fmt(resumen.totalPropinas)}</TableCell>
-                    <TableCell className={`text-right tabular-nums ${resumen.totalAjustes < 0 ? "text-destructive" : resumen.totalAjustes > 0 ? "text-emerald-600" : ""}`}>{resumen.totalAjustes === 0 ? "—" : `${resumen.totalAjustes > 0 ? "+" : "−"}${fmt(Math.abs(resumen.totalAjustes))}`}</TableCell>
-                    <TableCell className="text-right tabular-nums">{fmt(resumen.totalExtras)}</TableCell>
-                    <TableCell className="text-right tabular-nums">{fmt(resumen.totalBonus)}</TableCell>
-                    <TableCell className="text-right tabular-nums">{fmt(pagosFiltrados.reduce((s, p) => s + p.propinaMantenimiento, 0))}</TableCell>
-                    <TableCell className="text-right tabular-nums">{resumen.totalSsEmpleado > 0 ? fmt(resumen.totalSsEmpleado) : "—"}</TableCell>
-                    <TableCell className="text-right tabular-nums">{resumen.totalSsEmpresa > 0 ? fmt(resumen.totalSsEmpresa) : "—"}</TableCell>
-                    <TableCell className="text-right tabular-nums font-medium">{resumen.totalSs > 0 ? fmt(resumen.totalSs) : "—"}</TableCell>
-                    <TableCell className="text-right tabular-nums font-bold">{fmt(resumen.totalFinal)}</TableCell>
-                    <TableCell className="text-center"><Badge variant={pagosFiltrados.every((p) => p.pagado) ? "default" : "secondary"} className="text-[10px]">{pagosFiltrados.filter((p) => p.pagado).length}/{pagosFiltrados.length}</Badge></TableCell>
-                    <TableCell className="text-center"><Badge variant="secondary" className="text-[10px]">{pagosFiltrados.filter((p) => p.confirmacionEnviadaAt).length}/{pagosFiltrados.length}</Badge></TableCell>
+                    <TableCell>TOTALES</TableCell>
+                    {columnasRender.map((c) => totalDefs[c.campo] ?? <TableCell key={`t-${c.campo}`} />)}
                     <TableCell />
                   </TableRow>
                 )}

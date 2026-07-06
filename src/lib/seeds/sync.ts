@@ -443,11 +443,18 @@ export async function syncReclutamientoPlantillaEstadoAEmpresa(
     return { creadas: 1 };
   }
 
-  // Caso 2 — empresa con plantillas: ADITIVO. Inserta en cada plantilla los
-  // estados del seed que aún no existan (por `key`), respetando label/orden/email
-  // ya personalizados por el cliente. Hoy esto incorpora el estado nuevo
-  // `documentacion` sin tocar el resto. El email por defecto solo se asigna si la
-  // empresa tiene esa plantilla de email; si no, queda null (no rompe).
+  // Caso 2 — empresa con plantillas: ADITIVO. En cada plantilla existente:
+  //  a) Inserta los estados del seed que aún no existan (por `key`).
+  //  b) BACKFILL del email por defecto: rellena `email_plantilla_id` en los
+  //     estados que hoy no lo tienen (campo ausente o null), resolviendo el
+  //     `defaultEmailNombre` del seed a la plantilla de email de la empresa. NO
+  //     pisa una elección previa del cliente (si ya hay un id, se respeta).
+  // Sin (b), las empresas que ya tenían la plantilla de estados cuando aún no
+  // existían las plantillas de email suelta quedaban sin email por estado para
+  // siempre → el correo «Nuevo» (y el resto de fases) nunca se enviaba.
+  const emailDefaultPorKey = new Map(
+    seedEstados.map((e) => [e.key, e.email_plantilla_id]),
+  );
   let actualizadas = 0;
   for (const plantilla of existentes ?? []) {
     const estadosActuales = Array.isArray(plantilla.estados)
@@ -455,12 +462,24 @@ export async function syncReclutamientoPlantillaEstadoAEmpresa(
       : [];
     const keysActuales = new Set(estadosActuales.map((e) => e.key as string));
     const faltantes = seedEstados.filter((e) => !keysActuales.has(e.key));
-    if (faltantes.length === 0) continue;
+
+    // (b) Backfill del email por defecto en los estados existentes sin id.
+    let backfilled = false;
+    const conEmail = estadosActuales.map((e) => {
+      const tieneId = e.email_plantilla_id != null;
+      if (tieneId) return e;
+      const defId = emailDefaultPorKey.get(e.key as string) ?? null;
+      if (!defId) return e;
+      backfilled = true;
+      return { ...e, email_plantilla_id: defId };
+    });
+
+    if (faltantes.length === 0 && !backfilled) continue;
 
     // Mezcla y reordena por el `orden` canónico del seed para que los estados
     // nuevos queden en su posición (p. ej. documentacion antes de teorica).
     const ordenSeed = new Map(seedEstados.map((e) => [e.key, e.orden]));
-    const merged = [...estadosActuales, ...faltantes].sort((a, b) => {
+    const merged = [...conEmail, ...faltantes].sort((a, b) => {
       const oa = (ordenSeed.get(a.key as string) ?? (a.orden as number) ?? 0) as number;
       const ob = (ordenSeed.get(b.key as string) ?? (b.orden as number) ?? 0) as number;
       return oa - ob;
