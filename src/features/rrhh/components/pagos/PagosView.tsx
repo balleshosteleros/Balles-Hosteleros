@@ -329,25 +329,53 @@ export function PagosView() {
       porNombre.set(norm(p.empleadoNombre), p);
     }
 
-    // Empareja una nómina leída con la fila de su empleado (DNI primero, nombre
-    // como respaldo). Devuelve undefined si no encuentra a nadie.
+    // Palabras significativas de un nombre (ignora partículas y palabras de 1-2
+    // letras) para comparar por tokens sin depender del orden.
+    const tokens = (s: string) =>
+      new Set(
+        norm(s)
+          .split(" ")
+          .filter((w) => w.length >= 3 && !["del", "las", "los"].includes(w)),
+      );
+
+    // Empareja una nómina leída con la fila de su empleado. Estrategia:
+    //  1) por DNI/NIE (inequívoco);
+    //  2) por nombre exacto normalizado;
+    //  3) por coincidencia de palabras: comparte ≥2 palabras (o todas si el
+    //     nombre es de una sola palabra). Robusto ante el orden apellido/nombre.
     const emparejar = (n: { dniNie?: string; nombre?: string }): PagoEmpleado | undefined => {
       const dniIa = n.dniNie ? normalizarDniNie(String(n.dniNie)) : "";
-      let fila = dniIa ? porDni.get(dniIa) : undefined;
-      if (fila) return fila;
+      const filaDni = dniIa ? porDni.get(dniIa) : undefined;
+      if (filaDni) return filaDni;
+
       const nombreIa = norm(String(n.nombre ?? ""));
-      fila = porNombre.get(nombreIa);
-      if (!fila && nombreIa) {
-        for (const [k, v] of porNombre) {
-          if (k.includes(nombreIa) || nombreIa.includes(k)) { fila = v; break; }
+      if (!nombreIa) return undefined;
+      const exacta = porNombre.get(nombreIa);
+      if (exacta) return exacta;
+
+      const setIa = tokens(nombreIa);
+      if (setIa.size === 0) return undefined;
+      let mejor: PagoEmpleado | undefined;
+      let mejorComunes = 0;
+      for (const [k, v] of porNombre) {
+        const setEmp = tokens(k);
+        let comunes = 0;
+        for (const w of setIa) if (setEmp.has(w)) comunes++;
+        const requerido = Math.min(2, setIa.size, setEmp.size);
+        if (comunes >= requerido && comunes > mejorComunes) {
+          mejor = v;
+          mejorComunes = comunes;
         }
       }
-      return fila;
+      return mejor;
     };
 
     let emparejadas = 0;
     let sinEmparejar = 0;
     let fallos = 0;
+    // Nombres/DNI de las nóminas que no se pudieron asignar a ningún empleado,
+    // para avisar exactamente cuáles revisar (falta DNI o el nombre no cuadra).
+    const noAsignadas: string[] = [];
 
     for (const file of lista) {
       try {
@@ -365,6 +393,8 @@ export function PagosView() {
           const fila = emparejar(n);
           if (!fila) {
             sinEmparejar++;
+            const etiqueta = String(n.nombre ?? "").trim() || String(n.dniNie ?? "").trim() || "nómina sin identificar";
+            noAsignadas.push(etiqueta);
             continue;
           }
           if (fila.confirmacionEnviadaAt) continue; // liquidación enviada = inmutable
@@ -403,8 +433,14 @@ export function PagosView() {
     const partes = [`${emparejadas} nómina${emparejadas === 1 ? "" : "s"} leída${emparejadas === 1 ? "" : "s"}`];
     if (sinEmparejar > 0) partes.push(`${sinEmparejar} sin empleado`);
     if (fallos > 0) partes.push(`${fallos} con error`);
-    if (emparejadas > 0) toast.success(partes.join(" · "));
-    else toast.error(partes.join(" · ") || "No se pudo leer ninguna nómina.");
+    // Si quedaron nóminas sin asignar, listarlas para que RRHH sepa cuáles revisar
+    // (normalmente por falta de DNI en la ficha o nombre distinto).
+    const descripcion =
+      noAsignadas.length > 0
+        ? `Sin asignar: ${noAsignadas.slice(0, 8).join(", ")}${noAsignadas.length > 8 ? "…" : ""}. Revisa que esos empleados tengan el DNI en su ficha.`
+        : undefined;
+    if (emparejadas > 0) toast.success(partes.join(" · "), { description: descripcion });
+    else toast.error(partes.join(" · ") || "No se pudo leer ninguna nómina.", { description: descripcion });
   };
 
   // Abre la nómina original de un empleado en una pestaña nueva (URL firmada).
@@ -540,6 +576,29 @@ export function PagosView() {
   ];
 
   const columnDefs: Record<string, { th: ReactNode; td: (p: PagoEmpleado) => ReactNode }> = {
+    dniNie: {
+      th: <TableHead key="dniNie" className="w-[120px]">DNI/NIE</TableHead>,
+      td: (p) => {
+        const ext = p.empleadoId.startsWith("ext-");
+        return (
+          <TableCell key="dniNie" className="tabular-nums text-xs">
+            {p.dniNie ? (
+              <span className="font-medium">{p.dniNie}</span>
+            ) : ext ? (
+              <span className="text-muted-foreground">—</span>
+            ) : (
+              <Badge
+                variant="outline"
+                className="border-amber-300 bg-amber-50 text-[10px] text-amber-700"
+                title="Sin DNI: la nómina se emparejará por nombre (menos fiable). Complétalo en la ficha del empleado."
+              >
+                Falta DNI
+              </Badge>
+            )}
+          </TableCell>
+        );
+      },
+    },
     fijo: {
       th: <TableHead key="fijo" className="text-center w-[60px]">Fijo</TableHead>,
       td: (p) => (
@@ -688,6 +747,15 @@ export function PagosView() {
   // Celda de TOTALES por columna (respeta el orden y la visibilidad dinámicos, en
   // paralelo a columnDefs). Sin entrada = celda vacía.
   const totalDefs: Record<string, ReactNode> = {
+    dniNie: (
+      <TableCell key="t-dni" className="text-xs text-muted-foreground">
+        {(() => {
+          const con = pagosFiltrados.filter((p) => p.dniNie && !p.empleadoId.startsWith("ext-")).length;
+          const totalReales = pagosFiltrados.filter((p) => !p.empleadoId.startsWith("ext-")).length;
+          return `${con}/${totalReales} con DNI`;
+        })()}
+      </TableCell>
+    ),
     fijo: <TableCell key="t-fijo" />,
     pago: <TableCell key="t-pago" className="text-right tabular-nums">{fmt(resumen.totalPagos)}</TableCell>,
     nomina: <TableCell key="t-nomina" className="text-right tabular-nums">{fmt(resumen.totalNomina)}</TableCell>,
