@@ -483,6 +483,15 @@ export function PagosView() {
 
   const fmt = (n: number) => n.toLocaleString("es-ES", { minimumFractionDigits: 0, maximumFractionDigits: 2 }) + " €";
 
+  // ¿La nómina de este empleado/mes se ha procesado? (tiene documento adjunto o
+  // algún importe leído de la nómina). Sirve para distinguir un 0 CALCULADO de un
+  // dato SIN calcular: si está procesada, un 0 es real (0 €); si no, se muestra —.
+  const nominaProcesada = (p: PagoEmpleado): boolean =>
+    !!p.nominaPath || p.ssEmpleado > 0 || p.ssEmpresa > 0 || p.irpf > 0 || p.nomina > 0;
+
+  // Formatea un importe distinguiendo 0-calculado ("0 €") de sin-calcular ("—").
+  const fmtDato = (valor: number, calculado: boolean) => (calculado ? fmt(valor) : "—");
+
   const kpis = [
     { label: "Total pagos", value: fmt(resumen.totalFinal), icon: Banknote, color: "text-primary" },
     { label: "Positivo", value: fmt(resumen.positivo), icon: TrendingUp, color: "text-emerald-600" },
@@ -545,12 +554,12 @@ export function PagosView() {
       ),
     },
     pago: {
-      th: <TableHead key="pago" className="text-right">Pago</TableHead>,
-      td: (p) => <TableCell key="pago" className="text-right tabular-nums">{fmt(p.pago)}</TableCell>,
+      th: <TableHead key="pago" className="text-right whitespace-nowrap">Pago</TableHead>,
+      td: (p) => <TableCell key="pago" className="text-right tabular-nums whitespace-nowrap">{fmt(p.pago)}</TableCell>,
     },
     nomina: {
-      th: <TableHead key="nomina" className="text-right">Nómina</TableHead>,
-      td: (p) => <TableCell key="nomina" className="text-right tabular-nums">{fmt(p.nomina)}</TableCell>,
+      th: <TableHead key="nomina" className="text-right whitespace-nowrap">Nómina</TableHead>,
+      td: (p) => <TableCell key="nomina" className="text-right tabular-nums whitespace-nowrap">{fmt(p.nomina)}</TableCell>,
     },
     horasReales: {
       th: <TableHead key="horasReales" className="text-right">H.R</TableHead>,
@@ -561,54 +570,55 @@ export function PagosView() {
       td: (p) => <TableCell key="horasTrabajadas" className="text-right tabular-nums">{p.horasTrabajadas}h</TableCell>,
     },
     propina: {
-      th: <TableHead key="propina" className="text-right">Propina</TableHead>,
-      td: (p) => <TableCell key="propina" className="text-right tabular-nums">{fmt(p.propina)}</TableCell>,
+      th: <TableHead key="propina" className="text-right whitespace-nowrap">Propina</TableHead>,
+      td: (p) => <TableCell key="propina" className="text-right tabular-nums whitespace-nowrap">{fmt(p.propina)}</TableCell>,
     },
     ajuste: {
-      th: <TableHead key="ajuste" className="text-right">Ajuste</TableHead>,
+      th: <TableHead key="ajuste" className="text-right whitespace-nowrap">Ajuste</TableHead>,
       td: (p) => (
         <TableCell
           key="ajuste"
-          className={`text-right tabular-nums ${p.ajuste < 0 ? "text-destructive" : p.ajuste > 0 ? "text-emerald-600" : ""}`}
+          className={`text-right tabular-nums whitespace-nowrap ${p.ajuste < 0 ? "text-destructive" : p.ajuste > 0 ? "text-emerald-600" : ""}`}
         >
           {p.ajuste === 0 ? "—" : `${p.ajuste > 0 ? "+" : "−"}${fmt(Math.abs(p.ajuste))}`}
         </TableCell>
       ),
     },
     horasExtras: {
-      th: <TableHead key="horasExtras" className="text-right">H.Extras</TableHead>,
-      td: (p) => <TableCell key="horasExtras" className="text-right tabular-nums">{p.horasExtras > 0 ? fmt(p.horasExtras) : "—"}</TableCell>,
+      th: <TableHead key="horasExtras" className="text-right whitespace-nowrap">H.Extras</TableHead>,
+      td: (p) => <TableCell key="horasExtras" className="text-right tabular-nums whitespace-nowrap">{p.horasExtras > 0 ? fmt(p.horasExtras) : "—"}</TableCell>,
     },
     bonus: {
-      th: <TableHead key="bonus" className="text-right">Bonus</TableHead>,
-      td: (p) => <TableCell key="bonus" className="text-right tabular-nums">{p.bonus > 0 ? fmt(p.bonus) : "—"}</TableCell>,
+      th: <TableHead key="bonus" className="text-right whitespace-nowrap">Bonus</TableHead>,
+      td: (p) => <TableCell key="bonus" className="text-right tabular-nums whitespace-nowrap">{p.bonus > 0 ? fmt(p.bonus) : "—"}</TableCell>,
     },
     propinaMantenimiento: {
-      th: <TableHead key="propinaMantenimiento" className="text-right">Prop. Mant.</TableHead>,
-      td: (p) => <TableCell key="propinaMantenimiento" className="text-right tabular-nums">{p.propinaMantenimiento > 0 ? fmt(p.propinaMantenimiento) : "—"}</TableCell>,
+      th: <TableHead key="propinaMantenimiento" className="text-right whitespace-nowrap">Prop. Mant.</TableHead>,
+      td: (p) => <TableCell key="propinaMantenimiento" className="text-right tabular-nums whitespace-nowrap">{p.propinaMantenimiento > 0 ? fmt(p.propinaMantenimiento) : "—"}</TableCell>,
     },
     ssEmpleado: {
-      th: <TableHead key="ssEmpleado" className="text-right">SS Empleado</TableHead>,
-      td: (p) => <TableCell key="ssEmpleado" className="text-right tabular-nums">{p.ssEmpleado > 0 ? fmt(p.ssEmpleado) : "—"}</TableCell>,
+      th: <TableHead key="ssEmpleado" className="text-right whitespace-nowrap">SS Empleado</TableHead>,
+      td: (p) => <TableCell key="ssEmpleado" className="text-right tabular-nums whitespace-nowrap">{fmtDato(p.ssEmpleado, nominaProcesada(p))}</TableCell>,
     },
     ssEmpresa: {
-      th: <TableHead key="ssEmpresa" className="text-right">SS Empresa</TableHead>,
-      td: (p) => <TableCell key="ssEmpresa" className="text-right tabular-nums">{p.ssEmpresa > 0 ? fmt(p.ssEmpresa) : "—"}</TableCell>,
+      th: <TableHead key="ssEmpresa" className="text-right whitespace-nowrap">SS Empresa</TableHead>,
+      td: (p) => <TableCell key="ssEmpresa" className="text-right tabular-nums whitespace-nowrap">{fmtDato(p.ssEmpresa, nominaProcesada(p))}</TableCell>,
     },
     ssTotal: {
-      th: <TableHead key="ssTotal" className="text-right">Total SS</TableHead>,
-      td: (p) => {
-        const t = costeSSTotal(p);
-        return <TableCell key="ssTotal" className="text-right tabular-nums font-medium">{t > 0 ? fmt(t) : "—"}</TableCell>;
-      },
+      th: <TableHead key="ssTotal" className="text-right whitespace-nowrap">Total SS</TableHead>,
+      td: (p) => (
+        <TableCell key="ssTotal" className="text-right tabular-nums font-medium whitespace-nowrap">
+          {fmtDato(costeSSTotal(p), nominaProcesada(p))}
+        </TableCell>
+      ),
     },
     irpf: {
-      th: <TableHead key="irpf" className="text-right">IRPF</TableHead>,
-      td: (p) => <TableCell key="irpf" className="text-right tabular-nums">{p.irpf > 0 ? fmt(p.irpf) : "—"}</TableCell>,
+      th: <TableHead key="irpf" className="text-right whitespace-nowrap">IRPF</TableHead>,
+      td: (p) => <TableCell key="irpf" className="text-right tabular-nums whitespace-nowrap">{fmtDato(p.irpf, nominaProcesada(p))}</TableCell>,
     },
     total: {
-      th: <TableHead key="total" className="text-right font-bold">Total</TableHead>,
-      td: (p) => <TableCell key="total" className="text-right font-bold tabular-nums">{fmt(p.total)}</TableCell>,
+      th: <TableHead key="total" className="text-right font-bold whitespace-nowrap">Total</TableHead>,
+      td: (p) => <TableCell key="total" className="text-right font-bold tabular-nums whitespace-nowrap">{fmt(p.total)}</TableCell>,
     },
     nominaArchivo: {
       th: <TableHead key="nominaArchivo" className="text-center w-[90px]">Nómina</TableHead>,
@@ -687,6 +697,10 @@ export function PagosView() {
     (c) => c.bloqueada || colVisible(columnasVisibles, c.campo),
   );
 
+  // ¿Hay al menos una nómina procesada en la vista? Para los totales de SS/IRPF:
+  // si nadie la tiene, se muestra "—"; si alguien sí, se muestra el total (0 € si toca).
+  const hayNominaProcesada = pagosFiltrados.some((p) => nominaProcesada(p));
+
   // Celda de TOTALES por columna (respeta el orden y la visibilidad dinámicos, en
   // paralelo a columnDefs). Sin entrada = celda vacía.
   const totalDefs: Record<string, ReactNode> = {
@@ -713,10 +727,10 @@ export function PagosView() {
     horasExtras: <TableCell key="t-extras" className="text-right tabular-nums">{fmt(resumen.totalExtras)}</TableCell>,
     bonus: <TableCell key="t-bonus" className="text-right tabular-nums">{fmt(resumen.totalBonus)}</TableCell>,
     propinaMantenimiento: <TableCell key="t-mant" className="text-right tabular-nums">{fmt(pagosFiltrados.reduce((s, p) => s + p.propinaMantenimiento, 0))}</TableCell>,
-    ssEmpleado: <TableCell key="t-ssemp" className="text-right tabular-nums">{resumen.totalSsEmpleado > 0 ? fmt(resumen.totalSsEmpleado) : "—"}</TableCell>,
-    ssEmpresa: <TableCell key="t-ssempresa" className="text-right tabular-nums">{resumen.totalSsEmpresa > 0 ? fmt(resumen.totalSsEmpresa) : "—"}</TableCell>,
-    ssTotal: <TableCell key="t-sstotal" className="text-right tabular-nums font-medium">{resumen.totalSs > 0 ? fmt(resumen.totalSs) : "—"}</TableCell>,
-    irpf: <TableCell key="t-irpf" className="text-right tabular-nums">{(() => { const t = pagosFiltrados.reduce((s, p) => s + p.irpf, 0); return t > 0 ? fmt(t) : "—"; })()}</TableCell>,
+    ssEmpleado: <TableCell key="t-ssemp" className="text-right tabular-nums whitespace-nowrap">{fmtDato(resumen.totalSsEmpleado, hayNominaProcesada)}</TableCell>,
+    ssEmpresa: <TableCell key="t-ssempresa" className="text-right tabular-nums whitespace-nowrap">{fmtDato(resumen.totalSsEmpresa, hayNominaProcesada)}</TableCell>,
+    ssTotal: <TableCell key="t-sstotal" className="text-right tabular-nums font-medium whitespace-nowrap">{fmtDato(resumen.totalSs, hayNominaProcesada)}</TableCell>,
+    irpf: <TableCell key="t-irpf" className="text-right tabular-nums whitespace-nowrap">{fmtDato(pagosFiltrados.reduce((s, p) => s + p.irpf, 0), hayNominaProcesada)}</TableCell>,
     total: <TableCell key="t-total" className="text-right tabular-nums font-bold">{fmt(resumen.totalFinal)}</TableCell>,
     nominaArchivo: <TableCell key="t-nomdoc" className="text-center"><Badge variant="secondary" className="text-[10px]">{pagosFiltrados.filter((p) => p.nominaPath).length}/{pagosFiltrados.length}</Badge></TableCell>,
     pagado: <TableCell key="t-pagado" className="text-center"><Badge variant={pagosFiltrados.every((p) => p.pagado) ? "default" : "secondary"} className="text-[10px]">{pagosFiltrados.filter((p) => p.pagado).length}/{pagosFiltrados.length}</Badge></TableCell>,
