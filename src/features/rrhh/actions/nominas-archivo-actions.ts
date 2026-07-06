@@ -15,7 +15,11 @@
 
 import { getAppContext } from "@/lib/supabase/get-context";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { normalizarDniNie } from "@/features/rrhh/lib/documentacion-validacion";
+import {
+  procesarNominasConAdmin,
+  type NominaLeida,
+  type ResultadoProceso,
+} from "@/features/rrhh/services/nominas/procesar-nominas";
 
 const BUCKET = "rrhh-nominas";
 const SIGNED_URL_TTL = 60 * 10; // 10 min para verla
@@ -161,136 +165,33 @@ export async function guardarDatosNomina(
   }
 }
 
-/** Una nómina leída por la IA lista para emparejar y guardar. */
-export interface NominaLeida {
-  dniNie: string;
-  nombre: string;
-  ssEmpleado: number;
-  ssEmpresa: number;
-  neto: number;
-  irpf: number;
-  periodo: string; // AAAA-MM leído de la nómina, o "" si no se leyó
-  mimeType: string;
-  archivoBase64: string;
-}
-
-export interface ResultadoProceso {
-  guardadas: number;
-  yaExistian: number;
-  sinEmpleado: string[]; // etiquetas (nombre/dni) de las no emparejadas
-  duplicadas: string[]; // nombres de empleados que ya tenían nómina ese mes
-  meses: string[]; // periodos AAAA-MM tocados
-}
-
 /**
- * Empareja y guarda un lote de nóminas leídas, EN SERVIDOR, contra TODOS los
- * empleados de la empresa (no depende de la vista del cliente). Empareja por
- * DNI/NIE (inequívoco) y, como respaldo, por nombre (tokens). Cada nómina va al
- * mes que ella misma indica (periodo); si no lo trae, al `periodoDefecto`.
- * No regraba si el empleado ya tiene nómina ese mes.
+ * Empareja y guarda un lote de nóminas leídas (flujo AUTENTICADO desde Pagos).
+ * Toda la lógica vive en `procesarNominasConAdmin` (servicio compartido), que
+ * reutiliza también el enlace público de la gestoría. Aquí solo resolvemos la
+ * empresa activa y delegamos.
  */
 export async function procesarNominasLeidas(
   nominas: NominaLeida[],
   periodoDefecto: string,
 ): Promise<{ ok: boolean; error?: string; resultado?: ResultadoProceso }> {
   try {
-    const { supabase, empresaId } = await getAppContext();
+    const { empresaId } = await getAppContext();
     if (!empresaId) return { ok: false, error: "No autorizado" };
     const admin = createAdminClient();
-
-    // TODOS los empleados activos de la empresa (fuente fresca, no la vista).
-    const { data: emps } = await supabase
-      .from("empleados")
-      .select("id, nombre, apellidos, dni_nie")
-      .eq("empresa_id", empresaId)
-      .eq("estado", "Activo");
-
-    const norm = (s: string) =>
-      s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
-    const tokens = (s: string) =>
-      new Set(norm(s).split(" ").filter((w) => w.length >= 3 && !["del", "las", "los"].includes(w)));
-
-    type Emp = { id: string; nombre: string };
-    const porDni = new Map<string, Emp>();
-    const porNombre = new Map<string, Emp>();
-    for (const e of emps ?? []) {
-      const full = `${e.nombre ?? ""} ${e.apellidos ?? ""}`.trim();
-      const emp: Emp = { id: e.id as string, nombre: full };
-      if (e.dni_nie) porDni.set(normalizarDniNie(e.dni_nie as string), emp);
-      porNombre.set(norm(full), emp);
-    }
-
-    const emparejar = (n: NominaLeida): Emp | undefined => {
-      const dni = n.dniNie ? normalizarDniNie(n.dniNie) : "";
-      if (dni && porDni.has(dni)) return porDni.get(dni);
-      const nombreIa = norm(n.nombre || "");
-      if (!nombreIa) return undefined;
-      if (porNombre.has(nombreIa)) return porNombre.get(nombreIa);
-      const setIa = tokens(nombreIa);
-      if (setIa.size === 0) return undefined;
-      let mejor: Emp | undefined;
-      let mejorComunes = 0;
-      for (const [k, v] of porNombre) {
-        const setEmp = tokens(k);
-        let comunes = 0;
-        for (const w of setIa) if (setEmp.has(w)) comunes++;
-        const req = Math.min(2, setIa.size, setEmp.size);
-        if (comunes >= req && comunes > mejorComunes) { mejor = v; mejorComunes = comunes; }
-      }
-      return mejor;
-    };
-
-    const res: ResultadoProceso = { guardadas: 0, yaExistian: 0, sinEmpleado: [], duplicadas: [], meses: [] };
-    const meses = new Set<string>();
-
-    for (const n of nominas) {
-      const emp = emparejar(n);
-      if (!emp) {
-        // Mostrar lo que leyó la IA (nombre + DNI) para poder diagnosticar por qué
-        // no cuadró (DNI mal leído, nombre distinto, empleado inexistente…).
-        const etiq = [n.nombre?.trim(), n.dniNie ? `(${n.dniNie})` : ""].filter(Boolean).join(" ");
-        res.sinEmpleado.push(etiq || "nómina sin identificar");
-        continue;
-      }
-      const periodo = /^\d{4}-\d{2}$/.test(n.periodo) ? n.periodo : periodoDefecto;
-      const ext = EXT_POR_MIME[n.mimeType];
-      if (!ext) continue;
-
-      // Estado actual del pago de ese empleado/mes.
-      const { data: ex } = await admin
-        .from("rrhh_pagos")
-        .select("id, confirmacion_enviada_at, nomina_path")
-        .eq("empresa_id", empresaId).eq("empleado_id", emp.id).eq("periodo", periodo)
-        .maybeSingle();
-      if (ex?.confirmacion_enviada_at) { continue; } // liquidación enviada: intocable
-      if (ex?.nomina_path) { res.yaExistian++; res.duplicadas.push(emp.nombre); continue; }
-
-      // Subir el documento.
-      const path = `${empresaId}/${periodo}/${emp.id}.${ext}`;
-      const up = await admin.storage.from(BUCKET)
-        .upload(path, Buffer.from(n.archivoBase64, "base64"), { upsert: true, contentType: n.mimeType });
-      if (up.error) continue;
-
-      const campos = { nomina: n.neto || 0, ss_empleado: n.ssEmpleado || 0, ss_empresa: n.ssEmpresa || 0, irpf: n.irpf || 0, nomina_path: path };
-      if (ex?.id) {
-        await admin.from("rrhh_pagos").update(campos).eq("id", ex.id);
-      } else {
-        await admin.from("rrhh_pagos").insert({
-          empresa_id: empresaId, empleado_id: emp.id, empleado_nombre: emp.nombre, periodo, ...campos,
-        });
-      }
-      res.guardadas++;
-      meses.add(periodo);
-    }
-    res.meses = [...meses].sort();
-    return { ok: true, resultado: res };
+    const resultado = await procesarNominasConAdmin(admin, empresaId, nominas, periodoDefecto);
+    return { ok: true, resultado };
   } catch (err) {
     console.error("[rrhh] procesarNominasLeidas:", err);
     return { ok: false, error: err instanceof Error ? err.message : "Error" };
   }
 }
 
-/** URL firmada temporal para abrir la nómina original de un empleado/periodo. */
+/**
+ * URL firmada para VER la(s) nómina(s) de un empleado/mes. Si tiene UNA, devuelve
+ * su URL directa. Si tiene VARIAS (finiquito + normal…), COMBINA los PDFs en uno
+ * solo (una nómina seguida de la otra) y devuelve la URL del combinado.
+ */
 export async function getNominaArchivoUrl(
   periodo: string,
   empleadoId: string,
@@ -298,19 +199,79 @@ export async function getNominaArchivoUrl(
   try {
     const { supabase, empresaId } = await getAppContext();
     if (!empresaId) return { ok: false, error: "No autorizado" };
+    const admin = createAdminClient();
 
-    const { data: pago } = await supabase
-      .from("rrhh_pagos")
-      .select("nomina_path")
+    // Todas las nóminas individuales de ese empleado/mes, en orden.
+    const { data: indiv } = await supabase
+      .from("rrhh_pagos_nominas")
+      .select("nomina_path, orden")
       .eq("empresa_id", empresaId)
       .eq("empleado_id", empleadoId)
       .eq("periodo", periodo)
-      .maybeSingle();
-    const path = pago?.nomina_path as string | null | undefined;
-    if (!path) return { ok: false, error: "Sin nómina adjunta" };
+      .order("orden", { ascending: true });
+    let paths = (indiv ?? []).map((r) => r.nomina_path as string).filter(Boolean);
 
-    const admin = createAdminClient();
-    const signed = await admin.storage.from(BUCKET).createSignedUrl(path, SIGNED_URL_TTL);
+    // Respaldo: si aún no hay filas individuales (nóminas antiguas), usar el path
+    // único de rrhh_pagos.
+    if (paths.length === 0) {
+      const { data: pago } = await supabase
+        .from("rrhh_pagos")
+        .select("nomina_path")
+        .eq("empresa_id", empresaId).eq("empleado_id", empleadoId).eq("periodo", periodo)
+        .maybeSingle();
+      const p = pago?.nomina_path as string | null | undefined;
+      if (p) paths = [p];
+    }
+    if (paths.length === 0) return { ok: false, error: "Sin nómina adjunta" };
+
+    // Una sola: URL directa.
+    if (paths.length === 1) {
+      const signed = await admin.storage.from(BUCKET).createSignedUrl(paths[0], SIGNED_URL_TTL);
+      if (signed.error || !signed.data?.signedUrl) {
+        return { ok: false, error: signed.error?.message ?? "No se pudo generar el enlace" };
+      }
+      return { ok: true, url: signed.data.signedUrl };
+    }
+
+    // Varias: combinar los PDFs en uno (páginas de imágenes se incrustan también).
+    const { PDFDocument } = await import("pdf-lib");
+    const combinado = await PDFDocument.create();
+    for (const path of paths) {
+      const dl = await admin.storage.from(BUCKET).download(path);
+      if (dl.error || !dl.data) continue;
+      const bytes = new Uint8Array(await dl.data.arrayBuffer());
+      const esPdf = path.toLowerCase().endsWith(".pdf");
+      try {
+        if (esPdf) {
+          const src = await PDFDocument.load(bytes, { ignoreEncryption: true });
+          const pgs = await combinado.copyPages(src, src.getPageIndices());
+          pgs.forEach((pg) => combinado.addPage(pg));
+        } else {
+          // Imagen (jpg/png): una página con la imagen a tamaño A4.
+          const img = path.toLowerCase().endsWith(".png")
+            ? await combinado.embedPng(bytes)
+            : await combinado.embedJpg(bytes);
+          const page = combinado.addPage([595, 842]);
+          const s = Math.min(595 / img.width, 842 / img.height);
+          page.drawImage(img, {
+            x: (595 - img.width * s) / 2,
+            y: (842 - img.height * s) / 2,
+            width: img.width * s,
+            height: img.height * s,
+          });
+        }
+      } catch (e) {
+        console.error("[rrhh] combinar nómina:", path, e);
+      }
+    }
+    const combinadoBytes = await combinado.save();
+    // Subir el combinado con un nombre efímero y firmar su URL.
+    const combinadoPath = `${empresaId}/${periodo}/${empleadoId}-combinado.pdf`;
+    const up = await admin.storage
+      .from(BUCKET)
+      .upload(combinadoPath, Buffer.from(combinadoBytes), { upsert: true, contentType: "application/pdf" });
+    if (up.error) return { ok: false, error: up.error.message };
+    const signed = await admin.storage.from(BUCKET).createSignedUrl(combinadoPath, SIGNED_URL_TTL);
     if (signed.error || !signed.data?.signedUrl) {
       return { ok: false, error: signed.error?.message ?? "No se pudo generar el enlace" };
     }

@@ -28,6 +28,9 @@ export interface PagoEmpleado {
   // y periodo, o null si aún no se ha adjuntado. La columna "Nómina" muestra un
   // enlace para verla (URL firmada temporal).
   nominaPath: string | null;
+  // Nº de nóminas individuales de este empleado en el mes (1 normal; 2+ si tiene
+  // varias, p.ej. finiquito + normal). Sirve para el badge con el número.
+  numNominas: number;
   // Confirmacion de liquidacion: enviada -> bloqueada; aceptada -> el empleado la
   // acepto desde su app. ISO string o null.
   confirmacionEnviadaAt: string | null;

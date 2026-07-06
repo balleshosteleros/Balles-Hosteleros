@@ -100,6 +100,7 @@ function fromGuardado(
     total: g.total,
     pagado: g.pagado,
     nominaPath: g.nominaPath,
+    numNominas: g.numNominas,
     confirmacionEnviadaAt: g.confirmacionEnviadaAt,
     confirmacionAceptadaAt: g.confirmacionAceptadaAt,
   };
@@ -125,6 +126,7 @@ function toGuardado(p: PagoEmpleado): PagoGuardado {
     total: p.total,
     pagado: p.pagado,
     nominaPath: p.nominaPath,
+    numNominas: p.numNominas,
     confirmacionEnviadaAt: p.confirmacionEnviadaAt,
     confirmacionAceptadaAt: p.confirmacionAceptadaAt,
   };
@@ -158,6 +160,7 @@ function nuevoPagoVacio(
     total: 0,
     pagado: false,
     nominaPath: null,
+    numNominas: 0,
     confirmacionEnviadaAt: null,
     confirmacionAceptadaAt: null,
   };
@@ -496,6 +499,18 @@ export function PagosView() {
   // Formatea un importe distinguiendo 0-calculado ("0 €") de sin-calcular ("—").
   const fmtDato = (valor: number, calculado: boolean) => (calculado ? fmt(valor) : "—");
 
+  // Círculo con el nº de nóminas cuando hay MÁS de una (2, 3…). Nada si es 1 o 0.
+  // Se muestra junto a los importes de sumatorio para indicar que están sumados.
+  const circuloN = (p: PagoEmpleado): ReactNode =>
+    p.numNominas > 1 ? (
+      <span
+        className="ml-1 inline-flex h-4 w-4 items-center justify-center rounded-full bg-primary/10 text-[9px] font-semibold text-primary align-middle"
+        title={`Suma de ${p.numNominas} nóminas`}
+      >
+        {p.numNominas}
+      </span>
+    ) : null;
+
   const columnasDef: ToolbarColumna[] = [
     { campo: "nomina", label: "Nómina" },
     { campo: "horasReales", label: "H.R" },
@@ -517,7 +532,7 @@ export function PagosView() {
   const columnDefs: Record<string, { th: ReactNode; td: (p: PagoEmpleado) => ReactNode }> = {
     nomina: {
       th: <TableHead key="nomina" className="text-right whitespace-nowrap">Nómina</TableHead>,
-      td: (p) => <TableCell key="nomina" className="text-right tabular-nums whitespace-nowrap">{fmt(p.nomina)}</TableCell>,
+      td: (p) => <TableCell key="nomina" className="text-right tabular-nums whitespace-nowrap">{fmt(p.nomina)}{circuloN(p)}</TableCell>,
     },
     horasReales: {
       th: <TableHead key="horasReales" className="text-right">H.R</TableHead>,

@@ -123,6 +123,7 @@ export interface PagoGuardado {
   total: number;
   pagado: boolean;
   nominaPath: string | null;
+  numNominas: number; // nº de nóminas individuales de ese empleado/mes (para el badge)
   confirmacionEnviadaAt: string | null;
   confirmacionAceptadaAt: string | null;
 }
@@ -173,6 +174,7 @@ function dbToPago(r: PagoDbRow): PagoGuardado {
     total: Number(r.total),
     pagado: r.pagado,
     nominaPath: r.nomina_path,
+    numNominas: 0,
     confirmacionEnviadaAt: r.confirmacion_enviada_at,
     confirmacionAceptadaAt: r.confirmacion_aceptada_at,
   };
@@ -184,13 +186,28 @@ export async function loadPagos(
   try {
     const { supabase, empresaId } = await getAppContext();
     if (!empresaId) return { ok: false, data: [] };
-    const { data, error } = await supabase
-      .from("rrhh_pagos")
-      .select(PAGO_COLS)
-      .eq("empresa_id", empresaId)
-      .eq("periodo", periodo);
+    const [{ data, error }, { data: nominas }] = await Promise.all([
+      supabase.from("rrhh_pagos").select(PAGO_COLS).eq("empresa_id", empresaId).eq("periodo", periodo),
+      // Conteo de nóminas individuales por empleado (para el badge "2","3"…).
+      supabase
+        .from("rrhh_pagos_nominas")
+        .select("empleado_id")
+        .eq("empresa_id", empresaId)
+        .eq("periodo", periodo),
+    ]);
     if (error) throw error;
-    return { ok: true, data: (data ?? []).map((r) => dbToPago(r as PagoDbRow)) };
+    // Nº de nóminas por empleado.
+    const conteo = new Map<string, number>();
+    for (const r of nominas ?? []) {
+      const id = r.empleado_id as string;
+      conteo.set(id, (conteo.get(id) ?? 0) + 1);
+    }
+    const filas = (data ?? []).map((r) => {
+      const p = dbToPago(r as PagoDbRow);
+      p.numNominas = p.empleadoId ? conteo.get(p.empleadoId) ?? 0 : 0;
+      return p;
+    });
+    return { ok: true, data: filas };
   } catch (err) {
     console.error("[rrhh] loadPagos:", err);
     return { ok: false, data: [] };
