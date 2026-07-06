@@ -25,7 +25,7 @@ import { NextResponse } from "next/server";
 import { PDFDocument } from "pdf-lib";
 import { geminiJSON, GeminiKeyMissingError } from "@/lib/ia/gemini";
 import { getAppContext } from "@/lib/supabase/get-context";
-import { normalizarDniNie } from "@/features/rrhh/lib/documentacion-validacion";
+import { normalizarDniNie, esDniNieValido } from "@/features/rrhh/lib/documentacion-validacion";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -44,9 +44,19 @@ const TIPOS_OK = new Set([
 
 const PROMPT =
   "Esta es una nómina española (recibo de salarios) de UN trabajador. Extrae ÚNICAMENTE:\n" +
-  "1. El DNI o NIE del trabajador (DNI: 8 dígitos + letra; NIE: letra X/Y/Z + 7 dígitos + letra). " +
-  "Es el identificador fiscal del trabajador, NO el CIF de la empresa.\n" +
-  "2. El nombre completo del trabajador tal cual aparece.\n" +
+  "1. El DNI o NIE del trabajador. Léelo CARÁCTER A CARÁCTER, con máxima atención, sin inventar. " +
+  "Suele aparecer bajo la etiqueta 'D.N.I.' o junto a los datos del trabajador.\n" +
+  "   FORMATO EXACTO (respétalo SIEMPRE):\n" +
+  "   - DNI: EXACTAMENTE 8 dígitos seguidos de 1 letra final (ej. 47309297E). Nunca 9 dígitos.\n" +
+  "   - NIE: 1 letra inicial X, Y o Z, seguida de 7 dígitos, seguida de 1 letra final (ej. Z0033540B). " +
+  "En total: letra + 7 dígitos + letra. Nunca dos letras juntas al inicio ni al final.\n" +
+  "   REGLAS de lectura:\n" +
+  "   - El PRIMER carácter de un NIE es una LETRA (X/Y/Z), no un número.\n" +
+  "   - El ÚLTIMO carácter SIEMPRE es una LETRA de control (A-Z), nunca un número. Si crees leer un número al final, es una letra (0→O, 8→B, 5→S, 1→I, 2→Z).\n" +
+  "   - No añadas dígitos de más: un NIE tiene 7 dígitos entre las dos letras, ni 8 ni 6.\n" +
+  "   - Es el identificador fiscal del TRABAJADOR, NO el CIF de la empresa (el CIF empieza por letra + 8 dígitos y es de la empresa 'SYSTEM SL').\n" +
+  "   - Si no lo lees con total seguridad, devuelve cadena vacía (mejor vacío que un DNI inventado).\n" +
+  "2. El nombre completo del trabajador tal cual aparece (aparece como 'APELLIDO1 APELLIDO2, NOMBRE').\n" +
   "3. El importe TOTAL de las aportaciones/deducciones de Seguridad Social a cargo del TRABAJADOR " +
   "(suma de contingencias comunes, desempleo y formación que se DESCUENTAN de su nómina). Es la parte del empleado.\n" +
   "4. El importe TOTAL del coste de Seguridad Social a cargo de la EMPRESA por ese trabajador " +
@@ -235,9 +245,14 @@ export async function POST(req: Request) {
           tanda.map(async (doc) => {
             const data = await leerNomina(doc.mimeType, doc.base64);
             if (!data) return null;
-            const dniRaw = (data.dniNie ?? "").trim();
+            // Validar el DNI/NIE leído: si no tiene formato válido (la IA se
+            // equivocó en la letra final o metió un dígito de más), lo
+            // descartamos para emparejar por nombre en vez de por un DNI corrupto
+            // que no cuadraría con nadie.
+            const dniRaw = normalizarDniNie((data.dniNie ?? "").trim());
+            const dniNie = dniRaw && esDniNieValido(dniRaw) ? dniRaw : "";
             return {
-              dniNie: dniRaw ? normalizarDniNie(dniRaw) : "",
+              dniNie,
               nombre: (data.nombre ?? "").trim(),
               ssEmpleado: importe(data.ssEmpleado),
               ssEmpresa: importe(data.ssEmpresa),
