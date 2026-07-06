@@ -18,13 +18,14 @@ import {
 import {
   procesarNominasLeidas,
   getNominaArchivoUrl,
-  type NominaLeida,
 } from "@/features/rrhh/actions/nominas-archivo-actions";
+import type { NominaLeida } from "@/features/rrhh/services/nominas/procesar-nominas";
 import {
   getNotifLiquidacionesConfig,
   type NotifLiquidacionesConfig,
 } from "@/features/notificaciones/actions/notif-config-actions";
 import { NotifLiquidacionesConfigPanel } from "@/features/notificaciones/components/NotifLiquidacionesConfigPanel";
+import { NominasGestoriaConfigPanel } from "@/features/rrhh/components/pagos/NominasGestoriaConfigPanel";
 import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 import { toast } from "sonner";
 import { ZONE_COLORS } from "@/features/direccion/data/direccion";
@@ -35,7 +36,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { Edit2, Banknote, TrendingUp, TrendingDown, PiggyBank, HandCoins, Wallet, Settings, Send, Lock, Unlock, CheckCircle2, Clock, Upload, FileText } from "lucide-react";
+import { Edit2, Banknote, Settings, Send, Lock, Unlock, CheckCircle2, Clock, Upload, FileText } from "lucide-react";
 import {
   SubmoduleToolbar,
   aplicarFiltrosToolbar,
@@ -495,15 +496,6 @@ export function PagosView() {
   // Formatea un importe distinguiendo 0-calculado ("0 €") de sin-calcular ("—").
   const fmtDato = (valor: number, calculado: boolean) => (calculado ? fmt(valor) : "—");
 
-  const kpis = [
-    { label: "Total pagos", value: fmt(resumen.totalFinal), icon: Banknote, color: "text-primary" },
-    { label: "Positivo", value: fmt(resumen.positivo), icon: TrendingUp, color: "text-emerald-600" },
-    { label: "Negativo", value: fmt(resumen.negativo), icon: TrendingDown, color: "text-destructive" },
-    { label: "Efectivo ahorro", value: fmt(resumen.efectivoAhorro), icon: PiggyBank, color: "text-amber-600" },
-    { label: "Préstamos", value: fmt(resumen.prestamos), icon: HandCoins, color: "text-orange-600" },
-    { label: "Propinas acum.", value: fmt(resumen.propinasAcumuladas), icon: Wallet, color: "text-sky-600" },
-  ];
-
   const columnasDef: ToolbarColumna[] = [
     { campo: "nomina", label: "Nómina" },
     { campo: "horasReales", label: "H.R" },
@@ -774,18 +766,6 @@ export function PagosView() {
         })}
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-        {kpis.map((k) => (
-          <Card key={k.label}>
-            <CardContent className="p-4 flex flex-col items-center text-center gap-1">
-              <k.icon className={`h-5 w-5 ${k.color}`} />
-              <span className="text-xs text-muted-foreground">{k.label}</span>
-              <span className="text-lg font-bold">{k.value}</span>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
       <SubmoduleToolbar
         busqueda={busqueda}
         onBusquedaChange={setBusqueda}
@@ -823,11 +803,18 @@ export function PagosView() {
       />
 
       {showConfig && (
-        <Card>
-          <CardContent className="p-4">
-            <NotifLiquidacionesConfigPanel />
-          </CardContent>
-        </Card>
+        <div className="space-y-4">
+          <Card>
+            <CardContent className="p-4">
+              <NotifLiquidacionesConfigPanel />
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4">
+              <NominasGestoriaConfigPanel />
+            </CardContent>
+          </Card>
+        </div>
       )}
 
       <Card>
