@@ -53,6 +53,8 @@ const PROMPT =
   "(aportación empresarial; suele aparecer en el recibo de cotización o en el pie de la nómina). Es la parte de la empresa.\n" +
   "5. El LÍQUIDO A PERCIBIR (neto que cobra el trabajador; el importe final a pagar tras deducciones). " +
   "En euros. Es el 'líquido a percibir' o 'total a percibir'.\n" +
+  "5b. El importe de la RETENCIÓN de IRPF practicada al trabajador (línea 'RETENCION I.R.P.F.'; " +
+  "es una deducción de su nómina). En euros. 0 si no aparece.\n" +
   "6. El PERIODO de la nómina: el mes y año al que corresponde el recibo (aparece como 'del 1 al 30 de junio', " +
   "año 2026, etc.). Devuélvelo SIEMPRE en formato 'AAAA-MM' (p.ej. junio de 2026 = '2026-06'). Si no lo lees, cadena vacía.\n" +
   "Devuelve los importes como número en euros con punto decimal (p.ej. 123.45), sin el símbolo €. " +
@@ -82,12 +84,16 @@ const RESPUESTA_SCHEMA = {
       type: "number",
       description: "Líquido a percibir (neto a pagar al trabajador) en euros. 0 si no se lee.",
     },
+    irpf: {
+      type: "number",
+      description: "Retención de IRPF practicada al trabajador en euros. 0 si no se lee.",
+    },
     periodo: {
       type: "string",
       description: "Mes del recibo en formato AAAA-MM (p.ej. '2026-06'), o cadena vacía si no se lee.",
     },
   },
-  required: ["dniNie", "nombre", "ssEmpleado", "ssEmpresa", "neto", "periodo"],
+  required: ["dniNie", "nombre", "ssEmpleado", "ssEmpresa", "neto", "irpf", "periodo"],
 } as const;
 
 /** Redondea a 2 decimales y descarta valores no finitos o negativos. */
@@ -103,6 +109,7 @@ type IaLeida = {
   ssEmpleado?: number;
   ssEmpresa?: number;
   neto?: number;
+  irpf?: number;
   periodo?: string;
 };
 
@@ -124,6 +131,7 @@ interface NominaResultado {
   ssEmpleado: number;
   ssEmpresa: number;
   neto: number;
+  irpf: number;
   periodo: string;
   mimeType: string;
   archivoBase64: string;
@@ -234,6 +242,7 @@ export async function POST(req: Request) {
               ssEmpleado: importe(data.ssEmpleado),
               ssEmpresa: importe(data.ssEmpresa),
               neto: importe(data.neto),
+              irpf: importe(data.irpf),
               periodo: normalizarPeriodo(data.periodo),
               mimeType: doc.mimeType,
               archivoBase64: doc.base64,

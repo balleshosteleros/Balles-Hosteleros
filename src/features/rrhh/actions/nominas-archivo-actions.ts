@@ -168,6 +168,7 @@ export interface NominaLeida {
   ssEmpleado: number;
   ssEmpresa: number;
   neto: number;
+  irpf: number;
   periodo: string; // AAAA-MM leído de la nómina, o "" si no se leyó
   mimeType: string;
   archivoBase64: string;
@@ -270,7 +271,7 @@ export async function procesarNominasLeidas(
         .upload(path, Buffer.from(n.archivoBase64, "base64"), { upsert: true, contentType: n.mimeType });
       if (up.error) continue;
 
-      const campos = { nomina: n.neto || 0, ss_empleado: n.ssEmpleado || 0, ss_empresa: n.ssEmpresa || 0, nomina_path: path };
+      const campos = { nomina: n.neto || 0, ss_empleado: n.ssEmpleado || 0, ss_empresa: n.ssEmpresa || 0, irpf: n.irpf || 0, nomina_path: path };
       if (ex?.id) {
         await admin.from("rrhh_pagos").update(campos).eq("id", ex.id);
       } else {

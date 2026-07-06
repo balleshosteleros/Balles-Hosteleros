@@ -119,6 +119,7 @@ export interface PagoGuardado {
   propinaMantenimiento: number;
   ssEmpleado: number;
   ssEmpresa: number;
+  irpf: number;
   total: number;
   pagado: boolean;
   nominaPath: string | null;
@@ -141,6 +142,7 @@ type PagoDbRow = {
   propina_mes_anterior: number | string;
   ss_empleado: number | string;
   ss_empresa: number | string;
+  irpf: number | string;
   total: number | string;
   pagado: boolean;
   nomina_path: string | null;
@@ -149,7 +151,7 @@ type PagoDbRow = {
 };
 
 const PAGO_COLS =
-  "empleado_id, empleado_nombre, fijo, pago, nomina, horas_reales, horas_trabajadas, propina, ajuste, horas_extras, bonus, propina_mes_anterior, ss_empleado, ss_empresa, total, pagado, nomina_path, confirmacion_enviada_at, confirmacion_aceptada_at";
+  "empleado_id, empleado_nombre, fijo, pago, nomina, horas_reales, horas_trabajadas, propina, ajuste, horas_extras, bonus, propina_mes_anterior, ss_empleado, ss_empresa, irpf, total, pagado, nomina_path, confirmacion_enviada_at, confirmacion_aceptada_at";
 
 function dbToPago(r: PagoDbRow): PagoGuardado {
   return {
@@ -167,6 +169,7 @@ function dbToPago(r: PagoDbRow): PagoGuardado {
     propinaMantenimiento: Number(r.propina_mes_anterior),
     ssEmpleado: Number(r.ss_empleado),
     ssEmpresa: Number(r.ss_empresa),
+    irpf: Number(r.irpf),
     total: Number(r.total),
     pagado: r.pagado,
     nominaPath: r.nomina_path,
@@ -232,6 +235,7 @@ export async function savePago(
         propina_mes_anterior: row.propinaMantenimiento,
         ss_empleado: row.ssEmpleado,
         ss_empresa: row.ssEmpresa,
+        irpf: row.irpf,
         total: row.total,
         pagado: row.pagado,
         created_by: userId,

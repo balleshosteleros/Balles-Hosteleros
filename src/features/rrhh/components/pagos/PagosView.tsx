@@ -95,6 +95,7 @@ function fromGuardado(
     propinaMantenimiento: g.propinaMantenimiento,
     ssEmpleado: g.ssEmpleado,
     ssEmpresa: g.ssEmpresa,
+    irpf: g.irpf,
     total: g.total,
     pagado: g.pagado,
     nominaPath: g.nominaPath,
@@ -119,6 +120,7 @@ function toGuardado(p: PagoEmpleado): PagoGuardado {
     propinaMantenimiento: p.propinaMantenimiento,
     ssEmpleado: p.ssEmpleado,
     ssEmpresa: p.ssEmpresa,
+    irpf: p.irpf,
     total: p.total,
     pagado: p.pagado,
     nominaPath: p.nominaPath,
@@ -151,6 +153,7 @@ function nuevoPagoVacio(
     propinaMantenimiento: 0,
     ssEmpleado: 0,
     ssEmpresa: 0,
+    irpf: 0,
     total: 0,
     pagado: false,
     nominaPath: null,
@@ -504,6 +507,7 @@ export function PagosView() {
     { campo: "ssEmpleado", label: "SS Empleado" },
     { campo: "ssEmpresa", label: "SS Empresa" },
     { campo: "ssTotal", label: "Total SS" },
+    { campo: "irpf", label: "IRPF" },
     { campo: "total", label: "Total" },
     { campo: "nominaArchivo", label: "Nómina (doc)" },
     { campo: "pagado", label: "Pagado" },
@@ -597,6 +601,10 @@ export function PagosView() {
         const t = costeSSTotal(p);
         return <TableCell key="ssTotal" className="text-right tabular-nums font-medium">{t > 0 ? fmt(t) : "—"}</TableCell>;
       },
+    },
+    irpf: {
+      th: <TableHead key="irpf" className="text-right">IRPF</TableHead>,
+      td: (p) => <TableCell key="irpf" className="text-right tabular-nums">{p.irpf > 0 ? fmt(p.irpf) : "—"}</TableCell>,
     },
     total: {
       th: <TableHead key="total" className="text-right font-bold">Total</TableHead>,
@@ -708,6 +716,7 @@ export function PagosView() {
     ssEmpleado: <TableCell key="t-ssemp" className="text-right tabular-nums">{resumen.totalSsEmpleado > 0 ? fmt(resumen.totalSsEmpleado) : "—"}</TableCell>,
     ssEmpresa: <TableCell key="t-ssempresa" className="text-right tabular-nums">{resumen.totalSsEmpresa > 0 ? fmt(resumen.totalSsEmpresa) : "—"}</TableCell>,
     ssTotal: <TableCell key="t-sstotal" className="text-right tabular-nums font-medium">{resumen.totalSs > 0 ? fmt(resumen.totalSs) : "—"}</TableCell>,
+    irpf: <TableCell key="t-irpf" className="text-right tabular-nums">{(() => { const t = pagosFiltrados.reduce((s, p) => s + p.irpf, 0); return t > 0 ? fmt(t) : "—"; })()}</TableCell>,
     total: <TableCell key="t-total" className="text-right tabular-nums font-bold">{fmt(resumen.totalFinal)}</TableCell>,
     nominaArchivo: <TableCell key="t-nomdoc" className="text-center"><Badge variant="secondary" className="text-[10px]">{pagosFiltrados.filter((p) => p.nominaPath).length}/{pagosFiltrados.length}</Badge></TableCell>,
     pagado: <TableCell key="t-pagado" className="text-center"><Badge variant={pagosFiltrados.every((p) => p.pagado) ? "default" : "secondary"} className="text-[10px]">{pagosFiltrados.filter((p) => p.pagado).length}/{pagosFiltrados.length}</Badge></TableCell>,
@@ -950,6 +959,7 @@ function EditForm({ pago, onSave }: { pago: PagoEmpleado; onSave: (d: Partial<Pa
     { key: "ajuste", label: "Ajuste (+/−)" }, { key: "horasExtras", label: "H. Extras" },
     { key: "bonus", label: "Bonus" }, { key: "propinaMantenimiento", label: "Propina Mant." },
     { key: "ssEmpleado", label: "SS Empleado" }, { key: "ssEmpresa", label: "SS Empresa" },
+    { key: "irpf", label: "IRPF" },
   ];
   return (
     <div className="space-y-4">

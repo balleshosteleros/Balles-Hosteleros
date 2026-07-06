@@ -21,6 +21,7 @@ export interface PagoEmpleado {
   // Coste de Seguridad Social. INFORMATIVO: no entra en el `total` del pago.
   ssEmpleado: number; // lo que paga el trabajador (descontado de su nómina)
   ssEmpresa: number; // lo que paga la empresa por el trabajador
+  irpf: number; // retención de IRPF del trabajador (informativa, no toca el total)
   total: number;
   pagado: boolean;
   // Path en Storage (bucket rrhh-nominas) de la nómina original de este empleado
