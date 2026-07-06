@@ -41,6 +41,7 @@ import {
   toggleReclutamientoEmailPlantillaActiva,
   duplicateReclutamientoEmailPlantilla,
   deleteReclutamientoEmailPlantilla,
+  getDestinatariosAutomaticos,
   type ReclutamientoEmailPlantilla,
 } from "@/features/rrhh/actions/reclutamiento-email-plantillas-actions";
 import { toast } from "sonner";
@@ -73,6 +74,8 @@ function PlantillaEditorDialog({
   const [linkOpen, setLinkOpen] = useState(false);
   const [linkTexto, setLinkTexto] = useState("");
   const [linkUrl, setLinkUrl] = useState("");
+  // Direcciones reales de RRHH / gestoría (Ajustes) para la vista previa.
+  const [autoDest, setAutoDest] = useState<{ rrhh: string; gestoria: string }>({ rrhh: "", gestoria: "" });
 
   // Sincroniza el formulario al abrir o cambiar de plantilla.
   const plantillaId = plantilla?.id ?? null;
@@ -86,6 +89,16 @@ function PlantillaEditorDialog({
     setDestinoEmail(plantilla?.destinoEmail ?? "");
     setTab(initialTab);
   }, [open, plantillaId, plantilla, initialTab]);
+
+  // Carga las direcciones reales de RRHH/gestoría al abrir (para la vista previa).
+  useEffect(() => {
+    if (!open) return;
+    let cancel = false;
+    getDestinatariosAutomaticos()
+      .then((d) => { if (!cancel) setAutoDest(d); })
+      .catch(() => { if (!cancel) setAutoDest({ rrhh: "", gestoria: "" }); });
+    return () => { cancel = true; };
+  }, [open]);
 
   const insertVariable = (variable: string) => {
     setCuerpo((prev) => (prev.endsWith(" ") || prev === "" ? prev : prev + " ") + variable);
@@ -312,7 +325,11 @@ function PlantillaEditorDialog({
                       ? VARIABLES_RECLUTAMIENTO_EJEMPLO.candidato_email
                       : destino === "personalizado"
                         ? destinoEmail || "(escribe el email personalizado)"
-                        : `${etiquetaDestino(destino)} · correo de Ajustes de la empresa`}
+                        : destino === "rrhh"
+                          ? autoDest.rrhh || "(configura el email de RRHH en Ajustes → RRHH → Reclutamiento)"
+                          : destino === "gestoria"
+                            ? autoDest.gestoria || "(configura el email de gestoría en Ajustes → RRHH → Reclutamiento)"
+                            : `${etiquetaDestino(destino)}`}
                   </p>
                   <p className="text-xs text-muted-foreground mt-0.5">
                     <span className="font-medium">Asunto:</span> {sustituirVariablesReclutamiento(asunto, previewVars)}

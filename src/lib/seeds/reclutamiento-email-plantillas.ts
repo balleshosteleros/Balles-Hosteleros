@@ -30,7 +30,7 @@
  *
  *   Empresa:
  *     {{empresa_nombre}}            → nombre de la empresa
- *     {{empresa_email}}             → correo de RRHH / contacto de la empresa
+ *     {{email_rrhh}}             → correo de RRHH / contacto de la empresa
  *     {{empresa_telefono}}          → teléfono principal de la empresa
  *     {{empresa_web}}              → web de la empresa
  *     {{empresa_direccion}}         → dirección del local de la empresa
@@ -89,7 +89,7 @@ Te escribo para agradecerte el interés depositado en nuestra empresa {{empresa_
 
 {{candidato_nombre}}, gracias y saludos.
 {{empresa_nombre}}
-{{empresa_email}}`,
+{{email_rrhh}}`,
     activa: true,
   },
 
@@ -103,7 +103,7 @@ Te escribo para agradecerte el interés depositado en nuestra empresa {{empresa_
 
 {{candidato_nombre}}, gracias y saludos.
 {{empresa_nombre}}
-{{empresa_email}}`,
+{{email_rrhh}}`,
     activa: true,
   },
 
@@ -131,7 +131,7 @@ Ten en cuenta que debes adjuntar TODOS los documentos para poder enviarlo, y que
 
 Nuestro sistema leerá automáticamente los números de tus documentos y te los mostrará para que los revises y confirmes que son correctos. Es muy rápido.
 
-Si te surge cualquier duda, escríbenos a {{empresa_email}}.
+Si te surge cualquier duda, escríbenos a {{email_rrhh}}.
 
 ¡Gracias y nos vemos pronto, {{candidato_nombre}}!
 {{empresa_nombre}}`,
@@ -156,7 +156,7 @@ En la formación conocerás la empresa, las normas internas, nuestra forma de tr
 Accede a la formación aquí:
 [Acceder a la formación]({{enlace_formacion}})
 
-Cuando termines, Recursos Humanos revisará tu avance para continuar con el proceso. Si te surge cualquier duda, escríbenos a {{empresa_email}}.
+Cuando termines, Recursos Humanos revisará tu avance para continuar con el proceso. Si te surge cualquier duda, escríbenos a {{email_rrhh}}.
 
 ¡Nos vemos pronto, {{candidato_nombre}}!
 {{empresa_nombre}}`,
@@ -181,7 +181,7 @@ Normalmente en un plazo de 1 a 3 días desde la recepción de este correo recibi
 
 Cuando te lleguen, revísalos y fírmalos cuanto antes para no retrasar tu incorporación. Es importante que estés atento/a a tu bandeja de entrada (revisa también la carpeta de spam).
 
-Si te surge cualquier duda durante este proceso, escríbenos a {{empresa_email}}.
+Si te surge cualquier duda durante este proceso, escríbenos a {{email_rrhh}}.
 
 ¡Bienvenido/a, {{candidato_nombre}}! Estamos deseando tenerte en el equipo.
 {{empresa_nombre}}`,

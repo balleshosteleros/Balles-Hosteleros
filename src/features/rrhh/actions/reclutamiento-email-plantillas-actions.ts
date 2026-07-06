@@ -53,6 +53,28 @@ async function ctx() {
   return { supabase, user, empresaId };
 }
 
+/**
+ * Direcciones REALES a las que se envían los correos con destinatario automático
+ * (RRHH y gestoría), para la vista previa del editor de plantillas. Resuelven
+ * igual que el envío: RRHH → `correoRrhh` de Ajustes; gestoría → `gestoria_email`.
+ * Cadena vacía si no está configurado.
+ */
+export async function getDestinatariosAutomaticos(): Promise<{ rrhh: string; gestoria: string }> {
+  const { supabase, empresaId } = await ctx();
+  if (!empresaId) return { rrhh: "", gestoria: "" };
+
+  const [{ data: emp }, { data: cfg }] = await Promise.all([
+    supabase.from("empresas").select("email_contacto, datos_generales").eq("id", empresaId).maybeSingle(),
+    supabase.from("reclutamiento_config").select("gestoria_email").eq("empresa_id", empresaId).maybeSingle(),
+  ]);
+  const dg = (emp?.datos_generales as Record<string, unknown> | null) ?? {};
+  const dgStr = (k: string) => (typeof dg[k] === "string" ? (dg[k] as string).trim() : "");
+  return {
+    rrhh: dgStr("correoRrhh") || ((emp?.email_contacto as string | null)?.trim() ?? "") || dgStr("correoGeneral"),
+    gestoria: ((cfg?.gestoria_email as string | null)?.trim() ?? ""),
+  };
+}
+
 function dupMsg(error: { code?: string; message: string }): string {
   return error.code === "23505" ? "Ya existe una plantilla con ese nombre" : error.message;
 }
@@ -900,6 +922,12 @@ export async function buildReclutamientoEmailVars(
     departamento_nombre: departamentoNombre,
     tipo_jornada: tipoJornada,
     empresa_nombre: (emp?.nombre as string | null) ?? "",
+    // Correo de RRHH (Ajustes → RRHH → Reclutamiento). `email_rrhh` es el código
+    // recomendado; `empresa_email` es un alias antiguo con el MISMO valor.
+    email_rrhh:
+      dgStr("correoRrhh") ||
+      ((emp?.email_contacto as string | null) ?? "") ||
+      dgStr("correoGeneral"),
     empresa_email:
       dgStr("correoRrhh") ||
       ((emp?.email_contacto as string | null) ?? "") ||

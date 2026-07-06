@@ -43,7 +43,7 @@ export const VARIABLES_RECLUTAMIENTO: VariableReclutamiento[] = [
   { variable: "{{tipo_jornada}}", descripcion: "Tipo de jornada de la vacante", grupo: "Vacante" },
   // ── Empresa ──
   { variable: "{{empresa_nombre}}", descripcion: "Nombre de la empresa", grupo: "Empresa" },
-  { variable: "{{empresa_email}}", descripcion: "Correo de RRHH / contacto de la empresa", grupo: "Empresa" },
+  { variable: "{{email_rrhh}}", descripcion: "Correo de RRHH (Ajustes → RRHH → Reclutamiento). El candidato os escribe a RRHH.", grupo: "Empresa" },
   { variable: "{{empresa_telefono}}", descripcion: "Teléfono de la empresa", grupo: "Empresa" },
   { variable: "{{empresa_web}}", descripcion: "Web de la empresa", grupo: "Empresa" },
   { variable: "{{empresa_direccion}}", descripcion: "Dirección de la empresa", grupo: "Empresa" },
@@ -75,6 +75,7 @@ export const VARIABLES_RECLUTAMIENTO_EJEMPLO: Record<string, string> = {
   departamento_nombre: "Sala",
   tipo_jornada: "Jornada completa",
   empresa_nombre: "Tu empresa",
+  email_rrhh: "rrhh@empresa.com",
   empresa_email: "rrhh@empresa.com",
   empresa_telefono: "912 345 678",
   empresa_web: "www.empresa.com",

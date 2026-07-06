@@ -139,6 +139,11 @@ async function buildVarsPublico(
     departamento_nombre: departamentoNombre,
     tipo_jornada: vacante.tipo_jornada ?? "",
     empresa_nombre: (emp?.nombre as string | null) ?? "",
+    // Correo de RRHH: `email_rrhh` (recomendado) y `empresa_email` (alias) con el mismo valor.
+    email_rrhh:
+      dgStr("correoRrhh") ||
+      ((emp?.email_contacto as string | null) ?? "") ||
+      dgStr("correoGeneral"),
     empresa_email:
       dgStr("correoRrhh") ||
       ((emp?.email_contacto as string | null) ?? "") ||
