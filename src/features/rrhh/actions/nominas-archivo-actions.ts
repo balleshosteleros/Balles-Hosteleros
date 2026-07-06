@@ -15,6 +15,7 @@
 
 import { getAppContext } from "@/lib/supabase/get-context";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { normalizarDniNie } from "@/features/rrhh/lib/documentacion-validacion";
 
 const BUCKET = "rrhh-nominas";
 const SIGNED_URL_TTL = 60 * 10; // 10 min para verla
@@ -156,6 +157,131 @@ export async function guardarDatosNomina(
     return { ok: true };
   } catch (err) {
     console.error("[rrhh] guardarDatosNomina:", err);
+    return { ok: false, error: err instanceof Error ? err.message : "Error" };
+  }
+}
+
+/** Una nómina leída por la IA lista para emparejar y guardar. */
+export interface NominaLeida {
+  dniNie: string;
+  nombre: string;
+  ssEmpleado: number;
+  ssEmpresa: number;
+  neto: number;
+  periodo: string; // AAAA-MM leído de la nómina, o "" si no se leyó
+  mimeType: string;
+  archivoBase64: string;
+}
+
+export interface ResultadoProceso {
+  guardadas: number;
+  yaExistian: number;
+  sinEmpleado: string[]; // etiquetas (nombre/dni) de las no emparejadas
+  duplicadas: string[]; // nombres de empleados que ya tenían nómina ese mes
+  meses: string[]; // periodos AAAA-MM tocados
+}
+
+/**
+ * Empareja y guarda un lote de nóminas leídas, EN SERVIDOR, contra TODOS los
+ * empleados de la empresa (no depende de la vista del cliente). Empareja por
+ * DNI/NIE (inequívoco) y, como respaldo, por nombre (tokens). Cada nómina va al
+ * mes que ella misma indica (periodo); si no lo trae, al `periodoDefecto`.
+ * No regraba si el empleado ya tiene nómina ese mes.
+ */
+export async function procesarNominasLeidas(
+  nominas: NominaLeida[],
+  periodoDefecto: string,
+): Promise<{ ok: boolean; error?: string; resultado?: ResultadoProceso }> {
+  try {
+    const { supabase, empresaId } = await getAppContext();
+    if (!empresaId) return { ok: false, error: "No autorizado" };
+    const admin = createAdminClient();
+
+    // TODOS los empleados activos de la empresa (fuente fresca, no la vista).
+    const { data: emps } = await supabase
+      .from("empleados")
+      .select("id, nombre, apellidos, dni_nie")
+      .eq("empresa_id", empresaId)
+      .eq("estado", "Activo");
+
+    const norm = (s: string) =>
+      s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
+    const tokens = (s: string) =>
+      new Set(norm(s).split(" ").filter((w) => w.length >= 3 && !["del", "las", "los"].includes(w)));
+
+    type Emp = { id: string; nombre: string };
+    const porDni = new Map<string, Emp>();
+    const porNombre = new Map<string, Emp>();
+    for (const e of emps ?? []) {
+      const full = `${e.nombre ?? ""} ${e.apellidos ?? ""}`.trim();
+      const emp: Emp = { id: e.id as string, nombre: full };
+      if (e.dni_nie) porDni.set(normalizarDniNie(e.dni_nie as string), emp);
+      porNombre.set(norm(full), emp);
+    }
+
+    const emparejar = (n: NominaLeida): Emp | undefined => {
+      const dni = n.dniNie ? normalizarDniNie(n.dniNie) : "";
+      if (dni && porDni.has(dni)) return porDni.get(dni);
+      const nombreIa = norm(n.nombre || "");
+      if (!nombreIa) return undefined;
+      if (porNombre.has(nombreIa)) return porNombre.get(nombreIa);
+      const setIa = tokens(nombreIa);
+      if (setIa.size === 0) return undefined;
+      let mejor: Emp | undefined;
+      let mejorComunes = 0;
+      for (const [k, v] of porNombre) {
+        const setEmp = tokens(k);
+        let comunes = 0;
+        for (const w of setIa) if (setEmp.has(w)) comunes++;
+        const req = Math.min(2, setIa.size, setEmp.size);
+        if (comunes >= req && comunes > mejorComunes) { mejor = v; mejorComunes = comunes; }
+      }
+      return mejor;
+    };
+
+    const res: ResultadoProceso = { guardadas: 0, yaExistian: 0, sinEmpleado: [], duplicadas: [], meses: [] };
+    const meses = new Set<string>();
+
+    for (const n of nominas) {
+      const emp = emparejar(n);
+      if (!emp) {
+        res.sinEmpleado.push(n.nombre?.trim() || n.dniNie || "nómina sin identificar");
+        continue;
+      }
+      const periodo = /^\d{4}-\d{2}$/.test(n.periodo) ? n.periodo : periodoDefecto;
+      const ext = EXT_POR_MIME[n.mimeType];
+      if (!ext) continue;
+
+      // Estado actual del pago de ese empleado/mes.
+      const { data: ex } = await admin
+        .from("rrhh_pagos")
+        .select("id, confirmacion_enviada_at, nomina_path")
+        .eq("empresa_id", empresaId).eq("empleado_id", emp.id).eq("periodo", periodo)
+        .maybeSingle();
+      if (ex?.confirmacion_enviada_at) { continue; } // liquidación enviada: intocable
+      if (ex?.nomina_path) { res.yaExistian++; res.duplicadas.push(emp.nombre); continue; }
+
+      // Subir el documento.
+      const path = `${empresaId}/${periodo}/${emp.id}.${ext}`;
+      const up = await admin.storage.from(BUCKET)
+        .upload(path, Buffer.from(n.archivoBase64, "base64"), { upsert: true, contentType: n.mimeType });
+      if (up.error) continue;
+
+      const campos = { nomina: n.neto || 0, ss_empleado: n.ssEmpleado || 0, ss_empresa: n.ssEmpresa || 0, nomina_path: path };
+      if (ex?.id) {
+        await admin.from("rrhh_pagos").update(campos).eq("id", ex.id);
+      } else {
+        await admin.from("rrhh_pagos").insert({
+          empresa_id: empresaId, empleado_id: emp.id, empleado_nombre: emp.nombre, periodo, ...campos,
+        });
+      }
+      res.guardadas++;
+      meses.add(periodo);
+    }
+    res.meses = [...meses].sort();
+    return { ok: true, resultado: res };
+  } catch (err) {
+    console.error("[rrhh] procesarNominasLeidas:", err);
     return { ok: false, error: err instanceof Error ? err.message : "Error" };
   }
 }

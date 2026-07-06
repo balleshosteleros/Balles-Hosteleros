@@ -217,22 +217,32 @@ export async function POST(req: Request) {
     }
 
     try {
-      const nominas: NominaResultado[] = [];
-      for (const doc of documentos) {
-        const data = await leerNomina(doc.mimeType, doc.base64);
-        if (!data) continue; // página ilegible: se omite, no rompe el lote
-        const dniRaw = (data.dniNie ?? "").trim();
-        nominas.push({
-          dniNie: dniRaw ? normalizarDniNie(dniRaw) : "",
-          nombre: (data.nombre ?? "").trim(),
-          ssEmpleado: importe(data.ssEmpleado),
-          ssEmpresa: importe(data.ssEmpresa),
-          neto: importe(data.neto),
-          periodo: normalizarPeriodo(data.periodo),
-          mimeType: doc.mimeType,
-          archivoBase64: doc.base64,
-        });
+      // Leer las páginas EN PARALELO (por tandas) para no tardar minutos con un
+      // PDF de muchas nóminas. La IA de cada página es independiente.
+      const LOTE = 5;
+      const leidas: (NominaResultado | null)[] = [];
+      for (let i = 0; i < documentos.length; i += LOTE) {
+        const tanda = documentos.slice(i, i + LOTE);
+        const res = await Promise.all(
+          tanda.map(async (doc) => {
+            const data = await leerNomina(doc.mimeType, doc.base64);
+            if (!data) return null;
+            const dniRaw = (data.dniNie ?? "").trim();
+            return {
+              dniNie: dniRaw ? normalizarDniNie(dniRaw) : "",
+              nombre: (data.nombre ?? "").trim(),
+              ssEmpleado: importe(data.ssEmpleado),
+              ssEmpresa: importe(data.ssEmpresa),
+              neto: importe(data.neto),
+              periodo: normalizarPeriodo(data.periodo),
+              mimeType: doc.mimeType,
+              archivoBase64: doc.base64,
+            } as NominaResultado;
+          }),
+        );
+        leidas.push(...res);
       }
+      const nominas: NominaResultado[] = leidas.filter((x): x is NominaResultado => x !== null);
 
       if (nominas.length === 0) {
         return NextResponse.json({ ok: false, motivo: "ia_fallo", error: "No se pudo leer ninguna nómina" });
