@@ -74,11 +74,13 @@ function fromGuardado(
   empleadoNombre: string,
   area: PagoArea,
   g: PagoGuardado,
+  dniNie: string | null = null,
 ): PagoEmpleado {
   return {
     id: `${empleadoId}-pago`,
     empleadoId,
     empleadoNombre,
+    dniNie,
     area,
     fijo: g.fijo,
     pago: g.pago,
@@ -124,11 +126,17 @@ function toGuardado(p: PagoEmpleado): PagoGuardado {
   };
 }
 
-function nuevoPagoVacio(empleadoId: string, empleadoNombre: string, area: PagoArea): PagoEmpleado {
+function nuevoPagoVacio(
+  empleadoId: string,
+  empleadoNombre: string,
+  area: PagoArea,
+  dniNie: string | null = null,
+): PagoEmpleado {
   return {
     id: `${empleadoId}-pago`,
     empleadoId,
     empleadoNombre,
+    dniNie,
     area,
     fijo: false,
     pago: 0,
@@ -208,13 +216,16 @@ export function PagosView() {
       if (e.dniNie) dniPorEmpleado.current.set(e.empleadoId, normalizarDniNie(e.dniNie));
     }
 
-    // Empleados activos: fila guardada si existe, si no fila vacía.
+    // Empleados activos: fila guardada si existe, si no fila vacía. Se lleva el
+    // DNI/NIE de la ficha a la fila (se muestra en la tabla y sirve de referencia
+    // visual del emparejamiento).
     const filasEmpleados = resEmp.data.map((e) => {
       const g = guardadosPorEmp.get(e.empleadoId);
       guardadosPorEmp.delete(e.empleadoId);
+      const dni = e.dniNie ?? null;
       return g
-        ? fromGuardado(e.empleadoId, e.empleadoNombre, e.area, g)
-        : nuevoPagoVacio(e.empleadoId, e.empleadoNombre, e.area);
+        ? fromGuardado(e.empleadoId, e.empleadoNombre, e.area, g, dni)
+        : nuevoPagoVacio(e.empleadoId, e.empleadoNombre, e.area, dni);
     });
 
     // Pagos guardados de gente que ya no está activa (histórico): se muestran igual.
@@ -508,6 +519,7 @@ export function PagosView() {
   ];
 
   const columnasDef: ToolbarColumna[] = [
+    { campo: "dniNie", label: "DNI/NIE" },
     { campo: "fijo", label: "Fijo" },
     { campo: "pago", label: "Pago" },
     { campo: "nomina", label: "Nómina" },

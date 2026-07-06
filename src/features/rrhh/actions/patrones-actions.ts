@@ -647,9 +647,13 @@ export async function deletePatron(id: string) {
 
 // ─── Versionado de patrones ─────────────────────────────────────────────────
 // Editar un patrón NO se hace en sitio: crea una versión nueva (oficial) y la
-// anterior queda como histórico no editable. Las asignaciones de empleados se
-// arrastran a la versión nueva para no romper el fichaje actual. La fecha de
-// creación de cada versión = created_at.
+// anterior queda como histórico no editable. La fecha de creación de cada
+// versión = created_at.
+//
+// REGLA (adjudicación = snapshot): los empleados YA asignados NO se arrastran a
+// la versión nueva. Cada empleado conserva la versión del patrón que tenía en el
+// momento de la adjudicación de su puesto. El cambio de patrón solo afecta a
+// nuevas asignaciones (nuevas contrataciones/adjudicaciones).
 
 export async function crearVersionPatron(
   patronId: string,
@@ -749,11 +753,9 @@ export async function crearVersionPatron(
       if (eSem) throw eSem;
     }
 
-    // 4) Arrastrar empleados asignados a la versión nueva (no romper fichaje).
-    await supabase
-      .from("rrhh_patron_empleados")
-      .update({ patron_id: nuevo.id as string })
-      .eq("patron_id", oficialId);
+    // 4) Los empleados ya asignados NO se mueven: conservan la versión anterior
+    //    (snapshot del momento de su adjudicación). La versión nueva solo se
+    //    hereda en futuras asignaciones/adjudicaciones de puesto.
 
     return { ok: true, data: nuevo as PatronRow };
   } catch (err) {
