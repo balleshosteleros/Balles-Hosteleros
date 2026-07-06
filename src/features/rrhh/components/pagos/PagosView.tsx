@@ -375,16 +375,17 @@ export function PagosView() {
   // Abre la nómina original de un empleado en una pestaña nueva (URL firmada).
   const verNomina = async (p: PagoEmpleado) => {
     // Abrir la pestaña YA, dentro del gesto de clic (si se abre tras el await, el
-    // navegador la bloquea como popup). Luego se redirige a la URL firmada.
-    const win = window.open("", "_blank", "noopener,noreferrer");
+    // navegador la bloquea como popup). SIN noopener: si no, window.open("") no
+    // devuelve referencia y no se le puede asignar la URL luego.
+    const win = window.open("about:blank", "_blank");
     const res = await getNominaArchivoUrl(periodo, p.empleadoId);
     if (!res.ok) {
       win?.close();
       toast.error(res.error ?? "No se pudo abrir la nómina.");
       return;
     }
-    if (win) win.location.href = res.url;
-    else window.open(res.url, "_blank", "noopener,noreferrer"); // fallback
+    if (win && !win.closed) win.location.href = res.url;
+    else window.open(res.url, "_blank"); // fallback si el navegador cerró la pestaña
   };
 
   const guardarEdicion = (datos: Partial<PagoEmpleado>) => {

@@ -245,7 +245,10 @@ export async function procesarNominasLeidas(
     for (const n of nominas) {
       const emp = emparejar(n);
       if (!emp) {
-        res.sinEmpleado.push(n.nombre?.trim() || n.dniNie || "nómina sin identificar");
+        // Mostrar lo que leyó la IA (nombre + DNI) para poder diagnosticar por qué
+        // no cuadró (DNI mal leído, nombre distinto, empleado inexistente…).
+        const etiq = [n.nombre?.trim(), n.dniNie ? `(${n.dniNie})` : ""].filter(Boolean).join(" ");
+        res.sinEmpleado.push(etiq || "nómina sin identificar");
         continue;
       }
       const periodo = /^\d{4}-\d{2}$/.test(n.periodo) ? n.periodo : periodoDefecto;
