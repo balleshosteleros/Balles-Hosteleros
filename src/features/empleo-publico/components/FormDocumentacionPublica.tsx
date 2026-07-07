@@ -195,6 +195,22 @@ export function FormDocumentacionPublica({ token, empresaSlug }: Props) {
     void detectar(campo, f);
   }
 
+  /** Devuelve la fecha en formato ISO AAAA-MM-DD, sea cual sea el formato de entrada. */
+  function normalizarFechaISO(v: string): string {
+    if (!v) return "";
+    if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return v; // ya es ISO
+    // dd/mm/yyyy o dd-mm-yyyy (formatos que iOS puede devolver en algunos casos).
+    const m = /^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/.exec(v.trim());
+    if (m) {
+      const [, d, mo, y] = m;
+      return `${y}-${mo.padStart(2, "0")}-${d.padStart(2, "0")}`;
+    }
+    // Último recurso: que el navegador lo parsee y lo pasamos a ISO.
+    const parsed = new Date(v);
+    if (!Number.isNaN(parsed.getTime())) return parsed.toISOString().slice(0, 10);
+    return v;
+  }
+
   function validar(): string | null {
     if (!dniAnverso.file) return "Adjunta el anverso de tu DNI/NIE";
     if (!dniReverso.file) return "Adjunta el reverso de tu DNI/NIE";
@@ -228,13 +244,23 @@ export function FormDocumentacionPublica({ token, empresaSlug }: Props) {
         fd.set("dni_nie", normalizarDniNie(dniNie));
         fd.set("iban", normalizarIban(iban));
         fd.set("num_seguridad_social", normalizarSeguridadSocial(ss));
-        if (dniAnverso.file) fd.set("dni_anverso", dniAnverso.file);
-        if (dniReverso.file) fd.set("dni_reverso", dniReverso.file);
-        if (docIban.file) fd.set("doc_iban", docIban.file);
-        if (docSs.file) fd.set("doc_ss", docSs.file);
-        if (fotoPerfil.file) fd.set("foto_perfil", fotoPerfil.file);
+        // Adjunta cada archivo con un nombre seguro (iOS a veces entrega nombres
+        // o tipos que rompen el envío). Reempaquetamos en un Blob con tipo limpio.
+        const adj = (campo: string, d: DocState, ext: string) => {
+          if (!d.file) return;
+          const tipo = d.file.type || "application/octet-stream";
+          fd.set(campo, d.file, `${campo}.${ext}`);
+          void tipo;
+        };
+        adj("dni_anverso", dniAnverso, "jpg");
+        adj("dni_reverso", dniReverso, "jpg");
+        adj("doc_iban", docIban, "jpg");
+        adj("doc_ss", docSs, "jpg");
+        adj("foto_perfil", fotoPerfil, "jpg");
         fd.set("direccion", direccion.trim());
-        fd.set("fecha_nacimiento", fechaNacimiento);
+        // Fecha SIEMPRE en formato ISO (AAAA-MM-DD). En iOS el input date puede
+        // devolver un valor no-ISO que rompe el envío; lo normalizamos aquí.
+        fd.set("fecha_nacimiento", normalizarFechaISO(fechaNacimiento));
 
         const res = await fetch("/api/documentacion", { method: "POST", body: fd });
         const data = await res.json();

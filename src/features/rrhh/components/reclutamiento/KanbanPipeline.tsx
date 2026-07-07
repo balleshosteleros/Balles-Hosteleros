@@ -27,7 +27,7 @@ import {
 } from "@/components/ui/dialog";
 import {
   ArrowLeft, Mail, MailCheck, MapPin,
-  GripVertical, Send, X, UsersRound, CheckCircle2,
+  Send, X, UsersRound, CheckCircle2,
   MinusCircle, XCircle, Star, CalendarDays, Eye, FileText,
   Building2, UserCog,
 } from "lucide-react";
@@ -145,8 +145,9 @@ function CandidatoCard({
           {dias === 0 ? "hoy" : `${dias}d`}
         </span>
       )}
-      <div className="flex items-start gap-2">
-        <GripVertical className="h-3.5 w-3.5 text-muted-foreground/30 mt-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
+      {/* Sin manejador de arrastre lateral: la tarjeta entera es draggable, así
+          que el texto aprovecha todo el ancho. */}
+      <div className="flex items-start">
         <div className="flex-1 min-w-0">
           <div className="mb-1 pr-10">
             {/* Nombre y apellidos SIEMPRE visibles (sin truncar: hace wrap).
