@@ -15,9 +15,35 @@ export default function LoginPage() {
         </p>
       </div>
 
-      <Suspense fallback={<div className="h-64" />}>
+      <Suspense fallback={<LoginFormSkeleton />}>
         <LoginForm />
       </Suspense>
+    </div>
+  )
+}
+
+// Reserva la MISMA altura/estructura que <LoginForm> para que, al hidratar y
+// sustituir el fallback, el contenedor no cambie de tamaño (evita el "temblor"
+// de layout que se veía al cargar el login).
+function LoginFormSkeleton() {
+  return (
+    <div className="space-y-5" aria-hidden>
+      {/* Botón Google */}
+      <div className="h-[52px] w-full rounded-lg bg-slate-900/60" />
+      {/* Divisor */}
+      <div className="h-4 w-full" />
+      <div className="space-y-4">
+        {/* Email */}
+        <div className="h-[50px] w-full rounded-lg bg-slate-900/60" />
+        {/* Password */}
+        <div className="h-[50px] w-full rounded-lg bg-slate-900/60" />
+        {/* Olvidé contraseña */}
+        <div className="flex justify-end">
+          <div className="h-5 w-40 rounded bg-slate-900/40" />
+        </div>
+        {/* Botón iniciar sesión */}
+        <div className="h-[50px] w-full rounded-lg bg-blue-600/40" />
+      </div>
     </div>
   )
 }
