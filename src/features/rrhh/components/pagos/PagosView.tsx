@@ -879,9 +879,17 @@ export function PagosView() {
                         {columnasRender.map((c) => columnDefs[c.campo]?.td(p))}
                         <TableCell>
                           <div className="flex items-center gap-0.5">
-                            {p.confirmacionEnviadaAt ? (
+                            {p.confirmacionEnviadaAt || p.confirmacionAceptadaAt ? (
                               <>
-                                <Button variant="ghost" size="icon" className="h-7 w-7 cursor-not-allowed text-muted-foreground" disabled title="Liquidación enviada (bloqueada)"><Lock className="h-3.5 w-3.5" /></Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-7 w-7 cursor-not-allowed text-muted-foreground"
+                                  disabled
+                                  title={p.confirmacionAceptadaAt ? "Liquidación confirmada por el empleado (bloqueada)" : "Liquidación enviada (bloqueada)"}
+                                >
+                                  <Lock className="h-3.5 w-3.5" />
+                                </Button>
                                 {esDirector && (
                                   <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => reabrir(p)} title="Reabrir liquidación"><Unlock className="h-3.5 w-3.5" /></Button>
                                 )}
