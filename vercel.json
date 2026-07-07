@@ -71,6 +71,10 @@
     {
       "path": "/api/cron/prueba-avisos",
       "schedule": "30 9 * * *"
+    },
+    {
+      "path": "/api/cron/nominas-gestoria-envio",
+      "schedule": "0 8 * * *"
     }
   ]
 }
