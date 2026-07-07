@@ -40,7 +40,7 @@ const MAX_BYTES = 10 * 1024 * 1024;
 interface DocState {
   file: File | null;
   /** "ok" si la IA detectó algo, "fallo" si no, "n/a" si es PDF/no procesado. */
-  deteccion: "idle" | "procesando" | "ok" | "fallo" | "na";
+  deteccion: "idle" | "procesando" | "ok" | "fallo" | "na" | "ajeno";
 }
 
 const DOC_VACIO: DocState = { file: null, deteccion: "idle" };
@@ -96,6 +96,11 @@ function SubidaDoc({
               <AlertTriangle className="h-3.5 w-3.5" /> No se pudo leer
             </span>
           )}
+          {doc.deteccion === "ajeno" && (
+            <span className="inline-flex items-center gap-1 text-destructive shrink-0">
+              <AlertTriangle className="h-3.5 w-3.5" /> A nombre de otra persona
+            </span>
+          )}
         </div>
       )}
 
@@ -149,17 +154,32 @@ export function FormDocumentacionPublica({ token, empresaSlug }: Props) {
     fd.set("imagen", file);
     try {
       const res = await fetch("/api/documentacion/extraer", { method: "POST", body: fd });
-      const data = (await res.json()) as { ok: boolean; valor?: string | null; fecha_nacimiento?: string | null };
+      const data = (await res.json()) as {
+        ok: boolean; valor?: string | null; fecha_nacimiento?: string | null; direccion?: string | null;
+        titular_dni?: string | null; titular_nombre?: string | null;
+      };
       const valor = data.ok ? data.valor ?? null : null;
       if (valor) {
         if (campo === "dni_nie") setDniNie(valor);
         else if (campo === "iban") setIban(valor);
         else if (campo === "ss") setSs(valor);
       }
-      // Del DNI también sacamos la fecha de nacimiento (autocompletado). El
-      // candidato puede corregirla; solo se rellena si aún estaba vacía.
-      if (campo === "dni_nie" && data.fecha_nacimiento && !fechaNacimiento) {
-        setFechaNacimiento(data.fecha_nacimiento);
+      // Del DNI también sacamos fecha de nacimiento y dirección (autocompletado).
+      // Solo se rellenan si aún estaban vacíos; el candidato puede corregirlos.
+      if (campo === "dni_nie") {
+        if (data.fecha_nacimiento && !fechaNacimiento) setFechaNacimiento(data.fecha_nacimiento);
+        if (data.direccion && !direccion.trim()) setDireccion(data.direccion);
+      }
+      // Verificación de titular: la captura de SS/IBAN debe llevar el MISMO DNI
+      // que el documento de identidad. Si la IA leyó un DNI en el documento y NO
+      // coincide con el del DNI aportado, se marca como "ajeno" (bloquea el envío).
+      if ((campo === "iban" || campo === "ss") && dniNie.trim()) {
+        const titular = data.titular_dni ? normalizarDniNie(data.titular_dni) : "";
+        if (titular && titular !== normalizarDniNie(dniNie)) {
+          if (campo === "iban") setDocIban((d) => ({ ...d, deteccion: "ajeno" }));
+          else setDocSs((d) => ({ ...d, deteccion: "ajeno" }));
+          return;
+        }
       }
       return marcarDeteccion(campo, valor ? "ok" : "fallo");
     } catch {
@@ -226,6 +246,11 @@ export function FormDocumentacionPublica({ token, empresaSlug }: Props) {
       return "No hemos podido leer tu DNI/NIE. Vuelve a hacer la foto del anverso con buena luz.";
     if (docSs.deteccion === "fallo")
       return "No hemos podido leer el nº de la Seguridad Social. Vuelve a hacer la foto.";
+    // El documento de SS/IBAN debe ser del MISMO titular que el DNI aportado.
+    if (docIban.deteccion === "ajeno")
+      return "El documento del IBAN está a nombre de otra persona: debe coincidir con el DNI que has aportado.";
+    if (docSs.deteccion === "ajeno")
+      return "El documento de la Seguridad Social está a nombre de otra persona: debe coincidir con el DNI que has aportado.";
     if (!esDniNieValido(dniNie)) return "Revisa tu DNI/NIE: no parece válido";
     if (!esIbanValido(iban)) return "Revisa tu IBAN: no parece válido";
     if (!esSeguridadSocialValida(ss)) return "Revisa tu nº de la Seguridad Social";
@@ -309,7 +334,9 @@ export function FormDocumentacionPublica({ token, empresaSlug }: Props) {
       <section className="space-y-4">
         <h2 className="text-base font-semibold">1. DNI / NIE</h2>
         <p className="text-sm text-muted-foreground -mt-2">
-          Adjunta las dos caras. Si eres extranjero/a, vale el pasaporte.
+          Adjunta las dos caras de tu DNI (si eres español/a) o de tu NIE (si eres
+          extranjero/a). Para poder trabajar en España es obligatorio tener DNI o NIE;
+          el pasaporte por sí solo no sirve.
         </p>
         <div className="grid sm:grid-cols-2 gap-4">
           <SubidaDoc
@@ -407,6 +434,9 @@ export function FormDocumentacionPublica({ token, empresaSlug }: Props) {
             placeholder="Calle, número, piso, código postal y localidad"
             autoComplete="street-address"
           />
+          <p className="text-[11px] text-muted-foreground">
+            Se rellena sola al leer tu DNI (suele estar en el reverso); revísala.
+          </p>
         </div>
         <div className="space-y-1.5">
           <Label htmlFor="fecha-nac">Fecha de nacimiento *</Label>

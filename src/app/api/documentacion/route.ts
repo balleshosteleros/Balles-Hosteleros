@@ -88,7 +88,23 @@ export async function POST(req: Request) {
       fecha_nacimiento: String(fd.get("fecha_nacimiento") ?? "").trim(),
     });
     if (!parsed.success) {
-      return NextResponse.json({ ok: false, error: "Datos incompletos" }, { status: 400 });
+      // Di EXACTAMENTE qué campo falta o está mal (no un genérico "datos incompletos").
+      const ETIQUETAS: Record<string, string> = {
+        token: "el enlace",
+        dni_nie: "el número de DNI/NIE",
+        iban: "el número de cuenta (IBAN)",
+        num_seguridad_social: "el número de la Seguridad Social",
+        direccion: "la dirección postal",
+        fecha_nacimiento: "la fecha de nacimiento",
+      };
+      const campos = [
+        ...new Set(parsed.error.issues.map((i) => ETIQUETAS[String(i.path[0])] ?? String(i.path[0]))),
+      ];
+      const error =
+        campos.length === 1
+          ? `Falta ${campos[0]} o no es válido.`
+          : `Revisa estos campos: ${campos.join(", ")}.`;
+      return NextResponse.json({ ok: false, error }, { status: 400 });
     }
 
     // La fecha de nacimiento debe ser real y estar en el pasado.

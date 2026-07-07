@@ -42,17 +42,19 @@ function service() {
 
 const PROMPTS: Record<"dni_nie" | "iban" | "ss", string> = {
   dni_nie:
-    "Esta imagen es un documento de identidad español (DNI o NIE) o un pasaporte. " +
-    "Extrae el número del documento (DNI: 8 dígitos + letra; NIE: letra X/Y/Z + 7 dígitos + letra) " +
-    "y la fecha de nacimiento del titular. " +
-    "Responde SOLO con un JSON: {\"valor\":\"<numero o vacío>\",\"fecha_nacimiento\":\"<AAAA-MM-DD o vacío>\"}. " +
-    "La fecha SIEMPRE en formato AAAA-MM-DD (año-mes-día). Sin texto adicional.",
+    "Esta imagen debe ser un DNI español o una tarjeta de NIE (documento de identidad de extranjero en España). " +
+    "Extrae el número del documento (DNI: 8 dígitos + letra; NIE: letra X/Y/Z + 7 dígitos + letra), " +
+    "la fecha de nacimiento del titular y su domicilio/dirección postal si aparece (suele estar en el reverso). " +
+    "Responde SOLO con un JSON: {\"valor\":\"<numero o vacío>\",\"fecha_nacimiento\":\"<AAAA-MM-DD o vacío>\",\"direccion\":\"<domicilio completo o vacío>\"}. " +
+    "La fecha SIEMPRE en formato AAAA-MM-DD (año-mes-día). La dirección tal cual aparece. Sin texto adicional.",
   iban:
-    "Esta imagen muestra datos bancarios. Extrae ÚNICAMENTE el IBAN (empieza por dos letras de país, p.ej. ES, seguidas de 22 caracteres). " +
-    "Responde SOLO con un JSON: {\"valor\":\"<iban o null>\"}. Sin texto adicional.",
+    "Esta imagen muestra datos bancarios de una persona. Extrae el IBAN (empieza por dos letras de país, p.ej. ES, seguidas de 22 caracteres) " +
+    "y, si aparecen, el NOMBRE COMPLETO del titular y su DNI/NIE. " +
+    "Responde SOLO con un JSON: {\"valor\":\"<iban o vacío>\",\"titular_nombre\":\"<nombre o vacío>\",\"titular_dni\":\"<dni/nie o vacío>\"}. Sin texto adicional.",
   ss:
-    "Esta imagen muestra un documento de la Seguridad Social. Extrae ÚNICAMENTE el número de afiliación a la Seguridad Social (11 o 12 dígitos). " +
-    "Responde SOLO con un JSON: {\"valor\":\"<numero o null>\"}. Sin texto adicional.",
+    "Esta imagen muestra un documento de la Seguridad Social de una persona. Extrae el número de afiliación (11 o 12 dígitos) " +
+    "y, si aparecen, el NOMBRE COMPLETO del titular y su DNI/NIE. " +
+    "Responde SOLO con un JSON: {\"valor\":\"<numero o vacío>\",\"titular_nombre\":\"<nombre o vacío>\",\"titular_dni\":\"<dni/nie o vacío>\"}. Sin texto adicional.",
 };
 
 /** Schema de salida: número detectado (+ fecha de nacimiento en el caso del DNI). */
@@ -66,6 +68,18 @@ const RESPUESTA_SCHEMA = {
     fecha_nacimiento: {
       type: "string",
       description: "Fecha de nacimiento en formato AAAA-MM-DD (solo DNI/NIE/pasaporte), o cadena vacía.",
+    },
+    direccion: {
+      type: "string",
+      description: "Domicilio/dirección postal del titular si aparece (solo DNI/NIE), o cadena vacía.",
+    },
+    titular_nombre: {
+      type: "string",
+      description: "Nombre completo del titular que figura en el documento (IBAN/SS), o cadena vacía.",
+    },
+    titular_dni: {
+      type: "string",
+      description: "DNI/NIE del titular que figura en el documento (IBAN/SS), o cadena vacía.",
     },
   },
   required: ["valor"],
@@ -120,20 +134,33 @@ export async function POST(req: Request) {
     const buffer = Buffer.from(await imagen.arrayBuffer());
     let valor: string | null = null;
     let fechaNacimiento: string | null = null;
+    let direccion: string | null = null;
+    let titularDni: string | null = null;
+    let titularNombre: string | null = null;
     try {
-      const { data } = await geminiJSON<{ valor?: string; fecha_nacimiento?: string }>(PROMPTS[campo], {
+      const { data } = await geminiJSON<{
+        valor?: string; fecha_nacimiento?: string; direccion?: string; titular_dni?: string; titular_nombre?: string;
+      }>(PROMPTS[campo], {
         responseSchema: RESPUESTA_SCHEMA as never,
         temperature: 0,
         attachments: [{ mimeType: imagen.type, base64: buffer.toString("base64") }],
       });
       valor = limpiarValor(data.valor);
-      // Fecha de nacimiento solo del DNI/NIE. Se acepta únicamente AAAA-MM-DD real y pasada.
+      // Fecha de nacimiento y dirección solo del DNI/NIE.
       if (campo === "dni_nie") {
         const f = typeof data.fecha_nacimiento === "string" ? data.fecha_nacimiento.trim() : "";
         if (/^\d{4}-\d{2}-\d{2}$/.test(f)) {
           const d = new Date(`${f}T00:00:00Z`);
           if (!Number.isNaN(d.getTime()) && d.getTime() < Date.now()) fechaNacimiento = f;
         }
+        const dir = typeof data.direccion === "string" ? data.direccion.trim() : "";
+        if (dir.length >= 3 && dir.length <= 200) direccion = dir;
+      }
+      // Titular del documento (IBAN/SS): para verificar que coincide con el DNI.
+      if (campo === "iban" || campo === "ss") {
+        titularDni = limpiarValor(data.titular_dni);
+        if (titularDni) titularDni = normalizarDniNie(titularDni);
+        titularNombre = limpiarValor(data.titular_nombre);
       }
     } catch (e) {
       if (e instanceof GeminiKeyMissingError) {
@@ -151,7 +178,10 @@ export async function POST(req: Request) {
       else if (campo === "ss") valor = normalizarSeguridadSocial(valor);
     }
 
-    return NextResponse.json({ ok: true, valor, fecha_nacimiento: fechaNacimiento });
+    return NextResponse.json({
+      ok: true, valor, fecha_nacimiento: fechaNacimiento, direccion,
+      titular_dni: titularDni, titular_nombre: titularNombre,
+    });
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Error desconocido";
     console.error("[documentacion/extraer] fatal:", msg);
