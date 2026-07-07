@@ -1,7 +1,12 @@
 # TAREA para Fernando — Precios de compra de BACANAL (cuando bajes el repo)
 
-> **De:** Iván (vía Claude) · **Fecha:** 2026-06-30 · **Prioridad:** media
+> **De:** Iván (vía Claude) · **Fecha:** 2026-06-30 · **Actualizado:** 2026-07-07 · **Prioridad:** media
 > Léelo al hacer `git pull` y reconciliar.
+
+## ⚡ ACTUALIZACIÓN 2026-07-07 (lo primero que tienes que saber)
+
+- **Iván ya te ha pasado los ALBARANES DE COMPRA por WhatsApp.** Esos albaranes son la **fuente real de los precios de compra** (el precio unitario real de cada producto está en el albarán, línea a línea — NO en las facturas). **Tu tarea: subirlos y grabar los precios** de cada producto.
+- Con esos albaranes: cargar `albaranes` + `albaranes_lineas` y unir cada precio a su producto (ver "Lo que necesitamos de ti" abajo).
 
 ## Contexto: qué se hizo
 
@@ -35,3 +40,16 @@ and not exists (select 1 from producto_precios_compra ppc where ppc.producto_id=
 Cuando esa consulta devuelva pocas/ninguna fila → listo.
 
 _Relacionado: `docs/LOGISTICA_COMPRAS_PARA_IVAN_siembra_vs_ingest.md` (tu nota previa)._
+
+---
+
+## Otras decisiones de Iván (2026-07-07) — para que estemos alineados
+
+**1. Stock de Ágora ↔ Balles → BALLES MANDA EL STOCK.**
+Confirmado por Iván. El stock lo gobierna Balles; de Ágora **solo necesitamos las VENTAS** ("cuánto se vende"). Balles cruza venta × escandallo → consumo → descuenta stock → genera compras.
+- Esto **deja fuera la "Opción A"** que ejecutaste (Ágora copiando stock a Balles: 185 productos + 201 líneas de stock en Bacanal). Ese **espejo de stock hay que revertir/aparcar**.
+- ⚠️ Coordinémoslo antes de tocarlo (no toco tu código/datos de Ágora sin hablarlo contigo). El cron `agora-stock-mirror.ts` + botón manual quedan como transición hasta que decidamos retirarlos.
+- Lo único común y seguro: mantener alineado el catálogo de **productos de venta** entre Balles y Ágora.
+
+**2. Rotación de la clave de cifrado (módulo Accesos / PRP-043) → CAPADA / DESCARTADA.**
+Decisión de Iván: **no se necesita**, no hay que implementar la rotación de `CREDENCIALES_ENCRYPTION_KEY`. No lo tratéis como pendiente.
