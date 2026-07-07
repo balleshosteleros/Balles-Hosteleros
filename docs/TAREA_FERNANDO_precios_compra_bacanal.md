@@ -58,15 +58,15 @@ Decisión de Iván: **no se necesita**, no hay que implementar la rotación de `
 
 ## ❓ DUDAS DE IVÁN — Fernando, explícale/resuélvele esto
 
-Al repasar estos temas, Iván dice que **no entiende varias cosas y no sabe qué tiene que decidir o aportar él**. Textualmente:
+Al repasar estos temas, a Iván le quedaron varias dudas. No necesita entender lo técnico; necesita que le expliques cada punto de forma sencilla y que le digas qué le toca a él (si es que le toca algo). Estas son las dudas, ya desarrolladas:
 
-1. **"No entiendo nada de esto de Ágora / qué puedo aportar yo."**
-   → Sobre el stock de Ágora vs Balles: Iván no tiene claro qué parte le toca a él. Fernando: explícale en cristiano qué implica y confirma con él cómo/cuándo revertís el espejo de stock (Opción A).
+**Duda 1 — La integración de Ágora con Balles: no la entiende y no sabe qué papel juega él.**
+Hay dos maneras de llevar el stock: la que tú montaste (Ágora envía el stock y Balles lo copia) y la que Iván quiere (Balles lleva el stock por su cuenta y de Ágora solo usa las ventas). Iván no acaba de ver qué diferencia hay en la práctica ni qué implica para el día a día del restaurante. Fernando: explícaselo con palabras del negocio (qué cambia para él, qué gana), y confirmad juntos si se revierte/aparca el espejo de stock que ya estaba montado.
 
-2. **"No entiendo qué debo decidir."**
-   → Iván no sabe qué decisión se le está pidiendo en estos temas. Fernando: déjale claro qué decisiones son suyas (de negocio) y cuáles son puramente técnicas (tuyas), para que no tenga que decidir cosas técnicas.
+**Duda 2 — No tiene claro qué decisiones se le están pidiendo a él.**
+En estos temas hay decisiones de dos tipos: las de **negocio** (cómo quiere que funcione el restaurante) y las **técnicas** (cómo se implementa por dentro). Iván se pierde porque no distingue cuáles son suyas. Fernando: sepárale claramente qué decisiones necesitas de él (las de negocio) y qué cosas resuelves tú sin molestarle (las técnicas), para que no sienta que tiene que decidir cosas de programación.
 
-3. **"No entiendo qué debo o puedo hacer yo."**
-   → Iván quiere saber, en concreto, **qué acción le toca a él**. Estado actual: lo único que dependía de él eran los albaranes, y **ya te los pasó por WhatsApp**. Confírmale si necesitas algo más de él o si con eso está todo.
+**Duda 3 — Quiere saber, en concreto, qué acción le toca hacer a él.**
+Iván solo quiere una lista clara de "esto es lo tuyo". A día de hoy, lo único que dependía de él eran los **albaranes de compra**, y **ya te los ha pasado por WhatsApp**. Fernando: confírmale si con eso ya no tiene que hacer nada más, o si necesitas alguna otra cosa de su parte.
 
-> Resumen para Fernando: Iván no necesita entender lo técnico. Solo dile claramente **(a)** qué has hecho tú, **(b)** qué decisiones de negocio necesitas de él, y **(c)** que aparte de los albaranes ya enviados, no tiene que hacer nada más (si es así).
+> **Resumen para Fernando:** Iván no necesita entender lo técnico. Cuando habléis, dile de forma sencilla **(a)** qué has hecho tú, **(b)** qué decisiones de negocio necesitas de él, y **(c)** que, aparte de los albaranes que ya te envió, no tiene que hacer nada más (si efectivamente es así).
