@@ -149,12 +149,17 @@ export function FormDocumentacionPublica({ token, empresaSlug }: Props) {
     fd.set("imagen", file);
     try {
       const res = await fetch("/api/documentacion/extraer", { method: "POST", body: fd });
-      const data = (await res.json()) as { ok: boolean; valor?: string | null };
+      const data = (await res.json()) as { ok: boolean; valor?: string | null; fecha_nacimiento?: string | null };
       const valor = data.ok ? data.valor ?? null : null;
       if (valor) {
         if (campo === "dni_nie") setDniNie(valor);
         else if (campo === "iban") setIban(valor);
         else if (campo === "ss") setSs(valor);
+      }
+      // Del DNI también sacamos la fecha de nacimiento (autocompletado). El
+      // candidato puede corregirla; solo se rellena si aún estaba vacía.
+      if (campo === "dni_nie" && data.fecha_nacimiento && !fechaNacimiento) {
+        setFechaNacimiento(data.fecha_nacimiento);
       }
       return marcarDeteccion(campo, valor ? "ok" : "fallo");
     } catch {
@@ -236,7 +241,13 @@ export function FormDocumentacionPublica({ token, empresaSlug }: Props) {
         if (!res.ok || !data.ok) throw new Error(data.error ?? "Error al enviar");
         setEnviado(true);
       } catch (e) {
-        const msg = e instanceof Error ? e.message : "Error desconocido";
+        const raw = e instanceof Error ? e.message : "";
+        // Nunca mostramos errores técnicos del navegador (en inglés) al candidato.
+        // Si el mensaje no viene de nuestro servidor (español), lo traducimos.
+        const esTecnico = !raw || /did not match|pattern|failed to fetch|network|unexpected|typeerror/i.test(raw);
+        const msg = esTecnico
+          ? "No hemos podido enviar tu documentación. Revisa que todos los campos y documentos estén completos e inténtalo de nuevo. Si sigue fallando, escríbenos."
+          : raw;
         setError(msg);
         toast.error(msg);
       }
@@ -379,7 +390,11 @@ export function FormDocumentacionPublica({ token, empresaSlug }: Props) {
             value={fechaNacimiento}
             onChange={(e) => setFechaNacimiento(e.target.value)}
             max={new Date().toISOString().slice(0, 10)}
+            className="w-44"
           />
+          <p className="text-[11px] text-muted-foreground">
+            Se rellena sola al leer tu DNI; revísala por si acaso.
+          </p>
         </div>
       </section>
 

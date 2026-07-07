@@ -43,8 +43,10 @@ function service() {
 const PROMPTS: Record<"dni_nie" | "iban" | "ss", string> = {
   dni_nie:
     "Esta imagen es un documento de identidad español (DNI o NIE) o un pasaporte. " +
-    "Extrae ÚNICAMENTE el número del documento (DNI: 8 dígitos + letra; NIE: letra X/Y/Z + 7 dígitos + letra). " +
-    "Responde SOLO con un JSON: {\"valor\":\"<numero o null>\"}. Sin texto adicional.",
+    "Extrae el número del documento (DNI: 8 dígitos + letra; NIE: letra X/Y/Z + 7 dígitos + letra) " +
+    "y la fecha de nacimiento del titular. " +
+    "Responde SOLO con un JSON: {\"valor\":\"<numero o vacío>\",\"fecha_nacimiento\":\"<AAAA-MM-DD o vacío>\"}. " +
+    "La fecha SIEMPRE en formato AAAA-MM-DD (año-mes-día). Sin texto adicional.",
   iban:
     "Esta imagen muestra datos bancarios. Extrae ÚNICAMENTE el IBAN (empieza por dos letras de país, p.ej. ES, seguidas de 22 caracteres). " +
     "Responde SOLO con un JSON: {\"valor\":\"<iban o null>\"}. Sin texto adicional.",
@@ -53,13 +55,17 @@ const PROMPTS: Record<"dni_nie" | "iban" | "ss", string> = {
     "Responde SOLO con un JSON: {\"valor\":\"<numero o null>\"}. Sin texto adicional.",
 };
 
-/** Schema de salida: el modelo devuelve siempre `{ valor: "<numero>" }` (vacío si no lo lee). */
+/** Schema de salida: número detectado (+ fecha de nacimiento en el caso del DNI). */
 const RESPUESTA_SCHEMA = {
   type: "object",
   properties: {
     valor: {
       type: "string",
       description: "El número detectado, o cadena vacía si no se puede leer con seguridad.",
+    },
+    fecha_nacimiento: {
+      type: "string",
+      description: "Fecha de nacimiento en formato AAAA-MM-DD (solo DNI/NIE/pasaporte), o cadena vacía.",
     },
   },
   required: ["valor"],
@@ -113,13 +119,22 @@ export async function POST(req: Request) {
     // GEMINI_API_KEY, degrada con elegancia: el candidato teclea el número.
     const buffer = Buffer.from(await imagen.arrayBuffer());
     let valor: string | null = null;
+    let fechaNacimiento: string | null = null;
     try {
-      const { data } = await geminiJSON<{ valor?: string }>(PROMPTS[campo], {
+      const { data } = await geminiJSON<{ valor?: string; fecha_nacimiento?: string }>(PROMPTS[campo], {
         responseSchema: RESPUESTA_SCHEMA as never,
         temperature: 0,
         attachments: [{ mimeType: imagen.type, base64: buffer.toString("base64") }],
       });
       valor = limpiarValor(data.valor);
+      // Fecha de nacimiento solo del DNI/NIE. Se acepta únicamente AAAA-MM-DD real y pasada.
+      if (campo === "dni_nie") {
+        const f = typeof data.fecha_nacimiento === "string" ? data.fecha_nacimiento.trim() : "";
+        if (/^\d{4}-\d{2}-\d{2}$/.test(f)) {
+          const d = new Date(`${f}T00:00:00Z`);
+          if (!Number.isNaN(d.getTime()) && d.getTime() < Date.now()) fechaNacimiento = f;
+        }
+      }
     } catch (e) {
       if (e instanceof GeminiKeyMissingError) {
         // Sin IA configurada: no es un error para el candidato, solo no autocompleta.
@@ -136,7 +151,7 @@ export async function POST(req: Request) {
       else if (campo === "ss") valor = normalizarSeguridadSocial(valor);
     }
 
-    return NextResponse.json({ ok: true, valor });
+    return NextResponse.json({ ok: true, valor, fecha_nacimiento: fechaNacimiento });
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Error desconocido";
     console.error("[documentacion/extraer] fatal:", msg);
