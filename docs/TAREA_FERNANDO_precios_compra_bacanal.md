@@ -70,3 +70,26 @@ En estos temas hay decisiones de dos tipos: las de **negocio** (cómo quiere que
 Iván solo quiere una lista clara de "esto es lo tuyo". A día de hoy, lo único que dependía de él eran los **albaranes de compra**, y **ya te los ha pasado por WhatsApp**. Fernando: confírmale si con eso ya no tiene que hacer nada más, o si necesitas alguna otra cosa de su parte.
 
 > **Resumen para Fernando:** Iván no necesita entender lo técnico. Cuando habléis, dile de forma sencilla **(a)** qué has hecho tú, **(b)** qué decisiones de negocio necesitas de él, y **(c)** que, aparte de los albaranes que ya te envió, no tiene que hacer nada más (si efectivamente es así).
+
+---
+
+## ✅ RESPUESTA de Fernando/Claude (2026-07-07) — estado real de esta tarea
+
+**La parte de PRECIOS ya está hecha en su grueso desde el 2026-07-01** (parece que esta actualización se escribió sin verlo):
+
+- De **esos mismos albaranes de WhatsApp** (17 fotos, 14 documentos, 128 líneas extraídas con IA y todos los totales cuadrados) **cargamos 85 precios reales en `producto_precios_compra`**: Bacanal 41 + Habana 44 (Dither 32, Belmonte 29, Krittikali 10, Makro 5, Garcimar/Antonio de Miguel/Encinar 3). Verificado en BD; `productos.precio_compra` (vigente) sincronizado.
+- **Detalle completo, método y cómo revertir**: `docs/LOGISTICA_COMPRAS_PARA_IVAN_precios_albaranes.md` (commit `877b3da`).
+- La consulta de verificación de esta tarea ya baja de 311 → **271** en Bacanal (y 280 → 236 en Habana).
+
+**Lo que FALTA de precios necesita decisiones de NEGOCIO de Iván** (misma nota, secciones A/B/C):
+- **A)** 11 casos "¿es el mismo producto?" (ej.: rulo vaca-cabra Makro = ¿"Queso de cabra"?; pan frankfurt brioche = ¿"Pan briocht"?).
+- **B)** los panes: ¿el proveedor es SERPESKA, Mozos o Juanito Baker? (no está en `proveedores`).
+- **C)** ~28 productos de los albaranes que **no existen en el catálogo** (secreto de cerdo, merluza, corvina, nata, mozzarella, gyozas…): ¿se dan de alta? Muchos son justo los ~28 nuevos de los escandallos.
+
+**Sobre "cargar `albaranes` + `albaranes_lineas`"** (petición nueva de esta actualización): la carga del 07-01 fue **solo de precios**; los albaranes como documentos **no** están registrados. Lo podemos hacer con el mismo tooling (datos ya extraídos), idealmente **después** de las decisiones A/B/C para poder vincular todas las líneas a su producto.
+
+**Enterados y de acuerdo:**
+- **Stock: BALLES MANDA** — no tocamos el espejo de Ágora hasta coordinarlo (lane de Fernando).
+- **Rotación de clave (PRP-043): descartada** — la quitamos de pendientes.
+
+**Recordatorio:** también espera respuesta `docs/LOGISTICA_COMPRAS_PARA_IVAN_reposicion_por_ventas.md` (qué tabla de recetas manda: `producto_composicion` vs `escandallo_ingredientes`; con eso montamos nosotros el cálculo de `ventas_dia`).
