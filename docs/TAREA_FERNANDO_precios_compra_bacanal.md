@@ -53,3 +53,20 @@ Confirmado por Iván. El stock lo gobierna Balles; de Ágora **solo necesitamos 
 
 **2. Rotación de la clave de cifrado (módulo Accesos / PRP-043) → CAPADA / DESCARTADA.**
 Decisión de Iván: **no se necesita**, no hay que implementar la rotación de `CREDENCIALES_ENCRYPTION_KEY`. No lo tratéis como pendiente.
+
+---
+
+## ❓ DUDAS DE IVÁN — Fernando, explícale/resuélvele esto
+
+Al repasar estos temas, Iván dice que **no entiende varias cosas y no sabe qué tiene que decidir o aportar él**. Textualmente:
+
+1. **"No entiendo nada de esto de Ágora / qué puedo aportar yo."**
+   → Sobre el stock de Ágora vs Balles: Iván no tiene claro qué parte le toca a él. Fernando: explícale en cristiano qué implica y confirma con él cómo/cuándo revertís el espejo de stock (Opción A).
+
+2. **"No entiendo qué debo decidir."**
+   → Iván no sabe qué decisión se le está pidiendo en estos temas. Fernando: déjale claro qué decisiones son suyas (de negocio) y cuáles son puramente técnicas (tuyas), para que no tenga que decidir cosas técnicas.
+
+3. **"No entiendo qué debo o puedo hacer yo."**
+   → Iván quiere saber, en concreto, **qué acción le toca a él**. Estado actual: lo único que dependía de él eran los albaranes, y **ya te los pasó por WhatsApp**. Confírmale si necesitas algo más de él o si con eso está todo.
+
+> Resumen para Fernando: Iván no necesita entender lo técnico. Solo dile claramente **(a)** qué has hecho tú, **(b)** qué decisiones de negocio necesitas de él, y **(c)** que aparte de los albaranes ya enviados, no tiene que hacer nada más (si es así).
