@@ -92,7 +92,7 @@ export function FichajesTimelineMesEmpleado({ empleadoId }: { empleadoId: string
           <div>
             <p className="text-xs text-muted-foreground">Este mes</p>
             <p className="text-lg font-semibold tabular-nums">
-              {fmtHM(totFichadas)}{" "}
+              {fmtHM(totFichadas)} reales{" "}
               <span className="text-sm font-normal text-muted-foreground">
                 / {fmtHM(totTeoricas)} teóricas
               </span>
@@ -114,8 +114,8 @@ export function FichajesTimelineMesEmpleado({ empleadoId }: { empleadoId: string
           <div className="min-w-[900px]">
             {/* Cabecera: Fecha | Horas | regla 0-24 */}
             <div className="flex items-center border-b bg-muted/40 text-[11px] text-muted-foreground">
-              <div className="w-32 shrink-0 px-4 py-2 font-medium">Fecha</div>
-              <div className="w-28 shrink-0 px-2 py-2 font-medium">Horas</div>
+              <div className="w-20 shrink-0 px-3 py-2 font-medium">Fecha</div>
+              <div className="w-36 shrink-0 px-2 py-2 font-medium">Horas</div>
               <ReglaHoras />
             </div>
 
@@ -132,16 +132,16 @@ export function FichajesTimelineMesEmpleado({ empleadoId }: { empleadoId: string
                       <button
                         type="button"
                         onClick={() => d.fichado.length > 0 && toggle(d.fechaISO)}
-                        className="flex w-32 shrink-0 items-center gap-1 px-4 py-3 text-left"
+                        className="flex w-20 shrink-0 items-center gap-0.5 px-3 py-3 text-left"
                       >
                         {d.fichado.length > 0 ? (
-                          estaAbierto ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />
+                          estaAbierto ? <ChevronDown className="h-3.5 w-3.5 shrink-0" /> : <ChevronRight className="h-3.5 w-3.5 shrink-0" />
                         ) : (
-                          <span className="w-3.5" />
+                          <span className="w-3.5 shrink-0" />
                         )}
                         <span className="text-sm">{labelDiaMes(d.fechaISO)}</span>
                       </button>
-                      <div className="w-28 shrink-0 px-2 py-3 text-xs">
+                      <div className="w-36 shrink-0 whitespace-nowrap px-2 py-3 text-xs">
                         <span className="font-semibold tabular-nums">{fmtHM(d.horasFichadas)}</span>
                         <span className="text-muted-foreground tabular-nums"> / {fmtHM(d.horasPrevistas)}</span>
                       </div>

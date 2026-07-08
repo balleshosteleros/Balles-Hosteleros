@@ -118,7 +118,7 @@ export function FichajesTimelineDia() {
             {/* Cabecera: Empleado | Horas | regla 0-24 */}
             <div className="flex items-center border-b bg-muted/40 text-[11px] text-muted-foreground">
               <div className="w-48 shrink-0 px-4 py-2 font-medium">Empleado</div>
-              <div className="w-28 shrink-0 px-2 py-2 font-medium">Horas</div>
+              <div className="w-36 shrink-0 px-2 py-2 font-medium">Horas</div>
               <ReglaHoras />
             </div>
 
@@ -146,7 +146,7 @@ export function FichajesTimelineDia() {
                     <span className="truncate text-sm">{r.nombre}</span>
                   </button>
                   {/* Horas fichado / previsto */}
-                  <div className="w-28 shrink-0 px-2 py-3 text-xs">
+                  <div className="w-36 shrink-0 whitespace-nowrap px-2 py-3 text-xs">
                     <span className="font-semibold tabular-nums">{fmtHM(r.horasFichadas)}</span>
                     <span className="text-muted-foreground tabular-nums"> / {fmtHM(r.horasPrevistas)}</span>
                   </div>
