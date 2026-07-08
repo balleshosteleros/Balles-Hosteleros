@@ -674,14 +674,12 @@ export function KanbanPipeline({ vacante, vacantes = [], onBack, onUpdateCandida
       );
       return;
     }
-    // Entrada en la fase «Contratación» (PRP-070): no es un simple move. Abre el
-    // diálogo en modo «iniciar» para recoger puesto/primer día/local y disparar
-    // el orquestador (crea empleado + alta gestoría + contrato interno). Solo si
-    // el candidato no estaba ya en la fase contratación.
-    if (
-      getFasePrincipal(estadoDestino) === "contratacion" &&
-      getFasePrincipal(c.fase) !== "contratacion"
-    ) {
+    // Entrada en la columna «Contratación» (PRP-070): no es un simple move. Abre
+    // el diálogo en modo «iniciar» para recoger puesto/primer día/local y disparar
+    // el orquestador (crea empleado + alta gestoría + contrato interno). Se
+    // compara por ESTADO (columna), no por fase principal: Formación, Contratación,
+    // Prueba y Empleado comparten la misma fase «onboarding».
+    if (estadoDestino === "contratacion" && c.fase !== "contratacion") {
       setIniciarContratacionCand(c);
       return;
     }
