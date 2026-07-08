@@ -37,6 +37,38 @@ type Campo = "dni_nie" | "dni_reverso" | "iban" | "ss";
 const TIPOS_IMG = new Set(["image/png", "image/jpeg", "image/webp", "image/heic", "image/heif"]);
 const MAX_BYTES = 10 * 1024 * 1024;
 
+/**
+ * Comprime una imagen en el navegador antes de enviarla. Vercel limita el cuerpo
+ * total de la petición a ~4,5 MB, y son 5 documentos: si cada foto de móvil pesa
+ * varios MB, el envío se rechaza con 413. Reducimos cada imagen a máx. 1600px de
+ * lado y calidad JPEG 0,72 (queda nítida para leerla, pero pesa ~200-500 KB).
+ * Los PDF y las imágenes ya pequeñas se dejan tal cual.
+ */
+async function comprimirImagen(file: File): Promise<File> {
+  if (file.type === "application/pdf") return file;
+  if (!file.type.startsWith("image/")) return file;
+  if (file.size <= 900 * 1024) return file; // ya es pequeña
+  try {
+    const bitmap = await createImageBitmap(file);
+    const maxLado = 1600;
+    const escala = Math.min(1, maxLado / Math.max(bitmap.width, bitmap.height));
+    const w = Math.round(bitmap.width * escala);
+    const h = Math.round(bitmap.height * escala);
+    const canvas = document.createElement("canvas");
+    canvas.width = w; canvas.height = h;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return file;
+    ctx.drawImage(bitmap, 0, 0, w, h);
+    const blob: Blob | null = await new Promise((resolve) =>
+      canvas.toBlob((b) => resolve(b), "image/jpeg", 0.72),
+    );
+    if (!blob || blob.size >= file.size) return file; // no mejoró
+    return new File([blob], file.name.replace(/\.[^.]+$/, "") + ".jpg", { type: "image/jpeg" });
+  } catch {
+    return file; // si algo falla, se envía el original
+  }
+}
+
 /** Estado de un documento adjunto (con detección IA si es imagen). */
 interface DocState {
   file: File | null;
@@ -222,13 +254,13 @@ export function FormDocumentacionPublica({ token, empresaSlug }: Props) {
   }
 
   /** Gestiona un archivo adjunto: valida tipo/tamaño y lanza IA si procede. */
-  function onDocFile(
+  async function onDocFile(
     setter: (d: DocState) => void,
     campo: Campo | null,
-    f: File | null,
+    fRaw: File | null,
   ) {
     setError(null);
-    if (!f) {
+    if (!fRaw) {
       // Quitar el documento: limpia el archivo y el número autodetectado de ese campo.
       setter(DOC_VACIO);
       if (campo === "dni_nie") setDniNie("");
@@ -236,10 +268,13 @@ export function FormDocumentacionPublica({ token, empresaSlug }: Props) {
       else if (campo === "ss") setSs("");
       return;
     }
-    if (f.size > MAX_BYTES) { setError("El archivo supera 10MB"); return; }
-    const esImg = TIPOS_IMG.has(f.type);
-    const esPdf = f.type === "application/pdf";
+    if (fRaw.size > MAX_BYTES) { setError("El archivo supera 10MB"); return; }
+    const esImg = TIPOS_IMG.has(fRaw.type);
+    const esPdf = fRaw.type === "application/pdf";
     if (!esImg && !esPdf) { setError("Formato no admitido (usa foto o PDF)"); return; }
+
+    // Comprime las imágenes grandes para no superar el límite de subida de Vercel.
+    const f = await comprimirImagen(fRaw);
 
     // Campo sin IA (foto de perfil, reverso del DNI) → solo adjuntar.
     if (!campo) {
@@ -328,22 +363,31 @@ export function FormDocumentacionPublica({ token, empresaSlug }: Props) {
         fd.set("fecha_nacimiento", normalizarFechaISO(fechaNacimiento));
 
         const res = await fetch("/api/documentacion", { method: "POST", body: fd });
-        const data = await res.json();
-        if (!res.ok || !data.ok) throw new Error(data.error ?? "Error al enviar");
+        // Intenta leer la respuesta como JSON; si no lo es (p.ej. 413 Payload Too
+        // Large devuelve HTML), lo detectamos por el status.
+        let data: { ok?: boolean; error?: string } = {};
+        try { data = await res.json(); } catch { /* respuesta no-JSON */ }
+        if (!res.ok || !data.ok) {
+          // Mensaje según el problema real (no un genérico de "conexión").
+          if (res.status === 413) {
+            throw new Error("Alguna foto o documento pesa demasiado. Hazla con menos calidad o recórtala e inténtalo de nuevo.");
+          }
+          if (data.error) throw new Error(data.error); // mensaje claro del servidor
+          throw new Error(`No se pudo enviar (error ${res.status}). Inténtalo otra vez.`);
+        }
         setEnviado(true);
       } catch (e) {
         const raw = e instanceof Error ? e.message : "";
-        // El servidor devuelve mensajes claros en español (p.ej. "Revisa estos
-        // campos: …"): esos SÍ se muestran tal cual. Solo traducimos los errores
-        // técnicos del navegador (DOMException en inglés, fallo de red).
-        const esTecnico =
-          !raw ||
-          /^[\x00-\x7F]*$/.test(raw) && /did not match|pattern|failed to fetch|networkerror|load failed|unexpected|typeerror|undefined/i.test(raw);
-        const msg = esTecnico
-          ? "No se pudo enviar. Comprueba tu conexión a internet e inténtalo otra vez. Si sigue fallando, escríbenos."
-          : raw;
+        // Los mensajes que ya son claros (del servidor o los nuestros de arriba)
+        // se muestran tal cual. Solo el fallo de red puro cae en el genérico.
+        const esRed = /failed to fetch|networkerror|load failed|network request failed/i.test(raw);
+        const msg = esRed
+          ? "No se pudo conectar con el servidor. Revisa tu conexión e inténtalo otra vez."
+          : (raw || "No se pudo enviar. Inténtalo de nuevo.");
         mostrarError(msg);
         toast.error(msg);
+        // Registro para diagnóstico (visible en la consola del navegador).
+        console.error("[documentacion] envío falló:", e);
       }
     });
   }

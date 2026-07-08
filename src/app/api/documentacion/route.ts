@@ -25,6 +25,8 @@ import { BUCKET_DOC_CANDIDATOS } from "@/features/rrhh/lib/documentacion-candida
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
+// Subida de 5 documentos: damos margen de tiempo para conexiones lentas.
+export const maxDuration = 60;
 
 const MAX_DOC_BYTES = 10 * 1024 * 1024;
 const TIPOS_OK: Record<string, string> = {
