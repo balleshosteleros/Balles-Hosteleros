@@ -116,6 +116,15 @@ const nextConfig: NextConfig = {
           { key: 'Vary', value: 'User-Agent' },
         ],
       },
+      {
+        // Documentación del candidato: NUNCA cachear, para que al recargar
+        // siempre se cargue la última versión del formulario (sin tener que ir
+        // a incógnito ni borrar caché).
+        source: '/documentacion/:token*',
+        headers: [
+          { key: 'Cache-Control', value: 'no-store, must-revalidate' },
+        ],
+      },
     ]
   },
 }
