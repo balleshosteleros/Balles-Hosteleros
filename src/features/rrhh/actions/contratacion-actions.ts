@@ -126,6 +126,8 @@ interface CandidatoRow {
   dni_nie: string | null;
   iban: string | null;
   num_seguridad_social: string | null;
+  direccion: string | null;
+  fecha_nacimiento: string | null;
   documentacion_completada_at: string | null;
   fase: string;
   estado: string;
@@ -219,7 +221,7 @@ export async function contratarCandidato(input: ContratarInput): Promise<Contrat
   // 1. Cargar candidato
   const { data: cand, error: candErr } = await admin
     .from("candidatos")
-    .select("id, empresa_id, nombre, apellidos, email, telefono, dni_nie, iban, num_seguridad_social, documentacion_completada_at, fase, estado, promovido_at, vacante_id")
+    .select("id, empresa_id, nombre, apellidos, email, telefono, dni_nie, iban, num_seguridad_social, direccion, fecha_nacimiento, documentacion_completada_at, fase, estado, promovido_at, vacante_id")
     .eq("id", input.candidatoId)
     .eq("empresa_id", empresaId)
     .maybeSingle<CandidatoRow>();
@@ -307,6 +309,17 @@ export async function contratarCandidato(input: ContratarInput): Promise<Contrat
       }
     : null;
 
+  // El puesto debe tener condiciones (salario/jornada) configuradas antes de
+  // contratar: si no, la gestoría recibiría el alta con salario 0 y sin jornada.
+  if (!cond || (cond.salario_neto == null && cond.jornada_contrato == null)) {
+    return {
+      ok: false,
+      error:
+        `El puesto «${puesto.nombre}» no tiene condiciones configuradas (salario, jornada…). ` +
+        `Configúralas en RRHH → Puestos antes de contratar, para que la gestoría reciba el alta completa.`,
+    };
+  }
+
   // 3. Lock optimista
   const nowIso = new Date().toISOString();
   const { data: lockRows, error: lockErr } = await admin
@@ -328,94 +341,38 @@ export async function contratarCandidato(input: ContratarInput): Promise<Contrat
   const enviarAcceso = input.enviarAcceso !== false;
   const enviarGestoria = input.enviarGestoria !== false;
 
-  // 4. Detección de duplicados (email/DNI) → reactivar SOLO si está dado de baja.
-  // CRÍTICO: si el empleado que coincide por DNI/email está ACTIVO, NO es una
-  // recontratación: reactivar machacaría su puesto, departamento y el ROL de su
-  // usuario (bug que convirtió un DIRECTOR en camarero al contratar un candidato
-  // con el mismo DNI). En ese caso abortamos con un aviso claro y no tocamos nada.
-  let empleadoExistente: { id: string; user_id: string | null } | null = null;
+  // 4. Regla: NO se puede dar de alta un empleado cuyo DNI (o email) YA EXISTE en
+  // esta empresa, esté ACTIVO o de baja. Se bloquea siempre con un mensaje claro
+  // (evita duplicados y que una reactivación arrastre datos antiguos). Para
+  // reincorporar a un ex-empleado se hace desde su ficha, no contratándolo de nuevo.
   {
     const orFilters: string[] = [];
     if (emailPersonal) orFilters.push(`email_personal.eq.${emailPersonal}`);
     if (dniNorm) orFilters.push(`dni_nie.eq.${dniNorm}`);
     if (orFilters.length > 0) {
       const { data: matches } = await admin
-        .from("empleados").select("id, user_id, estado, nombre, apellidos, puesto")
+        .from("empleados").select("id, user_id, estado, nombre, apellidos, puesto, dni_nie")
         .eq("empresa_id", empresaId).or(orFilters.join(",")).limit(1);
       if (matches && matches.length > 0) {
         const m = matches[0];
-        const activo = String(m.estado ?? "").toLowerCase() === "activo";
-        if (activo) {
-          return {
-            ok: false,
-            error:
-              `Ya existe un empleado ACTIVO con ese DNI/email en esta empresa ` +
-              `(${`${m.nombre ?? ""} ${m.apellidos ?? ""}`.trim()}${m.puesto ? `, ${m.puesto}` : ""}). ` +
-              `No se puede contratar de nuevo sin darlo de baja antes: hacerlo sobrescribiría su puesto y su rol.`,
-          };
-        }
-        empleadoExistente = { id: m.id as string, user_id: (m.user_id as string | null) ?? null };
+        const nombreExistente = `${m.nombre ?? ""} ${m.apellidos ?? ""}`.trim();
+        const dniMostrar = (m.dni_nie as string | null) ?? dniNorm ?? "";
+        const estadoTxt = String(m.estado ?? "").toLowerCase() === "activo" ? "" : " (actualmente dado de baja)";
+        return {
+          ok: false,
+          error:
+            `Esta persona con DNI ${dniMostrar} ya se encuentra en la base de datos de empleados` +
+            `${nombreExistente ? `: ${nombreExistente}` : ""}${m.puesto ? `, ${m.puesto}` : ""}${estadoTxt}. ` +
+            `No se puede dar de alta de nuevo con el mismo DNI.`,
+        };
       }
     }
   }
 
   const fullName = `${cand.nombre} ${cand.apellidos ?? ""}`.trim();
 
-  if (empleadoExistente) {
-    // Pasos CRÍTICOS de la reactivación en un bloque protegido: si algo falla,
-    // revertimos el lock del candidato y avisamos a RRHH para poder reintentar.
-    // (No borramos el empleado: ya existía antes de esta reactivación.)
-    try {
-      await admin.from("empleados").update({
-        estado: "Activo",
-        fecha_baja: null,
-        departamento_id: puesto.departamento_id,
-        puesto: puesto.nombre as string,
-        fecha_alta: input.primerDia,
-      }).eq("id", empleadoExistente.id);
-
-      if (empleadoExistente.user_id) {
-        await admin.from("usuario_empresas")
-          .upsert({ user_id: empleadoExistente.user_id, empresa_id: empresaId }, { onConflict: "user_id,empresa_id" });
-        // Re-sincronizar el ROL del usuario con el nuevo DEPARTAMENTO: el rol es
-        // el departamento (SALA, COCINA…). Si la recontratación cambia de depto,
-        // el rol debe seguirlo. El trigger sync_usuario_rol_id fija rol_id.
-        if (deptoNombre) {
-          await admin.from("usuarios")
-            .update({ rol_label: deptoNombre, departamento: deptoNombre })
-            .eq("user_id", empleadoExistente.user_id);
-        }
-      }
-      await vincularPuestoPrincipal(admin, empleadoExistente.id, input.puestoId, puesto.nombre as string, input.primerDia);
-      await guardarSnapshotCondiciones(admin, empresaId, empleadoExistente.id, input.puestoId, puesto.nombre as string, nivelHeredado, input.primerDia, tipoContrato, cond);
-
-      const { error: markErr } = await admin.from("candidatos")
-        .update({ empleado_id: empleadoExistente.id, fase: destinoFase, estado: destinoEstado }).eq("id", cand.id);
-      if (markErr) throw new Error(markErr.message);
-    } catch (err) {
-      const motivo = err instanceof Error ? err.message : "Error al reactivar el empleado";
-      await revertirContratacionFallida(admin, empresaId, cand.id, fullName, motivo);
-      return { ok: false, error: `La contratación no se completó y se ha revertido. Puedes volver a intentarlo. (${motivo})` };
-    }
-
-    // Copia la documentación y la foto del candidato a la ficha del empleado
-    // reactivado (se conserva también en reclutamiento). Best-effort.
-    await copiarDocumentacionCandidatoAEmpleado({
-      admin, empresaId, candidatoId: cand.id, empleadoId: empleadoExistente.id, userId: empleadoExistente.user_id,
-    });
-
-    // Alta automática a la gestoría (tolerante a fallo: no bloquea la contratación).
-    // Solo si el usuario confirmó el envío (o compat: no se pasó el flag).
-    const gestoriaEnviada = enviarGestoria
-      ? await enviarAltaGestoriaSeguro(empleadoExistente.id)
-      : false;
-
-    revalidatePath("/rrhh/reclutamiento");
-    revalidatePath("/rrhh/empleados");
-    return { ok: true, empleadoId: empleadoExistente.id, reactivado: true, gestoriaEnviada };
-  }
-
-  // 5. Alta nueva vía núcleo canónico
+  // 5. Alta nueva vía núcleo canónico (siempre nueva: el DNI/email duplicado ya
+  // se bloqueó arriba, no hay reactivación automática).
   const alta = await altaUsuarioEmpleado({
     admin,
     loginEmail,
@@ -426,6 +383,11 @@ export async function contratarCandidato(input: ContratarInput): Promise<Contrat
     apellidos: cand.apellidos,
     telefono: cand.telefono,
     dniNie: dniNorm,
+    // Datos personales de la documentación → van a la ficha y a la gestoría.
+    numeroSs: cand.num_seguridad_social,
+    iban: cand.iban,
+    direccion: cand.direccion,
+    fechaNacimiento: cand.fecha_nacimiento,
     departamentoId: puesto.departamento_id as string,
     puesto: puesto.nombre as string,
     empresaPrincipalId: empresaId,

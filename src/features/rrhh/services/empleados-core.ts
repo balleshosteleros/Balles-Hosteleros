@@ -99,6 +99,11 @@ export type AltaUsuarioEmpleadoInput = {
   apellidos: string | null;
   telefono?: string | null;
   dniNie?: string | null;
+  /** Datos personales aportados en la documentación del candidato (para gestoría). */
+  numeroSs?: string | null;
+  iban?: string | null;
+  direccion?: string | null;
+  fechaNacimiento?: string | null;
   /** Ya resuelto a un id real o null por el caller (sin mocks). */
   departamentoId?: string | null;
   /** Nombre de puesto en TEXT (empleados.puesto no es FK). */
@@ -228,6 +233,11 @@ export async function altaUsuarioEmpleado(
       email_empresa: input.emailEmpresa ?? null,
       email_personal: input.emailPersonal,
       dni_nie: input.dniNie ?? null,
+      // Datos personales de la documentación (para que la gestoría los reciba).
+      numero_ss: input.numeroSs ?? null,
+      iban: input.iban ?? null,
+      direccion: input.direccion ?? null,
+      fecha_nacimiento: input.fechaNacimiento ?? null,
       telefono: input.telefono ?? null,
       fecha_alta: new Date().toISOString().slice(0, 10),
       estado: "Activo",

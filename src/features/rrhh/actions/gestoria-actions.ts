@@ -499,6 +499,17 @@ export async function enviarAltaGestoria(
     const res = await sendEmail({ to, subject, html, text, empresaId });
     if (!res.ok) return { ok: false, error: "No se pudo enviar el email (revisa el SMTP)." };
 
+    // Registrar el email en la actividad del candidato (aparece en la pestaña
+    // «Actividad» de su ficha, con su asunto y el HTML enviado).
+    {
+      const { registrarEmailEnHistorial } = await import(
+        "@/features/rrhh/services/registrar-email-historial"
+      );
+      await registrarEmailEnHistorial(admin, {
+        empresaId, empleadoId, asunto: subject, html: res.ok ? res.html : html,
+      });
+    }
+
     // Tick 1: aviso al departamento de RRHH (si está activado).
     if (cfg.data.notif_alta_gestoria) {
       await notificarRrhhGestoria({
