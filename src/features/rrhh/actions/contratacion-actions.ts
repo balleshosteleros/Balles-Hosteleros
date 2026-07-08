@@ -328,7 +328,11 @@ export async function contratarCandidato(input: ContratarInput): Promise<Contrat
   const enviarAcceso = input.enviarAcceso !== false;
   const enviarGestoria = input.enviarGestoria !== false;
 
-  // 4. Detección de duplicados (email/DNI) → reactivar
+  // 4. Detección de duplicados (email/DNI) → reactivar SOLO si está dado de baja.
+  // CRÍTICO: si el empleado que coincide por DNI/email está ACTIVO, NO es una
+  // recontratación: reactivar machacaría su puesto, departamento y el ROL de su
+  // usuario (bug que convirtió un DIRECTOR en camarero al contratar un candidato
+  // con el mismo DNI). En ese caso abortamos con un aviso claro y no tocamos nada.
   let empleadoExistente: { id: string; user_id: string | null } | null = null;
   {
     const orFilters: string[] = [];
@@ -336,8 +340,22 @@ export async function contratarCandidato(input: ContratarInput): Promise<Contrat
     if (dniNorm) orFilters.push(`dni_nie.eq.${dniNorm}`);
     if (orFilters.length > 0) {
       const { data: matches } = await admin
-        .from("empleados").select("id, user_id").eq("empresa_id", empresaId).or(orFilters.join(",")).limit(1);
-      if (matches && matches.length > 0) empleadoExistente = matches[0];
+        .from("empleados").select("id, user_id, estado, nombre, apellidos, puesto")
+        .eq("empresa_id", empresaId).or(orFilters.join(",")).limit(1);
+      if (matches && matches.length > 0) {
+        const m = matches[0];
+        const activo = String(m.estado ?? "").toLowerCase() === "activo";
+        if (activo) {
+          return {
+            ok: false,
+            error:
+              `Ya existe un empleado ACTIVO con ese DNI/email en esta empresa ` +
+              `(${`${m.nombre ?? ""} ${m.apellidos ?? ""}`.trim()}${m.puesto ? `, ${m.puesto}` : ""}). ` +
+              `No se puede contratar de nuevo sin darlo de baja antes: hacerlo sobrescribiría su puesto y su rol.`,
+          };
+        }
+        empleadoExistente = { id: m.id as string, user_id: (m.user_id as string | null) ?? null };
+      }
     }
   }
 

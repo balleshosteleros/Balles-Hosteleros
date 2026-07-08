@@ -33,6 +33,14 @@ export interface CrearFirmaInternoInput {
   observaciones?: string | null;
   /** UUID que se guarda en `enviado_por`. Para autosolicitudes (baja voluntaria) usar el user_id del propio empleado. */
   enviadoPorUserId: string;
+  /**
+   * Si true, el email de firma se manda al email PERSONAL del empleado (el de su
+   * candidatura), y solo si no lo tiene cae al de empresa. Se usa en el onboarding
+   * (contrato interno): es un documento personal del trabajador y debe llegarle a
+   * su correo, no al corporativo que pueda haber heredado. Default false (compat:
+   * empresa primero, luego personal).
+   */
+  preferirEmailPersonal?: boolean;
   /** Nombre que se muestra en el email de invitación. */
   enviadoPorNombre: string;
   /** Para audit log (opcional). */
@@ -101,8 +109,11 @@ export async function crearFirmaInterno(
       return { ok: false, error: "El empleado no pertenece a esa empresa" };
     }
 
-    const destino =
-      (emp.email_empresa as string | null) || (emp.email_personal as string | null);
+    const emailEmpresa = emp.email_empresa as string | null;
+    const emailPersonal = emp.email_personal as string | null;
+    const destino = input.preferirEmailPersonal
+      ? emailPersonal || emailEmpresa
+      : emailEmpresa || emailPersonal;
     if (!destino) {
       return { ok: false, error: "El empleado no tiene email para recibir la firma" };
     }

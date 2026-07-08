@@ -148,6 +148,9 @@ export async function iniciarContratacion(
       observaciones: "Contrato interno previo a la incorporación (PRP-070).",
       enviadoPorUserId: user.id,
       enviadoPorNombre: "RRHH",
+      // El contrato interno es un documento PERSONAL del trabajador: se envía a su
+      // email personal (el de su candidatura), no al corporativo heredado.
+      preferirEmailPersonal: true,
       emailAsunto: tplInterno?.asunto ?? null,
       emailIntro: tplInterno?.cuerpo ?? null,
       // Firma colocada automáticamente sobre la zona "Firmado" del contrato

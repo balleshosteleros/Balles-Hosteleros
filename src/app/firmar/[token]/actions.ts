@@ -30,6 +30,25 @@ async function getMeta() {
   return { ip, userAgent: h.get("user-agent") || null };
 }
 
+/**
+ * Documentos que genera y envía el SISTEMA en el onboarding (no una persona
+ * concreta): el «enviado por» debe ser la EMPRESA, no el usuario que pulsó el
+ * botón. Para el resto (p. ej. una baja voluntaria enviada por un admin) se
+ * muestra el nombre real de quien lo envió.
+ */
+const TIPOS_INSTITUCIONALES = new Set(["contrato_interno", "contrato_oficial"]);
+
+function resolverEnviadoPor(
+  tipoDoc: string | null | undefined,
+  empresaNombre: string | null | undefined,
+  usuario: { full_name?: string | null; email?: string | null } | null | undefined,
+): string {
+  if (TIPOS_INSTITUCIONALES.has(tipoDoc ?? "")) {
+    return (empresaNombre?.trim()) || "Recursos Humanos";
+  }
+  return (usuario?.full_name as string) || (usuario?.email as string) || "Administrador";
+}
+
 async function resolverToken(token: string) {
   const admin = createAdminClient();
   const tokenHash = hashToken(token);
@@ -172,7 +191,7 @@ export async function abrirDocumento(token: string): Promise<AbrirDocumentoResul
         zonaHoraria:
           ((empresa?.config_operativa as Record<string, unknown> | null)?.zonaHoraria as string | undefined)?.trim() ||
           "Europe/Madrid",
-        enviadoPor: (enviadoPorUser?.full_name as string) || (enviadoPorUser?.email as string) || "Administrador",
+        enviadoPor: resolverEnviadoPor(doc.tipo as string | null, empresa?.nombre as string | null, enviadoPorUser),
         enviadoEn: doc.enviado_en as string,
         pdfUrl: signed.data.signedUrl,
       },
@@ -509,7 +528,7 @@ export async function firmarDocumento(input: FirmarDocumentoInput): Promise<Firm
       empleadoNombre: `${emp?.nombre ?? ""} ${emp?.apellidos ?? ""}`.trim() || "—",
       empleadoDni: (emp?.dni_nie as string | null) ?? null,
       empleadoEmail,
-      enviadoPor: (enviadoPorUser?.full_name as string) || (enviadoPorUser?.email as string) || "Administrador",
+      enviadoPor: resolverEnviadoPor(doc.tipo as string | null, empresa?.nombre as string | null, enviadoPorUser),
       enviadoEn: doc.enviado_en as string,
       firmadoEn: firmadoEnIso,
       ipFirma: meta.ip,

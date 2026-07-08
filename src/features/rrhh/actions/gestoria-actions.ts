@@ -403,7 +403,9 @@ export async function enviarAltaGestoria(
       nombre: { label: "Nombre", value: nombre },
       dni_nie: { label: "DNI/NIE", value: emp.dni_nie },
       telefono: { label: "Teléfono", value: emp.telefono },
-      email: { label: "Email", value: emp.email_empresa || emp.email_personal },
+      // El email del trabajador para la gestoría es su email PERSONAL (dato de
+      // contacto real de su candidatura), no el corporativo que pueda haber heredado.
+      email: { label: "Email", value: emp.email_personal || emp.email_empresa },
       puesto: { label: "Puesto", value: `${emp.puesto ?? "—"}${cond?.nivel ? ` · Nivel ${cond.nivel}` : ""}` },
       primer_dia: { label: "Primer día", value: cond?.primer_dia ?? emp.fecha_alta },
       tipo_contrato: { label: "Tipo de contrato", value: cond?.tipo_contrato },
