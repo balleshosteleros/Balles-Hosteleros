@@ -38,7 +38,7 @@ export function appBaseUrl(): string {
     (process.env.NEXT_PUBLIC_VERCEL_URL
       ? `https://${process.env.NEXT_PUBLIC_VERCEL_URL}`
       : null) ??
-    "https://app.balleshosteleros.com";
+    "https://sistema.balleshosteleros.com";
   return raw.replace(/\/$/, "");
 }
 

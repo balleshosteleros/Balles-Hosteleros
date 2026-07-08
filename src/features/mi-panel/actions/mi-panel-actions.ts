@@ -2326,7 +2326,7 @@ async function onBajaContratoCreada(args: {
     pickCorreoEmpresa("correoRrhh") ?? pickCorreoEmpresa("correoGeneral");
   if (destinoEmpresa) {
     const appUrl =
-      process.env.NEXT_PUBLIC_APP_URL ?? "https://app.balleshosteleros.com";
+      process.env.NEXT_PUBLIC_APP_URL ?? "https://sistema.balleshosteleros.com";
     const { bajaContratoAvisoRrhhEmail } = await import(
       "@/lib/email/templates/baja-contrato-rrhh"
     );
