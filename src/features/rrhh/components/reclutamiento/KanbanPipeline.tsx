@@ -3,7 +3,6 @@ import {
   FASES_PRINCIPALES,
   FASES_PRINCIPALES_ORDER,
   ESTADOS_CONFIG,
-  ORIGEN_LABELS,
   getFasePrincipal,
   estadoRequiereResenas,
   estadoRequiereDocumentacion,
@@ -26,7 +25,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import {
-  ArrowLeft, Mail, MailCheck, MapPin,
+  ArrowLeft, Mail, MailCheck,
   Send, X, UsersRound, CheckCircle2,
   MinusCircle, XCircle, Star, CalendarDays, Eye, FileText,
   Building2, UserCog,
@@ -160,10 +159,6 @@ function CandidatoCard({
             <div className="flex items-center gap-1 min-w-0">
               <Mail className="h-3 w-3 shrink-0" />
               <span className="truncate">{candidato.email}</span>
-            </div>
-            <div className="flex items-center gap-1 min-w-0">
-              <MapPin className="h-3 w-3 shrink-0" />
-              <span className="truncate">{candidato.canal ? `${ORIGEN_LABELS[candidato.origen]} · ${candidato.canal}` : ORIGEN_LABELS[candidato.origen]}</span>
             </div>
           </div>
           {/* Fila inferior de indicadores: todos los iconos/badges juntos,
@@ -691,18 +686,21 @@ export function KanbanPipeline({ vacante, vacantes = [], onBack, onUpdateCandida
       return;
     }
     // Movimiento libre: cualquier estado/fase, hacia delante o hacia atrás.
-    // Emails automáticos al cambiar de fase: si están desactivados, se mueve sin
-    // correo y sin preguntar. Si están activos, se pide confirmación o se envía
-    // directamente según "Pedir confirmación antes de enviar cada email".
-    if (!config?.emails_auto_cambio_fase) {
+    // Emails automáticos al cambiar de fase. Comportamiento SEGURO por defecto:
+    // si la config aún no ha cargado (config === null) o no está definida, se
+    // PREGUNTA (no se salta el email en silencio). Solo si el usuario desactivó
+    // explícitamente los emails automáticos se mueve sin correo.
+    if (config && config.emails_auto_cambio_fase === false) {
       void performMove(c, estadoDestino, false);
       return;
     }
-    if (config.emails_pedir_confirmacion) {
-      setEmailConfirm({ candidato: c, estadoNuevo: estadoDestino });
+    // Emails activos (o config no cargada aún): pedir confirmación salvo que el
+    // usuario haya desactivado explícitamente "pedir confirmación".
+    if (config && config.emails_pedir_confirmacion === false) {
+      void performMove(c, estadoDestino, true);
       return;
     }
-    void performMove(c, estadoDestino, true);
+    setEmailConfirm({ candidato: c, estadoNuevo: estadoDestino });
   }, [config, performMove]);
 
   const handleConfirmMove = useCallback((enviarEmail: boolean) => {
