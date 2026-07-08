@@ -41,7 +41,7 @@ Sistema usable end-to-end por admin + empleado real en BACANAL, con smoke S1-S12
 | `FIRMA_OTP_PEPPER` | `openssl rand -base64 48` (distinto al anterior) | Igual |
 | `RESEND_API_KEY` | Resend dashboard | Verificar primero el transport real de `src/lib/email/send.ts`; si usa Resend, configurar. Si tiene fallback, documentarlo |
 | `RESEND_FROM_EMAIL` | Email con DKIM/SPF configurado en dominio empresa | Igual. Default sugerido: `firmas@balleshosteleros.com` |
-| `NEXT_PUBLIC_APP_URL` | URL del deploy actual | Vercel: prod `https://app.balleshosteleros.com`, preview `https://...vercel.app` por entorno |
+| `NEXT_PUBLIC_APP_URL` | URL del deploy actual | Vercel: prod `https://sistema.balleshosteleros.com`, preview `https://...vercel.app` por entorno |
 
 ⚠️ Los peppers deben ser **idénticos** entre entornos que compartan BD (un token hasheado con un pepper es inválido con otro). Distintos entre prod y staging si las BDs son separadas.
 

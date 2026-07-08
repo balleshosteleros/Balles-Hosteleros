@@ -242,7 +242,7 @@ GOCARDLESS_SECRET_ID=...
 GOCARDLESS_SECRET_KEY=...
 BANK_TOKENS_KEY=<32+ chars random — clave maestra cifrado tokens>
 CRON_SECRET=<ya existe — reutilizar>
-NEXT_PUBLIC_APP_URL=https://app.balleshosteleros.com   (para redirect callback)
+NEXT_PUBLIC_APP_URL=https://sistema.balleshosteleros.com   (para redirect callback)
 ```
 
 ### Decisiones de arquitectura clave

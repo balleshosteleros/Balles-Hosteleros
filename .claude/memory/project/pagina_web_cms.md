@@ -18,7 +18,7 @@ Submódulo Marketing > Página Web operativo desde 2026-04-18 (PRP-029).
 - `VERCEL_TOKEN` — PAT con scope Projects + Domains
 - `VERCEL_PROJECT_ID` — ID del proyecto destino
 - `VERCEL_TEAM_ID` — opcional si el proyecto vive en team scope
-- `APP_PRIMARY_HOSTS` — hosts del SaaS separados por coma (ej. `app.balleshosteleros.com,balleshosteleros.com`)
+- `APP_PRIMARY_HOSTS` — hosts del SaaS separados por coma (ej. `sistema.balleshosteleros.com,balleshosteleros.com`)
 - `PAGINA_WEB_IP_SALT` — salt para hash sha256 de IPs (RGPD)
 
 **Bloques soportados (11):** hero, galeria, menu, reservas, testimonios, cta, formulario, mapa, footer, texto_libre, video. Validación Zod por tipo en cada escritura. `texto_libre` se sanitiza server-side con DOMPurify.

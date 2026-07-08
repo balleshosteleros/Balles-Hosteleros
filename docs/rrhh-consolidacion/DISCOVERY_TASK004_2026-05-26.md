@@ -51,7 +51,7 @@ user_roles:         existe, columna `role` USER-DEFINED enum
 | 1 | **`FIRMA_TOKEN_PEPPER` ausente en `.env.local`** | `crypto.ts:getPepper` lanza `Error: Falta env FIRMA_TOKEN_PEPPER (mínimo 16 caracteres)` en cualquier creación/validación de token | Añadir variable de ≥32 chars random a `.env.local` y a Vercel env vars (todos los entornos). |
 | 2 | **`FIRMA_OTP_PEPPER` ausente en `.env.local`** | Mismo error en cualquier generación/validación de OTP | Igual. **DEBE ser distinto** al de tokens para que un fallo de pepper no exponga ambos. |
 | 3 | **`RESEND_API_KEY` ausente** (probable, no confirmado) | Emails de invitación + OTP + copia no se envían | Verificar config de `@/lib/email/send`. Si usa Resend, añadir keys. Si tiene fallback a otro transport (Supabase email?), documentarlo. |
-| 4 | **`NEXT_PUBLIC_APP_URL` ausente** | `email.ts` default a `https://app.balleshosteleros.com/firmar/...` — si ese dominio no apunta al deploy actual, los enlaces se rompen | Configurar en Vercel por entorno (preview vs prod). |
+| 4 | **`NEXT_PUBLIC_APP_URL` ausente** | `email.ts` default a `https://sistema.balleshosteleros.com/firmar/...` — si ese dominio no apunta al deploy actual, los enlaces se rompen | Configurar en Vercel por entorno (preview vs prod). |
 
 ### ⚠️ Race conditions reales
 

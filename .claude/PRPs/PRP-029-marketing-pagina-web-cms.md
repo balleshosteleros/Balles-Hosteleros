@@ -202,7 +202,7 @@ src/app/(public-site)/[[...slug]]/page.tsx                       # Catch-all res
 **Estrategia de resolución por hostname**
 
 - En `src/middleware.ts` (o en un nuevo `middleware` que convive con el proxy), detectar hostname:
-  - Si `host` coincide con el dominio principal del SaaS (`app.balleshosteleros.com`) → flujo normal (auth, panel).
+  - Si `host` coincide con el dominio principal del SaaS (`sistema.balleshosteleros.com`) → flujo normal (auth, panel).
   - Si `host` es un dominio de cliente registrado en `paginas_web_dominios` → rewrite interno a `/(public-site)/[[...slug]]?__host={host}` pasando hostname por header/param.
 - El catch-all lee el hostname vía `headers()`, consulta `hostname-resolver.ts`, obtiene `{empresa_id, pagina_id}`, y carga los bloques para SSR.
 

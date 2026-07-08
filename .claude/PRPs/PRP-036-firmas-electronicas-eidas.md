@@ -33,7 +33,7 @@ Convertir el módulo **RRHH → Firmas** (hoy 100 % mockup en `FirmasView.tsx` +
   - se calcula `sha256_original` y se persiste,
   - se crea fila en `firmas_documentos` con estado `pendiente`,
   - se genera un token único (32 bytes random base64url) y se guarda en `firmas_tokens` (single-use, expira con el plazo),
-  - se envía email vía Resend al empleado (a `email_empresa ?? email_personal`) con enlace `https://app.balleshosteleros.com/firmar/<token>`,
+  - se envía email vía Resend al empleado (a `email_empresa ?? email_personal`) con enlace `https://sistema.balleshosteleros.com/firmar/<token>`,
   - se registra evento `enviado` en `firmas_eventos`.
 - [ ] El empleado abre el enlace **sin login**, ve metadatos del documento (título, empresa, remitente, fecha de envío, expiración) y un visor PDF. Se registra evento `abierto` con IP + UA + timestamp.
 - [ ] Antes de firmar, el sistema le envía un **OTP de 6 dígitos** a su email (opcionalmente SMS si tiene `telefono` y el provider está configurado), válido 10 min y consumible solo 1 vez. Se registra evento `otp_enviado`.
@@ -61,7 +61,7 @@ Convertir el módulo **RRHH → Firmas** (hoy 100 % mockup en `FirmasView.tsx` +
    - Genera token: `crypto.randomBytes(32).toString('base64url')`; persiste hash bcrypt en `firmas_tokens` (no plain).
    - Envía email Resend con template React Email: asunto `"Tienes un documento para firmar — <título>"`, CTA `Firmar documento`, fallback texto plano.
    - Registra evento `enviado` con `prev_hash=null`.
-3. **Empleado abre email** → clic `https://app.balleshosteleros.com/firmar/<token>`:
+3. **Empleado abre email** → clic `https://sistema.balleshosteleros.com/firmar/<token>`:
    - Backend valida token (no expirado, no consumido, hash coincide) → si OK devuelve metadatos + signed URL del PDF.
    - Registra evento `abierto`.
    - Renderiza vista pública `FirmaPublicaView`: cabecera con logo empresa, datos remitente/destinatario, visor PDF (`<iframe>` o react-pdf), botones `Firmar` / `Rechazar`.
@@ -298,7 +298,7 @@ create policy "fe_read_empleado" on public.firmas_eventos for select to authenti
 ```
 RESEND_API_KEY=...
 RESEND_FROM_EMAIL=firmas@balleshosteleros.com
-NEXT_PUBLIC_APP_URL=https://app.balleshosteleros.com    (ya usado por PSD2)
+NEXT_PUBLIC_APP_URL=https://sistema.balleshosteleros.com    (ya usado por PSD2)
 CRON_SECRET=<ya existe — reutilizar>
 FIRMA_OTP_SECRET=<32+ chars — pepper extra para HMAC del OTP>    (opcional, mejora seguridad)
 ```
