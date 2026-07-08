@@ -33,6 +33,8 @@ import type {
   PlanTurno,
   TurnoCelda,
 } from "@/features/rrhh/actions/planificacion-actions";
+import type { FichadosCuadrante, TramoFichado } from "@/features/rrhh/actions/horas-actions";
+import { CeldaBarra } from "@/features/rrhh/components/horarios/CeldaBarra";
 
 export type Agrupacion = "departamentos" | "empleados" | "turnos";
 export type AreaValor = "operativa" | "administrativa";
@@ -68,6 +70,8 @@ interface CuadranteGridProps {
   /** Activa las zonas de drop (arrastrar turnos/patrones) y la × de quitar. */
   interactivo: boolean;
   onQuitar: (asignacionId: string) => void;
+  /** Fichajes por empleado/día para las barras (previsto vs fichado). */
+  fichados: FichadosCuadrante;
 }
 
 /** Datos que viajan al `over` en onDragEnd. */
@@ -99,6 +103,7 @@ export function CuadranteGrid({
   compacto,
   interactivo,
   onQuitar,
+  fichados,
 }: CuadranteGridProps) {
   const { empleados, turnos, celdas, coloresDepartamento } = planificacion;
   const turnoById = useMemo(
@@ -241,6 +246,7 @@ export function CuadranteGrid({
               compacto={compacto}
               dndActivo={dndActivo}
               onQuitar={onQuitar}
+              fichados={fichados}
             />
           )}
         </div>
@@ -570,6 +576,7 @@ function Celda({
   dropData,
   dndActivo,
   onQuitar,
+  fichado,
 }: {
   celdasTurno: TurnoCelda[] | undefined;
   turnoById: Map<string, PlanTurno>;
@@ -580,6 +587,7 @@ function Celda({
   dropData: DropData;
   dndActivo: boolean;
   onQuitar: (asignacionId: string) => void;
+  fichado: TramoFichado[] | undefined;
 }) {
   const { setNodeRef, isOver } = useDroppable({
     id: dropId,
@@ -615,6 +623,12 @@ function Celda({
           +{items.length - 1}
         </span>
       )}
+      {/* Barra previsto (gris) vs fichado (verde/azul/rojo). Solo tramos fijos
+          tienen ventana horaria; los flexibles no aportan gris (sin tramos). */}
+      <CeldaBarra
+        previsto={items.flatMap((i) => i.turno.tramos)}
+        fichado={fichado ?? []}
+      />
     </div>
   );
 }
@@ -633,6 +647,7 @@ function EmpleadosBody({
   compacto,
   dndActivo,
   onQuitar,
+  fichados,
 }: {
   empleados: PlanEmpleado[];
   dias: DiaCol[];
@@ -646,6 +661,7 @@ function EmpleadosBody({
   compacto: boolean;
   dndActivo: boolean;
   onQuitar: (asignacionId: string) => void;
+  fichados: FichadosCuadrante;
 }) {
   const filtrados = useMemo(
     () =>
@@ -727,6 +743,7 @@ function EmpleadosBody({
           }}
           dndActivo={dndActivo}
           onQuitar={onQuitar}
+          fichado={fichados[e.empleadoId]?.[d.iso]}
         />
       ))}
     </div>

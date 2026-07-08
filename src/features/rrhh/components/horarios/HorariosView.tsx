@@ -49,6 +49,11 @@ import {
   type AreaValor,
   type DropData,
 } from "@/features/rrhh/components/horarios/CuadranteGrid";
+import { LeyendaBarras } from "@/features/rrhh/components/horarios/CeldaBarra";
+import {
+  loadFichajesCuadrante,
+  type FichadosCuadrante,
+} from "@/features/rrhh/actions/horas-actions";
 import {
   PanelAsignacion,
   type DragData,
@@ -116,6 +121,8 @@ export function HorariosView() {
 
   const [plan, setPlan] = useState<Planificacion>(PLAN_VACIO);
   const [cargando, setCargando] = useState(true);
+  // Fichajes del rango por empleado/día, para las barras del cuadrante.
+  const [fichados, setFichados] = useState<FichadosCuadrante>({});
   useGlobalLoadingSync(cargando);
 
   const turnoById = useMemo(
@@ -225,6 +232,16 @@ export function HorariosView() {
       });
       setPlan(r.data);
       if (!silencioso) setCargando(false);
+      // Fichajes del rango para las barras (previsto vs fichado). No bloquea la
+      // rejilla: se pintan cuando llegan.
+      const empIds = r.data.empleados.map((e) => e.empleadoId);
+      if (empIds.length > 0) {
+        void loadFichajesCuadrante(empIds, desdeISO, hastaISO).then((fr) => {
+          if (fr.ok) setFichados(fr.data);
+        });
+      } else {
+        setFichados({});
+      }
     },
     [empresaId, desdeISO, hastaISO, cuadranteId],
   );
@@ -410,7 +427,11 @@ export function HorariosView() {
               compacto={periodo === "mes"}
               interactivo={panelOpen}
               onQuitar={handleQuitar}
+              fichados={fichados}
             />
+            <div className="mt-3 px-1">
+              <LeyendaBarras />
+            </div>
           </div>
           {panelOpen && (
             <PanelAsignacion
