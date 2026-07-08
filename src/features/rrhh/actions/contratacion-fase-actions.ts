@@ -87,6 +87,9 @@ export async function iniciarContratacion(
     emailEmpresa: input.emailEmpresa ?? null,
     enviarAcceso: false,
     enviarGestoria,
+    // Entrar en Contratación ES el acto de contratar: el candidato aún está en su
+    // fase anterior (Selección, etc.), así que se permite desde cualquier fase.
+    permitirDesdeCualquierFase: true,
     destino: { fase: "contratacion", estado: "contratacion" },
   });
   if (!contratado.ok || !contratado.empleadoId) {

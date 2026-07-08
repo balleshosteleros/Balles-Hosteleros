@@ -90,6 +90,14 @@ export interface ContratarInput {
    */
   enviarGestoria?: boolean;
   /**
+   * Si true, se permite contratar desde CUALQUIER fase previa (no solo
+   * Contratación/Prueba/Empleado). Lo usa la ENTRADA en Contratación: arrastrar
+   * el candidato a esa columna es precisamente el acto de contratarlo, y en ese
+   * momento el candidato todavía está en su fase anterior (p. ej. Selección).
+   * Default false (el resto de flujos siguen exigiendo la fase de contratación).
+   */
+  permitirDesdeCualquierFase?: boolean;
+  /**
    * Fase/estado en que queda el candidato tras crear el empleado. Por defecto
    * (compat) pasa a `seleccionado`/`empleado`. Al entrar en Contratación se pasa
    * `{ fase: "contratacion", estado: "contratacion" }`.
@@ -228,6 +236,7 @@ export async function contratarCandidato(input: ContratarInput): Promise<Contrat
     "contrato_oficial_subido", "contrato_oficial_firmado", "alta_completada",
   ]);
   const estadoOk =
+    input.permitirDesdeCualquierFase ||
     cand.estado === "prueba" || cand.estado === "empleado" || ESTADOS_CONTRATACION.has(cand.estado);
   if (!estadoOk) {
     return { ok: false, error: "Solo se puede contratar a candidatos en las fases Contratación, Prueba o Empleado." };
