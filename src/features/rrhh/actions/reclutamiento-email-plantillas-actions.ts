@@ -455,11 +455,16 @@ export async function previewReclutamientoFaseEmail(
     }
   }
 
-  // Fase «Formación»: resuelve {{enlace_formacion}} al CURSO del puesto de la
-  // vacante del candidato (igual que el envío real). Si no se resuelve, muestra
+  // Fase «Formación»: resuelve {{enlace_formacion}} igual que el envío pero SIN
+  // efectos (persistir=false: no genera token nuevo). Si aún no hay token, deja
   // un texto-placeholder legible.
   if (estado === "formacion") {
-    const enlace = await resolverEnlaceFormacion(supabase, empresaId, candidatoId);
+    const enlace = await resolverEnlaceFormacion(
+      supabase,
+      empresaId,
+      candidatoId,
+      false,
+    );
     vars.enlace_formacion =
       enlace || "(configura la URL de formación en Ajustes → RRHH → Reclutamiento)";
   }
@@ -767,11 +772,16 @@ export async function enviarReclutamientoFaseEmail(
     vars.documentacion_dias_validez = String(DOCUMENTACION_TOKEN_DIAS);
   }
 
-  // Fase «Formación»: resuelve {{enlace_formacion}} al CURSO del puesto de la
-  // vacante del candidato (1 puesto = 1 curso). Si no hay puesto/curso, cae a la
-  // URL genérica de Ajustes → RRHH → Reclutamiento.
+  // Fase «Formación»: resuelve {{enlace_formacion}} al enlace PÚBLICO por token
+  // del candidato (/formacion/<token>), que muestra el curso del puesto de su
+  // vacante sin login. persistir=true genera/renueva el token al enviar.
   if (estado === "formacion") {
-    vars.enlace_formacion = await resolverEnlaceFormacion(supabase, empresaId, candidatoId);
+    vars.enlace_formacion = await resolverEnlaceFormacion(
+      supabase,
+      empresaId,
+      candidatoId,
+      true,
+    );
   }
 
   const subject = sustituirVariablesReclutamiento(tpl.asunto, vars);
@@ -832,25 +842,33 @@ export async function enviarReclutamientoFaseEmail(
 /**
  * Resuelve {{enlace_formacion}} para un candidato concreto.
  *
- * El enlace apunta al CURSO del puesto de la vacante del candidato (relación
- * 1 puesto = 1 curso): candidato → vacante → puesto → curso. Así cada correo de
- * la fase «Formación» lleva al alumno directo a la formación de SU puesto.
+ * En la fase «Formación» el candidato AÚN NO tiene cuenta (el usuario se crea al
+ * entrar en «Contratación»), así que el enlace es PÚBLICO por token:
+ * `/formacion/<token>`. Esa página resuelve el curso del puesto de su vacante
+ * (candidato → vacante → puesto → curso; 1 puesto = 1 curso) y lo muestra sin
+ * login. El token se guarda en `candidatos.formacion_token`.
  *
- * Si el candidato no tiene vacante/puesto (o el curso no se puede resolver),
- * cae a la URL genérica configurada en Ajustes → RRHH → Reclutamiento
- * (`reclutamiento_config.formacion_url`).
+ * `persistir` = true (envío real) genera/renueva el token con caducidad +7 días.
+ * `persistir` = false (previa) solo lee el token existente para no tener efectos.
+ *
+ * Si el candidato no tiene vacante/puesto/curso, cae a la URL genérica de
+ * Ajustes → RRHH → Reclutamiento (`reclutamiento_config.formacion_url`).
  */
 async function resolverEnlaceFormacion(
   supabase: Awaited<ReturnType<typeof ctx>>["supabase"],
   empresaId: string,
   candidatoId: string,
+  persistir: boolean,
 ): Promise<string> {
-  const { appBaseUrl } = await import("@/features/rrhh/lib/documentacion-candidato");
+  const { enlaceFormacionPublica, asegurarTokenFormacion } = await import(
+    "@/features/rrhh/lib/documentacion-candidato"
+  );
 
-  // candidato → vacante → puesto → curso del puesto.
+  // candidato → vacante → puesto. Solo si tiene puesto tiene sentido el enlace
+  // público (que resuelve el curso de ese puesto).
   const { data: cand } = await supabase
     .from("candidatos")
-    .select("vacante_id")
+    .select("vacante_id, formacion_token")
     .eq("id", candidatoId)
     .eq("empresa_id", empresaId)
     .maybeSingle();
@@ -868,13 +886,20 @@ async function resolverEnlaceFormacion(
   }
 
   if (puestoId) {
-    const { getCursoDePuesto } = await import(
-      "@/features/formacion/actions/formacion-actions"
-    );
-    const res = await getCursoDePuesto(puestoId);
-    if (res.ok && res.cursoId) {
-      return `${appBaseUrl()}/mi-panel/formacion/curso/${res.cursoId}`;
+    let token = (cand?.formacion_token as string | null) ?? null;
+    if (persistir) {
+      // Solo el envío real tiene efectos: garantiza que el curso del puesto
+      // exista (para que la página no muestre "en preparación") y genera/renueva
+      // el token del enlace público. La previa no crea nada.
+      const { getCursoDePuesto } = await import(
+        "@/features/formacion/actions/formacion-actions"
+      );
+      await getCursoDePuesto(puestoId);
+      token = await asegurarTokenFormacion(supabase, candidatoId, empresaId);
     }
+    if (token) return enlaceFormacionPublica(token);
+    // Sin token todavía (previa antes del primer envío): texto-placeholder.
+    if (!persistir) return "(se generará un enlace personal al enviar)";
   }
 
   // Fallback: URL genérica de formación configurada por empresa.

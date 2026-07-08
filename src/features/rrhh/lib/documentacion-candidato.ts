@@ -47,6 +47,49 @@ export function enlaceDocumentacion(token: string): string {
   return `${appBaseUrl()}/documentacion/${token}`;
 }
 
+/** Días que el enlace público de formación permanece válido desde su envío. */
+export const FORMACION_TOKEN_DIAS = 7;
+
+/** Construye la URL pública del visor de formación a partir del token. */
+export function enlaceFormacionPublica(token: string): string {
+  return `${appBaseUrl()}/formacion/${token}`;
+}
+
+/**
+ * Devuelve el token del enlace público de formación del candidato, generándolo
+ * si no existe (perezoso) y RENOVANDO su caducidad a +7 días en cada envío
+ * (reenviar el correo reinicia el plazo). Espejo de `asegurarTokenDocumentacion`.
+ * Best-effort: si falla la escritura, devuelve el token igualmente.
+ */
+export async function asegurarTokenFormacion(
+  supabase: SupabaseClient,
+  candidatoId: string,
+  empresaId: string,
+): Promise<string | null> {
+  const { data: cand } = await supabase
+    .from("candidatos")
+    .select("formacion_token")
+    .eq("id", candidatoId)
+    .eq("empresa_id", empresaId)
+    .maybeSingle();
+
+  const token = (cand?.formacion_token as string | null) ?? crypto.randomUUID();
+  const expira = new Date(
+    Date.now() + FORMACION_TOKEN_DIAS * 24 * 60 * 60 * 1000,
+  ).toISOString();
+
+  const { error } = await supabase
+    .from("candidatos")
+    .update({ formacion_token: token, formacion_token_expira_en: expira })
+    .eq("id", candidatoId)
+    .eq("empresa_id", empresaId);
+  if (error) {
+    console.error("[formacion] no se pudo generar/renovar token:", error.message);
+    return token; // best-effort
+  }
+  return token;
+}
+
 /** Fecha de caducidad del enlace: ahora + DOCUMENTACION_TOKEN_DIAS días. */
 export function fechaCaducidadDocumentacion(): string {
   return new Date(
