@@ -112,10 +112,11 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
   const { title: headerLabel, icon: ModuleIcon } = getRouteMeta(pathname);
 
-  const rolLabel =
-    roles.length > 0
-      ? roles[0].charAt(0).toUpperCase() + roles[0].slice(1)
-      : "—";
+  // El rol que se muestra bajo el nombre es el ROL REAL del usuario (rol_label:
+  // DIRECCIÓN, SALA, COCINA, GESTORÍA…), NO el valor técnico de acceso
+  // (director/empleado). «Empleado» no es un rol: si un usuario de SALA aparecía
+  // como «EMPLEADO» era porque se pintaba roles[0] (técnico) en vez de rol_label.
+  const rolLabel = profile?.rol_label?.trim() || "—";
 
   const router = useRouter();
   const userEmail = profile?.email ?? user?.email ?? "";
