@@ -8,15 +8,14 @@ import { normalizarDniNie } from "@/features/rrhh/lib/documentacion-validacion";
 import {
   listEmpleadosParaPagos,
   loadPagos,
-  loadHorasMes,
   savePago,
   enviarConfirmacionesPago,
   reabrirConfirmacionPago,
   puedeReabrirPagos,
   marcarPagado,
   type PagoGuardado,
-  type HorasMesRow,
 } from "@/features/rrhh/actions/pagos-actions";
+import { loadHorasMes, type HorasMesRow } from "@/features/rrhh/actions/horas-actions";
 import {
   procesarNominasLeidas,
   getNominaArchivoUrl,

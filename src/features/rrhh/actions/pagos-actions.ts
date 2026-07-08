@@ -10,7 +10,6 @@ import {
   type LiquidacionDetalle,
 } from "@/features/rrhh/services/nominas/rrhh-pagos-confirmacion";
 import { nombreMes } from "@/features/rrhh/services/nominas/nominas-gestoria";
-import { horasMes, type HorasMesEmpleado } from "@/features/rrhh/services/horas/horas-mes";
 import { getZonaHorariaEmpresa } from "@/features/empresa/lib/empresa-server";
 import { formatFechaEnZona } from "@/features/empresa/lib/zona-horaria";
 
@@ -626,28 +625,6 @@ export async function listMisPagosAbonados(): Promise<{ ok: boolean; data: PagoA
   }
 }
 
-// ---------------------------------------------------------------------------
-// Horas del mes por empleado (teóricas del horario vs fichadas normales/extras).
-// Se cargan aparte de los pagos porque requieren recorrer el horario y los
-// fichajes; la tabla las muestra como contador y balance por empleado.
-// ---------------------------------------------------------------------------
-
-export type HorasMesRow = HorasMesEmpleado & { empleadoId: string };
-
-export async function loadHorasMes(
-  periodo: string,
-  empleadoIds: string[],
-): Promise<{ ok: boolean; data: HorasMesRow[] }> {
-  try {
-    const { supabase, empresaId } = await getAppContext();
-    const ids = empleadoIds.filter((id) => id && !id.startsWith("ext-"));
-    if (!empresaId || ids.length === 0) return { ok: true, data: [] };
-    const mapa = await horasMes(supabase, empresaId, ids, periodo);
-    const data: HorasMesRow[] = [];
-    for (const [empleadoId, h] of mapa) data.push({ empleadoId, ...h });
-    return { ok: true, data };
-  } catch (err) {
-    console.error("[rrhh] loadHorasMes:", err);
-    return { ok: false, data: [] };
-  }
-}
+// Las horas del mes por empleado (teóricas vs fichadas normales/extras) viven en
+// la acción compartida `@/features/rrhh/actions/horas-actions` (loadHorasMes),
+// para que Pagos, Horarios y el panel del trabajador usen el MISMO dato.
