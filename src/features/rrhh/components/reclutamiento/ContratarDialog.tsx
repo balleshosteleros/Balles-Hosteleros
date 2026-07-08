@@ -2,17 +2,22 @@
 
 import { useEffect, useState, useTransition } from "react";
 import { toast } from "sonner";
-import { Loader2, UserCheck, AlertTriangle } from "lucide-react";
+import { Loader2, UserCheck, AlertTriangle, Mail, Send, ArrowLeft, Building2, User } from "lucide-react";
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import { listPuestosCatalogo, listDepartamentosCatalogo } from "@/features/rrhh/actions/vacantes-actions";
 import { listLocales } from "@/features/ajustes/actions/locales-actions";
 import { contratarCandidato } from "@/features/rrhh/actions/contratacion-actions";
-import { iniciarContratacion } from "@/features/rrhh/actions/contratacion-fase-actions";
+import {
+  iniciarContratacion,
+  previewContratacionEmails,
+  type EmailContratacionPreview,
+} from "@/features/rrhh/actions/contratacion-fase-actions";
 
 interface PuestoRef { id: string; nombre: string; departamento_id?: string | null }
 interface DeptoRef { id: string; nombre: string; area?: string | null }
@@ -53,6 +58,12 @@ export function ContratarDialog({ open, onOpenChange, candidato, onDone, variant
   const [emailEmpresa, setEmailEmpresa] = useState("");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
+  // Wizard de «iniciar contratación»: paso 1 = datos, paso 2 = confirmar correos.
+  const [paso, setPaso] = useState<"datos" | "emails">("datos");
+  const [emails, setEmails] = useState<EmailContratacionPreview[] | null>(null);
+  const [enviarFlags, setEnviarFlags] = useState<Record<string, boolean>>({});
+  const [cargandoPreview, setCargandoPreview] = useState(false);
+
   const [pending, startTransition] = useTransition();
 
   const puestoSel = puestos.find((p) => p.id === puestoId) ?? null;
@@ -70,6 +81,9 @@ export function ContratarDialog({ open, onOpenChange, candidato, onDone, variant
     setPrimerDia(hoy());
     setEmailEmpresa("");
     setErrorMsg(null);
+    setPaso("datos");
+    setEmails(null);
+    setEnviarFlags({});
     // Default inmediato: el puesto de la vacante sale ya seleccionado aunque el
     // catálogo aún esté cargando (sin esperar al fetch).
     setPuestoId(vacantePuestoId ?? "");
@@ -84,6 +98,68 @@ export function ContratarDialog({ open, onOpenChange, candidato, onDone, variant
     );
   }, [open, candidatoId, vacantePuestoId]);
 
+  // Valida los datos y, en la variante «iniciar», avanza al paso de confirmar los
+  // correos (carga la vista previa de cada email con su destinatario real).
+  function irAConfirmarEmails() {
+    if (!candidato) return;
+    if (!puestoId) { toast.error("Selecciona el puesto"); return; }
+    if (!primerDia) { toast.error("Indica el primer día de trabajo"); return; }
+    if (!localId) { toast.error("Selecciona el local"); return; }
+    if (esAdministrativo && !emailEmpresa.trim()) { toast.error("Los puestos administrativos requieren email de empresa"); return; }
+    setErrorMsg(null);
+    setCargandoPreview(true);
+    startTransition(async () => {
+      const res = await previewContratacionEmails(candidato.id);
+      setCargandoPreview(false);
+      if (!res.ok || !res.emails) {
+        toast.error(res.error ?? "No se pudo preparar la vista previa de correos");
+        return;
+      }
+      setEmails(res.emails);
+      // Por defecto, marcar para enviar los que están disponibles.
+      setEnviarFlags(Object.fromEntries(res.emails.map((e) => [e.clave, e.disponible])));
+      setPaso("emails");
+    });
+  }
+
+  // Ejecuta la contratación respetando qué correos confirmó el usuario.
+  function confirmarYEnviar() {
+    if (!candidato) return;
+    startTransition(async () => {
+      try {
+        const res = await iniciarContratacion({
+          candidatoId: candidato.id,
+          puestoId,
+          primerDia,
+          localId,
+          emailEmpresa: esAdministrativo ? emailEmpresa.trim() : null,
+          enviarGestoria: enviarFlags["gestoria_alta"] ?? false,
+          enviarContratoInterno: enviarFlags["contrato_interno"] ?? false,
+        });
+        if (res.ok && res.empleadoId) {
+          const partes: string[] = [];
+          if (res.gestoriaEnviada) partes.push("alta a gestoría");
+          if (res.contratoInternoEnviado) partes.push("contrato interno");
+          const description = partes.length
+            ? `${partes.join(" y ").charAt(0).toUpperCase()}${partes.join(" y ").slice(1)} enviados`
+            : "Empleado creado (sin correos)";
+          toast.success("Contratación iniciada", { description });
+          setErrorMsg(null);
+          onDone();
+          onOpenChange(false);
+        } else {
+          const msg = res.error ?? "No se pudo iniciar la contratación";
+          setErrorMsg(msg);
+          toast.error(msg, { description: "Pulsa «Confirmar y enviar» de nuevo para reintentar." });
+        }
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : "Error inesperado al contratar";
+        setErrorMsg(msg);
+        toast.error("No se pudo completar la contratación", { description: msg });
+      }
+    });
+  }
+
   function contratar() {
     if (!candidato) return;
     if (!puestoId) { toast.error("Selecciona el puesto"); return; }
@@ -92,34 +168,6 @@ export function ContratarDialog({ open, onOpenChange, candidato, onDone, variant
     if (esAdministrativo && !emailEmpresa.trim()) { toast.error("Los puestos administrativos requieren email de empresa"); return; }
     startTransition(async () => {
       try {
-      if (esIniciar) {
-        const res = await iniciarContratacion({
-          candidatoId: candidato.id,
-          puestoId,
-          primerDia,
-          localId,
-          emailEmpresa: esAdministrativo ? emailEmpresa.trim() : null,
-        });
-        if (res.ok && res.empleadoId) {
-          const partes: string[] = [];
-          if (res.gestoriaEnviada) partes.push("alta a gestoría");
-          if (res.contratoInternoEnviado) partes.push("contrato interno");
-          const description = partes.length
-            ? `${partes.join(" y ").charAt(0).toUpperCase()}${partes.join(" y ").slice(1)} enviados`
-            : "Empleado creado";
-          toast.success("Contratación iniciada", { description });
-          setErrorMsg(null);
-          onDone();
-          onOpenChange(false);
-        } else {
-          // El diálogo NO se cierra: se muestra el error en un banner visible y
-          // basta con volver a pulsar para reintentar en un solo paso.
-          const msg = res.error ?? "No se pudo iniciar la contratación";
-          setErrorMsg(msg);
-          toast.error(msg, { description: "Pulsa «Iniciar contratación» de nuevo para reintentar." });
-        }
-        return;
-      }
       const res = await contratarCandidato({
         candidatoId: candidato.id,
         puestoId,
@@ -180,11 +228,66 @@ export function ContratarDialog({ open, onOpenChange, candidato, onDone, variant
           </DialogTitle>
           <DialogDescription>
             {esIniciar
-              ? "Se creará el empleado, se enviará el alta a la gestoría y el contrato interno a firmar."
+              ? (paso === "datos"
+                  ? "Se creará el empleado. En el siguiente paso confirmarás qué correos enviar."
+                  : "Confirma qué correos quieres enviar. Puedes activar o desactivar cada uno.")
               : "Confirma el puesto. Se creará el empleado y su usuario heredando las condiciones."}
           </DialogDescription>
         </DialogHeader>
 
+        {/* PASO 2 (solo variante iniciar): confirmar los correos a enviar. */}
+        {esIniciar && paso === "emails" ? (
+          <div className="space-y-3 py-2">
+            {errorMsg && (
+              <div role="alert" className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2.5 text-sm text-destructive">
+                <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+                <p className="text-xs text-destructive/90">{errorMsg}</p>
+              </div>
+            )}
+            <p className="text-sm text-muted-foreground">
+              Al iniciar la contratación de <span className="font-medium text-foreground">{nombreCand}</span> se pueden enviar estos correos:
+            </p>
+            {(emails ?? []).map((em) => {
+              const marcado = enviarFlags[em.clave] ?? false;
+              return (
+                <div
+                  key={em.clave}
+                  className={`rounded-lg border p-3 space-y-2 ${em.disponible ? "border-border bg-muted/20" : "border-amber-200 bg-amber-50"}`}
+                >
+                  <div className="flex items-start gap-2.5">
+                    <Checkbox
+                      id={`em-${em.clave}`}
+                      checked={marcado}
+                      disabled={!em.disponible}
+                      onCheckedChange={(v) =>
+                        setEnviarFlags((f) => ({ ...f, [em.clave]: v === true }))
+                      }
+                      className="mt-0.5"
+                    />
+                    <div className="min-w-0 flex-1 space-y-1">
+                      <Label htmlFor={`em-${em.clave}`} className="text-sm font-medium flex items-center gap-1.5 cursor-pointer">
+                        <Mail className="h-3.5 w-3.5 text-muted-foreground" /> {em.titulo}
+                      </Label>
+                      <p className="text-xs text-muted-foreground flex items-center gap-1">
+                        {em.clave === "gestoria_alta" ? <Building2 className="h-3 w-3" /> : <User className="h-3 w-3" />}
+                        <span className="font-medium">{em.destinatarioLabel}:</span>{" "}
+                        {em.para || <span className="italic">sin destinatario</span>}
+                      </p>
+                      {em.disponible ? (
+                        <>
+                          <p className="text-xs text-muted-foreground"><span className="font-medium">Asunto:</span> {em.asunto}</p>
+                          <p className="text-xs text-muted-foreground leading-relaxed whitespace-pre-wrap max-h-[22vh] overflow-y-auto pr-1">{em.cuerpo}</p>
+                        </>
+                      ) : (
+                        <p className="text-xs text-amber-700">{em.motivoNoDisponible}</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
         <div className="space-y-4 py-2">
             {errorMsg && (
               <div
@@ -254,14 +357,30 @@ export function ContratarDialog({ open, onOpenChange, candidato, onDone, variant
               </p>
             )}
         </div>
+        )}
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={pending}>Cancelar</Button>
-          <Button onClick={contratar} disabled={pending}>
-            {pending
-              ? <><Loader2 className="h-4 w-4 mr-1 animate-spin" /> {esIniciar ? "Iniciando…" : "Contratando…"}</>
-              : (esIniciar ? "Iniciar contratación" : "Contratar")}
-          </Button>
+          {esIniciar && paso === "emails" ? (
+            <>
+              <Button variant="outline" onClick={() => { setPaso("datos"); setErrorMsg(null); }} disabled={pending} className="gap-1.5">
+                <ArrowLeft className="h-4 w-4" /> Atrás
+              </Button>
+              <Button onClick={confirmarYEnviar} disabled={pending} className="gap-1.5">
+                {pending
+                  ? <><Loader2 className="h-4 w-4 animate-spin" /> Iniciando…</>
+                  : <><Send className="h-4 w-4" /> Confirmar y enviar</>}
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button variant="outline" onClick={() => onOpenChange(false)} disabled={pending || cargandoPreview}>Cancelar</Button>
+              <Button onClick={esIniciar ? irAConfirmarEmails : contratar} disabled={pending || cargandoPreview}>
+                {(pending || cargandoPreview)
+                  ? <><Loader2 className="h-4 w-4 mr-1 animate-spin" /> {esIniciar ? "Preparando…" : "Contratando…"}</>
+                  : (esIniciar ? "Continuar" : "Contratar")}
+              </Button>
+            </>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>

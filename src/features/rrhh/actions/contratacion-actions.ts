@@ -84,6 +84,12 @@ export interface ContratarInput {
    */
   enviarAcceso?: boolean;
   /**
+   * Si false, NO se envía el alta de contrato a la gestoría. Al entrar en
+   * Contratación el usuario confirma este envío en el diálogo (preview por email).
+   * Default true (comportamiento clásico).
+   */
+  enviarGestoria?: boolean;
+  /**
    * Fase/estado en que queda el candidato tras crear el empleado. Por defecto
    * (compat) pasa a `seleccionado`/`empleado`. Al entrar en Contratación se pasa
    * `{ fase: "contratacion", estado: "contratacion" }`.
@@ -311,6 +317,7 @@ export async function contratarCandidato(input: ContratarInput): Promise<Contrat
   const destinoFase = input.destino?.fase ?? "seleccionado";
   const destinoEstado = input.destino?.estado ?? "empleado";
   const enviarAcceso = input.enviarAcceso !== false;
+  const enviarGestoria = input.enviarGestoria !== false;
 
   // 4. Detección de duplicados (email/DNI) → reactivar
   let empleadoExistente: { id: string; user_id: string | null } | null = null;
@@ -371,7 +378,10 @@ export async function contratarCandidato(input: ContratarInput): Promise<Contrat
     });
 
     // Alta automática a la gestoría (tolerante a fallo: no bloquea la contratación).
-    const gestoriaEnviada = await enviarAltaGestoriaSeguro(empleadoExistente.id);
+    // Solo si el usuario confirmó el envío (o compat: no se pasó el flag).
+    const gestoriaEnviada = enviarGestoria
+      ? await enviarAltaGestoriaSeguro(empleadoExistente.id)
+      : false;
 
     revalidatePath("/rrhh/reclutamiento");
     revalidatePath("/rrhh/empleados");
@@ -461,7 +471,9 @@ export async function contratarCandidato(input: ContratarInput): Promise<Contrat
   }
 
   // 7. Alta automática a la gestoría (tolerante a fallo: no bloquea la contratación).
-  const gestoriaEnviada = await enviarAltaGestoriaSeguro(alta.empleadoId);
+  const gestoriaEnviada = enviarGestoria
+    ? await enviarAltaGestoriaSeguro(alta.empleadoId)
+    : false;
 
   revalidatePath("/rrhh/reclutamiento");
   revalidatePath("/rrhh/empleados");

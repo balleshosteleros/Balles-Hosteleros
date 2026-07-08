@@ -37,6 +37,12 @@ export interface IniciarContratacionInput {
   localId: string;
   /** Solo para puestos administrativos. */
   emailEmpresa?: string | null;
+  /**
+   * Qué correos enviar. El usuario los confirma uno a uno en el diálogo de
+   * contratación (preview por email). Si se omiten, se envían ambos (compat).
+   */
+  enviarGestoria?: boolean;
+  enviarContratoInterno?: boolean;
 }
 
 export interface IniciarContratacionResult {
@@ -66,7 +72,12 @@ export async function iniciarContratacion(
     return { ok: false, error: e instanceof Error ? e.message : "Sin permisos" };
   }
 
-  // 1. Materializar el empleado (alta gestoría incluida). Sin email de acceso.
+  // Qué correos enviar (confirmados uno a uno en el diálogo). Si no llegan, se
+  // envían ambos (compat con llamadas antiguas).
+  const enviarGestoria = input.enviarGestoria !== false;
+  const enviarContratoInterno = input.enviarContratoInterno !== false;
+
+  // 1. Materializar el empleado (alta gestoría según confirmación). Sin email de acceso.
   const contratado = await contratarCandidato({
     candidatoId: input.candidatoId,
     puestoId: input.puestoId,
@@ -75,6 +86,7 @@ export async function iniciarContratacion(
     localId: input.localId,
     emailEmpresa: input.emailEmpresa ?? null,
     enviarAcceso: false,
+    enviarGestoria,
     destino: { fase: "contratacion", estado: "contratacion" },
   });
   if (!contratado.ok || !contratado.empleadoId) {
@@ -82,9 +94,9 @@ export async function iniciarContratacion(
   }
   const empleadoId = contratado.empleadoId;
 
-  // 2. Generar y enviar a firmar el CONTRATO INTERNO.
+  // 2. Generar y enviar a firmar el CONTRATO INTERNO (solo si se confirmó).
   let contratoInternoEnviado = false;
-  try {
+  if (enviarContratoInterno) try {
     const admin = createAdminClient();
     const { data: emp } = await admin
       .from("empleados")
@@ -162,4 +174,99 @@ export async function iniciarContratacion(
     gestoriaEnviada: contratado.gestoriaEnviada,
     contratoInternoEnviado,
   };
+}
+
+/**
+ * Un correo que se enviaría al iniciar la contratación, para confirmarlo en el
+ * diálogo (preview por email). `disponible=false` cuando falta el destinatario
+ * (p. ej. sin correo de gestoría en Ajustes → Empresa): se muestra pero no se
+ * puede marcar para enviar.
+ */
+export interface EmailContratacionPreview {
+  clave: "gestoria_alta" | "contrato_interno";
+  titulo: string;
+  destinatarioLabel: string;
+  para: string;
+  asunto: string;
+  cuerpo: string;
+  disponible: boolean;
+  motivoNoDisponible?: string;
+}
+
+/**
+ * Lista los correos que se enviarían al INICIAR la contratación de un candidato:
+ *   1. Alta a la GESTORÍA (destinatario: correoGestoria de Ajustes → Empresa).
+ *   2. CONTRATO INTERNO a firmar (destinatario: el candidato/empleado).
+ * Cada uno con su destinatario REAL resuelto, para que el usuario confirme uno a
+ * uno antes de enviar. No tiene efectos (no crea nada, no envía nada).
+ */
+export async function previewContratacionEmails(
+  candidatoId: string,
+): Promise<{ ok: boolean; error?: string; emails?: EmailContratacionPreview[] }> {
+  const supabase = await createServerClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: "No autenticado" };
+  const empresaId = await getEmpresaActivaForUser(supabase, user.id);
+  if (!empresaId) return { ok: false, error: "No autenticado" };
+
+  try {
+    const admin = createAdminClient();
+    const { data: cand } = await admin
+      .from("candidatos")
+      .select("nombre, apellidos, email")
+      .eq("id", candidatoId)
+      .eq("empresa_id", empresaId)
+      .maybeSingle();
+    if (!cand) return { ok: false, error: "Candidato no encontrado" };
+
+    const empresaNombre = await admin
+      .from("empresas").select("nombre").eq("id", empresaId).maybeSingle()
+      .then((r) => (r.data?.nombre as string) ?? "la empresa");
+    const nombreCompleto = `${cand.nombre ?? ""} ${cand.apellidos ?? ""}`.trim();
+    const emailCandidato = (cand.email as string | null) ?? null;
+
+    const { resolverPlantillaOnboarding, resolverDestinatario, PLANTILLAS_ONBOARDING } = await import(
+      "@/features/rrhh/services/email-plantillas/resolver"
+    );
+    const { etiquetaDestino } = await import("@/features/rrhh/lib/plantillas-onboarding");
+    const vars = { candidato_nombre: cand.nombre ?? "", candidato_nombre_completo: nombreCompleto, empresa_nombre: empresaNombre };
+
+    // 1. Alta a la gestoría.
+    const tplGest = await resolverPlantillaOnboarding(admin, empresaId, PLANTILLAS_ONBOARDING.gestoriaAlta, vars);
+    const dstGest = tplGest
+      ? await resolverDestinatario(admin, empresaId, tplGest.destino, tplGest.destinoEmail, emailCandidato)
+      : await resolverDestinatario(admin, empresaId, "departamento", "correoGestoria", emailCandidato);
+    const gestoriaLabel = tplGest ? etiquetaDestino(tplGest.destino, tplGest.destinoEmail) : "Gestoría";
+
+    // 2. Contrato interno a firmar (al candidato).
+    const tplInt = await resolverPlantillaOnboarding(admin, empresaId, PLANTILLAS_ONBOARDING.contratoInterno, vars);
+
+    const emails: EmailContratacionPreview[] = [
+      {
+        clave: "gestoria_alta",
+        titulo: "Alta a la gestoría",
+        destinatarioLabel: gestoriaLabel,
+        para: dstGest.to || "",
+        asunto: tplGest?.asunto ?? `Alta de contrato · ${nombreCompleto} · ${empresaNombre}`,
+        cuerpo: tplGest?.cuerpo ?? "Solicitud de alta de contrato para el trabajador (con la ficha de datos y el enlace para subir el contrato firmado).",
+        disponible: !!dstGest.to,
+        motivoNoDisponible: dstGest.to ? undefined : "Falta el «Correo gestoría» en Ajustes → Empresa → Correos electrónicos.",
+      },
+      {
+        clave: "contrato_interno",
+        titulo: "Contrato interno a firmar",
+        destinatarioLabel: "Candidato",
+        para: emailCandidato || "",
+        asunto: tplInt?.asunto ?? "Tu contrato interno para firmar",
+        cuerpo: tplInt?.cuerpo ?? "Se enviará al candidato el contrato interno para su firma digital.",
+        disponible: !!emailCandidato,
+        motivoNoDisponible: emailCandidato ? undefined : "El candidato no tiene email en su ficha.",
+      },
+    ];
+
+    return { ok: true, emails };
+  } catch (err) {
+    console.error("[contratacion-fase] previewContratacionEmails:", err);
+    return { ok: false, error: "No se pudo preparar la vista previa de correos" };
+  }
 }
