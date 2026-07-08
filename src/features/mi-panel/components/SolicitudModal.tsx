@@ -77,6 +77,10 @@ export function SolicitudModal({ open, onOpenChange, onCreated }: SolicitudModal
   const [fechaInicio, setFechaInicio] = useState<string>("");
   const [fechaFin, setFechaFin] = useState<string>("");
   const [horas, setHoras] = useState<string>("");
+  // Tramo (entrada–salida) para solicitudes de trabajo: se materializa en el
+  // fichaje al aprobar. Aplica a dia_trabajado y horas_extras.
+  const [horaInicio, setHoraInicio] = useState<string>("");
+  const [horaFin, setHoraFin] = useState<string>("");
   const [motivo, setMotivo] = useState<string>("");
 
   const [avisoOpen, setAvisoOpen] = useState(false);
@@ -122,6 +126,8 @@ export function SolicitudModal({ open, onOpenChange, onCreated }: SolicitudModal
     setFechaInicio("");
     setFechaFin("");
     setHoras("");
+    setHoraInicio("");
+    setHoraFin("");
     setMotivo("");
     setAvisoOpen(false);
     setEnviando(false);
@@ -175,12 +181,22 @@ export function SolicitudModal({ open, onOpenChange, onCreated }: SolicitudModal
       toast.error("Indica una fecha de inicio");
       return;
     }
-    if (subtipo === "horas_extras") {
-      const h = Number(horas);
-      if (!h || h <= 0) {
-        toast.error("Indica cuántas horas extras quieres registrar");
+    // Trabajo (día trabajado / horas extras): exige el tramo entrada–salida.
+    let horasTramo: number | null = null;
+    if (subtipo === "horas_extras" || subtipo === "dia_trabajado") {
+      if (!horaInicio || !horaFin) {
+        toast.error("Indica la hora de entrada y de salida");
         return;
       }
+      const [hi, mi] = horaInicio.split(":").map(Number);
+      const [hf, mf] = horaFin.split(":").map(Number);
+      let min = hf * 60 + mf - (hi * 60 + mi);
+      if (min < 0) min += 1440; // cruza medianoche
+      if (min === 0) {
+        toast.error("La hora de salida no puede ser igual a la de entrada");
+        return;
+      }
+      horasTramo = Math.round((min / 60) * 100) / 100;
     }
     setEnviando(true);
     const res = await crearSolicitudPersonal({
@@ -189,7 +205,9 @@ export function SolicitudModal({ open, onOpenChange, onCreated }: SolicitudModal
       // baja_contrato: el server fija fecha_inicio = hoy; mandamos un placeholder.
       fechaInicio: subtipo === "baja_contrato" ? todayISO() : fechaInicio,
       fechaFin: fechaFin || null,
-      horas: subtipo === "horas_extras" ? Number(horas) : null,
+      horas: horasTramo,
+      horaInicio: horasTramo != null ? horaInicio : null,
+      horaFin: horasTramo != null ? horaFin : null,
       motivo: motivo.trim(),
     });
     setEnviando(false);
@@ -447,21 +465,45 @@ export function SolicitudModal({ open, onOpenChange, onCreated }: SolicitudModal
                     />
                   </div>
                 )}
-                {subtipo === "horas_extras" && (
+              </div>
+
+              {/* Tramo (entrada–salida) para solicitudes de trabajo: al aprobar se
+                  crea el fichaje con estas horas (dia_trabajado=normal, horas_extras=extra). */}
+              {(subtipo === "horas_extras" || subtipo === "dia_trabajado") && (
+                <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1.5">
-                    <Label htmlFor="horas">Horas</Label>
+                    <Label htmlFor="horaInicio">Hora de entrada</Label>
                     <Input
-                      id="horas"
-                      type="number"
-                      min="0.25"
-                      step="0.25"
-                      value={horas}
-                      onChange={(e) => setHoras(e.target.value)}
-                      placeholder="2"
+                      id="horaInicio"
+                      type="time"
+                      value={horaInicio}
+                      onChange={(e) => setHoraInicio(e.target.value)}
                     />
                   </div>
-                )}
-              </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="horaFin">Hora de salida</Label>
+                    <Input
+                      id="horaFin"
+                      type="time"
+                      value={horaFin}
+                      onChange={(e) => setHoraFin(e.target.value)}
+                    />
+                  </div>
+                  {horaInicio && horaFin && (
+                    <p className="col-span-2 text-xs text-muted-foreground">
+                      Total: {(() => {
+                        const [hi, mi] = horaInicio.split(":").map(Number);
+                        const [hf, mf] = horaFin.split(":").map(Number);
+                        let min = hf * 60 + mf - (hi * 60 + mi);
+                        if (min < 0) min += 1440; // cruza medianoche
+                        const h = Math.floor(min / 60);
+                        const m = min % 60;
+                        return m === 0 ? `${h}h` : `${h}h ${m}m`;
+                      })()}
+                    </p>
+                  )}
+                </div>
+              )}
 
               {subtipo === "vacaciones" && (() => {
                 if (vacCargando) {

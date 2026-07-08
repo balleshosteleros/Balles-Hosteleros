@@ -517,25 +517,32 @@ export async function getTiposFichajeDisponibles(): Promise<{
     const tipos = (tiposData ?? []) as TipoFichajeDisponible[];
 
     const necesitaSolicitud = tipos.some((t) => t.requiere_solicitud);
-    let tieneSolicitudHoy = false;
+    // Subtipos de solicitud de trabajo aprobados y vigentes hoy. El código EXT se
+    // habilita SOLO con 'horas_extras'; el resto de tipos que requieren solicitud
+    // (p.ej. día trabajado) con 'dia_trabajado'.
+    let subtiposHoy = new Set<string>();
     if (necesitaSolicitud) {
       // "Hoy" en la zona de la empresa (PRP-069).
       const tzEmp = await getZonaHorariaEmpresa(supabase, empresaId);
       const { fecha: hoyLocal } = ahoraEnZona(tzEmp);
       const { data: sol } = await supabase
         .from("solicitudes_personal")
-        .select("id")
+        .select("subtipo")
         .eq("empresa_id", empresaId)
         .eq("user_id", user.id)
         .eq("tipo", "trabajo")
         .eq("estado", "aprobada")
         .lte("fecha_inicio", hoyLocal)
-        .or(`fecha_fin.is.null,fecha_fin.gte.${hoyLocal}`)
-        .limit(1);
-      tieneSolicitudHoy = Boolean(sol && sol.length > 0);
+        .or(`fecha_fin.is.null,fecha_fin.gte.${hoyLocal}`);
+      subtiposHoy = new Set((sol ?? []).map((s) => s.subtipo as string));
     }
 
-    const disponibles = tipos.filter((t) => !t.requiere_solicitud || tieneSolicitudHoy);
+    // Un tipo que requiere solicitud se habilita si hay una solicitud del subtipo
+    // que le corresponde: EXT ← horas_extras; los demás ← dia_trabajado.
+    const habilitado = (codigo: string): boolean =>
+      codigo === "EXT" ? subtiposHoy.has("horas_extras") : subtiposHoy.has("dia_trabajado");
+
+    const disponibles = tipos.filter((t) => !t.requiere_solicitud || habilitado(t.codigo));
     return { ok: true, data: disponibles };
   } catch (err: unknown) {
     const msg = extractErrorMessage(err);
@@ -592,12 +599,15 @@ async function evaluarEntradaFichaje(
 
   if (tipoSel) {
     if (tipoSel.requiere_solicitud) {
+      // El subtipo debe coincidir con el tipo: EXT ← horas_extras; resto ← dia_trabajado.
+      const subtipoReq = tipoSel.codigo.toUpperCase() === "EXT" ? "horas_extras" : "dia_trabajado";
       const { data: sol } = await supabase
         .from("solicitudes_personal")
         .select("id")
         .eq("empresa_id", empresaId)
         .eq("user_id", userId)
         .eq("tipo", "trabajo")
+        .eq("subtipo", subtipoReq)
         .eq("estado", "aprobada")
         .lte("fecha_inicio", hoyMadrid)
         .or(`fecha_fin.is.null,fecha_fin.gte.${hoyMadrid}`)
@@ -605,7 +615,7 @@ async function evaluarEntradaFichaje(
       if (!sol || sol.length === 0) {
         return {
           ok: false,
-          error: `Para fichar como "${tipoSel.nombre}" necesitas una solicitud de trabajo aprobada para hoy.`,
+          error: `Para fichar como "${tipoSel.nombre}" necesitas una solicitud de ${subtipoReq === "horas_extras" ? "horas extras" : "día trabajado"} aprobada para hoy.`,
         };
       }
     } else {
@@ -1453,6 +1463,9 @@ export interface NuevaSolicitudInput {
   fechaInicio: string;
   fechaFin?: string | null;
   horas?: number | null;
+  /** Tramo (HH:MM) para solicitudes de trabajo; se materializa en el fichaje al aprobar. */
+  horaInicio?: string | null;
+  horaFin?: string | null;
   motivo?: string;
 }
 
@@ -1896,6 +1909,8 @@ export async function crearSolicitudPersonal(input: NuevaSolicitudInput) {
         fecha_inicio: input.fechaInicio,
         fecha_fin: input.fechaFin ?? null,
         horas: input.horas ?? null,
+        hora_inicio: input.horaInicio ?? null,
+        hora_fin: input.horaFin ?? null,
         motivo: input.motivo ?? "",
         estado: "pendiente",
       })
@@ -2040,7 +2055,7 @@ export async function aprobarSolicitud(id: string, notasRevision?: string) {
     // Cargamos la solicitud antes del UPDATE para decidir si hay notificación.
     const { data: solicitud, error: fetchErr } = await supabase
       .from("solicitudes_personal")
-      .select("id, empresa_id, user_id, tipo, empleado_nombre, subtipo, fecha_inicio, fecha_fin")
+      .select("id, empresa_id, user_id, tipo, empleado_nombre, subtipo, fecha_inicio, fecha_fin, horas, hora_inicio, hora_fin")
       .eq("id", id)
       .maybeSingle();
     if (fetchErr) throw fetchErr;
@@ -2053,6 +2068,27 @@ export async function aprobarSolicitud(id: string, notasRevision?: string) {
       tipo: solicitud.tipo as SolicitudTipo,
     }))) {
       return { ok: false, error: "Solo el validador asignado de este empleado puede aprobar esta solicitud." };
+    }
+
+    // Solicitud de TRABAJO (día trabajado / horas extras): al aprobar se crea el
+    // fichaje con el tramo indicado (NOR/EXT). Si el tramo se solapa con otro
+    // fichaje de ese día, NO se aprueba y se avisa (varios tramos disjuntos por
+    // día están permitidos; pisarse en el tiempo no).
+    if (solicitud.tipo === "trabajo") {
+      const { materializarFichajeDeSolicitud } = await import(
+        "@/features/mi-panel/services/solicitud-a-fichaje"
+      );
+      const res = await materializarFichajeDeSolicitud(supabase, {
+        id: solicitud.id as string,
+        empresa_id: solicitud.empresa_id as string,
+        user_id: solicitud.user_id as string,
+        empleado_nombre: (solicitud.empleado_nombre as string | null) ?? null,
+        subtipo: solicitud.subtipo as string,
+        fecha_inicio: solicitud.fecha_inicio as string,
+        hora_inicio: (solicitud.hora_inicio as string | null) ?? null,
+        hora_fin: (solicitud.hora_fin as string | null) ?? null,
+      });
+      if (!res.ok) return { ok: false, error: res.error ?? "No se pudo registrar el fichaje de la solicitud." };
     }
 
     const { error } = await supabase
