@@ -223,7 +223,17 @@ function recuadroLiquidacionHtml(d: LiquidacionDetalle): string {
   if (d.horasExtras) filas.push(fila("Horas extras", fmtEur(d.horasExtras)));
   if (d.bonus) filas.push(fila("Bonus", fmtEur(d.bonus)));
   if (d.ajuste) filas.push(fila("Ajuste", `${d.ajuste > 0 ? "+" : "−"}${fmtEur(Math.abs(d.ajuste))}`, { rojo: d.ajuste < 0 }));
-  filas.push(fila("Total", fmtEur(d.total), { destacado: true, separador: true }));
+  filas.push(fila("Total a percibir", fmtEur(d.total), { destacado: true, separador: true }));
+  // Coste para la empresa = total percibido + SS trabajador + IRPF + SS empresa.
+  const costeEmpresa = Math.round((d.total + d.ssEmpleado + d.irpf + d.ssEmpresa) * 100) / 100;
+  if (costeEmpresa !== d.total) {
+    filas.push(
+      `<tr>
+        <td style="padding:2px 0;color:#888;font-size:12px">Coste para la empresa</td>
+        <td style="padding:2px 0;text-align:right;color:#888;font-size:12px">${fmtEur(costeEmpresa)}</td>
+      </tr>`,
+    );
+  }
 
   return `
     <div style="border:1px solid #e5e5e5;border-radius:10px;padding:16px 18px;margin:16px 0;background:#fafafa">

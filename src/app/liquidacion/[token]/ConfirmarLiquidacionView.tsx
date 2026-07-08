@@ -56,8 +56,7 @@ export function ConfirmarLiquidacionView({ endpoint, detalle }: Props) {
           <h1 className="text-xl font-semibold text-zinc-900">¡Liquidación confirmada!</h1>
           <p className="mt-2 text-sm text-zinc-600">
             Gracias, {detalle.empleadoNombre.split(" ")[0] || ""}. Has confirmado que tu liquidación de{" "}
-            <b>{detalle.mesLabel}</b> ({fmtEur(detalle.total)}) es correcta. {detalle.empresaNombre} ya
-            puede proceder al pago.
+            <b>{detalle.mesLabel}</b> es correcta. {detalle.empresaNombre} ya puede proceder al pago.
           </p>
           <p className="mt-6 text-xs text-zinc-400">Ya puedes cerrar esta ventana.</p>
         </div>
@@ -68,6 +67,10 @@ export function ConfirmarLiquidacionView({ endpoint, detalle }: Props) {
   // ── Filas del recuadro: desglose bruto → neto y demás conceptos ─────────────
   // El sistema guarda el NETO; el BRUTO se reconstruye = neto + SS trabajador + IRPF.
   const bruto = Math.round((detalle.nomina + detalle.ssEmpleado + detalle.irpf) * 100) / 100;
+  // Coste para la empresa = lo que percibe el trabajador (total) + sus retenciones
+  // (SS trabajador + IRPF, que la empresa ingresa a Hacienda/SS) + la SS de empresa.
+  const costeEmpresa =
+    Math.round((detalle.total + detalle.ssEmpleado + detalle.irpf + detalle.ssEmpresa) * 100) / 100;
   type Fila = {
     label: string;
     valor: string;
@@ -133,11 +136,17 @@ export function ConfirmarLiquidacionView({ endpoint, detalle }: Props) {
                 </tr>
               ))}
               <tr className="border-t border-zinc-200">
-                <td className="py-1.5 text-sm font-semibold text-zinc-900">Total</td>
+                <td className="py-1.5 text-sm font-semibold text-zinc-900">Total a percibir</td>
                 <td className="py-1.5 text-right text-base font-bold tabular-nums text-zinc-900">
                   {fmtEur(detalle.total)}
                 </td>
               </tr>
+              {costeEmpresa !== detalle.total && (
+                <tr>
+                  <td className="pt-1 text-xs text-zinc-500">Coste para la empresa</td>
+                  <td className="pt-1 text-right text-xs tabular-nums text-zinc-500">{fmtEur(costeEmpresa)}</td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
