@@ -1,7 +1,5 @@
 import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Plus, Pencil, Trash2, GripVertical } from "lucide-react";
-import { TIPO_JORNADA_LABELS } from "@/features/rrhh/data/reclutamiento";
+import { JornadasVacantesPanel } from "@/features/ajustes/components/JornadasVacantesPanel";
 
 export function OfertasTrabajoConfig() {
   return (
@@ -13,27 +11,12 @@ export function OfertasTrabajoConfig() {
         </p>
       </div>
 
-      {/* Tipos de jornada */}
+      {/* Tipos de jornada — CRUD real conectado a la tabla `jornadas` (por empresa).
+          Es la misma fuente que usa el desplegable de "Jornada" en cada vacante y el
+          buscador del portal de empleo, así lo que se ve aquí es exactamente lo que existe. */}
       <Card>
-        <div className="px-5 py-4 border-b border-border flex items-center justify-between">
-          <h3 className="font-semibold text-foreground text-sm">Tipos de jornada</h3>
-          <Button variant="outline" size="sm" className="gap-1.5 text-xs h-8">
-            <Plus className="h-3.5 w-3.5" /> Añadir
-          </Button>
-        </div>
-        <CardContent className="p-0">
-          {Object.entries(TIPO_JORNADA_LABELS).map(([key, label]) => (
-            <div key={key} className="flex items-center justify-between px-5 py-3 border-b border-border last:border-0 hover:bg-muted/30 transition-colors">
-              <div className="flex items-center gap-2">
-                <GripVertical className="h-4 w-4 text-muted-foreground/40" />
-                <span className="text-sm text-foreground">{label}</span>
-              </div>
-              <div className="flex items-center gap-1">
-                <Button variant="ghost" size="icon" className="h-7 w-7"><Pencil className="h-3 w-3" /></Button>
-                <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive"><Trash2 className="h-3 w-3" /></Button>
-              </div>
-            </div>
-          ))}
+        <CardContent className="p-5">
+          <JornadasVacantesPanel />
         </CardContent>
       </Card>
     </div>

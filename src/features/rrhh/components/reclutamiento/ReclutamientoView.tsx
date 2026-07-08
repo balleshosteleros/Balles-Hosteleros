@@ -24,7 +24,6 @@ import {
   ESTADOS_CONFIG,
   ESTADOS_CONFIG as FASES_CONFIG,
   FASES_ORDER,
-  TIPO_JORNADA_LABELS,
   ESTADO_PUBLICACION_LABELS,
   ORIGEN_LABELS,
   type Vacante,
@@ -184,7 +183,7 @@ function VacanteCard({
 
       <div className="flex flex-wrap items-center gap-4 px-5 py-3 bg-muted/30 border-t border-border text-xs text-muted-foreground">
         {vacante.tipoJornada && (
-          <span className="inline-flex items-center gap-1"><Clock className="h-3.5 w-3.5" />{TIPO_JORNADA_LABELS[vacante.tipoJornada] ?? vacante.tipoJornada}</span>
+          <span className="inline-flex items-center gap-1"><Clock className="h-3.5 w-3.5" />{vacante.tipoJornada}</span>
         )}
         <span className="inline-flex items-center gap-1"><CalendarDays className="h-3.5 w-3.5" />{vacante.fechaCreacion}</span>
         {vacante.cuestionario && <span className="inline-flex items-center gap-1"><FileText className="h-3.5 w-3.5" />Cuestionario</span>}
@@ -517,7 +516,7 @@ export function ReclutamientoView() {
   const acceso = (v: Vacante, campo: string): unknown => {
     if (campo === "estadoPublicacion") return ESTADO_PUBLICACION_LABELS[v.estadoPublicacion];
     if (campo === "categoria") return v.categoria;
-    if (campo === "tipoJornada") return TIPO_JORNADA_LABELS[v.tipoJornada];
+    if (campo === "tipoJornada") return v.tipoJornada;
     if (campo === "puesto") return v.puesto;
     if (campo === "ubicacion") return v.ubicacion;
     return (v as unknown as Record<string, unknown>)[campo];
