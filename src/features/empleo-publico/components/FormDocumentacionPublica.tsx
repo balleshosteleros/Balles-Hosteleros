@@ -94,7 +94,7 @@ function SubidaDoc({
           )}
           {doc.deteccion === "fallo" && (
             <span className="inline-flex items-center gap-1 text-amber-600 shrink-0">
-              <AlertTriangle className="h-3.5 w-3.5" /> No se pudo leer — súbelo otra vez o escríbelo a mano
+              <AlertTriangle className="h-3.5 w-3.5" /> No hemos leído el número: revísalo abajo (el documento queda adjuntado)
             </span>
           )}
           {doc.deteccion === "ajeno" && (
