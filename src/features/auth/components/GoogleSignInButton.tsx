@@ -198,11 +198,21 @@ export function GoogleSignInButton({
       // descentrado. Medimos el contenedor y re-renderizamos al cambiar de
       // tamaño para mantenerlo centrado y a lo ancho real disponible.
       const GSI_MAX_WIDTH = 400 // límite que acepta Google para type=standard
+
+      // IMPORTANTE: observamos el MISMO elemento que mutamos al renderizar el
+      // botón. Insertar el iframe de Google cambia el tamaño del contenedor y
+      // eso vuelve a disparar el observer → borra e inserta de nuevo → parpadeo
+      // infinito. Guardamos el último ancho renderizado y solo re-renderizamos
+      // cuando el ancho DISPONIBLE cambia de verdad (rotación / resize real),
+      // ignorando las variaciones que provoca nuestra propia inserción.
+      let lastRenderedWidth = -1
       const renderAtWidth = () => {
         if (cancelled || !parent) return
         const available = Math.floor(parent.getBoundingClientRect().width)
         if (available <= 0) return
         const width = Math.min(available, GSI_MAX_WIDTH)
+        if (width === lastRenderedWidth) return
+        lastRenderedWidth = width
         parent.innerHTML = ''
         gid.renderButton(parent, {
           type: 'standard',
@@ -217,12 +227,16 @@ export function GoogleSignInButton({
 
       renderAtWidth()
 
+      // Medimos el ancho contra un envoltorio estable (el padre del contenedor
+      // del iframe), no contra el propio contenedor que mutamos, para que el
+      // observer refleje el espacio real disponible y no el del iframe.
+      const measured = parent.parentElement ?? parent
       let resizeRaf: ReturnType<typeof requestAnimationFrame> | null = null
       const observer = new ResizeObserver(() => {
         if (resizeRaf) cancelAnimationFrame(resizeRaf)
         resizeRaf = requestAnimationFrame(renderAtWidth)
       })
-      observer.observe(parent)
+      observer.observe(measured)
       observerRef.current = observer
 
       fallbackTimer = setTimeout(() => {
