@@ -24,12 +24,25 @@ async function getContext() {
  * "Error desconocido", ocultando la causa real (p.ej. violación de un CHECK).
  */
 function mensajeError(err: unknown): string {
-  if (err instanceof Error) return err.message;
-  if (err && typeof err === "object" && "message" in err) {
+  let raw = "";
+  if (err instanceof Error) raw = err.message;
+  else if (err && typeof err === "object" && "message" in err) {
     const m = (err as { message?: unknown }).message;
-    if (typeof m === "string" && m) return m;
+    if (typeof m === "string") raw = m;
   }
-  return "Error desconocido";
+  if (!raw) return "No se pudo completar la acción. Inténtalo de nuevo.";
+  // Nunca mostramos errores técnicos de la base de datos (en inglés) al usuario.
+  if (/violates check constraint|check constraint/i.test(raw))
+    return "No se pudo mover el candidato a esa fase. Avisa a soporte si continúa.";
+  if (/violates foreign key|foreign key constraint/i.test(raw))
+    return "Falta un dato relacionado para completar la acción.";
+  if (/duplicate key|already exists|unique constraint/i.test(raw))
+    return "Ya existe un registro con esos datos.";
+  if (/permission denied|row-level security|rls/i.test(raw))
+    return "No tienes permiso para esta acción.";
+  // Si el mensaje ya está en español (nuestro), se muestra tal cual.
+  if (/[áéíóúñ¿¡]/i.test(raw) || /^[^\x00-\x7F]*[a-z]/i.test(raw) === false) return raw;
+  return "No se pudo completar la acción. Inténtalo de nuevo.";
 }
 
 /** Nombre legible del usuario (nombre+apellidos → full_name → email). */
