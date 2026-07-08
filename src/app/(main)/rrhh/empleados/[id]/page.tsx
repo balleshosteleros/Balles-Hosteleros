@@ -5,8 +5,9 @@ import { useParams, useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { FichaEmpleadoHeader } from "@/features/rrhh/components/empleados/FichaEmpleadoHeader";
 import {
-  FichajesTab, HorariosTab, SolicitudesEmpleadoTab,
+  HorariosTab, SolicitudesEmpleadoTab,
 } from "@/features/rrhh/components/empleados/FichaTabsContent";
+import { FichajesTimelineMesEmpleado } from "@/features/rrhh/components/fichajes/FichajesTimelineMesEmpleado";
 import {
   GestionEmpleadoCard,
   type GestionEmpleadoCardHandle,
@@ -282,7 +283,11 @@ export default function FichaEmpleadoPage() {
           </div>
         );
       case "fichajes":
-        return <div className="p-6"><FichajesTab fichajes={fichajes} /></div>;
+        return (
+          <div className="p-6">
+            <FichajesTimelineMesEmpleado empleadoId={empleadoRegistro.id} />
+          </div>
+        );
       case "horarios":
         return <div className="p-6"><HorariosTab horario={horarioActual} /></div>;
       case "solicitudes":

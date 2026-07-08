@@ -238,3 +238,90 @@ export async function loadTimelineDia(
     return { ok: false, data: [] };
   }
 }
+
+// ---------------------------------------------------------------------------
+// Timeline MENSUAL de UN empleado: una fila por día del mes con su previsto y
+// sus fichados. Para la pestaña Fichajes de la ficha del empleado.
+// ---------------------------------------------------------------------------
+
+export interface TimelineDiaMes {
+  fechaISO: string;
+  previsto: TramoPrevisto[];
+  fichado: TramoFichado[];
+  horasPrevistas: number;
+  horasFichadas: number;
+}
+
+export interface TimelineMesEmpleado {
+  dias: TimelineDiaMes[];
+  // Totales del mes (fuente única: horasMes). null si no se pudo calcular.
+  horasFichadasMes: number;
+  horasTeoricasMes: number;
+}
+
+function diasDelMes(periodo: string): { desde: string; hasta: string; dias: string[] } {
+  const [y, m] = periodo.split("-").map(Number);
+  const ultimo = new Date(y, m, 0).getDate();
+  const dias: string[] = [];
+  for (let d = 1; d <= ultimo; d++) {
+    dias.push(`${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`);
+  }
+  return { desde: dias[0], hasta: dias[dias.length - 1], dias };
+}
+
+export async function loadTimelineMesEmpleado(
+  empleadoId: string,
+  periodo: string,
+): Promise<{ ok: boolean; data: TimelineMesEmpleado }> {
+  const vacio: TimelineMesEmpleado = { dias: [], horasFichadasMes: 0, horasTeoricasMes: 0 };
+  try {
+    const { supabase, empresaId } = await getAppContext();
+    if (!empresaId || !empleadoId) return { ok: true, data: vacio };
+    const { desde, hasta, dias } = diasDelMes(periodo);
+
+    // Previsto de todo el mes (celdas por día) + fichados del mes + totales.
+    const [plan, fich, tot] = await Promise.all([
+      getPlanificacionHorarios(empresaId, { desdeISO: desde, hastaISO: hasta }),
+      loadFichajesCuadrante([empleadoId], desde, hasta),
+      horasMes(supabase, empresaId, [empleadoId], periodo),
+    ]);
+    const planif = plan.data;
+    const turnoById = new Map(planif.turnos.map((t) => [t.id, t]));
+    const celdasEmp = planif.celdas[empleadoId] ?? {};
+    const fichEmp = fich.data[empleadoId] ?? {};
+    const totEmp = tot.get(empleadoId);
+
+    const filas: TimelineDiaMes[] = dias.map((fechaISO) => {
+      const previsto: TramoPrevisto[] = (celdasEmp[fechaISO] ?? []).flatMap((c) => {
+        const t = turnoById.get(c.turnoId);
+        if (!t) return [];
+        return t.tramos.map((tr) => ({
+          inicio: tr.inicio,
+          fin: tr.fin,
+          turnoNombre: t.nombre ?? null,
+          turnoCodigo: t.codigo ?? null,
+        }));
+      });
+      const fichado = fichEmp[fechaISO] ?? [];
+      return {
+        fechaISO,
+        previsto,
+        fichado,
+        horasPrevistas: horasDeTramosHHMM(previsto),
+        horasFichadas: horasDeTramosHHMM(fichado.map((f) => ({ inicio: f.horaInicio, fin: f.horaFin }))),
+      };
+    });
+
+    return {
+      ok: true,
+      data: {
+        dias: filas,
+        horasFichadasMes: totEmp?.fichadas ?? 0,
+        horasTeoricasMes: totEmp?.teoricas ?? 0,
+      },
+    };
+  } catch (err) {
+    console.error("[rrhh] loadTimelineMesEmpleado:", err);
+    return { ok: false, data: vacio };
+  }
+}
