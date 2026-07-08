@@ -6,7 +6,7 @@ export const dynamic = "force-dynamic";
 export default function MobilePagosPage() {
   return (
     <>
-      <MobilePageHeader title="Mis pagos" />
+      <MobilePageHeader title="Pagos" />
       <div className="px-3 py-4">
         <MisPagosView />
       </div>

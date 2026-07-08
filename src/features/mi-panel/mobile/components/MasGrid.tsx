@@ -34,7 +34,7 @@ const ITEMS: Item[] = [
   { href: "/m/horario", label: "Horario", icon: Timer, hue: 211 },
   { href: "/m/calendario", label: "Calendario", icon: CalendarDays, hue: 211 },
   { href: "/m/condiciones", label: "Condiciones", icon: ClipboardCheck, hue: 192 },
-  { href: "/m/pagos", label: "Mis pagos", icon: HandCoins, hue: 192 },
+  { href: "/m/pagos", label: "Pagos", icon: HandCoins, hue: 192 },
   { href: "/m/documentos", label: "Documentos", icon: Files, hue: 192 },
   { href: "/m/solicitudes", label: "Solicitudes", icon: Inbox, hue: 192 },
   { href: "/m/albaranes", label: "Albaranes", icon: PackageCheck, hue: 192 },
