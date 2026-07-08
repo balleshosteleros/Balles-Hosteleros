@@ -230,7 +230,31 @@ function SubmoduloRow({
           )}
       </button>
 
-      {open && (
+      {/* Reclutamiento: sus secciones exponen un ref imperativo (guardar/hayCambios)
+          que el botón «Guardar» global recorre. Se mantienen MONTADAS aunque el
+          acordeón esté cerrado (se ocultan con CSS), no con `{open && …}`: si se
+          desmontaran al colapsar, el ref quedaría a null, el estado tecleado (p. ej.
+          el email de la gestoría) se destruiría y el guardado global lo saltaría en
+          silencio dejando el dato sin persistir. El resto de submódulos no tienen
+          ref, así que conservan su montaje perezoso (solo al abrir). */}
+      {submodulo.key === "reclutamiento" ? (
+        <div className={open ? "border-t px-3 py-3 space-y-3" : "hidden"}>
+          <ChecklistCampos
+            submodulo={submodulo}
+            camposObligatorios={reglaSub.camposObligatorios}
+            onToggle={toggleCampo}
+          />
+          <div className="border-t pt-3">
+            <GestoriaConfig embedded ref={reclutamientoRefs?.gestoria} />
+          </div>
+          <div className="border-t pt-3">
+            <OnboardingPruebaConfig embedded ref={reclutamientoRefs?.onboarding} />
+          </div>
+          <div className="border-t pt-3">
+            <ConfigGeneralConfig embedded ref={reclutamientoRefs?.general} />
+          </div>
+        </div>
+      ) : open ? (
         <div className="border-t px-3 py-3 space-y-3">
           {submodulo.key === "solicitudes" ? (
             <ValidadoresSolicitudesConfig embedded />
@@ -253,24 +277,10 @@ function SubmoduloRow({
               {submodulo.key === "proveedores" && <OperativaCompraProveedores />}
 
               {submodulo.key === "productos" && <IvaDefaultConfig />}
-
-              {submodulo.key === "reclutamiento" && (
-                <>
-                  <div className="border-t pt-3">
-                    <GestoriaConfig embedded ref={reclutamientoRefs?.gestoria} />
-                  </div>
-                  <div className="border-t pt-3">
-                    <OnboardingPruebaConfig embedded ref={reclutamientoRefs?.onboarding} />
-                  </div>
-                  <div className="border-t pt-3">
-                    <ConfigGeneralConfig embedded ref={reclutamientoRefs?.general} />
-                  </div>
-                </>
-              )}
             </>
           )}
         </div>
-      )}
+      ) : null}
     </div>
   );
 }
