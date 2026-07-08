@@ -1,7 +1,6 @@
 "use client";
 
 import { useRef, useState, useTransition } from "react";
-import Link from "next/link";
 import { toast } from "sonner";
 import {
   Loader2,
@@ -9,7 +8,6 @@ import {
   CheckCircle2,
   Camera,
   Paperclip,
-  ArrowLeft,
   Sparkles,
   AlertTriangle,
   Trash2,
@@ -403,11 +401,6 @@ export function FormDocumentacionPublica({ token, empresaSlug }: Props) {
             Humanos continuará con tu incorporación.
           </p>
         </div>
-        <Button asChild variant="outline">
-          <Link href={`/empleo/${empresaSlug}`}>
-            <ArrowLeft className="h-4 w-4 mr-1.5" /> Ir al portal de empleo
-          </Link>
-        </Button>
       </div>
     );
   }
