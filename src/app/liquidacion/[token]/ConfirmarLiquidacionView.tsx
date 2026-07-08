@@ -65,10 +65,21 @@ export function ConfirmarLiquidacionView({ endpoint, detalle }: Props) {
     );
   }
 
-  // ── Filas del recuadro: solo los conceptos con valor (nómina y total siempre) ──
-  const filas: { label: string; valor: string; signo?: "pos" | "neg" }[] = [
-    { label: "Nómina", valor: fmtEur(detalle.nomina) },
-  ];
+  // ── Filas del recuadro: desglose bruto → neto y demás conceptos ─────────────
+  // El sistema guarda el NETO; el BRUTO se reconstruye = neto + SS trabajador + IRPF.
+  const bruto = Math.round((detalle.nomina + detalle.ssEmpleado + detalle.irpf) * 100) / 100;
+  type Fila = {
+    label: string;
+    valor: string;
+    signo?: "pos" | "neg";
+    destacado?: boolean;
+    separador?: boolean;
+  };
+  const filas: Fila[] = [{ label: "Nómina bruta", valor: fmtEur(bruto) }];
+  if (detalle.ssEmpleado)
+    filas.push({ label: "Seguridad Social (tu parte)", valor: `−${fmtEur(detalle.ssEmpleado)}`, signo: "neg" });
+  if (detalle.irpf) filas.push({ label: "IRPF", valor: `−${fmtEur(detalle.irpf)}`, signo: "neg" });
+  filas.push({ label: "Nómina neta", valor: fmtEur(detalle.nomina), destacado: true, separador: true });
   if (detalle.propina) filas.push({ label: "Propina", valor: fmtEur(detalle.propina) });
   if (detalle.propinaMantenimiento)
     filas.push({ label: "Propina mes anterior", valor: fmtEur(detalle.propinaMantenimiento) });
@@ -80,9 +91,6 @@ export function ConfirmarLiquidacionView({ endpoint, detalle }: Props) {
       valor: `${detalle.ajuste > 0 ? "+" : "−"}${fmtEur(Math.abs(detalle.ajuste))}`,
       signo: detalle.ajuste > 0 ? "pos" : "neg",
     });
-  if (detalle.irpf) filas.push({ label: "IRPF", valor: fmtEur(detalle.irpf) });
-  if (detalle.ssEmpleado)
-    filas.push({ label: "Seguridad Social (tu parte)", valor: fmtEur(detalle.ssEmpleado) });
 
   return (
     <div className="min-h-screen bg-zinc-50 flex items-center justify-center p-6">
@@ -104,26 +112,27 @@ export function ConfirmarLiquidacionView({ endpoint, detalle }: Props) {
         <div className="mt-5 rounded-xl border border-zinc-200 bg-zinc-50/60 p-4">
           <table className="w-full border-collapse">
             <tbody>
-              {filas.map((f) => (
-                <tr key={f.label}>
-                  <td className="py-1.5 text-sm text-zinc-600">{f.label}</td>
+              {filas.map((f, i) => (
+                <tr key={`${f.label}-${i}`} className={f.separador ? "border-t border-zinc-200" : ""}>
+                  <td className={`py-1.5 text-sm ${f.destacado ? "font-semibold text-zinc-900" : "text-zinc-600"}`}>
+                    {f.label}
+                  </td>
                   <td
                     className={`py-1.5 text-right text-sm tabular-nums ${
                       f.signo === "neg"
                         ? "text-rose-600"
                         : f.signo === "pos"
                           ? "text-emerald-600"
-                          : "text-zinc-900"
+                          : f.destacado
+                            ? "font-semibold text-zinc-900"
+                            : "text-zinc-900"
                     }`}
                   >
                     {f.valor}
                   </td>
                 </tr>
               ))}
-              <tr>
-                <td colSpan={2} className="border-t border-zinc-200 pt-0" />
-              </tr>
-              <tr>
+              <tr className="border-t border-zinc-200">
                 <td className="py-1.5 text-sm font-semibold text-zinc-900">Total</td>
                 <td className="py-1.5 text-right text-base font-bold tabular-nums text-zinc-900">
                   {fmtEur(detalle.total)}

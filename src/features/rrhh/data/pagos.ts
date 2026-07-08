@@ -85,3 +85,20 @@ export function getResumenPagos(pagos: PagoEmpleado[]): ResumenPagos {
 export function costeSSTotal(p: PagoEmpleado): number {
   return Math.round((p.ssEmpleado + p.ssEmpresa) * 100) / 100;
 }
+
+// ── Desglose bruto → neto de la nómina ──────────────────────────────────────
+// El sistema guarda el NETO (`nomina` = líquido a percibir, leído de la nómina
+// por la IA). El BRUTO no se almacena, pero se RECONSTRUYE sumando al neto las
+// retenciones que se le descuentan al trabajador: SS del empleado + IRPF.
+//   bruto = neto + ss_empleado + irpf
+// Así el desglose queda: Bruto  −SS(trabajador)  −IRPF  = Neto.
+
+/** Nómina NETA (líquido a percibir). Es el valor guardado en `nomina`. */
+export function nominaNeta(p: Pick<PagoEmpleado, "nomina">): number {
+  return Math.round(p.nomina * 100) / 100;
+}
+
+/** Nómina BRUTA reconstruida = neto + SS del trabajador + IRPF. */
+export function nominaBruta(p: Pick<PagoEmpleado, "nomina" | "ssEmpleado" | "irpf">): number {
+  return Math.round((p.nomina + p.ssEmpleado + p.irpf) * 100) / 100;
+}

@@ -193,24 +193,38 @@ export async function confirmarLiquidacionPorToken(
 
 /** Recuadro HTML con el desglose de la liquidación para el cuerpo del correo. */
 function recuadroLiquidacionHtml(d: LiquidacionDetalle): string {
-  const fila = (label: string, valor: string, destacado = false) => `
+  // El sistema guarda el NETO; el BRUTO se reconstruye = neto + SS trabajador + IRPF.
+  const bruto = Math.round((d.nomina + d.ssEmpleado + d.irpf) * 100) / 100;
+
+  const fila = (
+    label: string,
+    valor: string,
+    opts: { destacado?: boolean; rojo?: boolean; separador?: boolean } = {},
+  ) => {
+    const color = opts.rojo ? "#dc2626" : opts.destacado ? "#111" : "#111";
+    const peso = opts.destacado ? "font-weight:700;" : "";
+    const borde = opts.separador ? "border-top:1px solid #e5e5e5;" : "";
+    return `
     <tr>
-      <td style="padding:6px 0;color:#555;font-size:14px">${label}</td>
-      <td style="padding:6px 0;text-align:right;font-size:14px;${destacado ? "font-weight:700;color:#111" : "color:#111"}">${valor}</td>
+      <td style="padding:6px 0;color:${opts.destacado ? "#111" : "#555"};font-size:14px;${borde}">${label}</td>
+      <td style="padding:6px 0;text-align:right;font-size:14px;${peso}color:${color};${borde}">${valor}</td>
     </tr>`;
+  };
+
   const filas: string[] = [];
-  filas.push(fila("Nómina", fmtEur(d.nomina)));
+  // Bloque nómina: bruto → −SS → −IRPF → = neto.
+  filas.push(fila("Nómina bruta", fmtEur(bruto)));
+  if (d.ssEmpleado) filas.push(fila("Seguridad Social (tu parte)", `−${fmtEur(d.ssEmpleado)}`, { rojo: true }));
+  if (d.irpf) filas.push(fila("IRPF", `−${fmtEur(d.irpf)}`, { rojo: true }));
+  filas.push(fila("Nómina neta", fmtEur(d.nomina), { destacado: true, separador: true }));
+  // Resto de conceptos que se suman a la liquidación.
   if (d.propina) filas.push(fila("Propina", fmtEur(d.propina)));
   if (d.propinaMantenimiento) filas.push(fila("Propina mes anterior", fmtEur(d.propinaMantenimiento)));
   if (d.horasExtras) filas.push(fila("Horas extras", fmtEur(d.horasExtras)));
   if (d.bonus) filas.push(fila("Bonus", fmtEur(d.bonus)));
-  if (d.ajuste) filas.push(fila("Ajuste", `${d.ajuste > 0 ? "+" : "−"}${fmtEur(Math.abs(d.ajuste))}`));
-  if (d.irpf) filas.push(fila("IRPF", fmtEur(d.irpf)));
-  if (d.ssEmpleado) filas.push(fila("Seguridad Social (empleado)", fmtEur(d.ssEmpleado)));
-  filas.push(
-    `<tr><td colspan="2" style="border-top:1px solid #e5e5e5;padding:0"></td></tr>` +
-      fila("Total", fmtEur(d.total), true),
-  );
+  if (d.ajuste) filas.push(fila("Ajuste", `${d.ajuste > 0 ? "+" : "−"}${fmtEur(Math.abs(d.ajuste))}`, { rojo: d.ajuste < 0 }));
+  filas.push(fila("Total", fmtEur(d.total), { destacado: true, separador: true }));
+
   return `
     <div style="border:1px solid #e5e5e5;border-radius:10px;padding:16px 18px;margin:16px 0;background:#fafafa">
       <table style="width:100%;border-collapse:collapse">${filas.join("")}</table>

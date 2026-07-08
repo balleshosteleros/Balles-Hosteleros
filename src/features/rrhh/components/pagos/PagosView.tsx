@@ -3,7 +3,7 @@
 import { useState, useMemo, useEffect, useCallback, useRef, type ReactNode } from "react";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
-import { getResumenPagos, costeSSTotal, type PagoEmpleado, type PagoArea } from "@/features/rrhh/data/pagos";
+import { getResumenPagos, costeSSTotal, nominaBruta, type PagoEmpleado, type PagoArea } from "@/features/rrhh/data/pagos";
 import { normalizarDniNie } from "@/features/rrhh/lib/documentacion-validacion";
 import {
   listEmpleadosParaPagos,
@@ -512,17 +512,18 @@ export function PagosView() {
     ) : null;
 
   const columnasDef: ToolbarColumna[] = [
-    { campo: "nomina", label: "Nómina" },
+    { campo: "nominaBruta", label: "Nómina bruta" },
+    { campo: "ssEmpleado", label: "− SS trabajador" },
+    { campo: "irpf", label: "− IRPF" },
+    { campo: "nomina", label: "Nómina neta" },
     { campo: "horasReales", label: "H.R" },
     { campo: "horasTrabajadas", label: "H.T" },
     { campo: "propina", label: "Propina" },
     { campo: "ajuste", label: "Ajuste" },
     { campo: "horasExtras", label: "H.Extras" },
     { campo: "bonus", label: "Bonus" },
-    { campo: "ssEmpleado", label: "SS Empleado" },
     { campo: "ssEmpresa", label: "SS Empresa" },
     { campo: "ssTotal", label: "Total SS" },
-    { campo: "irpf", label: "IRPF" },
     { campo: "total", label: "Total" },
     { campo: "nominaArchivo", label: "Nómina (doc)" },
     { campo: "pagado", label: "Pagado" },
@@ -530,9 +531,17 @@ export function PagosView() {
   ];
 
   const columnDefs: Record<string, { th: ReactNode; td: (p: PagoEmpleado) => ReactNode }> = {
+    nominaBruta: {
+      th: <TableHead key="nominaBruta" className="text-right whitespace-nowrap">Nómina bruta</TableHead>,
+      td: (p) => (
+        <TableCell key="nominaBruta" className="text-right tabular-nums whitespace-nowrap">
+          {fmtDato(nominaBruta(p), nominaProcesada(p))}{circuloN(p)}
+        </TableCell>
+      ),
+    },
     nomina: {
-      th: <TableHead key="nomina" className="text-right whitespace-nowrap">Nómina</TableHead>,
-      td: (p) => <TableCell key="nomina" className="text-right tabular-nums whitespace-nowrap">{fmt(p.nomina)}{circuloN(p)}</TableCell>,
+      th: <TableHead key="nomina" className="text-right whitespace-nowrap font-semibold">Nómina neta</TableHead>,
+      td: (p) => <TableCell key="nomina" className="text-right tabular-nums whitespace-nowrap font-semibold">{fmtDato(p.nomina, nominaProcesada(p))}</TableCell>,
     },
     horasReales: {
       th: <TableHead key="horasReales" className="text-right">H.R</TableHead>,
@@ -566,8 +575,12 @@ export function PagosView() {
       td: (p) => <TableCell key="bonus" className="text-right tabular-nums whitespace-nowrap">{p.bonus > 0 ? fmt(p.bonus) : "—"}</TableCell>,
     },
     ssEmpleado: {
-      th: <TableHead key="ssEmpleado" className="text-right whitespace-nowrap">SS Empleado</TableHead>,
-      td: (p) => <TableCell key="ssEmpleado" className="text-right tabular-nums whitespace-nowrap">{fmtDato(p.ssEmpleado, nominaProcesada(p))}</TableCell>,
+      th: <TableHead key="ssEmpleado" className="text-right whitespace-nowrap">− SS trabajador</TableHead>,
+      td: (p) => (
+        <TableCell key="ssEmpleado" className="text-right tabular-nums whitespace-nowrap text-destructive">
+          {p.ssEmpleado > 0 ? `−${fmt(p.ssEmpleado)}` : fmtDato(p.ssEmpleado, nominaProcesada(p))}
+        </TableCell>
+      ),
     },
     ssEmpresa: {
       th: <TableHead key="ssEmpresa" className="text-right whitespace-nowrap">SS Empresa</TableHead>,
@@ -582,8 +595,12 @@ export function PagosView() {
       ),
     },
     irpf: {
-      th: <TableHead key="irpf" className="text-right whitespace-nowrap">IRPF</TableHead>,
-      td: (p) => <TableCell key="irpf" className="text-right tabular-nums whitespace-nowrap">{fmtDato(p.irpf, nominaProcesada(p))}</TableCell>,
+      th: <TableHead key="irpf" className="text-right whitespace-nowrap">− IRPF</TableHead>,
+      td: (p) => (
+        <TableCell key="irpf" className="text-right tabular-nums whitespace-nowrap text-destructive">
+          {p.irpf > 0 ? `−${fmt(p.irpf)}` : fmtDato(p.irpf, nominaProcesada(p))}
+        </TableCell>
+      ),
     },
     total: {
       th: <TableHead key="total" className="text-right font-bold whitespace-nowrap">Total</TableHead>,
@@ -672,8 +689,11 @@ export function PagosView() {
 
   // Celda de TOTALES por columna (respeta el orden y la visibilidad dinámicos, en
   // paralelo a columnDefs). Sin entrada = celda vacía.
+  const totalNominaBruta = pagosFiltrados.reduce((s, p) => s + nominaBruta(p), 0);
+  const totalIrpf = pagosFiltrados.reduce((s, p) => s + p.irpf, 0);
   const totalDefs: Record<string, ReactNode> = {
-    nomina: <TableCell key="t-nomina" className="text-right tabular-nums">{fmt(resumen.totalNomina)}</TableCell>,
+    nominaBruta: <TableCell key="t-nominabruta" className="text-right tabular-nums">{fmtDato(totalNominaBruta, hayNominaProcesada)}</TableCell>,
+    nomina: <TableCell key="t-nomina" className="text-right tabular-nums font-semibold">{fmtDato(resumen.totalNomina, hayNominaProcesada)}</TableCell>,
     horasReales: <TableCell key="t-hr" className="text-right tabular-nums">{pagosFiltrados.reduce((s, p) => s + p.horasReales, 0)}h</TableCell>,
     horasTrabajadas: <TableCell key="t-ht" className="text-right tabular-nums">{pagosFiltrados.reduce((s, p) => s + p.horasTrabajadas, 0)}h</TableCell>,
     propina: <TableCell key="t-propina" className="text-right tabular-nums">{fmt(resumen.totalPropinas)}</TableCell>,
@@ -684,10 +704,10 @@ export function PagosView() {
     ),
     horasExtras: <TableCell key="t-extras" className="text-right tabular-nums">{fmt(resumen.totalExtras)}</TableCell>,
     bonus: <TableCell key="t-bonus" className="text-right tabular-nums">{fmt(resumen.totalBonus)}</TableCell>,
-    ssEmpleado: <TableCell key="t-ssemp" className="text-right tabular-nums whitespace-nowrap">{fmtDato(resumen.totalSsEmpleado, hayNominaProcesada)}</TableCell>,
+    ssEmpleado: <TableCell key="t-ssemp" className="text-right tabular-nums whitespace-nowrap text-destructive">{hayNominaProcesada && resumen.totalSsEmpleado > 0 ? `−${fmt(resumen.totalSsEmpleado)}` : fmtDato(resumen.totalSsEmpleado, hayNominaProcesada)}</TableCell>,
     ssEmpresa: <TableCell key="t-ssempresa" className="text-right tabular-nums whitespace-nowrap">{fmtDato(resumen.totalSsEmpresa, hayNominaProcesada)}</TableCell>,
     ssTotal: <TableCell key="t-sstotal" className="text-right tabular-nums font-medium whitespace-nowrap">{fmtDato(resumen.totalSs, hayNominaProcesada)}</TableCell>,
-    irpf: <TableCell key="t-irpf" className="text-right tabular-nums whitespace-nowrap">{fmtDato(pagosFiltrados.reduce((s, p) => s + p.irpf, 0), hayNominaProcesada)}</TableCell>,
+    irpf: <TableCell key="t-irpf" className="text-right tabular-nums whitespace-nowrap text-destructive">{hayNominaProcesada && totalIrpf > 0 ? `−${fmt(totalIrpf)}` : fmtDato(totalIrpf, hayNominaProcesada)}</TableCell>,
     total: <TableCell key="t-total" className="text-right tabular-nums font-bold">{fmt(resumen.totalFinal)}</TableCell>,
     nominaArchivo: <TableCell key="t-nomdoc" className="text-center"><Badge variant="secondary" className="text-[10px]">{pagosFiltrados.filter((p) => p.nominaPath).length}/{pagosFiltrados.length}</Badge></TableCell>,
     pagado: <TableCell key="t-pagado" className="text-center"><Badge variant={pagosFiltrados.every((p) => p.pagado) ? "default" : "secondary"} className="text-[10px]">{pagosFiltrados.filter((p) => p.pagado).length}/{pagosFiltrados.length}</Badge></TableCell>,
