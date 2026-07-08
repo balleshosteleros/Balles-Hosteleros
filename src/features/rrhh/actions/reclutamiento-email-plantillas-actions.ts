@@ -455,15 +455,13 @@ export async function previewReclutamientoFaseEmail(
     }
   }
 
-  // Fase «Formación»: resuelve {{enlace_formacion}} con la URL configurada.
+  // Fase «Formación»: resuelve {{enlace_formacion}} al CURSO del puesto de la
+  // vacante del candidato (igual que el envío real). Si no se resuelve, muestra
+  // un texto-placeholder legible.
   if (estado === "formacion") {
-    const { data: cfgRow } = await supabase
-      .from("reclutamiento_config")
-      .select("formacion_url")
-      .eq("empresa_id", empresaId)
-      .maybeSingle();
+    const enlace = await resolverEnlaceFormacion(supabase, empresaId, candidatoId);
     vars.enlace_formacion =
-      (cfgRow?.formacion_url as string | null) || "(configura la URL de formación en Ajustes → RRHH → Reclutamiento)";
+      enlace || "(configura la URL de formación en Ajustes → RRHH → Reclutamiento)";
   }
 
   return {
@@ -769,15 +767,11 @@ export async function enviarReclutamientoFaseEmail(
     vars.documentacion_dias_validez = String(DOCUMENTACION_TOKEN_DIAS);
   }
 
-  // Fase «Formación»: resuelve {{enlace_formacion}} con la URL configurada en
-  // Ajustes → RRHH → Reclutamiento. Si no hay URL, queda vacío.
+  // Fase «Formación»: resuelve {{enlace_formacion}} al CURSO del puesto de la
+  // vacante del candidato (1 puesto = 1 curso). Si no hay puesto/curso, cae a la
+  // URL genérica de Ajustes → RRHH → Reclutamiento.
   if (estado === "formacion") {
-    const { data: cfgRow } = await supabase
-      .from("reclutamiento_config")
-      .select("formacion_url")
-      .eq("empresa_id", empresaId)
-      .maybeSingle();
-    vars.enlace_formacion = (cfgRow?.formacion_url as string | null) ?? "";
+    vars.enlace_formacion = await resolverEnlaceFormacion(supabase, empresaId, candidatoId);
   }
 
   const subject = sustituirVariablesReclutamiento(tpl.asunto, vars);
@@ -833,6 +827,63 @@ export async function enviarReclutamientoFaseEmail(
   }
   if (!res.configured) return { sent: false, reason: "Sin transporte de email configurado" };
   return { sent: false, reason: res.error };
+}
+
+/**
+ * Resuelve {{enlace_formacion}} para un candidato concreto.
+ *
+ * El enlace apunta al CURSO del puesto de la vacante del candidato (relación
+ * 1 puesto = 1 curso): candidato → vacante → puesto → curso. Así cada correo de
+ * la fase «Formación» lleva al alumno directo a la formación de SU puesto.
+ *
+ * Si el candidato no tiene vacante/puesto (o el curso no se puede resolver),
+ * cae a la URL genérica configurada en Ajustes → RRHH → Reclutamiento
+ * (`reclutamiento_config.formacion_url`).
+ */
+async function resolverEnlaceFormacion(
+  supabase: Awaited<ReturnType<typeof ctx>>["supabase"],
+  empresaId: string,
+  candidatoId: string,
+): Promise<string> {
+  const { appBaseUrl } = await import("@/features/rrhh/lib/documentacion-candidato");
+
+  // candidato → vacante → puesto → curso del puesto.
+  const { data: cand } = await supabase
+    .from("candidatos")
+    .select("vacante_id")
+    .eq("id", candidatoId)
+    .eq("empresa_id", empresaId)
+    .maybeSingle();
+  const vacanteId = (cand?.vacante_id as string | null) ?? null;
+
+  let puestoId: string | null = null;
+  if (vacanteId) {
+    const { data: vac } = await supabase
+      .from("vacantes")
+      .select("puesto_id")
+      .eq("id", vacanteId)
+      .eq("empresa_id", empresaId)
+      .maybeSingle();
+    puestoId = (vac?.puesto_id as string | null) ?? null;
+  }
+
+  if (puestoId) {
+    const { getCursoDePuesto } = await import(
+      "@/features/formacion/actions/formacion-actions"
+    );
+    const res = await getCursoDePuesto(puestoId);
+    if (res.ok && res.cursoId) {
+      return `${appBaseUrl()}/mi-panel/formacion/curso/${res.cursoId}`;
+    }
+  }
+
+  // Fallback: URL genérica de formación configurada por empresa.
+  const { data: cfgRow } = await supabase
+    .from("reclutamiento_config")
+    .select("formacion_url")
+    .eq("empresa_id", empresaId)
+    .maybeSingle();
+  return (cfgRow?.formacion_url as string | null) || "";
 }
 
 /**
