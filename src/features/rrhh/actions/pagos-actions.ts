@@ -326,7 +326,7 @@ export async function enviarConfirmacionesPago(
             usuarioId: uid,
             tipo: "liquidacion",
             titulo: `Tu liquidación de ${label}`,
-            mensaje: `Total: ${fmtEur(Number(r.total))}`,
+            mensaje: "",
             payload: {
               periodo,
               pago: Number(r.pago),

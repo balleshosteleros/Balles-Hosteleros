@@ -171,13 +171,19 @@ export async function accionarLiquidacion(
 export async function marcarNotificacionesVistasPorRef(
   refTabla: string,
   refId: string,
+  opts: { accionar?: boolean } = {},
 ): Promise<{ ok: boolean; cerradas: number }> {
   try {
     const admin = createAdminClient();
     const nowIso = new Date().toISOString();
+    const patch: Record<string, unknown> = { vista_at: nowIso, leida: true, leida_at: nowIso };
+    // Cuando el cierre equivale a una aprobación (p. ej. la liquidación
+    // confirmada por enlace de correo), marca también `accionada_at` para que
+    // el portal muestre "Aprobada" en vez de solo "Vista".
+    if (opts.accionar) patch.accionada_at = nowIso;
     const { data, error } = await admin
       .from("notificaciones")
-      .update({ vista_at: nowIso, leida: true, leida_at: nowIso })
+      .update(patch)
       .eq("entidad_tipo", refTabla)
       .eq("entidad_id", refId)
       .is("vista_at", null)

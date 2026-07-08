@@ -188,6 +188,18 @@ export async function confirmarLiquidacionPorToken(
     .eq("id", row.id)
     .is("confirmado_en", null);
 
+  // Cierra el aviso in-app de esa liquidación: al aprobar por enlace, la
+  // notificación del portal queda ya como "Aprobada" y no pide LIQUIDAR de nuevo
+  // (el mismo campo lo aprueba desde ambos sitios; el primero que confirme gana).
+  try {
+    const { marcarNotificacionesVistasPorRef } = await import(
+      "@/features/notificaciones/actions/notificaciones-actions"
+    );
+    await marcarNotificacionesVistasPorRef("rrhh_pagos", row.pago_id, { accionar: true });
+  } catch (e) {
+    console.error("[rrhh-pagos-confirmacion] cerrar notif in-app:", e);
+  }
+
   return { ok: true };
 }
 
