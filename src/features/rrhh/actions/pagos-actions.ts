@@ -10,6 +10,8 @@ import {
   type LiquidacionDetalle,
 } from "@/features/rrhh/services/nominas/rrhh-pagos-confirmacion";
 import { nombreMes } from "@/features/rrhh/services/nominas/nominas-gestoria";
+import { getZonaHorariaEmpresa } from "@/features/empresa/lib/empresa-server";
+import { formatFechaEnZona } from "@/features/empresa/lib/zona-horaria";
 
 const MESES_PAGOS = [
   "enero", "febrero", "marzo", "abril", "mayo", "junio",
@@ -419,7 +421,7 @@ export async function marcarPagado(
   pagado: boolean,
 ): Promise<{ ok: boolean; requiereAprobacion?: boolean }> {
   try {
-    const { supabase, empresaId } = await getAppContext();
+    const { supabase, empresaId, userId } = await getAppContext();
     if (!empresaId || !empleadoId || empleadoId.startsWith("ext-")) return { ok: false };
     const cfg = await getNotifLiquidacionesConfig();
 
@@ -436,9 +438,15 @@ export async function marcarPagado(
       return { ok: false, requiereAprobacion: true };
     }
 
+    // Al marcar pagado fechamos el abono (histórico del empleado); al desmarcar
+    // limpiamos la fecha para que no quede un "abonado el X" fantasma.
     const { error } = await supabase
       .from("rrhh_pagos")
-      .update({ pagado })
+      .update({
+        pagado,
+        pagado_at: pagado ? new Date().toISOString() : null,
+        pagado_por: pagado ? (userId ?? null) : null,
+      })
       .eq("id", row.id as string);
     if (error) throw error;
 
@@ -508,5 +516,111 @@ export async function puedeReabrirPagos(): Promise<boolean> {
     return esDirector;
   } catch {
     return false;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Histórico de pagos abonados de UN empleado
+// ---------------------------------------------------------------------------
+// Solo pagos ya abonados (pagado = true): es el histórico de "dinero recibido".
+// Cada fila trae el periodo, el neto percibido, el desglose y la fecha de abono.
+
+export interface PagoAbonado {
+  id: string;
+  periodo: string;      // 'YYYY-MM'
+  periodoLabel: string; // 'junio 2026'
+  total: number;        // neto a percibir (lo que recibe)
+  nomina: number;       // nómina neta
+  ssEmpleado: number;
+  irpf: number;
+  propina: number;
+  propinaMesAnterior: number;
+  horasExtras: number;
+  bonus: number;
+  ajuste: number;
+  pagadoAt: string | null;      // ISO del abono
+  pagadoAtLabel: string | null; // 'dd/mm/aaaa' en zona de la empresa
+  nominaPath: string | null;
+}
+
+const PAGO_ABONADO_COLS =
+  "id, periodo, total, nomina, ss_empleado, irpf, propina, propina_mes_anterior, " +
+  "horas_extras, bonus, ajuste, pagado_at, nomina_path";
+
+function bdToPagoAbonado(r: Record<string, unknown>, tz: string): PagoAbonado {
+  const periodo = String(r.periodo);
+  const pagadoAt = (r.pagado_at as string) ?? null;
+  return {
+    id: String(r.id),
+    periodo,
+    periodoLabel: periodoLabel(periodo),
+    total: Number(r.total),
+    nomina: Number(r.nomina),
+    ssEmpleado: Number(r.ss_empleado),
+    irpf: Number(r.irpf),
+    propina: Number(r.propina),
+    propinaMesAnterior: Number(r.propina_mes_anterior),
+    horasExtras: Number(r.horas_extras),
+    bonus: Number(r.bonus),
+    ajuste: Number(r.ajuste),
+    pagadoAt,
+    pagadoAtLabel: pagadoAt ? formatFechaEnZona(pagadoAt, tz) : null,
+    nominaPath: (r.nomina_path as string) ?? null,
+  };
+}
+
+// Histórico para la FICHA de RRHH (empleado concreto, empresa activa).
+export async function listPagosAbonadosEmpleado(
+  empleadoId: string,
+): Promise<{ ok: boolean; data: PagoAbonado[] }> {
+  try {
+    const { supabase, empresaId } = await getAppContext();
+    if (!empresaId || !empleadoId) return { ok: false, data: [] };
+    const tz = await getZonaHorariaEmpresa(supabase, empresaId);
+
+    const { data, error } = await supabase
+      .from("rrhh_pagos")
+      .select(PAGO_ABONADO_COLS)
+      .eq("empresa_id", empresaId)
+      .eq("empleado_id", empleadoId)
+      .eq("pagado", true)
+      .order("periodo", { ascending: false });
+    if (error) throw error;
+    return { ok: true, data: (data ?? []).map((r) => bdToPagoAbonado(r as unknown as Record<string, unknown>, tz)) };
+  } catch (err) {
+    console.error("[rrhh] listPagosAbonadosEmpleado:", err);
+    return { ok: false, data: [] };
+  }
+}
+
+// Histórico para el PORTAL del empleado logueado (sus fichas, empresa activa).
+// Cada nómina está aislada por empresa: la RLS de rrhh_pagos y el filtro por
+// empresa_id garantizan que solo vea los pagos de la empresa activa.
+export async function listMisPagosAbonados(): Promise<{ ok: boolean; data: PagoAbonado[] }> {
+  try {
+    const { supabase, empresaId, userId } = await getAppContext();
+    if (!empresaId || !userId) return { ok: false, data: [] };
+    const tz = await getZonaHorariaEmpresa(supabase, empresaId);
+
+    const { data: fichas } = await supabase
+      .from("empleados")
+      .select("id")
+      .eq("user_id", userId)
+      .eq("empresa_id", empresaId);
+    const fichaIds = (fichas ?? []).map((f) => f.id as string);
+    if (fichaIds.length === 0) return { ok: true, data: [] };
+
+    const { data, error } = await supabase
+      .from("rrhh_pagos")
+      .select(PAGO_ABONADO_COLS)
+      .eq("empresa_id", empresaId)
+      .in("empleado_id", fichaIds)
+      .eq("pagado", true)
+      .order("periodo", { ascending: false });
+    if (error) throw error;
+    return { ok: true, data: (data ?? []).map((r) => bdToPagoAbonado(r as unknown as Record<string, unknown>, tz)) };
+  } catch (err) {
+    console.error("[rrhh] listMisPagosAbonados:", err);
+    return { ok: false, data: [] };
   }
 }

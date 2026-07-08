@@ -87,6 +87,7 @@ export const miPanelSubs: SubItem[] = [
   { title: "FICHAJES", url: "/mi-panel/fichajes", icon: Fingerprint },
   { title: "FORMACIÓN", url: "/mi-panel/formacion", icon: GraduationCap, badge: "2ª fase" },
   { title: "CONDICIONES", url: "/mi-panel/condiciones", icon: ClipboardCheck },
+  { title: "MIS PAGOS", url: "/mi-panel/pagos", icon: HandCoins },
   { title: "CUESTIONARIOS", url: "/mi-panel/cuestionarios", icon: FileQuestion },
   { title: "SOLICITUDES", url: "/mi-panel/ausencias", icon: Inbox },
   { title: "COMUNICADOS", url: "/mi-panel/comunicados", icon: Megaphone },

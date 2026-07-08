@@ -16,6 +16,7 @@ import { FirmasEmpleadoTab } from "@/features/rrhh/components/empleados/FirmasEm
 import { DocumentosIdentificativosCard } from "@/features/rrhh/components/empleados/DocumentosIdentificativosCard";
 import { InspeccionesEmpleadoTab } from "@/features/rrhh/components/empleados/InspeccionesEmpleadoTab";
 import { CuestionariosEmpleadoTab } from "@/features/rrhh/components/empleados/CuestionariosEmpleadoTab";
+import { PagosEmpleadoTab } from "@/features/rrhh/components/empleados/PagosEmpleadoTab";
 import { ValidadoresEmpleadoCard } from "@/features/rrhh/components/empleados/ValidadoresEmpleadoCard";
 import { CalendarioVacacionesEmpleadoCard } from "@/features/rrhh/components/empleados/CalendarioVacacionesEmpleadoCard";
 import {
@@ -313,7 +314,7 @@ export default function FichaEmpleadoPage() {
       case "points":
         return <SubmoduloPorEmpleadoPlaceholder modulo="Points" path="/rrhh/points" empleado={empleado} />;
       case "pagos":
-        return <SubmoduloPorEmpleadoPlaceholder modulo="Pagos" path="/rrhh/pagos" empleado={empleado} />;
+        return <PagosEmpleadoTab empleadoId={empleadoRegistro.id} />;
       case "formacion":
         return <SubmoduloPorEmpleadoPlaceholder modulo="Formación" path="/rrhh/formacion" empleado={empleado} />;
       case "cuestionarios":
