@@ -19,6 +19,7 @@ import { generarToken, hashToken, compararToken } from "@/features/rrhh/services
 import { sendEmail } from "@/lib/email/send";
 import { getSiteUrl } from "@/features/rrhh/services/gestoria/gestoria-contrato";
 import { nombreMes } from "@/features/rrhh/services/nominas/nominas-gestoria";
+import { fetchEmpresaBrand } from "@/lib/email/brand-header";
 
 /** Datos del mes de un empleado que se muestran en el recuadro del enlace. */
 export interface LiquidacionDetalle {
@@ -39,6 +40,8 @@ export interface LiquidacionDetalle {
   irpf: number;
   total: number;
   confirmadoEn: string | null;
+  /** Isotipo (o logo) de la empresa para la pantalla de éxito. */
+  marcaUrl: string | null;
 }
 
 /** Enlace público que abre el empleado para confirmar su liquidación. */
@@ -130,11 +133,8 @@ export async function detalleLiquidacionPorToken(
     .maybeSingle();
   if (!pago) return { ok: false, error: "Liquidación no encontrada" };
 
-  const { data: emp } = await admin
-    .from("empresas")
-    .select("nombre")
-    .eq("id", row.empresa_id)
-    .maybeSingle();
+  const brand = await fetchEmpresaBrand(row.empresa_id);
+  const marcaUrl = brand?.isotipoUrl || brand?.logoUrl || null;
 
   return {
     ok: true,
@@ -142,7 +142,7 @@ export async function detalleLiquidacionPorToken(
       empleadoNombre: (pago.empleado_nombre as string) ?? "",
       periodo: row.periodo,
       mesLabel: nombreMes(row.periodo),
-      empresaNombre: (emp?.nombre as string) ?? "la empresa",
+      empresaNombre: brand?.nombre || "la empresa",
       fijo: Boolean(pago.fijo),
       pago: Number(pago.pago),
       nomina: Number(pago.nomina),
@@ -157,6 +157,7 @@ export async function detalleLiquidacionPorToken(
       total: Number(pago.total),
       // Confirmado si el token lo registra O si el pago ya está aceptado (pop-up in-app).
       confirmadoEn: (row.confirmado_en as string | null) ?? (pago.confirmacion_aceptada_at as string | null) ?? null,
+      marcaUrl,
     },
   };
 }

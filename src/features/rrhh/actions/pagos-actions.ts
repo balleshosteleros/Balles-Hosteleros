@@ -384,6 +384,7 @@ export async function enviarConfirmacionesPago(
               irpf: Number(r.irpf),
               total: Number(r.total),
               confirmadoEn: null,
+              marcaUrl: null,
             };
             return enviarCorreoConfirmacionLiquidacion(admin, {
               empresaId,

@@ -35,8 +35,38 @@ export function ConfirmarLiquidacionView({ endpoint, detalle }: Props) {
     }
   };
 
-  // Filas del recuadro: solo los conceptos con valor (nómina y total siempre).
-  const filas: { label: string; valor: string; destacado?: boolean; signo?: "pos" | "neg" }[] = [
+  // ── Pantalla de ÉXITO: isotipo de la empresa + check + mensaje ──────────────
+  if (confirmada) {
+    return (
+      <div className="min-h-screen bg-zinc-50 flex items-center justify-center p-6">
+        <div className="max-w-md w-full bg-white rounded-2xl border border-zinc-200 shadow-sm p-10 text-center">
+          {detalle.marcaUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={detalle.marcaUrl}
+              alt={detalle.empresaNombre}
+              className="mx-auto mb-6 h-20 w-20 object-contain"
+            />
+          ) : null}
+
+          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100">
+            <CheckCircle2 className="h-9 w-9 text-emerald-600" />
+          </div>
+
+          <h1 className="text-xl font-semibold text-zinc-900">¡Liquidación confirmada!</h1>
+          <p className="mt-2 text-sm text-zinc-600">
+            Gracias, {detalle.empleadoNombre.split(" ")[0] || ""}. Has confirmado que tu liquidación de{" "}
+            <b>{detalle.mesLabel}</b> ({fmtEur(detalle.total)}) es correcta. {detalle.empresaNombre} ya
+            puede proceder al pago.
+          </p>
+          <p className="mt-6 text-xs text-zinc-400">Ya puedes cerrar esta ventana.</p>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Filas del recuadro: solo los conceptos con valor (nómina y total siempre) ──
+  const filas: { label: string; valor: string; signo?: "pos" | "neg" }[] = [
     { label: "Nómina", valor: fmtEur(detalle.nomina) },
   ];
   if (detalle.propina) filas.push({ label: "Propina", valor: fmtEur(detalle.propina) });
@@ -57,6 +87,14 @@ export function ConfirmarLiquidacionView({ endpoint, detalle }: Props) {
   return (
     <div className="min-h-screen bg-zinc-50 flex items-center justify-center p-6">
       <div className="max-w-lg w-full bg-white rounded-2xl border border-zinc-200 shadow-sm p-8">
+        {detalle.marcaUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={detalle.marcaUrl}
+            alt={detalle.empresaNombre}
+            className="mx-auto mb-4 h-14 w-14 object-contain"
+          />
+        ) : null}
         <h1 className="text-lg font-semibold text-zinc-900">Tu liquidación de {detalle.mesLabel}</h1>
         <p className="mt-1 text-sm text-zinc-600">
           {detalle.empleadoNombre} · {detalle.empresaNombre}
@@ -95,49 +133,32 @@ export function ConfirmarLiquidacionView({ endpoint, detalle }: Props) {
           </table>
         </div>
 
-        {confirmada ? (
-          <div className="mt-5 rounded-xl border border-emerald-200 bg-emerald-50 p-4">
-            <div className="flex items-start gap-2">
-              <CheckCircle2 className="h-5 w-5 text-emerald-600 shrink-0 mt-0.5" />
-              <div className="text-sm text-emerald-900">
-                <p className="font-semibold">Liquidación confirmada</p>
-                <p className="mt-1">
-                  Gracias. Has confirmado que tu liquidación de {detalle.mesLabel} es correcta. La
-                  empresa ya puede proceder al pago.
-                </p>
-              </div>
-            </div>
+        <div className="mt-5 rounded-xl border border-sky-200 bg-sky-50 p-4 text-sm text-sky-900">
+          <p>
+            Revisa que los importes son correctos. Al confirmar, das el visto bueno a esta
+            liquidación y la empresa podrá proceder al pago.
+          </p>
+        </div>
+
+        {error && (
+          <div className="mt-3 flex items-start gap-2 text-sm text-rose-600">
+            <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+            <span>{error}</span>
           </div>
-        ) : (
-          <>
-            <div className="mt-5 rounded-xl border border-sky-200 bg-sky-50 p-4 text-sm text-sky-900">
-              <p>
-                Revisa que los importes son correctos. Al confirmar, das el visto bueno a esta
-                liquidación y la empresa podrá proceder al pago.
-              </p>
-            </div>
-
-            {error && (
-              <div className="mt-3 flex items-start gap-2 text-sm text-rose-600">
-                <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
-                <span>{error}</span>
-              </div>
-            )}
-
-            <button
-              onClick={confirmar}
-              disabled={confirmando}
-              className="mt-5 w-full inline-flex items-center justify-center gap-2 bg-emerald-600 text-white rounded-lg py-2.5 font-medium disabled:opacity-50 hover:bg-emerald-700 transition"
-            >
-              {confirmando ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <ShieldCheck className="h-4 w-4" />
-              )}
-              {confirmando ? "Confirmando…" : "Confirmar que es correcto"}
-            </button>
-          </>
         )}
+
+        <button
+          onClick={confirmar}
+          disabled={confirmando}
+          className="mt-5 w-full inline-flex items-center justify-center gap-2 bg-emerald-600 text-white rounded-lg py-2.5 font-medium disabled:opacity-50 hover:bg-emerald-700 transition"
+        >
+          {confirmando ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <ShieldCheck className="h-4 w-4" />
+          )}
+          {confirmando ? "Confirmando…" : "Confirmar que es correcto"}
+        </button>
       </div>
     </div>
   );
