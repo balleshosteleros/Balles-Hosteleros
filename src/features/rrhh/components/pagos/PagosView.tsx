@@ -8,12 +8,14 @@ import { normalizarDniNie } from "@/features/rrhh/lib/documentacion-validacion";
 import {
   listEmpleadosParaPagos,
   loadPagos,
+  loadHorasMes,
   savePago,
   enviarConfirmacionesPago,
   reabrirConfirmacionPago,
   puedeReabrirPagos,
   marcarPagado,
   type PagoGuardado,
+  type HorasMesRow,
 } from "@/features/rrhh/actions/pagos-actions";
 import {
   procesarNominasLeidas,
@@ -176,6 +178,8 @@ export function PagosView() {
   const [columnasOrden, setColumnasOrden] = useState<string[] | undefined>(undefined);
   const [editando, setEditando] = useState<PagoEmpleado | null>(null);
   const [pagosPorRango, setPagosPorRango] = useState<Record<string, PagoEmpleado[]>>({});
+  // Horas del mes por empleado (teóricas/normales/extras/balance), por rango.
+  const [horasPorRango, setHorasPorRango] = useState<Record<string, Map<string, HorasMesRow>>>({});
   const [loading, setLoading] = useState(false);
   const [showConfig, setShowConfig] = useState(false);
   const [filtroArea, setFiltroArea] = useState<"todos" | PagoArea>("todos");
@@ -200,6 +204,17 @@ export function PagosView() {
   const claveRango = rangoKey(calRange.range);
   const periodo = periodoDeRango(calRange.range);
   const pagos = pagosPorRango[claveRango] ?? [];
+  const horasMesMap = horasPorRango[claveRango];
+
+  // Formatea horas decimales a "8h" o "8h 30m".
+  const fmtHoras = (h: number): string => {
+    const signo = h < 0 ? "−" : "";
+    const abs = Math.abs(h);
+    const horas = Math.floor(abs);
+    const min = Math.round((abs - horas) * 60);
+    if (min === 0) return `${signo}${horas}h`;
+    return `${signo}${horas}h ${min}m`;
+  };
 
   const cargarEmpleados = useCallback(async () => {
     setLoading(true);
@@ -242,6 +257,18 @@ export function PagosView() {
     );
 
     setPagosPorRango((prev) => ({ ...prev, [claveRango]: [...filasEmpleados, ...filasExtra] }));
+
+    // Horas del mes por empleado (teóricas del horario vs fichadas normales/extras).
+    // Se cargan aparte porque recorren horario + fichajes; no bloquean la tabla.
+    const idsConFicha = resEmp.data.map((e) => e.empleadoId).filter((id) => !id.startsWith("ext-"));
+    if (idsConFicha.length > 0) {
+      void loadHorasMes(periodo, idsConFicha).then((r) => {
+        if (!r.ok) return;
+        const mapa = new Map<string, HorasMesRow>();
+        for (const h of r.data) mapa.set(h.empleadoId, h);
+        setHorasPorRango((prev) => ({ ...prev, [claveRango]: mapa }));
+      });
+    }
   }, [claveRango, periodo]);
 
   useEffect(() => {
@@ -252,6 +279,7 @@ export function PagosView() {
   // Re-cargar al cambiar empresa (limpia cache)
   useEffect(() => {
     setPagosPorRango({});
+    setHorasPorRango({});
   }, [empresaActual.id]);
 
   const setPagos = useCallback(
@@ -895,6 +923,31 @@ export function PagosView() {
                           ) : !p.empleadoId.startsWith("ext-") ? (
                             <div className="text-[11px] font-normal text-amber-600">Falta DNI</div>
                           ) : null}
+                          {(() => {
+                            const h = horasMesMap?.get(p.empleadoId);
+                            if (!h) return null;
+                            // Balance: verde si ha hecho horas de más, rojo si menos, gris si cuadra.
+                            const balCls =
+                              h.balance > 0.01 ? "text-emerald-600" : h.balance < -0.01 ? "text-destructive" : "text-muted-foreground";
+                            return (
+                              <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] font-normal">
+                                <span className="text-muted-foreground" title="Horas previstas según su horario">
+                                  Previstas {fmtHoras(h.teoricas)}
+                                </span>
+                                <span className="text-muted-foreground" title="Horas fichadas normales">
+                                  · Fichadas {fmtHoras(h.normales)}
+                                </span>
+                                {h.extras > 0.01 && (
+                                  <span className="text-amber-600" title="Horas extras fichadas">
+                                    · Extras {fmtHoras(h.extras)}
+                                  </span>
+                                )}
+                                <span className={`font-semibold ${balCls}`} title="Balance: fichadas − previstas + extras">
+                                  · {h.balance >= 0 ? "+" : ""}{fmtHoras(h.balance)}
+                                </span>
+                              </div>
+                            );
+                          })()}
                         </TableCell>
                         {columnasRender.map((c) => columnDefs[c.campo]?.td(p))}
                         <TableCell>

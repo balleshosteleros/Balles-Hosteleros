@@ -636,7 +636,7 @@ export async function cerrarConReparto(
         local_id: localSeg.id,
         centro: localSeg.nombre,
         modo_teletrabajo: ctx.modoTeletrabajo,
-        tipo: ctx.tipo ?? "ENT",
+        tipo: ctx.tipo ?? "NOR",
         sesion_id: sesionId,
         requiere_revision: revision,
         revision_motivo: revision ? motivoTxt : null,

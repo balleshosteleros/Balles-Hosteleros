@@ -840,7 +840,8 @@ export async function ficharEntradaPersonal(
         precision_entrada_metros: geo?.precision ?? null,
         modo_teletrabajo: modoTeletrabajo,
         centro,
-        tipo: tipoSel?.codigo ?? null,
+        // Tipo elegido (NOR/EXT del catálogo); normal por defecto si no se indicó.
+        tipo: tipoSel?.codigo ?? "NOR",
       })
       .select()
       .single();
@@ -1033,7 +1034,7 @@ export async function ficharSalidaPersonal(fichajeId: string, geo?: GeoInput) {
           local_id: localSeg.id,
           centro: localSeg.nombre,
           modo_teletrabajo: Boolean(fichaje.modo_teletrabajo),
-          tipo: (fichaje.tipo as string | null) ?? "ENT",
+          tipo: (fichaje.tipo as string | null) ?? "NOR",
           sesion_id: sesionId,
           requiere_revision: revision,
           revision_motivo: revision

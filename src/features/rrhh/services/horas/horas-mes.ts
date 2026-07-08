@@ -20,8 +20,16 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 export interface HorasMesEmpleado {
   teoricas: number; // horas previstas por su horario en el mes (decimal)
-  fichadas: number; // horas fichadas reales en el mes (decimal)
+  normales: number; // horas fichadas NORMALES (tipo NOR/ENT/MAN/…, no EXT)
+  extras: number; // horas fichadas de HORAS EXTRAS (tipo EXT)
+  fichadas: number; // normales + extras (total fichado)
+  // Balance frente al horario: (normales − teóricas) + extras. Positivo = ha
+  // hecho horas de más; negativo = ha hecho menos de las que marcaba su horario.
+  balance: number;
 }
+
+/** Tipos de fichaje que cuentan como HORAS EXTRAS (el resto son normales). */
+const TIPOS_EXTRA = new Set(["EXT"]);
 
 const LETRAS_DIA = ["L", "M", "X", "J", "V", "S", "D"] as const;
 
@@ -307,19 +315,22 @@ export async function horasTeoricasMes(
 }
 
 /**
- * Horas FICHADAS del mes por empleado. Suma `fichajes.horas_totales` de TODOS los
- * fichajes del mes. Ojo: `fichajes.empleado_id` es el `user_id` (auth), así que
- * primero resolvemos empleadoId → user_id.
+ * Horas FICHADAS del mes por empleado, separadas en NORMALES y EXTRAS según el
+ * `tipo` del fichaje (EXT = horas extras; el resto = normales). Solo cuenta
+ * jornadas cerradas (`estado='completado'` con `hora_salida`), que es el mismo
+ * criterio que usa el resto del sistema para "horas registradas" (no hay un
+ * concepto de "aprobación" de fichajes en la BD). Ojo: `fichajes.empleado_id` es
+ * el `user_id` (auth), así que primero resolvemos empleadoId → user_id.
  */
 export async function horasFichadasMes(
   supabase: SupabaseClient,
   empresaId: string,
   empleadoIds: string[],
   periodo: string,
-): Promise<Map<string, number>> {
-  const out = new Map<string, number>();
+): Promise<Map<string, { normales: number; extras: number }>> {
+  const out = new Map<string, { normales: number; extras: number }>();
   if (empleadoIds.length === 0) return out;
-  for (const eid of empleadoIds) out.set(eid, 0);
+  for (const eid of empleadoIds) out.set(eid, { normales: 0, extras: 0 });
 
   const { desde, hasta } = rangoMes(periodo);
 
@@ -328,37 +339,40 @@ export async function horasFichadasMes(
     .from("empleados")
     .select("id, user_id")
     .in("id", empleadoIds);
-  const userByEmp = new Map<string, string>();
   const empByUser = new Map<string, string>();
   for (const e of emps ?? []) {
-    const id = e.id as string;
     const uid = e.user_id as string | null;
-    if (uid) {
-      userByEmp.set(id, uid);
-      empByUser.set(uid, id);
-    }
+    if (uid) empByUser.set(uid, e.id as string);
   }
-  const userIds = [...userByEmp.values()];
+  const userIds = [...empByUser.keys()];
   if (userIds.length === 0) return out;
 
   const { data: fichajes } = await supabase
     .from("fichajes")
-    .select("empleado_id, horas_totales")
+    .select("empleado_id, horas_totales, tipo")
     .eq("empresa_id", empresaId)
     .in("empleado_id", userIds)
+    .eq("estado", "completado")
+    .not("hora_salida", "is", null)
     .gte("fecha", desde)
     .lte("fecha", hasta);
 
   for (const f of fichajes ?? []) {
-    const uid = f.empleado_id as string;
-    const eid = empByUser.get(uid);
+    const eid = empByUser.get(f.empleado_id as string);
     if (!eid) continue;
-    out.set(eid, Math.round((out.get(eid)! + Number(f.horas_totales ?? 0)) * 100) / 100);
+    const horas = Number(f.horas_totales ?? 0);
+    const acc = out.get(eid)!;
+    if (TIPOS_EXTRA.has((f.tipo as string) ?? "")) acc.extras = Math.round((acc.extras + horas) * 100) / 100;
+    else acc.normales = Math.round((acc.normales + horas) * 100) / 100;
   }
   return out;
 }
 
-/** Conveniencia: ambas de una vez. */
+/**
+ * Conveniencia: teóricas + fichadas (normales/extras) + balance, de una vez.
+ * Balance = (normales − teóricas) + extras. Positivo = horas de más; negativo =
+ * ha hecho menos horas de las que marcaba su horario.
+ */
 export async function horasMes(
   supabase: SupabaseClient,
   empresaId: string,
@@ -371,7 +385,16 @@ export async function horasMes(
   ]);
   const out = new Map<string, HorasMesEmpleado>();
   for (const eid of empleadoIds) {
-    out.set(eid, { teoricas: teoricas.get(eid) ?? 0, fichadas: fichadas.get(eid) ?? 0 });
+    const t = teoricas.get(eid) ?? 0;
+    const f = fichadas.get(eid) ?? { normales: 0, extras: 0 };
+    const balance = Math.round((f.normales - t + f.extras) * 100) / 100;
+    out.set(eid, {
+      teoricas: t,
+      normales: f.normales,
+      extras: f.extras,
+      fichadas: Math.round((f.normales + f.extras) * 100) / 100,
+      balance,
+    });
   }
   return out;
 }
