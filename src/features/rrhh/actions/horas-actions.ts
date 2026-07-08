@@ -145,12 +145,19 @@ export async function loadFichajesCuadrante(
 // previsto de la planificación y los fichados de loadFichajesCuadrante.
 // ---------------------------------------------------------------------------
 
+export interface TramoPrevisto {
+  inicio: string;
+  fin: string;
+  turnoNombre: string | null; // nombre del turno (para el tooltip)
+  turnoCodigo: string | null;
+}
+
 export interface TimelineFichajeRow {
   empleadoId: string;
   nombre: string;
   avatarUrl: string | null;
   departamento: string | null;
-  previsto: { inicio: string; fin: string }[]; // tramos del horario (gris)
+  previsto: TramoPrevisto[]; // tramos del horario (gris)
   fichado: TramoFichado[]; // tramos fichados (color por origen)
   horasPrevistas: number; // suma de tramos previstos del día
   horasFichadas: number; // suma de tramos fichados del día
@@ -200,7 +207,16 @@ export async function loadTimelineDia(
 
     const rows: TimelineFichajeRow[] = planif.empleados.map((e) => {
       const celdas = planif.celdas[e.empleadoId]?.[fechaISO] ?? [];
-      const previsto = celdas.flatMap((c) => turnoById.get(c.turnoId)?.tramos ?? []);
+      const previsto: TramoPrevisto[] = celdas.flatMap((c) => {
+        const t = turnoById.get(c.turnoId);
+        if (!t) return [];
+        return t.tramos.map((tr) => ({
+          inicio: tr.inicio,
+          fin: tr.fin,
+          turnoNombre: t.nombre ?? null,
+          turnoCodigo: t.codigo ?? null,
+        }));
+      });
       const fichado = fichados[e.empleadoId]?.[fechaISO] ?? [];
       return {
         empleadoId: e.empleadoId,
