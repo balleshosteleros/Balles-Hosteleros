@@ -802,7 +802,6 @@ export async function syncCategoriasProductoAEmpresa(
 const JORNADAS_SEED = [
   { nombre: "Jornada completa", orden: 1 },
   { nombre: "Jornada reducida", orden: 2 },
-  { nombre: "Jornada por horas", orden: 3 },
 ];
 const TIPOS_CONTRATO_SEED = [
   { nombre: "Indefinido", orden: 1 },
