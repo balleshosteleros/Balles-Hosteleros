@@ -11,6 +11,9 @@
 
 import { getAppContext } from "@/lib/supabase/get-context";
 import { horasMes, type HorasMesEmpleado } from "@/features/rrhh/services/horas/horas-mes";
+import { getPlanificacionHorarios } from "@/features/rrhh/actions/planificacion-actions";
+import { getZonaHorariaEmpresa } from "@/features/empresa/lib/empresa-server";
+import { formatHoraEnZona } from "@/features/empresa/lib/zona-horaria";
 
 export type HorasMesRow = HorasMesEmpleado & { empleadoId: string };
 
@@ -74,12 +77,11 @@ export interface TramoFichado {
 /** [empleadoId][fechaISO] → tramos fichados. */
 export type FichadosCuadrante = Record<string, Record<string, TramoFichado[]>>;
 
-/** "HH:MM" local de un timestamptz/ISO. null si no válido. */
-function horaLocalHHMM(iso: string | null): string | null {
+/** "HH:MM" de un timestamptz en la zona de la empresa. null si no válido. */
+function horaEnZonaHHMM(iso: string | null, tz: string): string | null {
   if (!iso) return null;
-  const d = new Date(iso);
-  if (isNaN(d.getTime())) return null;
-  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+  const s = formatHoraEnZona(iso, tz, { hour12: false });
+  return /^\d{2}:\d{2}/.test(s) ? s.slice(0, 5) : null;
 }
 
 export async function loadFichajesCuadrante(
@@ -91,6 +93,7 @@ export async function loadFichajesCuadrante(
     const { supabase, empresaId } = await getAppContext();
     const ids = empleadoIds.filter((id) => id && !id.startsWith("ext-"));
     if (!empresaId || ids.length === 0) return { ok: true, data: {} };
+    const tz = await getZonaHorariaEmpresa(supabase, empresaId);
 
     // empleados.id → user_id (fichajes usan user_id).
     const { data: emps } = await supabase
@@ -119,11 +122,11 @@ export async function loadFichajesCuadrante(
       const eid = empByUser.get(f.empleado_id as string);
       if (!eid) continue;
       const fecha = f.fecha as string;
-      const inicio = horaLocalHHMM(f.hora_entrada as string | null);
+      const inicio = horaEnZonaHHMM(f.hora_entrada as string | null, tz);
       if (!inicio) continue; // sin entrada no hay tramo pintable
       const tramo: TramoFichado = {
         horaInicio: inicio,
-        horaFin: horaLocalHHMM(f.hora_salida as string | null),
+        horaFin: horaEnZonaHHMM(f.hora_salida as string | null, tz),
         extra: (f.tipo as string) === "EXT",
         origen: f.solicitud_id ? "solicitud" : "directo",
       };
@@ -133,5 +136,89 @@ export async function loadFichajesCuadrante(
   } catch (err) {
     console.error("[rrhh] loadFichajesCuadrante:", err);
     return { ok: false, data: {} };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Timeline de Fichajes por DÍA (estilo Sesame): una fila por empleado con su
+// horario previsto (gris) y sus fichajes (verde/azul/rojo). Reutiliza el
+// previsto de la planificación y los fichados de loadFichajesCuadrante.
+// ---------------------------------------------------------------------------
+
+export interface TimelineFichajeRow {
+  empleadoId: string;
+  nombre: string;
+  avatarUrl: string | null;
+  departamento: string | null;
+  previsto: { inicio: string; fin: string }[]; // tramos del horario (gris)
+  fichado: TramoFichado[]; // tramos fichados (color por origen)
+  horasPrevistas: number; // suma de tramos previstos del día
+  horasFichadas: number; // suma de tramos fichados del día
+}
+
+/** Horas decimales de una lista de tramos "HH:MM" (resuelve cruce de medianoche). */
+function horasDeTramosHHMM(tramos: { inicio: string; fin: string | null }[]): number {
+  let total = 0;
+  for (const t of tramos) {
+    const m1 = /^(\d{1,2}):(\d{2})/.exec(t.inicio ?? "");
+    const m2 = t.fin ? /^(\d{1,2}):(\d{2})/.exec(t.fin) : null;
+    if (!m1 || !m2) continue;
+    let ini = Number(m1[1]) * 60 + Number(m1[2]);
+    let fin = Number(m2[1]) * 60 + Number(m2[2]);
+    if (fin <= ini) fin += 1440;
+    total += fin - ini;
+  }
+  return Math.round((total / 60) * 100) / 100;
+}
+
+/**
+ * Datos del timeline de un DÍA: empleados (filtrables por cuadrante) con su
+ * previsto y sus fichajes. `cuadranteId` acota por local/ámbito (opcional).
+ */
+export async function loadTimelineDia(
+  fechaISO: string,
+  cuadranteId?: string | null,
+): Promise<{ ok: boolean; data: TimelineFichajeRow[] }> {
+  try {
+    const { empresaId } = await getAppContext();
+    if (!empresaId) return { ok: true, data: [] };
+
+    // Previsto + empleados del ámbito (reutiliza el motor de planificación).
+    const plan = await getPlanificacionHorarios(empresaId, {
+      desdeISO: fechaISO,
+      hastaISO: fechaISO,
+      cuadranteId: cuadranteId ?? undefined,
+    });
+    const planif = plan.data;
+    const turnoById = new Map(planif.turnos.map((t) => [t.id, t]));
+    const empleadoIds = planif.empleados.map((e) => e.empleadoId);
+    if (empleadoIds.length === 0) return { ok: true, data: [] };
+
+    // Fichados del día.
+    const fich = await loadFichajesCuadrante(empleadoIds, fechaISO, fechaISO);
+    const fichados = fich.data;
+
+    const rows: TimelineFichajeRow[] = planif.empleados.map((e) => {
+      const celdas = planif.celdas[e.empleadoId]?.[fechaISO] ?? [];
+      const previsto = celdas.flatMap((c) => turnoById.get(c.turnoId)?.tramos ?? []);
+      const fichado = fichados[e.empleadoId]?.[fechaISO] ?? [];
+      return {
+        empleadoId: e.empleadoId,
+        nombre: e.nombreCompleto,
+        avatarUrl: e.avatarUrl,
+        departamento: e.departamento,
+        previsto,
+        fichado,
+        horasPrevistas: horasDeTramosHHMM(previsto),
+        horasFichadas: horasDeTramosHHMM(
+          fichado.map((f) => ({ inicio: f.horaInicio, fin: f.horaFin })),
+        ),
+      };
+    });
+    rows.sort((a, b) => a.nombre.localeCompare(b.nombre, "es"));
+    return { ok: true, data: rows };
+  } catch (err) {
+    console.error("[rrhh] loadTimelineDia:", err);
+    return { ok: false, data: [] };
   }
 }

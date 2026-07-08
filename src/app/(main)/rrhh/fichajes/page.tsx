@@ -1,5 +1,5 @@
-import { FichajesView } from "@/features/rrhh/components/fichajes/FichajesView";
+import { FichajesModulo } from "@/features/rrhh/components/fichajes/FichajesModulo";
 
 export default function FichajesPage() {
-  return <FichajesView />;
+  return <FichajesModulo />;
 }
