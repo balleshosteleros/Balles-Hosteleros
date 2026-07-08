@@ -6,7 +6,8 @@
  * nativa, el mismo motor que el resto del proyecto) y PROPONE el número detectado.
  * La persona siempre revisa y confirma después (la IA solo propone, no decide).
  *
- * Solo procesa imágenes (no PDF) — para PDF el candidato teclea el número a mano.
+ * Procesa imágenes Y PDF (Gemini lee ambos). Si el formato no se soporta o la IA
+ * no detecta nada, devuelve `valor: null` y el formulario pide teclear el número.
  * Best-effort: si la IA no detecta nada, devuelve `valor: null` y el formulario
  * pide rehacer la foto.
  */
@@ -24,7 +25,8 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 const MAX_IMG_BYTES = 10 * 1024 * 1024;
-const TIPOS_IMG = new Set(["image/png", "image/jpeg", "image/webp", "image/heic", "image/heif"]);
+// Gemini lee imágenes Y PDFs, así que aceptamos ambos para autocompletar.
+const TIPOS_IA = new Set(["image/png", "image/jpeg", "image/webp", "image/heic", "image/heif", "application/pdf"]);
 
 const Schema = z.object({
   token: z.string().guid(),
@@ -112,9 +114,9 @@ export async function POST(req: Request) {
     if (imagen.size > MAX_IMG_BYTES) {
       return NextResponse.json({ ok: false, error: "La imagen supera 10MB" }, { status: 400 });
     }
-    if (!TIPOS_IMG.has(imagen.type)) {
-      // PDF u otros: no se procesa por IA; el candidato teclea el número.
-      return NextResponse.json({ ok: true, valor: null, motivo: "no_imagen" });
+    if (!TIPOS_IA.has(imagen.type)) {
+      // Formato no soportado por IA; el candidato teclea el número.
+      return NextResponse.json({ ok: true, valor: null, motivo: "no_soportado" });
     }
 
     // Verifica que el token corresponde a un candidato real (anti-abuso básico).

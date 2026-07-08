@@ -12,6 +12,7 @@ import {
   ArrowLeft,
   Sparkles,
   AlertTriangle,
+  Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -79,11 +80,11 @@ function SubidaDoc({
       </div>
 
       {doc.file && (
-        <div className="flex items-center gap-2 text-sm">
+        <div className="group flex items-center gap-2 rounded-md border border-border bg-muted/30 px-2.5 py-1.5 text-sm">
           <span className="truncate text-foreground/80">{doc.file.name}</span>
           {doc.deteccion === "procesando" && (
             <span className="inline-flex items-center gap-1 text-muted-foreground shrink-0">
-              <Loader2 className="h-3.5 w-3.5 animate-spin" /> Leyendo…
+              <Loader2 className="h-3.5 w-3.5 animate-spin" /> Leyendo el documento…
             </span>
           )}
           {doc.deteccion === "ok" && (
@@ -93,7 +94,7 @@ function SubidaDoc({
           )}
           {doc.deteccion === "fallo" && (
             <span className="inline-flex items-center gap-1 text-amber-600 shrink-0">
-              <AlertTriangle className="h-3.5 w-3.5" /> No se pudo leer
+              <AlertTriangle className="h-3.5 w-3.5" /> No se pudo leer — súbelo otra vez o escríbelo a mano
             </span>
           )}
           {doc.deteccion === "ajeno" && (
@@ -101,6 +102,17 @@ function SubidaDoc({
               <AlertTriangle className="h-3.5 w-3.5" /> A nombre de otra persona
             </span>
           )}
+          {/* Papelera para quitar el documento y subir otro. En móvil siempre
+              visible; en escritorio aparece al pasar el ratón por encima. */}
+          <button
+            type="button"
+            onClick={() => onFile(null)}
+            aria-label="Quitar este documento"
+            title="Quitar y subir otro"
+            className="ml-auto shrink-0 rounded p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors sm:opacity-0 sm:group-hover:opacity-100"
+          >
+            <Trash2 className="h-4 w-4" />
+          </button>
         </div>
       )}
 
@@ -200,17 +212,25 @@ export function FormDocumentacionPublica({ token, empresaSlug }: Props) {
     f: File | null,
   ) {
     setError(null);
-    if (!f) { setter(DOC_VACIO); return; }
+    if (!f) {
+      // Quitar el documento: limpia el archivo y el número autodetectado de ese campo.
+      setter(DOC_VACIO);
+      if (campo === "dni_nie") setDniNie("");
+      else if (campo === "iban") setIban("");
+      else if (campo === "ss") setSs("");
+      return;
+    }
     if (f.size > MAX_BYTES) { setError("El archivo supera 10MB"); return; }
     const esImg = TIPOS_IMG.has(f.type);
     const esPdf = f.type === "application/pdf";
     if (!esImg && !esPdf) { setError("Formato no admitido (usa foto o PDF)"); return; }
 
-    // PDF o campo sin IA → solo adjuntar (el número se teclea a mano).
-    if (!campo || esPdf) {
+    // Campo sin IA (foto de perfil, reverso del DNI) → solo adjuntar.
+    if (!campo) {
       setter({ file: f, deteccion: "na" });
       return;
     }
+    // DNI, IBAN y SS (imagen o PDF): la IA intenta leer el número.
     setter({ file: f, deteccion: "procesando" });
     void detectar(campo, f);
   }
