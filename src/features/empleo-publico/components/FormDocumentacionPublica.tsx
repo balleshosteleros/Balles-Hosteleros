@@ -32,7 +32,7 @@ interface Props {
 }
 
 /** Campos cuyo número detecta la IA. */
-type Campo = "dni_nie" | "iban" | "ss";
+type Campo = "dni_nie" | "dni_reverso" | "iban" | "ss";
 
 const TIPOS_IMG = new Set(["image/png", "image/jpeg", "image/webp", "image/heic", "image/heif"]);
 const MAX_BYTES = 10 * 1024 * 1024;
@@ -176,9 +176,10 @@ export function FormDocumentacionPublica({ token, empresaSlug }: Props) {
         else if (campo === "iban") setIban(valor);
         else if (campo === "ss") setSs(valor);
       }
-      // Del DNI también sacamos fecha de nacimiento y dirección (autocompletado).
-      // Solo se rellenan si aún estaban vacíos; el candidato puede corregirlos.
-      if (campo === "dni_nie") {
+      // Del DNI (anverso o reverso) sacamos fecha de nacimiento y dirección. En el
+      // DNI español la DIRECCIÓN está en el REVERSO; la fecha en el anverso. Se
+      // rellenan solo si estaban vacíos; el candidato puede corregirlos.
+      if (campo === "dni_nie" || campo === "dni_reverso") {
         if (data.fecha_nacimiento && !fechaNacimiento) setFechaNacimiento(data.fecha_nacimiento);
         if (data.direccion && !direccion.trim()) setDireccion(data.direccion);
       }
@@ -193,6 +194,10 @@ export function FormDocumentacionPublica({ token, empresaSlug }: Props) {
           return;
         }
       }
+      // El reverso se considera "ok" si leyó la dirección (no tiene número propio).
+      if (campo === "dni_reverso") {
+        return marcarDeteccion(campo, data.direccion ? "ok" : "na");
+      }
       return marcarDeteccion(campo, valor ? "ok" : "fallo");
     } catch {
       return marcarDeteccion(campo, "fallo");
@@ -201,6 +206,7 @@ export function FormDocumentacionPublica({ token, empresaSlug }: Props) {
 
   function marcarDeteccion(campo: Campo, estado: DocState["deteccion"]) {
     if (campo === "dni_nie") setDniAnverso((d) => ({ ...d, deteccion: estado }));
+    else if (campo === "dni_reverso") setDniReverso((d) => ({ ...d, deteccion: estado }));
     else if (campo === "iban") setDocIban((d) => ({ ...d, deteccion: estado }));
     else if (campo === "ss") setDocSs((d) => ({ ...d, deteccion: estado }));
   }
@@ -364,7 +370,7 @@ export function FormDocumentacionPublica({ token, empresaSlug }: Props) {
             id="dni-reverso"
             label="Reverso (cara trasera)"
             doc={dniReverso}
-            onFile={(f) => onDocFile(setDniReverso, null, f)}
+            onFile={(f) => onDocFile(setDniReverso, "dni_reverso", f)}
           />
         </div>
         <div className="space-y-1.5">
@@ -447,9 +453,6 @@ export function FormDocumentacionPublica({ token, empresaSlug }: Props) {
             placeholder="Calle, número, piso, código postal y localidad"
             autoComplete="street-address"
           />
-          <p className="text-[11px] text-muted-foreground">
-            Se rellena sola al leer tu DNI (suele estar en el reverso); revísala.
-          </p>
         </div>
         <div className="space-y-1.5">
           <Label htmlFor="fecha-nac">Fecha de nacimiento *</Label>
@@ -461,9 +464,6 @@ export function FormDocumentacionPublica({ token, empresaSlug }: Props) {
             max={new Date().toISOString().slice(0, 10)}
             className="w-44"
           />
-          <p className="text-[11px] text-muted-foreground">
-            Se rellena sola al leer tu DNI; revísala por si acaso.
-          </p>
         </div>
       </section>
 

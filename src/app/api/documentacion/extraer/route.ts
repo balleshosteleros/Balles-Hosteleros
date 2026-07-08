@@ -30,8 +30,9 @@ const TIPOS_IA = new Set(["image/png", "image/jpeg", "image/webp", "image/heic",
 
 const Schema = z.object({
   token: z.string().guid(),
-  // Qué número queremos extraer de esta imagen.
-  campo: z.enum(["dni_nie", "iban", "ss"]),
+  // Qué dato queremos extraer de esta imagen.
+  // dni_nie = anverso (número + fecha) · dni_reverso = domicilio · iban/ss = número.
+  campo: z.enum(["dni_nie", "dni_reverso", "iban", "ss"]),
 });
 
 function service() {
@@ -42,13 +43,17 @@ function service() {
   );
 }
 
-const PROMPTS: Record<"dni_nie" | "iban" | "ss", string> = {
+const PROMPTS: Record<"dni_nie" | "dni_reverso" | "iban" | "ss", string> = {
   dni_nie:
     "Esta imagen debe ser un DNI español o una tarjeta de NIE (documento de identidad de extranjero en España). " +
     "Extrae el número del documento (DNI: 8 dígitos + letra; NIE: letra X/Y/Z + 7 dígitos + letra), " +
-    "la fecha de nacimiento del titular y su domicilio/dirección postal si aparece (suele estar en el reverso). " +
+    "la fecha de nacimiento del titular y su domicilio/dirección postal si aparece. " +
     "Responde SOLO con un JSON: {\"valor\":\"<numero o vacío>\",\"fecha_nacimiento\":\"<AAAA-MM-DD o vacío>\",\"direccion\":\"<domicilio completo o vacío>\"}. " +
     "La fecha SIEMPRE en formato AAAA-MM-DD (año-mes-día). La dirección tal cual aparece. Sin texto adicional.",
+  dni_reverso:
+    "Esta imagen es el REVERSO de un DNI español o de una tarjeta de NIE. En el reverso figura el DOMICILIO/dirección postal del titular. " +
+    "Extrae el domicilio completo (calle, número, código postal y localidad) tal cual aparece. " +
+    "Responde SOLO con un JSON: {\"direccion\":\"<domicilio completo o vacío>\"}. Sin texto adicional.",
   iban:
     "Esta imagen muestra datos bancarios de una persona. Extrae el IBAN (empieza por dos letras de país, p.ej. ES, seguidas de 22 caracteres) " +
     "y, si aparecen, el NOMBRE COMPLETO del titular y su DNI/NIE. " +
@@ -148,13 +153,17 @@ export async function POST(req: Request) {
         attachments: [{ mimeType: imagen.type, base64: buffer.toString("base64") }],
       });
       valor = limpiarValor(data.valor);
-      // Fecha de nacimiento y dirección solo del DNI/NIE.
+      // Fecha de nacimiento: del anverso del DNI/NIE.
       if (campo === "dni_nie") {
         const f = typeof data.fecha_nacimiento === "string" ? data.fecha_nacimiento.trim() : "";
         if (/^\d{4}-\d{2}-\d{2}$/.test(f)) {
           const d = new Date(`${f}T00:00:00Z`);
           if (!Number.isNaN(d.getTime()) && d.getTime() < Date.now()) fechaNacimiento = f;
         }
+      }
+      // Dirección: del DNI/NIE (aparece en el reverso; también la aceptamos si el
+      // modelo la lee del anverso).
+      if (campo === "dni_nie" || campo === "dni_reverso") {
         const dir = typeof data.direccion === "string" ? data.direccion.trim() : "";
         if (dir.length >= 3 && dir.length <= 200) direccion = dir;
       }
