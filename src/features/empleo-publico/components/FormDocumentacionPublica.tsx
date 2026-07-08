@@ -157,6 +157,16 @@ export function FormDocumentacionPublica({ token, empresaSlug }: Props) {
   const [enviado, setEnviado] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  const errorRef = useRef<HTMLDivElement>(null);
+
+  /** Muestra un error y hace scroll hasta él para que el candidato lo vea siempre. */
+  function mostrarError(msg: string) {
+    setError(msg);
+    // Espera al render y desplaza el aviso al centro de la pantalla.
+    setTimeout(() => {
+      errorRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 50);
+  }
 
   /** Llama a la IA para proponer el número de un campo a partir de la imagen. */
   async function detectar(campo: Campo, file: File): Promise<void> {
@@ -277,16 +287,20 @@ export function FormDocumentacionPublica({ token, empresaSlug }: Props) {
       return "El documento del IBAN está a nombre de otra persona: debe coincidir con el DNI que has aportado.";
     if (docSs.deteccion === "ajeno")
       return "El documento de la Seguridad Social está a nombre de otra persona: debe coincidir con el DNI que has aportado.";
-    if (!esDniNieValido(dniNie)) return "Revisa tu DNI/NIE: no parece válido";
-    if (!esIbanValido(iban)) return "Revisa tu IBAN: no parece válido";
-    if (!esSeguridadSocialValida(ss)) return "Revisa tu nº de la Seguridad Social";
+    // Números: distingue "falta escribirlo" de "está mal escrito".
+    if (!dniNie.trim()) return "Escribe tu número de DNI/NIE en su casilla.";
+    if (!esDniNieValido(dniNie)) return "El número de DNI/NIE no es válido: revísalo.";
+    if (!iban.trim()) return "Escribe tu número de cuenta (IBAN) en su casilla.";
+    if (!esIbanValido(iban)) return "El IBAN no es válido: revísalo.";
+    if (!ss.trim()) return "Escribe tu número de la Seguridad Social en su casilla.";
+    if (!esSeguridadSocialValida(ss)) return "El nº de la Seguridad Social no es válido: revísalo.";
     return null;
   }
 
   function enviar() {
     setError(null);
     const err = validar();
-    if (err) { setError(err); return; }
+    if (err) { mostrarError(err); return; }
 
     startTransition(async () => {
       try {
@@ -319,13 +333,16 @@ export function FormDocumentacionPublica({ token, empresaSlug }: Props) {
         setEnviado(true);
       } catch (e) {
         const raw = e instanceof Error ? e.message : "";
-        // Nunca mostramos errores técnicos del navegador (en inglés) al candidato.
-        // Si el mensaje no viene de nuestro servidor (español), lo traducimos.
-        const esTecnico = !raw || /did not match|pattern|failed to fetch|network|unexpected|typeerror/i.test(raw);
+        // El servidor devuelve mensajes claros en español (p.ej. "Revisa estos
+        // campos: …"): esos SÍ se muestran tal cual. Solo traducimos los errores
+        // técnicos del navegador (DOMException en inglés, fallo de red).
+        const esTecnico =
+          !raw ||
+          /^[\x00-\x7F]*$/.test(raw) && /did not match|pattern|failed to fetch|networkerror|load failed|unexpected|typeerror|undefined/i.test(raw);
         const msg = esTecnico
-          ? "No hemos podido enviar tu documentación. Revisa que todos los campos y documentos estén completos e inténtalo de nuevo. Si sigue fallando, escríbenos."
+          ? "No se pudo enviar. Comprueba tu conexión a internet e inténtalo otra vez. Si sigue fallando, escríbenos."
           : raw;
-        setError(msg);
+        mostrarError(msg);
         toast.error(msg);
       }
     });
@@ -473,7 +490,10 @@ export function FormDocumentacionPublica({ token, empresaSlug }: Props) {
       </div>
 
       {error && (
-        <div className="rounded-md bg-destructive/10 text-destructive text-sm px-3 py-2 border border-destructive/20">
+        <div
+          ref={errorRef}
+          className="rounded-md bg-destructive/10 text-destructive text-sm font-medium px-3 py-2.5 border border-destructive/30"
+        >
           {error}
         </div>
       )}
