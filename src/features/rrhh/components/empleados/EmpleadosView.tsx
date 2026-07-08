@@ -7,7 +7,7 @@ import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
 import { listEmpleados } from "@/features/rrhh/actions/empleados-actions";
 import { ESTADOS_LABEL, ESTADOS_COLOR, type EmpleadoUI } from "@/features/rrhh/components/empleados/empleado-ui";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Settings, Lock } from "lucide-react";
 import {
@@ -68,6 +68,7 @@ type EmpleadoBDRow = {
   email_empresa: string | null;
   telefono: string | null;
   estado: string;
+  avatar_url?: string | null;
   departamentos?: { nombre: string } | null;
   areas?: string[];
   es_principal?: boolean;
@@ -115,6 +116,7 @@ function bdToEmpleado(row: EmpleadoBDRow): EmpleadoConAcceso {
     id: row.id,
     nombre: row.nombre ?? "",
     apellidos: row.apellidos ?? "",
+    avatar: row.avatar_url ?? undefined,
     estado: normalizarEstadoEmpleado(row.estado),
     horarioTipo,
     horarioSemanal,
@@ -272,6 +274,9 @@ export function EmpleadosView() {
         <td key="empleado" className="px-3 py-2 align-middle">
           <div className="flex items-center gap-3">
             <Avatar className="h-10 w-10 shrink-0 border-2 border-muted">
+              {emp.avatar ? (
+                <AvatarImage src={emp.avatar} alt={`${emp.nombre} ${emp.apellidos}`} className="object-cover" />
+              ) : null}
               <AvatarFallback className="text-xs font-bold text-white" style={{ backgroundColor: avatarColor(emp.id) }}>
                 {iniciales(emp.nombre, emp.apellidos)}
               </AvatarFallback>

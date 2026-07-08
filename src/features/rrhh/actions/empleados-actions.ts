@@ -90,7 +90,18 @@ export async function listEmpleados() {
     // Cargar todas las empresas a las que cada empleado tiene acceso para enriquecer.
     const userIds = Array.from(new Set((data ?? []).map((e) => e.user_id as string).filter(Boolean)));
     let empresasPorUser: Record<string, Array<{ id: string; nombre: string }>> = {};
+    // Avatar de sesión (usuarios): fuente alternativa de la foto cuando el
+    // empleado subió su foto por su perfil y no quedó copiada en empleados.avatar_url.
+    let avatarPorUser: Record<string, string | null> = {};
     if (userIds.length > 0) {
+      const { data: avUsers } = await admin
+        .from("usuarios")
+        .select("id, avatar_url")
+        .in("id", userIds);
+      avatarPorUser = (avUsers ?? []).reduce<Record<string, string | null>>((acc, u) => {
+        acc[u.id as string] = (u.avatar_url as string | null) ?? null;
+        return acc;
+      }, {});
       const { data: rels } = await admin
         .from("usuario_empresas")
         .select("user_id, empresas:empresa_id(id, nombre)")
@@ -176,6 +187,9 @@ export async function listEmpleados() {
       ...e,
       es_principal: e.empresa_id === empresaId,
       empresas_acceso: empresasPorUser[e.user_id as string] ?? [],
+      // Foto del empleado: prioriza la copiada en empleados.avatar_url; si no,
+      // usa el avatar de sesión (usuarios) como fallback (regla doble fuente).
+      avatar_url: (e.avatar_url as string | null) ?? avatarPorUser[e.user_id as string] ?? null,
       areas: e.user_id
         ? Array.from(areasPorUser[e.user_id as string] ?? [])
         : [(e.departamentos as { area?: string } | null)?.area].filter(
