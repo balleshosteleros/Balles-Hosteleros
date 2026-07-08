@@ -14,13 +14,15 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import {
   Pencil, Mail, Eye, Search, Plus, Copy, Trash2,
   Variable, CheckCircle2, XCircle, Loader2,
-  ClipboardList, Link2, FileText, Building2, UserCog, Lock, User,
+  ClipboardList, Link2, FileText, Building2, Lock, User,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   CLAVES_ONBOARDING_PROTEGIDAS,
   etiquetaDestino,
   OPCIONES_DESTINO,
+  DEPARTAMENTOS_CORREO,
+  normalizarDestinoDepartamento,
   type DestinoPlantilla,
 } from "@/features/rrhh/lib/plantillas-onboarding";
 import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
@@ -41,7 +43,6 @@ import {
   toggleReclutamientoEmailPlantillaActiva,
   duplicateReclutamientoEmailPlantilla,
   deleteReclutamientoEmailPlantilla,
-  getDestinatariosAutomaticos,
   type ReclutamientoEmailPlantilla,
 } from "@/features/rrhh/actions/reclutamiento-email-plantillas-actions";
 import { toast } from "sonner";
@@ -74,8 +75,6 @@ function PlantillaEditorDialog({
   const [linkOpen, setLinkOpen] = useState(false);
   const [linkTexto, setLinkTexto] = useState("");
   const [linkUrl, setLinkUrl] = useState("");
-  // Direcciones reales de RRHH / gestoría (Ajustes) para la vista previa.
-  const [autoDest, setAutoDest] = useState<{ rrhh: string; gestoria: string }>({ rrhh: "", gestoria: "" });
 
   // Sincroniza el formulario al abrir o cambiar de plantilla.
   const plantillaId = plantilla?.id ?? null;
@@ -85,20 +84,22 @@ function PlantillaEditorDialog({
     setAsunto(plantilla?.asunto ?? "");
     setCuerpo(plantilla?.cuerpo ?? "");
     setActiva(plantilla?.activa ?? true);
-    setDestino(plantilla?.destino ?? "candidato");
-    setDestinoEmail(plantilla?.destinoEmail ?? "");
+    // Normaliza destinos heredados (gestoria/rrhh) al modelo actual (departamento).
+    const norm = normalizarDestinoDepartamento(
+      plantilla?.destino ?? "candidato",
+      plantilla?.destinoEmail ?? "",
+    );
+    setDestino(norm.destino);
+    setDestinoEmail(
+      norm.destino === "departamento"
+        ? norm.destinoEmail || "correoRrhh"
+        : norm.destinoEmail ?? "",
+    );
     setTab(initialTab);
   }, [open, plantillaId, plantilla, initialTab]);
 
-  // Carga las direcciones reales de RRHH/gestoría al abrir (para la vista previa).
-  useEffect(() => {
-    if (!open) return;
-    let cancel = false;
-    getDestinatariosAutomaticos()
-      .then((d) => { if (!cancel) setAutoDest(d); })
-      .catch(() => { if (!cancel) setAutoDest({ rrhh: "", gestoria: "" }); });
-    return () => { cancel = true; };
-  }, [open]);
+  // Nota: los correos de departamento se resuelven al ENVIAR, desde Ajustes →
+  // Empresa. La vista previa muestra la etiqueta del departamento, no la dirección.
 
   const insertVariable = (variable: string) => {
     setCuerpo((prev) => (prev.endsWith(" ") || prev === "" ? prev : prev + " ") + variable);
@@ -224,7 +225,23 @@ function PlantillaEditorDialog({
               {/* Destinatario: a quién se envía este correo. */}
               <div>
                 <Label className="text-xs">Se envía a</Label>
-                <Select value={destino} onValueChange={(v) => setDestino(v as DestinoPlantilla)}>
+                <Select
+                  value={destino}
+                  onValueChange={(v) => {
+                    const d = v as DestinoPlantilla;
+                    setDestino(d);
+                    // Al elegir «Departamento», precarga uno por defecto (RRHH) si
+                    // el valor guardado no es ya una clave de departamento válida.
+                    if (d === "departamento" &&
+                        !DEPARTAMENTOS_CORREO.some((x) => x.clave === destinoEmail)) {
+                      setDestinoEmail("correoRrhh");
+                    }
+                    if (d === "personalizado" &&
+                        DEPARTAMENTOS_CORREO.some((x) => x.clave === destinoEmail)) {
+                      setDestinoEmail("");
+                    }
+                  }}
+                >
                   <SelectTrigger className="mt-1 h-9">
                     <SelectValue />
                   </SelectTrigger>
@@ -239,6 +256,25 @@ function PlantillaEditorDialog({
                 <p className="text-[11px] text-muted-foreground mt-1">
                   {OPCIONES_DESTINO.find((o) => o.value === destino)?.ayuda}
                 </p>
+                {destino === "departamento" && (
+                  <>
+                    <Select value={destinoEmail || "correoRrhh"} onValueChange={setDestinoEmail}>
+                      <SelectTrigger className="mt-2 h-9">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {DEPARTAMENTOS_CORREO.map((d) => (
+                          <SelectItem key={d.clave} value={d.clave}>
+                            {d.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-[11px] text-muted-foreground mt-1">
+                      El correo se toma de Ajustes → Empresa → «Correos electrónicos».
+                    </p>
+                  </>
+                )}
                 {destino === "personalizado" && (
                   <Input
                     value={destinoEmail}
@@ -325,11 +361,7 @@ function PlantillaEditorDialog({
                       ? VARIABLES_RECLUTAMIENTO_EJEMPLO.candidato_email
                       : destino === "personalizado"
                         ? destinoEmail || "(escribe el email personalizado)"
-                        : destino === "rrhh"
-                          ? autoDest.rrhh || "(configura el email de RRHH en Ajustes → RRHH → Reclutamiento)"
-                          : destino === "gestoria"
-                            ? autoDest.gestoria || "(configura el email de gestoría en Ajustes → RRHH → Reclutamiento)"
-                            : `${etiquetaDestino(destino)}`}
+                        : `${etiquetaDestino(destino, destinoEmail)} · correo de Ajustes → Empresa`}
                   </p>
                   <p className="text-xs text-muted-foreground mt-0.5">
                     <span className="font-medium">Asunto:</span> {sustituirVariablesReclutamiento(asunto, previewVars)}
@@ -534,7 +566,9 @@ function PlantillasEmailTab() {
         <Card className="overflow-hidden">
           <CardContent className="p-0">
             {filtered.map((p) => {
-              const destino = p.destino;
+              // Normaliza destinos heredados (gestoria/rrhh) → departamento.
+              const dn = normalizarDestinoDepartamento(p.destino, p.destinoEmail);
+              const destino = dn.destino;
               const protegida = p.clave ? CLAVES_ONBOARDING_PROTEGIDAS.has(p.clave) : false;
               return (
               <div key={p.id} className="flex items-center justify-between px-5 py-4 border-b border-border last:border-0 hover:bg-muted/20 transition-colors">
@@ -543,14 +577,9 @@ function PlantillasEmailTab() {
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 mb-0.5 flex-wrap">
                       <span className="text-sm font-medium text-foreground truncate">{p.nombre}</span>
-                      {destino === "gestoria" && (
-                        <Badge variant="outline" className="text-[10px] gap-1 bg-amber-50 text-amber-700 border-amber-200" title="Este correo se envía a la gestoría">
-                          <Building2 className="h-3 w-3" /> Gestoría
-                        </Badge>
-                      )}
-                      {destino === "rrhh" && (
-                        <Badge variant="outline" className="text-[10px] gap-1 bg-sky-50 text-sky-700 border-sky-200" title="Se envía a RRHH">
-                          <UserCog className="h-3 w-3" /> RRHH
+                      {destino === "departamento" && (
+                        <Badge variant="outline" className="text-[10px] gap-1 bg-amber-50 text-amber-700 border-amber-200" title="Se envía al correo de este departamento (Ajustes → Empresa)">
+                          <Building2 className="h-3 w-3" /> {etiquetaDestino(destino, dn.destinoEmail)}
                         </Badge>
                       )}
                       {destino === "candidato" && (

@@ -77,20 +77,14 @@ export const GestoriaConfig = forwardRef<
 
   const cuerpo = (
     <div className="space-y-6 max-w-lg">
-      {/* Correos destino */}
-      <div className="space-y-4">
-        <div className="space-y-1.5">
-          <Label htmlFor="gest-email">Email de la gestoría</Label>
-          <Input id="gest-email" type="email" value={config.gestoria_email}
-            onChange={(e) => setConfig((c) => c && { ...c, gestoria_email: e.target.value })}
-            placeholder="gestoria@asesoria.com" />
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="gest-email-cc">Segundo contacto (opcional)</Label>
-          <Input id="gest-email-cc" type="email" value={config.gestoria_email_cc}
-            onChange={(e) => setConfig((c) => c && { ...c, gestoria_email_cc: e.target.value })}
-            placeholder="otro.contacto@asesoria.com" />
-        </div>
+      {/* El correo de la gestoría ya no se configura aquí: vive en Ajustes →
+          Empresa → «Correos electrónicos» (Correo gestoría), fuente única. */}
+      <div className="rounded-lg border border-border bg-muted/30 p-3">
+        <p className="text-xs text-muted-foreground">
+          El correo de la gestoría se toma de{" "}
+          <span className="font-medium text-foreground">Ajustes → Empresa → «Correos electrónicos» (Correo gestoría)</span>.
+          Cámbialo allí y se aplicará a las altas y recordatorios de contrato.
+        </p>
       </div>
 
       {/* Toggle envío automático */}

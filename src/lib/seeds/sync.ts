@@ -12,6 +12,10 @@
  */
 
 import { createAdminClient } from "@/lib/supabase/admin";
+import {
+  normalizarDestinoDepartamento,
+  type DestinoPlantilla,
+} from "@/features/rrhh/lib/plantillas-onboarding";
 import { DEPARTAMENTOS_SEED, normalizeDeptoNombre } from "./departamentos";
 import { ROLES_SEED, normalizeRolNombre } from "./roles";
 import { PUESTOS_SEED, normalizePuestoNombre } from "./puestos";
@@ -376,15 +380,25 @@ export async function syncReclutamientoEmailPlantillasAEmpresa(
     .filter((p) =>
       p.clave ? !clavesExistentes.has(p.clave) : !nombresExistentes.has(p.nombre),
     )
-    .map((p) => ({
-      empresa_id: empresaId,
-      nombre: p.nombre,
-      asunto: p.asunto,
-      cuerpo: p.cuerpo,
-      activa: p.activa,
-      clave: p.clave ?? null,
-      destino: p.destino ?? "candidato",
-    }));
+    .map((p) => {
+      // Normaliza el destino heredado del seed (gestoria/rrhh/candidato) al modelo
+      // actual: departamento + clave de correo (p. ej. correoGestoria), resuelto
+      // desde Ajustes → Empresa. `candidato`/`personalizado` quedan igual.
+      const norm = normalizarDestinoDepartamento(
+        (p.destino ?? "candidato") as DestinoPlantilla,
+        null,
+      );
+      return {
+        empresa_id: empresaId,
+        nombre: p.nombre,
+        asunto: p.asunto,
+        cuerpo: p.cuerpo,
+        activa: p.activa,
+        clave: p.clave ?? null,
+        destino: norm.destino,
+        destino_email: norm.destinoEmail,
+      };
+    });
 
   if (aCrear.length === 0) return { creadas: 0 };
   const { error } = await admin

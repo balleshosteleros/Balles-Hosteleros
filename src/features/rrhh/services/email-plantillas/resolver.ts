@@ -23,6 +23,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { sustituirVariablesReclutamiento } from "@/features/rrhh/lib/reclutamiento-email";
 import {
   normalizarDestino,
+  normalizarDestinoDepartamento,
   type ClaveOnboarding,
   type DestinoPlantilla,
 } from "@/features/rrhh/lib/plantillas-onboarding";
@@ -75,9 +76,10 @@ export async function resolverPlantillaOnboarding(
 /**
  * Resuelve la dirección de correo del DESTINATARIO configurado en una plantilla:
  *  · candidato     → email del candidato/empleado (lo pasa el llamador en `fallbackCandidato`).
- *  · gestoria      → `reclutamiento_config.gestoria_email` (+ cc).
- *  · rrhh          → `empresas.datos_generales.correoRrhh` (fallback correoGeneral).
+ *  · departamento  → `empresas.datos_generales[<clave>]` (la clave va en `destino_email`,
+ *                    p. ej. "correoGestoria"), fuente única de Ajustes → Empresa.
  *  · personalizado → `destino_email` de la propia plantilla.
+ *  · gestoria/rrhh → HEREDADOS: se mapean a departamento (correoGestoria / correoRrhh).
  *
  * Devuelve `{ to, cc }`. `to` vacío = no se puede enviar (el llamador decide).
  */
@@ -89,39 +91,36 @@ export async function resolverDestinatario(
   fallbackCandidato: string | null,
 ): Promise<{ to: string; cc: string | null }> {
   const limpio = (s: string | null | undefined) => (s ?? "").trim();
-  switch (destino) {
-    case "personalizado":
-      return { to: limpio(destinoEmail), cc: null };
-    case "gestoria": {
-      const { data } = await admin
-        .from("reclutamiento_config")
-        .select("gestoria_email, gestoria_email_cc")
-        .eq("empresa_id", empresaId)
-        .maybeSingle();
-      return {
-        to: limpio(data?.gestoria_email as string | null),
-        cc: limpio(data?.gestoria_email_cc as string | null) || null,
-      };
-    }
-    case "rrhh": {
-      const { data } = await admin
-        .from("empresas")
-        .select("datos_generales, email_contacto")
-        .eq("id", empresaId)
-        .maybeSingle();
-      const dg = (data?.datos_generales as Record<string, unknown> | null) ?? {};
-      const dgStr = (k: string) => (typeof dg[k] === "string" ? (dg[k] as string) : "");
-      return {
-        to:
-          limpio(dgStr("correoRrhh")) ||
-          limpio(data?.email_contacto as string | null) ||
-          limpio(dgStr("correoGeneral")),
-        cc: null,
-      };
-    }
-    default:
-      return { to: limpio(fallbackCandidato), cc: null };
+
+  // Retrocompatibilidad: gestoria/rrhh heredados → departamento con su clave.
+  const norm = normalizarDestinoDepartamento(destino, destinoEmail);
+
+  if (norm.destino === "personalizado") {
+    return { to: limpio(norm.destinoEmail), cc: null };
   }
+
+  if (norm.destino === "departamento") {
+    // Correos de departamento: FUENTE ÚNICA = Ajustes → Empresa (datos_generales).
+    // `destino_email` guarda la CLAVE del departamento (p. ej. "correoGestoria").
+    const { data } = await admin
+      .from("empresas")
+      .select("datos_generales, email_contacto")
+      .eq("id", empresaId)
+      .maybeSingle();
+    const dg = (data?.datos_generales as Record<string, unknown> | null) ?? {};
+    const dgStr = (k: string) => (typeof dg[k] === "string" ? (dg[k] as string) : "");
+    const clave = limpio(norm.destinoEmail) || "correoGeneral";
+    return {
+      to:
+        limpio(dgStr(clave)) ||
+        limpio(data?.email_contacto as string | null) ||
+        limpio(dgStr("correoGeneral")),
+      cc: null,
+    };
+  }
+
+  // candidato (por defecto)
+  return { to: limpio(fallbackCandidato), cc: null };
 }
 
 /** Convierte el cuerpo (texto plano con saltos de línea) en HTML simple. */

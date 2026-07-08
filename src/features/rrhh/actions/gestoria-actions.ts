@@ -37,8 +37,9 @@ async function getCtx() {
 }
 
 export interface ReclutamientoConfig {
-  gestoria_email: string;
-  gestoria_email_cc: string;
+  // El correo de la gestoría vive en Ajustes → Empresa → «Correos electrónicos»
+  // (datos_generales.correoGestoria), fuente única. Aquí solo quedan los ajustes
+  // de comportamiento del alta a la gestoría.
   gestoria_envio_auto: boolean;
   gestoria_campos: GestoriaCamposConfig;
   // Recordatorio automático a la gestoría si no sube el contrato.
@@ -52,8 +53,6 @@ export interface ReclutamientoConfig {
 }
 
 const RECLUTAMIENTO_CONFIG_DEFAULT: ReclutamientoConfig = {
-  gestoria_email: "",
-  gestoria_email_cc: "",
   gestoria_envio_auto: true,
   gestoria_campos: normalizarGestoriaCampos(null),
   gestoria_recordatorio_activo: true,
@@ -71,14 +70,12 @@ export async function getReclutamientoConfig(): Promise<{ ok: boolean; data: Rec
     const { data } = await supabase
       .from("reclutamiento_config")
       .select(
-        "gestoria_email, gestoria_email_cc, gestoria_envio_auto, gestoria_campos, " +
+        "gestoria_envio_auto, gestoria_campos, " +
           "gestoria_recordatorio_activo, gestoria_recordatorio_dias, " +
           "notif_alta_gestoria, notif_recordatorio_gestoria, notif_contrato_subido, notif_contrato_firmado",
       )
       .eq("empresa_id", empresaId)
       .maybeSingle<{
-        gestoria_email: string | null;
-        gestoria_email_cc: string | null;
         gestoria_envio_auto: boolean | null;
         gestoria_campos: unknown;
         gestoria_recordatorio_activo: boolean | null;
@@ -91,8 +88,6 @@ export async function getReclutamientoConfig(): Promise<{ ok: boolean; data: Rec
     return {
       ok: true,
       data: {
-        gestoria_email: data?.gestoria_email ?? "",
-        gestoria_email_cc: data?.gestoria_email_cc ?? "",
         gestoria_envio_auto: data?.gestoria_envio_auto ?? true,
         gestoria_campos: normalizarGestoriaCampos(data?.gestoria_campos),
         gestoria_recordatorio_activo: data?.gestoria_recordatorio_activo ?? true,
@@ -118,8 +113,6 @@ export async function saveReclutamientoConfig(input: ReclutamientoConfig) {
       .from("reclutamiento_config")
       .upsert({
         empresa_id: empresaId,
-        gestoria_email: input.gestoria_email.trim() || null,
-        gestoria_email_cc: input.gestoria_email_cc.trim() || null,
         gestoria_envio_auto: input.gestoria_envio_auto,
         gestoria_campos: normalizarGestoriaCampos(input.gestoria_campos),
         gestoria_recordatorio_activo: input.gestoria_recordatorio_activo,
@@ -353,13 +346,11 @@ export async function enviarAltaGestoria(
       ? await (async () => {
           const { data } = await (supabase as ReturnType<typeof createAdminClient>)
             .from("reclutamiento_config")
-            .select("gestoria_email, gestoria_email_cc, gestoria_envio_auto, gestoria_campos, notif_alta_gestoria")
+            .select("gestoria_envio_auto, gestoria_campos, notif_alta_gestoria")
             .eq("empresa_id", empresaId)
             .maybeSingle();
           return {
             data: {
-              gestoria_email: (data?.gestoria_email as string | null) ?? "",
-              gestoria_email_cc: (data?.gestoria_email_cc as string | null) ?? "",
               gestoria_envio_auto: (data?.gestoria_envio_auto as boolean | null) ?? true,
               gestoria_campos: normalizarGestoriaCampos(data?.gestoria_campos),
               notif_alta_gestoria: (data?.notif_alta_gestoria as boolean | null) ?? true,
@@ -466,17 +457,16 @@ export async function enviarAltaGestoria(
     };
     const tpl = await resolverPlantillaOnboarding(admin, empresaId, PLANTILLAS_ONBOARDING.gestoriaAlta, vars);
 
-    // Destinatario configurable en la plantilla (por defecto: gestoría). Si no hay
-    // plantilla (fallback), se envía a la gestoría de la config.
+    // Destinatario configurable en la plantilla (por defecto: gestoría). Fuente
+    // ÚNICA del correo = Ajustes → Empresa → «Correos electrónicos» (correoGestoria).
+    // Si no hay plantilla (fallback), se resuelve el correo del departamento
+    // «gestoría» igualmente desde esa fuente.
     const emailCandidato = emp.email_empresa || emp.email_personal || null;
     const dst = tpl
       ? await resolverDestinatario(admin, empresaId, tpl.destino, tpl.destinoEmail, emailCandidato)
-      : {
-          to: cfg.data.gestoria_email.trim(),
-          cc: cfg.data.gestoria_email_cc.trim() || null,
-        };
+      : await resolverDestinatario(admin, empresaId, "departamento", "correoGestoria", emailCandidato);
     if (!dst.to) {
-      return { ok: false, error: "Configura el correo de la gestoría en Ajustes → RRHH → Reclutamiento." };
+      return { ok: false, error: "Configura el «Correo gestoría» en Ajustes → Empresa → Correos electrónicos." };
     }
     const to = [dst.to, dst.cc].filter(Boolean).join(", ");
     // Para el aviso a RRHH: a dónde se envió realmente.

@@ -28,21 +28,19 @@ export async function GET(request: Request) {
 
   const admin = createAdminClient();
 
-  // Empresas con recordatorio activo y correo de gestoría configurado.
+  // Empresas con recordatorio activo. El correo de la gestoría se resuelve más
+  // abajo desde Ajustes → Empresa (correoGestoria), fuente única; ya no se filtra
+  // por la antigua columna gestoria_email.
   const { data: cfgs } = await admin
     .from("reclutamiento_config")
     .select(
-      "empresa_id, gestoria_email, gestoria_email_cc, gestoria_recordatorio_activo, gestoria_recordatorio_dias, notif_recordatorio_gestoria",
+      "empresa_id, gestoria_recordatorio_activo, gestoria_recordatorio_dias, notif_recordatorio_gestoria",
     );
 
-  const activas = new Map<string, { email: string; emailCc: string; dias: number; notif: boolean }>();
+  const activas = new Map<string, { dias: number; notif: boolean }>();
   for (const c of cfgs ?? []) {
     if (c.gestoria_recordatorio_activo === false) continue;
-    const email = (c.gestoria_email as string | null)?.trim();
-    if (!email) continue;
     activas.set(c.empresa_id as string, {
-      email,
-      emailCc: (c.gestoria_email_cc as string | null)?.trim() ?? "",
       dias: (c.gestoria_recordatorio_dias as number) ?? 3,
       notif: c.notif_recordatorio_gestoria ?? true,
     });
@@ -99,12 +97,13 @@ export async function GET(request: Request) {
       vars,
     );
 
-    // Destinatario configurable (por defecto: gestoría). Sin plantilla, a la
-    // gestoría de la config.
+    // Destinatario configurable (por defecto: gestoría). El correo se toma de
+    // Ajustes → Empresa → «Correo gestoría». Sin plantilla, se resuelve el mismo
+    // departamento gestoría desde esa fuente.
     const dst = tpl
       ? await resolverDestinatario(admin, empresaId, tpl.destino, tpl.destinoEmail, null)
-      : { to: cfg.email, cc: cfg.emailCc || null };
-    const to = [dst.to || cfg.email, dst.cc].filter(Boolean).join(", ");
+      : await resolverDestinatario(admin, empresaId, "departamento", "correoGestoria", null);
+    const to = [dst.to, dst.cc].filter(Boolean).join(", ");
     if (!to) continue;
 
     let subject: string;

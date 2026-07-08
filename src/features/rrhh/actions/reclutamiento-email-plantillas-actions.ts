@@ -55,23 +55,24 @@ async function ctx() {
 
 /**
  * Direcciones REALES a las que se envían los correos con destinatario automático
- * (RRHH y gestoría), para la vista previa del editor de plantillas. Resuelven
- * igual que el envío: RRHH → `correoRrhh` de Ajustes; gestoría → `gestoria_email`.
- * Cadena vacía si no está configurado.
+ * (RRHH y gestoría), para la vista previa del editor de plantillas. Fuente ÚNICA:
+ * Ajustes → Empresa → «Correos electrónicos» (`datos_generales.correoRrhh` /
+ * `correoGestoria`). Cadena vacía si no está configurado.
  */
 export async function getDestinatariosAutomaticos(): Promise<{ rrhh: string; gestoria: string }> {
   const { supabase, empresaId } = await ctx();
   if (!empresaId) return { rrhh: "", gestoria: "" };
 
-  const [{ data: emp }, { data: cfg }] = await Promise.all([
-    supabase.from("empresas").select("email_contacto, datos_generales").eq("id", empresaId).maybeSingle(),
-    supabase.from("reclutamiento_config").select("gestoria_email").eq("empresa_id", empresaId).maybeSingle(),
-  ]);
+  const { data: emp } = await supabase
+    .from("empresas")
+    .select("email_contacto, datos_generales")
+    .eq("id", empresaId)
+    .maybeSingle();
   const dg = (emp?.datos_generales as Record<string, unknown> | null) ?? {};
   const dgStr = (k: string) => (typeof dg[k] === "string" ? (dg[k] as string).trim() : "");
   return {
     rrhh: dgStr("correoRrhh") || ((emp?.email_contacto as string | null)?.trim() ?? "") || dgStr("correoGeneral"),
-    gestoria: ((cfg?.gestoria_email as string | null)?.trim() ?? ""),
+    gestoria: dgStr("correoGestoria") || dgStr("correoGeneral"),
   };
 }
 

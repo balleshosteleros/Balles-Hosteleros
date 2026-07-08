@@ -40,14 +40,59 @@ export const CLAVES_ONBOARDING_PROTEGIDAS: ReadonlySet<string> = new Set(
   Object.values(CLAVES_ONBOARDING),
 );
 
-/** Destinatario de un correo. */
-export type DestinoPlantilla = "candidato" | "gestoria" | "rrhh" | "personalizado";
+/**
+ * Destinatario de un correo. Modelo unificado:
+ *  · candidato     → el email de la ficha del candidato.
+ *  · departamento  → el correo de un DEPARTAMENTO de la empresa (Ajustes → Empresa
+ *                    → «Correos electrónicos»). El departamento concreto se guarda
+ *                    en `destino_email` como la CLAVE del departamento (ver
+ *                    `DEPARTAMENTOS_CORREO`), no como un email suelto.
+ *  · personalizado → una dirección de correo escrita a mano.
+ *
+ * `gestoria` y `rrhh` son valores HEREDADOS (plantillas ya guardadas). Se siguen
+ * aceptando y se resuelven como el departamento equivalente, pero el editor ya no
+ * los ofrece: se muestran como «departamento» con la clave correspondiente.
+ */
+export type DestinoPlantilla =
+  | "candidato"
+  | "departamento"
+  | "personalizado"
+  // heredados (retrocompatibilidad con datos existentes):
+  | "gestoria"
+  | "rrhh";
+
+/**
+ * Catálogo de DEPARTAMENTOS que pueden ser destinatarios, con la CLAVE del correo
+ * correspondiente en `empresas.datos_generales`. La fuente ÚNICA de estos correos
+ * es Ajustes → Empresa → «Correos electrónicos». `clave` es lo que se persiste en
+ * `reclutamiento_email_plantillas.destino_email` cuando `destino === "departamento"`.
+ */
+export const DEPARTAMENTOS_CORREO = [
+  { clave: "correoRrhh", label: "Recursos Humanos" },
+  { clave: "correoGestoria", label: "Gestoría" },
+  { clave: "correoContabilidad", label: "Contabilidad" },
+  { clave: "correoLogistica", label: "Logística" },
+  { clave: "correoCalidad", label: "Calidad" },
+  { clave: "correoGerencia", label: "Gerencia" },
+  { clave: "correoDireccion", label: "Dirección" },
+  { clave: "correoMarketing", label: "Marketing" },
+  { clave: "correoJuridico", label: "Jurídico" },
+  { clave: "correoGeneral", label: "General" },
+] as const;
+
+export type DepartamentoCorreoClave = (typeof DEPARTAMENTOS_CORREO)[number]["clave"];
+
+/** Etiqueta legible de una clave de correo de departamento. */
+export function etiquetaDepartamentoCorreo(clave: string | null | undefined): string {
+  return DEPARTAMENTOS_CORREO.find((d) => d.clave === clave)?.label ?? "Departamento";
+}
 
 const DESTINOS_VALIDOS: ReadonlySet<string> = new Set([
   "candidato",
+  "departamento",
+  "personalizado",
   "gestoria",
   "rrhh",
-  "personalizado",
 ]);
 
 /** Normaliza un valor libre de BD a un destino válido (fallback: candidato). */
@@ -57,13 +102,29 @@ export function normalizarDestino(v: unknown): DestinoPlantilla {
     : "candidato";
 }
 
+/**
+ * Mapea un destino heredado (`gestoria`/`rrhh`) a `{ destino: "departamento",
+ * clave }`. Para destinos ya modernos lo devuelve tal cual. Centraliza la
+ * retrocompatibilidad para que el resto del código razone solo en el modelo nuevo.
+ */
+export function normalizarDestinoDepartamento(
+  destino: DestinoPlantilla,
+  destinoEmail: string | null,
+): { destino: DestinoPlantilla; destinoEmail: string | null } {
+  if (destino === "gestoria") return { destino: "departamento", destinoEmail: "correoGestoria" };
+  if (destino === "rrhh") return { destino: "departamento", destinoEmail: "correoRrhh" };
+  return { destino, destinoEmail };
+}
+
 /** Etiqueta legible del destinatario (para badges y vista previa). */
-export function etiquetaDestino(destino: DestinoPlantilla): string {
+export function etiquetaDestino(destino: DestinoPlantilla, destinoEmail?: string | null): string {
   switch (destino) {
+    case "departamento":
+      return etiquetaDepartamentoCorreo(destinoEmail);
     case "gestoria":
       return "Gestoría";
     case "rrhh":
-      return "RRHH";
+      return "Recursos Humanos";
     case "personalizado":
       return "Personalizado";
     default:
@@ -73,22 +134,25 @@ export function etiquetaDestino(destino: DestinoPlantilla): string {
 
 /** Opciones del selector de destinatario en el editor de plantillas. */
 export const OPCIONES_DESTINO: { value: DestinoPlantilla; label: string; ayuda: string }[] = [
-  { value: "candidato", label: "Candidato", ayuda: "Al candidato registrado (su email)." },
-  { value: "gestoria", label: "Gestoría", ayuda: "Al correo de gestoría de Ajustes de la empresa." },
-  { value: "rrhh", label: "RRHH", ayuda: "Al correo de RRHH de Ajustes de la empresa." },
+  { value: "candidato", label: "Candidato", ayuda: "Al candidato registrado (el email de su ficha)." },
+  { value: "departamento", label: "Departamento", ayuda: "Al correo de un departamento de Ajustes → Empresa." },
   { value: "personalizado", label: "Personalizado", ayuda: "A una dirección que tú escribas." },
 ];
 
 /**
  * Destino POR DEFECTO de las plantillas del sistema al sembrarlas. El usuario
- * puede cambiarlo después desde el editor.
+ * puede cambiarlo después desde el editor. Los correos de departamento se
+ * resuelven desde Ajustes → Empresa.
  */
-export const DESTINO_DEFAULT_POR_CLAVE: Record<ClaveOnboarding, DestinoPlantilla> = {
-  gestoria_alta: "gestoria",
-  gestoria_recordatorio: "gestoria",
-  contrato_interno: "candidato",
-  contrato_oficial: "candidato",
-  prueba_aviso: "rrhh",
+export const DESTINO_DEFAULT_POR_CLAVE: Record<
+  ClaveOnboarding,
+  { destino: DestinoPlantilla; destinoEmail: string | null }
+> = {
+  gestoria_alta: { destino: "departamento", destinoEmail: "correoGestoria" },
+  gestoria_recordatorio: { destino: "departamento", destinoEmail: "correoGestoria" },
+  contrato_interno: { destino: "candidato", destinoEmail: null },
+  contrato_oficial: { destino: "candidato", destinoEmail: null },
+  prueba_aviso: { destino: "departamento", destinoEmail: "correoRrhh" },
 };
 
 /**
