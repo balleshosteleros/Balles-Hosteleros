@@ -333,11 +333,6 @@ export function FormDocumentacionPublica({ token, empresaSlug }: Props) {
       {/* 1. DNI / NIE */}
       <section className="space-y-4">
         <h2 className="text-base font-semibold">1. DNI / NIE</h2>
-        <p className="text-sm text-muted-foreground -mt-2">
-          Adjunta las dos caras de tu DNI (si eres español/a) o de tu NIE (si eres
-          extranjero/a). Para poder trabajar en España es obligatorio tener DNI o NIE;
-          el pasaporte por sí solo no sirve.
-        </p>
         <div className="grid sm:grid-cols-2 gap-4">
           <SubidaDoc
             id="dni-anverso"
@@ -372,7 +367,6 @@ export function FormDocumentacionPublica({ token, empresaSlug }: Props) {
         <SubidaDoc
           id="doc-iban"
           label="Documento con tu IBAN"
-          ayuda="Una foto o captura donde se vea el IBAN completo."
           doc={docIban}
           onFile={(f) => onDocFile(setDocIban, "iban", f)}
         />
@@ -396,7 +390,6 @@ export function FormDocumentacionPublica({ token, empresaSlug }: Props) {
         <SubidaDoc
           id="doc-ss"
           label="Documento de la Seguridad Social"
-          ayuda="Por ejemplo, el documento de afiliación (NAF) o tu tarjeta sanitaria."
           doc={docSs}
           onFile={(f) => onDocFile(setDocSs, "ss", f)}
         />

@@ -115,21 +115,9 @@ Te escribo para agradecerte el interés depositado en nuestra empresa {{empresa_
 
 ¡Enhorabuena! Pasas a la siguiente fase del proceso. Antes de empezar la formación, necesitamos que nos aportes tu documentación para poder gestionar tu alta.
 
-Tendrás que adjuntar (puedes hacer una foto con el móvil o subir un archivo):
-A. Tu DNI o NIE, por las dos caras (anverso y reverso). Si eres extranjero/a, vale el pasaporte.
-B. Un documento donde se vea tu número de cuenta bancaria (IBAN).
-C. Un documento donde se vea tu número de la Seguridad Social.
-D. Una foto de perfil reciente (tipo carné).
-E. Tu dirección postal y tu fecha de nacimiento.
-
-👉 Entra en este enlace personal y sigue los pasos:
-{{enlace_documentacion}}
+👉 [Subir mi documentación]({{enlace_documentacion}})
 
 ⏳ Importante: este enlace caduca a los {{documentacion_dias_validez}} días. Complétalo antes de que expire; si caduca, escríbenos y te enviaremos uno nuevo.
-
-Ten en cuenta que debes adjuntar TODOS los documentos para poder enviarlo, y que una vez enviado el enlace queda cerrado.
-
-Nuestro sistema leerá automáticamente los números de tus documentos y te los mostrará para que los revises y confirmes que son correctos. Es muy rápido.
 
 Si te surge cualquier duda, escríbenos a {{email_rrhh}}.
 
