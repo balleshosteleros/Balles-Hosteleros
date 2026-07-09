@@ -174,7 +174,11 @@ function VacanteCard({
                           className={`flex-1 basis-0 min-w-0 flex flex-col items-center justify-start rounded border border-border p-1.5 min-h-[52px] transition-all ${count > 0 ? "hover:border-primary/40 hover:shadow-sm cursor-pointer" : "opacity-50 cursor-default"}`}
                         >
                           <span className="text-sm font-bold text-foreground">{count}</span>
-                          <span className="text-[9px] leading-tight text-muted-foreground text-center font-medium">{estCfg.label}</span>
+                          {/* Alto fijo (2 líneas) para que las etiquetas largas
+                              («Suspenso Formación», «No se presenta», «Ex-empleados»)
+                              no agranden los recuadros de Offboarding/Descartado
+                              frente a los de etiqueta corta. */}
+                          <span className="flex h-6 items-center text-[9px] leading-tight text-muted-foreground text-center font-medium line-clamp-2">{estCfg.label}</span>
                         </button>
                       );
                     })}

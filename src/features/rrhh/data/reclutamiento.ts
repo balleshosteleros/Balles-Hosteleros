@@ -145,7 +145,7 @@ const DESCARTADO_CONFIG: FasePrincipalConfig = {
   color: "hsl(0, 72%, 51%)",
   colorFrom: "hsl(0, 80%, 58%)",
   colorTo: "hsl(0, 65%, 42%)",
-  estados: ["papelera", "no_se_presenta", "suspenso_formacion", "ex_empleado"],
+  estados: ["ex_empleado", "no_se_presenta", "suspenso_formacion", "papelera"],
 };
 
 export const FASES_PRINCIPALES: Record<FasePrincipal, FasePrincipalConfig> = {
