@@ -272,13 +272,29 @@ export async function aplicarFirmaYConcatenar(
     const { width: pw, height: ph } = page.getSize();
     try {
       const png = await orig.embedPng(trazoPng);
-      const w = Math.max(20, posicion.anchoPct * pw);
+      // Ancho de la caja de firma (área reservada).
+      const boxW = Math.max(20, posicion.anchoPct * pw);
       const ratio = png.width > 0 ? png.height / png.width : 0.35;
-      const h = w * ratio;
-      const xPdf = Math.max(0, Math.min(pw - w, posicion.xPct * pw));
-      // PDF coords (origin bottom-left): convertir desde UI (origin top-left)
-      const yPdf = Math.max(0, Math.min(ph - h, ph - posicion.yPct * ph - h));
-      page.drawImage(png, { x: xPdf, y: yPdf, width: w, height: h });
+      // Altura por el ratio del trazo, pero acotada para que no desborde la
+      // zona de firma (una firma "alta" no debe invadir el texto de alrededor).
+      // Tope proporcional al ancho y en valor absoluto (~60pt) para caber en el
+      // hueco típico de firma de los documentos que genera el sistema.
+      const maxH = Math.min(boxW * 0.4, 60);
+      let drawH = boxW * ratio;
+      let drawW = boxW;
+      if (drawH > maxH) {
+        // Reescalamos manteniendo proporción para que quepa en el alto máximo.
+        drawH = maxH;
+        drawW = ratio > 0 ? drawH / ratio : boxW;
+      }
+      // Centrado horizontal del trazo dentro de la caja reservada.
+      const boxX = Math.max(0, Math.min(pw - boxW, posicion.xPct * pw));
+      const xPdf = boxX + (boxW - drawW) / 2;
+      // PDF coords (origin bottom-left): convertir desde UI (origin top-left).
+      // La caja arranca en yPct (borde superior); centramos el trazo en su alto.
+      const boxTopYpdf = ph - posicion.yPct * ph;
+      const yPdf = Math.max(0, Math.min(ph - drawH, boxTopYpdf - drawH));
+      page.drawImage(png, { x: xPdf, y: yPdf, width: drawW, height: drawH });
     } catch {
       // si el PNG es inválido se omite, el acta seguirá llevando los datos legales
     }

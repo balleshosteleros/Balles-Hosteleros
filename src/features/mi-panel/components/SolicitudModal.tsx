@@ -9,6 +9,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -19,6 +29,7 @@ import { toast } from "sonner";
 import {
   crearSolicitudPersonal,
   getMiVacacionesInfo,
+  getMiBajaContratoEnCurso,
   type MiVacacionesInfo,
 } from "@/features/mi-panel/actions/mi-panel-actions";
 import { bloqueoSolapaRango } from "@/features/rrhh/data/calendarios-vacaciones";
@@ -86,6 +97,16 @@ export function SolicitudModal({ open, onOpenChange, onCreated }: SolicitudModal
   const [avisoOpen, setAvisoOpen] = useState(false);
   const [enviando, setEnviando] = useState(false);
 
+  // Baja de contrato: si ya hay una en curso, se bloquea el paso de detalle y
+  // se avisa de que no es modificable. Se comprueba al elegir el subtipo.
+  const [bajaEnCurso, setBajaEnCurso] = useState<{
+    fechaFin: string | null;
+    estado: string | null;
+  } | null>(null);
+  const [bajaComprobando, setBajaComprobando] = useState(false);
+  // Confirmación de irreversibilidad antes de enviar la baja.
+  const [confirmBajaOpen, setConfirmBajaOpen] = useState(false);
+
   // Info de vacaciones del empleado (saldo + periodos bloqueados). Se carga al
   // entrar en el detalle de una solicitud de vacaciones.
   const [vacInfo, setVacInfo] = useState<MiVacacionesInfo | null>(null);
@@ -134,6 +155,9 @@ export function SolicitudModal({ open, onOpenChange, onCreated }: SolicitudModal
     setNavLock(false);
     setVacInfo(null);
     setVacCargando(false);
+    setBajaEnCurso(null);
+    setBajaComprobando(false);
+    setConfirmBajaOpen(false);
     if (navLockTimer.current) clearTimeout(navLockTimer.current);
   }
 
@@ -154,6 +178,24 @@ export function SolicitudModal({ open, onOpenChange, onCreated }: SolicitudModal
     if (s === "dia_trabajado") {
       setSubtipo(s);
       setAvisoOpen(true);
+      return;
+    }
+    if (s === "baja_contrato") {
+      // Antes de dejar continuar comprobamos que no haya ya una baja en curso:
+      // es irreversible y no modificable, no puede crear una segunda.
+      setSubtipo(s);
+      setBajaEnCurso(null);
+      setBajaComprobando(true);
+      setPaso("detalle");
+      getMiBajaContratoEnCurso().then((res) => {
+        setBajaComprobando(false);
+        if (res.ok && res.enCurso) {
+          setBajaEnCurso({
+            fechaFin: res.fechaFin ?? null,
+            estado: res.estado ?? null,
+          });
+        }
+      });
       return;
     }
     setSubtipo(s);
@@ -215,7 +257,14 @@ export function SolicitudModal({ open, onOpenChange, onCreated }: SolicitudModal
       toast.error(res.error || "No se pudo enviar la solicitud");
       return;
     }
-    toast.success("Solicitud enviada");
+    if (subtipo === "baja_contrato") {
+      toast.success(
+        "Solicitud enviada. Revisa tu email y firma la carta de baja en 1 hora; si no, el enlace caduca y no se confirma.",
+        { duration: 8000 },
+      );
+    } else {
+      toast.success("Solicitud enviada");
+    }
     onCreated?.();
     handleClose(false);
   }
@@ -266,6 +315,18 @@ export function SolicitudModal({ open, onOpenChange, onCreated }: SolicitudModal
     );
     const excede = diasSel > 0 && diasSel > vacInfo.diasRestantes;
     return choque || excede;
+  })();
+
+  // Bloqueo de envío en cliente para baja de contrato: exige que exista la
+  // fecha efectiva y que respete el preaviso legal (15-45 días naturales).
+  // El servidor revalida igual.
+  const bajaEnvioBloqueado = (() => {
+    if (subtipo !== "baja_contrato") return false;
+    // Ya hay una baja en curso o aún estamos comprobándolo: no se puede enviar.
+    if (bajaEnCurso || bajaComprobando) return true;
+    if (!fechaFin) return true;
+    const dias = diasNaturales(todayISO(), fechaFin);
+    return dias < BAJA_CONTRATO_PREAVISO_MIN || dias > BAJA_CONTRATO_PREAVISO_MAX;
   })();
 
   return (
@@ -382,6 +443,42 @@ export function SolicitudModal({ open, onOpenChange, onCreated }: SolicitudModal
             const fueraDeRango =
               !!fechaFin &&
               (dias < BAJA_CONTRATO_PREAVISO_MIN || dias > BAJA_CONTRATO_PREAVISO_MAX);
+
+            // Mientras comprobamos si ya hay una baja en curso.
+            if (bajaComprobando) {
+              return (
+                <div className="flex items-center justify-center gap-2 py-10 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Comprobando…
+                </div>
+              );
+            }
+
+            // Ya hay una baja en curso: irreversible y no modificable.
+            if (bajaEnCurso) {
+              return (
+                <div className="grid gap-4 py-2">
+                  <div className="flex gap-3 rounded-md border border-rose-200 bg-rose-50 p-4 text-rose-900">
+                    <AlertTriangle className="h-5 w-5 mt-0.5 shrink-0" />
+                    <div className="space-y-1 text-sm leading-relaxed">
+                      <p className="font-semibold">
+                        Ya has solicitado tu baja de contrato.
+                      </p>
+                      <p>
+                        Una baja de contrato es irreversible y no se puede
+                        modificar ni volver a solicitar.
+                        {bajaEnCurso.fechaFin
+                          ? ` Tu último día efectivo es el ${formatFechaEs(
+                              bajaEnCurso.fechaFin,
+                            )}.`
+                          : ""}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              );
+            }
+
             return (
               <div className="grid gap-4 py-2">
                 <div className="flex gap-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-amber-900">
@@ -390,7 +487,10 @@ export function SolicitudModal({ open, onOpenChange, onCreated }: SolicitudModal
                     Al enviar esta solicitud arrancas hoy ({formatFechaEs(hoy)}) tu
                     periodo de preaviso. El plazo debe ser de entre{" "}
                     {BAJA_CONTRATO_PREAVISO_MIN} y {BAJA_CONTRATO_PREAVISO_MAX} días
-                    naturales. RRHH te confirmará por email cuando la reciba.
+                    naturales. Es <strong>irreversible</strong>: recibirás al momento
+                    un email con la carta de baja. La baja{" "}
+                    <strong>no se confirma</strong> hasta que la firmes, y el enlace
+                    de firma solo vale <strong>1 hora</strong>.
                   </div>
                 </div>
 
@@ -624,18 +724,31 @@ export function SolicitudModal({ open, onOpenChange, onCreated }: SolicitudModal
           )}
 
           <DialogFooter className="gap-2">
-            <Button variant="outline" onClick={() => handleClose(false)}>
-              Cancelar
-            </Button>
-            {paso === "detalle" && (
-              <Button
-                onClick={enviar}
-                disabled={enviando || vacEnvioBloqueado}
-                className="active:bg-blue-600"
-              >
-                {enviando && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Enviar solicitud
+            {/* Baja ya en curso: solo un botón para cerrar (no puede enviar). */}
+            {paso === "detalle" && subtipo === "baja_contrato" && bajaEnCurso ? (
+              <Button onClick={() => handleClose(false)} className="active:bg-blue-600">
+                Entendido
               </Button>
+            ) : (
+              <>
+                <Button variant="outline" onClick={() => handleClose(false)}>
+                  Cancelar
+                </Button>
+                {paso === "detalle" && (
+                  <Button
+                    onClick={
+                      subtipo === "baja_contrato"
+                        ? () => setConfirmBajaOpen(true)
+                        : enviar
+                    }
+                    disabled={enviando || vacEnvioBloqueado || bajaEnvioBloqueado}
+                    className="active:bg-blue-600"
+                  >
+                    {enviando && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    Enviar solicitud
+                  </Button>
+                )}
+              </>
             )}
           </DialogFooter>
         </DialogContent>
@@ -646,6 +759,55 @@ export function SolicitudModal({ open, onOpenChange, onCreated }: SolicitudModal
         onAceptar={aceptarAvisoDia}
         onCancelar={cancelarAvisoDia}
       />
+
+      {/* Confirmación de irreversibilidad de la baja de contrato. */}
+      <AlertDialog open={confirmBajaOpen} onOpenChange={setConfirmBajaOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Confirmas tu baja de contrato?</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-2">
+                <p>
+                  Esta acción es <strong>irreversible</strong>. Al confirmar
+                  comunicas formalmente tu decisión de causar baja voluntaria y
+                  recibirás <strong>al momento</strong> un email con una carta de
+                  baja para firmar.
+                </p>
+                <p>
+                  La baja <strong>no se considera confirmada</strong> hasta que
+                  firmes ese documento. El enlace de firma es válido{" "}
+                  <strong>solo 1 hora</strong> desde ahora; si caduca, quedará
+                  anulado y tendrás que volver a solicitarla.
+                </p>
+                <p>
+                  {fechaFin
+                    ? `Tu último día efectivo será el ${formatFechaEs(fechaFin)}.`
+                    : ""}{" "}
+                  Una vez enviada no podrás modificarla ni solicitar otra.
+                </p>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={enviando}>
+              No, cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction
+              disabled={enviando}
+              onClick={(e) => {
+                // Evitamos que el AlertDialog se cierre solo: lo cerramos al
+                // terminar el envío (o en caso de error dejamos el modal abierto).
+                e.preventDefault();
+                setConfirmBajaOpen(false);
+                enviar();
+              }}
+              className="bg-rose-600 hover:bg-rose-700 focus:ring-rose-600"
+            >
+              Sí, solicitar mi baja
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }

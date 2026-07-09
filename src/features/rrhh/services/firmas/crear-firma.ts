@@ -30,6 +30,12 @@ export interface CrearFirmaInternoInput {
   modalidad: ModalidadFirma;
   validez?: "eidas_simple" | "eidas_avanzada" | "eidas_cualificada";
   plazoDias?: number;
+  /**
+   * Ventana de validez en HORAS. Si se pasa, tiene prioridad sobre `plazoDias`.
+   * Se usa para firmas con caducidad corta (p. ej. la baja de contrato: el enlace
+   * vale 1 hora desde la solicitud y luego queda anulado). Se acota a 1..168 h.
+   */
+  plazoHoras?: number;
   observaciones?: string | null;
   /** UUID que se guarda en `enviado_por`. Para autosolicitudes (baja voluntaria) usar el user_id del propio empleado. */
   enviadoPorUserId: string;
@@ -83,7 +89,11 @@ export async function crearFirmaInterno(
       userAgent = null,
     } = input;
 
-    const plazoDias = Math.max(1, Math.min(60, input.plazoDias ?? 7));
+    // Ventana de validez del enlace/documento. Por horas (prioritario) o por días.
+    const expiraMs =
+      input.plazoHoras != null
+        ? Math.max(1, Math.min(168, input.plazoHoras)) * 3_600_000
+        : Math.max(1, Math.min(60, input.plazoDias ?? 7)) * 86_400_000;
 
     if (!Buffer.isBuffer(pdf) || pdf.length === 0) {
       return { ok: false, error: "PDF vacío o inválido" };
@@ -129,7 +139,7 @@ export async function crearFirmaInterno(
     const sha256Original = sha256(pdf);
 
     const ahora = new Date();
-    const expira = new Date(ahora.getTime() + plazoDias * 86_400_000);
+    const expira = new Date(ahora.getTime() + expiraMs);
 
     const { data: docIns, error: docErr } = await admin
       .from("firmas_documentos")

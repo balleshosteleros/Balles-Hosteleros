@@ -2,9 +2,11 @@
  * Generador del PDF "Carta de baja voluntaria" que el empleado firma
  * cuando solicita una baja de contrato desde Mi Panel.
  *
- * Una sola hoja A4 con texto legal estándar, datos del empleado y empresa,
- * fechas de preaviso y línea de firma. El acta eIDAS (audit trail) se
- * concatena automáticamente al firmar el documento.
+ * El texto reproduce la plantilla institucional de baja voluntaria de la
+ * empresa. Una sola hoja A4 con datos del empleado y empresa, fecha efectiva
+ * de la baja, preaviso y una zona de "Firma del trabajador" donde se estampa
+ * el trazo manuscrito. El acta eIDAS (audit trail) se concatena automáticamente
+ * al firmar el documento.
  */
 
 import "server-only";
@@ -26,122 +28,157 @@ const PAGE_W = 595.28; // A4
 const PAGE_H = 841.89;
 const MARGIN_X = 64;
 const FONT_SIZE = 11;
-const LINE_HEIGHT = 16;
+const LINE_HEIGHT = 17;
+const TEXT_W = PAGE_W - MARGIN_X * 2;
+
+/**
+ * Envoltura simple de líneas segmentadas: cada segmento tiene su propia fuente
+ * (normal/negrita). Devuelve las líneas ya cortadas al ancho disponible,
+ * conservando qué fuente usa cada trozo para dibujarlo después.
+ */
+type Seg = { t: string; bold?: boolean };
+
+/** Posición de la firma calculada por el propio generador (no "a ojo"). */
+export interface PosicionFirmaDefault {
+  pagina: number;
+  xPct: number;
+  yPct: number;
+  anchoPct: number;
+}
+
+export interface CartaBajaVoluntariaResult {
+  buffer: Buffer;
+  /** Dónde estampar la firma manuscrita: hueco reservado bajo "Firma del trabajador". */
+  posicionFirma: PosicionFirmaDefault;
+}
 
 export async function generarCartaBajaVoluntariaPDF(
   input: CartaBajaVoluntariaInput,
-): Promise<Buffer> {
+): Promise<CartaBajaVoluntariaResult> {
   const pdf = await PDFDocument.create();
   const page = pdf.addPage([PAGE_W, PAGE_H]);
   const font = await pdf.embedFont(StandardFonts.Helvetica);
   const fontBold = await pdf.embedFont(StandardFonts.HelveticaBold);
 
-  let y = PAGE_H - 80;
+  const widthOf = (t: string, bold: boolean) =>
+    (bold ? fontBold : font).widthOfTextAtSize(t, FONT_SIZE);
 
-  // ─── Título ─────────────────────────────────────────────
-  page.drawText("CARTA DE BAJA VOLUNTARIA", {
-    x: MARGIN_X,
+  let y = PAGE_H - 90;
+
+  // Dibuja un párrafo formado por segmentos (normal/negrita) con salto de línea
+  // automático al llegar al margen derecho. Avanza `y` según las líneas usadas.
+  function drawParagraph(segs: Seg[], gapAfter = LINE_HEIGHT) {
+    // Expandimos a palabras conservando la fuente de cada una.
+    const words: Seg[] = [];
+    for (const s of segs) {
+      const parts = s.t.split(/(\s+)/); // conserva los espacios como tokens
+      for (const p of parts) {
+        if (p.length === 0) continue;
+        words.push({ t: p, bold: s.bold });
+      }
+    }
+    let x = MARGIN_X;
+    for (const w of words) {
+      const wWidth = widthOf(w.t, !!w.bold);
+      const esEspacio = /^\s+$/.test(w.t);
+      if (x + wWidth > MARGIN_X + TEXT_W && !esEspacio) {
+        x = MARGIN_X;
+        y -= LINE_HEIGHT;
+      }
+      if (esEspacio && x === MARGIN_X) continue; // no arrastrar espacios al inicio de línea
+      page.drawText(w.t, {
+        x,
+        y,
+        size: FONT_SIZE,
+        font: w.bold ? fontBold : font,
+      });
+      x += wWidth;
+    }
+    y -= gapAfter;
+  }
+
+  // ─── Encabezado: ciudad y fecha (alineado a la derecha) ───────
+  const ciudadFecha = `${input.ciudad ?? "—"}, a ${input.fechaSolicitud}`;
+  page.drawText(ciudadFecha, {
+    x: MARGIN_X + TEXT_W - widthOf(ciudadFecha, false),
     y,
-    size: 16,
-    font: fontBold,
-    color: rgb(0.06, 0.09, 0.16),
+    size: FONT_SIZE,
+    font,
   });
-  y -= 8;
-  page.drawLine({
-    start: { x: MARGIN_X, y },
-    end: { x: PAGE_W - MARGIN_X, y },
-    thickness: 0.8,
-    color: rgb(0.6, 0.65, 0.72),
-  });
-  y -= 28;
+  y -= LINE_HEIGHT * 3;
 
-  // ─── Encabezado: ciudad y fecha ──────────────────────────
-  const ciudadFecha = `${input.ciudad ?? "—"}, a ${input.fechaSolicitud}.`;
-  page.drawText(ciudadFecha, { x: MARGIN_X, y, size: FONT_SIZE, font });
-  y -= LINE_HEIGHT * 2;
+  // ─── Cuerpo (reproduce la plantilla de baja voluntaria) ───────
+  drawParagraph([
+    { t: "Estimado/a departamento de Recursos Humanos de " },
+    { t: input.empresaNombre, bold: true },
+    { t: "," },
+  ], LINE_HEIGHT * 2);
 
-  // ─── A la atención de ────────────────────────────────────
-  page.drawText("A la atención de:", { x: MARGIN_X, y, size: FONT_SIZE, font });
-  y -= LINE_HEIGHT;
-  page.drawText(input.empresaNombre, {
+  drawParagraph([
+    { t: "Mediante la presente, yo " },
+    { t: input.empleadoNombre, bold: true },
+    {
+      t: input.empleadoDni ? ` (con DNI/NIE ${input.empleadoDni})` : "",
+    },
+    { t: ", comunico mi decisión de " },
+    { t: "causar baja voluntaria en la empresa", bold: true },
+    { t: ", siendo " },
+    {
+      t: `mi último día de trabajo el ${input.fechaBaja}`,
+      bold: true,
+    },
+    {
+      t: `, respetando un preaviso de ${input.diasPreaviso} días naturales contados desde la firma de este documento `,
+    },
+    {
+      t: "(al día siguiente de la firma comienza el cómputo del preaviso; el día efectivo de baja es el último de prestación de servicios y supone la finalización de la relación laboral).",
+      bold: true,
+    },
+  ], LINE_HEIGHT * 2);
+
+  drawParagraph([
+    {
+      t: "Agradezco sinceramente la oportunidad de haber formado parte del equipo y me despido deseando lo mejor para la empresa y sus futuros proyectos.",
+    },
+  ], LINE_HEIGHT * 2);
+
+  drawParagraph([{ t: "Atentamente," }], LINE_HEIGHT * 2);
+
+  // ─── Motivo (opcional) ────────────────────────────────────────
+  if (input.motivo) {
+    drawParagraph([
+      { t: "Motivo expresado por el solicitante: ", bold: true },
+      { t: input.motivo },
+    ], LINE_HEIGHT * 2);
+  }
+
+  // ─── Firma del trabajador ─────────────────────────────────────
+  page.drawText("Firma del trabajador:", {
     x: MARGIN_X,
     y,
     size: FONT_SIZE,
     font: fontBold,
   });
   y -= LINE_HEIGHT;
-  if (input.empresaCif) {
-    page.drawText(`CIF: ${input.empresaCif}`, {
-      x: MARGIN_X,
-      y,
-      size: FONT_SIZE,
-      font,
-    });
-    y -= LINE_HEIGHT;
-  }
-  y -= LINE_HEIGHT;
 
-  // ─── Cuerpo legal ────────────────────────────────────────
-  const body = [
-    `Yo, ${input.empleadoNombre}, mayor de edad, ${input.empleadoDni ? `con DNI/NIE ${input.empleadoDni}, ` : ""}empleado/a de la empresa ${input.empresaNombre},`,
-    "",
-    "Por medio del presente escrito le COMUNICO mi decisión de causar baja voluntaria",
-    `en la empresa, con efectos del día ${input.fechaBaja}, último día efectivo de prestación`,
-    "de servicios.",
-    "",
-    `Hago constar que esta comunicación se realiza con un preaviso de ${input.diasPreaviso} días`,
-    "naturales, cumpliendo así con lo establecido en el artículo 49.1.d) del Estatuto",
-    "de los Trabajadores y, en su caso, lo dispuesto en mi contrato y convenio colectivo",
-    "de aplicación.",
-    "",
-    "Solicito que se proceda al cálculo y abono del finiquito correspondiente, así como",
-    "a la entrega de cuanta documentación legal proceda (certificado de empresa,",
-    "modelo 145, justificante de cotización, etc.).",
-  ];
-  for (const line of body) {
-    page.drawText(line, { x: MARGIN_X, y, size: FONT_SIZE, font });
-    y -= LINE_HEIGHT;
-  }
+  // Hueco reservado para el trazo manuscrito. Capturamos su geometría exacta
+  // (en coordenadas PDF, origen abajo-izquierda) para calcular la posición de
+  // firma AUTOMÁTICAMENTE, sin ajustar coordenadas a ojo. El estampador espera
+  // porcentajes con origen ARRIBA-izquierda, así que convertimos yPct.
+  // Hueco alto (66pt) para que el trazo no invada el nombre/DNI de debajo.
+  // Debe ser >= a la altura máxima que el estampador da al trazo (ver pdf.ts).
+  const FIRMA_ALTO = 66;
+  const FIRMA_ANCHO_PCT = 0.32;
+  y -= 6; // pequeño aire entre la etiqueta y el trazo
+  const firmaTopY = y; // borde superior del hueco (justo bajo la etiqueta)
+  const posicionFirma: PosicionFirmaDefault = {
+    pagina: 1,
+    xPct: MARGIN_X / PAGE_W,
+    yPct: (PAGE_H - firmaTopY) / PAGE_H,
+    anchoPct: FIRMA_ANCHO_PCT,
+  };
 
-  if (input.motivo) {
-    y -= LINE_HEIGHT;
-    page.drawText("Motivo expresado por el solicitante:", {
-      x: MARGIN_X,
-      y,
-      size: FONT_SIZE,
-      font: fontBold,
-    });
-    y -= LINE_HEIGHT;
-    // Wrap simple (ancho aproximado)
-    const max = 80;
-    const palabras = input.motivo.split(/\s+/);
-    let linea = "";
-    for (const w of palabras) {
-      if ((linea + " " + w).trim().length > max) {
-        page.drawText(linea, { x: MARGIN_X, y, size: FONT_SIZE, font });
-        y -= LINE_HEIGHT;
-        linea = w;
-      } else {
-        linea = linea ? `${linea} ${w}` : w;
-      }
-    }
-    if (linea) {
-      page.drawText(linea, { x: MARGIN_X, y, size: FONT_SIZE, font });
-      y -= LINE_HEIGHT;
-    }
-  }
-
-  // ─── Cierre ──────────────────────────────────────────────
-  y -= LINE_HEIGHT * 2;
-  page.drawText(
-    "Sin otro particular, le saludo atentamente y quedo a su disposición.",
-    { x: MARGIN_X, y, size: FONT_SIZE, font },
-  );
-
-  // ─── Línea de firma ──────────────────────────────────────
-  y -= LINE_HEIGHT * 4;
-  page.drawText("Firmado:", { x: MARGIN_X, y, size: FONT_SIZE, font: fontBold });
-  y -= LINE_HEIGHT;
+  y -= FIRMA_ALTO;
   page.drawText(input.empleadoNombre, {
     x: MARGIN_X,
     y,
@@ -158,7 +195,7 @@ export async function generarCartaBajaVoluntariaPDF(
     });
   }
 
-  // ─── Footer ──────────────────────────────────────────────
+  // ─── Footer ───────────────────────────────────────────────────
   page.drawText(
     "Documento generado electrónicamente — la firma eIDAS adjunta acredita su validez.",
     {
@@ -171,5 +208,5 @@ export async function generarCartaBajaVoluntariaPDF(
   );
 
   const bytes = await pdf.save();
-  return Buffer.from(bytes);
+  return { buffer: Buffer.from(bytes), posicionFirma };
 }

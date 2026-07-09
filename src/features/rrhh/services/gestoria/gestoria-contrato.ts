@@ -209,16 +209,11 @@ export async function procesarSubidaContrato(
     { candidato_nombre: (emp?.nombre as string) ?? "", empresa_nombre: (empresaRow?.nombre as string) ?? "" },
   );
 
-  // Posición por defecto de la firma: al pie de la ÚLTIMA página del contrato.
-  // (No detectamos texto: los contratos escaneados no lo permiten de forma fiable.)
-  let ultimaPagina = 1;
-  try {
-    const { PDFDocument } = await import("pdf-lib");
-    const doc = await PDFDocument.load(buffer, { ignoreEncryption: true });
-    ultimaPagina = Math.max(1, doc.getPageCount());
-  } catch { /* si falla, página 1 */ }
-  const posicionOficial = { pagina: ultimaPagina, xPct: 0.10, yPct: 0.85, anchoPct: 0.32 };
-
+  // Documento EXTERNO (lo genera la gestoría, no el sistema): no sabemos dónde
+  // va la firma y los contratos escaneados no permiten detectar texto de forma
+  // fiable. En vez de fijar una posición "a ojo" (antes yPct:0.85, que caía
+  // donde caía), NO pasamos posicionFirmaDefault: el empleado coloca su firma
+  // arrastrándola sobre el punto correcto del contrato al firmar.
   const firma = await crearFirmaInterno({
     empresaId: row.empresa_id,
     empleadoId: row.empleado_id,
@@ -233,7 +228,8 @@ export async function procesarSubidaContrato(
     enviadoPorNombre: "RRHH",
     emailAsunto: tplOficial?.asunto ?? null,
     emailIntro: tplOficial?.cuerpo ?? null,
-    posicionFirmaDefault: posicionOficial,
+    // Sin posición por defecto: el trabajador la coloca a mano (doc externo).
+    posicionFirmaDefault: null,
   });
 
   // 3) Marca el token consumido + traza (incluso si la firma falló, el PDF está).

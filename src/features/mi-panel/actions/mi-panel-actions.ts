@@ -1457,6 +1457,48 @@ export async function listarMisSolicitudes(limite = 20): Promise<{
   }
 }
 
+/**
+ * ¿El empleado ya tiene una solicitud de baja de contrato en curso?
+ * Una baja de contrato es irreversible y no modificable: si hay una pendiente
+ * o aprobada, la UI debe impedir crear otra. Devuelve la fecha efectiva y el
+ * estado de la existente para poder informar al usuario.
+ */
+export async function getMiBajaContratoEnCurso(): Promise<{
+  ok: boolean;
+  enCurso: boolean;
+  fechaFin?: string | null;
+  estado?: string | null;
+  error?: string;
+}> {
+  try {
+    const { supabase, user, empresaId } = await getContext();
+    if (!user || !empresaId)
+      return { ok: false, enCurso: false, error: "No autenticado" };
+    const { data, error } = await supabase
+      .from("solicitudes_personal")
+      .select("estado, fecha_fin")
+      .eq("empresa_id", empresaId)
+      .eq("user_id", user.id)
+      .eq("subtipo", "baja_contrato")
+      .in("estado", ["pendiente", "aprobada"])
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (error) throw error;
+    if (!data) return { ok: true, enCurso: false };
+    return {
+      ok: true,
+      enCurso: true,
+      fechaFin: (data.fecha_fin as string | null) ?? null,
+      estado: (data.estado as string | null) ?? null,
+    };
+  } catch (err: unknown) {
+    const msg = extractErrorMessage(err);
+    console.error("[mi-panel] getMiBajaContratoEnCurso:", msg);
+    return { ok: false, enCurso: false, error: msg };
+  }
+}
+
 export interface NuevaSolicitudInput {
   tipo: SolicitudTipo;
   subtipo: SolicitudSubtipo;
@@ -2277,10 +2319,18 @@ async function onBajaContratoCreada(args: {
     args.nombreFallback ||
     "Empleado/a";
 
-  // 1) Generar PDF de la carta de baja voluntaria.
+  // 1) Generar PDF de la carta de baja voluntaria. El generador devuelve también
+  //    la posición EXACTA de la firma (calculada, no a ojo), para que el trazo
+  //    quede centrado sobre la zona "Firma del trabajador" automáticamente.
   let pdfBuffer: Buffer | null = null;
+  let posicionFirma: {
+    pagina: number;
+    xPct: number;
+    yPct: number;
+    anchoPct: number;
+  } | null = null;
   try {
-    pdfBuffer = await generarCartaBajaVoluntariaPDF({
+    const carta = await generarCartaBajaVoluntariaPDF({
       empleadoNombre,
       empleadoDni: emp.dni_nie,
       empresaNombre,
@@ -2291,11 +2341,16 @@ async function onBajaContratoCreada(args: {
       diasPreaviso: args.diasPreaviso,
       motivo: args.motivo,
     });
+    pdfBuffer = carta.buffer;
+    posicionFirma = carta.posicionFirma;
   } catch (e) {
     console.error("[mi-panel] baja_contrato: PDF falló:", extractErrorMessage(e));
   }
 
-  // 2) Crear solicitud de firma eIDAS (modalidad email_otp, más segura).
+  // 2) Crear solicitud de firma eIDAS. Igual que el contrato interno de entrada:
+  //    firma manuscrita + código OTP por email (doble factor). El paso OTP es
+  //    obligatorio en todas las modalidades, así que "manuscrita_digital" exige
+  //    ambas cosas: validar el código y dibujar la firma sobre el documento.
   if (pdfBuffer) {
     const firma = await crearFirmaInterno({
       empresaId: args.empresaId,
@@ -2303,12 +2358,19 @@ async function onBajaContratoCreada(args: {
       pdf: pdfBuffer,
       titulo: "Carta de baja voluntaria",
       tipo: "baja_voluntaria",
-      modalidad: "email_otp",
+      modalidad: "manuscrita_digital",
       validez: "eidas_simple",
-      plazoDias: 7,
-      observaciones: `Solicitud de baja con fecha efectiva ${formatFechaEs(args.fechaFin)} (${args.diasPreaviso} días de preaviso).`,
+      // El enlace de firma vale 1 hora desde la solicitud; luego queda anulado.
+      plazoHoras: 1,
+      observaciones: `Solicitud de baja con fecha efectiva ${formatFechaEs(args.fechaFin)} (${args.diasPreaviso} días de preaviso). Enlace de firma válido 1 hora.`,
       enviadoPorUserId: args.userId,
       enviadoPorNombre: empleadoNombre,
+      // El empleado firma su email personal si lo tiene (documento personal).
+      preferirEmailPersonal: true,
+      // Firma colocada AUTOMÁTICAMENTE sobre la zona "Firma del trabajador":
+      // el propio generador del PDF calculó la posición exacta del hueco, así
+      // que queda centrada sin ajustar coordenadas a ojo. El empleado no arrastra.
+      posicionFirmaDefault: posicionFirma,
     });
     if (!firma.ok) {
       console.error("[mi-panel] baja_contrato: firma no creada:", firma.error);
