@@ -28,10 +28,10 @@ function nifLimpio(nif: string | undefined): string {
 
 function ejercicioEjerPeriodo(tipo: string, periodo: string, ejercicio: number): string {
   const pad = (n: number) => n.toString().padStart(2, "0");
-  if (periodo === "Q1") return `${ejercicio}${pad(1)}1T`.slice(0, 7);
-  if (periodo === "Q2") return `${ejercicio}2T`;
-  if (periodo === "Q3") return `${ejercicio}3T`;
-  if (periodo === "Q4") return `${ejercicio}4T`;
+  if (periodo === "T1") return `${ejercicio}${pad(1)}1T`.slice(0, 7);
+  if (periodo === "T2") return `${ejercicio}2T`;
+  if (periodo === "T3") return `${ejercicio}3T`;
+  if (periodo === "T4") return `${ejercicio}4T`;
   return `${ejercicio}0A`;
 }
 
@@ -184,10 +184,10 @@ interface Build347Input {
     nif: string;
     nombre: string;
     clave: string;
-    importe_q1: number;
-    importe_q2: number;
-    importe_q3: number;
-    importe_q4: number;
+    importe_t1: number;
+    importe_t2: number;
+    importe_t3: number;
+    importe_t4: number;
     importe_total: number;
   }>;
 }
@@ -210,10 +210,10 @@ function build347(input: Build347Input): string {
         padRight(r.nombre, 60) +
         padRight(r.clave, 1) +
         padNum(r.importe_total, 17) +
-        padNum(r.importe_q1, 17) +
-        padNum(r.importe_q2, 17) +
-        padNum(r.importe_q3, 17) +
-        padNum(r.importe_q4, 17) +
+        padNum(r.importe_t1, 17) +
+        padNum(r.importe_t2, 17) +
+        padNum(r.importe_t3, 17) +
+        padNum(r.importe_t4, 17) +
         "</REG>",
     )
     .join("\n");

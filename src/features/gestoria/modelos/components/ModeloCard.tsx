@@ -15,7 +15,7 @@ const HOY = new Date();
 function diasHastaPlazo(modelo: ModeloAeat): number | null {
   const plazo = PLAZOS_PRESENTACION[modelo.tipo][modelo.periodo];
   if (!plazo) return null;
-  const año = modelo.periodo === "Q4" ? modelo.ejercicio + 1 : modelo.ejercicio;
+  const año = modelo.periodo === "T4" ? modelo.ejercicio + 1 : modelo.ejercicio;
   const añoPlazo = modelo.periodo === "ANUAL" ? modelo.ejercicio + 1 : año;
   const fin = new Date(añoPlazo, plazo.mes - 1, plazo.dia);
   const diff = Math.ceil((fin.getTime() - HOY.getTime()) / (1000 * 60 * 60 * 24));

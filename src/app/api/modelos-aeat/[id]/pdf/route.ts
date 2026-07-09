@@ -32,10 +32,10 @@ export async function GET(
         nif: string;
         nombre: string;
         clave: string;
-        importe_q1: number;
-        importe_q2: number;
-        importe_q3: number;
-        importe_q4: number;
+        importe_t1: number;
+        importe_t2: number;
+        importe_t3: number;
+        importe_t4: number;
         importe_total: number;
       }>
     | undefined;

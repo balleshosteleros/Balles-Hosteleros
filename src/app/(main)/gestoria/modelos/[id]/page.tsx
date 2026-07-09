@@ -40,10 +40,10 @@ export default async function ModeloPage({ params }: { params: Promise<{ id: str
         nombre: string;
         tipo_contacto: string;
         clave: string;
-        importe_q1: number;
-        importe_q2: number;
-        importe_q3: number;
-        importe_q4: number;
+        importe_t1: number;
+        importe_t2: number;
+        importe_t3: number;
+        importe_t4: number;
         importe_total: number;
       }>
     | undefined;

@@ -355,7 +355,7 @@ export function SubirModelosView({
         </button>
 
         <p className="mt-2 text-center text-xs text-zinc-500">
-          Es todo o nada: si falta algún modelo requerido, no se guarda ninguno.
+          Para poder enviar, adjunta todos los modelos requeridos. Se guardan juntos en un solo envío.
         </p>
       </div>
     </div>

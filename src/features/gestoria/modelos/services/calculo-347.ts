@@ -16,10 +16,10 @@ export interface Registro347 {
   nombre: string;
   tipo_contacto: "EMPRESA" | "AUTONOMO" | "PARTICULAR";
   clave: ClaveOperacion347;
-  importe_q1: number;
-  importe_q2: number;
-  importe_q3: number;
-  importe_q4: number;
+  importe_t1: number;
+  importe_t2: number;
+  importe_t3: number;
+  importe_t4: number;
   importe_total: number;
 }
 
@@ -29,12 +29,12 @@ export interface Calcular347Input {
   excluirContactosDe115?: Set<string>;
 }
 
-function trimestreDeFecha(fecha: string): "q1" | "q2" | "q3" | "q4" {
+function trimestreDeFecha(fecha: string): "t1" | "t2" | "t3" | "t4" {
   const mes = Number.parseInt(fecha.slice(5, 7), 10);
-  if (mes <= 3) return "q1";
-  if (mes <= 6) return "q2";
-  if (mes <= 9) return "q3";
-  return "q4";
+  if (mes <= 3) return "t1";
+  if (mes <= 6) return "t2";
+  if (mes <= 9) return "t3";
+  return "t4";
 }
 
 export function calcular347(input: Calcular347Input): Registro347[] {
@@ -56,16 +56,16 @@ export function calcular347(input: Calcular347Input): Registro347[] {
         nombre: f.contacto_nombre ?? "",
         tipo_contacto: f.contacto_tipo ?? "EMPRESA",
         clave,
-        importe_q1: 0,
-        importe_q2: 0,
-        importe_q3: 0,
-        importe_q4: 0,
+        importe_t1: 0,
+        importe_t2: 0,
+        importe_t3: 0,
+        importe_t4: 0,
         importe_total: 0,
       } as Registro347);
 
     const importeConIva = f.total;
     const trimestre = trimestreDeFecha(f.fecha_emision);
-    registro[`importe_${trimestre}` as "importe_q1"] += importeConIva;
+    registro[`importe_${trimestre}` as "importe_t1"] += importeConIva;
     registro.importe_total += importeConIva;
 
     acumulado.set(k, registro);
@@ -74,10 +74,10 @@ export function calcular347(input: Calcular347Input): Registro347[] {
   return Array.from(acumulado.values())
     .map((r) => ({
       ...r,
-      importe_q1: round2(r.importe_q1),
-      importe_q2: round2(r.importe_q2),
-      importe_q3: round2(r.importe_q3),
-      importe_q4: round2(r.importe_q4),
+      importe_t1: round2(r.importe_t1),
+      importe_t2: round2(r.importe_t2),
+      importe_t3: round2(r.importe_t3),
+      importe_t4: round2(r.importe_t4),
       importe_total: round2(r.importe_total),
     }))
     .filter((r) => Math.abs(r.importe_total) >= UMBRAL_MODELO_347)

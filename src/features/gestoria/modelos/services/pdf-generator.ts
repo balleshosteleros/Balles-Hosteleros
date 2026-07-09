@@ -218,10 +218,10 @@ export interface Registro347PDF {
   nif: string;
   nombre: string;
   clave: string;
-  importe_q1: number;
-  importe_q2: number;
-  importe_q3: number;
-  importe_q4: number;
+  importe_t1: number;
+  importe_t2: number;
+  importe_t3: number;
+  importe_t4: number;
   importe_total: number;
 }
 
@@ -236,10 +236,10 @@ export function generarHtml347(
     <td>${r.nif}</td>
     <td>${r.nombre}</td>
     <td>${r.clave}</td>
-    <td class="num">${fmt(r.importe_q1)}</td>
-    <td class="num">${fmt(r.importe_q2)}</td>
-    <td class="num">${fmt(r.importe_q3)}</td>
-    <td class="num">${fmt(r.importe_q4)}</td>
+    <td class="num">${fmt(r.importe_t1)}</td>
+    <td class="num">${fmt(r.importe_t2)}</td>
+    <td class="num">${fmt(r.importe_t3)}</td>
+    <td class="num">${fmt(r.importe_t4)}</td>
     <td class="num"><strong>${fmt(r.importe_total)}</strong></td>
   </tr>`,
     )

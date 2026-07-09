@@ -15,7 +15,7 @@ export type ModeloTipo =
   | "PYG"
   | "BALANCE"
   | "LIBRO_MAYOR";
-export type ModeloPeriodo = "Q1" | "Q2" | "Q3" | "Q4" | "ANUAL";
+export type ModeloPeriodo = "T1" | "T2" | "T3" | "T4" | "ANUAL";
 
 /** Tipos que se generan/calculan dentro del software (tienen editor de casillas). */
 export const TIPOS_CALCULABLES: ModeloTipo[] = ["303", "130", "111", "115", "390", "347"];
@@ -147,74 +147,74 @@ export const PLAZOS_PRESENTACION: Record<
   Record<ModeloPeriodo, { mes: number; dia: number } | null>
 > = {
   "303": {
-    Q1: { mes: 4, dia: 20 },
-    Q2: { mes: 7, dia: 20 },
-    Q3: { mes: 10, dia: 20 },
-    Q4: { mes: 1, dia: 30 },
+    T1: { mes: 4, dia: 20 },
+    T2: { mes: 7, dia: 20 },
+    T3: { mes: 10, dia: 20 },
+    T4: { mes: 1, dia: 30 },
     ANUAL: null,
   },
   "130": {
-    Q1: { mes: 4, dia: 20 },
-    Q2: { mes: 7, dia: 20 },
-    Q3: { mes: 10, dia: 20 },
-    Q4: { mes: 1, dia: 30 },
+    T1: { mes: 4, dia: 20 },
+    T2: { mes: 7, dia: 20 },
+    T3: { mes: 10, dia: 20 },
+    T4: { mes: 1, dia: 30 },
     ANUAL: null,
   },
   "111": {
-    Q1: { mes: 4, dia: 20 },
-    Q2: { mes: 7, dia: 20 },
-    Q3: { mes: 10, dia: 20 },
-    Q4: { mes: 1, dia: 20 },
+    T1: { mes: 4, dia: 20 },
+    T2: { mes: 7, dia: 20 },
+    T3: { mes: 10, dia: 20 },
+    T4: { mes: 1, dia: 20 },
     ANUAL: null,
   },
   "115": {
-    Q1: { mes: 4, dia: 20 },
-    Q2: { mes: 7, dia: 20 },
-    Q3: { mes: 10, dia: 20 },
-    Q4: { mes: 1, dia: 20 },
+    T1: { mes: 4, dia: 20 },
+    T2: { mes: 7, dia: 20 },
+    T3: { mes: 10, dia: 20 },
+    T4: { mes: 1, dia: 20 },
     ANUAL: null,
   },
   "390": {
-    Q1: null,
-    Q2: null,
-    Q3: null,
-    Q4: null,
+    T1: null,
+    T2: null,
+    T3: null,
+    T4: null,
     ANUAL: { mes: 1, dia: 30 },
   },
   "347": {
-    Q1: null,
-    Q2: null,
-    Q3: null,
-    Q4: null,
+    T1: null,
+    T2: null,
+    T3: null,
+    T4: null,
     ANUAL: { mes: 2, dia: 28 },
   },
   // Modelo 200 (Impuesto de Sociedades): 25 de julio del año siguiente al ejercicio.
   "200": {
-    Q1: null,
-    Q2: null,
-    Q3: null,
-    Q4: null,
+    T1: null,
+    T2: null,
+    T3: null,
+    T4: null,
     ANUAL: { mes: 7, dia: 25 },
   },
   // Modelo 190 (resumen anual de retenciones IRPF): 31 de enero.
   "190": {
-    Q1: null,
-    Q2: null,
-    Q3: null,
-    Q4: null,
+    T1: null,
+    T2: null,
+    T3: null,
+    T4: null,
     ANUAL: { mes: 1, dia: 31 },
   },
   // Documentos contables (sin plazo AEAT propio): entran en el email anual junto al resto.
-  PYG: { Q1: null, Q2: null, Q3: null, Q4: null, ANUAL: null },
-  BALANCE: { Q1: null, Q2: null, Q3: null, Q4: null, ANUAL: null },
-  LIBRO_MAYOR: { Q1: null, Q2: null, Q3: null, Q4: null, ANUAL: null },
+  PYG: { T1: null, T2: null, T3: null, T4: null, ANUAL: null },
+  BALANCE: { T1: null, T2: null, T3: null, T4: null, ANUAL: null },
+  LIBRO_MAYOR: { T1: null, T2: null, T3: null, T4: null, ANUAL: null },
 };
 
 export const MODELO_PERIODOS_VALIDOS: Record<ModeloTipo, ModeloPeriodo[]> = {
-  "303": ["Q1", "Q2", "Q3", "Q4"],
-  "130": ["Q1", "Q2", "Q3", "Q4"],
-  "111": ["Q1", "Q2", "Q3", "Q4"],
-  "115": ["Q1", "Q2", "Q3", "Q4"],
+  "303": ["T1", "T2", "T3", "T4"],
+  "130": ["T1", "T2", "T3", "T4"],
+  "111": ["T1", "T2", "T3", "T4"],
+  "115": ["T1", "T2", "T3", "T4"],
   "390": ["ANUAL"],
   "347": ["ANUAL"],
   "200": ["ANUAL"],
@@ -226,7 +226,7 @@ export const MODELO_PERIODOS_VALIDOS: Record<ModeloTipo, ModeloPeriodo[]> = {
 
 export type GrupoModelo = "TRIMESTRALES" | "ANUALES";
 
-/** Un modelo es trimestral si tiene algún periodo Q válido; si solo aplica ANUAL, es anual. */
+/** Un modelo es trimestral si tiene algún periodo T válido; si solo aplica ANUAL, es anual. */
 export function grupoDeModelo(tipo: ModeloTipo): GrupoModelo {
   return MODELO_PERIODOS_VALIDOS[tipo].includes("ANUAL") &&
     !MODELO_PERIODOS_VALIDOS[tipo].some((p) => p !== "ANUAL")
@@ -236,12 +236,12 @@ export function grupoDeModelo(tipo: ModeloTipo): GrupoModelo {
 
 /**
  * Combos por defecto que se aseguran al abrir un ejercicio.
- * Trimestrales: 303/130/111/115 × Q1-Q4. Anuales: 390/347/200/190/PYG/BALANCE/LIBRO_MAYOR.
+ * Trimestrales: 303/130/111/115 × T1-T4. Anuales: 390/347/200/190/PYG/BALANCE/LIBRO_MAYOR.
  * PYG/BALANCE/LIBRO_MAYOR aparecen SIEMPRE como hueco anual aunque no haya PDF (PRP-072).
  */
 export const COMBOS_MODELOS_DEFAULT: Array<{ tipo: ModeloTipo; periodo: ModeloPeriodo }> = [
   ...(["303", "130", "111", "115"] as ModeloTipo[]).flatMap((tipo) =>
-    (["Q1", "Q2", "Q3", "Q4"] as ModeloPeriodo[]).map((periodo) => ({ tipo, periodo })),
+    (["T1", "T2", "T3", "T4"] as ModeloPeriodo[]).map((periodo) => ({ tipo, periodo })),
   ),
   ...(["390", "347", "200", "190", "PYG", "BALANCE", "LIBRO_MAYOR"] as ModeloTipo[]).map(
     (tipo) => ({ tipo, periodo: "ANUAL" as ModeloPeriodo }),
@@ -255,7 +255,7 @@ export const RETENCION_ALQUILERES_PCT = 19;
 
 /**
  * Fecha límite de presentación de un modelo/periodo (o null si no aplica).
- * El plazo de Q4 y ANUAL cae en el año siguiente al ejercicio.
+ * El plazo de T4 y ANUAL cae en el año siguiente al ejercicio.
  */
 export function fechaLimitePresentacion(
   tipo: ModeloTipo,
@@ -264,7 +264,7 @@ export function fechaLimitePresentacion(
 ): Date | null {
   const plazo = PLAZOS_PRESENTACION[tipo][periodo];
   if (!plazo) return null;
-  const añoPlazo = periodo === "Q4" || periodo === "ANUAL" ? ejercicio + 1 : ejercicio;
+  const añoPlazo = periodo === "T4" || periodo === "ANUAL" ? ejercicio + 1 : ejercicio;
   return new Date(añoPlazo, plazo.mes - 1, plazo.dia);
 }
 
@@ -298,10 +298,10 @@ export function periodoARangoFechas(
 ): { inicio: string; fin: string } {
   const pad = (n: number) => n.toString().padStart(2, "0");
   const rangos: Record<ModeloPeriodo, [number, number, number, number]> = {
-    Q1: [1, 1, 3, 31],
-    Q2: [4, 1, 6, 30],
-    Q3: [7, 1, 9, 30],
-    Q4: [10, 1, 12, 31],
+    T1: [1, 1, 3, 31],
+    T2: [4, 1, 6, 30],
+    T3: [7, 1, 9, 30],
+    T4: [10, 1, 12, 31],
     ANUAL: [1, 1, 12, 31],
   };
   const [m1, d1, m2, d2] = rangos[periodo];

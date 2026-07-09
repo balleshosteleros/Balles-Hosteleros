@@ -14,10 +14,10 @@ interface Registro347View {
   nombre: string;
   tipo_contacto: string;
   clave: string;
-  importe_q1: number;
-  importe_q2: number;
-  importe_q3: number;
-  importe_q4: number;
+  importe_t1: number;
+  importe_t2: number;
+  importe_t3: number;
+  importe_t4: number;
   importe_total: number;
 }
 
@@ -100,16 +100,16 @@ export function Modelo347Editor({ modelo, registros }: Props) {
                     </Badge>
                   </td>
                   <td className="px-2 py-1 text-right font-mono">
-                    {r.importe_q1.toFixed(2)}
+                    {r.importe_t1.toFixed(2)}
                   </td>
                   <td className="px-2 py-1 text-right font-mono">
-                    {r.importe_q2.toFixed(2)}
+                    {r.importe_t2.toFixed(2)}
                   </td>
                   <td className="px-2 py-1 text-right font-mono">
-                    {r.importe_q3.toFixed(2)}
+                    {r.importe_t3.toFixed(2)}
                   </td>
                   <td className="px-2 py-1 text-right font-mono">
-                    {r.importe_q4.toFixed(2)}
+                    {r.importe_t4.toFixed(2)}
                   </td>
                   <td className="px-2 py-1 text-right font-mono font-bold">
                     {r.importe_total.toFixed(2)}

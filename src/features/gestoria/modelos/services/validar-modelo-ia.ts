@@ -75,10 +75,10 @@ interface RespuestaIA {
 }
 
 const periodoLegible: Record<ModeloPeriodo, string> = {
-  Q1: "1T",
-  Q2: "2T",
-  Q3: "3T",
-  Q4: "4T",
+  T1: "1T",
+  T2: "2T",
+  T3: "3T",
+  T4: "4T",
   ANUAL: "ANUAL",
 };
 

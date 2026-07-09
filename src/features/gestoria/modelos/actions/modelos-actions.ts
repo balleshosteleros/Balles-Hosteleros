@@ -282,7 +282,7 @@ export async function recalcularCasillas(
         .eq("ejercicio", modelo.ejercicio);
       casillas = calcular390({
         trimestres: (trimestres ?? []).map((t) => ({
-          periodo: t.periodo as "Q1" | "Q2" | "Q3" | "Q4",
+          periodo: t.periodo as "T1" | "T2" | "T3" | "T4",
           casillas: (t.casillas as Record<string, number>) ?? {},
         })),
       });

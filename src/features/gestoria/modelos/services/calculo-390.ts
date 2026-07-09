@@ -11,7 +11,7 @@ function round2(n: number): number {
 
 export interface Calcular390Input {
   trimestres: Array<{
-    periodo: "Q1" | "Q2" | "Q3" | "Q4";
+    periodo: "T1" | "T2" | "T3" | "T4";
     casillas: CasillasMap;
   }>;
 }

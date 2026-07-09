@@ -47,7 +47,7 @@ interface Disparo {
 
 /**
  * Periodos que "tocan" hoy para una empresa según el offset. Miramos ejercicios
- * recientes (actual y anterior) porque el plazo de Q4/ANUAL cae en enero/febrero
+ * recientes (actual y anterior) porque el plazo de T4/ANUAL cae en enero/febrero
  * del año siguiente.
  */
 function disparosDeHoy(
@@ -56,7 +56,7 @@ function disparosDeHoy(
   añoActual: number,
 ): Disparo[] {
   const periodos: ModeloPeriodo[] =
-    grupo === "TRIMESTRALES" ? ["Q1", "Q2", "Q3", "Q4"] : ["ANUAL"];
+    grupo === "TRIMESTRALES" ? ["T1", "T2", "T3", "T4"] : ["ANUAL"];
   const ejercicios = [añoActual, añoActual - 1];
   const out: Disparo[] = [];
   for (const ejercicio of ejercicios) {
