@@ -1,6 +1,6 @@
 # PRP-072: Almacén de modelos fiscales de gestoría (PDF adjunto por modelo)
 
-> **Estado**: PENDIENTE
+> **Estado**: APROBADO
 > **Fecha**: 2026-07-09
 > **Proyecto**: Balles-Hosteleros
 
@@ -124,34 +124,60 @@ scripts/
 **Objetivo**: En `ModeloCard`, si la fila tiene `pdf_url`, mostrar un icono clicable que llame a `getModeloPdfSignedUrl()` y abra el PDF en pestaña nueva; si no tiene, marcar el recuadro como hueco pendiente (coherente con la regla «0 calculado ≠ sin calcular»). El clic del icono no debe navegar al editor del modelo.
 **Validación**: Icono visible solo con PDF; abre el documento correcto en pestaña nueva; los huecos se distinguen visualmente.
 
-### Fase 5: Icono de ajustes + configuración del submódulo Modelos
-**Objetivo**: Añadir junto al selector de ejercicio (en `ModelosView`) un icono de ajustes siguiendo el patrón universal de configuración de submódulo del proyecto, que abre `ModelosConfigDialog`. La config se guarda por empresa (`modelos-config-actions.ts`, coherente con el mecanismo de config de otros submódulos). Dos ajustes (ver sección «Ajustes del submódulo (definidos)»): **(1) Tipos de modelo visibles por empresa** (toggles; los desactivados no generan recuadro/hueco) y **(2) Recordatorios de plazos** (opt-in, días de antelación, vía motor de notificaciones existente usando `PLAZOS_PRESENTACION`).
-**Validación**: El icono aparece junto al selector de ejercicio con el mismo estilo que en otros submódulos; abre el dialog; desactivar un tipo lo oculta para esa empresa; activar recordatorios emite el aviso en el plazo configurado; la config persiste por empresa y se refresca en los consumidores (patrón refreshKey).
+### Fase 5: Config del submódulo (tabla + acciones + icono de ajustes)
+**Objetivo**: Tabla `modelos_config` (fila por empresa, patrón `reclutamiento_config`) con columnas: `tipos_activos text[]`, `email_trim_activo bool`, `email_trim_dias_offset int default 1`, `email_anual_activo bool`, `email_anual_dias_offset int default 1`. Acciones `getModelosConfig()` / `saveModelosConfig()` (con sesión, `getAppContext`) y `getModelosConfigPorEmpresa(admin, empresaId)` (sin sesión, para el cron). Icono de ajustes en la toolbar de `ModelosView` (líneas 77-103) que abre `ModelosConfigDialog` con la **sección A (tipos visibles)**.
+**Validación**: El icono aparece junto al selector de ejercicio; desactivar un tipo lo oculta para esa empresa (no genera recuadro/hueco); la config persiste por empresa y se refresca (refreshKey).
 
-### Fase 6: Carga masiva de los 48 PDFs
-**Objetivo**: Script `scripts/cargar-modelos-gestoria.ts` (service_role) que recorre `/gestoria/{BACANAL,HABANA}`, mapea fichero → `{empresa_id, ejercicio, periodo, tipo}` (con mapa explícito para nombres ambiguos, excluyendo LIBRO MAYOR y HOSTELBAR), sube al bucket con el path canónico y hace upsert de la fila `modelos_aeat` con `pdf_url`. Idempotente (re-ejecutable sin duplicar).
-**Validación**: Los 48 PDFs quedan subidos y enlazados; recuento por empresa/ejercicio correcto; re-ejecución no duplica filas ni objetos huérfanos.
+### Fase 6: Plantillas de email de gestoría (trimestral + anual)
+**Objetivo**: Añadir dos claves nuevas al seed de plantillas (`src/lib/seeds/reclutamiento-email-plantillas.ts`): `gestoria_modelos_trimestral` y `gestoria_modelos_anual` (destino `gestoria`, con variable `{{enlace_modelos}}` + `{{empresa_nombre}}` + `{{periodo_label}}`). Backfill en migración para empresas existentes; sync aditivo en `syncReclutamientoEmailPlantillasAEmpresa`. Añadir las claves al union type y a `CLAVES_ONBOARDING`/`PLANTILLAS_ONBOARDING`. En `ModelosConfigDialog` sección B: toggles de los dos emails, días offset, y enlace a editar/ver cada plantilla en `PlantillasConfig`.
+**Validación**: Las dos plantillas se siembran en ambas empresas sin pisar ediciones; se ven y editan desde Ajustes; `resolverPlantillaOnboarding` las resuelve con las variables.
 
-### Fase 7: Validación Final
-**Objetivo**: Sistema funcionando end-to-end para BACANAL y HABANA.
+### Fase 7: Enlace tokenizado + rutas públicas + subida por la gestoría
+**Objetivo**: Espejo del patrón contrato. (a) Tabla `gestoria_modelos_tokens` (`empresa_id`, `ejercicio`, `periodo`, `grupo` trim/anual, `token_hash`, `expira_en`, `completado_en`, trazabilidad). (b) Service `gestoria-modelos-tokens.ts` (generar/resolver/procesar) reusando `crypto.ts`. (c) Página pública `src/app/gestoria/modelos/[token]/page.tsx` + vista de subida (lista de modelos del periodo, un input por modelo) + endpoint `src/app/api/gestoria/modelos/[token]/route.ts` (GET datos, POST cada PDF) con `createAdminClient()`. (d) `procesarSubidaModelo()`: sube al bucket + upsert `pdf_url` en `modelos_aeat` vía service_role. (e) Añadir prefijos `/gestoria/modelos` y `/api/gestoria/modelos` a `src/lib/supabase/proxy.ts` y `src/proxy.ts`.
+**Validación**: Con un token válido, la gestoría (sin login) ve los modelos del periodo, sube cada PDF a su hueco y el documento aparece en el software; token de un solo uso/expirable; rutas públicas pasan el middleware.
+
+### Fase 8: Validación IA del PDF subido
+**Objetivo**: Al recibir cada PDF en el endpoint público, extraer su texto y con IA (patrón `categorizacion-ia.ts` / Vercel AI SDK + OpenRouter ya usado en el submódulo) verificar que `tipo`, `NIF/razón social de la empresa` y `periodo/ejercicio` del documento coinciden con el hueco destino. Devolver `{ok, coincide, motivo}`; si no coincide, no confirmar la subida y mostrar el aviso a la gestoría para que corrija. Guardar el veredicto (confianza + explicación) junto al modelo.
+**Validación**: Subir el PDF correcto → validado y guardado; subir un PDF de otro modelo/empresa/periodo → rechazado con motivo claro; el guardado solo ocurre si la IA (o override manual) lo aprueba.
+
+### Fase 9: Cron de emails a la gestoría
+**Objetivo**: Cron diario `src/app/api/cron/gestoria-modelos/route.ts` (protegido con `CRON_SECRET`, `createAdminClient()`), registrado en `vercel.json`. Recorre empresas con `getModelosConfigPorEmpresa`; para cada grupo (trim/anual) activo, calcula si hoy = límite + offset para algún periodo con huecos pendientes; si sí y no se envió ya, genera token, resuelve plantilla+destinatario, envía `sendEmail({empresaId})` con `{{enlace_modelos}}`, marca enviado y emite notificación in-app.
+**Validación**: Simulando la fecha, el cron envía el email correcto una sola vez por periodo/empresa/grupo; respeta activar/desactivar y el offset; no envía si ya está todo subido.
+
+### Fase 10: Carga masiva de los 48 PDFs + Validación Final
+**Objetivo**: Script `scripts/cargar-modelos-gestoria.ts` (service_role, idempotente/upsert) que recorre `/gestoria/{BACANAL,HABANA}`, mapea fichero → `{empresa_id, ejercicio, periodo, tipo}` (mapa explícito para nombres ambiguos; incluye LIBRO MAYOR; excluye HOSTELBAR), sube al bucket y hace upsert en `modelos_aeat` con `pdf_url`. Luego validación end-to-end.
 **Validación**:
-- [ ] `npm run typecheck` pasa
-- [ ] `npm run build` exitoso
-- [ ] Playwright/manual: cada recuadro con PDF abre el documento firmado en pestaña nueva
+- [ ] Los 48 PDFs subidos y enlazados; recuento por empresa/ejercicio correcto; re-ejecución no duplica.
+- [ ] `npm run typecheck` pasa · `npm run build` exitoso
+- [ ] Cada recuadro con PDF abre el documento firmado en pestaña nueva
 - [ ] PYG, Balance y Libro Mayor aparecen como huecos en ejercicios sin PDF
-- [ ] El icono de ajustes junto al selector de ejercicio abre la config y persiste por empresa
+- [ ] Icono de ajustes abre la config; tipos visibles, emails (offset/plantilla) funcionan
+- [ ] Enlace de gestoría: subida por modelo + validación IA + entrada al software OK
 - [ ] Criterios de éxito cumplidos
 
 ---
 
 ## Ajustes del submódulo (definidos)
 
-El icono de ajustes junto al selector de ejercicio abre `ModelosConfigDialog` con la configuración por empresa (`empresa_id`), persistida vía `modelos-config-actions.ts` y refrescada en los consumidores (patrón `refreshKey`). Ajustes:
+El icono de ajustes junto al selector de ejercicio abre `ModelosConfigDialog` con la configuración por empresa (`empresa_id`), persistida en tabla `modelos_config` (patrón `reclutamiento_config`: fila por empresa, upsert `onConflict:"empresa_id"`) y refrescada en los consumidores (patrón `refreshKey`). Secciones:
 
-1. **Tipos de modelo visibles por empresa** — Toggle activar/desactivar por tipo (`303`, `111`, `190`, `347`, `390`, `200`, `PYG`, `BALANCE`, `LIBRO_MAYOR`). Los tipos desactivados no generan recuadro ni hueco anual para esa empresa. Por defecto: todos activos. Guardado como lista de tipos activos en la config de la empresa.
-2. **Recordatorios de plazos de presentación** — Por cada modelo/periodo, aviso automático antes de su fecha límite. Config: activar/desactivar recordatorios y con cuántos días de antelación (ej. 7 días). Reutiliza `PLAZOS_PRESENTACION` de `types/modelos.ts` y el motor de notificaciones/alertas existente (`emitirNotificacion()` + resolver, PRP-064/065) — el recordatorio se dirige al responsable de gestoría/dirección de esa empresa. Por defecto: desactivado (opt-in).
+### A. Tipos de modelo visibles por empresa
+Toggle activar/desactivar por tipo (`303`, `111`, `190`, `347`, `390`, `200`, `PYG`, `BALANCE`, `LIBRO_MAYOR`). Los tipos desactivados no generan recuadro ni hueco anual para esa empresa. Por defecto: todos activos.
 
-_Ambos ajustes son por empresa y no cruzan datos entre BACANAL y HABANA (RLS por `empresa_id`)._
+### B. Emails automáticos a la gestoría (solicitud de modelos)
+Cuando vence el plazo de un periodo, el software envía a la gestoría un email con un **enlace tokenizado** (estilo contrato PRP-068) para que suba los modelos ya presentados y **entren directos al software**. Configuración:
+
+- **Dos emails separados**: uno para **TRIMESTRALES** (303, 111…) y otro para **ANUALES** (390, 347, 190, 200, PYG, Balance, Libro Mayor). Cada uno con su propio activar/desactivar.
+- **Cuándo sale cada uno**: por defecto **1 día después** de la fecha límite de presentación (calculada desde `PLAZOS_PRESENTACION`). Configurable: nº de días respecto al límite (ej. +1). Un cron diario evalúa qué periodos «tocan» hoy según esa fórmula.
+- **Ver/editar la plantilla**: enlace desde los ajustes a la plantilla de email correspondiente (`gestoria_modelos_trimestral` y `gestoria_modelos_anual`) en el editor de plantillas existente (reutiliza `reclutamiento_email_plantillas` + `PlantillasConfig`). El cuerpo incluye la variable `{{enlace_modelos}}`.
+- **Destinatario**: la gestoría (destino `gestoria` → correo de departamento en Ajustes→Empresa), patrón `resolverDestinatario`.
+
+### C. Enlace tokenizado + subida por la gestoría + validación IA
+- **Un enlace por periodo** (trimestral o anual). Dentro del enlace, la gestoría ve la lista de modelos de ese periodo y **selecciona/adjunta cada modelo por separado** en su hueco (303 en 303, 111 en 111…).
+- **Validación IA por documento**: al subir cada PDF, una IA lee el justificante y verifica que el **tipo de modelo**, la **empresa (NIF/razón social)** y el **periodo/ejercicio** coinciden con el hueco donde se sube. Si no cuadra (p. ej. suben el 111 en el hueco del 303, o un PDF de otra empresa), se **marca como incorrecto** y se avisa a la gestoría en la misma pantalla para que corrija. Datos que la IA puede leer del texto del PDF: «Modelo 303», «B09654955 BACANAL SYSTEM SL», «2026 1T» (verificado en los justificantes AEAT reales).
+- **Entrada al software**: los PDFs validados se suben al bucket `modelos-aeat-pdf` (path `<empresa_id>/<ejercicio>/<periodo>/<tipo>_...pdf`) y hacen upsert de `pdf_url` en `modelos_aeat`, vía service_role (la gestoría no tiene login), igual que `procesarSubidaContrato` en `gestoria-contrato.ts`.
+
+_Todos los ajustes son por empresa y no cruzan datos entre BACANAL y HABANA (RLS por `empresa_id`)._
 
 ---
 
@@ -159,7 +185,10 @@ _Ambos ajustes son por empresa y no cruzan datos entre BACANAL y HABANA (RLS por
 
 > Crece con cada error encontrado durante la implementación.
 
-_(vacío — se completa en ejecución)_
+### 2026-07-09: RLS de storage usa usuario_empresas + usuarios (no user_empresas/profiles)
+- **Error**: La migración copió el patrón 096 con `public.user_empresas` y `public.profiles`; al aplicar → `relation "public.user_empresas" does not exist`.
+- **Fix**: En esta instancia las tablas se renombraron: `profiles`→`usuarios`, `user_empresas`→`usuario_empresas`. La RLS real de `modelos_aeat` usa `usuarios` UNION `usuario_empresas`. Las policies del bucket deben usar esas tablas.
+- **Aplicar en**: Cualquier migración/policy nueva que filtre por empresa del usuario en este proyecto. Ver [[project_rename_profiles_usuarios]] y [[project_rls_multiempresa]].
 
 ---
 

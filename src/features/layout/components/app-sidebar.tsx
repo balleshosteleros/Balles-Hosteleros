@@ -93,9 +93,7 @@ function CollapsibleSection({
   fase?: 1 | 2;
 }) {
   const faseBadge =
-    fase === 1 ? (
-      <NavPill text="1ª fase" tone="green" />
-    ) : fase === 2 ? (
+    fase === 2 ? (
       <NavPill text="2ª fase" tone="yellow" />
     ) : null;
 
