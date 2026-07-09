@@ -723,9 +723,6 @@ function DetalleView({ puesto, onBack, onChanged }: { puesto: PuestoSalarial; on
               </div>
             </div>
           </div>
-          <p className="text-[11px] text-muted-foreground mt-3">
-            El grupo/categoría y el epígrafe de cotización los deduce la gestoría del propio puesto y del convenio.
-          </p>
         </CardContent>
       </Card>
 
