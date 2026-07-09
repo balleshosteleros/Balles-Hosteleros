@@ -196,6 +196,9 @@ export async function asignarPlantillaPuestoAEmpleado(
   empleadoId: string,
   puestoId: string,
   vigenteDesde: string,
+  // Fin de vigencia de la asignación. null/undefined = ilimitado (se repite hasta
+  // que se le ponga fin o se cause baja al empleado).
+  vigenteHasta?: string | null,
 ) {
   try {
     const { supabase, user, empresaId } = await getContext();
@@ -207,7 +210,13 @@ export async function asignarPlantillaPuestoAEmpleado(
     const { error } = await supabase
       .from("rrhh_patron_empleados")
       .upsert(
-        { patron_id: patronId, empleado_id: empleadoId, vigente_desde: vigenteDesde, asignado_por_user_id: user.id },
+        {
+          patron_id: patronId,
+          empleado_id: empleadoId,
+          vigente_desde: vigenteDesde,
+          vigente_hasta: vigenteHasta ?? null,
+          asignado_por_user_id: user.id,
+        },
         { onConflict: "patron_id,empleado_id" },
       );
     if (error) throw error;

@@ -64,6 +64,8 @@ export async function setPuestosDeEmpleado(
   puestoIds: string[],
   principalId: string | null,
   vigenteDesde: string,
+  // Fin del horario del empleado. null/"" = sin fecha de fin (ilimitado).
+  vigenteHasta?: string | null,
 ) {
   try {
     const { supabase, user, empresaId } = await getContext();
@@ -109,7 +111,7 @@ export async function setPuestosDeEmpleado(
           vigente_desde: vigenteDesde,
         });
       if (insErr) throw insErr;
-      await asignarPlantillaPuestoAEmpleado(empleadoId, puestoId, vigenteDesde);
+      await asignarPlantillaPuestoAEmpleado(empleadoId, puestoId, vigenteDesde, vigenteHasta ?? null);
     }
 
     // 3) Marcar principal (uno solo). Limpiar primero para respetar el índice único parcial.

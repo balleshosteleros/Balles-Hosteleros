@@ -92,6 +92,8 @@ export const GestionEmpleadoCard = forwardRef<GestionEmpleadoCardHandle, Props>(
   const [puestosSel, setPuestosSel] = useState<string[]>([]);
   const [principalPuestoId, setPrincipalPuestoId] = useState<string>("");
   const [fechaInicioHorario, setFechaInicioHorario] = useState<string>(() => new Date().toISOString().slice(0, 10));
+  // Fin del horario. "" = sin fecha de fin (ilimitado, se repite hasta la baja).
+  const [fechaFinHorario, setFechaFinHorario] = useState<string>("");
   const [permiteTeletrabajo, setPermiteTeletrabajo] = useState(Boolean(initial.permiteTeletrabajo));
   const [estado, setEstado] = useState<EstadoEmpleado>(initial.estado);
   const [fechaBaja, setFechaBaja] = useState(initial.fechaBaja ?? "");
@@ -238,7 +240,8 @@ export const GestionEmpleadoCard = forwardRef<GestionEmpleadoCardHandle, Props>(
       // Reconcilia los puestos (M:N): asigna la plantilla de horario de cada uno,
       // marca el principal y propaga su departamento + puesto-texto a `empleados`.
       setPuestosDeEmpleado(
-        empleadoId, puestosSel, principalPuestoId || puestosSel[0] || null, fechaInicioHorario,
+        empleadoId, puestosSel, principalPuestoId || puestosSel[0] || null,
+        fechaInicioHorario, fechaFinHorario || null,
       ),
       setLocalesEmpleado(empleadoId, localesSeleccionados),
       setEmpleadoTeletrabajo(empleadoId, permiteTeletrabajo),
@@ -399,15 +402,45 @@ export const GestionEmpleadoCard = forwardRef<GestionEmpleadoCardHandle, Props>(
             El departamento se hereda de cada puesto. Cada puesto aporta su propio horario y condiciones.
           </p>
           {puestosSel.length > 0 && (
-            <div className="flex items-center gap-2 pt-1">
-              <Label className="text-xs text-muted-foreground">Inicio del horario</Label>
-              <Input
-                type="date"
-                value={fechaInicioHorario}
-                onChange={(e) => setFechaInicioHorario(e.target.value)}
-                className="w-44 h-9"
-              />
+            <div className="flex flex-wrap items-end gap-x-6 gap-y-2 pt-1">
+              <div className="flex flex-col gap-1">
+                <Label className="text-xs text-muted-foreground">Inicio del horario</Label>
+                <Input
+                  type="date"
+                  value={fechaInicioHorario}
+                  onChange={(e) => setFechaInicioHorario(e.target.value)}
+                  className="w-44 h-9"
+                />
+              </div>
+              <div className="flex flex-col gap-1">
+                <Label className="text-xs text-muted-foreground">Fin del horario (opcional)</Label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="date"
+                    value={fechaFinHorario}
+                    min={fechaInicioHorario || undefined}
+                    onChange={(e) => setFechaFinHorario(e.target.value)}
+                    className="w-44 h-9"
+                  />
+                  {fechaFinHorario && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-9 px-2 text-xs text-muted-foreground"
+                      onClick={() => setFechaFinHorario("")}
+                    >
+                      Sin fecha de fin
+                    </Button>
+                  )}
+                </div>
+              </div>
             </div>
+          )}
+          {puestosSel.length > 0 && (
+            <p className="text-[11px] text-muted-foreground">
+              Sin fecha de fin, el horario se repite indefinidamente. Al causar baja el empleado, se recorta automáticamente a su último día.
+            </p>
           )}
         </div>
 

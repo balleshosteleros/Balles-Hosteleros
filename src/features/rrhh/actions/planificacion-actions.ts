@@ -199,12 +199,12 @@ export async function getPlanificacionHorarios(
     // 3) Asignación directa: empleado → [{turnoId, vigenteDesde}].
     const { data: directosRows } = await supabase
       .from("rrhh_turno_empleados")
-      .select("empleado_id, turno_id, vigente_desde")
+      .select("empleado_id, turno_id, vigente_desde, vigente_hasta")
       .eq("empresa_id", empresaId)
       .in("empleado_id", empleadoIds);
     const directosPorEmpleado = new Map<
       string,
-      { turnoId: string; vigenteDesde: string | null }[]
+      { turnoId: string; vigenteDesde: string | null; vigenteHasta: string | null }[]
     >();
     for (const row of directosRows ?? []) {
       const empId = row.empleado_id as string;
@@ -212,6 +212,7 @@ export async function getPlanificacionHorarios(
       arr.push({
         turnoId: row.turno_id as string,
         vigenteDesde: (row.vigente_desde as string | null) ?? null,
+        vigenteHasta: (row.vigente_hasta as string | null) ?? null,
       });
       directosPorEmpleado.set(empId, arr);
     }
@@ -226,7 +227,10 @@ export async function getPlanificacionHorarios(
 
     const semanaRepPorPatron = new Map<string, (string | null)[]>();
     const empleadosPorPatron = new Map<string, string[]>();
-    const patronesDeEmpleado = new Map<string, string[]>();
+    const patronesDeEmpleado = new Map<
+      string,
+      { patronId: string; vigenteDesde: string | null; vigenteHasta: string | null }[]
+    >();
 
     if (patronIds.length) {
       const [{ data: semanasRows }, { data: asignRows }] = await Promise.all([
@@ -237,7 +241,7 @@ export async function getPlanificacionHorarios(
           .order("orden", { ascending: true }),
         supabase
           .from("rrhh_patron_empleados")
-          .select("patron_id, empleado_id")
+          .select("patron_id, empleado_id, vigente_desde, vigente_hasta")
           .in("patron_id", patronIds),
       ]);
 
@@ -255,7 +259,11 @@ export async function getPlanificacionHorarios(
         arrE.push(empId);
         empleadosPorPatron.set(pid, arrE);
         const arrP = patronesDeEmpleado.get(empId) ?? [];
-        arrP.push(pid);
+        arrP.push({
+          patronId: pid,
+          vigenteDesde: (a.vigente_desde as string | null) ?? null,
+          vigenteHasta: (a.vigente_hasta as string | null) ?? null,
+        });
         patronesDeEmpleado.set(empId, arrP);
       }
     }
@@ -288,18 +296,22 @@ export async function getPlanificacionHorarios(
         const letra = DIAS_SEMANA[weekday];
         const map = new Map<string, TurnoCelda>();
 
-        // Directos: vigentes y cuyo turno aplica ese día de la semana.
-        // Turnos legacy sin `dias` definidos aplican cada día asignado (como el
-        // motor de fichaje, que no filtra por día de la semana en directos).
+        // Directos: la asignación debe estar vigente ese día (empezó y no
+        // terminó) y su turno aplica ese día de la semana. Turnos legacy sin
+        // `dias` definidos aplican cada día asignado (como el motor de fichaje).
         for (const d of directos) {
           if (d.vigenteDesde && d.vigenteDesde > fecha) continue;
+          if (d.vigenteHasta && d.vigenteHasta < fecha) continue;
           const turno = turnoById.get(d.turnoId);
           if (turno && (turno.dias.length === 0 || turno.dias.includes(letra)))
             map.set(d.turnoId, { turnoId: d.turnoId, origen: "recurrente" });
         }
-        // Patrones: semana representativa, turno del día de la semana.
-        for (const pid of patronesEmp) {
-          const dias = semanaRepPorPatron.get(pid);
+        // Patrones: semana representativa, turno del día de la semana. La
+        // asignación del patrón al empleado debe estar vigente ese día.
+        for (const asig of patronesEmp) {
+          if (asig.vigenteDesde && asig.vigenteDesde > fecha) continue;
+          if (asig.vigenteHasta && asig.vigenteHasta < fecha) continue;
+          const dias = semanaRepPorPatron.get(asig.patronId);
           const turnoId = dias?.[weekday] ?? null;
           if (turnoId && turnoById.has(turnoId))
             map.set(turnoId, { turnoId, origen: "recurrente" });

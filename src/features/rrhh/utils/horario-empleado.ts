@@ -95,24 +95,29 @@ async function turnosAplicablesDia(
     if (tid) idsExplicitos.add(tid);
   }
 
-  // a) Asignación directa (turno suelto / por defecto)
+  // a) Asignación directa (turno suelto / por defecto). La asignación debe estar
+  //    vigente ese día: ya empezó (vigente_desde ≤ fecha) y no ha terminado
+  //    (vigente_hasta NULL = ilimitado, o ≥ fecha).
   const { data: directos } = await supabase
     .from("rrhh_turno_empleados")
     .select("turno_id, vigente_desde")
     .eq("empresa_id", empresaId)
     .eq("empleado_id", empleadoId)
-    .lte("vigente_desde", fechaISO);
+    .lte("vigente_desde", fechaISO)
+    .or(`vigente_hasta.is.null,vigente_hasta.gte.${fechaISO}`);
   for (const d of directos ?? []) {
     const tid = (d as { turno_id?: string | null }).turno_id;
     if (tid) idsDirectos.add(tid);
   }
 
-  // b) Patrones semanales vigentes: la celda del día de la semana.
+  // b) Patrones semanales vigentes: la celda del día de la semana. La ASIGNACIÓN
+  //    del patrón al empleado debe estar vigente ese día (empezó y no terminó).
   const { data: pe } = await supabase
     .from("rrhh_patron_empleados")
     .select("patron_id, vigente_desde")
     .eq("empleado_id", empleadoId)
-    .lte("vigente_desde", fechaISO);
+    .lte("vigente_desde", fechaISO)
+    .or(`vigente_hasta.is.null,vigente_hasta.gte.${fechaISO}`);
   const patronIds = (pe ?? [])
     .map((r) => (r as { patron_id?: string | null }).patron_id)
     .filter((x): x is string => Boolean(x));
@@ -329,14 +334,14 @@ export async function resolverHorarioResumen(
   //    decide luego con vigente_desde y los días del turno.
   const { data: te } = await supabase
     .from("rrhh_turno_empleados")
-    .select("empleado_id, turno_id, vigente_desde")
+    .select("empleado_id, turno_id, vigente_desde, vigente_hasta")
     .eq("empresa_id", empresaId)
     .in("empleado_id", empleadoIds);
 
   // b) Patrones: TODAS las asignaciones (sin filtrar fecha).
   const { data: pe } = await supabase
     .from("rrhh_patron_empleados")
-    .select("empleado_id, patron_id, vigente_desde")
+    .select("empleado_id, patron_id, vigente_desde, vigente_hasta")
     .in("empleado_id", empleadoIds);
   const patronIds = [
     ...new Set(
@@ -381,6 +386,9 @@ export async function resolverHorarioResumen(
         if (!eid || !pid) continue;
         const info = patronInfo.get(pid);
         if (!info) continue; // patrón inactivo o caducado
+        // Si la ASIGNACIÓN ya terminó (p. ej. recortada por baja), no cuenta.
+        const asigHasta = (r as { vigente_hasta?: string | null }).vigente_hasta ?? null;
+        if (asigHasta != null && asigHasta < hoyISO) continue;
         tieneHorario[eid] = true; // patrón vivo asignado (aunque empiece en el futuro)
         const asigDesde = (r as { vigente_desde?: string | null }).vigente_desde ?? null;
         const aplicaHoy =
@@ -458,7 +466,11 @@ export async function resolverHorarioResumen(
     if (!eid || !tid) continue;
     const info = turnoInfo.get(tid);
     if (!info) continue; // turno inactivo
-    if (info.vigenteHasta != null && info.vigenteHasta < hoyISO) continue; // caducado
+    if (info.vigenteHasta != null && info.vigenteHasta < hoyISO) continue; // turno caducado
+    // Si la ASIGNACIÓN del turno al empleado ya terminó (p. ej. recortada por
+    // baja), tampoco cuenta como horario.
+    const asigHasta = (d as { vigente_hasta?: string | null }).vigente_hasta ?? null;
+    if (asigHasta != null && asigHasta < hoyISO) continue;
     tieneHorario[eid] = true;
     const asigDesde = (d as { vigente_desde?: string | null }).vigente_desde ?? null;
     const aplicaHoy =

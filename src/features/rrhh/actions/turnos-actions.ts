@@ -485,15 +485,22 @@ export async function getEmpleadosDirectosPorTurno(
 }
 
 // Reemplaza el conjunto completo de empleados asignados directamente a un turno.
+// `vigenteDesde`/`vigenteHasta` aplican a las asignaciones NUEVAS (no pisan las
+// ya existentes gracias a ignoreDuplicates). vigenteHasta null = ilimitado.
 export async function setEmpleadosDirectosTurno(
   empresaIdOrSlug: string,
   turnoId: string,
   empleadoIds: string[],
+  vigenteDesde?: string | null,
+  vigenteHasta?: string | null,
 ) {
   try {
     const { supabase } = await getAppContext();
     const empresaId = await resolveEmpresaUuid(supabase, empresaIdOrSlug);
     if (!empresaId) return { ok: false, error: "Empresa no encontrada" };
+
+    const desde = vigenteDesde || new Date().toISOString().slice(0, 10);
+    const hasta = vigenteHasta || null;
 
     const idsUnicos = Array.from(new Set(empleadoIds.filter(Boolean)));
 
@@ -537,6 +544,8 @@ export async function setEmpleadosDirectosTurno(
         empresa_id: empresaId,
         turno_id: turnoId,
         empleado_id: empleadoId,
+        vigente_desde: desde,
+        vigente_hasta: hasta,
       }));
       const { error: errIns } = await supabase
         .from("rrhh_turno_empleados")

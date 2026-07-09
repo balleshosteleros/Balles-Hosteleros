@@ -2145,6 +2145,37 @@ export async function aprobarSolicitud(id: string, notasRevision?: string) {
     if (error) throw error;
 
     if (solicitud.subtipo === "baja_contrato") {
+      // Recorte del horario futuro: desde el último día (fecha_fin) que indicó el
+      // empleado, no debe conservar turnos ni patrones. Los ilimitados o que
+      // terminarían después se recortan a esa fecha; los sueltos posteriores se
+      // borran. No bloqueamos la aprobación si el recorte falla.
+      const ultimoDia = (solicitud.fecha_fin as string | null) ?? null;
+      if (ultimoDia) {
+        try {
+          const { data: empBaja } = await supabase
+            .from("empleados")
+            .select("id")
+            .eq("user_id", solicitud.user_id as string)
+            .eq("empresa_id", solicitud.empresa_id as string)
+            .maybeSingle();
+          if (empBaja?.id) {
+            const { recortarHorarioFuturoPorBaja } = await import(
+              "@/features/rrhh/services/baja-horario"
+            );
+            await recortarHorarioFuturoPorBaja(supabase, {
+              empleadoId: empBaja.id as string,
+              empresaId: solicitud.empresa_id as string,
+              fechaBaja: ultimoDia,
+            });
+          }
+        } catch (e) {
+          console.error(
+            "[mi-panel] aprobarSolicitud → recorte horario baja_contrato:",
+            extractErrorMessage(e),
+          );
+        }
+      }
+
       // Notificación al empleado. No bloqueamos la aprobación si el envío falla.
       try {
         await notificarBajaContratoRecibida({

@@ -109,17 +109,19 @@ export async function horasTeoricasMes(
   // a) Turnos directos por empleado (vigentes en algún momento del mes).
   const { data: te } = await supabase
     .from("rrhh_turno_empleados")
-    .select("empleado_id, turno_id, vigente_desde")
+    .select("empleado_id, turno_id, vigente_desde, vigente_hasta")
     .eq("empresa_id", empresaId)
     .in("empleado_id", empleadoIds)
-    .lte("vigente_desde", hasta);
+    .lte("vigente_desde", hasta)
+    .or(`vigente_hasta.is.null,vigente_hasta.gte.${desde}`);
 
   // b) Patrones por empleado.
   const { data: pe } = await supabase
     .from("rrhh_patron_empleados")
-    .select("empleado_id, patron_id, vigente_desde")
+    .select("empleado_id, patron_id, vigente_desde, vigente_hasta")
     .in("empleado_id", empleadoIds)
-    .lte("vigente_desde", hasta);
+    .lte("vigente_desde", hasta)
+    .or(`vigente_hasta.is.null,vigente_hasta.gte.${desde}`);
   const patronIds = [
     ...new Set((pe ?? []).map((r) => (r as { patron_id?: string }).patron_id).filter((x): x is string => !!x)),
   ];
@@ -215,7 +217,7 @@ export async function horasTeoricasMes(
   }
 
   // Indexar asignaciones por empleado.
-  const directosPorEmp = new Map<string, { turnoId: string; desde: string | null }[]>();
+  const directosPorEmp = new Map<string, { turnoId: string; desde: string | null; hasta: string | null }[]>();
   for (const d of te ?? []) {
     const eid = (d as { empleado_id?: string }).empleado_id;
     const tid = (d as { turno_id?: string | null }).turno_id;
@@ -223,9 +225,10 @@ export async function horasTeoricasMes(
     (directosPorEmp.get(eid) ?? directosPorEmp.set(eid, []).get(eid)!).push({
       turnoId: tid,
       desde: (d as { vigente_desde?: string | null }).vigente_desde ?? null,
+      hasta: (d as { vigente_hasta?: string | null }).vigente_hasta ?? null,
     });
   }
-  const patronesPorEmp = new Map<string, { patronId: string; desde: string | null }[]>();
+  const patronesPorEmp = new Map<string, { patronId: string; desde: string | null; hasta: string | null }[]>();
   for (const r of pe ?? []) {
     const eid = (r as { empleado_id?: string }).empleado_id;
     const pid = (r as { patron_id?: string }).patron_id;
@@ -233,6 +236,7 @@ export async function horasTeoricasMes(
     (patronesPorEmp.get(eid) ?? patronesPorEmp.set(eid, []).get(eid)!).push({
       patronId: pid,
       desde: (r as { vigente_desde?: string | null }).vigente_desde ?? null,
+      hasta: (r as { vigente_hasta?: string | null }).vigente_hasta ?? null,
     });
   }
   const planifPorEmpFecha = new Map<string, string[]>(); // `${eid}|${fecha}` → turnoIds
@@ -261,21 +265,23 @@ export async function horasTeoricasMes(
       // Turnos explícitos del día: planificación + celda del patrón vigente.
       const explicitos = new Set<string>();
       for (const tid of planifPorEmpFecha.get(`${eid}|${fecha}`) ?? []) explicitos.add(tid);
-      for (const { patronId, desde } of patronesPorEmp.get(eid) ?? []) {
+      for (const { patronId, desde, hasta } of patronesPorEmp.get(eid) ?? []) {
         const vig = patronVigencia.get(patronId);
         if (!vig) continue; // inactivo/caducado
         if (vig.vigenteDesde != null && vig.vigenteDesde > fecha) continue;
         if (vig.vigenteHasta != null && vig.vigenteHasta < fecha) continue;
         if (desde != null && desde > fecha) continue;
+        if (hasta != null && hasta < fecha) continue; // asignación recortada (baja)
         for (const tid of turnoDiaPorPatron.get(patronId)?.get(weekday) ?? []) explicitos.add(tid);
       }
       // Turnos directos aplicables hoy.
       const directos = new Set<string>();
-      for (const { turnoId, desde } of directosPorEmp.get(eid) ?? []) {
+      for (const { turnoId, desde, hasta } of directosPorEmp.get(eid) ?? []) {
         const info = turnoInfo.get(turnoId);
         if (!info) continue;
         if (info.vigenteHasta != null && info.vigenteHasta < fecha) continue;
         if (desde != null && desde > fecha) continue;
+        if (hasta != null && hasta < fecha) continue; // asignación recortada (baja)
         if (info.tipoJornada === "flexible" && info.dias.length > 0 && !info.dias.includes(letra)) continue;
         directos.add(turnoId);
       }
