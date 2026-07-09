@@ -105,8 +105,9 @@ export function HorariosView() {
   const [areas, setAreas] = useState<AreaValor[]>(["operativa", "administrativa"]);
   const [departamentosSel, setDepartamentosSel] = useState<string[]>([]);
   const [deptModificado, setDeptModificado] = useState(false);
-  // Por defecto se ocultan los empleados sin ningún turno en el rango visible.
-  const [ocultarSinTurno, setOcultarSinTurno] = useState(true);
+  // Por defecto se muestran TODOS los empleados activos, tengan o no turno en el
+  // rango visible. El usuario puede activar "Ocultar sin turno" manualmente.
+  const [ocultarSinTurno, setOcultarSinTurno] = useState(false);
   const [refDate, setRefDate] = useState<Date>(() => new Date());
   const [cuadranteId, setCuadranteId] = useState<string | null>(null);
   const [cuadrantes, setCuadrantes] = useState<{ id: string; nombre: string }[]>([]);
@@ -156,15 +157,20 @@ export function HorariosView() {
 
   // Filtros de ámbito (área + departamento) con selección literal: el empleado
   // se muestra solo si su área y su departamento están marcados. Por defecto
-  // está todo marcado, así que no filtra nada. "Ocultar sin turno" descarta a
-  // quien no tenga ningún turno en el rango visible.
+  // está todo marcado, así que no filtra nada y salen TODOS los activos —
+  // incluidos los que no tienen departamento asignado. Solo cuando el usuario
+  // toca el filtro de departamento (deptModificado) se aplica la selección
+  // literal. "Ocultar sin turno" (desactivado por defecto) descarta a quien no
+  // tenga ningún turno en el rango visible.
   const planFiltrado = useMemo<Planificacion>(() => {
     return {
       ...plan,
       empleados: plan.empleados.filter((e) => {
         if (!areas.includes(e.area)) return false;
-        if (!(e.departamento != null && departamentosSelEfectivo.includes(e.departamento))) {
-          return false;
+        if (deptModificado) {
+          if (!(e.departamento != null && departamentosSel.includes(e.departamento))) {
+            return false;
+          }
         }
         if (ocultarSinTurno) {
           const tieneTurno = Object.values(plan.celdas[e.empleadoId] ?? {}).some(
@@ -175,7 +181,7 @@ export function HorariosView() {
         return true;
       }),
     };
-  }, [plan, areas, departamentosSelEfectivo, ocultarSinTurno]);
+  }, [plan, areas, deptModificado, departamentosSel, ocultarSinTurno]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),

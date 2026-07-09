@@ -121,68 +121,6 @@ function indexLunes(fechaISO: string): number {
   return (d.getDay() + 6) % 7;
 }
 
-/**
- * IDs de empleados dentro del ámbito de un cuadrante (local + departamentos).
- * null = sin filtro de cuadrante.
- */
-async function empleadosDelCuadrante(
-  supabase: Awaited<ReturnType<typeof getAppContext>>["supabase"],
-  empresaId: string,
-  cuadranteId: string,
-): Promise<Set<string> | null> {
-  const { data: cuad } = await supabase
-    .from("rrhh_cuadrantes")
-    .select("id, local_id")
-    .eq("id", cuadranteId)
-    .maybeSingle();
-  if (!cuad) return null;
-  const localId = (cuad.local_id as string | null) ?? null;
-
-  const { data: depRows } = await supabase
-    .from("rrhh_cuadrante_departamentos")
-    .select("departamento_id")
-    .eq("cuadrante_id", cuadranteId);
-  const deptIds = new Set((depRows ?? []).map((r) => r.departamento_id as string));
-  if (deptIds.size === 0) return new Set();
-
-  const { data: empleadosRows } = await supabase
-    .from("empleados")
-    .select("id, departamento_id, local_id")
-    .eq("empresa_id", empresaId)
-    .eq("estado", "Activo");
-
-  const candidatos = (empleadosRows ?? []).filter(
-    (e) => e.departamento_id && deptIds.has(e.departamento_id as string),
-  );
-
-  if (!localId) return new Set(candidatos.map((e) => e.id as string));
-
-  // Con local: el empleado debe fichar en ese local (puente o por defecto).
-  const ids = candidatos.map((e) => e.id as string);
-  const localesPorEmpleado = new Map<string, Set<string>>();
-  if (ids.length) {
-    const { data: locRows } = await supabase
-      .from("empleado_locales")
-      .select("empleado_id, local_id")
-      .in("empleado_id", ids);
-    for (const row of locRows ?? []) {
-      const empId = row.empleado_id as string;
-      const set = localesPorEmpleado.get(empId) ?? new Set<string>();
-      set.add(row.local_id as string);
-      localesPorEmpleado.set(empId, set);
-    }
-  }
-  return new Set(
-    candidatos
-      .filter(
-        (e) =>
-          localesPorEmpleado.get(e.id as string)?.has(localId) ||
-          (e.local_id as string | null) === localId,
-      )
-      .map((e) => e.id as string),
-  );
-}
-
 export async function getPlanificacionHorarios(
   empresaIdOrSlug: string,
   opts: { desdeISO: string; hastaISO: string; cuadranteId?: string | null },
@@ -194,7 +132,7 @@ export async function getPlanificacionHorarios(
 
     // 1) Empleados activos (dedup multiempresa via fuente única).
     const empleadosRes = await getEmpleadosActivos(empresaIdOrSlug);
-    let empleados: PlanEmpleado[] = (empleadosRes.data ?? []).map((e) => ({
+    const empleados: PlanEmpleado[] = (empleadosRes.data ?? []).map((e) => ({
       empleadoId: e.empleadoId,
       nombreCompleto: e.nombreCompleto,
       departamento: e.departamento,
@@ -203,17 +141,9 @@ export async function getPlanificacionHorarios(
       avatarUrl: e.avatarUrl,
     }));
 
-    // 1b) Filtro de ámbito por cuadrante (opcional).
-    if (opts.cuadranteId) {
-      const permitidos = await empleadosDelCuadrante(
-        supabase,
-        empresaId,
-        opts.cuadranteId,
-      );
-      if (permitidos) {
-        empleados = empleados.filter((e) => permitidos.has(e.empleadoId));
-      }
-    }
+    // 1b) La rejilla SIEMPRE muestra a todos los empleados activos. El cuadrante
+    // (y la agrupación por departamento/empleado) es una forma de VER la
+    // información, no un filtro que oculte gente: no se recorta la lista aquí.
     const empleadoIds = empleados.map((e) => e.empleadoId);
 
     // 2a) Colores por departamento (fuente única del tinte de los turnos).
