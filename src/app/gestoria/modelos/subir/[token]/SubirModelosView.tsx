@@ -178,7 +178,7 @@ export function SubirModelosView({
       } else {
         setEnvioError(
           json.error ??
-            "Debes subir TODOS los modelos obligatorios antes de enviar.",
+            "Debes subir TODOS los modelos requeridos antes de enviar.",
         );
         setFaltan(Array.isArray(json.faltan) ? json.faltan : []);
       }
@@ -221,7 +221,7 @@ export function SubirModelosView({
         <p className="mt-1 text-sm text-zinc-600">{empresaNombre}</p>
         <p className="mt-3 text-sm text-zinc-600">
           Adjunta cada modelo; se verifica al momento. No se guardará nada hasta que
-          pulses &laquo;Enviar todo&raquo; con todos los obligatorios.
+          pulses &laquo;Enviar todo&raquo; con todos los modelos requeridos.
         </p>
 
         {/* Lista de modelos */}
@@ -256,7 +256,7 @@ export function SubirModelosView({
                         : "bg-zinc-100 text-zinc-500")
                     }
                   >
-                    {modelo.obligatorio ? "Obligatorio" : "Opcional"}
+                    {modelo.obligatorio ? "Requerido" : "Opcional"}
                   </span>
                 </div>
 
@@ -331,7 +331,7 @@ export function SubirModelosView({
         <div className="mt-6 flex items-center gap-1.5 text-sm text-zinc-600">
           <ShieldCheck className="h-4 w-4 text-zinc-400" />
           <span>
-            Obligatorios: {obligatoriosListos}/{obligatorios.length} adjuntados
+            Requeridos: {obligatoriosListos}/{obligatorios.length} adjuntados
           </span>
         </div>
 
@@ -355,7 +355,7 @@ export function SubirModelosView({
         </button>
 
         <p className="mt-2 text-center text-xs text-zinc-500">
-          Es todo o nada: si falta algún modelo obligatorio, no se guarda ninguno.
+          Es todo o nada: si falta algún modelo requerido, no se guarda ninguno.
         </p>
       </div>
     </div>

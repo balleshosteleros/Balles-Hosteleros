@@ -303,7 +303,7 @@ export async function confirmarSubidaModelos(
     return {
       ok: false,
       status: 400,
-      error: "Debes subir TODOS los modelos obligatorios antes de enviar.",
+      error: "Debes subir TODOS los modelos requeridos antes de enviar.",
       faltan,
     };
   }

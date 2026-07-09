@@ -173,15 +173,15 @@ export function ModelosConfigDialog({ onSaved }: ModelosConfigDialogProps) {
               </div>
             </section>
 
-            {/* Sección B — Obligatorios en el enlace de la gestoría */}
+            {/* Sección B — Modelos que se piden a la gestoría */}
             <section className="space-y-3">
               <div className="space-y-0.5">
                 <h3 className="text-sm font-semibold text-foreground">
-                  Obligatorios al subir por la gestoría
+                  Modelos que se piden a la gestoría
                 </h3>
                 <p className="text-xs text-muted-foreground">
-                  La gestoría debe subir <b>todos los obligatorios</b> para poder enviar (todo o
-                  nada). Por defecto todos lo son; desmarca los que quieras dejar opcionales.
+                  La gestoría debe subir <b>todos estos a la vez</b>: si falta alguno, no puede
+                  enviar. Por defecto se piden todos; desmarca los que esta empresa no presente.
                 </p>
               </div>
               <div className="rounded-lg border border-border p-3 space-y-1">
