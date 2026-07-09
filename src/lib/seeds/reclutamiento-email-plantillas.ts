@@ -55,7 +55,7 @@ export interface ReclutamientoEmailPlantillaSeed {
    * localiza por aquí, NO por el nombre → el nombre es editable. Las plantillas
    * libres (asociadas a estados) no llevan clave.
    */
-  clave?: "gestoria_alta" | "gestoria_recordatorio" | "contrato_interno" | "contrato_oficial" | "prueba_aviso";
+  clave?: "gestoria_alta" | "gestoria_recordatorio" | "contrato_interno" | "reconocimiento_medico" | "contrato_oficial" | "prueba_aviso";
   /** Destinatario por defecto (candidato / gestoria / rrhh). Editable después. */
   destino?: "candidato" | "gestoria" | "rrhh" | "personalizado";
 }
@@ -402,6 +402,23 @@ Gracias,
 Hemos iniciado tu proceso de alta. Antes de empezar a trabajar debes leer y firmar el contrato interno de la empresa, que recoge las normas, compromisos y confirmaciones de tu incorporación.
 
 Tiene validez interna entre la empresa y tú. Puedes leerlo y firmarlo desde el botón que encontrarás en este correo.
+
+Un saludo,
+{{empresa_nombre}}`,
+    activa: true,
+  },
+
+  // ── Reconocimiento médico (a firmar por el trabajador) ──
+  {
+    clave: "reconocimiento_medico",
+    destino: "candidato",
+    nombre: "Reconocimiento médico (a firmar)",
+    asunto: "Firma tu reconocimiento médico · {{empresa_nombre}}",
+    cuerpo: `Hola {{candidato_nombre}},
+
+Como parte de tu incorporación, la empresa está obligada a informarte de tu derecho a la vigilancia de la salud (reconocimiento médico). Su realización es voluntaria: tú decides si deseas hacértelo o no.
+
+En el documento adjunto podrás indicar tu decisión y firmar para dejar constancia de que has sido informado/a. Puedes leerlo y firmarlo desde el botón que encontrarás en este correo.
 
 Un saludo,
 {{empresa_nombre}}`,

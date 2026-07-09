@@ -13,6 +13,7 @@ export const CLAVES_ONBOARDING = {
   gestoriaAlta: "gestoria_alta",
   gestoriaRecordatorio: "gestoria_recordatorio",
   contratoInterno: "contrato_interno",
+  reconocimientoMedico: "reconocimiento_medico",
   contratoOficial: "contrato_oficial",
   pruebaAviso: "prueba_aviso",
 } as const;
@@ -25,6 +26,7 @@ export const NOMBRES_ONBOARDING: Record<ClaveOnboarding, string> = {
   gestoria_alta: "Gestoría · alta de contrato",
   gestoria_recordatorio: "Gestoría · recordatorio de contrato",
   contrato_interno: "Contrato interno (a firmar)",
+  reconocimiento_medico: "Reconocimiento médico (a firmar)",
   contrato_oficial: "Contrato oficial (a firmar)",
   prueba_aviso: "Aviso de periodo de prueba (RRHH)",
 };
@@ -151,6 +153,7 @@ export const DESTINO_DEFAULT_POR_CLAVE: Record<
   gestoria_alta: { destino: "departamento", destinoEmail: "correoGestoria" },
   gestoria_recordatorio: { destino: "departamento", destinoEmail: "correoGestoria" },
   contrato_interno: { destino: "candidato", destinoEmail: null },
+  reconocimiento_medico: { destino: "candidato", destinoEmail: null },
   contrato_oficial: { destino: "candidato", destinoEmail: null },
   prueba_aviso: { destino: "departamento", destinoEmail: "correoRrhh" },
 };
@@ -169,6 +172,7 @@ export const CLAVES_RESERVADAS_POR_ESTADO: Record<string, ClaveOnboarding[]> = {
     CLAVES_ONBOARDING.gestoriaAlta,
     CLAVES_ONBOARDING.gestoriaRecordatorio,
     CLAVES_ONBOARDING.contratoInterno,
+    CLAVES_ONBOARDING.reconocimientoMedico,
     CLAVES_ONBOARDING.contratoOficial,
   ],
   prueba: [CLAVES_ONBOARDING.pruebaAviso],

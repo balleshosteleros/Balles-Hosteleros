@@ -295,6 +295,8 @@ export async function notificarRrhhGestoria(params: {
     | "contratacion_iniciada"
     | "contrato_interno_enviado"
     | "contrato_interno_firmado"
+    | "reconocimiento_medico_enviado"
+    | "reconocimiento_medico_firmado"
     | "alta_completada";
   titulo: string;
   mensaje: string;

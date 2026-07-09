@@ -135,11 +135,13 @@ export function ContratarDialog({ open, onOpenChange, candidato, onDone, variant
           emailEmpresa: esAdministrativo ? emailEmpresa.trim() : null,
           enviarGestoria: enviarFlags["gestoria_alta"] ?? false,
           enviarContratoInterno: enviarFlags["contrato_interno"] ?? false,
+          enviarReconocimientoMedico: enviarFlags["reconocimiento_medico"] ?? false,
         });
         if (res.ok && res.empleadoId) {
           const partes: string[] = [];
           if (res.gestoriaEnviada) partes.push("alta a gestoría");
           if (res.contratoInternoEnviado) partes.push("contrato interno");
+          if (res.reconocimientoMedicoEnviado) partes.push("reconocimiento médico");
           const description = partes.length
             ? `${partes.join(" y ").charAt(0).toUpperCase()}${partes.join(" y ").slice(1)} enviados`
             : "Empleado creado (sin correos)";

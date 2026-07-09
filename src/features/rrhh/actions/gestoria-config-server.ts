@@ -20,6 +20,7 @@ export interface ReclutamientoConfigNotif {
   // PRP-070 — onboarding
   formacion_url: string | null;
   contrato_interno_plantilla: string | null;
+  reconocimiento_medico_plantilla: string | null;
   prueba_duracion_dias: number;
   prueba_aviso_dias: number;
   prueba_aviso_canal: string;
@@ -37,6 +38,7 @@ const DEFAULT: ReclutamientoConfigNotif = {
   notif_contrato_firmado: true,
   formacion_url: null,
   contrato_interno_plantilla: null,
+  reconocimiento_medico_plantilla: null,
   prueba_duracion_dias: 30,
   prueba_aviso_dias: 10,
   prueba_aviso_canal: "ambos",
@@ -53,7 +55,7 @@ export async function getReclutamientoConfigPorEmpresa(
       .select(
         "gestoria_email, gestoria_email_cc, gestoria_recordatorio_activo, gestoria_recordatorio_dias, " +
           "notif_alta_gestoria, notif_recordatorio_gestoria, notif_contrato_subido, notif_contrato_firmado, " +
-          "formacion_url, contrato_interno_plantilla, prueba_duracion_dias, prueba_aviso_dias, " +
+          "formacion_url, contrato_interno_plantilla, reconocimiento_medico_plantilla, prueba_duracion_dias, prueba_aviso_dias, " +
           "prueba_aviso_canal, prueba_aviso_activo",
       )
       .eq("empresa_id", empresaId)
@@ -68,6 +70,7 @@ export async function getReclutamientoConfigPorEmpresa(
         notif_contrato_firmado: boolean | null;
         formacion_url: string | null;
         contrato_interno_plantilla: string | null;
+        reconocimiento_medico_plantilla: string | null;
         prueba_duracion_dias: number | null;
         prueba_aviso_dias: number | null;
         prueba_aviso_canal: string | null;
@@ -85,6 +88,7 @@ export async function getReclutamientoConfigPorEmpresa(
       notif_contrato_firmado: data.notif_contrato_firmado ?? true,
       formacion_url: (data.formacion_url as string | null) ?? null,
       contrato_interno_plantilla: (data.contrato_interno_plantilla as string | null) ?? null,
+      reconocimiento_medico_plantilla: (data.reconocimiento_medico_plantilla as string | null) ?? null,
       prueba_duracion_dias: data.prueba_duracion_dias ?? 30,
       prueba_aviso_dias: data.prueba_aviso_dias ?? 10,
       prueba_aviso_canal: (data.prueba_aviso_canal as string) ?? "ambos",

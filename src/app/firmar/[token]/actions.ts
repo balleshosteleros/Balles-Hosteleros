@@ -36,7 +36,7 @@ async function getMeta() {
  * botón. Para el resto (p. ej. una baja voluntaria enviada por un admin) se
  * muestra el nombre real de quien lo envió.
  */
-const TIPOS_INSTITUCIONALES = new Set(["contrato_interno", "contrato_oficial"]);
+const TIPOS_INSTITUCIONALES = new Set(["contrato_interno", "reconocimiento_medico", "contrato_oficial"]);
 
 function resolverEnviadoPor(
   tipoDoc: string | null | undefined,
@@ -672,6 +672,29 @@ export async function firmarDocumento(input: FirmarDocumentoInput): Promise<Firm
         });
       } catch (e) {
         console.error("[firmar/firmar] contrato interno firmado:", e);
+      }
+    }
+
+    // Si el documento firmado es el RECONOCIMIENTO MÉDICO, avisa a RRHH. El PDF
+    // firmado (con la decisión SÍ/NO marcada) queda archivado en la carpeta de
+    // documentos del trabajador, igual que el contrato interno.
+    if ((doc.tipo as string) === "reconocimiento_medico") {
+      try {
+        const empleadoId = doc.empleado_id as string;
+        const empresaIdDoc = doc.empresa_id as string;
+        const { notificarRrhhGestoria } = await import(
+          "@/features/rrhh/services/gestoria/gestoria-contrato"
+        );
+        await notificarRrhhGestoria({
+          empresaId: empresaIdDoc,
+          tipo: "reconocimiento_medico_firmado",
+          titulo: `Reconocimiento médico firmado: ${datos.empleadoNombre}`,
+          mensaje: `${datos.empleadoNombre} ha firmado el reconocimiento médico. Queda guardado en su carpeta de documentos.`,
+          empleadoId,
+          dedupeKey: `reconocimiento_medico_firmado:${documentoId}`,
+        });
+      } catch (e) {
+        console.error("[firmar/firmar] reconocimiento médico firmado:", e);
       }
     }
 

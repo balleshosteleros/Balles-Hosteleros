@@ -26,6 +26,7 @@ import { requireAdminUser } from "@/features/rrhh/services/empleados-core";
 import { contratarCandidato } from "@/features/rrhh/actions/contratacion-actions";
 import { crearFirmaInterno } from "@/features/rrhh/services/firmas/crear-firma";
 import { generarContratoInternoPDF } from "@/features/rrhh/services/firmas/contrato-interno-pdf";
+import { generarReconocimientoMedicoPDF } from "@/features/rrhh/services/firmas/reconocimiento-medico-pdf";
 import { notificarRrhhGestoria } from "@/features/rrhh/services/gestoria/gestoria-contrato";
 import { getReclutamientoConfigPorEmpresa } from "@/features/rrhh/actions/gestoria-config-server";
 import { revalidatePath } from "next/cache";
@@ -43,6 +44,7 @@ export interface IniciarContratacionInput {
    */
   enviarGestoria?: boolean;
   enviarContratoInterno?: boolean;
+  enviarReconocimientoMedico?: boolean;
 }
 
 export interface IniciarContratacionResult {
@@ -51,6 +53,7 @@ export interface IniciarContratacionResult {
   empleadoId?: string;
   gestoriaEnviada?: boolean;
   contratoInternoEnviado?: boolean;
+  reconocimientoMedicoEnviado?: boolean;
 }
 
 function fechaEs(d: Date): string {
@@ -76,6 +79,7 @@ export async function iniciarContratacion(
   // envían ambos (compat con llamadas antiguas).
   const enviarGestoria = input.enviarGestoria !== false;
   const enviarContratoInterno = input.enviarContratoInterno !== false;
+  const enviarReconocimientoMedico = input.enviarReconocimientoMedico !== false;
 
   // 1. Materializar el empleado (alta gestoría según confirmación). Sin email de acceso.
   const contratado = await contratarCandidato({
@@ -172,6 +176,79 @@ export async function iniciarContratacion(
     console.error("[contratacion-fase] contrato interno:", err);
   }
 
+  // 3. Generar y enviar a firmar el RECONOCIMIENTO MÉDICO (solo si se confirmó).
+  //    Funciona igual que el contrato interno: documento generado por el sistema,
+  //    firma manuscrita digital, se archiva en la carpeta de documentos del
+  //    trabajador. El trabajador marca en el documento si desea o no realizarse
+  //    el examen de salud (su realización es voluntaria).
+  let reconocimientoMedicoEnviado = false;
+  if (enviarReconocimientoMedico) try {
+    const admin = createAdminClient();
+    const { data: emp } = await admin
+      .from("empleados")
+      .select("nombre, apellidos, dni_nie, puesto")
+      .eq("id", empleadoId)
+      .maybeSingle();
+    const { data: empresa } = await admin
+      .from("empresas")
+      .select("nombre, nif")
+      .eq("id", empresaId)
+      .maybeSingle();
+    const cfg = await getReclutamientoConfigPorEmpresa(admin, empresaId);
+
+    const empleadoNombre = `${emp?.nombre ?? ""} ${emp?.apellidos ?? ""}`.trim() || "Trabajador";
+
+    const pdf = await generarReconocimientoMedicoPDF({
+      empleadoNombre,
+      empleadoDni: (emp?.dni_nie as string | null) ?? null,
+      empresaNombre: (empresa?.nombre as string) ?? "La empresa",
+      empresaCif: (empresa?.nif as string | null) ?? null,
+      ciudad: null,
+      puesto: (emp?.puesto as string | null) ?? null,
+      fecha: fechaEs(new Date()),
+      cuerpo: (cfg.reconocimiento_medico_plantilla as string | null) ?? null,
+    });
+
+    const { resolverPlantillaOnboarding, PLANTILLAS_ONBOARDING } = await import(
+      "@/features/rrhh/services/email-plantillas/resolver"
+    );
+    const tplRecon = await resolverPlantillaOnboarding(
+      admin, empresaId, PLANTILLAS_ONBOARDING.reconocimientoMedico,
+      { candidato_nombre: emp?.nombre ?? "", empresa_nombre: (empresa?.nombre as string) ?? "" },
+    );
+    const firma = await crearFirmaInterno({
+      empresaId,
+      empleadoId,
+      pdf,
+      titulo: "Reconocimiento médico",
+      tipo: "reconocimiento_medico",
+      modalidad: "manuscrita_digital",
+      validez: "eidas_simple",
+      plazoDias: 14,
+      observaciones: "Reconocimiento médico previo a la incorporación.",
+      enviadoPorUserId: user.id,
+      enviadoPorNombre: "RRHH",
+      // Documento PERSONAL del trabajador: se envía a su email personal.
+      preferirEmailPersonal: true,
+      emailAsunto: tplRecon?.asunto ?? null,
+      emailIntro: tplRecon?.cuerpo ?? null,
+      // Firma sobre la zona "Firmado" del documento (lo genera el sistema).
+      posicionFirmaDefault: { pagina: 1, xPct: 0.10, yPct: 0.82, anchoPct: 0.32 },
+    });
+    reconocimientoMedicoEnviado = firma.ok;
+
+    await notificarRrhhGestoria({
+      empresaId,
+      tipo: "reconocimiento_medico_enviado",
+      titulo: `Reconocimiento médico enviado: ${empleadoNombre}`,
+      mensaje: `Se ha enviado el reconocimiento médico a ${empleadoNombre} para su firma.`,
+      empleadoId,
+      dedupeKey: `reconocimiento_medico_enviado:${empleadoId}`,
+    });
+  } catch (err) {
+    console.error("[contratacion-fase] reconocimiento médico:", err);
+  }
+
   revalidatePath("/rrhh/reclutamiento");
   revalidatePath("/rrhh/empleados");
   return {
@@ -179,6 +256,7 @@ export async function iniciarContratacion(
     empleadoId,
     gestoriaEnviada: contratado.gestoriaEnviada,
     contratoInternoEnviado,
+    reconocimientoMedicoEnviado,
   };
 }
 
@@ -189,7 +267,7 @@ export async function iniciarContratacion(
  * puede marcar para enviar.
  */
 export interface EmailContratacionPreview {
-  clave: "gestoria_alta" | "contrato_interno";
+  clave: "gestoria_alta" | "contrato_interno" | "reconocimiento_medico";
   titulo: string;
   destinatarioLabel: string;
   para: string;
@@ -247,6 +325,9 @@ export async function previewContratacionEmails(
     // 2. Contrato interno a firmar (al candidato).
     const tplInt = await resolverPlantillaOnboarding(admin, empresaId, PLANTILLAS_ONBOARDING.contratoInterno, vars);
 
+    // 3. Reconocimiento médico a firmar (al candidato).
+    const tplRecon = await resolverPlantillaOnboarding(admin, empresaId, PLANTILLAS_ONBOARDING.reconocimientoMedico, vars);
+
     const emails: EmailContratacionPreview[] = [
       {
         clave: "gestoria_alta",
@@ -265,6 +346,16 @@ export async function previewContratacionEmails(
         para: emailCandidato || "",
         asunto: tplInt?.asunto ?? "Tu contrato interno para firmar",
         cuerpo: tplInt?.cuerpo ?? "Se enviará al candidato el contrato interno para su firma digital.",
+        disponible: !!emailCandidato,
+        motivoNoDisponible: emailCandidato ? undefined : "El candidato no tiene email en su ficha.",
+      },
+      {
+        clave: "reconocimiento_medico",
+        titulo: "Reconocimiento médico a firmar",
+        destinatarioLabel: "Candidato",
+        para: emailCandidato || "",
+        asunto: tplRecon?.asunto ?? "Tu reconocimiento médico para firmar",
+        cuerpo: tplRecon?.cuerpo ?? "Se enviará al candidato el reconocimiento médico para su firma digital (decide si desea o no realizárselo).",
         disponible: !!emailCandidato,
         motivoNoDisponible: emailCandidato ? undefined : "El candidato no tiene email en su ficha.",
       },

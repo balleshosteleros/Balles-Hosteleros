@@ -209,6 +209,7 @@ export type PruebaAvisoCanal = "notificacion" | "email" | "ambos";
 export interface ReclutamientoConfigOnboarding {
   formacion_url: string;
   contrato_interno_plantilla: string;
+  reconocimiento_medico_plantilla: string;
   prueba_duracion_dias: number;
   prueba_aviso_dias: number;
   prueba_aviso_canal: PruebaAvisoCanal;
@@ -218,6 +219,7 @@ export interface ReclutamientoConfigOnboarding {
 const ONBOARDING_DEFAULT: ReclutamientoConfigOnboarding = {
   formacion_url: "",
   contrato_interno_plantilla: "",
+  reconocimiento_medico_plantilla: "",
   prueba_duracion_dias: 30,
   prueba_aviso_dias: 10,
   prueba_aviso_canal: "ambos",
@@ -234,7 +236,7 @@ export async function getReclutamientoConfigOnboarding(): Promise<{ ok: boolean;
     if (!empresaId) return { ok: false, data: ONBOARDING_DEFAULT };
     const { data } = await supabase
       .from("reclutamiento_config")
-      .select("formacion_url, contrato_interno_plantilla, prueba_duracion_dias, prueba_aviso_dias, prueba_aviso_canal, prueba_aviso_activo")
+      .select("formacion_url, contrato_interno_plantilla, reconocimiento_medico_plantilla, prueba_duracion_dias, prueba_aviso_dias, prueba_aviso_canal, prueba_aviso_activo")
       .eq("empresa_id", empresaId)
       .maybeSingle();
     return {
@@ -242,6 +244,7 @@ export async function getReclutamientoConfigOnboarding(): Promise<{ ok: boolean;
       data: {
         formacion_url: (data?.formacion_url as string | null) ?? "",
         contrato_interno_plantilla: (data?.contrato_interno_plantilla as string | null) ?? "",
+        reconocimiento_medico_plantilla: (data?.reconocimiento_medico_plantilla as string | null) ?? "",
         prueba_duracion_dias: (data?.prueba_duracion_dias as number | null) ?? 30,
         prueba_aviso_dias: (data?.prueba_aviso_dias as number | null) ?? 10,
         prueba_aviso_canal: normalizarCanal(data?.prueba_aviso_canal),
@@ -266,6 +269,7 @@ export async function saveReclutamientoConfigOnboarding(input: ReclutamientoConf
         empresa_id: empresaId,
         formacion_url: input.formacion_url.trim() || null,
         contrato_interno_plantilla: input.contrato_interno_plantilla.trim() || null,
+        reconocimiento_medico_plantilla: input.reconocimiento_medico_plantilla.trim() || null,
         prueba_duracion_dias: dur,
         prueba_aviso_dias: aviso,
         prueba_aviso_canal: normalizarCanal(input.prueba_aviso_canal),
