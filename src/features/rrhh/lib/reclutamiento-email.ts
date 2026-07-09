@@ -36,6 +36,8 @@ export const VARIABLES_RECLUTAMIENTO: VariableReclutamiento[] = [
   { variable: "{{prueba_fecha_inicio}}", descripcion: "Fecha de inicio del periodo de prueba (solo plantilla «Aviso de periodo de prueba»)", grupo: "Candidato" },
   { variable: "{{prueba_fecha_fin}}", descripcion: "Fecha prevista de fin del periodo de prueba (solo plantilla «Aviso de periodo de prueba»)", grupo: "Candidato" },
   { variable: "{{gestoria_datos}}", descripcion: "Tabla con los datos del trabajador para la gestoría (solo plantilla «Gestoría · alta de contrato»)", grupo: "Candidato" },
+  { variable: "{{enlace_modelos}}", descripcion: "Enlace para que la gestoría suba los modelos presentados, que se integran en el software (solo plantillas «Gestoría · Solicitud modelos trimestrales/anuales»)", grupo: "Empresa" },
+  { variable: "{{periodo_label}}", descripcion: "Periodo de los modelos solicitados, p.ej. «2T 2026» o «Ejercicio 2026» (solo plantillas de solicitud de modelos)", grupo: "Empresa" },
   // ── Vacante / puesto ──
   { variable: "{{vacante_nombre}}", descripcion: "Nombre de la vacante", grupo: "Vacante" },
   { variable: "{{vacante_ubicacion}}", descripcion: "Ubicación de la vacante", grupo: "Vacante" },
@@ -69,6 +71,8 @@ export const VARIABLES_RECLUTAMIENTO_EJEMPLO: Record<string, string> = {
   enlace_documentacion: "https://sistema.balleshosteleros.com/documentacion/ejemplo",
   documentacion_dias_validez: "7",
   enlace_formacion: "https://sistema.balleshosteleros.com/formacion/ejemplo",
+  enlace_modelos: "https://sistema.balleshosteleros.com/gestoria/modelos/ejemplo",
+  periodo_label: "2T 2026",
   prueba_duracion_dias: "30",
   vacante_nombre: "Camarero/a",
   vacante_ubicacion: "Sala principal",
@@ -144,4 +148,24 @@ export function parsearEnlacesCuerpo(texto: string): SegmentoCuerpo[] {
   }
   if (lastIndex < texto.length) trocearUrlsSueltas(texto.slice(lastIndex), segments);
   return segments;
+}
+
+/**
+ * Un enlace con texto `[texto](url)` se muestra como BOTÓN (fondo de color) en
+ * lugar de enlace subrayado cuando está SOLO en su línea (CTA destacado): el
+ * texto que lo precede acaba en salto de línea (o es el principio) y el que le
+ * sigue empieza por salto de línea (o es el final). Los enlaces inline dentro
+ * de un párrafo (p. ej. «escríbenos a …») siguen siendo enlaces subrayados.
+ * Las URLs sueltas nunca son botón.
+ */
+export function segmentoEsBoton(segments: SegmentoCuerpo[], i: number): boolean {
+  const seg = segments[i];
+  if (!seg || seg.type !== "link") return false;
+  // Una URL suelta (text === href) no se promociona a botón.
+  if (seg.text === seg.href) return false;
+  const prev = segments[i - 1];
+  const next = segments[i + 1];
+  const finLineaAntes = !prev || (prev.type === "text" && /(^|\n)[ \t]*$/.test(prev.value));
+  const iniLineaDespues = !next || (next.type === "text" && /^[ \t]*(\n|$)/.test(next.value));
+  return finLineaAntes && iniLineaDespues;
 }

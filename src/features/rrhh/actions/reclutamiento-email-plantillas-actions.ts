@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getEmpresaActivaForUser } from "@/features/empresa/lib/empresa-server";
 import { sendEmail } from "@/lib/email/send";
-import { sustituirVariablesReclutamiento, parsearEnlacesCuerpo } from "@/features/rrhh/lib/reclutamiento-email";
+import { sustituirVariablesReclutamiento, parsearEnlacesCuerpo, segmentoEsBoton } from "@/features/rrhh/lib/reclutamiento-email";
 import {
   type EstadoReclutamiento,
   ESTADOS_CONFIG,
@@ -701,13 +701,17 @@ function escapeHtml(s: string): string {
 
 function bodyToHtml(text: string): string {
   // Tokeniza en texto + enlaces (sintaxis `[texto](url)` y URLs sueltas) para
-  // que el correo enviado coincida con la vista previa del editor.
-  const html = parsearEnlacesCuerpo(text)
-    .map((seg) =>
-      seg.type === "link"
-        ? `<a href="${escapeHtml(seg.href)}" target="_blank" rel="noreferrer" style="color:#2563eb;text-decoration:underline">${escapeHtml(seg.text)}</a>`
-        : escapeHtml(seg.value).replace(/\n/g, "<br>"),
-    )
+  // que el correo enviado coincida con la vista previa del editor. Un enlace
+  // solo en su línea se muestra como BOTÓN (CTA); el resto, enlace subrayado.
+  const segs = parsearEnlacesCuerpo(text);
+  const html = segs
+    .map((seg, i) => {
+      if (seg.type !== "link") return escapeHtml(seg.value).replace(/\n/g, "<br>");
+      if (segmentoEsBoton(segs, i)) {
+        return `<a href="${escapeHtml(seg.href)}" target="_blank" rel="noreferrer" style="display:inline-block;background:#2563eb;color:#ffffff;text-decoration:none;font-weight:600;padding:12px 24px;border-radius:8px;margin:4px 0">${escapeHtml(seg.text)}</a>`;
+      }
+      return `<a href="${escapeHtml(seg.href)}" target="_blank" rel="noreferrer" style="color:#2563eb;text-decoration:underline">${escapeHtml(seg.text)}</a>`;
+    })
     .join("");
   return `<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:15px;line-height:1.55;color:#111827;max-width:600px;margin:0 auto;padding:24px">${html}</div>`;
 }

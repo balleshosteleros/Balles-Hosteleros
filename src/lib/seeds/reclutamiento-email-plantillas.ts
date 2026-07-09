@@ -55,7 +55,7 @@ export interface ReclutamientoEmailPlantillaSeed {
    * localiza por aquí, NO por el nombre → el nombre es editable. Las plantillas
    * libres (asociadas a estados) no llevan clave.
    */
-  clave?: "gestoria_alta" | "gestoria_recordatorio" | "gestoria_cambio_puesto" | "contrato_interno" | "reconocimiento_medico" | "contrato_oficial" | "prueba_aviso";
+  clave?: "gestoria_alta" | "gestoria_recordatorio" | "gestoria_cambio_puesto" | "gestoria_modelos_trimestral" | "gestoria_modelos_anual" | "contrato_interno" | "reconocimiento_medico" | "contrato_oficial" | "prueba_aviso";
   /** Destinatario por defecto (candidato / gestoria / rrhh). Editable después. */
   destino?: "candidato" | "gestoria" | "rrhh" | "personalizado";
 }
@@ -406,6 +406,44 @@ Os comunicamos que el siguiente trabajador cambia de puesto dentro de la empresa
 {{gestoria_datos}}
 
 Gracias,
+{{empresa_nombre}}`,
+    activa: true,
+  },
+
+  // ── Solicitud de modelos trimestrales (aviso a la gestoría) ──
+  {
+    clave: "gestoria_modelos_trimestral",
+    destino: "gestoria",
+    nombre: "Gestoría · Solicitud modelos trimestrales",
+    asunto: "Modelos trimestrales {{periodo_label}} · {{empresa_nombre}}",
+    cuerpo: `Hola,
+
+Ya ha vencido el plazo de presentación de los modelos trimestrales del periodo {{periodo_label}} de {{empresa_nombre}}.
+
+Os pedimos que subáis los modelos presentados (303, 111, etc.) desde el siguiente enlace, que los integrará automáticamente en el software:
+
+{{enlace_modelos}}
+
+Gracias por vuestra colaboración.
+{{empresa_nombre}}`,
+    activa: true,
+  },
+
+  // ── Solicitud de modelos anuales (aviso a la gestoría) ──
+  {
+    clave: "gestoria_modelos_anual",
+    destino: "gestoria",
+    nombre: "Gestoría · Solicitud modelos anuales",
+    asunto: "Modelos anuales {{periodo_label}} · {{empresa_nombre}}",
+    cuerpo: `Hola,
+
+Ya ha vencido el plazo de presentación de los modelos anuales del ejercicio {{periodo_label}} de {{empresa_nombre}}.
+
+Os pedimos que subáis los modelos presentados (390, 347, 190, 200, Pérdidas y Ganancias, Balance y Libro Mayor) desde el siguiente enlace, que los integrará automáticamente en el software:
+
+{{enlace_modelos}}
+
+Gracias por vuestra colaboración.
 {{empresa_nombre}}`,
     activa: true,
   },

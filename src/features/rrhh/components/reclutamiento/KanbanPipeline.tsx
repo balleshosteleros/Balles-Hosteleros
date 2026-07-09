@@ -28,7 +28,7 @@ import {
   ArrowLeft, Mail, MailCheck,
   Send, X, UsersRound, CheckCircle2,
   MinusCircle, XCircle, Star, CalendarDays, Eye, FileText,
-  Building2, UserCog,
+  Building2, UserCog, User,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -233,7 +233,26 @@ function DestinoIcon({ destino }: { destino: PlantillaFaseInfo["destino"] }) {
       </span>
     );
   }
-  return null;
+  if (destino === "personalizado") {
+    return (
+      <span
+        className="inline-flex items-center gap-0.5 rounded bg-violet-100 px-1 py-0.5 text-[9px] font-medium text-violet-700"
+        title="Este correo se envía a una dirección personalizada"
+      >
+        <UserCog className="h-2.5 w-2.5" /> Personalizado
+      </span>
+    );
+  }
+  // Candidato: destinatario por defecto. Se muestra también (antes se omitía) para
+  // que TODOS los correos indiquen a quién van, igual que gestoría/RRHH.
+  return (
+    <span
+      className="inline-flex items-center gap-0.5 rounded bg-emerald-100 px-1 py-0.5 text-[9px] font-medium text-emerald-700"
+      title="Este correo se envía al candidato"
+    >
+      <User className="h-2.5 w-2.5" /> Candidato
+    </span>
+  );
 }
 
 // ─── Icono de email de una columna (con popover de plantillas) ──

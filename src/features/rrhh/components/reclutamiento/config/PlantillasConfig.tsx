@@ -34,6 +34,7 @@ import {
   VARIABLES_RECLUTAMIENTO_EJEMPLO,
   sustituirVariablesReclutamiento,
   parsearEnlacesCuerpo,
+  segmentoEsBoton,
   formatearEnlaceMarkdown,
 } from "@/features/rrhh/lib/reclutamiento-email";
 import {
@@ -54,6 +55,7 @@ function PlantillaEditorDialog({
   onOpenChange,
   onSaved,
   empresaNombre,
+  empresaIsotipoUrl,
   initialTab = "editar",
 }: {
   plantilla: ReclutamientoEmailPlantilla | null;
@@ -61,6 +63,7 @@ function PlantillaEditorDialog({
   onOpenChange: (o: boolean) => void;
   onSaved: () => void;
   empresaNombre: string;
+  empresaIsotipoUrl?: string;
   initialTab?: "editar" | "preview";
 }) {
   const [nombre, setNombre] = useState("");
@@ -367,22 +370,53 @@ function PlantillaEditorDialog({
                     <span className="font-medium">Asunto:</span> {sustituirVariablesReclutamiento(asunto, previewVars)}
                   </p>
                 </div>
-                <div className="p-5 text-sm text-foreground leading-relaxed whitespace-pre-wrap">
-                  {parsearEnlacesCuerpo(sustituirVariablesReclutamiento(cuerpo, previewVars)).map((seg, i) =>
-                    seg.type === "link" ? (
-                      <a
-                        key={i}
-                        href={seg.href}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-blue-600 underline"
-                      >
-                        {seg.text}
-                      </a>
-                    ) : (
-                      <span key={i}>{seg.value}</span>
-                    ),
+                {/* Cuerpo del correo TAL CUAL lo recibe el destinatario: logo de
+                    la empresa arriba, botones para los CTA (enlace solo en su
+                    línea) y pie automático. Coincide con bodyToHtml del envío. */}
+                <div className="bg-white text-[#111827]">
+                  {empresaIsotipoUrl && (
+                    <div className="text-center px-6 pt-8 pb-3">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={empresaIsotipoUrl}
+                        alt={empresaNombre}
+                        className="inline-block h-auto w-auto max-h-[88px] max-w-[220px]"
+                      />
+                    </div>
                   )}
+                  <div className="px-6 py-5 text-sm leading-relaxed whitespace-pre-wrap">
+                    {(() => {
+                      const segs = parsearEnlacesCuerpo(
+                        sustituirVariablesReclutamiento(cuerpo, previewVars),
+                      );
+                      return segs.map((seg, i) => {
+                        if (seg.type !== "link") return <span key={i}>{seg.value}</span>;
+                        if (segmentoEsBoton(segs, i)) {
+                          return (
+                            <a
+                              key={i}
+                              href={seg.href}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-block my-1 rounded-lg bg-blue-600 px-6 py-3 font-semibold text-white no-underline hover:bg-blue-700"
+                            >
+                              {seg.text}
+                            </a>
+                          );
+                        }
+                        return (
+                          <a key={i} href={seg.href} target="_blank" rel="noreferrer" className="text-blue-600 underline">
+                            {seg.text}
+                          </a>
+                        );
+                      });
+                    })()}
+                  </div>
+                  <div className="px-6 pb-6">
+                    <p className="border-t border-[#e5e7eb] pt-3 text-[12px] leading-relaxed text-[#9ca3af]">
+                      Este mensaje se ha enviado de forma automática desde una dirección que no admite respuestas. Por favor, no respondas a este correo.
+                    </p>
+                  </div>
                 </div>
               </div>
               <p className="text-[11px] text-muted-foreground italic">
@@ -452,7 +486,8 @@ function PlantillaEditorDialog({
 
 // ─── Pestaña de Emails (biblioteca suelta) ──────────────────────
 function PlantillasEmailTab() {
-  const { empresaActual } = useEmpresa();
+  const { empresaActual, getIsotipoUrl } = useEmpresa();
+  const empresaIsotipoUrl = getIsotipoUrl(empresaActual.id) || undefined;
   const [plantillas, setPlantillas] = useState<ReclutamientoEmailPlantilla[]>([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<ReclutamientoEmailPlantilla | null>(null);
@@ -649,6 +684,7 @@ function PlantillasEmailTab() {
         onOpenChange={(o) => !o && setEditing(null)}
         onSaved={reload}
         empresaNombre={empresaActual.nombre}
+        empresaIsotipoUrl={empresaIsotipoUrl}
         initialTab={editingTab}
       />
       {/* Editor (crear) */}
@@ -658,6 +694,7 @@ function PlantillasEmailTab() {
         onOpenChange={setCreando}
         onSaved={reload}
         empresaNombre={empresaActual.nombre}
+        empresaIsotipoUrl={empresaIsotipoUrl}
         initialTab="editar"
       />
       {dialog}
