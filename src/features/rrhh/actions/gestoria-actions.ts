@@ -23,10 +23,10 @@ import {
 } from "@/features/rrhh/data/campos-candidatura";
 import {
   GESTORIA_CAMPOS,
-  normalizarGestoriaCampos,
   ETIQUETA_TIPO_BAJA,
+  faltantesAltaGestoria,
+  faltantesBajaGestoria,
   type GestoriaCampoKey,
-  type GestoriaCamposConfig,
   type TipoBajaContrato,
 } from "@/features/rrhh/data/campos-gestoria";
 
@@ -42,8 +42,11 @@ export interface ReclutamientoConfig {
   // El correo de la gestoría vive en Ajustes → Empresa → «Correos electrónicos»
   // (datos_generales.correoGestoria), fuente única. Aquí solo quedan los ajustes
   // de comportamiento del alta a la gestoría.
+  //
+  // NOTA: los DATOS que se envían a la gestoría ya no son configurables — todos
+  // son obligatorios (el alta debe ir completa). El antiguo checklist
+  // `gestoria_campos` se eliminó; ver `faltantesAltaGestoria`.
   gestoria_envio_auto: boolean;
-  gestoria_campos: GestoriaCamposConfig;
   // Recordatorio automático a la gestoría si no sube el contrato.
   gestoria_recordatorio_activo: boolean;
   gestoria_recordatorio_dias: number;
@@ -56,7 +59,6 @@ export interface ReclutamientoConfig {
 
 const RECLUTAMIENTO_CONFIG_DEFAULT: ReclutamientoConfig = {
   gestoria_envio_auto: true,
-  gestoria_campos: normalizarGestoriaCampos(null),
   gestoria_recordatorio_activo: true,
   gestoria_recordatorio_dias: 3,
   notif_alta_gestoria: true,
@@ -72,14 +74,13 @@ export async function getReclutamientoConfig(): Promise<{ ok: boolean; data: Rec
     const { data } = await supabase
       .from("reclutamiento_config")
       .select(
-        "gestoria_envio_auto, gestoria_campos, " +
+        "gestoria_envio_auto, " +
           "gestoria_recordatorio_activo, gestoria_recordatorio_dias, " +
           "notif_alta_gestoria, notif_recordatorio_gestoria, notif_contrato_subido, notif_contrato_firmado",
       )
       .eq("empresa_id", empresaId)
       .maybeSingle<{
         gestoria_envio_auto: boolean | null;
-        gestoria_campos: unknown;
         gestoria_recordatorio_activo: boolean | null;
         gestoria_recordatorio_dias: number | null;
         notif_alta_gestoria: boolean | null;
@@ -91,7 +92,6 @@ export async function getReclutamientoConfig(): Promise<{ ok: boolean; data: Rec
       ok: true,
       data: {
         gestoria_envio_auto: data?.gestoria_envio_auto ?? true,
-        gestoria_campos: normalizarGestoriaCampos(data?.gestoria_campos),
         gestoria_recordatorio_activo: data?.gestoria_recordatorio_activo ?? true,
         gestoria_recordatorio_dias: data?.gestoria_recordatorio_dias ?? 3,
         notif_alta_gestoria: data?.notif_alta_gestoria ?? true,
@@ -116,7 +116,6 @@ export async function saveReclutamientoConfig(input: ReclutamientoConfig) {
       .upsert({
         empresa_id: empresaId,
         gestoria_envio_auto: input.gestoria_envio_auto,
-        gestoria_campos: normalizarGestoriaCampos(input.gestoria_campos),
         gestoria_recordatorio_activo: input.gestoria_recordatorio_activo,
         gestoria_recordatorio_dias: dias,
         notif_alta_gestoria: input.notif_alta_gestoria,
@@ -352,13 +351,12 @@ export async function enviarAltaGestoria(
       ? await (async () => {
           const { data } = await (supabase as ReturnType<typeof createAdminClient>)
             .from("reclutamiento_config")
-            .select("gestoria_envio_auto, gestoria_campos, notif_alta_gestoria")
+            .select("gestoria_envio_auto, notif_alta_gestoria")
             .eq("empresa_id", empresaId)
             .maybeSingle();
           return {
             data: {
               gestoria_envio_auto: (data?.gestoria_envio_auto as boolean | null) ?? true,
-              gestoria_campos: normalizarGestoriaCampos(data?.gestoria_campos),
               notif_alta_gestoria: (data?.notif_alta_gestoria as boolean | null) ?? true,
             },
           };
@@ -369,8 +367,6 @@ export async function enviarAltaGestoria(
     if (!cfg.data.gestoria_envio_auto && !opts?.forzar) {
       return { ok: true, skipped: true as const };
     }
-
-    const campos = cfg.data.gestoria_campos;
 
     const { data: emp } = await supabase
       .from("empleados")
@@ -405,16 +401,43 @@ export async function enviarAltaGestoria(
       .then((r) => r.data?.nombre ?? "la empresa");
 
     const nombre = `${emp.nombre} ${emp.apellidos ?? ""}`.trim();
+    const emailTrabajador = emp.email_personal || emp.email_empresa;
 
-    // Valor de cada campo configurable. Solo se incluyen en el correo los que
-    // estén activados en `campos` (config por empresa; por defecto todos).
+    // INTEGRIDAD: la gestoría debe recibir el alta COMPLETA. Si falta cualquier
+    // dato obligatorio, NO se envía el correo (saldría con "—" o un salario 0
+    // falso). Se devuelve error con la lista de lo que falta para que el llamador
+    // lo muestre / lo bloquee aguas arriba. Ver `faltantesAltaGestoria`.
+    const faltan = faltantesAltaGestoria({
+      nombre,
+      dni_nie: emp.dni_nie,
+      telefono: emp.telefono,
+      email: emailTrabajador,
+      puesto: emp.puesto,
+      primer_dia: cond?.primer_dia ?? emp.fecha_alta,
+      tipo_contrato: cond?.tipo_contrato,
+      jornada: cond?.jornada_contrato,
+      horas_semanales: cond?.horas_semanales,
+      salario_neto: cond?.salario_neto != null ? Number(cond.salario_neto) : null,
+      convenio,
+    });
+    if (faltan.length > 0) {
+      return {
+        ok: false,
+        error:
+          `No se puede enviar el alta a la gestoría de ${nombre}: faltan datos obligatorios ` +
+          `(${faltan.join(", ")}). Complétalos en RRHH → Puestos / ficha del empleado y reinténtalo.`,
+      };
+    }
+
+    // Valor de cada campo (todos obligatorios, todos se envían). La integridad ya
+    // está garantizada por la validación de arriba.
     const valores: Record<GestoriaCampoKey, { label: string; value: string | null | undefined }> = {
       nombre: { label: "Nombre", value: nombre },
       dni_nie: { label: "DNI/NIE", value: emp.dni_nie },
       telefono: { label: "Teléfono", value: emp.telefono },
       // El email del trabajador para la gestoría es su email PERSONAL (dato de
       // contacto real de su candidatura), no el corporativo que pueda haber heredado.
-      email: { label: "Email", value: emp.email_personal || emp.email_empresa },
+      email: { label: "Email", value: emailTrabajador },
       puesto: { label: "Puesto", value: `${emp.puesto ?? "—"}${cond?.nivel ? ` · Nivel ${cond.nivel}` : ""}` },
       primer_dia: { label: "Primer día", value: cond?.primer_dia ?? emp.fecha_alta },
       tipo_contrato: { label: "Tipo de contrato", value: cond?.tipo_contrato },
@@ -433,11 +456,9 @@ export async function enviarAltaGestoria(
       </tr>`;
 
     const filasHtml = GESTORIA_CAMPOS
-      .filter(({ key }) => campos[key])
       .map(({ key }) => fila(valores[key].label, valores[key].value))
       .join("");
     const filasText = GESTORIA_CAMPOS
-      .filter(({ key }) => campos[key])
       .map(({ key }) => `${valores[key].label}: ${valores[key].value || "—"}`)
       .join("\n");
 
@@ -561,15 +582,6 @@ export async function enviarCambioPuestoGestoria(
     if (!emp) return { ok: false, error: "Empleado no encontrado" };
     const empresaId = emp.empresa_id as string;
 
-    const cfgCampos = await (async () => {
-      const { data } = await admin
-        .from("reclutamiento_config")
-        .select("gestoria_campos")
-        .eq("empresa_id", empresaId)
-        .maybeSingle();
-      return normalizarGestoriaCampos(data?.gestoria_campos);
-    })();
-
     // Condiciones VIGENTES tras la promoción (histórico: vigente_hasta IS NULL).
     const { data: condRows } = await admin
       .from("empleado_condiciones")
@@ -617,12 +629,10 @@ export async function enviarCambioPuestoGestoria(
       ? fila("Puesto anterior", cambio.puestoAnterior)
       : "";
     const filasHtml = filaAnterior + GESTORIA_CAMPOS
-      .filter(({ key }) => cfgCampos[key])
       .map(({ key }) => fila(valores[key].label, valores[key].value))
       .join("");
     const filasText = (cambio.puestoAnterior ? `Puesto anterior: ${cambio.puestoAnterior}\n` : "") +
       GESTORIA_CAMPOS
-        .filter(({ key }) => cfgCampos[key])
         .map(({ key }) => `${valores[key].label}: ${valores[key].value || "—"}`)
         .join("\n");
 
@@ -717,7 +727,7 @@ export async function enviarBajaGestoria(
      *  cuando la causa la empresa). Si no viene, se usa ETIQUETA_TIPO_BAJA. */
     tipoBajaLabel?: string | null;
   },
-): Promise<{ ok: boolean; error?: string; destino?: string | null }> {
+): Promise<{ ok: boolean; error?: string; destino?: string | null; datosIncompletos?: boolean }> {
   try {
     const admin = createAdminClient();
 
@@ -771,6 +781,32 @@ export async function enviarBajaGestoria(
     const empresaNombre = await admin.from("empresas").select("nombre").eq("id", empresaId).maybeSingle()
       .then((r) => r.data?.nombre ?? "la empresa");
     const nombre = `${emp.nombre} ${emp.apellidos ?? ""}`.trim();
+    const emailTrabajador = emp.email_personal || emp.email_empresa;
+
+    // INTEGRIDAD: la baja se BLOQUEA si faltan datos obligatorios (decisión del
+    // usuario), para que la gestoría no reciba una baja con datos identificativos
+    // en blanco. Incluye el caso de un empleado sin fila vigente en
+    // `empleado_condiciones` (alta manual / legacy): tipo_contrato y convenio
+    // saldrían vacíos. Ver `faltantesBajaGestoria`.
+    const faltan = faltantesBajaGestoria({
+      ultimo_dia_iso: baja.ultimoDiaIso,
+      nombre,
+      dni_nie: emp.dni_nie,
+      telefono: emp.telefono,
+      email: emailTrabajador,
+      puesto: emp.puesto,
+      tipo_contrato: cond?.tipo_contrato,
+      convenio,
+    });
+    if (faltan.length > 0) {
+      return {
+        ok: false as const,
+        datosIncompletos: true as const,
+        error:
+          `No se puede avisar a la gestoría de la baja de ${nombre}: faltan datos obligatorios ` +
+          `(${faltan.join(", ")}). Complétalos en la ficha del empleado / RRHH → Puestos y reinténtalo.`,
+      };
+    }
 
     const fila = (k: string, v: string | null | undefined) =>
       `<tr>
@@ -789,7 +825,7 @@ export async function enviarBajaGestoria(
       { label: "Nombre", value: nombre },
       { label: "DNI/NIE", value: emp.dni_nie },
       { label: "Teléfono", value: emp.telefono },
-      { label: "Email", value: emp.email_personal || emp.email_empresa },
+      { label: "Email", value: emailTrabajador },
       { label: "Puesto", value: emp.puesto },
       { label: "Tipo de contrato", value: cond?.tipo_contrato },
       { label: "Convenio", value: convenio },

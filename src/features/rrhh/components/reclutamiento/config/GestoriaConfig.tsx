@@ -7,17 +7,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import {
   getReclutamientoConfig,
   saveReclutamientoConfig,
   type ReclutamientoConfig,
 } from "@/features/rrhh/actions/gestoria-actions";
-import {
-  GESTORIA_CAMPOS,
-  type GestoriaCamposConfig,
-} from "@/features/rrhh/data/campos-gestoria";
+import { GESTORIA_CAMPOS } from "@/features/rrhh/data/campos-gestoria";
 import type { ConfigSectionHandle } from "./tipos";
 
 export const GestoriaConfig = forwardRef<
@@ -61,20 +57,6 @@ export const GestoriaConfig = forwardRef<
     return <div className="flex items-center gap-2 text-muted-foreground py-8"><Loader2 className="h-4 w-4 animate-spin" /> Cargando…</div>;
   }
 
-  const setCampo = (key: keyof GestoriaCamposConfig, value: boolean) =>
-    setConfig((c) => (c ? { ...c, gestoria_campos: { ...c.gestoria_campos, [key]: value } } : c));
-
-  const todos = GESTORIA_CAMPOS.every(({ key }) => config.gestoria_campos[key]);
-  const toggleTodos = () => {
-    const nuevo = !todos;
-    setConfig((c) => {
-      if (!c) return c;
-      const campos = { ...c.gestoria_campos };
-      for (const { key } of GESTORIA_CAMPOS) campos[key] = nuevo;
-      return { ...c, gestoria_campos: campos };
-    });
-  };
-
   const cuerpo = (
     <div className="space-y-6 max-w-lg">
       {/* El correo de la gestoría ya no se configura aquí: vive en Ajustes →
@@ -101,27 +83,23 @@ export const GestoriaConfig = forwardRef<
         />
       </div>
 
-      {/* Checklist de campos a enviar */}
+      {/* Datos que se envían a la gestoría (todos OBLIGATORIOS, no configurables) */}
       <div className="space-y-2">
-        <div className="flex items-center justify-between">
-          <Label className="text-sm font-medium">Datos que se envían a la gestoría</Label>
-          <button type="button" onClick={toggleTodos}
-            className="text-xs text-primary hover:underline">
-            {todos ? "Desmarcar todos" : "Marcar todos"}
-          </button>
-        </div>
+        <Label className="text-sm font-medium">Datos que se envían a la gestoría</Label>
         <p className="text-xs text-muted-foreground">
-          Marca qué datos del trabajador se incluyen en el correo. Por defecto, todos.
+          El alta y la baja se envían siempre con TODOS estos datos. Son obligatorios: si a un
+          trabajador le falta alguno, el sistema no deja contratar ni dar de baja hasta completarlo,
+          para que la gestoría reciba siempre la información completa.
         </p>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 pt-1">
           {GESTORIA_CAMPOS.map(({ key, label }) => (
-            <label key={key} className="flex items-center gap-2 cursor-pointer text-sm">
-              <Checkbox
-                checked={config.gestoria_campos[key]}
-                onCheckedChange={(v) => setCampo(key, v === true)}
+            <div key={key} className="flex items-center gap-2 text-sm">
+              <span
+                aria-hidden
+                className="inline-block h-1.5 w-1.5 rounded-full bg-primary/60 shrink-0"
               />
               <span className="text-foreground">{label}</span>
-            </label>
+            </div>
           ))}
         </div>
       </div>

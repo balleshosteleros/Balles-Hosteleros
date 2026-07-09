@@ -534,6 +534,10 @@ export async function darBajaContratoEmpresa(
     }
 
     // 1) Aviso a la gestoría (datos del trabajador + fechas + tipo de baja).
+    //    BLOQUEANTE: si faltan datos obligatorios del trabajador, la baja NO se
+    //    tramita (no se mueve de fase). Como `enviarBajaGestoria` valida ANTES de
+    //    provocar efectos, un fallo por datos incompletos aborta aquí sin dejar el
+    //    proceso a medias. Un fallo de ENVÍO (SMTP) sí deja seguir (ver más abajo).
     const { enviarBajaGestoria } = await import(
       "@/features/rrhh/actions/gestoria-actions"
     );
@@ -544,6 +548,10 @@ export async function darBajaContratoEmpresa(
       tipoBajaLabel: etiquetaTipoBajaEmpresa(input.tipoBaja),
       motivo: input.motivo ?? null,
     });
+    if (!avisoGestoria.ok && avisoGestoria.datosIncompletos) {
+      // Datos incompletos → baja bloqueada. No se ha movido nada todavía.
+      return { ok: false, error: avisoGestoria.error ?? "Faltan datos para avisar a la gestoría." };
+    }
 
     // 2) Mueve el candidato a la fase de offboarding «Baja contrato». Reutiliza
     //    moverCandidatoFase para que registre la actividad igual que un arrastre.
@@ -553,8 +561,8 @@ export async function darBajaContratoEmpresa(
     }
 
     revalidatePath("/rrhh/reclutamiento");
-    // El aviso a la gestoría no bloquea la baja: si falló el email, la baja se
-    // registró igual y se informa para que RRHH pueda reenviarlo.
+    // Un fallo de ENVÍO (no de datos) no bloquea la baja: la baja se registró
+    // igual y se informa para que RRHH pueda reenviarlo.
     return {
       ok: true as const,
       gestoriaAvisada: avisoGestoria.ok,

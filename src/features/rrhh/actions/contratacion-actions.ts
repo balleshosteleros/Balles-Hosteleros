@@ -23,6 +23,7 @@ import { friendlyError } from "@/shared/lib/friendly-errors";
 import { requireAdminUser, altaUsuarioEmpleado } from "@/features/rrhh/services/empleados-core";
 import { copiarDocumentacionCandidatoAEmpleado } from "@/features/rrhh/services/documentacion-candidato-a-empleado";
 import { enviarAltaGestoria } from "@/features/rrhh/actions/gestoria-actions";
+import { faltantesAltaGestoria } from "@/features/rrhh/data/campos-gestoria";
 import { escribirCondicionesVigentes } from "@/features/rrhh/services/condiciones-puesto";
 import { emitirNotificacion } from "@/features/notificaciones/actions/notificaciones-actions";
 import { revalidatePath } from "next/cache";
@@ -265,7 +266,7 @@ export async function contratarCandidato(input: ContratarInput): Promise<Contrat
   // 2. Puesto + área del departamento + condiciones del nivel
   const { data: puesto } = await admin
     .from("puestos")
-    .select("id, nombre, departamento_id, tipo_contrato_defecto, departamentos(nombre, area)")
+    .select("id, nombre, departamento_id, tipo_contrato_defecto, convenio_colectivo, departamentos(nombre, area)")
     .eq("id", input.puestoId)
     .maybeSingle();
   if (!puesto) return { ok: false, error: "Puesto no encontrado." };
@@ -305,15 +306,48 @@ export async function contratarCandidato(input: ContratarInput): Promise<Contrat
       }
     : null;
 
-  // El puesto debe tener condiciones (salario/jornada) configuradas antes de
-  // contratar: si no, la gestoría recibiría el alta con salario 0 y sin jornada.
-  if (!cond || (cond.salario_neto == null && cond.jornada_contrato == null)) {
-    return {
-      ok: false,
-      error:
-        `El puesto «${puesto.nombre}» no tiene condiciones configuradas (salario, jornada…). ` +
-        `Configúralas en RRHH → Puestos antes de contratar, para que la gestoría reciba el alta completa.`,
-    };
+  const dniNorm = normalizarDni(cand.dni_nie);
+  const fullName = `${cand.nombre} ${cand.apellidos ?? ""}`.trim();
+
+  // Tipo de contrato: FUENTE ÚNICA = la vacante del candidato (allí es obligatorio
+  // y siempre está relleno). El puesto ya no lo define. Fallback al puesto solo por
+  // compat con datos antiguos que aún tuvieran `tipo_contrato_defecto`. Se calcula
+  // aquí (antes del lock) para poder validar la INTEGRIDAD del alta completa.
+  let tipoContrato: string | null = null;
+  if (cand.vacante_id) {
+    const { data: vac } = await admin
+      .from("vacantes").select("tipo_contrato").eq("id", cand.vacante_id).maybeSingle();
+    tipoContrato = (vac?.tipo_contrato as string | null) ?? null;
+  }
+  if (!tipoContrato) tipoContrato = (puesto.tipo_contrato_defecto as string | null) ?? null;
+
+  // INTEGRIDAD DEL ALTA: la gestoría debe recibir el alta COMPLETA. Se bloquea la
+  // contratación si falta CUALQUIER dato obligatorio (no el antiguo OR débil que
+  // solo miraba salario+jornada). Así es imposible crear un empleado que luego
+  // genere un alta con "—" o un salario 0 falso. Ver `faltantesAltaGestoria`.
+  {
+    const faltan = faltantesAltaGestoria({
+      nombre: fullName,
+      dni_nie: dniNorm,
+      telefono: cand.telefono,
+      email: emailPersonal || emailEmpresa,
+      puesto: puesto.nombre as string,
+      primer_dia: input.primerDia,
+      tipo_contrato: tipoContrato,
+      jornada: cond?.jornada_contrato ?? null,
+      horas_semanales: cond?.horas_semanales ?? null,
+      salario_neto: cond?.salario_neto != null ? Number(cond.salario_neto) : null,
+      convenio: (puesto.convenio_colectivo as string | null) ?? null,
+    });
+    if (faltan.length > 0) {
+      return {
+        ok: false,
+        error:
+          `No se puede contratar a ${fullName}: la gestoría necesita el alta completa y faltan datos ` +
+          `(${faltan.join(", ")}). Configúralos en RRHH → Puestos (salario, jornada, horas, convenio), ` +
+          `en la vacante (tipo de contrato) o en la ficha del candidato, y reinténtalo.`,
+      };
+    }
   }
 
   // 3. Lock optimista
@@ -329,17 +363,6 @@ export async function contratarCandidato(input: ContratarInput): Promise<Contrat
     return { ok: false, error: "Contratación ya en curso (otro click más rápido)." };
   }
 
-  const dniNorm = normalizarDni(cand.dni_nie);
-  // Tipo de contrato: FUENTE ÚNICA = la vacante del candidato (allí es obligatorio
-  // y siempre está relleno). El puesto ya no lo define. Fallback al puesto solo por
-  // compat con datos antiguos que aún tuvieran `tipo_contrato_defecto`.
-  let tipoContrato: string | null = null;
-  if (cand.vacante_id) {
-    const { data: vac } = await admin
-      .from("vacantes").select("tipo_contrato").eq("id", cand.vacante_id).maybeSingle();
-    tipoContrato = (vac?.tipo_contrato as string | null) ?? null;
-  }
-  if (!tipoContrato) tipoContrato = (puesto.tipo_contrato_defecto as string | null) ?? null;
   // Fase/estado destino del candidato (compat = seleccionado/empleado).
   const destinoFase = input.destino?.fase ?? "seleccionado";
   const destinoEstado = input.destino?.estado ?? "empleado";
@@ -373,8 +396,6 @@ export async function contratarCandidato(input: ContratarInput): Promise<Contrat
       }
     }
   }
-
-  const fullName = `${cand.nombre} ${cand.apellidos ?? ""}`.trim();
 
   // 5. Alta nueva vía núcleo canónico (siempre nueva: el DNI/email duplicado ya
   // se bloqueó arriba, no hay reactivación automática).

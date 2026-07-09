@@ -2112,6 +2112,55 @@ export async function aprobarSolicitud(id: string, notasRevision?: string) {
       return { ok: false, error: "Solo el validador asignado de este empleado puede aprobar esta solicitud." };
     }
 
+    // BAJA DE CONTRATO: antes de aprobar, verificamos que el trabajador tenga
+    // TODOS los datos que la gestoría necesita (decisión del usuario: bloquear la
+    // baja si faltan datos). Así no se aprueba una baja que luego no se puede
+    // comunicar completa a la gestoría. La comprobación es de solo lectura.
+    if (solicitud.subtipo === "baja_contrato") {
+      const ultimoDiaPre = (solicitud.fecha_fin as string | null) ?? null;
+      const { data: empPre } = await supabase
+        .from("empleados")
+        .select("id, nombre, apellidos, dni_nie, telefono, email_personal, email_empresa, puesto")
+        .eq("user_id", solicitud.user_id as string)
+        .eq("empresa_id", solicitud.empresa_id as string)
+        .maybeSingle();
+      if (!empPre) {
+        return { ok: false, error: "No se encontró el empleado asociado a esta baja." };
+      }
+      const { data: condPre } = await supabase
+        .from("empleado_condiciones")
+        .select("tipo_contrato, puesto_id, vigente_hasta, vigente_desde")
+        .eq("empleado_id", empPre.id as string)
+        .order("vigente_desde", { ascending: false, nullsFirst: false })
+        .limit(20);
+      const cond = (condPre ?? []).find((r) => r.vigente_hasta == null) ?? condPre?.[0] ?? null;
+      let convenioPre = "";
+      if (cond?.puesto_id) {
+        const { data: p } = await supabase
+          .from("puestos").select("convenio_colectivo").eq("id", cond.puesto_id as string).maybeSingle();
+        convenioPre = (p?.convenio_colectivo as string | null) ?? "";
+      }
+      const { faltantesBajaGestoria } = await import("@/features/rrhh/data/campos-gestoria");
+      const faltan = faltantesBajaGestoria({
+        ultimo_dia_iso: ultimoDiaPre,
+        nombre: `${empPre.nombre ?? ""} ${empPre.apellidos ?? ""}`.trim(),
+        dni_nie: empPre.dni_nie as string | null,
+        telefono: empPre.telefono as string | null,
+        email: (empPre.email_personal as string | null) || (empPre.email_empresa as string | null),
+        puesto: empPre.puesto as string | null,
+        tipo_contrato: cond?.tipo_contrato as string | null,
+        convenio: convenioPre,
+      });
+      if (faltan.length > 0) {
+        return {
+          ok: false,
+          error:
+            `No se puede aprobar la baja: al trabajador le faltan datos obligatorios para la gestoría ` +
+            `(${faltan.join(", ")}). Complétalos en su ficha (RRHH → Empleados / Puestos) y vuelve a aprobar.`,
+        };
+      }
+    }
+
     // Solicitud de TRABAJO (día trabajado / horas extras): al aprobar se crea el
     // fichaje con el tramo indicado (NOR/EXT). Si el tramo se solapa con otro
     // fichaje de ese día, NO se aprueba y se avisa (varios tramos disjuntos por
