@@ -51,8 +51,16 @@ Al iniciar la app, la pantalla se pinta pero los ítems de los menús tardan var
    valorar cachear el resultado guard+rol unos segundos.
 4. **Skeleton en el sidebar** en vez de `[]`, y pintar desde caché aunque la revalidación siga en curso
    (ya casi lo hace; falta el primer login).
-5. **Verificar regiones Vercel↔Supabase** (dashboard): si están cruzadas, igualarlas es la mejora
-   más barata de todas (multiplica todo lo demás).
+5. **✅ VERIFICADO (2026-07-09): las regiones ESTÁN CRUZADAS — este es el fix nº 1.**
+   - Vercel ejecuta las funciones en **`iad1` (Washington DC, EE. UU.)** — el default; `vercel.json`
+     no fija región (verificado con `x-vercel-id: cdg1::iad1::…` en prod).
+   - Supabase está en **`eu-west-1` (Dublín)** (verificado vía Management API).
+   - **Cada round-trip función↔BD cruza el Atlántico (~90 ms)**; con 4-6 por request en el middleware
+     y ~20 requests de arranque, explica los 0,5-2,2 s/action medidos.
+   - **Fix de una línea**: añadir `"regions": ["dub1"]` a `vercel.json` (Dublín, mismo datacenter de
+     AWS que eu-west-1) y redeploy. Impacto esperado: RTT ~90 ms → ~2-10 ms; la cola de arranque de
+     ~20 s debería caer a ~2-4 s sin tocar código. Alternativa: cambiar la región en el dashboard
+     de Vercel (cuenta del team balleshosteleros).
 6. (Local/DX) Trocear imports pesados del layout (`app-layout` importa grabadora, cámaras, Google,
    agenda, soporte…) con `next/dynamic` → menos compilación y menos hidratación.
 
