@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useTransition, useCallback, useRef } from "react";
+import { useState, useEffect, useTransition, useCallback, useRef } from "react";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -12,7 +12,7 @@ import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import {
-  Pencil, Mail, Eye, Search, Plus, Copy, Trash2,
+  Pencil, Mail, Eye, Plus, Copy, Trash2,
   Variable, CheckCircle2, XCircle, Loader2,
   ClipboardList, Link2, FileText, Building2, Lock, User,
   Briefcase, AlertTriangle,
@@ -550,8 +550,6 @@ function PlantillasEmailTab() {
   const [editing, setEditing] = useState<ReclutamientoEmailPlantilla | null>(null);
   const [creando, setCreando] = useState(false);
   const [editingTab, setEditingTab] = useState<"editar" | "preview">("editar");
-  const [search, setSearch] = useState("");
-  const [filtroActivo, setFiltroActivo] = useState<string>("todos");
   const { confirm, dialog } = useConfirmDelete();
 
   const reload = useCallback(async () => {
@@ -564,16 +562,7 @@ function PlantillasEmailTab() {
     void reload();
   }, [reload]);
 
-  const filtered = useMemo(() => {
-    let list = plantillas;
-    if (search) {
-      const s = search.toLowerCase();
-      list = list.filter((p) => p.nombre.toLowerCase().includes(s) || p.asunto.toLowerCase().includes(s));
-    }
-    if (filtroActivo === "activas") list = list.filter((p) => p.activa);
-    if (filtroActivo === "inactivas") list = list.filter((p) => !p.activa);
-    return list;
-  }, [plantillas, search, filtroActivo]);
+  const filtered = plantillas;
 
   const handleToggle = (id: string, current: boolean) => {
     setPlantillas((prev) => prev.map((p) => (p.id === id ? { ...p, activa: !current } : p)));
@@ -638,29 +627,13 @@ function PlantillasEmailTab() {
         </Button>
       </div>
 
-      {/* Buscar + filtro */}
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="relative flex-1 min-w-[160px] max-w-xs">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input placeholder="Buscar plantilla..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9 h-9" />
-        </div>
-        <Select value={filtroActivo} onValueChange={setFiltroActivo}>
-          <SelectTrigger className="w-36 h-9"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="todos">Todas</SelectItem>
-            <SelectItem value="activas">Activas</SelectItem>
-            <SelectItem value="inactivas">Inactivas</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-
       {loading ? (
         <div className="flex items-center justify-center py-16 text-muted-foreground">
           <Loader2 className="h-5 w-5 animate-spin mr-2" /> Cargando plantillas…
         </div>
       ) : filtered.length === 0 ? (
         <div className="text-center py-16 text-muted-foreground text-sm">
-          {plantillas.length === 0 ? "No hay plantillas de email todavía." : "Ninguna plantilla coincide con el filtro."}
+          No hay plantillas de email todavía.
         </div>
       ) : (
         <Card className="overflow-hidden">
