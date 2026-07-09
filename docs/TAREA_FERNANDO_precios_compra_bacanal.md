@@ -124,3 +124,31 @@ Iván solo quiere una lista clara de "esto es lo tuyo". A día de hoy, lo único
 2. **¿Está cerrada vuestra Fase 4** (enlazar escandallo → producto de venta)? Sin ese enlace no se puede explotar "vendí plato X" → ingredientes.
 
 En cuanto (1) esté decidido, **nosotros montamos el cálculo de `ventas_dia_promedio`** (hoy nadie lo escribe y el motor de sugerencias lo lee) — eso es técnico y no necesita a Iván.
+
+---
+
+## ⚡ ACTUALIZACIÓN 2026-07-09 — TANDA 2 de albaranes (37 fotos más)
+
+Fernando pasó **37 fotos más** (14 documentos nuevos, fechas 25/06–03/07). Mismo proceso: extracción IA
+(todos los totales cuadrados) + emparejado contra catálogo. **195 precios más cargados y verificados**
+(Bacanal 83 + Habana 112; total acumulado en `producto_precios_compra` = **280**). El hueco de "sin precio"
+baja a **Bacanal 241 / Habana 190** (de 271/236). Reparto por proveedor: DITHER 65, BELMONTE 51, MAKRO 19,
+KRITTIKALI 14, COCACOLA 14, BIGGER GOLOSINAS 11, ENCINAR 7, MAHOU 6, SERPESKA 5, ANTONIO DE MIGUEL 2, DDI NEXIA 1.
+
+**4 proveedores nuevos** en esta tanda, todos ya casan con proveedores existentes del catálogo (no hizo
+falta crear ninguno): Coca-Cola Europacific Partners, Bigger Golosinas (chuches Habana), Procubitos
+(hielo Habana), y el distribuidor Iniciativas Sedox (reparte San Miguel/Corona, mapeado bajo "MAHOU").
+
+**Refuerza las MISMAS dudas del bloque A/B/C de arriba** (Makro repite productos en pedidos distintos:
+secreto de cerdo, corvina, aceite de oliva, gyozas, queso vaca-cabra, entrecot, etc. — misma pregunta,
+más evidencia). No repito la tabla; las decisiones de A/B/C siguen abiertas y aplican también a esta tanda.
+
+**Casos NUEVOS de esta tanda (no estaban en A/B/C):**
+- **"Cubo Cóctel Mix 2kg" (Bigger Golosinas, Habana)** — no existe en catálogo; aparece en 2 albaranes (9,86€). ¿Crear?
+- **"Leche Asturiana" (Dither, Habana)** — catálogo Habana solo tiene "Leche Condesada" (producto distinto). ¿Crear "Leche"?
+- **Hielo en cubitos 41mm (Procubitos, Habana)** — no encaja con "Hielo Roca" ni "Hielo Pile" del catálogo (0,818€/kg). ¿Crear "Hielo Cubitos"?
+- **Vaso de sidra PP desechable 50cl (Krittikali, Habana)** — catálogo solo tiene "Vaso de Sidra Tensionado" (vidrio); material distinto (59,99€/500u). ¿Mismo producto o crear aparte?
+- **Un pedido Makro es "PARA PERSONAL"** (no para el restaurante, doc 027174) — cargamos igual sus precios (bacon, carne picada, Coca-Cola) pero **confirma si corresponde** o si hay que excluirlo del gasto de restaurante.
+- **"Salsa barbacoa" comprada (Makro, Bacanal)** — el catálogo la tiene como **elaboración** (receta casera); esta línea es la salsa ya envasada de proveedor. ¿Es el mismo producto (y cargamos el precio ahí) o creamos "Salsa barbacoa (compra)" aparte?
+
+**Igual que la tanda 1:** revertible por el tag → `delete from producto_precios_compra where observaciones like '%tanda 2%';`
