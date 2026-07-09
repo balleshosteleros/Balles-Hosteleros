@@ -20,7 +20,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
-  ArrowLeft, Plus, Settings, Settings2, DollarSign, Clock, Calendar,
+  ArrowLeft, Plus, Settings, Settings2, Euro, Clock, Calendar,
   Briefcase, ChevronRight, Target, FileText, Pencil, ListChecks,
   UtensilsCrossed, ChefHat, Crown, User, Package, Camera, Calculator,
   CheckCircle2, Scale, Users, Gift, Loader2, GraduationCap,
@@ -40,9 +40,9 @@ import { PuestoHorarioDialog } from "./PuestoHorarioDialog";
 
 const estadoBadge = (e: string) => {
   switch (e) {
-    case "activo": return <Badge className="bg-emerald-100 text-emerald-700 border-0">Activo</Badge>;
-    case "borrador": return <Badge className="bg-amber-100 text-amber-700 border-0">Borrador</Badge>;
-    default: return <Badge variant="secondary">Inactivo</Badge>;
+    case "activo": return <Badge className="bg-emerald-100 text-emerald-700 border-0 hover:bg-emerald-100">Activo</Badge>;
+    case "borrador": return <Badge className="bg-amber-100 text-amber-700 border-0 hover:bg-amber-100">Borrador</Badge>;
+    default: return <Badge variant="secondary" className="hover:bg-secondary">Inactivo</Badge>;
   }
 };
 
@@ -627,7 +627,7 @@ function DetalleView({ puesto, onBack, onChanged }: { puesto: PuestoSalarial; on
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         {[
-          { label: "Salario bruto", value: eur(puesto.salarioBruto), icon: DollarSign, color: "text-primary bg-primary/10" },
+          { label: "Salario bruto", value: eur(puesto.salarioBruto), icon: Euro, color: "text-primary bg-primary/10" },
           { label: "Jornada", value: puesto.jornadaContrato || "—", icon: Briefcase, color: "text-amber-600 bg-amber-500/10" },
           { label: "Horas/semana", value: `${puesto.horasSemanales}h`, icon: Clock, color: "text-emerald-600 bg-emerald-500/10" },
           { label: "Vacaciones", value: puesto.vacaciones || "—", icon: Calendar, color: "text-blue-600 bg-blue-500/10" },
@@ -646,6 +646,17 @@ function DetalleView({ puesto, onBack, onChanged }: { puesto: PuestoSalarial; on
         ))}
       </div>
 
+      {puesto.descripcion && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Descripción</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-muted-foreground whitespace-pre-line">{puesto.descripcion}</p>
+          </CardContent>
+        </Card>
+      )}
+
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-base">Condiciones del puesto</CardTitle>
@@ -653,9 +664,23 @@ function DetalleView({ puesto, onBack, onChanged }: { puesto: PuestoSalarial; on
         <CardContent>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="flex items-center gap-3">
+              <Euro className="h-5 w-5 text-muted-foreground" />
+              <div>
+                <p className="text-xs text-muted-foreground">Salario bruto</p>
+                <p className="font-medium">{eur(puesto.salarioBruto)}</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <Briefcase className="h-5 w-5 text-muted-foreground" />
+              <div>
+                <p className="text-xs text-muted-foreground">Jornada de contrato</p>
+                <p className="font-medium">{puesto.jornadaContrato || "—"}</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
               <Clock className="h-5 w-5 text-muted-foreground" />
               <div>
-                <p className="text-xs text-muted-foreground">Horario semanal</p>
+                <p className="text-xs text-muted-foreground">Horas / semana</p>
                 <p className="font-medium">{puesto.horasSemanales}h / semana</p>
               </div>
             </div>
@@ -667,10 +692,49 @@ function DetalleView({ puesto, onBack, onChanged }: { puesto: PuestoSalarial; on
               </div>
             </div>
             <div className="flex items-center gap-3">
+              <Calendar className="h-5 w-5 text-muted-foreground" />
+              <div>
+                <p className="text-xs text-muted-foreground">Vacaciones</p>
+                <p className="font-medium">{puesto.vacaciones || "—"}</p>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">Datos de gestoría</CardTitle>
+          <CardDescription>Se envían a la gestoría al dar de alta al empleado</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="flex items-center gap-3">
+              <FileText className="h-5 w-5 text-muted-foreground" />
+              <div>
+                <p className="text-xs text-muted-foreground">Convenio colectivo</p>
+                <p className="font-medium">{puesto.convenioColectivo || "—"}</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
               <Briefcase className="h-5 w-5 text-muted-foreground" />
               <div>
-                <p className="text-xs text-muted-foreground">Jornada de contrato</p>
-                <p className="font-medium">{puesto.jornadaContrato}</p>
+                <p className="text-xs text-muted-foreground">Tipo de contrato</p>
+                <p className="font-medium capitalize">{puesto.tipoContratoDefecto || "—"}</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <Users className="h-5 w-5 text-muted-foreground" />
+              <div>
+                <p className="text-xs text-muted-foreground">Grupo / categoría</p>
+                <p className="font-medium">{puesto.grupoCategoriaProf || "—"}</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <FileText className="h-5 w-5 text-muted-foreground" />
+              <div>
+                <p className="text-xs text-muted-foreground">Epígrafe / cotización</p>
+                <p className="font-medium">{puesto.epigrafeCotizacion || "—"}</p>
               </div>
             </div>
           </div>
