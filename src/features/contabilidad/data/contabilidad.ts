@@ -158,21 +158,21 @@ export const SAMPLE_BANCOS: BancoConectado[] = [
 /* ── Impuestos data ── */
 export interface FilaImpuesto {
   concepto: string;
-  q1: number; q2: number; q3: number; q4: number;
+  t1: number; t2: number; t3: number; t4: number;
   expandible?: boolean;
 }
 
 export const IMPUESTOS_INGRESOS: FilaImpuesto[] = [
-  { concepto: "Base imponible", q1: 0, q2: 0, q3: 0, q4: 0 },
-  { concepto: "Suplidos", q1: 0, q2: 0, q3: 0, q4: 0 },
-  { concepto: "Impuestos sin asignar", q1: 0, q2: 0, q3: 0, q4: 0 },
+  { concepto: "Base imponible", t1: 0, t2: 0, t3: 0, t4: 0 },
+  { concepto: "Suplidos", t1: 0, t2: 0, t3: 0, t4: 0 },
+  { concepto: "Impuestos sin asignar", t1: 0, t2: 0, t3: 0, t4: 0 },
 ];
 
 export const IMPUESTOS_GASTOS: FilaImpuesto[] = [
-  { concepto: "Base imponible", q1: 59000.38, q2: 3893.84, q3: 0, q4: 0 },
-  { concepto: "Suplidos", q1: 0, q2: 0, q3: 0, q4: 0 },
-  { concepto: "IVA", q1: 8027.41, q2: 776.20, q3: 0, q4: 0, expandible: true },
-  { concepto: "Impuestos sin asignar", q1: 0, q2: 0, q3: 0, q4: 0 },
+  { concepto: "Base imponible", t1: 59000.38, t2: 3893.84, t3: 0, t4: 0 },
+  { concepto: "Suplidos", t1: 0, t2: 0, t3: 0, t4: 0 },
+  { concepto: "IVA", t1: 8027.41, t2: 776.20, t3: 0, t4: 0, expandible: true },
+  { concepto: "Impuestos sin asignar", t1: 0, t2: 0, t3: 0, t4: 0 },
 ];
 
 /* ── Escenarios data ── */

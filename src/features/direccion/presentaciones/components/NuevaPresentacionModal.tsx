@@ -96,7 +96,7 @@ export function NuevaPresentacionModal({ open, onOpenChange }: Props) {
             <Label htmlFor="prompt">Tema / descripción *</Label>
             <Textarea
               id="prompt"
-              placeholder="Ej: Resultados del trimestre Q1 2026 y plan de acción para mejorar la satisfacción de cliente en sala."
+              placeholder="Ej: Resultados del trimestre T1 2026 y plan de acción para mejorar la satisfacción de cliente en sala."
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
               rows={4}

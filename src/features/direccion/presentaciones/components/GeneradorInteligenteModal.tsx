@@ -142,7 +142,7 @@ Estilo visual y de redacción: ${estiloVisual}
               <Label htmlFor="titulo">Título de la presentación</Label>
               <Input
                 id="titulo"
-                placeholder="Ej: Resultados del Trimestre Q1"
+                placeholder="Ej: Resultados del Trimestre T1"
                 value={titulo}
                 onChange={(e) => setTitulo(e.target.value)}
                 disabled={generando}

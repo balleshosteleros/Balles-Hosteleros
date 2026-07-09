@@ -17,7 +17,7 @@ interface EventoFiscal {
 }
 
 const SAMPLE_EVENTOS: EventoFiscal[] = [
-  { dia: 7, titulo: "IVA trimestral Q1", tipo: "impuesto" },
+  { dia: 7, titulo: "IVA trimestral T1", tipo: "impuesto" },
   { dia: 15, titulo: "Pago alquiler", tipo: "pago" },
   { dia: 20, titulo: "Modelo 303", tipo: "impuesto" },
   { dia: 20, titulo: "Modelo 111", tipo: "impuesto" },

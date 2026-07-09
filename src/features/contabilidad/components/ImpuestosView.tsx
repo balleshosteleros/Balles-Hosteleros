@@ -9,29 +9,29 @@ import { IMPUESTOS_INGRESOS, IMPUESTOS_GASTOS, FilaImpuesto } from "@/features/c
 const fmt = (n: number) => n.toLocaleString("es-ES", { minimumFractionDigits: 2 }) + " €";
 
 function FilaTabla({ fila }: { fila: FilaImpuesto }) {
-  const total = fila.q1 + fila.q2 + fila.q3 + fila.q4;
+  const total = fila.t1 + fila.t2 + fila.t3 + fila.t4;
   return (
     <tr className="border-b hover:bg-muted/20">
       <td className="py-3 pl-8 text-sm">{fila.expandible && <span className="mr-1">›</span>}{fila.concepto}</td>
-      <td className="py-3 text-right text-sm font-mono">{fmt(fila.q1)}</td>
-      <td className="py-3 text-right text-sm font-mono">{fmt(fila.q2)}</td>
-      <td className="py-3 text-right text-sm font-mono">{fmt(fila.q3)}</td>
-      <td className="py-3 text-right text-sm font-mono">{fmt(fila.q4)}</td>
+      <td className="py-3 text-right text-sm font-mono">{fmt(fila.t1)}</td>
+      <td className="py-3 text-right text-sm font-mono">{fmt(fila.t2)}</td>
+      <td className="py-3 text-right text-sm font-mono">{fmt(fila.t3)}</td>
+      <td className="py-3 text-right text-sm font-mono">{fmt(fila.t4)}</td>
       <td className="py-3 text-right text-sm font-mono font-semibold">{fmt(total)}</td>
     </tr>
   );
 }
 
 function TotalFila({ filas, label }: { filas: FilaImpuesto[]; label: string }) {
-  const sum = (k: "q1" | "q2" | "q3" | "q4") => filas.reduce((s, f) => s + f[k], 0);
-  const total = sum("q1") + sum("q2") + sum("q3") + sum("q4");
+  const sum = (k: "t1" | "t2" | "t3" | "t4") => filas.reduce((s, f) => s + f[k], 0);
+  const total = sum("t1") + sum("t2") + sum("t3") + sum("t4");
   return (
     <tr className="border-b bg-muted/30 font-semibold">
       <td className="py-3 pl-8 text-sm">{label}</td>
-      <td className="py-3 text-right text-sm font-mono">{fmt(sum("q1"))}</td>
-      <td className="py-3 text-right text-sm font-mono">{fmt(sum("q2"))}</td>
-      <td className="py-3 text-right text-sm font-mono">{fmt(sum("q3"))}</td>
-      <td className="py-3 text-right text-sm font-mono">{fmt(sum("q4"))}</td>
+      <td className="py-3 text-right text-sm font-mono">{fmt(sum("t1"))}</td>
+      <td className="py-3 text-right text-sm font-mono">{fmt(sum("t2"))}</td>
+      <td className="py-3 text-right text-sm font-mono">{fmt(sum("t3"))}</td>
+      <td className="py-3 text-right text-sm font-mono">{fmt(sum("t4"))}</td>
       <td className="py-3 text-right text-sm font-mono font-bold">{fmt(total)}</td>
     </tr>
   );
@@ -49,7 +49,7 @@ export function ImpuestosView() {
             <SelectTrigger className="w-[140px]"><SelectValue /></SelectTrigger>
             <SelectContent><SelectItem value="TRIMESTRAL">Trimestral</SelectItem><SelectItem value="MENSUAL">Mensual</SelectItem><SelectItem value="ANUAL">Anual</SelectItem></SelectContent>
           </Select>
-          <Button variant="outline" size="sm" className="text-xs">📅 2026-Q1 — 2026-Q4</Button>
+          <Button variant="outline" size="sm" className="text-xs">📅 2026-T1 — 2026-T4</Button>
         </div>
       </div>
 
@@ -59,10 +59,10 @@ export function ImpuestosView() {
             {/* INGRESOS header */}
             <tr className="bg-muted/40 border-b">
               <th className="py-3 pl-4 text-left text-sm font-bold text-emerald-600 flex items-center gap-1.5">↗ Ingresos</th>
-              <th className="py-3 text-right text-xs font-semibold text-muted-foreground w-[150px]">2026-Q1</th>
-              <th className="py-3 text-right text-xs font-semibold text-muted-foreground w-[150px]">2026-Q2</th>
-              <th className="py-3 text-right text-xs font-semibold text-muted-foreground w-[150px]">2026-Q3</th>
-              <th className="py-3 text-right text-xs font-semibold text-muted-foreground w-[150px]">2026-Q4</th>
+              <th className="py-3 text-right text-xs font-semibold text-muted-foreground w-[150px]">2026-T1</th>
+              <th className="py-3 text-right text-xs font-semibold text-muted-foreground w-[150px]">2026-T2</th>
+              <th className="py-3 text-right text-xs font-semibold text-muted-foreground w-[150px]">2026-T3</th>
+              <th className="py-3 text-right text-xs font-semibold text-muted-foreground w-[150px]">2026-T4</th>
               <th className="py-3 text-right text-xs font-semibold text-muted-foreground w-[150px] pr-4">Total</th>
             </tr>
           </thead>
@@ -76,10 +76,10 @@ export function ImpuestosView() {
           <thead>
             <tr className="bg-muted/40 border-b border-t">
               <th className="py-3 pl-4 text-left text-sm font-bold text-red-500 flex items-center gap-1.5">↙ Gastos</th>
-              <th className="py-3 text-right text-xs font-semibold text-muted-foreground w-[150px]">2026-Q1</th>
-              <th className="py-3 text-right text-xs font-semibold text-muted-foreground w-[150px]">2026-Q2</th>
-              <th className="py-3 text-right text-xs font-semibold text-muted-foreground w-[150px]">2026-Q3</th>
-              <th className="py-3 text-right text-xs font-semibold text-muted-foreground w-[150px]">2026-Q4</th>
+              <th className="py-3 text-right text-xs font-semibold text-muted-foreground w-[150px]">2026-T1</th>
+              <th className="py-3 text-right text-xs font-semibold text-muted-foreground w-[150px]">2026-T2</th>
+              <th className="py-3 text-right text-xs font-semibold text-muted-foreground w-[150px]">2026-T3</th>
+              <th className="py-3 text-right text-xs font-semibold text-muted-foreground w-[150px]">2026-T4</th>
               <th className="py-3 text-right text-xs font-semibold text-muted-foreground w-[150px] pr-4">Total</th>
             </tr>
           </thead>
