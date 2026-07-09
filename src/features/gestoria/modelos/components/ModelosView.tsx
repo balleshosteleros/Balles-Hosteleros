@@ -11,6 +11,7 @@ import {
 } from "../actions/modelos-actions";
 import { ModeloCard } from "./ModeloCard";
 import { ModelosConfigDialog } from "./ModelosConfigDialog";
+import { CalendarioFiscal } from "./CalendarioFiscal";
 import type { ModeloAeat, ModeloTipo } from "../types/modelos";
 import { grupoDeModelo } from "../types/modelos";
 import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
@@ -82,6 +83,7 @@ export function ModelosView() {
           <RefreshCw className={`h-4 w-4 ${isPending ? "animate-spin" : ""}`} />
           Refrescar
         </Button>
+        <CalendarioFiscal ejercicio={ejercicio} />
         <div className="flex-1" />
         <Select
           value={String(ejercicio)}
@@ -137,18 +139,20 @@ export function ModelosView() {
         <>
           <section className="space-y-3">
             <h2 className="text-lg font-semibold border-b pb-2">Modelos trimestrales</h2>
-            {porTipoQ.map((grupo) => (
-              <div key={grupo.tipo} className="space-y-2">
-                <h3 className="text-sm font-semibold text-muted-foreground">
-                  Modelo {grupo.tipo}
-                </h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                  {grupo.modelos.map((m) => (
-                    <ModeloCard key={m.id} modelo={m} />
-                  ))}
+            {porTipoQ
+              .filter((grupo) => grupo.modelos.length > 0)
+              .map((grupo) => (
+                <div key={grupo.tipo} className="space-y-2">
+                  <h3 className="text-sm font-semibold text-muted-foreground">
+                    Modelo {grupo.tipo}
+                  </h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                    {grupo.modelos.map((m) => (
+                      <ModeloCard key={m.id} modelo={m} />
+                    ))}
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))}
           </section>
 
           <section className="space-y-3">

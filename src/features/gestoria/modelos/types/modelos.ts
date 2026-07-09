@@ -287,6 +287,52 @@ export function fechaLimiteGrupo(
   return new Date(Math.min(...fechas.map((d) => d.getTime())));
 }
 
+/**
+ * Ventana OFICIAL de presentación AEAT (régimen general) de un modelo/periodo:
+ * fecha desde la que se PUEDE presentar (inicio) hasta la fecha límite (fin).
+ *
+ * Inicio oficial de cada ventana:
+ *  · Trimestrales (303/111/130/115): el día 1 del mes siguiente al fin del
+ *    trimestre (T1→1 abr, T2→1 jul, T3→1 oct, T4→1 ene del año siguiente).
+ *  · 390 (resumen IVA) y 190 (resumen retenciones): del 1 al 30/31 de enero.
+ *  · 347: del 1 al 28 de febrero.
+ *  · 200 (Sociedades): del 1 al 25 de julio (los 25 primeros días naturales).
+ *  · Documentos contables (PYG/BALANCE/LIBRO_MAYOR): sin ventana oficial AEAT.
+ */
+const INICIO_VENTANA: Record<ModeloPeriodo, { mes: number; dia: number } | null> = {
+  T1: { mes: 4, dia: 1 },
+  T2: { mes: 7, dia: 1 },
+  T3: { mes: 10, dia: 1 },
+  T4: { mes: 1, dia: 1 }, // año siguiente
+  ANUAL: { mes: 1, dia: 1 }, // año siguiente (390/190); 347 y 200 se ajustan abajo
+};
+
+/**
+ * Devuelve la ventana [inicio, fin] de presentación de un modelo/periodo para un
+ * ejercicio, o null si el modelo no tiene ventana oficial (docs contables).
+ */
+export function ventanaPresentacion(
+  tipo: ModeloTipo,
+  periodo: ModeloPeriodo,
+  ejercicio: number,
+): { inicio: Date; fin: Date } | null {
+  const fin = fechaLimitePresentacion(tipo, periodo, ejercicio);
+  if (!fin) return null;
+  const añoSiguiente = periodo === "T4" || periodo === "ANUAL";
+  const añoVentana = añoSiguiente ? ejercicio + 1 : ejercicio;
+
+  let ini = INICIO_VENTANA[periodo];
+  // Ajustes de inicio para los anuales que no empiezan el 1 de enero.
+  if (periodo === "ANUAL") {
+    if (tipo === "347") ini = { mes: 2, dia: 1 }; // febrero
+    else if (tipo === "200") ini = { mes: 7, dia: 1 }; // julio
+    else ini = { mes: 1, dia: 1 }; // 390/190: enero
+  }
+  if (!ini) return null;
+  const inicio = new Date(añoVentana, ini.mes - 1, ini.dia);
+  return { inicio, fin };
+}
+
 export function periodoALabel(periodo: ModeloPeriodo, ejercicio: number): string {
   if (periodo === "ANUAL") return `${ejercicio}`;
   return `${ejercicio}-${periodo}`;
