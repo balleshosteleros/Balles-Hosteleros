@@ -62,7 +62,7 @@ export default async function SubirModelosPage({
 
   return (
     <SubirModelosView
-      endpoint={`/api/gestoria/modelos/${encodeURIComponent(token)}`}
+      endpoint={`/api/gestoria/modelos/subir/${encodeURIComponent(token)}`}
       empresaNombre={(empresa?.nombre as string) ?? "la empresa"}
       periodoLabel={periodoLabel}
       grupo={res.row.grupo}

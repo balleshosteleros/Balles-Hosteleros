@@ -1,6 +1,6 @@
 # PRP-072: Almacén de modelos fiscales de gestoría (PDF adjunto por modelo)
 
-> **Estado**: APROBADO
+> **Estado**: COMPLETADO ✅ (2026-07-09 — 10 fases, build OK, 48 PDFs cargados)
 > **Fecha**: 2026-07-09
 > **Proyecto**: Balles-Hosteleros
 
@@ -184,6 +184,16 @@ _Todos los ajustes son por empresa y no cruzan datos entre BACANAL y HABANA (RLS
 ## 🧠 Aprendizajes (Self-Annealing)
 
 > Crece con cada error encontrado durante la implementación.
+
+### 2026-07-09: Fichero "use server" solo exporta funciones async serializables
+- **Error**: `modelos-config-actions.ts` con `"use server"` exportaba una constante (`MODELOS_CONFIG_DEFAULT`) y una función que recibe un `SupabaseClient` (`getModelosConfigPorEmpresa`). Next lo rechaza (server actions solo exportan funciones async con args serializables) → "Failed to collect page data".
+- **Fix**: Separar en `services/modelos-config.ts` (tipos, constantes, `getModelosConfigPorEmpresa(admin,...)`, sin `"use server"`) y dejar `actions/modelos-config-actions.ts` solo con `getModelosConfig`/`saveModelosConfig`.
+- **Aplicar en**: Todo fichero `"use server"` del proyecto — NUNCA exportar constantes/tipos ni funciones que reciban clientes/objetos no serializables desde ahí; van a un módulo `services/`.
+
+### 2026-07-09: Ruta pública [token] colisiona con [id] existente
+- **Error**: `/gestoria/modelos/[token]` es ambigua con la ya existente `/gestoria/modelos/[id]` (detalle del modelo). El build falla con "Ambiguous app routes".
+- **Fix**: Mover la ruta pública a un segmento propio: `/gestoria/modelos/subir/[token]` (y `/api/gestoria/modelos/subir/[token]`). El prefijo público del proxy (`/gestoria/modelos`) ya la cubre por startsWith. Actualizar `urlSubidaModelos` y el `endpoint` de la page.
+- **Aplicar en**: Cualquier ruta tokenizada nueva bajo un prefijo que ya tenga un `[id]`/`[slug]` dinámico.
 
 ### 2026-07-09: RLS de storage usa usuario_empresas + usuarios (no user_empresas/profiles)
 - **Error**: La migración copió el patrón 096 con `public.user_empresas` y `public.profiles`; al aplicar → `relation "public.user_empresas" does not exist`.

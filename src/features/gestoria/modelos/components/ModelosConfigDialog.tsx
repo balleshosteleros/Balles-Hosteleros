@@ -17,12 +17,8 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
-import {
-  getModelosConfig,
-  saveModelosConfig,
-  MODELOS_CONFIG_DEFAULT,
-  type ModelosConfig,
-} from "../actions/modelos-config-actions";
+import { getModelosConfig, saveModelosConfig } from "../actions/modelos-config-actions";
+import { MODELOS_CONFIG_DEFAULT, type ModelosConfig } from "../services/modelos-config";
 import { MODELO_LABEL, grupoDeModelo, type ModeloTipo } from "../types/modelos";
 
 const TODOS_LOS_TIPOS = Object.keys(MODELO_LABEL) as ModeloTipo[];

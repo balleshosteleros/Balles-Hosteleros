@@ -75,6 +75,10 @@
     {
       "path": "/api/cron/nominas-gestoria-envio",
       "schedule": "0 8 * * *"
+    },
+    {
+      "path": "/api/cron/gestoria-modelos",
+      "schedule": "0 10 * * *"
     }
   ]
 }

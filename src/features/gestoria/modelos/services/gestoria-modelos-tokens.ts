@@ -29,7 +29,24 @@ export function getSiteUrl(): string {
 
 /** Enlace público que abre la gestoría para subir los modelos del periodo. */
 export function urlSubidaModelos(token: string): string {
-  return `${getSiteUrl()}/gestoria/modelos/${encodeURIComponent(token)}`;
+  return `${getSiteUrl()}/gestoria/modelos/subir/${encodeURIComponent(token)}`;
+}
+
+/** Botón HTML «Subir modelos» para el correo a la gestoría. */
+export function botonSubidaModelosHtml(token: string): string {
+  const url = urlSubidaModelos(token);
+  return `
+    <div style="margin:20px 0">
+      <a href="${url}"
+         style="display:inline-block;background:#16a34a;color:#fff;text-decoration:none;
+                padding:12px 22px;border-radius:8px;font-weight:600;font-size:14px">
+        Subir modelos
+      </a>
+      <p style="color:#888;font-size:12px;margin-top:8px">
+        Al pulsar verás cada modelo del periodo. Adjunta el PDF en su casilla; se
+        verificará automáticamente que el documento es correcto.
+      </p>
+    </div>`;
 }
 
 export interface ModelosTokenRow {
