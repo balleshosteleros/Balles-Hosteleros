@@ -382,11 +382,13 @@ Gracias,
     asunto: "Pendiente: contrato de {{candidato_nombre_completo}} sin subir · {{empresa_nombre}}",
     cuerpo: `Hola,
 
-Os recordamos que el contrato de {{candidato_nombre_completo}} sigue pendiente de subir.
+Os escribimos para recordaros que el contrato de {{candidato_nombre_completo}} sigue pendiente de subir.
 
-Mientras no subáis el contrato firmado, el trabajador no lo recibe y no puede firmarlo, lo que bloquea su alta. Os agradeceríamos que lo completéis cuanto antes.
+Mientras no lo tengáis subido en el enlace, el trabajador no puede firmarlo y su alta permanece bloqueada. Para evitar retrasos en la incorporación, os pedimos que lo completéis lo antes posible.
 
-Gracias,
+Podéis subir el contrato firmado desde el botón que encontraréis al final de este correo.
+
+Gracias por vuestra colaboración.
 {{empresa_nombre}}`,
     activa: true,
   },
