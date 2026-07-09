@@ -4,8 +4,9 @@
  * Cada plantilla es SUELTA (identificada por `nombre`, no atada a un estado).
  * La asociación email↔estado vive en la plantilla de ESTADOS
  * (`reclutamiento-plantilla-estados.ts` → `defaultEmailNombre` por estado) y,
- * como override por vacante, en `vacantes.email_plantillas`. Estas 10 plantillas
- * son las que se asocian por defecto a los 10 estados del proceso estándar.
+ * como override por vacante, en `vacantes.email_plantillas`. Estas plantillas
+ * libres se asocian por defecto a los estados del proceso estándar (Selección ·
+ * Onboarding · Offboarding · Descartado); las de offboarding nacen inactivas.
  *
  * Cualquier cambio aquí se propaga a TODAS las empresas existentes vía
  * `syncSeedsToAllEmpresas()` (modo aditivo: solo crea los estados que falten,
@@ -255,6 +256,98 @@ Te deseamos lo mejor en tu camino y mucho éxito en tus próximos proyectos.
 Un saludo,
 {{empresa_nombre}}`,
     activa: true,
+  },
+
+  // ─────────────────────────────────── OFFBOARDING (salida) ──
+  // Correos de la fase de salida ordenada del trabajador. Nacen INACTIVOS
+  // (activa: false): informan según el estado, pero solo se envían cuando el
+  // usuario los revise y los active. Destinatario: el propio trabajador.
+
+  // ── 11. Preaviso ──
+  {
+    nombre: "Preaviso",
+    asunto: "Comunicación de preaviso — {{empresa_nombre}}",
+    cuerpo: `Hola {{candidato_nombre}},
+
+Te confirmamos que hemos registrado el preaviso de finalización de tu relación laboral con {{empresa_nombre}}. Queremos acompañarte en esta última etapa para que la salida se realice de forma ordenada y sin contratiempos para ninguna de las partes.
+
+En los próximos días te iremos informando de los siguientes pasos: la tramitación de tu baja, la devolución del material y accesos que tengas asignados, y la preparación de tu liquidación y finiquito.
+
+Si tienes cualquier duda durante este proceso, puedes escribirnos a {{email_rrhh}} y te ayudaremos con gusto.
+
+Gracias por tu trabajo durante este tiempo.
+
+Un saludo,
+{{empresa_nombre}}`,
+    activa: false,
+  },
+
+  // ── 12. Baja contrato ──
+  {
+    nombre: "Baja contrato",
+    asunto: "Tramitación de tu baja — {{empresa_nombre}}",
+    cuerpo: `Hola {{candidato_nombre}},
+
+Te informamos de que hemos iniciado la tramitación de la baja de tu contrato en {{empresa_nombre}}. Estamos gestionando con la gestoría toda la documentación necesaria para que tu baja quede registrada correctamente ante la Seguridad Social.
+
+En cuanto el proceso esté completado, te haremos llegar la documentación que corresponda. Si necesitas algún justificante o tienes cualquier consulta, escríbenos a {{email_rrhh}}.
+
+Un saludo,
+{{empresa_nombre}}`,
+    activa: false,
+  },
+
+  // ── 13. Entregas ──
+  {
+    nombre: "Entregas",
+    asunto: "Devolución de material y accesos — {{empresa_nombre}}",
+    cuerpo: `Hola {{candidato_nombre}},
+
+Antes de completar tu salida de {{empresa_nombre}}, necesitamos que nos devuelvas el material y los accesos que tengas asignados (uniforme, llaves, tarjetas, dispositivos, taquilla y cualquier otro elemento propiedad de la empresa).
+
+Te indicaremos cómo y cuándo hacer la entrega para que sea lo más cómodo posible. Una vez recibido todo, podremos cerrar tu proceso de salida y avanzar con tu finiquito.
+
+Si tienes cualquier duda sobre qué debes devolver, escríbenos a {{email_rrhh}}.
+
+Gracias por tu colaboración.
+
+Un saludo,
+{{empresa_nombre}}`,
+    activa: false,
+  },
+
+  // ── 14. Finiquito ──
+  {
+    nombre: "Finiquito",
+    asunto: "Liquidación y finiquito — {{empresa_nombre}}",
+    cuerpo: `Hola {{candidato_nombre}},
+
+Tu liquidación y finiquito ya están preparados. En este documento se recogen las cantidades que te corresponden a la finalización de tu relación laboral con {{empresa_nombre}} (salario pendiente, parte proporcional de pagas y vacaciones no disfrutadas, según corresponda).
+
+Te haremos llegar la documentación para que puedas revisarla con calma y, si estás conforme, firmarla. Antes de firmar, revisa que todos los importes son correctos; si algo no te cuadra, escríbenos a {{email_rrhh}} y lo revisamos juntos.
+
+Gracias por tu dedicación durante todo este tiempo.
+
+Un saludo,
+{{empresa_nombre}}`,
+    activa: false,
+  },
+
+  // ── 15. Ex-empleados ──
+  {
+    nombre: "Ex-empleados",
+    asunto: "Gracias por tu trabajo — {{empresa_nombre}}",
+    cuerpo: `Hola {{candidato_nombre}},
+
+Damos por finalizada oficialmente tu relación laboral con {{empresa_nombre}}. Queremos agradecerte de corazón tu dedicación, tu esfuerzo y todo lo que has aportado durante tu etapa con nosotros.
+
+Las puertas quedan abiertas: nos encantará volver a coincidir contigo en el futuro, ya sea de nuevo en el equipo o en cualquier otro camino que emprendas. Si en algún momento necesitas una referencia laboral o cualquier documentación, no dudes en escribirnos a {{email_rrhh}}.
+
+Te deseamos lo mejor en tu futuro personal y profesional.
+
+Un fuerte abrazo,
+{{empresa_nombre}}`,
+    activa: false,
   },
 
   // ───────────────────────────────────── ONBOARDING (PRP-070) ──

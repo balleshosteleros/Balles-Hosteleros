@@ -149,16 +149,20 @@ function VacanteCard({
       </div>
 
       <div className="px-5 py-4">
+        {/* Las 4 fases se reparten el ancho por igual (flex-1 + basis-0); dentro,
+            los 4 estados también. min-h uniforme en cada estado para que las
+            etiquetas largas (p. ej. «Suspenso Formación», «Ex-empleados») no hagan
+            que unos recuadros crezcan más que otros. */}
         <div className="flex gap-2 overflow-x-auto">
           {FASES_PRINCIPALES_ORDER.map((fp) => {
             const fpCfg = FASES_PRINCIPALES[fp];
             const fpCount = fpCfg.estados.reduce((sum, e) => sum + (counts[e] || 0), 0);
             return (
-              <div key={fp} className="flex-1 min-w-0">
+              <div key={fp} className="flex-1 basis-0 min-w-0">
                 <div className="h-1.5 rounded-t" style={{ background: `linear-gradient(90deg, ${fpCfg.colorFrom}, ${fpCfg.colorTo})` }} />
                 <div className="border border-t-0 border-border rounded-b-lg p-1.5 bg-muted/20">
                   <div className="text-[9px] font-semibold text-foreground uppercase tracking-wider text-center mb-1">{fpCfg.label} ({fpCount})</div>
-                  <div className="flex gap-1">
+                  <div className="flex items-stretch gap-1">
                     {fpCfg.estados.map((estado) => {
                       const estCfg = ESTADOS_CONFIG[estado];
                       const count = counts[estado] || 0;
@@ -166,7 +170,7 @@ function VacanteCard({
                         <button
                           key={estado}
                           onClick={() => count > 0 ? onSelectFase(vacante, estado) : undefined}
-                          className={`flex-1 flex flex-col items-center rounded border border-border p-1.5 transition-all ${count > 0 ? "hover:border-primary/40 hover:shadow-sm cursor-pointer" : "opacity-50 cursor-default"}`}
+                          className={`flex-1 basis-0 min-w-0 flex flex-col items-center justify-start rounded border border-border p-1.5 min-h-[52px] transition-all ${count > 0 ? "hover:border-primary/40 hover:shadow-sm cursor-pointer" : "opacity-50 cursor-default"}`}
                         >
                           <span className="text-sm font-bold text-foreground">{count}</span>
                           <span className="text-[9px] leading-tight text-muted-foreground text-center font-medium">{estCfg.label}</span>
