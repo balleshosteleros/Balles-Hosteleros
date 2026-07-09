@@ -28,7 +28,6 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { requireAdminUser } from "@/features/rrhh/services/empleados-core";
 import {
   leerCondicionesPuesto,
-  tieneCondicionesUtiles,
   escribirCondicionesVigentes,
 } from "@/features/rrhh/services/condiciones-puesto";
 import { asignarPlantillaPuestoAEmpleado } from "@/features/rrhh/actions/puesto-horario-actions";
@@ -143,12 +142,28 @@ export async function promocionarEmpleado(
   }
 
   const cond = await leerCondicionesPuesto(admin, input.puestoId);
-  if (!tieneCondicionesUtiles(cond)) {
+  // La promoción exige que el puesto destino tenga TODAS las condiciones esenciales
+  // rellenas (no basta salario o jornada como en la contratación). Se valida en el
+  // servidor para que sea imposible saltarse el bloqueo del diálogo.
+  const faltan: string[] = [];
+  if (!cond || !((cond.salario_neto ?? 0) > 0)) faltan.push("salario");
+  if (!cond?.jornada_contrato?.trim()) faltan.push("jornada");
+  if (!((cond?.horas_semanales ?? 0) > 0)) faltan.push("horas semanales");
+  // El tipo de contrato del puesto vive en `puestos.tipo_contrato_defecto`.
+  {
+    const { data: pTipo } = await admin
+      .from("puestos")
+      .select("tipo_contrato_defecto")
+      .eq("id", input.puestoId)
+      .maybeSingle();
+    if (!(pTipo?.tipo_contrato_defecto as string | null)?.trim()) faltan.push("tipo de contrato");
+  }
+  if (faltan.length > 0) {
     return {
       ok: false,
       error:
-        `El puesto «${puesto.nombre}» no tiene condiciones configuradas (salario, jornada…). ` +
-        `Configúralas en RRHH → Puestos antes de promocionar.`,
+        `No se puede promocionar a «${puesto.nombre}»: faltan ${faltan.join(", ")} en las condiciones del puesto. ` +
+        `Complétalas en RRHH → Puestos antes de promocionar.`,
     };
   }
 

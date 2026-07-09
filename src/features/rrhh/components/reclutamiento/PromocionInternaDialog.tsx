@@ -120,10 +120,18 @@ export function PromocionInternaDialog({
     [puestos, puestoId],
   );
 
-  // Un puesto es elegible como destino si tiene condiciones configuradas
-  // (salario o jornada). Si no, se muestra pero deshabilitado.
-  const tieneCondiciones = (p: PuestoSalarial) =>
-    (p.salarioBruto ?? 0) > 0 || !!(p.jornadaContrato && p.jornadaContrato.trim());
+  // Un puesto solo es DESTINO válido de promoción si tiene TODAS las condiciones
+  // esenciales rellenas (salario, jornada, horas y tipo de contrato). Devuelve la
+  // lista de campos que faltan (vacía = todo relleno).
+  const camposQueFaltan = (p: PuestoSalarial): string[] => {
+    const faltan: string[] = [];
+    if (!((p.salarioBruto ?? 0) > 0)) faltan.push("salario");
+    if (!(p.jornadaContrato && p.jornadaContrato.trim())) faltan.push("jornada");
+    if (!((p.horasSemanales ?? 0) > 0)) faltan.push("horas/semana");
+    if (!(p.tipoContratoDefecto && p.tipoContratoDefecto.trim())) faltan.push("tipo de contrato");
+    return faltan;
+  };
+  const tieneCondiciones = (p: PuestoSalarial) => camposQueFaltan(p).length === 0;
 
   // Puestos agrupados por departamento (para el selector).
   const puestosPorDepto = useMemo(() => {
@@ -221,7 +229,7 @@ export function PromocionInternaDialog({
                       return (
                         <SelectItem key={p.id} value={p.id} disabled={!ok}>
                           {p.puesto}
-                          {!ok && <span className="text-muted-foreground"> · sin condiciones</span>}
+                          {!ok && <span className="text-muted-foreground"> · faltan datos</span>}
                         </SelectItem>
                       );
                     })}
@@ -232,9 +240,10 @@ export function PromocionInternaDialog({
             {mismoPuesto && (
               <p className="text-xs text-destructive">El empleado ya ocupa ese puesto.</p>
             )}
-            {puesto && !tieneCondiciones(puesto) && (
+            {puesto && !mismoPuesto && !tieneCondiciones(puesto) && (
               <p className="text-xs text-destructive">
-                Este puesto no tiene condiciones (salario, jornada…). Configúralas en RRHH → Puestos antes de promocionar.
+                No se puede promocionar a «{puesto.puesto}»: faltan {camposQueFaltan(puesto).join(", ")} en las
+                condiciones del puesto. Complétalas en RRHH → Puestos y vuelve a intentarlo.
               </p>
             )}
           </div>
