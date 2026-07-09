@@ -9,7 +9,7 @@ import {
   type PagoAbonado,
 } from "@/features/rrhh/actions/pagos-actions";
 import { HistorialPagos } from "@/features/rrhh/components/pagos/HistorialPagos";
-import { HandCoins, Loader2 } from "lucide-react";
+import { Euro, Loader2 } from "lucide-react";
 
 /**
  * Portal del empleado → "Mis pagos". Muestra SOLO las liquidaciones ya abonadas
@@ -40,7 +40,7 @@ export function MisPagosView() {
     <div className="p-4 md:p-6 max-w-4xl mx-auto space-y-5">
       <Card className="p-4 md:p-5 flex items-center gap-4 border-dashed">
         <div className="h-10 w-10 rounded-md bg-emerald-500/10 text-emerald-600 flex items-center justify-center">
-          <HandCoins className="h-5 w-5" />
+          <Euro className="h-5 w-5" />
         </div>
         <div className="flex-1 min-w-0">
           <p className="text-sm font-semibold">Tus pagos abonados</p>

@@ -43,7 +43,7 @@ import { cn } from "@/shared/lib/utils";
 import {
   User,
   Fingerprint, Inbox, FileSignature, Calendar, Timer,
-  UserRoundSearch, Gift, Trophy, HandCoins,
+  UserRoundSearch, Gift, Trophy, Euro,
   GraduationCap, FileQuestion, FileSearch,
   Save, Loader2,
 } from "lucide-react";
@@ -60,7 +60,7 @@ const TOP_TABS = [
   { id: "reclutamiento",   label: "Reclutamiento",  icon: UserRoundSearch   },
   { id: "bonus",           label: "Bonus",          icon: Gift              },
   { id: "points",          label: "Points",         icon: Trophy            },
-  { id: "pagos",           label: "Pagos",          icon: HandCoins         },
+  { id: "pagos",           label: "Pagos",          icon: Euro         },
   { id: "formacion",       label: "Formación",      icon: GraduationCap     },
   { id: "cuestionarios",   label: "Cuestionarios",  icon: FileQuestion      },
   { id: "inspecciones",    label: "Inspecciones",   icon: FileSearch        },

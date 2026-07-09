@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/shared/lib/utils";
 import type { PagoAbonado } from "@/features/rrhh/actions/pagos-actions";
-import { CheckCircle2, ChevronDown, HandCoins } from "lucide-react";
+import { CheckCircle2, ChevronDown, Euro } from "lucide-react";
 
 function fmtEur(n: number): string {
   return (
@@ -26,7 +26,7 @@ export function HistorialPagos({ pagos }: { pagos: PagoAbonado[] }) {
     return (
       <Card className="p-10 flex flex-col items-center justify-center text-center gap-2">
         <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center text-muted-foreground">
-          <HandCoins className="h-6 w-6" />
+          <Euro className="h-6 w-6" />
         </div>
         <p className="text-sm font-medium">Todavía no hay pagos abonados</p>
         <p className="text-xs text-muted-foreground max-w-xs">
