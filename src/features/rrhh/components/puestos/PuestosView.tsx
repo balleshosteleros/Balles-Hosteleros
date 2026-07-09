@@ -723,21 +723,10 @@ function DetalleView({ puesto, onBack, onChanged }: { puesto: PuestoSalarial; on
                 <p className="font-medium capitalize">{puesto.tipoContratoDefecto || "—"}</p>
               </div>
             </div>
-            <div className="flex items-center gap-3">
-              <Users className="h-5 w-5 text-muted-foreground" />
-              <div>
-                <p className="text-xs text-muted-foreground">Grupo / categoría</p>
-                <p className="font-medium">{puesto.grupoCategoriaProf || "—"}</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-3">
-              <FileText className="h-5 w-5 text-muted-foreground" />
-              <div>
-                <p className="text-xs text-muted-foreground">Epígrafe / cotización</p>
-                <p className="font-medium">{puesto.epigrafeCotizacion || "—"}</p>
-              </div>
-            </div>
           </div>
+          <p className="text-[11px] text-muted-foreground mt-3">
+            El grupo/categoría y el epígrafe de cotización los deduce la gestoría del propio puesto y del convenio.
+          </p>
         </CardContent>
       </Card>
 

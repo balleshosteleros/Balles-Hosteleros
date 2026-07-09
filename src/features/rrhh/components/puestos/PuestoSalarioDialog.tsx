@@ -282,6 +282,9 @@ export function PuestoSalarioDialog({ open, onOpenChange, editing, onSaved }: Pr
           {/* Datos de gestoría (compartidos por el puesto) */}
           <div className="rounded-md border border-border/60 p-3 space-y-4">
             <p className="text-xs font-medium text-muted-foreground">Datos de gestoría</p>
+            <p className="text-[11px] text-muted-foreground -mt-1">
+              El grupo/categoría y el epígrafe de cotización los deduce la gestoría del propio puesto («{nombre || "el puesto"}») y del convenio, no hace falta indicarlos aquí.
+            </p>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label htmlFor="ps-convenio">Convenio colectivo</Label>
@@ -299,14 +302,6 @@ export function PuestoSalarioDialog({ open, onOpenChange, editing, onSaved }: Pr
                   <option value="indefinido">Indefinido</option>
                   <option value="temporal">Temporal</option>
                 </select>
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="ps-grupo">Grupo / categoría</Label>
-                <Input id="ps-grupo" value={grupoCategoria} onChange={(e) => setGrupoCategoria(e.target.value)} placeholder="Ej. Grupo III" />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="ps-epigrafe">Epígrafe / cotización</Label>
-                <Input id="ps-epigrafe" value={epigrafe} onChange={(e) => setEpigrafe(e.target.value)} placeholder="Opcional" />
               </div>
             </div>
           </div>
