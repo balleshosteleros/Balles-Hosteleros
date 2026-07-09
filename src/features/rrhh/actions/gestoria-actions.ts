@@ -389,16 +389,14 @@ export async function enviarAltaGestoria(
       .limit(20);
     const cond = (condRows ?? []).find((r) => r.vigente_hasta == null) ?? condRows?.[0] ?? null;
 
-    let convenio = "", grupo = "", epigrafe = "";
+    let convenio = "";
     if (cond?.puesto_id) {
       const { data: p } = await supabase
         .from("puestos")
-        .select("convenio_colectivo, grupo_categoria_prof, epigrafe_cotizacion")
+        .select("convenio_colectivo")
         .eq("id", cond.puesto_id)
         .maybeSingle();
       convenio = p?.convenio_colectivo ?? "";
-      grupo = p?.grupo_categoria_prof ?? "";
-      epigrafe = p?.epigrafe_cotizacion ?? "";
     }
 
     const empresaNombre = await supabase.from("empresas").select("nombre").eq("id", empresaId).maybeSingle()
@@ -422,8 +420,6 @@ export async function enviarAltaGestoria(
       horas_semanales: { label: "Horas/semana", value: cond?.horas_semanales ? `${cond.horas_semanales}h` : "—" },
       salario_neto: { label: "Salario neto", value: cond?.salario_neto != null ? eur(Number(cond.salario_neto)) : "—" },
       convenio: { label: "Convenio", value: convenio },
-      grupo: { label: "Grupo/categoría", value: grupo },
-      epigrafe: { label: "Epígrafe/cotización", value: epigrafe },
     };
 
     // Cada dato como una fila de FICHA: etiqueta gris a la izquierda, valor en
@@ -581,16 +577,14 @@ export async function enviarCambioPuestoGestoria(
       .limit(20);
     const cond = (condRows ?? []).find((r) => r.vigente_hasta == null) ?? condRows?.[0] ?? null;
 
-    let convenio = "", grupo = "", epigrafe = "";
+    let convenio = "";
     if (cond?.puesto_id) {
       const { data: p } = await admin
         .from("puestos")
-        .select("convenio_colectivo, grupo_categoria_prof, epigrafe_cotizacion")
+        .select("convenio_colectivo")
         .eq("id", cond.puesto_id)
         .maybeSingle();
       convenio = p?.convenio_colectivo ?? "";
-      grupo = p?.grupo_categoria_prof ?? "";
-      epigrafe = p?.epigrafe_cotizacion ?? "";
     }
 
     const empresaNombre = await admin.from("empresas").select("nombre").eq("id", empresaId).maybeSingle()
@@ -609,8 +603,6 @@ export async function enviarCambioPuestoGestoria(
       horas_semanales: { label: "Horas/semana", value: cond?.horas_semanales ? `${cond.horas_semanales}h` : "—" },
       salario_neto: { label: "Salario neto", value: cond?.salario_neto != null ? eur(Number(cond.salario_neto)) : "—" },
       convenio: { label: "Convenio", value: convenio },
-      grupo: { label: "Grupo/categoría", value: grupo },
-      epigrafe: { label: "Epígrafe/cotización", value: epigrafe },
     };
 
     const fila = (k: string, v: string | null | undefined) =>

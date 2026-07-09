@@ -343,8 +343,6 @@ export async function updatePuesto(input: {
   // Datos de gestoría (compartidos por el puesto)
   convenio_colectivo?: string | null;
   tipo_contrato_defecto?: string | null;
-  grupo_categoria_prof?: string | null;
-  epigrafe_cotizacion?: string | null;
 }) {
   try {
     const { supabase, empresaId } = await getContext();
@@ -377,8 +375,6 @@ export async function updatePuesto(input: {
     }
     if (input.convenio_colectivo !== undefined) patch.convenio_colectivo = input.convenio_colectivo || null;
     if (input.tipo_contrato_defecto !== undefined) patch.tipo_contrato_defecto = input.tipo_contrato_defecto || null;
-    if (input.grupo_categoria_prof !== undefined) patch.grupo_categoria_prof = input.grupo_categoria_prof || null;
-    if (input.epigrafe_cotizacion !== undefined) patch.epigrafe_cotizacion = input.epigrafe_cotizacion || null;
     if (Object.keys(patch).length === 0) return { ok: true };
 
     const { data, error } = await supabase

@@ -16,8 +16,6 @@ export const GESTORIA_CAMPOS = [
   { key: "horas_semanales", label: "Horas/semana" },
   { key: "salario_neto", label: "Salario neto" },
   { key: "convenio", label: "Convenio colectivo" },
-  { key: "grupo", label: "Grupo / categoría" },
-  { key: "epigrafe", label: "Epígrafe / cotización" },
 ] as const;
 
 export type GestoriaCampoKey = (typeof GESTORIA_CAMPOS)[number]["key"];

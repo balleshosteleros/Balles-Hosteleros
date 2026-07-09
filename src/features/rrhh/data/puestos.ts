@@ -55,8 +55,6 @@ export interface PuestoSalarial {
   // Datos de gestoría (compartidos por el puesto, comunes a todos los niveles)
   convenioColectivo: string;
   tipoContratoDefecto: string;
-  grupoCategoriaProf: string;
-  epigrafeCotizacion: string;
 }
 
 export interface NormaSalarial {

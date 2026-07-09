@@ -58,8 +58,6 @@ export function PuestoSalarioDialog({ open, onOpenChange, editing, onSaved }: Pr
   const [descripcion, setDescripcion] = useState("");
   // Datos de gestoría (compartidos por el puesto)
   const [convenio, setConvenio] = useState("");
-  const [grupoCategoria, setGrupoCategoria] = useState("");
-  const [epigrafe, setEpigrafe] = useState("");
   // Niveles (condiciones por nivel)
   const [niveles, setNiveles] = useState<NivelSalarial[]>([nivelVacio(1)]);
   const [idx, setIdx] = useState(0);
@@ -83,8 +81,6 @@ export function PuestoSalarioDialog({ open, onOpenChange, editing, onSaved }: Pr
     setDepartamentoId(editing?.departamentoId ?? "");
     setDescripcion(editing?.descripcion ?? "");
     setConvenio(editing?.convenioColectivo ?? "");
-    setGrupoCategoria(editing?.grupoCategoriaProf ?? "");
-    setEpigrafe(editing?.epigrafeCotizacion ?? "");
     setIdx(0);
     // Niveles: si edita, cargar de BD; si nuevo, un Nivel 1 vacío.
     if (editing) {
@@ -140,8 +136,6 @@ export function PuestoSalarioDialog({ open, onOpenChange, editing, onSaved }: Pr
           departamento_id: departamentoId,
           descripcion: descripcion.trim() || null,
           convenio_colectivo: convenio,
-          grupo_categoria_prof: grupoCategoria,
-          epigrafe_cotizacion: epigrafe,
         });
         if (!upd.ok) { toast.error(upd.error ?? "No se pudo actualizar el puesto"); return; }
       }
@@ -163,12 +157,10 @@ export function PuestoSalarioDialog({ open, onOpenChange, editing, onSaved }: Pr
         if (!sal.ok) { toast.error(sal.error ?? "No se pudo guardar el nivel"); return; }
       }
       // Guardar datos de gestoría también al crear (updatePuesto tras crear).
-      if (esNuevo && (convenio || grupoCategoria || epigrafe)) {
+      if (esNuevo && convenio) {
         await updatePuesto({
           id: puestoId,
           convenio_colectivo: convenio,
-          grupo_categoria_prof: grupoCategoria,
-          epigrafe_cotizacion: epigrafe,
         });
       }
       toast.success(esNuevo ? "Puesto creado" : "Puesto actualizado");

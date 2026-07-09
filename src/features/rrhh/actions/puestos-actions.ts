@@ -52,8 +52,6 @@ type PuestoRow = {
   puesto_salarios: SalarioEmbed[] | SalarioEmbed | null;
   convenio_colectivo: string | null;
   tipo_contrato_defecto: string | null;
-  grupo_categoria_prof: string | null;
-  epigrafe_cotizacion: string | null;
 };
 
 function embedToNivel(sal: SalarioEmbed): NivelSalarial {
@@ -105,8 +103,6 @@ function rowToPuesto(r: PuestoRow, conCronograma: Set<string>): PuestoSalarial {
     tieneCronograma: conCronograma.has(r.id),
     convenioColectivo: r.convenio_colectivo ?? "",
     tipoContratoDefecto: r.tipo_contrato_defecto ?? "",
-    grupoCategoriaProf: r.grupo_categoria_prof ?? "",
-    epigrafeCotizacion: r.epigrafe_cotizacion ?? "",
   };
 }
 
@@ -122,7 +118,7 @@ export async function listPuestosEmpresa(): Promise<{
       supabase
         .from("puestos")
         .select(
-          "id, nombre, descripcion, convenio_colectivo, tipo_contrato_defecto, grupo_categoria_prof, epigrafe_cotizacion, departamentos(id, nombre), puesto_salarios(nivel, salario_bruto, nomina_neta, efectivo_extra, salario_neto, jornada_contrato, horas_semanales, dias_libres, vacaciones, horario_semanal, observaciones, objetivos, estado, updated_at)",
+          "id, nombre, descripcion, convenio_colectivo, tipo_contrato_defecto, departamentos(id, nombre), puesto_salarios(nivel, salario_bruto, nomina_neta, efectivo_extra, salario_neto, jornada_contrato, horas_semanales, dias_libres, vacaciones, horario_semanal, observaciones, objetivos, estado, updated_at)",
         )
         .eq("empresa_id", empresaId),
       supabase
