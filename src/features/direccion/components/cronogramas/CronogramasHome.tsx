@@ -14,7 +14,6 @@ import {
 } from "lucide-react";
 import type { CronogramaOperativo } from "../../hooks/useCronogramasOperativos";
 import {
-  CRONOGRAMA_ROLES,
   AREA_LABEL,
   AREA_BADGE_CLASS,
   getAreaForRol,
@@ -37,6 +36,12 @@ interface Props {
    * que queden sin cards visibles desaparecen automáticamente.
    */
   isRolAccesible?: (rol: string) => boolean;
+  /**
+   * Resuelve el área (OPERATIVA/ADMINISTRATIVA) de un rol a partir del
+   * departamento REAL del puesto (tabla `departamentos`). Si no se pasa, se
+   * usa el fallback hardcodeado `getAreaForRol`.
+   */
+  areaDeRol?: (rol: string) => AreaCronograma;
 }
 
 // Mapeo visual de departamentos — iconos alineados con el sidebar.
@@ -63,7 +68,7 @@ const DEPTO_CONFIG: Record<string, { icon: React.ElementType; color: string; bg:
   SALA:               { icon: UtensilsCrossed, color: "text-emerald-600", bg: "bg-emerald-50 border-emerald-200" },
   "JEFE DE SALA":     { icon: UtensilsCrossed, color: "text-emerald-700", bg: "bg-emerald-50 border-emerald-200" },
   CAMARERO:           { icon: UtensilsCrossed, color: "text-emerald-600", bg: "bg-emerald-50 border-emerald-200" },
-  ARTISTA:            { icon: UtensilsCrossed, color: "text-emerald-600", bg: "bg-emerald-50 border-emerald-200" },
+  ARTISTAS:           { icon: UtensilsCrossed, color: "text-emerald-600", bg: "bg-emerald-50 border-emerald-200" },
   COCINA:             { icon: ChefHat,         color: "text-orange-600", bg: "bg-orange-50 border-orange-200" },
   "JEFE DE COCINA":   { icon: ChefHat,         color: "text-orange-700", bg: "bg-orange-50 border-orange-200" },
   COCINERO:           { icon: ChefHat,         color: "text-orange-600", bg: "bg-orange-50 border-orange-200" },
@@ -118,22 +123,24 @@ function FrecuenciaBar({
   );
 }
 
-export function CronogramasHome({ data, onSelect, onCrearCronograma, onIrProductividad, isLoading, isRolAccesible }: Props) {
+export function CronogramasHome({ data, onSelect, onCrearCronograma, onIrProductividad, isLoading, isRolAccesible, areaDeRol }: Props) {
   const [filtroArea, setFiltroArea] = useState<AreaCronograma>("OPERATIVA");
   const [busqueda, setBusqueda] = useState("");
   const [showConfig, setShowConfig] = useState(false);
 
   const grupos = useMemo(() => {
+    // Fuente única = los cronogramas reales de la BD. Gracias a la relación 1:1
+    // PUESTO ↔ CRONOGRAMA (backfill 20260709130000 + alta automática en
+    // createPuesto), cada puesto real tiene aquí al menos su fila placeholder.
+    // NO se siembran roles hardcodeados: cada tarjeta = un puesto real, con su
+    // departamento real. Un puesto sin tareas configuradas aparece con su fila
+    // placeholder (total=0) en estado "Sin tareas todavía".
     const byRol = new Map<string, CronogramaOperativo[]>();
     for (const t of data) {
       if (!t.rol) continue;
       const arr = byRol.get(t.rol) ?? [];
       arr.push(t);
       byRol.set(t.rol, arr);
-    }
-    // Sembrar cronogramas canónicos aunque no tengan tareas en BD todavía.
-    for (const r of CRONOGRAMA_ROLES) {
-      if (!byRol.has(r.rol)) byRol.set(r.rol, []);
     }
     // Aplicar filtro de acceso del usuario actual: si la prop está definida,
     // descartamos los rols a los que no tiene `ver: true` en su rol de empresa.
@@ -144,7 +151,13 @@ export function CronogramasHome({ data, onSelect, onCrearCronograma, onIrProduct
     }
     return Array.from(byRol.entries())
       .map(([rol, tareas]) => {
-        const mains = tareas.filter((t) => !t.parent_id);
+        // La fila placeholder del alta (frecuencia OTRO, "Añadir misión de …")
+        // NO cuenta como tarea real: un puesto que solo la tiene aparece vacío.
+        const esPlaceholder = (t: CronogramaOperativo) =>
+          !t.parent_id && (t.frecuencia ?? "OTRO") === "OTRO" &&
+          (t.tarea ?? "").trim().startsWith("Añadir misión de");
+        const reales = tareas.filter((t) => !esPlaceholder(t));
+        const mains = reales.filter((t) => !t.parent_id);
         const counts: Record<string, number> = {
           DIARIO: 0, SEMANAL: 0, MENSUAL: 0, TRIMESTRAL: 0, ANUAL: 0, "POR NECESIDAD": 0, OTRO: 0,
         };
@@ -152,21 +165,26 @@ export function CronogramasHome({ data, onSelect, onCrearCronograma, onIrProduct
           const f = (t.frecuencia ?? "OTRO") as string;
           counts[f] = (counts[f] ?? 0) + 1;
         }
-        const conVideo = tareas.filter((t) => t.video_url).length;
+        const conVideo = reales.filter((t) => t.video_url).length;
+        // Departamento real del puesto (viene en la fila del cronograma). Es la
+        // fuente de la etiqueta y del área, en vez de mapeos hardcodeados.
+        const departamento =
+          tareas.find((t) => t.departamento)?.departamento?.trim() || "";
         return {
           rol,
-          area: getAreaForRol(rol),
+          departamento,
+          area: areaDeRol?.(rol) ?? getAreaForRol(rol),
           total: mains.length,
-          totalConSubs: tareas.length,
+          totalConSubs: reales.length,
           counts,
-          pctVideo: tareas.length > 0 ? Math.round((conVideo / tareas.length) * 100) : 0,
+          pctVideo: reales.length > 0 ? Math.round((conVideo / reales.length) * 100) : 0,
         };
       })
       .sort((a, b) => {
         if (a.area !== b.area) return a.area === "OPERATIVA" ? -1 : 1;
         return a.rol.localeCompare(b.rol);
       });
-  }, [data, isRolAccesible]);
+  }, [data, isRolAccesible, areaDeRol]);
 
   const gruposFiltrados = useMemo(() => {
     const porArea = grupos.filter((g) => g.area === filtroArea);
@@ -251,7 +269,7 @@ export function CronogramasHome({ data, onSelect, onCrearCronograma, onIrProduct
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 max-w-7xl mx-auto">
-            {gruposFiltrados.map(({ rol, area, total, totalConSubs, counts: freqCounts, pctVideo }) => {
+            {gruposFiltrados.map(({ rol, departamento, area, total, totalConSubs, counts: freqCounts, pctVideo }) => {
               const { icon: Icon, color, bg } = getDeptoConfig(rol);
               const isEmpty = total === 0;
               return (
@@ -297,7 +315,7 @@ export function CronogramasHome({ data, onSelect, onCrearCronograma, onIrProduct
                     variant="outline"
                     className={cn("text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0 mb-1.5", AREA_BADGE_CLASS[area])}
                   >
-                    {getModuloForCronograma(rol)}
+                    {departamento || getModuloForCronograma(rol)}
                   </Badge>
                   <h3 className="font-bold text-base uppercase tracking-wide mb-1">{rol}</h3>
                   <p className="text-xs text-muted-foreground mb-4">

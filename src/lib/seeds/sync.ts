@@ -285,6 +285,61 @@ export async function syncVacantesAEmpresa(
 }
 
 /**
+ * Garantiza exactamente un CURSO DE FORMACIÓN por cada PUESTO activo de la
+ * empresa (`formacion_cursos`, ámbito "puesto", título = nombre del puesto).
+ * Versión con cliente admin para el alta de empresa; espeja
+ * `syncCursosPorPuesto` (acción de UI). Aditivo e idempotente: el
+ * `unique(puesto_id)` evita duplicados.
+ */
+export async function syncCursosPorPuestoAEmpresa(
+  admin: Admin,
+  empresaId: string,
+): Promise<{ creados: number }> {
+  const [puestosRes, cursosRes] = await Promise.all([
+    admin
+      .from("puestos")
+      .select("id, nombre, estado")
+      .eq("empresa_id", empresaId),
+    admin
+      .from("formacion_cursos")
+      .select("puesto_id")
+      .eq("empresa_id", empresaId),
+  ]);
+
+  const puestos = (puestosRes.data ?? []) as Array<{
+    id: string; nombre: string; estado?: string | null;
+  }>;
+  const conCurso = new Set(
+    ((cursosRes.data ?? []) as Array<{ puesto_id: string | null }>)
+      .map((c) => c.puesto_id)
+      .filter(Boolean) as string[],
+  );
+
+  const faltan = puestos
+    .filter((p) => p.estado !== "inactivo")
+    .filter((p) => !conCurso.has(p.id));
+  if (faltan.length === 0) return { creados: 0 };
+
+  const filas = faltan.map((p, i) => ({
+    empresa_id: empresaId,
+    puesto_id: p.id,
+    ambito: "puesto",
+    titulo: p.nombre ?? "Puesto",
+    descripcion: "",
+    categoria: "operativa",
+    orden: i + 1,
+    publicado: true,
+    autor: "Sistema",
+    created_by: null,
+  }));
+  const { error } = await admin
+    .from("formacion_cursos")
+    .upsert(filas, { onConflict: "puesto_id", ignoreDuplicates: true });
+  if (error) throw error;
+  return { creados: filas.length };
+}
+
+/**
  * Sincroniza plantillas de email del pipeline de inspectores (aditivo).
  * Solo crea las fases que aún no existen en la empresa; NUNCA sobreescribe
  * personalizaciones del cliente.
@@ -869,6 +924,7 @@ export async function seedEmpresaDefaults(
   await syncOrganigramaAEmpresa(admin, empresaSlug);
   await syncCatalogosVacanteAEmpresa(admin, empresaId);
   await syncVacantesAEmpresa(admin, empresaId, empresaSlug);
+  await syncCursosPorPuestoAEmpresa(admin, empresaId);
   await syncInspectorEmailPlantillasAEmpresa(admin, empresaId);
   await syncInspeccionPresentacionAEmpresa(admin, empresaId);
   await syncReservaEtiquetasAEmpresa(admin, empresaId);
@@ -941,6 +997,7 @@ export async function syncSeedsToAllEmpresas(): Promise<{
       const o = await syncOrganigramaAEmpresa(admin, empresaSlug);
       await syncCatalogosVacanteAEmpresa(admin, empresaId);
       const v = await syncVacantesAEmpresa(admin, empresaId, empresaSlug);
+      await syncCursosPorPuestoAEmpresa(admin, empresaId);
       const iep = await syncInspectorEmailPlantillasAEmpresa(admin, empresaId);
       const ipres = await syncInspeccionPresentacionAEmpresa(admin, empresaId);
       const re = await syncReservaEtiquetasAEmpresa(admin, empresaId);

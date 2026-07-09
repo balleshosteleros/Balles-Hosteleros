@@ -15,7 +15,6 @@ export const CRONOGRAMA_ROLES: CronogramaRol[] = [
   { rol: "COCINERO", area: "OPERATIVA" },
   { rol: "OFFICE", area: "OPERATIVA" },
   { rol: "LIMPIEZA", area: "OPERATIVA" },
-  { rol: "ARTISTA", area: "OPERATIVA" },
 
   // ADMINISTRATIVA — equipo de gestión
   { rol: "DIRECCION", area: "ADMINISTRATIVA" },
@@ -76,7 +75,6 @@ export const CRONOGRAMA_TO_MODULO: Record<string, string> = {
   "COCINERO": "Cocina",
   "OFFICE": "Cocina",
   "LIMPIEZA": "Cocina",
-  "ARTISTA": "Sala",
 };
 
 export function getModuloForCronograma(cronograma: string): string {

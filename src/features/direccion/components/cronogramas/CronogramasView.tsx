@@ -580,6 +580,7 @@ export function CronogramasView() {
           onSelect={setSelectedRol}
           onCrearCronograma={() => setShowNewDialog(true)}
           onIrProductividad={() => router.push("/direccion/cronogramas/productividad")}
+          areaDeRol={areaForRol}
           isRolAccesible={(rol) => {
             // Un puesto es accesible si su departamento (o el módulo derivado
             // del nombre del puesto) está dentro de los módulos con `ver: true`

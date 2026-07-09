@@ -33,15 +33,16 @@ export const PUESTOS_SEED: PuestoSeed[] = [
   { departamento: "JURÍDICO", nombre: "ABOGADO" },
 
   // ── OPERATIVA ───────────────────────────────────────────────
+  // Catálogo oficial = plantilla de BACANAL (la empresa más completa).
   { departamento: "SALA", nombre: "JEFE DE SALA" },
   { departamento: "SALA", nombre: "CAMAREROS" },
-  { departamento: "SALA", nombre: "CACHIMBEROS" },
   { departamento: "SALA", nombre: "HOSTESS" },
   { departamento: "SALA", nombre: "LIMPIEZA" },
   { departamento: "COCINA", nombre: "JEFE DE COCINA" },
   { departamento: "COCINA", nombre: "COCINEROS" },
   { departamento: "COCINA", nombre: "OFFICE" },
-  { departamento: "ARTISTAS", nombre: "DJ" },
+  { departamento: "ARTISTAS", nombre: "CANTANTE" },
+  { departamento: "ARTISTAS", nombre: "MUSICO" },
   { departamento: "MANTENIMIENTO", nombre: "TECNICO" },
 ];
 
