@@ -704,23 +704,14 @@ function DetalleView({ puesto, onBack, onChanged }: { puesto: PuestoSalarial; on
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-base">Datos de gestoría</CardTitle>
-          <CardDescription>Se envían a la gestoría al dar de alta al empleado</CardDescription>
+          <CardDescription>El tipo de contrato se define en la vacante de este puesto</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="flex items-center gap-3">
-              <FileText className="h-5 w-5 text-muted-foreground" />
-              <div>
-                <p className="text-xs text-muted-foreground">Convenio colectivo</p>
-                <p className="font-medium">{puesto.convenioColectivo || "—"}</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-3">
-              <Briefcase className="h-5 w-5 text-muted-foreground" />
-              <div>
-                <p className="text-xs text-muted-foreground">Tipo de contrato</p>
-                <p className="font-medium capitalize">{puesto.tipoContratoDefecto || "—"}</p>
-              </div>
+          <div className="flex items-center gap-3">
+            <FileText className="h-5 w-5 text-muted-foreground" />
+            <div>
+              <p className="text-xs text-muted-foreground">Convenio colectivo</p>
+              <p className="font-medium">{puesto.convenioColectivo || "—"}</p>
             </div>
           </div>
         </CardContent>

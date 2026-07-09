@@ -334,7 +334,16 @@ export async function contratarCandidato(input: ContratarInput): Promise<Contrat
   }
 
   const dniNorm = normalizarDni(cand.dni_nie);
-  const tipoContrato = (puesto.tipo_contrato_defecto as string | null) ?? null;
+  // Tipo de contrato: FUENTE ÚNICA = la vacante del candidato (allí es obligatorio
+  // y siempre está relleno). El puesto ya no lo define. Fallback al puesto solo por
+  // compat con datos antiguos que aún tuvieran `tipo_contrato_defecto`.
+  let tipoContrato: string | null = null;
+  if (cand.vacante_id) {
+    const { data: vac } = await admin
+      .from("vacantes").select("tipo_contrato").eq("id", cand.vacante_id).maybeSingle();
+    tipoContrato = (vac?.tipo_contrato as string | null) ?? null;
+  }
+  if (!tipoContrato) tipoContrato = (puesto.tipo_contrato_defecto as string | null) ?? null;
   // Fase/estado destino del candidato (compat = seleccionado/empleado).
   const destinoFase = input.destino?.fase ?? "seleccionado";
   const destinoEstado = input.destino?.estado ?? "empleado";

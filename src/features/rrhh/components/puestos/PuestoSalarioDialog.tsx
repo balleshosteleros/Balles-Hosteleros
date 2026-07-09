@@ -58,7 +58,6 @@ export function PuestoSalarioDialog({ open, onOpenChange, editing, onSaved }: Pr
   const [descripcion, setDescripcion] = useState("");
   // Datos de gestoría (compartidos por el puesto)
   const [convenio, setConvenio] = useState("");
-  const [tipoContrato, setTipoContrato] = useState("");
   const [grupoCategoria, setGrupoCategoria] = useState("");
   const [epigrafe, setEpigrafe] = useState("");
   // Niveles (condiciones por nivel)
@@ -84,7 +83,6 @@ export function PuestoSalarioDialog({ open, onOpenChange, editing, onSaved }: Pr
     setDepartamentoId(editing?.departamentoId ?? "");
     setDescripcion(editing?.descripcion ?? "");
     setConvenio(editing?.convenioColectivo ?? "");
-    setTipoContrato(editing?.tipoContratoDefecto ?? "");
     setGrupoCategoria(editing?.grupoCategoriaProf ?? "");
     setEpigrafe(editing?.epigrafeCotizacion ?? "");
     setIdx(0);
@@ -142,7 +140,6 @@ export function PuestoSalarioDialog({ open, onOpenChange, editing, onSaved }: Pr
           departamento_id: departamentoId,
           descripcion: descripcion.trim() || null,
           convenio_colectivo: convenio,
-          tipo_contrato_defecto: tipoContrato,
           grupo_categoria_prof: grupoCategoria,
           epigrafe_cotizacion: epigrafe,
         });
@@ -166,11 +163,10 @@ export function PuestoSalarioDialog({ open, onOpenChange, editing, onSaved }: Pr
         if (!sal.ok) { toast.error(sal.error ?? "No se pudo guardar el nivel"); return; }
       }
       // Guardar datos de gestoría también al crear (updatePuesto tras crear).
-      if (esNuevo && (convenio || tipoContrato || grupoCategoria || epigrafe)) {
+      if (esNuevo && (convenio || grupoCategoria || epigrafe)) {
         await updatePuesto({
           id: puestoId,
           convenio_colectivo: convenio,
-          tipo_contrato_defecto: tipoContrato,
           grupo_categoria_prof: grupoCategoria,
           epigrafe_cotizacion: epigrafe,
         });
@@ -281,24 +277,9 @@ export function PuestoSalarioDialog({ open, onOpenChange, editing, onSaved }: Pr
           {/* Datos de gestoría (compartidos por el puesto) */}
           <div className="rounded-md border border-border/60 p-3 space-y-4">
             <p className="text-xs font-medium text-muted-foreground">Datos de gestoría</p>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label htmlFor="ps-convenio">Convenio colectivo</Label>
-                <Input id="ps-convenio" value={convenio} onChange={(e) => setConvenio(e.target.value)} placeholder="Ej. Hostelería de Madrid" />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="ps-tipocontrato">Tipo de contrato</Label>
-                <select
-                  id="ps-tipocontrato"
-                  value={tipoContrato}
-                  onChange={(e) => setTipoContrato(e.target.value)}
-                  className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
-                >
-                  <option value="">Sin definir</option>
-                  <option value="indefinido">Indefinido</option>
-                  <option value="temporal">Temporal</option>
-                </select>
-              </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="ps-convenio">Convenio colectivo</Label>
+              <Input id="ps-convenio" value={convenio} onChange={(e) => setConvenio(e.target.value)} placeholder="Ej. Hostelería de Madrid" />
             </div>
           </div>
         </div>
