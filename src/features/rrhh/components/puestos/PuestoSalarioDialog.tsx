@@ -26,7 +26,6 @@ interface Props {
 type Depto = { id: string; nombre: string };
 
 const ESTADOS: { value: PuestoSalarial["estado"]; label: string }[] = [
-  { value: "borrador", label: "Borrador" },
   { value: "activo", label: "Activo" },
   { value: "inactivo", label: "Inactivo" },
 ];
@@ -45,7 +44,7 @@ function nivelVacio(nivel: number): NivelSalarial {
     horarioSemanal: [],
     observaciones: "",
     objetivos: [],
-    estado: "borrador",
+    estado: "activo",
   };
 }
 
@@ -254,7 +253,7 @@ export function PuestoSalarioDialog({ open, onOpenChange, editing, onSaved }: Pr
               <Label htmlFor="ps-estado">Estado</Label>
               <select
                 id="ps-estado"
-                value={cur?.estado ?? "borrador"}
+                value={cur?.estado === "inactivo" ? "inactivo" : "activo"}
                 onChange={(e) => setCur({ estado: e.target.value as PuestoSalarial["estado"] })}
                 className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
               >

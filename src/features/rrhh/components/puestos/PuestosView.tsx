@@ -38,12 +38,11 @@ import { puestosIO } from "@/features/rrhh/io/puestos.io";
 import { PuestoSalarioDialog } from "./PuestoSalarioDialog";
 import { PuestoHorarioDialog } from "./PuestoHorarioDialog";
 
+// Solo dos estados: Activo / Inactivo. «borrador» (legacy) cuenta como Activo.
 const estadoBadge = (e: string) => {
-  switch (e) {
-    case "activo": return <Badge className="bg-emerald-100 text-emerald-700 border-0 hover:bg-emerald-100">Activo</Badge>;
-    case "borrador": return <Badge className="bg-amber-100 text-amber-700 border-0 hover:bg-amber-100">Borrador</Badge>;
-    default: return <Badge variant="secondary" className="hover:bg-secondary">Inactivo</Badge>;
-  }
+  return e === "inactivo"
+    ? <Badge variant="secondary" className="hover:bg-secondary">Inactivo</Badge>
+    : <Badge className="bg-emerald-100 text-emerald-700 border-0 hover:bg-emerald-100">Activo</Badge>;
 };
 
 const eur = (n: number) => n.toLocaleString("es-ES", { style: "currency", currency: "EUR", minimumFractionDigits: 0 });

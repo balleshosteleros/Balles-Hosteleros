@@ -191,7 +191,7 @@ export async function upsertPuestoSalario(input: UpsertSalarioInput) {
       horario_semanal: input.horarioSemanal ?? [],
       observaciones: input.observaciones ?? null,
       objetivos: input.objetivos ?? [],
-      estado: input.estado ?? "borrador",
+      estado: input.estado ?? "activo",
     };
     const { data, error } = await supabase
       .from("puesto_salarios")
