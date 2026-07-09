@@ -351,7 +351,7 @@ function ListView({
                     variant="outline"
                     className={`text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0 mb-1.5 ${AREA_BADGE_CLASS[area]}`}
                   >
-                    {AREA_LABEL[area]} · {p.departamento}
+                    {p.departamento}
                   </Badge>
                   <h3 className="font-bold text-base uppercase tracking-wide mb-0.5 flex items-center gap-2">
                     {p.puesto}
