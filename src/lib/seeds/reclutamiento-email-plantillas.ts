@@ -6,7 +6,7 @@
  * (`reclutamiento-plantilla-estados.ts` → `defaultEmailNombre` por estado) y,
  * como override por vacante, en `vacantes.email_plantillas`. Estas plantillas
  * libres se asocian por defecto a los estados del proceso estándar (Selección ·
- * Onboarding · Offboarding · Descartado); las de offboarding nacen inactivas.
+ * Onboarding · Offboarding · Descartado).
  *
  * Cualquier cambio aquí se propaga a TODAS las empresas existentes vía
  * `syncSeedsToAllEmpresas()` (modo aditivo: solo crea los estados que falten,
@@ -259,9 +259,9 @@ Un saludo,
   },
 
   // ─────────────────────────────────── OFFBOARDING (salida) ──
-  // Correos de la fase de salida ordenada del trabajador. Nacen INACTIVOS
-  // (activa: false): informan según el estado, pero solo se envían cuando el
-  // usuario los revise y los active. Destinatario: el propio trabajador.
+  // Correos de la fase de salida ordenada del trabajador. Nacen ACTIVOS
+  // (activa: true): se envían al mover al candidato al estado correspondiente
+  // (con la confirmación del kanban). Destinatario: el propio trabajador.
 
   // ── 11. Preaviso ──
   {
@@ -279,7 +279,7 @@ Gracias por tu trabajo durante este tiempo.
 
 Un saludo,
 {{empresa_nombre}}`,
-    activa: false,
+    activa: true,
   },
 
   // ── 12. Baja contrato ──
@@ -294,7 +294,7 @@ En cuanto el proceso esté completado, te haremos llegar la documentación que c
 
 Un saludo,
 {{empresa_nombre}}`,
-    activa: false,
+    activa: true,
   },
 
   // ── 13. Entregas ──
@@ -313,7 +313,7 @@ Gracias por tu colaboración.
 
 Un saludo,
 {{empresa_nombre}}`,
-    activa: false,
+    activa: true,
   },
 
   // ── 14. Finiquito ──
@@ -330,7 +330,7 @@ Gracias por tu dedicación durante todo este tiempo.
 
 Un saludo,
 {{empresa_nombre}}`,
-    activa: false,
+    activa: true,
   },
 
   // ── 15. Ex-empleados ──
@@ -347,7 +347,7 @@ Te deseamos lo mejor en tu futuro personal y profesional.
 
 Un fuerte abrazo,
 {{empresa_nombre}}`,
-    activa: false,
+    activa: true,
   },
 
   // ───────────────────────────────────── ONBOARDING (PRP-070) ──

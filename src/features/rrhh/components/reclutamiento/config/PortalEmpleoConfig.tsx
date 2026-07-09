@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Copy, ExternalLink, Eye, Globe, Loader2, Palette, Share2 } from "lucide-react";
+import { Copy, ExternalLink, Eye, Globe, Loader2, Share2 } from "lucide-react";
 import { toast } from "sonner";
 import {
   getEmpleoUrlConfig,
@@ -227,26 +227,6 @@ export function PortalEmpleoConfig() {
           <Button variant="outline" size="sm" className="gap-1.5" asChild>
             <Link href="/ajustes?tab=integraciones">
               <ExternalLink className="h-4 w-4" /> Gestionar conexión en Ajustes
-            </Link>
-          </Button>
-        </CardContent>
-      </Card>
-
-      {/* ── Apariencia → vive en Imagen de Marca ─────────── */}
-      <Card>
-        <div className="px-5 py-3 border-b border-border bg-primary/5 flex items-center gap-2">
-          <Palette className="h-4 w-4 text-primary" />
-          <span className="text-sm font-semibold text-foreground">Logo y colores del portal</span>
-        </div>
-        <CardContent className="p-5 space-y-3">
-          <p className="text-sm text-muted-foreground">
-            El logotipo, la paleta de colores y las tipografías del portal de empleo se heredan
-            automáticamente de la identidad visual de tu empresa. Se editan en un único sitio:
-            <span className="text-foreground font-medium"> Ajustes → Imagen de marca</span>.
-          </p>
-          <Button variant="outline" size="sm" className="gap-1.5" asChild>
-            <Link href="/ajustes?tab=imagen-marca">
-              <ExternalLink className="h-4 w-4" /> Ir a Imagen de marca
             </Link>
           </Button>
         </CardContent>
