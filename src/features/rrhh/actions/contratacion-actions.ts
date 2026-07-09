@@ -23,6 +23,7 @@ import { friendlyError } from "@/shared/lib/friendly-errors";
 import { requireAdminUser, altaUsuarioEmpleado } from "@/features/rrhh/services/empleados-core";
 import { copiarDocumentacionCandidatoAEmpleado } from "@/features/rrhh/services/documentacion-candidato-a-empleado";
 import { enviarAltaGestoria } from "@/features/rrhh/actions/gestoria-actions";
+import { escribirCondicionesVigentes } from "@/features/rrhh/services/condiciones-puesto";
 import { emitirNotificacion } from "@/features/notificaciones/actions/notificaciones-actions";
 import { revalidatePath } from "next/cache";
 
@@ -181,24 +182,19 @@ async function guardarSnapshotCondiciones(
     dias_libres: number | null; vacaciones: string | null; horario_semanal: unknown;
   } | null,
 ) {
-  await admin.from("empleado_condiciones").upsert({
-    empleado_id: empleadoId,
-    empresa_id: empresaId,
-    puesto_id: puestoId,
-    puesto_nombre: puestoNombre,
-    nivel,
-    nomina_neta: cond?.nomina_neta ?? 0,
-    efectivo_extra: cond?.efectivo_extra ?? 0,
-    salario_neto: cond?.salario_neto ?? 0,
-    jornada_contrato: cond?.jornada_contrato ?? null,
-    horas_semanales: cond?.horas_semanales ?? null,
-    dias_libres: cond?.dias_libres ?? null,
-    vacaciones: cond?.vacaciones ?? null,
-    horario_semanal: cond?.horario_semanal ?? [],
-    primer_dia: primerDia,
-    tipo_contrato: tipoContrato,
-    updated_at: new Date().toISOString(),
-  }, { onConflict: "empleado_id" });
+  // `empleado_condiciones` es un HISTÓRICO versionado: al contratar se escribe la
+  // primera fila vigente (motivo 'alta'). Las promociones (cambio de puesto) cierran
+  // esta fila e insertan otra. Ver services/condiciones-puesto.ts.
+  await escribirCondicionesVigentes(admin, {
+    empresaId,
+    empleadoId,
+    puestoId,
+    puestoNombre,
+    primerDia,
+    tipoContrato,
+    cond: cond ? { ...cond, nivel } : null,
+    motivo: "alta",
+  });
 }
 
 export async function contratarCandidato(input: ContratarInput): Promise<ContratarResult> {

@@ -55,7 +55,7 @@ export interface ReclutamientoEmailPlantillaSeed {
    * localiza por aquí, NO por el nombre → el nombre es editable. Las plantillas
    * libres (asociadas a estados) no llevan clave.
    */
-  clave?: "gestoria_alta" | "gestoria_recordatorio" | "contrato_interno" | "reconocimiento_medico" | "contrato_oficial" | "prueba_aviso";
+  clave?: "gestoria_alta" | "gestoria_recordatorio" | "gestoria_cambio_puesto" | "contrato_interno" | "reconocimiento_medico" | "contrato_oficial" | "prueba_aviso";
   /** Destinatario por defecto (candidato / gestoria / rrhh). Editable después. */
   destino?: "candidato" | "gestoria" | "rrhh" | "personalizado";
 }
@@ -385,6 +385,23 @@ Gracias,
 Os recordamos que el contrato de {{candidato_nombre_completo}} sigue pendiente de subir.
 
 Mientras no subáis el contrato firmado, el trabajador no lo recibe y no puede firmarlo, lo que bloquea su alta. Os agradeceríamos que lo completéis cuanto antes.
+
+Gracias,
+{{empresa_nombre}}`,
+    activa: true,
+  },
+
+  // ── Cambio de puesto / promoción interna (aviso a la gestoría) ──
+  {
+    clave: "gestoria_cambio_puesto",
+    destino: "gestoria",
+    nombre: "Gestoría · cambio de puesto (promoción)",
+    asunto: "Cambio de puesto · {{candidato_nombre_completo}} · {{empresa_nombre}}",
+    cuerpo: `Hola,
+
+Os comunicamos que el siguiente trabajador cambia de puesto dentro de la empresa (promoción interna). Os enviamos los datos para que tramitéis la modificación de su contrato:
+
+{{gestoria_datos}}
 
 Gracias,
 {{empresa_nombre}}`,

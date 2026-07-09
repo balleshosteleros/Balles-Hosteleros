@@ -378,11 +378,16 @@ export async function enviarAltaGestoria(
       .maybeSingle();
     if (!emp) return { ok: false, error: "Empleado no encontrado" };
 
-    const { data: cond } = await supabase
+    // `empleado_condiciones` es un histórico: se lee la fila VIGENTE (vigente_hasta
+    // IS NULL). Fallback a la más reciente por si un registro antiguo no tuviera el
+    // campo relleno.
+    const { data: condRows } = await supabase
       .from("empleado_condiciones")
-      .select("nivel, salario_neto, jornada_contrato, horas_semanales, primer_dia, tipo_contrato, puesto_id")
+      .select("nivel, salario_neto, jornada_contrato, horas_semanales, primer_dia, tipo_contrato, puesto_id, vigente_hasta, vigente_desde")
       .eq("empleado_id", empleadoId)
-      .maybeSingle();
+      .order("vigente_desde", { ascending: false, nullsFirst: false })
+      .limit(20);
+    const cond = (condRows ?? []).find((r) => r.vigente_hasta == null) ?? condRows?.[0] ?? null;
 
     let convenio = "", grupo = "", epigrafe = "";
     if (cond?.puesto_id) {
@@ -530,5 +535,162 @@ export async function enviarAltaGestoria(
   } catch (err) {
     console.error("[rrhh] enviarAltaGestoria:", err);
     return { ok: false, error: "No se pudo enviar el alta a la gestoría" };
+  }
+}
+
+/**
+ * Avisa a la GESTORÍA de un CAMBIO DE PUESTO (promoción interna) de un empleado ya
+ * dado de alta. Reutiliza la ficha de «Datos del trabajador» del alta (con las
+ * condiciones VIGENTES tras la promoción) y la plantilla editable
+ * `gestoria_cambio_puesto`. A diferencia del alta, NO adjunta token de subida de
+ * contrato (no se crea un contrato nuevo, se modifica el existente).
+ *
+ * Devuelve `{ ok, destino }` para que el llamador registre a dónde se envió.
+ */
+export async function enviarCambioPuestoGestoria(
+  empleadoId: string,
+  cambio: { puestoAnterior: string | null; puestoNuevo: string; primerDia: string },
+): Promise<{ ok: boolean; error?: string; destino?: string | null }> {
+  try {
+    const admin = createAdminClient();
+
+    // Empresa del empleado (service role: sin sesión garantizada en el flujo).
+    const { data: emp } = await admin
+      .from("empleados")
+      .select("empresa_id, nombre, apellidos, dni_nie, email_personal, email_empresa, telefono, puesto, fecha_alta")
+      .eq("id", empleadoId)
+      .maybeSingle();
+    if (!emp) return { ok: false, error: "Empleado no encontrado" };
+    const empresaId = emp.empresa_id as string;
+
+    const cfgCampos = await (async () => {
+      const { data } = await admin
+        .from("reclutamiento_config")
+        .select("gestoria_campos")
+        .eq("empresa_id", empresaId)
+        .maybeSingle();
+      return normalizarGestoriaCampos(data?.gestoria_campos);
+    })();
+
+    // Condiciones VIGENTES tras la promoción (histórico: vigente_hasta IS NULL).
+    const { data: condRows } = await admin
+      .from("empleado_condiciones")
+      .select("nivel, salario_neto, jornada_contrato, horas_semanales, primer_dia, tipo_contrato, puesto_id, vigente_hasta, vigente_desde")
+      .eq("empleado_id", empleadoId)
+      .order("vigente_desde", { ascending: false, nullsFirst: false })
+      .limit(20);
+    const cond = (condRows ?? []).find((r) => r.vigente_hasta == null) ?? condRows?.[0] ?? null;
+
+    let convenio = "", grupo = "", epigrafe = "";
+    if (cond?.puesto_id) {
+      const { data: p } = await admin
+        .from("puestos")
+        .select("convenio_colectivo, grupo_categoria_prof, epigrafe_cotizacion")
+        .eq("id", cond.puesto_id)
+        .maybeSingle();
+      convenio = p?.convenio_colectivo ?? "";
+      grupo = p?.grupo_categoria_prof ?? "";
+      epigrafe = p?.epigrafe_cotizacion ?? "";
+    }
+
+    const empresaNombre = await admin.from("empresas").select("nombre").eq("id", empresaId).maybeSingle()
+      .then((r) => r.data?.nombre ?? "la empresa");
+    const nombre = `${emp.nombre} ${emp.apellidos ?? ""}`.trim();
+
+    const valores: Record<GestoriaCampoKey, { label: string; value: string | null | undefined }> = {
+      nombre: { label: "Nombre", value: nombre },
+      dni_nie: { label: "DNI/NIE", value: emp.dni_nie },
+      telefono: { label: "Teléfono", value: emp.telefono },
+      email: { label: "Email", value: emp.email_personal || emp.email_empresa },
+      puesto: { label: "Puesto", value: `${cambio.puestoNuevo}${cond?.nivel ? ` · Nivel ${cond.nivel}` : ""}` },
+      primer_dia: { label: "Primer día en el nuevo puesto", value: cambio.primerDia },
+      tipo_contrato: { label: "Tipo de contrato", value: cond?.tipo_contrato },
+      jornada: { label: "Jornada", value: cond?.jornada_contrato },
+      horas_semanales: { label: "Horas/semana", value: cond?.horas_semanales ? `${cond.horas_semanales}h` : "—" },
+      salario_neto: { label: "Salario neto", value: cond?.salario_neto != null ? eur(Number(cond.salario_neto)) : "—" },
+      convenio: { label: "Convenio", value: convenio },
+      grupo: { label: "Grupo/categoría", value: grupo },
+      epigrafe: { label: "Epígrafe/cotización", value: epigrafe },
+    };
+
+    const fila = (k: string, v: string | null | undefined) =>
+      `<tr>
+        <td style="padding:10px 16px;color:#64748b;font-size:13px;border-bottom:1px solid #eef2f7;white-space:nowrap;">${escapeHtml(k)}</td>
+        <td style="padding:10px 16px;color:#0f172a;font-weight:600;font-size:14px;border-bottom:1px solid #eef2f7;text-align:right;">${escapeHtml(v) || "—"}</td>
+      </tr>`;
+    // La fila «Puesto anterior» se antepone para que el cambio quede explícito.
+    const filaAnterior = cambio.puestoAnterior
+      ? fila("Puesto anterior", cambio.puestoAnterior)
+      : "";
+    const filasHtml = filaAnterior + GESTORIA_CAMPOS
+      .filter(({ key }) => cfgCampos[key])
+      .map(({ key }) => fila(valores[key].label, valores[key].value))
+      .join("");
+    const filasText = (cambio.puestoAnterior ? `Puesto anterior: ${cambio.puestoAnterior}\n` : "") +
+      GESTORIA_CAMPOS
+        .filter(({ key }) => cfgCampos[key])
+        .map(({ key }) => `${valores[key].label}: ${valores[key].value || "—"}`)
+        .join("\n");
+
+    const tablaHtml = `
+      <table role="presentation" width="100%" style="border-collapse:separate;border-spacing:0;margin:18px 0;max-width:480px;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+        <tr><td colspan="2" style="background:#f8fafc;padding:12px 16px;font-size:12px;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;color:#475569;border-bottom:1px solid #e2e8f0;">Datos del trabajador</td></tr>
+        ${filasHtml}
+      </table>`;
+
+    const { resolverPlantillaOnboarding, resolverDestinatario, cuerpoOnboardingAHtml, PLANTILLAS_ONBOARDING } =
+      await import("@/features/rrhh/services/email-plantillas/resolver");
+    const vars: Record<string, string> = {
+      candidato_nombre: emp.nombre ?? "",
+      candidato_nombre_completo: nombre,
+      empresa_nombre: empresaNombre,
+      gestoria_datos: "",
+    };
+    const tpl = await resolverPlantillaOnboarding(admin, empresaId, PLANTILLAS_ONBOARDING.gestoriaCambioPuesto, vars);
+
+    const emailContacto = emp.email_empresa || emp.email_personal || null;
+    const dst = tpl
+      ? await resolverDestinatario(admin, empresaId, tpl.destino, tpl.destinoEmail, emailContacto)
+      : await resolverDestinatario(admin, empresaId, "departamento", "correoGestoria", emailContacto);
+    if (!dst.to) {
+      return { ok: false, error: "Configura el «Correo gestoría» en Ajustes → Empresa → Correos electrónicos." };
+    }
+    const to = [dst.to, dst.cc].filter(Boolean).join(", ");
+
+    let subject: string;
+    let html: string;
+    let text: string;
+    if (tpl) {
+      subject = tpl.asunto;
+      const partes = tpl.cuerpo.split("{{gestoria_datos}}");
+      const cuerpoHtml = partes.length > 1
+        ? partes.map((p) => cuerpoOnboardingAHtml(p)).join(tablaHtml)
+        : `${cuerpoOnboardingAHtml(tpl.cuerpo)}${tablaHtml}`;
+      html = cuerpoHtml;
+      text = tpl.cuerpo.replace("{{gestoria_datos}}", `\n${filasText}`);
+    } else {
+      subject = `Cambio de puesto · ${nombre} · ${empresaNombre}`;
+      html = `
+      <p>El siguiente trabajador cambia de puesto dentro de la empresa (promoción interna):</p>
+      ${tablaHtml}
+      <p style="color:#888;font-size:12px">Enviado automáticamente desde el sistema de ${empresaNombre}.</p>`;
+      text = `Cambio de puesto\n${filasText}`;
+    }
+
+    const res = await sendEmail({ to, subject, html, text, empresaId });
+    if (!res.ok) return { ok: false, error: "No se pudo enviar el email (revisa el SMTP)." };
+
+    // Registrar el email en la actividad del empleado.
+    const { registrarEmailEnHistorial } = await import(
+      "@/features/rrhh/services/registrar-email-historial"
+    );
+    await registrarEmailEnHistorial(admin, {
+      empresaId, empleadoId, asunto: subject, html: res.ok ? res.html : html,
+    });
+
+    return { ok: true, destino: dst.to };
+  } catch (err) {
+    console.error("[rrhh] enviarCambioPuestoGestoria:", err);
+    return { ok: false, error: "No se pudo avisar a la gestoría del cambio de puesto" };
   }
 }

@@ -44,7 +44,7 @@ import {
   Search, MoreHorizontal, MapPin, Clock, CalendarDays,
   FileText, Users, Send, ArrowLeft, User, Phone, Mail, Tag, Kanban, List,
   Pencil, Utensils, Building2, Settings, Check,
-  GripVertical,
+  GripVertical, TrendingUp,
 } from "lucide-react";
 import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
 import {
@@ -58,6 +58,7 @@ import { ReclutamientoConfigView } from "@/features/rrhh/components/reclutamient
 import { CandidatosRealesTab } from "@/features/rrhh/components/reclutamiento/CandidatosRealesTab";
 import { OfertaFormDialog } from "@/features/rrhh/components/reclutamiento/OfertaFormDialog";
 import { CandidatoDetailModal } from "@/features/rrhh/components/reclutamiento/CandidatoDetailModal";
+import { PromocionInternaDialog } from "@/features/rrhh/components/reclutamiento/PromocionInternaDialog";
 import { FunnelMetrics } from "@/features/rrhh/components/reclutamiento/FunnelMetrics";
 import {
   DropdownMenu,
@@ -515,6 +516,7 @@ export function ReclutamientoView() {
   const [areaFiltro, setAreaFiltro] = useState<"operativa" | "administrativa">("operativa");
   const [showConfig, setShowConfig] = useState(false);
   const [showCandidatos, setShowCandidatos] = useState(false);
+  const [showPromocion, setShowPromocion] = useState(false);
 
 
   const acceso = (v: Vacante, campo: string): unknown => {
@@ -726,14 +728,23 @@ export function ReclutamientoView() {
             orden={orden}
             onOrdenChange={setOrden}
             extraIzquierda={
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setShowCandidatos(true)}
-                className="gap-1.5"
-              >
-                <Users className="h-3.5 w-3.5" /> Candidatos
-              </Button>
+              <>
+                <Button
+                  size="sm"
+                  onClick={() => setShowPromocion(true)}
+                  className="gap-1.5 bg-blue-600 text-white hover:bg-blue-700"
+                >
+                  <TrendingUp className="h-3.5 w-3.5" /> Promoción interna
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowCandidatos(true)}
+                  className="gap-1.5"
+                >
+                  <Users className="h-3.5 w-3.5" /> Candidatos
+                </Button>
+              </>
             }
             extraDerecha={
               <Button
@@ -802,6 +813,13 @@ export function ReclutamientoView() {
         }}
         vacanteId={ofertaEditando?.id ?? null}
         onSaved={recargar}
+      />
+
+      {/* ── Dialog promoción interna (empleado cambia de puesto) ── */}
+      <PromocionInternaDialog
+        open={showPromocion}
+        onOpenChange={setShowPromocion}
+        onDone={recargar}
       />
     </div>
   );

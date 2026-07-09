@@ -210,6 +210,46 @@ export async function moverCandidatoFase(
       }
     }
 
+    // Offboarding cerrado: al pasar a EX-EMPLEADO, el empleado queda Inactivo y
+    // su usuario pierde el acceso (el trigger empleados_sync_estado_acceso pone
+    // usuarios.estado_acceso = 'Inactivo' → login bloqueado). La baja también
+    // recorta su horario futuro (setEmpleadoEstado → recortarHorarioFuturoPorBaja).
+    // Fecha de baja: la que ya tenga el empleado, o el último día de su solicitud
+    // de baja de contrato, o hoy como último recurso.
+    if (estado === "ex_empleado" && cand?.estado !== "ex_empleado" && cand?.empleado_id) {
+      try {
+        const empleadoId = cand.empleado_id as string;
+        const { data: emp } = await supabase
+          .from("empleados")
+          .select("id, user_id, fecha_baja")
+          .eq("id", empleadoId)
+          .maybeSingle();
+
+        let fechaBaja = (emp?.fecha_baja as string | null) ?? null;
+        if (!fechaBaja && emp?.user_id) {
+          const { data: sol } = await supabase
+            .from("solicitudes_personal")
+            .select("fecha_fin")
+            .eq("empresa_id", empresaId)
+            .eq("user_id", emp.user_id as string)
+            .eq("subtipo", "baja_contrato")
+            .not("fecha_fin", "is", null)
+            .order("fecha_fin", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          fechaBaja = (sol?.fecha_fin as string | null) ?? null;
+        }
+        if (!fechaBaja) fechaBaja = ahora.slice(0, 10);
+
+        const { setEmpleadoEstado } = await import(
+          "@/features/rrhh/actions/empleados-actions"
+        );
+        await setEmpleadoEstado({ id: empleadoId, estado: "Inactivo", fechaBaja });
+      } catch (e) {
+        console.error("[candidatos] baja al pasar a ex_empleado:", e);
+      }
+    }
+
     // Registra la actividad (apartado "Actividad" de la ficha): quién, cuándo y
     // de qué estado a cuál. El flag email_enviado lo marca después el envío del
     // correo de fase, si lo hubo. No bloquea el movimiento si fallara.

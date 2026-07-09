@@ -598,6 +598,28 @@ export async function setEmpleadoEstado(input: {
 
     const { error } = await supabase.from("empleados").update(patch).eq("id", input.id);
     if (error) throw error;
+
+    // Baja efectiva: recorta el horario futuro (turnos/patrones ilimitados o que
+    // terminarían después de la baja) a la fecha de baja, y limpia turnos sueltos
+    // posteriores. No bloqueamos la baja si el recorte falla.
+    if (input.estado !== "Activo" && input.fechaBaja) {
+      try {
+        const { recortarHorarioFuturoPorBaja } = await import(
+          "@/features/rrhh/services/baja-horario"
+        );
+        await recortarHorarioFuturoPorBaja(supabase, {
+          empleadoId: input.id,
+          fechaBaja: input.fechaBaja,
+        });
+      } catch (e) {
+        console.error(
+          "[rrhh] setEmpleadoEstado → recorte horario:",
+          e instanceof Error ? e.message : e,
+        );
+      }
+      revalidatePath("/rrhh/horarios");
+    }
+
     revalidatePath("/rrhh/empleados");
     revalidatePath(`/rrhh/empleados/${input.id}`);
     return { ok: true };

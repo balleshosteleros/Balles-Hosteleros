@@ -12,6 +12,7 @@
 export const CLAVES_ONBOARDING = {
   gestoriaAlta: "gestoria_alta",
   gestoriaRecordatorio: "gestoria_recordatorio",
+  gestoriaCambioPuesto: "gestoria_cambio_puesto",
   contratoInterno: "contrato_interno",
   reconocimientoMedico: "reconocimiento_medico",
   contratoOficial: "contrato_oficial",
@@ -25,6 +26,7 @@ export type ClaveOnboarding =
 export const NOMBRES_ONBOARDING: Record<ClaveOnboarding, string> = {
   gestoria_alta: "Gestoría · alta de contrato",
   gestoria_recordatorio: "Gestoría · recordatorio de contrato",
+  gestoria_cambio_puesto: "Gestoría · cambio de puesto (promoción)",
   contrato_interno: "Contrato interno (a firmar)",
   reconocimiento_medico: "Reconocimiento médico (a firmar)",
   contrato_oficial: "Contrato oficial (a firmar)",
@@ -152,6 +154,7 @@ export const DESTINO_DEFAULT_POR_CLAVE: Record<
 > = {
   gestoria_alta: { destino: "departamento", destinoEmail: "correoGestoria" },
   gestoria_recordatorio: { destino: "departamento", destinoEmail: "correoGestoria" },
+  gestoria_cambio_puesto: { destino: "departamento", destinoEmail: "correoGestoria" },
   contrato_interno: { destino: "candidato", destinoEmail: null },
   reconocimiento_medico: { destino: "candidato", destinoEmail: null },
   contrato_oficial: { destino: "candidato", destinoEmail: null },
