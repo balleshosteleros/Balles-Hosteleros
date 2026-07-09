@@ -28,7 +28,7 @@ import {
   ArrowLeft, Mail, MailCheck,
   Send, X, UsersRound, CheckCircle2,
   MinusCircle, XCircle, Star, CalendarDays, Eye, FileText,
-  Building2, UserCog, User,
+  Building2, UserCog, User, AlertTriangle,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -448,26 +448,29 @@ function EmailConfirmDialog({
   candidato: Candidato | null; estadoNuevo: EstadoReclutamiento | null;
   onConfirm: (enviarEmail: boolean) => void;
 }) {
-  // Plantilla asociada al estado destino de ESTE candidato (resuelta en servidor
-  // vía su vacante → plantilla de estados / override por vacante).
-  // undefined = cargando · null = sin email asociado a este estado.
-  const [tpl, setTpl] = useState<{ asunto: string; cuerpo: string; activa: boolean } | null | undefined>(undefined);
+  // Plantillas LIBRES asignadas al estado destino (modelo global: estado_key). Un
+  // estado puede tener VARIAS → se listan todas y se envían todas las activas.
+  // undefined = cargando · [] = sin email asociado a este estado.
+  const [tpls, setTpls] = useState<
+    { id: string; asunto: string; cuerpo: string; activa: boolean }[] | undefined
+  >(undefined);
   useEffect(() => {
     if (!open || !estadoNuevo || !candidato) return;
     let cancel = false;
-    setTpl(undefined);
+    setTpls(undefined);
     previewReclutamientoFaseEmail(candidato.id, estadoNuevo)
-      .then((res) => { if (!cancel) setTpl(res); })
-      .catch(() => { if (!cancel) setTpl(null); });
+      .then((res) => { if (!cancel) setTpls(res); })
+      .catch(() => { if (!cancel) setTpls([]); });
     return () => {
       cancel = true;
     };
   }, [open, estadoNuevo, candidato]);
 
   if (!candidato || !estadoNuevo) return null;
-  const cargando = tpl === undefined;
-  const tieneEmail = !!tpl;
-  const emailActiva = !!tpl?.activa;
+  const cargando = tpls === undefined;
+  const activas = (tpls ?? []).filter((t) => t.activa);
+  const tieneEmail = (tpls ?? []).length > 0;
+  const emailActiva = activas.length > 0;
   const faseAnterior = getFasePrincipal(candidato.fase);
   const faseNueva = getFasePrincipal(estadoNuevo);
 
@@ -503,34 +506,40 @@ function EmailConfirmDialog({
           <p className="text-xs text-muted-foreground">Comprobando la plantilla asociada…</p>
         )}
 
-        {!cargando && tieneEmail && emailActiva && tpl && (
-          <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-2">
-            <p className="text-xs font-semibold text-foreground flex items-center gap-1.5">
-              <Mail className="h-3.5 w-3.5" /> Previsualización del email
-            </p>
-            <p className="text-xs text-muted-foreground"><span className="font-medium">Para:</span> {candidato.email}</p>
-            <p className="text-xs text-muted-foreground"><span className="font-medium">Asunto:</span> {tpl.asunto}</p>
-            {/* Asunto/cuerpo llegan YA sustituidos con los datos reales desde el
-                servidor (previewReclutamientoFaseEmail), así que la previa coincide
-                con el correo que recibirá el candidato. El cuerpo hace scroll por
-                dentro si es largo: así la caja siempre mide lo mismo. */}
-            <p className="text-xs text-muted-foreground leading-relaxed mt-1 whitespace-pre-wrap max-h-[40vh] overflow-y-auto pr-1">
-              {parsearEnlacesCuerpo(tpl.cuerpo).map((seg, i) =>
-                seg.type === "link" ? (
-                  <a key={i} href={seg.href} target="_blank" rel="noreferrer" className="text-blue-600 underline">
-                    {seg.text}
-                  </a>
-                ) : (
-                  <span key={i}>{seg.value}</span>
-                ),
-              )}
-            </p>
+        {!cargando && emailActiva && (
+          <div className="space-y-2 max-h-[45vh] overflow-y-auto pr-1">
+            {activas.length > 1 && (
+              <p className="text-xs text-muted-foreground">
+                Este estado envía <strong>{activas.length} correos</strong> al candidato:
+              </p>
+            )}
+            {activas.map((t) => (
+              <div key={t.id} className="rounded-lg border border-border bg-muted/30 p-3 space-y-2">
+                <p className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                  <Mail className="h-3.5 w-3.5" /> {t.asunto}
+                </p>
+                <p className="text-xs text-muted-foreground"><span className="font-medium">Para:</span> {candidato.email}</p>
+                {/* Asunto/cuerpo llegan YA sustituidos con los datos reales desde
+                    el servidor, así que la previa coincide con lo que recibirá. */}
+                <p className="text-xs text-muted-foreground leading-relaxed mt-1 whitespace-pre-wrap">
+                  {parsearEnlacesCuerpo(t.cuerpo).map((seg, i) =>
+                    seg.type === "link" ? (
+                      <a key={i} href={seg.href} target="_blank" rel="noreferrer" className="text-blue-600 underline">
+                        {seg.text}
+                      </a>
+                    ) : (
+                      <span key={i}>{seg.value}</span>
+                    ),
+                  )}
+                </p>
+              </div>
+            ))}
           </div>
         )}
 
         {!cargando && tieneEmail && !emailActiva && (
           <div className="rounded-lg border border-border bg-amber-50 p-3">
-            <p className="text-xs text-amber-700">La plantilla asociada a este estado está desactivada. No se enviará email automático.</p>
+            <p className="text-xs text-amber-700">Las plantillas asociadas a este estado están desactivadas. No se enviará email automático.</p>
           </div>
         )}
 
@@ -541,7 +550,9 @@ function EmailConfirmDialog({
         )}
 
         <p className="text-sm text-foreground">
-          ¿Quieres enviar un email automático al candidato informándole del cambio?
+          {activas.length > 1
+            ? "¿Quieres enviar estos correos al candidato al mover?"
+            : "¿Quieres enviar un email automático al candidato informándole del cambio?"}
         </p>
         </div>
 
@@ -615,6 +626,9 @@ export function KanbanPipeline({ vacante, vacantes = [], onBack, onUpdateCandida
     candidato: Candidato;
     estadoNuevo: EstadoReclutamiento;
   } | null>(null);
+  // Confirmación al pasar a EX-EMPLEADO: avisa de que el empleado quedará Inactivo
+  // hoy y su usuario dejará de funcionar. Sin aceptar aquí, NO se mueve.
+  const [exEmpleadoConfirm, setExEmpleadoConfirm] = useState<Candidato | null>(null);
 
   const handleDragStart = useCallback((_e: React.DragEvent, c: Candidato) => {
     draggedCandidato.current = c;
@@ -702,6 +716,21 @@ export function KanbanPipeline({ vacante, vacantes = [], onBack, onUpdateCandida
       setIniciarContratacionCand(c);
       return;
     }
+    // Entrada en «Ex-empleados»: SOLO para quienes fueron empleados reales (tienen
+    // empleado vinculado). Un candidato que nunca llegó a empleado no puede pasar
+    // a ex-empleado. Y antes de mover, se confirma que quedará Inactivo hoy y que
+    // su usuario dejará de funcionar (no es un simple move).
+    if (estadoDestino === "ex_empleado" && c.fase !== "ex_empleado") {
+      if (!c.empleadoId) {
+        toast.error(
+          `${c.nombre} ${c.apellidos} no puede pasar a Ex-empleados`,
+          { description: "Solo pueden pasar a Ex-empleados quienes fueron empleados (vienen de la casilla «Empleado»)." },
+        );
+        return;
+      }
+      setExEmpleadoConfirm(c);
+      return;
+    }
     // Movimiento libre: cualquier estado/fase, hacia delante o hacia atrás.
     // Emails automáticos al cambiar de fase. Comportamiento SEGURO por defecto:
     // si la config aún no ha cargado (config === null) o no está definida, se
@@ -726,6 +755,17 @@ export function KanbanPipeline({ vacante, vacantes = [], onBack, onUpdateCandida
     setEmailConfirm(null);
     void performMove(candidato, estadoNuevo, enviarEmail);
   }, [emailConfirm, performMove]);
+
+  // Confirmada la baja definitiva (Ex-empleados): mueve al candidato. La server
+  // action moverCandidatoFase marca al empleado Inactivo (hoy) y desactiva su
+  // usuario. El email de fase se decide igual que el resto de movimientos.
+  const handleConfirmExEmpleado = useCallback(() => {
+    const c = exEmpleadoConfirm;
+    setExEmpleadoConfirm(null);
+    if (!c) return;
+    const enviarEmail = !(config && config.emails_auto_cambio_fase === false);
+    void performMove(c, "ex_empleado", enviarEmail);
+  }, [exEmpleadoConfirm, config, performMove]);
 
   return (
     <div className="flex flex-col h-full">
@@ -826,6 +866,37 @@ export function KanbanPipeline({ vacante, vacantes = [], onBack, onUpdateCandida
         estadoNuevo={emailConfirm?.estadoNuevo ?? null}
         onConfirm={handleConfirmMove}
       />
+
+      {/* Confirmación al pasar a EX-EMPLEADOS: es la baja definitiva. */}
+      <Dialog open={!!exEmpleadoConfirm} onOpenChange={(o) => !o && setExEmpleadoConfirm(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-destructive">
+              <AlertTriangle className="h-5 w-5" /> Pasar a Ex-empleados
+            </DialogTitle>
+            <DialogDescription>
+              {exEmpleadoConfirm
+                ? `Vas a marcar como ex-empleado a ${exEmpleadoConfirm.nombre} ${exEmpleadoConfirm.apellidos ?? ""}.`.trim()
+                : ""}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+            <p>Al aceptar, este empleado:</p>
+            <ul className="mt-1.5 list-disc pl-5 space-y-1">
+              <li>Quedará marcado como <strong>Inactivo hoy</strong> (con fecha de baja de hoy).</li>
+              <li>Su <strong>usuario dejará de funcionar</strong>: no podrá volver a iniciar sesión.</li>
+            </ul>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setExEmpleadoConfirm(null)}>
+              Cancelar
+            </Button>
+            <Button variant="destructive" onClick={handleConfirmExEmpleado}>
+              Aceptar y dar de baja
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -24,8 +24,10 @@ import {
 import {
   GESTORIA_CAMPOS,
   normalizarGestoriaCampos,
+  ETIQUETA_TIPO_BAJA,
   type GestoriaCampoKey,
   type GestoriaCamposConfig,
+  type TipoBajaContrato,
 } from "@/features/rrhh/data/campos-gestoria";
 
 async function getCtx() {
@@ -684,5 +686,169 @@ export async function enviarCambioPuestoGestoria(
   } catch (err) {
     console.error("[rrhh] enviarCambioPuestoGestoria:", err);
     return { ok: false, error: "No se pudo avisar a la gestoría del cambio de puesto" };
+  }
+}
+
+/**
+ * Avisa a la GESTORÍA de la BAJA de un trabajador (offboarding / baja voluntaria).
+ * Muestra una ficha PROPIA de la baja (NO comparte los campos configurables del
+ * alta): a la gestoría solo le hacen falta los datos identificativos + las fechas
+ * de la baja. En concreto se envía:
+ *   · Último día de trabajo (fecha efectiva que el empleado indicó al solicitar).
+ *   · Día oficial de la baja = último día + 1 (la baja en Seguridad Social es el
+ *     día siguiente al último trabajado).
+ *   · Motivo (si lo hay).
+ *   · Nombre, DNI/NIE, teléfono, email, puesto (SIN nivel), tipo de contrato y
+ *     convenio. NO se envían nivel, primer día, jornada, horas ni salario.
+ *
+ * Usa la plantilla editable `gestoria_baja` (destino gestoría por defecto). NO
+ * adjunta token de subida de contrato (no se crea un contrato nuevo).
+ *
+ * `ultimoDiaIso` debe llegar en formato ISO `YYYY-MM-DD`: aquí se formatea para
+ * mostrar y se calcula el día oficial de la baja (+1). Devuelve `{ ok, destino }`.
+ */
+export async function enviarBajaGestoria(
+  empleadoId: string,
+  baja: { ultimoDiaIso: string; tipoBaja: TipoBajaContrato; motivo?: string | null },
+): Promise<{ ok: boolean; error?: string; destino?: string | null }> {
+  try {
+    const admin = createAdminClient();
+
+    // Fechas de la baja. Trabajamos en UTC puro (fechas «de calendario», sin hora)
+    // para que el +1 día no dependa de la zona horaria. Formato de salida dd/mm/aaaa.
+    const fmt = (iso: string): string => {
+      const [y, m, d] = iso.split("-");
+      return y && m && d ? `${d}/${m}/${y}` : iso;
+    };
+    const sumarUnDia = (iso: string): string => {
+      const t = new Date(`${iso}T00:00:00Z`);
+      if (Number.isNaN(t.getTime())) return iso;
+      t.setUTCDate(t.getUTCDate() + 1);
+      return t.toISOString().slice(0, 10);
+    };
+    const ultimoDiaTrabajo = fmt(baja.ultimoDiaIso);
+    const diaOficialBaja = fmt(sumarUnDia(baja.ultimoDiaIso));
+    const tipoBajaLabel = ETIQUETA_TIPO_BAJA[baja.tipoBaja] ?? ETIQUETA_TIPO_BAJA.otras;
+
+    const { data: emp } = await admin
+      .from("empleados")
+      .select("empresa_id, nombre, apellidos, dni_nie, email_personal, email_empresa, telefono, puesto, fecha_alta")
+      .eq("id", empleadoId)
+      .maybeSingle();
+    if (!emp) return { ok: false, error: "Empleado no encontrado" };
+    const empresaId = emp.empresa_id as string;
+
+    // Condiciones VIGENTES del trabajador (histórico: vigente_hasta IS NULL). Solo
+    // se necesitan el tipo de contrato y el puesto (para el convenio).
+    const { data: condRows } = await admin
+      .from("empleado_condiciones")
+      .select("tipo_contrato, puesto_id, vigente_hasta, vigente_desde")
+      .eq("empleado_id", empleadoId)
+      .order("vigente_desde", { ascending: false, nullsFirst: false })
+      .limit(20);
+    const cond = (condRows ?? []).find((r) => r.vigente_hasta == null) ?? condRows?.[0] ?? null;
+
+    let convenio = "";
+    if (cond?.puesto_id) {
+      const { data: p } = await admin
+        .from("puestos")
+        .select("convenio_colectivo")
+        .eq("id", cond.puesto_id)
+        .maybeSingle();
+      convenio = p?.convenio_colectivo ?? "";
+    }
+
+    const empresaNombre = await admin.from("empresas").select("nombre").eq("id", empresaId).maybeSingle()
+      .then((r) => r.data?.nombre ?? "la empresa");
+    const nombre = `${emp.nombre} ${emp.apellidos ?? ""}`.trim();
+
+    const fila = (k: string, v: string | null | undefined) =>
+      `<tr>
+        <td style="padding:10px 16px;color:#64748b;font-size:13px;border-bottom:1px solid #eef2f7;white-space:nowrap;">${escapeHtml(k)}</td>
+        <td style="padding:10px 16px;color:#0f172a;font-weight:600;font-size:14px;border-bottom:1px solid #eef2f7;text-align:right;">${escapeHtml(v) || "—"}</td>
+      </tr>`;
+
+    // Ficha PROPIA de la baja: fechas de la baja arriba (dato clave para la
+    // gestoría) y luego los datos identificativos. Sin nivel/primer día/jornada/
+    // horas/salario (no se envían en la baja).
+    const camposBaja: Array<{ label: string; value: string | null | undefined }> = [
+      { label: "Tipo de baja", value: tipoBajaLabel },
+      { label: "Último día de trabajo", value: ultimoDiaTrabajo },
+      { label: "Día oficial de la baja", value: diaOficialBaja },
+      ...(baja.motivo ? [{ label: "Motivo", value: baja.motivo }] : []),
+      { label: "Nombre", value: nombre },
+      { label: "DNI/NIE", value: emp.dni_nie },
+      { label: "Teléfono", value: emp.telefono },
+      { label: "Email", value: emp.email_personal || emp.email_empresa },
+      { label: "Puesto", value: emp.puesto },
+      { label: "Tipo de contrato", value: cond?.tipo_contrato },
+      { label: "Convenio", value: convenio },
+    ];
+    const filasHtml = camposBaja.map((c) => fila(c.label, c.value)).join("");
+    const filasText = camposBaja.map((c) => `${c.label}: ${c.value || "—"}`).join("\n");
+
+    const tablaHtml = `
+      <table role="presentation" width="100%" style="border-collapse:separate;border-spacing:0;margin:18px 0;max-width:480px;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+        <tr><td colspan="2" style="background:#f8fafc;padding:12px 16px;font-size:12px;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;color:#475569;border-bottom:1px solid #e2e8f0;">Datos de la baja</td></tr>
+        ${filasHtml}
+      </table>`;
+
+    const { resolverPlantillaOnboarding, resolverDestinatario, cuerpoOnboardingAHtml, PLANTILLAS_ONBOARDING } =
+      await import("@/features/rrhh/services/email-plantillas/resolver");
+    const vars: Record<string, string> = {
+      candidato_nombre: emp.nombre ?? "",
+      candidato_nombre_completo: nombre,
+      empresa_nombre: empresaNombre,
+      tipo_baja: tipoBajaLabel,
+      fecha_baja: ultimoDiaTrabajo,
+      fecha_baja_oficial: diaOficialBaja,
+      gestoria_datos: "",
+    };
+    const tpl = await resolverPlantillaOnboarding(admin, empresaId, PLANTILLAS_ONBOARDING.gestoriaBaja, vars);
+
+    const emailContacto = emp.email_empresa || emp.email_personal || null;
+    const dst = tpl
+      ? await resolverDestinatario(admin, empresaId, tpl.destino, tpl.destinoEmail, emailContacto)
+      : await resolverDestinatario(admin, empresaId, "departamento", "correoGestoria", emailContacto);
+    if (!dst.to) {
+      return { ok: false, error: "Configura el «Correo gestoría» en Ajustes → Empresa → Correos electrónicos." };
+    }
+    const to = [dst.to, dst.cc].filter(Boolean).join(", ");
+
+    let subject: string;
+    let html: string;
+    let text: string;
+    if (tpl) {
+      subject = tpl.asunto;
+      const partes = tpl.cuerpo.split("{{gestoria_datos}}");
+      const cuerpoHtml = partes.length > 1
+        ? partes.map((p) => cuerpoOnboardingAHtml(p)).join(tablaHtml)
+        : `${cuerpoOnboardingAHtml(tpl.cuerpo)}${tablaHtml}`;
+      html = cuerpoHtml;
+      text = tpl.cuerpo.replace("{{gestoria_datos}}", `\n${filasText}`);
+    } else {
+      subject = `Baja de trabajador · ${nombre} · ${empresaNombre}`;
+      html = `
+      <p>El siguiente trabajador causa baja (${escapeHtml(tipoBajaLabel)}) en la empresa. Su último día efectivo de trabajo será el ${escapeHtml(ultimoDiaTrabajo)} y la baja será oficial el ${escapeHtml(diaOficialBaja)}:</p>
+      ${tablaHtml}
+      <p style="color:#888;font-size:12px">Enviado automáticamente desde el sistema de ${empresaNombre}.</p>`;
+      text = `Baja de trabajador\n${filasText}`;
+    }
+
+    const res = await sendEmail({ to, subject, html, text, empresaId });
+    if (!res.ok) return { ok: false, error: "No se pudo enviar el email (revisa el SMTP)." };
+
+    // Registrar el email en la actividad del empleado.
+    const { registrarEmailEnHistorial } = await import(
+      "@/features/rrhh/services/registrar-email-historial"
+    );
+    await registrarEmailEnHistorial(admin, {
+      empresaId, empleadoId, asunto: subject, html: res.ok ? res.html : html,
+    });
+
+    return { ok: true, destino: dst.to };
+  } catch (err) {
+    console.error("[rrhh] enviarBajaGestoria:", err);
+    return { ok: false, error: "No se pudo avisar a la gestoría de la baja" };
   }
 }
