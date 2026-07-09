@@ -3,8 +3,39 @@
  * Fuente: PRP-030 + orden anual AEAT ejercicio 2026 (régimen general).
  */
 
-export type ModeloTipo = "303" | "130" | "111" | "115" | "390" | "347";
+export type ModeloTipo =
+  | "303"
+  | "130"
+  | "111"
+  | "115"
+  | "390"
+  | "347"
+  | "200"
+  | "190"
+  | "PYG"
+  | "BALANCE"
+  | "LIBRO_MAYOR";
 export type ModeloPeriodo = "Q1" | "Q2" | "Q3" | "Q4" | "ANUAL";
+
+/** Tipos que se generan/calculan dentro del software (tienen editor de casillas). */
+export const TIPOS_CALCULABLES: ModeloTipo[] = ["303", "130", "111", "115", "390", "347"];
+/** Tipos que solo son documento adjunto de la gestoría (sin editor). */
+export const TIPOS_SOLO_DOCUMENTO: ModeloTipo[] = ["200", "190", "PYG", "BALANCE", "LIBRO_MAYOR"];
+
+/** Etiqueta legible de cada tipo (los numéricos se muestran como "Modelo NNN"). */
+export const MODELO_LABEL: Record<ModeloTipo, string> = {
+  "303": "Modelo 303",
+  "130": "Modelo 130",
+  "111": "Modelo 111",
+  "115": "Modelo 115",
+  "390": "Modelo 390",
+  "347": "Modelo 347",
+  "200": "Modelo 200",
+  "190": "Modelo 190",
+  PYG: "Pérdidas y Ganancias",
+  BALANCE: "Balance de Situación",
+  LIBRO_MAYOR: "Libro Mayor",
+};
 export type ModeloEstado = "BORRADOR" | "REVISADO" | "PRESENTADO";
 export type TipoAporte = "base" | "iva" | "retencion" | "cuota";
 export type OrigenAsignacion = "ia" | "manual" | "regla";
@@ -157,6 +188,26 @@ export const PLAZOS_PRESENTACION: Record<
     Q4: null,
     ANUAL: { mes: 2, dia: 28 },
   },
+  // Modelo 200 (Impuesto de Sociedades): 25 de julio del año siguiente al ejercicio.
+  "200": {
+    Q1: null,
+    Q2: null,
+    Q3: null,
+    Q4: null,
+    ANUAL: { mes: 7, dia: 25 },
+  },
+  // Modelo 190 (resumen anual de retenciones IRPF): 31 de enero.
+  "190": {
+    Q1: null,
+    Q2: null,
+    Q3: null,
+    Q4: null,
+    ANUAL: { mes: 1, dia: 31 },
+  },
+  // Documentos contables (sin plazo AEAT propio): entran en el email anual junto al resto.
+  PYG: { Q1: null, Q2: null, Q3: null, Q4: null, ANUAL: null },
+  BALANCE: { Q1: null, Q2: null, Q3: null, Q4: null, ANUAL: null },
+  LIBRO_MAYOR: { Q1: null, Q2: null, Q3: null, Q4: null, ANUAL: null },
 };
 
 export const MODELO_PERIODOS_VALIDOS: Record<ModeloTipo, ModeloPeriodo[]> = {
@@ -166,12 +217,75 @@ export const MODELO_PERIODOS_VALIDOS: Record<ModeloTipo, ModeloPeriodo[]> = {
   "115": ["Q1", "Q2", "Q3", "Q4"],
   "390": ["ANUAL"],
   "347": ["ANUAL"],
+  "200": ["ANUAL"],
+  "190": ["ANUAL"],
+  PYG: ["ANUAL"],
+  BALANCE: ["ANUAL"],
+  LIBRO_MAYOR: ["ANUAL"],
 };
+
+export type GrupoModelo = "TRIMESTRALES" | "ANUALES";
+
+/** Un modelo es trimestral si tiene algún periodo Q válido; si solo aplica ANUAL, es anual. */
+export function grupoDeModelo(tipo: ModeloTipo): GrupoModelo {
+  return MODELO_PERIODOS_VALIDOS[tipo].includes("ANUAL") &&
+    !MODELO_PERIODOS_VALIDOS[tipo].some((p) => p !== "ANUAL")
+    ? "ANUALES"
+    : "TRIMESTRALES";
+}
+
+/**
+ * Combos por defecto que se aseguran al abrir un ejercicio.
+ * Trimestrales: 303/130/111/115 × Q1-Q4. Anuales: 390/347/200/190/PYG/BALANCE/LIBRO_MAYOR.
+ * PYG/BALANCE/LIBRO_MAYOR aparecen SIEMPRE como hueco anual aunque no haya PDF (PRP-072).
+ */
+export const COMBOS_MODELOS_DEFAULT: Array<{ tipo: ModeloTipo; periodo: ModeloPeriodo }> = [
+  ...(["303", "130", "111", "115"] as ModeloTipo[]).flatMap((tipo) =>
+    (["Q1", "Q2", "Q3", "Q4"] as ModeloPeriodo[]).map((periodo) => ({ tipo, periodo })),
+  ),
+  ...(["390", "347", "200", "190", "PYG", "BALANCE", "LIBRO_MAYOR"] as ModeloTipo[]).map(
+    (tipo) => ({ tipo, periodo: "ANUAL" as ModeloPeriodo }),
+  ),
+];
 
 export const UMBRAL_MODELO_347 = 3005.06;
 export const RETENCION_PROFESIONALES_PCT = 15;
 export const RETENCION_PROFESIONALES_REDUCIDA_PCT = 7;
 export const RETENCION_ALQUILERES_PCT = 19;
+
+/**
+ * Fecha límite de presentación de un modelo/periodo (o null si no aplica).
+ * El plazo de Q4 y ANUAL cae en el año siguiente al ejercicio.
+ */
+export function fechaLimitePresentacion(
+  tipo: ModeloTipo,
+  periodo: ModeloPeriodo,
+  ejercicio: number,
+): Date | null {
+  const plazo = PLAZOS_PRESENTACION[tipo][periodo];
+  if (!plazo) return null;
+  const añoPlazo = periodo === "Q4" || periodo === "ANUAL" ? ejercicio + 1 : ejercicio;
+  return new Date(añoPlazo, plazo.mes - 1, plazo.dia);
+}
+
+/**
+ * Fecha límite del GRUPO para un periodo dado (la más temprana entre los tipos
+ * del grupo que tengan plazo). Sirve para disparar el email a la gestoría.
+ */
+export function fechaLimiteGrupo(
+  grupo: GrupoModelo,
+  periodo: ModeloPeriodo,
+  ejercicio: number,
+): Date | null {
+  const tipos = (Object.keys(MODELO_PERIODOS_VALIDOS) as ModeloTipo[]).filter(
+    (t) => grupoDeModelo(t) === grupo && MODELO_PERIODOS_VALIDOS[t].includes(periodo),
+  );
+  const fechas = tipos
+    .map((t) => fechaLimitePresentacion(t, periodo, ejercicio))
+    .filter((d): d is Date => d !== null);
+  if (fechas.length === 0) return null;
+  return new Date(Math.min(...fechas.map((d) => d.getTime())));
+}
 
 export function periodoALabel(periodo: ModeloPeriodo, ejercicio: number): string {
   if (periodo === "ANUAL") return `${ejercicio}`;

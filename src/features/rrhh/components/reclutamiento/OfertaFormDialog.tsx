@@ -227,7 +227,7 @@ export function OfertaFormDialog({ open, onOpenChange, vacanteId, tituloPrefill,
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl">
+      <DialogContent className="sm:max-w-2xl max-h-[90vh] flex flex-col">
         <DialogHeader>
           <DialogTitle>{vacanteId ? "Editar oferta" : "Nueva oferta de empleo"}</DialogTitle>
           <DialogDescription>
@@ -236,11 +236,11 @@ export function OfertaFormDialog({ open, onOpenChange, vacanteId, tituloPrefill,
         </DialogHeader>
 
         {loadingExisting ? (
-          <div className="py-12 flex items-center justify-center text-muted-foreground">
+          <div className="py-12 flex-1 flex items-center justify-center text-muted-foreground">
             <Loader2 className="h-5 w-5 mr-2 animate-spin" /> Cargando…
           </div>
         ) : (
-          <div className="grid gap-4 py-2">
+          <div className="grid gap-4 py-2 flex-1 overflow-y-auto -mx-6 px-6">
             <div className="space-y-1.5">
               <Label htmlFor="titulo">Título *</Label>
               <Input
@@ -345,31 +345,6 @@ export function OfertaFormDialog({ open, onOpenChange, vacanteId, tituloPrefill,
                 rows={5}
                 placeholder="Tareas, requisitos, beneficios…"
               />
-            </div>
-
-            {/* Plantilla de estados (consecución del pipeline) */}
-            <div className="space-y-1.5">
-              <Label>Plantilla de estados</Label>
-              <Select
-                value={form.plantilla_estado_id}
-                onValueChange={(v) => setForm({ ...form, plantilla_estado_id: v })}
-              >
-                <SelectTrigger><SelectValue placeholder="Selecciona…" /></SelectTrigger>
-                <SelectContent>
-                  {plantillasEstado.length === 0 ? (
-                    <SelectItem value="__none__" disabled>Sin plantillas (créalas en Plantillas → Estados)</SelectItem>
-                  ) : (
-                    plantillasEstado.map((pe) => (
-                      <SelectItem key={pe.id} value={pe.id}>
-                        {pe.nombre}{pe.es_predeterminada ? " (predeterminada)" : ""}
-                      </SelectItem>
-                    ))
-                  )}
-                </SelectContent>
-              </Select>
-              <p className="text-[11px] text-muted-foreground">
-                Define la consecución de estados del proceso de selección de esta vacante.
-              </p>
             </div>
 
             {/* Email por estado: qué plantilla de email se envía al pasar a cada estado */}

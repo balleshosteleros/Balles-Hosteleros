@@ -1,2 +1,68 @@
 /Users/ivanballesteros/Balles Hosteleros/.dev-daemon/start.sh: line 9: lsof: command not found
 [browser] Image with src "/logo-balles.png" has "fill" but is missing "sizes" prop. Please add it to improve page performance. Read more: https://nextjs.org/docs/api-reference/next/image#sizes (file:///Users/ivanballesteros/Balles Hosteleros/.next/dev/static/chunks/node_modules_next_dist_115brz8._.js:2431:13)
+⚠ Failed to reload dynamic routes: Error: You cannot use different slug names for the same dynamic path ('id' !== 'token').
+    at ignore-listed frames
+Error: You cannot use different slug names for the same dynamic path ('token' !== 'id').
+    at ignore-listed frames
+⨯ unhandledRejection: Error: You cannot use different slug names for the same dynamic path ('token' !== 'id').
+    at ignore-listed frames
+⨯ unhandledRejection:  Error: You cannot use different slug names for the same dynamic path ('token' !== 'id').
+    at ignore-listed frames
+Error: You cannot use different slug names for the same dynamic path ('token' !== 'id').
+    at ignore-listed frames
+Error: You cannot use different slug names for the same dynamic path ('token' !== 'id').
+    at ignore-listed frames
+Error: You cannot use different slug names for the same dynamic path ('token' !== 'id').
+    at ignore-listed frames
+Error: You cannot use different slug names for the same dynamic path ('token' !== 'id').
+    at ignore-listed frames
+Error: You cannot use different slug names for the same dynamic path ('token' !== 'id').
+    at ignore-listed frames
+Error: You cannot use different slug names for the same dynamic path ('token' !== 'id').
+    at ignore-listed frames
+Error: You cannot use different slug names for the same dynamic path ('token' !== 'id').
+    at ignore-listed frames
+Error: You cannot use different slug names for the same dynamic path ('token' !== 'id').
+    at ignore-listed frames
+Error: You cannot use different slug names for the same dynamic path ('token' !== 'id').
+    at ignore-listed frames
+Error: You cannot use different slug names for the same dynamic path ('token' !== 'id').
+    at ignore-listed frames
+Error: You cannot use different slug names for the same dynamic path ('token' !== 'id').
+    at ignore-listed frames
+Error: You cannot use different slug names for the same dynamic path ('token' !== 'id').
+    at ignore-listed frames
+Error: You cannot use different slug names for the same dynamic path ('token' !== 'id').
+    at ignore-listed frames
+Error: You cannot use different slug names for the same dynamic path ('token' !== 'id').
+    at ignore-listed frames
+Error: You cannot use different slug names for the same dynamic path ('token' !== 'id').
+    at ignore-listed frames
+Error: You cannot use different slug names for the same dynamic path ('token' !== 'id').
+    at ignore-listed frames
+Error: You cannot use different slug names for the same dynamic path ('token' !== 'id').
+    at ignore-listed frames
+Error: You cannot use different slug names for the same dynamic path ('token' !== 'id').
+    at ignore-listed frames
+Error: You cannot use different slug names for the same dynamic path ('token' !== 'id').
+    at ignore-listed frames
+Error: You cannot use different slug names for the same dynamic path ('token' !== 'id').
+    at ignore-listed frames
+Error: You cannot use different slug names for the same dynamic path ('token' !== 'id').
+    at ignore-listed frames
+Error: You cannot use different slug names for the same dynamic path ('token' !== 'id').
+    at ignore-listed frames
+Error: You cannot use different slug names for the same dynamic path ('token' !== 'id').
+    at ignore-listed frames
+Error: You cannot use different slug names for the same dynamic path ('token' !== 'id').
+    at ignore-listed frames
+⚠ Failed to reload dynamic routes: Error: You cannot use different slug names for the same dynamic path ('id' !== 'token').
+    at ignore-listed frames
+Error: You cannot use different slug names for the same dynamic path ('token' !== 'id').
+    at ignore-listed frames
+⨯ unhandledRejection: Error: You cannot use different slug names for the same dynamic path ('token' !== 'id').
+    at ignore-listed frames
+⨯ unhandledRejection:  Error: You cannot use different slug names for the same dynamic path ('token' !== 'id').
+    at ignore-listed frames
+⚠ Failed to reload dynamic routes: Error: You cannot use different slug names for the same dynamic path ('id' !== 'token').
+    at ignore-listed frames

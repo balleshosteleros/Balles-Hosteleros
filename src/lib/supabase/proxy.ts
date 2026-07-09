@@ -22,6 +22,8 @@ const AUTH_PATHS = ['/', '/callback', '/auth/confirm', '/forgot-password', '/upd
 const PUBLIC_PREFIXES = ['/carta', '/__site', '/api/google/connect', '/empleo', '/api/empleo', '/documentacion', '/api/documentacion', '/firmar', '/inspectores', '/inspecciones/verificar', '/v', '/r', '/api/visita',
   // Subida de contrato por la gestoría externa (enlace tokenizado, sin cuenta).
   '/gestoria/contrato', '/api/gestoria/contrato',
+  // Subida de modelos fiscales por la gestoría (PRP-072, enlace tokenizado).
+  '/gestoria/modelos', '/api/gestoria/modelos',
   // Formación del candidato en fase «Formación» (aún sin cuenta): enlace
   // tokenizado /formacion/<token> que muestra el curso de su puesto.
   '/formacion']

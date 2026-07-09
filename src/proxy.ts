@@ -43,6 +43,7 @@ function modulosPermitidos(modulo: string): string[] {
 // firmado desde `/gestoria/contrato/<token>` sin entrar al sistema.
 const RUTAS_PUBLICAS_TOKENIZADAS = [
   '/gestoria/contrato/', // subida de contrato por la gestoría (token único)
+  '/gestoria/modelos/', // subida de modelos fiscales por la gestoría (PRP-072)
 ]
 
 function esRutaPublicaTokenizada(pathname: string): boolean {

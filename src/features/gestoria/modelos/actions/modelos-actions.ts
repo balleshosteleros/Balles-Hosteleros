@@ -9,7 +9,12 @@ import type {
   ModeloPeriodo,
   ModeloTipo,
 } from "../types/modelos";
-import { MODELO_PERIODOS_VALIDOS, periodoARangoFechas } from "../types/modelos";
+import {
+  MODELO_PERIODOS_VALIDOS,
+  periodoARangoFechas,
+  COMBOS_MODELOS_DEFAULT,
+} from "../types/modelos";
+import { getModelosConfig } from "./modelos-config-actions";
 import { calcular303 } from "../services/calculo-303";
 import { calcular130 } from "../services/calculo-130";
 import { calcular111 } from "../services/calculo-111";
@@ -122,26 +127,12 @@ export async function asegurarModelosDelPeriodo(
   ejercicio: number,
 ): Promise<{ ok: boolean; creados: number; error?: string }> {
   try {
-    const combos: Array<{ tipo: ModeloTipo; periodo: ModeloPeriodo }> = [
-      { tipo: "303", periodo: "Q1" },
-      { tipo: "303", periodo: "Q2" },
-      { tipo: "303", periodo: "Q3" },
-      { tipo: "303", periodo: "Q4" },
-      { tipo: "130", periodo: "Q1" },
-      { tipo: "130", periodo: "Q2" },
-      { tipo: "130", periodo: "Q3" },
-      { tipo: "130", periodo: "Q4" },
-      { tipo: "111", periodo: "Q1" },
-      { tipo: "111", periodo: "Q2" },
-      { tipo: "111", periodo: "Q3" },
-      { tipo: "111", periodo: "Q4" },
-      { tipo: "115", periodo: "Q1" },
-      { tipo: "115", periodo: "Q2" },
-      { tipo: "115", periodo: "Q3" },
-      { tipo: "115", periodo: "Q4" },
-      { tipo: "390", periodo: "ANUAL" },
-      { tipo: "347", periodo: "ANUAL" },
-    ];
+    // Solo se generan los tipos activos en la config de la empresa (por defecto, todos).
+    const cfg = await getModelosConfig();
+    const tiposActivos = cfg.ok ? cfg.data.tipos_activos : null;
+    const combos = COMBOS_MODELOS_DEFAULT.filter(
+      (c) => !tiposActivos || tiposActivos.includes(c.tipo),
+    );
     let creados = 0;
     for (const c of combos) {
       const { id } = await crearModeloSiNoExiste({ ...c, ejercicio });

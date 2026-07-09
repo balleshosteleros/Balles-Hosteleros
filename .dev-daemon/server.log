@@ -426,3 +426,604 @@
  GET /mis-departamentos 200 in 890ms (next.js: 5ms, proxy.ts: 839ms, application-code: 46ms)
  GET /mis-departamentos 200 in 509ms (next.js: 5ms, proxy.ts: 464ms, application-code: 40ms)
  GET /manifest.webmanifest 200 in 11ms (next.js: 2ms, proxy.ts: 4ms, application-code: 4ms)
+ POST /mis-departamentos 200 in 3.1s (next.js: 6ms, proxy.ts: 819ms, application-code: 2.3s)
+  └─ ƒ contarPendientesHoy() in 2261ms src/features/tareas/actions/tareas-actions.ts
+ POST /mis-departamentos 200 in 2.1s (next.js: 8ms, proxy.ts: 479ms, application-code: 1567ms)
+  └─ ƒ getTareasValidacionPendientes() in 1554ms src/features/mi-panel/actions/mi-panel-actions.ts
+ POST /mis-departamentos 200 in 2.3s (next.js: 6ms, proxy.ts: 592ms, application-code: 1673ms)
+  └─ ƒ listCanales("habana") in 1662ms src/features/comunicacion/actions/comunicacion-actions.ts
+ POST /mis-departamentos 200 in 1309ms (next.js: 5ms, proxy.ts: 591ms, application-code: 713ms)
+  └─ ƒ contarLlamadasPerdidasNoVistas(null) in 702ms src/features/llamadas-internas/actions/llamadas-actions.ts
+ POST /mis-departamentos 200 in 1354ms (next.js: 6ms, proxy.ts: 618ms, application-code: 730ms)
+  └─ ƒ contarContactosNuevos(7) in 718ms src/features/agenda/actions/contactos-actions.ts
+ POST /mis-departamentos 200 in 2.8s (next.js: 6ms, proxy.ts: 628ms, application-code: 2.2s)
+  └─ ƒ contarPendientesHoy() in 2185ms src/features/tareas/actions/tareas-actions.ts
+ POST /mis-departamentos 200 in 2.1s (next.js: 6ms, proxy.ts: 503ms, application-code: 1549ms)
+  └─ ƒ getTareasValidacionPendientes() in 1538ms src/features/mi-panel/actions/mi-panel-actions.ts
+ POST /mis-departamentos 200 in 2.2s (next.js: 6ms, proxy.ts: 646ms, application-code: 1532ms)
+  └─ ƒ listCanales("habana") in 1521ms src/features/comunicacion/actions/comunicacion-actions.ts
+ POST /mis-departamentos 200 in 1177ms (next.js: 4ms, proxy.ts: 466ms, application-code: 707ms)
+  └─ ƒ contarLlamadasPerdidasNoVistas(null) in 695ms src/features/llamadas-internas/actions/llamadas-actions.ts
+ POST /mis-departamentos 200 in 1428ms (next.js: 6ms, proxy.ts: 703ms, application-code: 718ms)
+  └─ ƒ contarContactosNuevos(7) in 706ms src/features/agenda/actions/contactos-actions.ts
+ POST /mis-departamentos 200 in 4.2s (next.js: 3ms, proxy.ts: 960ms, application-code: 3.2s)
+  └─ ƒ contarPendientesHoy() in 3215ms src/features/tareas/actions/tareas-actions.ts
+ POST /mis-departamentos 200 in 2.8s (next.js: 6ms, proxy.ts: 475ms, application-code: 2.3s)
+  └─ ƒ getTareasValidacionPendientes() in 2276ms src/features/mi-panel/actions/mi-panel-actions.ts
+ POST /mis-departamentos 200 in 2.6s (next.js: 9ms, proxy.ts: 568ms, application-code: 1977ms)
+  └─ ƒ listCanales("habana") in 1964ms src/features/comunicacion/actions/comunicacion-actions.ts
+ POST /mis-departamentos 200 in 1563ms (next.js: 7ms, proxy.ts: 484ms, application-code: 1072ms)
+  └─ ƒ contarLlamadasPerdidasNoVistas(null) in 1062ms src/features/llamadas-internas/actions/llamadas-actions.ts
+ POST /mis-departamentos 200 in 1299ms (next.js: 6ms, proxy.ts: 581ms, application-code: 712ms)
+  └─ ƒ contarContactosNuevos(7) in 701ms src/features/agenda/actions/contactos-actions.ts
+ POST /mis-departamentos 200 in 2.7s (next.js: 6ms, proxy.ts: 593ms, application-code: 2.1s)
+  └─ ƒ contarPendientesHoy() in 2120ms src/features/tareas/actions/tareas-actions.ts
+ POST /mis-departamentos 200 in 1975ms (next.js: 3ms, proxy.ts: 466ms, application-code: 1507ms)
+  └─ ƒ getTareasValidacionPendientes() in 1498ms src/features/mi-panel/actions/mi-panel-actions.ts
+ POST /mis-departamentos 200 in 2.1s (next.js: 6ms, proxy.ts: 566ms, application-code: 1540ms)
+  └─ ƒ listCanales("habana") in 1527ms src/features/comunicacion/actions/comunicacion-actions.ts
+ POST /mis-departamentos 200 in 1161ms (next.js: 8ms, proxy.ts: 456ms, application-code: 697ms)
+  └─ ƒ contarLlamadasPerdidasNoVistas(null) in 686ms src/features/llamadas-internas/actions/llamadas-actions.ts
+ POST /mis-departamentos 200 in 1337ms (next.js: 6ms, proxy.ts: 603ms, application-code: 728ms)
+  └─ ƒ contarContactosNuevos(7) in 717ms src/features/agenda/actions/contactos-actions.ts
+ POST /mis-departamentos 200 in 3.6s (next.js: 6ms, proxy.ts: 600ms, application-code: 3.0s)
+  └─ ƒ contarPendientesHoy() in 2947ms src/features/tareas/actions/tareas-actions.ts
+ POST /mis-departamentos 200 in 2.1s (next.js: 4ms, proxy.ts: 469ms, application-code: 1629ms)
+  └─ ƒ getTareasValidacionPendientes() in 1618ms src/features/mi-panel/actions/mi-panel-actions.ts
+ POST /mis-departamentos 200 in 2.2s (next.js: 5ms, proxy.ts: 600ms, application-code: 1610ms)
+  └─ ƒ listCanales("habana") in 1599ms src/features/comunicacion/actions/comunicacion-actions.ts
+ POST /mis-departamentos 200 in 1204ms (next.js: 4ms, proxy.ts: 481ms, application-code: 719ms)
+  └─ ƒ contarLlamadasPerdidasNoVistas(null) in 709ms src/features/llamadas-internas/actions/llamadas-actions.ts
+ POST /mis-departamentos 200 in 1378ms (next.js: 6ms, proxy.ts: 629ms, application-code: 743ms)
+  └─ ƒ contarContactosNuevos(7) in 732ms src/features/agenda/actions/contactos-actions.ts
+ POST /mis-departamentos 200 in 3.5s (next.js: 5ms, proxy.ts: 1055ms, application-code: 2.5s)
+  └─ ƒ contarPendientesHoy() in 2464ms src/features/tareas/actions/tareas-actions.ts
+ POST /mis-departamentos 200 in 2.1s (next.js: 6ms, proxy.ts: 461ms, application-code: 1610ms)
+  └─ ƒ getTareasValidacionPendientes() in 1595ms src/features/mi-panel/actions/mi-panel-actions.ts
+ POST /mis-departamentos 200 in 2.2s (next.js: 8ms, proxy.ts: 591ms, application-code: 1552ms)
+  └─ ƒ listCanales("habana") in 1541ms src/features/comunicacion/actions/comunicacion-actions.ts
+ POST /mis-departamentos 200 in 1217ms (next.js: 6ms, proxy.ts: 473ms, application-code: 738ms)
+  └─ ƒ contarLlamadasPerdidasNoVistas(null) in 727ms src/features/llamadas-internas/actions/llamadas-actions.ts
+ POST /mis-departamentos 200 in 1396ms (next.js: 6ms, proxy.ts: 646ms, application-code: 744ms)
+  └─ ƒ contarContactosNuevos(7) in 734ms src/features/agenda/actions/contactos-actions.ts
+ POST /mis-departamentos 200 in 3.0s (next.js: 5ms, proxy.ts: 727ms, application-code: 2.2s)
+  └─ ƒ contarPendientesHoy() in 2239ms src/features/tareas/actions/tareas-actions.ts
+ POST /mis-departamentos 200 in 2.9s (next.js: 5ms, proxy.ts: 526ms, application-code: 2.3s)
+  └─ ƒ getTareasValidacionPendientes() in 2335ms src/features/mi-panel/actions/mi-panel-actions.ts
+ POST /mis-departamentos 200 in 2.2s (next.js: 6ms, proxy.ts: 566ms, application-code: 1648ms)
+  └─ ƒ listCanales("habana") in 1637ms src/features/comunicacion/actions/comunicacion-actions.ts
+ POST /mis-departamentos 200 in 1275ms (next.js: 6ms, proxy.ts: 482ms, application-code: 788ms)
+  └─ ƒ contarLlamadasPerdidasNoVistas(null) in 773ms src/features/llamadas-internas/actions/llamadas-actions.ts
+ POST /mis-departamentos 200 in 1335ms (next.js: 5ms, proxy.ts: 593ms, application-code: 738ms)
+  └─ ƒ contarContactosNuevos(7) in 727ms src/features/agenda/actions/contactos-actions.ts
+ POST /mis-departamentos 200 in 2.7s (next.js: 5ms, proxy.ts: 596ms, application-code: 2.1s)
+  └─ ƒ contarPendientesHoy() in 2077ms src/features/tareas/actions/tareas-actions.ts
+ POST /mis-departamentos 200 in 2.0s (next.js: 5ms, proxy.ts: 455ms, application-code: 1555ms)
+  └─ ƒ getTareasValidacionPendientes() in 1543ms src/features/mi-panel/actions/mi-panel-actions.ts
+ POST /mis-departamentos 200 in 2.3s (next.js: 6ms, proxy.ts: 629ms, application-code: 1676ms)
+  └─ ƒ listCanales("habana") in 1666ms src/features/comunicacion/actions/comunicacion-actions.ts
+ POST /mis-departamentos 200 in 1971ms (next.js: 5ms, proxy.ts: 472ms, application-code: 1494ms)
+  └─ ƒ contarLlamadasPerdidasNoVistas(null) in 1482ms src/features/llamadas-internas/actions/llamadas-actions.ts
+ POST /mis-departamentos 200 in 2.1s (next.js: 8ms, proxy.ts: 1347ms, application-code: 741ms)
+  └─ ƒ contarContactosNuevos(7) in 729ms src/features/agenda/actions/contactos-actions.ts
+ POST /mis-departamentos 200 in 2.9s (next.js: 5ms, proxy.ts: 656ms, application-code: 2.2s)
+  └─ ƒ contarPendientesHoy() in 2194ms src/features/tareas/actions/tareas-actions.ts
+ POST /mis-departamentos 200 in 2.1s (next.js: 5ms, proxy.ts: 485ms, application-code: 1590ms)
+  └─ ƒ getTareasValidacionPendientes() in 1577ms src/features/mi-panel/actions/mi-panel-actions.ts
+ POST /mis-departamentos 200 in 2.5s (next.js: 4ms, proxy.ts: 628ms, application-code: 1882ms)
+  └─ ƒ listCanales("habana") in 1868ms src/features/comunicacion/actions/comunicacion-actions.ts
+ POST /mis-departamentos 200 in 1287ms (next.js: 4ms, proxy.ts: 522ms, application-code: 760ms)
+  └─ ƒ contarLlamadasPerdidasNoVistas(null) in 748ms src/features/llamadas-internas/actions/llamadas-actions.ts
+ POST /mis-departamentos 200 in 1351ms (next.js: 5ms, proxy.ts: 601ms, application-code: 745ms)
+  └─ ƒ contarContactosNuevos(7) in 733ms src/features/agenda/actions/contactos-actions.ts
+ POST /mis-departamentos 200 in 3.6s (next.js: 5ms, proxy.ts: 1053ms, application-code: 2.6s)
+  └─ ƒ contarPendientesHoy() in 2561ms src/features/tareas/actions/tareas-actions.ts
+ POST /mis-departamentos 200 in 2.2s (next.js: 4ms, proxy.ts: 500ms, application-code: 1660ms)
+  └─ ƒ getTareasValidacionPendientes() in 1649ms src/features/mi-panel/actions/mi-panel-actions.ts
+ POST /mis-departamentos 200 in 3.3s (next.js: 5ms, proxy.ts: 911ms, application-code: 2.4s)
+  └─ ƒ listCanales("habana") in 2347ms src/features/comunicacion/actions/comunicacion-actions.ts
+ POST /mis-departamentos 200 in 1552ms (next.js: 6ms, proxy.ts: 479ms, application-code: 1067ms)
+  └─ ƒ contarLlamadasPerdidasNoVistas(null) in 1056ms src/features/llamadas-internas/actions/llamadas-actions.ts
+ POST /mis-departamentos 200 in 1312ms (next.js: 5ms, proxy.ts: 587ms, application-code: 720ms)
+  └─ ƒ contarContactosNuevos(7) in 709ms src/features/agenda/actions/contactos-actions.ts
+ POST /mis-departamentos 200 in 2.8s (next.js: 5ms, proxy.ts: 615ms, application-code: 2.2s)
+  └─ ƒ contarPendientesHoy() in 2173ms src/features/tareas/actions/tareas-actions.ts
+ POST /mis-departamentos 200 in 2.0s (next.js: 6ms, proxy.ts: 478ms, application-code: 1520ms)
+  └─ ƒ getTareasValidacionPendientes() in 1509ms src/features/mi-panel/actions/mi-panel-actions.ts
+ POST /mis-departamentos 200 in 2.2s (next.js: 6ms, proxy.ts: 589ms, application-code: 1652ms)
+  └─ ƒ listCanales("habana") in 1641ms src/features/comunicacion/actions/comunicacion-actions.ts
+ POST /mis-departamentos 200 in 1281ms (next.js: 6ms, proxy.ts: 493ms, application-code: 782ms)
+  └─ ƒ contarLlamadasPerdidasNoVistas(null) in 771ms src/features/llamadas-internas/actions/llamadas-actions.ts
+ POST /mis-departamentos 200 in 1326ms (next.js: 5ms, proxy.ts: 601ms, application-code: 720ms)
+  └─ ƒ contarContactosNuevos(7) in 710ms src/features/agenda/actions/contactos-actions.ts
+ POST /mis-departamentos 200 in 2.8s (next.js: 7ms, proxy.ts: 678ms, application-code: 2.1s)
+  └─ ƒ contarPendientesHoy() in 2069ms src/features/tareas/actions/tareas-actions.ts
+ POST /mis-departamentos 200 in 2.1s (next.js: 6ms, proxy.ts: 461ms, application-code: 1680ms)
+  └─ ƒ getTareasValidacionPendientes() in 1667ms src/features/mi-panel/actions/mi-panel-actions.ts
+ POST /mis-departamentos 200 in 2.2s (next.js: 5ms, proxy.ts: 577ms, application-code: 1664ms)
+  └─ ƒ listCanales("habana") in 1651ms src/features/comunicacion/actions/comunicacion-actions.ts
+ POST /mis-departamentos 200 in 1192ms (next.js: 9ms, proxy.ts: 462ms, application-code: 722ms)
+  └─ ƒ contarLlamadasPerdidasNoVistas(null) in 712ms src/features/llamadas-internas/actions/llamadas-actions.ts
+ POST /mis-departamentos 200 in 1462ms (next.js: 6ms, proxy.ts: 712ms, application-code: 744ms)
+  └─ ƒ contarContactosNuevos(7) in 733ms src/features/agenda/actions/contactos-actions.ts
+ POST /mis-departamentos 200 in 3.2s (next.js: 4ms, proxy.ts: 613ms, application-code: 2.6s)
+  └─ ƒ contarPendientesHoy() in 2585ms src/features/tareas/actions/tareas-actions.ts
+ POST /mis-departamentos 200 in 1214ms (next.js: 4ms, proxy.ts: 461ms, application-code: 748ms)
+  └─ ƒ listMisNotificaciones() in 741ms src/features/notificaciones/actions/notificaciones-actions.ts
+ GET /rrhh 200 in 3.7s (next.js: 754ms, proxy.ts: 1612ms, application-code: 1347ms)
+ GET /rrhh/reclutamiento 200 in 2.8s (next.js: 1438ms, proxy.ts: 1326ms, application-code: 27ms)
+ POST /mis-departamentos 200 in 1794ms (next.js: 3ms, proxy.ts: 785ms, application-code: 1006ms)
+  └─ ƒ listAccesosApps("habana") in 993ms src/features/rrhh/actions/accesos-apps-actions.ts
+ POST /mis-departamentos 200 in 1401ms (next.js: 4ms, proxy.ts: 452ms, application-code: 946ms)
+  └─ ƒ listAccesosApps("habana") in 932ms src/features/rrhh/actions/accesos-apps-actions.ts
+ POST /rrhh/reclutamiento 200 in 1923ms (next.js: 21ms, proxy.ts: 1169ms, application-code: 733ms)
+  └─ ƒ listMisNotificaciones() in 694ms src/features/notificaciones/actions/notificaciones-actions.ts
+ POST /mis-departamentos 200 in 1473ms (next.js: 6ms, proxy.ts: 474ms, application-code: 992ms)
+  └─ ƒ listAccesosApps("habana") in 976ms src/features/rrhh/actions/accesos-apps-actions.ts
+ POST /mis-departamentos 200 in 1794ms (next.js: 8ms, proxy.ts: 836ms, application-code: 950ms)
+  └─ ƒ listAccesosApps("habana") in 931ms src/features/rrhh/actions/accesos-apps-actions.ts
+ POST /rrhh/reclutamiento 200 in 1653ms (next.js: 6ms, proxy.ts: 922ms, application-code: 726ms)
+  └─ ƒ getUserPermisos("eyJhbGciOiJFUzI1NiIsImtpZCI6IjU3ZmMzMzZjLWZkYmQtNDM1Mi05YWQwLWY0MmI4MDk4ZDAxMyIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJodHRwczovL3N4anR1YnpkcGZtbG13cXRzZ3JvLnN1cGFiYXNlLmNvL2F1dGgvdjEiLCJzdWIiOiI1OWM0OTZmMi05YmM4LTRhMGItOTAwNC1jM2IyNzcwZDg5ODIiLCJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjoxNzgzNTk2MDIzLCJpYXQiOjE3ODM1OTI0MjMsImVtYWlsIjoiZGlyZWNjaW9uLmdydXBvaGFiYW5hQGdtYWlsLmNvbSIsInBob25lIjoiIiwiYXBwX21ldGFkYXRhIjp7InByb3ZpZGVyIjoiZW1haWwiLCJwcm92aWRlcnMiOlsiZW1haWwiLCJnb29nbGUiXX0sInVzZXJfbWV0YWRhdGEiOnsiYXZhdGFyX3VybCI6Imh0dHBzOi8vbGgzLmdvb2dsZXVzZXJjb250ZW50LmNvbS9hL0FDZzhvY0kzd1hxM1U2Slk1N3VSSWR5eG9jYkVCa0FDT0FaWm9zaDA3MGp3cmhlRWhJTVpkcW11PXM5Ni1jIiwiZW1haWwiOiJkaXJlY2Npb24uZ3J1cG9oYWJhbmFAZ21haWwuY29tIiwiZW1haWxfdmVyaWZpZWQiOnRydWUsImZ1bGxfbmFtZSI6IkRpcmVjY2nDs24gR3J1cG8gSGFiYW5hIiwiaXNzIjoiaHR0cHM6Ly9hY2NvdW50cy5nb29nbGUuY29tIiwibmFtZSI6IkRpcmVjY2nDs24gR3J1cG8gSGFiYW5hIiwicGhvbmVfdmVyaWZpZWQiOmZhbHNlLCJwaWN0dXJlIjoiaHR0cHM6Ly9saDMuZ29vZ2xldXNlcmNvbnRlbnQuY29tL2EvQUNnOG9jSTN3WHEzVTZKWTU3dVJJZHl4b2NiRUJrQUNPQVpab3NoMDcwandyaGVFaElNWmRxbXU9czk2LWMiLCJwcm92aWRlcl9pZCI6IjExNjE4MzEwOTkwMTcyODQyMjg5OSIsInN1YiI6IjExNjE4MzEwOTkwMTcyODQyMjg5OSJ9LCJyb2xlIjoiYXV0aGVudGljYXRlZCIsImFhbCI6ImFhbDEiLCJhbXIiOlt7Im1ldGhvZCI6Im9hdXRoIiwidGltZXN0YW1wIjoxNzgzNTkyNDIzfV0sInNlc3Npb25faWQiOiJmYjY5MTliNi03ZjVhLTRmOTYtYTg2Ni03ZDIzNDU2NjlhNzAiLCJpc19hbm9ueW1vdXMiOmZhbHNlfQ.93aVi1vi38yBQ71j1MywcG_n3KJgO8og6QiLL7Lo14oiGpd-COvsaUMDQOaJUN3Bs5TYSVJJyXnpbWe5QPqqMg") in 710ms src/features/auth/actions/permisos-actions.ts
+ POST /mis-departamentos 200 in 1900ms (next.js: 5ms, proxy.ts: 470ms, application-code: 1425ms)
+  └─ ƒ getTareasValidacionPendientes() in 1411ms src/features/mi-panel/actions/mi-panel-actions.ts
+ POST /rrhh/reclutamiento 200 in 1894ms (next.js: 6ms, proxy.ts: 929ms, application-code: 959ms)
+  └─ ƒ listAccesosApps("habana") in 943ms src/features/rrhh/actions/accesos-apps-actions.ts
+ POST /mis-departamentos 200 in 2.2s (next.js: 4ms, proxy.ts: 594ms, application-code: 1555ms)
+  └─ ƒ listCanales("habana") in 1538ms src/features/comunicacion/actions/comunicacion-actions.ts
+ POST /mis-departamentos 200 in 1528ms (next.js: 5ms, proxy.ts: 814ms, application-code: 708ms)
+  └─ ƒ contarLlamadasPerdidasNoVistas(null) in 697ms src/features/llamadas-internas/actions/llamadas-actions.ts
+ POST /mis-departamentos 200 in 1349ms (next.js: 5ms, proxy.ts: 592ms, application-code: 753ms)
+  └─ ƒ contarContactosNuevos(7) in 740ms src/features/agenda/actions/contactos-actions.ts
+ POST /mis-departamentos 200 in 3.5s (next.js: 7ms, proxy.ts: 868ms, application-code: 2.6s)
+  └─ ƒ contarPendientesHoy() in 2553ms src/features/tareas/actions/tareas-actions.ts
+ POST /mis-departamentos 200 in 2.2s (next.js: 7ms, proxy.ts: 481ms, application-code: 1673ms)
+  └─ ƒ getTareasValidacionPendientes() in 1658ms src/features/mi-panel/actions/mi-panel-actions.ts
+ POST /mis-departamentos 200 in 2.4s (next.js: 6ms, proxy.ts: 590ms, application-code: 1768ms)
+  └─ ƒ listCanales("habana") in 1752ms src/features/comunicacion/actions/comunicacion-actions.ts
+ POST /mis-departamentos 200 in 1281ms (next.js: 7ms, proxy.ts: 483ms, application-code: 792ms)
+  └─ ƒ contarLlamadasPerdidasNoVistas(null) in 776ms src/features/llamadas-internas/actions/llamadas-actions.ts
+ POST /mis-departamentos 200 in 1315ms (next.js: 6ms, proxy.ts: 580ms, application-code: 729ms)
+  └─ ƒ contarContactosNuevos(7) in 714ms src/features/agenda/actions/contactos-actions.ts
+ POST /mis-departamentos 200 in 1358ms (next.js: 6ms, proxy.ts: 600ms, application-code: 752ms)
+  └─ ƒ listMisNotificaciones() in 735ms src/features/notificaciones/actions/notificaciones-actions.ts
+ POST /mis-departamentos 200 in 2.3s (next.js: 7ms, proxy.ts: 1477ms, application-code: 828ms)
+  └─ ƒ listMisNotificaciones() in 812ms src/features/notificaciones/actions/notificaciones-actions.ts
+ POST /mis-departamentos 200 in 2.7s (next.js: 5ms, proxy.ts: 487ms, application-code: 2.2s)
+  └─ ƒ contarPendientesHoy() in 2167ms src/features/tareas/actions/tareas-actions.ts
+ POST /mis-departamentos 200 in 1265ms (next.js: 5ms, proxy.ts: 504ms, application-code: 756ms)
+  └─ ƒ getUserPermisos("eyJhbGciOiJFUzI1NiIsImtpZCI6IjU3ZmMzMzZjLWZkYmQtNDM1Mi05YWQwLWY0MmI4MDk4ZDAxMyIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJodHRwczovL3N4anR1YnpkcGZtbG13cXRzZ3JvLnN1cGFiYXNlLmNvL2F1dGgvdjEiLCJzdWIiOiI1OWM0OTZmMi05YmM4LTRhMGItOTAwNC1jM2IyNzcwZDg5ODIiLCJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjoxNzgzNTk2MDIzLCJpYXQiOjE3ODM1OTI0MjMsImVtYWlsIjoiZGlyZWNjaW9uLmdydXBvaGFiYW5hQGdtYWlsLmNvbSIsInBob25lIjoiIiwiYXBwX21ldGFkYXRhIjp7InByb3ZpZGVyIjoiZW1haWwiLCJwcm92aWRlcnMiOlsiZW1haWwiLCJnb29nbGUiXX0sInVzZXJfbWV0YWRhdGEiOnsiYXZhdGFyX3VybCI6Imh0dHBzOi8vbGgzLmdvb2dsZXVzZXJjb250ZW50LmNvbS9hL0FDZzhvY0kzd1hxM1U2Slk1N3VSSWR5eG9jYkVCa0FDT0FaWm9zaDA3MGp3cmhlRWhJTVpkcW11PXM5Ni1jIiwiZW1haWwiOiJkaXJlY2Npb24uZ3J1cG9oYWJhbmFAZ21haWwuY29tIiwiZW1haWxfdmVyaWZpZWQiOnRydWUsImZ1bGxfbmFtZSI6IkRpcmVjY2nDs24gR3J1cG8gSGFiYW5hIiwiaXNzIjoiaHR0cHM6Ly9hY2NvdW50cy5nb29nbGUuY29tIiwibmFtZSI6IkRpcmVjY2nDs24gR3J1cG8gSGFiYW5hIiwicGhvbmVfdmVyaWZpZWQiOmZhbHNlLCJwaWN0dXJlIjoiaHR0cHM6Ly9saDMuZ29vZ2xldXNlcmNvbnRlbnQuY29tL2EvQUNnOG9jSTN3WHEzVTZKWTU3dVJJZHl4b2NiRUJrQUNPQVpab3NoMDcwandyaGVFaElNWmRxbXU9czk2LWMiLCJwcm92aWRlcl9pZCI6IjExNjE4MzEwOTkwMTcyODQyMjg5OSIsInN1YiI6IjExNjE4MzEwOTkwMTcyODQyMjg5OSJ9LCJyb2xlIjoiYXV0aGVudGljYXRlZCIsImFhbCI6ImFhbDEiLCJhbXIiOlt7Im1ldGhvZCI6Im9hdXRoIiwidGltZXN0YW1wIjoxNzgzNTkyNDIzfV0sInNlc3Npb25faWQiOiJmYjY5MTliNi03ZjVhLTRmOTYtYTg2Ni03ZDIzNDU2NjlhNzAiLCJpc19hbm9ueW1vdXMiOmZhbHNlfQ.93aVi1vi38yBQ71j1MywcG_n3KJgO8og6QiLL7Lo14oiGpd-COvsaUMDQOaJUN3Bs5TYSVJJyXnpbWe5QPqqMg") in 737ms src/features/auth/actions/permisos-actions.ts
+ POST /mis-departamentos 200 in 2.0s (next.js: 7ms, proxy.ts: 495ms, application-code: 1546ms)
+  └─ ƒ getTareasValidacionPendientes() in 1530ms src/features/mi-panel/actions/mi-panel-actions.ts
+ POST /mis-departamentos 200 in 2.7s (next.js: 13ms, proxy.ts: 608ms, application-code: 2.1s)
+  └─ ƒ listCanales("habana") in 2068ms src/features/comunicacion/actions/comunicacion-actions.ts
+ POST /mis-departamentos 200 in 1450ms (next.js: 5ms, proxy.ts: 583ms, application-code: 862ms)
+  └─ ƒ contarLlamadasPerdidasNoVistas(null) in 849ms src/features/llamadas-internas/actions/llamadas-actions.ts
+ POST /mis-departamentos 200 in 1334ms (next.js: 6ms, proxy.ts: 593ms, application-code: 735ms)
+  └─ ƒ contarContactosNuevos(7) in 719ms src/features/agenda/actions/contactos-actions.ts
+ POST /mis-departamentos 200 in 3.0s (next.js: 5ms, proxy.ts: 767ms, application-code: 2.2s)
+  └─ ƒ contarPendientesHoy() in 2199ms src/features/tareas/actions/tareas-actions.ts
+ POST /mis-departamentos 200 in 2.1s (next.js: 6ms, proxy.ts: 494ms, application-code: 1633ms)
+  └─ ƒ getTareasValidacionPendientes() in 1617ms src/features/mi-panel/actions/mi-panel-actions.ts
+ POST /mis-departamentos 200 in 2.6s (next.js: 4ms, proxy.ts: 959ms, application-code: 1620ms)
+  └─ ƒ listCanales("habana") in 1603ms src/features/comunicacion/actions/comunicacion-actions.ts
+ POST /mis-departamentos 200 in 1222ms (next.js: 7ms, proxy.ts: 476ms, application-code: 740ms)
+  └─ ƒ contarLlamadasPerdidasNoVistas(null) in 724ms src/features/llamadas-internas/actions/llamadas-actions.ts
+ POST /mis-departamentos 200 in 1477ms (next.js: 6ms, proxy.ts: 699ms, application-code: 773ms)
+  └─ ƒ contarContactosNuevos(7) in 758ms src/features/agenda/actions/contactos-actions.ts
+ POST /mis-departamentos 200 in 1375ms (next.js: 6ms, proxy.ts: 606ms, application-code: 763ms)
+  └─ ƒ listMisNotificaciones() in 747ms src/features/notificaciones/actions/notificaciones-actions.ts
+ POST /mis-departamentos 200 in 2.4s (next.js: 6ms, proxy.ts: 1200ms, application-code: 1235ms)
+  └─ ƒ listMisNotificaciones() in 1218ms src/features/notificaciones/actions/notificaciones-actions.ts
+ POST /mis-departamentos 200 in 3.2s (next.js: 6ms, proxy.ts: 723ms, application-code: 2.4s)
+  └─ ƒ contarPendientesHoy() in 2433ms src/features/tareas/actions/tareas-actions.ts
+ POST /mis-departamentos 200 in 2.1s (next.js: 6ms, proxy.ts: 493ms, application-code: 1605ms)
+  └─ ƒ getTareasValidacionPendientes() in 1588ms src/features/mi-panel/actions/mi-panel-actions.ts
+ POST /mis-departamentos 200 in 2.3s (next.js: 6ms, proxy.ts: 656ms, application-code: 1623ms)
+  └─ ƒ listCanales("habana") in 1605ms src/features/comunicacion/actions/comunicacion-actions.ts
+ POST /mis-departamentos 200 in 1234ms (next.js: 6ms, proxy.ts: 477ms, application-code: 751ms)
+  └─ ƒ contarLlamadasPerdidasNoVistas(null) in 737ms src/features/llamadas-internas/actions/llamadas-actions.ts
+ POST /mis-departamentos 200 in 2.8s (next.js: 6ms, proxy.ts: 1000ms, application-code: 1822ms)
+  └─ ƒ contarContactosNuevos(7) in 1806ms src/features/agenda/actions/contactos-actions.ts
+ POST /mis-departamentos 200 in 1366ms (next.js: 7ms, proxy.ts: 598ms, application-code: 761ms)
+  └─ ƒ listMisNotificaciones() in 739ms src/features/notificaciones/actions/notificaciones-actions.ts
+ POST /mis-departamentos 200 in 2.8s (next.js: 5ms, proxy.ts: 614ms, application-code: 2.2s)
+  └─ ƒ contarPendientesHoy() in 2194ms src/features/tareas/actions/tareas-actions.ts
+ POST /mis-departamentos 200 in 2.1s (next.js: 7ms, proxy.ts: 486ms, application-code: 1653ms)
+  └─ ƒ getTareasValidacionPendientes() in 1637ms src/features/mi-panel/actions/mi-panel-actions.ts
+ POST /mis-departamentos 200 in 2.1s (next.js: 8ms, proxy.ts: 570ms, application-code: 1518ms)
+  └─ ƒ listCanales("habana") in 1503ms src/features/comunicacion/actions/comunicacion-actions.ts
+ POST /mis-departamentos 200 in 1178ms (next.js: 6ms, proxy.ts: 466ms, application-code: 705ms)
+  └─ ƒ contarLlamadasPerdidasNoVistas(null) in 692ms src/features/llamadas-internas/actions/llamadas-actions.ts
+ POST /mis-departamentos 200 in 1807ms (next.js: 6ms, proxy.ts: 671ms, application-code: 1130ms)
+  └─ ƒ contarContactosNuevos(7) in 1116ms src/features/agenda/actions/contactos-actions.ts
+ POST /mis-departamentos 200 in 2.1s (next.js: 6ms, proxy.ts: 1003ms, application-code: 1049ms)
+  └─ ƒ listMisNotificaciones() in 1032ms src/features/notificaciones/actions/notificaciones-actions.ts
+ POST /mis-departamentos 200 in 2.9s (next.js: 6ms, proxy.ts: 726ms, application-code: 2.2s)
+  └─ ƒ contarPendientesHoy() in 2193ms src/features/tareas/actions/tareas-actions.ts
+ POST /mis-departamentos 200 in 2.2s (next.js: 6ms, proxy.ts: 482ms, application-code: 1725ms)
+  └─ ƒ getTareasValidacionPendientes() in 1707ms src/features/mi-panel/actions/mi-panel-actions.ts
+ POST /mis-departamentos 200 in 2.2s (next.js: 5ms, proxy.ts: 597ms, application-code: 1583ms)
+  └─ ƒ listCanales("habana") in 1567ms src/features/comunicacion/actions/comunicacion-actions.ts
+ POST /mis-departamentos 200 in 1343ms (next.js: 6ms, proxy.ts: 498ms, application-code: 839ms)
+  └─ ƒ contarLlamadasPerdidasNoVistas(null) in 824ms src/features/llamadas-internas/actions/llamadas-actions.ts
+ POST /mis-departamentos 200 in 1795ms (next.js: 5ms, proxy.ts: 1042ms, application-code: 748ms)
+  └─ ƒ contarContactosNuevos(7) in 734ms src/features/agenda/actions/contactos-actions.ts
+ POST /mis-departamentos 200 in 3.6s (next.js: 6ms, proxy.ts: 1060ms, application-code: 2.6s)
+  └─ ƒ contarPendientesHoy() in 2559ms src/features/tareas/actions/tareas-actions.ts
+ POST /mis-departamentos 200 in 1261ms (next.js: 6ms, proxy.ts: 481ms, application-code: 774ms)
+  └─ ƒ listMisNotificaciones() in 755ms src/features/notificaciones/actions/notificaciones-actions.ts
+ POST /mis-departamentos 200 in 2.2s (next.js: 8ms, proxy.ts: 600ms, application-code: 1625ms)
+  └─ ƒ getTareasValidacionPendientes() in 1608ms src/features/mi-panel/actions/mi-panel-actions.ts
+ POST /mis-departamentos 200 in 2.5s (next.js: 6ms, proxy.ts: 654ms, application-code: 1827ms)
+  └─ ƒ listCanales("habana") in 1810ms src/features/comunicacion/actions/comunicacion-actions.ts
+ POST /mis-departamentos 200 in 1215ms (next.js: 7ms, proxy.ts: 472ms, application-code: 736ms)
+  └─ ƒ contarLlamadasPerdidasNoVistas(null) in 720ms src/features/llamadas-internas/actions/llamadas-actions.ts
+ POST /mis-departamentos 200 in 1340ms (next.js: 6ms, proxy.ts: 603ms, application-code: 731ms)
+  └─ ƒ contarContactosNuevos(7) in 715ms src/features/agenda/actions/contactos-actions.ts
+ POST /mis-departamentos 200 in 3.2s (next.js: 6ms, proxy.ts: 1012ms, application-code: 2.2s)
+  └─ ƒ contarPendientesHoy() in 2155ms src/features/tareas/actions/tareas-actions.ts
+ POST /mis-departamentos 200 in 1310ms (next.js: 6ms, proxy.ts: 507ms, application-code: 797ms)
+  └─ ƒ listMisNotificaciones() in 775ms src/features/notificaciones/actions/notificaciones-actions.ts
+ POST /mis-departamentos 200 in 2.7s (next.js: 5ms, proxy.ts: 1128ms, application-code: 1582ms)
+  └─ ƒ getTareasValidacionPendientes() in 1566ms src/features/mi-panel/actions/mi-panel-actions.ts
+ POST /mis-departamentos 200 in 2.8s (next.js: 6ms, proxy.ts: 989ms, application-code: 1805ms)
+  └─ ƒ listCanales("habana") in 1787ms src/features/comunicacion/actions/comunicacion-actions.ts
+ POST /mis-departamentos 200 in 1234ms (next.js: 7ms, proxy.ts: 483ms, application-code: 745ms)
+  └─ ƒ contarLlamadasPerdidasNoVistas(null) in 729ms src/features/llamadas-internas/actions/llamadas-actions.ts
+ POST /mis-departamentos 200 in 1364ms (next.js: 5ms, proxy.ts: 619ms, application-code: 739ms)
+  └─ ƒ contarContactosNuevos(7) in 722ms src/features/agenda/actions/contactos-actions.ts
+ POST /mis-departamentos 200 in 3.4s (next.js: 6ms, proxy.ts: 650ms, application-code: 2.7s)
+  └─ ƒ contarPendientesHoy() in 2722ms src/features/tareas/actions/tareas-actions.ts
+ POST /mis-departamentos 200 in 1317ms (next.js: 6ms, proxy.ts: 487ms, application-code: 824ms)
+  └─ ƒ listMisNotificaciones() in 809ms src/features/notificaciones/actions/notificaciones-actions.ts
+ POST /mis-departamentos 200 in 2.1s (next.js: 6ms, proxy.ts: 486ms, application-code: 1616ms)
+  └─ ƒ getTareasValidacionPendientes() in 1601ms src/features/mi-panel/actions/mi-panel-actions.ts
+ POST /mis-departamentos 200 in 2.2s (next.js: 6ms, proxy.ts: 586ms, application-code: 1600ms)
+  └─ ƒ listCanales("habana") in 1585ms src/features/comunicacion/actions/comunicacion-actions.ts
+ POST /mis-departamentos 200 in 1197ms (next.js: 7ms, proxy.ts: 486ms, application-code: 704ms)
+  └─ ƒ contarLlamadasPerdidasNoVistas(null) in 686ms src/features/llamadas-internas/actions/llamadas-actions.ts
+ POST /mis-departamentos 200 in 1338ms (next.js: 6ms, proxy.ts: 602ms, application-code: 730ms)
+  └─ ƒ contarContactosNuevos(7) in 709ms src/features/agenda/actions/contactos-actions.ts
+ POST /mis-departamentos 200 in 2.8s (next.js: 6ms, proxy.ts: 678ms, application-code: 2.1s)
+  └─ ƒ contarPendientesHoy() in 2114ms src/features/tareas/actions/tareas-actions.ts
+ POST /mis-departamentos 200 in 1196ms (next.js: 7ms, proxy.ts: 462ms, application-code: 727ms)
+  └─ ƒ listMisNotificaciones() in 708ms src/features/notificaciones/actions/notificaciones-actions.ts
+ POST /mis-departamentos 200 in 2.4s (next.js: 5ms, proxy.ts: 853ms, application-code: 1568ms)
+  └─ ƒ getTareasValidacionPendientes() in 1553ms src/features/mi-panel/actions/mi-panel-actions.ts
+ POST /mis-departamentos 200 in 2.3s (next.js: 6ms, proxy.ts: 572ms, application-code: 1755ms)
+  └─ ƒ listCanales("habana") in 1740ms src/features/comunicacion/actions/comunicacion-actions.ts
+ POST /mis-departamentos 200 in 1200ms (next.js: 7ms, proxy.ts: 481ms, application-code: 712ms)
+  └─ ƒ contarLlamadasPerdidasNoVistas(null) in 695ms src/features/llamadas-internas/actions/llamadas-actions.ts
+ POST /mis-departamentos 200 in 1342ms (next.js: 6ms, proxy.ts: 601ms, application-code: 735ms)
+  └─ ƒ contarContactosNuevos(7) in 717ms src/features/agenda/actions/contactos-actions.ts
+ POST /mis-departamentos 200 in 3.6s (next.js: 8ms, proxy.ts: 961ms, application-code: 2.7s)
+  └─ ƒ contarPendientesHoy() in 2124ms src/features/tareas/actions/tareas-actions.ts
+ POST /mis-departamentos 200 in 1296ms (next.js: 6ms, proxy.ts: 577ms, application-code: 713ms)
+  └─ ƒ listMisNotificaciones() in 692ms src/features/notificaciones/actions/notificaciones-actions.ts
+ POST /mis-departamentos 200 in 1889ms (next.js: 6ms, proxy.ts: 461ms, application-code: 1421ms)
+  └─ ƒ getTareasValidacionPendientes() in 1402ms src/features/mi-panel/actions/mi-panel-actions.ts
+ POST /mis-departamentos 200 in 2.9s (next.js: 5ms, proxy.ts: 1084ms, application-code: 1839ms)
+  └─ ƒ listCanales("habana") in 1822ms src/features/comunicacion/actions/comunicacion-actions.ts
+ POST /mis-departamentos 200 in 1264ms (next.js: 6ms, proxy.ts: 492ms, application-code: 767ms)
+  └─ ƒ contarLlamadasPerdidasNoVistas(null) in 752ms src/features/llamadas-internas/actions/llamadas-actions.ts
+ POST /mis-departamentos 200 in 1459ms (next.js: 5ms, proxy.ts: 580ms, application-code: 874ms)
+  └─ ƒ contarContactosNuevos(7) in 859ms src/features/agenda/actions/contactos-actions.ts
+ GET /manifest.webmanifest 200 in 22ms (next.js: 4ms, proxy.ts: 4ms, application-code: 14ms)
+ POST /mis-departamentos 200 in 3.4s (next.js: 6ms, proxy.ts: 1186ms, application-code: 2.2s)
+  └─ ƒ contarPendientesHoy() in 2185ms src/features/tareas/actions/tareas-actions.ts
+ POST /mis-departamentos 200 in 1243ms (next.js: 9ms, proxy.ts: 489ms, application-code: 745ms)
+  └─ ƒ listMisNotificaciones() in 726ms src/features/notificaciones/actions/notificaciones-actions.ts
+ POST /mis-departamentos 200 in 2.1s (next.js: 6ms, proxy.ts: 473ms, application-code: 1649ms)
+  └─ ƒ getTareasValidacionPendientes() in 1634ms src/features/mi-panel/actions/mi-panel-actions.ts
+ POST /mis-departamentos 200 in 2.5s (next.js: 5ms, proxy.ts: 659ms, application-code: 1807ms)
+  └─ ƒ listCanales("habana") in 1789ms src/features/comunicacion/actions/comunicacion-actions.ts
+ POST /mis-departamentos 200 in 1248ms (next.js: 7ms, proxy.ts: 498ms, application-code: 742ms)
+  └─ ƒ contarLlamadasPerdidasNoVistas(null) in 727ms src/features/llamadas-internas/actions/llamadas-actions.ts
+ POST /mis-departamentos 200 in 1358ms (next.js: 6ms, proxy.ts: 628ms, application-code: 724ms)
+  └─ ƒ contarContactosNuevos(7) in 709ms src/features/agenda/actions/contactos-actions.ts
+ POST /mis-departamentos 200 in 3.2s (next.js: 6ms, proxy.ts: 1046ms, application-code: 2.2s)
+  └─ ƒ contarPendientesHoy() in 2146ms src/features/tareas/actions/tareas-actions.ts
+ POST /mis-departamentos 200 in 1187ms (next.js: 7ms, proxy.ts: 459ms, application-code: 721ms)
+  └─ ƒ listMisNotificaciones() in 703ms src/features/notificaciones/actions/notificaciones-actions.ts
+ POST /mis-departamentos 200 in 2.4s (next.js: 6ms, proxy.ts: 802ms, application-code: 1550ms)
+  └─ ƒ getTareasValidacionPendientes() in 1533ms src/features/mi-panel/actions/mi-panel-actions.ts
+ POST /mis-departamentos 200 in 2.5s (next.js: 6ms, proxy.ts: 664ms, application-code: 1819ms)
+  └─ ƒ listCanales("habana") in 1804ms src/features/comunicacion/actions/comunicacion-actions.ts
+ POST /mis-departamentos 200 in 1247ms (next.js: 6ms, proxy.ts: 507ms, application-code: 734ms)
+  └─ ƒ contarLlamadasPerdidasNoVistas(null) in 717ms src/features/llamadas-internas/actions/llamadas-actions.ts
+ POST /mis-departamentos 200 in 1734ms (next.js: 6ms, proxy.ts: 593ms, application-code: 1136ms)
+  └─ ƒ contarContactosNuevos(7) in 1121ms src/features/agenda/actions/contactos-actions.ts
+ POST /mis-departamentos 200 in 2.7s (next.js: 6ms, proxy.ts: 610ms, application-code: 2.1s)
+  └─ ƒ contarPendientesHoy() in 2109ms src/features/tareas/actions/tareas-actions.ts
+ POST /mis-departamentos 200 in 1214ms (next.js: 6ms, proxy.ts: 475ms, application-code: 733ms)
+  └─ ƒ listMisNotificaciones() in 713ms src/features/notificaciones/actions/notificaciones-actions.ts
+ POST /mis-departamentos 200 in 2.0s (next.js: 6ms, proxy.ts: 467ms, application-code: 1573ms)
+  └─ ƒ getTareasValidacionPendientes() in 1556ms src/features/mi-panel/actions/mi-panel-actions.ts
+ POST /mis-departamentos 200 in 2.3s (next.js: 6ms, proxy.ts: 709ms, application-code: 1587ms)
+  └─ ƒ listCanales("habana") in 1568ms src/features/comunicacion/actions/comunicacion-actions.ts
+ POST /mis-departamentos 200 in 1221ms (next.js: 6ms, proxy.ts: 481ms, application-code: 735ms)
+  └─ ƒ contarLlamadasPerdidasNoVistas(null) in 720ms src/features/llamadas-internas/actions/llamadas-actions.ts
+ POST /mis-departamentos 200 in 1364ms (next.js: 6ms, proxy.ts: 622ms, application-code: 736ms)
+  └─ ƒ contarContactosNuevos(7) in 722ms src/features/agenda/actions/contactos-actions.ts
+ POST /mis-departamentos 200 in 2.7s (next.js: 4ms, proxy.ts: 623ms, application-code: 2.1s)
+  └─ ƒ contarPendientesHoy() in 2096ms src/features/tareas/actions/tareas-actions.ts
+ POST /mis-departamentos 200 in 1206ms (next.js: 6ms, proxy.ts: 471ms, application-code: 729ms)
+  └─ ƒ listMisNotificaciones() in 712ms src/features/notificaciones/actions/notificaciones-actions.ts
+ POST /mis-departamentos 200 in 2.4s (next.js: 6ms, proxy.ts: 472ms, application-code: 1909ms)
+  └─ ƒ getTareasValidacionPendientes() in 1895ms src/features/mi-panel/actions/mi-panel-actions.ts
+ POST /mis-departamentos 200 in 2.3s (next.js: 6ms, proxy.ts: 602ms, application-code: 1701ms)
+  └─ ƒ listCanales("habana") in 1684ms src/features/comunicacion/actions/comunicacion-actions.ts
+ POST /mis-departamentos 200 in 1242ms (next.js: 7ms, proxy.ts: 480ms, application-code: 755ms)
+  └─ ƒ contarLlamadasPerdidasNoVistas(null) in 739ms src/features/llamadas-internas/actions/llamadas-actions.ts
+ POST /mis-departamentos 200 in 1329ms (next.js: 10ms, proxy.ts: 606ms, application-code: 713ms)
+  └─ ƒ contarContactosNuevos(7) in 700ms src/features/agenda/actions/contactos-actions.ts
+ POST /mis-departamentos 200 in 3.0s (next.js: 7ms, proxy.ts: 684ms, application-code: 2.3s)
+  └─ ƒ contarPendientesHoy() in 2259ms src/features/tareas/actions/tareas-actions.ts
+ POST /mis-departamentos 200 in 1278ms (next.js: 4ms, proxy.ts: 499ms, application-code: 775ms)
+  └─ ƒ getUserPermisos("eyJhbGciOiJFUzI1NiIsImtpZCI6IjU3ZmMzMzZjLWZkYmQtNDM1Mi05YWQwLWY0MmI4MDk4ZDAxMyIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJodHRwczovL3N4anR1YnpkcGZtbG13cXRzZ3JvLnN1cGFiYXNlLmNvL2F1dGgvdjEiLCJzdWIiOiI1OWM0OTZmMi05YmM4LTRhMGItOTAwNC1jM2IyNzcwZDg5ODIiLCJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjoxNzgzNTk5NTUyLCJpYXQiOjE3ODM1OTU5NTIsImVtYWlsIjoiZGlyZWNjaW9uLmdydXBvaGFiYW5hQGdtYWlsLmNvbSIsInBob25lIjoiIiwiYXBwX21ldGFkYXRhIjp7InByb3ZpZGVyIjoiZW1haWwiLCJwcm92aWRlcnMiOlsiZW1haWwiLCJnb29nbGUiXX0sInVzZXJfbWV0YWRhdGEiOnsiYXZhdGFyX3VybCI6Imh0dHBzOi8vbGgzLmdvb2dsZXVzZXJjb250ZW50LmNvbS9hL0FDZzhvY0kzd1hxM1U2Slk1N3VSSWR5eG9jYkVCa0FDT0FaWm9zaDA3MGp3cmhlRWhJTVpkcW11PXM5Ni1jIiwiZW1haWwiOiJkaXJlY2Npb24uZ3J1cG9oYWJhbmFAZ21haWwuY29tIiwiZW1haWxfdmVyaWZpZWQiOnRydWUsImZ1bGxfbmFtZSI6IkRpcmVjY2nDs24gR3J1cG8gSGFiYW5hIiwiaXNzIjoiaHR0cHM6Ly9hY2NvdW50cy5nb29nbGUuY29tIiwibmFtZSI6IkRpcmVjY2nDs24gR3J1cG8gSGFiYW5hIiwicGhvbmVfdmVyaWZpZWQiOmZhbHNlLCJwaWN0dXJlIjoiaHR0cHM6Ly9saDMuZ29vZ2xldXNlcmNvbnRlbnQuY29tL2EvQUNnOG9jSTN3WHEzVTZKWTU3dVJJZHl4b2NiRUJrQUNPQVpab3NoMDcwandyaGVFaElNWmRxbXU9czk2LWMiLCJwcm92aWRlcl9pZCI6IjExNjE4MzEwOTkwMTcyODQyMjg5OSIsInN1YiI6IjExNjE4MzEwOTkwMTcyODQyMjg5OSJ9LCJyb2xlIjoiYXV0aGVudGljYXRlZCIsImFhbCI6ImFhbDEiLCJhbXIiOlt7Im1ldGhvZCI6Im9hdXRoIiwidGltZXN0YW1wIjoxNzgzNTkyNDIzfV0sInNlc3Npb25faWQiOiJmYjY5MTliNi03ZjVhLTRmOTYtYTg2Ni03ZDIzNDU2NjlhNzAiLCJpc19hbm9ueW1vdXMiOmZhbHNlfQ.9MdVM5IXNgD_75gGzJp97_X5xyWR3xT53kmNsCPcgihL_UHWG7yQERy43BUZtGE0mtIUY5PWRHRKZOs__I9eHg") in 757ms src/features/auth/actions/permisos-actions.ts
+ POST /mis-departamentos 200 in 1284ms (next.js: 6ms, proxy.ts: 490ms, application-code: 788ms)
+  └─ ƒ listMisNotificaciones() in 773ms src/features/notificaciones/actions/notificaciones-actions.ts
+ POST /mis-departamentos 200 in 2.0s (next.js: 4ms, proxy.ts: 468ms, application-code: 1553ms)
+  └─ ƒ getTareasValidacionPendientes() in 1538ms src/features/mi-panel/actions/mi-panel-actions.ts
+ POST /mis-departamentos 200 in 2.1s (next.js: 7ms, proxy.ts: 582ms, application-code: 1533ms)
+  └─ ƒ listCanales("habana") in 1518ms src/features/comunicacion/actions/comunicacion-actions.ts
+ POST /mis-departamentos 200 in 1197ms (next.js: 6ms, proxy.ts: 468ms, application-code: 723ms)
+  └─ ƒ contarLlamadasPerdidasNoVistas(null) in 707ms src/features/llamadas-internas/actions/llamadas-actions.ts
+ POST /mis-departamentos 200 in 1707ms (next.js: 5ms, proxy.ts: 601ms, application-code: 1101ms)
+  └─ ƒ contarContactosNuevos(7) in 1086ms src/features/agenda/actions/contactos-actions.ts
+ POST /mis-departamentos 200 in 2.8s (next.js: 6ms, proxy.ts: 669ms, application-code: 2.1s)
+  └─ ƒ contarPendientesHoy() in 2110ms src/features/tareas/actions/tareas-actions.ts
+ POST /mis-departamentos 200 in 2.1s (next.js: 6ms, proxy.ts: 469ms, application-code: 1598ms)
+  └─ ƒ getTareasValidacionPendientes() in 1585ms src/features/mi-panel/actions/mi-panel-actions.ts
+ POST /mis-departamentos 200 in 2.5s (next.js: 9ms, proxy.ts: 595ms, application-code: 1933ms)
+  └─ ƒ listCanales("habana") in 1920ms src/features/comunicacion/actions/comunicacion-actions.ts
+ POST /mis-departamentos 200 in 1888ms (next.js: 5ms, proxy.ts: 814ms, application-code: 1069ms)
+  └─ ƒ contarLlamadasPerdidasNoVistas(null) in 1050ms src/features/llamadas-internas/actions/llamadas-actions.ts
+ POST /mis-departamentos 200 in 1331ms (next.js: 7ms, proxy.ts: 595ms, application-code: 730ms)
+  └─ ƒ contarContactosNuevos(7) in 716ms src/features/agenda/actions/contactos-actions.ts
+ POST /mis-departamentos 200 in 1441ms (next.js: 6ms, proxy.ts: 709ms, application-code: 725ms)
+  └─ ƒ listMisNotificaciones() in 708ms src/features/notificaciones/actions/notificaciones-actions.ts
+✓ Compiled in 414ms
+ POST /mis-departamentos 200 in 3.2s (next.js: 14ms, proxy.ts: 918ms, application-code: 2.3s)
+  └─ ƒ contarPendientesHoy() in 2236ms src/features/tareas/actions/tareas-actions.ts
+ POST /mis-departamentos 200 in 1794ms (next.js: 6ms, proxy.ts: 493ms, application-code: 1296ms)
+  └─ ƒ listMisNotificaciones() in 1277ms src/features/notificaciones/actions/notificaciones-actions.ts
+ POST /mis-departamentos 200 in 2.2s (next.js: 4ms, proxy.ts: 478ms, application-code: 1685ms)
+  └─ ƒ getTareasValidacionPendientes() in 1669ms src/features/mi-panel/actions/mi-panel-actions.ts
+ POST /mis-departamentos 200 in 2.6s (next.js: 6ms, proxy.ts: 607ms, application-code: 2.0s)
+  └─ ƒ listCanales("habana") in 2006ms src/features/comunicacion/actions/comunicacion-actions.ts
+ POST /mis-departamentos 200 in 1280ms (next.js: 6ms, proxy.ts: 501ms, application-code: 772ms)
+  └─ ƒ contarLlamadasPerdidasNoVistas(null) in 756ms src/features/llamadas-internas/actions/llamadas-actions.ts
+ POST /mis-departamentos 200 in 1398ms (next.js: 6ms, proxy.ts: 681ms, application-code: 711ms)
+  └─ ƒ contarContactosNuevos(7) in 695ms src/features/agenda/actions/contactos-actions.ts
+ POST /mis-departamentos 200 in 3.1s (next.js: 4ms, proxy.ts: 670ms, application-code: 2.4s)
+  └─ ƒ contarPendientesHoy() in 2412ms src/features/tareas/actions/tareas-actions.ts
+ POST /mis-departamentos 200 in 1258ms (next.js: 6ms, proxy.ts: 488ms, application-code: 764ms)
+  └─ ƒ listMisNotificaciones() in 739ms src/features/notificaciones/actions/notificaciones-actions.ts
+ POST /mis-departamentos 200 in 2.6s (next.js: 115ms, proxy.ts: 478ms, application-code: 2.0s)
+  └─ ƒ getTareasValidacionPendientes() in 1997ms src/features/mi-panel/actions/mi-panel-actions.ts
+ POST /mis-departamentos 200 in 2.2s (next.js: 4ms, proxy.ts: 594ms, application-code: 1581ms)
+  └─ ƒ listCanales("habana") in 1566ms src/features/comunicacion/actions/comunicacion-actions.ts
+ POST /mis-departamentos 200 in 1287ms (next.js: 5ms, proxy.ts: 492ms, application-code: 791ms)
+  └─ ƒ contarLlamadasPerdidasNoVistas(null) in 774ms src/features/llamadas-internas/actions/llamadas-actions.ts
+ POST /mis-departamentos 200 in 1350ms (next.js: 7ms, proxy.ts: 599ms, application-code: 744ms)
+  └─ ƒ contarContactosNuevos(7) in 729ms src/features/agenda/actions/contactos-actions.ts
+✓ Compiled in 484ms
+ GET /mis-departamentos 200 in 647ms (next.js: 13ms, proxy.ts: 592ms, application-code: 42ms)
+ GET /mis-departamentos 200 in 1000ms (next.js: 6ms, proxy.ts: 948ms, application-code: 46ms)
+ GET /mis-departamentos 200 in 541ms (next.js: 3ms, proxy.ts: 488ms, application-code: 50ms)
+ GET /mis-departamentos 200 in 577ms (next.js: 7ms, proxy.ts: 533ms, application-code: 38ms)
+ GET /mis-departamentos 200 in 498ms (next.js: 6ms, proxy.ts: 451ms, application-code: 41ms)
+ GET /manifest.webmanifest 200 in 17ms (next.js: 3ms, proxy.ts: 4ms, application-code: 11ms)
+ POST /mis-departamentos 200 in 2.8s (next.js: 4ms, proxy.ts: 602ms, application-code: 2.1s)
+  └─ ƒ contarPendientesHoy() in 2131ms src/features/tareas/actions/tareas-actions.ts
+ POST /mis-departamentos 200 in 2.2s (next.js: 4ms, proxy.ts: 574ms, application-code: 1624ms)
+  └─ ƒ getTareasValidacionPendientes() in 1609ms src/features/mi-panel/actions/mi-panel-actions.ts
+ POST /mis-departamentos 200 in 2.3s (next.js: 5ms, proxy.ts: 590ms, application-code: 1702ms)
+  └─ ƒ listCanales("habana") in 1687ms src/features/comunicacion/actions/comunicacion-actions.ts
+ POST /mis-departamentos 200 in 1199ms (next.js: 6ms, proxy.ts: 471ms, application-code: 723ms)
+  └─ ƒ contarLlamadasPerdidasNoVistas(null) in 710ms src/features/llamadas-internas/actions/llamadas-actions.ts
+ POST /mis-departamentos 200 in 1383ms (next.js: 6ms, proxy.ts: 593ms, application-code: 783ms)
+  └─ ƒ contarContactosNuevos(7) in 769ms src/features/agenda/actions/contactos-actions.ts
+ POST /mis-departamentos 200 in 1444ms (next.js: 7ms, proxy.ts: 671ms, application-code: 766ms)
+  └─ ƒ listMisNotificaciones() in 747ms src/features/notificaciones/actions/notificaciones-actions.ts
+ POST /mis-departamentos 200 in 2.8s (next.js: 6ms, proxy.ts: 592ms, application-code: 2.2s)
+  └─ ƒ contarPendientesHoy() in 2179ms src/features/tareas/actions/tareas-actions.ts
+ POST /mis-departamentos 200 in 1230ms (next.js: 5ms, proxy.ts: 473ms, application-code: 752ms)
+  └─ ƒ listMisNotificaciones() in 735ms src/features/notificaciones/actions/notificaciones-actions.ts
+ POST /mis-departamentos 200 in 2.0s (next.js: 3ms, proxy.ts: 495ms, application-code: 1545ms)
+  └─ ƒ getTareasValidacionPendientes() in 1534ms src/features/mi-panel/actions/mi-panel-actions.ts
+ POST /mis-departamentos 200 in 2.4s (next.js: 3ms, proxy.ts: 712ms, application-code: 1638ms)
+  └─ ƒ listCanales("habana") in 1627ms src/features/comunicacion/actions/comunicacion-actions.ts
+ POST /mis-departamentos 200 in 1233ms (next.js: 7ms, proxy.ts: 483ms, application-code: 744ms)
+  └─ ƒ contarLlamadasPerdidasNoVistas(null) in 733ms src/features/llamadas-internas/actions/llamadas-actions.ts
+ POST /mis-departamentos 200 in 1340ms (next.js: 5ms, proxy.ts: 593ms, application-code: 741ms)
+  └─ ƒ contarContactosNuevos(7) in 724ms src/features/agenda/actions/contactos-actions.ts
+ POST /mis-departamentos 200 in 3.3s (next.js: 4ms, proxy.ts: 1046ms, application-code: 2.2s)
+  └─ ƒ contarPendientesHoy() in 2201ms src/features/tareas/actions/tareas-actions.ts
+ POST /mis-departamentos 200 in 1232ms (next.js: 6ms, proxy.ts: 482ms, application-code: 745ms)
+  └─ ƒ listMisNotificaciones() in 730ms src/features/notificaciones/actions/notificaciones-actions.ts
+ POST /mis-departamentos 200 in 2.5s (next.js: 5ms, proxy.ts: 488ms, application-code: 1985ms)
+  └─ ƒ getTareasValidacionPendientes() in 1970ms src/features/mi-panel/actions/mi-panel-actions.ts
+ POST /mis-departamentos 200 in 2.6s (next.js: 6ms, proxy.ts: 599ms, application-code: 2.0s)
+  └─ ƒ listCanales("habana") in 1998ms src/features/comunicacion/actions/comunicacion-actions.ts
+ POST /mis-departamentos 200 in 1222ms (next.js: 6ms, proxy.ts: 482ms, application-code: 734ms)
+  └─ ƒ contarLlamadasPerdidasNoVistas(null) in 719ms src/features/llamadas-internas/actions/llamadas-actions.ts
+ POST /mis-departamentos 200 in 1317ms (next.js: 5ms, proxy.ts: 587ms, application-code: 724ms)
+  └─ ƒ contarContactosNuevos(7) in 710ms src/features/agenda/actions/contactos-actions.ts
+✓ Compiled in 411ms
+ GET /mis-departamentos 200 in 698ms (next.js: 4ms, proxy.ts: 655ms, application-code: 39ms)
+ GET /manifest.webmanifest 200 in 14ms (next.js: 1959µs, proxy.ts: 4ms, application-code: 8ms)
+ POST /mis-departamentos 200 in 2.7s (next.js: 6ms, proxy.ts: 519ms, application-code: 2.2s)
+  └─ ƒ contarPendientesHoy() in 2190ms src/features/tareas/actions/tareas-actions.ts
+ POST /mis-departamentos 200 in 2.1s (next.js: 7ms, proxy.ts: 484ms, application-code: 1618ms)
+  └─ ƒ getTareasValidacionPendientes() in 1605ms src/features/mi-panel/actions/mi-panel-actions.ts
+ POST /mis-departamentos 200 in 2.6s (next.js: 5ms, proxy.ts: 651ms, application-code: 1951ms)
+  └─ ƒ listCanales("habana") in 1935ms src/features/comunicacion/actions/comunicacion-actions.ts
+ POST /mis-departamentos 200 in 1251ms (next.js: 5ms, proxy.ts: 477ms, application-code: 768ms)
+  └─ ƒ getUserPermisos("eyJhbGciOiJFUzI1NiIsImtpZCI6IjU3ZmMzMzZjLWZkYmQtNDM1Mi05YWQwLWY0MmI4MDk4ZDAxMyIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJodHRwczovL3N4anR1YnpkcGZtbG13cXRzZ3JvLnN1cGFiYXNlLmNvL2F1dGgvdjEiLCJzdWIiOiI1OWM0OTZmMi05YmM4LTRhMGItOTAwNC1jM2IyNzcwZDg5ODIiLCJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjoxNzgzNTk5NTUyLCJpYXQiOjE3ODM1OTU5NTIsImVtYWlsIjoiZGlyZWNjaW9uLmdydXBvaGFiYW5hQGdtYWlsLmNvbSIsInBob25lIjoiIiwiYXBwX21ldGFkYXRhIjp7InByb3ZpZGVyIjoiZW1haWwiLCJwcm92aWRlcnMiOlsiZW1haWwiLCJnb29nbGUiXX0sInVzZXJfbWV0YWRhdGEiOnsiYXZhdGFyX3VybCI6Imh0dHBzOi8vbGgzLmdvb2dsZXVzZXJjb250ZW50LmNvbS9hL0FDZzhvY0kzd1hxM1U2Slk1N3VSSWR5eG9jYkVCa0FDT0FaWm9zaDA3MGp3cmhlRWhJTVpkcW11PXM5Ni1jIiwiZW1haWwiOiJkaXJlY2Npb24uZ3J1cG9oYWJhbmFAZ21haWwuY29tIiwiZW1haWxfdmVyaWZpZWQiOnRydWUsImZ1bGxfbmFtZSI6IkRpcmVjY2nDs24gR3J1cG8gSGFiYW5hIiwiaXNzIjoiaHR0cHM6Ly9hY2NvdW50cy5nb29nbGUuY29tIiwibmFtZSI6IkRpcmVjY2nDs24gR3J1cG8gSGFiYW5hIiwicGhvbmVfdmVyaWZpZWQiOmZhbHNlLCJwaWN0dXJlIjoiaHR0cHM6Ly9saDMuZ29vZ2xldXNlcmNvbnRlbnQuY29tL2EvQUNnOG9jSTN3WHEzVTZKWTU3dVJJZHl4b2NiRUJrQUNPQVpab3NoMDcwandyaGVFaElNWmRxbXU9czk2LWMiLCJwcm92aWRlcl9pZCI6IjExNjE4MzEwOTkwMTcyODQyMjg5OSIsInN1YiI6IjExNjE4MzEwOTkwMTcyODQyMjg5OSJ9LCJyb2xlIjoiYXV0aGVudGljYXRlZCIsImFhbCI6ImFhbDEiLCJhbXIiOlt7Im1ldGhvZCI6Im9hdXRoIiwidGltZXN0YW1wIjoxNzgzNTkyNDIzfV0sInNlc3Npb25faWQiOiJmYjY5MTliNi03ZjVhLTRmOTYtYTg2Ni03ZDIzNDU2NjlhNzAiLCJpc19hbm9ueW1vdXMiOmZhbHNlfQ.9MdVM5IXNgD_75gGzJp97_X5xyWR3xT53kmNsCPcgihL_UHWG7yQERy43BUZtGE0mtIUY5PWRHRKZOs__I9eHg") in 755ms src/features/auth/actions/permisos-actions.ts
+ POST /mis-departamentos 200 in 1241ms (next.js: 6ms, proxy.ts: 510ms, application-code: 725ms)
+  └─ ƒ contarLlamadasPerdidasNoVistas(null) in 711ms src/features/llamadas-internas/actions/llamadas-actions.ts
+ POST /mis-departamentos 200 in 2.1s (next.js: 6ms, proxy.ts: 597ms, application-code: 1472ms)
+  └─ ƒ contarContactosNuevos(7) in 1458ms src/features/agenda/actions/contactos-actions.ts
+✓ Compiled in 473ms
+ POST /mis-departamentos 200 in 1289ms (next.js: 4ms, proxy.ts: 584ms, application-code: 702ms)
+  └─ ƒ listMisNotificaciones() in 688ms src/features/notificaciones/actions/notificaciones-actions.ts
+ GET /mis-departamentos 200 in 844ms (next.js: 214ms, proxy.ts: 555ms, application-code: 75ms)
+ GET /mis-departamentos 200 in 657ms (next.js: 6ms, proxy.ts: 611ms, application-code: 41ms)
+ GET /mis-departamentos 200 in 516ms (next.js: 6ms, proxy.ts: 466ms, application-code: 45ms)
+ GET /mis-departamentos 200 in 512ms (next.js: 6ms, proxy.ts: 466ms, application-code: 40ms)
+ GET /manifest.webmanifest 200 in 49ms (next.js: 37ms, proxy.ts: 5ms, application-code: 7ms)
+✓ Compiled in 485ms
+ GET /mis-departamentos 200 in 1044ms (next.js: 196ms, proxy.ts: 711ms, application-code: 138ms)
+ GET /mis-departamentos 200 in 617ms (next.js: 5ms, proxy.ts: 566ms, application-code: 47ms)
+ GET /mis-departamentos 200 in 523ms (next.js: 6ms, proxy.ts: 471ms, application-code: 46ms)
+ GET /mis-departamentos 200 in 539ms (next.js: 7ms, proxy.ts: 488ms, application-code: 44ms)
+ GET /manifest.webmanifest 200 in 48ms (next.js: 33ms, proxy.ts: 6ms, application-code: 8ms)
+✓ Compiled in 401ms
+ GET /mis-departamentos 200 in 660ms (next.js: 14ms, proxy.ts: 601ms, application-code: 46ms)
+ GET /mis-departamentos 200 in 537ms (next.js: 6ms, proxy.ts: 487ms, application-code: 44ms)
+ GET /mis-departamentos 200 in 531ms (next.js: 5ms, proxy.ts: 477ms, application-code: 48ms)
+ GET /mis-departamentos 200 in 537ms (next.js: 6ms, proxy.ts: 482ms, application-code: 49ms)
+ GET /mis-departamentos 200 in 520ms (next.js: 5ms, proxy.ts: 469ms, application-code: 45ms)
+ GET /manifest.webmanifest 200 in 15ms (next.js: 2ms, proxy.ts: 5ms, application-code: 7ms)
+ POST /mis-departamentos 200 in 3.0s (next.js: 6ms, proxy.ts: 774ms, application-code: 2.2s)
+  └─ ƒ contarPendientesHoy() in 2121ms src/features/tareas/actions/tareas-actions.ts
+ POST /mis-departamentos 200 in 2.1s (next.js: 6ms, proxy.ts: 471ms, application-code: 1608ms)
+  └─ ƒ getTareasValidacionPendientes() in 1597ms src/features/mi-panel/actions/mi-panel-actions.ts
+✓ Compiled in 376ms
+ GET /mis-departamentos 200 in 730ms (next.js: 10ms, proxy.ts: 667ms, application-code: 54ms)
+ GET /mis-departamentos 200 in 569ms (next.js: 6ms, proxy.ts: 518ms, application-code: 45ms)
+ GET /mis-departamentos 200 in 521ms (next.js: 5ms, proxy.ts: 469ms, application-code: 47ms)
+ POST /mis-departamentos 200 in 2.3s (next.js: 3ms, proxy.ts: 716ms, application-code: 1575ms)
+  └─ ƒ listCanales("habana") in 1568ms src/features/comunicacion/actions/comunicacion-actions.ts
+✓ Compiled in 372ms
+ GET /mis-departamentos 200 in 599ms (next.js: 46ms, proxy.ts: 516ms, application-code: 37ms)
+ GET /mis-departamentos 200 in 522ms (next.js: 6ms, proxy.ts: 479ms, application-code: 37ms)
+ POST /mis-departamentos 200 in 1162ms (next.js: 7ms, proxy.ts: 450ms, application-code: 705ms)
+  └─ ƒ contarLlamadasPerdidasNoVistas(null) in 693ms src/features/llamadas-internas/actions/llamadas-actions.ts
+ GET /mis-departamentos 200 in 682ms (next.js: 5ms, proxy.ts: 637ms, application-code: 40ms)
+ POST /mis-departamentos 200 in 1240ms (next.js: 5ms, proxy.ts: 479ms, application-code: 756ms)
+  └─ ƒ contarContactosNuevos(7) in 743ms src/features/agenda/actions/contactos-actions.ts
+✓ Compiled in 374ms
+ GET /mis-departamentos 200 in 921ms (next.js: 324ms, proxy.ts: 559ms, application-code: 37ms)
+ GET /mis-departamentos 200 in 515ms (next.js: 7ms, proxy.ts: 468ms, application-code: 41ms)
+ GET /mis-departamentos 200 in 652ms (next.js: 4ms, proxy.ts: 609ms, application-code: 39ms)
+ GET /mis-departamentos 200 in 523ms (next.js: 6ms, proxy.ts: 477ms, application-code: 40ms)
+ GET /mis-departamentos 200 in 527ms (next.js: 10ms, proxy.ts: 481ms, application-code: 36ms)
+ GET /mis-departamentos 200 in 526ms (next.js: 4ms, proxy.ts: 476ms, application-code: 45ms)
+ GET /mis-departamentos 200 in 535ms (next.js: 5ms, proxy.ts: 486ms, application-code: 43ms)
+ GET /mis-departamentos 200 in 535ms (next.js: 5ms, proxy.ts: 484ms, application-code: 46ms)
+ GET /mis-departamentos 200 in 581ms (next.js: 5ms, proxy.ts: 535ms, application-code: 40ms)
+ GET /manifest.webmanifest 200 in 15ms (next.js: 2ms, proxy.ts: 4ms, application-code: 8ms)
+ POST /mis-departamentos 200 in 1948ms (next.js: 5ms, proxy.ts: 1147ms, application-code: 797ms)
+  └─ ƒ listMisNotificaciones() in 777ms src/features/notificaciones/actions/notificaciones-actions.ts
+✓ Compiled in 386ms
+ GET /mis-departamentos 200 in 557ms (next.js: 5ms, proxy.ts: 512ms, application-code: 40ms)
+ GET /manifest.webmanifest 200 in 10ms (next.js: 1788µs, proxy.ts: 3ms, application-code: 5ms)
+✓ Compiled in 360ms
+✓ Compiled in 343ms
+ GET /mis-departamentos 200 in 634ms (next.js: 5ms, proxy.ts: 588ms, application-code: 41ms)
+ GET /manifest.webmanifest 200 in 11ms (next.js: 2ms, proxy.ts: 3ms, application-code: 6ms)
+✓ Compiled in 402ms
+✓ Compiled in 366ms
+✓ Compiled in 370ms
+✓ Compiled in 369ms
+✓ Compiled in 385ms
+✓ Compiled in 525ms
+✓ Compiled in 389ms
+ POST /mis-departamentos 200 in 3.5s (next.js: 7ms, proxy.ts: 1070ms, application-code: 2.5s)
+  └─ ƒ contarPendientesHoy() in 2448ms src/features/tareas/actions/tareas-actions.ts
+ POST /mis-departamentos 200 in 1429ms (next.js: 5ms, proxy.ts: 533ms, application-code: 892ms)
+  └─ ƒ listMisNotificaciones() in 874ms src/features/notificaciones/actions/notificaciones-actions.ts
+ POST /mis-departamentos 200 in 2.6s (next.js: 4ms, proxy.ts: 535ms, application-code: 2.0s)
+  └─ ƒ getTareasValidacionPendientes() in 2027ms src/features/mi-panel/actions/mi-panel-actions.ts
+✓ Compiled in 404ms
+ POST /mis-departamentos 200 in 2.7s (next.js: 5ms, proxy.ts: 674ms, application-code: 2.0s)
+  └─ ƒ listCanales("habana") in 2036ms src/features/comunicacion/actions/comunicacion-actions.ts
+ POST /mis-departamentos 200 in 1290ms (next.js: 4ms, proxy.ts: 496ms, application-code: 789ms)
+  └─ ƒ contarLlamadasPerdidasNoVistas(null) in 777ms src/features/llamadas-internas/actions/llamadas-actions.ts
+ POST /mis-departamentos 200 in 1539ms (next.js: 6ms, proxy.ts: 592ms, application-code: 942ms)
+  └─ ƒ contarContactosNuevos(7) in 928ms src/features/agenda/actions/contactos-actions.ts
+✓ Compiled in 384ms
+✓ Compiled in 374ms
+✓ Compiled in 411ms
+✓ Compiled in 423ms
+ POST /mis-departamentos 200 in 3.4s (next.js: 7ms, proxy.ts: 989ms, application-code: 2.4s)
+  └─ ƒ contarPendientesHoy() in 2396ms src/features/tareas/actions/tareas-actions.ts
+ POST /mis-departamentos 200 in 1233ms (next.js: 4ms, proxy.ts: 470ms, application-code: 759ms)
+  └─ ƒ listMisNotificaciones() in 748ms src/features/notificaciones/actions/notificaciones-actions.ts
+ POST /mis-departamentos 200 in 2.4s (next.js: 5ms, proxy.ts: 520ms, application-code: 1867ms)
+  └─ ƒ getTareasValidacionPendientes() in 1852ms src/features/mi-panel/actions/mi-panel-actions.ts
+ POST /mis-departamentos 200 in 2.2s (next.js: 6ms, proxy.ts: 582ms, application-code: 1570ms)
+  └─ ƒ listCanales("habana") in 1554ms src/features/comunicacion/actions/comunicacion-actions.ts
+ POST /mis-departamentos 200 in 1207ms (next.js: 3ms, proxy.ts: 488ms, application-code: 716ms)
+  └─ ƒ contarLlamadasPerdidasNoVistas(null) in 707ms src/features/llamadas-internas/actions/llamadas-actions.ts
+ POST /mis-departamentos 200 in 1334ms (next.js: 5ms, proxy.ts: 579ms, application-code: 751ms)
+  └─ ƒ contarContactosNuevos(7) in 735ms src/features/agenda/actions/contactos-actions.ts
+ POST /mis-departamentos 200 in 2.9s (next.js: 5ms, proxy.ts: 623ms, application-code: 2.3s)
+  └─ ƒ contarPendientesHoy() in 2298ms src/features/tareas/actions/tareas-actions.ts
+ POST /mis-departamentos 200 in 1263ms (next.js: 4ms, proxy.ts: 484ms, application-code: 775ms)
+  └─ ƒ listMisNotificaciones() in 759ms src/features/notificaciones/actions/notificaciones-actions.ts
+ POST /mis-departamentos 200 in 2.2s (next.js: 5ms, proxy.ts: 593ms, application-code: 1636ms)
+  └─ ƒ getTareasValidacionPendientes() in 1619ms src/features/mi-panel/actions/mi-panel-actions.ts
+ POST /mis-departamentos 200 in 2.2s (next.js: 6ms, proxy.ts: 583ms, application-code: 1587ms)
+  └─ ƒ listCanales("habana") in 1574ms src/features/comunicacion/actions/comunicacion-actions.ts
+ POST /mis-departamentos 200 in 1230ms (next.js: 5ms, proxy.ts: 481ms, application-code: 745ms)
+  └─ ƒ contarLlamadasPerdidasNoVistas(null) in 731ms src/features/llamadas-internas/actions/llamadas-actions.ts
+ POST /mis-departamentos 200 in 1345ms (next.js: 4ms, proxy.ts: 601ms, application-code: 740ms)
+  └─ ƒ contarContactosNuevos(7) in 722ms src/features/agenda/actions/contactos-actions.ts
+ POST /mis-departamentos 200 in 3.0s (next.js: 7ms, proxy.ts: 750ms, application-code: 2.3s)
+  └─ ƒ contarPendientesHoy() in 2236ms src/features/tareas/actions/tareas-actions.ts
+ POST /mis-departamentos 200 in 1693ms (next.js: 8ms, proxy.ts: 479ms, application-code: 1206ms)
+  └─ ƒ listMisNotificaciones() in 1187ms src/features/notificaciones/actions/notificaciones-actions.ts
+ POST /mis-departamentos 200 in 2.1s (next.js: 6ms, proxy.ts: 476ms, application-code: 1600ms)
+  └─ ƒ getTareasValidacionPendientes() in 1584ms src/features/mi-panel/actions/mi-panel-actions.ts
+ POST /mis-departamentos 200 in 2.7s (next.js: 6ms, proxy.ts: 616ms, application-code: 2.1s)
+  └─ ƒ listCanales("habana") in 2047ms src/features/comunicacion/actions/comunicacion-actions.ts
+ POST /mis-departamentos 200 in 1259ms (next.js: 5ms, proxy.ts: 488ms, application-code: 767ms)
+  └─ ƒ contarLlamadasPerdidasNoVistas(null) in 754ms src/features/llamadas-internas/actions/llamadas-actions.ts
+ POST /mis-departamentos 200 in 1329ms (next.js: 7ms, proxy.ts: 595ms, application-code: 728ms)
+  └─ ƒ contarContactosNuevos(7) in 711ms src/features/agenda/actions/contactos-actions.ts
+ POST /mis-departamentos 200 in 1352ms (next.js: 6ms, proxy.ts: 598ms, application-code: 748ms)
+  └─ ƒ getUserPermisos("eyJhbGciOiJFUzI1NiIsImtpZCI6IjU3ZmMzMzZjLWZkYmQtNDM1Mi05YWQwLWY0MmI4MDk4ZDAxMyIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJodHRwczovL3N4anR1YnpkcGZtbG13cXRzZ3JvLnN1cGFiYXNlLmNvL2F1dGgvdjEiLCJzdWIiOiI1OWM0OTZmMi05YmM4LTRhMGItOTAwNC1jM2IyNzcwZDg5ODIiLCJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjoxNzgzNTk5NTUyLCJpYXQiOjE3ODM1OTU5NTIsImVtYWlsIjoiZGlyZWNjaW9uLmdydXBvaGFiYW5hQGdtYWlsLmNvbSIsInBob25lIjoiIiwiYXBwX21ldGFkYXRhIjp7InByb3ZpZGVyIjoiZW1haWwiLCJwcm92aWRlcnMiOlsiZW1haWwiLCJnb29nbGUiXX0sInVzZXJfbWV0YWRhdGEiOnsiYXZhdGFyX3VybCI6Imh0dHBzOi8vbGgzLmdvb2dsZXVzZXJjb250ZW50LmNvbS9hL0FDZzhvY0kzd1hxM1U2Slk1N3VSSWR5eG9jYkVCa0FDT0FaWm9zaDA3MGp3cmhlRWhJTVpkcW11PXM5Ni1jIiwiZW1haWwiOiJkaXJlY2Npb24uZ3J1cG9oYWJhbmFAZ21haWwuY29tIiwiZW1haWxfdmVyaWZpZWQiOnRydWUsImZ1bGxfbmFtZSI6IkRpcmVjY2nDs24gR3J1cG8gSGFiYW5hIiwiaXNzIjoiaHR0cHM6Ly9hY2NvdW50cy5nb29nbGUuY29tIiwibmFtZSI6IkRpcmVjY2nDs24gR3J1cG8gSGFiYW5hIiwicGhvbmVfdmVyaWZpZWQiOmZhbHNlLCJwaWN0dXJlIjoiaHR0cHM6Ly9saDMuZ29vZ2xldXNlcmNvbnRlbnQuY29tL2EvQUNnOG9jSTN3WHEzVTZKWTU3dVJJZHl4b2NiRUJrQUNPQVpab3NoMDcwandyaGVFaElNWmRxbXU9czk2LWMiLCJwcm92aWRlcl9pZCI6IjExNjE4MzEwOTkwMTcyODQyMjg5OSIsInN1YiI6IjExNjE4MzEwOTkwMTcyODQyMjg5OSJ9LCJyb2xlIjoiYXV0aGVudGljYXRlZCIsImFhbCI6ImFhbDEiLCJhbXIiOlt7Im1ldGhvZCI6Im9hdXRoIiwidGltZXN0YW1wIjoxNzgzNTkyNDIzfV0sInNlc3Npb25faWQiOiJmYjY5MTliNi03ZjVhLTRmOTYtYTg2Ni03ZDIzNDU2NjlhNzAiLCJpc19hbm9ueW1vdXMiOmZhbHNlfQ.9MdVM5IXNgD_75gGzJp97_X5xyWR3xT53kmNsCPcgihL_UHWG7yQERy43BUZtGE0mtIUY5PWRHRKZOs__I9eHg") in 736ms src/features/auth/actions/permisos-actions.ts
+ POST /mis-departamentos 200 in 3.0s (next.js: 5ms, proxy.ts: 591ms, application-code: 2.4s)
+  └─ ƒ contarPendientesHoy() in 2397ms src/features/tareas/actions/tareas-actions.ts
+ POST /mis-departamentos 200 in 2.6s (next.js: 5ms, proxy.ts: 780ms, application-code: 1777ms)
+  └─ ƒ getTareasValidacionPendientes() in 1760ms src/features/mi-panel/actions/mi-panel-actions.ts
+ POST /mis-departamentos 200 in 2.9s (next.js: 6ms, proxy.ts: 851ms, application-code: 2.1s)
+  └─ ƒ listCanales("habana") in 2051ms src/features/comunicacion/actions/comunicacion-actions.ts
+ POST /mis-departamentos 200 in 1560ms (next.js: 6ms, proxy.ts: 471ms, application-code: 1084ms)
+  └─ ƒ contarLlamadasPerdidasNoVistas(null) in 1070ms src/features/llamadas-internas/actions/llamadas-actions.ts
+ POST /mis-departamentos 200 in 1655ms (next.js: 5ms, proxy.ts: 920ms, application-code: 730ms)
+  └─ ƒ contarContactosNuevos(7) in 715ms src/features/agenda/actions/contactos-actions.ts
+ POST /mis-departamentos 200 in 1338ms (next.js: 4ms, proxy.ts: 592ms, application-code: 742ms)
+  └─ ƒ listMisNotificaciones() in 726ms src/features/notificaciones/actions/notificaciones-actions.ts
+ POST /mis-departamentos 200 in 2.9s (next.js: 6ms, proxy.ts: 659ms, application-code: 2.2s)
+  └─ ƒ contarPendientesHoy() in 2200ms src/features/tareas/actions/tareas-actions.ts
+ POST /mis-departamentos 200 in 1253ms (next.js: 10ms, proxy.ts: 488ms, application-code: 754ms)
+  └─ ƒ listMisNotificaciones() in 739ms src/features/notificaciones/actions/notificaciones-actions.ts
+ POST /mis-departamentos 200 in 2.9s (next.js: 5ms, proxy.ts: 498ms, application-code: 2.4s)
+  └─ ƒ getTareasValidacionPendientes() in 2347ms src/features/mi-panel/actions/mi-panel-actions.ts
+ POST /mis-departamentos 200 in 2.2s (next.js: 5ms, proxy.ts: 586ms, application-code: 1585ms)
+  └─ ƒ listCanales("habana") in 1567ms src/features/comunicacion/actions/comunicacion-actions.ts
+ POST /mis-departamentos 200 in 1905ms (next.js: 7ms, proxy.ts: 814ms, application-code: 1084ms)
+  └─ ƒ contarLlamadasPerdidasNoVistas(null) in 1068ms src/features/llamadas-internas/actions/llamadas-actions.ts
+ POST /mis-departamentos 200 in 2.1s (next.js: 6ms, proxy.ts: 988ms, application-code: 1110ms)
+  └─ ƒ contarContactosNuevos(7) in 1097ms src/features/agenda/actions/contactos-actions.ts
+✓ Compiled in 513ms
+ POST /mis-departamentos 200 in 4.6s (next.js: 10ms, proxy.ts: 2.3s, application-code: 2.2s)
+  └─ ƒ contarPendientesHoy() in 2175ms src/features/tareas/actions/tareas-actions.ts
+ POST /mis-departamentos 200 in 1258ms (next.js: 6ms, proxy.ts: 484ms, application-code: 768ms)
+  └─ ƒ listMisNotificaciones() in 750ms src/features/notificaciones/actions/notificaciones-actions.ts
+ POST /mis-departamentos 200 in 2.1s (next.js: 6ms, proxy.ts: 501ms, application-code: 1587ms)
+  └─ ƒ getTareasValidacionPendientes() in 1573ms src/features/mi-panel/actions/mi-panel-actions.ts
+ POST /mis-departamentos 200 in 2.2s (next.js: 6ms, proxy.ts: 585ms, application-code: 1644ms)
+  └─ ƒ listCanales("habana") in 1630ms src/features/comunicacion/actions/comunicacion-actions.ts
+ POST /mis-departamentos 200 in 1239ms (next.js: 6ms, proxy.ts: 484ms, application-code: 750ms)
+  └─ ƒ contarLlamadasPerdidasNoVistas(null) in 734ms src/features/llamadas-internas/actions/llamadas-actions.ts
+ POST /mis-departamentos 200 in 1357ms (next.js: 5ms, proxy.ts: 586ms, application-code: 765ms)
+  └─ ƒ contarContactosNuevos(7) in 748ms src/features/agenda/actions/contactos-actions.ts
+✓ Compiled in 391ms
+✓ Compiled in 384ms
+✓ Compiled in 394ms

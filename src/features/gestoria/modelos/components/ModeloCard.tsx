@@ -4,8 +4,9 @@ import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { FileText, AlertTriangle, CheckCircle2, Lock } from "lucide-react";
-import { PLAZOS_PRESENTACION, periodoALabel } from "../types/modelos";
+import { PLAZOS_PRESENTACION, periodoALabel, MODELO_LABEL, TIPOS_SOLO_DOCUMENTO } from "../types/modelos";
 import type { ModeloAeat } from "../types/modelos";
+import { ModeloPdfButton } from "./ModeloPdfButton";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { formatFechaHoraEnZona } from "@/features/empresa/lib/zona-horaria";
 
@@ -29,6 +30,7 @@ function estadoColor(estado: string): string {
 
 export function ModeloCard({ modelo }: { modelo: ModeloAeat }) {
   const { empresaActual } = useEmpresa();
+  const soloDocumento = TIPOS_SOLO_DOCUMENTO.includes(modelo.tipo);
   const dias = diasHastaPlazo(modelo);
   const urgente = dias !== null && dias <= 7 && dias >= 0 && modelo.estado !== "PRESENTADO";
   const vencido = dias !== null && dias < 0 && modelo.estado !== "PRESENTADO";
@@ -47,7 +49,7 @@ export function ModeloCard({ modelo }: { modelo: ModeloAeat }) {
             <div>
               <CardTitle className="text-xl font-bold flex items-center gap-2">
                 <FileText className="h-5 w-5 text-primary" />
-                Modelo {modelo.tipo}
+                {MODELO_LABEL[modelo.tipo]}
               </CardTitle>
               <p className="text-xs text-muted-foreground mt-1">
                 {periodoALabel(modelo.periodo, modelo.ejercicio)}
@@ -82,7 +84,11 @@ export function ModeloCard({ modelo }: { modelo: ModeloAeat }) {
             ) : null}
           </div>
 
-          {resultado !== undefined && resultado !== 0 ? (
+          {soloDocumento ? (
+            <p className="text-sm text-muted-foreground italic">
+              Documento anual de la gestoría
+            </p>
+          ) : resultado !== undefined && resultado !== 0 ? (
             <div className="pt-2 border-t">
               <p className="text-xs text-muted-foreground">Resultado</p>
               <p
@@ -106,6 +112,10 @@ export function ModeloCard({ modelo }: { modelo: ModeloAeat }) {
               IA ejecutada: {formatFechaHoraEnZona(modelo.ia_corrida_en, empresaActual?.zonaHoraria ?? "")}
             </p>
           ) : null}
+
+          <div className="pt-2 border-t flex items-center justify-end">
+            <ModeloPdfButton modeloId={modelo.id} tienePdf={Boolean(modelo.pdf_url)} />
+          </div>
         </CardContent>
       </Card>
     </Link>

@@ -10,17 +10,13 @@ import {
   listModelos,
 } from "../actions/modelos-actions";
 import { ModeloCard } from "./ModeloCard";
+import { ModelosConfigDialog } from "./ModelosConfigDialog";
 import type { ModeloAeat, ModeloTipo } from "../types/modelos";
+import { grupoDeModelo } from "../types/modelos";
 import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
-
-type GrupoTipo = "TRIMESTRALES" | "ANUALES";
 
 const AÑO_ACTUAL = new Date().getFullYear();
 const AÑOS = [AÑO_ACTUAL, AÑO_ACTUAL - 1, AÑO_ACTUAL - 2];
-
-function grupoDeModelo(tipo: ModeloTipo): GrupoTipo {
-  return tipo === "390" || tipo === "347" ? "ANUALES" : "TRIMESTRALES";
-}
 
 export function ModelosView() {
   const [ejercicio, setEjercicio] = useState<number>(AÑO_ACTUAL);
@@ -57,10 +53,12 @@ export function ModelosView() {
     () => modelos.filter((m) => grupoDeModelo(m.tipo) === "TRIMESTRALES"),
     [modelos],
   );
-  const anuales = useMemo(
-    () => modelos.filter((m) => grupoDeModelo(m.tipo) === "ANUALES"),
-    [modelos],
-  );
+  const anuales = useMemo(() => {
+    const orden: ModeloTipo[] = ["390", "347", "200", "190", "PYG", "BALANCE", "LIBRO_MAYOR"];
+    return modelos
+      .filter((m) => grupoDeModelo(m.tipo) === "ANUALES")
+      .sort((a, b) => orden.indexOf(a.tipo) - orden.indexOf(b.tipo));
+  }, [modelos]);
 
   const porTipoQ = useMemo(() => {
     const tipos: ModeloTipo[] = ["303", "130", "111", "115"];
@@ -100,6 +98,7 @@ export function ModelosView() {
             ))}
           </SelectContent>
         </Select>
+        <ModelosConfigDialog onSaved={() => refrescar(ejercicio)} />
       </div>
 
       {error ? (
