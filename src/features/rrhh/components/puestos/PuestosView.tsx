@@ -704,7 +704,6 @@ function DetalleView({ puesto, onBack, onChanged }: { puesto: PuestoSalarial; on
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-base">Datos de gestoría</CardTitle>
-          <CardDescription>El tipo de contrato se define en la vacante de este puesto</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="flex items-center gap-3">
