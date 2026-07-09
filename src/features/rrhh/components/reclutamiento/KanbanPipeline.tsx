@@ -342,7 +342,7 @@ function EstadoColumn({
       {/* Cards */}
       <ScrollArea
         className="flex-1 px-1 pb-1 [&>[data-radix-scroll-area-viewport]>div]:!block [&>[data-radix-scroll-area-viewport]>div]:!min-w-0"
-        style={{ maxHeight: compact ? "180px" : "calc(100vh - 280px)" }}
+        style={{ maxHeight: compact ? "240px" : "calc(100vh - 280px)" }}
       >
         <div className="space-y-1.5 min-h-[36px]">
           {candidatos.map((c) => (
@@ -726,39 +726,25 @@ export function KanbanPipeline({ vacante, vacantes = [], onBack, onUpdateCandida
       </div>
 
       {/* Kanban Board */}
-      {/* Layout: Selección + Onboarding arriba a todo el ancho (Onboarding tiene
-          4 sub-columnas: Formación · Contratación · Prueba · Empleado); Descartado
-          abajo como banda horizontal compacta. Arrastrar una tarjeta a la banda
-          inferior la mueve a un estado de Descartado. */}
+      {/* Layout: las 4 fases apiladas una debajo de otra (Selección · Onboarding ·
+          Offboarding · Descartado). Cada fase es una banda horizontal a todo el
+          ancho con sus 4 estados en fila. Arrastrar una tarjeta a cualquier estado
+          la mueve a esa columna, respetando las reglas de reseñas/documentación. */}
       <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3">
-        <div className="flex gap-2 w-full">
-          {FASES_PRINCIPALES_ORDER.filter((f) => f !== "descartado").map((fase) => (
+        {FASES_PRINCIPALES_ORDER.map((fase) => (
+          <div key={fase} className="w-full">
             <FaseGroup
-              key={fase}
               fasePrincipal={fase}
               candidatos={candidatosVisibles.filter((c) => getFasePrincipal(c.fase) === fase)}
               plantillasPorEstado={plantillasPorEstado}
               mostrarContador={mostrarContador}
+              compact
               onDragStart={handleDragStart}
               onDrop={handleDrop}
               onCardClick={setSelectedCandidato}
             />
-          ))}
-        </div>
-
-        {/* Banda inferior: Descartado */}
-        <div className="w-full">
-          <FaseGroup
-            fasePrincipal="descartado"
-            candidatos={candidatosVisibles.filter((c) => getFasePrincipal(c.fase) === "descartado")}
-            plantillasPorEstado={plantillasPorEstado}
-            mostrarContador={mostrarContador}
-            compact
-            onDragStart={handleDragStart}
-            onDrop={handleDrop}
-            onCardClick={setSelectedCandidato}
-          />
-        </div>
+          </div>
+        ))}
       </div>
 
       <CandidatoDetailModal

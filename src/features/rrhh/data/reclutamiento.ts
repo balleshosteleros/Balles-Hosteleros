@@ -1,12 +1,14 @@
-// ─── Fase principal (3 grupos) ──────────────────────────────────
-// El pipeline tiene 3 grupos: Selección · Onboarding · Descartado.
+// ─── Fase principal (4 grupos) ──────────────────────────────────
+// El pipeline tiene 4 grupos: Selección · Onboarding · Offboarding · Descartado.
 // «Onboarding» agrupa como sub-columnas: Formación · Contratación · Prueba ·
-// Empleado. Se mantienen los nombres legacy de fase para historial antiguo.
+// Empleado. «Offboarding» agrupa: Preaviso · Baja contrato · Entregas ·
+// Finiquito. Se mantienen los nombres legacy de fase para historial antiguo.
 export type FasePrincipal =
   | "seleccion"
   | "onboarding"
+  | "offboarding"
   | "descartado"
-  // Aliases legacy de fase (historial antiguo en BD; mapean a las 3 nuevas)
+  // Aliases legacy de fase (historial antiguo en BD; mapean a las 4 nuevas)
   | "formacion"
   | "contratacion"
   | "prueba"
@@ -33,9 +35,15 @@ export type EstadoReclutamiento =
   | "contratacion"
   | "prueba"
   | "empleado"
+  // ── Offboarding (4 columnas) ──
+  | "preaviso"
+  | "baja_contrato"
+  | "entregas"
+  | "finiquito"
   // ── Descartado ──
   | "no_se_presenta"
   | "suspenso_formacion"
+  | "ex_empleado"
   // ── Estados legacy (historial antiguo; mapean a Formación / Contratación) ──
   | "teorica"
   | "practica"
@@ -94,10 +102,11 @@ export interface FasePrincipalConfig {
 // Solo las 3 fases canónicas se muestran en el pipeline; las legacy
 // se mantienen como alias para que el historial antiguo se renderice
 // sin crashear.
-// 3 fases canónicas en el pipeline: Selección · Onboarding · Descartado.
+// 4 fases canónicas en el pipeline: Selección · Onboarding · Offboarding · Descartado.
 export const FASES_PRINCIPALES_ORDER: FasePrincipal[] = [
   "seleccion",
   "onboarding",
+  "offboarding",
   "descartado",
 ];
 
@@ -120,17 +129,29 @@ const ONBOARDING_CONFIG: FasePrincipalConfig = {
   estados: ["formacion", "contratacion", "prueba", "empleado"],
 };
 
+// «Offboarding»: una sola fase con 4 sub-columnas (Preaviso · Baja contrato ·
+// Entregas · Finiquito). Es la salida ordenada de un empleado (no un descarte);
+// la cabecera de la fase usa un tono ámbar/naranja de cierre de ciclo.
+const OFFBOARDING_CONFIG: FasePrincipalConfig = {
+  label: "Offboarding",
+  color: "hsl(25, 85%, 52%)",
+  colorFrom: "hsl(30, 90%, 58%)",
+  colorTo: "hsl(20, 80%, 45%)",
+  estados: ["preaviso", "baja_contrato", "entregas", "finiquito"],
+};
+
 const DESCARTADO_CONFIG: FasePrincipalConfig = {
   label: "Descartado",
   color: "hsl(0, 72%, 51%)",
   colorFrom: "hsl(0, 80%, 58%)",
   colorTo: "hsl(0, 65%, 42%)",
-  estados: ["papelera", "no_se_presenta", "suspenso_formacion"],
+  estados: ["papelera", "no_se_presenta", "suspenso_formacion", "ex_empleado"],
 };
 
 export const FASES_PRINCIPALES: Record<FasePrincipal, FasePrincipalConfig> = {
   seleccion: SELECCION_CONFIG,
   onboarding: ONBOARDING_CONFIG,
+  offboarding: OFFBOARDING_CONFIG,
   descartado: DESCARTADO_CONFIG,
   // Aliases legacy de fase — apuntan a la fase nueva equivalente para que
   // FASES_PRINCIPALES[historialAntiguo.faseAnterior] siga devolviendo un config
@@ -158,9 +179,15 @@ export const ESTADOS_CONFIG: Record<EstadoReclutamiento, { label: string; color:
   contratacion: { label: "Contratación", color: "hsl(38, 92%, 50%)", icono: "📝" },
   prueba: { label: "Prueba", color: "hsl(265, 60%, 55%)", icono: "⏳" },
   empleado: { label: "Empleado", color: "hsl(145, 63%, 42%)", icono: "👤" },
+  // ── Offboarding: 4 columnas ──
+  preaviso: { label: "Preaviso", color: "hsl(25, 85%, 52%)", icono: "📢" },
+  baja_contrato: { label: "Baja contrato", color: "hsl(25, 85%, 52%)", icono: "📑" },
+  entregas: { label: "Entregas", color: "hsl(25, 85%, 52%)", icono: "📦" },
+  finiquito: { label: "Finiquito", color: "hsl(25, 85%, 52%)", icono: "💶" },
   // ── Descartado ──
   no_se_presenta: { label: "No se presenta", color: "hsl(0, 72%, 51%)", icono: "📋" },
   suspenso_formacion: { label: "Suspenso Formación", color: "hsl(0, 72%, 51%)", icono: "📋" },
+  ex_empleado: { label: "Ex-empleados", color: "hsl(0, 72%, 51%)", icono: "🚪" },
   // ── Legacy (mapean visualmente a su columna nueva; NO se muestran) ──
   teorica: { label: "Formación", color: "hsl(145, 63%, 42%)", icono: "🎓" },
   practica: { label: "Formación", color: "hsl(145, 63%, 42%)", icono: "🎓" },
@@ -183,7 +210,8 @@ const LEGACY_A_CONTRATACION = new Set<EstadoReclutamiento>([
 export const FASES_ORDER: EstadoReclutamiento[] = [
   "nuevo", "elegido", "entrevista", "documentacion",
   "formacion", "contratacion", "prueba", "empleado",
-  "papelera", "no_se_presenta", "suspenso_formacion",
+  "preaviso", "baja_contrato", "entregas", "finiquito",
+  "papelera", "no_se_presenta", "suspenso_formacion", "ex_empleado",
   // legacy (no se muestran como columnas; siguen siendo válidos en BD/historial)
   "teorica", "practica",
   "alta_pendiente_revision", "alta_enviada", "contrato_interno_firmado",
@@ -196,6 +224,7 @@ export const FASES_CONFIG = ESTADOS_CONFIG;
 // ─── Helper: get the fase principal (canónica) for a given estado ──
 export function getFasePrincipal(estado: EstadoReclutamiento): FasePrincipal {
   if (SELECCION_CONFIG.estados.includes(estado)) return "seleccion";
+  if (OFFBOARDING_CONFIG.estados.includes(estado)) return "offboarding";
   if (DESCARTADO_CONFIG.estados.includes(estado)) return "descartado";
   // Todo lo demás (formacion, contratacion, prueba, empleado + sus legacy)
   // pertenece a la única fase «Onboarding».
@@ -214,6 +243,13 @@ const ESTADOS_EXENTOS_RESENA = new Set<EstadoReclutamiento>([
   "elegido",
   "entrevista",
   "papelera",
+  // Offboarding y ex-empleado: ya es un empleado saliendo, no un candidato en
+  // proceso; no se le exige la reseña de entrevista para moverlo aquí.
+  "preaviso",
+  "baja_contrato",
+  "entregas",
+  "finiquito",
+  "ex_empleado",
 ]);
 
 /** ¿Mover a este estado exige tener las reseñas completas? */
@@ -426,8 +462,14 @@ export const EMAIL_PLANTILLAS_FASE: Record<EstadoReclutamiento, { asunto: string
   alta_completada: { asunto: "Alta completada", cuerpo: "Tu alta y contratos están completados.", activo: false },
   prueba: { asunto: "Comienza tu periodo de prueba", cuerpo: "Ya has sido dado/a de alta y has firmado la documentación correspondiente. Comienza tu periodo de prueba. Durante este tiempo evaluaremos tu adaptación, actitud, desempeño y cumplimiento de las normas internas.", activo: true },
   empleado: { asunto: "¡Bienvenido/a al equipo!", cuerpo: "Nos complace comunicarte que has sido seleccionado/a para incorporarte al equipo. ¡Enhorabuena!", activo: true },
+  // ── Offboarding: 4 columnas (salida ordenada del empleado) ──
+  preaviso: { asunto: "Comunicación de preaviso", cuerpo: "Te confirmamos la recepción del preaviso de finalización de tu relación laboral. En los próximos días te informaremos de los siguientes pasos.", activo: false },
+  baja_contrato: { asunto: "Tramitación de tu baja", cuerpo: "Estamos tramitando la baja de tu contrato. Te mantendremos informado/a del proceso.", activo: false },
+  entregas: { asunto: "Entrega de material", cuerpo: "Antes de tu salida necesitamos que devuelvas el material y los accesos que tengas asignados. Te indicaremos cómo y cuándo hacerlo.", activo: false },
+  finiquito: { asunto: "Liquidación y finiquito", cuerpo: "Tu liquidación y finiquito están preparados. Recibirás la documentación correspondiente para su revisión y firma.", activo: false },
   no_se_presenta: { asunto: "Estado de tu candidatura", cuerpo: "Lamentamos informarte de que tu candidatura ha sido marcada como no presentada.", activo: true },
   suspenso_formacion: { asunto: "Resultado de la formación", cuerpo: "Te informamos del resultado de tu fase de formación.", activo: true },
+  ex_empleado: { asunto: "Gracias por tu trabajo", cuerpo: "Damos por finalizada tu relación laboral con nosotros. Te agradecemos tu dedicación y te deseamos lo mejor en tu futuro profesional.", activo: false },
   papelera: { asunto: "Actualización de tu candidatura", cuerpo: "Te informamos de que tu candidatura no continúa en el proceso de selección actual.", activo: true },
   // ── Legacy (mapean a Formación; ya no se usan en el pipeline activo) ──
   teorica: { asunto: "Prueba teórica programada", cuerpo: "Te informamos de que pasas a la fase de prueba teórica.", activo: true },
@@ -470,6 +512,7 @@ export interface MetricasEmbudo {
   totalBase: number;
   grupoSeleccion: { count: number; porcentaje: number };
   grupoFormacion: { count: number; porcentaje: number };
+  grupoOffboarding: { count: number; porcentaje: number };
   grupoDescartado: { count: number; porcentaje: number };
   progreso: FilaEmbudo[];
   descartado: FilaEmbudo[];
@@ -486,6 +529,9 @@ export function calcularMetricasEmbudo(candidatos: Candidato[]): MetricasEmbudo 
   // «Onboarding» agrupa el tramo posterior a Selección (Formación · Contratación
   // · Prueba · Empleado).
   const formacionCount = sumEstados(ONBOARDING_CONFIG.estados);
+  // «Offboarding»: salida ordenada del empleado (Preaviso · Baja contrato ·
+  // Entregas · Finiquito).
+  const offboardingCount = sumEstados(OFFBOARDING_CONFIG.estados);
   const descartadoCount = sumEstados(DESCARTADO_CONFIG.estados);
 
   const pct = (n: number) =>
@@ -503,10 +549,12 @@ export function calcularMetricasEmbudo(candidatos: Candidato[]): MetricasEmbudo 
     totalBase,
     grupoSeleccion: { count: seleccionCount, porcentaje: pct(seleccionCount) },
     grupoFormacion: { count: formacionCount, porcentaje: pct(formacionCount) },
+    grupoOffboarding: { count: offboardingCount, porcentaje: pct(offboardingCount) },
     grupoDescartado: { count: descartadoCount, porcentaje: pct(descartadoCount) },
     progreso: [
       ...SELECCION_CONFIG.estados.map(filaEstado),
       ...ONBOARDING_CONFIG.estados.map(filaEstado),
+      ...OFFBOARDING_CONFIG.estados.map(filaEstado),
     ],
     descartado: DESCARTADO_CONFIG.estados.map(filaEstado),
   };

@@ -14,6 +14,7 @@
 export type FasePlantillaEstado =
   | "seleccion"
   | "onboarding"
+  | "offboarding"
   | "descartado";
 
 export interface PlantillaEstadoItemSeed {
@@ -58,10 +59,16 @@ export const RECLUTAMIENTO_PLANTILLA_ESTADOS_SEED: PlantillaEstadoSeed = {
     // correo genérico que recibe el candidato al entrar en la fase.
     { key: "prueba", label: "Prueba", color: "hsl(265, 60%, 55%)", fase: "onboarding", orden: 7, defaultEmailNombre: "Prueba" },
     { key: "empleado", label: "Empleado", color: "hsl(145, 63%, 42%)", fase: "onboarding", orden: 8, defaultEmailNombre: "Empleado" },
+    // ── Offboarding: 1 fase con 4 sub-columnas (Preaviso · Baja contrato · Entregas · Finiquito) ──
+    { key: "preaviso", label: "Preaviso", color: "hsl(25, 85%, 52%)", fase: "offboarding", orden: 9, defaultEmailNombre: "Preaviso" },
+    { key: "baja_contrato", label: "Baja contrato", color: "hsl(25, 85%, 52%)", fase: "offboarding", orden: 10, defaultEmailNombre: "Baja contrato" },
+    { key: "entregas", label: "Entregas", color: "hsl(25, 85%, 52%)", fase: "offboarding", orden: 11, defaultEmailNombre: "Entregas" },
+    { key: "finiquito", label: "Finiquito", color: "hsl(25, 85%, 52%)", fase: "offboarding", orden: 12, defaultEmailNombre: "Finiquito" },
     // ── Fase Descartado (todos heredan el color oficial de la fase) ──
-    { key: "papelera", label: "Papelera", color: "hsl(0, 72%, 51%)", fase: "descartado", orden: 9, defaultEmailNombre: "Papelera" },
-    { key: "no_se_presenta", label: "No se presenta", color: "hsl(0, 72%, 51%)", fase: "descartado", orden: 10, defaultEmailNombre: "No se presenta" },
-    { key: "suspenso_formacion", label: "Suspenso Formación", color: "hsl(0, 72%, 51%)", fase: "descartado", orden: 11, defaultEmailNombre: "Suspenso Formación" },
+    { key: "papelera", label: "Papelera", color: "hsl(0, 72%, 51%)", fase: "descartado", orden: 13, defaultEmailNombre: "Papelera" },
+    { key: "no_se_presenta", label: "No se presenta", color: "hsl(0, 72%, 51%)", fase: "descartado", orden: 14, defaultEmailNombre: "No se presenta" },
+    { key: "suspenso_formacion", label: "Suspenso Formación", color: "hsl(0, 72%, 51%)", fase: "descartado", orden: 15, defaultEmailNombre: "Suspenso Formación" },
+    { key: "ex_empleado", label: "Ex-empleados", color: "hsl(0, 72%, 51%)", fase: "descartado", orden: 16, defaultEmailNombre: "Ex-empleados" },
   ],
 };
 
@@ -70,6 +77,7 @@ export const RECLUTAMIENTO_PLANTILLA_ESTADOS_SEED: PlantillaEstadoSeed = {
 export const FASES_PLANTILLA_ESTADO: Record<string, { label: string; color: string }> = {
   seleccion: { label: "Selección", color: "hsl(220, 70%, 55%)" },
   onboarding: { label: "Onboarding", color: "hsl(145, 63%, 42%)" },
+  offboarding: { label: "Offboarding", color: "hsl(25, 85%, 52%)" },
   descartado: { label: "Descartado", color: "hsl(0, 72%, 51%)" },
   // legacy
   formacion: { label: "Onboarding", color: "hsl(145, 63%, 42%)" },

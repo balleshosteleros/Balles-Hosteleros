@@ -28,13 +28,14 @@ export function FunnelMetrics({ candidatos }: FunnelMetricsProps) {
   }
 
   const cfgSel = FASES_PRINCIPALES.seleccion;
-  const cfgFor = FASES_PRINCIPALES.formacion;
+  const cfgFor = FASES_PRINCIPALES.onboarding;
+  const cfgOff = FASES_PRINCIPALES.offboarding;
   const cfgDesc = FASES_PRINCIPALES.descartado;
 
   return (
     <div className="rounded-lg border border-border bg-card">
       {/* Totales por grupo */}
-      <div className="grid grid-cols-1 md:grid-cols-3 border-b border-border">
+      <div className="grid grid-cols-1 md:grid-cols-4 border-b border-border">
         <GrupoStat
           label={cfgSel.label}
           color={cfgSel.color}
@@ -51,6 +52,15 @@ export function FunnelMetrics({ candidatos }: FunnelMetricsProps) {
           colorTo={cfgFor.colorTo}
           count={metricas.grupoFormacion.count}
           porcentaje={metricas.grupoFormacion.porcentaje}
+          totalBase={metricas.totalBase}
+        />
+        <GrupoStat
+          label={cfgOff.label}
+          color={cfgOff.color}
+          colorFrom={cfgOff.colorFrom}
+          colorTo={cfgOff.colorTo}
+          count={metricas.grupoOffboarding.count}
+          porcentaje={metricas.grupoOffboarding.porcentaje}
           totalBase={metricas.totalBase}
         />
         <GrupoStat
