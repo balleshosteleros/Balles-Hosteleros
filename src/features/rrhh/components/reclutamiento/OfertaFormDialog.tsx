@@ -27,12 +27,6 @@ import {
   listPlantillasEstado,
   type PlantillaEstadoRow,
 } from "@/features/rrhh/actions/plantillas-reclutamiento-actions";
-import {
-  listReclutamientoEmailPlantillas,
-  createReclutamientoEmailPlantilla,
-  type ReclutamientoEmailPlantilla,
-} from "@/features/rrhh/actions/reclutamiento-email-plantillas-actions";
-import { FASES_PLANTILLA_ESTADO } from "@/lib/seeds/reclutamiento-plantilla-estados";
 import { useReglasSubmodulo } from "@/features/ajustes/hooks/use-reglas-submodulo";
 import { ValidacionFaltantesDialog } from "@/features/ajustes/components/ValidacionFaltantesDialog";
 import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
@@ -54,14 +48,9 @@ interface FormState {
   visible_publicamente: boolean;
   cuestionario_plantilla_id: string;
   plantilla_estado_id: string;
-  /** Map { estado_key: email_estado } — qué email se usa al pasar a cada estado. */
-  email_plantillas: Record<string, string>;
 }
 
 const SIN_CUESTIONARIO = "__none__";
-const SIN_EMAIL = "__no_email__";
-// Opción del desplegable «Email por estado» para crear una plantilla nueva.
-const NUEVO_EMAIL = "__nuevo_email__";
 
 const FORM_VACIO: FormState = {
   titulo: "",
@@ -75,7 +64,6 @@ const FORM_VACIO: FormState = {
   visible_publicamente: false,
   cuestionario_plantilla_id: "",
   plantilla_estado_id: "",
-  email_plantillas: {},
 };
 
 interface Props {
@@ -96,26 +84,18 @@ export function OfertaFormDialog({ open, onOpenChange, vacanteId, tituloPrefill,
   const [tiposContrato, setTiposContrato] = useState<TipoContratoRow[]>([]);
   const [cuestionarios, setCuestionarios] = useState<CuestionarioVacante[]>([]);
   const [plantillasEstado, setPlantillasEstado] = useState<PlantillaEstadoRow[]>([]);
-  const [emailPlantillas, setEmailPlantillas] = useState<ReclutamientoEmailPlantilla[]>([]);
   const [pending, startTransition] = useTransition();
-  // Mini-diálogo «crear email nuevo» desde el desplegable de un estado. Guarda a
-  // qué estado se asignará la plantilla recién creada.
-  const [nuevoEmailEstado, setNuevoEmailEstado] = useState<string | null>(null);
-  const [nuevoEmail, setNuevoEmail] = useState({ nombre: "", asunto: "", cuerpo: "" });
-  const [creandoEmail, setCreandoEmail] = useState(false);
   const [loadingExisting, setLoadingExisting] = useState(false);
   useGlobalLoadingSync(loadingExisting);
   const [faltantes, setFaltantes] = useState<string[]>([]);
   const { validar } = useReglasSubmodulo("rrhh", "reclutamiento");
 
-  const selectedEstadoTemplate = plantillasEstado.find((pe) => pe.id === form.plantilla_estado_id) ?? null;
-
   useEffect(() => {
     if (!open) return;
     void Promise.all([
       listPuestosCatalogo(), listDepartamentosCatalogo(), listJornadas(), listCuestionariosVacante(),
-      listPlantillasEstado(), listReclutamientoEmailPlantillas(), listTiposContrato(),
-    ]).then(([p, d, j, c, pe, ep, tc]) => {
+      listPlantillasEstado(), listTiposContrato(),
+    ]).then(([p, d, j, c, pe, tc]) => {
       setPuestos((p.data ?? []) as PuestoRef[]);
       setDepartamentos((d.data ?? []) as DepartamentoRef[]);
       setJornadas((j.data ?? []) as JornadaRow[]);
@@ -124,7 +104,6 @@ export function OfertaFormDialog({ open, onOpenChange, vacanteId, tituloPrefill,
       setCuestionarios(cuests);
       const plEstado = (pe.data ?? []) as PlantillaEstadoRow[];
       setPlantillasEstado(plEstado);
-      setEmailPlantillas(ep as ReclutamientoEmailPlantilla[]);
       // Al crear una vacante nueva, preselecciona el cuestionario y la plantilla
       // de estados por defecto.
       if (!vacanteId) {
@@ -156,7 +135,6 @@ export function OfertaFormDialog({ open, onOpenChange, vacanteId, tituloPrefill,
         estado_publicacion?: EstadoPub; visible_publicamente?: boolean;
         cuestionario_plantilla_id?: string | null;
         plantilla_estado_id?: string | null;
-        email_plantillas?: Record<string, string> | null;
       } | null;
       if (v) {
         setForm({
@@ -171,7 +149,6 @@ export function OfertaFormDialog({ open, onOpenChange, vacanteId, tituloPrefill,
           visible_publicamente: !!v.visible_publicamente,
           cuestionario_plantilla_id: v.cuestionario_plantilla_id ?? "",
           plantilla_estado_id: v.plantilla_estado_id ?? "",
-          email_plantillas: v.email_plantillas ?? {},
         });
       }
       setLoadingExisting(false);
@@ -218,7 +195,6 @@ export function OfertaFormDialog({ open, onOpenChange, vacanteId, tituloPrefill,
         cuestionario_plantilla_id: form.cuestionario_plantilla_id || null,
         cuestionario: !!form.cuestionario_plantilla_id,
         plantilla_estado_id: form.plantilla_estado_id || null,
-        email_plantillas: form.email_plantillas ?? {},
       };
       const res = vacanteId
         ? await updateVacante(vacanteId, payload)
@@ -231,41 +207,6 @@ export function OfertaFormDialog({ open, onOpenChange, vacanteId, tituloPrefill,
         toast.error(("error" in res && res.error) || "Error al guardar");
       }
     });
-  }
-
-  // Crea una plantilla de email nueva y la asigna al estado desde el que se abrió
-  // el mini-diálogo (opción «Crear email nuevo…» del desplegable). La plantilla
-  // queda en la biblioteca (reutilizable) y seleccionada en ese estado.
-  async function crearYAsignarEmail() {
-    const estadoKey = nuevoEmailEstado;
-    if (!estadoKey) return;
-    const nombre = nuevoEmail.nombre.trim();
-    const asunto = nuevoEmail.asunto.trim();
-    const cuerpo = nuevoEmail.cuerpo.trim();
-    if (!nombre || !asunto || !cuerpo) {
-      toast.error("Rellena nombre, asunto y cuerpo del email.");
-      return;
-    }
-    setCreandoEmail(true);
-    try {
-      const res = await createReclutamientoEmailPlantilla({ nombre, asunto, cuerpo, activa: true });
-      if (!res.ok || !res.id) {
-        toast.error(("error" in res && res.error) || "No se pudo crear el email.");
-        return;
-      }
-      // Refresca la biblioteca y asigna la nueva plantilla a este estado.
-      const lista = await listReclutamientoEmailPlantillas();
-      setEmailPlantillas(lista);
-      setForm((f) => ({
-        ...f,
-        email_plantillas: { ...f.email_plantillas, [estadoKey]: res.id as string },
-      }));
-      toast.success("Email creado y asignado a este estado.");
-      setNuevoEmailEstado(null);
-      setNuevoEmail({ nombre: "", asunto: "", cuerpo: "" });
-    } finally {
-      setCreandoEmail(false);
-    }
   }
 
   return (
@@ -390,64 +331,8 @@ export function OfertaFormDialog({ open, onOpenChange, vacanteId, tituloPrefill,
               />
             </div>
 
-            {/* Email por estado: qué plantilla de email se envía al pasar a cada estado */}
-            {selectedEstadoTemplate && selectedEstadoTemplate.estados.length > 0 && (
-              <div className="space-y-2 rounded-lg border border-border p-3">
-                <Label className="text-xs">Email por estado</Label>
-                <p className="text-[11px] text-muted-foreground -mt-1">
-                  Para cada estado, elige qué plantilla de email se envía al candidato al pasar a ese estado.
-                </p>
-                <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
-                  {[...selectedEstadoTemplate.estados]
-                    .sort((a, b) => a.orden - b.orden)
-                    .map((est) => {
-                      const faseCfg = FASES_PLANTILLA_ESTADO[est.fase];
-                      const current = form.email_plantillas[est.key]
-                        ?? est.email_plantilla_id
-                        ?? SIN_EMAIL;
-                      return (
-                        <div key={est.key} className="grid grid-cols-2 gap-2 items-center">
-                          <div className="flex items-center gap-2 min-w-0">
-                            <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: est.color || faseCfg.color }} />
-                            <span className="text-xs truncate">{est.label}</span>
-                          </div>
-                          <Select
-                            value={current}
-                            onValueChange={(v) => {
-                              if (v === NUEVO_EMAIL) {
-                                // Abre el mini-diálogo para crear un email nuevo
-                                // que se asignará a ESTE estado.
-                                setNuevoEmail({ nombre: "", asunto: "", cuerpo: "" });
-                                setNuevoEmailEstado(est.key);
-                                return;
-                              }
-                              setForm((f) => {
-                                const next = { ...f.email_plantillas };
-                                if (v === SIN_EMAIL) delete next[est.key];
-                                else next[est.key] = v;
-                                return { ...f, email_plantillas: next };
-                              });
-                            }}
-                          >
-                            <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Email…" /></SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value={SIN_EMAIL}>Sin email</SelectItem>
-                              {emailPlantillas.map((e) => (
-                                <SelectItem key={e.id} value={e.id}>
-                                  {e.nombre}{e.activa ? "" : " (inactiva)"}
-                                </SelectItem>
-                              ))}
-                              <SelectItem value={NUEVO_EMAIL} className="text-primary font-medium">
-                                + Crear email nuevo…
-                              </SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      );
-                    })}
-                </div>
-              </div>
-            )}
+            {/* La asignación email→estado es GLOBAL: se hace en cada plantilla de
+                email (Configuración → Plantillas → Emails), no por vacante. */}
 
             <div className="space-y-1.5">
               <Label>Cuestionario para el candidato</Label>
@@ -493,56 +378,6 @@ export function OfertaFormDialog({ open, onOpenChange, vacanteId, tituloPrefill,
         submoduloLabel="Vacantes"
       />
 
-      {/* Mini-diálogo: crear una plantilla de email nueva y asignarla al estado. */}
-      <Dialog open={!!nuevoEmailEstado} onOpenChange={(o) => !o && setNuevoEmailEstado(null)}>
-        <DialogContent className="sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Nuevo email</DialogTitle>
-            <DialogDescription>
-              Se creará en la biblioteca de plantillas y se asignará a este estado.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-3">
-            <div className="space-y-1.5">
-              <Label>Nombre de la plantilla</Label>
-              <Input
-                value={nuevoEmail.nombre}
-                onChange={(e) => setNuevoEmail((n) => ({ ...n, nombre: e.target.value }))}
-                placeholder="p. ej. Segunda entrevista"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Asunto</Label>
-              <Input
-                value={nuevoEmail.asunto}
-                onChange={(e) => setNuevoEmail((n) => ({ ...n, asunto: e.target.value }))}
-                placeholder="Asunto del correo — {{empresa_nombre}}"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Cuerpo</Label>
-              <Textarea
-                value={nuevoEmail.cuerpo}
-                onChange={(e) => setNuevoEmail((n) => ({ ...n, cuerpo: e.target.value }))}
-                rows={7}
-                placeholder={"Hola {{candidato_nombre}},\n\n…"}
-              />
-              <p className="text-[11px] text-muted-foreground">
-                Puedes usar códigos como {"{{candidato_nombre}}"} o {"{{empresa_nombre}}"}. Podrás afinar el texto y la vista previa después en Configuración → Plantillas → Emails.
-              </p>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setNuevoEmailEstado(null)} disabled={creandoEmail}>
-              Cancelar
-            </Button>
-            <Button onClick={crearYAsignarEmail} disabled={creandoEmail}>
-              {creandoEmail && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              Crear y asignar
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </Dialog>
   );
 }

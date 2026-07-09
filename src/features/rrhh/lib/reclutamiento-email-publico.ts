@@ -44,49 +44,24 @@ function bodyToHtml(text: string): string {
   return `<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:15px;line-height:1.55;color:#111827;max-width:600px;margin:0 auto;padding:24px">${html}</div>`;
 }
 
-/** Resuelve la plantilla del estado `nuevo` para la vacante de un candidato. */
+/**
+ * Resuelve la plantilla del estado `nuevo` (correo de acuse al inscribirse).
+ * Modelo global: primera plantilla LIBRE activa con `estado_key = 'nuevo'`.
+ * `vacanteId` se conserva por compatibilidad de firma (ya no influye).
+ */
 async function resolverPlantillaNuevo(
   supabase: Service,
   empresaId: string,
-  vacanteId: string,
+  _vacanteId: string,
 ): Promise<{ asunto: string; cuerpo: string; activa: boolean } | null> {
-  const { data: vac } = await supabase
-    .from("vacantes")
-    .select("plantilla_estado_id, email_plantillas")
-    .eq("id", vacanteId)
-    .maybeSingle();
-
-  const overrides = (vac?.email_plantillas ?? {}) as Record<string, string | null>;
-  let emailId: string | null = overrides[ESTADO_NUEVO] ?? null;
-
-  if (!emailId) {
-    let plantillaEstadoId = (vac?.plantilla_estado_id as string | null) ?? null;
-    if (!plantillaEstadoId) {
-      const { data: def } = await supabase
-        .from("reclutamiento_plantillas_estado")
-        .select("id")
-        .eq("empresa_id", empresaId)
-        .eq("es_predeterminada", true)
-        .maybeSingle();
-      plantillaEstadoId = (def?.id as string | null) ?? null;
-    }
-    if (plantillaEstadoId) {
-      const { data: pt } = await supabase
-        .from("reclutamiento_plantillas_estado")
-        .select("estados")
-        .eq("id", plantillaEstadoId)
-        .maybeSingle();
-      const items = (pt?.estados ?? []) as Array<{ key: string; email_plantilla_id?: string | null }>;
-      emailId = items.find((it) => it.key === ESTADO_NUEVO)?.email_plantilla_id ?? null;
-    }
-  }
-  if (!emailId) return null;
-
   const { data: tpl } = await supabase
     .from("reclutamiento_email_plantillas")
     .select("asunto, cuerpo, activa")
-    .eq("id", emailId)
     .eq("empresa_id", empresaId)
+    .eq("estado_key", ESTADO_NUEVO)
+    .is("clave", null)
+    .order("created_at", { ascending: true })
+    .limit(1)
     .maybeSingle();
   if (!tpl) return null;
   return {

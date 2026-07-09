@@ -11,6 +11,7 @@
 /** Claves ESTABLES de las plantillas del onboarding (ancla del flujo, inmutable). */
 export const CLAVES_ONBOARDING = {
   gestoriaAlta: "gestoria_alta",
+  gestoriaBaja: "gestoria_baja",
   gestoriaRecordatorio: "gestoria_recordatorio",
   gestoriaCambioPuesto: "gestoria_cambio_puesto",
   gestoriaModelosTrimestral: "gestoria_modelos_trimestral",
@@ -27,6 +28,7 @@ export type ClaveOnboarding =
 /** Nombre INICIAL (rótulo) de cada plantilla del onboarding (editable después). */
 export const NOMBRES_ONBOARDING: Record<ClaveOnboarding, string> = {
   gestoria_alta: "Gestoría · alta de contrato",
+  gestoria_baja: "Gestoría · baja de trabajador",
   gestoria_recordatorio: "Gestoría · recordatorio de contrato",
   gestoria_cambio_puesto: "Gestoría · cambio de puesto (promoción)",
   gestoria_modelos_trimestral: "Gestoría · Solicitud modelos trimestrales",
@@ -47,6 +49,18 @@ export const PLANTILLAS_ONBOARDING = CLAVES_ONBOARDING;
 export const CLAVES_ONBOARDING_PROTEGIDAS: ReadonlySet<string> = new Set(
   Object.values(CLAVES_ONBOARDING),
 );
+
+/**
+ * Claves cuya asignación de ESTADO está BLOQUEADA (candado): son la cadena
+ * crítica de gestoría —el alta a la gestoría y el contrato oficial que le llega
+ * al candidato una vez la gestoría lo sube—. Quedan fijadas a «contratacion» y no
+ * se pueden reasignar ni quitar desde el editor. El resto de plantillas (libres o
+ * del sistema) sí pueden reasignar su estado.
+ */
+export const CLAVES_ESTADO_BLOQUEADO: ReadonlySet<string> = new Set([
+  CLAVES_ONBOARDING.gestoriaAlta,
+  CLAVES_ONBOARDING.contratoOficial,
+]);
 
 /**
  * Destinatario de un correo. Modelo unificado:
@@ -157,6 +171,7 @@ export const DESTINO_DEFAULT_POR_CLAVE: Record<
   { destino: DestinoPlantilla; destinoEmail: string | null }
 > = {
   gestoria_alta: { destino: "departamento", destinoEmail: "correoGestoria" },
+  gestoria_baja: { destino: "departamento", destinoEmail: "correoGestoria" },
   gestoria_recordatorio: { destino: "departamento", destinoEmail: "correoGestoria" },
   gestoria_cambio_puesto: { destino: "departamento", destinoEmail: "correoGestoria" },
   gestoria_modelos_trimestral: { destino: "departamento", destinoEmail: "correoGestoria" },

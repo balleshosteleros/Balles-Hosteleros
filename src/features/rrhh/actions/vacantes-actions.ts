@@ -30,8 +30,6 @@ export interface VacanteInput {
   favorita?: boolean;
   /** Plantilla de estados (consecución del pipeline) elegida en el alta. */
   plantilla_estado_id?: string | null;
-  /** Map { estado_key: email_plantilla_id } elegido por estado. */
-  email_plantillas?: Record<string, string | null>;
   /** Cuestionario que rellena el candidato al inscribirse (opcional). */
   cuestionario_plantilla_id?: string | null;
 }
@@ -120,7 +118,6 @@ export async function createVacante(input: VacanteInput) {
         cuestionario: input.cuestionario ?? !!input.cuestionario_plantilla_id,
         favorita: input.favorita ?? false,
         plantilla_estado_id: input.plantilla_estado_id ?? null,
-        email_plantillas: input.email_plantillas ?? {},
         cuestionario_plantilla_id: input.cuestionario_plantilla_id ?? null,
         creado_por: user?.id ?? null,
       })

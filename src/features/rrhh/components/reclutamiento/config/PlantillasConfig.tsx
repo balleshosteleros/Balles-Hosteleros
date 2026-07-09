@@ -15,16 +15,23 @@ import {
   Pencil, Mail, Eye, Search, Plus, Copy, Trash2,
   Variable, CheckCircle2, XCircle, Loader2,
   ClipboardList, Link2, FileText, Building2, Lock, User,
+  Briefcase, AlertTriangle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   CLAVES_ONBOARDING_PROTEGIDAS,
+  CLAVES_ESTADO_BLOQUEADO,
   etiquetaDestino,
   OPCIONES_DESTINO,
   DEPARTAMENTOS_CORREO,
   normalizarDestinoDepartamento,
   type DestinoPlantilla,
 } from "@/features/rrhh/lib/plantillas-onboarding";
+import {
+  FASES_PRINCIPALES_ORDER,
+  FASES_PRINCIPALES,
+  ESTADOS_CONFIG,
+} from "@/features/rrhh/data/reclutamiento";
 import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 import { CuestionariosVacanteManager } from "./CuestionariosVacanteManager";
 import { DocumentosPlantillaTab } from "./DocumentosPlantillaTab";
@@ -72,6 +79,8 @@ function PlantillaEditorDialog({
   const [activa, setActiva] = useState(true);
   const [destino, setDestino] = useState<DestinoPlantilla>("candidato");
   const [destinoEmail, setDestinoEmail] = useState("");
+  // Estado del pipeline en el que se envía este email ("" = ninguno).
+  const [estadoKey, setEstadoKey] = useState("");
   const [tab, setTab] = useState<"editar" | "preview">(initialTab);
   const [pending, startTransition] = useTransition();
   const cuerpoRef = useRef<HTMLTextAreaElement>(null);
@@ -98,6 +107,7 @@ function PlantillaEditorDialog({
         ? norm.destinoEmail || "correoRrhh"
         : norm.destinoEmail ?? "",
     );
+    setEstadoKey(plantilla?.estadoKey ?? "");
     setTab(initialTab);
   }, [open, plantillaId, plantilla, initialTab]);
 
@@ -145,6 +155,8 @@ function PlantillaEditorDialog({
   // CLAVE estable, no por el nombre → el nombre YA es editable y se propaga solo.
   // Solo se protege del borrado.
   const esDelSistema = plantilla?.clave ? CLAVES_ONBOARDING_PROTEGIDAS.has(plantilla.clave) : false;
+  // Estado bloqueado (candado): cadena crítica de gestoría. No se puede reasignar.
+  const estadoBloqueado = plantilla?.clave ? CLAVES_ESTADO_BLOQUEADO.has(plantilla.clave) : false;
 
   const handleSave = () => {
     if (destino === "personalizado" && !destinoEmail.trim()) {
@@ -152,7 +164,11 @@ function PlantillaEditorDialog({
       return;
     }
     startTransition(async () => {
-      const payload = { nombre, asunto, cuerpo, activa, destino, destinoEmail: destinoEmail.trim() };
+      const payload = {
+        nombre, asunto, cuerpo, activa, destino, destinoEmail: destinoEmail.trim(),
+        // El estado no se envía en las bloqueadas (queda fijo por el servidor).
+        ...(estadoBloqueado ? {} : { estadoKey: estadoKey || null }),
+      };
       const res = plantilla
         ? await updateReclutamientoEmailPlantilla(plantilla.id, payload)
         : await createReclutamientoEmailPlantilla(payload);
@@ -286,6 +302,44 @@ function PlantillaEditorDialog({
                     type="email"
                     placeholder="correo@ejemplo.com"
                   />
+                )}
+              </div>
+
+              {/* Estado del pipeline en el que se envía este email. Un email va a
+                  un solo estado; un estado puede tener varios emails. Al entrar en
+                  ese estado se envía (con confirmación). Bloqueado para la cadena
+                  crítica de gestoría. */}
+              <div>
+                <Label className="text-xs">Se envía en el estado</Label>
+                {estadoBloqueado ? (
+                  <div className="mt-1 flex items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
+                    <Lock className="h-4 w-4 text-slate-500 shrink-0" />
+                    <span className="text-sm text-slate-700">
+                      {ESTADOS_CONFIG[estadoKey as keyof typeof ESTADOS_CONFIG]?.label ?? "Contratación"} · secuencia del sistema (no se puede cambiar)
+                    </span>
+                  </div>
+                ) : (
+                  <>
+                    <Select value={estadoKey || "__none__"} onValueChange={(v) => setEstadoKey(v === "__none__" ? "" : v)}>
+                      <SelectTrigger className="mt-1">
+                        <SelectValue placeholder="Selecciona…" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none__">No se envía automáticamente</SelectItem>
+                        {FASES_PRINCIPALES_ORDER.map((fase) => {
+                          const cfg = FASES_PRINCIPALES[fase];
+                          return cfg.estados.map((est) => (
+                            <SelectItem key={est} value={est}>
+                              {cfg.label} · {ESTADOS_CONFIG[est]?.label ?? est}
+                            </SelectItem>
+                          ));
+                        })}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-[11px] text-muted-foreground mt-1">
+                      Al mover un candidato a ese estado se enviará este correo (con confirmación). Es global para todas las vacantes.
+                    </p>
+                  </>
                 )}
               </div>
 
@@ -489,6 +543,9 @@ function PlantillasEmailTab() {
   const { empresaActual, getIsotipoUrl } = useEmpresa();
   const empresaIsotipoUrl = getIsotipoUrl(empresaActual.id) || undefined;
   const [plantillas, setPlantillas] = useState<ReclutamientoEmailPlantilla[]>([]);
+  // Nº de vacantes en las que está configurada cada plantilla ({ id: n }). Las
+  // ausentes = 0 vacantes. Sirve para verificar dónde se usa cada correo y avisar
+  // de los que no están en ninguna vacante.
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<ReclutamientoEmailPlantilla | null>(null);
   const [creando, setCreando] = useState(false);
@@ -557,6 +614,11 @@ function PlantillasEmailTab() {
   };
 
   const activasCount = plantillas.filter((p) => p.activa).length;
+  // Plantillas libres sin estado asignado: no se enviarían nunca al mover de fase.
+  // Se avisa para que el usuario las revise.
+  const sinEstadoCount = plantillas.filter(
+    (p) => !p.clave && !p.estadoKey,
+  ).length;
 
   return (
     <div className="space-y-6">
@@ -564,8 +626,11 @@ function PlantillasEmailTab() {
         <div>
           <h2 className="text-lg font-bold text-foreground">Plantillas de email</h2>
           <p className="text-sm text-muted-foreground mt-0.5">
-            Biblioteca de correos reutilizables. Asocia cada uno a un estado en cada vacante.
+            Biblioteca de correos reutilizables. En cada uno eliges el estado en el que se envía (es global).
             {!loading && <> {" "}{activasCount} de {plantillas.length} activas.</>}
+            {!loading && sinEstadoCount > 0 && (
+              <span className="text-amber-600"> {sinEstadoCount} sin estado.</span>
+            )}
           </p>
         </div>
         <Button onClick={() => setCreando(true)} className="gap-1.5 shrink-0">
@@ -627,6 +692,17 @@ function PlantillasEmailTab() {
                           <Mail className="h-3 w-3" /> {p.destinoEmail || "Personalizado"}
                         </Badge>
                       )}
+                      {/* Estado del pipeline en el que se envía este email. Las
+                          del sistema (onboarding) lo muestran igual (informativo). */}
+                      {p.estadoKey ? (
+                        <Badge variant="outline" className="text-[10px] gap-1 bg-sky-50 text-sky-700 border-sky-200" title={`Se envía en el estado ${ESTADOS_CONFIG[p.estadoKey as keyof typeof ESTADOS_CONFIG]?.label ?? p.estadoKey}`}>
+                          <Briefcase className="h-3 w-3" /> {ESTADOS_CONFIG[p.estadoKey as keyof typeof ESTADOS_CONFIG]?.label ?? p.estadoKey}
+                        </Badge>
+                      ) : !p.clave ? (
+                        <Badge variant="outline" className="text-[10px] gap-1 bg-amber-50 text-amber-700 border-amber-200" title="Esta plantilla no está asignada a ningún estado: no se enviará al mover de fase">
+                          <AlertTriangle className="h-3 w-3" /> Sin estado
+                        </Badge>
+                      ) : null}
                     </div>
                     <div className="text-xs text-muted-foreground truncate">
                       <span className="font-medium">Asunto:</span> {p.asunto}

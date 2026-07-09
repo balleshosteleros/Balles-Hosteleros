@@ -14,6 +14,7 @@ import { getReclutamientoConfigGeneral } from "@/features/rrhh/actions/gestoria-
 import {
   CLAVES_RESERVADAS_POR_ESTADO,
   CLAVES_ONBOARDING_PROTEGIDAS,
+  CLAVES_ESTADO_BLOQUEADO,
   NOMBRES_ONBOARDING,
   normalizarDestino,
   type DestinoPlantilla,
@@ -38,6 +39,8 @@ export interface ReclutamientoEmailPlantilla {
   clave: string | null;
   destino: DestinoPlantilla;
   destinoEmail: string | null;
+  /** Estado del pipeline en el que se envía (null = no se envía por estado). */
+  estadoKey: string | null;
 }
 
 type ActionResult = { ok: true } | { ok: false; error: string };
@@ -91,7 +94,7 @@ export async function listReclutamientoEmailPlantillas(): Promise<
 
   const { data, error } = await supabase
     .from("reclutamiento_email_plantillas")
-    .select("id, nombre, asunto, cuerpo, activa, clave, destino, destino_email")
+    .select("id, nombre, asunto, cuerpo, activa, clave, destino, destino_email, estado_key")
     .eq("empresa_id", empresaId)
     .order("created_at", { ascending: true });
   if (error) {
@@ -107,7 +110,44 @@ export async function listReclutamientoEmailPlantillas(): Promise<
     clave: (r.clave as string | null) ?? null,
     destino: normalizarDestino(r.destino),
     destinoEmail: (r.destino_email as string | null) ?? null,
+    estadoKey: (r.estado_key as string | null) ?? null,
   }));
+}
+
+/**
+ * Cuenta, por cada plantilla de email, en cuántas VACANTES está configurada.
+ * Una plantilla se considera usada en una vacante si aparece como override en
+ * `vacantes.email_plantillas` (`{ estado_key: email_plantilla_id }`), contando
+ * la vacante UNA sola vez aunque la use en varios estados.
+ *
+ * Devuelve un mapa `{ [emailPlantillaId]: nº de vacantes }`. Las plantillas sin
+ * uso no aparecen (el consumidor asume 0). Sirve para pintar la columna «Vacantes»
+ * y para detectar plantillas que no están asociadas a ninguna vacante.
+ */
+export async function contarVacantesPorEmailPlantilla(): Promise<Record<string, number>> {
+  const { supabase, empresaId } = await ctx();
+  if (!empresaId) return {};
+
+  const { data: vacantes, error } = await supabase
+    .from("vacantes")
+    .select("id, email_plantillas")
+    .eq("empresa_id", empresaId);
+  if (error) {
+    console.error("[reclutamiento-email-plantillas] contarVacantes:", error.message);
+    return {};
+  }
+
+  const conteo: Record<string, number> = {};
+  for (const v of vacantes ?? []) {
+    const map = (v.email_plantillas ?? {}) as Record<string, string | null>;
+    // IDs distintos usados en ESTA vacante (una vacante suma 1 por plantilla,
+    // aunque la misma plantilla esté en varios estados de la vacante).
+    const idsEnVacante = new Set(
+      Object.values(map).filter((id): id is string => typeof id === "string" && id.length > 0),
+    );
+    for (const id of idsEnVacante) conteo[id] = (conteo[id] ?? 0) + 1;
+  }
+  return conteo;
 }
 
 /**
@@ -135,6 +175,8 @@ export async function createReclutamientoEmailPlantilla(input: {
   activa?: boolean;
   destino?: DestinoPlantilla;
   destinoEmail?: string;
+  /** Estado del pipeline en el que se envía (null/undefined = ninguno). */
+  estadoKey?: string | null;
 }): Promise<CreateResult> {
   const nombre = input.nombre.trim();
   const asunto = input.asunto.trim();
@@ -159,6 +201,7 @@ export async function createReclutamientoEmailPlantilla(input: {
       activa: input.activa ?? true,
       destino: dst.destino,
       destino_email: dst.destino_email,
+      estado_key: input.estadoKey ?? null,
       // Las plantillas creadas por el usuario nunca son del sistema.
       clave: null,
     })
@@ -179,12 +222,29 @@ export async function updateReclutamientoEmailPlantilla(
     activa?: boolean;
     destino?: DestinoPlantilla;
     destinoEmail?: string;
+    estadoKey?: string | null;
   },
 ): Promise<ActionResult> {
   const { supabase, empresaId } = await ctx();
   if (!empresaId) return { ok: false, error: "Sin empresa activa" };
 
   const update: Record<string, unknown> = { updated_at: new Date().toISOString() };
+
+  // Estado del pipeline en el que se envía. Bloqueado para la cadena crítica de
+  // gestoría (gestoria_alta / contrato_oficial): su estado no se puede cambiar.
+  if (patch.estadoKey !== undefined) {
+    const { data: actual } = await supabase
+      .from("reclutamiento_email_plantillas")
+      .select("clave")
+      .eq("id", id)
+      .eq("empresa_id", empresaId)
+      .maybeSingle();
+    const clave = (actual?.clave as string | null) ?? null;
+    if (clave && CLAVES_ESTADO_BLOQUEADO.has(clave)) {
+      return { ok: false, error: "El estado de este correo del sistema no se puede cambiar." };
+    }
+    update.estado_key = patch.estadoKey || null;
+  }
   // El nombre YA es editable (el flujo localiza las del sistema por `clave`, no
   // por el nombre): renombrar aquí se propaga solo a todo el flujo.
   if (patch.nombre !== undefined) {
@@ -315,102 +375,51 @@ async function limpiarReferenciasEmail(
       .update({ estados: next, updated_at: new Date().toISOString() })
       .eq("id", p.id as string);
   }
-
-  // Overrides por vacante.
-  const { data: vacantes } = await supabase
-    .from("vacantes")
-    .select("id, email_plantillas")
-    .eq("empresa_id", empresaId);
-  for (const v of vacantes ?? []) {
-    const map = (v.email_plantillas ?? {}) as Record<string, string | null>;
-    if (!Object.values(map).includes(emailId)) continue;
-    const next: Record<string, string | null> = {};
-    for (const [k, val] of Object.entries(map)) if (val !== emailId) next[k] = val;
-    await supabase.from("vacantes").update({ email_plantillas: next }).eq("id", v.id as string);
-  }
+  // La asignación email→estado vive en la propia fila (estado_key), que
+  // desaparece al borrar la plantilla: no hay más referencias que limpiar.
 }
 
 // ─────────────────────────────────────────────────────────────────────────
-// Resolución email ⇐ estado (vía vacante → plantilla de estados / override)
+// Resolución emails ⇐ estado (modelo GLOBAL: reclutamiento_email_plantillas.estado_key)
 // ─────────────────────────────────────────────────────────────────────────
-/**
- * Devuelve la plantilla de email que corresponde al estado destino de un
- * candidato: primero el override de la vacante (`email_plantillas[estado]`), si
- * no, el email por defecto del estado en la plantilla de estados de la vacante.
- * Devuelve `null` si no hay email asociado.
- */
-async function resolverEmailParaEstado(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  empresaId: string,
-  candidatoId: string,
-  estado: string,
-): Promise<{
+interface EmailResuelto {
   id: string;
   asunto: string;
   cuerpo: string;
   activa: boolean;
   destino: DestinoPlantilla;
   destinoEmail: string | null;
-} | null> {
-  const { data: cand } = await supabase
-    .from("candidatos")
-    .select("vacante_id")
-    .eq("id", candidatoId)
-    .eq("empresa_id", empresaId)
-    .maybeSingle();
-  const vacanteId = (cand?.vacante_id as string | null) ?? null;
-  if (!vacanteId) return null;
+}
 
-  const { data: vac } = await supabase
-    .from("vacantes")
-    .select("plantilla_estado_id, email_plantillas")
-    .eq("id", vacanteId)
-    .maybeSingle();
-
-  const overrides = (vac?.email_plantillas ?? {}) as Record<string, string | null>;
-  let emailId: string | null = overrides[estado] ?? null;
-
-  if (!emailId) {
-    // La vacante puede no tener una plantilla de estados asignada: en ese caso
-    // se usa la plantilla predeterminada de la empresa. Así el email por estado
-    // funciona sin necesidad de cablear cada vacante (presente y futuras).
-    let plantillaEstadoId = (vac?.plantilla_estado_id as string | null) ?? null;
-    if (!plantillaEstadoId) {
-      const { data: def } = await supabase
-        .from("reclutamiento_plantillas_estado")
-        .select("id")
-        .eq("empresa_id", empresaId)
-        .eq("es_predeterminada", true)
-        .maybeSingle();
-      plantillaEstadoId = (def?.id as string | null) ?? null;
-    }
-    if (plantillaEstadoId) {
-      const { data: pt } = await supabase
-        .from("reclutamiento_plantillas_estado")
-        .select("estados")
-        .eq("id", plantillaEstadoId)
-        .maybeSingle();
-      const items = (pt?.estados ?? []) as Array<{ key: string; email_plantilla_id?: string | null }>;
-      emailId = items.find((it) => it.key === estado)?.email_plantilla_id ?? null;
-    }
-  }
-  if (!emailId) return null;
-
-  const { data: tpl } = await supabase
+/**
+ * Devuelve TODAS las plantillas de email LIBRES (`clave IS NULL`) asignadas al
+ * estado destino (`estado_key = estado`). Un estado puede tener varios emails.
+ *
+ * Excluye las plantillas del SISTEMA (con `clave`): la cadena de contratación
+ * (alta gestoría, contratos, reconocimiento, prueba) se dispara por su propio
+ * flujo (wizard / cron / evento de la gestoría), NUNCA por entrar en el estado.
+ * Ya no hay override por vacante: la asignación es global.
+ */
+async function resolverEmailsParaEstado(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  empresaId: string,
+  estado: string,
+): Promise<EmailResuelto[]> {
+  const { data } = await supabase
     .from("reclutamiento_email_plantillas")
     .select("id, asunto, cuerpo, activa, destino, destino_email")
-    .eq("id", emailId)
     .eq("empresa_id", empresaId)
-    .maybeSingle();
-  if (!tpl) return null;
-  return {
+    .eq("estado_key", estado)
+    .is("clave", null)
+    .order("created_at", { ascending: true });
+  return (data ?? []).map((tpl) => ({
     id: tpl.id as string,
     asunto: tpl.asunto as string,
     cuerpo: tpl.cuerpo as string,
     activa: tpl.activa as boolean,
     destino: normalizarDestino(tpl.destino),
     destinoEmail: (tpl.destino_email as string | null) ?? null,
-  };
+  }));
 }
 
 /**
@@ -426,11 +435,11 @@ async function resolverEmailParaEstado(
 export async function previewReclutamientoFaseEmail(
   candidatoId: string,
   estado: EstadoReclutamiento,
-): Promise<{ asunto: string; cuerpo: string; activa: boolean } | null> {
+): Promise<{ id: string; asunto: string; cuerpo: string; activa: boolean }[]> {
   const { supabase, empresaId } = await ctx();
-  if (!empresaId) return null;
-  const tpl = await resolverEmailParaEstado(supabase, empresaId, candidatoId, estado);
-  if (!tpl) return null;
+  if (!empresaId) return [];
+  const tpls = await resolverEmailsParaEstado(supabase, empresaId, estado);
+  if (tpls.length === 0) return [];
 
   const vars = await buildReclutamientoEmailVars(candidatoId);
 
@@ -470,78 +479,35 @@ export async function previewReclutamientoFaseEmail(
       enlace || "(configura la URL de formación en Ajustes → RRHH → Reclutamiento)";
   }
 
-  return {
+  return tpls.map((tpl) => ({
+    id: tpl.id,
     asunto: sustituirVariablesReclutamiento(tpl.asunto, vars),
     cuerpo: sustituirVariablesReclutamiento(tpl.cuerpo, vars),
     activa: tpl.activa,
-  };
+  }));
 }
 
 /**
- * Devuelve la lista de `key` de estados de una vacante que tienen un email
- * ACTIVO asociado (override por vacante o email por defecto del estado en la
- * plantilla de estados de la vacante, o la predeterminada de la empresa). Se usa
- * en el Kanban para marcar con un check verde qué columnas enviarán correo.
+ * Devuelve la lista de `key` de estados que tienen algún email LIBRE ACTIVO
+ * asignado (modelo global: `reclutamiento_email_plantillas.estado_key`). Se usa
+ * en el Kanban para marcar con un check verde qué columnas enviarán correo al
+ * entrar. El parámetro `vacanteId` se mantiene por compatibilidad de firma, pero
+ * la asignación ya no depende de la vacante (es global por empresa).
  */
 export async function estadosConEmailDeVacante(
-  vacanteId: string,
+  _vacanteId?: string,
 ): Promise<string[]> {
   const { supabase, empresaId } = await ctx();
-  if (!empresaId || !vacanteId) return [];
+  if (!empresaId) return [];
 
-  const { data: vac } = await supabase
-    .from("vacantes")
-    .select("plantilla_estado_id, email_plantillas")
-    .eq("id", vacanteId)
-    .maybeSingle();
-
-  const overrides = (vac?.email_plantillas ?? {}) as Record<string, string | null>;
-
-  // Plantilla de estados de la vacante; si no tiene, la predeterminada de la empresa.
-  let plantillaEstadoId = (vac?.plantilla_estado_id as string | null) ?? null;
-  if (!plantillaEstadoId) {
-    const { data: def } = await supabase
-      .from("reclutamiento_plantillas_estado")
-      .select("id")
-      .eq("empresa_id", empresaId)
-      .eq("es_predeterminada", true)
-      .maybeSingle();
-    plantillaEstadoId = (def?.id as string | null) ?? null;
-  }
-
-  const emailPorEstadoPlantilla: Record<string, string | null> = {};
-  if (plantillaEstadoId) {
-    const { data: pt } = await supabase
-      .from("reclutamiento_plantillas_estado")
-      .select("estados")
-      .eq("id", plantillaEstadoId)
-      .maybeSingle();
-    const items = (pt?.estados ?? []) as Array<{ key: string; email_plantilla_id?: string | null }>;
-    for (const it of items) emailPorEstadoPlantilla[it.key] = it.email_plantilla_id ?? null;
-  }
-
-  // email_plantilla_id por estado (el override de la vacante gana).
-  const idPorEstado: Record<string, string> = {};
-  const keys = new Set([...Object.keys(overrides), ...Object.keys(emailPorEstadoPlantilla)]);
-  for (const k of keys) {
-    const id = overrides[k] ?? emailPorEstadoPlantilla[k] ?? null;
-    if (id) idPorEstado[k] = id;
-  }
-
-  const ids = [...new Set(Object.values(idPorEstado))];
-  if (ids.length === 0) return [];
-
-  // Solo cuentan las plantillas que existen y están activas.
-  const { data: tpls } = await supabase
+  const { data } = await supabase
     .from("reclutamiento_email_plantillas")
-    .select("id, activa")
+    .select("estado_key")
     .eq("empresa_id", empresaId)
-    .in("id", ids);
-  const activos = new Set((tpls ?? []).filter((t) => t.activa).map((t) => t.id as string));
-
-  return Object.entries(idPorEstado)
-    .filter(([, id]) => activos.has(id))
-    .map(([estado]) => estado);
+    .eq("activa", true)
+    .is("clave", null)
+    .not("estado_key", "is", null);
+  return [...new Set((data ?? []).map((r) => r.estado_key as string).filter(Boolean))];
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -581,58 +547,28 @@ export async function plantillasPorEstadoDeVacante(
     (out[estado] ??= []).push(info);
   };
 
-  // 1) Plantilla de estado asociada a cada estado (correo al candidato).
-  const { data: vac } = await supabase
-    .from("vacantes")
-    .select("plantilla_estado_id, email_plantillas")
-    .eq("id", vacanteId)
-    .maybeSingle();
-
-  const overrides = (vac?.email_plantillas ?? {}) as Record<string, string | null>;
-
-  let plantillaEstadoId = (vac?.plantilla_estado_id as string | null) ?? null;
-  if (!plantillaEstadoId) {
-    const { data: def } = await supabase
-      .from("reclutamiento_plantillas_estado")
-      .select("id")
-      .eq("empresa_id", empresaId)
-      .eq("es_predeterminada", true)
-      .maybeSingle();
-    plantillaEstadoId = (def?.id as string | null) ?? null;
-  }
-
-  const emailPorEstadoPlantilla: Record<string, string | null> = {};
-  if (plantillaEstadoId) {
-    const { data: pt } = await supabase
-      .from("reclutamiento_plantillas_estado")
-      .select("estados")
-      .eq("id", plantillaEstadoId)
-      .maybeSingle();
-    const items = (pt?.estados ?? []) as Array<{ key: string; email_plantilla_id?: string | null }>;
-    for (const it of items) emailPorEstadoPlantilla[it.key] = it.email_plantilla_id ?? null;
-  }
-
-  const idPorEstado: Record<string, string> = {};
-  const keys = new Set([...Object.keys(overrides), ...Object.keys(emailPorEstadoPlantilla)]);
-  for (const k of keys) {
-    const id = overrides[k] ?? emailPorEstadoPlantilla[k] ?? null;
-    if (id) idPorEstado[k] = id;
+  // 1) Emails LIBRES asignados a cada estado (modelo global: estado_key). Un
+  //    estado puede tener varios. `vacanteId` ya no influye (asignación global).
+  const { data: libres } = await supabase
+    .from("reclutamiento_email_plantillas")
+    .select("nombre, activa, destino, estado_key")
+    .eq("empresa_id", empresaId)
+    .is("clave", null)
+    .not("estado_key", "is", null)
+    .order("created_at", { ascending: true });
+  for (const t of libres ?? []) {
+    const estado = t.estado_key as string;
+    push(estado, {
+      nombre: t.nombre as string,
+      activa: !!t.activa,
+      destino: normalizarDestino(t.destino),
+    });
   }
 
   // 2) Claves reservadas del onboarding a buscar por `clave` estable.
   const clavesReservadas = [
     ...new Set(Object.values(CLAVES_RESERVADAS_POR_ESTADO).flat()),
   ];
-
-  // Carga en bloque todas las plantillas implicadas (por id y por clave).
-  const ids = [...new Set(Object.values(idPorEstado))];
-  const { data: porId } = ids.length
-    ? await supabase
-        .from("reclutamiento_email_plantillas")
-        .select("id, nombre, activa, destino")
-        .eq("empresa_id", empresaId)
-        .in("id", ids)
-    : { data: [] as Array<{ id: string; nombre: string; activa: boolean; destino: string }> };
   const { data: porClave } = clavesReservadas.length
     ? await supabase
         .from("reclutamiento_email_plantillas")
@@ -640,25 +576,12 @@ export async function plantillasPorEstadoDeVacante(
         .eq("empresa_id", empresaId)
         .in("clave", clavesReservadas)
     : { data: [] as Array<{ clave: string; nombre: string; activa: boolean; destino: string }> };
-
-  const tplById = new Map(
-    (porId ?? []).map((t) => [
-      t.id as string,
-      { nombre: t.nombre as string, activa: !!t.activa, destino: normalizarDestino(t.destino) },
-    ]),
-  );
   const tplByClave = new Map(
     (porClave ?? []).map((t) => [
       t.clave as string,
       { nombre: t.nombre as string, activa: !!t.activa, destino: normalizarDestino(t.destino) },
     ]),
   );
-
-  // 2a) Plantilla de estado → su destinatario configurado.
-  for (const [estado, id] of Object.entries(idPorEstado)) {
-    const t = tplById.get(id);
-    if (t) push(estado, { nombre: t.nombre, activa: t.activa, destino: t.destino });
-  }
 
   // 2a-bis) Respaldo canónico: si un estado del candidato no tiene plantilla
   // configurada por la vacante/empresa, mostrar igualmente su correo por defecto
@@ -717,10 +640,11 @@ function bodyToHtml(text: string): string {
 }
 
 /**
- * Envía el correo asociado al estado destino de un candidato. Resuelve la
- * plantilla vía la vacante (override por vacante o email por defecto del estado
- * en la plantilla de estados), respeta el flag `activa` y sustituye los códigos
- * con los datos reales. NUNCA lanza: devuelve `{ sent, reason }`.
+ * Envía los correos LIBRES asignados al estado destino de un candidato (modelo
+ * global: `estado_key`). Un estado puede tener varios emails → se envían todos
+ * los activos. Los correos del sistema (con `clave`) NO se envían aquí: los
+ * dispara su propio flujo (wizard de contratación / cron / evento de gestoría).
+ * NUNCA lanza: devuelve `{ sent, reason }` (sent = se envió al menos uno).
  *
  * El disparo es a elección del usuario (diálogo de confirmación en el Kanban).
  */
@@ -731,9 +655,11 @@ export async function enviarReclutamientoFaseEmail(
   const { supabase, user, empresaId } = await ctx();
   if (!empresaId) return { sent: false, reason: "Sin empresa activa" };
 
-  const tpl = await resolverEmailParaEstado(supabase, empresaId, candidatoId, estado);
-  if (!tpl) return { sent: false, reason: "Sin plantilla de email asociada a este estado" };
-  if (!tpl.activa) return { sent: false, reason: "Plantilla desactivada" };
+  const tpls = await resolverEmailsParaEstado(supabase, empresaId, estado);
+  const activas = tpls.filter((t) => t.activa);
+  if (activas.length === 0) {
+    return { sent: false, reason: "Sin plantilla de email activa asociada a este estado" };
+  }
 
   // Configuración general (Ajustes → RRHH → Reclutamiento):
   //  · firma corporativa = cabecera (isotipo) + pie del correo.
@@ -741,7 +667,6 @@ export async function enviarReclutamientoFaseEmail(
   const cfg = (await getReclutamientoConfigGeneral()).data;
   const cc = cfg.emails_copia_reclutador ? (user?.email ?? undefined) : undefined;
 
-  // Destinatario configurado en la plantilla (por defecto, el candidato).
   const { data: cand } = await supabase
     .from("candidatos")
     .select("email")
@@ -753,22 +678,9 @@ export async function enviarReclutamientoFaseEmail(
     "@/features/rrhh/services/email-plantillas/resolver"
   );
   const admin = (await import("@/lib/supabase/admin")).createAdminClient();
-  const dst = await resolverDestinatario(admin, empresaId, tpl.destino, tpl.destinoEmail, emailCandidato);
-  const to = dst.to;
-  if (!to) {
-    return {
-      sent: false,
-      reason:
-        tpl.destino === "candidato"
-          ? "El candidato no tiene email"
-          : "El destinatario configurado en la plantilla no tiene email",
-    };
-  }
 
+  // Variables comunes (candidato/vacante/empresa) + placeholders por estado.
   const vars = await buildReclutamientoEmailVars(candidatoId);
-
-  // Paso «Documentación»: genera (perezosamente) el token del candidato y resuelve
-  // el placeholder {{enlace_documentacion}} a su URL pública de subida.
   if (estado === "documentacion") {
     const { asegurarTokenDocumentacion, enlaceDocumentacion, DOCUMENTACION_TOKEN_DIAS } =
       await import("@/features/rrhh/lib/documentacion-candidato");
@@ -776,72 +688,71 @@ export async function enviarReclutamientoFaseEmail(
     if (token) vars.enlace_documentacion = enlaceDocumentacion(token);
     vars.documentacion_dias_validez = String(DOCUMENTACION_TOKEN_DIAS);
   }
-
-  // Fase «Formación»: resuelve {{enlace_formacion}} al enlace PÚBLICO por token
-  // del candidato (/formacion/<token>), que muestra el curso del puesto de su
-  // vacante sin login. persistir=true genera/renueva el token al enviar.
   if (estado === "formacion") {
-    vars.enlace_formacion = await resolverEnlaceFormacion(
-      supabase,
-      empresaId,
-      candidatoId,
-      true,
-    );
+    vars.enlace_formacion = await resolverEnlaceFormacion(supabase, empresaId, candidatoId, true);
   }
 
-  const subject = sustituirVariablesReclutamiento(tpl.asunto, vars);
-  const bodyText = sustituirVariablesReclutamiento(tpl.cuerpo, vars);
-
-  // Pie automático: deja claro que es un correo no monitorizado y que no admite
-  // respuestas (sin incluir ninguna dirección de contacto).
   const empresaNombre = vars.empresa_nombre || "la empresa";
   const pieText =
     "Este mensaje se ha enviado de forma automática desde una dirección que no admite respuestas. Por favor, no respondas a este correo.";
-  // Firma corporativa ON: cabecera (isotipo, vía sendEmail.empresaId) + pie.
-  // Firma corporativa OFF: ni cabecera ni pie (correo limpio).
   const firma = cfg.emails_firma_corporativa;
-  const html = firma
-    ? bodyToHtml(bodyText) +
-      `<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;max-width:600px;margin:0 auto;padding:0 24px 24px"><p style="color:#9ca3af;font-size:12px;line-height:1.5;border-top:1px solid #e5e7eb;margin-top:8px;padding-top:12px">${escapeHtml(pieText)}</p></div>`
-    : bodyToHtml(bodyText);
 
-  // CC: copia al reclutador (config) + cc del destinatario (p. ej. gestoría).
-  const ccFinal = [cc, dst.cc].filter(Boolean).join(", ") || undefined;
+  let algunoEnviado = false;
+  let ultimoError: string | undefined;
 
-  const res = await sendEmail({
-    to,
-    cc: ccFinal,
-    subject,
-    html,
-    text: firma ? `${bodyText}\n\n—\n${pieText}` : bodyText,
-    fromName: empresaNombre,
-    empresaId,
-    brandHeader: firma,
-  });
-  if (res.ok) {
-    // Marca en la actividad que este cambio de estado envió correo al candidato.
-    // El registro lo creó moverCandidatoFase justo antes; actualizamos el más
-    // reciente de este candidato. No afecta al resultado del envío si falla.
-    const { data: ult } = await supabase
-      .from("candidato_historial")
-      .select("id")
-      .eq("candidato_id", candidatoId)
-      .eq("empresa_id", empresaId)
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    if (ult?.id) {
-      await supabase
-        .from("candidato_historial")
-        // Archiva el HTML exacto enviado (res.html ya incluye la cabecera de
-        // marca): así el correo recibido queda inmutable aunque cambie la plantilla.
-        .update({ email_enviado: true, email_asunto: subject, email_html: res.html })
-        .eq("id", ult.id as string);
+  for (const tpl of activas) {
+    const dst = await resolverDestinatario(admin, empresaId, tpl.destino, tpl.destinoEmail, emailCandidato);
+    const to = dst.to;
+    if (!to) {
+      ultimoError =
+        tpl.destino === "candidato"
+          ? "El candidato no tiene email"
+          : "El destinatario configurado en la plantilla no tiene email";
+      continue;
     }
-    return { sent: true };
+
+    const subject = sustituirVariablesReclutamiento(tpl.asunto, vars);
+    const bodyText = sustituirVariablesReclutamiento(tpl.cuerpo, vars);
+    const html = firma
+      ? bodyToHtml(bodyText) +
+        `<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;max-width:600px;margin:0 auto;padding:0 24px 24px"><p style="color:#9ca3af;font-size:12px;line-height:1.5;border-top:1px solid #e5e7eb;margin-top:8px;padding-top:12px">${escapeHtml(pieText)}</p></div>`
+      : bodyToHtml(bodyText);
+    const ccFinal = [cc, dst.cc].filter(Boolean).join(", ") || undefined;
+
+    const res = await sendEmail({
+      to,
+      cc: ccFinal,
+      subject,
+      html,
+      text: firma ? `${bodyText}\n\n—\n${pieText}` : bodyText,
+      fromName: empresaNombre,
+      empresaId,
+      brandHeader: firma,
+    });
+    if (res.ok) {
+      algunoEnviado = true;
+      // Archiva el HTML del ÚLTIMO correo enviado en la actividad más reciente.
+      const { data: ult } = await supabase
+        .from("candidato_historial")
+        .select("id")
+        .eq("candidato_id", candidatoId)
+        .eq("empresa_id", empresaId)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (ult?.id) {
+        await supabase
+          .from("candidato_historial")
+          .update({ email_enviado: true, email_asunto: subject, email_html: res.html })
+          .eq("id", ult.id as string);
+      }
+    } else {
+      ultimoError = res.configured ? res.error : "Sin transporte de email configurado";
+    }
   }
-  if (!res.configured) return { sent: false, reason: "Sin transporte de email configurado" };
-  return { sent: false, reason: res.error };
+
+  if (algunoEnviado) return { sent: true };
+  return { sent: false, reason: ultimoError ?? "No se pudo enviar el correo" };
 }
 
 /**
