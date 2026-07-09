@@ -2,8 +2,9 @@
  * Subida de modelos fiscales por la GESTORÍA (endpoint PÚBLICO, sin sesión).
  *
  * GET  → datos del periodo + lista de modelos con su estado.
- * POST → recibe UN modelo (campo `tipo` + `file` PDF), lo valida con IA,
- *        lo sube al bucket y lo enlaza a modelos_aeat (procesarSubidaModelo).
+ * POST accion=validar   → adjunta UN modelo a STAGING (valida con IA al momento).
+ * POST accion=confirmar → subida TODO-O-NADA: si están todos los obligatorios,
+ *        mueve staging → modelos_aeat; si falta alguno, no confirma nada.
  *
  * El token identifica empresa + ejercicio + periodo; la gestoría nunca ve datos
  * de otras empresas ni otros periodos.
@@ -13,7 +14,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import {
   resolverTokenModelosGestoria,
   listarModelosDelToken,
-  procesarSubidaModelo,
+  stagingSubidaModelo,
+  confirmarSubidaModelos,
 } from "@/features/gestoria/modelos/services/gestoria-modelos-tokens";
 import type { ModeloTipo } from "@/features/gestoria/modelos/types/modelos";
 
@@ -67,6 +69,21 @@ export async function POST(req: Request, ctx: { params: Promise<{ token: string 
     }
 
     const fd = await req.formData();
+    const accion = (fd.get("accion") as string | null) ?? "validar";
+
+    // ── Confirmar (todo-o-nada) ──
+    if (accion === "confirmar") {
+      const result = await confirmarSubidaModelos(admin, res.row);
+      if (!result.ok) {
+        return NextResponse.json(
+          { ok: false, error: result.error, faltan: result.faltan },
+          { status: result.status },
+        );
+      }
+      return NextResponse.json({ ok: true, confirmados: result.confirmados });
+    }
+
+    // ── Validar/adjuntar UN modelo a staging ──
     const tipo = fd.get("tipo") as string | null;
     const file = fd.get("file") as File | null;
     if (!tipo) return NextResponse.json({ ok: false, error: "Falta el tipo de modelo" }, { status: 400 });
@@ -81,14 +98,14 @@ export async function POST(req: Request, ctx: { params: Promise<{ token: string 
       );
     }
 
-    const result = await procesarSubidaModelo(admin, res.row, tipo as ModeloTipo, file);
+    const result = await stagingSubidaModelo(admin, res.row, tipo as ModeloTipo, file);
     if (!result.ok) {
       return NextResponse.json(
         { ok: false, error: result.error, iaMotivo: result.iaMotivo },
         { status: result.status },
       );
     }
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({ ok: true, iaMotivo: result.iaMotivo });
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Error desconocido";
     console.error("[gestoria/modelos] fatal:", msg);

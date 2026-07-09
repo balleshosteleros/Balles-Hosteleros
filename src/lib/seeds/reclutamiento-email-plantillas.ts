@@ -55,7 +55,7 @@ export interface ReclutamientoEmailPlantillaSeed {
    * localiza por aquí, NO por el nombre → el nombre es editable. Las plantillas
    * libres (asociadas a estados) no llevan clave.
    */
-  clave?: "gestoria_alta" | "gestoria_recordatorio" | "gestoria_cambio_puesto" | "gestoria_modelos_trimestral" | "gestoria_modelos_anual" | "contrato_interno" | "reconocimiento_medico" | "contrato_oficial" | "prueba_aviso";
+  clave?: "gestoria_alta" | "gestoria_baja" | "gestoria_recordatorio" | "gestoria_cambio_puesto" | "gestoria_modelos_trimestral" | "gestoria_modelos_anual" | "contrato_interno" | "reconocimiento_medico" | "contrato_oficial" | "prueba_aviso";
   /** Destinatario por defecto (candidato / gestoria / rrhh). Editable después. */
   destino?: "candidato" | "gestoria" | "rrhh" | "personalizado";
 }
@@ -374,6 +374,23 @@ Gracias,
     activa: true,
   },
 
+  // ── Baja a la gestoría (offboarding / baja voluntaria) ──
+  {
+    clave: "gestoria_baja",
+    destino: "gestoria",
+    nombre: "Gestoría · baja de trabajador",
+    asunto: "Baja de trabajador · {{candidato_nombre_completo}} · {{empresa_nombre}}",
+    cuerpo: `Hola,
+
+Os comunicamos que el siguiente trabajador causa BAJA en la empresa. Su último día efectivo de trabajo será el {{fecha_baja}}. Os enviamos los datos para que tramitéis la baja:
+
+{{gestoria_datos}}
+
+Gracias,
+{{empresa_nombre}}`,
+    activa: true,
+  },
+
   // ── Recordatorio a la gestoría ──
   {
     clave: "gestoria_recordatorio",
@@ -420,9 +437,7 @@ Gracias,
 
 Ya ha vencido el plazo de presentación de los modelos trimestrales del periodo {{periodo_label}} de {{empresa_nombre}}.
 
-Os pedimos que subáis los modelos presentados (303, 111, etc.) desde el siguiente enlace, que los integrará automáticamente en el software:
-
-{{enlace_modelos}}
+Os pedimos que subáis los modelos presentados (303, 111, etc.) con el botón de abajo; se integrarán automáticamente en el software.
 
 Gracias por vuestra colaboración.
 {{empresa_nombre}}`,
@@ -439,9 +454,7 @@ Gracias por vuestra colaboración.
 
 Ya ha vencido el plazo de presentación de los modelos anuales del ejercicio {{periodo_label}} de {{empresa_nombre}}.
 
-Os pedimos que subáis los modelos presentados (390, 347, 190, 200, Pérdidas y Ganancias, Balance y Libro Mayor) desde el siguiente enlace, que los integrará automáticamente en el software:
-
-{{enlace_modelos}}
+Os pedimos que subáis los modelos presentados (390, 347, 190, 200, Pérdidas y Ganancias, Balance y Libro Mayor) con el botón de abajo; se integrarán automáticamente en el software.
 
 Gracias por vuestra colaboración.
 {{empresa_nombre}}`,

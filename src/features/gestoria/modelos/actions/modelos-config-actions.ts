@@ -36,6 +36,7 @@ export async function saveModelosConfig(
       {
         empresa_id: empresaId,
         tipos_activos: input.tipos_activos,
+        tipos_obligatorios: input.tipos_obligatorios,
         email_trim_activo: input.email_trim_activo,
         email_trim_dias_offset: clampOffset(input.email_trim_dias_offset),
         email_anual_activo: input.email_anual_activo,

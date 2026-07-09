@@ -66,7 +66,14 @@ export default async function SubirModelosPage({
       empresaNombre={(empresa?.nombre as string) ?? "la empresa"}
       periodoLabel={periodoLabel}
       grupo={res.row.grupo}
-      modelos={modelos.map((m) => ({ tipo: m.tipo, label: m.label, tienePdf: m.tienePdf }))}
+      modelos={modelos.map((m) => ({
+        tipo: m.tipo,
+        label: m.label,
+        yaEnSoftware: m.yaEnSoftware,
+        enStaging: m.enStaging,
+        iaOk: m.iaOk,
+        obligatorio: m.obligatorio,
+      }))}
     />
   );
 }

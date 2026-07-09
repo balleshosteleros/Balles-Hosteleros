@@ -140,7 +140,7 @@ export async function GET(request: Request) {
         grupo: d.grupo,
         periodo: d.periodo,
       });
-      const pendientes = modelos.filter((m) => !m.tienePdf).length;
+      const pendientes = modelos.filter((m) => m.obligatorio && !m.yaEnSoftware).length;
       if (pendientes === 0) {
         // Marca el token como completado para no reintentar cada día.
         await admin

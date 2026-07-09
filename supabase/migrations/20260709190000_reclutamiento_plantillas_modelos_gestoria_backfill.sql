@@ -19,8 +19,7 @@ CROSS JOIN (
       'Modelos trimestrales {{periodo_label}} · {{empresa_nombre}}',
       'Hola,' || chr(10) || chr(10) ||
       'Ya ha vencido el plazo de presentación de los modelos trimestrales del periodo {{periodo_label}} de {{empresa_nombre}}.' || chr(10) || chr(10) ||
-      'Os pedimos que subáis los modelos presentados (303, 111, etc.) desde el siguiente enlace, que los integrará automáticamente en el software:' || chr(10) || chr(10) ||
-      '{{enlace_modelos}}' || chr(10) || chr(10) ||
+      'Os pedimos que subáis los modelos presentados (303, 111, etc.) con el botón de abajo; se integrarán automáticamente en el software.' || chr(10) || chr(10) ||
       'Gracias por vuestra colaboración.' || chr(10) ||
       '{{empresa_nombre}}'
     ),
@@ -30,8 +29,7 @@ CROSS JOIN (
       'Modelos anuales {{periodo_label}} · {{empresa_nombre}}',
       'Hola,' || chr(10) || chr(10) ||
       'Ya ha vencido el plazo de presentación de los modelos anuales del ejercicio {{periodo_label}} de {{empresa_nombre}}.' || chr(10) || chr(10) ||
-      'Os pedimos que subáis los modelos presentados (390, 347, 190, 200, Pérdidas y Ganancias, Balance y Libro Mayor) desde el siguiente enlace, que los integrará automáticamente en el software:' || chr(10) || chr(10) ||
-      '{{enlace_modelos}}' || chr(10) || chr(10) ||
+      'Os pedimos que subáis los modelos presentados (390, 347, 190, 200, Pérdidas y Ganancias, Balance y Libro Mayor) con el botón de abajo; se integrarán automáticamente en el software.' || chr(10) || chr(10) ||
       'Gracias por vuestra colaboración.' || chr(10) ||
       '{{empresa_nombre}}'
     )

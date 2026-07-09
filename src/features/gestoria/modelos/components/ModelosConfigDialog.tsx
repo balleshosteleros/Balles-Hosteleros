@@ -36,6 +36,8 @@ export function ModelosConfigDialog({ onSaved }: ModelosConfigDialogProps) {
 
   // Set de tipos activos. Si es null en config → todos activos.
   const [activos, setActivos] = useState<Set<ModeloTipo>>(new Set(TODOS_LOS_TIPOS));
+  // Obligatorios en el enlace de la gestoría. null en config → todos obligatorios.
+  const [obligatorios, setObligatorios] = useState<Set<ModeloTipo>>(new Set(TODOS_LOS_TIPOS));
   const [emailTrimActivo, setEmailTrimActivo] = useState(false);
   const [emailTrimOffset, setEmailTrimOffset] = useState(1);
   const [emailAnualActivo, setEmailAnualActivo] = useState(false);
@@ -49,6 +51,9 @@ export function ModelosConfigDialog({ onSaved }: ModelosConfigDialogProps) {
         const c = r.ok ? r.data : MODELOS_CONFIG_DEFAULT;
         setActivos(
           c.tipos_activos == null ? new Set(TODOS_LOS_TIPOS) : new Set(c.tipos_activos),
+        );
+        setObligatorios(
+          c.tipos_obligatorios == null ? new Set(TODOS_LOS_TIPOS) : new Set(c.tipos_obligatorios),
         );
         setEmailTrimActivo(c.email_trim_activo);
         setEmailTrimOffset(c.email_trim_dias_offset);
@@ -67,14 +72,27 @@ export function ModelosConfigDialog({ onSaved }: ModelosConfigDialogProps) {
     });
   };
 
+  const toggleObligatorio = (tipo: ModeloTipo, obl: boolean) => {
+    setObligatorios((prev) => {
+      const next = new Set(prev);
+      if (obl) next.add(tipo);
+      else next.delete(tipo);
+      return next;
+    });
+  };
+
   const guardar = async () => {
     setGuardando(true);
     try {
       const todosActivos = TODOS_LOS_TIPOS.every((t) => activos.has(t));
+      const todosObligatorios = TODOS_LOS_TIPOS.every((t) => obligatorios.has(t));
       const input: ModelosConfig = {
         tipos_activos: todosActivos
           ? null
           : TODOS_LOS_TIPOS.filter((t) => activos.has(t)),
+        tipos_obligatorios: todosObligatorios
+          ? null
+          : TODOS_LOS_TIPOS.filter((t) => obligatorios.has(t)),
         email_trim_activo: emailTrimActivo,
         email_trim_dias_offset: emailTrimOffset,
         email_anual_activo: emailAnualActivo,
@@ -152,6 +170,44 @@ export function ModelosConfigDialog({ onSaved }: ModelosConfigDialogProps) {
                   <p className="text-xs font-medium text-muted-foreground mb-1">Anuales</p>
                   {listaTipos(TIPOS_ANUALES)}
                 </div>
+              </div>
+            </section>
+
+            {/* Sección B — Obligatorios en el enlace de la gestoría */}
+            <section className="space-y-3">
+              <div className="space-y-0.5">
+                <h3 className="text-sm font-semibold text-foreground">
+                  Obligatorios al subir por la gestoría
+                </h3>
+                <p className="text-xs text-muted-foreground">
+                  La gestoría debe subir <b>todos los obligatorios</b> para poder enviar (todo o
+                  nada). Por defecto todos lo son; desmarca los que quieras dejar opcionales.
+                </p>
+              </div>
+              <div className="rounded-lg border border-border p-3 space-y-1">
+                {TODOS_LOS_TIPOS.filter((t) => activos.has(t)).map((tipo) => (
+                  <div
+                    key={`obl-${tipo}`}
+                    className="flex items-center justify-between rounded-md px-2 py-1.5 hover:bg-muted/50"
+                  >
+                    <Label
+                      htmlFor={`obl-${tipo}`}
+                      className="text-sm font-normal text-foreground cursor-pointer"
+                    >
+                      {MODELO_LABEL[tipo]}
+                    </Label>
+                    <Switch
+                      id={`obl-${tipo}`}
+                      checked={obligatorios.has(tipo)}
+                      onCheckedChange={(v) => toggleObligatorio(tipo, v)}
+                    />
+                  </div>
+                ))}
+                {TODOS_LOS_TIPOS.filter((t) => activos.has(t)).length === 0 ? (
+                  <p className="text-xs text-muted-foreground px-2 py-1">
+                    No hay modelos visibles.
+                  </p>
+                ) : null}
               </div>
             </section>
 

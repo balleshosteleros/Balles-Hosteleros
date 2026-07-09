@@ -14,6 +14,7 @@ import { generarToken, hashToken, compararToken } from "@/features/rrhh/services
 import type { ModeloTipo, ModeloPeriodo, GrupoModelo } from "../types/modelos";
 import { MODELO_LABEL, COMBOS_MODELOS_DEFAULT, grupoDeModelo } from "../types/modelos";
 import { validarModeloPdfIA } from "./validar-modelo-ia";
+import { getModelosConfigPorEmpresa, tiposObligatoriosEfectivos } from "./modelos-config";
 
 const BUCKET_MODELOS = "modelos-aeat-pdf";
 const MAX_PDF_BYTES = 25 * 1024 * 1024;
@@ -129,63 +130,93 @@ export async function resolverTokenModelosGestoria(
 }
 
 export interface ModeloDelPeriodo {
-  modeloId: string | null;
   tipo: ModeloTipo;
   label: string;
   periodo: ModeloPeriodo;
-  tienePdf: boolean;
+  /** Ya está en el software (subido y confirmado en modelos_aeat). */
+  yaEnSoftware: boolean;
+  /** Adjuntado y validado en staging, pendiente de confirmar. */
+  enStaging: boolean;
+  /** Validación IA OK del que está en staging. */
+  iaOk: boolean;
+  iaMotivo: string | null;
+  /** Es obligatorio subirlo para poder confirmar. */
+  obligatorio: boolean;
+}
+
+/** Tipos esperados en el enlace según el grupo del token. */
+function tiposEsperadosDelToken(row: ModelosTokenRow): ModeloTipo[] {
+  return COMBOS_MODELOS_DEFAULT.filter((c) => {
+    if (row.grupo === "TRIMESTRALES")
+      return c.periodo === row.periodo && grupoDeModelo(c.tipo) === "TRIMESTRALES";
+    return c.periodo === "ANUAL" && grupoDeModelo(c.tipo) === "ANUALES";
+  }).map((c) => c.tipo);
 }
 
 /**
- * Devuelve los modelos que la gestoría debe subir en este enlace, con su estado
- * (ya subido o hueco). Para trimestrales = todos los tipos Q del periodo Q; para
- * anuales = todos los tipos ANUAL del ejercicio.
+ * Devuelve los modelos del enlace con su estado: ya-en-software, en-staging
+ * (pendiente de confirmar) y si son obligatorios (según config de la empresa).
  */
 export async function listarModelosDelToken(
   admin: SupabaseClient,
   row: ModelosTokenRow,
 ): Promise<ModeloDelPeriodo[]> {
-  // Tipos esperados según el grupo del token.
-  const tiposEsperados = COMBOS_MODELOS_DEFAULT.filter((c) => {
-    if (row.grupo === "TRIMESTRALES") return c.periodo === row.periodo && grupoDeModelo(c.tipo) === "TRIMESTRALES";
-    return c.periodo === "ANUAL" && grupoDeModelo(c.tipo) === "ANUALES";
-  });
+  const tipos = tiposEsperadosDelToken(row);
 
+  // Config de obligatorios/visibles de la empresa.
+  const cfg = await getModelosConfigPorEmpresa(admin, row.empresa_id);
+  const obligatorios = tiposObligatoriosEfectivos(cfg, tipos);
+
+  // Ya en software.
   const { data: existentes } = await admin
     .from("modelos_aeat")
-    .select("id, tipo, periodo, pdf_url")
+    .select("tipo, pdf_url")
     .eq("empresa_id", row.empresa_id)
     .eq("ejercicio", row.ejercicio)
     .eq("periodo", row.periodo);
+  const yaSoftware = new Set(
+    ((existentes ?? []) as Array<{ tipo: string; pdf_url: string | null }>)
+      .filter((m) => m.pdf_url)
+      .map((m) => m.tipo),
+  );
 
-  const porTipo = new Map<string, { id: string; pdf_url: string | null }>();
-  for (const m of (existentes ?? []) as Array<{ id: string; tipo: string; pdf_url: string | null }>) {
-    porTipo.set(m.tipo, { id: m.id, pdf_url: m.pdf_url });
+  // En staging.
+  const { data: staging } = await admin
+    .from("gestoria_modelos_staging")
+    .select("tipo, ia_ok, ia_motivo")
+    .eq("token_id", row.id);
+  const stagingPorTipo = new Map<string, { ia_ok: boolean; ia_motivo: string | null }>();
+  for (const s of (staging ?? []) as Array<{ tipo: string; ia_ok: boolean; ia_motivo: string | null }>) {
+    stagingPorTipo.set(s.tipo, { ia_ok: s.ia_ok, ia_motivo: s.ia_motivo });
   }
 
-  return tiposEsperados.map((c) => {
-    const existente = porTipo.get(c.tipo);
+  return tipos.map((tipo) => {
+    const st = stagingPorTipo.get(tipo);
     return {
-      modeloId: existente?.id ?? null,
-      tipo: c.tipo,
-      label: MODELO_LABEL[c.tipo],
+      tipo,
+      label: MODELO_LABEL[tipo],
       periodo: row.periodo,
-      tienePdf: Boolean(existente?.pdf_url),
+      yaEnSoftware: yaSoftware.has(tipo),
+      enStaging: Boolean(st),
+      iaOk: st?.ia_ok ?? false,
+      iaMotivo: st?.ia_motivo ?? null,
+      obligatorio: obligatorios.includes(tipo),
     };
   });
 }
 
 /**
- * Procesa la subida de UN modelo por la gestoría: valida el PDF con IA, lo sube
- * al bucket y hace upsert de pdf_url en modelos_aeat. Todo por service_role.
+ * Adjunta UN modelo en STAGING: valida el PDF con IA y lo guarda en una zona
+ * temporal del token. NO entra a modelos_aeat todavía (subida todo-o-nada).
+ * La validación IA se hace al momento para dar feedback inmediato.
  */
-export async function procesarSubidaModelo(
+export async function stagingSubidaModelo(
   admin: SupabaseClient,
   row: ModelosTokenRow,
   tipo: ModeloTipo,
   file: File,
 ): Promise<
-  | { ok: true }
+  | { ok: true; iaMotivo: string }
   | { ok: false; error: string; status: number; iaMotivo?: string }
 > {
   if (file.type !== "application/pdf") return { ok: false, error: "El modelo debe ser un PDF", status: 400 };
@@ -194,14 +225,13 @@ export async function procesarSubidaModelo(
 
   const buffer = Buffer.from(await file.arrayBuffer());
 
-  // Datos de la empresa para que la IA verifique NIF/razón social.
   const { data: empresa } = await admin
     .from("empresas")
     .select("nombre, razon_social, nif")
     .eq("id", row.empresa_id)
     .maybeSingle();
 
-  // 1) Validación IA: ¿este PDF es el modelo/empresa/periodo correcto?
+  // Validación IA (feedback inmediato). No coincide → se rechaza, no se guarda.
   const ia = await validarModeloPdfIA({
     buffer,
     esperado: {
@@ -222,70 +252,110 @@ export async function procesarSubidaModelo(
     };
   }
 
-  // 2) Asegurar la fila modelos_aeat (crear si no existe) y subir el PDF.
-  let modeloId: string;
-  const { data: existente } = await admin
-    .from("modelos_aeat")
-    .select("id, pdf_url")
-    .eq("empresa_id", row.empresa_id)
-    .eq("tipo", tipo)
-    .eq("periodo", row.periodo)
-    .eq("ejercicio", row.ejercicio)
-    .maybeSingle();
-
-  if (existente) {
-    modeloId = existente.id as string;
-  } else {
-    const { data: creado, error: crearErr } = await admin
-      .from("modelos_aeat")
-      .insert({
-        empresa_id: row.empresa_id,
-        tipo,
-        periodo: row.periodo,
-        ejercicio: row.ejercicio,
-        estado: "BORRADOR",
-        casillas: {},
-      })
-      .select("id")
-      .single();
-    if (crearErr || !creado) {
-      return { ok: false, error: crearErr?.message ?? "No se pudo registrar el modelo", status: 500 };
-    }
-    modeloId = creado.id as string;
-  }
-
-  const path = `${row.empresa_id}/${row.ejercicio}/${row.periodo}/${tipo}_${Date.now()}.pdf`;
+  // Subida a staging: staging/<token_id>/<tipo>.pdf (upsert para reemplazos).
+  const stagingPath = `staging/${row.id}/${tipo}.pdf`;
   const { error: upErr } = await admin.storage
     .from(BUCKET_MODELOS)
-    .upload(path, buffer, { contentType: "application/pdf", upsert: false });
+    .upload(stagingPath, buffer, { contentType: "application/pdf", upsert: true });
   if (upErr) return { ok: false, error: `No se pudo guardar el PDF: ${upErr.message}`, status: 500 };
 
-  const { error: updErr } = await admin
-    .from("modelos_aeat")
-    .update({
-      pdf_url: path,
-      ia_corrida_en: new Date().toISOString(),
-    })
-    .eq("id", modeloId);
-  if (updErr) {
-    // Compensación: borrar el objeto subido.
-    await admin.storage.from(BUCKET_MODELOS).remove([path]);
-    return { ok: false, error: `No se pudo enlazar el PDF: ${updErr.message}`, status: 500 };
+  const { error: stErr } = await admin.from("gestoria_modelos_staging").upsert(
+    { token_id: row.id, tipo, staging_path: stagingPath, ia_ok: true, ia_motivo: ia.motivo },
+    { onConflict: "token_id,tipo" },
+  );
+  if (stErr) {
+    await admin.storage.from(BUCKET_MODELOS).remove([stagingPath]);
+    return { ok: false, error: `No se pudo registrar el documento: ${stErr.message}`, status: 500 };
   }
 
-  // Contador de modelos subidos en el token (traza).
   await admin
     .from("gestoria_modelos_tokens")
     .update({
-      primer_uso_en: (row as { primer_uso_en?: string }).primer_uso_en ?? new Date().toISOString(),
-      modelos_subidos: (await contarSubidos(admin, row)),
+      primer_uso_en:
+        (row as { primer_uso_en?: string }).primer_uso_en ?? new Date().toISOString(),
     })
-    .eq("id", row.id);
+    .eq("id", row.id)
+    .is("primer_uso_en", null);
 
-  return { ok: true };
+  return { ok: true, iaMotivo: ia.motivo };
 }
 
-async function contarSubidos(admin: SupabaseClient, row: ModelosTokenRow): Promise<number> {
+/**
+ * CONFIRMA la subida (todo-o-nada): si faltan modelos OBLIGATORIOS en staging,
+ * no confirma nada y devuelve la lista de los que faltan. Si están todos, mueve
+ * cada PDF de staging a su path final y hace upsert en modelos_aeat, marca el
+ * token completado y limpia el staging.
+ */
+export async function confirmarSubidaModelos(
+  admin: SupabaseClient,
+  row: ModelosTokenRow,
+): Promise<
+  | { ok: true; confirmados: number }
+  | { ok: false; error: string; status: number; faltan?: string[] }
+> {
   const modelos = await listarModelosDelToken(admin, row);
-  return modelos.filter((m) => m.tienePdf).length;
+
+  // Obligatorios que aún no están ni en software ni en staging (con IA OK).
+  const faltan = modelos
+    .filter((m) => m.obligatorio && !m.yaEnSoftware && !(m.enStaging && m.iaOk))
+    .map((m) => m.label);
+  if (faltan.length > 0) {
+    return {
+      ok: false,
+      status: 400,
+      error: "Debes subir TODOS los modelos obligatorios antes de enviar.",
+      faltan,
+    };
+  }
+
+  // Modelos en staging listos para confirmar.
+  const { data: staging } = await admin
+    .from("gestoria_modelos_staging")
+    .select("tipo, staging_path, ia_ok")
+    .eq("token_id", row.id)
+    .eq("ia_ok", true);
+
+  let confirmados = 0;
+  for (const s of (staging ?? []) as Array<{ tipo: string; staging_path: string }>) {
+    const finalPath = `${row.empresa_id}/${row.ejercicio}/${row.periodo}/${s.tipo}_${Date.now()}.pdf`;
+    // Copiar de staging a la ruta final (move no siempre disponible entre prefijos).
+    const { error: mvErr } = await admin.storage
+      .from(BUCKET_MODELOS)
+      .move(s.staging_path, finalPath);
+    if (mvErr) {
+      // Si move falla, intentamos copy+remove implícito vía descarga.
+      const { data: blob } = await admin.storage.from(BUCKET_MODELOS).download(s.staging_path);
+      if (!blob) continue;
+      const buf = Buffer.from(await blob.arrayBuffer());
+      const { error: upErr } = await admin.storage
+        .from(BUCKET_MODELOS)
+        .upload(finalPath, buf, { contentType: "application/pdf", upsert: true });
+      if (upErr) continue;
+      await admin.storage.from(BUCKET_MODELOS).remove([s.staging_path]);
+    }
+
+    // Upsert de la fila con el PDF definitivo.
+    await admin.from("modelos_aeat").upsert(
+      {
+        empresa_id: row.empresa_id,
+        tipo: s.tipo,
+        periodo: row.periodo,
+        ejercicio: row.ejercicio,
+        estado: "PRESENTADO",
+        pdf_url: finalPath,
+        ia_corrida_en: new Date().toISOString(),
+      },
+      { onConflict: "empresa_id,tipo,periodo,ejercicio" },
+    );
+    confirmados++;
+  }
+
+  // Limpiar staging y marcar token completado.
+  await admin.from("gestoria_modelos_staging").delete().eq("token_id", row.id);
+  await admin
+    .from("gestoria_modelos_tokens")
+    .update({ completado_en: new Date().toISOString(), modelos_subidos: confirmados })
+    .eq("id", row.id);
+
+  return { ok: true, confirmados };
 }
