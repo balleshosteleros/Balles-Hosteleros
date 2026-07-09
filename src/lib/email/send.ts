@@ -125,15 +125,25 @@ export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult>
   // falla, se cae a la URL externa (comportamiento anterior).
   let html = input.html;
   const inlineAttachments: { filename: string; content: Buffer; cid: string; contentType: string }[] = [];
-  if (input.empresaId && input.brandHeader !== false) {
+  // Nombre visible del remitente. Regla (2026-07-09): si el llamador NO fija un
+  // `fromName`, pero el correo pertenece a una empresa (`empresaId`), el remitente
+  // pasa a ser el NOMBRE DE LA EMPRESA (BACANAL, HABANA…), no "Balles Hosteleros".
+  // Así todos los correos salen con la marca de la empresa de forma consistente
+  // sin tocar cada llamador. Si no hay empresa, cae al display name de EMAIL_FROM.
+  let fromName = input.fromName;
+  if (input.empresaId) {
     const brand = await fetchEmpresaBrand(input.empresaId);
     if (brand) {
-      const inline = await brandHeaderInline(brand);
-      if (inline) {
-        html = inyectarCabecera(html, inline.html);
-        inlineAttachments.push(inline.attachment);
-      } else {
-        html = inyectarCabecera(html, brandHeaderHtml(brand));
+      if (!fromName && brand.nombre?.trim()) fromName = brand.nombre.trim();
+      // Cabecera corporativa (isotipo): solo si no se pidió omitirla explícitamente.
+      if (input.brandHeader !== false) {
+        const inline = await brandHeaderInline(brand);
+        if (inline) {
+          html = inyectarCabecera(html, inline.html);
+          inlineAttachments.push(inline.attachment);
+        } else {
+          html = inyectarCabecera(html, brandHeaderHtml(brand));
+        }
       }
     }
   }
@@ -146,8 +156,8 @@ export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult>
       auth: { user: cfg.user, pass: cfg.pass },
     });
     const info = await transporter.sendMail({
-      from: input.fromName
-        ? { name: input.fromName, address: addressOf(cfg.from) }
+      from: fromName
+        ? { name: fromName, address: addressOf(cfg.from) }
         : cfg.from,
       to: input.to,
       cc: input.cc || undefined,

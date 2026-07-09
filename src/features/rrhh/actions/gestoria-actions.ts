@@ -709,7 +709,14 @@ export async function enviarCambioPuestoGestoria(
  */
 export async function enviarBajaGestoria(
   empleadoId: string,
-  baja: { ultimoDiaIso: string; tipoBaja: TipoBajaContrato; motivo?: string | null },
+  baja: {
+    ultimoDiaIso: string;
+    tipoBaja: TipoBajaContrato;
+    motivo?: string | null;
+    /** Etiqueta a mostrar para el tipo de baja (p. ej. «Voluntaria forzosa»
+     *  cuando la causa la empresa). Si no viene, se usa ETIQUETA_TIPO_BAJA. */
+    tipoBajaLabel?: string | null;
+  },
 ): Promise<{ ok: boolean; error?: string; destino?: string | null }> {
   try {
     const admin = createAdminClient();
@@ -728,7 +735,10 @@ export async function enviarBajaGestoria(
     };
     const ultimoDiaTrabajo = fmt(baja.ultimoDiaIso);
     const diaOficialBaja = fmt(sumarUnDia(baja.ultimoDiaIso));
-    const tipoBajaLabel = ETIQUETA_TIPO_BAJA[baja.tipoBaja] ?? ETIQUETA_TIPO_BAJA.otras;
+    const tipoBajaLabel =
+      (baja.tipoBajaLabel && baja.tipoBajaLabel.trim()) ||
+      ETIQUETA_TIPO_BAJA[baja.tipoBaja] ||
+      ETIQUETA_TIPO_BAJA.otras;
 
     const { data: emp } = await admin
       .from("empleados")

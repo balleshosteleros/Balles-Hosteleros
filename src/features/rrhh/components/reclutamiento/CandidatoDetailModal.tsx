@@ -37,7 +37,9 @@ import {
   Eye,
   EyeOff,
   CalendarDays,
+  UserMinus,
 } from "lucide-react";
+import { BajaContratoEmpresaDialog } from "@/features/rrhh/components/reclutamiento/BajaContratoEmpresaDialog";
 
 function WhatsAppIcon({ className }: { className?: string }) {
   return (
@@ -159,6 +161,8 @@ export function CandidatoDetailModal({
   // Footer: reasignación a otra vacante (vacante + fase de destino).
   const [destVacanteId, setDestVacanteId] = useState<string>("");
   const [destEstado, setDestEstado] = useState<EstadoReclutamiento | "">("");
+  // Baja de contrato por parte de la empresa (empleado ya contratado).
+  const [bajaOpen, setBajaOpen] = useState(false);
   // Catálogo configurable de "¿Cómo nos has conocido?" (BD por empresa).
   const [origenesCfg, setOrigenesCfg] = useState<OrigenCandidatoConfig[]>([]);
 
@@ -505,6 +509,24 @@ export function CandidatoDetailModal({
                   </>
                 )}
 
+              {/* BAJA CONTRATO (por parte de la empresa): solo para EMPLEADOS
+                  reales (tienen empleado vinculado) que están en la casilla
+                  «Empleado». Inicia el offboarding y avisa a la gestoría. La baja
+                  voluntaria la solicita el propio trabajador desde Mi Panel. */}
+              {candidato.empleadoId && candidato.fase === "empleado" && (
+                <>
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    className="h-9 gap-1.5 text-xs"
+                    onClick={() => setBajaOpen(true)}
+                  >
+                    <UserMinus className="h-4 w-4" /> Baja contrato
+                  </Button>
+                  <span className="mx-1 h-6 w-px bg-border" />
+                </>
+              )}
+
               <span className="text-xs text-muted-foreground mr-1">
                 Cambiar de vacante
               </span>
@@ -592,6 +614,20 @@ export function CandidatoDetailModal({
           </div>
         </DialogPrimitive.Content>
       </DialogPortal>
+
+      {/* Baja de contrato por parte de la empresa (empleado ya contratado). */}
+      <BajaContratoEmpresaDialog
+        open={bajaOpen}
+        onOpenChange={setBajaOpen}
+        candidatoId={candidato.id}
+        empleadoNombre={`${candidato.nombre} ${candidato.apellidos ?? ""}`.trim()}
+        onDone={() => {
+          // Ha pasado a offboarding «Baja contrato»: refresca la lista y cierra
+          // la ficha (ya no aplica el botón de baja en su estado nuevo).
+          onUpdateCandidato({ ...candidato, fase: "baja_contrato" });
+          onOpenChange(false);
+        }}
+      />
     </Dialog>
   );
 }

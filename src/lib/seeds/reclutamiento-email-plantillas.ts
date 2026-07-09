@@ -382,7 +382,7 @@ Gracias,
     asunto: "Baja de trabajador · {{candidato_nombre_completo}} · {{empresa_nombre}}",
     cuerpo: `Hola,
 
-Os comunicamos que el siguiente trabajador causa BAJA en la empresa. Su último día efectivo de trabajo será el {{fecha_baja}}. Os enviamos los datos para que tramitéis la baja:
+Os comunicamos que el siguiente trabajador causa BAJA en la empresa ({{tipo_baja}}). Su último día efectivo de trabajo será el {{fecha_baja}} y la baja será oficial el {{fecha_baja_oficial}}. Os enviamos los datos para que tramitéis la baja:
 
 {{gestoria_datos}}
 
@@ -437,7 +437,7 @@ Gracias,
 
 Ya ha vencido el plazo de presentación de los modelos trimestrales del periodo {{periodo_label}} de {{empresa_nombre}}.
 
-Os pedimos que subáis los modelos presentados (303, 111, etc.) con el botón de abajo; se integrarán automáticamente en el software.
+Os pedimos que subáis los modelos presentados con el botón de abajo; se integrarán automáticamente en el software.
 
 Gracias por vuestra colaboración.
 {{empresa_nombre}}`,
@@ -454,7 +454,7 @@ Gracias por vuestra colaboración.
 
 Ya ha vencido el plazo de presentación de los modelos anuales del ejercicio {{periodo_label}} de {{empresa_nombre}}.
 
-Os pedimos que subáis los modelos presentados (390, 347, 190, 200, Pérdidas y Ganancias, Balance y Libro Mayor) con el botón de abajo; se integrarán automáticamente en el software.
+Os pedimos que subáis los modelos presentados con el botón de abajo; se integrarán automáticamente en el software.
 
 Gracias por vuestra colaboración.
 {{empresa_nombre}}`,

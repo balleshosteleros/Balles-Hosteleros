@@ -8,6 +8,7 @@ import {
   normalizarNombreOrNull,
 } from "@/shared/lib/normalizar-nombre";
 import type { FasePrincipal } from "@/features/rrhh/data/reclutamiento";
+import { etiquetaTipoBajaEmpresa, type TipoBajaContrato } from "@/features/rrhh/data/campos-gestoria";
 
 async function getContext() {
   const supabase = await createClient();
@@ -181,6 +182,16 @@ export async function moverCandidatoFase(
       } as const;
     }
 
+    // A EX-EMPLEADO solo pueden llegar quienes FUERON empleados reales (vienen de
+    // la casilla «empleado»): tienen un empleado vinculado. Un candidato que nunca
+    // llegó a ser empleado NO puede pasar a ex-empleado.
+    if (estado === "ex_empleado" && cand?.estado !== "ex_empleado" && !cand?.empleado_id) {
+      return {
+        ok: false,
+        error: "NO_FUE_EMPLEADO",
+      } as const;
+    }
+
     // Cada cambio de fase/estado reinicia el contador de «días en la fase actual».
     const faseCambia = !!cand && (cand.fase !== fase || cand.estado !== estado);
     const ahora = new Date().toISOString();
@@ -210,37 +221,16 @@ export async function moverCandidatoFase(
       }
     }
 
-    // Offboarding cerrado: al pasar a EX-EMPLEADO, el empleado queda Inactivo y
-    // su usuario pierde el acceso (el trigger empleados_sync_estado_acceso pone
-    // usuarios.estado_acceso = 'Inactivo' → login bloqueado). La baja también
-    // recorta su horario futuro (setEmpleadoEstado → recortarHorarioFuturoPorBaja).
-    // Fecha de baja: la que ya tenga el empleado, o el último día de su solicitud
-    // de baja de contrato, o hoy como último recurso.
+    // Offboarding cerrado: al pasar a EX-EMPLEADO, el empleado queda Inactivo HOY
+    // (el día en que se le pasa a ex-empleado) y su usuario pierde el acceso (el
+    // trigger empleados_sync_estado_acceso pone usuarios.estado_acceso = 'Inactivo'
+    // → login bloqueado). La baja también recorta su horario futuro
+    // (setEmpleadoEstado → recortarHorarioFuturoPorBaja). Un ex-empleado NUNCA
+    // queda Activo ni con usuario funcionando: esta es la garantía de esa regla.
     if (estado === "ex_empleado" && cand?.estado !== "ex_empleado" && cand?.empleado_id) {
       try {
         const empleadoId = cand.empleado_id as string;
-        const { data: emp } = await supabase
-          .from("empleados")
-          .select("id, user_id, fecha_baja")
-          .eq("id", empleadoId)
-          .maybeSingle();
-
-        let fechaBaja = (emp?.fecha_baja as string | null) ?? null;
-        if (!fechaBaja && emp?.user_id) {
-          const { data: sol } = await supabase
-            .from("solicitudes_personal")
-            .select("fecha_fin")
-            .eq("empresa_id", empresaId)
-            .eq("user_id", emp.user_id as string)
-            .eq("subtipo", "baja_contrato")
-            .not("fecha_fin", "is", null)
-            .order("fecha_fin", { ascending: false })
-            .limit(1)
-            .maybeSingle();
-          fechaBaja = (sol?.fecha_fin as string | null) ?? null;
-        }
-        if (!fechaBaja) fechaBaja = ahora.slice(0, 10);
-
+        const fechaBaja = ahora.slice(0, 10); // HOY
         const { setEmpleadoEstado } = await import(
           "@/features/rrhh/actions/empleados-actions"
         );
@@ -501,6 +491,78 @@ export async function eliminarCandidato(id: string) {
   } catch (err: unknown) {
     const msg = mensajeError(err);
     return { ok: false, error: msg };
+  }
+}
+
+/**
+ * BAJA DE CONTRATO iniciada POR LA EMPRESA (no por el trabajador). Se dispara
+ * desde la ficha del empleado en el reclutamiento (botón «BAJA CONTRATO»). A
+ * diferencia de la baja voluntaria (que solicita el propio empleado desde Mi
+ * Panel → Solicitudes), aquí es RRHH quien la causa e indica el TIPO de baja
+ * (disciplinaria, fin de contrato, etc.) y el último día de trabajo.
+ *
+ * Efectos: avisa a la gestoría con los datos del trabajador + tipo de baja +
+ * último día + día oficial de la baja (último + 1), y mueve al candidato a la
+ * fase de offboarding «Baja contrato». NO marca todavía al empleado como
+ * Inactivo: eso ocurre al final del offboarding, al pasarlo a «Ex-empleados».
+ */
+export async function darBajaContratoEmpresa(
+  candidatoId: string,
+  input: {
+    tipoBaja: TipoBajaContrato;
+    ultimoDiaIso: string;
+    motivo?: string | null;
+  },
+) {
+  try {
+    const { supabase, empresaId } = await getContext();
+    if (!empresaId) return { ok: false, error: "No autenticado" };
+
+    if (!input.ultimoDiaIso || !/^\d{4}-\d{2}-\d{2}$/.test(input.ultimoDiaIso)) {
+      return { ok: false, error: "Indica el último día de trabajo." };
+    }
+
+    const { data: cand } = await supabase
+      .from("candidatos")
+      .select("empleado_id, fase, estado")
+      .eq("id", candidatoId)
+      .eq("empresa_id", empresaId)
+      .maybeSingle();
+    if (!cand) return { ok: false, error: "Candidato no encontrado" };
+    if (!cand.empleado_id) {
+      return { ok: false, error: "Este candidato no es un empleado; no se le puede dar de baja." };
+    }
+
+    // 1) Aviso a la gestoría (datos del trabajador + fechas + tipo de baja).
+    const { enviarBajaGestoria } = await import(
+      "@/features/rrhh/actions/gestoria-actions"
+    );
+    const avisoGestoria = await enviarBajaGestoria(cand.empleado_id as string, {
+      ultimoDiaIso: input.ultimoDiaIso,
+      tipoBaja: input.tipoBaja,
+      // La causa la empresa: la voluntaria se etiqueta «Voluntaria forzosa».
+      tipoBajaLabel: etiquetaTipoBajaEmpresa(input.tipoBaja),
+      motivo: input.motivo ?? null,
+    });
+
+    // 2) Mueve el candidato a la fase de offboarding «Baja contrato». Reutiliza
+    //    moverCandidatoFase para que registre la actividad igual que un arrastre.
+    const mov = await moverCandidatoFase(candidatoId, "offboarding", "baja_contrato");
+    if (!mov.ok) {
+      return { ok: false, error: ("error" in mov && mov.error) || "No se pudo mover a Baja contrato" };
+    }
+
+    revalidatePath("/rrhh/reclutamiento");
+    // El aviso a la gestoría no bloquea la baja: si falló el email, la baja se
+    // registró igual y se informa para que RRHH pueda reenviarlo.
+    return {
+      ok: true as const,
+      gestoriaAvisada: avisoGestoria.ok,
+      gestoriaDestino: avisoGestoria.ok ? avisoGestoria.destino ?? null : null,
+      gestoriaError: avisoGestoria.ok ? null : (avisoGestoria.error ?? "No se pudo avisar a la gestoría"),
+    };
+  } catch (err: unknown) {
+    return { ok: false, error: mensajeError(err) };
   }
 }
 

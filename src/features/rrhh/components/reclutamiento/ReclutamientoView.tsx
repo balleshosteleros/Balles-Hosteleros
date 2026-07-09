@@ -637,6 +637,8 @@ export function ReclutamientoView() {
                   const res = await moverCandidatoFase(c.id, fase, c.fase);
                   if (!res.ok && "error" in res && res.error === "YA_EMPLEADO") {
                     toast.error("Este candidato ya es empleado y no puede descartarse desde aquí. Gestiona su baja desde la ficha del empleado.");
+                  } else if (!res.ok && "error" in res && res.error === "NO_FUE_EMPLEADO") {
+                    toast.error("Solo pueden pasar a Ex-empleados quienes fueron empleados (vienen de la casilla «Empleado»).");
                   } else if (!res.ok) {
                     toast.error(("error" in res && res.error) || "Error al mover candidato");
                   } else if (res.empleadoYaContratado) {

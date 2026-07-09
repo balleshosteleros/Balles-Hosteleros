@@ -30,3 +30,54 @@ export function normalizarGestoriaCampos(raw: unknown): GestoriaCamposConfig {
   }
   return out;
 }
+
+// ─────────────────────────────────────────────────────────────────────────
+// Tipo de baja de contrato (comunicado a la gestoría)
+// ─────────────────────────────────────────────────────────────────────────
+
+/** Tipo de baja de contrato que se comunica a la gestoría. */
+export type TipoBajaContrato =
+  | "voluntaria"
+  | "disciplinaria"
+  | "no_superado_periodo_prueba"
+  | "fin_contrato"
+  | "despido_objetivo"
+  | "otras";
+
+/** Etiqueta legible del tipo de baja (para el email y la UI). */
+export const ETIQUETA_TIPO_BAJA: Record<TipoBajaContrato, string> = {
+  voluntaria: "Baja voluntaria",
+  disciplinaria: "Despido disciplinario",
+  no_superado_periodo_prueba: "No superación del periodo de prueba",
+  fin_contrato: "Fin de contrato",
+  despido_objetivo: "Despido objetivo",
+  otras: "Otras",
+};
+
+/**
+ * Tipos de baja que puede elegir la EMPRESA al causar la baja desde la ficha del
+ * empleado. Incluye «voluntaria» para el caso de VOLUNTARIA FORZOSA: el
+ * trabajador no da señales de vida y la empresa tramita su baja voluntaria en su
+ * nombre (lo normal es que la voluntaria la solicite el propio trabajador desde
+ * Mi Panel → Solicitudes, pero la empresa puede hacerlo si desaparece).
+ * Orden para el selector.
+ */
+export const TIPOS_BAJA_EMPRESA: TipoBajaContrato[] = [
+  "disciplinaria",
+  "no_superado_periodo_prueba",
+  "fin_contrato",
+  "despido_objetivo",
+  "voluntaria",
+  "otras",
+];
+
+/**
+ * Etiqueta del tipo de baja EN EL CONTEXTO DE LA EMPRESA. Igual que
+ * `ETIQUETA_TIPO_BAJA` salvo la voluntaria, que aquí es «Voluntaria forzosa»
+ * (la causa la empresa, no el trabajador). La baja voluntaria que solicita el
+ * propio trabajador (Mi Panel) sigue usando `ETIQUETA_TIPO_BAJA` → «Baja
+ * voluntaria».
+ */
+export function etiquetaTipoBajaEmpresa(t: TipoBajaContrato): string {
+  return t === "voluntaria" ? "Voluntaria forzosa" : ETIQUETA_TIPO_BAJA[t];
+}

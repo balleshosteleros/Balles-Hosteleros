@@ -93,7 +93,7 @@ const bonusHabana: Omit<Bonus, "puestoIds">[] = [
       ],
     }],
     reglas: [
-      { id: "r1", titulo: "Cálculo trimestral", descripcion: "El balance se calcula por trimestre natural (Q1, Q2, Q3, Q4)." },
+      { id: "r1", titulo: "Cálculo trimestral", descripcion: "El balance se calcula por trimestre natural (T1, T2, T3, T4)." },
       { id: "r2", titulo: "Desfase de liquidación", descripcion: "Se paga a trimestre vencido por necesidad de cálculo y cierre contable." },
     ],
     formaPago: "Se liquida trimestralmente a trimestre vencido. Existe un desfase temporal necesario para el cierre y cálculo del balance.",
@@ -260,7 +260,7 @@ const configHabana: ConfigBonusEmpresa = {
   formasPago: [
     "Los bonus se liquidan trimestralmente, excepto las propinas que se reparten mensualmente.",
     "El pago se realiza a trimestre vencido, con un desfase temporal necesario para el cierre y cálculo.",
-    "Ejemplo: el bonus del Q1 (enero-marzo) se liquida en abril-mayo tras cerrar cuentas.",
+    "Ejemplo: el bonus del T1 (enero-marzo) se liquida en abril-mayo tras cerrar cuentas.",
     "Las propinas dependen del gerente y se reparten al final de cada mes.",
   ],
 };
@@ -304,24 +304,24 @@ export interface ResultadoBonus {
 
 const resultadosHabana: ResultadoBonus[] = [
   // BALANCE
-  { id: "rh1", bonusId: "bh1", periodo: "Q1 2026 (Ene–Mar)", estado: "liquidado", importe: "500 €", resumen: "Balance positivo de +26.300 € → tramo +25.000 €",
+  { id: "rh1", bonusId: "bh1", periodo: "T1 2026 (Ene–Mar)", estado: "liquidado", importe: "500 €", resumen: "Balance positivo de +26.300 € → tramo +25.000 €",
     detalles: { "Facturación": "142.500 €", "Gastos": "116.200 €", "Balance final": "+26.300 €", "Tramo alcanzado": "+25.000 €", "Bonus resultante": "500 €" } },
-  { id: "rh2", bonusId: "bh1", periodo: "Q4 2025 (Oct–Dic)", estado: "liquidado", importe: "600 €", resumen: "Balance positivo de +31.800 € → tramo +30.000 €",
+  { id: "rh2", bonusId: "bh1", periodo: "T4 2025 (Oct–Dic)", estado: "liquidado", importe: "600 €", resumen: "Balance positivo de +31.800 € → tramo +30.000 €",
     detalles: { "Facturación": "168.900 €", "Gastos": "137.100 €", "Balance final": "+31.800 €", "Tramo alcanzado": "+30.000 €", "Bonus resultante": "600 €" } },
-  { id: "rh3", bonusId: "bh1", periodo: "Q2 2026 (Abr–Jun)", estado: "pendiente", importe: "—", resumen: "Periodo en curso, pendiente de cierre",
+  { id: "rh3", bonusId: "bh1", periodo: "T2 2026 (Abr–Jun)", estado: "pendiente", importe: "—", resumen: "Periodo en curso, pendiente de cierre",
     detalles: { "Facturación": "En curso", "Gastos": "En curso", "Balance final": "Pendiente", "Tramo alcanzado": "—", "Bonus resultante": "—" } },
   // INVENTARIOS
-  { id: "rh4", bonusId: "bh2", periodo: "Q1 2026 (Ene–Mar)", estado: "calculado", importe: "150 €", resumen: "Desviación barra 2.4%, cocina 4.1%",
+  { id: "rh4", bonusId: "bh2", periodo: "T1 2026 (Ene–Mar)", estado: "calculado", importe: "150 €", resumen: "Desviación barra 2.4%, cocina 4.1%",
     detalles: { "Entrada albaranes barra": "18.400 €", "Salida ventas barra": "17.960 €", "Desviación barra": "2.4%", "Entrada albaranes cocina": "22.100 €", "Salida ventas cocina": "21.190 €", "Desviación cocina": "4.1%", "Tramo encargado barra": "< 3% → 150 €", "Tramo jefe cocina": "3-5% → 100 €" } },
-  { id: "rh5", bonusId: "bh2", periodo: "Q4 2025 (Oct–Dic)", estado: "liquidado", importe: "100 €", resumen: "Desviación barra 3.8%, cocina 3.2%",
+  { id: "rh5", bonusId: "bh2", periodo: "T4 2025 (Oct–Dic)", estado: "liquidado", importe: "100 €", resumen: "Desviación barra 3.8%, cocina 3.2%",
     detalles: { "Desviación barra": "3.8%", "Desviación cocina": "3.2%", "Desviación global": "3.5%", "Tramo encargados": "3-5% → 100 €", "Tramo gerente": "< 4% → 200 €" } },
   // INSPECCIÓN
-  { id: "rh6", bonusId: "bh3", periodo: "Q1 2026 (Ene–Mar)", estado: "liquidado", importe: "35 €", resumen: "Nota obtenida: 8.5 → tramo 8-9",
+  { id: "rh6", bonusId: "bh3", periodo: "T1 2026 (Ene–Mar)", estado: "liquidado", importe: "35 €", resumen: "Nota obtenida: 8.5 → tramo 8-9",
     detalles: { "Nota inspección": "8.5 / 10", "Servicio": "8.0", "Producto": "9.0", "Ventas": "8.5", "Limpieza": "8.5", "Tramo aplicado": "8 a 9 → 35 €" } },
-  { id: "rh7", bonusId: "bh3", periodo: "Q4 2025 (Oct–Dic)", estado: "liquidado", importe: "50 €", resumen: "Nota obtenida: 9.2 → tramo 9-10",
+  { id: "rh7", bonusId: "bh3", periodo: "T4 2025 (Oct–Dic)", estado: "liquidado", importe: "50 €", resumen: "Nota obtenida: 9.2 → tramo 9-10",
     detalles: { "Nota inspección": "9.2 / 10", "Tramo aplicado": "9 a 10 → 50 €" } },
   // BIENESTAR
-  { id: "rh8", bonusId: "bh4", periodo: "Q1 2026 (Ene–Mar)", estado: "liquidado", importe: "—", resumen: "Ganador: María López (nota 9.6, 3 años antigüedad)",
+  { id: "rh8", bonusId: "bh4", periodo: "T1 2026 (Ene–Mar)", estado: "liquidado", importe: "—", resumen: "Ganador: María López (nota 9.6, 3 años antigüedad)",
     detalles: { "Empleado premiado": "María López", "Nota cuestionario": "9.6 / 10", "Antigüedad": "3 años", "Criterio desempate": "No necesario", "Premio entregado": "Sesión spa (valor 80 €)" } },
   // PROPINAS
   { id: "rh9", bonusId: "bh5", periodo: "Marzo 2026", estado: "liquidado", importe: "Variable", resumen: "Total recaudado: 1.240 € repartidos entre 12 empleados",
@@ -331,9 +331,9 @@ const resultadosHabana: ResultadoBonus[] = [
 ];
 
 const resultadosBacanal: ResultadoBonus[] = [
-  { id: "rb1", bonusId: "bb1", periodo: "Q1 2026 (Ene–Mar)", estado: "calculado", importe: "350 €", resumen: "Balance +16.200 € → tramo +15.000 €",
+  { id: "rb1", bonusId: "bb1", periodo: "T1 2026 (Ene–Mar)", estado: "calculado", importe: "350 €", resumen: "Balance +16.200 € → tramo +15.000 €",
     detalles: { "Facturación": "98.500 €", "Gastos": "82.300 €", "Balance final": "+16.200 €", "Tramo alcanzado": "+15.000 €", "Bonus resultante": "350 €" } },
-  { id: "rb2", bonusId: "bb2", periodo: "Q1 2026 (Ene–Mar)", estado: "liquidado", importe: "30 €", resumen: "Nota obtenida: 8.3 → tramo 8-9",
+  { id: "rb2", bonusId: "bb2", periodo: "T1 2026 (Ene–Mar)", estado: "liquidado", importe: "30 €", resumen: "Nota obtenida: 8.3 → tramo 8-9",
     detalles: { "Nota inspección": "8.3 / 10", "Tramo aplicado": "8 a 9 → 30 €" } },
   { id: "rb3", bonusId: "bb3", periodo: "Marzo 2026", estado: "liquidado", importe: "Variable", resumen: "Total recaudado: 720 € entre 8 empleados",
     detalles: { "Total propinas": "720 €", "Nº empleados": "8", "Media por empleado": "~90 €" } },

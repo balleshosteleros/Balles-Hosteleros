@@ -2097,7 +2097,7 @@ export async function aprobarSolicitud(id: string, notasRevision?: string) {
     // Cargamos la solicitud antes del UPDATE para decidir si hay notificación.
     const { data: solicitud, error: fetchErr } = await supabase
       .from("solicitudes_personal")
-      .select("id, empresa_id, user_id, tipo, empleado_nombre, subtipo, fecha_inicio, fecha_fin, horas, hora_inicio, hora_fin")
+      .select("id, empresa_id, user_id, tipo, empleado_nombre, subtipo, fecha_inicio, fecha_fin, horas, hora_inicio, hora_fin, motivo")
       .eq("id", id)
       .maybeSingle();
     if (fetchErr) throw fetchErr;
@@ -2151,6 +2151,7 @@ export async function aprobarSolicitud(id: string, notasRevision?: string) {
       // borran. No bloqueamos la aprobación si el recorte falla.
       const ultimoDia = (solicitud.fecha_fin as string | null) ?? null;
       if (ultimoDia) {
+        let empleadoBajaId: string | null = null;
         try {
           const { data: empBaja } = await supabase
             .from("empleados")
@@ -2158,12 +2159,13 @@ export async function aprobarSolicitud(id: string, notasRevision?: string) {
             .eq("user_id", solicitud.user_id as string)
             .eq("empresa_id", solicitud.empresa_id as string)
             .maybeSingle();
-          if (empBaja?.id) {
+          empleadoBajaId = (empBaja?.id as string | null) ?? null;
+          if (empleadoBajaId) {
             const { recortarHorarioFuturoPorBaja } = await import(
               "@/features/rrhh/services/baja-horario"
             );
             await recortarHorarioFuturoPorBaja(supabase, {
-              empleadoId: empBaja.id as string,
+              empleadoId: empleadoBajaId,
               empresaId: solicitud.empresa_id as string,
               fechaBaja: ultimoDia,
             });
@@ -2173,6 +2175,34 @@ export async function aprobarSolicitud(id: string, notasRevision?: string) {
             "[mi-panel] aprobarSolicitud → recorte horario baja_contrato:",
             extractErrorMessage(e),
           );
+        }
+
+        // Aviso a la GESTORÍA con los datos del trabajador y su ÚLTIMO DÍA (la
+        // fecha efectiva de la baja que indicó el empleado en la solicitud). Mismo
+        // formato de ficha que el alta, plantilla editable `gestoria_baja`. No
+        // bloquea la aprobación si el envío falla.
+        if (empleadoBajaId) {
+          try {
+            const { enviarBajaGestoria } = await import(
+              "@/features/rrhh/actions/gestoria-actions"
+            );
+            const motivoBaja =
+              typeof solicitud.motivo === "string" && solicitud.motivo.trim()
+                ? solicitud.motivo.trim()
+                : null;
+            // Baja solicitada por el propio empleado desde Mi Panel = VOLUNTARIA.
+            // `ultimoDia` es el ISO (fecha_fin); la action calcula el día oficial (+1).
+            await enviarBajaGestoria(empleadoBajaId, {
+              ultimoDiaIso: ultimoDia,
+              tipoBaja: "voluntaria",
+              motivo: motivoBaja,
+            });
+          } catch (e) {
+            console.error(
+              "[mi-panel] aprobarSolicitud → aviso gestoría baja_contrato:",
+              extractErrorMessage(e),
+            );
+          }
         }
       }
 
