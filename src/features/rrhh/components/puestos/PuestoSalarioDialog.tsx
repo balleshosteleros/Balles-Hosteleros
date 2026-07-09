@@ -190,7 +190,7 @@ export function PuestoSalarioDialog({ open, onOpenChange, editing, onSaved }: Pr
         <DialogHeader>
           <DialogTitle>{esNuevo ? "Nuevo puesto" : `Puesto · ${editing?.puesto}`}</DialogTitle>
           <DialogDescription>
-            Define el puesto y sus niveles (plantillas de condiciones). Al contratar se copia el nivel elegido al empleado.
+            Define el puesto y sus condiciones. Al contratar se copian al empleado.
           </DialogDescription>
         </DialogHeader>
 
@@ -222,30 +222,9 @@ export function PuestoSalarioDialog({ open, onOpenChange, editing, onSaved }: Pr
             <Textarea id="ps-desc" value={descripcion} onChange={(e) => setDescripcion(e.target.value)} rows={2} placeholder="Funciones y responsabilidades del puesto" />
           </div>
 
-          {/* Selector de niveles */}
-          <div className="space-y-1.5">
-            <Label>Niveles</Label>
-            <div className="flex items-center gap-2 flex-wrap">
-              {niveles.map((n, i) => (
-                <Button
-                  key={n.nivel}
-                  type="button"
-                  size="sm"
-                  variant={i === idx ? "default" : "outline"}
-                  onClick={() => setIdx(i)}
-                >
-                  Nivel {n.nivel}
-                </Button>
-              ))}
-              <Button type="button" size="sm" variant="ghost" onClick={addNivel}>
-                <Plus className="h-4 w-4 mr-1" /> Añadir nivel
-              </Button>
-            </div>
-          </div>
-
-          {/* Condiciones del nivel seleccionado */}
+          {/* Condiciones del puesto (niveles ocultos de momento: se edita uno solo) */}
           <div className="rounded-md border border-border/60 p-3 space-y-4">
-            <p className="text-xs font-medium text-muted-foreground">Condiciones · Nivel {cur?.nivel}</p>
+            <p className="text-xs font-medium text-muted-foreground">Condiciones del puesto</p>
 
             <div className="space-y-1.5">
               <Label htmlFor="ps-bruto">Salario bruto mensual (€)</Label>
@@ -302,7 +281,7 @@ export function PuestoSalarioDialog({ open, onOpenChange, editing, onSaved }: Pr
 
           {/* Datos de gestoría (compartidos por el puesto) */}
           <div className="rounded-md border border-border/60 p-3 space-y-4">
-            <p className="text-xs font-medium text-muted-foreground">Datos de gestoría (comunes a todos los niveles)</p>
+            <p className="text-xs font-medium text-muted-foreground">Datos de gestoría</p>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label htmlFor="ps-convenio">Convenio colectivo</Label>
