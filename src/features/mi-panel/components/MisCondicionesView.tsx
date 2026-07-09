@@ -229,28 +229,28 @@ function SalarioCard({ puesto }: { puesto: PuestoSalarial | null }) {
   const items = puesto
     ? [
         {
-          label: "Nómina neta",
-          value: `${eur(puesto.nominaNeta)} aprox.`,
+          label: "Salario bruto",
+          value: `${eur(puesto.salarioBruto)} / mes`,
           icon: Wallet,
-          tone: "text-sky-600 bg-sky-500/10",
+          tone: "text-emerald-600 bg-emerald-500/10",
         },
         {
-          label: "Efectivo extra",
-          value: puesto.efectivoExtra > 0 ? `${eur(puesto.efectivoExtra)} aprox.` : "—",
+          label: "Jornada",
+          value: puesto.jornadaContrato || "—",
           icon: Coins,
           tone: "text-amber-600 bg-amber-500/10",
         },
         {
-          label: "Salario neto total",
-          value: eur(puesto.salarioNeto),
+          label: "Horas / semana",
+          value: `${puesto.horasSemanales}h`,
           icon: PiggyBank,
-          tone: "text-emerald-600 bg-emerald-500/10",
+          tone: "text-sky-600 bg-sky-500/10",
         },
       ]
     : [
-        { label: "Nómina neta", value: "Pendiente", icon: Wallet, tone: "text-sky-600 bg-sky-500/10" },
-        { label: "Efectivo extra", value: "Pendiente", icon: Coins, tone: "text-amber-600 bg-amber-500/10" },
-        { label: "Salario neto total", value: "Pendiente", icon: PiggyBank, tone: "text-emerald-600 bg-emerald-500/10" },
+        { label: "Salario bruto", value: "Pendiente", icon: Wallet, tone: "text-emerald-600 bg-emerald-500/10" },
+        { label: "Jornada", value: "Pendiente", icon: Coins, tone: "text-amber-600 bg-amber-500/10" },
+        { label: "Horas / semana", value: "Pendiente", icon: PiggyBank, tone: "text-sky-600 bg-sky-500/10" },
       ];
 
   return (

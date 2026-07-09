@@ -9,6 +9,9 @@ export interface HorarioDia {
 export interface NivelSalarial {
   nivel: number;
   vacaciones: string;
+  /** Salario BRUTO mensual: cifra principal del puesto. */
+  salarioBruto: number;
+  // Neto (interno): se conserva por compatibilidad con contratación/gestoría.
   nominaNeta: number;
   efectivoExtra: number;
   salarioNeto: number;
@@ -31,6 +34,9 @@ export interface PuestoSalarial {
   /** Nº de niveles del puesto (1..N). */
   nivelesCount: number;
   vacaciones: string;
+  /** Salario BRUTO mensual: cifra principal del puesto. */
+  salarioBruto: number;
+  // Neto (interno): se conserva por compatibilidad con contratación/gestoría.
   nominaNeta: number;
   efectivoExtra: number;
   salarioNeto: number;

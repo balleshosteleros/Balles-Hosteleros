@@ -28,6 +28,7 @@ async function getContext() {
 // Salario embebido dentro de un puesto (una fila por NIVEL).
 type SalarioEmbed = {
   nivel: number | null;
+  salario_bruto: number | string | null;
   nomina_neta: number | string | null;
   efectivo_extra: number | string | null;
   salario_neto: number | string | null;
@@ -58,6 +59,7 @@ function embedToNivel(sal: SalarioEmbed): NivelSalarial {
   return {
     nivel: sal.nivel ?? 1,
     vacaciones: sal.vacaciones ?? "",
+    salarioBruto: Number(sal.salario_bruto) || 0,
     nominaNeta: Number(sal.nomina_neta) || 0,
     efectivoExtra: Number(sal.efectivo_extra) || 0,
     salarioNeto: Number(sal.salario_neto) || 0,
@@ -86,6 +88,7 @@ function rowToPuesto(r: PuestoRow, conCronograma: Set<string>): PuestoSalarial {
     nivel: cab?.nivel ?? 1,
     nivelesCount: niveles.length || 1,
     vacaciones: cab?.vacaciones ?? "",
+    salarioBruto: Number(cab?.salario_bruto) || 0,
     nominaNeta: Number(cab?.nomina_neta) || 0,
     efectivoExtra: Number(cab?.efectivo_extra) || 0,
     salarioNeto: Number(cab?.salario_neto) || 0,
@@ -117,7 +120,7 @@ export async function listPuestosEmpresa(): Promise<{
       supabase
         .from("puestos")
         .select(
-          "id, nombre, convenio_colectivo, tipo_contrato_defecto, grupo_categoria_prof, epigrafe_cotizacion, departamentos(id, nombre), puesto_salarios(nivel, nomina_neta, efectivo_extra, salario_neto, jornada_contrato, horas_semanales, dias_libres, vacaciones, horario_semanal, observaciones, objetivos, estado, updated_at)",
+          "id, nombre, convenio_colectivo, tipo_contrato_defecto, grupo_categoria_prof, epigrafe_cotizacion, departamentos(id, nombre), puesto_salarios(nivel, salario_bruto, nomina_neta, efectivo_extra, salario_neto, jornada_contrato, horas_semanales, dias_libres, vacaciones, horario_semanal, observaciones, objetivos, estado, updated_at)",
         )
         .eq("empresa_id", empresaId),
       supabase
@@ -148,6 +151,8 @@ export interface UpsertSalarioInput {
   puestoId: string;
   /** Nivel del puesto (1..N). Por defecto 1. */
   nivel?: number;
+  /** Salario BRUTO mensual (cifra principal del puesto). */
+  salarioBruto?: number;
   nominaNeta?: number;
   efectivoExtra?: number;
   salarioNeto?: number;
@@ -166,13 +171,17 @@ export async function upsertPuestoSalario(input: UpsertSalarioInput) {
   try {
     const { supabase, empresaId } = await getContext();
     if (!empresaId) return { ok: false, error: "No autenticado" };
+    // El puesto trabaja con BRUTO. El neto se conserva por compatibilidad con
+    // contratación/gestoría: se espeja del bruto mientras no exista cálculo real.
+    const bruto = input.salarioBruto ?? 0;
     const payload = {
       empresa_id: empresaId,
       puesto_id: input.puestoId,
       nivel: input.nivel ?? 1,
-      nomina_neta: input.nominaNeta ?? 0,
-      efectivo_extra: input.efectivoExtra ?? 0,
-      salario_neto: input.salarioNeto ?? 0,
+      salario_bruto: bruto,
+      nomina_neta: bruto,
+      efectivo_extra: 0,
+      salario_neto: bruto,
       jornada_contrato: input.jornadaContrato ?? null,
       horas_semanales: input.horasSemanales ?? null,
       dias_libres: input.diasLibres ?? null,
@@ -206,7 +215,7 @@ export async function listNivelesDePuesto(
     const { data, error } = await supabase
       .from("puesto_salarios")
       .select(
-        "nivel, nomina_neta, efectivo_extra, salario_neto, jornada_contrato, horas_semanales, dias_libres, vacaciones, horario_semanal, observaciones, objetivos, estado, updated_at",
+        "nivel, salario_bruto, nomina_neta, efectivo_extra, salario_neto, jornada_contrato, horas_semanales, dias_libres, vacaciones, horario_semanal, observaciones, objetivos, estado, updated_at",
       )
       .eq("empresa_id", empresaId)
       .eq("puesto_id", puestoId)

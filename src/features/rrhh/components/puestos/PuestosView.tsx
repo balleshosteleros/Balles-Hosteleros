@@ -211,7 +211,7 @@ function ListView({
     if (campo === "departamento") return p.departamento;
     if (campo === "jornada") return p.jornadaContrato;
     if (campo === "estado") return p.estado === "activo" ? "Activo" : p.estado === "borrador" ? "Borrador" : "Inactivo";
-    if (campo === "salarioNeto") return p.salarioNeto;
+    if (campo === "salarioBruto") return p.salarioBruto;
     if (campo === "horasSemanales") return p.horasSemanales;
     if (campo === "puesto") return p.puesto;
     return (p as unknown as Record<string, unknown>)[campo];
@@ -244,7 +244,7 @@ function ListView({
 
   const filtros_columnasDef: ToolbarColumna[] = [
     { campo: "puesto", label: "Puesto", bloqueada: true },
-    { campo: "salarioNeto", label: "Salario neto" },
+    { campo: "salarioBruto", label: "Salario bruto" },
     { campo: "jornada", label: "Jornada" },
     { campo: "horasSemanales", label: "Horas/sem" },
     { campo: "estado", label: "Estado" },
@@ -362,7 +362,7 @@ function ListView({
                       </Badge>
                     )}
                   </h3>
-                  <p className="text-lg font-bold text-foreground mb-3">{eur(p.salarioNeto)}<span className="text-xs font-normal text-muted-foreground"> neto</span></p>
+                  <p className="text-lg font-bold text-foreground mb-3">{eur(p.salarioBruto)}<span className="text-xs font-normal text-muted-foreground"> bruto/mes</span></p>
 
                   <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground mb-4">
                     <span className="inline-flex items-center gap-1"><Briefcase className="h-3.5 w-3.5" /> {p.jornadaContrato}</span>
@@ -627,10 +627,10 @@ function DetalleView({ puesto, onBack, onChanged }: { puesto: PuestoSalarial; on
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         {[
-          { label: "Vacaciones", value: puesto.vacaciones, icon: Calendar, color: "text-blue-600 bg-blue-500/10" },
-          { label: "Nómina neta", value: eur(puesto.nominaNeta), icon: FileText, color: "text-emerald-600 bg-emerald-500/10" },
-          { label: "Efectivo extra", value: puesto.efectivoExtra > 0 ? eur(puesto.efectivoExtra) : "—", icon: DollarSign, color: "text-amber-600 bg-amber-500/10" },
-          { label: "Salario neto", value: eur(puesto.salarioNeto), icon: DollarSign, color: "text-primary bg-primary/10" },
+          { label: "Salario bruto", value: eur(puesto.salarioBruto), icon: DollarSign, color: "text-primary bg-primary/10" },
+          { label: "Jornada", value: puesto.jornadaContrato || "—", icon: Briefcase, color: "text-amber-600 bg-amber-500/10" },
+          { label: "Horas/semana", value: `${puesto.horasSemanales}h`, icon: Clock, color: "text-emerald-600 bg-emerald-500/10" },
+          { label: "Vacaciones", value: puesto.vacaciones || "—", icon: Calendar, color: "text-blue-600 bg-blue-500/10" },
         ].map((item) => (
           <Card key={item.label}>
             <CardContent className="p-4 flex items-center gap-3">
@@ -762,7 +762,7 @@ function ConfigView({ puestos, normas, onBack }: { puestos: PuestoSalarial[]; no
                   <TableRow>
                     <TableHead>Puesto</TableHead>
                     <TableHead>Departamento</TableHead>
-                    <TableHead className="text-right">Salario neto</TableHead>
+                    <TableHead className="text-right">Salario bruto</TableHead>
                     <TableHead className="text-center">Jornada</TableHead>
                     <TableHead className="text-center">Estado</TableHead>
                     <TableHead className="text-right">Acciones</TableHead>
@@ -773,7 +773,7 @@ function ConfigView({ puestos, normas, onBack }: { puestos: PuestoSalarial[]; no
                     <TableRow key={p.id}>
                       <TableCell className="font-medium">{p.puesto}</TableCell>
                       <TableCell>{p.departamento}</TableCell>
-                      <TableCell className="text-right">{eur(p.salarioNeto)}</TableCell>
+                      <TableCell className="text-right">{eur(p.salarioBruto)}</TableCell>
                       <TableCell className="text-center">{p.jornadaContrato}</TableCell>
                       <TableCell className="text-center">{estadoBadge(p.estado)}</TableCell>
                       <TableCell className="text-right">

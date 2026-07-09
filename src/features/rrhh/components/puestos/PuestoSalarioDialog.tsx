@@ -35,6 +35,7 @@ function nivelVacio(nivel: number): NivelSalarial {
   return {
     nivel,
     vacaciones: "",
+    salarioBruto: 0,
     nominaNeta: 0,
     efectivoExtra: 0,
     salarioNeto: 0,
@@ -68,7 +69,6 @@ export function PuestoSalarioDialog({ open, onOpenChange, editing, onSaved }: Pr
   const { confirm: confirmDelete, dialog: confirmDeleteDialog } = useConfirmDelete();
 
   const cur = niveles[idx] ?? niveles[0];
-  const salarioNeto = (cur?.nominaNeta ?? 0) + (cur?.efectivoExtra ?? 0);
 
   const setCur = (patch: Partial<NivelSalarial>) => {
     setNiveles((prev) => prev.map((n, i) => (i === idx ? { ...n, ...patch } : n)));
@@ -151,9 +151,7 @@ export function PuestoSalarioDialog({ open, onOpenChange, editing, onSaved }: Pr
         const sal = await upsertPuestoSalario({
           puestoId,
           nivel: n.nivel,
-          nominaNeta: n.nominaNeta,
-          efectivoExtra: n.efectivoExtra,
-          salarioNeto: n.nominaNeta + n.efectivoExtra,
+          salarioBruto: n.salarioBruto,
           jornadaContrato: n.jornadaContrato,
           horasSemanales: n.horasSemanales,
           diasLibres: n.diasLibres,
@@ -182,8 +180,6 @@ export function PuestoSalarioDialog({ open, onOpenChange, editing, onSaved }: Pr
       setSaving(false);
     }
   };
-
-  const eur = (n: number) => n.toLocaleString("es-ES", { style: "currency", currency: "EUR", minimumFractionDigits: 0 });
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -243,20 +239,9 @@ export function PuestoSalarioDialog({ open, onOpenChange, editing, onSaved }: Pr
           <div className="rounded-md border border-border/60 p-3 space-y-4">
             <p className="text-xs font-medium text-muted-foreground">Condiciones · Nivel {cur?.nivel}</p>
 
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label htmlFor="ps-nomina">Nómina neta (€)</Label>
-                <Input id="ps-nomina" type="number" min={0} value={cur?.nominaNeta ?? 0} onChange={(e) => setCur({ nominaNeta: Number(e.target.value) || 0 })} />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="ps-efectivo">Efectivo extra (€)</Label>
-                <Input id="ps-efectivo" type="number" min={0} value={cur?.efectivoExtra ?? 0} onChange={(e) => setCur({ efectivoExtra: Number(e.target.value) || 0 })} />
-              </div>
-            </div>
-
-            <div className="rounded-md bg-muted/40 px-3 py-2 text-sm flex justify-between">
-              <span className="text-muted-foreground">Salario neto total</span>
-              <span className="font-semibold">{eur(salarioNeto)}</span>
+            <div className="space-y-1.5">
+              <Label htmlFor="ps-bruto">Salario bruto mensual (€)</Label>
+              <Input id="ps-bruto" type="number" min={0} value={cur?.salarioBruto ?? 0} onChange={(e) => setCur({ salarioBruto: Number(e.target.value) || 0 })} />
             </div>
 
             <div className="grid grid-cols-2 gap-3">
