@@ -56,6 +56,7 @@ export function PuestoSalarioDialog({ open, onOpenChange, editing, onSaved }: Pr
   // Datos compartidos del puesto
   const [nombre, setNombre] = useState("");
   const [departamentoId, setDepartamentoId] = useState("");
+  const [descripcion, setDescripcion] = useState("");
   // Datos de gestoría (compartidos por el puesto)
   const [convenio, setConvenio] = useState("");
   const [tipoContrato, setTipoContrato] = useState("");
@@ -82,6 +83,7 @@ export function PuestoSalarioDialog({ open, onOpenChange, editing, onSaved }: Pr
     // Datos compartidos
     setNombre(editing?.puesto ?? "");
     setDepartamentoId(editing?.departamentoId ?? "");
+    setDescripcion(editing?.descripcion ?? "");
     setConvenio(editing?.convenioColectivo ?? "");
     setTipoContrato(editing?.tipoContratoDefecto ?? "");
     setGrupoCategoria(editing?.grupoCategoriaProf ?? "");
@@ -131,7 +133,7 @@ export function PuestoSalarioDialog({ open, onOpenChange, editing, onSaved }: Pr
     try {
       let puestoId = editing?.id ?? "";
       if (esNuevo) {
-        const res = await createPuesto({ nombre: nombre.trim(), departamento_id: departamentoId });
+        const res = await createPuesto({ nombre: nombre.trim(), departamento_id: departamentoId, descripcion: descripcion.trim() || null });
         if (!res.ok || !res.data) { toast.error(res.error ?? "No se pudo crear el puesto"); return; }
         puestoId = (res.data as { id: string }).id;
       } else {
@@ -139,6 +141,7 @@ export function PuestoSalarioDialog({ open, onOpenChange, editing, onSaved }: Pr
           id: puestoId,
           nombre: nombre.trim(),
           departamento_id: departamentoId,
+          descripcion: descripcion.trim() || null,
           convenio_colectivo: convenio,
           tipo_contrato_defecto: tipoContrato,
           grupo_categoria_prof: grupoCategoria,
@@ -214,6 +217,11 @@ export function PuestoSalarioDialog({ open, onOpenChange, editing, onSaved }: Pr
             </div>
           </div>
 
+          <div className="space-y-1.5">
+            <Label htmlFor="ps-desc">Descripción</Label>
+            <Textarea id="ps-desc" value={descripcion} onChange={(e) => setDescripcion(e.target.value)} rows={2} placeholder="Funciones y responsabilidades del puesto" />
+          </div>
+
           {/* Selector de niveles */}
           <div className="space-y-1.5">
             <Label>Niveles</Label>
@@ -278,6 +286,17 @@ export function PuestoSalarioDialog({ open, onOpenChange, editing, onSaved }: Pr
             <div className="space-y-1.5">
               <Label htmlFor="ps-obs">Observaciones</Label>
               <Textarea id="ps-obs" value={cur?.observaciones ?? ""} onChange={(e) => setCur({ observaciones: e.target.value })} rows={2} />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="ps-objetivos">Objetivos</Label>
+              <Textarea
+                id="ps-objetivos"
+                value={(cur?.objetivos ?? []).join("\n")}
+                onChange={(e) => setCur({ objetivos: e.target.value.split("\n").map((s) => s.trim()).filter(Boolean) })}
+                rows={3}
+                placeholder="Un objetivo por línea"
+              />
             </div>
           </div>
 

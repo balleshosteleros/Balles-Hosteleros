@@ -29,6 +29,8 @@ export interface PuestoSalarial {
   departamento: string;
   departamentoId: string;
   puesto: string;
+  /** Descripción del puesto (compartida, común a todos los niveles). */
+  descripcion: string;
   /** Nivel cabecera (el más bajo, normalmente 1). */
   nivel: number;
   /** Nº de niveles del puesto (1..N). */
