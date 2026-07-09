@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, useTransition } from "react";
 import {
-  Copy, Check, Power, Trash2, Link2, Code, Sparkles, ExternalLink, Globe,
+  Copy, Check, Power, Trash2, Link2, Code, Sparkles, ExternalLink, Globe, Loader2,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -24,9 +24,24 @@ import {
   toggleEmpleoLink,
   deleteEmpleoLink,
 } from "@/features/rrhh/actions/empleo-links-actions";
+import {
+  getEmpleoUrlConfig,
+  updateEmpleoUrlSlug,
+} from "@/features/rrhh/actions/reclutamiento-actions";
 
 function formatFecha(iso: string) {
   return new Date(iso).toLocaleDateString("es-ES", { day: "2-digit", month: "short", year: "numeric" });
+}
+
+/** Solo deja el nombre apto para URL (igual que el servidor) — feedback en vivo. */
+function sanitizeSlug(raw: string): string {
+  return raw
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/[^a-zA-Z0-9\s-]/g, "")
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-+/, "");
 }
 
 /** Deriva el código de URL a partir del nombre del canal (sin tildes, MAYÚSCULAS, _). */
@@ -55,6 +70,14 @@ export function EnlacesEmpleoSection({ empresaNombre }: Props) {
   const [creando, startCreate] = useTransition();
   const [copiado, setCopiado] = useState<string | null>(null);
 
+  // ── Nombre de la empresa en la URL (slug del portal) ──
+  const [origin, setOrigin] = useState("");
+  const [slugCargando, setSlugCargando] = useState(true);
+  const [slugGuardando, setSlugGuardando] = useState(false);
+  // `slugGuardado` = lo que vive en BD (URL que funciona). `slugValor` = lo que se edita.
+  const [slugGuardado, setSlugGuardado] = useState("");
+  const [slugValor, setSlugValor] = useState("");
+
   async function refrescar() {
     setLoading(true);
     const r = await listEmpleoLinks();
@@ -66,6 +89,72 @@ export function EnlacesEmpleoSection({ empresaNombre }: Props) {
   useEffect(() => {
     refrescar();
   }, []);
+
+  useEffect(() => {
+    setOrigin(window.location.origin);
+  }, []);
+
+  useEffect(() => {
+    let alive = true;
+    setSlugCargando(true);
+    getEmpleoUrlConfig()
+      .then((cfg) => {
+        if (!alive) return;
+        const inicial = cfg?.empleoSlug || sanitizeSlug(cfg?.nombreComercial ?? empresaNombre);
+        setSlugGuardado(inicial);
+        setSlugValor(inicial);
+      })
+      .catch((err) => console.error("[EnlacesEmpleoSection] getEmpleoUrlConfig:", err))
+      .finally(() => {
+        if (alive) setSlugCargando(false);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [empresaNombre]);
+
+  const urlSlugGuardada = useMemo(
+    () => (origin && slugGuardado ? `${origin}/empleo/${slugGuardado}` : ""),
+    [origin, slugGuardado],
+  );
+  const urlSlugPreview = useMemo(
+    () => (origin && slugValor ? `${origin}/empleo/${slugValor}` : ""),
+    [origin, slugValor],
+  );
+  const haySlugCambios = slugValor !== slugGuardado;
+
+  async function guardarSlug() {
+    const limpio = sanitizeSlug(slugValor).replace(/-+$/, "");
+    if (!limpio) {
+      toast.error("Escribe un nombre válido para la URL.");
+      return;
+    }
+    setSlugGuardando(true);
+    try {
+      const res = await updateEmpleoUrlSlug(limpio);
+      if (res.ok) {
+        setSlugGuardado(res.empleoSlug);
+        setSlugValor(res.empleoSlug);
+        toast.success("URL del portal de empleo guardada");
+        refrescar(); // los enlaces (iframe/botón) usan el nuevo slug
+      } else if (res.sugerencia) {
+        const sugerida = res.sugerencia;
+        toast.error(res.error, {
+          action: {
+            label: `Usar "${sugerida}"`,
+            onClick: () => setSlugValor(sugerida),
+          },
+        });
+      } else {
+        toast.error(res.error);
+      }
+    } catch (err) {
+      console.error("[EnlacesEmpleoSection] guardarSlug:", err);
+      toast.error("No se pudo guardar la URL.");
+    } finally {
+      setSlugGuardando(false);
+    }
+  }
 
   const webLink = useMemo(() => links.find((l) => l.protegido) ?? null, [links]);
   const canales = useMemo(() => links.filter((l) => !l.protegido), [links]);
@@ -148,65 +237,137 @@ export function EnlacesEmpleoSection({ empresaNombre }: Props) {
     <>
       {confirmDeleteDialog}
 
-      {/* ── Enlace web por defecto + incrustar ─────────────── */}
+      {/* ── Nombre en la URL + enlace web e incrustar ──────── */}
       <Card>
         <div className="px-5 py-3 border-b border-border bg-primary/5 flex items-center gap-2">
           <Globe className="h-4 w-4 text-primary" />
           <span className="text-sm font-semibold text-foreground">Enlace web e incrustar</span>
         </div>
-        <CardContent className="p-5 space-y-3">
-          <p className="text-xs text-muted-foreground">
-            Comparte el enlace web por defecto en tu página y redes. Todo CV que llegue sin un canal
-            concreto cuenta como «Web».
-          </p>
+        <CardContent className="p-5 space-y-5">
+          {/* Nombre de la empresa en la URL */}
+          <div className="space-y-3">
+            <p className="text-xs text-muted-foreground">
+              Escribe el nombre de tu empresa, el cual aparecerá en la URL que verán tus futuros
+              candidatos. Por defecto usamos el nombre comercial que ya guardaste.
+            </p>
 
-          {loading && !webLink ? (
-            <p className="text-sm text-muted-foreground py-2">Cargando…</p>
-          ) : (
-            <Tabs defaultValue="link">
-              <TabsList className="grid grid-cols-3 w-full">
-                <TabsTrigger value="link" className="gap-1.5"><Link2 className="h-3.5 w-3.5" /> Enlace</TabsTrigger>
-                <TabsTrigger value="iframe" className="gap-1.5"><Code className="h-3.5 w-3.5" /> Iframe</TabsTrigger>
-                <TabsTrigger value="button" className="gap-1.5"><Sparkles className="h-3.5 w-3.5" /> Botón</TabsTrigger>
-              </TabsList>
-
-              <TabsContent value="link" className="space-y-1.5 mt-3">
-                <Label>URL pública</Label>
-                <div className="flex gap-2">
-                  <Input value={webUrl} readOnly className="font-mono text-xs" />
-                  <Button variant="outline" size="icon" onClick={() => copiar(webUrl, "web-link", "Enlace copiado")} aria-label="Copiar enlace">
-                    {copiado === "web-link" ? <Check className="h-4 w-4 text-emerald-600" /> : <Copy className="h-4 w-4" />}
-                  </Button>
-                  {webUrl ? (
-                    <Button asChild variant="outline" size="icon">
-                      <a href={webUrl} target="_blank" rel="noopener noreferrer" aria-label="Abrir en nueva pestaña">
-                        <ExternalLink className="h-4 w-4" />
-                      </a>
-                    </Button>
-                  ) : null}
+            {slugCargando ? (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground py-2">
+                <Loader2 className="h-4 w-4 animate-spin" /> Cargando…
+              </div>
+            ) : (
+              <>
+                <div className="max-w-md">
+                  <Label className="text-xs">Nombre en la URL</Label>
+                  <Input
+                    value={slugValor}
+                    onChange={(e) => setSlugValor(sanitizeSlug(e.target.value))}
+                    placeholder={empresaNombre}
+                    className="mt-1"
+                    maxLength={60}
+                  />
                 </div>
-                <p className="text-[11px] text-muted-foreground">
-                  Pégala en tu web, LinkedIn, WhatsApp o en tu firma de email.
-                </p>
-              </TabsContent>
 
-              <TabsContent value="iframe" className="space-y-2 mt-3">
-                <Label>Código para incrustar en tu web</Label>
-                <Textarea value={iframeSnippet} readOnly rows={7} className="font-mono text-[11px]" onClick={(e) => (e.target as HTMLTextAreaElement).select()} />
-                <Button variant="outline" size="sm" className="w-full" onClick={() => copiar(iframeSnippet, "web-iframe")}>
-                  {copiado === "web-iframe" ? <><Check className="h-4 w-4 mr-1.5" /> Copiado</> : <><Copy className="h-4 w-4 mr-1.5" /> Copiar código iframe</>}
-                </Button>
-              </TabsContent>
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1.5">
+                    La URL para ver todas tus vacantes quedará así:
+                  </p>
+                  <div className="flex items-center gap-2 bg-muted/30 rounded-lg px-4 py-3 border border-border">
+                    <span className="text-sm font-mono text-primary flex-1 truncate">
+                      {urlSlugPreview || "—"}
+                    </span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="gap-1.5 shrink-0"
+                      onClick={() => copiar(urlSlugGuardada, "slug-url", "URL copiada")}
+                      disabled={haySlugCambios || !urlSlugGuardada}
+                      title={haySlugCambios ? "Guarda los cambios antes de copiar" : undefined}
+                    >
+                      {copiado === "slug-url" ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />} Copiar
+                    </Button>
+                    {urlSlugGuardada && !haySlugCambios ? (
+                      <Button asChild variant="outline" size="sm" className="gap-1.5 shrink-0">
+                        <a href={urlSlugGuardada} target="_blank" rel="noopener noreferrer" aria-label="Abrir en nueva pestaña">
+                          <ExternalLink className="h-3.5 w-3.5" /> Abrir
+                        </a>
+                      </Button>
+                    ) : null}
+                  </div>
+                  {haySlugCambios && (
+                    <p className="text-[11px] text-amber-600 mt-1.5">
+                      Tienes cambios sin guardar. Pulsa «Guardar» para activarlos.
+                    </p>
+                  )}
+                </div>
 
-              <TabsContent value="button" className="space-y-2 mt-3">
-                <Label>Botón &quot;Trabaja con nosotros&quot;</Label>
-                <Textarea value={buttonSnippet} readOnly rows={8} className="font-mono text-[11px]" onClick={(e) => (e.target as HTMLTextAreaElement).select()} />
-                <Button variant="outline" size="sm" className="w-full" onClick={() => copiar(buttonSnippet, "web-button")}>
-                  {copiado === "web-button" ? <><Check className="h-4 w-4 mr-1.5" /> Copiado</> : <><Copy className="h-4 w-4 mr-1.5" /> Copiar HTML del botón</>}
-                </Button>
-              </TabsContent>
-            </Tabs>
-          )}
+                <div className="flex justify-end">
+                  <Button className="gap-1.5" onClick={guardarSlug} disabled={slugGuardando || !haySlugCambios}>
+                    {slugGuardando ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                    Guardar
+                  </Button>
+                </div>
+              </>
+            )}
+          </div>
+
+          {/* Incrustar el portal en tu web */}
+          <div className="border-t border-border pt-5 space-y-3">
+            <p className="text-xs text-muted-foreground">
+              Comparte el enlace web por defecto en tu página y redes o incrústalo. Todo CV que llegue
+              sin un canal concreto cuenta como «Web».
+            </p>
+
+            {loading && !webLink ? (
+              <p className="text-sm text-muted-foreground py-2">Cargando…</p>
+            ) : (
+              <Tabs defaultValue="link">
+                <TabsList className="grid grid-cols-3 w-full">
+                  <TabsTrigger value="link" className="gap-1.5"><Link2 className="h-3.5 w-3.5" /> Enlace</TabsTrigger>
+                  <TabsTrigger value="iframe" className="gap-1.5"><Code className="h-3.5 w-3.5" /> Iframe</TabsTrigger>
+                  <TabsTrigger value="button" className="gap-1.5"><Sparkles className="h-3.5 w-3.5" /> Botón</TabsTrigger>
+                </TabsList>
+
+                <TabsContent value="link" className="space-y-1.5 mt-3">
+                  <Label>URL pública (con atribución «Web»)</Label>
+                  <div className="flex items-center gap-2 bg-muted/30 rounded-lg px-4 py-3 border border-border">
+                    <span className="text-sm font-mono text-primary flex-1 truncate">
+                      {webUrl || "—"}
+                    </span>
+                    <Button variant="outline" size="sm" className="gap-1.5 shrink-0" onClick={() => copiar(webUrl, "web-link", "Enlace copiado")}>
+                      {copiado === "web-link" ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />} Copiar
+                    </Button>
+                    {webUrl ? (
+                      <Button asChild variant="outline" size="sm" className="gap-1.5 shrink-0">
+                        <a href={webUrl} target="_blank" rel="noopener noreferrer" aria-label="Abrir en nueva pestaña">
+                          <ExternalLink className="h-3.5 w-3.5" /> Abrir
+                        </a>
+                      </Button>
+                    ) : null}
+                  </div>
+                  <p className="text-[11px] text-muted-foreground">
+                    Pégala en tu web, LinkedIn, WhatsApp o en tu firma de email.
+                  </p>
+                </TabsContent>
+
+                <TabsContent value="iframe" className="space-y-2 mt-3">
+                  <Label>Código para incrustar en tu web</Label>
+                  <Textarea value={iframeSnippet} readOnly rows={7} className="font-mono text-[11px]" onClick={(e) => (e.target as HTMLTextAreaElement).select()} />
+                  <Button variant="outline" size="sm" className="w-full" onClick={() => copiar(iframeSnippet, "web-iframe")}>
+                    {copiado === "web-iframe" ? <><Check className="h-4 w-4 mr-1.5" /> Copiado</> : <><Copy className="h-4 w-4 mr-1.5" /> Copiar código iframe</>}
+                  </Button>
+                </TabsContent>
+
+                <TabsContent value="button" className="space-y-2 mt-3">
+                  <Label>Botón &quot;Trabaja con nosotros&quot;</Label>
+                  <Textarea value={buttonSnippet} readOnly rows={8} className="font-mono text-[11px]" onClick={(e) => (e.target as HTMLTextAreaElement).select()} />
+                  <Button variant="outline" size="sm" className="w-full" onClick={() => copiar(buttonSnippet, "web-button")}>
+                    {copiado === "web-button" ? <><Check className="h-4 w-4 mr-1.5" /> Copiado</> : <><Copy className="h-4 w-4 mr-1.5" /> Copiar HTML del botón</>}
+                  </Button>
+                </TabsContent>
+              </Tabs>
+            )}
+          </div>
         </CardContent>
       </Card>
 
