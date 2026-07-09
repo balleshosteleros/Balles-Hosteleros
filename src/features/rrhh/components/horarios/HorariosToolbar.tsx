@@ -91,11 +91,15 @@ export function HorariosToolbar({
       {/* Fila de filtros — navegación de periodo + agrupación (minimalista) */}
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
         <div className="flex items-center gap-1.5">
-          <SegmentedPeriodo
-            value={periodo}
-            onChange={onPeriodoChange}
-            onHoy={onHoy}
-          />
+          <SegmentedPeriodo value={periodo} onChange={onPeriodoChange} />
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8 px-3 text-xs font-medium"
+            onClick={onHoy}
+          >
+            Hoy
+          </Button>
           <div className="flex items-center rounded-md border">
             <Button
               variant="ghost"
@@ -142,21 +146,12 @@ export function HorariosToolbar({
 function SegmentedPeriodo({
   value,
   onChange,
-  onHoy,
 }: {
   value: Periodo;
   onChange: (p: Periodo) => void;
-  onHoy: () => void;
 }) {
   return (
     <div className="flex items-center gap-0 rounded-lg border bg-muted/40 p-0.5">
-      <button
-        type="button"
-        onClick={onHoy}
-        className="h-7 rounded-md px-3 text-xs font-medium text-muted-foreground hover:text-foreground"
-      >
-        Hoy
-      </button>
       <ToggleGroup
         type="single"
         value={value}
