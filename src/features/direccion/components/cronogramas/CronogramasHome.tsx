@@ -18,6 +18,7 @@ import {
   AREA_LABEL,
   AREA_BADGE_CLASS,
   getAreaForRol,
+  getModuloForCronograma,
   type AreaCronograma,
 } from "../../data/cronogramaAreas";
 import { cn } from "@/lib/utils";
@@ -296,7 +297,7 @@ export function CronogramasHome({ data, onSelect, onCrearCronograma, onIrProduct
                     variant="outline"
                     className={cn("text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0 mb-1.5", AREA_BADGE_CLASS[area])}
                   >
-                    {AREA_LABEL[area]}
+                    {getModuloForCronograma(rol)}
                   </Badge>
                   <h3 className="font-bold text-base uppercase tracking-wide mb-1">{rol}</h3>
                   <p className="text-xs text-muted-foreground mb-4">
