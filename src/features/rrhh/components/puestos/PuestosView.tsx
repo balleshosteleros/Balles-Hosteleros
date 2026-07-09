@@ -129,7 +129,7 @@ export function PuestosView() {
 
   const selected = data.puestos.find((p) => p.id === selectedId) ?? null;
 
-  if (view === "detail" && selected) return <DetalleView puesto={selected} onBack={() => setView("list")} />;
+  if (view === "detail" && selected) return <DetalleView puesto={selected} onBack={() => setView("list")} onChanged={reload} />;
   if (view === "config") return <ConfigView puestos={data.puestos} normas={data.normas} onBack={() => setView("list")} />;
 
   return (
@@ -603,7 +603,9 @@ function HorarioDelPuesto({ puestoId }: { puestoId: string }) {
   );
 }
 
-function DetalleView({ puesto, onBack }: { puesto: PuestoSalarial; onBack: () => void }) {
+function DetalleView({ puesto, onBack, onChanged }: { puesto: PuestoSalarial; onBack: () => void; onChanged: () => void }) {
+  const [editOpen, setEditOpen] = useState(false);
+  const [horarioOpen, setHorarioOpen] = useState(false);
   return (
     <div className="space-y-4 p-4 md:p-6">
       <div className="flex items-center gap-3">
@@ -612,7 +614,15 @@ function DetalleView({ puesto, onBack }: { puesto: PuestoSalarial; onBack: () =>
           <h2 className="text-base font-semibold text-foreground">{puesto.puesto}</h2>
           <p className="text-muted-foreground text-sm">Departamento: {puesto.departamento}</p>
         </div>
-        <div className="ml-auto">{estadoBadge(puesto.estado)}</div>
+        <div className="ml-auto flex items-center gap-2">
+          {estadoBadge(puesto.estado)}
+          <Button variant="ghost" size="sm" className="h-8 px-2" onClick={() => setHorarioOpen(true)}>
+            <Calendar className="h-4 w-4 mr-1" /> Horario
+          </Button>
+          <Button variant="primary" size="sm" className="h-8" onClick={() => setEditOpen(true)}>
+            <Pencil className="h-4 w-4 mr-1" /> Editar condiciones
+          </Button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -704,6 +714,18 @@ function DetalleView({ puesto, onBack }: { puesto: PuestoSalarial; onBack: () =>
       <BonusDelPuesto puestoId={puesto.id} />
 
       <p className="text-xs text-muted-foreground text-right">Última actualización: {puesto.updatedAt}</p>
+
+      <PuestoSalarioDialog
+        open={editOpen}
+        onOpenChange={setEditOpen}
+        editing={puesto}
+        onSaved={onChanged}
+      />
+      <PuestoHorarioDialog
+        open={horarioOpen}
+        onOpenChange={setHorarioOpen}
+        puesto={puesto}
+      />
     </div>
   );
 }
