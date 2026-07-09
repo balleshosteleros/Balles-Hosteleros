@@ -321,6 +321,35 @@ export async function promocionarEmpleado(
   return { ok: true, anexoEnviado, gestoriaAvisada };
 }
 
+/**
+ * Mapa empleadoId → nombre del puesto PRINCIPAL, para el selector de empleados
+ * del diálogo (empleados.puesto —texto legacy— suele estar vacío). Solo lectura.
+ */
+export async function getPuestosPrincipalesEmpleados(): Promise<Record<string, string>> {
+  const { user, empresaId } = await getActor();
+  if (!user || !empresaId) return {};
+  let admin: Admin;
+  try {
+    admin = createAdminClient();
+  } catch {
+    return {};
+  }
+  const { data } = await admin
+    .from("empleado_puestos")
+    .select("empleado_id, puesto_nombre, puestos(nombre), empleados!inner(empresa_id)")
+    .eq("es_principal", true)
+    .eq("empleados.empresa_id", empresaId);
+  const map: Record<string, string> = {};
+  for (const r of data ?? []) {
+    const nombre =
+      ((r.puestos as { nombre?: string } | null)?.nombre) ??
+      (r.puesto_nombre as string | null) ??
+      "";
+    if (nombre) map[r.empleado_id as string] = nombre;
+  }
+  return map;
+}
+
 export interface CondicionesActualesEmpleado {
   puesto: string | null;
   departamento: string | null;
@@ -360,6 +389,20 @@ export async function getCondicionesVigentesEmpleado(
     .eq("empresa_id", empresaId)
     .maybeSingle();
 
+  // El puesto actual REAL es el principal de `empleado_puestos` (empleados.puesto
+  // —texto legacy— puede estar vacío en empleados antiguos). Fallback al texto.
+  const { data: principal } = await admin
+    .from("empleado_puestos")
+    .select("puesto_nombre, puestos(nombre)")
+    .eq("empleado_id", empleadoId)
+    .eq("es_principal", true)
+    .maybeSingle();
+  const puestoActual =
+    ((principal?.puestos as { nombre?: string } | null)?.nombre) ??
+    (principal?.puesto_nombre as string | null) ??
+    (emp?.puesto as string | null) ??
+    null;
+
   const { data: rows } = await admin
     .from("empleado_condiciones")
     .select("nivel, salario_neto, jornada_contrato, horas_semanales, tipo_contrato, vigente_hasta, vigente_desde")
@@ -372,7 +415,7 @@ export async function getCondicionesVigentesEmpleado(
   return {
     ok: true,
     data: {
-      puesto: (emp?.puesto as string | null) ?? null,
+      puesto: puestoActual,
       departamento: depto?.nombre ?? null,
       salarioNeto: (cond?.salario_neto as number | null) ?? null,
       jornada: (cond?.jornada_contrato as string | null) ?? null,

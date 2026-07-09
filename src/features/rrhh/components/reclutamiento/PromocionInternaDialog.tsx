@@ -39,6 +39,7 @@ import type { PuestoSalarial } from "@/features/rrhh/data/puestos";
 import {
   promocionarEmpleado,
   getCondicionesVigentesEmpleado,
+  getPuestosPrincipalesEmpleados,
   type CondicionesActualesEmpleado,
 } from "@/features/rrhh/actions/promocion-interna-actions";
 
@@ -64,6 +65,7 @@ export function PromocionInternaDialog({
   onDone?: () => void;
 }) {
   const [empleados, setEmpleados] = useState<EmpleadoActivo[]>([]);
+  const [puestosPrincipales, setPuestosPrincipales] = useState<Record<string, string>>({});
   const [puestos, setPuestos] = useState<PuestoSalarial[]>([]);
   const [cargando, setCargando] = useState(false);
 
@@ -85,11 +87,15 @@ export function PromocionInternaDialog({
     setEnviarAnexo(true);
     setAvisarGestoria(true);
     setCargando(true);
-    Promise.all([getEmpleadosActivos(), listPuestosEmpresa()])
-      .then(([emps, pts]) => {
+    Promise.all([getEmpleadosActivos(), listPuestosEmpresa(), getPuestosPrincipalesEmpleados()])
+      .then(([emps, pts, principales]) => {
         setEmpleados(emps.ok ? emps.data : []);
-        // Solo puestos activos como destino.
-        setPuestos(pts.puestos.filter((p) => p.estado === "activo"));
+        setPuestosPrincipales(principales ?? {});
+        // Todos los puestos de la empresa son destino posible. Los que no tengan
+        // condiciones configuradas se muestran deshabilitados (no se puede
+        // promocionar a un puesto sin salario/jornada). No filtramos por «activo»
+        // porque muchos puestos válidos aún no tienen su ficha salarial marcada.
+        setPuestos(pts.puestos);
       })
       .catch(() => toast.error("No se pudieron cargar los datos"))
       .finally(() => setCargando(false));
@@ -114,6 +120,11 @@ export function PromocionInternaDialog({
     [puestos, puestoId],
   );
 
+  // Un puesto es elegible como destino si tiene condiciones configuradas
+  // (salario o jornada). Si no, se muestra pero deshabilitado.
+  const tieneCondiciones = (p: PuestoSalarial) =>
+    (p.salarioBruto ?? 0) > 0 || !!(p.jornadaContrato && p.jornadaContrato.trim());
+
   // Puestos agrupados por departamento (para el selector).
   const puestosPorDepto = useMemo(() => {
     const map = new Map<string, PuestoSalarial[]>();
@@ -122,11 +133,17 @@ export function PromocionInternaDialog({
       arr.push(p);
       map.set(p.departamento, arr);
     }
-    return [...map.entries()].sort(([a], [b]) => a.localeCompare(b));
+    return [...map.entries()]
+      .map(([depto, lista]) => [depto, [...lista].sort((a, b) => a.puesto.localeCompare(b.puesto))] as const)
+      .sort(([a], [b]) => a.localeCompare(b));
   }, [puestos]);
 
-  const mismoPuesto = !!(empleado && puesto && (empleado.puesto ?? "") === puesto.puesto);
-  const puedeConfirmar = !!empleadoId && !!puestoId && !!primerDia && !mismoPuesto && !guardando;
+  const puestoActualNombre =
+    actuales?.puesto ?? empleado?.puesto ?? (empleadoId ? puestosPrincipales[empleadoId] : "") ?? "";
+  const mismoPuesto = !!(puesto && puestoActualNombre && puestoActualNombre === puesto.puesto);
+  const destinoValido = !!puesto && tieneCondiciones(puesto);
+  const puedeConfirmar =
+    !!empleadoId && !!puestoId && !!primerDia && !mismoPuesto && destinoValido && !guardando;
 
   const confirmar = async () => {
     if (!puedeConfirmar) return;
@@ -154,8 +171,8 @@ export function PromocionInternaDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
-        <DialogHeader>
+      <DialogContent className="sm:max-w-lg flex flex-col max-h-[90vh] p-0 gap-0">
+        <DialogHeader className="px-6 pt-6 pb-4 shrink-0">
           <DialogTitle className="flex items-center gap-2">
             <Briefcase className="h-5 w-5 text-blue-600" />
             Promoción interna
@@ -166,7 +183,7 @@ export function PromocionInternaDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="grid gap-4 py-1">
+        <div className="grid gap-4 px-6 py-1 overflow-y-auto">
           {/* Empleado */}
           <div className="grid gap-1.5">
             <Label>Empleado</Label>
@@ -175,12 +192,15 @@ export function PromocionInternaDialog({
                 <SelectValue placeholder={cargando ? "Cargando…" : "Selecciona un empleado"} />
               </SelectTrigger>
               <SelectContent>
-                {empleados.map((e) => (
-                  <SelectItem key={e.empleadoId} value={e.empleadoId}>
-                    {e.nombreCompleto}
-                    {e.puesto ? ` · ${e.puesto}` : ""}
-                  </SelectItem>
-                ))}
+                {empleados.map((e) => {
+                  const puestoAct = e.puesto || puestosPrincipales[e.empleadoId] || "";
+                  return (
+                    <SelectItem key={e.empleadoId} value={e.empleadoId}>
+                      {e.nombreCompleto}
+                      {puestoAct ? ` · ${puestoAct}` : ""}
+                    </SelectItem>
+                  );
+                })}
               </SelectContent>
             </Select>
           </div>
@@ -196,17 +216,26 @@ export function PromocionInternaDialog({
                 {puestosPorDepto.map(([depto, lista]) => (
                   <SelectGroup key={depto}>
                     <SelectLabel>{depto}</SelectLabel>
-                    {lista.map((p) => (
-                      <SelectItem key={p.id} value={p.id}>
-                        {p.puesto}
-                      </SelectItem>
-                    ))}
+                    {lista.map((p) => {
+                      const ok = tieneCondiciones(p);
+                      return (
+                        <SelectItem key={p.id} value={p.id} disabled={!ok}>
+                          {p.puesto}
+                          {!ok && <span className="text-muted-foreground"> · sin condiciones</span>}
+                        </SelectItem>
+                      );
+                    })}
                   </SelectGroup>
                 ))}
               </SelectContent>
             </Select>
             {mismoPuesto && (
               <p className="text-xs text-destructive">El empleado ya ocupa ese puesto.</p>
+            )}
+            {puesto && !tieneCondiciones(puesto) && (
+              <p className="text-xs text-destructive">
+                Este puesto no tiene condiciones (salario, jornada…). Configúralas en RRHH → Puestos antes de promocionar.
+              </p>
             )}
           </div>
 
@@ -221,7 +250,7 @@ export function PromocionInternaDialog({
               {[
                 {
                   campo: "Puesto",
-                  antes: actuales?.puesto ?? empleado?.puesto ?? "—",
+                  antes: actuales?.puesto ?? empleado?.puesto ?? (empleadoId ? puestosPrincipales[empleadoId] : "") ?? "—",
                   despues: puesto.puesto,
                 },
                 {
@@ -298,7 +327,7 @@ export function PromocionInternaDialog({
           </div>
         </div>
 
-        <DialogFooter>
+        <DialogFooter className="px-6 py-4 border-t border-border shrink-0">
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={guardando}>
             Cancelar
           </Button>
