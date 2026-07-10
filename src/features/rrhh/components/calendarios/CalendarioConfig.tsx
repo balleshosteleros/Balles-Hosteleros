@@ -1,13 +1,23 @@
-import { useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
-import { getConfigCalendario, getFestivosPorEmpresa, REGIONES_ESPANA, type Festivo } from "@/features/rrhh/data/calendarios";
+import { getConfigCalendario } from "@/features/rrhh/data/calendarios";
+import {
+  getFestivos,
+  regenerarFestivos,
+  addFestivoLocal,
+  deleteFestivo,
+  COMUNIDADES_AUTONOMAS,
+  type FestivoBD,
+} from "@/features/rrhh/actions/festivos-actions";
+import { saveEmpresaAjustes } from "@/features/empresa/actions/empresas-actions";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowLeft, Plus, Trash2, AlertCircle, Globe2, MapPin } from "lucide-react";
+import { ArrowLeft, Plus, Trash2, AlertCircle, Globe2, MapPin, Loader2 } from "lucide-react";
+import { toast } from "sonner";
 
 const MODALIDAD_LABELS: Record<string, string> = {
   laboral: "Laboral",
@@ -17,47 +27,90 @@ const MODALIDAD_LABELS: Record<string, string> = {
   justificadas: "Justificadas",
 };
 
+const AMBITO_LABEL: Record<FestivoBD["ambito"], string> = {
+  nacional: "Nacional",
+  autonomico: "Autonómico",
+  local: "Local",
+};
+const AMBITO_BADGE: Record<FestivoBD["ambito"], string> = {
+  nacional: "bg-rose-500/10 text-rose-700 border-rose-500/20",
+  autonomico: "bg-amber-500/10 text-amber-700 border-amber-500/20",
+  local: "bg-violet-500/10 text-violet-700 border-violet-500/20",
+};
+
 export function CalendarioConfig({ modalidad, onBack }: { modalidad: string; onBack: () => void }) {
   const config = getConfigCalendario(modalidad);
-  const { empresaActual } = useEmpresa();
-  const festivosEmpresa = useMemo(() => getFestivosPorEmpresa(empresaActual.id), [empresaActual.id]);
-  const regionInicial = festivosEmpresa.find(f => f.region)?.region ?? REGIONES_ESPANA[13];
-  const [regionSel, setRegionSel] = useState<string>(regionInicial);
-  const [festivos, setFestivos] = useState<Festivo[]>(festivosEmpresa);
+  const { empresaActual, ajustes, setAjustes } = useEmpresa();
+
+  const esFestivos = modalidad === "festivos";
+  const [anio] = useState<number>(() => new Date().getFullYear());
+  const comunidad = ajustes.configOperativa.comunidadAutonoma ?? "";
+
+  const [festivos, setFestivos] = useState<FestivoBD[]>([]);
+  const [cargando, setCargando] = useState(false);
+  const [guardandoCom, setGuardandoCom] = useState(false);
   const [nuevoNombre, setNuevoNombre] = useState("");
   const [nuevaFecha, setNuevaFecha] = useState("");
-  const [nuevoTipo, setNuevoTipo] = useState<Festivo["tipo"]>("local");
 
-  const festivosFiltrados = festivos.filter(f =>
-    f.tipo === "nacional" || !f.region || f.region === regionSel
-  );
+  const recargar = async () => {
+    setCargando(true);
+    const r = await getFestivos(anio);
+    if (r.ok) setFestivos([...r.data].sort((a, b) => a.fecha.localeCompare(b.fecha)));
+    setCargando(false);
+  };
 
-  const eliminarFestivo = (id: string) => setFestivos(prev => prev.filter(f => f.id !== id));
+  useEffect(() => {
+    if (!esFestivos) return;
+    recargar();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [esFestivos, anio, empresaActual.dbId]);
 
-  const agregarFestivo = () => {
+  // Cambiar la comunidad autónoma: guarda en config_operativa y regenera los
+  // festivos nacionales+autonómicos del año (conserva los locales manuales).
+  const cambiarComunidad = async (nueva: string) => {
+    if (!empresaActual.dbId) {
+      toast.error("Empresa no disponible");
+      return;
+    }
+    setGuardandoCom(true);
+    const nuevoConfig = { ...ajustes.configOperativa, comunidadAutonoma: nueva };
+    setAjustes((prev) => ({ ...prev, configOperativa: { ...prev.configOperativa, comunidadAutonoma: nueva } }));
+    const res = await saveEmpresaAjustes({ id: empresaActual.dbId, configOperativa: nuevoConfig });
+    if (!res.ok) {
+      toast.error("No se pudo guardar la comunidad autónoma");
+      setGuardandoCom(false);
+      return;
+    }
+    const reg = await regenerarFestivos(anio);
+    setGuardandoCom(false);
+    if (!reg.ok) {
+      toast.error("Comunidad guardada, pero fallo al regenerar festivos");
+      return;
+    }
+    toast.success(`Festivos de ${nueva} aplicados al calendario`);
+    await recargar();
+  };
+
+  const agregarFestivoLocal = async () => {
     if (!nuevoNombre.trim() || !nuevaFecha) return;
-    const nuevo: Festivo = {
-      id: `new-${Date.now()}`,
-      fecha: nuevaFecha,
-      nombre: nuevoNombre.trim(),
-      tipo: nuevoTipo,
-      centro: empresaActual.id,
-      region: nuevoTipo === "nacional" ? undefined : regionSel,
-    };
-    setFestivos(prev => [...prev, nuevo].sort((a, b) => a.fecha.localeCompare(b.fecha)));
+    const r = await addFestivoLocal({ anio, fecha: nuevaFecha, nombre: nuevoNombre.trim() });
+    if (!r.ok) {
+      toast.error(r.error);
+      return;
+    }
     setNuevoNombre("");
     setNuevaFecha("");
+    toast.success("Festivo local añadido");
+    await recargar();
   };
 
-  const tipoLabel: Record<Festivo["tipo"], string> = {
-    nacional: "Nacional",
-    autonomico: "Autonómico",
-    local: "Local",
-  };
-  const tipoBadge: Record<Festivo["tipo"], string> = {
-    nacional: "bg-rose-500/10 text-rose-700 border-rose-500/20",
-    autonomico: "bg-amber-500/10 text-amber-700 border-amber-500/20",
-    local: "bg-violet-500/10 text-violet-700 border-violet-500/20",
+  const eliminarFestivo = async (id: string) => {
+    const r = await deleteFestivo(id);
+    if (!r.ok) {
+      toast.error(r.error);
+      return;
+    }
+    await recargar();
   };
 
   return (
@@ -67,56 +120,62 @@ export function CalendarioConfig({ modalidad, onBack }: { modalidad: string; onB
         <h3 className="text-lg font-semibold">Configuración — {MODALIDAD_LABELS[modalidad]}</h3>
       </div>
 
-      {modalidad === "festivos" && (
+      {esFestivos && (
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-sm flex items-center gap-2">
               <AlertCircle className="h-4 w-4 text-rose-500" />
-              Festivos por región
+              Festivos oficiales {anio}
             </CardTitle>
             <CardDescription className="text-xs">
-              Los nacionales son fijos para toda España. Los autonómicos y locales dependen de la región del centro.
+              Elige la comunidad autónoma: los festivos nacionales y autonómicos se generan
+              automáticamente cada año. Solo tienes que añadir a mano los 2 festivos locales de tu municipio.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex flex-wrap items-center gap-3">
               <div className="flex items-center gap-2">
                 <MapPin className="h-3.5 w-3.5 text-muted-foreground" />
-                <span className="text-sm min-w-[60px]">Región</span>
-                <Select value={regionSel} onValueChange={setRegionSel}>
-                  <SelectTrigger className="w-[220px] h-9"><SelectValue /></SelectTrigger>
+                <span className="text-sm min-w-[140px]">Comunidad autónoma</span>
+                <Select value={comunidad} onValueChange={cambiarComunidad} disabled={guardandoCom}>
+                  <SelectTrigger className="w-[240px] h-9">
+                    <SelectValue placeholder="Selecciona una comunidad…" />
+                  </SelectTrigger>
                   <SelectContent>
-                    {REGIONES_ESPANA.map(r => <SelectItem key={r} value={r}>{r}</SelectItem>)}
+                    {COMUNIDADES_AUTONOMAS.map(r => <SelectItem key={r} value={r}>{r}</SelectItem>)}
                   </SelectContent>
                 </Select>
+                {guardandoCom && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
               </div>
               <span className="text-xs text-muted-foreground">
-                {festivosFiltrados.length} festivo(s) configurados
+                {festivos.length} festivo(s) en {anio}
               </span>
             </div>
 
             <div className="rounded-md border divide-y">
-              {festivosFiltrados.length === 0 && (
-                <div className="px-3 py-6 text-center text-xs text-muted-foreground">Sin festivos para esta región</div>
+              {cargando && (
+                <div className="px-3 py-6 text-center text-xs text-muted-foreground">Cargando festivos…</div>
               )}
-              {festivosFiltrados.map(f => (
+              {!cargando && festivos.length === 0 && (
+                <div className="px-3 py-6 text-center text-xs text-muted-foreground">
+                  Sin festivos. Selecciona una comunidad autónoma para generarlos.
+                </div>
+              )}
+              {!cargando && festivos.map(f => (
                 <div key={f.id} className="flex items-center gap-3 px-3 py-2">
                   <div className="text-xs font-mono text-muted-foreground w-24 shrink-0">{f.fecha}</div>
                   <div className="flex-1 text-sm font-medium truncate">{f.nombre}</div>
-                  <Badge variant="outline" className={`text-[10px] ${tipoBadge[f.tipo]}`}>
-                    {f.tipo === "nacional" ? <Globe2 className="h-2.5 w-2.5 mr-1" /> : <MapPin className="h-2.5 w-2.5 mr-1" />}
-                    {tipoLabel[f.tipo]}
+                  <Badge variant="outline" className={`text-[10px] ${AMBITO_BADGE[f.ambito]}`}>
+                    {f.ambito === "nacional" ? <Globe2 className="h-2.5 w-2.5 mr-1" /> : <MapPin className="h-2.5 w-2.5 mr-1" />}
+                    {AMBITO_LABEL[f.ambito]}
                   </Badge>
-                  {f.region && f.tipo !== "nacional" && (
-                    <span className="text-[10px] text-muted-foreground">{f.region}</span>
-                  )}
                   <Button
                     variant="ghost"
                     size="icon"
                     className="h-7 w-7 text-muted-foreground hover:text-destructive"
                     onClick={() => eliminarFestivo(f.id)}
-                    disabled={f.tipo === "nacional"}
-                    title={f.tipo === "nacional" ? "Los festivos nacionales no se pueden eliminar" : "Eliminar"}
+                    disabled={f.origen !== "manual"}
+                    title={f.origen !== "manual" ? "Los festivos nacionales y autonómicos se generan automáticamente" : "Eliminar"}
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                   </Button>
@@ -126,7 +185,7 @@ export function CalendarioConfig({ modalidad, onBack }: { modalidad: string; onB
 
             <div className="rounded-md border bg-muted/30 p-3 space-y-2">
               <div className="text-xs font-semibold flex items-center gap-1">
-                <Plus className="h-3 w-3" /> Registrar festivo
+                <Plus className="h-3 w-3" /> Añadir festivo local
               </div>
               <div className="flex flex-wrap gap-2">
                 <Input
@@ -136,25 +195,17 @@ export function CalendarioConfig({ modalidad, onBack }: { modalidad: string; onB
                   className="w-[160px] h-9"
                 />
                 <Input
-                  placeholder="Nombre del festivo"
+                  placeholder="Nombre del festivo local"
                   value={nuevoNombre}
                   onChange={e => setNuevoNombre(e.target.value)}
                   className="flex-1 min-w-[200px] h-9"
                 />
-                <Select value={nuevoTipo} onValueChange={v => setNuevoTipo(v as Festivo["tipo"])}>
-                  <SelectTrigger className="w-[140px] h-9"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="nacional">Nacional</SelectItem>
-                    <SelectItem value="autonomico">Autonómico</SelectItem>
-                    <SelectItem value="local">Local</SelectItem>
-                  </SelectContent>
-                </Select>
-                <Button size="sm" className="h-9 gap-1" onClick={agregarFestivo} disabled={!nuevoNombre.trim() || !nuevaFecha}>
+                <Button size="sm" className="h-9 gap-1" onClick={agregarFestivoLocal} disabled={!nuevoNombre.trim() || !nuevaFecha}>
                   <Plus className="h-3.5 w-3.5" />Añadir
                 </Button>
               </div>
               <p className="text-[11px] text-muted-foreground">
-                Los festivos {nuevoTipo === "nacional" ? "nacionales aplican a todo el país" : `aplican a la región ${regionSel}`}. La víspera se marca automáticamente.
+                Cada municipio fija 2 festivos locales. La víspera se marca automáticamente en el calendario.
               </p>
             </div>
           </CardContent>

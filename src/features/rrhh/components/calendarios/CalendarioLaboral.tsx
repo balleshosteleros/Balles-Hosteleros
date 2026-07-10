@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect } from "react";
-import { getTurnosPorEmpresa, getFestivoEnFecha } from "@/features/rrhh/data/calendarios";
+import { getTurnosPorEmpresa } from "@/features/rrhh/data/calendarios";
+import { useFestivos, type FestivoInfo } from "@/features/rrhh/hooks/useFestivos";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { getEmpleadosActivos, type EmpleadoActivo } from "@/features/rrhh/actions/empleados-actions";
 import { Card, CardContent } from "@/components/ui/card";
@@ -68,6 +69,7 @@ export function CalendarioLaboral({ empresaId }: { empresaId: string }) {
     };
   }, [empresaActual.dbId]);
   const rango = useCalendarRange("MENSUAL");
+  const { festivoEnFecha } = useFestivos(rango.anchor.getFullYear());
   const [busqueda, setBusqueda] = useState("");
   const [vista, setVista] = useState<"calendario" | "lista">("calendario");
   const [filtroDpto, setFiltroDpto] = useState("todos");
@@ -101,7 +103,7 @@ export function CalendarioLaboral({ empresaId }: { empresaId: string }) {
 
   if (showConfig) return <CalendarioConfig modalidad="laboral" onBack={() => setShowConfig(false)} />;
 
-  const festivoInfo = getFestivoEnFecha(empresaId, fechaISO);
+  const festivoInfo = festivoEnFecha(fechaISO);
   const turnosFiltrados = turnos.filter(t =>
     !busqueda || t.empleadoNombre.toLowerCase().includes(busqueda.toLowerCase())
   );
@@ -248,7 +250,7 @@ export function CalendarioLaboral({ empresaId }: { empresaId: string }) {
               <SemanaTurnos
                 inicio={rango.range.start}
                 turnosPorFecha={turnosPorFecha}
-                empresaId={empresaId}
+                festivoEnFecha={festivoEnFecha}
               />
             )}
 
@@ -257,7 +259,7 @@ export function CalendarioLaboral({ empresaId }: { empresaId: string }) {
                 year={rango.anchor.getFullYear()}
                 month={rango.anchor.getMonth()}
                 turnosPorFecha={turnosPorFecha}
-                empresaId={empresaId}
+                festivoEnFecha={festivoEnFecha}
                 onDayClick={(d) => {
                   rango.setAnchor(d);
                   rango.setMode("DIARIO");
@@ -273,7 +275,7 @@ export function CalendarioLaboral({ empresaId }: { empresaId: string }) {
                 rango.mode === "ANUAL" && "grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4",
               )}>
                 {rangeMonths(rango.mode, rango.anchor).map(({ year, month }) => (
-                  <MesMini key={`${year}-${month}`} year={year} month={month} turnosPorFecha={turnosPorFecha} empresaId={empresaId} />
+                  <MesMini key={`${year}-${month}`} year={year} month={month} turnosPorFecha={turnosPorFecha} festivoEnFecha={festivoEnFecha} />
                 ))}
               </div>
             )}
@@ -317,11 +319,11 @@ export function CalendarioLaboral({ empresaId }: { empresaId: string }) {
 function SemanaTurnos({
   inicio,
   turnosPorFecha,
-  empresaId,
+  festivoEnFecha,
 }: {
   inicio: Date;
   turnosPorFecha: Map<string, ReturnType<typeof getTurnosPorEmpresa>>;
-  empresaId: string;
+  festivoEnFecha: (fechaISO: string) => FestivoInfo | null;
 }) {
   const dias = Array.from({ length: 7 }, (_, i) => {
     const d = new Date(inicio);
@@ -336,7 +338,7 @@ function SemanaTurnos({
         {dias.map((d, idx) => {
           const fechaISO = toISODate(d);
           const turnos = turnosPorFecha.get(fechaISO) ?? [];
-          const festivoInfo = getFestivoEnFecha(empresaId, fechaISO);
+          const festivoInfo = festivoEnFecha(fechaISO);
           const isToday = d.toDateString() === hoy.toDateString();
           return (
             <div key={idx} className={cn("flex flex-col min-h-[300px]", isToday && "bg-primary/[0.04]")}>
@@ -382,13 +384,13 @@ function MesGrande({
   year,
   month,
   turnosPorFecha,
-  empresaId,
+  festivoEnFecha,
   onDayClick,
 }: {
   year: number;
   month: number;
   turnosPorFecha: Map<string, ReturnType<typeof getTurnosPorEmpresa>>;
-  empresaId: string;
+  festivoEnFecha: (fechaISO: string) => FestivoInfo | null;
   onDayClick?: (d: Date) => void;
 }) {
   const daysInMonth = new Date(year, month + 1, 0).getDate();
@@ -409,7 +411,7 @@ function MesGrande({
           const fechaISO = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
           const turnos = turnosPorFecha.get(fechaISO) ?? [];
           const isToday = hoy.getFullYear() === year && hoy.getMonth() === month && hoy.getDate() === day;
-          const festivoInfo = getFestivoEnFecha(empresaId, fechaISO);
+          const festivoInfo = festivoEnFecha(fechaISO);
           const intensity = Math.min(1, turnos.length / max);
           return (
             <button
@@ -453,12 +455,12 @@ function MesMini({
   year,
   month,
   turnosPorFecha,
-  empresaId,
+  festivoEnFecha,
 }: {
   year: number;
   month: number;
   turnosPorFecha: Map<string, ReturnType<typeof getTurnosPorEmpresa>>;
-  empresaId: string;
+  festivoEnFecha: (fechaISO: string) => FestivoInfo | null;
 }) {
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const firstDay = indexLunes(new Date(year, month, 1));
@@ -484,7 +486,7 @@ function MesMini({
           const fechaISO = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
           const turnos = turnosPorFecha.get(fechaISO) ?? [];
           const isToday = hoy.getFullYear() === year && hoy.getMonth() === month && hoy.getDate() === day;
-          const festivoInfo = getFestivoEnFecha(empresaId, fechaISO);
+          const festivoInfo = festivoEnFecha(fechaISO);
           const intensity = Math.min(1, turnos.length / max);
           return (
             <div

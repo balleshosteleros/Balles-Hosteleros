@@ -8,7 +8,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Search, Plus, CalendarDays, List, AlertCircle, Info } from "lucide-react";
 import { ConfigButton } from "@/shared/components/config-button";
 import { CalendarioConfig } from "./CalendarioConfig";
-import { getFestivoEnFecha } from "@/features/rrhh/data/calendarios";
+import { useFestivos, type FestivoInfo } from "@/features/rrhh/hooks/useFestivos";
 import { CalendarRangeToggle, CalendarRangeNav } from "@/shared/components/calendar/CalendarRangeToggle";
 import { useCalendarRange, type CalendarRangeMode } from "@/shared/components/calendar/calendar-range";
 import { cn } from "@/lib/utils";
@@ -93,11 +93,12 @@ function rangeMonths(mode: CalendarRangeMode, anchor: Date): { year: number; mon
   return [{ year: anchor.getFullYear(), month: anchor.getMonth() }];
 }
 
-export function CalendarioAusencias({ modalidad, items, botonNuevo, columnaExtra, empresaId }: Props) {
+export function CalendarioAusencias({ modalidad, items, botonNuevo, columnaExtra }: Props) {
   const [busqueda, setBusqueda] = useState("");
   const [vista, setVista] = useState<"calendario" | "lista">("calendario");
   const [showConfig, setShowConfig] = useState(false);
   const rango = useCalendarRange("MENSUAL");
+  const { festivoEnFecha } = useFestivos(rango.anchor.getFullYear());
 
   const filtradas = useMemo(() =>
     items.filter(v => !busqueda || v.empleadoNombre.toLowerCase().includes(busqueda.toLowerCase())),
@@ -163,7 +164,7 @@ export function CalendarioAusencias({ modalidad, items, botonNuevo, columnaExtra
               <VistaDiaria
                 anchor={rango.anchor}
                 eventosPorFecha={eventosPorFecha}
-                empresaId={empresaId}
+                festivoEnFecha={festivoEnFecha}
               />
             )}
 
@@ -171,7 +172,7 @@ export function CalendarioAusencias({ modalidad, items, botonNuevo, columnaExtra
               <VistaSemanal
                 anchor={rango.anchor}
                 eventosPorFecha={eventosPorFecha}
-                empresaId={empresaId}
+                festivoEnFecha={festivoEnFecha}
               />
             )}
 
@@ -180,7 +181,7 @@ export function CalendarioAusencias({ modalidad, items, botonNuevo, columnaExtra
                 year={meses[0].year}
                 month={meses[0].month}
                 eventosPorFecha={eventosPorFecha}
-                empresaId={empresaId}
+                festivoEnFecha={festivoEnFecha}
               />
             )}
 
@@ -197,7 +198,7 @@ export function CalendarioAusencias({ modalidad, items, botonNuevo, columnaExtra
                     year={year}
                     month={month}
                     eventosPorFecha={eventosPorFecha}
-                    empresaId={empresaId}
+                    festivoEnFecha={festivoEnFecha}
                   />
                 ))}
               </div>
@@ -243,9 +244,8 @@ export function CalendarioAusencias({ modalidad, items, botonNuevo, columnaExtra
   );
 }
 
-function FestivoMarker({ empresaId, fechaISO, compact }: { empresaId?: string; fechaISO: string; compact?: boolean }) {
-  if (!empresaId) return null;
-  const festivoInfo = getFestivoEnFecha(empresaId, fechaISO);
+function FestivoMarker({ festivoEnFecha, fechaISO, compact }: { festivoEnFecha: (f: string) => FestivoInfo | null; fechaISO: string; compact?: boolean }) {
+  const festivoInfo = festivoEnFecha(fechaISO);
   if (!festivoInfo) return null;
   if (compact) {
     return (
@@ -301,7 +301,7 @@ function VistaDiaria({
 }: {
   anchor: Date;
   eventosPorFecha: Map<string, AusenciaItem[]>;
-  empresaId?: string;
+  festivoEnFecha: (f: string) => FestivoInfo | null;
 }) {
   const fechaISO = toISO(anchor.getFullYear(), anchor.getMonth(), anchor.getDate());
   const eventos = eventosPorFecha.get(fechaISO) ?? [];
@@ -330,11 +330,11 @@ function VistaDiaria({
 function VistaSemanal({
   anchor,
   eventosPorFecha,
-  empresaId,
+  festivoEnFecha,
 }: {
   anchor: Date;
   eventosPorFecha: Map<string, AusenciaItem[]>;
-  empresaId?: string;
+  festivoEnFecha: (f: string) => FestivoInfo | null;
 }) {
   const iso = (anchor.getDay() + 6) % 7;
   const start = new Date(anchor);
@@ -360,7 +360,7 @@ function VistaSemanal({
             <span className={cn("text-[11px] font-medium", isToday ? "text-primary font-bold" : "text-foreground")}>
               {d.getDate()} {DIAS_INI[idx]}
             </span>
-            <FestivoMarker empresaId={empresaId} fechaISO={fechaISO} />
+            <FestivoMarker festivoEnFecha={festivoEnFecha} fechaISO={fechaISO} />
             <div className="mt-1 space-y-0.5">
               {eventos.slice(0, 4).map((ev, i) => (
                 <div key={i} className={cn("flex items-center gap-1 rounded px-1 py-0.5", ESTADO_COLORES[ev.estado] || "bg-muted")}>
@@ -381,12 +381,12 @@ function MesGrande({
   year,
   month,
   eventosPorFecha,
-  empresaId,
+  festivoEnFecha,
 }: {
   year: number;
   month: number;
   eventosPorFecha: Map<string, AusenciaItem[]>;
-  empresaId?: string;
+  festivoEnFecha: (f: string) => FestivoInfo | null;
 }) {
   const daysInMonth = getDaysInMonth(year, month);
   const firstDay = getFirstDayMon(year, month);
@@ -408,7 +408,7 @@ function MesGrande({
         return (
           <div key={day} className={cn("relative bg-card min-h-[80px] p-1.5", isToday && "ring-2 ring-primary ring-inset")}>
             <span className={cn("text-[11px] font-medium", isToday ? "text-primary font-bold" : "text-foreground")}>{day}</span>
-            <FestivoMarker empresaId={empresaId} fechaISO={fechaISO} />
+            <FestivoMarker festivoEnFecha={festivoEnFecha} fechaISO={fechaISO} />
             <div className="mt-1 space-y-0.5">
               {eventos.slice(0, 2).map((ev, idx) => (
                 <div key={idx} className={cn("flex items-center gap-1 rounded px-1 py-0.5", ESTADO_COLORES[ev.estado] || "bg-muted")}>
@@ -429,12 +429,12 @@ function MesMini({
   year,
   month,
   eventosPorFecha,
-  empresaId,
+  festivoEnFecha,
 }: {
   year: number;
   month: number;
   eventosPorFecha: Map<string, AusenciaItem[]>;
-  empresaId?: string;
+  festivoEnFecha: (f: string) => FestivoInfo | null;
 }) {
   const daysInMonth = getDaysInMonth(year, month);
   const firstDay = getFirstDayMon(year, month);
@@ -472,7 +472,7 @@ function MesMini({
               )}
             >
               {day}
-              <FestivoMarker empresaId={empresaId} fechaISO={fechaISO} compact />
+              <FestivoMarker festivoEnFecha={festivoEnFecha} fechaISO={fechaISO} compact />
               {count > 0 && dominante && (
                 <span className={cn("absolute bottom-0.5 h-1 w-1 rounded-full", DOT_COLORES[dominante] || "bg-muted-foreground")} />
               )}

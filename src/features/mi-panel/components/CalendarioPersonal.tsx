@@ -17,7 +17,7 @@ import {
 } from "@/features/empresa/lib/zona-horaria";
 import { useAuth } from "@/features/auth/contexts/auth-context";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
-import { getFestivoEnFecha } from "@/features/rrhh/data/calendarios";
+import { useFestivos } from "@/features/rrhh/hooks/useFestivos";
 import type { DiaCalendario } from "@/features/mi-panel/types";
 import { formatHorasDecimal } from "@/shared/lib/timeUtils";
 import { CalendarRangeToggle, CalendarRangeNav } from "@/shared/components/calendar/CalendarRangeToggle";
@@ -147,6 +147,7 @@ export function CalendarioPersonal({ refreshKey = 0 }: CalendarioPersonalProps) 
   const todayKey = ymd(today);
 
   const rango = useCalendarRange("MENSUAL");
+  const { festivoEnFecha } = useFestivos(rango.anchor.getFullYear());
   const [dias, setDias] = useState<DiaCalendario[]>([]);
   const [loading, setLoading] = useState(true);
   // Zona horaria de la empresa (PRP-069): formatea el sello "Descargado el" del
@@ -189,7 +190,7 @@ export function CalendarioPersonal({ refreshKey = 0 }: CalendarioPersonalProps) 
     const isToday = fecha === todayKey;
     const di = getDiaInfo(fecha, info, todayKey);
     const cls = TW_CLASSES[di.estado];
-    const festivoInfo = empresaActual?.id ? getFestivoEnFecha(empresaActual.id, fecha) : null;
+    const festivoInfo = festivoEnFecha(fecha);
     const compact = opts?.compact ?? false;
 
     return (

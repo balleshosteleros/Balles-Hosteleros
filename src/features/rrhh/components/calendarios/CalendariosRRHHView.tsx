@@ -1,16 +1,26 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
-import { getVacacionesPorEmpresa, getFestivosPorEmpresa, getBajasPorEmpresa, getJustificadasPorEmpresa } from "@/features/rrhh/data/calendarios";
+import { getVacacionesPorEmpresa, getBajasPorEmpresa, getJustificadasPorEmpresa } from "@/features/rrhh/data/calendarios";
+import { useFestivos } from "@/features/rrhh/hooks/useFestivos";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CalendarDays, Palmtree, PartyPopper, HeartPulse, FileCheck } from "lucide-react";
 import { CalendarioLaboral } from "@/features/rrhh/components/calendarios/CalendarioLaboral";
 import { CalendarioAusencias } from "@/features/rrhh/components/calendarios/CalendarioAusencias";
 import { CalendariosVacacionesPanel } from "@/features/rrhh/components/calendarios/CalendariosVacacionesPanel";
 
+const AMBITO_LABEL: Record<string, string> = {
+  nacional: "Nacional",
+  autonomico: "Autonómico",
+  local: "Local",
+};
+
 export function CalendariosRRHHView() {
   const { empresaActual } = useEmpresa();
+  // Año natural en curso: festivos reales de la BD (generados automáticamente).
+  const [anio] = useState<number>(() => new Date().getFullYear());
+  const { festivos: festivosBD } = useFestivos(anio);
 
   const vacaciones = useMemo(() =>
     getVacacionesPorEmpresa(empresaActual.id).map(v => ({
@@ -22,11 +32,14 @@ export function CalendariosRRHHView() {
   );
 
   const festivos = useMemo(() =>
-    getFestivosPorEmpresa(empresaActual.id).map(f => ({
-      id: f.id, empleadoNombre: f.nombre, departamento: f.centro,
-      fechaInicio: f.fecha, estado: f.tipo,
-    })),
-    [empresaActual.id]
+    festivosBD
+      .filter(f => f.fecha.startsWith(String(anio)))
+      .sort((a, b) => a.fecha.localeCompare(b.fecha))
+      .map(f => ({
+        id: f.id, empleadoNombre: f.nombre, departamento: AMBITO_LABEL[f.ambito] ?? f.ambito,
+        fechaInicio: f.fecha, estado: f.ambito,
+      })),
+    [festivosBD, anio]
   );
 
   const bajas = useMemo(() =>

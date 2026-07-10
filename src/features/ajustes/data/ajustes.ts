@@ -90,6 +90,8 @@ export interface ConfigOperativa {
   moneda: string;
   idioma: string;
   zonaHoraria: string;
+  /** Comunidad autónoma de la empresa: determina los festivos autonómicos. */
+  comunidadAutonoma?: string;
   formatoFecha: string;
   primerDiaSemana: string;
   localesAsociados: string;

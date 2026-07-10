@@ -6,6 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { TZ_DESTACADAS, offsetTZ } from "@/features/google-workspace/lib/timezones";
+import { COMUNIDADES_AUTONOMAS } from "@/features/rrhh/actions/festivos-actions";
 
 export function ConfigOperativaTab() {
   const { ajustes, setAjustes } = useEmpresa();
@@ -60,6 +61,18 @@ export function ConfigOperativaTab() {
                 {c.zonaHoraria && !TZ_DESTACADAS.some((z) => z.value === c.zonaHoraria) && (
                   <SelectItem value={c.zonaHoraria}>{c.zonaHoraria}</SelectItem>
                 )}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label className="text-xs font-bold uppercase">Comunidad autónoma</Label>
+            <Select value={c.comunidadAutonoma ?? ""} onValueChange={(v) => set("comunidadAutonoma", v)}>
+              <SelectTrigger className="mt-1"><SelectValue placeholder="Selecciona…" /></SelectTrigger>
+              <SelectContent>
+                {/* Determina los festivos autonómicos del calendario (RRHH). */}
+                {COMUNIDADES_AUTONOMAS.map((r) => (
+                  <SelectItem key={r} value={r}>{r}</SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
