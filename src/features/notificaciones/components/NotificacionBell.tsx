@@ -57,10 +57,15 @@ export function NotificacionBell({
   }, []);
 
   useEffect(() => {
-    cargar();
+    // 1ª carga diferida ~2,5 s: la campana no debe competir en la cola de server
+    // actions del arranque (retrasa el menú, que es lo crítico).
+    const primera = setTimeout(cargar, 2500);
     // Refresco periódico para que las alertas lleguen sin recargar la página.
     const id = setInterval(cargar, 60_000);
-    return () => clearInterval(id);
+    return () => {
+      clearTimeout(primera);
+      clearInterval(id);
+    };
   }, [cargar]);
 
   const sinVer = items.filter((n) => !n.vistaAt).length;

@@ -163,24 +163,30 @@ export function MeetDrawer({ children }: { children: ReactNode }) {
   const [needsReauth, setNeedsReauth] = useState(false);
   const [tzSecundaria, setTzSecundaria] = useState<string | null>(null);
   const nowTime = useNow();
+  // Sheet controlado: las cargas (calendarios, eventos, preferencia de huso) se
+  // hacen al ABRIR el drawer, no al montar el layout — antes precargaban en cada
+  // arranque de la app y competían con la ruta crítica.
+  const [abierto, setAbierto] = useState(false);
 
   // Huso secundario opcional (preferencia personal por usuario, compartida con
   // el Calendario vía la misma clave). El botón del reloj la cambia en caliente.
   useEffect(() => {
+    if (!abierto) return;
     loadUserPref(TZ_HORA_SECUNDARIA_KEY).then((v) => setTzSecundaria(v));
-  }, []);
+  }, [abierto]);
   const cambiarTz = (v: string | null) => {
     setTzSecundaria(v);
     saveUserPref(TZ_HORA_SECUNDARIA_KEY, v);
   };
 
-  // Lista de calendarios (para el filtro) al conectar
+  // Lista de calendarios (para el filtro) al conectar (solo con el drawer abierto)
   useEffect(() => {
     if (!connected) {
       setCalendarios([]);
       setSeleccionados(new Set());
       return;
     }
+    if (!abierto) return; // cargar solo al abrir el drawer
     let cancelado = false;
     Promise.all([
       fetch("/api/google/calendar/list").then((r) => r.json()),
@@ -224,7 +230,7 @@ export function MeetDrawer({ children }: { children: ReactNode }) {
     return () => {
       cancelado = true;
     };
-  }, [connected]);
+  }, [connected, abierto]);
 
   const toggleCal = useCallback((id: string) => {
     setSeleccionados((prev) => {
@@ -238,7 +244,7 @@ export function MeetDrawer({ children }: { children: ReactNode }) {
   }, []);
 
   const load = useCallback(async () => {
-    if (!connected) return;
+    if (!connected || !abierto) return;
     // Si ya cargó la lista y el usuario no dejó ningún calendario, no hay nada.
     if (calendarios.length > 0 && seleccionados.size === 0) {
       setEventosAll([]);
@@ -289,7 +295,7 @@ export function MeetDrawer({ children }: { children: ReactNode }) {
     } finally {
       setLoading(false);
     }
-  }, [connected, vista, refDate, calendarios, seleccionados]);
+  }, [connected, abierto, vista, refDate, calendarios, seleccionados]);
 
   useEffect(() => {
     load();
@@ -306,7 +312,7 @@ export function MeetDrawer({ children }: { children: ReactNode }) {
   );
 
   return (
-    <Sheet>
+    <Sheet open={abierto} onOpenChange={setAbierto}>
       <SheetTrigger asChild>{children}</SheetTrigger>
       <SheetContent side="right" className="flex flex-col gap-0 p-0 bg-[#f6f8fc] [&>button]:hidden">
         <SheetTitle className="sr-only">Google Meet — Reuniones</SheetTitle>

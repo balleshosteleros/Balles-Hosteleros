@@ -353,14 +353,19 @@ export function CalendarDrawer({ children }: CalendarDrawerProps) {
   const [moviendoVis, setMoviendoVis] = useState<string | null>(null);
   const clickSupRef = useRef(false);
   const nowTime = useNow();
+  // Sheet controlado: las cargas (calendarios, eventos, preferencia de huso) se
+  // hacen al ABRIR el drawer, no al montar el layout — antes precargaban en cada
+  // arranque de la app y competían con la ruta crítica.
+  const [abierto, setAbierto] = useState(false);
 
   // Huso secundario guardado por usuario (persiste tras logout y entre
-  // dispositivos). Lo cargamos al montar y lo guardamos al cambiarlo.
+  // dispositivos). Lo cargamos al abrir y lo guardamos al cambiarlo.
   useEffect(() => {
+    if (!abierto) return;
     loadUserPref(TZ_HORA_SECUNDARIA_KEY).then((v) => {
       if (v) setTzSecundaria(v);
     });
-  }, []);
+  }, [abierto]);
   const cambiarTz = (v: string | null) => {
     setTzSecundaria(v);
     saveUserPref(TZ_HORA_SECUNDARIA_KEY, v);
@@ -371,7 +376,7 @@ export function CalendarDrawer({ children }: CalendarDrawerProps) {
     return d.getHours() * 60 + d.getMinutes();
   }, [nowTime]);
 
-  // 1) Lista de calendarios al conectar
+  // 1) Lista de calendarios al conectar (solo con el drawer abierto)
   useEffect(() => {
     if (!connected) {
       setCalendarios([]);
@@ -379,6 +384,7 @@ export function CalendarDrawer({ children }: CalendarDrawerProps) {
       setNeedsReauth(false);
       return;
     }
+    if (!abierto) return; // cargar solo al abrir el drawer
     let cancelado = false;
     Promise.all([
       fetch("/api/google/calendar/list").then((r) => r.json()),
@@ -422,11 +428,11 @@ export function CalendarDrawer({ children }: CalendarDrawerProps) {
     return () => {
       cancelado = true;
     };
-  }, [connected]);
+  }, [connected, abierto]);
 
   // 2) Cargar eventos cuando cambian calendarios / vista / fecha
   useEffect(() => {
-    if (!connected || seleccionados.size === 0) return;
+    if (!connected || !abierto || seleccionados.size === 0) return;
     setCargando(true);
     const ids = Array.from(seleccionados).join(",");
     const params = new URLSearchParams({
@@ -447,7 +453,7 @@ export function CalendarDrawer({ children }: CalendarDrawerProps) {
         }
       })
       .finally(() => setCargando(false));
-  }, [connected, seleccionados, vista, fechaRef]);
+  }, [connected, abierto, seleccionados, vista, fechaRef]);
 
   function recargarEventos() {
     if (!connected || seleccionados.size === 0) return;
@@ -848,7 +854,7 @@ export function CalendarDrawer({ children }: CalendarDrawerProps) {
   }
 
   return (
-    <Sheet>
+    <Sheet open={abierto} onOpenChange={setAbierto}>
       <SheetTrigger asChild>{children}</SheetTrigger>
       <SheetContent
         side="right"

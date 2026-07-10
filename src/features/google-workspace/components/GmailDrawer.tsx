@@ -190,6 +190,9 @@ export function GmailDrawer({ children }: GmailDrawerProps) {
   const [sidebarAbierto, setSidebarAbierto] = useState(true);
   const [fotosContactos, setFotosContactos] = useState<Record<string, string>>({});
   const [needsReauth, setNeedsReauth] = useState(false);
+  // Sheet controlado: las cargas (labels, firma, mensajes) se hacen al ABRIR el
+  // drawer, no al montar el layout — antes precargaban en cada arranque de la app.
+  const [abierto, setAbierto] = useState(false);
   useGlobalLoadingSync(cargando);
 
   const arbolCarpetas = useMemo(
@@ -279,6 +282,7 @@ export function GmailDrawer({ children }: GmailDrawerProps) {
       setNeedsReauth(false);
       return;
     }
+    if (!abierto) return; // cargar solo al abrir el drawer
     fetch("/api/google/gmail/labels")
       .then((r) => r.json())
       .then((data) => {
@@ -296,16 +300,17 @@ export function GmailDrawer({ children }: GmailDrawerProps) {
         if (typeof data.signature === "string") setFirmaHtml(data.signature);
       })
       .catch(() => setFirmaHtml(""));
-  }, [connected]);
+  }, [connected, abierto]);
 
   useEffect(() => {
     if (!connected) {
       setMensajesReales(null);
       return;
     }
+    if (!abierto) return; // cargar solo al abrir el drawer
     recargar();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [connected, filtro]);
+  }, [connected, filtro, abierto]);
 
   useEffect(() => {
     if (!connected || !seleccionado) return;
@@ -572,7 +577,7 @@ export function GmailDrawer({ children }: GmailDrawerProps) {
       : filtro.nombre;
 
   return (
-    <Sheet>
+    <Sheet open={abierto} onOpenChange={setAbierto}>
       <SheetTrigger asChild>{children}</SheetTrigger>
       <SheetContent
         side="right"

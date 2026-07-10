@@ -230,15 +230,21 @@ function useTieneAccesos(empresaSlug: string) {
   useEffect(() => {
     if (!empresaSlug) return;
     let alive = true;
-    listAccesosApps(empresaSlug)
-      .then((rows) => {
-        if (alive) setTieneDatos(rows.some((a) => a.estado === "Activo"));
-      })
-      .catch(() => {
-        if (alive) setTieneDatos(true); // ante error, no bloquear el botón
-      });
+    // Diferida ~3 s: solo decide si el botón va gris; no debe competir en la cola
+    // de server actions del arranque (que retrasa el menú). El clearTimeout además
+    // coalesce el doble disparo cuando el slug pasa del default al real.
+    const t = setTimeout(() => {
+      listAccesosApps(empresaSlug)
+        .then((rows) => {
+          if (alive) setTieneDatos(rows.some((a) => a.estado === "Activo"));
+        })
+        .catch(() => {
+          if (alive) setTieneDatos(true); // ante error, no bloquear el botón
+        });
+    }, 3000);
     return () => {
       alive = false;
+      clearTimeout(t);
     };
   }, [empresaSlug]);
   return tieneDatos;
@@ -409,27 +415,32 @@ export function AccesosDrawer({
   useEffect(() => {
     if (!empresaSlug) return;
     let alive = true;
-    listAccesosApps(empresaSlug)
-      .then((rows) => {
-        if (!alive) return;
-        const hay = rows.some((app) =>
-          app.estado === "Activo" &&
-          app.accesos.some((acc) => {
-            const tieneSecreto =
-              acc.tieneContrasena || (acc.datosExtra ?? []).some((d) => d.tiene);
-            if (!tieneSecreto) return false;
-            if (soyDirector) return true;
-            const r = (acc.roles ?? []).map((x) => x.trim().toLowerCase());
-            return r.length > 0 && r.includes(miRol);
-          }),
-        );
-        setTieneCredenciales(hay);
-      })
-      .catch(() => {
-        if (alive) setTieneCredenciales(true);
-      });
+    // Diferida ~3 s por el mismo motivo que useTieneAccesos: fuera de la cola
+    // crítica del arranque (el botón queda activo mientras tanto, null = cargando).
+    const t = setTimeout(() => {
+      listAccesosApps(empresaSlug)
+        .then((rows) => {
+          if (!alive) return;
+          const hay = rows.some((app) =>
+            app.estado === "Activo" &&
+            app.accesos.some((acc) => {
+              const tieneSecreto =
+                acc.tieneContrasena || (acc.datosExtra ?? []).some((d) => d.tiene);
+              if (!tieneSecreto) return false;
+              if (soyDirector) return true;
+              const r = (acc.roles ?? []).map((x) => x.trim().toLowerCase());
+              return r.length > 0 && r.includes(miRol);
+            }),
+          );
+          setTieneCredenciales(hay);
+        })
+        .catch(() => {
+          if (alive) setTieneCredenciales(true);
+        });
+    }, 3000);
     return () => {
       alive = false;
+      clearTimeout(t);
     };
   }, [empresaSlug, miRol, soyDirector]);
 

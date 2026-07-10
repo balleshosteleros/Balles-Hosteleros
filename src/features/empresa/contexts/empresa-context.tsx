@@ -163,10 +163,15 @@ export function EmpresaProvider({ children }: { children: ReactNode }) {
   const [logoUrls, setLogoUrls] = useState<Record<string, string>>({});
   const [isotipoUrls, setIsotipoUrls] = useState<Record<string, string>>({});
 
-  // Cargar logos + isotipos desde Supabase al montar
+  // Cargar logos + isotipos desde Supabase, diferidos ~2,5 s: son cosméticos
+  // (hay fallback) y como server actions competirían en la cola serializada del
+  // arranque por delante de getUserPermisos, retrasando el menú.
   useEffect(() => {
-    getLogoUrls().then(setLogoUrls).catch(() => {});
-    getIsotipoUrls().then(setIsotipoUrls).catch(() => {});
+    const t = setTimeout(() => {
+      getLogoUrls().then(setLogoUrls).catch(() => {});
+      getIsotipoUrls().then(setIsotipoUrls).catch(() => {});
+    }, 2500);
+    return () => clearTimeout(t);
   }, []);
 
   // Hidratar empresas + ajustes desde Supabase (fuente de verdad).
