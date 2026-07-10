@@ -47,12 +47,34 @@ El cron `camaras-retencion` (02:30 UTC diario) borra de R2 **y** de la tabla los
 clips con `inicio` de hace más de 30 días. **Solo toca `camara_grabaciones`**: las
 grabaciones de pantalla, formación y onboarding (`recordings`) NO caducan.
 
+## Estándar elegido: Dahua XVR + relay FTP
+
+Modelo estándar "compatible Balles": **Dahua XVR serie 4** (`DH-XVR4116HS-I` /
+`DH-XVR4104HS-I`). Estos grabadores **no** suben MP4 por HTTP: suben por **FTP**
+en formato propietario **`.DAV`**. Para cerrar el hueco hay una pieza intermedia:
+
+```
+XVR Dahua ──FTP .dav──▶ ftp-relay (ffmpeg .dav→.mp4) ──POST /api/conector/segmento──▶ R2
+```
+
+- **`ftp-relay/`** (en este repo): servicio Node + ffmpeg, un contenedor para
+  TODOS los clientes (~5-10 €/mes). NO vive en Vercel (no puede escuchar FTP 24/7).
+  Ver `ftp-relay/README.md`.
+- **`/api/conector/resolver-camara`**: traduce (device_token, canal) → camara_id,
+  porque el XVR sube por canal (1..16), no por uuid.
+- El endpoint `/api/conector/segmento` sigue siendo el único punto donde el vídeo
+  entra a R2: el relay solo convierte y reenvía; toda la lógica (R2, cuota,
+  retención) vive en el software.
+- Onboarding del cliente en `docs/onboarding-xvr-dahua.md` (configurar FTP en el
+  grabador, ~5 min, guiado por vídeo).
+
 ## Pendiente para dejarlo 100% operativo
 
-1. **Estandarizar el kit "compatible Balles"**: elegir 1-2 modelos de NVR (o cámara)
-   que sepan subir clips MP4 a un endpoint HTTP con `Bearer` (o a un bucket S3, que
-   R2 acepta). El endpoint de ingesta ya es genérico y admite ambos flujos.
-2. **Grabar el vídeo de onboarding** sobre ESE modelo: emparejar por QR + pegar el
-   dato de destino en el grabador. Sin ese estándar no hay "conecta cualquier cámara
-   y funciona": alguien tiene que capturar el RTSP (aquí, el propio NVR).
-3. **Variables de entorno R2** (`R2_*`) y `CRON_SECRET` ya existen en `.env.example`.
+1. **Desplegar `ftp-relay`** en un VPS con IP pública y abrir puertos 21 +
+   30000-30009.
+2. **Emparejar el conector** de la empresa (obtener `device_token`) y dar de alta
+   las cámaras con su número de `canal` físico.
+3. **Grabar el vídeo de onboarding** sobre el XVR (menú Red → FTP).
+4. **Endurecer FTP**: FTPS o restringir por IP de origen del local (el FTP va sin
+   cifrar por defecto).
+5. **Variables de entorno R2** (`R2_*`) y `CRON_SECRET` ya existen en `.env.example`.

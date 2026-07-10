@@ -44,6 +44,7 @@
     "tests",
     "playwright.config.ts",
     "scripts",
-    "reelforge-recorder"
+    "reelforge-recorder",
+    "ftp-relay"
   ]
 }
