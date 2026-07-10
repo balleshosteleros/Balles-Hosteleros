@@ -20,6 +20,7 @@ import {
   type NominaLeida,
   type ResultadoProceso,
 } from "@/features/rrhh/services/nominas/procesar-nominas";
+import { registrarSubidaHistorico } from "@/features/rrhh/services/nominas/nominas-gestoria";
 
 const BUCKET = "rrhh-nominas";
 const SIGNED_URL_TTL = 60 * 10; // 10 min para verla
@@ -174,12 +175,22 @@ export async function guardarDatosNomina(
 export async function procesarNominasLeidas(
   nominas: NominaLeida[],
   periodoDefecto: string,
+  archivoNombre?: string,
 ): Promise<{ ok: boolean; error?: string; resultado?: ResultadoProceso }> {
   try {
-    const { empresaId } = await getAppContext();
+    const { empresaId, userId } = await getAppContext();
     if (!empresaId) return { ok: false, error: "No autorizado" };
     const admin = createAdminClient();
     const resultado = await procesarNominasConAdmin(admin, empresaId, nominas, periodoDefecto);
+    // Histórico de la subida manual (auditoría, mismo registro que la gestoría).
+    await registrarSubidaHistorico(admin, {
+      empresaId,
+      periodo: periodoDefecto,
+      origen: "manual",
+      archivoNombre: archivoNombre ?? null,
+      creadoPor: userId ?? null,
+      resultado,
+    });
     return { ok: true, resultado };
   } catch (err) {
     console.error("[rrhh] procesarNominasLeidas:", err);

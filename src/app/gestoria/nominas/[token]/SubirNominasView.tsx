@@ -10,10 +10,27 @@ interface Props {
   mesLabel: string;
 }
 
+interface MesIncorrecto {
+  etiqueta: string;
+  periodoLeido: string;
+}
+
 interface Resultado {
   guardadas: number;
   yaExistian: number;
   sinEmpleado: string[];
+  mesIncorrecto: MesIncorrecto[];
+}
+
+const MESES_ES = [
+  "enero", "febrero", "marzo", "abril", "mayo", "junio",
+  "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
+];
+
+function nombreMesCorto(periodo: string): string {
+  const [y, m] = (periodo ?? "").split("-");
+  const mes = MESES_ES[Number(m) - 1];
+  return mes ? `${mes} ${y}` : periodo;
 }
 
 const TIPOS_OK = [
@@ -63,6 +80,7 @@ export function SubirNominasView({ endpoint, empresaNombre, mesLabel }: Props) {
           guardadas: json.guardadas ?? 0,
           yaExistian: json.yaExistian ?? 0,
           sinEmpleado: json.sinEmpleado ?? [],
+          mesIncorrecto: json.mesIncorrecto ?? [],
         });
         setFile(null);
         if (inputRef.current) inputRef.current.value = "";
@@ -107,15 +125,62 @@ export function SubirNominasView({ endpoint, empresaNombre, mesLabel }: Props) {
                     : ""}
                   .
                 </p>
-                {resultado.sinEmpleado.length > 0 && (
-                  <p className="mt-1 text-amber-800">
-                    {resultado.sinEmpleado.length} no se pudieron asignar a ningún trabajador. La
-                    empresa lo revisará.
-                  </p>
-                )}
                 <p className="mt-2 text-xs text-emerald-700">
                   Puedes seguir subiendo más archivos si te faltan.
                 </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Mes incorrecto: NO se han volcado. La gestoría debe anularlas. */}
+        {resultado && resultado.mesIncorrecto.length > 0 && (
+          <div className="mt-4 rounded-xl border border-rose-200 bg-rose-50 p-4">
+            <div className="flex items-start gap-2">
+              <AlertTriangle className="h-5 w-5 text-rose-600 shrink-0 mt-0.5" />
+              <div className="text-sm text-rose-900">
+                <p className="font-semibold">
+                  {resultado.mesIncorrecto.length} nómina
+                  {resultado.mesIncorrecto.length === 1 ? "" : "s"} de otro mes · NO se
+                  {resultado.mesIncorrecto.length === 1 ? " ha" : " han"} subido
+                </p>
+                <p className="mt-1">
+                  Solo se admiten nóminas de <b>{mesLabel}</b>. Estas pertenecen a otro mes, así
+                  que <b>no se han volcado</b>. Anúlalas y no las vuelvas a adjuntar:
+                </p>
+                <ul className="mt-2 space-y-1 list-disc list-inside">
+                  {resultado.mesIncorrecto.map((x, i) => (
+                    <li key={i}>
+                      {x.etiqueta} — leída como <b>{nombreMesCorto(x.periodoLeido)}</b>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Empleados no dados de alta: no hay a quién asignarlas. */}
+        {resultado && resultado.sinEmpleado.length > 0 && (
+          <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4">
+            <div className="flex items-start gap-2">
+              <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
+              <div className="text-sm text-amber-900">
+                <p className="font-semibold">
+                  {resultado.sinEmpleado.length} nómina
+                  {resultado.sinEmpleado.length === 1 ? "" : "s"} sin trabajador · NO se
+                  {resultado.sinEmpleado.length === 1 ? " ha" : " han"} subido
+                </p>
+                <p className="mt-1">
+                  Est{resultado.sinEmpleado.length === 1 ? "e trabajador no está dado" : "os trabajadores no están dados"} de
+                  alta en el sistema, así que no se {resultado.sinEmpleado.length === 1 ? "ha" : "han"} podido asignar.
+                  Avisa a la empresa para que {resultado.sinEmpleado.length === 1 ? "lo dé" : "los dé"} de alta:
+                </p>
+                <ul className="mt-2 space-y-1 list-disc list-inside">
+                  {resultado.sinEmpleado.map((x, i) => (
+                    <li key={i}>{x}</li>
+                  ))}
+                </ul>
               </div>
             </div>
           </div>

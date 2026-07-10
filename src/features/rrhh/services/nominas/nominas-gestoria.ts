@@ -204,9 +204,61 @@ export async function procesarSubidaNominasGestoria(
     })
     .eq("id", row.id);
 
+  // Histórico del documento subido (auditoría por empresa/mes).
+  await registrarSubidaHistorico(admin, {
+    empresaId: row.empresa_id,
+    periodo: row.periodo,
+    origen: "gestoria",
+    archivoNombre: file.name,
+    archivoBytes: file.size,
+    resultado,
+  });
+
   await avisarRrhhNominasSubidas(admin, row.empresa_id, row.periodo, resultado);
 
   return { ok: true, resultado };
+}
+
+/**
+ * Guarda en `nominas_gestoria_subidas` el resultado de un volcado (un archivo
+ * subido). Best-effort: nunca rompe la subida. Sirve para las dos entradas
+ * (enlace público de la gestoría y subida manual autenticada).
+ */
+export async function registrarSubidaHistorico(
+  admin: SupabaseClient,
+  params: {
+    empresaId: string;
+    periodo: string;
+    origen: "gestoria" | "manual";
+    archivoNombre?: string | null;
+    archivoBytes?: number | null;
+    creadoPor?: string | null;
+    resultado: ResultadoProceso;
+  },
+): Promise<void> {
+  try {
+    const r = params.resultado;
+    await admin.from("nominas_gestoria_subidas").insert({
+      empresa_id: params.empresaId,
+      periodo: params.periodo,
+      origen: params.origen,
+      archivo_nombre: params.archivoNombre ?? null,
+      archivo_bytes: params.archivoBytes ?? null,
+      leidas: r.leidas,
+      guardadas: r.guardadas,
+      ya_existian: r.yaExistian,
+      sin_empleado: r.sinEmpleado.length,
+      mes_incorrecto: r.mesIncorrecto.length,
+      detalle: {
+        sinEmpleado: r.sinEmpleado,
+        mesIncorrecto: r.mesIncorrecto,
+        conIncidencia: r.conIncidencia,
+      },
+      creado_por: params.creadoPor ?? null,
+    });
+  } catch (e) {
+    console.error("[nominas-gestoria] registrarSubidaHistorico:", e);
+  }
 }
 
 /** Contador actual de subidas del token (para acumular sin condiciones de carrera graves). */
@@ -240,11 +292,24 @@ async function avisarRrhhNominasSubidas(
     const mes = nombreMes(periodo);
     const partes: string[] = [`${r.guardadas} volcada${r.guardadas === 1 ? "" : "s"}`];
     if (r.yaExistian > 0) partes.push(`${r.yaExistian} ya estaba${r.yaExistian === 1 ? "" : "n"}`);
-    if (r.sinEmpleado.length > 0) partes.push(`${r.sinEmpleado.length} sin empleado`);
-    const detalleSin =
-      r.sinEmpleado.length > 0
-        ? ` Sin empleado: ${r.sinEmpleado.slice(0, 6).join(", ")}${r.sinEmpleado.length > 6 ? "…" : ""}. Revisa su DNI en la ficha.`
-        : "";
+    if (r.conIncidencia > 0) partes.push(`${r.conIncidencia} con incidencia`);
+    if (r.mesIncorrecto.length > 0) partes.push(`${r.mesIncorrecto.length} de otro mes (rechazada${r.mesIncorrecto.length === 1 ? "" : "s"})`);
+    if (r.sinEmpleado.length > 0) partes.push(`${r.sinEmpleado.length} sin empleado dado de alta`);
+
+    // Detalle de las que requieren acción manual.
+    const detalles: string[] = [];
+    if (r.mesIncorrecto.length > 0) {
+      const lista = r.mesIncorrecto
+        .slice(0, 5)
+        .map((x) => `${x.etiqueta} (leída como ${nombreMes(x.periodoLeido)})`)
+        .join(", ");
+      detalles.push(`De otro mes, NO volcadas: ${lista}${r.mesIncorrecto.length > 5 ? "…" : ""}.`);
+    }
+    if (r.sinEmpleado.length > 0) {
+      const lista = r.sinEmpleado.slice(0, 6).join(", ");
+      detalles.push(`No dados de alta en el sistema: ${lista}${r.sinEmpleado.length > 6 ? "…" : ""}.`);
+    }
+    const detalleSin = detalles.length > 0 ? ` ${detalles.join(" ")}` : "";
 
     await emitirNotificacion({
       empresaId,
@@ -256,7 +321,7 @@ async function avisarRrhhNominasSubidas(
       refTabla: "empresas",
       refId: empresaId,
       accionUrl: "/rrhh/pagos",
-      dedupeKey: `nominas_gestoria_subidas:${empresaId}:${periodo}:${r.guardadas}:${r.sinEmpleado.length}`,
+      dedupeKey: `nominas_gestoria_subidas:${empresaId}:${periodo}:${r.guardadas}:${r.sinEmpleado.length}:${r.mesIncorrecto.length}`,
     });
   } catch (e) {
     console.error("[nominas-gestoria] avisarRrhh:", e);

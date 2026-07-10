@@ -27,6 +27,8 @@ import {
 } from "@/features/notificaciones/actions/notif-config-actions";
 import { NotifLiquidacionesConfigPanel } from "@/features/notificaciones/components/NotifLiquidacionesConfigPanel";
 import { NominasGestoriaConfigPanel } from "@/features/rrhh/components/pagos/NominasGestoriaConfigPanel";
+import { NominasRevisionDialog } from "@/features/rrhh/components/pagos/NominasRevisionDialog";
+import { listarNominasRevision } from "@/features/rrhh/actions/nominas-revision-actions";
 import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 import { toast } from "sonner";
 import { ZONE_COLORS } from "@/features/direccion/data/direccion";
@@ -37,7 +39,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { Edit2, Banknote, Settings, Send, Lock, Unlock, CheckCircle2, Clock, Upload, FileText } from "lucide-react";
+import { Edit2, Banknote, Settings, Send, Lock, Unlock, CheckCircle2, Clock, Upload, FileText, ReceiptText } from "lucide-react";
 import {
   SubmoduleToolbar,
   aplicarFiltrosToolbar,
@@ -181,6 +183,8 @@ export function PagosView() {
   const [horasPorRango, setHorasPorRango] = useState<Record<string, Map<string, HorasMesRow>>>({});
   const [loading, setLoading] = useState(false);
   const [showConfig, setShowConfig] = useState(false);
+  const [showRevision, setShowRevision] = useState(false);
+  const [incidenciasNominas, setIncidenciasNominas] = useState(0);
   const [filtroArea, setFiltroArea] = useState<"todos" | PagoArea>("todos");
   const [enviando, setEnviando] = useState(false);
   const [subiendoNominas, setSubiendoNominas] = useState(false);
@@ -204,6 +208,23 @@ export function PagosView() {
   const periodo = periodoDeRango(calRange.range);
   const pagos = pagosPorRango[claveRango] ?? [];
   const horasMesMap = horasPorRango[claveRango];
+
+  // Contador de nóminas con incidencia del mes en curso (badge del icono).
+  const refrescarIncidenciasNominas = useCallback(async () => {
+    if (!periodo) return;
+    const lista = await listarNominasRevision(periodo);
+    setIncidenciasNominas(lista.filter((n) => n.estado === "con_incidencia").length);
+  }, [periodo]);
+
+  useEffect(() => {
+    refrescarIncidenciasNominas();
+  }, [refrescarIncidenciasNominas]);
+
+  const mesLabelNominas = useMemo(() => {
+    const [y, m] = (periodo ?? "").split("-");
+    const MESES = ["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"];
+    return m ? `${MESES[Number(m) - 1] ?? ""} ${y}`.trim() : "";
+  }, [periodo]);
 
   // Formatea horas decimales a "8h" o "8h 30m".
   const fmtHoras = (h: number): string => {
@@ -375,7 +396,8 @@ export function PagosView() {
       return;
     }
 
-    const proc = await procesarNominasLeidas(todas, periodo);
+    const nombreArchivo = lista.length === 1 ? lista[0].name : `${lista.length} archivos`;
+    const proc = await procesarNominasLeidas(todas, periodo, nombreArchivo);
     setSubiendoNominas(false);
     if (!proc.ok || !proc.resultado) {
       toast.error(proc.error ?? "No se pudieron guardar las nóminas.");
@@ -388,7 +410,9 @@ export function PagosView() {
 
     const partes = [`${r.guardadas} nómina${r.guardadas === 1 ? "" : "s"} guardada${r.guardadas === 1 ? "" : "s"}`];
     if (r.yaExistian > 0) partes.push(`${r.yaExistian} ya subida${r.yaExistian === 1 ? "" : "s"}`);
-    if (r.sinEmpleado.length > 0) partes.push(`${r.sinEmpleado.length} sin empleado`);
+    if (r.conIncidencia > 0) partes.push(`${r.conIncidencia} con incidencia`);
+    if (r.mesIncorrecto.length > 0) partes.push(`${r.mesIncorrecto.length} de otro mes (rechazada${r.mesIncorrecto.length === 1 ? "" : "s"})`);
+    if (r.sinEmpleado.length > 0) partes.push(`${r.sinEmpleado.length} sin empleado dado de alta`);
     if (fallos > 0) partes.push(`${fallos} archivo${fallos === 1 ? "" : "s"} con error`);
 
     const nombreMes = (p: string) => {
@@ -397,9 +421,9 @@ export function PagosView() {
       return `${MESES[Number(m) - 1] ?? ""} ${y}`.trim();
     };
     const lineas: string[] = [];
-    if (r.meses.length > 0) lineas.push(`Guardadas en: ${r.meses.map(nombreMes).join(", ")}.`);
     if (r.duplicadas.length > 0) lineas.push(`Ya tenían nómina (no se regrabó): ${r.duplicadas.slice(0, 6).join(", ")}${r.duplicadas.length > 6 ? "…" : ""}.`);
-    if (r.sinEmpleado.length > 0) lineas.push(`Sin empleado: ${r.sinEmpleado.slice(0, 6).join(", ")}${r.sinEmpleado.length > 6 ? "…" : ""}. Revisa su DNI en la ficha.`);
+    if (r.mesIncorrecto.length > 0) lineas.push(`De otro mes, NO volcadas: ${r.mesIncorrecto.slice(0, 6).map((x) => `${x.etiqueta} (${nombreMes(x.periodoLeido)})`).join(", ")}${r.mesIncorrecto.length > 6 ? "…" : ""}.`);
+    if (r.sinEmpleado.length > 0) lineas.push(`No dados de alta en el sistema: ${r.sinEmpleado.slice(0, 6).join(", ")}${r.sinEmpleado.length > 6 ? "…" : ""}.`);
     const descripcion = lineas.length > 0 ? lineas.join(" ") : undefined;
 
     if (r.guardadas > 0 || r.yaExistian > 0) toast.success(partes.join(" · "), { description: descripcion });
@@ -852,6 +876,21 @@ export function PagosView() {
             />
             <Button
               size="icon"
+              variant="outline"
+              className="h-9 w-9 relative"
+              onClick={() => setShowRevision(true)}
+              title="Nóminas subidas"
+              aria-label="Nóminas subidas"
+            >
+              <ReceiptText className="h-4 w-4" strokeWidth={1.75} />
+              {incidenciasNominas > 0 && (
+                <span className="absolute -top-1 -right-1 h-4 min-w-4 px-1 rounded-full bg-amber-500 text-[10px] font-semibold text-white flex items-center justify-center">
+                  {incidenciasNominas}
+                </span>
+              )}
+            </Button>
+            <Button
+              size="icon"
               variant={showConfig ? "default" : "outline"}
               className="h-9 w-9"
               onClick={() => setShowConfig((v) => !v)}
@@ -878,6 +917,17 @@ export function PagosView() {
           </Card>
         </div>
       )}
+
+      <NominasRevisionDialog
+        open={showRevision}
+        onOpenChange={setShowRevision}
+        periodo={periodo}
+        mesLabel={mesLabelNominas}
+        onCambio={() => {
+          setPagosPorRango({});
+          refrescarIncidenciasNominas();
+        }}
+      />
 
       <Card>
         <CardContent className="p-0">

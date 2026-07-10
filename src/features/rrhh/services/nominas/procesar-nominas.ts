@@ -50,11 +50,13 @@ export interface NominaMesIncorrecto {
 }
 
 export interface ResultadoProceso {
+  leidas: number; // nº de nóminas que leyó la IA (total del archivo)
   guardadas: number;
   yaExistian: number;
-  sinEmpleado: string[]; // etiquetas (nombre/dni) de las no emparejadas
+  sinEmpleado: string[]; // etiquetas (nombre/dni) de las no emparejadas (NO dadas de alta)
   duplicadas: string[]; // nombres de empleados que ya tenían nómina ese mes
   mesIncorrecto: NominaMesIncorrecto[]; // rechazadas por ser de OTRO mes
+  conIncidencia: number; // volcadas pero marcadas para revisión (p.ej. neto 0)
   meses: string[]; // periodos AAAA-MM tocados
 }
 
@@ -64,7 +66,7 @@ export async function procesarNominasConAdmin(
   nominas: NominaLeida[],
   periodoDefecto: string,
 ): Promise<ResultadoProceso> {
-  const vacio: ResultadoProceso = { guardadas: 0, yaExistian: 0, sinEmpleado: [], duplicadas: [], mesIncorrecto: [], meses: [] };
+  const vacio: ResultadoProceso = { leidas: nominas.length, guardadas: 0, yaExistian: 0, sinEmpleado: [], duplicadas: [], mesIncorrecto: [], conIncidencia: 0, meses: [] };
   try {
     // TODOS los empleados activos de la empresa (fuente fresca).
     const { data: emps } = await admin
@@ -108,7 +110,7 @@ export async function procesarNominasConAdmin(
       return mejor;
     };
 
-    const res: ResultadoProceso = { guardadas: 0, yaExistian: 0, sinEmpleado: [], duplicadas: [], mesIncorrecto: [], meses: [] };
+    const res: ResultadoProceso = { leidas: nominas.length, guardadas: 0, yaExistian: 0, sinEmpleado: [], duplicadas: [], mesIncorrecto: [], conIncidencia: 0, meses: [] };
     const meses = new Set<string>();
 
     for (const n of nominas) {
@@ -165,11 +167,18 @@ export async function procesarNominasConAdmin(
         .upload(path, Buffer.from(n.archivoBase64, "base64"), { upsert: true, contentType: n.mimeType });
       if (up.error) continue;
 
+      // Incidencia detectable en el volcado: el neto (líquido a percibir) no se
+      // pudo leer o es 0. Se vuelca igual, pero marcada para que RRHH la revise.
+      const incidencia = (n.neto || 0) <= 0 ? "Importe neto no leído o a 0 €. Revisar el documento." : null;
+      const revisionEstado = incidencia ? "con_incidencia" : "correcta";
+      if (incidencia) res.conIncidencia++;
+
       // 1) Guardar la nómina INDIVIDUAL.
       await admin.from("rrhh_pagos_nominas").insert({
         empresa_id: empresaId, empleado_id: emp.id, periodo, orden,
         ss_empleado: n.ssEmpleado || 0, ss_empresa: n.ssEmpresa || 0,
         irpf: n.irpf || 0, neto: n.neto || 0, nomina_path: path,
+        revision_estado: revisionEstado, incidencia,
       });
 
       // 2) Recalcular la SUMA de todas las nóminas de ese empleado/mes y volcarla
@@ -178,6 +187,7 @@ export async function procesarNominasConAdmin(
         .from("rrhh_pagos_nominas")
         .select("ss_empleado, ss_empresa, irpf, neto, nomina_path, orden")
         .eq("empresa_id", empresaId).eq("empleado_id", emp.id).eq("periodo", periodo)
+        .neq("revision_estado", "denegada") // las denegadas no cuentan en la suma
         .order("orden", { ascending: true });
       const lista = todas ?? [];
       const suma = lista.reduce(
