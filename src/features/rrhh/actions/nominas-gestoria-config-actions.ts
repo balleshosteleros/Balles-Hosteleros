@@ -27,7 +27,7 @@ const CONFIG_DEFAULT: NominasGestoriaConfig = {
   activo: false,
   email: "",
   emailCc: "",
-  diaEnvio: 25,
+  diaEnvio: 1, // por defecto el día 1 (a las 00:00 de la zona de la empresa)
   notifRrhh: true,
   ultimoEnvio: null,
 };
@@ -49,7 +49,7 @@ export async function getNominasGestoriaConfig(): Promise<NominasGestoriaConfig>
       activo: data.nominas_gestoria_activo ?? false,
       email: (data.nominas_gestoria_email as string | null) ?? "",
       emailCc: (data.nominas_gestoria_email_cc as string | null) ?? "",
-      diaEnvio: (data.nominas_gestoria_dia_envio as number | null) ?? 25,
+      diaEnvio: (data.nominas_gestoria_dia_envio as number | null) ?? 1,
       notifRrhh: data.nominas_gestoria_notif_rrhh ?? true,
       ultimoEnvio: (data.nominas_gestoria_ultimo_envio as string | null) ?? null,
     };
