@@ -19,7 +19,7 @@ import type {
   FacturaParaModelo,
   ModeloAeat,
 } from "../types/modelos";
-import { periodoALabel } from "../types/modelos";
+import { periodoALabel, estadoVisualModelo, ESTADO_VISUAL_LABEL } from "../types/modelos";
 import { Modelo303Editor } from "./editors/Modelo303Editor";
 import { Modelo130Editor } from "./editors/Modelo130Editor";
 import { Modelo111Editor } from "./editors/Modelo111Editor";
@@ -28,6 +28,7 @@ import { Modelo390Editor } from "./editors/Modelo390Editor";
 import { Modelo347Editor } from "./editors/Modelo347Editor";
 import { FacturasSinClasificar } from "./FacturasSinClasificar";
 import { CuadreBadge } from "./CuadreBadge";
+import { SolicitarGestoriaButton } from "./SolicitarGestoriaButton";
 import { correrIA } from "../actions/categorizacion-actions";
 import { marcarRevisado } from "../actions/modelos-actions";
 import { presentarModelo } from "../actions/export-actions";
@@ -131,6 +132,11 @@ export function ModeloEditor({ modelo, facturas, asignaciones, registros347 }: P
                 {presentado ? <Lock className="h-3 w-3 mr-1" /> : null}
                 {modelo.estado}
               </Badge>
+              {!presentado ? (
+                <Badge variant="outline" className="bg-slate-50 text-slate-700 border-slate-200">
+                  {ESTADO_VISUAL_LABEL[estadoVisualModelo(modelo)]}
+                </Badge>
+              ) : null}
               {modelo.hash_snapshot ? (
                 <span className="text-[10px] font-mono text-muted-foreground truncate max-w-[200px]">
                   hash:{modelo.hash_snapshot.slice(0, 16)}...
@@ -173,6 +179,13 @@ export function ModeloEditor({ modelo, facturas, asignaciones, registros347 }: P
               <Lock className="h-4 w-4 mr-1" />
               Marcar presentado
             </Button>
+          ) : null}
+          {!presentado ? (
+            <SolicitarGestoriaButton
+              modeloId={modelo.id}
+              solicitado={Boolean(modelo.solicitud_gestoria_en)}
+              className="inline-flex items-center gap-1 h-9 px-3 rounded-md border border-input bg-background text-sm font-medium hover:bg-accent disabled:opacity-50"
+            />
           ) : null}
           <Link href={`/api/modelos-aeat/${modelo.id}/pdf`} target="_blank">
             <Button variant="outline" size="sm">

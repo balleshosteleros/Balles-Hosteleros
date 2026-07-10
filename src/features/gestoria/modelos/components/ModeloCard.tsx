@@ -3,37 +3,42 @@
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { FileText, AlertTriangle, CheckCircle2, Lock } from "lucide-react";
-import { PLAZOS_PRESENTACION, periodoALabel, MODELO_LABEL, TIPOS_SOLO_DOCUMENTO } from "../types/modelos";
-import type { ModeloAeat } from "../types/modelos";
+import { FileText, AlertTriangle, CheckCircle2, Lock, Clock, CalendarClock, Info } from "lucide-react";
+import {
+  periodoALabel,
+  MODELO_LABEL,
+  TIPOS_SOLO_DOCUMENTO,
+  estadoVisualModelo,
+  ESTADO_VISUAL_LABEL,
+} from "../types/modelos";
+import type { EstadoVisualModelo, ModeloAeat } from "../types/modelos";
 import { ModeloPdfButton } from "./ModeloPdfButton";
+import { SolicitarGestoriaButton } from "./SolicitarGestoriaButton";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { formatFechaHoraEnZona } from "@/features/empresa/lib/zona-horaria";
 
-const HOY = new Date();
-
-function diasHastaPlazo(modelo: ModeloAeat): number | null {
-  const plazo = PLAZOS_PRESENTACION[modelo.tipo][modelo.periodo];
-  if (!plazo) return null;
-  const año = modelo.periodo === "T4" ? modelo.ejercicio + 1 : modelo.ejercicio;
-  const añoPlazo = modelo.periodo === "ANUAL" ? modelo.ejercicio + 1 : año;
-  const fin = new Date(añoPlazo, plazo.mes - 1, plazo.dia);
-  const diff = Math.ceil((fin.getTime() - HOY.getTime()) / (1000 * 60 * 60 * 24));
-  return diff;
-}
-
-function estadoColor(estado: string): string {
-  if (estado === "PRESENTADO") return "bg-green-100 text-green-800 border-green-200";
-  if (estado === "REVISADO") return "bg-blue-100 text-blue-800 border-blue-200";
-  return "bg-amber-100 text-amber-800 border-amber-200";
-}
+/** Estilo del badge de estado visual (color + icono). */
+const ESTADO_VISUAL_STYLE: Record<
+  EstadoVisualModelo,
+  { clase: string; Icono: typeof FileText }
+> = {
+  PRESENTADO: { clase: "bg-green-100 text-green-800 border-green-200", Icono: CheckCircle2 },
+  SOLICITADO: { clase: "bg-sky-100 text-sky-800 border-sky-200", Icono: Info },
+  FUERA_PLAZO: { clase: "bg-red-100 text-red-800 border-red-200", Icono: AlertTriangle },
+  EN_PLAZO: { clase: "bg-amber-100 text-amber-800 border-amber-200", Icono: Clock },
+  SIN_ABRIR: { clase: "bg-slate-100 text-slate-700 border-slate-200", Icono: CalendarClock },
+};
 
 export function ModeloCard({ modelo }: { modelo: ModeloAeat }) {
   const { empresaActual } = useEmpresa();
   const soloDocumento = TIPOS_SOLO_DOCUMENTO.includes(modelo.tipo);
-  const dias = diasHastaPlazo(modelo);
-  const urgente = dias !== null && dias <= 7 && dias >= 0 && modelo.estado !== "PRESENTADO";
-  const vencido = dias !== null && dias < 0 && modelo.estado !== "PRESENTADO";
+  const estadoVisual = estadoVisualModelo(modelo);
+  const { clase, Icono } = ESTADO_VISUAL_STYLE[estadoVisual];
+  const presentado = estadoVisual === "PRESENTADO";
+  // El botón de solicitar a gestoría tiene sentido cuando el modelo aún no está
+  // presentado: en plazo, fuera de plazo o ya solicitado (para ver el estado).
+  const puedeSolicitar = !presentado;
+
   const resultado =
     (modelo.casillas?.["69"] as number | undefined) ??
     (modelo.casillas?.["19"] as number | undefined) ??
@@ -55,33 +60,15 @@ export function ModeloCard({ modelo }: { modelo: ModeloAeat }) {
                 {periodoALabel(modelo.periodo, modelo.ejercicio)}
               </p>
             </div>
-            {modelo.estado === "PRESENTADO" ? (
-              <Lock className="h-4 w-4 text-green-600" />
-            ) : null}
+            {presentado ? <Lock className="h-4 w-4 text-green-600" /> : null}
           </div>
         </CardHeader>
         <CardContent className="space-y-3">
           <div className="flex items-center gap-2 flex-wrap">
-            <Badge variant="outline" className={estadoColor(modelo.estado)}>
-              {modelo.estado}
+            <Badge variant="outline" className={`gap-1 ${clase}`}>
+              <Icono className="h-3 w-3" />
+              {ESTADO_VISUAL_LABEL[estadoVisual]}
             </Badge>
-            {urgente ? (
-              <Badge variant="destructive" className="gap-1">
-                <AlertTriangle className="h-3 w-3" />
-                Cierra en {dias}d
-              </Badge>
-            ) : null}
-            {vencido ? (
-              <Badge variant="destructive" className="gap-1">
-                Vencido
-              </Badge>
-            ) : null}
-            {modelo.estado === "REVISADO" ? (
-              <Badge variant="outline" className="gap-1 bg-blue-50">
-                <CheckCircle2 className="h-3 w-3" />
-                Listo
-              </Badge>
-            ) : null}
           </div>
 
           {soloDocumento ? (
@@ -113,7 +100,15 @@ export function ModeloCard({ modelo }: { modelo: ModeloAeat }) {
             </p>
           ) : null}
 
-          <div className="pt-2 border-t flex items-center justify-end">
+          <div className="pt-2 border-t flex items-center justify-between gap-2">
+            {puedeSolicitar ? (
+              <SolicitarGestoriaButton
+                modeloId={modelo.id}
+                solicitado={estadoVisual === "SOLICITADO"}
+              />
+            ) : (
+              <span />
+            )}
             <ModeloPdfButton modeloId={modelo.id} tienePdf={Boolean(modelo.pdf_url)} />
           </div>
         </CardContent>

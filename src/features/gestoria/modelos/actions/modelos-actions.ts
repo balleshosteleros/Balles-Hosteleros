@@ -45,11 +45,54 @@ export async function listModelos(
 
     const { data, error } = await q;
     if (error) throw error;
-    return { ok: true, data: (data ?? []) as ModeloAeat[] };
+    const modelos = (data ?? []) as ModeloAeat[];
+    await anotarSolicitudGestoria(supabase, empresaId, modelos);
+    return { ok: true, data: modelos };
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Error desconocido";
     console.error("[modelos] list:", msg);
     return { ok: false, data: [], error: msg };
+  }
+}
+
+/**
+ * Rellena `solicitud_gestoria_en` en cada modelo a partir del token de subida
+ * ACTIVO de su periodo (enviado, sin completar y no expirado). El estado visual
+ * "Solicitado a gestoría" deriva de aquí — no hay columna en modelos_aeat.
+ */
+async function anotarSolicitudGestoria(
+  supabase: Awaited<ReturnType<typeof getContext>>["supabase"],
+  empresaId: string,
+  modelos: ModeloAeat[],
+): Promise<void> {
+  if (modelos.length === 0) return;
+  const ahora = new Date().toISOString();
+  const { data: tokens } = await supabase
+    .from("gestoria_modelos_tokens")
+    .select("ejercicio, periodo, email_enviado_en, completado_en, expira_en")
+    .eq("empresa_id", empresaId)
+    .is("completado_en", null)
+    .not("email_enviado_en", "is", null)
+    .gt("expira_en", ahora);
+
+  // Índice por "ejercicio|periodo" → fecha de envío (la más reciente).
+  // Los tokens antiguos guardan el periodo como "Q1..Q4" (legacy) mientras que
+  // modelos_aeat ya usa "T1..T4": normalizamos Q→T para que casen.
+  const normPeriodo = (p: string) => p.replace(/^Q([1-4])$/, "T$1");
+  const porPeriodo = new Map<string, string>();
+  for (const t of (tokens ?? []) as Array<{
+    ejercicio: number;
+    periodo: string;
+    email_enviado_en: string | null;
+  }>) {
+    if (!t.email_enviado_en) continue;
+    const clave = `${t.ejercicio}|${normPeriodo(t.periodo)}`;
+    const prev = porPeriodo.get(clave);
+    if (!prev || t.email_enviado_en > prev) porPeriodo.set(clave, t.email_enviado_en);
+  }
+
+  for (const m of modelos) {
+    m.solicitud_gestoria_en = porPeriodo.get(`${m.ejercicio}|${m.periodo}`) ?? null;
   }
 }
 
@@ -67,7 +110,9 @@ export async function getModelo(
       .eq("empresa_id", empresaId)
       .single();
     if (error) throw error;
-    return { ok: true, data: data as ModeloAeat };
+    const modelo = data as ModeloAeat;
+    await anotarSolicitudGestoria(supabase, empresaId, [modelo]);
+    return { ok: true, data: modelo };
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Error desconocido";
     console.error("[modelos] get:", msg);

@@ -53,6 +53,12 @@ export interface ModeloAeat {
   casillas: CasillasMap;
   snapshot_empresa: SnapshotEmpresa | null;
   fecha_presentacion: string | null;
+  /**
+   * Fecha en que se solicitó a la gestoría subir los documentos (null = no
+   * solicitado). NO es una columna de `modelos_aeat`: se calcula al listar a
+   * partir del token de subida activo del periodo (`gestoria_modelos_tokens`).
+   */
+  solicitud_gestoria_en?: string | null;
   hash_snapshot: string | null;
   pdf_url: string | null;
   fichero_aeat_url: string | null;
@@ -331,6 +337,55 @@ export function ventanaPresentacion(
   if (!ini) return null;
   const inicio = new Date(añoVentana, ini.mes - 1, ini.dia);
   return { inicio, fin };
+}
+
+/**
+ * Estado VISUAL derivado de un modelo (lo que se pinta en la tarjeta).
+ * Combina el estado persistido (PRESENTADO / solicitud a gestoría) con la
+ * posición de HOY respecto a la ventana oficial de presentación.
+ *
+ * Prioridad:
+ *  1. PRESENTADO  — ya presentado (verde, cerrado).
+ *  2. SOLICITADO  — se ha pedido a la gestoría que suba los documentos (info).
+ *  3. FUERA_PLAZO — pasó la fecha límite sin presentar (rojo).
+ *  4. EN_PLAZO    — hoy está dentro de la ventana de presentación (ámbar).
+ *  5. SIN_ABRIR   — aún no ha llegado el día en que se puede presentar (gris).
+ *
+ * Los modelos sin ventana oficial (docs contables) nunca están "en plazo":
+ * caen a SIN_ABRIR salvo que estén presentados o solicitados.
+ */
+export type EstadoVisualModelo =
+  | "PRESENTADO"
+  | "SOLICITADO"
+  | "FUERA_PLAZO"
+  | "EN_PLAZO"
+  | "SIN_ABRIR";
+
+export const ESTADO_VISUAL_LABEL: Record<EstadoVisualModelo, string> = {
+  PRESENTADO: "Presentado",
+  SOLICITADO: "Solicitado a gestoría",
+  FUERA_PLAZO: "Fuera de plazo",
+  EN_PLAZO: "En plazo",
+  SIN_ABRIR: "Sin abrir plazo",
+};
+
+export function estadoVisualModelo(
+  modelo: Pick<
+    ModeloAeat,
+    "tipo" | "periodo" | "ejercicio" | "estado" | "solicitud_gestoria_en"
+  >,
+  hoy: Date = new Date(),
+): EstadoVisualModelo {
+  if (modelo.estado === "PRESENTADO") return "PRESENTADO";
+  if (modelo.solicitud_gestoria_en) return "SOLICITADO";
+
+  const ventana = ventanaPresentacion(modelo.tipo, modelo.periodo, modelo.ejercicio);
+  if (!ventana) return "SIN_ABRIR";
+
+  const t = hoy.getTime();
+  if (t > ventana.fin.getTime()) return "FUERA_PLAZO";
+  if (t >= ventana.inicio.getTime()) return "EN_PLAZO";
+  return "SIN_ABRIR";
 }
 
 export function periodoALabel(periodo: ModeloPeriodo, ejercicio: number): string {
