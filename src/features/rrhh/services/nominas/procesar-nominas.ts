@@ -8,9 +8,11 @@ import "server-only";
  * para el enlace PÚBLICO de la gestoría (`/api/gestoria/nominas/[token]`).
  *
  * Empareja por DNI/NIE (inequívoco) y, como respaldo, por nombre (tokens). Cada
- * nómina va al mes que ella misma indica (periodo); si no lo trae, al
- * `periodoDefecto`. No regraba si el empleado ya tiene nómina ese mes; respeta el
- * bloqueo de liquidaciones ya enviadas.
+ * nómina DEBE ser del mes solicitado (`periodoDefecto`): si la IA lee un periodo
+ * DISTINTO, la nómina se RECHAZA (no se vuelca) y se informa a quien la sube para
+ * que la anule y no la vuelva a adjuntar. Si la IA no logra leer el mes, se acepta
+ * como del mes solicitado. No regraba si el empleado ya tiene nómina ese mes;
+ * respeta el bloqueo de liquidaciones ya enviadas.
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -41,11 +43,18 @@ export interface NominaLeida {
   archivoBase64: string;
 }
 
+/** Una nómina rechazada por pertenecer a un mes distinto al solicitado. */
+export interface NominaMesIncorrecto {
+  etiqueta: string; // empleado (o nombre/DNI leído) para identificarla
+  periodoLeido: string; // AAAA-MM que la IA leyó en la nómina
+}
+
 export interface ResultadoProceso {
   guardadas: number;
   yaExistian: number;
   sinEmpleado: string[]; // etiquetas (nombre/dni) de las no emparejadas
   duplicadas: string[]; // nombres de empleados que ya tenían nómina ese mes
+  mesIncorrecto: NominaMesIncorrecto[]; // rechazadas por ser de OTRO mes
   meses: string[]; // periodos AAAA-MM tocados
 }
 
@@ -55,7 +64,7 @@ export async function procesarNominasConAdmin(
   nominas: NominaLeida[],
   periodoDefecto: string,
 ): Promise<ResultadoProceso> {
-  const vacio: ResultadoProceso = { guardadas: 0, yaExistian: 0, sinEmpleado: [], duplicadas: [], meses: [] };
+  const vacio: ResultadoProceso = { guardadas: 0, yaExistian: 0, sinEmpleado: [], duplicadas: [], mesIncorrecto: [], meses: [] };
   try {
     // TODOS los empleados activos de la empresa (fuente fresca).
     const { data: emps } = await admin
@@ -99,19 +108,29 @@ export async function procesarNominasConAdmin(
       return mejor;
     };
 
-    const res: ResultadoProceso = { guardadas: 0, yaExistian: 0, sinEmpleado: [], duplicadas: [], meses: [] };
+    const res: ResultadoProceso = { guardadas: 0, yaExistian: 0, sinEmpleado: [], duplicadas: [], mesIncorrecto: [], meses: [] };
     const meses = new Set<string>();
 
     for (const n of nominas) {
       const emp = emparejar(n);
       if (!emp) {
         // Mostrar lo que leyó la IA (nombre + DNI) para diagnosticar por qué no
-        // cuadró (DNI mal leído, nombre distinto, empleado inexistente…).
+        // cuadró (DNI mal leído, nombre distinto, o EMPLEADO NO DADO DE ALTA).
         const etiq = [n.nombre?.trim(), n.dniNie ? `(${n.dniNie})` : ""].filter(Boolean).join(" ");
         res.sinEmpleado.push(etiq || "nómina sin identificar");
         continue;
       }
-      const periodo = /^\d{4}-\d{2}$/.test(n.periodo) ? n.periodo : periodoDefecto;
+
+      // VALIDACIÓN DE MES: la nómina debe ser del mes solicitado. Si la IA leyó un
+      // periodo válido y NO coincide, se RECHAZA (no se vuelca) y se informa para
+      // que la gestoría la anule. Si no se pudo leer el mes, se acepta como del
+      // mes solicitado (no bloquear por un OCR ilegible).
+      const periodoLeido = /^\d{4}-\d{2}$/.test(n.periodo) ? n.periodo : "";
+      if (periodoLeido && periodoLeido !== periodoDefecto) {
+        res.mesIncorrecto.push({ etiqueta: emp.nombre, periodoLeido });
+        continue;
+      }
+      const periodo = periodoDefecto;
       const ext = EXT_POR_MIME[n.mimeType];
       if (!ext) continue;
 

@@ -73,6 +73,9 @@ export async function POST(req: Request, ctx: { params: Promise<{ token: string 
       guardadas: r.guardadas,
       yaExistian: r.yaExistian,
       sinEmpleado: r.sinEmpleado,
+      // Rechazadas por pertenecer a un mes distinto al solicitado: la gestoría
+      // debe anularlas y no volver a subirlas.
+      mesIncorrecto: r.mesIncorrecto,
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Error desconocido";
