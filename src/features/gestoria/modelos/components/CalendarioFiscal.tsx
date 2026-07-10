@@ -25,8 +25,10 @@ import {
   MODELO_LABEL,
   MODELO_PERIODOS_VALIDOS,
   ventanaPresentacion,
+  grupoDeModelo,
   type ModeloTipo,
   type ModeloPeriodo,
+  type GrupoModelo,
 } from "../types/modelos";
 
 interface Props {
@@ -99,9 +101,30 @@ function columnaLunes(getDay: number): number {
 interface Ventana {
   tipo: ModeloTipo;
   periodo: ModeloPeriodo;
+  grupo: GrupoModelo;
   inicio: Date;
   fin: Date;
 }
+
+// Color por GRUPO: trimestrales en verde, anuales en azul.
+const COLOR_GRUPO: Record<GrupoModelo, { franja: string; limite: string; leyenda: string }> = {
+  TRIMESTRALES: {
+    franja: "bg-emerald-100 text-emerald-900 dark:bg-emerald-900/40 dark:text-emerald-100",
+    limite: "ring-2 ring-emerald-600 dark:ring-emerald-400",
+    leyenda: "bg-emerald-100 dark:bg-emerald-900/50",
+  },
+  ANUALES: {
+    franja: "bg-sky-100 text-sky-900 dark:bg-sky-900/40 dark:text-sky-100",
+    limite: "ring-2 ring-sky-600 dark:ring-sky-400",
+    leyenda: "bg-sky-100 dark:bg-sky-900/50",
+  },
+};
+
+// Colores CSS crudos (para el gradiente de días con dos grupos a la vez).
+const COLOR_CSS: Record<GrupoModelo, string> = {
+  TRIMESTRALES: "rgb(209 250 229)", // emerald-100
+  ANUALES: "rgb(224 242 254)", // sky-100
+};
 
 export function CalendarioFiscal({ ejercicio }: Props) {
   const [vista, setVista] = useState<"mes" | "anio">("mes");
@@ -111,16 +134,23 @@ export function CalendarioFiscal({ ejercicio }: Props) {
   // Mes actual en vista mensual (0-11). Arranca en abril (primer plazo del ejercicio).
   const [mesVista, setMesVista] = useState<number>(3);
 
-  // Todas las ventanas del ejercicio (las fechas salen SOLO de ventanaPresentacion).
+  // Ventanas de VARIOS ejercicios: las de T4/anuales del ejercicio N caen en
+  // enero-julio de N+1, así que para que enero (y feb/jul) no salgan vacíos hay
+  // que incluir el ejercicio anterior. Generamos N-1, N y N+1.
   const todasVentanas = useMemo<Ventana[]>(() => {
     const tipos = Object.keys(MODELO_LABEL) as ModeloTipo[];
-    return tipos.flatMap((tipo) =>
-      MODELO_PERIODOS_VALIDOS[tipo]
-        .map((periodo) => {
-          const v = ventanaPresentacion(tipo, periodo, ejercicio);
-          return v ? { tipo, periodo, inicio: v.inicio, fin: v.fin } : null;
-        })
-        .filter((x): x is Ventana => x !== null),
+    const ejercicios = [ejercicio - 1, ejercicio, ejercicio + 1];
+    return ejercicios.flatMap((ej) =>
+      tipos.flatMap((tipo) =>
+        MODELO_PERIODOS_VALIDOS[tipo]
+          .map((periodo) => {
+            const v = ventanaPresentacion(tipo, periodo, ej);
+            return v
+              ? { tipo, periodo, grupo: grupoDeModelo(tipo), inicio: v.inicio, fin: v.fin }
+              : null;
+          })
+          .filter((x): x is Ventana => x !== null),
+      ),
     );
   }, [ejercicio]);
 
@@ -137,10 +167,16 @@ export function CalendarioFiscal({ ejercicio }: Props) {
     return todasVentanas.filter((v) => v.tipo === filtroModelo);
   }, [todasVentanas, filtroModelo]);
 
-  // Lista textual ordenada por fecha de inicio.
+  // Lista textual: solo las ventanas que caen (inicio o fin) en el año mostrado,
+  // ordenadas por fecha de inicio.
   const listaOrdenada = useMemo<Ventana[]>(
-    () => [...ventanasVisibles].sort((a, b) => aDia(a.inicio) - aDia(b.inicio)),
-    [ventanasVisibles],
+    () =>
+      [...ventanasVisibles]
+        .filter(
+          (v) => v.inicio.getFullYear() === anioVista || v.fin.getFullYear() === anioVista,
+        )
+        .sort((a, b) => aDia(a.inicio) - aDia(b.inicio)),
+    [ventanasVisibles, anioVista],
   );
 
   /** ¿El día está dentro de [inicio, fin] de alguna ventana visible? */
@@ -303,7 +339,20 @@ export function CalendarioFiscal({ ejercicio }: Props) {
           <div className="mt-4 flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
             <span className="inline-flex items-center gap-2">
               <span className="h-4 w-4 rounded-sm bg-emerald-100 dark:bg-emerald-900/50" />
-              Días disponibles para presentar
+              Trimestrales (disponible)
+            </span>
+            <span className="inline-flex items-center gap-2">
+              <span className="h-4 w-4 rounded-sm bg-sky-100 dark:bg-sky-900/50" />
+              Anuales (disponible)
+            </span>
+            <span className="inline-flex items-center gap-2">
+              <span
+                className="h-4 w-4 rounded-sm"
+                style={{
+                  backgroundImage: `linear-gradient(135deg, ${COLOR_CSS.TRIMESTRALES} 0 50%, ${COLOR_CSS.ANUALES} 50% 100%)`,
+                }}
+              />
+              Coinciden trimestral y anual
             </span>
             <span className="inline-flex items-center gap-2">
               <span className="h-4 w-4 rounded-sm bg-emerald-100 ring-2 ring-emerald-600 dark:bg-emerald-900/50" />
@@ -322,17 +371,23 @@ export function CalendarioFiscal({ ejercicio }: Props) {
               <ul className="space-y-1">
                 {listaOrdenada.map((v) => (
                   <li
-                    key={`${v.tipo}-${v.periodo}`}
+                    key={`${v.tipo}-${v.periodo}-${v.fin.getFullYear()}`}
                     className="flex items-baseline justify-between gap-4 text-sm"
                   >
-                    <span>
+                    <span className="inline-flex items-center gap-2">
+                      <span
+                        className={cn(
+                          "h-2.5 w-2.5 shrink-0 rounded-full",
+                          v.grupo === "TRIMESTRALES" ? "bg-emerald-500" : "bg-sky-500",
+                        )}
+                      />
                       <span className="font-medium">{MODELO_LABEL[v.tipo]}</span>{" "}
                       <span className="text-muted-foreground">
                         · {PERIODO_LABEL[v.periodo]}
                       </span>
                     </span>
                     <span className="tabular-nums text-muted-foreground">
-                      del {fechaCorta(v.inicio)} al {fechaCorta(v.fin)}
+                      del {fechaCorta(v.inicio)} al {fechaCorta(v.fin)} {v.fin.getFullYear()}
                     </span>
                   </li>
                 ))}
@@ -343,6 +398,39 @@ export function CalendarioFiscal({ ejercicio }: Props) {
       </DialogContent>
     </Dialog>
   );
+}
+
+/**
+ * Estilo de una celda-día según las ventanas activas: clases de fondo cuando
+ * hay un solo grupo, o un `style` con gradiente diagonal mitad-mitad cuando
+ * coinciden ventanas de DOS grupos distintos (trimestral + anual) ese día.
+ */
+function estiloCelda(ventanas: Ventana[]): {
+  className: string;
+  style?: React.CSSProperties;
+} {
+  if (ventanas.length === 0) return { className: "" };
+  const grupos = new Set(ventanas.map((v) => v.grupo));
+  if (grupos.size >= 2) {
+    // Día partido: mitad verde (trimestral) / mitad azul (anual), diagonal.
+    return {
+      className: "text-foreground",
+      style: {
+        backgroundImage: `linear-gradient(135deg, ${COLOR_CSS.TRIMESTRALES} 0 50%, ${COLOR_CSS.ANUALES} 50% 100%)`,
+      },
+    };
+  }
+  const grupo = [...grupos][0];
+  return { className: COLOR_GRUPO[grupo].franja };
+}
+
+/** Clase de anillo del día límite (según el grupo del/los que vencen ese día). */
+function anilloLimite(limites: Ventana[]): string {
+  if (limites.length === 0) return "";
+  const grupos = new Set(limites.map((v) => v.grupo));
+  // Si vencen dos grupos el mismo día, prioriza el anillo trimestral (verde).
+  const grupo: GrupoModelo = grupos.has("TRIMESTRALES") ? "TRIMESTRALES" : "ANUALES";
+  return COLOR_GRUPO[grupo].limite;
 }
 
 // --- Utilidad: matriz de días (celdas) de un mes con relleno de otros meses ---
@@ -395,36 +483,31 @@ function MesGrande({ anio, mes, ventanasEnDia, limitesEnDia }: MesProps) {
           const dentro = celda.enMes ? ventanasEnDia(celda.fecha) : [];
           const limites = celda.enMes ? limitesEnDia(celda.fecha) : [];
           const esLimite = limites.length > 0;
-          const enFranja = dentro.length > 0;
-
-          // Redondeo de esquinas para que la franja "se vea".
           const esInicioFranja = dentro.some((v) => mismaFecha(v.inicio, celda.fecha));
           const esFinFranja = dentro.some((v) => mismaFecha(v.fin, celda.fecha));
+          const est = estiloCelda(dentro);
 
           const titulo = esLimite
             ? "Vence: " +
               limites
                 .map((v) => `${MODELO_LABEL[v.tipo]} ${PERIODO_LABEL[v.periodo]}`)
                 .join(", ")
-            : undefined;
+            : dentro.length > 0
+              ? dentro.map((v) => `${MODELO_LABEL[v.tipo]} ${PERIODO_LABEL[v.periodo]}`).join(", ")
+              : undefined;
 
           return (
             <div
               key={i}
               title={titulo}
+              style={celda.enMes ? est.style : undefined}
               className={cn(
                 "flex aspect-square items-center justify-center rounded-md border border-transparent text-sm",
                 !celda.enMes && "text-muted-foreground/40",
-                enFranja &&
-                  celda.enMes &&
-                  "bg-emerald-100 text-emerald-900 dark:bg-emerald-900/40 dark:text-emerald-100",
-                enFranja &&
-                  celda.enMes &&
-                  (dentro.length > 1 ? "bg-emerald-200 dark:bg-emerald-800/60" : ""),
+                celda.enMes && est.className,
                 esInicioFranja && "rounded-l-lg",
                 esFinFranja && "rounded-r-lg",
-                esLimite &&
-                  "font-bold ring-2 ring-emerald-600 dark:ring-emerald-400",
+                esLimite && cn("font-bold", anilloLimite(limites)),
               )}
             >
               {celda.fecha.getDate()}
@@ -480,30 +563,27 @@ function MiniMes({ anio, mes, ventanasEnDia, limitesEnDia }: MesProps) {
           const dentro = celda.enMes ? ventanasEnDia(celda.fecha) : [];
           const limites = celda.enMes ? limitesEnDia(celda.fecha) : [];
           const esLimite = limites.length > 0;
-          const enFranja = dentro.length > 0;
+          const est = estiloCelda(dentro);
 
           const titulo = esLimite
             ? "Vence: " +
               limites
                 .map((v) => `${MODELO_LABEL[v.tipo]} ${PERIODO_LABEL[v.periodo]}`)
                 .join(", ")
-            : undefined;
+            : dentro.length > 0
+              ? dentro.map((v) => `${MODELO_LABEL[v.tipo]} ${PERIODO_LABEL[v.periodo]}`).join(", ")
+              : undefined;
 
           return (
             <div
               key={i}
               title={titulo}
+              style={celda.enMes ? est.style : undefined}
               className={cn(
                 "flex aspect-square items-center justify-center rounded-[3px] text-[10px] leading-none",
                 !celda.enMes && "text-muted-foreground/30",
-                enFranja &&
-                  celda.enMes &&
-                  "bg-emerald-100 text-emerald-900 dark:bg-emerald-900/40 dark:text-emerald-100",
-                enFranja &&
-                  celda.enMes &&
-                  (dentro.length > 1 ? "bg-emerald-200 dark:bg-emerald-800/60" : ""),
-                esLimite &&
-                  "font-bold ring-1 ring-emerald-600 dark:ring-emerald-400",
+                celda.enMes && est.className,
+                esLimite && cn("font-bold", anilloLimite(limites).replace("ring-2", "ring-1")),
               )}
             >
               {celda.enMes ? celda.fecha.getDate() : ""}

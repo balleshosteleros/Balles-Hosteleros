@@ -7,6 +7,7 @@ import { bajaContratoRecibidaEmail } from "@/lib/email/templates/baja-contrato-r
 import { crearFirmaInterno } from "@/features/rrhh/services/firmas/crear-firma";
 import { generarCartaBajaVoluntariaPDF } from "@/features/rrhh/services/firmas/baja-voluntaria-pdf";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { resolverDestinatario } from "@/features/rrhh/services/email-plantillas/resolver";
 import type {
   DiaCalendario,
   MiFichajeHoy,
@@ -1959,6 +1960,29 @@ export async function crearSolicitudPersonal(input: NuevaSolicitudInput) {
       .select()
       .single();
     if (error) throw error;
+
+    // BAJA MÉDICA: avisa automáticamente a gestoría (para tramitarla) y a
+    // gerencia (aviso informativo). Side-effect no bloqueante: si el email
+    // falla, la solicitud queda creada igual y RRHH la ve en pendientes.
+    if (input.tipo === "ausencia" && input.subtipo === "baja_medica") {
+      try {
+        await onBajaMedicaCreada({
+          empresaId,
+          userId: user.id,
+          fechaSolicitud: todayISO(),
+          fechaInicio: input.fechaInicio,
+          fechaFin: input.fechaFin ?? null,
+          motivo: input.motivo?.trim() ? input.motivo.trim() : null,
+          nombreFallback: nombre || "",
+        });
+      } catch (e) {
+        console.error(
+          "[mi-panel] baja_medica side-effects:",
+          extractErrorMessage(e),
+        );
+      }
+    }
+
     return { ok: true, data: mapSolicitud(data as Record<string, unknown>) };
   } catch (err: unknown) {
     const msg = extractErrorMessage(err);
@@ -2523,6 +2547,120 @@ async function onBajaContratoCreada(args: {
   } else {
     console.warn(
       "[mi-panel] baja_contrato: sin correo de RRHH/general en Datos generales para empresa",
+      args.empresaId,
+    );
+  }
+}
+
+// ─── Baja médica: side-effects al crear la solicitud ─────────
+//
+// Cuando un trabajador solicita una BAJA MÉDICA desde Mi Panel se avisa
+// automáticamente por email a DOS destinos:
+//   1) GESTORÍA (correoGestoria) — para que la tramite.
+//   2) GERENCIA (correoGerencia) — aviso informativo de que ha ocurrido.
+// Ambos correos de departamento son fuente única de Ajustes → Empresa →
+// «Correos electrónicos» (datos_generales). Si un destino no está configurado
+// se omite y se registra un warning; la solicitud queda creada igual.
+async function onBajaMedicaCreada(args: {
+  empresaId: string;
+  userId: string;
+  fechaSolicitud: string; // ISO — cuándo se registró (hoy)
+  fechaInicio: string; // ISO — inicio de la baja
+  fechaFin: string | null; // ISO — fin estimado (opcional)
+  motivo: string | null;
+  nombreFallback: string;
+}): Promise<void> {
+  const admin = createAdminClient();
+
+  const [empleadoRes, empresaRes] = await Promise.all([
+    admin
+      .from("empleados")
+      .select("nombre, apellidos, dni_nie, local_id, puesto")
+      .eq("empresa_id", args.empresaId)
+      .eq("user_id", args.userId)
+      .maybeSingle(),
+    admin
+      .from("empresas")
+      .select("nombre")
+      .eq("id", args.empresaId)
+      .maybeSingle(),
+  ]);
+
+  const emp = empleadoRes.data as
+    | {
+        nombre: string | null;
+        apellidos: string | null;
+        dni_nie: string | null;
+        local_id: string | null;
+        puesto: string | null;
+      }
+    | null;
+
+  const empleadoNombre =
+    (emp ? `${emp.nombre ?? ""} ${emp.apellidos ?? ""}`.trim() : "") ||
+    args.nombreFallback ||
+    "Empleado/a";
+  const empresaNombre =
+    (empresaRes.data?.nombre as string | undefined) ?? "Tu empresa";
+
+  // Nombre del local (best-effort) para dar contexto en el correo.
+  let local: string | null = null;
+  if (emp?.local_id) {
+    const { data: loc } = await admin
+      .from("locales")
+      .select("nombre")
+      .eq("id", emp.local_id)
+      .maybeSingle();
+    local = (loc?.nombre as string | null) ?? null;
+  }
+
+  const { bajaMedicaNotificacionEmail } = await import(
+    "@/lib/email/templates/baja-medica-notificacion"
+  );
+
+  const datosComunes = {
+    empleadoNombre,
+    empresaNombre,
+    dniNie: emp?.dni_nie ?? null,
+    local,
+    puesto: emp?.puesto ?? null,
+    fechaSolicitud: formatFechaEs(args.fechaSolicitud),
+    fechaInicio: formatFechaEs(args.fechaInicio),
+    fechaFin: args.fechaFin ? formatFechaEs(args.fechaFin) : null,
+    motivo: args.motivo,
+  } as const;
+
+  // Correos de gestoría y gerencia (fuente única: Ajustes → Empresa).
+  const [gestoria, gerencia] = await Promise.all([
+    resolverDestinatario(admin, args.empresaId, "departamento", "correoGestoria", null),
+    resolverDestinatario(admin, args.empresaId, "departamento", "correoGerencia", null),
+  ]);
+
+  // 1) Gestoría — para que tramite la baja.
+  if (gestoria.to) {
+    const { subject, html, text } = bajaMedicaNotificacionEmail({
+      destinatario: "gestoria",
+      ...datosComunes,
+    });
+    await sendEmail({ to: gestoria.to, subject, html, text, empresaId: args.empresaId });
+  } else {
+    console.warn(
+      "[mi-panel] baja_medica: sin correo de gestoría configurado para empresa",
+      args.empresaId,
+    );
+  }
+
+  // 2) Gerencia — aviso informativo. Se omite si coincide con el de gestoría
+  //    para no enviar dos correos al mismo buzón.
+  if (gerencia.to && gerencia.to.toLowerCase() !== gestoria.to.toLowerCase()) {
+    const { subject, html, text } = bajaMedicaNotificacionEmail({
+      destinatario: "gerencia",
+      ...datosComunes,
+    });
+    await sendEmail({ to: gerencia.to, subject, html, text, empresaId: args.empresaId });
+  } else if (!gerencia.to) {
+    console.warn(
+      "[mi-panel] baja_medica: sin correo de gerencia configurado para empresa",
       args.empresaId,
     );
   }
