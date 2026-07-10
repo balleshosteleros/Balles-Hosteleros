@@ -61,6 +61,11 @@ Al iniciar la app, la pantalla se pinta pero los ítems de los menús tardan var
      AWS que eu-west-1) y redeploy. Impacto esperado: RTT ~90 ms → ~2-10 ms; la cola de arranque de
      ~20 s debería caer a ~2-4 s sin tocar código. Alternativa: cambiar la región en el dashboard
      de Vercel (cuenta del team balleshosteleros).
+   - **✅ APLICADO Y MEDIDO (2026-07-10):** `"regions": ["dub1"]` en `vercel.json` (commit `e3dfe729`),
+     deploy `success`, `x-vercel-id` confirmado `::dub1::`. **Re-medición en prod (mismo login):
+     coste total de server actions 21,3 s → 6,5 s (−70 %); latencia por action 0,5-2,2 s → 0,08-0,4 s;
+     cola de arranque ~20 s → ~7 s.** Sin tocar código de app. Quedan ~6,5 s de cola → objetivo de los
+     fixes 1-4 de abajo.
 6. (Local/DX) Trocear imports pesados del layout (`app-layout` importa grabadora, cámaras, Google,
    agenda, soporte…) con `next/dynamic` → menos compilación y menos hidratación.
 
