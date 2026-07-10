@@ -53,7 +53,11 @@ import {
   createContacto,
   updateContacto,
   deleteContacto,
+  getContactosVistosAt,
+  marcarContactosVistos,
 } from "@/features/agenda/actions/contactos-actions";
+import { refreshDailyCounts } from "@/features/google-workspace/components/useDailyCounts";
+import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 
 const CATEGORIA_ICON: Record<ContactoCategoria, React.ElementType> = {
   mantenimiento: Wrench,
@@ -79,11 +83,17 @@ const EMPTY_FORM: ContactoInput = {
 };
 
 export function AgendaView() {
+  const { ajustes } = useEmpresa();
+  const diasAnuncio = ajustes.notificaciones.agenda.diasAnuncio;
   const [contactos, setContactos] = useState<Contacto[]>([]);
   const [cargando, setCargando] = useState(true);
   useGlobalLoadingSync(cargando);
   const [busqueda, setBusqueda] = useState("");
   const [tab, setTab] = useState<ContactoCategoria | "todos">("todos");
+  // Corte "visto hasta" del usuario: los contactos creados después se resaltan
+  // como nuevos. Se congela al abrir la vista para que sigan resaltados durante
+  // la sesión aunque ya los hayamos marcado como vistos en segundo plano.
+  const [vistosAt, setVistosAt] = useState<string | null>(null);
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
@@ -93,18 +103,43 @@ export function AgendaView() {
   const cargarContactos = useCallback(async () => {
     try {
       setCargando(true);
-      const data = await listContactos();
+      const [data, corte] = await Promise.all([
+        listContactos(),
+        getContactosVistosAt(diasAnuncio),
+      ]);
       setContactos(data);
+      setVistosAt(corte);
     } catch {
       toast.error("Error al cargar contactos");
     } finally {
       setCargando(false);
     }
-  }, []);
+  }, [diasAnuncio]);
 
   useEffect(() => {
     cargarContactos();
   }, [cargarContactos]);
+
+  // Al entrar en la agenda y ver los contactos, marcamos como vistos para ESTE
+  // usuario: el badge de "contactos nuevos" se pone a 0 solo para él (los demás
+  // lo siguen viendo hasta que entren). El resaltado visual se mantiene porque
+  // `vistosAt` ya quedó congelado antes de marcar.
+  useEffect(() => {
+    if (cargando || vistosAt === null) return;
+    let cancelado = false;
+    (async () => {
+      const res = await marcarContactosVistos();
+      if (!cancelado && res.ok) refreshDailyCounts();
+    })();
+    return () => {
+      cancelado = true;
+    };
+  }, [cargando, vistosAt]);
+
+  const esNuevo = useCallback(
+    (c: Contacto) => !!vistosAt && !!c.created_at && c.created_at > vistosAt,
+    [vistosAt],
+  );
 
   const filtrados = useMemo(() => {
     let lista = contactos;
@@ -246,17 +281,26 @@ export function AgendaView() {
         )}
         {filtrados.map((c) => {
           const Icon = CATEGORIA_ICON[c.categoria];
+          const nuevo = esNuevo(c);
           return (
             <Card
               key={c.id}
               onClick={() => abrirFicha(c)}
-              className="overflow-hidden cursor-pointer transition-colors hover:border-primary/40 hover:bg-muted/30"
+              className={`overflow-hidden cursor-pointer transition-colors ${
+                nuevo
+                  ? "border-emerald-400 ring-2 ring-emerald-400/40 bg-emerald-50/60 hover:bg-emerald-50"
+                  : "hover:border-primary/40 hover:bg-muted/30"
+              }`}
               title="Ver ficha"
             >
               <CardContent className="p-5 space-y-3">
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex items-center gap-3">
-                    <div className="rounded-lg bg-muted p-2">
+                    <div
+                      className={`rounded-lg p-2 ${
+                        nuevo ? "bg-emerald-100" : "bg-muted"
+                      }`}
+                    >
                       <Icon className="h-4 w-4 text-foreground" />
                     </div>
                     <div>
@@ -272,6 +316,11 @@ export function AgendaView() {
                     </div>
                   </div>
                   <div className="flex flex-col items-end gap-1">
+                    {nuevo && (
+                      <Badge className="text-[10px] bg-emerald-500 text-white border-transparent hover:bg-emerald-500">
+                        Nuevo
+                      </Badge>
+                    )}
                     <Badge
                       variant="outline"
                       className={`text-[10px] ${

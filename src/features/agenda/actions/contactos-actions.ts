@@ -37,27 +37,105 @@ export async function listContactos(): Promise<Contacto[]> {
 }
 
 /**
- * Cuenta los contactos añadidos a la agenda en los últimos `dias` días.
- * Cada contacto cuenta para el badge durante su ventana de anuncio: a los
- * `dias` días deja de contar, pero otros más recientes siguen anunciándose.
+ * Cuenta los contactos NUEVOS que el usuario todavía no ha visto: los creados
+ * después de la última vez que abrió la agenda (marca `agenda_contactos_vistos`).
+ * El parámetro `dias` acota la ventana máxima hacia atrás para un usuario que
+ * nunca ha abierto la agenda (no anunciar contactos muy antiguos). En cuanto el
+ * usuario abre la agenda, su marca se actualiza a "ahora" y el badge se pone a 0
+ * SOLO para él, sin afectar a los demás.
  */
 export async function contarContactosNuevos(dias = 7): Promise<number> {
   try {
     const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
     const empresaId = await getEmpresaId();
-    if (!empresaId) return 0;
+    if (!user || !empresaId) return 0;
+
     const ventana = Math.max(1, Math.min(365, Math.floor(dias)));
-    const cutoff = new Date(Date.now() - ventana * 24 * 60 * 60 * 1000).toISOString();
+    const ventanaCutoff = new Date(
+      Date.now() - ventana * 24 * 60 * 60 * 1000,
+    ).toISOString();
+
+    // Marca "visto hasta" del usuario para esta empresa.
+    const { data: vista } = await supabase
+      .from("agenda_contactos_vistos")
+      .select("visto_at")
+      .eq("user_id", user.id)
+      .eq("empresa_id", empresaId)
+      .maybeSingle();
+
+    // El corte es el más reciente entre "lo que ya vio" y la ventana máxima:
+    // así nunca contamos contactos anteriores a la última visita ni contactos
+    // muy antiguos para un usuario que nunca ha entrado.
+    const cutoff =
+      vista?.visto_at && vista.visto_at > ventanaCutoff
+        ? vista.visto_at
+        : ventanaCutoff;
+
     const { count, error } = await supabase
       .from("contactos_agenda")
       .select("id", { count: "exact", head: true })
       .eq("empresa_id", empresaId)
-      .gte("created_at", cutoff);
+      .gt("created_at", cutoff);
     if (error) throw error;
     return count ?? 0;
   } catch (err) {
     console.error("[contactos] contarContactosNuevos:", err);
     return 0;
+  }
+}
+
+/**
+ * Devuelve la marca "visto hasta" del usuario para la empresa activa, o el
+ * inicio de la ventana de anuncio si nunca ha abierto la agenda. La lista de
+ * contactos usa este valor para resaltar los creados después (contactos nuevos).
+ */
+export async function getContactosVistosAt(dias = 7): Promise<string> {
+  const ventana = Math.max(1, Math.min(365, Math.floor(dias)));
+  const ventanaCutoff = new Date(
+    Date.now() - ventana * 24 * 60 * 60 * 1000,
+  ).toISOString();
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    const empresaId = await getEmpresaId();
+    if (!user || !empresaId) return ventanaCutoff;
+    const { data } = await supabase
+      .from("agenda_contactos_vistos")
+      .select("visto_at")
+      .eq("user_id", user.id)
+      .eq("empresa_id", empresaId)
+      .maybeSingle();
+    if (data?.visto_at && data.visto_at > ventanaCutoff) return data.visto_at;
+    return ventanaCutoff;
+  } catch (err) {
+    console.error("[contactos] getContactosVistosAt:", err);
+    return ventanaCutoff;
+  }
+}
+
+/**
+ * Marca los contactos de la agenda como vistos para el usuario actual en la
+ * empresa activa (upsert de `visto_at = ahora`). Al llamarse desde la agenda,
+ * el badge de "contactos nuevos" se pone a 0 para este usuario. Idempotente.
+ */
+export async function marcarContactosVistos(): Promise<{ ok: boolean }> {
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    const empresaId = await getEmpresaId();
+    if (!user || !empresaId) return { ok: false };
+    const { error } = await supabase
+      .from("agenda_contactos_vistos")
+      .upsert(
+        { user_id: user.id, empresa_id: empresaId, visto_at: new Date().toISOString() },
+        { onConflict: "user_id,empresa_id" },
+      );
+    if (error) throw error;
+    return { ok: true };
+  } catch (err) {
+    console.error("[contactos] marcarContactosVistos:", err);
+    return { ok: false };
   }
 }
 

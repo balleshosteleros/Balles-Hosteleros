@@ -36,7 +36,11 @@ import {
   createContacto,
   deleteContacto,
   listEtiquetas,
+  getContactosVistosAt,
+  marcarContactosVistos,
 } from "@/features/agenda/actions/contactos-actions";
+import { refreshDailyCounts } from "@/features/google-workspace/components/useDailyCounts";
+import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 
 const CATEGORIA_ICON: Record<ContactoCategoria, React.ElementType> = {
@@ -74,12 +78,16 @@ const EMPTY_FORM: ContactoInput = {
 };
 
 export function AgendaMobile() {
+  const { ajustes } = useEmpresa();
+  const diasAnuncio = ajustes.notificaciones.agenda.diasAnuncio;
   const [contactos, setContactos] = useState<Contacto[]>([]);
   const [etiquetas, setEtiquetas] = useState<Etiqueta[]>([]);
   const [cargando, setCargando] = useState(true);
   const [busqueda, setBusqueda] = useState("");
   const [grupo, setGrupo] = useState<ContactoCategoria | "todos">("todos");
   const [etiquetaFiltro, setEtiquetaFiltro] = useState<string | null>(null);
+  // Corte "visto hasta": los contactos creados después se resaltan como nuevos.
+  const [vistosAt, setVistosAt] = useState<string | null>(null);
 
   const [nuevoOpen, setNuevoOpen] = useState(false);
   const [form, setForm] = useState<ContactoInput>(EMPTY_FORM);
@@ -93,8 +101,12 @@ export function AgendaMobile() {
     try {
       setCargando(true);
       // Independientes: si fallan las etiquetas, los contactos igualmente se ven.
-      const c = await listContactos();
+      const [c, corte] = await Promise.all([
+        listContactos(),
+        getContactosVistosAt(diasAnuncio),
+      ]);
       setContactos(c);
+      setVistosAt(corte);
       try {
         setEtiquetas(await listEtiquetas());
       } catch {
@@ -105,11 +117,30 @@ export function AgendaMobile() {
     } finally {
       setCargando(false);
     }
-  }, []);
+  }, [diasAnuncio]);
 
   useEffect(() => {
     cargar();
   }, [cargar]);
+
+  // Al ver la agenda marcamos como vistos para ESTE usuario: el badge se pone a
+  // 0 solo para él. El resaltado se mantiene porque `vistosAt` quedó congelado.
+  useEffect(() => {
+    if (cargando || vistosAt === null) return;
+    let cancelado = false;
+    (async () => {
+      const res = await marcarContactosVistos();
+      if (!cancelado && res.ok) refreshDailyCounts();
+    })();
+    return () => {
+      cancelado = true;
+    };
+  }, [cargando, vistosAt]);
+
+  const esNuevo = useCallback(
+    (c: Contacto) => !!vistosAt && !!c.created_at && c.created_at > vistosAt,
+    [vistosAt],
+  );
 
   useEffect(() => {
     setEtiquetaFiltro(null);
@@ -312,6 +343,7 @@ export function AgendaMobile() {
                     key={c.id}
                     c={c}
                     etiqueta={c.etiqueta_id ? etiquetaById.get(c.etiqueta_id) : null}
+                    nuevo={esNuevo(c)}
                     onAbrir={() => setDetalle(c)}
                   />
                 ))}
@@ -326,6 +358,7 @@ export function AgendaMobile() {
               key={c.id}
               c={c}
               etiqueta={c.etiqueta_id ? etiquetaById.get(c.etiqueta_id) : null}
+              nuevo={esNuevo(c)}
               onAbrir={() => setDetalle(c)}
             />
           ))}
@@ -592,10 +625,12 @@ function Campo({ label, children }: { label: string; children: React.ReactNode }
 function FilaContacto({
   c,
   etiqueta,
+  nuevo,
   onAbrir,
 }: {
   c: Contacto;
   etiqueta?: Etiqueta | null;
+  nuevo?: boolean;
   onAbrir: () => void;
 }) {
   const Icon = CATEGORIA_ICON[c.categoria];
@@ -604,7 +639,13 @@ function FilaContacto({
       ? c.empresa_contacto
       : c.telefono ?? null;
   return (
-    <li className="flex items-center gap-3 rounded-2xl border border-border/50 bg-card px-3 py-2.5">
+    <li
+      className={`flex items-center gap-3 rounded-2xl border px-3 py-2.5 ${
+        nuevo
+          ? "border-emerald-400 bg-emerald-50/70 ring-1 ring-emerald-400/40"
+          : "border-border/50 bg-card"
+      }`}
+    >
       <button
         type="button"
         onClick={onAbrir}
@@ -617,6 +658,11 @@ function FilaContacto({
         <div className="min-w-0 flex-1">
           <p className="flex items-center gap-1.5 truncate text-sm font-medium text-foreground">
             {c.nombre}
+            {nuevo && (
+              <span className="shrink-0 rounded-full bg-emerald-500 px-1.5 py-0.5 text-[9px] font-semibold uppercase leading-none text-white">
+                Nuevo
+              </span>
+            )}
           </p>
           {(sub || etiqueta) && (
             <p className="truncate text-[11px] text-muted-foreground">
