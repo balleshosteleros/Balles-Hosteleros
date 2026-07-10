@@ -14,7 +14,7 @@
 
 import { revalidatePath } from "next/cache";
 import { getAppContext } from "@/lib/supabase/get-context";
-import type { ModeloTipo, ModeloPeriodo } from "../types/modelos";
+import type { ModeloTipo, ModeloPeriodo, ModeloEstado } from "../types/modelos";
 
 const BUCKET_MODELOS = "modelos-aeat-pdf";
 
@@ -75,9 +75,15 @@ export async function subirModeloPdf(modeloId: string, file: File) {
       return { ok: false as const, error: `No se pudo subir el archivo: ${upErr.message}` };
     }
 
+    // Subir el documento = el modelo queda PRESENTADO (mismo efecto que cuando
+    // la gestoría lo sube por el enlace del correo). Se registra la fecha.
     const { error: updErr } = await supabase
       .from("modelos_aeat")
-      .update({ pdf_url: path })
+      .update({
+        pdf_url: path,
+        estado: "PRESENTADO" as ModeloEstado,
+        fecha_presentacion: new Date().toISOString(),
+      })
       .eq("id", modeloId)
       .eq("empresa_id", empresaId);
     if (updErr) {

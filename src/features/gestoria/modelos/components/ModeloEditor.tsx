@@ -1,12 +1,11 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
   ArrowLeft,
   Sparkles,
-  CheckCircle2,
   FileDown,
   FileText,
   Loader2,
@@ -19,7 +18,12 @@ import type {
   FacturaParaModelo,
   ModeloAeat,
 } from "../types/modelos";
-import { periodoALabel, estadoVisualModelo, ESTADO_VISUAL_LABEL } from "../types/modelos";
+import {
+  periodoALabel,
+  estadoVisualModelo,
+  ESTADO_VISUAL_LABEL,
+  diasHastaFinPlazo,
+} from "../types/modelos";
 import { Modelo303Editor } from "./editors/Modelo303Editor";
 import { Modelo130Editor } from "./editors/Modelo130Editor";
 import { Modelo111Editor } from "./editors/Modelo111Editor";
@@ -29,11 +33,9 @@ import { Modelo347Editor } from "./editors/Modelo347Editor";
 import { FacturasSinClasificar } from "./FacturasSinClasificar";
 import { CuadreBadge } from "./CuadreBadge";
 import { SolicitarGestoriaButton } from "./SolicitarGestoriaButton";
+import { SubirDocumentoModeloButton } from "./SubirDocumentoModeloButton";
 import { correrIA } from "../actions/categorizacion-actions";
-import { marcarRevisado } from "../actions/modelos-actions";
-import { presentarModelo } from "../actions/export-actions";
 import { validarCuadre } from "../services/validar-cuadre";
-import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 
 interface Props {
   modelo: ModeloAeat;
@@ -55,13 +57,21 @@ interface Props {
 
 export function ModeloEditor({ modelo, facturas, asignaciones, registros347 }: Props) {
   const router = useRouter();
-  const [isPending, startTransition] = useTransition();
   const [iaEjecutando, setIaEjecutando] = useState(false);
-  const { confirm: confirmPresentar, dialog: confirmPresentarDialog } = useConfirmDelete();
 
   const presentado = modelo.estado === "PRESENTADO";
   const editable = !presentado;
   const esAnual = modelo.tipo === "347" || modelo.tipo === "390";
+
+  // Estado visual (plazo/solicitud/presentado), con cuenta atrás en "En plazo".
+  const estadoVisual = estadoVisualModelo(modelo);
+  const diasPlazo = estadoVisual === "EN_PLAZO" ? diasHastaFinPlazo(modelo) : null;
+  const etiquetaEstadoVisual =
+    estadoVisual === "EN_PLAZO" && diasPlazo !== null
+      ? diasPlazo <= 0
+        ? "En plazo · último día"
+        : `En plazo · ${diasPlazo} ${diasPlazo === 1 ? "día" : "días"}`
+      : ESTADO_VISUAL_LABEL[estadoVisual];
 
   async function handleCorrerIA() {
     if (!editable) return;
@@ -78,29 +88,6 @@ export function ModeloEditor({ modelo, facturas, asignaciones, registros347 }: P
     } finally {
       setIaEjecutando(false);
     }
-  }
-
-  async function handleMarcarRevisado() {
-    startTransition(async () => {
-      const res = await marcarRevisado(modelo.id);
-      if (!res.ok) alert(`Error: ${res.error}`);
-      else router.refresh();
-    });
-  }
-
-  async function handlePresentar() {
-    const ok = await confirmPresentar({
-      title: "Presentar el modelo",
-      description:
-        "Presentar el modelo congela los datos de forma inmutable y no podrá editarse después. ¿Seguro?",
-      confirmLabel: "Presentar",
-    });
-    if (!ok) return;
-    startTransition(async () => {
-      const res = await presentarModelo(modelo.id);
-      if (!res.ok) alert(`Error: ${res.error}`);
-      else router.refresh();
-    });
   }
 
   return (
@@ -124,19 +111,12 @@ export function ModeloEditor({ modelo, facturas, asignaciones, registros347 }: P
                 className={
                   presentado
                     ? "bg-green-100 text-green-800 border-green-200"
-                    : modelo.estado === "REVISADO"
-                      ? "bg-blue-100 text-blue-800 border-blue-200"
-                      : "bg-amber-100 text-amber-800 border-amber-200"
+                    : "bg-slate-100 text-slate-700 border-slate-200"
                 }
               >
                 {presentado ? <Lock className="h-3 w-3 mr-1" /> : null}
-                {modelo.estado}
+                {etiquetaEstadoVisual}
               </Badge>
-              {!presentado ? (
-                <Badge variant="outline" className="bg-slate-50 text-slate-700 border-slate-200">
-                  {ESTADO_VISUAL_LABEL[estadoVisualModelo(modelo)]}
-                </Badge>
-              ) : null}
               {modelo.hash_snapshot ? (
                 <span className="text-[10px] font-mono text-muted-foreground truncate max-w-[200px]">
                   hash:{modelo.hash_snapshot.slice(0, 16)}...
@@ -162,30 +142,15 @@ export function ModeloEditor({ modelo, facturas, asignaciones, registros347 }: P
               Correr IA · clasificar {facturas.length} facturas
             </Button>
           ) : null}
-          {editable && modelo.estado === "BORRADOR" ? (
-            <Button variant="outline" size="sm" onClick={handleMarcarRevisado} disabled={isPending}>
-              <CheckCircle2 className="h-4 w-4 mr-1" />
-              Marcar revisado
-            </Button>
-          ) : null}
-          {editable && modelo.estado === "REVISADO" ? (
-            <Button
-              variant="default"
-              size="sm"
-              onClick={handlePresentar}
-              disabled={isPending}
-              className="bg-green-600 hover:bg-green-700"
-            >
-              <Lock className="h-4 w-4 mr-1" />
-              Marcar presentado
-            </Button>
-          ) : null}
           {!presentado ? (
-            <SolicitarGestoriaButton
-              modeloId={modelo.id}
-              solicitado={Boolean(modelo.solicitud_gestoria_en)}
-              className="inline-flex items-center gap-1 h-9 px-3 rounded-md border border-input bg-background text-sm font-medium hover:bg-accent disabled:opacity-50"
-            />
+            <>
+              <SolicitarGestoriaButton
+                modeloId={modelo.id}
+                solicitado={Boolean(modelo.solicitud_gestoria_en)}
+                className="inline-flex items-center gap-1 h-9 px-3 rounded-md border border-input bg-background text-sm font-medium hover:bg-accent disabled:opacity-50"
+              />
+              <SubirDocumentoModeloButton modeloId={modelo.id} />
+            </>
           ) : null}
           <Link href={`/api/modelos-aeat/${modelo.id}/pdf`} target="_blank">
             <Button variant="outline" size="sm">
@@ -231,8 +196,6 @@ export function ModeloEditor({ modelo, facturas, asignaciones, registros347 }: P
           </aside>
         ) : null}
       </div>
-
-      {confirmPresentarDialog}
     </div>
   );
 }

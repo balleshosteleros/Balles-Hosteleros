@@ -27,6 +27,8 @@ export function bajaMedicaNotificacionEmail(opts: {
   fechaInicio: string; // dd/mm/yyyy — inicio de la baja
   fechaFin?: string | null; // dd/mm/yyyy — fin estimado (opcional)
   motivo?: string | null;
+  /** true = el parte de baja va ADJUNTO (PDF) a este correo. */
+  tieneParte?: boolean;
   productName?: string;
 }): { subject: string; html: string; text: string } {
   const product = opts.productName ?? "Balles Hosteleros";
@@ -75,6 +77,23 @@ export function bajaMedicaNotificacionEmail(opts: {
       </tr>`
     : "";
 
+  // Estado del parte de baja: adjunto (PDF) o pendiente de aportar.
+  const parteBloque = opts.tieneParte
+    ? `<tr>
+        <td style="padding:0 32px 16px 32px;">
+          <p style="margin:0;font-size:13px;line-height:1.6;color:#166534;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:12px 14px;">
+            📎 Se adjunta a este correo el <strong>parte de baja</strong> aportado por el trabajador (PDF).
+          </p>
+        </td>
+      </tr>`
+    : `<tr>
+        <td style="padding:0 32px 16px 32px;">
+          <p style="margin:0;font-size:13px;line-height:1.6;color:#92400e;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:12px 14px;">
+            ⚠️ El trabajador <strong>aún no ha aportado el parte de baja</strong>. Se enviará en cuanto lo adjunte.
+          </p>
+        </td>
+      </tr>`;
+
   const html = `<!doctype html>
 <html lang="es">
   <body style="margin:0;padding:0;background:#f4f5f7;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#1f2937;">
@@ -101,6 +120,7 @@ export function bajaMedicaNotificacionEmail(opts: {
               </td>
             </tr>
             ${motivoBloque}
+            ${parteBloque}
             <tr>
               <td style="padding:16px 32px 24px 32px;border-top:1px solid #e2e8f0;">
                 <p style="margin:0;font-size:11px;color:#94a3b8;line-height:1.5;">
@@ -122,6 +142,12 @@ ${introText}
 
 ${detalleTexto}
 ${opts.motivo ? `\nDetalles indicados por el trabajador:\n${opts.motivo}\n` : ""}
+${
+  opts.tieneParte
+    ? "Se adjunta a este correo el parte de baja aportado por el trabajador (PDF)."
+    : "El trabajador aún no ha aportado el parte de baja; se enviará en cuanto lo adjunte."
+}
+
 Correo automático. No es necesario responder.
 
 — ${product}`;

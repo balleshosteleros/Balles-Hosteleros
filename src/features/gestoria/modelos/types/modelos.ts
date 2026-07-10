@@ -388,6 +388,24 @@ export function estadoVisualModelo(
   return "SIN_ABRIR";
 }
 
+/**
+ * Días naturales que quedan hasta el ÚLTIMO día de presentación (fin de la
+ * ventana), contando el día de hoy. Devuelve null si el modelo no tiene ventana
+ * oficial. Sirve para la cuenta atrás del estado "En plazo":
+ *   0 = último día (hoy vence), 1 = queda 1 día, etc.
+ */
+export function diasHastaFinPlazo(
+  modelo: Pick<ModeloAeat, "tipo" | "periodo" | "ejercicio">,
+  hoy: Date = new Date(),
+): number | null {
+  const ventana = ventanaPresentacion(modelo.tipo, modelo.periodo, modelo.ejercicio);
+  if (!ventana) return null;
+  const MS_DIA = 86_400_000;
+  const finDia = new Date(ventana.fin.getFullYear(), ventana.fin.getMonth(), ventana.fin.getDate());
+  const hoyDia = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
+  return Math.round((finDia.getTime() - hoyDia.getTime()) / MS_DIA);
+}
+
 export function periodoALabel(periodo: ModeloPeriodo, ejercicio: number): string {
   if (periodo === "ANUAL") return `${ejercicio}`;
   return `${ejercicio}-${periodo}`;

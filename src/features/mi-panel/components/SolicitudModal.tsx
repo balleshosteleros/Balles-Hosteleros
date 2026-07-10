@@ -24,10 +24,19 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
-import { Loader2, ChevronLeft, AlertTriangle, Palmtree, CalendarOff } from "lucide-react";
+import {
+  Loader2,
+  ChevronLeft,
+  AlertTriangle,
+  Palmtree,
+  CalendarOff,
+  Paperclip,
+  X,
+} from "lucide-react";
 import { toast } from "sonner";
 import {
   crearSolicitudPersonal,
+  crearBajaMedicaConParte,
   getMiVacacionesInfo,
   getMiBajaContratoEnCurso,
   type MiVacacionesInfo,
@@ -51,6 +60,11 @@ type Paso = "tipo" | "subtipo" | "detalle";
 
 const BAJA_CONTRATO_PREAVISO_MIN = 15;
 const BAJA_CONTRATO_PREAVISO_MAX = 45;
+
+// Parte de baja médica: hasta 3 fotos o PDFs, 10 MB cada uno.
+const PARTE_BAJA_MAX = 3;
+const PARTE_BAJA_MAX_BYTES = 10 * 1024 * 1024;
+const PARTE_BAJA_ACCEPT = "image/*,application/pdf";
 
 function todayISO(): string {
   return new Date().toISOString().split("T")[0];
@@ -93,6 +107,9 @@ export function SolicitudModal({ open, onOpenChange, onCreated }: SolicitudModal
   const [horaInicio, setHoraInicio] = useState<string>("");
   const [horaFin, setHoraFin] = useState<string>("");
   const [motivo, setMotivo] = useState<string>("");
+
+  // Parte de baja médica (fotos/PDF). Solo se usa cuando subtipo === baja_medica.
+  const [partes, setPartes] = useState<File[]>([]);
 
   const [avisoOpen, setAvisoOpen] = useState(false);
   const [enviando, setEnviando] = useState(false);
@@ -150,6 +167,7 @@ export function SolicitudModal({ open, onOpenChange, onCreated }: SolicitudModal
     setHoraInicio("");
     setHoraFin("");
     setMotivo("");
+    setPartes([]);
     setAvisoOpen(false);
     setEnviando(false);
     setNavLock(false);
@@ -212,6 +230,30 @@ export function SolicitudModal({ open, onOpenChange, onCreated }: SolicitudModal
     setSubtipo(null);
   }
 
+  function anadirPartes(files: FileList | null) {
+    if (!files || files.length === 0) return;
+    const nuevos: File[] = [];
+    for (const f of Array.from(files)) {
+      if (f.size > PARTE_BAJA_MAX_BYTES) {
+        toast.error(`"${f.name}" supera los 10 MB.`);
+        continue;
+      }
+      nuevos.push(f);
+    }
+    setPartes((prev) => {
+      const total = [...prev, ...nuevos];
+      if (total.length > PARTE_BAJA_MAX) {
+        toast.error(`Máximo ${PARTE_BAJA_MAX} ficheros.`);
+        return total.slice(0, PARTE_BAJA_MAX);
+      }
+      return total;
+    });
+  }
+
+  function quitarParte(idx: number) {
+    setPartes((prev) => prev.filter((_, i) => i !== idx));
+  }
+
   async function enviar() {
     if (!tipo || !subtipo) return;
     if (subtipo === "baja_contrato") {
@@ -221,6 +263,31 @@ export function SolicitudModal({ open, onOpenChange, onCreated }: SolicitudModal
       }
     } else if (!fechaInicio) {
       toast.error("Indica una fecha de inicio");
+      return;
+    }
+
+    // Baja médica: ruta propia con FormData (permite adjuntar hasta 3 partes).
+    if (subtipo === "baja_medica") {
+      setEnviando(true);
+      const fd = new FormData();
+      fd.set("fechaInicio", fechaInicio);
+      if (fechaFin) fd.set("fechaFin", fechaFin);
+      fd.set("motivo", motivo.trim());
+      for (const f of partes) fd.append("partes", f);
+      const res = await crearBajaMedicaConParte(fd);
+      setEnviando(false);
+      if (!res.ok) {
+        toast.error(res.error || "No se pudo enviar la solicitud");
+        return;
+      }
+      if (res.avisoParte) toast.warning(res.avisoParte, { duration: 7000 });
+      toast.success(
+        partes.length > 0
+          ? "Baja médica enviada con el parte. Avisamos a la gestoría."
+          : "Baja médica enviada. Avisamos a la gestoría.",
+      );
+      onCreated?.();
+      handleClose(false);
       return;
     }
     // Trabajo (día trabajado / horas extras): exige el tramo entrada–salida.
@@ -713,13 +780,67 @@ export function SolicitudModal({ open, onOpenChange, onCreated }: SolicitudModal
                   rows={3}
                   placeholder={
                     subtipo === "baja_medica"
-                      ? "Adjunta el parte si lo tienes…"
+                      ? "Cuéntanos brevemente qué te pasa (opcional)…"
                       : subtipo === "horas_extras"
                         ? "¿Por qué? ¿En qué tarea?"
                         : "Detalles para tu responsable"
                   }
                 />
               </div>
+
+              {/* Parte de baja médica: hasta 3 fotos o PDFs, se envían a gestoría. */}
+              {subtipo === "baja_medica" && (
+                <div className="space-y-2">
+                  <Label>Parte de baja (opcional)</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Adjunta una foto o PDF del parte médico. Puedes subir hasta{" "}
+                    {PARTE_BAJA_MAX} y se enviarán juntos a la gestoría. Si aún no
+                    lo tienes, envía la baja igualmente.
+                  </p>
+
+                  {partes.length > 0 && (
+                    <ul className="space-y-1.5">
+                      {partes.map((f, i) => (
+                        <li
+                          key={`${f.name}-${i}`}
+                          className="flex items-center gap-2 rounded-md border bg-muted/30 px-3 py-2 text-sm"
+                        >
+                          <Paperclip className="h-4 w-4 shrink-0 text-muted-foreground" />
+                          <span className="truncate flex-1">{f.name}</span>
+                          <span className="text-xs text-muted-foreground shrink-0">
+                            {(f.size / 1024 / 1024).toFixed(1)} MB
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => quitarParte(i)}
+                            className="rounded p-0.5 text-muted-foreground hover:text-rose-600"
+                            aria-label={`Quitar ${f.name}`}
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+
+                  {partes.length < PARTE_BAJA_MAX && (
+                    <label className="flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed py-3 text-sm text-muted-foreground transition-colors hover:border-primary hover:text-foreground">
+                      <Paperclip className="h-4 w-4" />
+                      {partes.length === 0 ? "Adjuntar parte (foto o PDF)" : "Añadir otro"}
+                      <input
+                        type="file"
+                        accept={PARTE_BAJA_ACCEPT}
+                        multiple
+                        className="hidden"
+                        onChange={(e) => {
+                          anadirPartes(e.target.files);
+                          e.target.value = "";
+                        }}
+                      />
+                    </label>
+                  )}
+                </div>
+              )}
             </div>
           )}
 

@@ -10,6 +10,7 @@ import {
   TIPOS_SOLO_DOCUMENTO,
   estadoVisualModelo,
   ESTADO_VISUAL_LABEL,
+  diasHastaFinPlazo,
 } from "../types/modelos";
 import type { EstadoVisualModelo, ModeloAeat } from "../types/modelos";
 import { ModeloPdfButton } from "./ModeloPdfButton";
@@ -35,6 +36,15 @@ export function ModeloCard({ modelo }: { modelo: ModeloAeat }) {
   const estadoVisual = estadoVisualModelo(modelo);
   const { clase, Icono } = ESTADO_VISUAL_STYLE[estadoVisual];
   const presentado = estadoVisual === "PRESENTADO";
+
+  // Cuenta atrás hasta el último día de presentación (solo en "En plazo").
+  const dias = estadoVisual === "EN_PLAZO" ? diasHastaFinPlazo(modelo) : null;
+  const etiquetaEstado =
+    estadoVisual === "EN_PLAZO" && dias !== null
+      ? dias <= 0
+        ? "En plazo · último día"
+        : `En plazo · ${dias} ${dias === 1 ? "día" : "días"}`
+      : ESTADO_VISUAL_LABEL[estadoVisual];
   // El botón de solicitar a gestoría tiene sentido cuando el modelo aún no está
   // presentado: en plazo, fuera de plazo o ya solicitado (para ver el estado).
   const puedeSolicitar = !presentado;
@@ -67,7 +77,7 @@ export function ModeloCard({ modelo }: { modelo: ModeloAeat }) {
           <div className="flex items-center gap-2 flex-wrap">
             <Badge variant="outline" className={`gap-1 ${clase}`}>
               <Icono className="h-3 w-3" />
-              {ESTADO_VISUAL_LABEL[estadoVisual]}
+              {etiquetaEstado}
             </Badge>
           </div>
 

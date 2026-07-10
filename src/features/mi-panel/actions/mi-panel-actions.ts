@@ -1510,6 +1510,12 @@ export interface NuevaSolicitudInput {
   horaInicio?: string | null;
   horaFin?: string | null;
   motivo?: string;
+  /**
+   * Path (bucket `bajas-medicas`) del PDF del parte de baja médica ya subido.
+   * Solo aplica a `baja_medica`; lo rellena `crearBajaMedicaConParte` tras
+   * fusionar y subir los ficheros. Se persiste en `justificante_path`.
+   */
+  justificantePath?: string | null;
 }
 
 export interface MiVacacionesInfo {
@@ -1667,6 +1673,135 @@ function diasSolicitudEnAnio(inicio: string, fin: string | null, anio: number): 
 async function userTieneRolDirector(userId: string): Promise<boolean> {
   const { esDirector } = await getRolContext(userId);
   return esDirector;
+}
+
+// Formatos de imagen/PDF que aceptamos como parte de baja (los que el móvil
+// suele producir). pdf-lib no incrusta WebP/HEIC en el PDF fusionado, pero los
+// admitimos igualmente: quedan guardados y el email avisa de los que no entraron.
+const PARTE_BAJA_MIME_OK = new Set([
+  "application/pdf",
+  "image/png",
+  "image/jpeg",
+  "image/jpg",
+  "image/webp",
+  "image/heic",
+  "image/heif",
+]);
+const PARTE_BAJA_MAX_FICHEROS = 3;
+const PARTE_BAJA_MAX_BYTES = 10 * 1024 * 1024; // 10 MB por fichero
+
+/**
+ * Baja médica CON parte adjunto (hasta 3 fotos/PDF). Recibe un `FormData`
+ * porque las server actions no transportan `File` en objetos planos.
+ *
+ * Flujo: valida los ficheros → los FUSIONA en un único PDF → lo sube al bucket
+ * `bajas-medicas` (path <empresaId>/<solicitudId>.pdf) → delega en
+ * `crearSolicitudPersonal`, que registra la solicitud y dispara el aviso a
+ * gestoría/gerencia (con el PDF adjunto). El parte es OPCIONAL: si no se adjunta
+ * ningún fichero, se comporta igual que una baja médica sin parte.
+ *
+ * Se usa un `solicitud_id` pre-generado para nombrar el fichero antes de crear
+ * la fila, de modo que el path del parte es estable y 1:1 con la solicitud.
+ */
+export async function crearBajaMedicaConParte(
+  formData: FormData,
+): Promise<{ ok: boolean; error?: string; data?: SolicitudPersonal; avisoParte?: string }> {
+  try {
+    const { user, empresaId } = await getContext();
+    if (!user || !empresaId) return { ok: false, error: "No autenticado" };
+
+    const fechaInicio = String(formData.get("fechaInicio") ?? "").trim();
+    const fechaFinRaw = String(formData.get("fechaFin") ?? "").trim();
+    const motivo = String(formData.get("motivo") ?? "").trim();
+    if (!fechaInicio) return { ok: false, error: "Indica la fecha de inicio de la baja" };
+    const fechaFin = fechaFinRaw || null;
+
+    // Ficheros del parte (0–3). El input se llama "partes".
+    const ficheros = formData
+      .getAll("partes")
+      .filter((f): f is File => f instanceof File && f.size > 0);
+
+    if (ficheros.length > PARTE_BAJA_MAX_FICHEROS) {
+      return {
+        ok: false,
+        error: `Puedes adjuntar como máximo ${PARTE_BAJA_MAX_FICHEROS} ficheros del parte de baja.`,
+      };
+    }
+    for (const f of ficheros) {
+      if (f.size > PARTE_BAJA_MAX_BYTES) {
+        return { ok: false, error: `"${f.name}" supera los 10 MB.` };
+      }
+      if (!PARTE_BAJA_MIME_OK.has((f.type || "").toLowerCase())) {
+        return {
+          ok: false,
+          error: `"${f.name}" no es un formato admitido. Sube una foto (JPG/PNG) o un PDF.`,
+        };
+      }
+    }
+
+    // ID de la solicitud pre-generado → nombra el PDF del parte de forma estable.
+    const solicitudId = crypto.randomUUID();
+    let justificantePath: string | null = null;
+    let avisoParte: string | undefined;
+
+    if (ficheros.length > 0) {
+      const { combinarFicherosEnPdf } = await import("@/lib/pdf/combinar-a-pdf");
+      const entradas = await Promise.all(
+        ficheros.map(async (f) => ({
+          nombre: f.name,
+          contentType: f.type,
+          bytes: new Uint8Array(await f.arrayBuffer()),
+        })),
+      );
+      const { pdf, incluidos, omitidos } = await combinarFicherosEnPdf(entradas);
+
+      if (incluidos === 0) {
+        return {
+          ok: false,
+          error:
+            "No se pudo leer ninguno de los ficheros del parte. Prueba con una foto JPG/PNG o un PDF.",
+        };
+      }
+      if (omitidos.length > 0) {
+        avisoParte = `Algunos ficheros no se pudieron incluir en el parte (${omitidos.join(", ")}). Súbelos como JPG, PNG o PDF.`;
+      }
+
+      const admin = createAdminClient();
+      const path = `${empresaId}/${solicitudId}.pdf`;
+      const up = await admin.storage
+        .from("bajas-medicas")
+        .upload(path, Buffer.from(pdf), { contentType: "application/pdf", upsert: true });
+      if (up.error) {
+        return { ok: false, error: `No se pudo guardar el parte de baja: ${up.error.message}` };
+      }
+      justificantePath = path;
+    }
+
+    // Delega en el flujo único de creación (validaciones + aviso a gestoría/gerencia).
+    const res = await crearSolicitudPersonal({
+      tipo: "ausencia",
+      subtipo: "baja_medica",
+      fechaInicio,
+      fechaFin,
+      motivo,
+      justificantePath,
+    });
+
+    // Si la creación falló pero el parte ya se subió, lo limpiamos (huérfano).
+    if (!res.ok && justificantePath) {
+      try {
+        await createAdminClient().storage.from("bajas-medicas").remove([justificantePath]);
+      } catch {
+        /* best-effort */
+      }
+      return res;
+    }
+    return { ...res, avisoParte };
+  } catch (err: unknown) {
+    const msg = extractErrorMessage(err);
+    console.error("[mi-panel] crearBajaMedicaConParte:", msg);
+    return { ok: false, error: msg };
+  }
 }
 
 export async function crearSolicitudPersonal(input: NuevaSolicitudInput) {
@@ -1955,6 +2090,7 @@ export async function crearSolicitudPersonal(input: NuevaSolicitudInput) {
         hora_inicio: input.horaInicio ?? null,
         hora_fin: input.horaFin ?? null,
         motivo: input.motivo ?? "",
+        justificante_path: input.justificantePath ?? null,
         estado: "pendiente",
       })
       .select()
@@ -1967,6 +2103,7 @@ export async function crearSolicitudPersonal(input: NuevaSolicitudInput) {
     if (input.tipo === "ausencia" && input.subtipo === "baja_medica") {
       try {
         await onBajaMedicaCreada({
+          solicitudId: (data as { id: string }).id,
           empresaId,
           userId: user.id,
           fechaSolicitud: todayISO(),
@@ -1974,6 +2111,7 @@ export async function crearSolicitudPersonal(input: NuevaSolicitudInput) {
           fechaFin: input.fechaFin ?? null,
           motivo: input.motivo?.trim() ? input.motivo.trim() : null,
           nombreFallback: nombre || "",
+          justificantePath: input.justificantePath ?? null,
         });
       } catch (e) {
         console.error(
@@ -2554,14 +2692,19 @@ async function onBajaContratoCreada(args: {
 
 // ─── Baja médica: side-effects al crear la solicitud ─────────
 //
-// Cuando un trabajador solicita una BAJA MÉDICA desde Mi Panel se avisa
-// automáticamente por email a DOS destinos:
-//   1) GESTORÍA (correoGestoria) — para que la tramite.
-//   2) GERENCIA (correoGerencia) — aviso informativo de que ha ocurrido.
-// Ambos correos de departamento son fuente única de Ajustes → Empresa →
-// «Correos electrónicos» (datos_generales). Si un destino no está configurado
-// se omite y se registra un warning; la solicitud queda creada igual.
+// Una baja médica es CRÍTICA: tiene que llegar a la gestoría sí o sí. El
+// trabajador enfermo nunca se bloquea (la baja se registra siempre), pero
+// garantizamos que la comunicación NO se pierde en silencio:
+//   1) GESTORÍA (correoGestoria) — email para que la tramite.
+//   2) GERENCIA (correoGerencia) — email de aviso informativo.
+//   3) RED DE SEGURIDAD: si CUALQUIERA de esos dos emails no se pudo enviar
+//      (destino sin configurar en Ajustes o fallo de SMTP), se emite una
+//      ALERTA INTERNA al área administrativa (dirección/RRHH/gerencia) con el
+//      detalle de la baja y qué destino quedó sin avisar, para que la
+//      comuniquen a mano. Así nadie se entera tarde.
+// Los correos son fuente única de Ajustes → Empresa → «Correos electrónicos».
 async function onBajaMedicaCreada(args: {
+  solicitudId: string;
   empresaId: string;
   userId: string;
   fechaSolicitud: string; // ISO — cuándo se registró (hoy)
@@ -2569,6 +2712,7 @@ async function onBajaMedicaCreada(args: {
   fechaFin: string | null; // ISO — fin estimado (opcional)
   motivo: string | null;
   nombreFallback: string;
+  justificantePath: string | null; // PDF del parte en el bucket bajas-medicas
 }): Promise<void> {
   const admin = createAdminClient();
 
@@ -2618,6 +2762,26 @@ async function onBajaMedicaCreada(args: {
     "@/lib/email/templates/baja-medica-notificacion"
   );
 
+  // Descarga el PDF del parte (si el trabajador lo adjuntó) para adjuntarlo a
+  // los correos. Best-effort: si falla la descarga, el correo sale sin adjunto.
+  let adjuntoParte:
+    | { filename: string; content: Buffer; contentType: string }
+    | null = null;
+  if (args.justificantePath) {
+    try {
+      const dl = await admin.storage.from("bajas-medicas").download(args.justificantePath);
+      if (!dl.error && dl.data) {
+        adjuntoParte = {
+          filename: `Parte-baja-${empleadoNombre.replace(/\s+/g, "-")}.pdf`,
+          content: Buffer.from(await dl.data.arrayBuffer()),
+          contentType: "application/pdf",
+        };
+      }
+    } catch (e) {
+      console.error("[mi-panel] baja_medica: no se pudo descargar el parte:", extractErrorMessage(e));
+    }
+  }
+
   const datosComunes = {
     empleadoNombre,
     empresaNombre,
@@ -2628,6 +2792,7 @@ async function onBajaMedicaCreada(args: {
     fechaInicio: formatFechaEs(args.fechaInicio),
     fechaFin: args.fechaFin ? formatFechaEs(args.fechaFin) : null,
     motivo: args.motivo,
+    tieneParte: !!adjuntoParte,
   } as const;
 
   // Correos de gestoría y gerencia (fuente única: Ajustes → Empresa).
@@ -2636,33 +2801,85 @@ async function onBajaMedicaCreada(args: {
     resolverDestinatario(admin, args.empresaId, "departamento", "correoGerencia", null),
   ]);
 
-  // 1) Gestoría — para que tramite la baja.
-  if (gestoria.to) {
+  // Envía a un destino y devuelve si LLEGÓ de verdad (email enviado con éxito).
+  const avisar = async (
+    destinatario: "gestoria" | "gerencia",
+    to: string,
+  ): Promise<boolean> => {
+    if (!to) return false;
     const { subject, html, text } = bajaMedicaNotificacionEmail({
-      destinatario: "gestoria",
+      destinatario,
       ...datosComunes,
     });
-    await sendEmail({ to: gestoria.to, subject, html, text, empresaId: args.empresaId });
-  } else {
-    console.warn(
-      "[mi-panel] baja_medica: sin correo de gestoría configurado para empresa",
-      args.empresaId,
-    );
-  }
+    const res = await sendEmail({
+      to,
+      subject,
+      html,
+      text,
+      empresaId: args.empresaId,
+      attachments: adjuntoParte ? [adjuntoParte] : undefined,
+    });
+    if (!res.ok) {
+      console.error(
+        `[mi-panel] baja_medica: email a ${destinatario} NO enviado (empresa ${args.empresaId}):`,
+        res.configured === false ? "SMTP no configurado" : res.error,
+      );
+    }
+    return res.ok;
+  };
 
-  // 2) Gerencia — aviso informativo. Se omite si coincide con el de gestoría
-  //    para no enviar dos correos al mismo buzón.
-  if (gerencia.to && gerencia.to.toLowerCase() !== gestoria.to.toLowerCase()) {
-    const { subject, html, text } = bajaMedicaNotificacionEmail({
-      destinatario: "gerencia",
-      ...datosComunes,
-    });
-    await sendEmail({ to: gerencia.to, subject, html, text, empresaId: args.empresaId });
-  } else if (!gerencia.to) {
-    console.warn(
-      "[mi-panel] baja_medica: sin correo de gerencia configurado para empresa",
-      args.empresaId,
-    );
+  // 1) Gestoría — para que tramite la baja (crítico).
+  const gestoriaOk = await avisar("gestoria", gestoria.to);
+
+  // 2) Gerencia — aviso informativo. Se omite (contando como "ya avisado") si
+  //    comparte buzón con gestoría, para no duplicar el mismo correo.
+  const gerenciaMismoBuzon =
+    !!gerencia.to && gerencia.to.toLowerCase() === gestoria.to.toLowerCase();
+  const gerenciaOk = gerenciaMismoBuzon
+    ? gestoriaOk
+    : await avisar("gerencia", gerencia.to);
+
+  // 3) RED DE SEGURIDAD: si algún destino crítico no recibió el aviso por email,
+  //    lo escalamos por notificación interna (bandeja + push) al área
+  //    administrativa, para que lo comuniquen a la gestoría manualmente.
+  const fallidos: string[] = [];
+  if (!gestoriaOk) fallidos.push(gestoria.to ? "gestoría (fallo de envío)" : "gestoría (sin correo configurado)");
+  if (!gerenciaMismoBuzon && !gerenciaOk)
+    fallidos.push(gerencia.to ? "gerencia (fallo de envío)" : "gerencia (sin correo configurado)");
+
+  if (fallidos.length > 0) {
+    try {
+      const { emitirNotificacion } = await import(
+        "@/features/notificaciones/actions/notificaciones-actions"
+      );
+      const detalleFecha = args.fechaFin
+        ? `del ${formatFechaEs(args.fechaInicio)} al ${formatFechaEs(args.fechaFin)}`
+        : `desde el ${formatFechaEs(args.fechaInicio)}`;
+      await emitirNotificacion({
+        system: true,
+        empresaId: args.empresaId,
+        // Área administrativa = dirección / RRHH / gerencia (quien administra).
+        segmento: { tipo: "area", area: "ADMINISTRATIVA" },
+        tipo: "alerta",
+        titulo: "Baja médica SIN avisar a la gestoría",
+        mensaje:
+          `${empleadoNombre} ha comunicado una baja médica (${detalleFecha}), pero no se pudo ` +
+          `avisar por email a: ${fallidos.join(" y ")}. ` +
+          `Comunícalo a la gestoría a mano y revisa los correos en Ajustes → Empresa.`,
+        accionUrl: "/rrhh/solicitudes",
+        accionLabel: "Ver solicitud",
+        requiereAccion: true,
+        refTabla: "solicitudes_personal",
+        refId: args.solicitudId,
+        // Una sola alerta por solicitud aunque se reintente el side-effect.
+        dedupeKey: `baja_medica_email_fallido:${args.solicitudId}`,
+      });
+    } catch (e) {
+      console.error(
+        "[mi-panel] baja_medica: no se pudo emitir alerta interna de respaldo:",
+        extractErrorMessage(e),
+      );
+    }
   }
 }
 
