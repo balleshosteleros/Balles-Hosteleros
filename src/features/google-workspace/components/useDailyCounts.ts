@@ -28,6 +28,9 @@ export interface DailyCounts {
 }
 
 const REFRESH_MS = 60 * 1000; // 1 minuto
+// La 1ª carga se difiere ~2 s para no competir con el arranque crítico (permisos
+// del menú, contexto de empresa) — los badges de contadores no son urgentes.
+const INITIAL_DELAY_MS = 2000;
 
 // Evento global para forzar un refresco inmediato de los contadores (p. ej. al
 // leer un correo o archivarlo, sin esperar al siguiente tick de 1 minuto).
@@ -54,58 +57,54 @@ export function useDailyCounts(): DailyCounts {
   });
 
   const fetchCounts = useCallback(async () => {
-    // Tareas de BD (no localStorage) + tareas de validación (validador).
-    let tasks = 0;
+    // Las 5 consultas de BD son INDEPENDIENTES entre sí → en PARALELO.
+    // (Antes iban en serie con `await` encadenados = 5 idas de red secuenciales.)
+    let vistasAt: string | null = null;
     try {
-      const res = await contarPendientesHoy();
-      if (res.ok) tasks = res.data;
+      vistasAt = localStorage.getItem(LLAMADAS_VISTAS_KEY);
     } catch {
-      /* ignore */
-    }
-    try {
-      const val = await getTareasValidacionPendientes();
-      if (val.ok && val.data.activo) {
-        // Cuenta como 1 tarea por tipo con pendientes (igual que el drawer).
-        tasks += (val.data.ausencia > 0 ? 1 : 0) + (val.data.trabajo > 0 ? 1 : 0);
-      }
-    } catch {
-      /* ignore */
+      /* localStorage no disponible */
     }
 
-    // Chat: nº de canales con mensajes sin leer
+    const [pendRes, valRes, canalesRes, missedRes, contactsRes] =
+      await Promise.allSettled([
+        contarPendientesHoy(),
+        getTareasValidacionPendientes(),
+        listCanales(empresaSlug),
+        contarLlamadasPerdidasNoVistas(vistasAt),
+        contarContactosNuevos(diasAnuncio),
+      ]);
+
+    // Tareas de BD + tareas de validación (validador).
+    let tasks = 0;
+    if (pendRes.status === "fulfilled" && pendRes.value.ok) {
+      tasks = pendRes.value.data;
+    }
+    if (
+      valRes.status === "fulfilled" &&
+      valRes.value.ok &&
+      valRes.value.data.activo
+    ) {
+      // Cuenta como 1 tarea por tipo con pendientes (igual que el drawer).
+      tasks +=
+        (valRes.value.data.ausencia > 0 ? 1 : 0) +
+        (valRes.value.data.trabajo > 0 ? 1 : 0);
+    }
+
+    // Chat: nº de canales con mensajes sin leer.
     let chatGroups = 0;
-    try {
-      const res = await listCanales(empresaSlug);
-      if (res.ok) {
-        chatGroups = (res.data as Array<{ sin_leer?: number }>).filter(
-          (c) => (c.sin_leer ?? 0) > 0,
-        ).length;
-      }
-    } catch {
-      /* ignore */
+    if (canalesRes.status === "fulfilled" && canalesRes.value.ok) {
+      chatGroups = (
+        canalesRes.value.data as Array<{ sin_leer?: number }>
+      ).filter((c) => (c.sin_leer ?? 0) > 0).length;
     }
 
     // Llamadas: perdidas internas posteriores a la última vez que se vio Recientes.
-    let missedCalls = 0;
-    try {
-      let vistasAt: string | null = null;
-      try {
-        vistasAt = localStorage.getItem(LLAMADAS_VISTAS_KEY);
-      } catch {
-        /* localStorage no disponible */
-      }
-      missedCalls = await contarLlamadasPerdidasNoVistas(vistasAt);
-    } catch {
-      /* ignore */
-    }
+    const missedCalls = missedRes.status === "fulfilled" ? missedRes.value : 0;
 
     // Agenda: contactos nuevos dentro de la ventana de anuncio configurada.
-    let newContacts = 0;
-    try {
-      newContacts = await contarContactosNuevos(diasAnuncio);
-    } catch {
-      /* ignore */
-    }
+    const newContacts =
+      contactsRes.status === "fulfilled" ? contactsRes.value : 0;
 
     if (!connected) {
       setCounts({
@@ -165,11 +164,15 @@ export function useDailyCounts(): DailyCounts {
   }, [connected, empresaSlug, diasAnuncio]);
 
   useEffect(() => {
-    fetchCounts();
+    // 1ª carga diferida ~2 s (no compite con el arranque). Además, como el efecto se
+    // re-ejecuta al cambiar empresaSlug/connected durante la hidratación, el
+    // clearTimeout de la limpieza COALESCE esas 2-3 re-ejecuciones en una sola.
+    const firstLoad = setTimeout(fetchCounts, INITIAL_DELAY_MS);
     const id = setInterval(fetchCounts, REFRESH_MS);
     const onRefresh = () => fetchCounts();
     window.addEventListener(DAILY_COUNTS_REFRESH_EVENT, onRefresh);
     return () => {
+      clearTimeout(firstLoad);
       clearInterval(id);
       window.removeEventListener(DAILY_COUNTS_REFRESH_EVENT, onRefresh);
     };

@@ -142,6 +142,9 @@ function CollapsibleSection({
 
 const SIDEBAR_PINNED_STORAGE_KEY = "sidebar:pinned";
 
+// Anchos variados para las filas del esqueleto del menú (mientras cargan permisos).
+const SIDEBAR_SKELETON_WIDTHS = ["w-28", "w-36", "w-24", "w-32", "w-24", "w-36", "w-28"];
+
 export function AppSidebar() {
   const { state, setOpen, isMobile } = useSidebar();
   const collapsed = state === "collapsed";
@@ -157,6 +160,10 @@ export function AppSidebar() {
     : permisosLoaded
       ? allSections.filter((s) => puedeVer(s.modulo))
       : [];
+  // Mientras se resuelven los permisos (primer login sin caché en localStorage),
+  // `sections` es [] y el menú salía en blanco varios segundos → parecía roto.
+  // Con esto pintamos un esqueleto en su lugar hasta que llegan los permisos.
+  const loadingSections = !isDirector && !permisosLoaded;
 
   // La URL manda: si el usuario está dentro de un módulo de departamento o de
   // Mi Panel, el sidebar muestra ese menú. El modo guardado solo decide en
@@ -402,20 +409,33 @@ export function AppSidebar() {
             </SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
-                {sections.map((s) => (
-                  <CollapsibleSection
-                    key={s.key}
-                    icon={s.icon}
-                    label={s.label}
-                    prefix={s.prefix}
-                    items={s.items}
-                    collapsed={collapsed}
-                    linkTo={s.linkTo}
-                    fase={s.fase}
-                    open={openKey === s.key}
-                    onOpenChange={(isOpen) => setOpenKey(isOpen ? s.key : null)}
-                  />
-                ))}
+                {loadingSections
+                  ? SIDEBAR_SKELETON_WIDTHS.map((w, i) => (
+                      <SidebarMenuItem key={`sk-${i}`}>
+                        <div className="flex items-center gap-2 px-2 py-2">
+                          <div className="h-4 w-4 shrink-0 animate-pulse rounded bg-sidebar-foreground/10" />
+                          {!collapsed && (
+                            <div
+                              className={`h-3 animate-pulse rounded bg-sidebar-foreground/10 ${w}`}
+                            />
+                          )}
+                        </div>
+                      </SidebarMenuItem>
+                    ))
+                  : sections.map((s) => (
+                      <CollapsibleSection
+                        key={s.key}
+                        icon={s.icon}
+                        label={s.label}
+                        prefix={s.prefix}
+                        items={s.items}
+                        collapsed={collapsed}
+                        linkTo={s.linkTo}
+                        fase={s.fase}
+                        open={openKey === s.key}
+                        onOpenChange={(isOpen) => setOpenKey(isOpen ? s.key : null)}
+                      />
+                    ))}
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>
