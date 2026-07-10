@@ -124,6 +124,92 @@ export async function updateCamara(
   }
 }
 
+export type CamaraGrabacionRow = {
+  id: string;
+  camara_id: string;
+  url: string | null;
+  r2_key: string;
+  inicio: string;
+  fin: string;
+  duracion_seg: number;
+  file_size: number;
+};
+
+/**
+ * Lista los clips de una cámara para rebobinar. Lee de `camara_grabaciones`
+ * (que vive en R2); NO se conecta al grabador. Rango opcional [desde, hasta].
+ */
+export async function listGrabaciones(input: {
+  camaraId: string;
+  desde?: string | null;
+  hasta?: string | null;
+  limit?: number;
+}) {
+  try {
+    const { supabase, empresaId } = await getCamarasContext();
+    if (!empresaId) return { ok: false as const, data: [] as CamaraGrabacionRow[], error: "Sin empresa activa" };
+
+    let query = supabase
+      .from("camara_grabaciones")
+      .select("id, camara_id, url, r2_key, inicio, fin, duracion_seg, file_size")
+      .eq("empresa_id", empresaId)
+      .eq("camara_id", input.camaraId)
+      .order("inicio", { ascending: false })
+      .limit(Math.min(input.limit ?? 200, 500));
+
+    if (input.desde) query = query.gte("inicio", input.desde);
+    if (input.hasta) query = query.lte("inicio", input.hasta);
+
+    const { data, error } = await query;
+    if (error) throw error;
+    return { ok: true as const, data: (data ?? []) as CamaraGrabacionRow[] };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Error desconocido";
+    console.error("[camaras] listGrabaciones:", msg);
+    return { ok: false as const, data: [] as CamaraGrabacionRow[], error: msg };
+  }
+}
+
+/**
+ * Cobertura de grabación de una cámara: primer y último clip disponibles, para
+ * mostrar al usuario "tienes vídeo desde X hasta Y" sin preguntar al grabador.
+ */
+export async function getCoberturaGrabacion(camaraId: string) {
+  try {
+    const { supabase, empresaId } = await getCamarasContext();
+    if (!empresaId) return { ok: false as const, error: "Sin empresa activa" };
+
+    const base = supabase
+      .from("camara_grabaciones")
+      .select("inicio")
+      .eq("empresa_id", empresaId)
+      .eq("camara_id", camaraId);
+
+    const [{ data: primero }, { data: ultimo }] = await Promise.all([
+      base.order("inicio", { ascending: true }).limit(1).maybeSingle(),
+      supabase
+        .from("camara_grabaciones")
+        .select("inicio")
+        .eq("empresa_id", empresaId)
+        .eq("camara_id", camaraId)
+        .order("inicio", { ascending: false })
+        .limit(1)
+        .maybeSingle()
+        .then((r) => ({ data: r.data })),
+    ]);
+
+    return {
+      ok: true as const,
+      desde: primero?.inicio ?? null,
+      hasta: ultimo?.inicio ?? null,
+    };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Error desconocido";
+    console.error("[camaras] getCoberturaGrabacion:", msg);
+    return { ok: false as const, error: msg };
+  }
+}
+
 export async function deleteCamara(id: string) {
   try {
     const { supabase, empresaId } = await getCamarasContext();

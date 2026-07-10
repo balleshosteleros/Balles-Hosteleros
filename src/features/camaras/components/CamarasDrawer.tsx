@@ -56,6 +56,7 @@ import {
   deleteCamara,
 } from "@/features/camaras/actions/camaras-actions";
 import { ConectorPairingDialog } from "@/features/camaras/components/ConectorPairingDialog";
+import { CamaraTile } from "@/features/camaras/components/CamaraTile";
 
 type Camara = {
   id: string;
@@ -565,35 +566,13 @@ function MosaicoGrid({
 }
 
 function Tile({ camara }: { camara: Camara }) {
+  // El vídeo vive en Cloudflare R2; el tile reproduce desde la nube, sin
+  // conectarse al grabador del local.
   return (
-    <div className="relative h-full w-full overflow-hidden rounded-md bg-zinc-950 border border-white/10">
-      {/* Vídeo placeholder — el stream RTSP/ONVIF se conectará aquí. */}
-      <div className="absolute inset-0 flex items-center justify-center">
-        <div className="text-center text-white/40">
-          <Cctv className="mx-auto h-8 w-8" />
-          <p className="mt-2 text-[10px] uppercase tracking-wider">
-            Esperando grabador
-          </p>
-        </div>
-      </div>
-
-      {/* Etiqueta */}
-      <div className="absolute left-0 bottom-0 right-0 flex items-end justify-between gap-2 bg-gradient-to-t from-black/80 to-transparent px-2 py-1.5">
-        <div className="min-w-0">
-          <p className="text-[11px] font-semibold text-white truncate">
-            {camara.nombre}
-          </p>
-          {camara.ubicacion && (
-            <p className="text-[9px] text-white/70 truncate">
-              {camara.ubicacion}
-            </p>
-          )}
-        </div>
-        <span className="shrink-0 inline-flex items-center gap-1 rounded-full bg-white/10 px-1.5 py-0.5 text-[9px] text-white/80">
-          <span className="h-1.5 w-1.5 rounded-full bg-amber-400" />
-          Pendiente
-        </span>
-      </div>
-    </div>
+    <CamaraTile
+      camaraId={camara.id}
+      nombre={camara.nombre}
+      ubicacion={camara.ubicacion || undefined}
+    />
   );
 }

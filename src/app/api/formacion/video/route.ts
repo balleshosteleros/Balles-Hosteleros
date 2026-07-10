@@ -1,26 +1,11 @@
 import { NextResponse } from "next/server";
-import { S3Client, PutObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
+import { PutObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
 import { createClient as createServerClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getR2 } from "@/shared/lib/r2";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-let _r2: S3Client | null = null;
-function getR2(): { client: S3Client; bucket: string; publicUrl: string } {
-  const bucket = process.env.R2_BUCKET_NAME;
-  const publicUrl = process.env.R2_PUBLIC_URL;
-  const endpoint = process.env.R2_ENDPOINT;
-  const accessKeyId = process.env.R2_ACCESS_KEY_ID;
-  const secretAccessKey = process.env.R2_SECRET_ACCESS_KEY;
-  if (!bucket || !publicUrl || !endpoint || !accessKeyId || !secretAccessKey) {
-    throw new Error("Faltan variables R2_* para configurar Cloudflare R2");
-  }
-  if (!_r2) {
-    _r2 = new S3Client({ region: "auto", endpoint, credentials: { accessKeyId, secretAccessKey } });
-  }
-  return { client: _r2, bucket, publicUrl };
-}
 
 // POST — sube un vídeo de formación a R2 (empresa_<id>/formacion/<uuid>.<ext>),
 // lo registra en `recordings` con type='formacion' (para que cuente en la cuota
