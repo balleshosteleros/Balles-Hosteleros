@@ -3,6 +3,18 @@
 > **De:** Iván (vía Claude) · **Fecha:** 2026-06-30 · **Actualizado:** 2026-07-07 · **Prioridad:** media
 > Léelo al hacer `git pull` y reconciliar.
 
+## 🚨 AVISO URGENTE PARA IVÁN (11-jul, Fernando) — NO es de precios
+
+**Los deploys de producción llevan rotos desde el 10-jul**: prod está congelada en
+`78274fb6` y NINGÚN commit tuyo posterior (nóminas, festivos, cámaras, telefonía,
+sanciones…) está en producción. La rotura está en el rango `e4bcdb94..85100ce0`.
+**Detalle completo y qué hacer: `docs/DEPLOYS_ROTOS_DESDE_85100ce0_PARA_IVAN.md`** —
+hace falta que abras el build log en el dashboard de Vercel (no tenemos acceso al team).
+
+(Además: las respuestas a las preguntas A/B/C/D de abajo que dijiste haber pusheado
+**no están en el repo** — el último cambio de este fichero es de Fernando. Revisa si
+tu agente se quedó sin hacer `git push`.)
+
 ## ⚡ ACTUALIZACIÓN 2026-07-07 (lo primero que tienes que saber)
 
 - **Iván ya te ha pasado los ALBARANES DE COMPRA por WhatsApp.** Esos albaranes son la **fuente real de los precios de compra** (el precio unitario real de cada producto está en el albarán, línea a línea — NO en las facturas). **Tu tarea: subirlos y grabar los precios** de cada producto.
