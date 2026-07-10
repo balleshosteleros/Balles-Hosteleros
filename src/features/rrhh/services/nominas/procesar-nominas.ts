@@ -124,9 +124,12 @@ export async function procesarNominasConAdmin(
       }
 
       // VALIDACIÓN DE MES: la nómina debe ser del mes solicitado. Si la IA leyó un
-      // periodo válido y NO coincide, se RECHAZA (no se vuelca) y se informa para
-      // que la gestoría la anule. Si no se pudo leer el mes, se acepta como del
-      // mes solicitado (no bloquear por un OCR ilegible).
+      // periodo válido y NO coincide, se DESCARTA por completo: el `continue` es
+      // ANTES de subir el PDF al bucket y de insertar en BD, así que la nómina de
+      // otro mes no deja ningún rastro (no se guarda ni el documento ni la fila).
+      // Solo se registra para avisar a la gestoría de que la anule por su lado.
+      // Si no se pudo leer el mes, se acepta como del mes solicitado (no bloquear
+      // por un OCR ilegible).
       const periodoLeido = /^\d{4}-\d{2}$/.test(n.periodo) ? n.periodo : "";
       if (periodoLeido && periodoLeido !== periodoDefecto) {
         res.mesIncorrecto.push({ etiqueta: emp.nombre, periodoLeido });
