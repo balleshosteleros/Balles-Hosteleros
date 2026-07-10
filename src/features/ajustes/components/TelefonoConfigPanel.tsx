@@ -10,8 +10,49 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
-import { Phone, Info, Wifi, WifiOff } from "lucide-react";
+import { Phone, Info, Wifi, WifiOff, Mail } from "lucide-react";
 import { toast } from "sonner";
+
+/**
+ * Genera el email plantilla que se envía a B2COM para pedir las credenciales
+ * SIP necesarias para llamar por internet desde el portal. El dato crítico es
+ * el soporte WSS/WebRTC: sin él el navegador no puede registrar la sesión SIP.
+ */
+function construirCorreoB2COM(nombreEmpresa: string, callerId: string) {
+  const asunto = `Solicitud de credenciales SIP para llamadas por internet — ${nombreEmpresa}`;
+  const cuerpo = [
+    `Buenos días,`,
+    ``,
+    `Somos ${nombreEmpresa}. Queremos poder realizar las llamadas salientes de nuestra línea a través de internet (softphone WebRTC) desde nuestro portal de gestión, aprovechando la línea que ya tenemos contratada con vosotros.`,
+    ``,
+    `Para poder integrarlo necesitamos que nos confirméis los siguientes puntos:`,
+    ``,
+    `1) Credenciales SIP completas:`,
+    `   - Servidor (host) y puerto`,
+    `   - URL WebSocket seguro (WSS) — imprescindible para llamar desde el navegador`,
+    `   - Usuario / extensión`,
+    `   - Contraseña`,
+    `   - Dominio / realm`,
+    `   - Códecs soportados (Opus / G.711)`,
+    ``,
+    `2) ¿Podemos usar como identificador de llamada (CallerID) nuestro número${callerId ? ` ${callerId}` : " fijo contratado"}?`,
+    ``,
+    `3) ¿Vuestra plataforma admite WebRTC/SIP sobre WSS directo, o hace falta un SBC intermedio?`,
+    ``,
+    `4) ¿Cuántas llamadas simultáneas permite nuestra línea?`,
+    ``,
+    `5) ¿Estas llamadas entran en nuestra tarifa plana actual o suponen un cargo adicional?`,
+    ``,
+    `6) (Para más adelante) ¿Sería posible recibir también las llamadas entrantes en el portal?`,
+    ``,
+    `Muchas gracias. Quedamos a la espera.`,
+    ``,
+    `Un saludo,`,
+    nombreEmpresa,
+  ].join("\n");
+
+  return { asunto, cuerpo };
+}
 
 const PROVEEDORES: { id: TelefoniaProveedor; label: string; desc: string }[] = [
   {
@@ -168,9 +209,31 @@ export function TelefonoConfigPanel() {
           </CardHeader>
           <CardContent className="space-y-3">
             {t.proveedor === "b2com_sip" && (
-              <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-                Si aún no tienes estos datos, pídeselos a B2COM. Usa el correo
-                de plantilla que te facilita el sistema.
+              <div className="space-y-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs text-amber-900">
+                <p>
+                  Si aún no tienes estos datos, pídeselos a B2COM. El botón
+                  abre un correo ya redactado con las 6 preguntas técnicas
+                  exactas: solo tienes que poner su dirección y enviar.
+                </p>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="h-8 border-amber-300 bg-white text-amber-900 hover:bg-amber-100"
+                  onClick={() => {
+                    const { asunto, cuerpo } = construirCorreoB2COM(
+                      empresaActual.nombre,
+                      t.callerId,
+                    );
+                    const href = `mailto:?subject=${encodeURIComponent(
+                      asunto,
+                    )}&body=${encodeURIComponent(cuerpo)}`;
+                    window.location.href = href;
+                  }}
+                >
+                  <Mail className="mr-1.5 h-3.5 w-3.5" />
+                  Pedir credenciales a B2COM
+                </Button>
               </div>
             )}
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
