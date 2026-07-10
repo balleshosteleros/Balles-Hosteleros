@@ -1,0 +1,16 @@
+services:
+  ftp-relay:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "21:21"
+      - "30000-30009:30000-30009"
+    environment:
+      # IP pública del servidor (imprescindible para FTP pasivo).
+      FTP_PASV_URL: "${FTP_PASV_URL}"
+      FTP_PORT: "21"
+      FTP_PASV_MIN: "30000"
+      FTP_PASV_MAX: "30009"
+      # Endpoints del software Balles.
+      SEGMENTO_URL: "${SEGMENTO_URL}"
+      RESOLVER_URL: "${RESOLVER_URL}"
