@@ -577,12 +577,11 @@ export function PreciosCompraSection({ productoId, unidad, onCurrentChange, onIt
                 <tr className="border-b bg-muted/50 text-left text-xs font-medium text-muted-foreground">
                   <th className="px-3 py-2 font-medium">Estado</th>
                   <th className="px-3 py-2 font-medium">Proveedor</th>
-                  <th className="px-3 py-2 font-medium">Formato</th>
+                  <th className="px-3 py-2 font-medium">Precio proveedor (sin IVA) · formato</th>
                   <th className="px-3 py-2 font-medium">Precio/unidad</th>
-                  <th className="px-3 py-2 font-medium">Precio sin IVA</th>
                   <th className="px-3 py-2 font-medium">% IVA</th>
                   <th className="px-3 py-2 font-medium">Importe IVA</th>
-                  <th className="px-3 py-2 font-medium">Precio total</th>
+                  <th className="px-3 py-2 font-medium">Precio total (con IVA)</th>
                   <th className="px-3 py-2 font-medium">Variación</th>
                   <th className="px-3 py-2 font-medium">Fecha inicio</th>
                   <th className="px-3 py-2 font-medium">Fecha hasta</th>
@@ -619,21 +618,29 @@ export function PreciosCompraSection({ productoId, unidad, onCurrentChange, onIt
                       <td className="px-3 py-1.5 text-muted-foreground whitespace-nowrap">
                         {it.proveedor ?? <span className="italic">—</span>}
                       </td>
-                      <td className="px-3 py-1.5 text-muted-foreground whitespace-nowrap">
-                        {it.formato ?? <span className="italic">—</span>}
+                      <td className="px-3 py-1.5 whitespace-nowrap">
+                        <div className="flex flex-col leading-tight">
+                          <span className="font-medium text-foreground tabular-nums">
+                            {formatEur(it.precio)}
+                          </span>
+                          <span className="text-[11px] text-muted-foreground/80">
+                            {it.formato ? (
+                              `por ${it.formato}`
+                            ) : (
+                              <span className="italic">sin formato</span>
+                            )}
+                          </span>
+                        </div>
                       </td>
                       <td
                         className="px-3 py-1.5 text-muted-foreground tabular-nums whitespace-nowrap"
-                        title="Calculado a partir del formato. Solo informativo, no editable."
+                        title="Precio de 1 unidad de medida (1 ud / 1 kg / 1 L), calculado desde el formato. Solo informativo, no editable."
                       >
                         {precioUnidad ? (
                           `${formatEur(precioUnidad.valor)}/${precioUnidad.sufijo}`
                         ) : (
                           <span className="italic">—</span>
                         )}
-                      </td>
-                      <td className="px-3 py-1.5 font-medium text-foreground tabular-nums whitespace-nowrap">
-                        {formatEur(it.precio)}
                       </td>
                       <td className="px-3 py-1.5 text-muted-foreground tabular-nums">
                         {it.iva ?? "—"}
