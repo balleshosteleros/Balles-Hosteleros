@@ -114,8 +114,8 @@ export function NominasGestoriaConfigPanel() {
               <span className="text-sm text-muted-foreground">de cada mes (1 a 28)</span>
             </div>
             <p className="text-xs text-muted-foreground">
-              La hora es la del envío del sistema (por la mañana). Se limita al día 28 para que
-              exista en todos los meses.
+              El correo sale a las 00:00 (medianoche) de la zona horaria de la empresa. Por
+              defecto el día 1. Se limita al día 28 para que exista en todos los meses.
             </p>
           </div>
 

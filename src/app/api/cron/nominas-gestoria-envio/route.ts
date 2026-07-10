@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getZonaHorariaEmpresa } from "@/features/empresa/lib/empresa-server";
-import { hoyEnZona } from "@/features/empresa/lib/zona-horaria";
+import { ahoraEnZona } from "@/features/empresa/lib/zona-horaria";
 import { enviarSolicitudNominasGestoria } from "@/features/rrhh/services/nominas/nominas-gestoria";
 
 export const dynamic = "force-dynamic";
@@ -10,9 +10,10 @@ export const runtime = "nodejs";
 /**
  * Envío automático a la gestoría del enlace para subir las nóminas del mes.
  *
- * Corre a diario. Para cada empresa con el envío ACTIVO y correo de gestoría,
- * comprueba si HOY (en la zona horaria de la empresa) es el día del mes
- * configurado (`nominas_gestoria_dia_envio`). Si lo es y no se envió ya ese mes
+ * Corre cada hora. Para cada empresa con el envío ACTIVO y correo de gestoría,
+ * comprueba si AHORA (en la zona horaria de la empresa) es el día del mes
+ * configurado (`nominas_gestoria_dia_envio`, por defecto el 1) y estamos en la
+ * franja de las 00:00 (medianoche local). Si lo es y no se envió ya ese mes
  * (`nominas_gestoria_ultimo_envio`), crea el token del periodo y manda el correo.
  * El enlace lleva a `/gestoria/nominas/<token>`, donde la gestoría sube las
  * nóminas y la IA las vuelca a `rrhh_pagos`.
@@ -40,16 +41,20 @@ export async function GET(request: Request) {
     if (!((e.nominas_gestoria_email as string | null)?.trim())) continue;
 
     const empresaId = e.id as string;
-    // "Hoy" en la zona de la empresa: día del mes y periodo (AAAA-MM).
+    // "Ahora" en la zona de la empresa: fecha local y minutos del día. Así el
+    // correo sale a las 00:00 HORA DE LA EMPRESA, no del servidor (PRP-069).
     const tz = await getZonaHorariaEmpresa(admin, empresaId);
-    const hoy = hoyEnZona(tz); // "YYYY-MM-DD"
-    const [anio, mes, dia] = hoy.split("-");
+    const { fecha, minutos } = ahoraEnZona(tz); // fecha "YYYY-MM-DD"
+    const [anio, mes, dia] = fecha.split("-");
     const periodo = `${anio}-${mes}`;
     const diaMes = Number(dia);
 
-    const diaEnvio = (e.nominas_gestoria_dia_envio as number) ?? 25;
+    const diaEnvio = (e.nominas_gestoria_dia_envio as number) ?? 1;
     if (diaMes !== diaEnvio) continue;
-    // Ya enviado este mes (idempotencia frente al cron diario).
+    // Solo en la franja de medianoche (00:00–00:59) de la empresa: el cron corre
+    // cada hora, esto lo restringe a una única franja del día.
+    if (minutos >= 60) continue;
+    // Ya enviado este mes (idempotencia frente al cron horario).
     if ((e.nominas_gestoria_ultimo_envio as string | null) === periodo) continue;
 
     const res = await enviarSolicitudNominasGestoria(admin, empresaId, periodo);
