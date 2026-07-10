@@ -20,6 +20,7 @@ interface Resultado {
   yaExistian: number;
   sinEmpleado: string[];
   mesIncorrecto: MesIncorrecto[];
+  rechazadoTodo: boolean;
 }
 
 const MESES_ES = [
@@ -81,6 +82,7 @@ export function SubirNominasView({ endpoint, empresaNombre, mesLabel }: Props) {
           yaExistian: json.yaExistian ?? 0,
           sinEmpleado: json.sinEmpleado ?? [],
           mesIncorrecto: json.mesIncorrecto ?? [],
+          rechazadoTodo: json.rechazadoTodo ?? false,
         });
         setFile(null);
         if (inputRef.current) inputRef.current.value = "";
@@ -110,8 +112,24 @@ export function SubirNominasView({ endpoint, empresaNombre, mesLabel }: Props) {
           </p>
         </div>
 
-        {/* Resumen del último volcado (permite seguir subiendo). */}
-        {resultado && (
+        {/* Archivo RECHAZADO por completo: tiene errores, no se ha subido nada. */}
+        {resultado && resultado.rechazadoTodo && (
+          <div className="mt-5 rounded-xl border-2 border-rose-300 bg-rose-50 p-4">
+            <div className="flex items-start gap-2">
+              <AlertTriangle className="h-5 w-5 text-rose-600 shrink-0 mt-0.5" />
+              <div className="text-sm text-rose-900">
+                <p className="font-semibold">El archivo tiene errores · NO se ha subido nada</p>
+                <p className="mt-1">
+                  Para evitar cargar datos incorrectos, <b>no se ha volcado ninguna nómina</b>.
+                  Corrige los siguientes puntos y vuelve a subir el archivo <b>completo</b>:
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Éxito: solo si NO hubo rechazo. */}
+        {resultado && !resultado.rechazadoTodo && (
           <div className="mt-5 rounded-xl border border-emerald-200 bg-emerald-50 p-4">
             <div className="flex items-start gap-2">
               <CheckCircle2 className="h-5 w-5 text-emerald-600 shrink-0 mt-0.5" />
@@ -133,7 +151,7 @@ export function SubirNominasView({ endpoint, empresaNombre, mesLabel }: Props) {
           </div>
         )}
 
-        {/* Mes incorrecto: NO se han volcado. La gestoría debe anularlas. */}
+        {/* Detalle: nóminas de otro mes (motivo de rechazo). */}
         {resultado && resultado.mesIncorrecto.length > 0 && (
           <div className="mt-4 rounded-xl border border-rose-200 bg-rose-50 p-4">
             <div className="flex items-start gap-2">
@@ -141,12 +159,11 @@ export function SubirNominasView({ endpoint, empresaNombre, mesLabel }: Props) {
               <div className="text-sm text-rose-900">
                 <p className="font-semibold">
                   {resultado.mesIncorrecto.length} nómina
-                  {resultado.mesIncorrecto.length === 1 ? "" : "s"} de otro mes · NO se
-                  {resultado.mesIncorrecto.length === 1 ? " ha" : " han"} subido
+                  {resultado.mesIncorrecto.length === 1 ? "" : "s"} de otro mes
                 </p>
                 <p className="mt-1">
-                  Solo se admiten nóminas de <b>{mesLabel}</b>. Estas pertenecen a otro mes, así
-                  que <b>no se han volcado</b>. Anúlalas y no las vuelvas a adjuntar:
+                  Solo se admiten nóminas de <b>{mesLabel}</b>. Estas pertenecen a otro mes.
+                  Quítalas o corrige el mes:
                 </p>
                 <ul className="mt-2 space-y-1 list-disc list-inside">
                   {resultado.mesIncorrecto.map((x, i) => (
@@ -168,13 +185,12 @@ export function SubirNominasView({ endpoint, empresaNombre, mesLabel }: Props) {
               <div className="text-sm text-amber-900">
                 <p className="font-semibold">
                   {resultado.sinEmpleado.length} nómina
-                  {resultado.sinEmpleado.length === 1 ? "" : "s"} sin trabajador · NO se
-                  {resultado.sinEmpleado.length === 1 ? " ha" : " han"} subido
+                  {resultado.sinEmpleado.length === 1 ? "" : "s"} sin trabajador
                 </p>
                 <p className="mt-1">
                   Est{resultado.sinEmpleado.length === 1 ? "e trabajador no está dado" : "os trabajadores no están dados"} de
                   alta en el sistema, así que no se {resultado.sinEmpleado.length === 1 ? "ha" : "han"} podido asignar.
-                  Avisa a la empresa para que {resultado.sinEmpleado.length === 1 ? "lo dé" : "los dé"} de alta:
+                  Avisa a la empresa para que {resultado.sinEmpleado.length === 1 ? "lo dé" : "los dé"} de alta y vuelve a subir el archivo:
                 </p>
                 <ul className="mt-2 space-y-1 list-disc list-inside">
                   {resultado.sinEmpleado.map((x, i) => (

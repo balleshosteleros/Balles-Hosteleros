@@ -58,6 +58,10 @@ export interface ResultadoProceso {
   mesIncorrecto: NominaMesIncorrecto[]; // rechazadas por ser de OTRO mes
   conIncidencia: number; // volcadas pero marcadas para revisión (p.ej. neto 0)
   meses: string[]; // periodos AAAA-MM tocados
+  // Si el archivo tiene ALGUNA nómina con error (otro mes o empleado no dado de
+  // alta), se rechaza ENTERO: no se guarda ninguna. La gestoría debe corregir el
+  // archivo y volver a subirlo completo.
+  rechazadoTodo: boolean;
 }
 
 export async function procesarNominasConAdmin(
@@ -66,7 +70,7 @@ export async function procesarNominasConAdmin(
   nominas: NominaLeida[],
   periodoDefecto: string,
 ): Promise<ResultadoProceso> {
-  const vacio: ResultadoProceso = { leidas: nominas.length, guardadas: 0, yaExistian: 0, sinEmpleado: [], duplicadas: [], mesIncorrecto: [], conIncidencia: 0, meses: [] };
+  const vacio: ResultadoProceso = { leidas: nominas.length, guardadas: 0, yaExistian: 0, sinEmpleado: [], duplicadas: [], mesIncorrecto: [], conIncidencia: 0, meses: [], rechazadoTodo: false };
   try {
     // TODOS los empleados activos de la empresa (fuente fresca).
     const { data: emps } = await admin
@@ -110,31 +114,39 @@ export async function procesarNominasConAdmin(
       return mejor;
     };
 
-    const res: ResultadoProceso = { leidas: nominas.length, guardadas: 0, yaExistian: 0, sinEmpleado: [], duplicadas: [], mesIncorrecto: [], conIncidencia: 0, meses: [] };
+    const res: ResultadoProceso = { leidas: nominas.length, guardadas: 0, yaExistian: 0, sinEmpleado: [], duplicadas: [], mesIncorrecto: [], conIncidencia: 0, meses: [], rechazadoTodo: false };
     const meses = new Set<string>();
 
+    // ── FASE 1: VALIDACIÓN PREVIA (sin tocar BD ni bucket) ────────────────────
+    // Comprobamos TODO el archivo antes de guardar nada. Si ALGUNA nómina es de
+    // otro mes o de un empleado NO dado de alta, se rechaza el archivo ENTERO:
+    // no se vuelca ninguna. La gestoría corrige el archivo y lo vuelve a subir.
+    // (Si la IA no lee el mes, se acepta como del mes solicitado: no bloquea.)
+    type Emparejada = { n: NominaLeida; emp: Emp };
+    const validas: Emparejada[] = [];
     for (const n of nominas) {
       const emp = emparejar(n);
       if (!emp) {
-        // Mostrar lo que leyó la IA (nombre + DNI) para diagnosticar por qué no
-        // cuadró (DNI mal leído, nombre distinto, o EMPLEADO NO DADO DE ALTA).
         const etiq = [n.nombre?.trim(), n.dniNie ? `(${n.dniNie})` : ""].filter(Boolean).join(" ");
         res.sinEmpleado.push(etiq || "nómina sin identificar");
         continue;
       }
-
-      // VALIDACIÓN DE MES: la nómina debe ser del mes solicitado. Si la IA leyó un
-      // periodo válido y NO coincide, se DESCARTA por completo: el `continue` es
-      // ANTES de subir el PDF al bucket y de insertar en BD, así que la nómina de
-      // otro mes no deja ningún rastro (no se guarda ni el documento ni la fila).
-      // Solo se registra para avisar a la gestoría de que la anule por su lado.
-      // Si no se pudo leer el mes, se acepta como del mes solicitado (no bloquear
-      // por un OCR ilegible).
       const periodoLeido = /^\d{4}-\d{2}$/.test(n.periodo) ? n.periodo : "";
       if (periodoLeido && periodoLeido !== periodoDefecto) {
         res.mesIncorrecto.push({ etiqueta: emp.nombre, periodoLeido });
         continue;
       }
+      validas.push({ n, emp });
+    }
+
+    // ¿Hay errores? → NO se guarda nada. Se devuelve el detalle para la gestoría.
+    if (res.mesIncorrecto.length > 0 || res.sinEmpleado.length > 0) {
+      res.rechazadoTodo = true;
+      return res;
+    }
+
+    // ── FASE 2: VOLCADO (solo si el archivo está 100% correcto) ───────────────
+    for (const { n, emp } of validas) {
       const periodo = periodoDefecto;
       const ext = EXT_POR_MIME[n.mimeType];
       if (!ext) continue;

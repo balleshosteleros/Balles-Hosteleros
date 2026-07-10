@@ -290,26 +290,42 @@ async function avisarRrhhNominasSubidas(
     if (emp?.nominas_gestoria_notif_rrhh === false) return;
 
     const mes = nombreMes(periodo);
-    const partes: string[] = [`${r.guardadas} volcada${r.guardadas === 1 ? "" : "s"}`];
-    if (r.yaExistian > 0) partes.push(`${r.yaExistian} ya estaba${r.yaExistian === 1 ? "" : "n"}`);
-    if (r.conIncidencia > 0) partes.push(`${r.conIncidencia} con incidencia`);
-    if (r.mesIncorrecto.length > 0) partes.push(`${r.mesIncorrecto.length} de otro mes (rechazada${r.mesIncorrecto.length === 1 ? "" : "s"})`);
-    if (r.sinEmpleado.length > 0) partes.push(`${r.sinEmpleado.length} sin empleado dado de alta`);
 
-    // Detalle de las que requieren acción manual.
+    // Detalle de los errores (mismo para ambos casos).
     const detalles: string[] = [];
     if (r.mesIncorrecto.length > 0) {
       const lista = r.mesIncorrecto
         .slice(0, 5)
         .map((x) => `${x.etiqueta} (leída como ${nombreMes(x.periodoLeido)})`)
         .join(", ");
-      detalles.push(`De otro mes, NO volcadas: ${lista}${r.mesIncorrecto.length > 5 ? "…" : ""}.`);
+      detalles.push(`De otro mes: ${lista}${r.mesIncorrecto.length > 5 ? "…" : ""}.`);
     }
     if (r.sinEmpleado.length > 0) {
       const lista = r.sinEmpleado.slice(0, 6).join(", ");
       detalles.push(`No dados de alta en el sistema: ${lista}${r.sinEmpleado.length > 6 ? "…" : ""}.`);
     }
     const detalleSin = detalles.length > 0 ? ` ${detalles.join(" ")}` : "";
+
+    // El archivo se rechazó ENTERO (tenía errores): no se volcó nada.
+    if (r.rechazadoTodo) {
+      await emitirNotificacion({
+        empresaId,
+        system: true,
+        tipo: "nominas_gestoria_subidas",
+        titulo: `Archivo de nóminas de ${mes} rechazado`,
+        mensaje: `La gestoría subió un archivo con errores: NO se ha volcado ninguna nómina. Debe corregirlo y volver a subirlo.${detalleSin}`,
+        segmento: { tipo: "area", area: "ADMINISTRATIVA" },
+        refTabla: "empresas",
+        refId: empresaId,
+        accionUrl: "/rrhh/pagos",
+        dedupeKey: `nominas_gestoria_rechazado:${empresaId}:${periodo}:${r.mesIncorrecto.length}:${r.sinEmpleado.length}`,
+      });
+      return;
+    }
+
+    const partes: string[] = [`${r.guardadas} volcada${r.guardadas === 1 ? "" : "s"}`];
+    if (r.yaExistian > 0) partes.push(`${r.yaExistian} ya estaba${r.yaExistian === 1 ? "" : "n"}`);
+    if (r.conIncidencia > 0) partes.push(`${r.conIncidencia} con incidencia`);
 
     await emitirNotificacion({
       empresaId,

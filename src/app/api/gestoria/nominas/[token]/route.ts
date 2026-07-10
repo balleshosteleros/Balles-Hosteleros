@@ -73,9 +73,10 @@ export async function POST(req: Request, ctx: { params: Promise<{ token: string 
       guardadas: r.guardadas,
       yaExistian: r.yaExistian,
       sinEmpleado: r.sinEmpleado,
-      // Rechazadas por pertenecer a un mes distinto al solicitado: la gestoría
-      // debe anularlas y no volver a subirlas.
+      // Rechazadas por pertenecer a un mes distinto al solicitado.
       mesIncorrecto: r.mesIncorrecto,
+      // El archivo tiene errores → NO se ha subido NADA; hay que corregir y resubir.
+      rechazadoTodo: r.rechazadoTodo,
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Error desconocido";
