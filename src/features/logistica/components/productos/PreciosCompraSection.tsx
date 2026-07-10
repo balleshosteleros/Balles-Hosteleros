@@ -85,6 +85,24 @@ function calcularPrecioTotal(precio: number, iva: string | null | undefined): nu
   return precio + calcularImporteIva(precio, iva);
 }
 
+// Precio por unidad mínima (dato INFORMATIVO, no editable): descompone el formato
+// de compra ("24 Ud", "2 kg", "1,5 L"...) y divide el precio pagado al proveedor por
+// su contenido, para obtener el coste de 1 unidad de consumo (1 ud / 1 kg / 1 L).
+// Ej: 16,56 € por "24 Ud" → 0,69 €/ud. Devuelve null si el formato no es divisible.
+function calcularPrecioPorUnidad(
+  precio: number,
+  formato: string | null | undefined,
+): { valor: number; sufijo: string } | null {
+  if (!formato) return null;
+  const m = formato.trim().match(/^([\d.,]+)\s*([a-zA-ZñÑ]+)/);
+  if (!m) return null;
+  const cantidad = parseDecimal(m[1]);
+  if (cantidad == null || cantidad <= 0) return null;
+  const ini = m[2].charAt(0).toLowerCase();
+  const sufijo = ini === "k" ? "kg" : ini === "l" ? "L" : "ud";
+  return { valor: precio / cantidad, sufijo };
+}
+
 function DiffBadge({ pct, label }: { pct: number; label: string }) {
   const Icon = pct > 0 ? TrendingUp : pct < 0 ? TrendingDown : Minus;
   const tone =
@@ -560,6 +578,7 @@ export function PreciosCompraSection({ productoId, unidad, onCurrentChange, onIt
                   <th className="px-3 py-2 font-medium">Estado</th>
                   <th className="px-3 py-2 font-medium">Proveedor</th>
                   <th className="px-3 py-2 font-medium">Formato</th>
+                  <th className="px-3 py-2 font-medium">Precio/unidad</th>
                   <th className="px-3 py-2 font-medium">Precio sin IVA</th>
                   <th className="px-3 py-2 font-medium">% IVA</th>
                   <th className="px-3 py-2 font-medium">Importe IVA</th>
@@ -577,6 +596,7 @@ export function PreciosCompraSection({ productoId, unidad, onCurrentChange, onIt
                   const diffSig = diffsContraSiguiente.get(it.id);
                   const importeIva = calcularImporteIva(it.precio, it.iva);
                   const precioTotal = calcularPrecioTotal(it.precio, it.iva);
+                  const precioUnidad = calcularPrecioPorUnidad(it.precio, it.formato);
 
                   return (
                     <tr
@@ -601,6 +621,16 @@ export function PreciosCompraSection({ productoId, unidad, onCurrentChange, onIt
                       </td>
                       <td className="px-3 py-1.5 text-muted-foreground whitespace-nowrap">
                         {it.formato ?? <span className="italic">—</span>}
+                      </td>
+                      <td
+                        className="px-3 py-1.5 text-muted-foreground tabular-nums whitespace-nowrap"
+                        title="Calculado a partir del formato. Solo informativo, no editable."
+                      >
+                        {precioUnidad ? (
+                          `${formatEur(precioUnidad.valor)}/${precioUnidad.sufijo}`
+                        ) : (
+                          <span className="italic">—</span>
+                        )}
                       </td>
                       <td className="px-3 py-1.5 font-medium text-foreground tabular-nums whitespace-nowrap">
                         {formatEur(it.precio)}
