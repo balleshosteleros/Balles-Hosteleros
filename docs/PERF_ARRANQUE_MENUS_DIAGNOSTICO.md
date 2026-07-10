@@ -69,6 +69,24 @@ Al iniciar la app, la pantalla se pinta pero los ítems de los menús tardan var
 6. (Local/DX) Trocear imports pesados del layout (`app-layout` importa grabadora, cámaras, Google,
    agenda, soporte…) con `next/dynamic` → menos compilación y menos hidratación.
 
+## Fixes 1+2 aplicados y medidos (2026-07-10) — HALLAZGO IMPORTANTE
+
+Commit `78274fb6`: (1) `useDailyCounts` — las 5 server actions en serie → `Promise.allSettled` +
+1ª carga diferida 2 s y coalescida; (2) **skeleton** en el sidebar mientras cargan permisos.
+
+**Medición post-deploy (prod, dub1): el tiempo NO se movió** (coste actions 6,5 s → 6,8 s = ruido).
+**Por qué:** ⚠️ **Next.js SERIALIZA las server actions por cliente** (una en vuelo a la vez). Por tanto
+`Promise.allSettled([action1..5])` **NO las paraleliza en la red** — React las encola igual, secuencial.
+La paralelización a nivel JS quedó neutralizada. (El diferido/coalesce sí quita ruido del primer burst,
+y el **skeleton sí mejora la percepción** — ya no hay "menú en blanco", sale esqueleto → menú — pero eso
+no aparece en `totalPostMs`.)
+
+**Conclusión estratégica:** el peso que queda (~6,5 s) son **~16 server actions serializadas por Next**
++ el peaje del middleware en cada una. La paralelización JS no puede con eso. **El único fix que mueve la
+aguja es ESTRUCTURAL: colapsar las ~16 actions en UNA sola "bootstrap"** (1 POST serializado en vez de 16)
+y/o aligerar el middleware. **Eso es zona de Iván** (providers + `src/proxy.ts`) → es el fix nº3/4, y es
+el que hay que priorizar con él. Los fixes JS-side (1) ya no dan más.
+
 ## Reproducir la medición
 - Usuario demo: `scripts/agora/create-dev-user.mjs` (ya actualizado al esquema actual: rol en
   `usuarios.rol_id/rol_label`, `estado_acceso`, `password_set`; la tabla `usuario_roles` ya no existe).
