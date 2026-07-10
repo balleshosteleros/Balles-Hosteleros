@@ -28,7 +28,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   CalendarDays, MoreHorizontal, Eye, Copy, Clock, Archive,
   Trash2, FileText, Users, Building2, ArrowLeft, Save, Upload, X, AlertTriangle, ImageIcon, Bell,
-  ChevronLeft, ChevronRight, Settings,
+  ChevronLeft, ChevronRight, Settings, ShieldAlert,
 } from "lucide-react";
 import {
   SubmoduleToolbar,
@@ -45,6 +45,7 @@ import { IOActions } from "@/shared/io";
 import { comunicadosIO } from "@/features/gerencia/io/comunicados.io";
 import { useReglasSubmodulo } from "@/features/ajustes/hooks/use-reglas-submodulo";
 import { ValidacionFaltantesDialog } from "@/features/ajustes/components/ValidacionFaltantesDialog";
+import { SancionDisciplinariaView } from "@/features/gerencia/components/SancionDisciplinariaView";
 
 function EstadoBadge({ estado }: { estado: EstadoComunicado }) {
   const colors: Record<EstadoComunicado, string> = {
@@ -615,7 +616,7 @@ export function ComunicadosView() {
     loadEmpleadosReales();
   }, [loadComunicados, loadEmpleadosReales]);
 
-  const [mainTab, setMainTab] = useState<"listado" | "calendario">("listado");
+  const [mainTab, setMainTab] = useState<"listado" | "calendario" | "sancion">("listado");
   const [calVista, setCalVista] = useState<"mensual" | "anual">("mensual");
   const [mesOffset, setMesOffset] = useState(0);
   const [search, setSearch] = useState("");
@@ -818,10 +819,11 @@ export function ComunicadosView() {
         <Card><CardContent className="pt-4 pb-3 text-center"><p className="text-2xl font-bold">{Math.round(comunicados.filter(c => c.alcancePct > 0).reduce((s, c) => s + c.alcancePct, 0) / Math.max(comunicados.filter(c => c.alcancePct > 0).length, 1))}%</p><p className="text-xs text-muted-foreground">Alcance medio</p></CardContent></Card>
       </div>
 
-      <Tabs value={mainTab} onValueChange={v => setMainTab(v as "listado" | "calendario")}>
+      <Tabs value={mainTab} onValueChange={v => setMainTab(v as "listado" | "calendario" | "sancion")}>
         <TabsList>
           <TabsTrigger value="listado"><FileText className="h-4 w-4 mr-1" />Comunicados</TabsTrigger>
           <TabsTrigger value="calendario"><CalendarDays className="h-4 w-4 mr-1" />Calendario</TabsTrigger>
+          <TabsTrigger value="sancion"><ShieldAlert className="h-4 w-4 mr-1" />Sanción disciplinaria</TabsTrigger>
         </TabsList>
 
         <TabsContent value="listado">
@@ -903,6 +905,10 @@ export function ComunicadosView() {
             setMesOffset={setMesOffset}
             onSelect={openEdit}
           />
+        </TabsContent>
+
+        <TabsContent value="sancion">
+          <SancionDisciplinariaView />
         </TabsContent>
       </Tabs>
     </div>

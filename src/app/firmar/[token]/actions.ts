@@ -36,7 +36,7 @@ async function getMeta() {
  * botón. Para el resto (p. ej. una baja voluntaria enviada por un admin) se
  * muestra el nombre real de quien lo envió.
  */
-const TIPOS_INSTITUCIONALES = new Set(["contrato_interno", "reconocimiento_medico", "contrato_oficial"]);
+const TIPOS_INSTITUCIONALES = new Set(["contrato_interno", "reconocimiento_medico", "contrato_oficial", "sancion_disciplinaria"]);
 
 function resolverEnviadoPor(
   tipoDoc: string | null | undefined,
@@ -591,6 +591,36 @@ export async function firmarDocumento(input: FirmarDocumentoInput): Promise<Firm
         firmadoEn: new Date(firmadoEnIso),
         signedUrl: descargaUrl,
       });
+    }
+
+    // Sanción disciplinaria firmada («leído/recibido»): además de quedar en el
+    // bucket de firmas, se archiva una copia del PDF firmado en la carpeta de
+    // documentos personales del trabajador (categoría `sanciones`), para que le
+    // quede guardado de forma permanente. Best-effort: si falla, la firma ya está
+    // completada y el trabajador recibió su copia por email.
+    if ((doc.tipo as string) === "sancion_disciplinaria") {
+      try {
+        const destPath = `${doc.empresa_id}/${doc.empleado_id}/sancion-${documentoId}.pdf`;
+        const copia = await admin.storage
+          .from("empleados-docs")
+          .upload(destPath, firmadoBytes, { upsert: true, contentType: "application/pdf" });
+        if (!copia.error) {
+          await admin.from("documentos_empleado").insert({
+            empresa_id: doc.empresa_id,
+            empleado_id: doc.empleado_id,
+            categoria: "sanciones",
+            nombre: `${doc.titulo} (firmada).pdf`,
+            storage_path: destPath,
+            tipo_mime: "application/pdf",
+            tamano_bytes: firmadoBytes.length,
+            created_by: (emp?.user_id as string) ?? null,
+          });
+        } else {
+          console.error("[firmar/firmar] archivar sanción:", copia.error.message);
+        }
+      } catch (e) {
+        console.error("[firmar/firmar] archivar sanción en documentos del empleado:", e);
+      }
     }
 
     // Documento firmado: el aviso in-app de "documento para firmar" queda leído.

@@ -7,7 +7,8 @@ export type CategoriaDocumento =
   | "nominas"
   | "contratos"
   | "justificantes"
-  | "registros-jornada";
+  | "registros-jornada"
+  | "sanciones";
 
 export interface DocumentoEmpleado {
   id: string;
@@ -28,6 +29,7 @@ export async function listMisDocumentos(): Promise<{
     contratos: [],
     justificantes: [],
     "registros-jornada": [],
+    sanciones: [],
   };
   try {
     const supabase = await createClient();
@@ -48,6 +50,7 @@ export async function listMisDocumentos(): Promise<{
       contratos: [],
       justificantes: [],
       "registros-jornada": [],
+      sanciones: [],
     };
     for (const row of data ?? []) {
       const r = row as {
