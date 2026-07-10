@@ -16,10 +16,7 @@ import {
   type PagoGuardado,
 } from "@/features/rrhh/actions/pagos-actions";
 import { loadHorasMes, type HorasMesRow } from "@/features/rrhh/actions/horas-actions";
-import {
-  procesarNominasLeidas,
-  getNominaArchivoUrl,
-} from "@/features/rrhh/actions/nominas-archivo-actions";
+import { procesarNominasLeidas } from "@/features/rrhh/actions/nominas-archivo-actions";
 import type { NominaLeida } from "@/features/rrhh/services/nominas/procesar-nominas";
 import {
   getNotifLiquidacionesConfig,
@@ -39,7 +36,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { Edit2, Banknote, Settings, Send, Lock, Unlock, CheckCircle2, Clock, Upload, FileText, ReceiptText } from "lucide-react";
+import { Edit2, Banknote, Settings, Send, Lock, Unlock, CheckCircle2, Clock, Upload, ReceiptText } from "lucide-react";
 import {
   SubmoduleToolbar,
   aplicarFiltrosToolbar,
@@ -407,23 +404,32 @@ export function PagosView() {
 
     // Recargar caché para que se vean las nóminas nuevas al navegar por meses.
     setPagosPorRango({});
-
-    const partes = [`${r.guardadas} nómina${r.guardadas === 1 ? "" : "s"} guardada${r.guardadas === 1 ? "" : "s"}`];
-    if (r.yaExistian > 0) partes.push(`${r.yaExistian} ya subida${r.yaExistian === 1 ? "" : "s"}`);
-    if (r.conIncidencia > 0) partes.push(`${r.conIncidencia} con incidencia`);
-    if (r.mesIncorrecto.length > 0) partes.push(`${r.mesIncorrecto.length} de otro mes (rechazada${r.mesIncorrecto.length === 1 ? "" : "s"})`);
-    if (r.sinEmpleado.length > 0) partes.push(`${r.sinEmpleado.length} sin empleado dado de alta`);
-    if (fallos > 0) partes.push(`${fallos} archivo${fallos === 1 ? "" : "s"} con error`);
+    refrescarIncidenciasNominas();
 
     const nombreMes = (p: string) => {
       const [y, m] = p.split("-");
       const MESES = ["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"];
       return `${MESES[Number(m) - 1] ?? ""} ${y}`.trim();
     };
+
+    // Archivo RECHAZADO por completo: tiene errores, NO se guardó nada.
+    if (r.rechazadoTodo) {
+      const errores: string[] = [];
+      if (r.mesIncorrecto.length > 0) errores.push(`De otro mes: ${r.mesIncorrecto.slice(0, 6).map((x) => `${x.etiqueta} (${nombreMes(x.periodoLeido)})`).join(", ")}${r.mesIncorrecto.length > 6 ? "…" : ""}.`);
+      if (r.sinEmpleado.length > 0) errores.push(`No dados de alta: ${r.sinEmpleado.slice(0, 6).join(", ")}${r.sinEmpleado.length > 6 ? "…" : ""}.`);
+      toast.error("El archivo tiene errores: no se ha guardado nada. Corrige y vuelve a subirlo entero.", {
+        description: errores.join(" "),
+      });
+      return;
+    }
+
+    const partes = [`${r.guardadas} nómina${r.guardadas === 1 ? "" : "s"} guardada${r.guardadas === 1 ? "" : "s"}`];
+    if (r.yaExistian > 0) partes.push(`${r.yaExistian} ya subida${r.yaExistian === 1 ? "" : "s"}`);
+    if (r.conIncidencia > 0) partes.push(`${r.conIncidencia} con incidencia`);
+    if (fallos > 0) partes.push(`${fallos} archivo${fallos === 1 ? "" : "s"} con error`);
+
     const lineas: string[] = [];
     if (r.duplicadas.length > 0) lineas.push(`Ya tenían nómina (no se regrabó): ${r.duplicadas.slice(0, 6).join(", ")}${r.duplicadas.length > 6 ? "…" : ""}.`);
-    if (r.mesIncorrecto.length > 0) lineas.push(`De otro mes, NO volcadas: ${r.mesIncorrecto.slice(0, 6).map((x) => `${x.etiqueta} (${nombreMes(x.periodoLeido)})`).join(", ")}${r.mesIncorrecto.length > 6 ? "…" : ""}.`);
-    if (r.sinEmpleado.length > 0) lineas.push(`No dados de alta en el sistema: ${r.sinEmpleado.slice(0, 6).join(", ")}${r.sinEmpleado.length > 6 ? "…" : ""}.`);
     const descripcion = lineas.length > 0 ? lineas.join(" ") : undefined;
 
     if (r.guardadas > 0 || r.yaExistian > 0) toast.success(partes.join(" · "), { description: descripcion });
@@ -431,21 +437,6 @@ export function PagosView() {
   };
 
   // Abre la nómina original de un empleado en una pestaña nueva (URL firmada).
-  const verNomina = async (p: PagoEmpleado) => {
-    // Abrir la pestaña YA, dentro del gesto de clic (si se abre tras el await, el
-    // navegador la bloquea como popup). SIN noopener: si no, window.open("") no
-    // devuelve referencia y no se le puede asignar la URL luego.
-    const win = window.open("about:blank", "_blank");
-    const res = await getNominaArchivoUrl(periodo, p.empleadoId);
-    if (!res.ok) {
-      win?.close();
-      toast.error(res.error ?? "No se pudo abrir la nómina.");
-      return;
-    }
-    if (win && !win.closed) win.location.href = res.url;
-    else window.open(res.url, "_blank"); // fallback si el navegador cerró la pestaña
-  };
-
   const guardarEdicion = (datos: Partial<PagoEmpleado>) => {
     if (!editando) return;
     let actualizado: PagoEmpleado | undefined;
@@ -569,14 +560,13 @@ export function PagosView() {
     { campo: "nomina", label: "Nómina neta" },
     { campo: "horasReales", label: "H.R" },
     { campo: "horasTrabajadas", label: "H.T" },
-    { campo: "propina", label: "Propina" },
+    { campo: "propina", label: "Complemento" },
     { campo: "ajuste", label: "Ajuste" },
     { campo: "horasExtras", label: "H.Extras" },
     { campo: "bonus", label: "Bonus" },
     { campo: "ssEmpresa", label: "SS Empresa" },
     { campo: "ssTotal", label: "Total SS" },
     { campo: "total", label: "Total" },
-    { campo: "nominaArchivo", label: "Nómina (doc)" },
     { campo: "pagado", label: "Pagado" },
     { campo: "confirmacion", label: "Confirmación" },
   ];
@@ -603,7 +593,7 @@ export function PagosView() {
       td: (p) => <TableCell key="horasTrabajadas" className="text-right tabular-nums">{p.horasTrabajadas}h</TableCell>,
     },
     propina: {
-      th: <TableHead key="propina" className="text-right whitespace-nowrap">Propina</TableHead>,
+      th: <TableHead key="propina" className="text-right whitespace-nowrap">Complemento</TableHead>,
       td: (p) => <TableCell key="propina" className="text-right tabular-nums whitespace-nowrap">{fmt(p.propina)}</TableCell>,
     },
     ajuste: {
@@ -656,27 +646,6 @@ export function PagosView() {
     total: {
       th: <TableHead key="total" className="text-right font-bold whitespace-nowrap">Total</TableHead>,
       td: (p) => <TableCell key="total" className="text-right font-bold tabular-nums whitespace-nowrap">{fmt(p.total)}</TableCell>,
-    },
-    nominaArchivo: {
-      th: <TableHead key="nominaArchivo" className="text-center w-[90px]">Nómina</TableHead>,
-      td: (p) => (
-        <TableCell key="nominaArchivo" className="text-center">
-          {p.nominaPath ? (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-7 gap-1 text-primary hover:bg-primary/5"
-              onClick={() => void verNomina(p)}
-              title="Ver la nómina original"
-            >
-              <FileText className="h-3.5 w-3.5" />
-              Ver
-            </Button>
-          ) : (
-            <span className="text-muted-foreground text-xs" title="Sin nómina adjunta">—</span>
-          )}
-        </TableCell>
-      ),
     },
     pagado: {
       th: <TableHead key="pagado" className="text-center w-[120px]">Pagar</TableHead>,
@@ -760,7 +729,6 @@ export function PagosView() {
     ssTotal: <TableCell key="t-sstotal" className="text-right tabular-nums font-medium whitespace-nowrap">{fmtDato(resumen.totalSs, hayNominaProcesada)}</TableCell>,
     irpf: <TableCell key="t-irpf" className="text-right tabular-nums whitespace-nowrap text-destructive">{hayNominaProcesada && totalIrpf > 0 ? `−${fmt(totalIrpf)}` : fmtDato(totalIrpf, hayNominaProcesada)}</TableCell>,
     total: <TableCell key="t-total" className="text-right tabular-nums font-bold">{fmt(resumen.totalFinal)}</TableCell>,
-    nominaArchivo: <TableCell key="t-nomdoc" className="text-center"><Badge variant="secondary" className="text-[10px]">{pagosFiltrados.filter((p) => p.nominaPath).length}/{pagosFiltrados.length}</Badge></TableCell>,
     pagado: <TableCell key="t-pagado" className="text-center"><Badge variant={pagosFiltrados.every((p) => p.pagado) ? "default" : "secondary"} className="text-[10px]">{pagosFiltrados.filter((p) => p.pagado).length}/{pagosFiltrados.length}</Badge></TableCell>,
     confirmacion: <TableCell key="t-conf" className="text-center"><Badge variant="secondary" className="text-[10px]">{pagosFiltrados.filter((p) => p.confirmacionEnviadaAt).length}/{pagosFiltrados.length}</Badge></TableCell>,
   };
@@ -1058,7 +1026,7 @@ export function PagosView() {
 function EditForm({ pago, onSave }: { pago: PagoEmpleado; onSave: (d: Partial<PagoEmpleado>) => void }) {
   const [form, setForm] = useState({ ...pago });
   const campos: { key: keyof PagoEmpleado; label: string }[] = [
-    { key: "nomina", label: "Nómina" }, { key: "propina", label: "Propina" },
+    { key: "nomina", label: "Nómina" }, { key: "propina", label: "Complemento" },
     { key: "ajuste", label: "Ajuste (+/−)" }, { key: "horasExtras", label: "H. Extras" },
     { key: "bonus", label: "Bonus" },
     { key: "ssEmpleado", label: "SS Empleado" }, { key: "ssEmpresa", label: "SS Empresa" },
