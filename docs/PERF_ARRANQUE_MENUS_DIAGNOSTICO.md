@@ -87,6 +87,38 @@ aguja es ESTRUCTURAL: colapsar las ~16 actions en UNA sola "bootstrap"** (1 POST
 y/o aligerar el middleware. **Eso es zona de Iván** (providers + `src/proxy.ts`) → es el fix nº3/4, y es
 el que hay que priorizar con él. Los fixes JS-side (1) ya no dan más.
 
+## Auditoría profunda (skill nextjs-performance-expert, 2026-07-10) — REVISA LA ESTRATEGIA
+
+Estudio independiente del código (agente auditor) + línea base estadística (4 muestras prod,
+mismas condiciones: mediana **~6,2 s** de coste de actions, rango 5,8-6,8 s, **22 POSTs estables**).
+Hallazgos NUEVOS que cambian la prioridad de los fixes:
+
+1. **La llamada que desbloquea el menú entra la ÚLTIMA en la cola.** `getUserPermisos` la dispara
+   `AuthProvider`, el provider MÁS EXTERNO (`src/shared/providers.tsx:23`); por orden de efectos de
+   React (hijos antes que padres) + `setTimeout(...,0)` (`auth-context.tsx:283`), entra detrás de
+   campana, accesos, empresa, logos… → **el menú espera a TODA la cola serializada** (9-14 POSTs).
+   Por eso la caché localStorage (que salta la cola) lo hace instantáneo.
+2. **Tormenta de prefetch oculta:** al pintarse el menú del director, ~11 `NavLink` sin
+   `prefetch={false}` emiten prefetches que pagan middleware completo con Paso 2 (~5-6 viajes cada
+   uno) ≈ **60-66 round-trips extra** que saturan GoTrue/PG justo en el arranque.
+3. **Doble/triple validación:** el middleware calcula `empresa_roles.permisos` en el Paso 2
+   (`proxy.ts:165`) **y los descarta**; cada action re-resuelve sesión+rol (`getAppContext`,
+   `getRolContext`). Los permisos se leen hasta 3× por request de módulo.
+4. **Aritmética total del bootstrap** (director, sin caché, sin Google): ≈ **145-155 round-trips**
+   en los primeros segundos; ~77 en UNA cola secuencial → 5,6-7 s ≈ lo medido.
+5. Perlas: `getEmpresaActivaId` es una server action que **solo lee una cookie** (paga 2 viajes de
+   peaje para 0 queries); `usePresencia` se re-suscribe 2-3× por deps inestables; en 2 de 3 recargas
+   prod aparece `[empresa-context] hidratación falló: TypeError: Failed to fetch` en consola.
+
+**Prioridad de fixes REVISADA** (la "megaacción bootstrap" deja de ser el camino recomendado):
+
+| Orden | Fix | Impacto | Riesgo | Zona |
+|---|---|---|---|---|
+| **d** | **Diferir/gatear lo secundario**: `listAccesosApps`×2, precarga Gmail/Calendar/Meet y `loadUserPref`×2 → gated en `open`; campana/EmpresaProvider tras `permisosLoaded`. El menú pasa de "último de 14" a "primero de 1-2" → **~80 % del beneficio** | Alto | Bajo | UI periférica (NO caliente) |
+| **a** | **Permisos del menú en SSR**: `(main)/layout.tsx` (ya tiene sesión) llama `getRolContext` y pasa `initialAuth` opcional a `AuthProvider` → menú en el primer paint SIEMPRE, con o sin localStorage | Alto | Bajo-medio | auth/providers = **Iván** (hacerlo aditivo) |
+| **c** | **Aligerar middleware**: saltar Paso 2 + UPDATE actividad en POSTs de actions (header `next-action`) y prefetches (`next-router-prefetch`) — redundante porque cada action re-valida; y/o `prefetch={false}` en NavLink | Medio (carga) | Medio | `proxy.ts` = **Iván** |
+| ~~b~~ | Megaacción/Route Handler bootstrap completo: **descartada en su forma total** (acopla invalidaciones dispares: contadores/min vs permisos/casi-nunca; megapayload; punto único lento). Solo tendría sentido parcial (permisos+empresas+logos) y (a) lo supera para el menú | — | — | — |
+
 ## Reproducir la medición
 - Usuario demo: `scripts/agora/create-dev-user.mjs` (ya actualizado al esquema actual: rol en
   `usuarios.rol_id/rol_label`, `estado_acceso`, `password_set`; la tabla `usuario_roles` ya no existe).
