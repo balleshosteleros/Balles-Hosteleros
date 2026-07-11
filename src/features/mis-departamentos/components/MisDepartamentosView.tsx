@@ -100,8 +100,14 @@ export function MisDepartamentosView() {
   // todavía no han llegado, por lento que sea el entorno.
   useEffect(() => {
     if (loading || rolesPendientes) return;
+    // roles=[] con permisosLoaded=true es el estado de DESLOGUEADO que la página
+    // de login deja en el AuthProvider y que sobrevive a la navegación cliente
+    // post-login (el provider no se remonta). Con cero roles no se puede afirmar
+    // "no eres dirección": esperamos a que el seed SSR o el SWR resuelvan el rol
+    // real. Un empleado de verdad siempre llega con roles no vacíos y sí rebota.
+    if (roles.length === 0) return;
     if (!esDireccion) router.replace("/mi-panel");
-  }, [loading, rolesPendientes, esDireccion, router]);
+  }, [loading, rolesPendientes, esDireccion, roles.length, router]);
 
   const tiles = useMemo(() => {
     // 'director' / 'admin' tienen bypass total — ven todos los departamentos.
