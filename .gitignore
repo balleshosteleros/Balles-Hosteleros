@@ -33,6 +33,9 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
+# Logs del daemon de localhost (se regeneran solos, no versionar)
+.dev-daemon/*.log
+
 # Local env files
 .env*.local
 !.env.example
