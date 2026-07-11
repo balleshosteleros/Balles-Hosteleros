@@ -1,5 +1,30 @@
 # ⚠️ URGENTE: los deploys de producción llevan rotos desde el 10-jul
 
+## ✅ RESUELTO (11-jul, Fernando) — causa encontrada y arreglada
+
+**Culpable: el cron horario `0 * * * *` de `nominas-gestoria-envio`** (introducido en
+`6ef08e69`). El plan de Vercel solo admite crons **diarios**; desde ese commit TODOS los
+deploys fallaban en la validación de configuración (por eso el typecheck local pasaba).
+
+- **Confirmación empírica:** rama `test/diag-cron-horario` (= main con solo esa línea
+  revertida) → deploy **success**, mientras main fallaba.
+- **Fix aplicado en main SIN romper tu feature PRP-069:** en vez de volver a un cron
+  diario cualquiera (habría dejado de cumplir la ventana 00:00–00:59 hora empresa que
+  exige tu route), quedan **DOS crons diarios al mismo path**: `0 22 * * *` y
+  `0 23 * * *` (UTC). Uno de los dos cae siempre en la medianoche de Madrid
+  (CEST/CET); tu check de idempotencia (`nominas_gestoria_ultimo_envio`) evita el
+  doble envío. **Si algún día una empresa opera en una zona horaria lejos de
+  UTC+1/+2, habrá que añadir otro cron diario a la hora UTC correspondiente.**
+- Con esto prod vuelve a desplegar y entran de golpe todos tus commits pendientes
+  (nóminas, festivos, cámaras, telefonía, sanciones, relay FTP) + nuestro fix de perf.
+- Nota: **cualquier cron con frecuencia menor que diaria volverá a romper TODOS los
+  deploys.** Si necesitas frecuencia horaria de verdad: Vercel Pro o el patrón del
+  workflow de GitHub Actions (`agora-sync-cron.yml`).
+
+---
+
+## (Histórico) El aviso original:
+
 > **De:** Fernando (11-jul-2026) · **Para:** Iván
 > Detectado al intentar desplegar un fix de rendimiento. **No es teoría: está verificado
 > contra la API de GitHub commit a commit.**
