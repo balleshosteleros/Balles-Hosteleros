@@ -28,15 +28,20 @@ export default async function MainLayout({ children }: { children: React.ReactNo
   let seed: React.ReactNode = null;
   if (user) {
     const p = await getUserPermisos();
-    seed = (
-      <AuthServerSeed
-        payload={{
-          userId: user.id,
-          roles: p.appRoles as AppRole[],
-          permisos: p.permisos,
-        }}
-      />
-    );
+    // Guard anti-carrera (paridad con looksRaceFailure de loadFreshAuth): si la
+    // resolución llegó a medias (sin empresa), NO sembramos ni cacheamos datos
+    // incompletos — el cliente seguirá su flujo normal con reintentos.
+    if (p.empresaId != null) {
+      seed = (
+        <AuthServerSeed
+          payload={{
+            userId: user.id,
+            roles: p.appRoles as AppRole[],
+            permisos: p.permisos,
+          }}
+        />
+      );
+    }
   }
 
   return (

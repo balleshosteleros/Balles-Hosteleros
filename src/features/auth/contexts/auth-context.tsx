@@ -338,6 +338,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setPermisos(p.permisos);
       setPermisosLoaded(true);
       setLoading(false);
+      // Sincroniza el MODO DE VISTA con el rol, igual que loadFreshAuth. Sin
+      // esto, un director en su primer login veía el menú al instante pero en
+      // modo "paneles" (Mi Panel/Perfil) hasta que el SWR corregía — y si
+      // navegaba en ese estado transitorio, acababa rebotado.
+      if (typeof window !== "undefined") {
+        const esDir = p.roles.includes("director") || p.roles.includes("admin");
+        const modo = esDir ? "departamentos" : "paneles";
+        try {
+          window.localStorage.setItem("bh_view_mode", modo);
+          const maxAge = 365 * 24 * 60 * 60;
+          document.cookie = `bh_view_mode=${modo}; path=/; max-age=${maxAge}; samesite=lax`;
+        } catch {
+          // storage/cookies no disponibles → ignoramos
+        }
+      }
     }
     writeAuthCache(p.userId, { roles: p.roles, permisos: p.permisos });
     if (typeof window !== "undefined") {
