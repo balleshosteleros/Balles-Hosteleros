@@ -138,6 +138,33 @@ el bootstrap), así que no es un A/B químicamente puro del fix (d), pero la mag
 estabilidad (3/3 fuera del rango previo) lo atribuyen al fix. Quedan ~2,9 s: los fixes
 (a) permisos en SSR y (c) middleware/prefetch — autorizados por Iván — son el siguiente paso.
 
+## Fix (a) MEDIDO en prod (2026-07-11) — OBJETIVO CUMPLIDO
+
+Commit `99860d82`: el layout de `(main)` resuelve permisos en SSR (`getUserPermisos()`
+server-side, misma región que la BD) y los siembra al `AuthProvider` vía `AuthServerSeed`
+**antes del primer paint** (useLayoutEffect). Aditivo: con caché o SWR ya resuelto es un
+no-op que solo persiste la caché; la autorización real sigue en servidor.
+
+**De paso se cazó el artefacto del script de medición**: no era `waitForURL` sino el
+`textContent()` del selector de error de login, cuyo auto-wait de Playwright metía 30 s
+fijos cuando no había error. Con `{ timeout: 500 }` el script ya mide el tiempo real.
+
+**Medición limpia (3 pasadas, PRIMER login sin caché, prod):**
+
+| Métrica | Antes de la campaña | Ahora (mediana) | Presupuesto skill |
+|---|---:|---:|---:|
+| **Submit → menú visible (28 ítems)** | ~8-20 s percibidos | **1,7 s (1,4–1,8)** | < 1,5-2 s ✅ |
+| Cola de server actions de fondo | 21,3 s | ~1-3 s y ya NO bloquea el menú | — |
+
+Nota honesta: los `nPosts: 4-5` de estas pasadas son artefacto de ventana (el recorder se
+cierra al pintarse el menú, ~1,7 s; las diferidas de 2,5-3 s caen fuera). Los POSTs de
+fondo siguen existiendo — el punto es que el menú ya no los espera.
+
+**Campaña completa: ~21 s → 1,7 s hasta menú en primer login** (regiones −70 %, diferir
+secundarias −53 % de cola, permisos en SSR = menú independiente de la cola).
+Pendiente opcional: fix (c) middleware/prefetch (reduce carga de GoTrue/PG, no latencia
+visible del menú).
+
 ## Reproducir la medición
 - Usuario demo: `scripts/agora/create-dev-user.mjs` (ya actualizado al esquema actual: rol en
   `usuarios.rol_id/rol_label`, `estado_acceso`, `password_set`; la tabla `usuario_roles` ya no existe).
