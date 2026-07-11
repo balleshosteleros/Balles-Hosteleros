@@ -119,6 +119,25 @@ Hallazgos NUEVOS que cambian la prioridad de los fixes:
 | **c** | **Aligerar middleware**: saltar Paso 2 + UPDATE actividad en POSTs de actions (header `next-action`) y prefetches (`next-router-prefetch`) — redundante porque cada action re-valida; y/o `prefetch={false}` en NavLink | Medio (carga) | Medio | `proxy.ts` = **Iván** |
 | ~~b~~ | Megaacción/Route Handler bootstrap completo: **descartada en su forma total** (acopla invalidaciones dispares: contadores/min vs permisos/casi-nunca; megapayload; punto único lento). Solo tendría sentido parcial (permisos+empresas+logos) y (a) lo supera para el menú | — | — | — |
 
+## Fix (d) MEDIDO en prod (2026-07-11) — funciona
+
+Commit `c3890d5f` (diferir secundarias: accesos ×2, campana, logos, drawers Google al abrir).
+Desplegado con `66ce9d37` (que además arregló el deploy roto: el cron horario de `6ef08e69`
+tumbaba TODOS los deploys — ver `docs/DEPLOYS_ROTOS_DESDE_85100ce0_PARA_IVAN.md`).
+
+**Medición (3 pasadas idénticas, primer login prod, mismo protocolo que la línea base):**
+
+| Métrica | ANTES (mediana, 4 muestras) | DESPUÉS (mediana, 3 muestras) | Δ |
+|---|---:|---:|---:|
+| Coste total server actions (fase 1) | 6,2 s (5,8–6,8) | **2,9 s (2,4–3,7)** | **−53 %** |
+| POSTs | 22 | 21 | — |
+| Menú con caché / recarga | 0,0–0,1 s | 0,0–0,1 s | = |
+
+Caveat honesto: el deploy soltó a la vez ~15 commits retenidos de Iván (features, no tocan
+el bootstrap), así que no es un A/B químicamente puro del fix (d), pero la magnitud y
+estabilidad (3/3 fuera del rango previo) lo atribuyen al fix. Quedan ~2,9 s: los fixes
+(a) permisos en SSR y (c) middleware/prefetch — autorizados por Iván — son el siguiente paso.
+
 ## Reproducir la medición
 - Usuario demo: `scripts/agora/create-dev-user.mjs` (ya actualizado al esquema actual: rol en
   `usuarios.rol_id/rol_label`, `estado_acceso`, `password_set`; la tabla `usuario_roles` ya no existe).
