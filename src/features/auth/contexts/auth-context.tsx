@@ -329,11 +329,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => subscription.unsubscribe();
   }, []);
 
-  // Aplica el seed del servidor SOLO si aún no hay permisos cargados (sin caché
-  // localStorage y antes de que el SWR resuelva). Si ya hay datos, se limita a
-  // persistir la caché para futuros arranques (el dato del servidor es fresco).
+  // Aplica el seed del servidor si aún no hay permisos cargados O si los roles
+  // están vacíos. El segundo caso cubre la navegación cliente desde el login:
+  // la página de login (sin sesión) deja el contexto en permisosLoaded=true con
+  // roles=[], y como el provider NO se remonta en el redirect post-login, ese
+  // estado obsoleto llegaba a /mis-departamentos y su guard rebotaba al
+  // director a /mi-panel. El dato del seed viene del servidor con la sesión ya
+  // validada → siempre gana a un estado de deslogueado. Si ya hay datos reales,
+  // solo persiste la caché para futuros arranques.
   const seedFromServer = useCallback((p: AuthServerSeedPayload) => {
-    if (!permisosLoaded) {
+    if (!permisosLoaded || roles.length === 0) {
       setRoles(p.roles);
       setPermisos(p.permisos);
       setPermisosLoaded(true);
@@ -362,7 +367,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // ignore
       }
     }
-  }, [permisosLoaded]);
+  }, [permisosLoaded, roles]);
 
   const signIn = useCallback(async (email: string, password: string) => {
     const supabase = getSupabase();
