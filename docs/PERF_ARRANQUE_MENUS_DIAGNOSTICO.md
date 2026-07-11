@@ -165,6 +165,24 @@ secundarias −53 % de cola, permisos en SSR = menú independiente de la cola).
 Pendiente opcional: fix (c) middleware/prefetch (reduce carga de GoTrue/PG, no latencia
 visible del menú).
 
+## Post-fix (a): dos bugs de PRIMER LOGIN cazados y cerrados (2026-07-11)
+
+El seed SSR destapó (no creó) dos bugs preexistentes del primer login, ambos derivados
+del mismo estado: la página de login deja el AuthProvider en `permisosLoaded=true` con
+`roles=[]` (deslogueado), y ese estado **sobrevive a la navegación cliente post-login**
+(el provider no se remonta).
+
+1. **Menú de empleado transitorio para un director** (Fernando lo sufrió: menú "Perfil",
+   clic → rebote). Fix `ff13249a`: el seed sincroniza también el **modo de vista** por rol
+   (localStorage+cookie `bh_view_mode`) antes de que `ViewModeProvider` lo lea.
+2. **Director aterrizaba en `/mi-panel`** en vez de `/mis-departamentos` (intermitente,
+   medido 1 de 2): el guard de `MisDepartamentosView` corría con el closure del primer
+   commit (roles=[]) y rebotaba antes de que el seed re-renderizara. Fixes `a26f1073`
+   (el seed también aplica con roles vacíos) + `e6152d88` (**el guard no rebota con
+   roles=[]** — con cero roles no se puede afirmar "no eres dirección").
+
+**Verificado en prod 3/3**: login director → `/mis-departamentos`, menú en 1,7-2,3 s.
+
 ## Reproducir la medición
 - Usuario demo: `scripts/agora/create-dev-user.mjs` (ya actualizado al esquema actual: rol en
   `usuarios.rol_id/rol_label`, `estado_acceso`, `password_set`; la tabla `usuario_roles` ya no existe).
