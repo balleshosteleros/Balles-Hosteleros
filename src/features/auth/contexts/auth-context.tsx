@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useEffect, useState, ReactNode, useCallback } from "react";
+import { createContext, useContext, useEffect, useLayoutEffect, useState, ReactNode, useCallback } from "react";
 import { createBrowserClient } from "@supabase/ssr";
 import type { User, Session, SupabaseClient } from "@supabase/supabase-js";
 import type { PermisoModulo } from "@/features/ajustes/data/ajustes";
@@ -124,6 +124,37 @@ function readLastCachedAuth(): AuthCache | null {
   } catch {
     return null;
   }
+}
+
+// ── Seed de permisos resueltos en SERVIDOR ──────────────────────────────────
+// El layout de (main) (server component, con la sesión ya validada) resuelve
+// roles+permisos durante el render SSR y los inyecta aquí ANTES del primer
+// paint del cliente. Así el menú es visible en el primer render SIEMPRE —
+// incluido el PRIMER login, donde no hay caché localStorage y hasta ahora el
+// sidebar esperaba a que getUserPermisos saliera la ÚLTIMA de la cola
+// serializada de server actions del arranque (~3-6 s medidos en prod).
+// El refresh stale-while-revalidate de loadFreshAuth sigue corriendo igual.
+export interface AuthServerSeedPayload {
+  userId: string;
+  roles: AppRole[];
+  permisos: PermisoModulo[];
+}
+
+const AuthSeedContext = createContext<((p: AuthServerSeedPayload) => void) | null>(null);
+
+// useLayoutEffect en cliente (corre antes del paint); en SSR no hace nada y
+// useEffect evita el warning de React en el render de servidor.
+const useIsoLayoutEffect = typeof window !== "undefined" ? useLayoutEffect : useEffect;
+
+export function AuthServerSeed({ payload }: { payload: AuthServerSeedPayload }) {
+  const seed = useContext(AuthSeedContext);
+  useIsoLayoutEffect(() => {
+    seed?.(payload);
+    // payload es un objeto nuevo en cada render del layout; el seed es
+    // idempotente (no-op si los permisos ya están cargados), así que no hace
+    // falta memoizarlo.
+  }, [seed, payload]);
+  return null;
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -298,6 +329,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => subscription.unsubscribe();
   }, []);
 
+  // Aplica el seed del servidor SOLO si aún no hay permisos cargados (sin caché
+  // localStorage y antes de que el SWR resuelva). Si ya hay datos, se limita a
+  // persistir la caché para futuros arranques (el dato del servidor es fresco).
+  const seedFromServer = useCallback((p: AuthServerSeedPayload) => {
+    if (!permisosLoaded) {
+      setRoles(p.roles);
+      setPermisos(p.permisos);
+      setPermisosLoaded(true);
+      setLoading(false);
+    }
+    writeAuthCache(p.userId, { roles: p.roles, permisos: p.permisos });
+    if (typeof window !== "undefined") {
+      try {
+        window.localStorage.setItem(LAST_USER_ID_KEY, p.userId);
+      } catch {
+        // ignore
+      }
+    }
+  }, [permisosLoaded]);
+
   const signIn = useCallback(async (email: string, password: string) => {
     const supabase = getSupabase();
     if (!supabase) return { error: "Supabase not configured" };
@@ -372,7 +423,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       user, session, profile, roles, loading, permisos, permisosLoaded,
       signIn, signOut, hasRole, canAccess, puedeVer, puedeEditar,
     }}>
-      {children}
+      <AuthSeedContext.Provider value={seedFromServer}>
+        {children}
+      </AuthSeedContext.Provider>
     </AuthContext.Provider>
   );
 }

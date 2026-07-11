@@ -1,6 +1,9 @@
 import { redirect } from "next/navigation";
 import { AppLayout } from "@/features/layout/components/app-layout";
 import { getEmpleadoGuardStatus } from "@/features/primer-acceso/data/empleado-status";
+import { getUserPermisos } from "@/features/auth/actions/permisos-actions";
+import { AuthServerSeed, type AppRole } from "@/features/auth/contexts/auth-context";
+import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
@@ -15,5 +18,31 @@ export default async function MainLayout({ children }: { children: React.ReactNo
   if (shouldShowWizard) {
     redirect("/primer-acceso");
   }
-  return <AppLayout>{children}</AppLayout>;
+
+  // Permisos del menú resueltos EN SERVIDOR (misma región que la BD) y
+  // sembrados al AuthProvider antes del primer paint: el sidebar no espera a
+  // la cola de server actions del arranque ni depende de la caché localStorage.
+  // Solo visibilidad de UI — la autorización real sigue en cada action/route.
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  let seed: React.ReactNode = null;
+  if (user) {
+    const p = await getUserPermisos();
+    seed = (
+      <AuthServerSeed
+        payload={{
+          userId: user.id,
+          roles: p.appRoles as AppRole[],
+          permisos: p.permisos,
+        }}
+      />
+    );
+  }
+
+  return (
+    <AppLayout>
+      {seed}
+      {children}
+    </AppLayout>
+  );
 }
