@@ -21,9 +21,28 @@ deploys fallaban en la validación de configuración (por eso el typecheck local
   deploys.** Si necesitas frecuencia horaria de verdad: Vercel Pro o el patrón del
   workflow de GitHub Actions (`agora-sync-cron.yml`).
 
+### Confirmaciones posteriores (12-jul, Ivan+Claude)
+
+- **El código nunca estuvo roto.** `npm run build` local en el HEAD del rango (mismo
+  bundler que Vercel, Turbopack) → **exit 0** + typecheck limpio. Esto descarta del
+  todo las "sospechas típicas" del histórico de abajo (prerender, import server-only,
+  env var de R2/telefonía): eran callejones sin salida. El único fallo era la
+  validación de `vercel.json` por el cron, que `next build` no comprueba.
+- **El fix (d) `c3890d5f` ya está desplegado y medido en prod:** coste de server
+  actions **6,2s → 2,9s (−53%)** (ver `573d32e`). La re-medición que quedó en cola
+  está hecha; no queda nada pendiente de este hilo.
+- **El "primer failure = `85100ce0`" del histórico despistaba:** Vercel no buildea
+  todos los commits de un push, así que el primer *build* fallido no señala al commit
+  culpable. El culpable real (`6ef08e69`, el cron) es **anterior** a `85100ce0`.
+
 ---
 
-## (Histórico) El aviso original:
+## (Histórico — YA RESUELTO, no accionar) El aviso original:
+
+> ⚠️ **Todo lo que sigue quedó OBSOLETO tras el fix del cron (ver arriba).** Se conserva
+> solo como registro. En particular, el diagnóstico "producción congelada", las "pistas
+> no confirmadas" y el apartado "qué necesitamos de ti" **ya no aplican**: la causa era el
+> cron, no el código, y prod despliega con normalidad desde el 11-jul.
 
 > **De:** Fernando (11-jul-2026) · **Para:** Iván
 > Detectado al intentar desplegar un fix de rendimiento. **No es teoría: está verificado
