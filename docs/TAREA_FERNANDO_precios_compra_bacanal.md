@@ -1,7 +1,52 @@
 # TAREA para Fernando — Precios de compra de BACANAL (cuando bajes el repo)
 
-> **De:** Iván (vía Claude) · **Fecha:** 2026-06-30 · **Actualizado:** 2026-07-07 · **Prioridad:** media
+> **De:** Iván (vía Claude) · **Fecha:** 2026-06-30 · **Actualizado:** 2026-07-14 · **Prioridad:** media
 > Léelo al hacer `git pull` y reconciliar.
+
+## ✅ ESTADO REAL 2026-07-14 (verificado contra la BD por Claude, lado de Iván)
+
+**Ojo Fernando: el documento iba por detrás de la base de datos.** Casi todo lo que este
+papel pedía como "pendiente de decidir" YA estaba cargado. Verificado producto a producto
+contra `producto_precios_compra` el 14-jul. Resumen:
+
+- **Bloque A (nombres que no cuadran): CERRADO.** Los productos propuestos ya tenían precio.
+  Iván confirmó el 14-jul los 3 únicos casos ambiguos que quedaban:
+  - **Bengalas** "60s sin humo 36u" (14,40 €) → es **«Bengalas»** (ya cargado). «Bengalas
+    Boom-boom» es OTRO producto distinto, se queda sin precio por ahora.
+  - **Lavavajillas manual 5L** (5,49 €) → es **«Lavavajillas manual»** (ya cargado). No es Fairy.
+  - **Entrecot de vaca** (28,90 €/kg) → es **«Lomo bajo frisona (350 gr)»** (ya cargado). NO
+    crear "Entrecot" aparte (mismo corte).
+- **Bloque B (panes / proveedor dudoso): CERRADO.** Los 3 panes (`Pan de Hamburguesa (High
+  Potato)`, `Artesanillo 55g`, `Artesanillo semillado 60g`) YA tienen precio, y el proveedor
+  **JUANITO BAKER ya existe** en el catálogo. No había nada que decidir.
+- **Bloque C (productos nuevos): CASI TODO CARGADO.** Verificados y CON precio en Bacanal:
+  Mozzarella rallada, Filete pechuga de pollo, Secreto de cerdo, Lomo de merluza, Nata para
+  montar 35%, Huevo de codorniz, Yema de huevo, Helado de vainilla, Gyozas (veg + pollo),
+  Corvina, Salsa tartufata, Base de arroz de paella, Paleta cebo ibérico. **Solo queda por
+  decidir lo del bloque "PENDIENTE REAL" de abajo.**
+
+### 🔴 PENDIENTE REAL (lo único que de verdad falta — decisión de negocio de Iván)
+
+1. **"Salsa barbacoa" comprada (Makro, Bacanal)** — NO existe como producto de compra (en el
+   catálogo solo está como *elaboración*/receta casera). ¿Crear "Salsa barbacoa (compra)"
+   con su precio, o dejarlo solo como elaboración?
+2. **HABANA — "Cubo Cóctel Mix 2kg" (Bigger Golosinas, 9,86 €)** — no existe. ¿Crear?
+3. **HABANA — "Leche Asturiana" (Dither)** — en catálogo solo hay «Leche Condesada» (producto
+   distinto, sin precio). ¿Crear «Leche» nueva y cargar ahí?
+4. **HABANA — "Hielo cubitos 41mm" (Procubitos, 0,818 €/kg)** — hay «Hielo Pile» y «Hielo Roca»
+   (ambos sin precio) pero es otro formato. ¿Crear «Hielo Cubitos» o usar uno de esos?
+5. **HABANA — "Vaso de sidra PP desechable 50cl" (Krittikali)** — en catálogo solo «Vaso de
+   Sidra Tensionado» (vidrio, sin precio). ¿Mismo producto o crear el desechable aparte?
+6. **DECISIÓN D (la importante, no es de albaranes):** ¿qué tabla de recetas manda,
+   `producto_composicion` vs `escandallo_ingredientes`? Bloquea el descuento de stock por ventas.
+   (Detalle en el bloque D más abajo.)
+7. **Pedido Makro "PARA PERSONAL" (doc 027174):** ¿se cuenta como gasto del restaurante o se excluye?
+
+> El resto de productos "sin precio" (234 Bacanal / 190 Habana) NO son decisiones: son
+> productos que simplemente no venían en ningún albarán enviado. Se cargarán solos cuando
+> llegue un albarán con ellos. No hay nada que decidir ahí.
+
+---
 
 ## 🚨 AVISO URGENTE PARA IVÁN (11-jul, Fernando) — NO es de precios
 
