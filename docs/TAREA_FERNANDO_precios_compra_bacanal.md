@@ -37,15 +37,11 @@ contra `producto_precios_compra` el 14-jul. Resumen:
    (ambos sin precio) pero es otro formato. ¿Crear «Hielo Cubitos» o usar uno de esos?
 5. **HABANA — "Vaso de sidra PP desechable 50cl" (Krittikali)** — en catálogo solo «Vaso de
    Sidra Tensionado» (vidrio, sin precio). ¿Mismo producto o crear el desechable aparte?
-6. ~~**DECISIÓN D (la importante, no es de albaranes):** ¿qué tabla de recetas manda?~~
-   **✅ DECIDIDO 14-jul por Iván: MANDA `producto_composicion`** (la que ya tiene TODOS los
-   platos: 117 Bacanal / 105 Habana). Es la fuente oficial para descontar stock por ventas.
-   `escandallo_ingredientes` (fichas técnicas PRP-071, hoy solo 22 platos en Bacanal / 0 en
-   Habana) **se sincroniza HACIA `producto_composicion`** a medida que se completen las fichas
-   — no al revés. Así el stock funciona ya con lo que hay, sin esperar a terminar las fichas.
-   **Fernando (lane técnica):** monta el cálculo de `ventas_dia_promedio` leyendo de
-   `producto_composicion`, y el sync explícito escandallo→composición. Esto NO necesita a Iván.
-7. **Pedido Makro "PARA PERSONAL" (doc 027174):** ¿se cuenta como gasto del restaurante o se excluye?
+6. **Pedido Makro "PARA PERSONAL" (doc 027174):** ¿se cuenta como gasto del restaurante o se excluye?
+
+> **Nota (Iván, 14-jul):** el tema de "qué tabla de recetas/escandallos manda para el stock"
+> es OTRA cosa, no pinta en este documento de precios de compra. Se trata por separado. Aquí
+> solo albaranes y precios.
 
 > El resto de productos "sin precio" (234 Bacanal / 190 Habana) NO son decisiones: son
 > productos que simplemente no venían en ningún albarán enviado. Se cargarán solos cuando
