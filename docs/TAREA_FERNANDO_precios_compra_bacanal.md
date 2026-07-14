@@ -3,6 +3,33 @@
 > **De:** Iván (vía Claude) · **Fecha:** 2026-06-30 · **Actualizado:** 2026-07-14 · **Prioridad:** media
 > Léelo al hacer `git pull` y reconciliar.
 
+## 📌 NOTA PARA FERNANDO (14-jul, de parte de Iván) — LÉEME AL ENTRAR
+
+**1. Albaranes cargados y semanas cubiertas.** Verificado en BD: cargadas **3 semanas**
+(hueco "sin precio" hoy: Bacanal 234 / Habana 190). El histórico arranca el 18-jun (Iván
+confirma que ANTES no había compras, no falta nada por detrás). Fechas cargadas:
+- Sem. 16-jun → albaranes **18-jun** (jue) + **19-jun** (vie) — 121 precios
+- Sem. 23-jun → albaranes **25-jun** (jue) + **26-jun** (vie) — 98 precios
+- Sem. 30-jun → albaranes **2-jul** (jue) + **3-jul** (vie) — 94 precios
+- **FALTA la semana del 7-jul (jue 10 / vie 11).** Iván dice que **te la pasará** (fotos/PDF).
+  Cárgala como tanda nueva cuando la tengas.
+
+**2. Decisiones sueltas que quedan (productos de albarán que NO existen en catálogo).**
+Iván las dejó pendientes; no bloquean. Ver bloque "🔴 PENDIENTE REAL" más abajo:
+salsa barbacoa (compra) · Cubo Cóctel Mix · Leche Asturiana · Hielo cubitos · Vaso sidra
+desechable · pedido Makro "para personal".
+
+**3. 🆕 FEATURE QUE IVÁN QUIERE — asistente OCR de facturas para líneas no reconocidas.**
+Detalle completo, verificado contra el código, en
+**`docs/PRP_ASISTENTE_OCR_LINEAS_NO_RECONOCIDAS.md`** (creado 14-jul). Resumen: hoy cuando
+el OCR de facturas encuentra una línea cuyo producto no está en el catálogo, la marca "extra"
+con `productoId:null`, NO ofrece vincular ni crear, y `validarFactura` BLOQUEA. Iván quiere
+que al subir la factura salga un asistente por cada línea huérfana con 3 opciones:
+**vincular a existente / crear producto nuevo (y se vincula solo) / ignorar**. Está planificado
+por fases en ese PRP. **Iván cerró su sesión aquí; retómalo tú con ese planteamiento.**
+
+---
+
 ## ✅ ESTADO REAL 2026-07-14 (verificado contra la BD por Claude, lado de Iván)
 
 **Ojo Fernando: el documento iba por detrás de la base de datos.** Casi todo lo que este
