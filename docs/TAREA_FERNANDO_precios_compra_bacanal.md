@@ -3,6 +3,42 @@
 > **De:** Iván (vía Claude) · **Fecha:** 2026-06-30 · **Actualizado:** 2026-07-14 · **Prioridad:** media
 > Léelo al hacer `git pull` y reconciliar.
 
+## ❓ 3 PREGUNTAS PARA IVÁN — asistente de albaranes por foto (15-jul, Fernando)
+
+> Contexto: Fernando analizó tu audio/conversación sobre el asistente (doble nombre
+> proveedor/interno, foto desde móvil, auto-registro de precios). El planteamiento está
+> claro y AMPLÍA el `docs/PRP_ASISTENTE_OCR_LINEAS_NO_RECONOCIDAS.md` con la pieza que
+> faltaba: **memorizar la asociación** nombre-proveedor → producto para que el sistema
+> case solo los albaranes siguientes. Antes de hacer el plan de implantación necesitamos
+> 3 decisiones tuyas. Responde debajo de cada una, como siempre.
+
+**P1 — Stock en albarán suelto.** Cuando alguien sube un albarán por foto SIN pedido
+previo, ¿debe además SUMAR el stock de lo recibido, o de momento solo registrar
+productos/precios/formatos?
+- *Por qué:* el flujo actual (recepción con pedido → "Entregado") ya suma stock; si el
+  suelto también suma desde el día 1, hay que decidirlo ahora para no descuadrar
+  inventarios con albaranes históricos del onboarding (que NO deberían sumar).
+- *Ejemplo de respuesta:* «Los del día a día SÍ suman stock; los históricos/onboarding
+  NO (o con un check "solo registrar precios")».
+
+**P2 — ¿Escritorio primero o móvil primero?** Para que pruebes la visual cuanto antes,
+proponemos: 1º escritorio (reutiliza el OCR y el diálogo de facturas que ya existen →
+lo tienes en días), 2º la sección de foto en la app móvil justo después.
+- *Por qué:* el móvil requiere pantalla nueva; el escritorio es extender lo que ya hay.
+- *Ejemplo de respuesta:* «OK escritorio primero» o «No, quiero el móvil ya aunque tarde más».
+
+**P3 — Precio por formato + unidad en la ficha.** Hoy conviven precios "por caja"
+(Cocacola 16,56/caja de 24) y "por kg/ud" (Limones 1,50/kg). Proponemos que cada ficha
+de compra guarde: formato de compra ("Caja 24 ud", "Kg", "Ud") + precio del formato +
+precio unitario derivado. Es lo que luego permite calcular escandallos bien.
+- *Por qué:* sin unidades por formato, el coste por ración de las recetas saldrá mal.
+- *Ejemplo de respuesta:* «Sí, formato+unitario en ficha; revisad los formatos ya
+  cargados» (los ~330 precios de estas 4 semanas tienen formato vacío — lo rellenaríamos).
+
+*(Lo que NO te preguntamos porque lo decidimos nosotros y lo verás documentado: dónde
+viven los alias por proveedor, cómo se muestran los dos nombres en la ficha, y que
+renombrar el producto interno no rompe las asociaciones.)*
+
 ## ✅ SEMANA DEL 7-JUL CARGADA — HABANA (15-jul, Fernando)
 
 Iván pasó los albaranes de la semana que faltaba y están **cargados: 51 precios de
