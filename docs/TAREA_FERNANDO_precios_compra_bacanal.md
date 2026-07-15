@@ -3,6 +3,50 @@
 > **De:** Iván (vía Claude) · **Fecha:** 2026-06-30 · **Actualizado:** 2026-07-14 · **Prioridad:** media
 > Léelo al hacer `git pull` y reconciliar.
 
+## ✅ ALBARANES REGISTRADOS (15-jul, Fernando) — lo que pediste el 7-jul
+
+**31 albaranes con 243 líneas** registrados en prod (BACANAL 20 · HABANA 11), del 18-jun
+al 10-jul. Ahora **137 productos tienen histórico de compras** (66 Bacanal / 71 Habana):
+se ve qué compraste, a quién, cuándo, cuánta cantidad y a qué precio. Verificado: 0 líneas
+sin producto, 0 productos inexistentes, 0 cruces entre empresas; totales cuadrados con el
+papel (p.ej. Coca-Cola 4534873194 = 128,41 € = 128,09 productos + 0,32 punto verde).
+
+**3 cosas que debes saber (importantes):**
+
+1. **⚠️ La tabla `albaranes_lineas` está MUERTA — no la usa NI UNA LÍNEA de código** (0
+   referencias en todo el repo). Tu propio `createAlbaran` guarda las líneas en la columna
+   **`albaranes.lineas` (jsonb)** de la cabecera, y `listComprasPorProducto` las lee de ahí.
+   Por eso he registrado ahí (donde la app SÍ lee) y no en `albaranes_lineas`, que habría
+   sido dato invisible. **Valora borrar esa tabla** para que no confunda.
+2. **El stock NO se ha tocado a propósito** (0 movimientos en `stock_movimientos`): esta
+   mercancía es de hace 3-4 semanas y ya está consumida; sumarla ahora inflaría el
+   inventario. Los albaranes van en estado **`Confirmado`** (recibido y cerrado), que es
+   el estado que hace que salgan en el histórico de compras de la ficha. Esto **prejuzga
+   la P1 de abajo solo para el histórico**: dinos si lo quieres de otra forma.
+3. Numeración: han tomado `ALB-2026-001..020` (Bacanal) y `ALB-2026-001..011` (Habana).
+   Son los primeros cronológicamente, así que los albaranes nuevos seguirán desde ahí.
+
+### 🔴 23 albaranes MÁS que NO se han podido registrar (te necesitan a ti)
+
+Regla que respeto (es la tuya, de `createAlbaran`): **un albarán no se guarda si alguna
+línea no tiene producto**. Estos 23 tienen líneas cuyo producto NO EXISTE en el catálogo
+— casi todos de **MAKRO**. En cuanto digas "crear", los registro enteros:
+
+- **Bacanal (crear ~24 productos)**: queso mascarpone · coulant de chocolate · alitas de
+  pollo · pimiento de freír · anacardo natural · tomate frito · aceite de oliva 0,4 ·
+  vinagre de vino blanco · mayonesa (Hellmann's 5L) · salsa barbacoa (¡la de tu decisión
+  nº1!) · galleta María · pan hamburguesa sésamo (≠ el High Potato que ya existe) ·
+  jamoncitos de pollo · hamburguesa vaca artesana 180g (catálogo solo tiene angus 200gr) ·
+  Coca-Cola PET 2L regular y zero (catálogo solo retornable/1L) · cubo con pedal 30L ·
+  tenedor mesa · cuchillo chuletero · mantequilla sin sal · mezcla de setas · pasas sin
+  semilla · cóctel de aceitunas (≠ «Aceituna negra expolvoreada»).
+- **Habana**: los 5 que ya tenías pendientes (Cubo Cóctel Mix, Leche Asturiana, Hielo
+  cubitos, vaso sidra PP, fregona tejido-sin-tejer) + **1 NUEVO**: "AQUARIUS VR30 C24"
+  (Coca-Cola) — **el albarán no dice el sabor** y el catálogo separa Limón y Naranja.
+  ¿Cuál era?
+- Fuera por diseño: "Desplazamiento y Servicio" (Disbesa) = gasto, no producto. Y la 2ª
+  línea de "Ron Limón Rives" del albarán 14991, que viene **1 ud sin importe** (¿regalo?).
+
 ## ❓ 3 PREGUNTAS PARA IVÁN — asistente de albaranes por foto (15-jul, Fernando)
 
 > Contexto: Fernando analizó tu audio/conversación sobre el asistente (doble nombre
