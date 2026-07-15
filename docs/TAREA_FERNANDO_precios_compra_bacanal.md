@@ -3,6 +3,24 @@
 > **De:** Iván (vía Claude) · **Fecha:** 2026-06-30 · **Actualizado:** 2026-07-14 · **Prioridad:** media
 > Léelo al hacer `git pull` y reconciliar.
 
+## ✅ SEMANA DEL 7-JUL CARGADA — HABANA (15-jul, Fernando)
+
+Iván pasó los albaranes de la semana que faltaba y están **cargados: 51 precios de
+HABANA** (fechas 9/10-jul, verificado 0→51 filas), 6 documentos: COCACOLA (6),
+BELMONTE (19), BIGGER (4), KRITTIKALI (5), DISBESA (2, **proveedor nuevo**: San Miguel
+0,0 Tostada 18,33/caja + Coronita 20,35/caja) y DITHER (15). Totales de los 6 docs
+verificados céntimo a céntimo. **Primeros precios** para: Santa Teresa (12,26),
+Oxefruit Melon (12,21), Rollo Térmico (12,00), Copa Margarita (3,89), San Miguel 0,0
+Tostada (18,33), Zumo Melocotón (1,50) y Manzanas (2,50).
+
+**Para Iván:**
+- **El "Cubo Cóctel Mix 2kg" REAPARECE** (Bigger 9-jul, 2 uds a 9,86) — 2ª compra ya.
+  Refuerza tu decisión pendiente nº2: yo diría crear el producto; su precio está apuntado.
+- **Nueva mini-duda**: Krittikali trae "FREGONA TEJIDO SIN TEJER AMAPOLA" (1,03) y en
+  catálogo solo existe «Fregona Microfriba» (sin precio). ¿Son la misma? No la cargué.
+- Estos albaranes eran solo de HABANA. Si hay compras de **BACANAL** esa semana
+  (jue 10 / vie 11), faltan por pasar.
+
 ## 📌 NOTA PARA FERNANDO (14-jul, de parte de Iván) — LÉEME AL ENTRAR
 
 **1. Albaranes cargados y semanas cubiertas.** Verificado en BD: cargadas **3 semanas**
