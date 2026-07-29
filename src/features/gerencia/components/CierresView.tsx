@@ -243,6 +243,7 @@ export function CierresView() {
     total: <TableHead key="total" className="text-right">Total contado</TableHead>,
     estado: <TableHead key="estado">Estado</TableHead>,
     descuadre: <TableHead key="descuadre" className="text-right">Descuadre</TableHead>,
+    gastos: <TableHead key="gastos" className="text-right">Gastos</TableHead>,
     acumulado: <TableHead key="acumulado" className="text-right">Acumulado</TableHead>,
     doc: <TableHead key="doc">Doc.</TableHead>,
   };
@@ -274,6 +275,11 @@ export function CierresView() {
     descuadre: (
       <TableCell key="descuadre" className={`text-right font-medium ${c.descuadre === 0 ? "text-muted-foreground" : c.descuadre > 0 ? "text-amber-700" : "text-red-700"}`}>
         {c.cuadra ? "—" : fmtEuro(c.descuadre)}
+      </TableCell>
+    ),
+    gastos: (
+      <TableCell key="gastos" className={`text-right ${c.total_gastos > 0 ? "text-orange-700 font-medium" : "text-muted-foreground"}`}>
+        {c.total_gastos > 0 ? fmtEuro(c.total_gastos) : "—"}
       </TableCell>
     ),
     acumulado: (
