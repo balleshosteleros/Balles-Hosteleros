@@ -106,6 +106,10 @@ export interface Producto {
   categoria: string;
   estado: EstadoProducto;
   proveedor?: string;
+  /** Cómo nombra el proveedor a este producto en su albarán/factura. Alias para el
+   *  asistente de albaranes por foto: al leer una línea, se empareja por este nombre.
+   *  Un solo nombre de proveedor por producto (decisión de negocio 2026-07-29). */
+  nombreProveedor?: string | null;
   precioCompra?: string;
   precioVenta?: string;
   coste?: string;

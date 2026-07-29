@@ -161,6 +161,7 @@ function makeConfig(variant: TipoProducto): ModuleIO<ProductoInput> {
         categoria: p.categoria,
         estado: p.estado,
         proveedor: p.proveedor ?? null,
+        nombreProveedor: p.nombreProveedor ?? null,
         precioCompra: p.precioCompra ?? null,
         precioVenta: p.precioVenta ?? null,
         coste: p.coste ?? null,

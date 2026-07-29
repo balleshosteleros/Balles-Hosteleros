@@ -27,6 +27,9 @@ const productoInputSchema = z.object({
   // El nombre del proveedor se almacena SIEMPRE en MAYÚSCULAS (regla de
   // negocio compartida con la tabla `proveedores.nombre_comercial`).
   proveedor: z.string().nullable().optional().transform((v) => v ? v.trim().toUpperCase() : v),
+  // Cómo nombra el proveedor a este producto en su albarán (alias para el OCR de
+  // albaranes). Se guarda tal cual (respeta el texto del proveedor); solo se recorta.
+  nombreProveedor: z.string().nullable().optional().transform((v) => v ? v.trim() : v),
   precioCompra: z.string().nullable().optional(),
   precioVenta: z.string().nullable().optional(),
   coste: z.string().nullable().optional(),
@@ -60,6 +63,7 @@ type ProductoRow = {
   categoria: string;
   estado: EstadoProducto;
   proveedor: string | null;
+  nombre_proveedor: string | null;
   precio_compra: string | null;
   precio_venta: string | null;
   coste: string | null;
@@ -91,6 +95,7 @@ function rowToProducto(r: ProductoRow): Producto {
     categoria: r.categoria,
     estado: r.estado,
     proveedor: r.proveedor ?? undefined,
+    nombreProveedor: r.nombre_proveedor ?? null,
     precioCompra: r.precio_compra ?? undefined,
     precioVenta: r.precio_venta ?? undefined,
     coste: r.coste ?? undefined,
@@ -268,6 +273,7 @@ export async function createProducto(
         categoria: parsed.data.categoria,
         estado: parsed.data.estado,
         proveedor: parsed.data.proveedor,
+        nombre_proveedor: parsed.data.nombreProveedor ?? null,
         precio_compra: parsed.data.precioCompra,
         precio_venta: parsed.data.precioVenta,
         coste: parsed.data.coste,
@@ -389,6 +395,7 @@ export async function bulkImportProductos(
       categoria: p.categoria,
       estado: p.estado,
       proveedor: p.proveedor ?? null,
+      nombre_proveedor: p.nombreProveedor ?? null,
       precio_compra: p.precioCompra ?? null,
       precio_venta: p.precioVenta ?? null,
       coste: p.coste ?? null,
@@ -463,6 +470,7 @@ export async function updateProducto(
     if (input.categoria !== undefined) updates.categoria = input.categoria ? capitalizeText(input.categoria) : input.categoria;
     if (input.estado !== undefined) updates.estado = input.estado;
     if (input.proveedor !== undefined) updates.proveedor = input.proveedor ? input.proveedor.trim().toUpperCase() : input.proveedor;
+    if (input.nombreProveedor !== undefined) updates.nombre_proveedor = input.nombreProveedor ? input.nombreProveedor.trim() : input.nombreProveedor;
     if (input.precioCompra !== undefined) updates.precio_compra = input.precioCompra;
     if (input.precioVenta !== undefined) updates.precio_venta = input.precioVenta;
     if (input.coste !== undefined) updates.coste = input.coste;

@@ -118,6 +118,7 @@ export async function parseFileToProductos(
       categoria: mapped.categoria || "Sin categoría",
       estado,
       proveedor: mapped.proveedor || null,
+      nombreProveedor: mapped.nombreProveedor || null,
       precioCompra: mapped.precioCompra || null,
       precioVenta: mapped.precioVenta || null,
       coste: mapped.coste || null,

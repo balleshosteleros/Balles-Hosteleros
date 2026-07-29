@@ -178,6 +178,7 @@ function ProductoDetalle({
   const [unidad, setUnidad] = useState(producto?.medida || "Unidades");
   const [estado, setEstado] = useState<EstadoProducto>(producto?.estado ?? "Activo");
   const [proveedor, setProveedor] = useState(producto?.proveedor ?? "");
+  const [nombreProveedor, setNombreProveedor] = useState(producto?.nombreProveedor ?? "");
   const [precioVenta, _setPrecioVenta] = useState(producto?.precioVenta ?? "");
   const [coste, setCoste] = useState(producto?.coste ?? "");
   const [iva, setIva] = useState(producto?.iva ?? "");
@@ -323,6 +324,7 @@ function ProductoDetalle({
       categoria,
       estado,
       proveedor: esCompra ? (proveedor || null) : null,
+      nombreProveedor: esCompra ? (nombreProveedor.trim() || null) : null,
       precioVenta: esElaboracion ? (precioVenta || null) : null,
       coste: esElaboracion ? (coste || null) : null,
       medida: unidad,
@@ -572,6 +574,22 @@ function ProductoDetalle({
                     ? formatEur(costeCalc)
                     : <span className="italic">Sin escandallo</span>}
                 </div>
+              </div>
+            )}
+            {esCompra && (
+              <div>
+                <Label className="text-xs text-muted-foreground block mb-1">
+                  Nombre en el albarán del proveedor
+                </Label>
+                <Input
+                  value={nombreProveedor}
+                  onChange={(e) => setNombreProveedor(e.target.value)}
+                  placeholder="Ej: Hielo cubitos 41mm"
+                />
+                <p className="text-[11px] text-muted-foreground mt-1">
+                  Cómo llama el proveedor a este producto en su albarán. El asistente lo usa
+                  para reconocerlo al subir un albarán por foto.
+                </p>
               </div>
             )}
             {mostrarIva && !esCompra && (
