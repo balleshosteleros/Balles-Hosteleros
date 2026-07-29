@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -11,6 +11,13 @@ import { ComparativaAlbaran } from "./ComparativaAlbaran";
 import { calcularTotalesLineas, diaSemanaDeFechaISO, formatoHoraReparto, type Albaran, type Pedido, type AnalisisAlbaran, type DocumentoAdjunto } from "@/features/logistica/data/pedidos";
 import { formatFechaHoraEnZona } from "@/features/empresa/lib/zona-horaria";
 import { updateAlbaranNumeroProveedor, subirDocumentoAlbaran } from "@/features/logistica/actions/albaranes-actions";
+import {
+  emparejarLineasAlbaran,
+  resolverAlbaranRevision,
+  type LineaEmparejada,
+} from "@/features/logistica/actions/asistente-albaran-actions";
+import { listCategoriasProducto } from "@/features/logistica/actions/categorias-producto-actions";
+import { AsistenteAlbaranPanel } from "@/features/logistica/components/albaranes/AsistenteAlbaranPanel";
 import { ArrowLeft, FileText, Send, Paperclip, CheckCircle2, Loader2, AlertTriangle, FileWarning, Eye, Receipt, Trash2 } from "lucide-react";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -28,9 +35,14 @@ interface Props {
   onEntregar: (albaran: Albaran) => void;
   onDelete?: (albaran: Albaran) => void;
   onGenerarFactura?: (albaran: Albaran) => void;
+  /** Tras confirmar un albarán en Revisión (asistente): el padre recarga y refresca el detalle. */
+  onConfirmadoRevision?: () => void;
 }
 
-export function DetalleAlbaran({ albaran, pedidoOrigen, zonaHoraria, onBack, onEntregar, onDelete, onGenerarFactura }: Props) {
+/** Campos extra que el flujo "subir por foto" guarda en cada línea del jsonb. */
+type LineaConOrigen = Albaran["lineas"][number] & { nombreProveedor?: string; ignorada?: boolean };
+
+export function DetalleAlbaran({ albaran, pedidoOrigen, zonaHoraria, onBack, onEntregar, onDelete, onGenerarFactura, onConfirmadoRevision }: Props) {
   const totales = calcularTotalesLineas(albaran.lineas);
   const diaReparto = pedidoOrigen?.fechaEntrega
     ? `${pedidoOrigen.fechaEntrega}${diaSemanaDeFechaISO(pedidoOrigen.fechaEntrega) ? ` · ${diaSemanaDeFechaISO(pedidoOrigen.fechaEntrega)}` : ""}`
@@ -39,6 +51,9 @@ export function DetalleAlbaran({ albaran, pedidoOrigen, zonaHoraria, onBack, onE
   const canEntregar = albaran.estado === "Pendiente";        // recepción → suma stock
   const canFacturar = albaran.estado === "Entregado";        // ya recepcionado → crear factura
   const canDelete = albaran.estado !== "Confirmado";         // si tiene factura, no se borra
+  // "Revisión" = subido por foto con líneas sin resolver: se resuelve con el asistente y
+  // SOLO al confirmar entra el stock. Sin Entregar/Facturar hasta entonces.
+  const enRevision = albaran.estado === "Revisión";
 
   const [uploadOpen, setUploadOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -47,6 +62,56 @@ export function DetalleAlbaran({ albaran, pedidoOrigen, zonaHoraria, onBack, onE
   const [documentos, setDocumentos] = useState<DocumentoAdjunto[]>(albaran.documentos ?? []);
   const [showComparativa, setShowComparativa] = useState(false);
   const [numProv, setNumProv] = useState<string>(albaran.numeroProveedor ?? "");
+
+  // ── Asistente (solo en Revisión): emparejar huérfanas + categorías para "crear producto" ──
+  const [asistLineas, setAsistLineas] = useState<LineaEmparejada[] | null>(null);
+  const [categorias, setCategorias] = useState<string[]>([]);
+  const [confirmando, setConfirmando] = useState(false);
+  const lineasConOrigen = albaran.lineas as LineaConOrigen[];
+  const huerfanas = lineasConOrigen.filter((l) => !l.productoId && l.ignorada !== true);
+  const resueltas = lineasConOrigen.filter((l) => !!l.productoId);
+
+  useEffect(() => {
+    if (!enRevision) return;
+    let alive = true;
+    (async () => {
+      const [cats, emp] = await Promise.all([
+        listCategoriasProducto("compra"),
+        emparejarLineasAlbaran(
+          huerfanas.map((l) => ({
+            id: l.id,
+            // El texto del proveedor es la clave de matching (y del alias a memorizar).
+            nombre: l.nombreProveedor ?? l.producto,
+            cantidad: l.cantidad,
+            precioUnitario: l.precioUC || null,
+          })),
+        ),
+      ]);
+      if (!alive) return;
+      if (cats.ok) setCategorias(cats.data.map((c) => c.nombre));
+      setAsistLineas(emp.ok ? emp.lineas : []);
+    })();
+    return () => { alive = false; };
+    // huerfanas se deriva de albaran.lineas; el albarán es inmutable mientras está montado.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [enRevision, albaran.id]);
+
+  const handleConfirmarRevision = async (
+    resoluciones: Record<string, { productoId: string | null; ignorada: boolean }>,
+  ) => {
+    setConfirmando(true);
+    const res = await resolverAlbaranRevision(albaran.id, resoluciones, true);
+    setConfirmando(false);
+    if (!res.ok) {
+      toast.error(res.error ?? "No se pudo confirmar el albarán");
+      return;
+    }
+    if (res.stockAviso) toast.warning(res.stockAviso);
+    toast.success(
+      `Albarán confirmado — stock actualizado${res.preciosRegistrados ? ` y ${res.preciosRegistrados} precio(s) registrados` : ""}`,
+    );
+    onConfirmadoRevision?.();
+  };
 
   const handleFileReady = async (file: File) => {
     setUploadOpen(false);
@@ -264,6 +329,40 @@ export function DetalleAlbaran({ albaran, pedidoOrigen, zonaHoraria, onBack, onE
           </div>
         </CardContent>
       </Card>
+
+      {/* Asistente de resolución (solo en Revisión) */}
+      {enRevision && (
+        <Card className="border-orange-300 dark:border-orange-800">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4 text-orange-500" />
+              Albarán en revisión
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              {resueltas.length} línea(s) reconocidas automáticamente
+              {huerfanas.length > 0
+                ? ` y ${huerfanas.length} por resolver. Vincula, crea o ignora cada producto y confirma: al confirmar entra el stock y se registran los precios.`
+                : ". Todo resuelto: confirma para que entre el stock y se registren los precios."}
+            </p>
+            {asistLineas === null ? (
+              <div className="flex items-center gap-2 py-4 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" /> Preparando el asistente…
+              </div>
+            ) : (
+              <AsistenteAlbaranPanel
+                key={albaran.id}
+                lineas={asistLineas}
+                proveedorAlbaran={albaran.proveedor}
+                categorias={categorias}
+                onConfirmar={handleConfirmarRevision}
+                confirmando={confirmando}
+              />
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Products table */}
       <Card>

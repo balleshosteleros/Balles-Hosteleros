@@ -18,13 +18,14 @@ import { DetalleAlbaran } from "@/features/logistica/components/pedidos/DetalleA
 import { PedidoModal } from "@/features/logistica/components/pedidos/PedidoModal";
 import { SugerenciasPedidoModal } from "@/features/logistica/components/pedidos/SugerenciasPedidoModal";
 import { FacturasTab } from "@/features/logistica/components/facturas/FacturasTab";
+import { SubirAlbaranDialog } from "@/features/logistica/components/albaranes/SubirAlbaranDialog";
 import { listFacturas, crearFacturaDesdeAlbaran } from "@/features/logistica/actions/facturas-actions";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Copy, Pencil, Trash2, Printer, MoreHorizontal, ClipboardList, Truck,
-  ChevronDown, Package, Settings, Receipt, ArrowLeft,
+  ChevronDown, Package, Settings, Receipt, ArrowLeft, Camera,
 } from "lucide-react";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
@@ -133,6 +134,10 @@ export function PedidosView() {
   const [columnasVisiblesAlb, setColumnasVisiblesAlb] = useState<ToolbarColumnaVisible>({});
   const [columnasOrdenAlb, setColumnasOrdenAlb] = useState<string[] | undefined>(undefined);
   const [showConfigAlb, setShowConfigAlb] = useState(false);
+  // Asistente de albaranes por foto: diálogo de subida + id a abrir en detalle al crear
+  // (mismo mecanismo que facturaIdToOpen: la lista se recarga y al llegar el dato se abre).
+  const [subirAlbaranOpen, setSubirAlbaranOpen] = useState(false);
+  const [albaranIdToOpen, setAlbaranIdToOpen] = useState<string | null>(null);
 
   const loadPedidos = useCallback(async () => {
     setLoading(true);
@@ -197,6 +202,16 @@ export function PedidosView() {
     loadAlbaranes();
     loadFacturasCount();
   }, [loadPedidos, loadAlbaranes, loadFacturasCount]);
+
+  // Al crear un albarán desde "Subir albarán", abrir su detalle en cuanto la lista lo traiga.
+  useEffect(() => {
+    if (!albaranIdToOpen) return;
+    const alb = albaranes.find((a) => a.id === albaranIdToOpen);
+    if (alb) {
+      setDetalleAlbaran(alb);
+      setAlbaranIdToOpen(null);
+    }
+  }, [albaranIdToOpen, albaranes]);
 
   const proveedoresUsados = useMemo(
     () => [...new Set(pedidos.map((p) => p.proveedor).filter(Boolean))].sort(),
@@ -453,6 +468,12 @@ export function PedidosView() {
             setDetalleAlbaran(null);
             setFacturaIdToOpen(res.data.id);
             setTab("facturas");
+          }}
+          onConfirmadoRevision={() => {
+            // Recargar y reabrir el detalle con los datos frescos (líneas resueltas, estado).
+            setAlbaranIdToOpen(detalleAlbaran.id);
+            setDetalleAlbaran(null);
+            loadAlbaranes();
           }}
         />
       </div>
@@ -821,16 +842,26 @@ export function PedidosView() {
                 columnasOrden={columnasOrdenAlb}
                 onColumnasOrdenChange={setColumnasOrdenAlb}
                 extraDerecha={
-                  <Button
-                    size="icon"
-                    variant={showConfigAlb ? "default" : "outline"}
-                    className="h-9 w-9"
-                    onClick={() => setShowConfigAlb((v) => !v)}
-                    title="Configuración"
-                    aria-label="Configuración"
-                  >
-                    <Settings className="h-4 w-4" strokeWidth={1.75} />
-                  </Button>
+                  <>
+                    <Button
+                      className="h-9 gap-1.5"
+                      onClick={() => setSubirAlbaranOpen(true)}
+                      title="Subir albarán por foto"
+                    >
+                      <Camera className="h-4 w-4" strokeWidth={1.75} />
+                      Subir albarán
+                    </Button>
+                    <Button
+                      size="icon"
+                      variant={showConfigAlb ? "default" : "outline"}
+                      className="h-9 w-9"
+                      onClick={() => setShowConfigAlb((v) => !v)}
+                      title="Configuración"
+                      aria-label="Configuración"
+                    >
+                      <Settings className="h-4 w-4" strokeWidth={1.75} />
+                    </Button>
+                  </>
                 }
               />
               {showConfigAlb && (
@@ -960,6 +991,15 @@ export function PedidosView() {
 
       {/* Modal */}
       <PedidoModal open={modalOpen} onClose={() => setModalOpen(false)} onSave={handleSave} item={editItem} empresaId={empresaActual.id} empresaNombre={empresaActual.nombre} />
+
+      <SubirAlbaranDialog
+        open={subirAlbaranOpen}
+        onOpenChange={setSubirAlbaranOpen}
+        onCreado={(albaranId) => {
+          setAlbaranIdToOpen(albaranId);
+          loadAlbaranes();
+        }}
+      />
 
       <SugerenciasPedidoModal
         open={sugerenciasOpen}
