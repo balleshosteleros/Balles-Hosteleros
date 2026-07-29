@@ -1,0 +1,247 @@
+"use server";
+
+/**
+ * Asistente de albaranes por foto (decisión de Iván, 2026-07-29).
+ *
+ * Cuando se sube un albarán por foto, la IA (OCR) lee líneas { nombre, cantidad, precio }.
+ * Este módulo empareja cada línea leída contra el CATÁLOGO de productos de compra:
+ *   - coincide exacto (por nombre o por nombreProveedor) → se liga sola.
+ *   - hay parecidos → se proponen candidatos para que la persona ligue.
+ *   - no encaja ninguno → se propone crear producto de compra desde el albarán.
+ * Además devuelve el precio vigente de cada producto ligado para el indicador de
+ * variación de precio (flecha amarilla/roja/verde).
+ *
+ * El backend del estado "Revisión" (guardar sin sumar stock, validar al confirmar) vive en
+ * `albaranes-actions.ts`. Aquí está solo la resolución línea-a-línea.
+ */
+
+import { getLogisticaContext } from "@/features/logistica/lib/supabase-context";
+import { getZonaHorariaEmpresa } from "@/features/empresa/lib/empresa-server";
+import { hoyEnZona } from "@/features/empresa/lib/zona-horaria";
+import { createProducto } from "@/features/logistica/actions/producto-actions";
+import { addPrecioCompra } from "@/features/logistica/actions/precios-compra-actions";
+import {
+  emparejarConCatalogo,
+  type ProductoCatalogo,
+  type CandidatoMatch,
+} from "@/features/logistica/lib/albaranes/emparejar-catalogo";
+
+/** Línea leída por el OCR del albarán. */
+export interface LineaLeida {
+  /** id temporal de la línea en el cliente (para casar la resolución). */
+  id: string;
+  nombre: string;
+  cantidad: number;
+  precioUnitario: number | null;
+  iva?: string | null;
+  formato?: string | null;
+}
+
+export interface SugerenciaCandidato {
+  productoId: string;
+  nombre: string;
+  nombreProveedor: string | null;
+  score: number;
+  via: CandidatoMatch["via"];
+  /** Precio vigente del producto (para el indicador de variación). Null si no tiene. */
+  precioVigente: number | null;
+}
+
+export interface LineaEmparejada {
+  id: string;
+  nombre: string;
+  cantidad: number;
+  precioUnitario: number | null;
+  /** Ligado automático (score alto). Null si necesita intervención. */
+  ligadoAuto: SugerenciaCandidato | null;
+  /** Candidatos propuestos por si la persona quiere ligar a uno. */
+  candidatos: SugerenciaCandidato[];
+}
+
+/** Devuelve el precio de compra vigente por producto (más reciente, sin fecha_fin). */
+async function preciosVigentes(
+  supabase: Awaited<ReturnType<typeof getLogisticaContext>>["supabase"],
+  productoIds: string[],
+  hoy: string,
+): Promise<Map<string, number>> {
+  const map = new Map<string, number>();
+  if (productoIds.length === 0) return map;
+  const { data } = await supabase
+    .from("producto_precios_compra")
+    .select("producto_id, precio, fecha_inicio, created_at")
+    .in("producto_id", productoIds)
+    .lte("fecha_inicio", hoy)
+    .order("fecha_inicio", { ascending: false })
+    .order("created_at", { ascending: false });
+  for (const row of (data ?? []) as Array<{ producto_id: string; precio: number | string }>) {
+    if (!map.has(row.producto_id)) {
+      const p = typeof row.precio === "string" ? parseFloat(row.precio) : row.precio;
+      if (Number.isFinite(p)) map.set(row.producto_id, p as number);
+    }
+  }
+  return map;
+}
+
+/**
+ * Empareja las líneas leídas del albarán contra el catálogo de productos de compra.
+ * No escribe nada: es de solo lectura, para pintar el asistente.
+ */
+export async function emparejarLineasAlbaran(
+  lineas: LineaLeida[],
+): Promise<{ ok: boolean; lineas: LineaEmparejada[]; error?: string }> {
+  try {
+    const { supabase, empresaId } = await getLogisticaContext();
+    if (!empresaId) return { ok: false, lineas: [], error: "No autenticado" };
+
+    const { data } = await supabase
+      .from("productos")
+      .select("id, nombre, nombre_proveedor")
+      .eq("empresa_id", empresaId)
+      .eq("tipo", "compra")
+      .eq("estado", "Activo");
+
+    const catalogo: ProductoCatalogo[] = ((data ?? []) as Array<{
+      id: string;
+      nombre: string;
+      nombre_proveedor: string | null;
+    }>).map((p) => ({ id: p.id, nombre: p.nombre, nombreProveedor: p.nombre_proveedor }));
+
+    // Precio vigente de TODO el catálogo (una sola consulta) para el indicador.
+    const hoy = hoyEnZona(await getZonaHorariaEmpresa(supabase, empresaId));
+    const vigentes = await preciosVigentes(supabase, catalogo.map((c) => c.id), hoy);
+
+    const toSugerencia = (c: CandidatoMatch): SugerenciaCandidato => ({
+      productoId: c.producto.id,
+      nombre: c.producto.nombre,
+      nombreProveedor: c.producto.nombreProveedor ?? null,
+      score: c.score,
+      via: c.via,
+      precioVigente: vigentes.get(c.producto.id) ?? null,
+    });
+
+    const resultado: LineaEmparejada[] = lineas.map((l) => {
+      const match = emparejarConCatalogo(l.nombre, catalogo);
+      return {
+        id: l.id,
+        nombre: l.nombre,
+        cantidad: l.cantidad,
+        precioUnitario: l.precioUnitario,
+        ligadoAuto: match.exacto ? toSugerencia(match.exacto) : null,
+        candidatos: match.candidatos.map(toSugerencia),
+      };
+    });
+
+    return { ok: true, lineas: resultado };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Error desconocido";
+    console.error("[asistente-albaran] emparejarLineasAlbaran:", msg);
+    return { ok: false, lineas: [], error: msg };
+  }
+}
+
+/**
+ * Crea un producto de compra NUEVO desde una línea del albarán y le carga el precio del
+ * propio albarán (lo que pidió Iván: sugerir el precio del albarán). Devuelve el productoId
+ * para que el cliente ligue la línea. Guarda `nombreProveedor` con el texto leído para que
+ * el próximo albarán de ese proveedor case solo.
+ */
+export async function crearProductoDesdeAlbaran(input: {
+  nombre: string;
+  categoria: string;
+  proveedor: string;
+  iva: string;
+  precio: number;
+  /** Cómo lo llamó el proveedor en el albarán (texto OCR). */
+  nombreProveedor: string;
+  formato?: string | null;
+  unidad?: string;
+}): Promise<{ ok: boolean; productoId?: string; error?: string }> {
+  try {
+    // Campos obligatorios (los mismos que exige el alta manual de un producto de compra
+    // con precio): nombre, categoría, proveedor, IVA y precio.
+    if (!input.nombre?.trim()) return { ok: false, error: "El nombre es obligatorio" };
+    if (!input.categoria?.trim()) return { ok: false, error: "La categoría es obligatoria" };
+    if (!input.proveedor?.trim()) return { ok: false, error: "El proveedor es obligatorio" };
+    if (!input.iva?.trim()) return { ok: false, error: "El IVA es obligatorio" };
+    if (!Number.isFinite(input.precio) || input.precio < 0) {
+      return { ok: false, error: "El precio del albarán es obligatorio" };
+    }
+
+    const creado = await createProducto({
+      nombre: input.nombre.trim(),
+      tipo: "compra",
+      categoria: input.categoria.trim(),
+      estado: "Activo",
+      proveedor: input.proveedor.trim(),
+      nombreProveedor: input.nombreProveedor?.trim() || null,
+      medida: input.unidad || "Unidades",
+      formato: input.formato ?? null,
+      // El precio de compra va por el histórico (addPrecioCompra), no aquí.
+    });
+    if (creado.error || !creado.producto) {
+      return { ok: false, error: creado.error ?? "No se pudo crear el producto" };
+    }
+
+    const { supabase, empresaId } = await getLogisticaContext();
+    const hoy = hoyEnZona(await getZonaHorariaEmpresa(supabase, empresaId));
+    const precioRes = await addPrecioCompra({
+      productoId: creado.producto.id,
+      precio: input.precio,
+      iva: input.iva,
+      proveedor: input.proveedor.trim(),
+      formato: input.formato ?? null,
+      fechaInicio: hoy,
+    });
+    if (!precioRes.ok) {
+      // El producto se creó; el precio falló. No es fatal para el flujo (se puede
+      // reintentar), pero lo reportamos para que el usuario lo sepa.
+      return { ok: true, productoId: creado.producto.id, error: precioRes.error };
+    }
+
+    return { ok: true, productoId: creado.producto.id };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Error desconocido";
+    console.error("[asistente-albaran] crearProductoDesdeAlbaran:", msg);
+    return { ok: false, error: msg };
+  }
+}
+
+/**
+ * Al vincular una línea a un producto EXISTENTE, memoriza el alias: guarda en
+ * `productos.nombre_proveedor` el texto que venía en el albarán, para que la próxima vez
+ * ese producto case solo. No pisa un alias ya existente salvo que esté vacío.
+ */
+export async function memorizarAliasProveedor(
+  productoId: string,
+  nombreEnAlbaran: string,
+): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const { supabase, empresaId } = await getLogisticaContext();
+    if (!empresaId) return { ok: false, error: "No autenticado" };
+    const alias = (nombreEnAlbaran ?? "").trim();
+    if (!alias) return { ok: true };
+
+    const { data: prod } = await supabase
+      .from("productos")
+      .select("nombre_proveedor")
+      .eq("id", productoId)
+      .eq("empresa_id", empresaId)
+      .maybeSingle();
+    // Solo rellena si está vacío (un solo nombre de proveedor por producto; no lo pisamos
+    // si el usuario ya puso uno a mano).
+    if (prod && (prod.nombre_proveedor as string | null)?.trim()) {
+      return { ok: true };
+    }
+    const { error } = await supabase
+      .from("productos")
+      .update({ nombre_proveedor: alias })
+      .eq("id", productoId)
+      .eq("empresa_id", empresaId);
+    if (error) throw error;
+    return { ok: true };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Error desconocido";
+    console.error("[asistente-albaran] memorizarAliasProveedor:", msg);
+    return { ok: false, error: msg };
+  }
+}
