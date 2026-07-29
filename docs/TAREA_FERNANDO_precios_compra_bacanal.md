@@ -181,6 +181,53 @@ en el campo precio (como pidió Iván).
 
 ---
 
+## ✅ YA CONSTRUIDO POR IVÁN/CLAUDE (2026-07-29) — casi toda la feature está hecha
+
+> Fernando: NO empieces de cero. Iván pidió desarrollarlo y ya está construido, compilado y
+> con `npm run build` en verde. Solo queda un cable final (la pantalla de SUBIR la foto).
+
+**Fase 1 — Casilla "nombre del proveedor" ✅ HECHA end-to-end.** Columna
+`productos.nombre_proveedor` (mig. `20260729120000`) + `Producto.nombreProveedor` + Zod +
+create/update/bulk + IO CSV + input en la ficha (`ProductosView.tsx`, solo compra).
+
+**Fase 2 — Matcher contra catálogo ✅ HECHA y probada.**
+`lib/albaranes/emparejar-catalogo.ts` → `emparejarConCatalogo(texto, catalogo)`. Compara por
+`nombre` Y `nombreProveedor` (el alias manda). Umbrales: exacto 0.92 / propuesta 0.55.
+Probado: "Hielo cubitos 41mm"→Hielo Roca vía alias; "Coca Cola Zero 2L"→propone.
+
+**Fase 3 — Estado "Revisión" ✅ HECHO (backend, la parte delicada del stock).**
+`data/albaranes.ts` → `ESTADO_REVISION`. `createAlbaran` acepta `estado` y relaja la regla
+del productoId SOLO en Revisión. Revisión NO suma stock. `updateAlbaranEstado`: al pasar de
+Revisión a Confirmado valida que no queden huérfanas (las `ignorada:true` no bloquean).
+
+**Fase 4 — Asistente por línea ✅ HECHO (UI + acciones).**
+- `actions/asistente-albaran-actions.ts`: `emparejarLineasAlbaran()` (empareja + precio
+  vigente para el indicador), `crearProductoDesdeAlbaran()` (crea + guarda alias + carga el
+  precio del albarán, obliga campos), `memorizarAliasProveedor()` (aprende al vincular).
+- `components/albaranes/ResolverLineaDialog.tsx` (3 opciones: vincular/crear/ignorar) +
+  `AsistenteAlbaranPanel.tsx` (orquesta, botón Confirmar bloqueado hasta resolver todo).
+
+**Fase 5 — Indicadores de precio ✅ HECHO.** `components/albaranes/IndicadorPrecio.tsx`:
+🔻amarilla abajo (baja) / 🔺roja arriba (sube) / ↔️verde doble-punta (igual), tolerancia
+1cént/0,5%.
+
+### 🔌 LO ÚNICO QUE FALTA (Fernando): cablear la pantalla de SUBIR la foto
+
+Toda la lógica y la UI de resolución están listas. Falta la ENTRADA (subir la foto):
+1. **Escritorio (primero):** vista/diálogo que suba la foto → OCR (patrón Gemini que ya
+   existe en `facturas-actions.ts`: `geminiJSON` + `OCR_RESPONSE_SCHEMA`) → llamar
+   `emparejarLineasAlbaran()` → pintar `<AsistenteAlbaranPanel>`. Al confirmar:
+   `createAlbaran({estado:"Revisión", lineas})` y cuando el panel esté resuelto,
+   `updateAlbaranEstado(id,"Confirmado")` (ya valida + suma stock).
+2. **Móvil (después):** mismo flujo reutilizando `AsistenteAlbaranPanel` en
+   `src/features/logistica/mobile/`.
+3. **Doble nombre en informes/impresión de albaranes:** nuestro `nombre` grande +
+   `nombre_proveedor` pequeño debajo.
+
+Todo lo pesado (matching, estado, stock, crear/vincular/ignorar, indicadores) ya está.
+
+---
+
 ## ✅ ALBARANES REGISTRADOS (15-jul, Fernando) — lo que pediste el 7-jul
 
 **31 albaranes con 243 líneas** registrados en prod (BACANAL 20 · HABANA 11), del 18-jun
