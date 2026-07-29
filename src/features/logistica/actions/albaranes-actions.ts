@@ -31,6 +31,15 @@ export async function listAlbaranes() {
 /** Estados con la mercancía ya recepcionada (stock aplicado): "Entregado" y "Confirmado". */
 const ESTADOS_COMPRA_CONFIRMADA = ["Entregado", "Confirmado"];
 
+/**
+ * "Revisión": estado de un albarán subido por foto que aún tiene líneas sin producto
+ * asociado (la IA leyó productos que no casan con el catálogo). El albarán se GUARDA en
+ * este estado —no se descarta— pero NO suma stock ni se considera compra confirmada hasta
+ * que una persona resuelve cada línea (vincular / crear / ignorar) y lo aprueba a
+ * "Confirmado". Decisión de Iván (2026-07-29): no existe "bloqueado"; existe "Revisión".
+ */
+export const ESTADO_REVISION = "Revisión";
+
 export interface CompraProductoRow {
   albaranId: string;
   numero: string;
@@ -134,28 +143,40 @@ export async function createAlbaran(input: {
   numeroSecuencial?: number;
   /** Número que pone el proveedor en su albarán (opcional, lo extrae OCR o se edita manualmente). */
   numeroProveedor?: string | null;
+  /**
+   * Estado inicial. Por defecto "Pendiente". Si es "Revisión" (albarán subido por foto con
+   * líneas aún sin producto), se relaja la regla del productoId: se permite guardar con
+   * líneas huérfanas para que la persona las resuelva en el asistente. "Revisión" NO suma
+   * stock (no está en ESTADOS_COMPRA_CONFIRMADA).
+   */
+  estado?: string;
 }): Promise<CreateAlbaranResult> {
   try {
     const { supabase, empresaId } = await getContext();
     if (!empresaId) return { ok: false, error: "No autenticado" };
 
-    // Regla dura: ningún albarán puede guardarse con una línea sin productoId.
-    // El productoId es lo que vincula cada línea con su producto (stock, histórico de
-    // compras, etc.), así que un albarán sin él sería un dato roto.
+    const estadoInicial = input.estado === ESTADO_REVISION ? ESTADO_REVISION : "Pendiente";
+
+    // Regla dura: ningún albarán puede guardarse con una línea sin productoId... EXCEPTO en
+    // estado "Revisión". El productoId es lo que vincula cada línea con su producto (stock,
+    // histórico de compras), así que un albarán CONFIRMADO sin él sería un dato roto; pero
+    // uno en Revisión existe precisamente para resolver esas líneas huérfanas.
     const lineas = Array.isArray(input.lineas) ? input.lineas : [];
-    const lineasInvalidas = lineas.filter((l) => {
-      const pid = (l as { productoId?: unknown })?.productoId;
-      return typeof pid !== "string" || pid.trim() === "";
-    });
     if (lineas.length === 0) {
       return { ok: false, error: "El albarán no tiene líneas." };
     }
-    if (lineasInvalidas.length > 0) {
-      return {
-        ok: false,
-        error:
-          "Hay líneas sin producto asociado. Cada línea debe corresponder a un producto del catálogo antes de confirmar el albarán.",
-      };
+    if (estadoInicial !== ESTADO_REVISION) {
+      const lineasInvalidas = lineas.filter((l) => {
+        const pid = (l as { productoId?: unknown })?.productoId;
+        return typeof pid !== "string" || pid.trim() === "";
+      });
+      if (lineasInvalidas.length > 0) {
+        return {
+          ok: false,
+          error:
+            "Hay líneas sin producto asociado. Cada línea debe corresponder a un producto del catálogo antes de confirmar el albarán.",
+        };
+      }
     }
 
     const year = new Date(input.fecha || new Date().toISOString()).getFullYear();
@@ -166,7 +187,7 @@ export async function createAlbaran(input: {
       almacen: input.almacen,
       documento: input.documento,
       fecha: input.fecha,
-      estado: "Pendiente",
+      estado: estadoInicial,
       dto_pct: input.dtoPct,
       dto_eur: input.dtoEur,
       notas: input.notas,
@@ -337,10 +358,31 @@ export async function updateAlbaranEstado(id: string, estado: string) {
     // y permanece en Confirmado; solo se revierte al volver a "Pendiente".
     const { data: previo } = await supabase
       .from("albaranes")
-      .select("estado")
+      .select("estado, lineas")
       .eq("id", id)
       .maybeSingle();
     const estadoAnterior = (previo?.estado as string | undefined) ?? null;
+
+    // Salir de "Revisión" hacia un estado que suma stock exige que TODAS las líneas tengan
+    // ya un producto asociado. Es la aprobación de la que habló Iván: no se confirma (ni se
+    // toca stock) hasta que todo está resuelto.
+    const recibidoDestino = estado === "Entregado" || estado === "Confirmado";
+    if (estadoAnterior === ESTADO_REVISION && recibidoDestino) {
+      const lineasPrev = Array.isArray(previo?.lineas)
+        ? (previo!.lineas as Array<{ productoId?: unknown; ignorada?: unknown }>)
+        : [];
+      const huerfanas = lineasPrev.filter((l) => {
+        if (l?.ignorada === true) return false; // líneas marcadas "ignorar" no bloquean
+        const pid = (l as { productoId?: unknown })?.productoId;
+        return typeof pid !== "string" || (pid as string).trim() === "";
+      });
+      if (huerfanas.length > 0) {
+        return {
+          ok: false,
+          error: `Quedan ${huerfanas.length} línea(s) sin resolver. Vincula, crea o ignora cada producto antes de confirmar.`,
+        };
+      }
+    }
 
     const { error } = await supabase
       .from("albaranes")
