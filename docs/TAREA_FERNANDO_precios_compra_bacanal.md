@@ -28,8 +28,9 @@ guardado como `ALB-2026-022` con creador resuelto ("Agora Demo"), foto adjunta, 
 de stock, visible en "En revisión" — verificado en BD y borrado después de comprobar (no era
 un albarán real, era la prueba).
 
-**Los 23 albaranes que tienes en el móvil son justo el caso de uso**: ya no hace falta que
-bajes el repo para subirlos, hazlo directamente desde ahí cuando quieras.
+(Los 23 albaranes pendientes que faltan por registrar los tiene Fernando en su móvil y los
+subirá él directamente por esta pantalla cuando le venga bien — no hace falta que hagas nada
+con ellos.)
 
 ---
 
