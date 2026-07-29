@@ -121,7 +121,8 @@ type CreateAlbaranResult =
   | { ok: false; error: string };
 
 export async function createAlbaran(input: {
-  pedidoId: string;
+  /** null = albarán suelto (subido por foto, sin pedido de origen). */
+  pedidoId: string | null;
   proveedorNombre: string;
   almacen: string;
   documento: string;
@@ -174,7 +175,8 @@ export async function createAlbaran(input: {
     const year = new Date(input.fecha || new Date().toISOString()).getFullYear();
     const insertPayload: Record<string, unknown> = {
       empresa_id: empresaId,
-      pedido_id: input.pedidoId,
+      // "" también cae a null: pedido_id es uuid y un string vacío rompe el casteo.
+      pedido_id: input.pedidoId || null,
       proveedor_nombre: input.proveedorNombre,
       almacen: input.almacen,
       documento: input.documento,

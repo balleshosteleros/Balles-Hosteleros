@@ -15,11 +15,15 @@
  * `albaranes-actions.ts`. Aquí está solo la resolución línea-a-línea.
  */
 
+import { randomUUID } from "crypto";
+import { SchemaType, type Schema } from "@google/generative-ai";
+import { geminiJSON, GeminiKeyMissingError } from "@/lib/ia/gemini";
 import { getLogisticaContext } from "@/features/logistica/lib/supabase-context";
 import { getZonaHorariaEmpresa } from "@/features/empresa/lib/empresa-server";
 import { hoyEnZona } from "@/features/empresa/lib/zona-horaria";
 import { createProducto } from "@/features/logistica/actions/producto-actions";
 import { addPrecioCompra } from "@/features/logistica/actions/precios-compra-actions";
+import { updateAlbaranEstado } from "@/features/logistica/actions/albaranes-actions";
 import {
   emparejarConCatalogo,
   type ProductoCatalogo,
@@ -56,6 +60,141 @@ export interface LineaEmparejada {
   ligadoAuto: SugerenciaCandidato | null;
   /** Candidatos propuestos por si la persona quiere ligar a uno. */
   candidatos: SugerenciaCandidato[];
+}
+
+/** Línea leída por el OCR de un albarán suelto (LineaLeida + datos para el jsonb). */
+export interface LineaOcrAlbaran extends LineaLeida {
+  unidad: string;
+  /** Importe total de la línea tal y como lo imprime el proveedor. */
+  importe: number | null;
+}
+
+export interface CabeceraOcrAlbaran {
+  proveedor: string | null;
+  numero: string | null;
+  /** YYYY-MM-DD */
+  fecha: string | null;
+  total: number | null;
+}
+
+const OCR_ALBARAN_SCHEMA: Schema = {
+  type: SchemaType.OBJECT,
+  properties: {
+    proveedorNombreDetectado: { type: SchemaType.STRING, nullable: true },
+    numeroAlbaranDetectado: { type: SchemaType.STRING, nullable: true },
+    fechaAlbaranDetectada: { type: SchemaType.STRING, nullable: true, description: "YYYY-MM-DD" },
+    totalDetectado: { type: SchemaType.NUMBER, nullable: true },
+    lineas: {
+      type: SchemaType.ARRAY,
+      items: {
+        type: SchemaType.OBJECT,
+        properties: {
+          nombre: { type: SchemaType.STRING },
+          cantidad: { type: SchemaType.NUMBER },
+          unidad: { type: SchemaType.STRING },
+          formato: { type: SchemaType.STRING },
+          precioUnitario: { type: SchemaType.NUMBER },
+          ivaPorcentaje: { type: SchemaType.NUMBER },
+          importeLinea: { type: SchemaType.NUMBER },
+        },
+        required: ["nombre", "cantidad"],
+      },
+    },
+  },
+  required: ["lineas"],
+};
+
+const OCR_ALBARAN_SYSTEM = `
+Eres un extractor de albaranes de proveedores de un restaurante en España.
+Tu tarea: leer el documento adjunto (foto o PDF de un albarán de entrega) y devolver un JSON con:
+- Cabecera: nombre del proveedor, número de albarán, fecha (YYYY-MM-DD) y total del documento.
+- Una lista de líneas de PRODUCTO con: nombre tal y como lo escribe el proveedor, cantidad,
+  unidad (kg, L, ud, caja...), formato, precio unitario NETO (con descuento aplicado si lo hay),
+  IVA % e importe de la línea.
+- NO incluyas como líneas los gastos o servicios (portes, desplazamiento, punto verde) ni las
+  líneas de regalo sin importe.
+Si un dato no se ve, devuélvelo como null. NO inventes (ni sabores, ni formatos). Idioma: español.
+`.trim();
+
+interface OcrAlbaranRaw {
+  proveedorNombreDetectado?: string | null;
+  numeroAlbaranDetectado?: string | null;
+  fechaAlbaranDetectada?: string | null;
+  totalDetectado?: number | null;
+  lineas?: Array<{
+    nombre?: string;
+    cantidad?: number;
+    unidad?: string;
+    formato?: string;
+    precioUnitario?: number;
+    ivaPorcentaje?: number;
+    importeLinea?: number;
+  }>;
+}
+
+/**
+ * OCR EXTRACTIVO de un albarán suelto (sin pedido de referencia): lee el documento y
+ * devuelve cabecera + líneas, sin comparar contra nada. Es la entrada del asistente
+ * (a diferencia de la Edge Function `analizar-albaran`, que es comparativa contra un pedido).
+ */
+export async function analizarAlbaranFoto(input: {
+  base64: string;
+  mimeType: string;
+}): Promise<
+  | { ok: true; cabecera: CabeceraOcrAlbaran; lineas: LineaOcrAlbaran[] }
+  | { ok: false; error: string }
+> {
+  try {
+    const { empresaId } = await getLogisticaContext();
+    if (!empresaId) return { ok: false, error: "No autenticado" };
+    if (!input.base64) return { ok: false, error: "No se recibió el documento" };
+
+    const ocr = await geminiJSON<OcrAlbaranRaw>(
+      "Extrae los datos estructurados de este albarán del proveedor.",
+      {
+        systemInstruction: OCR_ALBARAN_SYSTEM,
+        responseSchema: OCR_ALBARAN_SCHEMA,
+        temperature: 0.1,
+        attachments: [{ mimeType: input.mimeType || "image/jpeg", base64: input.base64 }],
+      },
+    );
+
+    const raw = ocr.data ?? {};
+    const lineas: LineaOcrAlbaran[] = (raw.lineas ?? [])
+      .filter((l) => (l.nombre ?? "").trim() !== "")
+      .map((l) => ({
+        id: randomUUID(),
+        nombre: (l.nombre ?? "").trim(),
+        cantidad: Number.isFinite(l.cantidad) ? (l.cantidad as number) : 0,
+        precioUnitario: Number.isFinite(l.precioUnitario) ? (l.precioUnitario as number) : null,
+        iva: Number.isFinite(l.ivaPorcentaje) ? String(l.ivaPorcentaje) : null,
+        formato: (l.formato ?? "").trim() || null,
+        unidad: (l.unidad ?? "").trim(),
+        importe: Number.isFinite(l.importeLinea) ? (l.importeLinea as number) : null,
+      }));
+
+    if (lineas.length === 0) {
+      return { ok: false, error: "La IA no encontró líneas de producto en el documento. Prueba con una foto más nítida." };
+    }
+
+    return {
+      ok: true,
+      cabecera: {
+        proveedor: (raw.proveedorNombreDetectado ?? "").trim() || null,
+        numero: (raw.numeroAlbaranDetectado ?? "").trim() || null,
+        fecha: (raw.fechaAlbaranDetectada ?? "").trim() || null,
+        total: Number.isFinite(raw.totalDetectado) ? (raw.totalDetectado as number) : null,
+      },
+      lineas,
+    };
+  } catch (err) {
+    if (err instanceof GeminiKeyMissingError) {
+      return { ok: false, error: "La IA no está configurada (falta GEMINI_API_KEY)." };
+    }
+    const msg = err instanceof Error ? err.message : "Error desconocido";
+    console.error("[asistente-albaran] analizarAlbaranFoto:", msg);
+    return { ok: false, error: msg };
+  }
 }
 
 /** Devuelve el precio de compra vigente por producto (más reciente, sin fecha_fin). */
@@ -211,6 +350,141 @@ export async function crearProductoDesdeAlbaran(input: {
  * `productos.nombre_proveedor` el texto que venía en el albarán, para que la próxima vez
  * ese producto case solo. No pisa un alias ya existente salvo que esté vacío.
  */
+interface LineaAlbaranJsonb {
+  id?: string;
+  productoId?: string;
+  producto?: string;
+  cantidad?: number;
+  unidad?: string;
+  precioUC?: number;
+  impuesto?: number;
+  dtoPct?: number;
+  dtoEur?: number;
+  total?: number;
+  /** Texto original del proveedor en el albarán (doble nombre). */
+  nombreProveedor?: string;
+  ignorada?: boolean;
+  formato?: string | null;
+}
+
+/**
+ * Persiste las resoluciones del asistente sobre un albarán en "Revisión" y, si
+ * `confirmar`, registra los precios de compra de las líneas resueltas y transiciona a
+ * "Confirmado" (donde `updateAlbaranEstado` valida huérfanas y suma stock — esa lógica
+ * NO se duplica aquí).
+ *
+ * Caso borde: resoluciones parciales + `confirmar:false` = guardar progreso; el albarán
+ * se queda en Revisión y otra persona puede continuar después.
+ */
+export async function resolverAlbaranRevision(
+  albaranId: string,
+  resoluciones: Record<string, { productoId: string | null; ignorada: boolean }>,
+  confirmar: boolean,
+): Promise<{ ok: boolean; error?: string; stockAviso?: string; preciosRegistrados?: number }> {
+  try {
+    const { supabase, empresaId } = await getLogisticaContext();
+    if (!empresaId) return { ok: false, error: "No autenticado" };
+
+    const { data: alb, error: albErr } = await supabase
+      .from("albaranes")
+      .select("id, estado, fecha, proveedor_nombre, lineas")
+      .eq("id", albaranId)
+      .eq("empresa_id", empresaId)
+      .maybeSingle();
+    if (albErr || !alb) return { ok: false, error: "Albarán no encontrado" };
+    if (alb.estado !== "Revisión") {
+      return { ok: false, error: `El albarán está en estado "${alb.estado}", no en Revisión.` };
+    }
+
+    const lineas = (Array.isArray(alb.lineas) ? alb.lineas : []) as LineaAlbaranJsonb[];
+
+    // 1) Aplicar resoluciones (por id de línea) y recopilar productos a nombrar.
+    const idsANombrar = new Set<string>();
+    for (const l of lineas) {
+      const res = l.id ? resoluciones[l.id] : undefined;
+      if (!res) {
+        if (l.productoId) idsANombrar.add(l.productoId);
+        continue;
+      }
+      l.ignorada = res.ignorada === true;
+      l.productoId = res.productoId ?? "";
+      if (l.productoId) idsANombrar.add(l.productoId);
+    }
+
+    // 2) Nombre de catálogo para las líneas ligadas (el texto OCR se conserva en
+    //    `nombreProveedor`, que es la otra mitad del doble nombre).
+    if (idsANombrar.size > 0) {
+      const { data: prods } = await supabase
+        .from("productos")
+        .select("id, nombre")
+        .eq("empresa_id", empresaId)
+        .in("id", [...idsANombrar]);
+      const nombres = new Map(
+        ((prods ?? []) as Array<{ id: string; nombre: string }>).map((p) => [p.id, p.nombre]),
+      );
+      for (const l of lineas) {
+        if (l.productoId && nombres.has(l.productoId)) {
+          if (!l.nombreProveedor && l.producto && l.producto !== nombres.get(l.productoId)) {
+            l.nombreProveedor = l.producto;
+          }
+          l.producto = nombres.get(l.productoId);
+        }
+      }
+    }
+
+    const { error: upErr } = await supabase
+      .from("albaranes")
+      .update({ lineas: lineas as unknown as object, updated_at: new Date().toISOString() })
+      .eq("id", albaranId)
+      .eq("empresa_id", empresaId);
+    if (upErr) throw upErr;
+
+    if (!confirmar) return { ok: true, preciosRegistrados: 0 };
+
+    // 3) Registrar precios de compra de las líneas resueltas (idempotente por
+    //    producto+proveedor+fecha). Automatiza el histórico que hasta ahora se cargaba a mano.
+    const proveedor = ((alb.proveedor_nombre as string) ?? "").trim();
+    const fecha = (alb.fecha as string) ?? hoyEnZona(await getZonaHorariaEmpresa(supabase, empresaId));
+    const candidatas = lineas.filter(
+      (l) => l.ignorada !== true && l.productoId && Number(l.precioUC) > 0,
+    );
+    let preciosRegistrados = 0;
+    if (candidatas.length > 0 && proveedor) {
+      const { data: existentes } = await supabase
+        .from("producto_precios_compra")
+        .select("producto_id")
+        .in("producto_id", candidatas.map((l) => l.productoId as string))
+        .eq("proveedor", proveedor)
+        .eq("fecha_inicio", fecha);
+      const yaCargados = new Set(
+        ((existentes ?? []) as Array<{ producto_id: string }>).map((e) => e.producto_id),
+      );
+      for (const l of candidatas) {
+        if (yaCargados.has(l.productoId as string)) continue;
+        const res = await addPrecioCompra({
+          productoId: l.productoId as string,
+          precio: Number(l.precioUC),
+          iva: l.impuesto != null ? String(l.impuesto) : undefined,
+          proveedor,
+          formato: l.formato ?? null,
+          fechaInicio: fecha,
+        });
+        if (res.ok) preciosRegistrados++;
+        // Un fallo de precio no aborta la confirmación: el albarán es válido igualmente.
+      }
+    }
+
+    // 4) Transición Revisión→Confirmado: valida huérfanas y suma stock.
+    const trans = await updateAlbaranEstado(albaranId, "Confirmado");
+    if (!trans.ok) return { ok: false, error: trans.error, preciosRegistrados };
+    return { ok: true, stockAviso: trans.stockAviso, preciosRegistrados };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Error desconocido";
+    console.error("[asistente-albaran] resolverAlbaranRevision:", msg);
+    return { ok: false, error: msg };
+  }
+}
+
 export async function memorizarAliasProveedor(
   productoId: string,
   nombreEnAlbaran: string,

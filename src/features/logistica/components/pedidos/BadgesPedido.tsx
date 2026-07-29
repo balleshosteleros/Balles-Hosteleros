@@ -12,6 +12,9 @@ const pedidoColors: Record<EstadoPedido, string> = {
 
 const albaranColors: Record<EstadoAlbaran, string> = {
   Pendiente: "bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-700",
+  // Revisión = naranja: reclama acción humana (líneas del OCR sin resolver), más urgente
+  // que el ámbar de Pendiente y sin pisar el esmeralda/azul de la cadena normal.
+  "Revisión": "bg-orange-100 text-orange-800 border-orange-300 dark:bg-orange-900/30 dark:text-orange-300 dark:border-orange-700",
   Entregado: "bg-emerald-100 text-emerald-800 border-emerald-300 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-700",
   Confirmado: "bg-blue-100 text-blue-800 border-blue-300 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-700",
 };

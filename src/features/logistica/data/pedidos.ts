@@ -47,10 +47,12 @@ export interface DocumentoAdjunto {
 //   Pedido:  Pendiente → Enviado   → Confirmado (tiene albarán)
 //   Albarán: Pendiente → Entregado → Confirmado (tiene factura)
 export type EstadoPedido = "Pendiente" | "Enviado" | "Confirmado";
-export type EstadoAlbaran = "Pendiente" | "Entregado" | "Confirmado";
+// "Revisión" = subido por foto con líneas aún sin producto asociado; NO suma stock hasta
+// pasar a Confirmado (asistente de albaranes, decisión Iván 29-jul).
+export type EstadoAlbaran = "Pendiente" | "Revisión" | "Entregado" | "Confirmado";
 
 export const ESTADOS_PEDIDO: EstadoPedido[] = ["Pendiente", "Enviado", "Confirmado"];
-export const ESTADOS_ALBARAN: EstadoAlbaran[] = ["Pendiente", "Entregado", "Confirmado"];
+export const ESTADOS_ALBARAN: EstadoAlbaran[] = ["Pendiente", "Revisión", "Entregado", "Confirmado"];
 
 export interface LineaPedido {
   id: string;
