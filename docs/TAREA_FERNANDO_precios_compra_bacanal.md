@@ -26,7 +26,9 @@
 - **Doble nombre proveedor↔nuestro:** casilla en cada ficha de compra con el **nombre del
   proveedor** + nuestro nombre. El asistente mapea la línea del albarán por el nombre del
   proveedor → nuestro producto. En NUESTROS albaranes/informes: nuestro nombre grande +
-  nombre del proveedor **pequeño y claro debajo**, juntos. (1 producto : N alias.)
+  nombre del proveedor **pequeño y claro debajo**, juntos. **UN solo nombre por producto**
+  (decisión Iván 29-jul). ✅ **Columna `productos.nombre_proveedor` YA CREADA** (migración
+  `20260729120000`); falta solo el código (ficha + matcher + informes). Ver detalle en (b).
 - **3 indicadores de variación de precio** en la verificación: 🔻amarilla abajo = bajó ·
   🔺roja arriba = más caro · ↔️verde doble-punta = igual. Compara precio leído vs vigente.
 
@@ -128,12 +130,18 @@ Cuando el asistente lee un producto del documento y lo compara con nuestra base 
   de tipo, solo cablearlo en UI + lógica de stock.
 - El stock debe dispararse SOLO al pasar a "Confirmado" (ya es coherente con P1).
 
-**b) Casilla "nombre del proveedor" (doble nombre) — NO existe:**
-- No hay ninguna columna/tabla de alias. `productos.proveedor` es el proveedor principal, NO
-  un alias del nombre que usa el proveedor. `producto_precios_compra` tampoco lo tiene.
-- **A construir:** dónde guardar los alias por proveedor (1 producto : N alias). Opciones:
-  columna nueva o tabla `producto_alias_proveedor(producto_id, proveedor, nombre_proveedor)`.
-  Es lo que alimenta el emparejado automático de futuros albaranes.
+**b) Casilla "nombre del proveedor" (doble nombre) — ✅ COLUMNA YA CREADA (Iván, 29-jul):**
+- **Decisión de Iván: UN solo nombre de proveedor por producto** (no N alias). Por eso se
+  ha creado la columna **`productos.nombre_proveedor` (text)** en vez de una tabla de alias.
+  Migración versionada: `supabase/migrations/20260729120000_productos_nombre_proveedor.sql`
+  (idempotente, ya aplicada y verificada en la BD el 29-jul).
+- **Lo que FALTA (código de Fernando):** (1) mostrar/editar ese campo en la ficha de producto
+  (`ProductosView.tsx`), (2) incluirlo en el `productoInputSchema` (Zod), (3) que el matcher
+  del asistente **busque candidatos también por `nombre_proveedor`**, no solo por `nombre`,
+  y (4) que al ligar/crear desde el albarán **se rellene `nombre_proveedor` con el texto que
+  venía en el albarán** (así el reconocimiento es automático la próxima vez).
+- En NUESTROS albaranes/informes: sale nuestro `nombre` grande + `nombre_proveedor` pequeño
+  debajo (feature de presentación, la hace Fernando).
 - ⚠️ **Aviso de deuda técnica que encontró la auditoría:** las columnas `proveedor` y
   `formato` de `producto_precios_compra` **existen en la BD remota pero NO están en ninguna
   migración versionada** (`.sql`) del repo. El código las usa (`precios-compra-actions.ts`
