@@ -9,6 +9,9 @@ const SIGNED_URL_TTL_SECONDS = 60 * 60;
 
 export type CierreModo = "fijo" | "libre";
 
+// Tipo de movimiento registrado en el submódulo Cierres.
+export type CierreTipo = "cierre" | "retirada" | "ingreso";
+
 export interface CierreGasto {
   id?: string;
   tipo: string;
@@ -18,6 +21,7 @@ export interface CierreGasto {
 
 export interface CierreRow {
   id: string;
+  tipo: CierreTipo;
   fecha: string;
   semana_iso: string | null;
   efectivo_retirado: number;
@@ -75,7 +79,7 @@ export async function listCierres(): Promise<{ ok: true; data: CierreRow[] } | {
 
     const { data, error } = await supabase
       .from("cierres_semanales")
-      .select("id, fecha, semana_iso, efectivo_retirado, total_contado, cuadra, descuadre, notas, storage_path, file_name, size_bytes, mime_type, registrado_por, created_at")
+      .select("id, tipo, fecha, semana_iso, efectivo_retirado, total_contado, cuadra, descuadre, notas, storage_path, file_name, size_bytes, mime_type, registrado_por, created_at")
       .eq("empresa_id", empresaId)
       .order("fecha", { ascending: false });
 
@@ -117,6 +121,7 @@ export async function listCierres(): Promise<{ ok: true; data: CierreRow[] } | {
       }
       rows.push({
         id: r.id as string,
+        tipo: (((r.tipo as string | null) ?? "cierre") as CierreTipo),
         fecha: ((r.fecha as string) ?? "").slice(0, 10),
         semana_iso: (r.semana_iso as string | null) ?? null,
         efectivo_retirado: Number(r.efectivo_retirado ?? 0),
@@ -148,6 +153,8 @@ export async function createCierre(formData: FormData): Promise<{ ok: true; data
     const { supabase, user, empresaId } = await getContext();
     if (!empresaId || !user) return { ok: false, error: "No autenticado" };
 
+    const tipoRaw = ((formData.get("tipo") as string | null) || "cierre").trim();
+    const tipo: CierreTipo = tipoRaw === "retirada" || tipoRaw === "ingreso" ? tipoRaw : "cierre";
     const fecha = ((formData.get("fecha") as string | null) || "").trim();
     const efectivoStr = ((formData.get("efectivo_retirado") as string | null) || "0").trim();
     const contadoStr = ((formData.get("total_contado") as string | null) || "0").trim();
@@ -191,6 +198,7 @@ export async function createCierre(formData: FormData): Promise<{ ok: true; data
       .from("cierres_semanales")
       .insert({
         empresa_id: empresaId,
+        tipo,
         fecha,
         semana_iso: isoWeek(fecha),
         efectivo_retirado: efectivo,
@@ -279,6 +287,7 @@ export async function createCierre(formData: FormData): Promise<{ ok: true; data
       ok: true,
       data: {
         id: cierreId,
+        tipo,
         fecha,
         semana_iso: isoWeek(fecha),
         efectivo_retirado: efectivo,

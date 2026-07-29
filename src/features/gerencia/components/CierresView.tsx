@@ -31,7 +31,7 @@ import {
 } from "@/components/ui/select";
 import {
   listCierres, createCierre, deleteCierre, getCierresConfig, updateCierresConfig,
-  type CierreRow, type CierresConfig, type CierreModo, type CierreGasto,
+  type CierreRow, type CierresConfig, type CierreModo, type CierreGasto, type CierreTipo,
 } from "@/features/gerencia/actions/cierres-actions";
 import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
 import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
@@ -45,6 +45,13 @@ import {
 } from "@/shared/components/SubmoduleToolbar";
 import { IOActions } from "@/shared/io";
 import { cierresIO } from "@/features/gerencia/io/cierres.io";
+
+// Tipos de movimiento del submódulo (el selector de arriba del modal).
+const TIPOS_MOVIMIENTO: { value: CierreTipo; label: string }[] = [
+  { value: "cierre", label: "Cierre" },
+  { value: "retirada", label: "Retirada" },
+  { value: "ingreso", label: "Ingreso" },
+];
 
 const DIAS_SEMANA = [
   { value: 0, label: "Lunes" },
@@ -110,6 +117,7 @@ export function CierresView() {
   }, []);
 
   const emptyForm = () => ({
+    tipo: "cierre" as CierreTipo,
     fecha: today,
     efectivo_retirado: "",
     total_contado: "",
@@ -330,6 +338,7 @@ export function CierresView() {
     setSaving(true);
     try {
       const fd = new FormData();
+      fd.append("tipo", form.tipo);
       fd.append("fecha", form.fecha);
       fd.append("efectivo_retirado", form.efectivo_retirado || "0");
       fd.append("total_contado", form.total_contado || "0");
@@ -349,7 +358,11 @@ export function CierresView() {
 
       const res = await createCierre(fd);
       if (res.ok) {
-        toast.success("Cierre registrado");
+        toast.success(
+          form.tipo === "retirada" ? "Retirada registrada"
+            : form.tipo === "ingreso" ? "Ingreso registrado"
+            : "Cierre registrado",
+        );
         setModalOpen(false);
         setForm(emptyForm());
         cargar();
@@ -834,8 +847,34 @@ export function CierresView() {
       <Dialog open={modalOpen} onOpenChange={setModalOpen}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Registrar cierre semanal</DialogTitle>
+            <DialogTitle>
+              {form.tipo === "retirada" ? "Registrar retirada"
+                : form.tipo === "ingreso" ? "Registrar ingreso"
+                : "Registrar cierre semanal"}
+            </DialogTitle>
           </DialogHeader>
+
+          {/* Selector de tipo de movimiento: Cierre · Retirada · Ingreso */}
+          <div className="mt-2 grid grid-cols-3 gap-2 rounded-lg bg-muted p-1">
+            {TIPOS_MOVIMIENTO.map((t) => {
+              const activo = form.tipo === t.value;
+              return (
+                <button
+                  key={t.value}
+                  type="button"
+                  onClick={() => setForm((f) => ({ ...f, tipo: t.value }))}
+                  className={`rounded-md px-3 py-2 text-sm font-medium transition ${
+                    activo
+                      ? "bg-background text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                  aria-pressed={activo}
+                >
+                  {t.label}
+                </button>
+              );
+            })}
+          </div>
 
           <div className="grid grid-cols-2 gap-4 mt-2">
             <div>
