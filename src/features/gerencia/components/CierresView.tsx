@@ -1,11 +1,11 @@
 "use client";
 
-import { useState, useMemo, useEffect, useCallback, type ReactNode } from "react";
+import { useState, useMemo, useEffect, useCallback, useRef, type ReactNode } from "react";
 import { toast } from "sonner";
 import {
   CalendarDays, Plus, ChevronLeft, ChevronRight, Wallet, FileText,
   Settings, Trash2, Download, CheckCircle2, AlertTriangle, ArrowDownToLine,
-  ArrowUpFromLine, TrendingUp,
+  ArrowUpFromLine, TrendingUp, Receipt, X,
 } from "lucide-react";
 import {
   format, startOfMonth, endOfMonth, eachDayOfInterval, getDay, addMonths,
@@ -31,7 +31,7 @@ import {
 } from "@/components/ui/select";
 import {
   listCierres, createCierre, deleteCierre, getCierresConfig, updateCierresConfig,
-  type CierreRow, type CierresConfig, type CierreModo,
+  type CierreRow, type CierresConfig, type CierreModo, type CierreGasto,
 } from "@/features/gerencia/actions/cierres-actions";
 import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
 import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
@@ -55,6 +55,20 @@ const DIAS_SEMANA = [
   { value: 5, label: "Sábado" },
   { value: 6, label: "Domingo" },
 ];
+
+// Sugerencias de tipo de gasto (texto libre: solo autocompletado, no lista cerrada).
+const TIPOS_GASTO_SUGERIDOS = [
+  "Proveedores", "Personal", "Suministros", "Mantenimiento",
+  "Impuestos", "Alquiler", "Limpieza", "Marketing", "Otros",
+];
+
+// Fila de gasto en el formulario (con clave local estable para React).
+interface GastoFila {
+  key: string;
+  tipo: string;
+  descripcion: string;
+  importe: string;
+}
 
 function fmtEuro(n: number): string {
   return new Intl.NumberFormat("es-ES", { style: "currency", currency: "EUR" }).format(n);
@@ -89,6 +103,12 @@ export function CierresView() {
 
   const today = useMemo(() => format(new Date(), "yyyy-MM-dd"), []);
 
+  const gastoKeyRef = useRef(0);
+  const nuevaGastoFila = useCallback((): GastoFila => {
+    gastoKeyRef.current += 1;
+    return { key: `g-${gastoKeyRef.current}`, tipo: "", descripcion: "", importe: "" };
+  }, []);
+
   const emptyForm = () => ({
     fecha: today,
     efectivo_retirado: "",
@@ -96,9 +116,16 @@ export function CierresView() {
     notas: "",
     registrado_por: "",
     file: null as File | null,
+    gastos: [] as GastoFila[],
   });
   const [form, setForm] = useState(emptyForm());
   const [saving, setSaving] = useState(false);
+
+  // Total de gastos apuntados en el formulario (en vivo).
+  const totalGastosPreview = useMemo(
+    () => form.gastos.reduce((s, g) => s + (Number((g.importe || "0").replace(",", ".")) || 0), 0),
+    [form.gastos],
+  );
 
   // Descuadre calculado en vivo: contado − efectivo. >0 sobra · <0 falta · 0 cuadra.
   const descuadrePreview = useMemo(() => {
@@ -166,13 +193,15 @@ export function CierresView() {
     let descuadrados = 0;
     let saldoNeto = 0;
     let acumuladoEfectivo = 0;
+    let acumuladoGastos = 0;
     cierres.forEach((c) => {
       if (c.cuadra) cuadran++;
       else descuadrados++;
       saldoNeto += c.descuadre;
       acumuladoEfectivo += c.efectivo_retirado;
+      acumuladoGastos += c.total_gastos;
     });
-    return { total, cuadran, descuadrados, saldoNeto, acumuladoEfectivo };
+    return { total, cuadran, descuadrados, saldoNeto, acumuladoEfectivo, acumuladoGastos };
   }, [cierres]);
 
   // Acumulado corriente por cierre: suma cronológica de las retiradas hasta esa fecha.
@@ -199,6 +228,7 @@ export function CierresView() {
     { campo: "total", label: "Total contado" },
     { campo: "estado", label: "Estado" },
     { campo: "descuadre", label: "Descuadre" },
+    { campo: "gastos", label: "Gastos" },
     { campo: "acumulado", label: "Acumulado" },
     { campo: "doc", label: "Doc." },
   ];
@@ -272,6 +302,19 @@ export function CierresView() {
     setModalOpen(true);
   };
 
+  // ── Gastos del formulario ─────────────────────────────
+  const addGasto = () =>
+    setForm((f) => ({ ...f, gastos: [...f.gastos, nuevaGastoFila()] }));
+
+  const removeGasto = (key: string) =>
+    setForm((f) => ({ ...f, gastos: f.gastos.filter((g) => g.key !== key) }));
+
+  const updateGasto = (key: string, campo: "tipo" | "descripcion" | "importe", valor: string) =>
+    setForm((f) => ({
+      ...f,
+      gastos: f.gastos.map((g) => (g.key === key ? { ...g, [campo]: valor } : g)),
+    }));
+
   const handleGuardar = async () => {
     if (saving) return; // evita doble envío
     if (!form.fecha) {
@@ -287,6 +330,15 @@ export function CierresView() {
       // El descuadre lo calcula el backend (contado − efectivo); no se envía a mano.
       fd.append("notas", form.notas);
       fd.append("registrado_por", form.registrado_por);
+      // Gastos de la semana: se descartan filas totalmente vacías.
+      const gastosPayload: CierreGasto[] = form.gastos
+        .map((g) => ({
+          tipo: g.tipo.trim(),
+          descripcion: g.descripcion.trim(),
+          importe: Number((g.importe || "0").replace(",", ".")) || 0,
+        }))
+        .filter((g) => g.tipo || g.descripcion || g.importe !== 0);
+      if (gastosPayload.length > 0) fd.append("gastos", JSON.stringify(gastosPayload));
       if (form.file) fd.append("file", form.file);
 
       const res = await createCierre(fd);
@@ -390,7 +442,7 @@ export function CierresView() {
       />
 
       {/* KPIs */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
         <Card className="border-emerald-200 bg-emerald-50/40">
           <CardContent className="p-4 flex items-center gap-3">
             <div className="h-10 w-10 rounded-lg bg-emerald-100 flex items-center justify-center">
@@ -445,6 +497,17 @@ export function CierresView() {
                 {fmtEuro(resumen.saldoNeto)}
               </p>
               <p className="text-xs text-muted-foreground">Saldo neto descuadres</p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4 flex items-center gap-3">
+            <div className="h-10 w-10 rounded-lg bg-orange-50 flex items-center justify-center">
+              <Receipt className="h-5 w-5 text-orange-600" />
+            </div>
+            <div>
+              <p className="text-2xl font-bold text-orange-700">{fmtEuro(resumen.acumuladoGastos)}</p>
+              <p className="text-xs text-muted-foreground">Gastos acumulados</p>
             </div>
           </CardContent>
         </Card>
@@ -856,6 +919,74 @@ export function CierresView() {
               </p>
             </div>
 
+            {/* Gastos de la semana (registro informativo, no afecta al descuadre) */}
+            <div className="col-span-2">
+              <div className="flex items-center justify-between mb-2">
+                <Label className="flex items-center gap-1.5">
+                  <Receipt className="h-4 w-4 text-muted-foreground" />
+                  Gastos de la semana
+                </Label>
+                <Button type="button" size="sm" variant="outline" className="gap-1" onClick={addGasto}>
+                  <Plus className="h-3.5 w-3.5" /> Añadir gasto
+                </Button>
+              </div>
+
+              {form.gastos.length === 0 ? (
+                <p className="text-xs text-muted-foreground rounded-lg border border-dashed px-4 py-4 text-center">
+                  Sin gastos apuntados. Añade los gastos que haya habido durante la semana.
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  <datalist id="tipos-gasto-sugeridos">
+                    {TIPOS_GASTO_SUGERIDOS.map((t) => (
+                      <option key={t} value={t} />
+                    ))}
+                  </datalist>
+                  {form.gastos.map((g) => (
+                    <div key={g.key} className="flex items-start gap-2">
+                      <Input
+                        className="w-[28%]"
+                        list="tipos-gasto-sugeridos"
+                        placeholder="Tipo de gasto"
+                        value={g.tipo}
+                        onChange={(e) => updateGasto(g.key, "tipo", e.target.value)}
+                      />
+                      <Input
+                        className="flex-1"
+                        placeholder="Descripción"
+                        value={g.descripcion}
+                        onChange={(e) => updateGasto(g.key, "descripcion", e.target.value)}
+                      />
+                      <Input
+                        className="w-[22%]"
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        inputMode="decimal"
+                        placeholder="Importe €"
+                        value={g.importe}
+                        onChange={(e) => updateGasto(g.key, "importe", e.target.value)}
+                      />
+                      <Button
+                        type="button"
+                        size="icon"
+                        variant="ghost"
+                        className="h-9 w-9 shrink-0 text-muted-foreground hover:text-red-600"
+                        onClick={() => removeGasto(g.key)}
+                        aria-label="Quitar gasto"
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ))}
+                  <div className="flex items-center justify-between rounded-lg bg-muted/50 px-4 py-2">
+                    <span className="text-sm font-medium">Total gastos</span>
+                    <span className="text-sm font-bold">{fmtEuro(totalGastosPreview)}</span>
+                  </div>
+                </div>
+              )}
+            </div>
+
             <div className="col-span-2">
               <Label>Documento del cierre (PDF, imagen, etc.)</Label>
               <Input
@@ -934,6 +1065,31 @@ export function CierresView() {
                     </div>
                   )}
                 </div>
+
+                {selected.gastos.length > 0 && (
+                  <div>
+                    <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
+                      <Receipt className="h-3.5 w-3.5" /> Gastos de la semana
+                    </Label>
+                    <div className="mt-1 rounded-lg border divide-y">
+                      {selected.gastos.map((g, i) => (
+                        <div key={g.id ?? i} className="flex items-center justify-between gap-3 px-3 py-2">
+                          <div className="min-w-0">
+                            {g.tipo && (
+                              <Badge variant="secondary" className="text-xs mr-2">{g.tipo}</Badge>
+                            )}
+                            <span className="text-sm text-muted-foreground">{g.descripcion || "—"}</span>
+                          </div>
+                          <span className="text-sm font-medium shrink-0">{fmtEuro(g.importe)}</span>
+                        </div>
+                      ))}
+                      <div className="flex items-center justify-between px-3 py-2 bg-muted/50">
+                        <span className="text-sm font-medium">Total gastos</span>
+                        <span className="text-sm font-bold">{fmtEuro(selected.total_gastos)}</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {selected.notas && (
                   <div>

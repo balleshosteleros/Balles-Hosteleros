@@ -9,6 +9,13 @@ const SIGNED_URL_TTL_SECONDS = 60 * 60;
 
 export type CierreModo = "fijo" | "libre";
 
+export interface CierreGasto {
+  id?: string;
+  tipo: string;
+  descripcion: string;
+  importe: number;
+}
+
 export interface CierreRow {
   id: string;
   fecha: string;
@@ -24,6 +31,8 @@ export interface CierreRow {
   mime_type: string | null;
   registrado_por: string | null;
   url: string | null;
+  gastos: CierreGasto[];
+  total_gastos: number;
   created_at: string;
 }
 
@@ -75,6 +84,29 @@ export async function listCierres(): Promise<{ ok: true; data: CierreRow[] } | {
       return { ok: false, error: error.message };
     }
 
+    // Gastos de todos los cierres de la empresa, agrupados por cierre_id.
+    const gastosPorCierre: Record<string, CierreGasto[]> = {};
+    {
+      const { data: gData, error: gErr } = await supabase
+        .from("cierres_gastos")
+        .select("id, cierre_id, tipo, descripcion, importe")
+        .eq("empresa_id", empresaId)
+        .order("created_at", { ascending: true });
+      if (gErr) {
+        console.error("[cierres:list] gastos:", gErr.message);
+      } else {
+        for (const g of gData ?? []) {
+          const cid = g.cierre_id as string;
+          (gastosPorCierre[cid] ??= []).push({
+            id: g.id as string,
+            tipo: (g.tipo as string | null) ?? "",
+            descripcion: (g.descripcion as string | null) ?? "",
+            importe: Number(g.importe ?? 0),
+          });
+        }
+      }
+    }
+
     const rows: CierreRow[] = [];
     for (const r of data ?? []) {
       let url: string | null = null;
@@ -98,6 +130,8 @@ export async function listCierres(): Promise<{ ok: true; data: CierreRow[] } | {
         mime_type: (r.mime_type as string | null) ?? null,
         registrado_por: (r.registrado_por as string | null) ?? null,
         url,
+        gastos: gastosPorCierre[r.id as string] ?? [],
+        total_gastos: (gastosPorCierre[r.id as string] ?? []).reduce((s, g) => s + g.importe, 0),
         created_at: (r.created_at as string) ?? "",
       });
     }
@@ -122,6 +156,29 @@ export async function createCierre(formData: FormData): Promise<{ ok: true; data
     const file = formData.get("file") as File | null;
 
     if (!fecha) return { ok: false, error: "La fecha es obligatoria" };
+
+    // Gastos de la semana (registro informativo, no altera el descuadre).
+    let gastosInput: CierreGasto[] = [];
+    const gastosRaw = (formData.get("gastos") as string | null) || "";
+    if (gastosRaw) {
+      try {
+        const parsed = JSON.parse(gastosRaw) as unknown;
+        if (Array.isArray(parsed)) {
+          gastosInput = parsed
+            .map((g) => {
+              const o = g as Record<string, unknown>;
+              const tipo = String(o.tipo ?? "").trim();
+              const descripcion = String(o.descripcion ?? "").trim();
+              const importe = Number(String(o.importe ?? "0").replace(",", ".")) || 0;
+              return { tipo, descripcion, importe };
+            })
+            // Descartar filas vacías (sin tipo/descripción y sin importe).
+            .filter((g) => g.tipo || g.descripcion || g.importe !== 0);
+        }
+      } catch (e) {
+        console.error("[cierres:create] gastos parse:", e);
+      }
+    }
 
     const efectivo = Number(efectivoStr.replace(",", ".")) || 0;
     const contado = Number(contadoStr.replace(",", ".")) || 0;
@@ -191,6 +248,33 @@ export async function createCierre(formData: FormData): Promise<{ ok: true; data
       }
     }
 
+    // Insertar los gastos de la semana asociados al cierre.
+    let gastosGuardados: CierreGasto[] = [];
+    if (gastosInput.length > 0) {
+      const { data: gRows, error: gErr } = await supabase
+        .from("cierres_gastos")
+        .insert(
+          gastosInput.map((g) => ({
+            cierre_id: cierreId,
+            empresa_id: empresaId,
+            tipo: g.tipo,
+            descripcion: g.descripcion || null,
+            importe: g.importe,
+          })),
+        )
+        .select("id, tipo, descripcion, importe");
+      if (gErr) {
+        console.error("[cierres:create] gastos insert:", gErr.message);
+      } else {
+        gastosGuardados = (gRows ?? []).map((g) => ({
+          id: g.id as string,
+          tipo: (g.tipo as string | null) ?? "",
+          descripcion: (g.descripcion as string | null) ?? "",
+          importe: Number(g.importe ?? 0),
+        }));
+      }
+    }
+
     return {
       ok: true,
       data: {
@@ -208,6 +292,8 @@ export async function createCierre(formData: FormData): Promise<{ ok: true; data
         mime_type: mimeType,
         registrado_por: registradoPor || null,
         url: signedUrl,
+        gastos: gastosGuardados,
+        total_gastos: gastosGuardados.reduce((s, g) => s + g.importe, 0),
         created_at: (row.created_at as string) ?? new Date().toISOString(),
       },
     };
