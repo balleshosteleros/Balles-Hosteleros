@@ -5,6 +5,58 @@
 
 ---
 
+## 🎉 EL CABLE ESTÁ HECHO Y PROBADO E2E EN VIVO (29-jul noche, Fernando) — Iván LÉEME
+
+**La pantalla de subir albarán por foto existe, está en main y funciona de punta a punta.**
+Probada con un albarán REAL (Makro 028341 de Bacanal, 26-jun, el de la tanda 2) contra prod:
+
+**Cómo se usa** (pruébalo tú): Logística → Pedidos → pestaña ALBARANES → botón **"Subir
+albarán"** (junto al engranaje) → adjuntar foto/PDF o cámara → la IA lee cabecera y líneas →
+pantalla de verificación (proveedor/fecha/nº detectados y editables, cantidades y precios
+editables, suma de líneas vs total del papel) → **"Guardar en Revisión"** (nuevo estado
+naranja: NO suma stock, guarda la foto adjunta, se puede seguir otro día) → en el detalle
+sale TU asistente (`AsistenteAlbaranPanel`): vincular/crear/ignorar línea a línea →
+**"Confirmar albarán"** → ahí entra el stock y se registran los precios de compra solos.
+
+**Resultado del E2E real** (todo verificado en BD):
+- OCR: 18/18 líneas de la página 1, suma 517,77 € clavada con el papel; fecha y nº albarán
+  (028341) auto-detectados. Cantidades a peso también (7,748 kg alitas, 5,075 kg corvina).
+- 7 líneas vinculadas, 1 producto creado desde el asistente (**Alitas de pollo**, nº 339 —
+  la creación de productos de compra vuelve a funcionar tras el fix de contadores del BUG 1),
+  10 ignoradas (productos que aún no existen en catálogo; quedan en el jsonb con el texto
+  del proveedor para auditoría).
+- Al confirmar: 8 movimientos de stock (`documento_tipo='albaran'`) + 4 precios nuevos en
+  `producto_precios_compra` con IVA correcto (los otros ya estaban cargados de la tanda 2 →
+  el guard anti-duplicados funciona). Alias `nombre_proveedor` memorizados (doble nombre ✓).
+- El albarán ALB-2026-021 se ha quedado como dato REAL (es un albarán verdadero de Bacanal).
+
+**Desmentido importante para tu agente**: `albaranes.estado` NO era texto libre — había un
+CHECK (`albaranes_estado_check`) desde la migración `20260627210000`. Ya está ampliado con
+'Revisión' vía `20260729150000_albaranes_estado_revision.sql` (aplicada a prod; tu próximo
+`db push` la verá como no-op). Esa migración también versiona `albaranes.numero_proveedor` y
+`producto_precios_compra.proveedor`/`.formato`, que existían en prod sin `.sql`.
+
+**3 mejoras detectadas en la prueba (para tu lista, ninguna bloquea):**
+1. **El buscador de "Vincular a existente" solo busca entre los candidatos precalculados**
+   (máx. 6). Si el matcher no propone el producto, no puedes vincularlo aunque exista:
+   me pasó con "Gyozas pollo y verduras", "Alcachofa confitada", "Oreja de cerdo en adobo" y
+   "Paleta cebo ibérico 50% loncheada" — existen y tuve que ignorar sus líneas. Propuesta:
+   que el Command busque contra TODO el catálogo de compra (fallback server o lista completa).
+2. **Sugerencias engañosas del matcher**: para "Oreja adobada" propuso "Panceta adobada 67%"
+   (y no la Oreja que existe); para "Dagu huevo codorniz" propuso "Huevo 90%" por delante de
+   "Huevo de codorniz 58%". La pantalla de verificación humana salva esto, pero sube el
+   riesgo de vincular mal con prisas. (El peso del alias ya ayuda cuando existe.)
+3. **IVA**: los albaranes de Makro imprimen una columna "Imp" con CÓDIGOS (5=IVA 4 %, 1=10 %),
+   no porcentajes. El prompt del OCR ya lo excluye y el registro de precios solo acepta
+   0/4/10/21; además normalicé el formato del IVA en `addPrecioCompra` (sin "%", como las
+   374 filas existentes — tu `crearProductoDesdeAlbaran` guardaba "10%").
+
+**Los 23 albaranes pendientes de la sección de abajo son la beta perfecta**: súbelos por la
+pantalla nueva en vez de cargarlos a mano (era tu plan: "quiero ir subiéndolos ya
+directamente desde el software").
+
+---
+
 ## 🟢 LÉEME PRIMERO — RESPUESTAS DE IVÁN (2026-07-29) · ACCIONES PARA FERNANDO
 
 > Fernando: Iván respondió a TODAS tus preguntas (los 3 bloques). Aquí está el resumen

@@ -200,7 +200,9 @@ export async function addPrecioCompra(input: {
       .insert({
         producto_id: input.productoId,
         precio: input.precio,
-        iva: input.iva ?? null,
+        // La tabla guarda el IVA sin "%" ("10", "4"...): normaliza entradas tipo "10%"
+        // (p.ej. IVA_OPCIONES de la UI) para no mezclar formatos.
+        iva: input.iva ? input.iva.replace("%", "").trim() : null,
         proveedor: proveedorNorm,
         formato: input.formato ?? null,
         fecha_inicio: input.fechaInicio,
@@ -345,7 +347,8 @@ export async function updatePrecioCompra(input: {
       .from("producto_precios_compra")
       .update({
         precio: input.precio,
-        iva: input.iva ?? null,
+        // Sin "%": misma normalización que en el insert.
+        iva: input.iva ? input.iva.replace("%", "").trim() : null,
         proveedor: proveedorNorm,
         formato: input.formato ?? null,
         fecha_inicio: input.fechaInicio,

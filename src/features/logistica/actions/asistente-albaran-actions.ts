@@ -113,6 +113,9 @@ Tu tarea: leer el documento adjunto (foto o PDF de un albarán de entrega) y dev
   IVA % e importe de la línea.
 - NO incluyas como líneas los gastos o servicios (portes, desplazamiento, punto verde) ni las
   líneas de regalo sin importe.
+- IVA %: SOLO si el documento imprime un porcentaje de IVA explícito (0, 4, 10 o 21). Muchos
+  albaranes (p.ej. Makro) imprimen una columna "Imp" con CÓDIGOS de impuesto (1, 2, 5...):
+  eso NO es un porcentaje — en ese caso devuelve null.
 Si un dato no se ve, devuélvelo como null. NO inventes (ni sabores, ni formatos). Idioma: español.
 `.trim();
 
@@ -464,7 +467,9 @@ export async function resolverAlbaranRevision(
         const res = await addPrecioCompra({
           productoId: l.productoId as string,
           precio: Number(l.precioUC),
-          iva: l.impuesto != null ? String(l.impuesto) : undefined,
+          // Solo porcentajes de IVA reales: un código de impuesto del proveedor (Makro
+          // imprime 1/2/5 en su columna "Imp") no debe acabar registrado como IVA.
+          iva: [0, 4, 10, 21].includes(Number(l.impuesto)) ? String(l.impuesto) : undefined,
           proveedor,
           formato: l.formato ?? null,
           fechaInicio: fecha,
