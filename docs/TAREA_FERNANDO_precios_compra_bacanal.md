@@ -56,6 +56,68 @@ ESTADO NUEVO de albarán ("Revisión"). Es la pieza más importante de esta rond
 
 ---
 
+## ✅ BLOQUES 2 y 3 EJECUTADOS + 🐛 DOS BUGS GORDOS ENCONTRADOS (29-jul, Fernando)
+
+**Hecho en prod** (precios 364 → 370, todo verificado):
+
+| Producto | Empresa | Qué se hizo | Precio |
+|---|---|---|---|
+| Cubo Coctel Mix | HABANA | **CREADO** (nº 285) + alias | 9,86 · IVA 10 · BIGGER · form. 2 Kg |
+| Leche Asturiana | HABANA | **CREADA** + alias | 1,99 · IVA 4 · DITHER · form. 1 Ud |
+| Hielo Roca | HABANA | precio + alias | 0,818 · IVA 10 · PROCUBITOS · form. 1 Kg |
+| Vaso de Sidra Tensionado | HABANA | precio + alias | 59,99 · IVA 21 · KRITTIKALI · **form. 500 Ud** |
+| Fregona Microfriba | HABANA | precio + alias | 1,03 · IVA 21 · KRITTIKALI · form. 1 Ud |
+| Fregona | BACANAL | alias (ya tenía precio) | — |
+| Salsa barbacoa | BACANAL | precio + alias ✅ · **cambio de tipo NO se pudo** ❌ | 5,32 · IVA 10 · MAKRO · form. 1850 g |
+
+- **Todos llevan ya la casilla `nombre_proveedor`** rellena con el texto literal del albarán,
+  así tu matcher los reconocerá solos la próxima vez. La receta de *Costillas a baja
+  temperatura* sigue **intacta** (Salsa barbacoa, 70 Gr) — verificado después de tocar.
+- ⚠️ **Vaso de sidra: 59,99 € es la CAJA DE 500 unidades** (0,12 €/ud). Lo he grabado con
+  formato "500 Ud". Es el ejemplo perfecto de por qué hacía falta tu P3.
+- Aquarius: **sin tocar**, como dijiste (el albarán no indica sabor, no se inventa).
+
+### 🐛 BUG 1 — CRÍTICO: **crear productos de compra estaba ROTO en las 2 empresas** (ya arreglado)
+
+Al intentar crear el Cubo Cóctel salté sobre esto: los contadores de `numero_counters`
+estaban **por debajo** del número real más alto, así que el siguiente número que iban a
+asignar **ya estaba ocupado** → toda alta de producto moría con violación de clave única:
+
+| Contador | Estaba en | Máximo real | Resultado |
+|---|---:|---:|---|
+| `productos:compra` BACANAL | 297 | 338 | ❌ roto |
+| `productos:compra` HABANA | 280 | 284 | ❌ roto |
+| `productos:elaboracion` BACANAL | 4 | 22 | ❌ roto |
+| `proveedores` BACANAL | 34 | 35 | ❌ roto |
+
+**Esto habría tumbado tu asistente entero**: su función estrella —"crear producto de compra
+desde el albarán"— fallaba siempre, en las dos empresas. **Lo he arreglado** resincronizando
+cada contador a su máximo real (solo sube, nunca baja → imposible reutilizar un número ya
+dado). Verificado: el siguiente número está libre en los 5 contadores.
+
+⚠️ **La causa raíz sigue viva:** esto pasa cuando algo inserta productos con
+`numero_secuencial` explícito sin tocar el contador (el trigger solo numera si viene NULL) —
+típico de importadores/migraciones masivas. **Tu importador de fichas debería resincronizar
+el contador al terminar**, o volverá a romperse.
+
+### 🐛 BUG 2 — **No se puede cambiar el TIPO de un producto** (bloquea tu petición nº1)
+
+La salsa barbacoa **no ha podido pasar de "elaboración" a "compra"**, y no es un problema de
+esa fila: **es estructural y le pasará a cualquiera desde la UI**.
+- `numero_secuencial` es único por **(empresa, tipo, número)** y la salsa es *elaboración nº 21*.
+- El *compra nº 21* de Bacanal ya existe: **«San miguel Tercio»** → colisión.
+- Y no se le puede dar otro número: el trigger `lock_numero_secuencial` lo declara
+  **inmutable** ("numero_secuencial es inmutable y no puede modificarse").
+
+**Necesito que decidas** (es tu terreno, toca infraestructura):
+- **(a)** Ajustar el trigger para que permita reasignar número **cuando cambia el tipo** (lo
+  correcto de cara al futuro: hoy la app no puede reclasificar ningún producto).
+- **(b)** Que lo haga yo puntualmente con el trigger desactivado un instante, solo para esta fila.
+- **(c)** Dejarla como *elaboración*: **ya tiene su precio de compra cargado**, que es lo que
+  de verdad necesitas para el coste. Es la opción sin riesgo si no corre prisa.
+
+Mientras decides, **el precio ya está** y el plato sigue llevándola.
+
 ## 🆕 FLUJO DEFINITIVO DEL ASISTENTE DE ALBARANES (Iván, 2026-07-29)
 
 > Fernando: esto sustituye la idea de "albarán bloqueado". Iván ha definido cómo debe
