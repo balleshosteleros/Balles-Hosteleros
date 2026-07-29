@@ -93,14 +93,19 @@ export function CierresView() {
     fecha: today,
     efectivo_retirado: "",
     total_contado: "",
-    cuadra: true,
-    descuadre: "",
-    descuadre_signo: "negativo" as "positivo" | "negativo",
     notas: "",
     registrado_por: "",
     file: null as File | null,
   });
   const [form, setForm] = useState(emptyForm());
+  const [saving, setSaving] = useState(false);
+
+  // Descuadre calculado en vivo: contado − efectivo. >0 sobra · <0 falta · 0 cuadra.
+  const descuadrePreview = useMemo(() => {
+    const efectivo = Number((form.efectivo_retirado || "0").replace(",", ".")) || 0;
+    const contado = Number((form.total_contado || "0").replace(",", ".")) || 0;
+    return Math.round((contado - efectivo) * 100) / 100;
+  }, [form.efectivo_retirado, form.total_contado]);
 
   const [cfgForm, setCfgForm] = useState<CierresConfig>({ modo: "libre", dia_semana: null });
   const [cfgSaving, setCfgSaving] = useState(false);
@@ -247,35 +252,33 @@ export function CierresView() {
   };
 
   const handleGuardar = async () => {
+    if (saving) return; // evita doble envío
     if (!form.fecha) {
       toast.error("La fecha es obligatoria");
       return;
     }
-    const fd = new FormData();
-    fd.append("fecha", form.fecha);
-    fd.append("efectivo_retirado", form.efectivo_retirado || "0");
-    fd.append("total_contado", form.total_contado || "0");
-    fd.append("cuadra", form.cuadra ? "true" : "false");
-    if (!form.cuadra) {
-      const raw = Number((form.descuadre || "0").replace(",", ".")) || 0;
-      const abs = Math.abs(raw);
-      const signed = form.descuadre_signo === "positivo" ? abs : -abs;
-      fd.append("descuadre", String(signed));
-    } else {
-      fd.append("descuadre", "0");
-    }
-    fd.append("notas", form.notas);
-    fd.append("registrado_por", form.registrado_por);
-    if (form.file) fd.append("file", form.file);
+    setSaving(true);
+    try {
+      const fd = new FormData();
+      fd.append("fecha", form.fecha);
+      fd.append("efectivo_retirado", form.efectivo_retirado || "0");
+      fd.append("total_contado", form.total_contado || "0");
+      // El descuadre lo calcula el backend (contado − efectivo); no se envía a mano.
+      fd.append("notas", form.notas);
+      fd.append("registrado_por", form.registrado_por);
+      if (form.file) fd.append("file", form.file);
 
-    const res = await createCierre(fd);
-    if (res.ok) {
-      toast.success("Cierre registrado");
-      setModalOpen(false);
-      setForm(emptyForm());
-      cargar();
-    } else {
-      toast.error(res.error ?? "Error al registrar el cierre");
+      const res = await createCierre(fd);
+      if (res.ok) {
+        toast.success("Cierre registrado");
+        setModalOpen(false);
+        setForm(emptyForm());
+        cargar();
+      } else {
+        toast.error(res.error ?? "Error al registrar el cierre");
+      }
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -768,62 +771,52 @@ export function CierresView() {
               />
             </div>
 
+            {/* Descuadre calculado automáticamente = contado − efectivo */}
             <div className="col-span-2">
-              <Label className="mb-2 block">¿Coincide el cierre con lo contado?</Label>
-              <RadioGroup
-                value={form.cuadra ? "si" : "no"}
-                onValueChange={(v) => setForm({ ...form, cuadra: v === "si" })}
-                className="flex gap-4"
+              <Label className="mb-2 block">Descuadre (calculado automáticamente)</Label>
+              <div
+                className={`flex items-center justify-between rounded-lg border px-4 py-3 ${
+                  descuadrePreview === 0
+                    ? "bg-emerald-50 border-emerald-200"
+                    : descuadrePreview > 0
+                      ? "bg-amber-50 border-amber-200"
+                      : "bg-red-50 border-red-200"
+                }`}
               >
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="si" id="cuadra-si" />
-                  <Label htmlFor="cuadra-si" className="cursor-pointer">Sí, cuadra</Label>
+                <div className="flex items-center gap-2">
+                  {descuadrePreview === 0 ? (
+                    <>
+                      <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                      <span className="text-sm font-medium text-emerald-800">Cuadra</span>
+                    </>
+                  ) : descuadrePreview > 0 ? (
+                    <>
+                      <ArrowUpFromLine className="h-4 w-4 text-amber-600" />
+                      <span className="text-sm font-medium text-amber-800">Sobra dinero</span>
+                    </>
+                  ) : (
+                    <>
+                      <ArrowDownToLine className="h-4 w-4 text-red-600" />
+                      <span className="text-sm font-medium text-red-800">Falta dinero</span>
+                    </>
+                  )}
                 </div>
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="no" id="cuadra-no" />
-                  <Label htmlFor="cuadra-no" className="cursor-pointer">No, hay descuadre</Label>
-                </div>
-              </RadioGroup>
+                <span
+                  className={`text-base font-bold ${
+                    descuadrePreview === 0
+                      ? "text-emerald-700"
+                      : descuadrePreview > 0
+                        ? "text-amber-700"
+                        : "text-red-700"
+                  }`}
+                >
+                  {descuadrePreview > 0 ? "+" : ""}{fmtEuro(descuadrePreview)}
+                </span>
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">
+                Se calcula solo: total contado en caja − efectivo retirado.
+              </p>
             </div>
-
-            {!form.cuadra && (
-              <>
-                <div>
-                  <Label>Cantidad del descuadre (€)</Label>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={form.descuadre}
-                    onChange={(e) => setForm({ ...form, descuadre: e.target.value })}
-                    placeholder="0.00"
-                  />
-                </div>
-                <div>
-                  <Label className="mb-2 block">Signo del descuadre</Label>
-                  <RadioGroup
-                    value={form.descuadre_signo}
-                    onValueChange={(v) => setForm({ ...form, descuadre_signo: v as "positivo" | "negativo" })}
-                    className="flex gap-4 pt-1"
-                  >
-                    <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="positivo" id="desc-pos" />
-                      <Label htmlFor="desc-pos" className="cursor-pointer flex items-center gap-1">
-                        <ArrowUpFromLine className="h-3 w-3 text-amber-600" />
-                        Positivo (sobra)
-                      </Label>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="negativo" id="desc-neg" />
-                      <Label htmlFor="desc-neg" className="cursor-pointer flex items-center gap-1">
-                        <ArrowDownToLine className="h-3 w-3 text-red-600" />
-                        Negativo (falta)
-                      </Label>
-                    </div>
-                  </RadioGroup>
-                </div>
-              </>
-            )}
 
             <div className="col-span-2">
               <Label>Documento del cierre (PDF, imagen, etc.)</Label>
@@ -851,8 +844,10 @@ export function CierresView() {
           </div>
 
           <DialogFooter className="mt-4">
-            <Button variant="outline" onClick={() => setModalOpen(false)}>Cancelar</Button>
-            <Button onClick={handleGuardar} disabled={!form.fecha}>Guardar</Button>
+            <Button variant="outline" onClick={() => setModalOpen(false)} disabled={saving}>Cancelar</Button>
+            <Button onClick={handleGuardar} disabled={!form.fecha || saving}>
+              {saving ? "Guardando..." : "Guardar"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

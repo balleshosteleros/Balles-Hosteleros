@@ -117,8 +117,6 @@ export async function createCierre(formData: FormData): Promise<{ ok: true; data
     const fecha = ((formData.get("fecha") as string | null) || "").trim();
     const efectivoStr = ((formData.get("efectivo_retirado") as string | null) || "0").trim();
     const contadoStr = ((formData.get("total_contado") as string | null) || "0").trim();
-    const cuadraStr = ((formData.get("cuadra") as string | null) || "true").trim();
-    const descuadreStr = ((formData.get("descuadre") as string | null) || "0").trim();
     const notas = ((formData.get("notas") as string | null) || "").trim();
     const registradoPor = ((formData.get("registrado_por") as string | null) || "").trim();
     const file = formData.get("file") as File | null;
@@ -127,8 +125,10 @@ export async function createCierre(formData: FormData): Promise<{ ok: true; data
 
     const efectivo = Number(efectivoStr.replace(",", ".")) || 0;
     const contado = Number(contadoStr.replace(",", ".")) || 0;
-    const cuadra = cuadraStr === "true";
-    const descuadre = cuadra ? 0 : Number(descuadreStr.replace(",", ".")) || 0;
+    // El descuadre SIEMPRE se calcula: contado − efectivo esperado.
+    // >0 sobra · <0 falta · 0 cuadra. No se acepta valor manual.
+    const descuadre = Math.round((contado - efectivo) * 100) / 100;
+    const cuadra = descuadre === 0;
 
     const { data: row, error: dbErr } = await supabase
       .from("cierres_semanales")
