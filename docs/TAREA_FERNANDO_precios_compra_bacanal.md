@@ -47,9 +47,129 @@
    proveedor en la casilla nueva de doble nombre.
 3. **Ron Rives 1 ud sin importe** = **regalo → grabar SIN precio**.
 
-**E) 23 albaranes bloqueados** (casi todos Makro) esperan crear ~24 productos → ver sección
-"🔴 23 albaranes MÁS que NO se han podido registrar". Iván NO ha dado el "crear" masivo de
-esos aún; sí resolvió los casos concretos de arriba.
+**E) 23 albaranes "bloqueados" → VER SECCIÓN NUEVA ABAJO.** Iván ha dado luz verde a crear
+los productos que no se identifican Y ha definido el flujo completo del asistente + un
+ESTADO NUEVO de albarán ("Revisión"). Es la pieza más importante de esta ronda. Ver
+👉 **"🆕 FLUJO DEFINITIVO DEL ASISTENTE DE ALBARANES (Iván, 29-jul)"**.
+
+---
+
+## 🆕 FLUJO DEFINITIVO DEL ASISTENTE DE ALBARANES (Iván, 2026-07-29)
+
+> Fernando: esto sustituye la idea de "albarán bloqueado". Iván ha definido cómo debe
+> comportarse el sistema de principio a fin cuando se sube un albarán (por foto o digital)
+> y alguna línea no casa con el catálogo. **Planifícalo e impleméntalo** (amplía el
+> `docs/PRP_ASISTENTE_OCR_LINEAS_NO_RECONOCIDAS.md`). Verificaré contra el código cómo
+> funciona hoy el matcher y añadiré aquí el "qué hay vs qué falta".
+
+### 1. NO existe estado "bloqueado" — se crea el estado **REVISIÓN**
+
+- Un albarán con líneas no reconocidas **NO se descarta ni se queda fuera**. Se guarda en
+  estado **"Revisión"**.
+- En **Revisión**: el albarán está guardado pero **NO suma stock, NO cambia de estado, NO
+  toca NADA**. Espera a que una persona apruebe línea por línea.
+- Solo cuando se aprueba que **TODO está correcto** → pasa a **"Confirmado"** → y **ahí**
+  (y solo ahí) **suma stock** (coherente con la P1).
+- ⚠️ **VERIFICADO en BD (29-jul):** `albaranes.estado` es **texto libre** (no un enum
+  rígido), y hoy solo se usa el valor **"Confirmado"** (31 albaranes). Añadir **"Revisión"**
+  es directo: no requiere migración de enum, solo cablearlo en la UI y en la lógica de
+  stock (que el stock se dispare en la transición Revisión→Confirmado, no antes).
+
+### 2. Cómo debe leer y emparejar cada línea (matcher + asistente)
+
+Cuando el asistente lee un producto del documento y lo compara con nuestra base de datos:
+
+1. **Buscar primero por la casilla "nombre del proveedor"** (la casilla nueva de doble
+   nombre del Bloque 2). El dato debe salir **exacto**.
+2. **Si coincide EXACTO** → liga la línea directamente a nuestro producto. Sin intervención.
+3. **Si NO coincide exacto** → el asistente hace una **PROPUESTA**: muestra candidatos
+   similares (buscando tanto por nombres de proveedor ya guardados como por nuestros
+   nombres) por si alguno encaja. La persona **decide si esa línea pertenece a otro
+   producto** y lo **liga** (esa asociación queda memorizada como nombre de proveedor para
+   la próxima vez).
+4. **Si no encaja NINGUNO** → el asistente **propone CREAR un producto de compra nuevo
+   DESDE el propio albarán**, que se guarde automáticamente y quede ligado a esa línea. Al
+   crear, **OBLIGA a rellenar todos los campos marcados como obligatorios en la ficha de
+   producto** — entre ellos el **precio negociado con el proveedor**, y en ese campo el
+   asistente **sugiere el precio de compra que viene en ese mismo albarán** (para que no se
+   teclee a mano).
+
+### 3. Luz verde de Iván a crear los productos no identificados
+
+> **✅ IVÁN (29-jul):** "Los productos que no logres identificar con productos ya creados
+> nuestros, grábalos nuevos." → Para los ~24 productos de los 23 albaranes en Revisión
+> (casi todos Makro: queso mascarpone, coulant de chocolate, alitas, pimiento de freír,
+> tomate frito, mayonesa, galleta María, cubo con pedal, cubertería, etc.): **si no casan
+> con uno existente, se crean como producto de compra nuevo** con el precio del albarán.
+> Los 3 casos dudosos ya los resolvió Iván (29-jul):
+> - **Coca-Cola PET 2L (regular y zero)** → **CREAR nuevo** producto de compra (no es la
+>   retornable ni la de 1L).
+> - **Hamburguesa vaca artesana 180g** → **es la MISMA que la "angus 200gr"** → ligar ahí.
+>   Iván: "es la misma, ponla como la de 200 gramos y edítalo ya que es correcto" (ajusta
+>   el gramaje/nombre en esa ficha, no crear una nueva).
+> - **Pan de hamburguesa sésamo** → **es el MISMO** que el existente ("High Potato") → ligar
+>   ahí, no crear otro.
+>
+> Fernando: una vez montado el asistente, estos 23 albaranes se resuelven con él; no hace
+> falta cargarlos "a mano" fuera del flujo.
+
+### 4. QUÉ HAY HOY vs QUÉ FALTA (verificado contra el código, 29-jul)
+
+> Auditoría del código real para que Fernando sepa exactamente qué construir. Rutas y
+> líneas concretas.
+
+**a) Estado "Revisión" — NO existe, y hoy el sistema hace lo contrario:**
+- `createAlbaran` (`src/features/logistica/actions/albaranes-actions.ts` L142-159) **RECHAZA
+  con error** cualquier línea sin `productoId` ("Hay líneas sin producto asociado"). O sea,
+  hoy un albarán con líneas no reconocidas **NO se puede guardar** — ni siquiera queda en
+  revisión. **A construir:** permitir guardar el albarán en estado **"Revisión"** con líneas
+  huérfanas, y que la regla dura solo aplique en la transición **Revisión→Confirmado**.
+- `albaranes.estado` es **texto libre** (no enum) → añadir "Revisión" no requiere migración
+  de tipo, solo cablearlo en UI + lógica de stock.
+- El stock debe dispararse SOLO al pasar a "Confirmado" (ya es coherente con P1).
+
+**b) Casilla "nombre del proveedor" (doble nombre) — NO existe:**
+- No hay ninguna columna/tabla de alias. `productos.proveedor` es el proveedor principal, NO
+  un alias del nombre que usa el proveedor. `producto_precios_compra` tampoco lo tiene.
+- **A construir:** dónde guardar los alias por proveedor (1 producto : N alias). Opciones:
+  columna nueva o tabla `producto_alias_proveedor(producto_id, proveedor, nombre_proveedor)`.
+  Es lo que alimenta el emparejado automático de futuros albaranes.
+- ⚠️ **Aviso de deuda técnica que encontró la auditoría:** las columnas `proveedor` y
+  `formato` de `producto_precios_compra` **existen en la BD remota pero NO están en ninguna
+  migración versionada** (`.sql`) del repo. El código las usa (`precios-compra-actions.ts`
+  L185, L204-205). Fernando: conviene versionar esas columnas en una migración idempotente
+  para no perderlas (regla del proyecto: migraciones siempre como `.sql`).
+
+**c) Asistente por línea (vincular / crear / ignorar) — NO existe:**
+- Hoy, cuando una línea no casa, el OCR la marca `"extra"` con `productoId:null`
+  (`comparar-lineas.ts` L156-174) y la UI (`FacturaComparativa.tsx` L209-247) SOLO ofrece
+  "Acepto" o editar el texto a mano. **No hay selector de producto, ni "crear producto",
+  ni propuesta de candidatos.** Y `validarFactura` bloquea. Este es exactamente el hueco.
+- **BUENA NOTICIA — ya existe un patrón para clonar:** el importador de fichas de cocina SÍ
+  tiene el diálogo que buscamos: `CorregirMatchDialog.tsx` (combobox shadcn `Command` dentro
+  de un `Dialog`) que propone candidatos por similitud y liga el producto. Fernando: clona
+  ese patrón para el asistente de albaranes, y para crear usa `createProducto` +
+  `addPrecioCompra` que ya existen.
+- El matcher del OCR (`comparar-lineas.ts`) hoy compara por nombre con **Levenshtein, umbral
+  0.7**, solo contra las líneas del albarán (no busca en el catálogo). Para el asistente hay
+  que **buscar candidatos en el CATÁLOGO** (por nombre nuestro Y por alias de proveedor) y
+  proponerlos, como hace el matcher de cocina (`matcher.ts`, umbrales exacto 0.99 /
+  probable 0.55).
+
+**d) Campos OBLIGATORIOS al crear producto de compra CON precio (verificado):**
+`nombre`, `categoría`, `unidad`, `proveedor`, `IVA`, `precio`. (El `formato` es opcional hoy
+— pero según la P3 pasa a ser deseable/obligatorio.) El IVA de compra va en
+`producto_precios_compra`, NO en `productos.iva`. → Cuando el asistente "cree producto desde
+el albarán", debe **forzar rellenar esos campos** y **sugerir el precio del propio albarán**
+en el campo precio (como pidió Iván).
+
+**Archivos que tocará Fernando** (del análisis del código):
+- `albaranes-actions.ts` (estado Revisión + relajar regla productoId)
+- `comparar-lineas.ts` / nuevo matcher contra catálogo
+- `FacturaComparativa.tsx` + `FacturaDialog.tsx` (UI del asistente por línea)
+- clonar `cocina/.../CorregirMatchDialog.tsx`
+- `producto-actions.ts` + `precios-compra-actions.ts` (crear desde albarán)
+- migración nueva para alias de proveedor + versionar `proveedor`/`formato` de precios.
 
 ---
 
