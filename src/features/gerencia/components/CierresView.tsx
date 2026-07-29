@@ -3,9 +3,9 @@
 import { useState, useMemo, useEffect, useCallback, type ReactNode } from "react";
 import { toast } from "sonner";
 import {
-  CalendarDays, List, Plus, ChevronLeft, ChevronRight, Wallet, FileText,
+  CalendarDays, Plus, ChevronLeft, ChevronRight, Wallet, FileText,
   Settings, Trash2, Download, CheckCircle2, AlertTriangle, ArrowDownToLine,
-  ArrowUpFromLine,
+  ArrowUpFromLine, TrendingUp,
 } from "lucide-react";
 import {
   format, startOfMonth, endOfMonth, eachDayOfInterval, getDay, addMonths,
@@ -21,7 +21,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsContent } from "@/components/ui/tabs";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
@@ -165,12 +165,26 @@ export function CierresView() {
     let cuadran = 0;
     let descuadrados = 0;
     let saldoNeto = 0;
+    let acumuladoEfectivo = 0;
     cierres.forEach((c) => {
       if (c.cuadra) cuadran++;
       else descuadrados++;
       saldoNeto += c.descuadre;
+      acumuladoEfectivo += c.efectivo_retirado;
     });
-    return { total, cuadran, descuadrados, saldoNeto };
+    return { total, cuadran, descuadrados, saldoNeto, acumuladoEfectivo };
+  }, [cierres]);
+
+  // Acumulado corriente por cierre: suma cronológica de las retiradas hasta esa fecha.
+  // (cierres viene descendente; recorremos en orden ascendente para el running total.)
+  const acumuladoPorId = useMemo(() => {
+    const m: Record<string, number> = {};
+    let run = 0;
+    [...cierres].reverse().forEach((c) => {
+      run += c.efectivo_retirado;
+      m[c.id] = run;
+    });
+    return m;
   }, [cierres]);
 
   const cierresFiltrados = useMemo(
@@ -185,6 +199,7 @@ export function CierresView() {
     { campo: "total", label: "Total contado" },
     { campo: "estado", label: "Estado" },
     { campo: "descuadre", label: "Descuadre" },
+    { campo: "acumulado", label: "Acumulado" },
     { campo: "doc", label: "Doc." },
   ];
   const columnasRender = ordenarColumnas(columnasDef, columnasOrden).filter(
@@ -198,6 +213,7 @@ export function CierresView() {
     total: <TableHead key="total" className="text-right">Total contado</TableHead>,
     estado: <TableHead key="estado">Estado</TableHead>,
     descuadre: <TableHead key="descuadre" className="text-right">Descuadre</TableHead>,
+    acumulado: <TableHead key="acumulado" className="text-right">Acumulado</TableHead>,
     doc: <TableHead key="doc">Doc.</TableHead>,
   };
   const cellDe = (c: CierreRow): Record<string, ReactNode> => ({
@@ -228,6 +244,11 @@ export function CierresView() {
     descuadre: (
       <TableCell key="descuadre" className={`text-right font-medium ${c.descuadre === 0 ? "text-muted-foreground" : c.descuadre > 0 ? "text-amber-700" : "text-red-700"}`}>
         {c.cuadra ? "—" : fmtEuro(c.descuadre)}
+      </TableCell>
+    ),
+    acumulado: (
+      <TableCell key="acumulado" className="text-right font-semibold text-emerald-700">
+        {fmtEuro(acumuladoPorId[c.id] ?? 0)}
       </TableCell>
     ),
     doc: (
@@ -339,6 +360,18 @@ export function CierresView() {
         onColumnasVisiblesChange={setColumnasVisibles}
         columnasOrden={columnasOrden}
         onColumnasOrdenChange={setColumnasOrden}
+        extraIzquierda={
+          <Button
+            size="sm"
+            variant="outline"
+            className={`gap-1.5 ${vista === "calendario" ? "bg-white border-primary text-primary hover:bg-white" : ""}`}
+            onClick={() => setVista((v) => (v === "calendario" ? "resumen" : "calendario"))}
+            title="Ver calendario"
+          >
+            <CalendarDays className="h-4 w-4" />
+            Calendario
+          </Button>
+        }
         extraDerecha={
           <>
             <IOActions config={cierresIO} onSuccess={cargar} />
@@ -346,7 +379,7 @@ export function CierresView() {
               size="icon"
               variant={vista === "ajustes" ? "default" : "outline"}
               className="h-9 w-9"
-              onClick={() => setVista("ajustes")}
+              onClick={() => setVista((v) => (v === "ajustes" ? "resumen" : "ajustes"))}
               title="Configuración"
               aria-label="Configuración"
             >
@@ -357,7 +390,18 @@ export function CierresView() {
       />
 
       {/* KPIs */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+        <Card className="border-emerald-200 bg-emerald-50/40">
+          <CardContent className="p-4 flex items-center gap-3">
+            <div className="h-10 w-10 rounded-lg bg-emerald-100 flex items-center justify-center">
+              <TrendingUp className="h-5 w-5 text-emerald-600" />
+            </div>
+            <div>
+              <p className="text-2xl font-bold text-emerald-700">{fmtEuro(resumen.acumuladoEfectivo)}</p>
+              <p className="text-xs text-muted-foreground">Efectivo acumulado</p>
+            </div>
+          </CardContent>
+        </Card>
         <Card>
           <CardContent className="p-4 flex items-center gap-3">
             <div className="h-10 w-10 rounded-lg bg-muted flex items-center justify-center">
@@ -406,14 +450,8 @@ export function CierresView() {
         </Card>
       </div>
 
-      {/* Tabs principales */}
+      {/* Vistas: resumen (principal) · calendario · ajustes — se conmutan desde la toolbar */}
       <Tabs value={vista} onValueChange={(v) => setVista(v as typeof vista)}>
-        <TabsList>
-          <TabsTrigger value="resumen" className="gap-1.5"><List className="h-4 w-4" /> Resumen</TabsTrigger>
-          <TabsTrigger value="calendario" className="gap-1.5"><CalendarDays className="h-4 w-4" /> Calendario</TabsTrigger>
-          <TabsTrigger value="ajustes" className="gap-1.5"><Settings className="h-4 w-4" /> Ajustes</TabsTrigger>
-        </TabsList>
-
         {/* ── RESUMEN ── */}
         <TabsContent value="resumen" className="mt-4 space-y-6">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -760,7 +798,7 @@ export function CierresView() {
               />
             </div>
             <div>
-              <Label>Total contado en caja (€)</Label>
+              <Label>Total cierre semana (€)</Label>
               <Input
                 type="number"
                 step="0.01"
