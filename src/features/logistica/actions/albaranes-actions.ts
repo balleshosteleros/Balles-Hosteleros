@@ -145,8 +145,19 @@ export async function createAlbaran(input: {
   estado?: string;
 }): Promise<CreateAlbaranResult> {
   try {
-    const { supabase, empresaId } = await getContext();
+    const { supabase, user, empresaId } = await getContext();
     if (!empresaId) return { ok: false, error: "No autenticado" };
+
+    // Sin perfil en cliente (p.ej. móvil, sin AuthProvider): se resuelve aquí por user_id.
+    let creador = input.creador?.trim() || "";
+    if (!creador && user?.id) {
+      const { data: u } = await supabase
+        .from("usuarios")
+        .select("nombre, apellidos")
+        .eq("user_id", user.id)
+        .single();
+      if (u) creador = `${u.nombre ?? ""} ${u.apellidos ?? ""}`.trim();
+    }
 
     const estadoInicial = input.estado === ESTADO_REVISION ? ESTADO_REVISION : "Pendiente";
 
@@ -185,7 +196,7 @@ export async function createAlbaran(input: {
       dto_pct: input.dtoPct,
       dto_eur: input.dtoEur,
       notas: input.notas,
-      creador: input.creador,
+      creador,
       lineas: input.lineas,
       numero_proveedor: input.numeroProveedor ?? null,
     };
