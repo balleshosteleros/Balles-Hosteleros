@@ -5,6 +5,34 @@
 
 ---
 
+## 📱 FASE MÓVIL LISTA (29-jul, más tarde) — Iván LÉEME
+
+**Ya puedes subir los albaranes por foto desde el móvil, tal cual los tienes en la galería.**
+En el teléfono: **Más → Albaranes → "Subir albarán por foto"** (tarjeta destacada arriba de
+la bandeja) → cámara o adjuntar archivo → la IA lee el albarán → verificación en tarjetas
+(proveedor, fecha, nº, y cada línea con cantidad/precio editable y aviso si la suma no
+cuadra con el total del papel) → **"Guardar en Revisión"**. Queda exactamente igual que
+subiéndolo desde el ordenador: en Revisión, sin sumar stock, con la foto adjunta. La
+resolución fina (vincular/crear/ignorar) se sigue haciendo desde el ordenador — por eso en
+la bandeja móvil aparece una sección **"En revisión"** de solo lectura que te confirma que
+quedó guardado y te recuerda que toca rematarlo desde ahí.
+
+Por dentro es el mismo motor que el cable de escritorio (mismo `analizarAlbaranFoto` /
+`createAlbaran` / `resolverAlbaranRevision`, probados ya en el E2E de abajo): solo cambié
+dónde vive el "quién lo sube" — el móvil no tiene tu perfil cargado en el navegador, así que
+`createAlbaran` lo resuelve él solo consultando `usuarios` por tu `user_id` si no se lo
+pasan (antes solo pasaba desde el diálogo de escritorio con el perfil ya en memoria).
+
+Probado en prod con la foto de la página 2 del Makro 028341 (la que no estaba registrada):
+guardado como `ALB-2026-022` con creador resuelto ("Agora Demo"), foto adjunta, 0 movimientos
+de stock, visible en "En revisión" — verificado en BD y borrado después de comprobar (no era
+un albarán real, era la prueba).
+
+**Los 23 albaranes que tienes en el móvil son justo el caso de uso**: ya no hace falta que
+bajes el repo para subirlos, hazlo directamente desde ahí cuando quieras.
+
+---
+
 ## 🎉 EL CABLE ESTÁ HECHO Y PROBADO E2E EN VIVO (29-jul noche, Fernando) — Iván LÉEME
 
 **La pantalla de subir albarán por foto existe, está en main y funciona de punta a punta.**
