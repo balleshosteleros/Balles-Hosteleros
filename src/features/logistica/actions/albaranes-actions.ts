@@ -5,6 +5,10 @@ import {
   aplicarEntradasAlbaran,
   revertirEntradasAlbaran,
 } from "@/features/logistica/services/entradas-stock-por-albaran";
+import {
+  ESTADO_REVISION,
+  ESTADOS_COMPRA_CONFIRMADA,
+} from "@/features/logistica/data/albaranes";
 
 async function getContext() {
   const { supabase, userId, empresaId } = await getLogisticaContext();
@@ -27,18 +31,6 @@ export async function listAlbaranes() {
     return { ok: false, data: [] };
   }
 }
-
-/** Estados con la mercancía ya recepcionada (stock aplicado): "Entregado" y "Confirmado". */
-const ESTADOS_COMPRA_CONFIRMADA = ["Entregado", "Confirmado"];
-
-/**
- * "Revisión": estado de un albarán subido por foto que aún tiene líneas sin producto
- * asociado (la IA leyó productos que no casan con el catálogo). El albarán se GUARDA en
- * este estado —no se descarta— pero NO suma stock ni se considera compra confirmada hasta
- * que una persona resuelve cada línea (vincular / crear / ignorar) y lo aprueba a
- * "Confirmado". Decisión de Iván (2026-07-29): no existe "bloqueado"; existe "Revisión".
- */
-export const ESTADO_REVISION = "Revisión";
 
 export interface CompraProductoRow {
   albaranId: string;
