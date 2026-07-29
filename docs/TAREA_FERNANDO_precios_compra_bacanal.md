@@ -47,6 +47,39 @@ línea no tiene producto**. Estos 23 tienen líneas cuyo producto NO EXISTE en e
 - Fuera por diseño: "Desplazamiento y Servicio" (Disbesa) = gasto, no producto. Y la 2ª
   línea de "Ron Limón Rives" del albarán 14991, que viene **1 ud sin importe** (¿regalo?).
 
+### ✅ BLOQUE 3 — RESPUESTAS DE IVÁN (2026-07-29)
+
+1. **AQUARIUS VR30 (sabor).** → Iván no lo recuerda con seguridad, **entiende que el
+   Naranja (el normal)**. **Fernando: no lo fuerces — esto debe salir indicado EN EL
+   ALBARÁN.** Si el albarán no especifica sabor, queda sin resolver hasta que el propio
+   albarán lo aclare (no inventar).
+
+2. **Fregona "tejido sin tejer Amapola" vs "Fregona Microfriba".** → **SÍ, son la misma.**
+   **Fernando: carga el precio (1,03) en «Fregona Microfriba» y graba "FREGONA TEJIDO SIN
+   TEJER AMAPOLA" como NOMBRE DEL PROVEEDOR en la casilla nueva** de doble nombre (ver
+   decisión de doble nombre del Bloque 2). Así aparecerá el nombre del proveedor junto al
+   nuestro.
+
+3. **Ron Limón Rives — 1 ud sin importe.** → **Es un regalo. Grábalo SIN precio (déjalo sin
+   precio).** Regla general que Iván confirma: si una línea viene sin importe, se graba sin
+   precio; será regalo/promoción.
+
+### 🆕 FEATURE NUEVA DE IVÁN — indicadores de variación de precio en la verificación del albarán
+
+> Sale de la P3. Como TODO albarán pasa por la pantalla de verificación (ver P1 del
+> asistente), al lado de cada precio que lee la IA debe salir un **icono-indicador**
+> comparando ese precio con el **precio marcado/vigente** de ese producto en el catálogo:
+> - **🔻 Flecha AMARILLA hacia abajo** → el precio ha **BAJADO** respecto al precio
+>   registrado del producto.
+> - **🔺 Flecha ROJA hacia arriba** → el precio está **MÁS CARO** que el registrado.
+> - **↔️ Flecha VERDE de doble punta horizontal** → el precio **coincide / está correcto**.
+>
+> **Para Fernando:** el indicador se calcula comparando `precio_leído` vs el precio vigente
+> en `producto_precios_compra` (el más reciente sin `fecha_fin`, o `productos.precio_compra`).
+> Va en la fila de cada línea del asistente de verificación, junto al campo del precio.
+> Detalle de umbral (¿exacto o con margen de céntimos para el "correcto"?) lo decides tú a
+> nivel técnico; la semántica de las 3 flechas es la de arriba.
+
 ## ❓ 3 PREGUNTAS PARA IVÁN — asistente de albaranes por foto (15-jul, Fernando)
 
 > Contexto: Fernando analizó tu audio/conversación sobre el asistente (doble nombre
@@ -65,11 +98,30 @@ productos/precios/formatos?
 - *Ejemplo de respuesta:* «Los del día a día SÍ suman stock; los históricos/onboarding
   NO (o con un check "solo registrar precios")».
 
+> **✅ RESPUESTA DE IVÁN (2026-07-29):** Al subir un albarán por foto, SIEMPRE hay
+> **primero una pantalla de verificación** de lo que la IA leyó (se revisa y se corrige
+> lo que haga falta). Solo cuando el usuario **aprueba el albarán y pasa a estado
+> CONFIRMADO**, ENTONCES sí se suman las cantidades al stock.
+> **NO existen "albaranes viejos": TODOS los albaranes suman stock SIEMPRE.** No hace
+> falta el check de "solo registrar precios". Si alguien quiere dejar el inventario
+> correcto, la vía es **hacer un INVENTARIO** (al empezar a usar el software) y ajustar
+> ahí todos los productos. El inventario inicial es la herramienta para cuadrar, NO
+> excluir albaranes del stock.
+> **Para Fernando:** el auto-registro de precios NO suma stock por sí solo; el stock lo
+> dispara el paso "Confirmado" tras la verificación humana. Elimina la idea del check
+> "solo precios" para históricos — no aplica.
+
 **P2 — ¿Escritorio primero o móvil primero?** Para que pruebes la visual cuanto antes,
 proponemos: 1º escritorio (reutiliza el OCR y el diálogo de facturas que ya existen →
 lo tienes en días), 2º la sección de foto en la app móvil justo después.
 - *Por qué:* el móvil requiere pantalla nueva; el escritorio es extender lo que ya hay.
 - *Ejemplo de respuesta:* «OK escritorio primero» o «No, quiero el móvil ya aunque tarde más».
+
+> **✅ RESPUESTA DE IVÁN (2026-07-29):** **Escritorio PRIMERO.** Y **después**, dentro de
+> la función MÓVIL, debe haber también un apartado (igual que el de escritorio) para
+> **subir las fotos de los albaranes, ver las cantidades que ha leído la IA y confirmarlo
+> desde el móvil**. Es decir: mismo flujo completo (foto → verificación → confirmar → suma
+> stock, ver P1) en las dos plataformas, empezando por escritorio.
 
 **P3 — Precio por formato + unidad en la ficha.** Hoy conviven precios "por caja"
 (Cocacola 16,56/caja de 24) y "por kg/ud" (Limones 1,50/kg). Proponemos que cada ficha
@@ -79,9 +131,39 @@ precio unitario derivado. Es lo que luego permite calcular escandallos bien.
 - *Ejemplo de respuesta:* «Sí, formato+unitario en ficha; revisad los formatos ya
   cargados» (los ~330 precios de estas 4 semanas tienen formato vacío — lo rellenaríamos).
 
+> **✅ RESPUESTA DE IVÁN (2026-07-29):** SÍ, correcto todo. En la ficha de cada producto
+> de COMPRA debe haber:
+> 1. **Formato de compra** → unidades / litro / kilogramos.
+> 2. **Precio del formato** → en base a ese formato (p.ej. precio de la caja, del litro…).
+> 3. **Precio unitario derivado** → el del formato dividido entre la unidad/porción (la
+>    cantidad por porción). El ejemplo del doc (Caja 24 ud → precio caja → precio/ud) es
+>    exacto.
+> **Y ADELANTE con la carga:** rellenad el formato en los ~330 precios ya cargados que lo
+> tienen vacío.
+
 *(Lo que NO te preguntamos porque lo decidimos nosotros y lo verás documentado: dónde
 viven los alias por proveedor, cómo se muestran los dos nombres en la ficha, y que
 renombrar el producto interno no rompe las asociaciones.)*
+
+### 🆕 DECISIÓN CLAVE DE IVÁN (2026-07-29) — DOBLE NOMBRE proveedor↔nuestro en la ficha
+
+> Esto responde a la P4 del Bloque 2 pero es una **feature transversal** del asistente,
+> por eso va aquí. Iván quiere que la ficha de cada **producto de compra** tenga una
+> **casilla con el nombre que usa el proveedor** además del nuestro. Flujo:
+> 1. En la ficha de compra: campo **"nombre del proveedor"** (cómo lo escribe el proveedor
+>    en su albarán) + nuestro **nombre interno**.
+> 2. Al subir un albarán digital, el asistente **identifica la línea por el nombre del
+>    proveedor** y la **mapea a nuestro producto** automáticamente (esto es la memoria de
+>    asociación que ya estaba planificada; ahora tiene su sitio de almacenamiento: la
+>    propia ficha).
+> 3. En el albarán que **generamos nosotros** y en **nuestros informes de albaranes**: sale
+>    **NUESTRO nombre** como principal y, **debajo, en letra pequeña y clarita, el nombre
+>    del proveedor**, siempre juntos, para identificarlo bien.
+> **Para Fernando:** un producto puede tener varios alias de proveedor (cada proveedor lo
+> nombra distinto) → probablemente 1 producto : N alias. Modela dónde viven (¿tabla
+> `producto_alias_proveedor` o campo en `producto_precios_compra`, que ya tiene `proveedor`?).
+> El caso 4 de abajo (hielo cubitos = Hielo Roca) es el ejemplo perfecto: el proveedor lo
+> llama "Hielo cubitos 41mm", nosotros "Hielo Roca".
 
 ## ✅ SEMANA DEL 7-JUL CARGADA — HABANA (15-jul, Fernando)
 
@@ -150,19 +232,49 @@ contra `producto_precios_compra` el 14-jul. Resumen:
   Corvina, Salsa tartufata, Base de arroz de paella, Paleta cebo ibérico. **Solo queda por
   decidir lo del bloque "PENDIENTE REAL" de abajo.**
 
-### 🔴 PENDIENTE REAL (lo único que de verdad falta — decisión de negocio de Iván)
+### 🔴 PENDIENTE REAL → ✅ RESUELTO POR IVÁN (2026-07-29). Fernando, EJECUTA:
 
-1. **"Salsa barbacoa" comprada (Makro, Bacanal)** — NO existe como producto de compra (en el
-   catálogo solo está como *elaboración*/receta casera). ¿Crear "Salsa barbacoa (compra)"
-   con su precio, o dejarlo solo como elaboración?
-2. **HABANA — "Cubo Cóctel Mix 2kg" (Bigger Golosinas, 9,86 €)** — no existe. ¿Crear?
-3. **HABANA — "Leche Asturiana" (Dither)** — en catálogo solo hay «Leche Condesada» (producto
-   distinto, sin precio). ¿Crear «Leche» nueva y cargar ahí?
-4. **HABANA — "Hielo cubitos 41mm" (Procubitos, 0,818 €/kg)** — hay «Hielo Pile» y «Hielo Roca»
-   (ambos sin precio) pero es otro formato. ¿Crear «Hielo Cubitos» o usar uno de esos?
-5. **HABANA — "Vaso de sidra PP desechable 50cl" (Krittikali)** — en catálogo solo «Vaso de
-   Sidra Tensionado» (vidrio, sin precio). ¿Mismo producto o crear el desechable aparte?
-6. **Pedido Makro "PARA PERSONAL" (doc 027174):** ¿se cuenta como gasto del restaurante o se excluye?
+1. **"Salsa barbacoa" comprada (Makro, Bacanal).**
+   → **IVÁN: pasa a producto de COMPRA, no elaboración.** Convierte
+   `37a8f2d2-1db4-4876-9bcc-8297e167262d` de `tipo=elaboracion` a `tipo=compra`, carga su
+   precio de compra, y **elimínala de Salsas/Elaboraciones y de Escandallos** donde figure
+   como elaboración casera. ⚠️ **VERIFICADO en BD:** hoy se usa **como ingrediente en 1
+   escandallo y en 1 composición** (`ingrediente_id`). Cambiar el `tipo` NO rompe esos
+   enlaces (siguen apuntando al mismo `id`). **Fernando: confirma con Iván qué escandallo/
+   plato la usa antes de "quitarla de escandallos"** — si un plato la lleva como
+   ingrediente, ese enlace debe SEGUIR (solo que ahora apunta a un producto de compra en
+   vez de a una elaboración). "Eliminarla de escandallos" = quitar su ficha de escandallo
+   PROPIO (no tiene, verificado: 0), NO romper los platos que la usan.
+
+2. **HABANA — "Cubo Cóctel Mix 2kg" (Bigger, 9,86 €).**
+   → **IVÁN: "revísalo, debe estar ya metido".** ⚠️ **VERIFICADO:** existe
+   **"Cubo Coctel Mix" (compra)** pero **SOLO en BACANAL** (`83537312-...`), **NO en
+   HABANA**, que es donde se compró. **Fernando: crea el producto en HABANA (espejo del de
+   Bacanal) y carga ahí el precio 9,86 €.** No estaba metido en la empresa correcta.
+
+3. **HABANA — "Leche Asturiana" (Dither).**
+   → **IVÁN: es OTRO producto diferente → CRÉALO.** Nueva ficha de compra "Leche" (o "Leche
+   Asturiana") en HABANA y carga su precio. NO mezclar con «Leche Condensada».
+
+4. **HABANA — "Hielo cubitos 41mm" (Procubitos, 0,818 €/kg).**
+   → **IVÁN: ESE ES EL «Hielo Roca».** ⚠️ **VERIFICADO:** existe **"Hielo Roca" (compra) en
+   HABANA sin precio** (`8d038723-...`). Carga el precio 0,818 €/kg **ahí**. NO crear
+   "Hielo Cubitos". → Este es el caso que motiva la casilla de **doble nombre** (proveedor:
+   "Hielo cubitos 41mm" / nuestro: "Hielo Roca"). Ver decisión de doble nombre arriba.
+
+5. **HABANA — "Vaso de sidra PP desechable 50cl" (Krittikali).**
+   → **IVÁN: es el mismo, ya lo hemos comprado más veces → carga el precio en el existente.**
+   ⚠️ **VERIFICADO:** existe **"Vaso de Sidra Tensionado" (compra) en HABANA sin precio**
+   (`36298306-...`). Carga ahí el precio. (Doble nombre: proveedor "Vaso sidra PP desechable"
+   / nuestro "Vaso de Sidra Tensionado".)
+
+6. **Pedido Makro "PARA PERSONAL" (doc 027174).**
+   → **IVÁN: olvídate de excluirlo. Trátalo como pedido NORMAL de proveedor MAKRO.** Los
+   precios se cargan igual. La distinción "comida del personal" NO es un tipo de producto:
+   es una **marca del pedido/albarán que pone el GERENTE a mano**. **Fernando: revisa si en
+   NOTAS del albarán / del pedido se puede escribir manualmente** un texto para que el
+   gerente marque "pedido de comida para el personal" e identificarlos. Si no existe ese
+   campo de notas libre, valóralo (no bloquea).
 
 > **Nota (Iván, 14-jul):** el tema de "qué tabla de recetas/escandallos manda para el stock"
 > es OTRA cosa, no pinta en este documento de precios de compra. Se trata por separado. Aquí
