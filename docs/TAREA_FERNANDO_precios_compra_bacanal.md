@@ -1,7 +1,57 @@
 # TAREA para Fernando — Precios de compra de BACANAL (cuando bajes el repo)
 
-> **De:** Iván (vía Claude) · **Fecha:** 2026-06-30 · **Actualizado:** 2026-07-14 · **Prioridad:** media
+> **De:** Iván (vía Claude) · **Fecha:** 2026-06-30 · **Actualizado:** 2026-07-29 · **Prioridad:** media
 > Léelo al hacer `git pull` y reconciliar.
+
+---
+
+## 🟢 LÉEME PRIMERO — RESPUESTAS DE IVÁN (2026-07-29) · ACCIONES PARA FERNANDO
+
+> Fernando: Iván respondió a TODAS tus preguntas (los 3 bloques). Aquí está el resumen
+> ejecutivo de lo que tienes que hacer. El detalle largo de cada punto está más abajo, en
+> sus secciones (con ▸ RESPUESTA DE IVÁN). IDs verificados contra la BD el 29-jul.
+
+**A) ASISTENTE DE ALBARANES POR FOTO (las 3 preguntas P1/P2/P3):**
+- **P1 — Stock:** al subir albarán por foto → SIEMPRE pantalla de verificación de lo que
+  leyó la IA → al pasar a **CONFIRMADO** se suma stock. **TODOS los albaranes suman stock
+  siempre** (no hay "albaranes viejos"). Para cuadrar inventario → herramienta de
+  **inventario inicial**, NO excluir albaranes. Quita la idea del check "solo precios".
+- **P2 — Orden:** **escritorio PRIMERO**; después, el MISMO flujo (foto → ver cantidades →
+  confirmar) también en **móvil**.
+- **P3 — Ficha de compra:** guardar **formato** (unidades / litro / kg) + **precio del
+  formato** + **precio unitario derivado** (formato ÷ porción). Adelante con la carga y
+  **rellena el formato en los ~330 precios que lo tienen vacío**.
+
+**B) DOS FEATURES NUEVAS que pidió Iván (planifícalas):**
+- **Doble nombre proveedor↔nuestro:** casilla en cada ficha de compra con el **nombre del
+  proveedor** + nuestro nombre. El asistente mapea la línea del albarán por el nombre del
+  proveedor → nuestro producto. En NUESTROS albaranes/informes: nuestro nombre grande +
+  nombre del proveedor **pequeño y claro debajo**, juntos. (1 producto : N alias.)
+- **3 indicadores de variación de precio** en la verificación: 🔻amarilla abajo = bajó ·
+  🔺roja arriba = más caro · ↔️verde doble-punta = igual. Compara precio leído vs vigente.
+
+**C) 6 PRODUCTOS (Bloque 2) — ejecutar (IDs verificados):**
+1. **Salsa barbacoa** `37a8f2d2-…` → `tipo` elaboracion→**compra** + cargar precio.
+   **NO tocar** el plato *"Costillas a baja temperatura"* que la lleva (70 g): sigue
+   llevándola, solo cambia a comprada.
+2. **Cubo Coctel Mix** → existe SOLO en Bacanal `83537312-…`; **crearlo en HABANA** + precio 9,86.
+3. **Leche Asturiana** → **crear nueva** en Habana + precio.
+4. **Hielo cubitos 41mm** = **«Hielo Roca»** de Habana `8d038723-…` (sin precio) → cargar 0,818 €/kg ahí.
+5. **Vaso sidra PP desechable** = **«Vaso de Sidra Tensionado»** Habana `36298306-…` (sin precio) → cargar ahí.
+6. **Pedido "PARA PERSONAL"** → tratar como **Makro normal**; el gerente lo marca con una
+   nota manual. Revisa si hay campo de notas libre en albarán/pedido.
+
+**D) 3 DUDAS SUELTAS (Bloque 3):**
+1. **Aquarius sabor** → debe indicarlo el albarán; si no lo dice, sin resolver (no inventar).
+2. **Fregona Amapola = «Fregona Microfriba»** → cargar precio 1,03 + grabar el nombre del
+   proveedor en la casilla nueva de doble nombre.
+3. **Ron Rives 1 ud sin importe** = **regalo → grabar SIN precio**.
+
+**E) 23 albaranes bloqueados** (casi todos Makro) esperan crear ~24 productos → ver sección
+"🔴 23 albaranes MÁS que NO se han podido registrar". Iván NO ha dado el "crear" masivo de
+esos aún; sí resolvió los casos concretos de arriba.
+
+---
 
 ## ✅ ALBARANES REGISTRADOS (15-jul, Fernando) — lo que pediste el 7-jul
 
@@ -245,6 +295,13 @@ contra `producto_precios_compra` el 14-jul. Resumen:
    ingrediente, ese enlace debe SEGUIR (solo que ahora apunta a un producto de compra en
    vez de a una elaboración). "Eliminarla de escandallos" = quitar su ficha de escandallo
    PROPIO (no tiene, verificado: 0), NO romper los platos que la usan.
+   → **✅ IVÁN CONFIRMA (2026-07-29): EL PLATO LA SIGUE LLEVANDO.** Verificado en BD: la usa
+   el plato **"Costillas a baja temperatura"** (70 g), tanto en `escandallo_ingredientes`
+   (esc `739e7340-...`) como en `producto_composicion` (venta `8171c73d-...`). **Ese
+   ingrediente NO se toca:** el plato mantiene la salsa barbacoa; solo cambia que ahora es
+   producto de COMPRA (con su precio) en vez de elaboración casera. NO borres el ingrediente
+   del escandallo del plato. Lo único que cambia es `productos.tipo` de la salsa
+   (elaboracion → compra) + cargar su precio de compra.
 
 2. **HABANA — "Cubo Cóctel Mix 2kg" (Bigger, 9,86 €).**
    → **IVÁN: "revísalo, debe estar ya metido".** ⚠️ **VERIFICADO:** existe
