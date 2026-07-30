@@ -1,7 +1,49 @@
 # TAREA para Fernando — Precios de compra de BACANAL (cuando bajes el repo)
 
-> **De:** Iván (vía Claude) · **Fecha:** 2026-06-30 · **Actualizado:** 2026-07-29 · **Prioridad:** media
+> **De:** Iván (vía Claude) · **Fecha:** 2026-06-30 · **Actualizado:** 2026-07-30 · **Prioridad:** media
 > Léelo al hacer `git pull` y reconciliar.
+
+---
+
+## 📸 LOTE DEL 30-JUL: 27 albaranes reales cargados (10→24 julio, Bacanal+Habana) — Iván LÉEME
+
+Fernando pasó 36 fotos de albaranes/facturas de proveedor reales (10 al 24 de julio). Se han
+**registrado 27 albaranes** directamente en BD (22 Bacanal `ALB-2026-023..044`, 5 Habana
+`ALB-2026-012..016`), estado **Confirmado**, con sus 180 líneas vinculadas a producto (creados
+**42 productos nuevos** — casi todos Makro: salsa barbacoa, mayonesa, aceite de oliva, pan hot
+dog, contramuslos de pollo, Coca-Cola PET 2L/Zero, etc. — más 1 proveedor nuevo, **NEW ESPRESSO**
+para las cápsulas de café de Bacanal) y **178 precios de compra** registrados en su histórico.
+**Igual que en el lote de los 31 albaranes del 15-jul: NO se ha tocado el stock** (mercancía de
+hace 1-3 semanas, ya consumida) — 0 `stock_movimientos` creados, verificado. Alias de proveedor
+rellenados donde estaban vacíos para que el matcher los reconozca solo la próxima vez.
+
+**4 cosas que quedan sin resolver — decisión tuya:**
+
+1. **Un albarán no se pudo cargar: falta una página.** Belmon Drink → Habana, albarán **15378**
+   (16-jul, pedido grande de licores/energéticas: Red Bull, ginebras, whiskies, Oxefruit...). Las
+   dos fotos que hay de él cortan en "**SUMA Y SIGUE: 694,39€**" — hay al menos una página más
+   con el resto de líneas y el total final que no llegó a fotografiarse. Si la tienes, pásala y
+   lo cargamos; si no, dinos si lo dejamos fuera definitivamente.
+2. **3 albaranes con un recargo sin producto claro** (se cargaron igual, solo con las líneas
+   reales; el recargo queda fuera y por eso el total registrado es unos euros menor que el de la
+   factura física):
+   - **DDI Nexia** (agua/vino, `7200007615` y `7200008242`): recargo "**S.L.**" de 2,99€ al 21%
+     en ambas — probablemente un depósito de envase de vidrio retornable.
+   - **Garcimar** (`MA/56452`): "**cargo**" de 1,50€ al 21% — probablemente portes/transporte.
+   - **Disbesa** (`176911`): línea "**Desplazamiento y Servicio**" de 1,10€.
+   ¿Quieres que creemos un producto genérico tipo "Recargo/portes proveedor" para que estas
+   líneas puedan entrar completas la próxima vez, o prefieres dejarlo siempre fuera del total?
+3. **Nombre de producto sin confirmar**: "**ALH RESERVA 0,30 RET**" (factura Mahou/ASYN, Bacanal)
+   — la foto es de una impresora de matriz de puntos, el texto no se lee con seguridad. Lo
+   registré como "Alhambra Reserva 0,30 RET" (mi mejor lectura); confírmalo o corrígelo en la
+   ficha del producto si es otra cosa.
+4. **Línea fantasma sin precio**: en el albarán de Belmonte `15402` (Bacanal, 16-jul) el papel
+   tiene una 4ª línea repetida de "TEQ JOSE CUERVO REPOSADO" (cantidad 1) sin precio ni importe
+   impresos — no se cargó (no afecta al total, que sí cuadra sin ella). Puede ser una unidad de
+   regalo o un error de impresión del proveedor.
+
+Nada de esto bloquea nada — son matices para cuando tengas un rato. El resto (23 de los 27
+documentos) cargó limpio, sin ambigüedades, verificado contra el papel.
 
 ---
 
