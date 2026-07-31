@@ -194,6 +194,44 @@ function esUuid(id: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)
 }
 
+/** Normaliza el nombre de rol para emparejar entre empresas del grupo (trim + upper). */
+function normalizeRolNombre(nombre: string): string {
+  return nombre.trim().toUpperCase()
+}
+
+/**
+ * Empresas del GRUPO sobre las que se propaga la configuración de roles: todas
+ * las que el director tiene accesibles (usuario_empresas) más su empresa
+ * primaria. Los ROLES son del grupo entero, no por empresa: los mismos permisos
+ * deben aplicar en todas las empresas del usuario. Ver
+ * project_roles_por_grupo_no_por_empresa.
+ */
+async function empresasDelGrupoDelUsuario(empresaActual: string): Promise<string[]> {
+  const ids = new Set<string>([empresaActual])
+  try {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return [...ids]
+
+    const admin = createAdminClient()
+    const { data: accesos } = await admin
+      .from('usuario_empresas')
+      .select('empresa_id')
+      .eq('user_id', user.id)
+    for (const a of accesos ?? []) ids.add(a.empresa_id as string)
+
+    const { data: profile } = await admin
+      .from('usuarios')
+      .select('empresa_id')
+      .eq('user_id', user.id)
+      .maybeSingle()
+    if (profile?.empresa_id) ids.add(profile.empresa_id as string)
+  } catch {
+    // Ante cualquier fallo, degradar a solo la empresa actual (nunca menos).
+  }
+  return [...ids]
+}
+
 export async function saveRolesToSupabase(
   roles: Rol[],
   empresaIdParam?: string,
@@ -209,63 +247,100 @@ export async function saveRolesToSupabase(
     const admin = createAdminClient()
     const empresa_id = await resolveEmpresaId(empresaIdParam)
 
-    // NO usamos delete-all + insert: `usuarios.rol_id` y otras tablas tienen FK
-    // a `empresa_roles.id` con NO ACTION, así que borrar un rol con usuarios
-    // asignados falla ("violates foreign key constraint usuarios_rol_id_fkey"),
-    // y regenerar ids rompería las asignaciones existentes. En su lugar:
-    // upsert por id (preservando ids reales) + borrado selectivo de los que
-    // desaparecieron y no tienen usuarios.
+    // Los ROLES son del GRUPO, no por empresa: propagamos los permisos a TODAS
+    // las empresas del director, emparejando por NOMBRE de rol. Así apagar un
+    // toggle (p.ej. CÁMARAS de DIRECCIÓN) surte efecto en todas las empresas y
+    // no divergen. NO tocamos ids ni asignaciones de usuarios de otras empresas:
+    // solo actualizamos `permisos`/`descripcion` de los roles que YA existan
+    // allí con el mismo nombre.
+    const empresasGrupo = await empresasDelGrupoDelUsuario(empresa_id)
+    const permisosPorNombre = new Map(
+      roles.map((r) => [normalizeRolNombre(r.nombre), r]),
+    )
 
-    // 1) Ids existentes en BD para esta empresa.
-    const { data: existentes, error: readError } = await admin
-      .from('empresa_roles')
-      .select('id')
-      .eq('empresa_id', empresa_id)
-    if (readError) return { error: readError.message }
-    const idsEnBd = new Set((existentes ?? []).map((r) => r.id as string))
+    for (const emp of empresasGrupo) {
+      const esEmpresaActual = emp === empresa_id
 
-    // 2) Upsert de los roles entrantes. Los que ya existen conservan su id;
-    //    los nuevos (id provisional de UI, p.ej. "rol-1720000000000") reciben
-    //    un uuid nuevo.
-    const idsEntrantes = new Set<string>()
-    const filas = roles.map((r) => {
-      const id = esUuid(r.id) ? r.id : crypto.randomUUID()
-      idsEntrantes.add(id)
-      return {
-        id,
-        empresa_id,
-        nombre: r.nombre,
-        descripcion: r.descripcion,
-        permisos: r.permisos,
-      }
-    })
+      // NO usamos delete-all + insert: `usuarios.rol_id` y otras tablas tienen FK
+      // a `empresa_roles.id` con NO ACTION, así que borrar un rol con usuarios
+      // asignados falla ("violates foreign key constraint usuarios_rol_id_fkey"),
+      // y regenerar ids rompería las asignaciones existentes. En su lugar:
+      // upsert por id (preservando ids reales) + borrado selectivo de los que
+      // desaparecieron y no tienen usuarios.
 
-    if (filas.length > 0) {
-      const { error: upsertError } = await admin
+      // 1) Roles existentes en BD para esta empresa (id + nombre).
+      const { data: existentes, error: readError } = await admin
         .from('empresa_roles')
-        .upsert(filas, { onConflict: 'id' })
-      if (upsertError) return { error: upsertError.message }
-    }
+        .select('id, nombre')
+        .eq('empresa_id', emp)
+      if (readError) {
+        if (esEmpresaActual) return { error: readError.message }
+        continue // otra empresa del grupo: no bloquear el guardado principal
+      }
+      const idsEnBd = new Set((existentes ?? []).map((r) => r.id as string))
 
-    // 3) Borrar los roles que estaban en BD y ya no vienen en el array,
-    //    saltando los que tienen usuarios asignados (la FK lo impediría y
-    //    dejaría a esos usuarios sin rol). Si alguno queda "huérfano" en la
-    //    lista pero con usuarios, simplemente se conserva.
-    const aBorrar = [...idsEnBd].filter((id) => !idsEntrantes.has(id))
-    if (aBorrar.length > 0) {
-      const { data: ocupados } = await admin
-        .from('usuarios')
-        .select('rol_id')
-        .in('rol_id', aBorrar)
-      const idsOcupados = new Set((ocupados ?? []).map((u) => u.rol_id as string))
-      const borrables = aBorrar.filter((id) => !idsOcupados.has(id))
-      if (borrables.length > 0) {
-        const { error: deleteError } = await admin
+      let filas: Array<{ id: string; empresa_id: string; nombre: string; descripcion: string; permisos: PermisoModulo[] }>
+      const idsEntrantes = new Set<string>()
+
+      if (esEmpresaActual) {
+        // Empresa actual: la UI es la fuente de verdad completa (crea/borra/renombra).
+        filas = roles.map((r) => {
+          const id = esUuid(r.id) ? r.id : crypto.randomUUID()
+          idsEntrantes.add(id)
+          return {
+            id,
+            empresa_id: emp,
+            nombre: r.nombre,
+            descripcion: r.descripcion,
+            permisos: r.permisos,
+          }
+        })
+      } else {
+        // Otra empresa del grupo: solo actualizamos permisos/descr. de los roles
+        // que YA existen allí con el mismo nombre. No creamos ni borramos: cada
+        // empresa mantiene su propio conjunto de roles y sus asignaciones.
+        filas = (existentes ?? [])
+          .map((row) => {
+            const match = permisosPorNombre.get(normalizeRolNombre(row.nombre as string))
+            if (!match) return null
+            idsEntrantes.add(row.id as string)
+            return {
+              id: row.id as string,
+              empresa_id: emp,
+              nombre: row.nombre as string,
+              descripcion: match.descripcion,
+              permisos: match.permisos,
+            }
+          })
+          .filter((f): f is NonNullable<typeof f> => f !== null)
+      }
+
+      if (filas.length > 0) {
+        const { error: upsertError } = await admin
           .from('empresa_roles')
-          .delete()
-          .eq('empresa_id', empresa_id)
-          .in('id', borrables)
-        if (deleteError) return { error: deleteError.message }
+          .upsert(filas, { onConflict: 'id' })
+        if (upsertError && esEmpresaActual) return { error: upsertError.message }
+      }
+
+      // Borrado selectivo SOLO en la empresa actual (las demás no se tocan).
+      if (esEmpresaActual) {
+        const aBorrar = [...idsEnBd].filter((id) => !idsEntrantes.has(id))
+        if (aBorrar.length > 0) {
+          const { data: ocupados } = await admin
+            .from('usuarios')
+            .select('rol_id')
+            .in('rol_id', aBorrar)
+          const idsOcupados = new Set((ocupados ?? []).map((u) => u.rol_id as string))
+          const borrables = aBorrar.filter((id) => !idsOcupados.has(id))
+          if (borrables.length > 0) {
+            const { error: deleteError } = await admin
+              .from('empresa_roles')
+              .delete()
+              .eq('empresa_id', emp)
+              .in('id', borrables)
+            if (deleteError) return { error: deleteError.message }
+          }
+        }
       }
     }
 

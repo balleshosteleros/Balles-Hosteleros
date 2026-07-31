@@ -59,6 +59,39 @@ export function puedeVerModulo(
 }
 
 /**
+ * Herramientas de la BARRA (CÁMARAS, cohete, candado). A diferencia de los
+ * módulos-departamento, NO se rigen por el bypass de `es_admin_plataforma`:
+ * cada una tiene su propio toggle en Ajustes → Roles y ese toggle manda para
+ * TODOS los roles, dirección incluida. Si dirección apaga CÁMARAS, deja de ver
+ * el icono aunque sea admin de plataforma.
+ */
+export const HERRAMIENTAS_BARRA = [
+  "CÁMARAS",
+  "HERR_APLICACIONES",
+  "HERR_ACCESOS",
+] as const;
+
+const HERRAMIENTAS_BARRA_NORM = HERRAMIENTAS_BARRA.map(normalizarModulo);
+
+/** ¿`modulo` es una herramienta de barra (toggle explícito, sin bypass)? */
+export function esHerramientaBarra(modulo: string): boolean {
+  return HERRAMIENTAS_BARRA_NORM.includes(normalizarModulo(modulo));
+}
+
+/**
+ * ¿El rol puede VER una HERRAMIENTA DE BARRA? Siempre según su permiso real,
+ * ignorando el bypass de admin de plataforma. Una herramienta desactivada en
+ * Ajustes → Roles se oculta también para dirección.
+ */
+export function puedeVerHerramienta(
+  permisos: PermisoModulo[],
+  modulo: string,
+): boolean {
+  const target = normalizarModulo(modulo);
+  return permisos.some((p) => p.ver && normalizarModulo(p.modulo) === target);
+}
+
+/**
  * ¿El rol puede EDITAR el módulo indicado? Admin de plataforma siempre; el
  * resto según `permisos`.
  */

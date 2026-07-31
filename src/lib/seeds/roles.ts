@@ -43,7 +43,9 @@ export const ROLES_SEED: RolSeed[] = [
       { modulo: "GESTORÍA", ver: true, editar: true },
       { modulo: "JURÍDICO", ver: true, editar: true },
       { modulo: "AJUSTES", ver: true, editar: true },
-      { modulo: "CÁMARAS", ver: true, editar: true },
+      // CÁMARAS es herramienta de barra: se activa manualmente en Ajustes→Roles
+      // (obedece el toggle también para dirección). Por defecto, apagada.
+      { modulo: "CÁMARAS", ver: false, editar: false },
       { modulo: "HERR_APLICACIONES", ver: true, editar: true },
       { modulo: "HERR_ACCESOS", ver: true, editar: true },
     ],
