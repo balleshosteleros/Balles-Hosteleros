@@ -205,15 +205,31 @@ export function CierresView() {
   const [cfgForm, setCfgForm] = useState<CierresConfig>({ modo: "libre", dia_semana: null });
   const [cfgSaving, setCfgSaving] = useState(false);
 
+  // Programaciones periódicas (reglas de cierre estilo Google Calendar).
+  const [programaciones, setProgramaciones] = useState<CierreProgramacion[]>([]);
+  const [progModalOpen, setProgModalOpen] = useState(false);
+  const [progEditId, setProgEditId] = useState<string | null>(null);
+  const [progSaving, setProgSaving] = useState(false);
+  const emptyProgForm = () => ({
+    nombre: "Cierre",
+    intervalo_semanas: 1,
+    dias_semana: [] as number[],
+    fecha_inicio: today,
+    fecha_fin: "" as string,
+    activo: true,
+  });
+  const [progForm, setProgForm] = useState(emptyProgForm());
+
   const cargar = useCallback(async () => {
     setLoading(true);
     try {
-      const [a, b] = await Promise.all([listCierres(), getCierresConfig()]);
+      const [a, b, c] = await Promise.all([listCierres(), getCierresConfig(), listCierresProgramaciones()]);
       if (a.ok) setCierres(a.data);
       if (b.ok) {
         setConfig(b.data);
         setCfgForm(b.data);
       }
+      if (c.ok) setProgramaciones(c.data);
     } catch (e) {
       console.error("[CierresView] cargar:", e);
     } finally {
@@ -466,6 +482,83 @@ export function CierresView() {
       }
     } finally {
       setCfgSaving(false);
+    }
+  };
+
+  // ── Programaciones periódicas ─────────────────────────
+  const abrirNuevaProg = () => {
+    setProgEditId(null);
+    setProgForm(emptyProgForm());
+    setProgModalOpen(true);
+  };
+
+  const abrirEditarProg = (p: CierreProgramacion) => {
+    setProgEditId(p.id);
+    setProgForm({
+      nombre: p.nombre,
+      intervalo_semanas: p.intervalo_semanas,
+      dias_semana: [...p.dias_semana],
+      fecha_inicio: p.fecha_inicio,
+      fecha_fin: p.fecha_fin ?? "",
+      activo: p.activo,
+    });
+    setProgModalOpen(true);
+  };
+
+  const toggleProgDia = (d: number) =>
+    setProgForm((f) => ({
+      ...f,
+      dias_semana: f.dias_semana.includes(d)
+        ? f.dias_semana.filter((x) => x !== d)
+        : [...f.dias_semana, d].sort((a, b) => a - b),
+    }));
+
+  const handleGuardarProg = async () => {
+    if (progSaving) return;
+    if (progForm.dias_semana.length === 0) {
+      toast.error("Elige al menos un día de la semana");
+      return;
+    }
+    if (!progForm.fecha_inicio) {
+      toast.error("La fecha de inicio es obligatoria");
+      return;
+    }
+    setProgSaving(true);
+    try {
+      const res = await upsertCierreProgramacion({
+        id: progEditId ?? undefined,
+        nombre: progForm.nombre,
+        intervalo_semanas: progForm.intervalo_semanas,
+        dias_semana: progForm.dias_semana,
+        fecha_inicio: progForm.fecha_inicio,
+        fecha_fin: progForm.fecha_fin || null,
+        activo: progForm.activo,
+      });
+      if (res.ok) {
+        toast.success(progEditId ? "Programación actualizada" : "Programación creada");
+        setProgModalOpen(false);
+        cargar();
+      } else {
+        toast.error(res.error ?? "Error al guardar la programación");
+      }
+    } finally {
+      setProgSaving(false);
+    }
+  };
+
+  const handleEliminarProg = async (p: CierreProgramacion) => {
+    const ok = await confirmDelete({
+      title: "¿Eliminar esta programación?",
+      description: `Se dejarán de marcar los días de "${p.nombre}" en el calendario.`,
+      confirmLabel: "Eliminar",
+    });
+    if (!ok) return;
+    const res = await deleteCierreProgramacion(p.id);
+    if (res.ok) {
+      toast.success("Programación eliminada");
+      cargar();
+    } else {
+      toast.error(res.error ?? "Error al eliminar");
     }
   };
 
