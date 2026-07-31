@@ -13,19 +13,17 @@ import { emitirNotificacion } from "@/features/notificaciones/actions/notificaci
 import { crearFirmaInterno } from "@/features/rrhh/services/firmas/crear-firma";
 import { getReclutamientoConfigPorEmpresa } from "@/features/rrhh/actions/gestoria-config-server";
 import { resolverPlantillaOnboarding, PLANTILLAS_ONBOARDING } from "@/features/rrhh/services/email-plantillas/resolver";
+import { getSiteUrl as getSiteUrlCentral } from "@/lib/site-url";
 
 const BUCKET_STAGING = "contratos-gestoria";
 const MAX_PDF_BYTES = 10 * 1024 * 1024;
 
-/** URL base pública del software (mismo orden de prioridad que contratacion-actions). */
-export function getSiteUrl(): string {
-  return (
-    process.env.NEXT_PUBLIC_APP_URL ??
-    process.env.NEXT_PUBLIC_SITE_URL ??
-    (process.env.NEXT_PUBLIC_VERCEL_URL ? `https://${process.env.NEXT_PUBLIC_VERCEL_URL}` : null) ??
-    "http://localhost:3000"
-  ).replace(/\/$/, "");
-}
+/**
+ * URL base pública del software. Reexporta el helper central `@/lib/site-url`
+ * (fuente única con protección anti-localhost en producción). Se mantiene el
+ * export aquí por compatibilidad con los módulos que ya lo importan de esta ruta.
+ */
+export const getSiteUrl = getSiteUrlCentral;
 
 /** Enlace público que abre la gestoría para subir el contrato firmado. */
 export function urlSubidaContrato(token: string): string {

@@ -16,6 +16,7 @@ import { createClient as createServerClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getEmpresaActivaForUser } from "@/features/empresa/lib/empresa-server";
 import { sendEmail } from "@/lib/email/send";
+import { getSiteUrl } from "@/lib/site-url";
 import { bienvenidaEmpleadoEmail } from "@/lib/email/templates/bienvenida-empleado";
 import { buildRecoveryActionUrl } from "@/lib/auth/recovery-link";
 import { friendlyError } from "@/shared/lib/friendly-errors";
@@ -318,14 +319,10 @@ export async function promoverCandidato(input: PromoverInput): Promise<PromoverR
     .eq("id", cand.id);
 
   // 5. Magic link de invitación (extra: la cuenta ya es usable con tempPassword).
-  const siteUrl =
-    process.env.NEXT_PUBLIC_APP_URL ??
-    process.env.NEXT_PUBLIC_SITE_URL ??
-    (process.env.NEXT_PUBLIC_VERCEL_URL ? `https://${process.env.NEXT_PUBLIC_VERCEL_URL}` : null) ??
-    "http://localhost:3000";
+  const siteUrl = getSiteUrl();
   // Recovery link → /update-password (vía /auth/confirm para que el prefetch de
   // los clientes de correo no consuma el token): el empleado ELIGE su contraseña.
-  const redirectTo = `${siteUrl.replace(/\/$/, "")}/update-password`;
+  const redirectTo = `${siteUrl}/update-password`;
 
   let magicLinkSent = false;
   try {

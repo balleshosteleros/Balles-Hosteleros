@@ -17,6 +17,7 @@ import { createClient as createServerClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getEmpresaActivaForUser } from "@/features/empresa/lib/empresa-server";
 import { sendEmail } from "@/lib/email/send";
+import { getSiteUrl } from "@/lib/site-url";
 import { bienvenidaEmpleadoEmail } from "@/lib/email/templates/bienvenida-empleado";
 import { buildRecoveryActionUrl } from "@/lib/auth/recovery-link";
 import { friendlyError } from "@/shared/lib/friendly-errors";
@@ -458,16 +459,12 @@ export async function contratarCandidato(input: ContratarInput): Promise<Contrat
   //    difiere a la fase Prueba, cuando el alta y los contratos están firmados.
   let accesoEmailEnviado = false;
   if (enviarAcceso) try {
-    const siteUrl =
-      process.env.NEXT_PUBLIC_APP_URL ??
-      process.env.NEXT_PUBLIC_SITE_URL ??
-      (process.env.NEXT_PUBLIC_VERCEL_URL ? `https://${process.env.NEXT_PUBLIC_VERCEL_URL}` : null) ??
-      "http://localhost:3000";
+    const siteUrl = getSiteUrl();
     // Recovery link → /update-password: el empleado ELIGE su propia contraseña.
     // (No magic link: queremos que ponga contraseña, no solo que entre.)
     // El enlace pasa por /auth/confirm (verifyOtp server-side) para que el
     // prefetch de los clientes de correo no lo consuma antes de tiempo.
-    const redirectTo = `${siteUrl.replace(/\/$/, "")}/update-password`;
+    const redirectTo = `${siteUrl}/update-password`;
     const { data: linkData } = await admin.auth.admin.generateLink({
       type: "recovery", email: loginEmail, options: { redirectTo },
     });
@@ -526,12 +523,8 @@ export async function enviarAccesoEmpleadoPorId(
     const loginEmail = ((emp.email_empresa as string | null) || (emp.email_personal as string | null) || "").toLowerCase();
     if (!loginEmail) return { ok: false, error: "El empleado no tiene email de acceso" };
 
-    const siteUrl =
-      process.env.NEXT_PUBLIC_APP_URL ??
-      process.env.NEXT_PUBLIC_SITE_URL ??
-      (process.env.NEXT_PUBLIC_VERCEL_URL ? `https://${process.env.NEXT_PUBLIC_VERCEL_URL}` : null) ??
-      "http://localhost:3000";
-    const redirectTo = `${siteUrl.replace(/\/$/, "")}/update-password`;
+    const siteUrl = getSiteUrl();
+    const redirectTo = `${siteUrl}/update-password`;
     const { data: linkData } = await admin.auth.admin.generateLink({
       type: "recovery", email: loginEmail, options: { redirectTo },
     });

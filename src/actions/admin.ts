@@ -7,6 +7,7 @@ import { capitalizeText } from '@/shared/lib/utils'
 import { sendEmail } from '@/lib/email/send'
 import { passwordResetEmail } from '@/lib/email/templates/password-reset'
 import { buildRecoveryActionUrl } from '@/lib/auth/recovery-link'
+import { getSiteUrl } from '@/lib/site-url'
 import { friendlyError } from '@/shared/lib/friendly-errors'
 import { getRolContext } from '@/features/auth/actions/permisos-actions'
 
@@ -246,14 +247,8 @@ export async function sendPasswordResetEmail(profileId: string) {
   if (pErr) return { error: friendlyError(pErr) }
   if (!profile?.email) return { error: 'El usuario no tiene email asociado.' }
 
-  const siteUrl =
-    process.env.NEXT_PUBLIC_APP_URL ??
-    process.env.NEXT_PUBLIC_SITE_URL ??
-    (process.env.NEXT_PUBLIC_VERCEL_URL
-      ? `https://${process.env.NEXT_PUBLIC_VERCEL_URL}`
-      : null) ??
-    'http://localhost:3000'
-  const redirectTo = `${siteUrl.replace(/\/$/, '')}/update-password`
+  const siteUrl = getSiteUrl()
+  const redirectTo = `${siteUrl}/update-password`
 
   // 1) Generamos el magic link (no envía nada por sí mismo).
   const { data: linkData, error: linkErr } = await admin.auth.admin.generateLink({

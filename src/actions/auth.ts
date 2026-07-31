@@ -11,6 +11,7 @@ import {
   checkProfileGuard,
   PROFILE_GUARD_MESSAGES,
 } from '@/features/auth/lib/profile-guard'
+import { getSiteUrl } from '@/lib/site-url'
 
 function translateAuthError(message: string | undefined): string {
   if (!message) return 'No se pudo iniciar sesión.'
@@ -119,19 +120,12 @@ export async function resetPassword(formData: FormData) {
   const supabase = await createClient()
   const email = formData.get('email') as string
 
-  // URL base: preferimos NEXT_PUBLIC_APP_URL (la que está en .env.local), con
-  // fallback a SITE_URL / VERCEL_URL / localhost. Sin esto, si SITE_URL no está
-  // definida el link salía como "undefined/update-password".
-  const siteUrl =
-    process.env.NEXT_PUBLIC_APP_URL ??
-    process.env.NEXT_PUBLIC_SITE_URL ??
-    (process.env.NEXT_PUBLIC_VERCEL_URL
-      ? `https://${process.env.NEXT_PUBLIC_VERCEL_URL}`
-      : null) ??
-    'http://localhost:3000'
+  // URL base centralizada en getSiteUrl(): NEXT_PUBLIC_APP_URL → SITE_URL →
+  // VERCEL_URL → localhost, y en producción falla si cae a localhost (guard).
+  const siteUrl = getSiteUrl()
 
   const { error } = await supabase.auth.resetPasswordForEmail(email, {
-    redirectTo: `${siteUrl.replace(/\/$/, '')}/update-password`,
+    redirectTo: `${siteUrl}/update-password`,
   })
 
   if (error) {

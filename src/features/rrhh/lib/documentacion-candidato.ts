@@ -10,6 +10,7 @@
  * helper de email público, ambos con su propio cliente Supabase.
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { getSiteUrl } from "@/lib/site-url";
 
 /** Tipos de documento que aporta el candidato (claves de los paths en storage). */
 export type DocTipoCandidato = "dni_anverso" | "dni_reverso" | "iban" | "ss";
@@ -28,18 +29,11 @@ export const BUCKET_DOC_CANDIDATOS = "documentacion-candidatos";
 export const DOCUMENTACION_TOKEN_DIAS = 7;
 
 /**
- * Base URL pública del sitio (para construir enlaces en correos). Mismo patrón
- * que el resto de actions de RRHH (firmas, contratación, cuestionarios).
+ * Base URL pública del sitio (para construir enlaces en correos). Delega en el
+ * helper central `@/lib/site-url` (fuente única con guard anti-localhost en prod).
  */
 export function appBaseUrl(): string {
-  const raw =
-    process.env.NEXT_PUBLIC_APP_URL ??
-    process.env.NEXT_PUBLIC_SITE_URL ??
-    (process.env.NEXT_PUBLIC_VERCEL_URL
-      ? `https://${process.env.NEXT_PUBLIC_VERCEL_URL}`
-      : null) ??
-    "https://sistema.balleshosteleros.com";
-  return raw.replace(/\/$/, "");
+  return getSiteUrl();
 }
 
 /** Construye la URL pública del formulario de documentación a partir del token. */

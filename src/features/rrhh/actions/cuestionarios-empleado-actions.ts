@@ -2,6 +2,7 @@
 
 import { getAppContext } from "@/lib/supabase/get-context";
 import { sendEmail } from "@/lib/email/send";
+import { getSiteUrl } from "@/lib/site-url";
 import { cuestionarioRecordatorioEmail } from "@/lib/email/templates/cuestionario-recordatorio";
 import type {
   BloqueCuestionario,
@@ -249,14 +250,7 @@ export async function enviarRecordatorioCuestionario(envioId: string) {
     const plantilla = rel<{ nombre: string }>(campana?.plantilla);
     const empresa = rel<{ nombre: string }>(envio.empresa);
 
-    const siteUrl =
-      process.env.NEXT_PUBLIC_APP_URL ??
-      process.env.NEXT_PUBLIC_SITE_URL ??
-      (process.env.NEXT_PUBLIC_VERCEL_URL
-        ? `https://${process.env.NEXT_PUBLIC_VERCEL_URL}`
-        : null) ??
-      "http://localhost:3000";
-    const actionUrl = `${siteUrl.replace(/\/$/, "")}/mi-panel/cuestionarios`;
+    const actionUrl = `${getSiteUrl()}/mi-panel/cuestionarios`;
 
     const nombre = `${empleado?.nombre ?? ""}${empleado?.apellidos ? " " + empleado.apellidos : ""}`.trim() || "compañero/a";
 

@@ -22,6 +22,7 @@ import "server-only";
 import nodemailer from "nodemailer";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { fetchEmpresaBrand, brandHeaderHtml, brandHeaderInline, inyectarCabecera } from "@/lib/email/brand-header";
+import { comprobarEnlacesCorreo } from "@/lib/email/link-guard";
 
 /** Dirección no-reply: capa cualquier respuesta a los correos del software. */
 const NOREPLY =
@@ -77,7 +78,11 @@ export type SendEmailResult =
   // llamadores que necesiten archivar el correo recibido lo persisten verbatim.
   | { ok: true; transport: "smtp"; id?: string; html: string }
   | { ok: false; configured: false }
-  | { ok: false; configured: true; error: string };
+  | { ok: false; configured: true; error: string }
+  // BLOQUEADO por el guard de enlaces: el correo contenía un enlace inservible
+  // (localhost, IP privada, preview de Vercel). `configured: true` porque el
+  // transporte SÍ estaba listo — no se envió por seguridad, no por falta de config.
+  | { ok: false; configured: true; blocked: true; error: string };
 
 type SmtpConfig = {
   host: string;
@@ -146,6 +151,26 @@ export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult>
         }
       }
     }
+  }
+
+  // CINTURÓN DE SEGURIDAD (2026-07-31): antes de enviar, verificamos que el correo
+  // NO contenga enlaces inservibles para el destinatario (localhost, IP privada,
+  // preview de Vercel). Origen: se envió a un empleado real un enlace localhost
+  // desde una copia del software corriendo en local. Si detectamos uno, NO se
+  // envía y devolvemos un error claro que el llamador puede mostrar/loguear.
+  // Se comprueba el `html` FINAL (con cabecera de marca ya inyectada).
+  const guard = comprobarEnlacesCorreo({
+    html,
+    text: input.text,
+    subject: input.subject,
+  });
+  if (!guard.ok) {
+    console.error(
+      `[email] ENVÍO BLOQUEADO — enlace inservible (${guard.hostOfensivo}). ` +
+        `Destinatario: ${input.to}. Asunto: "${input.subject}". ${guard.motivo} ` +
+        `Configura NEXT_PUBLIC_APP_URL con el dominio real y no envíes correos desde una copia local.`
+    );
+    return { ok: false, configured: true, blocked: true, error: guard.motivo };
   }
 
   try {

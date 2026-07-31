@@ -15,18 +15,10 @@ import type { ModeloTipo, ModeloPeriodo, GrupoModelo } from "../types/modelos";
 import { MODELO_LABEL, COMBOS_MODELOS_DEFAULT, grupoDeModelo } from "../types/modelos";
 import { validarModeloPdfIA } from "./validar-modelo-ia";
 import { getModelosConfigPorEmpresa, tiposObligatoriosEfectivos } from "./modelos-config";
+import { getSiteUrl } from "@/lib/site-url";
 
 const BUCKET_MODELOS = "modelos-aeat-pdf";
 const MAX_PDF_BYTES = 25 * 1024 * 1024;
-
-export function getSiteUrl(): string {
-  return (
-    process.env.NEXT_PUBLIC_APP_URL ??
-    process.env.NEXT_PUBLIC_SITE_URL ??
-    (process.env.NEXT_PUBLIC_VERCEL_URL ? `https://${process.env.NEXT_PUBLIC_VERCEL_URL}` : null) ??
-    "http://localhost:3000"
-  ).replace(/\/$/, "");
-}
 
 /** Enlace público que abre la gestoría para subir los modelos del periodo. */
 export function urlSubidaModelos(token: string): string {

@@ -13,6 +13,7 @@ import {
 import { runSyncForAccount } from "@/features/contabilidad/services/psd2/sync";
 
 import { getEmpresaActivaForUser } from "@/features/empresa/lib/empresa-server";
+import { getSiteUrl } from "@/lib/site-url";
 import type { SupabaseClient } from "@supabase/supabase-js";
 const DEFAULT_PROVIDER: ProviderId = "gocardless";
 const ACCESS_VALID_FOR_DAYS = 90;
@@ -44,10 +45,7 @@ async function getContext() {
 }
 
 function appUrl(): string {
-  return (process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000").replace(
-    /\/$/,
-    "",
-  );
+  return getSiteUrl();
 }
 
 export async function listarBancosES() {
