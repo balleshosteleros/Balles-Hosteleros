@@ -364,7 +364,7 @@ export function RolesTab() {
                       <span className="text-[10px] font-bold text-muted-foreground tracking-wider">ACCESOS DIRECTOS A APLICACIONES</span>
                     </div>
                     <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium text-muted-foreground">Aplicaciones</span>
+                      <span className="text-sm font-medium text-muted-foreground">APLICACIONES</span>
                       <div className="flex flex-col items-center gap-0.5 w-24">
                         <span className="text-[10px] text-muted-foreground font-bold">ACCESO</span>
                         <Switch
@@ -381,7 +381,7 @@ export function RolesTab() {
                       <span className="text-[10px] font-bold text-muted-foreground tracking-wider">ACCESOS Y CONTRASEÑAS</span>
                     </div>
                     <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium text-muted-foreground">Contraseñas</span>
+                      <span className="text-sm font-medium text-muted-foreground">CONTRASEÑAS</span>
                       <div className="flex flex-col items-center gap-0.5 w-24">
                         <span className="text-[10px] text-muted-foreground font-bold">ACCESO</span>
                         <Switch
