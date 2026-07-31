@@ -341,19 +341,24 @@ export function CierresView() {
       fd.append("tipo", form.tipo);
       fd.append("fecha", form.fecha);
       fd.append("efectivo_retirado", form.efectivo_retirado || "0");
-      fd.append("total_contado", form.total_contado || "0");
+      // Total contado y gastos solo aplican al cierre semanal.
+      if (form.tipo === "cierre") {
+        fd.append("total_contado", form.total_contado || "0");
+      }
       // El descuadre lo calcula el backend (contado − efectivo); no se envía a mano.
       fd.append("notas", form.notas);
       fd.append("registrado_por", form.registrado_por);
-      // Gastos de la semana: se descartan filas totalmente vacías.
-      const gastosPayload: CierreGasto[] = form.gastos
-        .map((g) => ({
-          tipo: g.tipo.trim(),
-          descripcion: g.descripcion.trim(),
-          importe: Number((g.importe || "0").replace(",", ".")) || 0,
-        }))
-        .filter((g) => g.tipo || g.descripcion || g.importe !== 0);
-      if (gastosPayload.length > 0) fd.append("gastos", JSON.stringify(gastosPayload));
+      if (form.tipo === "cierre") {
+        // Gastos de la semana: se descartan filas totalmente vacías.
+        const gastosPayload: CierreGasto[] = form.gastos
+          .map((g) => ({
+            tipo: g.tipo.trim(),
+            descripcion: g.descripcion.trim(),
+            importe: Number((g.importe || "0").replace(",", ".")) || 0,
+          }))
+          .filter((g) => g.tipo || g.descripcion || g.importe !== 0);
+        if (gastosPayload.length > 0) fd.append("gastos", JSON.stringify(gastosPayload));
+      }
       if (form.file) fd.append("file", form.file);
 
       const res = await createCierre(fd);
@@ -878,7 +883,7 @@ export function CierresView() {
 
           <div className="grid grid-cols-2 gap-4 mt-2">
             <div>
-              <Label>Fecha del cierre *</Label>
+              <Label>{form.tipo === "retirada" ? "Fecha de la retirada *" : "Fecha del cierre *"}</Label>
               <Input
                 type="date"
                 value={form.fecha}
@@ -905,19 +910,22 @@ export function CierresView() {
                 placeholder="0.00"
               />
             </div>
-            <div>
-              <Label>Total cierre semana (€)</Label>
-              <Input
-                type="number"
-                step="0.01"
-                min="0"
-                value={form.total_contado}
-                onChange={(e) => setForm({ ...form, total_contado: e.target.value })}
-                placeholder="0.00"
-              />
-            </div>
+            {form.tipo !== "retirada" && (
+              <div>
+                <Label>Total cierre semana (€)</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={form.total_contado}
+                  onChange={(e) => setForm({ ...form, total_contado: e.target.value })}
+                  placeholder="0.00"
+                />
+              </div>
+            )}
 
             {/* Descuadre calculado automáticamente = contado − efectivo */}
+            {form.tipo !== "retirada" && (
             <div className="col-span-2">
               <Label className="mb-2 block">Descuadre (calculado automáticamente)</Label>
               <div
@@ -963,8 +971,10 @@ export function CierresView() {
                 Se calcula solo: total contado en caja − efectivo retirado.
               </p>
             </div>
+            )}
 
             {/* Gastos de la semana (registro informativo, no afecta al descuadre) */}
+            {form.tipo !== "retirada" && (
             <div className="col-span-2">
               <div className="flex items-center justify-between mb-2">
                 <Label className="flex items-center gap-1.5">
@@ -1031,9 +1041,10 @@ export function CierresView() {
                 </div>
               )}
             </div>
+            )}
 
             <div className="col-span-2">
-              <Label>Documento del cierre (PDF, imagen, etc.)</Label>
+              <Label>{form.tipo === "retirada" ? "Documento (PDF, imagen, etc.)" : "Documento del cierre (PDF, imagen, etc.)"}</Label>
               <Input
                 type="file"
                 accept=".pdf,.jpg,.jpeg,.png,.webp,.xls,.xlsx,.csv"

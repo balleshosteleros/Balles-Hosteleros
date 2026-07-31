@@ -166,7 +166,7 @@ export async function createCierre(formData: FormData): Promise<{ ok: true; data
 
     // Gastos de la semana (registro informativo, no altera el descuadre).
     let gastosInput: CierreGasto[] = [];
-    const gastosRaw = (formData.get("gastos") as string | null) || "";
+    const gastosRaw = tipo === "cierre" ? ((formData.get("gastos") as string | null) || "") : "";
     if (gastosRaw) {
       try {
         const parsed = JSON.parse(gastosRaw) as unknown;
@@ -188,10 +188,12 @@ export async function createCierre(formData: FormData): Promise<{ ok: true; data
     }
 
     const efectivo = Number(efectivoStr.replace(",", ".")) || 0;
-    const contado = Number(contadoStr.replace(",", ".")) || 0;
-    // El descuadre SIEMPRE se calcula: contado − efectivo esperado.
+    // El total contado y el descuadre solo tienen sentido en el cierre semanal.
+    // En retiradas/ingresos no hay descuadre: se guarda cuadrado (descuadre 0).
+    const contado = tipo === "cierre" ? Number(contadoStr.replace(",", ".")) || 0 : 0;
+    // Para el cierre: descuadre = contado − efectivo esperado.
     // >0 sobra · <0 falta · 0 cuadra. No se acepta valor manual.
-    const descuadre = Math.round((contado - efectivo) * 100) / 100;
+    const descuadre = tipo === "cierre" ? Math.round((contado - efectivo) * 100) / 100 : 0;
     const cuadra = descuadre === 0;
 
     const { data: row, error: dbErr } = await supabase
