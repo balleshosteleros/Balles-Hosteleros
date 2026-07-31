@@ -45,7 +45,7 @@ const DEPARTAMENTOS: Depto[] = [
   { key: "cocina", modulo: "COCINA", label: "Cocina", icon: ChefHat, hue: 211 },
   { key: "gerencia", modulo: "GERENCIA", label: "Gerencia", icon: Briefcase, hue: 211 },
   { key: "calidad", modulo: "CALIDAD", label: "Calidad", icon: CheckCircle2, hue: 192 },
-  { key: "rrhh", modulo: "RRHH", label: "Recursos Humanos", icon: User, hue: 192 },
+  { key: "rrhh", modulo: "RECURSOS HUMANOS", label: "Recursos Humanos", icon: User, hue: 192 },
   { key: "marketing", modulo: "MARKETING", label: "Marketing", icon: Camera, hue: 192 },
   { key: "logistica", modulo: "LOGÍSTICA", label: "Logística", icon: Package, hue: 192 },
   { key: "contabilidad", modulo: "CONTABILIDAD", label: "Contabilidad", icon: Calculator, hue: 231 },

@@ -1,5 +1,5 @@
-import { Building2 } from "lucide-react";
 import { MobilePageHeader } from "@/features/mi-panel/mobile/components/MobilePageHeader";
+import { SubmodulosGrid } from "@/features/mi-panel/mobile/components/SubmodulosGrid";
 
 export const dynamic = "force-dynamic";
 
@@ -27,16 +27,9 @@ export default async function MobileDepartamentoDetallePage({
 
   return (
     <>
-      <MobilePageHeader title={label} />
-      <div className="flex min-h-[60vh] flex-col items-center justify-center px-6 text-center">
-        <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-muted/60 text-muted-foreground">
-          <Building2 className="h-7 w-7" />
-        </div>
-        <h2 className="mt-4 text-base font-semibold">Pendiente de configurar</h2>
-        <p className="mt-1 max-w-xs text-sm text-muted-foreground">
-          Aún no hemos habilitado las opciones de {label} en móvil. Aparecerán
-          aquí en cuanto estén listas.
-        </p>
+      <MobilePageHeader title={label} backHref="/m/departamentos" />
+      <div className="mt-3">
+        <SubmodulosGrid deptoKey={key} />
       </div>
     </>
   );
