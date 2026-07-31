@@ -10,6 +10,7 @@ import {
   type ReactNode,
 } from "react";
 import { useRecordingStore } from "../store/recording-store";
+import { useAuth } from "@/features/auth/contexts/auth-context";
 import {
   addPending,
   listPending,
@@ -42,6 +43,10 @@ interface RecorderContextValue {
   cameraStream: MediaStream | null;
   displaySurface: string | null;
   pendingCount: number;
+  /** Grabaciones nuevas (visibles para mi rol) que aún no he abierto. */
+  newCount: number;
+  /** Marca todas como vistas (oculta el badge de nuevas). */
+  markRecordingsSeen: () => void;
   /** Departamentos (canónicos) a los que el usuario tiene acceso. */
   departamentos: string[];
   /** Departamento elegido para guardar la próxima grabación. */
@@ -93,9 +98,15 @@ export function formatDuration(seconds: number): string {
   return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 }
 
+function seenKey(userId: string | undefined) {
+  return `bh_recordings_seen_${userId ?? "anon"}`;
+}
+
 export function RecorderProvider({ children }: { children: ReactNode }) {
   const { setState, setElapsed, setCountdownValue } = useRecordingStore();
   const isDrawerOpen = useRecordingStore((s) => s.isDrawerOpen);
+  const { user } = useAuth();
+  const [newCount, setNewCount] = useState<number>(0);
   const [options, setOptions] = useState<RecordOptions>(DEFAULT_OPTIONS);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<RecordingResult | null>(null);
@@ -140,6 +151,52 @@ export function RecorderProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (isDrawerOpen) refreshDepartamentos();
   }, [isDrawerOpen, refreshDepartamentos]);
+
+  // ── Badge de grabaciones NUEVAS ────────────────────────────────────────
+  // Cuenta las grabaciones visibles para MI rol (/api/recordings ya filtra por
+  // RLS: solo mis departamentos) creadas después de la última vez que abrí el
+  // panel. El timestamp "visto" se guarda por usuario en localStorage.
+  const refreshNewCount = useCallback(async () => {
+    if (typeof window === "undefined") return;
+    try {
+      const res = await fetch("/api/recordings", { cache: "no-store" });
+      if (!res.ok) return;
+      const list = await res.json();
+      if (!Array.isArray(list)) return;
+      let seenRaw = window.localStorage.getItem(seenKey(user?.id));
+      if (!seenRaw) {
+        // Primer uso: nada es "nuevo" retroactivamente. Fijamos "visto" a ahora.
+        window.localStorage.setItem(seenKey(user?.id), String(Date.now()));
+        seenRaw = String(Date.now());
+      }
+      const seenTs = Number(seenRaw);
+      const nuevas = list.filter(
+        (r: { created_at?: string }) =>
+          r.created_at && new Date(r.created_at).getTime() > seenTs,
+      ).length;
+      setNewCount(nuevas);
+    } catch {
+      /* silencioso */
+    }
+  }, [user?.id]);
+
+  const markRecordingsSeen = useCallback(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(seenKey(user?.id), String(Date.now()));
+    setNewCount(0);
+  }, [user?.id]);
+
+  // Recalcular al montar y cada 60 s (para reflejar grabaciones de otros).
+  useEffect(() => {
+    refreshNewCount();
+    const iv = setInterval(refreshNewCount, 60_000);
+    return () => clearInterval(iv);
+  }, [refreshNewCount]);
+
+  // Al abrir el panel, marcar todo como visto → el badge desaparece.
+  useEffect(() => {
+    if (isDrawerOpen) markRecordingsSeen();
+  }, [isDrawerOpen, markRecordingsSeen]);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
@@ -505,6 +562,19 @@ export function RecorderProvider({ children }: { children: ReactNode }) {
     [options, processRecording, setCountdownValue, setElapsed, setState, stopAllStreams, stopRecording],
   );
 
+  // Avisar antes de cerrar la pestaña si quedan grabaciones sin subir, para
+  // que nadie pierda un vídeo por cerrar el navegador (el blob vive en IndexedDB
+  // local hasta que sube). Se activa solo cuando hay pendientes.
+  useEffect(() => {
+    if (pendingCount <= 0) return;
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [pendingCount]);
+
   const pauseRecording = useCallback(() => {
     if (mediaRecorderRef.current?.state === "recording") {
       mediaRecorderRef.current.pause();
@@ -605,6 +675,8 @@ export function RecorderProvider({ children }: { children: ReactNode }) {
     cameraStream,
     displaySurface,
     pendingCount,
+    newCount,
+    markRecordingsSeen,
     departamentos,
     selectedDepartamento,
     setSelectedDepartamento,
