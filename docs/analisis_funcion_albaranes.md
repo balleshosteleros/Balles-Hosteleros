@@ -322,6 +322,10 @@ proporcionada sin especular.
 
 ## Evolución recomendada
 
+El plan completo para ejecutar estas mejoras queda definido en
+`.claude/PRPs/PRP-073-albaranes-proveedor-flujo-fiable-y-revision-asistida.md`. Ese PRP agrupa
+los problemas por dependencias y servirá como contrato para generar los TASKs fase a fase.
+
 Orden sugerido, sin alterar el principio de revisión humana:
 
 1. Permitir buscar y vincular contra todo el catálogo de compra.
