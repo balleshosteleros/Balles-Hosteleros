@@ -89,6 +89,41 @@ export function formatHoraEnZona(
 }
 
 /**
+ * Clave de día "AAAA-MM-DD" de un ISO en la zona dada. Estable para agrupar
+ * mensajes por día (chat estilo WhatsApp). Devuelve "" si la fecha no es válida.
+ */
+export function claveDiaEnZona(iso: string | null | undefined, tz: string): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  // en-CA da formato AAAA-MM-DD directamente.
+  return d.toLocaleDateString("en-CA", { timeZone: tzSegura(tz) });
+}
+
+/**
+ * Etiqueta amigable del separador de día en un chat: "Hoy", "Ayer" o fecha
+ * larga ("lunes, 4 de agosto de 2026"), todo calculado en la zona de la empresa.
+ */
+export function etiquetaDiaChat(iso: string | null | undefined, tz: string): string {
+  if (!iso) return "";
+  const clave = claveDiaEnZona(iso, tz);
+  if (!clave) return "";
+  const ahora = new Date();
+  const hoy = claveDiaEnZona(ahora.toISOString(), tz);
+  const ayer = claveDiaEnZona(new Date(ahora.getTime() - 86_400_000).toISOString(), tz);
+  if (clave === hoy) return "Hoy";
+  if (clave === ayer) return "Ayer";
+  const d = new Date(iso);
+  return d.toLocaleDateString("es-ES", {
+    timeZone: tzSegura(tz),
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
+}
+
+/**
  * Minutos del día (0–1439) de un `Date` concreto, en la zona dada. Útil para
  * comparar contra ventanas de horario/fichaje. Reemplaza a `minutosMadridDe`.
  */

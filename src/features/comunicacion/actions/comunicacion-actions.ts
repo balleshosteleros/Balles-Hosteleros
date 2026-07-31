@@ -39,6 +39,17 @@ function normalizar(s: string): string {
   return s.normalize("NFD").replace(COMBINING_MARKS, "").toUpperCase().trim();
 }
 
+// M\u00f3dulos de permiso que NO son departamentos: son ajustes/toggles extra dentro
+// de Roles (candado de Ajustes, c\u00e1mara de la toolbar, lanzadores de apps/accesos).
+// Los chats existen SOLO por departamento, as\u00ed que estos m\u00f3dulos nunca dan acceso
+// a un chat aunque est\u00e9n con "ver:true".
+const MODULOS_NO_DEPARTAMENTO = new Set([
+  "AJUSTES",
+  "CAMARAS",
+  "HERR_APLICACIONES",
+  "HERR_ACCESOS",
+]);
+
 // Sinónimos para matchear nombre de canal (ej "RR.HH") contra módulo de permisos
 // (ej "RECURSOS HUMANOS"). Cada array agrupa equivalentes; cualquier elemento
 // del array matchea cualquier otro.
@@ -105,7 +116,11 @@ async function getAccesoCtx(
         ver: boolean;
       }>;
       for (const p of permisos) {
-        if (p?.ver && p.modulo) candidatos.push(p.modulo);
+        // Solo módulos que sean departamentos reales (los chats existen por
+        // departamento; los ajustes/toggles extra no dan acceso a chat).
+        if (p?.ver && p.modulo && !MODULOS_NO_DEPARTAMENTO.has(normalizar(p.modulo))) {
+          candidatos.push(p.modulo);
+        }
       }
     }
   }

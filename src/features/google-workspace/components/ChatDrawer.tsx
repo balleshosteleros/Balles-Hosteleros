@@ -52,7 +52,7 @@ import { refreshDailyCounts } from "@/features/google-workspace/components/useDa
 import { createClient as createBrowserClient } from "@/lib/supabase/client";
 import { useAuth } from "@/features/auth/contexts/auth-context";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
-import { formatFechaEnZona, formatHoraEnZona } from "@/features/empresa/lib/zona-horaria";
+import { formatFechaEnZona, formatHoraEnZona, claveDiaEnZona, etiquetaDiaChat } from "@/features/empresa/lib/zona-horaria";
 import { getOrganigrama } from "@/features/direccion/actions/organigrama-actions";
 import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
 import { orgChartsPorEmpresa } from "@/features/direccion/data/direccion";
@@ -81,6 +81,10 @@ type Mensaje = {
   avatar: string;
   texto: string;
   fecha: string;
+  // Clave de día "AAAA-MM-DD" en la zona de la empresa, para agrupar por día.
+  fechaClave: string;
+  // Etiqueta amigable del separador de día: "Hoy", "Ayer" o fecha larga.
+  fechaLabel: string;
   hora: string;
   fijado: boolean;
   adjuntoPath?: string | null;
@@ -194,6 +198,8 @@ function mapDbMensaje(r: Record<string, unknown>, tz: string): Mensaje {
     avatar: iniciales,
     texto: (r.texto as string) ?? "",
     fecha: esHoy ? "Hoy" : formatFechaEnZona(createdAtIso, tz),
+    fechaClave: claveDiaEnZona(createdAtIso, tz),
+    fechaLabel: etiquetaDiaChat(createdAtIso, tz),
     hora: formatHoraEnZona(createdAtIso, tz),
     fijado: (r.fijado as boolean) ?? false,
     adjuntoPath: (r.adjunto_url as string) ?? null,
@@ -202,6 +208,22 @@ function mapDbMensaje(r: Record<string, unknown>, tz: string): Mensaje {
     adjuntoMime: (r.adjunto_mime as string) ?? null,
     adjuntoTamano: (r.adjunto_tamano as number) ?? null,
   };
+}
+
+// Agrupa una lista de mensajes (ya ordenados por fecha) en bloques por día,
+// para pintar el separador de fecha estilo WhatsApp una vez por día.
+type GrupoDia = { clave: string; label: string; mensajes: Mensaje[] };
+function agruparPorDia(mensajes: Mensaje[]): GrupoDia[] {
+  const grupos: GrupoDia[] = [];
+  for (const m of mensajes) {
+    const ultimo = grupos[grupos.length - 1];
+    if (ultimo && ultimo.clave === m.fechaClave) {
+      ultimo.mensajes.push(m);
+    } else {
+      grupos.push({ clave: m.fechaClave, label: m.fechaLabel, mensajes: [m] });
+    }
+  }
+  return grupos;
 }
 
 function mapDbPref(r: Record<string, unknown>): { canalId: string; pref: PrefCanal } {
@@ -529,6 +551,8 @@ export function ChatDrawer({ children }: { children: ReactNode }) {
       avatar: "TU",
       texto,
       fecha: "Hoy",
+      fechaClave: claveDiaEnZona(new Date().toISOString(), empresaActual.zonaHoraria),
+      fechaLabel: "Hoy",
       hora: formatHoraEnZona(new Date().toISOString(), empresaActual.zonaHoraria),
       fijado: false,
     };
@@ -1073,53 +1097,67 @@ export function ChatDrawer({ children }: { children: ReactNode }) {
                       <p className="text-xs text-muted-foreground">No hay mensajes todavía. Sé el primero en escribir.</p>
                     </div>
                   )}
-                  {msgDelCanal.map((m) => {
-                    // Propio = mismo autor_id que el usuario actual (fiable tras
-                    // recargar de BD). Fallback al optimista con autor "Tu".
-                    const propio = myUserId ? m.autorId === myUserId : m.autor === "Tu";
-                    return (
-                      <div key={m.id} className={cn("flex gap-2", propio ? "justify-end" : "justify-start")}>
-                        {!propio && (
-                          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-bold text-primary">
-                            {m.avatar}
-                          </div>
-                        )}
-                        <div
-                          className={cn(
-                            "max-w-[70%] rounded-2xl px-3.5 py-2 shadow-sm",
-                            propio
-                              // Propio: verde muy suave (estilo WhatsApp), texto normal.
-                              ? "bg-[#d9fdd3] dark:bg-emerald-900/40 text-foreground rounded-br-md"
-                              // Ajeno: blanco, ligeramente diferenciado del fondo.
-                              : "bg-white dark:bg-card text-foreground rounded-bl-md",
-                            m.fijado && "ring-2 ring-amber-400"
-                          )}
-                        >
-                          {!propio && (
-                            <p className="text-[11px] font-semibold mb-0.5 text-emerald-700 dark:text-emerald-400">
-                              {m.autor}
-                            </p>
-                          )}
-                          {m.adjuntoPath && m.adjuntoTipo && (
-                            <Adjunto
-                              path={m.adjuntoPath}
-                              tipo={m.adjuntoTipo}
-                              nombre={m.adjuntoNombre ?? "archivo"}
-                              tamano={m.adjuntoTamano ?? 0}
-                              propio={propio}
-                            />
-                          )}
-                          {m.texto && (
-                            <p className="text-sm whitespace-pre-wrap break-words">{m.texto}</p>
-                          )}
-                          <p className={cn("text-[10px] mt-1 text-right", propio ? "text-emerald-700/60 dark:text-emerald-300/60" : "text-muted-foreground")}>
-                            {m.hora}
-                            {m.fijado && <Pin className="inline ml-1 h-2.5 w-2.5" />}
-                          </p>
+                  {agruparPorDia(msgDelCanal).map((grupo) => (
+                    // Cada grupo = un día. El separador es `sticky` para que quede
+                    // flotando arriba mientras scrolleas y lo releve el del día
+                    // siguiente (comportamiento WhatsApp).
+                    <div key={grupo.clave} className="space-y-3">
+                      {grupo.label && (
+                        <div className="sticky top-0 z-10 flex justify-center py-1 pointer-events-none">
+                          <span className="rounded-full bg-muted/90 dark:bg-card/90 px-3 py-1 text-[11px] font-medium text-muted-foreground shadow-sm backdrop-blur-sm">
+                            {grupo.label}
+                          </span>
                         </div>
-                      </div>
-                    );
-                  })}
+                      )}
+                      {grupo.mensajes.map((m) => {
+                        // Propio = mismo autor_id que el usuario actual (fiable tras
+                        // recargar de BD). Fallback al optimista con autor "Tu".
+                        const propio = myUserId ? m.autorId === myUserId : m.autor === "Tu";
+                        return (
+                          <div key={m.id} className={cn("flex gap-2", propio ? "justify-end" : "justify-start")}>
+                            {!propio && (
+                              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-bold text-primary">
+                                {m.avatar}
+                              </div>
+                            )}
+                            <div
+                              className={cn(
+                                "max-w-[70%] rounded-2xl px-3.5 py-2 shadow-sm",
+                                propio
+                                  // Propio: verde muy suave (estilo WhatsApp), texto normal.
+                                  ? "bg-[#d9fdd3] dark:bg-emerald-900/40 text-foreground rounded-br-md"
+                                  // Ajeno: blanco, ligeramente diferenciado del fondo.
+                                  : "bg-white dark:bg-card text-foreground rounded-bl-md",
+                                m.fijado && "ring-2 ring-amber-400"
+                              )}
+                            >
+                              {!propio && (
+                                <p className="text-[11px] font-semibold mb-0.5 text-emerald-700 dark:text-emerald-400">
+                                  {m.autor}
+                                </p>
+                              )}
+                              {m.adjuntoPath && m.adjuntoTipo && (
+                                <Adjunto
+                                  path={m.adjuntoPath}
+                                  tipo={m.adjuntoTipo}
+                                  nombre={m.adjuntoNombre ?? "archivo"}
+                                  tamano={m.adjuntoTamano ?? 0}
+                                  propio={propio}
+                                />
+                              )}
+                              {m.texto && (
+                                <p className="text-sm whitespace-pre-wrap break-words">{m.texto}</p>
+                              )}
+                              <p className={cn("text-[10px] mt-1 text-right", propio ? "text-emerald-700/60 dark:text-emerald-300/60" : "text-muted-foreground")}>
+                                {m.hora}
+                                {m.fijado && <Pin className="inline ml-1 h-2.5 w-2.5" />}
+                              </p>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ))}
                 </div>
 
                 {/* Input */}
