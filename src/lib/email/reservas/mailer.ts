@@ -427,8 +427,8 @@ function renderHtml(input: RenderInput): string {
 
   return `<!doctype html>
 <html lang="es">
-  <body style="margin:0;padding:0;background:#f1f5f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#0f172a;">
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f1f5f9;padding:32px 16px;">
+  <body style="margin:0;padding:0;background:#ffffff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#0f172a;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#ffffff;padding:32px 16px;">
       <tr>
         <td align="center">
           <table role="presentation" width="560" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 4px 16px rgba(15,23,42,0.08);">
@@ -463,7 +463,7 @@ function renderHtml(input: RenderInput): string {
                 </table>
                 ${
                   input.observaciones
-                    ? `<div style="margin-top:14px;padding:12px 14px;background:#f8fafc;border-left:3px solid ${primario};border-radius:6px;">
+                    ? `<div style="margin-top:14px;padding:12px 14px;background:#ffffff;border-left:3px solid ${primario};border-radius:6px;">
                         <div style="font-size:11px;color:#64748b;font-weight:600;letter-spacing:0.4px;text-transform:uppercase;margin-bottom:4px;">Observaciones</div>
                         <div style="font-size:13px;color:#334155;line-height:1.55;">${escapeHtml(input.observaciones)}</div>
                       </div>`

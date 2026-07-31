@@ -248,7 +248,7 @@ function recuadroLiquidacionHtml(d: LiquidacionDetalle): string {
   }
 
   return `
-    <div style="border:1px solid #e5e5e5;border-radius:10px;padding:16px 18px;margin:16px 0;background:#fafafa">
+    <div style="border:1px solid #e5e5e5;border-radius:10px;padding:16px 18px;margin:16px 0;background:#ffffff">
       <table style="width:100%;border-collapse:collapse">${filas.join("")}</table>
     </div>`;
 }

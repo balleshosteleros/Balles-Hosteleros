@@ -46,7 +46,7 @@ export function bienvenidaEmpleadoEmail(opts: {
             </tr>
             <tr>
               <td style="padding:0 32px 8px 32px;">
-                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;">
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#ffffff;border:1px solid #e2e8f0;border-radius:10px;">
                   <tr>
                     <td style="padding:14px 16px;">
                       <p style="margin:0 0 8px 0;font-size:13px;line-height:1.6;color:#334155;">
