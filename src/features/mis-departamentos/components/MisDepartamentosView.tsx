@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import { useAuth, esAccesoDepartamentos, type AppRole } from "@/features/auth/contexts/auth-context";
+import { useAuth } from "@/features/auth/contexts/auth-context";
 import { Card } from "@/components/ui/card";
 import {
   Crown, UtensilsCrossed, ChefHat, Briefcase, CheckCircle2, User, Camera,
@@ -45,7 +45,7 @@ const ALL_DEPARTAMENTOS: DepartamentoTileExt[] = [
   { key: "cocina",       modulo: "COCINA",           label: "COCINA",       href: "/cocina",       icon: ChefHat,         description: "Comandas, escandallos, partidas",            color: "text-orange-600" },
   { key: "gerencia",     modulo: "GERENCIA",         label: "GERENCIA",     href: "/gerencia",     icon: Briefcase,       description: "Mantenimiento, cierres, ratios, comunicados", color: "text-blue-600" },
   { key: "calidad",      modulo: "CALIDAD",          label: "CALIDAD",      href: "/calidad",      icon: CheckCircle2,    description: "Auditorías, inspecciones",                   color: "text-emerald-600" },
-  { key: "rrhh",         modulo: "RRHH",             label: "RECURSOS HUMANOS", href: "/rrhh",     icon: User,            description: "Empleados, fichajes, horarios, formación",   color: "text-violet-600" },
+  { key: "rrhh",         modulo: "RECURSOS HUMANOS", label: "RECURSOS HUMANOS", href: "/rrhh",     icon: User,            description: "Empleados, fichajes, horarios, formación",   color: "text-violet-600" },
   { key: "marketing",    modulo: "MARKETING",        label: "MARKETING",    href: "/marketing",    icon: Camera,          description: "Calendario, campañas, fidelización",         color: "text-pink-600" },
   { key: "logistica",    modulo: "LOGÍSTICA",        label: "LOGÍSTICA",    href: "/logistica",    icon: Package,         description: "Proveedores, productos, pedidos, stock",     color: "text-teal-600" },
   { key: "contabilidad", modulo: "CONTABILIDAD",     label: "CONTABILIDAD", href: "/contabilidad", icon: Calculator,      description: "Facturas, transacciones, conciliación",      color: "text-cyan-600" },
@@ -53,33 +53,24 @@ const ALL_DEPARTAMENTOS: DepartamentoTileExt[] = [
   { key: "juridico",     modulo: "JURÍDICO",         label: "JURÍDICO",     href: "/juridico",     icon: Scale,           description: "Procesos legales",                           color: "text-fuchsia-600" },
 ];
 
-function dashboardSubtitlePorRol(rol: AppRole | null): string {
-  if (!rol) return "Estos son tus departamentos asignados.";
-  switch (rol) {
-    case "admin":
-    case "director":
-      return "Tienes visión completa del grupo. Selecciona un departamento para entrar.";
-    case "gerencia":
-      return "Áreas operativas y económicas bajo tu supervisión.";
-    case "responsable":
-      return "Departamentos del día a día del local.";
-    case "empleado":
-      return "Estas son las áreas a las que tienes acceso.";
-    case "solo_lectura":
-      return "Tienes acceso de consulta sobre estos departamentos.";
-    default:
-      return "Estos son tus departamentos asignados.";
-  }
+// Subtítulo según el nivel real de acceso: DIRECCIÓN (admin de plataforma) ve
+// todo; el resto ve solo sus departamentos permitidos.
+function dashboardSubtitle(esAdminPlataforma: boolean): string {
+  return esAdminPlataforma
+    ? "Tienes visión completa del grupo. Selecciona un departamento para entrar."
+    : "Estas son las áreas a las que tienes acceso.";
 }
 
 export function MisDepartamentosView() {
-  const { profile, user, roles, puedeVer, permisosLoaded, hasRole, loading } = useAuth();
+  const {
+    profile, user, roles, puedeVer, permisosLoaded, loading,
+    esAdminPlataforma, tieneAccesoDepartamentos,
+  } = useAuth();
   const router = useRouter();
-  const rolPrincipal: AppRole | null = roles[0] ?? null;
 
-  // Acceso a esta vista: dirección (director/admin) y gerencia. Dirección ve
-  // todo por bypass; gerencia lo ve filtrado por sus permisos (ver `tiles`).
-  const esDireccion = esAccesoDepartamentos(roles);
+  // Acceso a esta vista: quien tiene ≥1 departamento permitido (o es admin de
+  // plataforma). Admin ve todo; el resto ve solo sus departamentos (ver `tiles`).
+  const esDireccion = tieneAccesoDepartamentos;
 
   const [mounted, setMounted] = useState(false);
   useEffect(() => {
@@ -112,13 +103,14 @@ export function MisDepartamentosView() {
   }, [loading, rolesPendientes, esDireccion, roles.length, router]);
 
   const tiles = useMemo(() => {
-    // 'director' / 'admin' tienen bypass total — ven todos los departamentos.
-    if (hasRole("director") || hasRole("admin")) return ALL_DEPARTAMENTOS;
+    // Admin de plataforma (DIRECCIÓN) tiene bypass total — ve todos los deptos.
+    if (esAdminPlataforma) return ALL_DEPARTAMENTOS;
     // Hasta que carguen permisos no mostramos nada para evitar el parpadeo
     // "todo abierto" → "filtrado".
     if (!permisosLoaded) return [];
+    // El resto: solo los departamentos que sus permisos reales permiten ver.
     return ALL_DEPARTAMENTOS.filter((d) => puedeVer(d.modulo));
-  }, [hasRole, permisosLoaded, puedeVer]);
+  }, [esAdminPlataforma, permisosLoaded, puedeVer]);
 
   // Loading hasta que (a) el componente esté montado, (b) auth deje de cargar y
   // (c) los permisos hayan resuelto (`rolesPendientes = !permisosLoaded`).
@@ -145,7 +137,7 @@ export function MisDepartamentosView() {
   // El subtítulo depende del rol, que se resuelve async. Mientras se carga no lo
   // mostramos en vez de pintar el genérico de rol=null y que parpadee al genérico
   // → real (lo que hacía que la cabecera se viera incompleta/rota al entrar).
-  const subtitulo = !isLoading ? dashboardSubtitlePorRol(rolPrincipal) : "";
+  const subtitulo = !isLoading ? dashboardSubtitle(esAdminPlataforma) : "";
 
   return (
     <div className="p-4 md:p-6 max-w-6xl mx-auto space-y-6">

@@ -150,11 +150,12 @@ export function AppSidebar() {
   const collapsed = state === "collapsed";
   const pathname = usePathname();
   const { mode, setMode } = useViewMode();
-  const { puedeVer, permisosLoaded, hasRole } = useAuth();
+  const { puedeVer, permisosLoaded, esAdminPlataforma } = useAuth();
 
-  // 'director' tiene bypass total → mostramos todos los módulos sin esperar a permisos.
-  // Para el resto, esperamos a permisosLoaded para evitar parpadeo "todo abierto" → "filtrado".
-  const isDirector = hasRole("director");
+  // Admin de plataforma (DIRECCIÓN) tiene bypass total → todos los módulos sin
+  // esperar permisos. Para el resto esperamos a permisosLoaded para evitar el
+  // parpadeo "todo abierto" → "filtrado", y filtramos por permisos reales.
+  const isDirector = esAdminPlataforma;
   const sections = isDirector
     ? allSections
     : permisosLoaded

@@ -54,16 +54,16 @@ const DEPARTAMENTOS: Depto[] = [
 ];
 
 export function DepartamentosGrid() {
-  const { puedeVer, permisosLoaded, hasRole } = useAuth();
+  const { puedeVer, permisosLoaded, esAdminPlataforma } = useAuth();
 
   const tiles = useMemo(() => {
-    // director / admin: bypass total, ven todos los departamentos.
-    if (hasRole("director") || hasRole("admin")) return DEPARTAMENTOS;
+    // Admin de plataforma (DIRECCIÓN): bypass total, ve todos los departamentos.
+    if (esAdminPlataforma) return DEPARTAMENTOS;
     // Hasta que carguen permisos no mostramos nada para evitar el parpadeo
     // "todo abierto" → "filtrado".
     if (!permisosLoaded) return [];
     return DEPARTAMENTOS.filter((d) => puedeVer(d.modulo));
-  }, [hasRole, permisosLoaded, puedeVer]);
+  }, [esAdminPlataforma, permisosLoaded, puedeVer]);
 
   if (permisosLoaded && tiles.length === 0) {
     return (

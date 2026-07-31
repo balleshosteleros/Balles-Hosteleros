@@ -405,9 +405,9 @@ export function AccesosDrawer({
   children: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
-  const { profile, hasRole } = useAuth();
+  const { profile, esAdminPlataforma } = useAuth();
   const miRol = (profile?.rol_label ?? "").trim().toLowerCase();
-  const soyDirector = hasRole("director") || hasRole("admin");
+  const soyDirector = esAdminPlataforma;
 
   // ¿Tengo alguna credencial visible para mi rol? Carga al montar para decidir si
   // el candado va activo o gris+deshabilitado. null = cargando (botón activo).

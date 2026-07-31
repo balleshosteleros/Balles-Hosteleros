@@ -9,6 +9,8 @@ export interface UserPermisos {
   rolLabel: string | null
   empresaId: string | null
   appRoles: string[]
+  /** Rol con `empresa_roles.es_admin_plataforma` (DIRECCIÓN): bypass total. */
+  esAdminPlataforma: boolean
   /**
    * Departamento al que está asignado el empleado (`profiles.departamento`).
    * Es un string libre con el nombre del departamento (mismo nombre que en
@@ -91,35 +93,20 @@ export async function getRolContext(targetUserId?: string, accessToken?: string)
   }
 }
 
-/**
- * Nombres de rol (empresa_roles.nombre) que, sin ser admin de plataforma,
- * tienen acceso a la vista "Mis Departamentos" y al conmutador del header.
- * Se compara normalizado (sin acentos, mayúsculas, sin espacios).
- */
-const ROLES_ACCESO_DEPARTAMENTOS = new Set(['GERENCIA'])
-const COMBINING_MARKS = /[̀-ͯ]/g
-function normalizarRol(nombre: string): string {
-  return nombre.normalize('NFD').replace(COMBINING_MARKS, '').toUpperCase().trim()
-}
-
 export async function getUserPermisos(accessToken?: string): Promise<UserPermisos> {
   const ctx = await getRolContext(undefined, accessToken)
-  // `appRoles` se deriva del flag de plataforma (paridad con usuario_roles, que
-  // solo tenía director/empleado). Los lectores comprueban includes('director').
-  // Gerencia NO es admin de plataforma (esDirector=false) pero sí necesita el
-  // conmutador "Mis Paneles / Mis Departamentos": propagamos su rol real además
-  // de 'empleado' para que la UI (que filtra por permisos vía puedeVer) lo trate
-  // como acceso a departamentos sin darle el bypass total de dirección.
-  const appRoles = ctx.esDirector
-    ? ['director']
-    : ctx.rolNombre && ROLES_ACCESO_DEPARTAMENTOS.has(normalizarRol(ctx.rolNombre))
-      ? ['gerencia', 'empleado']
-      : ['empleado']
+  // `appRoles` es una etiqueta técnica LEGACY (director/empleado) que mantenemos
+  // solo para lectores que aún no leen permisos reales. La visibilidad de
+  // departamentos/módulos ya NO se decide por aquí: se decide por `permisos`
+  // reales + `esAdminPlataforma` (ver features/auth/lib/permisos.ts). No añadir
+  // más nombres de rol hardcodeados aquí.
+  const appRoles = ctx.esDirector ? ['director'] : ['empleado']
   return {
     permisos: ctx.permisos,
     rolLabel: ctx.rolNombre,
     empresaId: ctx.empresaId,
     appRoles,
+    esAdminPlataforma: ctx.esDirector,
     departamento: ctx.departamento,
   }
 }

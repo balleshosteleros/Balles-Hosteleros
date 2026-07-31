@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useTransition } from "react";
+import { useState, useEffect, useTransition } from "react";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { Rol } from "@/features/ajustes/data/ajustes";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { ChevronDown, ChevronRight, Plus, Trash2, Pencil, Check, Settings, Users, Cctv } from "lucide-react";
+import { ChevronDown, ChevronRight, Plus, Trash2, Settings, Users, Cctv, Rocket } from "lucide-react";
 import { toast } from "sonner";
 import { saveRolesToSupabase, loadRolesFromSupabase } from "@/features/ajustes/actions/roles-actions";
 import { getEmployees } from "@/actions/admin";
@@ -40,24 +40,28 @@ const MODULOS_NAV = [
 ];
 const MODULO_AJUSTES = "AJUSTES";
 const MODULO_CAMARAS = "CÁMARAS";
+// Cohete (aplicaciones) + candado (accesos y contraseñas). Un solo permiso
+// gobierna ambos iconos de la barra de herramientas.
+const MODULO_APLICACIONES = "HERR_APLICACIONES";
 
 function buildPermisosCompletos(overrides: Rol["permisos"] = []): {
   nav: Rol["permisos"];
   ajustes: Rol["permisos"][0];
   camaras: Rol["permisos"][0];
+  aplicaciones: Rol["permisos"][0];
 } {
   const find = (m: string) => overrides.find((p) => p.modulo === m);
   const nav = MODULOS_NAV.map((m) => find(m) ?? { modulo: m, ver: false, editar: false });
   const ajustes = find(MODULO_AJUSTES) ?? { modulo: MODULO_AJUSTES, ver: false, editar: false };
   const camaras = find(MODULO_CAMARAS) ?? { modulo: MODULO_CAMARAS, ver: false, editar: false };
-  return { nav, ajustes, camaras };
+  const aplicaciones = find(MODULO_APLICACIONES) ?? { modulo: MODULO_APLICACIONES, ver: false, editar: false };
+  return { nav, ajustes, camaras, aplicaciones };
 }
 
 export function RolesTab() {
   const { ajustes, setAjustes, empresaActual } = useEmpresa();
   const empresaDbId = empresaActual.dbId;
   const [expandedRol, setExpandedRol] = useState<string | null>(null);
-  const [editingRolId, setEditingRolId] = useState<string | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [deleteRol, setDeleteRol] = useState<Rol | null>(null);
   const [nuevoNombre, setNuevoNombre] = useState("");
@@ -152,21 +156,9 @@ export function RolesTab() {
     persistRoles(nextRoles);
   };
 
-  const renameRol = (rolId: string, nombre: string) => {
-    if (!nombre.trim()) return;
-    setAjustes((prev) => {
-      const nextRoles = prev.roles.map((r) =>
-        r.id === rolId ? { ...r, nombre: nombre.trim() } : r
-      );
-      persistRoles(nextRoles);
-      return { ...prev, roles: nextRoles };
-    });
-    toast.success("Nombre actualizado");
-  };
-
   const crearRol = () => {
     if (!nuevoNombre.trim()) return;
-    const permisos = [...MODULOS_NAV, MODULO_AJUSTES, MODULO_CAMARAS].map((m) => ({ modulo: m, ver: false, editar: false }));
+    const permisos = [...MODULOS_NAV, MODULO_AJUSTES, MODULO_CAMARAS, MODULO_APLICACIONES].map((m) => ({ modulo: m, ver: false, editar: false }));
     const nuevoRol: Rol = {
       id: `rol-${Date.now()}`,
       nombre: nuevoNombre.trim(),
@@ -205,9 +197,9 @@ export function RolesTab() {
 
       {ajustes.roles.map((rol) => {
         const isOpen = expandedRol === rol.id;
-        const { nav: permisosNav, ajustes: permisoAjustes, camaras: permisoCamaras } = buildPermisosCompletos(rol.permisos);
-        const TOTAL_MODULOS = MODULOS_NAV.length + 2; // 11 nav + AJUSTES + CÁMARAS
-        const accesosCount = [...permisosNav, permisoAjustes, permisoCamaras].filter((p) => p.ver).length;
+        const { nav: permisosNav, ajustes: permisoAjustes, camaras: permisoCamaras, aplicaciones: permisoAplicaciones } = buildPermisosCompletos(rol.permisos);
+        const TOTAL_MODULOS = MODULOS_NAV.length + 3; // 11 nav + AJUSTES + CÁMARAS + APLICACIONES
+        const accesosCount = [...permisosNav, permisoAjustes, permisoCamaras, permisoAplicaciones].filter((p) => p.ver).length;
         const usuariosConRol = usuariosSupabase.filter(
           (u) => u.rolLabel.toLowerCase() === rol.nombre.trim().toLowerCase()
         );
@@ -218,13 +210,7 @@ export function RolesTab() {
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   {isOpen ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
-                  <RolNombreEditable
-                    nombre={rol.nombre}
-                    protegido={rol.nombre === "Director"}
-                    editing={editingRolId === rol.id}
-                    onCancel={() => setEditingRolId(null)}
-                    onSave={(nombre) => { renameRol(rol.id, nombre); setEditingRolId(null); }}
-                  />
+                  <span className="text-sm font-semibold">{rol.nombre}</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-muted-foreground">{accesosCount}/{TOTAL_MODULOS} con acceso</span>
@@ -282,20 +268,12 @@ export function RolesTab() {
                     </PopoverContent>
                   </Popover>
                   {rol.nombre !== "Director" && (
-                    <>
-                      <Button
-                        variant="ghost" size="icon" className="h-7 w-7"
-                        onClick={(e) => { e.stopPropagation(); setEditingRolId(rol.id); }}
-                      >
-                        <Pencil className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button
-                        variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10"
-                        onClick={(e) => { e.stopPropagation(); setDeleteRol(rol); }}
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
-                    </>
+                    <Button
+                      variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10"
+                      onClick={(e) => { e.stopPropagation(); setDeleteRol(rol); }}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
                   )}
                 </div>
               </div>
@@ -375,6 +353,23 @@ export function RolesTab() {
                       </div>
                     </div>
                   </div>
+
+                  <div className="rounded-md border-2 border-dashed border-muted-foreground/20 bg-muted/30 px-3 py-2">
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <Rocket className="h-3.5 w-3.5 text-muted-foreground" />
+                      <span className="text-[10px] font-bold text-muted-foreground tracking-wider">APLICACIONES Y CONTRASEÑAS</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium text-muted-foreground">Aplicaciones</span>
+                      <div className="flex flex-col items-center gap-0.5 w-24">
+                        <span className="text-[10px] text-muted-foreground font-bold">ACCESO</span>
+                        <Switch
+                          checked={permisoAplicaciones.ver}
+                          onCheckedChange={() => toggleAcceso(rol.id, MODULO_APLICACIONES)}
+                        />
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </CardContent>
             )}
@@ -427,51 +422,6 @@ export function RolesTab() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
-  );
-}
-
-// Componente inline para editar el nombre del rol (controlado por el padre)
-function RolNombreEditable({
-  nombre,
-  protegido,
-  editing,
-  onSave,
-  onCancel,
-}: {
-  nombre: string;
-  protegido: boolean;
-  editing: boolean;
-  onSave: (nombre: string) => void;
-  onCancel: () => void;
-}) {
-  const [value, setValue] = useState(nombre);
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => { setValue(nombre); }, [nombre, editing]);
-  useEffect(() => { if (editing) inputRef.current?.focus(); }, [editing]);
-
-  const confirm = (e: React.MouseEvent | React.KeyboardEvent) => {
-    e.stopPropagation();
-    onSave(value);
-  };
-
-  if (protegido || !editing) {
-    return <span className="text-sm font-semibold">{nombre}</span>;
-  }
-
-  return (
-    <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-      <Input
-        ref={inputRef}
-        value={value}
-        onChange={(e) => setValue(e.target.value)}
-        onKeyDown={(e) => { if (e.key === "Enter") confirm(e); if (e.key === "Escape") { setValue(nombre); onCancel(); } }}
-        className="h-6 text-sm py-0 w-40"
-      />
-      <Button variant="ghost" size="icon" className="h-6 w-6" onClick={confirm}>
-        <Check className="h-3.5 w-3.5 text-green-600" />
-      </Button>
     </div>
   );
 }

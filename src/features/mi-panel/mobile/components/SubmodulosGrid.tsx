@@ -51,7 +51,7 @@ interface Props {
 }
 
 export function SubmodulosGrid({ deptoKey }: Props) {
-  const { puedeVer, permisosLoaded, hasRole } = useAuth();
+  const { puedeVer, permisosLoaded, esAdminPlataforma } = useAuth();
 
   const section = allSections.find((s) => s.key === deptoKey);
   const hue = HUE_POR_KEY[deptoKey] ?? 220;
@@ -64,10 +64,10 @@ export function SubmodulosGrid({ deptoKey }: Props) {
 
   const permitido = useMemo(() => {
     if (!section) return false;
-    if (hasRole("director") || hasRole("admin")) return true;
+    if (esAdminPlataforma) return true;
     if (!permisosLoaded) return null; // aún cargando
     return puedeVer(section.modulo);
-  }, [section, hasRole, permisosLoaded, puedeVer]);
+  }, [section, esAdminPlataforma, permisosLoaded, puedeVer]);
 
   // Sin acceso (o departamento sin submódulos): estado vacío neutro.
   if (permitido === false || (permitido && items.length === 0)) {

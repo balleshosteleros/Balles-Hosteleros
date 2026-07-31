@@ -3,7 +3,7 @@
 import { usePathname, useRouter } from "next/navigation";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/features/layout/components/app-sidebar";
-import { AuthContext, esAccesoDepartamentos } from "@/features/auth/contexts/auth-context";
+import { AuthContext } from "@/features/auth/contexts/auth-context";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -94,10 +94,10 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const user = auth?.user;
   const profile = auth?.profile;
   const roles = auth?.roles ?? [];
-  // El conmutador "Mis Paneles / Mis Departamentos" es para dirección
-  // (director/admin) y gerencia. El resto solo dispone de "Mis Paneles".
-  // FUENTE ÚNICA: esAccesoDepartamentos (ver auth-context).
-  const esDireccion = esAccesoDepartamentos(roles);
+  // El conmutador "Mis Paneles / Mis Departamentos" se muestra a quien tiene
+  // acceso a ≥1 departamento según sus PERMISOS reales (o es admin de
+  // plataforma). Quien no tiene ningún departamento no ve el conmutador.
+  const esDireccion = auth?.tieneAccesoDepartamentos ?? false;
   const puedeVer = auth?.puedeVer ?? (() => false);
   const signOut = auth?.signOut ?? (() => {});
 

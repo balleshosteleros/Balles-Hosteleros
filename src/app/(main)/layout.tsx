@@ -38,6 +38,7 @@ export default async function MainLayout({ children }: { children: React.ReactNo
             userId: user.id,
             roles: p.appRoles as AppRole[],
             permisos: p.permisos,
+            esAdminPlataforma: p.esAdminPlataforma,
           }}
         />
       );

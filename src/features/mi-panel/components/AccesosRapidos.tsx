@@ -7,9 +7,10 @@ import {
   Crown, UtensilsCrossed, ChefHat, CheckCircle2, Package,
   Settings, type LucideIcon,
 } from "lucide-react";
-import { useAuth, type AppRole, ROLE_MODULES } from "@/features/auth/contexts/auth-context";
+import { useAuth } from "@/features/auth/contexts/auth-context";
 
 interface Acceso {
+  /** Nombre canónico del módulo en empresa_roles.permisos (con acentos). */
   modulo: string;
   href: string;
   label: string;
@@ -17,39 +18,28 @@ interface Acceso {
   color: string;
 }
 
+// El módulo de cada acceso usa el nombre REAL del permiso (empresa_roles),
+// para filtrarse por `puedeVer` según el rol del usuario. Ajustes se muestra
+// solo a admin de plataforma (no es un departamento con permiso propio).
 const ACCESOS: Acceso[] = [
-  { modulo: "*",            href: "/direccion",    label: "Dirección",    icon: Crown,          color: "text-amber-600" },
-  { modulo: "*",            href: "/sala",         label: "Sala",         icon: UtensilsCrossed, color: "text-rose-600" },
-  { modulo: "*",            href: "/cocina",       label: "Cocina",       icon: ChefHat,        color: "text-orange-600" },
-  { modulo: "gerencia",     href: "/gerencia",     label: "Gerencia",     icon: Briefcase,      color: "text-indigo-600" },
-  { modulo: "*",            href: "/calidad",      label: "Calidad",      icon: CheckCircle2,   color: "text-emerald-600" },
-  { modulo: "rrhh",         href: "/rrhh",         label: "RRHH",         icon: User,           color: "text-cyan-600" },
-  { modulo: "marketing",    href: "/marketing",    label: "Marketing",    icon: Camera,         color: "text-pink-600" },
-  { modulo: "logistica",    href: "/logistica",    label: "Logística",    icon: Package,        color: "text-violet-600" },
-  { modulo: "contabilidad", href: "/contabilidad", label: "Contabilidad", icon: Calculator,     color: "text-blue-600" },
-  { modulo: "gestoria",     href: "/gestoria",     label: "Gestoría",     icon: FileText,       color: "text-slate-600" },
-  { modulo: "juridico",     href: "/juridico",     label: "Jurídico",     icon: Scale,          color: "text-stone-600" },
-  { modulo: "ajustes",      href: "/ajustes",      label: "Ajustes",      icon: Settings,       color: "text-muted-foreground" },
+  { modulo: "DIRECCIÓN",       href: "/direccion",    label: "Dirección",    icon: Crown,          color: "text-amber-600" },
+  { modulo: "SALA",            href: "/sala",         label: "Sala",         icon: UtensilsCrossed, color: "text-rose-600" },
+  { modulo: "COCINA",          href: "/cocina",       label: "Cocina",       icon: ChefHat,        color: "text-orange-600" },
+  { modulo: "GERENCIA",        href: "/gerencia",     label: "Gerencia",     icon: Briefcase,      color: "text-indigo-600" },
+  { modulo: "CALIDAD",         href: "/calidad",      label: "Calidad",      icon: CheckCircle2,   color: "text-emerald-600" },
+  { modulo: "RECURSOS HUMANOS", href: "/rrhh",        label: "RRHH",         icon: User,           color: "text-cyan-600" },
+  { modulo: "MARKETING",       href: "/marketing",    label: "Marketing",    icon: Camera,         color: "text-pink-600" },
+  { modulo: "LOGÍSTICA",       href: "/logistica",    label: "Logística",    icon: Package,        color: "text-violet-600" },
+  { modulo: "CONTABILIDAD",    href: "/contabilidad", label: "Contabilidad", icon: Calculator,     color: "text-blue-600" },
+  { modulo: "GESTORÍA",        href: "/gestoria",     label: "Gestoría",     icon: FileText,       color: "text-slate-600" },
+  { modulo: "JURÍDICO",        href: "/juridico",     label: "Jurídico",     icon: Scale,          color: "text-stone-600" },
+  { modulo: "AJUSTES",         href: "/ajustes",      label: "Ajustes",      icon: Settings,       color: "text-muted-foreground" },
 ];
 
-function rolPermite(roles: AppRole[], modulo: string): boolean {
-  if (modulo === "*") {
-    return roles.some((r) => ROLE_MODULES[r]?.includes("*"));
-  }
-  return roles.some((r) => {
-    const allowed = ROLE_MODULES[r] ?? [];
-    return allowed.includes("*") || allowed.includes(modulo);
-  });
-}
-
 export function AccesosRapidos() {
-  const { roles } = useAuth();
+  const { puedeVer, permisosLoaded } = useAuth();
 
-  const items = ACCESOS.filter((a) => {
-    if (roles.length === 0) return false;
-    if (a.modulo === "*") return roles.some((r) => ROLE_MODULES[r]?.includes("*"));
-    return rolPermite(roles, a.modulo);
-  });
+  const items = permisosLoaded ? ACCESOS.filter((a) => puedeVer(a.modulo)) : [];
 
   if (items.length === 0) return null;
 

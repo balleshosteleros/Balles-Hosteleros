@@ -36,9 +36,9 @@ export interface ModulosVisibles {
 }
 
 export async function getModulosVisibles(): Promise<ModulosVisibles> {
-  const { permisos, empresaId, appRoles } = await getUserPermisos();
+  const { permisos, empresaId, esAdminPlataforma } = await getUserPermisos();
 
-  const esGlobal = appRoles.includes("director") || appRoles.includes("admin");
+  const esGlobal = esAdminPlataforma;
 
   const set = new Set<string>();
   if (esGlobal) {

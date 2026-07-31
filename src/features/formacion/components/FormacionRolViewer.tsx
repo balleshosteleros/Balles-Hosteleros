@@ -13,12 +13,14 @@ import {
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/features/auth/contexts/auth-context";
 
 interface Modulo {
   href: string;
   titulo: string;
   descripcion: string;
-  roles: string[]; // roles que ven este módulo (vacío = todos)
+  /** Nombre canónico del módulo en empresa_roles.permisos (con acentos). */
+  modulo: string;
 }
 
 const TODOS_MODULOS: Modulo[] = [
@@ -26,68 +28,69 @@ const TODOS_MODULOS: Modulo[] = [
     href: "/direccion",
     titulo: "Dirección",
     descripcion: "Visión, valores y estructura jerárquica de la empresa.",
-    roles: ["director", "admin"],
+    modulo: "DIRECCIÓN",
   },
   {
     href: "/sala",
     titulo: "Sala",
     descripcion: "Atención al cliente, reservas y temperaturas.",
-    roles: ["sala", "gerencia", "director", "admin"],
+    modulo: "SALA",
   },
   {
     href: "/cocina",
     titulo: "Cocina",
     descripcion: "Escandallos, partidas y elaboraciones.",
-    roles: ["cocina", "gerencia", "director", "admin"],
+    modulo: "COCINA",
   },
   {
     href: "/gerencia",
     titulo: "Gerencia",
     descripcion: "Mantenimiento, ratios, comunicados y descuentos.",
-    roles: ["gerencia", "director", "admin"],
+    modulo: "GERENCIA",
   },
   {
     href: "/calidad",
     titulo: "Calidad",
     descripcion: "Auditorías, inspecciones y control de empleados.",
-    roles: ["calidad", "gerencia", "director", "admin"],
+    modulo: "CALIDAD",
   },
   {
     href: "/rrhh",
     titulo: "Recursos Humanos",
     descripcion: "Empleados, fichajes, calendarios y formación.",
-    roles: ["rrhh", "gerencia", "director", "admin"],
+    modulo: "RECURSOS HUMANOS",
   },
   {
     href: "/marketing",
     titulo: "Marketing",
     descripcion: "Calendario, contenido, fidelización y captación.",
-    roles: ["marketing", "gerencia", "director", "admin"],
+    modulo: "MARKETING",
   },
   {
     href: "/logistica",
     titulo: "Logística",
     descripcion: "Proveedores, productos, pedidos, stock y subida de precio.",
-    roles: ["logistica", "gerencia", "director", "admin"],
+    modulo: "LOGÍSTICA",
   },
   {
     href: "/contabilidad",
     titulo: "Contabilidad",
     descripcion: "Facturas, impuestos, transacciones y conciliación.",
-    roles: ["contabilidad", "gerencia", "director", "admin"],
+    modulo: "CONTABILIDAD",
   },
 ];
 
 interface MaterialPuesto {
   puesto: string;
-  roles: string[]; // roles que ven este bloque de material
+  /** Nombre canónico del módulo cuyo permiso muestra este bloque de material. */
+  modulo: string;
   items: string[];
 }
 
 const MATERIAL_POR_PUESTO: MaterialPuesto[] = [
   {
     puesto: "Sala",
-    roles: ["sala"],
+    modulo: "SALA",
     items: [
       "Uniforme de sala (camisa, pantalón, delantal y mandil)",
       "Bolígrafo, libreta y abridor",
@@ -97,7 +100,7 @@ const MATERIAL_POR_PUESTO: MaterialPuesto[] = [
   },
   {
     puesto: "Cocina",
-    roles: ["cocina"],
+    modulo: "COCINA",
     items: [
       "Uniforme de cocina (chaquetilla, pantalón, gorro y zapato antideslizante)",
       "Cuchillos básicos y funda",
@@ -107,7 +110,7 @@ const MATERIAL_POR_PUESTO: MaterialPuesto[] = [
   },
   {
     puesto: "Logística",
-    roles: ["logistica"],
+    modulo: "LOGÍSTICA",
     items: [
       "EPI: zapato de seguridad y guantes",
       "Lectora de códigos / móvil corporativo",
@@ -117,7 +120,7 @@ const MATERIAL_POR_PUESTO: MaterialPuesto[] = [
   },
   {
     puesto: "Gerencia / Mandos",
-    roles: ["gerencia", "director", "admin"],
+    modulo: "GERENCIA",
     items: [
       "Móvil y portátil corporativo",
       "Acceso a comunicados, mantenimiento y ratios",
@@ -127,39 +130,18 @@ const MATERIAL_POR_PUESTO: MaterialPuesto[] = [
   },
 ];
 
-function modulosVisibles(userRoles: string[]): Modulo[] {
-  const esAdmin = userRoles.some((r) =>
-    ["admin", "director", "gerencia"].includes(r)
-  );
-  if (esAdmin) return TODOS_MODULOS;
-  return TODOS_MODULOS.filter(
-    (m) => m.roles.length === 0 || m.roles.some((r) => userRoles.includes(r))
-  );
-}
+export function FormacionRolViewer() {
+  // Filtramos por los PERMISOS reales del rol (empresa_roles.permisos): cada
+  // usuario repasa solo la formación de los módulos que tiene permitido ver.
+  const { puedeVer, profile } = useAuth();
 
-function materialVisible(userRoles: string[]): MaterialPuesto[] {
-  const esAdmin = userRoles.some((r) =>
-    ["admin", "director", "gerencia"].includes(r)
-  );
-  if (esAdmin) return MATERIAL_POR_PUESTO;
-  const filtered = MATERIAL_POR_PUESTO.filter((m) =>
-    m.roles.some((r) => userRoles.includes(r))
-  );
-  // Si no coincide ningún puesto específico, mostrar todo
-  return filtered.length > 0 ? filtered : MATERIAL_POR_PUESTO;
-}
+  const modulos = TODOS_MODULOS.filter((m) => puedeVer(m.modulo));
+  const materialFiltrado = MATERIAL_POR_PUESTO.filter((m) => puedeVer(m.modulo));
+  // Si su rol no casa con ningún bloque de material específico, mostramos todo
+  // (fallback informativo, no sensible).
+  const material = materialFiltrado.length > 0 ? materialFiltrado : MATERIAL_POR_PUESTO;
 
-interface Props {
-  userRoles: string[];
-}
-
-export function FormacionRolViewer({ userRoles }: Props) {
-  const modulos = modulosVisibles(userRoles);
-  const material = materialVisible(userRoles);
-
-  const rolLabel = userRoles.length > 0
-    ? userRoles[0].charAt(0).toUpperCase() + userRoles[0].slice(1)
-    : "General";
+  const rolLabel = profile?.rol_label?.trim() || "General";
 
   return (
     <div className="space-y-8">

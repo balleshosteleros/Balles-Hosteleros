@@ -19,7 +19,7 @@ export default async function AyudaPage() {
 
   if (!user) redirect("/");
 
-  const { esDirector } = await getRolContext();
+  const { esDirector, permisos } = await getRolContext();
   const roles = esDirector ? ["director"] : ["empleado"];
   const canEdit = esDirector;
 

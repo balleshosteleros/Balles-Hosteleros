@@ -5,18 +5,16 @@ import { createBrowserClient } from "@supabase/ssr";
 import type { User, Session, SupabaseClient } from "@supabase/supabase-js";
 import type { PermisoModulo } from "@/features/ajustes/data/ajustes";
 import { getUserPermisos } from "@/features/auth/actions/permisos-actions";
+import {
+  puedeVerModulo,
+  puedeEditarModulo,
+  tieneAccesoDepartamentos as calcAccesoDepartamentos,
+} from "@/features/auth/lib/permisos";
 
+// Etiqueta técnica LEGACY. La visibilidad de departamentos/módulos NO se decide
+// por estos valores, sino por permisos reales (`permisos` + `esAdminPlataforma`,
+// ver features/auth/lib/permisos.ts). Se conserva solo para lectores antiguos.
 export type AppRole = "admin" | "director" | "gerencia" | "responsable" | "empleado" | "solo_lectura";
-
-/**
- * Roles con acceso a la vista "Mis Departamentos" y al conmutador del header
- * ("Mis Paneles / Mis Departamentos"). Dirección (director/admin) ve todo por
- * bypass; gerencia lo ve filtrado por sus permisos (`puedeVer`). FUENTE ÚNICA:
- * cualquier gate de esa vista debe usar este helper, no comprobar roles a mano.
- */
-export function esAccesoDepartamentos(roles: AppRole[]): boolean {
-  return roles.includes("director") || roles.includes("admin") || roles.includes("gerencia");
-}
 
 export interface AuthProfile {
   nombre: string;
@@ -37,6 +35,10 @@ interface AuthContextValue {
   loading: boolean;
   permisos: PermisoModulo[];
   permisosLoaded: boolean;
+  /** Rol con `es_admin_plataforma` (DIRECCIÓN): bypass total de permisos. */
+  esAdminPlataforma: boolean;
+  /** Tiene ≥1 departamento visible (o es admin): ve "Mis Departamentos". */
+  tieneAccesoDepartamentos: boolean;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
   hasRole: (role: AppRole) => boolean;
@@ -45,11 +47,6 @@ interface AuthContextValue {
   puedeEditar: (modulo: string) => boolean;
 }
 
-// "Dirección" === "DIRECCIÓN" === " direccion " (acentos, case y espacios).
-const COMBINING_MARKS = /[̀-ͯ]/g;
-function normalizarModulo(m: string): string {
-  return m.normalize("NFD").replace(COMBINING_MARKS, "").toUpperCase().trim();
-}
 
 export const AuthContext = createContext<AuthContextValue | null>(null);
 
@@ -102,6 +99,7 @@ function getSupabase(): SupabaseClient | null {
 interface AuthCache {
   roles: AppRole[];
   permisos: PermisoModulo[];
+  esAdminPlataforma: boolean;
 }
 const LAST_USER_ID_KEY = "bh_last_user_id";
 function authCacheKey(userId: string) {
@@ -148,6 +146,7 @@ export interface AuthServerSeedPayload {
   userId: string;
   roles: AppRole[];
   permisos: PermisoModulo[];
+  esAdminPlataforma: boolean;
 }
 
 const AuthSeedContext = createContext<((p: AuthServerSeedPayload) => void) | null>(null);
@@ -186,6 +185,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // reintentos por la carrera de cookies) — varios cientos de ms innecesarios.
   const [loading, setLoading] = useState(initialCache === null);
   const [permisos, setPermisos] = useState<PermisoModulo[]>(initialCache?.permisos ?? []);
+  const [esAdminPlataforma, setEsAdminPlataforma] = useState<boolean>(
+    initialCache?.esAdminPlataforma ?? false,
+  );
   const [permisosLoaded, setPermisosLoaded] = useState(initialCache !== null);
 
   useEffect(() => {
@@ -228,6 +230,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           if (cached) {
             setRoles(cached.roles);
             setPermisos(cached.permisos);
+            setEsAdminPlataforma(cached.esAdminPlataforma ?? false);
             setPermisosLoaded(true);
             setLoading(false);
           }
@@ -263,6 +266,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             const nextProfile = (profileRes.data as AuthProfile | null) ?? null;
             const fetchedRoles = (permisosRes?.appRoles ?? []) as AppRole[];
             const fetchedPermisos = permisosRes?.permisos ?? [];
+            const fetchedEsAdmin = permisosRes?.esAdminPlataforma ?? false;
 
             // Race justo tras el login: el server action corre antes de que las
             // cookies de sesión estén propagadas, así que auth.getUser() devuelve
@@ -283,6 +287,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               permisosRes !== null && fetchedRoles.length === 0 && (cached?.roles.length ?? 0) > 0;
             const nextRoles = fetchFailedSilently ? cached!.roles : fetchedRoles;
             const nextPermisos = fetchFailedSilently ? cached!.permisos : fetchedPermisos;
+            const nextEsAdmin = fetchFailedSilently
+              ? (cached!.esAdminPlataforma ?? false)
+              : fetchedEsAdmin;
 
             if (fetchFailedSilently) {
               console.warn(
@@ -293,16 +300,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             if (nextProfile) setProfile(nextProfile);
             setRoles(nextRoles);
             setPermisos(nextPermisos);
+            setEsAdminPlataforma(nextEsAdmin);
             setPermisosLoaded(true);
             setLoading(false);
 
-            // Sincroniza el modo de vista por defecto con el ROL: director/admin
-            // → "departamentos", resto → "paneles". Así el conmutador del header
-            // y futuras cargas reflejan el rol real, y el director no arranca en
-            // el modo "paneles" equivocado.
+            // Sincroniza el modo de vista por defecto con los PERMISOS reales:
+            // quien tiene acceso a ≥1 departamento (o es admin de plataforma)
+            // arranca en "departamentos"; el resto en "paneles". Así respetamos
+            // los roles reales de Ajustes, sin nombres técnicos hardcodeados.
             if (typeof window !== "undefined") {
-              const esDir = nextRoles.includes("director") || nextRoles.includes("admin");
-              const modo = esDir ? "departamentos" : "paneles";
+              const accesoDeptos = calcAccesoDepartamentos(nextEsAdmin, nextPermisos);
+              const modo = accesoDeptos ? "departamentos" : "paneles";
               try {
                 window.localStorage.setItem("bh_view_mode", modo);
                 const maxAge = 365 * 24 * 60 * 60;
@@ -318,6 +326,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               writeAuthCache(userId, {
                 roles: nextRoles,
                 permisos: nextPermisos,
+                esAdminPlataforma: nextEsAdmin,
               });
             }
           };
@@ -326,6 +335,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setProfile(null);
           setRoles([]);
           setPermisos([]);
+          setEsAdminPlataforma(false);
           setPermisosLoaded(true);
           setLoading(false);
         }
@@ -351,15 +361,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!permisosLoaded || roles.length === 0) {
       setRoles(p.roles);
       setPermisos(p.permisos);
+      setEsAdminPlataforma(p.esAdminPlataforma);
       setPermisosLoaded(true);
       setLoading(false);
-      // Sincroniza el MODO DE VISTA con el rol, igual que loadFreshAuth. Sin
-      // esto, un director en su primer login veía el menú al instante pero en
-      // modo "paneles" (Mi Panel/Perfil) hasta que el SWR corregía — y si
+      // Sincroniza el MODO DE VISTA con los PERMISOS reales, igual que
+      // loadFreshAuth. Sin esto, quien tiene acceso a departamentos veía el menú
+      // al instante pero en modo "paneles" hasta que el SWR corregía — y si
       // navegaba en ese estado transitorio, acababa rebotado.
       if (typeof window !== "undefined") {
-        const esDir = p.roles.includes("director") || p.roles.includes("admin");
-        const modo = esDir ? "departamentos" : "paneles";
+        const accesoDeptos = calcAccesoDepartamentos(p.esAdminPlataforma, p.permisos);
+        const modo = accesoDeptos ? "departamentos" : "paneles";
         try {
           window.localStorage.setItem("bh_view_mode", modo);
           const maxAge = 365 * 24 * 60 * 60;
@@ -369,7 +380,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
       }
     }
-    writeAuthCache(p.userId, { roles: p.roles, permisos: p.permisos });
+    writeAuthCache(p.userId, {
+      roles: p.roles,
+      permisos: p.permisos,
+      esAdminPlataforma: p.esAdminPlataforma,
+    });
     if (typeof window !== "undefined") {
       try {
         window.localStorage.setItem(LAST_USER_ID_KEY, p.userId);
@@ -412,6 +427,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setSession(null);
     setProfile(null);
     setRoles([]);
+    setEsAdminPlataforma(false);
 
     try {
       await fetch("/api/auth/signout", { method: "POST", credentials: "include" });
@@ -433,24 +449,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
   }, [roles]);
 
-  // Bypass total para 'director' — el rol más alto en este SaaS.
-  // Para los demás roles se enforza empresa_roles.permisos. Si la lista de
-  // permisos está vacía y el usuario no es director, no ve nada salvo dashboard.
+  // FUENTE ÚNICA de permisos: admin de plataforma (DIRECCIÓN) ve todo; el resto
+  // según `empresa_roles.permisos`. Sin nombres de rol técnicos hardcodeados.
   const puedeVer = useCallback((modulo: string) => {
-    if (roles.includes("director") || roles.includes("admin")) return true;
-    const target = normalizarModulo(modulo);
-    return permisos.some((p) => p.ver && normalizarModulo(p.modulo) === target);
-  }, [roles, permisos]);
+    return puedeVerModulo(esAdminPlataforma, permisos, modulo);
+  }, [esAdminPlataforma, permisos]);
 
   const puedeEditar = useCallback((modulo: string) => {
-    if (roles.includes("director") || roles.includes("admin")) return true;
-    const target = normalizarModulo(modulo);
-    return permisos.some((p) => p.editar && normalizarModulo(p.modulo) === target);
-  }, [roles, permisos]);
+    return puedeEditarModulo(esAdminPlataforma, permisos, modulo);
+  }, [esAdminPlataforma, permisos]);
+
+  // ¿Ve la vista "Mis Departamentos"? Admin de plataforma o con ≥1 departamento
+  // permitido. Un rol sin ningún departamento no ve ni el conmutador.
+  const tieneAccesoDepartamentos = calcAccesoDepartamentos(esAdminPlataforma, permisos);
 
   return (
     <AuthContext.Provider value={{
       user, session, profile, roles, loading, permisos, permisosLoaded,
+      esAdminPlataforma, tieneAccesoDepartamentos,
       signIn, signOut, hasRole, canAccess, puedeVer, puedeEditar,
     }}>
       <AuthSeedContext.Provider value={seedFromServer}>
