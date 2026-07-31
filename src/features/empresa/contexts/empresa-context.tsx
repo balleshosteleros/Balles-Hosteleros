@@ -163,13 +163,19 @@ export function EmpresaProvider({ children }: { children: ReactNode }) {
   const [logoUrls, setLogoUrls] = useState<Record<string, string>>({});
   const [isotipoUrls, setIsotipoUrls] = useState<Record<string, string>>({});
 
-  // Cargar logos + isotipos desde Supabase, diferidos ~2,5 s: son cosméticos
-  // (hay fallback) y como server actions competirían en la cola serializada del
-  // arranque por delante de getUserPermisos, retrasando el menú.
+  // El ISOTIPO es el icono del selector de empresa (siempre visible), así que se
+  // carga de inmediato: si se difiere, durante la ventana de carga el fallback
+  // degradaría al logotipo con texto y se vería el salto isotipo↔logotipo.
+  useEffect(() => {
+    getIsotipoUrls().then(setIsotipoUrls).catch(() => {});
+  }, []);
+
+  // El LOGO completo (con texto) solo lo usa la pantalla de ajustes, no el
+  // avatar. Se difiere ~2,5 s: como server action competiría en la cola
+  // serializada del arranque por delante de getUserPermisos, retrasando el menú.
   useEffect(() => {
     const t = setTimeout(() => {
       getLogoUrls().then(setLogoUrls).catch(() => {});
-      getIsotipoUrls().then(setIsotipoUrls).catch(() => {});
     }, 2500);
     return () => clearTimeout(t);
   }, []);
@@ -307,11 +313,12 @@ export function EmpresaProvider({ children }: { children: ReactNode }) {
     [logoUrls, allAjustes],
   );
 
-  // Isotipo (icono sin texto) — fallback al logo completo si no hay isotipo.
+  // Isotipo (icono sin texto). NO cae al logo con texto: si no hay isotipo,
+  // devuelve "" para que el avatar muestre las iniciales. Así se evita el salto
+  // "logotipo→isotipo" que se veía al recargar mientras el isotipo cargaba.
   const getIsotipoUrl = useCallback(
-    (eid: string) =>
-      isotipoUrls[eid] ?? logoUrls[eid] ?? allAjustes[eid]?.datosGenerales?.logoUrl ?? "",
-    [isotipoUrls, logoUrls, allAjustes],
+    (eid: string) => isotipoUrls[eid] ?? "",
+    [isotipoUrls],
   );
 
   // Actualiza el logo en el contexto inmediatamente tras subir/eliminar

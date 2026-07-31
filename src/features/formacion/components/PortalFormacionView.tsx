@@ -40,7 +40,7 @@ import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
 const TRES_MESES_MS = 1000 * 60 * 60 * 24 * 90;
 
 export function PortalFormacionView() {
-  const { profile, roles } = useAuth();
+  const { profile, puedeEditar } = useAuth();
   const { empresaActual } = useEmpresa();
   const userKey = profile?.email ?? "anon";
   const { puesto, setPuesto, ready } = usePuestoActual(userKey);
@@ -87,9 +87,9 @@ export function PortalFormacionView() {
   }
 
   const nombre = profile?.nombre ?? "Compañero";
-  const esResponsableODirector = roles.some((r) =>
-    ["admin", "director", "gerencia", "responsable"].includes(r),
-  );
+  // La gestión de formación por puesto vive en RRHH: la habilita quien puede
+  // EDITAR el módulo de RRHH (admin de plataforma incluido, vía puedeEditar).
+  const esResponsableODirector = puedeEditar("RECURSOS HUMANOS");
 
   if (!ready) {
     return <LoadingSpinner className="p-4 md:p-6" />;

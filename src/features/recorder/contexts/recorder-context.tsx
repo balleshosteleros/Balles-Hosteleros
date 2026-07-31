@@ -47,6 +47,8 @@ interface RecorderContextValue {
   /** Departamento elegido para guardar la próxima grabación. */
   selectedDepartamento: string | null;
   setSelectedDepartamento: (dep: string | null) => void;
+  /** Recarga los departamentos accesibles según el rol vigente. */
+  refreshDepartamentos: () => Promise<string[]>;
   startRecording: (title: string) => Promise<void>;
   pauseRecording: () => void;
   resumeRecording: () => void;
@@ -93,6 +95,7 @@ export function formatDuration(seconds: number): string {
 
 export function RecorderProvider({ children }: { children: ReactNode }) {
   const { setState, setElapsed, setCountdownValue } = useRecordingStore();
+  const isDrawerOpen = useRecordingStore((s) => s.isDrawerOpen);
   const [options, setOptions] = useState<RecordOptions>(DEFAULT_OPTIONS);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<RecordingResult | null>(null);
@@ -108,22 +111,35 @@ export function RecorderProvider({ children }: { children: ReactNode }) {
     selectedDepartamentoRef.current = selectedDepartamento;
   }, [selectedDepartamento]);
 
-  // Cargar departamentos accesibles una vez. Si solo hay uno, se preselecciona.
-  useEffect(() => {
-    let alive = true;
-    fetch("/api/recordings/departamentos")
-      .then((res) => (res.ok ? res.json() : { departamentos: [] }))
-      .then((data) => {
-        if (!alive) return;
-        const list: string[] = Array.isArray(data?.departamentos) ? data.departamentos : [];
-        setDepartamentos(list);
-        if (list.length === 1) setSelectedDepartamento(list[0]);
-      })
-      .catch(() => {});
-    return () => {
-      alive = false;
-    };
+  // Recarga los departamentos accesibles según el ROL VIGENTE. Se llama al
+  // montar y cada vez que se abre el drawer, para que — si el rol del usuario
+  // cambia — las carpetas visibles y las opciones de guardado se actualicen
+  // sin depender de un F5. Depura la selección si el depto elegido ya no existe.
+  const refreshDepartamentos = useCallback(async (): Promise<string[]> => {
+    try {
+      const res = await fetch("/api/recordings/departamentos", { cache: "no-store" });
+      const data = res.ok ? await res.json() : { departamentos: [] };
+      const list: string[] = Array.isArray(data?.departamentos) ? data.departamentos : [];
+      setDepartamentos(list);
+      setSelectedDepartamento((prev) => {
+        if (list.length === 1) return list[0]; // uno solo → auto
+        if (prev && !list.includes(prev)) return null; // el elegido ya no es accesible
+        return prev;
+      });
+      return list;
+    } catch {
+      return [];
+    }
   }, []);
+
+  useEffect(() => {
+    refreshDepartamentos();
+  }, [refreshDepartamentos]);
+
+  // Al abrir el drawer, recargar por si el rol cambió desde la última vez.
+  useEffect(() => {
+    if (isDrawerOpen) refreshDepartamentos();
+  }, [isDrawerOpen, refreshDepartamentos]);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
@@ -592,6 +608,7 @@ export function RecorderProvider({ children }: { children: ReactNode }) {
     departamentos,
     selectedDepartamento,
     setSelectedDepartamento,
+    refreshDepartamentos,
     startRecording,
     pauseRecording,
     resumeRecording,

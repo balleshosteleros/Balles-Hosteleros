@@ -19,8 +19,7 @@ export default async function AyudaPage() {
 
   if (!user) redirect("/");
 
-  const { esDirector, permisos } = await getRolContext();
-  const roles = esDirector ? ["director"] : ["empleado"];
+  const { esDirector } = await getRolContext();
   const canEdit = esDirector;
 
   let viewerData: Awaited<ReturnType<typeof listFaqsForCurrentUser>> = [];
@@ -54,7 +53,6 @@ export default async function AyudaPage() {
     <AyudaPortal
       viewerData={viewerData}
       adminData={adminData}
-      userRoles={roles}
       conocimiento={conocimiento}
       estadoConocimiento={estadoConocimiento}
     />

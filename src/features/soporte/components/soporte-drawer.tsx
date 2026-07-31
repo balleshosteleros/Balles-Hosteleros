@@ -480,7 +480,7 @@ export function SoporteDrawer({ children }: SoporteDrawerProps) {
         {/* ── FORMACIÓN INICIAL ── */}
         {vista === "formacion" && (
           <div className="flex-1 overflow-y-auto p-5">
-            <FormacionRolViewer userRoles={roles} />
+            <FormacionRolViewer />
           </div>
         )}
 

@@ -14,8 +14,7 @@ export default async function ComandasPage() {
           {permisos.reason ?? "No tienes permisos."}
         </p>
         <p className="text-xs text-muted-foreground">
-          Usuario: {permisos.userId ?? "anónimo"} · Roles:{" "}
-          {permisos.roles.length > 0 ? permisos.roles.join(", ") : "(ninguno asignado)"}
+          Usuario: {permisos.userId ?? "anónimo"}
         </p>
       </div>
     );

@@ -21,7 +21,6 @@ interface EstadoIndice {
 interface AyudaPortalProps {
   viewerData: FaqsByCategory[];
   adminData: Faq[] | null; // null si el usuario no puede editar
-  userRoles?: string[];    // roles del usuario para filtrar formación
   conocimiento?: ConocimientoChunk[] | null; // base del asistente (solo admin)
   estadoConocimiento?: EstadoIndice | null;
 }
@@ -29,7 +28,6 @@ interface AyudaPortalProps {
 export function AyudaPortal({
   viewerData,
   adminData,
-  userRoles = [],
   conocimiento = null,
   estadoConocimiento = null,
 }: AyudaPortalProps) {
@@ -60,7 +58,7 @@ export function AyudaPortal({
         </TabsContent>
 
         <TabsContent value="formacion" className="mt-0">
-          <FormacionRolViewer userRoles={userRoles} />
+          <FormacionRolViewer />
         </TabsContent>
 
         {canEdit && (

@@ -34,7 +34,7 @@ function EmpresaAvatar({ empresa, logoUrl, size = "md" }: { empresa: Empresa; lo
 }
 
 export function EmpresaSelector() {
-  // Avatar pequeño = ISOTIPO (icono sin texto). Fallback al logo completo si no hay isotipo.
+  // Avatar pequeño = ISOTIPO (icono sin texto). Si no hay isotipo, iniciales (nunca el logo con texto).
   const { empresas, empresaActual, setEmpresaId, getIsotipoUrl } = useEmpresa();
   const [open, setOpen] = useState(false);
 
