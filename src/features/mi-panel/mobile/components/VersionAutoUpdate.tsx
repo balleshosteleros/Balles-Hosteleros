@@ -14,6 +14,12 @@ import { useEffect, useRef } from "react";
  * actualización como pendiente y la aplica en cuanto la app pasa a segundo plano
  * o cuando vuelves a ella —momentos en los que una recarga no interrumpe nada—.
  *
+ * iOS standalone: al reabrir la app, iOS suele restaurar el snapshot congelado
+ * SIN disparar `visibilitychange` ni `focus` (por eso antes no se actualizaba y
+ * había que cerrarla y abrirla a mano). El evento fiable en ese caso es
+ * `pageshow` con `event.persisted === true` (restauración desde bfcache), que sí
+ * escuchamos aquí: al volver así, comprobamos versión (o aplicamos la pendiente).
+ *
  * Sin UI: devuelve null.
  */
 const BAKED = process.env.NEXT_PUBLIC_BUILD_SHA ?? "dev";
@@ -89,17 +95,32 @@ export function VersionAutoUpdate() {
       else void comprobar();
     };
 
+    // Restauración del snapshot en iOS standalone (bfcache). Es un "reingreso":
+    // tratamos la próxima comprobación como segura para recargar de inmediato
+    // (como el primer arranque), porque el usuario acaba de volver a la app.
+    const onPageShow = (e: PageTransitionEvent) => {
+      if (!e.persisted) return;
+      if (pendiente.current) {
+        recargar(pendiente.current);
+        return;
+      }
+      primerChequeo.current = true;
+      void comprobar();
+    };
+
     // Al montar (app recién abierta), al volver a primer plano y cada minuto.
     void comprobar();
     document.addEventListener("visibilitychange", onHidden);
     document.addEventListener("visibilitychange", onVisible);
     window.addEventListener("focus", onVisible);
+    window.addEventListener("pageshow", onPageShow);
     const id = window.setInterval(comprobar, CHECK_MS);
 
     return () => {
       document.removeEventListener("visibilitychange", onHidden);
       document.removeEventListener("visibilitychange", onVisible);
       window.removeEventListener("focus", onVisible);
+      window.removeEventListener("pageshow", onPageShow);
       window.clearInterval(id);
     };
   }, []);
