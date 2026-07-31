@@ -40,6 +40,13 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from "@/components/ui/select";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
@@ -199,29 +206,27 @@ function RecordingContent() {
         {departamentos.length > 1 && (
           <div className="space-y-2">
             <Label htmlFor="rec-depto">Guardar en departamento</Label>
-            <div className="grid grid-cols-2 gap-2">
-              {departamentos.map((dep) => {
-                const active = selectedDepartamento === dep;
-                return (
-                  <button
-                    key={dep}
-                    type="button"
-                    onClick={() => setSelectedDepartamento(dep)}
-                    className={cn(
-                      "flex items-center gap-2 rounded-lg border px-3 py-2 text-left text-sm transition-all",
-                      active
-                        ? "border-red-500 bg-red-50/50 ring-1 ring-red-500/20 font-medium"
-                        : "border-border bg-background hover:bg-muted/50 text-muted-foreground",
-                    )}
-                  >
-                    <FolderClosed
-                      className={cn("h-4 w-4 shrink-0", active ? "text-red-600" : "text-muted-foreground")}
-                    />
-                    <span className="truncate capitalize">{dep.toLowerCase()}</span>
-                  </button>
-                );
-              })}
-            </div>
+            <Select
+              value={selectedDepartamento ?? undefined}
+              onValueChange={(v) => setSelectedDepartamento(v)}
+            >
+              <SelectTrigger
+                id="rec-depto"
+                className={cn(needsDepartamento && "border-amber-400 ring-1 ring-amber-300")}
+              >
+                <SelectValue placeholder="Elige un departamento…" />
+              </SelectTrigger>
+              <SelectContent>
+                {departamentos.map((dep) => (
+                  <SelectItem key={dep} value={dep}>
+                    <span className="flex items-center gap-2 capitalize">
+                      <FolderClosed className="h-4 w-4 text-muted-foreground" />
+                      {dep.toLowerCase()}
+                    </span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             {needsDepartamento && (
               <p className="text-xs text-amber-600">
                 Elige en qué departamento se guardará la grabación.
@@ -677,36 +682,25 @@ function RecordingsList() {
       </div>
 
       {folders.length > 1 && (
-        <div className="flex flex-wrap gap-1.5">
-          <button
-            type="button"
-            onClick={() => setFolder(null)}
-            className={cn(
-              "px-2.5 py-1 rounded-full text-[11px] font-medium border transition-colors",
-              folder === null
-                ? "border-red-500 bg-red-50 text-red-700"
-                : "border-border bg-background text-muted-foreground hover:bg-muted/50",
-            )}
-          >
-            Todas
-          </button>
-          {folders.map((dep) => (
-            <button
-              key={dep}
-              type="button"
-              onClick={() => setFolder(dep)}
-              className={cn(
-                "flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-medium border transition-colors capitalize",
-                folder === dep
-                  ? "border-red-500 bg-red-50 text-red-700"
-                  : "border-border bg-background text-muted-foreground hover:bg-muted/50",
-              )}
-            >
-              <FolderClosed className="h-3 w-3" />
-              {dep.toLowerCase()}
-            </button>
-          ))}
-        </div>
+        <Select
+          value={folder ?? "__todas__"}
+          onValueChange={(v) => setFolder(v === "__todas__" ? null : v)}
+        >
+          <SelectTrigger className="h-8 text-xs">
+            <span className="flex items-center gap-2">
+              <FolderClosed className="h-3.5 w-3.5 text-muted-foreground" />
+              <SelectValue />
+            </span>
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="__todas__">Todas las carpetas</SelectItem>
+            {folders.map((dep) => (
+              <SelectItem key={dep} value={dep}>
+                <span className="capitalize">{dep.toLowerCase()}</span>
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       )}
 
       {recordings.length > 3 && (
