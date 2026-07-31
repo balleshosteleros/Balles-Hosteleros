@@ -5,11 +5,11 @@ import { toast } from "sonner";
 import {
   CalendarDays, Plus, ChevronLeft, ChevronRight, Wallet, FileText,
   Settings, Trash2, Download, CheckCircle2, AlertTriangle, ArrowDownToLine,
-  ArrowUpFromLine, TrendingUp, Receipt, X,
+  ArrowUpFromLine, TrendingUp, Receipt, X, Repeat, Pencil, CalendarClock,
 } from "lucide-react";
 import {
   format, startOfMonth, endOfMonth, eachDayOfInterval, getDay, addMonths,
-  subMonths, isSameDay, parseISO,
+  subMonths, isSameDay, parseISO, differenceInCalendarWeeks, startOfWeek,
 } from "date-fns";
 import { es } from "date-fns/locale";
 import { Badge } from "@/components/ui/badge";
@@ -31,7 +31,9 @@ import {
 } from "@/components/ui/select";
 import {
   listCierres, createCierre, deleteCierre, getCierresConfig, updateCierresConfig,
+  listCierresProgramaciones, upsertCierreProgramacion, deleteCierreProgramacion,
   type CierreRow, type CierresConfig, type CierreModo, type CierreGasto, type CierreTipo,
+  type CierreProgramacion,
 } from "@/features/gerencia/actions/cierres-actions";
 import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
 import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
@@ -111,6 +113,44 @@ function fmtSize(bytes: number | null): string {
 // Convierte el getDay() de JS (0=Dom..6=Sab) a nuestro orden (0=Lun..6=Dom)
 function jsDayToLunFirst(d: Date): number {
   return (getDay(d) + 6) % 7;
+}
+
+// ¿Este día concreto cae dentro de una programación periódica?
+// Regla: día de la semana coincide, dentro del rango de fechas, y la semana
+// respeta el intervalo (cada N semanas contando desde fecha_inicio).
+function diaEnProgramacion(dia: Date, p: CierreProgramacion): boolean {
+  if (!p.activo) return false;
+  if (!p.dias_semana.includes(jsDayToLunFirst(dia))) return false;
+  const inicio = parseISO(p.fecha_inicio);
+  const key = format(dia, "yyyy-MM-dd");
+  if (key < p.fecha_inicio) return false;
+  if (p.fecha_fin && key > p.fecha_fin) return false;
+  if (p.intervalo_semanas <= 1) return true;
+  // Semanas transcurridas desde el inicio (semana empieza en lunes).
+  const semanas = differenceInCalendarWeeks(
+    startOfWeek(dia, { weekStartsOn: 1 }),
+    startOfWeek(inicio, { weekStartsOn: 1 }),
+    { weekStartsOn: 1 },
+  );
+  return semanas % p.intervalo_semanas === 0;
+}
+
+// Descripción legible de la periodicidad (para la lista de reglas).
+function describirProgramacion(p: CierreProgramacion): string {
+  const nombres = p.dias_semana
+    .map((d) => DIAS_SEMANA.find((x) => x.value === d)?.label ?? "")
+    .filter(Boolean);
+  const dias = nombres.length === 0
+    ? "sin días"
+    : nombres.length === 1
+      ? nombres[0]
+      : `${nombres.slice(0, -1).join(", ")} y ${nombres[nombres.length - 1]}`;
+  const cada = p.intervalo_semanas <= 1
+    ? "Cada semana"
+    : p.intervalo_semanas === 2
+      ? "Cada 2 semanas"
+      : `Cada ${p.intervalo_semanas} semanas`;
+  return `${cada} · ${dias}`;
 }
 
 export function CierresView() {

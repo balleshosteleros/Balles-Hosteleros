@@ -45,6 +45,27 @@ export interface CierresConfig {
   dia_semana: number | null;
 }
 
+// Regla de cierre periódica (estilo Google Calendar): "cada N semanas, estos días".
+export interface CierreProgramacion {
+  id: string;
+  nombre: string;
+  intervalo_semanas: number;   // 1 = cada semana, 2 = quincenal, ...
+  dias_semana: number[];       // 0=Lun .. 6=Dom (mismo orden que la UI)
+  fecha_inicio: string;        // YYYY-MM-DD
+  fecha_fin: string | null;    // null = sin fin
+  activo: boolean;
+}
+
+export interface CierreProgramacionInput {
+  id?: string;
+  nombre: string;
+  intervalo_semanas: number;
+  dias_semana: number[];
+  fecha_inicio: string;
+  fecha_fin: string | null;
+  activo: boolean;
+}
+
 async function getContext() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -410,6 +431,115 @@ export async function updateCierresConfig(input: { modo: CierreModo; dia_semana:
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Error desconocido";
     console.error("[cierres:cfg:set] excepción:", msg);
+    return { ok: false, error: msg };
+  }
+}
+
+// ── Programaciones periódicas de cierre ──────────────────────
+
+function normalizarDias(dias: unknown): number[] {
+  if (!Array.isArray(dias)) return [];
+  const set = new Set<number>();
+  for (const d of dias) {
+    const n = Number(d);
+    if (Number.isInteger(n) && n >= 0 && n <= 6) set.add(n);
+  }
+  return [...set].sort((a, b) => a - b);
+}
+
+export async function listCierresProgramaciones(): Promise<{ ok: true; data: CierreProgramacion[] } | { ok: false; error: string }> {
+  try {
+    const { supabase, empresaId } = await getContext();
+    if (!empresaId) return { ok: false, error: "No autenticado" };
+
+    const { data, error } = await supabase
+      .from("cierres_programaciones")
+      .select("id, nombre, intervalo_semanas, dias_semana, fecha_inicio, fecha_fin, activo")
+      .eq("empresa_id", empresaId)
+      .order("created_at", { ascending: true });
+
+    if (error) {
+      console.error("[cierres:prog:list]", error.message);
+      return { ok: false, error: error.message };
+    }
+
+    const rows: CierreProgramacion[] = (data ?? []).map((r) => ({
+      id: r.id as string,
+      nombre: ((r.nombre as string | null) ?? "Cierre").trim() || "Cierre",
+      intervalo_semanas: Number(r.intervalo_semanas ?? 1) || 1,
+      dias_semana: normalizarDias(r.dias_semana),
+      fecha_inicio: ((r.fecha_inicio as string) ?? "").slice(0, 10),
+      fecha_fin: r.fecha_fin ? ((r.fecha_fin as string).slice(0, 10)) : null,
+      activo: Boolean(r.activo),
+    }));
+    return { ok: true, data: rows };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Error desconocido";
+    console.error("[cierres:prog:list] excepción:", msg);
+    return { ok: false, error: msg };
+  }
+}
+
+export async function upsertCierreProgramacion(input: CierreProgramacionInput): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const { supabase, empresaId } = await getContext();
+    if (!empresaId) return { ok: false, error: "No autenticado" };
+
+    const dias = normalizarDias(input.dias_semana);
+    if (dias.length === 0) return { ok: false, error: "Elige al menos un día de la semana" };
+    if (!input.fecha_inicio) return { ok: false, error: "La fecha de inicio es obligatoria" };
+    const intervalo = Math.min(52, Math.max(1, Math.round(Number(input.intervalo_semanas) || 1)));
+    if (input.fecha_fin && input.fecha_fin < input.fecha_inicio) {
+      return { ok: false, error: "La fecha de fin no puede ser anterior a la de inicio" };
+    }
+
+    const payload = {
+      empresa_id: empresaId,
+      nombre: (input.nombre || "").trim() || "Cierre",
+      intervalo_semanas: intervalo,
+      dias_semana: dias,
+      fecha_inicio: input.fecha_inicio,
+      fecha_fin: input.fecha_fin || null,
+      activo: input.activo,
+      updated_at: new Date().toISOString(),
+    };
+
+    const q = input.id
+      ? supabase.from("cierres_programaciones").update(payload).eq("id", input.id).eq("empresa_id", empresaId)
+      : supabase.from("cierres_programaciones").insert(payload);
+
+    const { error } = await q;
+    if (error) {
+      console.error("[cierres:prog:upsert]", error.message);
+      return { ok: false, error: error.message };
+    }
+    return { ok: true };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Error desconocido";
+    console.error("[cierres:prog:upsert] excepción:", msg);
+    return { ok: false, error: msg };
+  }
+}
+
+export async function deleteCierreProgramacion(id: string): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const { supabase, empresaId } = await getContext();
+    if (!empresaId) return { ok: false, error: "No autenticado" };
+
+    const { error } = await supabase
+      .from("cierres_programaciones")
+      .delete()
+      .eq("id", id)
+      .eq("empresa_id", empresaId);
+
+    if (error) {
+      console.error("[cierres:prog:delete]", error.message);
+      return { ok: false, error: error.message };
+    }
+    return { ok: true };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Error desconocido";
+    console.error("[cierres:prog:delete] excepción:", msg);
     return { ok: false, error: msg };
   }
 }
