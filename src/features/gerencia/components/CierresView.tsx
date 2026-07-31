@@ -53,6 +53,19 @@ const TIPOS_MOVIMIENTO: { value: CierreTipo; label: string }[] = [
   { value: "ingreso", label: "Ingreso" },
 ];
 
+const TIPO_LABEL: Record<CierreTipo, string> = {
+  cierre: "Cierre",
+  retirada: "Retirada",
+  ingreso: "Ingreso",
+};
+
+// Color del badge por tipo (cierre entra efectivo; retirada/ingreso lo sacan).
+const TIPO_BADGE_CLASS: Record<CierreTipo, string> = {
+  cierre: "bg-emerald-50 text-emerald-800 border-emerald-300",
+  retirada: "bg-amber-50 text-amber-800 border-amber-300",
+  ingreso: "bg-sky-50 text-sky-800 border-sky-300",
+};
+
 const DIAS_SEMANA = [
   { value: 0, label: "Lunes" },
   { value: 1, label: "Martes" },
@@ -79,6 +92,13 @@ interface GastoFila {
 
 function fmtEuro(n: number): string {
   return new Intl.NumberFormat("es-ES", { style: "currency", currency: "EUR" }).format(n);
+}
+
+// Efecto de cada movimiento sobre el efectivo acumulado:
+// solo el cierre SUMA efectivo a caja. Retirada e ingreso lo SACAN (restan):
+// una retirada saca dinero del cajón; un ingreso lo mete en el banco.
+function signoEfectivo(tipo: CierreTipo): 1 | -1 {
+  return tipo === "cierre" ? 1 : -1;
 }
 
 function fmtSize(bytes: number | null): string {
@@ -206,19 +226,20 @@ export function CierresView() {
       if (c.cuadra) cuadran++;
       else descuadrados++;
       saldoNeto += c.descuadre;
-      acumuladoEfectivo += c.efectivo_retirado;
+      acumuladoEfectivo += signoEfectivo(c.tipo) * c.efectivo_retirado;
       acumuladoGastos += c.total_gastos;
     });
     return { total, cuadran, descuadrados, saldoNeto, acumuladoEfectivo, acumuladoGastos };
   }, [cierres]);
 
-  // Acumulado corriente por cierre: suma cronológica de las retiradas hasta esa fecha.
+  // Acumulado corriente por movimiento: running total cronológico del efectivo.
+  // Cierre suma; retirada e ingreso restan (sacan efectivo de caja).
   // (cierres viene descendente; recorremos en orden ascendente para el running total.)
   const acumuladoPorId = useMemo(() => {
     const m: Record<string, number> = {};
     let run = 0;
     [...cierres].reverse().forEach((c) => {
-      run += c.efectivo_retirado;
+      run += signoEfectivo(c.tipo) * c.efectivo_retirado;
       m[c.id] = run;
     });
     return m;
@@ -231,6 +252,7 @@ export function CierresView() {
 
   const columnasDef: ToolbarColumna[] = [
     { campo: "fecha", label: "Fecha", bloqueada: true },
+    { campo: "tipo", label: "Tipo" },
     { campo: "semana", label: "Semana" },
     { campo: "efectivo", label: "Efectivo retirado" },
     { campo: "total", label: "Total contado" },
@@ -246,6 +268,7 @@ export function CierresView() {
 
   const headDe: Record<string, ReactNode> = {
     fecha: <TableHead key="fecha">Fecha</TableHead>,
+    tipo: <TableHead key="tipo">Tipo</TableHead>,
     semana: <TableHead key="semana">Semana</TableHead>,
     efectivo: <TableHead key="efectivo" className="text-right">Efectivo retirado</TableHead>,
     total: <TableHead key="total" className="text-right">Total contado</TableHead>,
@@ -261,10 +284,21 @@ export function CierresView() {
         {format(parseISO(c.fecha), "dd MMM yyyy", { locale: es })}
       </TableCell>
     ),
+    tipo: (
+      <TableCell key="tipo">
+        <Badge variant="outline" className={`text-xs ${TIPO_BADGE_CLASS[c.tipo]}`}>
+          {TIPO_LABEL[c.tipo]}
+        </Badge>
+      </TableCell>
+    ),
     semana: (
       <TableCell key="semana" className="text-xs text-muted-foreground">{c.semana_iso ?? "—"}</TableCell>
     ),
-    efectivo: <TableCell key="efectivo" className="text-right">{fmtEuro(c.efectivo_retirado)}</TableCell>,
+    efectivo: (
+      <TableCell key="efectivo" className={`text-right ${signoEfectivo(c.tipo) < 0 ? "text-red-700" : ""}`}>
+        {signoEfectivo(c.tipo) < 0 && c.efectivo_retirado > 0 ? "−" : ""}{fmtEuro(c.efectivo_retirado)}
+      </TableCell>
+    ),
     total: <TableCell key="total" className="text-right">{fmtEuro(c.total_contado)}</TableCell>,
     estado: (
       <TableCell key="estado">
@@ -291,7 +325,7 @@ export function CierresView() {
       </TableCell>
     ),
     acumulado: (
-      <TableCell key="acumulado" className="text-right font-semibold text-emerald-700">
+      <TableCell key="acumulado" className={`text-right font-semibold ${(acumuladoPorId[c.id] ?? 0) < 0 ? "text-red-700" : "text-emerald-700"}`}>
         {fmtEuro(acumuladoPorId[c.id] ?? 0)}
       </TableCell>
     ),
