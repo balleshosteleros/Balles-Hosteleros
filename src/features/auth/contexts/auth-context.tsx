@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useEffect, useLayoutEffect, useState, ReactNode, useCallback } from "react";
+import { createContext, useContext, useEffect, useLayoutEffect, useRef, useState, ReactNode, useCallback } from "react";
 import { createBrowserClient } from "@supabase/ssr";
 import type { User, Session, SupabaseClient } from "@supabase/supabase-js";
 import type { PermisoModulo } from "@/features/ajustes/data/ajustes";
@@ -8,6 +8,8 @@ import { getUserPermisos } from "@/features/auth/actions/permisos-actions";
 import {
   puedeVerModulo,
   puedeEditarModulo,
+  puedeVerHerramienta,
+  esHerramientaBarra,
   tieneAccesoDepartamentos as calcAccesoDepartamentos,
 } from "@/features/auth/lib/permisos";
 
@@ -42,7 +44,6 @@ interface AuthContextValue {
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
   hasRole: (role: AppRole) => boolean;
-  canAccess: (path: string) => boolean;
   puedeVer: (modulo: string) => boolean;
   puedeEditar: (modulo: string) => boolean;
 }
@@ -50,32 +51,16 @@ interface AuthContextValue {
 
 export const AuthContext = createContext<AuthContextValue | null>(null);
 
-const ROLE_MODULES: Record<AppRole, string[]> = {
-  admin: ["*"],
-  director: ["*"],
-  gerencia: ["dashboard", "gerencia", "rrhh", "contabilidad", "marketing", "logistica", "ajustes"],
-  responsable: ["dashboard", "rrhh", "gerencia"],
-  empleado: ["dashboard", "rrhh"],
-  solo_lectura: ["dashboard"],
-};
-
-function getModuloFromPath(path: string): string {
-  if (path === "/") return "dashboard";
-  const seg = path.split("/")[1];
-  const map: Record<string, string> = {
-    gerencia: "gerencia",
-    direccion: "gerencia",
-    contabilidad: "contabilidad",
-    gestoria: "gestoria",
-    juridico: "juridico",
-    rrhh: "rrhh",
-    marketing: "marketing",
-    logistica: "logistica",
-    ajustes: "ajustes",
-    ayuda: "ayuda",
-  };
-  return map[seg] ?? "dashboard";
+// Compara dos listas de permisos por contenido (módulo + ver + editar), sin
+// depender del orden. Se usa para detectar si los permisos del servidor
+// difieren de los que ya tiene el cliente y hay que refrescar la UI en vivo.
+function mismosPermisos(a: PermisoModulo[], b: PermisoModulo[]): boolean {
+  if (a.length !== b.length) return false;
+  const clave = (p: PermisoModulo) => `${p.modulo}|${p.ver ? 1 : 0}|${p.editar ? 1 : 0}`;
+  const setA = new Set(a.map(clave));
+  return b.every((p) => setA.has(clave(p)));
 }
+
 
 // Lazy singleton — only created once on the client side
 let supabaseInstance: SupabaseClient | null = null;
@@ -189,6 +174,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     initialCache?.esAdminPlataforma ?? false,
   );
   const [permisosLoaded, setPermisosLoaded] = useState(initialCache !== null);
+
+  // Refs espejo del estado de permisos: permiten que la revalidación en vivo
+  // compare contra el valor ACTUAL sin re-suscribir su effect en cada cambio.
+  const permisosRef = useRef(permisos);
+  const esAdminPlataformaRef = useRef(esAdminPlataforma);
+  useEffect(() => {
+    permisosRef.current = permisos;
+    esAdminPlataformaRef.current = esAdminPlataforma;
+  }, [permisos, esAdminPlataforma]);
 
   useEffect(() => {
     const supabase = getSupabase();
@@ -349,16 +343,88 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => subscription.unsubscribe();
   }, []);
 
-  // Aplica el seed del servidor si aún no hay permisos cargados O si los roles
-  // están vacíos. El segundo caso cubre la navegación cliente desde el login:
-  // la página de login (sin sesión) deja el contexto en permisosLoaded=true con
-  // roles=[], y como el provider NO se remonta en el redirect post-login, ese
-  // estado obsoleto llegaba a /mis-departamentos y su guard rebotaba al
-  // director a /mi-panel. El dato del seed viene del servidor con la sesión ya
-  // validada → siempre gana a un estado de deslogueado. Si ya hay datos reales,
-  // solo persiste la caché para futuros arranques.
+  // ── Revalidación EN VIVO de permisos ────────────────────────────────────
+  // Mantiene los permisos al día SIN reloguear ni refrescar: si un director
+  // cambia el rol de un usuario en Ajustes, la UI de ese usuario se actualiza
+  // sola. Dispara una recarga contra el servidor cuando:
+  //   - la pestaña vuelve a estar visible (volver a la ventana), y
+  //   - de forma periódica (cada 60 s) mientras la pestaña está activa.
+  // Solo aplica el resultado si los permisos DIFIEREN de los actuales y traen
+  // datos reales (no pisa el menú con un fetch en blanco por carrera de red).
+  useEffect(() => {
+    const userId = user?.id;
+    const accessToken = session?.access_token;
+    if (!userId) return;
+
+    let cancelado = false;
+
+    const revalidar = async () => {
+      if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
+      let res: Awaited<ReturnType<typeof getUserPermisos>> | null = null;
+      try {
+        res = await getUserPermisos(accessToken);
+      } catch {
+        return; // fallo transitorio de red → reintentamos en el próximo tick
+      }
+      if (cancelado || !res || res.empresaId == null) return;
+
+      const nextPermisos = res.permisos ?? [];
+      const nextEsAdmin = res.esAdminPlataforma ?? false;
+      const nextRoles = (res.appRoles ?? []) as AppRole[];
+      const seedTieneDatos = nextEsAdmin || nextPermisos.length > 0;
+      if (!seedTieneDatos) return;
+
+      // Aplicamos SOLO si algo cambió (comparando con el valor actual vía refs),
+      // para no re-renderizar en balde.
+      const cambio =
+        nextEsAdmin !== esAdminPlataformaRef.current ||
+        !mismosPermisos(nextPermisos, permisosRef.current);
+      if (!cambio) return;
+
+      setRoles(nextRoles);
+      setPermisos(nextPermisos);
+      setEsAdminPlataforma(nextEsAdmin);
+      writeAuthCache(userId, {
+        roles: nextRoles,
+        permisos: nextPermisos,
+        esAdminPlataforma: nextEsAdmin,
+      });
+    };
+
+    const onVisible = () => {
+      if (document.visibilityState === "visible") revalidar();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", revalidar);
+    const intervalo = window.setInterval(revalidar, 60_000);
+
+    return () => {
+      cancelado = true;
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", revalidar);
+      window.clearInterval(intervalo);
+    };
+  }, [user?.id, session?.access_token]);
+
+  // Aplica el seed de permisos resuelto EN SERVIDOR (layout de (main), con la
+  // sesión ya validada). Se aplica en dos situaciones:
+  //   1) Aún no hay permisos cargados o roles vacíos (primer paint / vuelta del
+  //      login) — igual que antes.
+  //   2) Los permisos del servidor DIFIEREN de los del cliente — así, al
+  //      REFRESCAR la página tras cambiar permisos en Ajustes, se ven al
+  //      instante SIN reloguear (el caché de localStorage ya no "gana").
+  // En ambos casos exigimos que el seed traiga datos REALES (permisos no vacíos
+  // o es admin de plataforma): un seed en blanco por la carrera de cookies no
+  // debe borrar el menú.
   const seedFromServer = useCallback((p: AuthServerSeedPayload) => {
-    if (!permisosLoaded || roles.length === 0) {
+    const seedTieneDatos = p.esAdminPlataforma || p.permisos.length > 0;
+    const difiere =
+      p.esAdminPlataforma !== esAdminPlataforma ||
+      !mismosPermisos(p.permisos, permisos);
+    const debeAplicar =
+      !permisosLoaded || roles.length === 0 || (seedTieneDatos && difiere);
+
+    if (debeAplicar) {
       setRoles(p.roles);
       setPermisos(p.permisos);
       setEsAdminPlataforma(p.esAdminPlataforma);
@@ -392,7 +458,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // ignore
       }
     }
-  }, [permisosLoaded, roles]);
+  }, [permisosLoaded, roles, permisos, esAdminPlataforma]);
 
   const signIn = useCallback(async (email: string, password: string) => {
     const supabase = getSupabase();
@@ -440,18 +506,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const hasRole = useCallback((role: AppRole) => roles.includes(role), [roles]);
 
-  const canAccess = useCallback((path: string) => {
-    if (roles.length === 0) return false;
-    const modulo = getModuloFromPath(path);
-    return roles.some((role) => {
-      const allowed = ROLE_MODULES[role];
-      return allowed.includes("*") || allowed.includes(modulo) || modulo === "ayuda";
-    });
-  }, [roles]);
-
   // FUENTE ÚNICA de permisos: admin de plataforma (DIRECCIÓN) ve todo; el resto
   // según `empresa_roles.permisos`. Sin nombres de rol técnicos hardcodeados.
+  // EXCEPCIÓN — herramientas de barra (CÁMARAS, cohete, candado): mandan SIEMPRE
+  // su toggle real, sin bypass de admin. Si dirección apaga CÁMARAS en Ajustes →
+  // Roles, deja de ver el icono aunque sea admin de plataforma.
   const puedeVer = useCallback((modulo: string) => {
+    if (esHerramientaBarra(modulo)) return puedeVerHerramienta(permisos, modulo);
     return puedeVerModulo(esAdminPlataforma, permisos, modulo);
   }, [esAdminPlataforma, permisos]);
 
@@ -467,7 +528,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     <AuthContext.Provider value={{
       user, session, profile, roles, loading, permisos, permisosLoaded,
       esAdminPlataforma, tieneAccesoDepartamentos,
-      signIn, signOut, hasRole, canAccess, puedeVer, puedeEditar,
+      signIn, signOut, hasRole, puedeVer, puedeEditar,
     }}>
       <AuthSeedContext.Provider value={seedFromServer}>
         {children}
@@ -481,5 +542,3 @@ export function useAuth() {
   if (!ctx) throw new Error("useAuth must be used within AuthProvider");
   return ctx;
 }
-
-export { getModuloFromPath, ROLE_MODULES };
