@@ -189,6 +189,11 @@ export async function deleteRolEmpresa(
   }
 }
 
+/** Detecta si un id es un UUID real (rol persistido) frente a uno provisional de UI (`rol-<timestamp>`). */
+function esUuid(id: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)
+}
+
 export async function saveRolesToSupabase(
   roles: Rol[],
   empresaIdParam?: string,
@@ -204,27 +209,66 @@ export async function saveRolesToSupabase(
     const admin = createAdminClient()
     const empresa_id = await resolveEmpresaId(empresaIdParam)
 
-    const { error: deleteError } = await admin
+    // NO usamos delete-all + insert: `usuarios.rol_id` y otras tablas tienen FK
+    // a `empresa_roles.id` con NO ACTION, así que borrar un rol con usuarios
+    // asignados falla ("violates foreign key constraint usuarios_rol_id_fkey"),
+    // y regenerar ids rompería las asignaciones existentes. En su lugar:
+    // upsert por id (preservando ids reales) + borrado selectivo de los que
+    // desaparecieron y no tienen usuarios.
+
+    // 1) Ids existentes en BD para esta empresa.
+    const { data: existentes, error: readError } = await admin
       .from('empresa_roles')
-      .delete()
+      .select('id')
       .eq('empresa_id', empresa_id)
+    if (readError) return { error: readError.message }
+    const idsEnBd = new Set((existentes ?? []).map((r) => r.id as string))
 
-    if (deleteError) return { error: deleteError.message }
+    // 2) Upsert de los roles entrantes. Los que ya existen conservan su id;
+    //    los nuevos (id provisional de UI, p.ej. "rol-1720000000000") reciben
+    //    un uuid nuevo.
+    const idsEntrantes = new Set<string>()
+    const filas = roles.map((r) => {
+      const id = esUuid(r.id) ? r.id : crypto.randomUUID()
+      idsEntrantes.add(id)
+      return {
+        id,
+        empresa_id,
+        nombre: r.nombre,
+        descripcion: r.descripcion,
+        permisos: r.permisos,
+      }
+    })
 
-    if (roles.length === 0) return {}
+    if (filas.length > 0) {
+      const { error: upsertError } = await admin
+        .from('empresa_roles')
+        .upsert(filas, { onConflict: 'id' })
+      if (upsertError) return { error: upsertError.message }
+    }
 
-    const { error: insertError } = await admin
-      .from('empresa_roles')
-      .insert(
-        roles.map((r) => ({
-          empresa_id,
-          nombre: r.nombre,
-          descripcion: r.descripcion,
-          permisos: r.permisos,
-        }))
-      )
+    // 3) Borrar los roles que estaban en BD y ya no vienen en el array,
+    //    saltando los que tienen usuarios asignados (la FK lo impediría y
+    //    dejaría a esos usuarios sin rol). Si alguno queda "huérfano" en la
+    //    lista pero con usuarios, simplemente se conserva.
+    const aBorrar = [...idsEnBd].filter((id) => !idsEntrantes.has(id))
+    if (aBorrar.length > 0) {
+      const { data: ocupados } = await admin
+        .from('usuarios')
+        .select('rol_id')
+        .in('rol_id', aBorrar)
+      const idsOcupados = new Set((ocupados ?? []).map((u) => u.rol_id as string))
+      const borrables = aBorrar.filter((id) => !idsOcupados.has(id))
+      if (borrables.length > 0) {
+        const { error: deleteError } = await admin
+          .from('empresa_roles')
+          .delete()
+          .eq('empresa_id', empresa_id)
+          .in('id', borrables)
+        if (deleteError) return { error: deleteError.message }
+      }
+    }
 
-    if (insertError) return { error: insertError.message }
     return {}
   } catch (e) {
     return { error: String(e) }
