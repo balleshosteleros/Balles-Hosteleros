@@ -45,6 +45,58 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Usuario sin empresa asignada" }, { status: 403 });
     }
 
+    // ── Camino nuevo: subida directa a R2 ya completada ──────────────────
+    // El navegador subió el vídeo con la URL firmada (/api/recordings/presign)
+    // y ahora solo registra la fila. Body diminuto (JSON), sin límite de tamaño.
+    const contentType = req.headers.get("content-type") ?? "";
+    if (contentType.includes("application/json")) {
+      const body = await req.json().catch(() => null);
+      const r2Key = typeof body?.r2Key === "string" ? body.r2Key : "";
+      if (!r2Key) {
+        return NextResponse.json({ error: "r2Key requerido" }, { status: 400 });
+      }
+      // El key debe pertenecer a la empresa del usuario (evita registrar objetos ajenos).
+      if (!r2Key.startsWith(`empresa_${profile.empresa_id}/`)) {
+        return NextResponse.json({ error: "Clave de objeto inválida" }, { status: 403 });
+      }
+
+      const title = typeof body?.title === "string" && body.title ? body.title : "Grabación sin título";
+      const duration = Number(body?.duration) || 0;
+      const fileSize = Number(body?.fileSize) || 0;
+      const fileId = typeof body?.fileId === "string" && body.fileId ? body.fileId : crypto.randomUUID();
+
+      const { publicUrl: PUBLIC_URL } = getR2();
+      const videoUrl = `${PUBLIC_URL}/${r2Key}`;
+
+      const { data, error } = await supabase
+        .from("recordings")
+        .insert({
+          id: fileId,
+          title,
+          url: videoUrl,
+          r2_key: r2Key,
+          duration,
+          file_size: fileSize,
+          empresa_id: profile.empresa_id,
+          owner_user_id: user.id,
+          type: "grabacion",
+        })
+        .select()
+        .single();
+
+      if (error) {
+        console.error("[Supabase] Error al insertar (directo):", error.message);
+        return NextResponse.json(
+          { error: "No se pudo registrar la grabación", db_error: error.message },
+          { status: 500 },
+        );
+      }
+      return NextResponse.json(data, { status: 201 });
+    }
+
+    // ── Camino legado: FormData (archivo por el servidor) ────────────────
+    // Se mantiene como fallback. Sujeto al límite de body de Vercel (~4.5 MB),
+    // por eso la ruta preferida es la subida directa de arriba.
     const formData = await req.formData();
     const file = formData.get("file") as File | null;
     const title = (formData.get("title") as string) || "Grabación sin título";
