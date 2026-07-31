@@ -217,9 +217,10 @@ export async function createCierre(formData: FormData): Promise<{ ok: true; data
     // El total contado y el descuadre solo tienen sentido en el cierre semanal.
     // En retiradas/ingresos no hay descuadre: se guarda cuadrado (descuadre 0).
     const contado = tipo === "cierre" ? Number(contadoStr.replace(",", ".")) || 0 : 0;
-    // Para el cierre: descuadre = contado − efectivo esperado.
+    // Referencia = total cierre (lo que debe haber). Descuadre = retirado − cierre.
+    // Si se retira MÁS que el cierre → sobra. Si se retira MENOS → falta.
     // >0 sobra · <0 falta · 0 cuadra. No se acepta valor manual.
-    const descuadre = tipo === "cierre" ? Math.round((contado - efectivo) * 100) / 100 : 0;
+    const descuadre = tipo === "cierre" ? Math.round((efectivo - contado) * 100) / 100 : 0;
     const cuadra = descuadre === 0;
 
     const { data: row, error: dbErr } = await supabase

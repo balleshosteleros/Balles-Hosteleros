@@ -197,11 +197,12 @@ export function CierresView() {
     [form.gastos],
   );
 
-  // Descuadre calculado en vivo: contado − efectivo. >0 sobra · <0 falta · 0 cuadra.
+  // Descuadre en vivo. Referencia = total cierre; descuadre = retirado − cierre.
+  // Retirado > cierre → sobra (>0). Retirado < cierre → falta (<0). Igual → cuadra.
   const descuadrePreview = useMemo(() => {
     const efectivo = Number((form.efectivo_retirado || "0").replace(",", ".")) || 0;
     const contado = Number((form.total_contado || "0").replace(",", ".")) || 0;
-    return Math.round((contado - efectivo) * 100) / 100;
+    return Math.round((efectivo - contado) * 100) / 100;
   }, [form.efectivo_retirado, form.total_contado]);
 
   const [cfgForm, setCfgForm] = useState<CierresConfig>({ modo: "libre", dia_semana: null });
@@ -295,7 +296,7 @@ export function CierresView() {
     { campo: "tipo", label: "Tipo" },
     { campo: "semana", label: "Semana" },
     { campo: "efectivo", label: "Efectivo retirado" },
-    { campo: "total", label: "Total contado" },
+    { campo: "total", label: "Total cierre" },
     { campo: "estado", label: "Estado" },
     { campo: "descuadre", label: "Descuadre" },
     { campo: "gastos", label: "Gastos" },
@@ -311,7 +312,7 @@ export function CierresView() {
     tipo: <TableHead key="tipo">Tipo</TableHead>,
     semana: <TableHead key="semana">Semana</TableHead>,
     efectivo: <TableHead key="efectivo" className="text-right">Efectivo retirado</TableHead>,
-    total: <TableHead key="total" className="text-right">Total contado</TableHead>,
+    total: <TableHead key="total" className="text-right">Total cierre</TableHead>,
     estado: <TableHead key="estado">Estado</TableHead>,
     descuadre: <TableHead key="descuadre" className="text-right">Descuadre</TableHead>,
     gastos: <TableHead key="gastos" className="text-right">Gastos</TableHead>,
@@ -372,9 +373,15 @@ export function CierresView() {
     doc: (
       <TableCell key="doc">
         {c.url ? (
-          <Badge variant="outline" className="text-xs gap-1">
-            <FileText className="h-3 w-3" /> Sí
-          </Badge>
+          <a
+            href={c.url}
+            target="_blank"
+            rel="noreferrer"
+            onClick={(e) => e.stopPropagation()}
+            className="inline-flex items-center gap-1 text-xs text-blue-700 hover:underline"
+          >
+            <FileText className="h-3 w-3" /> Ver
+          </a>
         ) : (
           <span className="text-xs text-muted-foreground">—</span>
         )}
@@ -424,7 +431,7 @@ export function CierresView() {
       if (form.tipo === "cierre") {
         fd.append("total_contado", form.total_contado || "0");
       }
-      // El descuadre lo calcula el backend (contado − efectivo); no se envía a mano.
+      // El descuadre lo calcula el backend (retirado − cierre); no se envía a mano.
       fd.append("notas", form.notas);
       fd.append("registrado_por", form.registrado_por);
       if (form.tipo === "cierre") {
@@ -1096,7 +1103,7 @@ export function CierresView() {
             </div>
             {form.tipo === "cierre" && (
               <div>
-                <Label>Total cierre semana (€)</Label>
+                <Label>Total cierre (€)</Label>
                 <Input
                   type="number"
                   step="0.01"
@@ -1108,7 +1115,7 @@ export function CierresView() {
               </div>
             )}
 
-            {/* Descuadre calculado automáticamente = contado − efectivo */}
+            {/* Descuadre calculado automáticamente = retirado − cierre */}
             {form.tipo === "cierre" && (
             <div className="col-span-2">
               <Label className="mb-2 block">Descuadre (calculado automáticamente)</Label>
@@ -1152,7 +1159,7 @@ export function CierresView() {
                 </span>
               </div>
               <p className="text-xs text-muted-foreground mt-1">
-                Se calcula solo: total contado en caja − efectivo retirado.
+                Se calcula solo: efectivo retirado − total cierre. Si retiras más de lo que marca el cierre, sobra.
               </p>
             </div>
             )}
@@ -1391,21 +1398,26 @@ export function CierresView() {
             <>
               <DialogHeader>
                 <DialogTitle className="flex items-center gap-3 capitalize">
-                  Cierre del {format(parseISO(selected.fecha), "EEEE d 'de' MMMM yyyy", { locale: es })}
+                  {TIPO_LABEL[selected.tipo]} del {format(parseISO(selected.fecha), "EEEE d 'de' MMMM yyyy", { locale: es })}
                 </DialogTitle>
               </DialogHeader>
 
               <div className="space-y-4 mt-2">
-                <div className="flex items-center gap-2">
-                  {selected.cuadra ? (
-                    <Badge className="bg-emerald-100 text-emerald-800 border-emerald-300 gap-1">
-                      <CheckCircle2 className="h-3 w-3" /> Cuadra
-                    </Badge>
-                  ) : (
-                    <Badge className={`gap-1 ${selected.descuadre >= 0 ? "bg-amber-100 text-amber-800 border-amber-300" : "bg-red-100 text-red-800 border-red-300"}`}>
-                      <AlertTriangle className="h-3 w-3" />
-                      Descuadre {selected.descuadre >= 0 ? "positivo (sobra)" : "negativo (falta)"}: {fmtEuro(selected.descuadre)}
-                    </Badge>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge variant="outline" className={`text-xs ${TIPO_BADGE_CLASS[selected.tipo]}`}>
+                    {TIPO_LABEL[selected.tipo]}
+                  </Badge>
+                  {selected.tipo === "cierre" && (
+                    selected.cuadra ? (
+                      <Badge className="bg-emerald-100 text-emerald-800 border-emerald-300 gap-1">
+                        <CheckCircle2 className="h-3 w-3" /> Cuadra
+                      </Badge>
+                    ) : (
+                      <Badge className={`gap-1 ${selected.descuadre >= 0 ? "bg-amber-100 text-amber-800 border-amber-300" : "bg-red-100 text-red-800 border-red-300"}`}>
+                        <AlertTriangle className="h-3 w-3" />
+                        {selected.descuadre >= 0 ? "Sobra" : "Falta"}: {fmtEuro(Math.abs(selected.descuadre))}
+                      </Badge>
+                    )
                   )}
                   {selected.semana_iso && (
                     <Badge variant="outline" className="text-xs">{selected.semana_iso}</Badge>
@@ -1417,14 +1429,30 @@ export function CierresView() {
                     <Label className="text-xs text-muted-foreground">Efectivo retirado</Label>
                     <p className="text-base font-semibold">{fmtEuro(selected.efectivo_retirado)}</p>
                   </div>
-                  <div>
-                    <Label className="text-xs text-muted-foreground">Total contado</Label>
-                    <p className="text-base font-semibold">{fmtEuro(selected.total_contado)}</p>
-                  </div>
+                  {selected.tipo === "cierre" && (
+                    <div>
+                      <Label className="text-xs text-muted-foreground">Total cierre</Label>
+                      <p className="text-base font-semibold">{fmtEuro(selected.total_contado)}</p>
+                    </div>
+                  )}
+                  {selected.tipo === "cierre" && !selected.cuadra && (
+                    <div>
+                      <Label className="text-xs text-muted-foreground">Descuadre</Label>
+                      <p className={`text-base font-semibold ${selected.descuadre >= 0 ? "text-amber-700" : "text-red-700"}`}>
+                        {selected.descuadre >= 0 ? "+" : ""}{fmtEuro(selected.descuadre)}
+                      </p>
+                    </div>
+                  )}
                   {selected.registrado_por && (
-                    <div className="col-span-2">
+                    <div>
                       <Label className="text-xs text-muted-foreground">Registrado por</Label>
                       <p className="text-sm">{selected.registrado_por}</p>
+                    </div>
+                  )}
+                  {selected.created_at && (
+                    <div>
+                      <Label className="text-xs text-muted-foreground">Fecha de registro</Label>
+                      <p className="text-sm">{format(parseISO(selected.created_at), "dd MMM yyyy, HH:mm", { locale: es })}</p>
                     </div>
                   )}
                 </div>
