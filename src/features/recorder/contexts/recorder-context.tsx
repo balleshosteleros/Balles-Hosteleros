@@ -159,13 +159,55 @@ export function RecorderProvider({ children }: { children: ReactNode }) {
       title: string,
       duration: number,
     ): Promise<{ id: string; url: string; duration: number; file_size: number } | null> => {
-      const formData = new FormData();
-      formData.append("file", blob, `${title}.webm`);
-      formData.append("title", title);
-      formData.append("duration", duration.toString());
-      formData.append("mimeType", blob.type);
+      const mimeType = blob.type || "video/webm";
 
-      try {
+      // Camino preferido: subida directa a R2 con URL firmada. Sube el vídeo sin
+      // pasar por la función serverless, evitando el límite de ~4.5 MB del body
+      // de Vercel que hacía fallar las grabaciones aunque hubiera conexión.
+      // Requiere CORS PUT habilitado en el bucket R2. Si falla (p. ej. CORS aún
+      // no aplicado), cae al camino FormData legado más abajo.
+      async function tryDirectUpload(): Promise<{ id: string; url: string; duration: number; file_size: number } | null> {
+        const presignRes = await fetch("/api/recordings/presign", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ fileSize: blob.size, mimeType }),
+        });
+        if (!presignRes.ok) {
+          // 413 = cuota llena → error real, no reintentar por FormData.
+          const text = await presignRes.text().catch(() => "");
+          throw new Error(`presign HTTP ${presignRes.status} ${text.slice(0, 200)}`);
+        }
+        const { uploadUrl, r2Key, fileId } = await presignRes.json();
+        if (!uploadUrl || !r2Key) return null;
+
+        const putRes = await fetch(uploadUrl, {
+          method: "PUT",
+          headers: { "Content-Type": mimeType },
+          body: blob,
+        });
+        if (!putRes.ok) return null; // p. ej. CORS o firma rechazada → fallback
+
+        const res = await fetch("/api/recordings", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ r2Key, fileId, title, duration, fileSize: blob.size, mimeType }),
+        });
+        if (!res.ok) {
+          const text = await res.text().catch(() => "");
+          throw new Error(`registro HTTP ${res.status} ${text.slice(0, 200)}`);
+        }
+        const data = await res.json();
+        if (!data?.id) throw new Error("Respuesta sin id");
+        return data;
+      }
+
+      // Fallback legado: el archivo viaja por el servidor (limitado a ~4.5 MB en Vercel).
+      async function legacyFormDataUpload() {
+        const formData = new FormData();
+        formData.append("file", blob, `${title}.webm`);
+        formData.append("title", title);
+        formData.append("duration", duration.toString());
+        formData.append("mimeType", mimeType);
         const res = await fetch("/api/recordings", { method: "POST", body: formData });
         if (!res.ok) {
           const text = await res.text().catch(() => "");
@@ -173,6 +215,11 @@ export function RecorderProvider({ children }: { children: ReactNode }) {
         }
         const data = await res.json();
         if (!data?.id) throw new Error("Respuesta sin id");
+        return data;
+      }
+
+      try {
+        const data = (await tryDirectUpload()) ?? (await legacyFormDataUpload());
         await removePending(pendingId).catch(() => {});
         await refreshPending();
         return data;
