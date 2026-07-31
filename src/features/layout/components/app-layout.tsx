@@ -37,6 +37,7 @@ import {
   useDailyCounts,
 } from "@/features/google-workspace/components";
 import { AgendaDrawer } from "@/features/agenda/components/AgendaDrawer";
+import { useChatNotifications } from "@/features/comunicacion/hooks/useChatNotifications";
 import {
   AplicacionesDrawer,
   AccesosDrawer,
@@ -134,6 +135,10 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
   const { ajustes, empresaActual } = useEmpresa();
   const { mode: viewMode, setMode: setViewMode } = useViewMode();
+
+  // Aviso global de mensajes de chat entrantes: toast abajo-derecha + pitido +
+  // refresco del badge, en tiempo real (realtime), sin recargar el software.
+  useChatNotifications(user?.id ?? null, empresaActual.id);
 
   function activarVista(modo: "paneles" | "departamentos") {
     setViewMode(modo);
@@ -259,16 +264,18 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                       </Button>
                     </AgendaDrawer>
 
-                    {/* Videovigilancia */}
-                    <CamarasDrawer>
-                      <Button
-                        variant="ghost" size="icon"
-                        className="relative h-8 w-8"
-                        title="Videovigilancia"
-                      >
-                        <ToolIcon.videovigilancia className={`!h-[18px] !w-[18px] ${toolTextColor(HERRAMIENTA.videovigilancia.colorKey)}`} />
-                      </Button>
-                    </CamarasDrawer>
+                    {/* Videovigilancia — solo si el rol tiene CÁMARAS activado. */}
+                    {puedeVer("CÁMARAS") && (
+                      <CamarasDrawer>
+                        <Button
+                          variant="ghost" size="icon"
+                          className="relative h-8 w-8"
+                          title="Videovigilancia"
+                        >
+                          <ToolIcon.videovigilancia className={`!h-[18px] !w-[18px] ${toolTextColor(HERRAMIENTA.videovigilancia.colorKey)}`} />
+                        </Button>
+                      </CamarasDrawer>
+                    )}
                     {/* Separador visual */}
                     <span className="w-px h-5 bg-border mx-0.5" />
 

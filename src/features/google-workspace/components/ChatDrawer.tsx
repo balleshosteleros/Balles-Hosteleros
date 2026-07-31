@@ -44,9 +44,13 @@ import {
   purgeCanalesObsoletos,
   sendMensajeAdjunto,
   getAdjuntoSignedUrl,
+  marcarCanalLeido,
   type EmpleadoCanal,
 } from "@/features/comunicacion/actions/comunicacion-actions";
+import { setChatCanalAbierto } from "@/features/comunicacion/hooks/useChatNotifications";
+import { refreshDailyCounts } from "@/features/google-workspace/components/useDailyCounts";
 import { createClient as createBrowserClient } from "@/lib/supabase/client";
+import { useAuth } from "@/features/auth/contexts/auth-context";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { formatFechaEnZona, formatHoraEnZona } from "@/features/empresa/lib/zona-horaria";
 import { getOrganigrama } from "@/features/direccion/actions/organigrama-actions";
@@ -72,6 +76,7 @@ type Canal = {
 type Mensaje = {
   id: string;
   canalId: string;
+  autorId: string | null;
   autor: string;
   avatar: string;
   texto: string;
@@ -184,6 +189,7 @@ function mapDbMensaje(r: Record<string, unknown>, tz: string): Mensaje {
   return {
     id: r.id as string,
     canalId: (r.canal_id as string) ?? "",
+    autorId: (r.autor_id as string | null) ?? null,
     autor: nombre,
     avatar: iniciales,
     texto: (r.texto as string) ?? "",
@@ -258,6 +264,8 @@ function GrupoAvatar({
 export function ChatDrawer({ children }: { children: ReactNode }) {
   // Avatares de chat (md, xl) = ISOTIPO (icono sin texto). Fallback al logotipo si no hay isotipo.
   const { empresaActual, getIsotipoUrl } = useEmpresa();
+  const { user } = useAuth();
+  const myUserId = user?.id ?? null;
   const logoUrl = getIsotipoUrl(empresaActual.id);
 
   const [open, setOpen] = useState(false);
@@ -458,6 +466,57 @@ export function ChatDrawer({ children }: { children: ReactNode }) {
     if (canalActivo) cargarMensajes(canalActivo);
   }, [canalActivo, cargarMensajes]);
 
+  // Avisa al hook global qué canal está abierto (para suprimir su toast) y marca
+  // el canal como leído: al abrirlo y cada vez que llega un mensaje estando abierto.
+  useEffect(() => {
+    // Solo consideramos "abierto" si el drawer está visible Y hay un canal activo.
+    const abierto = open ? canalActivo : null;
+    setChatCanalAbierto(abierto);
+    if (abierto) {
+      void marcarCanalLeido(abierto).then(() => refreshDailyCounts());
+    }
+    return () => setChatCanalAbierto(null);
+  }, [open, canalActivo]);
+
+  // Realtime: los mensajes del canal abierto entran al momento, sin recargar.
+  useEffect(() => {
+    if (!open || !canalActivo) return;
+    const supabase = createBrowserClient();
+    const canalId = canalActivo;
+    const channel = supabase
+      .channel(`chat-canal-${canalId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "mensajes",
+          filter: `canal_id=eq.${canalId}`,
+        },
+        (payload: { new: unknown }) => {
+          const nuevo = mapDbMensaje(
+            payload.new as Record<string, unknown>,
+            empresaActual.zonaHoraria,
+          );
+          setMensajes((prev) => {
+            // Evita duplicar el mensaje propio ya pintado (optimista o real).
+            if (prev.some((m) => m.id === nuevo.id)) return prev;
+            // El propio ya se insertó de forma optimista: lo ignoramos aquí.
+            if (myUserId && nuevo.autorId === myUserId) return prev;
+            return [...prev, nuevo];
+          });
+          // Estamos viéndolo: marcamos leído y refrescamos el badge.
+          if (!(myUserId && nuevo.autorId === myUserId)) {
+            void marcarCanalLeido(canalId).then(() => refreshDailyCounts());
+          }
+        },
+      )
+      .subscribe();
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [open, canalActivo, empresaActual.zonaHoraria, myUserId]);
+
   async function enviar() {
     if (!input.trim() || !canalActivo) return;
     const texto = input.trim();
@@ -465,6 +524,7 @@ export function ChatDrawer({ children }: { children: ReactNode }) {
     const optimistic: Mensaje = {
       id: `m-${Date.now()}`,
       canalId: canalActivo,
+      autorId: myUserId,
       autor: "Tu",
       avatar: "TU",
       texto,
@@ -1014,7 +1074,9 @@ export function ChatDrawer({ children }: { children: ReactNode }) {
                     </div>
                   )}
                   {msgDelCanal.map((m) => {
-                    const propio = m.autor === "Tu";
+                    // Propio = mismo autor_id que el usuario actual (fiable tras
+                    // recargar de BD). Fallback al optimista con autor "Tu".
+                    const propio = myUserId ? m.autorId === myUserId : m.autor === "Tu";
                     return (
                       <div key={m.id} className={cn("flex gap-2", propio ? "justify-end" : "justify-start")}>
                         {!propio && (
@@ -1026,13 +1088,15 @@ export function ChatDrawer({ children }: { children: ReactNode }) {
                           className={cn(
                             "max-w-[70%] rounded-2xl px-3.5 py-2 shadow-sm",
                             propio
-                              ? "bg-blue-600 text-white rounded-br-md"
+                              // Propio: verde muy suave (estilo WhatsApp), texto normal.
+                              ? "bg-[#d9fdd3] dark:bg-emerald-900/40 text-foreground rounded-br-md"
+                              // Ajeno: blanco, ligeramente diferenciado del fondo.
                               : "bg-white dark:bg-card text-foreground rounded-bl-md",
                             m.fijado && "ring-2 ring-amber-400"
                           )}
                         >
                           {!propio && (
-                            <p className="text-[11px] font-semibold mb-0.5 text-blue-700 dark:text-blue-400">
+                            <p className="text-[11px] font-semibold mb-0.5 text-emerald-700 dark:text-emerald-400">
                               {m.autor}
                             </p>
                           )}
@@ -1048,7 +1112,7 @@ export function ChatDrawer({ children }: { children: ReactNode }) {
                           {m.texto && (
                             <p className="text-sm whitespace-pre-wrap break-words">{m.texto}</p>
                           )}
-                          <p className={cn("text-[10px] mt-1 text-right", propio ? "text-blue-100" : "text-muted-foreground")}>
+                          <p className={cn("text-[10px] mt-1 text-right", propio ? "text-emerald-700/60 dark:text-emerald-300/60" : "text-muted-foreground")}>
                             {m.hora}
                             {m.fijado && <Pin className="inline ml-1 h-2.5 w-2.5" />}
                           </p>
@@ -1785,14 +1849,14 @@ function Adjunto({
       className={cn(
         "flex items-center gap-2 rounded-lg px-3 py-2 mb-1 transition-colors",
         propio
-          ? "bg-blue-700/40 hover:bg-blue-700/60 text-white"
+          ? "bg-emerald-600/15 hover:bg-emerald-600/25 text-foreground"
           : "bg-muted hover:bg-muted/80 text-foreground",
       )}
     >
       <FileText className="h-5 w-5 shrink-0" />
       <div className="min-w-0 flex-1">
         <p className="text-xs font-semibold truncate">{nombre}</p>
-        <p className={cn("text-[10px]", propio ? "text-blue-100" : "text-muted-foreground")}>
+        <p className={cn("text-[10px]", propio ? "text-emerald-700/70 dark:text-emerald-300/70" : "text-muted-foreground")}>
           {formatBytes(tamano)}
         </p>
       </div>

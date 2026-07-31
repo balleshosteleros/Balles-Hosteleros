@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useGoogleConnection } from "./useGoogleConnection";
 import { contarPendientesHoy } from "@/features/tareas/actions/tareas-actions";
 import { getTareasValidacionPendientes } from "@/features/mi-panel/actions/mi-panel-actions";
-import { listCanales } from "@/features/comunicacion/actions/comunicacion-actions";
+import { contarMensajesSinLeer } from "@/features/comunicacion/actions/comunicacion-actions";
 import { contarContactosNuevos } from "@/features/agenda/actions/contactos-actions";
 import { contarLlamadasPerdidasNoVistas } from "@/features/llamadas-internas/actions/llamadas-actions";
 import { LLAMADAS_VISTAS_KEY } from "./TelefonoDrawer";
@@ -70,7 +70,7 @@ export function useDailyCounts(): DailyCounts {
       await Promise.allSettled([
         contarPendientesHoy(),
         getTareasValidacionPendientes(),
-        listCanales(empresaSlug),
+        contarMensajesSinLeer(),
         contarLlamadasPerdidasNoVistas(vistasAt),
         contarContactosNuevos(diasAnuncio),
       ]);
@@ -91,12 +91,11 @@ export function useDailyCounts(): DailyCounts {
         (valRes.value.data.trabajo > 0 ? 1 : 0);
     }
 
-    // Chat: nº de canales con mensajes sin leer.
+    // Chat: nº total de mensajes sin leer (posteriores al last_read_at de cada
+    // canal, excluyendo los propios). El badge lo topa a 9+.
     let chatGroups = 0;
     if (canalesRes.status === "fulfilled" && canalesRes.value.ok) {
-      chatGroups = (
-        canalesRes.value.data as Array<{ sin_leer?: number }>
-      ).filter((c) => (c.sin_leer ?? 0) > 0).length;
+      chatGroups = canalesRes.value.data.totalMensajes;
     }
 
     // Llamadas: perdidas internas posteriores a la última vez que se vio Recientes.

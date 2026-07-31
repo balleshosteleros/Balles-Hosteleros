@@ -552,6 +552,116 @@ export async function vaciarCanal(canalId: string) {
   }
 }
 
+/**
+ * Marca un canal como leído hasta ahora (last_read_at = now()) para el usuario
+ * actual. A partir de este instante, los mensajes ya recibidos dejan de contar
+ * como "sin leer" en el badge.
+ */
+export async function marcarCanalLeido(canalId: string) {
+  try {
+    const { supabase, user } = await getContext();
+    if (!user) return { ok: false, error: "No autenticado" };
+    const { error } = await supabase
+      .from("canales_preferencias")
+      .upsert(
+        { user_id: user.id, canal_id: canalId, last_read_at: new Date().toISOString() },
+        { onConflict: "user_id,canal_id" }
+      );
+    if (error) throw error;
+    return { ok: true };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "Error";
+    console.error("[comunicacion] marcarCanalLeido:", msg);
+    return { ok: false, error: msg };
+  }
+}
+
+export interface ResumenSinLeer {
+  userId: string | null;
+  /** Nº de canales con al menos un mensaje sin leer. */
+  totalGrupos: number;
+  /** Suma total de mensajes sin leer en todos los canales. */
+  totalMensajes: number;
+  /** Detalle por canal: { [canalId]: nº mensajes sin leer }. */
+  porCanal: Record<string, number>;
+}
+
+/**
+ * Cuenta los mensajes sin leer del usuario actual en todos los canales a los que
+ * tiene acceso. "Sin leer" = mensaje posterior al last_read_at de su preferencia
+ * (o cualquier mensaje si nunca ha abierto el canal), excluyendo los mensajes
+ * escritos por el propio usuario. Alimenta el badge del icono de chat.
+ */
+export async function contarMensajesSinLeer(): Promise<{ ok: boolean; data: ResumenSinLeer }> {
+  const vacio: ResumenSinLeer = { userId: null, totalGrupos: 0, totalMensajes: 0, porCanal: {} };
+  try {
+    const { supabase, user, empresaId } = await getContext();
+    if (!user || !empresaId) return { ok: true, data: vacio };
+
+    // 1. Canales accesibles para el usuario (mismo filtro que listCanales).
+    const { data: canalesRows, error: canalesErr } = await supabase
+      .from("canales")
+      .select("id, empresa_id, nombre, tipo, miembros_user_ids, departamentos")
+      .eq("empresa_id", empresaId);
+    if (canalesErr) throw canalesErr;
+    const ctx = await getAccesoCtx(supabase, user.id, empresaId);
+    const canalesVisibles = (canalesRows ?? []).filter((row) => canalAccesible(row, ctx));
+    if (canalesVisibles.length === 0) return { ok: true, data: { ...vacio, userId: user.id } };
+    const canalIds = canalesVisibles.map((c) => c.id as string);
+
+    // 2. last_read_at por canal (preferencias del usuario) + canales silenciados.
+    const { data: prefs } = await supabase
+      .from("canales_preferencias")
+      .select("canal_id, last_read_at, silenciado")
+      .eq("user_id", user.id)
+      .in("canal_id", canalIds);
+    const lastReadMap = new Map<string, string | null>();
+    const silenciados = new Set<string>();
+    for (const p of prefs ?? []) {
+      lastReadMap.set(p.canal_id as string, (p.last_read_at as string | null) ?? null);
+      if (p.silenciado) silenciados.add(p.canal_id as string);
+    }
+
+    // 3. Mensajes de esos canales que no son del propio usuario. Traemos solo lo
+    //    necesario (canal_id + created_at) y contamos en memoria contra cada
+    //    last_read_at — evita N queries (una por canal).
+    const { data: msgs, error: msgErr } = await supabase
+      .from("mensajes")
+      .select("canal_id, created_at, autor_id")
+      .in("canal_id", canalIds)
+      .neq("autor_id", user.id)
+      .order("created_at", { ascending: false })
+      .limit(2000);
+    if (msgErr) throw msgErr;
+
+    const porCanal: Record<string, number> = {};
+    for (const m of msgs ?? []) {
+      const canalId = m.canal_id as string;
+      if (silenciados.has(canalId)) continue; // canal silenciado: no cuenta al badge
+      const lastRead = lastReadMap.get(canalId);
+      const createdAt = m.created_at as string;
+      // Sin last_read_at → el canal nunca se abrió: todos sus mensajes cuentan.
+      if (!lastRead || createdAt > lastRead) {
+        porCanal[canalId] = (porCanal[canalId] ?? 0) + 1;
+      }
+    }
+
+    const totalMensajes = Object.values(porCanal).reduce((a, b) => a + b, 0);
+    return {
+      ok: true,
+      data: {
+        userId: user.id,
+        totalGrupos: Object.keys(porCanal).length,
+        totalMensajes,
+        porCanal,
+      },
+    };
+  } catch (err) {
+    console.error("[comunicacion] contarMensajesSinLeer:", err);
+    return { ok: true, data: vacio };
+  }
+}
+
 export async function toggleFijado(mensajeId: string, fijado: boolean) {
   try {
     const { supabase } = await getContext();
