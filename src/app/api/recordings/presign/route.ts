@@ -43,6 +43,8 @@ export async function POST(req: Request) {
       typeof body?.mimeType === "string" && body.mimeType
         ? body.mimeType
         : "video/webm";
+    const departamentoIn: string =
+      typeof body?.departamento === "string" ? body.departamento.trim() : "";
 
     if (!fileSize || fileSize <= 0) {
       return NextResponse.json(
@@ -50,6 +52,42 @@ export async function POST(req: Request) {
         { status: 400 },
       );
     }
+
+    // Departamento destino: debe ser uno al que el usuario tiene acceso.
+    // bh_departamentos_usuario devuelve ya la lista canónica (misma fuente que
+    // el chat/tareas), así que validamos contra ella.
+    const { data: depsData } = await supabase.rpc("bh_departamentos_usuario", {
+      p_empresa: profile.empresa_id,
+    });
+    const misDeptos: string[] = Array.isArray(depsData)
+      ? [...new Set((depsData as string[]).filter(Boolean))]
+      : [];
+
+    let departamento = "";
+    if (departamentoIn) {
+      // Coincidencia case-insensitive contra los departamentos accesibles.
+      const match = misDeptos.find(
+        (d) => d.toUpperCase() === departamentoIn.toUpperCase(),
+      );
+      if (!match) {
+        return NextResponse.json(
+          { error: "No tienes acceso a ese departamento" },
+          { status: 403 },
+        );
+      }
+      departamento = match;
+    } else if (misDeptos.length === 1) {
+      // Pertenece a un solo departamento: se asigna automáticamente.
+      departamento = misDeptos[0];
+    } else if (misDeptos.length > 1) {
+      // Varios departamentos y no eligió: la UI debe preguntar.
+      return NextResponse.json(
+        { error: "Debes elegir un departamento", needsDepartamento: true },
+        { status: 422 },
+      );
+    }
+    // Si misDeptos.length === 0 (ej. usuario sin depto/rol reconocido),
+    // departamento queda "" → solo lo verá admin/dueño (RLS lo maneja).
 
     // Cuota POR EMPRESA (default 500 GB). Misma lógica que el registro final.
     const admin = createAdminClient();
@@ -76,11 +114,17 @@ export async function POST(req: Request) {
 
     const fileId = crypto.randomUUID();
     const ext = mimeType.includes("mp4") ? "mp4" : "webm";
-    const r2Key = `empresa_${profile.empresa_id}/grabaciones/${fileId}.${ext}`;
+    // Carpeta física por departamento dentro de la empresa. Sanitizamos el
+    // nombre para el path (solo se usa como carpeta; la fuente de verdad para
+    // permisos es la columna `departamento` de la BD).
+    const carpeta = departamento
+      ? departamento.replace(/[^A-Za-z0-9._-]/g, "_")
+      : "_sin_departamento";
+    const r2Key = `empresa_${profile.empresa_id}/grabaciones/${carpeta}/${fileId}.${ext}`;
 
     const uploadUrl = presignPutR2(r2Key, mimeType);
 
-    return NextResponse.json({ uploadUrl, r2Key, fileId, mimeType });
+    return NextResponse.json({ uploadUrl, r2Key, fileId, mimeType, departamento });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Error al firmar la subida";
     console.error("[recordings presign] Error:", message);

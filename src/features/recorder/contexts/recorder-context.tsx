@@ -42,6 +42,11 @@ interface RecorderContextValue {
   cameraStream: MediaStream | null;
   displaySurface: string | null;
   pendingCount: number;
+  /** Departamentos (canónicos) a los que el usuario tiene acceso. */
+  departamentos: string[];
+  /** Departamento elegido para guardar la próxima grabación. */
+  selectedDepartamento: string | null;
+  setSelectedDepartamento: (dep: string | null) => void;
   startRecording: (title: string) => Promise<void>;
   pauseRecording: () => void;
   resumeRecording: () => void;
@@ -95,6 +100,30 @@ export function RecorderProvider({ children }: { children: ReactNode }) {
   const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
   const [displaySurface, setDisplaySurface] = useState<string | null>(null);
   const [pendingCount, setPendingCount] = useState<number>(0);
+  const [departamentos, setDepartamentos] = useState<string[]>([]);
+  const [selectedDepartamento, setSelectedDepartamento] = useState<string | null>(null);
+  const selectedDepartamentoRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    selectedDepartamentoRef.current = selectedDepartamento;
+  }, [selectedDepartamento]);
+
+  // Cargar departamentos accesibles una vez. Si solo hay uno, se preselecciona.
+  useEffect(() => {
+    let alive = true;
+    fetch("/api/recordings/departamentos")
+      .then((res) => (res.ok ? res.json() : { departamentos: [] }))
+      .then((data) => {
+        if (!alive) return;
+        const list: string[] = Array.isArray(data?.departamentos) ? data.departamentos : [];
+        setDepartamentos(list);
+        if (list.length === 1) setSelectedDepartamento(list[0]);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
@@ -166,18 +195,20 @@ export function RecorderProvider({ children }: { children: ReactNode }) {
       // de Vercel que hacía fallar las grabaciones aunque hubiera conexión.
       // Requiere CORS PUT habilitado en el bucket R2. Si falla (p. ej. CORS aún
       // no aplicado), cae al camino FormData legado más abajo.
+      const departamento = selectedDepartamentoRef.current ?? undefined;
+
       async function tryDirectUpload(): Promise<{ id: string; url: string; duration: number; file_size: number } | null> {
         const presignRes = await fetch("/api/recordings/presign", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ fileSize: blob.size, mimeType }),
+          body: JSON.stringify({ fileSize: blob.size, mimeType, departamento }),
         });
         if (!presignRes.ok) {
           // 413 = cuota llena → error real, no reintentar por FormData.
           const text = await presignRes.text().catch(() => "");
           throw new Error(`presign HTTP ${presignRes.status} ${text.slice(0, 200)}`);
         }
-        const { uploadUrl, r2Key, fileId } = await presignRes.json();
+        const { uploadUrl, r2Key, fileId, departamento: depConfirmado } = await presignRes.json();
         if (!uploadUrl || !r2Key) return null;
 
         const putRes = await fetch(uploadUrl, {
@@ -190,7 +221,15 @@ export function RecorderProvider({ children }: { children: ReactNode }) {
         const res = await fetch("/api/recordings", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ r2Key, fileId, title, duration, fileSize: blob.size, mimeType }),
+          body: JSON.stringify({
+            r2Key,
+            fileId,
+            title,
+            duration,
+            fileSize: blob.size,
+            mimeType,
+            departamento: depConfirmado ?? departamento,
+          }),
         });
         if (!res.ok) {
           const text = await res.text().catch(() => "");
@@ -550,6 +589,9 @@ export function RecorderProvider({ children }: { children: ReactNode }) {
     cameraStream,
     displaySurface,
     pendingCount,
+    departamentos,
+    selectedDepartamento,
+    setSelectedDepartamento,
     startRecording,
     pauseRecording,
     resumeRecording,

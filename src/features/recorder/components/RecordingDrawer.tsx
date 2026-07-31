@@ -28,6 +28,7 @@ import {
   Search,
   Pencil,
   HardDrive,
+  FolderClosed,
 } from "lucide-react";
 import {
   Sheet,
@@ -146,12 +147,18 @@ function RecordingContent() {
     error,
     result,
     previewUrl,
+    departamentos,
+    selectedDepartamento,
+    setSelectedDepartamento,
     startRecording,
     pauseRecording,
     resumeRecording,
     stopRecording,
     reset,
   } = useRecorder();
+
+  // Debe elegir departamento si pertenece a varios y aún no ha elegido.
+  const needsDepartamento = departamentos.length > 1 && !selectedDepartamento;
 
   const { elapsed } = useRecordingStore();
 
@@ -189,6 +196,40 @@ function RecordingContent() {
           />
         </div>
 
+        {departamentos.length > 1 && (
+          <div className="space-y-2">
+            <Label htmlFor="rec-depto">Guardar en departamento</Label>
+            <div className="grid grid-cols-2 gap-2">
+              {departamentos.map((dep) => {
+                const active = selectedDepartamento === dep;
+                return (
+                  <button
+                    key={dep}
+                    type="button"
+                    onClick={() => setSelectedDepartamento(dep)}
+                    className={cn(
+                      "flex items-center gap-2 rounded-lg border px-3 py-2 text-left text-sm transition-all",
+                      active
+                        ? "border-red-500 bg-red-50/50 ring-1 ring-red-500/20 font-medium"
+                        : "border-border bg-background hover:bg-muted/50 text-muted-foreground",
+                    )}
+                  >
+                    <FolderClosed
+                      className={cn("h-4 w-4 shrink-0", active ? "text-red-600" : "text-muted-foreground")}
+                    />
+                    <span className="truncate capitalize">{dep.toLowerCase()}</span>
+                  </button>
+                );
+              })}
+            </div>
+            {needsDepartamento && (
+              <p className="text-xs text-amber-600">
+                Elige en qué departamento se guardará la grabación.
+              </p>
+            )}
+          </div>
+        )}
+
         <div className="space-y-3">
           <p className="text-sm font-medium">Configuración</p>
           <div className="grid grid-cols-1 gap-3">
@@ -221,7 +262,8 @@ function RecordingContent() {
 
         <Button
           onClick={handleStart}
-          className="w-full gap-3 h-12 text-base font-semibold shadow-lg shadow-red-200 bg-red-600 hover:bg-red-700"
+          disabled={needsDepartamento}
+          className="w-full gap-3 h-12 text-base font-semibold shadow-lg shadow-red-200 bg-red-600 hover:bg-red-700 disabled:opacity-60"
         >
           <Circle className="h-5 w-5 fill-white animate-pulse text-white" />
           Iniciar Grabación
@@ -474,6 +516,7 @@ interface SavedRecording {
   duration: number;
   file_size: number;
   created_at: string;
+  departamento: string | null;
 }
 
 function RecordingsList() {
@@ -482,6 +525,7 @@ function RecordingsList() {
   const [recordings, setRecordings] = useState<SavedRecording[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [folder, setFolder] = useState<string | null>(null); // null = todas
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState("");
@@ -521,11 +565,21 @@ function RecordingsList() {
     };
   }, [recordings.length, pendingCount]);
 
+  // Carpetas = departamentos presentes en las grabaciones visibles.
+  const folders = useMemo(() => {
+    const set = new Set<string>();
+    for (const r of recordings) if (r.departamento) set.add(r.departamento);
+    return [...set].sort();
+  }, [recordings]);
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return recordings;
-    return recordings.filter((r) => r.title.toLowerCase().includes(q));
-  }, [recordings, search]);
+    return recordings.filter((r) => {
+      if (folder && r.departamento !== folder) return false;
+      if (q && !r.title.toLowerCase().includes(q)) return false;
+      return true;
+    });
+  }, [recordings, search, folder]);
 
   const grouped = useMemo(() => {
     const map = new Map<DateBucket, SavedRecording[]>();
@@ -616,6 +670,39 @@ function RecordingsList() {
         <span className="text-[11px] text-muted-foreground">{recordings.length}</span>
       </div>
 
+      {folders.length > 1 && (
+        <div className="flex flex-wrap gap-1.5">
+          <button
+            type="button"
+            onClick={() => setFolder(null)}
+            className={cn(
+              "px-2.5 py-1 rounded-full text-[11px] font-medium border transition-colors",
+              folder === null
+                ? "border-red-500 bg-red-50 text-red-700"
+                : "border-border bg-background text-muted-foreground hover:bg-muted/50",
+            )}
+          >
+            Todas
+          </button>
+          {folders.map((dep) => (
+            <button
+              key={dep}
+              type="button"
+              onClick={() => setFolder(dep)}
+              className={cn(
+                "flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-medium border transition-colors capitalize",
+                folder === dep
+                  ? "border-red-500 bg-red-50 text-red-700"
+                  : "border-border bg-background text-muted-foreground hover:bg-muted/50",
+              )}
+            >
+              <FolderClosed className="h-3 w-3" />
+              {dep.toLowerCase()}
+            </button>
+          ))}
+        </div>
+      )}
+
       {recordings.length > 3 && (
         <div className="relative">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
@@ -692,7 +779,13 @@ function RecordingsList() {
                         <p className="text-xs font-medium truncate group-hover:text-primary transition-colors">
                           {rec.title}
                         </p>
-                        <p className="text-[10px] text-muted-foreground">
+                        <p className="text-[10px] text-muted-foreground flex items-center gap-1 flex-wrap">
+                          {rec.departamento && (
+                            <span className="inline-flex items-center gap-0.5 text-muted-foreground/90 capitalize">
+                              <FolderClosed className="h-2.5 w-2.5" />
+                              {rec.departamento.toLowerCase()} ·
+                            </span>
+                          )}
                           {formatFechaEnZona(rec.created_at, tz)} ·{" "}
                           {formatDuration(rec.duration)} · {formatBytes(rec.file_size)}
                         </p>

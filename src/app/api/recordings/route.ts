@@ -65,6 +65,19 @@ export async function POST(req: Request) {
       const fileSize = Number(body?.fileSize) || 0;
       const fileId = typeof body?.fileId === "string" && body.fileId ? body.fileId : crypto.randomUUID();
 
+      // Departamento (canónico) que el navegador recibió del presign, validado
+      // de nuevo contra los accesos reales del usuario. Fuente para permisos.
+      const departamentoIn = typeof body?.departamento === "string" ? body.departamento.trim() : "";
+      let departamento: string | null = null;
+      if (departamentoIn) {
+        const { data: depsData } = await supabase.rpc("bh_departamentos_usuario", {
+          p_empresa: profile.empresa_id,
+        });
+        const misDeptos: string[] = Array.isArray(depsData) ? (depsData as string[]) : [];
+        const match = misDeptos.find((d) => d.toUpperCase() === departamentoIn.toUpperCase());
+        departamento = match ?? null;
+      }
+
       const { publicUrl: PUBLIC_URL } = getR2();
       const videoUrl = `${PUBLIC_URL}/${r2Key}`;
 
@@ -80,6 +93,7 @@ export async function POST(req: Request) {
           empresa_id: profile.empresa_id,
           owner_user_id: user.id,
           type: "grabacion",
+          departamento,
         })
         .select()
         .single();
