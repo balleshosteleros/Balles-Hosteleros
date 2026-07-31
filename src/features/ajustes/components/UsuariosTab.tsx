@@ -25,7 +25,7 @@ import { toast } from "sonner";
 import {
   createEmployee, resetEmployeePassword, getEmployees, updateEmployeeStatus,
   getEmpleadosSinAcceso, updateEmployeeProfile, deleteEmployee,
-  sendPasswordResetEmail,
+  sendPasswordResetEmail, updateEmployeeLoginEmail,
 } from "@/actions/admin";
 import {
   listEmpresasDeUsuario,
@@ -883,6 +883,29 @@ function EditarUsuarioModal({
 }) {
   const [form, setForm] = useState({ ...acceso });
 
+  // Edición del email de acceso (login en auth.users). Conserva la contraseña.
+  const [emailAcceso, setEmailAcceso] = useState(acceso.emailUsuario);
+  const [emailGuardando, setEmailGuardando] = useState(false);
+  const emailNormalizado = emailAcceso.trim().toLowerCase();
+  const emailCambiado =
+    emailNormalizado !== (acceso.emailUsuario ?? "").trim().toLowerCase();
+
+  const cambiarEmailAcceso = async () => {
+    if (!acceso.userId) {
+      toast.error("Este usuario no tiene login vinculado.");
+      return;
+    }
+    setEmailGuardando(true);
+    const res = await updateEmployeeLoginEmail(acceso.userId, emailNormalizado);
+    setEmailGuardando(false);
+    if (res.error) {
+      toast.error(res.error);
+      return;
+    }
+    toast.success("Correo de acceso actualizado. La contraseña no cambia.");
+    setForm((p) => ({ ...p, emailUsuario: emailNormalizado }));
+  };
+
   // Empresas a las que el usuario tiene acceso (UUIDs). Carga + estado local.
   const [empresasIds, setEmpresasIds] = useState<string[]>([]);
   const [empresasLoading, setEmpresasLoading] = useState(true);
@@ -952,15 +975,27 @@ function EditarUsuarioModal({
             />
           </div>
           <div className="col-span-2">
-            <Label className="text-xs font-bold">EMAIL</Label>
-            <Input
-              type="email"
-              value={form.emailUsuario}
-              readOnly
-              className="bg-muted/40 cursor-not-allowed"
-            />
+            <Label className="text-xs font-bold">EMAIL DE ACCESO</Label>
+            <div className="flex gap-2">
+              <Input
+                type="email"
+                value={emailAcceso}
+                onChange={(e) => setEmailAcceso(e.target.value)}
+                disabled={!acceso.userId || emailGuardando}
+                className="flex-1"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                onClick={cambiarEmailAcceso}
+                disabled={!emailCambiado || emailGuardando || !acceso.userId}
+              >
+                {emailGuardando ? "Guardando..." : "Cambiar"}
+              </Button>
+            </div>
             <p className="text-[10px] text-muted-foreground mt-1">
-              El email es el identificador de inicio de sesión y no se modifica desde aquí.
+              Es el identificador de inicio de sesión. Al cambiarlo se conserva la
+              contraseña y se avisa al empleado. También es con el que entra por Google.
             </p>
           </div>
           <div>

@@ -6,6 +6,8 @@ import {
   requireAdminUser,
   requireRRHHAcceso,
   altaUsuarioEmpleado,
+  sincronizarLoginEmailEmpleado,
+  resolverLoginEmail,
 } from "@/features/rrhh/services/empleados-core";
 import { revalidatePath } from "next/cache";
 import { friendlyError } from "@/shared/lib/friendly-errors";
@@ -387,7 +389,9 @@ export async function createEmpleado(input: {
     const emailEmpresa = (input.emailEmpresa ?? "").trim().toLowerCase() || null;
     const emailPersonal = (input.emailPersonal ?? "").trim().toLowerCase();
     if (!emailPersonal) return { ok: false, error: "El email personal es obligatorio." };
-    const email = emailEmpresa ?? emailPersonal;
+    // Regla canónica única: login = empresa ?? personal (nunca null aquí, porque
+    // emailPersonal es obligatorio).
+    const email = resolverLoginEmail({ emailEmpresa, emailPersonal })!;
 
     let admin;
     try { admin = createAdminClient(); }
@@ -555,6 +559,49 @@ export async function updateEmpleado(id: string, updates: UpdateEmpleadoInput) {
 
     const { error } = await supabase.from("empleados").update(patch).eq("id", id);
     if (error) throw error;
+
+    // Si se han tocado los correos, resincronizar el login (auth.users) con la
+    // regla canónica (empresa ?? personal). Solo cambia el identificador de
+    // acceso; la contraseña se conserva y se avisa in-app al empleado.
+    if (updates.emailEmpresa !== undefined || updates.emailPersonal !== undefined) {
+      try {
+        const { data: emp } = await supabase
+          .from("empleados")
+          .select("email_empresa, email_personal")
+          .eq("id", id)
+          .maybeSingle();
+        const admin = createAdminClient();
+        const sync = await sincronizarLoginEmailEmpleado({
+          admin,
+          empleadoId: id,
+          emailEmpresa: emp?.email_empresa ?? null,
+          emailPersonal: emp?.email_personal ?? null,
+        });
+        if (!sync.ok) {
+          // No revertimos la ficha: informamos del fallo de sincronización.
+          console.error("[rrhh] updateEmpleado sync login:", sync.error);
+          revalidatePath("/rrhh/empleados");
+          revalidatePath(`/rrhh/empleados/${id}`);
+          return {
+            ok: true,
+            avisoLogin:
+              "Los datos se guardaron, pero no se pudo actualizar el correo de acceso: " +
+              sync.error,
+          };
+        }
+        if (sync.cambiado) {
+          revalidatePath("/rrhh/empleados");
+          revalidatePath(`/rrhh/empleados/${id}`);
+          return {
+            ok: true,
+            loginActualizado: { anterior: sync.anterior, nuevo: sync.nuevo },
+          };
+        }
+      } catch (e) {
+        console.error("[rrhh] updateEmpleado sync login (excepción):", e);
+      }
+    }
+
     revalidatePath("/rrhh/empleados");
     revalidatePath(`/rrhh/empleados/${id}`);
     return { ok: true };

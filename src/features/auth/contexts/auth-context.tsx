@@ -8,6 +8,16 @@ import { getUserPermisos } from "@/features/auth/actions/permisos-actions";
 
 export type AppRole = "admin" | "director" | "gerencia" | "responsable" | "empleado" | "solo_lectura";
 
+/**
+ * Roles con acceso a la vista "Mis Departamentos" y al conmutador del header
+ * ("Mis Paneles / Mis Departamentos"). Dirección (director/admin) ve todo por
+ * bypass; gerencia lo ve filtrado por sus permisos (`puedeVer`). FUENTE ÚNICA:
+ * cualquier gate de esa vista debe usar este helper, no comprobar roles a mano.
+ */
+export function esAccesoDepartamentos(roles: AppRole[]): boolean {
+  return roles.includes("director") || roles.includes("admin") || roles.includes("gerencia");
+}
+
 export interface AuthProfile {
   nombre: string;
   apellidos: string;

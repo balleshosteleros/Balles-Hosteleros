@@ -262,3 +262,106 @@ export async function altaUsuarioEmpleado(
 
   return { ok: true, userId, empleadoId: empleado.id, tempPassword };
 }
+
+/**
+ * Regla única y canónica de qué correo es la IDENTIDAD DE LOGIN de un empleado.
+ *
+ * Login = email de EMPRESA si existe; si no, el email PERSONAL del empleado.
+ * (Sustituye a la lógica antigua que decidía por área del puesto; ahora es una
+ * sola regla para todas las vías: alta directa, contratación y edición.)
+ *
+ * Normaliza (trim + lowercase). Devuelve null si no hay ninguno de los dos:
+ * en ese caso el caller no debe crear/actualizar el login.
+ */
+export function resolverLoginEmail(input: {
+  emailEmpresa?: string | null;
+  emailPersonal?: string | null;
+}): string | null {
+  const empresa = (input.emailEmpresa ?? "").trim().toLowerCase() || null;
+  const personal = (input.emailPersonal ?? "").trim().toLowerCase() || null;
+  return empresa ?? personal ?? null;
+}
+
+/**
+ * Sincroniza el email de login (auth.users) de un empleado con el que dicta la
+ * regla `resolverLoginEmail`, SIN tocar la contraseña (se conserva). Idempotente:
+ * si el login ya coincide, no hace nada.
+ *
+ * Notifica al propio empleado in-app cuando el login cambia, para que sepa que a
+ * partir de ahora entra con el nuevo correo (misma contraseña).
+ *
+ * Se usa tanto al editar el email de empresa en la ficha como al cambiarlo a mano
+ * desde Ajustes → Usuarios. Fuente única: no dupliques esta lógica.
+ */
+export async function sincronizarLoginEmailEmpleado(input: {
+  admin: AdminClient;
+  empleadoId: string;
+  /** Correos ya resueltos del empleado (los que se van a persistir en la ficha). */
+  emailEmpresa?: string | null;
+  emailPersonal?: string | null;
+  /** Notificar al empleado del cambio de login (default true). */
+  notificar?: boolean;
+}): Promise<
+  | { ok: true; cambiado: false }
+  | { ok: true; cambiado: true; anterior: string | null; nuevo: string }
+  | { ok: false; error: string }
+> {
+  const { admin, empleadoId } = input;
+
+  const nuevoLogin = resolverLoginEmail({
+    emailEmpresa: input.emailEmpresa,
+    emailPersonal: input.emailPersonal,
+  });
+  // Sin ningún correo no hay login que fijar: no tocamos nada.
+  if (!nuevoLogin) return { ok: true, cambiado: false };
+
+  // Localizar el usuario de auth vinculado al empleado.
+  const { data: emp, error: empErr } = await admin
+    .from("empleados")
+    .select("user_id, empresa_id")
+    .eq("id", empleadoId)
+    .maybeSingle();
+  if (empErr) return { ok: false, error: friendlyError(empErr) };
+  if (!emp?.user_id) return { ok: true, cambiado: false }; // empleado sin login vinculado
+
+  // Email actual en auth.users.
+  const { data: authUser, error: getErr } = await admin.auth.admin.getUserById(emp.user_id);
+  if (getErr || !authUser?.user) {
+    return { ok: false, error: getErr ? friendlyError(getErr) : "Usuario de acceso no encontrado." };
+  }
+  const anterior = (authUser.user.email ?? "").trim().toLowerCase() || null;
+  if (anterior === nuevoLogin) return { ok: true, cambiado: false }; // ya coincide
+
+  // Cambiar SOLO el email en auth.users. La contraseña se conserva intacta.
+  // email_confirm: true → el nuevo correo queda confirmado sin pedir verificación.
+  const { error: updErr } = await admin.auth.admin.updateUserById(emp.user_id, {
+    email: nuevoLogin,
+    email_confirm: true,
+  });
+  if (updErr) return { ok: false, error: friendlyError(updErr) };
+
+  // Aviso in-app al propio empleado (no rompe si falla).
+  if (input.notificar !== false && emp.empresa_id) {
+    try {
+      const { emitirNotificacion } = await import(
+        "@/features/notificaciones/actions/notificaciones-actions"
+      );
+      await emitirNotificacion({
+        empresaId: emp.empresa_id as string,
+        system: true,
+        tipo: "cambio_email_acceso",
+        titulo: "Tu correo de acceso ha cambiado",
+        mensaje:
+          `A partir de ahora inicias sesión con ${nuevoLogin}. ` +
+          `Tu contraseña sigue siendo la misma.`,
+        segmento: { tipo: "empleados", empleadoIds: [empleadoId] },
+        payload: { anterior, nuevo: nuevoLogin },
+        accionUrl: "/mi-panel",
+      });
+    } catch (e) {
+      console.error("[rrhh] aviso cambio_email_acceso:", e);
+    }
+  }
+
+  return { ok: true, cambiado: true, anterior, nuevo: nuevoLogin };
+}

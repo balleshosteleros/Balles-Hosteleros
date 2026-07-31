@@ -241,6 +241,81 @@ export async function resetEmployeePassword(userId: string, newPassword: string)
 }
 
 /**
+ * Cambia MANUALMENTE el email de acceso (login en auth.users) de un usuario
+ * desde Ajustes → Usuarios, SIN tocar la contraseña (se conserva).
+ *
+ * El nuevo correo se guarda además como `email_empresa` en la ficha del empleado
+ * vinculado (si existe), para que la fuente de ficha y el login no diverjan: la
+ * regla canónica es login = empresa ?? personal, así que fijar el de empresa deja
+ * ambos alineados. Notifica al empleado in-app del cambio.
+ */
+export async function updateEmployeeLoginEmail(userId: string, nuevoEmailRaw: string) {
+  await requireAdmin()
+
+  const nuevoEmail = (nuevoEmailRaw ?? '').trim().toLowerCase()
+  const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+  if (!EMAIL_RE.test(nuevoEmail)) return { error: 'Introduce un correo válido.' }
+
+  let admin: ReturnType<typeof createAdminClient>
+  try {
+    admin = createAdminClient()
+  } catch {
+    return { error: 'Supabase admin no configurado. Configura SUPABASE_SERVICE_ROLE_KEY.' }
+  }
+
+  // Email actual (para no hacer nada si ya coincide y para el aviso).
+  const { data: authUser, error: getErr } = await admin.auth.admin.getUserById(userId)
+  if (getErr || !authUser?.user) {
+    return { error: getErr ? friendlyError(getErr) : 'Usuario no encontrado.' }
+  }
+  const anterior = (authUser.user.email ?? '').trim().toLowerCase() || null
+  if (anterior === nuevoEmail) return { success: true, sinCambios: true }
+
+  // Cambiar el email de login (conserva la contraseña).
+  const { error: updErr } = await admin.auth.admin.updateUserById(userId, {
+    email: nuevoEmail,
+    email_confirm: true,
+  })
+  if (updErr) return { error: friendlyError(updErr) }
+
+  // Alinear la ficha del empleado: el nuevo login pasa a ser su email de empresa.
+  const { data: emp } = await admin
+    .from('empleados')
+    .select('id, empresa_id')
+    .eq('user_id', userId)
+    .maybeSingle()
+  if (emp?.id) {
+    await admin.from('empleados').update({ email_empresa: nuevoEmail }).eq('id', emp.id)
+
+    // Aviso in-app al empleado (no rompe si falla).
+    if (emp.empresa_id) {
+      try {
+        const { emitirNotificacion } = await import(
+          '@/features/notificaciones/actions/notificaciones-actions'
+        )
+        await emitirNotificacion({
+          empresaId: emp.empresa_id as string,
+          system: true,
+          tipo: 'cambio_email_acceso',
+          titulo: 'Tu correo de acceso ha cambiado',
+          mensaje:
+            `A partir de ahora inicias sesión con ${nuevoEmail}. ` +
+            `Tu contraseña sigue siendo la misma.`,
+          segmento: { tipo: 'empleados', empleadoIds: [emp.id as string] },
+          payload: { anterior, nuevo: nuevoEmail },
+          accionUrl: '/mi-panel',
+        })
+      } catch (e) {
+        console.error('[admin] aviso cambio_email_acceso:', e)
+      }
+    }
+  }
+
+  revalidatePath('/ajustes')
+  return { success: true, anterior, nuevo: nuevoEmail }
+}
+
+/**
  * Envía un correo de recuperación de contraseña al usuario indicado.
  *
  * Flujo:

@@ -28,7 +28,9 @@ export type TipoNotificacion =
   | "gestoria_alta_enviada"
   | "gestoria_recordatorio"
   | "gestoria_contrato_subido"
-  | "gestoria_contrato_firmado";
+  | "gestoria_contrato_firmado"
+  // Cambio del correo de acceso (login) del empleado
+  | "cambio_email_acceso";
 
 export interface TipoMeta {
   /** Etiqueta legible (sentence case). */
@@ -163,6 +165,14 @@ export const TIPOS_NOTIFICACION: Record<TipoNotificacion, TipoMeta> = {
     icono: "exito",
     color: "text-emerald-600",
     badge: "bg-emerald-100 text-emerald-700",
+    accionLabel: "Visto",
+    requiereAccion: false,
+  },
+  cambio_email_acceso: {
+    label: "Correo de acceso",
+    icono: "info",
+    color: "text-sky-600",
+    badge: "bg-sky-100 text-sky-700",
     accionLabel: "Visto",
     requiereAccion: false,
   },

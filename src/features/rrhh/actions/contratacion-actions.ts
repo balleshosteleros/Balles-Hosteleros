@@ -21,7 +21,7 @@ import { getSiteUrl } from "@/lib/site-url";
 import { bienvenidaEmpleadoEmail } from "@/lib/email/templates/bienvenida-empleado";
 import { buildRecoveryActionUrl } from "@/lib/auth/recovery-link";
 import { friendlyError } from "@/shared/lib/friendly-errors";
-import { requireAdminUser, altaUsuarioEmpleado } from "@/features/rrhh/services/empleados-core";
+import { requireAdminUser, altaUsuarioEmpleado, resolverLoginEmail } from "@/features/rrhh/services/empleados-core";
 import { copiarDocumentacionCandidatoAEmpleado } from "@/features/rrhh/services/documentacion-candidato-a-empleado";
 import { enviarAltaGestoria } from "@/features/rrhh/actions/gestoria-actions";
 import { faltantesAltaGestoria } from "@/features/rrhh/data/campos-gestoria";
@@ -276,13 +276,16 @@ export async function contratarCandidato(input: ContratarInput): Promise<Contrat
   const area = (depto?.area ?? "OPERATIVA").toUpperCase();
   const esAdministrativo = area === "ADMINISTRATIVA";
 
-  // Regla de email de acceso por área
+  // Email de acceso: regla canónica única → empresa ?? personal (misma que
+  // usan el alta directa y la edición de ficha). Para puestos administrativos
+  // se sigue exigiendo email de empresa (salvaguarda: un administrativo sin
+  // correo corporativo suele ser un error de captura).
   const emailPersonal = cand.email.toLowerCase();
   const emailEmpresa = (input.emailEmpresa ?? "").trim().toLowerCase() || null;
   if (esAdministrativo && !emailEmpresa) {
     return { ok: false, error: "Los puestos administrativos requieren un email de empresa para el acceso." };
   }
-  const loginEmail = esAdministrativo ? (emailEmpresa as string) : emailPersonal;
+  const loginEmail = resolverLoginEmail({ emailEmpresa, emailPersonal })!;
 
   // Plantilla del puesto: como el diálogo ya no elige nivel, heredamos el nivel
   // más bajo definido en la plantilla (normalmente el 1) en lugar de exigir un

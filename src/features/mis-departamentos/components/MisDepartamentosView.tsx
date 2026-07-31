@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import { useAuth, type AppRole } from "@/features/auth/contexts/auth-context";
+import { useAuth, esAccesoDepartamentos, type AppRole } from "@/features/auth/contexts/auth-context";
 import { Card } from "@/components/ui/card";
 import {
   Crown, UtensilsCrossed, ChefHat, Briefcase, CheckCircle2, User, Camera,
@@ -77,7 +77,9 @@ export function MisDepartamentosView() {
   const router = useRouter();
   const rolPrincipal: AppRole | null = roles[0] ?? null;
 
-  const esDireccion = hasRole("director") || hasRole("admin");
+  // Acceso a esta vista: dirección (director/admin) y gerencia. Dirección ve
+  // todo por bypass; gerencia lo ve filtrado por sus permisos (ver `tiles`).
+  const esDireccion = esAccesoDepartamentos(roles);
 
   const [mounted, setMounted] = useState(false);
   useEffect(() => {
