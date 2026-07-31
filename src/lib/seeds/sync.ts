@@ -36,7 +36,7 @@ import {
 type Admin = ReturnType<typeof createAdminClient>;
 
 /** Devuelve el id del departamento de una empresa por nombre, o null si no existe. */
-async function getDeptoIdByNombre(
+export async function getDeptoIdByNombre(
   admin: Admin,
   empresaId: string,
   nombre: string,
@@ -1035,6 +1035,3 @@ export async function syncSeedsToAllEmpresas(): Promise<{
     return { ok: false, resumen: [], error: msg };
   }
 }
-
-// Re-export del helper (lo necesita pagos-actions u otros lugares).
-export { getDeptoIdByNombre };

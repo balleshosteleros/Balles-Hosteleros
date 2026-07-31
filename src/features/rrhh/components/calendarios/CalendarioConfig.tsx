@@ -6,9 +6,11 @@ import {
   regenerarFestivos,
   addFestivoLocal,
   deleteFestivo,
+} from "@/features/rrhh/actions/festivos-actions";
+import {
   COMUNIDADES_AUTONOMAS,
   type FestivoBD,
-} from "@/features/rrhh/actions/festivos-actions";
+} from "@/features/rrhh/actions/festivos-types";
 import { saveEmpresaAjustes } from "@/features/empresa/actions/empresas-actions";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";

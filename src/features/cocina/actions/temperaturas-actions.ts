@@ -96,6 +96,3 @@ export async function registrarTemperatura(input: {
     return { ok: false, error: msg };
   }
 }
-
-// Alias para compatibilidad
-export const createRegistro = registrarTemperatura;

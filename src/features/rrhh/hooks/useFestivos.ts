@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState, useCallback } from "react";
-import { getFestivos, type FestivoBD } from "@/features/rrhh/actions/festivos-actions";
+import { getFestivos } from "@/features/rrhh/actions/festivos-actions";
+import type { FestivoBD } from "@/features/rrhh/actions/festivos-types";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 
 /**

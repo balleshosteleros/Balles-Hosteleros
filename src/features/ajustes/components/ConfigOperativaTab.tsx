@@ -6,7 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { TZ_DESTACADAS, offsetTZ } from "@/features/google-workspace/lib/timezones";
-import { COMUNIDADES_AUTONOMAS } from "@/features/rrhh/actions/festivos-actions";
+import { COMUNIDADES_AUTONOMAS } from "@/features/rrhh/actions/festivos-types";
 
 export function ConfigOperativaTab() {
   const { ajustes, setAjustes } = useEmpresa();
