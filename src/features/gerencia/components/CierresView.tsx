@@ -9,7 +9,7 @@ import {
 } from "lucide-react";
 import {
   format, startOfMonth, endOfMonth, eachDayOfInterval, getDay, addMonths,
-  subMonths, isSameDay, parseISO, addDays, addWeeks, startOfDay,
+  subMonths, isSameDay, parseISO,
 } from "date-fns";
 import { es } from "date-fns/locale";
 import { Badge } from "@/components/ui/badge";
@@ -193,27 +193,6 @@ export function CierresView() {
     return m;
   }, [cierres]);
 
-  const ultimosCierres = useMemo(() => cierres.slice(0, 5), [cierres]);
-
-  // Próximos cierres: solo si modo='fijo'
-  const proximosCierres = useMemo(() => {
-    if (config.modo !== "fijo" || config.dia_semana === null) return [];
-    const out: { fecha: Date; key: string; yaRegistrado: boolean }[] = [];
-    let cursor = startOfDay(new Date());
-    let safety = 0;
-    while (out.length < 5 && safety < 50) {
-      safety++;
-      if (jsDayToLunFirst(cursor) === config.dia_semana) {
-        const key = format(cursor, "yyyy-MM-dd");
-        const yaRegistrado = !!cierresPorFecha[key];
-        out.push({ fecha: cursor, key, yaRegistrado });
-        cursor = addWeeks(cursor, 1);
-      } else {
-        cursor = addDays(cursor, 1);
-      }
-    }
-    return out;
-  }, [config, cierresPorFecha]);
 
   const resumen = useMemo(() => {
     const total = cierres.length;
@@ -575,101 +554,6 @@ export function CierresView() {
       <Tabs value={vista} onValueChange={(v) => setVista(v as typeof vista)}>
         {/* ── RESUMEN ── */}
         <TabsContent value="resumen" className="mt-4 space-y-6">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            {/* Próximos cierres */}
-            <Card>
-              <CardContent className="p-4 space-y-3">
-                <div className="flex items-center justify-between">
-                  <h3 className="font-semibold">Próximos cierres</h3>
-                  {config.modo === "fijo" && config.dia_semana !== null ? (
-                    <Badge variant="secondary" className="text-xs">
-                      Cada {DIAS_SEMANA[config.dia_semana].label.toLowerCase()}
-                    </Badge>
-                  ) : (
-                    <Badge variant="outline" className="text-xs">Sin día prefijado</Badge>
-                  )}
-                </div>
-                {proximosCierres.length === 0 ? (
-                  <p className="text-sm text-muted-foreground py-6 text-center">
-                    {config.modo === "libre"
-                      ? "No hay día prefijado. Configúralo en Ajustes para ver los próximos."
-                      : "No hay próximos cierres programados."}
-                  </p>
-                ) : (
-                  <div className="space-y-2">
-                    {proximosCierres.map((p) => (
-                      <div
-                        key={p.key}
-                        className={`flex items-center justify-between rounded-lg border px-3 py-2 ${p.yaRegistrado ? "bg-emerald-50/50 border-emerald-200" : "bg-background"}`}
-                      >
-                        <div>
-                          <p className="text-sm font-medium capitalize">
-                            {format(p.fecha, "EEEE d 'de' MMMM", { locale: es })}
-                          </p>
-                          <p className="text-xs text-muted-foreground">{format(p.fecha, "yyyy-MM-dd")}</p>
-                        </div>
-                        {p.yaRegistrado ? (
-                          <Badge className="bg-emerald-100 text-emerald-800 border-emerald-300 gap-1">
-                            <CheckCircle2 className="h-3 w-3" /> Registrado
-                          </Badge>
-                        ) : (
-                          <Button size="sm" variant="outline" onClick={() => abrirNuevo(p.key)}>
-                            <Plus className="h-3 w-3 mr-1" /> Registrar
-                          </Button>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Últimos cierres */}
-            <Card>
-              <CardContent className="p-4 space-y-3">
-                <h3 className="font-semibold">Últimos cierres</h3>
-                {ultimosCierres.length === 0 ? (
-                  loading ? (
-                    <LoadingSpinner className="py-6" />
-                  ) : (
-                    <p className="text-sm text-muted-foreground py-6 text-center">
-                      Aún no hay cierres registrados.
-                    </p>
-                  )
-                ) : (
-                  <div className="space-y-2">
-                    {ultimosCierres.map((c) => (
-                      <div
-                        key={c.id}
-                        className="flex items-center justify-between rounded-lg border px-3 py-2 hover:bg-muted/50 cursor-pointer"
-                        onClick={() => { setSelected(c); setDetalleOpen(true); }}
-                      >
-                        <div>
-                          <p className="text-sm font-medium capitalize">
-                            {format(parseISO(c.fecha), "EEEE d MMM yyyy", { locale: es })}
-                          </p>
-                          <p className="text-xs text-muted-foreground">
-                            Efectivo retirado: {fmtEuro(c.efectivo_retirado)}
-                          </p>
-                        </div>
-                        {c.cuadra ? (
-                          <Badge className="bg-emerald-100 text-emerald-800 border-emerald-300 gap-1">
-                            <CheckCircle2 className="h-3 w-3" /> Cuadra
-                          </Badge>
-                        ) : (
-                          <Badge className={`gap-1 ${c.descuadre >= 0 ? "bg-amber-100 text-amber-800 border-amber-300" : "bg-red-100 text-red-800 border-red-300"}`}>
-                            {c.descuadre >= 0 ? <ArrowUpFromLine className="h-3 w-3" /> : <ArrowDownToLine className="h-3 w-3" />}
-                            {fmtEuro(c.descuadre)}
-                          </Badge>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </div>
-
           {/* Tabla completa */}
           <Card>
             <Table>
