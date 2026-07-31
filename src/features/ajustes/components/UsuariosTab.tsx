@@ -19,7 +19,7 @@ import { Badge } from "@/components/ui/badge";
 import {
   Search, KeyRound, Pencil, UserCog,
   Power, PowerOff, UserPlus, Plus, UserCheck, Trash2, Mail, ListFilter,
-  ExternalLink, Building2,
+  Building2,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -501,15 +501,6 @@ export function UsuariosTab() {
                 <td className="px-3 py-2.5 whitespace-nowrap">
                   <div className="flex items-center gap-1.5">
                     <span className="font-medium text-foreground">{acc.nombreEmpleado}</span>
-                    {acc.esEmpleado === false && (
-                      <span
-                        className="inline-flex items-center"
-                        title="Usuario externo (no empleado)"
-                        aria-label="Usuario externo"
-                      >
-                        <ExternalLink className="h-3.5 w-3.5 text-violet-600 shrink-0" />
-                      </span>
-                    )}
                   </div>
                   <div className="text-[11px] text-muted-foreground">{acc.emailUsuario}</div>
                 </td>
