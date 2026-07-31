@@ -4,7 +4,6 @@ import { useEffect, useRef, useState } from "react";
 import { Camera, Upload, Check, RefreshCw, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/features/auth/contexts/auth-context";
-import { uploadAvatar } from "@/features/auth/actions/avatar-actions";
 
 type Mode = "menu" | "camera" | "preview";
 
@@ -133,10 +132,21 @@ export function AvatarPicker({
       const file = new File([previewBlob], `avatar.${ext}`, { type: previewBlob.type || "image/jpeg" });
       const fd = new FormData();
       fd.append("file", file);
-      const url = await uploadAvatar(user.id, fd);
+
+      const res = await fetch("/api/avatar", { method: "POST", body: fd });
+      let payload: { url?: string; error?: string } = {};
+      try {
+        payload = await res.json();
+      } catch {
+        // Respuesta no-JSON (p.ej. HTML de una redirección): mensaje claro en español.
+        throw new Error("No se pudo contactar con el servidor. Recarga la página e inténtalo de nuevo.");
+      }
+      if (!res.ok || !payload.url) {
+        throw new Error(payload.error || "No se pudo subir la foto. Inténtalo de nuevo.");
+      }
 
       if (onUploaded) {
-        onUploaded(url);
+        onUploaded(payload.url);
       } else {
         window.location.reload();
       }
