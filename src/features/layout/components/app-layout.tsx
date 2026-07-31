@@ -24,7 +24,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { FloatingSoporteButton } from "@/features/soporte/components";
-import { OnboardingGuard } from "@/features/formacion/components/OnboardingGuard";
 import { AvatarRequiredGuard } from "@/features/auth/components/AvatarRequiredGuard";
 import { EmpresaSelector } from "@/features/empresa/components/empresa-selector";
 import {
@@ -404,9 +403,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             </div>
           </header>
           <main className="flex-1 overflow-y-auto overflow-x-hidden min-h-0 overscroll-contain pb-28">
-            <AvatarRequiredGuard>
-              <OnboardingGuard>{children}</OnboardingGuard>
-            </AvatarRequiredGuard>
+            <AvatarRequiredGuard>{children}</AvatarRequiredGuard>
           </main>
         </div>
         {showUi && <FloatingSoporteButton />}
