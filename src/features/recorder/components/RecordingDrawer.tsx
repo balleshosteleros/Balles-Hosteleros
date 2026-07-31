@@ -531,13 +531,17 @@ function RecordingsList() {
   const [editingTitle, setEditingTitle] = useState("");
   const [savingRename, setSavingRename] = useState(false);
   const [quota, setQuota] = useState<{ used: number; limit: number } | null>(null);
-  const { pendingCount } = useRecorder();
+  const { pendingCount, departamentos } = useRecorder();
   const { confirm: confirmDelete, dialog: confirmDeleteDialog } =
     useConfirmDelete();
 
+  // Firma de departamentos accesibles: si el rol cambia (cambian los deptos),
+  // recargamos la lista para que las carpetas visibles se actualicen solas.
+  const deptosKey = departamentos.join("|");
+
   useEffect(() => {
     let alive = true;
-    fetch("/api/recordings")
+    fetch("/api/recordings", { cache: "no-store" })
       .then((res) => (res.ok ? res.json() : []))
       .then((data) => {
         if (alive && Array.isArray(data)) setRecordings(data);
@@ -549,7 +553,7 @@ function RecordingsList() {
     return () => {
       alive = false;
     };
-  }, [pendingCount]);
+  }, [pendingCount, deptosKey]);
 
   useEffect(() => {
     let alive = true;
@@ -565,12 +569,14 @@ function RecordingsList() {
     };
   }, [recordings.length, pendingCount]);
 
-  // Carpetas = departamentos presentes en las grabaciones visibles.
+  // Carpetas = departamentos a los que TIENES acceso por tu rol (aunque estén
+  // vacías) + los que aparecen en las grabaciones visibles. Así siempre ves la
+  // carpeta de cada uno de tus departamentos, y si tu rol cambia, cambian.
   const folders = useMemo(() => {
-    const set = new Set<string>();
+    const set = new Set<string>(departamentos);
     for (const r of recordings) if (r.departamento) set.add(r.departamento);
     return [...set].sort();
-  }, [recordings]);
+  }, [recordings, departamentos]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -726,8 +732,19 @@ function RecordingsList() {
         </div>
       ) : filtered.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-6 text-center">
-          <Search className="h-5 w-5 text-muted-foreground/40 mb-1" />
-          <p className="text-xs text-muted-foreground">Sin resultados para “{search}”</p>
+          {search.trim() ? (
+            <>
+              <Search className="h-5 w-5 text-muted-foreground/40 mb-1" />
+              <p className="text-xs text-muted-foreground">Sin resultados para “{search}”</p>
+            </>
+          ) : (
+            <>
+              <FolderClosed className="h-5 w-5 text-muted-foreground/40 mb-1" />
+              <p className="text-xs text-muted-foreground capitalize">
+                No hay grabaciones en {folder?.toLowerCase()}
+              </p>
+            </>
+          )}
         </div>
       ) : (
         <div className="space-y-3 max-h-[40vh] overflow-y-auto pr-1">
