@@ -6,7 +6,7 @@ export function InicioHeader({ data }: { data: MobileInicioData }) {
   const { nombre, rolLabel, avatarUrl, empresaActual, empresas } = data;
 
   return (
-    <header className="relative px-5 pt-[max(env(safe-area-inset-top),12px)] pb-2">
+    <header className="sticky top-0 z-40 bg-background/95 px-5 pt-[max(env(safe-area-inset-top),12px)] pb-2 backdrop-blur">
       {/* Halo azulado de marca de fondo. Va recortado en su propio contenedor
           para NO tapar el desplegable de empresas (que se abre por debajo del
           header); el `overflow-hidden` en el <header> lo recortaba. */}
