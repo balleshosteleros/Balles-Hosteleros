@@ -706,7 +706,7 @@ export function UsuariosTab() {
           <form action={handleResetPassword} className="space-y-2">
             <div>
               <Label className="text-xs font-bold">Nueva contraseña</Label>
-              <Input name="new_password" type="password" required minLength={6} placeholder="Mínimo 6 caracteres" />
+              <Input name="new_password" type="password" required minLength={8} maxLength={72} placeholder="Mín. 8 caracteres, con letras y números" />
             </div>
             <div className="flex justify-end gap-2">
               <Button type="button" variant="outline" onClick={() => setResetModal(null)}>Cancelar</Button>
@@ -762,7 +762,7 @@ export function UsuariosTab() {
             </div>
             <div>
               <Label className="text-xs font-bold">Contraseña</Label>
-              <Input name="password" type="password" required minLength={6} autoComplete="new-password" />
+              <Input name="password" type="password" required minLength={8} maxLength={72} autoComplete="new-password" placeholder="Mín. 8 caracteres, con letras y números" />
             </div>
             <div>
               <Label className="text-xs font-bold">Rol *</Label>

@@ -45,6 +45,25 @@ async function requireAdmin() {
   return user
 }
 
+// Política de la contraseña MANUAL (la que fija el admin desde Ajustes).
+// A diferencia del alta por correo (PIN de 6 dígitos exactos, ver
+// updatePassword en actions/auth.ts), aquí el admin elige una contraseña real.
+// Regla razonable "de lo típico": mínimo 8, máximo 72 (límite de bcrypt: por
+// encima Supabase Auth ignora los caracteres extra), y que mezcle al menos una
+// letra y un número. Sin exigir mayúsculas/símbolos: longitud > reglas raras.
+const PASSWORD_MIN_LEN = 8
+const PASSWORD_MAX_LEN = 72
+const PASSWORD_ERROR =
+  'La contraseña debe tener entre 8 y 72 caracteres e incluir al menos una letra y un número.'
+
+/** Valida la contraseña manual del admin. Devuelve mensaje de error o null. */
+function validateManualPassword(password: string): string | null {
+  const pw = password ?? ''
+  if (pw.length < PASSWORD_MIN_LEN || pw.length > PASSWORD_MAX_LEN) return PASSWORD_ERROR
+  if (!/[a-zA-Z]/.test(pw) || !/\d/.test(pw)) return PASSWORD_ERROR
+  return null
+}
+
 export async function createEmployee(formData: FormData) {
   await requireAdmin()
 
@@ -57,6 +76,8 @@ export async function createEmployee(formData: FormData) {
 
   const email = formData.get('email') as string
   const password = formData.get('password') as string
+  const pwError = validateManualPassword(password)
+  if (pwError) return { error: pwError }
   const nombre = capitalizeText((formData.get('nombre') as string) ?? '')
   const apellidos = capitalizeText((formData.get('apellidos') as string) ?? '')
   const fullName = [nombre, apellidos].filter(Boolean).join(' ')
@@ -199,6 +220,9 @@ export async function getEmployees() {
 
 export async function resetEmployeePassword(userId: string, newPassword: string) {
   await requireAdmin()
+
+  const pwError = validateManualPassword(newPassword)
+  if (pwError) return { error: pwError }
 
   let admin: ReturnType<typeof createAdminClient>
   try {

@@ -127,7 +127,9 @@ export function CreateEmployeeForm({ onSuccess }: { onSuccess?: () => void }) {
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            minLength={6}
+            minLength={8}
+            maxLength={72}
+            placeholder="Mín. 8 caracteres, con letras y números"
           />
         </div>
 

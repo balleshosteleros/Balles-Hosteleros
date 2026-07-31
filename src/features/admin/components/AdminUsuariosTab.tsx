@@ -157,7 +157,7 @@ export function AdminUsuariosTab() {
             </div>
             <div>
               <label htmlFor="password" className="block text-sm font-medium mb-1">Contraseña</label>
-              <Input id="password" name="password" type="password" required minLength={6} />
+              <Input id="password" name="password" type="password" required minLength={8} maxLength={72} placeholder="Mín. 8 caracteres, con letras y números" />
             </div>
             <div>
               <label htmlFor="role" className="block text-sm font-medium mb-1">Rol</label>

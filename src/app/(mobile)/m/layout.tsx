@@ -5,7 +5,7 @@ import { PWARegister } from "@/features/mi-panel/mobile/components/PWARegister";
 import { MobileBottomNav } from "@/features/mi-panel/mobile/components/MobileBottomNav";
 import { MobileFichajeProvider } from "@/features/mi-panel/mobile/components/MobileFichajeProvider";
 import { VersionAutoUpdate } from "@/features/mi-panel/mobile/components/VersionAutoUpdate";
-import { NotificacionesGate } from "@/features/notificaciones/components/NotificacionesGate";
+// import { NotificacionesGate } from "@/features/notificaciones/components/NotificacionesGate"; // desactivado en pruebas
 
 export const dynamic = "force-dynamic";
 
@@ -69,7 +69,9 @@ export default async function MobileLayout({ children }: { children: React.React
       <main className="mx-auto w-full max-w-screen-sm pb-24">{children}</main>
       <MobileBottomNav />
       <MobileFichajeProvider />
-      <NotificacionesGate />
+      {/* Gate bloqueante de notificaciones desactivado durante las pruebas:
+          los empleados no deben verse forzados a pulsar "Visto" para trabajar. */}
+      {/* <NotificacionesGate /> */}
     </div>
   );
 }
