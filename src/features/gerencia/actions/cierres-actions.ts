@@ -185,6 +185,11 @@ export async function createCierre(formData: FormData): Promise<{ ok: true; data
 
     if (!fecha) return { ok: false, error: "La fecha es obligatoria" };
 
+    // Cierres e ingresos exigen justificante adjunto (la retirada no).
+    if (tipo !== "retirada" && !(file && file.size > 0)) {
+      return { ok: false, error: `Debes adjuntar un documento para registrar ${tipo === "ingreso" ? "un ingreso" : "un cierre"}` };
+    }
+
     // Gastos de la semana (registro informativo, no altera el descuadre).
     let gastosInput: CierreGasto[] = [];
     const gastosRaw = tipo === "cierre" ? ((formData.get("gastos") as string | null) || "") : "";

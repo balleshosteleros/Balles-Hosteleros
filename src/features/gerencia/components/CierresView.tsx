@@ -409,6 +409,11 @@ export function CierresView() {
       toast.error("La fecha es obligatoria");
       return;
     }
+    // Cierres e ingresos exigen justificante adjunto (la retirada no).
+    if (form.tipo !== "retirada" && !form.file) {
+      toast.error(`Debes adjuntar un documento para registrar ${form.tipo === "ingreso" ? "un ingreso" : "un cierre"}`);
+      return;
+    }
     setSaving(true);
     try {
       const fd = new FormData();
@@ -817,16 +822,21 @@ export function CierresView() {
                         )}
                       </div>
                       <div className="mt-1 space-y-0.5">
-                        {items.slice(0, 2).map((c) => (
+                        {items.slice(0, 2).map((c) => {
+                          // El importe con signo real sobre la caja: cierre suma, retirada/ingreso restan.
+                          const importeConSigno = signoEfectivo(c.tipo) * c.efectivo_retirado;
+                          const esNegativo = importeConSigno < 0;
+                          return (
                           <div key={c.id} className="text-[10px] leading-tight">
-                            <span className="font-medium">{fmtEuro(c.efectivo_retirado)}</span>
+                            <span className={`font-medium ${esNegativo ? "text-red-700" : ""}`}>{fmtEuro(importeConSigno)}</span>
                             {!c.cuadra && (
                               <span className={`ml-1 ${c.descuadre >= 0 ? "text-amber-700" : "text-red-700"}`}>
                                 ({c.descuadre >= 0 ? "+" : ""}{fmtEuro(c.descuadre)})
                               </span>
                             )}
                           </div>
-                        ))}
+                          );
+                        })}
                         {items.length > 2 && (
                           <span className="text-[10px] text-muted-foreground">+{items.length - 2} más</span>
                         )}
@@ -1223,15 +1233,20 @@ export function CierresView() {
                 {form.tipo === "ingreso"
                   ? "Documento del ingreso (PDF, imagen, etc.)"
                   : "Documento del cierre (PDF, imagen, etc.)"}
+                <span className="text-red-600"> *</span>
               </Label>
               <Input
                 type="file"
                 accept=".pdf,.jpg,.jpeg,.png,.webp,.xls,.xlsx,.csv"
                 onChange={(e) => setForm({ ...form, file: e.target.files?.[0] ?? null })}
               />
-              {form.file && (
+              {form.file ? (
                 <p className="text-xs text-muted-foreground mt-1">
                   {form.file.name} · {fmtSize(form.file.size)}
+                </p>
+              ) : (
+                <p className="text-xs text-red-600 mt-1">
+                  Obligatorio: adjunta el justificante para poder guardar.
                 </p>
               )}
             </div>
