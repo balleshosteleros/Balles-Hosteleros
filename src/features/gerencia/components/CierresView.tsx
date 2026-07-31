@@ -35,6 +35,7 @@ import {
   type CierreRow, type CierresConfig, type CierreModo, type CierreGasto, type CierreTipo,
   type CierreProgramacion,
 } from "@/features/gerencia/actions/cierres-actions";
+import { MAX_DOCUMENTOS_CIERRE } from "@/features/gerencia/types/cierres";
 import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
 import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 import {
@@ -185,7 +186,7 @@ export function CierresView() {
     total_contado: "",
     notas: "",
     registrado_por: "",
-    file: null as File | null,
+    files: [] as File[],
     gastos: [] as GastoFila[],
   });
   const [form, setForm] = useState(emptyForm());
@@ -416,8 +417,8 @@ export function CierresView() {
       toast.error("La fecha es obligatoria");
       return;
     }
-    // Cierres e ingresos exigen justificante adjunto (la retirada no).
-    if (form.tipo !== "retirada" && !form.file) {
+    // Cierres e ingresos exigen al menos un justificante adjunto (la retirada no).
+    if (form.tipo !== "retirada" && form.files.length === 0) {
       toast.error(`Debes adjuntar un documento para registrar ${form.tipo === "ingreso" ? "un ingreso" : "un cierre"}`);
       return;
     }
@@ -445,7 +446,7 @@ export function CierresView() {
           .filter((g) => g.tipo || g.descripcion || g.importe !== 0);
         if (gastosPayload.length > 0) fd.append("gastos", JSON.stringify(gastosPayload));
       }
-      if (form.file) fd.append("file", form.file);
+      for (const f of form.files) fd.append("file", f);
 
       const res = await createCierre(fd);
       if (res.ok) {
@@ -1238,22 +1239,62 @@ export function CierresView() {
             <div className="col-span-2">
               <Label>
                 {form.tipo === "ingreso"
-                  ? "Documento del ingreso (PDF, imagen, etc.)"
-                  : "Documento del cierre (PDF, imagen, etc.)"}
+                  ? "Documentos del ingreso (PDF, imagen, etc.)"
+                  : "Documentos del cierre (PDF, imagen, etc.)"}
                 <span className="text-red-600"> *</span>
               </Label>
               <Input
                 type="file"
+                multiple
                 accept=".pdf,.jpg,.jpeg,.png,.webp,.xls,.xlsx,.csv"
-                onChange={(e) => setForm({ ...form, file: e.target.files?.[0] ?? null })}
+                disabled={form.files.length >= MAX_DOCUMENTOS_CIERRE}
+                onChange={(e) => {
+                  const nuevos = Array.from(e.target.files ?? []);
+                  if (nuevos.length === 0) return;
+                  setForm((f) => {
+                    // Evita duplicados por nombre+tamaño y respeta el tope de documentos.
+                    const combinados = [...f.files];
+                    for (const n of nuevos) {
+                      if (combinados.some((x) => x.name === n.name && x.size === n.size)) continue;
+                      if (combinados.length >= MAX_DOCUMENTOS_CIERRE) break;
+                      combinados.push(n);
+                    }
+                    if (nuevos.length + f.files.length > MAX_DOCUMENTOS_CIERRE) {
+                      toast.error(`Puedes adjuntar como máximo ${MAX_DOCUMENTOS_CIERRE} documentos`);
+                    }
+                    return { ...f, files: combinados };
+                  });
+                  // Limpia el input para permitir volver a seleccionar el mismo archivo.
+                  e.target.value = "";
+                }}
               />
-              {form.file ? (
-                <p className="text-xs text-muted-foreground mt-1">
-                  {form.file.name} · {fmtSize(form.file.size)}
-                </p>
+              {form.files.length > 0 ? (
+                <div className="mt-2 space-y-1">
+                  {form.files.map((f, i) => (
+                    <div key={`${f.name}-${f.size}-${i}`} className="flex items-center justify-between rounded-md border px-2 py-1">
+                      <span className="flex items-center gap-2 text-xs truncate">
+                        <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                        <span className="truncate">{f.name}</span>
+                        <span className="text-muted-foreground shrink-0">· {fmtSize(f.size)}</span>
+                      </span>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        className="h-6 w-6 p-0 text-muted-foreground hover:text-red-600"
+                        onClick={() => setForm((prev) => ({ ...prev, files: prev.files.filter((_, idx) => idx !== i) }))}
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  ))}
+                  <p className="text-xs text-muted-foreground">
+                    {form.files.length} de {MAX_DOCUMENTOS_CIERRE} documentos
+                  </p>
+                </div>
               ) : (
                 <p className="text-xs text-red-600 mt-1">
-                  Obligatorio: adjunta el justificante para poder guardar.
+                  Obligatorio: adjunta al menos un justificante (hasta {MAX_DOCUMENTOS_CIERRE}) para poder guardar.
                 </p>
               )}
             </div>
@@ -1489,20 +1530,32 @@ export function CierresView() {
                   </div>
                 )}
 
-                {selected.url && (
-                  <div className="rounded-lg border p-3 flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <FileText className="h-5 w-5 text-muted-foreground" />
-                      <div>
-                        <p className="text-sm font-medium">{selected.file_name ?? "Documento del cierre"}</p>
-                        <p className="text-xs text-muted-foreground">{fmtSize(selected.size_bytes)}</p>
+                {(selected.documentos.length > 0 || selected.url) && (
+                  <div className="space-y-2">
+                    <Label className="text-xs text-muted-foreground">
+                      {selected.documentos.length > 1 ? "Documentos" : "Documento"}
+                    </Label>
+                    {(selected.documentos.length > 0
+                      ? selected.documentos
+                      : [{ name: selected.file_name ?? "Documento del cierre", size: selected.size_bytes ?? 0, url: selected.url }]
+                    ).map((doc, i) => (
+                      <div key={i} className="rounded-lg border p-3 flex items-center justify-between">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <FileText className="h-5 w-5 text-muted-foreground shrink-0" />
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium truncate">{doc.name || "Documento del cierre"}</p>
+                            <p className="text-xs text-muted-foreground">{fmtSize(doc.size)}</p>
+                          </div>
+                        </div>
+                        {doc.url && (
+                          <Button asChild size="sm" variant="outline" className="shrink-0">
+                            <a href={doc.url} target="_blank" rel="noreferrer">
+                              <Download className="h-3.5 w-3.5 mr-1" /> Abrir
+                            </a>
+                          </Button>
+                        )}
                       </div>
-                    </div>
-                    <Button asChild size="sm" variant="outline">
-                      <a href={selected.url} target="_blank" rel="noreferrer">
-                        <Download className="h-3.5 w-3.5 mr-1" /> Abrir
-                      </a>
-                    </Button>
+                    ))}
                   </div>
                 )}
               </div>

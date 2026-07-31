@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 
 import { getEmpresaActivaForUser } from "@/features/empresa/lib/empresa-server";
+import { MAX_DOCUMENTOS_CIERRE } from "@/features/gerencia/types/cierres";
 import type { SupabaseClient } from "@supabase/supabase-js";
 const BUCKET = "cierres-documentos";
 const SIGNED_URL_TTL_SECONDS = 60 * 60;
@@ -19,6 +20,15 @@ export interface CierreGasto {
   importe: number;
 }
 
+// Documento adjunto a un cierre/ingreso. Se admiten varios (máx. 3, controlado en UI/backend).
+export interface CierreDocumento {
+  path: string;
+  name: string;
+  size: number;
+  mime: string | null;
+  url: string | null;
+}
+
 export interface CierreRow {
   id: string;
   tipo: CierreTipo;
@@ -33,6 +43,7 @@ export interface CierreRow {
   file_name: string | null;
   size_bytes: number | null;
   mime_type: string | null;
+  documentos: CierreDocumento[];
   registrado_por: string | null;
   url: string | null;
   gastos: CierreGasto[];
@@ -82,6 +93,45 @@ function sanitizeFilename(name: string): string {
     .slice(0, 120);
 }
 
+// Normaliza el JSONB `documentos` a un array tipado. Si viene vacío, cae al
+// documento único legacy (storage_path/file_name/...) para no perder adjuntos antiguos.
+function normalizarDocumentos(
+  raw: unknown,
+  legacy: { path: string | null; name: string | null; size: number | null; mime: string | null },
+): Array<{ path: string; name: string; size: number; mime: string | null }> {
+  const out: Array<{ path: string; name: string; size: number; mime: string | null }> = [];
+  if (Array.isArray(raw)) {
+    for (const d of raw) {
+      const o = (d ?? {}) as Record<string, unknown>;
+      const path = typeof o.path === "string" ? o.path : "";
+      if (!path) continue;
+      out.push({
+        path,
+        name: typeof o.name === "string" && o.name ? o.name : "documento",
+        size: Number(o.size ?? 0) || 0,
+        mime: typeof o.mime === "string" ? o.mime : null,
+      });
+    }
+  }
+  if (out.length === 0 && legacy.path) {
+    out.push({ path: legacy.path, name: legacy.name || "documento", size: legacy.size ?? 0, mime: legacy.mime });
+  }
+  return out;
+}
+
+// Genera URLs firmadas para cada documento.
+async function firmarDocumentos(
+  supabase: SupabaseClient,
+  docs: Array<{ path: string; name: string; size: number; mime: string | null }>,
+): Promise<CierreDocumento[]> {
+  const out: CierreDocumento[] = [];
+  for (const d of docs) {
+    const signed = await supabase.storage.from(BUCKET).createSignedUrl(d.path, SIGNED_URL_TTL_SECONDS);
+    out.push({ ...d, url: signed.data?.signedUrl ?? null });
+  }
+  return out;
+}
+
 function isoWeek(dateStr: string): string {
   const d = new Date(dateStr + "T00:00:00");
   const target = new Date(d.valueOf());
@@ -100,7 +150,7 @@ export async function listCierres(): Promise<{ ok: true; data: CierreRow[] } | {
 
     const { data, error } = await supabase
       .from("cierres_semanales")
-      .select("id, tipo, fecha, semana_iso, efectivo_retirado, total_contado, cuadra, descuadre, notas, storage_path, file_name, size_bytes, mime_type, registrado_por, created_at")
+      .select("id, tipo, fecha, semana_iso, efectivo_retirado, total_contado, cuadra, descuadre, notas, storage_path, file_name, size_bytes, mime_type, documentos, registrado_por, created_at")
       .eq("empresa_id", empresaId)
       .order("fecha", { ascending: false });
 
@@ -134,12 +184,19 @@ export async function listCierres(): Promise<{ ok: true; data: CierreRow[] } | {
 
     const rows: CierreRow[] = [];
     for (const r of data ?? []) {
-      let url: string | null = null;
       const sp = r.storage_path as string | null;
-      if (sp) {
-        const signed = await supabase.storage.from(BUCKET).createSignedUrl(sp, SIGNED_URL_TTL_SECONDS);
-        if (signed.data?.signedUrl) url = signed.data.signedUrl;
-      }
+      // Documentos adjuntos: el array JSONB `documentos`, con fallback al doc único legacy.
+      const documentos = await firmarDocumentos(
+        supabase,
+        normalizarDocumentos(r.documentos, {
+          path: sp,
+          name: r.file_name as string | null,
+          size: r.size_bytes as number | null,
+          mime: r.mime_type as string | null,
+        }),
+      );
+      // `url` = primer documento (compatibilidad con consumidores antiguos).
+      const url = documentos[0]?.url ?? null;
       rows.push({
         id: r.id as string,
         tipo: (((r.tipo as string | null) ?? "cierre") as CierreTipo),
@@ -154,6 +211,7 @@ export async function listCierres(): Promise<{ ok: true; data: CierreRow[] } | {
         file_name: (r.file_name as string | null) ?? null,
         size_bytes: (r.size_bytes as number | null) ?? null,
         mime_type: (r.mime_type as string | null) ?? null,
+        documentos,
         registrado_por: (r.registrado_por as string | null) ?? null,
         url,
         gastos: gastosPorCierre[r.id as string] ?? [],
@@ -181,12 +239,15 @@ export async function createCierre(formData: FormData): Promise<{ ok: true; data
     const contadoStr = ((formData.get("total_contado") as string | null) || "0").trim();
     const notas = ((formData.get("notas") as string | null) || "").trim();
     const registradoPor = ((formData.get("registrado_por") as string | null) || "").trim();
-    const file = formData.get("file") as File | null;
+    // Se admiten varios adjuntos: campo repetido "file" (además de "file" único legacy).
+    const files = (formData.getAll("file") as unknown[])
+      .filter((f): f is File => f instanceof File && f.size > 0)
+      .slice(0, MAX_DOCUMENTOS_CIERRE);
 
     if (!fecha) return { ok: false, error: "La fecha es obligatoria" };
 
-    // Cierres e ingresos exigen justificante adjunto (la retirada no).
-    if (tipo !== "retirada" && !(file && file.size > 0)) {
+    // Cierres e ingresos exigen al menos un justificante adjunto (la retirada no).
+    if (tipo !== "retirada" && files.length === 0) {
       return { ok: false, error: `Debes adjuntar un documento para registrar ${tipo === "ingreso" ? "un ingreso" : "un cierre"}` };
     }
 
@@ -247,43 +308,47 @@ export async function createCierre(formData: FormData): Promise<{ ok: true; data
     }
 
     const cierreId = row.id as string;
-    let storagePath: string | null = null;
-    let fileName: string | null = null;
-    let fileSize: number | null = null;
-    let mimeType: string | null = null;
-    let signedUrl: string | null = null;
-
-    if (file && file.size > 0) {
+    // Subir todos los adjuntos (máx. 3). Se recopilan en el array `documentos`.
+    const documentosMeta: Array<{ path: string; name: string; size: number; mime: string | null }> = [];
+    let idx = 0;
+    for (const file of files) {
       const safe = sanitizeFilename(file.name);
-      const sp = `${empresaId}/${cierreId}/${Date.now()}_${safe}`;
+      const sp = `${empresaId}/${cierreId}/${Date.now()}_${idx}_${safe}`;
+      idx += 1;
       const { error: upErr } = await supabase.storage
         .from(BUCKET)
         .upload(sp, file, { upsert: false, contentType: file.type || "application/octet-stream" });
-
       if (upErr) {
         console.error("[cierres:create] storage:", upErr.message);
-      } else {
-        storagePath = sp;
-        fileName = file.name;
-        fileSize = file.size;
-        mimeType = file.type || null;
-
-        const { error: updErr } = await supabase
-          .from("cierres_semanales")
-          .update({
-            storage_path: storagePath,
-            file_name: fileName,
-            size_bytes: fileSize,
-            mime_type: mimeType,
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", cierreId);
-        if (updErr) console.error("[cierres:create] update path:", updErr.message);
-
-        const signed = await supabase.storage.from(BUCKET).createSignedUrl(storagePath, SIGNED_URL_TTL_SECONDS);
-        signedUrl = signed.data?.signedUrl ?? null;
+        continue;
       }
+      documentosMeta.push({ path: sp, name: file.name, size: file.size, mime: file.type || null });
     }
+
+    if (documentosMeta.length > 0) {
+      // El primer documento se refleja también en las columnas legacy por compatibilidad.
+      const primero = documentosMeta[0];
+      const { error: updErr } = await supabase
+        .from("cierres_semanales")
+        .update({
+          documentos: documentosMeta,
+          storage_path: primero.path,
+          file_name: primero.name,
+          size_bytes: primero.size,
+          mime_type: primero.mime,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", cierreId);
+      if (updErr) console.error("[cierres:create] update path:", updErr.message);
+    }
+
+    const documentos = await firmarDocumentos(supabase, documentosMeta);
+    const primeroDoc = documentos[0] ?? null;
+    const storagePath = primeroDoc ? documentosMeta[0].path : null;
+    const fileName = primeroDoc?.name ?? null;
+    const fileSize = primeroDoc?.size ?? null;
+    const mimeType = primeroDoc?.mime ?? null;
+    const signedUrl = primeroDoc?.url ?? null;
 
     // Insertar los gastos de la semana asociados al cierre.
     let gastosGuardados: CierreGasto[] = [];
@@ -328,6 +393,7 @@ export async function createCierre(formData: FormData): Promise<{ ok: true; data
         file_name: fileName,
         size_bytes: fileSize,
         mime_type: mimeType,
+        documentos,
         registrado_por: registradoPor || null,
         url: signedUrl,
         gastos: gastosGuardados,
@@ -349,13 +415,22 @@ export async function deleteCierre(id: string): Promise<{ ok: boolean; error?: s
 
     const { data: row } = await supabase
       .from("cierres_semanales")
-      .select("storage_path")
+      .select("storage_path, documentos")
       .eq("id", id)
       .eq("empresa_id", empresaId)
       .single();
 
-    if (row?.storage_path) {
-      await supabase.storage.from(BUCKET).remove([row.storage_path as string]);
+    // Recopilar todas las rutas a borrar (array `documentos` + doc legacy), sin duplicados.
+    const paths = new Set<string>();
+    if (Array.isArray(row?.documentos)) {
+      for (const d of row!.documentos as unknown[]) {
+        const p = (d as Record<string, unknown>)?.path;
+        if (typeof p === "string" && p) paths.add(p);
+      }
+    }
+    if (row?.storage_path) paths.add(row.storage_path as string);
+    if (paths.size > 0) {
+      await supabase.storage.from(BUCKET).remove([...paths]);
     }
 
     const { error } = await supabase
