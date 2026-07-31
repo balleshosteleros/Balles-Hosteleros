@@ -279,32 +279,31 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                     {/* Separador visual */}
                     <span className="w-px h-5 bg-border mx-0.5" />
 
-                    {/* Apps externas — solo si el rol tiene HERR_APLICACIONES.
-                        Dos paneles de media pantalla:
-                         · Aplicaciones (cohete): enlaces + usuario, sin secretos.
+                    {/* Apps externas — dos permisos independientes:
+                         · Aplicaciones (cohete): enlaces + usuario, sin secretos → HERR_APLICACIONES.
                          · Accesos y contraseñas (candado): bóveda segura con
-                           revelado bajo verificación de identidad. */}
+                           revelado bajo verificación de identidad → HERR_ACCESOS. */}
                     {puedeVer("HERR_APLICACIONES") && (
-                      <>
-                        <AplicacionesDrawer empresaSlug={empresaActual.id}>
-                          <Button
-                            variant="ghost" size="icon"
-                            className="relative h-8 w-8"
-                            title="Aplicaciones"
-                          >
-                            <ToolIcon.aplicaciones className={`!h-[18px] !w-[18px] ${toolTextColor(HERRAMIENTA.aplicaciones.colorKey)}`} />
-                          </Button>
-                        </AplicacionesDrawer>
-                        <AccesosDrawer empresaSlug={empresaActual.id}>
-                          <Button
-                            variant="ghost" size="icon"
-                            className="relative h-8 w-8"
-                            title="Accesos y contraseñas"
-                          >
-                            <ToolIcon.accesos className={`!h-[18px] !w-[18px] ${toolTextColor(HERRAMIENTA.accesos.colorKey)}`} />
-                          </Button>
-                        </AccesosDrawer>
-                      </>
+                      <AplicacionesDrawer empresaSlug={empresaActual.id}>
+                        <Button
+                          variant="ghost" size="icon"
+                          className="relative h-8 w-8"
+                          title="Aplicaciones"
+                        >
+                          <ToolIcon.aplicaciones className={`!h-[18px] !w-[18px] ${toolTextColor(HERRAMIENTA.aplicaciones.colorKey)}`} />
+                        </Button>
+                      </AplicacionesDrawer>
+                    )}
+                    {puedeVer("HERR_ACCESOS") && (
+                      <AccesosDrawer empresaSlug={empresaActual.id}>
+                        <Button
+                          variant="ghost" size="icon"
+                          className="relative h-8 w-8"
+                          title="Accesos y contraseñas"
+                        >
+                          <ToolIcon.accesos className={`!h-[18px] !w-[18px] ${toolTextColor(HERRAMIENTA.accesos.colorKey)}`} />
+                        </Button>
+                      </AccesosDrawer>
                     )}
                   </div>
 

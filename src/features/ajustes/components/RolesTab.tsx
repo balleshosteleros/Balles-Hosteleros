@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { ChevronDown, ChevronRight, Plus, Trash2, Settings, Users, Cctv, Rocket } from "lucide-react";
+import { ChevronDown, ChevronRight, Plus, Trash2, Settings, Users, Cctv, Rocket, KeyRound } from "lucide-react";
 import { toast } from "sonner";
 import { saveRolesToSupabase, loadRolesFromSupabase } from "@/features/ajustes/actions/roles-actions";
 import { getEmployees } from "@/actions/admin";
@@ -40,22 +40,26 @@ const MODULOS_NAV = [
 ];
 const MODULO_AJUSTES = "AJUSTES";
 const MODULO_CAMARAS = "CÁMARAS";
-// Cohete (aplicaciones) + candado (accesos y contraseñas). Un solo permiso
-// gobierna ambos iconos de la barra de herramientas.
+// Dos permisos independientes en la barra de herramientas:
+//  · APLICACIONES (cohete) → enlaces/accesos directos a apps externas.
+//  · ACCESOS (candado)     → bóveda de accesos y contraseñas.
 const MODULO_APLICACIONES = "HERR_APLICACIONES";
+const MODULO_ACCESOS = "HERR_ACCESOS";
 
 function buildPermisosCompletos(overrides: Rol["permisos"] = []): {
   nav: Rol["permisos"];
   ajustes: Rol["permisos"][0];
   camaras: Rol["permisos"][0];
   aplicaciones: Rol["permisos"][0];
+  accesos: Rol["permisos"][0];
 } {
   const find = (m: string) => overrides.find((p) => p.modulo === m);
   const nav = MODULOS_NAV.map((m) => find(m) ?? { modulo: m, ver: false, editar: false });
   const ajustes = find(MODULO_AJUSTES) ?? { modulo: MODULO_AJUSTES, ver: false, editar: false };
   const camaras = find(MODULO_CAMARAS) ?? { modulo: MODULO_CAMARAS, ver: false, editar: false };
   const aplicaciones = find(MODULO_APLICACIONES) ?? { modulo: MODULO_APLICACIONES, ver: false, editar: false };
-  return { nav, ajustes, camaras, aplicaciones };
+  const accesos = find(MODULO_ACCESOS) ?? { modulo: MODULO_ACCESOS, ver: false, editar: false };
+  return { nav, ajustes, camaras, aplicaciones, accesos };
 }
 
 export function RolesTab() {
@@ -158,7 +162,7 @@ export function RolesTab() {
 
   const crearRol = () => {
     if (!nuevoNombre.trim()) return;
-    const permisos = [...MODULOS_NAV, MODULO_AJUSTES, MODULO_CAMARAS, MODULO_APLICACIONES].map((m) => ({ modulo: m, ver: false, editar: false }));
+    const permisos = [...MODULOS_NAV, MODULO_AJUSTES, MODULO_CAMARAS, MODULO_APLICACIONES, MODULO_ACCESOS].map((m) => ({ modulo: m, ver: false, editar: false }));
     const nuevoRol: Rol = {
       id: `rol-${Date.now()}`,
       nombre: nuevoNombre.trim(),
@@ -197,9 +201,9 @@ export function RolesTab() {
 
       {ajustes.roles.map((rol) => {
         const isOpen = expandedRol === rol.id;
-        const { nav: permisosNav, ajustes: permisoAjustes, camaras: permisoCamaras, aplicaciones: permisoAplicaciones } = buildPermisosCompletos(rol.permisos);
-        const TOTAL_MODULOS = MODULOS_NAV.length + 3; // 11 nav + AJUSTES + CÁMARAS + APLICACIONES
-        const accesosCount = [...permisosNav, permisoAjustes, permisoCamaras, permisoAplicaciones].filter((p) => p.ver).length;
+        const { nav: permisosNav, ajustes: permisoAjustes, camaras: permisoCamaras, aplicaciones: permisoAplicaciones, accesos: permisoAccesos } = buildPermisosCompletos(rol.permisos);
+        const TOTAL_MODULOS = MODULOS_NAV.length + 4; // 11 nav + AJUSTES + CÁMARAS + APLICACIONES + ACCESOS
+        const accesosCount = [...permisosNav, permisoAjustes, permisoCamaras, permisoAplicaciones, permisoAccesos].filter((p) => p.ver).length;
         const usuariosConRol = usuariosSupabase.filter(
           (u) => u.rolLabel.toLowerCase() === rol.nombre.trim().toLowerCase()
         );
@@ -357,7 +361,7 @@ export function RolesTab() {
                   <div className="rounded-md border-2 border-dashed border-muted-foreground/20 bg-muted/30 px-3 py-2">
                     <div className="flex items-center gap-2 mb-1.5">
                       <Rocket className="h-3.5 w-3.5 text-muted-foreground" />
-                      <span className="text-[10px] font-bold text-muted-foreground tracking-wider">APLICACIONES Y CONTRASEÑAS</span>
+                      <span className="text-[10px] font-bold text-muted-foreground tracking-wider">ACCESOS DIRECTOS A APLICACIONES</span>
                     </div>
                     <div className="flex items-center justify-between">
                       <span className="text-sm font-medium text-muted-foreground">Aplicaciones</span>
@@ -366,6 +370,23 @@ export function RolesTab() {
                         <Switch
                           checked={permisoAplicaciones.ver}
                           onCheckedChange={() => toggleAcceso(rol.id, MODULO_APLICACIONES)}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="rounded-md border-2 border-dashed border-muted-foreground/20 bg-muted/30 px-3 py-2">
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <KeyRound className="h-3.5 w-3.5 text-muted-foreground" />
+                      <span className="text-[10px] font-bold text-muted-foreground tracking-wider">ACCESOS Y CONTRASEÑAS</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium text-muted-foreground">Contraseñas</span>
+                      <div className="flex flex-col items-center gap-0.5 w-24">
+                        <span className="text-[10px] text-muted-foreground font-bold">ACCESO</span>
+                        <Switch
+                          checked={permisoAccesos.ver}
+                          onCheckedChange={() => toggleAcceso(rol.id, MODULO_ACCESOS)}
                         />
                       </div>
                     </div>
