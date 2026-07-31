@@ -7,46 +7,64 @@ import { useEffect, useRef } from "react";
  * reabrirla (resucita el snapshot congelado), así que nunca veía los deploys
  * nuevos. Este componente compara la versión horneada en el bundle
  * (NEXT_PUBLIC_BUILD_SHA) contra la desplegada (/api/version) al abrir la app,
- * al volver a ella y cada pocos minutos; si difieren, recarga una sola vez.
+ * al volver a ella y cada minuto.
+ *
+ * Recarga "sin sacarte": si detecta versión nueva MIENTRAS estás usando la app,
+ * NO recarga en ese momento (te mandaría al inicio a media acción). Marca la
+ * actualización como pendiente y la aplica en cuanto la app pasa a segundo plano
+ * o cuando vuelves a ella —momentos en los que una recarga no interrumpe nada—.
  *
  * Sin UI: devuelve null.
  */
 const BAKED = process.env.NEXT_PUBLIC_BUILD_SHA ?? "dev";
-const CHECK_MS = 4 * 60 * 1000; // re-chequeo periódico mientras está abierta
+const CHECK_MS = 60 * 1000; // re-chequeo periódico mientras está abierta
 const RELOADED_KEY = "bh_reloaded_for_sha";
 
 export function VersionAutoUpdate() {
   const comprobando = useRef(false);
+  // SHA nuevo detectado pero aún no aplicado (app en primer plano en uso).
+  const pendiente = useRef<string | null>(null);
+  // ¿Es el primer chequeo tras montar? Entonces la app se acaba de abrir y una
+  // recarga es segura (no interrumpe nada en curso).
+  const primerChequeo = useRef(true);
 
   useEffect(() => {
     // En desarrollo (o si no hay SHA horneada) no auto-recargamos.
     if (!BAKED || BAKED === "dev") return;
 
+    const recargar = (sha: string) => {
+      // Anti-bucle: si ya recargamos por este mismo SHA y el bundle sigue sin
+      // coincidir (propagación de CDN en curso), no recargamos otra vez.
+      try {
+        if (sessionStorage.getItem(RELOADED_KEY) === sha) return;
+        sessionStorage.setItem(RELOADED_KEY, sha);
+      } catch {
+        /* noop */
+      }
+      window.location.reload();
+    };
+
     const comprobar = async () => {
-      if (comprobando.current || document.visibilityState !== "visible") return;
+      if (comprobando.current) return;
       comprobando.current = true;
+      const eraPrimero = primerChequeo.current;
+      primerChequeo.current = false;
       try {
         const res = await fetch("/api/version", { cache: "no-store" });
         if (!res.ok) return;
         const { sha } = (await res.json()) as { sha?: string };
         if (!sha || sha === "dev" || sha === BAKED) return;
 
-        // Anti-bucle: si ya recargamos por este mismo SHA y el bundle sigue
-        // sin coincidir (propagación de CDN en curso), no recargamos otra vez.
-        let yaIntentado: string | null = null;
-        try {
-          yaIntentado = sessionStorage.getItem(RELOADED_KEY);
-        } catch {
-          /* noop */
+        // Hay versión nueva. Solo recargamos "sin sacar":
+        //  · en el primer chequeo (la app se acaba de abrir), o
+        //  · si la app está oculta (segundo plano).
+        // Si estás usándola (visible y no es el arranque), lo dejamos pendiente
+        // y lo aplicamos al pasar a segundo plano o al volver.
+        if (eraPrimero || document.visibilityState !== "visible") {
+          recargar(sha);
+        } else {
+          pendiente.current = sha;
         }
-        if (yaIntentado === sha) return;
-
-        try {
-          sessionStorage.setItem(RELOADED_KEY, sha);
-        } catch {
-          /* noop */
-        }
-        window.location.reload();
       } catch {
         /* sin red: lo reintentamos en el próximo ciclo */
       } finally {
@@ -54,16 +72,32 @@ export function VersionAutoUpdate() {
       }
     };
 
-    // Al montar, al volver a primer plano y de forma periódica.
-    void comprobar();
-    const onVisible = () => {
-      if (document.visibilityState === "visible") void comprobar();
+    // Al mandar la app a segundo plano con una actualización pendiente, es el
+    // momento seguro para recargar: al volver ya verás la versión nueva y no te
+    // hemos cortado nada.
+    const onHidden = () => {
+      if (document.visibilityState === "hidden" && pendiente.current) {
+        recargar(pendiente.current);
+      }
     };
+
+    const onVisible = () => {
+      if (document.visibilityState !== "visible") return;
+      // Si volviste y había algo pendiente, aplícalo ahora (acabas de entrar,
+      // no interrumpe nada). Si no, comprueba por si hubo un deploy nuevo.
+      if (pendiente.current) recargar(pendiente.current);
+      else void comprobar();
+    };
+
+    // Al montar (app recién abierta), al volver a primer plano y cada minuto.
+    void comprobar();
+    document.addEventListener("visibilitychange", onHidden);
     document.addEventListener("visibilitychange", onVisible);
     window.addEventListener("focus", onVisible);
     const id = window.setInterval(comprobar, CHECK_MS);
 
     return () => {
+      document.removeEventListener("visibilitychange", onHidden);
       document.removeEventListener("visibilitychange", onVisible);
       window.removeEventListener("focus", onVisible);
       window.clearInterval(id);
