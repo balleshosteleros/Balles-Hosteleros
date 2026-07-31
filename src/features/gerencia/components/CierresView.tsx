@@ -47,6 +47,7 @@ import {
 } from "@/shared/components/SubmoduleToolbar";
 import { IOActions } from "@/shared/io";
 import { cierresIO } from "@/features/gerencia/io/cierres.io";
+import { getEmpleadosActivos, type EmpleadoActivo } from "@/features/rrhh/actions/empleados-actions";
 
 // Tipos de movimiento del submódulo (el selector de arriba del modal).
 const TIPOS_MOVIMIENTO: { value: CierreTipo; label: string }[] = [
@@ -157,6 +158,7 @@ export function CierresView() {
   const { confirm: confirmDelete, dialog: confirmDeleteDialog } = useConfirmDelete();
   const [cierres, setCierres] = useState<CierreRow[]>([]);
   const [config, setConfig] = useState<CierresConfig>({ modo: "libre", dia_semana: null });
+  const [empleados, setEmpleados] = useState<EmpleadoActivo[]>([]);
   const [loading, setLoading] = useState(true);
 
   const [vista, setVista] = useState<"resumen" | "calendario" | "ajustes">("resumen");
@@ -223,13 +225,16 @@ export function CierresView() {
   const cargar = useCallback(async () => {
     setLoading(true);
     try {
-      const [a, b, c] = await Promise.all([listCierres(), getCierresConfig(), listCierresProgramaciones()]);
+      const [a, b, c, d] = await Promise.all([
+        listCierres(), getCierresConfig(), listCierresProgramaciones(), getEmpleadosActivos(),
+      ]);
       if (a.ok) setCierres(a.data);
       if (b.ok) {
         setConfig(b.data);
         setCfgForm(b.data);
       }
       if (c.ok) setProgramaciones(c.data);
+      if (d.ok) setEmpleados(d.data);
     } catch (e) {
       console.error("[CierresView] cargar:", e);
     } finally {
@@ -746,11 +751,17 @@ export function CierresView() {
                   <span className="h-3 w-3 rounded bg-amber-200 border border-amber-400" />
                   Cierre con descuadre
                 </div>
-                {config.modo === "fijo" && config.dia_semana !== null && (
-                  <div className="flex items-center gap-1.5">
-                    <span className="h-3 w-3 rounded bg-blue-100 border border-blue-300 ring-1 ring-blue-300" />
-                    Día prefijado de cierre
-                  </div>
+                {programaciones.some((p) => p.activo) && (
+                  <>
+                    <div className="flex items-center gap-1.5">
+                      <span className="h-3 w-3 rounded bg-blue-100 border border-blue-300 ring-1 ring-blue-300" />
+                      Cierre programado
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="h-3 w-3 rounded bg-red-100 border border-red-400 ring-1 ring-red-400" />
+                      Pendiente (sin registrar)
+                    </div>
+                  </>
                 )}
                 <div className="flex items-center gap-1.5">
                   <span className="h-3 w-3 rounded ring-2 ring-primary/40" />
@@ -771,19 +782,22 @@ export function CierresView() {
                   const tieneCierre = items.length > 0;
                   const cuadra = tieneCierre && items.every((x) => x.cuadra);
                   const esHoy = isSameDay(dia, new Date());
-                  const esDiaPrefijado = config.modo === "fijo"
-                    && config.dia_semana !== null
-                    && jsDayToLunFirst(dia) === config.dia_semana;
+                  // ¿Este día está programado por alguna regla periódica?
+                  const esProgramado = programaciones.some((p) => diaEnProgramacion(dia, p));
+                  // Programado, ya pasó (o es hoy) y no se registró → pendiente.
+                  const esPendiente = esProgramado && !tieneCierre && key <= today;
+                  const esProgramadoFuturo = esProgramado && !tieneCierre && key > today;
 
                   let bg = "bg-background";
                   if (tieneCierre && cuadra) bg = "bg-emerald-100";
                   else if (tieneCierre && !cuadra) bg = "bg-amber-100";
-                  else if (esDiaPrefijado) bg = "bg-blue-50";
+                  else if (esPendiente) bg = "bg-red-100";
+                  else if (esProgramadoFuturo) bg = "bg-blue-50";
 
                   return (
                     <div
                       key={key}
-                      className={`relative ${bg} p-2 min-h-[90px] cursor-pointer transition hover:brightness-95 ${esHoy ? "ring-2 ring-primary/40 ring-inset" : ""} ${esDiaPrefijado && !tieneCierre ? "ring-1 ring-blue-300 ring-inset" : ""}`}
+                      className={`relative ${bg} p-2 min-h-[90px] cursor-pointer transition hover:brightness-95 ${esHoy ? "ring-2 ring-primary/40 ring-inset" : ""} ${esPendiente ? "ring-1 ring-red-400 ring-inset" : esProgramadoFuturo ? "ring-1 ring-blue-300 ring-inset" : ""}`}
                       onClick={() => {
                         if (tieneCierre) {
                           setSelected(items[0]);
@@ -816,7 +830,12 @@ export function CierresView() {
                         {items.length > 2 && (
                           <span className="text-[10px] text-muted-foreground">+{items.length - 2} más</span>
                         )}
-                        {!tieneCierre && esDiaPrefijado && (
+                        {esPendiente && (
+                          <span className="text-[10px] text-red-700 font-semibold flex items-center gap-0.5">
+                            <AlertTriangle className="h-2.5 w-2.5" /> Falta registrar
+                          </span>
+                        )}
+                        {esProgramadoFuturo && (
                           <span className="text-[10px] text-blue-700 font-medium">Cierre programado</span>
                         )}
                       </div>
@@ -829,7 +848,73 @@ export function CierresView() {
         </TabsContent>
 
         {/* ── AJUSTES ── */}
-        <TabsContent value="ajustes" className="mt-4">
+        <TabsContent value="ajustes" className="mt-4 space-y-6">
+          {/* Programaciones periódicas de cierre (estilo Google Calendar) */}
+          <Card>
+            <CardContent className="p-6 space-y-4 max-w-2xl">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <h3 className="font-semibold text-lg flex items-center gap-2">
+                    <CalendarClock className="h-5 w-5 text-primary" />
+                    Cierres programados
+                  </h3>
+                  <p className="text-sm text-muted-foreground">
+                    Define en qué días toca hacer cierre. Se marcarán en el calendario y, si pasa el día sin registrarlo, aparecerá en rojo como pendiente.
+                  </p>
+                </div>
+                <Button size="sm" className="gap-1.5 shrink-0" onClick={abrirNuevaProg}>
+                  <Plus className="h-4 w-4" /> Añadir
+                </Button>
+              </div>
+
+              {programaciones.length === 0 ? (
+                <div className="rounded-lg border border-dashed px-4 py-8 text-center">
+                  <Repeat className="h-6 w-6 mx-auto text-muted-foreground mb-2" />
+                  <p className="text-sm text-muted-foreground">
+                    No hay cierres programados. Pulsa <strong>Añadir</strong> para crear una regla que se repita (ej: cada semana los martes).
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {programaciones.map((p) => (
+                    <div
+                      key={p.id}
+                      className={`flex items-center justify-between gap-3 rounded-lg border px-4 py-3 ${p.activo ? "" : "opacity-60"}`}
+                    >
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium truncate">{p.nombre}</span>
+                          {!p.activo && (
+                            <Badge variant="outline" className="text-xs">Inactivo</Badge>
+                          )}
+                        </div>
+                        <p className="text-sm text-muted-foreground">{describirProgramacion(p)}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          Desde {format(parseISO(p.fecha_inicio), "d MMM yyyy", { locale: es })}
+                          {p.fecha_fin ? ` · hasta ${format(parseISO(p.fecha_fin), "d MMM yyyy", { locale: es })}` : " · sin fecha de fin"}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => abrirEditarProg(p)} aria-label="Editar">
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-8 w-8 text-muted-foreground hover:text-red-600"
+                          onClick={() => handleEliminarProg(p)}
+                          aria-label="Eliminar"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
           <Card>
             <CardContent className="p-6 space-y-6 max-w-2xl">
               <div>
@@ -934,7 +1019,13 @@ export function CierresView() {
 
           <div className="grid grid-cols-2 gap-4 mt-2">
             <div>
-              <Label>{form.tipo === "retirada" ? "Fecha de la retirada *" : "Fecha del cierre *"}</Label>
+              <Label>
+                {form.tipo === "retirada"
+                  ? "Fecha de la retirada *"
+                  : form.tipo === "ingreso"
+                    ? "Fecha del ingreso *"
+                    : "Fecha del cierre *"}
+              </Label>
               <Input
                 type="date"
                 value={form.fecha}
@@ -943,15 +1034,37 @@ export function CierresView() {
             </div>
             <div>
               <Label>Registrado por</Label>
-              <Input
-                value={form.registrado_por}
-                onChange={(e) => setForm({ ...form, registrado_por: e.target.value })}
-                placeholder="Opcional"
-              />
+              <Select
+                value={form.registrado_por || "__none__"}
+                onValueChange={(v) => setForm({ ...form, registrado_por: v === "__none__" ? "" : v })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecciona un empleado" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">Sin especificar</SelectItem>
+                  {empleados.map((e) => (
+                    <SelectItem key={e.empleadoId} value={e.nombreCompleto}>
+                      {e.nombreCompleto}
+                      {(e.puesto || e.departamento) && (
+                        <span className="text-muted-foreground">
+                          {" — "}{[e.puesto, e.departamento].filter(Boolean).join(" · ")}
+                        </span>
+                      )}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             <div>
-              <Label>Efectivo retirado del cajón (€)</Label>
+              <Label>
+                {form.tipo === "retirada"
+                  ? "Efectivo retirado a caja fuerte (€)"
+                  : form.tipo === "ingreso"
+                    ? "Ingreso en banco (€)"
+                    : "Efectivo retirado del cajón (€)"}
+              </Label>
               <Input
                 type="number"
                 step="0.01"
@@ -960,8 +1073,18 @@ export function CierresView() {
                 onChange={(e) => setForm({ ...form, efectivo_retirado: e.target.value })}
                 placeholder="0.00"
               />
+              {form.tipo === "retirada" && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  Dinero que sale de la caja fuerte para diferentes cuestiones como pagos.
+                </p>
+              )}
+              {form.tipo === "ingreso" && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  Efectivo que sale de la caja fuerte y se ingresa en el banco.
+                </p>
+              )}
             </div>
-            {form.tipo !== "retirada" && (
+            {form.tipo === "cierre" && (
               <div>
                 <Label>Total cierre semana (€)</Label>
                 <Input
@@ -976,7 +1099,7 @@ export function CierresView() {
             )}
 
             {/* Descuadre calculado automáticamente = contado − efectivo */}
-            {form.tipo !== "retirada" && (
+            {form.tipo === "cierre" && (
             <div className="col-span-2">
               <Label className="mb-2 block">Descuadre (calculado automáticamente)</Label>
               <div
@@ -1025,7 +1148,7 @@ export function CierresView() {
             )}
 
             {/* Gastos de la semana (registro informativo, no afecta al descuadre) */}
-            {form.tipo !== "retirada" && (
+            {form.tipo === "cierre" && (
             <div className="col-span-2">
               <div className="flex items-center justify-between mb-2">
                 <Label className="flex items-center gap-1.5">
@@ -1094,8 +1217,13 @@ export function CierresView() {
             </div>
             )}
 
+            {form.tipo !== "retirada" && (
             <div className="col-span-2">
-              <Label>{form.tipo === "retirada" ? "Documento (PDF, imagen, etc.)" : "Documento del cierre (PDF, imagen, etc.)"}</Label>
+              <Label>
+                {form.tipo === "ingreso"
+                  ? "Documento del ingreso (PDF, imagen, etc.)"
+                  : "Documento del cierre (PDF, imagen, etc.)"}
+              </Label>
               <Input
                 type="file"
                 accept=".pdf,.jpg,.jpeg,.png,.webp,.xls,.xlsx,.csv"
@@ -1107,6 +1235,7 @@ export function CierresView() {
                 </p>
               )}
             </div>
+            )}
 
             <div className="col-span-2">
               <Label>Notas / Observaciones</Label>
@@ -1123,6 +1252,118 @@ export function CierresView() {
             <Button variant="outline" onClick={() => setModalOpen(false)} disabled={saving}>Cancelar</Button>
             <Button onClick={handleGuardar} disabled={!form.fecha || saving}>
               {saving ? "Guardando..." : "Guardar"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Modal Programación periódica ── */}
+      <Dialog open={progModalOpen} onOpenChange={setProgModalOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <CalendarClock className="h-5 w-5 text-primary" />
+              {progEditId ? "Editar cierre programado" : "Nuevo cierre programado"}
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4 mt-2">
+            <div>
+              <Label>Nombre</Label>
+              <Input
+                value={progForm.nombre}
+                onChange={(e) => setProgForm({ ...progForm, nombre: e.target.value })}
+                placeholder="Ej: Cierre semanal"
+              />
+            </div>
+
+            <div>
+              <Label className="mb-2 block">Se repite</Label>
+              <div className="flex items-center gap-2 text-sm">
+                <span>Cada</span>
+                <Input
+                  type="number"
+                  min={1}
+                  max={52}
+                  className="w-20"
+                  value={progForm.intervalo_semanas}
+                  onChange={(e) =>
+                    setProgForm({
+                      ...progForm,
+                      intervalo_semanas: Math.min(52, Math.max(1, Math.round(Number(e.target.value) || 1))),
+                    })
+                  }
+                />
+                <span>{progForm.intervalo_semanas === 1 ? "semana" : "semanas"}</span>
+              </div>
+            </div>
+
+            <div>
+              <Label className="mb-2 block">Días de la semana *</Label>
+              <div className="flex flex-wrap gap-1.5">
+                {DIAS_SEMANA.map((d) => {
+                  const activo = progForm.dias_semana.includes(d.value);
+                  return (
+                    <button
+                      key={d.value}
+                      type="button"
+                      onClick={() => toggleProgDia(d.value)}
+                      className={`rounded-md border px-3 py-1.5 text-sm font-medium transition ${
+                        activo
+                          ? "bg-primary text-primary-foreground border-primary"
+                          : "bg-background text-muted-foreground hover:bg-muted"
+                      }`}
+                      aria-pressed={activo}
+                    >
+                      {d.label.slice(0, 3)}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label>Empieza el *</Label>
+                <Input
+                  type="date"
+                  value={progForm.fecha_inicio}
+                  onChange={(e) => setProgForm({ ...progForm, fecha_inicio: e.target.value })}
+                />
+              </div>
+              <div>
+                <Label>Termina el</Label>
+                <Input
+                  type="date"
+                  value={progForm.fecha_fin}
+                  min={progForm.fecha_inicio || undefined}
+                  onChange={(e) => setProgForm({ ...progForm, fecha_fin: e.target.value })}
+                />
+                <p className="text-xs text-muted-foreground mt-1">Déjalo vacío para que no termine.</p>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between rounded-lg border px-4 py-3">
+              <div>
+                <p className="text-sm font-medium">Activo</p>
+                <p className="text-xs text-muted-foreground">Si lo desactivas, deja de marcar días en el calendario.</p>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={progForm.activo}
+                onClick={() => setProgForm((f) => ({ ...f, activo: !f.activo }))}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition ${progForm.activo ? "bg-primary" : "bg-muted-foreground/30"}`}
+              >
+                <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition ${progForm.activo ? "translate-x-5" : "translate-x-1"}`} />
+              </button>
+            </div>
+          </div>
+
+          <DialogFooter className="mt-4">
+            <Button variant="outline" onClick={() => setProgModalOpen(false)} disabled={progSaving}>Cancelar</Button>
+            <Button onClick={handleGuardarProg} disabled={progSaving || progForm.dias_semana.length === 0 || !progForm.fecha_inicio}>
+              {progSaving ? "Guardando..." : "Guardar"}
             </Button>
           </DialogFooter>
         </DialogContent>
