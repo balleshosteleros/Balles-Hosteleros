@@ -376,23 +376,35 @@ export function CierresView() {
         {fmtEuro(acumuladoPorId[c.id] ?? 0)}
       </TableCell>
     ),
-    doc: (
-      <TableCell key="doc">
-        {c.url ? (
-          <a
-            href={c.url}
-            target="_blank"
-            rel="noreferrer"
-            onClick={(e) => e.stopPropagation()}
-            className="inline-flex items-center gap-1 text-xs text-blue-700 hover:underline"
-          >
-            <FileText className="h-3 w-3" /> Ver
-          </a>
-        ) : (
-          <span className="text-xs text-muted-foreground">—</span>
-        )}
-      </TableCell>
-    ),
+    doc: (() => {
+      const numDocs = c.documentos?.length ?? 0;
+      const urlDirecta = numDocs === 1 ? c.documentos[0].url : numDocs === 0 ? c.url : null;
+      return (
+        <TableCell key="doc">
+          {numDocs > 1 ? (
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); setSelected(c); setDetalleOpen(true); }}
+              className="inline-flex items-center gap-1 text-xs text-blue-700 hover:underline"
+            >
+              <FileText className="h-3 w-3" /> Ver {numDocs}
+            </button>
+          ) : urlDirecta ? (
+            <a
+              href={urlDirecta}
+              target="_blank"
+              rel="noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              className="inline-flex items-center gap-1 text-xs text-blue-700 hover:underline"
+            >
+              <FileText className="h-3 w-3" /> Ver
+            </a>
+          ) : (
+            <span className="text-xs text-muted-foreground">—</span>
+          )}
+        </TableCell>
+      );
+    })(),
   });
 
   // ── Handlers ──────────────────────────────────────────
