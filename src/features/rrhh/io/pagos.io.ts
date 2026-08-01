@@ -49,6 +49,10 @@ export const pagosIO: ModuleIO<PagoEmpleado> = {
     { key: "pagado", label: "Pagado", type: "boolean" },
     { key: "empleadoId", label: "ID Empleado", hideInImport: true },
   ],
+  // El informe exporta el mes seleccionado en la vista: PagosView pasa
+  // `exportRecords={pagosFiltrados}` a IOActions, que prioriza esos registros
+  // sobre fetchAll. Sin periodo no hay nada que listar aquí (los pagos son por
+  // periodo YYYY-MM), por lo que fetchAll queda como fallback vacío.
   fetchAll: async () => {
     return [];
   },
