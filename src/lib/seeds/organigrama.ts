@@ -60,7 +60,7 @@ export const ORGANIGRAMA_SEED: OrganigramaSeed = {
     { id: "2jefe-cocina", label: "2º JEFE DE COCINA", area: "operativa", x: 700, y: 500 },
     { id: "camareros", label: "CAMAREROS", area: "operativa", x: 320, y: 600 },
     { id: "cachimberos", label: "CACHIMBEROS", area: "operativa", x: 460, y: 600 },
-    { id: "cocineros", label: "COCINEROS", area: "operativa", x: 660, y: 600 },
+    { id: "cocineros", label: "COCINERO", area: "operativa", x: 660, y: 600 },
     { id: "office", label: "OFFICE", area: "operativa", x: 820, y: 600 },
   ],
   edges: [

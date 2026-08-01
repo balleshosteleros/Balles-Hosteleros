@@ -52,7 +52,7 @@ const habanaChart: OrgChart = {
     { id: 'hostess', label: 'HOSTESS', area: 'operativa', x: 580, y: 520 },
     { id: 'camareros', label: 'CAMAREROS', area: 'operativa', x: 320, y: 630 },
     { id: 'cachimberos', label: 'CACHIMBEROS', area: 'operativa', x: 500, y: 630 },
-    { id: 'cocineros', label: 'COCINEROS', area: 'operativa', x: 760, y: 630 },
+    { id: 'cocineros', label: 'COCINERO', area: 'operativa', x: 760, y: 630 },
     { id: 'office', label: 'OFFICE', area: 'operativa', x: 930, y: 630 },
   ],
   edges: [
@@ -94,7 +94,7 @@ const bacanalChart: OrgChart = {
     { id: 'jefe-cocina', label: 'JEFE DE COCINA', area: 'operativa', x: 700, y: 400 },
     { id: 'camareros', label: 'CAMAREROS', area: 'operativa', x: 320, y: 520 },
     { id: 'hostess', label: 'HOSTESS', area: 'operativa', x: 500, y: 520 },
-    { id: 'cocineros', label: 'COCINEROS', area: 'operativa', x: 700, y: 520 },
+    { id: 'cocineros', label: 'COCINERO', area: 'operativa', x: 700, y: 520 },
   ],
   edges: [
     { id: 'e1', source: 'socios', target: 'direccion' },

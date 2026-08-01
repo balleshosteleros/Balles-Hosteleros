@@ -39,7 +39,7 @@ export const PUESTOS_SEED: PuestoSeed[] = [
   { departamento: "SALA", nombre: "HOSTESS" },
   { departamento: "SALA", nombre: "LIMPIEZA" },
   { departamento: "COCINA", nombre: "JEFE DE COCINA" },
-  { departamento: "COCINA", nombre: "COCINEROS" },
+  { departamento: "COCINA", nombre: "COCINERO" },
   { departamento: "COCINA", nombre: "OFFICE" },
   { departamento: "ARTISTAS", nombre: "CANTANTE" },
   { departamento: "ARTISTAS", nombre: "MUSICO" },

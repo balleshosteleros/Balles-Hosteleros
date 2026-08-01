@@ -143,7 +143,7 @@ const habanaChart: OrgChart = {
     { id: 'hostess', label: 'HOSTESS', area: 'operativa', x: 580, y: 520 },
     { id: 'camareros', label: 'CAMAREROS', area: 'operativa', x: 320, y: 630 },
     { id: 'cachimberos', label: 'CACHIMBEROS', area: 'operativa', x: 500, y: 630 },
-    { id: 'cocineros', label: 'COCINEROS', area: 'operativa', x: 760, y: 630 },
+    { id: 'cocineros', label: 'COCINERO', area: 'operativa', x: 760, y: 630 },
     { id: 'office', label: 'OFFICE', area: 'operativa', x: 930, y: 630 },
   ],
   edges: [
