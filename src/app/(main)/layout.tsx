@@ -4,6 +4,7 @@ import { getEmpleadoGuardStatus } from "@/features/primer-acceso/data/empleado-s
 import { getUserPermisos } from "@/features/auth/actions/permisos-actions";
 import { AuthServerSeed, type AppRole } from "@/features/auth/contexts/auth-context";
 import { createClient } from "@/lib/supabase/server";
+import { getEmpresaActivaForUser } from "@/features/empresa/lib/empresa-server";
 
 export const dynamic = "force-dynamic";
 
@@ -25,6 +26,17 @@ export default async function MainLayout({ children }: { children: React.ReactNo
   // Solo visibilidad de UI — la autorización real sigue en cada action/route.
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
+
+  // Empresa activa (cookie del switcher). Se usa como `key` del subárbol de la
+  // página: al cambiar de empresa, el cliente hace router.refresh() → este
+  // Server Component (force-dynamic) re-corre con la nueva cookie, la key cambia
+  // y React REMONTA la página. Así los client components de datos vuelven a
+  // ejecutar su effect de carga con la nueva empresa, sin recarga dura del
+  // navegador (que era lenta y vaciaba los logos ya cacheados en el contexto).
+  const empresaActivaKey = user
+    ? await getEmpresaActivaForUser(supabase, user.id)
+    : null;
+
   let seed: React.ReactNode = null;
   if (user) {
     const p = await getUserPermisos();
@@ -48,7 +60,11 @@ export default async function MainLayout({ children }: { children: React.ReactNo
   return (
     <AppLayout>
       {seed}
-      {children}
+      {/* key = empresa activa → remonta la página al cambiar de empresa, para
+          que los client components recarguen sus datos con la nueva empresa. */}
+      <div key={empresaActivaKey ?? "sin-empresa"} className="contents">
+        {children}
+      </div>
     </AppLayout>
   );
 }
