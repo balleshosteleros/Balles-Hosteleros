@@ -6,11 +6,9 @@ interface ReunionExport {
   id: string;
   titulo: string;
   fecha: string;
-  hora: string;
-  duracion: number;
-  organizador: string;
+  duracion: string;
   participantes: string[];
-  estado: string;
+  meetLink: string;
   notas: string;
 }
 
@@ -18,11 +16,9 @@ const reunionSchema = z.object({
   id: z.string(),
   titulo: z.string().min(1),
   fecha: z.string(),
-  hora: z.string(),
-  duracion: z.number(),
-  organizador: z.string(),
+  duracion: z.string(),
   participantes: z.array(z.string()),
-  estado: z.string(),
+  meetLink: z.string(),
   notas: z.string(),
 });
 
@@ -38,11 +34,9 @@ export const reunionesIO: ModuleIO<ReunionExport> = {
     { key: "id", label: "ID", hideInImport: true },
     { key: "titulo", label: "Título", required: true },
     { key: "fecha", label: "Fecha", type: "date", required: true },
-    { key: "hora", label: "Hora" },
-    { key: "duracion", label: "Duración (min)", type: "number" },
-    { key: "organizador", label: "Organizador" },
+    { key: "duracion", label: "Duración" },
     { key: "participantes", label: "Participantes", type: "array" },
-    { key: "estado", label: "Estado" },
+    { key: "meetLink", label: "Enlace" },
     { key: "notas", label: "Notas" },
   ],
   fetchAll: async () => {
@@ -55,12 +49,10 @@ export const reunionesIO: ModuleIO<ReunionExport> = {
       return {
         id: String(m.id ?? ""),
         titulo: String(m.titulo ?? ""),
-        fecha: String(m.fecha ?? ""),
-        hora: String(m.hora ?? ""),
-        duracion: typeof m.duracion === "number" ? m.duracion : 0,
-        organizador: String(m.organizador ?? ""),
+        fecha: typeof m.fecha === "string" ? m.fecha.slice(0, 10) : "",
+        duracion: String(m.duracion ?? ""),
         participantes: Array.isArray(m.participantes) ? m.participantes.map(String) : [],
-        estado: String(m.estado ?? ""),
+        meetLink: String(m.meet_link ?? ""),
         notas: String(m.notas ?? ""),
       };
     });

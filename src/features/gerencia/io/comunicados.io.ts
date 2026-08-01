@@ -5,19 +5,27 @@ import { listComunicados } from "@/features/gerencia/actions/comunicados-actions
 interface ComunicadoExport {
   id: string;
   titulo: string;
-  contenido: string;
-  destinatarios: string;
-  fecha: string;
+  asunto: string;
+  cuerpo: string;
+  estado: string;
   prioridad: string;
+  recurrencia: string;
+  envio: string;
+  observaciones: string;
+  fecha: string;
 }
 
 const comunicadoSchema = z.object({
   id: z.string(),
   titulo: z.string().min(1),
-  contenido: z.string(),
-  destinatarios: z.string(),
-  fecha: z.string(),
+  asunto: z.string(),
+  cuerpo: z.string(),
+  estado: z.string(),
   prioridad: z.string(),
+  recurrencia: z.string(),
+  envio: z.string(),
+  observaciones: z.string(),
+  fecha: z.string(),
 });
 
 const schema = comunicadoSchema as unknown as RowSchema<ComunicadoExport>;
@@ -31,10 +39,14 @@ export const comunicadosIO: ModuleIO<ComunicadoExport> = {
   columns: [
     { key: "id", label: "ID", hideInImport: true },
     { key: "titulo", label: "Título", required: true },
-    { key: "fecha", label: "Fecha", type: "date" },
+    { key: "asunto", label: "Asunto" },
+    { key: "estado", label: "Estado" },
     { key: "prioridad", label: "Prioridad" },
-    { key: "destinatarios", label: "Destinatarios" },
-    { key: "contenido", label: "Contenido" },
+    { key: "recurrencia", label: "Recurrencia" },
+    { key: "envio", label: "Envío programado" },
+    { key: "fecha", label: "Fecha", type: "date" },
+    { key: "cuerpo", label: "Cuerpo" },
+    { key: "observaciones", label: "Observaciones" },
   ],
   fetchAll: async () => {
     const result = await listComunicados();
@@ -46,10 +58,14 @@ export const comunicadosIO: ModuleIO<ComunicadoExport> = {
       return {
         id: String(r.id ?? ""),
         titulo: String(r.titulo ?? ""),
-        contenido: String(r.contenido ?? r.mensaje ?? ""),
-        destinatarios: String(r.destinatarios ?? ""),
-        fecha: typeof r.created_at === "string" ? r.created_at.slice(0, 10) : String(r.fecha ?? ""),
+        asunto: String(r.asunto ?? ""),
+        cuerpo: String(r.cuerpo ?? ""),
+        estado: String(r.estado ?? ""),
         prioridad: String(r.prioridad ?? ""),
+        recurrencia: String(r.recurrencia ?? ""),
+        envio: String(r.envio ?? ""),
+        observaciones: String(r.observaciones ?? ""),
+        fecha: typeof r.created_at === "string" ? r.created_at.slice(0, 10) : "",
       };
     });
   },

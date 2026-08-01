@@ -5,19 +5,27 @@ import { listElaboraciones } from "@/features/cocina/actions/elaboraciones-actio
 interface ElaboracionExport {
   id: string;
   nombre: string;
-  categoria: string | null;
-  descripcion: string | null;
-  tiempo: string | null;
-  responsable: string | null;
+  cantidadProducida: number;
+  unidad: string;
+  fecha: string;
+  fechaCaducidad: string;
+  almacen: string;
+  estado: string;
+  responsable: string;
+  descripcion: string;
 }
 
 const elaboracionSchema = z.object({
   id: z.string(),
   nombre: z.string().min(1),
-  categoria: z.string().nullable(),
-  descripcion: z.string().nullable(),
-  tiempo: z.string().nullable(),
-  responsable: z.string().nullable(),
+  cantidadProducida: z.number(),
+  unidad: z.string(),
+  fecha: z.string(),
+  fechaCaducidad: z.string(),
+  almacen: z.string(),
+  estado: z.string(),
+  responsable: z.string(),
+  descripcion: z.string(),
 });
 
 const schema = elaboracionSchema as unknown as RowSchema<ElaboracionExport>;
@@ -26,14 +34,17 @@ export const elaboracionesIO: ModuleIO<ElaboracionExport> = {
   module: "cocina",
   submodule: "elaboraciones",
   label: "Elaboraciones",
-  description: "Procedimientos de elaboración con tiempo y responsable.",
+  description: "Registros de producción de elaboraciones.",
   schema,
-  uniqueBy: "nombre",
   columns: [
     { key: "id", label: "ID", hideInImport: true },
-    { key: "nombre", label: "Nombre", required: true, unique: true },
-    { key: "categoria", label: "Categoría" },
-    { key: "tiempo", label: "Tiempo" },
+    { key: "nombre", label: "Elaboración", required: true },
+    { key: "cantidadProducida", label: "Cantidad producida", type: "number" },
+    { key: "unidad", label: "Unidad" },
+    { key: "fecha", label: "Fecha producción", type: "date" },
+    { key: "fechaCaducidad", label: "Caducidad", type: "date" },
+    { key: "almacen", label: "Almacén" },
+    { key: "estado", label: "Estado" },
     { key: "responsable", label: "Responsable" },
     { key: "descripcion", label: "Descripción" },
   ],
@@ -43,10 +54,14 @@ export const elaboracionesIO: ModuleIO<ElaboracionExport> = {
     return rows.map<ElaboracionExport>((r) => ({
       id: String(r.id ?? ""),
       nombre: String(r.nombre ?? ""),
-      categoria: (r.categoria as string | null) ?? null,
-      descripcion: (r.descripcion as string | null) ?? null,
-      tiempo: (r.tiempo as string | null) ?? null,
-      responsable: (r.responsable as string | null) ?? null,
+      cantidadProducida: typeof r.cantidad_producida === "number" ? r.cantidad_producida : 0,
+      unidad: String(r.unidad ?? ""),
+      fecha: typeof r.fecha === "string" ? r.fecha.slice(0, 10) : "",
+      fechaCaducidad: typeof r.fecha_caducidad === "string" ? r.fecha_caducidad.slice(0, 10) : "",
+      almacen: String(r.almacen ?? ""),
+      estado: String(r.estado ?? ""),
+      responsable: String(r.responsable ?? ""),
+      descripcion: String(r.descripcion ?? ""),
     }));
   },
 };

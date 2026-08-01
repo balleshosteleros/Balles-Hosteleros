@@ -46,6 +46,19 @@ export const procesosJuridicosIO: ModuleIO<ProcesoJuridico> = {
     const ok = (result as { ok?: boolean }).ok;
     const data = (result as { data?: unknown }).data;
     if (!ok || !Array.isArray(data)) return [];
-    return data as ProcesoJuridico[];
+    return (data as Array<Record<string, unknown>>).map((r) => ({
+      id: String(r.id ?? ""),
+      titulo: (r.titulo as string) ?? "",
+      empresa: "",
+      empresaId: (r.empresa_id as string) ?? "",
+      tipo: ((r.tipo as string) ?? "Otro") as ProcesoJuridico["tipo"],
+      juridico: (r.abogado as string) ?? "",
+      fecha: (r.fecha_inicio as string) ?? (r.created_at as string) ?? "",
+      estado: (((r.estado as string) ?? "ABIERTO").toUpperCase()) as ProcesoJuridico["estado"],
+      gravedad: (((r.gravedad as string) ?? "LEVE").toUpperCase()) as ProcesoJuridico["gravedad"],
+      descripcion: (r.descripcion as string) ?? "",
+      documentos: Array.isArray(r.documentos) ? (r.documentos as ProcesoJuridico["documentos"]) : [],
+      actualizaciones: Array.isArray(r.actualizaciones) ? (r.actualizaciones as ProcesoJuridico["actualizaciones"]) : [],
+    })) as ProcesoJuridico[];
   },
 };

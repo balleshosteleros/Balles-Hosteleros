@@ -4,24 +4,18 @@ import { listDescuentos } from "@/features/sala/actions/descuentos-actions";
 
 interface DescuentoExport {
   id: string;
-  nombre: string;
-  tipo: string;
-  porcentaje: number;
-  estado: string;
-  fechaInicio: string;
-  fechaFin: string;
-  observaciones: string;
+  codigo: string;
+  ejecucion: string;
+  activo: string;
+  fechaCreacion: string;
 }
 
 const descuentoSchema = z.object({
   id: z.string(),
-  nombre: z.string().min(1),
-  tipo: z.string(),
-  porcentaje: z.number(),
-  estado: z.string(),
-  fechaInicio: z.string(),
-  fechaFin: z.string(),
-  observaciones: z.string(),
+  codigo: z.string().min(1),
+  ejecucion: z.string(),
+  activo: z.string(),
+  fechaCreacion: z.string(),
 });
 
 const schema = descuentoSchema as unknown as RowSchema<DescuentoExport>;
@@ -32,16 +26,13 @@ export const descuentosIO: ModuleIO<DescuentoExport> = {
   label: "Descuentos",
   description: "Políticas de descuentos aplicables.",
   schema,
-  uniqueBy: "nombre",
+  uniqueBy: "codigo",
   columns: [
     { key: "id", label: "ID", hideInImport: true },
-    { key: "nombre", label: "Nombre", required: true, unique: true },
-    { key: "tipo", label: "Tipo" },
-    { key: "porcentaje", label: "Porcentaje", type: "number" },
-    { key: "estado", label: "Estado" },
-    { key: "fechaInicio", label: "Fecha inicio", type: "date" },
-    { key: "fechaFin", label: "Fecha fin", type: "date" },
-    { key: "observaciones", label: "Observaciones" },
+    { key: "codigo", label: "Código", required: true, unique: true },
+    { key: "ejecucion", label: "Ejecución" },
+    { key: "activo", label: "Activo" },
+    { key: "fechaCreacion", label: "Fecha creación", type: "date" },
   ],
   fetchAll: async () => {
     const result = await listDescuentos();
@@ -52,13 +43,10 @@ export const descuentosIO: ModuleIO<DescuentoExport> = {
       const r = d as Record<string, unknown>;
       return {
         id: String(r.id ?? ""),
-        nombre: String(r.nombre ?? ""),
-        tipo: String(r.tipo ?? ""),
-        porcentaje: typeof r.porcentaje === "number" ? r.porcentaje : 0,
-        estado: String(r.estado ?? ""),
-        fechaInicio: typeof r.fecha_inicio === "string" ? r.fecha_inicio : String(r.fechaInicio ?? ""),
-        fechaFin: typeof r.fecha_fin === "string" ? r.fecha_fin : String(r.fechaFin ?? ""),
-        observaciones: String(r.observaciones ?? ""),
+        codigo: String(r.nombre ?? ""),
+        ejecucion: String(r.tipo ?? ""),
+        activo: r.activo === false ? "No" : "Sí",
+        fechaCreacion: typeof r.created_at === "string" ? r.created_at.slice(0, 10) : "",
       };
     });
   },

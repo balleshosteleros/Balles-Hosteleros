@@ -42,6 +42,20 @@ export const clientesIO: ModuleIO<Cliente> = {
   fetchAll: async () => {
     const result = await listClientes();
     if (!result.ok) return [];
-    return (result.data ?? []) as Cliente[];
+    return (result.data ?? []).map((row) => {
+      const r = row as Record<string, unknown>;
+      return {
+        id: String(r.id ?? ""),
+        nombre: (r.nombre as string) ?? "",
+        telefono: (r.telefono as string) ?? "",
+        email: (r.email as string) ?? "",
+        clasificacion: ((r.clasificacion as Cliente["clasificacion"]) ?? "NUEVO"),
+        visitas: (r.visitas as number) ?? 0,
+        ultimaVisita: (r.ultima_visita as string) ?? "",
+        observaciones: (r.observaciones as string) ?? "",
+        preferencias: (r.preferencias as string) ?? "",
+        notasInternas: (r.notas_internas as string) ?? "",
+      } as Cliente;
+    });
   },
 };

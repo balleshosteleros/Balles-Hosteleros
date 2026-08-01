@@ -50,10 +50,11 @@ export const misSolicitudesIO: ModuleIO<SolicitudExport> = {
         id: String(r.id ?? ""),
         tipo: String(r.tipo ?? ""),
         estado: String(r.estado ?? ""),
-        fechaInicio: String(r.fecha_inicio ?? r.fechaInicio ?? ""),
-        fechaFin: String(r.fecha_fin ?? r.fechaFin ?? ""),
+        fechaInicio: String(r.fechaInicio ?? r.fecha_inicio ?? ""),
+        fechaFin: String(r.fechaFin ?? r.fecha_fin ?? ""),
         motivo: String(r.motivo ?? ""),
-        fechaCreacion: typeof r.created_at === "string" ? r.created_at.slice(0, 10) : "",
+        fechaCreacion: typeof r.createdAt === "string" ? r.createdAt.slice(0, 10)
+          : typeof r.created_at === "string" ? r.created_at.slice(0, 10) : "",
       };
     });
   },

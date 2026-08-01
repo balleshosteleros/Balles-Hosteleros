@@ -5,21 +5,23 @@ import { listPresentaciones } from "@/features/gestoria/actions/presentaciones-a
 interface PresentacionExport {
   id: string;
   modelo: string;
+  tipo: string;
   periodo: string;
-  fechaPresentacion: string;
-  importe: number;
   estado: string;
-  observaciones: string;
+  fechaLimite: string;
+  fechaPresentacion: string;
+  notas: string;
 }
 
 const presSchema = z.object({
   id: z.string(),
   modelo: z.string(),
+  tipo: z.string(),
   periodo: z.string(),
-  fechaPresentacion: z.string(),
-  importe: z.number(),
   estado: z.string(),
-  observaciones: z.string(),
+  fechaLimite: z.string(),
+  fechaPresentacion: z.string(),
+  notas: z.string(),
 });
 
 const schema = presSchema as unknown as RowSchema<PresentacionExport>;
@@ -33,11 +35,12 @@ export const presentacionesGestoriaIO: ModuleIO<PresentacionExport> = {
   columns: [
     { key: "id", label: "ID", hideInImport: true },
     { key: "modelo", label: "Modelo", required: true, example: "303" },
-    { key: "periodo", label: "Período", required: true, example: "2026-T1" },
-    { key: "fechaPresentacion", label: "Fecha presentación", type: "date" },
-    { key: "importe", label: "Importe", type: "number" },
+    { key: "tipo", label: "Tipo" },
+    { key: "periodo", label: "Período", example: "2026-T1" },
     { key: "estado", label: "Estado" },
-    { key: "observaciones", label: "Observaciones" },
+    { key: "fechaLimite", label: "Fecha límite", type: "date" },
+    { key: "fechaPresentacion", label: "Fecha presentación", type: "date" },
+    { key: "notas", label: "Notas" },
   ],
   fetchAll: async () => {
     const result = await listPresentaciones();
@@ -48,12 +51,13 @@ export const presentacionesGestoriaIO: ModuleIO<PresentacionExport> = {
       const r = p as Record<string, unknown>;
       return {
         id: String(r.id ?? ""),
-        modelo: String(r.modelo ?? ""),
+        modelo: String(r.titulo ?? ""),
+        tipo: String(r.tipo ?? ""),
         periodo: String(r.periodo ?? ""),
-        fechaPresentacion: typeof r.fecha_presentacion === "string" ? r.fecha_presentacion : String(r.fechaPresentacion ?? ""),
-        importe: typeof r.importe === "number" ? r.importe : 0,
         estado: String(r.estado ?? ""),
-        observaciones: String(r.observaciones ?? ""),
+        fechaLimite: typeof r.fecha_limite === "string" ? r.fecha_limite.slice(0, 10) : "",
+        fechaPresentacion: typeof r.fecha_presentacion === "string" ? r.fecha_presentacion.slice(0, 10) : "",
+        notas: String(r.notas ?? ""),
       };
     });
   },

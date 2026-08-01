@@ -5,21 +5,19 @@ import { listVencimientos } from "@/features/gerencia/actions/vencimientos-actio
 interface VencimientoExport {
   id: string;
   concepto: string;
+  tipo: string;
   fechaVencimiento: string;
-  diasAviso: number;
-  prioridad: string;
-  responsable: string;
-  observaciones: string;
+  estado: string;
+  descripcion: string;
 }
 
 const vencimientoSchema = z.object({
   id: z.string(),
   concepto: z.string().min(1),
+  tipo: z.string(),
   fechaVencimiento: z.string(),
-  diasAviso: z.number(),
-  prioridad: z.string(),
-  responsable: z.string(),
-  observaciones: z.string(),
+  estado: z.string(),
+  descripcion: z.string(),
 });
 
 const schema = vencimientoSchema as unknown as RowSchema<VencimientoExport>;
@@ -33,11 +31,10 @@ export const vencimientosIO: ModuleIO<VencimientoExport> = {
   columns: [
     { key: "id", label: "ID", hideInImport: true },
     { key: "concepto", label: "Concepto", required: true },
+    { key: "tipo", label: "Tipo" },
     { key: "fechaVencimiento", label: "Fecha vencimiento", type: "date", required: true },
-    { key: "diasAviso", label: "Días aviso", type: "number" },
-    { key: "prioridad", label: "Prioridad" },
-    { key: "responsable", label: "Responsable" },
-    { key: "observaciones", label: "Observaciones" },
+    { key: "estado", label: "Estado" },
+    { key: "descripcion", label: "Descripción" },
   ],
   fetchAll: async () => {
     const result = await listVencimientos();
@@ -48,12 +45,11 @@ export const vencimientosIO: ModuleIO<VencimientoExport> = {
       const r = v as Record<string, unknown>;
       return {
         id: String(r.id ?? ""),
-        concepto: String(r.concepto ?? ""),
-        fechaVencimiento: typeof r.fecha_vencimiento === "string" ? r.fecha_vencimiento : String(r.fechaVencimiento ?? ""),
-        diasAviso: typeof r.dias_aviso === "number" ? r.dias_aviso : 0,
-        prioridad: String(r.prioridad ?? ""),
-        responsable: String(r.responsable ?? ""),
-        observaciones: String(r.observaciones ?? ""),
+        concepto: String(r.titulo ?? ""),
+        tipo: String(r.tipo ?? ""),
+        fechaVencimiento: typeof r.fecha_vencimiento === "string" ? r.fecha_vencimiento.slice(0, 10) : "",
+        estado: String(r.estado ?? ""),
+        descripcion: String(r.descripcion ?? ""),
       };
     });
   },

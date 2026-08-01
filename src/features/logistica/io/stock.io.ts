@@ -8,7 +8,8 @@ interface StockExport {
   cantidad: number | null;
   cantidadMinima: number | null;
   cantidadMaxima: number | null;
-  notas: string | null;
+  ubicacion: string;
+  ultimoMovimiento: string;
 }
 
 const stockSchema = z.object({
@@ -17,7 +18,8 @@ const stockSchema = z.object({
   cantidad: z.number().nullable(),
   cantidadMinima: z.number().nullable(),
   cantidadMaxima: z.number().nullable(),
-  notas: z.string().nullable(),
+  ubicacion: z.string(),
+  ultimoMovimiento: z.string(),
 });
 
 const schema = stockSchema as unknown as RowSchema<StockExport>;
@@ -34,7 +36,8 @@ export const stockIO: ModuleIO<StockExport> = {
     { key: "cantidad", label: "Cantidad actual", type: "number" },
     { key: "cantidadMinima", label: "Stock mínimo", type: "number" },
     { key: "cantidadMaxima", label: "Stock máximo", type: "number" },
-    { key: "notas", label: "Notas" },
+    { key: "ubicacion", label: "Ubicación" },
+    { key: "ultimoMovimiento", label: "Último movimiento", type: "date" },
   ],
   fetchAll: async () => {
     const result = await listStock();
@@ -42,10 +45,11 @@ export const stockIO: ModuleIO<StockExport> = {
     return rows.map<StockExport>((r) => ({
       producto: String(r.producto_nombre ?? r.nombre ?? ""),
       unidad: String(r.unidad ?? "ud"),
-      cantidad: typeof r.cantidad === "number" ? r.cantidad : null,
+      cantidad: typeof r.cantidad_actual === "number" ? r.cantidad_actual : null,
       cantidadMinima: typeof r.cantidad_minima === "number" ? r.cantidad_minima : null,
       cantidadMaxima: typeof r.cantidad_maxima === "number" ? r.cantidad_maxima : null,
-      notas: (r.notas as string | null) ?? null,
+      ubicacion: String(r.ubicacion ?? ""),
+      ultimoMovimiento: typeof r.ultimo_movimiento === "string" ? r.ultimo_movimiento.slice(0, 10) : "",
     }));
   },
 };
