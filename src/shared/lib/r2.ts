@@ -7,7 +7,12 @@
  * Solo debe importarse desde código de servidor (runtime "nodejs").
  */
 
-import { S3Client, PutObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
+import {
+  S3Client,
+  PutObjectCommand,
+  DeleteObjectCommand,
+  GetObjectCommand,
+} from "@aws-sdk/client-s3";
 import { createHash, createHmac } from "crypto";
 
 let _client: S3Client | null = null;
@@ -129,6 +134,26 @@ export async function putObjectR2(
     new PutObjectCommand({ Bucket: bucket, Key: key, Body: body, ContentType: contentType }),
   );
   return `${publicUrl}/${key}`;
+}
+
+/**
+ * Descarga un objeto de R2 y devuelve su cuerpo como stream web + metadatos.
+ * Se usa para el proxy de descarga: como el objeto se sirve desde el mismo
+ * origen que la app, el atributo `download`/`Content-Disposition: attachment`
+ * SÍ fuerza la descarga (el navegador ignora `download` en enlaces cross-origin
+ * a R2, por eso los vídeos se abrían en la pestaña en vez de descargarse).
+ */
+export async function getObjectR2(
+  key: string,
+): Promise<{ body: ReadableStream; contentType: string; contentLength?: number }> {
+  const { client, bucket } = getR2();
+  const res = await client.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
+  const body = res.Body as unknown as ReadableStream;
+  return {
+    body,
+    contentType: res.ContentType ?? "application/octet-stream",
+    contentLength: res.ContentLength,
+  };
 }
 
 /** Borra un objeto de R2. No lanza si el objeto ya no existe. */

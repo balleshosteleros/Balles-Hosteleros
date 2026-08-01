@@ -22,6 +22,12 @@ export function WebcamPip() {
     });
   }, []);
 
+  const visible = cameraStream && (state === "recording" || state === "paused");
+
+  // Asigna el stream al <video>. Depende de `visible` además de `cameraStream`
+  // porque el <video> NO existe en el DOM hasta que la burbuja es visible (durante
+  // el countdown está desmontado). Sin esta dependencia, el efecto corría cuando
+  // aún no había elemento y no volvía a correr al montarse → burbuja en negro.
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
@@ -34,7 +40,7 @@ export function WebcamPip() {
     } else {
       video.srcObject = null;
     }
-  }, [cameraStream]);
+  }, [cameraStream, visible]);
 
   const onPointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
     if (!pos) return;
@@ -56,7 +62,6 @@ export function WebcamPip() {
     (e.target as Element).releasePointerCapture?.(e.pointerId);
   }, []);
 
-  const visible = cameraStream && (state === "recording" || state === "paused");
   if (!visible || !pos) return null;
 
   return (
@@ -71,7 +76,16 @@ export function WebcamPip() {
     >
       <div className="relative w-full h-full rounded-full overflow-hidden border-[3px] border-red-500 shadow-2xl ring-4 ring-red-500/25 bg-black">
         <video
-          ref={videoRef}
+          ref={(el) => {
+            videoRef.current = el;
+            // Asigna el stream en el instante en que el <video> se monta, no solo
+            // cuando cambia cameraStream — así la burbuja nunca queda en negro.
+            if (el && cameraStream && el.srcObject !== cameraStream) {
+              el.srcObject = cameraStream;
+              const play = el.play();
+              if (play && typeof play.catch === "function") play.catch(() => {});
+            }
+          }}
           autoPlay
           playsInline
           muted

@@ -399,7 +399,15 @@ function RecordingContent() {
         )}
 
         <div className="grid grid-cols-2 gap-3">
-          <a href={result.url} download className="w-full">
+          <a
+            href={
+              result.url.startsWith("blob:")
+                ? result.url
+                : `/api/recordings/download?id=${encodeURIComponent(result.videoId)}`
+            }
+            download={`${title.trim() || "grabacion"}.webm`}
+            className="w-full"
+          >
             <Button variant="outline" className="w-full gap-2">
               <Download className="h-4 w-4" />
               Descargar
@@ -686,11 +694,9 @@ function RecordingsList() {
           value={folder ?? "__todas__"}
           onValueChange={(v) => setFolder(v === "__todas__" ? null : v)}
         >
-          <SelectTrigger className="h-8 text-xs">
-            <span className="flex items-center gap-2">
-              <FolderClosed className="h-3.5 w-3.5 text-muted-foreground" />
-              <SelectValue />
-            </span>
+          <SelectTrigger className="h-8 gap-2 text-xs">
+            <FolderClosed className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+            <SelectValue />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="__todas__">Todas las carpetas</SelectItem>
@@ -837,7 +843,7 @@ function RecordingsList() {
                           <ExternalLink className="h-3.5 w-3.5" />
                         </a>
                         <a
-                          href={rec.url}
+                          href={`/api/recordings/download?id=${encodeURIComponent(rec.id)}`}
                           download={`${rec.title}.webm`}
                           className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-primary"
                           title="Descargar"
