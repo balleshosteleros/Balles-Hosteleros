@@ -1,7 +1,6 @@
 "use client";
 
-import { createContext, useContext, useState, ReactNode, useCallback, useEffect, useRef, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { createContext, useContext, useState, ReactNode, useCallback, useEffect, useRef } from "react";
 import { Incidencia, SAMPLE_DATA } from "@/features/empresa/data/mantenimiento";
 import { AjustesEmpresa, buildDefaultAjustes, DatosGenerales, ConfigOperativa, mergeNotificaciones } from "@/features/ajustes/data/ajustes";
 import { getLogoUrls, getIsotipoUrls } from "@/features/empresa/actions/logo-actions";
@@ -150,9 +149,7 @@ interface EmpresaContextValue {
 const EmpresaContext = createContext<EmpresaContextValue | null>(null);
 
 export function EmpresaProvider({ children }: { children: ReactNode }) {
-  const router = useRouter();
   const isHydrated = useRef(false);
-  const [, startTransition] = useTransition();
   const showLoading = useGlobalLoading((s) => s.show);
   const hideLoading = useGlobalLoading((s) => s.hide);
   const [empresasList, setEmpresasList] = useState<Empresa[]>(EMPRESAS);
@@ -396,27 +393,24 @@ export function EmpresaProvider({ children }: { children: ReactNode }) {
           hideLoading();
           return;
         }
-        startTransition(() => {
-          // Si hay destino distinto de la ruta actual, navegamos a él (lleva
-          // el refresh de Server Components implícito). Si no, solo refrescamos
-          // los datos de la ruta en la que estamos.
-          if (destino) {
-            router.push(destino);
-          } else {
-            router.refresh();
-          }
-        });
-        // El re-render de los Server Components no es awaitable directamente:
-        // damos margen prudente para que la UI rehidratada se pinte y luego
-        // apagamos el overlay. Si la cookie cambia más rápido, el detector
-        // de navegación o el usuario percibirán la transición igualmente.
-        window.setTimeout(() => hideLoading(), 900);
+        // Recarga DURA del navegador a la ruta destino. `router.refresh()` solo
+        // re-renderiza los Server Components, pero las vistas de datos se cargan
+        // en client components (server actions que leen la cookie en un effect):
+        // esos NO se re-ejecutan con un refresh, así que la pantalla se quedaba
+        // mostrando los datos de la empresa anterior. Una recarga completa
+        // reconstruye TODO (SSR + client + effects + estado en memoria) con la
+        // cookie de la nueva empresa ya escrita. El overlay se mantiene hasta
+        // que la nueva página carga (no lo apagamos aquí: la navegación destruye
+        // este árbol de React).
+        const target =
+          destino ?? (typeof window !== "undefined" ? window.location.pathname : "/");
+        window.location.assign(target);
       })
       .catch((err) => {
         console.error("[empresa-context] setEmpresaActiva:", err);
         hideLoading();
       });
-  }, [empresasList, router, showLoading, hideLoading]);
+  }, [empresasList, showLoading, hideLoading]);
 
   return (
     <EmpresaContext.Provider
