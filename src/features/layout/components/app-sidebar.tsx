@@ -152,19 +152,36 @@ export function AppSidebar() {
   const { mode, setMode } = useViewMode();
   const { puedeVer, permisosLoaded, esAdminPlataforma } = useAuth();
 
+  // Evitar hydration mismatch: useAuth y useViewMode leen localStorage en el
+  // render inicial (caché de roles/permisos y modo de vista). En SSR esos lookups
+  // devuelven valores por defecto y en cliente devuelven la caché real, así que
+  // el menú difiere. Diferimos el render dinámico al post-mount; la caché ya está
+  // poblada para entonces, así que no hay parpadeo perceptible.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   // Admin de plataforma (DIRECCIÓN) tiene bypass total → todos los módulos sin
   // esperar permisos. Para el resto esperamos a permisosLoaded para evitar el
   // parpadeo "todo abierto" → "filtrado", y filtramos por permisos reales.
-  const isDirector = esAdminPlataforma;
+  // OJO hidratación: `esAdminPlataforma`/`permisosLoaded` vienen del caché de
+  // localStorage, que en SSR es false y en cliente puede ser true. Si pintáramos
+  // las secciones según esas señales en el PRIMER render cliente, el HTML no
+  // coincidiría con el del servidor → React #418. Por eso, mientras `!mounted`,
+  // nos comportamos igual que el servidor (skeleton), y resolvemos el menú real
+  // en el siguiente tick, cuando SSR y cliente ya no se comparan.
+  const isDirector = mounted && esAdminPlataforma;
+  const permisosListos = mounted && permisosLoaded;
   const sections = isDirector
     ? allSections
-    : permisosLoaded
+    : permisosListos
       ? allSections.filter((s) => puedeVer(s.modulo))
       : [];
-  // Mientras se resuelven los permisos (primer login sin caché en localStorage),
-  // `sections` es [] y el menú salía en blanco varios segundos → parecía roto.
-  // Con esto pintamos un esqueleto en su lugar hasta que llegan los permisos.
-  const loadingSections = !isDirector && !permisosLoaded;
+  // Mientras se resuelven los permisos (primer login sin caché en localStorage)
+  // o aún no hemos montado, `sections` es [] y el menú salía en blanco → parecía
+  // roto. Con esto pintamos un esqueleto en su lugar hasta que llegan.
+  const loadingSections = !isDirector && !permisosListos;
 
   // La URL manda: si el usuario está dentro de un módulo de departamento o de
   // Mi Panel, el sidebar muestra ese menú. El modo guardado solo decide en
@@ -180,16 +197,6 @@ export function AppSidebar() {
 
   const activeKey = sections.find((s) => pathname.startsWith(s.prefix))?.key ?? null;
   const [openKey, setOpenKey] = useState<string | null>(activeKey);
-
-  // Evitar hydration mismatch: useAuth y useViewMode leen localStorage en el render
-  // inicial (caché de roles/permisos y modo de vista). En SSR esos lookups devuelven
-  // valores por defecto y en cliente devuelven la caché real, así que las secciones
-  // del menú difieren. Diferimos el render dinámico al post-mount; la caché ya está
-  // poblada para entonces, así que no hay parpadeo perceptible.
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => {
-    setMounted(true);
-  }, []);
 
   // En las páginas hub (Mis Paneles / Mis Departamentos) el sidebar queda fijo
   // expandido — no se auto-colapsa ni se cierra al salir el cursor. Al pulsar

@@ -108,17 +108,24 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const signOut = auth?.signOut ?? (() => {});
 
   const devBypass = process.env.NEXT_PUBLIC_DEV_BYPASS_AUTH === "true";
+  // `mounted` es false en SSR Y en el primer render del cliente, así que ambos
+  // pintan el MISMO HTML (sin barra) → sin mismatch de hidratación (React #418).
+  // Tras montar leemos las señales que dependen de localStorage/caché.
+  const [mounted, setMounted] = useState(false);
   const [isDemoHost, setIsDemoHost] = useState(false);
   useEffect(() => {
+    setMounted(true);
     if (typeof window !== "undefined") {
       setIsDemoHost(window.location.hostname.startsWith("demo."));
     }
   }, []);
   // Mostramos la barra superior en cuanto sabemos que hay sesión — ya sea por
   // `user` (llega tras el primer paint) o por `permisosLoaded` (hidratado del
-  // caché en el primer render, como el sidebar). Así toda la cabecera aparece
-  // al instante junto con el resto del software, sin el salto visible.
-  const showUi = !!user || permisosLoaded || devBypass || isDemoHost;
+  // caché, como el sidebar). Pero SOLO tras montar: `permisosLoaded` difiere
+  // entre SSR (false, sin localStorage) y cliente (true si hay caché), y pintar
+  // esa diferencia en el primer render rompía la hidratación. Con `mounted` el
+  // primer paint coincide con el servidor y la barra aparece justo después.
+  const showUi = mounted && (!!user || permisosLoaded || devBypass || isDemoHost);
   const counts = useDailyCounts();
 
   const { title: headerLabel, icon: ModuleIcon } = getRouteMeta(pathname);
