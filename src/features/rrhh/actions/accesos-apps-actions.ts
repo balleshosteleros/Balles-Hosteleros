@@ -9,6 +9,7 @@ import {
   type AccesoCredencial,
   MAX_ACCESOS_POR_APP,
 } from "@/features/rrhh/data/accesos-apps";
+import { MAX_IMAGEN_MB, MAX_IMAGEN_BYTES } from "@/shared/lib/documentos";
 
 /** Minutos que dura una verificación de identidad antes de volver a pedirla. */
 const VERIFICACION_VALIDEZ_MIN = 5;
@@ -442,7 +443,7 @@ export async function subirLogoApp(formData: FormData): Promise<{ ok: true; url:
   const file = formData.get("file") as File | null;
   if (!file || file.size === 0) return { ok: false, error: "No se recibió ninguna imagen" };
   if (!file.type.startsWith("image/")) return { ok: false, error: "El archivo debe ser una imagen" };
-  if (file.size > 2 * 1024 * 1024) return { ok: false, error: "La imagen no puede superar 2 MB" };
+  if (file.size > MAX_IMAGEN_BYTES) return { ok: false, error: `La imagen no puede superar ${MAX_IMAGEN_MB} MB` };
 
   const admin = createAdminClient();
   const ext = (file.name.split(".").pop() || "png").toLowerCase();

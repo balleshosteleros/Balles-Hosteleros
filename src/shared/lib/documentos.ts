@@ -8,6 +8,13 @@
 export const MAX_DOCUMENTO_MB = 50;
 export const MAX_DOCUMENTO_BYTES = MAX_DOCUMENTO_MB * 1024 * 1024;
 
+// Tope de IMÁGENES sueltas y ficheros ligeros: avatar, logos (app y empresa),
+// fotos de carta/inspección/cata, y CV de candidatos. Se mantiene bajo a
+// propósito (10 MB) para no tener muchos valores distintos y proteger la cuota
+// en formularios públicos.
+export const MAX_IMAGEN_MB = 10;
+export const MAX_IMAGEN_BYTES = MAX_IMAGEN_MB * 1024 * 1024;
+
 // Mensaje estándar cuando un archivo supera el tope.
 export function mensajeDocumentoDemasiadoGrande(nombre?: string): string {
   return nombre

@@ -21,8 +21,9 @@ import { friendlyError } from "@/shared/lib/friendly-errors";
 import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
 import { ImportarMarcaDialog } from "./ImportarMarcaDialog";
 import type { MarcaImportada } from "@/features/empresa/actions/marca-import-actions";
+import { MAX_IMAGEN_MB, MAX_IMAGEN_BYTES } from "@/shared/lib/documentos";
 
-const MAX_LOGO_BYTES = 5 * 1024 * 1024;
+const MAX_LOGO_BYTES = MAX_IMAGEN_BYTES; // 10 MB (tope de imágenes)
 const HEX_RE = /^#[0-9a-fA-F]{6}$/;
 
 type Estado = {
@@ -95,7 +96,7 @@ export function ImagenMarcaTab() {
 
   const subirLogoPrincipal = async (file: File) => {
     if (file.size > MAX_LOGO_BYTES) {
-      toast.error("El logotipo es demasiado grande. Usa una imagen de menos de 5 MB.");
+      toast.error(`El logotipo es demasiado grande. Usa una imagen de menos de ${MAX_IMAGEN_MB} MB.`);
       return;
     }
     setSubiendoPrincipal(true);
@@ -116,7 +117,7 @@ export function ImagenMarcaTab() {
 
   const subirIsotipoFile = async (file: File) => {
     if (file.size > MAX_LOGO_BYTES) {
-      toast.error("El isotipo es demasiado grande. Usa una imagen de menos de 5 MB.");
+      toast.error(`El isotipo es demasiado grande. Usa una imagen de menos de ${MAX_IMAGEN_MB} MB.`);
       return;
     }
     setSubiendoIsotipo(true);

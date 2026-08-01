@@ -13,11 +13,12 @@ import {
   normalizarCamposFormulario,
   type CampoCandidaturaClave,
 } from "@/features/rrhh/data/campos-candidatura";
+import { MAX_IMAGEN_MB, MAX_IMAGEN_BYTES } from "@/shared/lib/documentos";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-const MAX_CV_BYTES = 5 * 1024 * 1024;
+const MAX_CV_BYTES = MAX_IMAGEN_BYTES; // 10 MB (tope de imágenes/ficheros ligeros)
 const RATE_LIMIT_WINDOW_MIN = 15;
 const RATE_LIMIT_MAX = 5;
 
@@ -168,7 +169,7 @@ export async function POST(req: Request) {
     // más abajo según la config de campos de la empresa.
     const tieneCv = !!cv && cv.size > 0;
     if (tieneCv && cv!.size > MAX_CV_BYTES) {
-      return NextResponse.json({ ok: false, error: "El CV supera el tamaño máximo de 5MB" }, { status: 400 });
+      return NextResponse.json({ ok: false, error: `El CV supera el tamaño máximo de ${MAX_IMAGEN_MB} MB` }, { status: 400 });
     }
     if (tieneCv && cv!.type !== "application/pdf") {
       return NextResponse.json({ ok: false, error: "El CV debe ser un PDF" }, { status: 400 });

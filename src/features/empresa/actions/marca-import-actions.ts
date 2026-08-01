@@ -14,6 +14,7 @@
  */
 
 import { geminiJSON } from "@/lib/ia/gemini";
+import { MAX_IMAGEN_BYTES } from "@/shared/lib/documentos";
 
 const HEX = /^#[0-9a-fA-F]{6}$/;
 
@@ -57,7 +58,7 @@ async function descargarImagen(src: string): Promise<ImagenDetectada | null> {
       .trim();
     if (!ct.startsWith("image/")) return null;
     const buf = Buffer.from(await res.arrayBuffer());
-    if (buf.length < 200 || buf.length > 5 * 1024 * 1024) return null;
+    if (buf.length < 200 || buf.length > MAX_IMAGEN_BYTES) return null;
     const dims = leerDimensiones(buf, ct);
     const aspect = dims ? dims.w / dims.h : 1;
     const base64 = buf.toString("base64");

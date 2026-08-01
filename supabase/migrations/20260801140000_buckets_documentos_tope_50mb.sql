@@ -1,12 +1,12 @@
 -- Unifica los topes de tamaño de TODOS los buckets. Ninguno queda "sin límite"
 -- (evita que un archivo enorme llene la cuota de almacenamiento por accidente).
 --
--- Topes por tipo:
+-- Solo 3 niveles, para no tener muchos valores distintos:
 --   50 MB  → documentos / justificantes / fotos de gestión / informes / assets web.
 --            Coincide con el límite del código (MAX_DOCUMENTO_MB en @/shared/lib/documentos).
---   10 MB  → imágenes sueltas (avatar, logos de app, fotos de carta/inspección/cata).
+--   10 MB  → imágenes sueltas y ficheros ligeros: avatar, logos (app y empresa),
+--            fotos de carta/inspección/cata, y CV de candidatos (MAX_IMAGEN_MB).
 --   500 MB → vídeo (grabaciones de cronogramas, material de formación).
---   (5 MB en cvs-candidatos y empresa-logos se conservan tal cual: no se tocan aquí.)
 --
 -- Idempotente: fija valores exactos con guarda IS DISTINCT FROM; re-ejecutar no cambia nada.
 
@@ -33,15 +33,17 @@ WHERE id IN (
 )
 AND file_size_limit IS DISTINCT FROM 52428800;
 
--- 10 MB — imágenes sueltas
+-- 10 MB — imágenes sueltas y ficheros ligeros (incluye logos de empresa y CV)
 UPDATE storage.buckets
 SET file_size_limit = 10485760
 WHERE id IN (
   'avatars',
   'app-logos',
+  'empresa-logos',
   'carta-fotos',
   'inspeccion-imagenes',
-  'nuevas-recetas-fotos-cata'
+  'nuevas-recetas-fotos-cata',
+  'cvs-candidatos'
 )
 AND file_size_limit IS DISTINCT FROM 10485760;
 

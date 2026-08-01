@@ -15,6 +15,7 @@ import {
   normalizarCamposFormulario,
   type CamposFormularioConfig,
 } from "@/features/rrhh/data/campos-candidatura";
+import { MAX_IMAGEN_MB, MAX_IMAGEN_BYTES } from "@/shared/lib/documentos";
 
 interface Props {
   empresaSlug: string;
@@ -71,7 +72,7 @@ const EXPERIENCIA_OPCIONES = [
   { value: "mas_5", label: "Más de 5 años" },
 ] as const;
 
-const MAX_CV_BYTES = 5 * 1024 * 1024;
+const MAX_CV_BYTES = MAX_IMAGEN_BYTES; // 10 MB (tope de imágenes/ficheros ligeros)
 
 type Paso = "datos" | "cuestionario";
 
@@ -242,8 +243,8 @@ export function FormCandidaturaPublica({
     if (pedirOrigen && cfg.como_nos_conocio.obligatorio && !form.como_nos_conocio)
       return "Indícanos por dónde nos has conocido";
     if (requerido("cv") && !form.cv) return "El currículum es obligatorio";
-    // Si se adjunta CV (obligatorio u opcional), debe ser un PDF válido ≤5MB.
-    if (form.cv && form.cv.size > MAX_CV_BYTES) return "El CV no puede superar 5MB";
+    // Si se adjunta CV (obligatorio u opcional), debe ser un PDF válido dentro del tope.
+    if (form.cv && form.cv.size > MAX_CV_BYTES) return `El CV no puede superar ${MAX_IMAGEN_MB} MB`;
     if (form.cv && form.cv.type !== "application/pdf") return "El CV debe ser un PDF";
     return null;
   }

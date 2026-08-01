@@ -13,13 +13,14 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { MAX_IMAGEN_MB, MAX_IMAGEN_BYTES } from "@/shared/lib/documentos";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
 const BUCKET = "avatars";
-const MAX_BYTES = 5 * 1024 * 1024;
+const MAX_BYTES = MAX_IMAGEN_BYTES; // 10 MB (tope de imágenes)
 const ALLOWED = ["image/jpeg", "image/png", "image/webp"];
 
 export async function POST(req: Request) {
@@ -39,7 +40,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "No se recibió ninguna imagen." }, { status: 400 });
     }
     if (file.size > MAX_BYTES) {
-      return NextResponse.json({ error: "La imagen supera 5 MB." }, { status: 400 });
+      return NextResponse.json({ error: `La imagen supera ${MAX_IMAGEN_MB} MB.` }, { status: 400 });
     }
     if (!ALLOWED.includes(file.type)) {
       return NextResponse.json(
