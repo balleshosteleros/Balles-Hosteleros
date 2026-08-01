@@ -267,7 +267,7 @@ export async function contratarCandidato(input: ContratarInput): Promise<Contrat
   // 2. Puesto + área del departamento + condiciones del nivel
   const { data: puesto } = await admin
     .from("puestos")
-    .select("id, nombre, departamento_id, tipo_contrato_defecto, convenio_colectivo, departamentos(nombre, area)")
+    .select("id, nombre, departamento_id, tipo_contrato_defecto, convenio_colectivo, validador_trabajo_defecto_id, validador_ausencias_defecto_id, departamentos(nombre, area)")
     .eq("id", input.puestoId)
     .maybeSingle();
   if (!puesto) return { ok: false, error: "Puesto no encontrado." };
@@ -439,6 +439,18 @@ export async function contratarCandidato(input: ContratarInput): Promise<Contrat
     await vincularPuestoPrincipal(admin, alta.empleadoId, input.puestoId, puesto.nombre as string, input.primerDia);
     await guardarSnapshotCondiciones(admin, empresaId, alta.empleadoId, input.puestoId, puesto.nombre as string, nivelHeredado, input.primerDia, tipoContrato, cond);
 
+    // Validadores heredados del PUESTO (plantilla). Si el puesto los tiene
+    // definidos, el empleado nace con ellos. Un validador no puede ser el propio
+    // empleado, pero como es recién creado eso no puede ocurrir aquí.
+    const valTrabajo = (puesto.validador_trabajo_defecto_id as string | null) ?? null;
+    const valAusencias = (puesto.validador_ausencias_defecto_id as string | null) ?? null;
+    if (valTrabajo || valAusencias) {
+      await admin.from("empleados").update({
+        validador_trabajo_id: valTrabajo,
+        validador_ausencias_id: valAusencias,
+      }).eq("id", alta.empleadoId);
+    }
+
     const { error: markErr } = await admin.from("candidatos")
       .update({ empleado_id: alta.empleadoId, fase: destinoFase, estado: destinoEstado }).eq("id", cand.id);
     if (markErr) throw new Error(markErr.message);
@@ -448,6 +460,31 @@ export async function contratarCandidato(input: ContratarInput): Promise<Contrat
     try { await admin.auth.admin.deleteUser(alta.userId); } catch (e) { console.error("[contratacion] rollback deleteUser:", e); }
     await revertirContratacionFallida(admin, empresaId, cand.id, fullName, motivo);
     return { ok: false, error: `La contratación no se completó y se ha revertido. Puedes volver a intentarlo. (${motivo})` };
+  }
+
+  // Aviso a RRHH si el PUESTO no tenía validadores por defecto: el empleado nace
+  // sin validador y sus solicitudes no podrían aprobarse hasta asignárselo. No
+  // bloquea la contratación (best-effort). Enlaza a la ficha del empleado.
+  if (!puesto.validador_trabajo_defecto_id || !puesto.validador_ausencias_defecto_id) {
+    try {
+      const { emitirNotificacion } = await import(
+        "@/features/notificaciones/actions/notificaciones-actions"
+      );
+      await emitirNotificacion({
+        empresaId,
+        system: true,
+        tipo: "validador_no_configurado",
+        titulo: `Asignar validador a ${fullName}`,
+        mensaje: `El puesto ${puesto.nombre} no tiene validadores por defecto, así que ${fullName} se ha creado sin validador de trabajo/ausencias. Asígnalo en su ficha para que pueda gestionar solicitudes.`,
+        segmento: { tipo: "area", area: "ADMINISTRATIVA" },
+        refTabla: "empleados",
+        refId: alta.empleadoId,
+        accionUrl: `/rrhh/empleados/${alta.empleadoId}`,
+        dedupeKey: `validador_pendiente:${alta.empleadoId}`,
+      });
+    } catch (e) {
+      console.error("[contratacion] aviso validador pendiente:", e);
+    }
   }
 
   // Copia la documentación y la foto del candidato a la ficha del empleado

@@ -245,6 +245,61 @@ export async function setValidadoresEmpleado(input: {
   }
 }
 
+/**
+ * Candidatos a validador por DEPARTAMENTO (para la plantilla del PUESTO).
+ *
+ * Igual que `listValidadoresElegibles`, pero parte del departamento del puesto
+ * (que aún no tiene empleado). Se usa en el diálogo de puestos para elegir el
+ * validador por defecto que heredarán los empleados contratados para ese puesto.
+ */
+export async function listValidadoresElegiblesPorDepartamento(input: {
+  departamentoId: string;
+}): Promise<ValidadoresElegiblesResult> {
+  const vacio = (error?: string): ValidadoresElegiblesResult => ({
+    ok: !error, data: [], area: null, departamentoNombre: null, error,
+  });
+  try {
+    let admin;
+    try { admin = createAdminClient(); }
+    catch { return vacio("Supabase admin no configurado."); }
+
+    if (!input.departamentoId) return { ...vacio(), area: null };
+
+    const { data: depto } = await admin
+      .from("departamentos")
+      .select("empresa_id, area")
+      .eq("id", input.departamentoId)
+      .maybeSingle();
+    const empresaId = (depto?.empresa_id as string | null) ?? null;
+    if (!empresaId) return vacio("Departamento no encontrado.");
+    await requireAdminUser({ empresaIds: [empresaId] });
+
+    const rawArea = (depto?.area as string | null) ?? null;
+    const area: AreaEmpleado | null =
+      rawArea === "OPERATIVA" ? "OPERATIVA" : rawArea === "ADMINISTRATIVA" ? "ADMINISTRATIVA" : null;
+    if (!area) return { ...vacio(), area: null };
+
+    const moduloNombre = await deptoNombreValidadorDeArea(admin, empresaId, area);
+    if (!moduloNombre) return { ...vacio(), area, departamentoNombre: null };
+
+    const [rolesSet, candidatos] = await Promise.all([
+      rolesConAccesoAModulo(admin, empresaId, moduloNombre),
+      empleadosActivosConRol(admin, empresaId),
+    ]);
+
+    const data: ValidadorElegible[] = candidatos
+      .filter((e) => rolesSet.has(e.rolNorm))
+      .map(({ id, nombre, apellidos, nombreCompleto }) => ({ id, nombre, apellidos, nombreCompleto }))
+      .sort((a, b) => a.nombreCompleto.localeCompare(b.nombreCompleto, "es"));
+
+    return { ok: true, data, area, departamentoNombre: moduloNombre };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Error desconocido";
+    console.error("[rrhh] listValidadoresElegiblesPorDepartamento:", msg);
+    return vacio(msg);
+  }
+}
+
 export interface DependienteValidador {
   empleadoId: string;
   nombreCompleto: string;
