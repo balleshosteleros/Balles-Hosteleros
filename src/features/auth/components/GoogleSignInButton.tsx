@@ -228,6 +228,18 @@ export function GoogleSignInButton({
 
       renderAtWidth()
 
+      // One Tap: mostramos la tarjeta de selección de cuenta DENTRO de la misma
+      // página (esquina superior derecha, vía FedCM) en lugar de abrir la ventana
+      // emergente al pulsar el botón. Aparece sola al cargar; el botón renderizado
+      // arriba queda como respaldo por si el usuario cierra la tarjeta o el
+      // navegador no soporta FedCM. No bloquea: si no puede mostrarse, no pasa nada.
+      try {
+        gid.prompt()
+      } catch {
+        // Si prompt() falla (navegador sin FedCM, política de cookies…),
+        // el usuario sigue teniendo el botón "Continuar con Google".
+      }
+
       // Medimos el ancho contra un envoltorio estable (el padre del contenedor
       // del iframe), no contra el propio contenedor que mutamos, para que el
       // observer refleje el espacio real disponible y no el del iframe.
