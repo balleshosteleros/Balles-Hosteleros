@@ -227,6 +227,48 @@ export async function listCierres(): Promise<{ ok: true; data: CierreRow[] } | {
   }
 }
 
+// Documento ya subido directamente al bucket por el navegador (URL firmada).
+// El servidor solo recibe los metadatos, nunca el binario → sin límite de 4.5 MB de Vercel.
+export interface CierreDocumentoSubido {
+  path: string;
+  name: string;
+  size: number;
+  mime: string | null;
+}
+
+// Genera URLs de subida firmadas para que el navegador suba los adjuntos DIRECTO
+// al bucket, saltando el límite de body de las Server Actions (4.5 MB en Vercel).
+export async function crearUrlsSubidaCierre(
+  archivos: Array<{ name: string; type: string }>,
+): Promise<{ ok: true; data: Array<{ token: string; path: string }> } | { ok: false; error: string }> {
+  try {
+    const { supabase, user, empresaId } = await getContext();
+    if (!empresaId || !user) return { ok: false, error: "No autenticado" };
+
+    const lista = (archivos ?? []).slice(0, MAX_DOCUMENTOS_CIERRE);
+    if (lista.length === 0) return { ok: false, error: "No hay archivos que subir" };
+
+    const salida: Array<{ token: string; path: string }> = [];
+    let idx = 0;
+    for (const a of lista) {
+      const safe = sanitizeFilename(a.name || "documento");
+      // Carpeta temporal por empresa; al confirmar el cierre se referencian por path.
+      const path = `${empresaId}/_pendientes/${Date.now()}_${idx}_${safe}`;
+      idx += 1;
+      const { data, error } = await supabase.storage.from(BUCKET).createSignedUploadUrl(path);
+      if (error || !data) {
+        console.error("[cierres:signedUpload]", error?.message);
+        return { ok: false, error: "No se pudo preparar la subida" };
+      }
+      salida.push({ token: data.token, path: data.path });
+    }
+    return { ok: true, data: salida };
+  } catch (e) {
+    console.error("[cierres:crearUrlsSubidaCierre]", e);
+    return { ok: false, error: "Error al preparar la subida" };
+  }
+}
+
 export async function createCierre(formData: FormData): Promise<{ ok: true; data: CierreRow } | { ok: false; error: string }> {
   try {
     const { supabase, user, empresaId } = await getContext();
@@ -239,15 +281,35 @@ export async function createCierre(formData: FormData): Promise<{ ok: true; data
     const contadoStr = ((formData.get("total_contado") as string | null) || "0").trim();
     const notas = ((formData.get("notas") as string | null) || "").trim();
     const registradoPor = ((formData.get("registrado_por") as string | null) || "").trim();
-    // Se admiten varios adjuntos: campo repetido "file" (además de "file" único legacy).
-    const files = (formData.getAll("file") as unknown[])
-      .filter((f): f is File => f instanceof File && f.size > 0)
-      .slice(0, MAX_DOCUMENTOS_CIERRE);
+    // Documentos ya subidos al bucket por el navegador. Solo llegan metadatos (path/name/size/mime).
+    let docsSubidos: CierreDocumentoSubido[] = [];
+    const docsRaw = (formData.get("documentos") as string | null) || "";
+    if (docsRaw) {
+      try {
+        const parsed = JSON.parse(docsRaw) as unknown;
+        if (Array.isArray(parsed)) {
+          docsSubidos = parsed
+            .map((d) => {
+              const o = (d ?? {}) as Record<string, unknown>;
+              return {
+                path: String(o.path ?? "").trim(),
+                name: String(o.name ?? "documento").trim() || "documento",
+                size: Number(o.size ?? 0) || 0,
+                mime: typeof o.mime === "string" ? o.mime : null,
+              };
+            })
+            .filter((d) => d.path)
+            .slice(0, MAX_DOCUMENTOS_CIERRE);
+        }
+      } catch (e) {
+        console.error("[cierres:create] documentos parse:", e);
+      }
+    }
 
     if (!fecha) return { ok: false, error: "La fecha es obligatoria" };
 
     // Cierres e ingresos exigen al menos un justificante adjunto (la retirada no).
-    if (tipo !== "retirada" && files.length === 0) {
+    if (tipo !== "retirada" && docsSubidos.length === 0) {
       return { ok: false, error: `Debes adjuntar un documento para registrar ${tipo === "ingreso" ? "un ingreso" : "un cierre"}` };
     }
 
@@ -308,21 +370,22 @@ export async function createCierre(formData: FormData): Promise<{ ok: true; data
     }
 
     const cierreId = row.id as string;
-    // Subir todos los adjuntos (máx. 3). Se recopilan en el array `documentos`.
+    // Los documentos ya están en el bucket (subida directa a `_pendientes`).
+    // Los movemos a la carpeta definitiva del cierre y recopilamos los metadatos.
     const documentosMeta: Array<{ path: string; name: string; size: number; mime: string | null }> = [];
     let idx = 0;
-    for (const file of files) {
-      const safe = sanitizeFilename(file.name);
-      const sp = `${empresaId}/${cierreId}/${Date.now()}_${idx}_${safe}`;
+    for (const doc of docsSubidos) {
+      const safe = sanitizeFilename(doc.name);
+      const destino = `${empresaId}/${cierreId}/${Date.now()}_${idx}_${safe}`;
       idx += 1;
-      const { error: upErr } = await supabase.storage
-        .from(BUCKET)
-        .upload(sp, file, { upsert: false, contentType: file.type || "application/octet-stream" });
-      if (upErr) {
-        console.error("[cierres:create] storage:", upErr.message);
+      const { error: mvErr } = await supabase.storage.from(BUCKET).move(doc.path, destino);
+      if (mvErr) {
+        console.error("[cierres:create] move:", mvErr.message);
+        // Si no se pudo mover (p. ej. ya movido), conservamos el path original.
+        documentosMeta.push({ path: doc.path, name: doc.name, size: doc.size, mime: doc.mime });
         continue;
       }
-      documentosMeta.push({ path: sp, name: file.name, size: file.size, mime: file.type || null });
+      documentosMeta.push({ path: destino, name: doc.name, size: doc.size, mime: doc.mime });
     }
 
     if (documentosMeta.length > 0) {

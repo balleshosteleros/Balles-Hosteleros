@@ -30,12 +30,13 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import {
-  listCierres, createCierre, deleteCierre, getCierresConfig, updateCierresConfig,
+  listCierres, createCierre, crearUrlsSubidaCierre, deleteCierre, getCierresConfig, updateCierresConfig,
   listCierresProgramaciones, upsertCierreProgramacion, deleteCierreProgramacion,
   type CierreRow, type CierresConfig, type CierreModo, type CierreGasto, type CierreTipo,
   type CierreProgramacion,
 } from "@/features/gerencia/actions/cierres-actions";
-import { MAX_DOCUMENTOS_CIERRE } from "@/features/gerencia/types/cierres";
+import { MAX_DOCUMENTOS_CIERRE, MAX_TAMANO_DOCUMENTO_MB, MAX_TAMANO_DOCUMENTO_BYTES } from "@/features/gerencia/types/cierres";
+import { createClient as createSupabaseBrowser } from "@/lib/supabase/client";
 import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
 import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 import {
@@ -43,8 +44,11 @@ import {
   colVisible,
   ordenarColumnas,
   coincideBusquedaUniversal,
+  aplicarFiltrosToolbar,
   type ToolbarColumna,
   type ToolbarColumnaVisible,
+  type ToolbarCampoFiltro,
+  type ToolbarFiltroActivo,
 } from "@/shared/components/SubmoduleToolbar";
 import { IOActions } from "@/shared/io";
 import { cierresIO } from "@/features/gerencia/io/cierres.io";
@@ -169,6 +173,7 @@ export function CierresView() {
 
   const [vista, setVista] = useState<"resumen" | "calendario" | "ajustes">("resumen");
   const [busqueda, setBusqueda] = useState("");
+  const [filtros, setFiltros] = useState<ToolbarFiltroActivo[]>([]);
   const [columnasVisibles, setColumnasVisibles] = useState<ToolbarColumnaVisible>({});
   const [columnasOrden, setColumnasOrden] = useState<string[] | undefined>(undefined);
   const [mesActual, setMesActual] = useState(new Date());
@@ -292,15 +297,35 @@ export function CierresView() {
     return m;
   }, [cierres]);
 
-  const cierresFiltrados = useMemo(
-    () => cierres.filter((c) => coincideBusquedaUniversal(c, busqueda)),
-    [cierres, busqueda],
-  );
+  // Campos filtrables de la barra de herramientas.
+  const camposFiltro: ToolbarCampoFiltro[] = [
+    { campo: "tipo", label: "Tipo", tipo: "lista", opciones: ["Cierre", "Ingreso", "Retirada"] },
+    { campo: "estado", label: "Estado", tipo: "lista", opciones: ["Cuadra", "Sobra", "Falta"] },
+    { campo: "tieneDoc", label: "Con documento", tipo: "booleano" },
+  ];
+
+  // Accesor que traduce cada fila al valor comparable por los filtros.
+  const accesoCierre = (c: CierreRow, campo: string): unknown => {
+    if (campo === "tipo") return TIPO_LABEL[c.tipo];
+    if (campo === "estado") return c.cuadra ? "Cuadra" : c.descuadre >= 0 ? "Sobra" : "Falta";
+    if (campo === "tieneDoc") return (c.documentos?.length ?? 0) > 0 || !!c.url;
+    return (c as unknown as Record<string, unknown>)[campo];
+  };
+
+  const cierresFiltrados = useMemo(() => {
+    let lista = cierres.filter((c) => coincideBusquedaUniversal(c, busqueda));
+    lista = aplicarFiltrosToolbar(
+      lista as unknown as Record<string, unknown>[],
+      filtros,
+      accesoCierre as unknown as (item: Record<string, unknown>, campo: string) => unknown,
+    ) as unknown as CierreRow[];
+    return lista;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cierres, busqueda, filtros]);
 
   const columnasDef: ToolbarColumna[] = [
     { campo: "fecha", label: "Fecha", bloqueada: true },
     { campo: "tipo", label: "Tipo" },
-    { campo: "semana", label: "Semana" },
     { campo: "efectivo", label: "Efectivo retirado" },
     { campo: "total", label: "Total cierre" },
     { campo: "estado", label: "Estado" },
@@ -316,7 +341,6 @@ export function CierresView() {
   const headDe: Record<string, ReactNode> = {
     fecha: <TableHead key="fecha">Fecha</TableHead>,
     tipo: <TableHead key="tipo">Tipo</TableHead>,
-    semana: <TableHead key="semana">Semana</TableHead>,
     efectivo: <TableHead key="efectivo" className="text-right">Efectivo retirado</TableHead>,
     total: <TableHead key="total" className="text-right">Total cierre</TableHead>,
     estado: <TableHead key="estado">Estado</TableHead>,
@@ -337,9 +361,6 @@ export function CierresView() {
           {TIPO_LABEL[c.tipo]}
         </Badge>
       </TableCell>
-    ),
-    semana: (
-      <TableCell key="semana" className="text-xs text-muted-foreground">{c.semana_iso ?? "—"}</TableCell>
     ),
     efectivo: (
       <TableCell key="efectivo" className={`text-right ${signoEfectivo(c.tipo) < 0 ? "text-red-700" : ""}`}>
@@ -441,6 +462,43 @@ export function CierresView() {
     }
     setSaving(true);
     try {
+      // 1) Subida DIRECTA de los adjuntos al bucket con URL firmada.
+      //    Salta el límite de 4.5 MB de las Server Actions (fotos de móvil, PDF grandes).
+      const documentosSubidos: Array<{ path: string; name: string; size: number; mime: string | null }> = [];
+      if (form.files.length > 0) {
+        const urls = await crearUrlsSubidaCierre(
+          form.files.map((f) => ({ name: f.name, type: f.type })),
+        );
+        if (!urls.ok) {
+          toast.error(urls.error ?? "No se pudo preparar la subida de documentos");
+          setSaving(false);
+          return;
+        }
+        const supabase = createSupabaseBrowser();
+        for (let i = 0; i < form.files.length; i++) {
+          const file = form.files[i];
+          const dest = urls.data[i];
+          const { error: upErr } = await supabase.storage
+            .from("cierres-documentos")
+            .uploadToSignedUrl(dest.path, dest.token, file, {
+              contentType: file.type || "application/octet-stream",
+            });
+          if (upErr) {
+            console.error("[cierres] subida directa:", upErr.message);
+            toast.error(`No se pudo subir "${file.name}". Inténtalo de nuevo.`);
+            setSaving(false);
+            return;
+          }
+          documentosSubidos.push({
+            path: dest.path,
+            name: file.name,
+            size: file.size,
+            mime: file.type || null,
+          });
+        }
+      }
+
+      // 2) Crear el cierre con los metadatos de los documentos ya subidos.
       const fd = new FormData();
       fd.append("tipo", form.tipo);
       fd.append("fecha", form.fecha);
@@ -463,7 +521,7 @@ export function CierresView() {
           .filter((g) => g.tipo || g.descripcion || g.importe !== 0);
         if (gastosPayload.length > 0) fd.append("gastos", JSON.stringify(gastosPayload));
       }
-      for (const f of form.files) fd.append("file", f);
+      if (documentosSubidos.length > 0) fd.append("documentos", JSON.stringify(documentosSubidos));
 
       const res = await createCierre(fd);
       if (res.ok) {
@@ -644,6 +702,9 @@ export function CierresView() {
         onBusquedaChange={setBusqueda}
         placeholderBusqueda="Buscar"
         onNuevo={() => abrirNuevo()}
+        campos={camposFiltro}
+        filtros={filtros}
+        onFiltrosChange={setFiltros}
         columnas={columnasDef}
         columnasVisibles={columnasVisibles}
         onColumnasVisiblesChange={setColumnasVisibles}
@@ -1295,24 +1356,35 @@ export function CierresView() {
               <Input
                 type="file"
                 multiple
-                accept=".pdf,.jpg,.jpeg,.png,.webp,.xls,.xlsx,.csv"
                 disabled={form.files.length >= MAX_DOCUMENTOS_CIERRE}
                 onChange={(e) => {
                   const nuevos = Array.from(e.target.files ?? []);
                   if (nuevos.length === 0) return;
-                  setForm((f) => {
-                    // Evita duplicados por nombre+tamaño y respeta el tope de documentos.
-                    const combinados = [...f.files];
-                    for (const n of nuevos) {
-                      if (combinados.some((x) => x.name === n.name && x.size === n.size)) continue;
-                      if (combinados.length >= MAX_DOCUMENTOS_CIERRE) break;
-                      combinados.push(n);
-                    }
-                    if (nuevos.length + f.files.length > MAX_DOCUMENTOS_CIERRE) {
-                      toast.error(`Puedes adjuntar como máximo ${MAX_DOCUMENTOS_CIERRE} documentos`);
-                    }
-                    return { ...f, files: combinados };
-                  });
+                  // Bloquea archivos que superen el tope: se avisa y NO se adjuntan.
+                  const grandes = nuevos.filter((n) => n.size > MAX_TAMANO_DOCUMENTO_BYTES);
+                  const validos = nuevos.filter((n) => n.size <= MAX_TAMANO_DOCUMENTO_BYTES);
+                  if (grandes.length > 0) {
+                    const nombres = grandes.map((g) => `"${g.name}" (${fmtSize(g.size)})`).join(", ");
+                    toast.error(
+                      `${grandes.length === 1 ? "El archivo" : "Los archivos"} ${nombres} ${grandes.length === 1 ? "supera" : "superan"} el máximo de ${MAX_TAMANO_DOCUMENTO_MB} MB y no se ${grandes.length === 1 ? "ha" : "han"} adjuntado`,
+                    );
+                  }
+                  if (validos.length > 0) {
+                    setForm((f) => {
+                      // Evita duplicados por nombre+tamaño y respeta el tope de documentos.
+                      const combinados = [...f.files];
+                      let excedido = false;
+                      for (const n of validos) {
+                        if (combinados.some((x) => x.name === n.name && x.size === n.size)) continue;
+                        if (combinados.length >= MAX_DOCUMENTOS_CIERRE) { excedido = true; break; }
+                        combinados.push(n);
+                      }
+                      if (excedido) {
+                        toast.error(`Puedes adjuntar como máximo ${MAX_DOCUMENTOS_CIERRE} documentos`);
+                      }
+                      return { ...f, files: combinados };
+                    });
+                  }
                   // Limpia el input para permitir volver a seleccionar el mismo archivo.
                   e.target.value = "";
                 }}
