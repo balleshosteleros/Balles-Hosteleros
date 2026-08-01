@@ -1,5 +1,8 @@
-import { useState } from "react";
-import { Incidencia, Actualizacion, AREAS } from "@/features/empresa/data/mantenimiento";
+import { useState, useEffect } from "react";
+import { Incidencia, Actualizacion } from "@/features/empresa/data/mantenimiento";
+import { getEmpleadosActivos, type EmpleadoActivo } from "@/features/rrhh/actions/empleados-actions";
+import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
+import { useAuth } from "@/features/auth/contexts/auth-context";
 import { tiempoTranscurrido } from "@/shared/lib/timeUtils";
 import { StatusBadge, GravedadBadge } from "@/features/mantenimiento/components/Badges";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -20,10 +23,27 @@ interface Props {
 
 export function DetalleIncidencia({ open, onClose, item, onAddActualizacion }: Props) {
   const hoy = new Date().toISOString().slice(0, 10);
+  const { empresaActual } = useEmpresa();
+  const { profile } = useAuth();
+  const miNombre = `${profile?.nombre ?? ""} ${profile?.apellidos ?? ""}`.trim();
+
   const [showForm, setShowForm] = useState(false);
   const [texto, setTexto] = useState("");
   const [fecha, setFecha] = useState(hoy);
-  const [apuntadoPor, setApuntadoPor] = useState(AREAS[0]);
+  const [apuntadoPor, setApuntadoPor] = useState(miNombre);
+  const [empleados, setEmpleados] = useState<EmpleadoActivo[]>([]);
+
+  useEffect(() => {
+    let alive = true;
+    getEmpleadosActivos(empresaActual.dbId).then((r) => {
+      if (alive) setEmpleados(r.ok ? r.data : []);
+    });
+    return () => { alive = false; };
+  }, [empresaActual.dbId]);
+
+  useEffect(() => {
+    if (miNombre && !apuntadoPor) setApuntadoPor(miNombre);
+  }, [miNombre, apuntadoPor]);
 
   const handleAdd = () => {
     if (!texto.trim()) return;
@@ -36,7 +56,7 @@ export function DetalleIncidencia({ open, onClose, item, onAddActualizacion }: P
     onAddActualizacion(item.id, act);
     setTexto("");
     setFecha(hoy);
-    setApuntadoPor(AREAS[0]);
+    setApuntadoPor(miNombre);
     setShowForm(false);
   };
 
@@ -117,8 +137,13 @@ export function DetalleIncidencia({ open, onClose, item, onAddActualizacion }: P
                 <div>
                   <Label className="text-xs font-bold">APUNTADO POR</Label>
                   <Select value={apuntadoPor} onValueChange={setApuntadoPor}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>{AREAS.map((a) => <SelectItem key={a} value={a}>{a}</SelectItem>)}</SelectContent>
+                    <SelectTrigger><SelectValue placeholder="Selecciona empleado" /></SelectTrigger>
+                    <SelectContent>
+                      {apuntadoPor && !empleados.some((e) => e.nombreCompleto === apuntadoPor) && (
+                        <SelectItem value={apuntadoPor}>{apuntadoPor}</SelectItem>
+                      )}
+                      {empleados.map((e) => <SelectItem key={e.empleadoId} value={e.nombreCompleto}>{e.nombreCompleto}</SelectItem>)}
+                    </SelectContent>
                   </Select>
                 </div>
               </div>

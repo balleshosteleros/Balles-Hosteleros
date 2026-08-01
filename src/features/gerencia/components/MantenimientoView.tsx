@@ -2,10 +2,11 @@
 
 import { useState, useMemo, useEffect, useCallback } from "react";
 import {
-  type Incidencia, type Actualizacion, LOCALES, ESTADOS, GRAVEDADES, AREAS, REPARADORES,
+  type Incidencia, type Actualizacion, LOCALES, ESTADOS, GRAVEDADES, REPARADORES,
   type Estado, type Gravedad,
 } from "@/features/empresa/data/mantenimiento";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
+import { getEmpleadosActivos, type EmpleadoActivo } from "@/features/rrhh/actions/empleados-actions";
 import { listMantenimiento, createIncidenciaMantenimiento, updateIncidencia, addActualizacion as serverAddActualizacion } from "@/features/gerencia/actions/mantenimiento-actions";
 import { toast } from "sonner";
 import { StatusBadge, GravedadBadge } from "@/features/mantenimiento/components/Badges";
@@ -53,8 +54,9 @@ function mapDbToIncidencia(row: Record<string, unknown>): Incidencia {
 }
 
 export function MantenimientoView() {
-  const { setDatos: setContextData } = useEmpresa();
+  const { setDatos: setContextData, empresaActual } = useEmpresa();
   const [data, setData] = useState<Incidencia[]>([]);
+  const [empleados, setEmpleados] = useState<EmpleadoActivo[]>([]);
   const [, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [filterLocal, setFilterLocal] = useState(ALL);
@@ -88,6 +90,14 @@ export function MantenimientoView() {
     loadIncidencias();
   }, [loadIncidencias]);
 
+  useEffect(() => {
+    let alive = true;
+    getEmpleadosActivos(empresaActual.dbId).then((r) => {
+      if (alive) setEmpleados(r.ok ? r.data : []);
+    });
+    return () => { alive = false; };
+  }, [empresaActual.dbId]);
+
   const filtered = useMemo(() => data.filter((i) => {
     if (filterLocal !== ALL && i.local !== filterLocal) return false;
     if (filterEstado !== ALL && i.estado !== filterEstado) return false;
@@ -107,7 +117,6 @@ export function MantenimientoView() {
 
   const gravityCounts = useMemo(() => ({
     LEVE: data.filter((i) => i.gravedad === "LEVE").length,
-    MEJORA: data.filter((i) => i.gravedad === "MEJORA").length,
     GRAVE: data.filter((i) => i.gravedad === "GRAVE").length,
     "MUY GRAVE": data.filter((i) => i.gravedad === "MUY GRAVE").length,
   }), [data]);
@@ -194,8 +203,8 @@ export function MantenimientoView() {
         ))}
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        {(["LEVE", "MEJORA", "GRAVE", "MUY GRAVE"] as Gravedad[]).map((g) => (
+      <div className="grid grid-cols-3 gap-3">
+        {(["LEVE", "GRAVE", "MUY GRAVE"] as Gravedad[]).map((g) => (
           <div key={g} className="rounded-lg border bg-card p-3 text-center">
             <GravedadBadge value={g} />
             <div className="text-xl font-bold mt-1 text-foreground">{gravityCounts[g]}</div>
@@ -266,8 +275,13 @@ export function MantenimientoView() {
                 </td>
                 <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
                   <Select value={item.apuntaDesperfecto} onValueChange={(v) => updateField(item.id, "apuntaDesperfecto", v)}>
-                    <SelectTrigger className="h-8 text-xs w-[140px]"><SelectValue /></SelectTrigger>
-                    <SelectContent>{AREAS.map((a) => <SelectItem key={a} value={a}>{a}</SelectItem>)}</SelectContent>
+                    <SelectTrigger className="h-8 text-xs w-[160px]"><SelectValue placeholder="Empleado" /></SelectTrigger>
+                    <SelectContent>
+                      {item.apuntaDesperfecto && !empleados.some((e) => e.nombreCompleto === item.apuntaDesperfecto) && (
+                        <SelectItem value={item.apuntaDesperfecto}>{item.apuntaDesperfecto}</SelectItem>
+                      )}
+                      {empleados.map((e) => <SelectItem key={e.empleadoId} value={e.nombreCompleto}>{e.nombreCompleto}</SelectItem>)}
+                    </SelectContent>
                   </Select>
                 </td>
                 <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>

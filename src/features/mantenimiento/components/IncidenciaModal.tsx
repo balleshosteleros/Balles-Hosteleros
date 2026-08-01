@@ -1,5 +1,8 @@
-import { useState } from "react";
-import { Incidencia, LOCALES, ESTADOS, GRAVEDADES, AREAS, REPARADORES } from "@/features/empresa/data/mantenimiento";
+import { useState, useEffect } from "react";
+import { Incidencia, LOCALES, ESTADOS, GRAVEDADES, REPARADORES } from "@/features/empresa/data/mantenimiento";
+import { getEmpleadosActivos, type EmpleadoActivo } from "@/features/rrhh/actions/empleados-actions";
+import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
+import { useAuth } from "@/features/auth/contexts/auth-context";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -16,17 +19,37 @@ interface Props {
 
 export function IncidenciaModal({ open, onClose, onSave, item }: Props) {
   const isEdit = !!item;
+  const { empresaActual } = useEmpresa();
+  const { profile } = useAuth();
+  const miNombre = `${profile?.nombre ?? ""} ${profile?.apellidos ?? ""}`.trim();
+
+  const [empleados, setEmpleados] = useState<EmpleadoActivo[]>([]);
+  useEffect(() => {
+    let alive = true;
+    getEmpleadosActivos(empresaActual.dbId).then((r) => {
+      if (alive) setEmpleados(r.ok ? r.data : []);
+    });
+    return () => { alive = false; };
+  }, [empresaActual.dbId]);
+
   const [form, setForm] = useState<Omit<Incidencia, "id">>({
     desperfecto: item?.desperfecto ?? "",
     local: item?.local ?? LOCALES[0],
     estado: item?.estado ?? "PENDIENTE",
     gravedad: item?.gravedad ?? "LEVE",
-    apuntaDesperfecto: item?.apuntaDesperfecto ?? AREAS[0],
+    apuntaDesperfecto: item?.apuntaDesperfecto ?? miNombre,
     reparador: item?.reparador ?? REPARADORES[0],
     fechaPublicado: item?.fechaPublicado ?? new Date().toISOString().slice(0, 10),
     comentarios: item?.comentarios ?? "",
     actualizaciones: item?.actualizaciones ?? [],
   });
+
+  // Al crear (no edición), fijar por defecto el empleado de la sesión cuando el perfil ya esté cargado.
+  useEffect(() => {
+    if (!item && miNombre && !form.apuntaDesperfecto) {
+      setForm((p) => ({ ...p, apuntaDesperfecto: miNombre }));
+    }
+  }, [miNombre, item, form.apuntaDesperfecto]);
 
   const set = (k: keyof typeof form, v: string) => setForm((p) => ({ ...p, [k]: v }));
 
@@ -70,8 +93,22 @@ export function IncidenciaModal({ open, onClose, onSave, item }: Props) {
           <div>
             <Label>APUNTA DESPERFECTO</Label>
             <Select value={form.apuntaDesperfecto} onValueChange={(v) => set("apuntaDesperfecto", v)}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>{AREAS.map((a) => <SelectItem key={a} value={a}>{a}</SelectItem>)}</SelectContent>
+              <SelectTrigger><SelectValue placeholder="Selecciona empleado" /></SelectTrigger>
+              <SelectContent>
+                {form.apuntaDesperfecto && !empleados.some((e) => e.nombreCompleto === form.apuntaDesperfecto) && (
+                  <SelectItem value={form.apuntaDesperfecto}>{form.apuntaDesperfecto}</SelectItem>
+                )}
+                {empleados.map((e) => (
+                  <SelectItem key={e.empleadoId} value={e.nombreCompleto}>
+                    {e.nombreCompleto}
+                    {(e.puesto || e.departamento) && (
+                      <span className="text-muted-foreground">
+                        {" — "}{[e.puesto, e.departamento].filter(Boolean).join(" · ")}
+                      </span>
+                    )}
+                  </SelectItem>
+                ))}
+              </SelectContent>
             </Select>
           </div>
           <div>
