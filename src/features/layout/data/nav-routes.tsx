@@ -333,3 +333,64 @@ export function getRouteMeta(pathname: string): { title: string; icon: IconType 
 export function getModuleLabel(pathname: string): string {
   return MODULE_META[getModulePath(pathname)]?.label ?? "";
 }
+
+// ─── Cambio de empresa: a dónde re-navegar ─────────────────────────────────
+
+/** Conjunto de URLs de submódulo conocidas (páginas "lista", sin ID). */
+const SUB_URLS = new Set<string>(ALL_SUBS.map((s) => s.url));
+
+/**
+ * Rutas raíz que NO son de departamento y son válidas en cualquier empresa
+ * (paneles personales, selección de departamentos, ajustes, agenda…). Al
+ * cambiar de empresa nos quedamos en ellas: solo procede un refresh, no un
+ * salto a "Mis Departamentos".
+ */
+const RUTAS_NEUTRAS = new Set<string>([
+  "/", "/mi-panel", "/mis-departamentos", "/ajustes", "/ayuda",
+  "/accesos", "/consultas-pendientes", "/formacion", "/reuniones", "/agenda",
+]);
+
+/**
+ * Decide a dónde llevar al usuario cuando cambia la empresa activa desde el
+ * selector superior.
+ *
+ * Regla (lo que pidió el usuario):
+ *   - Si la ruta actual es de un DEPARTAMENTO y el usuario tiene acceso a ese
+ *     módulo en la nueva empresa → seguir en el MISMO submódulo. Pero si la
+ *     ruta es un DETALLE con ID (p. ej. /rrhh/empleados/<uuid>), ese registro
+ *     puede no existir en la nueva empresa → caemos a la raíz del módulo.
+ *   - Si NO tiene acceso a ese departamento → "/mis-departamentos" para que
+ *     elija entre los que sí tiene disponibles.
+ *   - Rutas neutras (paneles personales, ajustes, agenda…) → sin cambio.
+ *
+ * Devuelve la ruta destino, o `null` si debe permanecer en la ruta actual
+ * (en ese caso basta con refrescar los datos).
+ *
+ * `puedeVerModulo` recibe el nombre canónico del módulo (p. ej. "GERENCIA") y
+ * responde si el rol del usuario lo puede ver — misma lógica que el sidebar.
+ */
+export function resolveDestinoCambioEmpresa(
+  pathname: string,
+  puedeVerModulo: (modulo: string) => boolean,
+): string | null {
+  const moduleRoot = getModulePath(pathname);
+
+  // Rutas neutras y raíz: válidas en toda empresa, no reubicamos.
+  if (RUTAS_NEUTRAS.has(moduleRoot)) return null;
+
+  // ¿Es una ruta de departamento? Buscamos su sección por prefijo.
+  const section = allSections.find((s) => s.prefix === moduleRoot);
+  if (!section) return null; // ruta desconocida/orphan → no forzamos salto
+
+  // Sin acceso al departamento en la nueva empresa → a elegir departamento.
+  if (!puedeVerModulo(section.modulo)) return "/mis-departamentos";
+
+  // Con acceso: conservamos el submódulo exacto si es una página "lista"
+  // conocida o la raíz del módulo. Si es un detalle con ID (u otra ruta más
+  // profunda), volvemos a la raíz del módulo para no abrir un registro que
+  // quizá no exista en la nueva empresa.
+  if (pathname === section.linkTo || SUB_URLS.has(pathname)) {
+    return null; // ya estamos en un destino válido → solo refrescar
+  }
+  return section.linkTo;
+}

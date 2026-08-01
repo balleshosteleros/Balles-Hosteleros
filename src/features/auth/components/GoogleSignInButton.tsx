@@ -35,6 +35,7 @@ interface GsiButtonOptions {
 interface GoogleAccountsId {
   initialize: (opts: GsiInitOptions) => void
   renderButton: (parent: HTMLElement, opts: GsiButtonOptions) => void
+  prompt: () => void
   cancel: () => void
 }
 

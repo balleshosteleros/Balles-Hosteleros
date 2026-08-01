@@ -1,8 +1,11 @@
 "use client";
 
 import { useState } from "react";
+import { usePathname } from "next/navigation";
 import { Check } from "lucide-react";
 import { useEmpresa, type Empresa } from "@/features/empresa/contexts/empresa-context";
+import { useAuth } from "@/features/auth/contexts/auth-context";
+import { resolveDestinoCambioEmpresa } from "@/features/layout/data/nav-routes";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -36,7 +39,19 @@ function EmpresaAvatar({ empresa, logoUrl, size = "md" }: { empresa: Empresa; lo
 export function EmpresaSelector() {
   // Avatar pequeño = ISOTIPO (icono sin texto). Si no hay isotipo, iniciales (nunca el logo con texto).
   const { empresas, empresaActual, setEmpresaId, getIsotipoUrl } = useEmpresa();
+  const { puedeVer } = useAuth();
+  const pathname = usePathname();
   const [open, setOpen] = useState(false);
+
+  // Al cambiar de empresa: seguir en el mismo submódulo si el usuario tiene
+  // acceso a él en la nueva empresa; si no, llevarle a "Mis Departamentos"
+  // para que elija entre los disponibles. La decisión se calcula con la ruta
+  // actual + permisos del usuario (misma lógica que el sidebar).
+  const cambiarEmpresa = (id: string) => {
+    const destino = resolveDestinoCambioEmpresa(pathname, puedeVer);
+    setEmpresaId(id, destino);
+    setOpen(false);
+  };
 
   return (
     <DropdownMenu open={open} onOpenChange={setOpen}>
@@ -62,7 +77,7 @@ export function EmpresaSelector() {
         {empresas.map((e) => (
           <DropdownMenuItem
             key={e.id}
-            onSelect={() => { setEmpresaId(e.id); setOpen(false); }}
+            onSelect={() => cambiarEmpresa(e.id)}
             className="flex items-center gap-2 cursor-pointer"
           >
             <EmpresaAvatar empresa={e} logoUrl={getIsotipoUrl(e.id)} size="sm" />

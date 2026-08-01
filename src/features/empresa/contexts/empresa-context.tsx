@@ -133,7 +133,7 @@ function buildInitialAjustes(): Record<string, AjustesEmpresa> {
 interface EmpresaContextValue {
   empresas: Empresa[];
   empresaActual: Empresa;
-  setEmpresaId: (id: string) => void;
+  setEmpresaId: (id: string, destino?: string | null) => void;
   datos: Incidencia[];
   setDatos: (updater: (prev: Incidencia[]) => Incidencia[]) => void;
   ajustes: AjustesEmpresa;
@@ -372,7 +372,11 @@ export function EmpresaProvider({ children }: { children: ReactNode }) {
     setAllAjustes((prev) => { const next = { ...prev }; delete next[id]; return next; });
   }, []);
 
-  const handleSetEmpresaId = useCallback((id: string) => {
+  // `destino` (opcional): ruta a la que re-navegar tras el cambio de empresa.
+  // La calcula quien dispara el cambio (EmpresaSelector) según la ruta actual y
+  // los permisos del usuario en la nueva empresa. Si no se pasa, solo se
+  // refresca la vista actual.
+  const handleSetEmpresaId = useCallback((id: string, destino?: string | null) => {
     setEmpresaId(id);
     // Persistimos el slug elegido para que sobreviva a una pérdida de cookie.
     if (typeof window !== "undefined") {
@@ -393,7 +397,14 @@ export function EmpresaProvider({ children }: { children: ReactNode }) {
           return;
         }
         startTransition(() => {
-          router.refresh();
+          // Si hay destino distinto de la ruta actual, navegamos a él (lleva
+          // el refresh de Server Components implícito). Si no, solo refrescamos
+          // los datos de la ruta en la que estamos.
+          if (destino) {
+            router.push(destino);
+          } else {
+            router.refresh();
+          }
         });
         // El re-render de los Server Components no es awaitable directamente:
         // damos margen prudente para que la UI rehidratada se pinte y luego
