@@ -3,6 +3,8 @@ import { googleFetchAuto } from "@/lib/google/api";
 
 type GmailThreadListResponse = {
   threads?: { id: string; historyId: string }[];
+  nextPageToken?: string;
+  resultSizeEstimate?: number;
 };
 
 type GmailMessage = {
@@ -76,25 +78,74 @@ export async function GET(request: Request) {
   // Si se pasa labelId explícito (etiqueta del usuario), tiene prioridad
   const labelIdParam = url.searchParams.get("labelId");
   const q = url.searchParams.get("q");
+  const pageToken = url.searchParams.get("pageToken");
   const maxResultsParam = Number(url.searchParams.get("maxResults"));
   const maxResults =
     Number.isFinite(maxResultsParam) && maxResultsParam > 0
       ? Math.min(maxResultsParam, 100)
-      : 30;
+      : 50;
   const labelMap: Record<string, string> = {
     inbox: "INBOX",
     enviados: "SENT",
     borradores: "DRAFT",
     papelera: "TRASH",
+    destacados: "STARRED",
+    spam: "SPAM",
   };
+
+  // Gmail expone dos cosas que la app antes no cubría:
+  //  - "Todos" (archivados incluidos): en la API NO se filtra por labelIds; se
+  //    pide el buzón entero con q="in:anywhere -in:spam -in:trash", igual que
+  //    la vista "Todos los mensajes" de Gmail web. Sin esto, los correos
+  //    archivados (sin INBOX y sin etiqueta de usuario) no salían en ningún
+  //    sitio de la app.
+  //  - Búsqueda: cuando el usuario escribe un término, se manda como q= a Gmail
+  //    para buscar en TODO el buzón (no solo en los 50 ya cargados en cliente).
+  const esTodos = carpeta === "todos" && !labelIdParam;
   const label = labelIdParam ?? labelMap[carpeta] ?? "INBOX";
 
-  // 1) Listado de hilos (conversaciones), igual que Gmail web
   const params = new URLSearchParams({
-    labelIds: label,
     maxResults: String(maxResults),
   });
-  if (q) params.set("q", q);
+  if (pageToken) params.set("pageToken", pageToken);
+
+  // Componemos el query de Gmail: la búsqueda del usuario (q) se combina con el
+  // ámbito de la carpeta actual, de modo que buscar dentro de "Recibidos" busca
+  // en recibidos, y buscar en "Todos" busca en todo el buzón.
+  const tieneBusqueda = !!(q && q.trim());
+  const partesQuery: string[] = [];
+  if (tieneBusqueda) partesQuery.push(q!.trim());
+
+  if (esTodos) {
+    // "Todos": todo el buzón salvo spam/papelera (como "Todos los mensajes").
+    // Sin labelIds; el ámbito se expresa con operadores de búsqueda.
+    partesQuery.push("in:anywhere -in:spam -in:trash");
+  } else if (labelIdParam) {
+    // Etiqueta de usuario: Gmail permite combinar labelIds + q, así que
+    // filtramos por la etiqueta (por ID) y añadimos el término si lo hay.
+    // (El operador `label:` de búsqueda usa el NOMBRE, no el ID, por eso aquí
+    // usamos labelIds y no lo metemos en el query.)
+    params.set("labelIds", label);
+  } else if (tieneBusqueda) {
+    // Carpeta de sistema + búsqueda: acotamos con operadores in:/is:, que sí
+    // se combinan con el término en una sola query.
+    const scopePorCarpeta: Record<string, string> = {
+      INBOX: "in:inbox",
+      SENT: "in:sent",
+      DRAFT: "in:drafts",
+      TRASH: "in:trash",
+      STARRED: "is:starred",
+      SPAM: "in:spam",
+    };
+    partesQuery.push(scopePorCarpeta[label] ?? `in:inbox`);
+  } else {
+    // Carpeta de sistema sin búsqueda: filtrado directo por label.
+    params.set("labelIds", label);
+  }
+
+  if (partesQuery.length > 0) params.set("q", partesQuery.join(" "));
+
+  // 1) Listado de hilos (conversaciones), igual que Gmail web
   const listRes = await googleFetchAuto<GmailThreadListResponse>(
     `https://gmail.googleapis.com/gmail/v1/users/me/threads?${params.toString()}`,
   );
@@ -106,7 +157,7 @@ export async function GET(request: Request) {
   }
   const list = listRes.data;
   if (!list || !list.threads) {
-    return NextResponse.json({ connected: true, mensajes: [] });
+    return NextResponse.json({ connected: true, mensajes: [], nextPageToken: null });
   }
 
   // 2) Detalles de cada hilo en paralelo (todos sus mensajes en metadata)
@@ -162,5 +213,9 @@ export async function GET(request: Request) {
       };
     });
 
-  return NextResponse.json({ connected: true, mensajes });
+  return NextResponse.json({
+    connected: true,
+    mensajes,
+    nextPageToken: list.nextPageToken ?? null,
+  });
 }

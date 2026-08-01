@@ -147,10 +147,16 @@ const MOCK_MENSAJES: Mensaje[] = [
 
 const CARPETAS = [
   { id: "inbox", label: "Recibidos", icon: Inbox },
+  { id: "destacados", label: "Destacados", icon: Star },
   { id: "enviados", label: "Enviados", icon: Send },
   { id: "borradores", label: "Borradores", icon: FileText },
+  { id: "todos", label: "Todos", icon: Archive },
+  { id: "spam", label: "Spam", icon: Trash2 },
   { id: "papelera", label: "Papelera", icon: Trash2 },
 ] as const;
+
+// Nº de conversaciones que se piden por página (igual que Gmail web).
+const PAGINA = 50;
 
 interface GmailDrawerProps {
   children: ReactNode;
@@ -174,8 +180,17 @@ type AISugerencia = { asunto: string; cuerpo: string };
 type AITono = "profesional" | "cercano" | "directo" | "formal" | "amistoso";
 type AILongitud = "corto" | "medio" | "largo";
 
+type CarpetaSistemaId =
+  | "inbox"
+  | "destacados"
+  | "enviados"
+  | "borradores"
+  | "todos"
+  | "spam"
+  | "papelera";
+
 type Filtro =
-  | { tipo: "sistema"; id: "inbox" | "enviados" | "borradores" | "papelera" }
+  | { tipo: "sistema"; id: CarpetaSistemaId }
   | { tipo: "label"; id: string; nombre: string };
 
 export function GmailDrawer({ children }: GmailDrawerProps) {
@@ -183,8 +198,15 @@ export function GmailDrawer({ children }: GmailDrawerProps) {
   const [filtro, setFiltro] = useState<Filtro>({ tipo: "sistema", id: "inbox" });
   const [seleccionado, setSeleccionado] = useState<Mensaje | null>(null);
   const [busqueda, setBusqueda] = useState("");
+  // Término efectivamente enviado a Gmail (con debounce). La búsqueda es
+  // server-side: consulta TODO el buzón, no solo lo cargado en cliente.
+  const [busquedaAplicada, setBusquedaAplicada] = useState("");
   const [mensajesReales, setMensajesReales] = useState<Mensaje[] | null>(null);
   const [cargando, setCargando] = useState(false);
+  // Paginación: token de la siguiente página (null = no hay más) y nº de página.
+  const [nextPageToken, setNextPageToken] = useState<string | null>(null);
+  const [pageTokens, setPageTokens] = useState<string[]>([]);
+  const [pagina, setPagina] = useState(0);
   const [carpetasUsuario, setCarpetasUsuario] = useState<CarpetaUsuario[]>([]);
   const [gruposAbiertos, setGruposAbiertos] = useState<Record<string, boolean>>({});
   const [sidebarAbierto, setSidebarAbierto] = useState(true);
@@ -226,14 +248,23 @@ export function GmailDrawer({ children }: GmailDrawerProps) {
   const carpeta =
     filtro.tipo === "sistema" ? filtro.id : (`label:${filtro.id}` as string);
 
-  function recargar() {
+  function construirUrl(pageToken?: string): string {
+    const p = new URLSearchParams();
+    if (filtro.tipo === "sistema") {
+      p.set("carpeta", filtro.id);
+    } else {
+      p.set("labelId", filtro.id);
+    }
+    p.set("maxResults", String(PAGINA));
+    if (busquedaAplicada.trim()) p.set("q", busquedaAplicada.trim());
+    if (pageToken) p.set("pageToken", pageToken);
+    return `/api/google/gmail/messages?${p.toString()}`;
+  }
+
+  function recargar(pageToken?: string) {
     if (!connected) return;
     setCargando(true);
-    const url =
-      filtro.tipo === "sistema"
-        ? `/api/google/gmail/messages?carpeta=${filtro.id}`
-        : `/api/google/gmail/messages?labelId=${encodeURIComponent(filtro.id)}`;
-    fetch(url)
+    fetch(construirUrl(pageToken))
       .then((r) => r.json())
       .then((data) => {
         if (data.needsReauth || data.connected === false) {
@@ -243,6 +274,7 @@ export function GmailDrawer({ children }: GmailDrawerProps) {
         }
         if (data.connected && Array.isArray(data.mensajes)) {
           setNeedsReauth(false);
+          setNextPageToken(data.nextPageToken ?? null);
           const lista: Mensaje[] = data.mensajes.map(
             (m: Omit<Mensaje, "cuerpo">) => ({ ...m, cuerpo: "" }),
           );
@@ -302,15 +334,43 @@ export function GmailDrawer({ children }: GmailDrawerProps) {
       .catch(() => setFirmaHtml(""));
   }, [connected, abierto]);
 
+  // Debounce de la búsqueda: espera a que el usuario deje de teclear (~450 ms)
+  // antes de consultar Gmail. Al aplicar un término nuevo, reinicia paginación.
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setBusquedaAplicada(busqueda);
+    }, 450);
+    return () => clearTimeout(t);
+  }, [busqueda]);
+
   useEffect(() => {
     if (!connected) {
       setMensajesReales(null);
       return;
     }
     if (!abierto) return; // cargar solo al abrir el drawer
+    // Cambió carpeta o término de búsqueda → volver a la primera página.
+    setPagina(0);
+    setPageTokens([]);
     recargar();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [connected, filtro, abierto]);
+  }, [connected, filtro, abierto, busquedaAplicada]);
+
+  function irPaginaSiguiente() {
+    if (!nextPageToken) return;
+    setPageTokens((prev) => [...prev, nextPageToken]);
+    setPagina((p) => p + 1);
+    recargar(nextPageToken);
+  }
+
+  function irPaginaAnterior() {
+    if (pagina === 0) return;
+    const nuevaPagina = pagina - 1;
+    const token = nuevaPagina === 0 ? undefined : pageTokens[nuevaPagina - 1];
+    setPageTokens((prev) => prev.slice(0, nuevaPagina));
+    setPagina(nuevaPagina);
+    recargar(token);
+  }
 
   useEffect(() => {
     if (!connected || !seleccionado) return;
@@ -560,14 +620,14 @@ export function GmailDrawer({ children }: GmailDrawerProps) {
     }
   }
 
+  // La búsqueda es server-side (consulta todo el buzón en Gmail), así que aquí
+  // NO volvemos a filtrar por el término: mostramos lo que devuelve el endpoint.
+  // El filtro por carpeta solo aplica al mock (sin conexión).
   const fuente = mensajesReales ?? MOCK_MENSAJES;
-  const mensajes = fuente.filter(
-    (m) =>
-      (mensajesReales !== null || m.carpeta === carpeta) &&
-      (busqueda.trim() === "" ||
-        m.asunto.toLowerCase().includes(busqueda.toLowerCase()) ||
-        m.remitente.toLowerCase().includes(busqueda.toLowerCase())),
-  );
+  const mensajes =
+    mensajesReales !== null
+      ? fuente
+      : fuente.filter((m) => m.carpeta === carpeta);
 
   const noLeidos = (mensajesReales ?? MOCK_MENSAJES).filter((m) => !m.leido).length;
 
@@ -754,8 +814,12 @@ export function GmailDrawer({ children }: GmailDrawerProps) {
                 cargando={cargando}
                 labelIdToNombre={labelIdToNombre}
                 filtroActivoId={filtro.tipo === "label" ? filtro.id : null}
+                pagina={pagina}
+                hayPaginaSiguiente={!!nextPageToken}
+                onPaginaAnterior={irPaginaAnterior}
+                onPaginaSiguiente={irPaginaSiguiente}
                 onSeleccionar={setSeleccionado}
-                onRefrescar={recargar}
+                onRefrescar={() => recargar(pagina === 0 ? undefined : pageTokens[pagina - 1])}
                 onArchivar={(id) => actuar("archive", id)}
                 onPapelera={(id) => actuar("trash", id)}
                 onEstrella={(m) =>
@@ -1022,6 +1086,10 @@ interface ListaMensajesProps {
   cargando: boolean;
   labelIdToNombre: Map<string, string>;
   filtroActivoId: string | null;
+  pagina: number;
+  hayPaginaSiguiente: boolean;
+  onPaginaAnterior: () => void;
+  onPaginaSiguiente: () => void;
   onSeleccionar: (m: Mensaje) => void;
   onRefrescar: () => void;
   onArchivar: (id: string) => void;
@@ -1034,6 +1102,10 @@ function ListaMensajes({
   cargando,
   labelIdToNombre,
   filtroActivoId,
+  pagina,
+  hayPaginaSiguiente,
+  onPaginaAnterior,
+  onPaginaSiguiente,
   onSeleccionar,
   onRefrescar,
   onArchivar,
@@ -1079,21 +1151,25 @@ function ListaMensajes({
 
         <div className="ml-auto flex items-center gap-1 text-xs text-[#5f6368]">
           <span>
-            {mensajes.length === 0 ? "0" : `1–${mensajes.length}`} de {mensajes.length}
+            {mensajes.length === 0
+              ? "0"
+              : `${pagina * PAGINA + 1}–${pagina * PAGINA + mensajes.length}`}
           </span>
           <button
             type="button"
+            onClick={onPaginaAnterior}
             className="rounded-full p-2 hover:bg-black/5 disabled:opacity-30"
             title="Anterior"
-            disabled
+            disabled={pagina === 0 || cargando}
           >
             <ChevronLeft className="h-4 w-4" />
           </button>
           <button
             type="button"
+            onClick={onPaginaSiguiente}
             className="rounded-full p-2 hover:bg-black/5 disabled:opacity-30"
             title="Siguiente"
-            disabled
+            disabled={!hayPaginaSiguiente || cargando}
           >
             <ChevronRight className="h-4 w-4" />
           </button>
