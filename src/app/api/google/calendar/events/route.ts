@@ -12,7 +12,12 @@ type CalendarEvent = {
   location?: string;
   start?: { dateTime?: string; date?: string };
   end?: { dateTime?: string; date?: string };
-  attendees?: { email: string; displayName?: string }[];
+  attendees?: {
+    email: string;
+    displayName?: string;
+    self?: boolean;
+    responseStatus?: string;
+  }[];
   colorId?: string;
   _calId?: string;
   hangoutLink?: string;
@@ -241,6 +246,11 @@ export async function GET(request: Request) {
       duracion,
       lugar: ev.location,
       participantes: ev.attendees?.map((a) => a.displayName || a.email),
+      // Estado de respuesta del usuario a este evento ("accepted" | "declined" |
+      // "tentative" | "needsAction"). Si no hay lista de asistentes es un evento
+      // propio sin invitados → cuenta como aceptado.
+      miRespuesta:
+        ev.attendees?.find((a) => a.self)?.responseStatus ?? "accepted",
       color: colorFromId(ev.colorId),
       eventColorHex,
       diaIndex,

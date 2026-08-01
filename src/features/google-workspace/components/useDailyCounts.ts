@@ -144,13 +144,24 @@ export function useDailyCounts(): DailyCounts {
       let events = 0;
       let meetings = 0;
       if (calRes.status === "fulfilled") {
-        const eventos: Array<{ meetLink?: string | null; fin?: string }> =
-          calRes.value?.eventos ?? [];
-        // Solo cuentan los eventos del día que aún NO han terminado: según pasa
-        // el tiempo, los que ya cumplieron su hora dejan de sumar al badge.
+        const eventos: Array<{
+          meetLink?: string | null;
+          fin?: string;
+          allDay?: boolean;
+          miRespuesta?: string;
+        }> = calRes.value?.eventos ?? [];
+        // El badge cuenta solo los EVENTOS REALES del día del usuario, no todo
+        // lo que Google devuelve para hoy. Se excluye:
+        //  - eventos "todo el día" (festivos, cumpleaños, calendarios
+        //    compartidos all-day) → inflaban el número sin ser citas propias;
+        //  - eventos que el usuario ha declinado (responseStatus "declined");
+        //  - eventos que ya han terminado (su hora de fin es anterior a ahora).
         const ahora = Date.now();
         const vigentes = eventos.filter(
-          (e) => !e.fin || new Date(e.fin).getTime() > ahora,
+          (e) =>
+            !e.allDay &&
+            e.miRespuesta !== "declined" &&
+            (!e.fin || new Date(e.fin).getTime() > ahora),
         );
         events = vigentes.length;
         meetings = vigentes.filter((e) => !!e.meetLink).length;
