@@ -41,11 +41,13 @@ import {
   updateCanalMiembros,
   updateCanalDepartamentos,
   listEmpleadosEmpresa,
+  listMiembrosPorCanal,
   purgeCanalesObsoletos,
   sendMensajeAdjunto,
   getAdjuntoSignedUrl,
   marcarCanalLeido,
   type EmpleadoCanal,
+  type MiembroCanal,
 } from "@/features/comunicacion/actions/comunicacion-actions";
 import { setChatCanalAbierto } from "@/features/comunicacion/hooks/useChatNotifications";
 import { refreshDailyCounts } from "@/features/google-workspace/components/useDailyCounts";
@@ -316,6 +318,11 @@ export function ChatDrawer({ children }: { children: ReactNode }) {
   const [busquedaEmpleados, setBusquedaEmpleados] = useState("");
   const [dlgMiembros, setDlgMiembros] = useState(false);
   const [miembrosEdit, setMiembrosEdit] = useState<Set<string>>(new Set());
+  // Miembros efectivos por canal (quién tiene acceso según rol/permisos). Se
+  // recalcula en cada carga, por lo que refleja cambios de roles automáticamente.
+  const [miembrosPorCanal, setMiembrosPorCanal] = useState<Record<string, MiembroCanal[]>>({});
+  // Diálogo "personas con acceso" (se abre al pulsar el contador del header).
+  const [dlgAcceso, setDlgAcceso] = useState(false);
 
   // Colapsables del sidebar
   const [openDeptos, setOpenDeptos] = useState(true);
@@ -425,7 +432,19 @@ export function ChatDrawer({ children }: { children: ReactNode }) {
         if (retry.ok) data = retry.data as Record<string, unknown>[];
       }
 
-      const mapped = data.map(mapDbCanal);
+      // Miembros efectivos por canal (quién tiene acceso según su rol/permisos).
+      // Para departamentos la pertenencia se deriva del rol, no de una lista;
+      // aquí obtenemos el conteo real y la lista de personas con acceso.
+      const resMiembros = await listMiembrosPorCanal();
+      const mapaMiembros = resMiembros.ok ? resMiembros.data : {};
+      setMiembrosPorCanal(mapaMiembros);
+
+      const mapped = data.map(mapDbCanal).map((c) => {
+        const acceso = mapaMiembros[c.id];
+        // Si tenemos la lista de acceso efectivo, el contador la usa (refleja
+        // los usuarios reales cuyo rol da acceso a este departamento/asunto).
+        return acceso ? { ...c, miembros: acceso.length } : c;
+      });
       setCanales(mapped);
     } catch (err) {
       console.error("[chat] cargarCanales error:", err);
@@ -980,7 +999,7 @@ export function ChatDrawer({ children }: { children: ReactNode }) {
             {/* Botón crear asunto */}
             <div className="p-3 border-t shrink-0">
               <Button
-                onClick={() => { setNombreNuevo(""); setMiembrosNuevo(new Set()); setDeptosNuevo(new Set()); setBusquedaEmpleados(""); setDlgNuevo(true); }}
+                onClick={() => { setNombreNuevo(""); setMiembrosNuevo(new Set()); setDeptosNuevo(new Set()); setBusquedaEmpleados(""); cargarEmpleados(); setDlgNuevo(true); }}
                 className="w-full gap-2 rounded-full h-12 text-sm font-semibold shadow-sm bg-green-600 hover:bg-green-700 text-white"
                 size="lg"
               >
@@ -1022,7 +1041,14 @@ export function ChatDrawer({ children }: { children: ReactNode }) {
                           {isDepartamento ? <Building2 className="h-3 w-3" /> : <Briefcase className="h-3 w-3" />}
                           {isDepartamento ? "Departamento" : "Asunto"}
                         </span>
-                        <span className="inline-flex items-center gap-1"><Users className="h-3 w-3" /> {canal.miembros}</span>
+                        <button
+                          type="button"
+                          onClick={() => setDlgAcceso(true)}
+                          className="inline-flex items-center gap-1 hover:text-primary hover:underline"
+                          title="Ver personas con acceso"
+                        >
+                          <Users className="h-3 w-3" /> {canal.miembros}
+                        </button>
                         {prefActivo.silenciado && (
                           <span className="inline-flex items-center gap-1"><BellOff className="h-3 w-3" /> silenciado</span>
                         )}
@@ -1059,7 +1085,7 @@ export function ChatDrawer({ children }: { children: ReactNode }) {
                             <DropdownMenuItem onSelect={() => { setDeptosEdit(new Set(canal.departamentos)); setDlgDeptos(true); }}>
                               <Building2 className="mr-2 h-4 w-4" /> Editar departamentos
                             </DropdownMenuItem>
-                            <DropdownMenuItem onSelect={() => { setMiembrosEdit(new Set(canal.miembrosUserIds)); setBusquedaEmpleados(""); setDlgMiembros(true); }}>
+                            <DropdownMenuItem onSelect={() => { setMiembrosEdit(new Set(canal.miembrosUserIds)); setBusquedaEmpleados(""); cargarEmpleados(); setDlgMiembros(true); }}>
                               <Users className="mr-2 h-4 w-4" /> Editar miembros
                             </DropdownMenuItem>
                           </>
@@ -1272,6 +1298,7 @@ export function ChatDrawer({ children }: { children: ReactNode }) {
                 <DepartamentosCheckList
                   departamentos={departamentosDisponibles}
                   seleccion={deptosNuevo}
+                  maxHeightClass="max-h-[140px]"
                   onToggle={(nombre) => {
                     const next = new Set(deptosNuevo);
                     if (next.has(nombre)) next.delete(nombre); else next.add(nombre);
@@ -1389,6 +1416,80 @@ export function ChatDrawer({ children }: { children: ReactNode }) {
           </DialogContent>
         </Dialog>
 
+        {/* Diálogo: personas con acceso a este canal (según rol/permisos) */}
+        <Dialog open={dlgAcceso} onOpenChange={setDlgAcceso}>
+          <DialogContent className="max-w-lg max-h-[85vh] flex flex-col">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Users className="h-4 w-4 text-primary" /> Personas con acceso
+              </DialogTitle>
+              <DialogDescription>
+                {canal?.tipo === "departamento" ? (
+                  <>Todos los empleados cuyo rol da acceso a <strong>{canal?.nombre}</strong>. La lista se actualiza sola cuando cambian los roles.</>
+                ) : (
+                  <>Miembros de <strong>{canal?.nombre}</strong> y empleados con acceso por su departamento.</>
+                )}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="flex-1 min-h-0 overflow-y-auto -mr-2 pr-2">
+              {(() => {
+                const lista = (canal ? miembrosPorCanal[canal.id] : undefined) ?? [];
+                if (lista.length === 0) {
+                  return (
+                    <p className="text-sm text-muted-foreground py-6 text-center">
+                      Ningún empleado tiene acceso a este grupo todavía.
+                    </p>
+                  );
+                }
+                const ordenada = [...lista].sort((a, b) =>
+                  `${a.nombre} ${a.apellidos}`.localeCompare(`${b.nombre} ${b.apellidos}`, "es"),
+                );
+                return (
+                  <ul className="divide-y">
+                    {ordenada.map((p) => {
+                      const nombre = `${p.nombre} ${p.apellidos}`.trim() || "Sin nombre";
+                      const ini =
+                        nombre
+                          .split(" ")
+                          .map((w) => w[0])
+                          .filter(Boolean)
+                          .join("")
+                          .toUpperCase()
+                          .slice(0, 2) || "?";
+                      const esYo = p.userId === myUserId;
+                      return (
+                        <li key={p.userId} className="flex items-center gap-3 py-2.5">
+                          <div
+                            className="h-9 w-9 rounded-full flex items-center justify-center text-[11px] font-bold text-white shrink-0"
+                            style={{ backgroundColor: colorEmpresa }}
+                          >
+                            {ini}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm font-medium text-foreground truncate">
+                              {nombre}
+                              {esYo && <span className="text-muted-foreground font-normal"> (tú)</span>}
+                            </p>
+                            <p className="text-[11px] text-muted-foreground truncate">
+                              {[p.rolLabel, p.departamento].filter(Boolean).join(" · ") || "Sin rol"}
+                            </p>
+                          </div>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                );
+              })()}
+            </div>
+            <DialogFooter>
+              <span className="mr-auto text-xs text-muted-foreground">
+                {((canal ? miembrosPorCanal[canal.id] : undefined) ?? []).length} personas
+              </span>
+              <Button variant="outline" onClick={() => setDlgAcceso(false)}>Cerrar</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
         {/* Diálogo: editar departamentos ligados (sólo asuntos) */}
         <Dialog open={dlgDeptos} onOpenChange={setDlgDeptos}>
           <DialogContent className="max-w-lg max-h-[85vh] flex flex-col">
@@ -1466,9 +1567,14 @@ export function ChatDrawer({ children }: { children: ReactNode }) {
                       <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
                     </button>
                   )}
-                  <p className="text-[11px] text-muted-foreground flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => { setDlgAjustes(false); setDlgAcceso(true); }}
+                    className="text-[11px] text-muted-foreground flex items-center gap-1 hover:text-primary hover:underline"
+                    title="Ver personas con acceso"
+                  >
                     <Users className="h-3 w-3" /> {canal.miembros} miembros
-                  </p>
+                  </button>
                 </div>
 
                 {isDepartamento && (
@@ -1495,7 +1601,7 @@ export function ChatDrawer({ children }: { children: ReactNode }) {
                       <Button
                         size="sm"
                         variant="outline"
-                        onClick={() => { setMiembrosEdit(new Set(canal.miembrosUserIds)); setBusquedaEmpleados(""); setDlgMiembros(true); setDlgAjustes(false); }}
+                        onClick={() => { setMiembrosEdit(new Set(canal.miembrosUserIds)); setBusquedaEmpleados(""); cargarEmpleados(); setDlgMiembros(true); setDlgAjustes(false); }}
                       >
                         <Users className="h-3.5 w-3.5 mr-1" /> Editar
                       </Button>
@@ -1617,13 +1723,13 @@ function EmpleadosCheckList({
 }) {
   if (empleados.length === 0) {
     return (
-      <div className="flex-1 rounded-md border bg-muted/20 flex items-center justify-center min-h-[180px]">
+      <div className="flex-1 rounded-md border bg-muted/20 flex items-center justify-center min-h-[220px]">
         <p className="text-xs text-muted-foreground">Sin empleados que coincidan.</p>
       </div>
     );
   }
   return (
-    <div className="flex-1 overflow-y-auto rounded-md border min-h-[180px]">
+    <div className="flex-1 overflow-y-auto rounded-md border min-h-[220px]">
       {empleados.map((e) => {
         const checked = seleccion.has(e.userId);
         const inicialesEmp = `${e.nombre[0] ?? ""}${e.apellidos[0] ?? ""}`.toUpperCase();
@@ -1664,11 +1770,12 @@ function EmpleadosCheckList({
 }
 
 function DepartamentosCheckList({
-  departamentos, seleccion, onToggle,
+  departamentos, seleccion, onToggle, maxHeightClass = "max-h-[200px]",
 }: {
   departamentos: string[];
   seleccion: Set<string>;
   onToggle: (nombre: string) => void;
+  maxHeightClass?: string;
 }) {
   if (departamentos.length === 0) {
     return (
@@ -1680,7 +1787,7 @@ function DepartamentosCheckList({
     );
   }
   return (
-    <div className="max-h-[200px] overflow-y-auto rounded-md border">
+    <div className={cn("overflow-y-auto rounded-md border", maxHeightClass)}>
       {departamentos.map((nombre) => {
         const checked = seleccion.has(nombre);
         return (

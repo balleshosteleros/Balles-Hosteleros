@@ -297,6 +297,134 @@ export async function listEmpleadosEmpresa(): Promise<{
   }
 }
 
+// ───────── Miembros efectivos por canal (quién tiene acceso) ─────────
+// Para un canal-departamento la pertenencia NO es una lista explícita: son
+// todos los empleados cuyo rol/permisos dan acceso a ese departamento. Esta
+// acción calcula, para cada canal accesible, la lista real de usuarios con
+// acceso — replicando la misma lógica que la RLS (getAccesoCtx / canalAccesible)
+// pero evaluada empleado a empleado. Alimenta el contador de personas del header
+// del chat y la lista "quién tiene acceso" (se re-calcula al cambiar roles).
+
+export interface MiembroCanal {
+  userId: string;
+  nombre: string;
+  apellidos: string;
+  rolLabel: string | null;
+  departamento: string | null;
+}
+
+// Resuelve los candidatos de acceso de UN empleado (departamento + rol +
+// módulos-departamento de los permisos de su rol), igual que getAccesoCtx pero
+// a partir de una fila de empleado ya cargada y su mapa de permisos por rol.
+function candidatosDeEmpleado(
+  emp: { rolLabel: string | null; departamento: string | null },
+  permisosPorRol: Map<string, string[]>,
+): string[] {
+  const candidatos: string[] = [];
+  const departamento = (emp.departamento ?? "").trim();
+  const rolLabel = (emp.rolLabel ?? "").trim();
+  if (departamento) candidatos.push(departamento);
+  if (rolLabel) {
+    candidatos.push(rolLabel);
+    const modulos = permisosPorRol.get(normalizar(rolLabel)) ?? [];
+    candidatos.push(...modulos);
+  }
+  return candidatos;
+}
+
+/**
+ * Devuelve, por cada canal accesible del usuario, la lista de usuarios que
+ * tienen acceso a ese canal según su rol/permisos (departamentos) o pertenencia
+ * explícita (asuntos). Se usa para el contador "N personas" del header y para
+ * la lista desplegable de miembros. Se re-evalúa en cada carga, así que refleja
+ * automáticamente cualquier cambio de roles/permisos de los usuarios.
+ */
+export async function listMiembrosPorCanal(): Promise<{
+  ok: boolean;
+  data: Record<string, MiembroCanal[]>;
+}> {
+  try {
+    const { supabase, user, empresaId } = await getContext();
+    if (!user || !empresaId) return { ok: true, data: {} };
+
+    // 1. Canales visibles para el usuario (mismo filtro que listCanales).
+    const { data: canalesRows, error: canalesErr } = await supabase
+      .from("canales")
+      .select("id, empresa_id, nombre, tipo, miembros_user_ids, departamentos")
+      .eq("empresa_id", empresaId);
+    if (canalesErr) throw canalesErr;
+    const ctx = await getAccesoCtx(supabase, user.id, empresaId);
+    const canales = (canalesRows ?? []).filter((row) => canalAccesible(row, ctx));
+    if (canales.length === 0) return { ok: true, data: {} };
+
+    // 2. Todos los empleados de la empresa (vía RPC SECURITY DEFINER, igual que
+    //    listEmpleadosEmpresa: profiles tiene RLS de solo-propio-perfil).
+    const { data: empleadosRaw, error: empErr } = await supabase.rpc("chat_empleados", {
+      p_empresa: empresaId,
+    });
+    if (empErr) throw empErr;
+    const empleados: MiembroCanal[] = (empleadosRaw ?? [])
+      .filter((r: Record<string, unknown>) => !!r.user_id)
+      .map((r: Record<string, unknown>) => ({
+        userId: r.user_id as string,
+        nombre: (r.nombre as string) ?? "",
+        apellidos: (r.apellidos as string) ?? "",
+        rolLabel: (r.rol_label as string | null) ?? null,
+        departamento: (r.departamento as string | null) ?? null,
+      }));
+
+    // 3. Permisos por rol (una sola query): rol → módulos-departamento con ver:true.
+    const { data: rolesRows } = await supabase
+      .from("empresa_roles")
+      .select("nombre, permisos")
+      .eq("empresa_id", empresaId);
+    const permisosPorRol = new Map<string, string[]>();
+    for (const r of rolesRows ?? []) {
+      const nombre = normalizar(String((r as Record<string, unknown>).nombre ?? ""));
+      if (!nombre) continue;
+      const permisos = ((r as Record<string, unknown>).permisos ?? []) as Array<{
+        modulo: string;
+        ver: boolean;
+      }>;
+      const modulos = permisos
+        .filter((p) => p?.ver && p.modulo && !MODULOS_NO_DEPARTAMENTO.has(normalizar(p.modulo)))
+        .map((p) => p.modulo);
+      permisosPorRol.set(nombre, modulos);
+    }
+
+    // 4. Para cada canal, evaluamos qué empleados tienen acceso (mismo predicado
+    //    que canalAccesible, pero con el ctx de cada empleado).
+    const resultado: Record<string, MiembroCanal[]> = {};
+    for (const canal of canales) {
+      const tipo = ((canal.tipo as string | null) ?? "asunto");
+      const miembrosExplicitos = new Set(
+        ((canal.miembros_user_ids as string[] | null) ?? []),
+      );
+      const nombre = String(canal.nombre ?? "");
+      const deptos = ((canal.departamentos as string[] | null) ?? []);
+      const lista: MiembroCanal[] = [];
+      for (const emp of empleados) {
+        let tieneAcceso = miembrosExplicitos.has(emp.userId);
+        if (!tieneAcceso) {
+          const cand = candidatosDeEmpleado(emp, permisosPorRol);
+          if (tipo === "departamento") {
+            tieneAcceso = matchDepartamento(nombre, cand);
+          } else {
+            tieneAcceso = deptos.some((d) => matchDepartamento(String(d ?? ""), cand));
+          }
+        }
+        if (tieneAcceso) lista.push(emp);
+      }
+      resultado[canal.id as string] = lista;
+    }
+
+    return { ok: true, data: resultado };
+  } catch (err) {
+    console.error("[comunicacion] listMiembrosPorCanal:", err);
+    return { ok: true, data: {} };
+  }
+}
+
 export async function listMensajes(canalId: string) {
   try {
     const { supabase, user, empresaId } = await getContext();
