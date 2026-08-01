@@ -78,9 +78,6 @@ function getSupabase(): SupabaseClient | null {
 // Caché stale-while-revalidate de roles/permisos por usuario.
 // Permite que el sidebar y los gates de UI se muestren al instante en cargas
 // posteriores, mientras refrescamos en segundo plano contra Supabase.
-// Nota: el `profile` queda fuera del caché a propósito — el nombre/avatar se
-// lee siempre fresco para evitar mostrar datos antiguos durante unos cientos
-// de ms tras editarlos.
 interface AuthCache {
   roles: AppRole[];
   permisos: PermisoModulo[];
@@ -114,6 +111,45 @@ function readLastCachedAuth(): AuthCache | null {
     const lastUserId = window.localStorage.getItem(LAST_USER_ID_KEY);
     if (!lastUserId) return null;
     return readAuthCache(lastUserId);
+  } catch {
+    return null;
+  }
+}
+
+// ── Caché del PERFIL (nombre, apellidos, avatar, rol_label) ─────────────────
+// Igual patrón stale-while-revalidate que los permisos: se pinta al instante
+// desde localStorage y se refresca en segundo plano. Así el nombre + rol + foto
+// del avatar aparecen a la vez que el resto de la cabecera, en vez de mostrar
+// "—" y un avatar vacío durante los cientos de ms que tarda la query a
+// Supabase. Si el usuario edita su nombre/avatar, el fetch fresco lo corrige en
+// el mismo render (por eso el dato cacheado nunca queda "pegado").
+function profileCacheKey(userId: string) {
+  return `bh_profile_cache_${userId}`;
+}
+function readProfileCache(userId: string): AuthProfile | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(profileCacheKey(userId));
+    if (!raw) return null;
+    return JSON.parse(raw) as AuthProfile;
+  } catch {
+    return null;
+  }
+}
+function writeProfileCache(userId: string, value: AuthProfile) {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(profileCacheKey(userId), JSON.stringify(value));
+  } catch {
+    // quota / private mode → ignoramos
+  }
+}
+function readLastCachedProfile(): AuthProfile | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const lastUserId = window.localStorage.getItem(LAST_USER_ID_KEY);
+    if (!lastUserId) return null;
+    return readProfileCache(lastUserId);
   } catch {
     return null;
   }
@@ -157,9 +193,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // vacío durante ~100-500 ms hasta que onAuthStateChange dispare INITIAL_SESSION
   // dentro del useEffect (que corre tras el primer paint).
   const initialCache = readLastCachedAuth();
+  const initialProfile = readLastCachedProfile();
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
-  const [profile, setProfile] = useState<AuthProfile | null>(null);
+  // El perfil (nombre/rol/avatar) se hidrata del caché en el primer render para
+  // que la cabecera lo muestre al instante; el fetch fresco lo revalida abajo.
+  const [profile, setProfile] = useState<AuthProfile | null>(initialProfile);
   const [roles, setRoles] = useState<AppRole[]>(initialCache?.roles ?? []);
   // Si hay caché del último usuario, arrancamos SIN loading: roles y permisos ya
   // están hidratados desde el primer render, así que la UI (sidebar, gates,
@@ -217,9 +256,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           }
 
           // 1) Hidratación instantánea desde localStorage si hay caché del usuario.
-          //    Así el sidebar y los gates pueden filtrar al primer render — sin
-          //    esperar a Supabase. El profile (nombre/avatar) NO se hidrata aquí
-          //    para evitar mostrar valores antiguos: se carga fresco abajo.
+          //    Así el sidebar, los gates y la cabecera (nombre/rol/avatar) se
+          //    pintan al primer render — sin esperar a Supabase. El fetch fresco
+          //    de abajo revalida todo (y corrige nombre/avatar si se editaron).
           const cached = readAuthCache(userId);
           if (cached) {
             setRoles(cached.roles);
@@ -228,6 +267,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             setPermisosLoaded(true);
             setLoading(false);
           }
+          const cachedProfile = readProfileCache(userId);
+          if (cachedProfile) setProfile(cachedProfile);
 
           // 2) Refresco en paralelo (stale-while-revalidate). Profile y permisos
           //    en una sola tanda — getUserPermisos ya devuelve appRoles, así que
@@ -291,7 +332,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               );
             }
 
-            if (nextProfile) setProfile(nextProfile);
+            if (nextProfile) {
+              setProfile(nextProfile);
+              // Persistimos el perfil fresco para que el próximo arranque pinte
+              // nombre/rol/avatar al instante (stale-while-revalidate).
+              writeProfileCache(userId, nextProfile);
+            }
             setRoles(nextRoles);
             setPermisos(nextPermisos);
             setEsAdminPlataforma(nextEsAdmin);
@@ -475,6 +521,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (user?.id && typeof window !== "undefined") {
       try {
         window.localStorage.removeItem(authCacheKey(user.id));
+        window.localStorage.removeItem(profileCacheKey(user.id));
         window.localStorage.removeItem(LAST_USER_ID_KEY);
       } catch {
         // ignore
