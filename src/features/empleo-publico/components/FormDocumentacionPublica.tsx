@@ -23,6 +23,7 @@ import {
   normalizarIban,
   normalizarSeguridadSocial,
 } from "@/features/rrhh/lib/documentacion-validacion";
+import { MAX_IMAGEN_MB, MAX_IMAGEN_BYTES } from "@/shared/lib/documentos";
 
 interface Props {
   token: string;
@@ -33,7 +34,7 @@ interface Props {
 type Campo = "dni_nie" | "dni_reverso" | "iban" | "ss";
 
 const TIPOS_IMG = new Set(["image/png", "image/jpeg", "image/webp", "image/heic", "image/heif"]);
-const MAX_BYTES = 10 * 1024 * 1024;
+const MAX_BYTES = MAX_IMAGEN_BYTES; // 10 MB (fotos de DNI/IBAN; se comprimen en cliente)
 
 /**
  * Comprime una imagen en el navegador antes de enviarla. Vercel limita el cuerpo
@@ -266,7 +267,7 @@ export function FormDocumentacionPublica({ token, empresaSlug }: Props) {
       else if (campo === "ss") setSs("");
       return;
     }
-    if (fRaw.size > MAX_BYTES) { setError("El archivo supera 10MB"); return; }
+    if (fRaw.size > MAX_BYTES) { setError(`El archivo supera ${MAX_IMAGEN_MB} MB`); return; }
     const esImg = TIPOS_IMG.has(fRaw.type);
     const esPdf = fRaw.type === "application/pdf";
     if (!esImg && !esPdf) { setError("Formato no admitido (usa foto o PDF)"); return; }

@@ -1,7 +1,9 @@
 import { useState, useRef } from "react";
+import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Camera, Upload, FileImage, X } from "lucide-react";
+import { MAX_DOCUMENTO_MB, MAX_DOCUMENTO_BYTES } from "@/shared/lib/documentos";
 
 interface Props {
   open: boolean;
@@ -17,6 +19,11 @@ export function AlbaranUploadModal({ open, onClose, onFileReady }: Props) {
 
   const handleFile = (f: File | null) => {
     if (!f) return;
+    // Avisa en el momento de coger el archivo si supera el tope (no lo adjunta en silencio).
+    if (f.size > MAX_DOCUMENTO_BYTES) {
+      toast.error(`"${f.name}" supera el máximo de ${MAX_DOCUMENTO_MB} MB y no se ha adjuntado`);
+      return;
+    }
     setFile(f);
     const reader = new FileReader();
     reader.onload = (e) => setPreview(e.target?.result as string);
