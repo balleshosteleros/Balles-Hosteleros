@@ -62,36 +62,36 @@ export function IncidenciaModal({ open, onClose, onSave, item }: Props) {
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="text-lg font-bold">{isEdit ? "EDITAR INCIDENCIA" : "NUEVA INCIDENCIA"}</DialogTitle>
+          <DialogTitle className="text-lg font-bold">{isEdit ? "Editar incidencia" : "Nueva incidencia"}</DialogTitle>
         </DialogHeader>
         <div className="grid grid-cols-2 gap-4 mt-2">
           <div className="col-span-2">
-            <Label>DESPERFECTO</Label>
+            <Label>Desperfecto</Label>
             <Input value={form.desperfecto} onChange={(e) => set("desperfecto", e.target.value)} placeholder="Descripción del desperfecto..." />
           </div>
           <div>
-            <Label>LOCAL</Label>
+            <Label>Local</Label>
             <Select value={form.local} onValueChange={(v) => set("local", v)}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>{LOCALES.map((l) => <SelectItem key={l} value={l}>{l}</SelectItem>)}</SelectContent>
             </Select>
           </div>
           <div>
-            <Label>ESTADO</Label>
+            <Label>Estado</Label>
             <Select value={form.estado} onValueChange={(v) => set("estado", v)}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>{ESTADOS.map((e) => <SelectItem key={e} value={e}>{e}</SelectItem>)}</SelectContent>
             </Select>
           </div>
           <div>
-            <Label>GRAVEDAD</Label>
+            <Label>Gravedad</Label>
             <Select value={form.gravedad} onValueChange={(v) => set("gravedad", v)}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>{GRAVEDADES.map((g) => <SelectItem key={g} value={g}>{g}</SelectItem>)}</SelectContent>
             </Select>
           </div>
           <div>
-            <Label>APUNTA DESPERFECTO</Label>
+            <Label>Apunta desperfecto</Label>
             <Select value={form.apuntaDesperfecto} onValueChange={(v) => set("apuntaDesperfecto", v)}>
               <SelectTrigger><SelectValue placeholder="Selecciona empleado" /></SelectTrigger>
               <SelectContent>
@@ -112,24 +112,24 @@ export function IncidenciaModal({ open, onClose, onSave, item }: Props) {
             </Select>
           </div>
           <div>
-            <Label>REPARADOR</Label>
+            <Label>Reparador</Label>
             <Select value={form.reparador} onValueChange={(v) => set("reparador", v)}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>{REPARADORES.map((r) => <SelectItem key={r} value={r}>{r}</SelectItem>)}</SelectContent>
             </Select>
           </div>
           <div>
-            <Label>FECHA PUBLICADO</Label>
+            <Label>Fecha publicado</Label>
             <Input type="date" value={form.fechaPublicado} onChange={(e) => set("fechaPublicado", e.target.value)} />
           </div>
           <div className="col-span-2">
-            <Label>COMENTARIOS</Label>
+            <Label>Comentarios</Label>
             <Textarea value={form.comentarios} onChange={(e) => set("comentarios", e.target.value)} rows={3} placeholder="Notas adicionales..." />
           </div>
         </div>
         <div className="flex justify-end gap-2 mt-4">
-          <Button variant="outline" onClick={onClose}>CANCELAR</Button>
-          <Button onClick={handleSave}>{isEdit ? "GUARDAR CAMBIOS" : "CREAR INCIDENCIA"}</Button>
+          <Button variant="outline" onClick={onClose}>Cancelar</Button>
+          <Button onClick={handleSave}>{isEdit ? "Guardar cambios" : "Crear incidencia"}</Button>
         </div>
       </DialogContent>
     </Dialog>

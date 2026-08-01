@@ -200,14 +200,26 @@ export function MantenimientoView() {
     () => [...new Set(data.map((i) => i.apuntaDesperfecto).filter(Boolean))].sort(),
     [data],
   );
+  const desperfectoOpciones = useMemo(
+    () => [...new Set(data.map((i) => i.desperfecto).filter(Boolean))].sort(),
+    [data],
+  );
+  const comentariosOpciones = useMemo(
+    () => [...new Set(data.map((i) => i.comentarios).filter(Boolean))].sort(),
+    [data],
+  );
 
   const columnDefs: Record<string, { th: ReactNode; td: (item: Incidencia) => ReactNode }> = {
     desperfecto: {
       th: (
         <TableColumnHeader
           key="desperfecto"
-          label="DESPERFECTO"
+          label="Desperfecto"
           campo="desperfecto"
+          filtroTipo="lista"
+          opciones={desperfectoOpciones}
+          filtros={filtros}
+          onFiltrosChange={setFiltros}
           ordenable
           orden={orden}
           onOrdenChange={setOrden}
@@ -223,7 +235,7 @@ export function MantenimientoView() {
       th: (
         <TableColumnHeader
           key="local"
-          label="LOCAL"
+          label="Local"
           campo="local"
           filtroTipo="lista"
           opciones={LOCALES}
@@ -247,7 +259,7 @@ export function MantenimientoView() {
       th: (
         <TableColumnHeader
           key="estado"
-          label="ESTADO"
+          label="Estado"
           campo="estado"
           filtroTipo="lista"
           opciones={ESTADOS}
@@ -271,7 +283,7 @@ export function MantenimientoView() {
       th: (
         <TableColumnHeader
           key="gravedad"
-          label="GRAVEDAD"
+          label="Gravedad"
           campo="gravedad"
           filtroTipo="lista"
           opciones={GRAVEDADES}
@@ -295,7 +307,7 @@ export function MantenimientoView() {
       th: (
         <TableColumnHeader
           key="apuntaDesperfecto"
-          label="APUNTA DESPERFECTO"
+          label="Apunta desperfecto"
           campo="apuntaDesperfecto"
           filtroTipo="lista"
           opciones={apuntaOpciones}
@@ -324,7 +336,7 @@ export function MantenimientoView() {
       th: (
         <TableColumnHeader
           key="reparador"
-          label="REPARADOR"
+          label="Reparador"
           campo="reparador"
           filtroTipo="lista"
           opciones={REPARADORES}
@@ -348,7 +360,7 @@ export function MantenimientoView() {
       th: (
         <TableColumnHeader
           key="fechaPublicado"
-          label="FECHA"
+          label="Fecha"
           campo="fechaPublicado"
           filtroTipo="fecha"
           filtros={filtros}
@@ -365,7 +377,20 @@ export function MantenimientoView() {
       ),
     },
     comentarios: {
-      th: <TableColumnHeader key="comentarios" label="COMENTARIOS" />,
+      th: (
+        <TableColumnHeader
+          key="comentarios"
+          label="Comentarios"
+          campo="comentarios"
+          filtroTipo="lista"
+          opciones={comentariosOpciones}
+          filtros={filtros}
+          onFiltrosChange={setFiltros}
+          ordenable
+          orden={orden}
+          onOrdenChange={setOrden}
+        />
+      ),
       td: (item) => (
         <td key="comentarios" className="px-3 py-2.5 max-w-[200px]">
           <span className="text-xs text-muted-foreground line-clamp-2">{item.comentarios}</span>
@@ -432,7 +457,7 @@ export function MantenimientoView() {
                 {columnasRender.map((c) => columnDefs[c.campo]?.td(item))}
                 <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
                   <Button variant="ghost" size="sm" className="gap-1.5 text-xs text-primary" onClick={() => setDetalleItem(item)}>
-                    <Info className="h-3.5 w-3.5" /> MÁS INFO
+                    <Info className="h-3.5 w-3.5" /> Más info
                   </Button>
                 </td>
               </tr>

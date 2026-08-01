@@ -209,12 +209,27 @@ export function RecorderProvider({ children }: { children: ReactNode }) {
   const elapsedRef = useRef<number>(0);
   const previewUrlRef = useRef<string | null>(null);
   const countdownCancelRef = useRef<boolean>(false);
+  // Composición cámara-en-pantalla: cuando hay cámara activa, dibujamos pantalla
+  // + burbuja de cámara en un canvas y grabamos ese canvas, para que la cámara
+  // quede INCRUSTADA en el vídeo aunque grabes otra ventana o toda la pantalla.
+  const canvasStreamRef = useRef<MediaStream | null>(null);
+  const compositeRafRef = useRef<number | null>(null);
+
+  const stopCompositing = useCallback(() => {
+    if (compositeRafRef.current != null) {
+      cancelAnimationFrame(compositeRafRef.current);
+      compositeRafRef.current = null;
+    }
+    canvasStreamRef.current?.getTracks().forEach((t) => t.stop());
+    canvasStreamRef.current = null;
+  }, []);
 
   useEffect(() => {
     previewUrlRef.current = previewUrl;
   }, [previewUrl]);
 
   const stopAllStreams = useCallback(() => {
+    stopCompositing();
     screenStreamRef.current?.getTracks().forEach((t) => t.stop());
     micStreamRef.current?.getTracks().forEach((t) => t.stop());
     cameraStreamRef.current?.getTracks().forEach((t) => t.stop());
@@ -225,7 +240,7 @@ export function RecorderProvider({ children }: { children: ReactNode }) {
     audioContextRef.current = null;
     setCameraStream(null);
     setDisplaySurface(null);
-  }, []);
+  }, [stopCompositing]);
 
   useEffect(() => {
     return () => {
@@ -420,6 +435,90 @@ export function RecorderProvider({ children }: { children: ReactNode }) {
     setState("uploading");
   }, [setState, stopAllStreams]);
 
+  // Dibuja pantalla + burbuja de cámara (círculo, esquina inf. derecha) en un
+  // canvas a 30 fps y devuelve la pista de vídeo del canvas. Así la cámara queda
+  // SIEMPRE incrustada en el vídeo, sin depender de qué ventana se comparta.
+  const buildCompositeVideoTracks = useCallback(
+    (
+      screenStream: MediaStream,
+      cameraStream: MediaStream,
+      screenSettings: MediaTrackSettings,
+    ): MediaStreamTrack[] => {
+      const width = screenSettings.width ?? 1920;
+      const height = screenSettings.height ?? 1080;
+      const fps = screenSettings.frameRate ?? 30;
+
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return screenStream.getVideoTracks(); // fallback: sin composición
+
+      const screenVideo = document.createElement("video");
+      screenVideo.srcObject = screenStream;
+      screenVideo.muted = true;
+      screenVideo.playsInline = true;
+      screenVideo.play().catch(() => {});
+
+      const camVideo = document.createElement("video");
+      camVideo.srcObject = cameraStream;
+      camVideo.muted = true;
+      camVideo.playsInline = true;
+      camVideo.play().catch(() => {});
+
+      // Burbuja circular ~ 22% del alto, en la esquina inferior derecha.
+      const bubble = Math.round(height * 0.22);
+      const margin = Math.round(height * 0.03);
+
+      const draw = () => {
+        // Pantalla de fondo (cubre todo el lienzo).
+        if (screenVideo.readyState >= 2) {
+          ctx.drawImage(screenVideo, 0, 0, width, height);
+        }
+        // Cámara: recorte circular espejado, con borde rojo.
+        if (camVideo.readyState >= 2) {
+          const cx = width - margin - bubble / 2;
+          const cy = height - margin - bubble / 2;
+          const r = bubble / 2;
+
+          // Recorte del vídeo de cámara a un cuadrado central (object-cover).
+          const cw = camVideo.videoWidth || 640;
+          const ch = camVideo.videoHeight || 480;
+          const side = Math.min(cw, ch);
+          const sx = (cw - side) / 2;
+          const sy = (ch - side) / 2;
+
+          ctx.save();
+          ctx.beginPath();
+          ctx.arc(cx, cy, r, 0, Math.PI * 2);
+          ctx.closePath();
+          ctx.clip();
+          // Espejo horizontal para que se vea como un selfie.
+          ctx.translate(cx + r, cy - r);
+          ctx.scale(-1, 1);
+          ctx.drawImage(camVideo, sx, sy, side, side, 0, 0, bubble, bubble);
+          ctx.restore();
+
+          // Anillo rojo alrededor de la burbuja.
+          ctx.save();
+          ctx.beginPath();
+          ctx.arc(cx, cy, r, 0, Math.PI * 2);
+          ctx.lineWidth = Math.max(3, Math.round(height * 0.004));
+          ctx.strokeStyle = "#ef4444";
+          ctx.stroke();
+          ctx.restore();
+        }
+        compositeRafRef.current = requestAnimationFrame(draw);
+      };
+      draw();
+
+      const canvasStream = canvas.captureStream(fps);
+      canvasStreamRef.current = canvasStream;
+      return canvasStream.getVideoTracks();
+    },
+    [],
+  );
+
   const startRecording = useCallback(
     async (title: string) => {
       setError(null);
@@ -489,6 +588,21 @@ export function RecorderProvider({ children }: { children: ReactNode }) {
           audioTracksToMix.push(...micStream.getAudioTracks());
         }
 
+        // ── Pista de VÍDEO ────────────────────────────────────────────────
+        // Con cámara activa: componemos pantalla + burbuja de cámara en un
+        // canvas y grabamos ESE canvas, para que la cámara quede incrustada en
+        // el vídeo grabes lo que grabes. Sin cámara: la pantalla directa.
+        let videoTracks: MediaStreamTrack[];
+        if (cameraStreamRef.current) {
+          videoTracks = buildCompositeVideoTracks(
+            screenStream,
+            cameraStreamRef.current,
+            trackSettings,
+          );
+        } else {
+          videoTracks = screenStream.getVideoTracks();
+        }
+
         if (audioTracksToMix.length > 0) {
           const audioContext = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
           audioContextRef.current = audioContext;
@@ -498,11 +612,11 @@ export function RecorderProvider({ children }: { children: ReactNode }) {
             source.connect(destination);
           });
           finalStream = new MediaStream([
-            ...screenStream.getVideoTracks(),
+            ...videoTracks,
             ...destination.stream.getAudioTracks(),
           ]);
         } else {
-          finalStream = new MediaStream([...screenStream.getVideoTracks()]);
+          finalStream = new MediaStream([...videoTracks]);
         }
 
         const mimeType = getSupportedMimeType();
@@ -559,7 +673,7 @@ export function RecorderProvider({ children }: { children: ReactNode }) {
         stopAllStreams();
       }
     },
-    [options, processRecording, setCountdownValue, setElapsed, setState, stopAllStreams, stopRecording],
+    [options, processRecording, setCountdownValue, setElapsed, setState, stopAllStreams, stopRecording, buildCompositeVideoTracks],
   );
 
   // Avisar antes de cerrar la pestaña si quedan grabaciones sin subir, para
