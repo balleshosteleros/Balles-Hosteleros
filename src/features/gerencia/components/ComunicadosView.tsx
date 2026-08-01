@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useEffect, useCallback, type ReactNode } from "react";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
+import { useAuth } from "@/features/auth/contexts/auth-context";
 import { getComunicadosByEmpresa, type Comunicado, ESTADO_COMUNICADO_LABELS, RECURRENCIA_LABELS, type EstadoComunicado, type Recurrencia } from "@/features/rrhh/data/comunicados";
 import {
   listComunicados,
@@ -128,10 +129,21 @@ function ComunicadoEditor({ comunicado, onBack, onSave, empleadosReales, empresa
   empresaNombre: string;
 }) {
   const isEdit = !!comunicado;
+  const { user } = useAuth();
   const [form, setForm] = useState<EditorForm>(comunicado ? formFromComunicado(comunicado) : emptyForm);
   const [preview, setPreview] = useState(false);
   const [empleadoFilter, setEmpleadoFilter] = useState("");
   const u = (patch: Partial<EditorForm>) => setForm(f => ({ ...f, ...patch }));
+
+  // Al crear (no editar), preseleccionar como creador al usuario de la sesión
+  // (es quien redacta el comunicado). El value del select es el userId, que
+  // coincide directamente con user.id de auth.
+  useEffect(() => {
+    if (comunicado || !user?.id) return;
+    if (empleadosReales.some((e) => e.userId === user.id)) {
+      setForm((f) => (f.creadorId ? f : { ...f, creadorId: user.id }));
+    }
+  }, [comunicado, user?.id, empleadosReales]);
 
   const toggleRole = (role: string) => {
     u({ rolesDestinatarios: form.rolesDestinatarios.includes(role) ? form.rolesDestinatarios.filter(r => r !== role) : [...form.rolesDestinatarios, role] });

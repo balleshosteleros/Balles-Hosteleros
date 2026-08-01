@@ -274,7 +274,7 @@ export async function getCostesIngredientes() {
 // ─── Empleados (creadores) ─────────────────────────────────────────
 
 export async function listEmpleadosCreadores() {
-  type Fila = { id: string; nombre: string; apellidos: string; puesto: string | null; departamento: string | null };
+  type Fila = { id: string; userId: string | null; nombre: string; apellidos: string; puesto: string | null; departamento: string | null };
   try {
     // Fuente única de empleados activos: incluye el puesto REAL (empleado_puestos)
     // y el departamento, para poder mostrar "puesto · departamento" en el selector.
@@ -283,6 +283,7 @@ export async function listEmpleadosCreadores() {
     if (!res.ok) return { ok: false as const, data: [] as Fila[] };
     const data: Fila[] = res.data.map((e) => ({
       id: e.empleadoId,
+      userId: e.userId,
       nombre: e.nombre,
       apellidos: e.apellidos,
       puesto: e.puesto,

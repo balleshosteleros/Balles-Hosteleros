@@ -24,26 +24,30 @@ interface Props {
 export function DetalleIncidencia({ open, onClose, item, onAddActualizacion }: Props) {
   const hoy = new Date().toISOString().slice(0, 10);
   const { empresaActual } = useEmpresa();
-  const { profile } = useAuth();
-  const miNombre = `${profile?.nombre ?? ""} ${profile?.apellidos ?? ""}`.trim();
+  const { user } = useAuth();
 
   const [showForm, setShowForm] = useState(false);
   const [texto, setTexto] = useState("");
   const [fecha, setFecha] = useState(hoy);
-  const [apuntadoPor, setApuntadoPor] = useState(miNombre);
+  const [apuntadoPor, setApuntadoPor] = useState("");
   const [empleados, setEmpleados] = useState<EmpleadoActivo[]>([]);
 
   useEffect(() => {
     let alive = true;
     getEmpleadosActivos(empresaActual.dbId).then((r) => {
-      if (alive) setEmpleados(r.ok ? r.data : []);
+      if (!alive) return;
+      const lista = r.ok ? r.data : [];
+      setEmpleados(lista);
+      // Preseleccionar al empleado de la sesión por userId (identificador fiable),
+      // usando su nombreCompleto de la lista para que el value case exacto con una
+      // opción (evita el duplicado "huérfano" sin puesto/departamento).
+      const yo = lista.find((e) => e.userId && e.userId === user?.id);
+      if (yo) setApuntadoPor((p) => (p ? p : yo.nombreCompleto));
     });
     return () => { alive = false; };
-  }, [empresaActual.dbId]);
+  }, [empresaActual.dbId, user?.id]);
 
-  useEffect(() => {
-    if (miNombre && !apuntadoPor) setApuntadoPor(miNombre);
-  }, [miNombre, apuntadoPor]);
+  const nombreSesion = empleados.find((e) => e.userId && e.userId === user?.id)?.nombreCompleto ?? "";
 
   const handleAdd = () => {
     if (!texto.trim()) return;
@@ -56,7 +60,7 @@ export function DetalleIncidencia({ open, onClose, item, onAddActualizacion }: P
     onAddActualizacion(item.id, act);
     setTexto("");
     setFecha(hoy);
-    setApuntadoPor(miNombre);
+    setApuntadoPor(nombreSesion);
     setShowForm(false);
   };
 

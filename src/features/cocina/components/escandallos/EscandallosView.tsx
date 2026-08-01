@@ -3,6 +3,7 @@
 import { useState, useMemo, useCallback, useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
+import { useAuth } from "@/features/auth/contexts/auth-context";
 import { useTabQuery } from "@/shared/hooks/use-tab-query";
 import { getRouteMeta } from "@/features/layout/data/nav-routes";
 import {
@@ -471,9 +472,10 @@ function EscandalloDetalle({
   escandallo: Escandallo | null; open: boolean; onClose: () => void;
   categorias: CategoriaEscandallo[]; onSave: (f: Escandallo) => void;
   config: ConfigEscandallos;
-  empleados: { id: string; nombre: string; apellidos: string; puesto: string | null; departamento: string | null }[];
+  empleados: { id: string; userId: string | null; nombre: string; apellidos: string; puesto: string | null; departamento: string | null }[];
 }) {
   const pathname = usePathname();
+  const { user } = useAuth();
   const routeMeta = useMemo(() => getRouteMeta(pathname || "/cocina/escandallos"), [pathname]);
   const MenuIcon = routeMeta.icon;
   const singular = routeMeta.title.replace(/S$/, "");
@@ -496,6 +498,17 @@ function EscandalloDetalle({
     }
     setForm(inicial);
   }, [escandallo]);
+
+  // Al crear (responsable aún vacío), preseleccionar como creador al empleado de
+  // la sesión emparejado por userId, usando su nombre exacto de la lista para que
+  // el value case con una opción (no queremos un valor "huérfano" sin puesto).
+  useEffect(() => {
+    if (!user?.id) return;
+    const yo = empleados.find((e) => e.userId && e.userId === user.id);
+    if (!yo) return;
+    const nombreYo = `${yo.nombre} ${yo.apellidos}`.trim();
+    setForm((prev) => (prev && !prev.responsable ? { ...prev, responsable: nombreYo } : prev));
+  }, [user?.id, empleados]);
 
   // Cargar productos (compra + elaboración, excluyendo venta) cuando se abre el diálogo.
   useEffect(() => {
@@ -1239,7 +1252,7 @@ export function EscandallosView() {
   const [escandallos, setEscandallos] = useState<Record<string, Escandallo[]>>({});
   const [categorias, setCategorias] = useState<Record<string, CategoriaEscandallo[]>>({});
   const [configs, setConfigs] = useState<Record<string, ConfigEscandallos>>({});
-  const [empleados, setEmpleados] = useState<{ id: string; nombre: string; apellidos: string; puesto: string | null; departamento: string | null }[]>([]);
+  const [empleados, setEmpleados] = useState<{ id: string; userId: string | null; nombre: string; apellidos: string; puesto: string | null; departamento: string | null }[]>([]);
   const [loading, setLoading] = useState(true);
 
   // --- Helper: map DB row → Escandallo ---

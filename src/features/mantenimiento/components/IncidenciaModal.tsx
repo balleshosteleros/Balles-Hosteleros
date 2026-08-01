@@ -21,8 +21,7 @@ interface Props {
 export function IncidenciaModal({ open, onClose, onSave, item }: Props) {
   const isEdit = !!item;
   const { empresaActual } = useEmpresa();
-  const { user, profile } = useAuth();
-  const miNombre = `${profile?.nombre ?? ""} ${profile?.apellidos ?? ""}`.trim();
+  const { user } = useAuth();
 
   const [empleados, setEmpleados] = useState<EmpleadoActivo[]>([]);
   const [locales, setLocales] = useState<string[]>([]);
@@ -32,8 +31,11 @@ export function IncidenciaModal({ open, onClose, onSave, item }: Props) {
       if (!alive) return;
       const lista = r.ok ? r.data : [];
       setEmpleados(lista);
-      // Al crear, preseleccionar por defecto al empleado de la sesión (emparejado
-      // por userId con el desplegable) para que coincida exactamente su nombre.
+      // Al crear, preseleccionar por defecto al empleado de la sesión emparejado
+      // por userId (identificador fiable). Usamos SIEMPRE su nombreCompleto de la
+      // lista para que el value coincida exacto con una opción (si usáramos el
+      // nombre del profile, que puede diferir en tildes, saldría un duplicado
+      // "huérfano" sin puesto/departamento).
       if (!item) {
         const yo = lista.find((e) => e.userId && e.userId === user?.id);
         if (yo) {
@@ -59,19 +61,14 @@ export function IncidenciaModal({ open, onClose, onSave, item }: Props) {
     local: item?.local ?? "",
     estado: item?.estado ?? "PENDIENTE",
     gravedad: item?.gravedad ?? "LEVE",
-    apuntaDesperfecto: item?.apuntaDesperfecto ?? miNombre,
+    // Vacío al crear: la preselección la fija el efecto por userId contra la
+    // lista real de empleados (evita valores que no casen con ninguna opción).
+    apuntaDesperfecto: item?.apuntaDesperfecto ?? "",
     reparador: item?.reparador ?? REPARADORES[0],
     fechaPublicado: item?.fechaPublicado ?? new Date().toISOString().slice(0, 10),
     comentarios: item?.comentarios ?? "",
     actualizaciones: item?.actualizaciones ?? [],
   });
-
-  // Al crear (no edición), fijar por defecto el empleado de la sesión cuando el perfil ya esté cargado.
-  useEffect(() => {
-    if (!item && miNombre && !form.apuntaDesperfecto) {
-      setForm((p) => ({ ...p, apuntaDesperfecto: miNombre }));
-    }
-  }, [miNombre, item, form.apuntaDesperfecto]);
 
   const set = (k: keyof typeof form, v: string) => setForm((p) => ({ ...p, [k]: v }));
 
