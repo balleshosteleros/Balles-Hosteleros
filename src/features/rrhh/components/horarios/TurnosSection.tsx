@@ -128,6 +128,7 @@ function turnoToDraft(t: Turno | null, empleadoIds: string[] = []): TurnoDraft {
 type EmpleadoConOrigen = EmpleadoBasico & {
   directo: boolean;
   patron: boolean;
+  puesto?: string | null;
 };
 
 function pluralEmpleados(n: number) {
@@ -263,13 +264,17 @@ export function TurnosSection({ empresaId }: { empresaId: string }) {
       }
       map.set(
         turnoId,
-        Array.from(porId.values()).sort((a, b) =>
-          a.nombre.localeCompare(b.nombre, "es"),
-        ),
+        Array.from(porId.values())
+          // Puesto real desde la fuente única (cruzando por id de empleado).
+          .map((e) => ({
+            ...e,
+            puesto: empleadosActivos.find((a) => a.empleadoId === e.id)?.puesto ?? null,
+          }))
+          .sort((a, b) => a.nombre.localeCompare(b.nombre, "es")),
       );
     }
     return map;
-  }, [empleadosDirectosPorTurno, empleadosPorTurno]);
+  }, [empleadosDirectosPorTurno, empleadosPorTurno, empleadosActivos]);
 
   // Empleados seleccionables: solo los del departamento vinculado al turno.
   // Se recalcula en vivo, de modo que si un empleado cambia de departamento
@@ -1080,6 +1085,8 @@ export function TurnosSection({ empresaId }: { empresaId: string }) {
                 (e) => ({
                   id: e.id,
                   nombre: `${e.nombre}${e.apellidos ? " " + e.apellidos : ""}`.trim(),
+                  // Puesto real desde la fuente única (cruzando por id de empleado).
+                  puesto: empleadosActivos.find((a) => a.empleadoId === e.id)?.puesto ?? null,
                 }),
               )
             : []
@@ -1133,9 +1140,16 @@ function EmpleadosTurnoDialog({
                 key={e.id}
                 className="py-2 text-sm flex items-center justify-between gap-2"
               >
-                <span>
-                  {e.nombre}
-                  {e.apellidos ? ` ${e.apellidos}` : ""}
+                <span className="min-w-0">
+                  <span className="block truncate">
+                    {e.nombre}
+                    {e.apellidos ? ` ${e.apellidos}` : ""}
+                  </span>
+                  {e.puesto && (
+                    <span className="block text-[11px] text-muted-foreground truncate">
+                      {e.puesto}
+                    </span>
+                  )}
                 </span>
                 <span className="flex items-center gap-1 shrink-0">
                   {e.directo && (

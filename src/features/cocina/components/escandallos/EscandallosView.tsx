@@ -471,7 +471,7 @@ function EscandalloDetalle({
   escandallo: Escandallo | null; open: boolean; onClose: () => void;
   categorias: CategoriaEscandallo[]; onSave: (f: Escandallo) => void;
   config: ConfigEscandallos;
-  empleados: { id: string; nombre: string; apellidos: string }[];
+  empleados: { id: string; nombre: string; apellidos: string; puesto: string | null; departamento: string | null }[];
 }) {
   const pathname = usePathname();
   const routeMeta = useMemo(() => getRouteMeta(pathname || "/cocina/escandallos"), [pathname]);
@@ -766,6 +766,11 @@ function EscandalloDetalle({
                         {empleados.map((emp) => (
                           <SelectItem key={emp.id} value={`${emp.nombre} ${emp.apellidos}`}>
                             {emp.nombre} {emp.apellidos}
+                            {(emp.puesto || emp.departamento) && (
+                              <span className="text-muted-foreground">
+                                {" — "}{[emp.puesto, emp.departamento].filter(Boolean).join(" · ")}
+                              </span>
+                            )}
                           </SelectItem>
                         ))}
                         {responsableHuerfano && (
@@ -1234,7 +1239,7 @@ export function EscandallosView() {
   const [escandallos, setEscandallos] = useState<Record<string, Escandallo[]>>({});
   const [categorias, setCategorias] = useState<Record<string, CategoriaEscandallo[]>>({});
   const [configs, setConfigs] = useState<Record<string, ConfigEscandallos>>({});
-  const [empleados, setEmpleados] = useState<{ id: string; nombre: string; apellidos: string }[]>([]);
+  const [empleados, setEmpleados] = useState<{ id: string; nombre: string; apellidos: string; puesto: string | null; departamento: string | null }[]>([]);
   const [loading, setLoading] = useState(true);
 
   // --- Helper: map DB row → Escandallo ---

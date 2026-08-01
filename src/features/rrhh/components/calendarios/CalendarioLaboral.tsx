@@ -205,7 +205,9 @@ export function CalendarioLaboral({ empresaId }: { empresaId: string }) {
                         <div key={emp.empleadoId} className="flex border-b last:border-b-0 hover:bg-muted/30 transition-colors">
                           <div className="w-[200px] shrink-0 px-4 py-3 border-r">
                             <p className="text-sm font-medium truncate">{emp.nombre} {emp.apellidos}</p>
-                            <p className="text-[10px] text-muted-foreground">{emp.departamento}</p>
+                            <p className="text-[10px] text-muted-foreground truncate">
+                              {[emp.puesto, emp.departamento].filter(Boolean).join(" · ")}
+                            </p>
                           </div>
                           <div className="flex-1 relative" style={{ height: 52 }}>
                             {turnosEmp.map(t => {

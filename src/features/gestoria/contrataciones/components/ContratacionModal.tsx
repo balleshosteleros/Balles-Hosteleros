@@ -600,11 +600,15 @@ function EmpleadoSelector({
             Sin empleados activos
           </SelectItem>
         ) : (
-          empleados.map((e) => (
-            <SelectItem key={e.id} value={e.id}>
-              {e.nombre} {e.apellidos ?? ""} {e.puesto ? `· ${e.puesto}` : ""}
-            </SelectItem>
-          ))
+          empleados.map((e) => {
+            const extra = [e.puesto, e.departamento].filter(Boolean).join(" · ");
+            return (
+              <SelectItem key={e.id} value={e.id}>
+                {e.nombre} {e.apellidos ?? ""}
+                {extra && <span className="text-muted-foreground">{" — "}{extra}</span>}
+              </SelectItem>
+            );
+          })
         )}
       </SelectContent>
     </Select>

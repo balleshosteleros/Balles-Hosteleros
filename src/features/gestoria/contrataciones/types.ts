@@ -99,4 +99,5 @@ export interface EmpleadoActivo {
   nombre: string;
   apellidos: string | null;
   puesto: string | null;
+  departamento?: string | null;
 }

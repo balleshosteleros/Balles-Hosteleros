@@ -237,7 +237,7 @@ export async function listEmpleadosEmpresaParaLocales(
     const admin = createAdminClient();
     const { data, error } = await admin
       .from("empleados")
-      .select("id, nombre, apellidos, estado, local_id, permite_teletrabajo")
+      .select("id, nombre, apellidos, estado, local_id, permite_teletrabajo, departamentos(nombre)")
       .eq("empresa_id", target)
       .order("nombre");
     if (error) throw error;
@@ -246,6 +246,9 @@ export async function listEmpleadosEmpresaParaLocales(
     // Locales asignados (de ESTA empresa) por empleado, vía la tabla puente.
     const empleadoIds = empleados.map((e) => e.id);
     const porEmpleado: Record<string, string[]> = {};
+    // Puesto principal desde la fuente única (empleado_puestos), para poder
+    // mostrar "puesto · departamento" en el selector.
+    const puestoPorEmpleado: Record<string, string> = {};
     if (empleadoIds.length > 0) {
       const { data: asignaciones } = await admin
         .from("empleado_locales")
@@ -257,11 +260,38 @@ export async function listEmpleadosEmpresaParaLocales(
         if (!r.locales?.id) continue;
         (porEmpleado[r.empleado_id] ??= []).push(r.locales.id);
       }
+      const { data: eps } = await admin
+        .from("empleado_puestos")
+        .select("empleado_id, es_principal, puesto_nombre, puestos(nombre)")
+        .in("empleado_id", empleadoIds);
+      for (const row of eps ?? []) {
+        const r = row as unknown as {
+          empleado_id: string;
+          es_principal: boolean;
+          puesto_nombre: string | null;
+          puestos: { nombre?: string | null } | Array<{ nombre?: string | null }> | null;
+        };
+        const rel = Array.isArray(r.puestos) ? r.puestos[0] : r.puestos;
+        const nombrePuesto = rel?.nombre ?? r.puesto_nombre ?? null;
+        if (!nombrePuesto) continue;
+        if (r.es_principal || !puestoPorEmpleado[r.empleado_id]) {
+          puestoPorEmpleado[r.empleado_id] = nombrePuesto;
+        }
+      }
     }
 
     return {
       ok: true,
-      data: empleados.map((e) => ({ ...e, local_ids: porEmpleado[e.id] ?? [] })),
+      data: empleados.map((e) => {
+        const depRel = e.departamentos as { nombre?: string | null } | Array<{ nombre?: string | null }> | null;
+        const depObj = Array.isArray(depRel) ? depRel[0] : depRel;
+        return {
+          ...e,
+          local_ids: porEmpleado[e.id] ?? [],
+          puesto: puestoPorEmpleado[e.id] ?? null,
+          departamento: (depObj?.nombre as string | null) ?? null,
+        };
+      }),
     };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : "Error desconocido";

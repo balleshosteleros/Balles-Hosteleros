@@ -21,14 +21,14 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Loader2 } from "lucide-react";
-import { createClient } from "@/lib/supabase/client";
+import { getEmpleadosActivos } from "@/features/rrhh/actions/empleados-actions";
 import { otorgarToqueManual } from "@/features/toques/actions/toques-actions";
-
-type Row = Record<string, unknown>;
 
 interface Empleado {
   userId: string;
   nombre: string;
+  puesto: string | null;
+  departamento: string | null;
 }
 
 interface Props {
@@ -39,7 +39,6 @@ interface Props {
 }
 
 export function OtorgarToqueDialog({ open, onOpenChange, empresaId, onOtorgado }: Props) {
-  const supabase = useMemo(() => createClient(), []);
   const [empleados, setEmpleados] = useState<Empleado[]>([]);
   const [userId, setUserId] = useState<string>("");
   const [toques, setToques] = useState<number>(1);
@@ -49,20 +48,20 @@ export function OtorgarToqueDialog({ open, onOpenChange, empresaId, onOtorgado }
 
   useEffect(() => {
     if (!open || !empresaId) return;
-    void supabase
-      .from("usuarios")
-      .select("user_id, full_name, nombre")
-      .eq("empresa_id", empresaId)
-      .order("full_name", { ascending: true })
-      .then(({ data }) => {
-        setEmpleados(
-          ((data ?? []) as Row[]).map((r) => ({
-            userId: String(r.user_id),
-            nombre: String(r.full_name ?? r.nombre ?? "—"),
+    void getEmpleadosActivos(empresaId).then((res) => {
+      if (!res.ok) return;
+      setEmpleados(
+        res.data
+          .filter((e) => e.userId)
+          .map((e) => ({
+            userId: e.userId as string,
+            nombre: e.nombreCompleto,
+            puesto: e.puesto,
+            departamento: e.departamento,
           }))
-        );
-      });
-  }, [open, empresaId, supabase]);
+      );
+    });
+  }, [open, empresaId]);
 
   const handleEnviar = async () => {
     setError(null);
@@ -111,6 +110,11 @@ export function OtorgarToqueDialog({ open, onOpenChange, empresaId, onOtorgado }
                 {empleados.map((e) => (
                   <SelectItem key={e.userId} value={e.userId}>
                     {e.nombre}
+                    {(e.puesto || e.departamento) && (
+                      <span className="text-muted-foreground">
+                        {" — "}{[e.puesto, e.departamento].filter(Boolean).join(" · ")}
+                      </span>
+                    )}
                   </SelectItem>
                 ))}
               </SelectContent>

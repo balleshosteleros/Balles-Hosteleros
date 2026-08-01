@@ -202,10 +202,13 @@ export function PromocionInternaDialog({
               <SelectContent>
                 {empleados.map((e) => {
                   const puestoAct = e.puesto || puestosPrincipales[e.empleadoId] || "";
+                  const extra = [puestoAct, e.departamento].filter(Boolean).join(" · ");
                   return (
                     <SelectItem key={e.empleadoId} value={e.empleadoId}>
                       {e.nombreCompleto}
-                      {puestoAct ? ` · ${puestoAct}` : ""}
+                      {extra && (
+                        <span className="text-muted-foreground">{" — "}{extra}</span>
+                      )}
                     </SelectItem>
                   );
                 })}

@@ -27,6 +27,8 @@ interface Empleado {
   estado: string | null;
   local_ids: string[];
   permite_teletrabajo: boolean;
+  puesto: string | null;
+  departamento: string | null;
 }
 
 interface Props {
@@ -199,6 +201,11 @@ function FilaEmpleado({
     <div className="flex items-center gap-2 px-3 py-2 border-b last:border-b-0 hover:bg-muted/30">
       <div className="flex-1 min-w-0">
         <p className="text-sm font-medium truncate">{nombre}</p>
+        {(empleado.puesto || empleado.departamento) && (
+          <p className="text-[10px] text-muted-foreground truncate">
+            {[empleado.puesto, empleado.departamento].filter(Boolean).join(" · ")}
+          </p>
+        )}
         {empleado.estado && empleado.estado !== "Activo" && (
           <p className="text-[10px] uppercase text-muted-foreground">
             {empleado.estado}

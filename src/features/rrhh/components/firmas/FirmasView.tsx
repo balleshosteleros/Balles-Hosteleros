@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { formatFechaHoraEnZona } from "@/features/empresa/lib/zona-horaria";
-import { listEmpleados } from "@/features/rrhh/actions/empleados-actions";
+import { getEmpleadosActivos } from "@/features/rrhh/actions/empleados-actions";
 import {
   listFirmas,
   crearFirma,
@@ -86,10 +86,11 @@ import {
   type ValidezLegal,
   type EstadoFirma,
 } from "@/features/rrhh/data/firmas";
+import { MAX_DOCUMENTO_MB, MAX_DOCUMENTO_BYTES } from "@/shared/lib/documentos";
 
-const MAX_PDF_BYTES = 10 * 1024 * 1024;
+const MAX_PDF_BYTES = MAX_DOCUMENTO_BYTES; // 50 MB (tope unificado de documentos)
 
-type EmpleadoOpcion = { id: string; nombre: string; departamento: string };
+type EmpleadoOpcion = { id: string; nombre: string; puesto: string | null; departamento: string };
 
 type EventoUI = {
   id: string;
@@ -249,23 +250,22 @@ export function FirmasView() {
   const cargarEmpleados = useCallback(async () => {
     setCargandoEmpleados(true);
     try {
-      const res = await listEmpleados();
+      const res = await getEmpleadosActivos(empresaActual.dbId);
       if (!res.ok) {
         toast.error("No se pudo cargar la lista de empleados");
         return;
       }
-      const opciones: EmpleadoOpcion[] = (res.data as Array<Record<string, unknown>>)
-        .filter((e) => (e.estado as string) === "Activo")
-        .map((e) => {
-          const nombre = `${(e.nombre as string) ?? ""} ${(e.apellidos as string) ?? ""}`.trim();
-          const dep = e.departamentos as { nombre?: string } | null;
-          return { id: e.id as string, nombre, departamento: dep?.nombre ?? "—" };
-        });
+      const opciones: EmpleadoOpcion[] = res.data.map((e) => ({
+        id: e.empleadoId,
+        nombre: e.nombreCompleto,
+        puesto: e.puesto,
+        departamento: e.departamento ?? "—",
+      }));
       setEmpleadosOpts(opciones);
     } finally {
       setCargandoEmpleados(false);
     }
-  }, []);
+  }, [empresaActual.dbId]);
 
   function abrirNuevo() {
     setTitulo("");
@@ -288,7 +288,7 @@ export function FirmasView() {
       return;
     }
     if (f.size > MAX_PDF_BYTES) {
-      toast.error("El PDF supera 10 MB");
+      toast.error(`El PDF supera ${MAX_DOCUMENTO_MB} MB`);
       e.target.value = "";
       return;
     }
@@ -672,6 +672,14 @@ export function FirmasView() {
                       empleadosOpts.map((e) => (
                         <SelectItem key={e.id} value={e.id}>
                           {e.nombre}
+                          {(e.puesto || (e.departamento && e.departamento !== "—")) && (
+                            <span className="text-muted-foreground">
+                              {" — "}
+                              {[e.puesto, e.departamento !== "—" ? e.departamento : null]
+                                .filter(Boolean)
+                                .join(" · ")}
+                            </span>
+                          )}
                         </SelectItem>
                       ))
                     )}
@@ -736,7 +744,7 @@ export function FirmasView() {
             </div>
 
             <div>
-              <Label>PDF a firmar (máx. 10 MB)</Label>
+              <Label>PDF a firmar (máx. {MAX_DOCUMENTO_MB} MB)</Label>
               <label className="mt-1.5 flex items-center gap-2 rounded-md border border-dashed border-border bg-muted/40 px-3 py-3 text-sm cursor-pointer hover:bg-muted/70">
                 <Upload className="h-4 w-4" />
                 <input

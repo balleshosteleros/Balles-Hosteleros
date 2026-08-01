@@ -422,7 +422,16 @@ function ComunicadoEditor({ comunicado, onBack, onSave, empleadosReales, empresa
                 <Label className="text-xs">Creador</Label>
                 <Select value={form.creadorId} onValueChange={v => u({ creadorId: v })}>
                   <SelectTrigger className="mt-1"><SelectValue placeholder="Seleccionar empleado..." /></SelectTrigger>
-                  <SelectContent>{empleadosReales.map(e => <SelectItem key={e.userId} value={e.userId}>{e.nombre} {e.apellidos}</SelectItem>)}</SelectContent>
+                  <SelectContent>{empleadosReales.map(e => (
+                    <SelectItem key={e.userId} value={e.userId}>
+                      {e.nombre} {e.apellidos}
+                      {(e.rolLabel || e.departamento) && (
+                        <span className="text-muted-foreground">
+                          {" — "}{[e.rolLabel, e.departamento].filter(Boolean).join(" · ")}
+                        </span>
+                      )}
+                    </SelectItem>
+                  ))}</SelectContent>
                 </Select>
               </div>
             </div>

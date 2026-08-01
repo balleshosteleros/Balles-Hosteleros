@@ -7,13 +7,13 @@ import { ESTADO_FICHAJE_LABEL, TIPO_FICHAJE_LABEL, TIPO_FICHAJE_BADGE, fichajeCo
 import type { EstadoFichaje, Fichaje, LocalGeo, ConfigFichajes, TipoFichajeCodigo } from "@/features/rrhh/data/fichajes";
 import { listFichajes, crearFichajeManual } from "@/features/rrhh/actions/fichajes-actions";
 import { listTiposFichaje, type TipoFichajeRow } from "@/features/rrhh/actions/horarios-config-actions";
-import { listEmpleados } from "@/features/rrhh/actions/empleados-actions";
+import { getEmpleadosActivos } from "@/features/rrhh/actions/empleados-actions";
 import { FichajeDetalleDialog } from "@/features/rrhh/components/fichajes/FichajeDetalleDialog";
 import { listLocales } from "@/features/ajustes/actions/locales-actions";
 import { TableColumnHeader } from "@/shared/components/TableColumnHeader";
 import { toast } from "sonner";
 
-type EmpleadoOpcion = { id: string; nombre: string };
+type EmpleadoOpcion = { id: string; nombre: string; puesto: string | null; departamento: string | null };
 
 const initialManualForm = () => ({
   empleadoId: "",
@@ -249,19 +249,19 @@ export function FichajesView() {
   const openNuevoDialog = useCallback(async () => {
     setManualForm(initialManualForm());
     setShowNuevo(true);
-    const res = await listEmpleados();
+    const res = await getEmpleadosActivos(empresaActual.dbId);
     if (res.ok) {
-      const opciones: EmpleadoOpcion[] = (res.data as Array<Record<string, unknown>>)
-        .filter((e) => (e.estado as string) === "Activo")
-        .map((e) => ({
-          id: e.id as string,
-          nombre: `${(e.nombre as string) ?? ""} ${(e.apellidos as string) ?? ""}`.trim(),
-        }));
+      const opciones: EmpleadoOpcion[] = res.data.map((e) => ({
+        id: e.empleadoId,
+        nombre: e.nombreCompleto,
+        puesto: e.puesto,
+        departamento: e.departamento,
+      }));
       setEmpleadosOpts(opciones);
     } else {
       toast.error("No se pudo cargar la lista de empleados");
     }
-  }, []);
+  }, [empresaActual.dbId]);
 
   const submitFichajeManual = useCallback(async () => {
     if (!manualForm.empleadoId) {
@@ -573,9 +573,14 @@ export function FichajesView() {
                 onChange={(e) => setManualForm((f) => ({ ...f, empleadoId: e.target.value }))}
               >
                 <option value="">Selecciona un empleado…</option>
-                {empleadosOpts.map((emp) => (
-                  <option key={emp.id} value={emp.id}>{emp.nombre || "—"}</option>
-                ))}
+                {empleadosOpts.map((emp) => {
+                  const extra = [emp.puesto, emp.departamento].filter(Boolean).join(" · ");
+                  return (
+                    <option key={emp.id} value={emp.id}>
+                      {(emp.nombre || "—") + (extra ? ` — ${extra}` : "")}
+                    </option>
+                  );
+                })}
               </select>
             </div>
 

@@ -218,11 +218,15 @@ export function SancionDisciplinariaView() {
               <Select value={form.empleadoId} onValueChange={v => u({ empleadoId: v })}>
                 <SelectTrigger className="mt-1"><SelectValue placeholder="Selecciona al trabajador…" /></SelectTrigger>
                 <SelectContent>
-                  {empleados.map(e => (
-                    <SelectItem key={e.userId} value={e.userId}>
-                      {e.nombre} {e.apellidos}{e.departamento ? ` · ${e.departamento}` : ""}
-                    </SelectItem>
-                  ))}
+                  {empleados.map(e => {
+                    const extra = [e.rolLabel, e.departamento].filter(Boolean).join(" · ");
+                    return (
+                      <SelectItem key={e.userId} value={e.userId}>
+                        {e.nombre} {e.apellidos}
+                        {extra && <span className="text-muted-foreground">{" — "}{extra}</span>}
+                      </SelectItem>
+                    );
+                  })}
                 </SelectContent>
               </Select>
             </div>

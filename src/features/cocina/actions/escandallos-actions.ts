@@ -274,20 +274,24 @@ export async function getCostesIngredientes() {
 // ─── Empleados (creadores) ─────────────────────────────────────────
 
 export async function listEmpleadosCreadores() {
+  type Fila = { id: string; nombre: string; apellidos: string; puesto: string | null; departamento: string | null };
   try {
-    const { supabase, empresaId } = await getAppContext();
-    if (!empresaId) return { ok: false as const, data: [] as { id: string; nombre: string; apellidos: string }[] };
-    const { data, error } = await supabase
-      .from("empleados")
-      .select("id, nombre, apellidos")
-      .eq("empresa_id", empresaId)
-      .eq("estado", "Activo")
-      .order("nombre", { ascending: true });
-    if (error) throw error;
-    return { ok: true as const, data: (data ?? []) as { id: string; nombre: string; apellidos: string }[] };
+    // Fuente única de empleados activos: incluye el puesto REAL (empleado_puestos)
+    // y el departamento, para poder mostrar "puesto · departamento" en el selector.
+    const { getEmpleadosActivos } = await import("@/features/rrhh/actions/empleados-actions");
+    const res = await getEmpleadosActivos();
+    if (!res.ok) return { ok: false as const, data: [] as Fila[] };
+    const data: Fila[] = res.data.map((e) => ({
+      id: e.empleadoId,
+      nombre: e.nombre,
+      apellidos: e.apellidos,
+      puesto: e.puesto,
+      departamento: e.departamento,
+    }));
+    return { ok: true as const, data };
   } catch (err) {
     console.error("[escandallos] listEmpleadosCreadores:", err);
-    return { ok: false as const, data: [] as { id: string; nombre: string; apellidos: string }[] };
+    return { ok: false as const, data: [] as Fila[] };
   }
 }
 

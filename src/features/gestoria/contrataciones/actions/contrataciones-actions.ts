@@ -98,12 +98,24 @@ export async function listEmpleadosActivos(): Promise<{ ok: boolean; data: Emple
     if (!empresaId) return { ok: false, data: [], error: "Sin empresa" };
     const { data, error } = await supabase
       .from("empleados")
-      .select("id, nombre, apellidos, puesto")
+      .select("id, nombre, apellidos, puesto, departamentos(nombre)")
       .eq("empresa_id", empresaId)
       .eq("estado", "Activo")
       .order("nombre", { ascending: true });
     if (error) throw error;
-    return { ok: true, data: (data ?? []) as EmpleadoActivo[] };
+    const filas: EmpleadoActivo[] = (data ?? []).map((e) => {
+      const rec = e as Record<string, unknown>;
+      const depRel = rec.departamentos as { nombre?: string | null } | Array<{ nombre?: string | null }> | null;
+      const depObj = Array.isArray(depRel) ? depRel[0] : depRel;
+      return {
+        id: rec.id as string,
+        nombre: rec.nombre as string,
+        apellidos: (rec.apellidos as string | null) ?? null,
+        puesto: (rec.puesto as string | null) ?? null,
+        departamento: (depObj?.nombre as string | null) ?? null,
+      };
+    });
+    return { ok: true, data: filas };
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Error desconocido";
     console.error("[contrataciones] empleados:", msg);

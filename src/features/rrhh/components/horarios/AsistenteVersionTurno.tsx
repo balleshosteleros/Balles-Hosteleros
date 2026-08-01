@@ -37,7 +37,7 @@ function hoyISO(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
-type EmpleadoMin = { id: string; nombre: string };
+type EmpleadoMin = { id: string; nombre: string; puesto?: string | null };
 
 // ─── Asistente: crear nueva versión de turno ─────────────────────────────
 export function AsistenteVersionTurno({
@@ -243,7 +243,14 @@ export function AsistenteVersionTurno({
                           >
                             {checked && <Check className="h-3 w-3" />}
                           </span>
-                          <span className="truncate">{e.nombre}</span>
+                          <span className="truncate">
+                            {e.nombre}
+                            {e.puesto && (
+                              <span className="text-muted-foreground">
+                                {" — "}{e.puesto}
+                              </span>
+                            )}
+                          </span>
                         </button>
                       );
                     })}
