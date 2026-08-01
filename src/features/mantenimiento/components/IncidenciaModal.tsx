@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
-import { Incidencia, LOCALES, ESTADOS, GRAVEDADES, REPARADORES } from "@/features/empresa/data/mantenimiento";
+import { Incidencia, ESTADOS, GRAVEDADES, REPARADORES } from "@/features/empresa/data/mantenimiento";
 import { getEmpleadosActivos, type EmpleadoActivo } from "@/features/rrhh/actions/empleados-actions";
+import { listLocales } from "@/features/ajustes/actions/locales-actions";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { useAuth } from "@/features/auth/contexts/auth-context";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -20,21 +21,42 @@ interface Props {
 export function IncidenciaModal({ open, onClose, onSave, item }: Props) {
   const isEdit = !!item;
   const { empresaActual } = useEmpresa();
-  const { profile } = useAuth();
+  const { user, profile } = useAuth();
   const miNombre = `${profile?.nombre ?? ""} ${profile?.apellidos ?? ""}`.trim();
 
   const [empleados, setEmpleados] = useState<EmpleadoActivo[]>([]);
+  const [locales, setLocales] = useState<string[]>([]);
   useEffect(() => {
     let alive = true;
     getEmpleadosActivos(empresaActual.dbId).then((r) => {
-      if (alive) setEmpleados(r.ok ? r.data : []);
+      if (!alive) return;
+      const lista = r.ok ? r.data : [];
+      setEmpleados(lista);
+      // Al crear, preseleccionar por defecto al empleado de la sesión (emparejado
+      // por userId con el desplegable) para que coincida exactamente su nombre.
+      if (!item) {
+        const yo = lista.find((e) => e.userId && e.userId === user?.id);
+        if (yo) {
+          setForm((p) => (p.apuntaDesperfecto ? p : { ...p, apuntaDesperfecto: yo.nombreCompleto }));
+        }
+      }
+    });
+    // Locales reales grabados en esta empresa (fuente única: Ajustes → Locales).
+    listLocales(empresaActual.dbId).then((r) => {
+      if (!alive) return;
+      const nombres = r.ok ? r.data.filter((l) => l.activo).map((l) => l.nombre) : [];
+      setLocales(nombres);
+      // Si es alta y aún no hay local elegido, pre-seleccionar el primero de la empresa.
+      if (!item && nombres.length > 0) {
+        setForm((p) => (p.local ? p : { ...p, local: nombres[0] }));
+      }
     });
     return () => { alive = false; };
-  }, [empresaActual.dbId]);
+  }, [empresaActual.dbId, item, user?.id]);
 
   const [form, setForm] = useState<Omit<Incidencia, "id">>({
     desperfecto: item?.desperfecto ?? "",
-    local: item?.local ?? LOCALES[0],
+    local: item?.local ?? "",
     estado: item?.estado ?? "PENDIENTE",
     gravedad: item?.gravedad ?? "LEVE",
     apuntaDesperfecto: item?.apuntaDesperfecto ?? miNombre,
@@ -72,8 +94,13 @@ export function IncidenciaModal({ open, onClose, onSave, item }: Props) {
           <div>
             <Label>Local</Label>
             <Select value={form.local} onValueChange={(v) => set("local", v)}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>{LOCALES.map((l) => <SelectItem key={l} value={l}>{l}</SelectItem>)}</SelectContent>
+              <SelectTrigger><SelectValue placeholder="Selecciona local" /></SelectTrigger>
+              <SelectContent>
+                {form.local && !locales.includes(form.local) && (
+                  <SelectItem value={form.local}>{form.local}</SelectItem>
+                )}
+                {locales.map((l) => <SelectItem key={l} value={l}>{l}</SelectItem>)}
+              </SelectContent>
             </Select>
           </div>
           <div>
@@ -91,7 +118,7 @@ export function IncidenciaModal({ open, onClose, onSave, item }: Props) {
             </Select>
           </div>
           <div>
-            <Label>Apunta desperfecto</Label>
+            <Label>Apuntado por</Label>
             <Select value={form.apuntaDesperfecto} onValueChange={(v) => set("apuntaDesperfecto", v)}>
               <SelectTrigger><SelectValue placeholder="Selecciona empleado" /></SelectTrigger>
               <SelectContent>

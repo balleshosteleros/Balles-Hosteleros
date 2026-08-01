@@ -2,11 +2,12 @@
 
 import { useState, useMemo, useEffect, useCallback, type ReactNode } from "react";
 import {
-  type Incidencia, type Actualizacion, LOCALES, ESTADOS, GRAVEDADES, REPARADORES,
+  type Incidencia, type Actualizacion, ESTADOS, GRAVEDADES, REPARADORES,
   type Estado, type Gravedad,
 } from "@/features/empresa/data/mantenimiento";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { getEmpleadosActivos, type EmpleadoActivo } from "@/features/rrhh/actions/empleados-actions";
+import { listLocales } from "@/features/ajustes/actions/locales-actions";
 import { listMantenimiento, createIncidenciaMantenimiento, updateIncidencia, addActualizacion as serverAddActualizacion } from "@/features/gerencia/actions/mantenimiento-actions";
 import { toast } from "sonner";
 import { StatusBadge, GravedadBadge } from "@/features/mantenimiento/components/Badges";
@@ -50,6 +51,7 @@ export function MantenimientoView() {
   const { setDatos: setContextData, empresaActual } = useEmpresa();
   const [data, setData] = useState<Incidencia[]>([]);
   const [empleados, setEmpleados] = useState<EmpleadoActivo[]>([]);
+  const [locales, setLocales] = useState<string[]>([]);
   const [, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [filtros, setFiltros] = useState<ToolbarFiltroActivo[]>([]);
@@ -87,6 +89,10 @@ export function MantenimientoView() {
     let alive = true;
     getEmpleadosActivos(empresaActual.dbId).then((r) => {
       if (alive) setEmpleados(r.ok ? r.data : []);
+    });
+    // Locales reales grabados en esta empresa (fuente única: Ajustes → Locales).
+    listLocales(empresaActual.dbId).then((r) => {
+      if (alive) setLocales(r.ok ? r.data.filter((l) => l.activo).map((l) => l.nombre) : []);
     });
     return () => { alive = false; };
   }, [empresaActual.dbId]);
@@ -190,7 +196,7 @@ export function MantenimientoView() {
     { campo: "local", label: "Local" },
     { campo: "estado", label: "Estado" },
     { campo: "gravedad", label: "Gravedad" },
-    { campo: "apuntaDesperfecto", label: "Apunta desperfecto" },
+    { campo: "apuntaDesperfecto", label: "Apuntado por" },
     { campo: "reparador", label: "Reparador" },
     { campo: "fechaPublicado", label: "Fecha" },
     { campo: "comentarios", label: "Comentarios" },
@@ -238,7 +244,7 @@ export function MantenimientoView() {
           label="Local"
           campo="local"
           filtroTipo="lista"
-          opciones={LOCALES}
+          opciones={locales}
           filtros={filtros}
           onFiltrosChange={setFiltros}
           ordenable
@@ -249,8 +255,13 @@ export function MantenimientoView() {
       td: (item) => (
         <td key="local" className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
           <Select value={item.local} onValueChange={(v) => updateField(item.id, "local", v)}>
-            <SelectTrigger className="h-8 text-xs w-[110px]"><SelectValue /></SelectTrigger>
-            <SelectContent>{LOCALES.map((l) => <SelectItem key={l} value={l}>{l}</SelectItem>)}</SelectContent>
+            <SelectTrigger className="h-8 text-xs w-[110px]"><SelectValue placeholder="Local" /></SelectTrigger>
+            <SelectContent>
+              {item.local && !locales.includes(item.local) && (
+                <SelectItem value={item.local}>{item.local}</SelectItem>
+              )}
+              {locales.map((l) => <SelectItem key={l} value={l}>{l}</SelectItem>)}
+            </SelectContent>
           </Select>
         </td>
       ),
@@ -307,7 +318,7 @@ export function MantenimientoView() {
       th: (
         <TableColumnHeader
           key="apuntaDesperfecto"
-          label="Apunta desperfecto"
+          label="Apuntado por"
           campo="apuntaDesperfecto"
           filtroTipo="lista"
           opciones={apuntaOpciones}
