@@ -2,13 +2,22 @@ import { z } from "zod";
 import type { ModuleIO, RowSchema } from "@/shared/io";
 import { listCierres } from "@/features/gerencia/actions/cierres-actions";
 
+const TIPO_LABEL: Record<string, string> = {
+  cierre: "Cierre",
+  retirada: "Retirada",
+  ingreso: "Ingreso",
+};
+
 interface CierreExport {
   id: string;
   fecha: string;
   tipo: string;
-  total: number;
-  efectivo: number;
-  tarjeta: number;
+  semana: string;
+  efectivo_retirado: number;
+  total_contado: number;
+  estado: string;
+  descuadre: number;
+  gastos: number;
   observaciones: string;
 }
 
@@ -16,9 +25,12 @@ const cierreSchema = z.object({
   id: z.string(),
   fecha: z.string(),
   tipo: z.string(),
-  total: z.number(),
-  efectivo: z.number(),
-  tarjeta: z.number(),
+  semana: z.string(),
+  efectivo_retirado: z.number(),
+  total_contado: z.number(),
+  estado: z.string(),
+  descuadre: z.number(),
+  gastos: z.number(),
   observaciones: z.string(),
 });
 
@@ -34,25 +46,28 @@ export const cierresIO: ModuleIO<CierreExport> = {
     { key: "id", label: "ID", hideInImport: true },
     { key: "fecha", label: "Fecha", type: "date", required: true },
     { key: "tipo", label: "Tipo" },
-    { key: "total", label: "Total", type: "number" },
-    { key: "efectivo", label: "Efectivo", type: "number" },
-    { key: "tarjeta", label: "Tarjeta", type: "number" },
+    { key: "semana", label: "Semana" },
+    { key: "efectivo_retirado", label: "Efectivo retirado", type: "number" },
+    { key: "total_contado", label: "Total cierre", type: "number" },
+    { key: "estado", label: "Estado" },
+    { key: "descuadre", label: "Descuadre", type: "number" },
+    { key: "gastos", label: "Gastos", type: "number" },
     { key: "observaciones", label: "Observaciones" },
   ],
   fetchAll: async () => {
     const result = await listCierres();
     if (!result.ok) return [];
-    return (result.data ?? []).map<CierreExport>((c) => {
-      const r = c as unknown as Record<string, unknown>;
-      return {
-        id: String(r.id ?? ""),
-        fecha: typeof r.fecha === "string" ? r.fecha : "",
-        tipo: String(r.tipo ?? ""),
-        total: typeof r.total === "number" ? r.total : 0,
-        efectivo: typeof r.efectivo === "number" ? r.efectivo : 0,
-        tarjeta: typeof r.tarjeta === "number" ? r.tarjeta : 0,
-        observaciones: String(r.observaciones ?? ""),
-      };
-    });
+    return (result.data ?? []).map<CierreExport>((c) => ({
+      id: c.id,
+      fecha: c.fecha,
+      tipo: TIPO_LABEL[c.tipo] ?? c.tipo,
+      semana: c.semana_iso ?? "",
+      efectivo_retirado: c.efectivo_retirado,
+      total_contado: c.total_contado,
+      estado: c.cuadra ? "Cuadra" : c.descuadre >= 0 ? "Sobra" : "Falta",
+      descuadre: c.descuadre,
+      gastos: c.total_gastos,
+      observaciones: c.notas ?? "",
+    }));
   },
 };
