@@ -80,6 +80,11 @@ const DIAS_SEMANA = [
   { value: 6, label: "Domingo" },
 ];
 
+// Nombre reconocible de la programación que se sincroniza automáticamente
+// desde "Día de cierre → Día prefijado". Así "Día prefijado" y "Cierres
+// programados" quedan conectados: elegir un día fijo pinta el calendario.
+const PROG_AUTO_NOMBRE = "Cierre semanal";
+
 // Sugerencias de tipo de gasto (texto libre: solo autocompletado, no lista cerrada).
 const TIPOS_GASTO_SUGERIDOS = [
   "Proveedores", "Personal", "Suministros", "Mantenimiento",
@@ -492,12 +497,44 @@ export function CierresView() {
         dia_semana: cfgForm.modo === "fijo" ? (cfgForm.dia_semana ?? 0) : null,
       };
       const res = await updateCierresConfig(payload);
-      if (res.ok) {
-        toast.success("Ajustes guardados");
-        setConfig(payload);
-      } else {
+      if (!res.ok) {
         toast.error(res.error ?? "Error al guardar ajustes");
+        return;
       }
+
+      // Sincroniza la programación automática para que el "Día prefijado"
+      // se refleje en el calendario (crea/actualiza/desactiva la regla semanal).
+      const progAuto = programaciones.find((p) => p.nombre === PROG_AUTO_NOMBRE);
+      if (payload.modo === "fijo") {
+        const progRes = await upsertCierreProgramacion({
+          id: progAuto?.id,
+          nombre: PROG_AUTO_NOMBRE,
+          intervalo_semanas: 1,
+          dias_semana: [payload.dia_semana as number],
+          fecha_inicio: progAuto?.fecha_inicio ?? today,
+          fecha_fin: null,
+          activo: true,
+        });
+        if (!progRes.ok) {
+          toast.error(progRes.error ?? "Error al programar el día en el calendario");
+          return;
+        }
+      } else if (progAuto?.activo) {
+        // Modo libre: la regla automática deja de pintar el calendario.
+        await upsertCierreProgramacion({
+          id: progAuto.id,
+          nombre: progAuto.nombre,
+          intervalo_semanas: progAuto.intervalo_semanas,
+          dias_semana: progAuto.dias_semana,
+          fecha_inicio: progAuto.fecha_inicio,
+          fecha_fin: progAuto.fecha_fin,
+          activo: false,
+        });
+      }
+
+      toast.success("Ajustes guardados");
+      setConfig(payload);
+      cargar();
     } finally {
       setCfgSaving(false);
     }
