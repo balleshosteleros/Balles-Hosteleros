@@ -185,9 +185,34 @@ export async function listEmpleados() {
       hoyISO,
     );
 
+    // Puesto principal por empleado (fuente única empleado_puestos; se prefiere
+    // el marcado es_principal, con la columna puesto_nombre como respaldo).
+    const puestoPorEmpleado: Record<string, string> = {};
+    if (empleadoIds.length > 0) {
+      const { data: eps } = await admin
+        .from("empleado_puestos")
+        .select("empleado_id, es_principal, puesto_nombre, puestos(nombre)")
+        .in("empleado_id", empleadoIds);
+      for (const r of eps ?? []) {
+        const row = r as unknown as {
+          empleado_id: string;
+          es_principal: boolean;
+          puesto_nombre: string | null;
+          puestos: { nombre?: string | null } | Array<{ nombre?: string | null }> | null;
+        };
+        const puestoRel = Array.isArray(row.puestos) ? row.puestos[0] : row.puestos;
+        const nombrePuesto = puestoRel?.nombre ?? row.puesto_nombre ?? null;
+        if (!nombrePuesto) continue;
+        if (row.es_principal || !puestoPorEmpleado[row.empleado_id]) {
+          puestoPorEmpleado[row.empleado_id] = nombrePuesto;
+        }
+      }
+    }
+
     const enriched = [...porUser.values(), ...sinUser].map((e) => ({
       ...e,
       es_principal: e.empresa_id === empresaId,
+      puesto: puestoPorEmpleado[e.id as string] ?? null,
       empresas_acceso: empresasPorUser[e.user_id as string] ?? [],
       // Foto del empleado: prioriza la copiada en empleados.avatar_url; si no,
       // usa el avatar de sesión (usuarios) como fallback (regla doble fuente).
@@ -593,6 +618,39 @@ export async function updateEmpleado(id: string, updates: UpdateEmpleadoInput) {
 
     const { error } = await supabase.from("empleados").update(patch).eq("id", id);
     if (error) throw error;
+
+    // Reflejo multiempresa: los datos de IDENTIDAD de la persona (nombre,
+    // apellidos, correos, teléfono) son de la persona, no de la relación con una
+    // empresa concreta, por lo que deben propagarse a TODAS las fichas-espejo del
+    // mismo empleado (mismo user_id). En cambio, departamento_id y puesto son
+    // propios de cada empresa y NUNCA se propagan (si se propagaran, un director
+    // multiempresa acabaría con el departamento de otra empresa — el bug que hacía
+    // aparecer a un empleado en dos áreas a la vez).
+    const patchIdentidad: Record<string, unknown> = {};
+    for (const campo of ["nombre", "apellidos", "email_empresa", "email_personal", "telefono"]) {
+      if (campo in patch) patchIdentidad[campo] = patch[campo];
+    }
+    if (Object.keys(patchIdentidad).length > 0) {
+      try {
+        const { data: ficha } = await supabase
+          .from("empleados")
+          .select("user_id")
+          .eq("id", id)
+          .maybeSingle();
+        const uid = ficha?.user_id as string | null;
+        if (uid) {
+          const admin = createAdminClient();
+          await admin
+            .from("empleados")
+            .update(patchIdentidad)
+            .eq("user_id", uid)
+            .neq("id", id);
+        }
+      } catch (e) {
+        // No rompemos el guardado principal si falla el reflejo a las espejo.
+        console.error("[rrhh] updateEmpleado reflejo multiempresa:", e);
+      }
+    }
 
     // Si se han tocado los correos, resincronizar el login (auth.users) con la
     // regla canónica (empresa ?? personal). Solo cambia el identificador de

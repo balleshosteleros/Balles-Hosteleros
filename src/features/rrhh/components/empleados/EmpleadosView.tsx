@@ -69,6 +69,7 @@ type EmpleadoBDRow = {
   telefono: string | null;
   estado: string;
   avatar_url?: string | null;
+  puesto?: string | null;
   departamentos?: { nombre: string } | null;
   areas?: string[];
   es_principal?: boolean;
@@ -121,6 +122,7 @@ function bdToEmpleado(row: EmpleadoBDRow): EmpleadoConAcceso {
     horarioTipo,
     horarioSemanal,
     horasHoy,
+    puesto: row.puesto ?? "—",
     departamento: row.departamentos?.nombre ?? "—",
     areas: row.areas ?? [],
     telefono: row.telefono ?? "—",
@@ -161,11 +163,14 @@ export function EmpleadosView() {
   const [orden, setOrden] = useState<ToolbarOrdenActivo | null>(null);
   const [columnasVisibles, setColumnasVisibles] = useState<ToolbarColumnaVisible>({});
   const [columnasOrden, setColumnasOrden] = useState<string[] | undefined>(undefined);
-  const [seleccionados, setSeleccionados] = useState<Set<string>>(new Set());
   const [showConfig, setShowConfig] = useState(false);
 
   const departamentosUsados = useMemo(
     () => [...new Set(empleados.map((e) => e.departamento).filter((d) => d && d !== "—"))].sort(),
+    [empleados],
+  );
+  const puestosUsados = useMemo(
+    () => [...new Set(empleados.map((e) => e.puesto).filter((p) => p && p !== "—"))].sort(),
     [empleados],
   );
   const empresasUsadas = useMemo(
@@ -187,6 +192,7 @@ export function EmpleadosView() {
       const n = parseFloat(String(e.horasHoy).replace(",", "."));
       return Number.isNaN(n) ? -1 : n;
     }
+    if (campo === "puesto") return e.puesto;
     if (campo === "departamento") return e.departamento;
     if (campo === "area") return e.areas.map(formatArea);
     if (campo === "telefono") return e.telefono;
@@ -199,7 +205,7 @@ export function EmpleadosView() {
 
   const filtrados = useMemo(() => {
     let lista = empleados.filter((e) => {
-      const texto = `${e.nombre} ${e.apellidos} ${e.departamento} ${e.emailEmpresa} ${e.emailPersonal} ${e.telefono}`.toLowerCase();
+      const texto = `${e.nombre} ${e.apellidos} ${e.puesto} ${e.departamento} ${e.emailEmpresa} ${e.emailPersonal} ${e.telefono}`.toLowerCase();
       if (busqueda && !texto.includes(busqueda.toLowerCase())) return false;
       return true;
     });
@@ -228,27 +234,13 @@ export function EmpleadosView() {
     return lista;
   }, [empleados, busqueda, filtros, orden]);
 
-  const todosSeleccionados = filtrados.length > 0 && filtrados.every((e) => seleccionados.has(e.id));
-
-  function toggleAll() {
-    if (todosSeleccionados) setSeleccionados(new Set());
-    else setSeleccionados(new Set(filtrados.map((e) => e.id)));
-  }
-
-  function toggleOne(id: string) {
-    setSeleccionados((prev) => {
-      const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
-      return next;
-    });
-  }
-
   const columnasDef: ToolbarColumna[] = [
     { campo: "empleado", label: "Empleado", bloqueada: true },
     { campo: "empresas", label: "Empresas" },
     { campo: "estado", label: "Estado" },
     { campo: "horario", label: "Horario" },
     { campo: "horasHoy", label: "Horas hoy" },
+    { campo: "puesto", label: "Puesto" },
     { campo: "departamento", label: "Departamento" },
     { campo: "area", label: "Área" },
     { campo: "telefono", label: "Teléfono" },
@@ -372,6 +364,23 @@ export function EmpleadosView() {
       ),
       td: (emp) => (
         <td key="horasHoy" className="px-3 py-2 align-middle text-center"><span className="text-sm text-muted-foreground">{emp.horasHoy}</span></td>
+      ),
+    },
+    puesto: {
+      th: (
+        <TableColumnHeader
+          key="puesto"
+          label="Puesto"
+          campo="puesto"
+          align="center"
+          filtroTipo="lista"
+          opciones={puestosUsados}
+          filtros={filtros}
+          onFiltrosChange={setFiltros}
+        />
+      ),
+      td: (emp) => (
+        <td key="puesto" className="px-3 py-2 align-middle text-center"><span className="text-sm font-semibold text-foreground">{emp.puesto}</span></td>
       ),
     },
     departamento: {
@@ -554,36 +563,32 @@ export function EmpleadosView() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b bg-muted/30">
-                <th className="w-10 pl-4 py-1.5"><Checkbox checked={todosSeleccionados} onCheckedChange={toggleAll} /></th>
                 {columnasRender.map((c) => columnDefs[c.campo]?.th)}
               </tr>
             </thead>
             <tbody>
               {filtrados.map((emp) => (
                 <tr key={emp.id} className="cursor-pointer h-16 border-b last:border-0 hover:bg-muted/30 transition-colors" onClick={() => router.push(`/rrhh/empleados/${emp.id}`)}>
-                  <td className="pl-4 align-middle" onClick={(e) => e.stopPropagation()}>
-                    <Checkbox checked={seleccionados.has(emp.id)} onCheckedChange={() => toggleOne(emp.id)} />
-                  </td>
                   {columnasRender.map((c) => columnDefs[c.campo]?.td(emp))}
                 </tr>
               ))}
               {loading && empleados.length === 0 && (
                 <tr>
-                  <td colSpan={columnasRender.length + 1} className="text-center py-12 text-muted-foreground">
+                  <td colSpan={columnasRender.length} className="text-center py-12 text-muted-foreground">
                     Cargando empleados…
                   </td>
                 </tr>
               )}
               {!loading && empleados.length === 0 && (
                 <tr>
-                  <td colSpan={columnasRender.length + 1} className="text-center py-12 text-muted-foreground">
+                  <td colSpan={columnasRender.length} className="text-center py-12 text-muted-foreground">
                     No hay empleados todavía. Los empleados se incorporan desde el <span className="font-medium text-foreground">portal de empleo</span> (Reclutamiento → contratación).
                   </td>
                 </tr>
               )}
               {!loading && empleados.length > 0 && filtrados.length === 0 && (
                 <tr>
-                  <td colSpan={columnasRender.length + 1} className="text-center py-12 text-muted-foreground">
+                  <td colSpan={columnasRender.length} className="text-center py-12 text-muted-foreground">
                     No se encontraron empleados con los filtros seleccionados.
                   </td>
                 </tr>

@@ -9,6 +9,7 @@ export interface EmpleadoUI {
   horarioTipo: string;
   horarioSemanal: string;
   horasHoy: string;
+  puesto: string;
   departamento: string;
   areas: string[];
   telefono: string;

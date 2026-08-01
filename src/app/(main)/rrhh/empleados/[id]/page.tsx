@@ -110,6 +110,7 @@ function bdToEmpleadoUI(emp: EmpleadoBD): EmpleadoUI {
     horarioTipo: "—",
     horarioSemanal: "—",
     horasHoy: "—",
+    puesto: emp.puesto ?? "—",
     departamento: emp.departamentos?.nombre ?? "—",
     areas: [],
     telefono: emp.telefono ?? "—",
