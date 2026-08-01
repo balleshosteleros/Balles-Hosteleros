@@ -303,12 +303,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             const fetchedPermisos = permisosRes?.permisos ?? [];
             const fetchedEsAdmin = permisosRes?.esAdminPlataforma ?? false;
 
+            // El PERFIL (nombre/rol/avatar) y los PERMISOS son fetches
+            // independientes. El perfil se aplica SIEMPRE que llegue, sin esperar
+            // a los permisos: antes se descartaba un perfil válido si el fetch de
+            // permisos fallaba (return temprano abajo), y la cabecera se quedaba
+            // en "—" y avatar vacío aunque el perfil sí hubiera cargado.
+            if (nextProfile) {
+              setProfile(nextProfile);
+              writeProfileCache(userId, nextProfile);
+            }
+
             // Race justo tras el login: el server action corre antes de que las
             // cookies de sesión estén propagadas, así que auth.getUser() devuelve
             // null y getUserPermisos retorna empresaId null + appRoles []. Sin
             // caché previo (p.ej. incógnito) eso pintaba "No tienes departamentos"
             // en falso. Mientras parezca un fallo de carrera, NO marcamos como
             // cargado: mantenemos el skeleton y reintentamos con backoff corto.
+            // (El perfil ya se aplicó arriba; esto solo afecta a permisos.)
             const looksRaceFailure =
               permisosRes === null || permisosRes.empresaId == null;
             if (looksRaceFailure && attempt < 3) {
@@ -332,12 +343,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               );
             }
 
-            if (nextProfile) {
-              setProfile(nextProfile);
-              // Persistimos el perfil fresco para que el próximo arranque pinte
-              // nombre/rol/avatar al instante (stale-while-revalidate).
-              writeProfileCache(userId, nextProfile);
-            }
             setRoles(nextRoles);
             setPermisos(nextPermisos);
             setEsAdminPlataforma(nextEsAdmin);
