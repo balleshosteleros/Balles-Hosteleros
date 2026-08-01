@@ -440,3 +440,66 @@ export async function getCondicionesVigentesEmpleado(
     },
   };
 }
+
+/** Una fila del histórico de puestos/condiciones del empleado. */
+export interface CondicionHistorica {
+  puesto: string | null;
+  nivel: number | null;
+  salarioNeto: number | null;
+  jornada: string | null;
+  horasSemanales: number | null;
+  tipoContrato: string | null;
+  motivo: string | null;
+  vigenteDesde: string | null;
+  vigenteHasta: string | null;
+  vigente: boolean;
+}
+
+/**
+ * Histórico COMPLETO de condiciones/puesto de un empleado (todas las filas de
+ * `empleado_condiciones`), la vigente primero. Solo lectura — el histórico solo
+ * se escribe al contratar (motivo 'alta') o al cambiar de puesto (motivo
+ * 'promocion') desde el módulo Puestos.
+ */
+export async function getHistorialCondicionesEmpleado(
+  empleadoId: string,
+): Promise<{ ok: boolean; data: CondicionHistorica[] }> {
+  const { user, empresaId } = await getActor();
+  if (!user || !empresaId) return { ok: false, data: [] };
+  try {
+    await requireAdminUser({ empresaIds: [empresaId] });
+  } catch {
+    return { ok: false, data: [] };
+  }
+  let admin: Admin;
+  try {
+    admin = createAdminClient();
+  } catch {
+    return { ok: false, data: [] };
+  }
+
+  const { data: rows } = await admin
+    .from("empleado_condiciones")
+    .select(
+      "puesto_nombre, nivel, salario_neto, jornada_contrato, horas_semanales, tipo_contrato, motivo, vigente_desde, vigente_hasta",
+    )
+    .eq("empleado_id", empleadoId)
+    .eq("empresa_id", empresaId)
+    .order("vigente_desde", { ascending: false, nullsFirst: false });
+
+  const data: CondicionHistorica[] = (rows ?? []).map((r) => ({
+    puesto: (r.puesto_nombre as string | null) ?? null,
+    nivel: (r.nivel as number | null) ?? null,
+    salarioNeto: (r.salario_neto as number | null) ?? null,
+    jornada: (r.jornada_contrato as string | null) ?? null,
+    horasSemanales: (r.horas_semanales as number | null) ?? null,
+    tipoContrato: (r.tipo_contrato as string | null) ?? null,
+    motivo: (r.motivo as string | null) ?? null,
+    vigenteDesde: (r.vigente_desde as string | null) ?? null,
+    vigenteHasta: (r.vigente_hasta as string | null) ?? null,
+    vigente: r.vigente_hasta == null,
+  }));
+  // La fila vigente (vigente_hasta null) siempre primero.
+  data.sort((a, b) => Number(b.vigente) - Number(a.vigente));
+  return { ok: true, data };
+}

@@ -18,6 +18,7 @@ import { DocumentosIdentificativosCard } from "@/features/rrhh/components/emplea
 import { InspeccionesEmpleadoTab } from "@/features/rrhh/components/empleados/InspeccionesEmpleadoTab";
 import { CuestionariosEmpleadoTab } from "@/features/rrhh/components/empleados/CuestionariosEmpleadoTab";
 import { PagosEmpleadoTab } from "@/features/rrhh/components/empleados/PagosEmpleadoTab";
+import { PuestosEmpleadoTab } from "@/features/rrhh/components/empleados/PuestosEmpleadoTab";
 import { ValidadoresEmpleadoCard } from "@/features/rrhh/components/empleados/ValidadoresEmpleadoCard";
 import { CalendarioVacacionesEmpleadoCard } from "@/features/rrhh/components/empleados/CalendarioVacacionesEmpleadoCard";
 import {
@@ -43,7 +44,7 @@ import { cn } from "@/shared/lib/utils";
 import {
   User,
   Fingerprint, Inbox, FileSignature, Calendar, Timer,
-  UserRoundSearch, Gift, Trophy, Euro,
+  UserRoundSearch, Gift, Trophy, Euro, Briefcase,
   GraduationCap, FileQuestion, FileSearch,
   Save, Loader2,
 } from "lucide-react";
@@ -60,7 +61,8 @@ const TOP_TABS = [
   { id: "reclutamiento",   label: "Reclutamiento",  icon: UserRoundSearch   },
   { id: "bonus",           label: "Bonus",          icon: Gift              },
   { id: "points",          label: "Points",         icon: Trophy            },
-  { id: "pagos",           label: "Pagos",          icon: Euro         },
+  { id: "pagos",           label: "Pagos",          icon: Euro              },
+  { id: "puestos",         label: "Puestos",        icon: Briefcase         },
   { id: "formacion",       label: "Formación",      icon: GraduationCap     },
   { id: "cuestionarios",   label: "Cuestionarios",  icon: FileQuestion      },
   { id: "inspecciones",    label: "Inspecciones",   icon: FileSearch        },
@@ -321,6 +323,8 @@ export default function FichaEmpleadoPage() {
         return <SubmoduloPorEmpleadoPlaceholder modulo="Points" path="/rrhh/points" empleado={empleado} />;
       case "pagos":
         return <PagosEmpleadoTab empleadoId={empleadoRegistro.id} />;
+      case "puestos":
+        return <PuestosEmpleadoTab empleadoId={empleadoRegistro.id} />;
       case "formacion":
         return <SubmoduloPorEmpleadoPlaceholder modulo="Formación" path="/rrhh/formacion" empleado={empleado} />;
       case "cuestionarios":
