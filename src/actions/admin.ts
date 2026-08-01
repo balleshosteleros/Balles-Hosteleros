@@ -570,6 +570,54 @@ export async function deleteEmployee(userId: string) {
     return { error: 'Supabase admin no configurado. Configura SUPABASE_SERVICE_ROLE_KEY.' }
   }
 
+  // ─── REGLA DURA: no se borra un empleado YA GRABADO ──────────────────────
+  // Nada de lo que un empleado hizo debe eliminarse: aunque en el futuro se le
+  // deshabilite, todo su historial (fichajes, turnos, documentos, nóminas,
+  // pagos, promociones…) queda guardado como registro legal. Borrar el usuario
+  // de auth.users dispara ON DELETE CASCADE a través de profiles → empleados →
+  // todas sus tablas hijas, destruyendo ese historial de forma irreversible.
+  // Por eso, si el empleado tiene datos, se BLOQUEA el borrado: la única vía es
+  // marcarlo como Inactivo (desde RRHH → Empleados). Solo se permite descartar
+  // altas en borrador sin perfil completado y sin datos.
+  // Misma guarda que `deleteEmpleado` en rrhh/actions/empleados-actions.ts.
+  const { data: emp } = await admin
+    .from('empleados')
+    .select('id, perfil_completado, user_id')
+    .eq('user_id', userId)
+    .maybeSingle()
+
+  let tieneDatos = Boolean(emp?.perfil_completado)
+  if (!tieneDatos) {
+    const [{ count: nFichajes }, { count: nTurnos }, { count: nPatrones }] =
+      await Promise.all([
+        admin
+          .from('fichajes')
+          .select('id', { count: 'exact', head: true })
+          .eq('empleado_id', userId),
+        emp?.id
+          ? admin
+              .from('rrhh_turno_empleados')
+              .select('turno_id', { count: 'exact', head: true })
+              .eq('empleado_id', emp.id)
+          : Promise.resolve({ count: 0 }),
+        emp?.id
+          ? admin
+              .from('rrhh_patron_empleados')
+              .select('patron_id', { count: 'exact', head: true })
+              .eq('empleado_id', emp.id)
+          : Promise.resolve({ count: 0 }),
+      ])
+    tieneDatos =
+      (nFichajes ?? 0) > 0 || (nTurnos ?? 0) > 0 || (nPatrones ?? 0) > 0
+  }
+
+  if (tieneDatos) {
+    return {
+      error:
+        'No se puede borrar un empleado ya grabado (tiene fichajes, turnos, documentos o histórico). Márcalo como Inactivo en su lugar para conservar su registro.',
+    }
+  }
+
   // Limpiamos manualmente las filas dependientes en public.* antes de borrar
   // el usuario en auth.users. Si dejamos que la cascada del FK lo haga, corre
   // como `supabase_auth_admin`, que NO tiene DELETE sobre estas tablas y el
