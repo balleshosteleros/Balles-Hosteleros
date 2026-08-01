@@ -48,8 +48,14 @@ export function FichaEmpleadoHeader({ empleado, onBack, empresas = [] }: Props) 
               <span className={`h-2 w-2 rounded-full ${ESTADOS_COLOR[empleado.estado]}`} />
               <span className="text-sm text-muted-foreground">{ESTADOS_LABEL[empleado.estado]}</span>
             </div>
-            <span className="text-sm text-muted-foreground">·</span>
-            <span className="text-sm text-muted-foreground">{empleado.departamento}</span>
+            {[empleado.puesto, empleado.departamento].filter(Boolean).join(" · ") && (
+              <>
+                <span className="text-sm text-muted-foreground">·</span>
+                <span className="text-sm text-muted-foreground">
+                  {[empleado.puesto, empleado.departamento].filter(Boolean).join(" · ")}
+                </span>
+              </>
+            )}
             {empresas.map((e) => (
               <EmpresaBadge key={e.id} nombre={e.nombre} />
             ))}

@@ -91,7 +91,7 @@ export function DirectorioEmpleados({ onIniciar }: { onIniciar?: () => void }) {
                   <p className="truncate text-sm font-medium">{e.nombreCompleto}</p>
                   <p className="truncate text-xs text-muted-foreground">
                     {online ? "Disponible" : "Desconectado"}
-                    {e.departamento ? ` · ${e.departamento}` : ""}
+                    {(e.puesto ?? e.departamento) ? ` · ${e.puesto ?? e.departamento}` : ""}
                   </p>
                 </div>
                 <button

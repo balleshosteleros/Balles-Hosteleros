@@ -75,21 +75,25 @@ export async function getEmpleadosEmpresa(): Promise<
     const empresaId = await getEmpresaActivaForUser(supabase, user.id);
     if (!empresaId) return { ok: false, error: "Sin empresa activa" };
 
-    const { data, error } = await supabase
-      .from("usuarios")
-      .select("user_id, nombre, apellidos, full_name, departamento, rol_label")
-      .eq("empresa_id", empresaId)
-      .order("nombre", { ascending: true });
+    // Vía RPC SECURITY DEFINER: resuelve el PUESTO real (empleado_puestos) y
+    // filtra solo activos. `rol` etiqueta el cargo del empleado en el dashboard,
+    // así que preferimos el puesto real y caemos al departamento como respaldo
+    // (`rol_label` en este sistema ES el nombre del departamento, no el puesto).
+    const { data, error } = await supabase.rpc("chat_empleados", { p_empresa: empresaId });
     if (error) return { ok: false, error: error.message };
-    const rows = (data ?? [])
+    const rows = ((data ?? []) as Array<Record<string, unknown>>)
       .filter((p) => p.user_id)
       .map((p) => ({
         user_id: p.user_id as string,
         nombre:
-          [p.nombre, p.apellidos].filter(Boolean).join(" ") ||
-          (p.full_name as string | null) ||
-          "(sin nombre)",
-        rol: (p.departamento as string | null) || (p.rol_label as string | null) || "—",
+          [p.nombre as string | null, p.apellidos as string | null]
+            .filter(Boolean)
+            .join(" ") || "(sin nombre)",
+        rol:
+          (p.puesto as string | null) ||
+          (p.departamento as string | null) ||
+          (p.rol_label as string | null) ||
+          "—",
       }));
     return { ok: true, data: rows };
   } catch (e) {
