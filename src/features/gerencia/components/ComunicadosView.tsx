@@ -150,6 +150,7 @@ function ComunicadoEditor({ comunicado, onBack, onSave, empleadosReales, empresa
     if (!q) return true;
     return (
       `${e.nombre} ${e.apellidos}`.toLowerCase().includes(q) ||
+      (e.puesto ?? "").toLowerCase().includes(q) ||
       (e.rolLabel ?? "").toLowerCase().includes(q) ||
       (e.departamento ?? "").toLowerCase().includes(q)
     );
@@ -333,7 +334,7 @@ function ComunicadoEditor({ comunicado, onBack, onSave, empleadosReales, empresa
                                 <div className="flex-1 min-w-0">
                                   <p className="truncate font-medium">{emp.nombre} {emp.apellidos}</p>
                                   <p className="text-[10px] text-muted-foreground truncate">
-                                    {[emp.rolLabel, emp.departamento].filter(Boolean).join(" · ") || "Sin rol"}
+                                    {[emp.puesto ?? emp.rolLabel, emp.departamento].filter(Boolean).join(" · ") || "Sin rol"}
                                   </p>
                                 </div>
                               </label>
@@ -425,9 +426,9 @@ function ComunicadoEditor({ comunicado, onBack, onSave, empleadosReales, empresa
                   <SelectContent>{empleadosReales.map(e => (
                     <SelectItem key={e.userId} value={e.userId}>
                       {e.nombre} {e.apellidos}
-                      {(e.rolLabel || e.departamento) && (
+                      {((e.puesto ?? e.rolLabel) || e.departamento) && (
                         <span className="text-muted-foreground">
-                          {" — "}{[e.rolLabel, e.departamento].filter(Boolean).join(" · ")}
+                          {" — "}{[e.puesto ?? e.rolLabel, e.departamento].filter(Boolean).join(" · ")}
                         </span>
                       )}
                     </SelectItem>

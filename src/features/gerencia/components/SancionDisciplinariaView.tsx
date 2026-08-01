@@ -98,7 +98,7 @@ function PrototipoSancion({ form, empleado, empresaNombre }: {
       </div>
       <Separator />
       <div className="px-6 py-4 space-y-3 text-sm">
-        <Campo label="Trabajador/a" value={`${nombre}${empleado?.rolLabel ? ` · ${empleado.rolLabel}` : ""}`} />
+        <Campo label="Trabajador/a" value={`${nombre}${(empleado?.puesto ?? empleado?.rolLabel) ? ` · ${empleado?.puesto ?? empleado?.rolLabel}` : ""}`} />
         <Campo label="Departamento" value={empleado?.departamento || "—"} />
         <Campo label="Calificación de la falta" value={gravLabel} />
         <Campo label="Fecha de los hechos" value={fmtFechaCorta(form.fechaHechos || null)} />
@@ -219,7 +219,7 @@ export function SancionDisciplinariaView() {
                 <SelectTrigger className="mt-1"><SelectValue placeholder="Selecciona al trabajador…" /></SelectTrigger>
                 <SelectContent>
                   {empleados.map(e => {
-                    const extra = [e.rolLabel, e.departamento].filter(Boolean).join(" · ");
+                    const extra = [e.puesto ?? e.rolLabel, e.departamento].filter(Boolean).join(" · ");
                     return (
                       <SelectItem key={e.userId} value={e.userId}>
                         {e.nombre} {e.apellidos}

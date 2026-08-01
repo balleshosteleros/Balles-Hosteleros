@@ -24,6 +24,8 @@ import {
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
+// Límite del ANÁLISIS por IA (Gemini), no de la subida. La subida/guardado admite
+// hasta 50 MB; para el OCR automático mantenemos 10 MB (lo que el modelo lee fiable).
 const MAX_IMG_BYTES = 10 * 1024 * 1024;
 // Gemini lee imágenes Y PDFs, así que aceptamos ambos para autocompletar.
 const TIPOS_IA = new Set(["image/png", "image/jpeg", "image/webp", "image/heic", "image/heif", "application/pdf"]);

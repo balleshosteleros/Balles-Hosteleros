@@ -12,6 +12,7 @@
  */
 import { NextResponse } from "next/server";
 import { createClient as createServiceClient } from "@supabase/supabase-js";
+import { MAX_DOCUMENTO_MB, MAX_DOCUMENTO_BYTES } from "@/shared/lib/documentos";
 import { z } from "zod";
 import {
   esDniNieValido,
@@ -28,7 +29,7 @@ export const runtime = "nodejs";
 // Subida de 5 documentos: damos margen de tiempo para conexiones lentas.
 export const maxDuration = 60;
 
-const MAX_DOC_BYTES = 10 * 1024 * 1024;
+const MAX_DOC_BYTES = MAX_DOCUMENTO_BYTES; // 50 MB (tope unificado de documentos)
 const TIPOS_OK: Record<string, string> = {
   "application/pdf": "pdf",
   "image/png": "png",
@@ -65,7 +66,7 @@ async function subirDoc(
   tipo: string,
 ): Promise<{ path: string | null; error?: string }> {
   if (!file || file.size === 0) return { path: null };
-  if (file.size > MAX_DOC_BYTES) return { path: null, error: `${tipo}: supera 10MB` };
+  if (file.size > MAX_DOC_BYTES) return { path: null, error: `${tipo}: supera ${MAX_DOCUMENTO_MB} MB` };
   const ext = TIPOS_OK[file.type];
   if (!ext) return { path: null, error: `${tipo}: formato no admitido` };
 

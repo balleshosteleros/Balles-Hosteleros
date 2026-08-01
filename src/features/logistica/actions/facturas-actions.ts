@@ -26,6 +26,7 @@ import type {
   LineaFactura,
   OcrFacturaResultado,
 } from "@/features/logistica/types/facturas";
+import { MAX_DOCUMENTO_MB, MAX_DOCUMENTO_BYTES } from "@/shared/lib/documentos";
 
 const BUCKET = "logistica-facturas";
 const SIGNED_URL_TTL = 60 * 60; // 1h
@@ -308,7 +309,7 @@ export async function subirAdjuntoFactura(formData: FormData): Promise<ActionRes
     const file = formData.get("file") as File | null;
     if (!facturaId) return fail("Falta facturaId");
     if (!file || file.size === 0) return fail("No se recibió ningún archivo");
-    if (file.size > 20 * 1024 * 1024) return fail("El archivo supera los 20 MB");
+    if (file.size > MAX_DOCUMENTO_BYTES) return fail(`El archivo supera los ${MAX_DOCUMENTO_MB} MB`);
 
     const safe = sanitizeFilename(file.name);
     const path = `${empresaId}/${facturaId}/${Date.now()}_${safe}`;

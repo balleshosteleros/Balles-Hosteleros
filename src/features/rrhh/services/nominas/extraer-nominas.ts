@@ -20,7 +20,10 @@ import type { NominaLeida } from "@/features/rrhh/services/nominas/procesar-nomi
 
 export { GeminiKeyMissingError };
 
-export const MAX_NOMINAS_BYTES = 25 * 1024 * 1024; // un PDF con todas las nóminas pesa
+// Límite del ANÁLISIS por IA (Gemini), no de la subida: el archivo puede
+// guardarse hasta 50 MB (tope de documentos), pero para la extracción automática
+// mantenemos 25 MB para no exceder lo que el modelo procesa de forma fiable.
+export const MAX_NOMINAS_BYTES = 25 * 1024 * 1024;
 const MAX_PAGINAS = 200; // salvaguarda: un mes de nóminas no llega a esto
 // Gemini lee PDF de forma nativa además de las imágenes habituales.
 export const TIPOS_NOMINA_OK = new Set([

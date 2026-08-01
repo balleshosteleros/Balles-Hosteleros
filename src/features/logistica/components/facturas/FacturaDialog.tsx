@@ -38,6 +38,7 @@ import {
 import type { Factura } from "@/features/logistica/types/facturas";
 import { FacturaComparativa } from "./FacturaComparativa";
 import { formatEur } from "@/shared/lib/numero";
+import { MAX_DOCUMENTO_MB } from "@/shared/lib/documentos";
 
 interface Props {
   open: boolean;
@@ -298,7 +299,7 @@ export function FacturaDialog({ open, facturaId, onOpenChange, onChanged }: Prop
                     <Upload className="h-8 w-8 mx-auto opacity-50" />
                     <div>Arrastra el PDF o la foto aquí</div>
                     <div className="text-[10px]">
-                      Formatos: PDF, JPG, PNG, WEBP, HEIC · máx 20 MB
+                      Formatos: PDF, JPG, PNG, WEBP, HEIC · máx {MAX_DOCUMENTO_MB} MB
                     </div>
                   </div>
                 )}

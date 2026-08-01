@@ -18,10 +18,11 @@ import {
   type LineaEmparejada,
 } from "@/features/logistica/actions/asistente-albaran-actions";
 import { ESTADO_REVISION } from "@/features/logistica/data/albaranes";
+import { MAX_DOCUMENTO_MB } from "@/shared/lib/documentos";
 
 export type PasoSubirAlbaran = "elegir" | "analizando" | "verificar" | "guardando";
 
-export const MAX_FILE_MB = 20;
+export const MAX_FILE_MB = MAX_DOCUMENTO_MB; // 50 MB (tope unificado de documentos)
 
 interface UseSubirAlbaranOpts {
   /** Fecha ISO a usar si el OCR no detecta fecha. Si no se pasa, se usa la fecha local del dispositivo. */

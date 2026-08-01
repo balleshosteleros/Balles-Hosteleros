@@ -36,6 +36,9 @@ export interface EmpleadoSelector {
   apellidos: string;
   rolLabel: string | null;
   departamento: string | null;
+  /** Puesto REAL (p. ej. "CANTANTE"). `rolLabel` es el nombre del departamento
+   *  en este sistema, por eso para "puesto · departamento" se usa este campo. */
+  puesto: string | null;
 }
 
 export async function listEmpleadosParaComunicado(): Promise<{
@@ -46,11 +49,9 @@ export async function listEmpleadosParaComunicado(): Promise<{
   try {
     const { supabase, empresaId } = await getContext();
     if (!empresaId) return { ok: false, data: [], error: "No autenticado" };
-    const { data, error } = await supabase
-      .from("usuarios")
-      .select("user_id, nombre, apellidos, rol_label, departamento")
-      .eq("empresa_id", empresaId)
-      .order("nombre", { ascending: true });
+    // Vía RPC SECURITY DEFINER: resuelve el PUESTO real (empleado_puestos) y
+    // filtra solo activos. usuarios tiene RLS que solo deja ver el propio perfil.
+    const { data, error } = await supabase.rpc("chat_empleados", { p_empresa: empresaId });
     if (error) throw error;
     return {
       ok: true,
@@ -62,6 +63,7 @@ export async function listEmpleadosParaComunicado(): Promise<{
           apellidos: (r.apellidos as string) ?? "",
           rolLabel: (r.rol_label as string | null) ?? null,
           departamento: (r.departamento as string | null) ?? null,
+          puesto: (r.puesto as string | null) ?? null,
         })),
     };
   } catch (err: unknown) {

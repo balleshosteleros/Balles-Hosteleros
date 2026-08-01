@@ -26,8 +26,9 @@ export const ALLOWED_MIMES = [
 
 export type AllowedMime = (typeof ALLOWED_MIMES)[number];
 
-export const MAX_FILE_BYTES = 2 * 1024 * 1024;     // 2 MB por archivo
-export const MAX_BYTES_EMPRESA = 8 * 1024 * 1024;  // 8 MB totales por empresa
+// Tope por archivo unificado (50 MB, @/shared/lib/documentos).
+export { MAX_DOCUMENTO_BYTES as MAX_FILE_BYTES } from "@/shared/lib/documentos";
+export const MAX_BYTES_EMPRESA = 500 * 1024 * 1024;  // 500 MB totales por empresa (docs de dirección)
 export const MAX_DOCS_CARPETA = 50;
 export const MAX_DOCS_EMPRESA = 50;
 

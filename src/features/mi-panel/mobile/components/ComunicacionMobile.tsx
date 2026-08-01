@@ -148,7 +148,7 @@ export function ComunicacionMobile() {
     if (!q) return empleados;
     return empleados.filter((e) => {
       const full = `${e.nombre} ${e.apellidos}`.toLowerCase();
-      return full.includes(q) || (e.rolLabel ?? "").toLowerCase().includes(q) || (e.departamento ?? "").toLowerCase().includes(q);
+      return full.includes(q) || (e.puesto ?? "").toLowerCase().includes(q) || (e.rolLabel ?? "").toLowerCase().includes(q) || (e.departamento ?? "").toLowerCase().includes(q);
     });
   }, [empleados, buscaEmp]);
 
@@ -483,7 +483,7 @@ export function ComunicacionMobile() {
                             <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-muted text-[10px] font-bold">{ini || "—"}</div>
                             <div className="min-w-0 flex-1">
                               <p className="truncate text-sm font-medium">{e.nombre} {e.apellidos}</p>
-                              <p className="truncate text-[11px] text-muted-foreground">{[e.rolLabel, e.departamento].filter(Boolean).join(" · ") || "Sin rol"}</p>
+                              <p className="truncate text-[11px] text-muted-foreground">{[e.puesto ?? e.rolLabel, e.departamento].filter(Boolean).join(" · ") || "Sin rol"}</p>
                             </div>
                           </div>
                         );
@@ -578,7 +578,7 @@ export function ComunicacionMobile() {
                     <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-muted text-[10px] font-bold">{ini || "—"}</div>
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-medium">{e.nombre} {e.apellidos}</p>
-                      <p className="truncate text-[11px] text-muted-foreground">{[e.rolLabel, e.departamento].filter(Boolean).join(" · ") || "Sin rol"}</p>
+                      <p className="truncate text-[11px] text-muted-foreground">{[e.puesto ?? e.rolLabel, e.departamento].filter(Boolean).join(" · ") || "Sin rol"}</p>
                     </div>
                   </button>
                 );

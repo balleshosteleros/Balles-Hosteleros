@@ -14,9 +14,10 @@ import { crearFirmaInterno } from "@/features/rrhh/services/firmas/crear-firma";
 import { getReclutamientoConfigPorEmpresa } from "@/features/rrhh/actions/gestoria-config-server";
 import { resolverPlantillaOnboarding, PLANTILLAS_ONBOARDING } from "@/features/rrhh/services/email-plantillas/resolver";
 import { getSiteUrl as getSiteUrlCentral } from "@/lib/site-url";
+import { MAX_DOCUMENTO_MB, MAX_DOCUMENTO_BYTES } from "@/shared/lib/documentos";
 
 const BUCKET_STAGING = "contratos-gestoria";
-const MAX_PDF_BYTES = 10 * 1024 * 1024;
+const MAX_PDF_BYTES = MAX_DOCUMENTO_BYTES; // 50 MB (tope unificado de documentos)
 
 /**
  * URL base pública del software. Reexporta el helper central `@/lib/site-url`
@@ -177,7 +178,7 @@ export async function procesarSubidaContrato(
 ): Promise<{ ok: true } | { ok: false; error: string; status: number }> {
   if (file.type !== "application/pdf") return { ok: false, error: "El contrato debe ser un PDF", status: 400 };
   if (file.size === 0) return { ok: false, error: "Adjunta el contrato (PDF)", status: 400 };
-  if (file.size > MAX_PDF_BYTES) return { ok: false, error: "El PDF supera 10 MB", status: 400 };
+  if (file.size > MAX_PDF_BYTES) return { ok: false, error: `El PDF supera ${MAX_DOCUMENTO_MB} MB`, status: 400 };
 
   const { data: emp } = await admin
     .from("empleados")

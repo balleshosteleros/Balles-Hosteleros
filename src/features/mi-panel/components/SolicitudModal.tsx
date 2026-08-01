@@ -49,6 +49,7 @@ import type {
   SolicitudTipo,
 } from "@/features/mi-panel/types";
 import { DiaTrabajadoAvisoDialog } from "@/features/mi-panel/components/DiaTrabajadoAvisoDialog";
+import { MAX_DOCUMENTO_MB, MAX_DOCUMENTO_BYTES } from "@/shared/lib/documentos";
 
 interface SolicitudModalProps {
   open: boolean;
@@ -61,9 +62,9 @@ type Paso = "tipo" | "subtipo" | "detalle";
 const BAJA_CONTRATO_PREAVISO_MIN = 15;
 const BAJA_CONTRATO_PREAVISO_MAX = 45;
 
-// Parte de baja médica: hasta 3 fotos o PDFs, 10 MB cada uno.
+// Parte de baja médica: hasta 3 fotos o PDFs, 50 MB cada uno (tope de documentos).
 const PARTE_BAJA_MAX = 3;
-const PARTE_BAJA_MAX_BYTES = 10 * 1024 * 1024;
+const PARTE_BAJA_MAX_BYTES = MAX_DOCUMENTO_BYTES;
 const PARTE_BAJA_ACCEPT = "image/*,application/pdf";
 
 function todayISO(): string {
@@ -235,7 +236,7 @@ export function SolicitudModal({ open, onOpenChange, onCreated }: SolicitudModal
     const nuevos: File[] = [];
     for (const f of Array.from(files)) {
       if (f.size > PARTE_BAJA_MAX_BYTES) {
-        toast.error(`"${f.name}" supera los 10 MB.`);
+        toast.error(`"${f.name}" supera los ${MAX_DOCUMENTO_MB} MB.`);
         continue;
       }
       nuevos.push(f);

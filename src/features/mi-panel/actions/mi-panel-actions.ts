@@ -1,6 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { MAX_DOCUMENTO_MB, MAX_DOCUMENTO_BYTES } from "@/shared/lib/documentos";
 import { distanciaMetros } from "@/features/rrhh/utils/geo";
 import { sendEmail } from "@/lib/email/send";
 import { bajaContratoRecibidaEmail } from "@/lib/email/templates/baja-contrato-recibida";
@@ -1688,7 +1689,7 @@ const PARTE_BAJA_MIME_OK = new Set([
   "image/heif",
 ]);
 const PARTE_BAJA_MAX_FICHEROS = 3;
-const PARTE_BAJA_MAX_BYTES = 10 * 1024 * 1024; // 10 MB por fichero
+const PARTE_BAJA_MAX_BYTES = MAX_DOCUMENTO_BYTES; // 50 MB por fichero (tope unificado)
 
 /**
  * Baja médica CON parte adjunto (hasta 3 fotos/PDF). Recibe un `FormData`
@@ -1729,7 +1730,7 @@ export async function crearBajaMedicaConParte(
     }
     for (const f of ficheros) {
       if (f.size > PARTE_BAJA_MAX_BYTES) {
-        return { ok: false, error: `"${f.name}" supera los 10 MB.` };
+        return { ok: false, error: `"${f.name}" supera los ${MAX_DOCUMENTO_MB} MB.` };
       }
       if (!PARTE_BAJA_MIME_OK.has((f.type || "").toLowerCase())) {
         return {

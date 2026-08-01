@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import { UploadCloud, FileText, CheckCircle2, AlertTriangle, Loader2 } from "lucide-react";
+import { MAX_DOCUMENTO_MB, MAX_DOCUMENTO_BYTES } from "@/shared/lib/documentos";
 
 interface Props {
   /** Endpoint POST al que se suben las nóminas. */
@@ -59,8 +60,8 @@ export function SubirNominasView({ endpoint, empresaNombre, mesLabel }: Props) {
       setError("Formato no admitido. Usa un PDF (recomendado) o una imagen.");
       return;
     }
-    if (f.size > 25 * 1024 * 1024) {
-      setError("El archivo supera 25 MB.");
+    if (f.size > MAX_DOCUMENTO_BYTES) {
+      setError(`El archivo supera ${MAX_DOCUMENTO_MB} MB.`);
       return;
     }
     setFile(f);

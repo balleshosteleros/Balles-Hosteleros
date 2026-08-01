@@ -1,10 +1,10 @@
 /* Utilidades de subida de fotos para estudios_apertura.
-   El bucket admite hasta 10 MB; el body de la action acepta el equivalente
-   en base64 (~14 MB) según next.config.ts. Para no enviar archivos enormes,
-   comprimimos en cliente antes de subir (resize a 2000 px máx + JPEG q=0.85).
-   Las fotos de móvil de 8-12 MB acaban en 800 KB-1.5 MB, sin pérdida visual
-   perceptible. */
-export const MAX_FOTO_BYTES = 10 * 1024 * 1024;
+   El bucket admite hasta 50 MB (tope de documentos). Para no enviar archivos
+   enormes por el body de la action, comprimimos en cliente antes de subir
+   (resize a 2000 px máx + JPEG q=0.85). Las fotos de móvil de 8-12 MB acaban
+   en 800 KB-1.5 MB, sin pérdida visual perceptible. */
+import { MAX_DOCUMENTO_BYTES } from "@/shared/lib/documentos";
+export const MAX_FOTO_BYTES = MAX_DOCUMENTO_BYTES;
 const MAX_DIMENSION = 2000;
 const JPEG_QUALITY = 0.85;
 const SKIP_COMPRESSION_BELOW = 800 * 1024;

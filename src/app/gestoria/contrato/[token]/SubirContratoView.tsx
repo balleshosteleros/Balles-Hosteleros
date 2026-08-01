@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import { UploadCloud, FileText, CheckCircle2, AlertTriangle, Loader2 } from "lucide-react";
+import { MAX_DOCUMENTO_MB, MAX_DOCUMENTO_BYTES } from "@/shared/lib/documentos";
 
 interface Props {
   /** Endpoint POST al que se sube el contrato (por-token o por-hash). */
@@ -25,8 +26,8 @@ export function SubirContratoView({ endpoint, trabajador, empresaNombre }: Props
       setError("El contrato debe ser un PDF.");
       return;
     }
-    if (f.size > 10 * 1024 * 1024) {
-      setError("El PDF supera 10 MB.");
+    if (f.size > MAX_DOCUMENTO_BYTES) {
+      setError(`El PDF supera ${MAX_DOCUMENTO_MB} MB.`);
       return;
     }
     setFile(f);

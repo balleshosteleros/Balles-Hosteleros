@@ -9,6 +9,7 @@ import {
   ESTADO_REVISION,
   ESTADOS_COMPRA_CONFIRMADA,
 } from "@/features/logistica/data/albaranes";
+import { MAX_DOCUMENTO_MB, MAX_DOCUMENTO_BYTES } from "@/shared/lib/documentos";
 
 async function getContext() {
   const { supabase, userId, empresaId } = await getLogisticaContext();
@@ -293,7 +294,7 @@ export async function subirDocumentoAlbaran(formData: FormData) {
     const uploadedBy = String(formData.get("uploadedBy") ?? "");
     if (!albaranId) return { ok: false as const, error: "Falta albaranId" };
     if (!file || file.size === 0) return { ok: false as const, error: "No se recibió ningún archivo" };
-    if (file.size > 20 * 1024 * 1024) return { ok: false as const, error: "El archivo supera los 20 MB" };
+    if (file.size > MAX_DOCUMENTO_BYTES) return { ok: false as const, error: `El archivo supera los ${MAX_DOCUMENTO_MB} MB` };
 
     const path = `${empresaId}/${albaranId}/${Date.now()}_${sanitizeFilenameAlb(file.name)}`;
     const { error: upErr } = await supabase.storage

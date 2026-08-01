@@ -14,9 +14,10 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { sha256, generarToken, hashToken } from "@/features/rrhh/services/firmas/crypto";
 import { registrarEvento } from "@/features/rrhh/services/firmas/audit";
 import { enviarInvitacionFirma } from "@/features/rrhh/services/firmas/email";
+import { MAX_DOCUMENTO_MB, MAX_DOCUMENTO_BYTES } from "@/shared/lib/documentos";
 
 const BUCKET = "firmas";
-const MAX_PDF_BYTES = 10 * 1024 * 1024;
+const MAX_PDF_BYTES = MAX_DOCUMENTO_BYTES; // 50 MB (tope unificado de documentos)
 const MODALIDADES = ["click_to_sign", "email_otp", "manuscrita_digital"] as const;
 
 export type ModalidadFirma = (typeof MODALIDADES)[number];
@@ -99,7 +100,7 @@ export async function crearFirmaInterno(
       return { ok: false, error: "PDF vacío o inválido" };
     }
     if (pdf.length > MAX_PDF_BYTES) {
-      return { ok: false, error: "El PDF supera 10 MB" };
+      return { ok: false, error: `El PDF supera ${MAX_DOCUMENTO_MB} MB` };
     }
     if (!empleadoId) return { ok: false, error: "Falta empleado destinatario" };
     if (!titulo) return { ok: false, error: "Falta el título del documento" };

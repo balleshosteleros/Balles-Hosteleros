@@ -385,6 +385,7 @@ export function ChatDrawer({ children }: { children: ReactNode }) {
       const full = `${e.nombre} ${e.apellidos}`.toLowerCase();
       return (
         full.includes(q) ||
+        (e.puesto ?? "").toLowerCase().includes(q) ||
         (e.rolLabel ?? "").toLowerCase().includes(q) ||
         (e.departamento ?? "").toLowerCase().includes(q)
       );
@@ -1471,7 +1472,7 @@ export function ChatDrawer({ children }: { children: ReactNode }) {
                               {esYo && <span className="text-muted-foreground font-normal"> (tú)</span>}
                             </p>
                             <p className="text-[11px] text-muted-foreground truncate">
-                              {[p.rolLabel, p.departamento].filter(Boolean).join(" · ") || "Sin rol"}
+                              {[p.puesto ?? p.rolLabel, p.departamento].filter(Boolean).join(" · ") || "Sin rol"}
                             </p>
                           </div>
                         </li>
@@ -1759,7 +1760,7 @@ function EmpleadosCheckList({
                 {e.nombre} {e.apellidos}
               </p>
               <p className="text-[11px] text-muted-foreground truncate">
-                {[e.rolLabel, e.departamento].filter(Boolean).join(" · ") || "Sin rol"}
+                {[e.puesto ?? e.rolLabel, e.departamento].filter(Boolean).join(" · ") || "Sin rol"}
               </p>
             </div>
           </button>

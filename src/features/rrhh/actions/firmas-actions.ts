@@ -10,11 +10,12 @@ import { registrarEvento, listarEventos, verificarCadena } from "@/features/rrhh
 import { enviarInvitacionFirma } from "@/features/rrhh/services/firmas/email";
 import { emitirNotificacion } from "@/features/notificaciones/actions/notificaciones-actions";
 import { getRolContext } from "@/features/auth/actions/permisos-actions";
+import { MAX_DOCUMENTO_MB, MAX_DOCUMENTO_BYTES } from "@/shared/lib/documentos";
 
 const BUCKET = "firmas";
 const SIGNED_URL_TTL_DESCARGA = 60 * 60 * 24 * 7; // 7 días para copia firmada
 const SIGNED_URL_TTL_VISOR = 60 * 5;              // 5 min para visor de firma
-const MAX_PDF_BYTES = 10 * 1024 * 1024;            // 10 MB
+const MAX_PDF_BYTES = MAX_DOCUMENTO_BYTES;         // 50 MB (tope unificado de documentos)
 const MODALIDADES = ["click_to_sign", "email_otp", "manuscrita_digital"] as const;
 
 type Modalidad = (typeof MODALIDADES)[number];
@@ -243,7 +244,7 @@ export async function crearFirma(formData: FormData): Promise<CrearFirmaResult> 
     if (!(file instanceof File) || file.size === 0) {
       return { ok: false, error: "Falta el PDF a firmar" };
     }
-    if (file.size > MAX_PDF_BYTES) return { ok: false, error: "El PDF supera 10 MB" };
+    if (file.size > MAX_PDF_BYTES) return { ok: false, error: `El PDF supera ${MAX_DOCUMENTO_MB} MB` };
     if (file.type && file.type !== "application/pdf") {
       return { ok: false, error: "Solo se aceptan archivos PDF" };
     }

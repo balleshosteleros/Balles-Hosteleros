@@ -1,6 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { MAX_DOCUMENTO_BYTES } from "@/shared/lib/documentos";
 import { getEmpresaActivaForUser } from "@/features/empresa/lib/empresa-server";
 import {
   bloqueLocalInicial,
@@ -37,7 +38,7 @@ const ALLOWED_MIME = new Set([
   "image/heic",
   "image/heif",
 ]);
-const MAX_FOTO_BYTES = 10 * 1024 * 1024; // 10 MB
+const MAX_FOTO_BYTES = MAX_DOCUMENTO_BYTES; // 50 MB (tope unificado de documentos)
 
 /* Categorías válidas para subpath en bucket. */
 const CATEGORIAS_FOTO_VALIDAS = new Set<string>([

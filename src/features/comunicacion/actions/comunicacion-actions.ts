@@ -264,6 +264,10 @@ export interface EmpleadoCanal {
   apellidos: string;
   rolLabel: string | null;
   departamento: string | null;
+  /** Puesto REAL del empleado (p. ej. "CANTANTE"). En este sistema `rolLabel`
+   *  es el nombre del departamento, así que para mostrar "puesto · departamento"
+   *  hay que usar este campo, no `rolLabel`. */
+  puesto: string | null;
 }
 
 export async function listEmpleadosEmpresa(): Promise<{
@@ -288,6 +292,7 @@ export async function listEmpleadosEmpresa(): Promise<{
           apellidos: (r.apellidos as string) ?? "",
           rolLabel: (r.rol_label as string | null) ?? null,
           departamento: (r.departamento as string | null) ?? null,
+          puesto: (r.puesto as string | null) ?? null,
         })),
     };
   } catch (err: unknown) {
@@ -311,6 +316,9 @@ export interface MiembroCanal {
   apellidos: string;
   rolLabel: string | null;
   departamento: string | null;
+  /** Puesto REAL (p. ej. "CANTANTE"). Para mostrar "puesto · departamento":
+   *  `rolLabel` es el nombre del departamento en este sistema. */
+  puesto: string | null;
 }
 
 // Resuelve los candidatos de acceso de UN empleado (departamento + rol +
@@ -371,6 +379,7 @@ export async function listMiembrosPorCanal(): Promise<{
         apellidos: (r.apellidos as string) ?? "",
         rolLabel: (r.rol_label as string | null) ?? null,
         departamento: (r.departamento as string | null) ?? null,
+        puesto: (r.puesto as string | null) ?? null,
       }));
 
     // 3. Permisos por rol (una sola query): rol → módulos-departamento con ver:true.

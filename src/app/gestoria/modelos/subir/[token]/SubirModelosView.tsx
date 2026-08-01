@@ -9,6 +9,7 @@ import {
   Upload,
   ShieldCheck,
 } from "lucide-react";
+import { MAX_DOCUMENTO_MB, MAX_DOCUMENTO_BYTES } from "@/shared/lib/documentos";
 
 interface Modelo {
   tipo: string;
@@ -40,7 +41,7 @@ interface FilaState {
   file: File | null;
 }
 
-const MAX_BYTES = 25 * 1024 * 1024; // 25 MB
+const MAX_BYTES = MAX_DOCUMENTO_BYTES; // 50 MB (tope unificado de documentos)
 
 export function SubirModelosView({
   endpoint,
@@ -108,7 +109,7 @@ export function SubirModelosView({
       if (f.size > MAX_BYTES) {
         return {
           ...prev,
-          [tipo]: { estado: "error", msg: "El PDF supera 25 MB.", file: null },
+          [tipo]: { estado: "error", msg: `El PDF supera ${MAX_DOCUMENTO_MB} MB.`, file: null },
         };
       }
       // Fichero válido en local: queda pendiente de adjuntar (idle con file).
