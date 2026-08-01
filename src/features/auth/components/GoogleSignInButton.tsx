@@ -22,20 +22,20 @@ interface GsiInitOptions {
   use_fedcm_for_prompt?: boolean
 }
 
-interface GsiButtonOptions {
-  type?: 'standard' | 'icon'
-  theme?: 'outline' | 'filled_blue' | 'filled_black'
-  size?: 'large' | 'medium' | 'small'
-  text?: 'signin_with' | 'signup_with' | 'continue_with' | 'signin'
-  shape?: 'rectangular' | 'pill' | 'circle' | 'square'
-  logo_alignment?: 'left' | 'center'
-  width?: number
+// Notificación que devuelve prompt() explicando si la tarjeta One Tap se pudo
+// mostrar o no (y por qué). La usamos para caer al popup solo cuando Google
+// confirma que la tarjeta no va a aparecer.
+interface GsiPromptNotification {
+  isNotDisplayed: () => boolean
+  isSkippedMoment: () => boolean
+  isDismissedMoment: () => boolean
+  getNotDisplayedReason?: () => string
+  getSkippedReason?: () => string
 }
 
 interface GoogleAccountsId {
   initialize: (opts: GsiInitOptions) => void
-  renderButton: (parent: HTMLElement, opts: GsiButtonOptions) => void
-  prompt: () => void
+  prompt: (cb?: (notification: GsiPromptNotification) => void) => void
   cancel: () => void
 }
 
@@ -96,9 +96,9 @@ export function GoogleSignInButton({
   label = 'Continuar con Google',
 }: GoogleSignInButtonProps) {
   const router = useRouter()
-  const buttonRef = useRef<HTMLDivElement>(null)
-  const observerRef = useRef<ResizeObserver | null>(null)
+  const gidRef = useRef<GoogleAccountsId | null>(null)
   const nonceRawRef = useRef<string>('')
+  const [ready, setReady] = useState(false)
   const [fallback, setFallback] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -120,6 +120,24 @@ export function GoogleSignInButton({
     }
   }, [redirectTo])
 
+  // Al pulsar nuestro botón NO abrimos la ventana emergente: pedimos a Google que
+  // muestre la tarjeta One Tap dentro de la misma página. Solo si Google confirma
+  // que no puede mostrarla (navegador sin FedCM, cooldown por descartes previos,
+  // dominio no autorizado…) caemos al flujo OAuth como último recurso.
+  const handleClick = useCallback(() => {
+    const gid = gidRef.current
+    if (!gid) {
+      void handleOAuthFallback()
+      return
+    }
+    setError(null)
+    gid.prompt((notification) => {
+      const noSale =
+        notification.isNotDisplayed() || notification.isSkippedMoment()
+      if (noSale) void handleOAuthFallback()
+    })
+  }, [handleOAuthFallback])
+
   useEffect(() => {
     const rawClientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID
     if (!rawClientId) {
@@ -129,7 +147,6 @@ export function GoogleSignInButton({
     const clientId: string = rawClientId
 
     let cancelled = false
-    let fallbackTimer: ReturnType<typeof setTimeout> | null = null
 
     async function handleCredential(resp: GsiCredentialResponse) {
       if (!resp?.credential || cancelled) return
@@ -174,8 +191,7 @@ export function GoogleSignInButton({
       if (cancelled) return
 
       const gid = window.google?.accounts?.id
-      const parent = buttonRef.current
-      if (!gid || !parent) {
+      if (!gid) {
         setFallback(true)
         return
       }
@@ -185,88 +201,34 @@ export function GoogleSignInButton({
       const hashed = await sha256Hex(raw)
       if (cancelled) return
 
+      // ux_mode NO se fija a 'popup': el selector de cuenta se muestra como
+      // tarjeta One Tap DENTRO de la misma página (FedCM), no en ventana aparte.
       gid.initialize({
         client_id: clientId,
         callback: handleCredential,
         nonce: hashed,
-        ux_mode: 'popup',
         auto_select: false,
         use_fedcm_for_prompt: true,
       })
+      gidRef.current = gid
+      if (!cancelled) setReady(true)
 
-      // El botón GSI se renderiza con un ancho fijo (iframe). Si pasamos un
-      // ancho mayor que el contenedor (típico en móvil), se desborda y queda
-      // descentrado. Medimos el contenedor y re-renderizamos al cambiar de
-      // tamaño para mantenerlo centrado y a lo ancho real disponible.
-      const GSI_MAX_WIDTH = 400 // límite que acepta Google para type=standard
-
-      // IMPORTANTE: observamos el MISMO elemento que mutamos al renderizar el
-      // botón. Insertar el iframe de Google cambia el tamaño del contenedor y
-      // eso vuelve a disparar el observer → borra e inserta de nuevo → parpadeo
-      // infinito. Guardamos el último ancho renderizado y solo re-renderizamos
-      // cuando el ancho DISPONIBLE cambia de verdad (rotación / resize real),
-      // ignorando las variaciones que provoca nuestra propia inserción.
-      let lastRenderedWidth = -1
-      const renderAtWidth = () => {
-        if (cancelled || !parent) return
-        const available = Math.floor(parent.getBoundingClientRect().width)
-        if (available <= 0) return
-        const width = Math.min(available, GSI_MAX_WIDTH)
-        if (width === lastRenderedWidth) return
-        lastRenderedWidth = width
-        parent.innerHTML = ''
-        gid.renderButton(parent, {
-          type: 'standard',
-          theme: 'outline',
-          size: 'large',
-          text: 'continue_with',
-          shape: 'rectangular',
-          logo_alignment: 'left',
-          width,
-        })
-      }
-
-      renderAtWidth()
-
-      // One Tap: mostramos la tarjeta de selección de cuenta DENTRO de la misma
-      // página (esquina superior derecha, vía FedCM) en lugar de abrir la ventana
-      // emergente al pulsar el botón. Aparece sola al cargar; el botón renderizado
-      // arriba queda como respaldo por si el usuario cierra la tarjeta o el
-      // navegador no soporta FedCM. No bloquea: si no puede mostrarse, no pasa nada.
+      // Mostramos la tarjeta One Tap automáticamente al cargar. Si Google decide
+      // no mostrarla (navegador sin FedCM, cooldown por descartes previos,
+      // dominio no autorizado…), NO forzamos el popup aquí: dejamos el botón
+      // "Continuar con Google", que al pulsarlo reintenta la tarjeta y solo
+      // entonces cae al OAuth como último recurso.
       try {
         gid.prompt()
       } catch {
-        // Si prompt() falla (navegador sin FedCM, política de cookies…),
-        // el usuario sigue teniendo el botón "Continuar con Google".
+        // Sin FedCM / cookies bloqueadas: el usuario usa el botón.
       }
-
-      // Medimos el ancho contra un envoltorio estable (el padre del contenedor
-      // del iframe), no contra el propio contenedor que mutamos, para que el
-      // observer refleje el espacio real disponible y no el del iframe.
-      const measured = parent.parentElement ?? parent
-      let resizeRaf: ReturnType<typeof requestAnimationFrame> | null = null
-      const observer = new ResizeObserver(() => {
-        if (resizeRaf) cancelAnimationFrame(resizeRaf)
-        resizeRaf = requestAnimationFrame(renderAtWidth)
-      })
-      observer.observe(measured)
-      observerRef.current = observer
-
-      fallbackTimer = setTimeout(() => {
-        if (cancelled) return
-        if (parent.childElementCount === 0) setFallback(true)
-      }, 4000)
     }
 
     init()
 
     return () => {
       cancelled = true
-      if (fallbackTimer) clearTimeout(fallbackTimer)
-      if (observerRef.current) {
-        observerRef.current.disconnect()
-        observerRef.current = null
-      }
       try {
         window.google?.accounts?.id?.cancel()
       } catch {
@@ -296,10 +258,22 @@ export function GoogleSignInButton({
 
   return (
     <div className="space-y-2">
-      <div
-        ref={buttonRef}
-        className="flex w-full justify-center overflow-hidden"
-      />
+      {/* Botón propio: al pulsarlo pedimos la tarjeta One Tap en la misma página
+          (no la ventana emergente de Google). Ver handleClick. */}
+      <button
+        type="button"
+        onClick={handleClick}
+        disabled={!ready || busy || oauthLoading}
+        className="flex w-full items-center justify-center gap-3 rounded-lg bg-white px-4 py-3 text-sm font-semibold text-slate-900 shadow-sm transition-all hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
+      >
+        <svg className="h-5 w-5" viewBox="0 0 24 24">
+          <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4" />
+          <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" />
+          <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05" />
+          <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
+        </svg>
+        {oauthLoading ? 'Redirigiendo...' : label}
+      </button>
       {error && (
         <p className="rounded-md border border-red-900/50 bg-red-950/40 px-3 py-2 text-sm text-red-300">
           {error}
