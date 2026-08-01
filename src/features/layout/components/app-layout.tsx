@@ -94,6 +94,12 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const user = auth?.user;
   const profile = auth?.profile;
   const roles = auth?.roles ?? [];
+  // Señal de sesión disponible en el PRIMER render: `user` se rellena tarde
+  // (dentro del useEffect de onAuthStateChange, tras el primer paint), pero
+  // `permisosLoaded` ya viene hidratado del caché/seed de servidor en el
+  // mismo render que el sidebar. Usarla evita que la barra superior aparezca
+  // "de golpe" unos cientos de ms después de que el software ya se ve.
+  const permisosLoaded = auth?.permisosLoaded ?? false;
   // El conmutador "Mis Paneles / Mis Departamentos" se muestra a quien tiene
   // acceso a ≥1 departamento según sus PERMISOS reales (o es admin de
   // plataforma). Quien no tiene ningún departamento no ve el conmutador.
@@ -108,7 +114,11 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       setIsDemoHost(window.location.hostname.startsWith("demo."));
     }
   }, []);
-  const showUi = !!user || devBypass || isDemoHost;
+  // Mostramos la barra superior en cuanto sabemos que hay sesión — ya sea por
+  // `user` (llega tras el primer paint) o por `permisosLoaded` (hidratado del
+  // caché en el primer render, como el sidebar). Así toda la cabecera aparece
+  // al instante junto con el resto del software, sin el salto visible.
+  const showUi = !!user || permisosLoaded || devBypass || isDemoHost;
   const counts = useDailyCounts();
 
   const { title: headerLabel, icon: ModuleIcon } = getRouteMeta(pathname);
