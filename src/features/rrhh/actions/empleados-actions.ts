@@ -284,6 +284,37 @@ export async function getEmpleadosActivos(
 
     if (error) throw error;
 
+    // Puesto principal desde la fuente única (tabla puente empleado_puestos).
+    // La columna legacy empleados.puesto está vacía en muchas fichas y, cuando
+    // trae algo, suele ser el nombre del departamento, no el puesto real. Por eso
+    // resolvemos el puesto principal aquí y solo caemos a la columna como fallback.
+    const empleadoIdsActivos = Array.from(
+      new Set((data ?? []).map((e) => e.id as string).filter(Boolean)),
+    );
+    const puestoPrincipalPorEmpleado: Record<string, string> = {};
+    if (empleadoIdsActivos.length > 0) {
+      const { data: eps } = await supabase
+        .from("empleado_puestos")
+        .select("empleado_id, es_principal, puesto_nombre, puestos(nombre)")
+        .in("empleado_id", empleadoIdsActivos);
+      for (const r of eps ?? []) {
+        const row = r as unknown as {
+          empleado_id: string;
+          es_principal: boolean;
+          puesto_nombre: string | null;
+          puestos: { nombre?: string | null } | Array<{ nombre?: string | null }> | null;
+        };
+        const puestoRel = Array.isArray(row.puestos) ? row.puestos[0] : row.puestos;
+        const nombrePuesto = puestoRel?.nombre ?? row.puesto_nombre ?? null;
+        if (!nombrePuesto) continue;
+        // Preferimos el principal; si aún no hay ninguno guardado para este
+        // empleado, tomamos el primero como respaldo.
+        if (row.es_principal || !puestoPrincipalPorEmpleado[row.empleado_id]) {
+          puestoPrincipalPorEmpleado[row.empleado_id] = nombrePuesto;
+        }
+      }
+    }
+
     // Dedup por user_id (mismo patrón que listEmpleados/listEmpleadosParaPagos):
     // el OR puede traer 2 veces a un usuario multiempresa; preferimos su ficha
     // en la empresa activa.
@@ -323,7 +354,10 @@ export async function getEmpleadosActivos(
         nombreCompleto: `${nombre} ${apellidos}`.trim(),
         departamento: (deptoObj?.nombre as string | null) ?? null,
         area,
-        puesto: (e.puesto as string | null) ?? null,
+        puesto:
+          puestoPrincipalPorEmpleado[e.id as string] ??
+          (e.puesto as string | null) ??
+          null,
         avatarUrl: (e.avatar_url as string | null) ?? null,
         estado: (e.estado as string) ?? "Activo",
       };

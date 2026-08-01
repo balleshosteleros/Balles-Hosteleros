@@ -337,7 +337,16 @@ export function MantenimientoView() {
               {item.apuntaDesperfecto && !empleados.some((e) => e.nombreCompleto === item.apuntaDesperfecto) && (
                 <SelectItem value={item.apuntaDesperfecto}>{item.apuntaDesperfecto}</SelectItem>
               )}
-              {empleados.map((e) => <SelectItem key={e.empleadoId} value={e.nombreCompleto}>{e.nombreCompleto}</SelectItem>)}
+              {empleados.map((e) => (
+                <SelectItem key={e.empleadoId} value={e.nombreCompleto}>
+                  {e.nombreCompleto}
+                  {(e.puesto || e.departamento) && (
+                    <span className="text-muted-foreground">
+                      {" — "}{[e.puesto, e.departamento].filter(Boolean).join(" · ")}
+                    </span>
+                  )}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </td>

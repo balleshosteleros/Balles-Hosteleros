@@ -1010,7 +1010,14 @@ export function TurnosSection({ empresaId }: { empresaId: string }) {
                               >
                                 {checked && <Check className="h-3 w-3" />}
                               </span>
-                              <span className="truncate">{e.nombreCompleto}</span>
+                              <span className="truncate">
+                                {e.nombreCompleto}
+                                {e.puesto && (
+                                  <span className="text-muted-foreground">
+                                    {" — "}{e.puesto}
+                                  </span>
+                                )}
+                              </span>
                             </button>
                           );
                         })}
