@@ -1,7 +1,41 @@
 # TAREA para Fernando — Precios de compra de BACANAL (cuando bajes el repo)
 
-> **De:** Iván (vía Claude) · **Fecha:** 2026-06-30 · **Actualizado:** 2026-07-30 · **Prioridad:** media
+> **De:** Iván (vía Claude) · **Fecha:** 2026-06-30 · **Actualizado:** 2026-08-03 · **Prioridad:** media
 > Léelo al hacer `git pull` y reconciliar.
+
+---
+
+## ❓ IVÁN: necesitamos la evidencia de TU prueba móvil que falló (03-ago, Fernando)
+
+Sabemos que probaste a subir un albarán desde el móvil y no funcionó. El análisis
+(`docs/analisis_funcion_albaranes.md`, hecho por Fernando contrastando con un agente de
+Codex — igual que el `PRP-073`, que está **pendiente de aprobación**: no generar TASKs de
+él todavía) deja 5 hipótesis posibles, pero sin los datos de tu prueba no se puede arreglar
+sobre seguro. Cuando puedas, apunta:
+
+1. **Teléfono y sistema**: iPhone o Android, y si fue navegador (¿cuál?) o la PWA instalada.
+2. **Ruta exacta**: ¿"Subir albarán por foto" (Más → Albaranes → tarjeta de arriba) o dentro
+   de la recepción de un pedido ("Hacer foto del albarán")? Son dos flujos distintos por dentro.
+3. **En qué paso falló**: al elegir la foto, al pulsar "Analizar", o al "Guardar en Revisión".
+4. **La foto**: ¿cámara directa o de la galería? ¿Tamaño aproximado (se ve en Detalles) y formato?
+5. **Qué viste en pantalla**: mensaje de error (captura si la tienes), o si se quedó colgado
+   sin decir nada, y la hora aproximada para buscar en los logs.
+
+Con eso distinguimos entre: límite de tamaño real (~10,5 MB, ver abajo), foto HEIC de iPhone
+que Gemini no acepta, sesión/empresa caducada, o la Edge Function de la recepción por pedido.
+
+**⚠️ Ojo con el cambio del tope a 50 MB** (entró en `49513d41`, un commit de RRHH): no arregla
+el fallo, lo agranda. El límite real de la petición sigue siendo **14 MB** (`bodySizeLimit` en
+`next.config.ts`) y el archivo viaja en base64 (+33%) → todo lo que pase de **~10,5 MB seguirá
+fallando igual**, solo que ahora la UI acepta hasta 50 MB sin avisar. El propio PRP-073 lista
+esto como anti-patrón. Propuesta mientras no llegue la Fase 1 del PRP (subida directa a Storage,
+sin base64): **comprimir la imagen en cliente antes de enviar** (`browser-image-compression` ya
+está instalado) y/o bajar el tope efectivo del flujo de albaranes a ~10 MB con aviso claro.
+Dinos si lo aplicamos nosotros o lo tocas tú — pero el tope a 50 tal cual está da fallos
+silenciosos con fotos de cámara normales.
+
+(Recordatorio: también siguen pendientes tus respuestas a las 4 dudas del lote del 30-jul,
+sección siguiente — en particular la página que falta del Belmon Drink 15378 de Habana.)
 
 ---
 
