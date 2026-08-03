@@ -15,6 +15,7 @@ import type { Cata, ValoracionCata } from "../types";
 import { VALORACION_LABELS } from "../types";
 import { QrFotoDialog } from "./QrFotoDialog";
 import { subirFotoCataDirecto } from "../actions/qr-foto-actions";
+import { MAX_IMAGEN_MB, MAX_IMAGEN_BYTES, traducirErrorSubida } from "@/shared/lib/documentos";
 import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
 
 interface Props {
@@ -101,6 +102,12 @@ export function CataTab({ recetaId, numero, escandallo, onChanged }: Props) {
     const file = e.target.files?.[0];
     if (!file || !cata?.id) return;
 
+    // Avisa en español si la imagen supera el tope (no la sube en silencio).
+    if (file.size > MAX_IMAGEN_BYTES) {
+      toast.error(`"${file.name}" supera el máximo de ${MAX_IMAGEN_MB} MB y no se ha subido`);
+      return;
+    }
+
     const reader = new FileReader();
     reader.onloadend = async () => {
       const base64 = (reader.result as string).split(",")[1];
@@ -112,7 +119,7 @@ export function CataTab({ recetaId, numero, escandallo, onChanged }: Props) {
         mime: file.type,
       });
       if (!res.ok) {
-        toast.error(res.error);
+        toast.error(traducirErrorSubida(res.error, "No se pudo subir la foto"));
         return;
       }
       toast.success("Foto subida");

@@ -16,6 +16,7 @@ import {
   getBranding, saveBranding, uploadLogo,
 } from "../actions/branding-actions";
 import type { Branding } from "../types/presentaciones";
+import { MAX_IMAGEN_MB, MAX_IMAGEN_BYTES, traducirErrorSubida } from "@/shared/lib/documentos";
 import { TIPOGRAFIAS } from "../data/layouts";
 import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
 
@@ -48,6 +49,11 @@ export function BrandingForm() {
   }, []);
 
   const onUpload = async (file: File) => {
+    // Avisa en español si la imagen supera el tope (no la sube en silencio).
+    if (file.size > MAX_IMAGEN_BYTES) {
+      toast.error(`El logo supera el máximo de ${MAX_IMAGEN_MB} MB y no se ha subido`);
+      return;
+    }
     setUploading(true);
     const res = await uploadLogo(file);
     setUploading(false);
@@ -55,7 +61,7 @@ export function BrandingForm() {
       setBranding((b) => ({ ...b, logo_url: res.url! }));
       toast.success("Logo subido");
     } else {
-      toast.error(res.error ?? "Error al subir logo");
+      toast.error(traducirErrorSubida(res.error, "No se pudo subir el logo"));
     }
   };
 

@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { Camera, Upload, Check, RefreshCw, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/features/auth/contexts/auth-context";
+import { MAX_IMAGEN_MB, MAX_IMAGEN_BYTES } from "@/shared/lib/documentos";
 
 type Mode = "menu" | "camera" | "preview";
 
@@ -115,6 +116,12 @@ export function AvatarPicker({
     const f = e.target.files?.[0];
     if (!f) return;
     setError(null);
+    // Avisa en español si la imagen supera el tope (no la carga en silencio).
+    if (f.size > MAX_IMAGEN_BYTES) {
+      setError(`La imagen supera el máximo de ${MAX_IMAGEN_MB} MB. Usa una más pequeña.`);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      return;
+    }
     setPreviewBlob(f);
     setPreviewUrl(URL.createObjectURL(f));
     setMode("preview");

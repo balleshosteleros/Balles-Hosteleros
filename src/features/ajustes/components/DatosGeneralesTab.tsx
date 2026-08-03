@@ -11,8 +11,9 @@ import { Upload, Trash2, Info, ImageIcon, Loader2, ChevronDown, Check } from "lu
 import { uploadLogo, deleteLogo, saveEmpresaColor } from "@/features/empresa/actions/logo-actions";
 import { saveEmpresaAjustes } from "@/features/empresa/actions/empresas-actions";
 import { friendlyError } from "@/shared/lib/friendly-errors";
+import { MAX_IMAGEN_MB, MAX_IMAGEN_BYTES } from "@/shared/lib/documentos";
 
-const MAX_LOGO_BYTES = 5 * 1024 * 1024; // 5 MB
+const MAX_LOGO_BYTES = MAX_IMAGEN_BYTES; // 10 MB (tope de imágenes)
 import {
   getDatosFiscales,
   saveDatosFiscales,
@@ -94,7 +95,7 @@ export function DatosGeneralesTab() {
     if (!file) return;
     e.target.value = "";
     if (file.size > MAX_LOGO_BYTES) {
-      toast.error("El logotipo es demasiado grande. Usa una imagen de menos de 5 MB.");
+      toast.error(`El logotipo es demasiado grande. Usa una imagen de menos de ${MAX_IMAGEN_MB} MB.`);
       return;
     }
     setUploading(true);

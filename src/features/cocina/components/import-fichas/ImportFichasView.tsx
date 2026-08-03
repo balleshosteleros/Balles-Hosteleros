@@ -34,6 +34,7 @@ import {
 } from "@/components/ui/table";
 import { Upload, CheckCircle2, AlertTriangle, HelpCircle, Boxes } from "lucide-react";
 import { toast } from "sonner";
+import { MAX_DOCUMENTO_MB, MAX_DOCUMENTO_BYTES, traducirErrorSubida } from "@/shared/lib/documentos";
 import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
 import { CorregirMatchDialog } from "./CorregirMatchDialog";
 
@@ -72,6 +73,11 @@ export function ImportFichasView() {
   const onArchivo = useCallback(
     async (file: File | undefined) => {
       if (!file) return;
+      // Avisa en español si el archivo supera el tope (no lo procesa en silencio).
+      if (file.size > MAX_DOCUMENTO_BYTES) {
+        toast.error(`"${file.name}" supera el máximo de ${MAX_DOCUMENTO_MB} MB`);
+        return;
+      }
       setCargando(true);
       setPreview(null);
       try {
@@ -87,7 +93,7 @@ export function ImportFichasView() {
 
         const res = await previewFichas(base64);
         if (!res.ok) {
-          toast.error(res.error);
+          toast.error(traducirErrorSubida(res.error, "No se pudo leer el archivo"));
           return;
         }
         setPreview(res.data);

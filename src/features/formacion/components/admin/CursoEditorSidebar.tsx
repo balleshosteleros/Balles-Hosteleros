@@ -21,6 +21,7 @@ import { toast } from "sonner";
 import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 import { useFormacionStore, leccionesDeCurso } from "@/features/formacion/store/use-formacion-store";
 import { uploadFormacionDoc, dbSetSeccionPublicada } from "@/features/formacion/actions/formacion-actions";
+import { MAX_DOCUMENTO_MB, MAX_DOCUMENTO_BYTES, MAX_IMAGEN_MB, MAX_IMAGEN_BYTES, traducirErrorSubida } from "@/shared/lib/documentos";
 import {
   listCuestionario, guardarPreguntaCuestionario, borrarPreguntaCuestionario,
   type PreguntaCuestionario, type OpcionCuestionario,
@@ -154,6 +155,11 @@ export function CursoEditorSidebar({ cursoId, activaId, onSelect }: Props) {
   }
 
   async function handleSubirCover(file: File) {
+    // Avisa en español si la imagen supera el tope (no la sube en silencio).
+    if (file.size > MAX_IMAGEN_BYTES) {
+      toast.error(`La portada supera el máximo de ${MAX_IMAGEN_MB} MB y no se ha subido`);
+      return;
+    }
     setSubiendoCover(true);
     try {
       const fd = new FormData();
@@ -162,7 +168,7 @@ export function CursoEditorSidebar({ cursoId, activaId, onSelect }: Props) {
       fd.append("mimeType", file.type);
       const res = await fetch("/api/formacion/video", { method: "POST", body: fd });
       const data = await res.json();
-      if (!res.ok) { toast.error(data.error ?? "No se pudo subir la portada"); return; }
+      if (!res.ok) { toast.error(traducirErrorSubida(data.error, "No se pudo subir la portada")); return; }
       setLecCover(data.url);
       toast.success("Portada subida");
     } finally {
@@ -171,12 +177,17 @@ export function CursoEditorSidebar({ cursoId, activaId, onSelect }: Props) {
   }
 
   async function handleSubirDoc(file: File) {
+    // Avisa en español si el documento supera el tope (no lo sube en silencio).
+    if (file.size > MAX_DOCUMENTO_BYTES) {
+      toast.error(`"${file.name}" supera el máximo de ${MAX_DOCUMENTO_MB} MB y no se ha subido`);
+      return;
+    }
     setSubiendoDoc(true);
     try {
       const fd = new FormData();
       fd.append("file", file);
       const r = await uploadFormacionDoc(fd);
-      if (!r.ok || !r.path) { toast.error(r.error ?? "No se pudo subir el documento"); return; }
+      if (!r.ok || !r.path) { toast.error(traducirErrorSubida(r.error, "No se pudo subir el documento")); return; }
       const tipo = file.type.startsWith("image/") ? "imagen" : "pdf";
       setLecDocPath(r.path); setLecDocNombre(r.nombre ?? file.name); setLecDocTipo(tipo);
       toast.success("Documento subido");

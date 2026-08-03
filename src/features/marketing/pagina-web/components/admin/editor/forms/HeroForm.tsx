@@ -10,6 +10,7 @@ import { useEditorStore } from "../../../../hooks/useEditorStore";
 import { Field, Section } from "./shared";
 import { subirAsset } from "../../../../services/asset-upload";
 import { createClient } from "@/lib/supabase/client";
+import { MAX_IMAGEN_MB, MAX_IMAGEN_BYTES, traducirErrorSubida } from "@/shared/lib/documentos";
 import type { Bloque, HeroDatos } from "../../../../types";
 
 async function obtenerEmpresaId(): Promise<string | null> {
@@ -44,6 +45,11 @@ export function HeroForm({ bloque }: { bloque: Extract<Bloque, { tipo: "hero" }>
       toast.error("Guarda la página antes de subir imágenes.");
       return;
     }
+    // Avisa en español si la imagen supera el tope (no la sube en silencio).
+    if (file.size > MAX_IMAGEN_BYTES) {
+      toast.error(`"${file.name}" supera el máximo de ${MAX_IMAGEN_MB} MB y no se ha subido`);
+      return;
+    }
     setSubiendo(true);
     const empresaId = await obtenerEmpresaId();
     if (!empresaId) {
@@ -56,7 +62,7 @@ export function HeroForm({ bloque }: { bloque: Extract<Bloque, { tipo: "hero" }>
       set({ foto_url: res.url });
       toast.success("Imagen subida");
     } else {
-      toast.error(res.error);
+      toast.error(traducirErrorSubida(res.error, "No se pudo subir la imagen"));
     }
     setSubiendo(false);
     if (fileRef.current) fileRef.current.value = "";

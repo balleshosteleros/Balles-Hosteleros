@@ -21,3 +21,34 @@ export function mensajeDocumentoDemasiadoGrande(nombre?: string): string {
     ? `"${nombre}" supera el máximo de ${MAX_DOCUMENTO_MB} MB`
     : `El archivo supera el máximo de ${MAX_DOCUMENTO_MB} MB`;
 }
+
+// Traduce a español CUALQUIER error de subida al almacén. Su misión principal es
+// que un archivo rechazado por tamaño NUNCA muestre un mensaje técnico en inglés
+// (p. ej. "Payload too large", "exceeded the maximum allowed size", error 413):
+// siempre un aviso claro de por qué no se pudo subir. Devuelve `fallback` (o un
+// mensaje genérico en español) si el error no es de tamaño.
+export function traducirErrorSubida(error: unknown, fallback?: string): string {
+  const raw =
+    typeof error === "string"
+      ? error
+      : error && typeof error === "object" && "message" in error
+        ? String((error as { message: unknown }).message ?? "")
+        : "";
+  const txt = raw.toLowerCase();
+
+  const esDeTamano =
+    txt.includes("payload too large") ||
+    txt.includes("exceeded the maximum") ||
+    txt.includes("maximum allowed size") ||
+    txt.includes("max file size") ||
+    txt.includes("file size") ||
+    txt.includes("too large") ||
+    txt.includes("413") ||
+    txt.includes("entity too large");
+
+  if (esDeTamano) {
+    return `El archivo es demasiado grande y no se ha podido subir (máximo ${MAX_DOCUMENTO_MB} MB para documentos, ${MAX_IMAGEN_MB} MB para imágenes).`;
+  }
+  // Si ya viene en español o es descriptivo, respétalo; si no, mensaje genérico.
+  return raw && /[áéíóúñ ]/.test(raw) ? raw : (fallback ?? "No se ha podido subir el archivo. Inténtalo de nuevo.");
+}

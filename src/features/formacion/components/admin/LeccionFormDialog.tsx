@@ -20,6 +20,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useFormacionStore } from "../../store/use-formacion-store";
 import { uploadFormacionDoc } from "../../actions/formacion-actions";
 import type { Leccion } from "../../types";
+import { MAX_DOCUMENTO_MB, MAX_DOCUMENTO_BYTES, traducirErrorSubida } from "@/shared/lib/documentos";
 
 type Mode =
   | { mode: "new"; seccionId: string }
@@ -55,6 +56,11 @@ export function LeccionFormDialog({ cursoId, mode, onClose }: Props) {
     const file = e.target.files?.[0];
     e.target.value = ""; // permite re-elegir el mismo archivo
     if (!file) return;
+    // Avisa en español si el documento supera el tope (no lo sube en silencio).
+    if (file.size > MAX_DOCUMENTO_BYTES) {
+      toast.error(`"${file.name}" supera el máximo de ${MAX_DOCUMENTO_MB} MB y no se ha subido`);
+      return;
+    }
     setSubiendo(true);
     const fd = new FormData();
     fd.append("file", file);
@@ -64,7 +70,7 @@ export function LeccionFormDialog({ cursoId, mode, onClose }: Props) {
       setDocumentoPath(res.path);
       setDocumentoNombre(res.nombre ?? file.name);
     } else {
-      toast.error(res.error ?? "No se pudo subir el documento");
+      toast.error(traducirErrorSubida(res.error, "No se pudo subir el documento"));
     }
   }
 

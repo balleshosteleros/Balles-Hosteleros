@@ -14,6 +14,7 @@ import { Separator } from "@/components/ui/separator";
 import { Clock, Plus, User, CalendarDays, MessageSquare, FileText, Download, Upload, FolderOpen, Paperclip, Trash2, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { listDocumentosByProceso, uploadDocumentoJuridico, deleteDocumentoJuridico } from "@/features/juridico/actions/documentos-actions";
+import { MAX_DOCUMENTO_MB, MAX_DOCUMENTO_BYTES } from "@/shared/lib/documentos";
 
 interface Props {
   open: boolean;
@@ -88,6 +89,11 @@ function AddDocForm({
   const [uploading, setUploading] = useState(false);
 
   const onFileChange = (f: File | null) => {
+    // Avisa en español al coger el archivo si supera el tope (no lo adjunta en silencio).
+    if (f && f.size > MAX_DOCUMENTO_BYTES) {
+      toast.error(`"${f.name}" supera el máximo de ${MAX_DOCUMENTO_MB} MB y no se ha adjuntado`);
+      return;
+    }
     setFile(f);
     if (f && !nombre.trim()) {
       setNombre(f.name.replace(/\.[^.]+$/, ""));

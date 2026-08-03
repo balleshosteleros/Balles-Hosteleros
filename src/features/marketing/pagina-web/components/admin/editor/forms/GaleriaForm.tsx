@@ -16,6 +16,7 @@ import { useEditorStore } from "../../../../hooks/useEditorStore";
 import { Field, Section } from "./shared";
 import { subirAsset } from "../../../../services/asset-upload";
 import type { Bloque, GaleriaDatos } from "../../../../types";
+import { MAX_IMAGEN_MB, MAX_IMAGEN_BYTES, traducirErrorSubida } from "@/shared/lib/documentos";
 
 export function GaleriaForm({ bloque }: { bloque: Extract<Bloque, { tipo: "galeria" }> }) {
   const actualizar = useEditorStore((s) => s.actualizarBloque);
@@ -41,9 +42,14 @@ export function GaleriaForm({ bloque }: { bloque: Extract<Bloque, { tipo: "galer
     const nuevas: Array<{ url: string; alt: string }> = [];
     for (const file of Array.from(files)) {
       if (datos.imagenes.length + nuevas.length >= 60) break;
+      // Avisa en español si una imagen supera el tope (se salta esa, sigue con el resto).
+      if (file.size > MAX_IMAGEN_BYTES) {
+        toast.error(`"${file.name}" supera el máximo de ${MAX_IMAGEN_MB} MB y no se ha subido`);
+        continue;
+      }
       const res = await subirAsset(file, empresaId, paginaId);
       if (!res.ok) {
-        toast.error(res.error);
+        toast.error(traducirErrorSubida(res.error, `No se pudo subir "${file.name}"`));
         continue;
       }
       nuevas.push({ url: res.url, alt: file.name.replace(/\.[^.]+$/, "") });

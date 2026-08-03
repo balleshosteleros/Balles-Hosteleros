@@ -16,6 +16,7 @@ import {
 import { COLORES_POS } from "@/features/logistica/data/productos";
 import { subirFotoItem } from "@/features/marketing/carta-digital/services/foto-upload";
 import { toast } from "sonner";
+import { MAX_IMAGEN_MB, MAX_IMAGEN_BYTES, traducirErrorSubida } from "@/shared/lib/documentos";
 
 interface Props {
   productoId: string;
@@ -59,11 +60,16 @@ export function EstiloProductoVenta({
       toast.error("Selecciona una imagen válida");
       return;
     }
+    // Avisa en español si la imagen supera el tope (no la sube en silencio).
+    if (file.size > MAX_IMAGEN_BYTES) {
+      toast.error(`La imagen supera el máximo de ${MAX_IMAGEN_MB} MB y no se ha subido`);
+      return;
+    }
     setSubiendo(true);
     const res = await subirFotoItem(file, empresaId, productoId);
     setSubiendo(false);
     if (!res.ok) {
-      toast.error(res.error || "Error al subir imagen");
+      toast.error(traducirErrorSubida(res.error, "No se pudo subir la imagen"));
       return;
     }
     // Elegir imagen → quita color (mutuamente excluyente)

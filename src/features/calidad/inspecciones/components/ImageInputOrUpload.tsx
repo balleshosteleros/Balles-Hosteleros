@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Upload, Link2, X, Loader2, ImageIcon } from "lucide-react";
 import { subirImagenInspeccion } from "../services/foto-upload";
+import { MAX_IMAGEN_MB, MAX_IMAGEN_BYTES, traducirErrorSubida } from "@/shared/lib/documentos";
 
 interface ImageInputOrUploadProps {
   value: string | null;
@@ -39,10 +40,15 @@ export function ImageInputOrUpload({
       toast.error("No hay empresa activa");
       return;
     }
+    // Avisa en español si la imagen supera el tope (no la sube en silencio).
+    if (file.size > MAX_IMAGEN_BYTES) {
+      toast.error(`"${file.name}" supera el máximo de ${MAX_IMAGEN_MB} MB y no se ha subido`);
+      return;
+    }
     startTransition(async () => {
       const res = await subirImagenInspeccion(file, empresaId, kind);
       if (!res.ok) {
-        toast.error(`Error al subir: ${res.error}`);
+        toast.error(traducirErrorSubida(res.error, "No se pudo subir la imagen"));
         return;
       }
       onChange(res.url);

@@ -5,6 +5,7 @@ import { useState, useTransition } from "react";
 import { Button } from "@/shared/components/ui/button";
 import { Upload } from "lucide-react";
 import { subirFotoItem } from "../../services/foto-upload";
+import { MAX_IMAGEN_MB, MAX_IMAGEN_BYTES, traducirErrorSubida } from "@/shared/lib/documentos";
 
 export function FotoUploader({
   empresaId,
@@ -24,6 +25,11 @@ export function FotoUploader({
   const handleFile = (file: File | null) => {
     if (!file) return;
     setError(null);
+    // Avisa en español si la imagen supera el tope (no la sube en silencio).
+    if (file.size > MAX_IMAGEN_BYTES) {
+      setError(`La imagen supera el máximo de ${MAX_IMAGEN_MB} MB`);
+      return;
+    }
     const reader = new FileReader();
     reader.onload = () => setPreview(reader.result as string);
     reader.readAsDataURL(file);
@@ -31,7 +37,7 @@ export function FotoUploader({
     startTransition(async () => {
       const res = await subirFotoItem(file, empresaId, itemId);
       if (!res.ok) {
-        setError(res.error);
+        setError(traducirErrorSubida(res.error, "No se pudo subir la imagen"));
         setPreview(fotoUrl);
         return;
       }
