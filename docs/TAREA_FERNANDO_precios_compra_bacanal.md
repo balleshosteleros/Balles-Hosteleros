@@ -5,6 +5,38 @@
 
 ---
 
+## 🔒 IVÁN: ETAPA B DESPLEGADA — confirmar un albarán ahora es TRANSACCIONAL (04-ago noche, Fernando)
+
+Mismo día, segunda etapa del PRP-073 en prod. Qué cambia al confirmar/recepcionar:
+
+1. **Se acabó el "Confirmado con aviso de stock".** Confirmar ahora es UNA transacción en BD
+   (`confirmar_albaran_transaccional`): valida líneas, re-chequea duplicados bajo bloqueo,
+   registra precios, mueve stock y cambia el estado AL FINAL. Si algo falla → rollback
+   completo y el albarán sigue en Revisión. Doble clic o dos personas a la vez = máximo un
+   movimiento por línea (verificado).
+2. **Las cantidades ya respetan el formato.** "3 cajas de 24" entra como **72** al kardex,
+   no como 3 (verificado en prod con test real y revertido). La equivalencia sale de
+   Logística → Catálogos → formatos de COMPRA (por nombre del formato o de la unidad).
+   El snapshot queda en la línea (`cantidadStock`, `equivalenciaAplicada`, `unidadStock`).
+3. **Una unidad contenedora sin equivalencia BLOQUEA la confirmación** con un mensaje que
+   dice exactamente qué formato crear. Ejemplo real: "La línea X viene en 'caja' y no hay
+   equivalencia definida. Crea el formato de compra 'caja' con su equivalencia…". Si te
+   pasa con albaranes en Revisión: creas el formato con su equivalencia y confirmas —
+   sin tocar código. (Unidades no contenedoras que no cuadran con la base siguen 1:1 como
+   siempre, marcadas para revisar en la Etapa C.)
+4. `updateAlbaranEstado` hacia Entregado/Confirmado ahora delega en la función de BD —
+   si tocas ese camino, la lógica vive en la migración `20260804150000`. Los precios de
+   compra al confirmar también se registran ahí (ya no en `resolverAlbaranRevision`).
+5. Cada guardado de revisión sella `revision_guardada_at/por`; el autosave con control de
+   conflictos llega en la Etapa C (F5, tu zona — te avisaremos antes).
+
+Con esto, la Etapa B queda cerrada. Siguiente hito: el piloto (Fernando sube sus 23
+albaranes por el móvil) y después la Etapa C. **Sigue pendiente que repitas tu prueba
+móvil fallida** (sección siguiente) — ahora con más motivo: todo el circuito nuevo está
+en prod.
+
+---
+
 ## ✅ IVÁN: ETAPA A DESPLEGADA — el fallo de subida móvil está arreglado: REPITE TU PRUEBA (04-ago tarde, Fernando)
 
 La Etapa A del PRP-073 (Fases 1 y 2) está **construida, probada E2E y desplegada en prod** el
