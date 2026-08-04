@@ -402,6 +402,57 @@ export async function resolverAlbaranRevision(
   }
 }
 
+/**
+ * Búsqueda PAGINADA sobre TODO el catálogo de compra de la empresa (PRP-073 F5/TASK-223).
+ * Los 6 candidatos del matcher son sugerencias iniciales, no el universo: esta action es
+ * la base para que "Vincular a existente" pueda encontrar cualquier producto.
+ */
+export async function buscarProductosCompra(input: {
+  query: string;
+  page?: number;
+  pageSize?: number;
+}): Promise<{
+  ok: boolean;
+  productos: Array<{ id: string; nombre: string; nombreProveedor: string | null; medida: string | null }>;
+  total: number;
+  error?: string;
+}> {
+  try {
+    const { supabase, empresaId } = await getLogisticaContext();
+    if (!empresaId) return { ok: false, productos: [], total: 0, error: "No autenticado" };
+
+    const page = Math.max(1, input.page ?? 1);
+    const pageSize = Math.min(50, Math.max(1, input.pageSize ?? 20));
+    const q = (input.query ?? "").trim();
+
+    let query = supabase
+      .from("productos")
+      .select("id, nombre, nombre_proveedor, medida", { count: "exact" })
+      .eq("empresa_id", empresaId)
+      .eq("tipo", "compra")
+      .eq("estado", "Activo")
+      .order("nombre");
+    if (q) {
+      // Busca en el nombre interno Y en el alias legacy del proveedor.
+      query = query.or(`nombre.ilike.%${q}%,nombre_proveedor.ilike.%${q}%`);
+    }
+    const { data, count, error } = await query.range((page - 1) * pageSize, page * pageSize - 1);
+    if (error) throw error;
+
+    return {
+      ok: true,
+      total: count ?? 0,
+      productos: ((data ?? []) as Array<{ id: string; nombre: string; nombre_proveedor: string | null; medida: string | null }>).map(
+        (p) => ({ id: p.id, nombre: p.nombre, nombreProveedor: p.nombre_proveedor, medida: p.medida }),
+      ),
+    };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Error desconocido";
+    console.error("[asistente-albaran] buscarProductosCompra:", msg);
+    return { ok: false, productos: [], total: 0, error: msg };
+  }
+}
+
 export async function memorizarAliasProveedor(
   productoId: string,
   nombreEnAlbaran: string,
