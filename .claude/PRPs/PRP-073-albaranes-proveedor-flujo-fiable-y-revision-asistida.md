@@ -16,7 +16,7 @@ que la transacción de la Fase 4 nazca validando cantidad base y equivalencia.
 | --- | --- | --- |
 | A — Captura fiable ✅ **EJECUTADA 2026-08-04** (TASK-201..209, migraciones aplicadas, E2E verde: matriz 2/8/12 MB, bloqueo sha, aviso+override de negocio; pendiente solo el gate humano: que Iván repita su prueba) | F1 → F2 | Matriz 2/8/12 MB pasa desde móvil real; Iván repite su prueba fallida; mismo archivo no crea dos albaranes. |
 | B — Confirmación segura ✅ **EJECUTADA 2026-08-04** (`confirmar_albaran_transaccional` aplicada y testada en prod: caja×24→72, doble confirm idempotente, contenedora sin equivalencia bloquea con rollback; autosave+conflicto de versión quedan para F5) | F3a (solo cantidades/equivalencias) → F4 | Concurrencia/doble clic = máx. 1 movimiento por línea; fallo de stock mantiene Revisión; recarga conserva decisiones. |
-| 🏁 Piloto | — | Los 23 albaranes pendientes de Fernando se suben por móvil y se confirman por el camino nuevo. La fricción observada alimenta el diseño de la etapa C. |
+| 🏁 Piloto ✅ **SIN OBJETO (aclarado 04-ago)**: los "23 pendientes" eran las 36 fotos del lote del 30-jul, ya cargadas (27 albaranes). La validación con volumen real ya ocurrió (lotes + E2E de las 3 etapas). | — | ~~Los 23 albaranes pendientes de Fernando~~ Queda como gate: la prueba móvil de Iván. |
 | C — Revisión rápida | F3b (alias + matcher + cuestionario) → F5 | Criterios de las fases 3 y 5. ⚠️ Re-coordinar con Iván antes: pisa `AsistenteAlbaranPanel`/`ResolverLineaDialog`. |
 | D — Deuda y cierre | F6 → F7 | Sin llamadas a la Edge Function no versionada; gates finales del PRP. ⚠️ F6 toca la recepción que Iván usa a diario: avisar y elegir ventana. |
 
