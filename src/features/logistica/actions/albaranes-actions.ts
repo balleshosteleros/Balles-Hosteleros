@@ -436,7 +436,7 @@ export async function updateAlbaranEstado(id: string, estado: string) {
     // y permanece en Confirmado; solo se revierte al volver a "Pendiente".
     const { data: previo } = await supabase
       .from("albaranes")
-      .select("estado, lineas")
+      .select("estado, lineas, empresa_id, pedido_id, proveedor_nombre, numero_proveedor, fecha, posible_duplicado_de, duplicado_override_at")
       .eq("id", id)
       .maybeSingle();
     const estadoAnterior = (previo?.estado as string | undefined) ?? null;
@@ -458,6 +458,25 @@ export async function updateAlbaranEstado(id: string, estado: string) {
         return {
           ok: false,
           error: `Quedan ${huerfanas.length} línea(s) sin resolver. Vincula, crea o ignora cada producto antes de confirmar.`,
+        };
+      }
+    }
+
+    // Re-check de duplicado de negocio antes de que el albarán toque stock (TASK-208):
+    // pudo registrarse otro albarán igual DESPUÉS de crear este. Solo albaranes sueltos
+    // (los de pedido los protege el unique de pedido_id) y sin override ya registrado.
+    const yaRecibido = estadoAnterior === "Entregado" || estadoAnterior === "Confirmado";
+    if (recibidoDestino && !yaRecibido && previo && !previo.pedido_id && !previo.duplicado_override_at) {
+      const candidato = await detectarDuplicadoNegocio(supabase, previo.empresa_id as string, {
+        proveedorNombre: (previo.proveedor_nombre as string) ?? "",
+        numeroProveedor: (previo.numero_proveedor as string | null) ?? null,
+        fecha: (previo.fecha as string | null) ?? null,
+        excluirId: id,
+      });
+      if (candidato) {
+        return {
+          ok: false,
+          error: `Posible duplicado del albarán ${candidato.numero} (${candidato.proveedorNombre}, ${candidato.fecha}). Revísalo antes de confirmar; si es otro documento, regístralo con motivo desde el asistente.`,
         };
       }
     }
