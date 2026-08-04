@@ -137,6 +137,8 @@ export async function createAlbaran(input: {
   numeroSecuencial?: number;
   /** Número que pone el proveedor en su albarán (opcional, lo extrae OCR o se edita manualmente). */
   numeroProveedor?: string | null;
+  /** Importación de origen (flujo por foto, PRP-073): vincula el albarán con su captura. */
+  importacionId?: string | null;
   /**
    * Estado inicial. Por defecto "Pendiente". Si es "Revisión" (albarán subido por foto con
    * líneas aún sin producto), se relaja la regla del productoId: se permite guardar con
@@ -201,6 +203,12 @@ export async function createAlbaran(input: {
       lineas: input.lineas,
       numero_proveedor: input.numeroProveedor ?? null,
     };
+
+    // Solo se incluye si viene: así los flujos sin importación (pedidos, recepción)
+    // no dependen de que la columna exista ya en la BD desplegada.
+    if (input.importacionId) {
+      insertPayload.importacion_id = input.importacionId;
+    }
 
     if (typeof input.numeroSecuencial === "number") {
       insertPayload.numero_secuencial = input.numeroSecuencial;

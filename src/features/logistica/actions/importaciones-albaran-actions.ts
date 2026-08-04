@@ -378,6 +378,102 @@ export async function analizarImportacionAlbaran(input: {
   }
 }
 
+export type AdjuntarDesdeImportacionResult =
+  | { ok: true; path: string }
+  | FalloImportacion;
+
+/**
+ * Adjunta al albarán recién creado el ORIGINAL que ya vive en Storage desde la
+ * importación (TASK-204): mueve el objeto al path canónico del albarán, lo
+ * appendea a `albaranes.documentos` y finaliza la importación. El archivo no
+ * vuelve a viajar: ya no puede existir un albarán del flujo foto sin original.
+ */
+export async function adjuntarDocumentoDesdeImportacion(input: {
+  albaranId: string;
+  importacionId: string;
+  /** Análisis OCR (cabecera + líneas) a persistir junto al documento. */
+  analisis?: unknown;
+  uploadedBy?: string;
+}): Promise<AdjuntarDesdeImportacionResult> {
+  let traceId = nuevoTraceId();
+  try {
+    const { supabase, userId, empresaId } = await getLogisticaContext();
+    if (!userId) return fallo("AUTH_EXPIRED", traceId);
+    if (!empresaId) return fallo("NO_ACTIVE_COMPANY", traceId);
+
+    const imp = await cargarImportacion(supabase, empresaId, input.importacionId);
+    if (!imp || !imp.storage_path) return fallo("NOT_FOUND", traceId);
+    traceId = imp.trace_id ?? traceId;
+
+    // Mover al path canónico del albarán (misma empresa → mismas policies).
+    const nombre = imp.file_name ? sanitizeFilename(imp.file_name) : "albaran";
+    const destino = `${empresaId}/${input.albaranId}/${Date.now()}_${nombre}`;
+    const mv = await supabase.storage.from(BUCKET).move(imp.storage_path, destino);
+    if (mv.error) {
+      console.error(`[importaciones-albaran] move (${traceId}):`, mv.error.message);
+      return fallo("PERSIST_FAILED", traceId, {
+        message: "El albarán se guardó, pero la foto no se pudo adjuntar.",
+      });
+    }
+
+    const doc = {
+      id: `doc-${Date.now()}`,
+      fileName: imp.file_name ?? nombre,
+      fileUrl: destino,
+      mimeType: imp.mime_type ?? "application/octet-stream",
+      uploadedAt: new Date().toISOString(),
+      uploadedBy: input.uploadedBy ?? "",
+      analisis: input.analisis ?? null,
+      hayAlerta: false,
+    };
+    const { data: alb } = await supabase
+      .from("albaranes")
+      .select("documentos")
+      .eq("id", input.albaranId)
+      .eq("empresa_id", empresaId)
+      .maybeSingle();
+    const prev = Array.isArray(alb?.documentos) ? (alb!.documentos as unknown[]) : [];
+    const { error: updErr } = await supabase
+      .from("albaranes")
+      .update({ documentos: [...prev, doc] })
+      .eq("id", input.albaranId)
+      .eq("empresa_id", empresaId);
+    if (updErr) {
+      // Deshacer el move para no dejar el objeto colgado en un path sin referencia.
+      await supabase.storage.from(BUCKET).move(destino, imp.storage_path);
+      return fallo("PERSIST_FAILED", traceId, {
+        message: "El albarán se guardó, pero la foto no se pudo adjuntar.",
+      });
+    }
+
+    await supabase
+      .from("albaran_importaciones")
+      .update({
+        estado: "finalizado",
+        albaran_id: input.albaranId,
+        storage_path: destino,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", imp.id);
+
+    await registrarEvento(supabase, {
+      empresaId,
+      importacionId: imp.id,
+      albaranId: input.albaranId,
+      actorId: userId,
+      tipo: "albaran_creado",
+      payload: { path: destino },
+    });
+
+    return { ok: true, path: destino };
+  } catch (err) {
+    console.error(`[importaciones-albaran] adjuntarDesdeImportacion (${traceId}):`, err);
+    return fallo("PERSIST_FAILED", traceId, {
+      message: "El albarán se guardó, pero la foto no se pudo adjuntar.",
+    });
+  }
+}
+
 /** Reintento sobre la MISMA importación: reusa el archivo ya subido. */
 export async function reintentarImportacionAlbaran(input: {
   importacionId: string;

@@ -24,6 +24,7 @@ import {
   completarSubidaAlbaran,
   analizarImportacionAlbaran,
   reintentarImportacionAlbaran,
+  adjuntarDocumentoDesdeImportacion,
 } from "@/features/logistica/actions/importaciones-albaran-actions";
 import {
   emparejarLineasAlbaran,
@@ -284,6 +285,7 @@ export function useSubirAlbaran({ fechaPorDefecto, creador, onCreado }: UseSubir
         lineas: lineasJson,
         numeroProveedor: numeroProveedor.trim() || null,
         estado: ESTADO_REVISION,
+        importacionId,
       });
       if (!res.ok) {
         toast.error(res.error);
@@ -291,17 +293,28 @@ export function useSubirAlbaran({ fechaPorDefecto, creador, onCreado }: UseSubir
         return;
       }
 
-      // La foto se adjunta al albarán recién creado (no bloquea el flujo si falla).
-      // TASK-204: pasará a moverse desde la importación (el original ya vive en Storage).
+      // El original ya vive en Storage (importación): se mueve al path del albarán
+      // sin volver a viajar. No bloquea el flujo si falla.
       try {
-        const fd = new FormData();
-        fd.set("albaranId", res.id);
-        fd.set("file", file);
-        fd.set("analisis", JSON.stringify({ cabecera, lineas }));
-        fd.set("hayAlerta", "false");
-        fd.set("uploadedBy", creador ?? "");
-        const up = await subirDocumentoAlbaran(fd);
-        if (!up.ok) toast.warning(`Albarán guardado, pero la foto no se pudo adjuntar: ${up.error}`);
+        if (importacionId) {
+          const adj = await adjuntarDocumentoDesdeImportacion({
+            albaranId: res.id,
+            importacionId,
+            analisis: { cabecera, lineas },
+            uploadedBy: creador ?? "",
+          });
+          if (!adj.ok) toast.warning(adj.message);
+        } else {
+          // Fallback legado (no debería darse: analizar siempre crea importación).
+          const fd = new FormData();
+          fd.set("albaranId", res.id);
+          fd.set("file", file);
+          fd.set("analisis", JSON.stringify({ cabecera, lineas }));
+          fd.set("hayAlerta", "false");
+          fd.set("uploadedBy", creador ?? "");
+          const up = await subirDocumentoAlbaran(fd);
+          if (!up.ok) toast.warning(`Albarán guardado, pero la foto no se pudo adjuntar: ${up.error}`);
+        }
       } catch {
         toast.warning("Albarán guardado, pero la foto no se pudo adjuntar");
       }
