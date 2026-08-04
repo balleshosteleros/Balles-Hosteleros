@@ -134,6 +134,7 @@ export function useSubirAlbaran({ fechaPorDefecto, creador, onCreado }: UseSubir
   const procesarResultado = async (cab: CabeceraOcrAlbaran, lin: LineaOcrAlbaran[]) => {
     const emp = await emparejarLineasAlbaran(
       lin.map((l) => ({ id: l.id, nombre: l.nombre, cantidad: l.cantidad, precioUnitario: l.precioUnitario })),
+      cab.proveedor, // activa el tramo de alias por proveedor (Etapa C)
     );
     const map = new Map<string, LineaEmparejada>();
     if (emp.ok) for (const le of emp.lineas) map.set(le.id, le);

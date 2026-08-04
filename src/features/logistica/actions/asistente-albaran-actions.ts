@@ -126,10 +126,35 @@ async function preciosVigentes(
  */
 export async function emparejarLineasAlbaran(
   lineas: LineaLeida[],
+  /** Proveedor detectado/elegido: activa el tramo de ALIAS por proveedor (Etapa C). */
+  proveedorNombre?: string | null,
 ): Promise<{ ok: boolean; lineas: LineaEmparejada[]; error?: string }> {
   try {
     const { supabase, empresaId } = await getLogisticaContext();
     if (!empresaId) return { ok: false, lineas: [], error: "No autenticado" };
+
+    // Tramo 1 (máxima evidencia): alias exacto del MISMO proveedor en la tabla
+    // producto_proveedor_aliases. Si casa, liga con score 1 sin pasar por similitud.
+    const aliasMap = new Map<string, string>(); // alias_normalizado -> producto_id
+    const provTxt = (proveedorNombre ?? "").trim();
+    if (provTxt) {
+      const { data: provRows } = await supabase
+        .from("proveedores")
+        .select("id")
+        .eq("empresa_id", empresaId)
+        .or(`nombre_comercial.ilike.${provTxt},razon_social.ilike.${provTxt}`);
+      if ((provRows ?? []).length === 1) {
+        const { data: aliases } = await supabase
+          .from("producto_proveedor_aliases")
+          .select("alias_normalizado, producto_id")
+          .eq("empresa_id", empresaId)
+          .eq("proveedor_id", provRows![0].id as string);
+        for (const a of (aliases ?? []) as Array<{ alias_normalizado: string; producto_id: string }>) {
+          aliasMap.set(a.alias_normalizado, a.producto_id);
+        }
+      }
+    }
+    const normAlias = (s: string) => s.toLowerCase().trim().replace(/\s+/g, " ");
 
     const { data } = await supabase
       .from("productos")
@@ -157,7 +182,23 @@ export async function emparejarLineasAlbaran(
       precioVigente: vigentes.get(c.producto.id) ?? null,
     });
 
+    const porId = new Map(catalogo.map((p) => [p.id, p]));
     const resultado: LineaEmparejada[] = lineas.map((l) => {
+      // Tramo 1: alias exacto del proveedor → liga con score 1 (máxima evidencia).
+      const aliasProd = aliasMap.get(normAlias(l.nombre));
+      if (aliasProd && porId.has(aliasProd)) {
+        const p = porId.get(aliasProd)!;
+        const sug: SugerenciaCandidato = {
+          productoId: p.id,
+          nombre: p.nombre,
+          nombreProveedor: p.nombreProveedor ?? null,
+          score: 1,
+          via: "nombre_proveedor",
+          precioVigente: vigentes.get(p.id) ?? null,
+        };
+        return { id: l.id, nombre: l.nombre, cantidad: l.cantidad, precioUnitario: l.precioUnitario, ligadoAuto: sug, candidatos: [sug] };
+      }
+      // Tramo 2: similitud contra nombre/nombre_proveedor (comportamiento previo).
       const match = emparejarConCatalogo(l.nombre, catalogo);
       return {
         id: l.id,
