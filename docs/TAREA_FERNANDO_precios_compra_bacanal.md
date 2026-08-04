@@ -5,6 +5,24 @@
 
 ---
 
+## 🧠 IVÁN: ETAPA C-BACKEND DESPLEGADA — alias por proveedor y búsqueda total (04-ago noche, Fernando)
+
+Tercera tanda del día, solo backend (tu UI del asistente NO se ha tocado — eso es la F5 y
+se coordina contigo antes):
+
+1. **Tabla `producto_proveedor_aliases`** (aplicada a prod): varios alias por producto ×
+   proveedor. Backfill desde `nombre_proveedor`: **145/150 migrados** inequívocamente (vía
+   histórico de precios), 5 al informe (`docs/BACKFILL_ALIAS_PROVEEDOR_2026-08-04.md`), 0
+   adivinados. `nombre_proveedor` queda de solo-lectura (fallback del matcher una versión).
+2. **Matcher alias-primero**: si el texto OCR casa EXACTO con un alias del mismo proveedor,
+   liga con score 1 sin pasar por similitud. Esto arregla los cruces tipo GARCIMAR.
+3. **`buscarProductosCompra`** (action paginada sobre todo el catálogo): lista para que tu
+   "Vincular a existente" de la F5 deje de estar limitado a 6 candidatos.
+
+Pendientes que siguen en tu tejado: repetir tu prueba móvil + las 4 dudas del 30-jul.
+
+---
+
 ## 🔒 IVÁN: ETAPA B DESPLEGADA — confirmar un albarán ahora es TRANSACCIONAL (04-ago noche, Fernando)
 
 Mismo día, segunda etapa del PRP-073 en prod. Qué cambia al confirmar/recepcionar:
