@@ -5,13 +5,50 @@
 
 ---
 
+## 📋 IVÁN: PRP-073 APROBADO — arrancamos la reconstrucción del flujo de albaranes (04-ago, Fernando)
+
+Fernando ha aprobado el **PRP-073** (`.claude/PRPs/PRP-073-albaranes-proveedor-flujo-fiable-y-revision-asistida.md`).
+Es el plan que arregla de raíz el fallo de subida móvil que viste y endurece todo el circuito
+(duplicados, confirmación transaccional, cantidades por formato, mesa de revisión). El orden de
+ejecución acordado está escrito en la cabecera del propio PRP. Resumen:
+
+- **Etapa A (empezamos ya):** subida directa a Storage (muere el base64 → muere tu fallo de
+  tamaño), compresión de imagen en cliente, errores con código + traceId, reintentos, y
+  detección de duplicados. **Cuando esté desplegada te pediremos que repitas tu prueba móvil
+  que falló** — ese es el gate de salida.
+- **Etapa B:** confirmación transaccional (hoy el estado puede quedar Confirmado con el stock
+  fallido) + cantidades por formato (caja de 24 → 24 al kardex, no 1).
+- **Piloto:** los 23 albaranes pendientes de Fernando, subidos por el camino nuevo.
+- **Etapas C y D:** matcher con alias por proveedor, mesa de revisión de escritorio (búsqueda
+  completa, guardar avance, ver el original al lado), y convergencia de la recepción por pedido.
+
+**3 cosas que te pedimos para no pisarnos:**
+
+1. **Mientras dure la Etapa A, no toques** `use-subir-albaran.ts`,
+   `asistente-albaran-actions.ts` ni `albaranes-actions.ts` (te avisamos aquí al cerrar cada
+   etapa). El resto del repo, libre.
+2. **El tope de 50 MB que subiste en `49513d41` lo vamos a revertir** dentro de la Etapa A: con
+   la subida directa a Storage el límite deja de depender de `bodySizeLimit`, y mientras tanto
+   50 MB solo agranda el fallo silencioso (el límite real sigue siendo ~10,5 MB, ver sección
+   siguiente). Si tienes un motivo para mantenerlo que no conozcamos, dínoslo aquí antes.
+3. **Las etapas C y D tocan tu zona** (`AsistenteAlbaranPanel`, `ResolverLineaDialog`, y la
+   recepción por pedido que usas a diario). Antes de arrancarlas te lo re-anunciamos aquí y
+   acordamos ventana.
+
+Y siguen pendientes de tu lado: **la evidencia de tu prueba fallida** (sección siguiente — sigue
+siendo útil aunque la Etapa A vaya a arreglar la causa más probable, porque confirma o descarta
+las otras 4 hipótesis) y **las 4 dudas del lote del 30-jul** (en particular la página que falta
+del Belmon Drink 15378 de Habana).
+
+---
+
 ## ❓ IVÁN: necesitamos la evidencia de TU prueba móvil que falló (03-ago, Fernando)
 
 Sabemos que probaste a subir un albarán desde el móvil y no funcionó. El análisis
 (`docs/analisis_funcion_albaranes.md`, hecho por Fernando contrastando con un agente de
-Codex — igual que el `PRP-073`, que está **pendiente de aprobación**: no generar TASKs de
-él todavía) deja 5 hipótesis posibles, pero sin los datos de tu prueba no se puede arreglar
-sobre seguro. Cuando puedas, apunta:
+Codex — igual que el `PRP-073`, ya **APROBADO**, ver sección de arriba) deja 5 hipótesis
+posibles, pero sin los datos de tu prueba no se puede arreglar sobre seguro. Cuando puedas,
+apunta:
 
 1. **Teléfono y sistema**: iPhone o Android, y si fue navegador (¿cuál?) o la PWA instalada.
 2. **Ruta exacta**: ¿"Subir albarán por foto" (Más → Albaranes → tarjeta de arriba) o dentro

@@ -1,9 +1,29 @@
 # PRP-073 — Albaranes de proveedor: captura fiable, revisión asistida e integridad de stock
 
-> **Estado:** PENDIENTE
+> **Estado:** APROBADO (2026-08-04, Fernando)
 > **Fecha:** 2026-07-31
 > **Proyecto:** Balles Hosteleros
 > **Documento de origen:** `docs/analisis_funcion_albaranes.md`
+
+## Orden de ejecución aprobado
+
+Se ejecuta por etapas, generando los TASKs de cada etapa al arrancarla (no todos de golpe).
+Dos cambios respecto al orden literal de las fases: la **Fase 3 se parte en dos** y su
+semántica de cantidades (3a) se adelanta por delante de la confirmación transaccional, para
+que la transacción de la Fase 4 nazca validando cantidad base y equivalencia.
+
+| Etapa | Fases | Gate de salida |
+| --- | --- | --- |
+| A — Captura fiable | F1 → F2 | Matriz 2/8/12 MB pasa desde móvil real; Iván repite su prueba fallida; mismo archivo no crea dos albaranes. |
+| B — Confirmación segura | F3a (solo cantidades/equivalencias) → F4 | Concurrencia/doble clic = máx. 1 movimiento por línea; fallo de stock mantiene Revisión; recarga conserva decisiones. |
+| 🏁 Piloto | — | Los 23 albaranes pendientes de Fernando se suben por móvil y se confirman por el camino nuevo. La fricción observada alimenta el diseño de la etapa C. |
+| C — Revisión rápida | F3b (alias + matcher + cuestionario) → F5 | Criterios de las fases 3 y 5. ⚠️ Re-coordinar con Iván antes: pisa `AsistenteAlbaranPanel`/`ResolverLineaDialog`. |
+| D — Deuda y cierre | F6 → F7 | Sin llamadas a la Edge Function no versionada; gates finales del PRP. ⚠️ F6 toca la recepción que Iván usa a diario: avisar y elegir ventana. |
+
+Ajustes de validación acordados: en esta máquina no se ejecuta `npm run build` (OOM en WSL) —
+el build lo valida el deploy de Vercel; la suite E2E se rebaja a mock determinista del OCR +
+Playwright mobile Chromium + matriz manual con teléfonos reales. Migraciones: se escriben y
+commitean en su fase, pero ejecutarlas en prod requiere OK explícito de Fernando, una a una.
 
 ---
 
@@ -467,4 +487,4 @@ todas las empresas.
 
 ---
 
-*PRP pendiente de aprobación. No implementa todavía cambios funcionales ni migraciones.*
+*PRP aprobado el 2026-08-04. Los TASKs se generan etapa a etapa según el orden de ejecución aprobado (ver cabecera).*
