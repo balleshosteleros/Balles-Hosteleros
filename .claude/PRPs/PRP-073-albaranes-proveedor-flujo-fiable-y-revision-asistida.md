@@ -14,7 +14,7 @@ que la transacción de la Fase 4 nazca validando cantidad base y equivalencia.
 
 | Etapa | Fases | Gate de salida |
 | --- | --- | --- |
-| A — Captura fiable | F1 → F2 | Matriz 2/8/12 MB pasa desde móvil real; Iván repite su prueba fallida; mismo archivo no crea dos albaranes. |
+| A — Captura fiable ✅ **EJECUTADA 2026-08-04** (TASK-201..209, migraciones aplicadas, E2E verde: matriz 2/8/12 MB, bloqueo sha, aviso+override de negocio; pendiente solo el gate humano: que Iván repita su prueba) | F1 → F2 | Matriz 2/8/12 MB pasa desde móvil real; Iván repite su prueba fallida; mismo archivo no crea dos albaranes. |
 | B — Confirmación segura | F3a (solo cantidades/equivalencias) → F4 | Concurrencia/doble clic = máx. 1 movimiento por línea; fallo de stock mantiene Revisión; recarga conserva decisiones. |
 | 🏁 Piloto | — | Los 23 albaranes pendientes de Fernando se suben por móvil y se confirman por el camino nuevo. La fricción observada alimenta el diseño de la etapa C. |
 | C — Revisión rápida | F3b (alias + matcher + cuestionario) → F5 | Criterios de las fases 3 y 5. ⚠️ Re-coordinar con Iván antes: pisa `AsistenteAlbaranPanel`/`ResolverLineaDialog`. |

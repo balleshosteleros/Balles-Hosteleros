@@ -5,6 +5,47 @@
 
 ---
 
+## ✅ IVÁN: ETAPA A DESPLEGADA — el fallo de subida móvil está arreglado: REPITE TU PRUEBA (04-ago tarde, Fernando)
+
+La Etapa A del PRP-073 (Fases 1 y 2) está **construida, probada E2E y desplegada en prod** el
+mismo día. Lo que cambia para ti:
+
+1. **Tu fallo de subida móvil debería estar muerto.** El archivo ya NO viaja en base64 por una
+   Server Action (era el límite mudo de ~10,5 MB): ahora la imagen se **comprime en el móvil**
+   (una foto de cámara de 12 MB baja a <1 MB) y **sube directa a Storage** con credencial
+   firmada. Probado con la matriz de 2, 8 y 12 MB: los tres tamaños entran. **→ Por favor,
+   repite la prueba que te falló, con la misma foto si puedes.** Si vuelve a fallar, ahora
+   verás un error CLARO en español con un código (p.ej. `alb-xxxx-xxxx`) — pásanoslo y con él
+   encontramos tu intento exacto en la traza.
+2. **Detección de duplicados activa.** El mismo archivo dos veces = bloqueado con el número
+   del albarán existente. Mismo proveedor + mismo nº de albarán = aviso naranja; para
+   registrarlo igualmente hay que escribir un motivo (queda auditado quién/cuándo/por qué).
+   Y un pedido ya no puede recepcionarse dos veces (constraint en BD).
+3. **Cada subida deja traza** en `albaran_importaciones` + `albaran_eventos` (nuevas tablas):
+   estado, huella SHA-256, intentos, código de error. Se acabó el "falló y no sabemos nada".
+4. **Tu tope de 50 MB ahora es verdad** para este flujo (con la subida directa el
+   `bodySizeLimit` ya no aplica) — no hizo falta revertirlo: hicimos cierto tu supuesto.
+5. **Fin del freeze**: puedes volver a tocar `use-subir-albaran.ts`,
+   `asistente-albaran-actions.ts` y `albaranes-actions.ts`. Ojo: `analizarAlbaranFoto` ahora
+   es un wrapper del extractor único en `lib/albaranes/ocr-albaran.ts` — si tocas el prompt
+   del OCR, tócalo AHÍ. Y en ficheros `"use server"` NO se pueden re-exportar tipos
+   (`export type { X }`): Turbopack no lo borra y revienta el loader de actions en runtime
+   (nos pasó; está corregido en `093e7889`).
+6. **Dato para la Fase 3 (alias):** tenemos proveedores duplicados por nombre en los
+   albaranes históricos ("GARCIMAR" vs "GARCIMAR SL", "DDI NEXIA" vs "DDI NEXIA S.L.U.") —
+   la detección de duplicados compara nombre exacto y eso la debilita entre lotes viejos y
+   nuevos. Se arregla con la tabla de alias de la Etapa C. Además el backfill de
+   `proveedor_id` dejó 4 albaranes sin match (informe en
+   `docs/BACKFILL_PROVEEDOR_ID_ALBARANES_2026-08-04.md`).
+
+Siguiente etapa (B): cantidades por formato (caja de 24 → 24 al stock) + confirmación
+transaccional. No pisa tus ficheros de revisión; te avisaremos aquí igualmente.
+
+(Siguen pendientes de tu lado: la evidencia de tu prueba fallida —sección de abajo, aún útil
+para descartar las otras hipótesis— y las 4 dudas del lote del 30-jul.)
+
+---
+
 ## 📋 IVÁN: PRP-073 APROBADO — arrancamos la reconstrucción del flujo de albaranes (04-ago, Fernando)
 
 Fernando ha aprobado el **PRP-073** (`.claude/PRPs/PRP-073-albaranes-proveedor-flujo-fiable-y-revision-asistida.md`).
