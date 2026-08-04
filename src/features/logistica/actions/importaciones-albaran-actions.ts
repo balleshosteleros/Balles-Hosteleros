@@ -31,6 +31,7 @@ import {
   type CabeceraOcrAlbaran,
   type LineaOcrAlbaran,
 } from "@/features/logistica/lib/albaranes/ocr-albaran";
+import { registrarEventoAlbaran } from "@/features/logistica/lib/albaranes/eventos";
 
 const BUCKET = "logistica-albaranes";
 
@@ -58,31 +59,8 @@ function fallo(
   };
 }
 
-/** Evento append-only. Nunca rompe el flujo principal si falla. */
-async function registrarEvento(
-  supabase: SupabaseClient,
-  ev: {
-    empresaId: string;
-    importacionId?: string | null;
-    albaranId?: string | null;
-    actorId?: string | null;
-    tipo: string;
-    payload?: Record<string, unknown>;
-  },
-): Promise<void> {
-  try {
-    await supabase.from("albaran_eventos").insert({
-      empresa_id: ev.empresaId,
-      importacion_id: ev.importacionId ?? null,
-      albaran_id: ev.albaranId ?? null,
-      actor_id: ev.actorId ?? null,
-      tipo: ev.tipo,
-      payload: ev.payload ?? null,
-    });
-  } catch (err) {
-    console.error("[importaciones-albaran] registrarEvento:", err);
-  }
-}
+// Eventos append-only: lib compartida (registrarEventoAlbaran).
+const registrarEvento = registrarEventoAlbaran;
 
 /** Tipo real del archivo por cabecera mágica (file.type/extensión no son confiables). */
 function detectarTipoReal(buf: Buffer): { mime: string } | null {
@@ -257,6 +235,43 @@ export async function completarSubidaAlbaran(input: {
     }
 
     const sha256 = createHash("sha256").update(buf).digest("hex");
+
+    // Bloqueo por huella exacta (TASK-207): si este MISMO archivo ya produjo un
+    // albarán en la empresa, no se llega ni al OCR — se remite al existente.
+    const { data: dupImp } = await supabase
+      .from("albaran_importaciones")
+      .select("albaran_id")
+      .eq("empresa_id", empresaId)
+      .eq("archivo_sha256", sha256)
+      .not("albaran_id", "is", null)
+      .neq("id", imp.id)
+      .limit(1)
+      .maybeSingle();
+    if (dupImp?.albaran_id) {
+      const { data: dupAlb } = await supabase
+        .from("albaranes")
+        .select("numero")
+        .eq("id", dupImp.albaran_id as string)
+        .maybeSingle();
+      const numeroDup = (dupAlb?.numero as string | undefined) ?? "";
+      const msg = numeroDup
+        ? `Este documento ya está registrado como el albarán ${numeroDup}.`
+        : "Este documento ya está registrado en otro albarán.";
+      await supabase
+        .from("albaran_importaciones")
+        .update({ estado: "error", error_code: "DUPLICATE_FILE", error_message: msg, archivo_sha256: sha256 })
+        .eq("id", imp.id);
+      await registrarEvento(supabase, {
+        empresaId,
+        importacionId: imp.id,
+        albaranId: dupImp.albaran_id as string,
+        actorId: userId,
+        tipo: "duplicado_archivo",
+        payload: { sha256, albaranExistente: numeroDup },
+      });
+      return fallo("DUPLICATE_FILE", traceId, { message: msg, retryable: false });
+    }
+
     const { error: updErr } = await supabase
       .from("albaran_importaciones")
       .update({

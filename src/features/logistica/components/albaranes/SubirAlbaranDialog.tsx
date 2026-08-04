@@ -13,6 +13,7 @@
  *                   ignorar) se hace después en el detalle con AsistenteAlbaranPanel.
  */
 
+import { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -34,12 +35,15 @@ interface Props {
 export function SubirAlbaranDialog({ open, onOpenChange, onCreado }: Props) {
   const { empresaActual } = useEmpresa();
   const { profile } = useAuth();
+  const [motivoOverride, setMotivoOverride] = useState("");
 
   const {
     paso,
     file,
     preview,
     fallo,
+    duplicado,
+    setDuplicado,
     cabecera,
     proveedor,
     setProveedor,
@@ -239,6 +243,37 @@ export function SubirAlbaranDialog({ open, onOpenChange, onCreado }: Props) {
               </table>
             </div>
 
+            {duplicado && (
+              <div className="space-y-2 rounded-lg border border-orange-300 bg-orange-50 p-3 dark:border-orange-800 dark:bg-orange-950/30">
+                <p className="text-sm font-medium text-orange-800 dark:text-orange-300">
+                  Posible duplicado: ya existe el albarán {duplicado.numero} de {duplicado.proveedorNombre}
+                  {duplicado.numeroProveedor ? ` (nº proveedor ${duplicado.numeroProveedor})` : ""} con fecha{" "}
+                  {duplicado.fecha}.
+                </p>
+                <p className="text-xs text-orange-700 dark:text-orange-400">
+                  Si es el mismo papel, no lo registres otra vez. Si de verdad es otro documento, explica
+                  por qué y registra.
+                </p>
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="Motivo (obligatorio para registrar)"
+                    value={motivoOverride}
+                    onChange={(e) => setMotivoOverride(e.target.value)}
+                    className="h-9 bg-background"
+                  />
+                  <Button variant="outline" onClick={() => { setDuplicado(null); setMotivoOverride(""); }}>
+                    Revisar datos
+                  </Button>
+                  <Button
+                    disabled={!motivoOverride.trim()}
+                    onClick={() => guardar({ posibleDuplicadoDe: duplicado.id, motivo: motivoOverride.trim() })}
+                  >
+                    Registrar de todos modos
+                  </Button>
+                </div>
+              </div>
+            )}
+
             <div className="flex items-center justify-between">
               <p className="text-xs text-muted-foreground">
                 Suma de líneas: <span className="font-semibold tabular-nums">{formatNumero(totalLineas)} €</span>
@@ -250,7 +285,7 @@ export function SubirAlbaranDialog({ open, onOpenChange, onCreado }: Props) {
               </p>
               <div className="flex gap-2">
                 <Button variant="outline" onClick={() => { reset(); }}>Empezar de nuevo</Button>
-                <Button onClick={guardar}>Guardar en Revisión</Button>
+                <Button onClick={() => guardar()} disabled={!!duplicado}>Guardar en Revisión</Button>
               </div>
             </div>
           </div>

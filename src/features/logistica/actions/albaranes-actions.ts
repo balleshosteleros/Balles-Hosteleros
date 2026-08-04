@@ -6,6 +6,11 @@ import {
   revertirEntradasAlbaran,
 } from "@/features/logistica/services/entradas-stock-por-albaran";
 import {
+  detectarDuplicadoNegocio,
+  type CandidatoDuplicado,
+} from "@/features/logistica/lib/albaranes/duplicados";
+import { registrarEventoAlbaran } from "@/features/logistica/lib/albaranes/eventos";
+import {
   ESTADO_REVISION,
   ESTADOS_COMPRA_CONFIRMADA,
 } from "@/features/logistica/data/albaranes";
@@ -119,7 +124,9 @@ export async function listComprasPorProducto(
 
 type CreateAlbaranResult =
   | { ok: true; id: string; numero: string; numeroSecuencial: number }
-  | { ok: false; error: string };
+  /** Posible duplicado de negocio: la persona debe abrir el existente o registrar la excepción. */
+  | { ok: false; duplicado: CandidatoDuplicado; error?: undefined }
+  | { ok: false; error: string; duplicado?: undefined };
 
 export async function createAlbaran(input: {
   /** null = albarán suelto (subido por foto, sin pedido de origen). */
@@ -139,6 +146,12 @@ export async function createAlbaran(input: {
   numeroProveedor?: string | null;
   /** Importación de origen (flujo por foto, PRP-073): vincula el albarán con su captura. */
   importacionId?: string | null;
+  /**
+   * Excepción de duplicado (TASK-207): si la detección devolvió un candidato y la
+   * persona decide registrar de todos modos, debe venir el candidato + motivo.
+   * Se persiste y audita; sin esto, un candidato detectado bloquea la creación.
+   */
+  duplicadoOverride?: { posibleDuplicadoDe: string; motivo: string } | null;
   /**
    * Estado inicial. Por defecto "Pendiente". Si es "Revisión" (albarán subido por foto con
    * líneas aún sin producto), se relaja la regla del productoId: se permite guardar con
@@ -186,6 +199,31 @@ export async function createAlbaran(input: {
       }
     }
 
+    // Detección de duplicado de NEGOCIO (TASK-207) — solo para albaranes sueltos:
+    // los que vienen de pedido ya están protegidos por el unique de pedido_id.
+    if (!input.pedidoId) {
+      const candidato = await detectarDuplicadoNegocio(supabase, empresaId, {
+        proveedorNombre: input.proveedorNombre,
+        numeroProveedor: input.numeroProveedor ?? null,
+        fecha: input.fecha || null,
+      });
+      if (candidato && input.duplicadoOverride?.posibleDuplicadoDe !== candidato.id) {
+        return { ok: false, duplicado: candidato };
+      }
+    }
+
+    // Identidad de proveedor (TASK-207): si el nombre corresponde inequívocamente
+    // a un proveedor real de la empresa, se guarda proveedor_id además del snapshot.
+    let proveedorId: string | null = null;
+    {
+      const { data: provs } = await supabase
+        .from("proveedores")
+        .select("id")
+        .eq("empresa_id", empresaId)
+        .ilike("nombre_comercial", input.proveedorNombre.trim());
+      if ((provs ?? []).length === 1) proveedorId = (provs![0].id as string) ?? null;
+    }
+
     const year = new Date(input.fecha || new Date().toISOString()).getFullYear();
     const insertPayload: Record<string, unknown> = {
       empresa_id: empresaId,
@@ -204,10 +242,21 @@ export async function createAlbaran(input: {
       numero_proveedor: input.numeroProveedor ?? null,
     };
 
+    if (proveedorId) {
+      insertPayload.proveedor_id = proveedorId;
+    }
+
     // Solo se incluye si viene: así los flujos sin importación (pedidos, recepción)
     // no dependen de que la columna exista ya en la BD desplegada.
     if (input.importacionId) {
       insertPayload.importacion_id = input.importacionId;
+    }
+
+    if (input.duplicadoOverride) {
+      insertPayload.posible_duplicado_de = input.duplicadoOverride.posibleDuplicadoDe;
+      insertPayload.duplicado_override_motivo = input.duplicadoOverride.motivo;
+      insertPayload.duplicado_override_por = user?.id ?? null;
+      insertPayload.duplicado_override_at = new Date().toISOString();
     }
 
     if (typeof input.numeroSecuencial === "number") {
@@ -224,6 +273,21 @@ export async function createAlbaran(input: {
       .select("id, numero, numero_secuencial")
       .single();
     if (error) throw error;
+
+    // La excepción de duplicado queda auditada en la traza (append-only).
+    if (input.duplicadoOverride) {
+      await registrarEventoAlbaran(supabase, {
+        empresaId,
+        albaranId: data.id as string,
+        importacionId: input.importacionId ?? null,
+        actorId: user?.id ?? null,
+        tipo: "duplicado_override",
+        payload: {
+          posibleDuplicadoDe: input.duplicadoOverride.posibleDuplicadoDe,
+          motivo: input.duplicadoOverride.motivo,
+        },
+      });
+    }
 
     // Encadenado: el pedido de origen pasa a "Confirmado" (🔒) y queda vinculado al albarán.
     if (input.pedidoId) {

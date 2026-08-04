@@ -18,12 +18,15 @@ import { formatNumero } from "@/shared/lib/numero";
 
 export function SubirAlbaranMobile() {
   const [exito, setExito] = useState<{ id: string; numero?: string } | null>(null);
+  const [motivoOverride, setMotivoOverride] = useState("");
 
   const {
     paso,
     file,
     preview,
     fallo,
+    duplicado,
+    setDuplicado,
     cabecera,
     proveedor,
     setProveedor,
@@ -242,12 +245,44 @@ export function SubirAlbaranMobile() {
             )}
           </p>
 
+          {duplicado && (
+            <div className="space-y-2.5 rounded-2xl border border-orange-300 bg-orange-50 p-3.5 dark:border-orange-800 dark:bg-orange-950/30">
+              <p className="text-sm font-medium text-orange-800 dark:text-orange-300">
+                Posible duplicado: ya existe el albarán {duplicado.numero} de {duplicado.proveedorNombre}
+                {duplicado.numeroProveedor ? ` (nº proveedor ${duplicado.numeroProveedor})` : ""} con fecha{" "}
+                {duplicado.fecha}.
+              </p>
+              <p className="text-xs text-orange-700 dark:text-orange-400">
+                Si es el mismo papel, no lo registres otra vez. Si de verdad es otro documento,
+                explica por qué y registra.
+              </p>
+              <Input
+                placeholder="Motivo (obligatorio para registrar)"
+                value={motivoOverride}
+                onChange={(e) => setMotivoOverride(e.target.value)}
+                className="h-10 bg-background"
+              />
+              <div className="flex gap-2">
+                <Button variant="outline" className="flex-1" onClick={() => { setDuplicado(null); setMotivoOverride(""); }}>
+                  Revisar datos
+                </Button>
+                <Button
+                  className="flex-1"
+                  disabled={!motivoOverride.trim()}
+                  onClick={() => guardar({ posibleDuplicadoDe: duplicado.id, motivo: motivoOverride.trim() })}
+                >
+                  Registrar de todos modos
+                </Button>
+              </div>
+            </div>
+          )}
+
           <div className="fixed inset-x-0 bottom-[84px] z-30 mx-auto max-w-screen-sm px-3">
             <div className="flex gap-2">
               <Button variant="outline" className="shrink-0" onClick={reset}>
                 Empezar de nuevo
               </Button>
-              <Button className="flex-1 shadow-lg" size="lg" onClick={guardar}>
+              <Button className="flex-1 shadow-lg" size="lg" onClick={() => guardar()} disabled={!!duplicado}>
                 Guardar en Revisión
               </Button>
             </div>

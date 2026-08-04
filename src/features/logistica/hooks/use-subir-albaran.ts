@@ -36,6 +36,7 @@ import type {
   LineaOcrAlbaran,
 } from "@/features/logistica/lib/albaranes/ocr-albaran";
 import type { FalloImportacion } from "@/features/logistica/lib/albaranes/importaciones";
+import type { CandidatoDuplicado } from "@/features/logistica/lib/albaranes/duplicados";
 import { ESTADO_REVISION } from "@/features/logistica/data/albaranes";
 import { MAX_DOCUMENTO_MB } from "@/shared/lib/documentos";
 
@@ -75,6 +76,7 @@ export function useSubirAlbaran({ fechaPorDefecto, creador, onCreado }: UseSubir
   const [preview, setPreview] = useState<string | null>(null);
   const [importacionId, setImportacionId] = useState<string | null>(null);
   const [fallo, setFallo] = useState<FalloImportacion | null>(null);
+  const [duplicado, setDuplicado] = useState<CandidatoDuplicado | null>(null);
   const [cabecera, setCabecera] = useState<CabeceraOcrAlbaran>({ proveedor: null, numero: null, fecha: null, total: null });
   const [proveedor, setProveedor] = useState("");
   const [fecha, setFecha] = useState("");
@@ -90,6 +92,7 @@ export function useSubirAlbaran({ fechaPorDefecto, creador, onCreado }: UseSubir
     setPreview(null);
     setImportacionId(null);
     setFallo(null);
+    setDuplicado(null);
     setCabecera({ proveedor: null, numero: null, fecha: null, total: null });
     setProveedor("");
     setFecha("");
@@ -243,7 +246,7 @@ export function useSubirAlbaran({ fechaPorDefecto, creador, onCreado }: UseSubir
     [lineas, ligadas],
   );
 
-  const guardar = () => {
+  const guardar = (override?: { posibleDuplicadoDe: string; motivo: string }) => {
     if (!proveedor.trim()) {
       toast.error("Indica el proveedor del albarán");
       return;
@@ -289,12 +292,20 @@ export function useSubirAlbaran({ fechaPorDefecto, creador, onCreado }: UseSubir
         numeroProveedor: numeroProveedor.trim() || null,
         estado: ESTADO_REVISION,
         importacionId,
+        duplicadoOverride: override ?? null,
       });
       if (!res.ok) {
-        toast.error(res.error);
+        if ("duplicado" in res && res.duplicado) {
+          // Posible duplicado de negocio: la persona decide en la pantalla de verificar.
+          setDuplicado(res.duplicado);
+          setPaso("verificar");
+          return;
+        }
+        toast.error(res.error ?? "No se pudo guardar el albarán");
         setPaso("verificar");
         return;
       }
+      setDuplicado(null);
 
       // El original ya vive en Storage (importación): se mueve al path del albarán
       // sin volver a viajar. No bloquea el flujo si falla.
@@ -336,6 +347,8 @@ export function useSubirAlbaran({ fechaPorDefecto, creador, onCreado }: UseSubir
     preview,
     importacionId,
     fallo,
+    duplicado,
+    setDuplicado,
     cabecera,
     proveedor,
     setProveedor,
