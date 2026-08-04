@@ -1,10 +1,7 @@
 "use server";
 
 import { getLogisticaContext } from "@/features/logistica/lib/supabase-context";
-import {
-  aplicarEntradasAlbaran,
-  revertirEntradasAlbaran,
-} from "@/features/logistica/services/entradas-stock-por-albaran";
+import { revertirEntradasAlbaran } from "@/features/logistica/services/entradas-stock-por-albaran";
 import {
   detectarDuplicadoNegocio,
   type CandidatoDuplicado,
@@ -429,7 +426,7 @@ export async function getDocumentoAlbaranSignedUrl(path: string) {
 
 export async function updateAlbaranEstado(id: string, estado: string) {
   try {
-    const { supabase, user } = await getContext();
+    const { supabase } = await getContext();
 
     // Estado anterior para decidir si hay que mover stock al entrar/salir de la zona
     // recepcionada ("Entregado"/"Confirmado"). El stock se aplica al recepcionar (Entregado)
@@ -441,44 +438,23 @@ export async function updateAlbaranEstado(id: string, estado: string) {
       .maybeSingle();
     const estadoAnterior = (previo?.estado as string | undefined) ?? null;
 
-    // Salir de "Revisión" hacia un estado que suma stock exige que TODAS las líneas tengan
-    // ya un producto asociado. Es la aprobación de la que habló Iván: no se confirma (ni se
-    // toca stock) hasta que todo está resuelto.
-    const recibidoDestino = estado === "Entregado" || estado === "Confirmado";
-    if (estadoAnterior === ESTADO_REVISION && recibidoDestino) {
-      const lineasPrev = Array.isArray(previo?.lineas)
-        ? (previo!.lineas as Array<{ productoId?: unknown; ignorada?: unknown }>)
-        : [];
-      const huerfanas = lineasPrev.filter((l) => {
-        if (l?.ignorada === true) return false; // líneas marcadas "ignorar" no bloquean
-        const pid = (l as { productoId?: unknown })?.productoId;
-        return typeof pid !== "string" || (pid as string).trim() === "";
+    // Transición HACIA recibido (Entregado/Confirmado): TODO pasa por la función
+    // transaccional (PRP-073 F4) — valida huérfanas, re-chequea duplicados bajo
+    // bloqueo, resuelve equivalencias (caja de 24 → 24 al kardex), registra
+    // precios y stock, y cambia el estado AL FINAL. Si algo falla, rollback
+    // completo: se acabó el "Confirmado con aviso de stock".
+    const recibido = (e: string | null) => e === "Entregado" || e === "Confirmado";
+    if (recibido(estado) && !recibido(estadoAnterior)) {
+      const { data: rpc, error: rpcErr } = await supabase.rpc("confirmar_albaran_transaccional", {
+        p_albaran_id: id,
+        p_estado_destino: estado,
       });
-      if (huerfanas.length > 0) {
-        return {
-          ok: false,
-          error: `Quedan ${huerfanas.length} línea(s) sin resolver. Vincula, crea o ignora cada producto antes de confirmar.`,
-        };
+      if (rpcErr) {
+        // El mensaje de la excepción plpgsql ya viene en español y accionable.
+        return { ok: false, error: rpcErr.message };
       }
-    }
-
-    // Re-check de duplicado de negocio antes de que el albarán toque stock (TASK-208):
-    // pudo registrarse otro albarán igual DESPUÉS de crear este. Solo albaranes sueltos
-    // (los de pedido los protege el unique de pedido_id) y sin override ya registrado.
-    const yaRecibido = estadoAnterior === "Entregado" || estadoAnterior === "Confirmado";
-    if (recibidoDestino && !yaRecibido && previo && !previo.pedido_id && !previo.duplicado_override_at) {
-      const candidato = await detectarDuplicadoNegocio(supabase, previo.empresa_id as string, {
-        proveedorNombre: (previo.proveedor_nombre as string) ?? "",
-        numeroProveedor: (previo.numero_proveedor as string | null) ?? null,
-        fecha: (previo.fecha as string | null) ?? null,
-        excluirId: id,
-      });
-      if (candidato) {
-        return {
-          ok: false,
-          error: `Posible duplicado del albarán ${candidato.numero} (${candidato.proveedorNombre}, ${candidato.fecha}). Revísalo antes de confirmar; si es otro documento, regístralo con motivo desde el asistente.`,
-        };
-      }
+      const r = (rpc ?? {}) as { precios?: number };
+      return { ok: true, preciosRegistrados: r.precios ?? 0 };
     }
 
     const { error } = await supabase
@@ -487,15 +463,7 @@ export async function updateAlbaranEstado(id: string, estado: string) {
       .eq("id", id);
     if (error) throw error;
 
-    // Movimientos de stock por recepción (PRP-057). Idempotente.
-    const recibido = (e: string | null) => e === "Entregado" || e === "Confirmado";
-    if (recibido(estado) && !recibido(estadoAnterior)) {
-      const res = await aplicarEntradasAlbaran(id, user?.id ?? null);
-      if (!res.ok) {
-        // Regla de seguridad: no tragarse el error de stock, pero el estado ya cambió.
-        return { ok: true, stockAviso: res.error };
-      }
-    } else if (!recibido(estado) && recibido(estadoAnterior)) {
+    if (!recibido(estado) && recibido(estadoAnterior)) {
       // Se deshace la recepción (vuelve a Pendiente) → devolver el stock.
       await revertirEntradasAlbaran(id);
     }

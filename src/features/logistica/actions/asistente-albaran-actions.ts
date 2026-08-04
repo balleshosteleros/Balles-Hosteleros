@@ -331,54 +331,29 @@ export async function resolverAlbaranRevision(
       }
     }
 
+    // Guardado (parcial o previo a confirmar) con sello de versión (PRP-073 F4):
+    // la versión optimista completa con UI de conflicto llega en la Etapa C.
+    const { userId } = await getLogisticaContext();
     const { error: upErr } = await supabase
       .from("albaranes")
-      .update({ lineas: lineas as unknown as object, updated_at: new Date().toISOString() })
+      .update({
+        lineas: lineas as unknown as object,
+        revision_guardada_at: new Date().toISOString(),
+        revision_guardada_por: userId,
+        updated_at: new Date().toISOString(),
+      })
       .eq("id", albaranId)
       .eq("empresa_id", empresaId);
     if (upErr) throw upErr;
 
     if (!confirmar) return { ok: true, preciosRegistrados: 0 };
 
-    // 3) Registrar precios de compra de las líneas resueltas (idempotente por
-    //    producto+proveedor+fecha). Automatiza el histórico que hasta ahora se cargaba a mano.
-    const proveedor = ((alb.proveedor_nombre as string) ?? "").trim();
-    const fecha = (alb.fecha as string) ?? hoyEnZona(await getZonaHorariaEmpresa(supabase, empresaId));
-    const candidatas = lineas.filter(
-      (l) => l.ignorada !== true && l.productoId && Number(l.precioUC) > 0,
-    );
-    let preciosRegistrados = 0;
-    if (candidatas.length > 0 && proveedor) {
-      const { data: existentes } = await supabase
-        .from("producto_precios_compra")
-        .select("producto_id")
-        .in("producto_id", candidatas.map((l) => l.productoId as string))
-        .eq("proveedor", proveedor)
-        .eq("fecha_inicio", fecha);
-      const yaCargados = new Set(
-        ((existentes ?? []) as Array<{ producto_id: string }>).map((e) => e.producto_id),
-      );
-      for (const l of candidatas) {
-        if (yaCargados.has(l.productoId as string)) continue;
-        const res = await addPrecioCompra({
-          productoId: l.productoId as string,
-          precio: Number(l.precioUC),
-          // Solo porcentajes de IVA reales: un código de impuesto del proveedor (Makro
-          // imprime 1/2/5 en su columna "Imp") no debe acabar registrado como IVA.
-          iva: [0, 4, 10, 21].includes(Number(l.impuesto)) ? String(l.impuesto) : undefined,
-          proveedor,
-          formato: l.formato ?? null,
-          fechaInicio: fecha,
-        });
-        if (res.ok) preciosRegistrados++;
-        // Un fallo de precio no aborta la confirmación: el albarán es válido igualmente.
-      }
-    }
-
-    // 4) Transición Revisión→Confirmado: valida huérfanas y suma stock.
+    // 3) Confirmación TRANSACCIONAL (PRP-073 F4): la función de BD valida huérfanas y
+    //    duplicados bajo bloqueo, resuelve equivalencias (caja de 24 → 24), registra
+    //    precios y stock, y cambia el estado al final. Fallo = rollback, sigue en Revisión.
     const trans = await updateAlbaranEstado(albaranId, "Confirmado");
-    if (!trans.ok) return { ok: false, error: trans.error, preciosRegistrados };
-    return { ok: true, stockAviso: trans.stockAviso, preciosRegistrados };
+    if (!trans.ok) return { ok: false, error: trans.error, preciosRegistrados: 0 };
+    return { ok: true, preciosRegistrados: trans.preciosRegistrados ?? 0 };
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Error desconocido";
     console.error("[asistente-albaran] resolverAlbaranRevision:", msg);
