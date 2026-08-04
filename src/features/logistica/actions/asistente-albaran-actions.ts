@@ -15,10 +15,12 @@
  * `albaranes-actions.ts`. Aquí está solo la resolución línea-a-línea.
  */
 
-import { randomUUID } from "crypto";
-import { SchemaType, type Schema } from "@google/generative-ai";
-import { geminiJSON, GeminiKeyMissingError } from "@/lib/ia/gemini";
 import { getLogisticaContext } from "@/features/logistica/lib/supabase-context";
+import {
+  ejecutarOcrAlbaran,
+  type CabeceraOcrAlbaran,
+  type LineaOcrAlbaran,
+} from "@/features/logistica/lib/albaranes/ocr-albaran";
 import { getZonaHorariaEmpresa } from "@/features/empresa/lib/empresa-server";
 import { hoyEnZona } from "@/features/empresa/lib/zona-horaria";
 import { createProducto } from "@/features/logistica/actions/producto-actions";
@@ -62,78 +64,9 @@ export interface LineaEmparejada {
   candidatos: SugerenciaCandidato[];
 }
 
-/** Línea leída por el OCR de un albarán suelto (LineaLeida + datos para el jsonb). */
-export interface LineaOcrAlbaran extends LineaLeida {
-  unidad: string;
-  /** Importe total de la línea tal y como lo imprime el proveedor. */
-  importe: number | null;
-}
-
-export interface CabeceraOcrAlbaran {
-  proveedor: string | null;
-  numero: string | null;
-  /** YYYY-MM-DD */
-  fecha: string | null;
-  total: number | null;
-}
-
-const OCR_ALBARAN_SCHEMA: Schema = {
-  type: SchemaType.OBJECT,
-  properties: {
-    proveedorNombreDetectado: { type: SchemaType.STRING, nullable: true },
-    numeroAlbaranDetectado: { type: SchemaType.STRING, nullable: true },
-    fechaAlbaranDetectada: { type: SchemaType.STRING, nullable: true, description: "YYYY-MM-DD" },
-    totalDetectado: { type: SchemaType.NUMBER, nullable: true },
-    lineas: {
-      type: SchemaType.ARRAY,
-      items: {
-        type: SchemaType.OBJECT,
-        properties: {
-          nombre: { type: SchemaType.STRING },
-          cantidad: { type: SchemaType.NUMBER },
-          unidad: { type: SchemaType.STRING },
-          formato: { type: SchemaType.STRING },
-          precioUnitario: { type: SchemaType.NUMBER },
-          ivaPorcentaje: { type: SchemaType.NUMBER },
-          importeLinea: { type: SchemaType.NUMBER },
-        },
-        required: ["nombre", "cantidad"],
-      },
-    },
-  },
-  required: ["lineas"],
-};
-
-const OCR_ALBARAN_SYSTEM = `
-Eres un extractor de albaranes de proveedores de un restaurante en España.
-Tu tarea: leer el documento adjunto (foto o PDF de un albarán de entrega) y devolver un JSON con:
-- Cabecera: nombre del proveedor, número de albarán, fecha (YYYY-MM-DD) y total del documento.
-- Una lista de líneas de PRODUCTO con: nombre tal y como lo escribe el proveedor, cantidad,
-  unidad (kg, L, ud, caja...), formato, precio unitario NETO (con descuento aplicado si lo hay),
-  IVA % e importe de la línea.
-- NO incluyas como líneas los gastos o servicios (portes, desplazamiento, punto verde) ni las
-  líneas de regalo sin importe.
-- IVA %: SOLO si el documento imprime un porcentaje de IVA explícito (0, 4, 10 o 21). Muchos
-  albaranes (p.ej. Makro) imprimen una columna "Imp" con CÓDIGOS de impuesto (1, 2, 5...):
-  eso NO es un porcentaje — en ese caso devuelve null.
-Si un dato no se ve, devuélvelo como null. NO inventes (ni sabores, ni formatos). Idioma: español.
-`.trim();
-
-interface OcrAlbaranRaw {
-  proveedorNombreDetectado?: string | null;
-  numeroAlbaranDetectado?: string | null;
-  fechaAlbaranDetectada?: string | null;
-  totalDetectado?: number | null;
-  lineas?: Array<{
-    nombre?: string;
-    cantidad?: number;
-    unidad?: string;
-    formato?: string;
-    precioUnitario?: number;
-    ivaPorcentaje?: number;
-    importeLinea?: number;
-  }>;
-}
+// Tipos del OCR: viven en el extractor único (lib/albaranes/ocr-albaran.ts) y se
+// re-exportan aquí para no romper los imports existentes del hook y las pantallas.
+export type { CabeceraOcrAlbaran, LineaOcrAlbaran };
 
 /**
  * OCR EXTRACTIVO de un albarán suelto (sin pedido de referencia): lee el documento y
@@ -152,48 +85,10 @@ export async function analizarAlbaranFoto(input: {
     if (!empresaId) return { ok: false, error: "No autenticado" };
     if (!input.base64) return { ok: false, error: "No se recibió el documento" };
 
-    const ocr = await geminiJSON<OcrAlbaranRaw>(
-      "Extrae los datos estructurados de este albarán del proveedor.",
-      {
-        systemInstruction: OCR_ALBARAN_SYSTEM,
-        responseSchema: OCR_ALBARAN_SCHEMA,
-        temperature: 0.1,
-        attachments: [{ mimeType: input.mimeType || "image/jpeg", base64: input.base64 }],
-      },
-    );
-
-    const raw = ocr.data ?? {};
-    const lineas: LineaOcrAlbaran[] = (raw.lineas ?? [])
-      .filter((l) => (l.nombre ?? "").trim() !== "")
-      .map((l) => ({
-        id: randomUUID(),
-        nombre: (l.nombre ?? "").trim(),
-        cantidad: Number.isFinite(l.cantidad) ? (l.cantidad as number) : 0,
-        precioUnitario: Number.isFinite(l.precioUnitario) ? (l.precioUnitario as number) : null,
-        iva: Number.isFinite(l.ivaPorcentaje) ? String(l.ivaPorcentaje) : null,
-        formato: (l.formato ?? "").trim() || null,
-        unidad: (l.unidad ?? "").trim(),
-        importe: Number.isFinite(l.importeLinea) ? (l.importeLinea as number) : null,
-      }));
-
-    if (lineas.length === 0) {
-      return { ok: false, error: "La IA no encontró líneas de producto en el documento. Prueba con una foto más nítida." };
-    }
-
-    return {
-      ok: true,
-      cabecera: {
-        proveedor: (raw.proveedorNombreDetectado ?? "").trim() || null,
-        numero: (raw.numeroAlbaranDetectado ?? "").trim() || null,
-        fecha: (raw.fechaAlbaranDetectada ?? "").trim() || null,
-        total: Number.isFinite(raw.totalDetectado) ? (raw.totalDetectado as number) : null,
-      },
-      lineas,
-    };
+    const res = await ejecutarOcrAlbaran(input);
+    if (!res.ok) return { ok: false, error: res.message };
+    return { ok: true, cabecera: res.cabecera, lineas: res.lineas };
   } catch (err) {
-    if (err instanceof GeminiKeyMissingError) {
-      return { ok: false, error: "La IA no está configurada (falta GEMINI_API_KEY)." };
-    }
     const msg = err instanceof Error ? err.message : "Error desconocido";
     console.error("[asistente-albaran] analizarAlbaranFoto:", msg);
     return { ok: false, error: msg };
