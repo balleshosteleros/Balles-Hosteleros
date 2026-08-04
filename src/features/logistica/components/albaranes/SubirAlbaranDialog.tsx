@@ -39,6 +39,7 @@ export function SubirAlbaranDialog({ open, onOpenChange, onCreado }: Props) {
     paso,
     file,
     preview,
+    fallo,
     cabecera,
     proveedor,
     setProveedor,
@@ -52,6 +53,7 @@ export function SubirAlbaranDialog({ open, onOpenChange, onCreado }: Props) {
     nReconocidas,
     handleFile,
     analizar,
+    reintentar,
     setLineaCampo,
     guardar,
     reset,
@@ -67,7 +69,7 @@ export function SubirAlbaranDialog({ open, onOpenChange, onCreado }: Props) {
   });
 
   const handleClose = (o: boolean) => {
-    if (!o && paso !== "analizando" && paso !== "guardando") {
+    if (!o && paso !== "subiendo" && paso !== "analizando" && paso !== "guardando") {
       reset();
       onOpenChange(false);
     }
@@ -131,18 +133,30 @@ export function SubirAlbaranDialog({ open, onOpenChange, onCreado }: Props) {
                 <X className="h-4 w-4" />
               </Button>
             </div>
+            {fallo && (
+              <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm">
+                <p className="font-medium text-destructive">{fallo.message}</p>
+                <p className="mt-1 text-[11px] text-muted-foreground">Código: {fallo.traceId}</p>
+              </div>
+            )}
             <div className="flex gap-2 justify-end">
               <Button variant="outline" onClick={() => { setFile(null); setPreview(null); }}>Cambiar archivo</Button>
-              <Button onClick={analizar} className="gap-1">Analizar albarán</Button>
+              <Button onClick={fallo ? reintentar : analizar} className="gap-1">
+                {fallo ? "Reintentar" : "Analizar albarán"}
+              </Button>
             </div>
           </div>
         )}
 
-        {(paso === "analizando" || paso === "guardando") && (
+        {(paso === "subiendo" || paso === "analizando" || paso === "guardando") && (
           <div className="flex flex-col items-center justify-center gap-3 py-12">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
             <p className="text-sm text-muted-foreground">
-              {paso === "analizando" ? "Leyendo el albarán con IA…" : "Guardando el albarán…"}
+              {paso === "subiendo"
+                ? "Subiendo el documento…"
+                : paso === "analizando"
+                  ? "Leyendo el albarán con IA…"
+                  : "Guardando el albarán…"}
             </p>
           </div>
         )}

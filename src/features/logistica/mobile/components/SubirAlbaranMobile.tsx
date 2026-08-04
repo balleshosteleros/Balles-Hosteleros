@@ -23,6 +23,7 @@ export function SubirAlbaranMobile() {
     paso,
     file,
     preview,
+    fallo,
     cabecera,
     proveedor,
     setProveedor,
@@ -36,6 +37,7 @@ export function SubirAlbaranMobile() {
     nReconocidas,
     handleFile,
     analizar,
+    reintentar,
     setLineaCampo,
     guardar,
     reset,
@@ -124,20 +126,32 @@ export function SubirAlbaranMobile() {
               <X className="h-4 w-4" />
             </Button>
           </div>
+          {fallo && (
+            <div className="rounded-2xl border border-destructive/30 bg-destructive/5 p-3.5 text-sm">
+              <p className="font-medium text-destructive">{fallo.message}</p>
+              <p className="mt-1 text-[11px] text-muted-foreground">Código: {fallo.traceId}</p>
+            </div>
+          )}
           <div className="flex gap-2">
             <Button variant="outline" className="flex-1" onClick={() => { setFile(null); setPreview(null); }}>
               Cambiar
             </Button>
-            <Button className="flex-1" onClick={analizar}>Analizar</Button>
+            <Button className="flex-1" onClick={fallo ? reintentar : analizar}>
+              {fallo ? "Reintentar" : "Analizar"}
+            </Button>
           </div>
         </div>
       )}
 
-      {(paso === "analizando" || paso === "guardando") && (
+      {(paso === "subiendo" || paso === "analizando" || paso === "guardando") && (
         <div className="flex flex-col items-center justify-center gap-3 py-20">
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
           <p className="text-sm text-muted-foreground">
-            {paso === "analizando" ? "Leyendo el albarán con IA…" : "Guardando el albarán…"}
+            {paso === "subiendo"
+              ? "Subiendo el documento…"
+              : paso === "analizando"
+                ? "Leyendo el albarán con IA…"
+                : "Guardando el albarán…"}
           </p>
         </div>
       )}
