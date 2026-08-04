@@ -28,10 +28,13 @@ import {
 } from "@/features/logistica/actions/importaciones-albaran-actions";
 import {
   emparejarLineasAlbaran,
-  type CabeceraOcrAlbaran,
-  type LineaOcrAlbaran,
   type LineaEmparejada,
 } from "@/features/logistica/actions/asistente-albaran-actions";
+// Solo tipos: se borran en compilación, no arrastran el server-only de la lib.
+import type {
+  CabeceraOcrAlbaran,
+  LineaOcrAlbaran,
+} from "@/features/logistica/lib/albaranes/ocr-albaran";
 import type { FalloImportacion } from "@/features/logistica/lib/albaranes/importaciones";
 import { ESTADO_REVISION } from "@/features/logistica/data/albaranes";
 import { MAX_DOCUMENTO_MB } from "@/shared/lib/documentos";

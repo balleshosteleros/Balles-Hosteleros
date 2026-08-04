@@ -64,9 +64,10 @@ export interface LineaEmparejada {
   candidatos: SugerenciaCandidato[];
 }
 
-// Tipos del OCR: viven en el extractor único (lib/albaranes/ocr-albaran.ts) y se
-// re-exportan aquí para no romper los imports existentes del hook y las pantallas.
-export type { CabeceraOcrAlbaran, LineaOcrAlbaran };
+// Tipos del OCR: viven en el extractor único (lib/albaranes/ocr-albaran.ts).
+// OJO: en un fichero "use server" NO se puede re-exportar tipos (Turbopack no
+// borra el `export type` y revienta en runtime): los consumidores los importan
+// directamente de la lib con `import type`.
 
 /**
  * OCR EXTRACTIVO de un albarán suelto (sin pedido de referencia): lee el documento y
