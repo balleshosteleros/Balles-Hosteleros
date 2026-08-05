@@ -35,6 +35,7 @@ import type {
   CabeceraOcrAlbaran,
   LineaOcrAlbaran,
 } from "@/features/logistica/lib/albaranes/ocr-albaran";
+import { CABECERA_OCR_VACIA } from "@/features/logistica/lib/albaranes/cabecera-vacia";
 import type { FalloImportacion } from "@/features/logistica/lib/albaranes/importaciones";
 import type { CandidatoDuplicado } from "@/features/logistica/lib/albaranes/duplicados";
 import { ESTADO_REVISION } from "@/features/logistica/data/albaranes";
@@ -77,7 +78,7 @@ export function useSubirAlbaran({ fechaPorDefecto, creador, onCreado }: UseSubir
   const [importacionId, setImportacionId] = useState<string | null>(null);
   const [fallo, setFallo] = useState<FalloImportacion | null>(null);
   const [duplicado, setDuplicado] = useState<CandidatoDuplicado | null>(null);
-  const [cabecera, setCabecera] = useState<CabeceraOcrAlbaran>({ proveedor: null, numero: null, fecha: null, total: null });
+  const [cabecera, setCabecera] = useState<CabeceraOcrAlbaran>(CABECERA_OCR_VACIA);
   const [proveedor, setProveedor] = useState("");
   const [fecha, setFecha] = useState("");
   const [numeroProveedor, setNumeroProveedor] = useState("");
@@ -93,7 +94,7 @@ export function useSubirAlbaran({ fechaPorDefecto, creador, onCreado }: UseSubir
     setImportacionId(null);
     setFallo(null);
     setDuplicado(null);
-    setCabecera({ proveedor: null, numero: null, fecha: null, total: null });
+    setCabecera(CABECERA_OCR_VACIA);
     setProveedor("");
     setFecha("");
     setNumeroProveedor("");
