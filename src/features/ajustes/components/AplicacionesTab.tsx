@@ -1,5 +1,11 @@
 "use client";
 
+// APLICACIONES (Ajustes → Herramientas → Aplicaciones)
+//
+// Solo el ENLACE: nombre, logo, URL, categoría, estado y qué departamentos ven
+// la app en el panel del cohete. Las CONTRASEÑAS viven en el apartado «Accesos»
+// (AccesosTab.tsx) — aquí no se muestran ni se editan.
+
 import { useEffect, useState, useRef } from "react";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { Input } from "@/components/ui/input";
@@ -16,8 +22,6 @@ import {
   Trash2,
   Plus,
   Pencil,
-  Eye,
-  Copy,
   ExternalLink,
   Search,
   ChevronDown,
@@ -28,11 +32,8 @@ import {
 import {
   CATEGORIAS_APP,
   DEPARTAMENTOS,
-  MAX_ACCESOS_POR_APP,
   faviconDesdeUrl,
   type AccesoApp,
-  type AccesoCredencial,
-  type DatoExtra,
   type EstadoApp,
 } from "@/features/rrhh/data/accesos-apps";
 import {
@@ -40,16 +41,11 @@ import {
   createAccesoApp,
   updateAccesoApp,
   deleteAccesoApp,
-  revelarAccesoApp,
   subirLogoApp,
 } from "@/features/rrhh/actions/accesos-apps-actions";
-import {
-  VerificacionAccesosProvider,
-  useVerificacionAccesos,
-} from "@/features/rrhh/components/useVerificacionAccesos";
-import { getRolesEmpresaNombres } from "@/features/ajustes/actions/roles-actions";
 import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
 import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
+import { AppLogo } from "@/features/ajustes/components/AppLogo";
 
 const emptyApp: Omit<AccesoApp, "id" | "ultimaActualizacion"> = {
   nombre: "",
@@ -70,108 +66,7 @@ const emptyApp: Omit<AccesoApp, "id" | "ultimaActualizacion"> = {
   empresaId: "",
 };
 
-function AppLogo({ nombre, logoUrl }: { nombre: string; logoUrl?: string }) {
-  const [err, setErr] = useState(false);
-  const colors = ["bg-blue-500", "bg-emerald-500", "bg-violet-500", "bg-orange-500", "bg-rose-500", "bg-teal-500"];
-  const color = colors[(nombre.charCodeAt(0) || 0) % colors.length];
-  if (logoUrl && !err)
-    return (
-      <img
-        src={logoUrl}
-        alt={nombre}
-        onError={() => setErr(true)}
-        className={`h-7 w-7 rounded-md object-contain p-0.5 ${
-          logoUrl.includes("simpleicons.org")
-            ? "bg-transparent"
-            : "bg-white dark:bg-white/90 border border-border/40"
-        }`}
-      />
-    );
-  return (
-    <div className={`h-7 w-7 ${color} rounded-md flex items-center justify-center text-white text-xs font-bold shrink-0`}>
-      {nombre[0]?.toUpperCase() || "?"}
-    </div>
-  );
-}
-
-function PasswordAdmin({
-  appId,
-  indice,
-  tiene,
-  nombreExtra,
-}: {
-  appId: string;
-  indice: number;
-  tiene: boolean;
-  nombreExtra?: string;
-}) {
-  const { ensureVerificado } = useVerificacionAccesos();
-  const [valor, setValor] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-
-  // Oculta el valor revelado tras 10s.
-  useEffect(() => {
-    if (valor === null) return;
-    const t = setTimeout(() => setValor(null), 10_000);
-    return () => clearTimeout(t);
-  }, [valor]);
-
-  if (!tiene) return <span className="text-muted-foreground text-xs">—</span>;
-
-  const revelar = async () => {
-    if (loading) return;
-    setLoading(true);
-    try {
-      const ok = await ensureVerificado();
-      if (!ok) return;
-      const res = await revelarAccesoApp(appId, indice, nombreExtra);
-      if (res.ok) {
-        setValor(res.contrasena);
-      } else {
-        toast.error(res.error);
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <span className="inline-flex min-w-0 max-w-full items-start gap-1 font-mono text-xs">
-      <span className="min-w-0 break-all">{valor !== null ? valor : "••••••••"}</span>
-      {valor !== null ? (
-        <button
-          onClick={() => {
-            navigator.clipboard.writeText(valor);
-            toast.success(nombreExtra ? `${nombreExtra} copiado` : "Contraseña copiada");
-          }}
-          className="mt-0.5 shrink-0 text-muted-foreground hover:text-foreground"
-          title="Copiar"
-        >
-          <Copy className="h-3.5 w-3.5" />
-        </button>
-      ) : (
-        <button
-          onClick={revelar}
-          disabled={loading}
-          className="mt-0.5 shrink-0 text-muted-foreground hover:text-foreground disabled:opacity-50"
-          title="Ver contraseña"
-        >
-          <Eye className="h-3.5 w-3.5" />
-        </button>
-      )}
-    </span>
-  );
-}
-
 export function AplicacionesTab() {
-  return (
-    <VerificacionAccesosProvider>
-      <AplicacionesTabInner />
-    </VerificacionAccesosProvider>
-  );
-}
-
-function AplicacionesTabInner() {
   const { empresas, empresaActual } = useEmpresa();
   const empresaDbId = empresaActual.dbId;
   const empresasOptions = empresas.map((e) => ({ id: e.id, nombre: e.nombre }));
@@ -190,7 +85,7 @@ function AplicacionesTabInner() {
       })
       .catch((e) => {
         console.error(e);
-        toast.error("No se pudieron cargar los accesos");
+        toast.error("No se pudieron cargar las aplicaciones");
       })
       .finally(() => {
         if (alive) setLoading(false);
@@ -206,9 +101,6 @@ function AplicacionesTabInner() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<Omit<AccesoApp, "id" | "ultimaActualizacion">>(emptyApp);
-  const [rolesDisponibles, setRolesDisponibles] = useState<string[]>([]);
-  // Popover de roles abierto por índice de acceso (-1 = ninguno).
-  const [rolesPopoverIdx, setRolesPopoverIdx] = useState<number>(-1);
   // Popover de departamentos (quién ve la app en el panel).
   const [deptosPopoverOpen, setDeptosPopoverOpen] = useState(false);
   // Subida de logo manual.
@@ -232,26 +124,6 @@ function AplicacionesTabInner() {
     toast.success("Logo subido");
   }
 
-  useEffect(() => {
-    getRolesEmpresaNombres(empresaDbId)
-      .then((nombres) => setRolesDisponibles(nombres))
-      .catch((e) => console.error("No se pudieron cargar roles:", e));
-  }, [empresaDbId]);
-
-  // Activa/desactiva un rol para UN acceso concreto (visibilidad por acceso).
-  const toggleRolAcceso = (idx: number, rol: string) => {
-    setForm((p) => ({
-      ...p,
-      accesos: p.accesos.map((a, i) => {
-        if (i !== idx) return a;
-        const set = new Set(a.roles ?? []);
-        if (set.has(rol)) set.delete(rol);
-        else set.add(rol);
-        return { ...a, roles: Array.from(set) };
-      }),
-    }));
-  };
-
   // Activa/desactiva un departamento que puede VER la app en el panel.
   // "Todos" es excluyente: al marcarlo, se limpia el resto (y viceversa).
   const toggleDepartamento = (depto: string) => {
@@ -267,80 +139,16 @@ function AplicacionesTabInner() {
     });
   };
 
-  const updateAcceso = (idx: number, patch: Partial<AccesoCredencial>) => {
-    setForm((p) => ({
-      ...p,
-      accesos: p.accesos.map((a, i) => (i === idx ? { ...a, ...patch } : a)),
-    }));
-  };
-  const addAcceso = () => {
-    setForm((p) =>
-      p.accesos.length >= MAX_ACCESOS_POR_APP
-        ? p
-        : { ...p, accesos: [...p.accesos, { etiqueta: "", usuario: "", contrasena: "", roles: [], datosExtra: [] }] },
-    );
-  };
-  const removeAcceso = (idx: number) => {
-    setForm((p) => {
-      const next = p.accesos.filter((_, i) => i !== idx);
-      return {
-        ...p,
-        accesos: next.length ? next : [{ etiqueta: "", usuario: "", contrasena: "", roles: [], datosExtra: [] }],
-      };
-    });
-  };
-
-  // --- Datos extra de cada acceso (PIN, PUK, código empresa...) ---
-  const addDatoExtra = (idxAcceso: number) => {
-    setForm((p) => ({
-      ...p,
-      accesos: p.accesos.map((a, i) =>
-        i === idxAcceso
-          ? { ...a, datosExtra: [...(a.datosExtra ?? []), { nombre: "", valor: "" }] }
-          : a,
-      ),
-    }));
-  };
-  const updateDatoExtra = (idxAcceso: number, idxExtra: number, patch: Partial<DatoExtra>) => {
-    setForm((p) => ({
-      ...p,
-      accesos: p.accesos.map((a, i) =>
-        i === idxAcceso
-          ? {
-              ...a,
-              datosExtra: (a.datosExtra ?? []).map((d, j) =>
-                j === idxExtra ? { ...d, ...patch } : d,
-              ),
-            }
-          : a,
-      ),
-    }));
-  };
-  const removeDatoExtra = (idxAcceso: number, idxExtra: number) => {
-    setForm((p) => ({
-      ...p,
-      accesos: p.accesos.map((a, i) =>
-        i === idxAcceso
-          ? { ...a, datosExtra: (a.datosExtra ?? []).filter((_, j) => j !== idxExtra) }
-          : a,
-      ),
-    }));
-  };
-
   const filteredApps = apps.filter((a) => {
     if (filtroEmpresa !== "todas" && a.empresaId !== filtroEmpresa) return false;
     if (filtroCategoria !== "todas" && a.categoria !== filtroCategoria) return false;
     if (buscar) {
       const q = buscar.toLowerCase();
-      // Coincide por nombre de app, categoría, o usuario/etiqueta de cualquier acceso.
+      // Coincide por nombre de app, categoría o descripción (nunca por credencial).
       const enNombre = a.nombre.toLowerCase().includes(q);
       const enCategoria = (a.categoria ?? "").toLowerCase().includes(q);
-      const enAccesos = a.accesos.some(
-        (acc) =>
-          (acc.usuario ?? "").toLowerCase().includes(q) ||
-          (acc.etiqueta ?? "").toLowerCase().includes(q),
-      );
-      if (!enNombre && !enCategoria && !enAccesos) return false;
+      const enDescripcion = (a.descripcion ?? "").toLowerCase().includes(q);
+      if (!enNombre && !enCategoria && !enDescripcion) return false;
     }
     return true;
   });
@@ -353,19 +161,12 @@ function AplicacionesTabInner() {
   };
   const openEdit = (app: AccesoApp) => {
     setEditingId(app.id);
-    // Compat: apps antiguas tenían roles a nivel de app. Si un acceso no tiene
-    // roles propios, hereda los roles globales de la app para no perder permisos.
-    const accesosBase = app.accesos.length
-      ? app.accesos
-      : [{ etiqueta: "", usuario: "", contrasena: "", roles: [], datosExtra: [] }];
-    const accesos = accesosBase.map((a) => ({
+    // Las credenciales NO se editan aquí (viven en «Accesos»), pero hay que
+    // mandarlas de vuelta intactas en el payload: valor vacío = "no cambiar",
+    // así la action preserva la contraseña cifrada previa.
+    const accesos = app.accesos.map((a) => ({
       ...a,
-      // La contraseña NUNCA viaja al cliente (viene oculta/cifrada). Al editar
-      // se muestra vacía; si se deja vacía, la action preserva la cifrada previa.
       contrasena: "",
-      roles: a.roles?.length ? a.roles : [...(app.rolesAutorizados ?? [])],
-      // Datos extra: no tenemos el valor (vacío = no cambiar); conservamos
-      // nombre y `tiene` para mostrar que ya hay valor guardado.
       datosExtra: (a.datosExtra ?? []).map((d) => ({
         nombre: d.nombre,
         valor: "",
@@ -400,28 +201,22 @@ function AplicacionesTabInner() {
     }
     setSavingApp(true);
     try {
-      // rolesAutorizados (nivel app) = unión de los roles de cada acceso.
-      // Se usa como pre-filtro de visibilidad de la app; el filtrado fino de
-      // qué acceso ve cada quien se hace por acceso.
-      const rolesUnion = Array.from(
-        new Set(form.accesos.flatMap((a) => a.roles ?? [])),
-      );
       // Logo: prioriza el que el usuario subió a mano (bucket app-logos). Si no
       // hay, se deriva automáticamente del nombre/URL (marca conocida o favicon).
+      // rolesAutorizados y accesos se pasan tal cual: se gestionan en «Accesos».
       const logoAuto = faviconDesdeUrl(form.url, form.nombre);
       const payload = {
         ...form,
-        rolesAutorizados: rolesUnion,
         logoUrl: form.logoUrl || logoAuto || undefined,
       };
       if (editingId) {
         const updated = await updateAccesoApp(editingId, payload);
         setApps((prev) => prev.map((a) => (a.id === editingId ? updated : a)));
-        toast.success(`Acceso "${updated.nombre}" actualizado`);
+        toast.success(`Aplicación "" actualizada`);
       } else {
         const created = await createAccesoApp(payload);
         setApps((prev) => [...prev, created]);
-        toast.success(`Acceso "${created.nombre}" creado`);
+        toast.success(`Aplicación "" creada`);
       }
       setModalOpen(false);
     } catch (e: unknown) {
@@ -433,15 +228,15 @@ function AplicacionesTabInner() {
 
   const handleDeleteApp = async (app: AccesoApp) => {
     const ok = await confirmDelete({
-      title: "Eliminar acceso",
-      description: `¿Eliminar el acceso "${app.nombre}"?`,
+      title: "Eliminar aplicación",
+      description: `¿Eliminar la aplicación "${app.nombre}"?`,
       confirmLabel: "Eliminar",
     });
     if (!ok) return;
     try {
       await deleteAccesoApp(app.id);
       setApps((prev) => prev.filter((a) => a.id !== app.id));
-      toast.success(`Acceso "${app.nombre}" eliminado`);
+      toast.success(`Aplicación "" eliminada`);
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : "Error al eliminar");
     }
@@ -502,8 +297,7 @@ function AplicacionesTabInner() {
             <TableHead>Aplicación</TableHead>
             <TableHead>Empresa</TableHead>
             <TableHead>Categoría</TableHead>
-            <TableHead>Usuario</TableHead>
-            <TableHead>Contraseña</TableHead>
+            <TableHead>Enlace</TableHead>
             <TableHead>Estado</TableHead>
             <TableHead className="text-right w-24">Acciones</TableHead>
           </TableRow>
@@ -511,15 +305,15 @@ function AplicacionesTabInner() {
         <TableBody>
           {loading && (
             <TableRow>
-              <TableCell colSpan={8} className="text-center py-8">
+              <TableCell colSpan={7} className="text-center py-8">
                 <LoadingSpinner />
               </TableCell>
             </TableRow>
           )}
           {!loading && filteredApps.length === 0 && (
             <TableRow>
-              <TableCell colSpan={8} className="text-center py-8 text-muted-foreground text-sm">
-                No hay accesos. Crea el primero con &quot;Nuevo&quot;.
+              <TableCell colSpan={7} className="text-center py-8 text-muted-foreground text-sm">
+                No hay aplicaciones. Crea la primera con &quot;Nuevo&quot;.
               </TableCell>
             </TableRow>
           )}
@@ -534,42 +328,16 @@ function AplicacionesTabInner() {
               </TableCell>
               <TableCell className="text-xs">{empresaNombre(app.empresaId)}</TableCell>
               <TableCell className="text-xs">{app.categoria}</TableCell>
-              <TableCell className="font-mono text-xs align-top">
-                <span className="text-[10px] uppercase tracking-wide text-muted-foreground mr-1">
-                  Usuario:
-                </span>
-                {app.accesos[0]?.usuario || app.usuario || (
-                  <span className="text-muted-foreground">—</span>
-                )}
-              </TableCell>
-              <TableCell className="align-top">
-                <div className="space-y-1">
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                      Contraseña:
-                    </span>
-                    <PasswordAdmin
-                      appId={app.id}
-                      indice={0}
-                      tiene={app.accesos[0]?.tieneContrasena ?? false}
-                    />
-                  </div>
-                  {(app.accesos[0]?.datosExtra ?? [])
-                    .filter((d) => d.tiene)
-                    .map((d) => (
-                      <div key={d.nombre} className="flex items-center gap-1.5">
-                        <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                          {d.nombre}:
-                        </span>
-                        <PasswordAdmin
-                          appId={app.id}
-                          indice={0}
-                          tiene={!!d.tiene}
-                          nombreExtra={d.nombre}
-                        />
-                      </div>
-                    ))}
-                </div>
+              <TableCell className="max-w-[220px]">
+                <a
+                  href={app.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block truncate text-xs text-primary hover:underline"
+                  title={app.url}
+                >
+                  {app.url}
+                </a>
               </TableCell>
               <TableCell>
                 <Badge
@@ -607,14 +375,14 @@ function AplicacionesTabInner() {
         </TableBody>
       </Table>
       <p className="text-xs text-muted-foreground">
-        {filteredApps.length} de {apps.length} accesos
+        {filteredApps.length} de {apps.length} aplicaciones
       </p>
 
-      {/* Modal crear / editar acceso */}
+      {/* Modal crear / editar aplicación */}
       <Dialog open={modalOpen} onOpenChange={setModalOpen}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>{editingId ? "Editar acceso" : "Nuevo acceso"}</DialogTitle>
+            <DialogTitle>{editingId ? "Editar aplicación" : "Nueva aplicación"}</DialogTitle>
           </DialogHeader>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 py-2">
             <div className="space-y-1">
@@ -772,193 +540,13 @@ function AplicacionesTabInner() {
               </p>
             </div>
 
-            {/* Accesos: varias parejas usuario/contraseña, cada una con sus roles */}
-            <div className="space-y-2 sm:col-span-2">
-              <Label className="text-xs font-semibold">
-                Accesos (usuario, contraseña y quién puede verla)
-              </Label>
-              <p className="text-xs text-muted-foreground">
-                Marca con un tick qué roles pueden ver cada contraseña. Solo esos usuarios la verán y podrán revelarla. Sin ningún tick, solo la ve dirección.
-              </p>
-              <div className="space-y-2">
-                {form.accesos.map((acc, idx) => (
-                  <div key={idx} className="flex items-start gap-2 rounded-md border border-border/60 p-2">
-                    <div className="grid flex-1 gap-2">
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                        <Input
-                          value={acc.etiqueta}
-                          onChange={(e) => updateAcceso(idx, { etiqueta: e.target.value })}
-                          placeholder="Etiqueta (ej: Contabilidad)"
-                          className="h-8 text-xs"
-                        />
-                        <Input
-                          value={acc.usuario}
-                          onChange={(e) => updateAcceso(idx, { usuario: e.target.value })}
-                          placeholder="usuario@empresa.es"
-                          autoComplete="off"
-                          className="h-8 text-xs"
-                        />
-                        <Input
-                          value={acc.contrasena}
-                          onChange={(e) => updateAcceso(idx, { contrasena: e.target.value })}
-                          placeholder={editingId ? "Dejar vacío = no cambiar" : "Contraseña"}
-                          type="password"
-                          autoComplete="new-password"
-                          className="h-8 text-xs"
-                        />
-                      </div>
-                      {/* Roles que pueden ver este acceso */}
-                      <Popover
-                        open={rolesPopoverIdx === idx}
-                        onOpenChange={(o) => setRolesPopoverIdx(o ? idx : -1)}
-                      >
-                        <PopoverTrigger asChild>
-                          <button
-                            type="button"
-                            className="w-full min-h-8 flex items-center justify-between gap-2 rounded-md border border-input bg-background px-2.5 py-1 text-xs text-left hover:bg-accent/30"
-                          >
-                            <div className="flex flex-wrap gap-1 flex-1">
-                              {(acc.roles ?? []).length === 0 ? (
-                                <span className="text-muted-foreground">¿Quién puede ver esta contraseña? — marca roles…</span>
-                              ) : (
-                                (acc.roles ?? []).map((rol) => (
-                                  <Badge key={rol} variant="secondary" className="gap-1 text-[10px]">
-                                    {rol}
-                                    <span
-                                      role="button"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        toggleRolAcceso(idx, rol);
-                                      }}
-                                      className="hover:text-destructive cursor-pointer"
-                                    >
-                                      <X className="h-2.5 w-2.5" />
-                                    </span>
-                                  </Badge>
-                                ))
-                              )}
-                            </div>
-                            <ChevronDown className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                          </button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
-                          <div className="max-h-64 overflow-y-auto py-1">
-                            {rolesDisponibles.length === 0 ? (
-                              <div className="px-3 py-2 text-xs text-muted-foreground">No hay roles definidos</div>
-                            ) : (
-                              <>
-                                <div className="flex items-center justify-between px-3 py-1.5 border-b">
-                                  <button
-                                    type="button"
-                                    onClick={() => updateAcceso(idx, { roles: [...rolesDisponibles] })}
-                                    className="text-xs text-primary hover:underline"
-                                  >
-                                    Seleccionar todos
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => updateAcceso(idx, { roles: [] })}
-                                    className="text-xs text-muted-foreground hover:text-foreground"
-                                  >
-                                    Limpiar
-                                  </button>
-                                </div>
-                                {rolesDisponibles.map((rol) => {
-                                  const checked = (acc.roles ?? []).includes(rol);
-                                  return (
-                                    <label
-                                      key={rol}
-                                      className="flex items-center gap-2 px-3 py-1.5 text-sm cursor-pointer hover:bg-accent/40"
-                                    >
-                                      <Checkbox checked={checked} onCheckedChange={() => toggleRolAcceso(idx, rol)} />
-                                      <span>{rol}</span>
-                                    </label>
-                                  );
-                                })}
-                              </>
-                            )}
-                          </div>
-                        </PopoverContent>
-                      </Popover>
-
-                      {/* Datos extra del acceso (PIN, PUK, código empresa…) */}
-                      <div className="space-y-1.5 rounded-md bg-muted/30 p-2">
-                        <div className="flex items-center justify-between">
-                          <span className="text-[11px] font-semibold text-muted-foreground">
-                            Datos extra (PIN, PUK, código…)
-                          </span>
-                        </div>
-                        {(acc.datosExtra ?? []).map((dato, idxExtra) => (
-                          <div key={idxExtra} className="flex items-center gap-2">
-                            <Input
-                              value={dato.nombre}
-                              onChange={(e) =>
-                                updateDatoExtra(idx, idxExtra, { nombre: e.target.value })
-                              }
-                              placeholder="Nombre (ej: PIN)"
-                              className="h-8 text-xs flex-1"
-                            />
-                            <Input
-                              value={dato.valor}
-                              onChange={(e) =>
-                                updateDatoExtra(idx, idxExtra, { valor: e.target.value })
-                              }
-                              placeholder={
-                                editingId && dato.tiene ? "Vacío = no cambiar" : "Valor"
-                              }
-                              type="password"
-                              autoComplete="new-password"
-                              className="h-8 text-xs flex-1"
-                            />
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8 shrink-0 text-muted-foreground hover:text-destructive"
-                              onClick={() => removeDatoExtra(idx, idxExtra)}
-                              title="Quitar dato extra"
-                            >
-                              <X className="h-3.5 w-3.5" />
-                            </Button>
-                          </div>
-                        ))}
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          className="h-7 gap-1.5 text-xs"
-                          onClick={() => addDatoExtra(idx)}
-                        >
-                          <Plus className="h-3 w-3" />Dato extra
-                        </Button>
-                      </div>
-                    </div>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 shrink-0 text-muted-foreground hover:text-destructive"
-                      onClick={() => removeAcceso(idx)}
-                      title="Quitar acceso"
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
-                  </div>
-                ))}
-              </div>
-              {form.accesos.length < MAX_ACCESOS_POR_APP && (
-                <Button type="button" variant="outline" size="sm" className="gap-1.5" onClick={addAcceso}>
-                  <Plus className="h-3.5 w-3.5" />Añadir acceso
-                </Button>
-              )}
-            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setModalOpen(false)}>
               Cancelar
             </Button>
             <Button onClick={handleSaveApp} disabled={savingApp || !form.nombre.trim() || !form.url.trim()}>
-              {savingApp ? "Guardando…" : editingId ? "Guardar" : "Crear acceso"}
+              {savingApp ? "Guardando…" : editingId ? "Guardar" : "Crear aplicación"}
             </Button>
           </DialogFooter>
         </DialogContent>

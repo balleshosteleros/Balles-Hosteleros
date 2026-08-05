@@ -10,6 +10,7 @@ import { TelefonoConfigPanel } from "@/features/ajustes/components/TelefonoConfi
 import { HoraSecundariaPanel } from "@/features/ajustes/components/HoraSecundariaPanel";
 import { ToolNotifPanel } from "@/features/ajustes/components/ToolNotifPanel";
 import { AplicacionesTab } from "@/features/ajustes/components/AplicacionesTab";
+import { AccesosTab } from "@/features/ajustes/components/AccesosTab";
 import type { ToolNotifKey } from "@/features/ajustes/data/ajustes";
 import { HERRAMIENTAS, toolTextColor } from "@/features/layout/data/herramientas";
 
@@ -75,12 +76,7 @@ export function HerramientasTab() {
                   </div>
                 </div>
               ) : id === "accesos" ? (
-                <p className="py-4 text-sm text-muted-foreground">
-                  La bóveda de contraseñas se gestiona desde &quot;Aplicaciones&quot;
-                  (cada app guarda sus credenciales). En la barra superior, el
-                  candado abre la consulta segura con verificación de identidad y
-                  revelado por rol.
-                </p>
+                <AccesosTab />
               ) : (
                 <ToolNotifPanel
                   toolKey={id}
