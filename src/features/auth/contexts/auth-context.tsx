@@ -67,15 +67,20 @@ interface AuthContextValue {
   /** Tiene ≥1 departamento visible (o es admin): ve "Mis Departamentos". */
   tieneAccesoDepartamentos: boolean;
   /**
-   * `true` solo cuando los permisos actuales vienen de una respuesta FIABLE del
-   * servidor (getUserPermisos con `empresaId` resuelto), no de un caché ni de una
-   * respuesta a medias por la carrera de cookies del arranque.
+   * VEREDICTO del servidor sobre el acceso a departamentos:
+   *   - `null`  → todavía no se ha pronunciado (caché de localStorage, carrera
+   *               de cookies del arranque, seed parcial). NO se puede concluir
+   *               nada: ni que tienes acceso ni que te lo han quitado.
+   *   - `true`  → confirmado con acceso.
+   *   - `false` → confirmado SIN acceso (p. ej. DIRECCIÓN te quitó el último
+   *               departamento) → los gates deben expulsar de inmediato.
    *
-   * Los gates que EXPULSAN de una vista (p. ej. Mis Departamentos) deben exigir
-   * esta señal: sin ella, "aún no sé si tienes acceso" era indistinguible de "te
-   * han quitado el acceso" y rebotaba a usuarios con permisos legítimos.
+   * Los gates que EXPULSAN (p. ej. Mis Departamentos) deben leer ESTO y no
+   * `tieneAccesoDepartamentos`: ese refleja el estado en curso, que durante el
+   * arranque oscila mientras llegan las distintas oleadas de permisos, y
+   * cualquier bajada momentánea a false disparaba un rebote indebido.
    */
-  permisosConfirmados: boolean;
+  accesoDeptosServidor: boolean | null;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
   hasRole: (role: AppRole) => boolean;
@@ -263,10 +268,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     initialCache?.esAdminPlataforma ?? false,
   );
   const [permisosLoaded, setPermisosLoaded] = useState(initialCache !== null);
-  // Arranca en false AUNQUE haya caché: el caché sirve para pintar la UI al
-  // instante, pero no es prueba de que el permiso siga vigente. Solo pasa a true
-  // cuando el servidor responde con `empresaId` resuelto (respuesta fiable).
-  const [permisosConfirmados, setPermisosConfirmados] = useState(false);
+  // VEREDICTO del servidor sobre el acceso a departamentos, no una bandera
+  // suelta. Guardamos el resultado JUNTO a su origen fiable: `null` = el
+  // servidor todavía no se ha pronunciado (caché, carrera de cookies, seed
+  // parcial); `true`/`false` = respuesta fiable con `empresaId` resuelto.
+  //
+  // Va como un único valor —y no como "confirmado" + "tieneAcceso" por
+  // separado— justo porque esos dos se marcaban en ramas con condiciones
+  // distintas y podían desincronizarse: bastaba con que el flag quedara en true
+  // sobre permisos degradados de otra oleada para que el gate expulsara a un
+  // usuario legítimo. Con un solo valor eso es imposible por construcción.
+  const [accesoDeptosServidor, setAccesoDeptosServidor] = useState<boolean | null>(null);
 
   // Refs espejo del estado de permisos: permiten que la revalidación en vivo
   // compare contra el valor ACTUAL sin re-suscribir su effect en cada cambio.
@@ -404,9 +416,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             setLoading(false);
 
             // Respuesta FIABLE del servidor (no carrera, no fallback a caché):
-            // a partir de aquí los gates que expulsan pueden actuar con certeza.
+            // registramos su veredicto sobre departamentos, calculado sobre los
+            // MISMOS datos que acabamos de aplicar arriba.
             if (!looksRaceFailure && !fetchFailedSilently) {
-              setPermisosConfirmados(true);
+              setAccesoDeptosServidor(
+                calcAccesoDepartamentos(nextEsAdmin, nextPermisos),
+              );
             }
 
             // Sincroniza el modo de vista INICIAL con los PERMISOS reales:
@@ -478,10 +493,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!seedTieneDatos) return;
 
       // La respuesta ya pasó el filtro `empresaId != null` de arriba: es fiable.
-      // Marcamos ANTES del early-return por "sin cambios", porque una
-      // revalidación que confirma los permisos vigentes es tan válida como una
-      // que los corrige — y si no, un usuario estable nunca quedaba confirmado.
-      setPermisosConfirmados(true);
+      // Registramos el veredicto ANTES del early-return por "sin cambios",
+      // porque una revalidación que CONFIRMA los permisos vigentes es tan válida
+      // como una que los corrige — si no, un usuario estable (cuyos permisos
+      // nunca cambian) no quedaba confirmado jamás.
+      setAccesoDeptosServidor(calcAccesoDepartamentos(nextEsAdmin, nextPermisos));
 
       // Aplicamos SOLO si algo cambió (comparando con el valor actual vía refs),
       // para no re-renderizar en balde.
@@ -546,17 +562,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const debeAplicar =
       !permisosLoaded || roles.length === 0 || (seedTieneDatos && difiere);
 
-    // El seed llega del layout de (main): server component con la sesión ya
-    // validada y `permisosValidos !== false` (empresaId resuelto). Es una fuente
-    // fiable, así que confirma los permisos aunque no haya que reaplicarlos.
-    if (seedTieneDatos) setPermisosConfirmados(true);
-
     if (debeAplicar) {
       setRoles(p.roles);
       setPermisos(p.permisos);
       setEsAdminPlataforma(p.esAdminPlataforma);
       setPermisosLoaded(true);
       setLoading(false);
+      // El veredicto va SIEMPRE junto a los permisos que lo justifican, en el
+      // mismo bloque y calculado sobre ELLOS. Marcarlo por separado (con
+      // `seedTieneDatos`, condición distinta de `debeAplicar`) dejaba el flag en
+      // true sobre permisos degradados de otra oleada: el gate veía "confirmado
+      // + sin acceso" y expulsaba a un usuario legítimo.
+      if (seedTieneDatos) {
+        setAccesoDeptosServidor(
+          calcAccesoDepartamentos(p.esAdminPlataforma, p.permisos),
+        );
+      }
       // Sincroniza el MODO DE VISTA con los PERMISOS reales, igual que
       // loadFreshAuth. Sin esto, quien tiene acceso a departamentos veía el menú
       // al instante pero en modo "paneles" hasta que el SWR corregía — y si
@@ -607,27 +628,42 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     }
 
-    try {
-      if (supabase) {
-        await supabase.auth.signOut();
-      }
-    } catch {
-      // Ignoramos; seguimos con la limpieza de servidor
-    }
-
+    // El estado local se vacía YA: la sesión está muerta desde este momento,
+    // independientemente de lo que tarden las llamadas de limpieza.
     setUser(null);
     setSession(null);
     setProfile(null);
     setRoles([]);
     setEsAdminPlataforma(false);
 
-    try {
-      await fetch("/api/auth/signout", { method: "POST", credentials: "include" });
-    } catch {
-      // Si falla el fetch, igual redirigimos
-    }
+    // Cerrar sesión NUNCA puede quedarse colgado (reportado por Iván, 05-ago).
+    // Antes eran dos llamadas EN SERIE y SIN tope: con la red lenta o el servidor
+    // ocupado, el usuario se quedaba atrapado dentro de la app. Ahora van en
+    // paralelo, con 3 s de tope cada una, y se sale pase lo que pase.
+    const salir = () => {
+      window.location.href = "/";
+    };
+    const rescate = setTimeout(salir, 3500);
 
-    window.location.href = "/";
+    const conTope = <T,>(p: Promise<T>, ms = 3000) =>
+      Promise.race([p, new Promise((r) => setTimeout(r, ms))]).catch(() => null);
+
+    await Promise.allSettled([
+      supabase ? conTope(supabase.auth.signOut()) : Promise.resolve(),
+      conTope(
+        fetch("/api/auth/signout", {
+          method: "POST",
+          credentials: "include",
+          // La ruta responde 302; sin esto `fetch` lo sigue y descarga la home
+          // entera antes de continuar.
+          redirect: "manual",
+          keepalive: true,
+        }),
+      ),
+    ]);
+
+    clearTimeout(rescate);
+    salir();
   }, [user?.id]);
 
   const hasRole = useCallback((role: AppRole) => roles.includes(role), [roles]);
@@ -653,7 +689,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   return (
     <AuthContext.Provider value={{
       user, session, profile, roles, loading, permisos, permisosLoaded,
-      esAdminPlataforma, tieneAccesoDepartamentos, permisosConfirmados,
+      esAdminPlataforma, tieneAccesoDepartamentos, accesoDeptosServidor,
       signIn, signOut, hasRole, puedeVer, puedeEditar,
     }}>
       <AuthSeedContext.Provider value={seedFromServer}>

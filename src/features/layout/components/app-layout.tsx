@@ -14,7 +14,7 @@ import {
   Building2,
 } from "lucide-react";
 import { getRouteMeta } from "@/features/layout/data/nav-routes";
-import { useEffect, useState, useContext } from "react";
+import { useEffect, useState, useContext, useRef } from "react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -129,7 +129,23 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   // servidor (ya con la sesión validada) antes del primer paint, así que la
   // cabecera con nombre + rol + foto puede pintarse sin esperar a que el
   // navegador resuelva `user` ni los permisos.
-  const showUi = mounted && (!!user || !!profile || permisosLoaded || devBypass || isDemoHost);
+  const hayIndicioDeSesion = !!user || !!profile || permisosLoaded || devBypass || isDemoHost;
+
+  // La barra superior (empresa, notificaciones, correo, calendario, avatar…) no
+  // debe PARPADEAR al navegar entre módulos. Las señales de arriba se reescriben
+  // en cada navegación —el layout de (main) es force-dynamic y vuelve a sembrar
+  // el AuthProvider— y si alguna llega degradada por la carrera de cookies,
+  // `user`/`profile`/`permisosLoaded` caen un instante y la barra entera
+  // desaparecía y volvía.
+  //
+  // Una sesión ya confirmada no deja de existir por cambiar de página: hacemos
+  // la señal MONÓTONA (solo avanza de oculta a visible). El cierre de sesión no
+  // depende de esto — hace `window.location.href = "/"`, que recarga entera la
+  // app y remonta este componente desde cero.
+  const sesionVistaRef = useRef(false);
+  if (hayIndicioDeSesion) sesionVistaRef.current = true;
+
+  const showUi = mounted && sesionVistaRef.current;
   const counts = useDailyCounts();
 
   const { title: headerLabel, icon: ModuleIcon } = getRouteMeta(pathname);

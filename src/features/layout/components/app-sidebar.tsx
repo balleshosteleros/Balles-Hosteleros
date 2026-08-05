@@ -171,8 +171,23 @@ export function AppSidebar() {
   // coincidiría con el del servidor → React #418. Por eso, mientras `!mounted`,
   // nos comportamos igual que el servidor (skeleton), y resolvemos el menú real
   // en el siguiente tick, cuando SSR y cliente ya no se comparan.
+  // Igual que la barra superior: el menú no debe vaciarse ni volver al esqueleto
+  // al navegar entre módulos. El layout de (main) es force-dynamic y re-siembra
+  // el AuthProvider en cada navegación; si ese seed llega degradado por la
+  // carrera de cookies, `permisosLoaded` cae un instante y el menú parpadeaba.
+  // Por eso la hacemos MONÓTONA: una vez sabemos los permisos, ya no "dejamos
+  // de saberlos". Un cambio real sigue reflejándose — lo que pinta las secciones
+  // es `puedeVer`, que lee los permisos vigentes en cada render.
+  //
+  // OJO: solo `permisosLoaded` es monótona. `esAdminPlataforma` NO debe serlo:
+  // si a un usuario le retiran el bypass de admin, el menú tiene que dejar de
+  // mostrarle todos los módulos. Recordar un "fue admin" convertiría un
+  // parpadeo visual en un fallo de permisos.
+  const permisosListosRef = useRef(false);
+  if (mounted && permisosLoaded) permisosListosRef.current = true;
+
   const isDirector = mounted && esAdminPlataforma;
-  const permisosListos = mounted && permisosLoaded;
+  const permisosListos = permisosListosRef.current;
   const sections = isDirector
     ? allSections
     : permisosListos

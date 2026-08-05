@@ -63,8 +63,8 @@ function dashboardSubtitle(esAdminPlataforma: boolean): string {
 
 export function MisDepartamentosView() {
   const {
-    profile, user, roles, puedeVer, permisosLoaded, loading,
-    esAdminPlataforma, tieneAccesoDepartamentos, permisosConfirmados,
+    profile, user, puedeVer, permisosLoaded, loading,
+    esAdminPlataforma, tieneAccesoDepartamentos, accesoDeptosServidor,
   } = useAuth();
   const router = useRouter();
 
@@ -86,34 +86,24 @@ export function MisDepartamentosView() {
   // lento que prod) expiraban antes de cargar el rol y rebotaban al director.
   const rolesPendientes = !permisosLoaded;
 
-  // Esta vista (MIS DEPARTAMENTOS) es exclusiva del rol dirección. Cualquier
+  // Esta vista (MIS DEPARTAMENTOS) es para quien tiene ≥1 departamento. Cualquier
   // otro rol que aterrice aquí se redirige a su panel personal (Mi Panel), que
-  // es su landing por defecto. Esperamos a que (a) auth deje de cargar y (b)
-  // los permisos hayan resuelto: así nunca rebotamos a un director cuyos roles
-  // todavía no han llegado, por lento que sea el entorno.
+  // es su landing por defecto.
+  //
+  // La expulsión se decide ÚNICAMENTE con el veredicto del servidor, nunca con
+  // el estado de permisos en curso (`tieneAccesoDepartamentos`). Ese estado
+  // oscila durante el arranque: el provider lo reescribe en varias oleadas
+  // (seed SSR, loadFreshAuth con reintentos a 250/500/750 ms, revalidación cada
+  // 60 s) y cualquier bajada momentánea a false por la carrera de cookies
+  // echaba a un usuario con acceso legítimo — incluido DIRECCIÓN, que llegaba a
+  // ver la cuadrícula un instante antes del rebote.
+  //
+  //   null  → el servidor aún no se ha pronunciado: ESPERAMOS, no expulsamos.
+  //   false → confirmado sin acceso (te lo han quitado): fuera de inmediato.
+  //   true  → confirmado con acceso: nos quedamos.
   useEffect(() => {
-    if (loading || rolesPendientes) return;
-    // roles=[] con permisosLoaded=true es el estado de DESLOGUEADO que la página
-    // de login deja en el AuthProvider y que sobrevive a la navegación cliente
-    // post-login (el provider no se remonta). Con cero roles no se puede afirmar
-    // "no eres dirección": esperamos a que el seed SSR o el SWR resuelvan el rol
-    // real. Un empleado de verdad siempre llega con roles no vacíos y sí rebota.
-    if (roles.length === 0) return;
-    // Solo expulsamos con permisos CONFIRMADOS por el servidor. `permisosLoaded`
-    // no basta: también se marca al hidratar desde el caché de localStorage y al
-    // aplicar un seed parcial, y el provider reescribe permisos en varias oleadas
-    // después del primer paint (seed SSR, loadFreshAuth con reintentos a 250/500/
-    // 750 ms, revalidación cada 60 s). Si cualquiera de esas oleadas aterrizaba
-    // degradada por la carrera de cookies, `tieneAccesoDepartamentos` caía un
-    // instante a false y este effect echaba a un usuario con acceso legítimo —
-    // incluido DIRECCIÓN, que llegaba a ver la cuadrícula antes del rebote.
-    //
-    // Con `permisosConfirmados` distinguimos los dos casos que antes eran
-    // indistinguibles: "aún no sé si tienes acceso" (esperar) y "te han quitado
-    // el acceso" (expulsar de inmediato, que es el comportamiento deseado).
-    if (!permisosConfirmados) return;
-    if (!esDireccion) router.replace("/mi-panel");
-  }, [loading, rolesPendientes, esDireccion, roles.length, permisosConfirmados, router]);
+    if (accesoDeptosServidor === false) router.replace("/mi-panel");
+  }, [accesoDeptosServidor, router]);
 
   const tiles = useMemo(() => {
     // Admin de plataforma (DIRECCIÓN) tiene bypass total — ve todos los deptos.
