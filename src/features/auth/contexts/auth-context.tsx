@@ -643,10 +643,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Cerrar sesión no puede quedarse colgado NI dejar la sesión viva
     // (reportado por Iván, 05-ago). El orden importa:
     //
-    // 1. Se destruye la sesión LOCAL primero. Es síncrono y no puede fallar, así
-    //    que a partir de aquí la sesión está muerta pase lo que pase después.
-    //    Antes esto iba al final, tras esperar a la red: si algo se colgaba, no
-    //    se ejecutaba nunca y el usuario seguía dentro al volver a entrar.
+    // 1. Sesión LOCAL primero: síncrono y no puede fallar. Cubre lo alcanzable
+    //    desde JS (localStorage y cookies no-HttpOnly).
     try {
       borrarCookiesSesion();
       borrarSesionLocal();
@@ -654,21 +652,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Nada puede impedir salir.
     }
 
-    // 2. Limpieza remota en segundo plano, SIN esperarla: `keepalive` deja que la
-    //    petición termine aunque la página ya esté navegando.
+    // 2. Limpieza del SERVIDOR, esperada pero acotada a 3 s. Es imprescindible:
+    //    las cookies `sb-*` son `HttpOnly` y solo el servidor puede borrarlas.
+    //    Lanzarla sin esperar (como antes) la cancelaba al navegar, la cookie
+    //    sobrevivía y el usuario volvía a entrar con la sesión viva.
+    await conTopeDeTiempo(
+      fetch("/api/auth/signout", { method: "POST", credentials: "include" }),
+      3000,
+    );
+
+    // 3. GoTrue en segundo plano: cortesía para revocar el refresh token.
     try {
-      if (supabase) void conTopeDeTiempo(supabase.auth.signOut());
-      void fetch("/api/auth/signout", {
-        method: "POST",
-        credentials: "include",
-        keepalive: true,
-      }).catch(() => null);
+      if (supabase) void supabase.auth.signOut().catch(() => null);
     } catch {
-      // Limpieza de cortesía, no un requisito para salir.
+      // Ídem.
     }
 
-    // 3. Fuera. Sin `await` de por medio: no hay forma de quedarse pillado.
-    window.location.replace("/");
+    // 4. Fuera. `?logout=1` garantiza que la home muestre el login y remate las
+    //    cookies aunque quedara sesión: sin esa marca, el proxy rebotaba a la
+    //    landing y el usuario se encontraba dentro otra vez.
+    window.location.replace("/?logout=1");
   }, [user?.id]);
 
   const hasRole = useCallback((role: AppRole) => roles.includes(role), [roles]);

@@ -168,6 +168,20 @@ export async function updateSession(
   // Rutas auth: callback, reset, etc. → libres
   // Rutas públicas: carta digital, sitios externos, assets, api → libres
   if (isAuthPath(pathname) || isPublicPath(pathname)) {
+    // "/?logout=1" es la vuelta de un cierre de sesión: SIEMPRE muestra el login.
+    // Si además quedara sesión viva (p.ej. la limpieza del servidor no llegó a
+    // tiempo), aquí se remata borrando las cookies `sb-*` — que son `HttpOnly` y
+    // el navegador no puede tocar. Sin esto la home rebotaba a la landing, la
+    // landing a /m y /m de vuelta al login: el botón se quedaba girando sin fin.
+    if (pathname === '/' && request.nextUrl.searchParams.has('logout')) {
+      const limpio = conInicioSesion(supabaseResponse)
+      for (const c of request.cookies.getAll()) {
+        if (c.name.startsWith('sb-')) limpio.cookies.set(c.name, '', { path: '/', maxAge: 0 })
+      }
+      limpio.cookies.delete(SESION_INICIO_COOKIE)
+      return { response: limpio, user: null }
+    }
+
     // Si ya estás logueado y visitas la home/login → te mando a tu landing
     // (excepto en host demo, donde "/" siempre debe mostrar el formulario)
     if (pathname === '/' && user && !isDemoHost) {

@@ -72,21 +72,23 @@ export function EmpleadoMenuMobile({ nombre, avatarUrl }: Props) {
   /**
    * Cerrar sesión NUNCA puede quedarse colgado (reportado por Iván, 05-ago).
    *
-   * Antes eran dos llamadas en serie SIN límite de tiempo: si el móvil tenía mala
-   * cobertura o el servidor tardaba, el botón se quedaba girando para siempre y el
-   * usuario se quedaba atrapado dentro de la app.
+   * Por qué el intento anterior seguía pillando el botón: la limpieza del
+   * servidor se lanzaba SIN esperarla y se navegaba acto seguido. Pero las
+   * cookies `sb-*` de Supabase son `HttpOnly`, así que `document.cookie` NO
+   * puede borrarlas — solo el servidor. Al navegar de inmediato, esa petición
+   * se cancelaba a media, la cookie sobrevivía y el servidor seguía viendo la
+   * sesión viva: la home rebotaba a la landing, la landing a /m, y /m de vuelta
+   * al login. Rueda girando sin fin.
    *
-   * Ahora: las dos limpiezas van en paralelo, cada una con su tope de 3 s, y pase
-   * lo que pase se sale al login. En el peor caso se tarda 3 segundos; nunca más.
+   * Ahora se ESPERA al servidor (único que puede matar la cookie `HttpOnly`),
+   * pero con un tope de 3 s: si la red va mal se sale igual, porque el destino
+   * `/?logout=1` ya no rebota aunque quede sesión.
    */
-  const cerrarSesion = () => {
+  const cerrarSesion = async () => {
     setSaliendo(true);
 
-    // 1. PRIMERO se destruye la sesión LOCAL, que es síncrono y no puede fallar.
-    //    Antes esto iba al final, después de esperar a la red: si algo se colgaba
-    //    (o el import de `auth-context` reventaba el componente), no se ejecutaba
-    //    nunca y el usuario seguía dentro. Ahora la sesión muere aquí, pase lo
-    //    que pase después.
+    // 1. Sesión local primero: síncrono y no puede fallar. Cubre lo que sí es
+    //    accesible desde JS (localStorage de la PWA y cookies no-HttpOnly).
     try {
       borrarCookiesSesion();
       borrarSesionLocal();
@@ -94,20 +96,22 @@ export function EmpleadoMenuMobile({ nombre, avatarUrl }: Props) {
       // Nada puede impedir salir.
     }
 
-    // 2. Limpieza remota en segundo plano, SIN esperarla. `keepalive` deja que la
-    //    petición termine aunque la página ya esté navegando.
+    // 2. Limpieza del SERVIDOR, esperada pero acotada. Es la que borra de verdad
+    //    las cookies `HttpOnly`; sin ella el usuario se queda dentro.
+    await conTopeDeTiempo(
+      fetch("/api/auth/signout", { method: "POST", credentials: "include" }),
+      3000,
+    );
+
+    // 3. GoTrue en segundo plano: cortesía para revocar el refresh token. Ya no
+    //    condiciona la salida.
     try {
-      void conTopeDeTiempo(createBrowserClient().auth.signOut());
-      void fetch("/api/auth/signout", {
-        method: "POST",
-        credentials: "include",
-        keepalive: true,
-      }).catch(() => null);
+      void createBrowserClient().auth.signOut().catch(() => null);
     } catch {
-      // Ídem: es limpieza de cortesía, no un requisito para salir.
+      // Ídem.
     }
 
-    // 3. Fuera. Sin `await` de por medio, así que no hay forma de quedarse pillado.
+    // 4. Fuera, con recarga dura para que no quede nada del árbol en memoria.
     window.location.replace("/?logout=1");
   };
 
