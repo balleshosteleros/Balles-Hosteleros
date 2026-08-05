@@ -9,6 +9,7 @@ import {
   type AccesoApp,
   type AccesoCredencial,
   MAX_ACCESOS_POR_APP,
+  MAX_DATOS_EXTRA_POR_ACCESO,
 } from "@/features/rrhh/data/accesos-apps";
 import { MAX_IMAGEN_MB, MAX_IMAGEN_BYTES } from "@/shared/lib/documentos";
 
@@ -112,7 +113,9 @@ function normalizarDatosExtra(acc: unknown): DatoExtraInterno[] {
       const valor = String(o.valor ?? o.valor_cifrado ?? "");
       return { nombre, valor };
     })
-    .filter((d) => d.nombre);
+    .filter((d) => d.nombre)
+    // Tope de datos extra por acceso: se aplica en servidor, no solo en la UI.
+    .slice(0, MAX_DATOS_EXTRA_POR_ACCESO);
 }
 
 /** Normaliza la lista de accesos: filtra vacíos y aplica el tope. */

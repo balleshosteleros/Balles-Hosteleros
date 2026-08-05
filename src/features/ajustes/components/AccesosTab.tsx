@@ -27,6 +27,8 @@ import {
   type AccesoApp,
   type AccesoCredencial,
   type DatoExtra,
+  MAX_ACCESOS_POR_APP,
+  MAX_DATOS_EXTRA_POR_ACCESO,
 } from "@/features/rrhh/data/accesos-apps";
 import {
   listAllAccesosApps,
@@ -222,13 +224,30 @@ function AccesosTabInner() {
       return next.length ? next : [{ ...accesoVacio }];
     });
   };
+  // Una app admite tantos accesos como haga falta (BBVA: Contabilidad,
+  // Dirección, Gerencia…). Todos comparten el mismo enlace de la app.
+  const addAcceso = () => {
+    setAccesos((prev) => {
+      if (prev.length >= MAX_ACCESOS_POR_APP) {
+        toast.error(`Máximo ${MAX_ACCESOS_POR_APP} accesos por aplicación`);
+        return prev;
+      }
+      return [...prev, { ...accesoVacio, datosExtra: [] }];
+    });
+  };
 
   // --- Datos extra de cada acceso (PIN, PUK, código empresa...) ---
   const addDatoExtra = (idxAcceso: number) => {
     setAccesos((prev) =>
-      prev.map((a, i) =>
-        i === idxAcceso ? { ...a, datosExtra: [...(a.datosExtra ?? []), { nombre: "", valor: "" }] } : a,
-      ),
+      prev.map((a, i) => {
+        if (i !== idxAcceso) return a;
+        const actuales = a.datosExtra ?? [];
+        if (actuales.length >= MAX_DATOS_EXTRA_POR_ACCESO) {
+          toast.error(`Máximo ${MAX_DATOS_EXTRA_POR_ACCESO} datos por acceso`);
+          return a;
+        }
+        return { ...a, datosExtra: [...actuales, { nombre: "", valor: "" }] };
+      }),
     );
   };
   const updateDatoExtra = (idxAcceso: number, idxExtra: number, patch: Partial<DatoExtra>) => {
@@ -485,6 +504,9 @@ function AccesosTabInner() {
               {accesos.map((acc, idx) => (
                 <div key={idx} className="flex items-start gap-2 rounded-md border border-border/60 p-2">
                   <div className="grid flex-1 gap-2">
+                    <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                      Acceso {idx + 1}
+                    </span>
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                       <Input
                         value={acc.etiqueta}
@@ -595,6 +617,9 @@ function AccesosTabInner() {
                         <span className="text-[11px] font-semibold text-muted-foreground">
                           Datos extra (PIN, PUK, código…)
                         </span>
+                        <span className="text-[11px] text-muted-foreground">
+                          {(acc.datosExtra ?? []).length}/{MAX_DATOS_EXTRA_POR_ACCESO}
+                        </span>
                       </div>
                       {(acc.datosExtra ?? []).map((dato, idxExtra) => (
                         <div key={idxExtra} className="flex items-center gap-2">
@@ -630,6 +655,7 @@ function AccesosTabInner() {
                         size="sm"
                         className="h-7 gap-1.5 text-xs"
                         onClick={() => addDatoExtra(idx)}
+                        disabled={(acc.datosExtra ?? []).length >= MAX_DATOS_EXTRA_POR_ACCESO}
                       >
                         <Plus className="h-3 w-3" />Dato extra
                       </Button>
@@ -647,6 +673,15 @@ function AccesosTabInner() {
                   </Button>
                 </div>
               ))}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-8 w-full gap-1.5 text-xs"
+                onClick={addAcceso}
+              >
+                <Plus className="h-3.5 w-3.5" />Añadir acceso
+              </Button>
             </div>
           </div>
           <DialogFooter>

@@ -51,6 +51,12 @@ export interface DatoExtra {
 /** Máximo de accesos (usuario/contraseña) por app. No se muestra en UI; se aplica en silencio. */
 export const MAX_ACCESOS_POR_APP = 50;
 
+/**
+ * Máximo de datos extra (PIN, PUK, código de empresa…) por acceso.
+ * Cada acceso lleva ya usuario y contraseña; estos 5 son datos adicionales.
+ */
+export const MAX_DATOS_EXTRA_POR_ACCESO = 5;
+
 export interface AccesoApp {
   id: string;
   nombre: string;
