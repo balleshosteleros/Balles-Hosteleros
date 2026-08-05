@@ -1,7 +1,52 @@
 # TAREA para Fernando — Precios de compra de BACANAL (cuando bajes el repo)
 
-> **De:** Iván (vía Claude) · **Fecha:** 2026-06-30 · **Actualizado:** 2026-08-03 · **Prioridad:** media
+> **De:** Iván (vía Claude) · **Fecha:** 2026-06-30 · **Actualizado:** 2026-08-05 · **Prioridad:** media
 > Léelo al hacer `git pull` y reconciliar.
+
+---
+
+## 🛑 RESPUESTA DE IVÁN (05-ago): estas preguntas NO se responden aquí — se resuelven en el software
+
+Fernando: leídas todas tus preguntas abiertas (las 4 dudas del lote del 30-jul y los 6 casos
+nuevos de la tanda 2). **No te las voy a contestar una a una, porque contestarlas no arregla el
+problema de fondo.**
+
+El fondo es este: cada vez que un albarán trae una rareza —falta una página, hay un recargo que
+no es un producto, un nombre no se lee bien, una línea viene sin precio, el producto no está en
+catálogo— **el sistema no la reconoce, así que acaba en un `.md` y me la preguntas a mí**. Eso
+no es un problema de código: es que el software no está diseñado para lo que se va a encontrar.
+Y se va a encontrar siempre lo mismo, con todos los proveedores y en todos los restaurantes.
+
+**Lo que quiero:** que al escanear una factura, el sistema **prevea todas esas posibilidades**,
+las detecte solo, y me las presente **en una ventana emergente con su propuesta ya hecha**, para
+que yo solo diga sí o no. Sin documentos, sin WhatsApp, sin esperar a que estés disponible.
+
+**→ `.claude/PRPs/PRP-074-mesa-de-incidencias-albaranes-anticipacion-y-propuesta.md`**
+
+Ahí está el diseño completo: **12 tipos de incidencia** (catálogo cerrado y versionado), cada uno
+con su detección, su propuesta por defecto y sus acciones. Tus 9 preguntas abiertas son
+exactamente 9 de esos 12 tipos — por eso las uso como los tests del detector en la F1.
+
+**Decisiones de negocio que ya te cierro (no hace falta que me las vuelvas a preguntar):**
+
+1. **El sistema propone, yo decido.** Nada entra en stock ni en catálogo sin mi OK. Solo se
+   auto-resuelve la evidencia máxima (alias exacto del mismo proveedor) y aun así se muestra.
+2. **Documento incompleto → se guarda marcado como parcial y avisa.** Entra lo legible, queda el
+   aviso pendiente. No se pierde nada y no se atasca nada. Esto responde al Belmon Drink 15378:
+   ya no hay que decidir "lo dejamos fuera o no", el sistema lo carga parcial y lo reclama.
+3. **Los portes, el envase retornable y el desplazamiento son productos de compra normales con
+   "Controla stock" DESACTIVADO.** No hay que inventar nada: todo producto de compra tiene ya
+   esa opción, y la confirmación transaccional ya la respeta (`productos.controla_stock`). Así
+   el total del albarán cuadra con el papel, el gasto se ve en contabilidad, y el inventario no
+   se ensucia. Esto responde a los tres recargos (DDI Nexia 2,99 €, Garcimar 1,50 €, Disbesa
+   1,10 €) y a todos los que vengan.
+
+**Lo que sigue siendo tuyo y no cambia:** la prueba móvil que me pediste que repita. Esa la hago
+yo y te paso el código de error si vuelve a fallar.
+
+**Antes de arrancar el PRP-074:** las fases F4 y F5 pisan tu zona (`ResolverLineaDialog` y
+`AsistenteAlbaranPanel`). Te lo re-anuncio aquí y acordamos ventana, como con la Etapa C del 073.
+Las fases F1 a F3 (OCR, detector, tabla y la ventana en sí) no tocan nada tuyo.
 
 ---
 
@@ -180,6 +225,13 @@ hace 1-3 semanas, ya consumida) — 0 `stock_movimientos` creados, verificado. A
 rellenados donde estaban vacíos para que el matcher los reconozca solo la próxima vez.
 
 **4 cosas que quedan sin resolver — decisión tuya:**
+
+> **▸ RESPUESTA DE IVÁN (05-ago): las 4 se resuelven en el software, no aquí.** Ver la sección
+> 🛑 del principio y el **PRP-074**. Correspondencia: (1) = incidencia `documento_incompleto`
+> → se carga parcial y reclama la página; (2) = `linea_de_servicio` → producto de compra con
+> Controla stock desactivado; (3) = `producto_ambiguo` → propone "Alhambra Reserva 0,30
+> retornable" con su % de parecido y yo acepto o corrijo; (4) = `linea_sin_importe` → propone
+> "regalo: entra a coste 0, no registra precio". Las cuatro son casos de test de la F1.
 
 1. **Un albarán no se pudo cargar: falta una página.** Belmon Drink → Habana, albarán **15378**
    (16-jul, pedido grande de licores/energéticas: Red Bull, ginebras, whiskies, Oxefruit...). Las
@@ -1018,6 +1070,15 @@ secreto de cerdo, corvina, aceite de oliva, gyozas, queso vaca-cabra, entrecot, 
 más evidencia). No repito la tabla; las decisiones de A/B/C siguen abiertas y aplican también a esta tanda.
 
 **Casos NUEVOS de esta tanda (no estaban en A/B/C):**
+
+> **▸ RESPUESTA DE IVÁN (05-ago): también van al software (PRP-074).** Cubo Cóctel Mix, Leche
+> Asturiana, Hielo Cubitos y el Vaso de sidra PP son incidencias `producto_no_encontrado` /
+> `producto_ambiguo`: el sistema me propondrá crear o vincular con los datos ya rellenados y yo
+> decido con un clic. La "Salsa barbacoa" comprada vs. la elaboración casera es el caso claro de
+> `producto_ambiguo` (mismo nombre, naturaleza distinta). **Lo único que sí te respondo aquí
+> porque no es una incidencia sino una regla de negocio: el pedido Makro "PARA PERSONAL" (doc
+> 027174) NO es gasto del restaurante** — sus precios pueden quedar cargados, pero ese pedido no
+> debe contar como compra de restaurante.
 - **"Cubo Cóctel Mix 2kg" (Bigger Golosinas, Habana)** — no existe en catálogo; aparece en 2 albaranes (9,86€). ¿Crear?
 - **"Leche Asturiana" (Dither, Habana)** — catálogo Habana solo tiene "Leche Condesada" (producto distinto). ¿Crear "Leche"?
 - **Hielo en cubitos 41mm (Procubitos, Habana)** — no encaja con "Hielo Roca" ni "Hielo Pile" del catálogo (0,818€/kg). ¿Crear "Hielo Cubitos"?
