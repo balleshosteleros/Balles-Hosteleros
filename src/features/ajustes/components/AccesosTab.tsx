@@ -32,6 +32,7 @@ import {
 } from "@/features/rrhh/data/accesos-apps";
 import {
   listAllAccesosApps,
+  createAccesoApp,
   updateAccesoApp,
   revelarAccesoApp,
 } from "@/features/rrhh/actions/accesos-apps-actions";
@@ -173,6 +174,8 @@ function AccesosTabInner() {
   const [editingApp, setEditingApp] = useState<AccesoApp | null>(null);
   const [accesos, setAccesos] = useState<AccesoCredencial[]>([accesoVacio]);
   const [enlace, setEnlace] = useState("");
+  // Solo en alta: al editar, el nombre lo aporta la app ya existente.
+  const [nombreNuevo, setNombreNuevo] = useState("");
   const [rolesDisponibles, setRolesDisponibles] = useState<string[]>([]);
   const [rolesPopoverIdx, setRolesPopoverIdx] = useState<number>(-1);
 
@@ -284,8 +287,21 @@ function AccesosTabInner() {
     return true;
   });
 
+  // Alta desde la bóveda: una entrada nueva de credenciales. El enlace es
+  // opcional — sin él es una credencial suelta (caja fuerte, PIN, wifi) y no
+  // aparecerá en «Aplicaciones», que solo lista las que tienen enlace web.
+  const openCreate = () => {
+    setEditingApp(null);
+    setNombreNuevo("");
+    setEnlace("");
+    setAccesos([{ ...accesoVacio, datosExtra: [] }]);
+    setRolesPopoverIdx(-1);
+    setModalOpen(true);
+  };
+
   const openEdit = (app: AccesoApp) => {
     setEditingApp(app);
+    setNombreNuevo("");
     setEnlace(app.url ?? "");
     // Compat: apps antiguas tenían roles a nivel de app. Si un acceso no tiene
     // roles propios, hereda los roles globales de la app para no perder permisos.
@@ -311,13 +327,44 @@ function AccesosTabInner() {
   };
 
   const handleSave = async () => {
-    if (!editingApp) return;
     setSaving(true);
     try {
       // rolesAutorizados (nivel app) = unión de los roles de cada acceso.
       // Se usa como pre-filtro de visibilidad; el filtrado fino de qué acceso
       // ve cada quien se hace por acceso.
       const rolesUnion = Array.from(new Set(accesos.flatMap((a) => a.roles ?? [])));
+
+      // Alta: crea la entrada nueva en la bóveda de la empresa activa.
+      if (!editingApp) {
+        const nombre = nombreNuevo.trim();
+        if (!nombre) {
+          toast.error("Pon un nombre");
+          return;
+        }
+        const creada = await createAccesoApp({
+          nombre,
+          descripcion: "",
+          url: enlace.trim(),
+          icono: "🔗",
+          logoUrl: undefined,
+          categoria: "Otros",
+          departamentos: [],
+          rolesAutorizados: rolesUnion,
+          accesos,
+          usuario: "",
+          contrasena: "",
+          estado: "Activo",
+          responsable: "",
+          notas: "",
+          tipoIntegracion: "enlace",
+          empresaId: empresaActual.id,
+        });
+        setApps((prev) => [...prev, creada]);
+        toast.success(`"${creada.nombre}" creada`);
+        setModalOpen(false);
+        return;
+      }
+
       const updated = await updateAccesoApp(editingApp.id, {
         nombre: editingApp.nombre,
         descripcion: editingApp.descripcion,
@@ -366,6 +413,9 @@ function AccesosTabInner() {
             className="pl-9"
           />
         </div>
+        <Button onClick={openCreate} className="gap-1.5">
+          <Plus className="h-4 w-4" />Nuevo
+        </Button>
       </div>
 
       <Table>
@@ -474,9 +524,24 @@ function AccesosTabInner() {
       <Dialog open={modalOpen} onOpenChange={setModalOpen}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Contraseñas de {editingApp?.nombre}</DialogTitle>
+            <DialogTitle>
+              {editingApp ? `Contraseñas de ${editingApp.nombre}` : "Nueva contraseña"}
+            </DialogTitle>
           </DialogHeader>
           <div className="space-y-2 py-2">
+            {/* Solo en alta: al editar, el nombre ya lo tiene la app. */}
+            {!editingApp && (
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold">Nombre</Label>
+                <Input
+                  value={nombreNuevo}
+                  onChange={(e) => setNombreNuevo(e.target.value)}
+                  placeholder="Ej: Caja fuerte, BBVA, Wifi del local…"
+                  className="h-8 text-xs"
+                />
+              </div>
+            )}
+
             {/* Enlace de la app: alimenta la columna «Enlace» de la tabla. */}
             <div className="space-y-1">
               <Label className="text-xs font-semibold">Enlace</Label>
