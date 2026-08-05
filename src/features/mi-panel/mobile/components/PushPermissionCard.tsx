@@ -4,12 +4,16 @@ import { useEffect, useState } from "react";
 import { Bell, BellOff, X } from "lucide-react";
 import { toast } from "sonner";
 import {
+  getExistingPushEndpoint,
   getPushPermission,
   isPushSupported,
   isStandalone,
   subscribeForPush,
 } from "../lib/push-client";
-import { savePushSubscription } from "@/features/mi-panel/actions/push-subscription-actions";
+import {
+  isPushSubscriptionSaved,
+  savePushSubscription,
+} from "@/features/mi-panel/actions/push-subscription-actions";
 
 export function PushPermissionCard() {
   const [visible, setVisible] = useState(false);
@@ -17,25 +21,47 @@ export function PushPermissionCard() {
   const [needsInstall, setNeedsInstall] = useState(false);
 
   useEffect(() => {
-    // iOS: los push (y por tanto que suenen las llamadas) solo funcionan con la PWA
-    // instalada en la pantalla de inicio. Mientras no lo esté, el navegador ni siquiera
-    // expone Notification/PushManager, así que NO se puede gatear por isPushSupported():
-    // hay que mostrar el aviso de instalar igualmente.
-    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-    const iosNeedsInstall = isIOS && !isStandalone();
+    let cancelado = false;
 
-    if (iosNeedsInstall) {
-      setNeedsInstall(true);
-    } else {
+    void (async () => {
+      // iOS: los push (y por tanto que suenen las llamadas) solo funcionan con la PWA
+      // instalada en la pantalla de inicio. Mientras no lo esté, el navegador ni siquiera
+      // expone Notification/PushManager, así que NO se puede gatear por isPushSupported():
+      // hay que mostrar el aviso de instalar igualmente.
+      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+      const iosNeedsInstall = isIOS && !isStandalone();
+
+      if (iosNeedsInstall) {
+        if (!cancelado) {
+          setNeedsInstall(true);
+          setVisible(true);
+        }
+        return;
+      }
+
       // Resto de plataformas: si no hay soporte de push, no hay nada que ofrecer.
       if (!isPushSupported()) return;
       const permission = getPushPermission();
-      if (permission === "granted" || permission === "denied") return;
-    }
+      // Denegado: el navegador ya no deja volver a preguntar desde la app.
+      if (permission === "denied") return;
 
-    // Sin avisos activados las llamadas no suenan, así que insistimos cada vez:
-    // el botón de cerrar solo oculta la tarjeta en esta visita, vuelve a salir al entrar.
-    setVisible(true);
+      // Permiso concedido NO significa que el dispositivo esté dado de alta: si el
+      // guardado en servidor falló, queda mudo (no le llega nada) y antes la tarjeta
+      // desaparecía para siempre, sin forma de reintentar. Así que con el permiso ya
+      // dado se comprueba de verdad contra la BD y solo se calla si está registrado.
+      if (permission === "granted") {
+        const endpoint = await getExistingPushEndpoint();
+        if (endpoint && (await isPushSubscriptionSaved(endpoint))) return;
+      }
+
+      // Sin avisos activados las llamadas no suenan, así que insistimos cada vez:
+      // el botón de cerrar solo oculta la tarjeta en esta visita, vuelve a salir al entrar.
+      if (!cancelado) setVisible(true);
+    })();
+
+    return () => {
+      cancelado = true;
+    };
   }, []);
 
   const onAccept = async () => {

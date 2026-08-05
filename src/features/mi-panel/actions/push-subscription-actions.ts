@@ -49,6 +49,32 @@ export async function savePushSubscription(
   return { ok: true };
 }
 
+/**
+ * ¿Está este dispositivo (endpoint) realmente guardado y activo en la BD?
+ *
+ * El permiso del navegador y la suscripción en servidor son cosas distintas: si
+ * el guardado falla, el permiso se queda concedido igualmente y el dispositivo
+ * queda "mudo" (no recibe nada) sin que la app pueda darse cuenta. Esto permite
+ * detectar ese estado y volver a ofrecer la activación.
+ */
+export async function isPushSubscriptionSaved(
+  endpoint: string,
+): Promise<boolean> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return false;
+  const { data } = await supabase
+    .from("push_subscriptions")
+    .select("endpoint")
+    .eq("endpoint", endpoint)
+    .eq("user_id", user.id)
+    .eq("enabled", true)
+    .maybeSingle();
+  return !!data;
+}
+
 export async function removePushSubscription(
   endpoint: string,
 ): Promise<{ ok: boolean }> {

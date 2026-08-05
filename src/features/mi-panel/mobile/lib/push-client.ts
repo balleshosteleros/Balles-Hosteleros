@@ -33,6 +33,22 @@ export function getPushPermission(): NotificationPermission | "unsupported" {
   return Notification.permission;
 }
 
+/**
+ * Endpoint de la suscripción que YA tiene este navegador, sin pedir permiso ni
+ * crear ninguna. Sirve para comprobar contra el servidor si este dispositivo
+ * está realmente dado de alta, o si solo tiene el permiso concedido "a medias".
+ */
+export async function getExistingPushEndpoint(): Promise<string | null> {
+  if (!isPushSupported()) return null;
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.getSubscription();
+    return sub?.endpoint ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export async function subscribeForPush(): Promise<{
   endpoint: string;
   p256dh: string;
