@@ -25,7 +25,13 @@ export function MobileBottomNav() {
   return (
     <nav
       aria-label="Navegación principal"
-      className="fixed inset-x-0 bottom-0 z-50 border-t border-border/60 bg-background/95 backdrop-blur pb-[max(env(safe-area-inset-bottom),0px)]"
+      // `fixed bottom-0` se ancla al documento, y en iOS Safari la barra se despega
+      // al hacer scroll (cuando aparece/desaparece la barra del navegador). Con
+      // `position: sticky` sobre el contenedor a altura de pantalla completa, la
+      // barra queda pegada abajo SIEMPRE, sin saltos. La altura se publica en
+      // --nav-h para que cada pantalla reserve exactamente ese hueco.
+      style={{ height: "var(--nav-h)" }}
+      className="sticky bottom-0 z-50 mt-auto w-full shrink-0 border-t border-border/60 bg-background/95 backdrop-blur pb-[env(safe-area-inset-bottom)]"
     >
       <ul className="mx-auto flex max-w-screen-sm items-stretch justify-around">
         {items.map((item) => {

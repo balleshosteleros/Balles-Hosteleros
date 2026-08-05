@@ -63,10 +63,16 @@ export default async function MobileLayout({ children }: { children: React.React
   }
 
   return (
-    <div className="min-h-dvh bg-background text-foreground antialiased">
+    // Columna a altura de pantalla: el contenido crece y la barra queda abajo
+    // pegada por `sticky`. Antes era `pb-24` a ojo sobre una barra `fixed`, y en
+    // iPhone (con franja inferior) la barra tapaba el final de las listas.
+    // --nav-h la publica la barra para que cada pantalla reserve el hueco justo.
+    <div
+      className="flex min-h-dvh flex-col bg-background text-foreground antialiased [--nav-h:calc(3.5rem+env(safe-area-inset-bottom))]"
+    >
       <PWARegister />
       <VersionAutoUpdate />
-      <main className="mx-auto w-full max-w-screen-sm pb-24">{children}</main>
+      <main className="mx-auto w-full max-w-screen-sm flex-1">{children}</main>
       <MobileBottomNav />
       <MobileFichajeProvider />
       {/* Gate bloqueante de notificaciones desactivado durante las pruebas:

@@ -74,7 +74,7 @@ export function SubirAlbaranMobile() {
   }
 
   return (
-    <div className="space-y-4 pb-28">
+    <div className="space-y-4 pb-[calc(var(--nav-h)+4.5rem)]">
       {paso === "elegir" && !preview && (
         <div className="space-y-3">
           <label className="flex flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-primary/40 bg-primary/5 p-8 active:scale-[0.98] transition-all cursor-pointer">
@@ -277,7 +277,7 @@ export function SubirAlbaranMobile() {
             </div>
           )}
 
-          <div className="fixed inset-x-0 bottom-[84px] z-30 mx-auto max-w-screen-sm px-3">
+          <div className="fixed inset-x-0 bottom-[calc(var(--nav-h)+0.75rem)] z-30 mx-auto max-w-screen-sm px-3">
             <div className="flex gap-2">
               <Button variant="outline" className="shrink-0" onClick={reset}>
                 Empezar de nuevo

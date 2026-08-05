@@ -63,7 +63,10 @@ export default async function MobileAlbaranesPage() {
   return (
     <>
       <MobilePageHeader title="Recepción de albaranes" subtitle="Pedidos pendientes de recibir" />
-      <div className="space-y-5 px-3 py-4">
+      {/* pb-6 al final: si no, la barra de navegación tapaba los últimos albaranes
+          en revisión (no se podían ni ver ni pulsar). El hueco de la barra ya lo
+          reserva el layout; esto es solo el aire para que no queden pegados. */}
+      <div className="space-y-5 px-3 py-4 pb-6">
         <Link
           href="/m/albaranes/subir"
           className="flex items-center gap-3 rounded-2xl border-2 border-dashed border-primary/40 bg-primary/5 p-3.5 transition-all active:scale-[0.98]"

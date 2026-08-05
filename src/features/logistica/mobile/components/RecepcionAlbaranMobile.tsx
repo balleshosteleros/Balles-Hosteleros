@@ -150,7 +150,7 @@ export function RecepcionAlbaranMobile({
   }
 
   return (
-    <div className="space-y-4 pb-28">
+    <div className="space-y-4 pb-[calc(var(--nav-h)+4.5rem)]">
       {/* Foto del albarán */}
       <Card>
         <CardContent className="p-4">
@@ -215,7 +215,7 @@ export function RecepcionAlbaranMobile({
       </div>
 
       {/* Confirmar — barra fija sobre el bottom-nav */}
-      <div className="fixed inset-x-0 bottom-[84px] z-30 mx-auto max-w-screen-sm px-3">
+      <div className="fixed inset-x-0 bottom-[calc(var(--nav-h)+0.75rem)] z-30 mx-auto max-w-screen-sm px-3">
         <Button
           className="w-full gap-2 shadow-lg"
           size="lg"
