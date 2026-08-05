@@ -393,7 +393,51 @@ export async function listAccesosApps(empresaSlug: string): Promise<AccesoApp[]>
 
   // Escudo 2 — solo las credenciales donde este rol esté marcado. El resto no
   // sale del servidor (antes viajaban y se ocultaban al pintar).
-  return filtrarAccesosPorRol(visibles.map((r) => rowToApp(r as Row)), rolNombre);
+  const filtradas = filtrarAccesosPorRol(visibles.map((r) => rowToApp(r as Row)), rolNombre);
+
+  // Red de seguridad (PRP-075): contrastamos con lo que la tabla `credenciales`
+  // deja pasar por RLS. Si la BD devuelve MENOS de lo que hemos calculado aquí,
+  // mandamos lo de la BD: ante discrepancia, gana el criterio más restrictivo.
+  return await recortarSegunCredencialesRLS(supabase, filtradas, rolNombre);
+}
+
+/**
+ * Contrasta el resultado calculado en código con lo que la tabla `credenciales`
+ * autoriza por RLS (los dos escudos aplicados por la propia base de datos).
+ * Solo QUITA credenciales: nunca añade. Si la consulta falla, se devuelve lo
+ * calculado (la protección en servidor ya se ha aplicado antes).
+ */
+async function recortarSegunCredencialesRLS(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  apps: AccesoApp[],
+  rolNombre: string | null,
+): Promise<AccesoApp[]> {
+  if (apps.length === 0) return apps;
+  const { data, error } = await supabase
+    .from("credenciales")
+    .select("origen_id, origen_indice");
+  if (error || !data) return apps; // sin señal de la BD, no relajamos nada
+  const permitidas = new Set(
+    data.map((c) => `${c.origen_id}#${c.origen_indice}`),
+  );
+  const out: AccesoApp[] = [];
+  for (const app of apps) {
+    const visibles = app.accesos.filter((a) =>
+      permitidas.has(`${app.id}#${a.indiceReal ?? 0}`),
+    );
+    if (visibles.length === 0) continue;
+    out.push({ ...app, accesos: visibles, usuario: visibles[0]?.usuario ?? "" });
+  }
+  // Trazabilidad: si el criterio de la BD no coincide con el del código,
+  // conviene saberlo (indica datos desincronizados entre las dos tablas).
+  const antes = apps.reduce((n, a) => n + a.accesos.length, 0);
+  const despues = out.reduce((n, a) => n + a.accesos.length, 0);
+  if (antes !== despues) {
+    console.warn(
+      `[accesos] RLS recortó ${antes - despues} credencial(es) para rol "${rolNombre}"`,
+    );
+  }
+  return out;
 }
 
 /**
@@ -423,6 +467,74 @@ export async function listAllAccesosApps(empresaSlug?: string): Promise<AccesoAp
   return (data ?? []).map((r) => rowToApp(r as Row));
 }
 
+/**
+ * PRP-075 · Réplica de una fila de `accesos_apps` en las tablas nuevas
+ * (`aplicaciones` + `credenciales`). Mientras conviven ambos modelos, toda
+ * escritura debe reflejarse en las dos o la RLS de `credenciales` empezaría a
+ * negar accesos legítimos (o a permitir los ya borrados).
+ *
+ * Usa cliente admin a propósito: la escritura en `credenciales` está reservada
+ * a dirección por RLS, y aquí ya se ha validado el permiso de edición antes.
+ * Nunca descifra: copia el valor cifrado tal cual.
+ */
+async function sincronizarTablasNuevas(row: Row & { empresa_id: string | null }): Promise<void> {
+  try {
+    if (!row.empresa_id) return;
+    const admin = createAdminClient();
+    const tieneEnlace = (row.url ?? "").trim().length > 0;
+
+    let aplicacionId: string | null = null;
+    if (tieneEnlace) {
+      const { data: app } = await admin
+        .from("aplicaciones")
+        .upsert(
+          {
+            empresa_id: row.empresa_id,
+            origen_id: row.id,
+            nombre: row.nombre ?? "",
+            descripcion: row.descripcion ?? "",
+            url: row.url ?? "",
+            icono: row.icono ?? "",
+            logo_url: row.logo_url ?? null,
+            categoria: row.categoria ?? "Otros",
+            departamentos: row.departamentos ?? [],
+            estado: row.estado ?? "Activo",
+            responsable: row.responsable ?? "",
+            notas: row.notas ?? "",
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "origen_id" },
+        )
+        .select("id")
+        .maybeSingle();
+      aplicacionId = (app?.id as string) ?? null;
+    }
+
+    // Las credenciales se reescriben enteras: es la forma segura de reflejar
+    // altas, bajas y reordenaciones dentro del array jsonb.
+    await admin.from("credenciales").delete().eq("origen_id", row.id);
+
+    const accesos = (row.accesos ?? []) as unknown as Array<Record<string, unknown>>;
+    if (accesos.length === 0) return;
+    await admin.from("credenciales").insert(
+      accesos.map((a, i) => ({
+        empresa_id: row.empresa_id,
+        aplicacion_id: aplicacionId,
+        origen_id: row.id,
+        origen_indice: i,
+        etiqueta: String(a.etiqueta ?? ""),
+        usuario: String(a.usuario ?? ""),
+        secreto: (a.contrasena as string) || null,
+        datos_extra: (a.datos_extra ?? a.datosExtra ?? []) as unknown,
+        roles: (Array.isArray(a.roles) ? a.roles : []) as string[],
+      })),
+    );
+  } catch (e) {
+    // No bloquea la operación principal: la fuente sigue siendo accesos_apps.
+    console.error("[accesos-apps] sincronizarTablasNuevas:", e);
+  }
+}
+
 /** Crea un acceso. RLS rechaza si el usuario no pertenece a la empresa indicada. */
 export async function createAccesoApp(
   app: Omit<AccesoApp, "id" | "ultimaActualizacion"> & { id?: string },
@@ -446,6 +558,7 @@ export async function createAccesoApp(
     console.error("[accesos-apps] createAccesoApp:", error);
     throw new Error(`Error al crear acceso: ${error.message}`);
   }
+  await sincronizarTablasNuevas(data as Row & { empresa_id: string | null });
   return rowToApp(data as Row);
 }
 
@@ -487,6 +600,7 @@ export async function updateAccesoApp(
     console.error("[accesos-apps] updateAccesoApp:", error);
     throw new Error(`Error al actualizar acceso: ${error.message}`);
   }
+  await sincronizarTablasNuevas(data as Row & { empresa_id: string | null });
   return rowToApp(data as Row);
 }
 
@@ -496,6 +610,16 @@ export async function deleteAccesoApp(id: string): Promise<void> {
   const user = await getUserOrNull(supabase);
   if (!user) throw new Error("No autorizado");
   await exigirPermisoEdicionAccesos(user.id);
+
+  // Limpia también las tablas nuevas (credenciales cae en cascada por FK, pero
+  // las sueltas cuelgan de origen_id, así que se borran explícitamente).
+  try {
+    const admin = createAdminClient();
+    await admin.from("credenciales").delete().eq("origen_id", id);
+    await admin.from("aplicaciones").delete().eq("origen_id", id);
+  } catch (e) {
+    console.error("[accesos-apps] limpieza tablas nuevas:", e);
+  }
 
   const { error } = await supabase.from("accesos_apps").delete().eq("id", id);
   if (error) {
@@ -620,6 +744,16 @@ export async function revelarAccesoApp(
     if (!rolPuedeVerAcceso(acc, rolNombre)) {
       return { ok: false, error: "No autorizado" };
     }
+    // Escudo 3 (PRP-075) — además, la BD debe autorizar esta credencial por RLS.
+    // Doble llave: aunque un fallo del código dejara pasar el check anterior,
+    // la propia base de datos tiene que estar de acuerdo antes de descifrar.
+    const { data: permitida } = await supabase
+      .from("credenciales")
+      .select("id")
+      .eq("origen_id", appId)
+      .eq("origen_indice", indice)
+      .maybeSingle();
+    if (!permitida) return { ok: false, error: "No autorizado" };
   }
 
   // Si se pide un dato extra concreto, devuelve ESE valor en vez de la contraseña.
