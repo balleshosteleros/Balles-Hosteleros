@@ -22,9 +22,8 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Plus, Pencil, Eye, Copy, Search, ChevronDown, X } from "lucide-react";
+import { Plus, Pencil, Eye, Copy, Search, ChevronDown, X, ArrowUpRight } from "lucide-react";
 import {
-  MAX_ACCESOS_POR_APP,
   type AccesoApp,
   type AccesoCredencial,
   type DatoExtra,
@@ -119,6 +118,38 @@ function PasswordAdmin({
   );
 }
 
+/**
+ * Recuadro de la columna «Enlace».
+ *  · Con URL  → verde y pulsable (abre en pestaña nueva).
+ *  · Sin URL  → gris, sin cursor ni acción: no abre nada.
+ */
+function EnlaceCelda({ url, nombre }: { url?: string; nombre: string }) {
+  const limpia = (url ?? "").trim();
+  if (!limpia) {
+    return (
+      <span
+        aria-disabled
+        title="Sin enlace"
+        className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-border bg-muted text-muted-foreground/60"
+      >
+        <ArrowUpRight className="h-3.5 w-3.5" />
+      </span>
+    );
+  }
+  const href = limpia.startsWith("http") ? limpia : `https://${limpia}`;
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      title={`Abrir ${nombre}`}
+      className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-emerald-600/40 bg-emerald-500/15 text-emerald-600 transition-colors hover:bg-emerald-500/25 dark:text-emerald-400"
+    >
+      <ArrowUpRight className="h-3.5 w-3.5" />
+    </a>
+  );
+}
+
 export function AccesosTab() {
   return (
     <VerificacionAccesosProvider>
@@ -139,6 +170,7 @@ function AccesosTabInner() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editingApp, setEditingApp] = useState<AccesoApp | null>(null);
   const [accesos, setAccesos] = useState<AccesoCredencial[]>([accesoVacio]);
+  const [enlace, setEnlace] = useState("");
   const [rolesDisponibles, setRolesDisponibles] = useState<string[]>([]);
   const [rolesPopoverIdx, setRolesPopoverIdx] = useState<number>(-1);
 
@@ -183,9 +215,6 @@ function AccesosTabInner() {
 
   const updateAcceso = (idx: number, patch: Partial<AccesoCredencial>) => {
     setAccesos((prev) => prev.map((a, i) => (i === idx ? { ...a, ...patch } : a)));
-  };
-  const addAcceso = () => {
-    setAccesos((prev) => (prev.length >= MAX_ACCESOS_POR_APP ? prev : [...prev, { ...accesoVacio }]));
   };
   const removeAcceso = (idx: number) => {
     setAccesos((prev) => {
@@ -238,6 +267,7 @@ function AccesosTabInner() {
 
   const openEdit = (app: AccesoApp) => {
     setEditingApp(app);
+    setEnlace(app.url ?? "");
     // Compat: apps antiguas tenían roles a nivel de app. Si un acceso no tiene
     // roles propios, hereda los roles globales de la app para no perder permisos.
     const base = app.accesos.length ? app.accesos : [{ ...accesoVacio }];
@@ -272,7 +302,7 @@ function AccesosTabInner() {
       const updated = await updateAccesoApp(editingApp.id, {
         nombre: editingApp.nombre,
         descripcion: editingApp.descripcion,
-        url: editingApp.url,
+        url: enlace.trim(),
         icono: editingApp.icono,
         logoUrl: editingApp.logoUrl || undefined,
         categoria: editingApp.categoria,
@@ -324,9 +354,9 @@ function AccesosTabInner() {
           <TableRow>
             <TableHead className="w-10"></TableHead>
             <TableHead>Aplicación</TableHead>
-            <TableHead>Usuario</TableHead>
-            <TableHead>Contraseña</TableHead>
+            <TableHead>Datos</TableHead>
             <TableHead>Quién puede verla</TableHead>
+            <TableHead className="w-16 text-center">Enlace</TableHead>
             <TableHead className="text-right w-16">Acciones</TableHead>
           </TableRow>
         </TableHeader>
@@ -353,13 +383,18 @@ function AccesosTabInner() {
               <TableCell>
                 <div className="font-medium text-sm">{app.nombre}</div>
               </TableCell>
-              <TableCell className="font-mono text-xs align-top">
-                {app.accesos[0]?.usuario || app.usuario || (
-                  <span className="text-muted-foreground">—</span>
-                )}
-              </TableCell>
               <TableCell className="align-top">
                 <div className="space-y-1">
+                  {(app.accesos[0]?.usuario || app.usuario) && (
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                        Usuario:
+                      </span>
+                      <span className="font-mono text-xs break-all">
+                        {app.accesos[0]?.usuario || app.usuario}
+                      </span>
+                    </div>
+                  )}
                   <PasswordAdmin
                     appId={app.id}
                     indice={app.accesos[0]?.indiceReal ?? 0}
@@ -400,6 +435,9 @@ function AccesosTabInner() {
                   )}
                 </div>
               </TableCell>
+              <TableCell className="text-center align-top">
+                <EnlaceCelda url={app.url} nombre={app.nombre} />
+              </TableCell>
               <TableCell className="text-right">
                 <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(app)}>
                   <Pencil className="h-3.5 w-3.5" />
@@ -420,6 +458,21 @@ function AccesosTabInner() {
             <DialogTitle>Contraseñas de {editingApp?.nombre}</DialogTitle>
           </DialogHeader>
           <div className="space-y-2 py-2">
+            {/* Enlace de la app: alimenta la columna «Enlace» de la tabla. */}
+            <div className="space-y-1">
+              <Label className="text-xs font-semibold">Enlace</Label>
+              <Input
+                value={enlace}
+                onChange={(e) => setEnlace(e.target.value)}
+                placeholder="https://… (vacío = sin enlace)"
+                className="h-8 text-xs"
+              />
+              <p className="text-xs text-muted-foreground">
+                Si lo dejas vacío, el recuadro de la columna «Enlace» se verá en
+                gris y no abrirá nada.
+              </p>
+            </div>
+
             <Label className="text-xs font-semibold">
               Accesos (usuario, contraseña y quién puede verla)
             </Label>
@@ -595,11 +648,6 @@ function AccesosTabInner() {
                 </div>
               ))}
             </div>
-            {accesos.length < MAX_ACCESOS_POR_APP && (
-              <Button type="button" variant="outline" size="sm" className="gap-1.5" onClick={addAcceso}>
-                <Plus className="h-3.5 w-3.5" />Añadir acceso
-              </Button>
-            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setModalOpen(false)}>
