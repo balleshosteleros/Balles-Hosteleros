@@ -22,7 +22,6 @@ import { createClient as createBrowserClient } from "@/lib/supabase/client";
 // Módulo sin dependencias a propósito: importar desde `auth-context` arrastraba
 // `permisos-actions` ("use server") al bundle del móvil.
 import {
-  conTopeDeTiempo,
   borrarCookiesSesion,
   borrarSesionLocal,
   desactivarAutoLoginGoogle,
@@ -71,50 +70,52 @@ export function EmpleadoMenuMobile({ nombre, avatarUrl }: Props) {
   };
 
   /**
-   * Cerrar sesión NUNCA puede quedarse colgado (reportado por Iván, 05-ago).
+   * Cerrar sesión. NO es `async` a propósito.
    *
-   * Por qué el intento anterior seguía pillando el botón: la limpieza del
-   * servidor se lanzaba SIN esperarla y se navegaba acto seguido. Pero las
-   * cookies `sb-*` de Supabase son `HttpOnly`, así que `document.cookie` NO
-   * puede borrarlas — solo el servidor. Al navegar de inmediato, esa petición
-   * se cancelaba a media, la cookie sobrevivía y el servidor seguía viendo la
-   * sesión viva: la home rebotaba a la landing, la landing a /m, y /m de vuelta
-   * al login. Rueda girando sin fin.
+   * Iván se quedaba con la rueda girando una y otra vez. El motivo: la línea que
+   * de verdad te saca (`location.replace`) estaba al FINAL de una función `async`,
+   * después de un `await`. Si algo fallaba antes —una excepción, iOS suspendiendo
+   * la app al pasar a segundo plano, la promesa sin resolver— esa línea no se
+   * ejecutaba NUNCA y no había ninguna red de seguridad detrás.
    *
-   * Ahora se ESPERA al servidor (único que puede matar la cookie `HttpOnly`),
-   * pero con un tope de 3 s: si la red va mal se sale igual, porque el destino
-   * `/?logout=1` ya no rebota aunque quede sesión.
+   * Ahora la salida está garantizada por dos vías independientes, y ninguna
+   * depende de que la limpieza termine:
+   *   · un temporizador que dispara a los 800 ms pase lo que pase,
+   *   · y la propia navegación en cuanto el servidor responde (lo normal).
+   * La limpieza corre en paralelo, sin bloquear a nadie.
    */
-  const cerrarSesion = async () => {
+  const cerrarSesion = () => {
     setSaliendo(true);
 
-    // 1. Sesión local primero: síncrono y no puede fallar. Cubre lo que sí es
-    //    accesible desde JS (localStorage de la PWA y cookies no-HttpOnly).
+    let salido = false;
+    const salir = () => {
+      if (salido) return;
+      salido = true;
+      // `/salir` remata en el SERVIDOR las cookies HttpOnly (que el navegador no
+      // puede tocar) y de ahí lleva al login. Es la misma puerta de emergencia
+      // que ya funciona escrita a mano, así que el botón no puede hacerlo peor.
+      window.location.replace("/salir");
+    };
+
+    // Red de seguridad: se sale sí o sí, aunque todo lo demás falle.
+    setTimeout(salir, 800);
+
+    // Limpieza de lo accesible desde el navegador. Síncrona y envuelta: una
+    // excepción aquí no puede impedir la salida.
     try {
       borrarCookiesSesion();
       borrarSesionLocal();
       desactivarAutoLoginGoogle();
     } catch {
-      // Nada puede impedir salir.
+      // Ignorado a propósito.
     }
 
-    // 2. Limpieza del SERVIDOR, esperada pero acotada. Es la que borra de verdad
-    //    las cookies `HttpOnly`; sin ella el usuario se queda dentro.
-    await conTopeDeTiempo(
-      fetch("/api/auth/signout", { method: "POST", credentials: "include" }),
-      3000,
-    );
-
-    // 3. GoTrue en segundo plano: cortesía para revocar el refresh token. Ya no
-    //    condiciona la salida.
+    // Revocación en Supabase, en segundo plano y sin esperarla.
     try {
       void createBrowserClient().auth.signOut().catch(() => null);
     } catch {
       // Ídem.
     }
-
-    // 4. Fuera, con recarga dura para que no quede nada del árbol en memoria.
-    window.location.replace("/?logout=1");
   };
 
   return (

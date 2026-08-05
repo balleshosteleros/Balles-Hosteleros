@@ -6,7 +6,6 @@ import type { User, Session, SupabaseClient } from "@supabase/supabase-js";
 import type { PermisoModulo } from "@/features/ajustes/data/ajustes";
 import { getUserPermisos } from "@/features/auth/actions/permisos-actions";
 import {
-  conTopeDeTiempo,
   borrarCookiesSesion,
   borrarSesionLocal,
   desactivarAutoLoginGoogle,
@@ -654,26 +653,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Nada puede impedir salir.
     }
 
-    // 2. Limpieza del SERVIDOR, esperada pero acotada a 3 s. Es imprescindible:
-    //    las cookies `sb-*` son `HttpOnly` y solo el servidor puede borrarlas.
-    //    Lanzarla sin esperar (como antes) la cancelaba al navegar, la cookie
-    //    sobrevivía y el usuario volvía a entrar con la sesión viva.
-    await conTopeDeTiempo(
-      fetch("/api/auth/signout", { method: "POST", credentials: "include" }),
-      3000,
-    );
-
-    // 3. GoTrue en segundo plano: cortesía para revocar el refresh token.
+    // 2. GoTrue en segundo plano: cortesía para revocar el refresh token.
     try {
       if (supabase) void supabase.auth.signOut().catch(() => null);
     } catch {
       // Ídem.
     }
 
-    // 4. Fuera. `?logout=1` garantiza que la home muestre el login y remate las
-    //    cookies aunque quedara sesión: sin esa marca, el proxy rebotaba a la
-    //    landing y el usuario se encontraba dentro otra vez.
-    window.location.replace("/?logout=1");
+    // 3. Fuera por `/salir`, que es una NAVEGACIÓN, no un `fetch`.
+    //
+    //    Antes se esperaba (`await`) a que respondiera `/api/auth/signout` y solo
+    //    después se navegaba. Si esa espera no terminaba —excepción, app suspendida
+    //    por iOS, promesa colgada—, la línea de salida no se ejecutaba nunca y el
+    //    usuario se quedaba con la rueda girando (reportado por Iván).
+    //
+    //    `/salir` hace en el servidor lo mismo que hacía aquel `fetch` (expira las
+    //    cookies `HttpOnly`, que el navegador no puede tocar) y además lleva al
+    //    login. Al ser una navegación, no hay nada que esperar ni que pueda
+    //    quedarse a medias.
+    window.location.replace("/salir");
   }, [user?.id]);
 
   const hasRole = useCallback((role: AppRole) => roles.includes(role), [roles]);
