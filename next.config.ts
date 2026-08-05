@@ -43,12 +43,16 @@ const nextConfig: NextConfig = {
       {
         source: '/',
         has: [{ type: 'header', key: 'user-agent', value: MOBILE_UA_REGEX }],
-        // "/?logout=1" (tras cerrar sesión) y "/?auth=1" (sesión caducada / sin
-        // sesión, desde la guardia de /m): NO redirigimos a /m (que exige sesión
-        // y rebotaría a "/"), así el login es alcanzable en móvil.
+        // "/?logout=1" (tras cerrar sesión), "/?auth=1" (sesión caducada / sin
+        // sesión, desde la guardia de /m) y "/?error=..." (acceso rechazado por
+        // el guard de perfil): NO redirigimos a /m (que exige sesión y rebotaría
+        // a "/"), así el login —y su mensaje de error— es alcanzable en móvil.
+        // Sin `error` aquí, el aviso "esta cuenta no tiene acceso" se perdía en
+        // el rebote "/"→"/m"→"/?auth=1" y el usuario volvía al login en silencio.
         missing: [
           { type: 'query', key: 'logout' },
           { type: 'query', key: 'auth' },
+          { type: 'query', key: 'error' },
         ],
         destination: '/m',
         permanent: false,
