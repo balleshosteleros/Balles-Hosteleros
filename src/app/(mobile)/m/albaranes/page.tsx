@@ -81,9 +81,11 @@ export default async function MobileAlbaranesPage() {
           <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" />
         </Link>
 
-        <RecepcionInbox pedidos={pedidos} />
-
+        {/* Revisión PRIMERO: son los que piden acción de una persona. Debajo de la lista
+            de pedidos por recibir quedaban tan abajo que no se veían. */}
         <AlbaranesEnRevision albaranes={enRevision} />
+
+        <RecepcionInbox pedidos={pedidos} />
       </div>
     </>
   );

@@ -11,6 +11,7 @@ import {
 } from "@/features/logistica/data/pedidos";
 import { listPedidos, getPedido, createPedido, updatePedido as serverUpdatePedido, deletePedido as serverDeletePedido } from "@/features/logistica/actions/pedidos-actions";
 import { listAlbaranes, createAlbaran, updateAlbaranEstado as serverUpdateAlbaranEstado, deleteAlbaran as serverDeleteAlbaran } from "@/features/logistica/actions/albaranes-actions";
+import { ESTADO_REVISION } from "@/features/logistica/data/albaranes";
 import { enviarPedidoEmail, prepararWhatsappPedido } from "@/features/logistica/actions/enviar-pedido-actions";
 import { EstadoPedidoBadge, EstadoAlbaranBadge } from "@/features/logistica/components/pedidos/BadgesPedido";
 import { DetallePedido } from "@/features/logistica/components/pedidos/DetallePedido";
@@ -825,6 +826,13 @@ export function PedidosView() {
           let filteredAlb = albaranes.filter((a) => coincideBusquedaUniversal(a, searchAlb));
           filteredAlb = aplicarFiltrosToolbar(filteredAlb, filtrosAlb, accesoAlb);
           filteredAlb = aplicarOrdenToolbar(filteredAlb, ordenAlb, accesoAlb);
+          // Los albaranes en Revisión son los únicos que piden acción de una persona
+          // (líneas sin producto). Van SIEMPRE arriba del todo, mande el orden que mande
+          // la toolbar: si quedan al final de una lista larga no se ven y nadie los resuelve.
+          filteredAlb = [
+            ...filteredAlb.filter((a) => a.estado === ESTADO_REVISION),
+            ...filteredAlb.filter((a) => a.estado !== ESTADO_REVISION),
+          ];
           const colsRenderAlb = ordenarColumnas(columnasDefAlb, columnasOrdenAlb).filter(
             (c) => c.bloqueada || colVisible(columnasVisiblesAlb, c.campo),
           );
