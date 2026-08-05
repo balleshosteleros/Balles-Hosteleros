@@ -403,6 +403,8 @@ function AccesosTabInner() {
         verlas. Para ver las de otra empresa, cambia de empresa arriba.
       </p>
 
+      {/* Cabecera idéntica a «Aplicaciones»: buscador a la izquierda y el
+          botón «Nuevo» pequeño a la derecha, ambos en la misma fila. */}
       <div className="flex flex-wrap items-center gap-3">
         <div className="relative flex-1 min-w-[220px] max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -413,7 +415,7 @@ function AccesosTabInner() {
             className="pl-9"
           />
         </div>
-        <Button onClick={openCreate} className="gap-1.5">
+        <Button size="sm" className="ml-auto gap-1.5" onClick={openCreate}>
           <Plus className="h-4 w-4" />Nuevo
         </Button>
       </div>
