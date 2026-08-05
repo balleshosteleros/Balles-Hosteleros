@@ -394,7 +394,7 @@ export async function analizarImportacionAlbaran(input: {
 }
 
 export type AdjuntarDesdeImportacionResult =
-  | { ok: true; path: string }
+  | { ok: true; path: string; data: Record<string, unknown> }
   | FalloImportacion;
 
 /**
@@ -406,9 +406,11 @@ export type AdjuntarDesdeImportacionResult =
 export async function adjuntarDocumentoDesdeImportacion(input: {
   albaranId: string;
   importacionId: string;
-  /** Análisis OCR (cabecera + líneas) a persistir junto al documento. */
+  /** Análisis OCR (cabecera + líneas, o comparativa contra pedido) a persistir junto al documento. */
   analisis?: unknown;
   uploadedBy?: string;
+  /** true si el análisis detectó diferencias (recepción contra pedido). */
+  hayAlerta?: boolean;
 }): Promise<AdjuntarDesdeImportacionResult> {
   let traceId = nuevoTraceId();
   try {
@@ -439,7 +441,7 @@ export async function adjuntarDocumentoDesdeImportacion(input: {
       uploadedAt: new Date().toISOString(),
       uploadedBy: input.uploadedBy ?? "",
       analisis: input.analisis ?? null,
-      hayAlerta: false,
+      hayAlerta: input.hayAlerta ?? false,
     };
     const { data: alb } = await supabase
       .from("albaranes")
@@ -480,12 +482,91 @@ export async function adjuntarDocumentoDesdeImportacion(input: {
       payload: { path: destino },
     });
 
-    return { ok: true, path: destino };
+    return { ok: true, path: destino, data: doc };
   } catch (err) {
     console.error(`[importaciones-albaran] adjuntarDesdeImportacion (${traceId}):`, err);
     return fallo("PERSIST_FAILED", traceId, {
       message: "El albarán se guardó, pero la foto no se pudo adjuntar.",
     });
+  }
+}
+
+export type CompararConPedidoResult =
+  | { ok: true; analisis: import("@/features/logistica/data/pedidos").AnalisisAlbaran }
+  | FalloImportacion;
+
+/**
+ * Recepción contra pedido SIN Edge Function (PRP-073 F6): descarga el documento
+ * de la importación, lo lee con el EXTRACTOR ÚNICO y compara contra las líneas
+ * del pedido con el comparador versionado. Muere la dependencia de
+ * `supabase.functions.invoke("analizar-albaran")` (código que no estaba en el repo).
+ */
+export async function compararImportacionConPedido(input: {
+  importacionId: string;
+  lineasPedido: Array<{ producto: string; cantidad: number; precioUC: number; unidad: string }>;
+}): Promise<CompararConPedidoResult> {
+  let traceId = nuevoTraceId();
+  try {
+    const { supabase, userId, empresaId } = await getLogisticaContext();
+    if (!userId) return fallo("AUTH_EXPIRED", traceId);
+    if (!empresaId) return fallo("NO_ACTIVE_COMPANY", traceId);
+
+    const imp = await cargarImportacion(supabase, empresaId, input.importacionId);
+    if (!imp || !imp.storage_path) return fallo("NOT_FOUND", traceId);
+    traceId = imp.trace_id ?? traceId;
+    if (imp.estado === "pendiente_subida") {
+      return fallo("UPLOAD_FAILED", traceId, { message: "La subida no llegó a completarse. Reintenta la subida." });
+    }
+
+    await supabase
+      .from("albaran_importaciones")
+      .update({ estado: "analizando", intentos: imp.intentos + 1, updated_at: new Date().toISOString() })
+      .eq("id", imp.id);
+
+    const descarga = await supabase.storage.from(BUCKET).download(imp.storage_path);
+    if (!descarga.data) {
+      return fallo("UPLOAD_FAILED", traceId, { message: "El archivo no está disponible en el almacén." });
+    }
+    const buf = Buffer.from(await descarga.data.arrayBuffer());
+
+    const res = await ejecutarOcrAlbaran({
+      base64: buf.toString("base64"),
+      mimeType: imp.mime_type || "image/jpeg",
+    });
+    if (!res.ok) {
+      await supabase
+        .from("albaran_importaciones")
+        .update({ estado: "error", error_code: res.error, error_message: res.message, updated_at: new Date().toISOString() })
+        .eq("id", imp.id);
+      return fallo(res.error, traceId, { message: res.message });
+    }
+
+    const { compararConPedido } = await import("@/features/logistica/lib/albaranes/comparar-pedido");
+    const analisis = compararConPedido(res.cabecera, res.lineas, input.lineasPedido);
+
+    await supabase
+      .from("albaran_importaciones")
+      .update({
+        estado: "revisable",
+        ocr_resultado: { cabecera: res.cabecera, lineas: res.lineas, comparativa: analisis.resumen },
+        error_code: null,
+        error_message: null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", imp.id);
+
+    await registrarEvento(supabase, {
+      empresaId,
+      importacionId: imp.id,
+      actorId: userId,
+      tipo: "comparativa_pedido",
+      payload: { ...analisis.resumen },
+    });
+
+    return { ok: true, analisis };
+  } catch (err) {
+    console.error(`[importaciones-albaran] compararConPedido (${traceId}):`, err);
+    return fallo("OCR_FAILED", traceId);
   }
 }
 

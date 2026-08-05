@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,7 +9,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { AlbaranUploadModal } from "@/features/logistica/components/pedidos/AlbaranUploadModal";
 import { ComparativaAlbaran } from "@/features/logistica/components/pedidos/ComparativaAlbaran";
 import { recibirAlbaranDesdePedido } from "@/features/logistica/actions/recepcion-movil-actions";
-import { subirDocumentoAlbaran } from "@/features/logistica/actions/albaranes-actions";
+import { adjuntarDocumentoDesdeImportacion } from "@/features/logistica/actions/importaciones-albaran-actions";
+import { analizarFotoContraPedido } from "@/features/logistica/lib/albaranes/analizar-foto-contra-pedido";
 import type { AnalisisAlbaran } from "@/features/logistica/data/pedidos";
 import { Camera, Loader2, CheckCircle2, PackageCheck } from "lucide-react";
 
@@ -31,14 +31,13 @@ export function RecepcionAlbaranMobile({
   lineas: LineaRecepcion[];
 }) {
   const router = useRouter();
-  const [supabase] = useState(() => createClient());
   const [recibido, setRecibido] = useState<Record<string, string>>(() =>
     Object.fromEntries(lineas.map((l) => [l.id, String(l.cantidadPedida)])),
   );
   const [uploadOpen, setUploadOpen] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
   const [analisis, setAnalisis] = useState<AnalisisAlbaran | null>(null);
-  const [foto, setFoto] = useState<File | null>(null);
+  const [importacionId, setImportacionId] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
   const [done, setDone] = useState<{ numero?: string; aviso?: string } | null>(null);
 
@@ -52,27 +51,23 @@ export function RecepcionAlbaranMobile({
   const handleFileReady = async (file: File) => {
     setUploadOpen(false);
     setAnalyzing(true);
-    setFoto(file);
     try {
-      const lineasRef = lineas.map((l) => ({
-        producto: l.producto,
-        cantidad: l.cantidadPedida,
-        precioUC: l.precioUC,
-        unidad: l.unidad,
-      }));
-      const base64 = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve((reader.result as string).split(",")[1]);
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
-      });
-      const { data, error } = await supabase.functions.invoke("analizar-albaran", {
-        body: { imageBase64: base64, mimeType: file.type || "image/jpeg", lineasPedido: lineasRef },
-      });
-      if (error) throw error;
-      const a = data as AnalisisAlbaran;
-      setAnalisis(a);
-      if (a?.resumen?.hayAlerta) {
+      // PRP-073 F6: mismo camino fiable que el alta libre (compresión + subida
+      // directa + extractor único), sin la Edge Function no versionada.
+      const res = await analizarFotoContraPedido(
+        file,
+        lineas.map((l) => ({
+          producto: l.producto,
+          cantidad: l.cantidadPedida,
+          precioUC: l.precioUC,
+          unidad: l.unidad,
+        })),
+        pedidoId,
+      );
+      if (!res.ok) throw new Error(res.error);
+      setAnalisis(res.analisis);
+      setImportacionId(res.importacionId);
+      if (res.analisis.resumen.hayAlerta) {
         toast.warning("La foto muestra diferencias con el pedido. Revísalas abajo.");
       }
     } catch (err) {
@@ -101,17 +96,17 @@ export function RecepcionAlbaranMobile({
         setConfirming(false);
         return;
       }
-      // La foto es evidencia secundaria: la recepción ya está confirmada.
-      if (foto && res.albaranId) {
+      // La foto es evidencia secundaria: la recepción ya está confirmada. El
+      // original ya vive en Storage (importación) — se mueve, no se re-sube.
+      if (importacionId && res.albaranId) {
         try {
-          const fd = new FormData();
-          fd.append("albaranId", res.albaranId);
-          fd.append("file", foto);
-          if (analisis) {
-            fd.append("analisis", JSON.stringify(analisis));
-            fd.append("hayAlerta", String(analisis.resumen.hayAlerta));
-          }
-          await subirDocumentoAlbaran(fd);
+          const adj = await adjuntarDocumentoDesdeImportacion({
+            albaranId: res.albaranId,
+            importacionId,
+            analisis,
+            hayAlerta: analisis?.resumen.hayAlerta ?? false,
+          });
+          if (!adj.ok) toast.warning("Recepción confirmada, pero no se pudo guardar la foto.");
         } catch {
           toast.warning("Recepción confirmada, pero no se pudo guardar la foto.");
         }
@@ -165,7 +160,7 @@ export function RecepcionAlbaranMobile({
             disabled={analyzing}
           >
             {analyzing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Camera className="h-4 w-4" />}
-            {analyzing ? "Analizando…" : foto ? "Repetir foto" : "Hacer foto del albarán"}
+            {analyzing ? "Analizando…" : importacionId ? "Repetir foto" : "Hacer foto del albarán"}
           </Button>
         </CardContent>
       </Card>

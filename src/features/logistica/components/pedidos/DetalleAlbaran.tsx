@@ -10,7 +10,9 @@ import { AlbaranUploadModal } from "./AlbaranUploadModal";
 import { ComparativaAlbaran } from "./ComparativaAlbaran";
 import { calcularTotalesLineas, diaSemanaDeFechaISO, formatoHoraReparto, type Albaran, type Pedido, type AnalisisAlbaran, type DocumentoAdjunto } from "@/features/logistica/data/pedidos";
 import { formatFechaHoraEnZona } from "@/features/empresa/lib/zona-horaria";
-import { updateAlbaranNumeroProveedor, subirDocumentoAlbaran } from "@/features/logistica/actions/albaranes-actions";
+import { updateAlbaranNumeroProveedor } from "@/features/logistica/actions/albaranes-actions";
+import { adjuntarDocumentoDesdeImportacion } from "@/features/logistica/actions/importaciones-albaran-actions";
+import { analizarFotoContraPedido } from "@/features/logistica/lib/albaranes/analizar-foto-contra-pedido";
 import {
   emparejarLineasAlbaran,
   resolverAlbaranRevision,
@@ -24,8 +26,6 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
-import { createClient } from "@/lib/supabase/client";
-const supabase = createClient();
 
 interface Props {
   albaran: Albaran;
@@ -128,35 +128,27 @@ export function DetalleAlbaran({ albaran, pedidoOrigen, zonaHoraria, onBack, onE
         ? pedidoOrigen.lineas.map((l) => ({ producto: l.producto, cantidad: l.cantidad, precioUC: l.precioUC, unidad: l.unidad }))
         : albaran.lineas.map((l) => ({ producto: l.producto, cantidad: l.cantidad, precioUC: l.precioUC, unidad: l.unidad }));
 
-      const base64 = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve((reader.result as string).split(",")[1]);
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
-      });
+      // PRP-073 F6: mismo camino fiable que el alta libre (compresión + subida
+      // directa + extractor único), sin la Edge Function no versionada.
+      const res = await analizarFotoContraPedido(file, lineasRef, pedidoOrigen?.id ?? null);
+      if (!res.ok) throw new Error(res.error);
 
-      const { data, error } = await supabase.functions.invoke("analizar-albaran", {
-        body: { imageBase64: base64, mimeType: file.type || "image/jpeg", lineasPedido: lineasRef },
-      });
-
-      if (error) throw error;
-
-      const analisis = data as AnalisisAlbaran;
+      const analisis = res.analisis;
       setAnalisisResult(analisis);
       setShowComparativa(true);
 
-      // Persistir el archivo en Storage + el análisis en BD (antes solo vivía en estado).
-      const fd = new FormData();
-      fd.append("albaranId", albaran.id);
-      fd.append("file", file);
-      fd.append("analisis", JSON.stringify(analisis));
-      fd.append("hayAlerta", String(analisis.resumen.hayAlerta));
-      fd.append("uploadedBy", albaran.creador);
-      const persistRes = await subirDocumentoAlbaran(fd);
+      // El original ya vive en Storage (importación): se mueve al path del albarán.
+      const persistRes = await adjuntarDocumentoDesdeImportacion({
+        albaranId: albaran.id,
+        importacionId: res.importacionId,
+        analisis,
+        hayAlerta: analisis.resumen.hayAlerta,
+        uploadedBy: albaran.creador,
+      });
       if (persistRes.ok) {
-        setDocumentos((prev) => [...prev, persistRes.data as DocumentoAdjunto]);
+        setDocumentos((prev) => [...prev, persistRes.data as unknown as DocumentoAdjunto]);
       } else {
-        toast.error(persistRes.error ?? "No se pudo guardar el documento adjunto");
+        toast.error(persistRes.message ?? "No se pudo guardar el documento adjunto");
       }
 
       if (analisis.resumen.hayAlerta) {
