@@ -19,7 +19,13 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { createClient as createBrowserClient } from "@/lib/supabase/client";
-import { conTopeDeTiempo, borrarCookiesSesion } from "@/features/auth/contexts/auth-context";
+// Módulo sin dependencias a propósito: importar desde `auth-context` arrastraba
+// `permisos-actions` ("use server") al bundle del móvil.
+import {
+  conTopeDeTiempo,
+  borrarCookiesSesion,
+  borrarSesionLocal,
+} from "@/features/auth/lib/cerrar-sesion";
 
 type Vista = "paneles" | "departamentos";
 
@@ -73,32 +79,36 @@ export function EmpleadoMenuMobile({ nombre, avatarUrl }: Props) {
    * Ahora: las dos limpiezas van en paralelo, cada una con su tope de 3 s, y pase
    * lo que pase se sale al login. En el peor caso se tarda 3 segundos; nunca más.
    */
-  const cerrarSesion = async () => {
+  const cerrarSesion = () => {
     setSaliendo(true);
 
-    const salir = () => {
-      window.location.href = "/?logout=1";
-    };
-    // Red de seguridad: si algo se quedara colgado pese a los topes, se sale igual.
-    const rescate = setTimeout(salir, 3500);
+    // 1. PRIMERO se destruye la sesión LOCAL, que es síncrono y no puede fallar.
+    //    Antes esto iba al final, después de esperar a la red: si algo se colgaba
+    //    (o el import de `auth-context` reventaba el componente), no se ejecutaba
+    //    nunca y el usuario seguía dentro. Ahora la sesión muere aquí, pase lo
+    //    que pase después.
+    try {
+      borrarCookiesSesion();
+      borrarSesionLocal();
+    } catch {
+      // Nada puede impedir salir.
+    }
 
-    await Promise.allSettled([
-      conTopeDeTiempo(createBrowserClient().auth.signOut()),
-      conTopeDeTiempo(
-        fetch("/api/auth/signout", {
-          method: "POST",
-          credentials: "include",
-          keepalive: true,
-        }),
-      ),
-    ]);
+    // 2. Limpieza remota en segundo plano, SIN esperarla. `keepalive` deja que la
+    //    petición termine aunque la página ya esté navegando.
+    try {
+      void conTopeDeTiempo(createBrowserClient().auth.signOut());
+      void fetch("/api/auth/signout", {
+        method: "POST",
+        credentials: "include",
+        keepalive: true,
+      }).catch(() => null);
+    } catch {
+      // Ídem: es limpieza de cortesía, no un requisito para salir.
+    }
 
-    // Última red: aunque las dos limpiezas anteriores fallaran, la cookie de
-    // sesión NO puede sobrevivir a un "cerrar sesión".
-    borrarCookiesSesion();
-
-    clearTimeout(rescate);
-    salir();
+    // 3. Fuera. Sin `await` de por medio, así que no hay forma de quedarse pillado.
+    window.location.replace("/?logout=1");
   };
 
   return (

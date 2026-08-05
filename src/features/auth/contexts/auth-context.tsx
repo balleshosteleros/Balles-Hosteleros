@@ -6,6 +6,11 @@ import type { User, Session, SupabaseClient } from "@supabase/supabase-js";
 import type { PermisoModulo } from "@/features/ajustes/data/ajustes";
 import { getUserPermisos } from "@/features/auth/actions/permisos-actions";
 import {
+  conTopeDeTiempo,
+  borrarCookiesSesion,
+  borrarSesionLocal,
+} from "@/features/auth/lib/cerrar-sesion";
+import {
   puedeVerModulo,
   puedeEditarModulo,
   puedeVerHerramienta,
@@ -125,48 +130,6 @@ interface AuthCache {
 }
 const LAST_USER_ID_KEY = "bh_last_user_id";
 
-/**
- * Resuelve como muy tarde en `ms`, pase lo que pase con la promesa original.
- * Se usa al cerrar sesión: ninguna limpieza puede dejar al usuario atrapado
- * dentro de la app si la red va mal (reportado por Iván, 05-ago).
- */
-export function conTopeDeTiempo<T>(p: Promise<T>, ms = 3000): Promise<T | null> {
-  return Promise.race([
-    p,
-    new Promise<null>((resolve) => setTimeout(() => resolve(null), ms)),
-  ]).catch(() => null);
-}
-
-/**
- * Borra a mano las cookies de sesión de Supabase (`sb-*`) desde el navegador.
- *
- * Red de seguridad del cierre de sesión: si `signOut()` falla o tarda, y encima
- * no llega la respuesta del servidor, la cookie sobreviviría y el usuario
- * volvería a entrar con la sesión viva — el fallo que reportó Iván (05-ago).
- * Se borra en varias rutas y dominios porque el navegador solo elimina la cookie
- * si coinciden exactamente con los que se usaron al crearla.
- */
-export function borrarCookiesSesion() {
-  if (typeof document === "undefined") return;
-  const host = window.location.hostname;
-  // sistema.balleshosteleros.com → probar también .balleshosteleros.com
-  const partes = host.split(".");
-  const dominios = [
-    undefined,
-    host,
-    partes.length > 2 ? `.${partes.slice(-2).join(".")}` : undefined,
-  ];
-
-  for (const cookie of document.cookie.split(";")) {
-    const nombre = cookie.split("=")[0]?.trim();
-    if (!nombre || !nombre.startsWith("sb-")) continue;
-    for (const dominio of dominios) {
-      document.cookie =
-        `${nombre}=; path=/; max-age=0; samesite=lax` +
-        (dominio ? `; domain=${dominio}` : "");
-    }
-  }
-}
 function authCacheKey(userId: string) {
   return `bh_auth_cache_${userId}`;
 }
@@ -671,40 +634,41 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     }
 
-    // El estado local se vacía YA: la sesión está muerta desde este momento,
-    // independientemente de lo que tarden las llamadas de limpieza.
     setUser(null);
     setSession(null);
     setProfile(null);
     setRoles([]);
     setEsAdminPlataforma(false);
 
-    // Cerrar sesión NUNCA puede quedarse colgado (reportado por Iván, 05-ago).
-    // Antes eran dos llamadas EN SERIE y SIN tope: con la red lenta o el servidor
-    // ocupado, el usuario se quedaba atrapado dentro de la app. Ahora van en
-    // paralelo, con 3 s de tope cada una, y se sale pase lo que pase.
-    const salir = () => {
-      window.location.href = "/";
-    };
-    const rescate = setTimeout(salir, 3500);
+    // Cerrar sesión no puede quedarse colgado NI dejar la sesión viva
+    // (reportado por Iván, 05-ago). El orden importa:
+    //
+    // 1. Se destruye la sesión LOCAL primero. Es síncrono y no puede fallar, así
+    //    que a partir de aquí la sesión está muerta pase lo que pase después.
+    //    Antes esto iba al final, tras esperar a la red: si algo se colgaba, no
+    //    se ejecutaba nunca y el usuario seguía dentro al volver a entrar.
+    try {
+      borrarCookiesSesion();
+      borrarSesionLocal();
+    } catch {
+      // Nada puede impedir salir.
+    }
 
-    await Promise.allSettled([
-      supabase ? conTopeDeTiempo(supabase.auth.signOut()) : Promise.resolve(),
-      conTopeDeTiempo(
-        fetch("/api/auth/signout", {
-          method: "POST",
-          credentials: "include",
-          keepalive: true,
-        }),
-      ),
-    ]);
+    // 2. Limpieza remota en segundo plano, SIN esperarla: `keepalive` deja que la
+    //    petición termine aunque la página ya esté navegando.
+    try {
+      if (supabase) void conTopeDeTiempo(supabase.auth.signOut());
+      void fetch("/api/auth/signout", {
+        method: "POST",
+        credentials: "include",
+        keepalive: true,
+      }).catch(() => null);
+    } catch {
+      // Limpieza de cortesía, no un requisito para salir.
+    }
 
-    // Última red: aunque las dos limpiezas anteriores fallaran, la cookie de
-    // sesión NO puede sobrevivir a un "cerrar sesión".
-    borrarCookiesSesion();
-
-    clearTimeout(rescate);
-    salir();
+    // 3. Fuera. Sin `await` de por medio: no hay forma de quedarse pillado.
+    window.location.replace("/");
   }, [user?.id]);
 
   const hasRole = useCallback((role: AppRole) => roles.includes(role), [roles]);
