@@ -50,12 +50,40 @@ export function VersionAutoUpdate() {
       window.location.reload();
     };
 
+    /**
+     * ¿El servidor sigue reconociendo esta sesión?
+     *
+     * La PWA de iOS resucita un snapshot congelado al reabrirse: la pantalla te
+     * muestra dentro aunque la sesión esté muerta en el servidor. Así, el botón
+     * de cerrar sesión "no hace nada" —no queda nada que cerrar— y el usuario se
+     * queda atrapado en una app que solo existe en la foto (Iván, 05-ago).
+     *
+     * Si el servidor ya no la reconoce, se sale al login sin preguntar.
+     */
+    const comprobarSesion = async () => {
+      try {
+        const res = await fetch("/api/auth/estado", { cache: "no-store" });
+        if (!res.ok) return;
+        const { autenticado } = (await res.json()) as { autenticado?: boolean };
+        if (autenticado === false) {
+          window.location.replace("/?logout=1");
+        }
+      } catch {
+        // Sin red: no se concluye nada. Mejor dejar la app como está que echar
+        // a alguien por un corte de cobertura.
+      }
+    };
+
     const comprobar = async () => {
       if (comprobando.current) return;
       comprobando.current = true;
       const eraPrimero = primerChequeo.current;
       primerChequeo.current = false;
       try {
+        // Primero la sesión: no tiene sentido actualizar una app a la que ya no
+        // se puede entrar.
+        void comprobarSesion();
+
         const res = await fetch("/api/version", { cache: "no-store" });
         if (!res.ok) return;
         const { sha } = (await res.json()) as { sha?: string };
