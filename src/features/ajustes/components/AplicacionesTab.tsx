@@ -68,9 +68,7 @@ const emptyApp: Omit<AccesoApp, "id" | "ultimaActualizacion"> = {
 };
 
 export function AplicacionesTab() {
-  const { empresas, empresaActual } = useEmpresa();
-  const empresaDbId = empresaActual.dbId;
-  const empresasOptions = empresas.map((e) => ({ id: e.id, nombre: e.nombre }));
+  const { empresaActual } = useEmpresa();
 
   const { confirm: confirmDelete, dialog: confirmDeleteDialog } = useConfirmDelete();
 
@@ -99,7 +97,6 @@ export function AplicacionesTab() {
   }, [empresaActual.id]);
 
   const [buscar, setBuscar] = useState("");
-  const [filtroEmpresa, setFiltroEmpresa] = useState("todas");
   const [filtroCategoria, setFiltroCategoria] = useState("todas");
   const [modalOpen, setModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -142,12 +139,17 @@ export function AplicacionesTab() {
     });
   };
 
+  // Universo real de esta pantalla: solo las entradas con enlace web. El resto
+  // (caja fuerte, PIN de TPV, wifi…) vive en «Accesos y contraseñas», así que
+  // el contador no debe compararlas contra el total o parecerá que faltan apps.
+  const appsConEnlace = apps.filter(tieneEnlaceWeb);
+  const sinEnlace = apps.length - appsConEnlace.length;
+
   const filteredApps = apps.filter((a) => {
     // Solo son APLICACIONES las que tienen enlace web real. Las entradas sin
     // URL (caja fuerte, PIN de TPV, wifi, SIM…) son credenciales sueltas y
     // viven en «Accesos y contraseñas», no aquí.
     if (!tieneEnlaceWeb(a)) return false;
-    if (filtroEmpresa !== "todas" && a.empresaId !== filtroEmpresa) return false;
     if (filtroCategoria !== "todas" && a.categoria !== filtroCategoria) return false;
     if (buscar) {
       const q = buscar.toLowerCase();
@@ -249,8 +251,6 @@ export function AplicacionesTab() {
     }
   };
 
-  const empresaNombre = (id: string) => empresasOptions.find((e) => e.id === id)?.nombre ?? id;
-
   return (
     <div className="space-y-2">
       {confirmDeleteDialog}
@@ -270,19 +270,6 @@ export function AplicacionesTab() {
             className="pl-9"
           />
         </div>
-        <Select value={filtroEmpresa} onValueChange={setFiltroEmpresa}>
-          <SelectTrigger className="w-[160px]">
-            <SelectValue placeholder="Empresa" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="todas">Todas las empresas</SelectItem>
-            {empresasOptions.map((e) => (
-              <SelectItem key={e.id} value={e.id}>
-                {e.nombre}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
         <Select value={filtroCategoria} onValueChange={setFiltroCategoria}>
           <SelectTrigger className="w-[200px]">
             <SelectValue placeholder="Categoría" />
@@ -302,7 +289,6 @@ export function AplicacionesTab() {
           <TableRow>
             <TableHead className="w-10"></TableHead>
             <TableHead>Aplicación</TableHead>
-            <TableHead>Empresa</TableHead>
             <TableHead>Categoría</TableHead>
             <TableHead>Enlace</TableHead>
             <TableHead>Estado</TableHead>
@@ -312,14 +298,14 @@ export function AplicacionesTab() {
         <TableBody>
           {loading && (
             <TableRow>
-              <TableCell colSpan={7} className="text-center py-8">
+              <TableCell colSpan={6} className="text-center py-8">
                 <LoadingSpinner />
               </TableCell>
             </TableRow>
           )}
           {!loading && filteredApps.length === 0 && (
             <TableRow>
-              <TableCell colSpan={7} className="text-center py-8 text-muted-foreground text-sm">
+              <TableCell colSpan={6} className="text-center py-8 text-muted-foreground text-sm">
                 No hay aplicaciones. Crea la primera con &quot;Nuevo&quot;.
               </TableCell>
             </TableRow>
@@ -333,7 +319,6 @@ export function AplicacionesTab() {
                 <div className="font-medium text-sm">{app.nombre}</div>
                 <div className="text-xs text-muted-foreground truncate max-w-[180px]">{app.descripcion}</div>
               </TableCell>
-              <TableCell className="text-xs">{empresaNombre(app.empresaId)}</TableCell>
               <TableCell className="text-xs">{app.categoria}</TableCell>
               <TableCell className="max-w-[220px]">
                 <a
@@ -382,7 +367,14 @@ export function AplicacionesTab() {
         </TableBody>
       </Table>
       <p className="text-xs text-muted-foreground">
-        {filteredApps.length} de {apps.length} aplicaciones
+        {filteredApps.length} de {appsConEnlace.length} aplicaciones
+        {sinEnlace > 0 && (
+          <>
+            {" "}· {sinEnlace} entrada{sinEnlace === 1 ? "" : "s"} sin enlace (caja
+            fuerte, PIN, wifi…) se {sinEnlace === 1 ? "gestiona" : "gestionan"} en
+            «Accesos y contraseñas»
+          </>
+        )}
       </p>
 
       {/* Modal crear / editar aplicación */}
