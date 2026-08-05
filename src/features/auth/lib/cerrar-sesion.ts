@@ -61,6 +61,27 @@ export function borrarCookiesSesion(): void {
  * librería la restaura desde ahí en el siguiente arranque y el usuario sigue
  * dentro — exactamente lo que reportó Iván tras el primer arreglo.
  */
+/**
+ * Le dice a Google que NO vuelva a conectar la cuenta automáticamente.
+ *
+ * Sin esto, al cerrar sesión y volver al login, la tarjeta One Tap reconoce la
+ * cuenta y entra de nuevo en el acto — en iPhone con una sola cuenta basta un
+ * toque, y a veces ni eso. El usuario ve que "no cierra sesión" cuando en
+ * realidad se cierra y se vuelve a abrir sola (Iván, 05-ago: confirmado en los
+ * registros de auth, cero cierres y un `Login` por /authorize→/callback).
+ */
+export function desactivarAutoLoginGoogle(): void {
+  if (typeof window === "undefined") return;
+  try {
+    const g = (window as unknown as {
+      google?: { accounts?: { id?: { disableAutoSelect?: () => void } } };
+    }).google;
+    g?.accounts?.id?.disableAutoSelect?.();
+  } catch {
+    // Google Identity no cargado: no hay nada que desactivar.
+  }
+}
+
 export function borrarSesionLocal(): void {
   if (typeof window === "undefined") return;
   for (const store of [window.localStorage, window.sessionStorage]) {

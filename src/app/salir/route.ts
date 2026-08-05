@@ -89,6 +89,15 @@ export async function GET() {
     if (window.caches) caches.keys().then(function (ks) { ks.forEach(function (k) { caches.delete(k); }); });
   } catch (e) {}
 
+  // Google: cortar la reconexión automática. Sin esto, al volver al login la
+  // tarjeta One Tap reconoce la cuenta y vuelve a entrar en el acto — parecía
+  // que la sesión "no se cerraba" cuando en realidad se reabría sola.
+  try {
+    if (window.google && window.google.accounts && window.google.accounts.id) {
+      window.google.accounts.id.disableAutoSelect();
+    }
+  } catch (e) {}
+
   setTimeout(function () { location.replace('/?logout=1'); }, 400);
 </script>
 </body>

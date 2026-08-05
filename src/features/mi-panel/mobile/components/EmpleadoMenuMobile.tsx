@@ -25,6 +25,7 @@ import {
   conTopeDeTiempo,
   borrarCookiesSesion,
   borrarSesionLocal,
+  desactivarAutoLoginGoogle,
 } from "@/features/auth/lib/cerrar-sesion";
 
 type Vista = "paneles" | "departamentos";
@@ -92,6 +93,7 @@ export function EmpleadoMenuMobile({ nombre, avatarUrl }: Props) {
     try {
       borrarCookiesSesion();
       borrarSesionLocal();
+      desactivarAutoLoginGoogle();
     } catch {
       // Nada puede impedir salir.
     }

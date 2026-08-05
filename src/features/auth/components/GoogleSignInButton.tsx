@@ -218,10 +218,24 @@ export function GoogleSignInButton({
       // dominio no autorizado…), NO forzamos el popup aquí: dejamos el botón
       // "Continuar con Google", que al pulsarlo reintenta la tarjeta y solo
       // entonces cae al OAuth como último recurso.
-      try {
-        gid.prompt()
-      } catch {
-        // Sin FedCM / cookies bloqueadas: el usuario usa el botón.
+      //
+      // EXCEPCIÓN — venimos de cerrar sesión (`?logout=1`): NO se muestra sola.
+      // Reportado por Iván (05-ago): cerraba sesión, el navegador volvía al login
+      // y la tarjeta de Google lo reconectaba en el acto — en iPhone, con una sola
+      // cuenta, basta un toque y a veces ni eso. Parecía que "no cerraba sesión"
+      // cuando en realidad se cerraba y se volvía a abrir sola. Los registros de
+      // auth lo confirmaron: cero cierres y un `Login` vía /authorize→/callback.
+      // Con el parámetro presente el usuario ve el login y decide él si entra.
+      const vengoDeCerrarSesion =
+        typeof window !== "undefined" &&
+        new URLSearchParams(window.location.search).has("logout")
+
+      if (!vengoDeCerrarSesion) {
+        try {
+          gid.prompt()
+        } catch {
+          // Sin FedCM / cookies bloqueadas: el usuario usa el botón.
+        }
       }
     }
 

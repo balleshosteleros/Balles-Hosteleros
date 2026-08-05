@@ -9,6 +9,7 @@ import {
   conTopeDeTiempo,
   borrarCookiesSesion,
   borrarSesionLocal,
+  desactivarAutoLoginGoogle,
 } from "@/features/auth/lib/cerrar-sesion";
 import {
   puedeVerModulo,
@@ -648,6 +649,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       borrarCookiesSesion();
       borrarSesionLocal();
+      desactivarAutoLoginGoogle();
     } catch {
       // Nada puede impedir salir.
     }
