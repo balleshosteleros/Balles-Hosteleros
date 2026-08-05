@@ -88,7 +88,32 @@ export async function updateSession(
     }
   )
 
-  const { data: { user } } = await supabase.auth.getUser()
+  const { data: { user }, error: userError } = await supabase.auth.getUser()
+
+  // ── Sesión HUÉRFANA: cookies de un usuario que ya no existe ─────────
+  // Si la cuenta se borró (o su token se revocó) mientras el móvil/PWA tenía
+  // sesión guardada, GoTrue responde 403 "User from sub claim in JWT does not
+  // exist" en CADA petición. Las cookies sb-* siguen en el dispositivo, así que
+  // la app queda atascada: no entra y tampoco muestra el login, y el usuario
+  // tiene que cerrar y reabrir la app a mano para desbloquearse.
+  // Limpiamos aquí las cookies muertas para que se recupere sola.
+  if (!user && userError) {
+    const codigo = (userError as { code?: string }).code ?? ''
+    const esSesionMuerta =
+      userError.status === 403 ||
+      codigo === 'user_not_found' ||
+      /user.*not.*exist|user_not_found|session.*not.*found/i.test(
+        userError.message ?? '',
+      )
+    if (esSesionMuerta) {
+      const limpio = NextResponse.redirect(new URL('/?auth=1', request.url))
+      for (const c of request.cookies.getAll()) {
+        if (c.name.startsWith('sb-')) limpio.cookies.delete(c.name)
+      }
+      limpio.cookies.delete(SESION_INICIO_COOKIE)
+      return { response: limpio, user: null }
+    }
+  }
 
   // Host demo: el formulario de demo debe mostrarse siempre en "/",
   // incluso si hay sesión activa. Así cada visitante empieza limpio.
