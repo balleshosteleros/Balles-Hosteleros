@@ -136,6 +136,37 @@ export function conTopeDeTiempo<T>(p: Promise<T>, ms = 3000): Promise<T | null> 
     new Promise<null>((resolve) => setTimeout(() => resolve(null), ms)),
   ]).catch(() => null);
 }
+
+/**
+ * Borra a mano las cookies de sesión de Supabase (`sb-*`) desde el navegador.
+ *
+ * Red de seguridad del cierre de sesión: si `signOut()` falla o tarda, y encima
+ * no llega la respuesta del servidor, la cookie sobreviviría y el usuario
+ * volvería a entrar con la sesión viva — el fallo que reportó Iván (05-ago).
+ * Se borra en varias rutas y dominios porque el navegador solo elimina la cookie
+ * si coinciden exactamente con los que se usaron al crearla.
+ */
+export function borrarCookiesSesion() {
+  if (typeof document === "undefined") return;
+  const host = window.location.hostname;
+  // sistema.balleshosteleros.com → probar también .balleshosteleros.com
+  const partes = host.split(".");
+  const dominios = [
+    undefined,
+    host,
+    partes.length > 2 ? `.${partes.slice(-2).join(".")}` : undefined,
+  ];
+
+  for (const cookie of document.cookie.split(";")) {
+    const nombre = cookie.split("=")[0]?.trim();
+    if (!nombre || !nombre.startsWith("sb-")) continue;
+    for (const dominio of dominios) {
+      document.cookie =
+        `${nombre}=; path=/; max-age=0; samesite=lax` +
+        (dominio ? `; domain=${dominio}` : "");
+    }
+  }
+}
 function authCacheKey(userId: string) {
   return `bh_auth_cache_${userId}`;
 }
@@ -667,6 +698,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }),
       ),
     ]);
+
+    // Última red: aunque las dos limpiezas anteriores fallaran, la cookie de
+    // sesión NO puede sobrevivir a un "cerrar sesión".
+    borrarCookiesSesion();
 
     clearTimeout(rescate);
     salir();

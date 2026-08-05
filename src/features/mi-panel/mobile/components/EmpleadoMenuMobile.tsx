@@ -19,7 +19,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { createClient as createBrowserClient } from "@/lib/supabase/client";
-import { conTopeDeTiempo } from "@/features/auth/contexts/auth-context";
+import { conTopeDeTiempo, borrarCookiesSesion } from "@/features/auth/contexts/auth-context";
 
 type Vista = "paneles" | "departamentos";
 
@@ -92,6 +92,10 @@ export function EmpleadoMenuMobile({ nombre, avatarUrl }: Props) {
         }),
       ),
     ]);
+
+    // Última red: aunque las dos limpiezas anteriores fallaran, la cookie de
+    // sesión NO puede sobrevivir a un "cerrar sesión".
+    borrarCookiesSesion();
 
     clearTimeout(rescate);
     salir();

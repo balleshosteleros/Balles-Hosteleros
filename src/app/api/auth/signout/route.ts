@@ -29,7 +29,25 @@ export async function POST() {
     }
   );
 
-  await supabase.auth.signOut();
+  // No se espera indefinidamente a Supabase: si tarda, se sigue igual y las
+  // cookies se borran a mano abajo. Lo que NO puede pasar es que el usuario se
+  // quede con la sesión viva porque una llamada externa fue lenta.
+  await Promise.race([
+    supabase.auth.signOut().catch(() => null),
+    new Promise((r) => setTimeout(r, 2500)),
+  ]);
+
+  // Las cookies de sesión de Supabase (`sb-<ref>-auth-token`, y sus trozos
+  // `.0`, `.1`… cuando el token es largo) se borran EXPLÍCITAMENTE.
+  //
+  // Antes se confiaba en que `signOut()` las limpiara. Pero si esa llamada falla
+  // o tarda, la cookie sobrevivía: el usuario "cerraba sesión", volvía a entrar
+  // y seguía dentro — que es justo lo que reportó Iván (05-ago).
+  for (const c of cookieStore.getAll()) {
+    if (c.name.startsWith("sb-")) {
+      response.cookies.set(c.name, "", { path: "/", maxAge: 0 });
+    }
+  }
 
   response.cookies.delete("g_access_token");
   response.cookies.delete("g_refresh_token");
