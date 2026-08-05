@@ -124,6 +124,18 @@ interface AuthCache {
   esAdminPlataforma: boolean;
 }
 const LAST_USER_ID_KEY = "bh_last_user_id";
+
+/**
+ * Resuelve como muy tarde en `ms`, pase lo que pase con la promesa original.
+ * Se usa al cerrar sesión: ninguna limpieza puede dejar al usuario atrapado
+ * dentro de la app si la red va mal (reportado por Iván, 05-ago).
+ */
+export function conTopeDeTiempo<T>(p: Promise<T>, ms = 3000): Promise<T | null> {
+  return Promise.race([
+    p,
+    new Promise<null>((resolve) => setTimeout(() => resolve(null), ms)),
+  ]).catch(() => null);
+}
 function authCacheKey(userId: string) {
   return `bh_auth_cache_${userId}`;
 }
@@ -645,18 +657,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
     const rescate = setTimeout(salir, 3500);
 
-    const conTope = <T,>(p: Promise<T>, ms = 3000) =>
-      Promise.race([p, new Promise((r) => setTimeout(r, ms))]).catch(() => null);
-
     await Promise.allSettled([
-      supabase ? conTope(supabase.auth.signOut()) : Promise.resolve(),
-      conTope(
+      supabase ? conTopeDeTiempo(supabase.auth.signOut()) : Promise.resolve(),
+      conTopeDeTiempo(
         fetch("/api/auth/signout", {
           method: "POST",
           credentials: "include",
-          // La ruta responde 302; sin esto `fetch` lo sigue y descarga la home
-          // entera antes de continuar.
-          redirect: "manual",
           keepalive: true,
         }),
       ),

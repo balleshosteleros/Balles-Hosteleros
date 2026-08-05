@@ -19,6 +19,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { createClient as createBrowserClient } from "@/lib/supabase/client";
+import { conTopeDeTiempo } from "@/features/auth/contexts/auth-context";
 
 type Vista = "paneles" | "departamentos";
 
@@ -62,23 +63,38 @@ export function EmpleadoMenuMobile({ nombre, avatarUrl }: Props) {
     router.push(VISTA_RUTA[modo]);
   };
 
+  /**
+   * Cerrar sesión NUNCA puede quedarse colgado (reportado por Iván, 05-ago).
+   *
+   * Antes eran dos llamadas en serie SIN límite de tiempo: si el móvil tenía mala
+   * cobertura o el servidor tardaba, el botón se quedaba girando para siempre y el
+   * usuario se quedaba atrapado dentro de la app.
+   *
+   * Ahora: las dos limpiezas van en paralelo, cada una con su tope de 3 s, y pase
+   * lo que pase se sale al login. En el peor caso se tarda 3 segundos; nunca más.
+   */
   const cerrarSesion = async () => {
     setSaliendo(true);
-    try {
-      const supabase = createBrowserClient();
-      await supabase.auth.signOut();
-    } catch {
-      /* seguimos: limpiamos también en el servidor */
-    }
-    try {
-      await fetch("/api/auth/signout", {
-        method: "POST",
-        credentials: "include",
-      });
-    } catch {
-      /* si falla, igual navegamos al login */
-    }
-    window.location.href = "/?logout=1";
+
+    const salir = () => {
+      window.location.href = "/?logout=1";
+    };
+    // Red de seguridad: si algo se quedara colgado pese a los topes, se sale igual.
+    const rescate = setTimeout(salir, 3500);
+
+    await Promise.allSettled([
+      conTopeDeTiempo(createBrowserClient().auth.signOut()),
+      conTopeDeTiempo(
+        fetch("/api/auth/signout", {
+          method: "POST",
+          credentials: "include",
+          keepalive: true,
+        }),
+      ),
+    ]);
+
+    clearTimeout(rescate);
+    salir();
   };
 
   return (
