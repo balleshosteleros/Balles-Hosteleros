@@ -606,7 +606,7 @@ export function detectarIncidencias(entrada: EntradaDeteccion): ResultadoDetecci
                 clave: "vincular",
                 etiqueta: `Vincular a "${yaExiste.nombre}"`,
                 propuesta: true,
-                payload: { productoId: yaExiste.id },
+                payload: { productoId: yaExiste.id, productoNombre: yaExiste.nombre },
               }
             : {
                 clave: "crear_gasto",
@@ -740,6 +740,7 @@ export function detectarIncidencias(entrada: EntradaDeteccion): ResultadoDetecci
           propuesta: i === 0,
           payload: {
             productoId: c.p.id,
+            productoNombre: c.p.nombre,
             memorizarAlias: linea.nombre,
             referenciaProveedor: linea.referenciaProveedor,
             porque: `${Math.round(c.score * 100)} % de parecido`,

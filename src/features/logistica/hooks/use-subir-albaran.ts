@@ -148,7 +148,15 @@ export function useSubirAlbaran({ fechaPorDefecto, creador, onCreado }: UseSubir
   };
 
   /** Emparejado + detección de incidencias + volcado al formulario de verificación. */
-  const procesarResultado = async (cab: CabeceraOcrAlbaran, lin: LineaOcrAlbaran[]) => {
+  const procesarResultado = async (
+    cab: CabeceraOcrAlbaran,
+    lin: LineaOcrAlbaran[],
+    // OJO (fix Fernando 06-ago): el id llega por PARÁMETRO, no del estado — en el
+    // primer análisis el setImportacionId acaba de ocurrir y este cierre aún ve
+    // null, así que las incidencias nacían huérfanas de raíz (importacion_id null
+    // → ligarIncidenciasAlAlbaran no encontraba nada que ligar).
+    impId: string | null = importacionId,
+  ) => {
     // Las dos lecturas son independientes: se lanzan a la vez.
     const [emp, mesa] = await Promise.all([
       emparejarLineasAlbaran(
@@ -156,7 +164,7 @@ export function useSubirAlbaran({ fechaPorDefecto, creador, onCreado }: UseSubir
         cab.proveedor, // activa el tramo de alias por proveedor (Etapa C)
       ),
       // PRP-074: qué NO cuadra en este documento, con la propuesta ya hecha.
-      analizarIncidenciasAlbaran({ cabecera: cab, lineas: lin, importacionId }),
+      analizarIncidenciasAlbaran({ cabecera: cab, lineas: lin, importacionId: impId }),
     ]);
 
     const map = new Map<string, LineaEmparejada>();
@@ -184,7 +192,14 @@ export function useSubirAlbaran({ fechaPorDefecto, creador, onCreado }: UseSubir
     setPaso("verificar");
   };
 
-  /** Registra las decisiones de la mesa y cierra las incidencias resueltas. */
+  /**
+   * Registra las decisiones de la mesa, cierra las incidencias resueltas y APLICA
+   * los efectos locales (fix Fernando 06-ago): un vínculo aceptado actualiza la
+   * línea aquí mismo — antes la decisión se anotaba y la línea seguía "Sin
+   * reconocer", así que la confirmación volvía a pedir lo ya decidido.
+   * (Las equivalencias de formato las ejecuta el servidor escribiendo en
+   * `formatos`, que es lo que lee la confirmación transaccional.)
+   */
   const resolverIncidencias = async (decisiones: DecisionIncidencia[]) => {
     if (decisiones.length === 0) return;
     const res = await decidirIncidencias(decisiones);
@@ -193,6 +208,33 @@ export function useSubirAlbaran({ fechaPorDefecto, creador, onCreado }: UseSubir
       return;
     }
     const decididas = new Set(decisiones.map((d) => d.incidenciaId));
+    const porId = new Map(incidencias.map((i) => [i.id, i]));
+    setLigadas((prev) => {
+      const map = new Map(prev);
+      for (const d of decisiones) {
+        if (!d.accion.startsWith("vincular")) continue;
+        const productoId = (d.payload?.productoId as string | undefined) ?? "";
+        const lineaId = porId.get(d.incidenciaId)?.lineaId ?? null;
+        if (!productoId || !lineaId) continue;
+        const linea = lineas.find((l) => l.id === lineaId);
+        map.set(lineaId, {
+          id: lineaId,
+          nombre: linea?.nombre ?? "",
+          cantidad: linea?.cantidad ?? 0,
+          precioUnitario: linea?.precioUnitario ?? null,
+          ligadoAuto: {
+            productoId,
+            nombre: (d.payload?.productoNombre as string | undefined) ?? "producto vinculado",
+            nombreProveedor: null,
+            score: 1,
+            via: "nombre_proveedor",
+            precioVigente: null,
+          },
+          candidatos: [],
+        });
+      }
+      return map;
+    });
     setIncidencias((prev) =>
       prev.map((i) => (decididas.has(i.id) ? { ...i, estado: "resuelta" as const } : i)),
     );
@@ -253,7 +295,7 @@ export function useSubirAlbaran({ fechaPorDefecto, creador, onCreado }: UseSubir
         manejarFallo(res);
         return;
       }
-      await procesarResultado(res.cabecera, res.lineas);
+      await procesarResultado(res.cabecera, res.lineas, ini.importacionId);
     });
   };
 
@@ -361,8 +403,15 @@ export function useSubirAlbaran({ fechaPorDefecto, creador, onCreado }: UseSubir
       // `importacion_id` pero sin `albaran_id`). Aquí se les asigna: sin esto, al
       // abrir el albarán en Revisión no aparecería ninguna y todo el trabajo de la
       // mesa quedaría huérfano en la BD.
-      if (importacionId) {
-        void ligarIncidenciasAlAlbaran(importacionId, res.id);
+      // Con await y aviso (fix Fernando 06-ago): el fire-and-forget anterior ya
+      // produjo incidencias huérfanas una vez, y en silencio.
+      if (importacionId && incidencias.length > 0) {
+        try {
+          const lig = await ligarIncidenciasAlAlbaran(importacionId, res.id);
+          if (!lig.ok) toast.warning("El albarán se guardó, pero sus incidencias no quedaron vinculadas.");
+        } catch {
+          toast.warning("El albarán se guardó, pero sus incidencias no quedaron vinculadas.");
+        }
       }
 
       // El original ya vive en Storage (importación): se mueve al path del albarán

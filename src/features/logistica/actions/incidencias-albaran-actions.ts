@@ -263,6 +263,89 @@ export interface DecisionIncidencia {
 }
 
 /**
+ * EJECUTA los efectos de una decisión aceptada (fix Fernando 06-ago).
+ *
+ * Antes la decisión solo se ANOTABA: aceptar "una caja son 24" no escribía en
+ * ningún sitio que la confirmación transaccional leyera, así que la RPC del
+ * PRP-073 volvía a bloquear la misma pregunta que el usuario ya había contestado.
+ * Ahora una equivalencia aceptada alimenta `formatos` (la fuente que lee la RPC)
+ * y `producto_formato_aliases` (que hasta hoy nadie escribía ni leía).
+ */
+async function ejecutarEfectosDecision(
+  supabase: Awaited<ReturnType<typeof getLogisticaContext>>["supabase"],
+  empresaId: string,
+  userId: string,
+  d: DecisionIncidencia,
+): Promise<void> {
+  const p = d.payload ?? {};
+  if (d.accion !== "aceptar_equivalencia" && d.accion !== "escribir_equivalencia") return;
+
+  const equivalencia = Number(p.equivalencia);
+  const nombreFormato = String(p.formato ?? "").trim();
+  const medida = (p.medida === "kg" || p.medida === "l" ? p.medida : "ud") as "ud" | "kg" | "l";
+  if (!(equivalencia > 0) || !nombreFormato) return;
+
+  // 1) `formatos` (tipo compra): es EXACTAMENTE lo que la confirmación transaccional
+  //    consulta por nombre. Sin esto, la decisión era decorativa.
+  const { data: meds } = await supabase
+    .from("medidas")
+    .select("id, codigo")
+    .eq("empresa_id", empresaId)
+    .eq("tipo", "compra");
+  const canon: Record<"ud" | "kg" | "l", string[]> = {
+    ud: ["ud", "uds", "u", "unidades", "unidad"],
+    kg: ["kg", "kilogramos", "kilogramo", "kilo", "kilos"],
+    l: ["l", "litros", "litro", "lt"],
+  };
+  const filas = (meds ?? []) as Array<{ id: string; codigo: string }>;
+  const unidad =
+    filas.find((m) => canon[medida].includes(String(m.codigo ?? "").toLowerCase().trim())) ?? filas[0];
+  if (unidad) {
+    const { data: fmt } = await supabase
+      .from("formatos")
+      .select("id, equivalencias")
+      .eq("empresa_id", empresaId)
+      .eq("tipo", "compra")
+      .ilike("nombre", nombreFormato)
+      .limit(1)
+      .maybeSingle();
+    if (!fmt) {
+      await supabase.from("formatos").insert({
+        empresa_id: empresaId,
+        unidad_id: unidad.id,
+        nombre: nombreFormato,
+        equivalencias: equivalencia,
+        orden: 999,
+        activa: true,
+        tipo: "compra",
+      });
+    } else if (fmt.equivalencias === null) {
+      // Rellena el hueco (la deuda de los 115 formatos a NULL se cierra con el uso),
+      // pero NUNCA pisa una equivalencia ya definida a mano.
+      await supabase.from("formatos").update({ equivalencias: equivalencia }).eq("id", fmt.id);
+    }
+  }
+
+  // 2) Alias de formato del proveedor: la tabla del PRP-074 gana por fin su escritor.
+  const aliasNormalizado = normalizarTexto(nombreFormato);
+  if (aliasNormalizado) {
+    await supabase.from("producto_formato_aliases").upsert(
+      {
+        empresa_id: empresaId,
+        proveedor_id: (p.proveedorId as string | undefined) ?? null,
+        producto_id: (p.productoId as string | undefined) ?? null,
+        alias: nombreFormato,
+        alias_normalizado: aliasNormalizado,
+        contenido: equivalencia,
+        medida,
+        created_by: userId,
+      },
+      { onConflict: "empresa_id,proveedor_id,producto_id,alias_normalizado", ignoreDuplicates: false },
+    );
+  }
+}
+
+/**
  * Registra la decisión humana sobre una o varias incidencias.
  *
  * Acepta un lote porque el botón "Aceptar todas las propuestas" resuelve muchas de
@@ -305,6 +388,16 @@ export async function decidirIncidencias(
     if (error) {
       console.error("[incidencias-albaran] decidir:", error.message);
       return { ok: false, error: "No se pudo guardar una de las decisiones." };
+    }
+
+    // Lo decidido se EJECUTA (fix Fernando 06-ago). Un fallo del efecto no tumba el
+    // lote: la decisión queda registrada y el efecto se puede reintentar/aplicar a mano.
+    if (estado !== "descartada") {
+      try {
+        await ejecutarEfectosDecision(supabase, empresaId, userId, d);
+      } catch (err) {
+        console.error("[incidencias-albaran] efecto de decisión:", err);
+      }
     }
     resueltas++;
   }

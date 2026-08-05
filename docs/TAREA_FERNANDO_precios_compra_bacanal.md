@@ -5,6 +5,68 @@
 
 ---
 
+## 🔬 REVISIÓN DEL PRP-074 HECHA — veredicto, 5 fallos encontrados y ARREGLADOS (06-ago, Fernando)
+
+Iván: hice la revisión que pediste, con tus 4 comprobaciones y algunas más. Resultado
+global primero, detalle después. **Los fallos ya están corregidos y desplegados** — esto
+no es una lista de reproches, es el registro de qué falló, por qué, y cómo quedó, para
+que los dos (y nuestros agentes) aprendamos de ello.
+
+### Veredicto de tus 4 comprobaciones
+
+| # | Pregunta | Respuesta |
+|---|---|---|
+| 1 | ¿Te pisé trabajo local? | **No** — todo lo nuestro estaba pusheado y el árbol limpio. Cero pérdida. |
+| 2 | ¿Compila? | **Sí** — solo faltaba `npm install` (tu dependencia nueva `fix-webm-duration`). |
+| 3 | ¿La solución es correcta? | **El diseño sí; la ejecución tenía 5 fallos** (abajo). El detector, el intérprete de formatos y la auditoría de decisiones están BIEN hechos. |
+| 4 | Tu lista de deuda | Correcta. F6/F7 siguen siendo nuestras; los 115 formatos a NULL se irán rellenando SOLOS con el fix nº1; `albaranes_lineas` = borrarla (0 referencias, lo confirmo). |
+
+### Los 5 fallos, con su porqué y su arreglo (todos corregidos y validados E2E)
+
+**1. La mesa DECIDÍA pero no EJECUTABA (el gordo).** `decidirIncidencias` solo anotaba
+`estado` + `decision` en la tabla. Aceptar "una caja son 24 → entran 48" no escribía en
+NINGÚN sitio que la confirmación transaccional lea: al confirmar, la RPC volvía a
+bloquear la misma pregunta que el usuario ya había contestado. La mesa prometía y no
+cumplía. **Arreglo:** las decisiones de equivalencia ahora hacen upsert en `formatos`
+(tipo compra) — que es EXACTAMENTE lo que la RPC consulta — sin pisar jamás una
+equivalencia puesta a mano. Bonus: tu deuda de "115/153 formatos a NULL" se rellena sola
+con el uso.
+
+**2. Los vínculos aceptados tampoco se aplicaban.** Aceptar "¿SPRITE C24 es Sprite?" → Sí
+dejaba la línea en "Sin reconocer" igualmente. **Arreglo:** el hook aplica el payload a la
+línea al resolver. Validado en vivo: 2 líneas pasaron de "0 de 2" a **"2 de 2
+reconocidas"** al aceptar, y el albarán guardado llevaba sus `productoId` puestos.
+
+**3. `producto_formato_aliases` era huérfana POR PARTIDA DOBLE**: `memorizarFormatoAlias`
+no la llamaba nadie, y nadie la leía. La misma enfermedad que tú nos señalaste con
+`producto_proveedor_aliases` — vale para los dos lados del espejo. **Arreglo:** las
+decisiones de equivalencia la escriben; la lectura llegará con el matcher de formatos.
+
+**4. Las incidencias SEGUÍAN naciendo huérfanas (la causa raíz seguía viva).** Tu nota
+decía "corregido en código", pero el hook pasaba `importacionId` leyendo el ESTADO de React
+en el mismo render donde se setea → llegaba **null** SIEMPRE en el primer análisis, y
+`ligarIncidenciasAlAlbaran` no encontraba nada que ligar. Tu arreglo ató las 8 viejas a
+mano; las nuevas habrían nacido huérfanas igual. **Arreglo:** el id viaja por parámetro,
+no por estado. Validado: 11 incidencias nuevas nacieron CON importación y quedaron ligadas
+al albarán al guardar.
+
+**5. El ligado era fire-and-forget** (`void ligar(...)`): si fallaba, huérfanas otra vez y
+en silencio — el mismo modo de fallo que ya te mordió. **Arreglo:** `await` + aviso visible
+si no se pudo ligar.
+
+### Lección para los agentes (la tuya y la nuestra)
+
+El patrón de los fallos 1-3 es el mismo: **piezas que registran sin ejecutar, o que se
+escriben sin que nadie las lea**. Un sistema que "anota la decisión" no está terminado
+hasta que la decisión CAMBIA algo comprobable (un formato, una línea, un movimiento). La
+prueba que lo caza siempre: seguir UNA decisión de punta a punta hasta la BD y preguntarse
+"¿qué es distinto ahora?". Si la respuesta es "una fila de auditoría", falta la mitad.
+
+(Y el método: esto salió a la primera revisión cruzada. Implementar y desplegar sin esa
+revisión es como confirmarse un albarán a uno mismo.)
+
+---
+
 ## 🔎 FERNANDO — LEE ESTO CON TU CLAUDE ANTES DE TOCAR NADA (06-ago)
 
 **Contexto en una frase:** el PRP-074 (mesa de incidencias de albaranes) **no está esperando tu
