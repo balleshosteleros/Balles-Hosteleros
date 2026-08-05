@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getRolContext } from "@/features/auth/actions/permisos-actions";
+import { normalizarModulo, puedeVerHerramienta } from "@/features/auth/lib/permisos";
 import { encryptOptional, decrypt } from "@/features/accesos/lib/crypto";
 import {
   type AccesoApp,
@@ -20,6 +21,48 @@ const PWD_OCULTA = "";
 /** ¿El texto tiene formato cifrado AES (iv:tag:enc)? */
 function esCifrado(s: string): boolean {
   return typeof s === "string" && s.split(":").length === 3 && s.length > 20;
+}
+
+// ---------------------------------------------------------------------------
+// PRP-075 · Los DOS ESCUDOS de la bóveda, aplicados en SERVIDOR.
+//
+//   Escudo 1 — ENTRAR: el rol necesita el candado HERR_ACCESOS en Ajustes →
+//     Roles. Sin él no recibe ni una fila (antes solo se ocultaba el icono en
+//     el navegador, así que la puerta era cosmética).
+//   Escudo 2 — LISTAR: dentro, solo los accesos donde SU rol esté marcado. Si
+//     no lo está, el acceso NO viaja al cliente: ni etiqueta, ni usuario, ni
+//     el hecho de que exista. Antes se enviaba todo y se ocultaba al pintar.
+//
+// Dirección (es_admin_plataforma) mantiene su bypass intencional.
+// `roles` vacío en un acceso = solo dirección (fail-closed).
+// ---------------------------------------------------------------------------
+
+/** ¿El rol puede ver una credencial concreta? Comparación sin acentos. */
+function rolPuedeVerAcceso(acc: AccesoCredencial, rolNombre: string | null): boolean {
+  const roles = (acc.roles ?? []).map((r) => normalizarModulo(r));
+  if (roles.length === 0) return false; // sin roles marcados = solo dirección
+  return roles.includes(normalizarModulo(rolNombre ?? ""));
+}
+
+/**
+ * Deja en cada app SOLO las credenciales que ese rol puede ver, y descarta las
+ * apps que se quedan sin ninguna. Lo que no se puede ver, no se envía.
+ */
+function filtrarAccesosPorRol(apps: AccesoApp[], rolNombre: string | null): AccesoApp[] {
+  const out: AccesoApp[] = [];
+  for (const app of apps) {
+    const visibles = app.accesos.filter((a) => rolPuedeVerAcceso(a, rolNombre));
+    if (visibles.length === 0) continue;
+    out.push({
+      ...app,
+      accesos: visibles,
+      // `usuario` de nivel app es un espejo del primer acceso: recalcularlo
+      // evita filtrar el login de una credencial que este rol no puede ver.
+      usuario: visibles[0]?.usuario ?? "",
+      rolesAutorizados: [],
+    });
+  }
+  return out;
 }
 
 type Row = {
@@ -101,8 +144,11 @@ function rowToApp(r: Row): AccesoApp {
     accesos.push({ etiqueta: "", usuario: r.usuario, contrasena: r.contrasena });
   }
   // Oculta toda contraseña / dato extra antes de salir al cliente; marca si existían.
-  const accesosSeguros = accesos.map((a) => ({
+  const accesosSeguros = accesos.map((a, i) => ({
     ...a,
+    // Posición real en BD: se estampa ANTES de filtrar por rol, para que
+    // `revelarAccesoApp` siga apuntando a la credencial correcta.
+    indiceReal: i,
     tieneContrasena: !!(a.contrasena && a.contrasena.length > 0),
     contrasena: PWD_OCULTA,
     // Los datos extra viajan con nombre + tiene (NUNCA el valor cifrado/claro).
@@ -244,6 +290,24 @@ async function userTieneRolAdminODirector(userId: string): Promise<boolean> {
 }
 
 /**
+ * PRP-075 · Regla de Ivan: **editar exige permiso de AJUSTES**. El candado de la
+ * barra es SOLO LECTURA — desde ahí no se crea ni se modifica nada. Quien no
+ * tenga acceso a Ajustes no puede tocar una credencial, aunque invoque la
+ * server action directamente. Dirección mantiene su bypass.
+ *
+ * Es la contrapartida necesaria al escudo 2: quien puede editar un acceso podría
+ * marcarse a sí mismo entre los roles autorizados y verlo todo.
+ */
+async function exigirPermisoEdicionAccesos(userId: string): Promise<void> {
+  const { esDirector, permisos } = await getRolContext(userId);
+  if (esDirector) return;
+  const ajustes = permisos.find((p) => normalizarModulo(p.modulo) === "AJUSTES");
+  if (!ajustes?.editar) {
+    throw new Error("No autorizado: se necesita permiso de edición en Ajustes");
+  }
+}
+
+/**
  * Normaliza un nombre de departamento para comparar sin depender de mayúsculas,
  * acentos ni variantes (RRHH ↔ Recursos Humanos). Devuelve minúsculas sin tildes.
  */
@@ -311,8 +375,12 @@ export async function listAccesosApps(empresaSlug: string): Promise<AccesoApp[]>
     return [];
   }
 
-  const { esDirector } = await getRolContext(user.id);
+  const { esDirector, rolNombre, permisos } = await getRolContext(user.id);
   if (esDirector) return (data ?? []).map((r) => rowToApp(r as Row));
+
+  // Escudo 1 — sin el candado en Ajustes → Roles no se recibe NADA, aunque se
+  // invoque esta action directamente saltándose la interfaz.
+  if (!puedeVerHerramienta(permisos, "HERR_ACCESOS")) return [];
 
   const misDeptos = await departamentosVisiblesDelRol(user.id);
 
@@ -323,7 +391,9 @@ export async function listAccesosApps(empresaSlug: string): Promise<AccesoApp[]>
     return deptos.some((d) => misDeptos.has(d));
   });
 
-  return visibles.map((r) => rowToApp(r as Row));
+  // Escudo 2 — solo las credenciales donde este rol esté marcado. El resto no
+  // sale del servidor (antes viajaban y se ocultaban al pintar).
+  return filtrarAccesosPorRol(visibles.map((r) => rowToApp(r as Row)), rolNombre);
 }
 
 /**
@@ -357,6 +427,7 @@ export async function createAccesoApp(
   const supabase = await createClient();
   const user = await getUserOrNull(supabase);
   if (!user) throw new Error("No autorizado");
+  await exigirPermisoEdicionAccesos(user.id);
 
   const empresaId = await resolverEmpresaIdDesdeSlug(supabase, app.empresaId);
   if (!empresaId) throw new Error("Empresa no encontrada o sin acceso");
@@ -383,6 +454,7 @@ export async function updateAccesoApp(
   const supabase = await createClient();
   const user = await getUserOrNull(supabase);
   if (!user) throw new Error("No autorizado");
+  await exigirPermisoEdicionAccesos(user.id);
 
   // Lee los accesos actuales (cifrados) para preservar contraseñas no editadas.
   const { data: prevRow } = await supabase
@@ -420,6 +492,7 @@ export async function deleteAccesoApp(id: string): Promise<void> {
   const supabase = await createClient();
   const user = await getUserOrNull(supabase);
   if (!user) throw new Error("No autorizado");
+  await exigirPermisoEdicionAccesos(user.id);
 
   const { error } = await supabase.from("accesos_apps").delete().eq("id", id);
   if (error) {
@@ -533,12 +606,15 @@ export async function revelarAccesoApp(
   const acc = accesos[indice];
   if (!acc) return { ok: false, error: "Acceso no encontrado" };
 
-  // Visibilidad por rol (salvo dirección/admin).
-  const { esDirector, rolNombre } = await getRolContext(user.id);
+  // Visibilidad por rol (salvo dirección/admin). Los DOS escudos, en servidor.
+  const { esDirector, rolNombre, permisos } = await getRolContext(user.id);
   if (!esDirector) {
-    const roles = (acc.roles ?? []).map((r) => r.trim().toLowerCase());
-    const mio = (rolNombre ?? "").trim().toLowerCase();
-    if (roles.length === 0 || !roles.includes(mio)) {
+    // Escudo 1 — sin candado en Ajustes → Roles, no se revela nada.
+    if (!puedeVerHerramienta(permisos, "HERR_ACCESOS")) {
+      return { ok: false, error: "No autorizado" };
+    }
+    // Escudo 2 — su rol debe estar marcado en ESTE acceso (sin acentos).
+    if (!rolPuedeVerAcceso(acc, rolNombre)) {
       return { ok: false, error: "No autorizado" };
     }
   }

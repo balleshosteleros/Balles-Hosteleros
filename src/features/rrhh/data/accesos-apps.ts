@@ -29,6 +29,14 @@ export interface AccesoCredencial {
    * viajan al cliente, `valor` va vacío y se marca `tiene`.
    */
   datosExtra?: DatoExtra[];
+  /**
+   * Solo en datos que viajan al cliente: posición REAL de este acceso dentro
+   * del array guardado en BD. Imprescindible desde PRP-075: el servidor filtra
+   * las credenciales que el rol no puede ver, así que la posición en la lista
+   * recibida ya no coincide con la de BD. `revelarAccesoApp` usa este índice;
+   * sin él se revelaría la contraseña equivocada. No se persiste.
+   */
+  indiceReal?: number;
 }
 
 /** Un dato extra (PIN, PUK, código...) dentro de un acceso. */

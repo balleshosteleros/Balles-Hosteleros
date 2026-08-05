@@ -378,7 +378,7 @@ function AccesosTabInner() {
                 <div className="space-y-1">
                   <PasswordAdmin
                     appId={app.id}
-                    indice={0}
+                    indice={app.accesos[0]?.indiceReal ?? 0}
                     tiene={app.accesos[0]?.tieneContrasena ?? false}
                   />
                   {(app.accesos[0]?.datosExtra ?? [])
@@ -390,7 +390,7 @@ function AccesosTabInner() {
                         </span>
                         <PasswordAdmin
                           appId={app.id}
-                          indice={0}
+                          indice={app.accesos[0]?.indiceReal ?? 0}
                           tiene={!!d.tiene}
                           nombreExtra={d.nombre}
                         />

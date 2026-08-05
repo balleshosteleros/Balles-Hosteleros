@@ -468,7 +468,10 @@ export function AccesosDrawer({
         .map((app) => ({
           app,
           accesos: app.accesos
-            .map((acc, indiceOriginal) => ({ acc, indiceOriginal }))
+            // `indiceReal` viene del servidor: la posición en BD. Desde PRP-075
+            // el servidor filtra por rol, así que la posición del array ya NO
+            // coincide con la de BD y usarla revelaría otra contraseña.
+            .map((acc, i) => ({ acc, indiceOriginal: acc.indiceReal ?? i }))
             .filter(
               ({ acc }) =>
                 (acc.tieneContrasena || (acc.datosExtra ?? []).some((d) => d.tiene)) &&

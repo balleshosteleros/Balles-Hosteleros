@@ -349,7 +349,35 @@ Volcar 99 enlaces → `aplicaciones`; 145 credenciales + 54 datos extra →
 *Validación obligatoria:* recuentos 99 / 145 / 54 exactos, y prueba de que una
 credencial migrada **se descifra correctamente** antes de continuar.
 
-**Fase 3 — RLS estricta + doble filtro en servidor**
+**Fase 3 — ✅ EJECUTADA (2026-08-05) en la parte de aplicación**
+
+Hecho sin esperar a la separación de tablas, porque cerraba los huecos reales:
+
+1. **Escudo 1 en servidor** — `listAccesosApps` y `revelarAccesoApp` exigen
+   `HERR_ACCESOS` vía `puedeVerHerramienta`. Sin candado no se recibe ni una
+   fila, aunque se invoque la server action saltándose la interfaz.
+2. **Escudo 2 en servidor** — `filtrarAccesosPorRol` deja solo las credenciales
+   donde ese rol está marcado y descarta las apps que se quedan sin ninguna.
+   Lo que el rol no puede ver **ya no sale del servidor**: ni etiqueta, ni
+   usuario, ni la existencia. Se recalcula `usuario` de nivel app y se vacía
+   `rolesAutorizados` para no filtrar por la puerta de atrás.
+3. **Acentos** — la comparación usa `normalizarModulo` (NFD + sin diacríticos),
+   así LOGÍSTICA/GESTORÍA/JURÍDICO/DIRECCIÓN dejan de ser un riesgo.
+4. **Editar exige AJUSTES** (regla de Ivan) — `exigirPermisoEdicionAccesos` en
+   `createAccesoApp`, `updateAccesoApp` y `deleteAccesoApp`. Antes bastaba con
+   estar autenticado: cualquier empleado podía escribir llamando a la action.
+   El candado de la barra es **solo lectura**. Verificado: hoy únicamente
+   DIRECCIÓN tiene `AJUSTES.editar`; gerencia y contabilidad no.
+5. **`indiceReal`** — al filtrar cambian las posiciones del array, y
+   `revelarAccesoApp` revela **por índice**. Se estampa la posición real en BD
+   en `rowToApp` (antes de filtrar) y el cliente la usa. Sin esto se revelaría
+   la contraseña equivocada: era el bug latente de este cambio.
+
+Pendiente de la Fase 3 original: mover las políticas a la tabla `credenciales`
+(requiere Fases 1-2). Hasta entonces la defensa vive en las server actions, que
+son el único camino de acceso desde la aplicación.
+
+**Fase 3-bis (con las tablas nuevas) — RLS estricta + doble filtro en servidor**
 Aplicar las políticas del punto 4 + `FORCE ROW LEVEL SECURITY`, y cerrar los tres
 huecos del punto 1-bis: `HERR_ACCESOS` comprobado en servidor, `listAccesosApps`
 filtrando por `roles`, y normalización de acentos al comparar roles.
