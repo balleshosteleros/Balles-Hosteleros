@@ -18,6 +18,7 @@ import {
   removePending,
   type PendingRecording,
 } from "../lib/pending-storage";
+import fixWebmDuration from "fix-webm-duration";
 
 export interface RecordOptions {
   includeSystemAudio: boolean;
@@ -364,11 +365,30 @@ export function RecorderProvider({ children }: { children: ReactNode }) {
   const processRecording = useCallback(
     async (blob: Blob, title: string) => {
       try {
-        const url = URL.createObjectURL(blob);
-        setPreviewUrl(url);
-
         const duration =
           elapsedRef.current || Math.floor((Date.now() - startTimeRef.current) / 1000);
+        // MediaRecorder no escribe el elemento Duration en los WebM que genera.
+        // Sin él, Chromium recalcula la duración durante la reproducción y la
+        // barra nativa puede saltar o parpadear. Reparamos el contenedor antes
+        // de previsualizarlo, persistirlo o subirlo.
+        let playableBlob = blob;
+        if (blob.type.toLowerCase().startsWith("video/webm")) {
+          try {
+            playableBlob = await fixWebmDuration(
+              blob,
+              Math.max(duration, 1) * 1000,
+              { logger: false },
+            );
+          } catch (err) {
+            // La grabación sigue siendo reproducible aunque un navegador genere
+            // una variante WebM que la librería no pueda reescribir.
+            console.warn("[recorder] no se pudo fijar la duración WebM:", err);
+          }
+        }
+
+        const url = URL.createObjectURL(playableBlob);
+        setPreviewUrl(url);
+
         const pendingId =
           (typeof crypto !== "undefined" && "randomUUID" in crypto
             ? crypto.randomUUID()
@@ -378,7 +398,7 @@ export function RecorderProvider({ children }: { children: ReactNode }) {
           videoId: pendingId,
           url,
           duration,
-          fileSize: blob.size,
+          fileSize: playableBlob.size,
         };
         setResult(localResult);
         setState("done");
@@ -390,10 +410,10 @@ export function RecorderProvider({ children }: { children: ReactNode }) {
           await addPending({
             id: pendingId,
             title,
-            blob,
-            mimeType: blob.type,
+            blob: playableBlob,
+            mimeType: playableBlob.type,
             duration,
-            fileSize: blob.size,
+            fileSize: playableBlob.size,
             createdAt: Date.now(),
             retryCount: 0,
           });
@@ -405,7 +425,7 @@ export function RecorderProvider({ children }: { children: ReactNode }) {
         }
 
         // Subida en segundo plano. Si tiene éxito, removePending lo borra.
-        const data = await uploadBlob(pendingId, blob, title, duration);
+        const data = await uploadBlob(pendingId, playableBlob, title, duration);
         if (data) {
           setResult({
             videoId: data.id,

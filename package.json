@@ -80,6 +80,7 @@
     "expand-brackets": "^4.0.0",
     "extglob": "^3.0.0",
     "fill-range": "^7.1.1",
+    "fix-webm-duration": "^1.0.6",
     "input-otp": "^1.4.2",
     "is-extglob": "^2.1.1",
     "is-glob": "^4.0.3",
