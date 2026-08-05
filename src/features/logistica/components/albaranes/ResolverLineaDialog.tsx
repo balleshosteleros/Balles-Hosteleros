@@ -11,7 +11,7 @@
  * Combobox (Command) DENTRO de Dialog — regla de UI del proyecto.
  */
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -34,9 +34,10 @@ import { EyeOff, Link2, Plus } from "lucide-react";
 import { ProveedorCombobox } from "@/features/logistica/components/productos/ProveedorCombobox";
 import { IndicadorPrecio } from "@/features/logistica/components/albaranes/IndicadorPrecio";
 import { IVA_OPCIONES } from "@/features/logistica/data/productos";
-import type {
-  LineaEmparejada,
-  SugerenciaCandidato,
+import {
+  buscarProductosCompra,
+  type LineaEmparejada,
+  type SugerenciaCandidato,
 } from "@/features/logistica/actions/asistente-albaran-actions";
 
 export type ResolucionLinea =
@@ -59,11 +60,25 @@ interface Props {
     iva: string;
     precio: number;
   }) => Promise<void> | void;
-  onIgnorar: () => Promise<void> | void;
+  /** El motivo es obligatorio (PRP-074 F4): nada queda fuera en silencio. */
+  onIgnorar: (motivo: string) => Promise<void> | void;
   busy?: boolean;
 }
 
 type Modo = "elegir" | "crear";
+
+/**
+ * Motivos por los que una línea puede quedar fuera del albarán (PRP-074 F4).
+ * Lista cerrada + "otro" con texto: así se puede saber DESPUÉS por qué faltaba algo,
+ * en vez de encontrarse un hueco sin explicación.
+ */
+const MOTIVOS_IGNORAR = [
+  { clave: "no_mercancia", etiqueta: "No es mercancía" },
+  { clave: "regalo", etiqueta: "Es un regalo" },
+  { clave: "error_proveedor", etiqueta: "Error del proveedor" },
+  { clave: "ya_recibido", etiqueta: "Ya recibido antes" },
+  { clave: "otro", etiqueta: "Otro motivo" },
+] as const;
 
 export function ResolverLineaDialog({
   open,
@@ -79,6 +94,45 @@ export function ResolverLineaDialog({
   const [modo, setModo] = useState<Modo>("elegir");
   const [busqueda, setBusqueda] = useState("");
 
+  // PRP-074 F4 — búsqueda sobre TODO el catálogo, no solo los ≤6 candidatos del
+  // matcher. Antes, si el producto existía pero el matcher no lo proponía, era
+  // inalcanzable desde aquí y había que ignorar la línea (le pasó a Fernando con
+  // "Gyozas pollo y verduras", "Alcachofa confitada" y "Oreja de cerdo en adobo").
+  const [resultados, setResultados] = useState<SugerenciaCandidato[]>([]);
+  const [buscando, setBuscando] = useState(false);
+
+  useEffect(() => {
+    const termino = busqueda.trim();
+    if (termino.length < 2) {
+      setResultados([]);
+      return;
+    }
+    // Se espera a que pare de teclear: una consulta por búsqueda, no por letra.
+    const t = setTimeout(async () => {
+      setBuscando(true);
+      try {
+        const res = await buscarProductosCompra({ query: termino, pageSize: 20 });
+        if (res.ok) {
+          // Los candidatos del matcher ya traen precio vigente; los de búsqueda libre
+          // no (la action no lo devuelve), así que el indicador de precio se omite.
+          setResultados(
+            res.productos.map((p) => ({
+              productoId: p.id,
+              nombre: p.nombre,
+              nombreProveedor: p.nombreProveedor ?? null,
+              score: 0,
+              via: "nombre" as const,
+              precioVigente: null,
+            })),
+          );
+        }
+      } finally {
+        setBuscando(false);
+      }
+    }, 250);
+    return () => clearTimeout(t);
+  }, [busqueda]);
+
   // Formulario de crear (prerelleno con lo leído del albarán).
   const [nombre, setNombre] = useState(linea.nombre);
   const [categoria, setCategoria] = useState(categorias[0] ?? "");
@@ -89,10 +143,23 @@ export function ResolverLineaDialog({
   );
   const [errorCrear, setErrorCrear] = useState<string | null>(null);
 
+  // Ignorar con motivo (PRP-074 F4).
+  const [ignorando, setIgnorando] = useState(false);
+  const [motivoIgnorar, setMotivoIgnorar] = useState<string | null>(null);
+  const [motivoTexto, setMotivoTexto] = useState("");
+  const motivoIgnorarValido =
+    motivoIgnorar !== null && (motivoIgnorar !== "otro" || motivoTexto.trim() !== "");
+
   const candidatos = useMemo(
     () => [...linea.candidatos].sort((a, b) => b.score - a.score),
     [linea.candidatos],
   );
+
+  /** Los encontrados por búsqueda que no estén ya arriba en "Sugeridos". */
+  const resultadosNuevos = useMemo(() => {
+    const yaSugeridos = new Set(candidatos.map((c) => c.productoId));
+    return resultados.filter((r) => !yaSugeridos.has(r.productoId));
+  }, [resultados, candidatos]);
 
   const parsePrecio = (v: string): number => {
     const n = parseFloat(v.replace(/[^0-9,.-]/g, "").replace(",", "."));
@@ -158,15 +225,46 @@ export function ResolverLineaDialog({
             />
             <CommandList>
               <CommandEmpty>
-                Sin coincidencias. Prueba a{" "}
-                <button
-                  className="underline text-foreground"
-                  onClick={() => setModo("crear")}
-                >
-                  crear el producto
-                </button>
-                .
+                {buscando ? (
+                  "Buscando en el catálogo…"
+                ) : busqueda.trim().length === 1 ? (
+                  "Escribe al menos dos letras para buscar."
+                ) : (
+                  <>
+                    Sin coincidencias. Prueba a{" "}
+                    <button
+                      className="underline text-foreground"
+                      onClick={() => setModo("crear")}
+                    >
+                      crear el producto
+                    </button>
+                    .
+                  </>
+                )}
               </CommandEmpty>
+
+              {/* Búsqueda libre: cualquier producto del catálogo, no solo los sugeridos. */}
+              {resultadosNuevos.length > 0 && (
+                <CommandGroup heading="Encontrados en el catálogo">
+                  {resultadosNuevos.map((c) => (
+                    <CommandItem
+                      key={`buscado-${c.productoId}`}
+                      value={`${c.nombre} ${c.nombreProveedor ?? ""}`}
+                      onSelect={() => void onVincular(c)}
+                      disabled={busy}
+                    >
+                      <span className="flex-1">
+                        {c.nombre}
+                        {c.nombreProveedor && (
+                          <span className="block text-[10px] text-muted-foreground">
+                            Proveedor: {c.nombreProveedor}
+                          </span>
+                        )}
+                      </span>
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              )}
               {candidatos.length > 0 && (
                 <CommandGroup heading="Sugeridos">
                   {candidatos.map((c) => (
@@ -260,16 +358,74 @@ export function ResolverLineaDialog({
           </div>
         )}
 
+        {/* PRP-074 F4 — ignorar EXIGE motivo: nada queda fuera del albarán en silencio. */}
         <div className="border-t pt-3">
-          <Button
-            variant="ghost"
-            size="sm"
-            className="gap-1 text-muted-foreground"
-            onClick={() => void onIgnorar()}
-            disabled={busy}
-          >
-            <EyeOff className="h-3.5 w-3.5" /> Ignorar esta línea (no es un producto)
-          </Button>
+          {!ignorando ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="gap-1 text-muted-foreground"
+              onClick={() => setIgnorando(true)}
+              disabled={busy}
+            >
+              <EyeOff className="h-3.5 w-3.5" /> Ignorar esta línea (no es un producto)
+            </Button>
+          ) : (
+            <div className="space-y-2">
+              <Label className="text-xs text-muted-foreground block">
+                ¿Por qué se deja fuera? (queda registrado)
+              </Label>
+              <div className="flex flex-wrap gap-1.5">
+                {MOTIVOS_IGNORAR.map((m) => (
+                  <Button
+                    key={m.clave}
+                    size="sm"
+                    variant={motivoIgnorar === m.clave ? "default" : "outline"}
+                    className="h-7 text-xs"
+                    onClick={() => setMotivoIgnorar(m.clave)}
+                  >
+                    {m.etiqueta}
+                  </Button>
+                ))}
+              </div>
+              {motivoIgnorar === "otro" && (
+                <Input
+                  value={motivoTexto}
+                  onChange={(e) => setMotivoTexto(e.target.value)}
+                  placeholder="Explica por qué"
+                  className="h-8 text-xs"
+                  autoFocus
+                />
+              )}
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => {
+                    setIgnorando(false);
+                    setMotivoIgnorar(null);
+                    setMotivoTexto("");
+                  }}
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  size="sm"
+                  className="gap-1"
+                  disabled={busy || !motivoIgnorarValido}
+                  onClick={() => {
+                    const etiqueta =
+                      MOTIVOS_IGNORAR.find((m) => m.clave === motivoIgnorar)?.etiqueta ?? "";
+                    void onIgnorar(
+                      motivoIgnorar === "otro" ? motivoTexto.trim() : etiqueta,
+                    );
+                  }}
+                >
+                  <EyeOff className="h-3.5 w-3.5" /> Ignorar
+                </Button>
+              </div>
+            </div>
+          )}
         </div>
       </DialogContent>
     </Dialog>

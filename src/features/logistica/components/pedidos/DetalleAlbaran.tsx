@@ -97,7 +97,11 @@ export function DetalleAlbaran({ albaran, pedidoOrigen, zonaHoraria, onBack, onE
   }, [enRevision, albaran.id]);
 
   const handleConfirmarRevision = async (
-    resoluciones: Record<string, { productoId: string | null; ignorada: boolean }>,
+    resoluciones: Record<
+      string,
+      // motivoIgnorada (PRP-074 F4): viaja hasta el jsonb de la línea.
+      { productoId: string | null; ignorada: boolean; motivoIgnorada?: string }
+    >,
   ) => {
     setConfirmando(true);
     const res = await resolverAlbaranRevision(albaran.id, resoluciones, true);

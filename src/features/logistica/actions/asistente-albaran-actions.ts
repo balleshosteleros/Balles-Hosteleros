@@ -304,6 +304,8 @@ interface LineaAlbaranJsonb {
   /** Texto original del proveedor en el albarán (doble nombre). */
   nombreProveedor?: string;
   ignorada?: boolean;
+  /** Por qué se dejó fuera del albarán (PRP-074 F4): nada se omite en silencio. */
+  motivoIgnorada?: string | null;
   formato?: string | null;
 }
 
@@ -318,7 +320,10 @@ interface LineaAlbaranJsonb {
  */
 export async function resolverAlbaranRevision(
   albaranId: string,
-  resoluciones: Record<string, { productoId: string | null; ignorada: boolean }>,
+  resoluciones: Record<
+    string,
+    { productoId: string | null; ignorada: boolean; motivoIgnorada?: string }
+  >,
   confirmar: boolean,
 ): Promise<{ ok: boolean; error?: string; stockAviso?: string; preciosRegistrados?: number }> {
   try {
@@ -347,6 +352,8 @@ export async function resolverAlbaranRevision(
         continue;
       }
       l.ignorada = res.ignorada === true;
+      // El motivo viaja con la línea: dentro de meses se puede saber por qué faltaba.
+      l.motivoIgnorada = l.ignorada ? (res.motivoIgnorada ?? null) : null;
       l.productoId = res.productoId ?? "";
       if (l.productoId) idsANombrar.add(l.productoId);
     }

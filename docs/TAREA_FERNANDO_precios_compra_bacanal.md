@@ -5,6 +5,42 @@
 
 ---
 
+## ⚠️ FERNANDO: he tocado TUS DOS FICHEROS del asistente (05-ago) — léelo antes de seguir
+
+Aviso por adelantado, como haces tú conmigo. He entrado en `ResolverLineaDialog.tsx` y
+`AsistenteAlbaranPanel.tsx` sin esperar a acordar ventana, por dos motivos: llevas **desde el
+29-jul sin tocarlos** (tu último commit ahí es `a84bb6a`) y hoy no habías subido nada. Si tenías
+algo a medias en local, **dímelo y lo reconciliamos** — no te lo pisaré dos veces.
+
+**Qué cambia en tu zona:**
+
+1. **`ResolverLineaDialog` — muere el límite de 6 candidatos.** Era la mejora nº 1 de tu propia
+   lista del 29-jul: te pasó con "Gyozas pollo y verduras", "Alcachofa confitada", "Oreja de
+   cerdo en adobo" y "Paleta cebo ibérico" — existían y tuviste que ignorar sus líneas. Ahora al
+   escribir 2+ letras consulta `buscarProductosCompra` (tu action paginada, que **estaba escrita
+   y no la usaba nadie**) con 250 ms de espera, y pinta un segundo grupo "Encontrados en el
+   catálogo" debajo de tus "Sugeridos", sin repetir los que ya salen arriba. Tu bloque de
+   sugeridos, el `IndicadorPrecio` y el `score` **no los he tocado**.
+2. **`ResolverLineaDialog` — ignorar ahora pide motivo.** Lista cerrada (no es mercancía ·
+   regalo · error del proveedor · ya recibido) + "otro" con texto libre. El botón no se habilita
+   sin motivo. **Ojo: `onIgnorar` cambió de firma** — ahora es `onIgnorar(motivo: string)`.
+3. **`AsistenteAlbaranPanel` — resumen antes de confirmar.** Tu botón "Confirmar albarán" ya no
+   dispara la RPC directamente: abre un resumen con qué entra en el almacén, el importe, y qué
+   queda fuera con su motivo. Desde ahí se confirma. `EstadoLinea` pasa a
+   `{ estado: "ignorada"; motivo: string }`.
+4. **El motivo viaja hasta la BD**: `resolverAlbaranRevision` acepta `motivoIgnorada` y lo
+   escribe en el jsonb de la línea (verificado contra prod). Antes ignorar era mudo y nadie
+   podía saber después por qué faltaba algo.
+
+Nada de esto cambia tu lógica de vincular/crear ni la confirmación transaccional de la Etapa B.
+Typecheck y eslint limpios; la cadena del motivo probada de punta a punta contra prod.
+
+**Contexto de por qué:** esto es la F4 y F5 del **PRP-074**, que arranca de la decisión de Iván
+de abajo. Las F1-F3 (OCR ampliado, detector, tablas y la ventana) ya están en prod y no tocan
+nada tuyo.
+
+---
+
 ## 🛑 RESPUESTA DE IVÁN (05-ago): estas preguntas NO se responden aquí — se resuelven en el software
 
 Fernando: leídas todas tus preguntas abiertas (las 4 dudas del lote del 30-jul y los 6 casos

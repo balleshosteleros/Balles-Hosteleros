@@ -13,7 +13,16 @@
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { CheckCircle2, Circle, EyeOff, AlertTriangle } from "lucide-react";
+import { formatNumero } from "@/shared/lib/numero";
 import { IndicadorPrecio } from "@/features/logistica/components/albaranes/IndicadorPrecio";
 import {
   ResolverLineaDialog,
@@ -29,7 +38,8 @@ import {
 /** Estado de resolución de cada línea (por id). */
 type EstadoLinea =
   | { estado: "ligada"; productoId: string; nombreProducto: string; precioVigente: number | null }
-  | { estado: "ignorada" }
+  /** El motivo es obligatorio (PRP-074 F4): nada queda fuera en silencio. */
+  | { estado: "ignorada"; motivo: string }
   | { estado: "pendiente" };
 
 interface Props {
@@ -71,6 +81,8 @@ export function AsistenteAlbaranPanel({
   const [dialogLinea, setDialogLinea] = useState<LineaEmparejada | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // PRP-074 F5 — el resumen previo: confirmar deja de ser un salto al vacío.
+  const [mostrarResumen, setMostrarResumen] = useState(false);
 
   const pendientes = useMemo(
     () => lineas.filter((l) => estados[l.id]?.estado === "pendiente").length,
@@ -129,19 +141,46 @@ export function AsistenteAlbaranPanel({
     }
   };
 
-  const handleIgnorar = (linea: LineaEmparejada) => {
-    setEstado(linea.id, { estado: "ignorada" });
+  const handleIgnorar = (linea: LineaEmparejada, motivo: string) => {
+    setEstado(linea.id, { estado: "ignorada", motivo });
     setDialogLinea(null);
   };
 
+  /**
+   * PRP-074 F5 — antes se confirmaba a ciegas: el usuario no sabía qué stock iba a
+   * entrar ni qué precios se iban a registrar. Ahora se muestra el resumen y solo
+   * entonces se ejecuta la transacción.
+   */
+  const resumen = useMemo(() => {
+    const entran: Array<{ nombre: string; cantidad: number }> = [];
+    const omitidas: Array<{ nombre: string; motivo: string }> = [];
+    let importeEntrante = 0;
+
+    for (const l of lineas) {
+      const e = estados[l.id];
+      if (e?.estado === "ligada") {
+        entran.push({ nombre: e.nombreProducto, cantidad: l.cantidad });
+        importeEntrante += (l.precioUnitario ?? 0) * l.cantidad;
+      } else if (e?.estado === "ignorada") {
+        omitidas.push({ nombre: l.nombre, motivo: e.motivo });
+      }
+    }
+    return { entran, omitidas, importeEntrante };
+  }, [lineas, estados]);
+
   const handleConfirmar = () => {
-    const resoluciones: Record<string, { productoId: string | null; ignorada: boolean }> = {};
+    const resoluciones: Record<
+      string,
+      { productoId: string | null; ignorada: boolean; motivoIgnorada?: string }
+    > = {};
     for (const l of lineas) {
       const e = estados[l.id];
       if (e?.estado === "ligada") resoluciones[l.id] = { productoId: e.productoId, ignorada: false };
-      else if (e?.estado === "ignorada") resoluciones[l.id] = { productoId: null, ignorada: true };
+      else if (e?.estado === "ignorada")
+        resoluciones[l.id] = { productoId: null, ignorada: true, motivoIgnorada: e.motivo };
       else resoluciones[l.id] = { productoId: null, ignorada: false };
     }
+    setMostrarResumen(false);
     void onConfirmar(resoluciones);
   };
 
@@ -200,6 +239,9 @@ export function AsistenteAlbaranPanel({
                     ) : e.estado === "ignorada" ? (
                       <span className="inline-flex items-center gap-1 text-muted-foreground">
                         <EyeOff className="h-3.5 w-3.5" /> Ignorada
+                        {e.motivo && (
+                          <span className="italic">— {e.motivo}</span>
+                        )}
                       </span>
                     ) : (
                       <span className="inline-flex items-center gap-1 text-amber-700">
@@ -234,7 +276,7 @@ export function AsistenteAlbaranPanel({
             : "Todo listo. Al confirmar, el albarán suma stock."}
         </p>
         <Button
-          onClick={handleConfirmar}
+          onClick={() => setMostrarResumen(true)}
           disabled={pendientes > 0 || confirmando}
           className="gap-1"
         >
@@ -242,6 +284,70 @@ export function AsistenteAlbaranPanel({
           {confirmando ? "Confirmando…" : "Confirmar albarán"}
         </Button>
       </div>
+
+      {/* PRP-074 F5 — resumen antes de ejecutar: qué entra, qué se omite y por qué. */}
+      <Dialog open={mostrarResumen} onOpenChange={setMostrarResumen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Antes de confirmar</DialogTitle>
+            <DialogDescription className="text-xs">
+              Esto es lo que va a pasar al confirmar el albarán. Después ya no se puede
+              deshacer sin revertir el documento entero.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3 text-sm">
+            <div>
+              <p className="font-medium">
+                Entran en el almacén: {resumen.entran.length}{" "}
+                {resumen.entran.length === 1 ? "producto" : "productos"}
+              </p>
+              {resumen.entran.length > 0 && (
+                <ul className="mt-1 max-h-40 space-y-0.5 overflow-y-auto text-xs text-muted-foreground">
+                  {resumen.entran.map((p, i) => (
+                    <li key={i}>
+                      · {formatNumero(p.cantidad)} × {p.nombre}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+
+            <p className="text-xs text-muted-foreground">
+              Se registran los precios de compra del albarán
+              {resumen.importeEntrante > 0 && (
+                <> · importe de lo que entra: {formatNumero(resumen.importeEntrante)} €</>
+              )}
+            </p>
+
+            {resumen.omitidas.length > 0 && (
+              <div className="rounded-md border border-amber-200 bg-amber-50/60 p-2 dark:border-amber-900/50 dark:bg-amber-950/20">
+                <p className="text-xs font-medium">
+                  Quedan fuera {resumen.omitidas.length}{" "}
+                  {resumen.omitidas.length === 1 ? "línea" : "líneas"}
+                </p>
+                <ul className="mt-1 space-y-0.5 text-xs text-muted-foreground">
+                  {resumen.omitidas.map((o, i) => (
+                    <li key={i}>
+                      · {o.nombre} — <span className="italic">{o.motivo}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setMostrarResumen(false)}>
+              Volver
+            </Button>
+            <Button onClick={handleConfirmar} disabled={confirmando} className="gap-1">
+              <CheckCircle2 className="h-4 w-4" />
+              Confirmar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {dialogLinea && (
         <ResolverLineaDialog
@@ -253,7 +359,7 @@ export function AsistenteAlbaranPanel({
           onClose={() => setDialogLinea(null)}
           onVincular={(c) => handleVincular(dialogLinea, c)}
           onCrear={(datos) => handleCrear(dialogLinea, datos)}
-          onIgnorar={() => handleIgnorar(dialogLinea)}
+          onIgnorar={(motivo) => handleIgnorar(dialogLinea, motivo)}
         />
       )}
     </div>
