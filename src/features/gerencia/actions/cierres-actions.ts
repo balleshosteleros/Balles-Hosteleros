@@ -35,6 +35,8 @@ export interface CierreRow {
   fecha: string;
   semana_iso: string | null;
   efectivo_retirado: number;
+  /** Solo en retiradas: true si el dinero ENTRA en caja, false si SALE. */
+  retirada_entrada: boolean;
   total_contado: number;
   cuadra: boolean;
   descuadre: number;
@@ -150,7 +152,7 @@ export async function listCierres(): Promise<{ ok: true; data: CierreRow[] } | {
 
     const { data, error } = await supabase
       .from("cierres_semanales")
-      .select("id, tipo, fecha, semana_iso, efectivo_retirado, total_contado, cuadra, descuadre, notas, storage_path, file_name, size_bytes, mime_type, documentos, registrado_por, created_at")
+      .select("id, tipo, fecha, semana_iso, efectivo_retirado, retirada_entrada, total_contado, cuadra, descuadre, notas, storage_path, file_name, size_bytes, mime_type, documentos, registrado_por, created_at")
       .eq("empresa_id", empresaId)
       .order("fecha", { ascending: false });
 
@@ -203,6 +205,7 @@ export async function listCierres(): Promise<{ ok: true; data: CierreRow[] } | {
         fecha: ((r.fecha as string) ?? "").slice(0, 10),
         semana_iso: (r.semana_iso as string | null) ?? null,
         efectivo_retirado: Number(r.efectivo_retirado ?? 0),
+        retirada_entrada: r.retirada_entrada === true,
         total_contado: Number(r.total_contado ?? 0),
         cuadra: Boolean(r.cuadra),
         descuadre: Number(r.descuadre ?? 0),
@@ -336,7 +339,13 @@ export async function createCierre(formData: FormData): Promise<{ ok: true; data
       }
     }
 
-    const efectivo = Number(efectivoStr.replace(",", ".")) || 0;
+    // Importe del movimiento: siempre se guarda como magnitud (positivo).
+    // En la retirada, el sentido elegido en el formulario se guarda aparte:
+    //   retiradaEntrada = false → sale dinero de caja (por defecto)
+    //   retiradaEntrada = true  → entra dinero en caja
+    const efectivo = Math.abs(Number(efectivoStr.replace(",", ".")) || 0);
+    const retiradaEntrada = tipo === "retirada"
+      && ((formData.get("retirada_sentido") as string | null) || "salida").trim() === "entrada";
     // El total contado y el descuadre solo tienen sentido en el cierre semanal.
     // En retiradas/ingresos no hay descuadre: se guarda cuadrado (descuadre 0).
     const contado = tipo === "cierre" ? Number(contadoStr.replace(",", ".")) || 0 : 0;
@@ -354,6 +363,7 @@ export async function createCierre(formData: FormData): Promise<{ ok: true; data
         fecha,
         semana_iso: isoWeek(fecha),
         efectivo_retirado: efectivo,
+        retirada_entrada: retiradaEntrada,
         total_contado: contado,
         cuadra,
         descuadre,
@@ -448,6 +458,7 @@ export async function createCierre(formData: FormData): Promise<{ ok: true; data
         fecha,
         semana_iso: isoWeek(fecha),
         efectivo_retirado: efectivo,
+        retirada_entrada: retiradaEntrada,
         total_contado: contado,
         cuadra,
         descuadre,

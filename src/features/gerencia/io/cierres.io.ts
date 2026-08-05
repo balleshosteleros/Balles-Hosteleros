@@ -62,7 +62,13 @@ export const cierresIO: ModuleIO<CierreExport> = {
       fecha: c.fecha,
       tipo: TIPO_LABEL[c.tipo] ?? c.tipo,
       semana: c.semana_iso ?? "",
-      efectivo_retirado: c.efectivo_retirado,
+      // Se exporta con el signo real sobre la caja: el cierre suma, el ingreso resta,
+      // y la retirada suma o resta según el sentido con el que se registró.
+      efectivo_retirado: c.tipo === "cierre"
+        ? Math.abs(c.efectivo_retirado)
+        : c.tipo === "retirada" && c.retirada_entrada
+          ? Math.abs(c.efectivo_retirado)
+          : -Math.abs(c.efectivo_retirado),
       total_contado: c.total_contado,
       estado: c.cuadra ? "Cuadra" : c.descuadre >= 0 ? "Sobra" : "Falta",
       descuadre: c.descuadre,

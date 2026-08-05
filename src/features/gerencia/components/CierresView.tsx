@@ -107,11 +107,17 @@ function fmtEuro(n: number): string {
   return new Intl.NumberFormat("es-ES", { style: "currency", currency: "EUR" }).format(n);
 }
 
-// Efecto de cada movimiento sobre el efectivo acumulado:
-// solo el cierre SUMA efectivo a caja. Retirada e ingreso lo SACAN (restan):
-// una retirada saca dinero del cajón; un ingreso lo mete en el banco.
-function signoEfectivo(tipo: CierreTipo): 1 | -1 {
-  return tipo === "cierre" ? 1 : -1;
+// Efecto de cada movimiento sobre el efectivo acumulado.
+// El cierre SIEMPRE suma efectivo a caja. El ingreso SIEMPRE lo saca (va al banco).
+//
+// La retirada puede ir en los dos sentidos, y lo decide la marca `retirada_entrada`:
+//   false (por defecto) = sale dinero de caja · true = entra dinero en caja.
+// Las retiradas ANTIGUAS quedan en false, que es justo lo que siempre significaron,
+// así que se siguen viendo en negativo exactamente igual que antes.
+function importeEfectivo(c: { tipo: CierreTipo; efectivo_retirado: number; retirada_entrada?: boolean }): number {
+  const magnitud = Math.abs(c.efectivo_retirado);
+  if (c.tipo === "retirada") return c.retirada_entrada ? magnitud : -magnitud;
+  return c.tipo === "cierre" ? magnitud : -magnitud;
 }
 
 function fmtSize(bytes: number | null): string {
@@ -191,6 +197,9 @@ export function CierresView() {
 
   const emptyForm = () => ({
     tipo: "cierre" as CierreTipo,
+    // Sentido de la retirada: "salida" saca dinero de caja, "entrada" lo mete.
+    // Por defecto sale (es el caso habitual: pagos, gastos...).
+    retirada_sentido: "salida" as "salida" | "entrada",
     fecha: today,
     efectivo_retirado: "",
     total_contado: "",
@@ -206,6 +215,12 @@ export function CierresView() {
   const totalGastosPreview = useMemo(
     () => form.gastos.reduce((s, g) => s + (Number((g.importe || "0").replace(",", ".")) || 0), 0),
     [form.gastos],
+  );
+
+  // Importe absoluto tecleado en el formulario (para la ayuda de la retirada).
+  const importeRetiradaPreview = useMemo(
+    () => Math.abs(Number((form.efectivo_retirado || "0").replace(",", ".")) || 0),
+    [form.efectivo_retirado],
   );
 
   // Descuadre en vivo. Referencia = total cierre; descuadre = retirado − cierre.
@@ -278,20 +293,20 @@ export function CierresView() {
       if (c.cuadra) cuadran++;
       else descuadrados++;
       saldoNeto += c.descuadre;
-      acumuladoEfectivo += signoEfectivo(c.tipo) * c.efectivo_retirado;
+      acumuladoEfectivo += importeEfectivo(c);
       acumuladoGastos += c.total_gastos;
     });
     return { total, cuadran, descuadrados, saldoNeto, acumuladoEfectivo, acumuladoGastos };
   }, [cierres]);
 
   // Acumulado corriente por movimiento: running total cronológico del efectivo.
-  // Cierre suma; retirada e ingreso restan (sacan efectivo de caja).
+  // Cierre suma; ingreso resta; la retirada suma o resta según su signo guardado.
   // (cierres viene descendente; recorremos en orden ascendente para el running total.)
   const acumuladoPorId = useMemo(() => {
     const m: Record<string, number> = {};
     let run = 0;
     [...cierres].reverse().forEach((c) => {
-      run += signoEfectivo(c.tipo) * c.efectivo_retirado;
+      run += importeEfectivo(c);
       m[c.id] = run;
     });
     return m;
@@ -363,8 +378,8 @@ export function CierresView() {
       </TableCell>
     ),
     efectivo: (
-      <TableCell key="efectivo" className={`text-right ${signoEfectivo(c.tipo) < 0 ? "text-red-700" : ""}`}>
-        {signoEfectivo(c.tipo) < 0 && c.efectivo_retirado > 0 ? "−" : ""}{fmtEuro(c.efectivo_retirado)}
+      <TableCell key="efectivo" className={`text-right ${importeEfectivo(c) < 0 ? "text-red-700" : ""}`}>
+        {fmtEuro(importeEfectivo(c))}
       </TableCell>
     ),
     total: <TableCell key="total" className="text-right">{fmtEuro(c.total_contado)}</TableCell>,
@@ -503,6 +518,8 @@ export function CierresView() {
       fd.append("tipo", form.tipo);
       fd.append("fecha", form.fecha);
       fd.append("efectivo_retirado", form.efectivo_retirado || "0");
+      // En la retirada el sentido decide el signo con el que se guarda el importe.
+      if (form.tipo === "retirada") fd.append("retirada_sentido", form.retirada_sentido);
       // Total contado y gastos solo aplican al cierre semanal.
       if (form.tipo === "cierre") {
         fd.append("total_contado", form.total_contado || "0");
@@ -526,7 +543,10 @@ export function CierresView() {
       const res = await createCierre(fd);
       if (res.ok) {
         toast.success(
-          form.tipo === "retirada" ? "Retirada registrada"
+          form.tipo === "retirada"
+            ? (form.retirada_sentido === "entrada"
+                ? "Retirada registrada: entra dinero en caja"
+                : "Retirada registrada: sale dinero de caja")
             : form.tipo === "ingreso" ? "Ingreso registrado"
             : "Cierre registrado",
         );
@@ -747,7 +767,9 @@ export function CierresView() {
               <TrendingUp className="h-5 w-5 text-emerald-600" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-emerald-700">{fmtEuro(resumen.acumuladoEfectivo)}</p>
+              <p className={`text-2xl font-bold ${resumen.acumuladoEfectivo < 0 ? "text-red-700" : "text-emerald-700"}`}>
+                {fmtEuro(resumen.acumuladoEfectivo)}
+              </p>
               <p className="text-xs text-muted-foreground">Efectivo acumulado</p>
             </div>
           </CardContent>
@@ -941,8 +963,9 @@ export function CierresView() {
                       </div>
                       <div className="mt-1 space-y-0.5">
                         {items.slice(0, 2).map((c) => {
-                          // El importe con signo real sobre la caja: cierre suma, retirada/ingreso restan.
-                          const importeConSigno = signoEfectivo(c.tipo) * c.efectivo_retirado;
+                          // El importe con signo real sobre la caja: cierre suma, ingreso resta,
+                          // y la retirada suma o resta según cómo se registró.
+                          const importeConSigno = importeEfectivo(c);
                           const esNegativo = importeConSigno < 0;
                           return (
                           <div key={c.id} className="text-[10px] leading-tight">
@@ -1185,14 +1208,43 @@ export function CierresView() {
               </Select>
             </div>
 
-            <div>
+            <div className={form.tipo === "retirada" ? "col-span-2" : undefined}>
               <Label>
                 {form.tipo === "retirada"
-                  ? "Efectivo retirado a caja fuerte (€)"
+                  ? "Importe del movimiento (€)"
                   : form.tipo === "ingreso"
                     ? "Ingreso en banco (€)"
                     : "Efectivo retirado del cajón (€)"}
               </Label>
+
+              {/* En la retirada el dinero puede salir o entrar: se elige con estos
+                  dos botones. El importe se teclea siempre en positivo. */}
+              {form.tipo === "retirada" && (
+                <div className="grid grid-cols-2 gap-2 rounded-lg bg-muted p-1 mb-2">
+                  {([
+                    { value: "salida" as const, label: "Sale dinero (−)", icon: ArrowUpFromLine, activeClass: "bg-background text-red-700 shadow-sm" },
+                    { value: "entrada" as const, label: "Entra dinero (+)", icon: ArrowDownToLine, activeClass: "bg-background text-emerald-700 shadow-sm" },
+                  ]).map((s) => {
+                    const activo = form.retirada_sentido === s.value;
+                    const Icono = s.icon;
+                    return (
+                      <button
+                        key={s.value}
+                        type="button"
+                        onClick={() => setForm((f) => ({ ...f, retirada_sentido: s.value }))}
+                        className={`flex items-center justify-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium transition ${
+                          activo ? s.activeClass : "text-muted-foreground hover:text-foreground"
+                        }`}
+                        aria-pressed={activo}
+                      >
+                        <Icono className="h-4 w-4" />
+                        {s.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+
               <Input
                 type="number"
                 step="0.01"
@@ -1203,7 +1255,9 @@ export function CierresView() {
               />
               {form.tipo === "retirada" && (
                 <p className="text-xs text-muted-foreground mt-1">
-                  Dinero que sale de la caja fuerte para diferentes cuestiones como pagos.
+                  {form.retirada_sentido === "salida"
+                    ? `Dinero que sale de la caja fuerte (pagos, gastos...). Se restará del acumulado: ${fmtEuro(-importeRetiradaPreview)}.`
+                    : `Dinero que entra en la caja fuerte (devoluciones, reintegros...). Se sumará al acumulado: ${fmtEuro(importeRetiradaPreview)}.`}
                 </p>
               )}
               {form.tipo === "ingreso" && (
@@ -1588,8 +1642,17 @@ export function CierresView() {
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <Label className="text-xs text-muted-foreground">Efectivo retirado</Label>
-                    <p className="text-base font-semibold">{fmtEuro(selected.efectivo_retirado)}</p>
+                    <Label className="text-xs text-muted-foreground">
+                      {selected.tipo === "retirada" ? "Importe del movimiento" : "Efectivo retirado"}
+                    </Label>
+                    <p className={`text-base font-semibold ${importeEfectivo(selected) < 0 ? "text-red-700" : ""}`}>
+                      {fmtEuro(importeEfectivo(selected))}
+                    </p>
+                    {selected.tipo === "retirada" && (
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        {importeEfectivo(selected) < 0 ? "Sale dinero de caja" : "Entra dinero en caja"}
+                      </p>
+                    )}
                   </div>
                   {selected.tipo === "cierre" && (
                     <div>
