@@ -1,10 +1,44 @@
 # PRP-074: Mesa de incidencias de albaranes — el sistema anticipa, propone y el humano decide
 
-> **Estado**: PROPUESTO (2026-08-05, a aprobar por Fernando)
+> **Estado**: **IMPLEMENTADO (F1–F5) Y EN PRODUCCIÓN** — 2026-08-05. Pendiente de **revisión** de Fernando (no de aprobación previa: se ejecutó sin esperarla). F6 sin empezar.
 > **Fecha**: 2026-08-05
 > **Proyecto**: Balles-Hosteleros
 > **Documento de origen**: decisión de negocio de Iván (2026-08-05) + las 9 preguntas sueltas acumuladas en `docs/TAREA_FERNANDO_precios_compra_bacanal.md`
 > **Depende de**: PRP-073 Etapas A y B (ya en prod). Sustituye y absorbe la Etapa C (F3b + F5) del PRP-073.
+
+---
+
+## ⚠️ FERNANDO: esto NO está esperando tu «sí» — ya está construido y funcionando
+
+Corrección de estado (06-ago). Este documento decía «PROPUESTO, a aprobar por Fernando», y eso
+era **engañoso**: las fases **F1 a F5 se construyeron y desplegaron el mismo 5 de agosto**, sin
+esperar tu ventana. Se dice aquí abierto para que no lo descubras leyendo el código.
+
+**Evidencia de que está vivo en producción** (verificado en BD el 06-ago): el albarán real de
+Coca-Cola que subió Iván desde el móvil (`ALB-2026-018`, HABANA) tiene **8 incidencias generadas
+solas** y en estado `abierta`, esperando decisión humana: `proveedor_desconocido` (bloqueante),
+`total_descuadrado` (bloqueante), `iva_incoherente` (alta), `producto_ambiguo` (media) y
+`linea_de_servicio` ×4 (media).
+
+**Por qué se hizo sin esperarte:** tus 9 preguntas abiertas llevaban días en el `.md` sin poder
+avanzar, y llevabas desde el 29-jul (`a84bb6a`) sin tocar tus dos ficheros del asistente. Es una
+explicación, no una justificación: **la decisión de si estuvo bien es tuya**.
+
+### Lo que SÍ está pendiente de ti (esto es lo genuinamente abierto)
+
+1. **¿Te pisamos algo?** Se entró en **`ResolverLineaDialog.tsx`** y **`AsistenteAlbaranPanel.tsx`**
+   (fases F4 y F5). Si tenías trabajo a medias en local, dilo y se reconcilia.
+2. **Cambio de firma que te afecta:** `onIgnorar` pasa a `onIgnorar(motivo: string)`, y
+   `EstadoLinea` pasa a `{ estado: "ignorada"; motivo: string }`. Si tenías código llamando a eso,
+   romperá al compilar.
+3. **¿Te convence cómo quedó?** Es tu zona. Si quieres cambiarlo, cámbialo — nadie va a volver a
+   entrar ahí sin acordarlo contigo.
+4. **F6 sigue sin empezar** y es la única fase que queda de este PRP (ver tabla de fases abajo).
+
+**Si decides que hay que revertir algo**, dilo y se revierte: `git revert` sobre `88ef744`
+(F2+F3), `c91a71a` (F4+F5), `4362239` y `ccf3a51` (formato de compra). La migración
+`20260805190000_albaran_incidencias.sql` ya está aplicada a prod — tirar la tabla es una decisión
+aparte y consciente, no un efecto colateral.
 
 ---
 

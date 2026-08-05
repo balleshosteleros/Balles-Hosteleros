@@ -1,7 +1,58 @@
 # TAREA para Fernando — Precios de compra de BACANAL (cuando bajes el repo)
 
-> **De:** Iván (vía Claude) · **Fecha:** 2026-06-30 · **Actualizado:** 2026-08-05 · **Prioridad:** media
+> **De:** Iván (vía Claude) · **Fecha:** 2026-06-30 · **Actualizado:** 2026-08-06 · **Prioridad:** media
 > Léelo al hacer `git pull` y reconciliar.
+
+---
+
+## 🔎 FERNANDO — LEE ESTO CON TU CLAUDE ANTES DE TOCAR NADA (06-ago)
+
+**Contexto en una frase:** el PRP-074 (mesa de incidencias de albaranes) **no está esperando tu
+aprobación — ya está construido, desplegado y funcionando en producción** desde el 5 de agosto.
+El documento decía «PROPUESTO, a aprobar por Fernando» y era engañoso; ya está corregido.
+
+**Se tocaron DOS ficheros tuyos sin esperar ventana.** Se avisa aquí en abierto para que no lo
+descubras leyendo el código. Si tenías trabajo a medias, se reconcilia — dilo.
+
+### Instrucciones para tu Claude (pégale esto)
+
+> Estoy revisando el PRP-074 de Balles-Hosteleros, que se implementó y desplegó sin mi
+> aprobación previa. Necesito que compruebes cuatro cosas y me digas si hay que reconciliar
+> algo o si puedo seguir:
+>
+> 1. **¿Me pisaron trabajo local?** Mira si tengo cambios sin commitear o commits locales sin
+>    subir en `src/features/logistica/components/albaranes/ResolverLineaDialog.tsx` y
+>    `src/features/logistica/components/albaranes/AsistenteAlbaranPanel.tsx`.
+>    Compara con `origin/main` y dime qué se sobrescribiría.
+> 2. **¿Me rompe algo al compilar?** `onIgnorar` cambió de firma a `onIgnorar(motivo: string)`
+>    y `EstadoLinea` pasó a `{ estado: "ignorada"; motivo: string }`. Busca todos los llamadores
+>    y confirma que compila (`npx tsc --noEmit`).
+> 3. **¿Cómo quedó mi zona?** Léete los commits `88ef744` (F2+F3), `c91a71a` (F4+F5),
+>    `4362239` y `ccf3a51` (formato de compra), y el PRP en
+>    `.claude/PRPs/PRP-074-mesa-de-incidencias-albaranes-anticipacion-y-propuesta.md`.
+>    Dime si la solución te parece correcta o si hay algo que yo habría hecho distinto.
+> 4. **Mi deuda pendiente:** F6 y F7 del PRP-073, los 115 de 153 formatos de compra con
+>    `equivalencias` a NULL, y decidir qué hacer con la tabla muerta `albaranes_lineas`.
+>
+> No cambies nada todavía. Primero dime qué encuentras.
+
+### Lo que hay construido (para que no lo busques a ciegas)
+
+| Pieza | Dónde |
+|---|---|
+| Catálogo cerrado de 12 tipos de incidencia + detector | `src/features/logistica/lib/albaranes/detectar-incidencias.ts` |
+| La ventana que propone y el humano decide | `src/features/logistica/components/albaranes/MesaIncidenciasDialog.tsx` |
+| Acciones (analizar, decidir, listar, memorizar alias) | `src/features/logistica/actions/incidencias-albaran-actions.ts` |
+| Tabla + RLS por empresa | `supabase/migrations/20260805190000_albaran_incidencias.sql` |
+| El plan completo y el estado real por fases | `.claude/PRPs/PRP-074-...md` |
+
+**Prueba de que funciona con datos reales** (verificado en BD el 06-ago): el albarán de Coca-Cola
+que subió Iván desde el móvil (`ALB-2026-018`, HABANA) generó **8 incidencias solo**, todas en
+estado `abierta` esperando decisión humana — `proveedor_desconocido` 🔴 · `total_descuadrado` 🔴 ·
+`iva_incoherente` 🟠 · `producto_ambiguo` 🔵 · `linea_de_servicio` 🔵 ×4.
+
+**Si decides revertir algo:** `git revert` sobre esos cuatro commits. La migración ya está
+aplicada a prod, así que tirar la tabla sería una decisión aparte y consciente.
 
 ---
 
