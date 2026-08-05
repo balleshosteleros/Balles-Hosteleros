@@ -12,7 +12,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Loader2, ShieldAlert } from "lucide-react";
+import { Loader2, ShieldAlert, Eye, EyeOff } from "lucide-react";
 import { useAuth } from "@/features/auth/contexts/auth-context";
 
 /** Minutos que dura una verificación antes de volver a pedirla. */
@@ -66,6 +66,8 @@ export function VerificacionAccesosProvider({ children }: { children: React.Reac
   const [open, setOpen] = useState(false);
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  // Ojito del campo: permite comprobar lo tecleado antes de verificar.
+  const [verPassword, setVerPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const validoHasta = useRef<number>(0);
   const pending = useRef<((ok: boolean) => void) | null>(null);
@@ -101,12 +103,14 @@ export function VerificacionAccesosProvider({ children }: { children: React.Reac
     validoHasta.current = performance.now() + VERIFICACION_VALIDEZ_MIN * 60_000;
     setOpen(false);
     setPassword("");
+    setVerPassword(false); // que no quede visible la próxima vez
     resolvePending(true);
   }
 
   function handleCancel() {
     setOpen(false);
     setPassword("");
+    setVerPassword(false); // que no quede visible la próxima vez
     resolvePending(false);
   }
 
@@ -134,14 +138,27 @@ export function VerificacionAccesosProvider({ children }: { children: React.Reac
           >
             <div>
               <Label htmlFor="verif-pwd-rrhh">Tu contraseña de acceso</Label>
-              <Input
-                id="verif-pwd-rrhh"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                autoFocus
-                autoComplete="current-password"
-              />
+              <div className="relative">
+                <Input
+                  id="verif-pwd-rrhh"
+                  type={verPassword ? "text" : "password"}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  autoFocus
+                  autoComplete="current-password"
+                  className="pr-9"
+                />
+                <button
+                  type="button"
+                  onClick={() => setVerPassword((v) => !v)}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  title={verPassword ? "Ocultar contraseña" : "Ver contraseña"}
+                  aria-label={verPassword ? "Ocultar contraseña" : "Ver contraseña"}
+                  tabIndex={-1}
+                >
+                  {verPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
               {error && <p className="text-[12px] text-destructive mt-1">{error}</p>}
             </div>
             <DialogFooter>
