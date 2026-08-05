@@ -355,7 +355,7 @@ function AccesosTabInner() {
             <TableHead className="w-10"></TableHead>
             <TableHead>Aplicación</TableHead>
             <TableHead>Datos</TableHead>
-            <TableHead>Quién puede verla</TableHead>
+            <TableHead>Roles</TableHead>
             <TableHead className="w-16 text-center">Enlace</TableHead>
             <TableHead className="text-right w-16">Acciones</TableHead>
           </TableRow>

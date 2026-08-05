@@ -149,7 +149,7 @@ export const HERRAMIENTAS: HerramientaDef[] = [
   {
     id: "aplicaciones",
     nombre: "Aplicaciones",
-    descripcion: "Accesos directos a aplicaciones externas (abrir web y usuario).",
+    descripcion: "Accesos directos a aplicaciones externas.",
     Icon: Rocket,
     colorKey: "amber",
   },
