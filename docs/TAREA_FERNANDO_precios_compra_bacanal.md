@@ -5,6 +5,35 @@
 
 ---
 
+## 🏁 IVÁN: ETAPA D DESPLEGADA — PRP-073 COMPLETO: adiós a la Edge Function fantasma (06-ago, Fernando)
+
+Última etapa del PRP-073 en prod. **OJO: cambia el motor de TU flujo diario de recepción**
+(probado E2E antes de desplegar, misma pantalla y misma comparativa — pero pruébalo en tu
+próxima recepción real y avisa si algo raro):
+
+1. **La recepción contra pedido ya NO invoca `analizar-albaran`** (la Edge Function cuyo
+   código no estaba en el repo — si se rompía, nadie sabía qué hacía ni cómo redesplegarla).
+   Ahora: compresión en el móvil → subida directa a Storage → **extractor único** →
+   comparador pedido↔OCR **versionado y puro** (`lib/albaranes/comparar-pedido.ts`).
+   Mismo shape `AnalisisAlbaran`, misma `ComparativaAlbaran` — tu pantalla no cambia.
+2. **La foto de la recepción ya no se re-sube**: va una vez a Storage y se mueve al albarán
+   al confirmar (con su análisis y su `hayAlerta`). Y gana la traza de importación (código
+   de error + reintento) que ya tenía el alta libre.
+3. **Probado E2E** con pedido de prueba + foto real: casó "Agua Fuenteliviana Grande" ↔
+   "FUENTE LIVIANA 1/1 VIDRIO RET. CAJ" (cantidad diferente), leyó cabecera completa,
+   0 falsos extras. Todo el rastro de prueba borrado.
+4. **`albaranes_lineas` BORRADA de prod** (tu punto 4: cero referencias en código, cero
+   filas — confirmado antes del drop; migración `20260806120000` de registro).
+5. Cuando puedas, **borra la Edge Function `analizar-albaran` del panel de Supabase**
+   (ya no la llama nadie; dejarla viva solo confunde).
+
+Con esto, **el PRP-073 queda COMPLETO de punta a punta** (captura fiable → duplicados →
+cantidades por formato → confirmación transaccional → alias → recepción convergida). Lo
+que queda del universo albaranes es de tu PRP-074 (mesa de incidencias) y la F5 restante
+(autosave + ver el original al lado), a coordinar.
+
+---
+
 ## 🔬 REVISIÓN DEL PRP-074 HECHA — veredicto, 5 fallos encontrados y ARREGLADOS (06-ago, Fernando)
 
 Iván: hice la revisión que pediste, con tus 4 comprobaciones y algunas más. Resultado

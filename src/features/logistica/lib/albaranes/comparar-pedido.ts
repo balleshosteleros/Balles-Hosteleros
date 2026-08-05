@@ -39,18 +39,32 @@ function normalizar(s: string): string {
  * está contenido en el largo (el mismo enfoque que ya validamos cargando
  * 58 albaranes a mano en julio).
  */
-function similitud(a: string, b: string): number {
-  const ta = new Set(normalizar(a).split(" ").filter(Boolean));
-  const tb = new Set(normalizar(b).split(" ").filter(Boolean));
-  if (ta.size === 0 || tb.size === 0) return 0;
-  let inter = 0;
-  for (const t of ta) if (tb.has(t)) inter++;
-  const corto = Math.min(ta.size, tb.size);
-  const largo = Math.max(ta.size, tb.size);
-  return 0.75 * (inter / corto) + 0.25 * (inter / largo);
+function tokensAlfa(s: string): string[] {
+  return normalizar(s)
+    .split(" ")
+    .filter((t) => t.length >= 3 && !/^\d+$/.test(t));
 }
 
-const UMBRAL_MATCH = 0.5;
+function similitud(a: string, b: string): number {
+  const ta = tokensAlfa(a);
+  const tb = tokensAlfa(b);
+  if (ta.length === 0 || tb.length === 0) return 0;
+  const sa = new Set(ta);
+  const sb = new Set(tb);
+  const ca = ta.join("");
+  const cb = tb.join("");
+  // Un token casa si aparece exacto en el otro lado O como subcadena del otro
+  // nombre pegado (caza "Fuenteliviana" ↔ "FUENTE LIVIANA", "CocaCola" ↔ "Coca Cola").
+  const casa = (t: string, otroSet: Set<string>, otroConcat: string) =>
+    otroSet.has(t) || (t.length >= 4 && otroConcat.includes(t));
+  let ia = 0;
+  for (const t of sa) if (casa(t, sb, cb)) ia++;
+  let ib = 0;
+  for (const t of sb) if (casa(t, sa, ca)) ib++;
+  return Math.max(ia / sa.size, ib / sb.size);
+}
+
+const UMBRAL_MATCH = 0.4;
 const TOLERANCIA_PRECIO = 0.01;
 const TOLERANCIA_CANTIDAD = 0.001;
 
