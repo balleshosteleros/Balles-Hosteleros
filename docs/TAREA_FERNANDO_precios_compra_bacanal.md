@@ -24,8 +24,11 @@ próxima recepción real y avisa si algo raro):
    0 falsos extras. Todo el rastro de prueba borrado.
 4. **`albaranes_lineas` BORRADA de prod** (tu punto 4: cero referencias en código, cero
    filas — confirmado antes del drop; migración `20260806120000` de registro).
-5. Cuando puedas, **borra la Edge Function `analizar-albaran` del panel de Supabase**
-   (ya no la llama nadie; dejarla viva solo confunde).
+5. **DATO IMPORTANTE**: fuimos a borrar la Edge Function `analizar-albaran` del panel…
+   y **ya no existía** (solo queda `soporte-embeddings`). Si no la borraste tú hace poco,
+   significa que **la recepción con foto llevaba rota en silencio** (el invoke fallaba y
+   la pantalla decía "ajusta las cantidades a mano") hasta el motor nuevo de hoy. ¿Sabes
+   cuándo desapareció? Nos ayudaría a fechar cuánto tiempo estuvo el hueco.
 
 Con esto, **el PRP-073 queda COMPLETO de punta a punta** (captura fiable → duplicados →
 cantidades por formato → confirmación transaccional → alias → recepción convergida). Lo
