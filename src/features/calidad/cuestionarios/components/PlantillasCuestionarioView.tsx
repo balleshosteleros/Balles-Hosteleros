@@ -15,9 +15,14 @@ import {
   DialogFooter,
   DialogDescription,
 } from "@/components/ui/dialog";
-import { SubmoduleToolbar } from "@/shared/components/SubmoduleToolbar";
+import {
+  SubmoduleToolbar,
+  type ToolbarColumna,
+  type ToolbarColumnaVisible,
+  ordenarColumnas,
+  colVisible,
+} from "@/shared/components/SubmoduleToolbar";
 import { ResizableColumnsProvider } from "@/shared/components/ResizableColumns";
-import { TableColumnHeader } from "@/shared/components/TableColumnHeader";
 import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
 import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 import { toast } from "sonner";
@@ -33,6 +38,14 @@ import {
 } from "@/features/calidad/cuestionarios/actions";
 import type { PlantillaCuestionario } from "@/features/calidad/cuestionarios/types";
 
+const columnasDef: ToolbarColumna[] = [
+  { campo: "nombre", label: "Nombre", bloqueada: true },
+  { campo: "categoria", label: "Categoría" },
+  { campo: "preguntas", label: "Preguntas" },
+  { campo: "duracion", label: "Duración" },
+  { campo: "estado", label: "Estado" },
+];
+
 interface Props {
   onVolver: () => void;
 }
@@ -41,6 +54,8 @@ export function PlantillasCuestionarioView({ onVolver }: Props) {
   const [plantillas, setPlantillas] = useState<PlantillaCuestionario[]>([]);
   const [loading, setLoading] = useState(true);
   const [busqueda, setBusqueda] = useState("");
+  const [columnasVisibles, setColumnasVisibles] = useState<ToolbarColumnaVisible>({});
+  const [columnasOrden, setColumnasOrden] = useState<string[]>(columnasDef.map((c) => c.campo));
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editando, setEditando] = useState<PlantillaCuestionario | null>(null);
   const [, startTransition] = useTransition();
@@ -77,23 +92,30 @@ export function PlantillasCuestionarioView({ onVolver }: Props) {
     setDialogOpen(true);
   }
 
+  const columnasRender = ordenarColumnas(columnasDef, columnasOrden).filter(
+    (c) => c.bloqueada || colVisible(columnasVisibles, c.campo),
+  );
+
   return (
     <div className="space-y-4">
       <SubmoduleToolbar
         busqueda={busqueda}
         onBusquedaChange={setBusqueda}
-        placeholderBusqueda="Buscar plantilla"
+        placeholderBusqueda="Buscar"
         onNuevo={abrirNueva}
-        textoNuevo="Nueva plantilla"
-        extraDerecha={
+        columnas={columnasDef}
+        columnasVisibles={columnasVisibles}
+        onColumnasVisiblesChange={setColumnasVisibles}
+        columnasOrden={columnasOrden}
+        onColumnasOrdenChange={setColumnasOrden}
+        extraIzquierda={
           <Button
             variant="outline"
             size="sm"
             onClick={onVolver}
-            className="h-9 gap-2"
+            className="gap-1.5"
           >
-            <ArrowLeft className="h-4 w-4" strokeWidth={1.75} />
-            Volver a Cuestionarios
+            <ArrowLeft className="h-3.5 w-3.5" /> Campañas
           </Button>
         }
       />
@@ -103,26 +125,29 @@ export function PlantillasCuestionarioView({ onVolver }: Props) {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b bg-muted/50">
-                <TableColumnHeader label="Nombre" />
-                <TableColumnHeader label="Categoría" />
-                <TableColumnHeader label="Preguntas" />
-                <TableColumnHeader label="Duración" />
-                <TableColumnHeader label="Estado" />
+                {columnasRender.map((c) => (
+                  <th key={c.campo} className="text-left px-3 py-2 font-medium text-foreground">
+                    {c.label}
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody>
               {loading && plantillas.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="text-center py-10">
+                  <td colSpan={columnasRender.length} className="text-center py-10">
                     <LoadingSpinner />
                   </td>
                 </tr>
               )}
               {!loading && filtradas.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="text-center py-10 text-muted-foreground">
+                  <td
+                    colSpan={columnasRender.length}
+                    className="text-center py-10 text-muted-foreground text-sm"
+                  >
                     {plantillas.length === 0
-                      ? "Aún no hay plantillas. Crea la primera con + Nueva plantilla."
+                      ? "Aún no hay plantillas. Pulsa + Nuevo para crear la primera."
                       : "Ninguna plantilla coincide con la búsqueda."}
                   </td>
                 </tr>
@@ -132,34 +157,45 @@ export function PlantillasCuestionarioView({ onVolver }: Props) {
                   (s, b) => s + b.preguntas.length,
                   0,
                 );
-                return (
-                  <tr
-                    key={p.id}
-                    className="border-b hover:bg-muted/30 cursor-pointer transition-colors"
-                    onClick={() => abrirEdicion(p)}
-                  >
-                    <td className="px-3 py-2.5">
+                const cells: Record<string, React.ReactNode> = {
+                  nombre: (
+                    <div>
                       <div className="font-medium">{p.nombre}</div>
                       {p.descripcion && (
                         <div className="text-xs text-muted-foreground line-clamp-1">
                           {p.descripcion}
                         </div>
                       )}
-                    </td>
-                    <td className="px-3 py-2.5 text-muted-foreground">
+                    </div>
+                  ),
+                  categoria: (
+                    <span className="text-muted-foreground">
                       {CATEGORIA_CUESTIONARIO_LABEL[p.categoria]}
-                    </td>
-                    <td className="px-3 py-2.5 tabular-nums">{totalPreguntas}</td>
-                    <td className="px-3 py-2.5 tabular-nums">{p.duracionMinutos} min</td>
-                    <td className="px-3 py-2.5">
-                      {p.archivada ? (
-                        <Badge variant="outline" className="text-[10px]">Archivada</Badge>
-                      ) : (
-                        <Badge variant="outline" className="text-[10px] bg-emerald-500/10 text-emerald-700 border-emerald-200">
-                          Activa
-                        </Badge>
-                      )}
-                    </td>
+                    </span>
+                  ),
+                  preguntas: <span className="tabular-nums">{totalPreguntas}</span>,
+                  duracion: (
+                    <span className="tabular-nums">{p.duracionMinutos} min</span>
+                  ),
+                  estado: p.archivada ? (
+                    <Badge variant="outline" className="text-[10px]">Archivada</Badge>
+                  ) : (
+                    <Badge variant="outline" className="text-[10px] bg-emerald-500/10 text-emerald-700 border-emerald-200">
+                      Activa
+                    </Badge>
+                  ),
+                };
+                return (
+                  <tr
+                    key={p.id}
+                    className="border-b hover:bg-muted/30 cursor-pointer transition-colors"
+                    onClick={() => abrirEdicion(p)}
+                  >
+                    {columnasRender.map((col) => (
+                      <td key={col.campo} className="px-3 py-2 align-middle">
+                        {cells[col.campo] ?? null}
+                      </td>
+                    ))}
                   </tr>
                 );
               })}
