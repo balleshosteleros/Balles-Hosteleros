@@ -125,7 +125,11 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   // entre SSR (false, sin localStorage) y cliente (true si hay caché), y pintar
   // esa diferencia en el primer render rompía la hidratación. Con `mounted` el
   // primer paint coincide con el servidor y la barra aparece justo después.
-  const showUi = mounted && (!!user || permisosLoaded || devBypass || isDemoHost);
+  // `profile` también cuenta como señal de sesión: lo siembra el layout de
+  // servidor (ya con la sesión validada) antes del primer paint, así que la
+  // cabecera con nombre + rol + foto puede pintarse sin esperar a que el
+  // navegador resuelva `user` ni los permisos.
+  const showUi = mounted && (!!user || !!profile || permisosLoaded || devBypass || isDemoHost);
   const counts = useDailyCounts();
 
   const { title: headerLabel, icon: ModuleIcon } = getRouteMeta(pathname);

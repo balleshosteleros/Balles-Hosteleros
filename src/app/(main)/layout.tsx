@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { AppLayout } from "@/features/layout/components/app-layout";
 import { getEmpleadoGuardStatus } from "@/features/primer-acceso/data/empleado-status";
 import { getUserPermisos } from "@/features/auth/actions/permisos-actions";
-import { AuthServerSeed, type AppRole } from "@/features/auth/contexts/auth-context";
+import { AuthServerSeed, type AppRole, type AuthProfile } from "@/features/auth/contexts/auth-context";
 import { createClient } from "@/lib/supabase/server";
 import { getEmpresaActivaForUser } from "@/features/empresa/lib/empresa-server";
 
@@ -39,11 +39,27 @@ export default async function MainLayout({ children }: { children: React.ReactNo
 
   let seed: React.ReactNode = null;
   if (user) {
-    const p = await getUserPermisos();
+    // Perfil y permisos EN PARALELO. El perfil (nombre + rol + avatar) se
+    // resuelve aquí y no solo en el navegador: si la cabecera dependía del
+    // fetch del cliente, al entrar aparecía sin nombre, sin rol y sin foto
+    // durante el arranque, pese a que la sesión ya estaba validada.
+    const [p, perfilRes] = await Promise.all([
+      getUserPermisos(),
+      supabase
+        .from("usuarios")
+        .select("nombre, apellidos, email, empresa_id, avatar_url, avatar_obligatorio, rol_label, departamento")
+        .eq("user_id", user.id)
+        .maybeSingle(),
+    ]);
+
+    const profile = (perfilRes.data as AuthProfile | null) ?? null;
+
     // Guard anti-carrera (paridad con looksRaceFailure de loadFreshAuth): si la
     // resolución llegó a medias (sin empresa), NO sembramos ni cacheamos datos
     // incompletos — el cliente seguirá su flujo normal con reintentos.
-    if (p.empresaId != null) {
+    // El PERFIL, en cambio, sí se siembra en cuanto exista: es independiente de
+    // los permisos y su ausencia es justo lo que dejaba la cabecera vacía.
+    if (p.empresaId != null || profile) {
       seed = (
         <AuthServerSeed
           payload={{
@@ -51,6 +67,8 @@ export default async function MainLayout({ children }: { children: React.ReactNo
             roles: p.appRoles as AppRole[],
             permisos: p.permisos,
             esAdminPlataforma: p.esAdminPlataforma,
+            profile,
+            permisosValidos: p.empresaId != null,
           }}
         />
       );

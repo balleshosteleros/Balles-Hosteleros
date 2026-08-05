@@ -168,6 +168,21 @@ export interface AuthServerSeedPayload {
   roles: AppRole[];
   permisos: PermisoModulo[];
   esAdminPlataforma: boolean;
+  /**
+   * Perfil (nombre, apellidos, rol_label, avatar) resuelto también en SERVIDOR.
+   * Sin esto, la cabecera se quedaba en blanco / "—" durante el arranque: el
+   * perfil solo se pedía desde el navegador, dentro de onAuthStateChange y
+   * detrás de un Promise.all que además esperaba a los permisos. Al sembrarlo
+   * aquí, el nombre + rol + foto se pintan en el mismo render que el menú.
+   */
+  profile?: AuthProfile | null;
+  /**
+   * `false` cuando el servidor resolvió el perfil pero NO los permisos (carrera
+   * de cookies: empresaId null). En ese caso sembramos solo la cabecera y
+   * dejamos que el cliente resuelva los permisos con sus reintentos, sin
+   * aplicar ni cachear una lista vacía que borraría el menú.
+   */
+  permisosValidos?: boolean;
 }
 
 const AuthSeedContext = createContext<((p: AuthServerSeedPayload) => void) | null>(null);
@@ -468,6 +483,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // o es admin de plataforma): un seed en blanco por la carrera de cookies no
   // debe borrar el menú.
   const seedFromServer = useCallback((p: AuthServerSeedPayload) => {
+    // El PERFIL se aplica SIEMPRE que el servidor lo mande, sin condicionarlo a
+    // los permisos: es el dato que pinta nombre + rol + foto en la cabecera y
+    // llega ya validado con la sesión de servidor. Así deja de aparecer vacío
+    // durante el arranque (antes esperaba al fetch del navegador).
+    if (p.profile) {
+      setProfile(p.profile);
+      writeProfileCache(p.userId, p.profile);
+    }
+
+    // Seed de solo-perfil (permisos no resueltos en servidor): la cabecera ya
+    // quedó sembrada arriba; no tocamos permisos ni su caché.
+    if (p.permisosValidos === false) return;
+
     const seedTieneDatos = p.esAdminPlataforma || p.permisos.length > 0;
     const difiere =
       p.esAdminPlataforma !== esAdminPlataforma ||
