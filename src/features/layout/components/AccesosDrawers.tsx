@@ -549,16 +549,23 @@ export function AccesosDrawer({
                   <div className="flex items-center gap-2 bg-muted/40 px-3 py-2 border-b border-border/40">
                     <AppLogo nombre={app.nombre} logoUrl={app.logoUrl} url={app.url} />
                     <span className="text-sm font-semibold truncate flex-1">{app.nombre}</span>
-                    {app.url && (
+                    {app.url ? (
                       <a
-                        href={app.url}
+                        href={app.url.startsWith("http") ? app.url : `https://${app.url}`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="shrink-0 text-muted-foreground hover:text-foreground"
+                        className="shrink-0 text-emerald-600 hover:text-emerald-700 dark:text-emerald-500 dark:hover:text-emerald-400"
                         title="Abrir aplicación"
                       >
                         <ExternalLink className="h-3.5 w-3.5" />
                       </a>
+                    ) : (
+                      <span
+                        className="shrink-0 text-muted-foreground/40"
+                        title="Sin enlace añadido"
+                      >
+                        <ExternalLink className="h-3.5 w-3.5" />
+                      </span>
                     )}
                   </div>
                   <div className="divide-y divide-border/40">
