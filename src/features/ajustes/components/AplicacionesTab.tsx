@@ -80,7 +80,9 @@ export function AplicacionesTab() {
 
   useEffect(() => {
     let alive = true;
-    listAllAccesosApps()
+    setLoading(true);
+    // Solo la empresa activa (aislamiento multiempresa, igual que en Accesos).
+    listAllAccesosApps(empresaActual.id)
       .then((rows) => {
         if (alive) setApps(rows);
       })
@@ -94,7 +96,7 @@ export function AplicacionesTab() {
     return () => {
       alive = false;
     };
-  }, []);
+  }, [empresaActual.id]);
 
   const [buscar, setBuscar] = useState("");
   const [filtroEmpresa, setFiltroEmpresa] = useState("todas");

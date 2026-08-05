@@ -16,7 +16,6 @@ import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -129,16 +128,14 @@ export function AccesosTab() {
 }
 
 function AccesosTabInner() {
-  const { empresas, empresaActual } = useEmpresa();
+  const { empresaActual } = useEmpresa();
   const empresaDbId = empresaActual.dbId;
-  const empresasOptions = empresas.map((e) => ({ id: e.id, nombre: e.nombre }));
 
   const [apps, setApps] = useState<AccesoApp[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
   const [buscar, setBuscar] = useState("");
-  const [filtroEmpresa, setFiltroEmpresa] = useState("todas");
   const [modalOpen, setModalOpen] = useState(false);
   const [editingApp, setEditingApp] = useState<AccesoApp | null>(null);
   const [accesos, setAccesos] = useState<AccesoCredencial[]>([accesoVacio]);
@@ -147,7 +144,10 @@ function AccesosTabInner() {
 
   useEffect(() => {
     let alive = true;
-    listAllAccesosApps()
+    setLoading(true);
+    // Solo la empresa activa: sin este filtro se listaban las credenciales de
+    // TODAS las empresas (estando en HABANA se veían también las de BACANAL).
+    listAllAccesosApps(empresaActual.id)
       .then((rows) => {
         if (alive) setApps(rows);
       })
@@ -161,7 +161,7 @@ function AccesosTabInner() {
     return () => {
       alive = false;
     };
-  }, []);
+  }, [empresaActual.id]);
 
   useEffect(() => {
     getRolesEmpresaNombres(empresaDbId)
@@ -223,7 +223,6 @@ function AccesosTabInner() {
   };
 
   const filteredApps = apps.filter((a) => {
-    if (filtroEmpresa !== "todas" && a.empresaId !== filtroEmpresa) return false;
     if (buscar) {
       const q = buscar.toLowerCase();
       const enNombre = a.nombre.toLowerCase().includes(q);
@@ -298,14 +297,14 @@ function AccesosTabInner() {
     }
   };
 
-  const empresaNombre = (id: string) => empresasOptions.find((e) => e.id === id)?.nombre ?? id;
 
   return (
     <div className="space-y-3">
       <p className="text-xs text-muted-foreground">
-        Bóveda de contraseñas. Las aplicaciones (nombre, enlace, logo) se dan de
-        alta en «Aplicaciones»; aquí solo se guardan sus credenciales y se
-        decide qué roles pueden verlas.
+        Bóveda de contraseñas de <strong>{empresaActual.nombre}</strong>. Las
+        aplicaciones (nombre, enlace, logo) se dan de alta en «Aplicaciones»;
+        aquí solo se guardan sus credenciales y se decide qué roles pueden
+        verlas. Para ver las de otra empresa, cambia de empresa arriba.
       </p>
 
       <div className="flex flex-wrap items-center gap-3">
@@ -318,19 +317,6 @@ function AccesosTabInner() {
             className="pl-9"
           />
         </div>
-        <Select value={filtroEmpresa} onValueChange={setFiltroEmpresa}>
-          <SelectTrigger className="w-[160px]">
-            <SelectValue placeholder="Empresa" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="todas">Todas las empresas</SelectItem>
-            {empresasOptions.map((e) => (
-              <SelectItem key={e.id} value={e.id}>
-                {e.nombre}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
       </div>
 
       <Table>
@@ -338,7 +324,6 @@ function AccesosTabInner() {
           <TableRow>
             <TableHead className="w-10"></TableHead>
             <TableHead>Aplicación</TableHead>
-            <TableHead>Empresa</TableHead>
             <TableHead>Usuario</TableHead>
             <TableHead>Contraseña</TableHead>
             <TableHead>Quién puede verla</TableHead>
@@ -348,14 +333,14 @@ function AccesosTabInner() {
         <TableBody>
           {loading && (
             <TableRow>
-              <TableCell colSpan={7} className="text-center py-8">
+              <TableCell colSpan={6} className="text-center py-8">
                 <LoadingSpinner />
               </TableCell>
             </TableRow>
           )}
           {!loading && filteredApps.length === 0 && (
             <TableRow>
-              <TableCell colSpan={7} className="text-center py-8 text-muted-foreground text-sm">
+              <TableCell colSpan={6} className="text-center py-8 text-muted-foreground text-sm">
                 No hay aplicaciones. Créalas primero en «Aplicaciones».
               </TableCell>
             </TableRow>
@@ -368,7 +353,6 @@ function AccesosTabInner() {
               <TableCell>
                 <div className="font-medium text-sm">{app.nombre}</div>
               </TableCell>
-              <TableCell className="text-xs">{empresaNombre(app.empresaId)}</TableCell>
               <TableCell className="font-mono text-xs align-top">
                 {app.accesos[0]?.usuario || app.usuario || (
                   <span className="text-muted-foreground">—</span>

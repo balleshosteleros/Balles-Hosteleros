@@ -400,16 +400,19 @@ export async function listAccesosApps(empresaSlug: string): Promise<AccesoApp[]>
  * Lista TODOS los accesos (todas las empresas). Solo admin/director.
  * Otros usuarios reciben array vacío (no se filtra: se rechaza).
  */
-export async function listAllAccesosApps(): Promise<AccesoApp[]> {
+export async function listAllAccesosApps(empresaSlug?: string): Promise<AccesoApp[]> {
   const supabase = await createClient();
   const user = await getUserOrNull(supabase);
   if (!user) return [];
   if (!(await userTieneRolAdminODirector(user.id))) return [];
 
+  // Aislamiento por empresa: esta action usa el cliente admin (se salta la RLS),
+  // así que el filtro por empresa hay que ponerlo A MANO. Sin él, estando en
+  // Ajustes de HABANA se listaban también las credenciales de BACANAL.
   const admin = createAdminClient();
-  const { data, error } = await admin
-    .from("accesos_apps")
-    .select("*")
+  let q = admin.from("accesos_apps").select("*");
+  if (empresaSlug) q = q.eq("empresa_slug", empresaSlug);
+  const { data, error } = await q
     .order("empresa_slug", { ascending: true })
     .order("categoria", { ascending: true })
     .order("nombre", { ascending: true });
