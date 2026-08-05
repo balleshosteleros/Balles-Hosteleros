@@ -48,6 +48,7 @@ export function CopiarEmpleadoDialog({
   const [datos, setDatos] = useState<DatosDestino | null>(null);
   const [cargando, setCargando] = useState(false);
   const [guardando, setGuardando] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   // Campos obligatorios de la empresa destino.
   const [emailEmpresa, setEmailEmpresa] = useState("");
@@ -103,9 +104,14 @@ export function CopiarEmpleadoDialog({
     });
     setGuardando(false);
     if (!res.ok) {
+      // Aviso persistente dentro del diálogo (no solo un toast que se va): si
+      // es un duplicado, el mensaje explica qué dato coincide y hay que poder
+      // leerlo con calma sin que se cierre el diálogo.
+      setErrorMsg(res.error ?? "No se pudo copiar el empleado.");
       toast.error(res.error ?? "No se pudo copiar el empleado.");
       return;
     }
+    setErrorMsg(null);
     const nombreEmpresa = opciones.find((e) => e.id === destino)?.nombre ?? "la otra empresa";
     toast.success(`${empleadoNombre} copiado a ${nombreEmpresa}. Asígnale sus turnos allí.`);
     setOpen(false);
@@ -135,6 +141,16 @@ export function CopiarEmpleadoDialog({
               rellena aquí. Los turnos se asignan después, en la nueva empresa.
             </DialogDescription>
           </DialogHeader>
+
+          {errorMsg && (
+            <div
+              role="alert"
+              className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2.5 text-sm text-destructive"
+            >
+              <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+              <span>{errorMsg}</span>
+            </div>
+          )}
 
           <div className="space-y-4">
             <div className="space-y-1.5">

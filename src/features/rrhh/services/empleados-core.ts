@@ -119,6 +119,123 @@ export type AltaUsuarioEmpleadoResult =
   | { ok: true; userId: string; empleadoId: string; tempPassword: string }
   | { ok: false; error: string };
 
+/** Dato que provocó la coincidencia, para poder decírselo al usuario. */
+export type CampoDuplicado = "documento" | "nombre" | "correo";
+
+export type EmpleadoDuplicado = {
+  campo: CampoDuplicado;
+  /** Texto del dato que coincide (p. ej. el DNI o el correo). */
+  valor: string;
+  empleadoId: string;
+  nombreCompleto: string;
+  /** 'Activo' | 'Inactivo' — decide si el mensaje habla de reactivar. */
+  estado: string | null;
+};
+
+/** Normaliza documento: mayúsculas, sin guiones ni espacios. */
+function normDoc(v: string | null | undefined): string {
+  return (v ?? "").toUpperCase().replace(/[\s-]/g, "").trim();
+}
+
+/** Normaliza texto libre (nombre/apellidos): minúsculas, sin acentos ni dobles espacios. */
+function normTexto(v: string | null | undefined): string {
+  return (v ?? "")
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function normEmail(v: string | null | undefined): string {
+  return (v ?? "").toLowerCase().trim();
+}
+
+/**
+ * Comprueba si ya existe un empleado en LA MISMA empresa que coincida por
+ * documento (DNI/NIE/pasaporte), por nombre+apellidos o por cualquiera de sus
+ * dos correos. Devuelve la primera coincidencia encontrada, o null.
+ *
+ * El alcance es intencionadamente por empresa: trabajar en dos empresas del
+ * grupo es normal y NO se considera duplicado (decisión de Ivan, 2026-08-05).
+ *
+ * Se compara en memoria (no en SQL) para poder normalizar igual que la UI:
+ * "12345678-z" y "12345678Z" son el mismo documento, y "José" = "jose".
+ */
+export async function buscarEmpleadoDuplicado(
+  admin: AdminClient,
+  empresaId: string,
+  datos: {
+    dniNie?: string | null;
+    nombre?: string | null;
+    apellidos?: string | null;
+    emailPersonal?: string | null;
+    emailEmpresa?: string | null;
+  },
+  /** Ficha a ignorar (al editar/copiar, no debe chocar consigo misma). */
+  excluirEmpleadoId?: string | null,
+): Promise<EmpleadoDuplicado | null> {
+  const { data, error } = await admin
+    .from("empleados")
+    .select("id, nombre, apellidos, dni_nie, email_personal, email_empresa, estado")
+    .eq("empresa_id", empresaId);
+
+  if (error || !data) return null;
+
+  const doc = normDoc(datos.dniNie);
+  const nom = normTexto(datos.nombre);
+  const ape = normTexto(datos.apellidos);
+  const mails = [normEmail(datos.emailPersonal), normEmail(datos.emailEmpresa)].filter(Boolean);
+
+  for (const e of data) {
+    if (excluirEmpleadoId && e.id === excluirEmpleadoId) continue;
+
+    const nombreCompleto = [e.nombre, e.apellidos].filter(Boolean).join(" ").trim();
+    const base = { empleadoId: e.id as string, nombreCompleto, estado: (e.estado as string | null) ?? null };
+
+    // 1. Documento: el criterio más fuerte.
+    if (doc && normDoc(e.dni_nie as string | null) === doc) {
+      return { ...base, campo: "documento", valor: (datos.dniNie ?? "").trim() };
+    }
+
+    // 2. Correo: cualquiera de los dos del alta contra cualquiera de los dos existentes.
+    const mailsExistentes = [
+      normEmail(e.email_personal as string | null),
+      normEmail(e.email_empresa as string | null),
+    ].filter(Boolean);
+    const coincide = mails.find((m) => mailsExistentes.includes(m));
+    if (coincide) {
+      return { ...base, campo: "correo", valor: coincide };
+    }
+
+    // 3. Nombre + apellidos: sólo si hay apellidos, para no bloquear por un
+    // nombre de pila suelto (demasiado común y daría falsos positivos).
+    if (nom && ape && normTexto(e.nombre as string | null) === nom && normTexto(e.apellidos as string | null) === ape) {
+      return { ...base, campo: "nombre", valor: `${(datos.nombre ?? "").trim()} ${(datos.apellidos ?? "").trim()}`.trim() };
+    }
+  }
+
+  return null;
+}
+
+const ETIQUETA_CAMPO: Record<CampoDuplicado, string> = {
+  documento: "el documento",
+  nombre: "el nombre y apellidos",
+  correo: "el correo",
+};
+
+/**
+ * Mensaje que ve el usuario. Dice QUÉ dato coincide y con quién, y deja claro
+ * que la única salida es activar la ficha existente, nunca crear otra.
+ */
+export function mensajeDuplicado(dup: EmpleadoDuplicado): string {
+  const queHacer =
+    dup.estado === "Activo"
+      ? "Ya está activo, así que no hay nada que crear."
+      : "Solo puedes activar la ficha que ya existe; no se puede crear una nueva.";
+  return `Esta persona ya está en la base de datos: coincide ${ETIQUETA_CAMPO[dup.campo]} «${dup.valor}» con ${dup.nombreCompleto || "un empleado existente"} (${dup.estado === "Activo" ? "activo" : "inactivo"}). ${queHacer}`;
+}
+
 /**
  * Núcleo canónico de alta de empleado. Crea en cascada:
  *   auth.user → profile → user_roles(empleado) → user_empresas → empleado
@@ -133,6 +250,21 @@ export async function altaUsuarioEmpleado(
 ): Promise<AltaUsuarioEmpleadoResult> {
   const { admin } = input;
   const tempPassword = crypto.randomUUID().slice(0, 12) + "Aa1!";
+
+  // 0. Anti-duplicados (misma empresa). ANTES de crear nada en auth.users, para
+  // no dejar usuarios huérfanos ni depender del rollback. Bloquea por documento,
+  // por nombre+apellidos o por correo: si la persona ya está, solo se puede
+  // activar su ficha existente, nunca crear otra.
+  const duplicado = await buscarEmpleadoDuplicado(admin, input.empresaPrincipalId, {
+    dniNie: input.dniNie,
+    nombre: input.nombre,
+    apellidos: input.apellidos,
+    emailPersonal: input.emailPersonal,
+    emailEmpresa: input.emailEmpresa,
+  });
+  if (duplicado) {
+    return { ok: false, error: mensajeDuplicado(duplicado) };
+  }
 
   // 1. Crear auth.user
   const { data: created, error: createErr } = await admin.auth.admin.createUser({

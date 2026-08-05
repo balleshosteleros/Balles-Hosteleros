@@ -8,6 +8,8 @@ import {
   altaUsuarioEmpleado,
   sincronizarLoginEmailEmpleado,
   resolverLoginEmail,
+  buscarEmpleadoDuplicado,
+  mensajeDuplicado,
 } from "@/features/rrhh/services/empleados-core";
 import { revalidatePath } from "next/cache";
 import { friendlyError } from "@/shared/lib/friendly-errors";
@@ -413,6 +415,8 @@ export async function createEmpleado(input: {
   emailEmpresa?: string;
   emailPersonal: string;
   telefono?: string;
+  /** DNI/NIE/pasaporte. Se usa para el control anti-duplicados de la empresa. */
+  dniNie?: string;
   // Empresas a las que el empleado tendrá acceso. La primera es la "principal"
   // (queda como empleados.empresa_id y profiles.empresa_id). Si no se pasa
   // `empresaPrincipalId`, se usa la primera o la empresa activa del admin.
@@ -477,6 +481,7 @@ export async function createEmpleado(input: {
       nombre: nombreNorm,
       apellidos: apellidosNorm,
       telefono: input.telefono ?? null,
+      dniNie: input.dniNie ?? null,
       departamentoId: isRealId(input.departamentoId) ? input.departamentoId : null,
       puesto: input.puesto ?? null,
       empresaPrincipalId,
@@ -1107,6 +1112,19 @@ export async function copiarEmpleadoAEmpresa(input: {
     if (!calOk) return { ok: false, error: "El calendario elegido no es de la empresa destino." };
     const { data: locsOk } = await admin.from("locales").select("id").eq("empresa_id", input.empresaDestinoId).in("id", localIds);
     if ((locsOk ?? []).length !== localIds.length) return { ok: false, error: "Algún local elegido no es de la empresa destino." };
+
+    // Anti-duplicados en la empresa DESTINO: aquí sí, porque copiar es crear una
+    // ficha nueva. El guard previo solo miraba user_id+empresa_id, así que una
+    // misma persona dada de alta dos veces con user_id distinto se colaba.
+    const txt = (v: unknown): string | null => (typeof v === "string" ? v : null);
+    const dupDestino = await buscarEmpleadoDuplicado(admin, input.empresaDestinoId, {
+      dniNie: txt(o.dni_nie),
+      nombre: txt(o.nombre),
+      apellidos: txt(o.apellidos),
+      emailPersonal: txt(o.email_personal),
+      emailEmpresa: txt(emailEmpresa),
+    });
+    if (dupDestino) return { ok: false, error: mensajeDuplicado(dupDestino) };
 
     // Nº de empleado correlativo al último de la empresa destino.
     const { data: nums } = await admin.from("empleados").select("numero_empleado").eq("empresa_id", input.empresaDestinoId);

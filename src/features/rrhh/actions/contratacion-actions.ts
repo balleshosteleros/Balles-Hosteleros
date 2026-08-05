@@ -21,7 +21,13 @@ import { getSiteUrl } from "@/lib/site-url";
 import { bienvenidaEmpleadoEmail } from "@/lib/email/templates/bienvenida-empleado";
 import { buildRecoveryActionUrl } from "@/lib/auth/recovery-link";
 import { friendlyError } from "@/shared/lib/friendly-errors";
-import { requireAdminUser, altaUsuarioEmpleado, resolverLoginEmail } from "@/features/rrhh/services/empleados-core";
+import {
+  requireAdminUser,
+  altaUsuarioEmpleado,
+  resolverLoginEmail,
+  buscarEmpleadoDuplicado,
+  mensajeDuplicado,
+} from "@/features/rrhh/services/empleados-core";
 import { copiarDocumentacionCandidatoAEmpleado } from "@/features/rrhh/services/documentacion-candidato-a-empleado";
 import { enviarAltaGestoria } from "@/features/rrhh/actions/gestoria-actions";
 import { faltantesAltaGestoria } from "@/features/rrhh/data/campos-gestoria";
@@ -377,28 +383,18 @@ export async function contratarCandidato(input: ContratarInput): Promise<Contrat
   // esta empresa, esté ACTIVO o de baja. Se bloquea siempre con un mensaje claro
   // (evita duplicados y que una reactivación arrastre datos antiguos). Para
   // reincorporar a un ex-empleado se hace desde su ficha, no contratándolo de nuevo.
+  // Se comprueba aquí (antes del alta) para poder revertir el lock optimista de
+  // la contratación. El núcleo `altaUsuarioEmpleado` repite la comprobación como
+  // última línea de defensa para las vías que no pasan por aquí.
   {
-    const orFilters: string[] = [];
-    if (emailPersonal) orFilters.push(`email_personal.eq.${emailPersonal}`);
-    if (dniNorm) orFilters.push(`dni_nie.eq.${dniNorm}`);
-    if (orFilters.length > 0) {
-      const { data: matches } = await admin
-        .from("empleados").select("id, user_id, estado, nombre, apellidos, puesto, dni_nie")
-        .eq("empresa_id", empresaId).or(orFilters.join(",")).limit(1);
-      if (matches && matches.length > 0) {
-        const m = matches[0];
-        const nombreExistente = `${m.nombre ?? ""} ${m.apellidos ?? ""}`.trim();
-        const dniMostrar = (m.dni_nie as string | null) ?? dniNorm ?? "";
-        const estadoTxt = String(m.estado ?? "").toLowerCase() === "activo" ? "" : " (actualmente dado de baja)";
-        return {
-          ok: false,
-          error:
-            `Esta persona con DNI ${dniMostrar} ya se encuentra en la base de datos de empleados` +
-            `${nombreExistente ? `: ${nombreExistente}` : ""}${m.puesto ? `, ${m.puesto}` : ""}${estadoTxt}. ` +
-            `No se puede dar de alta de nuevo con el mismo DNI.`,
-        };
-      }
-    }
+    const dup = await buscarEmpleadoDuplicado(admin, empresaId, {
+      dniNie: dniNorm,
+      nombre: cand.nombre,
+      apellidos: cand.apellidos,
+      emailPersonal,
+      emailEmpresa: input.emailEmpresa ?? null,
+    });
+    if (dup) return { ok: false, error: mensajeDuplicado(dup) };
   }
 
   // 5. Alta nueva vía núcleo canónico (siempre nueva: el DNI/email duplicado ya
