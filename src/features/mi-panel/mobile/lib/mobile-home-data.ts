@@ -8,7 +8,7 @@ import {
   type MiPanelResumen,
 } from "@/features/mi-panel/actions/mi-panel-actions";
 import { createClient } from "@/lib/supabase/server";
-import { getEmpresaActivaId } from "@/features/empresa/actions/empresa-activa-actions";
+import { getEmpresaActivaForUser } from "@/features/empresa/lib/empresa-server";
 
 export interface MobileHomeData {
   nombre: string;
@@ -63,7 +63,8 @@ export async function getMobileHomeData(): Promise<MobileHomeData> {
     if (!nombre) nombre = user.email?.split("@")[0] ?? "";
   }
 
-  const empresaId = await getEmpresaActivaId();
+  // Sin cookie del selector (caso normal en móvil) los cumpleaños salían vacíos.
+  const empresaId = user ? await getEmpresaActivaForUser(supabase, user.id) : null;
 
   const [fichajeRes, resumenRes, comunicadosRes, cumples] = await Promise.all([
     getMiFichajeHoy(),

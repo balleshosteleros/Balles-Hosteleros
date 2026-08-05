@@ -2,7 +2,7 @@
 
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
-import { getEmpresaActivaId } from "@/features/empresa/actions/empresa-activa-actions";
+import { getEmpresaActivaForUser } from "@/features/empresa/lib/empresa-server";
 
 const DRIFT_MAX_SEG = Number(process.env.FICHAJE_OFFLINE_DRIFT_MAX_SEG ?? 300);
 
@@ -66,7 +66,9 @@ export async function sincronizarFichajesOffline(
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return { ok: false, results: [], error: "No autenticado" };
-  const empresaId = await getEmpresaActivaId();
+  // Igual que en los avisos: el móvil no tiene la cookie del selector de empresa
+  // del escritorio, así que se resuelve la empresa real del empleado.
+  const empresaId = await getEmpresaActivaForUser(supabase, user.id);
   if (!empresaId) return { ok: false, results: [], error: "Sin empresa activa" };
 
   const { data: profile } = await supabase

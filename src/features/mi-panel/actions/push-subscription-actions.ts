@@ -2,7 +2,7 @@
 
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
-import { getEmpresaActivaId } from "@/features/empresa/actions/empresa-activa-actions";
+import { getEmpresaActivaForUser } from "@/features/empresa/lib/empresa-server";
 
 const subscribeSchema = z.object({
   endpoint: z.string().url(),
@@ -23,7 +23,10 @@ export async function savePushSubscription(
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return { ok: false, error: "No autenticado" };
-  const empresaId = await getEmpresaActivaId();
+  // El empleado que activa los avisos desde el móvil normalmente nunca ha tocado
+  // el selector de empresa del escritorio, así que NO existe la cookie: hay que
+  // caer a su empresa real (usuario_empresas / usuarios.empresa_id).
+  const empresaId = await getEmpresaActivaForUser(supabase, user.id);
   if (!empresaId) return { ok: false, error: "Sin empresa activa" };
 
   const { error } = await supabase
