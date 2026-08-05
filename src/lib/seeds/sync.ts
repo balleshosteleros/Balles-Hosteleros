@@ -32,6 +32,12 @@ import {
   CATEGORIAS_PRODUCTO_SEED,
   normalizeCategoriaProductoNombre,
 } from "./categorias-producto";
+import {
+  CATALOGO_TIPOS,
+  MEDIDAS_SEED,
+  IVAS_SEED,
+  CONSERVACIONES_SEED,
+} from "./catalogos-logistica";
 
 type Admin = ReturnType<typeof createAdminClient>;
 
@@ -910,6 +916,140 @@ export async function syncCatalogosVacanteAEmpresa(
 }
 
 /**
+ * Catálogos base de logística: medidas + sus formatos, IVAs y conservaciones.
+ *
+ * Cada catálogo es independiente POR TIPO (`compra`/`venta`/`elaboracion`), así que
+ * cada valor se siembra una vez por tipo. Aditivo: compara contra lo existente
+ * (case-insensitive, por tipo) y solo inserta lo que falta; nunca renombra ni borra,
+ * por lo que respeta los formatos que cada empresa haya añadido a mano.
+ */
+export async function syncCatalogosLogisticaAEmpresa(
+  admin: Admin,
+  empresaId: string,
+): Promise<{ medidasCreadas: number; formatosCreados: number; ivasCreados: number; conservacionesCreadas: number }> {
+  const norm = (s: string) => s.trim().toLowerCase();
+
+  // --- 1) Medidas (la FK de formatos cuelga de aquí, así que van primero) ---
+  const { data: medidasExist } = await admin
+    .from("medidas")
+    .select("id, tipo, codigo")
+    .eq("empresa_id", empresaId);
+  // clave `tipo|codigo` → id, para resolver la FK de los formatos sin re-consultar.
+  const medidaId = new Map<string, string>();
+  for (const m of medidasExist ?? []) {
+    medidaId.set(`${m.tipo as string}|${norm(m.codigo as string)}`, m.id as string);
+  }
+
+  const medidasACrear = CATALOGO_TIPOS.flatMap((tipo) =>
+    MEDIDAS_SEED.filter((m) => !medidaId.has(`${tipo}|${norm(m.codigo)}`)).map((m) => ({
+      empresa_id: empresaId,
+      tipo,
+      codigo: m.codigo,
+      label: m.label,
+      orden: m.orden,
+      activa: true,
+    })),
+  );
+  if (medidasACrear.length > 0) {
+    const { data: insertadas, error } = await admin
+      .from("medidas")
+      .insert(medidasACrear)
+      .select("id, tipo, codigo");
+    if (error) throw error;
+    for (const m of insertadas ?? []) {
+      medidaId.set(`${m.tipo as string}|${norm(m.codigo as string)}`, m.id as string);
+    }
+  }
+
+  // --- 2) Formatos (cuelgan de la medida correspondiente del MISMO tipo) ---
+  const { data: formatosExist } = await admin
+    .from("formatos")
+    .select("tipo, unidad_id, nombre")
+    .eq("empresa_id", empresaId);
+  const formatoKey = new Set(
+    (formatosExist ?? []).map(
+      (f) => `${f.tipo as string}|${f.unidad_id as string}|${norm(f.nombre as string)}`,
+    ),
+  );
+
+  const formatosACrear = CATALOGO_TIPOS.flatMap((tipo) =>
+    MEDIDAS_SEED.flatMap((m) => {
+      const unidadId = medidaId.get(`${tipo}|${norm(m.codigo)}`);
+      if (!unidadId) return []; // la medida no existe: nada que colgar
+      return m.formatos
+        .filter((f) => !formatoKey.has(`${tipo}|${unidadId}|${norm(f.nombre)}`))
+        .map((f) => ({
+          empresa_id: empresaId,
+          tipo,
+          unidad_id: unidadId,
+          nombre: f.nombre,
+          orden: f.orden,
+          equivalencias: f.equivalencias,
+          activa: true,
+        }));
+    }),
+  );
+  if (formatosACrear.length > 0) {
+    const { error } = await admin.from("formatos").insert(formatosACrear);
+    if (error) throw error;
+  }
+
+  // --- 3) IVAs ---
+  const { data: ivasExist } = await admin
+    .from("ivas")
+    .select("tipo, codigo")
+    .eq("empresa_id", empresaId);
+  const ivaKey = new Set(
+    (ivasExist ?? []).map((i) => `${i.tipo as string}|${norm(i.codigo as string)}`),
+  );
+  const ivasACrear = CATALOGO_TIPOS.flatMap((tipo) =>
+    IVAS_SEED.filter((i) => !ivaKey.has(`${tipo}|${norm(i.codigo)}`)).map((i) => ({
+      empresa_id: empresaId,
+      tipo,
+      codigo: i.codigo,
+      porcentaje: i.porcentaje,
+      label: i.label,
+      orden: i.orden,
+      activa: true,
+    })),
+  );
+  if (ivasACrear.length > 0) {
+    const { error } = await admin.from("ivas").insert(ivasACrear);
+    if (error) throw error;
+  }
+
+  // --- 4) Conservaciones (zonas APPCC) ---
+  const { data: consExist } = await admin
+    .from("conservaciones")
+    .select("tipo, nombre")
+    .eq("empresa_id", empresaId);
+  const consKey = new Set(
+    (consExist ?? []).map((c) => `${c.tipo as string}|${norm(c.nombre as string)}`),
+  );
+  const consACrear = CATALOGO_TIPOS.flatMap((tipo) =>
+    CONSERVACIONES_SEED.filter((c) => !consKey.has(`${tipo}|${norm(c.nombre)}`)).map((c) => ({
+      empresa_id: empresaId,
+      tipo,
+      nombre: c.nombre,
+      rango_temp: c.rango_temp,
+      orden: c.orden,
+      activa: true,
+    })),
+  );
+  if (consACrear.length > 0) {
+    const { error } = await admin.from("conservaciones").insert(consACrear);
+    if (error) throw error;
+  }
+
+  return {
+    medidasCreadas: medidasACrear.length,
+    formatosCreados: formatosACrear.length,
+    ivasCreados: ivasACrear.length,
+    conservacionesCreadas: consACrear.length,
+  };
+}
+
+/**
  * Siembra una empresa nueva con todos los pilares canónicos.
  * Llamar desde `createEmpresa()` justo después del INSERT en `empresas`.
  */
@@ -930,6 +1070,7 @@ export async function seedEmpresaDefaults(
   await syncReservaEtiquetasAEmpresa(admin, empresaId);
   await syncSalaEtiquetasAEmpresa(admin, empresaId);
   await syncCategoriasProductoAEmpresa(admin, empresaId);
+  await syncCatalogosLogisticaAEmpresa(admin, empresaId);
   await ensureReservasConfigEmpresa(admin, empresaId);
   await ensureRrhhConfigEmpresa(admin, empresaId);
   await syncReservaEmailPlantillasAEmpresa(admin, empresaId);
