@@ -164,6 +164,85 @@ export function tieneEnlaceWeb(app: Pick<AccesoApp, "url">): boolean {
   return (app.url ?? "").trim().length > 0;
 }
 
+// ── Titulares de credencial: qué hacer con `etiqueta` ─────────────────────
+// La etiqueta se escribió a mano y mezcla tres cosas distintas:
+//   1. RUIDO   — repite el nombre de la app o es genérica ("Cuenta", "NetCash",
+//                "Acceso por app"). No aporta: se oculta.
+//   2. DATO    — es información real mal colocada ("@bacanal_fuenlabrada",
+//                "Fuenlabrada"). Baja a la lista como una fila más.
+//   3. TITULAR — distingue credenciales dentro de la misma app ("Dirección",
+//                "RRHH", "Contabilidad"). Se mantiene arriba: sin ella, las 21
+//                cuentas de Google quedarían indistinguibles.
+
+/** Normaliza para comparar: sin acentos, sin signos, en minúsculas. */
+function clave(s: string): string {
+  return s
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+/** Etiquetas que no dicen nada por sí solas, vengan de la app que vengan. */
+const ETIQUETAS_GENERICAS = new Set(
+  [
+    "cuenta", "cuentas", "acceso", "accesos", "acceso por app", "app",
+    "pagina", "web", "usuario", "usuarios", "login", "contrasena",
+    "clave", "general", "principal", "datos", "config", "configuracion",
+  ].map(clave),
+);
+
+type DestinoEtiqueta =
+  | { tipo: "oculta" }
+  | { tipo: "dato"; nombre: string }
+  | { tipo: "titular" };
+
+/**
+ * Decide qué hacer con la etiqueta de un acceso.
+ * `nombreApp` sirve para detectar el titular que solo repite la app.
+ * `usuario` evita duplicar en pantalla un titular idéntico al usuario.
+ */
+export function clasificarEtiqueta(
+  etiqueta: string,
+  nombreApp: string,
+  usuario?: string | null,
+): DestinoEtiqueta {
+  const texto = (etiqueta ?? "").trim();
+  if (!texto) return { tipo: "oculta" };
+
+  const k = clave(texto);
+  const kApp = clave(nombreApp ?? "");
+
+  // 1. Ruido: genérica, o repite el nombre de la app, o repite el usuario.
+  // Una cuenta con arroba (@bacanal_fuenlabrada) es un dato real aunque se
+  // parezca al usuario: se decide antes que cualquier regla de ocultado.
+  if (texto.startsWith("@")) return { tipo: "dato", nombre: "Cuenta" };
+
+  if (ETIQUETAS_GENERICAS.has(k)) return { tipo: "oculta" };
+  if (k === kApp || (kApp && (kApp.includes(k) || k.includes(kApp)))) {
+    return { tipo: "oculta" };
+  }
+  // El usuario ya delata el titular: "Dirección" sobra si el correo es
+  // direccion@… — pasa con las 21 cuentas de Google y las 11 de Cover Manager.
+  if (usuario) {
+    const kUsuario = clave(usuario);
+    if (kUsuario === k) return { tipo: "oculta" };
+    // Compara solo contra el buzón (antes de la @), sin puntos ni guiones,
+    // para que "Dirección (Drive Admin)" case con direccion.grupohabana@…
+    const buzon = clave(usuario.split("@")[0] ?? "").replace(/\s+/g, "");
+    const kPlano = k.replace(/\s+/g, "");
+    const kBase = clave(texto.replace(/\(.*?\)/g, "")).replace(/\s+/g, "");
+    if (buzon && kBase && (buzon.includes(kBase) || kBase.includes(buzon))) {
+      return { tipo: "oculta" };
+    }
+    if (buzon && kPlano && buzon.includes(kPlano)) return { tipo: "oculta" };
+  }
+
+  // 3. Titular útil: distingue esta credencial de las demás de la app.
+  return { tipo: "titular" };
+}
+
 function useAccesosApps(empresaSlug: string, open: boolean, soloConEnlace = false) {
   const [apps, setApps] = useState<AccesoApp[]>([]);
   const [loading, setLoading] = useState(false);
@@ -571,11 +650,26 @@ export function AccesosDrawer({
                   <div className="divide-y divide-border/40">
                     {accesos.map(({ acc, indiceOriginal }) => {
                       const datosExtra = (acc.datosExtra ?? []).filter((d) => d.tiene);
+                      const destino = clasificarEtiqueta(
+                        acc.etiqueta ?? "",
+                        app.nombre,
+                        acc.usuario,
+                      );
                       return (
                         <div key={indiceOriginal} className="px-3 py-2.5 space-y-1.5">
-                          {acc.etiqueta && (
+                          {destino.tipo === "titular" && (
                             <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
                               {acc.etiqueta}
+                            </div>
+                          )}
+                          {destino.tipo === "dato" && (
+                            <div className="flex items-start justify-between gap-3 text-xs">
+                              <span className="shrink-0 text-muted-foreground">
+                                {destino.nombre}:
+                              </span>
+                              <span className="min-w-0 break-all text-right font-mono">
+                                {acc.etiqueta}
+                              </span>
                             </div>
                           )}
                           {acc.usuario && (
