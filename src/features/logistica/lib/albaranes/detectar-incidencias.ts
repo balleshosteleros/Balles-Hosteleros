@@ -23,6 +23,15 @@ import {
   type ProveedorFiscal,
   type ResultadoIdentificacion,
 } from "./identidad-fiscal";
+import {
+  calcularStock,
+  contrastarConImporte,
+  esEnvase,
+  etiqueta,
+  formatearNumero,
+  interpretarFormato,
+  interpretarMedida,
+} from "./formato-compra";
 
 // ---------------------------------------------------------------------------
 // Catálogo cerrado
@@ -188,13 +197,6 @@ function pareceServicio(nombre: string): boolean {
   );
 }
 
-/** Unidades que CONTIENEN otras: sin equivalencia, el stock entraría mal. */
-const UNIDADES_CONTENEDORAS = [
-  "caja", "cajas", "cja", "cj", "pack", "packs", "bandeja", "bandejas",
-  "saco", "sacos", "garrafa", "garrafas", "bidon", "bidón", "fardo",
-  "fardos", "lote", "lotes", "palet", "palets", "estuche", "docena",
-];
-
 export interface ResultadoDeteccion {
   incidencias: Incidencia[];
   /** Identificación del proveedor, para que la UI la muestre aunque no haya incidencia. */
@@ -239,28 +241,6 @@ function similitud(a: string, b: string): number {
 
 const eur = (n: number): string =>
   `${n.toFixed(2).replace(".", ",")} €`;
-
-/**
- * Deduce cuántas unidades trae un envase a partir del propio texto de la línea.
- * "PAN BRIOCHE 85g x 54u" → 54 · "CAJA 24" → 24 · "(6u)" → 6
- */
-export function deducirEquivalenciaDelTexto(texto: string): number | null {
-  const t = texto.toLowerCase();
-  const patrones = [
-    /x\s*(\d{1,4})\s*(?:u|ud|uds|unid)/,   // 85g x 54u
-    /(\d{1,4})\s*(?:u|ud|uds|unid)\b/,      // 24 uds
-    /\bde\s+(\d{1,4})\b/,                    // caja de 24
-    /\((\d{1,4})\s*(?:u|ud|uds)?\)/,        // (6u)
-  ];
-  for (const p of patrones) {
-    const m = p.exec(t);
-    if (m) {
-      const n = parseInt(m[1], 10);
-      if (n > 1 && n <= 2000) return n;
-    }
-  }
-  return null;
-}
 
 // ---------------------------------------------------------------------------
 // Detector
@@ -783,70 +763,151 @@ export function detectarIncidencias(entrada: EntradaDeteccion): ResultadoDetecci
   // --- helpers con captura de contexto ---
 
   /**
-   * Formato/equivalencia de una línea cuyo producto aún no conocemos.
-   * Solo puede juzgar por la unidad: si es contenedora, el stock entraría mal.
+   * Formato de una línea cuyo producto aún no conocemos.
+   * Sin ficha no hay medida base contra la que contrastar, pero si la línea viene
+   * en un envase el stock entraría mal igualmente.
    */
   function revisarFormatoSinProducto(linea: LineaOcrAlbaran) {
-    const unidadNorm = normalizar(linea.unidad);
-    if (!UNIDADES_CONTENEDORAS.includes(unidadNorm)) return;
+    if (!esEnvase(linea.unidad) && !esEnvase(linea.formato)) return;
     emitirFormato(linea, null);
   }
 
-  /** Emite la incidencia de equivalencia. `producto` null = aún sin identificar. */
+  /**
+   * Emite la incidencia de formato aplicando la regla:
+   *   cantidad comprada × contenido del envase = stock que entra.
+   * `producto` null = línea aún sin identificar.
+   */
   function emitirFormato(linea: LineaOcrAlbaran, producto: ProductoCatalogo | null) {
-    const unidadNorm = normalizar(linea.unidad);
-    const esContenedora = UNIDADES_CONTENEDORAS.includes(unidadNorm);
+    const medidaProducto = producto ? interpretarMedida(producto.medida)?.base ?? null : null;
+
+    const interpretado = interpretarFormato(
+      linea.formato,
+      linea.unidad,
+      linea.nombre,
+      medidaProducto,
+    );
+
+    // ¿Ya tenemos ese formato definido en Logística → Catálogos?
     const nombreFormato = normalizar(linea.formato ?? linea.unidad);
     const formatoConocido = entrada.formatos.find(
       (f) => normalizar(f.nombre) === nombreFormato && f.equivalencia !== null,
     );
-    if (formatoConocido) return;
+    if (formatoConocido) {
+      // Cuadramos lo guardado con lo que dice el papel: si discrepan, avisamos.
+      if (
+        interpretado.origen !== "unitario" &&
+        Math.abs(formatoConocido.equivalencia! - interpretado.contenido) > 0.001
+      ) {
+        const guardado = calcularStock(linea.cantidad, {
+          ...interpretado,
+          contenido: formatoConocido.equivalencia!,
+        });
+        const segunPapel = calcularStock(linea.cantidad, interpretado);
+        incidencias.push({
+          tipo: "formato_sin_equivalencia",
+          severidad: "alta",
+          lineaId: linea.id,
+          titulo: `El formato "${formatoConocido.nombre}" no dice lo mismo que el albarán`,
+          explicacion:
+            `Tenemos guardado que una "${formatoConocido.nombre}" son ` +
+            `${formatearNumero(formatoConocido.equivalencia!)} ${etiqueta(interpretado.medida)}, ` +
+            `pero el papel indica ${formatearNumero(interpretado.contenido)}. ` +
+            `Entrarían ${guardado.explicacion} en vez de ${segunPapel.explicacion}.`,
+          acciones: [
+            {
+              clave: "usar_papel",
+              etiqueta: `Hacer caso al albarán (${segunPapel.explicacion})`,
+              propuesta: true,
+              payload: {
+                equivalencia: interpretado.contenido,
+                cantidadStock: segunPapel.cantidadStock,
+                actualizarFormato: formatoConocido.id,
+              },
+            },
+            {
+              clave: "usar_catalogo",
+              etiqueta: `Mantener lo guardado (${guardado.explicacion})`,
+              payload: {
+                equivalencia: formatoConocido.equivalencia,
+                cantidadStock: guardado.cantidadStock,
+              },
+            },
+          ],
+          detalle: {
+            formato: formatoConocido.nombre,
+            equivalenciaGuardada: formatoConocido.equivalencia,
+            equivalenciaPapel: interpretado.contenido,
+          },
+        });
+      }
+      return;
+    }
 
-    const deducida =
-      deducirEquivalenciaDelTexto(linea.nombre) ??
-      deducirEquivalenciaDelTexto(linea.formato ?? "");
-    const envase = linea.unidad || linea.formato || "envase";
+    // Compra suelta (sin envase) y medida coherente: no hay nada que resolver.
+    if (interpretado.origen === "unitario" && !esEnvase(linea.unidad)) return;
+
+    const calculo = calcularStock(linea.cantidad, interpretado);
+    const envase = interpretado.envase ?? linea.unidad ?? linea.formato ?? "envase";
+    const bloquea = esEnvase(linea.unidad) || esEnvase(linea.formato) || !!interpretado.envase;
+
+    // Contraste con el dinero: si 3 × precio no da el importe, el formato va mal leído.
+    const contraste = contrastarConImporte(linea.cantidad, linea.precioUnitario, linea.importe);
+    const dineroCuadra = contraste?.cuadra ?? true;
+
+    const seguro = interpretado.origen !== "unitario" && interpretado.confianza >= 0.8 && dineroCuadra;
     const dueño = producto ? ` de ${producto.nombre}` : "";
 
     incidencias.push({
       tipo: "formato_sin_equivalencia",
-      severidad: esContenedora ? "bloqueante" : "media",
+      severidad: bloquea ? "bloqueante" : "media",
       lineaId: linea.id,
-      titulo: deducida
-        ? `¿Una "${envase}"${dueño} son ${deducida} unidades?`
-        : `No sé cuántas unidades trae una "${envase}"`,
-      explicacion: esContenedora
-        ? `El proveedor sirve ${linea.cantidad} "${linea.unidad}". Sin saber cuántas unidades trae cada una, ` +
-          `entrarían ${linea.cantidad} al almacén en vez de las que de verdad hay.` +
-          (deducida ? ` Por el nombre de la línea deduzco que son ${deducida}.` : "")
-        : `La línea viene en "${linea.unidad}" y el producto se mide en "${producto?.medida ?? "ud"}".`,
+      titulo:
+        interpretado.origen === "unitario"
+          ? `No sé cuánto trae una "${envase}"${dueño}`
+          : `¿Una "${envase}"${dueño} son ${formatearNumero(interpretado.contenido)} ${etiqueta(interpretado.medida)}?`,
+      explicacion:
+        `El proveedor sirve ${formatearNumero(linea.cantidad)} "${linea.unidad || envase}". ` +
+        (interpretado.origen === "unitario"
+          ? `Sin saber cuánto lleva cada una, entrarían ${formatearNumero(linea.cantidad)} al almacén en vez de lo que de verdad hay.`
+          : `Según el papel, ${interpretado.descripcion}, así que al almacén entran ${calculo.explicacion}.`) +
+        (!dineroCuadra
+          ? ` Ojo: ${formatearNumero(linea.cantidad)} × ${formatearNumero(linea.precioUnitario ?? 0)} € no da el importe de la línea, así que el formato puede estar mal leído.`
+          : ""),
       acciones: [
-        ...(deducida
+        ...(interpretado.origen !== "unitario"
           ? [
               {
                 clave: "aceptar_equivalencia",
-                etiqueta: `Sí, ${deducida} unidades`,
-                propuesta: true,
+                etiqueta: `Sí — entran ${formatearNumero(calculo.cantidadStock)} ${etiqueta(calculo.medida)}`,
+                propuesta: seguro,
                 payload: {
                   formato: linea.formato ?? linea.unidad,
-                  equivalencia: deducida,
-                  cantidadStock: linea.cantidad * deducida,
+                  equivalencia: interpretado.contenido,
+                  medida: interpretado.medida,
+                  cantidadStock: calculo.cantidadStock,
+                  guardarFormato: true,
                 },
               },
             ]
           : []),
         {
           clave: "escribir_equivalencia",
-          etiqueta: "Escribir cuántas unidades trae",
-          propuesta: !deducida,
+          etiqueta: `Escribir cuánto trae una "${envase}"`,
+          propuesta: !seguro,
         },
-        { clave: "una_a_una", etiqueta: "Es 1 unidad por envase", payload: { equivalencia: 1 } },
+        {
+          clave: "una_a_una",
+          etiqueta: `Se compra suelto (${formatearNumero(linea.cantidad)} ${etiqueta(interpretado.medida)})`,
+          payload: { equivalencia: 1, cantidadStock: linea.cantidad },
+        },
       ],
       detalle: {
         unidad: linea.unidad,
         formato: linea.formato,
         medidaProducto: producto?.medida ?? null,
-        equivalenciaDeducida: deducida,
+        interpretacion: interpretado,
+        calculo: calculo.explicacion,
+        dineroCuadra,
       },
     });
   }
@@ -857,10 +918,12 @@ export function detectarIncidencias(entrada: EntradaDeteccion): ResultadoDetecci
     if (!producto) return;
 
     const unidadNorm = normalizar(linea.unidad);
-    const esContenedora = UNIDADES_CONTENEDORAS.includes(unidadNorm);
+    const medidaBase = interpretarMedida(producto.medida)?.base ?? null;
+    const medidaLinea = interpretarMedida(linea.unidad)?.base ?? null;
+    const esContenedora = esEnvase(linea.unidad) || esEnvase(linea.formato);
 
-    // Contenedora, o unidad que no cuadra con la base del producto.
-    if (esContenedora || (unidadNorm && unidadNorm !== normalizar(producto.medida))) {
+    // Viene en envase, o en una medida distinta a la de nuestra ficha.
+    if (esContenedora || (medidaLinea !== null && medidaBase !== null && medidaLinea !== medidaBase)) {
       emitirFormato(linea, producto);
     }
 

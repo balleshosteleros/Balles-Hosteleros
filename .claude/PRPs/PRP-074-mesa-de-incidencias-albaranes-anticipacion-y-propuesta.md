@@ -61,7 +61,35 @@ Doce tipos, agrupados por lo que el sistema puede llegar a saber. Cada uno con d
 | 8 | `producto_ambiguo` | Dos o más candidatos con puntuación próxima, o el mejor está entre los umbrales. | Los candidatos ordenados con **el porqué de cada uno** ("alias de este proveedor", "nombre parecido 87 %", "mismo precio que la última compra"). | Elegir uno (memoriza alias) · Crear nuevo · Ignorar | Media |
 | 9 | `linea_de_servicio` | La línea es porte, transporte, desplazamiento, envase retornable, punto verde o similar. | "«Portes» es un gasto, no mercancía. Crear como producto de compra **sin control de stock**." | Crear como gasto sin stock (1 clic) · Vincular a un gasto existente · Dejar fuera del total | Media |
 | 10 | `linea_sin_importe` | Cantidad presente, precio e importe ausentes. | "Puede ser una unidad de regalo. Entra en stock a coste 0 y no registra precio." | Es regalo (stock sí, precio no) · Es error de impresión (descartar) · Escribir el precio | Media |
-| 11 | `formato_sin_equivalencia` | Unidad contenedora sin equivalencia, o unidad que no cuadra con la base *(hoy silenciado a 1:1)*. | "«Caja» de este producto = **24 unidades**" — deducido del nombre de la línea, del histórico o del formato del catálogo. | Aceptar equivalencia · Corregir el número · Tratar como 1 unidad | **Bloqueante** si es contenedora, Media si no |
+| 11 | `formato_sin_equivalencia` | La línea viene en un envase sin contenido conocido, o en una medida distinta a la de nuestra ficha *(hoy silenciado a 1:1)*. | "«Caja» de este producto = **24 unidades**" — interpretado del texto del proveedor, contrastado con el importe de la línea. | Aceptar equivalencia · Corregir el número · Se compra suelto | **Bloqueante** si viene en envase, Media si no |
+
+#### La regla del formato (decisión de Iván, 05-ago-2026)
+
+Un formato tiene **siempre dos partes: un número y una medida** — 24 × unidades, 5 × litros, 3 × kilos. Y lo que sube al almacén es **siempre**:
+
+> **cantidad comprada × contenido del formato = stock**
+> 3 cajas de 24 ud → **72 ud** · 2 garrafas de 5 L → **10 L** · 4 sacos de 3 kg → **12 kg**
+
+Cada proveedor lo escribe a su manera y el sistema debe interpretarlo bien siempre. Casos cubiertos y verificados:
+
+| Cómo lo escribe el proveedor | Interpretación |
+|---|---|
+| `caja de 24` | 24 ud |
+| `CJ. 12x1L` | 12 L |
+| `CERVEZA 24x33cl` | 24 ud (o 7,92 L si la ficha va por litros) |
+| `PACK-6` | 6 ud |
+| `PAN BRIOCHE 85g x 54u` | **54 ud** (el 85 g es el peso de cada pan, no el multiplicador) |
+| `leche 1,5L (6u)` | **6 ud** (el 1,5 L es el tamaño del envase) |
+| `BIDON 25 L` | 25 L |
+| `bandeja de 500 gr` | 0,5 kg (convierte gramos → kg, la medida base) |
+| `ACEITE OLIVA 5 L` sin envase | 1 ud (una botella de 5 L es **una** botella) |
+
+Tres reglas que hacen falta para no equivocarse:
+1. **Envase ≠ medida.** "Caja" no dice cuánto lleva; "kg" sí. Si viene en envase y no sabemos el contenido, bloquea.
+2. **Submedidas se convierten a la base**: gramos → kg, ml/cl → L, docena → 12 ud.
+3. **La misma línea se interpreta distinto según nuestra ficha**: `12x1L` son 12 unidades si el producto va por unidades, y 12 L si va por litros.
+
+**Contraste con el dinero:** si `cantidad × precio unitario` no da el importe de la línea, el formato está mal leído y se avisa. El papel valida la interpretación.
 | 12 | `precio_anomalo` | El precio se desvía del último registrado más allá del umbral configurable. | "Este producto costaba 4,10 € y ahora viene a 7,80 € (+90 %). ¿Subida real o error de lectura?" | Es correcto (registra) · Corregir el precio · No registrar este precio | Alta |
 
 ### Criterios de Éxito

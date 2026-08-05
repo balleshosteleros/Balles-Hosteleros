@@ -13,11 +13,17 @@
 
 import {
   detectarIncidencias,
-  deducirEquivalenciaDelTexto,
   type EntradaDeteccion,
   type ProductoCatalogo,
   type TipoIncidencia,
 } from "../src/features/logistica/lib/albaranes/detectar-incidencias";
+import {
+  calcularStock,
+  interpretarFormato,
+  interpretarMedida,
+  esEnvase,
+  type MedidaBase,
+} from "../src/features/logistica/lib/albaranes/formato-compra";
 import {
   esIdentificadorFiscalValido,
   normalizarCif,
@@ -374,12 +380,100 @@ comprobar("Leche Asturiana: NO se vincula automáticamente",
   !r6.vinculosAutomaticos.some((v) => v.productoId === "prod-leche-cond"));
 
 // --- CASO 9: Makro "PARA PERSONAL" ----------------------------------------
-seccion("9. Formatos: caja de 24 → 24 unidades al almacén");
+seccion("9. FORMATOS — número × medida, y cantidad × formato = stock");
 
-comprobar('Deduce "x 54u" del texto', deducirEquivalenciaDelTexto("PAN BRIOCHE 85g x 54u") === 54);
-comprobar('Deduce "caja de 24"', deducirEquivalenciaDelTexto("CAJA DE 24") === 24);
-comprobar('Deduce "(6u)"', deducirEquivalenciaDelTexto("METRO Chef leche entera 1,5L (6u)") === 6);
-comprobar("No inventa cuando no hay pista", deducirEquivalenciaDelTexto("MERLUZA FRESCA") === null);
+// --- Medidas y sus sinónimos ---
+comprobar('"kg" → kilogramos', interpretarMedida("kg")?.base === "kg");
+comprobar('"Kilos" → kilogramos', interpretarMedida("Kilos")?.base === "kg");
+comprobar('"gr" → kg con factor 0,001', interpretarMedida("gr")?.base === "kg" && interpretarMedida("gr")?.factor === 0.001);
+comprobar('"L" → litros', interpretarMedida("L")?.base === "l");
+comprobar('"cl" → litros con factor 0,01', interpretarMedida("cl")?.factor === 0.01);
+comprobar('"ml" → litros con factor 0,001', interpretarMedida("ml")?.factor === 0.001);
+comprobar('"uds" → unidades', interpretarMedida("uds")?.base === "ud");
+comprobar('"botellas" → unidades', interpretarMedida("botellas")?.base === "ud");
+comprobar('"docena" → 12 unidades', interpretarMedida("docena")?.factor === 12);
+comprobar('"caja" NO es una medida (es envase)', interpretarMedida("caja") === null && esEnvase("caja"));
+comprobar('"garrafa" es envase', esEnvase("garrafa"));
+comprobar('"kg" NO es envase', !esEnvase("kg"));
+
+// --- Los tres tipos de formato que nombró Iván ---
+const fUnidades = interpretarFormato("caja de 24 unidades", "caja", "COCA-COLA", "ud");
+comprobar("Caja de 24 UNIDADES → 24 ud",
+  fUnidades.contenido === 24 && fUnidades.medida === "ud",
+  `${fUnidades.contenido} ${fUnidades.medida}`);
+
+const fKilos = interpretarFormato("saco de 3 kg", "saco", "HARINA", "kg");
+comprobar("Saco de 3 KILOS → 3 kg",
+  fKilos.contenido === 3 && fKilos.medida === "kg",
+  `${fKilos.contenido} ${fKilos.medida}`);
+
+const fLitros = interpretarFormato("garrafa de 5 litros", "garrafa", "ACEITE", "l");
+comprobar("Garrafa de 5 LITROS → 5 L",
+  fLitros.contenido === 5 && fLitros.medida === "l",
+  `${fLitros.contenido} ${fLitros.medida}`);
+
+// --- Cada proveedor lo escribe a su manera ---
+const formas: Array<[string, string, string, MedidaBase | null, number, MedidaBase]> = [
+  // [formato, unidad, nombre, medidaProducto, contenido esperado, medida esperada]
+  ["caja de 24", "caja", "COCA-COLA PET 2L", "ud", 24, "ud"],
+  ["CJ. 12x1L", "cj", "AGUA MINERAL", "l", 12, "l"],
+  ["", "caja", "CERVEZA 24x33cl", "ud", 24, "ud"],
+  ["PACK-6", "pack", "YOGUR NATURAL", "ud", 6, "ud"],
+  ["", "caja", "PAN FRANKFURT BRIOCHE 85g x 54u", "ud", 54, "ud"],
+  ["BIDON 25 L", "bidon", "ACEITE GIRASOL", "l", 25, "l"],
+  ["saco 25kg", "saco", "PATATA", "kg", 25, "kg"],
+  ["", "bandeja", "METRO Chef leche entera 1,5L (6u)", "ud", 6, "ud"],
+];
+for (const [fmt, uni, nom, medProd, esperado, medEsperada] of formas) {
+  const r = interpretarFormato(fmt, uni, nom, medProd);
+  comprobar(
+    `"${fmt || nom}" → ${esperado} ${medEsperada}`,
+    r.contenido === esperado && r.medida === medEsperada,
+    `dio ${r.contenido} ${r.medida} (${r.origen})`,
+  );
+}
+
+// --- LA REGLA: cantidad × formato = stock ---
+seccion("9b. La regla: cantidad comprada × contenido del formato");
+
+const c1 = calcularStock(3, interpretarFormato("caja de 24", "caja", "COCA-COLA", "ud"));
+comprobar("3 cajas × 24 ud = 72 ud", c1.cantidadStock === 72, c1.explicacion);
+comprobar("Lo explica en español", c1.explicacion.includes("72"), c1.explicacion);
+
+const c2 = calcularStock(2, interpretarFormato("garrafa de 5 litros", "garrafa", "ACEITE", "l"));
+comprobar("2 garrafas × 5 L = 10 L", c2.cantidadStock === 10, c2.explicacion);
+
+const c3 = calcularStock(4, interpretarFormato("saco de 3 kg", "saco", "HARINA", "kg"));
+comprobar("4 sacos × 3 kg = 12 kg", c3.cantidadStock === 12, c3.explicacion);
+
+const c4 = calcularStock(7.748, interpretarFormato("", "kg", "ALITAS DE POLLO", "kg"));
+comprobar("Compra a peso: 7,748 kg entran tal cual", c4.cantidadStock === 7.748, c4.explicacion);
+
+const c5 = calcularStock(5, interpretarFormato("", "ud", "MERLUZA", "ud"));
+comprobar("Compra suelta: 5 ud entran tal cual", c5.cantidadStock === 5, c5.explicacion);
+
+// Submedidas: el papel en gramos, el stock en kilos
+const c6 = calcularStock(10, interpretarFormato("bandeja de 500 gr", "bandeja", "QUESO", "kg"));
+comprobar("10 bandejas × 500 g = 5 kg (convierte a la medida base)",
+  c6.cantidadStock === 5 && c6.medida === "kg", c6.explicacion);
+
+const c7 = calcularStock(2, interpretarFormato("caja 24x33cl", "caja", "CERVEZA", "l"));
+comprobar("2 cajas × 24 × 33 cl = 15,84 L",
+  Math.abs(c7.cantidadStock - 15.84) < 0.01, c7.explicacion);
+
+// El mismo texto, según cómo lleve el producto NUESTRA ficha
+const porUds = interpretarFormato("caja 12x1L", "caja", "AGUA", "ud");
+const porLitros = interpretarFormato("caja 12x1L", "caja", "AGUA", "l");
+comprobar("Si nuestra ficha va por unidades, 12x1L son 12 unidades", porUds.contenido === 12 && porUds.medida === "ud");
+comprobar("Si nuestra ficha va por litros, 12x1L son 12 L", porLitros.contenido === 12 && porLitros.medida === "l");
+
+// No inventar
+const sinPista = interpretarFormato("", "ud", "MERLUZA FRESCA", "ud");
+comprobar("Sin pista de formato no se inventa multiplicador",
+  sinPista.contenido === 1 && sinPista.origen === "unitario");
+const botellaSuelta = interpretarFormato("", "ud", "ACEITE OLIVA 5 L", "ud");
+comprobar("Una botella de 5 L es 1 unidad, no 5 (no hay envase)",
+  botellaSuelta.contenido === 1, `dio ${botellaSuelta.contenido}`);
 
 const r9 = detectarIncidencias(
   entrada({
