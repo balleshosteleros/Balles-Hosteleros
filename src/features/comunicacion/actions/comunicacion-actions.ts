@@ -707,7 +707,8 @@ export async function vaciarCanal(canalId: string) {
 /**
  * Marca un canal como leído hasta ahora (last_read_at = now()) para el usuario
  * actual. A partir de este instante, los mensajes ya recibidos dejan de contar
- * como "sin leer" en el badge.
+ * como "sin leer" en el badge. También retira la marca manual de "no leído":
+ * abrir el grupo siempre lo deja al día.
  */
 export async function marcarCanalLeido(canalId: string) {
   try {
@@ -716,7 +717,12 @@ export async function marcarCanalLeido(canalId: string) {
     const { error } = await supabase
       .from("canales_preferencias")
       .upsert(
-        { user_id: user.id, canal_id: canalId, last_read_at: new Date().toISOString() },
+        {
+          user_id: user.id,
+          canal_id: canalId,
+          last_read_at: new Date().toISOString(),
+          marcado_no_leido: false,
+        },
         { onConflict: "user_id,canal_id" }
       );
     if (error) throw error;
@@ -724,6 +730,30 @@ export async function marcarCanalLeido(canalId: string) {
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : "Error";
     console.error("[comunicacion] marcarCanalLeido:", msg);
+    return { ok: false, error: msg };
+  }
+}
+
+/**
+ * Deja un canal marcado como "no leído" a mano (como WhatsApp): el grupo queda
+ * señalado como pendiente aunque ya se hubiera leído. La marca es personal y
+ * desaparece en cuanto el usuario vuelve a abrir el grupo.
+ */
+export async function marcarCanalNoLeido(canalId: string) {
+  try {
+    const { supabase, user } = await getContext();
+    if (!user) return { ok: false, error: "No autenticado" };
+    const { error } = await supabase
+      .from("canales_preferencias")
+      .upsert(
+        { user_id: user.id, canal_id: canalId, marcado_no_leido: true },
+        { onConflict: "user_id,canal_id" }
+      );
+    if (error) throw error;
+    return { ok: true };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "Error";
+    console.error("[comunicacion] marcarCanalNoLeido:", msg);
     return { ok: false, error: msg };
   }
 }
@@ -761,17 +791,20 @@ export async function contarMensajesSinLeer(): Promise<{ ok: boolean; data: Resu
     if (canalesVisibles.length === 0) return { ok: true, data: { ...vacio, userId: user.id } };
     const canalIds = canalesVisibles.map((c) => c.id as string);
 
-    // 2. last_read_at por canal (preferencias del usuario) + canales silenciados.
+    // 2. last_read_at por canal (preferencias del usuario) + canales silenciados
+    //    + grupos que el usuario dejó marcados como no leídos a mano.
     const { data: prefs } = await supabase
       .from("canales_preferencias")
-      .select("canal_id, last_read_at, silenciado")
+      .select("canal_id, last_read_at, silenciado, marcado_no_leido")
       .eq("user_id", user.id)
       .in("canal_id", canalIds);
     const lastReadMap = new Map<string, string | null>();
     const silenciados = new Set<string>();
+    const marcados = new Set<string>();
     for (const p of prefs ?? []) {
       lastReadMap.set(p.canal_id as string, (p.last_read_at as string | null) ?? null);
       if (p.silenciado) silenciados.add(p.canal_id as string);
+      if (p.marcado_no_leido) marcados.add(p.canal_id as string);
     }
 
     // 3. Mensajes de esos canales que no son del propio usuario. Traemos solo lo
@@ -799,11 +832,20 @@ export async function contarMensajesSinLeer(): Promise<{ ok: boolean; data: Resu
     }
 
     const totalMensajes = Object.values(porCanal).reduce((a, b) => a + b, 0);
+
+    // Los grupos que el usuario dejó en "no leído" a mano también cuentan como
+    // pendientes, aunque no tengan mensajes nuevos: por eso suman al nº de
+    // grupos, pero no al total de mensajes.
+    const gruposPendientes = new Set(Object.keys(porCanal));
+    for (const id of marcados) {
+      if (!silenciados.has(id)) gruposPendientes.add(id);
+    }
+
     return {
       ok: true,
       data: {
         userId: user.id,
-        totalGrupos: Object.keys(porCanal).length,
+        totalGrupos: gruposPendientes.size,
         totalMensajes,
         porCanal,
       },
@@ -812,6 +854,115 @@ export async function contarMensajesSinLeer(): Promise<{ ok: boolean; data: Resu
     console.error("[comunicacion] contarMensajesSinLeer:", err);
     return { ok: true, data: vacio };
   }
+}
+
+export interface ResumenCanal {
+  /** Texto del último mensaje del canal (vacío si nunca se escribió nada). */
+  ultimoMensaje: string | null;
+  /** Fecha ISO del último mensaje, para ordenar por actividad. */
+  ultimoMensajeAt: string | null;
+  /** Mensajes de otros posteriores a tu last_read_at. */
+  sinLeer: number;
+  /** El usuario dejó el grupo marcado como no leído a mano. */
+  marcadoNoLeido: boolean;
+}
+
+/**
+ * Devuelve, para cada canal visible, su último mensaje y cuántos mensajes lleva
+ * el usuario sin leer. La lista de canales (tabla `canales`) no guarda ninguna
+ * de las dos cosas: se calculan aquí a partir de `mensajes` y del `last_read_at`
+ * de las preferencias del usuario. Alimenta la lista de grupos del chat.
+ */
+export async function listResumenCanales(): Promise<{
+  ok: boolean;
+  data: Record<string, ResumenCanal>;
+}> {
+  try {
+    const { supabase, user, empresaId } = await getContext();
+    if (!user || !empresaId) return { ok: true, data: {} };
+
+    // 1. Canales accesibles para el usuario (mismo filtro que listCanales).
+    const { data: canalesRows, error: canalesErr } = await supabase
+      .from("canales")
+      .select("id, empresa_id, nombre, tipo, miembros_user_ids, departamentos")
+      .eq("empresa_id", empresaId);
+    if (canalesErr) throw canalesErr;
+    const ctx = await getAccesoCtx(supabase, user.id, empresaId);
+    const canalIds = (canalesRows ?? [])
+      .filter((row) => canalAccesible(row, ctx))
+      .map((c) => c.id as string);
+    if (canalIds.length === 0) return { ok: true, data: {} };
+
+    // 2. Preferencias del usuario: hasta dónde leyó y si dejó marca manual.
+    const { data: prefs } = await supabase
+      .from("canales_preferencias")
+      .select("canal_id, last_read_at, marcado_no_leido")
+      .eq("user_id", user.id)
+      .in("canal_id", canalIds);
+    const lastReadMap = new Map<string, string | null>();
+    const marcados = new Set<string>();
+    for (const p of prefs ?? []) {
+      lastReadMap.set(p.canal_id as string, (p.last_read_at as string | null) ?? null);
+      if (p.marcado_no_leido) marcados.add(p.canal_id as string);
+    }
+
+    // 3. Mensajes recientes de esos canales (los más nuevos primero). De una
+    //    sola pasada sacamos el último de cada canal y el conteo de no leídos.
+    const { data: msgs, error: msgErr } = await supabase
+      .from("mensajes")
+      .select("canal_id, created_at, autor_id, texto, adjunto_tipo, adjunto_nombre")
+      .in("canal_id", canalIds)
+      .order("created_at", { ascending: false })
+      .limit(3000);
+    if (msgErr) throw msgErr;
+
+    const data: Record<string, ResumenCanal> = {};
+    for (const id of canalIds) {
+      data[id] = {
+        ultimoMensaje: null,
+        ultimoMensajeAt: null,
+        sinLeer: 0,
+        marcadoNoLeido: marcados.has(id),
+      };
+    }
+
+    for (const m of msgs ?? []) {
+      const canalId = m.canal_id as string;
+      const resumen = data[canalId];
+      if (!resumen) continue;
+
+      // Como vienen ordenados de más nuevo a más viejo, el primero de cada
+      // canal es su último mensaje.
+      if (!resumen.ultimoMensajeAt) {
+        resumen.ultimoMensajeAt = m.created_at as string;
+        resumen.ultimoMensaje = describirMensaje(m);
+      }
+
+      // Sin leer: mensajes de otros posteriores a tu last_read_at (o todos si
+      // nunca abriste el canal).
+      if ((m.autor_id as string | null) === user.id) continue;
+      const lastRead = lastReadMap.get(canalId);
+      if (!lastRead || (m.created_at as string) > lastRead) {
+        resumen.sinLeer += 1;
+      }
+    }
+
+    return { ok: true, data };
+  } catch (err) {
+    console.error("[comunicacion] listResumenCanales:", err);
+    return { ok: true, data: {} };
+  }
+}
+
+/** Texto corto que representa un mensaje en la lista de grupos. */
+function describirMensaje(m: Record<string, unknown>): string {
+  const texto = ((m.texto as string) ?? "").trim();
+  if (texto) return texto;
+  const tipo = m.adjunto_tipo as string | null;
+  if (tipo === "imagen") return "📷 Foto";
+  if (tipo === "audio") return "🎤 Audio";
+  if (tipo === "archivo") return `📎 ${((m.adjunto_nombre as string) ?? "Archivo").trim()}`;
+  return "";
 }
 
 export async function toggleFijado(mensajeId: string, fijado: boolean) {

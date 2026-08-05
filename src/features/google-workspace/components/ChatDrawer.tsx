@@ -5,14 +5,13 @@ import {
   MessageCircle, Send, Users, Plus, Search, Pin, Smile, MoreVertical,
   BellOff, Bell, Pencil, Trash2, LogOut, Lock, ChevronLeft, ChevronDown,
   ShieldCheck, Eraser, Hourglass, X, Paperclip, Mic, Building2, Briefcase, Check,
-  FileText, Download, Loader2,
+  FileText, Download, Loader2, Mail, MailOpen,
 } from "lucide-react";
 import {
   Sheet, SheetContent, SheetTitle, SheetTrigger, SheetClose,
 } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
@@ -46,6 +45,8 @@ import {
   sendMensajeAdjunto,
   getAdjuntoSignedUrl,
   marcarCanalLeido,
+  marcarCanalNoLeido,
+  listResumenCanales,
   type EmpleadoCanal,
   type MiembroCanal,
 } from "@/features/comunicacion/actions/comunicacion-actions";
@@ -69,6 +70,8 @@ type Canal = {
   departamentos: string[];
   ultimoMensaje?: string;
   sinLeer: number;
+  /** El usuario dejó el grupo marcado como no leído a mano (estilo WhatsApp). */
+  marcadoNoLeido: boolean;
   descripcion?: string;
   soloAdminsEnvian: boolean;
   bloquearAjustes: boolean;
@@ -163,13 +166,27 @@ function mapDbCanal(r: Record<string, unknown>): Canal {
     miembros: (r.miembros as number) ?? miembrosArr.length,
     miembrosUserIds: miembrosArr,
     departamentos: deptosArr,
-    ultimoMensaje: (r.ultimo_mensaje as string) || undefined,
-    sinLeer: (r.sin_leer as number) ?? 0,
+    // El último mensaje y los no leídos no viven en la tabla `canales`: se
+    // calculan aparte (listResumenCanales) y se inyectan al cargar la lista.
+    ultimoMensaje: undefined,
+    sinLeer: 0,
+    marcadoNoLeido: false,
     descripcion: (r.descripcion as string) || undefined,
     soloAdminsEnvian: (r.solo_admins_envian as boolean) ?? false,
     bloquearAjustes: (r.bloquear_ajustes as boolean) ?? false,
     mensajesEfimerosDias: (r.mensajes_efimeros_dias as number | null) ?? null,
   };
+}
+
+/** Texto corto de un mensaje para la vista previa de la lista de grupos. */
+function resumenMensajeLista(r: Record<string, unknown>): string {
+  const texto = ((r.texto as string) ?? "").trim();
+  if (texto) return texto;
+  const tipo = r.adjunto_tipo as string | null;
+  if (tipo === "imagen") return "📷 Foto";
+  if (tipo === "audio") return "🎤 Audio";
+  if (tipo === "archivo") return `📎 ${((r.adjunto_nombre as string) ?? "Archivo").trim()}`;
+  return "";
 }
 
 function limpiarNombre(raw: unknown): string {
@@ -436,15 +453,27 @@ export function ChatDrawer({ children }: { children: ReactNode }) {
       // Miembros efectivos por canal (quién tiene acceso según su rol/permisos).
       // Para departamentos la pertenencia se deriva del rol, no de una lista;
       // aquí obtenemos el conteo real y la lista de personas con acceso.
-      const resMiembros = await listMiembrosPorCanal();
+      const [resMiembros, resResumen] = await Promise.all([
+        listMiembrosPorCanal(),
+        // Último mensaje y no leídos reales de cada grupo (no están en `canales`).
+        listResumenCanales(),
+      ]);
       const mapaMiembros = resMiembros.ok ? resMiembros.data : {};
       setMiembrosPorCanal(mapaMiembros);
+      const resumen = resResumen.data;
 
       const mapped = data.map(mapDbCanal).map((c) => {
         const acceso = mapaMiembros[c.id];
-        // Si tenemos la lista de acceso efectivo, el contador la usa (refleja
-        // los usuarios reales cuyo rol da acceso a este departamento/asunto).
-        return acceso ? { ...c, miembros: acceso.length } : c;
+        const r = resumen[c.id];
+        return {
+          ...c,
+          // Si tenemos la lista de acceso efectivo, el contador la usa (refleja
+          // los usuarios reales cuyo rol da acceso a este departamento/asunto).
+          miembros: acceso ? acceso.length : c.miembros,
+          ultimoMensaje: r?.ultimoMensaje || undefined,
+          sinLeer: r?.sinLeer ?? 0,
+          marcadoNoLeido: r?.marcadoNoLeido ?? false,
+        };
       });
       setCanales(mapped);
     } catch (err) {
@@ -515,6 +544,13 @@ export function ChatDrawer({ children }: { children: ReactNode }) {
     const abierto = open ? canalActivo : null;
     setChatCanalAbierto(abierto);
     if (abierto) {
+      // Al abrirlo desaparece el globo verde y cualquier marca manual de
+      // "no leído": el grupo queda al día.
+      setCanales((prev) =>
+        prev.map((c) =>
+          c.id === abierto ? { ...c, sinLeer: 0, marcadoNoLeido: false } : c,
+        ),
+      );
       void marcarCanalLeido(abierto).then(() => refreshDailyCounts());
     }
     return () => setChatCanalAbierto(null);
@@ -558,6 +594,64 @@ export function ChatDrawer({ children }: { children: ReactNode }) {
       void supabase.removeChannel(channel);
     };
   }, [open, canalActivo, empresaActual.zonaHoraria, myUserId]);
+
+  // Realtime de la lista: cualquier mensaje nuevo de la empresa actualiza el
+  // último mensaje del grupo y sube su globo verde, aunque no sea el abierto.
+  useEffect(() => {
+    if (!open) return;
+    const supabase = createBrowserClient();
+    const channel = supabase
+      .channel(`chat-lista-${empresaActual.id}`)
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "mensajes" },
+        (payload: { new: unknown }) => {
+          const r = payload.new as Record<string, unknown>;
+          const canalId = (r.canal_id as string) ?? "";
+          if (!canalId) return;
+          const esPropio = !!myUserId && r.autor_id === myUserId;
+          const resumen = resumenMensajeLista(r);
+          const viendolo = canalId === canalActivo;
+          setCanales((prev) =>
+            prev.map((c) => {
+              if (c.id !== canalId) return c;
+              // Solo suman los ajenos, y solo si no estás mirando el grupo.
+              const suma = esPropio || viendolo ? 0 : 1;
+              return {
+                ...c,
+                ultimoMensaje: resumen || c.ultimoMensaje,
+                sinLeer: c.sinLeer + suma,
+              };
+            }),
+          );
+        },
+      )
+      .subscribe();
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [open, empresaActual.id, canalActivo, myUserId]);
+
+  /** Deja el grupo marcado como pendiente (o le quita la marca). */
+  async function alternarNoLeido(canalId: string, valor: boolean) {
+    setCanales((prev) =>
+      prev.map((c) => (c.id === canalId ? { ...c, marcadoNoLeido: valor } : c)),
+    );
+    const res = valor ? await marcarCanalNoLeido(canalId) : await marcarCanalLeido(canalId);
+    if (!res.ok) {
+      // Deshacemos el cambio visual si el guardado falló.
+      setCanales((prev) =>
+        prev.map((c) => (c.id === canalId ? { ...c, marcadoNoLeido: !valor } : c)),
+      );
+      toast.error("No se pudo guardar el aviso");
+      return;
+    }
+    if (!valor) {
+      setCanales((prev) => prev.map((c) => (c.id === canalId ? { ...c, sinLeer: 0 } : c)));
+    }
+    refreshDailyCounts();
+    toast.success(valor ? "Grupo marcado como no leído" : "Aviso retirado");
+  }
 
   async function enviar() {
     if (!input.trim() || !canalActivo) return;
@@ -956,6 +1050,7 @@ export function ChatDrawer({ children }: { children: ReactNode }) {
                           activo={canalActivo === c.id}
                           pref={prefsMap[c.id] ?? PREF_DEFAULT}
                           onClick={() => setCanalActivo(c.id)}
+                          onToggleNoLeido={(v) => void alternarNoLeido(c.id, v)}
                           logoUrl={logoUrl}
                           iniciales={iniciales}
                           colorEmpresa={colorEmpresa}
@@ -986,6 +1081,7 @@ export function ChatDrawer({ children }: { children: ReactNode }) {
                           activo={canalActivo === c.id}
                           pref={prefsMap[c.id] ?? PREF_DEFAULT}
                           onClick={() => setCanalActivo(c.id)}
+                          onToggleNoLeido={(v) => void alternarNoLeido(c.id, v)}
                           logoUrl={logoUrl}
                           iniciales={iniciales}
                           colorEmpresa={colorEmpresa}
@@ -1097,6 +1193,18 @@ export function ChatDrawer({ children }: { children: ReactNode }) {
                         </DropdownMenuItem>
                         <DropdownMenuItem onSelect={() => setPref("fijado", !prefActivo.fijado)}>
                           <Pin className="mr-2 h-4 w-4" /> {prefActivo.fijado ? "Desfijar grupo" : "Fijar grupo"}
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onSelect={() => {
+                            if (!canalActivo) return;
+                            const id = canalActivo;
+                            // Salimos del grupo: si siguiera abierto volvería a
+                            // marcarse como leído al instante.
+                            setCanalActivo(null);
+                            void alternarNoLeido(id, true);
+                          }}
+                        >
+                          <Mail className="mr-2 h-4 w-4" /> Marcar como no leído
                         </DropdownMenuItem>
                         {!isDepartamento && (
                           <>
@@ -1857,45 +1965,127 @@ function SidebarSeccion({
 }
 
 function CanalRow({
-  canal, activo, pref, onClick, logoUrl, iniciales, colorEmpresa,
+  canal, activo, pref, onClick, onToggleNoLeido, logoUrl, iniciales, colorEmpresa,
 }: {
   canal: Canal;
   activo: boolean;
   pref: PrefCanal;
   onClick: () => void;
+  onToggleNoLeido: (valor: boolean) => void;
   logoUrl?: string;
   iniciales: string;
   colorEmpresa: string;
 }) {
   const esDepto = canal.tipo === "departamento";
+  // Un grupo está pendiente si tiene mensajes nuevos o si lo dejaste marcado.
+  const pendiente = canal.sinLeer > 0 || canal.marcadoNoLeido;
+
+  // Gesto: arrastrar la fila hacia la derecha marca/desmarca el aviso, como en
+  // WhatsApp. Se sigue el dedo/ratón y al soltar se aplica si pasó del umbral.
+  const [desplazado, setDesplazado] = useState(0);
+  const inicioRef = useRef<number | null>(null);
+  const UMBRAL = 72;
+
+  function iniciar(x: number) {
+    inicioRef.current = x;
+  }
+  function mover(x: number) {
+    if (inicioRef.current === null) return;
+    // Solo hacia la derecha, con tope para que no se despegue de la lista.
+    const delta = Math.max(0, Math.min(x - inicioRef.current, 110));
+    setDesplazado(delta);
+  }
+  function soltar() {
+    if (inicioRef.current === null) return;
+    inicioRef.current = null;
+    if (desplazado >= UMBRAL) onToggleNoLeido(!canal.marcadoNoLeido);
+    setDesplazado(0);
+  }
+
   return (
-    <button
-      onClick={onClick}
-      className={cn(
-        "flex w-full items-center gap-3 px-4 py-3 text-left transition-colors border-b border-border/50",
-        activo ? "bg-primary/5" : "hover:bg-muted/40"
-      )}
-    >
-      <GrupoAvatar logoUrl={logoUrl} iniciales={iniciales} color={colorEmpresa} size="md" />
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center justify-between gap-2">
-          <span className="text-sm font-bold text-foreground truncate flex items-center gap-1.5">
-            {canal.nombre}
-            {esDepto && <Lock className="h-3 w-3 text-muted-foreground shrink-0" />}
-          </span>
-        </div>
-        <div className="flex items-center gap-1 mt-0.5">
-          {pref.silenciado && <BellOff className="h-3 w-3 text-muted-foreground shrink-0" />}
-          {pref.fijado && <Pin className="h-3 w-3 text-muted-foreground shrink-0" />}
-          <p className="text-[12px] text-muted-foreground truncate">
-            {canal.ultimoMensaje ?? "Sin mensajes todavía"}
-          </p>
-          {canal.sinLeer > 0 && (
-            <Badge className="ml-auto h-5 px-1.5 text-[10px] bg-primary shrink-0">{canal.sinLeer}</Badge>
+    <div className="relative overflow-hidden border-b border-border/50">
+      {/* Fondo que asoma al arrastrar: indica qué va a pasar al soltar. */}
+      <div
+        className={cn(
+          "absolute inset-y-0 left-0 flex items-center gap-1.5 px-4 text-white transition-colors",
+          canal.marcadoNoLeido ? "bg-muted-foreground" : "bg-green-600",
+        )}
+        style={{ width: desplazado }}
+      >
+        {desplazado > 40 && (
+          <>
+            {canal.marcadoNoLeido ? (
+              <MailOpen className="h-4 w-4 shrink-0" />
+            ) : (
+              <Mail className="h-4 w-4 shrink-0" />
+            )}
+            <span className="text-[10px] font-semibold whitespace-nowrap">
+              {canal.marcadoNoLeido ? "Quitar aviso" : "No leído"}
+            </span>
+          </>
+        )}
+      </div>
+
+      <button
+        onClick={onClick}
+        onPointerDown={(e) => iniciar(e.clientX)}
+        onPointerMove={(e) => mover(e.clientX)}
+        onPointerUp={soltar}
+        onPointerCancel={soltar}
+        onPointerLeave={soltar}
+        className={cn(
+          "relative flex w-full items-center gap-3 px-4 py-3 text-left transition-colors touch-pan-y",
+          activo ? "bg-primary/5" : "bg-background hover:bg-muted/40",
+        )}
+        style={{
+          transform: `translateX(${desplazado}px)`,
+          transition: desplazado === 0 ? "transform 150ms ease-out" : "none",
+        }}
+      >
+        <div className="relative shrink-0">
+          <GrupoAvatar logoUrl={logoUrl} iniciales={iniciales} color={colorEmpresa} size="md" />
+          {/* Globo verde sobre el grupo, como WhatsApp: nº de mensajes nuevos,
+              o un punto si el aviso lo pusiste tú a mano. */}
+          {pendiente && (
+            <span
+              className={cn(
+                "absolute -top-1 -right-1 flex items-center justify-center rounded-full",
+                "bg-green-500 text-white text-[10px] font-bold leading-none",
+                "ring-2 ring-background shadow-sm",
+                canal.sinLeer > 0 ? "min-w-[18px] h-[18px] px-1" : "h-3 w-3",
+              )}
+            >
+              {canal.sinLeer > 0 ? (canal.sinLeer > 99 ? "99+" : canal.sinLeer) : ""}
+            </span>
           )}
         </div>
-      </div>
-    </button>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center justify-between gap-2">
+            <span
+              className={cn(
+                "text-sm truncate flex items-center gap-1.5",
+                pendiente ? "font-extrabold text-foreground" : "font-bold text-foreground",
+              )}
+            >
+              {canal.nombre}
+              {esDepto && <Lock className="h-3 w-3 text-muted-foreground shrink-0" />}
+            </span>
+          </div>
+          <div className="flex items-center gap-1 mt-0.5">
+            {pref.silenciado && <BellOff className="h-3 w-3 text-muted-foreground shrink-0" />}
+            {pref.fijado && <Pin className="h-3 w-3 text-muted-foreground shrink-0" />}
+            <p
+              className={cn(
+                "text-[12px] truncate",
+                pendiente ? "text-foreground font-medium" : "text-muted-foreground",
+              )}
+            >
+              {canal.ultimoMensaje ?? "Sin mensajes todavía"}
+            </p>
+          </div>
+        </div>
+      </button>
+    </div>
   );
 }
 

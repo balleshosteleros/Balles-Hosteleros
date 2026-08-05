@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   MessageCircle, Search, Plus, Send, Mic, Paperclip, X, ChevronLeft, ChevronDown,
   Building2, Briefcase, Loader2, Lock, FileText, Download, Check, Users, Info,
+  Mail, MailOpen,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/shared/lib/utils";
@@ -12,6 +13,7 @@ import { createClient as createBrowserClient } from "@/lib/supabase/client";
 import {
   listCanales, listMensajes, sendMensaje, createCanal,
   sendMensajeAdjunto, getAdjuntoSignedUrl, listEmpleadosEmpresa,
+  listResumenCanales, marcarCanalLeido, marcarCanalNoLeido,
   type EmpleadoCanal,
 } from "@/features/comunicacion/actions/comunicacion-actions";
 import { getZonaHorariaActiva } from "@/features/mi-panel/actions/mi-panel-actions";
@@ -26,6 +28,12 @@ type Canal = {
   tipo: "departamento" | "asunto" | "grupo" | "directo";
   departamentos: string[];
   miembrosUserIds: string[];
+  /** Último mensaje del grupo (se calcula aparte, no está en `canales`). */
+  ultimoMensaje?: string;
+  /** Mensajes de otros que aún no has leído. */
+  sinLeer: number;
+  /** Lo dejaste marcado como no leído a mano (estilo WhatsApp). */
+  marcadoNoLeido: boolean;
 };
 
 type Mensaje = {
@@ -53,6 +61,9 @@ function mapCanal(r: Record<string, unknown>): Canal {
     tipo,
     departamentos: Array.isArray(r.departamentos) ? (r.departamentos as string[]) : [],
     miembrosUserIds: Array.isArray(r.miembros_user_ids) ? (r.miembros_user_ids as string[]) : [],
+    ultimoMensaje: undefined,
+    sinLeer: 0,
+    marcadoNoLeido: false,
   };
 }
 
@@ -161,10 +172,47 @@ export function ComunicacionMobile() {
 
   const cargarCanales = useCallback(async () => {
     setCargando(true);
-    const res = await listCanales(empresaActual.id);
-    if (res.ok) setCanales((res.data as Record<string, unknown>[]).map(mapCanal));
+    const [res, resResumen] = await Promise.all([
+      listCanales(empresaActual.id),
+      // Último mensaje y no leídos: no viven en la tabla `canales`.
+      listResumenCanales(),
+    ]);
+    if (res.ok) {
+      const resumen = resResumen.data;
+      setCanales(
+        (res.data as Record<string, unknown>[]).map(mapCanal).map((c) => {
+          const r = resumen[c.id];
+          return {
+            ...c,
+            ultimoMensaje: r?.ultimoMensaje || undefined,
+            sinLeer: r?.sinLeer ?? 0,
+            marcadoNoLeido: r?.marcadoNoLeido ?? false,
+          };
+        }),
+      );
+    }
     setCargando(false);
   }, [empresaActual.id]);
+
+  /** Deja el grupo marcado como pendiente (o le quita la marca). */
+  const alternarNoLeido = useCallback(async (canalId: string, valor: boolean) => {
+    setCanales((prev) =>
+      prev.map((c) =>
+        c.id === canalId
+          ? { ...c, marcadoNoLeido: valor, sinLeer: valor ? c.sinLeer : 0 }
+          : c,
+      ),
+    );
+    const res = valor ? await marcarCanalNoLeido(canalId) : await marcarCanalLeido(canalId);
+    if (!res.ok) {
+      setCanales((prev) =>
+        prev.map((c) => (c.id === canalId ? { ...c, marcadoNoLeido: !valor } : c)),
+      );
+      toast.error("No se pudo guardar el aviso");
+      return;
+    }
+    toast.success(valor ? "Grupo marcado como no leído" : "Aviso retirado");
+  }, []);
 
   useEffect(() => { cargarCanales(); }, [cargarCanales]);
 
@@ -184,6 +232,16 @@ export function ComunicacionMobile() {
       setCargandoMsgs(false);
     });
   }, [canalActivo, miUserId, zonaHoraria]);
+
+  // Abrir un grupo lo deja al día: se va el globo verde y cualquier aviso manual.
+  useEffect(() => {
+    if (!canalActivo) return;
+    const id = canalActivo;
+    setCanales((prev) =>
+      prev.map((c) => (c.id === id ? { ...c, sinLeer: 0, marcadoNoLeido: false } : c)),
+    );
+    void marcarCanalLeido(id);
+  }, [canalActivo]);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
@@ -315,7 +373,7 @@ export function ComunicacionMobile() {
             {openDeptos && (
               <div className="space-y-2">
                 {deptos.map((c) => (
-                  <FilaCanal key={c.id} canal={c} color={empresaActual.color} logoUrl={logoUrl} onClick={() => setCanalActivo(c.id)} />
+                  <FilaCanal key={c.id} canal={c} color={empresaActual.color} logoUrl={logoUrl} onClick={() => setCanalActivo(c.id)} onToggleNoLeido={(v) => void alternarNoLeido(c.id, v)} />
                 ))}
                 {deptos.length === 0 && <Vacio texto="Sin departamentos disponibles." />}
               </div>
@@ -331,7 +389,7 @@ export function ComunicacionMobile() {
             {openAsuntos && (
               <div className="space-y-2">
                 {asuntos.map((c) => (
-                  <FilaCanal key={c.id} canal={c} color={empresaActual.color} logoUrl={logoUrl} onClick={() => setCanalActivo(c.id)} />
+                  <FilaCanal key={c.id} canal={c} color={empresaActual.color} logoUrl={logoUrl} onClick={() => setCanalActivo(c.id)} onToggleNoLeido={(v) => void alternarNoLeido(c.id, v)} />
                 ))}
                 {asuntos.length === 0 && <Vacio texto="Sin asuntos. Crea uno con el botón +." />}
               </div>
@@ -626,23 +684,101 @@ function CanalAvatar({ logoUrl, iniciales, color }: { logoUrl?: string; iniciale
   );
 }
 
-function FilaCanal({ canal, color, logoUrl, onClick }: { canal: Canal; color: string; logoUrl?: string; onClick: () => void }) {
+function FilaCanal({
+  canal, color, logoUrl, onClick, onToggleNoLeido,
+}: {
+  canal: Canal;
+  color: string;
+  logoUrl?: string;
+  onClick: () => void;
+  onToggleNoLeido: (valor: boolean) => void;
+}) {
+  const pendiente = canal.sinLeer > 0 || canal.marcadoNoLeido;
+
+  // Deslizar la fila hacia la derecha marca/desmarca el aviso, como WhatsApp.
+  const [desplazado, setDesplazado] = useState(0);
+  const inicioRef = useRef<number | null>(null);
+  const arrastroRef = useRef(false);
+  const UMBRAL = 72;
+
+  function soltar() {
+    if (inicioRef.current === null) return;
+    inicioRef.current = null;
+    if (desplazado >= UMBRAL) onToggleNoLeido(!canal.marcadoNoLeido);
+    setDesplazado(0);
+  }
+
   return (
-    <button onClick={onClick} className="flex w-full items-center gap-3 rounded-2xl border border-border/50 bg-card px-3 py-3 text-left active:bg-muted/40">
-      <CanalAvatar logoUrl={logoUrl} iniciales={canal.nombre.slice(0, 2).toUpperCase()} color={color} />
-      <div className="min-w-0 flex-1">
-        <p className="flex items-center gap-1.5 truncate text-sm font-bold">
-          {canal.nombre}
-          {canal.tipo === "departamento" && <Lock className="h-3 w-3 shrink-0 text-muted-foreground" />}
-        </p>
-        <p className="truncate text-[11px] text-muted-foreground">
-          {canal.tipo === "departamento"
-            ? "Departamento"
-            : canal.departamentos.length > 0 ? canal.departamentos.join(" · ") : "Asunto"}
-        </p>
+    <div className="relative overflow-hidden rounded-2xl">
+      {/* Fondo que asoma al arrastrar: dice qué pasará al soltar. */}
+      <div
+        className={cn(
+          "absolute inset-y-0 left-0 flex items-center gap-1.5 px-3 text-white",
+          canal.marcadoNoLeido ? "bg-muted-foreground" : "bg-green-600",
+        )}
+        style={{ width: desplazado }}
+      >
+        {desplazado > 40 && (
+          <>
+            {canal.marcadoNoLeido ? <MailOpen className="h-4 w-4 shrink-0" /> : <Mail className="h-4 w-4 shrink-0" />}
+            <span className="whitespace-nowrap text-[10px] font-semibold">
+              {canal.marcadoNoLeido ? "Quitar" : "No leído"}
+            </span>
+          </>
+        )}
       </div>
-      <MessageCircle className="h-4 w-4 shrink-0 text-muted-foreground/60" />
-    </button>
+
+      <button
+        onClick={() => {
+          // Si venimos de un arrastre, el toque no debe abrir el grupo.
+          if (arrastroRef.current) { arrastroRef.current = false; return; }
+          onClick();
+        }}
+        onTouchStart={(e) => { inicioRef.current = e.touches[0].clientX; arrastroRef.current = false; }}
+        onTouchMove={(e) => {
+          if (inicioRef.current === null) return;
+          const delta = Math.max(0, Math.min(e.touches[0].clientX - inicioRef.current, 110));
+          if (delta > 8) arrastroRef.current = true;
+          setDesplazado(delta);
+        }}
+        onTouchEnd={soltar}
+        onTouchCancel={soltar}
+        className="relative flex w-full items-center gap-3 rounded-2xl border border-border/50 bg-card px-3 py-3 text-left active:bg-muted/40"
+        style={{
+          transform: `translateX(${desplazado}px)`,
+          transition: desplazado === 0 ? "transform 150ms ease-out" : "none",
+        }}
+      >
+        <div className="relative shrink-0">
+          <CanalAvatar logoUrl={logoUrl} iniciales={canal.nombre.slice(0, 2).toUpperCase()} color={color} />
+          {pendiente && (
+            <span
+              className={cn(
+                "absolute -top-1 -right-1 flex items-center justify-center rounded-full",
+                "bg-green-500 text-[10px] font-bold leading-none text-white",
+                "shadow-sm ring-2 ring-card",
+                canal.sinLeer > 0 ? "h-[18px] min-w-[18px] px-1" : "h-3 w-3",
+              )}
+            >
+              {canal.sinLeer > 0 ? (canal.sinLeer > 99 ? "99+" : canal.sinLeer) : ""}
+            </span>
+          )}
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className={cn("flex items-center gap-1.5 truncate text-sm", pendiente ? "font-extrabold" : "font-bold")}>
+            {canal.nombre}
+            {canal.tipo === "departamento" && <Lock className="h-3 w-3 shrink-0 text-muted-foreground" />}
+          </p>
+          <p className={cn("truncate text-[11px]", pendiente ? "font-medium text-foreground" : "text-muted-foreground")}>
+            {canal.ultimoMensaje
+              ?? (canal.tipo === "departamento"
+                ? "Departamento"
+                : canal.departamentos.length > 0 ? canal.departamentos.join(" · ") : "Asunto")}
+          </p>
+        </div>
+        <MessageCircle className="h-4 w-4 shrink-0 text-muted-foreground/60" />
+      </button>
+    </div>
   );
 }
 
