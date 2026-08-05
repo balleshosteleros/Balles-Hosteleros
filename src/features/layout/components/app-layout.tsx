@@ -431,12 +431,17 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                           </DropdownMenuItem>
                         )}
                         <DropdownMenuSeparator />
-                        <DropdownMenuItem
-                          onSelect={signOut}
-                          className="text-destructive focus:text-destructive cursor-pointer gap-2 px-3 py-1.5"
-                        >
-                          <LogOut className="h-3.5 w-3.5" />
-                          <span className="text-xs font-medium">CERRAR SESIÓN</span>
+                        {/*
+                          ENLACE real a /salir, no solo un `onSelect`. El JS puede
+                          estar congelado o roto y entonces no habría forma de
+                          salir; el navegador resuelve un href pase lo que pase.
+                          `signOut()` sigue corriendo para limpiar lo local.
+                        */}
+                        <DropdownMenuItem asChild className="text-destructive focus:text-destructive cursor-pointer gap-2 px-3 py-1.5">
+                          <a href="/salir" onClick={() => { void signOut(); }}>
+                            <LogOut className="h-3.5 w-3.5" />
+                            <span className="text-xs font-medium">CERRAR SESIÓN</span>
+                          </a>
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>

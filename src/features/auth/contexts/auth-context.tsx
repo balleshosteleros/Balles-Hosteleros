@@ -660,17 +660,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Ídem.
     }
 
-    // 3. Fuera por `/salir`, que es una NAVEGACIÓN, no un `fetch`.
+    // 3. Salida de respaldo.
     //
-    //    Antes se esperaba (`await`) a que respondiera `/api/auth/signout` y solo
-    //    después se navegaba. Si esa espera no terminaba —excepción, app suspendida
-    //    por iOS, promesa colgada—, la línea de salida no se ejecutaba nunca y el
-    //    usuario se quedaba con la rueda girando (reportado por Iván).
+    //    Quien navega de verdad es el `href="/salir"` del enlace que llama aquí:
+    //    lo resuelve el navegador, así que funciona aunque el JS esté congelado o
+    //    roto — que es lo que dejaba a Iván encerrado con la rueda girando.
     //
-    //    `/salir` hace en el servidor lo mismo que hacía aquel `fetch` (expira las
-    //    cookies `HttpOnly`, que el navegador no puede tocar) y además lleva al
-    //    login. Al ser una navegación, no hay nada que esperar ni que pueda
-    //    quedarse a medias.
+    //    Esto cubre a quien invoque `signOut()` por código, sin pasar por ese
+    //    enlace. Si el enlace ya está navegando, esta línea no llega a ejecutarse.
     window.location.replace("/salir");
   }, [user?.id]);
 

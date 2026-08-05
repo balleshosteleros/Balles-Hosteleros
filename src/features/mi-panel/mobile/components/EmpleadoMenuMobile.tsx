@@ -87,21 +87,10 @@ export function EmpleadoMenuMobile({ nombre, avatarUrl }: Props) {
   const cerrarSesion = () => {
     setSaliendo(true);
 
-    let salido = false;
-    const salir = () => {
-      if (salido) return;
-      salido = true;
-      // `/salir` remata en el SERVIDOR las cookies HttpOnly (que el navegador no
-      // puede tocar) y de ahí lleva al login. Es la misma puerta de emergencia
-      // que ya funciona escrita a mano, así que el botón no puede hacerlo peor.
-      window.location.replace("/salir");
-    };
-
-    // Red de seguridad: se sale sí o sí, aunque todo lo demás falle.
-    setTimeout(salir, 800);
-
-    // Limpieza de lo accesible desde el navegador. Síncrona y envuelta: una
-    // excepción aquí no puede impedir la salida.
+    // NO se navega desde aquí ni se llama a `preventDefault`: de la salida se
+    // encarga el `href="/salir"` del enlace, que el navegador resuelve solo.
+    // Esto es únicamente la limpieza de lo que vive en el teléfono, y va envuelto
+    // porque una excepción aquí NO puede impedir que el enlace navegue.
     try {
       borrarCookiesSesion();
       borrarSesionLocal();
@@ -221,18 +210,30 @@ export function EmpleadoMenuMobile({ nombre, avatarUrl }: Props) {
               </p>
             </div>
 
-            <button
-              type="button"
+            {/*
+              ENLACE, no botón. Es la diferencia entre que funcione siempre o no.
+
+              Un <button onClick> depende de que el JavaScript de la app esté vivo
+              y actualizado. La PWA de iOS resucita un snapshot congelado, así que
+              si esa copia tiene código roto el botón no responde y el usuario se
+              queda encerrado — le pasó a Iván cinco veces seguidas, incluso tras
+              reinstalar.
+
+              Un <a href> lo resuelve el NAVEGADOR: navega aunque el JS esté
+              muerto, congelado o a medio cargar. `cerrarSesion` sigue ejecutándose
+              para limpiar lo local, pero ya no es lo que decide si sales.
+            */}
+            <a
+              href="/salir"
               onClick={cerrarSesion}
-              disabled={saliendo}
-              className="mt-5 flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-rose-500 text-sm font-semibold text-white active:bg-rose-600 disabled:opacity-60"
+              className="mt-5 flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-rose-500 text-sm font-semibold text-white no-underline active:bg-rose-600"
             >
               {saliendo ? (
                 <Loader2 className="h-5 w-5 animate-spin" />
               ) : (
                 "Sí, cerrar sesión"
               )}
-            </button>
+            </a>
             <button
               type="button"
               onClick={() => setConfirmando(false)}
