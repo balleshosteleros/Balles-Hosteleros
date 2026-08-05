@@ -52,7 +52,10 @@ export async function checkProfileGuard(
   return { ok: true, empresaId, rolLabel: rolLabel ?? '' }
 }
 
-const GENERIC_ACCESS_MESSAGE = 'Usuario o contraseña incorrectos.'
+// Mensaje ÚNICO de acceso denegado (decisión de Ivan, 2026-08-05): idéntico
+// tanto por usuario/contraseña como por Google. Debe coincidir con el de
+// LoginForm.tsx y con el que lanza el trigger handle_new_user en la BD.
+const GENERIC_ACCESS_MESSAGE = 'Esta cuenta no tiene acceso al sistema.'
 
 // Único mensaje específico: cuando la cuenta existe pero falta elegir
 // contraseña, guiamos al empleado en lugar de ocultarlo como credencial mala.

@@ -64,7 +64,15 @@ export async function GET(request: Request) {
 
   const { data, error } = await supabase.auth.exchangeCodeForSession(code)
   if (error || !data.session) {
-    const fail = NextResponse.redirect(`${origin}/?error=auth_callback_failed`)
+    // Cuenta de Google NO invitada: el trigger handle_new_user aborta el alta,
+    // así que el intercambio falla. No es un fallo técnico — es "no tienes
+    // acceso" — y hay que decirlo así en vez de "credenciales incorrectas".
+    const noInvitada = /no tiene acceso|no permitida|invitaci/i.test(
+      error?.message ?? '',
+    )
+    const fail = NextResponse.redirect(
+      `${origin}/?error=${noInvitada ? 'sin_acceso_google' : 'auth_callback_failed'}`,
+    )
     clearPending(fail)
     return fail
   }
@@ -98,9 +106,12 @@ export async function GET(request: Request) {
     const guard = await checkProfileGuard(supabase, data.session.user.id)
     if (!guard.ok) {
       await supabase.auth.signOut()
-      const fail = NextResponse.redirect(
-        `${origin}/?error=${guard.code}`,
-      )
+      // Sin perfil / sin empresa tras entrar por Google = cuenta no invitada.
+      const code =
+        guard.code === 'sin_perfil' || guard.code === 'sin_empresa'
+          ? 'sin_acceso_google'
+          : guard.code
+      const fail = NextResponse.redirect(`${origin}/?error=${code}`)
       clearPending(fail)
       return fail
     }

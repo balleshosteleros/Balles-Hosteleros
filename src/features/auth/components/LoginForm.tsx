@@ -9,7 +9,11 @@ import { AuthDivider } from './AuthDivider'
 
 const LAST_EMAIL_KEY = 'bh:last-login-email'
 
-const GENERIC_ACCESS_MESSAGE = 'Usuario o contraseña incorrectos.'
+// Mensaje ÚNICO de acceso denegado (decisión de Ivan, 2026-08-05): el mismo
+// tanto si se escribe usuario/contraseña como si se entra por Google. Antes el
+// caso Google decía "usuario o contraseña incorrectos", que no tiene sentido
+// cuando no se ha escrito ninguna contraseña.
+const GENERIC_ACCESS_MESSAGE = 'Esta cuenta no tiene acceso al sistema.'
 
 // Cuenta válida pero sin contraseña elegida: guiamos al empleado al correo
 // "Crea tu contraseña" en lugar de ocultarlo como credencial incorrecta.
@@ -21,13 +25,6 @@ const SIN_PASSWORD_MESSAGE =
 const SESION_EXPIRADA_MESSAGE =
   'Tu sesión ha caducado por seguridad. Vuelve a iniciar sesión.'
 
-// Entró por Google con una cuenta que no está dada de alta en el sistema (el
-// móvil suele coger la cuenta personal del teléfono sin preguntar). Decirle
-// "usuario o contraseña incorrectos" despista: no ha escrito ninguna. Le
-// nombramos la cuenta usada para que vea que se equivocó de cuenta.
-const SIN_ACCESO_GOOGLE_MESSAGE =
-  'Esta cuenta de Google no tiene acceso al sistema. Comprueba que has elegido tu cuenta de trabajo, o pide a dirección que te dé de alta.'
-
 const ERROR_MESSAGES: Record<string, string> = {
   auth_callback_failed: GENERIC_ACCESS_MESSAGE,
   cuenta_inactiva: GENERIC_ACCESS_MESSAGE,
@@ -36,7 +33,7 @@ const ERROR_MESSAGES: Record<string, string> = {
   sin_rol: GENERIC_ACCESS_MESSAGE,
   sin_password: SIN_PASSWORD_MESSAGE,
   sesion_expirada: SESION_EXPIRADA_MESSAGE,
-  sin_acceso_google: SIN_ACCESO_GOOGLE_MESSAGE,
+  sin_acceso_google: GENERIC_ACCESS_MESSAGE,
 }
 
 export function LoginForm() {

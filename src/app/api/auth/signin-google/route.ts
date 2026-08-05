@@ -80,9 +80,17 @@ export async function POST(request: Request) {
   })
 
   if (error || !data?.session) {
+    // El trigger handle_new_user rechaza el alta de cuentas NO invitadas, así
+    // que GoTrue devuelve error en vez de crear el usuario. Ese caso no es un
+    // fallo técnico: es "esta cuenta no tiene acceso", y hay que decirlo tal
+    // cual. Sin esto el usuario veía "usuario o contraseña incorrectos" — sin
+    // sentido cuando no ha escrito ninguna contraseña.
+    const noInvitada = /no tiene acceso|no permitida|invitaci/i.test(
+      error?.message ?? '',
+    )
     return NextResponse.json(
-      { ok: false, code: 'auth_callback_failed' },
-      { status: 401 },
+      { ok: false, code: noInvitada ? 'sin_acceso_google' : 'auth_callback_failed' },
+      { status: noInvitada ? 403 : 401 },
     )
   }
 
@@ -94,8 +102,15 @@ export async function POST(request: Request) {
     if (guard.code === 'sin_perfil' || guard.code === 'sin_empresa') {
       await purgeOrphanUser(userId)
     }
+    // Cuentas de Google residuales (creadas antes del bloqueo del trigger):
+    // el motivo real es que no están invitadas, así que mostramos el aviso
+    // específico en vez del genérico de credenciales.
+    const code =
+      guard.code === 'sin_perfil' || guard.code === 'sin_empresa'
+        ? 'sin_acceso_google'
+        : guard.code
     const fail = NextResponse.json(
-      { ok: false, code: guard.code },
+      { ok: false, code },
       { status: 403 },
     )
     for (const { name, value, options } of writes.values()) {

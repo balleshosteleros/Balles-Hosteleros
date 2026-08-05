@@ -13,11 +13,16 @@ import {
 } from '@/features/auth/lib/profile-guard'
 import { getSiteUrl } from '@/lib/site-url'
 
+// Mensaje ÚNICO de acceso denegado (decisión de Ivan, 2026-08-05): el mismo
+// se escriba usuario/contraseña o se entre por Google. Debe coincidir con el de
+// LoginForm.tsx, profile-guard.ts y el trigger handle_new_user de la BD.
+const ACCESO_DENEGADO_MESSAGE = 'Esta cuenta no tiene acceso al sistema.'
+
 function translateAuthError(message: string | undefined): string {
   if (!message) return 'No se pudo iniciar sesión.'
   const m = message.toLowerCase()
   if (m.includes('invalid login credentials') || m.includes('invalid credentials')) {
-    return 'Usuario o contraseña incorrectos.'
+    return ACCESO_DENEGADO_MESSAGE
   }
   if (m.includes('email not confirmed')) {
     return 'El correo aún no ha sido confirmado.'
@@ -26,7 +31,7 @@ function translateAuthError(message: string | undefined): string {
     return 'Demasiados intentos. Inténtalo de nuevo en unos minutos.'
   }
   if (m.includes('user not found')) {
-    return 'Usuario o contraseña incorrectos.'
+    return ACCESO_DENEGADO_MESSAGE
   }
   if (m.includes('network') || m.includes('fetch')) {
     return 'No hay conexión con el servidor. Inténtalo de nuevo.'
