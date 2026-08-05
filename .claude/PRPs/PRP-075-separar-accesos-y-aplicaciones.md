@@ -43,9 +43,56 @@ y sus secretos:
 
 ## 1-bis. Auditoría del doble filtro por rol (pedido por Ivan)
 
-Ivan exige dos puertas: **(A)** solo entra al módulo quien tenga un rol con
-permiso de accesos, y **(B)** dentro, cada usuario ve únicamente los accesos
-cuyos roles le incluyen. Auditado en el código actual:
+### Regla, en palabras de Ivan (2026-08-05)
+
+> "Si un rol de gerencia puede ver accesos, le deja verlos, pero luego hay un
+> segundo escudo: de los accesos que hay creados solo podrá ver los que le
+> permita el rol de gerencia. Si no está puesto ese rol dentro del acceso, **no
+> le saldrá en el listado de accesos**."
+
+Los dos escudos son **independientes y acumulativos**:
+
+| Escudo | Pregunta | Si falla |
+|---|---|---|
+| **1 — Entrar** | ¿Su rol tiene permiso de accesos? | No entra al módulo |
+| **2 — Listar** | ¿Su rol está marcado *dentro de ese acceso*? | **Ese acceso NO aparece en el listado** |
+
+Consecuencias de diseño (decididas, no abiertas):
+- El escudo 1 **no** concede nada por sí solo: da entrada al módulo, no a los
+  accesos. Gerencia con permiso pero sin estar marcada en ningún acceso ve el
+  listado **vacío**.
+- Un acceso que no le corresponde **no se muestra de ninguna forma**: ni en gris,
+  ni bloqueado, ni con el usuario tapado. No existe para él.
+- Por tanto el servidor **no debe enviar** esas filas al navegador (hoy sí las
+  envía; ver Hueco 2).
+- `roles` vacío en un acceso = solo dirección (*fail-closed*, ya correcto).
+
+### Cómo queda con los datos reales (verificado en producción)
+
+Las **145 credenciales ya tienen roles marcados** — ninguna quedaría huérfana ni
+pasaría a "solo dirección" por descuido. Reparto actual:
+
+| Rol | Credenciales que verá |
+|---|---|
+| DIRECCIÓN | 107 (además, bypass total) |
+| CONTABILIDAD | 22 |
+| **GERENCIA** | **16** |
+| MARKETING | 15 |
+| LOGÍSTICA | 10 |
+| CALIDAD | 9 |
+| RECURSOS HUMANOS | 4 |
+| GESTORÍA | 2 |
+| JURÍDICO | 2 |
+
+Es decir, el ejemplo de Ivan se cumple: gerencia entra al módulo y ve **16 de
+145**; las otras 129 no le aparecen en el listado.
+
+⚠️ **Riesgo detectado:** cuatro roles llevan tilde (`LOGÍSTICA`, `GESTORÍA`,
+`JURÍDICO`, `DIRECCIÓN`). La comparación actual hace `trim` + `lowercase` pero
+**no quita acentos**, así que un desajuste de tilde dejaría a ese rol sin ver
+nada. De ahí la normalización del punto 4 del cierre — no es teórica.
+
+### Estado del código actual frente a esa regla
 
 | Control | Veredicto | Dónde |
 |---|---|---|
@@ -197,12 +244,19 @@ Aplicar las políticas del punto 4 + `FORCE ROW LEVEL SECURITY`, y cerrar los tr
 huecos del punto 1-bis: `HERR_ACCESOS` comprobado en servidor, `listAccesosApps`
 filtrando por `roles`, y normalización de acentos al comparar roles.
 
-*Validación con usuarios reales, uno por rol:*
-1. Rol **sin** permiso de accesos → 0 filas, incluso llamando a la API a mano.
-2. Rol **con** permiso → ve solo sus credenciales, y **no recibe el usuario/login**
-   de las demás (comprobar la respuesta de red, no solo la pantalla).
-3. Credencial sin roles marcados → solo dirección.
-4. Dirección → lo ve todo.
+*Validación con usuarios reales, uno por rol. Se comprueba la **respuesta de red**,
+no solo lo que se ve en pantalla:*
+1. Escudo 1 · Rol **sin** permiso de accesos → no entra; 0 filas incluso llamando
+   a la API a mano.
+2. Escudo 2 · **Gerencia** con permiso → recibe exactamente **16 filas** (dato
+   real de producción). Las otras 129 **no viajan** al navegador: ni etiqueta,
+   ni usuario, ni el hecho de que existan.
+3. Gerencia con permiso pero marcada en **ninguno** → listado **vacío**. El
+   permiso no concede nada por sí solo.
+4. Credencial sin roles marcados → solo dirección.
+5. Dirección → lo ve todo (bypass intencional).
+6. Roles con tilde (`LOGÍSTICA`, `GESTORÍA`, `JURÍDICO`) → ven sus credenciales.
+   Probar explícitamente: es donde fallaría la comparación sin normalizar.
 
 **Fase 4 — Apuntar la app a las tablas nuevas**
 `AplicacionesTab` → `aplicaciones`. `AccesosTab` y el candado → `credenciales`.
@@ -243,8 +297,10 @@ sigue completa y funcionando.
 
 1. **Modelo de dos tablas** (punto 3): aprobado por Ivan (2026-08-05).
 2. **Doble filtro por rol** (punto 1-bis): aprobado por Ivan. Entra en Fase 3.
-3. ¿La escritura de credenciales queda **solo** en dirección, o algún rol más
-   (p. ej. gerencia) debe poder crear/editar?
-4. ¿Un usuario con permiso de accesos debe **ver que existe** una credencial que
-   no puede revelar (en gris, sin login), o no debe aparecerle en absoluto?
-   Recomendación: que no aparezca — menos información filtrada.
+3. **Credencial no autorizada = invisible**: resuelto por Ivan (2026-08-05). No
+   aparece en el listado; el servidor no la envía. Ver punto 1-bis.
+4. **PENDIENTE — único punto abierto:** la creación y edición de credenciales,
+   ¿queda **solo** en dirección, o algún rol más (p. ej. gerencia) debe poder
+   crear/editar? Ojo: quien pueda editar un acceso puede marcarse a sí mismo
+   entre los roles autorizados, así que este permiso equivale de facto a poder
+   verlo todo. Recomendación: solo dirección.
