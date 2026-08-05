@@ -152,9 +152,9 @@ Tres reglas que hacen falta para no equivocarse:
 
 | Fase | Contenido | Toca zona de Iván |
 |---|---|---|
-| **F1 — Detector** | Ampliar el OCR (servicios, continuidad, página, confianza). `detectar-incidencias.ts` puro + tests con los 9 casos reales. Sin UI. | No |
-| **F2 — Persistencia** | Migración `albaran_incidencias` + RLS + actions de decisión + eventos. | No |
-| **F3 — Mesa** | `MesaIncidenciasDialog`: agrupación, propuesta con porqué, "Aceptar todas", guardar a medias. | No |
+| **F1 — Detector** ✅ **HECHA (05-ago)** | OCR ampliado (fiscal, continuidad, servicios, desglose de IVA, referencia, confianza) · `identidad-fiscal.ts` con dígito de control de CIF · `detectar-incidencias.ts` · `formato-compra.ts` (número × medida). 98 comprobaciones en verde. | No |
+| **F2 — Persistencia** ✅ **HECHA (05-ago, aplicada a prod)** | `albaran_incidencias` + `producto_formato_aliases` + `albaranes.documento_parcial/paginas_esperadas`, con RLS por empresa. `incidencias-albaran-actions.ts`: analizar, decidir, listar, memorizar alias de producto y de formato. Protecciones verificadas en prod. | No |
+| **F3 — Mesa** ✅ **HECHA (05-ago)** | `MesaIncidenciasDialog` conectado a `SubirAlbaranDialog`: agrupación por severidad, propuesta con su porqué, "Aceptar todas", motivo obligatorio, guardar a medias. No aparece si el albarán está limpio. | No |
 | **F4 — Resolución completa** | Enchufar `buscarProductosCompra`; escribir `producto_proveedor_aliases`; motivo obligatorio al ignorar; "Controla stock" en el alta rápida. | **Sí** — `ResolverLineaDialog`, avisar y elegir ventana |
 | **F5 — Resumen previo** | Modal de resumen antes de confirmar, alimentado con `aplicados`/`omitidos` que la RPC **ya devuelve y hoy se descartan** (`albaranes-actions.ts:456`). | **Sí** — `AsistenteAlbaranPanel` |
 | **F6 — Configuración y cierre** | Umbrales y motivos en el engranaje del submódulo. Resolver en el software las 9 preguntas abiertas y cerrar ese apartado del `.md`. | No |

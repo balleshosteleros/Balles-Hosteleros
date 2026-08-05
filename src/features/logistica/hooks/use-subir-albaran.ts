@@ -36,6 +36,12 @@ import type {
   LineaOcrAlbaran,
 } from "@/features/logistica/lib/albaranes/ocr-albaran";
 import { CABECERA_OCR_VACIA } from "@/features/logistica/lib/albaranes/cabecera-vacia";
+import {
+  analizarIncidenciasAlbaran,
+  decidirIncidencias,
+  type DecisionIncidencia,
+  type IncidenciaPersistida,
+} from "@/features/logistica/actions/incidencias-albaran-actions";
 import type { FalloImportacion } from "@/features/logistica/lib/albaranes/importaciones";
 import type { CandidatoDuplicado } from "@/features/logistica/lib/albaranes/duplicados";
 import { ESTADO_REVISION } from "@/features/logistica/data/albaranes";
@@ -85,6 +91,12 @@ export function useSubirAlbaran({ fechaPorDefecto, creador, onCreado }: UseSubir
   const [almacen, setAlmacen] = useState("COCINA");
   const [lineas, setLineas] = useState<LineaOcrAlbaran[]>([]);
   const [ligadas, setLigadas] = useState<Map<string, LineaEmparejada>>(new Map());
+  // PRP-074 — mesa de incidencias: lo que el sistema ha detectado que no cuadra.
+  const [incidencias, setIncidencias] = useState<IncidenciaPersistida[]>([]);
+  const [vinculosAutomaticos, setVinculosAutomaticos] = useState<
+    Array<{ lineaId: string; productoId: string; motivo: string }>
+  >([]);
+  const [proveedorIdentificado, setProveedorIdentificado] = useState<string | null>(null);
   const [, startTransition] = useTransition();
 
   const reset = () => {
@@ -101,6 +113,9 @@ export function useSubirAlbaran({ fechaPorDefecto, creador, onCreado }: UseSubir
     setAlmacen("COCINA");
     setLineas([]);
     setLigadas(new Map());
+    setIncidencias([]);
+    setVinculosAutomaticos([]);
+    setProveedorIdentificado(null);
   };
 
   const handleFile = (f: File | null) => {
@@ -131,14 +146,32 @@ export function useSubirAlbaran({ fechaPorDefecto, creador, onCreado }: UseSubir
     })();
   };
 
-  /** Emparejado + volcado del OCR al formulario de verificación. */
+  /** Emparejado + detección de incidencias + volcado al formulario de verificación. */
   const procesarResultado = async (cab: CabeceraOcrAlbaran, lin: LineaOcrAlbaran[]) => {
-    const emp = await emparejarLineasAlbaran(
-      lin.map((l) => ({ id: l.id, nombre: l.nombre, cantidad: l.cantidad, precioUnitario: l.precioUnitario })),
-      cab.proveedor, // activa el tramo de alias por proveedor (Etapa C)
-    );
+    // Las dos lecturas son independientes: se lanzan a la vez.
+    const [emp, mesa] = await Promise.all([
+      emparejarLineasAlbaran(
+        lin.map((l) => ({ id: l.id, nombre: l.nombre, cantidad: l.cantidad, precioUnitario: l.precioUnitario })),
+        cab.proveedor, // activa el tramo de alias por proveedor (Etapa C)
+      ),
+      // PRP-074: qué NO cuadra en este documento, con la propuesta ya hecha.
+      analizarIncidenciasAlbaran({ cabecera: cab, lineas: lin, importacionId }),
+    ]);
+
     const map = new Map<string, LineaEmparejada>();
     if (emp.ok) for (const le of emp.lineas) map.set(le.id, le);
+
+    if (mesa.ok) {
+      setIncidencias(mesa.incidencias);
+      setVinculosAutomaticos(mesa.vinculosAutomaticos);
+      setProveedorIdentificado(mesa.proveedorNombre);
+    } else {
+      // Que falle el análisis no puede impedir registrar el albarán: se avisa y se
+      // sigue por el camino de siempre (verificación manual).
+      console.error("[subir-albaran] incidencias:", mesa.error);
+      setIncidencias([]);
+      setVinculosAutomaticos([]);
+    }
 
     setCabecera(cab);
     setProveedor(cab.proveedor ?? "");
@@ -148,6 +181,20 @@ export function useSubirAlbaran({ fechaPorDefecto, creador, onCreado }: UseSubir
     setLigadas(map);
     setFallo(null);
     setPaso("verificar");
+  };
+
+  /** Registra las decisiones de la mesa y cierra las incidencias resueltas. */
+  const resolverIncidencias = async (decisiones: DecisionIncidencia[]) => {
+    if (decisiones.length === 0) return;
+    const res = await decidirIncidencias(decisiones);
+    if (!res.ok) {
+      toast.error(res.error);
+      return;
+    }
+    const decididas = new Set(decisiones.map((d) => d.incidenciaId));
+    setIncidencias((prev) =>
+      prev.map((i) => (decididas.has(i.id) ? { ...i, estado: "resuelta" as const } : i)),
+    );
   };
 
   const manejarFallo = (f: FalloImportacion) => {
@@ -364,6 +411,12 @@ export function useSubirAlbaran({ fechaPorDefecto, creador, onCreado }: UseSubir
     ligadas,
     totalLineas,
     nReconocidas,
+    // PRP-074 — mesa de incidencias
+    incidencias,
+    incidenciasAbiertas: incidencias.filter((i) => i.estado === "abierta"),
+    vinculosAutomaticos,
+    proveedorIdentificado,
+    resolverIncidencias,
     handleFile,
     analizar,
     reintentar,

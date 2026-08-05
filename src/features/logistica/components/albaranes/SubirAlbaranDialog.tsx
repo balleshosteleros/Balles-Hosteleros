@@ -23,6 +23,7 @@ import { useAuth } from "@/features/auth/contexts/auth-context";
 import { hoyEnZona } from "@/features/empresa/lib/zona-horaria";
 import { useSubirAlbaran } from "@/features/logistica/hooks/use-subir-albaran";
 import { ProveedorCombobox } from "@/features/logistica/components/productos/ProveedorCombobox";
+import { MesaIncidenciasDialog } from "@/features/logistica/components/albaranes/MesaIncidenciasDialog";
 import { formatNumero } from "@/shared/lib/numero";
 
 interface Props {
@@ -55,6 +56,10 @@ export function SubirAlbaranDialog({ open, onOpenChange, onCreado }: Props) {
     ligadas,
     totalLineas,
     nReconocidas,
+    incidenciasAbiertas,
+    vinculosAutomaticos,
+    proveedorIdentificado,
+    resolverIncidencias,
     handleFile,
     analizar,
     reintentar,
@@ -72,14 +77,21 @@ export function SubirAlbaranDialog({ open, onOpenChange, onCreado }: Props) {
     },
   });
 
+  // PRP-074 — la mesa se abre sola al terminar el análisis SI hay algo que aclarar.
+  // Si el albarán está limpio no aparece: no se añade fricción a lo que ya funciona.
+  const [mesaCerrada, setMesaCerrada] = useState(false);
+  const mesaAbierta = paso === "verificar" && incidenciasAbiertas.length > 0 && !mesaCerrada;
+
   const handleClose = (o: boolean) => {
     if (!o && paso !== "subiendo" && paso !== "analizando" && paso !== "guardando") {
       reset();
+      setMesaCerrada(false);
       onOpenChange(false);
     }
   };
 
   return (
+    <>
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className={paso === "verificar" ? "sm:max-w-3xl" : "sm:max-w-md"}>
         <DialogHeader>
@@ -284,6 +296,11 @@ export function SubirAlbaranDialog({ open, onOpenChange, onCreado }: Props) {
                 )}
               </p>
               <div className="flex gap-2">
+                {incidenciasAbiertas.length > 0 && (
+                  <Button variant="outline" onClick={() => setMesaCerrada(false)}>
+                    Ver lo que no cuadra ({incidenciasAbiertas.length})
+                  </Button>
+                )}
                 <Button variant="outline" onClick={() => { reset(); }}>Empezar de nuevo</Button>
                 <Button onClick={() => guardar()} disabled={!!duplicado}>Guardar en Revisión</Button>
               </div>
@@ -292,5 +309,20 @@ export function SubirAlbaranDialog({ open, onOpenChange, onCreado }: Props) {
         )}
       </DialogContent>
     </Dialog>
+
+    <MesaIncidenciasDialog
+      open={mesaAbierta}
+      onOpenChange={(o) => setMesaCerrada(!o)}
+      incidencias={incidenciasAbiertas}
+      vinculosAutomaticos={vinculosAutomaticos}
+      proveedorNombre={proveedorIdentificado ?? proveedor}
+      numeroAlbaran={numeroProveedor}
+      onResolver={async (decisiones) => {
+        await resolverIncidencias(decisiones);
+        setMesaCerrada(true);
+      }}
+      onGuardarYSalir={() => setMesaCerrada(true)}
+    />
+    </>
   );
 }
