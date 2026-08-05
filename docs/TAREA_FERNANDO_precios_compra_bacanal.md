@@ -5,6 +5,153 @@
 
 ---
 
+## ✅ CIERRE DEL 05-AGO — TODAS tus preguntas respondidas + la prueba móvil HECHA
+
+Fernando: lee esto primero. Queda **cero pendiente por mi parte**; lo que sigue abierto es tuyo
+o de los dos, y está listado al final.
+
+### 0. LA IDEA DE FONDO — por qué no te contesto pregunta por pregunta
+
+Tus preguntas (¿este producto es aquel? ¿este albarán está duplicado? ¿falta una página? ¿este
+recargo es un producto?) **no eran preguntas de código: son del día a día de recibir mercancía**.
+Pasan con todos los proveedores, todas las semanas, y van a seguir pasando.
+
+El problema real era que **el software no reconocía esa clase de situación**, así que cada una
+acababa en este `.md` esperando respuesta durante días. Contestarlas de una en una no arreglaba
+nada: la semana siguiente había otras diez.
+
+**Lo que faltaba era el código que resuelve esa clase de problema** — que es lo que se ha hecho
+(PRP-074). Ahora el escaneo detecta las anomalías solo y las presenta en una ventana con la
+propuesta ya rellenada, para resolverlas en el momento, sin `.md` y sin esperar a nadie.
+
+**Comprobado con tu propio albarán de Coca-Cola** (el que subí desde el móvil): generó **8
+incidencias solo**, sin que nadie las buscara —
+
+- 🔴 No reconozco al proveedor "Coca-Cola Europacific Partners"
+- 🔴 Las líneas no suman el total del papel (sobran 0,10 €)
+- 🟡 El IVA del 21 % no cuadra
+- 🔵 ¿"SPRITE VR20 C24" es "Sprite"?
+- 🔵 "Punto Verde" es un gasto, no mercancía **(×4)**
+
+Eso es exactamente lo que antes me preguntabas por WhatsApp. Quedan registradas en
+`albaran_incidencias` ligadas a `ALB-2026-018` (HABANA, en Revisión), esperando decisión humana.
+
+> **Nota:** las de ese albarán nacieron huérfanas (se detectan justo tras el OCR, cuando el
+> albarán aún no existe, y no se les asignaba al guardarlo). Corregido en código y las 8 ya están
+> atadas a mano. Si ves incidencias sin albarán en otro documento, es de antes del arreglo.
+
+### 1. LA PRUEBA MÓVIL QUE ME PEDÍAS: HECHA Y CORRECTA ✅
+
+Era el último gate del PRP-073. **Subí un albarán real desde el móvil y entró bien.**
+
+- **Albarán:** Coca-Cola Europacific Partners nº 4535606566, 31-jul, HABANA
+- **Traza:** `alb-msfz8pll-awdvdl` · estado `revisable` · **0 errores, primer intento**
+- **La foto pesó 0,27 MB** tras comprimirse en el móvil (una foto de cámara son 3-12 MB)
+- 8 líneas leídas, todas correctas
+
+**Tu fallo de subida está muerto.** Ya no hace falta que esperes evidencia mía de la prueba
+fallida: el circuito nuevo funciona con un documento real.
+
+### 2. LAS 4 DUDAS DEL LOTE DEL 30-JUL — YA NO SON PREGUNTAS, SON INCIDENCIAS DEL SISTEMA
+
+Cada una de tus 4 dudas era un **caso de operativa normal** que el software no sabía reconocer.
+Ahora cada una tiene su tipo de incidencia, su detección automática y su propuesta. Correspondencia
+exacta (y el nombre técnico por si lo buscas en el código):
+
+| Tu duda | Cómo la resuelve el sistema ahora |
+|---|---|
+| **1. Belmon Drink 15378** (falta una página, corta en "SUMA Y SIGUE: 694,39 €") | Incidencia `documento_incompleto`. El OCR lee el marcador y el "pág. X de Y". Bloquea la confirmación y ofrece: añadir la página · cargar parcial marcado (`albaranes.documento_parcial`) · descartar. **Ya no hay que decidir "dentro o fuera": se carga marcado y reclama la página.** |
+| **2. Los 3 recargos** (DDI Nexia 2,99 € ×2, Garcimar 1,50 €, Disbesa 1,10 €) | Incidencia `linea_de_servicio`. **Decisión de Iván: producto de compra con `controla_stock` DESACTIVADO.** No hace falta inventar nada — la opción ya existía y la RPC de la Etapa B ya la respeta. El total cuadra con el papel, el gasto se ve en contabilidad, el inventario no se ensucia. |
+| **3. "ALH RESERVA 0,30 RET"** (matriz de puntos, ilegible) | Incidencia `producto_ambiguo`. Propone "Alhambra Reserva 0,30 retornable" **con su % de parecido y el porqué**. Al aceptar, memoriza el alias: no vuelve a preguntar por ese proveedor. Tu lectura era correcta. |
+| **4. Belmonte 15402**, TEQ José Cuervo sin precio | Incidencia `linea_sin_importe`. Propone **"es un regalo: entra en stock a coste 0, NO registra precio"** (registrarlo a 0 hundiría el precio medio). Alternativas: escribir precio · descartar como error de impresión (con motivo). |
+
+**Importante sobre el OCR:** tenía una instrucción explícita de **descartar** portes, desplazamiento
+y punto verde (`ocr-albaran.ts:72-73`). Por eso los totales nunca cuadraban. Ya no los descarta:
+los lee marcados con `esServicio`. Verificado con el albarán real: los 4 "Punto Verde" de
+Coca-Cola entraron marcados, y el desglose cuadró al céntimo (85,27 base + 17,91 IVA = 103,18).
+
+### 3. LOS CASOS NUEVOS DE LA TANDA 2 — RESUELTOS IGUAL
+
+Cubo Cóctel Mix, Leche Asturiana, Hielo Cubitos 41mm y Vaso de sidra PP → `producto_no_encontrado`
+/ `producto_ambiguo`, con el alta **ya rellenada** (nombre, IVA, precio, alias del proveedor) a un
+clic. "Salsa barbacoa" comprada vs. la elaboración casera → `producto_ambiguo` (mismo nombre,
+naturaleza distinta), a confirmar por una persona.
+
+**Lo único que SÍ es respuesta directa y no incidencia:** el pedido Makro **"PARA PERSONAL"**
+(doc 027174) **NO es gasto del restaurante**. Sus precios pueden quedar cargados, pero ese pedido
+no debe contar como compra de restaurante.
+
+### 4. TUS 3 MEJORAS DEL 29-JUL — LAS TRES HECHAS
+
+| Tu mejora | Estado |
+|---|---|
+| **1. El buscador solo mira ≤6 candidatos precalculados** (te pasó con Gyozas, Alcachofa confitada, Oreja de cerdo, Paleta ibérica: existían y tuviste que ignorarlas) | ✅ **Resuelta.** `ResolverLineaDialog` busca sobre TODO el catálogo con 2+ letras. Usa **tu** `buscarProductosCompra` — estaba escrita desde el 04-ago y **no la consumía nadie**; solo había que enchufarla. |
+| **2. Sugerencias engañosas del matcher** ("Oreja adobada" → proponía "Panceta adobada") | ✅ **Mitigada.** El matcher liga por alias exacto de proveedor (score 1) y por **referencia de artículo**, que es un código y no falla aunque cambie el nombre. Y toda vinculación manual **escribe** en `producto_proveedor_aliases` — esa tabla existía desde el PRP-073 pero **nadie la escribía**, solo se leía: por eso el sistema nunca aprendía. |
+| **3. IVA con códigos de Makro** | ✅ Ya estaba, y ahora además se lee el **desglose del pie por tipo** (base + cuota + recargo de equivalencia) y se contrasta con las líneas. |
+
+### 5. LO QUE HE TOCADO DE TU ZONA (avisado, no consensuado — dime si te pisé algo)
+
+Entré en `ResolverLineaDialog.tsx` y `AsistenteAlbaranPanel.tsx` sin esperar ventana porque
+llevabas **desde el 29-jul sin tocarlos** (`a84bb6a`) y ese día no habías subido nada. Si tenías
+algo en local, **dímelo y lo reconciliamos**.
+
+- **`onIgnorar` cambia de firma** → `onIgnorar(motivo: string)`. Ignorar ahora exige motivo de
+  lista cerrada (no es mercancía · regalo · error del proveedor · ya recibido · otro).
+- **`EstadoLinea`** pasa a `{ estado: "ignorada"; motivo: string }`.
+- **`resolverAlbaranRevision`** acepta `motivoIgnorada` y lo escribe en el jsonb de la línea.
+  Antes ignorar era **mudo**: nadie podía saber después por qué faltaba algo.
+- **"Confirmar albarán" ya no dispara la RPC directamente**: abre un resumen previo (qué entra en
+  el almacén, importe, qué queda fuera y por qué).
+
+No toco tu lógica de vincular/crear ni la confirmación transaccional de la Etapa B.
+
+### 6. UN FALLO REAL QUE ENCONTRÉ CON TU ALBARÁN — OJO CON ESTO
+
+**Coca-Cola comprime el formato en un código**: `COCACOLA VR237 C24` = envase retornable de
+237 ml en **caja de 24**. Mi intérprete leía `1` en vez de `24`, así que **2 cajas habrían
+entrado como 2 unidades al almacén en vez de 48 botellas**.
+
+Corregido: se leen los códigos `C24` / `P6` / `E12`, con dos guardas para no confundirlos con una
+referencia de artículo (el número pegado a la letra y entre 4 y 48). La confianza queda en 0,75
+—bajo el umbral— para que **lo confirme una persona**: es una deducción, no una certeza.
+
+La regla que gobierna esto ahora (decisión de Iván): **un formato es un NÚMERO y una MEDIDA**
+(24 ud · 5 L · 3 kg) y el stock es **siempre `cantidad × contenido`**. Cubre "caja de 24",
+"CJ. 12x1L", "24x33cl", "PACK-6", "BIDON 25 L", "bandeja de 500 gr" (→ 0,5 kg), y distingue
+tamaño de recuento ("PAN BRIOCHE 85g x 54u" son **54 panes**, no 85 gramos).
+
+---
+
+## 🔴 LO QUE SIGUE ABIERTO
+
+**Para ti, Fernando:**
+
+1. **¿Te pisé algo?** Confírmame que no tenías trabajo local en `ResolverLineaDialog` /
+   `AsistenteAlbaranPanel`.
+2. **Deuda del PRP-073 que sigue siendo tuya:** F6 (la Edge Function no versionada de la
+   recepción por pedido) y F7. F6 toca la recepción que Iván usa a diario → avisar y elegir ventana.
+3. **75 % de los formatos de compra tienen `equivalencias` a NULL** (115 de 153 en prod). El
+   matcher de la RPC exige `equivalencias is not null`, así que esos formatos son invisibles para
+   el match por nombre. El intérprete nuevo lo tapa deduciendo del texto, pero **conviene
+   rellenarlos** para no depender de la deducción.
+4. **`albaranes_lineas` está MUERTA**: existe en el esquema y ningún fichero de `src/` la usa —
+   todo va por el jsonb `albaranes.lineas`. Decidir si se borra o se documenta como legacy.
+
+**Para Iván (yo):**
+
+5. **Cerrar sesión en la app instalada.** Sigue sin cerrar. Lo hemos perseguido en tres pasadas
+   (colgado → cookies `sb-*` no borradas → orden de ejecución). El último hallazgo: las cookies
+   son **`HttpOnly`**, así que solo el servidor puede matarlas, y navegar de inmediato cancelaba
+   esa petición. **Sospecha viva y no verificada:** `src/app/manifest.ts` tiene
+   **`start_url: "/m"`** — el icono de la pantalla de inicio abre SIEMPRE `/m` directamente, así
+   que aunque la sesión muera, al reabrir la app se entra por la ruta privada y puede rebotar.
+   Descartado que sea el service worker (`public/sw.js` es NetworkOnly, no cachea nada).
+6. **Piloto de volumen:** el PRP-073 pedía ≥20 albaranes de 3 proveedores antes de activación
+   general. Con los lotes ya cargados (27 + 31) y este E2E real, queda a criterio de los dos si
+   se da por cumplido.
+
+---
+
 ## ⚠️ FERNANDO: he tocado TUS DOS FICHEROS del asistente (05-ago) — léelo antes de seguir
 
 Aviso por adelantado, como haces tú conmigo. He entrado en `ResolverLineaDialog.tsx` y

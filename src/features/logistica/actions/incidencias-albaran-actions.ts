@@ -312,6 +312,35 @@ export async function decidirIncidencias(
   return { ok: true, resueltas };
 }
 
+/**
+ * Ata al albarán las incidencias que se detectaron ANTES de que existiera.
+ *
+ * El análisis corre justo después del OCR, cuando todavía no hay albarán: las
+ * incidencias nacen con `importacion_id` pero sin `albaran_id`. Si no se ligan al
+ * guardar, quedan huérfanas y al abrir el albarán en Revisión no aparece ninguna.
+ */
+export async function ligarIncidenciasAlAlbaran(
+  importacionId: string,
+  albaranId: string,
+): Promise<{ ok: boolean; ligadas: number }> {
+  const { supabase, empresaId } = await getLogisticaContext();
+  if (!empresaId) return { ok: false, ligadas: 0 };
+
+  const { data, error } = await supabase
+    .from("albaran_incidencias")
+    .update({ albaran_id: albaranId })
+    .eq("importacion_id", importacionId)
+    .eq("empresa_id", empresaId)
+    .is("albaran_id", null)
+    .select("id");
+
+  if (error) {
+    console.error("[incidencias-albaran] ligar:", error.message);
+    return { ok: false, ligadas: 0 };
+  }
+  return { ok: true, ligadas: data?.length ?? 0 };
+}
+
 /** Incidencias abiertas de un albarán, para retomar la revisión otro día. */
 export async function listarIncidenciasAlbaran(
   albaranId: string,

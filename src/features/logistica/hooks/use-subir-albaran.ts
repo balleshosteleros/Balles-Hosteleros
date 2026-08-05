@@ -39,6 +39,7 @@ import { CABECERA_OCR_VACIA } from "@/features/logistica/lib/albaranes/cabecera-
 import {
   analizarIncidenciasAlbaran,
   decidirIncidencias,
+  ligarIncidenciasAlAlbaran,
   type DecisionIncidencia,
   type IncidenciaPersistida,
 } from "@/features/logistica/actions/incidencias-albaran-actions";
@@ -355,6 +356,14 @@ export function useSubirAlbaran({ fechaPorDefecto, creador, onCreado }: UseSubir
         return;
       }
       setDuplicado(null);
+
+      // Las incidencias se detectaron ANTES de que el albarán existiera (nacen con
+      // `importacion_id` pero sin `albaran_id`). Aquí se les asigna: sin esto, al
+      // abrir el albarán en Revisión no aparecería ninguna y todo el trabajo de la
+      // mesa quedaría huérfano en la BD.
+      if (importacionId) {
+        void ligarIncidenciasAlAlbaran(importacionId, res.id);
+      }
 
       // El original ya vive en Storage (importación): se mueve al path del albarán
       // sin volver a viajar. No bloquea el flujo si falla.
