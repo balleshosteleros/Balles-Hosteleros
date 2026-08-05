@@ -18,7 +18,10 @@ export type UpdateSessionResult = {
   user: User | null
 }
 
-const AUTH_PATHS = ['/', '/callback', '/auth/confirm', '/forgot-password', '/update-password', '/check-email', '/acceso-demo']
+// `/salir` es la salida de emergencia: tiene que ser alcanzable SIEMPRE, con o sin
+// sesión. Si no fuera pública, el proxy la mandaría al login antes de ejecutarse y
+// nunca llegaría a borrar las cookies (que son HttpOnly: solo el servidor puede).
+const AUTH_PATHS = ['/', '/salir', '/callback', '/auth/confirm', '/forgot-password', '/update-password', '/check-email', '/acceso-demo']
 const PUBLIC_PREFIXES = ['/carta', '/__site', '/api/google/connect', '/empleo', '/api/empleo', '/documentacion', '/api/documentacion', '/firmar', '/inspectores', '/inspecciones/verificar', '/v', '/r', '/api/visita',
   // Subida de contrato por la gestoría externa (enlace tokenizado, sin cuenta).
   '/gestoria/contrato', '/api/gestoria/contrato',
