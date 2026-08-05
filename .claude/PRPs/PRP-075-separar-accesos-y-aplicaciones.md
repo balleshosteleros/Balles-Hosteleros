@@ -92,6 +92,36 @@ Es decir, el ejemplo de Ivan se cumple: gerencia entra al módulo y ve **16 de
 **no quita acentos**, así que un desajuste de tilde dejaría a ese rol sin ver
 nada. De ahí la normalización del punto 4 del cierre — no es teórica.
 
+### El selector de roles dentro de cada acceso (UI) — ya existe y es correcto
+
+En el modal de una credencial hay un desplegable "¿Quién puede ver esta
+contraseña?" que ya cumple lo pedido:
+
+- Lista **todos** los roles de la empresa (`getRolesEmpresaNombres` lee
+  `empresa_roles` sin filtrar, `roles-actions.ts`).
+- Permite marcar **de 0 a todos**, con "Seleccionar todos" y "Limpiar".
+- 0 roles marcados = solo dirección (*fail-closed*).
+
+**No requiere cambios de UI.** Lo que falla no es el selector, sino que el
+servidor no respeta lo marcado al listar (Hueco 2).
+
+### Estado de los candados por rol (verificado en producción)
+
+`empresa_roles` tiene **13 roles por empresa**: ARTISTAS, CALIDAD, COCINA,
+CONTABILIDAD, DIRECCIÓN, GERENCIA, GESTORÍA, JURÍDICO, LOGÍSTICA, MANTENIMIENTO,
+MARKETING, RECURSOS HUMANOS, SALA.
+
+⚠️ **Hoy solo DIRECCIÓN tiene `HERR_ACCESOS` activado.** Los otros 12 lo tienen
+en `false`.
+
+Consecuencia práctica: aunque un acceso tenga marcada GERENCIA (16 los tienen),
+gerencia **no vería nada** porque le falta el escudo 1. Los datos ya están
+preparados para el modelo de dos escudos; simplemente el candado no se ha
+concedido todavía a ningún rol salvo dirección.
+
+No es un fallo: es una decisión de configuración que Ivan toma en
+Ajustes → Roles, activando el candado a los roles que correspondan.
+
 ### Estado del código actual frente a esa regla
 
 | Control | Veredicto | Dónde |
