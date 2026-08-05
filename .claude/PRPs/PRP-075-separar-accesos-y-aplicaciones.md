@@ -150,6 +150,58 @@ añadido esa entrada de permiso a dos filas de `empresa_roles`.
 siendo **de pantalla**. El navegador de gerencia aún recibe metadatos de las
 credenciales que no le tocan. Por eso la Fase 3 no es opcional.
 
+### Estructura de un acceso (confirmada por Ivan) y verificación del bloqueo
+
+Dentro de **una aplicación** (p. ej. BBVA) se pueden crear **varios accesos**
+independientes; cada uno con su etiqueta, usuario, contraseña, sus **datos extra**
+(clave, PIN, API KEY…) y **su propia lista de roles**.
+
+Verificado en el código:
+- Hasta **50 accesos por aplicación** (`MAX_ACCESOS_POR_APP = 50`).
+- **Datos extra sin límite** por acceso. Caso real ya en producción: Adyen tiene
+  5 (Username, API KEY, API CLIENT, ID Merchant, ID Store). El límite de "5" que
+  mencionaba Ivan no existe como tope técnico: caben más.
+- Los roles se marcan **por acceso**, no por aplicación. Correcto: en un mismo
+  BBVA, un acceso puede verlo contabilidad y otro solo dirección.
+
+### ¿Un rol SIN marcar puede ver ese acceso? — comprobación con datos reales
+
+Pregunta de Ivan: si no marca a gerencia (o a **cualquier rol**) en un acceso,
+¿puede verlo aunque tenga el candado?
+
+**La contraseña: NO. Bloqueo verificado en servidor.**
+`accesos-apps-actions.ts:538-544` — antes de descifrar nada:
+
+```ts
+if (!esDirector) {
+  const roles = (acc.roles ?? []).map((r) => r.trim().toLowerCase());
+  const mio = (rolNombre ?? "").trim().toLowerCase();
+  if (roles.length === 0 || !roles.includes(mio)) return { ok: false, error: "No autorizado" };
+}
+```
+
+El rol se lee de la BD con la sesión del usuario (`getRolContext`), no de lo que
+mande el navegador. Contraste real sobre las 145 credenciales:
+
+| ¿Gerencia marcada? | Credenciales | Resultado al intentar revelar |
+|---|---|---|
+| Sí | 16 | Puede revelar |
+| **No** | **129** | **"No autorizado" — bloqueado en servidor** |
+
+Y esto **no depende del candado**: tener `HERR_ACCESOS` permite entrar al módulo,
+pero no salta este check. Vale igual para gerencia y para cualquier otro rol.
+
+**Los metadatos: SÍ llegan al navegador (Hueco 2).**
+`rowToApp` (L97-135) borra la contraseña (`PWD_OCULTA`) y el valor de los datos
+extra antes de salir, pero **conserva `usuario` y los nombres de los datos
+extra**, y `listAccesosApps` no filtra por `roles`. Así que de esas 129, el
+navegador de gerencia recibe el login y la existencia de la credencial, aunque
+la pantalla no se los muestre.
+
+**Conclusión:** las contraseñas están seguras hoy; lo que se filtra son
+metadatos. La Fase 3 convierte el ocultado de pantalla en un filtrado real en
+servidor + RLS.
+
 ### Estado del código actual frente a esa regla
 
 | Control | Veredicto | Dónde |
