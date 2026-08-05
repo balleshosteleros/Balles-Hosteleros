@@ -64,7 +64,7 @@ function dashboardSubtitle(esAdminPlataforma: boolean): string {
 export function MisDepartamentosView() {
   const {
     profile, user, roles, puedeVer, permisosLoaded, loading,
-    esAdminPlataforma, tieneAccesoDepartamentos,
+    esAdminPlataforma, tieneAccesoDepartamentos, permisosConfirmados,
   } = useAuth();
   const router = useRouter();
 
@@ -99,8 +99,21 @@ export function MisDepartamentosView() {
     // "no eres dirección": esperamos a que el seed SSR o el SWR resuelvan el rol
     // real. Un empleado de verdad siempre llega con roles no vacíos y sí rebota.
     if (roles.length === 0) return;
+    // Solo expulsamos con permisos CONFIRMADOS por el servidor. `permisosLoaded`
+    // no basta: también se marca al hidratar desde el caché de localStorage y al
+    // aplicar un seed parcial, y el provider reescribe permisos en varias oleadas
+    // después del primer paint (seed SSR, loadFreshAuth con reintentos a 250/500/
+    // 750 ms, revalidación cada 60 s). Si cualquiera de esas oleadas aterrizaba
+    // degradada por la carrera de cookies, `tieneAccesoDepartamentos` caía un
+    // instante a false y este effect echaba a un usuario con acceso legítimo —
+    // incluido DIRECCIÓN, que llegaba a ver la cuadrícula antes del rebote.
+    //
+    // Con `permisosConfirmados` distinguimos los dos casos que antes eran
+    // indistinguibles: "aún no sé si tienes acceso" (esperar) y "te han quitado
+    // el acceso" (expulsar de inmediato, que es el comportamiento deseado).
+    if (!permisosConfirmados) return;
     if (!esDireccion) router.replace("/mi-panel");
-  }, [loading, rolesPendientes, esDireccion, roles.length, router]);
+  }, [loading, rolesPendientes, esDireccion, roles.length, permisosConfirmados, router]);
 
   const tiles = useMemo(() => {
     // Admin de plataforma (DIRECCIÓN) tiene bypass total — ve todos los deptos.

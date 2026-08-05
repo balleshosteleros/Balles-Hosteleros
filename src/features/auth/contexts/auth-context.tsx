@@ -18,6 +18,31 @@ import {
 // ver features/auth/lib/permisos.ts). Se conserva solo para lectores antiguos.
 export type AppRole = "admin" | "director" | "gerencia" | "responsable" | "empleado" | "solo_lectura";
 
+/**
+ * Modo de vista (Mis Paneles / Mis Departamentos) POR DEFECTO, derivado de los
+ * permisos. Es un DEFAULT, no una imposición: si el usuario ya eligió una vista
+ * con el conmutador, su elección manda y esto no la toca.
+ *
+ * Antes se escribía `bh_view_mode` de forma incondicional en cada arranque (aquí
+ * y en el seed de servidor), así que el clic del usuario en "Mis Departamentos"
+ * quedaba pisado por el siguiente ciclo de auth y volvía solo a "Mis Paneles".
+ */
+function aplicarModoVistaPorDefecto(accesoDepartamentos: boolean) {
+  if (typeof window === "undefined") return;
+  try {
+    // Elección explícita previa → se respeta, no se recalcula.
+    const guardado = window.localStorage.getItem("bh_view_mode");
+    if (guardado === "paneles" || guardado === "departamentos") return;
+
+    const modo = accesoDepartamentos ? "departamentos" : "paneles";
+    window.localStorage.setItem("bh_view_mode", modo);
+    const maxAge = 365 * 24 * 60 * 60;
+    document.cookie = `bh_view_mode=${modo}; path=/; max-age=${maxAge}; samesite=lax`;
+  } catch {
+    // storage/cookies no disponibles → ignoramos
+  }
+}
+
 export interface AuthProfile {
   nombre: string;
   apellidos: string;
@@ -41,6 +66,16 @@ interface AuthContextValue {
   esAdminPlataforma: boolean;
   /** Tiene ≥1 departamento visible (o es admin): ve "Mis Departamentos". */
   tieneAccesoDepartamentos: boolean;
+  /**
+   * `true` solo cuando los permisos actuales vienen de una respuesta FIABLE del
+   * servidor (getUserPermisos con `empresaId` resuelto), no de un caché ni de una
+   * respuesta a medias por la carrera de cookies del arranque.
+   *
+   * Los gates que EXPULSAN de una vista (p. ej. Mis Departamentos) deben exigir
+   * esta señal: sin ella, "aún no sé si tienes acceso" era indistinguible de "te
+   * han quitado el acceso" y rebotaba a usuarios con permisos legítimos.
+   */
+  permisosConfirmados: boolean;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
   hasRole: (role: AppRole) => boolean;
@@ -228,6 +263,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     initialCache?.esAdminPlataforma ?? false,
   );
   const [permisosLoaded, setPermisosLoaded] = useState(initialCache !== null);
+  // Arranca en false AUNQUE haya caché: el caché sirve para pintar la UI al
+  // instante, pero no es prueba de que el permiso siga vigente. Solo pasa a true
+  // cuando el servidor responde con `empresaId` resuelto (respuesta fiable).
+  const [permisosConfirmados, setPermisosConfirmados] = useState(false);
 
   // Refs espejo del estado de permisos: permiten que la revalidación en vivo
   // compare contra el valor ACTUAL sin re-suscribir su effect en cada cambio.
@@ -364,21 +403,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             setPermisosLoaded(true);
             setLoading(false);
 
-            // Sincroniza el modo de vista por defecto con los PERMISOS reales:
+            // Respuesta FIABLE del servidor (no carrera, no fallback a caché):
+            // a partir de aquí los gates que expulsan pueden actuar con certeza.
+            if (!looksRaceFailure && !fetchFailedSilently) {
+              setPermisosConfirmados(true);
+            }
+
+            // Sincroniza el modo de vista INICIAL con los PERMISOS reales:
             // quien tiene acceso a ≥1 departamento (o es admin de plataforma)
             // arranca en "departamentos"; el resto en "paneles". Así respetamos
             // los roles reales de Ajustes, sin nombres técnicos hardcodeados.
-            if (typeof window !== "undefined") {
-              const accesoDeptos = calcAccesoDepartamentos(nextEsAdmin, nextPermisos);
-              const modo = accesoDeptos ? "departamentos" : "paneles";
-              try {
-                window.localStorage.setItem("bh_view_mode", modo);
-                const maxAge = 365 * 24 * 60 * 60;
-                document.cookie = `bh_view_mode=${modo}; path=/; max-age=${maxAge}; samesite=lax`;
-              } catch {
-                // storage/cookies no disponibles → ignoramos
-              }
-            }
+            aplicarModoVistaPorDefecto(
+              calcAccesoDepartamentos(nextEsAdmin, nextPermisos),
+            );
 
             // Solo persistimos el caché si el fetch fue real. Así un fallo
             // transitorio no corrompe el localStorage para el próximo mount.
@@ -439,6 +476,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const nextRoles = (res.appRoles ?? []) as AppRole[];
       const seedTieneDatos = nextEsAdmin || nextPermisos.length > 0;
       if (!seedTieneDatos) return;
+
+      // La respuesta ya pasó el filtro `empresaId != null` de arriba: es fiable.
+      // Marcamos ANTES del early-return por "sin cambios", porque una
+      // revalidación que confirma los permisos vigentes es tan válida como una
+      // que los corrige — y si no, un usuario estable nunca quedaba confirmado.
+      setPermisosConfirmados(true);
 
       // Aplicamos SOLO si algo cambió (comparando con el valor actual vía refs),
       // para no re-renderizar en balde.
@@ -503,6 +546,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const debeAplicar =
       !permisosLoaded || roles.length === 0 || (seedTieneDatos && difiere);
 
+    // El seed llega del layout de (main): server component con la sesión ya
+    // validada y `permisosValidos !== false` (empresaId resuelto). Es una fuente
+    // fiable, así que confirma los permisos aunque no haya que reaplicarlos.
+    if (seedTieneDatos) setPermisosConfirmados(true);
+
     if (debeAplicar) {
       setRoles(p.roles);
       setPermisos(p.permisos);
@@ -513,17 +561,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // loadFreshAuth. Sin esto, quien tiene acceso a departamentos veía el menú
       // al instante pero en modo "paneles" hasta que el SWR corregía — y si
       // navegaba en ese estado transitorio, acababa rebotado.
-      if (typeof window !== "undefined") {
-        const accesoDeptos = calcAccesoDepartamentos(p.esAdminPlataforma, p.permisos);
-        const modo = accesoDeptos ? "departamentos" : "paneles";
-        try {
-          window.localStorage.setItem("bh_view_mode", modo);
-          const maxAge = 365 * 24 * 60 * 60;
-          document.cookie = `bh_view_mode=${modo}; path=/; max-age=${maxAge}; samesite=lax`;
-        } catch {
-          // storage/cookies no disponibles → ignoramos
-        }
-      }
+      aplicarModoVistaPorDefecto(
+        calcAccesoDepartamentos(p.esAdminPlataforma, p.permisos),
+      );
     }
     writeAuthCache(p.userId, {
       roles: p.roles,
@@ -556,6 +596,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         window.localStorage.removeItem(authCacheKey(user.id));
         window.localStorage.removeItem(profileCacheKey(user.id));
         window.localStorage.removeItem(LAST_USER_ID_KEY);
+        // El modo de vista es una preferencia POR USUARIO. Al cerrar sesión hay
+        // que soltarla: si no, el siguiente que entre en este navegador hereda
+        // la vista del anterior y `aplicarModoVistaPorDefecto` la respetaría
+        // como si fuera suya, aterrizando en la vista equivocada.
+        window.localStorage.removeItem("bh_view_mode");
+        document.cookie = "bh_view_mode=; path=/; max-age=0; samesite=lax";
       } catch {
         // ignore
       }
@@ -607,7 +653,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   return (
     <AuthContext.Provider value={{
       user, session, profile, roles, loading, permisos, permisosLoaded,
-      esAdminPlataforma, tieneAccesoDepartamentos,
+      esAdminPlataforma, tieneAccesoDepartamentos, permisosConfirmados,
       signIn, signOut, hasRole, puedeVer, puedeEditar,
     }}>
       <AuthSeedContext.Provider value={seedFromServer}>
