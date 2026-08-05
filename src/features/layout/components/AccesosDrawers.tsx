@@ -157,7 +157,14 @@ function PasswordCell({
 }
 
 // ── Carga compartida de apps activas de la empresa ────────────────────────
-function useAccesosApps(empresaSlug: string, open: boolean) {
+// Una entrada solo es una APLICACIÓN si tiene enlace web real. Sin URL es una
+// credencial suelta (caja fuerte, PIN de TPV, wifi, SIM…): vive en la bóveda de
+// Accesos, no en el lanzador del cohete.
+export function tieneEnlaceWeb(app: Pick<AccesoApp, "url">): boolean {
+  return (app.url ?? "").trim().length > 0;
+}
+
+function useAccesosApps(empresaSlug: string, open: boolean, soloConEnlace = false) {
   const [apps, setApps] = useState<AccesoApp[]>([]);
   const [loading, setLoading] = useState(false);
   const [busqueda, setBusqueda] = useState("");
@@ -169,7 +176,9 @@ function useAccesosApps(empresaSlug: string, open: boolean) {
     setBusqueda("");
     listAccesosApps(empresaSlug)
       .then((rows) => {
-        if (alive) setApps(rows.filter((a) => a.estado === "Activo"));
+        if (!alive) return;
+        const activas = rows.filter((a) => a.estado === "Activo");
+        setApps(soloConEnlace ? activas.filter(tieneEnlaceWeb) : activas);
       })
       .catch((e) => console.error("[accesos] drawer:", e))
       .finally(() => {
@@ -178,7 +187,7 @@ function useAccesosApps(empresaSlug: string, open: boolean) {
     return () => {
       alive = false;
     };
-  }, [open, empresaSlug]);
+  }, [open, empresaSlug, soloConEnlace]);
 
   const q = busqueda.trim().toLowerCase();
   const appsFiltradas = useMemo(() => {
@@ -299,7 +308,8 @@ export function AplicacionesDrawer({
 }) {
   const [open, setOpen] = useState(false);
   const tieneDatos = useTieneAccesos(empresaSlug);
-  const { appsFiltradas, loading, busqueda, setBusqueda, q } = useAccesosApps(empresaSlug, open);
+  // soloConEnlace: el lanzador muestra únicamente apps con URL web real.
+  const { appsFiltradas, loading, busqueda, setBusqueda, q } = useAccesosApps(empresaSlug, open, true);
 
   // Sin ningún acceso asignado → botón gris, deshabilitado, con tooltip. No abre.
   if (tieneDatos === false) {
@@ -357,13 +367,10 @@ export function AplicacionesDrawer({
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               {appsFiltradas.map((app) => {
                 const usuario = app.accesos[0]?.usuario || app.usuario || "";
+                // Aquí toda app tiene URL (la lista se filtra por enlace real).
                 const abrir = () => {
-                  if (app.url && app.url.trim()) {
-                    const href = app.url.startsWith("http") ? app.url : `https://${app.url}`;
-                    window.open(href, "_blank", "noopener,noreferrer");
-                  } else {
-                    toast.info(`«${app.nombre}» no tiene un enlace web configurado.`);
-                  }
+                  const href = app.url.startsWith("http") ? app.url : `https://${app.url}`;
+                  window.open(href, "_blank", "noopener,noreferrer");
                 };
                 return (
                   <button
@@ -371,7 +378,7 @@ export function AplicacionesDrawer({
                     type="button"
                     onClick={abrir}
                     className="flex items-center gap-3 rounded-lg border border-border/50 p-3 text-left hover:bg-muted/50 hover:border-border transition-colors"
-                    title={app.url ? "Abrir aplicación" : "Sin enlace web"}
+                    title="Abrir aplicación"
                   >
                     <AppLogo nombre={app.nombre} logoUrl={app.logoUrl} url={app.url} size="lg" />
                     <div className="min-w-0 flex-1">
@@ -380,9 +387,7 @@ export function AplicacionesDrawer({
                         {usuario || <span className="not-italic font-sans">{app.categoria}</span>}
                       </div>
                     </div>
-                    {app.url && (
-                      <ExternalLink className="h-4 w-4 text-muted-foreground shrink-0" />
-                    )}
+                    <ExternalLink className="h-4 w-4 text-muted-foreground shrink-0" />
                   </button>
                 );
               })}

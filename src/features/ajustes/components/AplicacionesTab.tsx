@@ -46,6 +46,7 @@ import {
 import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
 import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 import { AppLogo } from "@/features/ajustes/components/AppLogo";
+import { tieneEnlaceWeb } from "@/features/layout/components/AccesosDrawers";
 
 const emptyApp: Omit<AccesoApp, "id" | "ultimaActualizacion"> = {
   nombre: "",
@@ -140,6 +141,10 @@ export function AplicacionesTab() {
   };
 
   const filteredApps = apps.filter((a) => {
+    // Solo son APLICACIONES las que tienen enlace web real. Las entradas sin
+    // URL (caja fuerte, PIN de TPV, wifi, SIM…) son credenciales sueltas y
+    // viven en «Accesos y contraseñas», no aquí.
+    if (!tieneEnlaceWeb(a)) return false;
     if (filtroEmpresa !== "todas" && a.empresaId !== filtroEmpresa) return false;
     if (filtroCategoria !== "todas" && a.categoria !== filtroCategoria) return false;
     if (buscar) {
