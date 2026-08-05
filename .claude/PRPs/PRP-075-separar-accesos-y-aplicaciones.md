@@ -122,6 +122,34 @@ concedido todavía a ningún rol salvo dirección.
 No es un fallo: es una decisión de configuración que Ivan toma en
 Ajustes → Roles, activando el candado a los roles que correspondan.
 
+#### ✅ APLICADO (2026-08-05): candado concedido a GERENCIA
+
+Ivan lo autoriza expresamente. Aplicado a los **dos** roles GERENCIA (uno por
+empresa: BACANAL `dd35ea33…`, HABANA `0a31c861…`):
+
+```json
+{ "modulo": "HERR_ACCESOS", "ver": true, "editar": false }
+```
+
+`editar: false` a propósito: quien puede editar un acceso podría marcarse a sí
+mismo entre los roles autorizados y saltarse el escudo 2. Gerencia consulta,
+dirección administra. Si Ivan decide luego que gerencia también cree/edite, es
+cambiar ese flag (punto 4 de decisiones).
+
+**Efecto real (escudo 1 + escudo 2 combinados):**
+
+| Empresa | Credenciales totales | Las que verá gerencia |
+|---|---|---|
+| BACANAL | 77 | **9** |
+| HABANA | 68 | **7** |
+
+Las demás no le aparecen en el listado. Nada más se ha modificado: solo se ha
+añadido esa entrada de permiso a dos filas de `empresa_roles`.
+
+⚠️ Recordatorio: hasta que se cierre el Hueco 2 (Fase 3), ese filtrado sigue
+siendo **de pantalla**. El navegador de gerencia aún recibe metadatos de las
+credenciales que no le tocan. Por eso la Fase 3 no es opcional.
+
 ### Estado del código actual frente a esa regla
 
 | Control | Veredicto | Dónde |
