@@ -7,7 +7,17 @@ export default function manifest(): MetadataRoute.Manifest {
     name: "Balles Hosteleros · Mi Panel",
     short_name: "Balles",
     description: "Portal del empleado: fichar, turnos, comunicados y solicitudes.",
-    start_url: "/m",
+    // El icono de la pantalla de inicio abre SIEMPRE por aquí. `?app=1` marca que
+    // viene del arranque de la PWA (no de una navegación normal), para que la
+    // guardia de sesión pueda distinguirlo y mandar al login sin rebotar.
+    //
+    // Sin esa marca, abrir la app tras cerrar sesión entraba en bucle: "/m" exige
+    // sesión y manda a "/", y la regla móvil de `next.config.ts` devuelve "/" a
+    // "/m". El navegador se quedaba dando vueltas.
+    start_url: "/m?app=1",
+    // `id` fija la identidad de la PWA. Sin él, cambiar `start_url` haría que el
+    // navegador la trate como una app distinta y quedaran dos iconos instalados.
+    id: "/m",
     scope: "/",
     display: "standalone",
     orientation: "portrait",

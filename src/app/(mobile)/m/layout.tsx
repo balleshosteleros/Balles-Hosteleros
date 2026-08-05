@@ -55,6 +55,10 @@ export default async function MobileLayout({ children }: { children: React.React
   // en vez de ir al login. ?auth=1 evita el rebote del redirect móvil "/"→"/m".
   const { shouldShowWizard, hasUser } = await getEmpleadoGuardStatus();
   if (!hasUser) {
+    // `?auth=1` es OBLIGATORIO: sin él, la regla de `next.config.ts` devolvería
+    // "/" → "/m" por user-agent móvil y entraríamos en un rebote infinito.
+    // Es justo lo que pasaba al abrir la app instalada tras cerrar sesión: su
+    // `start_url` es "/m" a secas, así que el arranque caía en el bucle.
     redirect("/?auth=1");
   }
   // Mismo guard de primer acceso que desktop.

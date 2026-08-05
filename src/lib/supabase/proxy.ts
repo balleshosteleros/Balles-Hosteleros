@@ -203,9 +203,19 @@ export async function updateSession(
     return { response: conInicioSesion(supabaseResponse), user }
   }
 
-  // Resto: privado → requiere sesión
+  // Resto: privado → requiere sesión.
+  //
+  // El destino lleva `?auth=1` SIEMPRE, no solo desde /m: sin ese parámetro, la
+  // regla móvil de `next.config.ts` devuelve "/" → "/m" por user-agent, y "/m"
+  // vuelve aquí por falta de sesión. Rebote infinito.
+  //
+  // Es lo que dejaba la app instalada dando vueltas al abrirla tras cerrar
+  // sesión: su `start_url` entra por una ruta privada, así que caía justo aquí.
   if (!user) {
-    return { response: NextResponse.redirect(new URL('/', request.url)), user: null }
+    return {
+      response: NextResponse.redirect(new URL('/?auth=1', request.url)),
+      user: null,
+    }
   }
 
   // Y además, perfil completo y activo. Sin esto, un usuario que entrara
