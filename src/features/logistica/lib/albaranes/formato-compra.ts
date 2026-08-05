@@ -139,6 +139,31 @@ export function interpretarFormato(
   for (const texto of candidatos) {
     if (!texto) continue;
 
+    // --- 0. Códigos comprimidos de fabricante: "C24", "P6", "E12".
+    // Coca-Cola imprime "COCACOLA VR237 C24" = envase retornable de 237 ml en caja
+    // de 24. Sin esto entrarían 2 cajas al almacén en vez de 48 botellas.
+    // Se exige que el número vaya pegado a la letra y que sea un tamaño de caja
+    // plausible, para no confundirlo con un código de artículo cualquiera.
+    const reCodigo = /\b([cpe])\s?(\d{1,3})\b/;
+    const mCod = reCodigo.exec(texto);
+    if (mCod) {
+      const n = parseInt(mCod[2], 10);
+      // Tamaños reales de caja/pack en hostelería.
+      if (n >= 4 && n <= 48) {
+        const med = medidaBasePorDefecto(medidaProducto);
+        const envase = mCod[1] === "p" ? "pack" : "caja";
+        return {
+          contenido: redondear(n),
+          medida: med.base,
+          envase,
+          origen: "envase_numero",
+          // Por debajo de 0.8: la UI lo marca para que una persona lo confirme.
+          confianza: 0.75,
+          descripcion: `1 ${envase} = ${formatearNumero(n)} ${etiqueta(med.base)}`,
+        };
+      }
+    }
+
     // --- 1. Envase con contenido explícito: "caja de 24 unidades", "garrafa 5 l"
     const reExplicito = new RegExp(
       String.raw`\b(${ENVASES_RE})\b[\s.:-]*(?:de\s+|con\s+|x\s*)?${NUM}\s*(${MEDIDAS_RE})?\b`,

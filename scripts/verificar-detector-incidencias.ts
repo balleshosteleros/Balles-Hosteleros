@@ -433,6 +433,28 @@ for (const [fmt, uni, nom, medProd, esperado, medEsperada] of formas) {
   );
 }
 
+// --- Códigos de fabricante (caso REAL: albarán Coca-Cola 4535606566, 31-jul) ---
+seccion("9c. Códigos comprimidos de fabricante (albarán real de Coca-Cola)");
+
+const cocacola = interpretarFormato("VR237 C24", "ud", "COCACOLA VR237 C24", "ud");
+comprobar('"COCACOLA VR237 C24" → caja de 24 (el C24 es la caja)',
+  cocacola.contenido === 24 && cocacola.medida === "ud",
+  `dio ${cocacola.contenido} ${cocacola.medida}`);
+comprobar("2 cajas de Coca-Cola = 48 botellas al almacén (no 2)",
+  calcularStock(2, cocacola).cantidadStock === 48,
+  calcularStock(2, cocacola).explicacion);
+comprobar("Se marca para confirmar (confianza < 0,8): es una deducción, no una certeza",
+  cocacola.confianza < 0.8);
+comprobar('"SPRITE VR20 C24" también',
+  interpretarFormato("VR20 C24", "ud", "SPRITE VR20 C24", "ud").contenido === 24);
+comprobar('"P6" se lee como pack de 6',
+  interpretarFormato("P6", "ud", "YOGUR P6", "ud").contenido === 6);
+// No confundir un código de artículo con un tamaño de caja
+comprobar("Un código largo NO se confunde con una caja",
+  interpretarFormato("", "ud", "REF C1250 MERLUZA", "ud").contenido === 1);
+comprobar("Un número minúsculo tampoco (C2 no es una caja)",
+  interpretarFormato("", "ud", "PRODUCTO C2", "ud").contenido === 1);
+
 // --- LA REGLA: cantidad × formato = stock ---
 seccion("9b. La regla: cantidad comprada × contenido del formato");
 
