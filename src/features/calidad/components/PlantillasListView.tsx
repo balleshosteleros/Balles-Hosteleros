@@ -8,14 +8,14 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Copy, Pencil, Archive, ArchiveRestore, MoreVertical, ArrowLeft, ClipboardList } from "lucide-react";
+import { Copy, Pencil, CheckCircle2, MoreVertical, ArrowLeft, ClipboardList } from "lucide-react";
 import type { AuditoriasTab } from "./CalidadAuditoriasView";
 import { toast } from "sonner";
 import {
   listPlantillas,
   crearPlantilla,
   clonarPlantilla,
-  archivarPlantilla,
+  marcarPlantillaVigente,
   type PlantillaResumen,
 } from "@/features/calidad/actions/plantillas-actions";
 import {
@@ -45,6 +45,7 @@ const columnasDef: ToolbarColumna[] = [
   { campo: "num_secciones", label: "Secciones" },
   { campo: "num_preguntas", label: "Preguntas" },
   { campo: "estado_vigente", label: "Estado" },
+  { campo: "es_vigente", label: "Vigente" },
   { campo: "created_at", label: "Creada" },
   { campo: "acciones", label: "", bloqueada: true },
 ];
@@ -66,7 +67,6 @@ export function PlantillasListView({ onTabChange }: PlantillasListViewProps) {
   const [busqueda, setBusqueda] = useState("");
   const [columnasVisibles, setColumnasVisibles] = useState<ToolbarColumnaVisible>({});
   const [columnasOrden, setColumnasOrden] = useState<string[]>(columnasDef.map((c) => c.campo));
-  const [showArchivadas, setShowArchivadas] = useState(false);
   const [nuevaOpen, setNuevaOpen] = useState(false);
 
   const reload = useCallback(() => {
@@ -81,9 +81,7 @@ export function PlantillasListView({ onTabChange }: PlantillasListViewProps) {
     reload();
   }, [reload]);
 
-  const filtradas = plantillas
-    .filter((p) => showArchivadas ? true : !p.archivada)
-    .filter((p) => coincideBusquedaUniversal(p, busqueda));
+  const filtradas = plantillas.filter((p) => coincideBusquedaUniversal(p, busqueda));
 
   const columnasRender = ordenarColumnas(columnasDef, columnasOrden).filter(
     (c) => c.bloqueada || colVisible(columnasVisibles, c.campo),
@@ -109,16 +107,6 @@ export function PlantillasListView({ onTabChange }: PlantillasListViewProps) {
             className="gap-1.5"
           >
             <ArrowLeft className="h-3.5 w-3.5" /> Auditorías realizadas
-          </Button>
-        }
-        extraDerecha={
-          <Button
-            size="sm"
-            variant={showArchivadas ? "default" : "outline"}
-            onClick={() => setShowArchivadas((v) => !v)}
-            title="Mostrar archivadas"
-          >
-            {showArchivadas ? <ArchiveRestore className="h-4 w-4" /> : <Archive className="h-4 w-4" />}
           </Button>
         }
       />
@@ -167,10 +155,10 @@ export function PlantillasListView({ onTabChange }: PlantillasListViewProps) {
                         toast.error(res.error);
                       }
                     }}
-                    onArchivar={async () => {
-                      const res = await archivarPlantilla(p.id, !p.archivada);
+                    onMarcarVigente={async () => {
+                      const res = await marcarPlantillaVigente(p.id);
                       if (res.ok) {
-                        toast.success(p.archivada ? "Plantilla restaurada" : "Plantilla archivada");
+                        toast.success("Plantilla vigente. Es la que se usará para auditar");
                         reload();
                       } else {
                         toast.error(res.error);
@@ -205,20 +193,20 @@ function FilaPlantilla({
   columnas,
   onOpen,
   onClonar,
-  onArchivar,
+  onMarcarVigente,
 }: {
   p: PlantillaResumen;
   tz: string;
   columnas: ToolbarColumna[];
   onOpen: () => void;
   onClonar: () => void;
-  onArchivar: () => void;
+  onMarcarVigente: () => void;
 }) {
   const cells: Record<string, React.ReactNode> = {
     numero_secuencial: <span className="font-mono text-xs text-muted-foreground">{p.numero_secuencial}</span>,
     nombre: (
       <div>
-        <div className={`font-medium ${p.archivada ? "text-muted-foreground line-through" : "text-foreground"}`}>{p.nombre}</div>
+        <div className="font-medium text-foreground">{p.nombre}</div>
         {p.descripcion && <div className="text-xs text-muted-foreground truncate max-w-md">{p.descripcion}</div>}
       </div>
     ),
@@ -229,6 +217,11 @@ function FilaPlantilla({
       <Badge className="text-[10px] bg-emerald-100 text-emerald-700 hover:bg-emerald-100">Publicada</Badge>
     ) : p.estado_vigente === "borrador" ? (
       <Badge variant="outline" className="text-[10px]">Borrador</Badge>
+    ) : (
+      <span className="text-muted-foreground">—</span>
+    ),
+    es_vigente: p.es_vigente ? (
+      <Badge className="text-[10px] bg-blue-100 text-blue-700 hover:bg-blue-100">Vigente</Badge>
     ) : (
       <span className="text-muted-foreground">—</span>
     ),
@@ -247,10 +240,14 @@ function FilaPlantilla({
           <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onClonar(); }}>
             <Copy className="h-4 w-4 mr-2" /> Duplicar
           </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onArchivar(); }}>
-            {p.archivada ? (<><ArchiveRestore className="h-4 w-4 mr-2" /> Restaurar</>) : (<><Archive className="h-4 w-4 mr-2" /> Archivar</>)}
-          </DropdownMenuItem>
+          {!p.es_vigente && (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onMarcarVigente(); }}>
+                <CheckCircle2 className="h-4 w-4 mr-2" /> Marcar vigente
+              </DropdownMenuItem>
+            </>
+          )}
         </DropdownMenuContent>
       </DropdownMenu>
     ),

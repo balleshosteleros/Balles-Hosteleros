@@ -2,10 +2,10 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { ClipboardCheck } from "lucide-react";
 import { listEnvios, type EnvioResumen } from "@/features/calidad/actions/envios-actions";
+import { NuevaAuditoriaDialog } from "./NuevaAuditoriaDialog";
 import { PlantillasNavButtonAuditorias } from "./PlantillasListView";
 import { AnaliticaNavButton } from "./AuditoriasAnaliticaView";
 import { formatFechaAuditoria } from "@/features/calidad/lib/fecha-auditoria";
@@ -56,6 +56,7 @@ export function EnviosListView({ onTabChange }: EnviosListViewProps) {
   const [busqueda, setBusqueda] = useState("");
   const [columnasVisibles, setColumnasVisibles] = useState<ToolbarColumnaVisible>({});
   const [columnasOrden, setColumnasOrden] = useState<string[]>(columnasDef.map((c) => c.campo));
+  const [nuevaOpen, setNuevaOpen] = useState(false);
 
   const reload = useCallback(() => {
     setLoading(true);
@@ -80,7 +81,7 @@ export function EnviosListView({ onTabChange }: EnviosListViewProps) {
         busqueda={busqueda}
         onBusquedaChange={setBusqueda}
         placeholderBusqueda="Buscar auditoría"
-        onNuevo={() => toast.info("Crear auditoría manual: próximamente")}
+        onNuevo={() => setNuevaOpen(true)}
         columnas={columnasDef}
         columnasVisibles={columnasVisibles}
         onColumnasVisiblesChange={setColumnasVisibles}
@@ -122,7 +123,14 @@ export function EnviosListView({ onTabChange }: EnviosListViewProps) {
                   <tr
                     key={e.id}
                     className="border-b hover:bg-muted/30 cursor-pointer transition-colors"
-                    onClick={() => router.push(`/calidad/auditorias/${e.id}`)}
+                    onClick={() =>
+                      router.push(
+                        // Un borrador se sigue rellenando; una cerrada solo se consulta.
+                        e.estado === "borrador"
+                          ? `/calidad/auditorias/${e.id}/rellenar`
+                          : `/calidad/auditorias/${e.id}`,
+                      )
+                    }
                   >
                     {columnasRender.map((c) => {
                       const cells: Record<string, React.ReactNode> = {
@@ -132,11 +140,17 @@ export function EnviosListView({ onTabChange }: EnviosListViewProps) {
                         version: <Badge variant="outline" className="text-[10px]">v{e.version}</Badge>,
                         local_nombre: <span>{e.local_nombre}</span>,
                         auditor_nombre: <span>{e.auditor_nombre}</span>,
-                        nota_final: <NotaBadge nota={e.nota_final} />,
+                        // Una pendiente no tiene nota: la nota nace al cerrarla.
+                        nota_final: e.estado === "enviada"
+                          ? <NotaBadge nota={e.nota_final} />
+                          : <span className="text-xs text-muted-foreground">Sin terminar</span>,
                         estado: e.estado === "enviada" ? (
                           <Badge className="text-[10px] bg-emerald-100 text-emerald-700 hover:bg-emerald-100">Enviada</Badge>
                         ) : (
-                          <Badge variant="outline" className="text-[10px]">Borrador</Badge>
+                          // Pendiente: sin terminar, no cuenta para estadísticas.
+                          <Badge className="text-[10px] bg-amber-100 text-amber-800 hover:bg-amber-100">
+                            Pendiente
+                          </Badge>
                         ),
                       };
                       return <td key={c.campo} className="px-3 py-2 align-middle">{cells[c.campo] ?? null}</td>;
@@ -152,6 +166,15 @@ export function EnviosListView({ onTabChange }: EnviosListViewProps) {
       <div className="text-xs text-muted-foreground text-right">
         {filtrados.length} de {envios.length} auditorías
       </div>
+
+      <NuevaAuditoriaDialog
+        open={nuevaOpen}
+        onOpenChange={setNuevaOpen}
+        onCreada={(envioId) => {
+          setNuevaOpen(false);
+          router.push(`/calidad/auditorias/${envioId}/rellenar`);
+        }}
+      />
     </div>
   );
 }

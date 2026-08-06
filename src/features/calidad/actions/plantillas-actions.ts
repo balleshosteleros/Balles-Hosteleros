@@ -184,17 +184,62 @@ export async function actualizarPlantilla(plantillaId: string, input: { nombre?:
   return { ok: true };
 }
 
-export async function archivarPlantilla(plantillaId: string, archivada: boolean): Promise<{ ok: boolean; error?: string }> {
+/**
+ * Marca UNA plantilla como la vigente de la empresa: la que vale para hacer una
+ * auditoría. Al marcar una, la anterior deja de serlo automáticamente (la BD
+ * solo admite una vigente por empresa).
+ *
+ * Solo se puede marcar una plantilla que tenga versión publicada: una auditoría
+ * no debe lanzarse con un borrador a medias.
+ */
+export async function marcarPlantillaVigente(plantillaId: string): Promise<{ ok: boolean; error?: string }> {
   const { supabase, empresaId } = await ctx();
   if (!empresaId) return { ok: false, error: "Sin sesión" };
+
+  // La plantilla debe ser de esta empresa.
+  const { data: plantilla } = await supabase
+    .from("auditoria_plantillas")
+    .select("id")
+    .eq("id", plantillaId)
+    .eq("empresa_id", empresaId)
+    .maybeSingle();
+  if (!plantilla) return { ok: false, error: "Plantilla no encontrada" };
+
+  const { data: publicada } = await supabase
+    .from("auditoria_plantilla_versiones")
+    .select("id")
+    .eq("plantilla_id", plantillaId)
+    .eq("estado", "publicada")
+    .limit(1)
+    .maybeSingle();
+  if (!publicada) return { ok: false, error: "Publica la plantilla antes de marcarla vigente" };
+
+  // Primero se apaga la anterior: el índice único no deja dos vigentes a la vez.
+  const { error: errApagar } = await supabase
+    .from("auditoria_plantillas")
+    .update({ es_vigente: false })
+    .eq("empresa_id", empresaId)
+    .eq("es_vigente", true);
+  if (errApagar) return { ok: false, error: errApagar.message };
+
   const { error } = await supabase
     .from("auditoria_plantillas")
-    .update({ archivada })
+    .update({ es_vigente: true })
     .eq("id", plantillaId)
     .eq("empresa_id", empresaId);
   if (error) return { ok: false, error: error.message };
+
   revalidatePath("/calidad/auditorias");
   return { ok: true };
+}
+
+/**
+ * La plantilla con la que se hace una auditoría. Si no hay ninguna marcada
+ * vigente, devuelve null: no se puede auditar hasta que se nombre una.
+ */
+export async function getPlantillaVigente(): Promise<PlantillaResumen | null> {
+  const plantillas = await listPlantillas();
+  return plantillas.find((p) => p.es_vigente) ?? null;
 }
 
 export async function publicarVersion(versionId: string): Promise<{ ok: boolean; error?: string }> {

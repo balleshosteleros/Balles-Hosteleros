@@ -90,7 +90,7 @@ export async function getCalidadDashboard(): Promise<CalidadDashboard> {
          local:locales!auditoria_envios_local_id_fkey(nombre)`,
       )
       .eq("empresa_id", empresaId),
-    supabase.from("auditoria_plantillas").select("id, archivada").eq("empresa_id", empresaId),
+    supabase.from("auditoria_plantillas").select("id").eq("empresa_id", empresaId),
     supabase
       .from("inspeccion_envios")
       .select("id, nota_final, estado, created_at, fecha_inspeccion")
@@ -210,9 +210,7 @@ export async function getCalidadDashboard(): Promise<CalidadDashboard> {
       enviadasTrimestre: aTrimestre.length,
       pendientesBorrador: aPendientes,
       notaMediaTrimestre: avg(aTrimestre.map((e) => e.nota_final)),
-      plantillasActivas: (auditoriaPlantillas ?? []).filter(
-        (p) => !(p as { archivada: boolean }).archivada,
-      ).length,
+      plantillasActivas: (auditoriaPlantillas ?? []).length,
       porLocal,
     },
     inspecciones: {

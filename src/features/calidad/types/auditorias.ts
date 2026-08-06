@@ -16,7 +16,12 @@ export interface AuditoriaPlantilla {
   nombre: string;
   descripcion: string | null;
   clonada_de_plantilla_id: string | null;
-  archivada: boolean;
+  /**
+   * La plantilla que vale para hacer una auditoría. Solo UNA por empresa.
+   * No confundir con `vigente` de AuditoriaVersion, que es qué versión manda
+   * dentro de una misma plantilla.
+   */
+  es_vigente: boolean;
   created_at: string;
   created_by: string | null;
 }
