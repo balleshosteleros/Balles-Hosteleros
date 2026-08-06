@@ -1,11 +1,14 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { ClipboardCheck } from "lucide-react";
 import { listEnvios, type EnvioResumen } from "@/features/calidad/actions/envios-actions";
 import { PlantillasNavButtonAuditorias } from "./PlantillasListView";
+import { AnaliticaNavButton } from "./AuditoriasAnaliticaView";
+import { formatFechaAuditoria } from "@/features/calidad/lib/fecha-auditoria";
 import type { AuditoriasTab } from "./CalidadAuditoriasView";
 import {
   SubmoduleToolbar,
@@ -29,10 +32,7 @@ const columnasDef: ToolbarColumna[] = [
   { campo: "estado", label: "Estado" },
 ];
 
-function formatFecha(iso: string): string {
-  const d = new Date(iso);
-  return d.toLocaleDateString("es-ES", { day: "2-digit", month: "2-digit", year: "numeric" });
-}
+const formatFecha = formatFechaAuditoria;
 
 function NotaBadge({ nota }: { nota: number | null }) {
   if (nota === null) return <span className="text-muted-foreground">—</span>;
@@ -50,6 +50,7 @@ interface EnviosListViewProps {
 }
 
 export function EnviosListView({ onTabChange }: EnviosListViewProps) {
+  const router = useRouter();
   const [envios, setEnvios] = useState<EnvioResumen[]>([]);
   const [loading, setLoading] = useState(true);
   const [busqueda, setBusqueda] = useState("");
@@ -85,7 +86,12 @@ export function EnviosListView({ onTabChange }: EnviosListViewProps) {
         onColumnasVisiblesChange={setColumnasVisibles}
         columnasOrden={columnasOrden}
         onColumnasOrdenChange={setColumnasOrden}
-        extraIzquierda={<PlantillasNavButtonAuditorias onTabChange={onTabChange} />}
+        extraIzquierda={
+          <div className="flex items-center gap-2">
+            <PlantillasNavButtonAuditorias onTabChange={onTabChange} />
+            <AnaliticaNavButton onClick={() => onTabChange("graficas")} />
+          </div>
+        }
       />
 
       <ResizableColumnsProvider storageKey="calidad-auditorias-envios">
@@ -113,7 +119,11 @@ export function EnviosListView({ onTabChange }: EnviosListViewProps) {
                 <tr><td colSpan={columnasRender.length} className="text-center py-10 text-muted-foreground">Ninguna auditoría coincide con la búsqueda.</td></tr>
               ) : (
                 filtrados.map((e) => (
-                  <tr key={e.id} className="border-b hover:bg-muted/30 transition-colors">
+                  <tr
+                    key={e.id}
+                    className="border-b hover:bg-muted/30 cursor-pointer transition-colors"
+                    onClick={() => router.push(`/calidad/auditorias/${e.id}`)}
+                  >
                     {columnasRender.map((c) => {
                       const cells: Record<string, React.ReactNode> = {
                         numero_secuencial: <span className="font-mono text-xs text-muted-foreground">{e.numero_secuencial}</span>,
