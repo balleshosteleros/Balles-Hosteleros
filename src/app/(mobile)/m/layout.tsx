@@ -15,7 +15,11 @@ export const metadata: Metadata = {
   manifest: "/manifest.webmanifest",
   appleWebApp: {
     capable: true,
-    title: "Balles",
+    // En iPhone, ESTE valor gana al `short_name` del manifest al añadir a la
+    // pantalla de inicio: es el que aparece en el campo editable. Tenía "Balles"
+    // y por eso la app se guardaba con el nombre a medias aunque el manifest
+    // dijera otra cosa (Iván, 06-ago). Los dos sitios deben ir a la vez.
+    title: "Balles Hosteleros",
     statusBarStyle: "default",
     startupImage: [
       {

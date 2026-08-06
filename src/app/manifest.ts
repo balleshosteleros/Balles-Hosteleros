@@ -5,7 +5,12 @@ import type { MetadataRoute } from "next";
 export default function manifest(): MetadataRoute.Manifest {
   return {
     name: "Balles Hosteleros · Mi Panel",
-    short_name: "Balles",
+    // `short_name` es lo que sale bajo el icono en la pantalla de inicio y lo que
+    // el móvil propone en el campo editable al añadirla. Nombre COMPLETO a
+    // propósito (Iván, 06-ago): antes decía solo "Balles". Si no cabe, el sistema
+    // lo recorta al pintarlo, pero el nombre que se guarda y el que se busca es
+    // este entero.
+    short_name: "Balles Hosteleros",
     description: "Portal del empleado: fichar, turnos, comunicados y solicitudes.",
     // El icono de la pantalla de inicio abre SIEMPRE por aquí. `?app=1` marca que
     // viene del arranque de la PWA (no de una navegación normal), para que la
