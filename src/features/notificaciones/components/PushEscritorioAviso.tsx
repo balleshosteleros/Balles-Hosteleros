@@ -21,6 +21,31 @@ const POSPUESTO_KEY = "bh_push_escritorio_pospuesto";
 const DIAS_ESPERA = 7;
 
 /**
+ * Reguarda en servidor la suscripción viva de este navegador, sin preguntar nada.
+ *
+ * Solo se llama con el permiso ya concedido y el aparato ya de alta: sirve para
+ * que una renovación de endpoint hecha por el navegador no deje la fila de la BD
+ * apuntando a una suscripción muerta. `savePushSubscription` desactiva por
+ * `device_id` las filas viejas del mismo aparato, así que esto no acumula filas.
+ */
+async function refrescarSuscripcion(): Promise<void> {
+  try {
+    const sub = await subscribeForPush();
+    if (!sub) return;
+    await savePushSubscription({
+      endpoint: sub.endpoint,
+      p256dh: sub.p256dh,
+      auth: sub.auth,
+      userAgent: navigator.userAgent,
+      deviceLabel: "Ordenador",
+      deviceId: getDeviceId() ?? undefined,
+    });
+  } catch {
+    /* silencioso: es mantenimiento en segundo plano, no una acción del usuario */
+  }
+}
+
+/**
  * Ofrece activar los avisos del sistema en el ORDENADOR.
  *
  * Diferencias deliberadas con la tarjeta del móvil (PushPermissionCard):
@@ -60,7 +85,16 @@ export function PushEscritorioAviso() {
       // contra la BD y solo callamos si está realmente registrado.
       if (permission === "granted") {
         const endpoint = await getExistingPushEndpoint();
-        if (endpoint && (await isPushSubscriptionSaved(endpoint))) return;
+        const deviceId = getDeviceId();
+        if (endpoint && (await isPushSubscriptionSaved(endpoint, deviceId))) {
+          // El aparato consta de alta, pero el navegador pudo haber renovado su
+          // suscripción por su cuenta: entonces la fila de la BD apunta a un
+          // endpoint muerto y los avisos NO llegan aunque aquí callemos. Se
+          // reguarda en silencio (ya hay permiso, no se pregunta nada) para que
+          // el alta siga apuntando a la suscripción viva.
+          void refrescarSuscripcion();
+          return;
+        }
       }
 
       if (!cancelado) setVisible(true);

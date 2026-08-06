@@ -67,21 +67,41 @@ export async function savePushSubscription(
 }
 
 /**
- * ¿Está este dispositivo (endpoint) realmente guardado y activo en la BD?
+ * ¿Está este APARATO realmente dado de alta y activo en la BD?
  *
  * El permiso del navegador y la suscripción en servidor son cosas distintas: si
  * el guardado falla, el permiso se queda concedido igualmente y el dispositivo
  * queda "mudo" (no recibe nada) sin que la app pueda darse cuenta. Esto permite
  * detectar ese estado y volver a ofrecer la activación.
+ *
+ * Se pregunta por `device_id` y NO solo por endpoint: el navegador renueva la
+ * suscripción por su cuenta y cada renovación trae un endpoint nuevo, así que
+ * preguntar por endpoint daba "no está dado de alta" en un ordenador que sí lo
+ * estaba — y el cartel de "Activa los avisos" volvía a salir en CADA entrada por
+ * mucho que el usuario lo activara. El endpoint se mantiene como respaldo para
+ * los aparatos antiguos, que se guardaron sin `device_id`.
  */
 export async function isPushSubscriptionSaved(
   endpoint: string,
+  deviceId?: string | null,
 ): Promise<boolean> {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return false;
+
+  if (deviceId) {
+    const { data } = await supabase
+      .from("push_subscriptions")
+      .select("id")
+      .eq("user_id", user.id)
+      .eq("device_id", deviceId)
+      .eq("enabled", true)
+      .limit(1);
+    if (data && data.length > 0) return true;
+  }
+
   const { data } = await supabase
     .from("push_subscriptions")
     .select("endpoint")
