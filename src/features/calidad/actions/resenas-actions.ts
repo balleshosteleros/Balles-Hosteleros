@@ -301,7 +301,11 @@ export async function syncResenasGoogle(): Promise<SyncGoogleResult> {
     }
 
     if (result.ok) revalidatePath("/calidad/resenas");
-    return result;
+    // Google solo devuelve 5 reseñas por consulta: si las 5 son nuevas, el
+    // cupo se llenó y pudo quedarse alguna fuera. Aquí no se emite aviso
+    // interno (el usuario está mirando la pantalla); se marca para que la UI
+    // lo diga en el mismo momento.
+    return { ...result, cupoLleno: result.ok && result.insertadas >= 5 };
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Error desconocido";
     return {

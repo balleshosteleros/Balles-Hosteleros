@@ -11,6 +11,12 @@ export interface SyncGoogleResult {
   actualizadas: number;
   total: number;
   error?: string;
+  /**
+   * Las 5 reseñas que devuelve Google (su máximo) eran todas nuevas, así que
+   * es probable que hubiera más sin recoger. Solo lo rellena la sincronización
+   * manual, para avisar en pantalla.
+   */
+  cupoLleno?: boolean;
 }
 
 export async function syncResenasGoogleForEmpresa(

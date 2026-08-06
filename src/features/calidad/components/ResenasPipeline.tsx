@@ -224,6 +224,15 @@ export function ResenasPipeline() {
     toast.success(
       `Sincronizado: ${res.insertadas} nuevas, ${res.actualizadas} actualizadas (${res.total} en Google)`,
     );
+    // Google solo deja leer 5 de una vez: si las 5 eran nuevas, puede que
+    // hubiera más que no caben y que ya no se pueden recuperar desde aquí.
+    if (res.cupoLleno) {
+      toast.warning("Puede que falte alguna reseña", {
+        description:
+          "Han entrado 5 de golpe, que es el máximo que Google deja leer. Si ese día hubo más, revísalas en tu ficha de Google y contéstalas allí.",
+        duration: 12000,
+      });
+    }
     cargar();
   };
 

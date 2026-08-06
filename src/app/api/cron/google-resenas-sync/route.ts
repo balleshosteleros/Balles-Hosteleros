@@ -29,6 +29,10 @@ import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { syncResenasGoogleForEmpresa } from "@/features/calidad/services/resenas-google-sync";
 import { generarBorradoresPendientesForEmpresa } from "@/features/calidad/services/generar-borradores";
+import { emitirNotificacion } from "@/features/notificaciones/actions/notificaciones-actions";
+
+/** Tope de reseñas que devuelve Google Places por consulta. */
+const MAX_RESENAS_GOOGLE = 5;
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -52,6 +56,10 @@ export async function GET(request: Request) {
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
   );
+
+  // Clave de día (UTC) para no repetir el aviso de cupo si el cron se
+  // reejecuta a mano dentro de la misma jornada.
+  const hoyClave = new Date().toISOString().slice(0, 10);
 
   // ─── Empresas a sincronizar ───────────────────────────────────────────────
   const { searchParams } = new URL(request.url);
@@ -104,7 +112,45 @@ export async function GET(request: Request) {
         }
       }
 
-      resultados.push({ empresaId, ...result, borradores });
+      // ─── Aviso de posible pérdida ─────────────────────────────────────────
+      // Google solo devuelve 5 reseñas. Si las 5 son nuevas, el cupo se llenó
+      // y es probable que hubiera más que no caben: se avisa para revisarlas
+      // a mano en la ficha de Google. Con 4 o menos sobró hueco, luego no se
+      // perdió ninguna y no se molesta a nadie.
+      let avisoCupo = false;
+      if (result.ok && result.insertadas >= MAX_RESENAS_GOOGLE) {
+        try {
+          const { data: emp } = await supabase
+            .from("empresas")
+            .select("nombre")
+            .eq("id", empresaId)
+            .maybeSingle();
+          const nombreEmpresa = (emp?.nombre as string | null) ?? "la empresa";
+
+          const res = await emitirNotificacion({
+            empresaId,
+            system: true,
+            tipo: "alerta",
+            titulo: `${nombreEmpresa}: puede que falte alguna reseña de Google`,
+            mensaje:
+              `Se han recogido ${result.insertadas} reseñas nuevas de una sola vez, que es el máximo que Google deja leer. ` +
+              `Si ese día hubo más, las que sobran no se pueden recuperar desde aquí: revísalas en la ficha de Google y contéstalas allí.`,
+            segmento: { tipo: "area", area: "ADMINISTRATIVA" },
+            accionUrl: "/calidad/resenas",
+            // Un aviso por empresa y día: el cron es diario, pero si se
+            // reejecuta a mano no se duplica.
+            dedupeKey: `resenas-cupo:${empresaId}:${hoyClave}`,
+          });
+          avisoCupo = res.creadas > 0;
+        } catch (e) {
+          console.warn(
+            `[cron/google-resenas-sync] aviso de cupo falló en ${empresaId}:`,
+            e,
+          );
+        }
+      }
+
+      resultados.push({ empresaId, ...result, borradores, avisoCupo });
       if (!result.ok) hayErrores = true;
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
