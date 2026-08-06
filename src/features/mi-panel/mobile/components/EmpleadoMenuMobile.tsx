@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { createPortal } from "react-dom";
 import Image from "next/image";
 import { useRouter, usePathname } from "next/navigation";
 import {
@@ -57,6 +58,9 @@ export function EmpleadoMenuMobile({ nombre, avatarUrl }: Props) {
   const pathname = usePathname() ?? "/m";
   const [confirmando, setConfirmando] = useState(false);
   const [saliendo, setSaliendo] = useState(false);
+  // Menú CONTROLADO: permite cerrarlo desde el código si hiciera falta, y hace
+  // explícito su estado (útil para no dejarlo abierto detrás de la confirmación).
+  const [menuAbierto, setMenuAbierto] = useState(false);
 
   // Vista activa según la ruta: /m/departamentos = departamentos; resto = paneles.
   const vistaActiva: Vista = pathname.startsWith("/m/departamentos")
@@ -127,7 +131,7 @@ export function EmpleadoMenuMobile({ nombre, avatarUrl }: Props) {
 
   return (
     <>
-      <DropdownMenu>
+      <DropdownMenu open={menuAbierto} onOpenChange={setMenuAbierto}>
         <DropdownMenuTrigger asChild>
           <button
             type="button"
@@ -195,8 +199,17 @@ export function EmpleadoMenuMobile({ nombre, avatarUrl }: Props) {
           <DropdownMenuSeparator />
 
           <DropdownMenuItem
-            onSelect={(e) => {
-              e.preventDefault();
+            onSelect={() => {
+              // NO se usa `preventDefault()`: antes se hacía, y eso impedía que el
+              // menú se cerrara. El menú quedaba montado por encima —tapando la
+              // cabecera con el nombre y el selector de empresa— y la hoja de
+              // confirmación se pintaba a medias debajo: solo asomaba su
+              // "Cancelar" flotando en la pantalla. El botón rojo para salir
+              // quedaba invisible, así que no había forma de cerrar sesión
+              // (Iván, 06-ago, captura del menú abierto con "Cancelar" suelto).
+              //
+              // Dejando que Radix cierre el menú, la confirmación se muestra sola
+              // (va en un portal aparte, fuera de este árbol).
               setConfirmando(true);
             }}
             className="cursor-pointer gap-2 px-3 py-1.5 text-destructive focus:text-destructive"
@@ -207,16 +220,30 @@ export function EmpleadoMenuMobile({ nombre, avatarUrl }: Props) {
         </DropdownMenuContent>
       </DropdownMenu>
 
-      {/* Confirmación de cierre de sesión (evita salidas accidentales al tacto) */}
-      {confirmando && (
-        <div
-          className="fixed inset-0 z-[80] flex flex-col justify-end bg-black/50"
-          onClick={() => !saliendo && setConfirmando(false)}
-        >
+      {/*
+        Confirmación de cierre de sesión (evita salidas accidentales al tacto).
+
+        Va en un PORTAL a `document.body`, no aquí dentro. Estaba anidada dentro
+        del <DropdownMenu>, y Radix —que mientras el menú está abierto pone el
+        `body` en `pointer-events: none` y monta su propia capa— dejaba la hoja
+        inerte y a medio pintar: se veía su "Cancelar" suelto sobre la pantalla,
+        el botón rojo de salir no aparecía, y el menú seguía tapando la cabecera
+        con el nombre y el selector de empresa.
+
+        En un portal la hoja es hermana del `body`: nada de Radix la alcanza.
+        `z-[100]` la deja por encima del menú (z-50) y de la barra inferior (z-50).
+      */}
+      {confirmando &&
+        typeof document !== "undefined" &&
+        createPortal(
           <div
-            className="rounded-t-3xl bg-background p-5 pb-[max(env(safe-area-inset-bottom),20px)]"
-            onClick={(e) => e.stopPropagation()}
+            className="fixed inset-0 z-[100] flex flex-col justify-end bg-black/50"
+            onClick={() => !saliendo && setConfirmando(false)}
           >
+            <div
+              className="rounded-t-3xl bg-background p-5 pb-[max(env(safe-area-inset-bottom),20px)]"
+              onClick={(e) => e.stopPropagation()}
+            >
             <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-muted" />
             <div className="flex flex-col items-center text-center">
               <div className="flex h-12 w-12 items-center justify-center rounded-full bg-rose-50 text-rose-500 dark:bg-rose-950">
@@ -278,9 +305,10 @@ export function EmpleadoMenuMobile({ nombre, avatarUrl }: Props) {
                 Cancelar
               </button>
             )}
-          </div>
-        </div>
-      )}
+            </div>
+          </div>,
+          document.body,
+        )}
     </>
   );
 }
