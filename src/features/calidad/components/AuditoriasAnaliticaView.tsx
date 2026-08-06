@@ -59,6 +59,20 @@ function claseNota(n: number | null): string {
   return "bg-red-100 text-red-700";
 }
 
+/**
+ * Gravedad por recorrido: cuantas más auditorías arrastra una pregunta, más tiempo
+ * lleva midiéndose y más asentado está el problema. Los tramos son relativos al
+ * máximo del periodo — con 11 auditorías "muchas" no significa lo mismo que con 60 —
+ * así que se reparte en tercios sobre el máximo observado.
+ */
+function nivelRecorrido(veces: number, maximo: number): { etiqueta: string; clase: string } {
+  if (maximo <= 1 || veces <= 1) return { etiqueta: "Puntual", clase: "bg-yellow-100 text-yellow-700" };
+  const ratio = veces / maximo;
+  if (ratio >= 2 / 3) return { etiqueta: "Crónico", clase: "bg-red-100 text-red-700" };
+  if (ratio >= 1 / 3) return { etiqueta: "Recurrente", clase: "bg-orange-100 text-orange-700" };
+  return { etiqueta: "Puntual", clase: "bg-yellow-100 text-yellow-700" };
+}
+
 /** La pendiente se expresa como puntos ganados/perdidos a lo largo de todo el histórico. */
 function TendenciaBadge({ pendiente, puntos }: { pendiente: number; puntos: number }) {
   const total = pendiente * Math.max(0, puntos - 1);
@@ -143,14 +157,27 @@ export function AuditoriasAnaliticaView() {
       .map((s) => ({ etiqueta: s.titulo, nota: s.media, clave: s.clave }));
   }, [data]);
 
-  /** Las 10 preguntas con peor media de todo el histórico: por dónde empezar a arreglar. */
-  const peoresPreguntas = useMemo(() => {
+  /**
+   * Ranking de preguntas por media histórica. Se muestran solo las 5 primeras
+   * salvo que se despliegue el ranking completo, y el orden se puede invertir
+   * para ver las mejores en vez de las peores.
+   */
+  const [ordenPreguntas, setOrdenPreguntas] = useState<"peores" | "mejores">("peores");
+  const [rankingCompleto, setRankingCompleto] = useState(false);
+
+  const preguntasOrdenadas = useMemo(() => {
     if (!data) return [];
-    return data.secciones
-      .flatMap((s) => s.preguntas)
-      .sort((a, b) => a.media - b.media)
-      .slice(0, 10);
-  }, [data]);
+    const todas = data.secciones.flatMap((s) => s.preguntas);
+    return todas.sort((a, b) => (ordenPreguntas === "peores" ? a.media - b.media : b.media - a.media));
+  }, [data, ordenPreguntas]);
+
+  const preguntasVisibles = rankingCompleto ? preguntasOrdenadas : preguntasOrdenadas.slice(0, 5);
+
+  /** Referencia para graduar el recorrido: la pregunta más veces auditada del periodo. */
+  const maxVeces = useMemo(
+    () => preguntasOrdenadas.reduce((max, p) => Math.max(max, p.veces), 0),
+    [preguntasOrdenadas],
+  );
 
   if (loading && !data) {
     return (
@@ -292,25 +319,78 @@ export function AuditoriasAnaliticaView() {
             </div>
           </div>
 
-          {/* Preguntas más problemáticas */}
-          {peoresPreguntas.length > 0 && (
+          {/* Ranking de preguntas: peores o mejores, resumido o completo */}
+          {preguntasOrdenadas.length > 0 && (
             <div className="rounded-lg border bg-card p-4">
-              <h3 className="text-sm font-medium">Preguntas con peor nota</h3>
-              <p className="text-xs text-muted-foreground">Media histórica de cada pregunta, sumando todas las auditorías.</p>
-              <div className="mt-3 divide-y">
-                {peoresPreguntas.map((p) => (
-                  <div key={p.clave} className="flex items-start gap-3 py-2">
-                    <span className={cn("mt-0.5 shrink-0 rounded-md px-2 py-0.5 font-mono text-sm tabular-nums", claseNota(p.media))}>
-                      {num(p.media)}
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <div className="text-sm">{p.texto}</div>
-                      <div className="text-xs text-muted-foreground">{p.seccion} · {p.veces} auditorías</div>
-                    </div>
-                    <TendenciaBadge pendiente={p.tendencia} puntos={p.veces} />
-                  </div>
-                ))}
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <h3 className="text-sm font-medium">
+                    {ordenPreguntas === "peores" ? "Preguntas con peor nota" : "Preguntas con mejor nota"}
+                  </h3>
+                  <p className="text-xs text-muted-foreground">Media histórica de cada pregunta, sumando todas las auditorías.</p>
+                </div>
+                <div className="flex shrink-0 rounded-md border p-0.5">
+                  <button
+                    type="button"
+                    onClick={() => setOrdenPreguntas("peores")}
+                    className={cn(
+                      "rounded px-2.5 py-1 text-xs transition-colors",
+                      ordenPreguntas === "peores" ? "bg-muted font-medium" : "text-muted-foreground hover:text-foreground",
+                    )}
+                  >
+                    Peor nota
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setOrdenPreguntas("mejores")}
+                    className={cn(
+                      "rounded px-2.5 py-1 text-xs transition-colors",
+                      ordenPreguntas === "mejores" ? "bg-muted font-medium" : "text-muted-foreground hover:text-foreground",
+                    )}
+                  >
+                    Mejor nota
+                  </button>
+                </div>
               </div>
+              <div className="mt-3 divide-y">
+                {preguntasVisibles.map((p) => {
+                  const recorrido = nivelRecorrido(p.veces, maxVeces);
+                  return (
+                    <div key={p.clave} className="flex items-start gap-3 py-2">
+                      <span className={cn("mt-0.5 shrink-0 rounded-md px-2 py-0.5 font-mono text-sm tabular-nums", claseNota(p.media))}>
+                        {num(p.media)}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <div className="text-sm">{p.texto}</div>
+                        <div className="text-xs text-muted-foreground">{p.seccion}</div>
+                      </div>
+                      <span
+                        className={cn(
+                          "mt-0.5 shrink-0 rounded-md px-2 py-0.5 text-xs tabular-nums",
+                          recorrido.clase,
+                        )}
+                        title={`${p.veces} auditorías con esta pregunta`}
+                      >
+                        {recorrido.etiqueta} · {p.veces}
+                      </span>
+                      <TendenciaBadge pendiente={p.tendencia} puntos={p.veces} />
+                    </div>
+                  );
+                })}
+              </div>
+              {preguntasOrdenadas.length > 5 && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="mt-2 h-8 w-full text-xs"
+                  onClick={() => setRankingCompleto((v) => !v)}
+                >
+                  {rankingCompleto
+                    ? "Ver solo las 5 primeras"
+                    : `Ver el ranking completo (${preguntasOrdenadas.length} preguntas)`}
+                  <ChevronDown className={cn("ml-1 h-3.5 w-3.5 transition-transform", rankingCompleto && "rotate-180")} />
+                </Button>
+              )}
             </div>
           )}
 
