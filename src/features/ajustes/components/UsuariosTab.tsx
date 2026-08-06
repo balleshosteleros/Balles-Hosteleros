@@ -3,6 +3,11 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { formatFechaEnZona, formatHoraEnZona } from "@/features/empresa/lib/zona-horaria";
+import { AvisosCell } from "@/features/ajustes/components/AvisosCell";
+import {
+  getEstadoPushEmpresa,
+  type EstadoPushUsuario,
+} from "@/features/ajustes/actions/push-estado-actions";
 import {
   AccesoPortal, EstadoAcceso,
   permisosDesdeRol,
@@ -139,6 +144,7 @@ export function UsuariosTab() {
   const [sinAcceso, setSinAcceso] = useState<EmpleadoSinAcceso[]>([]);
   const [rolesData, setRolesData] = useState<Rol[]>([]);
   const [userEmpresas, setUserEmpresas] = useState<Record<string, string[]>>({});
+  const [estadoPush, setEstadoPush] = useState<Record<string, EstadoPushUsuario>>({});
   // empleadoId (profiles.id) → empresa_id propia del perfil. Sirve para
   // resolver la pertenencia a la empresa activa de usuarios legados que aún
   // no tienen filas en user_empresas (unión profiles.empresa_id ∪ user_empresas).
@@ -170,11 +176,13 @@ export function UsuariosTab() {
   const loadAccesos = useCallback(async () => {
     setLoading(true);
     try {
-      const [empResult, sinResult, ueMap] = await Promise.all([
+      const [empResult, sinResult, ueMap, pushMap] = await Promise.all([
         getEmployees(),
         getEmpleadosSinAcceso(),
         listAllUserEmpresas(),
+        getEstadoPushEmpresa(),
       ]);
+      setEstadoPush(pushMap ?? {});
       if (empResult.error) {
         toast.error(empResult.error);
         setAccesos([]);
@@ -451,6 +459,7 @@ export function UsuariosTab() {
                 { label: "ROL", filter: "rol" as const },
                 { label: "ESTADO", filter: "estado" as const },
                 { label: "ÚLTIMA CONEXIÓN" },
+                { label: "AVISOS" },
                 { label: "PERMISOS" },
                 { label: "ACCIONES" },
               ]).map((col) => (
@@ -525,6 +534,13 @@ export function UsuariosTab() {
                 <td className="px-3 py-2.5"><EstadoBadge estado={acc.estadoAcceso} /></td>
                 <td className="px-3 py-2.5 text-muted-foreground text-xs">{acc.ultimaConexion}</td>
                 <td className="px-3 py-2.5">
+                  <AvisosCell
+                    estado={acc.userId ? estadoPush[acc.userId] : undefined}
+                    usuarioId={acc.userId ?? null}
+                    nombre={acc.nombreEmpleado}
+                  />
+                </td>
+                <td className="px-3 py-2.5">
                   {(() => {
                     const k = acc.rol.trim().toLowerCase();
                     const accesos = accesosPorRol.get(k) ?? 0;
@@ -566,10 +582,10 @@ export function UsuariosTab() {
               </tr>
             ))}
             {loading && (
-              <tr><td colSpan={8} className="text-center py-8"><LoadingSpinner /></td></tr>
+              <tr><td colSpan={9} className="text-center py-8"><LoadingSpinner /></td></tr>
             )}
             {!loading && filtrados.length === 0 && (
-              <tr><td colSpan={8} className="text-center py-8 text-muted-foreground">No se encontraron usuarios.</td></tr>
+              <tr><td colSpan={9} className="text-center py-8 text-muted-foreground">No se encontraron usuarios.</td></tr>
             )}
           </tbody>
         </table>
