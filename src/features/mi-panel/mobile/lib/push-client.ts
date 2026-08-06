@@ -11,6 +11,37 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array {
   return arr;
 }
 
+const DEVICE_ID_KEY = "bh_push_device_id";
+
+/**
+ * Identificador estable de ESTE navegador.
+ *
+ * El endpoint de push no sirve para reconocer un aparato: el navegador lo renueva
+ * por su cuenta y cada renovación genera uno nuevo, así que sin esto cada
+ * renovación creaba una fila más y las viejas quedaban vivas para siempre
+ * (6 filas para 2 aparatos reales). El user_agent tampoco vale: el mismo iPhone
+ * cambia de "Safari 26.5" a "26.5.2" al actualizarse.
+ *
+ * Se guarda en localStorage, así que sobrevive a las renovaciones y se pierde si
+ * el usuario borra los datos del navegador — que es justo cuando su suscripción
+ * también muere, así que el par vuelve a nacer junto y coherente.
+ */
+export function getDeviceId(): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const guardado = localStorage.getItem(DEVICE_ID_KEY);
+    if (guardado) return guardado;
+    const nuevo = crypto.randomUUID();
+    localStorage.setItem(DEVICE_ID_KEY, nuevo);
+    return nuevo;
+  } catch {
+    // Modo incógnito / almacenamiento bloqueado: sin id estable. El guardado
+    // cae al comportamiento anterior (una fila por endpoint), que sigue siendo
+    // correcto, solo que sin poder unir renovaciones.
+    return null;
+  }
+}
+
 export function isPushSupported(): boolean {
   return (
     typeof window !== "undefined" &&

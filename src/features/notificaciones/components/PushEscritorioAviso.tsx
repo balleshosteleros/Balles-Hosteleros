@@ -5,6 +5,7 @@ import { Bell, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
+  getDeviceId,
   getExistingPushEndpoint,
   getPushPermission,
   isPushSupported,
@@ -86,6 +87,7 @@ export function PushEscritorioAviso() {
         auth: sub.auth,
         userAgent: navigator.userAgent,
         deviceLabel: "Ordenador",
+        deviceId: getDeviceId() ?? undefined,
       });
       if (!res.ok) {
         toast.error(res.error || "No se pudo guardar la suscripción");

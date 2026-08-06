@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Monitor, Smartphone, BellPlus } from "lucide-react";
+import { Monitor, Smartphone, SendHorizonal } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -92,7 +92,9 @@ export function AvisosCell({
           disabled={enviando || enviado}
           onClick={onPedir}
         >
-          <BellPlus className="h-3.5 w-3.5" />
+          {/* Icono de "enviar", NO una campana: en la app la campana ya es el
+              buzón de notificaciones y aquí confundía con ella. */}
+          <SendHorizonal className="h-3.5 w-3.5" />
         </Button>
       )}
     </div>

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Bell, BellOff, X } from "lucide-react";
 import { toast } from "sonner";
 import {
+  getDeviceId,
   getExistingPushEndpoint,
   getPushPermission,
   isPushSupported,
@@ -80,6 +81,7 @@ export function PushPermissionCard() {
         p256dh: sub.p256dh,
         auth: sub.auth,
         userAgent: navigator.userAgent,
+        deviceId: getDeviceId() ?? undefined,
       });
       if (!res.ok) {
         toast.error(res.error || "No se pudo guardar la suscripción");

@@ -10,6 +10,7 @@ const subscribeSchema = z.object({
   auth: z.string().min(4),
   userAgent: z.string().max(500).optional(),
   deviceLabel: z.string().max(80).optional(),
+  deviceId: z.string().max(64).optional(),
 });
 
 export async function savePushSubscription(
@@ -29,6 +30,21 @@ export async function savePushSubscription(
   const empresaId = await getEmpresaActivaForUser(supabase, user.id);
   if (!empresaId) return { ok: false, error: "Sin empresa activa" };
 
+  const deviceId = parsed.data.deviceId ?? null;
+
+  // Un aparato = una suscripción viva. El navegador renueva su suscripción por
+  // su cuenta y cada renovación trae un endpoint NUEVO, así que sin esto la fila
+  // anterior del mismo aparato se quedaba viva para siempre y la pantalla de
+  // Ajustes → Usuarios enseñaba verde apoyándose en dispositivos ya muertos.
+  if (deviceId) {
+    await supabase
+      .from("push_subscriptions")
+      .update({ enabled: false })
+      .eq("user_id", user.id)
+      .eq("device_id", deviceId)
+      .neq("endpoint", parsed.data.endpoint);
+  }
+
   const { error } = await supabase
     .from("push_subscriptions")
     .upsert(
@@ -40,6 +56,7 @@ export async function savePushSubscription(
         auth: parsed.data.auth,
         user_agent: parsed.data.userAgent ?? null,
         device_label: parsed.data.deviceLabel ?? null,
+        device_id: deviceId,
         enabled: true,
         last_seen_at: new Date().toISOString(),
       },
