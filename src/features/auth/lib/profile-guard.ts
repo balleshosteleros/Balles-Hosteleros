@@ -36,8 +36,13 @@ export async function checkProfileGuard(
 
   if (!profile) return { ok: false, code: 'sin_perfil' }
 
-  const estado = (profile.estado_acceso as string | null) ?? null
-  if (estado && estado !== 'Activo') {
+  // Solo entra quien está explícitamente 'Activo'. Antes era `if (estado && …)`,
+  // que dejaba pasar a quien NO tuviera estado (null o vacío): la condición se
+  // saltaba entera y el usuario colaba sin que nadie le hubiera dado el alta.
+  // Sin estado NO se entra — sin estado no hay permiso, y la ausencia de dato
+  // nunca puede valer como permiso concedido.
+  const estado = (profile.estado_acceso as string | null)?.trim() || null
+  if (estado !== 'Activo') {
     return { ok: false, code: 'cuenta_inactiva' }
   }
 
