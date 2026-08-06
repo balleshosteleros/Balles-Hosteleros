@@ -13,6 +13,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { syncResenasGoogleForEmpresa } from "@/features/calidad/services/resenas-google-sync";
+import { generarBorradoresPendientesForEmpresa } from "@/features/calidad/services/generar-borradores";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -68,7 +69,27 @@ export async function GET(request: Request) {
   for (const empresaId of empresaIds) {
     try {
       const result = await syncResenasGoogleForEmpresa(supabase, empresaId);
-      resultados.push({ empresaId, ...result });
+
+      // Si entraron reseñas nuevas, la IA redacta ya su borrador de respuesta
+      // para que estén listas al abrir la pantalla. Un fallo aquí no invalida
+      // la sincronización, que es lo importante.
+      let borradores = { generados: 0, saltados: 0 };
+      if (result.ok && result.insertadas > 0) {
+        try {
+          const r = await generarBorradoresPendientesForEmpresa(
+            supabase,
+            empresaId,
+          );
+          borradores = { generados: r.generados, saltados: r.saltados };
+        } catch (e) {
+          console.warn(
+            `[cron/google-resenas-sync] borradores IA fallaron en ${empresaId}:`,
+            e,
+          );
+        }
+      }
+
+      resultados.push({ empresaId, ...result, borradores });
       if (!result.ok) hayErrores = true;
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);

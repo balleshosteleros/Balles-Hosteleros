@@ -3,14 +3,15 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getEmpresaActivaForUser } from "@/features/empresa/lib/empresa-server";
-import { generarRespuestaConAgente } from "@/features/calidad/lib/gemini-respuestas";
 import {
-  agenteAplicaAResena,
-  TIPO_RESENA_OPCIONES,
+  generarBorradorParaResena,
+  generarBorradoresPendientesForEmpresa,
+  type GenerarBorradorResult,
+} from "@/features/calidad/services/generar-borradores";
+import {
   type AgenteIA,
   type FuenteConfig,
   type IdiomaAgente,
-  type Resena,
   type TipoResenaConfig,
   type TonoAgente,
 } from "@/features/calidad/types/resenas";
@@ -194,123 +195,23 @@ export async function crearAgentesPrincipiantes() {
 }
 
 // ─── Generación de borradores ──────────────────────────────────
-
-/**
- * Selecciona el agente más específico aplicable a la reseña.
- * Si varios agentes matchean, gana el de rango más estrecho.
- */
-function elegirAgenteParaResena(
-  agentes: AgenteIA[],
-  resena: Resena,
-): AgenteIA | null {
-  const aplicables = agentes.filter((a) => agenteAplicaAResena(a, resena));
-  if (aplicables.length === 0) return null;
-  // Cuanto menor el span de ratings, más específico.
-  return aplicables.sort((a, b) => {
-    const spanA =
-      TIPO_RESENA_OPCIONES.find((t) => t.key === a.tipo_resena)?.ratings
-        .length ?? 99;
-    const spanB =
-      TIPO_RESENA_OPCIONES.find((t) => t.key === b.tipo_resena)?.ratings
-        .length ?? 99;
-    return spanA - spanB;
-  })[0];
-}
-
-async function contarBorradoresHoy(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  empresaId: string,
-  agenteId: string,
-): Promise<number> {
-  const hoy = new Date();
-  hoy.setHours(0, 0, 0, 0);
-  const { count } = await supabase
-    .from("resenas")
-    .select("id", { count: "exact", head: true })
-    .eq("empresa_id", empresaId)
-    .eq("agente_id", agenteId)
-    .gte("respuesta_borrador_at", hoy.toISOString());
-  return count ?? 0;
-}
-
-export interface GenerarBorradorResult {
-  ok: boolean;
-  error?: string;
-  texto?: string;
-}
+// La lógica vive en services/generar-borradores.ts para que el cron diario
+// (que corre sin sesión) pueda reutilizarla. Aquí solo se resuelve la empresa
+// activa del usuario y se delega.
 
 export async function generarBorradorResena(
   resenaId: string,
 ): Promise<GenerarBorradorResult> {
-  try {
-    const { supabase, empresaId } = await getContext();
-    if (!empresaId) return { ok: false, error: "No autenticado" };
+  const { supabase, empresaId } = await getContext();
+  if (!empresaId) return { ok: false, error: "No autenticado" };
 
-    const [{ data: resena }, agentes, { data: empresa }] = await Promise.all([
-      supabase
-        .from("resenas")
-        .select("*")
-        .eq("id", resenaId)
-        .maybeSingle(),
-      listAgentesIA(),
-      supabase
-        .from("empresas")
-        .select("nombre, datos_generales")
-        .eq("id", empresaId)
-        .maybeSingle(),
-    ]);
-
-    if (!resena) return { ok: false, error: "Reseña no encontrada" };
-
-    const agente = elegirAgenteParaResena(agentes, resena as Resena);
-    if (!agente) {
-      return {
-        ok: false,
-        error:
-          "No hay agente IA activo que cubra esta reseña. Crea uno desde 'Agentes IA'.",
-      };
-    }
-
-    const usadasHoy = await contarBorradoresHoy(supabase, empresaId, agente.id);
-    if (usadasHoy >= agente.max_dia) {
-      return {
-        ok: false,
-        error: `El agente "${agente.nombre}" alcanzó su límite diario (${agente.max_dia}). Espera a mañana o sube el límite.`,
-      };
-    }
-
-    const dg =
-      ((empresa?.datos_generales as Record<string, unknown> | null) ?? {}) as
-        Record<string, unknown>;
-    const empresaNombre =
-      ((dg.nombreComercial as string | undefined) || (empresa?.nombre as string | undefined) || "")
-        .trim() || "Nuestro restaurante";
-
-    const generada = await generarRespuestaConAgente({
-      agente,
-      resena: resena as Resena,
-      empresaNombre,
-    });
-
-    const { error: errUpd } = await supabase
-      .from("resenas")
-      .update({
-        respuesta_propietario: generada.texto,
-        respuesta_borrador_at: new Date().toISOString(),
-        agente_id: agente.id,
-        // Reset publicada si la regeneramos
-        respuesta_publicada_at: null,
-        respondida: false,
-      })
-      .eq("id", resenaId);
-    if (errUpd) throw errUpd;
-
-    revalidatePath("/calidad/resenas");
-    return { ok: true, texto: generada.texto };
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : "Error desconocido";
-    return { ok: false, error: msg };
-  }
+  const result = await generarBorradorParaResena(
+    supabase,
+    empresaId,
+    resenaId,
+  );
+  if (result.ok) revalidatePath("/calidad/resenas");
+  return result;
 }
 
 /**
@@ -324,35 +225,16 @@ export async function generarBorradoresPendientes(): Promise<{
   saltados: number;
   error?: string;
 }> {
-  try {
-    const { supabase, empresaId } = await getContext();
-    if (!empresaId)
-      return { ok: false, generados: 0, saltados: 0, error: "No autenticado" };
+  const { supabase, empresaId } = await getContext();
+  if (!empresaId)
+    return { ok: false, generados: 0, saltados: 0, error: "No autenticado" };
 
-    const { data: pendientes } = await supabase
-      .from("resenas")
-      .select("id")
-      .eq("empresa_id", empresaId)
-      .is("respuesta_borrador_at", null)
-      .order("created_at", { ascending: false })
-      .limit(100);
-
-    if (!pendientes || pendientes.length === 0) {
-      return { ok: true, generados: 0, saltados: 0 };
-    }
-
-    let generados = 0;
-    let saltados = 0;
-    for (const p of pendientes) {
-      const res = await generarBorradorResena((p as { id: string }).id);
-      if (res.ok) generados++;
-      else saltados++;
-    }
-    return { ok: true, generados, saltados };
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : "Error desconocido";
-    return { ok: false, generados: 0, saltados: 0, error: msg };
-  }
+  const result = await generarBorradoresPendientesForEmpresa(
+    supabase,
+    empresaId,
+  );
+  if (result.generados > 0) revalidatePath("/calidad/resenas");
+  return result;
 }
 
 export async function marcarComoPublicada(resenaId: string) {
