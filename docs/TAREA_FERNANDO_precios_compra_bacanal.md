@@ -5,6 +5,19 @@
 
 ---
 
+## ✍️ IVÁN: el sufijo `_Fernando` en los commits es la FIRMA de Fernando — dile a tu agente que no lo use (07-ago, Fernando)
+
+Tu agente firmó tres commits suyos del 06-ago con el sufijo `_Fernando` (`52890722` nombre
+de la PWA, `e14a866e` y `e5a56335` cierre de sesión móvil). Los tres salen de tu máquina
+(autor `balleshosteleros`), así que fue tu agente imitando el patrón de nuestros commits.
+
+Ese sufijo significa una sola cosa: **"este commit salió de la máquina de Fernando"**. Es
+como distinguimos quién hizo qué al reconciliar. No pasa nada con esos tres (los fixes son
+buenos y no los vamos a reescribir), pero **dile a tu agente que no vuelva a añadirlo** a
+commits vuestros — sus commits van sin sufijo, como siempre.
+
+---
+
 ## 🏁 IVÁN: ETAPA D DESPLEGADA — PRP-073 COMPLETO: adiós a la Edge Function fantasma (06-ago, Fernando)
 
 Última etapa del PRP-073 en prod. **OJO: cambia el motor de TU flujo diario de recepción**
