@@ -111,7 +111,7 @@ export function SeguimientoCalidadResena({
         </div>
 
         <div className="space-y-1">
-          <Label className="text-xs">Fecha del registro</Label>
+          <Label className="text-xs">Fecha de la visita</Label>
           <Input
             type="date"
             className="h-9"
@@ -121,7 +121,7 @@ export function SeguimientoCalidadResena({
         </div>
 
         <div className="space-y-1">
-          <Label className="text-xs">Fecha de la sesión</Label>
+          <Label className="text-xs">Fecha de gestión</Label>
           <Input
             type="date"
             className="h-9"
@@ -206,7 +206,7 @@ export function SeguimientoCalidadResena({
       </div>
 
       <div className="space-y-1">
-        <Label className="text-xs">Observaciones del closer</Label>
+        <Label className="text-xs">Observaciones de calidad</Label>
         <Textarea
           value={observaciones}
           onChange={(e) => onObservacionesChange(e.target.value)}

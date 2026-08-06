@@ -81,14 +81,14 @@ CREATE INDEX IF NOT EXISTS resenas_gestionada_por_idx
 COMMENT ON COLUMN public.resenas.plataforma IS
   'Por dónde entró el cliente: go_high_level | cover_manager | google | otro. NULL = sin informar.';
 COMMENT ON COLUMN public.resenas.fecha_registro IS
-  'Fecha en que el cliente se registró en la plataforma de origen.';
+  'Fecha de la visita del cliente al restaurante (en pantalla: "Fecha de la visita").';
 COMMENT ON COLUMN public.resenas.fecha_sesion IS
-  'Fecha en que el cliente vino al restaurante.';
+  'Fecha en que calidad gestionó la reseña (en pantalla: "Fecha de gestión").';
 COMMENT ON COLUMN public.resenas.coge_telefono IS
   'si | no | sin_telefono. NULL = todavía no se ha llamado.';
 COMMENT ON COLUMN public.resenas.estado_gestion IS
   'Seguimiento comercial de la llamada. NO confundir con `estado` (columna del kanban).';
 COMMENT ON COLUMN public.resenas.observaciones_closer IS
-  'Notas libres de quien llama al cliente.';
+  'Notas libres de quien llama al cliente (en pantalla: "Observaciones de calidad").';
 COMMENT ON COLUMN public.resenas.gestionada_por IS
   'Usuario que lleva esta reseña (auth.users.id).';
