@@ -101,16 +101,17 @@ export function PushPermissionCard() {
 
   if (needsInstall) {
     return (
-      <div className="mx-5 mt-4 flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-3 text-sm dark:border-amber-900 dark:bg-amber-950/40">
-        <BellOff className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+      <div className="mx-5 mt-4 flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-900 dark:bg-amber-950/40">
+        <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-amber-500/15 text-amber-600">
+          <BellOff className="h-4 w-4" />
+        </span>
         <div className="min-w-0 flex-1">
-          <p className="text-xs font-semibold uppercase tracking-wider text-amber-900 dark:text-amber-100">
-            Activa las llamadas y avisos
+          <p className="text-sm font-semibold text-amber-950 dark:text-amber-50">
+            Añade la app a tu pantalla de inicio
           </p>
-          <p className="mt-0.5 text-xs text-amber-900/80 dark:text-amber-100/80">
-            En iPhone, para que te suenen las llamadas y lleguen los avisos tienes que añadir
-            esta app a tu pantalla de inicio: toca <strong>Compartir</strong> →{" "}
-            <strong>Añadir a inicio</strong>. Después ábrela desde el icono y activa los avisos.
+          <p className="mt-1 text-xs text-amber-900/80 dark:text-amber-100/80">
+            Toca <strong>Compartir</strong> → <strong>Añadir a inicio</strong> y ábrela desde el
+            icono. Es necesario para usar la app.
           </p>
         </div>
         <button
@@ -125,25 +126,26 @@ export function PushPermissionCard() {
   }
 
   return (
-    <div className="mx-5 mt-4 flex items-start gap-3 rounded-2xl border border-border bg-card p-3">
-      <Bell className="mt-0.5 h-4 w-4 shrink-0 text-foreground" />
+    <div className="mx-5 mt-4 flex items-start gap-3 rounded-2xl border border-border bg-card p-4 shadow-sm">
+      <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+        <Bell className="h-4 w-4" />
+      </span>
       <div className="min-w-0 flex-1">
-        <p className="text-sm font-medium">Activar llamadas y avisos</p>
-        <p className="mt-0.5 text-xs text-muted-foreground">
-          Necesario para que te suenen las llamadas de tus compañeros, y para avisarte cuando
-          aprueben tu solicitud, llegue un comunicado o cambie tu turno.
+        <p className="text-sm font-semibold">Activa las notificaciones</p>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Son necesarias para poder usar la app.
         </p>
-        <div className="mt-2 flex gap-2">
+        <div className="mt-3 flex gap-2">
           <button
             onClick={onAccept}
             disabled={busy}
-            className="rounded-full bg-foreground px-3 py-1.5 text-xs font-medium text-background active:opacity-80"
+            className="rounded-full bg-foreground px-4 py-2 text-xs font-semibold text-background active:opacity-80 disabled:opacity-60"
           >
-            {busy ? "Activando…" : "Activar"}
+            {busy ? "Activando…" : "Activar ahora"}
           </button>
           <button
             onClick={onDismiss}
-            className="rounded-full bg-muted px-3 py-1.5 text-xs font-medium text-muted-foreground active:opacity-80"
+            className="rounded-full px-3 py-2 text-xs font-medium text-muted-foreground active:opacity-80"
           >
             Ahora no
           </button>
