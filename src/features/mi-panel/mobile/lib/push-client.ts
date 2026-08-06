@@ -34,6 +34,26 @@ export function getPushPermission(): NotificationPermission | "unsupported" {
 }
 
 /**
+ * Asegura que el service worker está registrado ANTES de usar `serviceWorker.ready`.
+ *
+ * Ojo: `ready` no rechaza nunca, se queda colgado indefinidamente si nadie ha
+ * registrado el SW. En el móvil siempre lo registra la instalación de la PWA,
+ * pero en el escritorio se entra por una URL normal y no hay registro previo:
+ * sin esto, activar los avisos desde el ordenador se quedaba esperando en
+ * silencio para siempre.
+ */
+export async function ensureServiceWorker(): Promise<ServiceWorkerRegistration | null> {
+  if (!isPushSupported()) return null;
+  try {
+    const existente = await navigator.serviceWorker.getRegistration();
+    if (existente) return existente;
+    return await navigator.serviceWorker.register("/sw.js");
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Endpoint de la suscripción que YA tiene este navegador, sin pedir permiso ni
  * crear ninguna. Sirve para comprobar contra el servidor si este dispositivo
  * está realmente dado de alta, o si solo tiene el permiso concedido "a medias".
@@ -41,7 +61,8 @@ export function getPushPermission(): NotificationPermission | "unsupported" {
 export async function getExistingPushEndpoint(): Promise<string | null> {
   if (!isPushSupported()) return null;
   try {
-    const reg = await navigator.serviceWorker.ready;
+    const reg = await ensureServiceWorker();
+    if (!reg) return null;
     const sub = await reg.pushManager.getSubscription();
     return sub?.endpoint ?? null;
   } catch {
@@ -56,10 +77,14 @@ export async function subscribeForPush(): Promise<{
 } | null> {
   if (!isPushSupported() || !VAPID_PUBLIC) return null;
 
+  // El registro va ANTES de pedir permiso: si el SW no se puede registrar, no
+  // tiene sentido quemar la única pregunta que el navegador nos deja hacer.
+  const reg = await ensureServiceWorker();
+  if (!reg) return null;
+
   const perm = await Notification.requestPermission();
   if (perm !== "granted") return null;
 
-  const reg = await navigator.serviceWorker.ready;
   let sub = await reg.pushManager.getSubscription();
   if (!sub) {
     const key = urlBase64ToUint8Array(VAPID_PUBLIC);
@@ -81,7 +106,8 @@ export async function subscribeForPush(): Promise<{
 
 export async function unsubscribeFromPush(): Promise<string | null> {
   if (!isPushSupported()) return null;
-  const reg = await navigator.serviceWorker.ready;
+  const reg = await ensureServiceWorker();
+  if (!reg) return null;
   const sub = await reg.pushManager.getSubscription();
   if (!sub) return null;
   const endpoint = sub.endpoint;

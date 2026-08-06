@@ -46,6 +46,7 @@ import { ToolsAvisoPopups } from "@/features/layout/components/ToolsAvisoPopups"
 import { CamarasDrawer } from "@/features/camaras/components/CamarasDrawer";
 import { RecordingTrigger } from "@/features/recorder/components/RecordingTrigger";
 import { NotificacionBell } from "@/features/notificaciones/components/NotificacionBell";
+import { PushEscritorioAviso } from "@/features/notificaciones/components/PushEscritorioAviso";
 import { RecordingDrawer } from "@/features/recorder/components/RecordingDrawer";
 import { RecordingOverlay } from "@/features/recorder/components/RecordingOverlay";
 import { CountdownOverlay } from "@/features/recorder/components/CountdownOverlay";
@@ -457,6 +458,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         {showUi && <FloatingSoporteButton />}
       </div>
       {showUi && <ToolsAvisoPopups />}
+      {showUi && <PushEscritorioAviso />}
       <RecordingDrawer />
       <RecordingOverlay />
       <CountdownOverlay />

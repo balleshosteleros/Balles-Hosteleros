@@ -2,7 +2,7 @@
 // Fase 2: solo permite instalación (sin cache offline; eso llega en Fase 5).
 // Estrategia por defecto: NetworkOnly — passthrough sin interceptar.
 
-const SW_VERSION = "v1-fase2";
+const SW_VERSION = "v2-push-escritorio";
 
 self.addEventListener("install", (event) => {
   // Activación inmediata en primer install.
@@ -57,15 +57,30 @@ self.addEventListener("push", (event) => {
 
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
-  const targetUrl = (event.notification.data && event.notification.data.url) || "/m";
+  const targetUrl = (event.notification.data && event.notification.data.url) || null;
   event.waitUntil(
-    self.clients
-      .matchAll({ type: "window", includeUncontrolled: true })
-      .then((clients) => {
+    (async () => {
+      const clients = await self.clients.matchAll({
+        type: "window",
+        includeUncontrolled: true,
+      });
+
+      // Si ya está la ventana concreta abierta, se enfoca esa.
+      if (targetUrl) {
         for (const client of clients) {
           if (client.url.includes(targetUrl) && "focus" in client) return client.focus();
         }
-        if (self.clients.openWindow) return self.clients.openWindow(targetUrl);
-      }),
+      }
+
+      // Sin destino concreto: en el ordenador hay una ventana de Balles abierta
+      // detrás de otras, y lo que el usuario espera al pulsar el aviso es que
+      // se ponga delante — NO que le abran otra pestaña en la vista móvil.
+      if (!targetUrl && clients.length > 0) {
+        const win = clients.find((c) => "focus" in c);
+        if (win) return win.focus();
+      }
+
+      if (self.clients.openWindow) return self.clients.openWindow(targetUrl || "/m");
+    })(),
   );
 });
