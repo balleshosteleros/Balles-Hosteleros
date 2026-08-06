@@ -69,16 +69,25 @@ export function PlantillaEditor({ plantillaId, versionIdInicial }: { plantillaId
   const router = useRouter();
   const [data, setData] = useState<PlantillaConVersion | null>(null);
   const [loading, setLoading] = useState(true);
+  // Versión que se está mostrando. Arranca en la del enlace (?v=) y la mandan
+  // también el selector y "Editar y publicar nueva versión": el router.replace
+  // no remonta el componente, así que sin este estado el reload() posterior
+  // recargaba la versión vieja y parecía que el botón no hacía nada.
+  const [versionId, setVersionId] = useState<string | undefined>(versionIdInicial);
   useGlobalLoadingSync(loading);
   const { confirm: confirmDelete, dialog: confirmDeleteDialog } =
     useConfirmDelete();
   const [, startTransition] = useTransition();
 
-  const reload = useCallback(async () => {
-    const d = await getPlantillaConVersion(plantillaId, versionIdInicial);
+  useEffect(() => {
+    setVersionId(versionIdInicial);
+  }, [versionIdInicial]);
+
+  const reload = useCallback(async (vid?: string) => {
+    const d = await getPlantillaConVersion(plantillaId, vid ?? versionId);
     setData(d);
     setLoading(false);
-  }, [plantillaId, versionIdInicial]);
+  }, [plantillaId, versionId]);
 
   useEffect(() => {
     reload();
@@ -114,7 +123,7 @@ export function PlantillaEditor({ plantillaId, versionIdInicial }: { plantillaId
     const res = await publicarVersion(versionActual.id);
     if (res.ok) {
       toast.success(`Versión ${versionActual.version} publicada y vigente`);
-      reload();
+      reload(versionActual.id);
     } else {
       toast.error(res.error ?? "Error al publicar");
     }
@@ -129,8 +138,9 @@ export function PlantillaEditor({ plantillaId, versionIdInicial }: { plantillaId
     const res = await crearBorradorNuevaVersion(vigente.id);
     if (res.ok) {
       toast.success("Borrador creado");
+      setVersionId(res.versionId);
       router.replace(`/calidad/auditorias/plantillas/${plantillaId}?v=${res.versionId}`);
-      reload();
+      reload(res.versionId);
     } else {
       toast.error(res.error);
     }
@@ -156,7 +166,11 @@ export function PlantillaEditor({ plantillaId, versionIdInicial }: { plantillaId
             <VersionSwitcher
               versiones={versiones}
               actualId={versionActual.id}
-              onChange={(vid) => router.push(`/calidad/auditorias/plantillas/${plantillaId}?v=${vid}`)}
+              onChange={(vid) => {
+                setVersionId(vid);
+                router.replace(`/calidad/auditorias/plantillas/${plantillaId}?v=${vid}`);
+                reload(vid);
+              }}
             />
           )}
         </div>
