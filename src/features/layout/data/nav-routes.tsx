@@ -246,17 +246,26 @@ const MODULE_META: Record<string, ModuleMeta> = {
 // ─── Rutas extra (orphan: existen como leaf pero no salen en sidebar) ──────
 
 const EXTRA_ROUTES: Record<string, { title: string; icon?: IconType }> = {
+  "/onboarding": { title: "PUESTA EN MARCHA", icon: Sparkles },
   "/mi-panel/formacion/curso": { title: "CURSO", icon: GraduationCap },
+  "/rrhh/formacion/curso": { title: "CURSO", icon: GraduationCap },
   "/direccion/cronogramas/productividad": { title: "PRODUCTIVIDAD", icon: TrendingUp },
   "/direccion/presentaciones/branding": { title: "BRANDING", icon: Presentation },
   "/logistica/fichas-tecnicas": { title: "FICHAS TÉCNICAS", icon: ClipboardList },
   "/logistica/partidas": { title: "PARTIDAS", icon: LayoutGrid },
   "/logistica/incidencias": { title: "INCIDENCIAS", icon: AlertTriangle },
+  "/cocina/importar-fichas": { title: "IMPORTAR FICHAS", icon: FileUp },
   "/marketing/campanas/email": { title: "CAMPAÑAS — EMAIL", icon: Mail },
   "/marketing/campanas/meta": { title: "CAMPAÑAS — META", icon: Send },
+  "/marketing/campanas/sms": { title: "CAMPAÑAS — SMS", icon: MessageSquare },
   "/marketing/campanas/whatsapp": { title: "CAMPAÑAS — WHATSAPP", icon: MessageSquare },
   "/rrhh/comunicados": { title: "COMUNICADOS", icon: Megaphone },
   "/rrhh/puestos": { title: "PUESTOS", icon: Banknote },
+  "/sala/reservas/links": { title: "ENLACES DE RESERVA", icon: Globe },
+  "/calidad/auditorias/plantillas": { title: "PLANTILLAS", icon: ClipboardList },
+  "/contabilidad/bancos/callback": { title: "BANCOS", icon: Landmark },
+  "/ajustes/canales/google": { title: "CANAL GOOGLE", icon: Globe },
+  "/ajustes/canales/google/salud": { title: "CANAL GOOGLE — SALUD", icon: CheckCircle2 },
 };
 
 // ─── Índice unificado: url → { title, icon } ───────────────────────────────
@@ -297,6 +306,11 @@ export function getModulePath(pathname: string): string {
 function getDynamicTitle(pathname: string): string {
   if (pathname.startsWith("/rrhh/empleados/")) return "FICHA EMPLEADO";
   if (pathname.startsWith("/gestoria/modelos/")) return "MODELO";
+  if (pathname.startsWith("/calidad/auditorias/plantillas/")) return "PLANTILLA";
+  if (pathname.startsWith("/calidad/auditorias/")) {
+    return pathname.endsWith("/rellenar") ? "RELLENAR AUDITORÍA" : "AUDITORÍA";
+  }
+  if (pathname.startsWith("/calidad/cuestionarios/")) return "CUESTIONARIO";
   if (pathname.startsWith("/direccion/presentaciones/")) {
     if (pathname.endsWith("/present")) return "PRESENTAR";
     if (pathname.endsWith("/print")) return "IMPRIMIR";
@@ -311,21 +325,44 @@ function getDynamicTitle(pathname: string): string {
 }
 
 /**
+ * Busca la entrada del índice MÁS PROFUNDA que sea ancestro de la ruta.
+ *
+ * Ejemplo: para "/marketing/pagina-web/<id>/dominios" encuentra
+ * "/marketing/pagina-web" (el submódulo), NO "/marketing" (el módulo).
+ * Se recorta segmento a segmento desde el final, así que siempre gana la
+ * coincidencia más específica.
+ */
+function findAncestorEntry(pathname: string): { title: string; icon?: IconType } | undefined {
+  const segments = pathname.split("/").filter(Boolean);
+  for (let i = segments.length - 1; i > 0; i--) {
+    const candidate = `/${segments.slice(0, i).join("/")}`;
+    const entry = ROUTE_INDEX[candidate];
+    if (entry) return entry;
+  }
+  return undefined;
+}
+
+/**
  * Devuelve título + icono para mostrar en el header.
- * Prioriza la entrada exacta de pathname; si no existe, intenta la raíz del módulo;
- * si tampoco, recurre a títulos dinámicos.
+ *
+ * Orden de resolución:
+ *   1. Entrada exacta del pathname.
+ *   2. Ancestro más profundo del índice → así una página de detalle
+ *      (p. ej. /marketing/pagina-web/<id>) hereda el icono de SU SUBMÓDULO
+ *      (el globo de PÁGINA WEB) y no el del módulo padre (la cámara de
+ *      MARKETING). Regla general: si hay submódulo, manda el submódulo.
+ *   3. Título dinámico, si lo hay, para afinar el texto (PREVIEW, DOMINIOS…).
  */
 export function getRouteMeta(pathname: string): { title: string; icon: IconType | null } {
   const exact = ROUTE_INDEX[pathname];
   if (exact) return { title: exact.title, icon: exact.icon ?? null };
 
-  const moduleRoot = getModulePath(pathname);
+  const ancestor = findAncestorEntry(pathname);
   const dyn = getDynamicTitle(pathname);
-  const moduleEntry = ROUTE_INDEX[moduleRoot];
 
   return {
-    title: dyn || moduleEntry?.title || "",
-    icon: moduleEntry?.icon ?? null,
+    title: dyn || ancestor?.title || "",
+    icon: ancestor?.icon ?? null,
   };
 }
 
