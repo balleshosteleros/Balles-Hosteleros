@@ -60,17 +60,38 @@ function claseNota(n: number | null): string {
 }
 
 /**
- * Gravedad por recorrido: cuantas más auditorías arrastra una pregunta, más tiempo
- * lleva midiéndose y más asentado está el problema. Los tramos son relativos al
- * máximo del periodo — con 11 auditorías "muchas" no significa lo mismo que con 60 —
- * así que se reparte en tercios sobre el máximo observado.
+ * Cuánto pesa lo que dice la pregunta, cruzando las dos variables: el volumen de
+ * auditorías marca lo asentado que está el dato, y la NOTA marca si eso es una
+ * mala o una buena noticia. El volumen por sí solo no es un problema — 11
+ * auditorías con un 9 es una fortaleza consolidada, no una alarma —, así que el
+ * rojo queda reservado a las notas suspensas y las buenas se pintan en verde.
+ *
+ * Los tramos de volumen son relativos al máximo del periodo (con 11 auditorías
+ * "muchas" no significa lo mismo que con 60), así que se reajustan solos.
  */
-function nivelRecorrido(veces: number, maximo: number): { etiqueta: string; clase: string } {
-  if (maximo <= 1 || veces <= 1) return { etiqueta: "Puntual", clase: "bg-yellow-100 text-yellow-700" };
-  const ratio = veces / maximo;
-  if (ratio >= 2 / 3) return { etiqueta: "Crónico", clase: "bg-red-100 text-red-700" };
-  if (ratio >= 1 / 3) return { etiqueta: "Recurrente", clase: "bg-orange-100 text-orange-700" };
-  return { etiqueta: "Puntual", clase: "bg-yellow-100 text-yellow-700" };
+function nivelRecorrido(veces: number, maximo: number, media: number): { etiqueta: string; clase: string } {
+  const ratio = maximo <= 1 ? 0 : veces / maximo;
+  const asentado = veces > 1 && ratio >= 2 / 3;
+  const repetido = veces > 1 && ratio >= 1 / 3;
+
+  // Nota suspensa: el volumen agrava — lleva tiempo fallando.
+  if (media < 5) {
+    if (asentado) return { etiqueta: "Crónico", clase: "bg-red-100 text-red-700" };
+    if (repetido) return { etiqueta: "Recurrente", clase: "bg-orange-100 text-orange-700" };
+    return { etiqueta: "Puntual", clase: "bg-yellow-100 text-yellow-700" };
+  }
+
+  // Nota buena: el volumen consolida — lleva tiempo saliendo bien.
+  if (media >= 7) {
+    if (asentado) return { etiqueta: "Consolidado", clase: "bg-emerald-100 text-emerald-700" };
+    if (repetido) return { etiqueta: "Estable", clase: "bg-emerald-50 text-emerald-700" };
+    return { etiqueta: "Puntual", clase: "bg-muted text-muted-foreground" };
+  }
+
+  // Zona intermedia (5–7): ni alarma ni fortaleza, solo cuánto recorrido tiene.
+  if (asentado) return { etiqueta: "Recurrente", clase: "bg-amber-100 text-amber-700" };
+  if (repetido) return { etiqueta: "Irregular", clase: "bg-amber-50 text-amber-700" };
+  return { etiqueta: "Puntual", clase: "bg-muted text-muted-foreground" };
 }
 
 /** La pendiente se expresa como puntos ganados/perdidos a lo largo de todo el histórico. */
@@ -354,7 +375,7 @@ export function AuditoriasAnaliticaView() {
               </div>
               <div className="mt-3 divide-y">
                 {preguntasVisibles.map((p) => {
-                  const recorrido = nivelRecorrido(p.veces, maxVeces);
+                  const recorrido = nivelRecorrido(p.veces, maxVeces, p.media);
                   return (
                     <div key={p.clave} className="flex items-start gap-3 py-2">
                       <span className={cn("mt-0.5 shrink-0 rounded-md px-2 py-0.5 font-mono text-sm tabular-nums", claseNota(p.media))}>
