@@ -10,8 +10,11 @@ import {
 import { syncResenasGoogleForEmpresa } from "@/features/calidad/services/resenas-google-sync";
 import type { SyncGoogleResult } from "@/features/calidad/services/resenas-google-sync";
 import type {
+  CogeTelefono,
+  EstadoGestionResena,
   EstadoResena,
   OrigenResena,
+  PlataformaResena,
   Resena,
 } from "@/features/calidad/types/resenas";
 
@@ -229,6 +232,14 @@ export interface ActualizarResenaInput {
   rating?: number | null;
   respuesta_propietario?: string | null;
   respondida?: boolean;
+  // Seguimiento de calidad
+  plataforma?: PlataformaResena | null;
+  fecha_registro?: string | null;
+  fecha_sesion?: string | null;
+  coge_telefono?: CogeTelefono | null;
+  estado_gestion?: EstadoGestionResena | null;
+  observaciones_closer?: string | null;
+  gestionada_por?: string | null;
 }
 
 export async function actualizarResena(
@@ -252,6 +263,49 @@ export async function actualizarResena(
 
 export async function moverResena(id: string, estado: EstadoResena) {
   return actualizarResena(id, { estado });
+}
+
+// ─── Empleados para "Gestionada por" ────────────────────────────
+
+export interface EmpleadoGestor {
+  userId: string;
+  nombre: string;
+  puesto: string | null;
+  departamento: string | null;
+}
+
+/**
+ * Empleados activos de la empresa, para el desplegable "Gestionada por".
+ * Vía RPC SECURITY DEFINER: `usuarios` tiene RLS que solo deja ver el propio
+ * perfil, así que sin la RPC el desplegable saldría con una sola persona.
+ */
+export async function listEmpleadosGestores(): Promise<EmpleadoGestor[]> {
+  try {
+    const { supabase, empresaId } = await getContext();
+    if (!empresaId) return [];
+    const { data, error } = await supabase.rpc("chat_empleados", {
+      p_empresa: empresaId,
+    });
+    if (error) throw error;
+    return (data ?? [])
+      .filter((r: Record<string, unknown>) => !!r.user_id)
+      .map((r: Record<string, unknown>) => ({
+        userId: r.user_id as string,
+        nombre: [r.nombre as string, r.apellidos as string]
+          .filter(Boolean)
+          .join(" ")
+          .trim(),
+        puesto: (r.puesto as string | null) ?? null,
+        departamento: (r.departamento as string | null) ?? null,
+      }))
+      .sort((a: EmpleadoGestor, b: EmpleadoGestor) =>
+        a.nombre.localeCompare(b.nombre, "es"),
+      );
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Error desconocido";
+    console.error("[resenas] listEmpleadosGestores:", msg);
+    return [];
+  }
 }
 
 export async function eliminarResena(id: string) {

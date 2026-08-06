@@ -12,6 +12,32 @@ export type OrigenResena =
   | "google"
   | "otro";
 
+// ─── Seguimiento de calidad ───────────────────────────────────
+// Datos que la persona de calidad rellena al llamar al cliente. Antes vivían
+// en una hoja de cálculo aparte. Todos admiten "sin informar" (null): una
+// reseña recién llegada de Google todavía no se ha gestionado.
+
+export type PlataformaResena =
+  | "go_high_level"
+  | "cover_manager"
+  | "google"
+  | "otro";
+
+export type CogeTelefono = "si" | "no" | "sin_telefono";
+
+/**
+ * Punto en el que está la gestión comercial de la reseña. NO confundir con
+ * `EstadoResena`, que es la columna del kanban. Son dos ejes distintos.
+ */
+export type EstadoGestionResena =
+  | "pendiente_llamada"
+  | "no_quiere_llamada"
+  | "pendiente_visitarnos"
+  | "no_quiere_volver"
+  | "mando_whatsapp"
+  | "vuelve_cliente"
+  | "se_revisa_resena";
+
 export interface Resena {
   id: string;
   empresa_id: string;
@@ -39,6 +65,14 @@ export interface Resena {
   respuesta_borrador_at: string | null;
   respuesta_publicada_at: string | null;
   agente_id: string | null;
+  // Seguimiento de calidad (null = todavía sin gestionar)
+  plataforma: PlataformaResena | null;
+  fecha_registro: string | null;
+  fecha_sesion: string | null;
+  coge_telefono: CogeTelefono | null;
+  estado_gestion: EstadoGestionResena | null;
+  observaciones_closer: string | null;
+  gestionada_por: string | null;
 }
 
 // ─── Agentes IA ───────────────────────────────────────────────
@@ -216,6 +250,118 @@ export const ESTADOS_RESENA_ORDER: EstadoResena[] = ESTADOS_RESENA.map(
 export const ESTADO_LABEL: Record<EstadoResena, string> = Object.fromEntries(
   ESTADOS_RESENA.map((e) => [e.key, e.label]),
 ) as Record<EstadoResena, string>;
+
+// ─── Catálogos de seguimiento de calidad ──────────────────────
+
+export const PLATAFORMA_OPCIONES: {
+  key: PlataformaResena;
+  label: string;
+}[] = [
+  { key: "go_high_level", label: "Go High Level" },
+  { key: "cover_manager", label: "Cover Manager" },
+  { key: "google", label: "Google" },
+  { key: "otro", label: "Otro" },
+];
+
+export const PLATAFORMA_LABEL: Record<PlataformaResena, string> =
+  Object.fromEntries(
+    PLATAFORMA_OPCIONES.map((p) => [p.key, p.label]),
+  ) as Record<PlataformaResena, string>;
+
+export const COGE_TELEFONO_OPCIONES: {
+  key: CogeTelefono;
+  label: string;
+}[] = [
+  { key: "si", label: "Sí" },
+  { key: "no", label: "No" },
+  { key: "sin_telefono", label: "Sin teléfono" },
+];
+
+export const COGE_TELEFONO_LABEL: Record<CogeTelefono, string> =
+  Object.fromEntries(
+    COGE_TELEFONO_OPCIONES.map((c) => [c.key, c.label]),
+  ) as Record<CogeTelefono, string>;
+
+/**
+ * Cada estado de gestión lleva su propio icono para poder distinguirlos de un
+ * vistazo en la tarjeta del kanban, sin abrir la ficha. `icon` es el nombre de
+ * un icono de lucide-react; el componente lo resuelve.
+ */
+export interface EstadoGestionConfig {
+  key: EstadoGestionResena;
+  label: string;
+  /** Nombre del icono lucide-react */
+  icon: string;
+  /** Color del icono en la tarjeta */
+  color: string;
+  /** Estilo de la pastilla dentro de la ficha */
+  badge: string;
+}
+
+export const ESTADOS_GESTION: EstadoGestionConfig[] = [
+  {
+    key: "pendiente_llamada",
+    label: "Pendiente llamada",
+    icon: "PhoneOutgoing",
+    color: "text-amber-500",
+    badge: "bg-amber-100 text-amber-800",
+  },
+  {
+    key: "no_quiere_llamada",
+    label: "No quiere llamada",
+    icon: "PhoneOff",
+    color: "text-rose-600",
+    badge: "bg-rose-100 text-rose-800",
+  },
+  {
+    key: "pendiente_visitarnos",
+    label: "Pendiente de visitarnos",
+    icon: "CalendarClock",
+    color: "text-orange-500",
+    badge: "bg-orange-100 text-orange-800",
+  },
+  {
+    key: "no_quiere_volver",
+    label: "No quiere volver",
+    icon: "UserX",
+    color: "text-red-700",
+    badge: "bg-red-100 text-red-900",
+  },
+  {
+    key: "mando_whatsapp",
+    label: "Mando WhatsApp",
+    icon: "MessageCircle",
+    color: "text-green-600",
+    badge: "bg-green-100 text-green-800",
+  },
+  {
+    key: "vuelve_cliente",
+    label: "Vuelve cliente",
+    icon: "HeartHandshake",
+    color: "text-emerald-600",
+    badge: "bg-emerald-100 text-emerald-800",
+  },
+  {
+    key: "se_revisa_resena",
+    label: "Se revisa reseña",
+    icon: "Search",
+    color: "text-sky-600",
+    badge: "bg-sky-100 text-sky-800",
+  },
+];
+
+export const ESTADO_GESTION_LABEL: Record<EstadoGestionResena, string> =
+  Object.fromEntries(
+    ESTADOS_GESTION.map((e) => [e.key, e.label]),
+  ) as Record<EstadoGestionResena, string>;
+
+export const ESTADO_GESTION_CONFIG: Record<
+  EstadoGestionResena,
+  EstadoGestionConfig
+> = Object.fromEntries(ESTADOS_GESTION.map((e) => [e.key, e])) as Record<
+  EstadoGestionResena,
+  EstadoGestionConfig
+>;
 
 export const ORIGEN_LABEL: Record<OrigenResena, string> = {
   manual: "Manual",

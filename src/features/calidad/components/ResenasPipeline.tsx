@@ -4,16 +4,25 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   AlertCircle,
   Bot,
+  CalendarClock,
   Check,
   CheckCircle2,
   Copy,
   ExternalLink,
+  HeartHandshake,
   Loader2,
+  MessageCircle,
+  Phone,
+  PhoneOff,
+  PhoneOutgoing,
   RefreshCw,
+  Search,
   Settings,
   Sparkles,
   Star,
   Trash2,
+  UserX,
+  type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -50,10 +59,12 @@ import {
   detectarPlaceIdEmpresa,
   eliminarResena,
   getEmpresaPlaceInfo,
+  listEmpleadosGestores,
   listResenas,
   moverResena,
   setEmpresaPlaceId,
   syncResenasGoogle,
+  type EmpleadoGestor,
   type EmpresaPlaceInfo,
 } from "@/features/calidad/actions/resenas-actions";
 import {
@@ -63,11 +74,16 @@ import {
 } from "@/features/calidad/actions/agentes-ia-actions";
 import {
   ESTADOS_RESENA,
+  ESTADO_GESTION_CONFIG,
   ORIGEN_LABEL,
+  type CogeTelefono,
+  type EstadoGestionResena,
   type EstadoResena,
+  type PlataformaResena,
   type Resena,
 } from "@/features/calidad/types/resenas";
 import { AgentesIAView } from "./AgentesIAView";
+import { SeguimientoCalidadResena } from "./SeguimientoCalidadResena";
 import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
@@ -798,6 +814,74 @@ function KanbanColumna({
   );
 }
 
+// ─── Iconos de seguimiento ────────────────────────────────────
+
+/** Los nombres de `ESTADOS_GESTION.icon` resueltos a componentes reales. */
+const ICONOS_GESTION: Record<string, LucideIcon> = {
+  PhoneOutgoing,
+  PhoneOff,
+  CalendarClock,
+  UserX,
+  MessageCircle,
+  HeartHandshake,
+  Search,
+};
+
+/**
+ * Los dos indicadores que se ven SIN abrir la ficha:
+ *  · el teléfono, verde si lo cogió y rojo si no (gris si no hay teléfono),
+ *  · un único icono, el del estado de gestión en el que está la reseña.
+ * Si no se ha gestionado todavía, no se pinta nada: no hay dato que enseñar.
+ */
+function IconosSeguimiento({
+  cogeTelefono,
+  estadoGestion,
+}: {
+  cogeTelefono: CogeTelefono | null;
+  estadoGestion: EstadoGestionResena | null;
+}) {
+  if (!cogeTelefono && !estadoGestion) return null;
+
+  const cfg = estadoGestion ? ESTADO_GESTION_CONFIG[estadoGestion] : null;
+  const IconEstado = cfg ? ICONOS_GESTION[cfg.icon] : null;
+
+  const telefono =
+    cogeTelefono === "si"
+      ? { color: "text-emerald-600", title: "Cogió el teléfono", off: false }
+      : cogeTelefono === "no"
+        ? { color: "text-rose-600", title: "No cogió el teléfono", off: false }
+        : cogeTelefono === "sin_telefono"
+          ? {
+              color: "text-muted-foreground/50",
+              title: "Sin teléfono",
+              off: true,
+            }
+          : null;
+
+  return (
+    <div className="flex items-center gap-1.5 shrink-0">
+      {telefono &&
+        (telefono.off ? (
+          <PhoneOff
+            className={`h-3.5 w-3.5 ${telefono.color}`}
+            aria-label={telefono.title}
+          />
+        ) : (
+          <Phone
+            className={`h-3.5 w-3.5 fill-current ${telefono.color}`}
+            aria-label={telefono.title}
+          />
+        ))}
+      {IconEstado && cfg && (
+        <IconEstado
+          className={`h-3.5 w-3.5 ${cfg.color}`}
+          aria-label={cfg.label}
+        />
+      )}
+    </div>
+  );
+}
+
 // ─── Tarjeta ──────────────────────────────────────────────────
 
 function ResenaCard({
@@ -842,6 +926,10 @@ function ResenaCard({
             <span className="font-medium text-xs truncate min-w-0 flex-1">
               {resena.nombre_comensal}
             </span>
+            <IconosSeguimiento
+              cogeTelefono={resena.coge_telefono}
+              estadoGestion={resena.estado_gestion}
+            />
             {resena.origen === "google" && (
               <span className="shrink-0 text-[9px] font-semibold uppercase tracking-wide text-sky-700 bg-sky-100 px-1 py-px rounded">
                 Google
@@ -912,6 +1000,19 @@ function DetalleResenaDialog({
   const [comentario, setComentario] = useState("");
   const [respuesta, setRespuesta] = useState("");
   const [estado, setEstado] = useState<EstadoResena>("nuevo_comensal");
+  // Seguimiento de calidad. "" = sin informar (el desplegable usa el
+  // centinela SIN_DATO porque Radix no admite value="").
+  const [plataforma, setPlataforma] = useState<PlataformaResena | "">("");
+  const [fechaRegistro, setFechaRegistro] = useState("");
+  const [fechaSesion, setFechaSesion] = useState("");
+  const [telefono, setTelefono] = useState("");
+  const [cogeTelefono, setCogeTelefono] = useState<CogeTelefono | "">("");
+  const [estadoGestion, setEstadoGestion] = useState<EstadoGestionResena | "">(
+    "",
+  );
+  const [observaciones, setObservaciones] = useState("");
+  const [gestionadaPor, setGestionadaPor] = useState("");
+  const [empleados, setEmpleados] = useState<EmpleadoGestor[]>([]);
   const [saving, setSaving] = useState(false);
   const [generando, setGenerando] = useState(false);
   const [publicando, setPublicando] = useState(false);
@@ -924,8 +1025,24 @@ function DetalleResenaDialog({
       setComentario(resena.comentario ?? "");
       setRespuesta(resena.respuesta_propietario ?? "");
       setEstado(resena.estado);
+      setPlataforma(resena.plataforma ?? "");
+      setFechaRegistro(resena.fecha_registro ?? "");
+      setFechaSesion(resena.fecha_sesion ?? "");
+      setTelefono(resena.telefono ?? "");
+      setCogeTelefono(resena.coge_telefono ?? "");
+      setEstadoGestion(resena.estado_gestion ?? "");
+      setObservaciones(resena.observaciones_closer ?? "");
+      setGestionadaPor(resena.gestionada_por ?? "");
     }
   }, [resena]);
+
+  // Los empleados no cambian entre reseñas: se piden una sola vez, al abrir
+  // la primera ficha.
+  const abierto = !!resena;
+  useEffect(() => {
+    if (!abierto || empleados.length > 0) return;
+    listEmpleadosGestores().then(setEmpleados);
+  }, [abierto, empleados.length]);
 
   if (!resena) return null;
 
@@ -939,6 +1056,16 @@ function DetalleResenaDialog({
       comentario: esGoogle ? undefined : comentario,
       respuesta_propietario: respuesta || null,
       estado,
+      // Vacío se guarda como null: "sin informar" es un dato válido y hay que
+      // poder volver atrás si te equivocaste al marcar.
+      plataforma: plataforma || null,
+      fecha_registro: fechaRegistro || null,
+      fecha_sesion: fechaSesion || null,
+      telefono: telefono.trim() || null,
+      coge_telefono: cogeTelefono || null,
+      estado_gestion: estadoGestion || null,
+      observaciones_closer: observaciones.trim() || null,
+      gestionada_por: gestionadaPor || null,
     });
     setSaving(false);
     if (!res.ok) {
@@ -1042,7 +1169,7 @@ function DetalleResenaDialog({
   return (
     <>
     <Dialog open={!!resena} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <div className="flex items-start gap-3">
             {resena.autor_avatar ? (
@@ -1130,6 +1257,26 @@ function DetalleResenaDialog({
               placeholder="Sin comentario"
             />
           </div>
+
+          <SeguimientoCalidadResena
+            plataforma={plataforma}
+            onPlataformaChange={setPlataforma}
+            fechaRegistro={fechaRegistro}
+            onFechaRegistroChange={setFechaRegistro}
+            fechaSesion={fechaSesion}
+            onFechaSesionChange={setFechaSesion}
+            telefono={telefono}
+            onTelefonoChange={setTelefono}
+            cogeTelefono={cogeTelefono}
+            onCogeTelefonoChange={setCogeTelefono}
+            estadoGestion={estadoGestion}
+            onEstadoGestionChange={setEstadoGestion}
+            observaciones={observaciones}
+            onObservacionesChange={setObservaciones}
+            gestionadaPor={gestionadaPor}
+            onGestionadaPorChange={setGestionadaPor}
+            empleados={empleados}
+          />
 
           <div>
             <div className="flex items-center justify-between mb-1">
