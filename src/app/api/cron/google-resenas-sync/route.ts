@@ -2,9 +2,16 @@
  * Cron endpoint: sincroniza reseñas desde Google Places API para todas las
  * empresas con `google_place_id` configurado.
  *
- * Se ejecuta cada día a las 07:00 (configurado en vercel.json).
+ * Se ejecuta CADA HORA (configurado en vercel.json). Google Places solo
+ * devuelve las 5 reseñas más recientes, así que la frecuencia marca cuántas
+ * caben entre dos pasadas sin perderse: a diario el margen era de 5 al día,
+ * por hora es de 5 a la hora (~120/día). Una mesa grande que reseña a la vez
+ * en hora punta cabe de sobra.
+ *
  * Las reseñas se upsertean por `external_id`, por lo que el cron es seguro
  * de re-ejecutar y nunca pisa cambios manuales del usuario (estado, respuestas).
+ * Si no hay reseñas nuevas, la pasada no consume IA: los borradores solo se
+ * generan para las que entran sin borrador previo.
  *
  * Las reseñas YA persisten para siempre en la tabla `resenas`; este cron solo
  * añade las nuevas que aparezcan en Google y refresca avatares/textos.
