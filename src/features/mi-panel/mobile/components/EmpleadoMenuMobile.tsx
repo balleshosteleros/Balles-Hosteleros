@@ -22,9 +22,8 @@ import { createClient as createBrowserClient } from "@/lib/supabase/client";
 // Módulo sin dependencias a propósito: importar desde `auth-context` arrastraba
 // `permisos-actions` ("use server") al bundle del móvil.
 import {
-  borrarCookiesSesion,
-  borrarSesionLocal,
   desactivarAutoLoginGoogle,
+  marcarCerrandoSesion,
 } from "@/features/auth/lib/cerrar-sesion";
 
 type Vista = "paneles" | "departamentos";
@@ -78,22 +77,41 @@ export function EmpleadoMenuMobile({ nombre, avatarUrl }: Props) {
    * la app al pasar a segundo plano, la promesa sin resolver— esa línea no se
    * ejecutaba NUNCA y no había ninguna red de seguridad detrás.
    *
-   * Ahora la salida está garantizada por dos vías independientes, y ninguna
+   * Ahora la salida está garantizada por DOS vías independientes, y ninguna
    * depende de que la limpieza termine:
-   *   · un temporizador que dispara a los 800 ms pase lo que pase,
-   *   · y la propia navegación en cuanto el servidor responde (lo normal).
+   *   · el `href="/salir"` del enlace, que resuelve el navegador (caso normal),
+   *   · y un temporizador de respaldo que fuerza la salida a los 1200 ms si la
+   *     navegación no ha arrancado (iOS suspendiendo la vista, red muerta).
    * La limpieza corre en paralelo, sin bloquear a nadie.
    */
   const cerrarSesion = () => {
     setSaliendo(true);
 
+    // Cerrojo: impide que el auto-actualizador de la PWA recargue la página en
+    // mitad de la salida (su `reload()` cancelaría la navegación a `/salir` y el
+    // cierre quedaría a medias, con las cookies vivas).
+    marcarCerrandoSesion();
+
+    // RED DE SEGURIDAD. El comentario de arriba prometía este temporizador pero
+    // NO existía: si el enlace no llegaba a navegar, el usuario se quedaba con la
+    // rueda girando y sin salida (el botón Cancelar se deshabilita al salir).
+    // `location.replace` no deja rastro en el historial: no se puede volver
+    // "atrás" a una sesión ya cerrada.
+    window.setTimeout(() => {
+      window.location.replace("/salir");
+    }, 1200);
+
     // NO se navega desde aquí ni se llama a `preventDefault`: de la salida se
     // encarga el `href="/salir"` del enlace, que el navegador resuelve solo.
     // Esto es únicamente la limpieza de lo que vive en el teléfono, y va envuelto
     // porque una excepción aquí NO puede impedir que el enlace navegue.
+    //
+    // OJO con el orden: las cookies `sb-*` son HttpOnly y las mata `/salir` en el
+    // servidor. Aquí NO se toca el almacén local todavía —borrarlo antes de salir
+    // hace que el cliente de Supabase detecte el hueco y refresque el token,
+    // resucitando la sesión que estamos cerrando—. De `localStorage` se encarga
+    // la página de `/salir`, ya con las cookies muertas.
     try {
-      borrarCookiesSesion();
-      borrarSesionLocal();
       desactivarAutoLoginGoogle();
     } catch {
       // Ignorado a propósito.
@@ -234,14 +252,32 @@ export function EmpleadoMenuMobile({ nombre, avatarUrl }: Props) {
                 "Sí, cerrar sesión"
               )}
             </a>
-            <button
-              type="button"
-              onClick={() => setConfirmando(false)}
-              disabled={saliendo}
-              className="mt-2 h-11 w-full rounded-2xl text-sm font-medium text-muted-foreground active:bg-muted"
-            >
-              Cancelar
-            </button>
+            {/*
+              Mientras se sale, este hueco NO puede ser un botón muerto.
+
+              Antes era "Cancelar" con `disabled={saliendo}`, y el fondo tampoco
+              cerraba durante la salida: si la navegación no arrancaba, el usuario
+              se quedaba encerrado mirando la rueda sin nada que tocar. Ahora, en
+              cuanto empieza la salida, se convierte en un enlace directo a
+              `/salir` —la puerta que siempre funciona, porque la resuelve el
+              navegador y no depende del JavaScript de la app—.
+            */}
+            {saliendo ? (
+              <a
+                href="/salir"
+                className="mt-2 flex h-11 w-full items-center justify-center rounded-2xl text-sm font-medium text-muted-foreground no-underline active:bg-muted"
+              >
+                Si tarda, toca aquí para salir
+              </a>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setConfirmando(false)}
+                className="mt-2 h-11 w-full rounded-2xl text-sm font-medium text-muted-foreground active:bg-muted"
+              >
+                Cancelar
+              </button>
+            )}
           </div>
         </div>
       )}

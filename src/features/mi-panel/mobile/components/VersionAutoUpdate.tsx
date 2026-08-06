@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { estaCerrandoSesion } from "@/features/auth/lib/cerrar-sesion";
 
 /**
  * Auto-actualizador de la PWA. En iOS la app instalada NO se recarga al
@@ -39,6 +40,12 @@ export function VersionAutoUpdate() {
     if (!BAKED || BAKED === "dev") return;
 
     const recargar = (sha: string) => {
+      // Si el usuario está cerrando sesión, NO recargamos: la recarga cancelaría
+      // la navegación a `/salir` y el cierre quedaría a medias (cookies vivas y
+      // usuario de vuelta dentro). La actualización puede esperar al próximo
+      // arranque; salir, no.
+      if (estaCerrandoSesion()) return;
+
       // Anti-bucle: si ya recargamos por este mismo SHA y el bundle sigue sin
       // coincidir (propagación de CDN en curso), no recargamos otra vez.
       try {
@@ -65,7 +72,9 @@ export function VersionAutoUpdate() {
         const res = await fetch("/api/auth/estado", { cache: "no-store" });
         if (!res.ok) return;
         const { autenticado } = (await res.json()) as { autenticado?: boolean };
-        if (autenticado === false) {
+        // Si ya se está saliendo, no pisamos la navegación en curso: `/salir` hace
+        // más cosas que este atajo (mata las cookies HttpOnly y el service worker).
+        if (autenticado === false && !estaCerrandoSesion()) {
           window.location.replace("/?logout=1");
         }
       } catch {

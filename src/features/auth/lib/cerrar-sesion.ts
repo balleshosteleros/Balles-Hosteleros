@@ -10,6 +10,32 @@
  */
 
 /**
+ * Cerrojo de "estoy saliendo", compartido entre componentes.
+ *
+ * El auto-actualizador de la PWA (`VersionAutoUpdate`) llama a
+ * `window.location.reload()` cuando detecta un deploy nuevo, y lo hace también
+ * cada minuto y al volver a la app. Si eso cae justo mientras el usuario está
+ * saliendo, la recarga cancela la navegación a `/salir` y el cierre de sesión se
+ * queda a medias: cookies vivas y usuario de vuelta dentro.
+ *
+ * Se guarda en `window` (no en un módulo) porque el actualizador y el menú viven
+ * en bundles distintos del móvil y no comparten instancia de módulo.
+ */
+const CERROJO = "__bhCerrandoSesion";
+
+/** Marca que hay un cierre de sesión en curso. Nadie debe recargar la página. */
+export function marcarCerrandoSesion(): void {
+  if (typeof window === "undefined") return;
+  (window as unknown as Record<string, boolean>)[CERROJO] = true;
+}
+
+/** ¿Hay un cierre de sesión en curso? */
+export function estaCerrandoSesion(): boolean {
+  if (typeof window === "undefined") return false;
+  return (window as unknown as Record<string, boolean>)[CERROJO] === true;
+}
+
+/**
  * Resuelve como muy tarde en `ms`, pase lo que pase con la promesa original.
  * Ninguna limpieza puede dejar al usuario atrapado dentro de la app si la red va mal.
  */
