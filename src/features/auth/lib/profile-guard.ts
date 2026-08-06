@@ -13,13 +13,20 @@ export type ProfileGuardResult =
 
 /**
  * Verifica que un user autenticado tenga perfil completo y activo:
- * existe en profiles, estado_acceso = Activo, tiene empresa, rol y ha
- * ELEGIDO su propia contraseña (password_set). Cualquier fallo aquí
- * significa que NO debe quedarse con sesión válida.
+ * existe en profiles, estado_acceso = Activo, tiene empresa y rol.
+ * Cualquier fallo aquí significa que NO debe quedarse con sesión válida.
+ *
+ * `exigirPassword` (decisión de Ivan, 2026-08-06): la contraseña propia SOLO
+ * se exige en el login por correo+contraseña. Quien entra con Google nunca
+ * escribe una, así que exigírsela lo dejaba en bucle: el sistema le pedía una
+ * contraseña que su forma de entrar no le iba a pedir jamás. La barrera vivía
+ * en la puerta cuando en realidad solo hace falta dentro, en el módulo seguro
+ * de contraseñas guardadas — que debe pedirla en ese momento, no aquí.
  */
 export async function checkProfileGuard(
   supabase: SupabaseClient,
   userId: string,
+  { exigirPassword = false }: { exigirPassword?: boolean } = {},
 ): Promise<ProfileGuardResult> {
   const { data: profile } = await supabase
     .from('usuarios')
@@ -43,11 +50,12 @@ export async function checkProfileGuard(
   const rolLabel = (profile.rol_label as string | null) ?? null
   if (!rolId && !rolLabel) return { ok: false, code: 'sin_rol' }
 
-  // El empleado debe haber elegido SU contraseña (vía el correo "Crea tu
-  // contraseña"). Mientras no lo haya hecho, no entra ni con Google: la
-  // contraseña aleatoria del alta no la conoce, y la necesita para acciones
-  // de seguridad (ver contraseñas guardadas).
-  if (profile.password_set === false) return { ok: false, code: 'sin_password' }
+  // Solo en el login por correo+contraseña: si el empleado aún no ha estrenado
+  // SU contraseña (correo "Crea tu contraseña"), la que escribe no puede ser la
+  // suya — la del alta es aleatoria y no la conoce. Por Google no aplica.
+  if (exigirPassword && profile.password_set === false) {
+    return { ok: false, code: 'sin_password' }
+  }
 
   return { ok: true, empresaId, rolLabel: rolLabel ?? '' }
 }

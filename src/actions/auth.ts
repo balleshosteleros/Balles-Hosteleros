@@ -51,7 +51,11 @@ export async function login(formData: FormData) {
     return { error: translateAuthError(error?.message) }
   }
 
-  const guard = await checkProfileGuard(supabase, data.user.id)
+  // Entrada por correo+contraseña: aquí SÍ se exige haber estrenado la propia
+  // contraseña (por Google no, ver checkProfileGuard).
+  const guard = await checkProfileGuard(supabase, data.user.id, {
+    exigirPassword: true,
+  })
   if (!guard.ok) {
     await supabase.auth.signOut()
     return { error: PROFILE_GUARD_MESSAGES[guard.code] }
