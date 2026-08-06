@@ -75,11 +75,32 @@ export async function proxy(request: NextRequest) {
     return sessionResponse
   }
 
-  // Paso 2: autorización por módulo (solo para prefijos protegidos).
+  if (!user) return sessionResponse
+
+  const adminUrlActividad = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const serviceKeyActividad = process.env.SUPABASE_SERVICE_ROLE_KEY
+
+  // Paso 2: marca de actividad. Va ANTES del filtro por módulo a propósito: si
+  // solo se marcara en rutas de módulo (/rrhh, /gerencia…), quien entra desde el
+  // móvil (/m) o se queda en Mi Panel / Mis Departamentos / la portada nunca
+  // dejaría rastro y su "última conexión" saldría vacía para siempre.
+  // Auto-throttled a 30s vía WHERE para que múltiples pestañas/recargas no
+  // inflen la BD: si la última marca es reciente, el UPDATE no toca filas.
+  if (adminUrlActividad && serviceKeyActividad) {
+    const adminActividad = createSupabaseClient(adminUrlActividad, serviceKeyActividad, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    })
+    const cutoffActividad = new Date(Date.now() - 30_000).toISOString()
+    await adminActividad
+      .from('usuarios')
+      .update({ ultima_actividad: new Date().toISOString() })
+      .eq('user_id', user.id)
+      .or(`ultima_actividad.is.null,ultima_actividad.lt.${cutoffActividad}`)
+  }
+
+  // Paso 3: autorización por módulo (solo para prefijos protegidos).
   const moduloReq = moduloRequerido(pathname)
   if (!moduloReq) return sessionResponse
-
-  if (!user) return sessionResponse
 
   // Cliente SSR solo para signOut si la cuenta está inactiva (abajo).
   const supabase = createServerClient(
@@ -105,24 +126,11 @@ export async function proxy(request: NextRequest) {
     auth: { autoRefreshToken: false, persistSession: false },
   })
 
-  // Marca actividad real del usuario en la app. Auto-throttled a 30s vía WHERE
-  // para que múltiples pestañas/recargas no inflen la BD: si la última marca
-  // es reciente, el UPDATE no toca filas y vuelve casi gratis.
-  const cutoff = new Date(Date.now() - 30_000).toISOString()
-  const ahora = new Date().toISOString()
-
-  const [{ data: profile }] = await Promise.all([
-    admin
-      .from('usuarios')
-      .select('rol_id, rol_label, empresa_id, estado_acceso')
-      .eq('user_id', user.id)
-      .maybeSingle(),
-    admin
-      .from('usuarios')
-      .update({ ultima_actividad: ahora })
-      .eq('user_id', user.id)
-      .or(`ultima_actividad.is.null,ultima_actividad.lt.${cutoff}`),
-  ])
+  const { data: profile } = await admin
+    .from('usuarios')
+    .select('rol_id, rol_label, empresa_id, estado_acceso')
+    .eq('user_id', user.id)
+    .maybeSingle()
 
   // Cuenta deshabilitada (p.ej. el empleado fue dado de baja en RRHH y el
   // trigger sync_profile_estado_from_empleado puso estado_acceso=Inactivo).

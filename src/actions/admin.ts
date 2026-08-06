@@ -203,15 +203,46 @@ export async function getEmployees() {
     (rolesAdmin ?? []).map((r: { id: string; es_admin_plataforma: boolean }) => [r.id, Boolean(r.es_admin_plataforma)]),
   )
 
+  // Último acceso REAL: lo mantiene Supabase Auth solo (last_sign_in_at) y es la
+  // única fuente con histórico completo — `ultima_actividad` solo existe desde
+  // que el proxy empezó a marcarla. Mostramos el MÁS RECIENTE de los dos: el
+  // login dice cuándo entró, la actividad dice hasta cuándo estuvo usándolo.
+  const ultimoLoginPorUser = new Map<string, string>()
+  try {
+    // listUsers pagina de 50 en 50 por defecto; recorremos hasta agotar.
+    for (let page = 1; page <= 40; page++) {
+      const { data: authPage, error: authError } = await admin.auth.admin.listUsers({
+        page,
+        perPage: 1000,
+      })
+      if (authError) break
+      const usuariosAuth = authPage?.users ?? []
+      for (const u of usuariosAuth) {
+        if (u.last_sign_in_at) ultimoLoginPorUser.set(u.id, u.last_sign_in_at)
+      }
+      if (usuariosAuth.length < 1000) break
+    }
+  } catch {
+    // Sin acceso a Auth admin caemos a ultima_actividad: peor dato, no un fallo.
+  }
+
+  const masReciente = (a: string | null, b: string | null): string | null => {
+    if (!a) return b
+    if (!b) return a
+    return new Date(a).getTime() >= new Date(b).getTime() ? a : b
+  }
+
   const data = (profiles ?? []).map((p: { id: string; user_id?: string | null; rol_id?: string | null; rol_label?: string | null; ultima_actividad?: string | null }) => {
+    const ultimoLogin = p.user_id ? ultimoLoginPorUser.get(p.user_id) ?? null : null
     return {
       ...p,
       role: (p.rol_id && adminPorRol.get(p.rol_id)) ? 'director' : 'empleado',
       // rol_label = nombre custom del rol (preferente para mostrar en UI)
       rol_label: p.rol_label ?? null,
-      // ultima_actividad la escribe el proxy en cada navegación autenticada;
-      // refleja la última vez que el usuario entró a la app (no el login).
-      ultima_actividad: p.ultima_actividad ?? null,
+      // ultima_actividad la escribe el proxy en CUALQUIER navegación autenticada
+      // (móvil incluido). Se combina con el login de Auth para no perder el
+      // histórico de quien entró antes de que existiera esa marca.
+      ultima_actividad: masReciente(p.ultima_actividad ?? null, ultimoLogin),
     }
   })
 
