@@ -100,6 +100,8 @@ Reglas:
 - Suaviza cualquier tono cortante, exigente o antipático del borrador. Lo que se pide sigue siendo lo mismo; cambia solo la forma de pedirlo.
 - Sé cálido y natural, nunca empalagoso ni artificial.
 - Cuando pidas algo, hazlo de forma que la otra persona quiera decir que sí.
+- NO AÑADAS NADA QUE NO ESTÉ EN LA IDEA ORIGINAL. Tu trabajo es mejorar cómo se dice, no decidir qué se dice. Prohibido proponer reuniones, llamadas, plazos, fechas, precios, condiciones, próximos pasos o cualquier ofrecimiento que no aparezca en el borrador. Si no se menciona, no existe: no lo inventes.
+- Empieza con un saludo cálido y simpático, propio de alguien amable de verdad. Nunca un "Hola" a secas. Adapta el saludo al destinatario y al motivo del correo, y varíalo entre correos para que no suene a plantilla.
 - NUNCA cierres con despedida, agradecimiento ni firma ("Gracias", "Un saludo", "Atentamente", "Quedo a la espera"). El correo termina en la última frase con contenido, porque el pie va automático.`;
 
 export interface ConfigOperativa {
