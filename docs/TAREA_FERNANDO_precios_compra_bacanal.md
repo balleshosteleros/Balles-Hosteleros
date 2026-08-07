@@ -5,6 +5,35 @@
 
 ---
 
+## 🔧 IVÁN: como te ibas de vacaciones, los hallazgos del piloto que eran código YA ESTÁN ARREGLADOS (07-ago tarde, Fernando)
+
+Para que no te los encuentres como deberes: de la lista del informe de abajo, esta misma
+tarde quedaron **arreglados, desplegados y probados en vivo** —
+
+1. **Empresa activa desincronizada tras entrar con navegador limpio** (`ff805878`): la
+   elección del cliente ahora arma SIEMPRE la cookie del servidor y refresca la vista.
+   Verificado E2E: navegador limpio → etiqueta y datos de la MISMA empresa.
+2. **Crear producto en la empresa equivocada** (`aa4047b8`): crear/importar productos usaba
+   la empresa de la ficha del usuario; ahora usan la activa, como el resto.
+3. **Los tres remates de tu mesa/asistente** (`1b7cb0c2`): el aviso "Antes de confirmar" ya
+   cuenta TODAS las líneas que entran; la decisión "crear producto" de la mesa viaja al
+   detalle y abre el formulario prerrellenado; y **crear_gasto se ejecuta de verdad** — los
+   Punto Verde/portes nacen como gasto sin control de stock y la línea queda ligada sola.
+4. **Autosave de la revisión (el F5 que faltaba)** (`e1dff6fd`): cada vincular/crear/ignorar
+   se guarda al vuelo; recargar a mitad de revisión ya no pierde nada. Probado E2E con
+   albarán de prueba (borrado después). La UI de conflicto de versión optimista queda para
+   coordinarla contigo a la vuelta.
+5. **Dossier de duplicados del catálogo** (`8d05f0fd`): OJO — no eran 4 casos sueltos:
+   **213 grupos duplicados, 426 productos** (huele a siembra que corrió dos veces). Está
+   en `docs/DUPLICADOS_CATALOGO_DOSSIER_2026-08-07.md` con las referencias de cada uno.
+   **No se ha fusionado nada**: a tu vuelta eliges "el bueno" de cada grupo y lo hacemos.
+
+Con esto, de tu audio solo esperamos: la decisión del stock del lote (dejar o revertir),
+si das el piloto por cumplido, el criterio de los duplicados, las 4 dudas del lote 30-jul,
+y las dos viejas (Excel MAKRO y WhatsApp). Buen viaje.
+
+---
+
 ## 📊 IVÁN: PILOTO EJECUTADO — 10 albaranes reales por el camino nuevo, TODOS confirmados (07-ago, Fernando)
 
 Pediste que el piloto fueran documentos reales con el motor nuevo. Hecho: **10 albaranes del
