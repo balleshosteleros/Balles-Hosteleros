@@ -40,6 +40,28 @@ const nextConfig: NextConfig = {
       },
     ],
   },
+  async rewrites() {
+    return [
+      // Subdominio de códigos QR: `qr.balleshosteleros.com/a3k9` → `/q/a3k9`.
+      //
+      // Va AQUÍ y no en el proxy porque los rewrites de next.config se aplican en
+      // el routing de Vercel, antes del cache y antes del middleware. Haciéndolo
+      // solo en el proxy, Vercel resolvía `/a3k9` como página inexistente y
+      // devolvía un 404 (cacheado, además) sin llegar a ejecutar el rewrite.
+      {
+        source: '/:codigo((?!q/|_next/|api/|favicon|robots|sitemap)[^/.]+)',
+        has: [{ type: 'host', value: QR_HOST }],
+        destination: '/q/:codigo',
+      },
+      // Raíz del subdominio (alguien entra a pelo, sin código): aviso neutro en
+      // vez de la pantalla de login del sistema.
+      {
+        source: '/',
+        has: [{ type: 'host', value: QR_HOST }],
+        destination: '/q/_',
+      },
+    ]
+  },
   async redirects() {
     return [
       // PRP-045: redirect móvil → /m para la home raíz, aplicado a nivel de

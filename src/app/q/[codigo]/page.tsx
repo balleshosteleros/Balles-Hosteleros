@@ -18,7 +18,13 @@ import {
   resolverDestino,
 } from "@/features/marketing/qr/services/resolver";
 
+// `force-dynamic` + `revalidate = 0`: esta ruta NO puede cachearse. Si Vercel
+// guardara la respuesta, cambiar el destino de un QR desde el panel no tendría
+// efecto hasta que caducara el cache — y el sentido de todo esto es justamente
+// que el cambio sea inmediato sin reimprimir el papel.
 export const dynamic = "force-dynamic";
+export const revalidate = 0;
+export const fetchCache = "force-no-store";
 
 export default async function QrRedirectPage({
   params,
