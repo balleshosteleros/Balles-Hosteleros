@@ -231,18 +231,26 @@ export function EmpresaProvider({ children }: { children: ReactNode }) {
               // ignore
             }
           }
+          // Sin cookie, la empresa que el cliente decide mostrar (localStorage o el
+          // default) se ARMA SIEMPRE en la cookie y se refresca la vista. Antes había
+          // un tercer camino sin re-armado: navegador limpio → el cliente enseñaba la
+          // primera de la lista mientras el servidor usaba la empresa de la ficha del
+          // usuario — etiqueta y datos de empresas DISTINTAS, y el matcher de albaranes
+          // casando contra el catálogo equivocado (cazado en el piloto del 07-ago-2026).
           const restored = restoredSlug
             ? list.find((e) => e.id === restoredSlug)
             : null;
-          if (restored) {
-            setEmpresaId(restored.id);
-            // Re-arma la cookie para que las server actions vean la empresa
-            // correcta sin esperar a que el usuario vuelva a hacer click.
-            if (restored.dbId) {
-              setEmpresaActiva(restored.dbId).catch(() => {});
-            }
-          } else {
-            setEmpresaId((prev) => list.some((e) => e.id === prev) ? prev : list[0].id);
+          const elegida =
+            restored ?? list.find((e) => e.id === EMPRESAS[0].id) ?? list[0];
+          setEmpresaId(elegida.id);
+          if (elegida.dbId) {
+            setEmpresaActiva(elegida.dbId)
+              .then((res) => {
+                // La primera pintura pudo salir con la empresa del servidor (otra):
+                // con la cookie ya armada, un refresh realinea los datos en pantalla.
+                if (res.ok) router.refresh();
+              })
+              .catch(() => {});
           }
         }
         isHydrated.current = true;
@@ -274,6 +282,8 @@ export function EmpresaProvider({ children }: { children: ReactNode }) {
         console.error("[empresa-context] hidratación falló:", err);
       });
     return () => { alive = false; };
+    // Hidratación de una sola vez al montar; `router` es estable (useRouter).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
