@@ -58,7 +58,7 @@ export async function POST(request: Request) {
       { error: "refresh_failed", email },
       { status: 401 },
     );
-    writeAccountsTo(fallo.cookies, limpio);
+    await writeAccountsTo(fallo.cookies, limpio);
     return fallo;
   }
 
@@ -68,5 +68,8 @@ export async function POST(request: Request) {
   ok.cookies.set("g_email", cuenta.email, META_COOKIE_OPTS);
   ok.cookies.set("g_picture", cuenta.picture ?? "", META_COOKIE_OPTS);
   ok.cookies.set("g_name", cuenta.name ?? "", META_COOKIE_OPTS);
+  // Reescribe el roster: si `readAccounts` vino de BD (sesión recién abierta),
+  // las cookies estaban vacías y hay que repoblarlas para el switcher.
+  await writeAccountsTo(ok.cookies, accounts);
   return ok;
 }

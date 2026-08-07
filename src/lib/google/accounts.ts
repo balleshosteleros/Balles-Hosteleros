@@ -1,7 +1,11 @@
 import { cookies } from "next/headers";
 import type { NextResponse } from "next/server";
+import { createClient } from "@/lib/supabase/server";
 
 type ResponseCookies = NextResponse["cookies"];
+
+/** Tabla de respaldo: el roster sobrevive al cierre de sesión. */
+const TABLA_CUENTAS = "google_cuentas_usuario";
 
 /**
  * Multi-cuenta Google estilo Gmail.
@@ -14,6 +18,12 @@ type ResponseCookies = NextResponse["cookies"];
  *                        al navegador como JS.
  *  - `g_accounts_meta` → no-httpOnly. JSON con `{email, name, picture}` para
  *                        pintar el switcher en cliente sin exponer secretos.
+ *
+ * Las cookies son solo CACHÉ. La fuente duradera es la tabla
+ * `google_cuentas_usuario` (una fila por usuario, RLS: cada uno ve la suya).
+ * Antes el roster vivía únicamente en cookie, y `signout` la borraba → había
+ * que reconectar todas las cuentas cada día. Ahora, al volver a entrar, se
+ * rehidrata desde BD y el usuario se encuentra sus cuentas ya puestas.
  */
 
 export type GoogleAccount = {
@@ -52,10 +62,75 @@ function safeParse<T>(value: string | undefined, fallback: T): T {
   }
 }
 
+/**
+ * Roster del usuario guardado en BD. Devuelve [] si no hay sesión o si algo
+ * falla: nunca revienta, el flujo puede seguir con la cookie.
+ */
+async function readAccountsFromDb(): Promise<GoogleAccount[]> {
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return [];
+
+    const { data, error } = await supabase
+      .from(TABLA_CUENTAS)
+      .select("cuentas")
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    if (error) {
+      console.error("[google/accounts] lectura BD fallida:", error.message);
+      return [];
+    }
+    const cuentas = data?.cuentas;
+    return Array.isArray(cuentas) ? (cuentas as GoogleAccount[]) : [];
+  } catch (err) {
+    console.error("[google/accounts] lectura BD error:", err);
+    return [];
+  }
+}
+
+/**
+ * Persiste el roster del usuario. El fallo se registra pero no interrumpe:
+ * la cookie ya se habrá escrito y la sesión en curso sigue funcionando.
+ */
+async function writeAccountsToDb(accounts: GoogleAccount[]): Promise<void> {
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const { error } = await supabase.from(TABLA_CUENTAS).upsert(
+      {
+        user_id: user.id,
+        cuentas: accounts,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "user_id" },
+    );
+    if (error) {
+      console.error("[google/accounts] guardado BD fallido:", error.message);
+    }
+  } catch (err) {
+    console.error("[google/accounts] guardado BD error:", err);
+  }
+}
+
+/**
+ * Lee el roster: primero la cookie (rápido) y, si viene vacía, se rehidrata
+ * desde BD. Ese segundo camino es el que hace que las cuentas sobrevivan al
+ * cierre de sesión, que borra las cookies `g_accounts*`.
+ */
 export async function readAccounts(): Promise<GoogleAccount[]> {
   const c = await cookies();
   const raw = c.get(ACCOUNTS_COOKIE)?.value;
-  return safeParse<GoogleAccount[]>(raw, []);
+  const deCookie = safeParse<GoogleAccount[]>(raw, []);
+  if (deCookie.length > 0) return deCookie;
+  return readAccountsFromDb();
 }
 
 function toMeta(accounts: GoogleAccount[]): GoogleAccountMeta[] {
@@ -63,10 +138,21 @@ function toMeta(accounts: GoogleAccount[]): GoogleAccountMeta[] {
 }
 
 /**
- * Reescribe las cookies de roster en una respuesta concreta.
- * Útil cuando estamos en un Route Handler que ya construyó la respuesta.
+ * Reescribe las cookies de roster Y lo persiste en BD, para que sobreviva al
+ * cierre de sesión. Devuelve la promesa del guardado: los Route Handlers
+ * deben esperarla antes de responder, o la función serverless puede cortarse
+ * con el upsert a medias.
  */
 export function writeAccountsTo(
+  responseCookies: ResponseCookies,
+  accounts: GoogleAccount[],
+): Promise<void> {
+  writeAccountsCookies(responseCookies, accounts);
+  return writeAccountsToDb(accounts);
+}
+
+/** Solo cookies, sin tocar BD. */
+function writeAccountsCookies(
   responseCookies: ResponseCookies,
   accounts: GoogleAccount[],
 ) {

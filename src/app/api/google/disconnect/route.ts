@@ -53,7 +53,7 @@ export async function POST(request: Request) {
   if (!email) {
     const response = NextResponse.json({ ok: true });
     clearActive(response);
-    writeAccountsTo(response.cookies, []);
+    await writeAccountsTo(response.cookies, []);
     return response;
   }
 
@@ -66,7 +66,7 @@ export async function POST(request: Request) {
 
   if (!eraActiva) {
     const response = NextResponse.json({ ok: true, removed: email });
-    writeAccountsTo(response.cookies, restantes);
+    await writeAccountsTo(response.cookies, restantes);
     return response;
   }
 
@@ -79,7 +79,7 @@ export async function POST(request: Request) {
       removed: email,
       switchedTo: cand.email,
     });
-    writeAccountsTo(response.cookies, restantes);
+    await writeAccountsTo(response.cookies, restantes);
     response.cookies.set("g_access_token", accessToken, COOKIE_OPTS);
     response.cookies.set("g_refresh_token", cand.refreshToken, COOKIE_OPTS);
     response.cookies.set("g_email", cand.email, META_COOKIE_OPTS);
@@ -91,6 +91,6 @@ export async function POST(request: Request) {
   // Ninguna cuenta del roster sirvió: limpiamos todo (activas + roster).
   const response = NextResponse.json({ ok: true, removed: email });
   clearActive(response);
-  writeAccountsTo(response.cookies, []);
+  await writeAccountsTo(response.cookies, []);
   return response;
 }

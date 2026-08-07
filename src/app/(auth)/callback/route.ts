@@ -175,7 +175,7 @@ export async function GET(request: Request) {
       picture,
       refreshToken: providerRefreshToken,
     })
-    writeAccountsTo(response.cookies, actualizadas)
+    await writeAccountsTo(response.cookies, actualizadas)
   }
 
   if (isConnectFlow) clearPending(response)

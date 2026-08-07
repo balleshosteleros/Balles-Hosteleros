@@ -65,14 +65,18 @@ export function useGoogleConnection() {
   // cuentas conectadas antes del switcher multi-cuenta), llamamos al server
   // para que copie la cuenta activa al roster. Así el usuario no necesita
   // volver a pasar por Google.
+  // También rehidrata tras cerrar sesión: el signout borra las cookies `g_*`,
+  // pero el roster sigue en BD (`google_cuentas_usuario`). Si no hay cuenta
+  // activa, /sync reactiva la guardada y el usuario no reconecta cada día.
   useEffect(() => {
     if (typeof document === "undefined") return;
     const correo = leerCookie("g_email");
-    if (!correo) return;
     const roster = leerRoster();
-    if (roster.some((a) => a.email.toLowerCase() === correo.toLowerCase())) {
-      return;
-    }
+    const yaEnRoster =
+      !!correo &&
+      roster.some((a) => a.email.toLowerCase() === correo.toLowerCase());
+    if (yaEnRoster) return;
+
     fetch("/api/google/sync", { method: "POST" })
       .then((r) => r.json())
       .then((data) => {

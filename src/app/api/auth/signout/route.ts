@@ -54,6 +54,9 @@ export async function POST() {
   response.cookies.delete("g_email");
   response.cookies.delete("g_picture");
   response.cookies.delete("g_name");
+  // Solo la caché: el roster real vive en `google_cuentas_usuario` y NO se
+  // borra aquí a propósito. Así al volver a entrar las cuentas de Google
+  // siguen conectadas y no hay que reconectarlas cada día.
   response.cookies.delete("g_accounts");
   response.cookies.delete("g_accounts_meta");
   // Reloj de caducidad de 8h: se borra para que el próximo login arranque limpio.
