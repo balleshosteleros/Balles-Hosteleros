@@ -5,6 +5,7 @@ import { z } from "zod";
 import { getAppContext } from "@/lib/supabase/get-context";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { reservarCodigoLibre } from "../services/codigos";
+import { destinoValido, normalizarDestino } from "../lib/normalizar-destino";
 import type { CodigoQr, DestinoHistorico } from "../types";
 
 type ActionResult<T = void> =
@@ -12,26 +13,21 @@ type ActionResult<T = void> =
   | { ok: false; error: string };
 
 /**
- * El destino solo puede ser http/https. Sin esta validación esto sería un
- * redirector abierto: cualquiera con acceso al panel podría apuntar un QR a
- * `javascript:` o a un esquema raro y usarlo contra los clientes del restaurante.
+ * El destino se completa con https:// si no lo trae (nadie escribe el prefijo al
+ * teclear una dirección) y SOLO se acepta http/https. Sin esa restricción esto
+ * sería un redirector abierto: cualquiera con acceso al panel podría apuntar un QR
+ * a `javascript:` y usarlo contra los clientes del restaurante.
+ *
+ * Se normaliza aquí además de en el formulario a propósito: la validación de
+ * pantalla es una comodidad, la del servidor es la que manda.
  */
 const destinoSchema = z
   .string()
   .trim()
   .min(1, "Escribe a dónde quieres que lleve el código.")
   .max(2000, "La dirección es demasiado larga.")
-  .refine(
-    (v) => {
-      try {
-        const u = new URL(v);
-        return u.protocol === "http:" || u.protocol === "https:";
-      } catch {
-        return false;
-      }
-    },
-    "La dirección debe empezar por https:// (o http://).",
-  );
+  .transform(normalizarDestino)
+  .refine(destinoValido, "Esa dirección no parece válida. Revísala.");
 
 const crearSchema = z.object({
   nombre: z.string().trim().min(1, "Ponle un nombre para reconocerlo.").max(120),

@@ -16,6 +16,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { crearCodigoQr, editarCodigoQr } from "../../actions/qr-actions";
+import { destinoValido, normalizarDestino } from "../../lib/normalizar-destino";
 import type { CodigoQr } from "../../types";
 
 export function QrFormDialog({
@@ -53,15 +54,8 @@ export function QrFormDialog({
     const d = destino.trim();
     if (!d) {
       e.destino = "Escribe a dónde quieres que lleve el código.";
-    } else {
-      try {
-        const u = new URL(d);
-        if (u.protocol !== "http:" && u.protocol !== "https:") {
-          e.destino = "La dirección debe empezar por https://";
-        }
-      } catch {
-        e.destino = "Esa dirección no es válida. Debe empezar por https://";
-      }
+    } else if (!destinoValido(d)) {
+      e.destino = "Esa dirección no parece válida. Revísala.";
     }
 
     setErrores(e);
@@ -75,7 +69,7 @@ export function QrFormDialog({
       const payload = {
         nombre: nombre.trim(),
         descripcion: descripcion.trim() || null,
-        destino: destino.trim(),
+        destino: normalizarDestino(destino),
       };
 
       const res = editando
@@ -132,7 +126,11 @@ export function QrFormDialog({
               id="qr-destino"
               value={destino}
               onChange={(e) => setDestino(e.target.value)}
-              placeholder="https://api.whatsapp.com/send/?phone=34600000000"
+              // Al salir del campo se completa con https:// para que se vea cómo
+              // va a quedar guardado, en vez de que el sistema lo cambie a
+              // escondidas al pulsar Guardar.
+              onBlur={() => setDestino((v) => (v.trim() ? normalizarDestino(v) : v))}
+              placeholder="google.com"
               aria-invalid={!!errores.destino}
             />
             {errores.destino ? (
