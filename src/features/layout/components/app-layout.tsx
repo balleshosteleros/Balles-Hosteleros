@@ -347,8 +347,12 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
                   {/* Bloque final: empresa + nombre + ajustes + avatar — todo en un pill */}
                   <div className="flex items-center gap-0.5 rounded-full border bg-muted/40 py-1 px-1.5">
-                    {/* Logo empresa */}
-                    <EmpresaSelector />
+                    {/* Logo empresa. Oculto en móvil: cambiar de empresa es una
+                        acción de escritorio y aquí solo se llegaba de rebote,
+                        al caer en una vista de ordenador desde el teléfono. */}
+                    <div className="hidden md:block">
+                      <EmpresaSelector />
+                    </div>
 
                     <div className="hidden md:block h-5 w-px bg-border mx-1" />
 
@@ -422,10 +426,19 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                             <DropdownMenuSeparator />
                           </>
                         )}
+                        {/*
+                          AJUSTES no se ofrece desde el teléfono: la
+                          configuración de la empresa se toca desde el
+                          ordenador. En el móvil, este menú se alcanzaba al
+                          abrir un submódulo que aún no tiene pantalla propia
+                          y cae en la vista de escritorio (Iván, 07-ago).
+                          `hidden md:flex` (no un check de aparato) porque el
+                          resto de la cabecera ya se recorta por ancho.
+                        */}
                         {roles.includes("director") && (
                           <DropdownMenuItem
                             onSelect={() => router.push("/ajustes")}
-                            className="cursor-pointer gap-2 px-3 py-1.5"
+                            className="hidden md:flex cursor-pointer gap-2 px-3 py-1.5"
                           >
                             <Settings className="h-3.5 w-3.5 text-muted-foreground" />
                             <span className="text-xs font-medium">AJUSTES</span>

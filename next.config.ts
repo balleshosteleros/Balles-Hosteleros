@@ -133,6 +133,26 @@ const nextConfig: NextConfig = {
         destination: '/m',
         permanent: false,
       },
+      // AJUSTES no se abre desde el teléfono: la configuración de la empresa
+      // (usuarios, roles, permisos, empresas) se toca desde el ordenador.
+      //
+      // Se bloquea AQUÍ, por User-Agent real, y no escondiendo el botón con
+      // CSS: `md:hidden` responde al ANCHO de ventana, así que ni tapa la URL
+      // escrita a mano ni distingue un móvil de un portátil con la ventana
+      // estrecha. Con el mismo patrón que /mi-panel y /mis-departamentos, un
+      // móvil que pida /ajustes acaba en su app (Iván, 07-ago).
+      {
+        source: '/ajustes',
+        has: [{ type: 'header', key: 'user-agent', value: MOBILE_UA_REGEX }],
+        destination: '/m',
+        permanent: false,
+      },
+      {
+        source: '/ajustes/:path*',
+        has: [{ type: 'header', key: 'user-agent', value: MOBILE_UA_REGEX }],
+        destination: '/m',
+        permanent: false,
+      },
     ]
   },
   async headers() {
