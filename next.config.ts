@@ -6,6 +6,12 @@ import type { NextConfig } from 'next'
 const MOBILE_UA_REGEX =
   '.*(iPhone|iPod|Android.*Mobile|BlackBerry|IEMobile|Opera Mini|webOS|Windows Phone).*'
 
+// Subdominio de códigos QR. Los QR se escanean desde móvil y su código vive en la
+// raíz del subdominio, así que hay que excluirlo del redirect "/" → "/m": si no, el
+// cliente acabaría en la app de empleados en vez de en la carta. Debe coincidir con
+// `hostQr()` en hostname-resolver.ts.
+const QR_HOST = process.env.NEXT_PUBLIC_QR_HOST?.trim() || 'qr.balleshosteleros.com'
+
 const nextConfig: NextConfig = {
   // Versión del build horneada en el bundle del cliente. El auto-actualizador
   // de la PWA (VersionAutoUpdate) la compara contra /api/version para recargar
@@ -49,10 +55,16 @@ const nextConfig: NextConfig = {
         // a "/"), así el login —y su mensaje de error— es alcanzable en móvil.
         // Sin `error` aquí, el aviso "esta cuenta no tiene acceso" se perdía en
         // el rebote "/"→"/m"→"/?auth=1" y el usuario volvía al login en silencio.
+        //
+        // El host de QR queda FUERA de este redirect. Un QR se escanea casi
+        // siempre desde un móvil, y en `qr.balleshosteleros.com` el código vive en
+        // la raíz: sin esta exclusión, el cliente acabaría en la app móvil de
+        // empleados en vez de en la carta, y fallaría prácticamente siempre.
         missing: [
           { type: 'query', key: 'logout' },
           { type: 'query', key: 'auth' },
           { type: 'query', key: 'error' },
+          { type: 'host', value: QR_HOST },
         ],
         destination: '/m',
         permanent: false,

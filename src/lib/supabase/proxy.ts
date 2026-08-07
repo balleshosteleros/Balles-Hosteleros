@@ -1,7 +1,7 @@
 import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import type { User } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
-import { esHostPrincipal } from '@/features/marketing/pagina-web/services/hostname-resolver'
+import { esHostPrincipal, esHostQr } from '@/features/marketing/pagina-web/services/hostname-resolver'
 import { LANDING_PATH } from '@/features/auth/lib/role-redirect'
 import { checkProfileGuard } from '@/features/auth/lib/profile-guard'
 import {
@@ -23,6 +23,10 @@ export type UpdateSessionResult = {
 // nunca llegaría a borrar las cookies (que son HttpOnly: solo el servidor puede).
 const AUTH_PATHS = ['/', '/salir', '/callback', '/auth/confirm', '/forgot-password', '/update-password', '/check-email', '/acceso-demo']
 const PUBLIC_PREFIXES = ['/carta', '/__site', '/api/google/connect', '/empleo', '/api/empleo', '/documentacion', '/api/documentacion', '/firmar', '/inspectores', '/inspecciones/verificar', '/v', '/r', '/api/visita',
+  // Redirección de códigos QR: la abre un cliente anónimo con el móvil desde una
+  // carta impresa. Si exigiera login, el QR mandaría al cliente a la pantalla de
+  // acceso del sistema en vez de a la carta.
+  '/q',
   // Subida de contrato por la gestoría externa (enlace tokenizado, sin cuenta).
   '/gestoria/contrato', '/api/gestoria/contrato',
   // Subida de modelos fiscales por la gestoría (PRP-072, enlace tokenizado).
@@ -53,9 +57,34 @@ export async function updateSession(
     return { response: NextResponse.redirect(target), user: null }
   }
 
-  // ── Hostname rewrite: dominios custom de páginas web ────────────────
   const rawHost =
     request.headers.get('x-forwarded-host') ?? request.headers.get('host') ?? ''
+
+  // ── Subdominio de códigos QR ────────────────────────────────────────
+  // `qr.balleshosteleros.com/a3k9` → `/q/a3k9`. Va ANTES del rewrite de dominios
+  // custom porque termina en `.balleshosteleros.com` y `esHostPrincipal()` lo daría
+  // por bueno, dejándolo caer en el enrutado normal de la app (login).
+  //
+  // El código corto vive en la raíz del subdominio a propósito: cada carácter de
+  // más en la URL hace el QR más denso, con cuadros más pequeños, y peor de
+  // escanear con la luz de un comedor por la noche.
+  if (rawHost && esHostQr(rawHost)) {
+    const pathname = request.nextUrl.pathname
+    const esAsset =
+      /\.[a-z0-9]+$/i.test(pathname) ||
+      pathname.startsWith('/_next/') ||
+      pathname.startsWith('/api/')
+
+    if (!esAsset && !pathname.startsWith('/q/')) {
+      const codigo = pathname.replace(/^\/+|\/+$/g, '')
+      const target = request.nextUrl.clone()
+      // Sin código (alguien entra al subdominio a pelo) → aviso neutro, no login.
+      target.pathname = codigo ? `/q/${codigo}` : '/q/_'
+      return { response: NextResponse.rewrite(target), user: null }
+    }
+  }
+
+  // ── Hostname rewrite: dominios custom de páginas web ────────────────
   if (rawHost && !esHostPrincipal(rawHost)) {
     const pathname = request.nextUrl.pathname
     const isAsset = /\.[a-z0-9]+$/i.test(pathname) || pathname.startsWith('/api/') || pathname.startsWith('/_next/')

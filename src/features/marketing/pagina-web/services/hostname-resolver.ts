@@ -103,6 +103,26 @@ export function hostnamesPrincipales(): string[] {
     .filter(Boolean);
 }
 
+/**
+ * Subdominio donde viven los códigos QR. Es COMÚN a todas las empresas (por eso el
+ * código es único globalmente): así dar de alta una empresa nueva no obliga a tocar
+ * DNS ni a esperar a nadie.
+ *
+ * Configurable por si algún día cambia, pero con valor por defecto: si la variable
+ * de entorno faltara en producción, los QR ya impresos dejarían de funcionar, y eso
+ * no puede depender de un despiste de configuración.
+ */
+export function hostQr(): string {
+  const env = process.env.NEXT_PUBLIC_QR_HOST?.trim();
+  return normalizarHost(env || "qr.balleshosteleros.com");
+}
+
+export function esHostQr(rawHost: string): boolean {
+  const host = normalizarHost(rawHost);
+  if (!host) return false;
+  return host === hostQr();
+}
+
 export function esHostPrincipal(rawHost: string): boolean {
   const host = normalizarHost(rawHost);
   if (!host) return true;
