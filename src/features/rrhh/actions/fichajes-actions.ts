@@ -6,6 +6,8 @@ import { distanciaMetros } from "@/features/rrhh/utils/geo";
 import { getEmpresaActivaId } from "@/features/empresa/actions/empresa-activa-actions";
 import { calcularSalidaPrevista, cerrarConReparto } from "@/features/mi-panel/utils/fichaje-multiempresa";
 import { getRolContext } from "@/features/auth/actions/permisos-actions";
+import { getZonaHorariaEmpresa } from "@/features/empresa/lib/empresa-server";
+import { hoyEnZona, zonaLocalAUtcISO } from "@/features/empresa/lib/zona-horaria";
 import { revalidatePath } from "next/cache";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -323,13 +325,22 @@ export async function ficharEntrada(geo: GeoInput) {
       }
     }
 
+    // La FECHA del fichaje es el día en la zona horaria de la EMPRESA, no el día
+    // UTC. Este código corre en servidor (Vercel = UTC): con `toISOString()`, quien
+    // ficha a la 01:30 en Madrid (23:30 UTC del día anterior) quedaba registrado
+    // con la fecha del DÍA ANTERIOR. En hostelería el turno de noche es la norma,
+    // y como el resto del módulo (horas del mes, cuadrante, auto-salida) filtra por
+    // `fecha`, el fichaje se atribuía al día y al mes equivocados — y el cron de
+    // auto-salida no lo encontraba nunca, dejándolo abierto. `hora_entrada` sí es
+    // un instante y va en UTC, que es lo correcto.
+    const tzEmpresa = await getZonaHorariaEmpresa(supabase, empresaId);
     const { data, error } = await supabase
       .from("fichajes")
       .insert({
         empresa_id: empresaId,
         empleado_id: user.id,
         empleado_nombre: nombre ?? "Sin nombre",
-        fecha: new Date().toISOString().split("T")[0],
+        fecha: hoyEnZona(tzEmpresa),
         hora_entrada: new Date().toISOString(),
         estado: "trabajando",
         local_id: empleado.local_id,
@@ -423,10 +434,16 @@ type CrearFichajeManualInput = {
   observaciones?: string | null;
 };
 
-function toIsoCombinado(fecha: string, hora: string): string {
-  // El navegador interpreta el string YYYY-MM-DDTHH:MM como hora local;
-  // toISOString() lo convierte a UTC, que es lo que persistimos.
-  return new Date(`${fecha}T${hora}:00`).toISOString();
+/**
+ * "2026-08-06" + "09:00" en la zona de la EMPRESA → instante UTC a persistir.
+ *
+ * Ojo: esto corre en SERVIDOR (Vercel = UTC), no en el navegador como decía el
+ * comentario anterior. `new Date("...T09:00")` tomaba las 09:00 como UTC, así que
+ * todo fichaje manual se guardaba desplazado y luego se pintaba dos horas más
+ * tarde en verano (una en invierno).
+ */
+function toIsoCombinado(fecha: string, hora: string, tz: string): string {
+  return zonaLocalAUtcISO(fecha, hora, tz);
 }
 
 export async function crearFichajeManual(input: CrearFichajeManualInput) {
@@ -457,16 +474,31 @@ export async function crearFichajeManual(input: CrearFichajeManualInput) {
       .eq("id", empleado.local_id)
       .maybeSingle();
 
-    const horaEntradaIso = toIsoCombinado(input.fecha, input.horaEntrada);
-    const horaSalidaIso = input.horaSalida
-      ? toIsoCombinado(input.fecha, input.horaSalida)
+    const tzEmpresa = await getZonaHorariaEmpresa(supabase, empresaId);
+    const horaEntradaIso = toIsoCombinado(input.fecha, input.horaEntrada, tzEmpresa);
+    let horaSalidaIso = input.horaSalida
+      ? toIsoCombinado(input.fecha, input.horaSalida, tzEmpresa)
       : null;
-    const pausaInicioIso = input.pausaInicio
-      ? toIsoCombinado(input.fecha, input.pausaInicio)
+    let pausaInicioIso = input.pausaInicio
+      ? toIsoCombinado(input.fecha, input.pausaInicio, tzEmpresa)
       : null;
-    const pausaFinIso = input.pausaFin
-      ? toIsoCombinado(input.fecha, input.pausaFin)
+    let pausaFinIso = input.pausaFin
+      ? toIsoCombinado(input.fecha, input.pausaFin, tzEmpresa)
       : null;
+
+    // TURNO QUE CRUZA MEDIANOCHE (22:00 → 02:00): la salida y las pausas se
+    // combinan con la MISMA fecha que la entrada, así que caerían ANTES que ella
+    // y la jornada saldría negativa (rescatada a 0 h por el `Math.max` de abajo).
+    // Si una marca queda por detrás de la entrada, pertenece al día siguiente.
+    const DIA_MS = 24 * 60 * 60 * 1000;
+    const entradaMs = new Date(horaEntradaIso).getTime();
+    const alDiaSiguienteSiAntes = (iso: string | null): string | null =>
+      iso && new Date(iso).getTime() < entradaMs
+        ? new Date(new Date(iso).getTime() + DIA_MS).toISOString()
+        : iso;
+    horaSalidaIso = alDiaSiguienteSiAntes(horaSalidaIso);
+    pausaInicioIso = alDiaSiguienteSiAntes(pausaInicioIso);
+    pausaFinIso = alDiaSiguienteSiAntes(pausaFinIso);
 
     let horasTotales = 0;
     if (horaSalidaIso) {

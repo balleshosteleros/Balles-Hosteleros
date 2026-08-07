@@ -171,3 +171,38 @@ export function ahoraEnZona(tz: string): { fecha: string; minutos: number } {
   const minutos = Number(get("hour")) * 60 + Number(get("minute"));
   return { fecha, minutos };
 }
+
+/**
+ * INVERSO de las anteriores: una fecha y hora LOCALES de la empresa
+ * ("2026-08-06", "09:00") → el instante real en UTC, listo para guardar.
+ *
+ * Necesario en servidor: `new Date("2026-08-06T09:00")` usa la zona del proceso
+ * (Vercel = UTC), así que interpretaría las 09:00 como UTC y guardaría un
+ * instante desplazado — en Madrid se leería luego como las 11:00 en verano.
+ *
+ * Cómo funciona: se parte de la lectura ingenua en UTC y se corrige con el
+ * desfase real de esa zona en ese instante (que ya contempla el horario de
+ * verano). Se aplica dos veces porque el propio desfase puede cambiar justo en
+ * el salto horario; la segunda pasada estabiliza el resultado.
+ */
+export function zonaLocalAUtcISO(fecha: string, hora: string, tz: string): string {
+  const zona = tzSegura(tz);
+  const base = Date.parse(`${fecha}T${hora}:00Z`);
+  if (Number.isNaN(base)) return new Date(`${fecha}T${hora}:00Z`).toISOString();
+
+  const desfaseMs = (utcMs: number): number => {
+    const p = new Intl.DateTimeFormat("en-GB", {
+      timeZone: zona,
+      year: "numeric", month: "2-digit", day: "2-digit",
+      hour: "2-digit", minute: "2-digit", second: "2-digit",
+      hourCycle: "h23",
+    }).formatToParts(new Date(utcMs));
+    const g = (t: string) => Number(p.find((x) => x.type === t)?.value ?? "0");
+    const comoUtc = Date.UTC(g("year"), g("month") - 1, g("day"), g("hour"), g("minute"), g("second"));
+    return comoUtc - utcMs;
+  };
+
+  let ts = base - desfaseMs(base);
+  ts = base - desfaseMs(ts);
+  return new Date(ts).toISOString();
+}

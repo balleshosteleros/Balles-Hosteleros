@@ -9,6 +9,8 @@
 
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { getZonaHorariaEmpresa } from "@/features/empresa/lib/empresa-server";
+import { hoyEnZona, zonaLocalAUtcISO } from "@/features/empresa/lib/zona-horaria";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -29,32 +31,72 @@ export async function GET(request: Request) {
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
   );
 
-  const hoy = new Date().toISOString().split("T")[0];
+  // Se recorre EMPRESA a EMPRESA: "días anteriores" y el cierre dependen de la
+  // zona horaria de cada una (PRP-069), no del día UTC del servidor.
+  const { data: empresas, error: empErr } = await supabase.from("empresas").select("id");
+  if (empErr) {
+    console.error("[cron/cerrar-fichajes-huerfanos]", empErr);
+    return NextResponse.json({ ok: false, error: empErr.message }, { status: 500 });
+  }
 
-  const { data, error } = await supabase
-    .from("fichajes")
-    .update({
-      estado: "completado",
-      hora_salida: new Date().toISOString(),
-      incidencia: "Fichaje sin cierre — pendiente de revisión",
-    })
-    .lt("fecha", hoy)
-    .is("hora_salida", null)
-    .in("estado", ["trabajando", "pausa"])
-    .select("id, empresa_id, empleado_id, fecha");
+  let cerrados = 0;
+  const detalle: { id: string; empresaId: string; horas: number }[] = [];
 
-  if (error) {
-    console.error("[cron/cerrar-fichajes-huerfanos]", error);
-    return NextResponse.json(
-      { ok: false, error: error.message },
-      { status: 500 },
-    );
+  for (const e of empresas ?? []) {
+    const empresaId = e.id as string;
+    const tz = await getZonaHorariaEmpresa(supabase, empresaId);
+    const hoy = hoyEnZona(tz);
+
+    const { data: abiertos, error } = await supabase
+      .from("fichajes")
+      .select("id, hora_entrada, fecha")
+      .eq("empresa_id", empresaId)
+      .lt("fecha", hoy)
+      .is("hora_salida", null)
+      .in("estado", ["trabajando", "pausa"]);
+    if (error) {
+      console.error("[cron/cerrar-fichajes-huerfanos]", empresaId, error.message);
+      continue;
+    }
+
+    for (const f of abiertos ?? []) {
+      // La salida se fija al FINAL DE SU PROPIO DÍA, no al momento de ejecutarse
+      // el cron. Antes se ponía `now()`: quien entró a las 20:00 y no fichó salida
+      // quedaba con ~12 h (hasta las 08:00 del día siguiente, cuando corre el
+      // cron), y esas horas infladas son las que suma el cálculo del mes para los
+      // pagos. Además `horas_totales` no se recalculaba nunca.
+      const entradaIso = f.hora_entrada as string | null;
+      if (!entradaIso) continue;
+      const finDeDia = zonaLocalAUtcISO(f.fecha as string, "23:59", tz);
+      const entradaMs = new Date(entradaIso).getTime();
+      const salidaMs = Math.max(new Date(finDeDia).getTime(), entradaMs);
+      const horas = Math.round(((salidaMs - entradaMs) / 3600000) * 100) / 100;
+
+      const { error: upErr } = await supabase
+        .from("fichajes")
+        .update({
+          estado: "completado",
+          hora_salida: new Date(salidaMs).toISOString(),
+          horas_totales: horas,
+          requiere_revision: true,
+          incidencia:
+            "Cerrado automáticamente: no se fichó la salida. Horas estimadas hasta el fin del día — revisar.",
+        })
+        .eq("id", f.id as string);
+      if (upErr) {
+        console.error("[cron/cerrar-fichajes-huerfanos] update", f.id, upErr.message);
+        continue;
+      }
+      cerrados++;
+      detalle.push({ id: f.id as string, empresaId, horas });
+    }
   }
 
   return NextResponse.json({
     ok: true,
     ejecutadoEn: new Date().toISOString(),
-    cerrados: data?.length ?? 0,
-    fichajes: data ?? [],
+    empresas: empresas?.length ?? 0,
+    cerrados,
+    fichajes: detalle,
   });
 }
