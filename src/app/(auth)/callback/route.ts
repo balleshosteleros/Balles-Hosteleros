@@ -5,7 +5,7 @@ import { landingPorRol } from '@/features/auth/lib/role-redirect'
 import { getRolContext } from '@/features/auth/actions/permisos-actions'
 import { checkProfileGuard } from '@/features/auth/lib/profile-guard'
 import {
-  readAccounts,
+  readAccountsFor,
   upsertAccount,
   writeAccountsTo,
 } from '@/lib/google/accounts'
@@ -168,14 +168,23 @@ export async function GET(request: Request) {
   }
 
   if (googleEmail && providerRefreshToken) {
-    const previas = await readAccounts()
+    // Usuario del SOFTWARE. En "añadir otra cuenta" `setSession` ya restauró
+    // la sesión original, así que getUser() devuelve al usuario de siempre y
+    // no a la cuenta de Google recién vinculada.
+    const { data: userData } = await supabase.auth.getUser()
+    const uid = userData.user?.id ?? data.session.user.id
+
+    // El roster no se puede leer de cookies aquí: en connect flow llegan las
+    // del navegador, y en login normal aún no se han aplicado. Se lee de BD
+    // con el uid ya resuelto.
+    const previas = await readAccountsFor(uid)
     const actualizadas = upsertAccount(previas, {
       email: googleEmail,
       name: fullName,
       picture,
       refreshToken: providerRefreshToken,
     })
-    await writeAccountsTo(response.cookies, actualizadas)
+    await writeAccountsTo(response.cookies, actualizadas, uid)
   }
 
   if (isConnectFlow) clearPending(response)

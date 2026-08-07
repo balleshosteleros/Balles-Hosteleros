@@ -73,11 +73,28 @@ async function readAccountsFromDb(): Promise<GoogleAccount[]> {
       data: { user },
     } = await supabase.auth.getUser();
     if (!user) return [];
+    return readAccountsFor(user.id);
+  } catch (err) {
+    console.error("[google/accounts] lectura BD error:", err);
+    return [];
+  }
+}
+
+/**
+ * Roster de un usuario concreto, sin depender de la sesión en cookies.
+ * Necesario en el callback de OAuth, donde la sesión aún no es legible.
+ */
+export async function readAccountsFor(
+  userId: string,
+): Promise<GoogleAccount[]> {
+  try {
+    const { createAdminClient } = await import("@/lib/supabase/admin");
+    const supabase = createAdminClient();
 
     const { data, error } = await supabase
       .from(TABLA_CUENTAS)
       .select("cuentas")
-      .eq("user_id", user.id)
+      .eq("user_id", userId)
       .maybeSingle();
 
     if (error) {
@@ -96,17 +113,32 @@ async function readAccountsFromDb(): Promise<GoogleAccount[]> {
  * Persiste el roster del usuario. El fallo se registra pero no interrumpe:
  * la cookie ya se habrá escrito y la sesión en curso sigue funcionando.
  */
-async function writeAccountsToDb(accounts: GoogleAccount[]): Promise<void> {
+async function writeAccountsToDb(
+  accounts: GoogleAccount[],
+  userId?: string,
+): Promise<void> {
   try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) return;
+    // `userId` explícito para el callback de OAuth: allí la sesión aún no está
+    // en las cookies de la petición (se aplica al final, desde un buffer), así
+    // que getUser() devolvería null y el upsert lo rechazaría RLS. En ese caso
+    // usamos el cliente admin, con el user_id ya verificado por quien llama.
+    let uid = userId;
+    let supabase;
+    if (uid) {
+      const { createAdminClient } = await import("@/lib/supabase/admin");
+      supabase = createAdminClient();
+    } else {
+      supabase = await createClient();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) return;
+      uid = user.id;
+    }
 
     const { error } = await supabase.from(TABLA_CUENTAS).upsert(
       {
-        user_id: user.id,
+        user_id: uid,
         cuentas: accounts,
         updated_at: new Date().toISOString(),
       },
@@ -146,9 +178,10 @@ function toMeta(accounts: GoogleAccount[]): GoogleAccountMeta[] {
 export function writeAccountsTo(
   responseCookies: ResponseCookies,
   accounts: GoogleAccount[],
+  userId?: string,
 ): Promise<void> {
   writeAccountsCookies(responseCookies, accounts);
-  return writeAccountsToDb(accounts);
+  return writeAccountsToDb(accounts, userId);
 }
 
 /** Solo cookies, sin tocar BD. */

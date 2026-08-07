@@ -69,18 +69,20 @@ export async function POST() {
   const yaEsta = accounts.some(
     (a) => a.email.toLowerCase() === email.toLowerCase(),
   );
-  if (yaEsta) {
-    return NextResponse.json({ ok: true, synced: false });
-  }
 
-  const actualizadas = upsertAccount(accounts, {
-    email,
-    name: c.get("g_name")?.value ?? "",
-    picture: c.get("g_picture")?.value ?? "",
-    refreshToken,
-  });
+  // Aunque ya esté en el roster, hay que reescribir: las cuentas conectadas
+  // antes de que existiera la persistencia viven solo en cookie, y si no las
+  // volcamos a BD se pierden al cerrar sesión.
+  const actualizadas = yaEsta
+    ? accounts
+    : upsertAccount(accounts, {
+        email,
+        name: c.get("g_name")?.value ?? "",
+        picture: c.get("g_picture")?.value ?? "",
+        refreshToken,
+      });
 
-  const response = NextResponse.json({ ok: true, synced: true });
+  const response = NextResponse.json({ ok: true, synced: !yaEsta });
   await writeAccountsTo(response.cookies, actualizadas);
   return response;
 }

@@ -70,13 +70,10 @@ export function useGoogleConnection() {
   // activa, /sync reactiva la guardada y el usuario no reconecta cada día.
   useEffect(() => {
     if (typeof document === "undefined") return;
-    const correo = leerCookie("g_email");
-    const roster = leerRoster();
-    const yaEnRoster =
-      !!correo &&
-      roster.some((a) => a.email.toLowerCase() === correo.toLowerCase());
-    if (yaEnRoster) return;
-
+    // Se llama SIEMPRE al montar: /sync es idempotente y es lo que vuelca a BD
+    // las cuentas que solo viven en cookie (conectadas antes de existir la
+    // persistencia). Si se salta cuando ya están en el roster, esas cuentas no
+    // se respaldan nunca y se pierden al cerrar sesión.
     fetch("/api/google/sync", { method: "POST" })
       .then((r) => r.json())
       .then((data) => {
