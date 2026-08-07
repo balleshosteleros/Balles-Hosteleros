@@ -98,6 +98,25 @@ type SmtpConfig = {
  * de las obligatorias (host/user/pass): señal de "transporte no configurado".
  */
 function resolverSmtpConfig(): SmtpConfig | null {
+  // Resend tiene PRIORIDAD sobre Gmail cuando hay key: sin tope de 2.000/día
+  // (el de Google no se amplía pagando) y mejor entregabilidad. Si algún día se
+  // quita `RESEND_API_KEY`, se vuelve solo a Gmail sin tocar código.
+  const resendKey = process.env.RESEND_API_KEY?.trim();
+  if (resendKey) {
+    const from = process.env.EMAIL_FROM?.trim() || process.env.EMAIL_NOREPLY?.trim();
+    if (from) {
+      return {
+        host: "smtp.resend.com",
+        port: 465,
+        secure: true,
+        user: "resend",
+        pass: resendKey,
+        from,
+      };
+    }
+    console.warn("[email] RESEND_API_KEY presente pero falta EMAIL_FROM: uso Gmail.");
+  }
+
   const host = process.env.SMTP_HOST?.trim();
   const user = process.env.SMTP_USER?.trim();
   const pass = process.env.SMTP_PASS;

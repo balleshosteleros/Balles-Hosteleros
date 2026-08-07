@@ -31,6 +31,7 @@ import { FichajesConfigPanel } from "@/features/ajustes/components/FichajesConfi
 import { NotifLiquidacionesConfigPanel } from "@/features/notificaciones/components/NotifLiquidacionesConfigPanel";
 import { JornadasVacantesPanel } from "@/features/ajustes/components/JornadasVacantesPanel";
 import { TiposContratoPanel } from "@/features/ajustes/components/TiposContratoPanel";
+import { DireccionWebEmpresaPanel } from "@/features/marketing/pagina-web/components/admin/dominios/DireccionWebEmpresaPanel";
 import { GestoriaConfig } from "@/features/rrhh/components/reclutamiento/config/GestoriaConfig";
 import { ConfigGeneralConfig } from "@/features/rrhh/components/reclutamiento/config/ConfigGeneralConfig";
 import { OnboardingPruebaConfig } from "@/features/rrhh/components/reclutamiento/config/OnboardingPruebaConfig";
@@ -266,6 +267,8 @@ function SubmoduloRow({
             <JornadasVacantesPanel />
           ) : submodulo.key === "contratos" ? (
             <TiposContratoPanel />
+          ) : submodulo.key === "pagina_web" ? (
+            <DireccionWebEmpresaPanel />
           ) : (
             <>
               <ChecklistCampos

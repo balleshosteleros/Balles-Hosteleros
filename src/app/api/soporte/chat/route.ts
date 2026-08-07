@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { openrouterChat, type ChatMsg } from "@/lib/ia/openrouter";
+import { chatTexto, type ChatMsg } from "@/lib/ia/chat-texto";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { rateLimit } from "@/shared/lib/rate-limit-memory";
@@ -141,7 +141,7 @@ export async function POST(request: Request) {
     })),
   ];
 
-  const aiRaw = await openrouterChat(chat);
+  const aiRaw = await chatTexto(chat);
 
   // Fallback sin IA: respondemos con el chunk más cercano + sus recursos.
   if (!aiRaw) {

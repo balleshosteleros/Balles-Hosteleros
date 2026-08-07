@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Download, Eye, EyeOff, Globe, Link2, Loader2 } from "lucide-react";
+import { ArrowLeft, Download, Eye, EyeOff, Globe, Link2, Loader2, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { useEditorStore } from "../../../hooks/useEditorStore";
@@ -15,6 +15,7 @@ import { Canvas } from "./Canvas";
 import { PropiedadesPanel } from "./PropiedadesPanel";
 import { AutosaveIndicator } from "./AutosaveIndicator";
 import { PreviewPane } from "./PreviewPane";
+import { ChatWebPane } from "./ChatWebPane";
 import { ImportarDeUrlDialog } from "./ImportarDeUrlDialog";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 
@@ -30,6 +31,7 @@ export function EditorShell({ paginaId }: Props) {
   const bloques = useEditorStore((s) => s.bloques);
   const [loading, setLoading] = useState(true);
   const [showPreview, setShowPreview] = useState(false);
+  const [showChat, setShowChat] = useState(false);
   const [estadoPagina, setEstadoPagina] = useState<"BORRADOR" | "PUBLICADA" | "ARCHIVADA">("BORRADOR");
   const [publicando, setPublicando] = useState(false);
   const [showImportar, setShowImportar] = useState(false);
@@ -89,6 +91,14 @@ export function EditorShell({ paginaId }: Props) {
             </Button>
           </Link>
           <Button
+            variant={showChat ? "default" : "outline"}
+            size="sm"
+            onClick={() => setShowChat((v) => !v)}
+            title="Cambia la web hablando con el asistente"
+          >
+            <Sparkles className="h-4 w-4 mr-1" /> Asistente
+          </Button>
+          <Button
             variant={showPreview ? "default" : "outline"}
             size="sm"
             onClick={() => setShowPreview((v) => !v)}
@@ -143,14 +153,17 @@ export function EditorShell({ paginaId }: Props) {
         </div>
       </header>
 
-      {/* 3 columnas + preview opcional */}
+      {/* 3 columnas + preview opcional + asistente opcional */}
       <div className="flex flex-1 overflow-hidden">
         <BloqueLibrary />
         <Canvas />
         {showPreview ? (
           <PreviewPane paginaId={paginaId} onCerrar={() => setShowPreview(false)} />
         ) : (
-          <PropiedadesPanel />
+          !showChat && <PropiedadesPanel />
+        )}
+        {showChat && (
+          <ChatWebPane paginaId={paginaId} onCerrar={() => setShowChat(false)} />
         )}
       </div>
 

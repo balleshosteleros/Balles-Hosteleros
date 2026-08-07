@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { openrouterChat } from "@/lib/ia/openrouter";
+import { chatTexto } from "@/lib/ia/chat-texto";
 import { createClient } from "@/lib/supabase/server";
 import { rateLimit } from "@/shared/lib/rate-limit-memory";
 import { getModulosVisibles } from "@/lib/soporte/modulos-visibles";
@@ -47,7 +47,7 @@ export async function POST(request: Request) {
 
   // Resumen con IA usando SOLO los chunks permitidos como contexto.
   const contexto = chunks.map((c) => `## ${c.titulo}\n${c.contenido}`).join("\n\n");
-  const aiResponse = await openrouterChat([
+  const aiResponse = await chatTexto([
     {
       role: "system",
       content:

@@ -42,6 +42,31 @@ export async function listarDominios(paginaId: string): Promise<ActionResult<Pag
   }
 }
 
+/**
+ * Lista TODOS los dominios de la empresa activa (de todas sus páginas).
+ * Lo consume Ajustes → Departamentos → Marketing → Página web, donde la
+ * dirección web se gestiona a nivel de empresa y no de una página suelta.
+ */
+export async function listarDominiosEmpresa(): Promise<ActionResult<PaginaWebDominio[]>> {
+  try {
+    const { supabase, empresaId } = await getAppContext();
+    if (!empresaId) return { ok: false, error: "Sin empresa." };
+    const { data, error } = await supabase
+      .from("paginas_web_dominios")
+      .select("*")
+      .eq("empresa_id", empresaId)
+      .order("created_at", { ascending: true });
+    if (error) {
+      console.error("[dominios][listarEmpresa]", error.message);
+      return { ok: false, error: "No se pudieron cargar las direcciones web." };
+    }
+    return { ok: true, data: (data ?? []) as PaginaWebDominio[] };
+  } catch (err) {
+    console.error("[dominios][listarEmpresa] fatal:", err);
+    return { ok: false, error: "Error inesperado." };
+  }
+}
+
 export async function anadirDominio(input: {
   paginaId: string;
   hostname: string;
@@ -53,7 +78,7 @@ export async function anadirDominio(input: {
 
     const hostname = normalizarHost(input.hostname);
     if (!hostname || !/^[a-z0-9.-]+\.[a-z]{2,}$/.test(hostname)) {
-      return { ok: false, error: "Hostname inválido. Ej: bacanalmadrid.com" };
+      return { ok: false, error: "Hostname inválido. Ej: turestaurante.com" };
     }
 
     const dns = generarDnsHint(hostname);

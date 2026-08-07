@@ -64,9 +64,11 @@ async function contarEntidad(
         .select("logo_url, color")
         .eq("id", empresaId)
         .maybeSingle();
-      const tieneLogo = !!(data?.logo_url as string | null);
-      const tieneColor = !!(data?.color as string | null);
-      return tieneLogo || tieneColor ? 1 : 0;
+      // El LOGO es obligatorio, no basta con el color: sin logo, todos los
+      // correos de la empresa (nóminas, contratos, candidatos, proveedores)
+      // salen sin cabecera de marca. El color solo no sirve para eso.
+      const tieneLogo = !!(data?.logo_url as string | null)?.trim();
+      return tieneLogo ? 1 : 0;
     }
     default:
       return 0;

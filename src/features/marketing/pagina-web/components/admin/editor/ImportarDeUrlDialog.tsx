@@ -24,7 +24,7 @@ interface Props {
 }
 
 export function ImportarDeUrlDialog({ open, onOpenChange, paginaId, onImported }: Props) {
-  const [url, setUrl] = useState("https://www.bacanalmadrid.com");
+  const [url, setUrl] = useState("");
   const [cargando, setCargando] = useState(false);
   useGlobalLoadingSync(cargando);
 
@@ -75,7 +75,7 @@ export function ImportarDeUrlDialog({ open, onOpenChange, paginaId, onImported }
             <Label htmlFor="url">URL pública</Label>
             <Input
               id="url"
-              placeholder="https://www.bacanalmadrid.com"
+              placeholder="https://www.turestaurante.com"
               value={url}
               onChange={(e) => setUrl(e.target.value)}
               disabled={cargando}

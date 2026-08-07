@@ -60,13 +60,13 @@ export function AnadirDominioDialog({ open, onOpenChange, paginaId, onAdded }: P
             <Label htmlFor="hostname">Hostname</Label>
             <Input
               id="hostname"
-              placeholder="bacanalmadrid.com · sanvalentin.bacanalmadrid.com"
+              placeholder="turestaurante.com · eventos.turestaurante.com"
               value={hostname}
               onChange={(e) => setHostname(e.target.value)}
               disabled={enviando}
             />
             <p className="text-xs text-muted-foreground">
-              Acepta apex (bacanalmadrid.com) o subdominios. Para apex usa un A record a
+              Acepta apex (turestaurante.com) o subdominios. Para apex usa un A record a
               <code className="mx-1">76.76.21.21</code>. Para subdominios, CNAME a
               <code className="mx-1">cname.vercel-dns.com</code>.
             </p>

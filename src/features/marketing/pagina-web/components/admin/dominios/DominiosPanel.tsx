@@ -119,6 +119,17 @@ export function DominiosPanel({ paginaId, nombrePagina }: Props) {
         </Button>
       </div>
 
+      <p className="text-sm text-muted-foreground">
+        La dirección web es de toda la empresa. Puedes gestionarla en{" "}
+        <Link
+          href="/ajustes?tab=departamentos"
+          className="underline underline-offset-2 hover:text-foreground"
+        >
+          Ajustes › Departamentos › Marketing › Página web
+        </Link>
+        .
+      </p>
+
       <Card>
         <Table>
           <TableHeader>

@@ -91,3 +91,45 @@ export async function geminiJSON<T = unknown>(
     modelo,
   };
 }
+
+/**
+ * Respuesta en TEXTO libre (sin esquema JSON). Para chats conversacionales.
+ *
+ * Devuelve null si no hay key o si la llamada falla, para que el caller pueda
+ * caer a su propio fallback sin romper la pantalla.
+ */
+export async function geminiTexto(
+  mensajes: Array<{ role: "system" | "user" | "assistant"; content: string }>,
+  opts: { temperature?: number; model?: string } = {},
+): Promise<string | null> {
+  const key = process.env.GEMINI_API_KEY?.trim();
+  if (!key) return null;
+
+  try {
+    const sistema = mensajes
+      .filter((m) => m.role === "system")
+      .map((m) => m.content)
+      .join("\n\n");
+
+    const conversacion = mensajes.filter((m) => m.role !== "system");
+
+    const genAI = new GoogleGenerativeAI(key);
+    const model = genAI.getGenerativeModel({
+      model: opts.model || DEFAULT_MODEL,
+      systemInstruction: sistema || undefined,
+      generationConfig: { temperature: opts.temperature ?? 0.3 },
+    });
+
+    const result = await model.generateContent({
+      contents: conversacion.map((m) => ({
+        role: m.role === "assistant" ? "model" : "user",
+        parts: [{ text: m.content }],
+      })),
+    });
+
+    return result.response.text() || null;
+  } catch (err) {
+    console.error("[gemini][texto]", err);
+    return null;
+  }
+}

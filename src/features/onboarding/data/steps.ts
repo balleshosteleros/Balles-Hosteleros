@@ -62,7 +62,9 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
     key: "imagen_marca",
     titulo: "Imagen de marca",
     descripcion: "Logo y colores de la empresa para emails, carta y portal.",
-    obligatorio: false,
+    // Obligatorio: sin logo, TODOS los correos de la empresa (nóminas,
+    // contratos, candidatos, proveedores) salen sin marca. Ver `sendEmail()`.
+    obligatorio: true,
     dependencias: [],
     icono: "Image",
     rutaGestion: "/ajustes",

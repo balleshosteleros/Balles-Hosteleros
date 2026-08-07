@@ -104,11 +104,11 @@ export function WizardDominioDialog({ open, onOpenChange, paginaId, onCompletado
     setError(null);
     const limpio = hostname.trim().toLowerCase();
     if (!limpio) {
-      setError("Escribe tu dirección web (ej. bacanalmadrid.com)");
+      setError("Escribe tu dirección web (ej. turestaurante.com)");
       return;
     }
     if (!/^[a-z0-9.-]+\.[a-z]{2,}$/.test(limpio)) {
-      setError("La dirección no parece válida. Ej: bacanalmadrid.com");
+      setError("La dirección no parece válida. Ej: turestaurante.com");
       return;
     }
 
@@ -295,29 +295,13 @@ function PasoDireccion({
           autoFocus
           value={hostname}
           onChange={(e) => onHostnameChange(e.target.value)}
-          placeholder="bacanalmadrid.com"
+          placeholder="turestaurante.com"
           className="h-12 text-base"
           disabled={enviando}
           onKeyDown={(e) => {
             if (e.key === "Enter" && !enviando) onSiguiente();
           }}
         />
-        <div className="flex flex-wrap gap-2 text-xs">
-          <button
-            type="button"
-            className="px-2 py-1 rounded-md bg-muted hover:bg-muted/70 text-muted-foreground"
-            onClick={() => onHostnameChange("bacanalmadrid.com")}
-          >
-            Ejemplo: bacanalmadrid.com
-          </button>
-          <button
-            type="button"
-            className="px-2 py-1 rounded-md bg-muted hover:bg-muted/70 text-muted-foreground"
-            onClick={() => onHostnameChange("www.bacanalmadrid.com")}
-          >
-            Ejemplo: www.bacanalmadrid.com
-          </button>
-        </div>
         {error && (
           <p className="text-sm text-red-600 dark:text-red-400 pt-1">{error}</p>
         )}
