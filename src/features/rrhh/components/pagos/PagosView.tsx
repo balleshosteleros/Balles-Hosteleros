@@ -3,7 +3,8 @@
 import { useState, useMemo, useEffect, useCallback, useRef, type ReactNode } from "react";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
-import { getResumenPagos, costeSSTotal, nominaBruta, type PagoEmpleado, type PagoArea } from "@/features/rrhh/data/pagos";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { getResumenPagos, costeSSTotal, nominaBruta, calcularTotalPago, type PagoEmpleado, type PagoArea, type DetalleNomina } from "@/features/rrhh/data/pagos";
 import { normalizarDniNie } from "@/features/rrhh/lib/documentacion-validacion";
 import {
   listEmpleadosParaPagos,
@@ -16,7 +17,7 @@ import {
   type PagoGuardado,
 } from "@/features/rrhh/actions/pagos-actions";
 import { loadHorasMes, type HorasMesRow } from "@/features/rrhh/actions/horas-actions";
-import { procesarNominasLeidas } from "@/features/rrhh/actions/nominas-archivo-actions";
+import { procesarNominasLeidas, getNominaArchivoUrl } from "@/features/rrhh/actions/nominas-archivo-actions";
 import type { NominaLeida } from "@/features/rrhh/services/nominas/procesar-nominas";
 import {
   getNotifLiquidacionesConfig,
@@ -25,7 +26,17 @@ import {
 import { NotifLiquidacionesConfigPanel } from "@/features/notificaciones/components/NotifLiquidacionesConfigPanel";
 import { NominasGestoriaConfigPanel } from "@/features/rrhh/components/pagos/NominasGestoriaConfigPanel";
 import { NominasRevisionDialog } from "@/features/rrhh/components/pagos/NominasRevisionDialog";
-import { listarNominasRevision } from "@/features/rrhh/actions/nominas-revision-actions";
+import {
+  listarNominasRevision,
+  getEstadoMesNominas,
+  confirmarMesNominas,
+  reabrirMesNominas,
+  subirTc1Mes,
+  getTc1MesUrl,
+  borrarTc1Mes,
+  type EstadoMesNominas,
+} from "@/features/rrhh/actions/nominas-revision-actions";
+import { MAX_NOMINAS_MB, MAX_NOMINAS_BYTES } from "@/shared/lib/documentos";
 import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 import { toast } from "sonner";
 import { ZONE_COLORS } from "@/features/direccion/data/direccion";
@@ -36,7 +47,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { Edit2, Banknote, Settings, Send, Lock, Unlock, CheckCircle2, Clock, Upload, ReceiptText } from "lucide-react";
+import { Edit2, Banknote, Settings, Send, Lock, Unlock, CheckCircle2, Clock, Upload, ReceiptText, AlertTriangle, FileText, ShieldCheck, X } from "lucide-react";
 import {
   SubmoduleToolbar,
   aplicarFiltrosToolbar,
@@ -71,6 +82,31 @@ function periodoDeRango(rango: { start: Date }): string {
   return `${y}-${m}`;
 }
 
+/** Conceptos que vienen de la nómina y por tanto se pueden desglosar por documento. */
+type CampoDesglose = "nominaBruta" | "neto" | "ssEmpleado" | "ssEmpresa" | "irpf" | "ssTotal";
+
+const ETIQUETA_DESGLOSE: Record<CampoDesglose, string> = {
+  nominaBruta: "Nómina bruta por documento",
+  neto: "Nómina neta por documento",
+  ssEmpleado: "SS trabajador por documento",
+  ssEmpresa: "SS empresa por documento",
+  irpf: "IRPF por documento",
+  ssTotal: "Total SS por documento",
+};
+
+/** Valor de UNA nómina individual para el concepto pedido. */
+function valorDesglose(d: DetalleNomina, campo: CampoDesglose): number {
+  switch (campo) {
+    // Bruto = neto + lo que se le descuenta al trabajador (SS + IRPF).
+    case "nominaBruta": return d.neto + d.ssEmpleado + d.irpf;
+    case "neto": return d.neto;
+    case "ssEmpleado": return d.ssEmpleado;
+    case "ssEmpresa": return d.ssEmpresa;
+    case "irpf": return d.irpf;
+    case "ssTotal": return d.ssEmpleado + d.ssEmpresa;
+  }
+}
+
 function fromGuardado(
   empleadoId: string,
   empleadoNombre: string,
@@ -101,6 +137,7 @@ function fromGuardado(
     pagado: g.pagado,
     nominaPath: g.nominaPath,
     numNominas: g.numNominas,
+    avisoInactivo: g.avisoInactivo,
     confirmacionEnviadaAt: g.confirmacionEnviadaAt,
     confirmacionAceptadaAt: g.confirmacionAceptadaAt,
   };
@@ -127,6 +164,7 @@ function toGuardado(p: PagoEmpleado): PagoGuardado {
     pagado: p.pagado,
     nominaPath: p.nominaPath,
     numNominas: p.numNominas,
+    avisoInactivo: p.avisoInactivo,
     confirmacionEnviadaAt: p.confirmacionEnviadaAt,
     confirmacionAceptadaAt: p.confirmacionAceptadaAt,
   };
@@ -161,6 +199,7 @@ function nuevoPagoVacio(
     pagado: false,
     nominaPath: null,
     numNominas: 0,
+    avisoInactivo: false,
     confirmacionEnviadaAt: null,
     confirmacionAceptadaAt: null,
   };
@@ -181,6 +220,18 @@ export function PagosView() {
   const [loading, setLoading] = useState(false);
   const [showConfig, setShowConfig] = useState(false);
   const [showRevision, setShowRevision] = useState(false);
+  // empleadoId cuya nómina se está abriendo (para el indicador del icono).
+  const [abriendoNomina, setAbriendoNomina] = useState<string | null>(null);
+  const [confirmandoMes, setConfirmandoMes] = useState(false);
+  const [subiendoTc1, setSubiendoTc1] = useState(false);
+  const tc1InputRef = useRef<HTMLInputElement>(null);
+  // Estado del mes: en borrador se puede corregir; confirmado es inmutable.
+  const [estadoMes, setEstadoMes] = useState<EstadoMesNominas>({
+    confirmado: false,
+    confirmadoEn: null,
+    puedeGestionar: false,
+    tc1: null,
+  });
   const [incidenciasNominas, setIncidenciasNominas] = useState(0);
   const [filtroArea, setFiltroArea] = useState<"todos" | PagoArea>("todos");
   const [enviando, setEnviando] = useState(false);
@@ -216,6 +267,17 @@ export function PagosView() {
   useEffect(() => {
     refrescarIncidenciasNominas();
   }, [refrescarIncidenciasNominas]);
+
+  // Estado del mes (borrador / confirmado). Decide si se puede editar y si el
+  // empleado ya ve sus nóminas en el portal.
+  const refrescarEstadoMes = useCallback(async () => {
+    if (!periodo) return;
+    setEstadoMes(await getEstadoMesNominas(periodo));
+  }, [periodo]);
+
+  useEffect(() => {
+    refrescarEstadoMes();
+  }, [refrescarEstadoMes]);
 
   const mesLabelNominas = useMemo(() => {
     const [y, m] = (periodo ?? "").split("-");
@@ -430,13 +492,144 @@ export function PagosView() {
 
     const lineas: string[] = [];
     if (r.duplicadas.length > 0) lineas.push(`Ya tenían nómina (no se regrabó): ${r.duplicadas.slice(0, 6).join(", ")}${r.duplicadas.length > 6 ? "…" : ""}.`);
+    // Volcadas bien, pero de gente ya de baja: se avisa para que se revise.
+    if (r.inactivos.length > 0) {
+      const etiquetas = r.inactivos
+        .slice(0, 6)
+        .map((x) => {
+          if (!x.fechaBaja) return `${x.nombre} (sin fecha de baja)`;
+          const [y, m, d] = x.fechaBaja.split("-");
+          return `${x.nombre} (fin ${d}/${m}/${y})`;
+        })
+        .join(", ");
+      lineas.push(`Revisa (ya estaban de baja): ${etiquetas}${r.inactivos.length > 6 ? "…" : ""}.`);
+    }
     const descripcion = lineas.length > 0 ? lineas.join(" ") : undefined;
 
     if (r.guardadas > 0 || r.yaExistian > 0) toast.success(partes.join(" · "), { description: descripcion });
     else toast.error(partes.join(" · ") || "No se emparejó ninguna nómina.", { description: descripcion });
   };
 
-  // Abre la nómina original de un empleado en una pestaña nueva (URL firmada).
+  // Abre la nómina original de un empleado en una pestaña nueva (URL firmada
+  // temporal). Si tiene varias del mes, `getNominaArchivoUrl` las combina en un
+  // único PDF, así que el gestor las ve todas de una vez.
+  const abrirNominaEmpleado = async (p: PagoEmpleado) => {
+    if (p.empleadoId.startsWith("ext-")) return;
+    setAbriendoNomina(p.empleadoId);
+    try {
+      const res = await getNominaArchivoUrl(periodo, p.empleadoId);
+      if (res.ok) window.open(res.url, "_blank", "noopener,noreferrer");
+      else toast.error(res.error ?? "No se pudo abrir la nómina.");
+    } catch {
+      toast.error("No se pudo abrir la nómina.");
+    } finally {
+      setAbriendoNomina(null);
+    }
+  };
+
+  // TC1 del mes: documento de EMPRESA (bases y cuotas de toda la plantilla). Se
+  // guarda aparte de las nóminas y NO se reparte a ningún empleado.
+  const subirTc1 = async (file: File | null) => {
+    if (!file) return;
+    if (file.size > MAX_NOMINAS_BYTES) {
+      toast.error(`El archivo supera ${MAX_NOMINAS_MB} MB.`);
+      return;
+    }
+    setSubiendoTc1(true);
+    try {
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const fr = new FileReader();
+        fr.onload = () => resolve(String(fr.result).split(",")[1] ?? "");
+        fr.onerror = () => reject(new Error("No se pudo leer el archivo"));
+        fr.readAsDataURL(file);
+      });
+      const res = await subirTc1Mes({
+        periodo,
+        nombre: file.name,
+        mimeType: file.type || "application/pdf",
+        archivoBase64: base64,
+      });
+      if (!res.ok) {
+        toast.error(res.error ?? "No se pudo subir el TC1.");
+        return;
+      }
+      await refrescarEstadoMes();
+      toast.success(`TC1 de ${mesLabelNominas} adjuntado.`);
+    } catch {
+      toast.error("No se pudo subir el TC1.");
+    } finally {
+      setSubiendoTc1(false);
+    }
+  };
+
+  const abrirTc1 = async () => {
+    const res = await getTc1MesUrl(periodo);
+    if (res.ok) window.open(res.url, "_blank", "noopener,noreferrer");
+    else toast.error(res.error ?? "No se pudo abrir el TC1.");
+  };
+
+  const quitarTc1 = async () => {
+    const ok = await confirm({
+      title: `Quitar el TC1 de ${mesLabelNominas}`,
+      description: "Se borrará el documento del mes. Podrás volver a adjuntarlo cuando quieras.",
+      confirmLabel: "Quitar TC1",
+    });
+    if (!ok) return;
+    const res = await borrarTc1Mes(periodo);
+    if (!res.ok) {
+      toast.error(res.error ?? "No se pudo quitar el TC1.");
+      return;
+    }
+    await refrescarEstadoMes();
+    toast.success("TC1 quitado.");
+  };
+
+  // Cierra el mes: las nóminas quedan inmutables para TODOS los roles y se
+  // publican en la carpeta de cada empleado.
+  const confirmarMes = async () => {
+    const ok = await confirm({
+      title: `Confirmar las nóminas de ${mesLabelNominas}`,
+      description:
+        "Quedarán bloqueadas: nadie podrá editar sus importes, ni borrarlas, ni subir nuevas de este mes. " +
+        "Además cada empleado verá su nómina en su portal. Solo dirección puede reabrir el mes después. ¿Continuar?",
+      confirmLabel: "Confirmar nóminas",
+    });
+    if (!ok) return;
+    setConfirmandoMes(true);
+    const res = await confirmarMesNominas(periodo);
+    setConfirmandoMes(false);
+    if (!res.ok) {
+      toast.error(res.error ?? "No se pudieron confirmar las nóminas.");
+      return;
+    }
+    await refrescarEstadoMes();
+    toast.success(`Nóminas de ${mesLabelNominas} confirmadas y publicadas a los empleados.`, {
+      description:
+        res.conIncidencia > 0
+          ? `Atención: se han cerrado ${res.conIncidencia} nómina${res.conIncidencia === 1 ? "" : "s"} con incidencia sin revisar.`
+          : undefined,
+    });
+  };
+
+  const reabrirMes = async () => {
+    const ok = await confirm({
+      title: `Reabrir las nóminas de ${mesLabelNominas}`,
+      description:
+        "Volverán a ser editables y DEJARÁN de verse en el portal del empleado hasta que se confirmen otra vez. ¿Continuar?",
+      confirmLabel: "Reabrir",
+    });
+    if (!ok) return;
+    setConfirmandoMes(true);
+    const res = await reabrirMesNominas(periodo);
+    setConfirmandoMes(false);
+    if (!res.ok) {
+      toast.error(res.error ?? "No se pudo reabrir el mes.");
+      return;
+    }
+    await refrescarEstadoMes();
+    toast.success(`Nóminas de ${mesLabelNominas} reabiertas para corregir.`);
+  };
+
   const guardarEdicion = (datos: Partial<PagoEmpleado>) => {
     if (!editando) return;
     let actualizado: PagoEmpleado | undefined;
@@ -444,10 +637,13 @@ export function PagosView() {
       prev.map((p) => {
         if (p.id !== editando.id) return p;
         const updated = { ...p, ...datos };
-        // El ajuste (con signo) mueve el total de ese empleado por su diferencia;
-        // el resto de columnas son el desglose y no recalculan el total importado.
-        const deltaAjuste = updated.ajuste - p.ajuste;
-        updated.total = Math.round((p.total + deltaAjuste) * 100) / 100;
+        // El total SIEMPRE se recalcula desde el desglose completo: es la cifra
+        // que se persiste, la que viaja en el correo de liquidación y la que
+        // cobra el empleado, así que no puede quedar desincronizada del desglose
+        // que se le enseña. Antes solo se movía por el delta del ajuste, de modo
+        // que corregir la nómina (o propina, horas extras…) cambiaba el desglose
+        // pero dejaba el total anterior.
+        updated.total = Math.round(calcularTotalPago(updated) * 100) / 100;
         actualizado = updated;
         return updated;
       }),
@@ -542,16 +738,61 @@ export function PagosView() {
   const fmtDato = (valor: number, calculado: boolean) => (calculado ? fmt(valor) : "—");
 
   // Círculo con el nº de nóminas cuando hay MÁS de una (2, 3…). Nada si es 1 o 0.
-  // Se muestra junto a los importes de sumatorio para indicar que están sumados.
-  const circuloN = (p: PagoEmpleado): ReactNode =>
-    p.numNominas > 1 ? (
-      <span
-        className="ml-1 inline-flex h-4 w-4 items-center justify-center rounded-full bg-primary/10 text-[9px] font-semibold text-primary align-middle"
-        title={`Suma de ${p.numNominas} nóminas`}
-      >
-        {p.numNominas}
-      </span>
-    ) : null;
+  // Marca que el importe de la celda es una SUMA y, al pulsarlo, abre un recuadro
+  // con lo que aporta cada nómina a ESE concepto y su sumatorio.
+  const circuloN = (p: PagoEmpleado, campo?: CampoDesglose): ReactNode => {
+    if (p.numNominas <= 1) return null;
+    const detalle = p.detalleNominas ?? [];
+    // Sin campo (o sin detalle cargado): distintivo informativo, no pulsable.
+    if (!campo || detalle.length === 0) {
+      return (
+        <span
+          className="ml-1 inline-flex h-4 w-4 items-center justify-center rounded-full bg-primary/10 text-[9px] font-semibold text-primary align-middle"
+          title={`Suma de ${p.numNominas} nóminas`}
+        >
+          {p.numNominas}
+        </span>
+      );
+    }
+    return (
+      <Popover>
+        <PopoverTrigger asChild>
+          <button
+            type="button"
+            onClick={(e) => e.stopPropagation()}
+            className="ml-1 inline-flex h-4 w-4 items-center justify-center rounded-full bg-primary/10 text-[9px] font-semibold text-primary align-middle transition hover:bg-primary/25 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+            title={`Suma de ${p.numNominas} nóminas — pulsa para ver el desglose`}
+            aria-label={`Ver el desglose de las ${p.numNominas} nóminas`}
+          >
+            {p.numNominas}
+          </button>
+        </PopoverTrigger>
+        <PopoverContent align="end" className="w-64 p-3" onClick={(e) => e.stopPropagation()}>
+          <p className="text-xs font-semibold">{ETIQUETA_DESGLOSE[campo]}</p>
+          <p className="mt-0.5 text-[11px] text-muted-foreground">
+            {p.empleadoNombre} · {p.numNominas} nóminas este mes
+          </p>
+          <ul className="mt-2 space-y-1">
+            {detalle.map((d, i) => (
+              <li key={i} className="flex items-baseline justify-between gap-3 text-xs">
+                <span className="text-muted-foreground">
+                  Nómina {i + 1}
+                  {d.incidencia ? <span className="ml-1 text-amber-600">⚠</span> : null}
+                </span>
+                <span className="tabular-nums">{fmt(valorDesglose(d, campo))}</span>
+              </li>
+            ))}
+          </ul>
+          <div className="mt-2 flex items-baseline justify-between gap-3 border-t pt-2 text-xs font-semibold">
+            <span>Total</span>
+            <span className="tabular-nums">
+              {fmt(detalle.reduce((s, d) => s + valorDesglose(d, campo), 0))}
+            </span>
+          </div>
+        </PopoverContent>
+      </Popover>
+    );
+  };
 
   const columnasDef: ToolbarColumna[] = [
     { campo: "nominaBruta", label: "Nómina bruta" },
@@ -566,6 +807,7 @@ export function PagosView() {
     { campo: "bonus", label: "Bonus" },
     { campo: "ssEmpresa", label: "SS Empresa" },
     { campo: "ssTotal", label: "Total SS" },
+    { campo: "nominaDoc", label: "Nómina (documento)" },
     { campo: "total", label: "Total" },
     { campo: "pagado", label: "Pagado" },
     { campo: "confirmacion", label: "Confirmación" },
@@ -576,13 +818,17 @@ export function PagosView() {
       th: <TableHead key="nominaBruta" className="text-right whitespace-nowrap">Nómina bruta</TableHead>,
       td: (p) => (
         <TableCell key="nominaBruta" className="text-right tabular-nums whitespace-nowrap">
-          {fmtDato(nominaBruta(p), nominaProcesada(p))}{circuloN(p)}
+          {fmtDato(nominaBruta(p), nominaProcesada(p))}{circuloN(p, "nominaBruta")}
         </TableCell>
       ),
     },
     nomina: {
       th: <TableHead key="nomina" className="text-right whitespace-nowrap font-semibold">Nómina neta</TableHead>,
-      td: (p) => <TableCell key="nomina" className="text-right tabular-nums whitespace-nowrap font-semibold">{fmtDato(p.nomina, nominaProcesada(p))}</TableCell>,
+      td: (p) => (
+        <TableCell key="nomina" className="text-right tabular-nums whitespace-nowrap font-semibold">
+          {fmtDato(p.nomina, nominaProcesada(p))}{circuloN(p, "neto")}
+        </TableCell>
+      ),
     },
     horasReales: {
       th: <TableHead key="horasReales" className="text-right">H.R</TableHead>,
@@ -620,18 +866,23 @@ export function PagosView() {
       td: (p) => (
         <TableCell key="ssEmpleado" className="text-right tabular-nums whitespace-nowrap text-destructive">
           {p.ssEmpleado > 0 ? `−${fmt(p.ssEmpleado)}` : fmtDato(p.ssEmpleado, nominaProcesada(p))}
+          {circuloN(p, "ssEmpleado")}
         </TableCell>
       ),
     },
     ssEmpresa: {
       th: <TableHead key="ssEmpresa" className="text-right whitespace-nowrap">SS Empresa</TableHead>,
-      td: (p) => <TableCell key="ssEmpresa" className="text-right tabular-nums whitespace-nowrap">{fmtDato(p.ssEmpresa, nominaProcesada(p))}</TableCell>,
+      td: (p) => (
+        <TableCell key="ssEmpresa" className="text-right tabular-nums whitespace-nowrap">
+          {fmtDato(p.ssEmpresa, nominaProcesada(p))}{circuloN(p, "ssEmpresa")}
+        </TableCell>
+      ),
     },
     ssTotal: {
       th: <TableHead key="ssTotal" className="text-right whitespace-nowrap">Total SS</TableHead>,
       td: (p) => (
         <TableCell key="ssTotal" className="text-right tabular-nums font-medium whitespace-nowrap">
-          {fmtDato(costeSSTotal(p), nominaProcesada(p))}
+          {fmtDato(costeSSTotal(p), nominaProcesada(p))}{circuloN(p, "ssTotal")}
         </TableCell>
       ),
     },
@@ -640,6 +891,36 @@ export function PagosView() {
       td: (p) => (
         <TableCell key="irpf" className="text-right tabular-nums whitespace-nowrap text-destructive">
           {p.irpf > 0 ? `−${fmt(p.irpf)}` : fmtDato(p.irpf, nominaProcesada(p))}
+          {circuloN(p, "irpf")}
+        </TableCell>
+      ),
+    },
+    nominaDoc: {
+      th: <TableHead key="nominaDoc" className="text-center w-[70px] whitespace-nowrap">Nómina</TableHead>,
+      td: (p) => (
+        <TableCell key="nominaDoc" className="text-center">
+          {p.numNominas > 0 || p.nominaPath ? (
+            <button
+              type="button"
+              onClick={() => abrirNominaEmpleado(p)}
+              disabled={abriendoNomina === p.empleadoId}
+              className="inline-flex items-center justify-center rounded-md p-1.5 text-muted-foreground transition hover:bg-muted hover:text-foreground disabled:opacity-50"
+              title={
+                p.numNominas > 1
+                  ? `Ver las ${p.numNominas} nóminas de ${p.empleadoNombre} (se abren en un único PDF)`
+                  : `Ver la nómina de ${p.empleadoNombre}`
+              }
+              aria-label={`Ver la nómina de ${p.empleadoNombre}`}
+            >
+              {abriendoNomina === p.empleadoId ? (
+                <Clock className="h-4 w-4 animate-pulse" />
+              ) : (
+                <FileText className="h-4 w-4" />
+              )}
+            </button>
+          ) : (
+            <span className="text-xs text-muted-foreground" title="Sin nómina adjunta">—</span>
+          )}
         </TableCell>
       ),
     },
@@ -769,14 +1050,34 @@ export function PagosView() {
           variant="outline"
           className="ml-auto gap-2"
           onClick={() => nominasInputRef.current?.click()}
-          disabled={subiendoNominas}
-          title="Sube las nóminas del mes; la IA lee el coste de Seguridad Social de cada una"
+          disabled={subiendoNominas || estadoMes.confirmado}
+          title={
+            estadoMes.confirmado
+              ? "Las nóminas de este mes ya están confirmadas: para subir otras hay que reabrir el mes"
+              : "Sube las nóminas del mes; la IA lee el coste de Seguridad Social de cada una"
+          }
         >
           <Upload className="h-4 w-4" />
           {subiendoNominas
             ? `Leyendo nóminas… ${progresoNominas.hechas}/${progresoNominas.total}`
             : "Subir nóminas (SS)"}
         </Button>
+        {estadoMes.puedeGestionar && (
+          <Button
+            variant={estadoMes.confirmado ? "outline" : "default"}
+            className="gap-2"
+            onClick={() => (estadoMes.confirmado ? reabrirMes() : confirmarMes())}
+            disabled={confirmandoMes}
+            title={
+              estadoMes.confirmado
+                ? "Las nóminas están confirmadas y publicadas al empleado. Reabrir permite corregirlas (solo dirección)."
+                : "Cierra las nóminas del mes: quedan inmutables y se publican en la carpeta de cada empleado"
+            }
+          >
+            {estadoMes.confirmado ? <Unlock className="h-4 w-4" /> : <ShieldCheck className="h-4 w-4" />}
+            {estadoMes.confirmado ? "Reabrir nóminas" : "Confirmar nóminas"}
+          </Button>
+        )}
         <Button
           className="gap-2"
           onClick={() =>
@@ -871,6 +1172,75 @@ export function PagosView() {
         }
       />
 
+      {/* TC1 del mes: documento de EMPRESA (recibo de cotizaciones), no de un
+          empleado. Vive en la esquina de la cabecera, junto al resto del mes. */}
+      <div className="flex items-center justify-end">
+        <input
+          ref={tc1InputRef}
+          type="file"
+          accept="application/pdf,image/png,image/jpeg,image/webp,image/heic,image/heif"
+          className="hidden"
+          onChange={(e) => {
+            void subirTc1(e.target.files?.[0] ?? null);
+            e.target.value = "";
+          }}
+        />
+        {estadoMes.tc1 ? (
+          <div className="inline-flex items-center gap-2 rounded-lg border bg-card px-3 py-1.5 text-xs shadow-sm">
+            <ReceiptText className="h-4 w-4 shrink-0 text-muted-foreground" />
+            <button
+              type="button"
+              onClick={abrirTc1}
+              className="font-medium underline-offset-2 hover:underline"
+              title="Abrir el TC1 de este mes"
+            >
+              TC1 de {mesLabelNominas}
+            </button>
+            {estadoMes.tc1.importe != null && (
+              <span className="tabular-nums text-muted-foreground">
+                {estadoMes.tc1.importe.toLocaleString("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
+              </span>
+            )}
+            {estadoMes.tc1.trabajadores != null && (
+              <span className="text-muted-foreground">· {estadoMes.tc1.trabajadores} trab.</span>
+            )}
+            {estadoMes.puedeGestionar && !estadoMes.confirmado && (
+              <button
+                type="button"
+                onClick={quitarTc1}
+                className="ml-1 text-muted-foreground transition hover:text-destructive"
+                title="Quitar el TC1 de este mes"
+                aria-label="Quitar el TC1"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
+        ) : estadoMes.puedeGestionar && !estadoMes.confirmado ? (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="gap-1.5 text-muted-foreground"
+            disabled={subiendoTc1}
+            onClick={() => tc1InputRef.current?.click()}
+            title="Adjunta el TC1 (recibo de cotizaciones) de este mes"
+          >
+            {subiendoTc1 ? <Clock className="h-4 w-4 animate-pulse" /> : <ReceiptText className="h-4 w-4" />}
+            {subiendoTc1 ? "Subiendo…" : "Adjuntar TC1"}
+          </Button>
+        ) : null}
+      </div>
+
+      {estadoMes.confirmado && (
+        <div className="flex items-start gap-2 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm dark:border-emerald-900/40 dark:bg-emerald-950/20">
+          <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
+          <p className="text-emerald-900 dark:text-emerald-200">
+            Las nóminas de <b>{mesLabelNominas}</b> están confirmadas: los importes que vienen de la
+            nómina no se pueden modificar y cada empleado ya ve la suya en su portal.
+          </p>
+        </div>
+      )}
+
       {showConfig && (
         <div className="space-y-4">
           <Card>
@@ -934,7 +1304,18 @@ export function PagosView() {
                         }}
                       >
                         <TableCell className="font-medium" style={{ color: palette.label }}>
-                          <div>{p.empleadoNombre}</div>
+                          <div className="flex items-center gap-1.5">
+                            {p.avisoInactivo ? (
+                              <span
+                                title="Este empleado ya estaba de baja cuando se subió su nómina. Revisa si realmente debe cobrar."
+                                aria-label="Empleado dado de baja: revisar si debe cobrar"
+                                className="inline-flex"
+                              >
+                                <AlertTriangle className="h-4 w-4 shrink-0 text-destructive" />
+                              </span>
+                            ) : null}
+                            <span>{p.empleadoNombre}</span>
+                          </div>
                           {p.dniNie ? (
                             <div className="text-[11px] font-normal tabular-nums text-muted-foreground">{p.dniNie}</div>
                           ) : !p.empleadoId.startsWith("ext-") ? (
@@ -986,7 +1367,16 @@ export function PagosView() {
                               </>
                             ) : (
                               <>
-                                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditando(p)} title="Editar"><Edit2 className="h-3.5 w-3.5" /></Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-7 w-7"
+                                  onClick={() => setEditando(p)}
+                                  disabled={estadoMes.confirmado}
+                                  title={estadoMes.confirmado ? "Nóminas del mes confirmadas: la liquidación no se puede editar" : "Editar"}
+                                >
+                                  <Edit2 className="h-3.5 w-3.5" />
+                                </Button>
                                 {!p.empleadoId.startsWith("ext-") && (
                                   <Button variant="ghost" size="icon" className="h-7 w-7 text-primary" onClick={() => enviarConfirmaciones([p.empleadoId], "liquidación")} disabled={enviando} title="Enviar liquidación a este empleado"><Send className="h-3.5 w-3.5" /></Button>
                                 )}
@@ -1025,13 +1415,24 @@ export function PagosView() {
 
 function EditForm({ pago, onSave }: { pago: PagoEmpleado; onSave: (d: Partial<PagoEmpleado>) => void }) {
   const [form, setForm] = useState({ ...pago });
+  // Editables a mano: conceptos que NO salen de la nómina.
   const campos: { key: keyof PagoEmpleado; label: string }[] = [
-    { key: "nomina", label: "Nómina" }, { key: "propina", label: "Complemento" },
-    { key: "ajuste", label: "Ajuste (+/−)" }, { key: "horasExtras", label: "H. Extras" },
+    { key: "propina", label: "Complemento" },
+    { key: "ajuste", label: "Ajuste (+/−)" },
+    { key: "horasExtras", label: "H. Extras" },
     { key: "bonus", label: "Bonus" },
-    { key: "ssEmpleado", label: "SS Empleado" }, { key: "ssEmpresa", label: "SS Empresa" },
+  ];
+  // Vienen de la nómina leída: se muestran, pero NO se editan. Corregirlos a mano
+  // desincronizaría la tabla del documento oficial; para cambiarlos hay que borrar
+  // la nómina y volver a subirla desde el diálogo de revisión.
+  const camposNomina: { key: keyof PagoEmpleado; label: string }[] = [
+    { key: "nomina", label: "Nómina neta" },
+    { key: "ssEmpleado", label: "SS Empleado" },
+    { key: "ssEmpresa", label: "SS Empresa" },
     { key: "irpf", label: "IRPF" },
   ];
+  const eur = (n: number) =>
+    n.toLocaleString("es-ES", { minimumFractionDigits: 0, maximumFractionDigits: 2 }) + " €";
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-3">
@@ -1041,6 +1442,25 @@ function EditForm({ pago, onSave }: { pago: PagoEmpleado; onSave: (d: Partial<Pa
             <Input type="number" value={form[c.key] as number} onChange={(e) => setForm((prev) => ({ ...prev, [c.key]: Number(e.target.value) }))} />
           </div>
         ))}
+      </div>
+
+      <div className="rounded-lg border bg-muted/40 p-3">
+        <div className="flex items-center gap-1.5">
+          <Lock className="h-3.5 w-3.5 text-muted-foreground" />
+          <p className="text-xs font-medium">Datos de la nómina (no editables)</p>
+        </div>
+        <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1.5">
+          {camposNomina.map((c) => (
+            <div key={c.key} className="flex items-baseline justify-between gap-2 text-xs">
+              <span className="text-muted-foreground">{c.label}</span>
+              <span className="tabular-nums font-medium">{eur(form[c.key] as number)}</span>
+            </div>
+          ))}
+        </div>
+        <p className="mt-2 text-[11px] text-muted-foreground">
+          Salen del documento que subió la gestoría. Para corregirlos, borra esa nómina desde
+          «Revisar nóminas» y sube la correcta.
+        </p>
       </div>
       <p className="text-xs text-muted-foreground">
         Total coste Seguridad Social:{" "}

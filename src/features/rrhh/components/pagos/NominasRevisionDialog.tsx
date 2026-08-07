@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import {
   Dialog,
   DialogContent,
@@ -18,16 +18,20 @@ import {
   X,
   Upload,
   History,
+  Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
   listarNominasRevision,
   revisarNomina,
   listarSubidasHistorico,
+  borrarNominaSubida,
   type NominaRevision,
   type SubidaHistorico,
 } from "@/features/rrhh/actions/nominas-revision-actions";
-import { getNominaArchivoUrl } from "@/features/rrhh/actions/nominas-archivo-actions";
+import { getNominaArchivoUrl, procesarNominasLeidas } from "@/features/rrhh/actions/nominas-archivo-actions";
+import type { NominaLeida } from "@/features/rrhh/services/nominas/procesar-nominas";
+import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 
 interface Props {
   open: boolean;
@@ -65,6 +69,10 @@ export function NominasRevisionDialog({ open, onOpenChange, periodo, mesLabel, o
   const [historico, setHistorico] = useState<SubidaHistorico[]>([]);
   const [accionando, setAccionando] = useState<string | null>(null);
   const [abriendo, setAbriendo] = useState<string | null>(null);
+  const { confirm, dialog: confirmDialog } = useConfirmDelete();
+  const [subiendo, setSubiendo] = useState(false);
+  const [progreso, setProgreso] = useState({ hechas: 0, total: 0 });
+  const inputRef = useRef<HTMLInputElement>(null);
 
   const recargar = useCallback(async () => {
     setCargando(true);
@@ -91,6 +99,88 @@ export function NominasRevisionDialog({ open, onOpenChange, periodo, mesLabel, o
       onCambio?.();
     } else {
       toast.error(res.error ?? "No se pudo completar la acción.");
+    }
+  };
+
+  // Subida desde la propia ventana de revisión: lee con IA y vuelca, igual que
+  // el botón de Pagos. Así el ciclo "borrar la mala → subir la buena" se hace sin
+  // cerrar el diálogo.
+  const subir = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    const lista = Array.from(files);
+    setSubiendo(true);
+    setProgreso({ hechas: 0, total: lista.length });
+
+    const todas: NominaLeida[] = [];
+    let fallos = 0;
+    for (const file of lista) {
+      try {
+        const fd = new FormData();
+        fd.set("archivo", file);
+        const res = await fetch("/api/nominas/extraer", { method: "POST", body: fd });
+        const data = await res.json();
+        if (data.ok && Array.isArray(data.nominas)) todas.push(...(data.nominas as NominaLeida[]));
+        else fallos++;
+      } catch {
+        fallos++;
+      }
+      setProgreso((p) => ({ ...p, hechas: p.hechas + 1 }));
+    }
+
+    if (todas.length === 0) {
+      setSubiendo(false);
+      toast.error("No se pudo leer ninguna nómina.");
+      return;
+    }
+
+    const nombreArchivo = lista.length === 1 ? lista[0].name : `${lista.length} archivos`;
+    const proc = await procesarNominasLeidas(todas, periodo, nombreArchivo);
+    setSubiendo(false);
+
+    if (!proc.ok || !proc.resultado) {
+      toast.error(proc.error ?? "No se pudieron guardar las nóminas.");
+      return;
+    }
+    const r = proc.resultado;
+    if (r.rechazadoTodo) {
+      toast.error("El archivo tiene errores: no se ha guardado nada.", {
+        description:
+          r.sinEmpleado.length > 0
+            ? `Sin trabajador asignado: ${r.sinEmpleado.slice(0, 4).join(", ")}.`
+            : "Hay nóminas de otro mes.",
+      });
+    } else {
+      const avisos: string[] = [];
+      if (r.yaExistian > 0) avisos.push(`${r.yaExistian} ya estaba${r.yaExistian === 1 ? "" : "n"} subida${r.yaExistian === 1 ? "" : "s"}`);
+      if (fallos > 0) avisos.push(`${fallos} archivo${fallos === 1 ? "" : "s"} con error`);
+      toast.success(`${r.guardadas} nómina${r.guardadas === 1 ? "" : "s"} volcada${r.guardadas === 1 ? "" : "s"}.`, {
+        description: avisos.length > 0 ? avisos.join(" · ") : undefined,
+      });
+    }
+    await recargar();
+    onCambio?.();
+  };
+
+  // Borrado REAL (fila + documento). Es la vía para corregir una nómina mal
+  // leída: los importes no se editan a mano, se borra y se sube la correcta.
+  const borrar = async (n: NominaRevision) => {
+    const ok = await confirm({
+      title: `Borrar la nómina de ${n.empleadoNombre}`,
+      description:
+        "Se borrará la nómina y su documento, y los importes del pago se recalcularán sin ella. " +
+        "Después podrás subir la nómina correcta. Esta acción no se puede deshacer.",
+      confirmLabel: "Borrar nómina",
+    });
+    if (!ok) return;
+    setAccionando(n.id);
+    const res = await borrarNominaSubida(n.id);
+    setAccionando(null);
+    if (res.ok) {
+      toast.success("Nómina borrada. Ya puedes subir la correcta.");
+      await recargar();
+      onCambio?.();
+    } else {
+      toast.error(res.error ?? "No se pudo borrar la nómina.");
     }
   };
 
@@ -147,6 +237,37 @@ export function NominasRevisionDialog({ open, onOpenChange, periodo, mesLabel, o
           </button>
         </div>
 
+        {/* Subir desde aquí mismo: tras borrar una nómina mal leída, se sube la
+            correcta sin salir de la ventana de revisión. */}
+        {tab === "revision" && (
+          <div className="flex items-center justify-between gap-3 rounded-lg border bg-muted/40 px-3 py-2">
+            <p className="text-xs text-muted-foreground">
+              ¿Alguna nómina mal leída? Bórrala y sube la correcta.
+            </p>
+            <input
+              ref={inputRef}
+              type="file"
+              multiple
+              accept="application/pdf,image/png,image/jpeg,image/webp,image/heic,image/heif"
+              className="hidden"
+              onChange={(e) => {
+                void subir(e.target.files);
+                e.target.value = "";
+              }}
+            />
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5 shrink-0"
+              disabled={subiendo}
+              onClick={() => inputRef.current?.click()}
+            >
+              {subiendo ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+              {subiendo ? `Leyendo… ${progreso.hechas}/${progreso.total}` : "Subir nóminas"}
+            </Button>
+          </div>
+        )}
+
         <div className="overflow-y-auto flex-1 -mx-6 px-6">
           {cargando ? (
             <div className="flex items-center justify-center py-12 text-muted-foreground">
@@ -159,11 +280,13 @@ export function NominasRevisionDialog({ open, onOpenChange, periodo, mesLabel, o
               abriendo={abriendo}
               onAbrir={abrirDocumento}
               onRevisar={revisar}
+              onBorrar={borrar}
             />
           ) : (
             <HistoricoLista historico={historico} />
           )}
         </div>
+        {confirmDialog}
       </DialogContent>
     </Dialog>
   );
@@ -194,6 +317,7 @@ function estadoBadge(n: NominaRevision) {
 function RevisionLista({
   nominas,
   accionando,
+  onBorrar,
   abriendo,
   onAbrir,
   onRevisar,
@@ -203,6 +327,7 @@ function RevisionLista({
   abriendo: string | null;
   onAbrir: (n: NominaRevision) => void;
   onRevisar: (n: NominaRevision, a: "aprobar" | "denegar") => void;
+  onBorrar: (n: NominaRevision) => void;
 }) {
   if (nominas.length === 0) {
     return (
@@ -282,6 +407,20 @@ function RevisionLista({
               </Button>
             </div>
           )}
+
+          {/* Borrado REAL: es la vía para corregir importes mal leídos — se borra
+              la nómina y se sube la correcta, en vez de editar los datos a mano. */}
+          <Button
+            variant="ghost"
+            size="sm"
+            className="gap-1.5 shrink-0 text-muted-foreground hover:bg-rose-50 hover:text-rose-700"
+            disabled={accionando === n.id}
+            onClick={() => onBorrar(n)}
+            title="Borrar esta nómina y su documento (para volver a subir la correcta)"
+          >
+            <Trash2 className="h-4 w-4" />
+            Borrar
+          </Button>
         </li>
       ))}
     </ul>

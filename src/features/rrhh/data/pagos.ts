@@ -1,5 +1,20 @@
 export type PagoArea = "administrativa" | "operativa";
 
+/**
+ * Una nómina individual del mes. Un empleado puede tener varias (p.ej. finiquito +
+ * nómina normal): `rrhh_pagos` guarda la SUMA y esto es lo que aporta cada una,
+ * para poder abrir el desglose desde cualquier columna de importe.
+ */
+export interface DetalleNomina {
+  orden: number;
+  neto: number;
+  ssEmpleado: number;
+  ssEmpresa: number;
+  irpf: number;
+  /** Texto de incidencia si la IA no pudo leerla bien (p.ej. neto a 0). */
+  incidencia: string | null;
+}
+
 export interface PagoEmpleado {
   id: string;
   empleadoId: string;
@@ -31,6 +46,14 @@ export interface PagoEmpleado {
   // Nº de nóminas individuales de este empleado en el mes (1 normal; 2+ si tiene
   // varias, p.ej. finiquito + normal). Sirve para el badge con el número.
   numNominas: number;
+  // Las nóminas individuales del mes (ordenadas). Con 2+, cada columna de importe
+  // muestra el círculo con el número y abre el desglose al pulsarlo. Derivado de
+  // `rrhh_pagos_nominas`: no se persiste con el pago.
+  detalleNominas?: DetalleNomina[];
+  // true si alguna nómina del mes se subió cuando el empleado YA estaba Inactivo.
+  // Pinta un aviso de peligro para revisar si de verdad le corresponde cobrar. Se
+  // sella al subir: una baja POSTERIOR no marca la nómina retroactivamente.
+  avisoInactivo: boolean;
   // Confirmacion de liquidacion: enviada -> bloqueada; aceptada -> el empleado la
   // acepto desde su app. ISO string o null.
   confirmacionEnviadaAt: string | null;

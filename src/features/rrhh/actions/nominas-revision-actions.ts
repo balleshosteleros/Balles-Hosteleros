@@ -13,6 +13,8 @@
 
 import { getAppContext } from "@/lib/supabase/get-context";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getRolContext } from "@/features/auth/actions/permisos-actions";
+import { BUCKET_NOMINAS, EXT_POR_MIME } from "@/features/rrhh/services/nominas/procesar-nominas";
 import { revalidatePath } from "next/cache";
 
 export type RevisionEstado = "correcta" | "con_incidencia" | "denegada";
@@ -110,9 +112,32 @@ async function recalcularSumaPago(
     }),
     { ss_empleado: 0, ss_empresa: 0, irpf: 0, nomina: 0 },
   );
+  // `nomina` es un sumando del total a percibir: hay que recalcular `total` con el
+  // resto del desglose, o la fila queda con el total anterior y el empleado vería
+  // un importe distinto al de su liquidación.
+  const { data: prev } = await admin
+    .from("rrhh_pagos")
+    .select("pago, propina, horas_extras, bonus, propina_mes_anterior, ajuste")
+    .eq("empresa_id", empresaId)
+    .eq("empleado_id", empleadoId)
+    .eq("periodo", periodo)
+    .maybeSingle();
+  const total =
+    Number(prev?.pago ?? 0) +
+    suma.nomina +
+    Number(prev?.propina ?? 0) +
+    Number(prev?.horas_extras ?? 0) +
+    Number(prev?.bonus ?? 0) +
+    Number(prev?.propina_mes_anterior ?? 0) +
+    Number(prev?.ajuste ?? 0);
+
   await admin
     .from("rrhh_pagos")
-    .update({ ...suma, nomina_path: lista[0]?.nomina_path ?? null })
+    .update({
+      ...suma,
+      nomina_path: lista[0]?.nomina_path ?? null,
+      total: Math.round(total * 100) / 100,
+    })
     .eq("empresa_id", empresaId)
     .eq("empleado_id", empleadoId)
     .eq("periodo", periodo);
@@ -226,5 +251,342 @@ export async function listarSubidasHistorico(limit = 60): Promise<SubidaHistoric
   } catch (err) {
     console.error("[rrhh] listarSubidasHistorico:", err);
     return [];
+  }
+}
+
+// ── Estado del MES: borrador ⇄ confirmado ────────────────────────────────────
+// Mientras el mes está en BORRADOR, RRHH puede borrar nóminas mal subidas y
+// volver a subirlas. Al CONFIRMAR, el mes queda inmutable para todos los roles
+// (lo garantizan los triggers de BD, no solo este código) y las nóminas se
+// publican en la carpeta del empleado.
+
+export interface EstadoMesNominas {
+  confirmado: boolean;
+  confirmadoEn: string | null;
+  /** Si el usuario actual puede confirmar/reabrir (gestor de pagos). */
+  puedeGestionar: boolean;
+  /** TC1 del mes (recibo de cotizaciones de la EMPRESA), si se ha subido. */
+  tc1: { nombre: string; importe: number | null; trabajadores: number | null } | null;
+}
+
+/** Estado de confirmación del mes de nóminas. */
+export async function getEstadoMesNominas(periodo: string): Promise<EstadoMesNominas> {
+  const vacio: EstadoMesNominas = { confirmado: false, confirmadoEn: null, puedeGestionar: false, tc1: null };
+  try {
+    const { supabase, empresaId } = await getAppContext();
+    if (!empresaId) return vacio;
+    const { data } = await supabase
+      .from("rrhh_nominas_mes")
+      .select("confirmado_en, tc1_path, tc1_nombre, tc1_importe, tc1_trabajadores")
+      .eq("empresa_id", empresaId)
+      .eq("periodo", periodo)
+      .maybeSingle();
+    // `puede_gestionar_pagos()` es la MISMA función que aplica la RLS, así que la
+    // pantalla y la base de datos no pueden discrepar.
+    const { data: puede } = await supabase.rpc("puede_gestionar_pagos");
+    const confirmadoEn = (data?.confirmado_en as string | null) ?? null;
+    return {
+      confirmado: confirmadoEn !== null,
+      confirmadoEn,
+      puedeGestionar: puede === true,
+      tc1: data?.tc1_path
+        ? {
+            nombre: (data.tc1_nombre as string | null) ?? "TC1",
+            importe: data.tc1_importe != null ? Number(data.tc1_importe) : null,
+            trabajadores: data.tc1_trabajadores != null ? Number(data.tc1_trabajadores) : null,
+          }
+        : null,
+    };
+  } catch (err) {
+    console.error("[rrhh] getEstadoMesNominas:", err);
+    return vacio;
+  }
+}
+
+/**
+ * Confirma el mes: cierra las nóminas y las publica al empleado. A partir de aquí
+ * los importes que vienen de la nómina son inmutables para cualquier rol.
+ */
+export async function confirmarMesNominas(periodo: string) {
+  try {
+    const { supabase, empresaId, userId } = await getAppContext();
+    if (!empresaId || !userId) return { ok: false as const, error: "No autenticado" };
+
+    const { data: puede } = await supabase.rpc("puede_gestionar_pagos");
+    if (puede !== true) {
+      return { ok: false as const, error: "No tienes permiso para confirmar las nóminas." };
+    }
+
+    // No tiene sentido cerrar un mes sin nóminas: sería un candado en falso.
+    const { count } = await supabase
+      .from("rrhh_pagos_nominas")
+      .select("id", { count: "exact", head: true })
+      .eq("empresa_id", empresaId)
+      .eq("periodo", periodo);
+    if (!count) {
+      return { ok: false as const, error: "No hay nóminas de este mes que confirmar." };
+    }
+
+    // Aviso (no bloqueo): confirmar con incidencias sin revisar es decisión de RRHH.
+    const { count: pendientes } = await supabase
+      .from("rrhh_pagos_nominas")
+      .select("id", { count: "exact", head: true })
+      .eq("empresa_id", empresaId)
+      .eq("periodo", periodo)
+      .eq("revision_estado", "con_incidencia");
+
+    const { error } = await supabase
+      .from("rrhh_nominas_mes")
+      .upsert(
+        { empresa_id: empresaId, periodo, confirmado_en: new Date().toISOString(), confirmado_por: userId },
+        { onConflict: "empresa_id,periodo" },
+      );
+    if (error) throw error;
+
+    revalidatePath("/rrhh/pagos");
+    revalidatePath("/mi-panel/documentos");
+    return { ok: true as const, conIncidencia: pendientes ?? 0 };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Error desconocido";
+    console.error("[rrhh] confirmarMesNominas:", msg);
+    return { ok: false as const, error: msg };
+  }
+}
+
+/**
+ * Reabre un mes confirmado para poder corregirlo. Solo DIRECCIÓN: deshacer un
+ * cierre es excepcional y deja de publicar las nóminas al empleado hasta que se
+ * vuelva a confirmar.
+ */
+export async function reabrirMesNominas(periodo: string) {
+  try {
+    const { supabase, empresaId } = await getAppContext();
+    if (!empresaId) return { ok: false as const, error: "No autenticado" };
+
+    const { esDirector } = await getRolContext();
+    if (!esDirector) {
+      return { ok: false as const, error: "Solo dirección puede reabrir un mes ya confirmado." };
+    }
+
+    const { error } = await supabase
+      .from("rrhh_nominas_mes")
+      .delete()
+      .eq("empresa_id", empresaId)
+      .eq("periodo", periodo);
+    if (error) throw error;
+
+    revalidatePath("/rrhh/pagos");
+    revalidatePath("/mi-panel/documentos");
+    return { ok: true as const };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Error desconocido";
+    console.error("[rrhh] reabrirMesNominas:", msg);
+    return { ok: false as const, error: msg };
+  }
+}
+
+/**
+ * Borra DE VERDAD una nómina mal subida: su fila, su documento del bucket y
+ * recalcula la suma del pago. Es la única forma de corregir los importes que
+ * vienen de la nómina (no se editan a mano): se borra y se vuelve a subir.
+ * Imposible si el mes ya está confirmado.
+ */
+export async function borrarNominaSubida(nominaId: string) {
+  try {
+    const { supabase, empresaId } = await getAppContext();
+    if (!empresaId) return { ok: false as const, error: "No autenticado" };
+
+    const { data: puede } = await supabase.rpc("puede_gestionar_pagos");
+    if (puede !== true) {
+      return { ok: false as const, error: "No tienes permiso para borrar nóminas." };
+    }
+
+    const admin = createAdminClient();
+    const { data: fila } = await admin
+      .from("rrhh_pagos_nominas")
+      .select("id, empresa_id, empleado_id, periodo, nomina_path")
+      .eq("id", nominaId)
+      .maybeSingle();
+    if (!fila) return { ok: false as const, error: "Esa nómina ya no existe." };
+    if (fila.empresa_id !== empresaId) {
+      return { ok: false as const, error: "Esa nómina no es de esta empresa." };
+    }
+
+    const periodo = fila.periodo as string;
+    const empleadoId = fila.empleado_id as string;
+
+    const { data: mes } = await admin
+      .from("rrhh_nominas_mes")
+      .select("confirmado_en")
+      .eq("empresa_id", empresaId)
+      .eq("periodo", periodo)
+      .maybeSingle();
+    if (mes?.confirmado_en) {
+      return {
+        ok: false as const,
+        error: "Las nóminas de este mes ya están confirmadas. Para corregirlas hay que reabrir el mes.",
+      };
+    }
+
+    // Bloqueo previo por liquidación ya enviada al empleado (regla existente).
+    const { data: pago } = await admin
+      .from("rrhh_pagos")
+      .select("confirmacion_enviada_at")
+      .eq("empresa_id", empresaId)
+      .eq("empleado_id", empleadoId)
+      .eq("periodo", periodo)
+      .maybeSingle();
+    if (pago?.confirmacion_enviada_at) {
+      return { ok: false as const, error: "La liquidación ya se envió: reábrela antes de tocar sus nóminas." };
+    }
+
+    const { error: delErr } = await admin.from("rrhh_pagos_nominas").delete().eq("id", nominaId);
+    if (delErr) throw delErr;
+
+    // El documento se borra DESPUÉS de la fila: si fallara, quedaría un fichero
+    // huérfano (inocuo) en vez de una fila apuntando a un documento inexistente.
+    const path = fila.nomina_path as string | null;
+    if (path) {
+      const { error: stErr } = await admin.storage.from(BUCKET_NOMINAS).remove([path]);
+      if (stErr) console.error("[rrhh] borrarNominaSubida (documento huérfano):", stErr.message);
+    }
+
+    await recalcularSumaPago(admin, empresaId, empleadoId, periodo);
+    revalidatePath("/rrhh/pagos");
+    return { ok: true as const };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Error desconocido";
+    console.error("[rrhh] borrarNominaSubida:", msg);
+    return { ok: false as const, error: msg };
+  }
+}
+
+// ── TC1: recibo de cotizaciones de la EMPRESA (no de un empleado) ────────────
+// Es el documento que acompaña a las nóminas del mes: bases, cuotas y nº de
+// trabajadores de TODA la empresa. Se guarda una vez por empresa+periodo y se
+// consulta desde la cabecera de Pagos; nunca va a la carpeta de un empleado.
+
+/** Sube (o reemplaza) el TC1 del mes. Importe y nº de trabajadores son opcionales. */
+export async function subirTc1Mes(input: {
+  periodo: string;
+  nombre: string;
+  mimeType: string;
+  archivoBase64: string;
+  importe?: number | null;
+  trabajadores?: number | null;
+}) {
+  try {
+    const { supabase, empresaId, userId } = await getAppContext();
+    if (!empresaId || !userId) return { ok: false as const, error: "No autenticado" };
+
+    const { data: puede } = await supabase.rpc("puede_gestionar_pagos");
+    if (puede !== true) return { ok: false as const, error: "No tienes permiso para subir el TC1." };
+
+    const ext = EXT_POR_MIME[input.mimeType];
+    if (!ext) return { ok: false as const, error: "Formato no admitido. Usa PDF o imagen." };
+
+    const admin = createAdminClient();
+    const path = `${empresaId}/${input.periodo}/TC1.${ext}`;
+    const { error: upErr } = await admin.storage
+      .from(BUCKET_NOMINAS)
+      .upload(path, Buffer.from(input.archivoBase64, "base64"), {
+        upsert: true, // reemplazar el TC1 del mes es normal (lo reenvía la gestoría)
+        contentType: input.mimeType,
+      });
+    if (upErr) throw upErr;
+
+    const { error } = await supabase.from("rrhh_nominas_mes").upsert(
+      {
+        empresa_id: empresaId,
+        periodo: input.periodo,
+        tc1_path: path,
+        tc1_nombre: input.nombre,
+        tc1_importe: input.importe ?? null,
+        tc1_trabajadores: input.trabajadores ?? null,
+        tc1_subido_en: new Date().toISOString(),
+        tc1_subido_por: userId,
+      },
+      { onConflict: "empresa_id,periodo" },
+    );
+    if (error) throw error;
+
+    revalidatePath("/rrhh/pagos");
+    return { ok: true as const };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Error desconocido";
+    console.error("[rrhh] subirTc1Mes:", msg);
+    return { ok: false as const, error: msg };
+  }
+}
+
+/** URL firmada (1 h) para abrir el TC1 del mes. */
+export async function getTc1MesUrl(periodo: string) {
+  try {
+    const { supabase, empresaId } = await getAppContext();
+    if (!empresaId) return { ok: false as const, error: "No autenticado" };
+
+    const { data } = await supabase
+      .from("rrhh_nominas_mes")
+      .select("tc1_path")
+      .eq("empresa_id", empresaId)
+      .eq("periodo", periodo)
+      .maybeSingle();
+    const path = (data?.tc1_path as string | null) ?? null;
+    if (!path) return { ok: false as const, error: "No hay TC1 de este mes." };
+
+    const admin = createAdminClient();
+    const { data: signed, error } = await admin.storage
+      .from(BUCKET_NOMINAS)
+      .createSignedUrl(path, 60 * 60);
+    if (error) throw error;
+    return { ok: true as const, url: signed?.signedUrl ?? "" };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Error desconocido";
+    console.error("[rrhh] getTc1MesUrl:", msg);
+    return { ok: false as const, error: msg };
+  }
+}
+
+/** Quita el TC1 del mes (documento y datos). No se puede si el mes está confirmado. */
+export async function borrarTc1Mes(periodo: string) {
+  try {
+    const { supabase, empresaId } = await getAppContext();
+    if (!empresaId) return { ok: false as const, error: "No autenticado" };
+
+    const { data: puede } = await supabase.rpc("puede_gestionar_pagos");
+    if (puede !== true) return { ok: false as const, error: "No tienes permiso." };
+
+    const { data } = await supabase
+      .from("rrhh_nominas_mes")
+      .select("tc1_path, confirmado_en")
+      .eq("empresa_id", empresaId)
+      .eq("periodo", periodo)
+      .maybeSingle();
+    if (data?.confirmado_en) {
+      return { ok: false as const, error: "El mes está confirmado. Reábrelo para cambiar el TC1." };
+    }
+    const path = (data?.tc1_path as string | null) ?? null;
+    if (!path) return { ok: true as const };
+
+    const admin = createAdminClient();
+    const { error } = await admin
+      .from("rrhh_nominas_mes")
+      .update({
+        tc1_path: null, tc1_nombre: null, tc1_importe: null,
+        tc1_trabajadores: null, tc1_subido_en: null, tc1_subido_por: null,
+      })
+      .eq("empresa_id", empresaId)
+      .eq("periodo", periodo);
+    if (error) throw error;
+    // El fichero se borra después: si fallara, queda huérfano (inocuo).
+    const { error: stErr } = await admin.storage.from(BUCKET_NOMINAS).remove([path]);
+    if (stErr) console.error("[rrhh] borrarTc1Mes (fichero huérfano):", stErr.message);
+
+    revalidatePath("/rrhh/pagos");
+    return { ok: true as const };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Error desconocido";
+    console.error("[rrhh] borrarTc1Mes:", msg);
+    return { ok: false as const, error: msg };
   }
 }

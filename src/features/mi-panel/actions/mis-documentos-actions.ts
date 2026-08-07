@@ -71,11 +71,52 @@ export async function listMisDocumentos(): Promise<{
         fecha: (r.created_at ?? "").slice(0, 10),
       });
     }
+    // Las NÓMINAS no viven en `documentos_empleado`: están en `rrhh_pagos_nominas`
+    // (+ bucket `rrhh-nominas`), que es donde las deja el volcado de la gestoría.
+    // Se listan aquí para que el empleado las vea en su carpeta, sin duplicar
+    // ficheros. La RLS solo devuelve las SUYAS y solo de meses CONFIRMADOS por
+    // RRHH: mientras el mes está en borrador, no debe verlas.
+    const { data: nominas } = await supabase
+      .from("rrhh_pagos_nominas")
+      .select("id, periodo, orden, created_at, nomina_path")
+      .not("nomina_path", "is", null)
+      .neq("revision_estado", "denegada")
+      .order("periodo", { ascending: false })
+      .order("orden", { ascending: true });
+
+    for (const row of nominas ?? []) {
+      const r = row as { id: string; periodo: string; orden: number; created_at: string };
+      // Varias nóminas del mismo mes (p.ej. finiquito + normal) se numeran para
+      // que el empleado las distinga.
+      const total = (nominas ?? []).filter((x) => (x as { periodo: string }).periodo === r.periodo).length;
+      const sufijo = total > 1 ? ` (${(r.orden ?? 0) + 1} de ${total})` : "";
+      grupos.nominas.push({
+        id: `nom:${r.id}`,
+        categoria: "nominas",
+        nombre: `Nómina ${nombreMesPeriodo(r.periodo)}${sufijo}`,
+        tipoMime: "application/pdf",
+        tamanoBytes: null,
+        fecha: (r.created_at ?? "").slice(0, 10),
+      });
+    }
+
     return { ok: true, data: grupos };
   } catch (err) {
     console.error("[mi-panel] listMisDocumentos:", err);
     return { ok: false, data: vacio };
   }
+}
+
+const MESES_ES = [
+  "enero", "febrero", "marzo", "abril", "mayo", "junio",
+  "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
+];
+
+/** "2026-07" → "julio 2026". */
+function nombreMesPeriodo(periodo: string): string {
+  const [y, m] = (periodo ?? "").split("-");
+  const mes = MESES_ES[Number(m) - 1];
+  return mes ? `${mes} ${y}` : periodo;
 }
 
 /**
@@ -92,6 +133,28 @@ export async function getDocumentoEmpleadoUrl(
       data: { user },
     } = await supabase.auth.getUser();
     if (!user) return { ok: false, error: "No autenticado" };
+
+    // Las nóminas viven en otra tabla y otro bucket: se marcan con el prefijo
+    // "nom:" al listarlas. La RLS de `rrhh_pagos_nominas` es la que garantiza que
+    // solo llega si es SUYA y de un mes ya confirmado por RRHH.
+    if (documentoId.startsWith("nom:")) {
+      const nominaId = documentoId.slice(4);
+      const { data: nom, error: nErr } = await supabase
+        .from("rrhh_pagos_nominas")
+        .select("nomina_path")
+        .eq("id", nominaId)
+        .maybeSingle();
+      if (nErr) throw nErr;
+      const path = (nom as { nomina_path: string | null } | null)?.nomina_path ?? null;
+      if (!path) return { ok: false, error: "Nómina no disponible" };
+
+      const adminN = createAdminClient();
+      const { data: signedN, error: sErrN } = await adminN.storage
+        .from("rrhh-nominas")
+        .createSignedUrl(path, 60 * 60);
+      if (sErrN) throw sErrN;
+      return { ok: true, url: signedN?.signedUrl };
+    }
 
     // RLS garantiza que solo recupera el documento si es del propio empleado.
     const { data: doc, error } = await supabase

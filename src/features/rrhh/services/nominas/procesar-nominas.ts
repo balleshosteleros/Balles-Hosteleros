@@ -15,6 +15,7 @@ import "server-only";
  * respeta el bloqueo de liquidaciones ya enviadas.
  */
 
+import { createHash } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { normalizarDniNie } from "@/features/rrhh/lib/documentacion-validacion";
 
@@ -43,6 +44,13 @@ export interface NominaLeida {
   archivoBase64: string;
 }
 
+/** Empleado ya de baja al subir su nómina. Se admite; solo se avisa. */
+export interface NominaEmpleadoInactivo {
+  nombre: string;
+  /** Fin de contrato (AAAA-MM-DD), o null si no consta. */
+  fechaBaja: string | null;
+}
+
 /** Una nómina rechazada por pertenecer a un mes distinto al solicitado. */
 export interface NominaMesIncorrecto {
   etiqueta: string; // empleado (o nombre/DNI leído) para identificarla
@@ -57,6 +65,11 @@ export interface ResultadoProceso {
   duplicadas: string[]; // nombres de empleados que ya tenían nómina ese mes
   mesIncorrecto: NominaMesIncorrecto[]; // rechazadas por ser de OTRO mes
   conIncidencia: number; // volcadas pero marcadas para revisión (p.ej. neto 0)
+  // Empleados que YA constaban de baja el día de subir su nómina. NO es un error y
+  // NO bloquea: es lo normal cuando la baja es a fin de mes y la nómina llega el
+  // día 1. Se listan con su FECHA DE FIN DE CONTRATO para que quien la sube pueda
+  // comprobar de un vistazo que el periodo cobrado cuadra con lo trabajado.
+  inactivos: NominaEmpleadoInactivo[];
   meses: string[]; // periodos AAAA-MM tocados
   // Si el archivo tiene ALGUNA nómina con error (otro mes o empleado no dado de
   // alta), se rechaza ENTERO: no se guarda ninguna. La gestoría debe corregir el
@@ -70,26 +83,34 @@ export async function procesarNominasConAdmin(
   nominas: NominaLeida[],
   periodoDefecto: string,
 ): Promise<ResultadoProceso> {
-  const vacio: ResultadoProceso = { leidas: nominas.length, guardadas: 0, yaExistian: 0, sinEmpleado: [], duplicadas: [], mesIncorrecto: [], conIncidencia: 0, meses: [], rechazadoTodo: false };
+  const vacio: ResultadoProceso = { leidas: nominas.length, guardadas: 0, yaExistian: 0, sinEmpleado: [], duplicadas: [], mesIncorrecto: [], conIncidencia: 0, inactivos: [], meses: [], rechazadoTodo: false };
   try {
-    // TODOS los empleados activos de la empresa (fuente fresca).
+    // TODOS los empleados de la empresa, ACTIVOS E INACTIVOS (fuente fresca).
+    // Los inactivos SÍ entran: el mes de la baja se cobra igual (finiquito y/o
+    // nómina del periodo trabajado), y filtrarlos hacía que su nómina se tomara
+    // por "empleado no dado de alta" y se RECHAZARA EL ARCHIVO ENTERO.
+    // Se guarda el estado para sellarlo en la nómina y avisar en Pagos.
     const { data: emps } = await admin
       .from("empleados")
-      .select("id, nombre, apellidos, dni_nie")
-      .eq("empresa_id", empresaId)
-      .eq("estado", "Activo");
+      .select("id, nombre, apellidos, dni_nie, estado, fecha_baja")
+      .eq("empresa_id", empresaId);
 
     const norm = (s: string) =>
       s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
     const tokens = (s: string) =>
       new Set(norm(s).split(" ").filter((w) => w.length >= 3 && !["del", "las", "los"].includes(w)));
 
-    type Emp = { id: string; nombre: string };
+    type Emp = { id: string; nombre: string; inactivo: boolean; fechaBaja: string | null };
     const porDni = new Map<string, Emp>();
     const porNombre = new Map<string, Emp>();
     for (const e of emps ?? []) {
       const full = `${e.nombre ?? ""} ${e.apellidos ?? ""}`.trim();
-      const emp: Emp = { id: e.id as string, nombre: full };
+      const emp: Emp = {
+        id: e.id as string,
+        nombre: full,
+        inactivo: (e.estado as string | null) !== "Activo",
+        fechaBaja: (e.fecha_baja as string | null) ?? null,
+      };
       if (e.dni_nie) porDni.set(normalizarDniNie(e.dni_nie as string), emp);
       porNombre.set(norm(full), emp);
     }
@@ -114,7 +135,7 @@ export async function procesarNominasConAdmin(
       return mejor;
     };
 
-    const res: ResultadoProceso = { leidas: nominas.length, guardadas: 0, yaExistian: 0, sinEmpleado: [], duplicadas: [], mesIncorrecto: [], conIncidencia: 0, meses: [], rechazadoTodo: false };
+    const res: ResultadoProceso = { leidas: nominas.length, guardadas: 0, yaExistian: 0, sinEmpleado: [], duplicadas: [], mesIncorrecto: [], conIncidencia: 0, inactivos: [], meses: [], rechazadoTodo: false };
     const meses = new Set<string>();
 
     // ── FASE 1: VALIDACIÓN PREVIA (sin tocar BD ni bucket) ────────────────────
@@ -159,13 +180,17 @@ export async function procesarNominasConAdmin(
         .maybeSingle();
       if (ex?.confirmacion_enviada_at) { continue; } // liquidación enviada: intocable
 
-      // ¿Ya está ESTA MISMA nómina cargada? (evita duplicar al re-subir el mismo
-      // PDF). Se identifica por empleado+mes+importes. Si coincide, se salta.
+      // ¿Ya está ESTE MISMO documento cargado? (evita duplicar al re-subir el
+      // mismo PDF). Se identifica por la HUELLA del archivo, no por los importes:
+      // un finiquito puede coincidir en neto/ss/irpf con la nómina normal del mes
+      // — el caso que esta tabla existe para soportar — y compararlo por importes
+      // lo descartaba como "duplicado", con lo que el empleado cobraba de menos.
+      const sha256 = createHash("sha256").update(Buffer.from(n.archivoBase64, "base64")).digest("hex");
       const { data: yaMismas } = await admin
         .from("rrhh_pagos_nominas")
         .select("id")
         .eq("empresa_id", empresaId).eq("empleado_id", emp.id).eq("periodo", periodo)
-        .eq("neto", n.neto || 0).eq("ss_empleado", n.ssEmpleado || 0).eq("irpf", n.irpf || 0);
+        .eq("sha256", sha256);
       if (yaMismas && yaMismas.length > 0) { res.yaExistian++; res.duplicadas.push(emp.nombre); continue; }
 
       // Nº de nóminas ya existentes de este empleado/mes (para ordenar y nombrar el
@@ -176,8 +201,10 @@ export async function procesarNominasConAdmin(
         .eq("empresa_id", empresaId).eq("empleado_id", emp.id).eq("periodo", periodo);
       const orden = nPrevias ?? 0;
 
-      // Subir el documento de ESTA nómina (path único por orden: no pisa las otras).
-      const path = `${empresaId}/${periodo}/${emp.id}-${orden}.${ext}`;
+      // Subir el documento de ESTA nómina. El path lleva la huella del archivo, no
+      // el `orden`: con `orden` dos volcados simultáneos calculan el mismo número
+      // y, al ir con `upsert: true`, el segundo pisaba el PDF del primero.
+      const path = `${empresaId}/${periodo}/${emp.id}-${orden}-${sha256.slice(0, 12)}.${ext}`;
       const up = await admin.storage.from(BUCKET_NOMINAS)
         .upload(path, Buffer.from(n.archivoBase64, "base64"), { upsert: true, contentType: n.mimeType });
       if (up.error) continue;
@@ -192,8 +219,13 @@ export async function procesarNominasConAdmin(
       await admin.from("rrhh_pagos_nominas").insert({
         empresa_id: empresaId, empleado_id: emp.id, periodo, orden,
         ss_empleado: n.ssEmpleado || 0, ss_empresa: n.ssEmpresa || 0,
-        irpf: n.irpf || 0, neto: n.neto || 0, nomina_path: path,
+        irpf: n.irpf || 0, neto: n.neto || 0, nomina_path: path, sha256,
         revision_estado: revisionEstado, incidencia,
+        // SELLO del estado del empleado EN ESTE INSTANTE. El aviso de "cobra
+        // alguien ya dado de baja" depende de si estaba inactivo AL SUBIR la
+        // nómina; si se le da de baja DESPUÉS, no debe marcarse. Por eso se
+        // congela aquí y no se recalcula leyendo `empleados.estado` al pintar.
+        empleado_inactivo_al_subir: emp.inactivo,
       });
 
       // 2) Recalcular la SUMA de todas las nóminas de ese empleado/mes y volcarla
@@ -216,13 +248,42 @@ export async function procesarNominasConAdmin(
       );
       const campos = { ...suma, nomina_path: lista[0]?.nomina_path ?? path };
       if (ex?.id) {
-        await admin.from("rrhh_pagos").update(campos).eq("id", ex.id);
+        // El volcado cambia `nomina`, que es un sumando del total a percibir. Hay
+        // que recalcular `total` con el resto del desglose ya guardado; si no, la
+        // fila queda con el total anterior a la nómina y el empleado cobraría un
+        // importe distinto al que muestra su liquidación.
+        const { data: prev } = await admin
+          .from("rrhh_pagos")
+          .select("pago, propina, horas_extras, bonus, propina_mes_anterior, ajuste")
+          .eq("id", ex.id)
+          .maybeSingle();
+        const total =
+          Number(prev?.pago ?? 0) +
+          suma.nomina +
+          Number(prev?.propina ?? 0) +
+          Number(prev?.horas_extras ?? 0) +
+          Number(prev?.bonus ?? 0) +
+          Number(prev?.propina_mes_anterior ?? 0) +
+          Number(prev?.ajuste ?? 0);
+        await admin
+          .from("rrhh_pagos")
+          .update({ ...campos, total: Math.round(total * 100) / 100 })
+          .eq("id", ex.id);
       } else {
+        // Fila nueva: el único importe conocido es la nómina, así que el total
+        // arranca igual a la suma de netos volcada.
         await admin.from("rrhh_pagos").insert({
           empresa_id: empresaId, empleado_id: emp.id, empleado_nombre: emp.nombre, periodo, ...campos,
+          total: Math.round(suma.nomina * 100) / 100,
         });
       }
       res.guardadas++;
+      // Aviso de precaución (NO error): la nómina es de alguien que ya constaba de
+      // baja al subirla. Es lo esperable si la baja fue a fin de mes y la nómina
+      // llega el día 1; la gestoría solo tiene que confirmar que es correcta.
+      if (emp.inactivo && !res.inactivos.some((x) => x.nombre === emp.nombre)) {
+        res.inactivos.push({ nombre: emp.nombre, fechaBaja: emp.fechaBaja });
+      }
       meses.add(periodo);
     }
     res.meses = [...meses].sort();

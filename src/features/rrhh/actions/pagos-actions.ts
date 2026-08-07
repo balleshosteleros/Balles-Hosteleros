@@ -12,6 +12,7 @@ import {
 import { nombreMes } from "@/features/rrhh/services/nominas/nominas-gestoria";
 import { getZonaHorariaEmpresa } from "@/features/empresa/lib/empresa-server";
 import { formatFechaEnZona } from "@/features/empresa/lib/zona-horaria";
+import type { DetalleNomina } from "@/features/rrhh/data/pagos";
 
 const MESES_PAGOS = [
   "enero", "febrero", "marzo", "abril", "mayo", "junio",
@@ -132,6 +133,14 @@ export interface PagoGuardado {
   pagado: boolean;
   nominaPath: string | null;
   numNominas: number; // nº de nóminas individuales de ese empleado/mes (para el badge)
+  // Las nóminas individuales del mes (ordenadas). Cuando hay 2+, permite abrir el
+  // desglose de CADA columna y ver qué aporta cada una a la suma. Solo LECTURA: se
+  // deriva de `rrhh_pagos_nominas`, no se guarda en `rrhh_pagos`.
+  detalleNominas?: DetalleNomina[];
+  // true si ALGUNA de sus nóminas del mes se subió cuando el empleado YA estaba
+  // Inactivo: se pinta un aviso para revisar si de verdad le corresponde cobrar.
+  // No se marca si la baja se produjo DESPUÉS de subir la nómina.
+  avisoInactivo: boolean;
   confirmacionEnviadaAt: string | null;
   confirmacionAceptadaAt: string | null;
 }
@@ -183,6 +192,7 @@ function dbToPago(r: PagoDbRow): PagoGuardado {
     pagado: r.pagado,
     nominaPath: r.nomina_path,
     numNominas: 0,
+    avisoInactivo: false,
     confirmacionEnviadaAt: r.confirmacion_enviada_at,
     confirmacionAceptadaAt: r.confirmacion_aceptada_at,
   };
@@ -196,23 +206,42 @@ export async function loadPagos(
     if (!empresaId) return { ok: false, data: [] };
     const [{ data, error }, { data: nominas }] = await Promise.all([
       supabase.from("rrhh_pagos").select(PAGO_COLS).eq("empresa_id", empresaId).eq("periodo", periodo),
-      // Conteo de nóminas individuales por empleado (para el badge "2","3"…).
+      // Nóminas individuales del mes: sirven para el badge "2","3"…, para el
+      // desglose al pulsarlo (qué aporta cada nómina a cada columna) y para el
+      // sello de "ya estaba de baja al subirla" (aviso de revisión).
       supabase
         .from("rrhh_pagos_nominas")
-        .select("empleado_id")
+        .select("empleado_id, empleado_inactivo_al_subir, orden, neto, ss_empleado, ss_empresa, irpf, incidencia")
         .eq("empresa_id", empresaId)
-        .eq("periodo", periodo),
+        .eq("periodo", periodo)
+        .neq("revision_estado", "denegada")
+        .order("orden", { ascending: true }),
     ]);
     if (error) throw error;
-    // Nº de nóminas por empleado.
-    const conteo = new Map<string, number>();
+    // Desglose por empleado: sus nóminas individuales (en orden) y si ALGUNA se
+    // subió estando ya de baja.
+    const porEmpleado = new Map<string, DetalleNomina[]>();
+    const inactivoAlSubir = new Set<string>();
     for (const r of nominas ?? []) {
       const id = r.empleado_id as string;
-      conteo.set(id, (conteo.get(id) ?? 0) + 1);
+      const lista = porEmpleado.get(id) ?? [];
+      lista.push({
+        orden: Number(r.orden ?? 0),
+        neto: Number(r.neto ?? 0),
+        ssEmpleado: Number(r.ss_empleado ?? 0),
+        ssEmpresa: Number(r.ss_empresa ?? 0),
+        irpf: Number(r.irpf ?? 0),
+        incidencia: (r.incidencia as string | null) ?? null,
+      });
+      porEmpleado.set(id, lista);
+      if (r.empleado_inactivo_al_subir === true) inactivoAlSubir.add(id);
     }
     const filas = (data ?? []).map((r) => {
       const p = dbToPago(r as PagoDbRow);
-      p.numNominas = p.empleadoId ? conteo.get(p.empleadoId) ?? 0 : 0;
+      const detalle = p.empleadoId ? porEmpleado.get(p.empleadoId) ?? [] : [];
+      p.numNominas = detalle.length;
+      p.detalleNominas = detalle;
+      p.avisoInactivo = p.empleadoId ? inactivoAlSubir.has(p.empleadoId) : false;
       return p;
     });
     return { ok: true, data: filas };
