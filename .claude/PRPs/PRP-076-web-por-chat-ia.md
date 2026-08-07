@@ -64,9 +64,25 @@ Chat lateral en el editor. Solo modifica textos de bloques que ya existen.
 No crea, no borra, no reordena. Cambios a borrador + deshacer.
 Cubre el ~80% de las peticiones reales de un cliente.
 
-**Fase 2 — Cambios estructurales**
+**Fase 2 — Cambios estructurales + incrustaciones (decidido 2026-08-07)**
 Añadir, quitar y reordenar bloques por conversación. Requiere que la IA
 devuelva el árbol de bloques completo validado contra los esquemas Zod.
+
+Incluye que la IA pueda **incrustar contenido de terceros** a petición del
+cliente: mapas, formularios de Google, vídeos, reservas, redes, pedidos a
+domicilio, entradas… Criterio de Iván: *"todo lo que un restaurante pueda
+querer, métemelo todo"*. Máxima libertad de contenido — es su web y su
+responsabilidad; el software no opina sobre textos ni fotos.
+
+La lista vive en `services/incrustaciones-permitidas.ts` (~60 dominios). NO es
+un muro: existe porque un iframe ejecuta código de un tercero dentro de la
+página, y si ese tercero es malicioso el daño lo sufre **quien visita la web**
+(un comensal reservando), no el cliente — y la reclamación acabaría en Balles.
+Cuando alguien pida un sitio que no esté, se añade en dos minutos y la IA lo
+dice en vez de fallar en silencio.
+
+La biblioteca lateral queda **plegada por defecto** (icono para desplegarla):
+la vía principal de construir es hablando; la manual sigue ahí como salida.
 
 **Fase 3 — Capturas de referencia**
 Adjuntar imágenes en el chat ("quiero algo así"). La IA extrae estilo,
