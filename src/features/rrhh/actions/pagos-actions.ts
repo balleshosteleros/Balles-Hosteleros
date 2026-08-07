@@ -469,15 +469,25 @@ export async function marcarPagado(
 
     // Al marcar pagado fechamos el abono (histórico del empleado); al desmarcar
     // limpiamos la fecha para que no quede un "abonado el X" fantasma.
-    const { error } = await supabase
+    //
+    // El update se condiciona al estado CONTRARIO (`.eq("pagado", !pagado)`): así
+    // dos clics seguidos (o dos pestañas) no lo ejecutan dos veces. Antes el
+    // segundo pisaba `pagado_at` con la fecha del reintento y —peor— enviaba al
+    // empleado un SEGUNDO aviso de "liquidación pagada".
+    const { data: cambiadas, error } = await supabase
       .from("rrhh_pagos")
       .update({
         pagado,
         pagado_at: pagado ? new Date().toISOString() : null,
         pagado_por: pagado ? (userId ?? null) : null,
       })
-      .eq("id", row.id as string);
+      .eq("id", row.id as string)
+      .eq("pagado", !pagado)
+      .select("id");
     if (error) throw error;
+
+    // Ya estaba en ese estado: nada que hacer y, sobre todo, NO se re-notifica.
+    if (!cambiadas || cambiadas.length === 0) return { ok: true };
 
     if (pagado && cfg.pagadoActivo) {
       const { data: emp } = await supabase

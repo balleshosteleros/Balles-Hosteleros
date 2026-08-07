@@ -219,16 +219,52 @@ export async function promocionarEmpleado(
     .eq("empresa_id", empresaId);
 
   // 4. Copiar condiciones del nuevo puesto al HISTÓRICO (cierra la vigente).
-  await escribirCondicionesVigentes(admin, {
-    empresaId,
-    empleadoId: input.empleadoId,
-    puestoId: input.puestoId,
-    puestoNombre: puesto.nombre as string,
-    primerDia: input.primerDia,
-    tipoContrato,
-    cond,
-    motivo: "promocion",
-  });
+  //
+  // Es el paso que fija el SALARIO del puesto nuevo. Si falla aquí, el empleado ya
+  // tiene el puesto cambiado (paso 3) pero seguiría con las condiciones del puesto
+  // anterior: ascendido y cobrando lo de antes. Se deshace el cambio de puesto y
+  // se aborta con un mensaje claro, en vez de dejarlo a medias en silencio.
+  try {
+    await escribirCondicionesVigentes(admin, {
+      empresaId,
+      empleadoId: input.empleadoId,
+      puestoId: input.puestoId,
+      puestoNombre: puesto.nombre as string,
+      primerDia: input.primerDia,
+      tipoContrato,
+      cond,
+      motivo: "promocion",
+    });
+  } catch (err) {
+    console.error("[promocion] condiciones:", err);
+    // Revertir el paso 3: devolver el puesto principal y los datos del empleado.
+    await admin.from("empleado_puestos").update({ es_principal: false }).eq("empleado_id", input.empleadoId);
+    if (puestoOrigenId) {
+      await admin
+        .from("empleado_puestos")
+        .update({ es_principal: true })
+        .eq("empleado_id", input.empleadoId)
+        .eq("puesto_id", puestoOrigenId);
+      const { data: pOrig } = await admin
+        .from("puestos")
+        .select("nombre, departamento_id")
+        .eq("id", puestoOrigenId)
+        .maybeSingle();
+      if (pOrig) {
+        await admin
+          .from("empleados")
+          .update({ puesto: pOrig.nombre as string, departamento_id: pOrig.departamento_id as string | null })
+          .eq("id", input.empleadoId)
+          .eq("empresa_id", empresaId);
+      }
+    }
+    return {
+      ok: false as const,
+      error:
+        "No se pudieron guardar las condiciones del nuevo puesto, así que la promoción se ha deshecho. " +
+        "Revisa que el puesto tenga salario y jornada configurados e inténtalo de nuevo.",
+    };
+  }
 
   // 5. Reasignar el PATRÓN DE HORARIO del nuevo puesto (best-effort).
   try {

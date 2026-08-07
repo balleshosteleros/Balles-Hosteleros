@@ -396,7 +396,14 @@ export async function contratarCandidato(input: ContratarInput): Promise<Contrat
       emailPersonal,
       emailEmpresa: input.emailEmpresa ?? null,
     });
-    if (dup) return { ok: false, error: mensajeDuplicado(dup) };
+    if (dup) {
+      // IMPORTANTE: revertir el lock. Sin esto el candidato se quedaba con
+      // `promovido_at` marcado sin haberse creado ningún empleado, y al reintentar
+      // saltaba la guarda de arriba con "Este candidato ya fue contratado
+      // anteriormente" — falso y sin forma de deshacerlo desde la interfaz.
+      await revertirContratacionFallida(admin, empresaId, cand.id, fullName, mensajeDuplicado(dup));
+      return { ok: false, error: mensajeDuplicado(dup) };
+    }
   }
 
   // 5. Alta nueva vía núcleo canónico (siempre nueva: el DNI/email duplicado ya

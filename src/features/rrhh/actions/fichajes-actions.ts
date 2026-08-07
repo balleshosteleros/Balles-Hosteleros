@@ -367,7 +367,7 @@ export async function ficharSalida(fichajeId: string, geo: GeoInput) {
 
     const { data: fichaje, error: fetchErr } = await supabase
       .from("fichajes")
-      .select("hora_entrada, local_id, modo_teletrabajo")
+      .select("hora_entrada, local_id, modo_teletrabajo, pausa_inicio, pausa_fin")
       .eq("id", fichajeId)
       .single();
     if (fetchErr) throw fetchErr;
@@ -399,9 +399,23 @@ export async function ficharSalida(fichajeId: string, geo: GeoInput) {
     let horasTotales = 0;
     if (fichaje?.hora_entrada) {
       const entrada = new Date(fichaje.hora_entrada);
+      // La PAUSA se descuenta, igual que al editar un fichaje a mano. Antes esta
+      // vía hacía la resta simple entrada→salida, así que dos empleados con la
+      // misma jornada y la misma pausa cobraban distinto según si su fichaje se
+      // cerró solo o lo tocó alguien después.
+      const pausaMs =
+        fichaje.pausa_inicio && fichaje.pausa_fin
+          ? Math.max(
+              0,
+              new Date(fichaje.pausa_fin as string).getTime() -
+                new Date(fichaje.pausa_inicio as string).getTime(),
+            )
+          : 0;
       horasTotales =
-        Math.round(((ahora.getTime() - entrada.getTime()) / 3600000) * 100) /
-        100;
+        Math.max(
+          0,
+          Math.round(((ahora.getTime() - entrada.getTime() - pausaMs) / 3600000) * 100) / 100,
+        );
     }
 
     const { error } = await supabase
