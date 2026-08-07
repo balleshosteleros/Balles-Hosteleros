@@ -15,6 +15,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import {
   resolverTokenNominasGestoria,
   procesarSubidaNominasGestoria,
+  guardarTc1Gestoria,
   nombreMes,
 } from "@/features/rrhh/services/nominas/nominas-gestoria";
 
@@ -31,7 +32,9 @@ export async function GET(_req: Request, ctx: { params: Promise<{ token: string 
     const message =
       res.reason === "expired"
         ? "El enlace ha caducado. Pide a la empresa que te lo reenvíe."
-        : "Enlace no válido.";
+        : res.reason === "cerrado"
+          ? "Las nóminas de este mes ya se recibieron correctamente. Este enlace queda cerrado: no admite más subidas."
+          : "Enlace no válido.";
     return NextResponse.json({ ok: false, reason: res.reason, message }, { status: 404 });
   }
 
@@ -56,11 +59,30 @@ export async function POST(req: Request, ctx: { params: Promise<{ token: string 
 
     const res = await resolverTokenNominasGestoria(admin, token);
     if (!res.ok) {
-      const message = res.reason === "expired" ? "El enlace ha caducado." : "Enlace no válido.";
+      const message =
+        res.reason === "expired"
+          ? "El enlace ha caducado."
+          : res.reason === "cerrado"
+            ? "Las nóminas de este mes ya se recibieron: este enlace ya no admite subidas."
+            : "Enlace no válido.";
       return NextResponse.json({ ok: false, error: message }, { status: 404 });
     }
 
     const fd = await req.formData();
+    const documento = (fd.get("documento") as string | null) ?? "nominas";
+
+    // TC1 (recibo de cotizaciones): documento de EMPRESA, no de un empleado. Va a
+    // su propio sitio y NO pasa por la lectura con IA de nóminas.
+    if (documento === "tc1") {
+      const tc1 = fd.get("archivo") as File | null;
+      if (!tc1) return NextResponse.json({ ok: false, error: "Adjunta el TC1" }, { status: 400 });
+      const guardado = await guardarTc1Gestoria(admin, res.row, tc1);
+      if (!guardado.ok) {
+        return NextResponse.json({ ok: false, error: guardado.error }, { status: guardado.status });
+      }
+      return NextResponse.json({ ok: true, documento: "tc1" });
+    }
+
     const file = fd.get("archivo") as File | null;
     if (!file) return NextResponse.json({ ok: false, error: "Adjunta las nóminas" }, { status: 400 });
 

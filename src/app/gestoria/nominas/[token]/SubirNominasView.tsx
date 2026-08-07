@@ -59,6 +59,34 @@ export function SubirNominasView({ endpoint, empresaNombre, mesLabel }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [resultado, setResultado] = useState<Resultado | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const tc1Ref = useRef<HTMLInputElement>(null);
+  const [subiendoTc1, setSubiendoTc1] = useState(false);
+  const [tc1Subido, setTc1Subido] = useState(false);
+
+  // El TC1 se sube por separado: es un documento de la EMPRESA (bases y cuotas de
+  // toda la plantilla), no una nómina, así que no pasa por la lectura por IA.
+  const subirTc1 = async (f: File | null) => {
+    if (!f) return;
+    setError(null);
+    if (f.size > MAX_NOMINAS_BYTES) {
+      setError(`El TC1 supera ${MAX_NOMINAS_MB} MB.`);
+      return;
+    }
+    setSubiendoTc1(true);
+    try {
+      const fd = new FormData();
+      fd.append("archivo", f);
+      fd.append("documento", "tc1");
+      const res = await fetch(endpoint, { method: "POST", body: fd });
+      const json = await res.json();
+      if (json.ok) setTc1Subido(true);
+      else setError(json.error ?? "No se pudo subir el TC1.");
+    } catch {
+      setError("No se pudo conectar. Inténtalo de nuevo.");
+    } finally {
+      setSubiendoTc1(false);
+    }
+  };
 
   const onSelect = (f: File | null) => {
     setError(null);
@@ -89,6 +117,7 @@ export function SubirNominasView({ endpoint, empresaNombre, mesLabel }: Props) {
     try {
       const fd = new FormData();
       fd.append("archivo", file);
+      fd.append("documento", "nominas");
       const res = await fetch(endpoint, { method: "POST", body: fd });
       const json = await res.json();
       if (json.ok) {
@@ -121,12 +150,59 @@ export function SubirNominasView({ endpoint, empresaNombre, mesLabel }: Props) {
         </p>
 
         <div className="mt-5 rounded-xl border border-sky-200 bg-sky-50 p-4 text-sm text-sky-900">
-          <p className="font-semibold">Cómo subirlas</p>
-          <p className="mt-1">
-            Puedes adjuntar <b>un único PDF con todas las nóminas</b> (una por página) o subir
-            varios archivos, uno cada vez. Se leen y vuelcan automáticamente al sistema.
-          </p>
+          <p className="font-semibold">Hacen falta dos documentos</p>
+          <ol className="mt-1.5 list-decimal list-inside space-y-1">
+            <li>
+              <b>Las nóminas</b> del mes: un único PDF con todas (una por página) o varios
+              archivos sueltos. Se leen y se asignan a cada trabajador automáticamente.
+            </li>
+            <li>
+              <b>El TC1</b> (Recibo de Liquidación de Cotizaciones) de la empresa.
+            </li>
+          </ol>
         </div>
+
+        {/* ── TC1: documento de EMPRESA, va aparte de las nóminas ── */}
+        <div className="mt-4 rounded-xl border border-zinc-200 p-4">
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-zinc-900">TC1 · Recibo de cotizaciones</p>
+              <p className="mt-0.5 text-xs text-zinc-600">
+                {tc1Subido
+                  ? "Recibido correctamente."
+                  : "El documento de la empresa con las bases y cuotas del mes."}
+              </p>
+            </div>
+            <input
+              ref={tc1Ref}
+              type="file"
+              accept="application/pdf,image/png,image/jpeg,image/webp,image/heic,image/heif"
+              className="hidden"
+              onChange={(e) => {
+                void subirTc1(e.target.files?.[0] ?? null);
+                e.target.value = "";
+              }}
+            />
+            {tc1Subido ? (
+              <span className="inline-flex shrink-0 items-center gap-1.5 text-sm font-medium text-emerald-700">
+                <CheckCircle2 className="h-4 w-4" />
+                Subido
+              </span>
+            ) : (
+              <button
+                type="button"
+                onClick={() => tc1Ref.current?.click()}
+                disabled={subiendoTc1}
+                className="shrink-0 inline-flex items-center gap-1.5 rounded-lg border border-zinc-300 px-3 py-1.5 text-sm font-medium text-zinc-700 transition hover:bg-zinc-50 disabled:opacity-50"
+              >
+                {subiendoTc1 ? <Loader2 className="h-4 w-4 animate-spin" /> : <UploadCloud className="h-4 w-4" />}
+                {subiendoTc1 ? "Subiendo…" : "Adjuntar TC1"}
+              </button>
+            )}
+          </div>
+        </div>
+
+        <p className="mt-4 text-sm font-semibold text-zinc-900">Nóminas del mes</p>
 
         {/* Archivo RECHAZADO por completo: tiene errores, no se ha subido nada. */}
         {resultado && resultado.rechazadoTodo && (
