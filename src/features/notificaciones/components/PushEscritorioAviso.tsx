@@ -20,6 +20,12 @@ import {
 const POSPUESTO_KEY = "bh_push_escritorio_pospuesto";
 const DIAS_ESPERA = 7;
 
+// Marca de "este ordenador ya dijo que sí". Se escribe cuando el alta se guarda
+// correctamente en servidor y vive en el mismo sitio que el `device_id`, así que
+// desaparece exactamente cuando el aparato deja de ser reconocible (borrar datos
+// del navegador, otro perfil) — que es justo cuando SÍ hay que volver a ofrecerlo.
+const ACTIVADO_KEY = "bh_push_escritorio_activado";
+
 /**
  * Reguarda en servidor la suscripción viva de este navegador, sin preguntar nada.
  *
@@ -83,10 +89,33 @@ export function PushEscritorioAviso() {
       // Permiso concedido NO significa dispositivo dado de alta: si el guardado
       // en servidor falló, este ordenador queda mudo. Se comprueba de verdad
       // contra la BD y solo callamos si está realmente registrado.
+      //
+      // La pregunta se hace por `device_id`, que es lo ÚNICO estable de este
+      // aparato, y NO se condiciona a tener un endpoint vivo en este instante:
+      // `getExistingPushEndpoint()` devuelve null con mucha facilidad (el
+      // service worker aún no está listo al cargar la página, el navegador
+      // descartó la suscripción…), y exigirlo hacía que ni siquiera se
+      // consultara la BD — el cartel volvía a salir en cada entrada por mucho
+      // que el usuario ya lo hubiera activado en este mismo ordenador.
       if (permission === "granted") {
-        const endpoint = await getExistingPushEndpoint();
+        // Ya se activó en este ordenador y el permiso sigue concedido: no se
+        // vuelve a preguntar nunca. Solo se refresca la suscripción por si el
+        // navegador la renovó, para que el alta no apunte a un endpoint muerto.
+        try {
+          if (localStorage.getItem(ACTIVADO_KEY) === "1") {
+            void refrescarSuscripcion();
+            return;
+          }
+        } catch {
+          /* sin localStorage: se comprueba contra la BD, más abajo */
+        }
+
         const deviceId = getDeviceId();
-        if (endpoint && (await isPushSubscriptionSaved(endpoint, deviceId))) {
+        const endpoint = await getExistingPushEndpoint();
+        if (
+          (deviceId || endpoint) &&
+          (await isPushSubscriptionSaved(endpoint ?? "", deviceId))
+        ) {
           // El aparato consta de alta, pero el navegador pudo haber renovado su
           // suscripción por su cuenta: entonces la fila de la BD apunta a un
           // endpoint muerto y los avisos NO llegan aunque aquí callemos. Se
@@ -126,6 +155,13 @@ export function PushEscritorioAviso() {
       if (!res.ok) {
         toast.error(res.error || "No se pudo guardar la suscripción");
       } else {
+        // Solo se marca cuando el servidor confirma el alta: si el guardado
+        // falla, el ordenador queda mudo y hay que poder volver a ofrecerlo.
+        try {
+          localStorage.setItem(ACTIVADO_KEY, "1");
+        } catch {
+          /* ignore */
+        }
         toast.success("Avisos activados en este ordenador");
         setVisible(false);
       }

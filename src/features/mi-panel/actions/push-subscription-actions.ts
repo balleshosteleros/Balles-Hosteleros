@@ -102,6 +102,10 @@ export async function isPushSubscriptionSaved(
     if (data && data.length > 0) return true;
   }
 
+  // Sin endpoint vivo no hay respaldo posible: preguntar por cadena vacía
+  // devolvería siempre "no está dado de alta" y haría reaparecer el cartel.
+  if (!endpoint) return false;
+
   const { data } = await supabase
     .from("push_subscriptions")
     .select("endpoint")
