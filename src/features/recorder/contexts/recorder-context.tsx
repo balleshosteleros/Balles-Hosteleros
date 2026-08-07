@@ -459,11 +459,11 @@ export function RecorderProvider({ children }: { children: ReactNode }) {
   // canvas a 30 fps y devuelve la pista de vídeo del canvas. Así la cámara queda
   // SIEMPRE incrustada en el vídeo, sin depender de qué ventana se comparta.
   const buildCompositeVideoTracks = useCallback(
-    (
+    async (
       screenStream: MediaStream,
       cameraStream: MediaStream,
       screenSettings: MediaTrackSettings,
-    ): MediaStreamTrack[] => {
+    ): Promise<MediaStreamTrack[]> => {
       const width = screenSettings.width ?? 1920;
       const height = screenSettings.height ?? 1080;
       const fps = screenSettings.frameRate ?? 30;
@@ -485,6 +485,16 @@ export function RecorderProvider({ children }: { children: ReactNode }) {
       camVideo.muted = true;
       camVideo.playsInline = true;
       camVideo.play().catch(() => {});
+
+      // Esperar a que la pantalla tenga fotogramas reales antes de capturar el
+      // canvas: si captureStream() arranca sobre un lienzo en blanco, el primer
+      // keyframe se codifica vacío y el vídeo resultante sale negro.
+      await new Promise<void>((resolve) => {
+        if (screenVideo.readyState >= 2) return resolve();
+        const done = () => resolve();
+        screenVideo.addEventListener("loadeddata", done, { once: true });
+        setTimeout(done, 3000); // tope de seguridad: nunca bloquear la grabación
+      });
 
       // Burbuja circular ~ 22% del alto, en la esquina inferior derecha.
       const bubble = Math.round(height * 0.22);
@@ -531,6 +541,9 @@ export function RecorderProvider({ children }: { children: ReactNode }) {
         compositeRafRef.current = requestAnimationFrame(draw);
       };
       draw();
+
+      // Un fotograma ya pintado en el lienzo antes de exponerlo como pista.
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
 
       const canvasStream = canvas.captureStream(fps);
       canvasStreamRef.current = canvasStream;
@@ -614,13 +627,19 @@ export function RecorderProvider({ children }: { children: ReactNode }) {
         // el vídeo grabes lo que grabes. Sin cámara: la pantalla directa.
         let videoTracks: MediaStreamTrack[];
         if (cameraStreamRef.current) {
-          videoTracks = buildCompositeVideoTracks(
+          videoTracks = await buildCompositeVideoTracks(
             screenStream,
             cameraStreamRef.current,
             trackSettings,
           );
         } else {
           videoTracks = screenStream.getVideoTracks();
+        }
+
+        if (videoTracks.length === 0) {
+          throw new Error(
+            "No se obtuvo la imagen de la pantalla. Vuelve a intentarlo y elige la pantalla o ventana en el diálogo del navegador.",
+          );
         }
 
         if (audioTracksToMix.length > 0) {
@@ -640,9 +659,37 @@ export function RecorderProvider({ children }: { children: ReactNode }) {
         }
 
         const mimeType = getSupportedMimeType();
+
+        // Countdown 3..2..1 ANTES de construir el MediaRecorder. Si se crea antes
+        // y se arranca después, la pista de vídeo lleva segundos sin consumidor:
+        // el navegador la congela y el primer fragmento sale sin keyframe, con lo
+        // que el WebM queda con audio pero sin imagen. Construir y arrancar
+        // seguidos garantiza que el codificador reciba un keyframe inicial.
+        countdownCancelRef.current = false;
+        setState("countdown");
+        for (let n = COUNTDOWN_SECONDS; n >= 1; n--) {
+          if (countdownCancelRef.current) return;
+          setCountdownValue(n);
+          await new Promise((r) => setTimeout(r, 1000));
+        }
+        if (countdownCancelRef.current) return;
+        setCountdownValue(0);
+
+        // La pista debe estar viva justo antes de grabar. Si el usuario detuvo
+        // el share durante la cuenta atrás, abortamos sin crear el recorder.
+        if (videoTracks.length === 0 || videoTracks[0].readyState !== "live") {
+          stopAllStreams();
+          setState("idle");
+          return;
+        }
+
         const recorder = new MediaRecorder(finalStream, {
           mimeType,
+          // Ambos bitrates explícitos: si solo se fija el de vídeo, Chrome trata
+          // el valor como presupuesto global y puede dejar la pista de vídeo sin
+          // asignación real, produciendo un archivo con solo audio.
           videoBitsPerSecond: options.quality === "1080p" ? 5_000_000 : 2_500_000,
+          audioBitsPerSecond: 128_000,
         });
 
         recorder.ondataavailable = (e) => {
@@ -655,17 +702,6 @@ export function RecorderProvider({ children }: { children: ReactNode }) {
         };
 
         mediaRecorderRef.current = recorder;
-
-        // Countdown 3..2..1 antes de empezar a grabar realmente
-        countdownCancelRef.current = false;
-        setState("countdown");
-        for (let n = COUNTDOWN_SECONDS; n >= 1; n--) {
-          if (countdownCancelRef.current) return;
-          setCountdownValue(n);
-          await new Promise((r) => setTimeout(r, 1000));
-        }
-        if (countdownCancelRef.current) return;
-        setCountdownValue(0);
 
         recorder.start(1000);
 
