@@ -80,14 +80,20 @@ export function DepartamentosGrid() {
   }
 
   return (
-    <div className="grid grid-cols-3 gap-2.5 px-5 pt-2">
+    // Mismo escalado proporcional que `MasGrid`: sin `cqi` los cuadros crecían
+    // con la pantalla pero el icono se quedaba fijo, y en móviles anchos se
+    // veían diminutos dentro de recuadros enormes.
+    <div
+      className="grid grid-cols-3 gap-2.5 px-5 pt-2 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6"
+      style={{ containerType: "inline-size" }}
+    >
       {tiles.map((d) => {
         const Icon = d.icon;
         return (
           <Link
             key={d.key}
             href={`/m/departamentos/${d.key}`}
-            className="group relative flex aspect-square flex-col items-center justify-center gap-2 overflow-hidden rounded-2xl border text-center text-xs font-medium shadow-sm transition-all active:scale-[0.97]"
+            className="group relative flex aspect-square flex-col items-center justify-center gap-[4cqi] overflow-hidden rounded-2xl border text-center font-medium shadow-sm transition-all active:scale-[0.97]"
             style={{
               borderColor: `hsl(${d.hue} 60% 60% / 0.25)`,
               background: `linear-gradient(160deg, hsl(${d.hue} 70% 97%) 0%, hsl(${d.hue} 65% 92%) 100%)`,
@@ -101,17 +107,22 @@ export function DepartamentosGrid() {
               style={{ background: `hsl(${d.hue} 80% 70% / 0.35)` }}
             />
             <span
-              className="relative flex h-11 w-11 items-center justify-center rounded-xl text-white shadow-sm"
+              className="relative flex items-center justify-center rounded-xl text-white shadow-sm"
               style={{
+                width: "clamp(2.75rem, 12cqi, 4rem)",
+                height: "clamp(2.75rem, 12cqi, 4rem)",
                 background: `linear-gradient(145deg, hsl(${d.hue} 75% 58%) 0%, hsl(${d.hue} 70% 46%) 100%)`,
                 boxShadow: `0 3px 10px -2px hsl(${d.hue} 70% 45% / 0.5)`,
               }}
             >
-              <Icon className="h-5 w-5" strokeWidth={2.1} />
+              <Icon className="h-1/2 w-1/2" strokeWidth={2.1} />
             </span>
             <span
               className="relative px-1 leading-tight"
-              style={{ color: `hsl(${d.hue} 45% 28%)` }}
+              style={{
+                color: `hsl(${d.hue} 45% 28%)`,
+                fontSize: "clamp(0.75rem, 3.2cqi, 0.95rem)",
+              }}
             >
               {d.label}
             </span>

@@ -75,12 +75,32 @@ export default async function MobileLayout({ children }: { children: React.React
     // pegada por `sticky`. Antes era `pb-24` a ojo sobre una barra `fixed`, y en
     // iPhone (con franja inferior) la barra tapaba el final de las listas.
     // --nav-h la publica la barra para que cada pantalla reserve el hueco justo.
+    // `overflow-x-clip` es OBLIGATORIO: la cabecera estira su fondo más allá de
+    // la columna de 640px para llegar a los bordes de móviles anchos, y sin
+    // recortar aquí eso generaría scroll horizontal (documento de 1400px en una
+    // pantalla de 720px). Es `clip` y NO `hidden` a propósito: `hidden` crea un
+    // contenedor de scroll y rompería el `position: sticky` de la cabecera y de
+    // la barra inferior.
     <div
-      className="flex min-h-dvh flex-col bg-background text-foreground antialiased [--nav-h:calc(3.5rem+env(safe-area-inset-bottom))]"
+      className="flex min-h-dvh flex-col overflow-x-clip bg-background text-foreground antialiased [--nav-h:calc(3.5rem+env(safe-area-inset-bottom))]"
     >
       <PWARegister />
       <VersionAutoUpdate />
-      <main className="mx-auto w-full max-w-screen-sm flex-1">{children}</main>
+      {/*
+        Ancho de la columna. Antes era `max-w-screen-sm` fijo (640px) y eso daba
+        DOS problemas:
+          · En móviles anchos (Android de 720px) la cabecera y la tarjeta de
+            avisos pintaban su fondo solo hasta 640px y asomaban FRANJAS BLANCAS
+            a los lados (Iván, captura del panel de empleado). El fondo se pinta
+            ahora a pantalla completa y la columna queda TRANSPARENTE encima.
+          · En tablet y ordenador (esta app es alcanzable ahí con la cookie
+            `bh_force_view=mobile`) todo se quedaba congelado en una banda de
+            640px centrada, desaprovechando la pantalla. Ahora la columna crece
+            por tramos hasta 1100px, que es donde la rejilla deja de estirarse.
+      */}
+      <main className="mx-auto w-full max-w-screen-sm flex-1 bg-transparent md:max-w-3xl lg:max-w-5xl xl:max-w-[1100px]">
+        {children}
+      </main>
       <MobileBottomNav />
       <MobileFichajeProvider />
       {/* Gate bloqueante de notificaciones desactivado durante las pruebas:
