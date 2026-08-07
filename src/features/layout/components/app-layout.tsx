@@ -1,7 +1,7 @@
 "use client";
 
 import { usePathname, useRouter } from "next/navigation";
-import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+import { SidebarProvider } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/features/layout/components/app-sidebar";
 import { AuthContext } from "@/features/auth/contexts/auth-context";
 import { Button } from "@/components/ui/button";
@@ -12,8 +12,9 @@ import {
   CheckCircle2,
   Settings,
   Building2,
+  ArrowLeft,
 } from "lucide-react";
-import { getRouteMeta } from "@/features/layout/data/nav-routes";
+import { getRouteMeta, allSections } from "@/features/layout/data/nav-routes";
 import { useEffect, useState, useContext, useRef } from "react";
 import {
   DropdownMenu,
@@ -151,6 +152,22 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
   const { title: headerLabel, icon: ModuleIcon } = getRouteMeta(pathname);
 
+  // VOLVER (solo móvil). En el teléfono las pantallas de módulo son las mismas
+  // que en el ordenador, pero sin menú lateral: se sale con esta flecha, que
+  // devuelve a la rejilla de submódulos del departamento —las viñetas que ya
+  // existen en /m/departamentos/[key]— en vez de dejar la vista sin salida.
+  //
+  // El departamento se deduce del propio pathname con el `prefix` de
+  // `allSections` (misma fuente que el sidebar), así no hay que mantener una
+  // tabla aparte: un módulo nuevo funciona solo. Sin departamento que coincida
+  // (p.ej. /agenda) se vuelve al inicio de la app.
+  const volverHref = (() => {
+    const sec = allSections.find(
+      (s) => pathname === s.prefix || pathname.startsWith(`${s.prefix}/`),
+    );
+    return sec ? `/m/departamentos/${sec.key}` : "/m";
+  })();
+
   // El rol que se muestra bajo el nombre es el ROL REAL del usuario (rol_label:
   // DIRECCIÓN, SALA, COCINA, GESTORÍA…), NO el valor técnico de acceso
   // (director/empleado). «Empleado» no es un rol: si un usuario de SALA aparecía
@@ -191,7 +208,23 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         <AppSidebar />
         <div className="flex-1 flex flex-col min-w-0 h-screen">
           <header className="sticky top-0 z-30 h-14 flex items-center border-b bg-card px-3 md:px-4 shrink-0 gap-2 md:gap-3">
-            <SidebarTrigger className="md:hidden -ml-1 shrink-0" />
+            {/*
+              En MÓVIL no hay menú lateral: la navegación del teléfono son las
+              viñetas de /m, y el desplegable de escritorio (con todos los
+              departamentos y su cabecera) no pinta nada aquí. En su sitio va
+              una flecha de volver al departamento (Iván, 07-ago).
+
+              Es un <a> de verdad, no un router.push: si el JS no ha cargado o
+              se ha roto, la vista se quedaría sin salida posible.
+            */}
+            <a
+              href={volverHref}
+              className="md:hidden -ml-1 shrink-0 flex h-9 w-9 items-center justify-center rounded-md hover:bg-accent transition-colors"
+              aria-label="Volver"
+              title="Volver"
+            >
+              <ArrowLeft className="h-5 w-5" />
+            </a>
             {(headerLabel || ModuleIcon !== null) && (
               <h1 className="flex items-center gap-2 text-sm font-bold tracking-wide text-foreground min-w-0 flex-1 md:flex-none">
                 {ModuleIcon !== null && <ModuleIcon className="h-4 w-4 shrink-0" />}
