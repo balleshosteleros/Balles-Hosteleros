@@ -10,7 +10,18 @@ export const runtime = "nodejs";
 /**
  * Envío automático a la gestoría del enlace para subir las nóminas del mes.
  *
- * Corre cada hora. Para cada empresa con el envío ACTIVO y correo de gestoría,
+ * Corre UNA VEZ AL DÍA, a las 02:00 UTC. Era cada hora, pero el plan de Vercel
+ * es Hobby y solo admite crons diarios: el deploy se rechazaba entero
+ * ("Hobby accounts are limited to daily cron jobs") y dejaba producción sin
+ * publicar. Al pasar a Pro basta con devolver el schedule a "0 * * * *".
+ *
+ * La lógica no necesita la pasada horaria: mira si HOY es el día configurado y
+ * `ultimo_envio` impide repetir, así que una pasada diaria envía igual. Las
+ * 02:00 UTC son un punto donde el día ya entró en Europa y aún no acabó en
+ * América; una empresa en un huso muy adelantado o atrasado podría recibir el
+ * aviso en el día vecino al configurado.
+ *
+ * Para cada empresa con el envío ACTIVO y correo de gestoría,
  * comprueba si HOY (en la zona horaria de la empresa) es el día del mes
  * configurado (`nominas_gestoria_dia_envio`, por defecto el 1). Si lo es y no se
  * envió ya ese mes (`nominas_gestoria_ultimo_envio`, que garantiza un único envío
