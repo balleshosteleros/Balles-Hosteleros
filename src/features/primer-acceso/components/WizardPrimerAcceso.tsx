@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
   Loader2, Check, ChevronRight, ChevronLeft, User, Home,
-  CreditCard, Heart, Shirt, Sparkles,
+  CreditCard, Heart, Shirt, Sparkles, ShieldCheck,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -221,6 +221,21 @@ export function WizardPrimerAcceso({ prefilled }: { prefilled: Prefilled }) {
             );
           })}
         </div>
+
+        {/* Por qué se piden estos datos: se está pidiendo el IBAN y el DNI, así
+            que conviene decir para qué se usan y quién los ve. */}
+        {paso === 0 && (
+          <div className="mb-4 flex items-start gap-2.5 rounded-lg border border-emerald-200 bg-emerald-50/60 p-3.5 dark:border-emerald-900/40 dark:bg-emerald-950/20">
+            <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
+            <div className="text-xs leading-relaxed text-emerald-900 dark:text-emerald-200">
+              <p className="font-medium">Solo te lo pedimos una vez</p>
+              <p className="mt-0.5">
+                Son los datos que la empresa necesita para tu contrato, tu nómina y el pago de tu
+                salario. Se guardan en tu ficha y solo los ve el equipo de RRHH.
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* Card */}
         <div className="rounded-lg border bg-card p-5 md:p-6 space-y-4">
