@@ -32,7 +32,7 @@ export function RecepcionInbox({ pedidos }: { pedidos: PedidoPorRecibir[] }) {
       {pedidos.map((p) => (
         <li key={p.id}>
           <Link
-            href={`/m/albaranes/recibir/${p.id}`}
+            href={`/m/pedidos/recibir/${p.id}`}
             className="flex items-center gap-3 rounded-2xl border bg-card p-3.5 shadow-sm transition-all active:scale-[0.98]"
           >
             <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400">

@@ -62,13 +62,17 @@ export default async function MobileAlbaranesPage() {
 
   return (
     <>
-      <MobilePageHeader title="Recepción de albaranes" subtitle="Pedidos pendientes de recibir" />
+      {/* Título = la vista donde estás: en el ordenador los albaranes son una
+          pestaña dentro de PEDIDOS, no un submódulo aparte. En móvil se fusionó
+          igual, así que esta pantalla es Pedidos (su contenido —recepción por
+          foto y albaranes en revisión— no cambió). */}
+      <MobilePageHeader title="Pedidos" subtitle="Recepción de mercancía y albaranes" />
       {/* pb-6 al final: si no, la barra de navegación tapaba los últimos albaranes
           en revisión (no se podían ni ver ni pulsar). El hueco de la barra ya lo
           reserva el layout; esto es solo el aire para que no queden pegados. */}
       <div className="space-y-5 px-3 py-4 pb-6">
         <Link
-          href="/m/albaranes/subir"
+          href="/m/pedidos/subir"
           className="flex items-center gap-3 rounded-2xl border-2 border-dashed border-primary/40 bg-primary/5 p-3.5 transition-all active:scale-[0.98]"
         >
           <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/15 text-primary">

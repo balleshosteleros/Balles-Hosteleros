@@ -17,7 +17,7 @@ export default async function SubirAlbaranPage() {
       <MobilePageHeader
         title="Subir albarán por foto"
         subtitle="Se guarda en Revisión para resolver desde el ordenador"
-        backHref="/m/albaranes"
+        backHref="/m/pedidos"
       />
       <div className="px-3 py-4">
         <SubirAlbaranMobile />

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useMemo } from "react";
-import { Camera, Building2 } from "lucide-react";
+import { Building2 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useAuth } from "@/features/auth/contexts/auth-context";
 import { allSections, type SubItem } from "@/features/layout/data/nav-routes";
@@ -17,9 +17,10 @@ import { allSections, type SubItem } from "@/features/layout/data/nav-routes";
  * duplican. El gate de permiso es por DEPARTAMENTO (section.modulo), igual que
  * el sidebar: si ves el departamento, ves todos sus submódulos.
  *
- * Extras solo-móvil: algún submódulo existe únicamente en la app del teléfono
- * (p.ej. ALBARANES → recepción por foto en /m/albaranes) y se inyecta aquí sin
- * tocar la navegación de escritorio.
+ * Redirecciones solo-móvil: algún submódulo tiene pantalla propia de teléfono
+ * y la del sidebar es de escritorio. Aquí se cambia SOLO el destino, sin tocar
+ * la navegación de escritorio ni añadir botones que allí no existen: la rejilla
+ * del móvil enseña los mismos submódulos que el ordenador, ni uno más.
  */
 
 /** Tinte del departamento (mismo `hue` que en DepartamentosGrid). */
@@ -38,12 +39,18 @@ const HUE_POR_KEY: Record<string, number> = {
 };
 
 /**
- * Submódulos que solo existen en móvil, por departamento. Se añaden a los del
- * sidebar (que son pantallas de escritorio) para no perder accesos que ya
- * funcionan en el teléfono.
+ * Submódulos con pantalla propia de teléfono: misma entrada que en el ordenador
+ * (mismo título, mismo icono, mismo sitio), pero el enlace lleva a la versión
+ * móvil en vez de a la de escritorio.
+ *
+ * PEDIDOS: la recepción de albaranes (subir por foto con OCR y recibir la
+ * mercancía de un pedido) colgaba de un botón suelto "ALBARANES" que en el
+ * ordenador NO existe, porque allí los albaranes son una pestaña DENTRO de
+ * Pedidos. Se fusionó para que la estructura sea la misma en los dos sitios:
+ * esa pantalla, sin tocarla por dentro, es ahora la de Pedidos en móvil.
  */
-const EXTRAS_MOVIL: Record<string, SubItem[]> = {
-  logistica: [{ title: "ALBARANES", url: "/m/albaranes", icon: Camera }],
+const RUTA_MOVIL: Record<string, string> = {
+  "/logistica/pedidos": "/m/pedidos",
 };
 
 interface Props {
@@ -58,9 +65,12 @@ export function SubmodulosGrid({ deptoKey }: Props) {
 
   const items = useMemo<SubItem[]>(() => {
     if (!section) return [];
-    const extras = EXTRAS_MOVIL[deptoKey] ?? [];
-    return [...section.items, ...extras];
-  }, [section, deptoKey]);
+    // Los mismos submódulos que el sidebar, solo se reapunta el destino de los
+    // que tienen pantalla de móvil propia.
+    return section.items.map((it) =>
+      RUTA_MOVIL[it.url] ? { ...it, url: RUTA_MOVIL[it.url] } : it,
+    );
+  }, [section]);
 
   const permitido = useMemo(() => {
     if (!section) return false;
@@ -88,14 +98,18 @@ export function SubmodulosGrid({ deptoKey }: Props) {
   if (permitido === null) return null;
 
   return (
-    <div className="grid grid-cols-3 gap-2.5 px-5 pt-2">
+    // Mismo escalado proporcional que `MasGrid` (ver comentario allí).
+    <div
+      className="grid grid-cols-3 gap-2.5 px-5 pt-2 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6"
+      style={{ containerType: "inline-size" }}
+    >
       {items.map((it) => {
         const Icon = it.icon as LucideIcon;
         return (
           <Link
             key={it.url}
             href={it.url}
-            className="group relative flex aspect-square flex-col items-center justify-center gap-2 overflow-hidden rounded-2xl border text-center text-xs font-medium shadow-sm transition-all active:scale-[0.97]"
+            className="group relative flex aspect-square flex-col items-center justify-center gap-[4cqi] overflow-hidden rounded-2xl border text-center font-medium shadow-sm transition-all active:scale-[0.97]"
             style={{
               borderColor: `hsl(${hue} 60% 60% / 0.25)`,
               background: `linear-gradient(160deg, hsl(${hue} 70% 97%) 0%, hsl(${hue} 65% 92%) 100%)`,
@@ -109,17 +123,23 @@ export function SubmodulosGrid({ deptoKey }: Props) {
               style={{ background: `hsl(${hue} 80% 70% / 0.35)` }}
             />
             <span
-              className="relative flex h-11 w-11 items-center justify-center rounded-xl text-white shadow-sm"
+              className="relative flex items-center justify-center rounded-xl text-white shadow-sm"
               style={{
+                width: "clamp(2.75rem, 12cqi, 4rem)",
+                height: "clamp(2.75rem, 12cqi, 4rem)",
                 background: `linear-gradient(145deg, hsl(${hue} 75% 58%) 0%, hsl(${hue} 70% 46%) 100%)`,
                 boxShadow: `0 3px 10px -2px hsl(${hue} 70% 45% / 0.5)`,
               }}
             >
-              <Icon className="h-5 w-5" strokeWidth={2.1} />
+              <Icon className="h-1/2 w-1/2" strokeWidth={2.1} />
             </span>
             <span
               className="relative px-1 leading-tight"
-              style={{ color: `hsl(${hue} 45% 28%)`, textTransform: "none" }}
+              style={{
+                color: `hsl(${hue} 45% 28%)`,
+                textTransform: "none",
+                fontSize: "clamp(0.75rem, 3.2cqi, 0.95rem)",
+              }}
             >
               {/* Sentence case: el sidebar usa MAYÚSCULAS, en móvil lo suavizamos. */}
               {it.title.charAt(0) + it.title.slice(1).toLowerCase()}

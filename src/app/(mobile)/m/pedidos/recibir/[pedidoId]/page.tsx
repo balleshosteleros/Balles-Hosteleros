@@ -56,7 +56,7 @@ export default async function RecibirPedidoPage({
       <MobilePageHeader
         title="Recibir mercancía"
         subtitle={`${pedido.proveedor_nombre ?? "Proveedor"} · ${referencia}`}
-        backHref="/m/albaranes"
+        backHref="/m/pedidos"
       />
       <div className="px-3 py-4">
         <RecepcionAlbaranMobile pedidoId={pedido.id} lineas={lineas} />

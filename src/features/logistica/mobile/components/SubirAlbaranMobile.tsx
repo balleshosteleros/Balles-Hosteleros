@@ -66,7 +66,7 @@ export function SubirAlbaranMobile() {
         <div className="mt-6 flex w-full max-w-xs flex-col gap-2">
           <Button onClick={() => setExito(null)}>Subir otro albarán</Button>
           <Button variant="outline" asChild>
-            <Link href="/m/albaranes">Volver</Link>
+            <Link href="/m/pedidos">Volver</Link>
           </Button>
         </div>
       </div>

@@ -137,7 +137,7 @@ export function RecepcionAlbaranMobile({
             Aviso de stock: {done.aviso}
           </p>
         )}
-        <Button className="mt-6" onClick={() => { router.refresh(); router.push("/m/albaranes"); }}>
+        <Button className="mt-6" onClick={() => { router.refresh(); router.push("/m/pedidos"); }}>
           Volver a la bandeja
         </Button>
       </div>
