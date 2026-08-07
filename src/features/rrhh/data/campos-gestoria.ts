@@ -71,7 +71,10 @@ export function faltantesAltaGestoria(d: DatosAltaGestoria): string[] {
   if (vacio(d.tipo_contrato)) faltan.push("Tipo de contrato");
   if (vacio(d.jornada)) faltan.push("Jornada");
   if (d.horas_semanales == null || Number(d.horas_semanales) <= 0) faltan.push("Horas/semana");
-  if (d.salario_neto == null || Number(d.salario_neto) <= 0) faltan.push("Salario neto");
+  // El dato obligatorio del alta es el salario BRUTO (lo pactado y lo que se
+  // declara). El campo conserva el nombre `salario_neto` por compatibilidad, pero
+  // lo que viaja en él es el bruto.
+  if (d.salario_neto == null || Number(d.salario_neto) <= 0) faltan.push("Salario bruto");
   if (vacio(d.convenio)) faltan.push("Convenio colectivo");
   return faltan;
 }

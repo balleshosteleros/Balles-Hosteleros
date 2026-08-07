@@ -187,17 +187,21 @@ export async function upsertPuestoSalario(input: UpsertSalarioInput) {
   try {
     const { supabase, empresaId } = await getContext();
     if (!empresaId) return { ok: false, error: "No autenticado" };
-    // El puesto trabaja con BRUTO. El neto se conserva por compatibilidad con
-    // contratación/gestoría: se espeja del bruto mientras no exista cálculo real.
+    // El puesto trabaja con BRUTO, que es la cifra del convenio y la que se pacta.
+    // El NETO no se puede deducir del bruto sin conocer retenciones (IRPF por
+    // situación personal, cotización, jornada), así que NO se inventa: se deja a
+    // null. Antes se espejaba el bruto en `salario_neto`, y como el alta a la
+    // gestoría lee ese campo y lo etiqueta "Salario neto", un puesto de 1.800 €
+    // brutos generaba un contrato que declaraba 1.800 € NETOS.
     const bruto = input.salarioBruto ?? 0;
     const payload = {
       empresa_id: empresaId,
       puesto_id: input.puestoId,
       nivel: input.nivel ?? 1,
       salario_bruto: bruto,
-      nomina_neta: bruto,
+      nomina_neta: null,
       efectivo_extra: 0,
-      salario_neto: bruto,
+      salario_neto: null,
       jornada_contrato: input.jornadaContrato ?? null,
       horas_semanales: input.horasSemanales ?? null,
       dias_libres: input.diasLibres ?? null,

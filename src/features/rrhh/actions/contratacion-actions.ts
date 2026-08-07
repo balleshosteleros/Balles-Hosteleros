@@ -185,7 +185,7 @@ async function guardarSnapshotCondiciones(
   primerDia: string,
   tipoContrato: string | null,
   cond: {
-    nomina_neta: number; efectivo_extra: number; salario_neto: number;
+    salario_bruto: number | null; nomina_neta: number; efectivo_extra: number; salario_neto: number;
     jornada_contrato: string | null; horas_semanales: number | null;
     dias_libres: number | null; vacaciones: string | null; horario_semanal: unknown;
   } | null,
@@ -299,7 +299,7 @@ export async function contratarCandidato(input: ContratarInput): Promise<Contrat
   // numeración que existan; si la plantilla está vacía, `cond` queda null.
   const { data: condRows } = await admin
     .from("puesto_salarios")
-    .select("nivel, nomina_neta, efectivo_extra, salario_neto, jornada_contrato, horas_semanales, dias_libres, vacaciones, horario_semanal")
+    .select("nivel, salario_bruto, nomina_neta, efectivo_extra, salario_neto, jornada_contrato, horas_semanales, dias_libres, vacaciones, horario_semanal")
     .eq("puesto_id", input.puestoId)
     .order("nivel", { ascending: true })
     .limit(1);
@@ -309,6 +309,7 @@ export async function contratarCandidato(input: ContratarInput): Promise<Contrat
   const nivelHeredado = (condRow?.nivel as number | undefined) ?? input.nivel;
   const cond = condRow
     ? {
+        salario_bruto: condRow.salario_bruto,
         nomina_neta: condRow.nomina_neta, efectivo_extra: condRow.efectivo_extra,
         salario_neto: condRow.salario_neto, jornada_contrato: condRow.jornada_contrato,
         horas_semanales: condRow.horas_semanales, dias_libres: condRow.dias_libres,
@@ -346,7 +347,8 @@ export async function contratarCandidato(input: ContratarInput): Promise<Contrat
       tipo_contrato: tipoContrato,
       jornada: cond?.jornada_contrato ?? null,
       horas_semanales: cond?.horas_semanales ?? null,
-      salario_neto: cond?.salario_neto != null ? Number(cond.salario_neto) : null,
+      // Dato obligatorio del alta = BRUTO (lo pactado), no el neto.
+      salario_neto: cond?.salario_bruto != null ? Number(cond.salario_bruto) : null,
       convenio: (puesto.convenio_colectivo as string | null) ?? null,
     });
     if (faltan.length > 0) {

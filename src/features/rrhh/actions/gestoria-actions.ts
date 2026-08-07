@@ -381,7 +381,7 @@ export async function enviarAltaGestoria(
     // campo relleno.
     const { data: condRows } = await supabase
       .from("empleado_condiciones")
-      .select("nivel, salario_neto, jornada_contrato, horas_semanales, primer_dia, tipo_contrato, puesto_id, vigente_hasta, vigente_desde")
+      .select("nivel, salario_bruto, salario_neto, jornada_contrato, horas_semanales, primer_dia, tipo_contrato, puesto_id, vigente_hasta, vigente_desde")
       .eq("empleado_id", empleadoId)
       .order("vigente_desde", { ascending: false, nullsFirst: false })
       .limit(20);
@@ -417,7 +417,8 @@ export async function enviarAltaGestoria(
       tipo_contrato: cond?.tipo_contrato,
       jornada: cond?.jornada_contrato,
       horas_semanales: cond?.horas_semanales,
-      salario_neto: cond?.salario_neto != null ? Number(cond.salario_neto) : null,
+      // El dato obligatorio del alta es el BRUTO (lo que se pacta y se declara).
+      salario_neto: cond?.salario_bruto != null ? Number(cond.salario_bruto) : null,
       convenio,
     });
     if (faltan.length > 0) {
@@ -443,7 +444,7 @@ export async function enviarAltaGestoria(
       tipo_contrato: { label: "Tipo de contrato", value: cond?.tipo_contrato },
       jornada: { label: "Jornada", value: cond?.jornada_contrato },
       horas_semanales: { label: "Horas/semana", value: cond?.horas_semanales ? `${cond.horas_semanales}h` : "—" },
-      salario_neto: { label: "Salario neto", value: cond?.salario_neto != null ? eur(Number(cond.salario_neto)) : "—" },
+      salario_neto: { label: "Salario bruto", value: cond?.salario_bruto != null ? eur(Number(cond.salario_bruto)) : "—" },
       convenio: { label: "Convenio", value: convenio },
     };
 
@@ -585,7 +586,7 @@ export async function enviarCambioPuestoGestoria(
     // Condiciones VIGENTES tras la promoción (histórico: vigente_hasta IS NULL).
     const { data: condRows } = await admin
       .from("empleado_condiciones")
-      .select("nivel, salario_neto, jornada_contrato, horas_semanales, primer_dia, tipo_contrato, puesto_id, vigente_hasta, vigente_desde")
+      .select("nivel, salario_bruto, salario_neto, jornada_contrato, horas_semanales, primer_dia, tipo_contrato, puesto_id, vigente_hasta, vigente_desde")
       .eq("empleado_id", empleadoId)
       .order("vigente_desde", { ascending: false, nullsFirst: false })
       .limit(20);
@@ -615,7 +616,7 @@ export async function enviarCambioPuestoGestoria(
       tipo_contrato: { label: "Tipo de contrato", value: cond?.tipo_contrato },
       jornada: { label: "Jornada", value: cond?.jornada_contrato },
       horas_semanales: { label: "Horas/semana", value: cond?.horas_semanales ? `${cond.horas_semanales}h` : "—" },
-      salario_neto: { label: "Salario neto", value: cond?.salario_neto != null ? eur(Number(cond.salario_neto)) : "—" },
+      salario_neto: { label: "Salario bruto", value: cond?.salario_bruto != null ? eur(Number(cond.salario_bruto)) : "—" },
       convenio: { label: "Convenio", value: convenio },
     };
 

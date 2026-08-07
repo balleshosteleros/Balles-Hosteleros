@@ -20,6 +20,8 @@ type Admin = {
 
 export interface CondicionesPuesto {
   nivel: number;
+  /** Salario BRUTO pactado: la cifra del convenio y la que se declara a gestoría. */
+  salario_bruto: number | null;
   nomina_neta: number;
   efectivo_extra: number;
   salario_neto: number;
@@ -41,7 +43,7 @@ export async function leerCondicionesPuesto(
   const { data } = await admin
     .from("puesto_salarios")
     .select(
-      "nivel, nomina_neta, efectivo_extra, salario_neto, jornada_contrato, horas_semanales, dias_libres, vacaciones, horario_semanal",
+      "nivel, salario_bruto, nomina_neta, efectivo_extra, salario_neto, jornada_contrato, horas_semanales, dias_libres, vacaciones, horario_semanal",
     )
     .eq("puesto_id", puestoId)
     .order("nivel", { ascending: true })
@@ -50,6 +52,7 @@ export async function leerCondicionesPuesto(
   if (!row) return null;
   return {
     nivel: (row.nivel as number | null) ?? 1,
+    salario_bruto: row.salario_bruto,
     nomina_neta: row.nomina_neta,
     efectivo_extra: row.efectivo_extra,
     salario_neto: row.salario_neto,
@@ -63,7 +66,7 @@ export async function leerCondicionesPuesto(
 
 /** Una plantilla tiene condiciones útiles si al menos define salario o jornada. */
 export function tieneCondicionesUtiles(cond: CondicionesPuesto | null): boolean {
-  return !!cond && !(cond.salario_neto == null && cond.jornada_contrato == null);
+  return !!cond && !(cond.salario_bruto == null && cond.jornada_contrato == null);
 }
 
 export interface EscribirCondicionesInput {
@@ -105,9 +108,12 @@ export async function escribirCondicionesVigentes(
     puesto_id: puestoId,
     puesto_nombre: puestoNombre,
     nivel: cond?.nivel ?? 1,
-    nomina_neta: cond?.nomina_neta ?? 0,
+    // El BRUTO es el dato pactado; el neto se deja tal cual venga (null mientras
+    // no exista cálculo real) en vez de rellenarlo con una copia del bruto.
+    salario_bruto: cond?.salario_bruto ?? null,
+    nomina_neta: cond?.nomina_neta ?? null,
     efectivo_extra: cond?.efectivo_extra ?? 0,
-    salario_neto: cond?.salario_neto ?? 0,
+    salario_neto: cond?.salario_neto ?? null,
     jornada_contrato: cond?.jornada_contrato ?? null,
     horas_semanales: cond?.horas_semanales ?? null,
     dias_libres: cond?.dias_libres ?? null,
