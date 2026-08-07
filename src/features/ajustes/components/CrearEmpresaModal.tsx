@@ -15,6 +15,7 @@ import { createEmpresa } from "@/features/empresa/actions/empresas-actions";
 import { setEmpresaActiva } from "@/features/empresa/actions/empresa-activa-actions";
 import { useRouter } from "next/navigation";
 import type { DatosGenerales, ConfigOperativa } from "@/features/ajustes/data/ajustes";
+import { ESTILO_EMAIL_IA_POR_DEFECTO } from "@/features/ajustes/data/ajustes";
 
 // El alta replica EXACTAMENTE la vista de Ajustes → Empresa (ConfiguracionTab):
 // mismas tarjetas, mismos campos y mismo layout. Las iniciales y el color del
@@ -147,6 +148,11 @@ export function CrearEmpresaModal({ open, onOpenChange }: { open: boolean; onOpe
         formatoFecha: form.formatoFecha,
         primerDiaSemana: form.primerDiaSemana,
         colorPrimario: color,
+        // Estilo de redacción con IA de serie: editable después en
+        // Ajustes → Herramientas → Email.
+        emailEstiloIA: ESTILO_EMAIL_IA_POR_DEFECTO,
+        emailTonoIA: "cercano",
+        emailLongitudIA: "medio",
       };
 
       const res = await createEmpresa({ nombre, iniciales, color, datosGenerales, configOperativa });

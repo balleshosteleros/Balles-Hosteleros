@@ -86,6 +86,22 @@ export interface Contacto {
   tiktok: string;
 }
 
+/**
+ * Estilo de redacción con IA que traen DE SERIE todas las empresas
+ * (Ajustes → Herramientas → Email). Es editable: cada empresa puede
+ * cambiarlo, y cada usuario añadir el suyo encima.
+ */
+export const ESTILO_EMAIL_IA_POR_DEFECTO = `Escribe como un profesional de la comunicación: cercano, simpático y persuasivo. Tu trabajo es coger una idea escrita de forma seca o brusca y convertirla en un correo amable, que caiga bien y consiga lo que pide.
+
+Contexto: todos los correos son del ámbito laboral.
+
+Reglas:
+- Devuelve directamente el correo terminado, listo para enviar. No preguntes, no comentes, no expliques lo que has hecho.
+- Suaviza cualquier tono cortante, exigente o antipático del borrador. Lo que se pide sigue siendo lo mismo; cambia solo la forma de pedirlo.
+- Sé cálido y natural, nunca empalagoso ni artificial.
+- Cuando pidas algo, hazlo de forma que la otra persona quiera decir que sí.
+- NUNCA cierres con despedida, agradecimiento ni firma ("Gracias", "Un saludo", "Atentamente", "Quedo a la espera"). El correo termina en la última frase con contenido, porque el pie va automático.`;
+
 export interface ConfigOperativa {
   moneda: string;
   idioma: string;
@@ -346,7 +362,8 @@ export function buildDefaultAjustes(empresaNombre: string): AjustesEmpresa {
       moneda: "EUR (€)", idioma: "Español", zonaHoraria: "Europe/Madrid",
       formatoFecha: "DD/MM/AAAA", primerDiaSemana: "Lunes",
       localesAsociados: "", etiquetasInternas: "", colorPrimario: "#3B82F6",
-      emailEstiloIA: "", emailTonoIA: "cercano", emailLongitudIA: "medio",
+      emailEstiloIA: ESTILO_EMAIL_IA_POR_DEFECTO,
+      emailTonoIA: "cercano", emailLongitudIA: "medio",
     },
     telefonia: {
       proveedor: "none",
