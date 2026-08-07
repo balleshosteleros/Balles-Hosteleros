@@ -5,6 +5,56 @@
 
 ---
 
+## ✅ RESPUESTA DE IVÁN (07-ago) — tus 3 preguntas abiertas, contestadas
+
+Fernando: leído todo lo del 6 y 7 de agosto. Van las tres respuestas.
+
+### 1. La Edge Function `analizar-albaran`: **NO la borré yo**
+
+Confirmado, nunca la toqué desde el panel ni de ninguna otra forma. Así que tu sospecha se
+confirma: **la recepción con foto llevaba rota en silencio**, y el "ajusta las cantidades a
+mano" que me salía en pantalla no era el comportamiento normal — era el invoke fallando.
+
+**No sé fechar cuándo desapareció** (yo no la borré, así que no tengo momento que darte). Si
+os sirve para acotarlo, tiráis de los logs del proyecto o del historial del panel: cualquier
+cosa por vuestro lado va a ser más fiable que mi memoria. Lo que sí te digo es que llevaba
+tiempo dándome ese aviso y yo lo tomaba por normal, así que el hueco no fue de días.
+
+Esto refuerza lo tuyo: una pieza cuyo código no está en el repo puede morirse sin que salte
+nada. Bien quitada.
+
+### 2. La recepción contra pedido: la pruebo en la próxima entrega real
+
+Entendido que habéis cambiado el motor por dentro y que la pantalla es la misma. **La uso en
+la próxima recepción de verdad y te aviso aquí**, tanto si va bien como si veo algo raro. Si
+falla te paso el código de error que salga.
+
+### 3. El piloto de volumen: **NO lo doy por cumplido todavía — quiero más pruebas**
+
+Sé que están los lotes de 27 + 31 y el E2E real, pero prefiero no activarlo en general aún.
+El motivo es justo lo del punto 1: acabamos de descubrir que un trozo de este circuito
+llevaba roto en silencio sin que nadie se enterara, y encima el motor de la recepción por
+pedido **ha cambiado hace dos días**. Los albaranes de esos lotes se cargaron con el motor
+viejo; no son prueba del nuevo.
+
+Lo que quiero antes de dar el piloto por bueno: **unas cuantas recepciones reales mías, con
+el motor de la Etapa D ya puesto**, hechas por el flujo del día a día. Cuando lleve varias
+seguidas sin sorpresas, lo damos por cumplido y lo hablamos aquí. No hay prisa.
+
+**Y tengo más albaranes pendientes de subir** — los voy a subir yo por el móvil, por el
+camino nuevo. Eso me sirve de piloto de verdad: son documentos reales, con el motor de
+ahora, y si algo falla saldrá ahí. Te cuento aquí cómo va (cuántos entraron limpios, cuáles
+dieron incidencia y de qué tipo). **Con eso decidimos si el piloto queda cumplido**, en vez
+de darlo por bueno con los lotes viejos.
+
+### 4. Lo del sufijo `_Fernando`: entendido y corregido
+
+Tienes razón, y era mi agente imitando vuestro patrón sin saber qué significaba. Ya está
+guardado como regla permanente por mi lado: **mis commits van sin sufijo**. El `_Fernando`
+es tuyo y solo tuyo. No se repetirá.
+
+---
+
 ## ✍️ IVÁN: el sufijo `_Fernando` en los commits es la FIRMA de Fernando — dile a tu agente que no lo use (07-ago, Fernando)
 
 Tu agente firmó tres commits suyos del 06-ago con el sufijo `_Fernando` (`52890722` nombre
