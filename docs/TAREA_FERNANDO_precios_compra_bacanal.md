@@ -5,6 +5,89 @@
 
 ---
 
+## 📊 IVÁN: PILOTO EJECUTADO — 10 albaranes reales por el camino nuevo, TODOS confirmados (07-ago, Fernando)
+
+Pediste que el piloto fueran documentos reales con el motor nuevo. Hecho: **10 albaranes del
+30-31/07 (4 de Bacanal + 6 de Habana, 7 proveedores distintos) subidos por la pantalla de la
+app, resueltos y CONFIRMADOS de punta a punta** — con stock y precios de verdad, no como los
+lotes de julio. Incluye **tu Coca-Cola del móvil (ALB-2026-018)**: lo resolvimos desde
+escritorio (Sprite vinculado, los 4 "Punto Verde" ignorados con motivo "no es mercancía") y
+confirmado — tu subida del día 5 acabó el ciclo completo móvil→escritorio→stock.
+
+### Los números que pediste (limpios vs incidencias)
+
+| Albarán | Proveedor | Líneas | Auto | A mano | Notas |
+|---|---|---|---|---|---|
+| ALB-2026-053 (BAC) | DITHER | 9 | **9/9** | — | varios "ya lo vinculaste antes" (los alias funcionan) |
+| ALB-2026-054 (BAC) | ENCINAR | 4 | **4/4** | — | kg y €/kg exactos |
+| ALB-2026-055 (BAC) | MAHOU | 1 | 1/1 | precio | la mesa avisó "sube un 56%" → era el DTO de línea sin aplicar; corregido a 20,41 efectivo |
+| ALB-2026-056 (BAC) | KRITTIKALI | 6 | 4/6 | 2 | bobina vinculada en la mesa; ambientador en el asistente |
+| ALB-2026-018 (HAB) | COCA-COLA (tuyo) | 8 | 3/4 | 1 + 4 ignoradas | Punto Verde con motivo registrado |
+| ALB-2026-019 (HAB) | DITHER | 19 | **17/19** | 2 | canela molida→Polvo y sandía negra→Sandia, propuestas correctas |
+| ALB-2026-020 (HAB) | BIGGER | 4 | 3/4 | 1 | ver duplicado de catálogo abajo |
+| ALB-2026-021 (HAB) | MAHOU | 2 | 0/2 | 2 | producto no existía en Habana → creado; la línea REGALO entró al stock SIN registrar precio 0 ✓ |
+| ALB-2026-022 (HAB) | KRITTIKALI | 5 | 2/5 | 3 | limpiacristales y rollo por la mesa; copa creada |
+| ALB-2026-023 (HAB) | DDI NEXIA | 1 | 0/1 | 1 | vino nuevo + LA CAJA (ver hallazgo nº1) |
+
+En total: **43 de 59 líneas casaron solas** (73%), el resto se resolvió con la mesa o el
+asistente en segundos, **0 errores de OCR en cantidades/precios/fechas** en los 10
+documentos, y las fichas de proveedor se completaron con razón social, CP y población desde
+los propios papeles (tus propuestas de la mesa — muy bien eso).
+
+### Lo que el piloto ha cazado (por esto se hacen pilotos)
+
+1. **ARREGLADO — "CAJ" no contaba como caja.** El vino de DDI Nexia venía "2 CAJ" (cajas de
+   6 botellas) y la confirmación lo sumó como **2 unidades sin avisar**: la lista de unidades
+   contenedoras de la función transaccional no incluía la abreviatura "CAJ". Migración
+   `20260807130000` aplicada a prod (añade caj/cajón/box), formato de compra "75CL 6U" con
+   equivalencia 6 creado, y el albarán re-confirmado: ahora suma **+12 botellas** con el
+   snapshot correcto (2 × 6). De paso quedó validado en vivo TODO el circuito de
+   equivalencias que faltaba por probar.
+2. **PARA TU AGENTE (grave) — crear producto desde el asistente lo crea en la empresa
+   EQUIVOCADA.** `createProducto` usa la empresa de la ficha del usuario
+   (`getUserEmpresaId`, `producto-actions.ts:263`) en vez de la empresa ACTIVA como el resto
+   de acciones: trabajando en HABANA me creó el producto en BACANAL (limpiado). Cualquiera
+   que trabaje en la empresa que no es "la suya" mete productos donde no toca sin enterarse.
+   El fix es usar `getLogisticaContext()` ahí (y revisar el resto de usos de
+   `getUserEmpresaId` en ese fichero).
+3. **PARA TU AGENTE (grave) — empresa activa desincronizada tras volver a entrar.** Tras
+   re-login, el botón de arriba decía HABANA pero el servidor seguía en BACANAL: el análisis
+   del albarán casó contra el catálogo equivocado. Y pulsar HABANA no lo arregla (el cliente
+   cree que ya está ahí); hay que pasar por BACANAL y volver. Riesgo real de registrar
+   albaranes en la empresa que no es.
+4. **El aviso "Antes de confirmar" cuenta mal**: dice "Entran en el almacén: 0 productos"
+   aunque mueva 9 o 19 — solo cuenta las líneas resueltas en esa pantalla, ignora las que ya
+   venían vinculadas de la subida. La confirmación real va bien; es solo el contador.
+5. **La decisión "Crear producto nuevo" de la mesa no crea nada** — la línea llega "Sin
+   resolver" al detalle y hay que rehacer la decisión en el asistente.
+6. **El asistente no ve un producto recién creado** en la misma sesión (lista cacheada), y
+   al recargar la página se pierden las resoluciones no confirmadas — es el autosave del F5
+   que sigue pendiente, ahora con caso real.
+7. **El matcher se fía demasiado del parecido textual**: para "AMBIENTADOR AIR SANDIA"
+   propuso "Sandia" (la fruta, 90%) cuando existía "Ambientador Sandia" (82%).
+8. **Duplicados de catálogo por mayúsculas**: "Mix goma pica"/"Mix Goma Pica", dos
+   "Alhambra" en Habana, varios "Delizia". Merecería una pasada de limpieza.
+9. **Fichas con CIF**: a DDI NEXIA le grabamos el CIF del papel (B79533048; el que tenía,
+   A/08000820, era erróneo). En MAHOU dejamos el CIF real de Mahou aunque el papel traiga el
+   del distribuidor ASYN (la mesa propone bien ahí).
+
+### El stock queda SUMADO — decide si lo dejamos así
+
+Estos 10 albaranes son entregas de hace una semana, en parte consumidas, así que el stock
+resultante está inflado respecto a la realidad física. Registro exacto de cada delta por
+producto en **`docs/LOTE_ALBARANES_2026-08-07_REGISTRO_STOCK.md`** (55 movimientos). Opciones:
+**(a)** lo dejamos (y el próximo inventario de regularización lo cuadra — es para lo que
+existe), o **(b)** lo revertimos y quedan como los lotes viejos (precios se conservan).
+Dinos cuál prefieres; con el registro cualquiera de las dos es limpia.
+
+Detalle menor: el usuario demo (Agora Demo) ahora tiene acceso a Habana y existe el
+proveedor DDI NEXIA en Habana — hacían falta para el lote.
+
+**El piloto por nuestra parte queda hecho. Falta tu mitad: tu próxima recepción real contra
+pedido con el motor F6.** Con eso decidimos juntos si lo damos por cumplido.
+
+---
+
 ## ✅ RESPUESTA DE IVÁN (07-ago) — tus 3 preguntas abiertas, contestadas
 
 Fernando: leído todo lo del 6 y 7 de agosto. Van las tres respuestas.
