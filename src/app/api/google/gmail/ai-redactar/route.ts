@@ -14,6 +14,10 @@ const InputSchema = z.object({
   longitud: z.enum(["corto", "medio", "largo"]).default("medio"),
   idioma: z.string().max(10).default("es"),
   instruccion: z.string().max(1000).optional().default(""),
+  /** Estilo BASE de la empresa (Ajustes → Herramientas → Email). */
+  estiloEmpresa: z.string().max(2000).optional().default(""),
+  /** Estilo personal del usuario, se aplica ENCIMA del de empresa. */
+  estiloUsuario: z.string().max(2000).optional().default(""),
   emailOriginal: z
     .object({
       remitente: z.string().max(200).optional().default(""),
@@ -38,10 +42,21 @@ Reglas:
 - El "cuerpo" se entrega en texto plano con saltos de línea reales (\\n). NUNCA HTML, NUNCA Markdown, sin asteriscos ni comillas decorativas.
 - Mantén el idioma indicado por el usuario (por defecto español de España).
 - No inventes datos concretos (cifras, fechas, nombres, direcciones) que no estén en el contexto. Si faltan, deja un placeholder claro entre corchetes [como esto].
-- Sé natural, claro y útil. Evita relleno corporativo vacío y frases hechas.
 - Termina con una despedida breve y la firma "[Tu nombre]" salvo que el borrador ya incluya una firma; en ese caso respétala.
-- Si el usuario te da una "instruccion" extra (p.ej. "más corto", "incluye que vamos mañana"), aplícala con prioridad.
-- Si el usuario solo te pasa instrucciones y un borrador vacío o muy pobre, redacta el correo desde cero.`;
+- Si el usuario solo te pasa instrucciones y un borrador vacío o muy pobre, redacta el correo desde cero.
+
+ESCRIBE COMO UNA PERSONA, NO COMO UNA EMPRESA. Esto es lo más importante:
+- Suena a alguien que conoce al destinatario y le escribe de tú (salvo que el tono pedido sea "formal").
+- PROHIBIDO el relleno corporativo: "Espero que este correo le encuentre bien", "Quedamos a su entera disposición", "No dude en contactarnos", "Le agradecemos de antemano", "Reciba un cordial saludo", "Por la presente", "Nos complace comunicarle".
+- Ve al grano desde la primera frase. Nada de párrafo introductorio de cortesía.
+- Frases cortas y directas. Nada de subordinadas largas ni voz pasiva.
+- Sin adornos vacíos: si algo no aporta información, fuera.
+
+PRIORIDAD DE INSTRUCCIONES (de menos a más manda):
+1. Estas reglas generales.
+2. El estilo de la EMPRESA (cómo escribe la casa).
+3. El estilo PERSONAL del usuario — manda sobre el de empresa si chocan.
+4. La instrucción puntual para este correo concreto — manda sobre todo lo demás.`;
 
 function construirPrompt(input: z.infer<typeof InputSchema>): string {
   const lineas: string[] = [];
@@ -58,10 +73,30 @@ function construirPrompt(input: z.infer<typeof InputSchema>): string {
   lineas.push(`Tono: ${input.tono}`);
   lineas.push(`Longitud objetivo: ${input.longitud}`);
   lineas.push(`Idioma: ${input.idioma}`);
-  if (input.instruccion?.trim()) {
-    lineas.push(`Instrucción extra del usuario: ${input.instruccion.trim()}`);
-  }
   lineas.push("");
+
+  // Estilo de la casa: se aplica a todos los correos de la empresa.
+  if (input.estiloEmpresa?.trim()) {
+    lineas.push("=== Estilo de redacción de la EMPRESA ===");
+    lineas.push(input.estiloEmpresa.trim());
+    lineas.push("=== Fin del estilo de la empresa ===");
+    lineas.push("");
+  }
+
+  // Estilo personal: manda sobre el de empresa cuando se contradicen.
+  if (input.estiloUsuario?.trim()) {
+    lineas.push("=== Estilo PERSONAL de quien firma (manda sobre el de la empresa) ===");
+    lineas.push(input.estiloUsuario.trim());
+    lineas.push("=== Fin del estilo personal ===");
+    lineas.push("");
+  }
+
+  if (input.instruccion?.trim()) {
+    lineas.push(
+      `Instrucción SOLO para este correo (manda sobre todo lo anterior): ${input.instruccion.trim()}`,
+    );
+    lineas.push("");
+  }
 
   if (input.destinatario) {
     lineas.push(`Destinatario: ${input.destinatario}`);

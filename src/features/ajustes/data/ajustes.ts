@@ -97,6 +97,16 @@ export interface ConfigOperativa {
   localesAsociados: string;
   etiquetasInternas: string;
   colorPrimario: string;
+  /**
+   * Estilo BASE de redacción de correos con IA (Ajustes → Herramientas →
+   * Email). Se antepone siempre al prompt; cada usuario puede añadir el suyo
+   * encima (`usuario_preferencias.prefs["email.estiloIA"]`).
+   */
+  emailEstiloIA?: string;
+  /** Tono por defecto de la redacción con IA. Ya no se elige por correo. */
+  emailTonoIA?: string;
+  /** Longitud por defecto de la redacción con IA. */
+  emailLongitudIA?: string;
 }
 
 // ─── Telefonía ──────────────────────────────────────────────────
@@ -336,6 +346,7 @@ export function buildDefaultAjustes(empresaNombre: string): AjustesEmpresa {
       moneda: "EUR (€)", idioma: "Español", zonaHoraria: "Europe/Madrid",
       formatoFecha: "DD/MM/AAAA", primerDiaSemana: "Lunes",
       localesAsociados: "", etiquetasInternas: "", colorPrimario: "#3B82F6",
+      emailEstiloIA: "", emailTonoIA: "cercano", emailLongitudIA: "medio",
     },
     telefonia: {
       proveedor: "none",

@@ -10,6 +10,7 @@ import { TelefonoConfigPanel } from "@/features/ajustes/components/TelefonoConfi
 import { HoraSecundariaPanel } from "@/features/ajustes/components/HoraSecundariaPanel";
 import { ToolNotifPanel } from "@/features/ajustes/components/ToolNotifPanel";
 import { AplicacionesTab } from "@/features/ajustes/components/AplicacionesTab";
+import { EmailRedaccionPanel } from "@/features/ajustes/components/EmailRedaccionPanel";
 import { AccesosTab } from "@/features/ajustes/components/AccesosTab";
 import type { ToolNotifKey } from "@/features/ajustes/data/ajustes";
 import { HERRAMIENTAS, toolTextColor } from "@/features/layout/data/herramientas";
@@ -73,6 +74,13 @@ export function HerramientasTab() {
                   <AplicacionesTab />
                   <div className="border-t pt-4">
                     <ToolNotifPanel toolKey="aplicaciones" hasBadge={false} />
+                  </div>
+                </div>
+              ) : id === "email" ? (
+                <div className="space-y-6">
+                  <EmailRedaccionPanel />
+                  <div className="border-t pt-4">
+                    <ToolNotifPanel toolKey="email" hasBadge />
                   </div>
                 </div>
               ) : id === "accesos" ? (

@@ -59,6 +59,11 @@ import { GoogleAccountButton } from "./GoogleAccountButton";
 import { useGoogleConnection } from "./useGoogleConnection";
 import { sanitizeEmailHtml } from "@/shared/lib/sanitize-email-html";
 import { refreshDailyCounts } from "./useDailyCounts";
+import { loadUserPref, saveUserPref } from "@/shared/io/user-preferences";
+import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
+
+/** Clave del estilo personal de redacción en `usuario_preferencias.prefs`. */
+const PREF_ESTILO_IA = "email.estiloIA";
 
 type MensajeHilo = {
   id: string;
@@ -177,9 +182,6 @@ type ComposeState = {
 
 type AISugerencia = { asunto: string; cuerpo: string };
 
-type AITono = "profesional" | "cercano" | "directo" | "formal" | "amistoso";
-type AILongitud = "corto" | "medio" | "largo";
-
 type CarpetaSistemaId =
   | "inbox"
   | "destacados"
@@ -242,8 +244,32 @@ export function GmailDrawer({ children }: GmailDrawerProps) {
   const [aiSugerencia, setAiSugerencia] = useState<AISugerencia | null>(null);
   const [aiInstruccion, setAiInstruccion] = useState("");
   const [aiAbierto, setAiAbierto] = useState(false);
-  const [aiTono, setAiTono] = useState<AITono>("profesional");
-  const [aiLongitud, setAiLongitud] = useState<AILongitud>("medio");
+  // Estilo personal del usuario: se aplica ENCIMA del estilo de empresa
+  // (Ajustes → Herramientas → Email). Persiste en `usuario_preferencias`.
+  const [miEstilo, setMiEstilo] = useState("");
+  const [miEstiloAbierto, setMiEstiloAbierto] = useState(false);
+  const [miEstiloGuardando, setMiEstiloGuardando] = useState(false);
+
+  // Estilo BASE de la empresa (Ajustes → Herramientas → Email).
+  const { ajustes } = useEmpresa();
+  const estiloEmpresa = ajustes.configOperativa.emailEstiloIA ?? "";
+  const tonoEmpresa = ajustes.configOperativa.emailTonoIA ?? "cercano";
+  const longitudEmpresa = ajustes.configOperativa.emailLongitudIA ?? "medio";
+
+  useEffect(() => {
+    loadUserPref(PREF_ESTILO_IA).then((v) => setMiEstilo(v ?? ""));
+  }, []);
+
+  async function guardarMiEstilo() {
+    setMiEstiloGuardando(true);
+    try {
+      await saveUserPref(PREF_ESTILO_IA, miEstilo.trim());
+      setMiEstiloAbierto(false);
+      toast.success("Estilo guardado");
+    } finally {
+      setMiEstiloGuardando(false);
+    }
+  }
 
   const carpeta =
     filtro.tipo === "sistema" ? filtro.id : (`label:${filtro.id}` as string);
@@ -563,10 +589,12 @@ export function GmailDrawer({ children }: GmailDrawerProps) {
           asunto: compose.subject,
           destinatario: compose.to,
           modo,
-          tono: aiTono,
-          longitud: aiLongitud,
+          tono: tonoEmpresa,
+          longitud: longitudEmpresa,
           idioma: "es",
           instruccion: aiInstruccion,
+          estiloEmpresa,
+          estiloUsuario: miEstilo,
           emailOriginal: compose.emailOriginal,
         }),
       });
@@ -956,43 +984,43 @@ export function GmailDrawer({ children }: GmailDrawerProps) {
                     </div>
                     <button
                       type="button"
-                      onClick={() => setAiAbierto((v) => !v)}
+                      onClick={() => setMiEstiloAbierto((v) => !v)}
                       className="text-[11px] text-violet-700 hover:underline"
                     >
-                      {aiAbierto ? "Ocultar opciones" : "Mostrar opciones"}
+                      {miEstiloAbierto ? "Cerrar mi estilo" : "Mi estilo"}
                     </button>
                   </div>
 
-                  {aiAbierto && (
-                    <div className="mt-2 grid grid-cols-2 gap-2">
+                  {miEstiloAbierto && (
+                    <div className="mt-2 rounded-md border border-violet-200 bg-white p-2">
                       <label className="text-[10px] font-medium text-violet-900">
-                        Tono
-                        <select
-                          value={aiTono}
-                          onChange={(e) => setAiTono(e.target.value as AITono)}
-                          className="mt-0.5 w-full rounded border border-violet-200 bg-white px-2 py-1 text-[12px]"
-                        >
-                          <option value="profesional">Profesional</option>
-                          <option value="cercano">Cercano</option>
-                          <option value="directo">Directo</option>
-                          <option value="formal">Formal</option>
-                          <option value="amistoso">Amistoso</option>
-                        </select>
+                        Cómo quiero que escriba la IA por mí
                       </label>
-                      <label className="text-[10px] font-medium text-violet-900">
-                        Longitud
-                        <select
-                          value={aiLongitud}
-                          onChange={(e) =>
-                            setAiLongitud(e.target.value as AILongitud)
-                          }
-                          className="mt-0.5 w-full rounded border border-violet-200 bg-white px-2 py-1 text-[12px]"
+                      <textarea
+                        value={miEstilo}
+                        onChange={(e) => setMiEstilo(e.target.value)}
+                        rows={4}
+                        placeholder={
+                          "Escribo de tú y voy al grano.\n" +
+                          "Nada de fórmulas de cortesía largas.\n" +
+                          "Firmo como Iván."
+                        }
+                        className="mt-1 w-full rounded border border-violet-200 px-2 py-1.5 text-[12px] outline-none focus:border-violet-400"
+                      />
+                      <p className="mt-1 text-[10px] text-violet-700/80">
+                        Se suma al estilo de la empresa y se aplica a todos tus
+                        correos. Solo te afecta a ti.
+                      </p>
+                      <div className="mt-1.5 flex justify-end">
+                        <button
+                          type="button"
+                          onClick={guardarMiEstilo}
+                          disabled={miEstiloGuardando}
+                          className="rounded-full bg-violet-600 px-3 py-1 text-[11px] font-semibold text-white hover:bg-violet-700 disabled:opacity-60"
                         >
-                          <option value="corto">Corto</option>
-                          <option value="medio">Medio</option>
-                          <option value="largo">Largo</option>
-                        </select>
-                      </label>
+                          {miEstiloGuardando ? "Guardando…" : "Guardar"}
+                        </button>
+                      </div>
                     </div>
                   )}
 
