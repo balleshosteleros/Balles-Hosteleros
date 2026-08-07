@@ -55,13 +55,18 @@ export async function guardarPerfilCompleto(input: PerfilCompletoInput) {
   const err = validarPerfil(input);
   if (err) return { ok: false, error: err };
 
-  const { data: empleado } = await supabase
+  // Un trabajador en varias empresas tiene una ficha por empresa. Los datos
+  // personales (DNI, IBAN, dirección…) son de la PERSONA, así que se guardan en
+  // TODAS sus fichas: si no, quedaría completo en una empresa e incompleto en la
+  // otra. Antes se usaba `.maybeSingle()`, que con 2 fichas fallaba y hacía
+  // imposible completar el perfil.
+  const { data: fichas } = await supabase
     .from("empleados")
     .select("id, empresa_id")
-    .eq("user_id", user.id)
-    .maybeSingle();
+    .eq("user_id", user.id);
 
-  if (!empleado) return { ok: false, error: "No se encontró tu ficha de empleado" };
+  if (!fichas || fichas.length === 0) return { ok: false, error: "No se encontró tu ficha de empleado" };
+  const empleado = fichas[0];
 
   const ibanNorm = normalizarIban(input.iban);
   const dniNorm = input.dni_nie.toUpperCase().replace(/\s+/g, "").replace(/-/g, "");
@@ -86,7 +91,8 @@ export async function guardarPerfilCompleto(input: PerfilCompletoInput) {
       perfil_completado: true,
       perfil_completado_at: new Date().toISOString(),
     })
-    .eq("id", empleado.id);
+    // A TODAS sus fichas (una por empresa), no solo a una.
+    .in("id", fichas.map((f) => f.id as string));
 
   if (error) return { ok: false, error: error.message };
 
@@ -101,11 +107,14 @@ export async function uploadDocumentoEmpleado(input: {
   const { supabase, user } = await getCtx();
   if (!user) return { ok: false, error: "No autenticado" };
 
-  const { data: empleado } = await supabase
+  // Basta una ficha cualquiera (solo se usa para componer la ruta del archivo),
+  // pero con `.maybeSingle()` fallaba en quien tiene ficha en dos empresas.
+  const { data: fichasDoc } = await supabase
     .from("empleados")
     .select("id, empresa_id")
     .eq("user_id", user.id)
-    .maybeSingle();
+    .limit(1);
+  const empleado = fichasDoc?.[0];
 
   if (!empleado) return { ok: false, error: "No se encontró tu ficha de empleado" };
 

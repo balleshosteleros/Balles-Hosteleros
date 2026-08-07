@@ -37,14 +37,20 @@ export const getEmpleadoGuardStatus = cache(
     const { supabase, user } = await getCtx();
     if (!user) return { shouldShowWizard: false, hasUser: false };
 
-    const { data: empleado } = await supabase
+    // Un trabajador en VARIAS empresas tiene una ficha por empresa, así que aquí
+    // pueden venir 2+ filas. Con `.maybeSingle()` la consulta fallaba y devolvía
+    // null: el asistente NO se mostraba nunca y esas personas se quedaban sin
+    // rellenar sus datos indefinidamente. Se piden todas y basta con que UNA esté
+    // pendiente (los datos personales son de la persona, no de la empresa: al
+    // guardarlos se reflejan en sus fichas espejo).
+    const { data: fichas } = await supabase
       .from("empleados")
       .select("perfil_completado")
-      .eq("user_id", user.id)
-      .maybeSingle();
+      .eq("user_id", user.id);
 
-    if (!empleado) return { shouldShowWizard: false, hasUser: true };
-    return { shouldShowWizard: !empleado.perfil_completado, hasUser: true };
+    if (!fichas || fichas.length === 0) return { shouldShowWizard: false, hasUser: true };
+    const pendiente = fichas.some((f) => !f.perfil_completado);
+    return { shouldShowWizard: pendiente, hasUser: true };
   },
 );
 
@@ -65,7 +71,12 @@ export const getEmpleadoStatus = cache(async (): Promise<EmpleadoStatus> => {
     .select(
       "id, empresa_id, perfil_completado, nombre, apellidos, email_personal, telefono, dni_nie, fecha_nacimiento, direccion, iban, numero_ss, contacto_emergencia_nombre, contacto_emergencia_telefono, contacto_emergencia_relacion, talla_uniforme, alergias_medicas, avatar_url, dni_archivo_url"
     )
+    // Varias empresas = varias fichas. Se prioriza la que esté PENDIENTE, que es
+    // la que el asistente tiene que rellenar (con `.maybeSingle()` esto fallaba
+    // y el asistente no llegaba a mostrarse nunca).
     .eq("user_id", user.id)
+    .order("perfil_completado", { ascending: true })
+    .limit(1)
     .maybeSingle();
 
   if (!empleado) {
