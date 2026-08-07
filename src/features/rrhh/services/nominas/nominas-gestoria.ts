@@ -173,7 +173,16 @@ export async function procesarSubidaNominasGestoria(
   file: File,
 ): Promise<{ ok: true; resultado: ResultadoProceso } | { ok: false; error: string; status: number }> {
   if (!file || file.size === 0) return { ok: false, error: "Adjunta la nómina", status: 400 };
-  if (file.size > MAX_NOMINAS_BYTES) return { ok: false, error: "El archivo supera 25 MB", status: 400 };
+  if (file.size > MAX_NOMINAS_BYTES) {
+    const mb = Math.round(MAX_NOMINAS_BYTES / (1024 * 1024));
+    return {
+      ok: false,
+      error:
+        `El archivo supera ${mb} MB, que es el máximo que la lectura automática procesa de forma fiable. ` +
+        `Divide las nóminas en varios archivos y súbelos por separado.`,
+      status: 400,
+    };
+  }
   const mime = resolverMimeNomina(file);
   if (!mime) return { ok: false, error: "Formato no admitido (usa PDF, JPG, PNG o WebP)", status: 400 };
 

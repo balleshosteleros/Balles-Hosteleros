@@ -1,8 +1,8 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { UploadCloud, FileText, CheckCircle2, AlertTriangle, Loader2 } from "lucide-react";
-import { MAX_DOCUMENTO_MB, MAX_DOCUMENTO_BYTES } from "@/shared/lib/documentos";
+import { UploadCloud, FileText, CheckCircle2, AlertTriangle, Loader2, ShieldQuestion } from "lucide-react";
+import { MAX_NOMINAS_MB, MAX_NOMINAS_BYTES } from "@/shared/lib/documentos";
 
 interface Props {
   /** Endpoint POST al que se suben las nóminas. */
@@ -20,6 +20,8 @@ interface Resultado {
   guardadas: number;
   yaExistian: number;
   sinEmpleado: string[];
+  /** Volcadas correctamente, pero de trabajadores que ya constaban de baja. */
+  inactivos: { nombre: string; fechaBaja: string | null }[];
   mesIncorrecto: MesIncorrecto[];
   rechazadoTodo: boolean;
 }
@@ -28,6 +30,13 @@ const MESES_ES = [
   "enero", "febrero", "marzo", "abril", "mayo", "junio",
   "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
 ];
+
+/** "2026-07-31" → "31/07/2026". Fecha pura (sin hora): se parte el texto, no se
+ *  construye un Date, para que no la desplace ninguna zona horaria. */
+function fechaCorta(iso: string): string {
+  const [y, m, d] = (iso ?? "").split("-");
+  return y && m && d ? `${d}/${m}/${y}` : iso;
+}
 
 function nombreMesCorto(periodo: string): string {
   const [y, m] = (periodo ?? "").split("-");
@@ -60,8 +69,13 @@ export function SubirNominasView({ endpoint, empresaNombre, mesLabel }: Props) {
       setError("Formato no admitido. Usa un PDF (recomendado) o una imagen.");
       return;
     }
-    if (f.size > MAX_DOCUMENTO_BYTES) {
-      setError(`El archivo supera ${MAX_DOCUMENTO_MB} MB.`);
+    // Tope de la LECTURA por IA (no el de documentos): más allá, el modelo no
+    // procesa el archivo de forma fiable. Se avisa aquí para no hacerle esperar
+    // una subida que el servidor va a rechazar igualmente.
+    if (f.size > MAX_NOMINAS_BYTES) {
+      setError(
+        `El archivo supera ${MAX_NOMINAS_MB} MB. Divide las nóminas en varios archivos y súbelos por separado.`,
+      );
       return;
     }
     setFile(f);
@@ -82,6 +96,7 @@ export function SubirNominasView({ endpoint, empresaNombre, mesLabel }: Props) {
           guardadas: json.guardadas ?? 0,
           yaExistian: json.yaExistian ?? 0,
           sinEmpleado: json.sinEmpleado ?? [],
+          inactivos: json.inactivos ?? [],
           mesIncorrecto: json.mesIncorrecto ?? [],
           rechazadoTodo: json.rechazadoTodo ?? false,
         });
@@ -119,10 +134,11 @@ export function SubirNominasView({ endpoint, empresaNombre, mesLabel }: Props) {
             <div className="flex items-start gap-2">
               <AlertTriangle className="h-5 w-5 text-rose-600 shrink-0 mt-0.5" />
               <div className="text-sm text-rose-900">
-                <p className="font-semibold">El archivo tiene errores · NO se ha subido nada</p>
+                <p className="font-semibold">No se ha podido subir · NO se ha guardado nada</p>
                 <p className="mt-1">
                   Para evitar cargar datos incorrectos, <b>no se ha volcado ninguna nómina</b>.
-                  Corrige los siguientes puntos y vuelve a subir el archivo <b>completo</b>:
+                  Revisa los puntos que se indican abajo y vuelve a subir el archivo <b>completo</b>.
+                  Si no puedes resolverlo, <b>contacta con el departamento de RRHH de la empresa</b>.
                 </p>
               </div>
             </div>
@@ -146,6 +162,42 @@ export function SubirNominasView({ endpoint, empresaNombre, mesLabel }: Props) {
                 </p>
                 <p className="mt-2 text-xs text-emerald-700">
                   Puedes seguir subiendo más archivos si te faltan.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Trabajadores ya dados de baja: SÍ se han volcado. Solo comprobación. */}
+        {resultado && !resultado.rechazadoTodo && resultado.inactivos.length > 0 && (
+          <div className="mt-4 rounded-xl border border-sky-200 bg-sky-50 p-4">
+            <div className="flex items-start gap-2">
+              <ShieldQuestion className="h-5 w-5 text-sky-600 shrink-0 mt-0.5" />
+              <div className="text-sm text-sky-900">
+                <p className="font-semibold">
+                  Comprueba {resultado.inactivos.length === 1 ? "esta nómina" : `estas ${resultado.inactivos.length} nóminas`}
+                </p>
+                <p className="mt-1">
+                  Se {resultado.inactivos.length === 1 ? "ha volcado" : "han volcado"} <b>correctamente</b>, no hay que
+                  hacer nada más. Solo te avisamos por precaución:{" "}
+                  {resultado.inactivos.length === 1 ? "este trabajador figura ya" : "estos trabajadores figuran ya"} de baja
+                  en el sistema.
+                </p>
+                <ul className="mt-2 space-y-1 list-disc list-inside">
+                  {resultado.inactivos.map((x, i) => (
+                    <li key={i}>
+                      {x.nombre}
+                      {x.fechaBaja ? (
+                        <> — fin de contrato el <b>{fechaCorta(x.fechaBaja)}</b></>
+                      ) : (
+                        <> — sin fecha de fin de contrato registrada</>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+                <p className="mt-2 text-xs text-sky-700">
+                  Es lo habitual cuando la baja es a final de mes y la nómina se envía el día 1: el trabajador
+                  cobra el periodo que sí trabajó. Si es el caso, todo correcto. Si no lo esperabas, avisa a la empresa.
                 </p>
               </div>
             </div>
@@ -185,19 +237,31 @@ export function SubirNominasView({ endpoint, empresaNombre, mesLabel }: Props) {
               <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
               <div className="text-sm text-amber-900">
                 <p className="font-semibold">
-                  {resultado.sinEmpleado.length} nómina
+                  No se puede subir: {resultado.sinEmpleado.length} nómina
                   {resultado.sinEmpleado.length === 1 ? "" : "s"} sin trabajador
                 </p>
                 <p className="mt-1">
-                  Est{resultado.sinEmpleado.length === 1 ? "e trabajador no está dado" : "os trabajadores no están dados"} de
-                  alta en el sistema, así que no se {resultado.sinEmpleado.length === 1 ? "ha" : "han"} podido asignar.
-                  Avisa a la empresa para que {resultado.sinEmpleado.length === 1 ? "lo dé" : "los dé"} de alta y vuelve a subir el archivo:
+                  Est{resultado.sinEmpleado.length === 1 ? "e trabajador no figura" : "os trabajadores no figuran"} en
+                  la base de datos de la empresa (ni en activo ni como baja anterior), así que no hay a quién
+                  asignar {resultado.sinEmpleado.length === 1 ? "su nómina" : "sus nóminas"}:
                 </p>
                 <ul className="mt-2 space-y-1 list-disc list-inside">
                   {resultado.sinEmpleado.map((x, i) => (
                     <li key={i}>{x}</li>
                   ))}
                 </ul>
+                <p className="mt-2 text-sm text-amber-900">
+                  <b>No se permitirá subir este archivo</b> mientras haya alguna nómina sin trabajador
+                  asignado: no se vuelca <b>ninguna</b>, para no cargar el mes a medias.
+                </p>
+                <p className="mt-2 text-sm text-amber-900">
+                  <b>Ponte en contacto con el departamento de RRHH de la empresa</b> para que lo revisen:
+                  o dan de alta al trabajador, o te confirman que esa nómina no debe enviarse.
+                </p>
+                <p className="mt-2 text-xs text-amber-800">
+                  Si crees que es un error de lectura (nombre o DNI mal reconocidos), corrígelo y vuelve a
+                  subir el archivo completo.
+                </p>
               </div>
             </div>
           </div>

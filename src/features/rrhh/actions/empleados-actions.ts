@@ -735,10 +735,12 @@ export async function setEmpleadoEstado(input: {
     const { supabase } = await getAppContext();
     // La fecha de baja queda siempre reflejada: al reactivar (Activo) NO se borra,
     // se conserva como historico de la ultima baja.
-    const patch: Record<string, unknown> = {
-      estado: input.estado,
-      fecha_baja: input.fechaBaja ?? null,
-    };
+    const patch: Record<string, unknown> = { estado: input.estado };
+    // Solo se escribe cuando viene informada. Antes se ponía `?? null` siempre, así
+    // que reactivar a alguien (Activo, sin fechaBaja) BORRABA el histórico de su
+    // última baja — justo lo contrario de lo que dice el comentario de arriba. Esa
+    // fecha es ahora el dato que sostiene el aviso de nóminas de ex-empleados.
+    if (input.fechaBaja) patch.fecha_baja = input.fechaBaja;
 
     const { error } = await supabase.from("empleados").update(patch).eq("id", input.id);
     if (error) throw error;

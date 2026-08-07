@@ -74,6 +74,39 @@ export async function setPuestosDeEmpleado(
     const nuevos = Array.from(new Set(puestoIds.filter(Boolean)));
     const principal = principalId && nuevos.includes(principalId) ? principalId : nuevos[0] ?? null;
 
+    // AISLAMIENTO POR EMPRESA (defensa en profundidad).
+    //
+    // Hoy no hay fuga: un trabajador en varias empresas tiene una FICHA POR
+    // EMPRESA con id distinto, el selector solo ofrece puestos de la empresa
+    // activa y las escrituras filtran por `empleado_id`. Pero `empleado_puestos`
+    // NO tiene columna `empresa_id`, así que ese aislamiento depende por completo
+    // de que el id que llega sea el correcto: si alguien invocara esta acción con
+    // el id de la ficha de OTRA empresa (es una server action, alcanzable desde
+    // el navegador), nada lo impediría. Se comprueba explícitamente.
+    const { data: fichaEmp } = await supabase
+      .from("empleados")
+      .select("empresa_id")
+      .eq("id", empleadoId)
+      .maybeSingle();
+    if (!fichaEmp) return { ok: false, error: "Empleado no encontrado" };
+    if ((fichaEmp.empresa_id as string) !== empresaId) {
+      return { ok: false, error: "Ese empleado no pertenece a la empresa activa" };
+    }
+
+    // Y los puestos asignados deben ser de esta misma empresa.
+    if (nuevos.length) {
+      const { data: pEmp } = await supabase
+        .from("puestos")
+        .select("id")
+        .in("id", nuevos)
+        .eq("empresa_id", empresaId);
+      const validos = new Set(((pEmp ?? []) as { id: string }[]).map((p) => p.id));
+      const ajenos = nuevos.filter((id) => !validos.has(id));
+      if (ajenos.length) {
+        return { ok: false, error: "Alguno de los puestos no pertenece a la empresa activa" };
+      }
+    }
+
     // Puestos actuales
     const { data: actualesRaw } = await supabase
       .from("empleado_puestos")

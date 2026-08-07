@@ -73,6 +73,9 @@ export async function POST(req: Request, ctx: { params: Promise<{ token: string 
       guardadas: r.guardadas,
       yaExistian: r.yaExistian,
       sinEmpleado: r.sinEmpleado,
+      // Aviso de precaución: SÍ se han volcado, pero el trabajador ya constaba de
+      // baja el día de subirlas. La gestoría solo confirma que es correcto.
+      inactivos: r.inactivos,
       // Rechazadas por pertenecer a un mes distinto al solicitado.
       mesIncorrecto: r.mesIncorrecto,
       // El archivo tiene errores → NO se ha subido NADA; hay que corregir y resubir.

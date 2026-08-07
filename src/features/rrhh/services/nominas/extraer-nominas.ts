@@ -22,8 +22,11 @@ export { GeminiKeyMissingError };
 
 // Límite del ANÁLISIS por IA (Gemini), no de la subida: el archivo puede
 // guardarse hasta 50 MB (tope de documentos), pero para la extracción automática
-// mantenemos 25 MB para no exceder lo que el modelo procesa de forma fiable.
-export const MAX_NOMINAS_BYTES = 25 * 1024 * 1024;
+// se mantiene más bajo para no exceder lo que el modelo procesa de forma fiable.
+// Fuente única en `shared/lib/documentos` para que la pantalla de subida (cliente)
+// pueda avisar antes de subir: este módulo es `server-only`.
+export { MAX_NOMINAS_BYTES, MAX_NOMINAS_MB } from "@/shared/lib/documentos";
+import { MAX_NOMINAS_BYTES } from "@/shared/lib/documentos";
 const MAX_PAGINAS = 200; // salvaguarda: un mes de nóminas no llega a esto
 // Gemini lee PDF de forma nativa además de las imágenes habituales.
 export const TIPOS_NOMINA_OK = new Set([

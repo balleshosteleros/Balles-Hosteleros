@@ -24,6 +24,12 @@ import {
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
+// Leer un PDF con TODAS las nóminas del mes es lento: se parte en páginas y cada
+// una pasa por la IA en tandas de 5. Una empresa de 60 empleados ronda el minuto;
+// el tope de 200 páginas, unos 3 minutos. Sin este margen se cortaría a mitad y se
+// perderían las nóminas ya leídas. Mismo valor que el enlace de la gestoría
+// (`/api/gestoria/nominas/[token]`), que hace exactamente el mismo trabajo.
+export const maxDuration = 300;
 
 export async function POST(req: Request) {
   try {
@@ -39,7 +45,16 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, error: "Falta el archivo" }, { status: 400 });
     }
     if (archivo.size > MAX_NOMINAS_BYTES) {
-      return NextResponse.json({ ok: false, error: "El archivo supera 25MB" }, { status: 400 });
+      const mb = Math.round(MAX_NOMINAS_BYTES / (1024 * 1024));
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            `El archivo supera ${mb} MB, que es el máximo que la lectura automática procesa de forma fiable. ` +
+            `Divídelo en varios archivos (por ejemplo, la mitad de las nóminas en cada uno) y súbelos por separado.`,
+        },
+        { status: 400 },
+      );
     }
     const tipo = resolverMimeNomina(archivo);
     if (!tipo) {

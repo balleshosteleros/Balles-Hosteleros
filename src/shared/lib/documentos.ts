@@ -8,6 +8,14 @@
 export const MAX_DOCUMENTO_MB = 50;
 export const MAX_DOCUMENTO_BYTES = MAX_DOCUMENTO_MB * 1024 * 1024;
 
+// Tope del ANÁLISIS por IA de nóminas (lectura con visión), MÁS BAJO que el de
+// documentos: guardar un PDF de 50 MB es viable, pero por encima de esto el modelo
+// no lo procesa de forma fiable. Vive aquí —y no en el servicio, que es
+// `server-only`— para que la pantalla de subida pueda avisar ANTES de subir en vez
+// de que el servidor lo rechace después.
+export const MAX_NOMINAS_MB = 25;
+export const MAX_NOMINAS_BYTES = MAX_NOMINAS_MB * 1024 * 1024;
+
 // Tope de IMÁGENES sueltas y ficheros ligeros: avatar, logos (app y empresa),
 // fotos de carta/inspección/cata, y CV de candidatos. Se mantiene bajo a
 // propósito (10 MB) para no tener muchos valores distintos y proteger la cuota

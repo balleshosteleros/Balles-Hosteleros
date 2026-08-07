@@ -11,10 +11,10 @@ export const runtime = "nodejs";
  * Envío automático a la gestoría del enlace para subir las nóminas del mes.
  *
  * Corre cada hora. Para cada empresa con el envío ACTIVO y correo de gestoría,
- * comprueba si AHORA (en la zona horaria de la empresa) es el día del mes
- * configurado (`nominas_gestoria_dia_envio`, por defecto el 1) y estamos en la
- * franja de las 00:00 (medianoche local). Si lo es y no se envió ya ese mes
- * (`nominas_gestoria_ultimo_envio`), crea el token del periodo y manda el correo.
+ * comprueba si HOY (en la zona horaria de la empresa) es el día del mes
+ * configurado (`nominas_gestoria_dia_envio`, por defecto el 1). Si lo es y no se
+ * envió ya ese mes (`nominas_gestoria_ultimo_envio`, que garantiza un único envío
+ * mensual), crea el token del periodo y manda el correo.
  * El enlace lleva a `/gestoria/nominas/<token>`, donde la gestoría sube las
  * nóminas y la IA las vuelca a `rrhh_pagos`.
  */
@@ -44,17 +44,19 @@ export async function GET(request: Request) {
     // "Ahora" en la zona de la empresa: fecha local y minutos del día. Así el
     // correo sale a las 00:00 HORA DE LA EMPRESA, no del servidor (PRP-069).
     const tz = await getZonaHorariaEmpresa(admin, empresaId);
-    const { fecha, minutos } = ahoraEnZona(tz); // fecha "YYYY-MM-DD"
+    const { fecha } = ahoraEnZona(tz); // fecha "YYYY-MM-DD"
     const [anio, mes, dia] = fecha.split("-");
     const periodo = `${anio}-${mes}`;
     const diaMes = Number(dia);
 
     const diaEnvio = (e.nominas_gestoria_dia_envio as number) ?? 1;
     if (diaMes !== diaEnvio) continue;
-    // Solo en la franja de medianoche (00:00–00:59) de la empresa: el cron corre
-    // cada hora, esto lo restringe a una única franja del día.
-    if (minutos >= 60) continue;
-    // Ya enviado este mes (idempotencia frente al cron horario).
+    // NO se restringe a la franja de medianoche local. Los crons de Vercel solo
+    // disparan en horas EN PUNTO UTC, que en un huso como Europe/Madrid (+1/+2)
+    // caen a las 01:00/02:00 locales: la condición "00:00–00:59 local" no se
+    // cumplía jamás y el correo del día 1 no llegaba nunca a la gestoría.
+    // Basta con que sea el día configurado; de no repetir envío ya se encarga
+    // `ultimo_envio`, que es el control de idempotencia real.
     if ((e.nominas_gestoria_ultimo_envio as string | null) === periodo) continue;
 
     const res = await enviarSolicitudNominasGestoria(admin, empresaId, periodo);
