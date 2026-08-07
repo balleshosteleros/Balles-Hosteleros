@@ -43,13 +43,12 @@ los propios papeles (tus propuestas de la mesa — muy bien eso).
    equivalencia 6 creado, y el albarán re-confirmado: ahora suma **+12 botellas** con el
    snapshot correcto (2 × 6). De paso quedó validado en vivo TODO el circuito de
    equivalencias que faltaba por probar.
-2. **PARA TU AGENTE (grave) — crear producto desde el asistente lo crea en la empresa
-   EQUIVOCADA.** `createProducto` usa la empresa de la ficha del usuario
-   (`getUserEmpresaId`, `producto-actions.ts:263`) en vez de la empresa ACTIVA como el resto
-   de acciones: trabajando en HABANA me creó el producto en BACANAL (limpiado). Cualquiera
-   que trabaje en la empresa que no es "la suya" mete productos donde no toca sin enterarse.
-   El fix es usar `getLogisticaContext()` ahí (y revisar el resto de usos de
-   `getUserEmpresaId` en ese fichero).
+2. **ARREGLADO — crear producto lo creaba en la empresa EQUIVOCADA.** `createProducto` (y
+   la importación masiva de productos) usaban la empresa de la FICHA del usuario en vez de
+   la empresa ACTIVA del selector: trabajando en HABANA me creó el producto en BACANAL
+   (limpiado). Corregido en `producto-actions.ts`: ambas usan ya `getLogisticaContext()`
+   como el resto de acciones, y el helper defectuoso (`getUserEmpresaId`) está eliminado
+   para que nadie lo reutilice. Typecheck y lint verdes.
 3. **PARA TU AGENTE (grave) — empresa activa desincronizada tras volver a entrar.** Tras
    re-login, el botón de arriba decía HABANA pero el servidor seguía en BACANAL: el análisis
    del albarán casó contra el catálogo equivocado. Y pulsar HABANA no lo arregla (el cliente

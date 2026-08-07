@@ -134,16 +134,6 @@ async function requireManagement() {
   return user;
 }
 
-async function getUserEmpresaId(userId: string): Promise<string | null> {
-  const supabase = await createClient();
-  const { data } = await supabase
-    .from("usuarios")
-    .select("empresa_id")
-    .eq("user_id", userId)
-    .single();
-  return (data as { empresa_id: string | null } | null)?.empresa_id ?? null;
-}
-
 // Cada producto de venta debe tener su escandallo (1:1 por nombre + empresa).
 // Si ya existe uno con el mismo nombre, no duplica. Si la creación falla, NO
 // rompemos el alta del producto: el escandallo se puede crear manualmente luego.
@@ -260,10 +250,10 @@ export async function createProducto(
       return { error: parsed.error.issues[0]?.message ?? "Datos inválidos" };
     }
 
-    const empresaId = await getUserEmpresaId(user.id);
+    // La empresa ACTIVA del selector, no la de la ficha del usuario: en multi-empresa
+    // difieren y el producto acababa en la empresa equivocada (lote 07-ago-2026).
+    const { supabase, empresaId } = await getLogisticaContext();
     if (!empresaId) return { error: "No tienes empresa asignada" };
-
-    const { supabase } = await getLogisticaContext();
     const { data: inserted, error } = await supabase
       .from("productos")
       .insert({
@@ -364,7 +354,8 @@ export async function bulkImportProductos(
       return { error: "Máximo 5000 productos por importación" };
     }
 
-    const empresaId = await getUserEmpresaId(user.id);
+    // Igual que en createProducto: la empresa ACTIVA del selector, no la de la ficha.
+    const { empresaId } = await getLogisticaContext();
     if (!empresaId) return { error: "No tienes empresa asignada" };
 
     // Validar cada fila
