@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Download, Eye, EyeOff, Globe, Link2, Loader2, Sparkles } from "lucide-react";
+import { ArrowLeft, Eye, Globe, Loader2, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { useEditorStore } from "../../../hooks/useEditorStore";
@@ -14,9 +14,7 @@ import { BloqueLibrary } from "./BloqueLibrary";
 import { Canvas } from "./Canvas";
 import { PropiedadesPanel } from "./PropiedadesPanel";
 import { AutosaveIndicator } from "./AutosaveIndicator";
-import { PreviewPane } from "./PreviewPane";
 import { ChatWebPane } from "./ChatWebPane";
-import { ImportarDeUrlDialog } from "./ImportarDeUrlDialog";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 
 interface Props {
@@ -29,12 +27,11 @@ export function EditorShell({ paginaId }: Props) {
   const reset = useEditorStore((s) => s.reset);
   const nombre = useEditorStore((s) => s.nombre);
   const bloques = useEditorStore((s) => s.bloques);
+  const seleccionadoId = useEditorStore((s) => s.seleccionadoId);
   const [loading, setLoading] = useState(true);
-  const [showPreview, setShowPreview] = useState(false);
   const [showChat, setShowChat] = useState(false);
   const [estadoPagina, setEstadoPagina] = useState<"BORRADOR" | "PUBLICADA" | "ARCHIVADA">("BORRADOR");
   const [publicando, setPublicando] = useState(false);
-  const [showImportar, setShowImportar] = useState(false);
   const { estado: estadoAutosave, ultimoGuardado } = useAutosave(paginaId);
 
   // Emitir bloques por BroadcastChannel al iframe de preview
@@ -82,14 +79,10 @@ export function EditorShell({ paginaId }: Props) {
         <span className="font-medium text-sm truncate">{nombre}</span>
         <AutosaveIndicator estado={estadoAutosave} ultimoGuardado={ultimoGuardado} zonaHoraria={empresaActual.zonaHoraria} />
         <div className="ml-auto flex items-center gap-2">
-          <Button variant="ghost" size="sm" onClick={() => setShowImportar(true)}>
-            <Download className="h-4 w-4 mr-1" /> Importar URL
-          </Button>
-          <Link href={`/marketing/pagina-web/${paginaId}/dominios`}>
-            <Button variant="ghost" size="sm">
-              <Link2 className="h-4 w-4 mr-1" /> Dominios
-            </Button>
-          </Link>
+          {/* Importar desde una web existente vive DENTRO del asistente: es una
+              tarea de IA, no un botón suelto de la barra.
+              La dirección web es de la EMPRESA, no de una página suelta: se
+              gestiona en Ajustes › Departamentos › Marketing › Página web. */}
           <Button
             variant={showChat ? "default" : "outline"}
             size="sm"
@@ -98,20 +91,17 @@ export function EditorShell({ paginaId }: Props) {
           >
             <Sparkles className="h-4 w-4 mr-1" /> Asistente
           </Button>
+          {/* Ver la web: pestaña nueva y a pantalla completa. Un panel lateral
+              estrecho no deja juzgar cómo queda de verdad. */}
           <Button
-            variant={showPreview ? "default" : "outline"}
+            variant="outline"
             size="sm"
-            onClick={() => setShowPreview((v) => !v)}
+            onClick={() =>
+              window.open(`/pagina-web-preview/${paginaId}`, "_blank", "noopener,noreferrer")
+            }
+            title="Ver la web a pantalla completa en una pestaña nueva"
           >
-            {showPreview ? (
-              <>
-                <EyeOff className="h-4 w-4 mr-1" /> Ocultar preview
-              </>
-            ) : (
-              <>
-                <Eye className="h-4 w-4 mr-1" /> Preview
-              </>
-            )}
+            <Eye className="h-4 w-4 mr-1" /> Ver
           </Button>
           {estadoPagina === "PUBLICADA" ? (
             <Button
@@ -153,29 +143,19 @@ export function EditorShell({ paginaId }: Props) {
         </div>
       </header>
 
-      {/* 3 columnas + preview opcional + asistente opcional */}
+      {/* Propiedades solo cuando hay bloque seleccionado: una columna vacía
+          permanente come un tercio de la pantalla sin aportar nada.
+          El asistente, si está abierto, ocupa ese mismo hueco. */}
       <div className="flex flex-1 overflow-hidden">
         <BloqueLibrary />
         <Canvas />
-        {showPreview ? (
-          <PreviewPane paginaId={paginaId} onCerrar={() => setShowPreview(false)} />
-        ) : (
-          !showChat && <PropiedadesPanel />
-        )}
-        {showChat && (
+        {showChat ? (
           <ChatWebPane paginaId={paginaId} onCerrar={() => setShowChat(false)} />
+        ) : (
+          seleccionadoId && <PropiedadesPanel />
         )}
       </div>
 
-      <ImportarDeUrlDialog
-        open={showImportar}
-        onOpenChange={setShowImportar}
-        paginaId={paginaId}
-        onImported={async () => {
-          const r = await obtenerPagina(paginaId);
-          if (r.ok) hydrate(r.data);
-        }}
-      />
     </div>
   );
 }

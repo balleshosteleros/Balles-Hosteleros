@@ -9,7 +9,7 @@
  */
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { Loader2, Send, Sparkles, Undo2, X } from "lucide-react";
+import { Download, Loader2, Send, Sparkles, Undo2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useEditorStore } from "../../../hooks/useEditorStore";
@@ -18,6 +18,7 @@ import {
   deshacerUltimoCambioChat,
   enviarMensajeChatWeb,
 } from "../../../actions/chat-web-actions";
+import { ImportarDeUrlDialog } from "./ImportarDeUrlDialog";
 
 interface Props {
   paginaId: string;
@@ -48,6 +49,7 @@ export function ChatWebPane({ paginaId, onCerrar }: Props) {
   const [texto, setTexto] = useState("");
   const [enviando, setEnviando] = useState(false);
   const [puedeDeshacer, setPuedeDeshacer] = useState(false);
+  const [showImportar, setShowImportar] = useState(false);
   const finRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -164,6 +166,14 @@ export function ChatWebPane({ paginaId, onCerrar }: Props) {
                 {s}
               </button>
             ))}
+            <button
+              type="button"
+              onClick={() => setShowImportar(true)}
+              className="flex w-full items-center gap-2 text-left text-xs rounded-md border bg-background px-3 py-2 hover:bg-muted/60 text-muted-foreground"
+            >
+              <Download className="h-3.5 w-3.5 shrink-0" />
+              Copiar el contenido de una web que ya tengo
+            </button>
           </div>
         )}
 
@@ -207,6 +217,23 @@ export function ChatWebPane({ paginaId, onCerrar }: Props) {
           pulses Publicar.
         </p>
       </div>
+
+      <ImportarDeUrlDialog
+        open={showImportar}
+        onOpenChange={setShowImportar}
+        paginaId={paginaId}
+        onImported={async () => {
+          await refrescarLienzo();
+          setMensajes((prev) => [
+            ...prev,
+            {
+              rol: "assistant",
+              texto:
+                "He traído el contenido de esa web. Revísalo y dime qué quieres cambiar.",
+            },
+          ]);
+        }}
+      />
     </div>
   );
 }
