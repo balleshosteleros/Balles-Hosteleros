@@ -63,6 +63,13 @@ interface Props {
   /** El motivo es obligatorio (PRP-074 F4): nada queda fuera en silencio. */
   onIgnorar: (motivo: string) => Promise<void> | void;
   busy?: boolean;
+  /**
+   * Si en la mesa de incidencias ya se decidió "crear producto nuevo", el diálogo abre
+   * directamente en el formulario de crear en vez de obligar a rehacer la decisión.
+   */
+  modoInicial?: "elegir" | "crear";
+  /** IVA leído del albarán (p.ej. "21"), para prerrellenar el formulario de crear. */
+  ivaInicial?: string | null;
 }
 
 type Modo = "elegir" | "crear";
@@ -90,8 +97,10 @@ export function ResolverLineaDialog({
   onCrear,
   onIgnorar,
   busy,
+  modoInicial,
+  ivaInicial,
 }: Props) {
-  const [modo, setModo] = useState<Modo>("elegir");
+  const [modo, setModo] = useState<Modo>(modoInicial ?? "elegir");
   const [busqueda, setBusqueda] = useState("");
 
   // PRP-074 F4 — búsqueda sobre TODO el catálogo, no solo los ≤6 candidatos del
@@ -137,7 +146,13 @@ export function ResolverLineaDialog({
   const [nombre, setNombre] = useState(linea.nombre);
   const [categoria, setCategoria] = useState(categorias[0] ?? "");
   const [proveedor, setProveedor] = useState(proveedorAlbaran);
-  const [iva, setIva] = useState<string>(IVA_OPCIONES[IVA_OPCIONES.length - 1]);
+  const [iva, setIva] = useState<string>(() => {
+    // Prerrelleno con el IVA leído del albarán ("21" → "21%") si es una opción válida.
+    const leido = ivaInicial != null ? `${String(ivaInicial).replace("%", "").trim()}%` : null;
+    return leido && (IVA_OPCIONES as readonly string[]).includes(leido)
+      ? leido
+      : IVA_OPCIONES[IVA_OPCIONES.length - 1];
+  });
   const [precio, setPrecio] = useState(
     linea.precioUnitario != null ? String(linea.precioUnitario).replace(".", ",") : "",
   );

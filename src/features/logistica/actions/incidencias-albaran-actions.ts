@@ -39,6 +39,9 @@ export interface IncidenciaPersistida extends Incidencia {
   id: string;
   estado: EstadoIncidencia;
   motivo: string | null;
+  /** La decisión humana registrada (si ya se decidió): permite retomar la intención
+   *  — p.ej. "crear producto" elegido en la mesa — al abrir el albarán en Revisión. */
+  decision?: { accion: string; payload?: Record<string, unknown> } | null;
 }
 
 export type ResultadoMesa =
@@ -276,8 +279,49 @@ async function ejecutarEfectosDecision(
   empresaId: string,
   userId: string,
   d: DecisionIncidencia,
-): Promise<void> {
+): Promise<{ productoId: string; productoNombre: string } | void> {
   const p = d.payload ?? {};
+
+  // "crear_gasto" (línea de servicio: portes, punto verde…) trae TODO lo necesario
+  // (nombre, categoría "Gastos", sin control de stock), así que aquí sí se puede crear
+  // el producto de verdad — a diferencia de "crear" mercancía, que necesita categoría
+  // humana y se difiere al asistente. Devuelve el producto para que el cliente ligue
+  // la línea sin pasos extra (antes había que ignorarla a mano, línea a línea).
+  if (d.accion === "crear_gasto") {
+    const nombre = String(p.nombre ?? "").trim();
+    if (!nombre) return;
+
+    const { data: existente } = await supabase
+      .from("productos")
+      .select("id, nombre")
+      .eq("empresa_id", empresaId)
+      .eq("tipo", "compra")
+      .ilike("nombre", nombre)
+      .limit(1)
+      .maybeSingle();
+    if (existente) return { productoId: existente.id as string, productoNombre: existente.nombre as string };
+
+    const { data: creado, error } = await supabase
+      .from("productos")
+      .insert({
+        empresa_id: empresaId,
+        tipo: "compra",
+        nombre,
+        categoria: String(p.categoria ?? "Gastos"),
+        estado: "Activo",
+        controla_stock: false,
+        medida: "Unidades",
+        created_by: userId,
+      })
+      .select("id, nombre")
+      .single();
+    if (error || !creado) {
+      console.error("[incidencias-albaran] crear_gasto:", error?.message);
+      return;
+    }
+    return { productoId: creado.id as string, productoNombre: creado.nombre as string };
+  }
+
   if (d.accion !== "aceptar_equivalencia" && d.accion !== "escribir_equivalencia") return;
 
   const equivalencia = Number(p.equivalencia);
@@ -353,15 +397,25 @@ async function ejecutarEfectosDecision(
  */
 export async function decidirIncidencias(
   decisiones: DecisionIncidencia[],
-): Promise<{ ok: true; resueltas: number } | { ok: false; error: string }> {
+): Promise<
+  | {
+      ok: true;
+      resueltas: number;
+      /** Productos creados por efectos de decisión (p.ej. crear_gasto), por incidencia:
+       *  el cliente los usa para ligar la línea sin que el usuario repita el trabajo. */
+      efectos: Record<string, { productoId: string; productoNombre: string }>;
+    }
+  | { ok: false; error: string }
+> {
   const { supabase, userId, empresaId } = await getLogisticaContext();
   if (!userId || !empresaId) {
     return { ok: false, error: "Sesión caducada o sin empresa activa. Vuelve a entrar." };
   }
-  if (decisiones.length === 0) return { ok: true, resueltas: 0 };
+  if (decisiones.length === 0) return { ok: true, resueltas: 0, efectos: {} };
 
   const ahora = new Date().toISOString();
   let resueltas = 0;
+  const efectos: Record<string, { productoId: string; productoNombre: string }> = {};
 
   for (const d of decisiones) {
     const conMotivo = typeof d.motivo === "string" && d.motivo.trim() !== "";
@@ -394,7 +448,8 @@ export async function decidirIncidencias(
     // lote: la decisión queda registrada y el efecto se puede reintentar/aplicar a mano.
     if (estado !== "descartada") {
       try {
-        await ejecutarEfectosDecision(supabase, empresaId, userId, d);
+        const efecto = await ejecutarEfectosDecision(supabase, empresaId, userId, d);
+        if (efecto) efectos[d.incidenciaId] = efecto;
       } catch (err) {
         console.error("[incidencias-albaran] efecto de decisión:", err);
       }
@@ -402,7 +457,7 @@ export async function decidirIncidencias(
     resueltas++;
   }
 
-  return { ok: true, resueltas };
+  return { ok: true, resueltas, efectos };
 }
 
 /**
@@ -443,7 +498,7 @@ export async function listarIncidenciasAlbaran(
 
   const { data, error } = await supabase
     .from("albaran_incidencias")
-    .select("id, linea_id, tipo, severidad, detalle, propuesta, estado, motivo")
+    .select("id, linea_id, tipo, severidad, detalle, propuesta, estado, motivo, decision")
     .eq("albaran_id", albaranId)
     .eq("empresa_id", empresaId)
     .order("created_at", { ascending: true });
@@ -470,6 +525,7 @@ export async function listarIncidenciasAlbaran(
       detalle: (row.detalle ?? {}) as Record<string, unknown>,
       estado: row.estado as EstadoIncidencia,
       motivo: (row.motivo as string) ?? null,
+      decision: (row.decision as IncidenciaPersistida["decision"]) ?? null,
     };
   });
 

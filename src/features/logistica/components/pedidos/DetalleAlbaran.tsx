@@ -19,6 +19,7 @@ import {
   type LineaEmparejada,
 } from "@/features/logistica/actions/asistente-albaran-actions";
 import { listCategoriasProducto } from "@/features/logistica/actions/categorias-producto-actions";
+import { listarIncidenciasAlbaran } from "@/features/logistica/actions/incidencias-albaran-actions";
 import { AsistenteAlbaranPanel } from "@/features/logistica/components/albaranes/AsistenteAlbaranPanel";
 import { ArrowLeft, FileText, Send, Paperclip, CheckCircle2, Loader2, AlertTriangle, FileWarning, Eye, Receipt, Trash2 } from "lucide-react";
 import {
@@ -67,6 +68,10 @@ export function DetalleAlbaran({ albaran, pedidoOrigen, zonaHoraria, onBack, onE
   const [asistLineas, setAsistLineas] = useState<LineaEmparejada[] | null>(null);
   const [categorias, setCategorias] = useState<string[]>([]);
   const [confirmando, setConfirmando] = useState(false);
+  // Decisiones "crear producto" tomadas en la mesa de incidencias durante la subida:
+  // la mesa no puede crearlos (falta la categoría), así que la intención viaja hasta
+  // aquí y el asistente abre directo en el formulario de crear.
+  const [intencionesCrear, setIntencionesCrear] = useState<Record<string, { iva?: string | null }>>({});
   const lineasConOrigen = albaran.lineas as LineaConOrigen[];
   const huerfanas = lineasConOrigen.filter((l) => !l.productoId && l.ignorada !== true);
   const resueltas = lineasConOrigen.filter((l) => !!l.productoId);
@@ -75,7 +80,7 @@ export function DetalleAlbaran({ albaran, pedidoOrigen, zonaHoraria, onBack, onE
     if (!enRevision) return;
     let alive = true;
     (async () => {
-      const [cats, emp] = await Promise.all([
+      const [cats, emp, incs] = await Promise.all([
         listCategoriasProducto("compra"),
         emparejarLineasAlbaran(
           huerfanas.map((l) => ({
@@ -86,10 +91,20 @@ export function DetalleAlbaran({ albaran, pedidoOrigen, zonaHoraria, onBack, onE
             precioUnitario: l.precioUC || null,
           })),
         ),
+        listarIncidenciasAlbaran(albaran.id),
       ]);
       if (!alive) return;
       if (cats.ok) setCategorias(cats.data.map((c) => c.nombre));
       setAsistLineas(emp.ok ? emp.lineas : []);
+      if (incs.ok) {
+        const crear: Record<string, { iva?: string | null }> = {};
+        for (const inc of incs.incidencias) {
+          if (inc.lineaId && inc.decision?.accion === "crear") {
+            crear[inc.lineaId] = { iva: (inc.decision.payload?.iva as string | undefined) ?? null };
+          }
+        }
+        setIntencionesCrear(crear);
+      }
     })();
     return () => { alive = false; };
     // huerfanas se deriva de albaran.lineas; el albarán es inmutable mientras está montado.
@@ -350,6 +365,14 @@ export function DetalleAlbaran({ albaran, pedidoOrigen, zonaHoraria, onBack, onE
               <AsistenteAlbaranPanel
                 key={albaran.id}
                 lineas={asistLineas}
+                lineasYaVinculadas={resueltas
+                  .filter((l) => l.ignorada !== true)
+                  .map((l) => ({
+                    nombre: l.producto,
+                    cantidad: l.cantidad,
+                    precioUnitario: l.precioUC || null,
+                  }))}
+                intencionesCrear={intencionesCrear}
                 proveedorAlbaran={albaran.proveedor}
                 categorias={categorias}
                 onConfirmar={handleConfirmarRevision}

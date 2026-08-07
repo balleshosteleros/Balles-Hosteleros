@@ -212,8 +212,12 @@ export function useSubirAlbaran({ fechaPorDefecto, creador, onCreado }: UseSubir
     setLigadas((prev) => {
       const map = new Map(prev);
       for (const d of decisiones) {
-        if (!d.accion.startsWith("vincular")) continue;
-        const productoId = (d.payload?.productoId as string | undefined) ?? "";
+        // Liga la línea si la decisión fue un vínculo O si el servidor creó el producto
+        // por efecto de la decisión (crear_gasto: portes/punto verde como gasto sin stock).
+        const efecto = res.efectos[d.incidenciaId];
+        if (!d.accion.startsWith("vincular") && !efecto) continue;
+        const productoId =
+          (d.payload?.productoId as string | undefined) ?? efecto?.productoId ?? "";
         const lineaId = porId.get(d.incidenciaId)?.lineaId ?? null;
         if (!productoId || !lineaId) continue;
         const linea = lineas.find((l) => l.id === lineaId);
@@ -224,7 +228,10 @@ export function useSubirAlbaran({ fechaPorDefecto, creador, onCreado }: UseSubir
           precioUnitario: linea?.precioUnitario ?? null,
           ligadoAuto: {
             productoId,
-            nombre: (d.payload?.productoNombre as string | undefined) ?? "producto vinculado",
+            nombre:
+              (d.payload?.productoNombre as string | undefined) ??
+              res.efectos[d.incidenciaId]?.productoNombre ??
+              "producto vinculado",
             nombreProveedor: null,
             score: 1,
             via: "nombre_proveedor",

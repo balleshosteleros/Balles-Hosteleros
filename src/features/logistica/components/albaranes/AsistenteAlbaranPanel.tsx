@@ -44,6 +44,20 @@ type EstadoLinea =
 
 interface Props {
   lineas: LineaEmparejada[];
+  /**
+   * Líneas que YA venían vinculadas del paso de subida (con productoId en el albarán).
+   * No pasan por el asistente, pero también entran al almacén al confirmar: sin ellas el
+   * resumen de "Antes de confirmar" contaba solo las resueltas aquí (decía "0 productos"
+   * moviendo 9 — cazado en el piloto del 07-ago-2026).
+   */
+  lineasYaVinculadas?: Array<{ nombre: string; cantidad: number; precioUnitario: number | null }>;
+  /**
+   * Líneas cuya decisión en la mesa de incidencias fue "crear producto nuevo"
+   * (por id de línea, con el IVA leído si venía). La mesa no puede crear el producto
+   * (falta la categoría), así que aquí el diálogo abre directo en el formulario de
+   * crear en vez de hacer rehacer la decisión desde cero.
+   */
+  intencionesCrear?: Record<string, { iva?: string | null }>;
   proveedorAlbaran: string;
   categorias: string[];
   /** Se llama cuando el usuario confirma: devuelve la resolución final de cada línea. */
@@ -58,6 +72,8 @@ interface Props {
 
 export function AsistenteAlbaranPanel({
   lineas,
+  lineasYaVinculadas = [],
+  intencionesCrear = {},
   proveedorAlbaran,
   categorias,
   onConfirmar,
@@ -156,6 +172,10 @@ export function AsistenteAlbaranPanel({
     const omitidas: Array<{ nombre: string; motivo: string }> = [];
     let importeEntrante = 0;
 
+    for (const l of lineasYaVinculadas) {
+      entran.push({ nombre: l.nombre, cantidad: l.cantidad });
+      importeEntrante += (l.precioUnitario ?? 0) * l.cantidad;
+    }
     for (const l of lineas) {
       const e = estados[l.id];
       if (e?.estado === "ligada") {
@@ -166,7 +186,7 @@ export function AsistenteAlbaranPanel({
       }
     }
     return { entran, omitidas, importeEntrante };
-  }, [lineas, estados]);
+  }, [lineas, lineasYaVinculadas, estados]);
 
   const handleConfirmar = () => {
     const resoluciones: Record<
@@ -246,6 +266,11 @@ export function AsistenteAlbaranPanel({
                     ) : (
                       <span className="inline-flex items-center gap-1 text-amber-700">
                         <Circle className="h-3.5 w-3.5" /> Sin resolver
+                        {intencionesCrear[l.id] && (
+                          <span className="italic text-muted-foreground">
+                            — elegiste crearlo en la subida
+                          </span>
+                        )}
                       </span>
                     )}
                   </td>
@@ -256,7 +281,11 @@ export function AsistenteAlbaranPanel({
                       className="h-7 px-2 text-[10px]"
                       onClick={() => setDialogLinea(l)}
                     >
-                      {e.estado === "pendiente" ? "Resolver" : "Cambiar"}
+                      {e.estado === "pendiente"
+                        ? intencionesCrear[l.id]
+                          ? "Crear"
+                          : "Resolver"
+                        : "Cambiar"}
                     </Button>
                   </td>
                 </tr>
@@ -351,11 +380,18 @@ export function AsistenteAlbaranPanel({
 
       {dialogLinea && (
         <ResolverLineaDialog
+          key={dialogLinea.id}
           open={!!dialogLinea}
           linea={dialogLinea}
           proveedorAlbaran={proveedorAlbaran}
           categorias={categorias}
           busy={busy}
+          modoInicial={
+            estados[dialogLinea.id]?.estado === "pendiente" && intencionesCrear[dialogLinea.id]
+              ? "crear"
+              : undefined
+          }
+          ivaInicial={intencionesCrear[dialogLinea.id]?.iva ?? null}
           onClose={() => setDialogLinea(null)}
           onVincular={(c) => handleVincular(dialogLinea, c)}
           onCrear={(datos) => handleCrear(dialogLinea, datos)}
