@@ -17,6 +17,11 @@ import { marcarNotificacionesVistasPorRef } from "@/features/notificaciones/acti
 
 const BUCKET = "firmas";
 const OTP_TTL_MIN = 10;
+// Cuánto sigue autorizando la firma un OTP YA validado. Es la ventana entre
+// "he metido el código" y "he pulsado firmar": generosa para no cortar a quien
+// lee el documento con calma, pero acotada para que una validación antigua no
+// autorice una firma cualquier día después.
+const OTP_VALIDEZ_FIRMA_MIN = 15;
 const OTP_MAX_INTENTOS = 3;
 const VISOR_TTL_SECONDS = 60 * 10;
 const COPIA_TTL_SECONDS = 60 * 60 * 24 * 7;
@@ -421,15 +426,29 @@ export async function firmarDocumento(input: FirmarDocumentoInput): Promise<Firm
     const documentoId = res.tokenRow.documento_id as string;
     const meta = await getMeta();
 
+    // Doble factor: el OTP debe estar validado Y esa validación debe ser RECIENTE.
+    // Antes solo se miraba `validado_en` del último OTP, sin caducidad, así que un
+    // código validado semanas atrás seguía autorizando la firma con solo tener el
+    // enlace. Y como `reenviarFirma` renueva el token pero NO borra los OTP, el
+    // código validado por el primer destinatario dejaba firmar al segundo sin
+    // pedirle nada. Se exige que la validación siga dentro de su ventana de vigencia.
     const { data: otpRow } = await admin
       .from("firmas_otps")
-      .select("validado_en")
+      .select("id, validado_en")
       .eq("documento_id", documentoId)
-      .order("created_at", { ascending: false })
+      .not("validado_en", "is", null)
+      .order("validado_en", { ascending: false })
       .limit(1)
       .maybeSingle();
     if (!otpRow?.validado_en) {
       return { ok: false, error: "Verifica el código OTP antes de firmar" };
+    }
+    const validadoHaceMs = Date.now() - new Date(otpRow.validado_en as string).getTime();
+    if (validadoHaceMs > OTP_VALIDEZ_FIRMA_MIN * 60_000) {
+      return {
+        ok: false,
+        error: "Han pasado más de 15 minutos desde que verificaste el código. Solicita uno nuevo para firmar.",
+      };
     }
 
     // R1 (TASK-008): compare-and-swap atómico del token para impedir doble firma

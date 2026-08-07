@@ -427,6 +427,10 @@ export async function reenviarFirma(
     const empresaLogoUrl = (empresa?.logo_url as string | null) ?? null;
 
     await admin.from("firmas_tokens").delete().eq("documento_id", documentoId);
+    // Junto al token se invalidan los OTP: si no, un código ya validado del envío
+    // anterior seguiría autorizando la firma y quien reciba el enlace nuevo
+    // firmaría sin que se le pida ningún código. Renovar enlace = reiniciar 2FA.
+    await admin.from("firmas_otps").delete().eq("documento_id", documentoId);
 
     const token = generarToken();
     const tokenHash = hashToken(token);
@@ -535,6 +539,10 @@ export async function ampliarPlazoFirma(
 
     // Limpiar tokens anteriores y generar uno nuevo
     await admin.from("firmas_tokens").delete().eq("documento_id", documentoId);
+    // Junto al token se invalidan los OTP: si no, un código ya validado del envío
+    // anterior seguiría autorizando la firma y quien reciba el enlace nuevo
+    // firmaría sin que se le pida ningún código. Renovar enlace = reiniciar 2FA.
+    await admin.from("firmas_otps").delete().eq("documento_id", documentoId);
     const token = generarToken();
     const tokenHash = hashToken(token);
     const { error: tokErr } = await admin.from("firmas_tokens").insert({
@@ -609,6 +617,10 @@ export async function cancelarFirma(
       .update({ estado: "expirado" })
       .eq("id", documentoId);
     await admin.from("firmas_tokens").delete().eq("documento_id", documentoId);
+    // Junto al token se invalidan los OTP: si no, un código ya validado del envío
+    // anterior seguiría autorizando la firma y quien reciba el enlace nuevo
+    // firmaría sin que se le pida ningún código. Renovar enlace = reiniciar 2FA.
+    await admin.from("firmas_otps").delete().eq("documento_id", documentoId);
 
     await registrarEvento({
       documentoId,
