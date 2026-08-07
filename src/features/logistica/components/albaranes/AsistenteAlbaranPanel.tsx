@@ -68,6 +68,15 @@ interface Props {
     >,
   ) => Promise<void> | void;
   confirmando?: boolean;
+  /**
+   * Autosave (F5): se llama tras CADA resolución (vincular/crear/ignorar) para que el
+   * padre la persista al vuelo. Sin esto, una recarga a mitad de revisión perdía todo
+   * el trabajo no confirmado (caso real del piloto 07-ago-2026).
+   */
+  onResolucion?: (
+    lineaId: string,
+    res: { productoId: string | null; ignorada: boolean; motivoIgnorada?: string },
+  ) => void;
 }
 
 export function AsistenteAlbaranPanel({
@@ -78,6 +87,7 @@ export function AsistenteAlbaranPanel({
   categorias,
   onConfirmar,
   confirmando,
+  onResolucion,
 }: Props) {
   // Estado inicial: las que ligaron solas quedan "ligada"; el resto "pendiente".
   const [estados, setEstados] = useState<Record<string, EstadoLinea>>(() => {
@@ -120,6 +130,7 @@ export function AsistenteAlbaranPanel({
         nombreProducto: c.nombre,
         precioVigente: c.precioVigente,
       });
+      onResolucion?.(linea.id, { productoId: c.productoId, ignorada: false });
       setDialogLinea(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error al vincular");
@@ -149,6 +160,7 @@ export function AsistenteAlbaranPanel({
         nombreProducto: datos.nombre,
         precioVigente: datos.precio,
       });
+      onResolucion?.(linea.id, { productoId: res.productoId, ignorada: false });
       setDialogLinea(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error al crear");
@@ -159,6 +171,7 @@ export function AsistenteAlbaranPanel({
 
   const handleIgnorar = (linea: LineaEmparejada, motivo: string) => {
     setEstado(linea.id, { estado: "ignorada", motivo });
+    onResolucion?.(linea.id, { productoId: null, ignorada: true, motivoIgnorada: motivo });
     setDialogLinea(null);
   };
 

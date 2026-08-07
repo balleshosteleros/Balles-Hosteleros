@@ -111,6 +111,22 @@ export function DetalleAlbaran({ albaran, pedidoOrigen, zonaHoraria, onBack, onE
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enRevision, albaran.id]);
 
+  // Autosave (F5): cada resolución del asistente se guarda al vuelo en el jsonb del
+  // albarán (resolverAlbaranRevision con confirmar=false ya sabía guardar progreso
+  // parcial — solo faltaba llamarlo). Una recarga ya no pierde el trabajo hecho.
+  const handleResolucionParcial = (
+    lineaId: string,
+    res: { productoId: string | null; ignorada: boolean; motivoIgnorada?: string },
+  ) => {
+    void resolverAlbaranRevision(albaran.id, { [lineaId]: res }, false).then((r) => {
+      if (!r.ok) {
+        toast.warning(
+          "No se pudo guardar el progreso de esa línea — se aplicará igualmente al confirmar.",
+        );
+      }
+    });
+  };
+
   const handleConfirmarRevision = async (
     resoluciones: Record<
       string,
@@ -373,6 +389,7 @@ export function DetalleAlbaran({ albaran, pedidoOrigen, zonaHoraria, onBack, onE
                     precioUnitario: l.precioUC || null,
                   }))}
                 intencionesCrear={intencionesCrear}
+                onResolucion={handleResolucionParcial}
                 proveedorAlbaran={albaran.proveedor}
                 categorias={categorias}
                 onConfirmar={handleConfirmarRevision}
