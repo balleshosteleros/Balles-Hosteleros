@@ -65,17 +65,23 @@ const nextConfig: NextConfig = {
         has: [{ type: 'host', value: QR_HOST }],
         destination: '/q/:codigo',
       },
-      // Raíz del subdominio (alguien entra a pelo, sin código): aviso neutro en
-      // vez de la pantalla de login del sistema.
-      {
-        source: '/',
-        has: [{ type: 'host', value: QR_HOST }],
-        destination: '/q/_',
-      },
     ]
   },
   async redirects() {
     return [
+      // Raíz del subdominio de QR, sin código (alguien teclea el subdominio a
+      // pelo): aviso neutro en vez de la pantalla de login del sistema.
+      //
+      // Es un REDIRECT y no un rewrite a propósito: "/" se sirve como home
+      // estática y el rewrite se evaluaba tarde, dejando ver el login. Va el
+      // primero de la lista para ganar al redirect móvil de PRP-045, que también
+      // matchea "/".
+      {
+        source: '/',
+        has: [{ type: 'host', value: QR_HOST }],
+        destination: '/q/_',
+        permanent: false,
+      },
       // PRP-045: redirect móvil → /m para la home raíz, aplicado a nivel de
       // routing Vercel (antes de cache y middleware). El resto de rutas
       // privadas las protege el proxy.ts que sí se ejecuta una vez la home
