@@ -12,6 +12,11 @@ const MOBILE_UA_REGEX =
 // `hostQr()` en hostname-resolver.ts.
 const QR_HOST = process.env.NEXT_PUBLIC_QR_HOST?.trim() || 'qr.balleshosteleros.com'
 
+// Web comercial del producto. Vive en este mismo proyecto bajo `/software`,
+// pero en producción se publica en su propio subdominio.
+const SOFTWARE_HOST =
+  process.env.NEXT_PUBLIC_SOFTWARE_HOST?.trim() || 'software.balleshosteleros.com'
+
 const nextConfig: NextConfig = {
   // Versión del build horneada en el bundle del cliente. El auto-actualizador
   // de la PWA (VersionAutoUpdate) la compara contra /api/version para recargar
@@ -42,6 +47,13 @@ const nextConfig: NextConfig = {
   },
   async rewrites() {
     return [
+      // `software.balleshosteleros.com` sirve la landing integrada sin exponer
+      // `/software` en la URL ni mantener un segundo proyecto de Vercel.
+      {
+        source: '/',
+        has: [{ type: 'host', value: SOFTWARE_HOST }],
+        destination: '/software',
+      },
       // Subdominio de códigos QR: `qr.balleshosteleros.com/a3k9` → `/q/a3k9`.
       //
       // Va AQUÍ y no en el proxy porque los rewrites de next.config se aplican en
