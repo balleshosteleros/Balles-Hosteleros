@@ -210,3 +210,66 @@ export async function extraerNominasDeArchivo(buffer: Buffer, mimeType: string):
   }
   return leidas.filter((x): x is NominaLeida => x !== null);
 }
+
+/** Datos del TC1 (Recibo de Liquidación de Cotizaciones) que hacen falta. */
+export interface Tc1Leido {
+  /** Líquido de totales: lo que la empresa paga a la Seguridad Social. */
+  liquidoTotal: number | null;
+  /** Nº de trabajadores confirmados que declara el documento. */
+  trabajadores: number | null;
+  /** Periodo de liquidación leído (AAAA-MM), o "" si no se pudo. */
+  periodo: string;
+}
+
+/** Salida estructurada del TC1. Los números van a 0 si no se leen (no null: el
+ *  esquema de Gemini no admite tipos opcionales), y se filtran después. */
+const TC1_SCHEMA = {
+  type: "object",
+  properties: {
+    liquidoTotal: { type: "number", description: "Importe de 'LIQUIDO DE TOTALES' en euros. 0 si no se lee." },
+    trabajadores: { type: "number", description: "Número de trabajadores confirmados. 0 si no se lee." },
+    periodo: { type: "string", description: "Periodo de liquidación en formato AAAA-MM, o cadena vacía." },
+  },
+  required: ["liquidoTotal", "trabajadores", "periodo"],
+} as const;
+
+const PROMPT_TC1 = `Eres un experto en documentos de la Seguridad Social española.
+Este documento es un TC1 (Recibo de Liquidación de Cotizaciones) o RLC.
+
+- liquidoTotal: el importe de "LIQUIDO DE TOTALES" (el total a ingresar). Número
+  con punto decimal, sin símbolo de euro ni separador de miles.
+- trabajadores: el "Número de trabajadores confirmados".
+- periodo: el "Período de Liquidación" en formato AAAA-MM. Si aparece un rango
+  (06/2026 - 06/2026), usa el primero.
+
+No inventes valores: si un dato no aparece con claridad, pon 0 (o "" en periodo).`;
+
+/**
+ * Lee el TC1 con IA para poder cuadrarlo con las nóminas del mes. Si no hay clave
+ * de IA o la lectura falla, devuelve nulos: el TC1 se guarda igual, solo que sin
+ * comprobación automática de cuadre.
+ */
+export async function extraerDatosTc1(buffer: Buffer, mimeType: string): Promise<Tc1Leido> {
+  const vacio: Tc1Leido = { liquidoTotal: null, trabajadores: null, periodo: "" };
+  try {
+    const { data } = await geminiJSON<Tc1Leido>(PROMPT_TC1, {
+      responseSchema: TC1_SCHEMA as never,
+      temperature: 0,
+      attachments: [{ mimeType, base64: buffer.toString("base64") }],
+    });
+    if (!data) return vacio;
+    const num = (v: unknown): number | null => {
+      const n = typeof v === "number" ? v : Number(String(v ?? "").replace(",", "."));
+      return Number.isFinite(n) && n > 0 ? n : null;
+    };
+    return {
+      liquidoTotal: num(data.liquidoTotal),
+      trabajadores: num(data.trabajadores),
+      periodo: /^\d{4}-\d{2}$/.test(String(data.periodo ?? "")) ? String(data.periodo) : "",
+    };
+  } catch (err) {
+    if (err instanceof GeminiKeyMissingError) return vacio;
+    console.error("[nominas] extraerDatosTc1:", err);
+    return vacio;
+  }
+}

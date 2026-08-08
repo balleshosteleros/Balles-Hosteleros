@@ -16,6 +16,7 @@ import {
   resolverTokenNominasGestoria,
   procesarSubidaNominasGestoria,
   guardarTc1Gestoria,
+  cuadrarTc1ConNominas,
   nombreMes,
 } from "@/features/rrhh/services/nominas/nominas-gestoria";
 
@@ -80,7 +81,8 @@ export async function POST(req: Request, ctx: { params: Promise<{ token: string 
       if (!guardado.ok) {
         return NextResponse.json({ ok: false, error: guardado.error }, { status: guardado.status });
       }
-      return NextResponse.json({ ok: true, documento: "tc1" });
+      const cuadre = await cuadrarTc1ConNominas(admin, res.row.empresa_id, res.row.periodo);
+      return NextResponse.json({ ok: true, documento: "tc1", cuadre });
     }
 
     const file = fd.get("archivo") as File | null;
@@ -102,6 +104,8 @@ export async function POST(req: Request, ctx: { params: Promise<{ token: string 
       mesIncorrecto: r.mesIncorrecto,
       // El archivo tiene errores → NO se ha subido NADA; hay que corregir y resubir.
       rechazadoTodo: r.rechazadoTodo,
+      // Cuadre TC1 ↔ nóminas: null mientras no esté el TC1.
+      cuadre: await cuadrarTc1ConNominas(admin, res.row.empresa_id, res.row.periodo),
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Error desconocido";

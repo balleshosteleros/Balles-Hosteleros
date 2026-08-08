@@ -22,6 +22,7 @@ import {
   resolverMimeNomina,
   GeminiKeyMissingError,
   MAX_NOMINAS_BYTES,
+  extraerDatosTc1,
 } from "@/features/rrhh/services/nominas/extraer-nominas";
 import {
   procesarNominasConAdmin,
@@ -41,6 +42,40 @@ export function nombreMes(periodo: string): string {
   const [y, m] = periodo.split("-");
   const mes = MESES[Number(m) - 1] ?? "";
   return `${mes} de ${y}`.trim();
+}
+
+/**
+ * Correo de la gestoría de una empresa, de una ÚNICA fuente lógica.
+ *
+ * Se toma el de Ajustes de empresa (`nominas_gestoria_email`) y, si ahí no hay
+ * nada, el que ya está configurado para las altas de personal
+ * (`reclutamiento_config.gestoria_email`): es la MISMA gestoría, así que no tiene
+ * sentido pedir que se escriba dos veces ni que el envío falle por estar puesto
+ * "en el otro sitio".
+ */
+export async function correoGestoriaEmpresa(
+  admin: SupabaseClient,
+  empresaId: string,
+): Promise<{ to: string | null; cc: string | null }> {
+  const { data: emp } = await admin
+    .from("empresas")
+    .select("nominas_gestoria_email, nominas_gestoria_email_cc")
+    .eq("id", empresaId)
+    .maybeSingle();
+
+  let to = (emp?.nominas_gestoria_email as string | null)?.trim() || null;
+  let cc = (emp?.nominas_gestoria_email_cc as string | null)?.trim() || null;
+
+  if (!to) {
+    const { data: rc } = await admin
+      .from("reclutamiento_config")
+      .select("gestoria_email, gestoria_email_cc")
+      .eq("empresa_id", empresaId)
+      .maybeSingle();
+    to = (rc?.gestoria_email as string | null)?.trim() || null;
+    cc = cc ?? ((rc?.gestoria_email_cc as string | null)?.trim() || null);
+  }
+  return { to, cc };
 }
 
 /** Enlace público que abre la gestoría para subir las nóminas del mes. */
@@ -163,9 +198,10 @@ export async function enviarSolicitudNominasGestoria(
   if (!emp) return { ok: false, error: "Empresa no encontrada" };
   if (emp.nominas_gestoria_activo === false) return { ok: false, error: "Envío a gestoría desactivado" };
 
-  const to = (emp.nominas_gestoria_email as string | null)?.trim();
+  // Se lee AHORA, en el instante del envío: si se cambia el correo antes de que
+  // salga, el aviso va al nuevo. No se guarda ni se cachea en ningún sitio.
+  const { to, cc } = await correoGestoriaEmpresa(admin, empresaId);
   if (!to) return { ok: false, error: "Falta el correo de la gestoría" };
-  const cc = (emp.nominas_gestoria_email_cc as string | null)?.trim() || undefined;
   const empresaNombre = (emp.nombre as string) ?? "la empresa";
 
   const tk = await crearTokenNominasGestoria(admin, empresaId, periodo);
@@ -204,9 +240,9 @@ export async function recordarSolicitudNominasGestoria(
     .select("nombre, nominas_gestoria_email, nominas_gestoria_email_cc")
     .eq("id", empresaId)
     .maybeSingle();
-  const to = (emp?.nominas_gestoria_email as string | null)?.trim();
+  // Igual que el aviso: correo leído en el momento de enviar el recordatorio.
+  const { to, cc } = await correoGestoriaEmpresa(admin, empresaId);
   if (!to) return { ok: false, error: "Falta el correo de la gestoría" };
-  const cc = (emp?.nominas_gestoria_email_cc as string | null)?.trim() || undefined;
   const empresaNombre = (emp?.nombre as string) ?? "la empresa";
 
   // El token del aviso original. No se regenera: sería otro enlace distinto.
@@ -288,20 +324,21 @@ export async function procesarSubidaNominasGestoria(
 
   const resultado = await procesarNominasConAdmin(admin, row.empresa_id, nominas, row.periodo);
 
-  // Registrar la subida en el token (trazabilidad + contador).
+  // Registrar la subida en el token (trazabilidad + contador). El enlace NO se
+  // cierra aquí: hacen falta LOS DOS documentos (nóminas + TC1), y el TC1 puede
+  // llegar después. De cerrarlo ahora, no podrían adjuntarlo.
   await admin
     .from("nominas_gestoria_tokens")
     .update({
       ultima_subida_en: new Date().toISOString(),
       subidas_count: (await contarSubidas(admin, row.id)) + resultado.guardadas,
-      // ENLACE CERRADO: las nóminas ya están dentro, no se admite nada más. Solo
-      // si el volcado fue bueno — si el archivo se rechazó entero (algún
-      // trabajador sin identificar), el enlace sigue abierto para reintentar.
-      ...(resultado.guardadas > 0 && !resultado.rechazadoTodo
-        ? { cerrado_en: new Date().toISOString() }
-        : {}),
     })
     .eq("id", row.id);
+
+  // ¿Están ya los dos? Entonces se cuadra y se cierra.
+  if (resultado.guardadas > 0 && !resultado.rechazadoTodo) {
+    await cerrarSiEstanLosDosDocumentos(admin, row);
+  }
 
   // Histórico del documento subido (auditoría por empresa/mes).
   await registrarSubidaHistorico(admin, {
@@ -480,16 +517,115 @@ export async function guardarTc1Gestoria(
     .upload(path, buffer, { upsert: true, contentType: file.type });
   if (up.error) return { ok: false, error: up.error.message, status: 500 };
 
+  // Se lee con IA el líquido total y el nº de trabajadores: son los datos que
+  // permiten cuadrarlo con las nóminas. Si la IA no está disponible o no los lee,
+  // el TC1 se guarda igual (sin comprobación automática).
+  const datos = await extraerDatosTc1(buffer, file.type);
+
   const { error } = await admin.from("rrhh_nominas_mes").upsert(
     {
       empresa_id: row.empresa_id,
       periodo: row.periodo,
       tc1_path: path,
       tc1_nombre: file.name,
+      tc1_importe: datos.liquidoTotal,
+      tc1_trabajadores: datos.trabajadores,
       tc1_subido_en: new Date().toISOString(),
     },
     { onConflict: "empresa_id,periodo" },
   );
   if (error) return { ok: false, error: error.message, status: 500 };
+
+  // Si las nóminas ya estaban, con el TC1 se completa el envío: se cierra.
+  await cerrarSiEstanLosDosDocumentos(admin, row);
   return { ok: true };
+}
+
+/** Margen admitido al cuadrar TC1 contra nóminas (redondeos). Configurable. */
+const CUADRE_TOLERANCIA_EUR = 1;
+
+export interface CuadreTc1 {
+  /** Total de cotizaciones sumado de las nóminas (trabajador + empresa). */
+  totalNominas: number;
+  /** Líquido del TC1, si se ha podido leer. */
+  totalTc1: number | null;
+  diferencia: number | null;
+  cuadra: boolean;
+  /** Nº de nóminas volcadas frente a los trabajadores que declara el TC1. */
+  numNominas: number;
+  trabajadoresTc1: number | null;
+}
+
+/**
+ * Compara el TC1 con las nóminas del mes. Son el MISMO dinero expresado de dos
+ * formas: el TC1 agrupa por concepto de cotización, y las nóminas lo reparten por
+ * trabajador. Así que la suma de (SS trabajador + SS empresa) de todas las
+ * nóminas debe coincidir con el líquido del TC1.
+ */
+export async function cuadrarTc1ConNominas(
+  admin: SupabaseClient,
+  empresaId: string,
+  periodo: string,
+): Promise<CuadreTc1> {
+  const { data: filas } = await admin
+    .from("rrhh_pagos_nominas")
+    .select("ss_empleado, ss_empresa")
+    .eq("empresa_id", empresaId)
+    .eq("periodo", periodo)
+    .neq("revision_estado", "denegada");
+
+  const totalNominas =
+    Math.round(
+      (filas ?? []).reduce(
+        (a, r) => a + Number(r.ss_empleado ?? 0) + Number(r.ss_empresa ?? 0),
+        0,
+      ) * 100,
+    ) / 100;
+
+  const { data: mes } = await admin
+    .from("rrhh_nominas_mes")
+    .select("tc1_importe, tc1_trabajadores")
+    .eq("empresa_id", empresaId)
+    .eq("periodo", periodo)
+    .maybeSingle();
+
+  const totalTc1 = mes?.tc1_importe != null ? Number(mes.tc1_importe) : null;
+  const diferencia =
+    totalTc1 != null ? Math.round((totalTc1 - totalNominas) * 100) / 100 : null;
+
+  return {
+    totalNominas,
+    totalTc1,
+    diferencia,
+    // Sin importe de TC1 no se puede afirmar que NO cuadre: se da por bueno.
+    cuadra: diferencia == null || Math.abs(diferencia) <= CUADRE_TOLERANCIA_EUR,
+    numNominas: (filas ?? []).length,
+    trabajadoresTc1: mes?.tc1_trabajadores != null ? Number(mes.tc1_trabajadores) : null,
+  };
+}
+
+/**
+ * Cierra el enlace SOLO cuando están los DOS documentos (nóminas + TC1): o los
+ * dos o ninguno. Mientras falte uno, la gestoría puede seguir subiendo.
+ */
+async function cerrarSiEstanLosDosDocumentos(
+  admin: SupabaseClient,
+  row: { id: string; empresa_id: string; periodo: string },
+): Promise<void> {
+  const { data: mes } = await admin
+    .from("rrhh_nominas_mes")
+    .select("tc1_path")
+    .eq("empresa_id", row.empresa_id)
+    .eq("periodo", row.periodo)
+    .maybeSingle();
+  if (!mes?.tc1_path) return; // falta el TC1: el enlace sigue abierto
+
+  const { count } = await admin
+    .from("rrhh_pagos_nominas")
+    .select("id", { count: "exact", head: true })
+    .eq("empresa_id", row.empresa_id)
+    .eq("periodo", row.periodo);
+  if (!count) return; // faltan las nóminas
+
+  await cerrarTokenNominasGestoria(admin, row.id);
 }

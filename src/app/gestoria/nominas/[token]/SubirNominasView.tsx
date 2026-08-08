@@ -16,6 +16,15 @@ interface MesIncorrecto {
   periodoLeido: string;
 }
 
+interface Cuadre {
+  totalNominas: number;
+  totalTc1: number | null;
+  diferencia: number | null;
+  cuadra: boolean;
+  numNominas: number;
+  trabajadoresTc1: number | null;
+}
+
 interface Resultado {
   guardadas: number;
   yaExistian: number;
@@ -24,6 +33,13 @@ interface Resultado {
   inactivos: { nombre: string; fechaBaja: string | null }[];
   mesIncorrecto: MesIncorrecto[];
   rechazadoTodo: boolean;
+  /** Comparación TC1 ↔ nóminas. null si aún no hay TC1. */
+  cuadre: Cuadre | null;
+}
+
+/** "2416.7" → "2.416,70 €" */
+function eur(n: number): string {
+  return n.toLocaleString("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " €";
 }
 
 const MESES_ES = [
@@ -127,6 +143,7 @@ export function SubirNominasView({ endpoint, empresaNombre, mesLabel }: Props) {
           sinEmpleado: json.sinEmpleado ?? [],
           inactivos: json.inactivos ?? [],
           mesIncorrecto: json.mesIncorrecto ?? [],
+          cuadre: json.cuadre ?? null,
           rechazadoTodo: json.rechazadoTodo ?? false,
         });
         setFile(null);
@@ -274,6 +291,49 @@ export function SubirNominasView({ endpoint, empresaNombre, mesLabel }: Props) {
                 <p className="mt-2 text-xs text-sky-700">
                   Es lo habitual cuando la baja es a final de mes y la nómina se envía el día 1: el trabajador
                   cobra el periodo que sí trabajó. Si es el caso, todo correcto. Si no lo esperabas, avisa a la empresa.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* DESCUADRE TC1 ↔ nóminas: el TC1 y las nóminas son el mismo dinero
+            expresado de dos formas, así que la suma de cotizaciones de las
+            nóminas debe coincidir con el líquido del TC1. */}
+        {resultado?.cuadre && !resultado.cuadre.cuadra && resultado.cuadre.totalTc1 != null && (
+          <div className="mt-4 rounded-xl border-2 border-amber-300 bg-amber-50 p-4">
+            <div className="flex items-start gap-2">
+              <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
+              <div className="text-sm text-amber-900">
+                <p className="font-semibold">Los importes no cuadran · revisad los documentos</p>
+                <p className="mt-1">
+                  El total del TC1 no coincide con la suma de las cotizaciones de las nóminas
+                  que habéis subido:
+                </p>
+                <ul className="mt-2 space-y-1">
+                  <li className="flex justify-between gap-4">
+                    <span>Cotizaciones sumadas de las nóminas</span>
+                    <b className="tabular-nums">{eur(resultado.cuadre.totalNominas)}</b>
+                  </li>
+                  <li className="flex justify-between gap-4">
+                    <span>Líquido de totales del TC1</span>
+                    <b className="tabular-nums">{eur(resultado.cuadre.totalTc1)}</b>
+                  </li>
+                  <li className="flex justify-between gap-4 border-t border-amber-300 pt-1">
+                    <span>Diferencia</span>
+                    <b className="tabular-nums">{eur(Math.abs(resultado.cuadre.diferencia ?? 0))}</b>
+                  </li>
+                </ul>
+                {resultado.cuadre.trabajadoresTc1 != null && (
+                  <p className="mt-2">
+                    El TC1 declara <b>{resultado.cuadre.trabajadoresTc1} trabajadores</b> y hemos
+                    recibido <b>{resultado.cuadre.numNominas} nóminas</b>.
+                  </p>
+                )}
+                <p className="mt-2 text-xs text-amber-800">
+                  Los documentos se han guardado, pero la empresa los va a revisar antes de darlos
+                  por buenos. Comprobad si falta alguna nómina o si hay algún concepto del TC1 que
+                  no aparece en ellas. Si el descuadre es correcto, indicad el motivo a la empresa.
                 </p>
               </div>
             </div>
