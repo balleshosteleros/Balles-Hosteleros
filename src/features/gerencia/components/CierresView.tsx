@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import {
   CalendarDays, Plus, ChevronLeft, ChevronRight, Wallet, FileText,
   Settings, Trash2, Download, CheckCircle2, AlertTriangle, ArrowDownToLine,
-  ArrowUpFromLine, TrendingUp, Receipt, X, Repeat, Pencil, CalendarClock,
+  ArrowUpFromLine, TrendingUp, Receipt, X, Repeat, Pencil, CalendarClock, ListFilter,
 } from "lucide-react";
 import {
   format, startOfMonth, endOfMonth, eachDayOfInterval, getDay, addMonths,
@@ -44,12 +44,11 @@ import {
   colVisible,
   ordenarColumnas,
   coincideBusquedaUniversal,
-  aplicarFiltrosToolbar,
   type ToolbarColumna,
   type ToolbarColumnaVisible,
-  type ToolbarCampoFiltro,
-  type ToolbarFiltroActivo,
 } from "@/shared/components/SubmoduleToolbar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Checkbox } from "@/components/ui/checkbox";
 import { IOActions } from "@/shared/io";
 import { cierresIO } from "@/features/gerencia/io/cierres.io";
 import { getEmpleadosActivos, type EmpleadoActivo } from "@/features/rrhh/actions/empleados-actions";
@@ -104,6 +103,10 @@ interface GastoFila {
   importe: string;
 }
 
+// Conjunto vacío compartido: evita crear un Set nuevo en cada render para las
+// columnas que todavía no tienen ningún filtro puesto.
+const EMPTY_SET: Set<string> = new Set();
+
 function fmtEuro(n: number): string {
   return new Intl.NumberFormat("es-ES", { style: "currency", currency: "EUR" }).format(n);
 }
@@ -134,6 +137,24 @@ function importeEfectivo(c: { tipo: CierreTipo; efectivo_retirado: number; retir
   const magnitud = Math.abs(c.efectivo_retirado);
   if (c.tipo === "retirada") return c.retirada_entrada ? magnitud : -magnitud;
   return c.tipo === "cierre" ? magnitud : -magnitud;
+}
+
+// Valor NUMÉRICO real de una columna de dinero: se usa solo para ordenar las
+// opciones del filtro de esa columna de menor a mayor (el texto en euros se
+// ordenaría mal como cadena: "1.000 €" iría antes que "9 €").
+function numeroColumna(
+  c: CierreRow,
+  campo: string,
+  acumulados: Record<string, number>,
+): number {
+  switch (campo) {
+    case "efectivo": return importeEfectivo(c);
+    case "total": return c.total_contado;
+    case "descuadre": return c.cuadra ? 0 : c.descuadre;
+    case "gastos": return c.total_gastos;
+    case "acumulado": return acumulados[c.id] ?? 0;
+    default: return 0;
+  }
 }
 
 function fmtSize(bytes: number | null): string {
@@ -202,7 +223,10 @@ export function CierresView() {
 
   const [vista, setVista] = useState<"resumen" | "calendario" | "ajustes">("resumen");
   const [busqueda, setBusqueda] = useState("");
-  const [filtros, setFiltros] = useState<ToolbarFiltroActivo[]>([]);
+  // Filtros POR COLUMNA: cada cabecera de la tabla tiene su propio icono de
+  // filtro con las opciones reales de esa columna. No hay botón de filtros
+  // arriba: se filtra desde la columna que se quiere acotar.
+  const [filtrosCol, setFiltrosCol] = useState<Record<string, Set<string>>>({});
   const [columnasVisibles, setColumnasVisibles] = useState<ToolbarColumnaVisible>({});
   const [columnasOrden, setColumnasOrden] = useState<string[] | undefined>(undefined);
   const [mesActual, setMesActual] = useState(new Date());
@@ -263,12 +287,33 @@ export function CierresView() {
   // Solo el cierre semanal tiene descuadre; retiradas e ingresos nunca lo tienen.
   const hayDescuadre = form.tipo === "cierre" && descuadrePreview !== 0;
 
-  // Los gastos SOLO se pueden declarar cuando hay diferencia y se ha elegido
-  // justificarla con gastos. Si el cierre cuadra no hay nada que declarar.
-  const puedeDeclararGastos = hayDescuadre && form.resolucion_descuadre === "gastos";
+  // SOBRA dinero (descuadre > 0): no se ha pagado nada, así que no hay gasto que
+  // declarar. La única salida es cerrar con descuadre dejando por escrito el
+  // justificante de por qué sobra. FALTA dinero (< 0): ahí sí puede deberse a
+  // gastos pagados del efectivo, y se ofrecen las dos opciones.
+  const sobraDinero = hayDescuadre && descuadrePreview > 0;
+
+  // Los gastos SOLO se pueden declarar cuando FALTA dinero y se ha elegido
+  // justificarlo con gastos. Si el cierre cuadra no hay nada que declarar.
+  const puedeDeclararGastos = hayDescuadre && !sobraDinero && form.resolucion_descuadre === "gastos";
 
   // Cerrar con descuadre exige explicar por escrito los motivos que se creen.
-  const notaMotivosObligatoria = hayDescuadre && form.resolucion_descuadre === "descuadre";
+  // Cuando sobra dinero es SIEMPRE obligatorio: es el justificante del sobrante.
+  const notaMotivosObligatoria = hayDescuadre && (sobraDinero || form.resolucion_descuadre === "descuadre");
+
+  // Los gastos declarados justifican la diferencia: tienen que sumar EXACTAMENTE
+  // el descuadre, ni de más ni de menos. Se compara en valor absoluto porque los
+  // importes se apuntan siempre en positivo.
+  const objetivoGastos = Math.abs(descuadrePreview);
+
+  // Diferencia entre lo declarado y lo que hay que justificar.
+  // >0 sobran gastos · <0 faltan · 0 encaja.
+  const diferenciaGastos = useMemo(
+    () => Math.round((totalGastosPreview - objetivoGastos) * 100) / 100,
+    [totalGastosPreview, objetivoGastos],
+  );
+
+  const gastosCuadran = puedeDeclararGastos && totalGastosPreview > 0 && diferenciaGastos === 0;
 
   // Al desaparecer el descuadre (o al cambiar de tipo) se limpian la decisión y
   // los gastos: quedarían huérfanos y el backend los rechazaría igualmente.
@@ -280,6 +325,17 @@ export function CierresView() {
         : { ...f, resolucion_descuadre: "", gastos: [] },
     );
   }, [hayDescuadre]);
+
+  // Si SOBRA dinero no hay elección posible: solo cabe cerrar con descuadre
+  // dejando el justificante por escrito. Se fija la decisión y se tiran los gastos.
+  useEffect(() => {
+    if (!sobraDinero) return;
+    setForm((f) =>
+      f.resolucion_descuadre === "descuadre" && f.gastos.length === 0
+        ? f
+        : { ...f, resolucion_descuadre: "descuadre", gastos: [] },
+    );
+  }, [sobraDinero]);
 
   // Al pasar de "declarar gastos" a "cerrar con descuadre" se descartan los gastos.
   useEffect(() => {
@@ -420,58 +476,92 @@ export function CierresView() {
     return m;
   }, [cierres]);
 
-  // Quién apuntó cada movimiento: la lista sale de los datos reales, sin repetidos.
-  const opcionesRegistradoPor = useMemo(() => {
-    const set = new Set<string>();
-    cierres.forEach((c) => {
-      const q = (c.registrado_por ?? "").trim();
-      if (q) set.add(q);
-    });
-    return [...set].sort((a, b) => a.localeCompare(b, "es"));
-  }, [cierres]);
+  // Valor con el que se filtra CADA columna: es exactamente el texto que se ve
+  // en pantalla en esa celda, para que las opciones del filtro coincidan con la
+  // tabla (importes formateados en euros, fechas escritas, badges de estado...).
+  const valorColumna = useCallback(
+    (c: CierreRow, campo: string): string => {
+      switch (campo) {
+        case "fecha":
+          return format(parseISO(c.fecha), "dd MMM yyyy", { locale: es });
+        case "tipo":
+          return TIPO_LABEL[c.tipo];
+        case "efectivo":
+          return fmtEuro(importeEfectivo(c));
+        case "total":
+          return fmtEuro(c.total_contado);
+        case "estado":
+          return c.cuadra ? "Cuadra" : c.descuadre >= 0 ? "Sobra" : "Falta";
+        case "descuadre":
+          return c.cuadra ? "—" : fmtDescuadre(c.descuadre);
+        case "gastos":
+          return c.total_gastos > 0 ? fmtGasto(c.total_gastos) : "—";
+        case "acumulado":
+          return fmtEuro(acumuladoPorId[c.id] ?? 0);
+        case "doc": {
+          const n = (c.documentos?.length ?? 0) || (c.storage_path ? 1 : 0);
+          return n > 0 ? "Con documento" : "Sin documento";
+        }
+        case "registrado_por":
+          return (c.registrado_por ?? "").trim();
+        default:
+          return "";
+      }
+    },
+    [acumuladoPorId],
+  );
 
-  // Campos filtrables de la barra de herramientas: UNO POR CADA COLUMNA de la
-  // tabla, para poder acotar por cualquiera de ellas (importes, fechas, texto).
-  const camposFiltro: ToolbarCampoFiltro[] = [
-    { campo: "fecha", label: "Fecha", tipo: "fecha" },
-    { campo: "tipo", label: "Tipo", tipo: "lista", opciones: ["Cierre", "Ingreso", "Retirada"] },
-    { campo: "efectivo", label: "Efectivo retirado", tipo: "numero" },
-    { campo: "total", label: "Total cierre", tipo: "numero" },
-    { campo: "estado", label: "Estado", tipo: "lista", opciones: ["Cuadra", "Sobra", "Falta"] },
-    { campo: "descuadre", label: "Descuadre", tipo: "numero" },
-    { campo: "gastos", label: "Gastos", tipo: "numero" },
-    { campo: "acumulado", label: "Acumulado", tipo: "numero" },
-    { campo: "doc", label: "Documentos", tipo: "numero" },
-    { campo: "tieneDoc", label: "Con documento", tipo: "booleano" },
-    { campo: "registrado_por", label: "Apuntado por", tipo: "lista", opciones: opcionesRegistradoPor },
-  ];
+  // Cierres que pasan la búsqueda: base sobre la que se calculan las opciones
+  // de cada filtro de columna (así solo se ofrecen valores que existen).
+  const cierresBuscados = useMemo(
+    () => cierres.filter((c) => coincideBusquedaUniversal(c, busqueda)),
+    [cierres, busqueda],
+  );
 
-  // Accesor que traduce cada fila al valor comparable por los filtros.
-  // Las claves coinciden con las de las columnas de la tabla, para que filtrar
-  // por "Descuadre" o "Acumulado" compare exactamente lo que se ve en pantalla.
-  const accesoCierre = (c: CierreRow, campo: string): unknown => {
-    if (campo === "tipo") return TIPO_LABEL[c.tipo];
-    if (campo === "estado") return c.cuadra ? "Cuadra" : c.descuadre >= 0 ? "Sobra" : "Falta";
-    if (campo === "tieneDoc") return (c.documentos?.length ?? 0) > 0 || !!c.storage_path;
-    if (campo === "efectivo") return importeEfectivo(c);
-    if (campo === "total") return c.total_contado;
-    if (campo === "gastos") return c.total_gastos;
-    if (campo === "acumulado") return acumuladoPorId[c.id] ?? 0;
-    if (campo === "doc") return (c.documentos?.length ?? 0) || (c.storage_path ? 1 : 0);
-    if (campo === "registrado_por") return (c.registrado_por ?? "").trim();
-    return (c as unknown as Record<string, unknown>)[campo];
-  };
-
+  // Filas finales: se aplican TODOS los filtros de columna a la vez (una fila
+  // pasa si cumple cada columna filtrada; dentro de una columna vale cualquiera
+  // de los valores marcados).
   const cierresFiltrados = useMemo(() => {
-    let lista = cierres.filter((c) => coincideBusquedaUniversal(c, busqueda));
-    lista = aplicarFiltrosToolbar(
-      lista as unknown as Record<string, unknown>[],
-      filtros,
-      accesoCierre as unknown as (item: Record<string, unknown>, campo: string) => unknown,
-    ) as unknown as CierreRow[];
-    return lista;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cierres, busqueda, filtros, acumuladoPorId]);
+    const activos = Object.entries(filtrosCol).filter(([, v]) => v.size > 0);
+    if (activos.length === 0) return cierresBuscados;
+    return cierresBuscados.filter((c) =>
+      activos.every(([campo, valores]) => valores.has(valorColumna(c, campo))),
+    );
+  }, [cierresBuscados, filtrosCol, valorColumna]);
+
+  // Opciones de cada columna, sacadas de los datos reales y sin repetir.
+  const opcionesColumna = useCallback(
+    (campo: string): string[] => {
+      const set = new Set<string>();
+      cierresBuscados.forEach((c) => {
+        const v = valorColumna(c, campo);
+        if (v) set.add(v);
+      });
+      const lista = [...set];
+      // Las columnas de dinero y fecha se ordenan por su valor real, no como texto.
+      if (campo === "fecha") {
+        const fechaDe = new Map<string, string>();
+        cierresBuscados.forEach((c) => fechaDe.set(valorColumna(c, "fecha"), c.fecha));
+        return lista.sort((a, b) => (fechaDe.get(b) ?? "").localeCompare(fechaDe.get(a) ?? ""));
+      }
+      if (["efectivo", "total", "descuadre", "gastos", "acumulado"].includes(campo)) {
+        const numDe = new Map<string, number>();
+        cierresBuscados.forEach((c) => numDe.set(valorColumna(c, campo), numeroColumna(c, campo, acumuladoPorId)));
+        return lista.sort((a, b) => (numDe.get(a) ?? 0) - (numDe.get(b) ?? 0));
+      }
+      return lista.sort((a, b) => a.localeCompare(b, "es"));
+    },
+    [cierresBuscados, valorColumna, acumuladoPorId],
+  );
+
+  const setFiltroColumna = useCallback((campo: string, valores: Set<string>) => {
+    setFiltrosCol((prev) => {
+      const next = { ...prev };
+      if (valores.size === 0) delete next[campo];
+      else next[campo] = valores;
+      return next;
+    });
+  }, []);
 
   const columnasDef: ToolbarColumna[] = [
     { campo: "fecha", label: "Fecha", bloqueada: true },
@@ -488,16 +578,32 @@ export function CierresView() {
     (c) => c.bloqueada || colVisible(columnasVisibles, c.campo),
   );
 
+  // Cabecera de columna: el título más su propio icono de filtro. TODAS las
+  // columnas de la tabla se pueden filtrar desde aquí, cada una con sus valores.
+  const cabecera = (campo: string, label: string, derecha = false) => (
+    <TableHead key={campo} className={derecha ? "text-right" : undefined}>
+      <div className={`inline-flex items-center gap-1.5 ${derecha ? "justify-end" : ""}`}>
+        <span>{label}</span>
+        <ColumnFilter
+          label={label}
+          options={opcionesColumna(campo)}
+          selected={filtrosCol[campo] ?? EMPTY_SET}
+          onChange={(next) => setFiltroColumna(campo, next)}
+        />
+      </div>
+    </TableHead>
+  );
+
   const headDe: Record<string, ReactNode> = {
-    fecha: <TableHead key="fecha">Fecha</TableHead>,
-    tipo: <TableHead key="tipo">Tipo</TableHead>,
-    efectivo: <TableHead key="efectivo" className="text-right">Efectivo retirado</TableHead>,
-    total: <TableHead key="total" className="text-right">Total cierre</TableHead>,
-    estado: <TableHead key="estado">Estado</TableHead>,
-    descuadre: <TableHead key="descuadre" className="text-right">Descuadre</TableHead>,
-    gastos: <TableHead key="gastos" className="text-right">Gastos</TableHead>,
-    acumulado: <TableHead key="acumulado" className="text-right">Acumulado</TableHead>,
-    doc: <TableHead key="doc">Doc.</TableHead>,
+    fecha: cabecera("fecha", "Fecha"),
+    tipo: cabecera("tipo", "Tipo"),
+    efectivo: cabecera("efectivo", "Efectivo retirado", true),
+    total: cabecera("total", "Total cierre", true),
+    estado: cabecera("estado", "Estado"),
+    descuadre: cabecera("descuadre", "Descuadre", true),
+    gastos: cabecera("gastos", "Gastos", true),
+    acumulado: cabecera("acumulado", "Acumulado", true),
+    doc: cabecera("doc", "Doc."),
   };
   const cellDe = (c: CierreRow): Record<string, ReactNode> => ({
     fecha: (
@@ -620,11 +726,17 @@ export function CierresView() {
     }
     // Con descuadre hay que decidir qué se hace con la diferencia.
     if (hayDescuadre) {
-      if (!form.resolucion_descuadre) {
+      // Si SOBRA dinero no hay gastos que declarar: solo el justificante escrito.
+      if (sobraDinero) {
+        if (!form.notas.trim()) {
+          toast.error(`Escribe el justificante de por qué sobran ${fmtEuro(descuadrePreview)}: es obligatorio`);
+          return;
+        }
+      } else if (!form.resolucion_descuadre) {
         toast.error("Hay descuadre: elige si cierras con descuadre o si declaras gastos");
         return;
       }
-      if (form.resolucion_descuadre === "descuadre" && !form.notas.trim()) {
+      if (!sobraDinero && form.resolucion_descuadre === "descuadre" && !form.notas.trim()) {
         toast.error("Explica en las notas los motivos del descuadre: es obligatorio");
         return;
       }
@@ -640,6 +752,14 @@ export function CierresView() {
         );
         if (sinTipo) {
           toast.error("Elige el tipo de gasto en todas las líneas que tengan importe");
+          return;
+        }
+        // Los gastos declarados tienen que cubrir la diferencia EXACTAMENTE.
+        if (diferenciaGastos !== 0) {
+          toast.error(
+            `Los gastos suman ${fmtEuro(totalGastos)} y la diferencia del cierre es ${fmtEuro(objetivoGastos)}. `
+            + `Tienen que coincidir exactamente: ${diferenciaGastos > 0 ? `sobran ${fmtEuro(diferenciaGastos)}` : `faltan ${fmtEuro(-diferenciaGastos)}`}.`,
+          );
           return;
         }
       }
@@ -899,9 +1019,6 @@ export function CierresView() {
         onBusquedaChange={setBusqueda}
         placeholderBusqueda="Buscar"
         onNuevo={() => abrirNuevo()}
-        campos={camposFiltro}
-        filtros={filtros}
-        onFiltrosChange={setFiltros}
         columnas={columnasDef}
         columnasVisibles={columnasVisibles}
         onColumnasVisiblesChange={setColumnasVisibles}
@@ -1526,9 +1643,28 @@ export function CierresView() {
             </div>
             )}
 
+            {/* Cuando SOBRA dinero no hay elección: no se ha pagado nada, así que no
+                hay gasto que declarar. Solo cabe dejar el justificante por escrito. */}
+            {sobraDinero && (
+            <div className="col-span-2">
+              <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3">
+                <ArrowUpFromLine className="h-4 w-4 shrink-0 text-amber-600 mt-0.5" />
+                <div>
+                  <p className="text-sm font-medium text-amber-800">
+                    Sobran {fmtEuro(descuadrePreview)}
+                  </p>
+                  <p className="text-xs text-amber-700 mt-1">
+                    Cuando sobra dinero no se declaran gastos: no se ha pagado nada. El cierre se
+                    guarda con descuadre y hay que dejar por escrito el justificante de por qué sobra.
+                  </p>
+                </div>
+              </div>
+            </div>
+            )}
+
             {/* Qué se hace con la diferencia: cerrar con descuadre o declarar gastos.
-                Solo aparece cuando NO cuadra; si cuadra no hay nada que resolver. */}
-            {hayDescuadre && (
+                Solo cuando FALTA dinero; si sobra o cuadra no hay nada que elegir. */}
+            {hayDescuadre && !sobraDinero && (
             <div className="col-span-2">
               <Label className="mb-2 block">¿Qué hacemos con la diferencia? *</Label>
               <div className="grid grid-cols-2 gap-2">
@@ -1592,7 +1728,7 @@ export function CierresView() {
 
               {form.gastos.length === 0 ? (
                 <p className="text-xs text-red-600 rounded-lg border border-dashed border-red-200 px-4 py-4 text-center">
-                  Obligatorio: añade los gastos que justifican la diferencia de {fmtEuro(Math.abs(descuadrePreview))}.
+                  Obligatorio: añade gastos que sumen exactamente {fmtEuro(objetivoGastos)}, la diferencia del cierre.
                 </p>
               ) : (
                 <div className="space-y-2">
@@ -1639,9 +1775,25 @@ export function CierresView() {
                       </Button>
                     </div>
                   ))}
-                  <div className="flex items-center justify-between rounded-lg bg-muted/50 px-4 py-2">
-                    <span className="text-sm font-medium">Total gastos</span>
-                    <span className="text-sm font-bold">{fmtEuro(totalGastosPreview)}</span>
+                  {/* Los gastos tienen que sumar EXACTAMENTE la diferencia del cierre. */}
+                  <div
+                    className={`rounded-lg border px-4 py-2 ${
+                      gastosCuadran ? "bg-emerald-50 border-emerald-200" : "bg-red-50 border-red-200"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium">Total gastos</span>
+                      <span className={`text-sm font-bold ${gastosCuadran ? "text-emerald-700" : "text-red-700"}`}>
+                        {fmtEuro(totalGastosPreview)} de {fmtEuro(objetivoGastos)}
+                      </span>
+                    </div>
+                    <p className={`text-xs mt-1 ${gastosCuadran ? "text-emerald-700" : "text-red-600"}`}>
+                      {gastosCuadran
+                        ? "Los gastos cubren exactamente la diferencia del cierre."
+                        : diferenciaGastos > 0
+                          ? `Sobran ${fmtEuro(diferenciaGastos)}: los gastos tienen que sumar exactamente ${fmtEuro(objetivoGastos)}.`
+                          : `Faltan ${fmtEuro(-diferenciaGastos)}: los gastos tienen que sumar exactamente ${fmtEuro(objetivoGastos)}.`}
+                    </p>
                   </div>
                 </div>
               )}
@@ -1726,7 +1878,11 @@ export function CierresView() {
 
             <div className="col-span-2">
               <Label>
-                {notaMotivosObligatoria ? "Motivos del descuadre" : "Notas / Observaciones"}
+                {sobraDinero
+                  ? "Justificante del sobrante"
+                  : notaMotivosObligatoria
+                    ? "Motivos del descuadre"
+                    : "Notas / Observaciones"}
                 {notaMotivosObligatoria && <span className="text-red-600"> *</span>}
               </Label>
               <Textarea
@@ -1734,14 +1890,18 @@ export function CierresView() {
                 value={form.notas}
                 onChange={(e) => setForm({ ...form, notas: e.target.value })}
                 placeholder={
-                  notaMotivosObligatoria
-                    ? "Explica a qué se cree que se debe la diferencia..."
-                    : "Cualquier comentario sobre el cierre..."
+                  sobraDinero
+                    ? "Escribe por qué sobra el dinero..."
+                    : notaMotivosObligatoria
+                      ? "Explica a qué se cree que se debe la diferencia..."
+                      : "Cualquier comentario sobre el cierre..."
                 }
               />
               {notaMotivosObligatoria && !form.notas.trim() && (
                 <p className="text-xs text-red-600 mt-1">
-                  Obligatorio: explica los motivos que se creen del descuadre.
+                  {sobraDinero
+                    ? `Obligatorio: escribe el justificante de por qué sobran ${fmtEuro(descuadrePreview)}.`
+                    : "Obligatorio: explica los motivos que se creen del descuadre."}
                 </p>
               )}
             </div>
@@ -1756,9 +1916,9 @@ export function CierresView() {
                 || saving
                 || !!errorSaldo
                 || !form.registrado_por.trim()
-                || (hayDescuadre && !form.resolucion_descuadre)
+                || (hayDescuadre && !sobraDinero && !form.resolucion_descuadre)
                 || (notaMotivosObligatoria && !form.notas.trim())
-                || (puedeDeclararGastos && totalGastosPreview <= 0)
+                || (puedeDeclararGastos && (totalGastosPreview <= 0 || diferenciaGastos !== 0))
               }
             >
               {saving ? "Guardando..." : "Guardar"}
@@ -2027,5 +2187,75 @@ export function CierresView() {
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+/* ─── FILTRO DE COLUMNA ─── */
+// Icono de filtro que vive en la cabecera de CADA columna de la tabla. Abre un
+// desplegable con los valores reales de esa columna y checkboxes para marcar
+// los que se quieren ver. Sin nada marcado, la columna no filtra; en cuanto se
+// marca algo, el icono se enciende para que se vea que hay un filtro puesto.
+function ColumnFilter({
+  label,
+  options,
+  selected,
+  onChange,
+}: {
+  label: string;
+  options: string[];
+  selected: Set<string>;
+  onChange: (next: Set<string>) => void;
+}) {
+  const active = selected.size > 0;
+  const toggle = (value: string) => {
+    const next = new Set(selected);
+    if (next.has(value)) next.delete(value);
+    else next.add(value);
+    onChange(next);
+  };
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className={`inline-flex h-5 w-5 items-center justify-center rounded transition ${
+            active
+              ? "bg-primary/10 text-primary"
+              : "text-muted-foreground/60 hover:bg-muted hover:text-foreground"
+          }`}
+          title={`Filtrar ${label.toLowerCase()}`}
+        >
+          <ListFilter className="h-3 w-3" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-56 p-0">
+        <div className="flex items-center justify-between border-b px-3 py-2">
+          <p className="text-[10px] font-bold tracking-wider text-muted-foreground">{label}</p>
+          {active && (
+            <button
+              type="button"
+              onClick={() => onChange(new Set())}
+              className="text-[10px] font-semibold text-primary hover:underline"
+            >
+              Limpiar
+            </button>
+          )}
+        </div>
+        <ul className="max-h-64 overflow-y-auto py-1">
+          {options.length === 0 ? (
+            <li className="px-3 py-2 text-xs text-muted-foreground">Sin opciones</li>
+          ) : (
+            options.map((opt) => (
+              <li key={opt}>
+                <label className="flex cursor-pointer items-center gap-2 px-3 py-1.5 hover:bg-muted/50">
+                  <Checkbox checked={selected.has(opt)} onCheckedChange={() => toggle(opt)} />
+                  <span className="text-sm">{opt}</span>
+                </label>
+              </li>
+            ))
+          )}
+        </ul>
+      </PopoverContent>
+    </Popover>
   );
 }
