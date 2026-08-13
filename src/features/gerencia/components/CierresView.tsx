@@ -107,6 +107,14 @@ function fmtEuro(n: number): string {
   return new Intl.NumberFormat("es-ES", { style: "currency", currency: "EUR" }).format(n);
 }
 
+// Descuadre SIEMPRE con su signo delante: "+" cuando sobra dinero y "−" cuando falta.
+// Se antepone a mano porque Intl coloca el menos pegado al número y aquí interesa que
+// el signo se lea antes que la cifra. El color (verde/rojo) lo pone cada vista.
+function fmtDescuadre(n: number): string {
+  if (n === 0) return fmtEuro(0);
+  return `${n > 0 ? "+" : "−"}${fmtEuro(Math.abs(n))}`;
+}
+
 // Efecto de cada movimiento sobre el efectivo acumulado.
 // El cierre SIEMPRE suma efectivo a caja. El ingreso SIEMPRE lo saca (va al banco).
 //
@@ -214,6 +222,11 @@ export function CierresView() {
     registrado_por: "",
     files: [] as File[],
     gastos: [] as GastoFila[],
+    // Qué se hace con la diferencia entre lo retirado y el total del cierre.
+    // Solo se elige cuando hay descuadre; si cuadra no existe decisión que tomar.
+    //   "descuadre" → se cierra con descuadre y la nota de motivos es obligatoria.
+    //   "gastos"    → la diferencia se justifica declarando gastos.
+    resolucion_descuadre: "" as "" | "descuadre" | "gastos",
   });
   const [form, setForm] = useState(emptyForm());
   const [saving, setSaving] = useState(false);
@@ -237,6 +250,34 @@ export function CierresView() {
     const contado = Number((form.total_contado || "0").replace(",", ".")) || 0;
     return Math.round((efectivo - contado) * 100) / 100;
   }, [form.efectivo_retirado, form.total_contado]);
+
+  // ── Descuadre: cerrar con descuadre (nota obligatoria) o declarar gastos ──
+  // Solo el cierre semanal tiene descuadre; retiradas e ingresos nunca lo tienen.
+  const hayDescuadre = form.tipo === "cierre" && descuadrePreview !== 0;
+
+  // Los gastos SOLO se pueden declarar cuando hay diferencia y se ha elegido
+  // justificarla con gastos. Si el cierre cuadra no hay nada que declarar.
+  const puedeDeclararGastos = hayDescuadre && form.resolucion_descuadre === "gastos";
+
+  // Cerrar con descuadre exige explicar por escrito los motivos que se creen.
+  const notaMotivosObligatoria = hayDescuadre && form.resolucion_descuadre === "descuadre";
+
+  // Al desaparecer el descuadre (o al cambiar de tipo) se limpian la decisión y
+  // los gastos: quedarían huérfanos y el backend los rechazaría igualmente.
+  useEffect(() => {
+    if (hayDescuadre) return;
+    setForm((f) =>
+      f.resolucion_descuadre === "" && f.gastos.length === 0
+        ? f
+        : { ...f, resolucion_descuadre: "", gastos: [] },
+    );
+  }, [hayDescuadre]);
+
+  // Al pasar de "declarar gastos" a "cerrar con descuadre" se descartan los gastos.
+  useEffect(() => {
+    if (form.resolucion_descuadre === "gastos") return;
+    setForm((f) => (f.gastos.length === 0 ? f : { ...f, gastos: [] }));
+  }, [form.resolucion_descuadre]);
 
   // ── Guardia de caja: el efectivo acumulado NUNCA puede quedar por debajo de cero ──
   // No se puede sacar (retirada de salida / ingreso al banco) dinero que no hay en caja.
@@ -449,7 +490,7 @@ export function CierresView() {
             <CheckCircle2 className="h-3 w-3" /> Cuadra
           </Badge>
         ) : (
-          <Badge className={`gap-1 ${c.descuadre >= 0 ? "bg-amber-100 text-amber-800 border-amber-300" : "bg-red-100 text-red-800 border-red-300"}`}>
+          <Badge className={`gap-1 ${c.descuadre >= 0 ? "bg-emerald-100 text-emerald-800 border-emerald-300" : "bg-red-100 text-red-800 border-red-300"}`}>
             <AlertTriangle className="h-3 w-3" />
             {c.descuadre >= 0 ? "Sobra" : "Falta"}
           </Badge>
@@ -457,8 +498,8 @@ export function CierresView() {
       </TableCell>
     ),
     descuadre: (
-      <TableCell key="descuadre" className={`text-right font-medium ${c.descuadre === 0 ? "text-muted-foreground" : c.descuadre > 0 ? "text-amber-700" : "text-red-700"}`}>
-        {c.cuadra ? "—" : fmtEuro(c.descuadre)}
+      <TableCell key="descuadre" className={`text-right font-medium ${c.descuadre === 0 ? "text-muted-foreground" : c.descuadre > 0 ? "text-emerald-700" : "text-red-700"}`}>
+        {c.cuadra ? "—" : fmtDescuadre(c.descuadre)}
       </TableCell>
     ),
     gastos: (
@@ -532,10 +573,33 @@ export function CierresView() {
       toast.error("La fecha es obligatoria");
       return;
     }
+    // Quién apunta el movimiento es obligatorio: todo cierre queda con responsable.
+    if (!form.registrado_por.trim()) {
+      toast.error("Indica quién apunta el cierre: es obligatorio");
+      return;
+    }
     // Cierres e ingresos exigen al menos un justificante adjunto (la retirada no).
     if (form.tipo !== "retirada" && form.files.length === 0) {
       toast.error(`Debes adjuntar un documento para registrar ${form.tipo === "ingreso" ? "un ingreso" : "un cierre"}`);
       return;
+    }
+    // Con descuadre hay que decidir qué se hace con la diferencia.
+    if (hayDescuadre) {
+      if (!form.resolucion_descuadre) {
+        toast.error("Hay descuadre: elige si cierras con descuadre o si declaras gastos");
+        return;
+      }
+      if (form.resolucion_descuadre === "descuadre" && !form.notas.trim()) {
+        toast.error("Explica en las notas los motivos del descuadre: es obligatorio");
+        return;
+      }
+      if (form.resolucion_descuadre === "gastos") {
+        const totalGastos = Math.round(totalGastosPreview * 100) / 100;
+        if (totalGastos <= 0) {
+          toast.error("Has elegido declarar gastos: añade al menos un gasto con importe");
+          return;
+        }
+      }
     }
     // El efectivo acumulado nunca puede quedar por debajo de cero.
     if (errorSaldo) {
@@ -590,12 +654,15 @@ export function CierresView() {
       // Total contado y gastos solo aplican al cierre semanal.
       if (form.tipo === "cierre") {
         fd.append("total_contado", form.total_contado || "0");
+        // Qué se hace con la diferencia (solo tiene efecto si hay descuadre).
+        if (hayDescuadre) fd.append("resolucion_descuadre", form.resolucion_descuadre);
       }
       // El descuadre lo calcula el backend (retirado − cierre); no se envía a mano.
       fd.append("notas", form.notas);
       fd.append("registrado_por", form.registrado_por);
-      if (form.tipo === "cierre") {
-        // Gastos de la semana: se descartan filas totalmente vacías.
+      // Los gastos solo viajan si hay descuadre y se eligió justificarlo con gastos.
+      if (puedeDeclararGastos) {
+        // Gastos declarados: se descartan filas totalmente vacías.
         const gastosPayload: CierreGasto[] = form.gastos
           .map((g) => ({
             tipo: g.tipo.trim(),
@@ -876,12 +943,12 @@ export function CierresView() {
         </Card>
         <Card>
           <CardContent className="p-4 flex items-center gap-3">
-            <div className={`h-10 w-10 rounded-lg flex items-center justify-center ${resumen.saldoNeto >= 0 ? "bg-emerald-50" : "bg-amber-50"}`}>
-              <Wallet className={`h-5 w-5 ${resumen.saldoNeto >= 0 ? "text-emerald-600" : "text-amber-600"}`} />
+            <div className={`h-10 w-10 rounded-lg flex items-center justify-center ${resumen.saldoNeto >= 0 ? "bg-emerald-50" : "bg-red-50"}`}>
+              <Wallet className={`h-5 w-5 ${resumen.saldoNeto >= 0 ? "text-emerald-600" : "text-red-600"}`} />
             </div>
             <div>
-              <p className={`text-2xl font-bold ${resumen.saldoNeto >= 0 ? "text-emerald-700" : "text-amber-700"}`}>
-                {fmtEuro(resumen.saldoNeto)}
+              <p className={`text-2xl font-bold ${resumen.saldoNeto >= 0 ? "text-emerald-700" : "text-red-700"}`}>
+                {fmtDescuadre(resumen.saldoNeto)}
               </p>
               <p className="text-xs text-muted-foreground">Saldo neto descuadres</p>
             </div>
@@ -1038,8 +1105,8 @@ export function CierresView() {
                           <div key={c.id} className="text-[10px] leading-tight">
                             <span className={`font-medium ${esNegativo ? "text-red-700" : ""}`}>{fmtEuro(importeConSigno)}</span>
                             {!c.cuadra && (
-                              <span className={`ml-1 ${c.descuadre >= 0 ? "text-amber-700" : "text-red-700"}`}>
-                                ({c.descuadre >= 0 ? "+" : ""}{fmtEuro(c.descuadre)})
+                              <span className={`ml-1 ${c.descuadre >= 0 ? "text-emerald-700" : "text-red-700"}`}>
+                                ({fmtDescuadre(c.descuadre)})
                               </span>
                             )}
                           </div>
@@ -1251,16 +1318,18 @@ export function CierresView() {
               />
             </div>
             <div>
-              <Label>Registrado por</Label>
+              <Label>
+                Apuntado por
+                <span className="text-red-600"> *</span>
+              </Label>
               <Select
-                value={form.registrado_por || "__none__"}
-                onValueChange={(v) => setForm({ ...form, registrado_por: v === "__none__" ? "" : v })}
+                value={form.registrado_por || undefined}
+                onValueChange={(v) => setForm({ ...form, registrado_por: v })}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Selecciona un empleado" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="__none__">Sin especificar</SelectItem>
                   {empleados.map((e) => (
                     <SelectItem key={e.empleadoId} value={e.nombreCompleto}>
                       {e.nombreCompleto}
@@ -1273,6 +1342,11 @@ export function CierresView() {
                   ))}
                 </SelectContent>
               </Select>
+              {!form.registrado_por && (
+                <p className="text-xs text-red-600 mt-1">
+                  Obligatorio: indica quién apunta el cierre.
+                </p>
+              )}
             </div>
 
             <div className={form.tipo === "retirada" ? "col-span-2" : undefined}>
@@ -1369,7 +1443,7 @@ export function CierresView() {
                   descuadrePreview === 0
                     ? "bg-emerald-50 border-emerald-200"
                     : descuadrePreview > 0
-                      ? "bg-amber-50 border-amber-200"
+                      ? "bg-emerald-50 border-emerald-200"
                       : "bg-red-50 border-red-200"
                 }`}
               >
@@ -1381,8 +1455,8 @@ export function CierresView() {
                     </>
                   ) : descuadrePreview > 0 ? (
                     <>
-                      <ArrowUpFromLine className="h-4 w-4 text-amber-600" />
-                      <span className="text-sm font-medium text-amber-800">Sobra dinero</span>
+                      <ArrowUpFromLine className="h-4 w-4 text-emerald-600" />
+                      <span className="text-sm font-medium text-emerald-800">Sobra dinero</span>
                     </>
                   ) : (
                     <>
@@ -1396,11 +1470,11 @@ export function CierresView() {
                     descuadrePreview === 0
                       ? "text-emerald-700"
                       : descuadrePreview > 0
-                        ? "text-amber-700"
+                        ? "text-emerald-700"
                         : "text-red-700"
                   }`}
                 >
-                  {descuadrePreview > 0 ? "+" : ""}{fmtEuro(descuadrePreview)}
+                  {fmtDescuadre(descuadrePreview)}
                 </span>
               </div>
               <p className="text-xs text-muted-foreground mt-1">
@@ -1409,13 +1483,64 @@ export function CierresView() {
             </div>
             )}
 
-            {/* Gastos de la semana (registro informativo, no afecta al descuadre) */}
-            {form.tipo === "cierre" && (
+            {/* Qué se hace con la diferencia: cerrar con descuadre o declarar gastos.
+                Solo aparece cuando NO cuadra; si cuadra no hay nada que resolver. */}
+            {hayDescuadre && (
+            <div className="col-span-2">
+              <Label className="mb-2 block">¿Qué hacemos con la diferencia? *</Label>
+              <div className="grid grid-cols-2 gap-2">
+                {([
+                  {
+                    value: "descuadre" as const,
+                    titulo: "Cerrar con descuadre",
+                    ayuda: "La diferencia queda como descuadre. Hay que explicar los motivos en las notas.",
+                    icon: AlertTriangle,
+                  },
+                  {
+                    value: "gastos" as const,
+                    titulo: "Declarar gastos",
+                    ayuda: "La diferencia se justifica con gastos pagados del efectivo.",
+                    icon: Receipt,
+                  },
+                ]).map((op) => {
+                  const activo = form.resolucion_descuadre === op.value;
+                  const Icono = op.icon;
+                  return (
+                    <button
+                      key={op.value}
+                      type="button"
+                      onClick={() => setForm((f) => ({ ...f, resolucion_descuadre: op.value }))}
+                      className={`rounded-lg border p-3 text-left transition ${
+                        activo
+                          ? "border-primary bg-primary/5 ring-1 ring-primary"
+                          : "hover:border-muted-foreground/40"
+                      }`}
+                      aria-pressed={activo}
+                    >
+                      <span className="flex items-center gap-1.5 text-sm font-medium">
+                        <Icono className="h-4 w-4 text-muted-foreground" />
+                        {op.titulo}
+                      </span>
+                      <span className="mt-1 block text-xs text-muted-foreground">{op.ayuda}</span>
+                    </button>
+                  );
+                })}
+              </div>
+              {!form.resolucion_descuadre && (
+                <p className="text-xs text-red-600 mt-1">
+                  Obligatorio: el cierre no cuadra, elige una de las dos opciones.
+                </p>
+              )}
+            </div>
+            )}
+
+            {/* Gastos declarados: solo cuando hay descuadre y se eligió justificarlo con gastos. */}
+            {puedeDeclararGastos && (
             <div className="col-span-2">
               <div className="flex items-center justify-between mb-2">
                 <Label className="flex items-center gap-1.5">
                   <Receipt className="h-4 w-4 text-muted-foreground" />
-                  Gastos de la semana
+                  Gastos declarados
                 </Label>
                 <Button type="button" size="sm" variant="outline" className="gap-1" onClick={addGasto}>
                   <Plus className="h-3.5 w-3.5" /> Añadir gasto
@@ -1423,8 +1548,8 @@ export function CierresView() {
               </div>
 
               {form.gastos.length === 0 ? (
-                <p className="text-xs text-muted-foreground rounded-lg border border-dashed px-4 py-4 text-center">
-                  Sin gastos apuntados. Añade los gastos que haya habido durante la semana.
+                <p className="text-xs text-red-600 rounded-lg border border-dashed border-red-200 px-4 py-4 text-center">
+                  Obligatorio: añade los gastos que justifican la diferencia de {fmtEuro(Math.abs(descuadrePreview))}.
                 </p>
               ) : (
                 <div className="space-y-2">
@@ -1556,19 +1681,42 @@ export function CierresView() {
             )}
 
             <div className="col-span-2">
-              <Label>Notas / Observaciones</Label>
+              <Label>
+                {notaMotivosObligatoria ? "Motivos del descuadre" : "Notas / Observaciones"}
+                {notaMotivosObligatoria && <span className="text-red-600"> *</span>}
+              </Label>
               <Textarea
                 rows={3}
                 value={form.notas}
                 onChange={(e) => setForm({ ...form, notas: e.target.value })}
-                placeholder="Cualquier comentario sobre el cierre..."
+                placeholder={
+                  notaMotivosObligatoria
+                    ? "Explica a qué se cree que se debe la diferencia..."
+                    : "Cualquier comentario sobre el cierre..."
+                }
               />
+              {notaMotivosObligatoria && !form.notas.trim() && (
+                <p className="text-xs text-red-600 mt-1">
+                  Obligatorio: explica los motivos que se creen del descuadre.
+                </p>
+              )}
             </div>
           </div>
 
           <DialogFooter className="mt-4">
             <Button variant="outline" onClick={() => setModalOpen(false)} disabled={saving}>Cancelar</Button>
-            <Button onClick={handleGuardar} disabled={!form.fecha || saving || !!errorSaldo}>
+            <Button
+              onClick={handleGuardar}
+              disabled={
+                !form.fecha
+                || saving
+                || !!errorSaldo
+                || !form.registrado_por.trim()
+                || (hayDescuadre && !form.resolucion_descuadre)
+                || (notaMotivosObligatoria && !form.notas.trim())
+                || (puedeDeclararGastos && totalGastosPreview <= 0)
+              }
+            >
               {saving ? "Guardando..." : "Guardar"}
             </Button>
           </DialogFooter>
@@ -1709,9 +1857,9 @@ export function CierresView() {
                         <CheckCircle2 className="h-3 w-3" /> Cuadra
                       </Badge>
                     ) : (
-                      <Badge className={`gap-1 ${selected.descuadre >= 0 ? "bg-amber-100 text-amber-800 border-amber-300" : "bg-red-100 text-red-800 border-red-300"}`}>
+                      <Badge className={`gap-1 ${selected.descuadre >= 0 ? "bg-emerald-100 text-emerald-800 border-emerald-300" : "bg-red-100 text-red-800 border-red-300"}`}>
                         <AlertTriangle className="h-3 w-3" />
-                        {selected.descuadre >= 0 ? "Sobra" : "Falta"}: {fmtEuro(Math.abs(selected.descuadre))}
+                        {selected.descuadre >= 0 ? "Sobra" : "Falta"}: {fmtDescuadre(selected.descuadre)}
                       </Badge>
                     )
                   )}
@@ -1743,8 +1891,8 @@ export function CierresView() {
                   {selected.tipo === "cierre" && !selected.cuadra && (
                     <div>
                       <Label className="text-xs text-muted-foreground">Descuadre</Label>
-                      <p className={`text-base font-semibold ${selected.descuadre >= 0 ? "text-amber-700" : "text-red-700"}`}>
-                        {selected.descuadre >= 0 ? "+" : ""}{fmtEuro(selected.descuadre)}
+                      <p className={`text-base font-semibold ${selected.descuadre >= 0 ? "text-emerald-700" : "text-red-700"}`}>
+                        {fmtDescuadre(selected.descuadre)}
                       </p>
                     </div>
                   )}
