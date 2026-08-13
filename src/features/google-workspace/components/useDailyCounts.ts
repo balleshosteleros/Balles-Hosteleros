@@ -198,6 +198,13 @@ export function useDailyCounts(): DailyCounts {
     } catch {
       setCounts((prev) => ({ ...prev, tasks, chatGroups, missedCalls, newContacts }));
     }
+    // `empresaSlug` NO se usa dentro del callback, pero es una dependencia
+    // NECESARIA: las server actions de arriba (tareas, chat, llamadas, agenda)
+    // resuelven la empresa activa por cookie en el servidor, así que al cambiar
+    // de empresa cambia el resultado sin que cambie ningún argumento visible.
+    // Sin esta dependencia los badges se quedarían con los números de la
+    // empresa anterior hasta el siguiente tick de 1 minuto.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [connected, empresaSlug, diasAnuncio]);
 
   useEffect(() => {
