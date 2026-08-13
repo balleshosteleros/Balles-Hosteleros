@@ -413,18 +413,45 @@ export function CierresView() {
     return m;
   }, [cierres]);
 
-  // Campos filtrables de la barra de herramientas.
+  // Quién apuntó cada movimiento: la lista sale de los datos reales, sin repetidos.
+  const opcionesRegistradoPor = useMemo(() => {
+    const set = new Set<string>();
+    cierres.forEach((c) => {
+      const q = (c.registrado_por ?? "").trim();
+      if (q) set.add(q);
+    });
+    return [...set].sort((a, b) => a.localeCompare(b, "es"));
+  }, [cierres]);
+
+  // Campos filtrables de la barra de herramientas: UNO POR CADA COLUMNA de la
+  // tabla, para poder acotar por cualquiera de ellas (importes, fechas, texto).
   const camposFiltro: ToolbarCampoFiltro[] = [
+    { campo: "fecha", label: "Fecha", tipo: "fecha" },
     { campo: "tipo", label: "Tipo", tipo: "lista", opciones: ["Cierre", "Ingreso", "Retirada"] },
+    { campo: "efectivo", label: "Efectivo retirado", tipo: "numero" },
+    { campo: "total", label: "Total cierre", tipo: "numero" },
     { campo: "estado", label: "Estado", tipo: "lista", opciones: ["Cuadra", "Sobra", "Falta"] },
+    { campo: "descuadre", label: "Descuadre", tipo: "numero" },
+    { campo: "gastos", label: "Gastos", tipo: "numero" },
+    { campo: "acumulado", label: "Acumulado", tipo: "numero" },
+    { campo: "doc", label: "Documentos", tipo: "numero" },
     { campo: "tieneDoc", label: "Con documento", tipo: "booleano" },
+    { campo: "registrado_por", label: "Apuntado por", tipo: "lista", opciones: opcionesRegistradoPor },
   ];
 
   // Accesor que traduce cada fila al valor comparable por los filtros.
+  // Las claves coinciden con las de las columnas de la tabla, para que filtrar
+  // por "Descuadre" o "Acumulado" compare exactamente lo que se ve en pantalla.
   const accesoCierre = (c: CierreRow, campo: string): unknown => {
     if (campo === "tipo") return TIPO_LABEL[c.tipo];
     if (campo === "estado") return c.cuadra ? "Cuadra" : c.descuadre >= 0 ? "Sobra" : "Falta";
     if (campo === "tieneDoc") return (c.documentos?.length ?? 0) > 0 || !!c.storage_path;
+    if (campo === "efectivo") return importeEfectivo(c);
+    if (campo === "total") return c.total_contado;
+    if (campo === "gastos") return c.total_gastos;
+    if (campo === "acumulado") return acumuladoPorId[c.id] ?? 0;
+    if (campo === "doc") return (c.documentos?.length ?? 0) || (c.storage_path ? 1 : 0);
+    if (campo === "registrado_por") return (c.registrado_por ?? "").trim();
     return (c as unknown as Record<string, unknown>)[campo];
   };
 
@@ -437,7 +464,7 @@ export function CierresView() {
     ) as unknown as CierreRow[];
     return lista;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cierres, busqueda, filtros]);
+  }, [cierres, busqueda, filtros, acumuladoPorId]);
 
   const columnasDef: ToolbarColumna[] = [
     { campo: "fecha", label: "Fecha", bloqueada: true },
