@@ -127,6 +127,13 @@ function fmtSize(bytes: number | null): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+// Enlace al adjunto de un cierre. Se apunta a la ruta que firma el documento EN
+// EL MOMENTO del clic: las URLs firmadas al cargar la lista caducan a la hora y
+// abrirlas después devolvía `InvalidJWT: "exp" claim timestamp check failed`.
+function urlDocumentoCierre(path: string): string {
+  return `/api/cierres/doc?path=${encodeURIComponent(path)}`;
+}
+
 // Convierte el getDay() de JS (0=Dom..6=Sab) a nuestro orden (0=Lun..6=Dom)
 function jsDayToLunFirst(d: Date): number {
   return (getDay(d) + 6) % 7;
@@ -375,7 +382,7 @@ export function CierresView() {
   const accesoCierre = (c: CierreRow, campo: string): unknown => {
     if (campo === "tipo") return TIPO_LABEL[c.tipo];
     if (campo === "estado") return c.cuadra ? "Cuadra" : c.descuadre >= 0 ? "Sobra" : "Falta";
-    if (campo === "tieneDoc") return (c.documentos?.length ?? 0) > 0 || !!c.url;
+    if (campo === "tieneDoc") return (c.documentos?.length ?? 0) > 0 || !!c.storage_path;
     return (c as unknown as Record<string, unknown>)[campo];
   };
 
@@ -466,7 +473,10 @@ export function CierresView() {
     ),
     doc: (() => {
       const numDocs = c.documentos?.length ?? 0;
-      const urlDirecta = numDocs === 1 ? c.documentos[0].url : numDocs === 0 ? c.url : null;
+      // Se enlaza el path (no la URL firmada al cargar la lista): la firma se
+      // genera en el clic, así nunca llega caducada (InvalidJWT).
+      const pathDirecto = numDocs === 1 ? c.documentos[0].path : numDocs === 0 ? c.storage_path : null;
+      const urlDirecta = pathDirecto ? urlDocumentoCierre(pathDirecto) : null;
       return (
         <TableCell key="doc">
           {numDocs > 1 ? (
@@ -1784,14 +1794,14 @@ export function CierresView() {
                   </div>
                 )}
 
-                {(selected.documentos.length > 0 || selected.url) && (
+                {(selected.documentos.length > 0 || selected.storage_path) && (
                   <div className="space-y-2">
                     <Label className="text-xs text-muted-foreground">
                       {selected.documentos.length > 1 ? "Documentos" : "Documento"}
                     </Label>
                     {(selected.documentos.length > 0
                       ? selected.documentos
-                      : [{ name: selected.file_name ?? "Documento del cierre", size: selected.size_bytes ?? 0, url: selected.url }]
+                      : [{ name: selected.file_name ?? "Documento del cierre", size: selected.size_bytes ?? 0, path: selected.storage_path ?? "" }]
                     ).map((doc, i) => (
                       <div key={i} className="rounded-lg border p-3 flex items-center justify-between">
                         <div className="flex items-center gap-2 min-w-0">
@@ -1801,9 +1811,9 @@ export function CierresView() {
                             <p className="text-xs text-muted-foreground">{fmtSize(doc.size)}</p>
                           </div>
                         </div>
-                        {doc.url && (
+                        {doc.path && (
                           <Button asChild size="sm" variant="outline" className="shrink-0">
-                            <a href={doc.url} target="_blank" rel="noreferrer">
+                            <a href={urlDocumentoCierre(doc.path)} target="_blank" rel="noreferrer">
                               <Download className="h-3.5 w-3.5 mr-1" /> Abrir
                             </a>
                           </Button>
