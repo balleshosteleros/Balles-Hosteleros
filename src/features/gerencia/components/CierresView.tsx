@@ -116,6 +116,13 @@ function fmtDescuadre(n: number): string {
   return `${n > 0 ? "+" : "−"}${fmtEuro(Math.abs(n))}`;
 }
 
+// Un gasto SIEMPRE resta dinero de la caja, así que se enseña con el signo negativo
+// delante aunque en la base de datos se guarde como cantidad positiva.
+function fmtGasto(n: number): string {
+  if (n === 0) return fmtEuro(0);
+  return `−${fmtEuro(Math.abs(n))}`;
+}
+
 // Efecto de cada movimiento sobre el efectivo acumulado.
 // El cierre SIEMPRE suma efectivo a caja. El ingreso SIEMPRE lo saca (va al banco).
 //
@@ -531,8 +538,8 @@ export function CierresView() {
       </TableCell>
     ),
     gastos: (
-      <TableCell key="gastos" className={`text-right ${c.total_gastos > 0 ? "text-orange-700 font-medium" : "text-muted-foreground"}`}>
-        {c.total_gastos > 0 ? fmtEuro(c.total_gastos) : "—"}
+      <TableCell key="gastos" className={`text-right ${c.total_gastos > 0 ? "text-red-700 font-medium" : "text-muted-foreground"}`}>
+        {c.total_gastos > 0 ? fmtGasto(c.total_gastos) : "—"}
       </TableCell>
     ),
     acumulado: (
@@ -996,7 +1003,7 @@ export function CierresView() {
               <Receipt className="h-5 w-5 text-orange-600" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-orange-700">{fmtEuro(resumen.acumuladoGastos)}</p>
+              <p className="text-2xl font-bold text-red-700">{fmtGasto(resumen.acumuladoGastos)}</p>
               <p className="text-xs text-muted-foreground">Gastos acumulados</p>
             </div>
           </CardContent>
@@ -1961,12 +1968,12 @@ export function CierresView() {
                             )}
                             <span className="text-sm text-muted-foreground">{g.descripcion || "—"}</span>
                           </div>
-                          <span className="text-sm font-medium shrink-0">{fmtEuro(g.importe)}</span>
+                          <span className="text-sm font-medium shrink-0 text-red-700">{fmtGasto(g.importe)}</span>
                         </div>
                       ))}
                       <div className="flex items-center justify-between px-3 py-2 bg-muted/50">
                         <span className="text-sm font-medium">Total gastos</span>
-                        <span className="text-sm font-bold">{fmtEuro(selected.total_gastos)}</span>
+                        <span className="text-sm font-bold text-red-700">{fmtGasto(selected.total_gastos)}</span>
                       </div>
                     </div>
                   </div>
