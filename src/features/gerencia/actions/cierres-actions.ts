@@ -134,6 +134,77 @@ async function firmarDocumentos(
   return out;
 }
 
+// Efecto de un movimiento sobre el efectivo de la caja fuerte.
+// El cierre SIEMPRE suma. El ingreso SIEMPRE resta (el dinero va al banco).
+// La retirada suma o resta según `retirada_entrada` (false = sale, true = entra).
+// MISMA fórmula que la UI (`importeEfectivo` en CierresView) — si cambia una, cambian las dos.
+export function efectoEnCaja(mov: { tipo: CierreTipo; efectivo_retirado: number; retirada_entrada?: boolean }): number {
+  const magnitud = Math.abs(Number(mov.efectivo_retirado) || 0);
+  if (mov.tipo === "retirada") return mov.retirada_entrada ? magnitud : -magnitud;
+  return mov.tipo === "cierre" ? magnitud : -magnitud;
+}
+
+// Redondeo a céntimos: evita que los flotantes den saldos tipo -0,0000001.
+function céntimos(n: number): number {
+  return Math.round(n * 100) / 100;
+}
+
+/**
+ * El efectivo acumulado en la caja fuerte NUNCA puede quedar por debajo de cero:
+ * no se puede sacar dinero que no se tiene.
+ *
+ * No basta con mirar el saldo final: los movimientos se ordenan por fecha, así que
+ * uno con fecha atrasada puede dejar en negativo el acumulado de los días POSTERIORES.
+ * Por eso se recalcula el running total completo con el movimiento nuevo insertado
+ * en su sitio y se rechaza si CUALQUIER punto de la línea queda negativo.
+ *
+ * Devuelve null si el movimiento es válido, o el mensaje de error si no lo es.
+ */
+function validarSaldoNoNegativo(
+  existentes: Array<{ fecha: string; created_at: string; tipo: CierreTipo; efectivo_retirado: number; retirada_entrada: boolean }>,
+  nuevo: { fecha: string; tipo: CierreTipo; efectivo_retirado: number; retirada_entrada: boolean },
+): string | null {
+  const efecto = efectoEnCaja(nuevo);
+  // Los movimientos que SUMAN efectivo nunca pueden dejar la caja en negativo.
+  if (efecto >= 0) return null;
+
+  // Saldo disponible justo ANTES de este movimiento (todo lo anterior a su fecha).
+  const saldoPrevio = céntimos(
+    existentes
+      .filter((m) => m.fecha <= nuevo.fecha)
+      .reduce((s, m) => s + efectoEnCaja(m), 0),
+  );
+
+  const importe = Math.abs(efecto);
+  const accion = nuevo.tipo === "ingreso" ? "ingresar" : "retirar";
+
+  if (saldoPrevio <= 0) {
+    return `No hay efectivo acumulado en caja a fecha ${nuevo.fecha} (saldo: ${fmtEuro(saldoPrevio)}). `
+      + `No puedes ${accion} ${fmtEuro(importe)} de un dinero que no tienes.`;
+  }
+  if (importe > saldoPrevio) {
+    return `Solo hay ${fmtEuro(saldoPrevio)} de efectivo acumulado en caja a fecha ${nuevo.fecha}. `
+      + `No puedes ${accion} ${fmtEuro(importe)} porque dejaría el acumulado en ${fmtEuro(céntimos(saldoPrevio - importe))}, y eso es imposible: `
+      + `no se puede sacar dinero que no se tiene. Como máximo puedes ${accion} ${fmtEuro(saldoPrevio)}.`;
+  }
+
+  // El movimiento cabe en su fecha, pero al ir atrasado puede hundir días posteriores.
+  const posteriores = existentes.filter((m) => m.fecha > nuevo.fecha).sort((a, b) => (a.fecha < b.fecha ? -1 : a.fecha > b.fecha ? 1 : a.created_at < b.created_at ? -1 : 1));
+  let run = céntimos(saldoPrevio + efecto);
+  for (const m of posteriores) {
+    run = céntimos(run + efectoEnCaja(m));
+    if (run < 0) {
+      return `Este movimiento cuadra el ${nuevo.fecha}, pero dejaría el acumulado en ${fmtEuro(run)} el ${m.fecha}, `
+      + `y el efectivo acumulado nunca puede quedar por debajo de cero. Revisa la fecha o el importe.`;
+    }
+  }
+  return null;
+}
+
+function fmtEuro(n: number): string {
+  return new Intl.NumberFormat("es-ES", { style: "currency", currency: "EUR" }).format(n);
+}
+
 function isoWeek(dateStr: string): string {
   const d = new Date(dateStr + "T00:00:00");
   const target = new Date(d.valueOf());
@@ -354,6 +425,37 @@ export async function createCierre(formData: FormData): Promise<{ ok: true; data
     // >0 sobra · <0 falta · 0 cuadra. No se acepta valor manual.
     const descuadre = tipo === "cierre" ? Math.round((efectivo - contado) * 100) / 100 : 0;
     const cuadra = descuadre === 0;
+
+    // GUARDIA DE CAJA: el efectivo acumulado nunca puede quedar por debajo de cero.
+    // Se comprueba en el servidor (barrera real) además de en la UI, porque aquí es
+    // donde se decide si el movimiento entra o no en la caja.
+    if (efectivo > 0) {
+      const { data: previos, error: previosErr } = await supabase
+        .from("cierres_semanales")
+        .select("fecha, created_at, tipo, efectivo_retirado, retirada_entrada")
+        .eq("empresa_id", empresaId);
+
+      if (previosErr) {
+        console.error("[cierres:create] saldo previo:", previosErr.message);
+        return { ok: false, error: "No se pudo comprobar el efectivo acumulado en caja" };
+      }
+
+      const existentes = (previos ?? []).map((m) => ({
+        fecha: ((m.fecha as string) ?? "").slice(0, 10),
+        created_at: (m.created_at as string) ?? "",
+        tipo: (((m.tipo as string | null) ?? "cierre") as CierreTipo),
+        efectivo_retirado: Number(m.efectivo_retirado ?? 0),
+        retirada_entrada: m.retirada_entrada === true,
+      }));
+
+      const problema = validarSaldoNoNegativo(existentes, {
+        fecha,
+        tipo,
+        efectivo_retirado: efectivo,
+        retirada_entrada: retiradaEntrada,
+      });
+      if (problema) return { ok: false, error: problema };
+    }
 
     const { data: row, error: dbErr } = await supabase
       .from("cierres_semanales")

@@ -231,6 +231,58 @@ export function CierresView() {
     return Math.round((efectivo - contado) * 100) / 100;
   }, [form.efectivo_retirado, form.total_contado]);
 
+  // ── Guardia de caja: el efectivo acumulado NUNCA puede quedar por debajo de cero ──
+  // No se puede sacar (retirada de salida / ingreso al banco) dinero que no hay en caja.
+
+  // Efectivo disponible en la caja fuerte justo ANTES del movimiento que se está
+  // tecleando (suma de todo lo registrado hasta su fecha, incluida).
+  const saldoDisponible = useMemo(() => {
+    if (!form.fecha) return 0;
+    const suma = cierres
+      .filter((c) => c.fecha <= form.fecha)
+      .reduce((s, c) => s + importeEfectivo(c), 0);
+    return Math.round(suma * 100) / 100;
+  }, [cierres, form.fecha]);
+
+  // Signo del movimiento en curso: ¿saca dinero de la caja?
+  const movimientoSacaEfectivo = useMemo(() => {
+    if (form.tipo === "ingreso") return true;
+    if (form.tipo === "retirada") return form.retirada_sentido === "salida";
+    return false; // el cierre siempre suma
+  }, [form.tipo, form.retirada_sentido]);
+
+  // Acumulado que quedaría si se guardase este movimiento.
+  const acumuladoResultante = useMemo(
+    () => Math.round((saldoDisponible + (movimientoSacaEfectivo ? -importeRetiradaPreview : importeRetiradaPreview)) * 100) / 100,
+    [saldoDisponible, movimientoSacaEfectivo, importeRetiradaPreview],
+  );
+
+  // Mensaje de bloqueo (null = el movimiento es válido). Capa la UI y explica el porqué.
+  const errorSaldo = useMemo(() => {
+    if (!movimientoSacaEfectivo || importeRetiradaPreview <= 0) return null;
+    const accion = form.tipo === "ingreso" ? "ingresar" : "retirar";
+    if (saldoDisponible <= 0) {
+      return `No hay efectivo acumulado en caja a esta fecha (${fmtEuro(saldoDisponible)}). `
+        + `No puedes ${accion} ${fmtEuro(importeRetiradaPreview)} de un dinero que no tienes.`;
+    }
+    if (importeRetiradaPreview > saldoDisponible) {
+      return `Solo hay ${fmtEuro(saldoDisponible)} de efectivo acumulado en caja. `
+        + `No puedes ${accion} ${fmtEuro(importeRetiradaPreview)} porque dejaría el acumulado en ${fmtEuro(acumuladoResultante)}, y eso es imposible. `
+        + `Como máximo puedes ${accion} ${fmtEuro(saldoDisponible)}.`;
+    }
+    // El movimiento cabe hoy, pero si va con fecha atrasada puede hundir días posteriores.
+    let run = acumuladoResultante;
+    const posteriores = [...cierres].filter((c) => c.fecha > form.fecha).sort((a, b) => (a.fecha < b.fecha ? -1 : 1));
+    for (const c of posteriores) {
+      run = Math.round((run + importeEfectivo(c)) * 100) / 100;
+      if (run < 0) {
+        return `Este movimiento cuadra en su fecha, pero dejaría el acumulado en ${fmtEuro(run)} el ${c.fecha}, `
+          + `y el efectivo acumulado nunca puede quedar por debajo de cero. Revisa la fecha o el importe.`;
+      }
+    }
+    return null;
+  }, [movimientoSacaEfectivo, importeRetiradaPreview, saldoDisponible, acumuladoResultante, form.tipo, form.fecha, cierres]);
+
   const [cfgForm, setCfgForm] = useState<CierresConfig>({ modo: "libre", dia_semana: null });
   const [cfgSaving, setCfgSaving] = useState(false);
 
@@ -473,6 +525,11 @@ export function CierresView() {
     // Cierres e ingresos exigen al menos un justificante adjunto (la retirada no).
     if (form.tipo !== "retirada" && form.files.length === 0) {
       toast.error(`Debes adjuntar un documento para registrar ${form.tipo === "ingreso" ? "un ingreso" : "un cierre"}`);
+      return;
+    }
+    // El efectivo acumulado nunca puede quedar por debajo de cero.
+    if (errorSaldo) {
+      toast.error(errorSaldo);
       return;
     }
     setSaving(true);
@@ -1265,6 +1322,19 @@ export function CierresView() {
                   Efectivo que sale de la caja fuerte y se ingresa en el banco.
                 </p>
               )}
+
+              {/* Guardia de caja: disponible en vivo y bloqueo si el acumulado quedaría negativo. */}
+              {movimientoSacaEfectivo && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  Efectivo acumulado disponible a esta fecha: <strong>{fmtEuro(saldoDisponible)}</strong>.
+                </p>
+              )}
+              {errorSaldo && (
+                <div className="mt-2 flex items-start gap-2 rounded-md border border-red-200 bg-red-50 p-2 text-xs text-red-700">
+                  <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+                  <span>{errorSaldo}</span>
+                </div>
+              )}
             </div>
             {form.tipo === "cierre" && (
               <div>
@@ -1488,7 +1558,7 @@ export function CierresView() {
 
           <DialogFooter className="mt-4">
             <Button variant="outline" onClick={() => setModalOpen(false)} disabled={saving}>Cancelar</Button>
-            <Button onClick={handleGuardar} disabled={!form.fecha || saving}>
+            <Button onClick={handleGuardar} disabled={!form.fecha || saving || !!errorSaldo}>
               {saving ? "Guardando..." : "Guardar"}
             </Button>
           </DialogFooter>
