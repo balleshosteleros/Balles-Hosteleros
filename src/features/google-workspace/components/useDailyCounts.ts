@@ -8,6 +8,7 @@ import { contarMensajesSinLeer } from "@/features/comunicacion/actions/comunicac
 import { contarContactosNuevos } from "@/features/agenda/actions/contactos-actions";
 import { contarLlamadasPerdidasNoVistas } from "@/features/llamadas-internas/actions/llamadas-actions";
 import { LLAMADAS_VISTAS_KEY } from "./TelefonoDrawer";
+import { loadCalendariosSeleccionados } from "../lib/calendar-prefs";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 
 function ymd(d: Date): string {
@@ -120,6 +121,32 @@ export function useDailyCounts(): DailyCounts {
 
     try {
       const ref = ymd(new Date());
+      // El badge debe contar SOLO los calendarios que el usuario tiene
+      // seleccionados en el panel de Calendar/Meet, no todos los de la cuenta de
+      // Google. Sin este filtro el endpoint cae a "todos los calendarios
+      // marcados en Google" (DIRECCION, PERSONAL, Bacanal, Habana...) y el badge
+      // decía 4 mientras el drawer mostraba 2.
+      const seleccionados = await loadCalendariosSeleccionados();
+      // `null` = el usuario nunca eligió → dejamos que el endpoint aplique su
+      // criterio por defecto (los marcados en Google / el principal), igual que
+      // hace el drawer en su primera apertura.
+      // `[]` = deseleccionó todo → no hay nada que contar.
+      if (seleccionados !== null && seleccionados.length === 0) {
+        setCounts({
+          emails: 0,
+          events: 0,
+          meetings: 0,
+          tasks,
+          chatGroups,
+          missedCalls,
+          newContacts,
+        });
+        return;
+      }
+      const calParams = new URLSearchParams({ view: "day", date: ref });
+      if (seleccionados !== null) {
+        calParams.set("calendarIds", seleccionados.join(","));
+      }
       const [emailRes, calRes] = await Promise.allSettled([
         // Cargamos el inbox completo (no solo is:unread) y contamos las
         // CONVERSACIONES no leídas, igual que la bandeja del drawer. El
@@ -129,7 +156,7 @@ export function useDailyCounts(): DailyCounts {
         fetch(
           "/api/google/gmail/messages?carpeta=inbox&maxResults=50",
         ).then((r) => r.json()),
-        fetch(`/api/google/calendar/events?view=day&date=${ref}`).then((r) =>
+        fetch(`/api/google/calendar/events?${calParams}`).then((r) =>
           r.json()
         ),
       ]);

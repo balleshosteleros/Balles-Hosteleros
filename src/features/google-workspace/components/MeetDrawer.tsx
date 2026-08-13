@@ -23,6 +23,7 @@ import {
   loadCalendariosSeleccionados,
   saveCalendariosSeleccionados,
 } from "../lib/calendar-prefs";
+import { refreshDailyCounts } from "./useDailyCounts";
 import {
   TZ_HORA_SECUNDARIA_KEY,
   horaFechaEnTZ,
@@ -239,6 +240,9 @@ export function MeetDrawer({ children }: { children: ReactNode }) {
       else n.add(id);
       // Persistimos para que la selección se conserve en la próxima sesión.
       saveCalendariosSeleccionados(n);
+      // El badge cuenta sobre esta misma selección → que se recalcule ya, sin
+      // esperar al tick de 1 minuto.
+      refreshDailyCounts();
       return n;
     });
   }, []);

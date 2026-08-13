@@ -1,5 +1,17 @@
 import { NextResponse } from "next/server";
 import { getGoogleTokens, googleFetchAuto } from "@/lib/google/api";
+import { createClient } from "@/lib/supabase/server";
+import {
+  getEmpresaActivaForUser,
+  getZonaHorariaEmpresa,
+} from "@/features/empresa/lib/empresa-server";
+import {
+  claveDiaEnZona,
+  formatHoraEnZona,
+  hoyEnZona,
+  minutosDiaEnZona,
+  zonaLocalAUtcISO,
+} from "@/features/empresa/lib/zona-horaria";
 
 type CalendarListResponse = {
   items?: CalendarEvent[];
@@ -73,13 +85,40 @@ const GOOGLE_EVENT_COLORS: Record<string, string> = {
   "11": "#d50000",
 };
 
-function getInicioSemana(base?: Date): Date {
-  const hoy = base ? new Date(base) : new Date();
-  const dia = hoy.getDay() === 0 ? 6 : hoy.getDay() - 1;
-  const inicio = new Date(hoy);
-  inicio.setDate(hoy.getDate() - dia);
-  inicio.setHours(0, 0, 0, 0);
-  return inicio;
+/** Zona horaria de la empresa activa del usuario (PRP-069). */
+async function zonaEmpresaActiva(): Promise<string> {
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return "Europe/Madrid";
+    const empresaId = await getEmpresaActivaForUser(supabase, user.id);
+    return await getZonaHorariaEmpresa(supabase, empresaId);
+  } catch {
+    return "Europe/Madrid";
+  }
+}
+
+// El rango del día/semana/mes se calcula SOBRE LA CLAVE "YYYY-MM-DD", nunca con
+// `new Date(...)` + getDay()/setHours(): esos métodos usan la zona del PROCESO
+// (UTC en Vercel), así que la ventana se desplazaba las horas de offset de la
+// empresa y se colaban eventos de la madrugada del día siguiente mientras se
+// perdían los de primera hora del propio día.
+
+/** Suma días a una clave "YYYY-MM-DD" sin pasar por la zona local del proceso. */
+function sumarDias(clave: string, dias: number): string {
+  const [y, m, d] = clave.split("-").map(Number);
+  const base = new Date(Date.UTC(y, m - 1, d));
+  base.setUTCDate(base.getUTCDate() + dias);
+  return base.toISOString().slice(0, 10);
+}
+
+/** Día de la semana de una clave "YYYY-MM-DD" con lunes = 0 … domingo = 6. */
+function indiceDiaSemana(clave: string): number {
+  const [y, m, d] = clave.split("-").map(Number);
+  const dow = new Date(Date.UTC(y, m - 1, d)).getUTCDay();
+  return dow === 0 ? 6 : dow - 1;
 }
 
 export async function GET(request: Request) {
@@ -131,34 +170,43 @@ export async function GET(request: Request) {
         : ["primary"];
   }
 
-  // Vista (day | week | month) y fecha de referencia (yyyy-mm-dd)
+  // Vista (day | week | month) y fecha de referencia (yyyy-mm-dd).
+  // La ventana se ancla a la zona horaria de la EMPRESA ACTIVA (PRP-069): el
+  // "día de hoy" es el de la empresa, no el del servidor.
   const vista = url.searchParams.get("view") ?? "week";
-  const fechaRef = url.searchParams.get("date");
-  const base = fechaRef ? new Date(fechaRef + "T00:00:00") : new Date();
+  const tz = await zonaEmpresaActiva();
+  const fechaRef = url.searchParams.get("date") ?? hoyEnZona(tz);
 
-  let inicio: Date;
-  let fin: Date;
+  // Rango semiabierto [claveInicio, claveFin) en días locales de la empresa.
+  let claveInicio: string;
+  let claveFin: string;
 
   if (vista === "day") {
-    inicio = new Date(base);
-    inicio.setHours(0, 0, 0, 0);
-    fin = new Date(inicio);
-    fin.setDate(inicio.getDate() + 1);
+    claveInicio = fechaRef;
+    claveFin = sumarDias(fechaRef, 1);
   } else if (vista === "month") {
-    inicio = new Date(base.getFullYear(), base.getMonth(), 1);
-    fin = new Date(base.getFullYear(), base.getMonth() + 1, 1);
+    const [anio, mes] = fechaRef.split("-").map(Number);
+    claveInicio = `${fechaRef.slice(0, 7)}-01`;
+    // Primer día del mes siguiente (mes 12 → enero del año siguiente).
+    claveFin =
+      mes === 12
+        ? `${anio + 1}-01-01`
+        : `${anio}-${String(mes + 1).padStart(2, "0")}-01`;
   } else {
-    inicio = getInicioSemana(base);
-    fin = new Date(inicio);
-    fin.setDate(inicio.getDate() + 7);
+    claveInicio = sumarDias(fechaRef, -indiceDiaSemana(fechaRef));
+    claveFin = sumarDias(claveInicio, 7);
   }
 
   const params = new URLSearchParams({
-    timeMin: inicio.toISOString(),
-    timeMax: fin.toISOString(),
+    // Medianoche local de la empresa convertida al instante UTC real.
+    timeMin: zonaLocalAUtcISO(claveInicio, "00:00", tz),
+    timeMax: zonaLocalAUtcISO(claveFin, "00:00", tz),
     singleEvents: "true",
     orderBy: "startTime",
     maxResults: "100",
+    // Google devuelve las horas de los eventos en esta zona, de modo que el
+    // desglose por día/hora de abajo coincide con el calendario de la empresa.
+    timeZone: tz,
   });
 
   // Pedimos los eventos de TODOS los calendarios seleccionados en paralelo
@@ -204,8 +252,14 @@ export async function GET(request: Request) {
     const start = new Date(startStr);
     const end = new Date(endStr);
 
-    const diaIndex = start.getDay() === 0 ? 6 : start.getDay() - 1;
-    const inicioMin = allDay ? 0 : start.getHours() * 60 + start.getMinutes();
+    // Día y minuto del evento EN LA ZONA DE LA EMPRESA. Con getDay()/getHours()
+    // se usaba la zona del proceso (UTC en Vercel) y los eventos se pintaban
+    // desplazados de columna y de hora respecto al calendario real.
+    const claveDia = allDay
+      ? (ev.start?.date ?? claveDiaEnZona(startStr, tz))
+      : claveDiaEnZona(startStr, tz);
+    const diaIndex = indiceDiaSemana(claveDia);
+    const inicioMin = allDay ? 0 : minutosDiaEnZona(start, tz);
     const duracionMin = allDay
       ? 24 * 60
       : Math.max(
@@ -237,12 +291,7 @@ export async function GET(request: Request) {
       calendarColorHex: eventColorHex ?? calendarColorHex,
       titulo: ev.summary || "(Sin título)",
       descripcion: ev.description ?? "",
-      hora: allDay
-        ? "Todo el día"
-        : start.toLocaleTimeString("es-ES", {
-            hour: "2-digit",
-            minute: "2-digit",
-          }),
+      hora: allDay ? "Todo el día" : formatHoraEnZona(startStr, tz),
       duracion,
       lugar: ev.location,
       participantes: ev.attendees?.map((a) => a.displayName || a.email),
@@ -260,8 +309,10 @@ export async function GET(request: Request) {
       // Fechas ISO completas para edición y para fecha exacta
       inicio: startStr,
       fin: endStr,
-      // Fecha YYYY-MM-DD para agrupar en vistas mes/día
-      fechaDia: start.toISOString().slice(0, 10),
+      // Fecha YYYY-MM-DD para agrupar en vistas mes/día (día de la EMPRESA:
+      // con toISOString() el corte era a medianoche UTC y los eventos de última
+      // hora saltaban al día siguiente).
+      fechaDia: claveDia,
       // Link de Google Meet (si existe)
       meetLink:
         ev.hangoutLink ??
