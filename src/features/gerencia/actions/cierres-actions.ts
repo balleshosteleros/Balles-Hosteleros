@@ -138,7 +138,11 @@ async function firmarDocumentos(
 // El cierre SIEMPRE suma. El ingreso SIEMPRE resta (el dinero va al banco).
 // La retirada suma o resta según `retirada_entrada` (false = sale, true = entra).
 // MISMA fórmula que la UI (`importeEfectivo` en CierresView) — si cambia una, cambian las dos.
-export function efectoEnCaja(mov: { tipo: CierreTipo; efectivo_retirado: number; retirada_entrada?: boolean }): number {
+//
+// NO se exporta: este archivo es "use server" y ahí solo pueden salir funciones
+// async (si no, el build entero falla con "Server Actions must be async functions").
+// Es una ayuda interna, así que se queda dentro del módulo.
+function efectoEnCaja(mov: { tipo: CierreTipo; efectivo_retirado: number; retirada_entrada?: boolean }): number {
   const magnitud = Math.abs(Number(mov.efectivo_retirado) || 0);
   if (mov.tipo === "retirada") return mov.retirada_entrada ? magnitud : -magnitud;
   return mov.tipo === "cierre" ? magnitud : -magnitud;
@@ -382,6 +386,11 @@ export async function createCierre(formData: FormData): Promise<{ ok: true; data
 
     if (!fecha) return { ok: false, error: "La fecha es obligatoria" };
 
+    // Quién apunta el movimiento es obligatorio: todo cierre queda con responsable.
+    if (!registradoPor) {
+      return { ok: false, error: "Indica quién apunta el cierre: es obligatorio" };
+    }
+
     // Cierres e ingresos exigen al menos un justificante adjunto (la retirada no).
     if (tipo !== "retirada" && docsSubidos.length === 0) {
       return { ok: false, error: `Debes adjuntar un documento para registrar ${tipo === "ingreso" ? "un ingreso" : "un cierre"}` };
@@ -425,6 +434,53 @@ export async function createCierre(formData: FormData): Promise<{ ok: true; data
     // >0 sobra · <0 falta · 0 cuadra. No se acepta valor manual.
     const descuadre = tipo === "cierre" ? Math.round((efectivo - contado) * 100) / 100 : 0;
     const cuadra = descuadre === 0;
+
+    // ── Reglas del descuadre (barrera real, la UI solo acompaña) ──
+    // Si el cierre NO cuadra hay que decidir qué se hace con la diferencia:
+    //   "descuadre" → se cierra con descuadre y la nota de motivos es obligatoria.
+    //   "gastos"    → la diferencia se justifica declarando gastos.
+    // Si CUADRA no se admiten gastos: no hay diferencia que declarar.
+    const resolucionRaw = ((formData.get("resolucion_descuadre") as string | null) || "").trim();
+    const totalGastos = Math.round(gastosInput.reduce((s, g) => s + g.importe, 0) * 100) / 100;
+
+    if (tipo === "cierre" && !cuadra) {
+      if (resolucionRaw !== "descuadre" && resolucionRaw !== "gastos") {
+        return { ok: false, error: "Hay descuadre: elige si cierras con descuadre o si declaras gastos" };
+      }
+      if (resolucionRaw === "descuadre") {
+        if (!notas) {
+          return { ok: false, error: "Explica en las notas los motivos del descuadre: es obligatorio" };
+        }
+        if (gastosInput.length > 0) {
+          return { ok: false, error: "Has elegido cerrar con descuadre: no se pueden declarar gastos" };
+        }
+      }
+      if (resolucionRaw === "gastos") {
+        if (totalGastos <= 0) {
+          return { ok: false, error: "Has elegido declarar gastos: añade al menos un gasto con importe" };
+        }
+        // Los gastos declarados justifican la diferencia, así que tienen que
+        // cubrirla EXACTAMENTE: ni de más ni de menos. Se compara contra el
+        // valor absoluto porque los importes siempre se apuntan en positivo.
+        const objetivo = Math.abs(descuadre);
+        if (totalGastos !== objetivo) {
+          const sobran = céntimos(totalGastos - objetivo);
+          return {
+            ok: false,
+            error: `Los gastos declarados suman ${fmtEuro(totalGastos)} y la diferencia del cierre es ${fmtEuro(objetivo)}. `
+              + `Tienen que coincidir exactamente: ${sobran > 0 ? `sobran ${fmtEuro(sobran)}` : `faltan ${fmtEuro(-sobran)}`}.`,
+          };
+        }
+      }
+    } else if (gastosInput.length > 0) {
+      // Cuadra (o no es un cierre): no hay diferencia que justificar con gastos.
+      return {
+        ok: false,
+        error: tipo === "cierre"
+          ? "El cierre cuadra: no se pueden declarar gastos porque no hay diferencia que justificar"
+          : "Solo se pueden declarar gastos en un cierre con descuadre",
+      };
+    }
 
     // GUARDIA DE CAJA: el efectivo acumulado nunca puede quedar por debajo de cero.
     // Se comprueba en el servidor (barrera real) además de en la UI, porque aquí es
