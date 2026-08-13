@@ -89,8 +89,9 @@ const DIAS_SEMANA = [
 // programados" quedan conectados: elegir un día fijo pinta el calendario.
 const PROG_AUTO_NOMBRE = "Cierre semanal";
 
-// Sugerencias de tipo de gasto (texto libre: solo autocompletado, no lista cerrada).
-const TIPOS_GASTO_SUGERIDOS = [
+// Tipos de gasto: LISTA CERRADA. No se puede escribir a mano ni inventar
+// categorías nuevas, para que los gastos siempre se agrupen igual.
+const TIPOS_GASTO = [
   "Proveedores", "Personal", "Suministros", "Mantenimiento",
   "Impuestos", "Alquiler", "Limpieza", "Marketing", "Otros",
 ];
@@ -597,6 +598,14 @@ export function CierresView() {
         const totalGastos = Math.round(totalGastosPreview * 100) / 100;
         if (totalGastos <= 0) {
           toast.error("Has elegido declarar gastos: añade al menos un gasto con importe");
+          return;
+        }
+        // Todo gasto con importe tiene que llevar tipo elegido de la lista.
+        const sinTipo = form.gastos.some(
+          (g) => (Number((g.importe || "0").replace(",", ".")) || 0) !== 0 && !g.tipo,
+        );
+        if (sinTipo) {
+          toast.error("Elige el tipo de gasto en todas las líneas que tengan importe");
           return;
         }
       }
@@ -1553,20 +1562,21 @@ export function CierresView() {
                 </p>
               ) : (
                 <div className="space-y-2">
-                  <datalist id="tipos-gasto-sugeridos">
-                    {TIPOS_GASTO_SUGERIDOS.map((t) => (
-                      <option key={t} value={t} />
-                    ))}
-                  </datalist>
                   {form.gastos.map((g) => (
                     <div key={g.key} className="flex items-start gap-2">
-                      <Input
-                        className="w-[28%]"
-                        list="tipos-gasto-sugeridos"
-                        placeholder="Tipo de gasto"
+                      <Select
                         value={g.tipo}
-                        onChange={(e) => updateGasto(g.key, "tipo", e.target.value)}
-                      />
+                        onValueChange={(v) => updateGasto(g.key, "tipo", v)}
+                      >
+                        <SelectTrigger className="w-[28%]">
+                          <SelectValue placeholder="Tipo de gasto" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {TIPOS_GASTO.map((t) => (
+                            <SelectItem key={t} value={t}>{t}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                       <Input
                         className="flex-1"
                         placeholder="Descripción"
