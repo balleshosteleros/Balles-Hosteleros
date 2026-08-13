@@ -540,8 +540,12 @@ export async function guardarTc1Gestoria(
   return { ok: true };
 }
 
-/** Margen admitido al cuadrar TC1 contra nóminas (redondeos). Configurable. */
-const CUADRE_TOLERANCIA_EUR = 1;
+/**
+ * Margen admitido al cuadrar TC1 contra nóminas. CUADRE ESTRICTO: al céntimo.
+ * Se deja como constante porque es la única pieza a tocar si algún día se
+ * quisiera admitir holgura.
+ */
+const CUADRE_TOLERANCIA_EUR = 0.01;
 
 export interface CuadreTc1 {
   /** Total de cotizaciones sumado de las nóminas (trabajador + empresa). */
@@ -604,8 +608,12 @@ export async function cuadrarTc1ConNominas(
 }
 
 /**
- * Cierra el enlace SOLO cuando están los DOS documentos (nóminas + TC1): o los
- * dos o ninguno. Mientras falte uno, la gestoría puede seguir subiendo.
+ * Cierra el enlace SOLO cuando la entrega está COMPLETA y CORRECTA:
+ *   1) están los dos documentos (nóminas + TC1), y
+ *   2) los importes CUADRAN al céntimo.
+ *
+ * Si no cuadran, el enlace se deja ABIERTO a propósito: es lo que permite a la
+ * gestoría corregir y volver a subir sin pedir un enlace nuevo.
  */
 async function cerrarSiEstanLosDosDocumentos(
   admin: SupabaseClient,
@@ -625,6 +633,9 @@ async function cerrarSiEstanLosDosDocumentos(
     .eq("empresa_id", row.empresa_id)
     .eq("periodo", row.periodo);
   if (!count) return; // faltan las nóminas
+
+  const cuadre = await cuadrarTc1ConNominas(admin, row.empresa_id, row.periodo);
+  if (!cuadre.cuadra) return; // descuadre: abierto para que lo corrijan
 
   await cerrarTokenNominasGestoria(admin, row.id);
 }

@@ -238,8 +238,9 @@ export function SubirNominasView({ endpoint, empresaNombre, mesLabel }: Props) {
           </div>
         )}
 
-        {/* Éxito: solo si NO hubo rechazo. */}
-        {resultado && !resultado.rechazadoTodo && (
+        {/* Éxito: solo si NO hubo rechazo Y los importes cuadran. Con descuadre,
+            la entrega no es válida: sale el aviso rojo de abajo, no este. */}
+        {resultado && !resultado.rechazadoTodo && (resultado.cuadre?.cuadra ?? true) && (
           <div className="mt-5 rounded-xl border border-emerald-200 bg-emerald-50 p-4">
             <div className="flex items-start gap-2">
               <CheckCircle2 className="h-5 w-5 text-emerald-600 shrink-0 mt-0.5" />
@@ -301,11 +302,11 @@ export function SubirNominasView({ endpoint, empresaNombre, mesLabel }: Props) {
             expresado de dos formas, así que la suma de cotizaciones de las
             nóminas debe coincidir con el líquido del TC1. */}
         {resultado?.cuadre && !resultado.cuadre.cuadra && resultado.cuadre.totalTc1 != null && (
-          <div className="mt-4 rounded-xl border-2 border-amber-300 bg-amber-50 p-4">
+          <div className="mt-4 rounded-xl border-2 border-rose-300 bg-rose-50 p-4">
             <div className="flex items-start gap-2">
-              <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
-              <div className="text-sm text-amber-900">
-                <p className="font-semibold">Los importes no cuadran · revisad los documentos</p>
+              <AlertTriangle className="h-5 w-5 text-rose-600 shrink-0 mt-0.5" />
+              <div className="text-sm text-rose-900">
+                <p className="font-semibold">Los importes NO cuadran · entrega no válida</p>
                 <p className="mt-1">
                   El total del TC1 no coincide con la suma de las cotizaciones de las nóminas
                   que habéis subido:
@@ -319,7 +320,7 @@ export function SubirNominasView({ endpoint, empresaNombre, mesLabel }: Props) {
                     <span>Líquido de totales del TC1</span>
                     <b className="tabular-nums">{eur(resultado.cuadre.totalTc1)}</b>
                   </li>
-                  <li className="flex justify-between gap-4 border-t border-amber-300 pt-1">
+                  <li className="flex justify-between gap-4 border-t border-rose-300 pt-1">
                     <span>Diferencia</span>
                     <b className="tabular-nums">{eur(Math.abs(resultado.cuadre.diferencia ?? 0))}</b>
                   </li>
@@ -330,10 +331,14 @@ export function SubirNominasView({ endpoint, empresaNombre, mesLabel }: Props) {
                     recibido <b>{resultado.cuadre.numNominas} nóminas</b>.
                   </p>
                 )}
-                <p className="mt-2 text-xs text-amber-800">
-                  Los documentos se han guardado, pero la empresa los va a revisar antes de darlos
-                  por buenos. Comprobad si falta alguna nómina o si hay algún concepto del TC1 que
-                  no aparece en ellas. Si el descuadre es correcto, indicad el motivo a la empresa.
+                <p className="mt-2 text-sm text-rose-900">
+                  <b>La entrega no se da por buena hasta que los importes cuadren.</b> El enlace
+                  sigue abierto: corregid el documento que falle y volved a subirlo.
+                </p>
+                <p className="mt-2 text-xs text-rose-800">
+                  Comprobad si falta alguna nómina o si hay algún concepto del TC1 que no aparece
+                  desglosado en ellas. Si el descuadre tuviera una explicación correcta, poneos en
+                  contacto con el departamento de RRHH de la empresa antes de continuar.
                 </p>
               </div>
             </div>
