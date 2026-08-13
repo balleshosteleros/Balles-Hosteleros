@@ -59,22 +59,21 @@ export async function correoGestoriaEmpresa(
 ): Promise<{ to: string | null; cc: string | null }> {
   const { data: emp } = await admin
     .from("empresas")
-    .select("nominas_gestoria_email, nominas_gestoria_email_cc")
+    .select("datos_generales, nominas_gestoria_email, nominas_gestoria_email_cc")
     .eq("id", empresaId)
     .maybeSingle();
 
-  let to = (emp?.nominas_gestoria_email as string | null)?.trim() || null;
-  let cc = (emp?.nominas_gestoria_email_cc as string | null)?.trim() || null;
+  // FUENTE ÚNICA: Ajustes → Configuración → «Correo gestoría»
+  // (`empresas.datos_generales.correoGestoria`). Es el mismo que ya usan el
+  // recordatorio de gestoría y el envío de modelos fiscales, así que el correo se
+  // escribe UNA vez y vale para todo.
+  const dg = (emp?.datos_generales ?? {}) as Record<string, unknown>;
+  const deAjustes = typeof dg.correoGestoria === "string" ? dg.correoGestoria.trim() : "";
 
-  if (!to) {
-    const { data: rc } = await admin
-      .from("reclutamiento_config")
-      .select("gestoria_email, gestoria_email_cc")
-      .eq("empresa_id", empresaId)
-      .maybeSingle();
-    to = (rc?.gestoria_email as string | null)?.trim() || null;
-    cc = cc ?? ((rc?.gestoria_email_cc as string | null)?.trim() || null);
-  }
+  // Respaldo: el campo propio de nóminas, por si alguna empresa lo tuviera puesto
+  // ahí de antes. No es donde se edita hoy.
+  const to = deAjustes || (emp?.nominas_gestoria_email as string | null)?.trim() || null;
+  const cc = (emp?.nominas_gestoria_email_cc as string | null)?.trim() || null;
   return { to, cc };
 }
 

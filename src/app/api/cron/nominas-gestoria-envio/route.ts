@@ -68,7 +68,11 @@ export async function GET(request: Request) {
 
   for (const e of empresas ?? []) {
     if (e.nominas_gestoria_activo !== true) continue;
-    if (!((e.nominas_gestoria_email as string | null)?.trim())) continue;
+    // El correo NO se comprueba aquí: vive en Ajustes → Configuración
+    // (`datos_generales.correoGestoria`), y este filtro miraba un campo distinto
+    // que está vacío, así que descartaba a TODAS las empresas y no salía nada.
+    // `enviarSolicitudNominasGestoria` resuelve el correo de la fuente correcta y
+    // devuelve el error si de verdad falta.
 
     const empresaId = e.id as string;
     // "Ahora" en la zona de la empresa: fecha local y minutos del día. Así el
