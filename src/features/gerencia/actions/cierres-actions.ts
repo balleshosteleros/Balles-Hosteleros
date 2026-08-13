@@ -443,11 +443,30 @@ export async function createCierre(formData: FormData): Promise<{ ok: true; data
     const resolucionRaw = ((formData.get("resolucion_descuadre") as string | null) || "").trim();
     const totalGastos = Math.round(gastosInput.reduce((s, g) => s + g.importe, 0) * 100) / 100;
 
+    // Cuando SOBRA dinero (descuadre > 0) no se ha pagado nada, así que no hay
+    // gasto que declarar: la única salida es cerrar con descuadre dejando por
+    // escrito el justificante de por qué sobra.
+    const sobra = tipo === "cierre" && descuadre > 0;
+
     if (tipo === "cierre" && !cuadra) {
-      if (resolucionRaw !== "descuadre" && resolucionRaw !== "gastos") {
+      if (sobra) {
+        if (gastosInput.length > 0) {
+          return {
+            ok: false,
+            error: `Sobran ${fmtEuro(descuadre)}: cuando sobra dinero no se declaran gastos, `
+              + `porque no se ha pagado nada. Deja por escrito el justificante de por qué sobra.`,
+          };
+        }
+        if (!notas) {
+          return {
+            ok: false,
+            error: `Escribe el justificante de por qué sobran ${fmtEuro(descuadre)}: es obligatorio`,
+          };
+        }
+      } else if (resolucionRaw !== "descuadre" && resolucionRaw !== "gastos") {
         return { ok: false, error: "Hay descuadre: elige si cierras con descuadre o si declaras gastos" };
       }
-      if (resolucionRaw === "descuadre") {
+      if (!sobra && resolucionRaw === "descuadre") {
         if (!notas) {
           return { ok: false, error: "Explica en las notas los motivos del descuadre: es obligatorio" };
         }
@@ -455,7 +474,7 @@ export async function createCierre(formData: FormData): Promise<{ ok: true; data
           return { ok: false, error: "Has elegido cerrar con descuadre: no se pueden declarar gastos" };
         }
       }
-      if (resolucionRaw === "gastos") {
+      if (!sobra && resolucionRaw === "gastos") {
         if (totalGastos <= 0) {
           return { ok: false, error: "Has elegido declarar gastos: añade al menos un gasto con importe" };
         }
