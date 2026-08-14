@@ -136,6 +136,48 @@ las de arriba, hablamos de piloto.
 
 ---
 
+## ✅ EJECUTADO EL 14-AGO — lo que ya está hecho (no lo repitas)
+
+Todo esto está aplicado y verificado contra producción. Lo listo para que no lo rehagas:
+
+1. **OCR: tres reglas nuevas, universales para cualquier proveedor** (commit `37e80580`).
+   - *Una línea = un artículo.* Los proveedores que imprimen cada artículo en varias filas
+     (subunidades, descuento, base, lote) ya no generan artículos fantasma: esas filas se
+     funden en su línea. Las **subunidades pasan a ser la cantidad real** (una caja son 24
+     botellas, no 1 unidad) y los **importes negativos van al descuento**, nunca a un
+     artículo. Con prueba de cuadre contra la base imponible del pie.
+   - *Se lee el DESTINATARIO* (CIF, razón social, dirección). Antes se descartaba a propósito.
+   - Se aclara que **portes, punto verde y envases SÍ son artículos facturados** (con su
+     importe, para poder saber cada céntimo que va a cada proveedor); lo que no lo son son
+     los descuentos y las filas de cálculo.
+2. **La pantalla ya no muestra los productos dos veces** (commit `e302b91b`). En Revisión se
+   pintaba el asistente y debajo la tabla "Productos del albarán" con las mismas líneas: un
+   albarán de 23 líneas se veía como 46 filas.
+3. **13 productos de servicio pasan a NO controlar stock** (Punto Verde, Desplazamiento y los
+   envases de las dos empresas). Estaban con `controla_stock = true`, así que cada albarán les
+   sumaba unidades al inventario. Ahora el importe sigue contando —que es lo que interesa para
+   el gasto por proveedor— pero no ensucian el almacén. Ninguno tenía movimientos, así que el
+   cambio no descuadra nada.
+4. **Los 8 albaranes del 13-ago movidos de BACANAL a HABANA**, que es donde debían estar. Se
+   creó **DISBESA en Habana** (solo existía en Bacanal), se **desvincularon las 19 líneas** que
+   apuntaban a productos de Bacanal, se soltó el proveedor de Bacanal del Krittikali y se
+   borraron las incidencias calculadas contra el catálogo equivocado. Los 8 siguen en Revisión,
+   con sus 79 líneas, listos para resolverse contra el catálogo correcto. **No habían sumado
+   stock**, así que el traslado no descuadra ningún almacén.
+5. **Arreglado el `ALB-2023-062` → `ALB-2026-062`** (el año 2023 en mitad de la serie).
+6. **Fusionados los 8 duplicados reales.** Gana la ficha con más referencias, se le traspasan
+   precios, alias y recetas, y la perdedora queda **Inactiva** con el motivo escrito en sus
+   observaciones. Nada se borra. Comprobado después: **0 duplicados activos** y **0 recetas
+   apuntando a una ficha inactiva**.
+7. **Corregido el dossier de duplicados** con un aviso al principio, para que nadie actúe
+   sobre los 213 grupos.
+
+**Pendiente de hacer todavía:** conectar el aviso de empresa equivocada (el OCR ya extrae el
+destinatario, pero aún no compara ni avisa), el matcher tolerante a mayúsculas/acentos, el
+alta de producto desde el albarán, y reprocesar los 8 albaranes con el OCR ya corregido.
+
+---
+
 ## 🔬 HALLAZGOS NUEVOS DEL 14-AGO — cuatro cosas que hemos destapado hoy
 
 Fernando: revisando lo de arriba con mi agente han salido cuatro cosas que no estaban en

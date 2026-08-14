@@ -1,3 +1,26 @@
+> # ⛔ ESTE DOSSIER ESTABA MAL — NO ACTUAR SOBRE ÉL (corregido 14-ago-2026)
+>
+> Agrupa **solo por nombre, sin mirar el `tipo`**, y en este modelo cada artículo existe
+> legítimamente DOS veces: una ficha `compra` y una ficha `venta` (Absolut compra/Alcoholes +
+> Absolut venta/Vodkas). **Eso no es un duplicado: es el diseño**, y lo que une a las dos es
+> la receta 1:1 de `producto_composicion` — por eso en casi todas las parejas de abajo las dos
+> filas tienen `Recetas: 1`.
+>
+> Fusionar los 213 grupos habría **desactivado ~200 fichas legítimas y roto las recetas que
+> hacen que una venta descuente su producto de compra**.
+>
+> **Duplicados reales** (mismo `tipo`, misma empresa): **8 grupos**, no 213 — BACANAL 6,
+> HABANA 2. **Ya fusionados el 14-ago**: gana la ficha con más referencias, se le traspasan
+> precios, alias y recetas, y la perdedora queda **Inactiva** (nada se borra; el motivo queda
+> escrito en sus `observaciones`).
+>
+> Causa real: **no fue "una siembra que corrió dos veces"**. El matcher de albaranes distingue
+> mayúsculas y acentos, así que al cargar los albaranes del 30-jul no reconoció "Cebolla roja"
+> como la "Cebolla Roja" ya existente y creó ficha nueva. Mientras eso no se arregle, cada
+> tanda de albaranes seguirá generando duplicados.
+>
+> La tabla de abajo se conserva solo como registro de lo que se analizó.
+
 # Dossier de productos duplicados en el catálogo (07-ago-2026)
 
 > Grupos de productos con el MISMO nombre (ignorando mayúsculas, acentos y signos) dentro
