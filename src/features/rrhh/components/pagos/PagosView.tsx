@@ -225,6 +225,8 @@ export function PagosView() {
   const [confirmandoMes, setConfirmandoMes] = useState(false);
   const [subiendoTc1, setSubiendoTc1] = useState(false);
   const tc1InputRef = useRef<HTMLInputElement>(null);
+  // Diálogo único de la entrega del mes: nóminas + TC1.
+  const [showDocsMes, setShowDocsMes] = useState(false);
   // Estado del mes: en borrador se puede corregir; confirmado es inmutable.
   const [estadoMes, setEstadoMes] = useState<EstadoMesNominas>({
     confirmado: false,
@@ -591,7 +593,7 @@ export function PagosView() {
       title: `Confirmar las nóminas de ${mesLabelNominas}`,
       description:
         "Quedarán bloqueadas: nadie podrá editar sus importes, ni borrarlas, ni subir nuevas de este mes. " +
-        "Además cada empleado verá su nómina en su portal. Solo dirección puede reabrir el mes después. ¿Continuar?",
+        "Además cada empleado verá su nómina en su portal. ¿Continuar?",
       confirmLabel: "Confirmar nóminas",
     });
     if (!ok) return;
@@ -1049,18 +1051,18 @@ export function PagosView() {
         <Button
           variant="outline"
           className="ml-auto gap-2"
-          onClick={() => nominasInputRef.current?.click()}
+          onClick={() => setShowDocsMes(true)}
           disabled={subiendoNominas || estadoMes.confirmado}
           title={
             estadoMes.confirmado
               ? "Las nóminas de este mes ya están confirmadas: para subir otras hay que reabrir el mes"
-              : "Sube las nóminas del mes; la IA lee el coste de Seguridad Social de cada una"
+              : "Sube las nóminas del mes y el TC1; la IA los lee y vuelca los datos"
           }
         >
           <Upload className="h-4 w-4" />
           {subiendoNominas
             ? `Leyendo nóminas… ${progresoNominas.hechas}/${progresoNominas.total}`
-            : "Subir nóminas (SS)"}
+            : "Subir documentos del mes"}
         </Button>
         {estadoMes.puedeGestionar && (
           <Button
@@ -1070,7 +1072,7 @@ export function PagosView() {
             disabled={confirmandoMes}
             title={
               estadoMes.confirmado
-                ? "Las nóminas están confirmadas y publicadas al empleado. Reabrir permite corregirlas (solo dirección)."
+                ? "Las nóminas están confirmadas y publicadas al empleado. Reabrir permite corregirlas."
                 : "Cierra las nóminas del mes: quedan inmutables y se publican en la carpeta de cada empleado"
             }
           >
@@ -1171,65 +1173,6 @@ export function PagosView() {
           </>
         }
       />
-
-      {/* TC1 del mes: documento de EMPRESA (recibo de cotizaciones), no de un
-          empleado. Vive en la esquina de la cabecera, junto al resto del mes. */}
-      <div className="flex items-center justify-end">
-        <input
-          ref={tc1InputRef}
-          type="file"
-          accept="application/pdf,image/png,image/jpeg,image/webp,image/heic,image/heif"
-          className="hidden"
-          onChange={(e) => {
-            void subirTc1(e.target.files?.[0] ?? null);
-            e.target.value = "";
-          }}
-        />
-        {estadoMes.tc1 ? (
-          <div className="inline-flex items-center gap-2 rounded-lg border bg-card px-3 py-1.5 text-xs shadow-sm">
-            <ReceiptText className="h-4 w-4 shrink-0 text-muted-foreground" />
-            <button
-              type="button"
-              onClick={abrirTc1}
-              className="font-medium underline-offset-2 hover:underline"
-              title="Abrir el TC1 de este mes"
-            >
-              TC1 de {mesLabelNominas}
-            </button>
-            {estadoMes.tc1.importe != null && (
-              <span className="tabular-nums text-muted-foreground">
-                {estadoMes.tc1.importe.toLocaleString("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
-              </span>
-            )}
-            {estadoMes.tc1.trabajadores != null && (
-              <span className="text-muted-foreground">· {estadoMes.tc1.trabajadores} trab.</span>
-            )}
-            {estadoMes.puedeGestionar && !estadoMes.confirmado && (
-              <button
-                type="button"
-                onClick={quitarTc1}
-                className="ml-1 text-muted-foreground transition hover:text-destructive"
-                title="Quitar el TC1 de este mes"
-                aria-label="Quitar el TC1"
-              >
-                <X className="h-3.5 w-3.5" />
-              </button>
-            )}
-          </div>
-        ) : estadoMes.puedeGestionar && !estadoMes.confirmado ? (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="gap-1.5 text-muted-foreground"
-            disabled={subiendoTc1}
-            onClick={() => tc1InputRef.current?.click()}
-            title="Adjunta el TC1 (recibo de cotizaciones) de este mes"
-          >
-            {subiendoTc1 ? <Clock className="h-4 w-4 animate-pulse" /> : <ReceiptText className="h-4 w-4" />}
-            {subiendoTc1 ? "Subiendo…" : "Adjuntar TC1"}
-          </Button>
-        ) : null}
-      </div>
 
       {estadoMes.confirmado && (
         <div className="flex items-start gap-2 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm dark:border-emerald-900/40 dark:bg-emerald-950/20">
@@ -1400,6 +1343,114 @@ export function PagosView() {
           </div>
         </CardContent>
       </Card>
+
+      {/* DOCUMENTOS DEL MES: nóminas + TC1 juntos. Son la misma entrega mensual,
+          así que se suben desde el mismo sitio. */}
+      <Dialog open={showDocsMes} onOpenChange={setShowDocsMes}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Documentos de {mesLabelNominas}</DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-3">
+            {/* 1) Las nóminas */}
+            <div className="rounded-lg border p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium">Nóminas del mes</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    Un PDF con todas (una por página) o varios archivos. Se leen y se asignan a
+                    cada trabajador.
+                  </p>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="shrink-0 gap-1.5"
+                  disabled={subiendoNominas}
+                  onClick={() => nominasInputRef.current?.click()}
+                >
+                  {subiendoNominas ? <Clock className="h-4 w-4 animate-pulse" /> : <Upload className="h-4 w-4" />}
+                  {subiendoNominas
+                    ? `${progresoNominas.hechas}/${progresoNominas.total}`
+                    : "Adjuntar"}
+                </Button>
+              </div>
+              {estadoMes.tc1 == null && incidenciasNominas > 0 && (
+                <p className="mt-2 text-xs text-amber-600">
+                  {incidenciasNominas} nómina{incidenciasNominas === 1 ? "" : "s"} con incidencia por revisar.
+                </p>
+              )}
+            </div>
+
+            {/* 2) El TC1: documento de EMPRESA, no de un empleado */}
+            <div className="rounded-lg border p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium">TC1 · Recibo de cotizaciones</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    {estadoMes.tc1
+                      ? "Ya adjuntado. Debe cuadrar con la suma de las nóminas."
+                      : "Documento de la empresa con las bases y cuotas del mes."}
+                  </p>
+                  {estadoMes.tc1 && (
+                    <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+                      <button
+                        type="button"
+                        onClick={abrirTc1}
+                        className="font-medium underline-offset-2 hover:underline"
+                      >
+                        Ver documento
+                      </button>
+                      {estadoMes.tc1.importe != null && (
+                        <span className="tabular-nums text-muted-foreground">
+                          {estadoMes.tc1.importe.toLocaleString("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
+                        </span>
+                      )}
+                      {estadoMes.tc1.trabajadores != null && (
+                        <span className="text-muted-foreground">{estadoMes.tc1.trabajadores} trabajadores</span>
+                      )}
+                    </div>
+                  )}
+                </div>
+                {estadoMes.tc1 ? (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="shrink-0 gap-1.5 text-muted-foreground hover:text-destructive"
+                    onClick={quitarTc1}
+                  >
+                    <X className="h-4 w-4" />
+                    Quitar
+                  </Button>
+                ) : (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="shrink-0 gap-1.5"
+                    disabled={subiendoTc1}
+                    onClick={() => tc1InputRef.current?.click()}
+                  >
+                    {subiendoTc1 ? <Clock className="h-4 w-4 animate-pulse" /> : <ReceiptText className="h-4 w-4" />}
+                    {subiendoTc1 ? "Subiendo…" : "Adjuntar"}
+                  </Button>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <input
+            ref={tc1InputRef}
+            type="file"
+            accept="application/pdf,image/png,image/jpeg,image/webp,image/heic,image/heif"
+            className="hidden"
+            onChange={(e) => {
+              void subirTc1(e.target.files?.[0] ?? null);
+              e.target.value = "";
+            }}
+          />
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={!!editando} onOpenChange={(open) => !open && setEditando(null)}>
         <DialogContent className="max-w-md">
