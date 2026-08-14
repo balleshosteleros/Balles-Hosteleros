@@ -866,8 +866,12 @@ export async function enviarBajaGestoria(
 
     // Enlace para que la gestoría adjunte los DOCUMENTOS OFICIALES de la baja
     // (justificante del RED — obligatorio — y certificado de empresa del SEPE).
-    // Es el equivalente al enlace de subida del contrato en el alta.
-    const { crearTokenDocsBaja, botonDocsBajaHtml, urlSubidaDocsBaja } = await import(
+    //
+    // El token se crea AQUÍ, pero su correo NO sale todavía: la petición de
+    // documentos se envía EL DÍA DE LA BAJA (o al momento si la baja se comunica
+    // con la fecha ya pasada). Este correo es solo el aviso de que el trabajador
+    // causa baja; los papeles no existen hasta que la baja se tramita.
+    const { crearTokenDocsBaja } = await import(
       "@/features/rrhh/services/gestoria/gestoria-baja-documentos"
     );
     const tkDocs = await crearTokenDocsBaja(admin, {
@@ -875,10 +879,6 @@ export async function enviarBajaGestoria(
       empleadoId,
       ultimoDiaIso: baja.ultimoDiaIso,
     });
-    const botonDocsHtml = tkDocs.ok ? botonDocsBajaHtml(urlSubidaDocsBaja(tkDocs.token)) : "";
-    const enlaceDocsText = tkDocs.ok
-      ? `\n\nAdjunta los documentos de la baja (justificante de la Seguridad Social y certificado de empresa): ${urlSubidaDocsBaja(tkDocs.token)}`
-      : "";
 
     let subject: string;
     let html: string;
@@ -889,16 +889,15 @@ export async function enviarBajaGestoria(
       const cuerpoHtml = partes.length > 1
         ? partes.map((p) => cuerpoOnboardingAHtml(p)).join(tablaHtml)
         : `${cuerpoOnboardingAHtml(tpl.cuerpo)}${tablaHtml}`;
-      html = `${cuerpoHtml}${botonDocsHtml}`;
-      text = `${tpl.cuerpo.replace("{{gestoria_datos}}", `\n${filasText}`)}${enlaceDocsText}`;
+      html = cuerpoHtml;
+      text = tpl.cuerpo.replace("{{gestoria_datos}}", `\n${filasText}`);
     } else {
       subject = `Baja de trabajador · ${nombre} · ${empresaNombre}`;
       html = `
       <p>El siguiente trabajador causa baja (${escapeHtml(tipoBajaLabel)}) en la empresa. Su último día efectivo de trabajo será el ${escapeHtml(ultimoDiaTrabajo)} y la baja será oficial el ${escapeHtml(diaOficialBaja)}:</p>
       ${tablaHtml}
-      ${botonDocsHtml}
       <p style="color:#888;font-size:12px">Enviado automáticamente desde el sistema de ${empresaNombre}.</p>`;
-      text = `Baja de trabajador\n${filasText}${enlaceDocsText}`;
+      text = `Baja de trabajador\n${filasText}`;
     }
 
     const res = await sendEmail({ to, subject, html, text, empresaId });
@@ -941,18 +940,18 @@ export async function enviarBajaGestoria(
       console.error("[rrhh] enviarBajaGestoria → histórico:", e);
     }
 
-    // BAJA CON FECHA YA PASADA: no se espera al cron (corre una vez al día, así
-    // que una baja comunicada hoy con fecha de ayer no recibiría el aviso urgente
-    // hasta mañana, justo en el caso que más corre). Se manda AHORA, detrás del
-    // correo de la baja, para que la gestoría tenga ya los datos y el enlace.
+    // BAJA YA EFECTIVA al comunicarla (fecha de hoy o anterior): la petición de
+    // documentos, que normalmente sale el día de la baja, se manda AHORA mismo —
+    // ese día ya llegó. Si no, habría que esperar a la vuelta del cron (una vez
+    // al día) justo en el caso que más corre.
     if (res.ok && tkDocs.ok) {
       const hoyIso = new Date().toISOString().slice(0, 10);
-      if (baja.ultimoDiaIso < hoyIso) {
+      if (baja.ultimoDiaIso <= hoyIso) {
         try {
-          const { enviarRecordatorioDocsBaja } = await import(
+          const { enviarPeticionDocsBaja } = await import(
             "@/features/rrhh/services/gestoria/gestoria-baja-documentos"
           );
-          await enviarRecordatorioDocsBaja(admin, {
+          await enviarPeticionDocsBaja(admin, {
             id: tkDocs.tokenId,
             empresaId,
             empleadoId,
@@ -961,7 +960,7 @@ export async function enviarBajaGestoria(
             expiraEn: tkDocs.expiraEn,
           });
         } catch (e) {
-          console.error("[rrhh] enviarBajaGestoria → urgente docs baja:", e);
+          console.error("[rrhh] enviarBajaGestoria → petición docs baja:", e);
         }
       }
     }

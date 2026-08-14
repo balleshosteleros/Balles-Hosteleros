@@ -295,7 +295,7 @@ export async function procesarRecordatoriosDocsBaja(
 
   let enviados = 0;
   for (const tk of pendientes ?? []) {
-    const ok = await enviarRecordatorioDocsBaja(admin, {
+    const ok = await enviarPeticionDocsBaja(admin, {
       id: tk.id as string,
       empresaId: tk.empresa_id as string,
       empleadoId: tk.empleado_id as string,
@@ -309,17 +309,23 @@ export async function procesarRecordatoriosDocsBaja(
 }
 
 /**
- * Envía UN recordatorio de documentos de baja, si procede.
+ * Pide a la gestoría los documentos de la baja, EL DÍA DE LA BAJA.
  *
- * Lo usan dos caminos:
- *   · el cron diario (barrido de pendientes), y
- *   · el propio aviso de baja cuando la fecha YA HA PASADO al comunicarla
- *     (`avisarSiVencida`): en ese caso no se espera a la vuelta del cron, que
- *     tardaría hasta un día entero justo en el supuesto más urgente.
+ * Por qué ese día y no al comunicarla: los papeles (justificante del RED,
+ * certificado de empresa) no existen hasta que la baja se tramita, así que
+ * pedirlos semanas antes solo generaba ruido. El correo de la comunicación es
+ * únicamente el aviso de que el trabajador causa baja.
  *
- * Devuelve `true` solo si el correo salió.
+ * Se dispara desde dos caminos:
+ *   · el cron diario, cuando llega el día de la baja (o si ya pasó y sigue sin
+ *     documentar), y
+ *   · el propio aviso de baja, si al comunicarla la fecha ya es hoy o anterior.
+ *
+ * Además, el mismo día se avisa al TRABAJADOR a su correo personal.
+ *
+ * Devuelve `true` solo si el correo a la gestoría salió.
  */
-export async function enviarRecordatorioDocsBaja(
+export async function enviarPeticionDocsBaja(
   admin: SupabaseClient,
   tk: {
     id: string;
@@ -338,9 +344,9 @@ export async function enviarRecordatorioDocsBaja(
       (new Date(`${tk.ultimoDia}T00:00:00Z`).getTime() - new Date(`${hoy}T00:00:00Z`).getTime()) /
         86_400_000,
     );
-    // Solo se avisa desde un día antes en adelante (incluye el propio día y los
-    // posteriores, que son los urgentes).
-    if (diasHasta > 1) return false;
+    // Se pide EL DÍA DE LA BAJA en adelante. Antes de ese día no hay papeles que
+    // reclamar.
+    if (diasHasta > 0) return false;
     const vencido = diasHasta < 0;
 
     const { data: emp } = await admin
@@ -369,25 +375,38 @@ export async function enviarRecordatorioDocsBaja(
     const fechaES = tk.ultimoDia.split("-").reverse().join("/");
     const subject = vencido
       ? `⚠️ Urgente: faltan los documentos de la baja de ${nombre} · ${empresaNombre}`
-      : `Recordatorio: documentos de la baja de ${nombre} (mañana) · ${empresaNombre}`;
+      : `Documentos de la baja de ${nombre} · ${empresaNombre}`;
     const html = `
-      <p>Nos falta el <b>justificante de baja de la Seguridad Social</b> de
-      <b>${nombre}</b>${emp?.dni_nie ? ` (DNI/NIE ${emp.dni_nie})` : ""}.</p>
+      <p>${
+        vencido
+          ? `Nos falta el <b>justificante de baja de la Seguridad Social</b> de <b>${nombre}</b>${emp?.dni_nie ? ` (DNI/NIE ${emp.dni_nie})` : ""}.`
+          : `Hoy es el último día de trabajo de <b>${nombre}</b>${emp?.dni_nie ? ` (DNI/NIE ${emp.dni_nie})` : ""}.`
+      }</p>
       <p${vencido ? ' style="color:#b91c1c"' : ""}>
         ${
           vencido
             ? `Su baja tenía fecha del <b>${fechaES}</b> y esa fecha <b>ya ha pasado</b>. Sin el justificante no podemos acreditar la baja ni su causa. Te agradeceríamos que nos lo envíes cuanto antes.`
-            : `Su baja es el <b>${fechaES}</b>. Te agradeceríamos que nos adjuntes la documentación en cuanto la tengas.`
+            : `Su baja es efectiva el <b>${fechaES}</b>. Al tramitarla, adjúntanos por favor el <b>justificante de baja de la Seguridad Social</b> y el <b>certificado de empresa</b>.`
         }
       </p>
       ${botonHtml}
       <p style="color:#888;font-size:12px">Enviado automáticamente desde el sistema de ${empresaNombre}.</p>`;
     const text =
-      `Faltan los documentos de la baja de ${nombre} (fecha de baja: ${fechaES}). ` +
+      `Documentos de la baja de ${nombre} (fecha de baja: ${fechaES}). ` +
       `Súbelos aquí: ${enlace}`;
 
     const res = await sendEmail({ to, subject, html, text, empresaId: tk.empresaId });
     if (!res.ok) return false;
+
+    // El mismo día se avisa al TRABAJADOR: ya suele estar Inactivo y sin acceso
+    // al sistema, así que el correo es su única vía. Best-effort.
+    await avisarTrabajadorBaja(admin, {
+      empresaId: tk.empresaId,
+      empleadoId: tk.empleadoId,
+      empresaNombre,
+      nombrePila: (emp?.nombre as string | null) ?? null,
+      fechaES,
+    });
 
     await admin
       .from("gestoria_baja_doc_tokens")
@@ -411,6 +430,64 @@ export async function enviarRecordatorioDocsBaja(
   } catch (e) {
     console.error("[gestoria/baja] recordatorio:", e);
     return false;
+  }
+}
+
+/**
+ * Aviso al TRABAJADOR el día de su baja, a su correo PERSONAL.
+ *
+ * Ese día ya suele estar Inactivo y sin acceso al sistema, así que el correo es
+ * su única vía. Le anticipa que recibirá la documentación oficial en cuanto la
+ * gestoría la emita (cada documento se le envía después, ya adjunto).
+ *
+ * Best-effort: nunca tumba el circuito de la gestoría.
+ */
+async function avisarTrabajadorBaja(
+  admin: SupabaseClient,
+  params: {
+    empresaId: string;
+    empleadoId: string;
+    empresaNombre: string;
+    nombrePila: string | null;
+    fechaES: string;
+  },
+): Promise<void> {
+  try {
+    const { data: emp } = await admin
+      .from("empleados")
+      .select("email_personal, email_empresa")
+      .eq("id", params.empleadoId)
+      .maybeSingle();
+    // Personal PRIMERO: tras la baja el corporativo suele estar cerrado.
+    const to = (emp?.email_personal as string | null) || (emp?.email_empresa as string | null);
+    if (!to) return;
+
+    const saludo = params.nombrePila?.trim() || "Hola";
+    const html = `
+      <p>${saludo},</p>
+      <p>Hoy finaliza tu relación laboral con ${params.empresaNombre}, con fecha de baja del
+      <b>${params.fechaES}</b>.</p>
+      <p>Estamos tramitando con la gestoría la documentación oficial de tu baja
+      (justificante de la Seguridad Social y certificado de empresa). <b>Te la haremos llegar
+      a este mismo correo</b> en cuanto la tengamos, para que puedas conservarla y usarla en
+      cualquier gestión ante la Seguridad Social o el SEPE.</p>
+      <p>Gracias por tu trabajo y te deseamos lo mejor.</p>
+      <p style="color:#888;font-size:12px">Enviado automáticamente desde el sistema de ${params.empresaNombre}.</p>`;
+    const text =
+      `${saludo},\n\nHoy finaliza tu relación laboral con ${params.empresaNombre} (fecha de baja: ` +
+      `${params.fechaES}). Estamos tramitando con la gestoría la documentación oficial de tu baja ` +
+      `(justificante de la Seguridad Social y certificado de empresa) y te la enviaremos a este ` +
+      `mismo correo en cuanto la tengamos.\n\nGracias por tu trabajo.`;
+
+    await sendEmail({
+      to,
+      subject: `Fin de tu relación laboral · ${params.empresaNombre}`,
+      html,
+      text,
+      empresaId: params.empresaId,
+    });
+  } catch (e) {
+    console.error("[gestoria/baja] aviso al trabajador:", e);
   }
 }
 
