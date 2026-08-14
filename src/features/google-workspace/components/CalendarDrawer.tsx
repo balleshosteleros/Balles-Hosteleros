@@ -308,7 +308,11 @@ const FORM_VACIO: Form = {
 };
 
 export function CalendarDrawer({ children }: CalendarDrawerProps) {
-  const { connected } = useGoogleConnection();
+  // `email` = cuenta de Google ACTIVA (la del logotipo de arriba). El panel
+  // enseña SOLO esa cuenta: sus calendarios y sus eventos. Es dependencia de los
+  // efectos de carga porque al cambiar de cuenta `connected` sigue siendo true y
+  // sin ella el panel se quedaba pintando los calendarios de la cuenta anterior.
+  const { connected, email: cuentaGoogle } = useGoogleConnection();
   const { confirm: confirmDelete, dialog: confirmDeleteDialog } =
     useConfirmDelete();
   const [vista, setVista] = useState<Vista>("week");
@@ -389,7 +393,7 @@ export function CalendarDrawer({ children }: CalendarDrawerProps) {
     let cancelado = false;
     Promise.all([
       fetch("/api/google/calendar/list").then((r) => r.json()),
-      loadCalendariosSeleccionados(),
+      loadCalendariosSeleccionados(cuentaGoogle),
     ])
       .then(([data, guardados]) => {
         if (cancelado) return;
@@ -409,7 +413,16 @@ export function CalendarDrawer({ children }: CalendarDrawerProps) {
           // caemos a los que Google trae marcados / el principal.
           let initial: Set<string>;
           if (guardados) {
-            initial = new Set(guardados.filter((id) => idsDisponibles.has(id)));
+            const vivos = guardados.filter((id) => idsDisponibles.has(id));
+            initial = new Set(vivos);
+            // La selección guardada puede arrastrar calendarios que ya no están
+            // compartidos con el usuario (departamentos retirados, cuentas que
+            // dejaron de compartir). Aquí ya los filtramos para pintar, pero si
+            // no reescribimos la preferencia siguen guardados y vuelven a colarse
+            // en cuanto el usuario marca/desmarca cualquier casilla.
+            if (vivos.length !== guardados.length) {
+              saveCalendariosSeleccionados(cuentaGoogle, vivos);
+            }
           } else {
             initial = new Set<string>(
               data.calendarios
@@ -429,7 +442,7 @@ export function CalendarDrawer({ children }: CalendarDrawerProps) {
     return () => {
       cancelado = true;
     };
-  }, [connected, abierto]);
+  }, [connected, cuentaGoogle, abierto]);
 
   // 2) Cargar eventos cuando cambian calendarios / vista / fecha
   useEffect(() => {
@@ -673,7 +686,9 @@ export function CalendarDrawer({ children }: CalendarDrawerProps) {
       if (next.has(id)) next.delete(id);
       else next.add(id);
       // Persistimos para que la selección se conserve en la próxima sesión.
-      saveCalendariosSeleccionados(next);
+      // Va asociada a la CUENTA activa: cada cuenta de Google tiene sus propios
+      // calendarios, así que marcar aquí no debe afectar a las demás.
+      saveCalendariosSeleccionados(cuentaGoogle, next);
       // El badge cuenta sobre esta misma selección → que se recalcule ya, sin
       // esperar al tick de 1 minuto.
       refreshDailyCounts();

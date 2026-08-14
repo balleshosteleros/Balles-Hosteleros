@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useGoogleConnection } from "./useGoogleConnection";
 import { contarPendientesHoy } from "@/features/tareas/actions/tareas-actions";
 import { getTareasValidacionPendientes } from "@/features/mi-panel/actions/mi-panel-actions";
@@ -11,11 +11,89 @@ import { LLAMADAS_VISTAS_KEY } from "./TelefonoDrawer";
 import { loadCalendariosSeleccionados } from "../lib/calendar-prefs";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 
-function ymd(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${dd}`;
+/**
+ * Día "de hoy" EN LA ZONA DE LA EMPRESA, no en la del navegador.
+ *
+ * Importa: el usuario puede estar físicamente en otro huso (Indonesia, +8) y la
+ * empresa operar en España (+2). Con `getFullYear/getMonth/getDate` el badge
+ * pedía el día del NAVEGADOR mientras el endpoint contaba el día de la EMPRESA
+ * (`hoyEnZona(tz)`), así que durante esas horas de desfase cada uno miraba una
+ * fecha distinta y los números no podían coincidir.
+ */
+function ymdEnZona(d: Date, tz: string): string {
+  // en-CA da directamente el formato YYYY-MM-DD.
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: tz,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(d);
+}
+
+/**
+ * Resuelve QUÉ calendarios debe contar el badge, con la misma regla que aplica
+ * el panel al pintarlos: **solo cuentan los que el usuario tiene seleccionados**.
+ *
+ * `guardados` es la selección persistida (o `null` si nunca eligió). Se filtra
+ * contra los calendarios que Google devuelve HOY, porque una selección antigua
+ * puede arrastrar IDs de calendarios que ya no están compartidos con el usuario
+ * (departamentos que se quitaron, cuentas que dejaron de compartir...). Esos IDs
+ * muertos no se pueden consultar: si los mandáramos, el badge pediría eventos de
+ * calendarios inexistentes. El panel ya los descarta al pintar, así que el badge
+ * tiene que descartarlos igual para no desviarse de lo que se ve.
+ *
+ * Si el usuario nunca eligió, se arranca con los que Google trae marcados más el
+ * principal — idéntico a la primera apertura de `CalendarDrawer`.
+ */
+async function resolverCalendarios(
+  guardados: string[] | null,
+): Promise<string[]> {
+  try {
+    const data = await fetch("/api/google/calendar/list").then((r) => r.json());
+    if (!data?.connected || !Array.isArray(data.calendarios)) {
+      // Sin lista no podemos validar nada: respetamos la selección tal cual.
+      return guardados ?? [];
+    }
+    const cals: Array<{ id: string; seleccionado?: boolean; primary?: boolean }> =
+      data.calendarios;
+
+    if (guardados !== null) {
+      // Selección explícita del usuario: se respeta, quitando solo lo que ya no
+      // existe. Si TODO lo guardado ha desaparecido devolvemos [] a propósito —
+      // "no cuentes nada" es la respuesta correcta, y coincide con el panel,
+      // que en ese caso tampoco pinta nada.
+      const vivos = new Set(cals.map((c) => c.id));
+      return guardados.filter((id) => vivos.has(id));
+    }
+
+    const ids = cals
+      .filter((c) => c.seleccionado || c.primary)
+      .map((c) => c.id);
+    if (ids.length === 0 && cals.length > 0) return [cals[0].id];
+    return ids;
+  } catch {
+    return guardados ?? [];
+  }
+}
+
+/** Evento del día reducido a lo que el badge necesita para contarlo. */
+type EventoContable = { finMs: number | null; tieneMeet: boolean };
+
+/**
+ * Cuenta los eventos que TODAVÍA NO HAN TERMINADO en este instante. Es una
+ * función pura de la hora actual, así que se puede reevaluar cada minuto sin
+ * volver a preguntar a Google: el badge va bajando solo según acaban.
+ */
+function contarVigentes(eventos: EventoContable[]): {
+  events: number;
+  meetings: number;
+} {
+  const ahora = Date.now();
+  const vigentes = eventos.filter((e) => e.finMs === null || e.finMs > ahora);
+  return {
+    events: vigentes.length,
+    meetings: vigentes.filter((e) => e.tieneMeet).length,
+  };
 }
 
 export interface DailyCounts {
@@ -32,6 +110,8 @@ const REFRESH_MS = 60 * 1000; // 1 minuto
 // La 1ª carga se difiere ~2 s para no competir con el arranque crítico (permisos
 // del menú, contexto de empresa) — los badges de contadores no son urgentes.
 const INITIAL_DELAY_MS = 2000;
+// Reevaluación LOCAL de qué eventos siguen vigentes (sin tocar la red).
+const TICK_VIGENCIA_MS = 15 * 1000;
 
 // Evento global para forzar un refresco inmediato de los contadores (p. ej. al
 // leer un correo o archivarlo, sin esperar al siguiente tick de 1 minuto).
@@ -43,9 +123,14 @@ export function refreshDailyCounts(): void {
 }
 
 export function useDailyCounts(): DailyCounts {
-  const { connected } = useGoogleConnection();
+  // `email` es la CUENTA DE GOOGLE ACTIVA. Es dependencia obligatoria: al
+  // cambiar de cuenta (Bacanal → Habana) `connected` sigue siendo true, así que
+  // sin mirar el email el badge se quedaba con los eventos de la cuenta
+  // anterior. Cada cuenta tiene sus propios calendarios y sus propios eventos.
+  const { connected, email: cuentaGoogle } = useGoogleConnection();
   const { empresaActual, ajustes } = useEmpresa();
   const empresaSlug = empresaActual.id;
+  const tzEmpresa = empresaActual.zonaHoraria;
   const diasAnuncio = ajustes.notificaciones.agenda.diasAnuncio;
   const [counts, setCounts] = useState<DailyCounts>({
     emails: 0,
@@ -56,6 +141,10 @@ export function useDailyCounts(): DailyCounts {
     missedCalls: 0,
     newContacts: 0,
   });
+  // Eventos de HOY tal como los devolvió Google en la última consulta. El
+  // recuento por "ya terminado" se recalcula en local cada minuto sobre esta
+  // lista, para que el badge baje al acabar un evento sin esperar a la red.
+  const eventosHoyRef = useRef<EventoContable[]>([]);
 
   const fetchCounts = useCallback(async () => {
     // Las 5 consultas de BD son INDEPENDIENTES entre sí → en PARALELO.
@@ -107,6 +196,9 @@ export function useDailyCounts(): DailyCounts {
       contactsRes.status === "fulfilled" ? contactsRes.value : 0;
 
     if (!connected) {
+      // Sin cuenta de Google no hay eventos que contar: vaciamos también la
+      // lista cacheada para que el tick local no siga contando los de antes.
+      eventosHoyRef.current = [];
       setCounts({
         emails: 0,
         events: 0,
@@ -120,18 +212,21 @@ export function useDailyCounts(): DailyCounts {
     }
 
     try {
-      const ref = ymd(new Date());
+      const ref = ymdEnZona(new Date(), tzEmpresa);
       // El badge debe contar SOLO los calendarios que el usuario tiene
       // seleccionados en el panel de Calendar/Meet, no todos los de la cuenta de
       // Google. Sin este filtro el endpoint cae a "todos los calendarios
       // marcados en Google" (DIRECCION, PERSONAL, Bacanal, Habana...) y el badge
       // decía 4 mientras el drawer mostraba 2.
-      const seleccionados = await loadCalendariosSeleccionados();
-      // `null` = el usuario nunca eligió → dejamos que el endpoint aplique su
-      // criterio por defecto (los marcados en Google / el principal), igual que
-      // hace el drawer en su primera apertura.
-      // `[]` = deseleccionó todo → no hay nada que contar.
-      if (seleccionados !== null && seleccionados.length === 0) {
+      const guardados = await loadCalendariosSeleccionados(cuentaGoogle);
+      // Si mandáramos la petición sin `calendarIds`, el endpoint cae a "todos los
+      // calendarios de la cuenta" (17 en el caso real: los de Bacanal, los de
+      // Habana por departamento, PERSONAL, MARKETING...) y el badge sumaría
+      // eventos de calendarios que el usuario NO tiene seleccionados.
+      const seleccionados = await resolverCalendarios(guardados);
+      // `[]` = no hay ningún calendario seleccionado válido → nada que contar.
+      if (seleccionados.length === 0) {
+        eventosHoyRef.current = [];
         setCounts({
           emails: 0,
           events: 0,
@@ -143,10 +238,11 @@ export function useDailyCounts(): DailyCounts {
         });
         return;
       }
-      const calParams = new URLSearchParams({ view: "day", date: ref });
-      if (seleccionados !== null) {
-        calParams.set("calendarIds", seleccionados.join(","));
-      }
+      const calParams = new URLSearchParams({
+        view: "day",
+        date: ref,
+        calendarIds: seleccionados.join(","),
+      });
       const [emailRes, calRes] = await Promise.allSettled([
         // Cargamos el inbox completo (no solo is:unread) y contamos las
         // CONVERSACIONES no leídas, igual que la bandeja del drawer. El
@@ -168,8 +264,10 @@ export function useDailyCounts(): DailyCounts {
         emails = mensajes.filter((m) => m.leido === false).length;
       }
 
-      let events = 0;
-      let meetings = 0;
+      // Guardamos los eventos CANDIDATOS del día (ya sin all-day ni declinados,
+      // que no dependen de la hora) y dejamos que el conteo por "ya terminado"
+      // lo haga el tick local de abajo. Así el badge baja EN CUANTO acaba un
+      // evento, sin esperar a la siguiente consulta a Google.
       if (calRes.status === "fulfilled") {
         const eventos: Array<{
           meetLink?: string | null;
@@ -181,18 +279,15 @@ export function useDailyCounts(): DailyCounts {
         // lo que Google devuelve para hoy. Se excluye:
         //  - eventos "todo el día" (festivos, cumpleaños, calendarios
         //    compartidos all-day) → inflaban el número sin ser citas propias;
-        //  - eventos que el usuario ha declinado (responseStatus "declined");
-        //  - eventos que ya han terminado (su hora de fin es anterior a ahora).
-        const ahora = Date.now();
-        const vigentes = eventos.filter(
-          (e) =>
-            !e.allDay &&
-            e.miRespuesta !== "declined" &&
-            (!e.fin || new Date(e.fin).getTime() > ahora),
-        );
-        events = vigentes.length;
-        meetings = vigentes.filter((e) => !!e.meetLink).length;
+        //  - eventos que el usuario ha declinado (responseStatus "declined").
+        eventosHoyRef.current = eventos
+          .filter((e) => !e.allDay && e.miRespuesta !== "declined")
+          .map((e) => ({
+            finMs: e.fin ? new Date(e.fin).getTime() : null,
+            tieneMeet: !!e.meetLink,
+          }));
       }
+      const { events, meetings } = contarVigentes(eventosHoyRef.current);
 
       setCounts({ emails, events, meetings, tasks, chatGroups, missedCalls, newContacts });
     } catch {
@@ -205,7 +300,7 @@ export function useDailyCounts(): DailyCounts {
     // Sin esta dependencia los badges se quedarían con los números de la
     // empresa anterior hasta el siguiente tick de 1 minuto.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [connected, empresaSlug, diasAnuncio]);
+  }, [connected, cuentaGoogle, empresaSlug, tzEmpresa, diasAnuncio]);
 
   useEffect(() => {
     // 1ª carga diferida ~2 s (no compite con el arranque). Además, como el efecto se
@@ -213,11 +308,23 @@ export function useDailyCounts(): DailyCounts {
     // clearTimeout de la limpieza COALESCE esas 2-3 re-ejecuciones en una sola.
     const firstLoad = setTimeout(fetchCounts, INITIAL_DELAY_MS);
     const id = setInterval(fetchCounts, REFRESH_MS);
+    // Tick local: NO llama a Google, solo vuelve a mirar el reloj sobre los
+    // eventos ya descargados. Es lo que hace que el badge vaya bajando (5 → 4 →
+    // 3…) a medida que terminan, en vez de quedarse clavado hasta el siguiente
+    // refresco de red. Va a 15 s para que el cambio se note casi al instante.
+    const tick = setInterval(() => {
+      setCounts((prev) => {
+        const { events, meetings } = contarVigentes(eventosHoyRef.current);
+        if (prev.events === events && prev.meetings === meetings) return prev;
+        return { ...prev, events, meetings };
+      });
+    }, TICK_VIGENCIA_MS);
     const onRefresh = () => fetchCounts();
     window.addEventListener(DAILY_COUNTS_REFRESH_EVENT, onRefresh);
     return () => {
       clearTimeout(firstLoad);
       clearInterval(id);
+      clearInterval(tick);
       window.removeEventListener(DAILY_COUNTS_REFRESH_EVENT, onRefresh);
     };
   }, [fetchCounts]);

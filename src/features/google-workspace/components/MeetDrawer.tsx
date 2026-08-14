@@ -151,7 +151,10 @@ function etiquetaRango(refYmd: string, vista: Vista): string {
 }
 
 export function MeetDrawer({ children }: { children: ReactNode }) {
-  const { connected } = useGoogleConnection();
+  // Cuenta de Google activa: los calendarios y su selección son POR CUENTA, y
+  // al cambiarla hay que recargar (`connected` sigue siendo true y por sí solo
+  // no dispara nada).
+  const { connected, email: cuentaGoogle } = useGoogleConnection();
   const [eventosAll, setEventosAll] = useState<EventoApi[]>([]);
   const [eventosSinMeet, setEventosSinMeet] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -191,7 +194,7 @@ export function MeetDrawer({ children }: { children: ReactNode }) {
     let cancelado = false;
     Promise.all([
       fetch("/api/google/calendar/list").then((r) => r.json()),
-      loadCalendariosSeleccionados(),
+      loadCalendariosSeleccionados(cuentaGoogle),
     ])
       .then(([data, guardados]) => {
         if (cancelado) return;
@@ -231,21 +234,22 @@ export function MeetDrawer({ children }: { children: ReactNode }) {
     return () => {
       cancelado = true;
     };
-  }, [connected, abierto]);
+  }, [connected, cuentaGoogle, abierto]);
 
   const toggleCal = useCallback((id: string) => {
     setSeleccionados((prev) => {
       const n = new Set(prev);
       if (n.has(id)) n.delete(id);
       else n.add(id);
-      // Persistimos para que la selección se conserve en la próxima sesión.
-      saveCalendariosSeleccionados(n);
+      // Persistimos para que la selección se conserve en la próxima sesión,
+      // asociada a la CUENTA activa (cada una tiene sus propios calendarios).
+      saveCalendariosSeleccionados(cuentaGoogle, n);
       // El badge cuenta sobre esta misma selección → que se recalcule ya, sin
       // esperar al tick de 1 minuto.
       refreshDailyCounts();
       return n;
     });
-  }, []);
+  }, [cuentaGoogle]);
 
   const load = useCallback(async () => {
     if (!connected || !abierto) return;
