@@ -46,7 +46,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { Edit2, Banknote, Send, Lock, Unlock, CheckCircle2, Clock, Upload, ReceiptText, AlertTriangle, FileText, ShieldCheck, X } from "lucide-react";
+import { Edit2, Banknote, Settings, Send, Lock, Unlock, CheckCircle2, Clock, Upload, ReceiptText, AlertTriangle, FileText, ShieldCheck, X } from "lucide-react";
 import {
   SubmoduleToolbar,
   aplicarFiltrosToolbar,
@@ -260,6 +260,7 @@ export function PagosView() {
     tc1: null,
   });
   const [incidenciasNominas, setIncidenciasNominas] = useState(0);
+  const [showConfig, setShowConfig] = useState(false);
   const [enviando, setEnviando] = useState(false);
   const [subiendoNominas, setSubiendoNominas] = useState(false);
   const [progresoNominas, setProgresoNominas] = useState({ hechas: 0, total: 0 });
@@ -1237,9 +1238,33 @@ export function PagosView() {
                 </span>
               )}
             </Button>
+            <Button
+              size="icon"
+              variant={showConfig ? "default" : "outline"}
+              className="h-9 w-9"
+              onClick={() => setShowConfig((v) => !v)}
+              title="Configuración"
+              aria-label="Configuración"
+            >
+              <Settings className="h-4 w-4" strokeWidth={1.75} />
+            </Button>
           </>
         }
       />
+
+      {/* CONFIGURACIÓN del módulo (engranaje): ajustes de uso diario de ESTA
+          vista. Hoy vacío — los dos ajustes que había (avisos de liquidación y
+          envío a la gestoría) son normas de empresa y viven en Ajustes, que es
+          otra barrera de permisos. No se enlaza a Ajustes desde aquí. */}
+      {showConfig && (
+        <Card>
+          <CardContent className="p-6 text-center">
+            <p className="text-sm text-muted-foreground">
+              No hay configuración propia de Pagos por ahora.
+            </p>
+          </CardContent>
+        </Card>
+      )}
 
       {esVistaAgregada && (
         <div className="flex items-start gap-2 rounded-lg border border-sky-200 bg-sky-50 p-3 text-sm dark:border-sky-900/40 dark:bg-sky-950/20">
