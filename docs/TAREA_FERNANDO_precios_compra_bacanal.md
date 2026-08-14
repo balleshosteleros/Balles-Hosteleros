@@ -5,6 +5,42 @@
 
 ---
 
+## ❓ IVÁN: bienvenido — las 5 preguntas que te fueron por WhatsApp, aquí por escrito (14-ago, Fernando)
+
+Como no pudiste contestarlas en vacaciones, te las dejo donde siempre. Con tus respuestas
+(un audio a Fernando o una nota aquí, como prefieras) desbloqueamos todo lo que queda:
+
+1. **El stock del lote de 10 albaranes (31-jul).** Los confirmamos por la app con el
+   circuito completo, así que SUMARON stock de verdad — pero eran entregas en parte ya
+   consumidas. ¿Lo dejamos sumado y que el próximo inventario lo cuadre, o lo revertimos y
+   quedan como los lotes anteriores (solo precios, sin stock)? Registro exacto para el
+   revert en `docs/LOTE_ALBARANES_2026-08-07_REGISTRO_STOCK.md`.
+
+2. **¿Damos el piloto por cumplido?** Tu mitad era una recepción real contra pedido con el
+   motor nuevo. ¿Lo damos por bueno con los 10 albaranes reales que ya pasaron (más tu
+   Coca-Cola del móvil, que terminamos nosotros), o haces esa prueba ahora que has vuelto?
+
+3. **Los duplicados del catálogo — más gordo de lo que parecía.** No son 4 casos: hay
+   **213 grupos duplicados (426 productos)**, casi seguro una siembra que corrió dos veces.
+   El listado con las referencias de cada uno está en
+   `docs/DUPLICADOS_CATALOGO_DOSSIER_2026-08-07.md`. ¿Los fusionamos nosotros con criterio
+   automático (gana el que más referencias tiene; el otro se desactiva, nada se borra), o
+   prefieres repasar el listado tú?
+
+4. **Las 4 dudas del lote del 30-jul** (siguen abiertas, detalladas más abajo en este
+   documento): la página que faltaba de un albarán, 3 recargos sin producto claro, 1 nombre
+   incierto y 1 línea fantasma.
+
+5. **El cargador del Excel de MAKRO.** Aquel programa que carga productos desde el Excel
+   pero BORRA los de logística y los mete de cero (por eso nunca se ejecutó). Ahora que
+   productos y precios entran solos con las fotos de albaranes: ¿lo quieres para algo o lo
+   olvidamos y lo retiramos?
+
+(La sexta de la lista original —wa.me vs API de Meta— ya la decidió Fernando: seguimos con
+wa.me de momento.)
+
+---
+
 ## 🔧 IVÁN: como te ibas de vacaciones, los hallazgos del piloto que eran código YA ESTÁN ARREGLADOS (07-ago tarde, Fernando)
 
 Para que no te los encuentres como deberes: de la lista del informe de abajo, esta misma
