@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { RefreshCw, AlertTriangle, Plus } from "lucide-react";
+import { RefreshCw, AlertTriangle, Plus, Clock, Info, CalendarClock, CheckCircle2 } from "lucide-react";
 import {
   asegurarModelosDelPeriodo,
   listModelos,
@@ -12,12 +12,77 @@ import {
 import { ModeloCard } from "./ModeloCard";
 import { ModelosConfigDialog } from "./ModelosConfigDialog";
 import { CalendarioFiscal } from "./CalendarioFiscal";
-import type { ModeloAeat, ModeloTipo } from "../types/modelos";
-import { grupoDeModelo } from "../types/modelos";
+import type { EstadoVisualModelo, ModeloAeat, ModeloTipo } from "../types/modelos";
+import { grupoDeModelo, estadoVisualModelo, ESTADO_VISUAL_LABEL } from "../types/modelos";
 import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
 
 const AÑO_ACTUAL = new Date().getFullYear();
 const AÑOS = [AÑO_ACTUAL, AÑO_ACTUAL - 1, AÑO_ACTUAL - 2];
+
+/**
+ * Resumen del ejercicio: un contador por estado visual. Los colores son los
+ * mismos que los badges de ModeloCard para que la vista se lea de un vistazo.
+ * El orden va de lo más urgente (fuera de plazo) a lo ya cerrado (presentado).
+ */
+const ORDEN_RESUMEN: EstadoVisualModelo[] = [
+  "FUERA_PLAZO",
+  "EN_PLAZO",
+  "SOLICITADO",
+  "SIN_ABRIR",
+  "PRESENTADO",
+];
+
+const RESUMEN_STYLE: Record<
+  EstadoVisualModelo,
+  { icono: typeof AlertTriangle; iconCls: string; bgCls: string; barCls: string }
+> = {
+  FUERA_PLAZO: { icono: AlertTriangle, iconCls: "text-red-600", bgCls: "bg-red-50", barCls: "bg-red-500" },
+  EN_PLAZO: { icono: Clock, iconCls: "text-amber-600", bgCls: "bg-amber-50", barCls: "bg-amber-500" },
+  SOLICITADO: { icono: Info, iconCls: "text-sky-600", bgCls: "bg-sky-50", barCls: "bg-sky-500" },
+  SIN_ABRIR: { icono: CalendarClock, iconCls: "text-slate-600", bgCls: "bg-slate-100", barCls: "bg-slate-400" },
+  PRESENTADO: { icono: CheckCircle2, iconCls: "text-green-600", bgCls: "bg-green-50", barCls: "bg-green-500" },
+};
+
+function ResumenEjercicio({ modelos }: { modelos: ModeloAeat[] }) {
+  const conteo = useMemo(() => {
+    const base: Record<EstadoVisualModelo, number> = {
+      FUERA_PLAZO: 0,
+      EN_PLAZO: 0,
+      SOLICITADO: 0,
+      SIN_ABRIR: 0,
+      PRESENTADO: 0,
+    };
+    for (const m of modelos) base[estadoVisualModelo(m)] += 1;
+    return base;
+  }, [modelos]);
+
+  return (
+    <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+      {ORDEN_RESUMEN.map((estado) => {
+        const { icono: Icono, iconCls, bgCls, barCls } = RESUMEN_STYLE[estado];
+        return (
+          <div
+            key={estado}
+            className="relative overflow-hidden rounded-lg border bg-card px-3 py-2.5 hover:shadow-sm transition-shadow"
+          >
+            <div className={`absolute left-0 top-0 bottom-0 w-1 ${barCls}`} />
+            <div className="flex items-center gap-2.5 pl-1">
+              <div className={`flex items-center justify-center h-7 w-7 rounded-md ${bgCls} shrink-0`}>
+                <Icono className={`h-3.5 w-3.5 ${iconCls}`} />
+              </div>
+              <div className="min-w-0">
+                <p className="text-xl font-bold leading-none tracking-tight">{conteo[estado]}</p>
+                <p className="text-[11px] text-muted-foreground leading-tight mt-0.5 truncate">
+                  {ESTADO_VISUAL_LABEL[estado]}
+                </p>
+              </div>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 export function ModelosView() {
   const [ejercicio, setEjercicio] = useState<number>(AÑO_ACTUAL);
@@ -137,6 +202,8 @@ export function ModelosView() {
         <LoadingSpinner className="py-12" />
       ) : modelos.length === 0 ? null : (
         <>
+          <ResumenEjercicio modelos={modelos} />
+
           <section className="space-y-3">
             <h2 className="text-lg font-semibold border-b pb-2">Modelos trimestrales</h2>
             {porTipoQ

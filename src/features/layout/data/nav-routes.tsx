@@ -192,7 +192,6 @@ export const contabilidadSubs: SubItem[] = [
 
 export const gestoriaSubs: SubItem[] = [
   { title: "MODELOS", url: "/gestoria/modelos", icon: FileSearch },
-  { title: "PRESENTACIONES", url: "/gestoria/presentaciones", icon: FileUp },
   { title: "CONTRATACIONES", url: "/gestoria/contrataciones", icon: UserPlus },
 ];
 
