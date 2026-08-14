@@ -29,8 +29,15 @@ const PUBLIC_PREFIXES = ['/carta', '/__site', '/api/google/connect', '/api/googl
   '/q',
   // Subida de contrato por la gestoría externa (enlace tokenizado, sin cuenta).
   '/gestoria/contrato', '/api/gestoria/contrato',
+  // Documentos oficiales de la BAJA (justificante del RED + certificado SEPE),
+  // que la gestoría adjunta por su enlace tokenizado, también sin cuenta.
+  '/gestoria/baja', '/api/gestoria/baja',
   // Subida de modelos fiscales por la gestoría (PRP-072, enlace tokenizado).
   '/gestoria/modelos', '/api/gestoria/modelos',
+  // Subida MENSUAL de nóminas por la gestoría (enlace tokenizado). Faltaba: el
+  // correo que se le envía cada mes la mandaba al login en vez de a la pantalla
+  // de subida.
+  '/gestoria/nominas', '/api/gestoria/nominas',
   // Formación del candidato en fase «Formación» (aún sin cuenta): enlace
   // tokenizado /formacion/<token> que muestra el curso de su puesto.
   '/formacion',

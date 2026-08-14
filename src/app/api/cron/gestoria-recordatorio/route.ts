@@ -148,5 +148,24 @@ export async function GET(request: Request) {
     }
   }
 
-  return NextResponse.json({ ok: true, ejecutadoEn: new Date().toISOString(), recordatoriosEnviados: enviados });
+  // Documentos OFICIALES de las BAJAS (justificante del RED / certificado SEPE).
+  // Va dentro de este cron a propósito: Vercel limita los crons diarios del plan
+  // y añadir uno nuevo bloquearía TODOS los despliegues.
+  let bajasRecordadas = 0;
+  try {
+    const { procesarRecordatoriosDocsBaja } = await import(
+      "@/features/rrhh/services/gestoria/gestoria-baja-documentos"
+    );
+    const r = await procesarRecordatoriosDocsBaja(admin);
+    bajasRecordadas = r.enviados;
+  } catch (e) {
+    console.error("[cron/gestoria] recordatorios de documentos de baja:", e);
+  }
+
+  return NextResponse.json({
+    ok: true,
+    ejecutadoEn: new Date().toISOString(),
+    recordatoriosEnviados: enviados,
+    bajasRecordadas,
+  });
 }

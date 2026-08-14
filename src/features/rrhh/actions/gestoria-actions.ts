@@ -864,6 +864,22 @@ export async function enviarBajaGestoria(
     }
     const to = [dst.to, dst.cc].filter(Boolean).join(", ");
 
+    // Enlace para que la gestoría adjunte los DOCUMENTOS OFICIALES de la baja
+    // (justificante del RED — obligatorio — y certificado de empresa del SEPE).
+    // Es el equivalente al enlace de subida del contrato en el alta.
+    const { crearTokenDocsBaja, botonDocsBajaHtml, urlSubidaDocsBaja } = await import(
+      "@/features/rrhh/services/gestoria/gestoria-baja-documentos"
+    );
+    const tkDocs = await crearTokenDocsBaja(admin, {
+      empresaId,
+      empleadoId,
+      ultimoDiaIso: baja.ultimoDiaIso,
+    });
+    const botonDocsHtml = tkDocs.ok ? botonDocsBajaHtml(urlSubidaDocsBaja(tkDocs.token)) : "";
+    const enlaceDocsText = tkDocs.ok
+      ? `\n\nAdjunta los documentos de la baja (justificante de la Seguridad Social y certificado de empresa): ${urlSubidaDocsBaja(tkDocs.token)}`
+      : "";
+
     let subject: string;
     let html: string;
     let text: string;
@@ -873,15 +889,16 @@ export async function enviarBajaGestoria(
       const cuerpoHtml = partes.length > 1
         ? partes.map((p) => cuerpoOnboardingAHtml(p)).join(tablaHtml)
         : `${cuerpoOnboardingAHtml(tpl.cuerpo)}${tablaHtml}`;
-      html = cuerpoHtml;
-      text = tpl.cuerpo.replace("{{gestoria_datos}}", `\n${filasText}`);
+      html = `${cuerpoHtml}${botonDocsHtml}`;
+      text = `${tpl.cuerpo.replace("{{gestoria_datos}}", `\n${filasText}`)}${enlaceDocsText}`;
     } else {
       subject = `Baja de trabajador · ${nombre} · ${empresaNombre}`;
       html = `
       <p>El siguiente trabajador causa baja (${escapeHtml(tipoBajaLabel)}) en la empresa. Su último día efectivo de trabajo será el ${escapeHtml(ultimoDiaTrabajo)} y la baja será oficial el ${escapeHtml(diaOficialBaja)}:</p>
       ${tablaHtml}
+      ${botonDocsHtml}
       <p style="color:#888;font-size:12px">Enviado automáticamente desde el sistema de ${empresaNombre}.</p>`;
-      text = `Baja de trabajador\n${filasText}`;
+      text = `Baja de trabajador\n${filasText}${enlaceDocsText}`;
     }
 
     const res = await sendEmail({ to, subject, html, text, empresaId });
@@ -892,21 +909,34 @@ export async function enviarBajaGestoria(
     // verse en rojo, no desaparecer. Foto fija de lo enviado. Best-effort: el
     // registro nunca puede tumbar el aviso de baja.
     try {
-      await admin.from("gestoria_bajas").insert({
-        empresa_id: empresaId,
-        empleado_id: empleadoId,
-        nombre,
-        dni_nie: emp.dni_nie ?? null,
-        puesto: emp.puesto ?? null,
-        tipo_baja: baja.tipoBaja,
-        tipo_baja_label: tipoBajaLabel,
-        motivo: baja.motivo ?? null,
-        ultimo_dia: baja.ultimoDiaIso,
-        origen: baja.origen ?? "reclutamiento",
-        email_estado: res.ok ? "enviado" : "fallido",
-        email_to: dst.to,
-        email_error: res.ok ? null : "No se pudo enviar el email (revisa el SMTP).",
-      });
+      const { data: filaBaja } = await admin
+        .from("gestoria_bajas")
+        .insert({
+          empresa_id: empresaId,
+          empleado_id: empleadoId,
+          nombre,
+          dni_nie: emp.dni_nie ?? null,
+          puesto: emp.puesto ?? null,
+          tipo_baja: baja.tipoBaja,
+          tipo_baja_label: tipoBajaLabel,
+          motivo: baja.motivo ?? null,
+          ultimo_dia: baja.ultimoDiaIso,
+          origen: baja.origen ?? "reclutamiento",
+          email_estado: res.ok ? "enviado" : "fallido",
+          email_to: dst.to,
+          email_error: res.ok ? null : "No se pudo enviar el email (revisa el SMTP).",
+        })
+        .select("id")
+        .single();
+
+      // Liga el enlace de documentos con esta baja: el visor lee por ahí si el
+      // justificante llegó.
+      if (filaBaja?.id && tkDocs.ok) {
+        await admin
+          .from("gestoria_baja_doc_tokens")
+          .update({ baja_id: filaBaja.id as string })
+          .eq("id", tkDocs.tokenId);
+      }
     } catch (e) {
       console.error("[rrhh] enviarBajaGestoria → histórico:", e);
     }

@@ -198,10 +198,14 @@ async function listAltas(
 }
 
 /**
- * BAJAS. A diferencia del alta, la gestoría NO devuelve ningún documento: el
- * trámite se agota en el aviso. Por eso lo único que puede quedar «pendiente»
- * es que el correo no llegara a salir — y ese caso es grave, porque el
- * trabajador seguiría de alta en la Seguridad Social.
+ * BAJAS. El estado sigue el documento que acredita oficialmente la baja: el
+ * JUSTIFICANTE de la Seguridad Social (sistema RED), que la gestoría sube por su
+ * enlace. El certificado de empresa (SEPE) es opcional y no bloquea.
+ *   · correcto  → justificante recibido
+ *   · pendiente → falta el justificante, o el aviso a la gestoría no salió
+ *
+ * El aviso fallido es el caso más grave: la gestoría puede no haberse enterado
+ * de la baja y el trabajador seguiría de alta en la Seguridad Social.
  */
 async function listBajas(
   supabase: Awaited<ReturnType<typeof createClient>>,
@@ -214,12 +218,34 @@ async function listBajas(
     .eq("empresa_id", empresaId)
     .order("enviado_en", { ascending: false });
   if (error) throw error;
+  const filas = data ?? [];
+  if (filas.length === 0) return [];
 
-  return (data ?? []).map((b) => {
+  // Documentos oficiales recibidos, por baja.
+  const { data: docsData } = await supabase
+    .from("gestoria_baja_doc_tokens")
+    .select("baja_id, justificante_subido_en, certificado_subido_en")
+    .eq("empresa_id", empresaId)
+    .not("baja_id", "is", null);
+  const docs = new Map(
+    (docsData ?? []).map((d) => [
+      (d as Record<string, unknown>).baja_id as string,
+      d as Record<string, unknown>,
+    ]),
+  );
+
+  return filas.map((b) => {
     const fallido = (b.email_estado as string) === "fallido";
     const ultimoDia = (b.ultimo_dia as string | null) ?? null;
-    // Si el aviso falló, el peligro no depende de la fecha: la gestoría no se ha
-    // enterado de la baja, punto. Se marca siempre en rojo.
+    const doc = docs.get(b.id as string);
+    const tieneJustificante = doc?.justificante_subido_en != null;
+
+    // El aviso fallido manda sobre todo lo demás: sin correo no hay trámite.
+    let pendienteDe: MotivoPendiente | null = null;
+    if (fallido) pendienteDe = "email_fallido";
+    else if (!tieneJustificante) pendienteDe = "justificante_baja";
+
+    const pendiente = pendienteDe !== null;
     const aviso = fallido
       ? {
           aviso: "peligro" as const,
@@ -228,7 +254,10 @@ async function listBajas(
               ? "El aviso NO salió y la baja ya es efectiva"
               : "El aviso a la gestoría NO salió",
         }
-      : { aviso: "ninguno" as const, aviso_texto: null };
+      : calcularAviso(pendiente, ultimoDia, hoy, {
+          hoy: "La baja es HOY y falta el justificante de la Seguridad Social",
+          pasado: "La baja ya pasó y sigue sin justificante de la Seguridad Social",
+        });
 
     return {
       id: b.id as string,
@@ -239,8 +268,8 @@ async function listBajas(
       puesto: (b.puesto as string | null) ?? null,
       enviado_en: b.enviado_en as string,
       fecha_evento: ultimoDia,
-      estado: fallido ? ("pendiente" as const) : ("correcto" as const),
-      pendiente_de: fallido ? ("email_fallido" as MotivoPendiente) : null,
+      estado: pendiente ? ("pendiente" as const) : ("correcto" as const),
+      pendiente_de: pendienteDe,
       tipo_baja_label: (b.tipo_baja_label as string | null) ?? null,
       motivo: (b.motivo as string | null) ?? null,
       ...aviso,

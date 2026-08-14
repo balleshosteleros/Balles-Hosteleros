@@ -25,7 +25,8 @@ export type MotivoPendiente =
   | "contrato_gestoria" // la gestoría aún no ha subido el contrato
   | "firma_trabajador" // subido, pero el trabajador no lo ha firmado
   | "enlace_caducado" // el enlace de subida expiró sin contrato
-  | "email_fallido"; // el aviso a la gestoría no salió
+  | "email_fallido" // el aviso a la gestoría no salió
+  | "justificante_baja"; // falta el justificante de baja de la Seguridad Social
 
 /** Nivel de alerta de la fila. `peligro` se pinta en rojo. */
 export type NivelAviso = "ninguno" | "peligro";

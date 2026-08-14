@@ -54,6 +54,7 @@ const TEXTO_PENDIENTE: Record<string, string> = {
   firma_trabajador: "Falta la firma del trabajador",
   enlace_caducado: "El enlace de subida caducó sin contrato",
   email_fallido: "El aviso a la gestoría no salió",
+  justificante_baja: "Falta el justificante de la Seguridad Social",
 };
 
 function columnasDe(tipo: TipoContratacion): ToolbarColumna[] {
@@ -357,7 +358,7 @@ export function ContratacionesView() {
               {" — "}
               {tipoActivo === "alta"
                 ? "hay trabajadores que ya han empezado (o empiezan hoy) con el contrato sin cerrar."
-                : "el aviso a la gestoría no llegó a salir."}
+                : "faltan documentos oficiales de bajas que ya son efectivas."}
             </span>
           </div>
         </div>
