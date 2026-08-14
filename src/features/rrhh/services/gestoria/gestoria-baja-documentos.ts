@@ -127,7 +127,10 @@ export function botonDocsBajaHtml(url: string, opts?: { recordatorio?: boolean }
 export async function crearTokenDocsBaja(
   admin: SupabaseClient,
   params: { empresaId: string; empleadoId: string; bajaId?: string | null; ultimoDiaIso: string },
-): Promise<{ ok: true; token: string; tokenId: string } | { ok: false; error: string }> {
+): Promise<
+  | { ok: true; token: string; tokenHash: string; tokenId: string; expiraEn: string }
+  | { ok: false; error: string }
+> {
   try {
     const token = generarToken();
     const tokenHash = hashToken(token);
@@ -151,7 +154,7 @@ export async function crearTokenDocsBaja(
       .select("id")
       .single();
     if (error || !data) return { ok: false, error: error?.message ?? "No se pudo crear el enlace" };
-    return { ok: true, token, tokenId: data.id as string };
+    return { ok: true, token, tokenHash, tokenId: data.id as string, expiraEn: expira };
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Error creando el enlace de documentos de baja";
     return { ok: false, error: msg };
@@ -284,99 +287,131 @@ export async function procesarSubidaDocBaja(
 export async function procesarRecordatoriosDocsBaja(
   admin: SupabaseClient,
 ): Promise<{ enviados: number }> {
-  const hoy = new Date().toISOString().slice(0, 10);
-  let enviados = 0;
-
   const { data: pendientes } = await admin
     .from("gestoria_baja_doc_tokens")
     .select("id, empresa_id, empleado_id, token_hash, ultimo_dia, expira_en")
     .is("justificante_subido_en", null)
     .is("recordatorio_en", null);
 
+  let enviados = 0;
   for (const tk of pendientes ?? []) {
-    try {
-      const ultimoDia = tk.ultimo_dia as string;
-      if (new Date(tk.expira_en as string).getTime() < Date.now()) continue;
-
-      const diasHasta = Math.round(
-        (new Date(`${ultimoDia}T00:00:00Z`).getTime() - new Date(`${hoy}T00:00:00Z`).getTime()) /
-          86_400_000,
-      );
-      if (diasHasta > 1) continue;
-      const vencido = diasHasta < 0;
-
-      const empresaId = tk.empresa_id as string;
-      const { data: emp } = await admin
-        .from("empleados")
-        .select("nombre, apellidos, dni_nie")
-        .eq("id", tk.empleado_id)
-        .maybeSingle();
-      const { data: empresa } = await admin
-        .from("empresas")
-        .select("nombre")
-        .eq("id", empresaId)
-        .maybeSingle();
-      const nombre = `${emp?.nombre ?? ""} ${emp?.apellidos ?? ""}`.trim() || "el trabajador";
-      const empresaNombre = (empresa?.nombre as string) ?? "la empresa";
-
-      const enlace = urlRecordatorioDocsBaja(tk.token_hash as string);
-      const botonHtml = botonDocsBajaHtml(enlace, { recordatorio: true });
-
-      const { resolverDestinatario } = await import(
-        "@/features/rrhh/services/email-plantillas/resolver"
-      );
-      const dst = await resolverDestinatario(admin, empresaId, "departamento", "correoGestoria", null);
-      const to = [dst.to, dst.cc].filter(Boolean).join(", ");
-      if (!to) continue;
-
-      const fechaES = ultimoDia.split("-").reverse().join("/");
-      const subject = vencido
-        ? `⚠️ Urgente: faltan los documentos de la baja de ${nombre} · ${empresaNombre}`
-        : `Recordatorio: documentos de la baja de ${nombre} (mañana) · ${empresaNombre}`;
-      const html = `
-        <p>Nos falta el <b>justificante de baja de la Seguridad Social</b> de
-        <b>${nombre}</b>${emp?.dni_nie ? ` (DNI/NIE ${emp.dni_nie})` : ""}.</p>
-        <p${vencido ? ' style="color:#b91c1c"' : ""}>
-          ${
-            vencido
-              ? `Su baja tenía fecha del <b>${fechaES}</b> y esa fecha <b>ya ha pasado</b>. Sin el justificante no podemos acreditar la baja ni su causa.`
-              : `Su baja es el <b>${fechaES}</b>. Te agradeceríamos que nos adjuntes la documentación en cuanto la tengas.`
-          }
-        </p>
-        ${botonHtml}
-        <p style="color:#888;font-size:12px">Enviado automáticamente desde el sistema de ${empresaNombre}.</p>`;
-      const text =
-        `Faltan los documentos de la baja de ${nombre} (fecha de baja: ${fechaES}). ` +
-        `Súbelos aquí: ${enlace}`;
-
-      const res = await sendEmail({ to, subject, html, text, empresaId });
-      if (!res.ok) continue;
-
-      await admin
-        .from("gestoria_baja_doc_tokens")
-        .update({ recordatorio_en: new Date().toISOString() })
-        .eq("id", tk.id);
-      enviados++;
-
-      const { notificarRrhhGestoria } = await import(
-        "@/features/rrhh/services/gestoria/gestoria-contrato"
-      );
-      await notificarRrhhGestoria({
-        empresaId,
-        tipo: "gestoria_recordatorio",
-        titulo: `Documentos de baja pendientes: ${nombre}`,
-        mensaje: vencido
-          ? `La baja de ${nombre} (${fechaES}) ya pasó y la gestoría aún no ha subido el justificante. Se le ha reenviado el enlace.`
-          : `La baja de ${nombre} es el ${fechaES} y faltan los documentos. Se ha recordado a la gestoría.`,
-        empleadoId: tk.empleado_id as string,
-        dedupeKey: `gestoria_baja_docs:${tk.id}`,
-      });
-    } catch (e) {
-      console.error("[gestoria/baja] recordatorio:", e);
-    }
+    const ok = await enviarRecordatorioDocsBaja(admin, {
+      id: tk.id as string,
+      empresaId: tk.empresa_id as string,
+      empleadoId: tk.empleado_id as string,
+      tokenHash: tk.token_hash as string,
+      ultimoDia: tk.ultimo_dia as string,
+      expiraEn: tk.expira_en as string,
+    });
+    if (ok) enviados++;
   }
-
   return { enviados };
+}
+
+/**
+ * Envía UN recordatorio de documentos de baja, si procede.
+ *
+ * Lo usan dos caminos:
+ *   · el cron diario (barrido de pendientes), y
+ *   · el propio aviso de baja cuando la fecha YA HA PASADO al comunicarla
+ *     (`avisarSiVencida`): en ese caso no se espera a la vuelta del cron, que
+ *     tardaría hasta un día entero justo en el supuesto más urgente.
+ *
+ * Devuelve `true` solo si el correo salió.
+ */
+export async function enviarRecordatorioDocsBaja(
+  admin: SupabaseClient,
+  tk: {
+    id: string;
+    empresaId: string;
+    empleadoId: string;
+    tokenHash: string;
+    ultimoDia: string;
+    expiraEn: string;
+  },
+): Promise<boolean> {
+  try {
+    if (new Date(tk.expiraEn).getTime() < Date.now()) return false;
+
+    const hoy = new Date().toISOString().slice(0, 10);
+    const diasHasta = Math.round(
+      (new Date(`${tk.ultimoDia}T00:00:00Z`).getTime() - new Date(`${hoy}T00:00:00Z`).getTime()) /
+        86_400_000,
+    );
+    // Solo se avisa desde un día antes en adelante (incluye el propio día y los
+    // posteriores, que son los urgentes).
+    if (diasHasta > 1) return false;
+    const vencido = diasHasta < 0;
+
+    const { data: emp } = await admin
+      .from("empleados")
+      .select("nombre, apellidos, dni_nie")
+      .eq("id", tk.empleadoId)
+      .maybeSingle();
+    const { data: empresa } = await admin
+      .from("empresas")
+      .select("nombre")
+      .eq("id", tk.empresaId)
+      .maybeSingle();
+    const nombre = `${emp?.nombre ?? ""} ${emp?.apellidos ?? ""}`.trim() || "el trabajador";
+    const empresaNombre = (empresa?.nombre as string) ?? "la empresa";
+
+    const enlace = urlRecordatorioDocsBaja(tk.tokenHash);
+    const botonHtml = botonDocsBajaHtml(enlace, { recordatorio: true });
+
+    const { resolverDestinatario } = await import(
+      "@/features/rrhh/services/email-plantillas/resolver"
+    );
+    const dst = await resolverDestinatario(admin, tk.empresaId, "departamento", "correoGestoria", null);
+    const to = [dst.to, dst.cc].filter(Boolean).join(", ");
+    if (!to) return false;
+
+    const fechaES = tk.ultimoDia.split("-").reverse().join("/");
+    const subject = vencido
+      ? `⚠️ Urgente: faltan los documentos de la baja de ${nombre} · ${empresaNombre}`
+      : `Recordatorio: documentos de la baja de ${nombre} (mañana) · ${empresaNombre}`;
+    const html = `
+      <p>Nos falta el <b>justificante de baja de la Seguridad Social</b> de
+      <b>${nombre}</b>${emp?.dni_nie ? ` (DNI/NIE ${emp.dni_nie})` : ""}.</p>
+      <p${vencido ? ' style="color:#b91c1c"' : ""}>
+        ${
+          vencido
+            ? `Su baja tenía fecha del <b>${fechaES}</b> y esa fecha <b>ya ha pasado</b>. Sin el justificante no podemos acreditar la baja ni su causa. Te agradeceríamos que nos lo envíes cuanto antes.`
+            : `Su baja es el <b>${fechaES}</b>. Te agradeceríamos que nos adjuntes la documentación en cuanto la tengas.`
+        }
+      </p>
+      ${botonHtml}
+      <p style="color:#888;font-size:12px">Enviado automáticamente desde el sistema de ${empresaNombre}.</p>`;
+    const text =
+      `Faltan los documentos de la baja de ${nombre} (fecha de baja: ${fechaES}). ` +
+      `Súbelos aquí: ${enlace}`;
+
+    const res = await sendEmail({ to, subject, html, text, empresaId: tk.empresaId });
+    if (!res.ok) return false;
+
+    await admin
+      .from("gestoria_baja_doc_tokens")
+      .update({ recordatorio_en: new Date().toISOString() })
+      .eq("id", tk.id);
+
+    const { notificarRrhhGestoria } = await import(
+      "@/features/rrhh/services/gestoria/gestoria-contrato"
+    );
+    await notificarRrhhGestoria({
+      empresaId: tk.empresaId,
+      tipo: "gestoria_recordatorio",
+      titulo: `Documentos de baja pendientes: ${nombre}`,
+      mensaje: vencido
+        ? `La baja de ${nombre} (${fechaES}) ya pasó y la gestoría aún no ha subido el justificante. Se le ha reenviado el enlace.`
+        : `La baja de ${nombre} es el ${fechaES} y faltan los documentos. Se ha recordado a la gestoría.`,
+      empleadoId: tk.empleadoId,
+      dedupeKey: `gestoria_baja_docs:${tk.id}`,
+    });
+    return true;
+  } catch (e) {
+    console.error("[gestoria/baja] recordatorio:", e);
+    return false;
+  }
 }
 
 /** Envía el documento al trabajador a su email PERSONAL (el corporativo puede

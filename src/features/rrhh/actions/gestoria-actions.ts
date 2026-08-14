@@ -941,6 +941,31 @@ export async function enviarBajaGestoria(
       console.error("[rrhh] enviarBajaGestoria → histórico:", e);
     }
 
+    // BAJA CON FECHA YA PASADA: no se espera al cron (corre una vez al día, así
+    // que una baja comunicada hoy con fecha de ayer no recibiría el aviso urgente
+    // hasta mañana, justo en el caso que más corre). Se manda AHORA, detrás del
+    // correo de la baja, para que la gestoría tenga ya los datos y el enlace.
+    if (res.ok && tkDocs.ok) {
+      const hoyIso = new Date().toISOString().slice(0, 10);
+      if (baja.ultimoDiaIso < hoyIso) {
+        try {
+          const { enviarRecordatorioDocsBaja } = await import(
+            "@/features/rrhh/services/gestoria/gestoria-baja-documentos"
+          );
+          await enviarRecordatorioDocsBaja(admin, {
+            id: tkDocs.tokenId,
+            empresaId,
+            empleadoId,
+            tokenHash: tkDocs.tokenHash,
+            ultimoDia: baja.ultimoDiaIso,
+            expiraEn: tkDocs.expiraEn,
+          });
+        } catch (e) {
+          console.error("[rrhh] enviarBajaGestoria → urgente docs baja:", e);
+        }
+      }
+    }
+
     if (!res.ok) return { ok: false, error: "No se pudo enviar el email (revisa el SMTP)." };
 
     // Registrar el email en la actividad del empleado.
