@@ -28,6 +28,36 @@ async function leerFirmaCorporativa(): Promise<string> {
   }
 }
 
+/** Ancho máximo razonable para el logo de una firma, en píxeles. */
+const ANCHO_FIRMA = 320;
+
+/**
+ * Repara las imágenes de la firma antes de enviarla.
+ *
+ * Gmail guarda algunas firmas con un `<img>` SIN atributos `width`/`height`
+ * (caso real: la firma de Habana). Muchos clientes de correo le reservan
+ * entonces 0 píxeles y el logo no se ve, aunque la imagen se descargue bien —
+ * mientras que otra firma con las mismas condiciones pero CON dimensiones sí
+ * aparece.
+ *
+ * Aquí se le dan dimensiones y un `max-width` a toda imagen que no las traiga,
+ * para que el logo salga visible sin tener que reconfigurar la firma en Gmail.
+ * Las que ya declaran tamaño se dejan intactas: su autor ya decidió cómo se ven.
+ */
+function repararImagenesFirma(firma: string): string {
+  if (!firma) return "";
+
+  return firma.replace(/<img\b[^>]*>/gi, (tag) => {
+    const tieneAncho = /\bwidth\s*=/i.test(tag) || /style=["'][^"']*\bwidth\s*:/i.test(tag);
+    if (tieneAncho) return tag;
+
+    // Se inyecta justo antes del cierre, respetando `<img ...>` y `<img ... />`.
+    const cierre = tag.endsWith("/>") ? "/>" : ">";
+    const cuerpo = tag.slice(0, tag.length - cierre.length).trimEnd();
+    return `${cuerpo} width="${ANCHO_FIRMA}" style="max-width:${ANCHO_FIRMA}px;height:auto;display:block"${cierre}`;
+  });
+}
+
 /**
  * Convierte el texto del compositor en HTML seguro y CLICABLE.
  *
@@ -155,7 +185,7 @@ export async function POST(request: Request) {
   }
 
   const cuerpoHtml = escaparHtml(body.body ?? "");
-  const firma = body.sinFirma ? "" : await leerFirmaCorporativa();
+  const firma = body.sinFirma ? "" : repararImagenesFirma(await leerFirmaCorporativa());
   const htmlFinal = firma
     ? `<div>${cuerpoHtml}</div><br><br><div>--<br>${firma}</div>`
     : `<div>${cuerpoHtml}</div>`;
