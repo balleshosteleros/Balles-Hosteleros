@@ -6,6 +6,8 @@ const pagoSchema = z.object({
   id: z.string(),
   empleadoId: z.string(),
   empleadoNombre: z.string(),
+  puesto: z.string().nullable(),
+  area: z.string(),
   fijo: z.boolean(),
   pago: z.number(),
   nomina: z.number(),
@@ -33,6 +35,9 @@ export const pagosIO: ModuleIO<PagoEmpleado> = {
   columns: [
     { key: "id", label: "ID", hideInImport: true },
     { key: "empleadoNombre", label: "Empleado", required: true },
+    // Vienen de la ficha del empleado, no del pago: se exportan pero no se importan.
+    { key: "puesto", label: "Puesto", hideInImport: true },
+    { key: "area", label: "Área", hideInImport: true },
     { key: "fijo", label: "Fijo", type: "boolean" },
     { key: "pago", label: "Pago base", type: "number" },
     { key: "nomina", label: "Nómina", type: "number" },

@@ -22,6 +22,8 @@ export interface PagoEmpleado {
   // DNI/NIE de la ficha del empleado (para emparejar nóminas y mostrarlo en la
   // tabla). null si el empleado no lo tiene registrado o es un ex-empleado suelto.
   dniNie: string | null;
+  // Puesto de la ficha del empleado. null en ex-empleados sueltos (sin ficha).
+  puesto: string | null;
   area: PagoArea;
   fijo: boolean;
   pago: number;
