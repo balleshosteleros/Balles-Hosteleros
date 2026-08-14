@@ -32,10 +32,12 @@ import { Modelo390Editor } from "./editors/Modelo390Editor";
 import { Modelo347Editor } from "./editors/Modelo347Editor";
 import { FacturasSinClasificar } from "./FacturasSinClasificar";
 import { CuadreBadge } from "./CuadreBadge";
+import { CasillasPresentadas } from "./CasillasPresentadas";
 import { SolicitarGestoriaButton } from "./SolicitarGestoriaButton";
 import { SubirDocumentoModeloButton } from "./SubirDocumentoModeloButton";
 import { correrIA } from "../actions/categorizacion-actions";
 import { validarCuadre } from "../services/validar-cuadre";
+import { toast } from "@/shared/hooks/use-toast";
 
 interface Props {
   modelo: ModeloAeat;
@@ -62,6 +64,9 @@ export function ModeloEditor({ modelo, facturas, asignaciones, registros347 }: P
   const presentado = modelo.estado === "PRESENTADO";
   const editable = !presentado;
   const esAnual = modelo.tipo === "347" || modelo.tipo === "390";
+  // Casillas leídas del justificante AEAT: se muestran como el impreso oficial
+  // presentado, no como un editor con propuestas del motor interno.
+  const esPresentado = modelo.casillas_origen === "gestoria";
 
   // Estado visual (plazo/solicitud/presentado), con cuenta atrás en "En plazo".
   const estadoVisual = estadoVisualModelo(modelo);
@@ -78,11 +83,17 @@ export function ModeloEditor({ modelo, facturas, asignaciones, registros347 }: P
     setIaEjecutando(true);
     try {
       const res = await correrIA(modelo.id);
-      if (!res.ok) alert(`Error: ${res.error}`);
-      else {
-        alert(
-          `IA completada: ${res.asignaciones} facturas clasificadas (${res.dudosas} dudosas). Tokens: ${res.tokensInput} / ${res.tokensOutput}.`,
-        );
+      if (!res.ok) {
+        toast({
+          variant: "destructive",
+          title: "No se pudo clasificar",
+          description: res.error,
+        });
+      } else {
+        toast({
+          title: "Clasificación completada",
+          description: `${res.asignaciones} facturas clasificadas · ${res.dudosas} dudosas.`,
+        });
         router.refresh();
       }
     } finally {
@@ -122,10 +133,18 @@ export function ModeloEditor({ modelo, facturas, asignaciones, registros347 }: P
                   hash:{modelo.hash_snapshot.slice(0, 16)}...
                 </span>
               ) : null}
-              {!esAnual ? (
+              {!esAnual && !esPresentado ? (
                 <CuadreBadge
                   resultado={validarCuadre(modelo.tipo, modelo.casillas ?? {}, facturas)}
                 />
+              ) : null}
+              {esPresentado ? (
+                <Badge
+                  variant="outline"
+                  className="bg-green-50 text-green-800 border-green-200"
+                >
+                  Datos del justificante AEAT
+                </Badge>
               ) : null}
             </div>
           </div>
@@ -155,21 +174,29 @@ export function ModeloEditor({ modelo, facturas, asignaciones, registros347 }: P
           <Link href={`/api/modelos-aeat/${modelo.id}/pdf`} target="_blank">
             <Button variant="outline" size="sm">
               <FileDown className="h-4 w-4 mr-1" />
-              PDF
+              Imprimir
             </Button>
           </Link>
-          <Link href={`/api/modelos-aeat/${modelo.id}/fichero`} target="_blank">
-            <Button variant="outline" size="sm">
-              <FileDown className="h-4 w-4 mr-1" />
-              Fichero AEAT
-            </Button>
-          </Link>
+          {/*
+            El botón "Fichero AEAT" se retira hasta implementar el diseño de
+            registro oficial: lo que se generaba no lo acepta la Sede.
+          */}
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_340px] gap-4">
         <div className="min-w-0">
-          {modelo.tipo === "303" ? (
+          {esPresentado ? (
+            <CasillasPresentadas
+              modeloId={modelo.id}
+              tipo={modelo.tipo}
+              casillas={modelo.casillas ?? {}}
+              csvAeat={modelo.csv_aeat}
+              numeroJustificante={modelo.numero_justificante}
+              documentoOrigenUrl={modelo.documento_origen_url}
+              tienePdf={Boolean(modelo.pdf_url)}
+            />
+          ) : modelo.tipo === "303" ? (
             <Modelo303Editor modelo={modelo} facturas={facturas} asignaciones={asignaciones} />
           ) : modelo.tipo === "130" ? (
             <Modelo130Editor modelo={modelo} facturas={facturas} asignaciones={asignaciones} />
@@ -184,7 +211,7 @@ export function ModeloEditor({ modelo, facturas, asignaciones, registros347 }: P
           ) : null}
         </div>
 
-        {!esAnual ? (
+        {!esAnual && !esPresentado ? (
           <aside className="space-y-3">
             <FacturasSinClasificar
               modeloId={modelo.id}

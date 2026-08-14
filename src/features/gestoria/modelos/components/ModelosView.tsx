@@ -12,12 +12,14 @@ import {
 import { ModeloCard } from "./ModeloCard";
 import { ModelosConfigDialog } from "./ModelosConfigDialog";
 import { CalendarioFiscal } from "./CalendarioFiscal";
+import { AnaliticaModelos } from "./AnaliticaModelos";
 import type { EstadoVisualModelo, ModeloAeat, ModeloTipo } from "../types/modelos";
 import { grupoDeModelo, estadoVisualModelo, ESTADO_VISUAL_LABEL } from "../types/modelos";
 import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
 
 const AÑO_ACTUAL = new Date().getFullYear();
-const AÑOS = [AÑO_ACTUAL, AÑO_ACTUAL - 1, AÑO_ACTUAL - 2];
+// Hay modelos presentados importados desde 2023: el selector debe alcanzarlos.
+const AÑOS = [AÑO_ACTUAL, AÑO_ACTUAL - 1, AÑO_ACTUAL - 2, AÑO_ACTUAL - 3, AÑO_ACTUAL - 4];
 
 /**
  * Resumen del ejercicio: un contador por estado visual. Los colores son los
@@ -84,7 +86,10 @@ function ResumenEjercicio({ modelos }: { modelos: ModeloAeat[] }) {
   );
 }
 
+type SubVista = "modelos" | "analitica";
+
 export function ModelosView() {
+  const [vista, setVista] = useState<SubVista>("modelos");
   const [ejercicio, setEjercicio] = useState<number>(AÑO_ACTUAL);
   const [modelos, setModelos] = useState<ModeloAeat[]>([]);
   const [loading, setLoading] = useState(true);
@@ -149,10 +154,30 @@ export function ModelosView() {
           Refrescar
         </Button>
         <CalendarioFiscal ejercicio={ejercicio} />
+
+        {/* Sub-vistas del submódulo: el listado de huecos y la analítica de lo
+            presentado. La analítica no depende del ejercicio elegido: pinta la
+            serie histórica completa. */}
+        <div className="inline-flex rounded-md border p-0.5">
+          {(["modelos", "analitica"] as const).map((v) => (
+            <button
+              key={v}
+              type="button"
+              onClick={() => setVista(v)}
+              className={`rounded px-3 py-1 text-sm font-medium transition-colors ${
+                vista === v ? "bg-primary text-primary-foreground" : "hover:bg-accent"
+              }`}
+            >
+              {v === "modelos" ? "Modelos" : "Analítica"}
+            </button>
+          ))}
+        </div>
+
         <div className="flex-1" />
         <Select
           value={String(ejercicio)}
           onValueChange={(v) => setEjercicio(Number.parseInt(v, 10))}
+          disabled={vista === "analitica"}
         >
           <SelectTrigger className="w-32 h-9 shrink-0">
             <SelectValue />
@@ -198,7 +223,9 @@ export function ModelosView() {
         </div>
       ) : null}
 
-      {loading ? (
+      {vista === "analitica" ? (
+        <AnaliticaModelos />
+      ) : loading ? (
         <LoadingSpinner className="py-12" />
       ) : modelos.length === 0 ? null : (
         <>

@@ -21,6 +21,14 @@ export interface Calcular303Input {
   cuotasCompensarPeriodosAnteriores?: number;
 }
 
+/** Casillas de CUOTA de IVA soportado: solo se deduce la parte deducible. */
+const CASILLAS_CUOTA_SOPORTADA = new Set(["29", "31", "33", "35", "37", "39", "41"]);
+
+/** Una rectificativa resta: invierte el signo de lo que aporta a la casilla. */
+function signoFactura(f: FacturaParaModelo): number {
+  return f.tipo_factura === "rectificativa" ? -1 : 1;
+}
+
 export function calcular303(input: Calcular303Input): CasillasMap {
   const { asignaciones, facturas } = input;
   const facturasMap = new Map(facturas.map((f) => [f.id, f]));
@@ -29,7 +37,14 @@ export function calcular303(input: Calcular303Input): CasillasMap {
   for (const asg of asignaciones) {
     const factura = facturasMap.get(asg.factura_id);
     if (!factura) continue;
-    add(casillas, asg.casilla, asg.importe);
+
+    // El IVA soportado solo se deduce en su porcentaje deducible (p. ej. un
+    // vehículo al 50 %). Las bases y el IVA repercutido van íntegros.
+    const pctDeducible = CASILLAS_CUOTA_SOPORTADA.has(asg.casilla)
+      ? (factura.iva_deducible_pct ?? 100) / 100
+      : 1;
+
+    add(casillas, asg.casilla, asg.importe * pctDeducible * signoFactura(factura));
   }
 
   const baseIvaRepercutido =
@@ -74,7 +89,7 @@ export function validarCuadre303(
 ): { cuadra: boolean; diferencia: number; detalle: string } {
   const totalIvaRepercutidoFacturas = facturas
     .filter((f) => f.tipo === "VENTA")
-    .reduce((acc, f) => acc + f.iva_importe, 0);
+    .reduce((acc, f) => acc + f.iva_importe * signoFactura(f), 0);
 
   const totalCuotaRepercutidaCasillas =
     (casillas["03"] ?? 0) + (casillas["06"] ?? 0) + (casillas["09"] ?? 0);

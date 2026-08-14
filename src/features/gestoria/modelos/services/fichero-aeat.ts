@@ -1,38 +1,89 @@
 /**
- * Generador de ficheros posicionales AEAT para Sede Electrónica.
- * Formato texto ISO-8859-1 (Latin-1) posicional.
+ * Volcado de las casillas de un modelo a fichero de texto (ISO-8859-1).
  *
- * NOTA sobre encoding: Supabase Storage devuelve bytes; este servicio produce
- * un Uint8Array con la codificación Latin-1 correcta.
+ * ⚠️ NO ES UN FICHERO PRESENTABLE EN LA SEDE ELECTRÓNICA. ⚠️
+ *
+ * La AEAT exige un fichero posicional que cumpla el DISEÑO DE REGISTRO oficial,
+ * que publica como hoja .xlsx por modelo y ejercicio y que cambia con cada orden
+ * ministerial (para el 303, la Orden HAC/646/2021 y sus modificaciones). Ese
+ * diseño define posición, longitud y formato exactos de cada campo.
+ *
+ * La estructura que genera este módulo (`<T303><DATOS>…`) NO procede de ese
+ * documento: es un formato propio. Sirve como VOLCADO DE APOYO para revisar o
+ * traspasar las cifras a mano, no para presentar. Si se sube a la Sede, se
+ * rechaza.
+ *
+ * Para convertirlo en presentable hay que implementar el diseño de registro
+ * oficial de cada modelo descargándolo de la Sede (requiere certificado) y
+ * versionarlo por ejercicio. Hasta entonces `ficheroAeatEsPresentable` devuelve
+ * false y la descarga queda cerrada en la UI.
  */
 
 import type { CasillasMap, ModeloAeat, SnapshotEmpresa } from "../types/modelos";
+
+/**
+ * ¿El fichero generado cumple el diseño de registro oficial de la AEAT?
+ *
+ * Hoy NO para ningún modelo. Se deja como interruptor único para que, cuando se
+ * implemente el diseño oficial de un modelo, se active aquí y la UI lo ofrezca
+ * sin tener que tocar componentes.
+ */
+export function ficheroAeatEsPresentable(_tipo: ModeloAeat["tipo"]): boolean {
+  return false;
+}
 
 function padRight(v: string | undefined | null, len: number): string {
   const s = (v ?? "").toString();
   return s.length >= len ? s.slice(0, len) : s + " ".repeat(len - s.length);
 }
 
+/**
+ * Importe posicional: 1 carácter de signo ("N" negativo, " " positivo) + los
+ * dígitos sin coma, rellenados con ceros a la izquierda.
+ *
+ * Si el importe no cabe en el ancho del campo NO se recorta en silencio: cortar
+ * dígitos cambiaría la cifra declarada, que es peor que un fichero rechazado.
+ * Se registra el error y se emite un valor saturado, visiblemente anómalo.
+ */
 function padNum(v: number | undefined, len: number, decimales = 2): string {
   const n = v ?? 0;
   const negativo = n < 0 ? "N" : " ";
   const entero = Math.abs(n);
   const cents = Math.round(entero * 10 ** decimales).toString();
-  const padded = cents.padStart(len - 1, "0");
-  return `${negativo}${padded.slice(0, len - 1)}`;
+  const anchoDigitos = len - 1;
+
+  if (cents.length > anchoDigitos) {
+    console.error(
+      `[fichero-aeat] importe ${n} no cabe en ${anchoDigitos} dígitos; el fichero saldría con un importe FALSO`,
+    );
+    return `${negativo}${"9".repeat(anchoDigitos)}`;
+  }
+
+  return `${negativo}${cents.padStart(anchoDigitos, "0")}`;
 }
 
 function nifLimpio(nif: string | undefined): string {
   return (nif ?? "").toUpperCase().replace(/[^A-Z0-9]/g, "");
 }
 
-function ejercicioEjerPeriodo(tipo: string, periodo: string, ejercicio: number): string {
-  const pad = (n: number) => n.toString().padStart(2, "0");
-  if (periodo === "T1") return `${ejercicio}${pad(1)}1T`.slice(0, 7);
-  if (periodo === "T2") return `${ejercicio}2T`;
-  if (periodo === "T3") return `${ejercicio}3T`;
-  if (periodo === "T4") return `${ejercicio}4T`;
-  return `${ejercicio}0A`;
+/**
+ * Ejercicio + periodo en el formato de la AEAT: 4 dígitos de ejercicio seguidos
+ * del código de periodo de 2 caracteres (1T..4T para trimestrales, 0A anual).
+ * SIEMPRE 6 caracteres — si la longitud variase, todo el registro posicional
+ * que va detrás quedaría desalineado y la Sede rechazaría el fichero.
+ */
+function ejercicioEjerPeriodo(_tipo: string, periodo: string, ejercicio: number): string {
+  const codigo =
+    periodo === "T1"
+      ? "1T"
+      : periodo === "T2"
+        ? "2T"
+        : periodo === "T3"
+          ? "3T"
+          : periodo === "T4"
+            ? "4T"
+            : "0A";
+  return `${ejercicio.toString().padStart(4, "0")}${codigo}`;
 }
 
 interface BuildInput {
@@ -263,10 +314,12 @@ export function generarFicheroAEAT(input: GenerarFicheroInput): {
   const periodoTxt =
     modelo.periodo === "ANUAL" ? `${modelo.ejercicio}` : `${modelo.ejercicio}${modelo.periodo}`;
 
+  // Extensión .txt y sufijo explícito: la extensión ".303" hacía pasar por
+  // fichero de presentación algo que la Sede rechaza.
   return {
     contenido,
     mimeType: "text/plain; charset=iso-8859-1",
-    filename: `modelo-${modelo.tipo}-${periodoTxt}.${modelo.tipo}`,
+    filename: `modelo-${modelo.tipo}-${periodoTxt}-volcado-NO-presentable.txt`,
   };
 }
 

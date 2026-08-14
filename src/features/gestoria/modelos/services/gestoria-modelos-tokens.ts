@@ -14,6 +14,7 @@ import { generarToken, hashToken, compararToken } from "@/features/rrhh/services
 import type { ModeloTipo, ModeloPeriodo, GrupoModelo } from "../types/modelos";
 import { MODELO_LABEL, COMBOS_MODELOS_DEFAULT, grupoDeModelo } from "../types/modelos";
 import { validarModeloPdfIA } from "./validar-modelo-ia";
+import { extraerCasillasIA } from "./extraer-casillas-ia";
 import { getModelosConfigPorEmpresa, tiposObligatoriosEfectivos } from "./modelos-config";
 import { getSiteUrl } from "@/lib/site-url";
 
@@ -244,6 +245,16 @@ export async function stagingSubidaModelo(
     };
   }
 
+  // El documento es válido: se leen sus CASILLAS REALES para que el modelo
+  // guarde los datos presentados, no solo el archivo. Best-effort: si falla,
+  // el PDF entra igual y las casillas pueden extraerse después.
+  const extraccion = await extraerCasillasIA({
+    buffer,
+    tipo,
+    ejercicio: row.ejercicio,
+    periodo: row.periodo,
+  });
+
   // Subida a staging: staging/<token_id>/<tipo>.pdf (upsert para reemplazos).
   const stagingPath = `staging/${row.id}/${tipo}.pdf`;
   const { error: upErr } = await admin.storage
@@ -252,7 +263,17 @@ export async function stagingSubidaModelo(
   if (upErr) return { ok: false, error: `No se pudo guardar el PDF: ${upErr.message}`, status: 500 };
 
   const { error: stErr } = await admin.from("gestoria_modelos_staging").upsert(
-    { token_id: row.id, tipo, staging_path: stagingPath, ia_ok: true, ia_motivo: ia.motivo },
+    {
+      token_id: row.id,
+      tipo,
+      staging_path: stagingPath,
+      ia_ok: true,
+      ia_motivo: ia.motivo,
+      casillas: extraccion.casillas,
+      casillas_confianza: extraccion.confianza,
+      csv_aeat: extraccion.csv ?? null,
+      numero_justificante: extraccion.numeroJustificante ?? null,
+    },
     { onConflict: "token_id,tipo" },
   );
   if (stErr) {
@@ -303,12 +324,19 @@ export async function confirmarSubidaModelos(
   // Modelos en staging listos para confirmar.
   const { data: staging } = await admin
     .from("gestoria_modelos_staging")
-    .select("tipo, staging_path, ia_ok")
+    .select("tipo, staging_path, ia_ok, casillas, casillas_confianza, csv_aeat, numero_justificante")
     .eq("token_id", row.id)
     .eq("ia_ok", true);
 
   let confirmados = 0;
-  for (const s of (staging ?? []) as Array<{ tipo: string; staging_path: string }>) {
+  for (const s of (staging ?? []) as Array<{
+    tipo: string;
+    staging_path: string;
+    casillas: Record<string, number> | null;
+    casillas_confianza: number | null;
+    csv_aeat: string | null;
+    numero_justificante: string | null;
+  }>) {
     const finalPath = `${row.empresa_id}/${row.ejercicio}/${row.periodo}/${s.tipo}_${Date.now()}.pdf`;
     // Copiar de staging a la ruta final (move no siempre disponible entre prefijos).
     const { error: mvErr } = await admin.storage
@@ -326,19 +354,52 @@ export async function confirmarSubidaModelos(
       await admin.storage.from(BUCKET_MODELOS).remove([s.staging_path]);
     }
 
-    // Upsert de la fila con el PDF definitivo.
-    await admin.from("modelos_aeat").upsert(
-      {
+    // Adjuntar el PDF a la fila del hueco. OJO: NO se puede hacer upsert con el
+    // objeto completo — al haber conflicto, Postgres escribiría el DEFAULT de las
+    // columnas ausentes y borraría `casillas` (y `created_by`) del trabajo ya
+    // hecho en el software. Por eso: UPDATE si existe, INSERT solo si no existe.
+    const { data: existente } = await admin
+      .from("modelos_aeat")
+      .select("id")
+      .eq("empresa_id", row.empresa_id)
+      .eq("tipo", s.tipo)
+      .eq("periodo", row.periodo)
+      .eq("ejercicio", row.ejercicio)
+      .maybeSingle();
+
+    // Si se pudieron leer casillas del justificante, se guardan como el dato
+    // OFICIAL de lo presentado (origen 'gestoria'). Si no se leyó ninguna, no se
+    // toca `casillas` para no borrar lo que hubiera calculado el motor.
+    const casillasLeidas = s.casillas ?? {};
+    const hayCasillas = Object.keys(casillasLeidas).length > 0;
+
+    const camposDocumento = {
+      estado: "PRESENTADO",
+      pdf_url: finalPath,
+      fecha_presentacion: new Date().toISOString(),
+      ia_corrida_en: new Date().toISOString(),
+      csv_aeat: s.csv_aeat,
+      numero_justificante: s.numero_justificante,
+      ...(hayCasillas
+        ? {
+            casillas: casillasLeidas,
+            casillas_origen: "gestoria" as const,
+            casillas_confianza: s.casillas_confianza,
+          }
+        : {}),
+    };
+
+    if (existente) {
+      await admin.from("modelos_aeat").update(camposDocumento).eq("id", existente.id);
+    } else {
+      await admin.from("modelos_aeat").insert({
         empresa_id: row.empresa_id,
         tipo: s.tipo,
         periodo: row.periodo,
         ejercicio: row.ejercicio,
-        estado: "PRESENTADO",
-        pdf_url: finalPath,
-        ia_corrida_en: new Date().toISOString(),
-      },
-      { onConflict: "empresa_id,tipo,periodo,ejercicio" },
-    );
+        ...camposDocumento,
+      });
+    }
     confirmados++;
   }
 

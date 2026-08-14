@@ -6,7 +6,7 @@ import {
   listFacturasParaModelo,
   recalcularCasillas,
 } from "@/features/gestoria/modelos/actions/modelos-actions";
-import { calcular347 } from "@/features/gestoria/modelos/services/calculo-347";
+import { getRegistros347 } from "@/features/gestoria/modelos/actions/registros-347-actions";
 import type { AsignacionModelo } from "@/features/gestoria/modelos/types/modelos";
 
 export const dynamic = "force-dynamic";
@@ -49,7 +49,7 @@ export default async function ModeloPage({ params }: { params: Promise<{ id: str
     | undefined;
 
   if (modelo.tipo === "347") {
-    registros347 = calcular347({ facturas });
+    registros347 = await getRegistros347(id, modelo.ejercicio);
   }
 
   return (

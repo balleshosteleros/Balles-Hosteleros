@@ -35,6 +35,13 @@ export const CASILLAS_390 = {
   },
 } as const;
 
+/**
+ * Correspondencia casilla 303 (trimestral) → casilla 390 (resumen anual).
+ * Cubre las tres bases/cuotas devengadas y TODOS los bloques de IVA soportado
+ * que el 303 admite: interior corriente (28/29), interior inversión (30/31),
+ * importaciones corrientes (32/33) e inversión (34/35), e intracomunitarias
+ * corrientes (36/37) e inversión (38/39).
+ */
 export const MAPPING_303_A_390: Record<string, string> = {
   "01": "100",
   "03": "101",
@@ -48,6 +55,10 @@ export const MAPPING_303_A_390: Record<string, string> = {
   "31": "193",
   "32": "194",
   "33": "195",
+  "34": "194",
+  "35": "195",
   "36": "196",
   "37": "197",
+  "38": "196",
+  "39": "197",
 };

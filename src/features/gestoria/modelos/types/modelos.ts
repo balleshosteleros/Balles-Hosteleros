@@ -37,6 +37,13 @@ export const MODELO_LABEL: Record<ModeloTipo, string> = {
   LIBRO_MAYOR: "Libro Mayor",
 };
 export type ModeloEstado = "BORRADOR" | "REVISADO" | "PRESENTADO";
+
+/**
+ * De dónde salen las casillas de un modelo:
+ *  · "calculado" → las propuso el motor interno desde facturas/nóminas.
+ *  · "gestoria"  → se leyeron del justificante AEAT ya presentado (dato oficial).
+ */
+export type CasillasOrigen = "calculado" | "gestoria";
 export type TipoAporte = "base" | "iva" | "retencion" | "cuota";
 export type OrigenAsignacion = "ia" | "manual" | "regla";
 
@@ -51,6 +58,16 @@ export interface ModeloAeat {
   ejercicio: number;
   estado: ModeloEstado;
   casillas: CasillasMap;
+  /** Origen de las casillas. "gestoria" = leídas del justificante presentado. */
+  casillas_origen: CasillasOrigen;
+  /** Confianza 0..1 de la lectura por IA (solo si origen = "gestoria"). */
+  casillas_confianza: number | null;
+  /** Código Seguro de Verificación del justificante AEAT. */
+  csv_aeat: string | null;
+  numero_justificante: string | null;
+  /** Documento original (Drive u origen externo) para abrirlo desde la ficha. */
+  documento_origen_url: string | null;
+  documento_origen_nombre: string | null;
   snapshot_empresa: SnapshotEmpresa | null;
   fecha_presentacion: string | null;
   /**

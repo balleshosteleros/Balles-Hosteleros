@@ -19,12 +19,15 @@ export interface Calcular390Input {
 export function calcular390(input: Calcular390Input): CasillasMap {
   const casillas: CasillasMap = {};
 
+  // Varias casillas del 303 vuelcan sobre la MISMA casilla del 390 (p. ej. las
+  // importaciones corrientes y las de inversión). Hay que ACUMULAR, no asignar:
+  // si se asignase, la última del bucle borraría a las anteriores.
   for (const [casilla303, casilla390] of Object.entries(MAPPING_303_A_390)) {
     const suma = input.trimestres.reduce(
       (acc, t) => acc + (t.casillas[casilla303] ?? 0),
       0,
     );
-    casillas[casilla390] = round2(suma);
+    casillas[casilla390] = round2((casillas[casilla390] ?? 0) + suma);
   }
 
   const totalBasesRepercutido =

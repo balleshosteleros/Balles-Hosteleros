@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Info } from "lucide-react";
 
@@ -32,6 +32,12 @@ export function CasillaInput({
   compact = false,
 }: Props) {
   const [local, setLocal] = useState<string>(valor != null ? String(valor) : "");
+
+  // Tras recalcular (IA, reasignación de facturas) el valor llega nuevo desde el
+  // servidor: sin esto el input seguiría mostrando la cifra vieja.
+  useEffect(() => {
+    setLocal(valor != null ? String(valor) : "");
+  }, [valor]);
 
   const bgByTipo = {
     base: "bg-gray-50",

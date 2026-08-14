@@ -20,6 +20,7 @@ import { calcular130 } from "../services/calculo-130";
 import { calcular111 } from "../services/calculo-111";
 import { calcular115 } from "../services/calculo-115";
 import { calcular390 } from "../services/calculo-390";
+import { retencionesTrabajoDelTrimestre } from "../services/nominas-trimestre";
 
 async function getContext() {
   const { supabase, userId, empresaId } = await getAppContext();
@@ -172,21 +173,56 @@ export async function asegurarModelosDelPeriodo(
   ejercicio: number,
 ): Promise<{ ok: boolean; creados: number; error?: string }> {
   try {
+    const { supabase, empresaId, user } = await getContext();
+    if (!empresaId || !user) return { ok: false, creados: 0, error: "No autenticado" };
+
     // Solo se generan los tipos activos en la config de la empresa (por defecto, todos).
     const cfg = await getModelosConfig();
     const tiposActivos = cfg.ok ? cfg.data.tipos_activos : null;
+    const tiposOcultos = cfg.ok ? cfg.data.tipos_ocultos : [];
     const combos = COMBOS_MODELOS_DEFAULT.filter(
-      (c) => !tiposActivos || tiposActivos.includes(c.tipo),
+      (c) =>
+        !tiposOcultos.includes(c.tipo) &&
+        (!tiposActivos || tiposActivos.includes(c.tipo)),
     );
-    let creados = 0;
-    for (const c of combos) {
-      const { id } = await crearModeloSiNoExiste({ ...c, ejercicio });
-      if (id) creados++;
-    }
+
+    // Se leen los huecos existentes de UNA vez y se insertan solo los que faltan.
+    // Antes esto hacía un select + insert por combo en serie (~25 idas y vueltas)
+    // en CADA carga de la vista.
+    const { data: existentes, error: exErr } = await supabase
+      .from("modelos_aeat")
+      .select("tipo, periodo")
+      .eq("empresa_id", empresaId)
+      .eq("ejercicio", ejercicio);
+    if (exErr) throw exErr;
+
+    const yaExiste = new Set(
+      ((existentes ?? []) as Array<{ tipo: string; periodo: string }>).map(
+        (m) => `${m.tipo}|${m.periodo}`,
+      ),
+    );
+
+    const faltantes = combos.filter((c) => !yaExiste.has(`${c.tipo}|${c.periodo}`));
+    if (faltantes.length === 0) return { ok: true, creados: 0 };
+
+    const { error } = await supabase.from("modelos_aeat").insert(
+      faltantes.map((c) => ({
+        empresa_id: empresaId,
+        tipo: c.tipo,
+        periodo: c.periodo,
+        ejercicio,
+        estado: "BORRADOR" as ModeloEstado,
+        casillas: {},
+        created_by: user.id,
+      })),
+    );
+    if (error) throw error;
+
     revalidatePath("/gestoria/modelos");
-    return { ok: true, creados };
+    return { ok: true, creados: faltantes.length };
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Error desconocido";
+    console.error("[modelos] asegurarModelosDelPeriodo:", msg);
     return { ok: false, creados: 0, error: msg };
   }
 }
@@ -271,6 +307,72 @@ export async function listAsignaciones(
   }
 }
 
+const ORDEN_TRIMESTRES: ModeloPeriodo[] = ["T1", "T2", "T3", "T4"];
+
+/**
+ * Reúne lo que necesita el 130, que es un modelo ACUMULATIVO: las asignaciones y
+ * facturas de todos los trimestres del ejercicio hasta el declarado (incluido),
+ * más la suma de los pagos fraccionados (casilla 07) de los anteriores.
+ */
+async function acumuladoEjercicio130(
+  supabase: Awaited<ReturnType<typeof getContext>>["supabase"],
+  empresaId: string,
+  ejercicio: number,
+  periodo: ModeloPeriodo,
+  actual: { asignaciones: never; facturas: FacturaParaModelo[] },
+): Promise<{
+  asignaciones: never;
+  facturas: FacturaParaModelo[];
+  pagosTrimestresAnteriores: number;
+}> {
+  const indiceActual = ORDEN_TRIMESTRES.indexOf(periodo);
+  if (indiceActual <= 0) {
+    return { ...actual, pagosTrimestresAnteriores: 0 };
+  }
+  const anteriores = ORDEN_TRIMESTRES.slice(0, indiceActual);
+
+  const { data: previos } = await supabase
+    .from("modelos_aeat")
+    .select("id, periodo, casillas")
+    .eq("empresa_id", empresaId)
+    .eq("tipo", "130")
+    .eq("ejercicio", ejercicio)
+    .in("periodo", anteriores);
+
+  const filas = (previos ?? []) as Array<{
+    id: string;
+    periodo: string;
+    casillas: Record<string, number> | null;
+  }>;
+
+  // Pagos fraccionados ya declarados en trimestres anteriores (casilla 07).
+  const pagosTrimestresAnteriores = filas.reduce(
+    (acc, f) => acc + (f.casillas?.["07"] ?? 0),
+    0,
+  );
+
+  // Asignaciones + facturas de los trimestres anteriores, para el acumulado.
+  const asignacionesAcum = [...(actual.asignaciones as unknown as unknown[])];
+  const facturasAcum = [...actual.facturas];
+
+  for (const fila of filas) {
+    const { data: asgPrevias } = await supabase
+      .from("asignaciones_modelo")
+      .select("*")
+      .eq("modelo_id", fila.id);
+    if (asgPrevias?.length) asignacionesAcum.push(...asgPrevias);
+
+    const facturasPrevias = await listFacturasParaModelo(fila.id);
+    if (facturasPrevias.ok) facturasAcum.push(...facturasPrevias.data);
+  }
+
+  return {
+    asignaciones: asignacionesAcum as never,
+    facturas: facturasAcum,
+    pagosTrimestresAnteriores,
+  };
+}
+
 export async function recalcularCasillas(
   modeloId: string,
 ): Promise<{ ok: boolean; error?: string }> {
@@ -288,6 +390,15 @@ export async function recalcularCasillas(
 
     if (modelo.estado === "PRESENTADO") {
       return { ok: false, error: "Modelo presentado es inmutable" };
+    }
+
+    // Las casillas leídas del justificante AEAT son el dato OFICIAL de lo
+    // presentado: el motor interno no las sobrescribe nunca con su propuesta.
+    if (modelo.casillas_origen === "gestoria") {
+      return {
+        ok: false,
+        error: "Las casillas provienen del justificante presentado y no se recalculan",
+      };
     }
 
     const { data: asignaciones } = await supabase
@@ -315,8 +426,32 @@ export async function recalcularCasillas(
     }[];
 
     if (tipo === "303") casillas = calcular303({ asignaciones: asgs as never, facturas: facturasRes.data });
-    if (tipo === "130") casillas = calcular130({ asignaciones: asgs as never, facturas: facturasRes.data });
-    if (tipo === "111") casillas = calcular111({ asignaciones: asgs as never, facturas: facturasRes.data });
+    if (tipo === "130") {
+      // El 130 es ACUMULATIVO: necesita las asignaciones/facturas de todos los
+      // trimestres del ejercicio hasta este, y los pagos ya hechos (casilla 07).
+      const acumulado = await acumuladoEjercicio130(
+        supabase,
+        empresaId,
+        modelo.ejercicio as number,
+        modelo.periodo as ModeloPeriodo,
+        { asignaciones: asgs as never, facturas: facturasRes.data },
+      );
+      casillas = calcular130(acumulado);
+    }
+    if (tipo === "111") {
+      // El 111 suma nóminas (rrhh_pagos) + retenciones a profesionales (facturas).
+      const trabajo = await retencionesTrabajoDelTrimestre(
+        supabase,
+        empresaId,
+        modelo.ejercicio as number,
+        modelo.periodo as ModeloPeriodo,
+      );
+      casillas = calcular111({
+        asignaciones: asgs as never,
+        facturas: facturasRes.data,
+        trabajo,
+      });
+    }
     if (tipo === "115") casillas = calcular115({ asignaciones: asgs as never, facturas: facturasRes.data });
     if (tipo === "390") {
       const { data: trimestres } = await supabase
@@ -336,7 +471,9 @@ export async function recalcularCasillas(
     const { error } = await supabase
       .from("modelos_aeat")
       .update({ casillas })
-      .eq("id", modeloId);
+      .eq("id", modeloId)
+      .eq("empresa_id", empresaId)
+      .neq("estado", "PRESENTADO");
     if (error) throw error;
 
     revalidatePath("/gestoria/modelos");
@@ -348,38 +485,55 @@ export async function recalcularCasillas(
   }
 }
 
-export async function marcarRevisado(
+/**
+ * Cambia el estado de un modelo. Un modelo PRESENTADO es INMUTABLE: no se puede
+ * devolver a borrador ni marcar como revisado desde aquí (para reabrirlo hay que
+ * retirar antes su documento). Siempre acotado a la empresa activa.
+ */
+async function cambiarEstadoModelo(
   modeloId: string,
+  nuevoEstado: Exclude<ModeloEstado, "PRESENTADO">,
 ): Promise<{ ok: boolean; error?: string }> {
   try {
-    const { supabase } = await getContext();
+    const { supabase, empresaId } = await getContext();
+    if (!empresaId) return { ok: false, error: "No autenticado" };
+
+    const { data: modelo, error: mErr } = await supabase
+      .from("modelos_aeat")
+      .select("estado")
+      .eq("id", modeloId)
+      .eq("empresa_id", empresaId)
+      .maybeSingle<{ estado: ModeloEstado }>();
+    if (mErr) throw mErr;
+    if (!modelo) return { ok: false, error: "El modelo no existe" };
+    if (modelo.estado === "PRESENTADO") {
+      return { ok: false, error: "Un modelo presentado es inmutable" };
+    }
+
     const { error } = await supabase
       .from("modelos_aeat")
-      .update({ estado: "REVISADO" })
-      .eq("id", modeloId);
+      .update({ estado: nuevoEstado })
+      .eq("id", modeloId)
+      .eq("empresa_id", empresaId)
+      .neq("estado", "PRESENTADO");
     if (error) throw error;
     revalidatePath("/gestoria/modelos");
     return { ok: true };
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Error desconocido";
+    console.error("[modelos] cambiarEstado:", msg);
     return { ok: false, error: msg };
   }
+}
+
+export async function marcarRevisado(
+  modeloId: string,
+): Promise<{ ok: boolean; error?: string }> {
+  return cambiarEstadoModelo(modeloId, "REVISADO");
 }
 
 export async function resetearAEstadoBorrador(
   modeloId: string,
 ): Promise<{ ok: boolean; error?: string }> {
-  try {
-    const { supabase } = await getContext();
-    const { error } = await supabase
-      .from("modelos_aeat")
-      .update({ estado: "BORRADOR" })
-      .eq("id", modeloId);
-    if (error) throw error;
-    revalidatePath("/gestoria/modelos");
-    return { ok: true };
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : "Error desconocido";
-    return { ok: false, error: msg };
-  }
+  return cambiarEstadoModelo(modeloId, "BORRADOR");
 }

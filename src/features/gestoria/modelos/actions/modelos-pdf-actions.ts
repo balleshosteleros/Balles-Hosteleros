@@ -15,6 +15,7 @@
 import { revalidatePath } from "next/cache";
 import { getAppContext } from "@/lib/supabase/get-context";
 import type { ModeloTipo, ModeloPeriodo, ModeloEstado } from "../types/modelos";
+import { extraerCasillasIA } from "../services/extraer-casillas-ia";
 
 const BUCKET_MODELOS = "modelos-aeat-pdf";
 
@@ -66,6 +67,16 @@ export async function subirModeloPdf(modeloId: string, file: File) {
     if (readErr) throw readErr;
     if (!fila) return { ok: false as const, error: "El modelo no existe" };
 
+    // Se leen las casillas del justificante para que el modelo guarde los datos
+    // presentados, no solo el archivo. Best-effort: si falla, el PDF entra igual.
+    const extraccion = await extraerCasillasIA({
+      buffer: Buffer.from(await file.arrayBuffer()),
+      tipo: fila.tipo,
+      ejercicio: fila.ejercicio,
+      periodo: fila.periodo,
+    });
+    const hayCasillas = Object.keys(extraccion.casillas).length > 0;
+
     const path = pathModeloPdf(empresaId, fila.ejercicio, fila.periodo, fila.tipo);
 
     const { error: upErr } = await supabase.storage
@@ -83,6 +94,15 @@ export async function subirModeloPdf(modeloId: string, file: File) {
         pdf_url: path,
         estado: "PRESENTADO" as ModeloEstado,
         fecha_presentacion: new Date().toISOString(),
+        csv_aeat: extraccion.csv,
+        numero_justificante: extraccion.numeroJustificante,
+        ...(hayCasillas
+          ? {
+              casillas: extraccion.casillas,
+              casillas_origen: "gestoria" as const,
+              casillas_confianza: extraccion.confianza,
+            }
+          : {}),
       })
       .eq("id", modeloId)
       .eq("empresa_id", empresaId);

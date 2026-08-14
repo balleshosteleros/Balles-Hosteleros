@@ -15,7 +15,15 @@ function add(map: CasillasMap, casilla: string, importe: number): void {
 export interface Calcular111Input {
   asignaciones: AsignacionModelo[];
   facturas: FacturaParaModelo[];
-  numPerceptoresTrabajo?: number;
+  /**
+   * Rendimientos del TRABAJO del trimestre, leídos de las nóminas (`rrhh_pagos`).
+   * No son facturas, por eso entran por aquí y no por `asignaciones`.
+   */
+  trabajo?: {
+    basePercepciones: number;
+    retenciones: number;
+    numPerceptores: number;
+  };
   numPerceptoresProfesionales?: number;
 }
 
@@ -24,8 +32,24 @@ export function calcular111(input: Calcular111Input): CasillasMap {
   const facturasMap = new Map(facturas.map((f) => [f.id, f]));
   const casillas: CasillasMap = {};
 
-  casillas["02"] = input.numPerceptoresTrabajo ?? 0;
-  casillas["08"] = input.numPerceptoresProfesionales ?? 0;
+  // Perceptores profesionales: contactos distintos con retención asignada a las
+  // casillas de profesionales (07/09 dinerarios, 10/12 en especie).
+  const CASILLAS_PROFESIONALES = new Set(["07", "09", "10", "12"]);
+  const perceptoresProfesionales = new Set<string>();
+  for (const asg of asignaciones) {
+    if (!CASILLAS_PROFESIONALES.has(asg.casilla)) continue;
+    const f = facturasMap.get(asg.factura_id);
+    if (f?.contacto_id) perceptoresProfesionales.add(f.contacto_id);
+  }
+
+  casillas["02"] = input.trabajo?.numPerceptores ?? 0;
+  casillas["08"] = input.numPerceptoresProfesionales ?? perceptoresProfesionales.size;
+
+  // Nóminas → rendimientos del trabajo dinerarios (base 01, retención 03).
+  if (input.trabajo) {
+    add(casillas, "01", input.trabajo.basePercepciones);
+    add(casillas, "03", input.trabajo.retenciones);
+  }
 
   for (const asg of asignaciones) {
     const f = facturasMap.get(asg.factura_id);

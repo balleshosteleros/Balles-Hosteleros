@@ -2,8 +2,7 @@ import { NextResponse } from "next/server";
 import { getAppContext } from "@/lib/supabase/get-context";
 import { generarHtmlModelo } from "@/features/gestoria/modelos/services/pdf-generator";
 import { construirSnapshotEmpresa } from "@/features/gestoria/modelos/actions/export-actions";
-import { calcular347 } from "@/features/gestoria/modelos/services/calculo-347";
-import { listFacturasParaModelo } from "@/features/gestoria/modelos/actions/modelos-actions";
+import { getRegistros347 } from "@/features/gestoria/modelos/actions/registros-347-actions";
 import type { ModeloAeat, SnapshotEmpresa } from "@/features/gestoria/modelos/types/modelos";
 
 export async function GET(
@@ -41,13 +40,20 @@ export async function GET(
     | undefined;
 
   if (modelo.tipo === "347") {
-    const { data } = await listFacturasParaModelo(id);
-    registros347 = calcular347({ facturas: data });
+    registros347 = await getRegistros347(id, modelo.ejercicio as number);
   }
 
   const html = generarHtmlModelo(modelo as ModeloAeat, snapshot, registros347);
 
-  return new NextResponse(html, {
+  // No hay motor de PDF en servidor: la hoja está maquetada en A4 con CSS de
+  // impresión y es el navegador quien la exporta. Abrimos su diálogo al cargar
+  // para que "Imprimir / Guardar como PDF" sea un paso, no una búsqueda.
+  const htmlImprimible = html.replace(
+    "</body>",
+    "<script>window.addEventListener('load',()=>window.print())</script></body>",
+  );
+
+  return new NextResponse(htmlImprimible, {
     headers: {
       "Content-Type": "text/html; charset=utf-8",
       "Cache-Control": "no-store",
