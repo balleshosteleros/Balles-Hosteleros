@@ -1,25 +1,27 @@
 "use server";
 
+/**
+ * Visor de CONTRATACIONES (Gestoría) — SOLO LECTURA.
+ *
+ * No crea, no edita, no envía correos. Únicamente LEE el histórico de lo que
+ * RRHH ya ha comunicado a la gestoría. La fuente de verdad es RRHH; esta
+ * pantalla es un espejo para que la gestoría (que entra como una usuaria más con
+ * acceso al departamento) vea todo lo que se le ha mandado.
+ *
+ * Fuentes reales por tipo:
+ *   · altas          → `gestoria_contrato_tokens` + ficha/condiciones del empleado
+ *   · bajas          → `gestoria_bajas`
+ *   · modificaciones → `empleado_promociones` (avisadas: gestoria_enviado_at)
+ */
+
 import { createClient } from "@/lib/supabase/server";
-import { sendEmail } from "@/lib/email/send";
-import { getEmpresaActivaForUser } from "@/features/empresa/lib/empresa-server";
-import {
-  normalizarNombre,
-  normalizarNombreOrNull,
-} from "@/shared/lib/normalizar-nombre";
+import { getEmpresaActivaForUser, getZonaHorariaEmpresa } from "@/features/empresa/lib/empresa-server";
+import { hoyEnZona } from "@/features/empresa/lib/zona-horaria";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import {
-  altaEmailContent,
-  bajaEmailContent,
-  modificacionEmailContent,
-} from "@/features/gestoria/contrataciones/lib/email-templates";
 import type {
-  AltaInput,
-  BajaInput,
   ContratacionRow,
-  ContratacionesConfig,
-  EmpleadoActivo,
-  ModificacionInput,
+  MotivoPendiente,
+  TipoContratacion,
 } from "@/features/gestoria/contrataciones/types";
 
 async function getContext() {
@@ -27,36 +29,64 @@ async function getContext() {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return { supabase, user: null, empresaId: null as string | null, empresaNombre: "" };
+  if (!user) return { supabase, user: null, empresaId: null as string | null };
   const empresaId = await getEmpresaActivaForUser(supabase as unknown as SupabaseClient, user.id);
-
-  let empresaNombre = "";
-  if (empresaId) {
-    const { data: e } = await supabase.from("empresas").select("nombre").eq("id", empresaId).maybeSingle();
-    empresaNombre = (e?.nombre as string | undefined) ?? "";
-  }
-  return { supabase, user, empresaId, empresaNombre };
+  return { supabase, user, empresaId };
 }
 
-export async function listContrataciones(filtros?: {
-  desde?: string | null;
-  hasta?: string | null;
-  tipo?: "alta" | "baja" | null;
-}): Promise<{ ok: boolean; data: ContratacionRow[]; error?: string }> {
+/** Nombre completo a partir de la ficha (o el copiado en el histórico). */
+function nombreDe(nombre: unknown, apellidos: unknown): string {
+  return `${(nombre as string) ?? ""} ${(apellidos as string) ?? ""}`.trim();
+}
+
+/**
+ * Marca de PELIGRO: el trámite sigue pendiente y su fecha clave ya llegó o pasó.
+ *
+ * Es el caso que pidió Iván: un alta cuyo contrato no está cerrado y el
+ * trabajador ya empieza HOY (o empezó) — trabaja sin contrato firmado. Se
+ * compara contra «hoy» en la zona horaria de la empresa, no la del servidor.
+ */
+function calcularAviso(
+  pendiente: boolean,
+  fechaEvento: string | null,
+  hoy: string,
+  textos: { hoy: string; pasado: string },
+): { aviso: "ninguno" | "peligro"; aviso_texto: string | null } {
+  if (!pendiente || !fechaEvento) return { aviso: "ninguno", aviso_texto: null };
+  if (fechaEvento > hoy) return { aviso: "ninguno", aviso_texto: null };
+  return {
+    aviso: "peligro",
+    aviso_texto: fechaEvento === hoy ? textos.hoy : textos.pasado,
+  };
+}
+
+/**
+ * Histórico completo de lo enviado a la gestoría, ya resuelto y ordenado
+ * (lo más reciente primero). Se devuelven los tres tipos juntos; la vista los
+ * separa por pestañas.
+ */
+export async function listContrataciones(): Promise<{
+  ok: boolean;
+  data: ContratacionRow[];
+  error?: string;
+}> {
   try {
     const { supabase, empresaId } = await getContext();
     if (!empresaId) return { ok: false, data: [], error: "Sin empresa" };
-    let q = supabase
-      .from("contrataciones")
-      .select("*")
-      .eq("empresa_id", empresaId)
-      .order("created_at", { ascending: false });
-    if (filtros?.desde) q = q.gte("created_at", filtros.desde);
-    if (filtros?.hasta) q = q.lte("created_at", filtros.hasta);
-    if (filtros?.tipo) q = q.eq("tipo", filtros.tipo);
-    const { data, error } = await q;
-    if (error) throw error;
-    return { ok: true, data: (data ?? []) as ContratacionRow[] };
+
+    const tz = await getZonaHorariaEmpresa(supabase as unknown as SupabaseClient, empresaId);
+    const hoy = hoyEnZona(tz);
+
+    const [altas, bajas, modificaciones] = await Promise.all([
+      listAltas(supabase, empresaId, hoy),
+      listBajas(supabase, empresaId, hoy),
+      listModificaciones(supabase, empresaId),
+    ]);
+
+    const data = [...altas, ...bajas, ...modificaciones].sort((a, b) =>
+      a.enviado_en < b.enviado_en ? 1 : a.enviado_en > b.enviado_en ? -1 : 0,
+    );
+    return { ok: true, data };
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Error desconocido";
     console.error("[contrataciones] list:", msg);
@@ -64,361 +94,205 @@ export async function listContrataciones(filtros?: {
   }
 }
 
-export async function listPuestos(): Promise<{ ok: boolean; data: string[]; error?: string }> {
-  try {
-    const { supabase, empresaId } = await getContext();
-    if (!empresaId) return { ok: false, data: [], error: "Sin empresa" };
-    const [puestosRes, empleadosRes] = await Promise.all([
-      supabase.from("puestos").select("nombre").eq("empresa_id", empresaId),
-      supabase.from("empleados").select("puesto").eq("empresa_id", empresaId),
-    ]);
-    if (puestosRes.error) throw puestosRes.error;
-    if (empleadosRes.error) throw empleadosRes.error;
-    const set = new Set<string>();
-    for (const r of puestosRes.data ?? []) {
-      const v = ((r as Record<string, unknown>).nombre as string | undefined)?.trim();
-      if (v) set.add(v);
+/**
+ * ALTAS. Una fila por alta enviada (`gestoria_contrato_tokens`). El estado sigue
+ * el circuito del documento: la gestoría sube el contrato → el trabajador firma.
+ *   · correcto  → contrato subido Y firmado
+ *   · pendiente → falta el contrato de la gestoría, o falta la firma, o el
+ *                 enlace de subida caducó sin que subieran nada
+ */
+async function listAltas(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  empresaId: string,
+  hoy: string,
+): Promise<ContratacionRow[]> {
+  const { data, error } = await supabase
+    .from("gestoria_contrato_tokens")
+    .select("id, empleado_id, alta_enviada_en, expira_en, contrato_subido_en, firma_documento_id")
+    .eq("empresa_id", empresaId)
+    .order("alta_enviada_en", { ascending: false });
+  if (error) throw error;
+  const filas = data ?? [];
+  if (filas.length === 0) return [];
+
+  const empleadoIds = Array.from(new Set(filas.map((f) => f.empleado_id as string).filter(Boolean)));
+  const firmaIds = filas.map((f) => f.firma_documento_id as string | null).filter(Boolean) as string[];
+
+  // Ficha del trabajador, primer día pactado (condiciones vigentes) y estado de
+  // la firma. Todo en lote, para no disparar una consulta por fila.
+  const [empleadosRes, condicionesRes, firmasRes] = await Promise.all([
+    empleadoIds.length
+      ? supabase.from("empleados").select("id, nombre, apellidos, dni_nie, puesto, fecha_alta").in("id", empleadoIds)
+      : Promise.resolve({ data: [], error: null }),
+    empleadoIds.length
+      ? supabase
+          .from("empleado_condiciones")
+          .select("empleado_id, primer_dia, vigente_hasta, vigente_desde")
+          .in("empleado_id", empleadoIds)
+          .order("vigente_desde", { ascending: false, nullsFirst: false })
+      : Promise.resolve({ data: [], error: null }),
+    firmaIds.length
+      ? supabase.from("firmas_documentos").select("id, estado").in("id", firmaIds)
+      : Promise.resolve({ data: [], error: null }),
+  ]);
+
+  const empleados = new Map(
+    (empleadosRes.data ?? []).map((e) => [(e as Record<string, unknown>).id as string, e as Record<string, unknown>]),
+  );
+  // Primer día = fila VIGENTE de condiciones (`vigente_hasta IS NULL`), que es el
+  // criterio del histórico en RRHH. Si el empleado no tiene ninguna vigente (alta
+  // antigua / manual), vale la más reciente. Las filas vienen ordenadas por
+  // `vigente_desde` DESC, así que la primera de cada empleado es la más reciente:
+  // una vigente SIEMPRE gana, y entre no vigentes gana la primera vista.
+  const primerDia = new Map<string, string | null>();
+  const tieneVigente = new Set<string>();
+  for (const c of (condicionesRes.data ?? []) as Array<Record<string, unknown>>) {
+    const empId = c.empleado_id as string;
+    const vigente = c.vigente_hasta == null;
+    if (tieneVigente.has(empId)) continue; // ya fijada por su fila vigente
+    if (vigente || !primerDia.has(empId)) {
+      primerDia.set(empId, (c.primer_dia as string | null) ?? null);
+      if (vigente) tieneVigente.add(empId);
     }
-    for (const r of empleadosRes.data ?? []) {
-      const v = ((r as Record<string, unknown>).puesto as string | undefined)?.trim();
-      if (v) set.add(v);
-    }
-    const data = Array.from(set).sort((a, b) => a.localeCompare(b, "es"));
-    return { ok: true, data };
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : "Error desconocido";
-    console.error("[contrataciones] listPuestos:", msg);
-    return { ok: false, data: [], error: msg };
   }
+  const firmas = new Map(
+    (firmasRes.data ?? []).map((f) => [
+      (f as Record<string, unknown>).id as string,
+      (f as Record<string, unknown>).estado as string,
+    ]),
+  );
+
+  return filas.map((f) => {
+    const empId = f.empleado_id as string;
+    const emp = empleados.get(empId);
+    const subido = f.contrato_subido_en != null;
+    const estadoFirma = f.firma_documento_id ? firmas.get(f.firma_documento_id as string) : null;
+    const firmado = estadoFirma === "firmado";
+    const caducado = !subido && new Date(f.expira_en as string).getTime() < Date.now();
+
+    let pendienteDe: MotivoPendiente | null = null;
+    if (!subido) pendienteDe = caducado ? "enlace_caducado" : "contrato_gestoria";
+    else if (!firmado) pendienteDe = "firma_trabajador";
+
+    const pendiente = pendienteDe !== null;
+    // Día de comienzo: el pactado en condiciones; si no hay, el alta de la ficha.
+    const fechaEvento = primerDia.get(empId) ?? (emp?.fecha_alta as string | null) ?? null;
+
+    return {
+      id: f.id as string,
+      tipo: "alta" as TipoContratacion,
+      empleado_id: empId ?? null,
+      nombre: nombreDe(emp?.nombre, emp?.apellidos) || "Trabajador",
+      dni_nie: (emp?.dni_nie as string | null) ?? null,
+      puesto: (emp?.puesto as string | null) ?? null,
+      enviado_en: f.alta_enviada_en as string,
+      fecha_evento: fechaEvento,
+      estado: pendiente ? ("pendiente" as const) : ("correcto" as const),
+      pendiente_de: pendienteDe,
+      ...calcularAviso(pendiente, fechaEvento, hoy, {
+        hoy: "Empieza HOY y el contrato sigue sin cerrar",
+        pasado: "Ya ha empezado a trabajar y el contrato sigue sin cerrar",
+      }),
+    };
+  });
 }
 
-export async function listEmpleadosActivos(): Promise<{ ok: boolean; data: EmpleadoActivo[]; error?: string }> {
-  try {
-    const { supabase, empresaId } = await getContext();
-    if (!empresaId) return { ok: false, data: [], error: "Sin empresa" };
-    const { data, error } = await supabase
-      .from("empleados")
-      .select("id, nombre, apellidos, puesto, departamentos(nombre)")
-      .eq("empresa_id", empresaId)
-      .eq("estado", "Activo")
-      .order("nombre", { ascending: true });
-    if (error) throw error;
-    const filas: EmpleadoActivo[] = (data ?? []).map((e) => {
-      const rec = e as Record<string, unknown>;
-      const depRel = rec.departamentos as { nombre?: string | null } | Array<{ nombre?: string | null }> | null;
-      const depObj = Array.isArray(depRel) ? depRel[0] : depRel;
-      return {
-        id: rec.id as string,
-        nombre: rec.nombre as string,
-        apellidos: (rec.apellidos as string | null) ?? null,
-        puesto: (rec.puesto as string | null) ?? null,
-        departamento: (depObj?.nombre as string | null) ?? null,
-      };
-    });
-    return { ok: true, data: filas };
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : "Error desconocido";
-    console.error("[contrataciones] empleados:", msg);
-    return { ok: false, data: [], error: msg };
-  }
+/**
+ * BAJAS. A diferencia del alta, la gestoría NO devuelve ningún documento: el
+ * trámite se agota en el aviso. Por eso lo único que puede quedar «pendiente»
+ * es que el correo no llegara a salir — y ese caso es grave, porque el
+ * trabajador seguiría de alta en la Seguridad Social.
+ */
+async function listBajas(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  empresaId: string,
+  hoy: string,
+): Promise<ContratacionRow[]> {
+  const { data, error } = await supabase
+    .from("gestoria_bajas")
+    .select("id, empleado_id, nombre, dni_nie, puesto, tipo_baja_label, motivo, ultimo_dia, email_estado, enviado_en")
+    .eq("empresa_id", empresaId)
+    .order("enviado_en", { ascending: false });
+  if (error) throw error;
+
+  return (data ?? []).map((b) => {
+    const fallido = (b.email_estado as string) === "fallido";
+    const ultimoDia = (b.ultimo_dia as string | null) ?? null;
+    // Si el aviso falló, el peligro no depende de la fecha: la gestoría no se ha
+    // enterado de la baja, punto. Se marca siempre en rojo.
+    const aviso = fallido
+      ? {
+          aviso: "peligro" as const,
+          aviso_texto:
+            ultimoDia && ultimoDia <= hoy
+              ? "El aviso NO salió y la baja ya es efectiva"
+              : "El aviso a la gestoría NO salió",
+        }
+      : { aviso: "ninguno" as const, aviso_texto: null };
+
+    return {
+      id: b.id as string,
+      tipo: "baja" as TipoContratacion,
+      empleado_id: (b.empleado_id as string | null) ?? null,
+      nombre: (b.nombre as string) || "Trabajador",
+      dni_nie: (b.dni_nie as string | null) ?? null,
+      puesto: (b.puesto as string | null) ?? null,
+      enviado_en: b.enviado_en as string,
+      fecha_evento: ultimoDia,
+      estado: fallido ? ("pendiente" as const) : ("correcto" as const),
+      pendiente_de: fallido ? ("email_fallido" as MotivoPendiente) : null,
+      tipo_baja_label: (b.tipo_baja_label as string | null) ?? null,
+      motivo: (b.motivo as string | null) ?? null,
+      ...aviso,
+    };
+  });
 }
 
-export async function getContratacionesConfig(): Promise<{ ok: boolean; config: ContratacionesConfig | null; error?: string }> {
-  try {
-    const { supabase, empresaId } = await getContext();
-    if (!empresaId) return { ok: false, config: null, error: "Sin empresa" };
-    const { data, error } = await supabase
-      .from("empresas")
-      .select("config_operativa")
-      .eq("id", empresaId)
-      .maybeSingle();
-    if (error) throw error;
-    const cfg = (data?.config_operativa as Record<string, unknown> | undefined)?.contrataciones as
-      | ContratacionesConfig
-      | undefined;
-    return { ok: true, config: cfg ?? null };
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : "Error desconocido";
-    console.error("[contrataciones] getConfig:", msg);
-    return { ok: false, config: null, error: msg };
-  }
-}
+/**
+ * MODIFICACIONES (promoción interna / cambio de puesto). Solo las que se han
+ * comunicado a la gestoría (`gestoria_enviado_at`). Tampoco hay documento de
+ * vuelta por parte de la gestoría, así que se dan por correctas al enviarse.
+ */
+async function listModificaciones(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  empresaId: string,
+): Promise<ContratacionRow[]> {
+  const { data, error } = await supabase
+    .from("empleado_promociones")
+    .select("id, empleado_id, puesto_origen_nombre, puesto_destino_nombre, primer_dia, gestoria_enviado_at")
+    .eq("empresa_id", empresaId)
+    .not("gestoria_enviado_at", "is", null)
+    .order("gestoria_enviado_at", { ascending: false });
+  if (error) throw error;
+  const filas = data ?? [];
+  if (filas.length === 0) return [];
 
-export async function saveContratacionesConfig(input: ContratacionesConfig): Promise<{ ok: boolean; error?: string }> {
-  try {
-    const { supabase, empresaId } = await getContext();
-    if (!empresaId) return { ok: false, error: "Sin empresa" };
-    const { data: row, error: readErr } = await supabase
-      .from("empresas")
-      .select("config_operativa")
-      .eq("id", empresaId)
-      .maybeSingle();
-    if (readErr) throw readErr;
-    const current = (row?.config_operativa as Record<string, unknown> | null) ?? {};
-    const next = {
-      ...current,
-      contrataciones: {
-        email_gestoria: input.email_gestoria.trim(),
-        email_departamento: input.email_departamento?.trim() || null,
-      },
+  const empleadoIds = Array.from(new Set(filas.map((f) => f.empleado_id as string).filter(Boolean)));
+  const { data: empleadosData } = empleadoIds.length
+    ? await supabase.from("empleados").select("id, nombre, apellidos, dni_nie").in("id", empleadoIds)
+    : { data: [] };
+  const empleados = new Map(
+    (empleadosData ?? []).map((e) => [(e as Record<string, unknown>).id as string, e as Record<string, unknown>]),
+  );
+
+  return filas.map((m) => {
+    const emp = empleados.get(m.empleado_id as string);
+    return {
+      id: m.id as string,
+      tipo: "modificacion" as TipoContratacion,
+      empleado_id: (m.empleado_id as string | null) ?? null,
+      nombre: nombreDe(emp?.nombre, emp?.apellidos) || "Trabajador",
+      dni_nie: (emp?.dni_nie as string | null) ?? null,
+      // El puesto que importa en un cambio es el NUEVO.
+      puesto: (m.puesto_destino_nombre as string | null) ?? null,
+      enviado_en: m.gestoria_enviado_at as string,
+      fecha_evento: (m.primer_dia as string | null) ?? null,
+      estado: "correcto" as const,
+      pendiente_de: null,
+      aviso: "ninguno" as const,
+      aviso_texto: null,
+      puesto_anterior: (m.puesto_origen_nombre as string | null) ?? null,
+      puesto_nuevo: (m.puesto_destino_nombre as string | null) ?? null,
     };
-    const { error } = await supabase
-      .from("empresas")
-      .update({ config_operativa: next, updated_at: new Date().toISOString() })
-      .eq("id", empresaId);
-    if (error) throw error;
-    return { ok: true };
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : "Error desconocido";
-    console.error("[contrataciones] saveConfig:", msg);
-    return { ok: false, error: msg };
-  }
-}
-
-export async function crearAlta(input: AltaInput, emailExtra?: string | null): Promise<{ ok: boolean; id?: string; emailOk?: boolean; emailError?: string; error?: string }> {
-  try {
-    const { supabase, user, empresaId, empresaNombre } = await getContext();
-    if (!empresaId || !user) return { ok: false, error: "No autenticado" };
-
-    const cfgRes = await getContratacionesConfig();
-    const dest = cfgRes.config?.email_gestoria;
-    if (!dest) return { ok: false, error: "Configura el email de gestoría en Ajustes" };
-
-    const insert = {
-      empresa_id: empresaId,
-      tipo: "alta" as const,
-      nombre: normalizarNombre(input.nombre),
-      apellidos: normalizarNombreOrNull(input.apellidos),
-      dni: input.dni ?? null,
-      numero_ss: input.numero_ss ?? null,
-      fecha_comienzo: input.fecha_comienzo,
-      nomina: input.nomina ?? "Según convenio",
-      puesto: input.puesto,
-      jornada_horas: input.jornada_horas,
-      horario_lunes: input.horario_lunes ?? null,
-      horario_martes: input.horario_martes ?? null,
-      horario_miercoles: input.horario_miercoles ?? null,
-      horario_jueves: input.horario_jueves ?? null,
-      horario_viernes: input.horario_viernes ?? null,
-      horario_sabado: input.horario_sabado ?? null,
-      horario_domingo: input.horario_domingo ?? null,
-      email_to_gestoria: dest,
-      email_to_departamento: emailExtra?.trim() || null,
-      email_estado: "pendiente",
-      created_by: user.id,
-    };
-
-    const { data: row, error } = await supabase
-      .from("contrataciones")
-      .insert(insert)
-      .select("id")
-      .single();
-    if (error) throw error;
-
-    const id = row.id as string;
-    const { subject, text, html } = altaEmailContent(input, empresaNombre);
-    const recipients = [dest];
-    if (emailExtra?.trim()) recipients.push(emailExtra.trim());
-
-    let emailOk = true;
-    let emailError: string | undefined;
-    for (const to of recipients) {
-      const r = await sendEmail({ to, subject, html, text, empresaId });
-      if (!r.ok) {
-        emailOk = false;
-        emailError = "configured" in r && r.configured ? r.error : "Email no configurado";
-        break;
-      }
-    }
-
-    await supabase
-      .from("contrataciones")
-      .update({
-        email_estado: emailOk ? "enviado" : "fallido",
-        email_enviado_at: emailOk ? new Date().toISOString() : null,
-        email_error: emailOk ? null : emailError ?? null,
-      })
-      .eq("id", id);
-
-    return { ok: true, id, emailOk, emailError };
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : "Error desconocido";
-    console.error("[contrataciones] crearAlta:", msg);
-    return { ok: false, error: msg };
-  }
-}
-
-export async function crearBaja(input: BajaInput, emailExtra?: string | null): Promise<{ ok: boolean; id?: string; emailOk?: boolean; emailError?: string; error?: string }> {
-  try {
-    const { supabase, user, empresaId, empresaNombre } = await getContext();
-    if (!empresaId || !user) return { ok: false, error: "No autenticado" };
-
-    const cfgRes = await getContratacionesConfig();
-    const dest = cfgRes.config?.email_gestoria;
-    if (!dest) return { ok: false, error: "Configura el email de gestoría en Ajustes" };
-
-    const { data: emp, error: empErr } = await supabase
-      .from("empleados")
-      .select("id, nombre, apellidos, puesto")
-      .eq("id", input.empleado_id)
-      .eq("empresa_id", empresaId)
-      .maybeSingle();
-    if (empErr) throw empErr;
-    if (!emp) return { ok: false, error: "Empleado no encontrado" };
-
-    const empleado: EmpleadoActivo = {
-      id: emp.id as string,
-      nombre: (emp.nombre as string) ?? "",
-      apellidos: (emp.apellidos as string | null) ?? null,
-      puesto: (emp.puesto as string | null) ?? null,
-    };
-
-    const insert = {
-      empresa_id: empresaId,
-      tipo: "baja" as const,
-      nombre: empleado.nombre,
-      apellidos: empleado.apellidos,
-      puesto: empleado.puesto,
-      empleado_id: input.empleado_id,
-      fecha_finalizacion: input.fecha_finalizacion,
-      motivo: input.motivo,
-      motivo_otro: input.motivo === "Otro" ? input.motivo_otro ?? null : null,
-      liquidar_vacaciones: input.liquidar_vacaciones,
-      dias_vacaciones: input.liquidar_vacaciones ? input.dias_vacaciones ?? null : null,
-      descontar_preaviso: input.descontar_preaviso,
-      dias_preaviso: input.descontar_preaviso ? input.dias_preaviso ?? null : null,
-      email_to_gestoria: dest,
-      email_to_departamento: emailExtra?.trim() || null,
-      email_estado: "pendiente",
-      created_by: user.id,
-    };
-
-    const { data: row, error } = await supabase
-      .from("contrataciones")
-      .insert(insert)
-      .select("id")
-      .single();
-    if (error) throw error;
-
-    const id = row.id as string;
-    const { subject, text, html } = bajaEmailContent(input, empleado, empresaNombre);
-    const recipients = [dest];
-    if (emailExtra?.trim()) recipients.push(emailExtra.trim());
-
-    let emailOk = true;
-    let emailError: string | undefined;
-    for (const to of recipients) {
-      const r = await sendEmail({ to, subject, html, text, empresaId });
-      if (!r.ok) {
-        emailOk = false;
-        emailError = "configured" in r && r.configured ? r.error : "Email no configurado";
-        break;
-      }
-    }
-
-    await supabase
-      .from("contrataciones")
-      .update({
-        email_estado: emailOk ? "enviado" : "fallido",
-        email_enviado_at: emailOk ? new Date().toISOString() : null,
-        email_error: emailOk ? null : emailError ?? null,
-      })
-      .eq("id", id);
-
-    return { ok: true, id, emailOk, emailError };
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : "Error desconocido";
-    console.error("[contrataciones] crearBaja:", msg);
-    return { ok: false, error: msg };
-  }
-}
-
-export async function crearModificacion(input: ModificacionInput, emailExtra?: string | null): Promise<{ ok: boolean; id?: string; emailOk?: boolean; emailError?: string; error?: string }> {
-  try {
-    const { supabase, user, empresaId, empresaNombre } = await getContext();
-    if (!empresaId || !user) return { ok: false, error: "No autenticado" };
-
-    const cfgRes = await getContratacionesConfig();
-    const dest = cfgRes.config?.email_gestoria;
-    if (!dest) return { ok: false, error: "Configura el email de gestoría en Ajustes" };
-
-    const { data: emp, error: empErr } = await supabase
-      .from("empleados")
-      .select("id, nombre, apellidos, puesto")
-      .eq("id", input.empleado_id)
-      .eq("empresa_id", empresaId)
-      .maybeSingle();
-    if (empErr) throw empErr;
-    if (!emp) return { ok: false, error: "Empleado no encontrado" };
-
-    const empleado: EmpleadoActivo = {
-      id: emp.id as string,
-      nombre: (emp.nombre as string) ?? "",
-      apellidos: (emp.apellidos as string | null) ?? null,
-      puesto: (emp.puesto as string | null) ?? null,
-    };
-
-    const detalleFinal = (() => {
-      const partes: string[] = [];
-      if (input.modificacion_tipo === "Puesto" && input.nuevo_puesto?.trim()) {
-        partes.push(`De "${empleado.puesto ?? "—"}" a "${input.nuevo_puesto.trim()}"`);
-      }
-      if (input.modificacion_detalle?.trim()) partes.push(input.modificacion_detalle.trim());
-      return partes.join(" · ");
-    })();
-
-    const insert = {
-      empresa_id: empresaId,
-      tipo: "modificacion" as const,
-      nombre: empleado.nombre,
-      apellidos: empleado.apellidos,
-      puesto: empleado.puesto,
-      empleado_id: input.empleado_id,
-      fecha_cambio: input.fecha_cambio,
-      modificacion_tipo: input.modificacion_tipo,
-      modificacion_detalle: detalleFinal,
-      email_to_gestoria: dest,
-      email_to_departamento: emailExtra?.trim() || null,
-      email_estado: "pendiente",
-      created_by: user.id,
-    };
-
-    const { data: row, error } = await supabase
-      .from("contrataciones")
-      .insert(insert)
-      .select("id")
-      .single();
-    if (error) throw error;
-
-    const id = row.id as string;
-    const { subject, text, html } = modificacionEmailContent(input, empleado, empresaNombre);
-    const recipients = [dest];
-    if (emailExtra?.trim()) recipients.push(emailExtra.trim());
-
-    let emailOk = true;
-    let emailError: string | undefined;
-    for (const to of recipients) {
-      const r = await sendEmail({ to, subject, html, text, empresaId });
-      if (!r.ok) {
-        emailOk = false;
-        emailError = "configured" in r && r.configured ? r.error : "Email no configurado";
-        break;
-      }
-    }
-
-    await supabase
-      .from("contrataciones")
-      .update({
-        email_estado: emailOk ? "enviado" : "fallido",
-        email_enviado_at: emailOk ? new Date().toISOString() : null,
-        email_error: emailOk ? null : emailError ?? null,
-      })
-      .eq("id", id);
-
-    return { ok: true, id, emailOk, emailError };
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : "Error desconocido";
-    console.error("[contrataciones] crearModificacion:", msg);
-    return { ok: false, error: msg };
-  }
+  });
 }

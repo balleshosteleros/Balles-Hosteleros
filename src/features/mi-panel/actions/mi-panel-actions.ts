@@ -2404,11 +2404,32 @@ export async function aprobarSolicitud(id: string, notasRevision?: string) {
                 : null;
             // Baja solicitada por el propio empleado desde Mi Panel = VOLUNTARIA.
             // `ultimoDia` es el ISO (fecha_fin); la action calcula el día oficial (+1).
-            await enviarBajaGestoria(empleadoBajaId, {
+            const avisoBaja = await enviarBajaGestoria(empleadoBajaId, {
               ultimoDiaIso: ultimoDia,
               tipoBaja: "voluntaria",
               motivo: motivoBaja,
+              origen: "mi_panel",
             });
+
+            // Si el aviso NO sale, la baja queda aprobada pero la gestoría puede
+            // no haberse enterado (el trabajador seguiría de alta en la Seguridad
+            // Social). Antes esto solo se veía en el log del servidor: nadie se
+            // enteraba. Ahora se avisa a RRHH para que lo reenvíe a mano.
+            if (!avisoBaja.ok) {
+              const { notificarRrhhGestoria } = await import(
+                "@/features/rrhh/services/gestoria/gestoria-contrato"
+              );
+              await notificarRrhhGestoria({
+                empresaId: solicitud.empresa_id as string,
+                tipo: "gestoria_alta_enviada",
+                titulo: "No se pudo avisar a la gestoría de una baja",
+                mensaje:
+                  `La baja aprobada desde Mi Panel (último día ${ultimoDia}) NO se pudo comunicar ` +
+                  `a la gestoría: ${avisoBaja.error ?? "error desconocido"}. Revísalo y reenvíalo a mano.`,
+                empleadoId: empleadoBajaId,
+                dedupeKey: `gestoria_baja_fallida:${empleadoBajaId}:${ultimoDia}`,
+              });
+            }
           } catch (e) {
             console.error(
               "[mi-panel] aprobarSolicitud → aviso gestoría baja_contrato:",

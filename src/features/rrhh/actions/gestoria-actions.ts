@@ -727,6 +727,8 @@ export async function enviarBajaGestoria(
     /** Etiqueta a mostrar para el tipo de baja (p. ej. «Voluntaria forzosa»
      *  cuando la causa la empresa). Si no viene, se usa ETIQUETA_TIPO_BAJA. */
     tipoBajaLabel?: string | null;
+    /** Vía por la que se tramitó la baja (para el histórico del visor). */
+    origen?: "reclutamiento" | "mi_panel";
   },
 ): Promise<{ ok: boolean; error?: string; destino?: string | null; datosIncompletos?: boolean }> {
   try {
@@ -883,6 +885,32 @@ export async function enviarBajaGestoria(
     }
 
     const res = await sendEmail({ to, subject, html, text, empresaId });
+
+    // HISTÓRICO (visor Gestoría → Contrataciones). Se registra SIEMPRE, también
+    // cuando el envío falla: una baja tramitada cuyo aviso NO salió es el caso
+    // peligroso (el trabajador seguiría de alta en la Seguridad Social) y debe
+    // verse en rojo, no desaparecer. Foto fija de lo enviado. Best-effort: el
+    // registro nunca puede tumbar el aviso de baja.
+    try {
+      await admin.from("gestoria_bajas").insert({
+        empresa_id: empresaId,
+        empleado_id: empleadoId,
+        nombre,
+        dni_nie: emp.dni_nie ?? null,
+        puesto: emp.puesto ?? null,
+        tipo_baja: baja.tipoBaja,
+        tipo_baja_label: tipoBajaLabel,
+        motivo: baja.motivo ?? null,
+        ultimo_dia: baja.ultimoDiaIso,
+        origen: baja.origen ?? "reclutamiento",
+        email_estado: res.ok ? "enviado" : "fallido",
+        email_to: dst.to,
+        email_error: res.ok ? null : "No se pudo enviar el email (revisa el SMTP).",
+      });
+    } catch (e) {
+      console.error("[rrhh] enviarBajaGestoria → histórico:", e);
+    }
+
     if (!res.ok) return { ok: false, error: "No se pudo enviar el email (revisa el SMTP)." };
 
     // Registrar el email en la actividad del empleado.

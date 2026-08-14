@@ -547,6 +547,7 @@ export async function darBajaContratoEmpresa(
       // La causa la empresa: la voluntaria se etiqueta «Voluntaria forzosa».
       tipoBajaLabel: etiquetaTipoBajaEmpresa(input.tipoBaja),
       motivo: input.motivo ?? null,
+      origen: "reclutamiento",
     });
     if (!avisoGestoria.ok && avisoGestoria.datosIncompletos) {
       // Datos incompletos → baja bloqueada. No se ha movido nada todavía.
