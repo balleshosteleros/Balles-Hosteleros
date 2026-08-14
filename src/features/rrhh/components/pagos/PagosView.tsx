@@ -9,6 +9,7 @@ import { normalizarDniNie } from "@/features/rrhh/lib/documentacion-validacion";
 import {
   listEmpleadosParaPagos,
   loadPagos,
+  loadPagosRango,
   savePago,
   enviarConfirmacionesPago,
   reabrirConfirmacionPago,
@@ -58,7 +59,9 @@ import {
   type ToolbarOrdenActivo,
   type ToolbarColumnaVisible,
   type ToolbarColumna,
+  type ToolbarFiltroTipo,
 } from "@/shared/components/SubmoduleToolbar";
+import { TableColumnHeader } from "@/shared/components/TableColumnHeader";
 import { IOActions } from "@/shared/io";
 import { pagosIO } from "@/features/rrhh/io/pagos.io";
 import {
@@ -67,9 +70,21 @@ import {
 } from "@/shared/components/calendar/CalendarRangeToggle";
 import { useCalendarRange, type CalendarRangeMode } from "@/shared/components/calendar/calendar-range";
 
-// Los pagos se registran por mes (igual que la hoja de nóminas), así que el
-// módulo trabaja en modo MENSUAL: cada periodo = un mes 'YYYY-MM'.
-const MODES_PAGOS: CalendarRangeMode[] = ["MENSUAL"];
+// Los pagos se registran por MES, pero se pueden ver agregados por trimestre o
+// año: entonces se suman todos los importes de cada trabajador en el rango.
+const MODES_PAGOS: CalendarRangeMode[] = ["MENSUAL", "TRIMESTRAL", "ANUAL"];
+
+/** Meses 'AAAA-MM' que cubre un rango, del primero al último. */
+function periodosDeRango(rango: { start: Date; end: Date }): string[] {
+  const out: string[] = [];
+  const d = new Date(rango.start.getFullYear(), rango.start.getMonth(), 1);
+  const fin = new Date(rango.end.getFullYear(), rango.end.getMonth(), 1);
+  while (d <= fin) {
+    out.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
+    d.setMonth(d.getMonth() + 1);
+  }
+  return out;
+}
 
 function rangoKey(rango: { start: Date; end: Date }): string {
   return `${rango.start.toISOString().slice(0, 10)}_${rango.end.toISOString().slice(0, 10)}`;
@@ -94,6 +109,15 @@ const ETIQUETA_DESGLOSE: Record<CampoDesglose, string> = {
   ssTotal: "Total SS por documento",
 };
 
+/** Opción del filtro para las filas sin puesto en la ficha (ex-empleados). */
+const SIN_PUESTO = "Sin puesto";
+
+/** Nombre visible del área a la que pertenece el empleado. */
+const AREA_LABEL: Record<PagoArea, string> = {
+  administrativa: "Administrativa",
+  operativa: "Operativa",
+};
+
 /** Valor de UNA nómina individual para el concepto pedido. */
 function valorDesglose(d: DetalleNomina, campo: CampoDesglose): number {
   switch (campo) {
@@ -113,12 +137,14 @@ function fromGuardado(
   area: PagoArea,
   g: PagoGuardado,
   dniNie: string | null = null,
+  puesto: string | null = null,
 ): PagoEmpleado {
   return {
     id: `${empleadoId}-pago`,
     empleadoId,
     empleadoNombre,
     dniNie,
+    puesto,
     area,
     fijo: g.fijo,
     pago: g.pago,
@@ -175,12 +201,14 @@ function nuevoPagoVacio(
   empleadoNombre: string,
   area: PagoArea,
   dniNie: string | null = null,
+  puesto: string | null = null,
 ): PagoEmpleado {
   return {
     id: `${empleadoId}-pago`,
     empleadoId,
     empleadoNombre,
     dniNie,
+    puesto,
     area,
     fijo: false,
     pago: 0,
@@ -235,7 +263,6 @@ export function PagosView() {
     tc1: null,
   });
   const [incidenciasNominas, setIncidenciasNominas] = useState(0);
-  const [filtroArea, setFiltroArea] = useState<"todos" | PagoArea>("todos");
   const [enviando, setEnviando] = useState(false);
   const [subiendoNominas, setSubiendoNominas] = useState(false);
   const [progresoNominas, setProgresoNominas] = useState({ hechas: 0, total: 0 });
@@ -256,8 +283,13 @@ export function PagosView() {
 
   const claveRango = rangoKey(calRange.range);
   const periodo = periodoDeRango(calRange.range);
-  const pagos = pagosPorRango[claveRango] ?? [];
+  // Estable entre renders: si no, el `?? []` crea un array nuevo cada vez y
+  // los useMemo que dependen de `pagos` se recalculan siempre.
+  const pagos = useMemo(() => pagosPorRango[claveRango] ?? [], [pagosPorRango, claveRango]);
   const horasMesMap = horasPorRango[claveRango];
+  // Trimestre/año: las filas son SUMAS de varios meses. Editar, confirmar o
+  // marcar pagado no tienen sentido sobre un agregado (son actos de UN mes).
+  const esVistaAgregada = calRange.mode !== "MENSUAL";
 
   // Contador de nóminas con incidencia del mes en curso (badge del icono).
   const refrescarIncidenciasNominas = useCallback(async () => {
@@ -299,9 +331,14 @@ export function PagosView() {
 
   const cargarEmpleados = useCallback(async () => {
     setLoading(true);
+    // Con un rango de VARIOS meses (trimestral/anual) se piden agregados: la
+    // suma de cada trabajador en el periodo, incluidos los que solo cobraron
+    // algún mes suelto.
+    const meses = periodosDeRango(calRange.range);
+    const esAgregado = meses.length > 1;
     const [resEmp, resPagos] = await Promise.all([
       listEmpleadosParaPagos(),
-      loadPagos(periodo),
+      esAgregado ? loadPagosRango(meses) : loadPagos(periodo),
     ]);
     setLoading(false);
     if (!resEmp.ok) return;
@@ -323,14 +360,18 @@ export function PagosView() {
     // Empleados activos: fila guardada si existe, si no fila vacía. Se lleva el
     // DNI/NIE de la ficha a la fila (se muestra en la tabla y sirve de referencia
     // visual del emparejamiento).
-    const filasEmpleados = resEmp.data.map((e) => {
-      const g = guardadosPorEmp.get(e.empleadoId);
-      guardadosPorEmp.delete(e.empleadoId);
-      const dni = e.dniNie ?? null;
-      return g
-        ? fromGuardado(e.empleadoId, e.empleadoNombre, e.area, g, dni)
-        : nuevoPagoVacio(e.empleadoId, e.empleadoNombre, e.area, dni);
-    });
+    const filasEmpleados = resEmp.data
+      .map((e) => {
+        const g = guardadosPorEmp.get(e.empleadoId);
+        guardadosPorEmp.delete(e.empleadoId);
+        const dni = e.dniNie ?? null;
+        return g
+          ? fromGuardado(e.empleadoId, e.empleadoNombre, e.area, g, dni, e.puesto)
+          : esAgregado
+            ? null // en trimestre/año no se listan filas vacías: solo lo cobrado
+            : nuevoPagoVacio(e.empleadoId, e.empleadoNombre, e.area, dni, e.puesto);
+      })
+      .filter((f): f is PagoEmpleado => f !== null);
 
     // Pagos guardados de gente que ya no está activa (histórico): se muestran igual.
     const filasExtra = [...guardadosPorEmp.values(), ...guardadosSinEmp].map((g) =>
@@ -381,12 +422,15 @@ export function PagosView() {
     if (campo === "bonus") return p.bonus;
     if (campo === "horasExtras") return p.horasExtras;
     if (campo === "empleado") return p.empleadoNombre;
+    // El área se filtra por su etiqueta visible ("Administrativa"), que es lo
+    // que el usuario ve en la columna y en el desplegable del filtro.
+    if (campo === "area") return AREA_LABEL[p.area];
+    if (campo === "puesto") return p.puesto ?? SIN_PUESTO;
     return (p as unknown as Record<string, unknown>)[campo];
   };
 
   const pagosFiltrados = useMemo(() => {
     let resultado = pagos.filter((p) => {
-      if (filtroArea !== "todos" && p.area !== filtroArea) return false;
       if (busqueda) {
         const q = busqueda.toLowerCase();
         if (!p.empleadoNombre.toLowerCase().includes(q)) return false;
@@ -396,7 +440,7 @@ export function PagosView() {
     resultado = aplicarFiltrosToolbar(resultado, filtros, acceso);
     resultado = aplicarOrdenToolbar(resultado, orden, acceso);
     return resultado;
-  }, [pagos, busqueda, filtros, orden, filtroArea]);
+  }, [pagos, busqueda, filtros, orden]);
 
   const resumen = useMemo(() => getResumenPagos(pagosFiltrados), [pagosFiltrados]);
 
@@ -797,6 +841,8 @@ export function PagosView() {
   };
 
   const columnasDef: ToolbarColumna[] = [
+    { campo: "puesto", label: "Puesto" },
+    { campo: "area", label: "Área" },
     { campo: "nominaBruta", label: "Nómina bruta" },
     { campo: "ssEmpleado", label: "− SS trabajador" },
     { campo: "irpf", label: "− IRPF" },
@@ -815,9 +861,77 @@ export function PagosView() {
     { campo: "confirmacion", label: "Confirmación" },
   ];
 
+  // Nombres para el filtro de la columna Empleado (todos los del mes, no solo
+  // los que ya pasan el filtro: si no, filtrar dejaría la lista sin opciones).
+  const opcionesEmpleado = useMemo(
+    () => Array.from(new Set(pagos.map((p) => p.empleadoNombre))).sort((a, b) => a.localeCompare(b, "es")),
+    [pagos],
+  );
+
+  // Puestos presentes en el mes. "Sin puesto" solo aparece si hay alguna fila así.
+  const opcionesPuesto = useMemo(
+    () => Array.from(new Set(pagos.map((p) => p.puesto ?? SIN_PUESTO))).sort((a, b) => a.localeCompare(b, "es")),
+    [pagos],
+  );
+
+  // Cabecera con filtro y orden en la propia columna (sin botones aparte).
+  const th = (
+    campo: string,
+    label: string,
+    filtroTipo: ToolbarFiltroTipo,
+    align: "left" | "right" | "center" = "right",
+    opciones?: string[],
+    className?: string,
+  ): ReactNode => (
+    <TableColumnHeader
+      key={campo}
+      campo={campo}
+      label={label}
+      filtroTipo={filtroTipo}
+      opciones={opciones}
+      filtros={filtros}
+      onFiltrosChange={setFiltros}
+      ordenable
+      orden={orden}
+      onOrdenChange={setOrden}
+      ordenLabelAsc={filtroTipo === "numero" ? "Menor" : "A→Z"}
+      ordenLabelDesc={filtroTipo === "numero" ? "Mayor" : "Z→A"}
+      align={align}
+      className={className}
+    />
+  );
+
   const columnDefs: Record<string, { th: ReactNode; td: (p: PagoEmpleado) => ReactNode }> = {
+    puesto: {
+      th: th("puesto", "Puesto", "lista", "left", opcionesPuesto, "min-w-[150px]"),
+      td: (p) => (
+        <TableCell key="puesto" className="whitespace-nowrap">
+          {p.puesto ? (
+            <span className="text-sm">{p.puesto}</span>
+          ) : (
+            <span className="text-sm text-muted-foreground">—</span>
+          )}
+        </TableCell>
+      ),
+    },
+    area: {
+      th: th("area", "Área", "lista", "left", Object.values(AREA_LABEL), "min-w-[130px]"),
+      td: (p) => {
+        const pal = ZONE_COLORS[p.area];
+        return (
+          <TableCell key="area">
+            <span
+              className="inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium whitespace-nowrap"
+              style={{ backgroundColor: pal.bg, borderColor: pal.border, color: pal.label }}
+            >
+              {AREA_LABEL[p.area]}
+            </span>
+          </TableCell>
+        );
+      },
+    },
     nominaBruta: {
-      th: <TableHead key="nominaBruta" className="text-right whitespace-nowrap">Nómina bruta</TableHead>,
+      th: th("nominaBruta", "Nómina bruta", "numero"),
       td: (p) => (
         <TableCell key="nominaBruta" className="text-right tabular-nums whitespace-nowrap">
           {fmtDato(nominaBruta(p), nominaProcesada(p))}{circuloN(p, "nominaBruta")}
@@ -825,7 +939,7 @@ export function PagosView() {
       ),
     },
     nomina: {
-      th: <TableHead key="nomina" className="text-right whitespace-nowrap font-semibold">Nómina neta</TableHead>,
+      th: th("nomina", "Nómina neta", "numero", "right", undefined, "font-semibold"),
       td: (p) => (
         <TableCell key="nomina" className="text-right tabular-nums whitespace-nowrap font-semibold">
           {fmtDato(p.nomina, nominaProcesada(p))}{circuloN(p, "neto")}
@@ -833,19 +947,19 @@ export function PagosView() {
       ),
     },
     horasReales: {
-      th: <TableHead key="horasReales" className="text-right">H.R</TableHead>,
+      th: th("horasReales", "H.R", "numero"),
       td: (p) => <TableCell key="horasReales" className="text-right tabular-nums">{p.horasReales}h</TableCell>,
     },
     horasTrabajadas: {
-      th: <TableHead key="horasTrabajadas" className="text-right">H.T</TableHead>,
+      th: th("horasTrabajadas", "H.T", "numero"),
       td: (p) => <TableCell key="horasTrabajadas" className="text-right tabular-nums">{p.horasTrabajadas}h</TableCell>,
     },
     propina: {
-      th: <TableHead key="propina" className="text-right whitespace-nowrap">Complemento</TableHead>,
+      th: th("propina", "Complemento", "numero"),
       td: (p) => <TableCell key="propina" className="text-right tabular-nums whitespace-nowrap">{fmt(p.propina)}</TableCell>,
     },
     ajuste: {
-      th: <TableHead key="ajuste" className="text-right whitespace-nowrap">Ajuste</TableHead>,
+      th: th("ajuste", "Ajuste", "numero"),
       td: (p) => (
         <TableCell
           key="ajuste"
@@ -856,15 +970,15 @@ export function PagosView() {
       ),
     },
     horasExtras: {
-      th: <TableHead key="horasExtras" className="text-right whitespace-nowrap">H.Extras</TableHead>,
+      th: th("horasExtras", "H.Extras", "numero"),
       td: (p) => <TableCell key="horasExtras" className="text-right tabular-nums whitespace-nowrap">{p.horasExtras > 0 ? fmt(p.horasExtras) : "—"}</TableCell>,
     },
     bonus: {
-      th: <TableHead key="bonus" className="text-right whitespace-nowrap">Bonus</TableHead>,
+      th: th("bonus", "Bonus", "numero"),
       td: (p) => <TableCell key="bonus" className="text-right tabular-nums whitespace-nowrap">{p.bonus > 0 ? fmt(p.bonus) : "—"}</TableCell>,
     },
     ssEmpleado: {
-      th: <TableHead key="ssEmpleado" className="text-right whitespace-nowrap">− SS trabajador</TableHead>,
+      th: th("ssEmpleado", "− SS trabajador", "numero"),
       td: (p) => (
         <TableCell key="ssEmpleado" className="text-right tabular-nums whitespace-nowrap text-destructive">
           {p.ssEmpleado > 0 ? `−${fmt(p.ssEmpleado)}` : fmtDato(p.ssEmpleado, nominaProcesada(p))}
@@ -873,7 +987,7 @@ export function PagosView() {
       ),
     },
     ssEmpresa: {
-      th: <TableHead key="ssEmpresa" className="text-right whitespace-nowrap">SS Empresa</TableHead>,
+      th: th("ssEmpresa", "SS Empresa", "numero"),
       td: (p) => (
         <TableCell key="ssEmpresa" className="text-right tabular-nums whitespace-nowrap">
           {fmtDato(p.ssEmpresa, nominaProcesada(p))}{circuloN(p, "ssEmpresa")}
@@ -881,7 +995,7 @@ export function PagosView() {
       ),
     },
     ssTotal: {
-      th: <TableHead key="ssTotal" className="text-right whitespace-nowrap">Total SS</TableHead>,
+      th: th("ssTotal", "Total SS", "numero"),
       td: (p) => (
         <TableCell key="ssTotal" className="text-right tabular-nums font-medium whitespace-nowrap">
           {fmtDato(costeSSTotal(p), nominaProcesada(p))}{circuloN(p, "ssTotal")}
@@ -889,7 +1003,7 @@ export function PagosView() {
       ),
     },
     irpf: {
-      th: <TableHead key="irpf" className="text-right whitespace-nowrap">− IRPF</TableHead>,
+      th: th("irpf", "− IRPF", "numero"),
       td: (p) => (
         <TableCell key="irpf" className="text-right tabular-nums whitespace-nowrap text-destructive">
           {p.irpf > 0 ? `−${fmt(p.irpf)}` : fmtDato(p.irpf, nominaProcesada(p))}
@@ -898,7 +1012,7 @@ export function PagosView() {
       ),
     },
     nominaDoc: {
-      th: <TableHead key="nominaDoc" className="text-center w-[70px] whitespace-nowrap">Nómina</TableHead>,
+      th: <TableColumnHeader key="nominaDoc" label="Nómina" className="w-[70px]" align="center" />,
       td: (p) => (
         <TableCell key="nominaDoc" className="text-center">
           {p.numNominas > 0 || p.nominaPath ? (
@@ -927,11 +1041,11 @@ export function PagosView() {
       ),
     },
     total: {
-      th: <TableHead key="total" className="text-right font-bold whitespace-nowrap">Total</TableHead>,
+      th: th("total", "Total", "numero", "right", undefined, "font-bold"),
       td: (p) => <TableCell key="total" className="text-right font-bold tabular-nums whitespace-nowrap">{fmt(p.total)}</TableCell>,
     },
     pagado: {
-      th: <TableHead key="pagado" className="text-center w-[120px]">Pagar</TableHead>,
+      th: th("pagado", "Pagar", "booleano", "center", undefined, "w-[120px]"),
       td: (p) => {
         const ext = p.empleadoId.startsWith("ext-");
         const bloqueado = pagarBloqueado(p);
@@ -965,7 +1079,7 @@ export function PagosView() {
       },
     },
     confirmacion: {
-      th: <TableHead key="confirmacion" className="text-center w-[110px]">Aprobación</TableHead>,
+      th: <TableColumnHeader key="confirmacion" label="Aprobación" className="w-[110px]" align="center" />,
       td: (p) => (
         <TableCell key="confirmacion" className="text-center">
           {p.confirmacionAceptadaAt ? (
@@ -1016,12 +1130,6 @@ export function PagosView() {
     confirmacion: <TableCell key="t-conf" className="text-center"><Badge variant="secondary" className="text-[10px]">{pagosFiltrados.filter((p) => p.confirmacionEnviadaAt).length}/{pagosFiltrados.length}</Badge></TableCell>,
   };
 
-  const areaOpciones: { value: "todos" | PagoArea; label: string; palette?: { bg: string; border: string; label: string } }[] = [
-    { value: "todos", label: "Todos" },
-    { value: "administrativa", label: "Administrativa", palette: ZONE_COLORS.administrativa },
-    { value: "operativa", label: "Operativa", palette: ZONE_COLORS.operativa },
-  ];
-
   return (
     <div className="p-6 space-y-6 max-w-[1600px] mx-auto">
       <div className="flex items-center gap-2 flex-wrap">
@@ -1052,7 +1160,7 @@ export function PagosView() {
           variant="outline"
           className="ml-auto gap-2"
           onClick={() => setShowDocsMes(true)}
-          disabled={subiendoNominas || estadoMes.confirmado}
+          disabled={subiendoNominas || estadoMes.confirmado || esVistaAgregada}
           title={
             estadoMes.confirmado
               ? "Las nóminas de este mes ya están confirmadas: para subir otras hay que reabrir el mes"
@@ -1069,7 +1177,7 @@ export function PagosView() {
             variant={estadoMes.confirmado ? "outline" : "default"}
             className="gap-2"
             onClick={() => (estadoMes.confirmado ? reabrirMes() : confirmarMes())}
-            disabled={confirmandoMes}
+            disabled={confirmandoMes || esVistaAgregada}
             title={
               estadoMes.confirmado
                 ? "Las nóminas están confirmadas y publicadas al empleado. Reabrir permite corregirlas."
@@ -1088,39 +1196,11 @@ export function PagosView() {
               "liquidaciones",
             )
           }
-          disabled={enviando || pagos.every((p) => !!p.confirmacionEnviadaAt)}
+          disabled={enviando || esVistaAgregada || pagos.every((p) => !!p.confirmacionEnviadaAt)}
         >
           <Send className="h-4 w-4" />
           Enviar liquidaciones
         </Button>
-      </div>
-
-      <div className="flex items-center gap-2 flex-wrap">
-        {areaOpciones.map((op) => {
-          const activo = filtroArea === op.value;
-          const style = activo && op.palette
-            ? { backgroundColor: op.palette.bg, borderColor: op.palette.border, color: op.palette.label }
-            : undefined;
-          return (
-            <Button
-              key={op.value}
-              type="button"
-              variant={activo ? "default" : "outline"}
-              size="sm"
-              className="h-8"
-              style={style}
-              onClick={() => setFiltroArea(op.value)}
-            >
-              {op.palette && (
-                <span
-                  className="mr-2 inline-block h-2.5 w-2.5 rounded-full border"
-                  style={{ backgroundColor: op.palette.bg, borderColor: op.palette.border }}
-                />
-              )}
-              {op.label}
-            </Button>
-          );
-        })}
       </div>
 
       <SubmoduleToolbar
@@ -1174,6 +1254,17 @@ export function PagosView() {
         }
       />
 
+      {esVistaAgregada && (
+        <div className="flex items-start gap-2 rounded-lg border border-sky-200 bg-sky-50 p-3 text-sm dark:border-sky-900/40 dark:bg-sky-950/20">
+          <ReceiptText className="mt-0.5 h-4 w-4 shrink-0 text-sky-600" />
+          <p className="text-sky-900 dark:text-sky-200">
+            Vista <b>acumulada</b>: cada fila suma lo cobrado por ese trabajador en el periodo, e
+            incluye a quien solo cobró algún mes suelto. Para editar, confirmar o pagar, cambia a
+            vista mensual.
+          </p>
+        </div>
+      )}
+
       {estadoMes.confirmado && (
         <div className="flex items-start gap-2 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm dark:border-emerald-900/40 dark:bg-emerald-950/20">
           <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
@@ -1216,7 +1307,19 @@ export function PagosView() {
             <Table>
               <TableHeader>
                 <TableRow className="bg-muted/40">
-                  <TableHead className="min-w-[180px]">Empleado</TableHead>
+                  <TableColumnHeader
+                    campo="empleado"
+                    label="Empleado"
+                    filtroTipo="lista"
+                    opciones={opcionesEmpleado}
+                    filtros={filtros}
+                    onFiltrosChange={setFiltros}
+                    ordenable
+                    orden={orden}
+                    onOrdenChange={setOrden}
+                    align="left"
+                    className="min-w-[180px]"
+                  />
                   {columnasRender.map((c) => columnDefs[c.campo]?.th)}
                   <TableHead className="w-[50px]"></TableHead>
                 </TableRow>
@@ -1315,7 +1418,7 @@ export function PagosView() {
                                   size="icon"
                                   className="h-7 w-7"
                                   onClick={() => setEditando(p)}
-                                  disabled={estadoMes.confirmado}
+                                  disabled={estadoMes.confirmado || esVistaAgregada}
                                   title={estadoMes.confirmado ? "Nóminas del mes confirmadas: la liquidación no se puede editar" : "Editar"}
                                 >
                                   <Edit2 className="h-3.5 w-3.5" />
@@ -1431,7 +1534,7 @@ export function PagosView() {
                     disabled={subiendoTc1}
                     onClick={() => tc1InputRef.current?.click()}
                   >
-                    {subiendoTc1 ? <Clock className="h-4 w-4 animate-pulse" /> : <ReceiptText className="h-4 w-4" />}
+                    {subiendoTc1 ? <Clock className="h-4 w-4 animate-pulse" /> : <Upload className="h-4 w-4" />}
                     {subiendoTc1 ? "Subiendo…" : "Adjuntar"}
                   </Button>
                 )}

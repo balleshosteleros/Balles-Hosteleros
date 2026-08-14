@@ -667,3 +667,82 @@ export async function listMisPagosAbonados(): Promise<{ ok: boolean; data: PagoA
 // Las horas del mes por empleado (teóricas vs fichadas normales/extras) viven en
 // la acción compartida `@/features/rrhh/actions/horas-actions` (loadHorasMes),
 // para que Pagos, Horarios y el panel del trabajador usen el MISMO dato.
+
+/**
+ * Pagos de VARIOS meses agregados por empleado (vistas trimestral y anual).
+ *
+ * Suma todos los importes de cada trabajador en el rango. Aparecen TODOS los que
+ * cobraron algún mes del periodo, aunque solo fuera uno: quien trabajó en marzo y
+ * se fue sale igual, con lo suyo de marzo. Así el total del rango cuadra con lo
+ * realmente pagado, sin depender de quién siga de alta hoy.
+ *
+ * Los campos que no tienen sentido sumar (estado de pago, confirmaciones, ruta
+ * del documento) se devuelven neutros: en agregado no representan nada.
+ */
+export async function loadPagosRango(
+  periodos: string[],
+): Promise<{ ok: boolean; data: PagoGuardado[]; meses: number }> {
+  try {
+    const { supabase, empresaId } = await getAppContext();
+    if (!empresaId || periodos.length === 0) return { ok: false, data: [], meses: 0 };
+
+    const { data, error } = await supabase
+      .from("rrhh_pagos")
+      .select(PAGO_COLS)
+      .eq("empresa_id", empresaId)
+      .in("periodo", periodos);
+    if (error) throw error;
+
+    // Agregación por trabajador. Los sueltos (ex-empleados sin ficha) se agrupan
+    // por su nombre, que es lo único que los identifica.
+    const acc = new Map<string, PagoGuardado>();
+    for (const row of data ?? []) {
+      const p = dbToPago(row as PagoDbRow);
+      const clave = p.empleadoId ?? `ext:${p.empleadoNombre}`;
+      const prev = acc.get(clave);
+      if (!prev) {
+        acc.set(clave, {
+          ...p,
+          // En agregado no aplican: son estados de UN mes concreto.
+          pagado: false,
+          nominaPath: null,
+          numNominas: 0,
+          avisoInactivo: false,
+          confirmacionEnviadaAt: null,
+          confirmacionAceptadaAt: null,
+        });
+        continue;
+      }
+      prev.pago += p.pago;
+      prev.nomina += p.nomina;
+      prev.horasReales += p.horasReales;
+      prev.horasTrabajadas += p.horasTrabajadas;
+      prev.propina += p.propina;
+      prev.ajuste += p.ajuste;
+      prev.horasExtras += p.horasExtras;
+      prev.bonus += p.bonus;
+      prev.propinaMantenimiento += p.propinaMantenimiento;
+      prev.ssEmpleado += p.ssEmpleado;
+      prev.ssEmpresa += p.ssEmpresa;
+      prev.irpf += p.irpf;
+      prev.total += p.total;
+    }
+
+    // Redondeo a céntimos AL FINAL (no en cada suma: acumularía el error).
+    const r2 = (n: number) => Math.round(n * 100) / 100;
+    const filas = [...acc.values()].map((p) => ({
+      ...p,
+      pago: r2(p.pago), nomina: r2(p.nomina), propina: r2(p.propina),
+      ajuste: r2(p.ajuste), horasExtras: r2(p.horasExtras), bonus: r2(p.bonus),
+      propinaMantenimiento: r2(p.propinaMantenimiento),
+      ssEmpleado: r2(p.ssEmpleado), ssEmpresa: r2(p.ssEmpresa), irpf: r2(p.irpf),
+      total: r2(p.total),
+      horasReales: r2(p.horasReales), horasTrabajadas: r2(p.horasTrabajadas),
+    }));
+
+    return { ok: true, data: filas, meses: periodos.length };
+  } catch (err) {
+    console.error("[rrhh] loadPagosRango:", err);
+    return { ok: false, data: [], meses: 0 };
+  }
+}
