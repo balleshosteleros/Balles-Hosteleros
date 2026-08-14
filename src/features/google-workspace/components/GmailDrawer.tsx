@@ -451,18 +451,28 @@ export function GmailDrawer({ children }: GmailDrawerProps) {
       })
       .catch(() => {});
     if (!seleccionado.leido && connected) {
+      // Marca el HILO entero como leído (no solo el último mensaje): si la
+      // conversación tenía otros correos sin leer, para Gmail seguía sin leer
+      // y el contador no bajaba.
       fetch("/api/google/gmail/modify", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: seleccionado.id, action: "read" }),
-      });
+        body: JSON.stringify({
+          id: seleccionado.id,
+          threadId: seleccionado.threadId,
+          action: "read",
+        }),
+        // El refresco del badge va DESPUÉS de que Gmail confirme. Antes se
+        // lanzaba a la vez, así que el recuento salía con el estado anterior y
+        // el número se quedaba clavado.
+      })
+        .then(() => refreshDailyCounts())
+        .catch(() => {});
       setMensajesReales((prev) =>
         prev
           ? prev.map((m) => (m.id === seleccionado.id ? { ...m, leido: true } : m))
           : prev,
       );
-      // Actualiza el badge de "sin leer" de la barra al instante.
-      refreshDailyCounts();
     }
   }, [connected, seleccionado]);
 

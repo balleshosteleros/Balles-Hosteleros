@@ -37,6 +37,23 @@ function leerRoster(): CuentaGoogle[] {
   }
 }
 
+/**
+ * Aviso global de "la cuenta de Google activa ha cambiado".
+ *
+ * Cada componente que llama a `useGoogleConnection` tiene su PROPIA copia del
+ * estado, leída de las cookies `g_*`. Al cambiar de cuenta el servidor
+ * reescribe esas cookies, pero las copias ya montadas no se enteran: solo se
+ * releían al montar o al recuperar el foco de la ventana. Resultado: el badge
+ * de la barra seguía contando la cuenta ANTERIOR (marcaba 2 con la bandeja
+ * nueva vacía) hasta que salías y volvías del navegador.
+ */
+export const GOOGLE_ACCOUNT_CHANGED_EVENT = "google-account:changed";
+
+export function notifyGoogleAccountChanged(): void {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new Event(GOOGLE_ACCOUNT_CHANGED_EVENT));
+}
+
 export function useGoogleConnection() {
   const [connected, setConnected] = useState(false);
   const [email, setEmail] = useState<string | null>(null);
@@ -58,7 +75,13 @@ export function useGoogleConnection() {
     refresh();
     const onFocus = () => refresh();
     window.addEventListener("focus", onFocus);
-    return () => window.removeEventListener("focus", onFocus);
+    // Todas las copias del hook se resincronizan cuando cualquiera cambia la
+    // cuenta activa, sin esperar a que la ventana pierda y recupere el foco.
+    window.addEventListener(GOOGLE_ACCOUNT_CHANGED_EVENT, onFocus);
+    return () => {
+      window.removeEventListener("focus", onFocus);
+      window.removeEventListener(GOOGLE_ACCOUNT_CHANGED_EVENT, onFocus);
+    };
   }, [refresh]);
 
   // Backfill: si hay cuenta activa pero el roster está vacío (caso legacy de
@@ -106,6 +129,7 @@ export function useGoogleConnection() {
       // Refrescamos desde cookies: el server ya dejó el estado correcto
       // (puede haber promovido otra cuenta como activa).
       refresh();
+      notifyGoogleAccountChanged();
       return res.ok;
     },
     [refresh],
@@ -127,6 +151,10 @@ export function useGoogleConnection() {
           body: JSON.stringify({ email: correo }),
         });
         refresh();
+        // Avisa al resto de copias del hook (badge de la barra, drawers…) de
+        // que la cuenta activa es otra. Sin esto seguían con la anterior y el
+        // contador mostraba correos de una bandeja que ya no era la visible.
+        notifyGoogleAccountChanged();
         return res.ok;
       } finally {
         setSwitching(false);
