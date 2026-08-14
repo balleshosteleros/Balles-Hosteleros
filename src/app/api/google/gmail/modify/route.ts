@@ -20,8 +20,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "no_token" }, { status: 401 });
   }
 
-  const { id, action, labelId } = (await request.json().catch(() => ({}))) as {
+  const { id, threadId, action, labelId } = (await request
+    .json()
+    .catch(() => ({}))) as {
     id?: string;
+    threadId?: string;
     action?: string;
     labelId?: string;
   };
@@ -30,7 +33,15 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "missing_fields" }, { status: 400 });
   }
 
-  const baseUrl = `https://gmail.googleapis.com/gmail/v1/users/me/messages/${id}`;
+  // La bandeja lista HILOS (conversaciones), no mensajes sueltos: cada fila
+  // puede agrupar varios correos. Si la acción se aplicara solo al último
+  // mensaje, un hilo de dos correos seguiría en Recibidos por el otro — el
+  // usuario lo mandaba a la papelera, desaparecía de la pantalla y al recargar
+  // volvía, con el contador de no leídos igual. Gmail web actúa sobre el hilo
+  // entero, y aquí hacemos lo mismo cuando el cliente manda `threadId`.
+  const baseUrl = threadId
+    ? `https://gmail.googleapis.com/gmail/v1/users/me/threads/${threadId}`
+    : `https://gmail.googleapis.com/gmail/v1/users/me/messages/${id}`;
   let endpoint = `${baseUrl}/modify`;
   let payload: Record<string, unknown> = {};
 

@@ -471,10 +471,16 @@ export function GmailDrawer({ children }: GmailDrawerProps) {
       toast.error("Conecta Google primero");
       return;
     }
+    // La lista son HILOS: la acción va sobre la conversación entera, como en
+    // Gmail. Si solo fuera al mensaje suelto, un hilo con varios correos
+    // seguiría en Recibidos por los demás y reaparecería al recargar.
+    const threadId =
+      mensajesReales?.find((m) => m.id === id)?.threadId ??
+      (seleccionado?.id === id ? seleccionado.threadId : undefined);
     const res = await fetch("/api/google/gmail/modify", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id, action, labelId }),
+      body: JSON.stringify({ id, threadId, action, labelId }),
     });
     if (res.ok) {
       const labels: Record<string, string> = {
