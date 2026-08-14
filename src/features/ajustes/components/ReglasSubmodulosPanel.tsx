@@ -29,6 +29,7 @@ import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
 import { ValidadoresSolicitudesConfig } from "@/features/ajustes/components/RrhhConfigTab";
 import { FichajesConfigPanel } from "@/features/ajustes/components/FichajesConfigPanel";
 import { CierresPlazoPanel } from "@/features/ajustes/components/CierresPlazoPanel";
+import { NominasGestoriaConfigPanel } from "@/features/rrhh/components/pagos/NominasGestoriaConfigPanel";
 import { NotifLiquidacionesConfigPanel } from "@/features/notificaciones/components/NotifLiquidacionesConfigPanel";
 import { JornadasVacantesPanel } from "@/features/ajustes/components/JornadasVacantesPanel";
 import { TiposContratoPanel } from "@/features/ajustes/components/TiposContratoPanel";
@@ -263,7 +264,17 @@ function SubmoduloRow({
           ) : submodulo.key === "fichajes" ? (
             <FichajesConfigPanel embedded />
           ) : submodulo.key === "pagos" ? (
-            <NotifLiquidacionesConfigPanel embedded />
+            // Dos normas de empresa del submódulo Pagos: los avisos de
+            // liquidación y el envío mensual de nóminas a la gestoría. Este
+            // último estaba en el engranaje de Pagos, que es el nivel de uso
+            // diario; decide a qué tercero se le manda un correo automático, así
+            // que va aquí, en el nivel superior.
+            <div className="space-y-6">
+              <NotifLiquidacionesConfigPanel embedded />
+              <div className="border-t pt-6">
+                <NominasGestoriaConfigPanel />
+              </div>
+            </div>
           ) : submodulo.key === "jornadas" ? (
             <JornadasVacantesPanel />
           ) : submodulo.key === "contratos" ? (

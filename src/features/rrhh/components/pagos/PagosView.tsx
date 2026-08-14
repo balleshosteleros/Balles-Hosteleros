@@ -24,8 +24,6 @@ import {
   getNotifLiquidacionesConfig,
   type NotifLiquidacionesConfig,
 } from "@/features/notificaciones/actions/notif-config-actions";
-import { NotifLiquidacionesConfigPanel } from "@/features/notificaciones/components/NotifLiquidacionesConfigPanel";
-import { NominasGestoriaConfigPanel } from "@/features/rrhh/components/pagos/NominasGestoriaConfigPanel";
 import { NominasRevisionDialog } from "@/features/rrhh/components/pagos/NominasRevisionDialog";
 import {
   listarNominasRevision,
@@ -1275,19 +1273,27 @@ export function PagosView() {
         </div>
       )}
 
+      {/* Los ajustes de Pagos (avisos de liquidación y envío de nóminas a la
+          gestoría) viven en AJUSTES → Departamentos → RRHH → Pagos: son normas de
+          empresa, no ajustes de uso diario. Aquí solo se enlaza, para no tener el
+          mismo formulario en dos sitios. */}
       {showConfig && (
-        <div className="space-y-4">
-          <Card>
-            <CardContent className="p-4">
-              <NotifLiquidacionesConfigPanel />
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-4">
-              <NominasGestoriaConfigPanel />
-            </CardContent>
-          </Card>
-        </div>
+        <Card>
+          <CardContent className="flex flex-wrap items-center justify-between gap-3 p-4">
+            <div>
+              <p className="text-sm font-medium">Ajustes de Pagos</p>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                Avisos de liquidación y envío mensual de nóminas a la gestoría.
+              </p>
+            </div>
+            <Button variant="outline" size="sm" className="gap-2" asChild>
+              <a href="/ajustes?tab=departamentos" target="_blank" rel="noopener noreferrer">
+                <Settings className="h-4 w-4" />
+                Abrir en Ajustes
+              </a>
+            </Button>
+          </CardContent>
+        </Card>
       )}
 
       <NominasRevisionDialog
