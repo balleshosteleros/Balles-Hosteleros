@@ -32,7 +32,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ token: string 
   if (!res.ok) {
     const message =
       res.reason === "expired"
-        ? "El enlace ha caducado. Pide a la empresa que te lo reenvíe."
+        ? "Este enlace ha caducado. Cada enlace sirve solo para las nóminas de su mes y vence el día 15 del mes siguiente. Ponte en contacto con el departamento de RRHH de la empresa para que te envíe uno nuevo."
         : res.reason === "cerrado"
           ? "Las nóminas de este mes ya se recibieron correctamente. Este enlace queda cerrado: no admite más subidas."
           : "Enlace no válido.";
@@ -62,7 +62,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ token: string 
     if (!res.ok) {
       const message =
         res.reason === "expired"
-          ? "El enlace ha caducado."
+          ? "Este enlace ha caducado y ya no admite subidas. Pide uno nuevo al departamento de RRHH de la empresa."
           : res.reason === "cerrado"
             ? "Las nóminas de este mes ya se recibieron: este enlace ya no admite subidas."
             : "Enlace no válido.";

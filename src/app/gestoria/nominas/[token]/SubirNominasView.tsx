@@ -166,7 +166,14 @@ export function SubirNominasView({ endpoint, empresaNombre, mesLabel }: Props) {
           {empresaNombre} te pide adjuntar las nóminas de <b>{mesLabel}</b>.
         </p>
 
-        <div className="mt-5 rounded-xl border border-sky-200 bg-sky-50 p-4 text-sm text-sky-900">
+        {/* El enlace es de UN mes concreto: dejarlo claro evita que suban las de
+            otro y se rechace el archivo entero. */}
+        <div className="mt-3 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs text-zinc-700">
+          Este enlace sirve <b>solo para las nóminas de {mesLabel}</b>. Si contiene alguna de
+          otro mes, no se guardará ninguna.
+        </div>
+
+        <div className="mt-4 rounded-xl border border-sky-200 bg-sky-50 p-4 text-sm text-sky-900">
           <p className="font-semibold">Hacen falta dos documentos</p>
           <ol className="mt-1.5 list-decimal list-inside space-y-1">
             <li>

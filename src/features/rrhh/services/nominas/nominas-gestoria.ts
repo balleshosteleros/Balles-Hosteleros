@@ -114,9 +114,15 @@ export async function crearTokenNominasGestoria(
     // gestoría pueda usar indistintamente el primer correo o el segundo.
     const token = generarToken();
     const tokenHash = hashToken(token);
-    // Vigencia amplia: hasta el final del mes SIGUIENTE al periodo.
+    // CADUCIDAD: día 15 del mes SIGUIENTE al periodo.
+    //
+    // El enlace no pide credenciales — quien tenga la dirección puede subir —, así
+    // que cuanto menos tiempo viva, mejor. Con el aviso el día 28 y el
+    // recordatorio a los 4 días, quedan ~18 días de margen: de sobra para una
+    // entrega normal, y el enlace no se queda vivo un mes entero.
+    // Antes caducaba al final del mes siguiente (~33 días).
     const [y, m] = periodo.split("-").map(Number);
-    const expira = new Date(Date.UTC(y, m + 1, 0, 23, 59, 59)).toISOString();
+    const expira = new Date(Date.UTC(y, m, 15, 23, 59, 59)).toISOString();
 
     const { error } = await admin
       .from("nominas_gestoria_tokens")
