@@ -35,7 +35,9 @@ import {
   type CierreRow, type CierresConfig, type CierreModo, type CierreGasto, type CierreTipo,
   type CierreProgramacion,
 } from "@/features/gerencia/actions/cierres-actions";
-import { MAX_DOCUMENTOS_CIERRE, MAX_TAMANO_DOCUMENTO_MB, MAX_TAMANO_DOCUMENTO_BYTES } from "@/features/gerencia/types/cierres";
+import { MAX_DOCUMENTOS_CIERRE, MAX_TAMANO_DOCUMENTO_MB, MAX_TAMANO_DOCUMENTO_BYTES, DIAS_BLOQUEO_DEFAULT } from "@/features/gerencia/types/cierres";
+import { loadRolesFromSupabase } from "@/features/ajustes/actions/roles-actions";
+import { useAuth } from "@/features/auth/contexts/auth-context";
 import { createClient as createSupabaseBrowser } from "@/lib/supabase/client";
 import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
 import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
@@ -217,7 +219,7 @@ function describirProgramacion(p: CierreProgramacion): string {
 export function CierresView() {
   const { confirm: confirmDelete, dialog: confirmDeleteDialog } = useConfirmDelete();
   const [cierres, setCierres] = useState<CierreRow[]>([]);
-  const [config, setConfig] = useState<CierresConfig>({ modo: "libre", dia_semana: null });
+  const [config, setConfig] = useState<CierresConfig>({ modo: "libre", dia_semana: null, dias_bloqueo: DIAS_BLOQUEO_DEFAULT, rol_excepcion_id: null });
   const [empleados, setEmpleados] = useState<EmpleadoActivo[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -235,6 +237,9 @@ export function CierresView() {
   const [selected, setSelected] = useState<CierreRow | null>(null);
 
   const today = useMemo(() => format(new Date(), "yyyy-MM-dd"), []);
+  // Dirección puede apuntar fuera de plazo; el resto no (salvo el rol
+  // autorizado, que valida el servidor).
+  const { esAdminPlataforma } = useAuth();
 
   const gastoKeyRef = useRef(0);
   const nuevaGastoFila = useCallback((): GastoFila => {
@@ -395,8 +400,23 @@ export function CierresView() {
     return null;
   }, [movimientoSacaEfectivo, importeRetiradaPreview, saldoDisponible, acumuladoResultante, form.tipo, form.fecha, cierres]);
 
-  const [cfgForm, setCfgForm] = useState<CierresConfig>({ modo: "libre", dia_semana: null });
+  const [cfgForm, setCfgForm] = useState<CierresConfig>({ modo: "libre", dia_semana: null, dias_bloqueo: DIAS_BLOQUEO_DEFAULT, rol_excepcion_id: null });
   const [cfgSaving, setCfgSaving] = useState(false);
+  // Roles de la empresa, para elegir quién más puede apuntar fuera de plazo.
+  const [rolesEmpresa, setRolesEmpresa] = useState<Array<{ id: string; nombre: string }>>([]);
+
+  // ¿La fecha elegida ya está fuera del plazo para apuntar?
+  // (0 = sin bloqueo). El servidor manda; esto solo avisa en pantalla.
+  const diasDeRetraso = useMemo(() => {
+    if (!form.fecha) return 0;
+    const msDia = 24 * 60 * 60 * 1000;
+    const tHoy = Date.parse(`${today}T00:00:00Z`);
+    const tApunte = Date.parse(`${form.fecha}T00:00:00Z`);
+    if (!Number.isFinite(tHoy) || !Number.isFinite(tApunte)) return 0;
+    return Math.round((tHoy - tApunte) / msDia);
+  }, [form.fecha, today]);
+
+  const fueraDePlazo = config.dias_bloqueo > 0 && diasDeRetraso > config.dias_bloqueo;
 
   // Programaciones periódicas (reglas de cierre estilo Google Calendar).
   const [programaciones, setProgramaciones] = useState<CierreProgramacion[]>([]);
@@ -416,8 +436,9 @@ export function CierresView() {
   const cargar = useCallback(async () => {
     setLoading(true);
     try {
-      const [a, b, c, d] = await Promise.all([
+      const [a, b, c, d, e] = await Promise.all([
         listCierres(), getCierresConfig(), listCierresProgramaciones(), getEmpleadosActivos(),
+        loadRolesFromSupabase(),
       ]);
       if (a.ok) setCierres(a.data);
       if (b.ok) {
@@ -426,6 +447,7 @@ export function CierresView() {
       }
       if (c.ok) setProgramaciones(c.data);
       if (d.ok) setEmpleados(d.data);
+      if (e) setRolesEmpresa(e.map((r) => ({ id: r.id, nombre: r.nombre })));
     } catch (e) {
       console.error("[CierresView] cargar:", e);
     } finally {
@@ -714,6 +736,15 @@ export function CierresView() {
       toast.error("La fecha es obligatoria");
       return;
     }
+    // Aviso temprano de fuera de plazo. El candado de verdad está en el
+    // servidor (que además conoce el rol autorizado); esto solo evita el
+    // viaje inútil y explica el motivo al momento.
+    if (fueraDePlazo && !esAdminPlataforma) {
+      toast.error(
+        `Fuera de plazo: no se pueden apuntar movimientos con más de ${config.dias_bloqueo} ${config.dias_bloqueo === 1 ? "día" : "días"} de retraso. Solo dirección puede.`,
+      );
+      return;
+    }
     // Quién apunta el movimiento es obligatorio: todo cierre queda con responsable.
     if (!form.registrado_por.trim()) {
       toast.error("Indica quién apunta el cierre: es obligatorio");
@@ -882,6 +913,9 @@ export function CierresView() {
       const payload = {
         modo: cfgForm.modo,
         dia_semana: cfgForm.modo === "fijo" ? (cfgForm.dia_semana ?? 0) : null,
+        dias_bloqueo: cfgForm.dias_bloqueo,
+        // Sin bloqueo no hay excepción que guardar.
+        rol_excepcion_id: cfgForm.dias_bloqueo > 0 ? cfgForm.rol_excepcion_id : null,
       };
       const res = await updateCierresConfig(payload);
       if (!res.ok) {
@@ -1412,6 +1446,57 @@ export function CierresView() {
                 </div>
               </RadioGroup>
 
+              <div className="pt-2 border-t">
+                <h3 className="font-semibold text-lg">Plazo para apuntar</h3>
+                <p className="text-sm text-muted-foreground">
+                  Días de retraso admitidos para registrar un apunte (cierre, retirada o ingreso). Pasado ese plazo, nadie puede apuntar con fecha atrasada salvo dirección.
+                </p>
+
+                <div className="mt-4 flex items-center gap-3">
+                  <Input
+                    type="number"
+                    min={0}
+                    max={365}
+                    step={1}
+                    className="w-24"
+                    value={String(cfgForm.dias_bloqueo)}
+                    onChange={(e) =>
+                      setCfgForm((s) => ({ ...s, dias_bloqueo: Math.max(0, Math.min(365, Number(e.target.value) || 0)) }))
+                    }
+                  />
+                  <span className="text-sm text-muted-foreground">
+                    {cfgForm.dias_bloqueo === 0
+                      ? "Sin bloqueo: se puede apuntar con cualquier fecha."
+                      : `Días de retraso permitidos (${cfgForm.dias_bloqueo === 1 ? "1 día" : `${cfgForm.dias_bloqueo} días`}).`}
+                  </span>
+                </div>
+
+                {cfgForm.dias_bloqueo > 0 && (
+                  <div className="mt-4">
+                    <Label className="text-sm">Además de dirección, puede saltarse el plazo</Label>
+                    <Select
+                      value={cfgForm.rol_excepcion_id ?? "ninguno"}
+                      onValueChange={(v) =>
+                        setCfgForm((s) => ({ ...s, rol_excepcion_id: v === "ninguno" ? null : v }))
+                      }
+                    >
+                      <SelectTrigger className="w-[260px] mt-1.5">
+                        <SelectValue placeholder="Solo dirección" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="ninguno">Solo dirección</SelectItem>
+                        {rolesEmpresa.map((r) => (
+                          <SelectItem key={r.id} value={r.id}>{r.nombre}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground mt-1.5">
+                      Dirección siempre puede apuntar fuera de plazo, esté o no elegido aquí.
+                    </p>
+                  </div>
+                )}
+              </div>
+
               <div className="flex justify-end gap-2 pt-2 border-t">
                 <Button
                   variant="outline"
@@ -1476,6 +1561,13 @@ export function CierresView() {
                 value={form.fecha}
                 onChange={(e) => setForm({ ...form, fecha: e.target.value })}
               />
+              {fueraDePlazo && (
+                <p className={`text-xs mt-1.5 ${esAdminPlataforma ? "text-amber-700" : "text-red-600"}`}>
+                  {esAdminPlataforma
+                    ? `Fecha atrasada ${diasDeRetraso} días (el plazo es ${config.dias_bloqueo}). Puedes apuntarla porque eres dirección.`
+                    : `Fuera de plazo: ${diasDeRetraso} días de retraso y el máximo son ${config.dias_bloqueo}. Solo dirección puede apuntar aquí.`}
+                </p>
+              )}
             </div>
             <div>
               <Label>

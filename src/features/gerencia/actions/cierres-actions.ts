@@ -2,8 +2,10 @@
 
 import { createClient } from "@/lib/supabase/server";
 
-import { getEmpresaActivaForUser } from "@/features/empresa/lib/empresa-server";
-import { MAX_DOCUMENTOS_CIERRE } from "@/features/gerencia/types/cierres";
+import { getEmpresaActivaForUser, getZonaHorariaEmpresa } from "@/features/empresa/lib/empresa-server";
+import { hoyEnZona } from "@/features/empresa/lib/zona-horaria";
+import { getRolContext } from "@/features/auth/actions/permisos-actions";
+import { MAX_DOCUMENTOS_CIERRE, DIAS_BLOQUEO_DEFAULT } from "@/features/gerencia/types/cierres";
 import type { SupabaseClient } from "@supabase/supabase-js";
 const BUCKET = "cierres-documentos";
 const SIGNED_URL_TTL_SECONDS = 60 * 60;
@@ -56,6 +58,10 @@ export interface CierreRow {
 export interface CierresConfig {
   modo: CierreModo;
   dia_semana: number | null;
+  // Días de retraso admitidos para apuntar (0 = sin bloqueo).
+  dias_bloqueo: number;
+  // Rol que, además de dirección, puede saltarse el plazo. null = solo dirección.
+  rol_excepcion_id: string | null;
 }
 
 // Regla de cierre periódica (estilo Google Calendar): "cada N semanas, estos días".
@@ -85,6 +91,49 @@ async function getContext() {
   if (!user) return { supabase, user: null, empresaId: null as string | null };
   const empresaId = await getEmpresaActivaForUser(supabase as unknown as SupabaseClient, user.id);
 return { supabase, user, empresaId };
+}
+
+// ── Bloqueo de apuntes retroactivos ──────────────────────────
+// Ningún apunte (cierre, retirada o ingreso) puede registrarse con más días de
+// retraso de los configurados. Se salta el plazo:
+//   · Dirección (es_admin_plataforma), SIEMPRE.
+//   · El rol autorizado en Configuración (`rol_excepcion_id`), si lo hay.
+// `dias_bloqueo = 0` desactiva el bloqueo.
+//
+// Devuelve el mensaje de error si hay que BLOQUEAR, o null si se permite.
+async function comprobarPlazoApunte(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  empresaId: string,
+  fecha: string,
+): Promise<string | null> {
+  const { data: cfg } = await supabase
+    .from("cierres_config")
+    .select("dias_bloqueo, rol_excepcion_id")
+    .eq("empresa_id", empresaId)
+    .maybeSingle();
+
+  const dias = Number(cfg?.dias_bloqueo ?? DIAS_BLOQUEO_DEFAULT);
+  if (!Number.isFinite(dias) || dias <= 0) return null; // 0 = sin bloqueo
+
+  // "Hoy" según la empresa, no según el servidor.
+  const tz = await getZonaHorariaEmpresa(supabase as unknown as SupabaseClient, empresaId);
+  const hoy = hoyEnZona(tz);
+
+  // Días de retraso = hoy − fecha del apunte (en días naturales completos).
+  const msDia = 24 * 60 * 60 * 1000;
+  const tHoy = Date.parse(`${hoy}T00:00:00Z`);
+  const tApunte = Date.parse(`${fecha}T00:00:00Z`);
+  if (!Number.isFinite(tHoy) || !Number.isFinite(tApunte)) return null;
+
+  const retraso = Math.round((tHoy - tApunte) / msDia);
+  if (retraso <= dias) return null; // dentro de plazo (o fecha futura)
+
+  // Fuera de plazo: solo pasa dirección o el rol autorizado.
+  const { esDirector, rolId } = await getRolContext();
+  if (esDirector) return null;
+  if (cfg?.rol_excepcion_id && rolId === cfg.rol_excepcion_id) return null;
+
+  return `Fuera de plazo: no se pueden registrar apuntes con más de ${dias} ${dias === 1 ? "día" : "días"} de retraso (este lleva ${retraso}). Solo dirección puede hacerlo.`;
 }
 
 function sanitizeFilename(name: string): string {
@@ -395,6 +444,13 @@ export async function createCierre(formData: FormData): Promise<{ ok: true; data
     if (tipo !== "retirada" && docsSubidos.length === 0) {
       return { ok: false, error: `Debes adjuntar un documento para registrar ${tipo === "ingreso" ? "un ingreso" : "un cierre"}` };
     }
+
+    // NINGÚN apunte con más retraso del permitido. Dirección siempre puede, y
+    // opcionalmente el rol autorizado en Configuración. El plazo se mide en la
+    // zona horaria de la EMPRESA (PRP-069): si no, cerca de medianoche el
+    // servidor (UTC) contaría un día de más.
+    const bloqueo = await comprobarPlazoApunte(supabase, empresaId, fecha);
+    if (bloqueo) return { ok: false, error: bloqueo };
 
     // Gastos de la semana (registro informativo, no altera el descuadre).
     let gastosInput: CierreGasto[] = [];
@@ -709,7 +765,7 @@ export async function getCierresConfig(): Promise<{ ok: true; data: CierresConfi
 
     const { data, error } = await supabase
       .from("cierres_config")
-      .select("modo, dia_semana")
+      .select("modo, dia_semana, dias_bloqueo, rol_excepcion_id")
       .eq("empresa_id", empresaId)
       .maybeSingle();
 
@@ -719,7 +775,10 @@ export async function getCierresConfig(): Promise<{ ok: true; data: CierresConfi
     }
 
     if (!data) {
-      return { ok: true, data: { modo: "libre", dia_semana: null } };
+      return {
+        ok: true,
+        data: { modo: "libre", dia_semana: null, dias_bloqueo: DIAS_BLOQUEO_DEFAULT, rol_excepcion_id: null },
+      };
     }
 
     return {
@@ -727,6 +786,8 @@ export async function getCierresConfig(): Promise<{ ok: true; data: CierresConfi
       data: {
         modo: ((data.modo as string) ?? "libre") as CierreModo,
         dia_semana: (data.dia_semana as number | null) ?? null,
+        dias_bloqueo: Number(data.dias_bloqueo ?? DIAS_BLOQUEO_DEFAULT),
+        rol_excepcion_id: (data.rol_excepcion_id as string | null) ?? null,
       },
     };
   } catch (err) {
@@ -736,12 +797,28 @@ export async function getCierresConfig(): Promise<{ ok: true; data: CierresConfi
   }
 }
 
-export async function updateCierresConfig(input: { modo: CierreModo; dia_semana: number | null }): Promise<{ ok: boolean; error?: string }> {
+export async function updateCierresConfig(input: {
+  modo: CierreModo;
+  dia_semana: number | null;
+  dias_bloqueo?: number;
+  rol_excepcion_id?: string | null;
+}): Promise<{ ok: boolean; error?: string }> {
   try {
     const { supabase, empresaId } = await getContext();
     if (!empresaId) return { ok: false, error: "No autenticado" };
 
+    // El plazo de bloqueo y su excepción son ajustes de control: solo dirección
+    // los cambia. Si no, cualquiera podría abrirse el plazo y saltarse la norma.
+    const { esDirector } = await getRolContext();
+    if (!esDirector) {
+      return { ok: false, error: "Solo dirección puede cambiar la configuración de cierres" };
+    }
+
     const dia = input.modo === "fijo" ? input.dia_semana : null;
+
+    // Plazo saneado: entero de 0 a 365 (0 = sin bloqueo).
+    const diasRaw = Number(input.dias_bloqueo ?? DIAS_BLOQUEO_DEFAULT);
+    const dias = Number.isFinite(diasRaw) ? Math.min(365, Math.max(0, Math.round(diasRaw))) : DIAS_BLOQUEO_DEFAULT;
 
     const { error } = await supabase
       .from("cierres_config")
@@ -750,6 +827,8 @@ export async function updateCierresConfig(input: { modo: CierreModo; dia_semana:
           empresa_id: empresaId,
           modo: input.modo,
           dia_semana: dia,
+          dias_bloqueo: dias,
+          rol_excepcion_id: input.rol_excepcion_id ?? null,
           updated_at: new Date().toISOString(),
         },
         { onConflict: "empresa_id" }
