@@ -10,17 +10,78 @@
  */
 
 import { getAppContext } from "@/lib/supabase/get-context";
+import { googleFetchAuto } from "@/lib/google/api";
 
 export interface Destinatario {
   nombre: string;
   email: string;
   /** De dónde sale, para que el usuario sepa a quién está escribiendo. */
-  origen: "Agenda" | "Empleado";
+  origen: "Agenda" | "Empleado" | "Gmail";
   /** Cargo, empresa o departamento; ayuda a desambiguar homónimos. */
   detalle?: string;
 }
 
 const MAX = 8;
+
+type PeopleResp = {
+  results?: Array<{
+    person?: {
+      names?: Array<{ displayName?: string }>;
+      emailAddresses?: Array<{ value?: string }>;
+      organizations?: Array<{ name?: string; title?: string }>;
+    };
+  }>;
+};
+
+/**
+ * Contactos de la cuenta de Google ya vinculada. Cubre DOS fuentes:
+ *  · `people:searchContacts`  → la agenda de Google del usuario.
+ *  · `otherContacts:search`   → direcciones con las que ha intercambiado
+ *    correo aunque nunca las guardara. Aquí es donde aparece, por ejemplo, la
+ *    gestoría a la que se escribe cada trimestre.
+ *
+ * Esto es lo que hace que una empresa nueva tenga sus contactos disponibles en
+ * cuanto vincula el correo, SIN que nadie tenga que importar nada a mano.
+ */
+async function buscarEnGoogle(q: string): Promise<Destinatario[]> {
+  const endpoints = ["people:searchContacts", "otherContacts:search"] as const;
+  const out: Destinatario[] = [];
+
+  for (const ep of endpoints) {
+    try {
+      const url = new URL(`https://people.googleapis.com/v1/${ep}`);
+      url.searchParams.set("query", q);
+      url.searchParams.set("pageSize", "10");
+      // `otherContacts` no admite `organizations` en el readMask.
+      url.searchParams.set(
+        "readMask",
+        ep === "otherContacts:search"
+          ? "names,emailAddresses"
+          : "names,emailAddresses,organizations",
+      );
+
+      const { data, needsReauth } = await googleFetchAuto<PeopleResp>(url.toString());
+      if (needsReauth) return out;
+
+      for (const r of data?.results ?? []) {
+        const email = r.person?.emailAddresses?.[0]?.value;
+        if (!email) continue;
+        const org = r.person?.organizations?.[0];
+        out.push({
+          nombre: r.person?.names?.[0]?.displayName ?? email,
+          email,
+          origen: "Gmail",
+          detalle: [org?.title, org?.name].filter(Boolean).join(" · ") || undefined,
+        });
+      }
+    } catch (err) {
+      // Sin cuenta vinculada o sin permisos: no es un error, simplemente no hay
+      // sugerencias de Google. Las de agenda y empleados siguen funcionando.
+      console.error(`[correo] buscarEnGoogle(${ep}):`, err);
+    }
+  }
+  return out;
+}
 
 export async function buscarDestinatarios(
   termino: string,
@@ -89,7 +150,12 @@ export async function buscarDestinatarios(
       });
     }
 
-    // Un mismo correo puede estar en la agenda y como empleado: se deja uno.
+    // Contactos de la cuenta de Google vinculada (agenda + con quien se ha
+    // intercambiado correo). Van DESPUÉS para que, ante el mismo correo, gane
+    // la ficha propia del software, que trae puesto/empresa.
+    resultados.push(...(await buscarEnGoogle(q)));
+
+    // Un mismo correo puede estar en varias fuentes: se deja la primera.
     const vistos = new Set<string>();
     const unicos = resultados.filter((r) => {
       const clave = r.email.toLowerCase();

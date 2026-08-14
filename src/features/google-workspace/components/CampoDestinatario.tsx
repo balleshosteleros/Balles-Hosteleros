@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { AlertCircle, User, BookUser } from "lucide-react";
+import { AlertCircle, User, BookUser, Mail } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -116,6 +116,8 @@ export function CampoDestinatario({
               >
                 {d.origen === "Empleado" ? (
                   <User className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                ) : d.origen === "Gmail" ? (
+                  <Mail className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                 ) : (
                   <BookUser className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                 )}
