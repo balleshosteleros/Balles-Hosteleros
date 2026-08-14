@@ -28,6 +28,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
 import { ValidadoresSolicitudesConfig } from "@/features/ajustes/components/RrhhConfigTab";
 import { FichajesConfigPanel } from "@/features/ajustes/components/FichajesConfigPanel";
+import { CierresPlazoPanel } from "@/features/ajustes/components/CierresPlazoPanel";
 import { NotifLiquidacionesConfigPanel } from "@/features/notificaciones/components/NotifLiquidacionesConfigPanel";
 import { JornadasVacantesPanel } from "@/features/ajustes/components/JornadasVacantesPanel";
 import { TiposContratoPanel } from "@/features/ajustes/components/TiposContratoPanel";
@@ -224,7 +225,7 @@ function SubmoduloRow({
         )}
         <span className="text-sm font-medium flex-1">{submodulo.label}</span>
         {submodulo.placeholder &&
-          !["solicitudes", "fichajes", "pagos", "jornadas", "contratos"].includes(submodulo.key) && (
+          !["solicitudes", "fichajes", "pagos", "jornadas", "contratos", "cierres"].includes(submodulo.key) && (
             <Badge variant="outline" className="text-[9px] text-muted-foreground">
               PRÓXIMAMENTE
             </Badge>
@@ -269,6 +270,8 @@ function SubmoduloRow({
             <TiposContratoPanel />
           ) : submodulo.key === "pagina_web" ? (
             <DireccionWebEmpresaPanel />
+          ) : submodulo.key === "cierres" ? (
+            <CierresPlazoPanel embedded />
           ) : (
             <>
               <ChecklistCampos

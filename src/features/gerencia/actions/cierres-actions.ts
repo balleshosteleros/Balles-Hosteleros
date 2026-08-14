@@ -97,7 +97,8 @@ return { supabase, user, empresaId };
 // Ningún apunte (cierre, retirada o ingreso) puede registrarse con más días de
 // retraso de los configurados. Se salta el plazo:
 //   · Dirección (es_admin_plataforma), SIEMPRE.
-//   · El rol autorizado en Configuración (`rol_excepcion_id`), si lo hay.
+//   · El rol autorizado en Ajustes → Deptos → Gerencia → Cierres
+//     (`rol_excepcion_id`), si lo hay.
 // `dias_bloqueo = 0` desactiva el bloqueo.
 //
 // Devuelve el mensaje de error si hay que BLOQUEAR, o null si se permite.
@@ -807,32 +808,38 @@ export async function updateCierresConfig(input: {
     const { supabase, empresaId } = await getContext();
     if (!empresaId) return { ok: false, error: "No autenticado" };
 
-    // El plazo de bloqueo y su excepción son ajustes de control: solo dirección
-    // los cambia. Si no, cualquiera podría abrirse el plazo y saltarse la norma.
-    const { esDirector } = await getRolContext();
-    if (!esDirector) {
-      return { ok: false, error: "Solo dirección puede cambiar la configuración de cierres" };
-    }
-
     const dia = input.modo === "fijo" ? input.dia_semana : null;
 
-    // Plazo saneado: entero de 0 a 365 (0 = sin bloqueo).
-    const diasRaw = Number(input.dias_bloqueo ?? DIAS_BLOQUEO_DEFAULT);
-    const dias = Number.isFinite(diasRaw) ? Math.min(365, Math.max(0, Math.round(diasRaw))) : DIAS_BLOQUEO_DEFAULT;
+    // El día de cierre es ajuste de uso diario (engranaje del módulo). El PLAZO
+    // para apuntar vive en Ajustes → Departamentos → Gerencia → Cierres y solo
+    // lo toca dirección, así que aquí únicamente viaja si viene explícito.
+    const tocaPlazo = input.dias_bloqueo !== undefined || input.rol_excepcion_id !== undefined;
+
+    const fila: Record<string, unknown> = {
+      empresa_id: empresaId,
+      modo: input.modo,
+      dia_semana: dia,
+      updated_at: new Date().toISOString(),
+    };
+
+    if (tocaPlazo) {
+      // Cambiar el plazo es solo de dirección: si no, cualquiera se lo abriría
+      // y se saltaría la norma por la puerta de atrás.
+      const { esDirector } = await getRolContext();
+      if (!esDirector) {
+        return { ok: false, error: "Solo dirección puede cambiar el plazo para apuntar" };
+      }
+      // Plazo saneado: entero de 0 a 365 (0 = sin bloqueo).
+      const diasRaw = Number(input.dias_bloqueo ?? DIAS_BLOQUEO_DEFAULT);
+      fila.dias_bloqueo = Number.isFinite(diasRaw)
+        ? Math.min(365, Math.max(0, Math.round(diasRaw)))
+        : DIAS_BLOQUEO_DEFAULT;
+      fila.rol_excepcion_id = input.rol_excepcion_id ?? null;
+    }
 
     const { error } = await supabase
       .from("cierres_config")
-      .upsert(
-        {
-          empresa_id: empresaId,
-          modo: input.modo,
-          dia_semana: dia,
-          dias_bloqueo: dias,
-          rol_excepcion_id: input.rol_excepcion_id ?? null,
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: "empresa_id" }
-      );
+      .upsert(fila, { onConflict: "empresa_id" });
 
     if (error) {
       console.error("[cierres:cfg:set]", error.message);

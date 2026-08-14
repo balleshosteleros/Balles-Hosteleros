@@ -36,7 +36,6 @@ import {
   type CierreProgramacion,
 } from "@/features/gerencia/actions/cierres-actions";
 import { MAX_DOCUMENTOS_CIERRE, MAX_TAMANO_DOCUMENTO_MB, MAX_TAMANO_DOCUMENTO_BYTES, DIAS_BLOQUEO_DEFAULT } from "@/features/gerencia/types/cierres";
-import { loadRolesFromSupabase } from "@/features/ajustes/actions/roles-actions";
 import { useAuth } from "@/features/auth/contexts/auth-context";
 import { createClient as createSupabaseBrowser } from "@/lib/supabase/client";
 import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
@@ -402,8 +401,6 @@ export function CierresView() {
 
   const [cfgForm, setCfgForm] = useState<CierresConfig>({ modo: "libre", dia_semana: null, dias_bloqueo: DIAS_BLOQUEO_DEFAULT, rol_excepcion_id: null });
   const [cfgSaving, setCfgSaving] = useState(false);
-  // Roles de la empresa, para elegir quién más puede apuntar fuera de plazo.
-  const [rolesEmpresa, setRolesEmpresa] = useState<Array<{ id: string; nombre: string }>>([]);
 
   // ¿La fecha elegida ya está fuera del plazo para apuntar?
   // (0 = sin bloqueo). El servidor manda; esto solo avisa en pantalla.
@@ -436,9 +433,8 @@ export function CierresView() {
   const cargar = useCallback(async () => {
     setLoading(true);
     try {
-      const [a, b, c, d, e] = await Promise.all([
+      const [a, b, c, d] = await Promise.all([
         listCierres(), getCierresConfig(), listCierresProgramaciones(), getEmpleadosActivos(),
-        loadRolesFromSupabase(),
       ]);
       if (a.ok) setCierres(a.data);
       if (b.ok) {
@@ -447,7 +443,6 @@ export function CierresView() {
       }
       if (c.ok) setProgramaciones(c.data);
       if (d.ok) setEmpleados(d.data);
-      if (e) setRolesEmpresa(e.map((r) => ({ id: r.id, nombre: r.nombre })));
     } catch (e) {
       console.error("[CierresView] cargar:", e);
     } finally {
@@ -913,9 +908,6 @@ export function CierresView() {
       const payload = {
         modo: cfgForm.modo,
         dia_semana: cfgForm.modo === "fijo" ? (cfgForm.dia_semana ?? 0) : null,
-        dias_bloqueo: cfgForm.dias_bloqueo,
-        // Sin bloqueo no hay excepción que guardar.
-        rol_excepcion_id: cfgForm.dias_bloqueo > 0 ? cfgForm.rol_excepcion_id : null,
       };
       const res = await updateCierresConfig(payload);
       if (!res.ok) {
@@ -954,7 +946,9 @@ export function CierresView() {
       }
 
       toast.success("Ajustes guardados");
-      setConfig(payload);
+      // El plazo para apuntar no se toca aquí (vive en Ajustes → Deptos →
+      // Gerencia → Cierres): se conserva tal cual estaba.
+      setConfig((c) => ({ ...c, ...payload }));
       cargar();
     } finally {
       setCfgSaving(false);
@@ -1445,57 +1439,6 @@ export function CierresView() {
                   </Label>
                 </div>
               </RadioGroup>
-
-              <div className="pt-2 border-t">
-                <h3 className="font-semibold text-lg">Plazo para apuntar</h3>
-                <p className="text-sm text-muted-foreground">
-                  Días de retraso admitidos para registrar un apunte (cierre, retirada o ingreso). Pasado ese plazo, nadie puede apuntar con fecha atrasada salvo dirección.
-                </p>
-
-                <div className="mt-4 flex items-center gap-3">
-                  <Input
-                    type="number"
-                    min={0}
-                    max={365}
-                    step={1}
-                    className="w-24"
-                    value={String(cfgForm.dias_bloqueo)}
-                    onChange={(e) =>
-                      setCfgForm((s) => ({ ...s, dias_bloqueo: Math.max(0, Math.min(365, Number(e.target.value) || 0)) }))
-                    }
-                  />
-                  <span className="text-sm text-muted-foreground">
-                    {cfgForm.dias_bloqueo === 0
-                      ? "Sin bloqueo: se puede apuntar con cualquier fecha."
-                      : `Días de retraso permitidos (${cfgForm.dias_bloqueo === 1 ? "1 día" : `${cfgForm.dias_bloqueo} días`}).`}
-                  </span>
-                </div>
-
-                {cfgForm.dias_bloqueo > 0 && (
-                  <div className="mt-4">
-                    <Label className="text-sm">Además de dirección, puede saltarse el plazo</Label>
-                    <Select
-                      value={cfgForm.rol_excepcion_id ?? "ninguno"}
-                      onValueChange={(v) =>
-                        setCfgForm((s) => ({ ...s, rol_excepcion_id: v === "ninguno" ? null : v }))
-                      }
-                    >
-                      <SelectTrigger className="w-[260px] mt-1.5">
-                        <SelectValue placeholder="Solo dirección" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="ninguno">Solo dirección</SelectItem>
-                        {rolesEmpresa.map((r) => (
-                          <SelectItem key={r.id} value={r.id}>{r.nombre}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <p className="text-xs text-muted-foreground mt-1.5">
-                      Dirección siempre puede apuntar fuera de plazo, esté o no elegido aquí.
-                    </p>
-                  </div>
-                )}
-              </div>
 
               <div className="flex justify-end gap-2 pt-2 border-t">
                 <Button
