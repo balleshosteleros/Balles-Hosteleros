@@ -5,6 +5,7 @@ import { ahoraEnZona } from "@/features/empresa/lib/zona-horaria";
 import {
   enviarSolicitudNominasGestoria,
   recordarSolicitudNominasGestoria,
+  mesSolicitado,
 } from "@/features/rrhh/services/nominas/nominas-gestoria";
 
 export const dynamic = "force-dynamic";
@@ -32,19 +33,6 @@ export const runtime = "nodejs";
  * El enlace lleva a `/gestoria/nominas/<token>`, donde la gestoría sube las
  * nóminas y la IA las vuelca a `rrhh_pagos`.
  */
-/**
- * Mes cuyas nóminas se piden, según el día en que se avisa. Regla: SIEMPRE las
- * últimas nóminas cerradas, para que no haya lío.
- *   • Día 16–31 → el mes EN CURSO (ya se está cerrando).
- *   • Día 1–15  → el mes ANTERIOR (el actual acaba de empezar).
- */
-export function mesSolicitado(anio: string, mes: string, diaEnvio: number): string {
-  if (diaEnvio >= 16) return `${anio}-${mes}`;
-  const d = new Date(Date.UTC(Number(anio), Number(mes) - 1, 1));
-  d.setUTCMonth(d.getUTCMonth() - 1);
-  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
-}
-
 export async function GET(request: Request) {
   const cronSecret = process.env.CRON_SECRET;
   if (!cronSecret) return NextResponse.json({ error: "Configuración inválida" }, { status: 503 });

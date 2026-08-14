@@ -77,6 +77,20 @@ export async function correoGestoriaEmpresa(
   return { to, cc };
 }
 
+/**
+ * Mes cuyas nóminas se piden, según el día en que se avisa. Regla: SIEMPRE las
+ * últimas nóminas cerradas, para que no haya lío.
+ *   • Día 16–31 → el mes EN CURSO (ya se está cerrando).
+ *   • Día 1–15  → el mes ANTERIOR (el actual acaba de empezar).
+ * La usan tanto el cron como el botón «Enviar ahora», para que no discrepen.
+ */
+export function mesSolicitado(anio: string, mes: string, diaEnvio: number): string {
+  if (diaEnvio >= 16) return `${anio}-${mes}`;
+  const d = new Date(Date.UTC(Number(anio), Number(mes) - 1, 1));
+  d.setUTCMonth(d.getUTCMonth() - 1);
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
 /** Enlace público que abre la gestoría para subir las nóminas del mes. */
 export function urlSubidaNominas(token: string): string {
   return `${getSiteUrl()}/gestoria/nominas/${encodeURIComponent(token)}`;

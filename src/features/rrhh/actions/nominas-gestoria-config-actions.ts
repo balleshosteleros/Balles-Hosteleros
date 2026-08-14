@@ -12,7 +12,10 @@ import { getAppContext } from "@/lib/supabase/get-context";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getZonaHorariaEmpresa } from "@/features/empresa/lib/empresa-server";
 import { hoyEnZona } from "@/features/empresa/lib/zona-horaria";
-import { enviarSolicitudNominasGestoria } from "@/features/rrhh/services/nominas/nominas-gestoria";
+import {
+  enviarSolicitudNominasGestoria,
+  mesSolicitado,
+} from "@/features/rrhh/services/nominas/nominas-gestoria";
 
 export interface NominasGestoriaConfig {
   activo: boolean;
@@ -95,7 +98,15 @@ export async function enviarNominasGestoriaAhora(): Promise<{ ok: boolean; error
     if (!empresaId) return { ok: false, error: "No autorizado" };
     const admin = createAdminClient();
     const tz = await getZonaHorariaEmpresa(admin, empresaId);
-    const periodo = hoyEnZona(tz).slice(0, 7); // "AAAA-MM"
+
+    // QUÉ MES SE PIDE: la MISMA regla que el envío automático, no el mes en curso
+    // a secas. Se decide por el DÍA DE HOY, que es cuando se está reclamando:
+    //   • del 16 en adelante → el mes en curso (ya se está cerrando)
+    //   • del 1 al 15        → el mes anterior (las últimas nóminas cerradas)
+    // Antes cogía siempre el mes actual, así que pulsarlo un día 14 pedía las
+    // nóminas de un mes que aún no ha terminado y que la gestoría no tiene.
+    const [anio, mes, dia] = hoyEnZona(tz).split("-");
+    const periodo = mesSolicitado(anio, mes, Number(dia));
     const res = await enviarSolicitudNominasGestoria(admin, empresaId, periodo);
     return res.ok ? { ok: true } : { ok: false, error: res.error };
   } catch (err) {
