@@ -332,8 +332,9 @@ export function SubirNominasView({ endpoint, empresaNombre, mesLabel }: Props) {
                   </p>
                 )}
                 <p className="mt-2 text-sm text-rose-900">
-                  <b>La entrega no se da por buena hasta que los importes cuadren.</b> El enlace
-                  sigue abierto: corregid el documento que falle y volved a subirlo.
+                  <b>Los importes deben coincidir EXACTAMENTE</b>, sin ni un céntimo de
+                  diferencia. El enlace sigue abierto: corregid el documento que falle y volved
+                  a subirlo.
                 </p>
                 <p className="mt-2 text-xs text-rose-800">
                   Comprobad si falta alguna nómina o si hay algún concepto del TC1 que no aparece

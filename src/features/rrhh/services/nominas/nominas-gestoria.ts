@@ -541,11 +541,11 @@ export async function guardarTc1Gestoria(
 }
 
 /**
- * Margen admitido al cuadrar TC1 contra nóminas. CUADRE ESTRICTO: al céntimo.
- * Se deja como constante porque es la única pieza a tocar si algún día se
- * quisiera admitir holgura.
+ * Margen admitido al cuadrar TC1 contra nóminas. CERO: tiene que ir EXACTO, ni un
+ * céntimo de diferencia. Se deja como constante por si algún día hiciera falta
+ * holgura, pero por defecto no se admite ninguna.
  */
-const CUADRE_TOLERANCIA_EUR = 0.01;
+const CUADRE_TOLERANCIA_EUR = 0;
 
 export interface CuadreTc1 {
   /** Total de cotizaciones sumado de las nóminas (trabajador + empresa). */
