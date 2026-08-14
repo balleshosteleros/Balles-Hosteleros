@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getGoogleTokens, googleFetchAuto } from "@/lib/google/api";
+import { direccionesInvalidas } from "@/features/google-workspace/lib/direcciones";
 
 type SendAs = {
   sendAsEmail: string;
@@ -27,12 +28,84 @@ async function leerFirmaCorporativa(): Promise<string> {
   }
 }
 
+/**
+ * Convierte el texto del compositor en HTML seguro y CLICABLE.
+ *
+ * Se escapa primero (para no inyectar HTML) y solo después se detectan las URLs
+ * y correos sobre el texto ya escapado: así un enlace pegado en el mensaje llega
+ * como enlace de verdad y no como texto plano.
+ *
+ * El orden importa: si se enlazara antes de escapar, el `<a>` recién creado se
+ * escaparía a sí mismo y se vería el marcado en el correo.
+ */
 function escaparHtml(texto: string): string {
-  return texto
+  const escapado = texto
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/\n/g, "<br>");
+    .replace(/>/g, "&gt;");
+
+  const enlazado = escapado
+    // URLs http(s) y www. Se corta en el signo de puntuación final para no
+    // tragarse el punto o la coma que cierran la frase.
+    .replace(
+      /\b(https?:\/\/[^\s<]+|www\.[^\s<]+)/gi,
+      (url) => {
+        const limpia = url.replace(/[.,;:!?)\]]+$/, "");
+        const cola = url.slice(limpia.length);
+        const href = limpia.startsWith("http") ? limpia : `https://${limpia}`;
+        return `<a href="${href}" target="_blank" rel="noopener noreferrer" style="color:#1a73e8;text-decoration:underline">${limpia}</a>${cola}`;
+      },
+    )
+    // Correos sueltos → mailto. Se excluyen los que ya van dentro de un href.
+    .replace(
+      /(^|[\s(])([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})/g,
+      (_m, previo: string, correo: string) =>
+        `${previo}<a href="mailto:${correo}" style="color:#1a73e8;text-decoration:underline">${correo}</a>`,
+    );
+
+  return enlazado.replace(/\n/g, "<br>");
+}
+
+/**
+ * Traduce el error de la API de Gmail a algo accionable.
+ *
+ * Google devuelve un JSON crudo tipo `{"error":{"code":400,...,"reason":
+ * "invalidArgument"}}` que en pantalla no dice nada. Aquí se convierte en una
+ * frase que explica QUÉ pasó y QUÉ hacer.
+ */
+function mensajeErrorGmail(status: number, cuerpo: string, destino?: string): string {
+  let razon = "";
+  let detalle = "";
+  try {
+    const j = JSON.parse(cuerpo) as {
+      error?: { message?: string; errors?: Array<{ reason?: string; message?: string }> };
+    };
+    razon = j.error?.errors?.[0]?.reason ?? "";
+    detalle = j.error?.errors?.[0]?.message ?? j.error?.message ?? "";
+  } catch {
+    detalle = cuerpo.slice(0, 200);
+  }
+
+  const malas = destino ? direccionesInvalidas(destino) : [];
+  if (malas.length > 0) {
+    return `La dirección "${malas[0]}" no es válida. Revisa que esté bien escrita (por ejemplo, que el dominio lleve el punto: gmail.com).`;
+  }
+
+  if (/invalid.*to header/i.test(detalle) || razon === "invalidArgument") {
+    return "Gmail ha rechazado el destinatario. Revisa que la dirección esté bien escrita, sin espacios ni comas de más.";
+  }
+  if (status === 401 || status === 403) {
+    return "Google ha rechazado el envío por permisos. Vuelve a conectar tu cuenta desde Ajustes.";
+  }
+  if (status === 429) {
+    return "Google ha limitado el envío por exceso de correos. Espera unos minutos y vuelve a intentarlo.";
+  }
+  if (status >= 500) {
+    return "Gmail no está disponible en este momento. Inténtalo de nuevo en unos minutos.";
+  }
+  return detalle
+    ? `Gmail ha rechazado el envío: ${detalle}`
+    : "No se pudo enviar el correo. Revisa el destinatario y vuelve a intentarlo.";
 }
 
 /**
@@ -64,6 +137,19 @@ export async function POST(request: Request) {
   if (!body.to || !body.subject) {
     return NextResponse.json(
       { error: "missing_fields", message: "Falta destinatario o asunto" },
+      { status: 400 },
+    );
+  }
+
+  // Se valida ANTES de llamar a Gmail: así el aviso dice qué dirección falla en
+  // vez de devolver el JSON crudo que responde Google.
+  const malas = direccionesInvalidas(body.to);
+  if (malas.length > 0) {
+    return NextResponse.json(
+      {
+        error: "invalid_recipient",
+        message: `La dirección "${malas[0]}" no es válida. Revisa que esté bien escrita (por ejemplo, que el dominio lleve el punto: gmail.com).`,
+      },
       { status: 400 },
     );
   }
@@ -115,7 +201,11 @@ export async function POST(request: Request) {
     const errBody = await res.text();
     console.error("[gmail/send]", res.status, errBody);
     return NextResponse.json(
-      { error: "send_failed", message: errBody, status: res.status },
+      {
+        error: "send_failed",
+        message: mensajeErrorGmail(res.status, errBody, body.to),
+        status: res.status,
+      },
       { status: 500 },
     );
   }

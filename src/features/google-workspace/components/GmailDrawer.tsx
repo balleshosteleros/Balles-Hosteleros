@@ -53,6 +53,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { CampoDestinatario } from "./CampoDestinatario";
+import { direccionesInvalidas } from "../lib/direcciones";
 import { GoogleConnectBanner } from "./GoogleConnectBanner";
 import { GoogleReauthBanner } from "./GoogleReauthBanner";
 import { GoogleAccountButton } from "./GoogleAccountButton";
@@ -647,6 +649,15 @@ export function GmailDrawer({ children }: GmailDrawerProps) {
       toast.error("Falta destinatario o asunto");
       return;
     }
+    // Se corta aquí para no gastar la llamada a Gmail con una dirección que ya
+    // sabemos que va a rechazar.
+    const malas = direccionesInvalidas(compose.to);
+    if (malas.length > 0) {
+      toast.error(
+        `La dirección "${malas[0]}" no es válida. Revisa que el dominio esté completo (por ejemplo, gmail.com).`,
+      );
+      return;
+    }
     setEnviando(true);
     const res = await fetch("/api/google/gmail/send", {
       method: "POST",
@@ -894,18 +905,10 @@ export function GmailDrawer({ children }: GmailDrawerProps) {
                 </button>
               </div>
               <div className="flex-1 overflow-y-auto p-4 space-y-3">
-                <div>
-                  <Label className="text-[11px]">Para</Label>
-                  <Input
-                    type="email"
-                    value={compose.to}
-                    onChange={(e) =>
-                      setCompose({ ...compose, to: e.target.value })
-                    }
-                    placeholder="destinatario@correo.com"
-                    className="mt-1"
-                  />
-                </div>
+                <CampoDestinatario
+                  valor={compose.to}
+                  onChange={(to) => setCompose({ ...compose, to })}
+                />
                 <div>
                   <Label className="text-[11px]">Asunto</Label>
                   <Input
