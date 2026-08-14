@@ -29,6 +29,10 @@ import { RECLUTAMIENTO_EMAIL_PLANTILLAS_SEED } from "./reclutamiento-email-plant
 import { RECLUTAMIENTO_PLANTILLA_ESTADOS_SEED } from "./reclutamiento-plantilla-estados";
 import { RECLUTAMIENTO_CUESTIONARIO_DEFAULT_SEED } from "./reclutamiento-cuestionario-default";
 import {
+  RESENAS_AGENTES_IA_SEED,
+  normalizeAgenteIaNombre,
+} from "./resenas-agentes-ia";
+import {
   CATEGORIAS_PRODUCTO_SEED,
   normalizeCategoriaProductoNombre,
 } from "./categorias-producto";
@@ -687,6 +691,48 @@ export async function syncReservaEtiquetasAEmpresa(
 }
 
 /**
+ * Sincroniza los agentes IA de reseñas canónicos a una empresa concreta.
+ * Aditivo: solo crea los que falten por nombre. Si el cliente personalizó las
+ * instrucciones o el tono de un agente existente, se respeta su versión.
+ *
+ * Sin agentes la IA no redacta NADA (no encuentra quién cubra la reseña y la
+ * salta), así que esto es lo que hace que una empresa nueva conteste sola
+ * desde el primer día.
+ */
+export async function syncResenasAgentesIaAEmpresa(
+  admin: Admin,
+  empresaId: string,
+): Promise<{ creados: number }> {
+  const { data: existentes } = await admin
+    .from("resenas_agentes_ia")
+    .select("nombre")
+    .eq("empresa_id", empresaId);
+  const setExistentes = new Set(
+    (existentes ?? []).map((a) => normalizeAgenteIaNombre(a.nombre as string)),
+  );
+
+  const aCrear = RESENAS_AGENTES_IA_SEED
+    .filter((a) => !setExistentes.has(normalizeAgenteIaNombre(a.nombre)))
+    .map((a) => ({
+      empresa_id: empresaId,
+      nombre: a.nombre,
+      instrucciones: a.instrucciones,
+      tonos: a.tonos,
+      idioma: a.idioma,
+      tipo_resena: a.tipo_resena,
+      fuente: a.fuente,
+      pie_pagina: a.pie_pagina,
+      max_dia: a.max_dia,
+      activo: true,
+    }));
+
+  if (aCrear.length === 0) return { creados: 0 };
+  const { error } = await admin.from("resenas_agentes_ia").insert(aCrear);
+  if (error) throw error;
+  return { creados: aCrear.length };
+}
+
+/**
  * Sincroniza categorías + etiquetas canónicas de Sala (Reservas y Clientes)
  * a una empresa concreta. Aditivo: solo crea categorías y etiquetas (por
  * nombre dentro de su scope) que aún no existan; nunca renombra ni borra.
@@ -1077,6 +1123,7 @@ export async function seedEmpresaDefaults(
   await syncReclutamientoEmailPlantillasAEmpresa(admin, empresaId);
   await syncReclutamientoPlantillaEstadoAEmpresa(admin, empresaId);
   await syncReclutamientoCuestionarioDefaultAEmpresa(admin, empresaId);
+  await syncResenasAgentesIaAEmpresa(admin, empresaId);
 }
 
 /**
@@ -1099,6 +1146,7 @@ export async function syncSeedsToAllEmpresas(): Promise<{
     reservaEmailsCreadas: number;
     reclutamientoEmailsCreadas: number;
     reclutamientoEstadosCreadas: number;
+    resenasAgentesIaCreados: number;
   }>;
   error?: string;
 }> {
@@ -1125,7 +1173,8 @@ export async function syncSeedsToAllEmpresas(): Promise<{
       reservasConfigCreada: boolean;
       reservaEmailsCreadas: number;
       reclutamientoEmailsCreadas: number;
-    reclutamientoEstadosCreadas: number;
+      reclutamientoEstadosCreadas: number;
+      resenasAgentesIaCreados: number;
     }> = [];
 
     for (const e of empresas ?? []) {
@@ -1150,6 +1199,7 @@ export async function syncSeedsToAllEmpresas(): Promise<{
       const rclep = await syncReclutamientoEmailPlantillasAEmpresa(admin, empresaId);
       const rclpe = await syncReclutamientoPlantillaEstadoAEmpresa(admin, empresaId);
       await syncReclutamientoCuestionarioDefaultAEmpresa(admin, empresaId);
+      const agIa = await syncResenasAgentesIaAEmpresa(admin, empresaId);
       resumen.push({
         empresa: empresaNombre,
         deptosCreados: d.creados,
@@ -1166,6 +1216,7 @@ export async function syncSeedsToAllEmpresas(): Promise<{
         reservaEmailsCreadas: rep.creadas,
         reclutamientoEmailsCreadas: rclep.creadas,
         reclutamientoEstadosCreadas: rclpe.creadas,
+        resenasAgentesIaCreados: agIa.creados,
       });
     }
 

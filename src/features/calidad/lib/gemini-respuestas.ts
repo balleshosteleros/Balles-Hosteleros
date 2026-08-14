@@ -62,8 +62,17 @@ export async function generarRespuestaConAgente(
     instruccionIdioma,
     instruccionTono,
     "Personaliza la respuesta — menciona algo concreto que diga la reseña.",
-    "No inventes hechos no mencionados en la reseña.",
-    "No saludes con clichés tipo 'Estimado cliente'. Empieza con el nombre si está disponible.",
+    // Regla dura: se detectó a la IA añadiendo a una reseña sobre música alta
+    // un "y que salieras con la garganta destrozada" que el cliente NUNCA
+    // escribió. Inventar en una respuesta pública es lo más grave que puede
+    // pasar aquí, así que se prohíbe de forma explícita y con ejemplo.
+    "PROHIBIDO inventar. Solo puedes referirte a hechos escritos LITERALMENTE en la reseña. " +
+      "No añadas consecuencias, síntomas ni detalles que el cliente no haya mencionado, " +
+      "aunque parezcan deducirse de lo que dice. Si la reseña solo da una puntuación sin texto, " +
+      "agradece en general y NO supongas qué le gustó.",
+    "No saludes con clichés tipo 'Estimado cliente'. Empieza por el NOMBRE DE PILA del cliente " +
+      "(solo la primera palabra del nombre, nunca los apellidos) y continúa la frase en " +
+      "minúscula tras la coma: 'Blanca, gracias por…', nunca 'Blanca, Gracias por…'.",
     "No termines con saludos genéricos tipo 'Atentamente'. El pie de página se añade después.",
     "Sé natural y humano, no robótico.",
     "Si la reseña es negativa, reconoce el problema y ofrece resolverlo (email, teléfono, próxima visita).",
@@ -95,7 +104,11 @@ ${agente.instrucciones ? `Instrucciones adicionales del propietario:\n${agente.i
       },
       required: ["respuesta"],
     } as Parameters<typeof geminiJSON>[1]["responseSchema"],
-    temperature: 0.7,
+    // 0.7 daba demasiada libertad creativa para un texto que se publica en la
+    // ficha pública del restaurante: es lo que llevó a la IA a adornar una
+    // reseña con detalles que el cliente no había escrito. 0.4 mantiene la
+    // respuesta natural pero mucho más pegada a lo que dice la reseña.
+    temperature: 0.4,
   });
 
   let texto = result.data.respuesta.trim();

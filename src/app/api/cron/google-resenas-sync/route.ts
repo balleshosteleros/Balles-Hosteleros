@@ -93,11 +93,19 @@ export async function GET(request: Request) {
     try {
       const result = await syncResenasGoogleForEmpresa(supabase, empresaId);
 
-      // Si entraron reseñas nuevas, la IA redacta ya su borrador de respuesta
-      // para que estén listas al abrir la pantalla. Un fallo aquí no invalida
-      // la sincronización, que es lo importante.
+      // La IA redacta el borrador de toda reseña que aún no tenga uno, para
+      // que estén listas al abrir la pantalla. Un fallo aquí no invalida la
+      // sincronización, que es lo importante.
+      //
+      // OJO: esto NO se condiciona a `insertadas > 0`. Antes sí, y el efecto
+      // era que una reseña que entrara mientras no había ningún agente IA
+      // creado se quedaba sin borrador PARA SIEMPRE: al día siguiente ya no
+      // contaba como nueva y nadie volvía a mirarla. Así fue como BACANAL y
+      // HABANA acumularon 22 reseñas sin contestar. La pasada es barata
+      // cuando no hay nada pendiente: `generarBorradoresPendientesForEmpresa`
+      // consulta las que faltan y sale sin gastar IA si no hay ninguna.
       let borradores = { generados: 0, saltados: 0 };
-      if (result.ok && result.insertadas > 0) {
+      if (result.ok) {
         try {
           const r = await generarBorradoresPendientesForEmpresa(
             supabase,
