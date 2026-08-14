@@ -15,6 +15,7 @@ import { hoyEnZona } from "@/features/empresa/lib/zona-horaria";
 import {
   enviarSolicitudNominasGestoria,
   mesSolicitado,
+  correoGestoriaEmpresa,
 } from "@/features/rrhh/services/nominas/nominas-gestoria";
 
 export interface NominasGestoriaConfig {
@@ -132,5 +133,23 @@ export async function enviarNominasGestoriaAhora(
   } catch (err) {
     console.error("[nominas-gestoria] enviarAhora:", err);
     return { ok: false, error: err instanceof Error ? err.message : "Error" };
+  }
+}
+
+/**
+ * Correo de la gestoría tal y como lo verá el envío: sale de Ajustes →
+ * Configuración (`datos_generales.correoGestoria`), no de este panel. Se expone
+ * para poder MOSTRARLO y avisar a quién va a ir el correo antes de enviarlo.
+ */
+export async function getCorreoGestoria(): Promise<string | null> {
+  try {
+    const { empresaId } = await getAppContext();
+    if (!empresaId) return null;
+    const admin = createAdminClient();
+    const { to } = await correoGestoriaEmpresa(admin, empresaId);
+    return to;
+  } catch (err) {
+    console.error("[nominas-gestoria] getCorreoGestoria:", err);
+    return null;
   }
 }

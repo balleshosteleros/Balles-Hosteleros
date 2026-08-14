@@ -11,8 +11,10 @@ import {
   getNominasGestoriaConfig,
   setNominasGestoriaConfig,
   enviarNominasGestoriaAhora,
+  getCorreoGestoria,
   type NominasGestoriaConfig,
 } from "@/features/rrhh/actions/nominas-gestoria-config-actions";
+import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 
 // Ajustes del envío automático de nóminas a la gestoría (general de empresa).
 // La gestoría recibe un correo el día configurado con un enlace para subir las
@@ -50,9 +52,14 @@ export function NominasGestoriaConfigPanel() {
   const [enviando, setEnviando] = useState(false);
   // Mes a reclamar con «Enviar ahora». Por defecto, el último ya cerrado.
   const [mesEnvio, setMesEnvio] = useState(MESES_ELEGIBLES[0]);
+  // Correo REAL al que irá el envío (Ajustes → Configuración), para poder
+  // enseñarlo y confirmarlo antes de mandar nada.
+  const [correoGestoria, setCorreoGestoria] = useState<string | null>(null);
+  const { confirm, dialog: confirmDialog } = useConfirmDelete();
 
   useEffect(() => {
     getNominasGestoriaConfig().then(setCfg);
+    getCorreoGestoria().then(setCorreoGestoria);
   }, []);
 
   if (!cfg) {
@@ -75,6 +82,20 @@ export function NominasGestoriaConfigPanel() {
   };
 
   const enviarAhora = async () => {
+    // CONFIRMACIÓN: esto manda un correo REAL a la gestoría. Sin este paso, un
+    // clic sin querer les llega igual y no hay forma de recuperar el correo.
+    if (!correoGestoria) {
+      toast.error("No hay correo de gestoría configurado en Ajustes → Configuración.");
+      return;
+    }
+    const ok = await confirm({
+      title: `Enviar a la gestoría las nóminas de ${etiquetaMes(mesEnvio)}`,
+      description:
+        `Se enviará un correo a ${correoGestoria} con un enlace para subir las nóminas de ` +
+        `${etiquetaMes(mesEnvio)}. El enlace caduca en 3 días. ¿Continuar?`,
+      confirmLabel: "Enviar correo",
+    });
+    if (!ok) return;
     setEnviando(true);
     // El correo NO se comprueba aquí: vive en Ajustes → Configuración, no en este
     // panel, así que mirar `cfg.email` bloqueaba el envío aunque estuviera puesto.
@@ -112,25 +133,20 @@ export function NominasGestoriaConfigPanel() {
 
       {cfg.activo && (
         <>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="space-y-1.5">
-              <Label className="text-sm">Correo de la gestoría</Label>
-              <Input
-                type="email"
-                value={cfg.email}
-                onChange={(e) => set("email", e.target.value)}
-                placeholder="gestoria@ejemplo.com"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-sm">Copia a (opcional)</Label>
-              <Input
-                type="email"
-                value={cfg.emailCc}
-                onChange={(e) => set("emailCc", e.target.value)}
-                placeholder="copia@ejemplo.com"
-              />
-            </div>
+          {/* El correo NO se edita aquí: vive en Ajustes → Configuración, que es
+              la fuente única (lo usan también los modelos fiscales y el alta de
+              personal). Tener un campo propio aquí duplicaba el dato y, al estar
+              vacío, hacía creer que no había correo configurado. */}
+          <div className="rounded-lg border bg-muted/20 p-3">
+            <Label className="text-sm">Correo de la gestoría</Label>
+            <p className="mt-1 text-sm font-medium">
+              {correoGestoria ?? (
+                <span className="text-destructive">Sin configurar</span>
+              )}
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Se toma de Ajustes → Configuración. Cámbialo allí si hace falta.
+            </p>
           </div>
 
           <div className="space-y-1.5 rounded-lg border bg-muted/20 p-3">
@@ -212,6 +228,7 @@ export function NominasGestoriaConfigPanel() {
           )}
         </Button>
       </div>
+      {confirmDialog}
     </div>
   );
 }
