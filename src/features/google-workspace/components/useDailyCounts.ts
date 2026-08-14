@@ -107,9 +107,12 @@ export interface DailyCounts {
 }
 
 const REFRESH_MS = 60 * 1000; // 1 minuto
-// La 1ª carga se difiere ~2 s para no competir con el arranque crítico (permisos
-// del menú, contexto de empresa) — los badges de contadores no son urgentes.
-const INITIAL_DELAY_MS = 2000;
+// La 1ª carga se difiere un poco para no competir con el arranque crítico
+// (permisos del menú, contexto de empresa). Eran 2 s, pero ese retardo se
+// SUMABA a lo que tardaban las consultas, y los badges aparecían varios
+// segundos después de la pantalla. Con el conteo de correo ya barato, 400 ms
+// bastan para ceder el arranque sin que se note la espera.
+const INITIAL_DELAY_MS = 400;
 // Reevaluación LOCAL de qué eventos siguen vigentes (sin tocar la red).
 const TICK_VIGENCIA_MS = 15 * 1000;
 
@@ -228,6 +231,19 @@ export function useDailyCounts(): DailyCounts {
       return;
     }
 
+    // Los contadores que NO dependen de Google (tareas, chat, llamadas,
+    // agenda) ya están resueltos: se pintan YA. Antes había un único
+    // `setCounts` al final, así que estos esperaban a Gmail y Calendar y todos
+    // los iconos aparecían tarde a la vez, aunque su dato estuviera listo.
+    // Los de Google se completan abajo en cuanto respondan.
+    setCounts((prev) => ({
+      ...prev,
+      tasks,
+      chatGroups,
+      missedCalls,
+      newContacts,
+    }));
+
     try {
       const ref = ymdEnZona(new Date(), tzEmpresa);
       // El badge debe contar SOLO los calendarios que el usuario tiene
@@ -263,14 +279,12 @@ export function useDailyCounts(): DailyCounts {
         calendarIds: seleccionados.join(","),
       });
       const [emailRes, calRes] = await Promise.allSettled([
-        // Cargamos el inbox completo (no solo is:unread) y contamos las
-        // CONVERSACIONES no leídas, igual que la bandeja del drawer. El
-        // endpoint agrupa por hilo, así que contar mensajes con q=is:unread
-        // daba un número distinto al que se ve en la bandeja (p. ej. 2 hilos
-        // con 3 mensajes no leídos → badge 3 vs bandeja 2).
-        fetch(
-          "/api/google/gmail/messages?carpeta=inbox&maxResults=50",
-        ).then((r) => r.json()),
+        // Cuenta las CONVERSACIONES sin leer con UNA sola llamada. Antes esto
+        // pedía la bandeja entera (`/gmail/messages`), que trae el detalle de
+        // cada hilo: ~51 peticiones a Google para obtener un número. Tardaba
+        // segundos y, como el `setCounts` es único al final, el retraso se
+        // llevaba por delante a los demás iconos.
+        fetch("/api/google/gmail/unread-count").then((r) => r.json()),
         fetch(`/api/google/calendar/events?${calParams}`).then((r) =>
           r.json()
         ),
@@ -278,9 +292,7 @@ export function useDailyCounts(): DailyCounts {
 
       let emails = 0;
       if (emailRes.status === "fulfilled") {
-        const mensajes: Array<{ leido?: boolean }> =
-          emailRes.value?.mensajes ?? [];
-        emails = mensajes.filter((m) => m.leido === false).length;
+        emails = emailRes.value?.unread ?? 0;
       }
 
       // Guardamos los eventos CANDIDATOS del día (ya sin all-day ni declinados,
