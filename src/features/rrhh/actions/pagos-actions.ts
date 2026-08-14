@@ -53,7 +53,12 @@ export async function listEmpleadosParaPagos(): Promise<{ ok: boolean; data: Emp
 
     const { data, error } = await supabase
       .from("empleados")
-      .select("id, nombre, apellidos, puesto, estado, user_id, empresa_id, dni_nie, departamentos(nombre, area)")
+      // El puesto REAL vive en `empleado_puestos` (M:N, uno principal).
+      // `empleados.puesto` es texto legacy: está vacío en varias fichas y puede
+      // estar desfasado, así que solo se usa de respaldo.
+      .select(
+        "id, nombre, apellidos, puesto, estado, user_id, empresa_id, dni_nie, departamentos(nombre, area), empleado_puestos(es_principal, puestos(nombre))",
+      )
       .or(filtro)
       .eq("estado", "Activo")
       .order("nombre", { ascending: true });
@@ -88,7 +93,24 @@ export async function listEmpleadosParaPagos(): Promise<{ ok: boolean; data: Emp
         | Array<{ nombre?: string | null; area?: string | null }>
         | null;
       const deptoObj = Array.isArray(deptoRel) ? deptoRel[0] : deptoRel;
-      const puesto = (e.puesto as string | null) ?? null;
+
+      // UN solo puesto por empleado: el principal de `empleado_puestos`. Si no
+      // hubiera principal marcado se coge el primero, y como último recurso el
+      // texto legacy de la ficha.
+      const vinculos = (e.empleado_puestos ?? []) as Array<{
+        es_principal?: boolean | null;
+        puestos?: { nombre?: string | null } | Array<{ nombre?: string | null }> | null;
+      }>;
+      const nombreDeVinculo = (v: (typeof vinculos)[number]): string | null => {
+        const rel = v.puestos;
+        const obj = Array.isArray(rel) ? rel[0] : rel;
+        return obj?.nombre?.trim() || null;
+      };
+      const principal = vinculos.find((v) => v.es_principal);
+      const puesto =
+        (principal ? nombreDeVinculo(principal) : null) ??
+        vinculos.map(nombreDeVinculo).find((n) => n) ??
+        ((e.puesto as string | null)?.trim() || null);
       const area: EmpleadoArea =
         deptoObj?.area === "OPERATIVA" ? "operativa" : "administrativa";
       return {
