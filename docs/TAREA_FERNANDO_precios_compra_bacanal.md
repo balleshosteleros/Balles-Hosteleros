@@ -1,7 +1,293 @@
 # TAREA para Fernando — Precios de compra de BACANAL (cuando bajes el repo)
 
-> **De:** Iván (vía Claude) · **Fecha:** 2026-06-30 · **Actualizado:** 2026-08-06 · **Prioridad:** media
+> **De:** Iván (vía Claude) · **Fecha:** 2026-06-30 · **Actualizado:** 2026-08-14 · **Prioridad:** media
 > Léelo al hacer `git pull` y reconciliar.
+
+---
+
+## ✅ RESPUESTA DE IVÁN (14-ago) — tus 5 preguntas, contestadas + lo que falta por revisar
+
+Fernando: de vuelta. Van las cinco respuestas, y después una lectura de conjunto que me
+importa más que las cinco juntas. Todo lo que afirmo aquí está verificado contra la BD de
+producción hoy, no es impresión mía.
+
+### 1. El stock del lote de 10 albaranes → **(a) DEJARLO SUMADO**
+
+No lo revertimos. Revertir no nos deja mejor: nos deja igual de lejos de la realidad y
+encima perdemos la única entrada de mercancía real que hay registrada. Lo cuadramos con un
+inventario de regularización, que es para lo que existe.
+
+**Pero ojo con el motivo, que me lo aclaró mi agente y cambia el cuadro:** yo daba por hecho
+que esa mercancía ya habría salido por las ventas. **No ha salido.** El descuento por ventas
+está apagado en las dos empresas (`empresas.stock_descuento_desde = NULL` en BACANAL y en
+HABANA) y en `stock_movimientos` **no hay una sola salida**: los 63 movimientos que existen
+son todos de tipo `entrada` por albarán. Así que ese stock está inflado tal cual quedó el
+7-ago, y el inventario de regularización no es opcional: es obligatorio.
+
+### 2. El piloto → **NO se da por bueno. Y no es por falta de albaranes.**
+
+Sigo en el mismo sitio que el 7-ago, pero ahora con un motivo concreto en vez de una
+sensación. **El circuito de stock hoy solo suma.** De las cuatro cosas que deberían moverlo,
+funciona una:
+
+| Lo que debería mover el stock | Estado real en BD (14-ago) |
+|---|---|
+| Compras (albaranes) | ✅ Funciona — 63 movimientos de entrada |
+| Ventas | ❌ Apagado — `stock_descuento_desde` a NULL en las dos empresas |
+| Mermas | ❌ **0 movimientos y 0 mermas registradas**, aunque `mermas-actions.ts` llame al kardex |
+| Inventarios | ❌ **0 inventarios creados.** Sin configurar |
+
+Subir más albaranes no valida eso: validaría otra vez la mitad de arriba de un circuito que
+no tiene mitad de abajo. Por eso el piloto no queda cumplido — y no es cuestión de volumen.
+
+**Tres cosas concretas que me he encontrado y que hay que resolver antes:**
+
+**a) Mis 8 albaranes del móvil no se ven en el escritorio — están atascados en Revisión.**
+No se perdieron: subieron bien el 13-ago entre las 08:10 y las 08:31, todos a BACANAL, con
+**79 líneas leídas por el OCR**. Son ALB-2026-057 (17 líneas), 058 (2), 059 (23), 060 (5),
+061 (6), **ALB-2023-062** (5), 063 (20) y 064 (1). Los ocho en estado **Revisión**, ninguno
+confirmado, ninguno ha sumado stock. Desde el ordenador no los veo en ningún sitio: o la
+lista no muestra los de Revisión, o me lo tapa el selector de empresa. Necesito que lo que
+sube por el móvil aparezca en el escritorio sin buscarlo.
+
+**b) Bug de numeración: `ALB-2023-062`.** Año 2023 en mitad de la serie 2026, entre el 061 y
+el 063. El contador está cogiendo el año de donde no debe — probablemente de una fecha mal
+leída del papel. Hay que fijar que la serie mande sobre lo que diga el OCR.
+
+**c) No hay dónde ver la rotación de un producto.** Existe `MovimientosStockSection` dentro
+de la ficha, pero no hay ninguna pantalla de movimientos del almacén: qué ha entrado, qué ha
+salido, por qué y cuándo. Quiero poder abrir un producto y ver su vida — subió por este
+albarán, bajó por estas ventas, bajó por esta merma, se ajustó en este inventario — y
+también una vista general de todo el almacén. Hoy no existe, y aunque existiera estaría
+vacía, porque nada ha bajado nunca.
+
+### 3. Los duplicados del catálogo → **fusionadlos vosotros con el criterio automático**
+
+No voy a repasar 213 parejas a mano. Adelante con el criterio que propones: gana la ficha con
+más referencias (precios, recetas, movimientos) y la otra se desactiva. **Nada se borra**, así
+que si algún caso sale torcido se vuelve atrás. Dejadme al final la lista de los que hayan
+quedado dudosos y esos sí los miro yo.
+
+### 4. Las 4 dudas del lote del 30-jul → **por la mesa de incidencias, no por este documento**
+
+No las contesto una a una a propósito, y es la misma respuesta que te di el 5-ago: si las
+contesto, dentro de dos semanas tenemos cuatro nuevas. Para eso construimos el PRP-074, que
+ya está en producción. Las cuatro caen dentro de los tipos que la mesa ya contempla —
+la página que falta es `documento_incompleto`, los tres recargos son `linea_de_servicio`
+(producto de compra con control de stock desactivado), y el nombre borroso es
+`producto_ambiguo` con su propuesta y su porcentaje. **Pasadlas por la mesa.** Si alguna no
+encaja en ninguno de los 12 tipos, entonces sí: avísame, porque eso significa que falta un
+tipo y es cambio de código consciente.
+
+### 5. El cargador del Excel de MAKRO → **olvidadlo y retiradlo**
+
+Fuera. Los productos y los precios ya entran solos con las fotos de los albaranes, así que no
+aporta nada — y mientras siga ahí es una pistola cargada: el día que alguien lo ejecute sin
+saberlo nos borra el catálogo de logística con sus stocks máximos, sus alias y su histórico
+de precios. Quitadlo del repo.
+
+---
+
+### ⚠️ La lectura de conjunto: esto NO está cerca de estar terminado
+
+Lo digo claro para que no se dé por hecho lo contrario en ningún sitio. Que los 10 albaranes
+del piloto salieran bien está muy bien, pero **la logística no está lista ni de lejos**:
+
+- **Los albaranes no se están reflejando correctamente todavía** — los ocho míos son la
+  prueba: subidos, leídos, y sin llegar a ninguna parte ni verse desde el escritorio.
+- **Los inventarios están sin configurar.** Cero inventarios creados en la BD. Y son
+  justamente la pieza con la que pensábamos cuadrar el stock inflado del punto 1: sin ellos,
+  esa vía no existe.
+- **Las mermas no restan.** Cero registradas, cero movimientos.
+- **Las ventas no restan.** Apagadas, y bloqueadas hasta que estén cargadas las recetas
+  reales de platos (hoy 203 recetas y todas de bebidas 1:1, ninguna de plato).
+- **Hay 670 productos de compra y solo 352 filas de stock.** Ni siquiera todos los productos
+  tienen ficha de stock.
+
+Mi prioridad, por orden: **(1)** que los albaranes del móvil se vean y se puedan cerrar desde
+el escritorio; **(2)** inventarios funcionando, para poder cuadrar; **(3)** mermas restando;
+**(4)** la pantalla de movimientos por producto; **(5)** recetas de platos, y con ellas
+encender el descuento por ventas. Hasta que esos cinco estén, el stock que enseña el sistema
+no es un dato en el que nadie pueda apoyarse.
+
+---
+
+### 📌 Y ahora las tuyas: tu deuda pendiente, que llevas arrastrando
+
+De tu propia lista de "LO QUE SIGUE ABIERTO", contéstame o cierra estas cuatro:
+
+1. **F6 y F7 del PRP-073.** F6 es la Edge Function no versionada de la recepción por pedido —
+   la que descubrimos que llevaba **rota en silencio** sin que saltara nada. Toca la recepción
+   que uso a diario, así que dime cuándo la tocas y lo acordamos. Esto es prioritario: es
+   exactamente el tipo de fallo invisible que me impide fiarme del circuito.
+2. **Los formatos de compra sin equivalencias: 115 de 153 (el 75%) están a NULL.** El matcher
+   exige que no sean nulos, así que esos formatos son invisibles para el emparejado por
+   nombre. El intérprete nuevo lo tapa deduciendo del texto, pero no quiero depender de una
+   deducción: hay que rellenarlos. Dime si lo haces tú o te ayudo a montarlo.
+3. **La tabla `albaranes_lineas` está muerta** — existe en el esquema y no la usa ningún
+   fichero de `src/` (todo va por el jsonb `albaranes.lineas`). Decide: se borra o se
+   documenta como legacy. Que no se quede en tierra de nadie.
+4. **¿Te pisé algo?** Confírmame de una vez que no tenías trabajo local en
+   `ResolverLineaDialog` / `AsistenteAlbaranPanel` cuando entré el 5-ago. Sigue sin
+   respuesta y quiero cerrarlo.
+
+Con esto quedan las cinco tuyas contestadas y las cuatro mías en tu tejado. Cuando cierres
+las de arriba, hablamos de piloto.
+
+---
+
+## 🔬 HALLAZGOS NUEVOS DEL 14-AGO — cuatro cosas que hemos destapado hoy
+
+Fernando: revisando lo de arriba con mi agente han salido cuatro cosas que no estaban en
+ningún sitio. Dos son bugs de fondo, una desmonta un dossier tuyo y otra explica por qué el
+stock nunca baja. Todo verificado contra la BD de producción, con las consultas hechas hoy.
+
+### A) 🔴 El OCR TIRA a la basura el destinatario del albarán — por eso mis 8 acabaron en Bacanal
+
+Esta es la gorda, y explica el bug de la empresa equivocada que dabas por cerrado el 7-ago.
+
+En el prompt de `ocr-albaran.ts` hay una instrucción explícita de quedarse **solo con los
+datos fiscales del EMISOR** y descartar los del destinatario ("*del destinatario/cliente, que
+es el restaurante*" — y a continuación solo se piden `cifNifEmisor`, razón social y dirección
+del proveedor). O sea: **el nombre y el CIF de MI restaurante están impresos en el papel, el
+sistema los ve, y los tira a propósito.**
+
+Consecuencia: la empresa del albarán la decide **únicamente el selector de arriba**. Si está
+en BACANAL, entra en BACANAL aunque el papel diga HABANA con todas sus letras. Ninguno de mis
+8 albaranes del 13-ago pudo avisarme, porque el único dato con el que comprobarlo se había
+descartado en el paso anterior.
+
+**Lo que quiero (y creo que es el 13.º tipo de incidencia del PRP-074, de los que bloquean):**
+
+1. Que el OCR extraiga **también** CIF, razón social y dirección del **destinatario**. Es un
+   cambio pequeño: la IA ya está leyendo ese texto, solo se le dice que lo devuelva.
+2. Que al terminar de leer se **cruce ese CIF con la empresa activa**.
+3. Que si no cuadran salte el aviso **en el momento, antes de guardar**, con la salida
+   resuelta: *"Este albarán parece de HABANA y estás subiendo a BACANAL — [Cambiar a Habana y
+   continuar] · [Seguir en Bacanal] · [Cancelar]"*. Que se pueda cambiar de empresa ahí mismo
+   sin salir ni perder la foto.
+4. Si el CIF del papel **coincide con otra empresa mía**, eso no es sospecha: es certeza.
+   Bloquear hasta confirmación expresa.
+5. Si el papel no trae destinatario legible, avisar igual: *"no he podido comprobar a qué
+   empresa va dirigido, verifica que BACANAL es correcto"*.
+
+### B) 🔴 El dossier de duplicados está MAL: no son 213 grupos, son 8
+
+**Ojo antes de fusionar nada, porque esto habría sido un destrozo.** El dossier
+`DUPLICADOS_CATALOGO_DOSSIER_2026-08-07.md` agrupa por nombre **sin mirar el `tipo`**, y en
+este modelo cada artículo existe legítimamente DOS veces: una ficha `compra` y una ficha
+`venta`. Absolut compra (Alcoholes) + Absolut venta (Vodkas). Cocacola compra + Cocacola
+venta. Eso no es un duplicado: **es el diseño**, y lo que las une es justamente la receta 1:1
+de `producto_composicion` — fíjate en que en el dossier las dos filas de cada pareja tienen
+`Recetas: 1`.
+
+Si llegamos a fusionar los 213 grupos con el criterio automático, **nos cargamos ~200 fichas
+legítimas y rompemos las recetas que hacen que una venta descuente su producto de compra**.
+Justo lo contrario de lo que queremos.
+
+Duplicados REALES (mismo `tipo`, misma empresa, nombre equivalente): **BACANAL 6 grupos (12
+fichas) · HABANA 2 grupos (4 fichas)**. Ocho. Y el origen no es "una siembra que corrió dos
+veces":
+
+| Ficha | Alta | Precios | Movs | Alias |
+|---|---|---|---|---|
+| "Cebolla **R**oja" | 10-jun (siembra) | 1 | 0 | 0 |
+| "Cebolla **r**oja" | 30-jul (albarán) | 2 | 1 | 1 |
+
+**El emparejador no reconoció "Cebolla roja" como la "Cebolla Roja" que ya existía porque
+cambia una mayúscula, y creó ficha nueva.** Es tu mismo hallazgo nº8 del piloto ("Mix goma
+pica"/"Mix Goma Pica", los dos "Alhambra", los "Delizia"). O sea: **los duplicados los está
+generando el propio flujo de albaranes, y seguirán apareciendo con cada tanda que subamos**
+mientras el matcher distinga mayúsculas.
+
+**Acciones:** corregir el dossier (hoy induce a una decisión destructiva), fusionar solo los
+8 reales (gana la ficha con más referencias, la otra se DESACTIVA, nada se borra) y arreglar
+la causa → punto C.
+
+### C) El emparejado tiene que tolerar mucho más que una letra
+
+No basta con ignorar mayúsculas. El proveedor escribe "CEBOLLA ROJA NAC. 5KG CAT.I" y
+nosotros tenemos "Cebolla roja": cambian mayúsculas, acentos, palabras de más, el orden, y a
+veces hay erratas del propio proveedor. El matcher debe aguantar todo eso.
+
+Y la regla de UX que quiero, que hoy no se cumple: **nunca ofrecer "crear producto" a secas.**
+Primero *"¿es alguno de estos?"* con los candidatos ordenados por parecido **y el porqué de
+cada uno**; crear solo si de verdad no está.
+
+**El alta desde el albarán debe ser EXACTAMENTE la misma que desde Productos** — mismo
+formulario y mismas obligaciones. Lo único distinto es que se abre desde el albarán y llega
+medio relleno para ir más rápido.
+
+Lo que el albarán ya sabe y debe venir puesto: **nombre del proveedor y referencia del
+proveedor tal y como se leyeron del papel** (esto es explícito: no volver a pedirlos), precio
+unitario de la línea, formato/medida, IVA de la línea, tipo `compra` y empresa activa.
+
+Lo que hay que **obligar** a rellenar porque el papel no lo trae: **categoría** (se puede
+proponer por proveedor y por productos parecidos, pero la elige la persona) y **nombre de
+catálogo** editable (queremos "Cebolla roja", no "CEBOLLA ROJA NAC. 5KG CAT.I").
+
+**Y el formato/equivalencia: obligatorio cuando la línea traiga formato de caja.** Es
+exactamente lo que reventó con las "2 CAJ" de vino que sumaron 2 botellas en vez de 12, y hoy
+tenemos 115 de 153 formatos a NULL. Si al crear no se confirma qué trae el envase, el
+producto nace con el stock roto desde el primer día. Cuando la línea venga en kg o ud sueltas
+no hay nada que preguntar y no debe molestar.
+
+### D) Por qué el stock no baja NUNCA (y por qué las recetas son el cuello de botella real)
+
+Yo insistía en que el stock no podía estar inflado porque esa mercancía se ha vendido. Y la
+lógica era correcta — **las ventas SÍ están entrando**:
+
+| Empresa | Tickets | Desde | Hasta |
+|---|---|---|---|
+| HABANA | **1.698** | 17-jun | 13-ago |
+| BACANAL | **527** | 17-jun | 2-ago |
+
+Lo que pasa es que en `agora-sync/route.ts` la función `descontarDiaSiCorte` hace
+`if (!corte || businessDay < corte) return` **y sale sin descontar, en silencio**. Con
+`stock_descuento_desde` a NULL en las dos empresas, el cron guarda 2.225 tickets y se salta
+el descuento todos los días sin que salte nada. No falla: pasa de largo.
+
+Y está apagado con razón: **no hay recetas de platos** (203 recetas cargadas y TODAS de
+bebidas 1:1, ninguna de plato). Si lo encendiéramos hoy, las bebidas restarían bien y toda la
+cocina —lo que compramos a Dither y al Encinar— seguiría sin bajar jamás, pero con la
+apariencia de que el sistema ya funciona. Peor que ahora.
+
+**Conclusión: las recetas de platos son el cuello de botella de TODA la logística.** Hasta
+que estén cargadas, el stock solo puede subir, y da igual cuántos albaranes subamos.
+
+---
+
+## 📋 LO QUE QUEDA POR HACER — nada de esto está ejecutado todavía
+
+Lo dejo listado para que no se pierda ninguno. Los dos primeros están bloqueados esperando
+una respuesta mía que aún no he dado:
+
+1. ⏸️ **Mover mis 8 albaranes del 13-ago de BACANAL a HABANA.** El traslado es limpio (0
+   movimientos de stock, 0 pedidos, 0 facturas, los 8 en Revisión), pero arrastra tres cosas
+   que hay que arreglar en el camino: **19 de las 79 líneas ya están vinculadas a productos de
+   BACANAL** (hay que desvincularlas para que se emparejen contra el catálogo de Habana), el
+   ALB-2023-062 tiene enganchado el **proveedor Krittikali de BACANAL** (repuntar al de
+   Habana) y hay **117 incidencias** calculadas contra el catálogo de Bacanal (borrar y
+   recalcular). **Bloqueado por:** DISBESA solo existe como proveedor en BACANAL, no en
+   HABANA — o ese albarán sí era de Bacanal, o hay que dar de alta Disbesa en Habana. Lo
+   confirmo yo.
+2. ⏸️ **Fusionar los 8 duplicados reales** y corregir el dossier.
+3. ⏳ **El aviso de empresa equivocada** (hallazgo A). **Esto primero de todo**: mientras no
+   exista, me vuelve a pasar con la próxima tanda que suba.
+4. ⏳ **Matcher tolerante + alta de producto desde el albarán** (hallazgo C).
+5. ⏳ **Bug de numeración `ALB-2023-062`** — año 2023 en mitad de la serie 2026, entre el 061
+   y el 063. El contador está cogiendo el año de una fecha mal leída del papel (el albarán de
+   Krittikali trae fecha 2023-07-20). La serie debe mandar sobre lo que diga el OCR.
+6. ⏳ **Pantalla de movimientos de stock.** Existe `MovimientosStockSection` en la ficha del
+   producto, pero no hay vista de almacén: qué entró, qué salió, por qué y cuándo. Quiero
+   poder abrir un producto y ver su vida entera, y también el conjunto.
+7. ⏳ **Inventarios** — 0 creados en la BD. Son la pieza con la que íbamos a cuadrar el stock
+   del lote del punto 1: sin ellos esa vía no existe.
+8. ⏳ **Mermas** — 0 registradas, 0 movimientos, aunque `mermas-actions.ts` llame al kardex.
+9. ⏳ **Recetas de platos** y, con ellas, encender `stock_descuento_desde` (hallazgo D).
+
+Un dato más para dimensionar: **670 productos de compra y solo 352 filas de `stock`**. Ni
+siquiera todos los productos tienen ficha de almacén.
 
 ---
 
