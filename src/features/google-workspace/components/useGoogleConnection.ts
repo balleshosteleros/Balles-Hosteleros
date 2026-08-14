@@ -82,31 +82,18 @@ export function useGoogleConnection() {
       .catch(() => {});
   }, [refresh]);
 
-  const connect = useCallback(async () => {
-    const { createClient } = await import("@/lib/supabase/client");
-    const supabase = createClient();
-    await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: {
-        redirectTo: `${window.location.origin}/callback?next=${window.location.pathname}`,
-        scopes: [
-          "email",
-          "profile",
-          "https://www.googleapis.com/auth/gmail.send",
-          "https://www.googleapis.com/auth/gmail.readonly",
-          "https://www.googleapis.com/auth/gmail.modify",
-          "https://www.googleapis.com/auth/gmail.settings.basic",
-          "https://www.googleapis.com/auth/calendar.readonly",
-          "https://www.googleapis.com/auth/calendar.events",
-          "https://www.googleapis.com/auth/contacts.readonly",
-          "https://www.googleapis.com/auth/contacts.other.readonly",
-        ].join(" "),
-        queryParams: {
-          access_type: "offline",
-          prompt: "consent",
-        },
-      },
-    });
+  /**
+   * Vincula una cuenta de Google para correo y calendario.
+   *
+   * Delega en `/api/google/connect`, que va DIRECTO a Google sin pasar por
+   * Supabase Auth. Antes esto llamaba a `signInWithOAuth`, o sea intentaba
+   * INICIAR SESIÓN en el software con el correo que solo se quería vincular:
+   * si ese correo no era un usuario invitado, salía el aviso de «no tienes
+   * acceso» y la vinculación no llegaba a hacerse.
+   */
+  const connect = useCallback(() => {
+    const next = encodeURIComponent(window.location.pathname);
+    window.location.href = `/api/google/connect?next=${next}`;
   }, []);
 
   const disconnect = useCallback(

@@ -22,7 +22,7 @@ export type UpdateSessionResult = {
 // sesión. Si no fuera pública, el proxy la mandaría al login antes de ejecutarse y
 // nunca llegaría a borrar las cookies (que son HttpOnly: solo el servidor puede).
 const AUTH_PATHS = ['/', '/salir', '/callback', '/auth/confirm', '/forgot-password', '/update-password', '/check-email', '/acceso-demo']
-const PUBLIC_PREFIXES = ['/carta', '/__site', '/api/google/connect', '/empleo', '/api/empleo', '/documentacion', '/api/documentacion', '/firmar', '/inspectores', '/inspecciones/verificar', '/v', '/r', '/api/visita',
+const PUBLIC_PREFIXES = ['/carta', '/__site', '/api/google/connect', '/api/google/vincular-callback', '/empleo', '/api/empleo', '/documentacion', '/api/documentacion', '/firmar', '/inspectores', '/inspecciones/verificar', '/v', '/r', '/api/visita',
   // Redirección de códigos QR: la abre un cliente anónimo con el móvil desde una
   // carta impresa. Si exigiera login, el QR mandaría al cliente a la pantalla de
   // acceso del sistema en vez de a la carta.

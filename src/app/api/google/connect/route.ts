@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 
 const SCOPES = [
+  "openid",
   "email",
   "profile",
   // Scopes granulares de Gmail (SENSIBLE, no RESTRICTED). Evitamos
@@ -17,9 +18,8 @@ const SCOPES = [
   "https://www.googleapis.com/auth/contacts.other.readonly",
 ].join(" ");
 
-// Cookies temporales para sostener la identidad del software durante el
-// rebote a Google. Vida corta: si el usuario tarda más de 10 minutos en
-// volver, se invalidan solas y el callback ya no las restaura.
+// Vida corta: si el usuario tarda más de 10 minutos en volver de Google, se
+// invalidan solas y el callback rechaza la vuelta.
 const TEMP_OPTS = {
   httpOnly: true,
   secure: process.env.NODE_ENV === "production",
@@ -29,15 +29,19 @@ const TEMP_OPTS = {
 };
 
 /**
- * Inicia el flujo OAuth con Google a través de Supabase, pidiendo los
- * scopes de Gmail y Calendar.
+ * Inicia la VINCULACIÓN de una cuenta de Google para correo y calendario.
  *
- * IMPORTANTE: la sesión de Supabase del usuario del software y la cuenta
- * de Google son cosas distintas. Antes de redirigir guardamos la sesión
- * actual en cookies temporales (`sb_pending_*`) para que el callback
- * pueda restaurarla tras intercambiar el code. Si no hacemos esto,
- * Supabase nos loguea como el correo Google que acabamos de añadir y se
- * pierde el usuario original.
+ * Va DIRECTO a Google, sin pasar por Supabase Auth. Vincular un buzón no es
+ * iniciar sesión: la cuenta de Google no tiene por qué ser un usuario del
+ * software. Antes esto usaba `supabase.auth.signInWithOAuth`, y Supabase
+ * intentaba dar de alta como usuario el correo que se quería vincular; con
+ * cualquier correo no invitado, el trigger `handle_new_user` abortaba el alta
+ * y la vinculación terminaba en «no tienes acceso». Con las cuentas que sí
+ * eran usuarios (p. ej. la de Bacanal) funcionaba, y de ahí que fallara solo
+ * con unas sí y otras no.
+ *
+ * La sesión del software ni se toca: sigues siendo tú, y la cuenta vinculada
+ * se guarda en el roster de `google_cuentas_usuario`.
  */
 export async function GET(request: Request) {
   const url = new URL(request.url);
@@ -45,54 +49,51 @@ export async function GET(request: Request) {
   const switchAccount = url.searchParams.get("switch") === "1";
   const nextPath = url.searchParams.get("next") || "/";
 
+  // Vincular es una acción del usuario que ya está dentro. Sin sesión no hay
+  // a quién asociar la cuenta, así que al login.
   const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    return NextResponse.redirect(`${origin}/?auth=1`);
+  }
 
-  // Foto de la sesión actual antes de tocar nada.
-  const { data: sessionData } = await supabase.auth.getSession();
-  const currentSession = sessionData.session;
-
-  const { data, error } = await supabase.auth.signInWithOAuth({
-    provider: "google",
-    options: {
-      // URL simple, sin query params encadenados — Supabase es estricto con esto
-      redirectTo: `${origin}/callback`,
-      scopes: SCOPES,
-      queryParams: {
-        access_type: "offline",
-        // Si el usuario quiere cambiar de cuenta, fuerza el selector de cuentas
-        prompt: switchAccount ? "select_account consent" : "consent",
-      },
-    },
-  });
-
-  if (error || !data?.url) {
-    console.error("[google/connect] error:", error);
+  const clientId = process.env.GOOGLE_CLIENT_ID;
+  if (!clientId) {
+    console.error("[google/connect] falta GOOGLE_CLIENT_ID");
     return NextResponse.json(
       {
-        error: "no_oauth_url",
+        error: "sin_credenciales",
         message:
-          error?.message ??
-          "Supabase no devolvió una URL de OAuth. Revisa la configuración de Google en Supabase Auth.",
+          "Falta GOOGLE_CLIENT_ID en el entorno. Sin esa credencial no se puede vincular ninguna cuenta de Google.",
       },
       { status: 500 },
     );
   }
 
-  const response = NextResponse.redirect(data.url);
+  const state = crypto.randomUUID();
 
-  if (currentSession?.access_token && currentSession?.refresh_token) {
-    response.cookies.set(
-      "sb_pending_access",
-      currentSession.access_token,
-      TEMP_OPTS,
-    );
-    response.cookies.set(
-      "sb_pending_refresh",
-      currentSession.refresh_token,
-      TEMP_OPTS,
-    );
-    response.cookies.set("g_connect_next", nextPath, TEMP_OPTS);
-  }
+  const authUrl = new URL("https://accounts.google.com/o/oauth2/v2/auth");
+  authUrl.searchParams.set("client_id", clientId);
+  authUrl.searchParams.set(
+    "redirect_uri",
+    `${origin}/api/google/vincular-callback`,
+  );
+  authUrl.searchParams.set("response_type", "code");
+  authUrl.searchParams.set("scope", SCOPES);
+  authUrl.searchParams.set("access_type", "offline");
+  // `consent` siempre: es lo que garantiza que Google devuelva refresh_token.
+  // Sin él, la cuenta caducaría en una hora y pediría reconectar sola.
+  authUrl.searchParams.set(
+    "prompt",
+    switchAccount ? "select_account consent" : "consent",
+  );
+  authUrl.searchParams.set("include_granted_scopes", "true");
+  authUrl.searchParams.set("state", state);
 
+  const response = NextResponse.redirect(authUrl.toString());
+  response.cookies.set("g_vincular_next", nextPath, TEMP_OPTS);
+  response.cookies.set("g_vincular_state", state, TEMP_OPTS);
   return response;
 }
