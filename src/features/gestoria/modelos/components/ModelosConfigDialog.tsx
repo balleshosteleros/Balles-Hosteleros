@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Settings, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -34,9 +34,7 @@ import {
   type ModeloPeriodo,
 } from "../types/modelos";
 
-const TODOS_LOS_TIPOS = Object.keys(MODELO_LABEL) as ModeloTipo[];
-const TIPOS_TRIMESTRALES = TODOS_LOS_TIPOS.filter((t) => grupoDeModelo(t) === "TRIMESTRALES");
-const TIPOS_ANUALES = TODOS_LOS_TIPOS.filter((t) => grupoDeModelo(t) === "ANUALES");
+const CATALOGO_TIPOS = Object.keys(MODELO_LABEL) as ModeloTipo[];
 
 // Opciones del desplegable "cuándo sale el email" (solo DESPUÉS del plazo: es
 // para reclamar el modelo ya presentado). El valor es el offset en días.
@@ -45,6 +43,14 @@ const OPCIONES_OFFSET: { valor: number; etiqueta: string }[] = [
   { valor: 1, etiqueta: "1 día después" },
   { valor: 3, etiqueta: "3 días después" },
   { valor: 7, etiqueta: "7 días después" },
+];
+
+// Antelación del recordatorio informativo (ANTES de que venza el plazo).
+const OPCIONES_DIAS_PREVIO: { valor: number; etiqueta: string }[] = [
+  { valor: 3, etiqueta: "3 días antes" },
+  { valor: 5, etiqueta: "5 días antes" },
+  { valor: 7, etiqueta: "7 días antes" },
+  { valor: 15, etiqueta: "15 días antes" },
 ];
 
 const NOMBRE_MES = [
@@ -65,12 +71,16 @@ function fechaLimiteTexto(tipo: ModeloTipo, periodo: ModeloPeriodo): string | nu
 }
 
 /** Filas del calendario fiscal oficial: un modelo con todos sus plazos. */
-const CALENDARIO_OFICIAL = TODOS_LOS_TIPOS.map((tipo) => {
-  const plazos = MODELO_PERIODOS_VALIDOS[tipo]
-    .map((p) => ({ periodo: p, fecha: fechaLimiteTexto(tipo, p) }))
-    .filter((x) => x.fecha);
-  return { tipo, label: MODELO_LABEL[tipo], plazos };
-}).filter((r) => r.plazos.length > 0);
+function filasCalendario(tipos: ModeloTipo[]) {
+  return tipos
+    .map((tipo) => {
+      const plazos = MODELO_PERIODOS_VALIDOS[tipo]
+        .map((p) => ({ periodo: p, fecha: fechaLimiteTexto(tipo, p) }))
+        .filter((x) => x.fecha);
+      return { tipo, label: MODELO_LABEL[tipo], plazos };
+    })
+    .filter((r) => r.plazos.length > 0);
+}
 
 interface ModelosConfigDialogProps {
   onSaved?: () => void;
@@ -81,14 +91,37 @@ export function ModelosConfigDialog({ onSaved }: ModelosConfigDialogProps) {
   const [cargando, setCargando] = useState(false);
   const [guardando, setGuardando] = useState(false);
 
+  // Tipos que NO aplican a esta empresa (p. ej. el 130 en sociedades): ni
+  // siquiera se listan aquí. Vienen de la config, así que otras empresas que sí
+  // presenten ese modelo lo siguen viendo.
+  const [ocultos, setOcultos] = useState<ModeloTipo[]>([]);
+  const TODOS_LOS_TIPOS = useMemo(
+    () => CATALOGO_TIPOS.filter((t) => !ocultos.includes(t)),
+    [ocultos],
+  );
+  const TIPOS_TRIMESTRALES = useMemo(
+    () => TODOS_LOS_TIPOS.filter((t) => grupoDeModelo(t) === "TRIMESTRALES"),
+    [TODOS_LOS_TIPOS],
+  );
+  const TIPOS_ANUALES = useMemo(
+    () => TODOS_LOS_TIPOS.filter((t) => grupoDeModelo(t) === "ANUALES"),
+    [TODOS_LOS_TIPOS],
+  );
+  const CALENDARIO_OFICIAL = useMemo(
+    () => filasCalendario(TODOS_LOS_TIPOS),
+    [TODOS_LOS_TIPOS],
+  );
+
   // Set de tipos activos. Si es null en config → todos activos.
-  const [activos, setActivos] = useState<Set<ModeloTipo>>(new Set(TODOS_LOS_TIPOS));
+  const [activos, setActivos] = useState<Set<ModeloTipo>>(new Set(CATALOGO_TIPOS));
   // Obligatorios en el enlace de la gestoría. null en config → todos obligatorios.
-  const [obligatorios, setObligatorios] = useState<Set<ModeloTipo>>(new Set(TODOS_LOS_TIPOS));
-  const [emailTrimActivo, setEmailTrimActivo] = useState(false);
-  const [emailTrimOffset, setEmailTrimOffset] = useState(1);
-  const [emailAnualActivo, setEmailAnualActivo] = useState(false);
-  const [emailAnualOffset, setEmailAnualOffset] = useState(1);
+  const [obligatorios, setObligatorios] = useState<Set<ModeloTipo>>(new Set(CATALOGO_TIPOS));
+  const [emailTrimActivo, setEmailTrimActivo] = useState(MODELOS_CONFIG_DEFAULT.email_trim_activo);
+  const [emailTrimOffset, setEmailTrimOffset] = useState(MODELOS_CONFIG_DEFAULT.email_trim_dias_offset);
+  const [emailAnualActivo, setEmailAnualActivo] = useState(MODELOS_CONFIG_DEFAULT.email_anual_activo);
+  const [emailAnualOffset, setEmailAnualOffset] = useState(MODELOS_CONFIG_DEFAULT.email_anual_dias_offset);
+  const [previoActivo, setPrevioActivo] = useState(MODELOS_CONFIG_DEFAULT.recordatorio_previo_activo);
+  const [previoDias, setPrevioDias] = useState(MODELOS_CONFIG_DEFAULT.recordatorio_previo_dias);
 
   useEffect(() => {
     if (!open) return;
@@ -96,16 +129,19 @@ export function ModelosConfigDialog({ onSaved }: ModelosConfigDialogProps) {
     void getModelosConfig()
       .then((r) => {
         const c = r.ok ? r.data : MODELOS_CONFIG_DEFAULT;
+        setOcultos(c.tipos_ocultos ?? []);
         setActivos(
-          c.tipos_activos == null ? new Set(TODOS_LOS_TIPOS) : new Set(c.tipos_activos),
+          c.tipos_activos == null ? new Set(CATALOGO_TIPOS) : new Set(c.tipos_activos),
         );
         setObligatorios(
-          c.tipos_obligatorios == null ? new Set(TODOS_LOS_TIPOS) : new Set(c.tipos_obligatorios),
+          c.tipos_obligatorios == null ? new Set(CATALOGO_TIPOS) : new Set(c.tipos_obligatorios),
         );
         setEmailTrimActivo(c.email_trim_activo);
         setEmailTrimOffset(c.email_trim_dias_offset);
         setEmailAnualActivo(c.email_anual_activo);
         setEmailAnualOffset(c.email_anual_dias_offset);
+        setPrevioActivo(c.recordatorio_previo_activo);
+        setPrevioDias(c.recordatorio_previo_dias);
       })
       .finally(() => setCargando(false));
   }, [open]);
@@ -140,10 +176,15 @@ export function ModelosConfigDialog({ onSaved }: ModelosConfigDialogProps) {
         tipos_obligatorios: todosObligatorios
           ? null
           : TODOS_LOS_TIPOS.filter((t) => obligatorios.has(t)),
+        // Se reenvía tal cual: el diálogo no puede cambiar qué modelos aplican a
+        // la empresa, solo encender/apagar los que sí aplican.
+        tipos_ocultos: ocultos,
         email_trim_activo: emailTrimActivo,
         email_trim_dias_offset: emailTrimOffset,
         email_anual_activo: emailAnualActivo,
         email_anual_dias_offset: emailAnualOffset,
+        recordatorio_previo_activo: previoActivo,
+        recordatorio_previo_dias: previoDias,
       };
       const res = await saveModelosConfig(input);
       if (res.ok) {
@@ -258,7 +299,50 @@ export function ModelosConfigDialog({ onSaved }: ModelosConfigDialogProps) {
               </div>
             </section>
 
-            {/* Sección B — Emails a la gestoría */}
+            {/* Sección C — Recordatorio previo (informativo, antes de vencer) */}
+            <section className="space-y-3">
+              <div className="space-y-0.5">
+                <h3 className="text-sm font-semibold text-foreground">
+                  Recordatorio antes de vencer
+                </h3>
+                <p className="text-xs text-muted-foreground">
+                  Aviso interno de que se acerca la fecha límite de presentación. Es solo
+                  informativo: no se envía nada a la gestoría ni se pide ningún documento.
+                </p>
+              </div>
+              <div className="space-y-3 rounded-lg border border-border p-3">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="space-y-0.5">
+                    <Label className="text-sm font-medium">Avisar antes del vencimiento</Label>
+                    <p className="text-xs text-muted-foreground">
+                      Para los modelos que aún no estén presentados.
+                    </p>
+                  </div>
+                  <Switch checked={previoActivo} onCheckedChange={setPrevioActivo} />
+                </div>
+                <div className={cn("space-y-1", !previoActivo && "opacity-50")}>
+                  <Label className="text-sm text-foreground">¿Con cuánta antelación?</Label>
+                  <Select
+                    disabled={!previoActivo}
+                    value={String(previoDias)}
+                    onValueChange={(v) => setPrevioDias(Number(v))}
+                  >
+                    <SelectTrigger className="h-9">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {OPCIONES_DIAS_PREVIO.map((o) => (
+                        <SelectItem key={o.valor} value={String(o.valor)}>
+                          {o.etiqueta}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </section>
+
+            {/* Sección D — Emails a la gestoría */}
             <section className="space-y-3">
               <div className="space-y-0.5">
                 <h3 className="text-sm font-semibold text-foreground">Emails a la gestoría</h3>
@@ -336,9 +420,15 @@ export function ModelosConfigDialog({ onSaved }: ModelosConfigDialogProps) {
                 El email se dirige a la gestoría (Ajustes → Empresa → Correo gestoría) y su
                 texto es editable en Ajustes → Plantillas de email.
               </p>
+              <p className="text-xs text-muted-foreground">
+                Lo que sube la gestoría se revisa con IA: comprueba que el PDF es el modelo,
+                la empresa y el periodo pedidos —si no coincide, lo rechaza— y lee sus
+                casillas para rellenar el modelo solo. Con el aviso apagado no sale ningún
+                correo y los modelos se quedan en borrador.
+              </p>
             </section>
 
-            {/* Sección C — Calendario fiscal oficial (informativo) */}
+            {/* Sección E — Calendario fiscal oficial (informativo) */}
             <section className="space-y-3">
               <div className="space-y-0.5">
                 <h3 className="text-sm font-semibold text-foreground">

@@ -14,6 +14,7 @@ import {
   type GrupoModelo,
   type ModeloPeriodo,
 } from "@/features/gestoria/modelos/types/modelos";
+import { emitirNotificacion } from "@/features/notificaciones/actions/notificaciones-actions";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -37,6 +38,27 @@ function esHoy(fecha: Date): boolean {
     fecha.getMonth() === hoy.getMonth() &&
     fecha.getDate() === hoy.getDate()
   );
+}
+
+/**
+ * Periodos cuyo plazo vence dentro de `diasAntes` días exactos (recordatorio
+ * previo informativo). Mismo barrido de ejercicios que `disparosDeHoy`: el
+ * plazo de T4/ANUAL cae en enero/febrero/julio del año siguiente.
+ */
+function previosDeHoy(grupo: GrupoModelo, diasAntes: number, añoActual: number): Disparo[] {
+  const periodos: ModeloPeriodo[] =
+    grupo === "TRIMESTRALES" ? ["T1", "T2", "T3", "T4"] : ["ANUAL"];
+  const out: Disparo[] = [];
+  for (const ejercicio of [añoActual, añoActual - 1]) {
+    for (const periodo of periodos) {
+      const limite = fechaLimiteGrupo(grupo, periodo, ejercicio);
+      if (!limite) continue;
+      // Aviso `diasAntes` días ANTES del vencimiento ⇒ objetivo = límite - N.
+      const objetivo = new Date(limite.getTime() - diasAntes * MS_DIA);
+      if (esHoy(objetivo)) out.push({ grupo, periodo, ejercicio });
+    }
+  }
+  return out;
 }
 
 interface Disparo {
@@ -80,6 +102,7 @@ export async function GET(request: Request) {
   const admin = createAdminClient();
   const añoActual = new Date().getFullYear();
   let enviados = 0;
+  let recordatorios = 0;
 
   const { resolverPlantillaOnboarding, resolverDestinatario, cuerpoOnboardingAHtml, PLANTILLAS_ONBOARDING } =
     await import("@/features/rrhh/services/email-plantillas/resolver");
@@ -87,12 +110,48 @@ export async function GET(request: Request) {
   // Empresas con al menos un email activo.
   const { data: cfgRows } = await admin
     .from("modelos_config")
-    .select("empresa_id, email_trim_activo, email_trim_dias_offset, email_anual_activo, email_anual_dias_offset")
-    .or("email_trim_activo.eq.true,email_anual_activo.eq.true");
+    .select("empresa_id")
+    .or("email_trim_activo.eq.true,email_anual_activo.eq.true,recordatorio_previo_activo.eq.true");
 
   for (const row of cfgRows ?? []) {
     const empresaId = row.empresa_id as string;
     const cfg = await getModelosConfigPorEmpresa(admin, empresaId);
+
+    // ── Recordatorio PREVIO (informativo, no toca a la gestoría) ──
+    if (cfg.recordatorio_previo_activo) {
+      const previos = [
+        ...previosDeHoy("TRIMESTRALES", cfg.recordatorio_previo_dias, añoActual),
+        ...previosDeHoy("ANUALES", cfg.recordatorio_previo_dias, añoActual),
+      ];
+      for (const p of previos) {
+        // Solo si queda algo por presentar en ese periodo.
+        const { data: pendientes } = await admin
+          .from("modelos_aeat")
+          .select("id")
+          .eq("empresa_id", empresaId)
+          .eq("ejercicio", p.ejercicio)
+          .eq("periodo", p.periodo)
+          .neq("estado", "PRESENTADO");
+        if (!pendientes?.length) continue;
+
+        const limite = fechaLimiteGrupo(p.grupo, p.periodo, p.ejercicio);
+        const periodoLabel = periodoALabel(p.periodo, p.ejercicio);
+        const res = await emitirNotificacion({
+          empresaId,
+          system: true,
+          tipo: "vencimiento",
+          titulo: `Presentación ${periodoLabel}: quedan ${cfg.recordatorio_previo_dias} días`,
+          mensaje: `${pendientes.length} ${
+            pendientes.length === 1 ? "modelo pendiente" : "modelos pendientes"
+          } de presentar${limite ? ` · fecha límite ${limite.toLocaleDateString("es-ES")}` : ""}.`,
+          segmento: { tipo: "area", area: "ADMINISTRATIVA" },
+          accionUrl: "/gestoria/modelos",
+          // Una sola vez por periodo y empresa, aunque el cron repita.
+          dedupeKey: `modelos-previo:${empresaId}:${p.ejercicio}:${p.periodo}`,
+        });
+        if (res.creadas > 0) recordatorios += res.creadas;
+      }
+    }
 
     const disparos: Disparo[] = [];
     if (cfg.email_trim_activo) {
@@ -198,5 +257,10 @@ export async function GET(request: Request) {
     }
   }
 
-  return NextResponse.json({ ok: true, ejecutadoEn: new Date().toISOString(), emailsEnviados: enviados });
+  return NextResponse.json({
+    ok: true,
+    ejecutadoEn: new Date().toISOString(),
+    emailsEnviados: enviados,
+    recordatoriosPrevios: recordatorios,
+  });
 }

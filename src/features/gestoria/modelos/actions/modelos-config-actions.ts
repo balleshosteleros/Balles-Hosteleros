@@ -5,6 +5,7 @@ import {
   MODELOS_CONFIG_COLS,
   MODELOS_CONFIG_DEFAULT,
   clampOffset,
+  clampDiasPrevio,
   normalizarModelosConfig,
   type ModelosConfig,
   type ModelosConfigRow,
@@ -37,10 +38,14 @@ export async function saveModelosConfig(
         empresa_id: empresaId,
         tipos_activos: input.tipos_activos,
         tipos_obligatorios: input.tipos_obligatorios,
+        // `tipos_ocultos` NO se toca desde el diálogo: define qué modelos no
+        // aplican a la empresa y se gestiona por migración/BD.
         email_trim_activo: input.email_trim_activo,
         email_trim_dias_offset: clampOffset(input.email_trim_dias_offset),
         email_anual_activo: input.email_anual_activo,
         email_anual_dias_offset: clampOffset(input.email_anual_dias_offset),
+        recordatorio_previo_activo: input.recordatorio_previo_activo,
+        recordatorio_previo_dias: clampDiasPrevio(input.recordatorio_previo_dias),
         updated_at: new Date().toISOString(),
       },
       { onConflict: "empresa_id" },
