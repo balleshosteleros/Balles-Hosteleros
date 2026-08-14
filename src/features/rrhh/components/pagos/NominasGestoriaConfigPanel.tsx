@@ -17,10 +17,39 @@ import {
 // Ajustes del envío automático de nóminas a la gestoría (general de empresa).
 // La gestoría recibe un correo el día configurado con un enlace para subir las
 // nóminas del mes; la IA las lee y vuelca al sistema automáticamente.
+const MESES_ES = [
+  "enero", "febrero", "marzo", "abril", "mayo", "junio",
+  "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
+];
+
+/**
+ * Los 6 últimos meses YA TERMINADOS, del más reciente al más antiguo. No incluye
+ * el mes en curso: no tiene sentido reclamar nóminas de un mes sin cerrar (el
+ * servidor también lo rechaza).
+ */
+function ultimosMesesCerrados(n = 6): string[] {
+  const out: string[] = [];
+  const hoy = new Date();
+  for (let i = 1; i <= n; i++) {
+    const d = new Date(hoy.getFullYear(), hoy.getMonth() - i, 1);
+    out.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
+  }
+  return out;
+}
+
+const MESES_ELEGIBLES = ultimosMesesCerrados();
+
+function etiquetaMes(periodo: string): string {
+  const [y, m] = periodo.split("-");
+  return `${MESES_ES[Number(m) - 1] ?? ""} ${y}`.trim();
+}
+
 export function NominasGestoriaConfigPanel() {
   const [cfg, setCfg] = useState<NominasGestoriaConfig | null>(null);
   const [guardando, setGuardando] = useState(false);
   const [enviando, setEnviando] = useState(false);
+  // Mes a reclamar con «Enviar ahora». Por defecto, el último ya cerrado.
+  const [mesEnvio, setMesEnvio] = useState(MESES_ELEGIBLES[0]);
 
   useEffect(() => {
     getNominasGestoriaConfig().then(setCfg);
@@ -46,15 +75,19 @@ export function NominasGestoriaConfigPanel() {
   };
 
   const enviarAhora = async () => {
-    if (!cfg.email.trim()) {
-      toast.error("Añade primero el correo de la gestoría.");
-      return;
-    }
     setEnviando(true);
-    const res = await enviarNominasGestoriaAhora();
+    // El correo NO se comprueba aquí: vive en Ajustes → Configuración, no en este
+    // panel, así que mirar `cfg.email` bloqueaba el envío aunque estuviera puesto.
+    // Si de verdad falta, el servidor devuelve el motivo.
+    const res = await enviarNominasGestoriaAhora(mesEnvio);
     setEnviando(false);
-    if (res.ok) toast.success("Correo enviado a la gestoría con el enlace para subir las nóminas.");
-    else toast.error(res.error ?? "No se pudo enviar el correo.");
+    if (res.ok) {
+      toast.success(`Enlace enviado a la gestoría para las nóminas de ${etiquetaMes(mesEnvio)}.`, {
+        description: "Caduca en 3 días.",
+      });
+    } else {
+      toast.error(res.error ?? "No se pudo enviar el correo.");
+    }
   };
 
   return (
@@ -140,7 +173,30 @@ export function NominasGestoriaConfigPanel() {
 
       <div className="flex flex-wrap items-center justify-end gap-2">
         {cfg.activo && (
-          <Button variant="outline" onClick={enviarAhora} disabled={enviando} className="gap-2">
+          <div className="mr-auto flex items-center gap-2">
+            <label htmlFor="mes-envio" className="text-xs text-muted-foreground">
+              Reclamar el mes
+            </label>
+            <select
+              id="mes-envio"
+              value={mesEnvio}
+              onChange={(e) => setMesEnvio(e.target.value)}
+              className="h-9 rounded-md border bg-background px-2 text-sm"
+            >
+              {MESES_ELEGIBLES.map((p) => (
+                <option key={p} value={p}>{etiquetaMes(p)}</option>
+              ))}
+            </select>
+          </div>
+        )}
+        {cfg.activo && (
+          <Button
+            variant="outline"
+            onClick={enviarAhora}
+            disabled={enviando}
+            className="gap-2"
+            title="Envía a la gestoría un enlace nuevo para el mes elegido. Caduca en 3 días."
+          >
             {enviando ? (
               <><Loader2 className="h-4 w-4 animate-spin" />Enviando…</>
             ) : (

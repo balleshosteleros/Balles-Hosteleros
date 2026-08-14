@@ -106,6 +106,8 @@ export async function crearTokenNominasGestoria(
   admin: SupabaseClient,
   empresaId: string,
   periodo: string,
+  /** Días de vigencia. Si no se indica: hasta el día 15 del mes siguiente. */
+  opts?: { diasVigencia?: number },
 ): Promise<{ ok: true; token: string } | { ok: false; error: string }> {
   try {
     // Ojo: cada llamada genera un token NUEVO y pisa el anterior (upsert por
@@ -122,7 +124,9 @@ export async function crearTokenNominasGestoria(
     // entrega normal, y el enlace no se queda vivo un mes entero.
     // Antes caducaba al final del mes siguiente (~33 días).
     const [y, m] = periodo.split("-").map(Number);
-    const expira = new Date(Date.UTC(y, m, 15, 23, 59, 59)).toISOString();
+    const expira = opts?.diasVigencia
+      ? new Date(Date.now() + opts.diasVigencia * 86400000).toISOString()
+      : new Date(Date.UTC(y, m, 15, 23, 59, 59)).toISOString();
 
     const { error } = await admin
       .from("nominas_gestoria_tokens")
@@ -208,6 +212,8 @@ export async function enviarSolicitudNominasGestoria(
   admin: SupabaseClient,
   empresaId: string,
   periodo: string,
+  /** `diasVigencia`: caducidad a medida (envío manual). Por defecto, día 15. */
+  opts?: { diasVigencia?: number },
 ): Promise<{ ok: boolean; error?: string }> {
   const { data: emp } = await admin
     .from("empresas")
@@ -223,7 +229,7 @@ export async function enviarSolicitudNominasGestoria(
   if (!to) return { ok: false, error: "Falta el correo de la gestoría" };
   const empresaNombre = (emp.nombre as string) ?? "la empresa";
 
-  const tk = await crearTokenNominasGestoria(admin, empresaId, periodo);
+  const tk = await crearTokenNominasGestoria(admin, empresaId, periodo, opts);
   if (!tk.ok) return { ok: false, error: tk.error };
 
   const boton = botonSubidaNominasHtml(tk.token);

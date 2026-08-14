@@ -92,23 +92,43 @@ export async function setNominasGestoriaConfig(
  * (zona horaria de la empresa), sin esperar al día configurado. No cambia
  * `ultimo_envio` (es un envío manual, no el automático del cron).
  */
-export async function enviarNominasGestoriaAhora(): Promise<{ ok: boolean; error?: string }> {
+export async function enviarNominasGestoriaAhora(
+  /** Mes a reclamar 'AAAA-MM'. Si no se indica, el que tocaría por fecha. */
+  periodoElegido?: string,
+): Promise<{ ok: boolean; error?: string; periodo?: string }> {
   try {
     const { empresaId } = await getAppContext();
     if (!empresaId) return { ok: false, error: "No autorizado" };
     const admin = createAdminClient();
     const tz = await getZonaHorariaEmpresa(admin, empresaId);
 
-    // QUÉ MES SE PIDE: la MISMA regla que el envío automático, no el mes en curso
-    // a secas. Se decide por el DÍA DE HOY, que es cuando se está reclamando:
+    // QUÉ MES SE PIDE: el que elija quien pulsa. Si no elige, la MISMA regla que
+    // el envío automático, decidida por el DÍA DE HOY:
     //   • del 16 en adelante → el mes en curso (ya se está cerrando)
     //   • del 1 al 15        → el mes anterior (las últimas nóminas cerradas)
-    // Antes cogía siempre el mes actual, así que pulsarlo un día 14 pedía las
-    // nóminas de un mes que aún no ha terminado y que la gestoría no tiene.
-    const [anio, mes, dia] = hoyEnZona(tz).split("-");
-    const periodo = mesSolicitado(anio, mes, Number(dia));
-    const res = await enviarSolicitudNominasGestoria(admin, empresaId, periodo);
-    return res.ok ? { ok: true } : { ok: false, error: res.error };
+    let periodo: string;
+    if (periodoElegido) {
+      if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(periodoElegido)) {
+        return { ok: false, error: "Mes no válido" };
+      }
+      // No tiene sentido reclamar nóminas de un mes que aún no ha terminado.
+      const hoy = hoyEnZona(tz).slice(0, 7);
+      if (periodoElegido > hoy) {
+        return { ok: false, error: "Ese mes todavía no ha terminado." };
+      }
+      periodo = periodoElegido;
+    } else {
+      const [anio, mes, dia] = hoyEnZona(tz).split("-");
+      periodo = mesSolicitado(anio, mes, Number(dia));
+    }
+
+    // Envío MANUAL: el enlace caduca a los 3 días. Es un reenvío puntual (se
+    // olvidaron, caducó el anterior…), no la entrega ordinaria del mes, así que
+    // no tiene por qué quedarse vivo semanas. El automático sigue con su plazo.
+    const res = await enviarSolicitudNominasGestoria(admin, empresaId, periodo, {
+      diasVigencia: 3,
+    });
+    return res.ok ? { ok: true, periodo } : { ok: false, error: res.error };
   } catch (err) {
     console.error("[nominas-gestoria] enviarAhora:", err);
     return { ok: false, error: err instanceof Error ? err.message : "Error" };
