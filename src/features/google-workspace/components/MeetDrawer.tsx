@@ -244,9 +244,10 @@ export function MeetDrawer({ children }: { children: ReactNode }) {
       // Persistimos para que la selección se conserve en la próxima sesión,
       // asociada a la CUENTA activa (cada una tiene sus propios calendarios).
       saveCalendariosSeleccionados(cuentaGoogle, n);
-      // El badge cuenta sobre esta misma selección → que se recalcule ya, sin
-      // esperar al tick de 1 minuto.
-      refreshDailyCounts();
+      // El badge cuenta sobre esta misma selección → que se recalcule YA, con
+      // la lista en la mano (persistirla es asíncrono y leerla de BD daría la
+      // selección anterior).
+      refreshDailyCounts(Array.from(n));
       return n;
     });
   }, [cuentaGoogle]);

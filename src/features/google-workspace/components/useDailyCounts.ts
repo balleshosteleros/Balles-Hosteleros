@@ -116,10 +116,24 @@ const TICK_VIGENCIA_MS = 15 * 1000;
 // Evento global para forzar un refresco inmediato de los contadores (p. ej. al
 // leer un correo o archivarlo, sin esperar al siguiente tick de 1 minuto).
 export const DAILY_COUNTS_REFRESH_EVENT = "daily-counts:refresh";
-export function refreshDailyCounts(): void {
-  if (typeof window !== "undefined") {
-    window.dispatchEvent(new Event(DAILY_COUNTS_REFRESH_EVENT));
-  }
+
+/**
+ * Fuerza un recálculo inmediato de los contadores.
+ *
+ * `calendarios` es la selección que el usuario ACABA de dejar marcada en el
+ * panel. Hay que pasarla a mano porque persistirla es asíncrono (lee y escribe
+ * en BD): si el badge fuera a buscarla, leería la selección ANTERIOR y se
+ * quedaría un paso por detrás — al ocultar un calendario el número seguía
+ * incluyendo sus eventos hasta el siguiente ciclo. Con la lista en la mano el
+ * número cambia en el acto.
+ */
+export function refreshDailyCounts(calendarios?: string[]): void {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(
+    new CustomEvent(DAILY_COUNTS_REFRESH_EVENT, {
+      detail: calendarios ? { calendarios } : undefined,
+    }),
+  );
 }
 
 export function useDailyCounts(): DailyCounts {
@@ -146,7 +160,10 @@ export function useDailyCounts(): DailyCounts {
   // lista, para que el badge baje al acabar un evento sin esperar a la red.
   const eventosHoyRef = useRef<EventoContable[]>([]);
 
-  const fetchCounts = useCallback(async () => {
+  // `calendariosAhora` llega cuando el usuario acaba de marcar/desmarcar en el
+  // panel: se usa TAL CUAL en vez de releer la preferencia (que aún se está
+  // guardando). Sin esto el badge iba un paso por detrás de las casillas.
+  const fetchCounts = useCallback(async (calendariosAhora?: string[]) => {
     // Las 5 consultas de BD son INDEPENDIENTES entre sí → en PARALELO.
     // (Antes iban en serie con `await` encadenados = 5 idas de red secuenciales.)
     let vistasAt: string | null = null;
@@ -218,7 +235,9 @@ export function useDailyCounts(): DailyCounts {
       // Google. Sin este filtro el endpoint cae a "todos los calendarios
       // marcados en Google" (DIRECCION, PERSONAL, Bacanal, Habana...) y el badge
       // decía 4 mientras el drawer mostraba 2.
-      const guardados = await loadCalendariosSeleccionados(cuentaGoogle);
+      const guardados =
+        calendariosAhora ??
+        (await loadCalendariosSeleccionados(cuentaGoogle));
       // Si mandáramos la petición sin `calendarIds`, el endpoint cae a "todos los
       // calendarios de la cuenta" (17 en el caso real: los de Bacanal, los de
       // Habana por departamento, PERSONAL, MARKETING...) y el badge sumaría
@@ -319,7 +338,11 @@ export function useDailyCounts(): DailyCounts {
         return { ...prev, events, meetings };
       });
     }, TICK_VIGENCIA_MS);
-    const onRefresh = () => fetchCounts();
+    const onRefresh = (e: Event) => {
+      // Si el disparador adjuntó la selección recién marcada, se usa esa.
+      const detail = (e as CustomEvent<{ calendarios?: string[] }>).detail;
+      fetchCounts(detail?.calendarios);
+    };
     window.addEventListener(DAILY_COUNTS_REFRESH_EVENT, onRefresh);
     return () => {
       clearTimeout(firstLoad);

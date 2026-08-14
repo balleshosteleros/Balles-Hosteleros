@@ -689,9 +689,11 @@ export function CalendarDrawer({ children }: CalendarDrawerProps) {
       // Va asociada a la CUENTA activa: cada cuenta de Google tiene sus propios
       // calendarios, así que marcar aquí no debe afectar a las demás.
       saveCalendariosSeleccionados(cuentaGoogle, next);
-      // El badge cuenta sobre esta misma selección → que se recalcule ya, sin
-      // esperar al tick de 1 minuto.
-      refreshDailyCounts();
+      // El badge cuenta sobre esta misma selección → que se recalcule YA. Le
+      // pasamos la lista en la mano: persistirla es asíncrono, así que si el
+      // badge fuera a leerla de BD contaría todavía con la selección anterior
+      // (ocultas un calendario y sus eventos seguían sumando un rato más).
+      refreshDailyCounts(Array.from(next));
       return next;
     });
   }
