@@ -46,7 +46,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { Edit2, Banknote, Settings, Send, Lock, Unlock, CheckCircle2, Clock, Upload, ReceiptText, AlertTriangle, FileText, ShieldCheck, X } from "lucide-react";
+import { Edit2, Banknote, Send, Lock, Unlock, CheckCircle2, Clock, Upload, ReceiptText, AlertTriangle, FileText, ShieldCheck, X } from "lucide-react";
 import {
   SubmoduleToolbar,
   aplicarFiltrosToolbar,
@@ -244,7 +244,6 @@ export function PagosView() {
   // Horas del mes por empleado (teóricas/normales/extras/balance), por rango.
   const [horasPorRango, setHorasPorRango] = useState<Record<string, Map<string, HorasMesRow>>>({});
   const [loading, setLoading] = useState(false);
-  const [showConfig, setShowConfig] = useState(false);
   const [showRevision, setShowRevision] = useState(false);
   // empleadoId cuya nómina se está abriendo (para el indicador del icono).
   const [abriendoNomina, setAbriendoNomina] = useState<string | null>(null);
@@ -1238,16 +1237,6 @@ export function PagosView() {
                 </span>
               )}
             </Button>
-            <Button
-              size="icon"
-              variant={showConfig ? "default" : "outline"}
-              className="h-9 w-9"
-              onClick={() => setShowConfig((v) => !v)}
-              title="Configuración"
-              aria-label="Configuración"
-            >
-              <Settings className="h-4 w-4" strokeWidth={1.75} />
-            </Button>
           </>
         }
       />
@@ -1271,29 +1260,6 @@ export function PagosView() {
             nómina no se pueden modificar y cada empleado ya ve la suya en su portal.
           </p>
         </div>
-      )}
-
-      {/* Los ajustes de Pagos (avisos de liquidación y envío de nóminas a la
-          gestoría) viven en AJUSTES → Departamentos → RRHH → Pagos: son normas de
-          empresa, no ajustes de uso diario. Aquí solo se enlaza, para no tener el
-          mismo formulario en dos sitios. */}
-      {showConfig && (
-        <Card>
-          <CardContent className="flex flex-wrap items-center justify-between gap-3 p-4">
-            <div>
-              <p className="text-sm font-medium">Ajustes de Pagos</p>
-              <p className="mt-0.5 text-xs text-muted-foreground">
-                Avisos de liquidación y envío mensual de nóminas a la gestoría.
-              </p>
-            </div>
-            <Button variant="outline" size="sm" className="gap-2" asChild>
-              <a href="/ajustes?tab=departamentos" target="_blank" rel="noopener noreferrer">
-                <Settings className="h-4 w-4" />
-                Abrir en Ajustes
-              </a>
-            </Button>
-          </CardContent>
-        </Card>
       )}
 
       <NominasRevisionDialog
