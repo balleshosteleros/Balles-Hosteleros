@@ -5,6 +5,88 @@
 
 ---
 
+## 👋 FERNANDO, EMPIEZA POR AQUÍ — resumen del 14-ago en 2 minutos
+
+Fernando: he vuelto y he estado el día entero con la logística. Esto es todo lo que ha pasado,
+ordenado. El detalle de cada punto está más abajo en el documento; esto es el índice para que
+no tengas que reconstruirlo leyendo 1.700 líneas.
+
+### Tus 5 preguntas → contestadas
+
+| | Mi respuesta |
+|---|---|
+| 1. Stock del lote de 10 | **Dejarlo sumado.** Pero ojo: no ha restado nada, el inventario es obligatorio |
+| 2. ¿Piloto por bueno? | **NO.** Y no es por volumen: el circuito solo suma |
+| 3. Duplicados | Fusionar con criterio automático — **pero eran 8, no 213** (ver abajo) |
+| 4. Las 4 dudas del 30-jul | **Por la mesa de incidencias**, no por este documento |
+| 5. Excel de MAKRO | **Fuera.** Retíralo del repo |
+
+### Lo que YA ESTÁ HECHO hoy (no lo rehagas)
+
+Siete cosas aplicadas y verificadas contra producción. Tres commits: `37e80580`, `e302b91b`,
+`6c3273aa`.
+
+1. **El OCR ya entiende los albaranes de cualquier proveedor.** Le faltaba la regla más
+   básica: *una línea = un artículo*. Los proveedores que imprimen cada artículo en varias
+   filas generaban artículos fantasma — el albarán de Coca-Cola daba **20 líneas para 8
+   productos reales**, con "Dto. Fijo" a −37,15 € y "SUBUNIDADES/NETO" como si fueran
+   mercancía. Ahora esas filas se funden en su artículo, **las subunidades son la cantidad
+   real** (una caja son 24 botellas, no 1 unidad — esto arregla de raíz lo de las "2 CAJ") y
+   los importes negativos van al descuento.
+2. **El OCR ya lee el DESTINATARIO** del documento. Antes lo descartaba a propósito: por eso
+   la empresa la decidía solo el selector y mis 8 albaranes acabaron en Bacanal sin que nada
+   avisara.
+3. **La pantalla ya no muestra los productos dos veces** en Revisión.
+4. **13 productos de servicio** (Punto Verde, Desplazamiento, envases) **ya no controlan
+   stock**. El importe sigue contando; dejan de inflar el inventario.
+5. **Mis 8 albaranes del 13-ago, movidos a HABANA**, que es donde debían ir. Creado DISBESA en
+   Habana, desvinculadas las 19 líneas que apuntaban a Bacanal y borradas las incidencias mal
+   calculadas. Siguen en Revisión, sin stock sumado.
+6. **`ALB-2023-062` → `ALB-2026-062`** (el año 2023 en mitad de la serie 2026).
+7. **Los 8 duplicados reales, fusionados** y el dossier corregido.
+
+### ⚠️ Dos cosas que te van a interesar de verdad
+
+**A) Tu dossier de duplicados estaba mal, y por poco hacemos un destrozo.** Agrupaba por
+nombre **sin mirar el `tipo`**: en este modelo cada artículo existe legítimamente DOS veces
+(ficha `compra` + ficha `venta`, unidas por su receta 1:1). Fusionar los 213 grupos habría
+**desactivado ~200 fichas legítimas y roto el descuento de stock por venta**. Duplicados
+reales: **8**. Y la causa no era "una siembra que corrió dos veces" — **es que el matcher
+distingue mayúsculas**: al cargar los albaranes del 30-jul no reconoció "Cebolla roja" como
+la "Cebolla Roja" que ya existía. Mientras no se arregle, cada tanda genera duplicados nuevos.
+
+**B) Por qué el stock no baja NUNCA.** Yo insistía en que no podía estar inflado porque esa
+mercancía se ha vendido. Las ventas SÍ entran (**1.698 tickets de Habana, 527 de Bacanal**
+desde el 17-jun), pero `descontarDiaSiCorte` hace `if (!corte …) return` **y sale sin
+descontar, en silencio**, porque `stock_descuento_desde` está a NULL en las dos empresas. Y
+está apagado con razón: **no hay recetas de platos** (203 recetas, todas bebidas 1:1). Si lo
+encendemos hoy, la cocina entera seguiría sin bajar. **Las recetas de platos son el cuello de
+botella de toda la logística.**
+
+### Lo que queda por hacer
+
+Nada de esto está hecho: conectar el **aviso de empresa equivocada** (el OCR ya extrae el
+destinatario, pero todavía no compara ni avisa), el **matcher tolerante** a
+mayúsculas/acentos/palabras de más, el **alta de producto desde el albarán** (con el nombre y
+la referencia del proveedor ya leídos, obligando categoría y formato), y **reprocesar los 8
+albaranes** con el OCR ya corregido.
+
+Y sigue en pie lo estructural: **inventarios sin configurar (0 creados)**, **mermas que no
+restan (0 registradas)**, **no hay pantalla de movimientos de stock**, y **670 productos de
+compra con solo 352 fichas de stock**.
+
+### Y lo tuyo, que sigue esperando
+
+F6/F7 del PRP-073 · los **115 de 153 formatos sin equivalencias** · la tabla
+`albaranes_lineas` muerta · y confirmarme si te pisé algo el 5-ago. Detalle al final del
+bloque de mi respuesta.
+
+⚠️ **Aviso suelto:** `src/features/rrhh/components/pagos/PagosView.tsx` está modificado sin
+commitear y **no compila** (`showConfig`, `setShowConfig`, `Settings` sin definir). No lo he
+tocado porque no es mío. Si es tuyo, revísalo: romperá el build.
+
+---
+
 ## ✅ RESPUESTA DE IVÁN (14-ago) — tus 5 preguntas, contestadas + lo que falta por revisar
 
 Fernando: de vuelta. Van las cinco respuestas, y después una lectura de conjunto que me
