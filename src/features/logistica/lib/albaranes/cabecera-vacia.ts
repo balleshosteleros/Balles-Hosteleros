@@ -22,6 +22,11 @@ export const CABECERA_OCR_VACIA: CabeceraOcrAlbaran = {
     ciudad: null,
     provincia: null,
   },
+  destinatario: {
+    cifNif: null,
+    razonSocial: null,
+    direccion: null,
+  },
   desgloseIva: [],
   continuaEnOtraPagina: false,
   paginaActual: null,

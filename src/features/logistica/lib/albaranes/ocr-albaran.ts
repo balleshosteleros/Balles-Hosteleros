@@ -46,6 +46,17 @@ export interface DesgloseIvaOcr {
   recargoEquivalencia: number | null;
 }
 
+/**
+ * A quién va dirigido el documento. Con esto se detecta que un albarán se está subiendo a
+ * la empresa equivocada ANTES de guardarlo: el OCR ve el nombre del restaurante impreso en
+ * el papel, así que puede contrastarlo con la empresa activa.
+ */
+export interface DestinatarioOcrAlbaran {
+  cifNif: string | null;
+  razonSocial: string | null;
+  direccion: string | null;
+}
+
 export interface CabeceraOcrAlbaran {
   proveedor: string | null;
   numero: string | null;
@@ -54,6 +65,8 @@ export interface CabeceraOcrAlbaran {
   total: number | null;
   /** Datos fiscales impresos (PRP-074). */
   fiscal: FiscalOcrAlbaran;
+  /** A quién va dirigido: permite avisar de albarán subido a la empresa equivocada. */
+  destinatario: DestinatarioOcrAlbaran;
   /** Desglose por tipo de IVA del pie (PRP-074). Vacío si el documento no lo imprime. */
   desgloseIva: DesgloseIvaOcr[];
   /** Base imponible total impresa en el pie, si aparece. */
@@ -106,6 +119,11 @@ const OCR_ALBARAN_SCHEMA: Schema = {
     codigoPostalEmisor: { type: SchemaType.STRING, nullable: true },
     ciudadEmisor: { type: SchemaType.STRING, nullable: true },
     provinciaEmisor: { type: SchemaType.STRING, nullable: true },
+
+    // --- Identidad del DESTINATARIO: detecta albarán subido a la empresa equivocada ---
+    cifNifDestinatario: { type: SchemaType.STRING, nullable: true },
+    razonSocialDestinatario: { type: SchemaType.STRING, nullable: true },
+    direccionDestinatario: { type: SchemaType.STRING, nullable: true },
 
     // --- Continuidad del documento (PRP-074) ---
     continuaEnOtraPagina: { type: SchemaType.BOOLEAN, nullable: true },
@@ -161,14 +179,23 @@ CABECERA
 - Nombre comercial del proveedor, número de albarán/factura, fecha (YYYY-MM-DD) y total.
 - Base imponible total, si el pie la imprime.
 
-IDENTIDAD FISCAL DEL EMISOR (quien EMITE el documento, es decir el proveedor; NUNCA los datos
-del destinatario/cliente, que es el restaurante):
+IDENTIDAD FISCAL DEL EMISOR (quien EMITE el documento, es decir el proveedor):
 - cifNifEmisor: CIF/NIF tal cual, sin espacios ni puntos (ej: B09654955, A28017895).
   Suele ir en la cabecera junto al logo, o al pie. Si ves DOS identificadores fiscales,
   el del EMISOR es el que acompaña al nombre del proveedor, no al del cliente.
 - razonSocialEmisor: la denominación legal completa (con S.L., S.A., S.L.U., C.B....).
   Ojo: puede diferir del nombre comercial del logo. Ambos son útiles.
 - direccionEmisor, codigoPostalEmisor, ciudadEmisor, provinciaEmisor: domicilio fiscal del emisor.
+
+IDENTIDAD DEL DESTINATARIO (a QUIÉN va dirigido el documento: el restaurante que recibe la
+mercancía). Sirve para avisar si el albarán se está subiendo a la empresa equivocada, así que
+extráelo SIEMPRE que se lea, aunque parezca redundante:
+- cifNifDestinatario: el CIF/NIF que acompaña al nombre del CLIENTE, no al del proveedor.
+- razonSocialDestinatario: denominación legal o nombre comercial del cliente tal cual se imprime.
+- direccionDestinatario: dirección de entrega o de facturación del cliente.
+Aparece bajo etiquetas como "Cliente", "Destinatario", "Enviar a", "Dirección de entrega",
+"Facturar a", "Socio" o similares. Si el documento solo trae UN identificador fiscal, es el
+del emisor: en ese caso devuelve null en los tres campos del destinatario, no lo adivines.
 
 CONTINUIDAD DEL DOCUMENTO (crítico: si falta una página, el albarán se cargaría incompleto)
 - continuaEnOtraPagina: true si ves "SUMA Y SIGUE", "SIGUE", "continúa", "pasa a la página
@@ -188,11 +215,32 @@ LÍNEAS
   IVA % e importe de la línea.
 - referenciaProveedor: el código/referencia del artículo en el catálogo DEL PROVEEDOR, si la
   columna existe (ej: "REF 4421", "COD. 100238"). Es el identificador más fiable que hay.
-- esServicio: true si la línea NO es mercancía sino un gasto o servicio: portes, transporte,
-  desplazamiento, envase o casco retornable, punto verde, gestión de residuos, recargo
-  financiero. IMPORTANTE: inclúyelas SIEMPRE como líneas (antes se omitían y el total no
-  cuadraba). Simplemente márcalas con esServicio: true.
+- esServicio: true si la línea NO es mercancía sino un gasto o servicio que el proveedor te
+  COBRA aparte: portes, transporte, desplazamiento, envase o casco retornable, punto verde,
+  gestión de residuos, recargo financiero. IMPORTANTE: inclúyelas SIEMPRE como líneas (antes
+  se omitían y el total no cuadraba). Simplemente márcalas con esServicio: true. Son conceptos
+  facturados de pleno derecho: llevan su importe y suman al total.
 - Incluye TAMBIÉN las líneas de regalo o promoción sin importe (cantidad sí, precio 0 o null).
+
+UNA LÍNEA = UN ARTÍCULO FACTURADO. Esta es la regla más importante y falla a menudo.
+Muchos proveedores imprimen CADA artículo en VARIAS filas: una con el nombre y, debajo,
+filas de detalle que describen esa misma línea. Esas filas de detalle NO son artículos
+nuevos: son atributos del artículo de arriba y debes FUNDIRLAS en él, nunca devolverlas
+como entradas propias. Reconócelas porque no tienen nombre de artículo propio, sino una
+etiqueta de concepto, y suelen ir indentadas o en tipografía menor. Casos típicos:
+- "SUBUNIDADES", "NETO", "UNIDADES", "CONTENIDO", "PIEZAS", "S/UD": indican cuántas unidades
+  reales trae el formato de arriba (ej: la caja son 24 botellas). Eso es la CANTIDAD real del
+  artículo, no un artículo. Si el papel imprime a la vez "1 caja" y "24 subunidades", el
+  artículo son 24 unidades: usa el desglose real y refleja "caja de 24" en formato.
+- "DTO", "DESCUENTO", "DTO. FIJO", "RAPPEL", "PROMOCIÓN", "BONIFICACIÓN", o cualquier fila de
+  importe NEGATIVO: es el descuento de la línea de arriba → va en descuentoPct (o descontado
+  ya en precioUnitario), NUNCA como artículo. Un artículo jamás tiene precio negativo.
+- "BASE", "IMPONIBLE", "IVA", "CUOTA", "TOTAL LÍNEA", "SUBTOTAL": son cálculos, no artículos.
+- Lotes, caducidades, temperaturas, números de serie o de pedido: son trazabilidad, no artículos.
+Distinguir de los servicios: portes, punto verde y envases SÍ son artículos facturados (van
+con esServicio: true y su importe positivo). Un descuento o una subunidad NO lo son.
+Prueba final antes de devolver: la suma de tus líneas debe cuadrar con la base imponible del
+pie. Si te sale de más, casi seguro has convertido filas de detalle en artículos.
 - confianza: 0 a 1, cómo de seguro estás de haber leído bien esa línea. Usa < 0.7 si el texto
   está borroso, cortado, tachado o impreso en matriz de puntos poco legible.
 
@@ -215,6 +263,9 @@ interface OcrAlbaranRaw {
   codigoPostalEmisor?: string | null;
   ciudadEmisor?: string | null;
   provinciaEmisor?: string | null;
+  cifNifDestinatario?: string | null;
+  razonSocialDestinatario?: string | null;
+  direccionDestinatario?: string | null;
   continuaEnOtraPagina?: boolean | null;
   paginaActual?: number | null;
   paginasTotales?: number | null;
@@ -357,6 +408,11 @@ export async function ejecutarOcrAlbaran(input: {
           codigoPostal: txt(raw.codigoPostalEmisor),
           ciudad: txt(raw.ciudadEmisor),
           provincia: txt(raw.provinciaEmisor),
+        },
+        destinatario: {
+          cifNif: txt(raw.cifNifDestinatario),
+          razonSocial: txt(raw.razonSocialDestinatario),
+          direccion: txt(raw.direccionDestinatario),
         },
         desgloseIva,
         // El marcador manda; y "pág. 1 de 3" también implica continuidad aunque no lo diga.
