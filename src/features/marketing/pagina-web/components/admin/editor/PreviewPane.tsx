@@ -82,7 +82,7 @@ export function PreviewPane({ paginaId, onCerrar }: Props) {
       <div className="flex-1 overflow-auto p-3">
         <div className="mx-auto bg-white shadow-lg" style={{ width }}>
           <iframe
-            src={`/marketing/pagina-web/${paginaId}/preview`}
+            src={`/pagina-web-preview/${paginaId}`}
             className="w-full h-[80vh] border-0"
             title="Preview en vivo"
           />

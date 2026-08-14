@@ -33,7 +33,17 @@ const PUBLIC_PREFIXES = ['/carta', '/__site', '/api/google/connect', '/empleo', 
   '/gestoria/modelos', '/api/gestoria/modelos',
   // Formación del candidato en fase «Formación» (aún sin cuenta): enlace
   // tokenizado /formacion/<token> que muestra el curso de su puesto.
-  '/formacion']
+  '/formacion',
+  // Vista previa del editor de páginas web. La abre el botón «Ver» en una
+  // pestaña nueva (con `noopener`), y ahí la sesión no siempre acompaña: al
+  // caer en el bloque privado de abajo, el proxy la mandaba a `/?auth=1`. Como
+  // lo que se abría era el login dentro de una pestaña que esperaba una web,
+  // se quedaba cargando sin pintar nada.
+  //
+  // Pasa por aquí solo para NO rebotar al login. El borrador es material
+  // interno, así que la propia página exige sesión + empresa antes de
+  // enseñar nada (ver src/app/pagina-web-preview/[id]/page.tsx).
+  '/pagina-web-preview']
 
 function isAuthPath(pathname: string) {
   if (pathname === '/') return true

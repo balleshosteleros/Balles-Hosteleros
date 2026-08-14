@@ -10,11 +10,9 @@ import {
   Pencil,
   Trash2,
   Eye,
-  Archive,
   Settings,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import {
@@ -46,12 +44,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import {
-  listarPaginas,
-  borrarPagina,
-  renombrarPagina,
-  cambiarEstadoPagina,
-} from "../../actions/paginas-actions";
+import { listarPaginas, borrarPagina } from "../../actions/paginas-actions";
 import { NuevaPaginaModal } from "./NuevaPaginaModal";
 import type { PaginaWeb, PaginaWebEstado } from "../../types";
 import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
@@ -79,11 +72,9 @@ export function PaginasListView() {
   const [columnasVisibles, setColumnasVisibles] = useState<ToolbarColumnaVisible>({});
   const [columnasOrden, setColumnasOrden] = useState<string[] | undefined>(undefined);
   const [nuevaOpen, setNuevaOpen] = useState(false);
-  const [confirmar, setConfirmar] = useState<
-    | { tipo: "archivar" | "eliminar"; id: string; nombre: string }
-    | null
-  >(null);
-  const [renombrando, setRenombrando] = useState<{ id: string; nombre: string } | null>(null);
+  // Sin "archivar": el estado ARCHIVADA sigue existiendo en el modelo por
+  // compatibilidad, pero ya no se ofrece como acción.
+  const [confirmar, setConfirmar] = useState<{ id: string; nombre: string } | null>(null);
   const [showConfig, setShowConfig] = useState(false);
 
   const cargar = useCallback(async () => {
@@ -119,29 +110,14 @@ export function PaginasListView() {
 
   const onConfirmar = async () => {
     if (!confirmar) return;
-    const res =
-      confirmar.tipo === "archivar"
-        ? await cambiarEstadoPagina({ id: confirmar.id, estado: "ARCHIVADA" })
-        : await borrarPagina(confirmar.id);
+    const res = await borrarPagina(confirmar.id);
     if (res.ok) {
-      toast.success(confirmar.tipo === "archivar" ? "Archivada" : "Eliminada");
+      toast.success("Eliminada");
       cargar();
     } else {
       toast.error(res.error ?? "Error");
     }
     setConfirmar(null);
-  };
-
-  const onRenombrar = async () => {
-    if (!renombrando || !renombrando.nombre.trim()) return;
-    const res = await renombrarPagina({ id: renombrando.id, nombre: renombrando.nombre.trim() });
-    if (res.ok) {
-      toast.success("Renombrada");
-      cargar();
-    } else {
-      toast.error(res.error ?? "Error");
-    }
-    setRenombrando(null);
   };
 
   const columnasDef: ToolbarColumna[] = [
@@ -288,41 +264,31 @@ export function PaginasListView() {
                   {columnasRender.map((c) => columnDefs[c.campo]?.td(p))}
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-1">
+                      {/* Ver = la WEB, en una pestaña nueva. Editar = el editor.
+                          Antes el ojo abría el editor y el lápiz solo renombraba,
+                          así que no había forma de ver la web desde aquí. */}
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
+                        title="Ver la web en una pestaña nueva"
+                        onClick={() =>
+                          window.open(`/pagina-web-preview/${p.id}`, "_blank", "noopener,noreferrer")
+                        }
+                      >
+                        <Eye className="h-4 w-4" />
+                      </Button>
                       <Link href={`/marketing/pagina-web/${p.id}`}>
-                        <Button variant="ghost" size="icon" className="h-8 w-8" title="Abrir editor">
-                          <Eye className="h-4 w-4" />
+                        <Button variant="ghost" size="icon" className="h-8 w-8" title="Editar">
+                          <Pencil className="h-4 w-4" />
                         </Button>
                       </Link>
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-8 w-8"
-                        title="Renombrar"
-                        onClick={() => setRenombrando({ id: p.id, nombre: p.nombre })}
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                      {p.estado !== "ARCHIVADA" && (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8"
-                          title="Archivar"
-                          onClick={() =>
-                            setConfirmar({ tipo: "archivar", id: p.id, nombre: p.nombre })
-                          }
-                        >
-                          <Archive className="h-4 w-4" />
-                        </Button>
-                      )}
-                      <Button
-                        variant="ghost"
-                        size="icon"
                         className="h-8 w-8 text-red-600 hover:text-red-700"
                         title="Eliminar"
-                        onClick={() =>
-                          setConfirmar({ tipo: "eliminar", id: p.id, nombre: p.nombre })
-                        }
+                        onClick={() => setConfirmar({ id: p.id, nombre: p.nombre })}
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
@@ -339,48 +305,19 @@ export function PaginasListView() {
       <AlertDialog open={!!confirmar} onOpenChange={(o) => !o && setConfirmar(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>
-              {confirmar?.tipo === "archivar"
-                ? "¿Archivar página?"
-                : "¿Eliminar definitivamente?"}
-            </AlertDialogTitle>
+            <AlertDialogTitle>¿Eliminar definitivamente?</AlertDialogTitle>
             <AlertDialogDescription>
-              {confirmar?.tipo === "archivar"
-                ? `"${confirmar.nombre}" quedará archivada. Podrás recuperarla.`
-                : `"${confirmar?.nombre}" se eliminará con todos sus bloques, dominios y versiones.`}
+              {`"${confirmar?.nombre}" se eliminará con todos sus bloques, dominios y versiones.`}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction
               onClick={onConfirmar}
-              className={
-                confirmar?.tipo === "eliminar"
-                  ? "bg-red-600 hover:bg-red-700 text-white"
-                  : undefined
-              }
+              className="bg-red-600 hover:bg-red-700 text-white"
             >
-              {confirmar?.tipo === "archivar" ? "Archivar" : "Eliminar"}
+              Eliminar
             </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      <AlertDialog open={!!renombrando} onOpenChange={(o) => !o && setRenombrando(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Renombrar página</AlertDialogTitle>
-          </AlertDialogHeader>
-          <Input
-            value={renombrando?.nombre ?? ""}
-            onChange={(e) =>
-              setRenombrando((r) => (r ? { ...r, nombre: e.target.value } : null))
-            }
-            className="mt-2"
-          />
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={onRenombrar}>Guardar</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

@@ -8,7 +8,7 @@ import { toast } from "sonner";
 import { useEditorStore } from "../../../hooks/useEditorStore";
 import { useAutosave } from "../../../hooks/useAutosave";
 import { useBroadcastBloques } from "../../../hooks/useLivePreview";
-import { obtenerPagina } from "../../../actions/paginas-actions";
+import { obtenerPagina, renombrarPagina } from "../../../actions/paginas-actions";
 import { despublicarPagina, publicarPagina } from "../../../actions/publicar-actions";
 import { BloqueLibrary } from "./BloqueLibrary";
 import { Canvas } from "./Canvas";
@@ -25,7 +25,7 @@ export function EditorShell({ paginaId }: Props) {
   const { empresaActual } = useEmpresa();
   const hydrate = useEditorStore((s) => s.hydrate);
   const reset = useEditorStore((s) => s.reset);
-  const nombre = useEditorStore((s) => s.nombre);
+  const nombreStore = useEditorStore((s) => s.nombre);
   const bloques = useEditorStore((s) => s.bloques);
   const seleccionadoId = useEditorStore((s) => s.seleccionadoId);
   const [loading, setLoading] = useState(true);
@@ -33,6 +33,37 @@ export function EditorShell({ paginaId }: Props) {
   const [estadoPagina, setEstadoPagina] = useState<"BORRADOR" | "PUBLICADA" | "ARCHIVADA">("BORRADOR");
   const [publicando, setPublicando] = useState(false);
   const { estado: estadoAutosave, ultimoGuardado } = useAutosave(paginaId);
+
+  // El nombre se edita en la cabecera. Va aparte del autosave de bloques (que
+  // solo guarda el lienzo) y se persiste al salir del campo.
+  // `nombreStore` llega cuando termina de cargar la página. Patrón de React
+  // para estado derivado: comparamos con el valor anterior en el propio render
+  // (nada de efectos, que causarían un render en cascada).
+  const [nombre, setNombre] = useState(nombreStore);
+  const [nombreAnterior, setNombreAnterior] = useState(nombreStore);
+  if (nombreStore !== nombreAnterior) {
+    setNombreAnterior(nombreStore);
+    setNombre(nombreStore);
+  }
+
+  const guardarNombre = async () => {
+    const limpio = nombre.trim();
+    // Vacío o sin cambios: no molestamos al servidor.
+    if (!limpio) {
+      setNombre(nombreAnterior);
+      return;
+    }
+    if (limpio === nombreAnterior) return;
+    const res = await renombrarPagina({ id: paginaId, nombre: limpio });
+    if (res.ok) {
+      setNombreAnterior(limpio);
+      setNombre(limpio);
+      toast.success("Nombre guardado");
+    } else {
+      setNombre(nombreAnterior);
+      toast.error(res.error);
+    }
+  };
 
   // Emitir bloques por BroadcastChannel al iframe de preview
   useBroadcastBloques(paginaId, bloques);
@@ -76,7 +107,24 @@ export function EditorShell({ paginaId }: Props) {
           </Button>
         </Link>
         <Globe className="h-4 w-4 text-muted-foreground" />
-        <span className="font-medium text-sm truncate">{nombre}</span>
+        {/* El nombre se edita AQUÍ, escribiendo encima del título: antes era un
+            botón suelto en la lista que abría un diálogo aparte. Se guarda al
+            salir del campo (o con Enter). */}
+        <input
+          value={nombre}
+          onChange={(e) => setNombre(e.target.value)}
+          onBlur={guardarNombre}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") e.currentTarget.blur();
+            if (e.key === "Escape") {
+              setNombre(nombreAnterior);
+              e.currentTarget.blur();
+            }
+          }}
+          aria-label="Nombre de la página"
+          title="Nombre de la página"
+          className="font-medium text-sm truncate bg-transparent border border-transparent rounded px-1.5 py-0.5 -mx-1.5 min-w-0 max-w-[280px] hover:border-border focus:border-ring focus:outline-none"
+        />
         <AutosaveIndicator estado={estadoAutosave} ultimoGuardado={ultimoGuardado} zonaHoraria={empresaActual.zonaHoraria} />
         <div className="ml-auto flex items-center gap-2">
           {/* Importar desde una web existente vive DENTRO del asistente: es una

@@ -306,9 +306,7 @@ function ReservasPublico({ bloque }: { bloque: Extract<Bloque, { tipo: "reservas
           Reservar ahora
         </a>
       ) : modo === "embed_cover" && url ? (
-        <div className="aspect-video w-full">
-          <iframe src={url} className="w-full h-full border-0 rounded-md" title="Reservas" />
-        </div>
+        <ReservasEmbed url={url} />
       ) : (
         <p className="text-sm text-muted-foreground">
           Formulario de reserva (Fase 7 conecta con captura de leads).
@@ -316,6 +314,68 @@ function ReservasPublico({ bloque }: { bloque: Extract<Bloque, { tipo: "reservas
       )}
     </section>
   );
+}
+
+/**
+ * Motor de reservas externo (CoverManager y equivalentes).
+ *
+ * Dos detalles que el iframe genérico no cubría:
+ *  - allow="payment": el módulo cobra señal/depósito en algunos restaurantes.
+ *  - altura: el módulo es vertical y variable (calendario → horas → datos),
+ *    no encaja en aspect-video. El proveedor publica su alto real por postMessage
+ *    y aquí se aplica; si nunca llega, se queda en el alto inicial de 550px.
+ */
+const RESERVAS_ORIGENES_PERMITIDOS = ["https://www.covermanager.com"];
+
+function ReservasEmbed({ url }: { url: string }) {
+  const [altura, setAltura] = useState(550);
+
+  const origenPermitido = RESERVAS_ORIGENES_PERMITIDOS.some((o) => url.startsWith(`${o}/`));
+
+  useEffect(() => {
+    if (!origenPermitido) return;
+    function onMensaje(e: MessageEvent) {
+      if (!RESERVAS_ORIGENES_PERMITIDOS.includes(e.origin)) return;
+      const alto = leerAltura(e.data);
+      if (alto && alto > 200 && alto < 5000) setAltura(alto);
+    }
+    window.addEventListener("message", onMensaje);
+    return () => window.removeEventListener("message", onMensaje);
+  }, [origenPermitido]);
+
+  if (!origenPermitido) {
+    console.warn("[pagina-web][reservas] origen no permitido:", url);
+    return (
+      <p className="text-sm text-muted-foreground">
+        El motor de reservas configurado no está autorizado.
+      </p>
+    );
+  }
+
+  return (
+    <iframe
+      src={url}
+      title="Reservas"
+      className="w-full border-0 rounded-md"
+      style={{ height: `${altura}px` }}
+      allow="payment"
+      loading="lazy"
+    />
+  );
+}
+
+/** CoverManager (iframe-resizer) envía "[iFrameSizer]…:<alto>:<ancho>"; otros mandan objeto. */
+function leerAltura(data: unknown): number | null {
+  if (typeof data === "number") return data;
+  if (typeof data === "string") {
+    const m = data.match(/(?:height[":\s]+)?(\d{3,4})(?::\d+)?$/);
+    return m ? Number(m[1]) : null;
+  }
+  if (data && typeof data === "object" && "height" in data) {
+    const h = Number((data as { height: unknown }).height);
+    return Number.isFinite(h) ? h : null;
+  }
+  return null;
 }
 
 function TestimoniosPublico({
