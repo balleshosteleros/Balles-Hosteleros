@@ -335,6 +335,12 @@ export async function enviarReservaEmail(
     subject,
     html,
     text,
+    // `brandHeader: false` porque este correo YA pinta su propia cabecera con el
+    // isotipo. Pasamos `empresaId` igualmente para dos cosas: que el remitente
+    // salga con el nombre de la empresa y que el isotipo se INCRUSTE (cid:), que
+    // si no Gmail lo bloquea y el cliente ve un hueco.
+    empresaId,
+    brandHeader: false,
   });
 
   if (!res.ok) {

@@ -84,6 +84,48 @@ export async function brandHeaderInline(
   }
 }
 
+/**
+ * INCRUSTA la marca que el propio HTML ya trae. Los correos que pintan su propia
+ * cabecera (reservas) referencian el isotipo por URL externa, y Gmail/Outlook
+ * BLOQUEAN esas imágenes por defecto: el cliente ve un hueco donde debería estar
+ * el logo. Aquí sustituimos esas URLs por `cid:` y devolvemos el adjunto inline,
+ * de modo que la imagen se ve SIEMPRE, sin pedir «mostrar imágenes».
+ *
+ * Solo toca las URLs de marca de ESA empresa (isotipo/logo): el resto del HTML
+ * se deja intacto. Best-effort: si la descarga falla, devuelve el html tal cual.
+ */
+export async function incrustarMarcaEnHtml(
+  html: string,
+  brand: EmpresaBrand,
+): Promise<{
+  html: string;
+  attachments: { filename: string; content: Buffer; cid: string; contentType: string }[];
+}> {
+  const attachments: { filename: string; content: Buffer; cid: string; contentType: string }[] = [];
+  // Candidatas: las imágenes de marca de la empresa que aparezcan en el HTML.
+  const candidatas = [brand.isotipoUrl, brand.logoUrl].filter(esUrlAbsoluta);
+  let out = html;
+  for (const [i, url] of candidatas.entries()) {
+    if (!out.includes(url)) continue;
+    try {
+      const res = await fetch(url);
+      if (!res.ok) continue;
+      const contentType = res.headers.get("content-type") || "image/png";
+      const buf = Buffer.from(await res.arrayBuffer());
+      if (buf.length === 0) continue;
+      const cid = `marca-empresa-${i}`;
+      const ext = contentType.includes("svg") ? "svg" : contentType.includes("jpeg") ? "jpg" : "png";
+      // `split/join` = reemplazo literal de TODAS las apariciones, sin que los
+      // caracteres de la URL se interpreten como patrón de expresión regular.
+      out = out.split(url).join(`cid:${cid}`);
+      attachments.push({ filename: `marca-${i}.${ext}`, content: buf, cid, contentType });
+    } catch {
+      // Se queda la URL externa (comportamiento anterior): nunca rompe el envío.
+    }
+  }
+  return { html: out, attachments };
+}
+
 /** Lee marca de la empresa (nombre + isotipo + logo). Nunca lanza. */
 export async function fetchEmpresaBrand(empresaId: string): Promise<EmpresaBrand | null> {
   try {

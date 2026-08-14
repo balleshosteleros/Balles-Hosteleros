@@ -21,7 +21,13 @@
 import "server-only";
 import nodemailer from "nodemailer";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { fetchEmpresaBrand, brandHeaderHtml, brandHeaderInline, inyectarCabecera } from "@/lib/email/brand-header";
+import {
+  fetchEmpresaBrand,
+  brandHeaderHtml,
+  brandHeaderInline,
+  inyectarCabecera,
+  incrustarMarcaEnHtml,
+} from "@/lib/email/brand-header";
 import { comprobarEnlacesCorreo } from "@/lib/email/link-guard";
 
 /** Dirección no-reply: capa cualquier respuesta a los correos del software. */
@@ -168,6 +174,14 @@ export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult>
         } else {
           html = inyectarCabecera(html, brandHeaderHtml(brand));
         }
+      } else {
+        // El correo pinta su PROPIA cabecera de marca (reservas): la imagen va
+        // por URL externa y Gmail la bloquea por defecto → el cliente ve un hueco
+        // donde debería estar el isotipo. La incrustamos (cid:) para que se vea
+        // siempre, sin tocar el diseño del correo.
+        const emb = await incrustarMarcaEnHtml(html, brand);
+        html = emb.html;
+        inlineAttachments.push(...emb.attachments);
       }
     }
   }
