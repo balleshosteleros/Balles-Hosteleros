@@ -309,19 +309,18 @@ export async function procesarRecordatoriosDocsBaja(
 }
 
 /**
- * Pide a la gestoría los documentos de la baja, EL DÍA DE LA BAJA.
- *
- * Por qué ese día y no al comunicarla: los papeles (justificante del RED,
- * certificado de empresa) no existen hasta que la baja se tramita, así que
- * pedirlos semanas antes solo generaba ruido. El correo de la comunicación es
- * únicamente el aviso de que el trabajador causa baja.
+ * Pide a la gestoría los documentos oficiales de la baja.
  *
  * Se dispara desde dos caminos:
- *   · el cron diario, cuando llega el día de la baja (o si ya pasó y sigue sin
- *     documentar), y
- *   · el propio aviso de baja, si al comunicarla la fecha ya es hoy o anterior.
+ *   · `forzar: true` — al comunicar la baja desde RRHH («Baja contrato»). Es el
+ *     camino normal: la gestoría recibe la petición en ese mismo momento, junto
+ *     al aviso de la baja, sea cual sea la fecha. Decisión de Iván.
+ *   · el cron diario — red de seguridad para las peticiones que no llegaron a
+ *     salir (p. ej. el correo falló) y para insistir cuando la fecha de la baja
+ *     ya ha pasado y el justificante sigue sin subir.
  *
- * Además, el mismo día se avisa al TRABAJADOR a su correo personal.
+ * Además se avisa al TRABAJADOR a su correo personal: el día de su baja ya suele
+ * estar Inactivo y sin acceso al sistema.
  *
  * Devuelve `true` solo si el correo a la gestoría salió.
  */
@@ -334,6 +333,8 @@ export async function enviarPeticionDocsBaja(
     tokenHash: string;
     ultimoDia: string;
     expiraEn: string;
+    /** Envía sin mirar la fecha (lo usa la comunicación de la baja). */
+    forzar?: boolean;
   },
 ): Promise<boolean> {
   try {
@@ -344,10 +345,12 @@ export async function enviarPeticionDocsBaja(
       (new Date(`${tk.ultimoDia}T00:00:00Z`).getTime() - new Date(`${hoy}T00:00:00Z`).getTime()) /
         86_400_000,
     );
-    // Se pide EL DÍA DE LA BAJA en adelante. Antes de ese día no hay papeles que
-    // reclamar.
-    if (diasHasta > 0) return false;
+    // Sin `forzar` (barrido del cron) solo se insiste desde el día de la baja en
+    // adelante: antes de esa fecha la petición ya salió al comunicarla.
+    if (!tk.forzar && diasHasta > 0) return false;
     const vencido = diasHasta < 0;
+    // Baja aún por llegar: el correo no puede hablar en pasado ni decir «hoy».
+    const futura = diasHasta > 0;
 
     const { data: emp } = await admin
       .from("empleados")
@@ -375,18 +378,22 @@ export async function enviarPeticionDocsBaja(
     const fechaES = tk.ultimoDia.split("-").reverse().join("/");
     const subject = vencido
       ? `⚠️ Urgente: faltan los documentos de la baja de ${nombre} · ${empresaNombre}`
-      : `Documentos de la baja de ${nombre} · ${empresaNombre}`;
+      : `Documentos de la baja de ${nombre} (${fechaES}) · ${empresaNombre}`;
     const html = `
       <p>${
         vencido
           ? `Nos falta el <b>justificante de baja de la Seguridad Social</b> de <b>${nombre}</b>${emp?.dni_nie ? ` (DNI/NIE ${emp.dni_nie})` : ""}.`
-          : `Hoy es el último día de trabajo de <b>${nombre}</b>${emp?.dni_nie ? ` (DNI/NIE ${emp.dni_nie})` : ""}.`
+          : futura
+            ? `<b>${nombre}</b>${emp?.dni_nie ? ` (DNI/NIE ${emp.dni_nie})` : ""} causa baja en la empresa.`
+            : `Hoy es el último día de trabajo de <b>${nombre}</b>${emp?.dni_nie ? ` (DNI/NIE ${emp.dni_nie})` : ""}.`
       }</p>
       <p${vencido ? ' style="color:#b91c1c"' : ""}>
         ${
           vencido
             ? `Su baja tenía fecha del <b>${fechaES}</b> y esa fecha <b>ya ha pasado</b>. Sin el justificante no podemos acreditar la baja ni su causa. Te agradeceríamos que nos lo envíes cuanto antes.`
-            : `Su baja es efectiva el <b>${fechaES}</b>. Al tramitarla, adjúntanos por favor el <b>justificante de baja de la Seguridad Social</b> y el <b>certificado de empresa</b>.`
+            : futura
+              ? `Su último día de trabajo será el <b>${fechaES}</b>. En cuanto tramites la baja, adjúntanos por favor el <b>justificante de baja de la Seguridad Social</b> y el <b>certificado de empresa</b> desde el botón de abajo. El enlace queda guardado y puedes usarlo cuando tengas los documentos.`
+              : `Su baja es efectiva el <b>${fechaES}</b>. Al tramitarla, adjúntanos por favor el <b>justificante de baja de la Seguridad Social</b> y el <b>certificado de empresa</b>.`
         }
       </p>
       ${botonHtml}
@@ -398,34 +405,48 @@ export async function enviarPeticionDocsBaja(
     const res = await sendEmail({ to, subject, html, text, empresaId: tk.empresaId });
     if (!res.ok) return false;
 
-    // El mismo día se avisa al TRABAJADOR: ya suele estar Inactivo y sin acceso
-    // al sistema, así que el correo es su única vía. Best-effort.
-    await avisarTrabajadorBaja(admin, {
-      empresaId: tk.empresaId,
-      empleadoId: tk.empleadoId,
-      empresaNombre,
-      nombrePila: (emp?.nombre as string | null) ?? null,
-      fechaES,
-    });
+    // Aviso al TRABAJADOR, solo cuando su baja YA es efectiva (hoy o antes): ese
+    // día ya suele estar Inactivo y sin acceso al sistema, así que el correo es su
+    // única vía. Si la baja aún es futura no se le escribe: ya conoce su fecha y
+    // el correo que le importa es el que le lleva los documentos. Best-effort.
+    if (!futura) {
+      await avisarTrabajadorBaja(admin, {
+        empresaId: tk.empresaId,
+        empleadoId: tk.empleadoId,
+        empresaNombre,
+        nombrePila: (emp?.nombre as string | null) ?? null,
+        fechaES,
+      });
+    }
 
-    await admin
-      .from("gestoria_baja_doc_tokens")
-      .update({ recordatorio_en: new Date().toISOString() })
-      .eq("id", tk.id);
+    // `recordatorio_en` cierra el barrido del cron para esta baja. Solo se sella
+    // cuando la fecha YA llegó: si se sellara en la petición inicial de una baja
+    // futura, el cron no volvería a insistir nunca y una baja que se quedara sin
+    // documentar pasaría desapercibida — justo lo que este circuito evita.
+    if (!futura) {
+      await admin
+        .from("gestoria_baja_doc_tokens")
+        .update({ recordatorio_en: new Date().toISOString() })
+        .eq("id", tk.id);
+    }
 
-    const { notificarRrhhGestoria } = await import(
-      "@/features/rrhh/services/gestoria/gestoria-contrato"
-    );
-    await notificarRrhhGestoria({
-      empresaId: tk.empresaId,
-      tipo: "gestoria_recordatorio",
-      titulo: `Documentos de baja pendientes: ${nombre}`,
-      mensaje: vencido
-        ? `La baja de ${nombre} (${fechaES}) ya pasó y la gestoría aún no ha subido el justificante. Se le ha reenviado el enlace.`
-        : `La baja de ${nombre} es el ${fechaES} y faltan los documentos. Se ha recordado a la gestoría.`,
-      empleadoId: tk.empleadoId,
-      dedupeKey: `gestoria_baja_docs:${tk.id}`,
-    });
+    // A RRHH solo se le avisa cuando hay algo que vigilar: la petición inicial de
+    // una baja futura es el curso normal, no una incidencia.
+    if (!futura) {
+      const { notificarRrhhGestoria } = await import(
+        "@/features/rrhh/services/gestoria/gestoria-contrato"
+      );
+      await notificarRrhhGestoria({
+        empresaId: tk.empresaId,
+        tipo: "gestoria_recordatorio",
+        titulo: `Documentos de baja pendientes: ${nombre}`,
+        mensaje: vencido
+          ? `La baja de ${nombre} (${fechaES}) ya pasó y la gestoría aún no ha subido el justificante. Se le ha reenviado el enlace.`
+          : `La baja de ${nombre} es el ${fechaES} y faltan los documentos. Se ha recordado a la gestoría.`,
+        empleadoId: tk.empleadoId,
+        dedupeKey: `gestoria_baja_docs:${tk.id}`,
+      });
+    }
     return true;
   } catch (e) {
     console.error("[gestoria/baja] recordatorio:", e);

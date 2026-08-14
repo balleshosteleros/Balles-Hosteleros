@@ -945,23 +945,23 @@ export async function enviarBajaGestoria(
     // ese día ya llegó. Si no, habría que esperar a la vuelta del cron (una vez
     // al día) justo en el caso que más corre.
     if (res.ok && tkDocs.ok) {
-      const hoyIso = new Date().toISOString().slice(0, 10);
-      if (baja.ultimoDiaIso <= hoyIso) {
-        try {
-          const { enviarPeticionDocsBaja } = await import(
-            "@/features/rrhh/services/gestoria/gestoria-baja-documentos"
-          );
-          await enviarPeticionDocsBaja(admin, {
-            id: tkDocs.tokenId,
-            empresaId,
-            empleadoId,
-            tokenHash: tkDocs.tokenHash,
-            ultimoDia: baja.ultimoDiaIso,
-            expiraEn: tkDocs.expiraEn,
-          });
-        } catch (e) {
-          console.error("[rrhh] enviarBajaGestoria → petición docs baja:", e);
-        }
+      try {
+        const { enviarPeticionDocsBaja } = await import(
+          "@/features/rrhh/services/gestoria/gestoria-baja-documentos"
+        );
+        await enviarPeticionDocsBaja(admin, {
+          id: tkDocs.tokenId,
+          empresaId,
+          empleadoId,
+          tokenHash: tkDocs.tokenHash,
+          ultimoDia: baja.ultimoDiaIso,
+          expiraEn: tkDocs.expiraEn,
+          // Decisión de Iván: la gestoría recibe la petición EN EL MOMENTO en que
+          // RRHH pasa al empleado a «Baja contrato», sin esperar al día de la baja.
+          forzar: true,
+        });
+      } catch (e) {
+        console.error("[rrhh] enviarBajaGestoria → petición docs baja:", e);
       }
     }
 
