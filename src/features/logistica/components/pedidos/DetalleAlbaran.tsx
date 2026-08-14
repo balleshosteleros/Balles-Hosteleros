@@ -400,7 +400,12 @@ export function DetalleAlbaran({ albaran, pedidoOrigen, zonaHoraria, onBack, onE
         </Card>
       )}
 
-      {/* Products table */}
+      {/* Productos del albarán.
+          En Revisión NO se pinta: el asistente de arriba ya lista las mismas líneas para
+          resolverlas una a una, y repetirlas aquí debajo mostraba cada producto dos veces
+          (un albarán de 23 líneas se veía como 46 filas). Al confirmar, el asistente
+          desaparece y esta tabla pasa a ser la vista del albarán. */}
+      {!enRevision && (
       <Card>
         <CardHeader className="pb-2"><CardTitle className="text-base">Productos del albarán</CardTitle></CardHeader>
         <CardContent className="p-0">
@@ -430,6 +435,7 @@ export function DetalleAlbaran({ albaran, pedidoOrigen, zonaHoraria, onBack, onE
           </div>
         </CardContent>
       </Card>
+      )}
 
       {/* Pie + Totales */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
