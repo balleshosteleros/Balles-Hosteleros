@@ -631,8 +631,12 @@ export async function updateEmpleado(id: string, updates: UpdateEmpleadoInput) {
     // propios de cada empresa y NUNCA se propagan (si se propagaran, un director
     // multiempresa acabaría con el departamento de otra empresa — el bug que hacía
     // aparecer a un empleado en dos áreas a la vez).
+    // `email_empresa` NO va aquí a propósito: es el buzón de trabajo DE ESA
+    // empresa (direccion.grupobacanal@ vs direccion.grupohabana@), no un dato
+    // de la persona. Propagándolo, editar el correo en una empresa machacaba
+    // el de la otra y las dos fichas acababan con el mismo buzón.
     const patchIdentidad: Record<string, unknown> = {};
-    for (const campo of ["nombre", "apellidos", "email_empresa", "email_personal", "telefono"]) {
+    for (const campo of ["nombre", "apellidos", "email_personal", "telefono"]) {
       if (campo in patch) patchIdentidad[campo] = patch[campo];
     }
     if (Object.keys(patchIdentidad).length > 0) {

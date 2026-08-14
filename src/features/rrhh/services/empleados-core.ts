@@ -433,6 +433,12 @@ export async function sincronizarLoginEmailEmpleado(input: {
   emailPersonal?: string | null;
   /** Notificar al empleado del cambio de login (default true). */
   notificar?: boolean;
+  /**
+   * Cambiar el correo de acceso aunque la cuenta ya tenga uno fijado. Solo
+   * para el cambio deliberado desde Ajustes → Usuarios. En el guardado normal
+   * de la ficha va a false: el login no se mueve por editar un buzón.
+   */
+  forzar?: boolean;
 }): Promise<
   | { ok: true; cambiado: false }
   | { ok: true; cambiado: true; anterior: string | null; nuevo: string }
@@ -463,6 +469,14 @@ export async function sincronizarLoginEmailEmpleado(input: {
   }
   const anterior = (authUser.user.email ?? "").trim().toLowerCase() || null;
   if (anterior === nuevoLogin) return { ok: true, cambiado: false }; // ya coincide
+
+  // El login se fija en el alta de la PRIMERA empresa y no se mueve solo. Quien
+  // trabaja en dos empresas tiene un buzón de trabajo por empresa, pero una
+  // única cuenta: si esto siguiera a `resolverLoginEmail` sin más, dar de alta
+  // en la segunda empresa (o editar allí el correo) le cambiaría el correo de
+  // acceso por debajo y entraría con uno distinto al que se le comunicó.
+  // Cambiar el acceso es una decisión explícita → `forzar`.
+  if (anterior && !input.forzar) return { ok: true, cambiado: false };
 
   // Cambiar SOLO el email en auth.users. La contraseña se conserva intacta.
   // email_confirm: true → el nuevo correo queda confirmado sin pedir verificación.

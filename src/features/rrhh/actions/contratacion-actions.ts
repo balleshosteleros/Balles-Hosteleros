@@ -561,11 +561,33 @@ export async function enviarAccesoEmpleadoPorId(
     const admin = createAdminClient();
     const { data: emp } = await admin
       .from("empleados")
-      .select("email_empresa, email_personal, nombre, empresa_id")
+      .select("email_empresa, email_personal, nombre, empresa_id, user_id")
       .eq("id", empleadoId)
       .maybeSingle();
     if (!emp) return { ok: false, error: "Empleado no encontrado" };
-    const loginEmail = ((emp.email_empresa as string | null) || (emp.email_personal as string | null) || "").toLowerCase();
+
+    // El login se fijó al dar de alta en la PRIMERA empresa y no cambia nunca.
+    // Hay que leerlo de la cuenta, no recalcularlo desde esta ficha: quien
+    // trabaja en dos empresas tiene una ficha por empresa, cada una con su
+    // buzón de trabajo, pero UNA sola cuenta. Recalculándolo, al reenviar el
+    // acceso desde la ficha de la segunda empresa se mandaba el enlace al
+    // buzón de esa empresa, que no es la cuenta con la que entra.
+    let loginEmail = "";
+    const userId = emp.user_id as string | null;
+    if (userId) {
+      const { data: cuenta } = await admin.auth.admin.getUserById(userId);
+      loginEmail = (cuenta?.user?.email ?? "").toLowerCase();
+    }
+    // Sin cuenta creada todavía (acceso diferido): se deriva igual que en el
+    // alta, que es lo que fijará el login cuando la cuenta se cree.
+    if (!loginEmail) {
+      loginEmail = (
+        resolverLoginEmail({
+          emailEmpresa: emp.email_empresa as string | null,
+          emailPersonal: emp.email_personal as string | null,
+        }) ?? ""
+      ).toLowerCase();
+    }
     if (!loginEmail) return { ok: false, error: "El empleado no tiene email de acceso" };
 
     const siteUrl = getSiteUrl();
