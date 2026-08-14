@@ -10,7 +10,7 @@
  */
 
 import { getAppContext } from "@/lib/supabase/get-context";
-import { googleFetchAuto } from "@/lib/google/api";
+import { googleFetchAuto, getGoogleTokens } from "@/lib/google/api";
 
 export interface Destinatario {
   nombre: string;
@@ -43,24 +43,49 @@ type PeopleResp = {
  * Esto es lo que hace que una empresa nueva tenga sus contactos disponibles en
  * cuanto vincula el correo, SIN que nadie tenga que importar nada a mano.
  */
-async function buscarEnGoogle(q: string): Promise<Destinatario[]> {
-  const endpoints = ["people:searchContacts", "otherContacts:search"] as const;
-  const out: Destinatario[] = [];
+type EndpointPeople = "people:searchContacts" | "otherContacts:search";
 
+function urlPeople(ep: EndpointPeople, q: string): string {
+  const url = new URL(`https://people.googleapis.com/v1/${ep}`);
+  url.searchParams.set("query", q);
+  url.searchParams.set("pageSize", "10");
+  // `otherContacts` no admite `organizations` en el readMask.
+  url.searchParams.set(
+    "readMask",
+    ep === "otherContacts:search"
+      ? "names,emailAddresses"
+      : "names,emailAddresses,organizations",
+  );
+  return url.toString();
+}
+
+/**
+ * Cuentas cuya caché de búsqueda ya se ha calentado en este proceso.
+ *
+ * La búsqueda de People usa una caché PEREZOSA: Google documenta que hay que
+ * mandar una petición de calentamiento con la consulta vacía, o las primeras
+ * búsquedas devuelven vacío. Sin esto, el primer usuario de una empresa recién
+ * vinculada no vería ninguna sugerencia — justo el trámite que se quiere evitar.
+ */
+const cacheCalentada = new Set<string>();
+
+async function calentarCache(cuenta: string): Promise<void> {
+  if (cacheCalentada.has(cuenta)) return;
+  cacheCalentada.add(cuenta);
+  await Promise.allSettled([
+    googleFetchAuto(urlPeople("people:searchContacts", "")),
+    googleFetchAuto(urlPeople("otherContacts:search", "")),
+  ]);
+}
+
+async function buscarEnGoogle(q: string, cuenta: string): Promise<Destinatario[]> {
+  const out: Destinatario[] = [];
+  await calentarCache(cuenta);
+
+  const endpoints: EndpointPeople[] = ["people:searchContacts", "otherContacts:search"];
   for (const ep of endpoints) {
     try {
-      const url = new URL(`https://people.googleapis.com/v1/${ep}`);
-      url.searchParams.set("query", q);
-      url.searchParams.set("pageSize", "10");
-      // `otherContacts` no admite `organizations` en el readMask.
-      url.searchParams.set(
-        "readMask",
-        ep === "otherContacts:search"
-          ? "names,emailAddresses"
-          : "names,emailAddresses,organizations",
-      );
-
-      const { data, needsReauth } = await googleFetchAuto<PeopleResp>(url.toString());
+      const { data, needsReauth } = await googleFetchAuto<PeopleResp>(urlPeople(ep, q));
       if (needsReauth) return out;
 
       for (const r of data?.results ?? []) {
@@ -153,7 +178,14 @@ export async function buscarDestinatarios(
     // Contactos de la cuenta de Google vinculada (agenda + con quien se ha
     // intercambiado correo). Van DESPUÉS para que, ante el mismo correo, gane
     // la ficha propia del software, que trae puesto/empresa.
-    resultados.push(...(await buscarEnGoogle(q)));
+    //
+    // Se consulta la cuenta ACTIVA: cada empresa vincula la suya, así que al
+    // cambiar de empresa cambian también las sugerencias de Gmail y nunca se
+    // ofrecen los contactos de otra.
+    const { email: cuentaGoogle } = await getGoogleTokens();
+    if (cuentaGoogle) {
+      resultados.push(...(await buscarEnGoogle(q, cuentaGoogle)));
+    }
 
     // Un mismo correo puede estar en varias fuentes: se deja la primera.
     const vistos = new Set<string>();
