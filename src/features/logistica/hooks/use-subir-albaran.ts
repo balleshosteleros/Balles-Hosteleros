@@ -374,6 +374,9 @@ export function useSubirAlbaran({ fechaPorDefecto, creador, onCreado }: UseSubir
           total: l.importe ?? Math.round(precio * l.cantidad * 100) / 100,
           nombreProveedor: l.nombre,
           formato: l.formato ?? null,
+          // Desglose impreso en el papel ("SUBUNIDADES: 24"): trazabilidad de la
+          // equivalencia; la cantidad de arriba es SIEMPRE el nº de envases.
+          unidadesPorEnvase: l.unidadesPorEnvase ?? null,
         };
       });
 

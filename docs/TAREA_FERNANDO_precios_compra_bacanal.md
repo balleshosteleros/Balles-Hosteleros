@@ -87,6 +87,44 @@ tocado porque no es mío. Si es tuyo, revísalo: romperá el build.
 
 ---
 
+## ⚡ FERNANDO (15-ago): primera respuesta — la regla de subunidades del OCR nuevo multiplicaba el stock DOS veces; ARREGLADO
+
+Iván: buen día de trabajo el de ayer — lo del dossier (ficha compra + ficha venta por diseño)
+nos salvó de un destrozo. Pero tu regla nueva del OCR ("las subunidades son la CANTIDAD
+real") chocaba de frente con el circuito de equivalencias que ya está en producción:
+
+- Todo lo que viene DESPUÉS del OCR (la mesa de incidencias, el contraste con el importe de
+  la línea y `confirmar_albaran_transaccional`) asume que `cantidad` = **nº de envases
+  comprados**, y es el sistema quien multiplica por la equivalencia del formato. Con la
+  cantidad ya desglosada, el vino de las "2 CAJ" habría entrado como 12 del OCR × 6 del RPC
+  = **72 botellas**. Nadie llegó a confirmar un albarán leído con el prompt nuevo (verificado
+  en BD: solo existe uno posterior a tu deploy y sigue en Revisión, con cantidades por
+  envase y el dinero cuadrando), así que **no hay daño en datos**.
+- **El arreglo conserva tu acierto entero**: las filas de detalle se siguen fundiendo en su
+  artículo (nada de artículos fantasma, descuentos como descuentos), pero `cantidad` vuelve a
+  ser el nº de envases y el desglose viaja en un campo nuevo `unidadesPorEnvase`. Ese campo
+  pasa a ser la fuente Nº 1 de equivalencia: "el papel manda" — la mesa la propone con
+  confianza 95 % y al aceptarla se guarda el formato en Catálogos. Exactamente lo que pedías,
+  multiplicando UNA sola vez. (Y de propina: cada albarán con desglose irá rellenando solo
+  los 115 formatos sin equivalencia que reclamas en tu punto 2.)
+- Además el detector no reconocía "CAJ"/"cajón"/"box" como envases — su lista estaba
+  desalineada con la de contenedoras del RPC desde el hotfix del 07-ago. Alineadas.
+
+Tres avisos rápidos más:
+
+1. **Tu bug de numeración ya tiene la 3ª víctima**: anoche (14-ago 21:58) Alejandro subió por
+   el móvil el **`ALB-2013-025`** de Belmon Drink — fecha leída 2013 → serie 2013. El gerente
+   ya usa la subida móvil por su cuenta; razón de más para tu pendiente nº 5 (la serie debe
+   mandar sobre la fecha del OCR).
+2. De tu lista de "deuda mía": **F6 y F7 están CERRADOS desde el PRP-073** (F6 = la recepción
+   ya NO usa la Edge Function; extractor único compartido) y **`albaranes_lineas` ya no
+   existe** (migración `20260806120000`, aplicada — verificado hoy contra prod: 0 tablas).
+   Queda viva la de los formatos sin equivalencia, que el punto de arriba empieza a drenar.
+3. **No te pisé nada el 5-ago**: no había trabajo local sin commitear en esos ficheros.
+   Cerrado.
+
+---
+
 ## ✅ RESPUESTA DE IVÁN (14-ago) — tus 5 preguntas, contestadas + lo que falta por revisar
 
 Fernando: de vuelta. Van las cinco respuestas, y después una lectura de conjunto que me

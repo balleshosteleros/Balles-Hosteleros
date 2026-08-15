@@ -49,7 +49,9 @@ const SINONIMOS: Array<{ base: MedidaBase; factor: number; formas: string[] }> =
  * Si una línea viene en un envase y no sabemos su contenido, el stock entraría mal.
  */
 const ENVASES = [
-  "caja", "cajas", "cja", "cjas", "cj", "c", "pack", "packs", "pk",
+  // "caj" y "cajon/es": mismas abreviaturas que la lista de contenedoras del RPC
+  // (hotfix 07-ago, ALB-2026-023) — las dos listas deben reconocer lo mismo.
+  "caja", "cajas", "caj", "cja", "cjas", "cj", "c", "cajon", "cajones", "box", "pack", "packs", "pk",
   "bandeja", "bandejas", "band", "saco", "sacos", "garrafa", "garrafas",
   "bidon", "bidones", "fardo", "fardos", "lote", "lotes", "palet", "palets",
   "estuche", "estuches", "cubeta", "cubetas", "barril", "barriles",
@@ -97,6 +99,7 @@ export interface FormatoInterpretado {
   envase: string | null;
   /** Cómo se dedujo, para explicárselo al usuario. */
   origen:
+    | "subunidades"      // fila de desglose del papel ("SUBUNIDADES: 24")
     | "explicito"        // "caja de 24 unidades"
     | "multiplicacion"   // "12x1L"
     | "envase_numero"    // "PACK-6"
@@ -127,14 +130,31 @@ const aNumero = (s: string): number => parseFloat(s.replace(",", "."));
  * @param unidad   columna "unidad" del albarán
  * @param nombre   nombre de la línea (muchos proveedores meten aquí el formato)
  * @param medidaProducto  medida base de NUESTRA ficha, para resolver ambigüedades
+ * @param unidadesPorEnvase  desglose impreso en el papel ("SUBUNIDADES: 24"), si el OCR lo leyó
  */
 export function interpretarFormato(
   formato: string | null | undefined,
   unidad: string | null | undefined,
   nombre: string | null | undefined,
   medidaProducto?: MedidaBase | null,
+  unidadesPorEnvase?: number | null,
 ): FormatoInterpretado {
   const candidatos = [formato, unidad, nombre].map(normalizarTexto);
+
+  // --- 0-bis (prioridad máxima). El desglose impreso en el propio albarán: el
+  // proveedor DECLARA cuántas unidades trae el envase ("1 caja / 24 subunidades").
+  // Es más fiable que cualquier interpretación del texto, así que manda sobre todas.
+  if (unidadesPorEnvase != null && unidadesPorEnvase > 1) {
+    const envase = candidatos.map((t) => (t ? nombreEnvaseEn(t) : null)).find((e) => e !== null) ?? null;
+    return {
+      contenido: redondear(unidadesPorEnvase),
+      medida: "ud",
+      envase,
+      origen: "subunidades",
+      confianza: 0.95,
+      descripcion: `1 ${envase ?? "envase"} = ${formatearNumero(unidadesPorEnvase)} unidades (desglose del albarán)`,
+    };
+  }
 
   for (const texto of candidatos) {
     if (!texto) continue;

@@ -769,7 +769,11 @@ export function detectarIncidencias(entrada: EntradaDeteccion): ResultadoDetecci
    * en un envase el stock entraría mal igualmente.
    */
   function revisarFormatoSinProducto(linea: LineaOcrAlbaran) {
-    if (!esEnvase(linea.unidad) && !esEnvase(linea.formato)) return;
+    // El desglose impreso ("SUBUNIDADES: 24") también obliga a resolver la
+    // equivalencia aunque el texto del formato no sea un envase reconocible
+    // ("caja de 24"); sin texto de formato no hay nombre bajo el que guardarla.
+    const desglose = (linea.unidadesPorEnvase ?? 0) > 1 && !!linea.formato;
+    if (!esEnvase(linea.unidad) && !esEnvase(linea.formato) && !desglose) return;
     emitirFormato(linea, null);
   }
 
@@ -786,6 +790,7 @@ export function detectarIncidencias(entrada: EntradaDeteccion): ResultadoDetecci
       linea.unidad,
       linea.nombre,
       medidaProducto,
+      linea.unidadesPorEnvase,
     );
 
     // ¿Ya tenemos ese formato definido en Logística → Catálogos?
@@ -921,7 +926,12 @@ export function detectarIncidencias(entrada: EntradaDeteccion): ResultadoDetecci
     const unidadNorm = normalizar(linea.unidad);
     const medidaBase = interpretarMedida(producto.medida)?.base ?? null;
     const medidaLinea = interpretarMedida(linea.unidad)?.base ?? null;
-    const esContenedora = esEnvase(linea.unidad) || esEnvase(linea.formato);
+    const esContenedora =
+      esEnvase(linea.unidad) ||
+      esEnvase(linea.formato) ||
+      // Desglose impreso ("SUBUNIDADES: 24") con texto de formato: hay equivalencia
+      // que resolver aunque el envase no esté en la lista de contenedoras.
+      ((linea.unidadesPorEnvase ?? 0) > 1 && !!linea.formato);
 
     // Viene en envase, o en una medida distinta a la de nuestra ficha.
     if (esContenedora || (medidaLinea !== null && medidaBase !== null && medidaLinea !== medidaBase)) {

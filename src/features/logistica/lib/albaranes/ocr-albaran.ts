@@ -91,6 +91,13 @@ export interface LineaOcrAlbaran {
   iva?: string | null;
   formato?: string | null;
   unidad: string;
+  /**
+   * Unidades reales que trae UN envase, leídas de la fila de desglose del papel
+   * ("SUBUNIDADES: 24"). La `cantidad` sigue siendo el nº de envases comprados:
+   * la conversión a unidades la aplica el circuito de equivalencias UNA sola vez
+   * (si la cantidad viniera ya desglosada, la confirmación multiplicaría dos veces).
+   */
+  unidadesPorEnvase?: number | null;
   /** Importe total de la línea tal y como lo imprime el proveedor. */
   importe: number | null;
   /** Referencia/código del artículo en el catálogo DEL PROVEEDOR (ancla de alias fuerte). */
@@ -156,6 +163,10 @@ const OCR_ALBARAN_SCHEMA: Schema = {
           cantidad: { type: SchemaType.NUMBER },
           unidad: { type: SchemaType.STRING },
           formato: { type: SchemaType.STRING },
+          unidadesPorEnvase: {
+            type: SchemaType.NUMBER,
+            description: "Unidades reales por envase según la fila de desglose (SUBUNIDADES/CONTENIDO/PIEZAS)",
+          },
           precioUnitario: { type: SchemaType.NUMBER },
           descuentoPct: { type: SchemaType.NUMBER },
           ivaPorcentaje: { type: SchemaType.NUMBER },
@@ -229,9 +240,13 @@ nuevos: son atributos del artículo de arriba y debes FUNDIRLAS en él, nunca de
 como entradas propias. Reconócelas porque no tienen nombre de artículo propio, sino una
 etiqueta de concepto, y suelen ir indentadas o en tipografía menor. Casos típicos:
 - "SUBUNIDADES", "NETO", "UNIDADES", "CONTENIDO", "PIEZAS", "S/UD": indican cuántas unidades
-  reales trae el formato de arriba (ej: la caja son 24 botellas). Eso es la CANTIDAD real del
-  artículo, no un artículo. Si el papel imprime a la vez "1 caja" y "24 subunidades", el
-  artículo son 24 unidades: usa el desglose real y refleja "caja de 24" en formato.
+  reales trae el envase de la línea de arriba (ej: la caja son 24 botellas). NO son un
+  artículo, y OJO: tampoco cambian la cantidad. \`cantidad\` es SIEMPRE el número de envases
+  comprados tal y como lo imprime la columna de cantidad del documento ("1 caja" → cantidad
+  1, unidad "caja"). El desglose devuélvelo en \`unidadesPorEnvase\` (24) y refleja el envase
+  en formato ("caja de 24"). El sistema multiplica después envases × unidadesPorEnvase con
+  su tabla de equivalencias: si devolvieras 24 en cantidad, el stock entraría multiplicado
+  dos veces.
 - "DTO", "DESCUENTO", "DTO. FIJO", "RAPPEL", "PROMOCIÓN", "BONIFICACIÓN", o cualquier fila de
   importe NEGATIVO: es el descuento de la línea de arriba → va en descuentoPct (o descontado
   ya en precioUnitario), NUNCA como artículo. Un artículo jamás tiene precio negativo.
@@ -282,6 +297,7 @@ interface OcrAlbaranRaw {
     cantidad?: number;
     unidad?: string;
     formato?: string;
+    unidadesPorEnvase?: number;
     precioUnitario?: number;
     descuentoPct?: number;
     ivaPorcentaje?: number;
@@ -363,6 +379,8 @@ export async function ejecutarOcrAlbaran(input: {
             : null,
           formato: txt(l.formato),
           unidad: (l.unidad ?? "").trim(),
+          // Solo un desglose real (>1) aporta información; 0/1/negativos se descartan.
+          unidadesPorEnvase: (num(l.unidadesPorEnvase) ?? 0) > 1 ? num(l.unidadesPorEnvase) : null,
           importe: num(l.importeLinea),
           referenciaProveedor: txt(l.referenciaProveedor),
           esServicio: l.esServicio === true || pareceServicio(nombre),
