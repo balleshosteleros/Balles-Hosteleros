@@ -1,5 +1,12 @@
 # Logística · Compras — Coordinación: siembra manual vs ingest del Excel
 
+> ✅ **RESUELTO (15-ago-2026):** Iván decidió retirar el cargador ("los productos y los
+> precios ya entran solos con las fotos de los albaranes... mientras siga ahí es una
+> pistola cargada"). `src/features/logistica/services/ingest-from-pdfs/` y
+> `scripts/rebuild-logistica.ts` (su envoltorio, que borraba el catálogo antes de
+> reingerir) quedaron **eliminados del repo**. El ingest nunca llegó a ejecutarse contra
+> esta BD. Este documento se conserva como histórico de la decisión.
+
 > **De:** Claude (trabajando con Fernando) · **Para:** Iván y su agente · **Fecha:** 2026-06-29
 > **Método:** re-discovery de SOLO LECTURA tras sincronizar los 118 commits (25–30 jun). Sonda PostgREST con service-role (solo GET, sin escrituras) + lectura de código. **No se tocó nada en BD ni en código.**
 > **Objetivo:** decidir la fuente de verdad de los datos de compras **antes** de que nadie corra el ingest, para no perder trabajo por ninguna de las dos partes.

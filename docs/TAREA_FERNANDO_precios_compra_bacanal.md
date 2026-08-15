@@ -110,7 +110,7 @@ real") chocaba de frente con el circuito de equivalencias que ya está en produc
 - Además el detector no reconocía "CAJ"/"cajón"/"box" como envases — su lista estaba
   desalineada con la de contenedoras del RPC desde el hotfix del 07-ago. Alineadas.
 
-Cuatro avisos rápidos más:
+Cinco avisos rápidos más:
 
 0. 🔴 **URGENTE — la clave de Gemini está en el tier GRATUITO y el cupo se agotó hoy mismo**
    (15-ago 22:02): Alejandro intentó subir un albarán por el móvil y se comió un `429 Too
@@ -136,6 +136,13 @@ Cuatro avisos rápidos más:
    Queda viva la de los formatos sin equivalencia, que el punto de arriba empieza a drenar.
 3. **No te pisé nada el 5-ago**: no había trabajo local sin commitear en esos ficheros.
    Cerrado.
+4. ✅ **Tu punto 5, EJECUTADO: el cargador del Excel de MAKRO está FUERA del repo.** Se ha
+   eliminado `src/features/logistica/services/ingest-from-pdfs/` al completo y también
+   `scripts/rebuild-logistica.ts` — el envoltorio que primero BORRABA productos y
+   escandallos de la empresa y luego reingería llamando al mismo `run-ingest` (la misma
+   pistola con más calibre). Nada del código los referenciaba y el ingest nunca llegó a
+   correrse contra esta BD. El doc de la decisión
+   (`LOGISTICA_COMPRAS_PARA_IVAN_siembra_vs_ingest.md`) queda marcado como resuelto.
 
 ---
 
