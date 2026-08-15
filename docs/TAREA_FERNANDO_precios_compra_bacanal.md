@@ -1,11 +1,59 @@
 # TAREA para Fernando — Precios de compra de BACANAL (cuando bajes el repo)
 
-> **De:** Iván (vía Claude) · **Fecha:** 2026-06-30 · **Actualizado:** 2026-08-14 · **Prioridad:** media
+> **De:** Iván (vía Claude) · **Fecha:** 2026-06-30 · **Actualizado:** 2026-08-15 · **Prioridad:** media
 > Léelo al hacer `git pull` y reconciliar.
 
 ---
 
-## 👋 FERNANDO, EMPIEZA POR AQUÍ — resumen del 14-ago en 2 minutos
+## 👋 IVÁN, EMPIEZA POR AQUÍ — respuesta de Fernando al 14-ago, todo en 2 minutos (15-ago)
+
+Iván: leído todo tu bloque del 14-ago (que sigue intacto justo debajo de este). Aquí va el
+balance completo del día por nuestra parte; el detalle de cada punto está en las dos
+secciones ⚡/✅ de Fernando que siguen a este resumen. **Léete al menos las dos primeras filas
+de la última tabla, que son tuyas y una es urgente.**
+
+### Tus 5 respuestas → qué hicimos con ellas
+
+| Tu respuesta | Estado |
+|---|---|
+| 1. Stock del lote: dejarlo sumado | ✅ Nada que hacer. Se queda; el inventario de regularización lo cuadra |
+| 2. Piloto no cumplido | Entendido. Tu criterio (el circuito solo suma) es de fondo, no de albaranes |
+| 3. Duplicados: fusión automática | ✅ Ya los fusionaste tú (8 reales). Tenías razón con el dossier: gracias por pararlo |
+| 4. Dudas del 30-jul: por la mesa | ✅ **3 de 4 EJECUTADAS** en prod: recargos como `linea_de_servicio` (con alias por proveedor), ALH RESERVA confirmado, línea fantasma como regalo. La 4ª (Belmon 15378) espera tu página |
+| 5. Excel MAKRO: fuera | ✅ **RETIRADO** del repo (`ingest-from-pdfs/` + `rebuild-logistica.ts`) |
+
+### Tus 4 "deudas de Fernando" → las 4 cerradas
+
+| Tu reclamo | Estado |
+|---|---|
+| F6/F7 del PRP-073 | ✅ Estaban hechos desde el 6-ago (la recepción ya no usa la Edge Function) |
+| 115 formatos sin equivalencia | ✅ **RELLENADOS HOY, 0 a NULL** (eran todos "número + medida" de Habana; doble validación, 0 dudosos) |
+| Tabla `albaranes_lineas` muerta | ✅ Ya no existe (borrada el 6-ago; verificado en prod) |
+| ¿Te pisé algo el 5-ago? | ✅ No. Cerrado |
+
+### Y una cosa GORDA que tu día de ayer dejó abierta (y ya está arreglada)
+
+Tu regla nueva del OCR "las subunidades son la cantidad real" **multiplicaba el stock DOS
+veces** con el circuito de equivalencias que ya está en prod (2 cajas → 12 del OCR × 6 del
+RPC = 72 botellas). Arreglado conservando tu acierto: la cantidad vuelve a ser nº de envases
+y el desglose viaja en un campo nuevo que pasa a ser la fuente Nº 1 de equivalencia. Sin daño
+en datos. Detalle en la sección ⚡.
+
+### Lo que te queda A TI (por orden)
+
+| | Qué |
+|---|---|
+| 🔴 **URGENTE** | **Activar facturación en el proyecto Google de la `GEMINI_API_KEY`.** Está en el tier free (20 peticiones/DÍA para TODA la app) y ayer a las 22:02 el gerente se quedó sin poder subir albaranes. Va a pasar cada día. Coste con billing: céntimos al mes |
+| 📄 | La **página final del Belmon Drink `15378`** (Habana): única duda del 30-jul que no podemos cerrar sin ella |
+| 🗂️ | **Repartir tu lista nueva** (aviso de empresa equivocada, matcher tolerante, alta desde albarán, bug de numeración —ya van 3 víctimas: `ALB-2013-025` anoche—, movimientos de stock, inventarios, mermas, recetas). Dinos qué haces tú y qué nosotros, y no nos pisamos |
+| 💬 | Una decisión de diseño pequeña, cuando quieras: qué hacer si dos personas revisan el mismo albarán a la vez (avisar y recargar / bloquear al segundo). La fontanería ya existe |
+
+Y de tu lista de pendientes propia (sección 📋), dos ya no lo son: los formatos (hecho) y el
+Excel MAKRO (hecho).
+
+---
+
+## 👋 FERNANDO, EMPIEZA POR AQUÍ — resumen del 14-ago en 2 minutos (bloque de Iván, intacto)
 
 Fernando: he vuelto y he estado el día entero con la logística. Esto es todo lo que ha pasado,
 ordenado. El detalle de cada punto está más abajo en el documento; esto es el índice para que
