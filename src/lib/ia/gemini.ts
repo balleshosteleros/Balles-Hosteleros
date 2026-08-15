@@ -15,6 +15,27 @@ export class GeminiKeyMissingError extends Error {
   }
 }
 
+/**
+ * Cuota de la API agotada (429). En el tier free el límite es POR DÍA (p.ej. 20
+ * peticiones/día por modelo), así que reintentar en segundos no sirve de nada.
+ * El mensaje está pensado para enseñarse tal cual al usuario final.
+ */
+export class GeminiQuotaError extends Error {
+  constructor() {
+    super(
+      "La IA que lee los documentos ha alcanzado su límite diario de uso. " +
+        "Vuelve a intentarlo mañana por la mañana o avisa al administrador para ampliar el plan.",
+    );
+    this.name = "GeminiQuotaError";
+  }
+}
+
+/** ¿El fallo del SDK es un 429 de cuota o rate-limit? */
+function esErrorDeCuota(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err);
+  return /\b429\b|Too Many Requests|quota|resource.?exhausted/i.test(msg);
+}
+
 export interface GeminiInlineAttachment {
   /** Tipo MIME (e.g. "image/jpeg", "application/pdf"). */
   mimeType: string;
@@ -58,21 +79,28 @@ export async function geminiJSON<T = unknown>(
   });
 
   const hasAttachments = opts.attachments && opts.attachments.length > 0;
-  const result = hasAttachments
-    ? await model.generateContent({
-        contents: [
-          {
-            role: "user",
-            parts: [
-              { text: prompt },
-              ...opts.attachments!.map((a) => ({
-                inlineData: { mimeType: a.mimeType, data: a.base64 },
-              })),
-            ],
-          },
-        ],
-      })
-    : await model.generateContent(prompt);
+  let result;
+  try {
+    result = hasAttachments
+      ? await model.generateContent({
+          contents: [
+            {
+              role: "user",
+              parts: [
+                { text: prompt },
+                ...opts.attachments!.map((a) => ({
+                  inlineData: { mimeType: a.mimeType, data: a.base64 },
+                })),
+              ],
+            },
+          ],
+        })
+      : await model.generateContent(prompt);
+  } catch (err) {
+    // El volcado crudo del SDK (URL, JSON de violations…) no debe llegar al usuario.
+    if (esErrorDeCuota(err)) throw new GeminiQuotaError();
+    throw err;
+  }
   const text = result.response.text();
 
   let data: T;

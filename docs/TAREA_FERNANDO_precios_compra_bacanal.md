@@ -110,7 +110,21 @@ real") chocaba de frente con el circuito de equivalencias que ya está en produc
 - Además el detector no reconocía "CAJ"/"cajón"/"box" como envases — su lista estaba
   desalineada con la de contenedoras del RPC desde el hotfix del 07-ago. Alineadas.
 
-Tres avisos rápidos más:
+Cuatro avisos rápidos más:
+
+0. 🔴 **URGENTE — la clave de Gemini está en el tier GRATUITO y el cupo se agotó hoy mismo**
+   (15-ago 22:02): Alejandro intentó subir un albarán por el móvil y se comió un `429 Too
+   Many Requests` — el plan free de Google da **20 peticiones AL DÍA** por modelo
+   (`gemini-2.5-flash`), y entre tus pruebas, las del gerente y los reintentos, se gastan en
+   nada. El cupo se rellena hacia las 9:00 (medianoche del Pacífico), pero **va a volver a
+   pasar cada día** ahora que el OCR se usa de verdad. **Arreglo (tuyo, es tu clave):
+   activar facturación en el proyecto de Google AI de la `GEMINI_API_KEY`** (o crear una
+   clave en un proyecto con billing y actualizarla en Vercel). Con pago por uso, un albarán
+   cuesta fracciones de céntimo — el mes entero de las dos empresas sale por céntimos. Ojo:
+   la misma clave la usan también nóminas, gestoría, calidad, facturas y el chat de la web,
+   así que el cupo de 20 lo comparte TODO. Mientras tanto he arreglado el mensaje: al
+   agotarse la cuota ya no sale el volcado técnico rojo, sino "la IA ha alcanzado su límite
+   diario…" (aplica a todos los módulos que usan Gemini, no solo a albaranes).
 
 1. **Tu bug de numeración ya tiene la 3ª víctima**: anoche (14-ago 21:58) Alejandro subió por
    el móvil el **`ALB-2013-025`** de Belmon Drink — fecha leída 2013 → serie 2013. El gerente

@@ -23,7 +23,7 @@ import "server-only";
 
 import { randomUUID } from "crypto";
 import { SchemaType, type Schema } from "@google/generative-ai";
-import { geminiJSON, GeminiKeyMissingError } from "@/lib/ia/gemini";
+import { geminiJSON, GeminiKeyMissingError, GeminiQuotaError } from "@/lib/ia/gemini";
 
 /** Datos fiscales impresos en el documento, para contrastar con la ficha del proveedor. */
 export interface FiscalOcrAlbaran {
@@ -447,6 +447,10 @@ export async function ejecutarOcrAlbaran(input: {
   } catch (err) {
     if (err instanceof GeminiKeyMissingError) {
       return { ok: false, error: "OCR_FAILED", message: "La IA no está configurada (falta GEMINI_API_KEY)." };
+    }
+    if (err instanceof GeminiQuotaError) {
+      // Cuota diaria agotada: mensaje amable, sin volcado técnico ni ruido en logs.
+      return { ok: false, error: "OCR_FAILED", message: err.message };
     }
     const msg = err instanceof Error ? err.message : "Error desconocido";
     console.error("[ocr-albaran] ejecutarOcrAlbaran:", msg);
