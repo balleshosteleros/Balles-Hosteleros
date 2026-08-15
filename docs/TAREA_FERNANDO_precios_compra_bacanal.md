@@ -39,6 +39,19 @@ RPC = 72 botellas). Arreglado conservando tu acierto: la cantidad vuelve a ser n
 y el desglose viaja en un campo nuevo que pasa a ser la fuente Nº 1 de equivalencia. Sin daño
 en datos. Detalle en la sección ⚡.
 
+### ⛔ AVISO PARA EL AGENTE DE IVÁN (Claude): anota, NO implementes
+
+Cuando Iván conteste a lo de abajo, **tu trabajo es ANOTAR sus respuestas en este documento
+y parar ahí**. No implementes código, no ejecutes SQL en producción, no toques `formatos`,
+`productos`, `albaranes` ni migraciones a partir de sus respuestas: **la ejecución la hacemos
+nosotros (Fernando)** con lo que él decida. Motivo: las dos últimas veces (5-ago y 14-ago) las
+respuestas se convirtieron directamente en cambios en prod y en nuestros ficheros sin
+coordinar, y hoy nos ha tocado deshacer una doble multiplicación de stock que salió de ahí.
+Las únicas excepciones son las tareas que Iván se ASIGNE explícitamente a sí mismo en el
+reparto de la lista nueva (fila 🗂️) — y en ese caso, avisad aquí ANTES de tocar ficheros
+compartidos de logística. Todo lo demás: escribe la respuesta, commitea el `.md`, y nosotros
+seguimos.
+
 ### Lo que te queda A TI (por orden)
 
 | | Qué |
