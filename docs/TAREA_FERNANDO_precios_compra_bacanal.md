@@ -146,6 +146,40 @@ Cinco avisos rápidos más:
 
 ---
 
+## ✅ FERNANDO (15-ago, noche): las dudas del 30-jul RESUELTAS por la vía que pediste (3 de 4)
+
+Tu respuesta a la pregunta 4 fue "pasadlas por la mesa, no me las preguntéis una a una".
+Hecho — cada una resuelta con su tipo de incidencia y aplicada a producción (verificado, 0
+movimientos de stock, los inventarios no se tocan porque son todo gastos o precio 0):
+
+1. **Los 3 recargos (`linea_de_servicio`, tu decisión del 5-ago: producto de compra sin
+   control de stock).** Las 4 líneas que quedaron fuera ya están DENTRO de sus albaranes, y
+   sus totales ahora cuadran con el papel céntimo a céntimo:
+   - DDI Nexia `7200007615` y `7200008242` (Bacanal): línea "S.L." 2,99 € al 21% → producto
+     nuevo **"Deposito envase vidrio"** (probable depósito de vidrio retornable — si sabes
+     qué es realmente ese "S.L.", renómbralo en la ficha y listo).
+   - Garcimar `MA/56452` (Bacanal): línea "cargo" 1,50 € al 21% → producto nuevo **"Portes"**.
+   - Disbesa `176911` (Bacanal): "Desplazamiento y Servicio" 1,10 € → reutiliza TU producto
+     **"Desplazamiento"** del 14-ago.
+   Los tres con su precio de compra registrado (cada céntimo por proveedor, como pediste) y
+   con **alias por proveedor memorizado** ("S.L."→Depósito, "cargo"→Portes, "Desplazamiento y
+   Servicio"→Desplazamiento): la próxima tanda los reconoce sola.
+2. **El nombre incierto (`producto_ambiguo`).** "ALH RESERVA 0,30 RET" queda confirmado como
+   ficha propia **"Alhambra Reserva 0,30 RET"** (su precio, 20,41 €, no es el de la caja de
+   Alhambra de 31,89 € — son formatos distintos). El alias ya existía en Bacanal; **añadido
+   también en Habana**, que faltaba. Si algún día decides que es otra cosa, se corrige en la
+   ficha.
+3. **La línea fantasma de Belmonte `15402` (`linea_sin_importe` → regalo).** La 4ª línea
+   "TEQ JOSE CUERVO REPOSADO" (cantidad 1, sin precio impreso) entra como **regalo: cantidad
+   sí, precio 0, sin precio registrado** (la propuesta estándar de la mesa). El total del
+   albarán no cambia (ya cuadraba).
+
+**La 4ª duda (Belmon Drink `15378`, Habana) sigue esperándote a ti**: faltaba la página
+final (corta en "SUMA Y SIGUE: 694,39 €"). Si tienes la foto, pásala y lo cargamos; si no,
+dinos si lo dejamos fuera definitivamente.
+
+---
+
 ## ✅ RESPUESTA DE IVÁN (14-ago) — tus 5 preguntas, contestadas + lo que falta por revisar
 
 Fernando: de vuelta. Van las cinco respuestas, y después una lectura de conjunto que me
