@@ -110,7 +110,7 @@ real") chocaba de frente con el circuito de equivalencias que ya está en produc
 - Además el detector no reconocía "CAJ"/"cajón"/"box" como envases — su lista estaba
   desalineada con la de contenedoras del RPC desde el hotfix del 07-ago. Alineadas.
 
-Cinco avisos rápidos más:
+Seis avisos rápidos más:
 
 0. 🔴 **URGENTE — la clave de Gemini está en el tier GRATUITO y el cupo se agotó hoy mismo**
    (15-ago 22:02): Alejandro intentó subir un albarán por el móvil y se comió un `429 Too
@@ -133,7 +133,7 @@ Cinco avisos rápidos más:
 2. De tu lista de "deuda mía": **F6 y F7 están CERRADOS desde el PRP-073** (F6 = la recepción
    ya NO usa la Edge Function; extractor único compartido) y **`albaranes_lineas` ya no
    existe** (migración `20260806120000`, aplicada — verificado hoy contra prod: 0 tablas).
-   Queda viva la de los formatos sin equivalencia, que el punto de arriba empieza a drenar.
+   Y la de los formatos también cae: ver el punto 5.
 3. **No te pisé nada el 5-ago**: no había trabajo local sin commitear en esos ficheros.
    Cerrado.
 4. ✅ **Tu punto 5, EJECUTADO: el cargador del Excel de MAKRO está FUERA del repo.** Se ha
@@ -143,6 +143,15 @@ Cinco avisos rápidos más:
    pistola con más calibre). Nada del código los referenciaba y el ingest nunca llegó a
    correrse contra esta BD. El doc de la decisión
    (`LOGISTICA_COMPRAS_PARA_IVAN_siembra_vs_ingest.md`) queda marcado como resuelto.
+5. ✅ **Tu punto 2 también, EJECUTADO: los 115 formatos sin equivalencia están RELLENADOS —
+   quedan 0 a NULL** (154/154 formatos de compra con equivalencia). Resultó más limpio de lo
+   que parecía: los 115 eran TODOS de Habana y todos de la siembra sistemática "número +
+   medida" ("12 U", "5 L", "0,5 K") — tu propia regla de formatos, donde el nombre ES la
+   equivalencia. Se rellenaron con doble validación: el número del nombre solo se aceptó si
+   la letra (U/K/L) coincidía con la medida (`unidad_id`) de la propia fila; cualquier
+   inconsistencia se habría quedado a NULL y en una lista para ti — no hubo ninguna. A partir
+   de ahora esos formatos ya son visibles para el emparejador y la confirmación no vuelve a
+   pedir crearlos.
 
 ---
 
