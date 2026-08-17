@@ -11,6 +11,7 @@ import {
   Trash2,
   Eye,
   Settings,
+  FileText,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -46,6 +47,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { listarPaginas, borrarPagina } from "../../actions/paginas-actions";
 import { NuevaPaginaModal } from "./NuevaPaginaModal";
+import { GenerarLegalesDialog } from "./GenerarLegalesDialog";
 import type { PaginaWeb, PaginaWebEstado } from "../../types";
 import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
@@ -72,6 +74,7 @@ export function PaginasListView() {
   const [columnasVisibles, setColumnasVisibles] = useState<ToolbarColumnaVisible>({});
   const [columnasOrden, setColumnasOrden] = useState<string[] | undefined>(undefined);
   const [nuevaOpen, setNuevaOpen] = useState(false);
+  const [legalesOpen, setLegalesOpen] = useState(false);
   // Sin "archivar": el estado ARCHIVADA sigue existiendo en el modelo por
   // compatibilidad, pero ya no se ofrece como acción.
   const [confirmar, setConfirmar] = useState<{ id: string; nombre: string } | null>(null);
@@ -213,16 +216,28 @@ export function PaginasListView() {
         columnasOrden={columnasOrden}
         onColumnasOrdenChange={setColumnasOrden}
         extraDerecha={
-          <Button
-            size="icon"
-            variant={showConfig ? "default" : "outline"}
-            className="h-9 w-9"
-            onClick={() => setShowConfig((v) => !v)}
-            title="Configuración"
-            aria-label="Configuración"
-          >
-            <Settings className="h-4 w-4" strokeWidth={1.75} />
-          </Button>
+          <>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-9"
+              onClick={() => setLegalesOpen(true)}
+              title="Generar política de privacidad, aviso legal y cookies"
+            >
+              <FileText className="h-4 w-4 mr-2" strokeWidth={1.75} />
+              Páginas legales
+            </Button>
+            <Button
+              size="icon"
+              variant={showConfig ? "default" : "outline"}
+              className="h-9 w-9"
+              onClick={() => setShowConfig((v) => !v)}
+              title="Configuración"
+              aria-label="Configuración"
+            >
+              <Settings className="h-4 w-4" strokeWidth={1.75} />
+            </Button>
+          </>
         }
       />
 
@@ -301,6 +316,12 @@ export function PaginasListView() {
       </Card>
 
       <NuevaPaginaModal open={nuevaOpen} onOpenChange={setNuevaOpen} onCreated={cargar} />
+
+      <GenerarLegalesDialog
+        open={legalesOpen}
+        onOpenChange={setLegalesOpen}
+        onGenerated={cargar}
+      />
 
       <AlertDialog open={!!confirmar} onOpenChange={(o) => !o && setConfirmar(null)}>
         <AlertDialogContent>

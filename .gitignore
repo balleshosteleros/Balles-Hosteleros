@@ -111,3 +111,6 @@ scripts/*.secret.json
 
 # Fichas técnicas Excel (pesadas, con imágenes embebidas) — no versionar
 docs/fichas-tecnicas/*.xlsx
+
+# Ficheros generados por scripts (textos legales, exports puntuales)
+tmp/
