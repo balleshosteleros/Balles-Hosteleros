@@ -130,6 +130,10 @@ esperar aprobación de Google. El desarrollo posterior son un par de días.
 
 **Conviene empezar el trámite cuanto antes precisamente porque tarda.**
 
+👉 **Pasos concretos para pedirlo (formulario, qué escribir, datos del
+proyecto):**
+[GOOGLE_PERMISO_RESENAS_PASOS_PARA_IVAN.md](./GOOGLE_PERMISO_RESENAS_PASOS_PARA_IVAN.md)
+
 Detalle completo en
 [RESENAS_GOOGLE_PARA_IVAN_migracion_desde_ghl.md](./RESENAS_GOOGLE_PARA_IVAN_migracion_desde_ghl.md).
 
