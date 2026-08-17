@@ -48,6 +48,7 @@ export default async function PublicCatchAllPage() {
         paginaId: match.pagina_id,
         empresaSlug: match.empresa_slug,
       }}
+      hrefPoliticaCookies="/politica-de-cookies"
     />
   );
 }

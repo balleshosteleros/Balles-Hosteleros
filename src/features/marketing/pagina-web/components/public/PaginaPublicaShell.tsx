@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import type { Bloque, BrandingSnapshot } from "../../types";
 import { BloquePublico } from "./BloquePublico";
+import { BannerCookies } from "./BannerCookies";
 
 export interface PaginaContexto {
   empresaId: string | null;
@@ -14,6 +15,8 @@ interface Props {
   bloques: Bloque[];
   contexto?: PaginaContexto;
   branding?: BrandingSnapshot | null;
+  /** Ruta de la política de cookies publicada, si existe. */
+  hrefPoliticaCookies?: string | null;
 }
 
 /**
@@ -21,7 +24,12 @@ interface Props {
  * navegación fija. Los bloques leen el tema con var(--pw-*), así que cada
  * empresa se ve con SUS colores sin duplicar el código de cada bloque.
  */
-export function PaginaPublicaShell({ bloques, contexto, branding }: Props) {
+export function PaginaPublicaShell({
+  bloques,
+  contexto,
+  branding,
+  hrefPoliticaCookies,
+}: Props) {
   const ordenados = [...bloques].sort((a, b) => a.orden - b.orden);
 
   const primario = branding?.color_primario ?? "#d0a000";
@@ -50,6 +58,7 @@ export function PaginaPublicaShell({ bloques, contexto, branding }: Props) {
           <BloquePublico key={b.id} bloque={b} contexto={contexto} />
         ))}
       </main>
+      <BannerCookies hrefPolitica={hrefPoliticaCookies} />
       <EstilosPublicos />
     </div>
   );
