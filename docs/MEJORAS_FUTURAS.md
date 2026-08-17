@@ -97,7 +97,9 @@ perdió alguna). El aviso llega al área administrativa con enlace a
 
 ## 2. Publicar las respuestas de reseñas en Google automáticamente
 
-> **Estado:** pendiente de un trámite con Google.
+> **Estado:** ⏳ **SOLICITUD YA ENVIADA** el 17-ago-2026 (ID de Google
+> `8-0006000041312`). Google da 7–10 días hábiles → respuesta esperada a
+> finales de agosto. Vigilar el correo: pueden pedir información adicional.
 > **Coste:** **gratis** — Google no cobra por esta API.
 > **La desbloquea:** una solicitud de acceso que presenta **el software una sola
 > vez, para toda la plataforma**. Tarda **semanas** en aprobarse.

@@ -1,5 +1,28 @@
 # Permiso de Google para publicar respuestas a reseñas — pasos
 
+---
+
+## ✅ SOLICITUD ENVIADA — 17 de agosto de 2026
+
+| | |
+|---|---|
+| **ID de asistencia de Google** | `8-0006000041312` |
+| **Enviada el** | 17-ago-2026 |
+| **Plazo que da Google** | 7–10 días hábiles |
+| **Respuesta esperada** | ~28-ago-2026 / 1-sep-2026 |
+| **Estado** | ⏳ Esperando respuesta de Google |
+
+**Google contesta por correo, a la cuenta desde la que se envió (la que
+administra la ficha de BACANAL).** Puede pedir información adicional: si ese
+correo se queda sin contestar, la solicitud se queda parada. Conviene
+vigilarlo.
+
+Cuando llegue la aprobación → seguir por el **Paso 2** de este documento.
+
+El Paso 1 de abajo queda como registro de lo que se envió.
+
+---
+
 **Qué se pide:** acceso a la **Google Business Profile API**, que es la que
 permite **publicar** la respuesta en tu ficha. Es la misma que usa GoHighLevel,
 y el motivo de que a ti "te responda solo" allí.
