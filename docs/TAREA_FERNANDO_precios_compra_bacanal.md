@@ -1,7 +1,112 @@
 # TAREA para Fernando — Precios de compra de BACANAL (cuando bajes el repo)
 
-> **De:** Iván (vía Claude) · **Fecha:** 2026-06-30 · **Actualizado:** 2026-08-15 · **Prioridad:** media
+> **De:** Iván (vía Claude) · **Fecha:** 2026-06-30 · **Actualizado:** 2026-08-17 · **Prioridad:** media
 > Léelo al hacer `git pull` y reconciliar.
+
+---
+
+## 📌 RESPUESTA DE IVÁN (17-ago) — tus 4 puntos, contestados. Y un encargo nuevo
+
+Fernando: contesto a las cuatro cosas que me dejaste. **Anotado y parado ahí**, como pediste:
+esto es solo mi respuesta, la ejecución es vuestra. Al final hay un encargo nuevo (punto 5)
+que me parece más importante que los otros cuatro juntos.
+
+### 1. 🔴 Billing de Gemini → **DE MOMENTO SEGUIMOS CON ESA VERSIÓN**
+
+No activo la facturación ahora. Sé lo que implica (20 peticiones/día para toda la app) y lo
+asumo de momento.
+
+**Pero entonces esto pasa a ser importante de verdad, y es lo que te pido:** si vamos a
+convivir con el tope, **el aviso de "se ha acabado la IA por hoy" tiene que entenderse en
+CUALQUIER sitio de la app que use IA**, no solo en albaranes. Que la persona sepa que es el
+límite del día y que no sirve de nada reintentar.
+
+Hemos auditado los 23 puntos de la app que llaman a Gemini. **Solo albaranes lo hace bien.**
+El resto se reparte en tres grupos:
+
+**a) Le sueltan al usuario el volcado técnico crudo del 429** (`[GoogleGenerativeAI Error]…
+[429 Too Many Requests]… {"quotaViolations":[…]}`) — 8 sitios:
+
+| Módulo | Fichero:línea |
+|---|---|
+| **Reseñas de Google** (el peor: `gemini-respuestas.ts:96` no tiene ni try/catch) | `src/features/calidad/lib/gemini-respuestas.ts:96` → `generar-borradores.ts:174` → `ResenasPipeline.tsx:1085` |
+| Importador de productos | `src/features/logistica/actions/importador-ia-actions.ts:356` |
+| Importador de catálogos/proveedores | `src/features/logistica/actions/importador-catalogos-ia-actions.ts:351`, `:670` |
+| Facturas (contraste con albarán) | `src/features/logistica/actions/facturas-actions.ts:501` |
+| Contabilidad (facturas y contactos) | `src/features/contabilidad/actions/importador-ia-actions.ts:189`, `:387` |
+| Aperturas IA (dirección) | `src/features/direccion/actions/aperturas-ia-actions.ts:215` |
+| Calidad — editor de slides | `src/features/calidad/inspecciones/actions.ts:623` |
+| Gmail IA (redactar) | `src/app/api/google/gmail/ai-redactar/route.ts:189` → `GmailDrawer.tsx:621` |
+
+**b) Mensaje genérico que ENGAÑA** — no revienta, pero le dice a la persona algo que le hace
+reintentar todo el día en balde: nóminas ("No se pudo leer el archivo"), chat de la web ("El
+asistente no está disponible ahora mismo, inténtalo en un momento"), chat de inspectores,
+gestoría (casillas AEAT y validación de modelos), soporte.
+
+**c) Silencio total** — ni se entera nadie: gestoría/categorización de facturas
+(`categorizacion-ia.ts:339`), nóminas TC1, reclutamiento (extracción de CV/DNI), imagen de
+marca (se traga una paleta de fallback).
+
+Y dos apaños sueltos que conviene unificar: `api/presentaciones/generar/route.ts:107-116` y
+`regenerar-slide/route.ts:86-95` tienen su propio regex de cuota, anterior al tuyo, que **ya
+no casa** con tu `GeminiQuotaError` (tu mensaje está en español y no contiene "429"), así que
+cae al `else` y sale **"IA falló: La IA que lee los documentos ha alcanzado su límite
+diario…"** con un 502.
+
+**Causa raíz** (esto es lo que hay que arreglar, no los 23 sitios a mano): lanzas
+`GeminiQuotaError` en el cliente central, pero **solo albaranes lo comprueba** antes de su
+`err.message` genérico. Además **`geminiTexto` (`src/lib/ia/gemini.ts:129-163`) ni siquiera lo
+lanza** — se traga todo y devuelve `null`, así que el chat de soporte nunca podrá distinguir
+"sin cuota" de "se rompió algo".
+
+Un detalle de redacción: el texto dice *"La IA que **lee los documentos**…"*, que no encaja
+cuando el que falla es el chat de la web o el redactor de correos. Hazlo genérico.
+
+### 2. 📄 Belmon Drink 15378 → **lo busco, pero el arreglo de verdad es el punto 5**
+
+Ya sé cuál es: **Habana, 16-jul-2026, pedido grande de licores y energéticas** (Red Bull,
+ginebras, whiskies, Oxefruit). Buscaré la página que falta entre las fotos del 30-jul.
+
+Pero no nos quedemos ahí: ver el punto 5.
+
+### 3. 🗂️ Reparto de la lista → **LO HACES TODO TÚ**
+
+Las 7 las coges tú enteras, para no pisarnos. Yo sigo con lo mío (reservas y web pública) y no
+toco ficheros de logística. Las 7: aviso de empresa equivocada · matcher tolerante a
+mayúsculas/acentos · alta de producto desde el albarán · bug de numeración (la serie manda
+sobre la fecha del OCR) · pantalla de movimientos de stock · inventarios y mermas · recetas de
+platos.
+
+### 4. 💬 Dos personas en el mismo albarán → **decídelo tú, como cualquier software**
+
+Esto no es una decisión de negocio, es de oficio: hazlo como lo hace cualquier programa serio.
+Yo no tengo criterio técnico aquí y no quiero inventarlo. Avisar al segundo y recargar me
+suena a lo normal, pero tú sabrás.
+
+### 5. ⚠️ ENCARGO NUEVO — un albarán incompleto hay que cazarlo EN LA SUBIDA, no dos semanas después
+
+Esto es lo que me importa de verdad del 15378. El problema no es esa página perdida: es que
+**alguien del local subió un albarán al que le faltaba una hoja y el sistema no le dijo nada
+en ese momento** — que es el único momento en que el papel sigue encima de la mesa y se puede
+volver a fotografiar. Dos semanas después, esa hoja ya no aparece. Nos va a volver a pasar
+con cada albarán de varias páginas.
+
+**Lo quiero resuelto obligando a subirlo completo en el momento**, no anotando la deuda para
+después. La incidencia ya está diseñada y los campos existen en la BD
+(`albaranes.documento_parcial` y `albaranes.paginas_esperadas`), pero **no está conectado**:
+hoy en producción **no hay ni un solo albarán marcado como parcial** y el 15378 ni se intentó.
+Está a medias.
+
+Cómo lo veo (decide tú la forma, pero que el resultado sea este):
+- El OCR ya sabe leer "SUMA Y SIGUE" y el "pág. X de Y" → que se use.
+- Al detectarlo, **parar la subida ahí mismo** y decirlo claro en el móvil: *"A este albarán le
+  falta al menos una página — hazle foto a la siguiente"*, con el botón de añadir foto
+  delante. Es el gerente subiendo con el móvil, tiene el papel en la mano: es el momento.
+- Solo si la persona insiste, dejarlo entrar marcado como parcial y **que no se pueda
+  confirmar** hasta completarlo.
+
+Prioridad alta para mí: es el mismo patrón que el aviso de empresa equivocada — el sistema ya
+tiene el dato, pero se lo calla.
 
 ---
 
