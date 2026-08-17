@@ -1,92 +1,121 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Button } from "@/components/ui/button";
-import { Switch } from "@/components/ui/switch";
-import { Database, Plug, Loader2, CheckCircle2, Briefcase, Clock } from "lucide-react";
-import { toast } from "sonner";
-import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
-import {
-  getAgoraIntegracion,
-  guardarAgoraIntegracion,
-  probarConexionAgora,
-} from "@/features/ajustes/actions/agora-integracion-actions";
-import { FichaGoogleCard } from "@/features/ajustes/components/FichaGoogleCard";
-
 /**
  * Integraciones de la empresa con servicios externos (PRP-059).
- * Cada empresa configura aquí sus propias claves de Ágora POS.
+ *
+ * Rejilla de tarjetas del MISMO tamaño, una por servicio, con su logo y un
+ * distintivo de estado bien visible: check verde si la conexión está lista,
+ * marca roja si no. De un vistazo se ve qué falta por conectar sin tener que
+ * leer nada.
+ *
+ * La configuración de cada una se abre en un diálogo al pulsar su tarjeta, en
+ * vez de vivir desplegada en la página: así todas ocupan lo mismo y la lista
+ * no crece a lo largo según se añaden integraciones.
+ *
+ * Cada empresa configura sus propias claves; afectan solo a la empresa activa.
  */
+
+import { useEffect, useState } from "react";
+import { Card } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { CheckCircle2, XCircle, Clock } from "lucide-react";
+import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
+import { getAgoraIntegracion } from "@/features/ajustes/actions/agora-integracion-actions";
+import { getEmpresaPlaceInfo } from "@/features/calidad/actions/resenas-actions";
+import {
+  IntegracionLogo,
+  type IntegracionLogoKey,
+} from "@/features/ajustes/components/IntegracionLogo";
+import { FichaGooglePanel } from "@/features/ajustes/components/FichaGooglePanel";
+import { AgoraPanel } from "@/features/ajustes/components/AgoraPanel";
+
+/** Estado de conexión de cada integración. */
+type EstadoConexion = "conectado" | "sin_conectar" | "proximamente";
+
+interface IntegracionDef {
+  key: string;
+  nombre: string;
+  /** Una línea: qué hace por el negocio, sin tecnicismos. */
+  resumen: string;
+  logo: IntegracionLogoKey;
+  /** Las "próximamente" no se pueden abrir todavía. */
+  proximamente?: boolean;
+}
+
+const INTEGRACIONES: IntegracionDef[] = [
+  {
+    key: "google",
+    nombre: "Google",
+    resumen: "Reseñas de tu ficha, contestadas por la IA.",
+    logo: "google",
+  },
+  {
+    key: "agora",
+    nombre: "Ágora POS",
+    resumen: "Importa cada día las ventas de tu TPV.",
+    logo: "agora",
+  },
+  {
+    key: "highlevel",
+    nombre: "GoHighLevel",
+    resumen: "Marketing y reputación.",
+    logo: "highlevel",
+    proximamente: true,
+  },
+  {
+    key: "b2com",
+    nombre: "B2COM",
+    resumen: "Centralita telefónica de la empresa.",
+    logo: "b2com",
+    proximamente: true,
+  },
+];
+
 export function IntegracionesTab() {
   const { empresaActual } = useEmpresa();
   const empresaId = empresaActual?.id;
 
+  const [estados, setEstados] = useState<Record<string, EstadoConexion>>({});
   const [cargando, setCargando] = useState(true);
-  const [activo, setActivo] = useState(false);
-  const [url, setUrl] = useState("");
-  const [workplaceId, setWorkplaceId] = useState("");
-  const [token, setToken] = useState("");
-  const [tieneToken, setTieneToken] = useState(false);
-  const [guardando, setGuardando] = useState(false);
-  const [probando, setProbando] = useState(false);
+  const [abierta, setAbierta] = useState<string | null>(null);
+
+  // Se recarga al cambiar de empresa y al cerrar un diálogo, para que el
+  // distintivo refleje lo que se acabe de conectar sin recargar la página.
+  const cargarEstados = () => {
+    setCargando(true);
+    Promise.all([getEmpresaPlaceInfo(), getAgoraIntegracion()]).then(
+      ([place, agora]) => {
+        setEstados({
+          google: place?.googlePlaceId ? "conectado" : "sin_conectar",
+          agora:
+            agora.ok && agora.estado.activo && agora.estado.tieneToken
+              ? "conectado"
+              : "sin_conectar",
+          highlevel: "proximamente",
+          b2com: "proximamente",
+        });
+        setCargando(false);
+      },
+    );
+  };
 
   useEffect(() => {
-    let vivo = true;
-    setCargando(true);
-    getAgoraIntegracion().then((res) => {
-      if (!vivo) return;
-      if (res.ok) {
-        setActivo(res.estado.activo);
-        setUrl(res.estado.url);
-        setWorkplaceId(res.estado.workplaceId != null ? String(res.estado.workplaceId) : "");
-        setTieneToken(res.estado.tieneToken);
-        setToken("");
-      }
-      setCargando(false);
-    });
-    return () => {
-      vivo = false;
-    };
+    cargarEstados();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [empresaId]);
 
-  const probar = async () => {
-    setProbando(true);
-    const res = await probarConexionAgora({
-      url,
-      workplaceId: workplaceId ? Number(workplaceId) : 0,
-      token: token || undefined,
-    });
-    setProbando(false);
-    if (res.ok) {
-      toast.success(`Conexión correcta — ${res.facturas} factura(s) de ayer (${res.dia}).`);
-    } else {
-      toast.error(res.error);
-    }
+  const cerrarDialogo = () => {
+    setAbierta(null);
+    cargarEstados();
   };
 
-  const guardar = async () => {
-    setGuardando(true);
-    const res = await guardarAgoraIntegracion({
-      activo,
-      url,
-      workplaceId: workplaceId ? Number(workplaceId) : null,
-      token: token || undefined,
-    });
-    setGuardando(false);
-    if (res.ok) {
-      toast.success("Integración de Ágora guardada.");
-      if (token) {
-        setTieneToken(true);
-        setToken("");
-      }
-    } else {
-      toast.error(res.error);
-    }
-  };
+  const integracionAbierta = INTEGRACIONES.find((i) => i.key === abierta);
 
   return (
     <div className="space-y-4">
@@ -98,151 +127,118 @@ export function IntegracionesTab() {
         </p>
       </div>
 
-      {/* Ficha de Google: va primero porque es la conexión más directa —un
-          clic, sin claves ni tokens— y la que desbloquea que las reseñas se
-          contesten solas. */}
-      <FichaGoogleCard />
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        {INTEGRACIONES.map((integracion) => {
+          const estado = integracion.proximamente
+            ? "proximamente"
+            : (estados[integracion.key] ?? "sin_conectar");
+          const bloqueada = integracion.proximamente;
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-sm">
-            <Database className="h-5 w-5 text-emerald-600" />
-            Ágora POS
-            {activo ? (
-              <Badge className="ml-auto gap-1 bg-emerald-100 font-normal text-emerald-700 hover:bg-emerald-100">
-                <CheckCircle2 className="h-3 w-3" /> Activo
-              </Badge>
-            ) : (
-              <Badge variant="secondary" className="ml-auto font-normal">
-                Inactivo
-              </Badge>
-            )}
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-5">
-          <p className="flex items-start gap-2 text-sm text-muted-foreground">
-            <Plug className="mt-0.5 h-4 w-4 shrink-0" />
-            Sincroniza automáticamente las ventas cerradas de tu TPV Ágora cada
-            día. Introduce tus datos, prueba la conexión y guárdalos.
-          </p>
+          return (
+            <Card
+              key={integracion.key}
+              role={bloqueada ? undefined : "button"}
+              tabIndex={bloqueada ? undefined : 0}
+              aria-disabled={bloqueada}
+              onClick={() => {
+                if (!bloqueada) setAbierta(integracion.key);
+              }}
+              onKeyDown={(e) => {
+                if (bloqueada) return;
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  setAbierta(integracion.key);
+                }
+              }}
+              className={
+                "relative flex h-full flex-col gap-3 p-4 transition " +
+                (bloqueada
+                  ? "opacity-60"
+                  : "cursor-pointer hover:border-primary/40 hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring")
+              }
+            >
+              {/* Distintivo de estado, arriba a la derecha: verde = listo,
+                  rojo = falta conectar. Es lo primero que se ve. */}
+              <span className="absolute right-3 top-3">
+                {cargando && !bloqueada ? (
+                  <span className="block h-5 w-5 animate-pulse rounded-full bg-muted" />
+                ) : estado === "conectado" ? (
+                  <CheckCircle2
+                    className="h-5 w-5 text-emerald-600"
+                    aria-label="Conectado"
+                  />
+                ) : estado === "proximamente" ? (
+                  <Clock
+                    className="h-5 w-5 text-muted-foreground"
+                    aria-label="Próximamente"
+                  />
+                ) : (
+                  <XCircle
+                    className="h-5 w-5 text-red-600"
+                    aria-label="Sin conectar"
+                  />
+                )}
+              </span>
 
-          <div className="flex items-center justify-between rounded-lg border px-3 py-2.5">
-            <div>
-              <div className="text-sm font-medium text-foreground">Conector activo</div>
-              <div className="text-xs text-muted-foreground">
-                Cuando está activo, el sistema importa tus ventas cada madrugada.
-              </div>
-            </div>
-            <Switch checked={activo} onCheckedChange={setActivo} disabled={cargando} />
-          </div>
-
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-1.5 sm:col-span-2">
-              <Label htmlFor="agora-url">Dirección del servicio</Label>
-              <Input
-                id="agora-url"
-                placeholder="https://tu-servidor-agora.com"
-                value={url}
-                onChange={(e) => setUrl(e.target.value)}
-                disabled={cargando}
+              <IntegracionLogo
+                logo={integracion.logo}
+                nombre={integracion.nombre}
               />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="agora-tpv">Nº de TPV</Label>
-              <Input
-                id="agora-tpv"
-                inputMode="numeric"
-                placeholder="Ej. 4"
-                value={workplaceId}
-                onChange={(e) => setWorkplaceId(e.target.value.replace(/[^0-9]/g, ""))}
-                disabled={cargando}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="agora-token">Token de Ágora</Label>
-              <Input
-                id="agora-token"
-                type="password"
-                autoComplete="off"
-                placeholder={tieneToken ? "•••••••• (guardado)" : "Pega aquí tu token"}
-                value={token}
-                onChange={(e) => setToken(e.target.value)}
-                disabled={cargando}
-              />
-              <p className="text-xs text-muted-foreground">
-                {tieneToken
-                  ? "Déjalo vacío para mantener el token actual."
-                  : "Se guarda cifrado y no se vuelve a mostrar."}
-              </p>
-            </div>
-          </div>
 
-          <div className="flex flex-wrap items-center gap-2 border-t pt-4">
-            <Button variant="outline" onClick={probar} disabled={probando || cargando || !url || !workplaceId}>
-              {probando ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : null}
-              Probar conexión
-            </Button>
-            <Button onClick={guardar} disabled={guardando || cargando}>
-              {guardando ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : null}
-              Guardar
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* ── Portales de empleo ───────────────────────────────
-          La conexión vive aquí (Ajustes generales), fuera del módulo de
-          RRHH, por seguridad. En RRHH solo se activa/desactiva la
-          publicación una vez conectado el portal. */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-sm">
-            <Briefcase className="h-5 w-5 text-blue-600" />
-            Portales de empleo
-            <Badge variant="secondary" className="ml-auto gap-1 font-normal">
-              <Clock className="h-3 w-3" /> Pendiente
-            </Badge>
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-5">
-          <p className="flex items-start gap-2 text-sm text-muted-foreground">
-            <Plug className="mt-0.5 h-4 w-4 shrink-0" />
-            Conecta tus cuentas de portales de empleo para publicar vacantes
-            directamente desde aquí. Las claves se gestionan en Ajustes —fuera
-            del módulo de RRHH— por seguridad. La integración está en preparación.
-          </p>
-
-          <div className="divide-y rounded-lg border">
-            {PORTALES_EMPLEO.map((portal) => (
-              <div key={portal.nombre} className="flex items-center justify-between px-4 py-3">
-                <div className="flex items-center gap-3">
-                  <span className="text-xl">{portal.icono}</span>
-                  <span className="text-sm font-medium text-foreground">{portal.nombre}</span>
+              <div className="space-y-1">
+                <div className="text-sm font-medium text-foreground">
+                  {integracion.nombre}
                 </div>
-                <div className="flex items-center gap-3">
-                  <Badge variant="secondary" className="gap-1 font-normal">
-                    <Clock className="h-3 w-3" /> Pendiente
-                  </Badge>
-                  <Button variant="outline" size="sm" disabled title="Próximamente">
-                    Conectar
-                  </Button>
-                </div>
+                <p className="text-xs text-muted-foreground">
+                  {integracion.resumen}
+                </p>
               </div>
-            ))}
-          </div>
 
-          <p className="text-xs text-muted-foreground">
-            Una vez conectado un portal, podrás activar o desactivar la publicación
-            de tus vacantes desde RRHH → Reclutamiento → Portal de empleo.
-          </p>
-        </CardContent>
-      </Card>
+              <div className="mt-auto pt-1 text-xs font-medium">
+                {cargando && !bloqueada ? (
+                  <span className="text-muted-foreground">Comprobando…</span>
+                ) : estado === "conectado" ? (
+                  <span className="text-emerald-700">Conectado</span>
+                ) : estado === "proximamente" ? (
+                  <span className="text-muted-foreground">Próximamente</span>
+                ) : (
+                  <span className="text-red-600">Sin conectar</span>
+                )}
+              </div>
+            </Card>
+          );
+        })}
+      </div>
+
+      <Dialog
+        open={abierta !== null}
+        onOpenChange={(open) => {
+          if (!open) cerrarDialogo();
+        }}
+      >
+        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
+          {integracionAbierta ? (
+            <>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <IntegracionLogo
+                    logo={integracionAbierta.logo}
+                    nombre={integracionAbierta.nombre}
+                    size={24}
+                  />
+                  {integracionAbierta.nombre}
+                </DialogTitle>
+                <DialogDescription>
+                  {integracionAbierta.resumen}
+                </DialogDescription>
+              </DialogHeader>
+
+              {abierta === "google" ? <FichaGooglePanel /> : null}
+              {abierta === "agora" ? <AgoraPanel /> : null}
+            </>
+          ) : null}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
-
-/** Portales de empleo disponibles para integrar (conexión gestionada aquí). */
-const PORTALES_EMPLEO = [
-  { nombre: "InfoJobs", icono: "🔵" },
-  { nombre: "JobToday", icono: "🟢" },
-];

@@ -15,18 +15,9 @@
  */
 
 import { useEffect, useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import {
-  Star,
-  Plug,
-  Loader2,
-  CheckCircle2,
-  Search,
-  MapPin,
-} from "lucide-react";
+import { Loader2, Search, MapPin } from "lucide-react";
 import { toast } from "sonner";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import {
@@ -42,7 +33,7 @@ interface Candidato {
   address: string;
 }
 
-export function FichaGoogleCard() {
+export function FichaGooglePanel() {
   const { empresaActual } = useEmpresa();
   const empresaId = empresaActual?.id;
 
@@ -116,7 +107,7 @@ export function FichaGoogleCard() {
     setConectada(true);
     setCandidato(null);
     setQueryManual("");
-    toast.success("Ficha de Google conectada. Las reseñas empezarán a entrar solas.");
+    toast.success("Local vinculado. Las reseñas empezarán a entrar solas.");
   };
 
   const desconectar = async () => {
@@ -128,33 +119,30 @@ export function FichaGoogleCard() {
       return;
     }
     setConectada(false);
-    toast.success("Ficha de Google desconectada.");
+    toast.success("Local desvinculado.");
   };
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-sm">
-          <Star className="h-5 w-5 text-amber-500" />
-          Ficha de Google
-          {conectada ? (
-            <Badge className="ml-auto gap-1 bg-emerald-100 font-normal text-emerald-700 hover:bg-emerald-100">
-              <CheckCircle2 className="h-3 w-3" /> Conectada
-            </Badge>
-          ) : (
-            <Badge variant="secondary" className="ml-auto font-normal">
-              Sin conectar
-            </Badge>
-          )}
-        </CardTitle>
-      </CardHeader>
+    <div className="space-y-5">
+        <p className="text-sm text-muted-foreground">
+          Señala cuál es tu local en Google para que las reseñas entren solas
+          cada día y la IA redacte la respuesta de cada una. Sin esto no entra
+          ninguna reseña.
+        </p>
 
-      <CardContent className="space-y-5">
-        <p className="flex items-start gap-2 text-sm text-muted-foreground">
-          <Plug className="mt-0.5 h-4 w-4 shrink-0" />
-          Conecta el local con su ficha de Google para que las reseñas entren
-          solas cada día y la IA redacte la respuesta de cada una. Sin conectar
-          la ficha no entra ninguna reseña.
+        {/* Honestidad sobre el alcance: esto NO es un "conectar con Google" con
+            cuenta y permisos, es señalar una ficha pública (place_id). Sirve
+            para LEER, no para publicar. El acceso de escritura exige la Google
+            Business Profile API, pendiente de aprobación. Sin este aviso, el
+            restaurante da por hecho que ya se publica solo. */}
+        <p className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2.5 text-xs text-sky-900">
+          <span className="font-medium">Esto es solo el primer paso.</span>{" "}
+          Aquí únicamente indicas cuál es tu local, para poder leer sus reseñas
+          públicas. Las respuestas se preparan solas, pero de momento hay que
+          publicarlas a mano en Google. Para que se publiquen solas harás una
+          conexión con tu cuenta de Google —entrando y aceptando permisos, como
+          en cualquier otra app—, que estará disponible en cuanto Google nos
+          apruebe el acceso.
         </p>
 
         {!apiKeyOk && !cargando ? (
@@ -172,10 +160,11 @@ export function FichaGoogleCard() {
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border px-3 py-2.5">
             <div>
               <div className="text-sm font-medium text-foreground">
-                Reseñas activas
+                Local vinculado
               </div>
               <div className="text-xs text-muted-foreground">
-                Entran solas cada día y la IA prepara la respuesta de cada una.
+                Las reseñas entran solas cada día y la IA prepara la respuesta
+                de cada una, lista para publicar.
               </div>
             </div>
             <Button
@@ -187,7 +176,7 @@ export function FichaGoogleCard() {
               {guardando ? (
                 <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
               ) : null}
-              Desconectar
+              Cambiar local
             </Button>
           </div>
         ) : (
@@ -270,7 +259,6 @@ export function FichaGoogleCard() {
             </div>
           </div>
         ) : null}
-      </CardContent>
-    </Card>
+    </div>
   );
 }
