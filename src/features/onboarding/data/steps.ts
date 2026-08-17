@@ -81,23 +81,6 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
     entidad: "carta",
   },
   {
-    key: "ficha_google",
-    titulo: "Ficha de Google",
-    descripcion:
-      "Vincula el local con su ficha de Google para que la IA conteste sola las reseñas. Sin esto, no entra ninguna reseña.",
-    // Obligatorio: los agentes IA que redactan las respuestas ya vienen
-    // sembrados en toda empresa nueva, pero sin ficha vinculada no llega
-    // ninguna reseña que contestar y el módulo queda mudo sin avisar de nada.
-    // Antes esto solo se podía hacer entrando a /calidad/resenas y sabiendo
-    // que existía el botón, así que una empresa que no pasara por ahí no
-    // contestaba una sola reseña y nadie se enteraba.
-    obligatorio: true,
-    dependencias: [],
-    icono: "Star",
-    rutaGestion: "/calidad/resenas",
-    entidad: "ficha_google",
-  },
-  {
     key: "calendarios",
     titulo: "Calendarios de vacaciones",
     descripcion: "Periodos y días festivos para la gestión de vacaciones.",

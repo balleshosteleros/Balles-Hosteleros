@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
   MapPin, Briefcase, Users, Truck, Package, Image as ImageIcon,
-  BookOpen, CalendarDays, Star, Check, ArrowRight, Lock, PartyPopper,
+  BookOpen, CalendarDays, Check, ArrowRight, Lock, PartyPopper,
 } from "lucide-react";
 import { ONBOARDING_STEPS } from "@/features/onboarding/data/steps";
 import {
@@ -17,7 +17,7 @@ import {
 import type { OnboardingResumen, OnboardingEstado } from "@/features/onboarding/types/onboarding";
 
 const ICONOS: Record<string, React.ComponentType<{ className?: string }>> = {
-  MapPin, Briefcase, Users, Truck, Package, Image: ImageIcon, BookOpen, CalendarDays, Star,
+  MapPin, Briefcase, Users, Truck, Package, Image: ImageIcon, BookOpen, CalendarDays,
 };
 
 const ESTADO_BADGE: Record<OnboardingEstado, { label: string; clase: string }> = {

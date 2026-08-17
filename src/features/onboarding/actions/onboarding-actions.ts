@@ -70,17 +70,6 @@ async function contarEntidad(
       const tieneLogo = !!(data?.logo_url as string | null)?.trim();
       return tieneLogo ? 1 : 0;
     }
-    case "ficha_google": {
-      // Vinculada = la empresa tiene `google_place_id`. Sin él no entra
-      // NINGUNA reseña, así que los agentes IA sembrados no tienen nada que
-      // contestar y el módulo queda mudo sin dar ningún error.
-      const { data } = await supabase
-        .from("empresas")
-        .select("google_place_id")
-        .eq("id", empresaId)
-        .maybeSingle();
-      return (data?.google_place_id as string | null)?.trim() ? 1 : 0;
-    }
     default:
       return 0;
   }
