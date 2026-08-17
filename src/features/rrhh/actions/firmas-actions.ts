@@ -69,6 +69,31 @@ async function requireAdmin(): Promise<{ userId: string; userName: string; empre
   return { userId: user.id, userName: fullName, empresaId };
 }
 
+// `firmas_documentos.enviado_por` guarda el UUID del usuario que envió el documento.
+// Para poder mostrar "Enviado por Nombre Apellidos" en las listas resolvemos los UUID
+// contra `usuarios` en una sola consulta. Si un UUID no tiene ficha (usuario borrado),
+// se devuelve tal cual y la vista ya lo pinta como "—".
+async function resolverNombresEnviadoPor(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  userIds: string[],
+): Promise<Map<string, string>> {
+  const mapa = new Map<string, string>();
+  const unicos = [...new Set(userIds.filter(Boolean))];
+  if (unicos.length === 0) return mapa;
+
+  const { data, error } = await supabase
+    .from("usuarios")
+    .select("user_id, full_name, email")
+    .in("user_id", unicos);
+  if (error) return mapa;
+
+  for (const u of (data ?? []) as { user_id: string; full_name: string | null; email: string | null }[]) {
+    const nombre = (u.full_name || u.email || "").trim();
+    if (nombre) mapa.set(u.user_id, nombre);
+  }
+  return mapa;
+}
+
 // Aviso in-app al empleado de que tiene un documento para firmar. Acompaña al
 // email de invitación: el botón "Firmar" abre el mismo enlace de firma. El
 // `refTabla`/`refId` permiten que, al firmar, la notificación quede marcada como
@@ -132,12 +157,18 @@ export async function listFirmasPorEmpleado(
       empleados: { id: string; nombre: string | null; apellidos: string | null;
         departamentos: { nombre: string | null } | null; } | null;
     };
-    const items: FirmaResumen[] = (data as unknown as Row[]).map((r) => ({
+    const filas = data as unknown as Row[];
+    const nombresEnviadoPor = await resolverNombresEnviadoPor(
+      supabase,
+      filas.map((r) => r.enviado_por),
+    );
+    const items: FirmaResumen[] = filas.map((r) => ({
       id: r.id, titulo: r.titulo, tipo: r.tipo, modalidad: r.modalidad,
       validez: r.validez, estado: r.estado, empleadoId: r.empleado_id,
       empleadoNombre: `${r.empleados?.nombre ?? ""} ${r.empleados?.apellidos ?? ""}`.trim() || "—",
       departamento: r.empleados?.departamentos?.nombre ?? "—",
-      enviadoPor: r.enviado_por, enviadoEn: r.enviado_en, expiraEn: r.expira_en,
+      enviadoPor: nombresEnviadoPor.get(r.enviado_por) ?? r.enviado_por,
+      enviadoEn: r.enviado_en, expiraEn: r.expira_en,
       firmadoEn: r.firmado_en, ipFirma: r.ip_firma,
       sha256Original: r.sha256_original, sha256Acta: r.sha256_acta,
       reenviadoCount: r.reenviado_count,
@@ -191,7 +222,13 @@ export async function listFirmas(): Promise<{ ok: true; data: FirmaResumen[] } |
       } | null;
     };
 
-    const items: FirmaResumen[] = (data as unknown as Row[]).map((r) => {
+    const filas = data as unknown as Row[];
+    const nombresEnviadoPor = await resolverNombresEnviadoPor(
+      supabase,
+      filas.map((r) => r.enviado_por),
+    );
+
+    const items: FirmaResumen[] = filas.map((r) => {
       const empNombre = `${r.empleados?.nombre ?? ""} ${r.empleados?.apellidos ?? ""}`.trim();
       return {
         id: r.id,
@@ -203,7 +240,7 @@ export async function listFirmas(): Promise<{ ok: true; data: FirmaResumen[] } |
         empleadoId: r.empleado_id,
         empleadoNombre: empNombre || "—",
         departamento: r.empleados?.departamentos?.nombre ?? "—",
-        enviadoPor: r.enviado_por,
+        enviadoPor: nombresEnviadoPor.get(r.enviado_por) ?? r.enviado_por,
         enviadoEn: r.enviado_en,
         expiraEn: r.expira_en,
         firmadoEn: r.firmado_en,
@@ -671,7 +708,7 @@ export async function getDescargaFirmadoUrl(
 
     const { data: doc } = await admin
       .from("firmas_documentos")
-      .select("empresa_id, estado, pdf_firmado_path")
+      .select("empresa_id, estado, pdf_firmado_path, titulo")
       .eq("id", documentoId)
       .maybeSingle();
     if (!doc) return { ok: false, error: "Documento no encontrado" };
@@ -680,9 +717,18 @@ export async function getDescargaFirmadoUrl(
       return { ok: false, error: "El documento aún no está firmado" };
     }
 
+    // `download` hace que Storage sirva el PDF con Content-Disposition: attachment,
+    // así el navegador lo guarda directamente en el ordenador en vez de abrirlo en
+    // una pestaña y obligar a descargarlo otra vez desde el visor.
+    const nombreArchivo = `${String(doc.titulo ?? "documento")
+      .replace(/[\\/:*?"<>|]/g, "-")
+      .trim() || "documento"}.pdf`;
+
     const signed = await admin.storage
       .from(BUCKET)
-      .createSignedUrl(doc.pdf_firmado_path as string, SIGNED_URL_TTL_DESCARGA);
+      .createSignedUrl(doc.pdf_firmado_path as string, SIGNED_URL_TTL_DESCARGA, {
+        download: nombreArchivo,
+      });
     if (signed.error || !signed.data?.signedUrl) {
       return { ok: false, error: signed.error?.message ?? "No se pudo generar URL" };
     }

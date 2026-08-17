@@ -594,9 +594,11 @@ export async function firmarDocumento(input: FirmarDocumentoInput): Promise<Firm
     // Token ya marcado consumido_en al inicio (R1).
     void firmadoEvento;
 
+    // `download`: la copia firmada se guarda en el dispositivo al pulsar, sin pasar
+    // por el visor del navegador.
     const signed = await admin.storage
       .from(BUCKET)
-      .createSignedUrl(firmadoPath, COPIA_TTL_SECONDS);
+      .createSignedUrl(firmadoPath, COPIA_TTL_SECONDS, { download: "documento-firmado.pdf" });
     const descargaUrl = signed.data?.signedUrl ?? "";
 
     if (empleadoEmail && descargaUrl) {
@@ -777,7 +779,9 @@ export async function getEstadoFirma(
     if (doc.estado === "firmado" && doc.pdf_firmado_path) {
       const signed = await admin.storage
         .from(BUCKET)
-        .createSignedUrl(doc.pdf_firmado_path as string, COPIA_TTL_SECONDS);
+        .createSignedUrl(doc.pdf_firmado_path as string, COPIA_TTL_SECONDS, {
+          download: "documento-firmado.pdf",
+        });
       descargaUrl = signed.data?.signedUrl ?? undefined;
     }
     return { estado: doc.estado as "pendiente" | "firmado" | "rechazado" | "expirado", descargaUrl };

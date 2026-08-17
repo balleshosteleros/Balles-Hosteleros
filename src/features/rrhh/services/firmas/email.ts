@@ -83,7 +83,7 @@ export async function enviarInvitacionFirma(input: InvitacionFirmaInput): Promis
   const introHtml = input.introOverride
     ? input.introOverride.split(/\n{2,}/).map((p) => `<p>${esc(p).replace(/\n/g, "<br/>")}</p>`).join("")
     : `<p>Hola ${esc(input.empleadoNombre)},</p>
-       <p>La dirección de ${esc(input.empresaNombre)} te ha enviado un documento para firma electrónica:</p>`;
+       <p>${esc(input.empresaNombre)} te ha enviado un documento para firma electrónica:</p>`;
 
   const cuerpoHtml = `
     ${introHtml}
@@ -101,7 +101,7 @@ export async function enviarInvitacionFirma(input: InvitacionFirmaInput): Promis
   const introText = input.introOverride
     ? `${input.introOverride}\n\n`
     : `Hola ${input.empleadoNombre},\n\n` +
-      `La dirección de ${input.empresaNombre} te ha enviado un documento para firma electrónica:\n`;
+      `${input.empresaNombre} te ha enviado un documento para firma electrónica:\n`;
   const text =
     introText +
     `  ${input.tituloDocumento}\n\n` +

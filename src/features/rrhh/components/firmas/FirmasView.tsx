@@ -49,7 +49,6 @@ import {
   Inbox,
   Eye,
   Download,
-  ShieldCheck,
   Upload,
   AlertTriangle,
   RefreshCcw,
@@ -73,11 +72,7 @@ import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
 import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 import {
   TIPOS_DOCUMENTO,
-  MODALIDADES_FIRMA,
-  VALIDECES_LEGAL,
   TIPO_LABEL,
-  MODALIDAD_LABEL,
-  VALIDEZ_LABEL,
   ESTADO_LABEL,
   ESTADO_COLOR,
   type DocumentoFirma,
@@ -89,6 +84,13 @@ import {
 import { MAX_DOCUMENTO_MB, MAX_DOCUMENTO_BYTES } from "@/shared/lib/documentos";
 
 const MAX_PDF_BYTES = MAX_DOCUMENTO_BYTES; // 50 MB (tope unificado de documentos)
+
+// Todos los documentos se firman igual: el empleado dibuja su firma de puño y letra
+// sobre el lienzo del portal. La validez es la que el sistema puede sostener de verdad
+// (eIDAS simple: enlace único + código por email + sellado y hash del PDF). No se ofrecen
+// eIDAS avanzada ni cualificada porque exigen certificado digital reconocido, que no emitimos.
+const MODALIDAD_FIJA: ModalidadFirma = "manuscrita_digital";
+const VALIDEZ_FIJA: ValidezLegal = "eidas_simple";
 
 type EmpleadoOpcion = { id: string; nombre: string; puesto: string | null; departamento: string };
 
@@ -157,8 +159,6 @@ export function FirmasView() {
 
   const [titulo, setTitulo] = useState("");
   const [tipo, setTipo] = useState<TipoDocumento>("contrato");
-  const [modalidad, setModalidad] = useState<ModalidadFirma>("click_to_sign");
-  const [validez, setValidez] = useState<ValidezLegal>("eidas_simple");
   const [empleadoId, setEmpleadoId] = useState<string>("");
   const [diasExpiracion, setDiasExpiracion] = useState<number>(7);
   const [observaciones, setObservaciones] = useState("");
@@ -220,8 +220,6 @@ export function FirmasView() {
 
   const acceso = (d: DocumentoFirma, campo: string): unknown => {
     if (campo === "tipo") return TIPO_LABEL[d.tipo];
-    if (campo === "modalidad") return MODALIDAD_LABEL[d.modalidad];
-    if (campo === "validez") return VALIDEZ_LABEL[d.validez];
     if (campo === "estado") return ESTADO_LABEL[d.estado];
     if (campo === "empleado") return d.empleadoNombre;
     if (campo === "departamento") return d.departamento;
@@ -270,8 +268,6 @@ export function FirmasView() {
   function abrirNuevo() {
     setTitulo("");
     setTipo("contrato");
-    setModalidad("click_to_sign");
-    setValidez("eidas_simple");
     setEmpleadoId("");
     setDiasExpiracion(7);
     setObservaciones("");
@@ -310,8 +306,8 @@ export function FirmasView() {
     fd.set("file", archivo);
     fd.set("titulo", titulo.trim());
     fd.set("tipo", tipo);
-    fd.set("modalidad", modalidad);
-    fd.set("validez", validez);
+    fd.set("modalidad", MODALIDAD_FIJA);
+    fd.set("validez", VALIDEZ_FIJA);
     fd.set("empleadoId", empleadoId);
     fd.set("plazoDias", String(diasExpiracion));
     if (observaciones.trim()) fd.set("observaciones", observaciones.trim());
@@ -336,7 +332,14 @@ export function FirmasView() {
     const res = await getDescargaFirmadoUrl(docId);
     setAccionPorFila((s) => ({ ...s, [docId]: null }));
     if (!res.ok) return toast.error(res.error);
-    window.open(res.url, "_blank", "noopener,noreferrer");
+    // La URL ya viene con Content-Disposition: attachment, así que un enlace normal
+    // guarda el PDF en el ordenador sin abrir el visor en otra pestaña.
+    const a = document.createElement("a");
+    a.href = res.url;
+    a.download = "";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
   }
 
   async function reenviar(docId: string) {
@@ -411,8 +414,6 @@ export function FirmasView() {
     { campo: "documento", label: "Documento" },
     { campo: "empleado", label: "Empleado" },
     { campo: "tipo", label: "Tipo" },
-    { campo: "modalidad", label: "Modalidad" },
-    { campo: "validez", label: "Validez" },
     { campo: "enviado", label: "Enviado" },
     { campo: "firmado", label: "Firmado" },
     { campo: "estado", label: "Estado" },
@@ -440,21 +441,6 @@ export function FirmasView() {
     tipo: {
       th: <TableHead key="tipo">Tipo</TableHead>,
       td: (d) => <TableCell key="tipo" className="text-sm">{TIPO_LABEL[d.tipo]}</TableCell>,
-    },
-    modalidad: {
-      th: <TableHead key="modalidad">Modalidad</TableHead>,
-      td: (d) => <TableCell key="modalidad" className="text-sm">{MODALIDAD_LABEL[d.modalidad]}</TableCell>,
-    },
-    validez: {
-      th: <TableHead key="validez">Validez</TableHead>,
-      td: (d) => (
-        <TableCell key="validez">
-          <Badge variant="outline" className="gap-1">
-            <ShieldCheck className="h-3 w-3" />
-            {VALIDEZ_LABEL[d.validez]}
-          </Badge>
-        </TableCell>
-      ),
     },
     enviado: {
       th: <TableHead key="enviado">Enviado</TableHead>,
@@ -687,38 +673,6 @@ export function FirmasView() {
                 </Select>
               </div>
 
-              <div className="space-y-1.5">
-                <Label>Modalidad de firma</Label>
-                <Select value={modalidad} onValueChange={(v) => setModalidad(v as ModalidadFirma)}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {MODALIDADES_FIRMA.map((m) => (
-                      <SelectItem key={m} value={m}>
-                        {MODALIDAD_LABEL[m]}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-1.5">
-                <Label>Validez legal</Label>
-                <Select value={validez} onValueChange={(v) => setValidez(v as ValidezLegal)}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {VALIDECES_LEGAL.map((v) => (
-                      <SelectItem key={v} value={v}>
-                        {VALIDEZ_LABEL[v]}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
               <div className="space-y-1.5 col-span-2">
                 <Label>Plazo de firma (días)</Label>
                 <Input
@@ -794,8 +748,6 @@ export function FirmasView() {
                 <Info label="Empleado" value={verDoc.empleadoNombre} />
                 <Info label="Departamento" value={verDoc.departamento} />
                 <Info label="Tipo" value={TIPO_LABEL[verDoc.tipo]} />
-                <Info label="Modalidad" value={MODALIDAD_LABEL[verDoc.modalidad]} />
-                <Info label="Validez" value={VALIDEZ_LABEL[verDoc.validez]} />
                 <Info
                   label="Estado"
                   value={
