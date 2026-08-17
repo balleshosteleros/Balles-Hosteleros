@@ -24,7 +24,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { CheckCircle2, XCircle, Clock } from "lucide-react";
+import { CheckCircle2, XCircle } from "lucide-react";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { getAgoraIntegracion } from "@/features/ajustes/actions/agora-integracion-actions";
 import { getEmpresaPlaceInfo } from "@/features/calidad/actions/resenas-actions";
@@ -36,7 +36,7 @@ import { FichaGooglePanel } from "@/features/ajustes/components/FichaGooglePanel
 import { AgoraPanel } from "@/features/ajustes/components/AgoraPanel";
 
 /** Estado de conexión de cada integración. */
-type EstadoConexion = "conectado" | "sin_conectar" | "proximamente";
+type EstadoConexion = "conectado" | "sin_conectar";
 
 interface IntegracionDef {
   key: string;
@@ -44,8 +44,6 @@ interface IntegracionDef {
   /** Una línea: qué hace por el negocio, sin tecnicismos. */
   resumen: string;
   logo: IntegracionLogoKey;
-  /** Las "próximamente" no se pueden abrir todavía. */
-  proximamente?: boolean;
 }
 
 const INTEGRACIONES: IntegracionDef[] = [
@@ -60,20 +58,6 @@ const INTEGRACIONES: IntegracionDef[] = [
     nombre: "Ágora POS",
     resumen: "Importa cada día las ventas de tu TPV.",
     logo: "agora",
-  },
-  {
-    key: "highlevel",
-    nombre: "GoHighLevel",
-    resumen: "Marketing y reputación.",
-    logo: "highlevel",
-    proximamente: true,
-  },
-  {
-    key: "b2com",
-    nombre: "B2COM",
-    resumen: "Centralita telefónica de la empresa.",
-    logo: "b2com",
-    proximamente: true,
   },
 ];
 
@@ -97,8 +81,6 @@ export function IntegracionesTab() {
             agora.ok && agora.estado.activo && agora.estado.tieneToken
               ? "conectado"
               : "sin_conectar",
-          highlevel: "proximamente",
-          b2com: "proximamente",
         });
         setCargando(false);
       },
@@ -129,48 +111,32 @@ export function IntegracionesTab() {
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {INTEGRACIONES.map((integracion) => {
-          const estado = integracion.proximamente
-            ? "proximamente"
-            : (estados[integracion.key] ?? "sin_conectar");
-          const bloqueada = integracion.proximamente;
+          const estado = estados[integracion.key] ?? "sin_conectar";
+          const conectado = estado === "conectado";
 
           return (
             <Card
               key={integracion.key}
-              role={bloqueada ? undefined : "button"}
-              tabIndex={bloqueada ? undefined : 0}
-              aria-disabled={bloqueada}
-              onClick={() => {
-                if (!bloqueada) setAbierta(integracion.key);
-              }}
+              role="button"
+              tabIndex={0}
+              onClick={() => setAbierta(integracion.key)}
               onKeyDown={(e) => {
-                if (bloqueada) return;
                 if (e.key === "Enter" || e.key === " ") {
                   e.preventDefault();
                   setAbierta(integracion.key);
                 }
               }}
-              className={
-                "relative flex h-full flex-col gap-3 p-4 transition " +
-                (bloqueada
-                  ? "opacity-60"
-                  : "cursor-pointer hover:border-primary/40 hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring")
-              }
+              className="relative flex h-full cursor-pointer flex-col gap-3 p-4 transition hover:border-primary/40 hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               {/* Distintivo de estado, arriba a la derecha: verde = listo,
                   rojo = falta conectar. Es lo primero que se ve. */}
               <span className="absolute right-3 top-3">
-                {cargando && !bloqueada ? (
+                {cargando ? (
                   <span className="block h-5 w-5 animate-pulse rounded-full bg-muted" />
-                ) : estado === "conectado" ? (
+                ) : conectado ? (
                   <CheckCircle2
                     className="h-5 w-5 text-emerald-600"
                     aria-label="Conectado"
-                  />
-                ) : estado === "proximamente" ? (
-                  <Clock
-                    className="h-5 w-5 text-muted-foreground"
-                    aria-label="Próximamente"
                   />
                 ) : (
                   <XCircle
@@ -195,12 +161,10 @@ export function IntegracionesTab() {
               </div>
 
               <div className="mt-auto pt-1 text-xs font-medium">
-                {cargando && !bloqueada ? (
+                {cargando ? (
                   <span className="text-muted-foreground">Comprobando…</span>
-                ) : estado === "conectado" ? (
+                ) : conectado ? (
                   <span className="text-emerald-700">Conectado</span>
-                ) : estado === "proximamente" ? (
-                  <span className="text-muted-foreground">Próximamente</span>
                 ) : (
                   <span className="text-red-600">Sin conectar</span>
                 )}

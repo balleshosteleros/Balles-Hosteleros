@@ -39,12 +39,10 @@ function GoogleLogo({ size }: { size: number }) {
   );
 }
 
-export type IntegracionLogoKey = "google" | "agora" | "highlevel" | "b2com";
+export type IntegracionLogoKey = "google" | "agora";
 
 const FICHEROS: Record<string, string> = {
   agora: "/icons/apps/agora.png",
-  highlevel: "/icons/apps/highlevel.png",
-  b2com: "/icons/apps/b2com.png",
 };
 
 export function IntegracionLogo({
