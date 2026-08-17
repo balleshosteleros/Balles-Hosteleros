@@ -33,7 +33,8 @@ export type OnboardingEntidad =
   | "productos"
   | "imagen_marca"
   | "carta"
-  | "calendarios";
+  | "calendarios"
+  | "ficha_google";
 
 /** Estado calculado de un paso (catálogo + derivación + persistencia). */
 export interface OnboardingPasoEstado {
