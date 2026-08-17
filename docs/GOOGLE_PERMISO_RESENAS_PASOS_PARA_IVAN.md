@@ -28,6 +28,34 @@ permiso a la pantalla de consentimiento.
 
 ---
 
+## ⚠️ Con qué cuenta hay que enviarlo (esto atasca a mucha gente)
+
+Google exige que el correo que envía la solicitud sea **propietario o
+administrador de una ficha de Google Business verificada y activa desde hace
+más de 60 días**. Y dice literalmente que esa ficha **puede ser la de un
+cliente que gestionas**, no hace falta que sea la del solicitante.
+
+Por tanto:
+
+| Concepto | Qué va |
+|---|---|
+| **Cuenta con la que se envía** | La que administra la ficha de **BACANAL** en Google Business |
+| **Empresa solicitante** (en el texto) | La sociedad **del software**, no un restaurante |
+| **Ficha que acredita** | BACANAL (o HABANA) |
+| **Sitio web** | El del negocio de esa ficha, para que sea coherente |
+
+**No** es la cuenta del proyecto de Google Cloud: lo que Google mira son los
+permisos sobre la **ficha del negocio**. Son cosas distintas.
+
+**Si al cambiar de cuenta el formulario rebota a otra página**, es que hay
+varias sesiones de Google abiertas a la vez y se lía. Solución: **ventana de
+incógnito** y entrar solo con la cuenta correcta.
+
+Antes de empezar, comprobar en https://business.google.com que esa cuenta ve la
+ficha y que aparece **verificada**.
+
+---
+
 ## Paso 1 — Pedir el acceso a la API (el que tarda)
 
 Este es **el paso lento y el único urgente**. Los demás se hacen en minutos y
@@ -42,10 +70,10 @@ solo tienen sentido cuando Google conteste.
    | Campo del formulario | Qué poner |
    |---|---|
    | **Project ID / Project number** | `131650182388` |
-   | **Nombre de la empresa** | Bacanal System S.L. |
-   | **Sitio web** | El dominio del software (`app.sistema…`) |
-   | **Correo de contacto** | El correo con el que se gestiona Google Cloud |
-   | **Tipo de uso** | Uso propio / gestión de negocios propios y clientes |
+   | **Nombre de la empresa** | La sociedad **del software** (⚠️ NO un restaurante: Google evalúa a la plataforma, igual que en su día evaluó a GoHighLevel) |
+   | **Sitio web** | El del negocio de la ficha que se usa para acreditar |
+   | **Correo de contacto** | El que es **administrador de la ficha** de BACANAL |
+   | **Tipo de uso** | Uso propio / gestión de negocios propios y de clientes |
 
 3. En el campo de **descripción del uso** (el importante — es lo que un humano
    de Google va a leer), explicar en inglés algo así:
