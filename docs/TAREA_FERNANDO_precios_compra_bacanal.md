@@ -62,12 +62,18 @@ lanza** — se traga todo y devuelve `null`, así que el chat de soporte nunca p
 Un detalle de redacción: el texto dice *"La IA que **lee los documentos**…"*, que no encaja
 cuando el que falla es el chat de la web o el redactor de correos. Hazlo genérico.
 
-### 2. 📄 Belmon Drink 15378 → **lo busco, pero el arreglo de verdad es el punto 5**
+### 2. 📄 Belmon Drink 15378 → **PEDIDO AL GERENTE. Queda PENDIENTE de que llegue completo**
 
-Ya sé cuál es: **Habana, 16-jul-2026, pedido grande de licores y energéticas** (Red Bull,
-ginebras, whiskies, Oxefruit). Buscaré la página que falta entre las fotos del 30-jul.
+Identificado: **Habana, 16-jul-2026, pedido grande de licores y energéticas** (Red Bull,
+ginebras, whiskies, Oxefruit); las dos fotos del 30-jul cortan en "SUMA Y SIGUE: 694,39 €".
 
-Pero no nos quedemos ahí: ver el punto 5.
+**Se lo he pedido al gerente: que nos mande el albarán de Belmonte ENTERO, todas las páginas.**
+No lo busquéis entre las fotos viejas ni lo carguéis a medias — **déjalo parado hasta que
+llegue completo**. En cuanto lo tenga os aviso aquí y se sube de una vez.
+
+⏳ **Estado: PENDIENTE (Iván) — esperando el documento completo del gerente.**
+
+Pero no nos quedemos ahí: ver el punto 5, que es para que esto no vuelva a pasar.
 
 ### 3. 🗂️ Reparto de la lista → **LO HACES TODO TÚ**
 
@@ -159,12 +165,16 @@ seguimos.
 
 ### Lo que te queda A TI (por orden)
 
-| | Qué |
-|---|---|
-| 🔴 **URGENTE** | **Activar facturación en el proyecto Google de la `GEMINI_API_KEY`.** Está en el tier free (20 peticiones/DÍA para TODA la app) y ayer a las 22:02 el gerente se quedó sin poder subir albaranes. Va a pasar cada día. Coste con billing: céntimos al mes |
-| 📄 | La **página final del Belmon Drink `15378`** (Habana): única duda del 30-jul que no podemos cerrar sin ella |
-| 🗂️ | **Repartir tu lista nueva** (aviso de empresa equivocada, matcher tolerante, alta desde albarán, bug de numeración —ya van 3 víctimas: `ALB-2013-025` anoche—, movimientos de stock, inventarios, mermas, recetas). Dinos qué haces tú y qué nosotros, y no nos pisamos |
-| 💬 | Una decisión de diseño pequeña, cuando quieras: qué hacer si dos personas revisan el mismo albarán a la vez (avisar y recargar / bloquear al segundo). La fontanería ya existe |
+> **▸ LAS 4 CONTESTADAS por Iván el 17-ago** — respuestas completas en la sección 📌 del tope
+> del documento. Estado resumido en la última columna.
+
+| | Qué | Estado (17-ago) |
+|---|---|---|
+| 🔴 **URGENTE** | **Activar facturación en el proyecto Google de la `GEMINI_API_KEY`.** Está en el tier free (20 peticiones/DÍA para TODA la app) y ayer a las 22:02 el gerente se quedó sin poder subir albaranes. Va a pasar cada día. Coste con billing: céntimos al mes | ❌ **NO se activa de momento**, seguimos con el tier free. A cambio: que el aviso de cuota se entienda en TODOS los módulos (hoy solo albaranes; 8 sueltan el 429 crudo) |
+| 📄 | La **página final del Belmon Drink `15378`** (Habana): única duda del 30-jul que no podemos cerrar sin ella | ⏳ **PENDIENTE — pedido al gerente ENTERO.** No lo carguéis a medias; esperad a que Iván avise |
+| 🗂️ | **Repartir tu lista nueva** (aviso de empresa equivocada, matcher tolerante, alta desde albarán, bug de numeración —ya van 3 víctimas: `ALB-2013-025` anoche—, movimientos de stock, inventarios, mermas, recetas). Dinos qué haces tú y qué nosotros, y no nos pisamos | ✅ **Repartido: las 7 las hacéis vosotros.** Iván sigue en reservas/web y no toca logística |
+| 💬 | Una decisión de diseño pequeña, cuando quieras: qué hacer si dos personas revisan el mismo albarán a la vez (avisar y recargar / bloquear al segundo). La fontanería ya existe | ✅ **Decididlo vosotros**, como cualquier software. Iván no entra |
+| 🆕 | *(nuevo, de Iván)* **Albarán incompleto: cazarlo EN LA SUBIDA** obligando a fotografiar la página que falta, no anotar la deuda para después | 🔺 **Prioridad alta.** La incidencia está diseñada y los campos existen, pero no está conectado: 0 albaranes marcados en prod |
 
 Y de tu lista de pendientes propia (sección 📋), dos ya no lo son: los formatos (hecho) y el
 Excel MAKRO (hecho).
