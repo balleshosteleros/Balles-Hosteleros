@@ -89,9 +89,12 @@ Ya está escrita en `supabase/migrations/`.
 
 Pasos, en orden:
 
-1. **Solicitar acceso a la Google Business Profile API.** Lo tiene que pedir
-   Iván como propietario de las fichas. Google revisa y aprueba (o pide más
-   información). Es el paso lento.
+1. **Solicitar acceso a la Google Business Profile API.** Es **UN trámite para
+   todo el software, no uno por empresa**: lo pide Balles-Hosteleros como
+   plataforma, exactamente igual que hizo GoHighLevel en su día. Por eso a Iván
+   "le responde solo" en GHL sin haber pedido nada — él solo pulsó "conectar
+   con Google" y aceptó los permisos sobre su ficha; el trámite ya lo tenían
+   ellos. Google revisa y aprueba (o pide más información). Es el paso lento.
 2. Configurar el OAuth de Google Business en el software.
 3. Conectar cada ficha (BACANAL, HABANA) autorizando al software, igual que en
    su día se autorizó a GHL.
