@@ -30,7 +30,7 @@ export function BloquePublico({
     case "menu":
       return <MenuPublico bloque={bloque} />;
     case "reservas":
-      return <ReservasPublico bloque={bloque} />;
+      return <ReservasPublico bloque={bloque} contexto={contexto} />;
     case "testimonios":
       return <TestimoniosPublico bloque={bloque} />;
     case "cta":
@@ -291,12 +291,35 @@ function MenuPublico({ bloque }: { bloque: Extract<Bloque, { tipo: "menu" }> }) 
   );
 }
 
-function ReservasPublico({ bloque }: { bloque: Extract<Bloque, { tipo: "reservas" }> }) {
+function ReservasPublico({
+  bloque,
+  contexto,
+}: {
+  bloque: Extract<Bloque, { tipo: "reservas" }>;
+  contexto?: PaginaContexto;
+}) {
   const { modo, url } = bloque.datos;
+  const slug = contexto?.empresaSlug ?? null;
   return (
     <section className="py-12 px-4 max-w-3xl mx-auto text-center" id="reservas">
       <h2 className="text-3xl font-bold mb-4">Reservas</h2>
-      {modo === "enlace_externo" && url ? (
+      {modo === "portal_propio" ? (
+        slug ? (
+          // Motor propio: mismo origen, así que no hace falta postMessage para
+          // el alto — le damos sitio suficiente y el iframe scrollea solo.
+          <iframe
+            src={`/reservar/${slug}/embed`}
+            title="Reservar mesa"
+            className="w-full border-0 rounded-md bg-white"
+            style={{ height: "760px" }}
+            loading="lazy"
+          />
+        ) : (
+          <p className="text-sm text-muted-foreground">
+            (Configura el slug de la empresa para activar las reservas)
+          </p>
+        )
+      ) : modo === "enlace_externo" && url ? (
         <a
           href={url}
           className="inline-block rounded-md bg-black text-white px-6 py-3 font-semibold"
@@ -586,12 +609,30 @@ function TextoLibrePublico({
 }: {
   bloque: Extract<Bloque, { tipo: "texto_libre" }>;
 }) {
+  // Estilos propios en vez de `prose`: el plugin @tailwindcss/typography no
+  // está instalado en el proyecto, así que esas clases no pintaban nada y el
+  // HTML salía sin jerarquía (títulos y párrafos iguales).
+  // `pt-28` deja sitio a la nav fija, que si no tapa el primer titular en las
+  // páginas que empiezan por texto — las legales, sin hero.
   return (
-    <section className="py-10 px-4 max-w-3xl mx-auto">
-      <div
-        className="prose prose-lg max-w-none"
-        dangerouslySetInnerHTML={{ __html: bloque.datos.html_seguro }}
-      />
+    <section className="pw-texto mx-auto max-w-3xl px-4 pb-10 pt-28">
+      <div dangerouslySetInnerHTML={{ __html: bloque.datos.html_seguro }} />
+      <style>{`
+        .pw-texto { color: rgba(245,245,244,.82); line-height: 1.7; }
+        .pw-texto h1 { font-size: clamp(1.9rem, 4vw, 2.6rem); font-weight: 700; color: var(--pw-primario); margin: 0 0 1.2rem; line-height: 1.15; }
+        .pw-texto h2 { font-size: 1.3rem; font-weight: 600; color: #fff; margin: 2.2rem 0 .7rem; }
+        .pw-texto h3 { font-size: 1.05rem; font-weight: 600; color: #fff; margin: 1.6rem 0 .5rem; }
+        .pw-texto p { margin: 0 0 1rem; }
+        .pw-texto ul, .pw-texto ol { margin: 0 0 1.2rem; padding-left: 1.3rem; }
+        .pw-texto li { margin-bottom: .4rem; }
+        .pw-texto ul { list-style: disc; }
+        .pw-texto ol { list-style: decimal; }
+        .pw-texto strong { color: #fff; font-weight: 600; }
+        .pw-texto a { color: var(--pw-primario); text-decoration: underline; text-underline-offset: 2px; }
+        .pw-texto table { width: 100%; border-collapse: collapse; margin: 0 0 1.5rem; font-size: .9rem; display: block; overflow-x: auto; }
+        .pw-texto th, .pw-texto td { border: 1px solid rgba(255,255,255,.14); padding: .55rem .7rem; text-align: left; vertical-align: top; }
+        .pw-texto th { background: rgba(255,255,255,.06); color: #fff; font-weight: 600; }
+      `}</style>
     </section>
   );
 }

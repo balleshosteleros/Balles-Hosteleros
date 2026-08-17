@@ -17,10 +17,20 @@ async function obtenerHost(): Promise<string | null> {
   );
 }
 
-export async function generateMetadata(): Promise<Metadata> {
+/** La ruta decide QUÉ página se sirve: "" = portada, "menu" = /menu, etc. */
+function slugDeParams(slug: string[] | undefined): string {
+  return (slug ?? []).join("/");
+}
+
+interface PageProps {
+  params: Promise<{ slug?: string[] }>;
+}
+
+export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const host = await obtenerHost();
   if (!host) return {};
-  const match = await resolverHostname(host);
+  const { slug } = await params;
+  const match = await resolverHostname(host, slugDeParams(slug));
   if (!match) return {};
   return {
     title: match.seo?.title ?? `${match.nombre_empresa} — ${match.nombre_pagina}`,
@@ -34,10 +44,11 @@ export async function generateMetadata(): Promise<Metadata> {
   };
 }
 
-export default async function PublicCatchAllPage() {
+export default async function PublicCatchAllPage({ params }: PageProps) {
   const host = await obtenerHost();
   if (!host) notFound();
-  const match = await resolverHostname(host);
+  const { slug } = await params;
+  const match = await resolverHostname(host, slugDeParams(slug));
   if (!match) notFound();
 
   return (

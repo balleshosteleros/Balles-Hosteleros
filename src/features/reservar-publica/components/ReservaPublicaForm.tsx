@@ -11,6 +11,7 @@ import { comprobarClientePublicoAction } from "@/features/reservar-publica/actio
 import { validarCuponPublicoAction } from "@/features/reservar-publica/actions/validar-cupon-publico-action";
 import { CuponInputReserva } from "@/features/sala/cupones/components/CuponInputReserva";
 import { TicketSelector, type ProductoTicketPublico } from "@/features/reservar-publica/components/TicketSelector";
+import { SelectorDisponibilidad } from "@/features/reservar-publica/components/SelectorDisponibilidad";
 import { toast } from "sonner";
 
 interface AvisoDatosOriginales {
@@ -61,7 +62,9 @@ export function ReservaPublicaForm({
   const [telefono, setTelefono] = useState("");
   const [email, setEmail] = useState("");
   const [fecha, setFecha] = useState(new Date().toISOString().split("T")[0]);
-  const [hora, setHora] = useState("21:00");
+  // Sin hora por defecto: la elige el cliente entre las que están realmente
+  // abiertas (antes se fijaba "21:00" a ciegas y podía no existir ese pase).
+  const [hora, setHora] = useState("");
   const [personas, setPersonas] = useState(2);
   const [codigo, setCodigo] = useState("");
   const [mostrarCodigo, setMostrarCodigo] = useState(false);
@@ -311,6 +314,80 @@ export function ReservaPublicaForm({
             />
           )}
 
+          {/* Paso 1 — Comensales. Va primero porque la disponibilidad de horas
+              depende de cuánta gente viene. */}
+          <div>
+            <Label className="text-zinc-700 flex items-center gap-1.5">
+              <Users className="h-3.5 w-3.5" />
+              Personas *
+            </Label>
+            <div className="flex items-center gap-2 mt-1 rounded-lg border bg-zinc-50/50 p-1.5">
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-11 w-11 sm:h-9 sm:w-9 rounded-md hover:bg-white text-xl"
+                onClick={() => setPersonas((n) => Math.max(1, n - 1))}
+                aria-label="Restar persona"
+              >
+                <span className="leading-none">−</span>
+              </Button>
+              <div className="flex-1 flex items-center justify-center gap-2 text-xl font-bold text-zinc-900 tabular-nums">
+                {personas}
+                <span className="text-xs font-medium text-zinc-500 uppercase tracking-wider">
+                  {personas === 1 ? "persona" : "personas"}
+                </span>
+              </div>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-11 w-11 sm:h-9 sm:w-9 rounded-md hover:bg-white text-xl"
+                onClick={() => setPersonas((n) => Math.min(50, n + 1))}
+                aria-label="Sumar persona"
+              >
+                <span className="leading-none">+</span>
+              </Button>
+            </div>
+          </div>
+
+          {/* Paso 2 — Fecha */}
+          <div>
+            <Label htmlFor="fecha" className="text-zinc-700 flex items-center gap-1.5">
+              <Calendar className="h-3.5 w-3.5" />
+              Fecha *
+            </Label>
+            <Input
+              id="fecha"
+              type="date"
+              value={fecha}
+              onChange={(e) => setFecha(e.target.value)}
+              min={new Date().toISOString().split("T")[0]}
+              required
+              className="mt-1 h-12 sm:h-10 text-base sm:text-sm"
+            />
+          </div>
+
+          {/* Paso 3 — Horas REALES del restaurante para esa fecha y comensales.
+              Sustituye al iframe de CoverManager: el cliente pulsa un pase
+              abierto en vez de escribir una hora que luego rechazaríamos. */}
+          <div>
+            <Label className="text-zinc-700 flex items-center gap-1.5 mb-2">
+              <Clock className="h-3.5 w-3.5" />
+              Hora *
+            </Label>
+            <SelectorDisponibilidad
+              empresaSlug={empresaSlug}
+              fecha={fecha}
+              personas={personas}
+              horaSeleccionada={hora}
+              onSelect={setHora}
+              accent={accent}
+              onAccent={onAccent}
+            />
+          </div>
+
+          {/* Paso 4 — Datos de contacto */}
           <div className="grid grid-cols-2 gap-3">
             <div>
               <Label htmlFor="nombre" className="text-zinc-700">Nombre *</Label>
@@ -319,7 +396,6 @@ export function ReservaPublicaForm({
                 value={nombre}
                 onChange={(e) => setNombre(e.target.value)}
                 required
-                autoFocus
                 autoComplete="given-name"
                 className="mt-1 h-12 sm:h-10 text-base sm:text-sm"
               />
@@ -369,73 +445,6 @@ export function ReservaPublicaForm({
               placeholder="tu@email.com"
               className="mt-1 h-12 sm:h-10 text-base sm:text-sm"
             />
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <Label htmlFor="fecha" className="text-zinc-700 flex items-center gap-1.5">
-                <Calendar className="h-3.5 w-3.5" />
-                Fecha *
-              </Label>
-              <Input
-                id="fecha"
-                type="date"
-                value={fecha}
-                onChange={(e) => setFecha(e.target.value)}
-                min={new Date().toISOString().split("T")[0]}
-                required
-                className="mt-1 h-12 sm:h-10 text-base sm:text-sm"
-              />
-            </div>
-            <div>
-              <Label htmlFor="hora" className="text-zinc-700 flex items-center gap-1.5">
-                <Clock className="h-3.5 w-3.5" />
-                Hora *
-              </Label>
-              <Input
-                id="hora"
-                type="time"
-                value={hora}
-                onChange={(e) => setHora(e.target.value)}
-                required
-                className="mt-1 h-12 sm:h-10 text-base sm:text-sm"
-              />
-            </div>
-          </div>
-
-          <div>
-            <Label className="text-zinc-700 flex items-center gap-1.5">
-              <Users className="h-3.5 w-3.5" />
-              Personas *
-            </Label>
-            <div className="flex items-center gap-2 mt-1 rounded-lg border bg-zinc-50/50 p-1.5">
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="h-11 w-11 sm:h-9 sm:w-9 rounded-md hover:bg-white text-xl"
-                onClick={() => setPersonas((n) => Math.max(1, n - 1))}
-                aria-label="Restar persona"
-              >
-                <span className="leading-none">−</span>
-              </Button>
-              <div className="flex-1 flex items-center justify-center gap-2 text-xl font-bold text-zinc-900 tabular-nums">
-                {personas}
-                <span className="text-xs font-medium text-zinc-500 uppercase tracking-wider">
-                  {personas === 1 ? "persona" : "personas"}
-                </span>
-              </div>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="h-11 w-11 sm:h-9 sm:w-9 rounded-md hover:bg-white text-xl"
-                onClick={() => setPersonas((n) => Math.min(50, n + 1))}
-                aria-label="Sumar persona"
-              >
-                <span className="leading-none">+</span>
-              </Button>
-            </div>
           </div>
 
           {/* Cupón y ticket son tipos de reserva incompatibles: si el cliente

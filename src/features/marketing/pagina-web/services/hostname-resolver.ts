@@ -32,9 +32,25 @@ export function normalizarHost(raw: string): string {
     .split(":")[0];
 }
 
-export async function resolverHostname(rawHost: string): Promise<HostnameMatch | null> {
+/**
+ * Resuelve el dominio y, dentro de él, la página que corresponde a la ruta.
+ *
+ * @param rutaSlug Slug de la URL: "" = inicio (la página del dominio),
+ * "politica-de-privacidad" = esa página concreta de la misma empresa.
+ *
+ * POR QUÉ IMPORTA LA RUTA:
+ * Antes se servía SIEMPRE la página asociada al dominio, sin mirar la URL, así
+ * que /politica-de-privacidad devolvía la portada. Sin URL propia no se puede
+ * enlazar la política desde un formulario — y eso es obligatorio por RGPD.
+ */
+export async function resolverHostname(
+  rawHost: string,
+  rutaSlug = "",
+): Promise<HostnameMatch | null> {
   const hostname = normalizarHost(rawHost);
   if (!hostname) return null;
+
+  const slug = rutaSlug.replace(/^\/+|\/+$/g, "").toLowerCase();
 
   try {
     const supabase = createAnonClient();
@@ -52,12 +68,34 @@ export async function resolverHostname(rawHost: string): Promise<HostnameMatch |
     }
     if (!domRow) return null;
 
-    const { data: pagRow, error: pagErr } = await supabase
+    const paginaInicioId = (domRow as { pagina_id: string }).pagina_id;
+
+    // La portada es la página enganchada al dominio. Para cualquier otra ruta
+    // buscamos por slug DENTRO de la misma empresa, para que un dominio no
+    // pueda servir páginas de otra.
+    let consulta = supabase
       .from("paginas_web")
       .select("id, empresa_id, nombre, bloques, seo, estado")
-      .eq("id", (domRow as { pagina_id: string }).pagina_id)
-      .eq("estado", "PUBLICADA")
-      .maybeSingle();
+      .eq("estado", "PUBLICADA");
+
+    if (slug) {
+      const { data: inicioRow } = await supabase
+        .from("paginas_web")
+        .select("empresa_id")
+        .eq("id", paginaInicioId)
+        .maybeSingle();
+
+      const empresaDelDominio = (inicioRow as { empresa_id?: string } | null)?.empresa_id;
+      if (!empresaDelDominio) return null;
+
+      consulta = consulta
+        .eq("empresa_id", empresaDelDominio)
+        .eq("slug_interno", slug);
+    } else {
+      consulta = consulta.eq("id", paginaInicioId);
+    }
+
+    const { data: pagRow, error: pagErr } = await consulta.maybeSingle();
 
     if (pagErr || !pagRow) {
       if (pagErr) console.error("[pagina-web][resolver] pag:", pagErr.message);

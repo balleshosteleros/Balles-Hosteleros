@@ -1,6 +1,9 @@
 // Portal access records linking employees to user accounts
 
-export type EstadoAcceso = "Activo" | "Inactivo" | "Pendiente";
+// Solo DOS estados (decisión de Ivan, 2026-08-06): o tienes acceso o no lo
+// tienes. "Pendiente" se eliminó — no lo escribía nadie y solo añadía un
+// tercer caso ambiguo que había que interpretar en cada pantalla.
+export type EstadoAcceso = "Activo" | "Inactivo";
 
 export interface AccesoPortal {
   id: string;
@@ -95,7 +98,8 @@ export function crearAccesoDesdeEmpleado(
     empresa: empresaNombre,
     empresaId,
     rol,
-    estadoAcceso: "Pendiente",
+    // Nace sin acceso: hasta que alguien lo active a mano, NO entra.
+    estadoAcceso: "Inactivo",
     ultimaConexion: "—",
     fechaCreacion: new Date().toISOString().slice(0, 10),
     permisos: permisosDesdeRol(rol),
@@ -108,7 +112,7 @@ const HABANA_ACCESOS: AccesoPortal[] = [
   { id: "acc-h4", empleadoId: "h4", nombreEmpleado: "Laura Sánchez Moreno", emailUsuario: "laura.sanchez@habana.es", empresa: "HABANA", empresaId: "habana", rol: "Director", estadoAcceso: "Activo", ultimaConexion: "2026-04-07 10:00", fechaCreacion: "2020-01-10", permisos: permisosDesdeRol("Director") },
   { id: "acc-h5", empleadoId: "h5", nombreEmpleado: "Pedro Ruiz Navarro", emailUsuario: "pedro.ruiz@habana.es", empresa: "HABANA", empresaId: "habana", rol: "Gerencia", estadoAcceso: "Activo", ultimaConexion: "2026-04-06 18:00", fechaCreacion: "2021-02-01", permisos: permisosDesdeRol("Gerencia") },
   { id: "acc-h3", empleadoId: "h3", nombreEmpleado: "Alejandro Ruiz Torres", emailUsuario: "alejandro.ruiz@habana.es", empresa: "HABANA", empresaId: "habana", rol: "Empleado", estadoAcceso: "Inactivo", ultimaConexion: "2026-03-20 23:00", fechaCreacion: "2023-01-15", permisos: permisosDesdeRol("Empleado") },
-  { id: "acc-h6", empleadoId: "h6", nombreEmpleado: "Ana López Díaz", emailUsuario: "ana.lopez@habana.es", empresa: "HABANA", empresaId: "habana", rol: "Empleado", estadoAcceso: "Pendiente", ultimaConexion: "—", fechaCreacion: "2024-06-01", permisos: permisosDesdeRol("Empleado") },
+  { id: "acc-h6", empleadoId: "h6", nombreEmpleado: "Ana López Díaz", emailUsuario: "ana.lopez@habana.es", empresa: "HABANA", empresaId: "habana", rol: "Empleado", estadoAcceso: "Inactivo", ultimaConexion: "—", fechaCreacion: "2024-06-01", permisos: permisosDesdeRol("Empleado") },
 ];
 
 const BACANAL_ACCESOS: AccesoPortal[] = [

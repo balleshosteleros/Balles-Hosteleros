@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import type { Bloque, BrandingSnapshot } from "../../types";
 import { BloquePublico } from "./BloquePublico";
-import { BannerCookies } from "./BannerCookies";
+import { BannerCookies, EnlaceConfigurarCookies } from "./BannerCookies";
 
 export interface PaginaContexto {
   empresaId: string | null;
@@ -58,9 +58,41 @@ export function PaginaPublicaShell({
           <BloquePublico key={b.id} bloque={b} contexto={contexto} />
         ))}
       </main>
+      <PieLegal />
       <BannerCookies hrefPolitica={hrefPoliticaCookies} />
       <EstilosPublicos />
     </div>
+  );
+}
+
+/**
+ * Enlaces legales al pie de TODAS las páginas.
+ *
+ * Va en el shell y no en el bloque `footer` porque las páginas legales no
+ * llevan ese bloque: si dependiera de él, estando en la política de privacidad
+ * no habría forma de llegar al aviso legal ni de volver. Además la política
+ * tiene que ser accesible desde cualquier página (RGPD) y el enlace de cookies
+ * es la vía para retirar el consentimiento (AEPD).
+ */
+function PieLegal() {
+  return (
+    <nav className="border-t border-white/10 px-4 py-5">
+      <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-center gap-x-4 gap-y-2 text-xs text-white/50">
+        <a href="/" className="transition-colors hover:text-white/90">
+          Inicio
+        </a>
+        <a href="/politica-de-privacidad" className="transition-colors hover:text-white/90">
+          Política de privacidad
+        </a>
+        <a href="/aviso-legal" className="transition-colors hover:text-white/90">
+          Aviso legal
+        </a>
+        <a href="/politica-de-cookies" className="transition-colors hover:text-white/90">
+          Política de cookies
+        </a>
+        <EnlaceConfigurarCookies className="transition-colors hover:text-white/90" />
+      </div>
+    </nav>
   );
 }
 

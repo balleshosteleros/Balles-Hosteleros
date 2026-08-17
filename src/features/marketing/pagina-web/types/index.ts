@@ -52,7 +52,12 @@ export interface MenuDatos {
 }
 
 export interface ReservasDatos {
-  modo: "embed_cover" | "formulario_propio" | "enlace_externo";
+  /**
+   * `portal_propio` monta nuestro motor de reservas (/reservar/[slug]/embed),
+   * con disponibilidad real. Es el modo a usar; `embed_cover` queda solo para
+   * las empresas que aún no han migrado desde CoverManager.
+   */
+  modo: "portal_propio" | "embed_cover" | "formulario_propio" | "enlace_externo";
   url?: string;
   campos?: string[];
 }
@@ -156,6 +161,12 @@ export interface PaginaWeb {
   branding: BrandingSnapshot | null;
   seo: SeoConfig | null;
   estado: PaginaWebEstado;
+  /**
+   * Documento legal generado desde empresas.datos_generales (privacidad,
+   * aviso legal, cookies). NULL = página normal, editable a mano.
+   */
+  legal_tipo: "privacidad" | "aviso_legal" | "cookies" | null;
+  legal_generada_at: string | null;
   publicada_at: string | null;
   created_by: string | null;
   created_at: string;

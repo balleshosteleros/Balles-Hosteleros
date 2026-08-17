@@ -26,13 +26,20 @@ export function ReservasForm({ bloque }: { bloque: Extract<Bloque, { tipo: "rese
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
+              <SelectItem value="portal_propio">Nuestro motor de reservas</SelectItem>
               <SelectItem value="formulario_propio">Formulario propio (captura lead)</SelectItem>
               <SelectItem value="embed_cover">Embed de Cover / TheFork</SelectItem>
               <SelectItem value="enlace_externo">Enlace a plataforma externa</SelectItem>
             </SelectContent>
           </Select>
         </Field>
-        {datos.modo !== "formulario_propio" && (
+        {datos.modo === "portal_propio" && (
+          <p className="text-xs text-muted-foreground">
+            Muestra la disponibilidad real del restaurante y las reservas entran
+            directamente en Sala. No hace falta configurar nada más.
+          </p>
+        )}
+        {datos.modo !== "formulario_propio" && datos.modo !== "portal_propio" && (
           <Field label="URL externa / embed" hint="URL de Cover, TheFork u otra plataforma">
             <Input
               value={datos.url ?? ""}

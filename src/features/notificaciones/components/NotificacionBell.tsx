@@ -102,7 +102,7 @@ export function NotificacionBell({
             >
               <Bell className={`!h-[18px] !w-[18px] ${toolTextColor(HERRAMIENTA.notificaciones.colorKey)}`} />
               {sinVer > 0 && (
-                <span className="absolute -right-1.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-bold leading-none text-white ring-2 ring-card">
+                <span className="absolute -right-0.5 -top-0.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-red-600 px-0.5 text-[8px] font-bold leading-none text-white">
                   {sinVer > 9 ? "9+" : sinVer}
                 </span>
               )}

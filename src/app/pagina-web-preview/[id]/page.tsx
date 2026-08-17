@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { getAppContext } from "@/lib/supabase/get-context";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { obtenerPagina } from "@/features/marketing/pagina-web/actions/paginas-actions";
 import { PreviewClient } from "./PreviewClient";
 
@@ -30,5 +31,21 @@ export default async function PaginaPreviewPage({ params }: Props) {
     );
   }
 
-  return <PreviewClient paginaId={id} bloquesIniciales={res.data.bloques ?? []} />;
+  // El slug hace falta para que el bloque de reservas monte el motor propio
+  // (/reservar/[slug]/embed) también dentro de la vista previa.
+  const admin = createAdminClient();
+  const { data: empresa } = await admin
+    .from("empresas")
+    .select("slug")
+    .eq("id", empresaId)
+    .maybeSingle();
+
+  return (
+    <PreviewClient
+      paginaId={id}
+      bloquesIniciales={res.data.bloques ?? []}
+      empresaId={empresaId}
+      empresaSlug={(empresa?.slug as string | null) ?? null}
+    />
+  );
 }

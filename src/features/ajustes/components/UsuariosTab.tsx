@@ -41,9 +41,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
 import { EmpresaBadge } from "@/shared/components/EmpresaBadge";
 
-// Solo se contemplan dos estados de acceso visibles: Activo / Inactivo. El tipo
-// EstadoAcceso aún incluye "Pendiente" por datos legados, pero en esta pestaña
-// nunca se muestra (se normaliza a Activo/Inactivo en profileToAcceso).
+// El acceso solo tiene DOS estados: Activo / Inactivo. O entras o no entras.
 // Conjunto vacío estable para usar como "default neutro" en filtros sin default.
 const EMPTY_SET: Set<string> = new Set();
 

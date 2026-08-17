@@ -23,13 +23,11 @@ function profileToUsuario(p: ProfileRow): Usuario {
     [p.nombre, p.apellidos].filter(Boolean).join(" ").trim() ||
     p.full_name ||
     p.email;
-  // Usuario.estado solo admite Activo|Invitado|Pendiente. Mapeamos
-  // "Inactivo" → "Pendiente" (mismo color ámbar en el badge); los demás
-  // estados quedan como "Activo".
+  // Usuario.estado (tipo propio de esta pestaña) admite Activo|Invitado|Pendiente.
+  // El acceso real solo tiene DOS estados: mapeamos "Inactivo" → "Pendiente"
+  // para pintar el badge en ámbar. Cualquier otro valor = "Activo".
   const estado: Usuario["estado"] =
-    p.estado_acceso === "Pendiente" || p.estado_acceso === "Inactivo"
-      ? "Pendiente"
-      : "Activo";
+    p.estado_acceso === "Inactivo" ? "Pendiente" : "Activo";
   return {
     id: p.id,
     nombre: fullName,
