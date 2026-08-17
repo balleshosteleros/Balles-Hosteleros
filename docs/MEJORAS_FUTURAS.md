@@ -26,9 +26,9 @@ las que entren después, sin tocar nada más.
 
 Lo que sí está resuelto empresa a empresa (y **ya funciona hoy**) es que una
 empresa nueva nazca contestando sola: los agentes IA se le crean en el alta
-desde el manifiesto canónico, y **"Ficha de Google" es un paso obligatorio del
-onboarding** de puesta en marcha, así que nadie puede saltárselo sin darse
-cuenta. Eso no depende de Vercel ni de ningún plan de pago.
+desde el manifiesto canónico, y la ficha de Google se conecta desde
+**Ajustes → Integraciones**, junto al resto de conexiones. Eso no depende de
+Vercel ni de ningún plan de pago.
 
 ### El problema
 
@@ -159,6 +159,32 @@ golpe los 22 borradores atrasados se alcanzó ese tope y hubo que espaciarlos.
 
 **No es un error del software** y se recupera solo en unos 30 segundos. Solo
 sería un problema real si algún día entraran muchísimas reseñas a la vez.
+
+---
+
+## 5. Definir el onboarding de empresa nueva
+
+> **Estado:** sin definir. Existe el andamiaje (PRP-067) pero no la decisión.
+> **Coste:** ninguno.
+> **La desbloquea:** decidir con Iván, de una vez y en conjunto, qué es
+> obligatorio para que el sistema empiece a funcionar bien.
+
+Hay 8 pasos montados (Locales, Puestos, Empleados, Imagen de marca…), pero
+**Iván todavía no ha definido qué debe ser obligatorio**. La decisión se tomará
+de una vez, mirando el conjunto — no añadiendo pasos sueltos según van
+surgiendo.
+
+Criterio que se viene aplicando: **es obligatorio si, al faltar, algo que el
+cliente da por hecho deja de funcionar sin avisar de nada.**
+
+Candidatos ya detectados que rompen en silencio:
+
+- **Ficha de Google** — sin vincular no entra ninguna reseña, así que los
+  agentes IA no tienen nada que contestar. Ya se puede conectar desde
+  Ajustes → Integraciones, pero nada obliga a hacerlo.
+- **Imagen de marca (logo)** — ya es obligatorio. Sin logo, todos los correos
+  de la empresa (nóminas, contratos, candidatos, proveedores) salen sin
+  cabecera de marca.
 
 ---
 
