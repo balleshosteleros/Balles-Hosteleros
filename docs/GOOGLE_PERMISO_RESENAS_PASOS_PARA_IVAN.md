@@ -41,8 +41,20 @@ Por tanto:
 |---|---|
 | **Cuenta con la que se envía** | La que administra la ficha de **BACANAL** en Google Business |
 | **Empresa solicitante** (en el texto) | La sociedad **del software**, no un restaurante |
+| **Sitio web de empresa** | La web de **Balles** (la plataforma solicitante) |
 | **Ficha que acredita** | BACANAL (o HABANA) |
-| **Sitio web** | El del negocio de esa ficha, para que sea coherente |
+
+⚠️ **La web y la ficha NO tienen por qué coincidir, y aquí no coinciden.** Son
+dos requisitos distintos que conviven:
+
+- La **web** es la de la plataforma que pide el acceso (Balles). Google evalúa
+  a la plataforma, igual que a GoHighLevel le pidió gohighlevel.com y no la web
+  de uno de sus restaurantes clientes.
+- La **ficha verificada de +60 días** solo sirve para acreditar que se gestionan
+  negocios reales, y Google admite expresamente que sea **de un cliente**.
+
+Por eso el texto de justificación dice "our own restaurant group **and client
+restaurants**": describe exactamente esta situación.
 
 **No** es la cuenta del proyecto de Google Cloud: lo que Google mira son los
 permisos sobre la **ficha del negocio**. Son cosas distintas.
@@ -71,9 +83,17 @@ solo tienen sentido cuando Google conteste.
    |---|---|
    | **Project ID / Project number** | `131650182388` |
    | **Nombre de la empresa** | La sociedad **del software** (⚠️ NO un restaurante: Google evalúa a la plataforma, igual que en su día evaluó a GoHighLevel) |
-   | **Sitio web** | El del negocio de la ficha que se usa para acreditar |
+   | **Sitio web de empresa** | La web de **Balles** (la plataforma), NO la de un restaurante |
    | **Correo de contacto** | El que es **administrador de la ficha** de BACANAL |
    | **Tipo de uso** | Uso propio / gestión de negocios propios y de clientes |
+
+   Y los dos campos de texto libre del formulario:
+
+   - *"¿Cómo supiste que existe este formulario de acceso a la API?"* →
+     `Through the official Google Business Profile API documentation
+     (developers.google.com/my-business), in the prerequisites page.`
+   - *"¿Cuál es el motivo principal por el que quieres acceder?"* → el texto
+     en inglés del punto 3, más abajo.
 
 3. En el campo de **descripción del uso** (el importante — es lo que un humano
    de Google va a leer), explicar en inglés algo así:
