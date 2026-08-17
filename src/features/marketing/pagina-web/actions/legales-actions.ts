@@ -153,7 +153,13 @@ export async function generarPaginasLegales(
       if (existente) {
         const { error: errUpdate } = await supabase
           .from("paginas_web")
-          .update({ bloques, seo, nombre: pagina.nombre })
+          .update({
+            bloques,
+            seo,
+            nombre: pagina.nombre,
+            legal_tipo: pagina.tipo,
+            legal_generada_at: new Date().toISOString(),
+          })
           .eq("id", (existente as { id: string }).id)
           .eq("empresa_id", empresaId);
 
@@ -183,6 +189,8 @@ export async function generarPaginasLegales(
           seo,
           estado: "BORRADOR",
           created_by: userId,
+          legal_tipo: pagina.tipo,
+          legal_generada_at: new Date().toISOString(),
         })
         .select("id")
         .single();

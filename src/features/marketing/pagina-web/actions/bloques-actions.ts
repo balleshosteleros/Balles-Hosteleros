@@ -22,6 +22,29 @@ export async function guardarBloques(
     const { supabase, empresaId } = await getAppContext();
     if (!empresaId) return { ok: false, error: "Sin empresa." };
 
+    // Las páginas legales no se editan a mano: su contenido sale de
+    // empresas.datos_generales. Si se pudieran reescribir aquí, el CIF o el
+    // domicilio acabarían diciendo una cosa en Ajustes y otra en la web, y un
+    // documento legal con datos equivocados no cumple el RGPD.
+    const { data: meta, error: errMeta } = await supabase
+      .from("paginas_web")
+      .select("legal_tipo")
+      .eq("id", paginaId)
+      .eq("empresa_id", empresaId)
+      .maybeSingle();
+
+    if (errMeta) {
+      console.error("[pagina-web][guardarBloques] meta:", errMeta.message);
+      return { ok: false, error: "No se pudo comprobar la página." };
+    }
+    if ((meta as { legal_tipo: string | null } | null)?.legal_tipo) {
+      return {
+        ok: false,
+        error:
+          "Esta página legal se genera con los datos de la empresa. Para cambiarla, edita Ajustes → Datos generales y vuelve a generarla.",
+      };
+    }
+
     // Sanitizar HTML de bloques texto_libre ANTES de validar + persistir
     const sanitizados = bloques.map((b) => sanitizarBloqueTextoLibre(b));
 

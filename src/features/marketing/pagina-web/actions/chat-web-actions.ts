@@ -91,11 +91,21 @@ async function cargarPagina(paginaId: string): Promise<CargaPagina> {
   if (!empresaId) return { error: "Sin empresa." };
   const { data, error } = await supabase
     .from("paginas_web")
-    .select("id, empresa_id, bloques, estado")
+    .select("id, empresa_id, bloques, estado, legal_tipo")
     .eq("id", paginaId)
     .eq("empresa_id", empresaId)
     .maybeSingle();
   if (error || !data) return { error: "Página no encontrada." };
+
+  // Los documentos legales no los reescribe ni el asistente: su contenido sale
+  // de Ajustes → Datos generales y se regenera desde allí.
+  if ((data as { legal_tipo: string | null }).legal_tipo) {
+    return {
+      error:
+        "Esta página legal se genera con los datos de la empresa. Para cambiarla, edita Ajustes → Datos generales y vuelve a generarla.",
+    };
+  }
+
   return { supabase, empresaId, pagina: data as unknown as PaginaWeb };
 }
 

@@ -12,6 +12,7 @@ import {
   Eye,
   Settings,
   FileText,
+  Lock,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -136,12 +137,18 @@ export function PaginasListView() {
       th: <TableHead key="nombre">Nombre</TableHead>,
       td: (p) => (
         <TableCell key="nombre" className="font-medium max-w-[320px] truncate">
-          <Link
-            href={`/marketing/pagina-web/${p.id}`}
-            className="hover:underline"
-          >
-            {p.nombre}
-          </Link>
+          <span className="flex items-center gap-1.5">
+            <Link href={`/marketing/pagina-web/${p.id}`} className="truncate hover:underline">
+              {p.nombre}
+            </Link>
+            {p.legal_tipo && (
+              <Lock
+                className="h-3 w-3 shrink-0 text-muted-foreground"
+                strokeWidth={2}
+                aria-label="Se genera con los datos de la empresa"
+              />
+            )}
+          </span>
         </TableCell>
       ),
     },

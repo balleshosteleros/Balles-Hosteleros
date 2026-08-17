@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Eye, Globe, Loader2, Sparkles } from "lucide-react";
+import { ArrowLeft, Eye, Globe, Loader2, Sparkles, Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { useEditorStore } from "../../../hooks/useEditorStore";
@@ -31,8 +31,11 @@ export function EditorShell({ paginaId }: Props) {
   const [loading, setLoading] = useState(true);
   const [showChat, setShowChat] = useState(false);
   const [estadoPagina, setEstadoPagina] = useState<"BORRADOR" | "PUBLICADA" | "ARCHIVADA">("BORRADOR");
+  // Página legal = contenido derivado de Ajustes. Se ve, se publica, pero no
+  // se edita: sus datos (CIF, domicilio, correo) tienen una única fuente.
+  const [esLegal, setEsLegal] = useState(false);
   const [publicando, setPublicando] = useState(false);
-  const { estado: estadoAutosave, ultimoGuardado } = useAutosave(paginaId);
+  const { estado: estadoAutosave, ultimoGuardado } = useAutosave(paginaId, 1000, !esLegal);
 
   // El nombre se edita en la cabecera. Va aparte del autosave de bloques (que
   // solo guarda el lienzo) y se persiste al salir del campo.
@@ -81,6 +84,7 @@ export function EditorShell({ paginaId }: Props) {
       }
       hydrate(res.data);
       setEstadoPagina(res.data.estado);
+      setEsLegal(Boolean(res.data.legal_tipo));
       setLoading(false);
     })();
     return () => {
@@ -123,22 +127,32 @@ export function EditorShell({ paginaId }: Props) {
           }}
           aria-label="Nombre de la página"
           title="Nombre de la página"
-          className="font-medium text-sm truncate bg-transparent border border-transparent rounded px-1.5 py-0.5 -mx-1.5 min-w-0 max-w-[280px] hover:border-border focus:border-ring focus:outline-none"
+          readOnly={esLegal}
+          className="font-medium text-sm truncate bg-transparent border border-transparent rounded px-1.5 py-0.5 -mx-1.5 min-w-0 max-w-[280px] hover:border-border focus:border-ring focus:outline-none read-only:hover:border-transparent read-only:cursor-default"
         />
-        <AutosaveIndicator estado={estadoAutosave} ultimoGuardado={ultimoGuardado} zonaHoraria={empresaActual.zonaHoraria} />
+        {esLegal ? (
+          <span className="flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-1 text-xs text-muted-foreground">
+            <Lock className="h-3 w-3" strokeWidth={2} />
+            Solo lectura
+          </span>
+        ) : (
+          <AutosaveIndicator estado={estadoAutosave} ultimoGuardado={ultimoGuardado} zonaHoraria={empresaActual.zonaHoraria} />
+        )}
         <div className="ml-auto flex items-center gap-2">
           {/* Importar desde una web existente vive DENTRO del asistente: es una
               tarea de IA, no un botón suelto de la barra.
               La dirección web es de la EMPRESA, no de una página suelta: se
               gestiona en Ajustes › Departamentos › Marketing › Página web. */}
-          <Button
-            variant={showChat ? "default" : "outline"}
-            size="sm"
-            onClick={() => setShowChat((v) => !v)}
-            title="Cambia la web hablando con el asistente"
-          >
-            <Sparkles className="h-4 w-4 mr-1" /> Asistente
-          </Button>
+          {!esLegal && (
+            <Button
+              variant={showChat ? "default" : "outline"}
+              size="sm"
+              onClick={() => setShowChat((v) => !v)}
+              title="Cambia la web hablando con el asistente"
+            >
+              <Sparkles className="h-4 w-4 mr-1" /> Asistente
+            </Button>
+          )}
           {/* Ver la web: pestaña nueva y a pantalla completa. Un panel lateral
               estrecho no deja juzgar cómo queda de verdad. */}
           <Button
@@ -194,14 +208,30 @@ export function EditorShell({ paginaId }: Props) {
       {/* Propiedades solo cuando hay bloque seleccionado: una columna vacía
           permanente come un tercio de la pantalla sin aportar nada.
           El asistente, si está abierto, ocupa ese mismo hueco. */}
+      {esLegal && (
+        <div className="flex items-start gap-2.5 border-b bg-muted/40 px-4 py-2.5 text-sm text-muted-foreground">
+          <Lock className="mt-0.5 h-4 w-4 shrink-0" strokeWidth={1.75} />
+          <p>
+            Esta página se escribe sola con los datos de la empresa, para que la razón social,
+            el CIF y el domicilio digan siempre lo mismo aquí y en Ajustes. Para cambiarla,
+            corrige{" "}
+            <Link href="/ajustes" className="underline underline-offset-2 hover:text-foreground">
+              Ajustes → Datos generales
+            </Link>{" "}
+            y vuelve a generarla desde la lista de páginas.
+          </p>
+        </div>
+      )}
+
       <div className="flex flex-1 overflow-hidden">
-        <BloqueLibrary />
+        {!esLegal && <BloqueLibrary />}
         <Canvas />
-        {showChat ? (
-          <ChatWebPane paginaId={paginaId} onCerrar={() => setShowChat(false)} />
-        ) : (
-          seleccionadoId && <PropiedadesPanel />
-        )}
+        {!esLegal &&
+          (showChat ? (
+            <ChatWebPane paginaId={paginaId} onCerrar={() => setShowChat(false)} />
+          ) : (
+            seleccionadoId && <PropiedadesPanel />
+          ))}
       </div>
 
     </div>

@@ -10,13 +10,17 @@ import { useEditorStore } from "./useEditorStore";
 import { guardarBloques } from "../actions/bloques-actions";
 import type { EstadoAutosave } from "../components/admin/editor/AutosaveIndicator";
 
-export function useAutosave(paginaId: string | null, debounceMs = 1000) {
+/**
+ * @param activo Poner a `false` en páginas de solo lectura (documentos legales):
+ * sin esto el autosave intentaría guardar y el servidor devolvería error.
+ */
+export function useAutosave(paginaId: string | null, debounceMs = 1000, activo = true) {
   const [estado, setEstado] = useState<EstadoAutosave>("idle");
   const [ultimoGuardado, setUltimoGuardado] = useState<Date | null>(null);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    if (!paginaId) return;
+    if (!paginaId || !activo) return;
 
     const unsubscribe = useEditorStore.subscribe((state, prev) => {
       // Evita guardar durante hidratación o si no hay cambios reales
@@ -46,7 +50,7 @@ export function useAutosave(paginaId: string | null, debounceMs = 1000) {
       unsubscribe();
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
     };
-  }, [paginaId, debounceMs]);
+  }, [paginaId, debounceMs, activo]);
 
   return { estado, ultimoGuardado };
 }
