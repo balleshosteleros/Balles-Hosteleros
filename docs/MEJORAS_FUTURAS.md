@@ -26,8 +26,9 @@ las que entren después, sin tocar nada más.
 
 Lo que sí está resuelto empresa a empresa (y **ya funciona hoy**) es que una
 empresa nueva nazca contestando sola: los agentes IA se le crean en el alta
-desde el manifiesto canónico, y su ficha de Google se detecta y enlaza con un
-clic. Eso no depende de Vercel ni de ningún plan de pago.
+desde el manifiesto canónico, y **"Ficha de Google" es un paso obligatorio del
+onboarding** de puesta en marcha, así que nadie puede saltárselo sin darse
+cuenta. Eso no depende de Vercel ni de ningún plan de pago.
 
 ### El problema
 
