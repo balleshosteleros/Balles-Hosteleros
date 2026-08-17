@@ -15,6 +15,7 @@ import {
   guardarAgoraIntegracion,
   probarConexionAgora,
 } from "@/features/ajustes/actions/agora-integracion-actions";
+import { FichaGoogleCard } from "@/features/ajustes/components/FichaGoogleCard";
 
 /**
  * Integraciones de la empresa con servicios externos (PRP-059).
@@ -96,6 +97,11 @@ export function IntegracionesTab() {
           propias claves; afectan solo a la empresa activa del selector.
         </p>
       </div>
+
+      {/* Ficha de Google: va primero porque es la conexión más directa —un
+          clic, sin claves ni tokens— y la que desbloquea que las reseñas se
+          contesten solas. */}
+      <FichaGoogleCard />
 
       <Card>
         <CardHeader>
