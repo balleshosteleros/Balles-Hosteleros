@@ -52,6 +52,31 @@ const PUBLIC_PREFIXES = ['/carta', '/__site', '/api/google/connect', '/api/googl
   // enseñar nada (ver src/app/pagina-web-preview/[id]/page.tsx).
   '/pagina-web-preview']
 
+/**
+ * Rutas que en el dominio de un cliente se sirven TAL CUAL, sin mandarlas al
+ * CMS de páginas web.
+ *
+ * La web de un restaurante enlaza su carta y su portal de empleo (botones "Ver
+ * carta digital" y "Trabaja con nosotros"), pero esas pantallas son módulos del
+ * software, no páginas del CMS. Sin esta excepción, el rewrite las convertía en
+ * `/__site/carta/...`, el resolvedor buscaba una página con ese slug, no la
+ * encontraba y el visitante veía un 404 al pulsar el botón.
+ */
+const RUTAS_PUBLICAS_EN_DOMINIO_CLIENTE = [
+  '/carta',
+  '/empleo',
+  '/reservar',
+  '/formacion',
+  '/documentacion',
+  '/firmar',
+]
+
+function esRutaPublicaDeCliente(pathname: string) {
+  return RUTAS_PUBLICAS_EN_DOMINIO_CLIENTE.some(
+    (p) => pathname === p || pathname.startsWith(`${p}/`),
+  )
+}
+
 function isAuthPath(pathname: string) {
   if (pathname === '/') return true
   return AUTH_PATHS.some((p) => p !== '/' && pathname.startsWith(p))
@@ -105,7 +130,7 @@ export async function updateSession(
   if (rawHost && !esHostPrincipal(rawHost)) {
     const pathname = request.nextUrl.pathname
     const isAsset = /\.[a-z0-9]+$/i.test(pathname) || pathname.startsWith('/api/') || pathname.startsWith('/_next/')
-    if (!isAsset) {
+    if (!isAsset && !esRutaPublicaDeCliente(pathname)) {
       const target = request.nextUrl.clone()
       target.pathname = `/__site${pathname === '/' ? '' : pathname}`
       const res = NextResponse.rewrite(target)
