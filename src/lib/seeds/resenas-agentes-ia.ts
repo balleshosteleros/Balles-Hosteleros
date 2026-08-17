@@ -73,11 +73,14 @@ export const RESENAS_AGENTES_IA_SEED: ResenaAgenteIaSeed[] = [
     idioma: "dinamico",
     tipo_resena: "2_o_menos",
     fuente: "google",
-    // TODO(Iván): el pie completo estaba cortado en la captura de GHL. Falta
-    // el correo de calidad del final. Al confirmarlo, se completa aquí.
+    // Pie literal de GHL, confirmado por Iván (17-ago-2026). Se respeta tal
+    // cual lo tiene escrito, incluidas sus expresiones: es la voz con la que
+    // el restaurante lleva años contestando.
     pie_pagina:
       "Nos gustaria hablar con tigo desde el departamento de calidad, donde " +
-      "intentamos mejorar y darte solucion por tu mala experiencia,",
+      "intentamos mejorar y darte solucion por tu mala experiencia, nos puedes " +
+      "escribir a : calidad.grupobacanal@gmail.com.\n" +
+      "Muchas gracias, que tengas un buen dia.",
     max_dia: 50,
   },
 ];
