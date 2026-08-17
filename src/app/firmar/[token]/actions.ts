@@ -611,6 +611,9 @@ export async function firmarDocumento(input: FirmarDocumentoInput): Promise<Firm
         tituloDocumento: doc.titulo as string,
         firmadoEn: new Date(firmadoEnIso),
         signedUrl: descargaUrl,
+        // El PDF firmado ya está en memoria: se adjunta para que el empleado lo
+        // tenga en su bandeja aunque el enlace caduque a los 7 días.
+        pdfFirmado: firmadoBytes,
       });
     }
 

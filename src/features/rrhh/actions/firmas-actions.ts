@@ -83,12 +83,24 @@ async function resolverNombresEnviadoPor(
 
   const { data, error } = await supabase
     .from("usuarios")
-    .select("user_id, full_name, email")
+    .select("user_id, nombre, apellidos, full_name, email")
     .in("user_id", unicos);
   if (error) return mapa;
 
-  for (const u of (data ?? []) as { user_id: string; full_name: string | null; email: string | null }[]) {
-    const nombre = (u.full_name || u.email || "").trim();
+  type FilaUsuario = {
+    user_id: string;
+    nombre: string | null;
+    apellidos: string | null;
+    full_name: string | null;
+    email: string | null;
+  };
+  for (const u of (data ?? []) as FilaUsuario[]) {
+    // `nombre` + `apellidos` es la fuente fiable: `full_name` puede venir vacío en
+    // fichas anteriores a que el alta lo rellenara. El email es el último recurso.
+    const nombre =
+      `${u.nombre ?? ""} ${u.apellidos ?? ""}`.trim() ||
+      (u.full_name ?? "").trim() ||
+      (u.email ?? "").trim();
     if (nombre) mapa.set(u.user_id, nombre);
   }
   return mapa;

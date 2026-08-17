@@ -172,15 +172,39 @@ export type CopiaFirmadaInput = {
   tituloDocumento: string;
   firmadoEn: Date;
   signedUrl: string;
+  /**
+   * PDF firmado (documento + acta) para adjuntarlo al correo, de modo que el
+   * empleado lo tenga en su bandeja sin depender del enlace, que caduca a los 7
+   * días. Si no se pasa, el correo va solo con el botón de descarga.
+   * Solo se adjunta el documento YA FIRMADO: el pendiente de firma viaja siempre
+   * por enlace único, porque ese enlace es lo que acredita quién firmó.
+   */
+  pdfFirmado?: Uint8Array | null;
 };
+
+/**
+ * Tope para adjuntar la copia firmada. Los documentos aceptan hasta 50 MB, pero un
+ * correo con un adjunto así lo rechazan la mayoría de servidores (Gmail corta en 25 MB,
+ * y el adjunto crece ~33% al codificarse). Por encima de este límite el correo sale
+ * igual, solo que con el botón de descarga en lugar del PDF adjunto.
+ */
+const MAX_ADJUNTO_BYTES = 8 * 1024 * 1024;
 
 export async function enviarCopiaFirmada(input: CopiaFirmadaInput): Promise<SendEmailResult> {
   const tz = await zonaDeEmpresa(input.empresaId);
   const firmadoStr = formatFechaHoraEnZona(input.firmadoEn.toISOString(), tz);
+  const adjunto =
+    input.pdfFirmado && input.pdfFirmado.byteLength <= MAX_ADJUNTO_BYTES
+      ? input.pdfFirmado
+      : null;
   const cuerpoHtml = `
     <p>Hola ${esc(input.empleadoNombre)},</p>
     <p>Has firmado correctamente el documento <strong>${esc(input.tituloDocumento)}</strong> el ${esc(firmadoStr)}.</p>
-    <p>Puedes descargar tu copia (documento original + acta de firma):</p>
+    <p>${
+      adjunto
+        ? "Adjunto a este correo tienes tu copia (documento original + acta de firma). También puedes descargarla aquí:"
+        : "Puedes descargar tu copia (documento original + acta de firma):"
+    }</p>
     <p style="text-align:center;margin:24px 0;">
       <a href="${input.signedUrl}" style="display:inline-block;background:#10b981;color:#ffffff;text-decoration:none;padding:12px 22px;border-radius:8px;font-weight:500;">
         Descargar copia firmada
@@ -191,8 +215,13 @@ export async function enviarCopiaFirmada(input: CopiaFirmadaInput): Promise<Send
   const text =
     `Hola ${input.empleadoNombre},\n\n` +
     `Has firmado correctamente "${input.tituloDocumento}" el ${firmadoStr}.\n` +
+    (adjunto ? "Adjunto tienes tu copia firmada.\n" : "") +
     `Descarga tu copia: ${input.signedUrl}\n` +
     `También lo tienes disponible en tu portal, en Mis documentos.\n`;
+
+  const nombreAdjunto = `${input.tituloDocumento
+    .replace(/[\\/:*?"<>|]/g, "-")
+    .trim() || "documento"}.pdf`;
 
   return sendEmail({
     to: input.to,
@@ -204,6 +233,17 @@ export async function enviarCopiaFirmada(input: CopiaFirmadaInput): Promise<Send
     }),
     text,
     empresaId: input.empresaId,
+    ...(adjunto
+      ? {
+          attachments: [
+            {
+              filename: nombreAdjunto,
+              content: adjunto,
+              contentType: "application/pdf",
+            },
+          ],
+        }
+      : {}),
     // Reply-To siempre no-reply: no se responde al software.
   });
 }
