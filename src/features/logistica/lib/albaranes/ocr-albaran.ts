@@ -137,6 +137,8 @@ const OCR_ALBARAN_SCHEMA: Schema = {
     paginaActual: { type: SchemaType.NUMBER, nullable: true },
     paginasTotales: { type: SchemaType.NUMBER, nullable: true },
     sumaYSigue: { type: SchemaType.NUMBER, nullable: true },
+    /** El importe del pie va acompañado de "SUMA Y SIGUE"/"SIGUE" (no es el total final). */
+    pieEsSumaYSigue: { type: SchemaType.BOOLEAN, nullable: true },
 
     // --- Desglose de IVA del pie (PRP-074) ---
     desgloseIva: {
@@ -212,6 +214,11 @@ CONTINUIDAD DEL DOCUMENTO (crítico: si falta una página, el albarán se cargar
 - continuaEnOtraPagina: true si ves "SUMA Y SIGUE", "SIGUE", "continúa", "pasa a la página
   siguiente", o si el documento termina en una suma parcial SIN un total final ni pie de IVA.
 - sumaYSigue: el importe que acompaña a ese marcador, si lo hay.
+- pieEsSumaYSigue: true si el ÚNICO importe del pie va junto a "SUMA Y SIGUE"/"SIGUE".
+- REGLA DURA: un importe etiquetado "SUMA Y SIGUE" NUNCA es el total. En ese caso
+  totalDetectado = null y el importe va en sumaYSigue. Un total final va acompañado de la
+  palabra "TOTAL" y normalmente de un desglose de IVA; una suma de arrastre, no. Confundirlos
+  hace que el albarán se cargue a medias sin que nadie se entere.
 - paginaActual / paginasTotales: si imprime "Página 1 de 3" → 1 y 3. Si no lo imprime, null.
 
 DESGLOSE DE IVA (pie del documento) — devuélvelo SIEMPRE que el documento lo imprima
@@ -285,6 +292,7 @@ interface OcrAlbaranRaw {
   paginaActual?: number | null;
   paginasTotales?: number | null;
   sumaYSigue?: number | null;
+  pieEsSumaYSigue?: boolean | null;
   desgloseIva?: Array<{
     tipo?: number;
     baseImponible?: number;
@@ -407,9 +415,21 @@ export async function ejecutarOcrAlbaran(input: {
       }))
       .filter((d) => TIPOS_IVA_VALIDOS.includes(d.tipo));
 
-    const sumaYSigue = num(raw.sumaYSigue);
     const paginaActual = num(raw.paginaActual);
     const paginasTotales = num(raw.paginasTotales);
+    let sumaYSigue = num(raw.sumaYSigue);
+    let total = num(raw.totalDetectado);
+    // Red de seguridad (caso real Belmon 15378, 18-ago): el modelo leyó "SUMA Y SIGUE 694,39"
+    // y lo devolvió como TOTAL con sumaYSigue=null → el albarán pasaba por completo. Si el
+    // propio modelo dice que el pie es de arrastre, ese importe NO es el total.
+    if (raw.pieEsSumaYSigue === true && total !== null && sumaYSigue === null) {
+      sumaYSigue = total;
+      total = null;
+    }
+    // Y si hay importe de arrastre, no puede haber "total" idéntico: es el mismo número.
+    if (sumaYSigue !== null && total !== null && Math.abs(total - sumaYSigue) < 0.005) {
+      total = null;
+    }
 
     return {
       ok: true,
@@ -417,7 +437,7 @@ export async function ejecutarOcrAlbaran(input: {
         proveedor: txt(raw.proveedorNombreDetectado),
         numero: txt(raw.numeroAlbaranDetectado),
         fecha: txt(raw.fechaAlbaranDetectada),
-        total: num(raw.totalDetectado),
+        total,
         baseImponible: num(raw.baseImponibleDetectada),
         fiscal: {
           cifNif: txt(raw.cifNifEmisor),
@@ -436,6 +456,7 @@ export async function ejecutarOcrAlbaran(input: {
         // El marcador manda; y "pág. 1 de 3" también implica continuidad aunque no lo diga.
         continuaEnOtraPagina:
           raw.continuaEnOtraPagina === true ||
+          raw.pieEsSumaYSigue === true ||
           sumaYSigue !== null ||
           (paginaActual !== null && paginasTotales !== null && paginaActual < paginasTotales),
         paginaActual,
