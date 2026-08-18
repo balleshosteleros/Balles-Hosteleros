@@ -23,7 +23,6 @@ import {
   Clock,
   Upload,
   Loader2,
-  ListMusic,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -362,14 +361,27 @@ function TarjetaLista({
     <Card className={bloqueada ? "opacity-70" : undefined}>
       <CardContent className="p-4 space-y-3">
         <div className="flex items-start justify-between gap-2">
-          <div className="min-w-0">
-            <p className="truncate font-semibold text-foreground">{lista.nombre}</p>
+          {/*
+            El nombre abre las canciones de la lista. Antes eso vivía en un botón
+            con icono junto a la papelera, y no se entendía qué hacía. Pulsar el
+            nombre para ver qué hay dentro es lo que se espera, y deja la tarjeta
+            con un botón menos.
+          */}
+          <button
+            type="button"
+            onClick={onAbrir}
+            className="min-w-0 text-left"
+            title="Ver las canciones de la lista"
+          >
+            <p className="truncate font-semibold text-foreground hover:underline">
+              {lista.nombre}
+            </p>
             <p className="text-xs text-muted-foreground">
               {lista.canciones.length === 1
                 ? "1 canción"
                 : `${lista.canciones.length} canciones`}
             </p>
-          </div>
+          </button>
 
           <Button
             variant="ghost"
@@ -431,15 +443,6 @@ function TarjetaLista({
           >
             <Play className="h-4 w-4 mr-1.5" />
             Reproducir
-          </Button>
-
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={onAbrir}
-            title="Ver canciones y horarios"
-          >
-            <ListMusic className="h-4 w-4" />
           </Button>
 
           {puedeGestionar && (

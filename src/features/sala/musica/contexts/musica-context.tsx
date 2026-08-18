@@ -136,6 +136,8 @@ export function MusicaProvider({ children }: { children: ReactNode }) {
   // dependa de que ningún componente concreto siga montado.
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const urlsRef = useRef<Record<string, string>>({});
+  /** Hasta cuándo valen las URLs firmadas guardadas (caducan a las 2 h). */
+  const urlsHastaRef = useRef(0);
   const listasRef = useRef<ListaMusica[]>([]);
   const ultimoSeqRef = useRef(0);
 
@@ -325,10 +327,28 @@ export function MusicaProvider({ children }: { children: ReactNode }) {
       const cancion = lista.canciones[idx];
       if (!cancion) return;
 
-      let url = urlsRef.current[cancion.id];
+      /*
+        Las URLs de audio van firmadas y caducan a las 2 h. Guardarlas sin más
+        rompía la música justo donde peor: en un servicio la pantalla está
+        abierta todo el día, así que a partir de la tercera hora cada cambio de
+        canción fallaba con "No se pudo cargar" y la música se paraba.
+
+        Se refrescan a los 90 min —bastante antes de que caduquen— y siempre que
+        falte la de la canción que toca.
+      */
+      const caducadas = Date.now() > urlsHastaRef.current;
+      let url = caducadas ? undefined : urlsRef.current[cancion.id];
+
       if (!url) {
         const res = await getUrlsLista(lista.id);
-        if (res.ok) urlsRef.current = { ...urlsRef.current, ...res.urls };
+        if (res.ok) {
+          // Si habían caducado se reemplazan enteras, no se mezclan con las
+          // viejas: mantener las anteriores solo conservaría enlaces muertos.
+          urlsRef.current = caducadas
+            ? res.urls
+            : { ...urlsRef.current, ...res.urls };
+          urlsHastaRef.current = Date.now() + 90 * 60_000;
+        }
         url = urlsRef.current[cancion.id];
       }
       if (!url) {
@@ -339,6 +359,27 @@ export function MusicaProvider({ children }: { children: ReactNode }) {
       const el = asegurarAudio();
       el.src = url;
       el.volume = volumen / 100;
+
+      /*
+        Si el archivo falla al cargar (enlace caducado por un portátil con la
+        hora desfasada, corte de red), se pide una URL nueva y se reintenta UNA
+        vez. Sin esto, la música del local se quedaba parada en silencio y
+        alguien tenía que ir a darle a Play.
+      */
+      const alFallar = async () => {
+        el.onerror = null;
+        const res = await getUrlsLista(lista.id);
+        if (!res.ok || !res.urls[cancion.id]) {
+          toast.error(`No se pudo reproducir «${cancion.titulo}»`);
+          return;
+        }
+        urlsRef.current = res.urls;
+        urlsHastaRef.current = Date.now() + 90 * 60_000;
+        el.src = res.urls[cancion.id];
+        void el.play().catch(() => setReproduciendo(false));
+      };
+      el.onerror = () => void alFallar();
+
       try {
         await el.play();
         setReproduciendo(true);
