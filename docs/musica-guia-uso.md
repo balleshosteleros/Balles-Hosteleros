@@ -122,14 +122,33 @@ disponible»**.
 
 ## 6. Poner música en el local
 
+### Cada local, su música
+
+**La música es independiente en cada local.** Si la empresa tiene dos, cada uno
+suena por su cuenta aunque usen la misma lista: uno puede ir por la canción 3 y
+el otro por la 7, o tener listas distintas a la vez.
+
+Cuando hay más de un local aparece un **selector de local** arriba del
+reproductor. Lo que hagas (poner una lista, pausar, subir volumen) afecta **solo
+al local seleccionado**.
+
 ### El ordenador de los altavoces
 
-El equipo conectado a los altavoces se marca **una sola vez**:
+Cada local tiene **un único** equipo de altavoces, y se marca **una sola vez**:
 
 1. Entra en **Sala → Música** en ese ordenador.
-2. Activa el interruptor **«Este equipo es el de los altavoces»**.
+2. Si hay varios locales, elige el suyo en el selector.
+3. Activa el interruptor **«Este equipo es el de los altavoces»**.
 
-Queda guardado. Ese es el único equipo donde suena la música de verdad.
+Queda guardado. Ese es el único equipo donde suena la música de ese local.
+
+> **Si otro ordenador ya está sonando en ese local**, el software avisa antes de
+> nada: *«Ya hay un equipo sonando en este local»*, y tú decides si tomas el
+> relevo. Así nadie deja un local sin música por descuido en pleno servicio.
+>
+> Si el equipo que constaba se apagó o cerró el navegador, el relevo es
+> automático y no pregunta nada: se detecta que ya no está y otro puede ocupar
+> su sitio.
 
 ### Desde cualquier otro sitio
 

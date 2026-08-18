@@ -63,8 +63,20 @@ export interface ListaMusica {
   motivoBloqueo: string | null;
 }
 
-/** Estado del equipo conectado a los altavoces (una fila por empresa). */
+/** Un local de la empresa. La música es independiente en cada uno. */
+export interface LocalMusica {
+  id: string;
+  nombre: string;
+}
+
+/**
+ * Estado de la música de UN LOCAL (una fila por local).
+ *
+ * Dos locales de la misma empresa suenan por separado aunque usen la misma
+ * lista: el restaurante puede ir por la canción 3 y la coctelería por la 7.
+ */
 export interface EstadoReproductor {
+  localId: string;
   listaId: string | null;
   cancionId: string | null;
   indice: number;
@@ -74,6 +86,8 @@ export interface EstadoReproductor {
   comandoSeq: number;
   deviceId: string | null;
   deviceNombre: string | null;
+  /** Última señal de vida del equipo de altavoces (ISO). */
+  vistoEn: string | null;
 }
 
 export type ComandoReproductor =

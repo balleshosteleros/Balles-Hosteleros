@@ -51,7 +51,6 @@ import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 import { useMusica } from "@/features/sala/musica/contexts/musica-context";
 import { ReproductorPrincipal } from "@/features/sala/musica/components/ReproductorPrincipal";
 import { ConfiguracionMusica } from "@/features/sala/musica/components/ConfiguracionMusica";
-import { AvisoLicencias } from "@/features/sala/musica/components/AvisoLicencias";
 import { DetalleLista } from "@/features/sala/musica/components/DetalleLista";
 import { subirCanciones } from "@/features/sala/musica/lib/subir-canciones";
 import {
@@ -62,8 +61,7 @@ import {
 import { ETIQUETAS_MUSICA, type ListaMusica } from "@/features/sala/musica/types";
 
 export function MusicaView() {
-  const { listas, biblioteca, cargando, puedeGestionar, recargar, reproducirLista } =
-    useMusica();
+  const { listas, cargando, puedeGestionar, recargar, reproducirLista } = useMusica();
 
   const [busqueda, setBusqueda] = useState("");
   const [soloFavoritas, setSoloFavoritas] = useState(false);
@@ -236,13 +234,6 @@ export function MusicaView() {
         />
 
         <ReproductorPrincipal />
-
-        {/*
-          Las pautas de música legal solo las ve quien puede subir archivos: al
-          resto del equipo, que únicamente pulsa Play, no le aportan nada y le
-          quitarían sitio a las listas.
-        */}
-        {puedeGestionar && <AvisoLicencias hayCanciones={biblioteca.length > 0} />}
 
         {showConfig && puedeGestionar && <ConfiguracionMusica />}
 

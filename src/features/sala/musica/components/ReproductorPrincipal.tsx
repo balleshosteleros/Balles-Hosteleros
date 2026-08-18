@@ -9,22 +9,44 @@
  * bajar el volumen y saltar una canción que no encaja.
  */
 
-import { Play, Pause, SkipBack, SkipForward, Square, Volume2, VolumeX, Speaker } from "lucide-react";
+import { useState } from "react";
+import { Play, Pause, SkipBack, SkipForward, Square, Volume2, VolumeX, Speaker, Store } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { useMusica } from "@/features/sala/musica/contexts/musica-context";
 
 export function ReproductorPrincipal() {
   const {
+    locales,
+    localId,
+    setLocalId,
     listaActual,
     cancionActual,
     reproduciendo,
     volumen,
     esAltavoz,
+    altavozNombre,
     activarModoAltavoz,
     alternarPlay,
     siguiente,
@@ -33,11 +55,49 @@ export function ReproductorPrincipal() {
     cambiarVolumen,
   } = useMusica();
 
+  // Equipo que ya hace de altavoz cuando se intenta tomar el relevo.
+  const [relevoDe, setRelevoDe] = useState<string | null>(null);
+
   const hayMusica = Boolean(listaActual && cancionActual);
+  const variosLocales = locales.length > 1;
+
+  async function onCambiarAltavoz(valor: boolean) {
+    const res = await activarModoAltavoz(valor);
+    // Ya hay otro equipo sonando en este local: se pregunta antes de relevarlo,
+    // porque quitarle la música a un local en pleno servicio no puede pasar por
+    // accidente.
+    if (!res.ok && res.ocupadoPor) setRelevoDe(res.ocupadoPor);
+  }
 
   return (
     <Card>
       <CardContent className="p-4 space-y-4">
+        {/*
+          Selector de local. Cada local tiene su propia música sonando, aunque
+          usen la misma lista. Con un solo local no se enseña: sería una decisión
+          sin alternativa ocupando sitio.
+        */}
+        {variosLocales && (
+          <div className="flex items-center gap-2 border-b pb-3">
+            <Store className="h-4 w-4 shrink-0 text-muted-foreground" />
+            <Label htmlFor="local-musica" className="text-xs text-muted-foreground">
+              Local
+            </Label>
+            <Select value={localId ?? ""} onValueChange={setLocalId}>
+              <SelectTrigger id="local-musica" className="h-8 w-auto min-w-[180px]">
+                <SelectValue placeholder="Elige un local" />
+              </SelectTrigger>
+              <SelectContent>
+                {locales.map((l) => (
+                  <SelectItem key={l.id} value={l.id}>
+                    {l.nombre}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           {/* Qué está sonando */}
           <div className="min-w-0 flex-1">
@@ -156,7 +216,7 @@ export function ReproductorPrincipal() {
             <Switch
               id="modo-altavoz"
               checked={esAltavoz}
-              onCheckedChange={(v) => void activarModoAltavoz(v)}
+              onCheckedChange={(v) => void onCambiarAltavoz(v)}
             />
             {esAltavoz && (
               <Badge variant="secondary" className="text-[10px]">
@@ -166,13 +226,43 @@ export function ReproductorPrincipal() {
           </div>
         </div>
 
-        {!esAltavoz && hayMusica && (
+        {!esAltavoz && (
           <p className="text-xs text-muted-foreground">
-            La música suena en el equipo conectado a los altavoces. Desde aquí
-            controlas lo que se escucha en el local.
+            {altavozNombre
+              ? "La música suena en el equipo conectado a los altavoces de este local. Desde aquí controlas lo que se escucha allí."
+              : "Ningún equipo está marcado como altavoz de este local todavía. Activa el interruptor en el ordenador conectado a los altavoces."}
           </p>
         )}
       </CardContent>
+
+      {/*
+        Relevo del altavoz. Se pregunta siempre que otro equipo siga vivo:
+        dejar sin música un local en pleno servicio no puede pasar por descuido.
+      */}
+      <AlertDialog open={relevoDe !== null} onOpenChange={(v) => !v && setRelevoDe(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Ya hay un equipo sonando en este local</AlertDialogTitle>
+            <AlertDialogDescription>
+              La música de este local está saliendo por otro ordenador. Si
+              continúas, ese equipo dejará de sonar y la música pasará a este.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setRelevoDe(null)}>
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                setRelevoDe(null);
+                void activarModoAltavoz(true, true);
+              }}
+            >
+              Sonar aquí
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Card>
   );
 }

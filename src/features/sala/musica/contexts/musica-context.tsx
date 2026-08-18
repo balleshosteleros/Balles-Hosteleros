@@ -13,10 +13,16 @@
  *     pantalla grande. Con un único contexto, los dos miran la misma verdad y no
  *     hay forma de que se desincronicen.
  *
- * MODO ALTAVOZ: el ordenador conectado a los altavoces se marca una vez como
- * reproductor del local. Solo ESE navegador tiene audio real; los demás son
- * mandos a distancia — pintan lo que suena y envían órdenes, pero no reproducen
- * nada (si no, la misma canción sonaría a la vez en cinco sitios distintos).
+ * LA MÚSICA ES POR LOCAL, NO POR EMPRESA. Una empresa con dos locales necesita
+ * dos músicas sonando a la vez, aunque usen la misma lista: el restaurante puede
+ * ir por la canción 3 y la coctelería por la 7. Cada local tiene su propia fila
+ * de estado y su propio equipo de altavoces.
+ *
+ * MODO ALTAVOZ: el ordenador conectado a los altavoces de un local se marca una
+ * vez. Solo ESE navegador tiene audio real; los demás son mandos a distancia —
+ * pintan lo que suena y envían órdenes, pero no reproducen nada. Y solo puede
+ * haber uno por local: dos equipos sonando a la vez con unos segundos de desfase
+ * es peor que no tener música.
  */
 
 import {
@@ -34,17 +40,29 @@ import { getDeviceId } from "@/features/mi-panel/mobile/lib/push-client";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import {
   listMusica,
+  listLocales,
   getUrlsLista,
   enviarComando,
   getEstadoReproductor,
   marcarComoReproductor,
+  latidoReproductor,
+  liberarReproductor,
 } from "@/features/sala/musica/actions/musica-actions";
-import type { ListaMusica, Cancion } from "@/features/sala/musica/types";
+import type {
+  ListaMusica,
+  Cancion,
+  LocalMusica,
+} from "@/features/sala/musica/types";
 
-/** Clave de localStorage: ¿este navegador es el equipo de los altavoces? */
-const CLAVE_MODO_ALTAVOZ = "bh_musica_altavoz";
+/** Clave de localStorage: en qué local es altavoz este navegador (id del local). */
+const CLAVE_LOCAL_ALTAVOZ = "bh_musica_altavoz_local";
+/** Clave de localStorage: último local elegido en el selector. */
+const CLAVE_LOCAL_ELEGIDO = "bh_musica_local";
 /** Clave de localStorage: el usuario cerró el mini reproductor a mano. */
 const CLAVE_MINI_OCULTO = "bh_musica_mini_oculto";
+
+/** Cada cuánto el equipo de altavoces avisa de que sigue vivo. */
+const MS_LATIDO = 60_000;
 
 interface MusicaContextValue {
   listas: ListaMusica[];
@@ -54,14 +72,30 @@ interface MusicaContextValue {
   uso: { bytesUsados: number; bytesLimite: number };
   recargar: () => Promise<void>;
 
+  /** Locales de la empresa; cada uno con su música independiente. */
+  locales: LocalMusica[];
+  /** Local que se está viendo/controlando ahora mismo. */
+  localId: string | null;
+  setLocalId: (id: string) => void;
+
   listaActual: ListaMusica | null;
   cancionActual: Cancion | null;
   reproduciendo: boolean;
   volumen: number;
 
-  /** ¿Este navegador es el que está conectado a los altavoces? */
+  /** ¿Este navegador es el altavoz DEL LOCAL seleccionado? */
   esAltavoz: boolean;
-  activarModoAltavoz: (activar: boolean) => Promise<void>;
+  /** Nombre del equipo que hace de altavoz en este local (si lo hay). */
+  altavozNombre: string | null;
+  /**
+   * Activa o desactiva el modo altavoz. Si ya hay otro equipo vivo, no lo releva
+   * por su cuenta: devuelve `ocupadoPor` para que la pantalla pregunte primero.
+   * Con `forzar` toma el relevo.
+   */
+  activarModoAltavoz: (
+    activar: boolean,
+    forzar?: boolean,
+  ) => Promise<{ ok: boolean; ocupadoPor?: string }>;
 
   reproducirLista: (lista: ListaMusica, indice?: number) => Promise<void>;
   alternarPlay: () => Promise<void>;
@@ -87,11 +121,15 @@ export function MusicaProvider({ children }: { children: ReactNode }) {
   const [puedeGestionar, setPuedeGestionar] = useState(false);
   const [cargando, setCargando] = useState(true);
 
+  const [locales, setLocales] = useState<LocalMusica[]>([]);
+  const [localId, setLocalIdState] = useState<string | null>(null);
+
   const [listaActual, setListaActual] = useState<ListaMusica | null>(null);
   const [indice, setIndice] = useState(0);
   const [reproduciendo, setReproduciendo] = useState(false);
   const [volumen, setVolumen] = useState(70);
-  const [esAltavoz, setEsAltavoz] = useState(false);
+  const [localAltavoz, setLocalAltavoz] = useState<string | null>(null);
+  const [altavozNombre, setAltavozNombre] = useState<string | null>(null);
   const [miniCerrado, setMiniCerrado] = useState(false);
 
   // El elemento de audio se crea a mano (no en el árbol de React) para que no
@@ -102,6 +140,8 @@ export function MusicaProvider({ children }: { children: ReactNode }) {
   const ultimoSeqRef = useRef(0);
 
   const cancionActual = listaActual?.canciones[indice] ?? null;
+  // Este navegador solo es altavoz del local que está mirando.
+  const esAltavoz = Boolean(localId && localAltavoz === localId);
 
   useEffect(() => {
     listasRef.current = listas;
@@ -124,11 +164,46 @@ export function MusicaProvider({ children }: { children: ReactNode }) {
     void recargar();
   }, [recargar, empresaId]);
 
+  // Locales de la empresa + local elegido por defecto.
+  useEffect(() => {
+    if (!empresaId) return;
+    void (async () => {
+      const res = await listLocales();
+      if (!res.ok) return;
+      setLocales(res.locales);
+
+      let guardado: string | null = null;
+      try {
+        guardado = localStorage.getItem(CLAVE_LOCAL_ELEGIDO);
+      } catch {
+        /* sin localStorage: se elige el primero */
+      }
+      // El guardado solo vale si sigue perteneciendo a esta empresa (al cambiar
+      // de empresa, el local anterior ya no existe aquí).
+      const valido = res.locales.some((l) => l.id === guardado);
+      setLocalIdState(valido ? guardado : (res.locales[0]?.id ?? null));
+    })();
+  }, [empresaId]);
+
+  const setLocalId = useCallback((id: string) => {
+    setLocalIdState(id);
+    try {
+      localStorage.setItem(CLAVE_LOCAL_ELEGIDO, id);
+    } catch {
+      /* sin localStorage: la elección dura solo esta sesión */
+    }
+    // Al cambiar de local se limpia lo que se estaba pintando: el estado del
+    // nuevo local llega enseguida y mientras tanto no debe verse el del otro.
+    setListaActual(null);
+    setIndice(0);
+    setReproduciendo(false);
+    ultimoSeqRef.current = 0;
+  }, []);
+
   /*
     La disponibilidad depende de la HORA, así que una lista bloqueada se
     desbloquea sola al entrar en su franja. Sin este refresco, quien dejara la
     pantalla abierta a las 12:55 seguiría viendo "Comidas" bloqueada a las 13:05.
-    Cada minuto es suficiente y el coste es una consulta ligera.
   */
   useEffect(() => {
     const t = setInterval(() => void recargar(), 60_000);
@@ -139,32 +214,71 @@ export function MusicaProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     try {
-      setEsAltavoz(localStorage.getItem(CLAVE_MODO_ALTAVOZ) === "1");
+      setLocalAltavoz(localStorage.getItem(CLAVE_LOCAL_ALTAVOZ));
       setMiniCerrado(localStorage.getItem(CLAVE_MINI_OCULTO) === "1");
     } catch {
       /* almacenamiento bloqueado: se queda como mando a distancia */
     }
   }, []);
 
-  const activarModoAltavoz = useCallback(async (activar: boolean) => {
-    setEsAltavoz(activar);
-    try {
-      if (activar) localStorage.setItem(CLAVE_MODO_ALTAVOZ, "1");
-      else localStorage.removeItem(CLAVE_MODO_ALTAVOZ);
-    } catch {
-      /* sin localStorage el modo dura solo esta sesión */
-    }
+  const activarModoAltavoz = useCallback(
+    async (activar: boolean, forzar = false) => {
+      if (!localId) return { ok: false };
+      const deviceId = getDeviceId() ?? "sin-id";
 
-    if (activar) {
-      const id = getDeviceId() ?? "sin-id";
-      await marcarComoReproductor(id, navigator.userAgent.slice(0, 60));
-    } else {
-      // Al dejar de ser altavoz, se calla: si no, seguiría sonando aquí además
-      // de en el equipo que tome el relevo.
-      audioRef.current?.pause();
-      setReproduciendo(false);
-    }
-  }, []);
+      if (!activar) {
+        await liberarReproductor(localId, deviceId);
+        setLocalAltavoz(null);
+        try {
+          localStorage.removeItem(CLAVE_LOCAL_ALTAVOZ);
+        } catch {
+          /* sin localStorage */
+        }
+        // Al dejar de ser altavoz se calla: si no, seguiría sonando aquí además
+        // de en el equipo que tome el relevo.
+        audioRef.current?.pause();
+        setReproduciendo(false);
+        return { ok: true };
+      }
+
+      const res = await marcarComoReproductor({
+        localId,
+        deviceId,
+        deviceNombre: navigator.userAgent.slice(0, 60),
+        forzar,
+      });
+
+      // Ya hay otro equipo vivo: no se releva sin preguntar.
+      if (!res.ok && res.ocupadoPor) {
+        return { ok: false, ocupadoPor: res.ocupadoPor };
+      }
+      if (!res.ok) {
+        toast.error(res.error ?? "No se pudo activar este equipo");
+        return { ok: false };
+      }
+
+      setLocalAltavoz(localId);
+      try {
+        localStorage.setItem(CLAVE_LOCAL_ALTAVOZ, localId);
+      } catch {
+        /* sin localStorage: el modo dura solo esta sesión */
+      }
+      return { ok: true };
+    },
+    [localId],
+  );
+
+  // Señal de vida mientras este equipo sea el altavoz. Sin ella, un ordenador
+  // apagado seguiría constando como altavoz del local para siempre.
+  useEffect(() => {
+    if (!esAltavoz || !localId) return;
+    const deviceId = getDeviceId() ?? "sin-id";
+    void latidoReproductor(localId, deviceId);
+    const t = setInterval(() => {
+      void latidoReproductor(localId, deviceId);
+    }, MS_LATIDO);
+    return () => clearInterval(t);
+  }, [esAltavoz, localId]);
 
   // ─── Audio real (solo en el equipo de altavoces) ──────────────────────────
 
@@ -232,33 +346,6 @@ export function MusicaProvider({ children }: { children: ReactNode }) {
 
   // ─── Realtime: el equipo de altavoces obedece las órdenes ─────────────────
 
-  useEffect(() => {
-    if (!empresaId) return;
-    const supabase = createClient();
-    const canal = supabase
-      .channel(`musica-${empresaId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "musica_reproductor",
-          filter: `empresa_id=eq.${empresaId}`,
-        },
-        (payload: { new: unknown }) => {
-          const fila = payload.new as Record<string, unknown> | null;
-          if (!fila) return;
-          aplicarEstadoRemoto(fila);
-        },
-      )
-      .subscribe();
-
-    return () => {
-      void supabase.removeChannel(canal);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [empresaId, esAltavoz]);
-
   /**
    * Refleja el estado que viene de la BD. En el equipo de altavoces, además,
    * EJECUTA la orden. `comando_seq` evita reaccionar dos veces a lo mismo (y
@@ -279,6 +366,23 @@ export function MusicaProvider({ children }: { children: ReactNode }) {
       setIndice(idx);
       setVolumen(vol);
       setReproduciendo(Boolean(fila.reproduciendo));
+      setAltavozNombre((fila.device_nombre as string | null) ?? null);
+
+      // Si otro equipo ha tomado el relevo, este deja de ser altavoz y se calla.
+      const deviceFila = (fila.device_id as string | null) ?? null;
+      const miId = getDeviceId();
+      if (miId && deviceFila && deviceFila !== miId) {
+        setLocalAltavoz((prev) => {
+          if (prev === null) return prev;
+          audioRef.current?.pause();
+          try {
+            localStorage.removeItem(CLAVE_LOCAL_ALTAVOZ);
+          } catch {
+            /* sin localStorage */
+          }
+          return null;
+        });
+      }
 
       // Una orden nueva reabre el mini reproductor aunque alguien lo cerrara.
       if (seq > ultimoSeqRef.current && comando === "play") {
@@ -322,26 +426,60 @@ export function MusicaProvider({ children }: { children: ReactNode }) {
     [esAltavoz, sonarCancion],
   );
 
-  // Al abrir la app, recupera lo que ya estuviera sonando en el local.
+  // Se escucha SOLO la fila del local seleccionado: si se escuchara toda la
+  // empresa, el estado de un local pisaría al del otro.
   useEffect(() => {
-    if (!empresaId) return;
+    if (!localId) return;
+    const supabase = createClient();
+    const canal = supabase
+      .channel(`musica-local-${localId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "musica_reproductor",
+          filter: `local_id=eq.${localId}`,
+        },
+        (payload: { new: unknown }) => {
+          const fila = payload.new as Record<string, unknown> | null;
+          if (!fila) return;
+          aplicarEstadoRemoto(fila);
+        },
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(canal);
+    };
+  }, [localId, aplicarEstadoRemoto]);
+
+  // Al abrir la app (o al cambiar de local), recupera lo que ya estuviera
+  // sonando en ese local.
+  useEffect(() => {
+    if (!localId) return;
     void (async () => {
-      const res = await getEstadoReproductor();
+      const res = await getEstadoReproductor(localId);
       if (!res.ok || !res.estado) return;
       const e = res.estado;
       ultimoSeqRef.current = e.comandoSeq;
       setIndice(e.indice);
       setVolumen(e.volumen);
       setReproduciendo(e.reproduciendo);
+      setAltavozNombre(e.deviceNombre);
       const lista = listasRef.current.find((l) => l.id === e.listaId) ?? null;
       setListaActual(lista);
     })();
-  }, [empresaId, listas.length]);
+  }, [localId, listas.length]);
 
   // ─── Órdenes (las manda cualquiera, incluido el propio altavoz) ───────────
 
   const reproducirLista = useCallback(
     async (lista: ListaMusica, idxInicial = 0) => {
+      if (!localId) {
+        toast.error("Elige primero el local");
+        return;
+      }
       if (!lista.disponibleAhora) {
         toast.error(lista.motivoBloqueo ?? "Esta lista está fuera de su horario");
         return;
@@ -363,6 +501,7 @@ export function MusicaProvider({ children }: { children: ReactNode }) {
       }
 
       const res = await enviarComando({
+        localId,
         comando: "play",
         listaId: lista.id,
         cancionId: lista.canciones[idxInicial]?.id ?? null,
@@ -376,17 +515,18 @@ export function MusicaProvider({ children }: { children: ReactNode }) {
       setReproduciendo(true);
       if (esAltavoz) await sonarCancion(lista, idxInicial);
     },
-    [esAltavoz, sonarCancion],
+    [localId, esAltavoz, sonarCancion],
   );
 
   const alternarPlay = useCallback(async () => {
-    if (!listaActual) return;
+    if (!listaActual || !localId) return;
     if (reproduciendo) {
       setReproduciendo(false);
       audioRef.current?.pause();
-      await enviarComando({ comando: "pause" });
+      await enviarComando({ localId, comando: "pause" });
     } else {
       const res = await enviarComando({
+        localId,
         comando: "play",
         listaId: listaActual.id,
         indice,
@@ -405,15 +545,16 @@ export function MusicaProvider({ children }: { children: ReactNode }) {
         await sonarCancion(listaActual, indice);
       }
     }
-  }, [listaActual, reproduciendo, indice, esAltavoz, sonarCancion]);
+  }, [listaActual, localId, reproduciendo, indice, esAltavoz, sonarCancion]);
 
   const saltar = useCallback(
     async (delta: number) => {
-      if (!listaActual || listaActual.canciones.length === 0) return;
+      if (!listaActual || !localId || listaActual.canciones.length === 0) return;
       const total = listaActual.canciones.length;
       const nuevo = (indice + delta + total) % total;
       setIndice(nuevo);
       await enviarComando({
+        localId,
         comando: delta > 0 ? "siguiente" : "anterior",
         listaId: listaActual.id,
         cancionId: listaActual.canciones[nuevo]?.id ?? null,
@@ -421,28 +562,33 @@ export function MusicaProvider({ children }: { children: ReactNode }) {
       });
       if (esAltavoz) await sonarCancion(listaActual, nuevo);
     },
-    [listaActual, indice, esAltavoz, sonarCancion],
+    [listaActual, localId, indice, esAltavoz, sonarCancion],
   );
 
   const siguiente = useCallback(() => saltar(1), [saltar]);
   const anterior = useCallback(() => saltar(-1), [saltar]);
 
   const parar = useCallback(async () => {
+    if (!localId) return;
     setReproduciendo(false);
     const el = audioRef.current;
     if (el) {
       el.pause();
       el.currentTime = 0;
     }
-    await enviarComando({ comando: "stop" });
-  }, []);
+    await enviarComando({ localId, comando: "stop" });
+  }, [localId]);
 
-  const cambiarVolumen = useCallback(async (v: number) => {
-    const vol = Math.max(0, Math.min(100, Math.round(v)));
-    setVolumen(vol);
-    if (audioRef.current) audioRef.current.volume = vol / 100;
-    await enviarComando({ comando: "volumen", volumen: vol });
-  }, []);
+  const cambiarVolumen = useCallback(
+    async (v: number) => {
+      if (!localId) return;
+      const vol = Math.max(0, Math.min(100, Math.round(v)));
+      setVolumen(vol);
+      if (audioRef.current) audioRef.current.volume = vol / 100;
+      await enviarComando({ localId, comando: "volumen", volumen: vol });
+    },
+    [localId],
+  );
 
   const cerrarMini = useCallback(() => {
     setMiniCerrado(true);
@@ -465,11 +611,15 @@ export function MusicaProvider({ children }: { children: ReactNode }) {
         puedeGestionar,
         uso,
         recargar,
+        locales,
+        localId,
+        setLocalId,
         listaActual,
         cancionActual,
         reproduciendo,
         volumen,
         esAltavoz,
+        altavozNombre,
         activarModoAltavoz,
         reproducirLista,
         alternarPlay,

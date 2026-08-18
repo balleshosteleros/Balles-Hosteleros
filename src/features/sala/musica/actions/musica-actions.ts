@@ -29,6 +29,7 @@ import type {
   EstadoReproductor,
   UsoMusica,
   ComandoReproductor,
+  LocalMusica,
 } from "@/features/sala/musica/types";
 
 const RUTA = "/sala/musica";
@@ -534,17 +535,44 @@ export async function borrarHorario(id: string) {
 
 // ─── Reproductor del local ──────────────────────────────────────────────────
 
-export async function getEstadoReproductor(): Promise<{
+/** Locales de la empresa. Cada uno tiene su música independiente. */
+export async function listLocales(): Promise<{
+  ok: boolean;
+  locales: LocalMusica[];
+}> {
+  try {
+    const ctx = await guardVer();
+    if (!ctx.ok) return { ok: false, locales: [] };
+    const { data, error } = await ctx.supabase
+      .from("locales")
+      .select("id, nombre")
+      .eq("empresa_id", ctx.empresaId)
+      .order("nombre", { ascending: true });
+    if (error) throw error;
+    return {
+      ok: true,
+      locales: (data ?? []).map((l) => ({
+        id: l.id as string,
+        nombre: l.nombre as string,
+      })),
+    };
+  } catch (err) {
+    console.error("[musica] listLocales:", err);
+    return { ok: false, locales: [] };
+  }
+}
+
+export async function getEstadoReproductor(localId: string): Promise<{
   ok: boolean;
   estado: EstadoReproductor | null;
 }> {
   try {
     const ctx = await guardVer();
-    if (!ctx.ok) return { ok: false, estado: null };
+    if (!ctx.ok || !localId) return { ok: false, estado: null };
     const { data } = await ctx.supabase
       .from("musica_reproductor")
       .select("*")
-      .eq("empresa_id", ctx.empresaId)
+      .eq("local_id", localId)
       .maybeSingle();
     if (!data) return { ok: true, estado: null };
     return { ok: true, estado: mapEstado(data) };
@@ -556,6 +584,7 @@ export async function getEstadoReproductor(): Promise<{
 
 function mapEstado(d: Record<string, unknown>): EstadoReproductor {
   return {
+    localId: d.local_id as string,
     listaId: (d.lista_id as string | null) ?? null,
     cancionId: (d.cancion_id as string | null) ?? null,
     indice: Number(d.indice ?? 0),
@@ -565,6 +594,7 @@ function mapEstado(d: Record<string, unknown>): EstadoReproductor {
     comandoSeq: Number(d.comando_seq ?? 0),
     deviceId: (d.device_id as string | null) ?? null,
     deviceNombre: (d.device_nombre as string | null) ?? null,
+    vistoEn: (d.visto_en as string | null) ?? null,
   };
 }
 
@@ -577,6 +607,7 @@ function mapEstado(d: Record<string, unknown>): EstadoReproductor {
  * donde de verdad se impide que suene la lista de copas por la mañana.
  */
 export async function enviarComando(input: {
+  localId: string;
   comando: ComandoReproductor;
   listaId?: string | null;
   cancionId?: string | null;
@@ -586,6 +617,17 @@ export async function enviarComando(input: {
   try {
     const ctx = await guardVer();
     if (!ctx.ok) return { ok: false, error: ctx.error };
+    if (!input.localId) return { ok: false, error: "Falta indicar el local" };
+
+    // El local debe ser de la empresa activa: si no, se podría mandar música al
+    // local de otra empresa conociendo su id.
+    const { data: local } = await ctx.supabase
+      .from("locales")
+      .select("id")
+      .eq("id", input.localId)
+      .eq("empresa_id", ctx.empresaId)
+      .maybeSingle();
+    if (!local) return { ok: false, error: "Local no válido" };
 
     if (input.comando === "play" && input.listaId) {
       const permitido = await listaDisponible(ctx.supabase, ctx.empresaId, input.listaId);
@@ -595,10 +637,11 @@ export async function enviarComando(input: {
     const { data: actual } = await ctx.supabase
       .from("musica_reproductor")
       .select("comando_seq")
-      .eq("empresa_id", ctx.empresaId)
+      .eq("local_id", input.localId)
       .maybeSingle();
 
     const patch: Record<string, unknown> = {
+      local_id: input.localId,
       empresa_id: ctx.empresaId,
       comando: input.comando,
       comando_seq: Number(actual?.comando_seq ?? 0) + 1,
@@ -616,7 +659,7 @@ export async function enviarComando(input: {
 
     const { error } = await ctx.supabase
       .from("musica_reproductor")
-      .upsert(patch, { onConflict: "empresa_id" });
+      .upsert(patch, { onConflict: "local_id" });
     if (error) throw error;
 
     return { ok: true };
@@ -658,22 +701,78 @@ async function listaDisponible(
 }
 
 /**
- * Marca ESTE navegador como el equipo conectado a los altavoces. A partir de
- * aquí es el que suena, y el resto solo manda órdenes.
+ * Minutos sin señal de vida tras los cuales se da por muerto al equipo de
+ * altavoces. Se manda señal cada minuto, así que 3 minutos son 3 fallos
+ * seguidos: suficiente para no relevar a un equipo vivo por un corte de red
+ * pasajero, y poco para no dejar el local sin música toda la tarde porque
+ * alguien apagó un ordenador.
  */
-export async function marcarComoReproductor(deviceId: string, deviceNombre: string) {
+const MINUTOS_ALTAVOZ_VIVO = 3;
+
+/**
+ * Marca ESTE navegador como el equipo conectado a los altavoces DE UN LOCAL.
+ *
+ * Solo puede haber uno por local: si hubiera dos, la misma lista sonaría a la
+ * vez en dos equipos con unos segundos de desfase, que es peor que no tener
+ * música. Si ya hay otro equipo vivo, esta acción NO lo releva por su cuenta —
+ * devuelve `ocupadoPor` para que la aplicación pregunte primero.
+ *
+ * Con `forzar: true` toma el relevo igualmente (el usuario ya ha confirmado).
+ */
+export async function marcarComoReproductor(input: {
+  localId: string;
+  deviceId: string;
+  deviceNombre: string;
+  forzar?: boolean;
+}): Promise<{ ok: boolean; error?: string; ocupadoPor?: string }> {
   try {
     const ctx = await guardVer();
     if (!ctx.ok) return { ok: false, error: ctx.error };
+    if (!input.localId) return { ok: false, error: "Falta indicar el local" };
+
+    const { data: local } = await ctx.supabase
+      .from("locales")
+      .select("id")
+      .eq("id", input.localId)
+      .eq("empresa_id", ctx.empresaId)
+      .maybeSingle();
+    if (!local) return { ok: false, error: "Local no válido" };
+
+    const { data: actual } = await ctx.supabase
+      .from("musica_reproductor")
+      .select("device_id, device_nombre, visto_en, reproduciendo")
+      .eq("local_id", input.localId)
+      .maybeSingle();
+
+    // ¿Hay ya OTRO equipo marcado y sigue dando señales de vida?
+    const otro =
+      actual?.device_id && actual.device_id !== input.deviceId ? actual : null;
+    if (otro && !input.forzar) {
+      const visto = otro.visto_en ? new Date(otro.visto_en as string) : null;
+      const vivo =
+        visto !== null &&
+        Date.now() - visto.getTime() < MINUTOS_ALTAVOZ_VIVO * 60_000;
+      if (vivo) {
+        return {
+          ok: false,
+          ocupadoPor: (otro.device_nombre as string | null) || "Otro equipo",
+        };
+      }
+      // Sin señal reciente: el equipo que constaba ya no está abierto, así que
+      // se toma el relevo sin molestar a nadie con una pregunta.
+    }
+
     const { error } = await ctx.supabase.from("musica_reproductor").upsert(
       {
+        local_id: input.localId,
         empresa_id: ctx.empresaId,
-        device_id: deviceId,
-        device_nombre: deviceNombre.slice(0, 60),
+        device_id: input.deviceId,
+        device_nombre: input.deviceNombre.slice(0, 60),
+        visto_en: new Date().toISOString(),
         actualizado_por: ctx.userId,
         updated_at: new Date().toISOString(),
       },
-      { onConflict: "empresa_id" },
+      { onConflict: "local_id" },
     );
     if (error) throw error;
     return { ok: true };
@@ -681,6 +780,54 @@ export async function marcarComoReproductor(deviceId: string, deviceNombre: stri
     const msg = err instanceof Error ? err.message : "Error desconocido";
     console.error("[musica] marcarComoReproductor:", msg);
     return { ok: false, error: msg };
+  }
+}
+
+/**
+ * Señal de vida del equipo de altavoces. Se manda cada minuto mientras está
+ * marcado: así, si se apaga o se cierra el navegador, otro equipo puede tomar
+ * el relevo sin preguntar en vez de quedarse bloqueado para siempre.
+ */
+export async function latidoReproductor(localId: string, deviceId: string) {
+  try {
+    const ctx = await guardVer();
+    if (!ctx.ok || !localId) return { ok: false };
+    // Solo escribe si ESTE equipo sigue siendo el altavoz: si otro tomó el
+    // relevo, su latido no debe resucitar al anterior.
+    const { error } = await ctx.supabase
+      .from("musica_reproductor")
+      .update({ visto_en: new Date().toISOString() })
+      .eq("local_id", localId)
+      .eq("device_id", deviceId);
+    if (error) throw error;
+    return { ok: true };
+  } catch (err) {
+    console.error("[musica] latidoReproductor:", err);
+    return { ok: false };
+  }
+}
+
+/** Deja de ser el equipo de altavoces (libera el local para otro equipo). */
+export async function liberarReproductor(localId: string, deviceId: string) {
+  try {
+    const ctx = await guardVer();
+    if (!ctx.ok || !localId) return { ok: false };
+    const { error } = await ctx.supabase
+      .from("musica_reproductor")
+      .update({
+        device_id: null,
+        device_nombre: null,
+        visto_en: null,
+        reproduciendo: false,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("local_id", localId)
+      .eq("device_id", deviceId);
+    if (error) throw error;
+    return { ok: true };
+  } catch (err) {
+    console.error("[musica] liberarReproductor:", err);
+    return { ok: false };
   }
 }
 
