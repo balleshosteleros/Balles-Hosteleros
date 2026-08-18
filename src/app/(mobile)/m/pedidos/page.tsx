@@ -29,6 +29,7 @@ interface AlbaranRow {
   proveedor_nombre?: string | null;
   fecha?: string | null;
   estado?: string | null;
+  documento_parcial?: boolean | null;
 }
 
 export default async function MobileAlbaranesPage() {
@@ -58,6 +59,7 @@ export default async function MobileAlbaranesPage() {
       numero: a.numero || (a.numero_proveedor ? `Nº ${a.numero_proveedor}` : a.id.slice(0, 8)),
       proveedor: a.proveedor_nombre ?? "Proveedor",
       fecha: a.fecha ?? null,
+      incompleto: a.documento_parcial === true,
     }));
 
   return (

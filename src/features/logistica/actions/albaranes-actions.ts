@@ -150,6 +150,13 @@ export async function createAlbaran(input: {
    */
   duplicadoOverride?: { posibleDuplicadoDe: string; motivo: string } | null;
   /**
+   * Documento incompleto (PRP-074 · encargo Iván 17-ago): el OCR detectó "SUMA Y
+   * SIGUE" / "pág. X de Y" y la persona insistió en guardar solo esta parte. Se
+   * persiste marcado y la confirmación transaccional lo BLOQUEA hasta que se
+   * complete (`marcarAlbaranCompleto`). El motivo queda en la traza.
+   */
+  documentoParcial?: { motivo: string; paginasEsperadas: number | null } | null;
+  /**
    * Estado inicial. Por defecto "Pendiente". Si es "Revisión" (albarán subido por foto con
    * líneas aún sin producto), se relaja la regla del productoId: se permite guardar con
    * líneas huérfanas para que la persona las resuelva en el asistente. "Revisión" NO suma
@@ -256,6 +263,11 @@ export async function createAlbaran(input: {
       insertPayload.duplicado_override_at = new Date().toISOString();
     }
 
+    if (input.documentoParcial) {
+      insertPayload.documento_parcial = true;
+      insertPayload.paginas_esperadas = input.documentoParcial.paginasEsperadas;
+    }
+
     if (typeof input.numeroSecuencial === "number") {
       insertPayload.numero_secuencial = input.numeroSecuencial;
       insertPayload.numero = `ALB-${year}-${String(input.numeroSecuencial).padStart(3, "0")}`;
@@ -282,6 +294,21 @@ export async function createAlbaran(input: {
         payload: {
           posibleDuplicadoDe: input.duplicadoOverride.posibleDuplicadoDe,
           motivo: input.duplicadoOverride.motivo,
+        },
+      });
+    }
+
+    // El "lo cargo a medias" también queda en la traza, con su motivo.
+    if (input.documentoParcial) {
+      await registrarEventoAlbaran(supabase, {
+        empresaId,
+        albaranId: data.id as string,
+        importacionId: input.importacionId ?? null,
+        actorId: user?.id ?? null,
+        tipo: "documento_parcial",
+        payload: {
+          motivo: input.documentoParcial.motivo,
+          paginasEsperadas: input.documentoParcial.paginasEsperadas,
         },
       });
     }
@@ -337,6 +364,46 @@ export async function updateAlbaranNumeroProveedor(id: string, numeroProveedor: 
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : "Error desconocido";
     console.error("[albaranes] updateAlbaranNumeroProveedor:", msg);
+    return { ok: false, error: msg };
+  }
+}
+
+/**
+ * Quita la marca de documento incompleto (PRP-074 · encargo Iván 17-ago) cuando ya se
+ * han adjuntado las páginas que faltaban y las líneas están completas. Es lo único
+ * que desbloquea la confirmación de un albarán guardado como parcial. Queda en la
+ * traza quién lo dio por completo.
+ */
+export async function marcarAlbaranCompleto(id: string, nota?: string) {
+  try {
+    const { supabase, user, empresaId } = await getContext();
+    if (!empresaId) return { ok: false, error: "No autenticado" };
+    const { data: alb } = await supabase
+      .from("albaranes")
+      .select("estado, documento_parcial, importacion_id")
+      .eq("id", id)
+      .eq("empresa_id", empresaId)
+      .maybeSingle();
+    if (!alb) return { ok: false, error: "Albarán no encontrado" };
+    if (!alb.documento_parcial) return { ok: true }; // ya estaba completo: idempotente
+    const { error } = await supabase
+      .from("albaranes")
+      .update({ documento_parcial: false, updated_at: new Date().toISOString() })
+      .eq("id", id)
+      .eq("empresa_id", empresaId);
+    if (error) throw error;
+    await registrarEventoAlbaran(supabase, {
+      empresaId,
+      albaranId: id,
+      importacionId: (alb.importacion_id as string | null) ?? null,
+      actorId: user?.id ?? null,
+      tipo: "documento_completado",
+      payload: { nota: nota?.trim() || null },
+    });
+    return { ok: true };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "Error desconocido";
+    console.error("[albaranes] marcarAlbaranCompleto:", msg);
     return { ok: false, error: msg };
   }
 }

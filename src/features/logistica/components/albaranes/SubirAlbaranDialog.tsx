@@ -59,6 +59,8 @@ export function SubirAlbaranDialog({ open, onOpenChange, onCreado }: Props) {
     incidenciasAbiertas,
     vinculosAutomaticos,
     proveedorIdentificado,
+    documentoIncompleto,
+    parcialDecidido,
     resolverIncidencias,
     handleFile,
     analizar,
@@ -286,6 +288,23 @@ export function SubirAlbaranDialog({ open, onOpenChange, onCreado }: Props) {
               </div>
             )}
 
+            {documentoIncompleto && !parcialDecidido && (
+              <div className="rounded-lg border border-red-300 bg-red-50 p-3 text-sm dark:border-red-800 dark:bg-red-950/30">
+                <p className="font-medium text-red-800 dark:text-red-300">
+                  A este albarán le falta al menos una página
+                  {documentoIncompleto.paginaActual && documentoIncompleto.paginasTotales
+                    ? ` (es la ${documentoIncompleto.paginaActual} de ${documentoIncompleto.paginasTotales})`
+                    : ""}
+                  .
+                </p>
+                <p className="mt-1 text-xs text-red-700 dark:text-red-400">
+                  Sube también la página que falta (Empezar de nuevo con la otra foto) o, en «Ver lo que no
+                  cuadra», elige «Cargar solo esta parte» indicando el motivo. Así guardado no se podrá
+                  confirmar hasta completarlo.
+                </p>
+              </div>
+            )}
+
             <div className="flex items-center justify-between">
               <p className="text-xs text-muted-foreground">
                 Suma de líneas: <span className="font-semibold tabular-nums">{formatNumero(totalLineas)} €</span>
@@ -302,7 +321,12 @@ export function SubirAlbaranDialog({ open, onOpenChange, onCreado }: Props) {
                   </Button>
                 )}
                 <Button variant="outline" onClick={() => { reset(); }}>Empezar de nuevo</Button>
-                <Button onClick={() => guardar()} disabled={!!duplicado}>Guardar en Revisión</Button>
+                <Button
+                  onClick={() => guardar()}
+                  disabled={!!duplicado || (!!documentoIncompleto && !parcialDecidido)}
+                >
+                  {documentoIncompleto && parcialDecidido ? "Guardar incompleto" : "Guardar en Revisión"}
+                </Button>
               </div>
             </div>
           </div>

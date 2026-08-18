@@ -137,6 +137,13 @@ export interface Albaran {
   ultimaActualizacion: string;
   /** Documentos adjuntos persistidos (archivo del proveedor + análisis OCR). */
   documentos?: DocumentoAdjunto[];
+  /**
+   * Se guardó sabiendo que falta al menos una página ("SUMA Y SIGUE"). Mientras sea
+   * true la confirmación está bloqueada; se quita con `marcarAlbaranCompleto`.
+   */
+  documentoParcial?: boolean;
+  /** Nº de páginas que decía el papel ("pág. 1 de 3" → 3), si se leyó. */
+  paginasEsperadas?: number | null;
 }
 
 // ─── Helpers ──────────────────────────────────────────────

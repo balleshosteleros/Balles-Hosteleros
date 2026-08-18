@@ -98,6 +98,8 @@ export function useSubirAlbaran({ fechaPorDefecto, creador, onCreado }: UseSubir
     Array<{ lineaId: string; productoId: string; motivo: string }>
   >([]);
   const [proveedorIdentificado, setProveedorIdentificado] = useState<string | null>(null);
+  // Decisión "cargar solo esta parte" tomada en la mesa (escritorio): con motivo.
+  const [parcialDecidido, setParcialDecidido] = useState<{ motivo: string } | null>(null);
   const [, startTransition] = useTransition();
 
   const reset = () => {
@@ -117,6 +119,7 @@ export function useSubirAlbaran({ fechaPorDefecto, creador, onCreado }: UseSubir
     setIncidencias([]);
     setVinculosAutomaticos([]);
     setProveedorIdentificado(null);
+    setParcialDecidido(null);
   };
 
   const handleFile = (f: File | null) => {
@@ -209,6 +212,17 @@ export function useSubirAlbaran({ fechaPorDefecto, creador, onCreado }: UseSubir
     }
     const decididas = new Set(decisiones.map((d) => d.incidenciaId));
     const porId = new Map(incidencias.map((i) => [i.id, i]));
+    // Documento incompleto decidido en la mesa: "cargar solo esta parte" (con motivo)
+    // viaja al guardado; "descartar" vuelve al principio (hay que hacer la otra foto).
+    for (const d of decisiones) {
+      if (porId.get(d.incidenciaId)?.tipo !== "documento_incompleto") continue;
+      if (d.accion === "cargar_parcial") setParcialDecidido({ motivo: d.motivo?.trim() || "" });
+      if (d.accion === "descartar") {
+        toast.info("Albarán descartado: hazle foto también a la página que falta y vuelve a subirlo.");
+        reset();
+        return;
+      }
+    }
     setLigadas((prev) => {
       const map = new Map(prev);
       for (const d of decisiones) {
@@ -345,13 +359,40 @@ export function useSubirAlbaran({ fechaPorDefecto, creador, onCreado }: UseSubir
     [lineas, ligadas],
   );
 
-  const guardar = (override?: { posibleDuplicadoDe: string; motivo: string }) => {
+  /**
+   * Documento incompleto (encargo Iván 17-ago): el OCR vio "SUMA Y SIGUE" o
+   * "pág. X de Y" con X < Y. Se caza AQUÍ, con el papel aún encima de la mesa —
+   * dos semanas después la hoja ya no aparece (caso Belmon 15378).
+   */
+  const documentoIncompleto = useMemo(
+    () =>
+      cabecera.continuaEnOtraPagina
+        ? {
+            sumaYSigue: cabecera.sumaYSigue,
+            paginaActual: cabecera.paginaActual,
+            paginasTotales: cabecera.paginasTotales,
+          }
+        : null,
+    [cabecera],
+  );
+
+  const guardar = (
+    override?: { posibleDuplicadoDe: string; motivo: string },
+    parcial?: { motivo: string },
+  ) => {
     if (!proveedor.trim()) {
       toast.error("Indica el proveedor del albarán");
       return;
     }
     if (!fecha) {
       toast.error("Indica la fecha del albarán");
+      return;
+    }
+    // Móvil lo pasa explícito; escritorio lo decidió en la mesa ("cargar solo esta parte").
+    const parcialEfectivo = parcial ?? parcialDecidido ?? undefined;
+    if (documentoIncompleto && !parcialEfectivo?.motivo.trim()) {
+      // Sin "insisto + motivo" no entra: la UI debe pedir la foto de la página que falta.
+      toast.error("A este albarán le falta al menos una página. Añade la foto o indica por qué lo cargas incompleto.");
       return;
     }
     if (!file) return;
@@ -395,6 +436,10 @@ export function useSubirAlbaran({ fechaPorDefecto, creador, onCreado }: UseSubir
         estado: ESTADO_REVISION,
         importacionId,
         duplicadoOverride: override ?? null,
+        documentoParcial:
+          documentoIncompleto && parcialEfectivo
+            ? { motivo: parcialEfectivo.motivo.trim(), paginasEsperadas: documentoIncompleto.paginasTotales }
+            : null,
       });
       if (!res.ok) {
         if ("duplicado" in res && res.duplicado) {
@@ -479,6 +524,9 @@ export function useSubirAlbaran({ fechaPorDefecto, creador, onCreado }: UseSubir
     ligadas,
     totalLineas,
     nReconocidas,
+    // Documento incompleto (SUMA Y SIGUE / pág. X de Y): se caza en la subida.
+    documentoIncompleto,
+    parcialDecidido,
     // PRP-074 — mesa de incidencias
     incidencias,
     incidenciasAbiertas: incidencias.filter((i) => i.estado === "abierta"),

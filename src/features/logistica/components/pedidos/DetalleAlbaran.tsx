@@ -10,7 +10,7 @@ import { AlbaranUploadModal } from "./AlbaranUploadModal";
 import { ComparativaAlbaran } from "./ComparativaAlbaran";
 import { calcularTotalesLineas, diaSemanaDeFechaISO, formatoHoraReparto, type Albaran, type Pedido, type AnalisisAlbaran, type DocumentoAdjunto } from "@/features/logistica/data/pedidos";
 import { formatFechaHoraEnZona } from "@/features/empresa/lib/zona-horaria";
-import { updateAlbaranNumeroProveedor } from "@/features/logistica/actions/albaranes-actions";
+import { updateAlbaranNumeroProveedor, marcarAlbaranCompleto } from "@/features/logistica/actions/albaranes-actions";
 import { adjuntarDocumentoDesdeImportacion } from "@/features/logistica/actions/importaciones-albaran-actions";
 import { analizarFotoContraPedido } from "@/features/logistica/lib/albaranes/analizar-foto-contra-pedido";
 import {
@@ -63,6 +63,9 @@ export function DetalleAlbaran({ albaran, pedidoOrigen, zonaHoraria, onBack, onE
   const [documentos, setDocumentos] = useState<DocumentoAdjunto[]>(albaran.documentos ?? []);
   const [showComparativa, setShowComparativa] = useState(false);
   const [numProv, setNumProv] = useState<string>(albaran.numeroProveedor ?? "");
+  // Documento incompleto (falta una página): estado local para reflejar "ya está completo".
+  const [parcial, setParcial] = useState<boolean>(albaran.documentoParcial === true);
+  const [completando, setCompletando] = useState(false);
 
   // ── Asistente (solo en Revisión): emparejar huérfanas + categorías para "crear producto" ──
   const [asistLineas, setAsistLineas] = useState<LineaEmparejada[] | null>(null);
@@ -356,6 +359,46 @@ export function DetalleAlbaran({ albaran, pedidoOrigen, zonaHoraria, onBack, onE
           </div>
         </CardContent>
       </Card>
+
+      {/* Documento incompleto: se guardó a sabiendas de que falta una página. Bloquea la
+          confirmación (RPC) hasta que se adjunten las páginas y alguien lo dé por completo. */}
+      {parcial && (
+        <Card className="border-red-300 dark:border-red-800">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base flex items-center gap-2">
+              <FileWarning className="h-4 w-4 text-red-600" />
+              A este albarán le falta al menos una página
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              Se guardó como incompleto
+              {albaran.paginasEsperadas ? ` (el papel decía ${albaran.paginasEsperadas} páginas)` : ""}.
+              No se puede confirmar hasta completarlo: adjunta la foto de la página que falta con
+              «Adjuntar» (arriba), añade sus líneas si procede, y márcalo como completo.
+            </p>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={completando}
+              onClick={async () => {
+                setCompletando(true);
+                const r = await marcarAlbaranCompleto(albaran.id);
+                setCompletando(false);
+                if (!r.ok) {
+                  toast.error(r.error ?? "No se pudo marcar como completo");
+                  return;
+                }
+                setParcial(false);
+                toast.success("Albarán marcado como completo: ya se puede confirmar");
+              }}
+            >
+              {completando ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+              Ya está completo
+            </Button>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Asistente de resolución (solo en Revisión) */}
       {enRevision && (

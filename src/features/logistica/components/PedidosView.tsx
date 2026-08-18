@@ -181,6 +181,8 @@ export function PedidosView() {
           creador: (r.creador as string) ?? "",
           ultimaActualizacion: (r.updated_at as string) ?? "",
           documentos: Array.isArray(r.documentos) ? (r.documentos as Albaran["documentos"]) : [],
+          documentoParcial: r.documento_parcial === true,
+          paginasEsperadas: typeof r.paginas_esperadas === "number" ? r.paginas_esperadas : null,
         }));
         setAlbaranes(mapped);
       }

@@ -8,7 +8,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Camera, Upload, FileImage, Loader2, X, CheckCircle2, HelpCircle } from "lucide-react";
+import { Camera, Upload, FileImage, Loader2, X, CheckCircle2, HelpCircle, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
@@ -19,6 +19,9 @@ import { formatNumero } from "@/shared/lib/numero";
 export function SubirAlbaranMobile() {
   const [exito, setExito] = useState<{ id: string; numero?: string } | null>(null);
   const [motivoOverride, setMotivoOverride] = useState("");
+  // Documento incompleto: la persona insiste en cargar solo esta parte (con motivo).
+  const [insisteParcial, setInsisteParcial] = useState(false);
+  const [motivoParcial, setMotivoParcial] = useState("");
 
   const {
     paso,
@@ -27,6 +30,7 @@ export function SubirAlbaranMobile() {
     fallo,
     duplicado,
     setDuplicado,
+    documentoIncompleto,
     cabecera,
     proveedor,
     setProveedor,
@@ -161,6 +165,68 @@ export function SubirAlbaranMobile() {
 
       {paso === "verificar" && (
         <div className="space-y-4">
+          {documentoIncompleto && (
+            <div className="space-y-3 rounded-2xl border-2 border-red-300 bg-red-50 p-3.5 dark:border-red-800 dark:bg-red-950/30">
+              <div className="flex items-start gap-2">
+                <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-red-600 dark:text-red-400" />
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-red-800 dark:text-red-300">
+                    A este albarán le falta al menos una página
+                  </p>
+                  <p className="mt-1 text-xs text-red-700 dark:text-red-400">
+                    {documentoIncompleto.sumaYSigue != null
+                      ? `El papel corta en "SUMA Y SIGUE: ${formatNumero(documentoIncompleto.sumaYSigue)} €"`
+                      : "El papel no llega al total final"}
+                    {documentoIncompleto.paginaActual && documentoIncompleto.paginasTotales
+                      ? ` (es la página ${documentoIncompleto.paginaActual} de ${documentoIncompleto.paginasTotales})`
+                      : ""}
+                    . Hazle foto ahora a la página siguiente y súbela como otro albarán: es el
+                    momento, con el papel delante. Si lo guardas así, quedará marcado como
+                    incompleto y no se podrá confirmar hasta completarlo.
+                  </p>
+                </div>
+              </div>
+              {!insisteParcial ? (
+                <div className="flex gap-2">
+                  <label className="flex flex-1 cursor-pointer items-center justify-center gap-2 rounded-xl bg-primary px-3 py-2.5 text-sm font-semibold text-primary-foreground shadow active:scale-[0.98]">
+                    <Camera className="h-4 w-4" /> Foto de la página siguiente
+                    <input
+                      type="file"
+                      accept="image/*"
+                      capture="environment"
+                      className="hidden"
+                      onChange={(e) => {
+                        const f = e.target.files?.[0] || null;
+                        if (!f) return;
+                        // Este albarán se descarta y se empieza con la página siguiente:
+                        // así cada página entra con su OCR y sus líneas completas.
+                        setInsisteParcial(false);
+                        setMotivoParcial("");
+                        reset();
+                        handleFile(f);
+                      }}
+                    />
+                  </label>
+                  <Button variant="outline" className="shrink-0" onClick={() => setInsisteParcial(true)}>
+                    Cargar así
+                  </Button>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <Input
+                    placeholder="¿Por qué lo cargas incompleto? (obligatorio)"
+                    value={motivoParcial}
+                    onChange={(e) => setMotivoParcial(e.target.value)}
+                    className="h-10 bg-background"
+                  />
+                  <Button variant="ghost" size="sm" className="h-8 px-2 text-xs" onClick={() => { setInsisteParcial(false); setMotivoParcial(""); }}>
+                    Mejor hago la foto
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
+
           <Card>
             <CardContent className="space-y-3 p-3.5">
               <div className="space-y-1">
@@ -269,7 +335,12 @@ export function SubirAlbaranMobile() {
                 <Button
                   className="flex-1"
                   disabled={!motivoOverride.trim()}
-                  onClick={() => guardar({ posibleDuplicadoDe: duplicado.id, motivo: motivoOverride.trim() })}
+                  onClick={() =>
+                    guardar(
+                      { posibleDuplicadoDe: duplicado.id, motivo: motivoOverride.trim() },
+                      documentoIncompleto && insisteParcial ? { motivo: motivoParcial } : undefined,
+                    )
+                  }
                 >
                   Registrar de todos modos
                 </Button>
@@ -279,11 +350,18 @@ export function SubirAlbaranMobile() {
 
           <div className="fixed inset-x-0 bottom-[calc(var(--nav-h)+0.75rem)] z-30 mx-auto max-w-screen-sm px-3">
             <div className="flex gap-2">
-              <Button variant="outline" className="shrink-0" onClick={reset}>
+              <Button variant="outline" className="shrink-0" onClick={() => { setInsisteParcial(false); setMotivoParcial(""); reset(); }}>
                 Empezar de nuevo
               </Button>
-              <Button className="flex-1 shadow-lg" size="lg" onClick={() => guardar()} disabled={!!duplicado}>
-                Guardar en Revisión
+              <Button
+                className="flex-1 shadow-lg"
+                size="lg"
+                onClick={() =>
+                  guardar(undefined, documentoIncompleto && insisteParcial ? { motivo: motivoParcial } : undefined)
+                }
+                disabled={!!duplicado || (!!documentoIncompleto && (!insisteParcial || !motivoParcial.trim()))}
+              >
+                {documentoIncompleto && insisteParcial ? "Guardar incompleto" : "Guardar en Revisión"}
               </Button>
             </div>
           </div>
