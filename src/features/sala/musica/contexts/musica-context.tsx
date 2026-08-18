@@ -164,9 +164,20 @@ export function MusicaProvider({ children }: { children: ReactNode }) {
     void recargar();
   }, [recargar, empresaId]);
 
-  // Locales de la empresa + local elegido por defecto.
+  /*
+    Locales de la empresa + local elegido por defecto.
+
+    NO se condiciona a `empresaId`: ese valor viene de `empresaActual.dbId`, que
+    solo existe cuando la empresa se ha hidratado desde la BD. Si tardaba o no
+    llegaba, los locales no se cargaban NUNCA, `localId` se quedaba vacío y al
+    pulsar Play saltaba "Elige primero el local" — sin selector donde elegirlo,
+    porque con un solo local está oculto a propósito. Bloqueo total.
+
+    El servidor ya sabe cuál es la empresa activa (cookie del selector), así que
+    la acción se puede pedir directamente. `empresaId` queda solo como disparador
+    para recargar al cambiar de empresa.
+  */
   useEffect(() => {
-    if (!empresaId) return;
     void (async () => {
       const res = await listLocales();
       if (!res.ok) return;
@@ -477,7 +488,14 @@ export function MusicaProvider({ children }: { children: ReactNode }) {
   const reproducirLista = useCallback(
     async (lista: ListaMusica, idxInicial = 0) => {
       if (!localId) {
-        toast.error("Elige primero el local");
+        // Con los locales ya cargados esto solo pasa si la empresa no tiene
+        // ninguno dado de alta. Se dice QUÉ hacer: un "elige el local" a secas
+        // deja al usuario buscando un selector que, con un solo local, ni existe.
+        toast.error(
+          locales.length === 0
+            ? "Esta empresa no tiene locales dados de alta. Créalo en Ajustes → Locales."
+            : "Elige primero el local",
+        );
         return;
       }
       if (!lista.disponibleAhora) {
@@ -515,7 +533,7 @@ export function MusicaProvider({ children }: { children: ReactNode }) {
       setReproduciendo(true);
       if (esAltavoz) await sonarCancion(lista, idxInicial);
     },
-    [localId, esAltavoz, sonarCancion],
+    [localId, locales.length, esAltavoz, sonarCancion],
   );
 
   const alternarPlay = useCallback(async () => {
