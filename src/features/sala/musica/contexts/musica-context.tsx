@@ -139,6 +139,21 @@ export function MusicaProvider({ children }: { children: ReactNode }) {
   const listasRef = useRef<ListaMusica[]>([]);
   const ultimoSeqRef = useRef(0);
 
+  /*
+    Volumen: hasta cuándo NO hacer caso a lo que llega de la BD.
+
+    Arrastrar la barra escribía el volumen en la base de datos, ese valor volvía
+    por realtime y pisaba la posición donde el usuario tenía el dedo: la barra
+    saltaba sola arriba y abajo mientras se movía.
+
+    Durante los 2 s siguientes a tocarla, manda lo que hace el usuario aquí y se
+    ignoran los ecos. Pasado ese rato vuelve a obedecer a la BD, para que un
+    cambio hecho desde otro equipo sí se refleje.
+  */
+  const volumenLocalHastaRef = useRef(0);
+  /** Escritura de volumen aplazada, para no mandar una por cada píxel movido. */
+  const volumenTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const cancionActual = listaActual?.canciones[indice] ?? null;
   // Este navegador solo es altavoz del local que está mirando.
   const esAltavoz = Boolean(localId && localAltavoz === localId);
@@ -375,7 +390,9 @@ export function MusicaProvider({ children }: { children: ReactNode }) {
       // Todos (altavoz y mandos) pintan lo mismo.
       setListaActual(lista);
       setIndice(idx);
-      setVolumen(vol);
+      // El volumen NO se pisa si el usuario acaba de tocar la barra: sería su
+      // propio eco volviendo y la barra saltaría mientras la arrastra.
+      if (Date.now() >= volumenLocalHastaRef.current) setVolumen(vol);
       setReproduciendo(Boolean(fila.reproduciendo));
       setAltavozNombre((fila.device_nombre as string | null) ?? null);
 
@@ -601,12 +618,32 @@ export function MusicaProvider({ children }: { children: ReactNode }) {
     async (v: number) => {
       if (!localId) return;
       const vol = Math.max(0, Math.min(100, Math.round(v)));
+
+      // Manda lo que hace el usuario: se pinta y se aplica al audio al momento,
+      // y durante 2 s se ignora lo que llegue de la BD (sería su propio eco).
       setVolumen(vol);
+      volumenLocalHastaRef.current = Date.now() + 2000;
       if (audioRef.current) audioRef.current.volume = vol / 100;
-      await enviarComando({ localId, comando: "volumen", volumen: vol });
+
+      // Arrastrar la barra dispara decenas de valores. Si cada uno escribiera en
+      // la BD, llegarían desordenados y el último en aplicarse podría no ser el
+      // que el usuario dejó puesto. Se guarda solo cuando suelta (250 ms sin
+      // moverse).
+      if (volumenTimerRef.current) clearTimeout(volumenTimerRef.current);
+      volumenTimerRef.current = setTimeout(() => {
+        void enviarComando({ localId, comando: "volumen", volumen: vol });
+      }, 250);
     },
     [localId],
   );
+
+  // Si se cierra la pantalla justo tras mover el volumen, el guardado aplazado
+  // se cancela: no debe escribir cuando ya no hay nadie mirando.
+  useEffect(() => {
+    return () => {
+      if (volumenTimerRef.current) clearTimeout(volumenTimerRef.current);
+    };
+  }, []);
 
   const cerrarMini = useCallback(() => {
     setMiniCerrado(true);

@@ -138,7 +138,7 @@ Cada local tiene **un único** equipo de altavoces, y se marca **una sola vez**:
 
 1. Entra en **Sala → Música** en ese ordenador.
 2. Si hay varios locales, elige el suyo en el selector.
-3. Activa el interruptor **«Este equipo es el de los altavoces»**.
+3. Activa el interruptor **«Sonar en este ordenador»**.
 
 Queda guardado. Ese es el único equipo donde suena la música de ese local.
 

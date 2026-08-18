@@ -13,7 +13,6 @@ import { useState } from "react";
 import { Play, Pause, SkipBack, SkipForward, Square, Volume2, VolumeX, Speaker, Store } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
@@ -204,35 +203,38 @@ export function ReproductorPrincipal() {
           </div>
 
           {/*
-            Modo altavoz. Solo el equipo conectado a los altavoces debe tenerlo
-            activado; el resto son mandos a distancia. Sin esto, la misma canción
-            sonaría a la vez en todos los ordenadores abiertos.
+            Dónde suena la música.
+
+            El texto anterior era "Este equipo es el de los altavoces" y no se
+            entendía: describía una configuración en vez de decir qué pasa al
+            activarlo. Ahora se lee como lo que hace —"Sonar en este ordenador"—
+            y la frase de debajo explica siempre la consecuencia, esté encendido
+            o apagado.
+
+            El interruptor no se puede quitar: es lo que decide POR QUÉ altavoces
+            sale la música. Sin él, o no suena en ningún sitio, o suena a la vez
+            en todos los ordenadores abiertos con unos segundos de desfase.
           */}
           <div className="flex items-center gap-2 shrink-0">
             <Speaker className={`h-4 w-4 ${esAltavoz ? "text-emerald-600" : "text-muted-foreground"}`} />
             <Label htmlFor="modo-altavoz" className="text-xs text-muted-foreground cursor-pointer">
-              Este equipo es el de los altavoces
+              Sonar en este ordenador
             </Label>
             <Switch
               id="modo-altavoz"
               checked={esAltavoz}
               onCheckedChange={(v) => void onCambiarAltavoz(v)}
             />
-            {esAltavoz && (
-              <Badge variant="secondary" className="text-[10px]">
-                Sonando aquí
-              </Badge>
-            )}
           </div>
         </div>
 
-        {!esAltavoz && (
-          <p className="text-xs text-muted-foreground">
-            {altavozNombre
-              ? "La música suena en el equipo conectado a los altavoces de este local. Desde aquí controlas lo que se escucha allí."
-              : "Ningún equipo está marcado como altavoz de este local todavía. Activa el interruptor en el ordenador conectado a los altavoces."}
-          </p>
-        )}
+        <p className="text-xs text-muted-foreground">
+          {esAltavoz
+            ? "La música sale por los altavoces de este ordenador. Desde otros equipos pueden cambiar lo que suena aquí."
+            : altavozNombre
+              ? "La música sale por otro ordenador del local. Desde aquí puedes cambiar lo que suena allí."
+              : "Actívalo en el ordenador conectado a los altavoces del local. Desde los demás podréis cambiar lo que suena en él."}
+        </p>
       </CardContent>
 
       {/*
