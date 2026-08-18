@@ -54,12 +54,35 @@ export function presignPutR2(
   contentType: string,
   expiresSeconds = 900,
 ): string {
+  return presignR2("PUT", key, expiresSeconds);
+}
+
+/**
+ * URL GET firmada para LEER un objeto directamente desde R2.
+ *
+ * Se usa para reproducir música: si el audio se sirviera por proxy a través de
+ * una función serverless, cada canción consumiría tiempo de función durante
+ * todo el rato que suena, y el `<audio>` perdería el soporte de saltar a un
+ * punto concreto (Range requests) que R2 sí da de forma nativa.
+ *
+ * La URL caduca (2 h por defecto): no es un enlace público permanente.
+ */
+export function presignGetR2(key: string, expiresSeconds = 7200): string {
+  return presignR2("GET", key, expiresSeconds);
+}
+
+/** Firma SigV4 en query-string, compartida por las URLs de subida y lectura. */
+function presignR2(
+  method: "PUT" | "GET",
+  key: string,
+  expiresSeconds: number,
+): string {
   const endpoint = process.env.R2_ENDPOINT!;
   const bucket = process.env.R2_BUCKET_NAME!;
   const accessKeyId = process.env.R2_ACCESS_KEY_ID!;
   const secretAccessKey = process.env.R2_SECRET_ACCESS_KEY!;
   if (!endpoint || !bucket || !accessKeyId || !secretAccessKey) {
-    throw new Error("Faltan variables R2_* para firmar la subida");
+    throw new Error("Faltan variables R2_* para firmar la petición");
   }
 
   const region = "auto";
@@ -95,7 +118,7 @@ export function presignPutR2(
   const canonicalHeaders = `host:${host}\n`;
   const payloadHash = "UNSIGNED-PAYLOAD";
   const canonicalRequest = [
-    "PUT",
+    method,
     canonicalUri,
     canonicalQuery,
     canonicalHeaders,

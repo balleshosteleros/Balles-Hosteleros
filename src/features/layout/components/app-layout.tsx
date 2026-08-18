@@ -53,6 +53,8 @@ import { RecordingOverlay } from "@/features/recorder/components/RecordingOverla
 import { CountdownOverlay } from "@/features/recorder/components/CountdownOverlay";
 import { WebcamPip } from "@/features/recorder/components/WebcamPip";
 import { RecorderProvider } from "@/features/recorder/contexts/recorder-context";
+import { MusicaProvider } from "@/features/sala/musica/contexts/musica-context";
+import { MiniReproductor } from "@/features/sala/musica/components/MiniReproductor";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { useViewMode } from "@/features/layout/contexts/view-mode-context";
 import {
@@ -203,6 +205,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <RecorderProvider>
+    <MusicaProvider>
     <SidebarProvider>
       <div className="h-screen flex w-full overflow-hidden">
         <AppSidebar />
@@ -231,6 +234,14 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 <span className="truncate">{headerLabel}</span>
               </h1>
             )}
+            {/*
+              Mini reproductor: ocupa el hueco libre junto al título del módulo,
+              a la izquierda del resto de herramientas. Solo se pinta cuando hay
+              música sonando; el resto del tiempo no existe y ese espacio vuelve
+              a la cabecera.
+            */}
+            {showUi && <MiniReproductor />}
+
             <div className="ml-auto flex items-center gap-2 md:gap-3 shrink-0">
               {showUi && (
                 <>
@@ -510,6 +521,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       <CountdownOverlay />
       <WebcamPip />
     </SidebarProvider>
+    </MusicaProvider>
     </RecorderProvider>
   );
 }

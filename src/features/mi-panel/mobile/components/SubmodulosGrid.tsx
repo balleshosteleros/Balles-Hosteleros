@@ -53,6 +53,19 @@ const RUTA_MOVIL: Record<string, string> = {
   "/logistica/pedidos": "/m/pedidos",
 };
 
+/**
+ * Submódulos que NO se muestran en el teléfono.
+ *
+ * MÚSICA es de ordenador a propósito: la música del local suena en el equipo
+ * conectado a los altavoces, y ese equipo nunca es un móvil. Enseñar aquí la
+ * pantalla completa (subir canciones, horarios, biblioteca) solo invitaría a
+ * intentar poner música desde el teléfono, que es justo lo que no queremos.
+ *
+ * Ojo: esto oculta la ENTRADA de la rejilla, no el mini reproductor de la barra
+ * superior, que ya es solo de escritorio por su propio `hidden lg:flex`.
+ */
+const OCULTOS_EN_MOVIL = new Set<string>(["/sala/musica"]);
+
 interface Props {
   deptoKey: string;
 }
@@ -67,9 +80,9 @@ export function SubmodulosGrid({ deptoKey }: Props) {
     if (!section) return [];
     // Los mismos submódulos que el sidebar, solo se reapunta el destino de los
     // que tienen pantalla de móvil propia.
-    return section.items.map((it) =>
-      RUTA_MOVIL[it.url] ? { ...it, url: RUTA_MOVIL[it.url] } : it,
-    );
+    return section.items
+      .filter((it) => !OCULTOS_EN_MOVIL.has(it.url))
+      .map((it) => (RUTA_MOVIL[it.url] ? { ...it, url: RUTA_MOVIL[it.url] } : it));
   }, [section]);
 
   const permitido = useMemo(() => {

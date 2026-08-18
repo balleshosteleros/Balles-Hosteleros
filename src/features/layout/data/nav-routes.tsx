@@ -6,7 +6,7 @@ import {
   Gift, Crown, Network, PercentDiamond, TrendingUp, FolderOpen, Calendar,
   Timer, UserRoundSearch, Euro, Megaphone, Package, FileArchive, Files,
   KeyRound, Gavel, FileUp, ShoppingCart, Warehouse, FlaskConical, GraduationCap,
-  UtensilsCrossed, BookOpen, Contact, Thermometer, Sparkles, FileSearch, PenLine,
+  UtensilsCrossed, BookOpen, Contact, Thermometer, Sparkles, FileSearch, PenLine, Music,
   CheckCircle2, BarChart3, Landmark, Tag, Zap, ContactRound, Heart, UserPlus,
   Apple, CreditCard, Presentation, QrCode, Link2, Globe, Send, Wallet, Fingerprint,
   Inbox, FileSignature, Trophy, UserCircle, LayoutDashboard, FileQuestion,
@@ -114,6 +114,7 @@ export const salaSubs: SubItem[] = [
   { title: "RESERVAS", url: "/sala/reservas", icon: BookOpen },
   { title: "CUPONES", url: "/sala/cupones", icon: Gift },
   { title: "CLIENTES", url: "/sala/clientes", icon: Contact },
+  { title: "MÚSICA", url: "/sala/musica", icon: Music },
 ];
 
 export const cocinaSubs: SubItem[] = [
