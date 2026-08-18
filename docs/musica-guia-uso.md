@@ -78,10 +78,17 @@ listas que quieras.
    Ambiente tranquilo o Fin de semana.
 4. Guarda.
 
-Para meterle canciones, pulsa el icono de lista en su tarjeta:
+Para ver y editar sus canciones, **pulsa el nombre de la lista**:
 
 - **Añadir desde la biblioteca** — busca y añade lo que ya está subido.
 - **Subir a esta lista** — sube archivos nuevos que entran directos en ella.
+
+**Quitar canciones.** Cada canción tiene dos botones, y hacen cosas distintas:
+
+| Botón | Qué hace |
+|---|---|
+| **Flecha** | La saca de *esta* lista, pero sigue en la biblioteca para usarla en otras. No libera espacio. |
+| **Papelera** | La borra **del todo**: desaparece de todas las listas, se elimina el archivo y se libera el espacio. Pide confirmación porque no tiene vuelta atrás — habría que volver a subirla. |
 
 **Favoritas:** pulsa la estrella de la tarjeta. Las favoritas salen las primeras,
 y el botón *Favoritas* de la barra filtra solo esas. Es lo que el equipo usa a

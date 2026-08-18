@@ -9,7 +9,16 @@
 
 import { useState, useMemo, useRef } from "react";
 import { toast } from "sonner";
-import { Play, Plus, Trash2, Upload, Loader2, Search, Music2 } from "lucide-react";
+import {
+  Play,
+  Plus,
+  Trash2,
+  Upload,
+  Loader2,
+  Search,
+  Music2,
+  CornerUpRight,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -25,8 +34,10 @@ import { subirCanciones } from "@/features/sala/musica/lib/subir-canciones";
 import {
   anadirCancionesALista,
   quitarCancionDeLista,
+  borrarCancion,
 } from "@/features/sala/musica/actions/musica-actions";
-import type { ListaMusica } from "@/features/sala/musica/types";
+import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
+import type { ListaMusica, Cancion } from "@/features/sala/musica/types";
 
 /** Segundos → "m:ss". Devuelve "" si no se pudo leer la duración del archivo. */
 function formatearDuracion(seg: number): string {
@@ -46,6 +57,7 @@ export function DetalleLista({
   onOpenChange: (v: boolean) => void;
 }) {
   const { biblioteca, puedeGestionar, recargar, reproducirLista } = useMusica();
+  const { confirm, dialog: dialogoConfirmacion } = useConfirmDelete();
   const [busqueda, setBusqueda] = useState("");
   const [subiendo, setSubiendo] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -83,6 +95,28 @@ export function DetalleLista({
       toast.error(res.error ?? "No se pudo quitar");
       return;
     }
+    await recargar();
+  }
+
+  /**
+   * Borra la canción de verdad: desaparece de TODAS las listas y su archivo se
+   * elimina del almacenamiento. Se confirma porque no tiene vuelta atrás —
+   * habría que volver a subir el archivo.
+   */
+  async function onEliminar(c: Cancion) {
+    const ok = await confirm({
+      title: "Eliminar canción",
+      description: `«${c.titulo}» se borrará de todas las listas y se eliminará el archivo. Tendrías que volver a subirlo.`,
+      confirmLabel: "Eliminar",
+    });
+    if (!ok) return;
+
+    const res = await borrarCancion(c.id);
+    if (!res.ok) {
+      toast.error(res.error ?? "No se pudo eliminar");
+      return;
+    }
+    toast.success("Canción eliminada");
     await recargar();
   }
 
@@ -197,17 +231,42 @@ export function DetalleLista({
                     <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
                       {formatearDuracion(c.duracionSeg)}
                     </span>
+                    {/*
+                      Dos acciones distintas y fáciles de confundir, por eso van
+                      separadas y con nombre propio:
+
+                      · QUITAR (flecha) → sale de esta lista pero sigue en la
+                        biblioteca, lista para otras listas. No libera espacio.
+                      · ELIMINAR (papelera) → borra el archivo de verdad, de
+                        todas las listas, y libera el espacio que ocupaba.
+
+                      Antes solo existía la papelera y hacía lo primero: parecía
+                      que borraba y en realidad el archivo seguía consumiendo
+                      cuota sin que nadie lo viera.
+                    */}
                     {puedeGestionar && (
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7 shrink-0"
-                        onClick={() => void onQuitar(c.id)}
-                        title="Quitar de la lista"
-                        aria-label="Quitar de la lista"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
+                      <>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 shrink-0"
+                          onClick={() => void onQuitar(c.id)}
+                          title="Quitar de esta lista (la canción sigue en la biblioteca)"
+                          aria-label="Quitar de esta lista"
+                        >
+                          <CornerUpRight className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 shrink-0 text-muted-foreground hover:text-destructive"
+                          onClick={() => void onEliminar(c)}
+                          title="Eliminar la canción del todo y liberar espacio"
+                          aria-label="Eliminar canción"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </>
                     )}
                   </li>
                 ))}
@@ -282,6 +341,8 @@ export function DetalleLista({
           )}
         </div>
       </DialogContent>
+
+      {dialogoConfirmacion}
     </Dialog>
   );
 }

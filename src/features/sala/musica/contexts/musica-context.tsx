@@ -173,6 +173,22 @@ export function MusicaProvider({ children }: { children: ReactNode }) {
       setBiblioteca(res.biblioteca);
       setUso(res.uso);
       setPuedeGestionar(res.puedeGestionar);
+
+      /*
+        La lista que se está reproduciendo es una copia en memoria: si alguien
+        borra una canción o la quita de la lista, esa copia seguiría apuntando a
+        algo que ya no existe y el reproductor intentaría cargar un archivo
+        eliminado. Se refresca con la versión recién traída.
+      */
+      setListaActual((actual) => {
+        if (!actual) return actual;
+        const puesta = res.listas.find((l) => l.id === actual.id);
+        if (!puesta) return null; // la lista entera ya no está
+        // El índice se recorta para no quedar fuera de rango si la lista
+        // encogió (antes iba por la 7 y ahora solo quedan 5 canciones).
+        setIndice((i) => Math.min(i, Math.max(0, puesta.canciones.length - 1)));
+        return puesta;
+      });
     }
     setCargando(false);
   }, []);
