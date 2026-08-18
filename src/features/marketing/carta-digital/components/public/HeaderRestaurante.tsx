@@ -22,21 +22,26 @@ export function HeaderRestaurante({ empresa }: { empresa: CartaEmpresaPublica })
       <div
         className="relative h-[42vh] min-h-[280px] w-full overflow-hidden sm:h-[52vh] sm:min-h-[360px]"
         style={{
-          backgroundColor: "var(--carta-primario)",
+          // Con imagen de cabecera el fondo solo rellena lo que sobra: en negro
+          // pasa desapercibido. Sin imagen, el degradado de marca lo tapa entero.
+          backgroundColor: empresa.carta_hero_url ? "#0a0a0a" : "var(--carta-primario)",
         }}
       >
         {empresa.carta_hero_url ? (
           <div
             className="absolute inset-0 transition-transform duration-100 ease-out will-change-transform"
-            style={{ transform: `translateY(${heroParallax}px) scale(1.06)`, opacity: heroOpacity }}
+            style={{ transform: `translateY(${heroParallax}px)`, opacity: heroOpacity }}
           >
+            {/* `object-contain` y sin `scale`: estas cabeceras suelen ser el
+                rótulo del negocio, y recortarlas se comía parte del nombre.
+                El fondo en negro rellena lo que sobra sin bandas raras. */}
             <Image
               src={empresa.carta_hero_url}
               alt={empresa.nombre}
               fill
               priority
               sizes="100vw"
-              className="object-cover"
+              className="object-contain"
             />
           </div>
         ) : (
@@ -86,28 +91,39 @@ export function HeaderRestaurante({ empresa }: { empresa: CartaEmpresaPublica })
           }}
         />
 
+        {/* Cuando hay imagen de cabecera, esa imagen SUELE llevar ya el nombre
+            y el logotipo del negocio (es la que usan en redes). Repetirlos
+            encima tapaba la imagen y dejaba el nombre ilegible sobre el
+            propio rótulo. Con foto: la imagen habla sola y el nombre queda
+            para lectores de pantalla. Sin foto: el nombre es el protagonista. */}
         <div className="relative z-10 flex h-full flex-col items-center justify-center px-6 text-center">
-          {empresa.logo_alt_url || empresa.logo_url ? (
-            <div className="mb-4 flex h-16 w-16 items-center justify-center overflow-hidden rounded-full bg-white/10 ring-1 ring-white/30 backdrop-blur sm:h-20 sm:w-20">
-              <Image
-                src={(empresa.logo_alt_url ?? empresa.logo_url) as string}
-                alt={empresa.nombre}
-                width={80}
-                height={80}
-                className="h-full w-full object-contain p-1.5"
-              />
-            </div>
-          ) : null}
+          {empresa.carta_hero_url ? (
+            <h1 className="sr-only">{empresa.nombre}</h1>
+          ) : (
+            <>
+              {empresa.logo_alt_url || empresa.logo_url ? (
+                <div className="mb-4 flex h-16 w-16 items-center justify-center overflow-hidden rounded-full bg-white/10 ring-1 ring-white/30 backdrop-blur sm:h-20 sm:w-20">
+                  <Image
+                    src={(empresa.logo_alt_url ?? empresa.logo_url) as string}
+                    alt=""
+                    width={80}
+                    height={80}
+                    className="h-full w-full object-contain p-1.5"
+                  />
+                </div>
+              ) : null}
 
-          <h1
-            className="text-4xl font-light tracking-[0.08em] text-white drop-shadow-lg sm:text-6xl"
-            style={{ fontFamily: "var(--carta-fuente-titulos)", letterSpacing: "0.06em" }}
-          >
-            {empresa.nombre}
-          </h1>
+              <h1
+                className="text-4xl font-light tracking-[0.08em] text-white drop-shadow-lg sm:text-6xl"
+                style={{ fontFamily: "var(--carta-fuente-titulos)", letterSpacing: "0.06em" }}
+              >
+                {empresa.nombre}
+              </h1>
+            </>
+          )}
 
           {empresa.carta_descripcion ? (
-            <p className="mt-3 max-w-xl text-sm font-light italic leading-relaxed text-white/85 sm:text-base">
+            <p className="mt-3 max-w-xl text-sm font-light italic leading-relaxed text-white/85 drop-shadow sm:text-base">
               {empresa.carta_descripcion}
             </p>
           ) : null}

@@ -54,7 +54,10 @@ export function formatFechaHoraEnZona(
  */
 export function formatFechaEnZona(
   iso: string | null | undefined,
-  tz: string,
+  // Admite ausencia: la empresa activa puede no estar resuelta en el primer
+  // render. `tzSegura` ya cae al valor por defecto, así que exigirla aquí solo
+  // servía para reventar la pantalla en ese instante.
+  tz: string | null | undefined,
   opts?: Intl.DateTimeFormatOptions,
 ): string {
   if (!iso) return "";

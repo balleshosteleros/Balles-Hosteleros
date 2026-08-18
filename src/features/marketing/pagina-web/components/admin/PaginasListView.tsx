@@ -69,6 +69,7 @@ export function PaginasListView() {
   const { empresaActual } = useEmpresa();
   const [items, setItems] = useState<PaginaWeb[]>([]);
   const [loading, setLoading] = useState(true);
+  const [errorCarga, setErrorCarga] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [filtros, setFiltros] = useState<ToolbarFiltroActivo[]>([]);
   const [orden, setOrden] = useState<ToolbarOrdenActivo | null>(null);
@@ -81,12 +82,26 @@ export function PaginasListView() {
   const [confirmar, setConfirmar] = useState<{ id: string; nombre: string } | null>(null);
   const [showConfig, setShowConfig] = useState(false);
 
+  // El `finally` no es opcional: sin él, cualquier excepción (red caída,
+  // sesión caducada, error del servidor) dejaba la pantalla girando el spinner
+  // para siempre, sin mensaje y sin forma de salir salvo recargar.
   const cargar = useCallback(async () => {
     setLoading(true);
-    const res = await listarPaginas();
-    if (res.ok) setItems(res.data);
-    else toast.error(res.error ?? "Error al cargar páginas");
-    setLoading(false);
+    setErrorCarga(null);
+    try {
+      const res = await listarPaginas();
+      if (res.ok) setItems(res.data);
+      else {
+        setErrorCarga(res.error ?? "No se pudieron cargar las páginas.");
+        toast.error(res.error ?? "No se pudieron cargar las páginas.");
+      }
+    } catch (err) {
+      console.error("[pagina-web][PaginasListView] cargar:", err);
+      setErrorCarga("No se pudieron cargar las páginas. Comprueba la conexión.");
+      toast.error("No se pudieron cargar las páginas.");
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => {
@@ -192,7 +207,11 @@ export function PaginasListView() {
       th: <TableHead key="actualizada">Actualizada</TableHead>,
       td: (p) => (
         <TableCell key="actualizada" className="text-sm text-muted-foreground whitespace-nowrap">
-          {formatFechaEnZona(p.updated_at, empresaActual.zonaHoraria, {
+          {/* `empresaActual` puede no estar aún resuelta en el primer render
+              (el contexto la deriva de una lista que llega por red). Sin este
+              opcional, la fila entera reventaba y la pantalla se quedaba
+              cargando sin decir nada. */}
+          {formatFechaEnZona(p.updated_at, empresaActual?.zonaHoraria, {
             day: "2-digit",
             month: "short",
             year: "numeric",
@@ -265,7 +284,20 @@ export function PaginasListView() {
                 </TableCell>
               </TableRow>
             )}
-            {!loading && filtered.length === 0 && (
+            {!loading && errorCarga && (
+              <TableRow>
+                <TableCell colSpan={6} className="text-center py-12">
+                  <div className="flex flex-col items-center gap-3">
+                    <Globe className="h-10 w-10 text-muted-foreground/40" />
+                    <p className="text-sm text-muted-foreground">{errorCarga}</p>
+                    <Button variant="outline" onClick={cargar}>
+                      Reintentar
+                    </Button>
+                  </div>
+                </TableCell>
+              </TableRow>
+            )}
+            {!loading && !errorCarga && filtered.length === 0 && (
               <TableRow>
                 <TableCell colSpan={6} className="text-center py-12">
                   <div className="flex flex-col items-center gap-3">
