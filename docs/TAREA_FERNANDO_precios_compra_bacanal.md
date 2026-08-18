@@ -1,7 +1,131 @@
 # TAREA para Fernando — Precios de compra de BACANAL (cuando bajes el repo)
 
-> **De:** Iván (vía Claude) · **Fecha:** 2026-06-30 · **Actualizado:** 2026-08-17 · **Prioridad:** media
+> **De:** Iván (vía Claude) · **Fecha:** 2026-06-30 · **Actualizado:** 2026-08-18 · **Prioridad:** media
 > Léelo al hacer `git pull` y reconciliar.
+
+---
+
+## 🔴 ENCARGO 18-AGO — FERNANDO, EMPIEZA POR AQUÍ: falta el 40% del catálogo y no hay forma de meterlo desde el software
+
+**Cómo salió esto:** estaba montando la carta digital de HABANA (otra cosa) y me saltó que
+había 4 cócteles de autor en la carta que no existían como producto en el sistema. Pregunté,
+tiré del hilo, **y no he tocado nada**. Solo he mirado. Lo dejo escrito para que lo ejecutes tú.
+
+**Por qué no he metido los productos yo:** porque hoy **no tenemos forma de dar de alta
+productos como tal**. Lo estamos haciendo desde el propio Claude, escribiendo en la base de
+datos. Eso no es una solución: cuando el cliente tenga solo el software, se queda tirado.
+Prefiero que quede el problema bien planteado a taparlo a mano otra vez.
+
+### Lo que hemos medido (contra la API de Ágora en vivo, 18-ago)
+
+| | Ágora tiene activos | Nosotros tenemos | **Faltan** |
+|---|---|---|---|
+| **BACANAL** (almacén 4) | 639 | 603 (388 de Ágora + 215 a mano) | **252** |
+| **HABANA** (almacén 1) | 639 | 492 (371 de Ágora + 121 a mano) | **269** |
+
+Ágora devuelve **el mismo catálogo de 639 para las dos** (catálogo único, almacén distinto por
+empresa). Falta **~40% en ambas**.
+
+Entre lo que falta hay cosas que SE SIRVEN HOY: Ensaladilla Rusa, Ensalada de Burrata,
+Croquetas de jamón ibérico, Tortilla trufada, Vieiras con kimchi, y cócteles (Fiesta del
+Caribe 1787, Desliz de cobra 1788, Danza Macabra 1789, Boom-Boom 2429, Big Boy, Love 66,
+Blue Yellow, Kafayayo…). **Están activos y con precio correcto en Ágora** — Danza Macabra
+9,75 €, que es justo el de la carta. El dato estaba ahí y no llegó.
+
+**Consecuencia real:** se compra `Prebeach Danza Macabra`, se sirve y se cobra, pero como el
+cóctel no existe como producto de venta en el sistema, ese preparado **entra en almacén y no
+sale nunca**. El stock no puede cuadrar.
+
+### Por qué faltan (pista, NO confirmado)
+
+`scripts/agora/migrar-catalogo.mjs:28` filtra por `DeletionDate`, y el volcado parece haberse
+hecho **solo sobre productos con stock registrado en el almacén** (39% de los importados
+tienen stock frente a 21% de los que no). Encaja con que la migración se pensara para
+inventario, no para carta. **No lo doy por cierto: confírmalo antes de actuar.**
+
+Lo que sí está descartado: no es que estén borrados en Ágora (los 4 cócteles tienen
+`DeletionDate = null`, `SaleableAsMain = true` y precio en la lista 1).
+
+### ⚠️ Cuidado: he creado 6 productos a mano que ya existían en Ágora
+
+Antes de saber todo esto, Iván me pidió crear los platos de comida de la carta de Habana y los
+di de alta a mano (categoría "Delicateses para cenar"): Burger Balles Hosteleros, Ensaladilla
+rusa con tobiko, Gyozas de pollo al curry, Bao-cadillo de oreja, Alitas BBQ asiática,
+Torreznos con guacamole. **Tienen `agora_id` vacío.**
+
+**Si reimportas sin limpiarlos primero, saldrán duplicados.** Localízalos así:
+
+```sql
+select id, nombre, precio_venta from productos
+where empresa_id = '00000000-0000-0000-0000-000000000001'
+  and categoria = 'Delicateses para cenar' and agora_id is null;
+```
+
+Lo suyo es borrarlos y dejar que entren por importación con su `agora_id`. Mea culpa.
+
+### El encargo de verdad: un importador de catálogo que el CLIENTE pueda usar
+
+Esto es lo importante, y va más allá de Ágora.
+
+**Hoy no existe.** El botón "Sincronizar" de Logística (`AgoraSyncStatus.tsx` →
+`syncVentasAgoraAction`) **sincroniza VENTAS, no el catálogo**. Traer productos es un script de
+terminal que lanza alguien de Balles. Un cliente solo con el software **no puede**.
+
+**El problema de fondo (palabras de Iván):** cada software es un estilo. Leer documentos de
+cualquier tipo e interpretar cómo debe migrarse conlleva **hacer propuestas** y que todos los
+datos que necesitemos se cumplan, y los que no necesitemos desaparezcan si no van a tener
+valor luego — o poner un **límite claro** hasta dónde leemos y memorizamos para el volcado.
+
+Y el punto que se nos escapó al plantearlo: **NOSOTROS TENEMOS TRES TIPOS DE PRODUCTO
+(compra / venta / elaboración). ÁGORA NO.** Ágora tiene "productos" con atributos sueltos:
+
+| Señal en Ágora | Cuántos | A qué tipo apuntaría |
+|---|---|---|
+| Con precio de venta > 0 | 246 | → venta |
+| Sin precio de venta | 393 | → compra |
+| Con `Addins` (componentes) | 68 | → ¿elaboración? |
+| Con `CostPrice` > 0 | 532 | mezcla de todo |
+
+**Los grupos se solapan** (hay productos con precio de venta Y componentes). Así que traducir
+"producto de Ágora" a nuestro modelo **no es leer un dato, es interpretarlo**, y equivocarse
+tiene coste: marcar como compra algo que era elaboración lo deja sin escandallo y el coste
+sale mal para siempre.
+
+**Lo que hay que construir, entonces, no es un importador que trague y vuelque, sino uno que
+PROPONGA y el cliente APRUEBE:**
+
+> "He leído 639 productos de tu TPV. Propongo 246 como venta (tienen precio), 393 como compra
+> (sin precio) y 68 me chirrían porque tienen componentes: ¿son elaboraciones? De cada uno
+> traigo nombre, precio, coste, familia, IVA y alérgenos. Lo demás (color de botón, tiempo de
+> preparación, códigos de barras) lo descarto salvo que me digas que lo quieres."
+
+Con el **límite de lectura escrito y visible**, no como caja negra.
+
+**Decisión que Iván tiene que tomar antes de arrancar** (está pendiente, no la des por hecha):
+¿el importador es **solo para Ágora** (mapeo de campos concreto y preciso) o para **cualquier
+TPV/fichero** que traiga un cliente nuevo (capa que lee CSV/Excel/API desconocida, propone
+equivalencias con IA y las enseña para aprobar)? Lo segundo es lo que resuelve el negocio, y
+es bastante más trabajo.
+
+### Lo que falta además, para que el cliente sea autónomo
+
+Lo he verificado en el código, no es de oídas:
+
+| Función | Estado |
+|---|---|
+| Importar catálogo desde el TPV | ❌ No existe UI. Solo `scripts/agora/migrar-catalogo.mjs` |
+| Llenar la carta desde Productos | ⚠️ Acción escrita (`carta-digital/actions/sincronizar-actions.ts`), **sin botón** |
+| Ocultar plato (sin fecha / por temporada) | ⚠️ Lógica y BD listas (`ocultar-actions.ts`), **sin pantalla** |
+| Aviso "tu TPV tiene productos que no están aquí" | ❌ No existe — **por eso nadie se enteró de los 269** |
+| Marcar "visible en carta digital" | ✅ Hecho, en la ficha del producto |
+
+**Lo que NO hay que hacer:** seguir metiendo productos a mano desde Claude. Cada cosa que
+arreglamos por detrás es una que el cliente no podrá arreglar solo.
+
+**Pendiente de Iván, no lo ejecutes sin respuesta:** hay que decidir si se importan los 269/252
+enteros (deja el catálogo cuadrado con el TPV, pero mete lo que ya no se use) o solo los que
+están en carta. Hace falta ver antes la lista agrupada por familia y con ventas recientes,
+para distinguir producto vivo de residuo del TPV.
 
 ---
 
