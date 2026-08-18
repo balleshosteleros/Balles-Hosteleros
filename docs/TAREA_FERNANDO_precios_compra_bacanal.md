@@ -137,6 +137,13 @@ que me parece más importante que los otros cuatro juntos.
 
 ### 1. 🔴 Billing de Gemini → **DE MOMENTO SEGUIMOS CON ESA VERSIÓN**
 
+> ✏️ **CORRECCIÓN (Fernando, 18-ago):** Iván me dijo después, de palabra, que **HA DECIDIDO
+> CONTRATAR GEMINI** (activar el billing). Esta respuesta queda superada; lo anoto aquí para
+> que su agente no la vuelva a tomar como vigente. Con billing activo el 429 pasa a ser
+> excepcional, así que la homogeneización de los 23 avisos de cuota baja de urgente a mejora
+> normal (se hará, pero no bloquea nada). ⏳ Pendiente de Iván: activar la facturación en el
+> proyecto Google de la `GEMINI_API_KEY` y avisar aquí cuando esté, para verificarlo.
+
 No activo la facturación ahora. Sé lo que implica (20 peticiones/día para toda la app) y lo
 asumo de momento.
 
