@@ -5,6 +5,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { findOrLinkClienteSala, type CampoDistinto } from "@/features/sala/lib/cliente-link";
 import { asignarMesaAutomatica } from "@/features/sala/planos/lib/asignacion-mesa";
 import { validarMotorWebReserva } from "@/features/sala/lib/motor-web-validar";
+import { notificarReservaCreada } from "@/lib/email/reservas/notificar-creada";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 const inputSchema = z.object({
@@ -240,6 +241,45 @@ export async function crearReservaPublicaAction(
     console.error("[reservar-publica] sin local para empresa", empresa.id);
     return { ok: false, error: "No podemos aceptar reservas online ahora mismo. Llámanos para reservar." };
   }
+  // CUPO DEL TURNO (manda sobre las mesas).
+  // Si la empresa tiene tope de comensales, ese límite va PRIMERO: aunque
+  // queden mesas, si el turno está al tope no se acepta. Si no hay tope,
+  // `try_reservar_slot` concede siempre y el límite real son las mesas.
+  //
+  // Se reserva ANTES de la mesa y con el mismo candado que usa Google, para
+  // que ambos canales cuenten sobre el mismo saldo y no se vendan dos veces
+  // las mismas plazas.
+  const { data: cupoOk, error: errCupo } = await admin.rpc("try_reservar_slot", {
+    p_empresa_id: empresa.id,
+    p_fecha: data.fecha,
+    p_turno: turno,
+    p_personas: data.personas,
+  });
+  if (errCupo) {
+    console.error("[reservar-publica] try_reservar_slot:", errCupo);
+    return { ok: false, error: "No pudimos procesar la reserva. Inténtalo de nuevo o llámanos." };
+  }
+  if (cupoOk !== true) {
+    return {
+      ok: false,
+      error: `Lo sentimos, ya no quedan plazas para el ${data.fecha} a las ${data.hora.slice(0, 5)}. Prueba con otra hora o llámanos.`,
+    };
+  }
+
+  /** El cupo ya está apartado: hay que devolverlo si la reserva no llega a crearse. */
+  const liberarCupo = async () => {
+    try {
+      await admin.rpc("liberar_slot_manual", {
+        p_empresa_id: empresa.id,
+        p_fecha: data.fecha,
+        p_turno: turno,
+        p_personas: data.personas,
+      });
+    } catch (e) {
+      console.error("[reservar-publica] liberar_slot_manual:", e);
+    }
+  };
+
   const asign = await asignarMesaAutomatica(admin as unknown as SupabaseClient, {
     localId: local.id as string,
     empresaId: empresa.id,
@@ -248,6 +288,7 @@ export async function crearReservaPublicaAction(
     personas: data.personas,
   });
   if (!asign.ok || !asign.mesa) {
+    await liberarCupo();
     // Diferenciamos config rota vs. lleno para que se vea en logs.
     if (!asign.ok && asign.razon === "SIN_PLANO_ACTIVO") {
       console.error("[reservar-publica] sin plano activo en local", local.id);
@@ -267,7 +308,10 @@ export async function crearReservaPublicaAction(
   const mesaFinal: string = asign.mesa.codigo;
   const zonaFinal: string | null = asign.mesa.zonaNombre || null;
 
+  // Id generado en código para poder disparar el correo sin releer la fila.
+  const reservaId = crypto.randomUUID();
   const { error } = await admin.from("reservas").insert({
+    id: reservaId,
     empresa_id: empresa.id,
     cliente_id: cliente.id,
     // Snapshot de la reserva = datos canónicos de la ficha (los originales mandan).
@@ -294,6 +338,10 @@ export async function crearReservaPublicaAction(
     pago_pendiente: pagoPendienteFinal,
   });
   if (error) {
+    // Sin fila de reserva, el trigger de cancelación nunca devolvería el cupo:
+    // hay que soltarlo a mano o el turno quedaría ocupado por una reserva
+    // que no existe.
+    await liberarCupo();
     console.error("[reservar-publica] insert error:", error);
     return { ok: false, error: "No pudimos crear la reserva" };
   }
@@ -302,6 +350,18 @@ export async function crearReservaPublicaAction(
     p_cliente_id: cliente.id,
     p_fecha: data.fecha,
   });
+
+  // Correo de confirmación. La reserva web se acepta al momento (o se rechaza
+  // por falta de mesa), así que el cliente debe recibir su confirmación igual
+  // que si la hubiéramos dado de alta desde Sala.
+  //
+  // Fire-and-forget A PROPÓSITO: la reserva YA está creada y es válida. Si el
+  // correo falla (SMTP caído, plantilla desactivada), no se puede deshacer la
+  // reserva ni tiene sentido mostrarle un error al cliente: se registra en log
+  // y el restaurante la ve igualmente en Sala.
+  notificarReservaCreada(reservaId).catch((e) =>
+    console.error("[reservar-publica] mail CONFIRMACION:", e),
+  );
 
   return {
     ok: true,

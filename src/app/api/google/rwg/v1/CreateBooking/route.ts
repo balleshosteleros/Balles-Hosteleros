@@ -10,6 +10,8 @@ import type {
 } from "@/features/canales-google-rwg/lib/proto-types";
 import { RWG_EXTERNAL_ORIGEN, RWG_ORIGEN_CANONICO } from "@/features/canales-google-rwg/lib/proto-types";
 import { validarMotorWebReserva } from "@/features/sala/lib/motor-web-validar";
+import { notificarReservaCreada } from "@/lib/email/reservas/notificar-creada";
+import { asignarMesaAutomatica } from "@/features/sala/planos/lib/asignacion-mesa";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -174,6 +176,54 @@ export const POST = withMetricas("CreateBooking", async (request) => {
     };
   }
 
+  /** Devuelve el cupo apartado cuando la reserva no llega a crearse. */
+  const liberarCupo = async () => {
+    try {
+      await admin.rpc("liberar_slot_manual", {
+        p_empresa_id: merchant.empresaId, p_fecha: fecha, p_turno: turno, p_personas: personas,
+      });
+    } catch { /* fail-open */ }
+  };
+
+  // 4b. MESA. El cupo del turno manda, pero si además no hay mesa (ni unión)
+  // para ese grupo, la reserva no se puede servir: se rechaza igual que en la
+  // web. Sin esto Google aceptaba reservas con el local lleno de mesas.
+  const { data: localRwg } = await admin
+    .from("locales")
+    .select("id")
+    .eq("empresa_id", merchant.empresaId)
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+
+  let mesaAsignada: string | null = null;
+  let zonaAsignada: string | null = null;
+  if (localRwg) {
+    const asign = await asignarMesaAutomatica(admin, {
+      localId: localRwg.id as string,
+      empresaId: merchant.empresaId,
+      fecha,
+      hora,
+      personas,
+    });
+    if (asign.ok && asign.mesa) {
+      mesaAsignada = asign.mesa.codigo;
+      zonaAsignada = asign.mesa.zonaNombre || null;
+    } else if (asign.ok && !asign.mesa) {
+      // Sin mesa ni unión disponible: para Google esto es "slot lleno".
+      await liberarCupo();
+      const body: CreateBookingResponse = {
+        booking_failure: { cause: "SLOT_UNAVAILABLE", description: "no table available" },
+      };
+      return {
+        status: 200, body,
+        metrica: { empresaId: merchant.empresaId, causa: "sin_mesa_libre" },
+      };
+    }
+    // asign.ok === false (plano mal configurado): no bloqueamos la reserva por
+    // un fallo de configuración nuestro; entra sin mesa y se asigna en Sala.
+  }
+
   // 5. Cliente
   const linkRes = await findOrLinkClienteSala(admin, {
     empresaId: merchant.empresaId,
@@ -184,11 +234,7 @@ export const POST = withMetricas("CreateBooking", async (request) => {
   });
   if (!linkRes.ok) {
     // Liberar slot (best-effort): el trigger no aplica aquí porque no hay reserva todavía.
-    try {
-      await admin.rpc("liberar_slot_manual", {
-        p_empresa_id: merchant.empresaId, p_fecha: fecha, p_turno: turno, p_personas: personas,
-      });
-    } catch { /* fail-open */ }
+    await liberarCupo();
     const body: CreateBookingResponse = {
       booking_failure: { cause: "BOOKING_FAILURE_REASON_UNSPECIFIED", description: "cannot link client" },
     };
@@ -224,6 +270,8 @@ export const POST = withMetricas("CreateBooking", async (request) => {
     personas,
     turno,
     estado: "CONFIRMADA",
+    mesa: mesaAsignada,
+    zona: zonaAsignada,
     notas: data.notes ?? null,
     origen: RWG_ORIGEN_CANONICO,
     external_id: reservaId,
@@ -273,6 +321,14 @@ export const POST = withMetricas("CreateBooking", async (request) => {
 
   // 8. Visita del cliente
   await registrarVisitaCliente(admin, cliente.id, fecha);
+
+  // 8b. Correo de confirmación. Una reserva que entra por Google es una
+  // reserva confirmada del restaurante, así que el cliente recibe el mismo
+  // correo que si hubiera reservado por la web. Fire-and-forget: Google espera
+  // una respuesta rápida y la reserva ya es válida aunque el correo falle.
+  notificarReservaCreada(reservaId).catch((e) =>
+    console.error("[rwg][CreateBooking] mail CONFIRMACION:", e),
+  );
 
   // 9. OK
   const body: CreateBookingResponse = {

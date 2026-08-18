@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getZonaHorariaEmpresa } from "@/features/empresa/lib/empresa-server";
+import { asignarMesaAutomatica } from "@/features/sala/planos/lib/asignacion-mesa";
 import type {
   BatchAvailabilityLookupRequest,
   SlotTimeAvailability,
@@ -104,7 +105,34 @@ export async function lookupAvailability(
     ocupacionByKey.set(slotKey({ fecha: row.fecha, turno: row.turno as "COMIDA" | "CENA" }), row.personas_total);
   }
 
-  // 5. Construir respuesta en el orden del request.
+  // 5. ¿Hay MESA (o unión) para ese grupo a esa hora?
+  //
+  // El cupo del turno manda cuando existe, pero no basta: sin tope de
+  // comensales `cupo_efectivo` devuelve NULL y Google vería sitio infinito
+  // aunque no quede una sola mesa. Aquí se comprueba mesa real, que es el
+  // límite efectivo cuando no hay cupo configurado.
+  const localId = await primerLocal(admin, empresaId);
+  const hayMesaPorSlot = new Map<number, boolean>();
+  if (localId) {
+    await Promise.all(
+      enriched.map(async (e, i) => {
+        const { hora } = startSecToFechaHora(slots[i].start_sec, tz);
+        const asign = await asignarMesaAutomatica(admin, {
+          localId,
+          empresaId,
+          fecha: e.fecha,
+          hora,
+          personas: e.partySize,
+        });
+        // Solo un "no hay mesa" explícito cierra el slot. Si el plano está mal
+        // configurado (asign.ok === false) NO cerramos Google por un fallo
+        // nuestro: manda el cupo.
+        hayMesaPorSlot.set(i, asign.ok ? Boolean(asign.mesa) : true);
+      }),
+    );
+  }
+
+  // 6. Construir respuesta en el orden del request.
   return enriched.map((e, i) => {
     const k = slotKey(e);
     const cupo = cupoByKey.get(k);
@@ -113,13 +141,30 @@ export async function lookupAvailability(
     const total = ilimitado ? 999 : cupo;
     const libres = ilimitado ? 999 : Math.max(0, cupo - ocupado);
     const cabeParty = libres >= e.partySize;
+    const hayMesa = hayMesaPorSlot.get(i) ?? true;
+    const disponible = cabeParty && hayMesa;
     return {
       slot_time: slots[i],
-      spots_open: cabeParty ? libres : 0,
+      spots_open: disponible ? libres : 0,
       spots_total: total,
-      availability: cabeParty
+      availability: disponible
         ? "SPOTS_AVAILABILITY_AVAILABLE"
         : "SPOTS_AVAILABILITY_UNAVAILABLE",
     };
   });
+}
+
+/** Primer local de la empresa (hoy las empresas tienen uno). */
+async function primerLocal(
+  admin: SupabaseClient,
+  empresaId: string,
+): Promise<string | null> {
+  const { data } = await admin
+    .from("locales")
+    .select("id")
+    .eq("empresa_id", empresaId)
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  return (data?.id as string | undefined) ?? null;
 }
