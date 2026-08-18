@@ -11,7 +11,7 @@ import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { Bloque } from "../../types";
 import type { PaginaContexto } from "./PaginaPublicaShell";
-import { Loader2 } from "lucide-react";
+import { Loader2, AtSign, ThumbsUp, MessageCircle, Music2 } from "lucide-react";
 
 export function BloquePublico({
   bloque,
@@ -47,7 +47,59 @@ export function BloquePublico({
       return <VideoPublico bloque={bloque} />;
     case "bolsa_inspectores":
       return <BolsaInspectoresPublico bloque={bloque} contexto={contexto} />;
+    case "redes":
+      return <RedesPublico bloque={bloque} contexto={contexto} />;
   }
+}
+
+/**
+ * Redes sociales. Los enlaces NO viven en el bloque: se leen de la empresa
+ * (Ajustes → datos generales), así que actualizar Instagram allí cambia la web
+ * sin tocar el editor. Si la empresa no tiene ninguna red, el bloque no se
+ * pinta en vez de dejar un hueco vacío.
+ */
+function RedesPublico({
+  bloque,
+  contexto,
+}: {
+  bloque: Extract<Bloque, { tipo: "redes" }>;
+  contexto?: PaginaContexto;
+}) {
+  const { titulo, descripcion } = bloque.datos;
+  const redes = contexto?.redes ?? null;
+
+  const items = [
+    { clave: "instagram", label: "Instagram", url: redes?.instagram ?? null, Icon: AtSign },
+    { clave: "facebook", label: "Facebook", url: redes?.facebook ?? null, Icon: ThumbsUp },
+    { clave: "tiktok", label: "TikTok", url: redes?.tiktok ?? null, Icon: Music2 },
+    { clave: "whatsapp", label: "WhatsApp", url: redes?.whatsapp ?? null, Icon: MessageCircle },
+  ].filter((r) => Boolean(r.url));
+
+  if (!items.length) return null;
+
+  return (
+    <section className="py-14 px-4 text-center" id="redes">
+      <h2 className="text-3xl font-bold">{titulo}</h2>
+      {descripcion ? (
+        <p className="mt-3 text-muted-foreground max-w-xl mx-auto">{descripcion}</p>
+      ) : null}
+      <div className="mt-7 flex flex-wrap items-center justify-center gap-3">
+        {items.map(({ clave, label, url, Icon }) => (
+          <a
+            key={clave}
+            href={url as string}
+            target="_blank"
+            rel="noreferrer noopener"
+            className="inline-flex items-center gap-2 rounded-full border px-6 py-3 font-semibold transition-transform hover:scale-105"
+            style={{ borderColor: "var(--pw-primario)", color: "var(--pw-primario)" }}
+          >
+            <Icon className="h-5 w-5" />
+            {label}
+          </a>
+        ))}
+      </div>
+    </section>
+  );
 }
 
 function BolsaInspectoresPublico({
@@ -538,6 +590,33 @@ function FormularioPublico({
               )}
             </div>
           ))}
+          {/* Consentimiento obligatorio: el formulario recoge nombre, correo y
+              teléfono. Sin casilla marcada por el usuario y sin enlace a la
+              política, la recogida no cumple el RGPD (arts. 6.1.a y 13).
+              La casilla NO puede venir premarcada: el consentimiento tiene que
+              ser un acto afirmativo. */}
+          <label className="flex items-start gap-2 pt-1 text-xs leading-snug opacity-80">
+            <input
+              type="checkbox"
+              name="consentimiento_privacidad"
+              required
+              disabled={enviando}
+              className="mt-0.5 shrink-0"
+            />
+            <span>
+              He leído y acepto la{" "}
+              <a
+                href="/politica-de-privacidad"
+                target="_blank"
+                rel="noreferrer noopener"
+                className="underline underline-offset-2"
+              >
+                política de privacidad
+              </a>
+              .
+            </span>
+          </label>
+
           {errorMsg ? (
             <p className="text-sm text-red-600">{errorMsg}</p>
           ) : null}
@@ -557,12 +636,31 @@ function FormularioPublico({
 function MapaPublico({ bloque }: { bloque: Extract<Bloque, { tipo: "mapa" }> }) {
   const { lat, lng, zoom, direccion_texto } = bloque.datos;
   const src = `https://www.openstreetmap.org/export/embed.html?bbox=${lng - 0.01},${lat - 0.01},${lng + 0.01},${lat + 0.01}&layer=mapnik&marker=${lat},${lng}&zoom=${zoom}`;
+  // `id="mapa"`: el pie enlaza la dirección con href="#mapa". Sin este ancla el
+  // enlace no hacía nada al pulsarlo.
+  // El enlace "Cómo llegar" abre la app de mapas del móvil, que es lo que de
+  // verdad quiere quien está buscando el sitio desde la calle.
+  const comoLlegar = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+    direccion_texto || `${lat},${lng}`,
+  )}`;
+
   return (
-    <section className="py-12 px-4 max-w-6xl mx-auto">
+    <section className="py-12 px-4 max-w-6xl mx-auto scroll-mt-24" id="mapa">
       <h2 className="text-3xl font-bold text-center mb-4">Cómo llegar</h2>
-      <p className="text-center text-muted-foreground mb-6">{direccion_texto}</p>
+      <p className="text-center text-muted-foreground mb-3">{direccion_texto}</p>
+      <p className="text-center mb-6">
+        <a
+          href={comoLlegar}
+          target="_blank"
+          rel="noreferrer noopener"
+          className="text-sm font-semibold underline underline-offset-2"
+          style={{ color: "var(--pw-primario)" }}
+        >
+          Abrir en Google Maps
+        </a>
+      </p>
       <div className="aspect-[16/9] w-full rounded-md overflow-hidden border">
-        <iframe src={src} className="w-full h-full" title="Mapa" />
+        <iframe src={src} className="w-full h-full" title="Mapa" loading="lazy" />
       </div>
     </section>
   );
@@ -577,13 +675,23 @@ function FooterPublico({ bloque }: { bloque: Extract<Bloque, { tipo: "footer" }>
           <div key={i}>
             <h4 className="font-semibold mb-3">{c.titulo}</h4>
             <ul className="space-y-1 text-sm opacity-80">
-              {c.items.map((it, j) => (
-                <li key={j}>
-                  <a href={it.href} className="hover:underline">
-                    {it.label}
-                  </a>
-                </li>
-              ))}
+              {c.items.map((it, j) => {
+                // Los horarios se guardan como items con href="#" porque no
+                // llevan a ninguna parte. Pintados como enlace, al pulsarlos
+                // saltaban al principio de la página; van como texto.
+                const esTexto = !it.href || it.href === "#";
+                return (
+                  <li key={j}>
+                    {esTexto ? (
+                      <span>{it.label}</span>
+                    ) : (
+                      <a href={it.href} className="hover:underline">
+                        {it.label}
+                      </a>
+                    )}
+                  </li>
+                );
+              })}
             </ul>
           </div>
         ))}

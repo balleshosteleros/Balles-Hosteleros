@@ -46,6 +46,18 @@ function isHexColor(c: string | null | undefined): c is string {
   return !!c && /^#[0-9a-fA-F]{3,8}$/.test(c);
 }
 
+/** "2026-08-20" → "jueves, 20 de agosto". Fecha civil: sin zona horaria. */
+function formatearFechaLarga(iso: string): string {
+  if (!iso) return "";
+  const [y, m, d] = iso.split("-").map(Number);
+  const fecha = new Date(y, (m ?? 1) - 1, d);
+  return fecha.toLocaleDateString("es-ES", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+  });
+}
+
 export function ReservaPublicaForm({
   empresaSlug,
   empresaNombre,
@@ -75,6 +87,9 @@ export function ReservaPublicaForm({
   const [avisoDatos, setAvisoDatos] = useState<AvisoDatosOriginales | null>(null);
   const [match, setMatch] = useState<MatchCliente | null>(null);
   const [cuponAplicado, setCuponAplicado] = useState<{ codigo: string; tituloCliente: string } | null>(null);
+  // Consentimiento RGPD: la reserva recoge nombre, teléfono y correo. Arranca
+  // SIN marcar — un consentimiento premarcado no es válido (art. 4.11 RGPD).
+  const [aceptaPrivacidad, setAceptaPrivacidad] = useState(false);
 
   const accent = isHexColor(colorPrimario) ? colorPrimario : "#0a0a0a";
   const onAccent = isHexColor(colorTexto) ? colorTexto : "#ffffff";
@@ -95,6 +110,7 @@ export function ReservaPublicaForm({
     fecha &&
     hora &&
     ticketValido &&
+    aceptaPrivacidad &&
     cuponValido !== false;
 
   const styleVars = useMemo(
@@ -207,8 +223,28 @@ export function ReservaPublicaForm({
             <CalendarCheck className="h-10 w-10" style={{ color: accent }} />
           </div>
           <div className="space-y-1">
-            <h1 className="text-2xl font-bold tracking-tight">¡Reserva recibida!</h1>
-            <p className="text-zinc-600">Te confirmamos en breve por teléfono.</p>
+            <h1 className="text-2xl font-bold tracking-tight">¡Reserva confirmada!</h1>
+            <p className="text-zinc-600">Tu mesa está reservada. Te esperamos.</p>
+          </div>
+          {/* Resumen de lo reservado: la mesa ya está asignada, así que
+              podemos afirmar día, hora y comensales sin condicionales. */}
+          <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-4 text-left">
+            <dl className="space-y-1.5 text-sm">
+              <div className="flex justify-between gap-4">
+                <dt className="text-zinc-500">Día</dt>
+                <dd className="font-semibold text-zinc-900">{formatearFechaLarga(fecha)}</dd>
+              </div>
+              <div className="flex justify-between gap-4">
+                <dt className="text-zinc-500">Hora</dt>
+                <dd className="font-semibold text-zinc-900 tabular-nums">{hora}</dd>
+              </div>
+              <div className="flex justify-between gap-4">
+                <dt className="text-zinc-500">Comensales</dt>
+                <dd className="font-semibold text-zinc-900">
+                  {personas} {personas === 1 ? "persona" : "personas"}
+                </dd>
+              </div>
+            </dl>
           </div>
           {cuponAplicado && (
             <div className="text-left rounded-xl border border-amber-200 bg-amber-50 p-4">
@@ -314,80 +350,82 @@ export function ReservaPublicaForm({
             />
           )}
 
-          {/* Paso 1 — Comensales. Va primero porque la disponibilidad de horas
-              depende de cuánta gente viene. */}
-          <div>
-            <Label className="text-zinc-700 flex items-center gap-1.5">
-              <Users className="h-3.5 w-3.5" />
-              Personas *
-            </Label>
-            <div className="flex items-center gap-2 mt-1 rounded-lg border bg-zinc-50/50 p-1.5">
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="h-11 w-11 sm:h-9 sm:w-9 rounded-md hover:bg-white text-xl"
-                onClick={() => setPersonas((n) => Math.max(1, n - 1))}
-                aria-label="Restar persona"
-              >
-                <span className="leading-none">−</span>
-              </Button>
-              <div className="flex-1 flex items-center justify-center gap-2 text-xl font-bold text-zinc-900 tabular-nums">
-                {personas}
-                <span className="text-xs font-medium text-zinc-500 uppercase tracking-wider">
-                  {personas === 1 ? "persona" : "personas"}
-                </span>
+          {/* Bloque "qué reservas": comensales → fecha → hora. Agrupado en un
+              panel para separarlo visualmente de los datos de contacto.
+              Las personas van primero porque la disponibilidad depende de
+              cuánta gente viene. */}
+          <div className="rounded-2xl border border-zinc-200/80 bg-zinc-50/60 p-4 space-y-4">
+            <div>
+              <Label className="text-zinc-700 flex items-center gap-1.5">
+                <Users className="h-3.5 w-3.5" />
+                Personas *
+              </Label>
+              <div className="flex items-center gap-2 mt-1.5 rounded-xl border border-zinc-200 bg-white p-1.5">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-11 w-11 sm:h-9 sm:w-9 rounded-lg hover:bg-zinc-100 text-xl"
+                  onClick={() => setPersonas((n) => Math.max(1, n - 1))}
+                  aria-label="Restar persona"
+                >
+                  <span className="leading-none">−</span>
+                </Button>
+                <div className="flex-1 flex items-center justify-center gap-2 text-xl font-bold text-zinc-900 tabular-nums">
+                  {personas}
+                  <span className="text-xs font-medium text-zinc-500 uppercase tracking-wider">
+                    {personas === 1 ? "persona" : "personas"}
+                  </span>
+                </div>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-11 w-11 sm:h-9 sm:w-9 rounded-lg hover:bg-zinc-100 text-xl"
+                  onClick={() => setPersonas((n) => Math.min(50, n + 1))}
+                  aria-label="Sumar persona"
+                >
+                  <span className="leading-none">+</span>
+                </Button>
               </div>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="h-11 w-11 sm:h-9 sm:w-9 rounded-md hover:bg-white text-xl"
-                onClick={() => setPersonas((n) => Math.min(50, n + 1))}
-                aria-label="Sumar persona"
-              >
-                <span className="leading-none">+</span>
-              </Button>
+            </div>
+
+            <div>
+              <Label htmlFor="fecha" className="text-zinc-700 flex items-center gap-1.5">
+                <Calendar className="h-3.5 w-3.5" />
+                Fecha *
+              </Label>
+              <Input
+                id="fecha"
+                type="date"
+                value={fecha}
+                onChange={(e) => setFecha(e.target.value)}
+                min={new Date().toISOString().split("T")[0]}
+                required
+                className="mt-1.5 h-12 sm:h-11 rounded-xl border-zinc-200 bg-white text-base sm:text-sm"
+              />
+            </div>
+
+            {/* Horas REALES del restaurante para esa fecha y comensales.
+                Sustituye al iframe de CoverManager: el cliente elige un pase
+                abierto en vez de escribir una hora que luego rechazaríamos. */}
+            <div>
+              <Label className="text-zinc-700 flex items-center gap-1.5 mb-1.5">
+                <Clock className="h-3.5 w-3.5" />
+                Hora *
+              </Label>
+              <SelectorDisponibilidad
+                empresaSlug={empresaSlug}
+                fecha={fecha}
+                personas={personas}
+                horaSeleccionada={hora}
+                onSelect={setHora}
+                accent={accent}
+              />
             </div>
           </div>
 
-          {/* Paso 2 — Fecha */}
-          <div>
-            <Label htmlFor="fecha" className="text-zinc-700 flex items-center gap-1.5">
-              <Calendar className="h-3.5 w-3.5" />
-              Fecha *
-            </Label>
-            <Input
-              id="fecha"
-              type="date"
-              value={fecha}
-              onChange={(e) => setFecha(e.target.value)}
-              min={new Date().toISOString().split("T")[0]}
-              required
-              className="mt-1 h-12 sm:h-10 text-base sm:text-sm"
-            />
-          </div>
-
-          {/* Paso 3 — Horas REALES del restaurante para esa fecha y comensales.
-              Sustituye al iframe de CoverManager: el cliente pulsa un pase
-              abierto en vez de escribir una hora que luego rechazaríamos. */}
-          <div>
-            <Label className="text-zinc-700 flex items-center gap-1.5 mb-2">
-              <Clock className="h-3.5 w-3.5" />
-              Hora *
-            </Label>
-            <SelectorDisponibilidad
-              empresaSlug={empresaSlug}
-              fecha={fecha}
-              personas={personas}
-              horaSeleccionada={hora}
-              onSelect={setHora}
-              accent={accent}
-              onAccent={onAccent}
-            />
-          </div>
-
-          {/* Paso 4 — Datos de contacto */}
+          {/* Datos de contacto */}
           <div className="grid grid-cols-2 gap-3">
             <div>
               <Label htmlFor="nombre" className="text-zinc-700">Nombre *</Label>
@@ -397,7 +435,7 @@ export function ReservaPublicaForm({
                 onChange={(e) => setNombre(e.target.value)}
                 required
                 autoComplete="given-name"
-                className="mt-1 h-12 sm:h-10 text-base sm:text-sm"
+                className="mt-1.5 h-12 sm:h-11 rounded-xl border-zinc-200 text-base sm:text-sm"
               />
             </div>
             <div>
@@ -407,7 +445,7 @@ export function ReservaPublicaForm({
                 value={apellidos}
                 onChange={(e) => setApellidos(e.target.value)}
                 autoComplete="family-name"
-                className="mt-1 h-12 sm:h-10 text-base sm:text-sm"
+                className="mt-1.5 h-12 sm:h-11 rounded-xl border-zinc-200 text-base sm:text-sm"
               />
             </div>
           </div>
@@ -426,7 +464,7 @@ export function ReservaPublicaForm({
               onChange={(e) => setTelefono(e.target.value)}
               required
               placeholder="612 345 678"
-              className="mt-1 h-12 sm:h-10 text-base sm:text-sm"
+              className="mt-1.5 h-12 sm:h-11 rounded-xl border-zinc-200 text-base sm:text-sm"
             />
           </div>
 
@@ -443,7 +481,7 @@ export function ReservaPublicaForm({
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="tu@email.com"
-              className="mt-1 h-12 sm:h-10 text-base sm:text-sm"
+              className="mt-1.5 h-12 sm:h-11 rounded-xl border-zinc-200 text-base sm:text-sm"
             />
           </div>
 
@@ -478,10 +516,32 @@ export function ReservaPublicaForm({
             </div>
           )}
 
+          <label className="flex items-start gap-2 pt-1 text-xs leading-snug text-zinc-500">
+            <input
+              type="checkbox"
+              checked={aceptaPrivacidad}
+              onChange={(e) => setAceptaPrivacidad(e.target.checked)}
+              disabled={enviando}
+              className="mt-0.5 shrink-0"
+            />
+            <span>
+              He leído y acepto la{" "}
+              <a
+                href="/politica-de-privacidad"
+                target="_blank"
+                rel="noreferrer noopener"
+                className="underline underline-offset-2 hover:text-zinc-700"
+              >
+                política de privacidad
+              </a>
+              .
+            </span>
+          </label>
+
           <Button
             type="submit"
             size="lg"
-            className="w-full font-semibold text-base h-14 sm:h-12 shadow-md hover:shadow-lg transition-shadow mt-2"
+            className="w-full font-semibold text-base h-14 sm:h-12 rounded-xl shadow-md hover:shadow-lg transition-shadow mt-2"
             disabled={!valido || enviando}
             style={{ background: accent, color: onAccent }}
           >
@@ -490,7 +550,7 @@ export function ReservaPublicaForm({
         </form>
 
         <footer className="text-center mt-6 text-xs text-zinc-400">
-          <p>Reserva sujeta a confirmación · {empresaNombre}</p>
+          <p>Confirmación inmediata · {empresaNombre}</p>
         </footer>
       </div>
 
