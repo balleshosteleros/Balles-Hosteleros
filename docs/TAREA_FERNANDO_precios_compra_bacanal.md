@@ -5,6 +5,48 @@
 
 ---
 
+## ✅ FERNANDO (18-ago): tu encargo 5 HECHO — el albarán incompleto se caza EN LA SUBIDA
+
+Iván: leídas tus respuestas del 17-ago (gracias por anotar y parar) y tu encargo del 18-ago
+(el 40% del catálogo, contesto abajo). Lo primero que he atacado es tu punto 5, que marcaste
+como prioridad alta y estaba a medias desde el PRP-074. **Desplegado en producción**
+(`c910f197`), exactamente con la forma que pediste:
+
+1. **En el móvil, la subida PARA ahí mismo.** Si el OCR ve "SUMA Y SIGUE" o "pág. X de Y"
+   con X < Y, en la pantalla de verificar aparece una tarjeta roja: *"A este albarán le
+   falta al menos una página — el papel corta en SUMA Y SIGUE: 694,39 €"*, con el botón
+   **"Foto de la página siguiente"** (abre la cámara directamente) delante de todo. El
+   botón "Guardar en Revisión" queda deshabilitado.
+2. **Solo si la persona insiste** ("Cargar así" + motivo obligatorio) entra, y entra
+   **marcado como incompleto** (`documento_parcial`, con el motivo en la traza y las páginas
+   esperadas si el papel las decía).
+3. **Marcado así NO se puede confirmar**: la confirmación transaccional lo bloquea con el
+   mensaje *"A este albarán le falta al menos una página… Añade la foto de la página que
+   falta y márcalo como completo antes de confirmar"* (probado en vivo contra prod, revertido).
+4. **Para completarlo**: en el detalle de escritorio sale la tarjeta roja con el botón
+   **"Ya está completo"** (tras adjuntar la foto de la página que faltaba). Queda en la traza
+   quién lo dio por completo. En la bandeja móvil esos albaranes salen con badge
+   **INCOMPLETO** en rojo, en vez de REVISIÓN.
+5. **En escritorio**, la decisión "Cargar solo esta parte" de tu mesa **por fin viaja al
+   guardado** (antes se anotaba y no hacía nada) y "Descartar" vuelve al principio para
+   hacer las dos fotos.
+
+Sobre cómo se sube la página que falta: **cada página entra como su propia foto** (la
+segunda hoja se sube con "Foto de la página siguiente" y el OCR la lee con sus líneas). Es
+lo más fiable con el papel delante y evita inventar un "álbum" de páginas dentro de un
+albarán. Si en el uso real prefieres que las hojas se junten en un solo albarán, se puede
+hacer después — dímelo tras probarlo con el próximo de varias páginas.
+
+Detalle técnico: `use-subir-albaran.ts` (`documentoIncompleto`, `parcialDecidido`),
+`SubirAlbaranMobile.tsx`, `SubirAlbaranDialog.tsx`, `DetalleAlbaran.tsx`,
+`AlbaranesEnRevision.tsx`, `createAlbaran` (`documentoParcial`), `marcarAlbaranCompleto`,
+migración `20260818200000_confirmacion_bloquea_documento_parcial.sql` (aplicada).
+
+Lo siguiente en mi cola, en tu orden: el aviso de empresa equivocada (mismo patrón), y el
+diagnóstico del catálogo faltante (respuesta a tu encargo del 18-ago, más abajo).
+
+---
+
 ## 🔴 ENCARGO 18-AGO — FERNANDO, EMPIEZA POR AQUÍ: falta el 40% del catálogo y no hay forma de meterlo desde el software
 
 **Cómo salió esto:** estaba montando la carta digital de HABANA (otra cosa) y me saltó que
