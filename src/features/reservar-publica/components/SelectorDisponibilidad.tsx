@@ -1,16 +1,24 @@
 "use client";
 
 /**
- * Selector de hora al estilo del módulo de CoverManager: el cliente NO escribe
- * una hora, pulsa una de las que el restaurante tiene realmente abiertas.
+ * Selector de hora en desplegable, con la disponibilidad REAL del restaurante.
  *
- * Las horas se agrupan por turno (Comida / Cena) y las que están completas se
- * muestran deshabilitadas en vez de ocultarse, para que se vea que ese pase
- * existe pero está lleno.
+ * El cliente no escribe una hora: elige una de las que están abiertas. Las
+ * horas completas siguen listadas pero deshabilitadas, para que se vea que ese
+ * pase existe y está lleno (en vez de desaparecer sin explicación).
  */
 
 import { useEffect, useState } from "react";
-import { Loader2 } from "lucide-react";
+import { Loader2, Clock } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   listarDisponibilidadPublicaAction,
   type SlotPublico,
@@ -23,7 +31,6 @@ interface Props {
   horaSeleccionada: string | null;
   onSelect: (hora: string) => void;
   accent: string;
-  onAccent: string;
 }
 
 export function SelectorDisponibilidad({
@@ -33,7 +40,6 @@ export function SelectorDisponibilidad({
   horaSeleccionada,
   onSelect,
   accent,
-  onAccent,
 }: Props) {
   const [slots, setSlots] = useState<SlotPublico[]>([]);
   const [cargando, setCargando] = useState(true);
@@ -63,15 +69,15 @@ export function SelectorDisponibilidad({
   // Si la hora elegida deja de estar disponible (cambio de fecha o de
   // comensales), se deselecciona para no enviar una hora inválida.
   useEffect(() => {
-    if (!horaSeleccionada) return;
+    if (!horaSeleccionada || cargando) return;
     const sigueValida = slots.some((s) => s.hora === horaSeleccionada && s.disponible);
-    if (!sigueValida && !cargando) onSelect("");
+    if (!sigueValida) onSelect("");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slots, cargando]);
 
   if (cargando) {
     return (
-      <div className="flex items-center justify-center gap-2 py-8 text-sm text-zinc-500">
+      <div className="flex h-12 items-center gap-2 rounded-xl border border-zinc-200 bg-zinc-50 px-4 text-sm text-zinc-500">
         <Loader2 className="h-4 w-4 animate-spin" />
         Buscando horarios…
       </div>
@@ -80,7 +86,7 @@ export function SelectorDisponibilidad({
 
   if (!slots.length) {
     return (
-      <div className="rounded-lg border border-zinc-200 bg-zinc-50 px-4 py-6 text-center text-sm text-zinc-600">
+      <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-4 text-center text-sm text-amber-900">
         {mensaje ?? "No hay horarios disponibles para este día."}
       </div>
     );
@@ -93,46 +99,56 @@ export function SelectorDisponibilidad({
     ] as Array<{ clave: "COMIDA" | "CENA"; titulo: string; items: SlotPublico[] }>
   ).filter((g) => g.items.length > 0);
 
+  const libres = slots.filter((s) => s.disponible).length;
+
+  if (libres === 0) {
+    return (
+      <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-4 text-center text-sm text-amber-900">
+        No quedan mesas para {personas} {personas === 1 ? "persona" : "personas"} este día.
+        Prueba otra fecha.
+      </div>
+    );
+  }
+
   return (
-    <div className="space-y-4">
-      {grupos.map((g) => (
-        <div key={g.clave}>
-          <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-zinc-500">
-            {g.titulo}
-          </p>
-          <div className="grid grid-cols-4 gap-2">
-            {g.items.map((s) => {
-              const activa = horaSeleccionada === s.hora;
-              return (
-                <button
+    <div className="space-y-1.5">
+      <Select value={horaSeleccionada || undefined} onValueChange={onSelect}>
+        <SelectTrigger
+          className="h-12 rounded-xl border-zinc-200 bg-white text-base data-[placeholder]:text-zinc-400 sm:h-11 sm:text-sm"
+          style={horaSeleccionada ? { borderColor: accent } : undefined}
+        >
+          <span className="flex items-center gap-2">
+            <Clock className="h-4 w-4 shrink-0 text-zinc-400" />
+            <SelectValue placeholder="Elige una hora" />
+          </span>
+        </SelectTrigger>
+        <SelectContent className="max-h-72">
+          {grupos.map((g) => (
+            <SelectGroup key={g.clave}>
+              <SelectLabel className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">
+                {g.titulo}
+              </SelectLabel>
+              {g.items.map((s) => (
+                <SelectItem
                   key={`${g.clave}-${s.hora}`}
-                  type="button"
+                  value={s.hora}
                   disabled={!s.disponible}
-                  onClick={() => onSelect(s.hora)}
-                  title={s.motivo ?? undefined}
-                  className={[
-                    "h-11 rounded-lg border text-sm font-semibold transition-colors tabular-nums",
-                    s.disponible
-                      ? activa
-                        ? "border-transparent"
-                        : "border-zinc-200 bg-white text-zinc-800 hover:border-zinc-400"
-                      : "cursor-not-allowed border-zinc-100 bg-zinc-50 text-zinc-300 line-through",
-                  ].join(" ")}
-                  style={
-                    activa && s.disponible
-                      ? { background: accent, color: onAccent }
-                      : undefined
-                  }
+                  className="tabular-nums"
                 >
                   {s.hora}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      ))}
+                  {!s.disponible ? (
+                    <span className="ml-2 text-xs text-zinc-400">
+                      {s.motivo ?? "Completo"}
+                    </span>
+                  ) : null}
+                </SelectItem>
+              ))}
+            </SelectGroup>
+          ))}
+        </SelectContent>
+      </Select>
       <p className="text-xs text-zinc-400">
-        Las horas tachadas están completas para {personas}{" "}
+        {libres} {libres === 1 ? "hora disponible" : "horas disponibles"} para {personas}{" "}
         {personas === 1 ? "persona" : "personas"}.
       </p>
     </div>
