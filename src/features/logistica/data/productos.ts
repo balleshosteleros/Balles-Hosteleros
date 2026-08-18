@@ -131,6 +131,13 @@ export interface Producto {
   cartaTexto?: string | null;
   /** Estrella dorada en la carta digital. Se configura desde la ficha del producto de venta. */
   cartaDestacado?: boolean;
+  /**
+   * Interruptor maestro de la carta digital. Si está apagado, este producto no
+   * aparece en la carta ni se puede añadir desde ella, pase lo que pase.
+   * La ocultación puntual (hoy no hay, o entre dos fechas) se decide en la
+   * propia carta, no aquí.
+   */
+  visibleCarta?: boolean;
   alergenos: string[];
 }
 

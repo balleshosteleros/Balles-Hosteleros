@@ -40,13 +40,41 @@ export function HeaderRestaurante({ empresa }: { empresa: CartaEmpresaPublica })
             />
           </div>
         ) : (
-          <div
-            className="absolute inset-0 transition-opacity"
-            style={{
-              opacity: heroOpacity,
-              background: `radial-gradient(120% 80% at 50% 30%, var(--carta-acento) 0%, var(--carta-primario) 55%, #000 100%)`,
-            }}
-          />
+          // Sin foto de cabecera —lo normal al empezar— un degradado plano deja
+          // la carta con aire de plantilla sin terminar. Estas tres capas dan
+          // profundidad usando SOLO el color de marca de la empresa: halo de
+          // luz, viñeta que cierra los bordes y una trama fina que rompe el
+          // plano de color. Funciona igual sea cual sea el color del cliente.
+          <div className="absolute inset-0 transition-opacity" style={{ opacity: heroOpacity }}>
+            <div
+              className="absolute inset-0"
+              style={{
+                background:
+                  "radial-gradient(115% 75% at 50% 22%, color-mix(in srgb, var(--carta-acento) 92%, #fff) 0%, var(--carta-primario) 42%, #060505 100%)",
+              }}
+            />
+            <div
+              className="absolute inset-0"
+              style={{
+                background:
+                  "radial-gradient(60% 42% at 50% 26%, rgba(255,255,255,0.30) 0%, transparent 62%)",
+              }}
+            />
+            <div
+              className="absolute inset-0 opacity-[0.16] mix-blend-overlay"
+              style={{
+                backgroundImage:
+                  "repeating-linear-gradient(115deg, rgba(255,255,255,.55) 0 1px, transparent 1px 7px)",
+              }}
+            />
+            <div
+              className="absolute inset-0"
+              style={{
+                background:
+                  "radial-gradient(125% 95% at 50% 40%, transparent 42%, rgba(0,0,0,0.62) 100%)",
+              }}
+            />
+          </div>
         )}
 
         <div

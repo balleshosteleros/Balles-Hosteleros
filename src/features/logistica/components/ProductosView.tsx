@@ -35,7 +35,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 import {
   ShoppingCart, Store, Settings,
-  ArrowLeft, Trash2, AlertTriangle, FlaskConical, Star,
+  ArrowLeft, Trash2, AlertTriangle, FlaskConical, Star, Eye, EyeOff,
 } from "lucide-react";
 import { toast } from "sonner";
 import { IOActions } from "@/shared/io";
@@ -195,6 +195,8 @@ function ProductoDetalle({
   const [cartaNombre, setCartaNombre] = useState<string>(producto?.cartaNombre ?? "");
   const [cartaTexto, setCartaTexto] = useState<string>(producto?.cartaTexto ?? "");
   const [cartaDestacado, setCartaDestacado] = useState<boolean>(producto?.cartaDestacado ?? false);
+  // Interruptor maestro de la carta digital (ver ficha del producto de venta).
+  const [visibleCarta, setVisibleCarta] = useState<boolean>(producto?.visibleCarta ?? false);
   const [alergenos, setAlergenos] = useState<string[]>(producto?.alergenos ?? []);
   const [alergenosDerivados, setAlergenosDerivados] = useState<string[]>([]);
   const [alergenosOrigenes, setAlergenosOrigenes] = useState<AlergenoOrigen[]>([]);
@@ -339,6 +341,7 @@ function ProductoDetalle({
       cartaNombre: esVenta ? (cartaNombre.trim() || null) : null,
       cartaTexto: esVenta ? (cartaTexto.trim() || null) : null,
       cartaDestacado: esVenta ? cartaDestacado : false,
+      visibleCarta: esVenta ? visibleCarta : false,
       alergenos: !esVenta ? alergenos : [],
     };
     if (!esCompra) {
@@ -899,8 +902,34 @@ function ProductoDetalle({
               Si dejas estos campos vacíos, la carta digital usará el nombre y la descripción del producto.
             </p>
 
+            {/* Interruptor maestro. Va ANTES que "destacar" porque manda sobre
+                él: sin esto encendido, el producto no llega siquiera a la carta. */}
             <label className="mt-4 flex items-center gap-3 rounded-lg border p-3 cursor-pointer select-none hover:bg-muted/40 transition-colors">
-              <Checkbox checked={cartaDestacado} onCheckedChange={(v) => setCartaDestacado(v === true)} />
+              <Checkbox checked={visibleCarta} onCheckedChange={(v) => setVisibleCarta(v === true)} />
+              {visibleCarta ? (
+                <Eye className="h-5 w-5 text-emerald-600" strokeWidth={1.75} />
+              ) : (
+                <EyeOff className="h-5 w-5 text-muted-foreground" strokeWidth={1.75} />
+              )}
+              <div>
+                <div className="text-sm font-medium">Visible en carta digital</div>
+                <div className="text-[11px] text-muted-foreground">
+                  Si está apagado, este producto no aparece en la carta ni se puede añadir desde
+                  ella. Para quitarlo solo una temporada, ocúltalo desde la carta.
+                </div>
+              </div>
+            </label>
+
+            <label
+              className={`mt-2 flex items-center gap-3 rounded-lg border p-3 select-none transition-colors ${
+                visibleCarta ? "cursor-pointer hover:bg-muted/40" : "opacity-50 cursor-not-allowed"
+              }`}
+            >
+              <Checkbox
+                checked={cartaDestacado}
+                disabled={!visibleCarta}
+                onCheckedChange={(v) => setCartaDestacado(v === true)}
+              />
               <Star className={`h-5 w-5 ${cartaDestacado ? "fill-amber-400 text-amber-500 drop-shadow-[0_1px_2px_rgba(217,119,6,0.5)]" : "text-muted-foreground"}`} />
               <div>
                 <div className="text-sm font-medium">Destacar en la carta</div>
