@@ -151,6 +151,12 @@ export const bolsaInspectoresDatosSchema = z.object({
   cta_label: z.string().min(1).max(80),
 });
 
+/** Los enlaces salen de la empresa (Ajustes), aquí solo se guarda el texto. */
+export const redesDatosSchema = z.object({
+  titulo: z.string().min(1).max(200),
+  descripcion: z.string().max(500).optional(),
+});
+
 export const datosSchemaPorTipo = {
   hero: heroDatosSchema,
   galeria: galeriaDatosSchema,
@@ -164,6 +170,7 @@ export const datosSchemaPorTipo = {
   texto_libre: textoLibreDatosSchema,
   video: videoDatosSchema,
   bolsa_inspectores: bolsaInspectoresDatosSchema,
+  redes: redesDatosSchema,
 } as const;
 
 export const bloqueSchema = z.discriminatedUnion("tipo", [
@@ -179,6 +186,7 @@ export const bloqueSchema = z.discriminatedUnion("tipo", [
   bloqueBaseSchema.extend({ tipo: z.literal("texto_libre"), datos: textoLibreDatosSchema }),
   bloqueBaseSchema.extend({ tipo: z.literal("video"), datos: videoDatosSchema }),
   bloqueBaseSchema.extend({ tipo: z.literal("bolsa_inspectores"), datos: bolsaInspectoresDatosSchema }),
+  bloqueBaseSchema.extend({ tipo: z.literal("redes"), datos: redesDatosSchema }),
 ]);
 
 export const bloquesArraySchema = z.array(bloqueSchema).max(80);

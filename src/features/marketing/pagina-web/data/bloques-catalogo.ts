@@ -14,6 +14,7 @@ import {
   Type,
   PlayCircle,
   Briefcase,
+  Share2,
   type LucideIcon,
 } from "lucide-react";
 import type { BloqueTipo } from "../types";
@@ -38,6 +39,7 @@ export const BLOQUES_CATALOGO: BloqueCatalogoEntrada[] = [
   { tipo: "texto_libre", label: "Texto libre", descripcion: "Párrafos con formato", icon: Type },
   { tipo: "video", label: "Video", descripcion: "YouTube / Vimeo / MP4", icon: PlayCircle },
   { tipo: "bolsa_inspectores", label: "Bolsa inspectores", descripcion: "CTA para inscripción de inspectores externos", icon: Briefcase },
+  { tipo: "redes", label: "Redes sociales", descripcion: "Enlaces que salen de Ajustes de la empresa", icon: Share2 },
 ];
 
 export function getCatalogo(tipo: BloqueTipo): BloqueCatalogoEntrada {

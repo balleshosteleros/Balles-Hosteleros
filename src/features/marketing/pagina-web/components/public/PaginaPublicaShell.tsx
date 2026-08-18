@@ -9,6 +9,13 @@ export interface PaginaContexto {
   empresaId: string | null;
   paginaId: string | null;
   empresaSlug?: string | null;
+  /** Enlaces ya normalizados desde Ajustes → datos generales. */
+  redes?: {
+    instagram: string | null;
+    facebook: string | null;
+    tiktok: string | null;
+    whatsapp: string | null;
+  } | null;
 }
 
 interface Props {

@@ -21,6 +21,7 @@ export const BLOQUE_TIPOS = [
   "texto_libre",
   "video",
   "bolsa_inspectores",
+  "redes",
 ] as const;
 
 export type BloqueTipo = (typeof BLOQUE_TIPOS)[number];
@@ -120,6 +121,16 @@ export interface BolsaInspectoresDatos {
   cta_label: string;
 }
 
+/**
+ * Redes sociales. Los enlaces NO se escriben aquí: se leen de
+ * `empresas.datos_generales` (instagram / facebook / tiktok) en tiempo de
+ * render, para que cambiar la red en Ajustes actualice la web sola.
+ */
+export interface RedesDatos {
+  titulo: string;
+  descripcion?: string;
+}
+
 export type Bloque =
   | (BloqueBase & { tipo: "hero"; datos: HeroDatos })
   | (BloqueBase & { tipo: "galeria"; datos: GaleriaDatos })
@@ -132,7 +143,8 @@ export type Bloque =
   | (BloqueBase & { tipo: "footer"; datos: FooterDatos })
   | (BloqueBase & { tipo: "texto_libre"; datos: TextoLibreDatos })
   | (BloqueBase & { tipo: "video"; datos: VideoDatos })
-  | (BloqueBase & { tipo: "bolsa_inspectores"; datos: BolsaInspectoresDatos });
+  | (BloqueBase & { tipo: "bolsa_inspectores"; datos: BolsaInspectoresDatos })
+  | (BloqueBase & { tipo: "redes"; datos: RedesDatos });
 
 export type BloqueDatos<T extends BloqueTipo> = Extract<Bloque, { tipo: T }>["datos"];
 

@@ -479,17 +479,28 @@ function TestimoniosPublico({
 
 function CtaPublico({ bloque }: { bloque: Extract<Bloque, { tipo: "cta" }> }) {
   const { titulo, texto, boton } = bloque.datos;
+
+  // Los colores salen del tema de la empresa (--pw-primario). Antes eran negro
+  // fijo sobre `bg-muted/30`: en una web de fondo oscuro, el botón secundario
+  // quedaba con borde y texto negro sobre negro, es decir, invisible.
+  const externo = /^https?:\/\//i.test(boton.href);
+
   return (
-    <section className="py-14 px-4 text-center bg-muted/30">
+    <section className="py-14 px-4 text-center">
       <h2 className="text-3xl font-bold">{titulo}</h2>
-      {texto ? <p className="mt-3 text-muted-foreground max-w-xl mx-auto">{texto}</p> : null}
+      {texto ? <p className="mt-3 max-w-xl mx-auto opacity-70">{texto}</p> : null}
       <a
         href={boton.href}
-        className={`inline-block mt-6 rounded-md px-6 py-3 font-semibold ${
+        {...(externo ? { target: "_blank", rel: "noreferrer noopener" } : {})}
+        className="inline-block mt-6 rounded-md px-6 py-3 font-semibold transition-transform hover:scale-105"
+        style={
           boton.variante === "primary"
-            ? "bg-black text-white"
-            : "border border-black text-black hover:bg-black hover:text-white"
-        }`}
+            ? { backgroundColor: "var(--pw-primario)", color: "#111" }
+            : {
+                border: "1px solid var(--pw-primario)",
+                color: "var(--pw-primario)",
+              }
+        }
       >
         {boton.label}
       </a>

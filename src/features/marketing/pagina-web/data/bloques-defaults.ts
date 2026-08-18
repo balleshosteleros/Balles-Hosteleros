@@ -103,5 +103,14 @@ export function crearBloqueDefault(tipo: BloqueTipo, orden: number): Bloque {
           cta_label: "Apuntarme a la bolsa",
         },
       };
+    case "redes":
+      return {
+        ...base,
+        tipo,
+        datos: {
+          titulo: "Síguenos",
+          descripcion: "Todo lo que pasa en el local, cada día.",
+        },
+      };
   }
 }

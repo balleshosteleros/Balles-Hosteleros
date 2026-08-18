@@ -21,6 +21,42 @@ export interface HostnameMatch {
   } | null;
   nombre_empresa: string;
   nombre_pagina: string;
+  /**
+   * Redes de la empresa (Ajustes → datos generales). Se resuelven aquí y no se
+   * guardan en el bloque: cambiar la red en Ajustes actualiza la web sola.
+   */
+  redes: RedesEmpresa;
+}
+
+export interface RedesEmpresa {
+  instagram: string | null;
+  facebook: string | null;
+  tiktok: string | null;
+  whatsapp: string | null;
+}
+
+/**
+ * Los campos de Ajustes admiten tanto un usuario ("bacanal_fuenlabrada") como
+ * una URL completa. Normalizamos a URL para poder enlazar siempre.
+ */
+export function urlRed(red: keyof RedesEmpresa, valor: string | null | undefined): string | null {
+  const v = (valor ?? "").trim();
+  if (!v) return null;
+  if (/^https?:\/\//i.test(v)) return v;
+  const handle = v.replace(/^@/, "").trim();
+  if (!handle) return null;
+  switch (red) {
+    case "instagram":
+      return `https://www.instagram.com/${encodeURIComponent(handle)}`;
+    case "facebook":
+      // El nombre de página de Facebook no lleva espacios en la URL: se
+      // guardan por comodidad ("Bacanal fuenlabrada") y aquí se quitan.
+      return `https://www.facebook.com/${encodeURIComponent(handle.replace(/\s+/g, ""))}`;
+    case "tiktok":
+      return `https://www.tiktok.com/@${encodeURIComponent(handle)}`;
+    case "whatsapp":
+      return `https://wa.me/${handle.replace(/\D/g, "")}`;
+  }
 }
 
 /** Normaliza un hostname (sin port, sin protocolo, lowercase). */
@@ -112,9 +148,12 @@ export async function resolverHostname(
 
     const { data: empresaRow } = await supabase
       .from("empresas")
-      .select("id, nombre, slug")
+      .select("id, nombre, slug, datos_generales")
       .eq("id", pag.empresa_id)
       .maybeSingle();
+
+    const dg = ((empresaRow as { datos_generales?: Record<string, unknown> } | null)
+      ?.datos_generales ?? {}) as Record<string, string | undefined>;
 
     return {
       empresa_id: pag.empresa_id,
@@ -125,6 +164,12 @@ export async function resolverHostname(
       seo: pag.seo ?? null,
       nombre_empresa: (empresaRow as { nombre?: string } | null)?.nombre ?? "Restaurante",
       nombre_pagina: pag.nombre,
+      redes: {
+        instagram: urlRed("instagram", dg.instagram),
+        facebook: urlRed("facebook", dg.facebook),
+        tiktok: urlRed("tiktok", dg.tiktok),
+        whatsapp: urlRed("whatsapp", dg.whatsapp),
+      },
     };
   } catch (err) {
     console.error("[pagina-web][resolver] fatal:", err);
