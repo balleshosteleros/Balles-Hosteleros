@@ -37,6 +37,16 @@ lo más fiable con el papel delante y evita inventar un "álbum" de páginas den
 albarán. Si en el uso real prefieres que las hojas se junten en un solo albarán, se puede
 hacer después — dímelo tras probarlo con el próximo de varias páginas.
 
+**Probado E2E con la foto real de TU Belmon 15378** (móvil 375×812 contra producción, después
+borrado; 0 restos, 0 stock): tarjeta roja *"El papel corta en SUMA Y SIGUE: 694,39 €"*, botón de
+cámara delante, Guardar bloqueado → "Cargar así" + motivo → guardado como incompleto con el
+motivo en la traza → el RPC lo rechaza al confirmar → en la bandeja móvil sale INCOMPLETO en
+rojo. **Y el E2E cazó una cosa más** (`f44e800f`): la primera vez el OCR leyó "SUMA Y SIGUE
+694,39" **como si fuera el TOTAL** (`sumaYSigue: null`), así que el albarán habría pasado por
+completo — el mismo silencio que sufriste el 30-jul. Arreglado con regla dura en el prompt +
+un campo dedicado + red de seguridad determinista (si el pie es de arrastre, el total pasa a
+null). Segunda pasada: detectado a la primera.
+
 Detalle técnico: `use-subir-albaran.ts` (`documentoIncompleto`, `parcialDecidido`),
 `SubirAlbaranMobile.tsx`, `SubirAlbaranDialog.tsx`, `DetalleAlbaran.tsx`,
 `AlbaranesEnRevision.tsx`, `createAlbaran` (`documentoParcial`), `marcarAlbaranCompleto`,
