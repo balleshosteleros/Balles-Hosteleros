@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getEmpresaActivaForUser } from "@/features/empresa/lib/empresa-server";
 import {
   findPlaceByText,
+  getPlaceDetails,
   getGoogleMapsApiKey,
 } from "@/lib/google/places";
 import { syncResenasGoogleForEmpresa } from "@/features/calidad/services/resenas-google-sync";
@@ -127,6 +128,44 @@ export async function detectarPlaceIdEmpresa(): Promise<
         name: cand.name,
         address: cand.formattedAddress,
       },
+    };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Error desconocido";
+    return { ok: false, error: msg };
+  }
+}
+
+/**
+ * Devuelve QUÉ local está vinculado ahora mismo (nombre + dirección), leyéndolo
+ * de Google a partir del `google_place_id` guardado.
+ *
+ * Sin esto la pantalla solo podía decir "Local vinculado" sin decir cuál, y no
+ * había forma de comprobar que apunta al restaurante correcto: si por lo que
+ * fuera estuviera apuntando a otro sitio, se estarían leyendo y contestando
+ * las reseñas de otro negocio sin que nadie se diera cuenta.
+ */
+export async function getLocalVinculado(): Promise<
+  | { ok: true; local: { name: string; address: string } }
+  | { ok: false; error: string }
+> {
+  try {
+    const { supabase, empresaId } = await getContext();
+    if (!empresaId) return { ok: false, error: "No autenticado" };
+    const { data } = await supabase
+      .from("empresas")
+      .select("google_place_id")
+      .eq("id", empresaId)
+      .maybeSingle();
+    const placeId = (data?.google_place_id as string | null)?.trim();
+    if (!placeId) return { ok: false, error: "SIN_PLACE_ID" };
+    if (!getGoogleMapsApiKey()) {
+      return { ok: false, error: "MISSING_GOOGLE_MAPS_API_KEY" };
+    }
+    const details = await getPlaceDetails(placeId);
+    if (!details) return { ok: false, error: "PLACE_NO_ENCONTRADO" };
+    return {
+      ok: true,
+      local: { name: details.name, address: details.formattedAddress },
     };
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Error desconocido";

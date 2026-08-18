@@ -22,6 +22,7 @@ import { toast } from "sonner";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import {
   getEmpresaPlaceInfo,
+  getLocalVinculado,
   detectarPlaceIdEmpresa,
   buscarPlaceCustom,
   setEmpresaPlaceId,
@@ -44,17 +45,30 @@ export function FichaGooglePanel() {
   const [guardando, setGuardando] = useState(false);
   const [candidato, setCandidato] = useState<Candidato | null>(null);
   const [queryManual, setQueryManual] = useState("");
+  /** Qué local está vinculado (nombre + dirección), leído de Google. */
+  const [local, setLocal] = useState<{ name: string; address: string } | null>(
+    null,
+  );
 
   useEffect(() => {
     let vivo = true;
     setCargando(true);
+    setLocal(null);
     getEmpresaPlaceInfo().then((info) => {
       if (!vivo) return;
-      setConectada(!!info?.googlePlaceId);
+      const vinculada = !!info?.googlePlaceId;
+      setConectada(vinculada);
       setApiKeyOk(info?.googleApiKeyConfigured ?? false);
       setCandidato(null);
       setQueryManual("");
       setCargando(false);
+      // Se resuelve aparte para no retrasar la pantalla: implica una llamada
+      // a Google. Si falla, se muestra el estado sin el nombre del local.
+      if (vinculada) {
+        getLocalVinculado().then((res) => {
+          if (vivo && res.ok) setLocal(res.local);
+        });
+      }
     });
     return () => {
       vivo = false;
@@ -158,14 +172,39 @@ export function FichaGooglePanel() {
           </div>
         ) : conectada ? (
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border px-3 py-2.5">
-            <div>
-              <div className="text-sm font-medium text-foreground">
-                Local vinculado
-              </div>
-              <div className="text-xs text-muted-foreground">
-                Las reseñas entran solas cada día y la IA prepara la respuesta
-                de cada una, lista para publicar.
-              </div>
+            <div className="min-w-0">
+              {/* Se muestra QUÉ local, no solo que hay uno: es la única forma
+                  de comprobar que apunta al restaurante correcto y no a un
+                  homónimo, en cuyo caso entrarían reseñas de otro negocio. */}
+              {local ? (
+                <>
+                  <div className="flex items-start gap-1.5">
+                    <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
+                    <div className="min-w-0">
+                      <div className="text-sm font-medium text-foreground">
+                        {local.name}
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        {local.address}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="mt-1.5 text-xs text-muted-foreground">
+                    Las reseñas entran solas cada día y la IA prepara la
+                    respuesta de cada una, lista para publicar.
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="text-sm font-medium text-foreground">
+                    Local vinculado
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    Las reseñas entran solas cada día y la IA prepara la
+                    respuesta de cada una, lista para publicar.
+                  </div>
+                </>
+              )}
             </div>
             <Button
               variant="outline"
