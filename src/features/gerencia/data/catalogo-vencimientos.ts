@@ -1,12 +1,12 @@
 /**
- * Catálogo canónico de revisiones y obligaciones normativas de hostelería en España.
+ * Catálogo canónico de vencimientos y obligaciones normativas de hostelería en España.
  *
  * Cada entrada representa una obligación legal real que una inspección puede exigir.
  * `clave` es el identificador estable — nunca se renombra (los registros de la empresa
  * apuntan a él). El catálogo es la plantilla; cada empresa crea sus propios registros.
  */
 
-export type AmbitoRevision =
+export type AmbitoVencimiento =
   | "SEGURIDAD"
   | "SANIDAD"
   | "INSTALACIONES"
@@ -16,7 +16,7 @@ export type AmbitoRevision =
   | "DERECHOS"
   | "MEDIOAMBIENTE";
 
-export type PeriodicidadRevision =
+export type PeriodicidadVencimiento =
   | "MENSUAL"
   | "TRIMESTRAL"
   | "SEMESTRAL"
@@ -26,11 +26,11 @@ export type PeriodicidadRevision =
   | "CONTINUA"
   | "UNICA";
 
-export interface RevisionCatalogo {
+export interface VencimientoCatalogo {
   clave: string;
   nombre: string;
-  ambito: AmbitoRevision;
-  periodicidad: PeriodicidadRevision;
+  ambito: AmbitoVencimiento;
+  periodicidad: PeriodicidadVencimiento;
   /** Norma que la obliga, en lenguaje citable ante un inspector. */
   normativa: string;
   /** Qué hay que hacer y qué papel queda como prueba. */
@@ -41,13 +41,13 @@ export interface RevisionCatalogo {
   documentoProbatorio: string;
   /** Rango orientativo de multa por incumplimiento. */
   riesgoSancion: string;
-  /** Icono lucide que representa la revisión en la barra superior. */
+  /** Icono lucide que representa el vencimiento en la barra superior. */
   icono: string;
-  /** Las que marcamos como críticas van primero en la barra. */
+  /** Los que marcamos como críticos van primero en la barra. */
   critica: boolean;
 }
 
-export const CATALOGO_REVISIONES: RevisionCatalogo[] = [
+export const CATALOGO_VENCIMIENTOS: VencimientoCatalogo[] = [
   // ─── SEGURIDAD / INCENDIOS ──────────────────────────────────
   {
     clave: "extintores",
@@ -481,7 +481,7 @@ export const CATALOGO_REVISIONES: RevisionCatalogo[] = [
   },
 ];
 
-export const AMBITOS: AmbitoRevision[] = [
+export const AMBITOS: AmbitoVencimiento[] = [
   "SEGURIDAD",
   "SANIDAD",
   "INSTALACIONES",
@@ -492,7 +492,7 @@ export const AMBITOS: AmbitoRevision[] = [
   "MEDIOAMBIENTE",
 ];
 
-export const PERIODICIDADES: PeriodicidadRevision[] = [
+export const PERIODICIDADES: PeriodicidadVencimiento[] = [
   "MENSUAL",
   "TRIMESTRAL",
   "SEMESTRAL",
@@ -503,7 +503,7 @@ export const PERIODICIDADES: PeriodicidadRevision[] = [
   "UNICA",
 ];
 
-export const ETIQUETA_PERIODICIDAD: Record<PeriodicidadRevision, string> = {
+export const ETIQUETA_PERIODICIDAD: Record<PeriodicidadVencimiento, string> = {
   MENSUAL: "Mensual",
   TRIMESTRAL: "Trimestral",
   SEMESTRAL: "Semestral",
@@ -514,7 +514,7 @@ export const ETIQUETA_PERIODICIDAD: Record<PeriodicidadRevision, string> = {
   UNICA: "Una sola vez",
 };
 
-export const ETIQUETA_AMBITO: Record<AmbitoRevision, string> = {
+export const ETIQUETA_AMBITO: Record<AmbitoVencimiento, string> = {
   SEGURIDAD: "Seguridad",
   SANIDAD: "Sanidad",
   INSTALACIONES: "Instalaciones",
@@ -525,14 +525,14 @@ export const ETIQUETA_AMBITO: Record<AmbitoRevision, string> = {
   MEDIOAMBIENTE: "Medioambiente",
 };
 
-export const ETIQUETA_EJECUTOR: Record<RevisionCatalogo["ejecutor"], string> = {
+export const ETIQUETA_EJECUTOR: Record<VencimientoCatalogo["ejecutor"], string> = {
   EMPRESA: "La propia empresa",
   EXTERNO_ACREDITADO: "Empresa externa acreditada",
   ADMINISTRACION: "Administración pública",
 };
 
 /** Meses que suma cada periodicidad para calcular el siguiente vencimiento. */
-export const MESES_PERIODICIDAD: Record<PeriodicidadRevision, number | null> = {
+export const MESES_PERIODICIDAD: Record<PeriodicidadVencimiento, number | null> = {
   MENSUAL: 1,
   TRIMESTRAL: 3,
   SEMESTRAL: 6,
@@ -543,6 +543,6 @@ export const MESES_PERIODICIDAD: Record<PeriodicidadRevision, number | null> = {
   UNICA: null,
 };
 
-export function getRevisionCatalogo(clave: string): RevisionCatalogo | undefined {
-  return CATALOGO_REVISIONES.find((r) => r.clave === clave);
+export function getVencimientoCatalogo(clave: string): VencimientoCatalogo | undefined {
+  return CATALOGO_VENCIMIENTOS.find((r) => r.clave === clave);
 }

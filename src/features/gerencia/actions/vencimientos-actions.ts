@@ -2,9 +2,9 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { getEmpresaActivaForUser } from "@/features/empresa/lib/empresa-server";
-import { CATALOGO_REVISIONES, MESES_PERIODICIDAD, type PeriodicidadRevision } from "@/features/gerencia/data/catalogo-revisiones";
+import { CATALOGO_VENCIMIENTOS, MESES_PERIODICIDAD, type PeriodicidadVencimiento } from "@/features/gerencia/data/catalogo-vencimientos";
 
-export interface RevisionRow {
+export interface VencimientoRow {
   id: string;
   clave: string | null;
   nombre: string;
@@ -39,14 +39,14 @@ async function getContext() {
 
 /** Suma la periodicidad a una fecha para saber cuándo toca la siguiente. */
 function calcularProximoVencimiento(desde: string, periodicidad: string): string | null {
-  const meses = MESES_PERIODICIDAD[periodicidad as PeriodicidadRevision];
+  const meses = MESES_PERIODICIDAD[periodicidad as PeriodicidadVencimiento];
   if (meses === null || meses === undefined) return null;
   const fecha = new Date(`${desde}T00:00:00`);
   fecha.setMonth(fecha.getMonth() + meses);
   return fecha.toISOString().slice(0, 10);
 }
 
-export async function listRevisiones(): Promise<{ ok: boolean; data: RevisionRow[] }> {
+export async function listVencimientos(): Promise<{ ok: boolean; data: VencimientoRow[] }> {
   try {
     const { supabase, empresaId } = await getContext();
     if (!empresaId) return { ok: false, data: [] };
@@ -56,9 +56,9 @@ export async function listRevisiones(): Promise<{ ok: boolean; data: RevisionRow
       .eq("empresa_id", empresaId)
       .order("fecha_vencimiento", { ascending: true, nullsFirst: false });
     if (error) throw error;
-    return { ok: true, data: (data ?? []) as RevisionRow[] };
+    return { ok: true, data: (data ?? []) as VencimientoRow[] };
   } catch (err) {
-    console.error("[revisiones] listRevisiones:", err);
+    console.error("[vencimientos] listVencimientos:", err);
     return { ok: false, data: [] };
   }
 }
@@ -76,7 +76,7 @@ export async function listHistorial(revisionId: string): Promise<{ ok: boolean; 
     if (error) throw error;
     return { ok: true, data: (data ?? []) as HistorialRow[] };
   } catch (err) {
-    console.error("[revisiones] listHistorial:", err);
+    console.error("[vencimientos] listHistorial:", err);
     return { ok: false, data: [] };
   }
 }
@@ -97,7 +97,7 @@ export async function sembrarCatalogo(): Promise<{ ok: boolean; creadas: number;
     if (errExist) throw errExist;
 
     const yaEstan = new Set((existentes ?? []).map((r) => r.clave));
-    const nuevas = CATALOGO_REVISIONES.filter((c) => !yaEstan.has(c.clave)).map((c) => ({
+    const nuevas = CATALOGO_VENCIMIENTOS.filter((c) => !yaEstan.has(c.clave)).map((c) => ({
       empresa_id: empresaId,
       clave: c.clave,
       nombre: c.nombre,
@@ -118,12 +118,12 @@ export async function sembrarCatalogo(): Promise<{ ok: boolean; creadas: number;
     return { ok: true, creadas: nuevas.length };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : "Error desconocido";
-    console.error("[revisiones] sembrarCatalogo:", msg);
+    console.error("[vencimientos] sembrarCatalogo:", msg);
     return { ok: false, creadas: 0, error: msg };
   }
 }
 
-export async function createRevision(input: {
+export async function createVencimiento(input: {
   nombre: string;
   ambito: string;
   periodicidad: string;
@@ -153,7 +153,7 @@ export async function createRevision(input: {
     return { ok: true };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : "Error desconocido";
-    console.error("[revisiones] createRevision:", msg);
+    console.error("[vencimientos] createVencimiento:", msg);
     return { ok: false, error: msg };
   }
 }
@@ -210,7 +210,7 @@ export async function registrarRevision(input: {
     return { ok: true, proximaFecha };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : "Error desconocido";
-    console.error("[revisiones] registrarRevision:", msg);
+    console.error("[vencimientos] registrarRevision:", msg);
     return { ok: false, error: msg };
   }
 }

@@ -137,7 +137,7 @@ export const logisticaSubs: SubItem[] = [
 
 export const gerenciaSubs: SubItem[] = [
   { title: "MANTENIMIENTO", url: "/gerencia/mantenimiento", icon: Wrench },
-  { title: "REVISIONES", url: "/gerencia/vencimientos", icon: CalendarDays },
+  { title: "VENCIMIENTOS", url: "/gerencia/vencimientos", icon: CalendarDays },
   { title: "CIERRES", url: "/gerencia/cierres", icon: Wallet },
   { title: "INFORMES", url: "/gerencia/informes", icon: BarChart3 },
   { title: "RATIOS", url: "/gerencia/ratios", icon: TrendingUp },

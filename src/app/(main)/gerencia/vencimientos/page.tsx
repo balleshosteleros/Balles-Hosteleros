@@ -1,5 +1,5 @@
-import { RevisionesView } from "@/features/gerencia/components/RevisionesView";
+import { VencimientosView } from "@/features/gerencia/components/VencimientosView";
 
-export default function RevisionesPage() {
-  return <RevisionesView />;
+export default function VencimientosPage() {
+  return <VencimientosView />;
 }

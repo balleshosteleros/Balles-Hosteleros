@@ -154,6 +154,19 @@ const CAMPOS_CONTACTOS: CampoSubmodulo[] = [
   { key: "direccion", label: "Dirección fiscal" },
 ];
 
+/**
+ * Alta de reserva — formulario interno de sala y portal público del cliente.
+ *
+ * Nombre, apellidos, fecha, hora, comensales, turno, estado y mesa se exigen
+ * SIEMPRE por código (sin ellos no hay reserva que colocar), así que no se
+ * listan aquí: aquí solo van los campos que cada empresa decide. La zona no
+ * aparece porque se deduce de la mesa elegida.
+ */
+const CAMPOS_RESERVAS: CampoSubmodulo[] = [
+  { key: "telefono", label: "Teléfono" },
+  { key: "email", label: "Email" },
+];
+
 const CAMPOS_NUEVAS_RECETAS: CampoSubmodulo[] = [
   { key: "nombre", label: "Nombre de la receta" },
   { key: "descripcion", label: "Descripción" },
@@ -221,7 +234,15 @@ export const CATALOGO: ModuloDef[] = [
     submodulos: [
       placeholder("pos", "Punto de Venta"),
       placeholder("tarifas", "Tarifas"),
-      placeholder("reservas", "Reservas"),
+      {
+        key: "reservas",
+        label: "Reservas",
+        campos: CAMPOS_RESERVAS,
+        // Email y teléfono se exigen de serie en toda empresa: sin ellos no hay
+        // forma de confirmar la reserva ni de avisar al cliente si algo cambia.
+        // Quien quiera aflojarlo lo desmarca en Ajustes → Departamentos → Sala.
+        obligatorios: ["telefono", "email"],
+      },
       placeholder("clientes", "Clientes"),
     ],
   },
@@ -289,7 +310,7 @@ export const CATALOGO: ModuloDef[] = [
     label: "GERENCIA",
     submodulos: [
       placeholder("mantenimiento", "Mantenimiento"),
-      placeholder("revisiones", "Revisiones"),
+      placeholder("revisiones", "Vencimientos"),
       placeholder("cierres", "Cierres"),
       placeholder("descuentos", "Descuentos"),
       placeholder("ratios", "Ratios"),
