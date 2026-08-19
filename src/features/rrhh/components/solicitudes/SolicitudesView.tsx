@@ -9,7 +9,6 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { DenunciasPanel } from "@/features/rrhh/components/denuncias/DenunciasView";
-import { SeguimientoIgualdad } from "@/features/rrhh/components/denuncias/SeguimientoIgualdad";
 import {
   Table,
   TableBody,
@@ -243,9 +242,8 @@ export function SolicitudesView() {
 
         {/* Las denuncias viven en su propia tabla, con acceso restringido a
             RRHH, pero se gestionan desde aquí para no tener dos sitios. */}
-        <TabsContent value="denuncias" className="mt-4 space-y-6">
+        <TabsContent value="denuncias" className="mt-4">
           <DenunciasPanel embebido />
-          <SeguimientoIgualdad />
         </TabsContent>
 
         <TabsContent value={tab} className="mt-4 space-y-4">

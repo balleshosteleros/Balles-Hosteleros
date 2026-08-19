@@ -342,9 +342,9 @@ export const CATALOGO_REVISIONES: RevisionCatalogo[] = [
     periodicidad: "ANUAL",
     normativa: "LO 3/2007 · RD 901/2020 — plan obligatorio desde 50 personas",
     descripcion:
-      "Protocolo frente al acoso sexual obligatorio en toda empresa con plantilla, y plan de igualdad registrado a partir de 50 personas. No basta con tenerlos redactados: hay que acreditar que se han comunicado a la plantilla. Esa comunicación se hace desde Formación, con el curso «Igualdad y protocolo frente al acoso», que deja registro de quién lo ha completado y cuándo.",
+      "Protocolo frente al acoso sexual obligatorio en toda empresa con plantilla, y plan de igualdad registrado a partir de 50 personas. No basta con tenerlos redactados: hay que acreditar que se han comunicado a la plantilla.",
     ejecutor: "EXTERNO_ACREDITADO",
-    documentoProbatorio: "Protocolo comunicado a la plantilla (registro de Formación), plan registrado en REGCON",
+    documentoProbatorio: "Protocolo comunicado a la plantilla y plan registrado en REGCON",
     riesgoSancion: "Hasta 225.018 €",
     icono: "Scale",
     critica: false,

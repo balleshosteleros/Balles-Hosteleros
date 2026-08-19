@@ -90,7 +90,6 @@ export const miPanelSubs: SubItem[] = [
   { title: "PAGOS", url: "/mi-panel/pagos", icon: Euro },
   { title: "CUESTIONARIOS", url: "/mi-panel/cuestionarios", icon: FileQuestion },
   { title: "SOLICITUDES", url: "/mi-panel/ausencias", icon: Inbox },
-  { title: "IGUALDAD", url: "/mi-panel/igualdad", icon: Scale },
   { title: "COMUNICADOS", url: "/mi-panel/comunicados", icon: Megaphone },
   { title: "DOCUMENTOS", url: "/mi-panel/documentos", icon: Files },
   { title: "INSPECCIONES", url: "/mi-panel/inspecciones", icon: FileSearch },
