@@ -45,6 +45,8 @@ import {
 } from "@/features/logistica/actions/incidencias-albaran-actions";
 import type { FalloImportacion } from "@/features/logistica/lib/albaranes/importaciones";
 import type { CandidatoDuplicado } from "@/features/logistica/lib/albaranes/duplicados";
+import type { AvisoEmpresa } from "@/features/logistica/lib/albaranes/empresa-destinatario";
+import { setEmpresaActiva } from "@/features/empresa/actions/empresa-activa-actions";
 import { ESTADO_REVISION } from "@/features/logistica/data/albaranes";
 import { MAX_DOCUMENTO_MB } from "@/shared/lib/documentos";
 
@@ -100,6 +102,11 @@ export function useSubirAlbaran({ fechaPorDefecto, creador, onCreado }: UseSubir
   const [proveedorIdentificado, setProveedorIdentificado] = useState<string | null>(null);
   // Decisión "cargar solo esta parte" tomada en la mesa (escritorio): con motivo.
   const [parcialDecidido, setParcialDecidido] = useState<{ motivo: string } | null>(null);
+  // Aviso de empresa equivocada (destinatario del papel ≠ empresa activa).
+  const [avisoEmpresa, setAvisoEmpresa] = useState<AvisoEmpresa | null>(null);
+  // "Seguir en esta empresa de todas formas": desbloquea el guardado tras el aviso.
+  const [empresaConfirmada, setEmpresaConfirmada] = useState(false);
+  const [cambiandoEmpresa, setCambiandoEmpresa] = useState(false);
   const [, startTransition] = useTransition();
 
   const reset = () => {
@@ -120,6 +127,9 @@ export function useSubirAlbaran({ fechaPorDefecto, creador, onCreado }: UseSubir
     setVinculosAutomaticos([]);
     setProveedorIdentificado(null);
     setParcialDecidido(null);
+    setAvisoEmpresa(null);
+    setEmpresaConfirmada(false);
+    setCambiandoEmpresa(false);
   };
 
   const handleFile = (f: File | null) => {
@@ -177,12 +187,15 @@ export function useSubirAlbaran({ fechaPorDefecto, creador, onCreado }: UseSubir
       setIncidencias(mesa.incidencias);
       setVinculosAutomaticos(mesa.vinculosAutomaticos);
       setProveedorIdentificado(mesa.proveedorNombre);
+      setAvisoEmpresa(mesa.avisoEmpresa);
+      setEmpresaConfirmada(false);
     } else {
       // Que falle el análisis no puede impedir registrar el albarán: se avisa y se
       // sigue por el camino de siempre (verificación manual).
       console.error("[subir-albaran] incidencias:", mesa.error);
       setIncidencias([]);
       setVinculosAutomaticos([]);
+      setAvisoEmpresa(null);
     }
 
     setCabecera(cab);
@@ -376,10 +389,45 @@ export function useSubirAlbaran({ fechaPorDefecto, creador, onCreado }: UseSubir
     [cabecera],
   );
 
+  /** "Seguir en esta empresa de todas formas": desbloquea el guardado tras el aviso. */
+  const confirmarEmpresa = () => setEmpresaConfirmada(true);
+
+  /**
+   * "Cambiar a la empresa correcta y volver a analizar": arma la empresa activa nueva
+   * (cookie, validada en servidor) y reanaliza el MISMO documento contra su catálogo.
+   * El OCR no se repite: solo cambian el emparejado y las incidencias.
+   */
+  const cambiarEmpresa = (empresaId: string) => {
+    if (!importacionId) return;
+    setCambiandoEmpresa(true);
+    startTransition(async () => {
+      const res = await setEmpresaActiva(empresaId);
+      if (!res.ok) {
+        toast.error(res.error ?? "No se pudo cambiar de empresa");
+        setCambiandoEmpresa(false);
+        return;
+      }
+      setPaso("analizando");
+      try {
+        await procesarResultado(cabecera, lineas, importacionId);
+      } finally {
+        setCambiandoEmpresa(false);
+      }
+    });
+  };
+
   const guardar = (
     override?: { posibleDuplicadoDe: string; motivo: string },
     parcial?: { motivo: string },
   ) => {
+    // Empresa equivocada sin resolver: no se guarda hasta cambiar de empresa o confirmar.
+    if (avisoEmpresa?.veredicto === "otra_empresa" && !empresaConfirmada) {
+      toast.error(
+        `Este albarán parece de ${avisoEmpresa.empresaDetectada?.nombre ?? "otra empresa"}. ` +
+          "Cambia de empresa o confirma que quieres seguir aquí.",
+      );
+      return;
+    }
     if (!proveedor.trim()) {
       toast.error("Indica el proveedor del albarán");
       return;
@@ -527,6 +575,12 @@ export function useSubirAlbaran({ fechaPorDefecto, creador, onCreado }: UseSubir
     // Documento incompleto (SUMA Y SIGUE / pág. X de Y): se caza en la subida.
     documentoIncompleto,
     parcialDecidido,
+    // Empresa equivocada (destinatario del papel ≠ empresa activa).
+    avisoEmpresa,
+    empresaConfirmada,
+    cambiandoEmpresa,
+    confirmarEmpresa,
+    cambiarEmpresa,
     // PRP-074 — mesa de incidencias
     incidencias,
     incidenciasAbiertas: incidencias.filter((i) => i.estado === "abierta"),

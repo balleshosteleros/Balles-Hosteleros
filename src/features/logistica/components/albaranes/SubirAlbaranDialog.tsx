@@ -17,7 +17,7 @@ import { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Camera, Upload, FileImage, Loader2, X, CheckCircle2, HelpCircle } from "lucide-react";
+import { Camera, Upload, FileImage, Loader2, X, CheckCircle2, HelpCircle, Building2 } from "lucide-react";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { useAuth } from "@/features/auth/contexts/auth-context";
 import { hoyEnZona } from "@/features/empresa/lib/zona-horaria";
@@ -61,6 +61,11 @@ export function SubirAlbaranDialog({ open, onOpenChange, onCreado }: Props) {
     proveedorIdentificado,
     documentoIncompleto,
     parcialDecidido,
+    avisoEmpresa,
+    empresaConfirmada,
+    cambiandoEmpresa,
+    confirmarEmpresa,
+    cambiarEmpresa,
     resolverIncidencias,
     handleFile,
     analizar,
@@ -288,6 +293,43 @@ export function SubirAlbaranDialog({ open, onOpenChange, onCreado }: Props) {
               </div>
             )}
 
+            {avisoEmpresa && avisoEmpresa.veredicto === "otra_empresa" && !empresaConfirmada && (
+              <div className="space-y-2 rounded-lg border border-red-300 bg-red-50 p-3 text-sm dark:border-red-800 dark:bg-red-950/30">
+                <p className="flex items-center gap-2 font-medium text-red-800 dark:text-red-300">
+                  <Building2 className="h-4 w-4 shrink-0" />
+                  {avisoEmpresa.porCif
+                    ? `Este albarán es de ${avisoEmpresa.empresaDetectada?.nombre}, no de ${avisoEmpresa.empresaActiva.nombre}.`
+                    : `Este albarán parece de ${avisoEmpresa.empresaDetectada?.nombre}, y lo estás subiendo a ${avisoEmpresa.empresaActiva.nombre}.`}
+                </p>
+                <p className="text-xs text-red-700 dark:text-red-400">
+                  {avisoEmpresa.destinatarioTexto ? `Va dirigido a "${avisoEmpresa.destinatarioTexto}". ` : ""}
+                  Cámbiate a {avisoEmpresa.empresaDetectada?.nombre} para leerlo contra su catálogo, o sigue aquí si
+                  de verdad es de {avisoEmpresa.empresaActiva.nombre}.
+                </p>
+                <div className="flex gap-2">
+                  <Button
+                    size="sm"
+                    disabled={cambiandoEmpresa}
+                    onClick={() => avisoEmpresa.empresaDetectada && cambiarEmpresa(avisoEmpresa.empresaDetectada.id)}
+                  >
+                    {cambiandoEmpresa ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                    Cambiar a {avisoEmpresa.empresaDetectada?.nombre}
+                  </Button>
+                  <Button size="sm" variant="outline" disabled={cambiandoEmpresa} onClick={confirmarEmpresa}>
+                    Seguir en {avisoEmpresa.empresaActiva.nombre}
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {avisoEmpresa && avisoEmpresa.veredicto !== "otra_empresa" && (
+              <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs text-amber-800 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-300">
+                {avisoEmpresa.veredicto === "no_verificable"
+                  ? `No se pudo leer a qué empresa va dirigido este albarán. Verifica que ${avisoEmpresa.empresaActiva.nombre} es la correcta.`
+                  : `El destinatario leído ("${avisoEmpresa.destinatarioTexto}") no coincide con ${avisoEmpresa.empresaActiva.nombre}. Comprueba que es la empresa correcta.`}
+              </div>
+            )}
+
             {documentoIncompleto && !parcialDecidido && (
               <div className="rounded-lg border border-red-300 bg-red-50 p-3 text-sm dark:border-red-800 dark:bg-red-950/30">
                 <p className="font-medium text-red-800 dark:text-red-300">
@@ -323,7 +365,11 @@ export function SubirAlbaranDialog({ open, onOpenChange, onCreado }: Props) {
                 <Button variant="outline" onClick={() => { reset(); }}>Empezar de nuevo</Button>
                 <Button
                   onClick={() => guardar()}
-                  disabled={!!duplicado || (!!documentoIncompleto && !parcialDecidido)}
+                  disabled={
+                    !!duplicado ||
+                    (avisoEmpresa?.veredicto === "otra_empresa" && !empresaConfirmada) ||
+                    (!!documentoIncompleto && !parcialDecidido)
+                  }
                 >
                   {documentoIncompleto && parcialDecidido ? "Guardar incompleto" : "Guardar en Revisión"}
                 </Button>

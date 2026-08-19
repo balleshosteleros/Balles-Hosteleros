@@ -31,6 +31,11 @@ import type {
   CabeceraOcrAlbaran,
   LineaOcrAlbaran,
 } from "@/features/logistica/lib/albaranes/ocr-albaran";
+import {
+  evaluarEmpresaDestinatario,
+  type AvisoEmpresa,
+  type EmpresaIdentidad,
+} from "@/features/logistica/lib/albaranes/empresa-destinatario";
 
 export type EstadoIncidencia = "abierta" | "resuelta" | "aceptada_con_motivo" | "descartada";
 
@@ -52,12 +57,34 @@ export type ResultadoMesa =
       proveedorId: string | null;
       proveedorNombre: string | null;
       puedeConfirmar: boolean;
+      /** Aviso de empresa equivocada (destinatario del papel ≠ empresa activa), o null si cuadra. */
+      avisoEmpresa: AvisoEmpresa | null;
     }
   | { ok: false; error: string };
 
 // ---------------------------------------------------------------------------
 // Carga del catálogo
 // ---------------------------------------------------------------------------
+
+/**
+ * Identidad fiscal de la empresa activa + todas las del usuario, para cruzar contra el
+ * destinatario del papel (aviso de empresa equivocada). Devuelve solo lo accesible por RLS.
+ */
+async function cargarIdentidadEmpresas(
+  supabase: Awaited<ReturnType<typeof getLogisticaContext>>["supabase"],
+  empresaId: string,
+): Promise<{ activa: EmpresaIdentidad; empresas: EmpresaIdentidad[] } | null> {
+  const { data } = await supabase.from("empresas").select("id, nombre, nif, razon_social");
+  const empresas: EmpresaIdentidad[] = (data ?? []).map((e) => ({
+    id: e.id as string,
+    nombre: (e.nombre as string) ?? "",
+    nif: (e.nif as string | null) ?? null,
+    razonSocial: (e.razon_social as string | null) ?? null,
+  }));
+  const activa = empresas.find((e) => e.id === empresaId);
+  if (!activa) return null; // sin identidad de la activa no se puede cruzar
+  return { activa, empresas };
+}
 
 /**
  * Trae de una vez todo lo que el detector necesita saber de la empresa.
@@ -173,7 +200,15 @@ export async function analizarIncidenciasAlbaran(input: {
   }
 
   try {
-    const catalogo = await cargarCatalogo(supabase, empresaId);
+    const [catalogo, identidad] = await Promise.all([
+      cargarCatalogo(supabase, empresaId),
+      cargarIdentidadEmpresas(supabase, empresaId),
+    ]);
+
+    // Aviso de empresa equivocada: el destinatario del papel vs la empresa activa.
+    const avisoEmpresa = identidad
+      ? evaluarEmpresaDestinatario(input.cabecera.destinatario, identidad.activa, identidad.empresas)
+      : null;
 
     const resultado = detectarIncidencias({
       cabecera: input.cabecera,
@@ -182,6 +217,18 @@ export async function analizarIncidenciasAlbaran(input: {
       duplicadoNegocioDe: input.duplicadoNegocioDe ?? null,
       ...catalogo,
     });
+
+    // Re-análisis idempotente: al reanalizar la misma importación (p.ej. tras cambiar de
+    // empresa por el aviso), no dejar las incidencias del análisis anterior colgando de la
+    // importación —al guardar se ligarían todas al albarán—. Se borran las abiertas sin albarán.
+    if (input.importacionId && !input.albaranId) {
+      await supabase
+        .from("albaran_incidencias")
+        .delete()
+        .eq("empresa_id", empresaId)
+        .eq("importacion_id", input.importacionId)
+        .is("albaran_id", null);
+    }
 
     // Se persisten para que la decisión quede auditada y el trabajo a medias no
     // se pierda al cerrar la pantalla.
@@ -236,6 +283,22 @@ export async function analizarIncidenciasAlbaran(input: {
       },
     });
 
+    if (avisoEmpresa) {
+      await registrarEventoAlbaran(supabase, {
+        empresaId,
+        albaranId: input.albaranId ?? null,
+        importacionId: input.importacionId ?? null,
+        actorId: userId,
+        tipo: "aviso_empresa_destinatario",
+        payload: {
+          veredicto: avisoEmpresa.veredicto,
+          porCif: avisoEmpresa.porCif,
+          empresaDetectada: avisoEmpresa.empresaDetectada?.nombre ?? null,
+          destinatario: avisoEmpresa.destinatarioTexto,
+        },
+      });
+    }
+
     return {
       ok: true,
       incidencias: persistidas,
@@ -243,6 +306,7 @@ export async function analizarIncidenciasAlbaran(input: {
       proveedorId: resultado.identificacion.proveedor?.id ?? null,
       proveedorNombre: resultado.identificacion.proveedor?.nombreComercial ?? null,
       puedeConfirmar: resultado.puedeConfirmar,
+      avisoEmpresa,
     };
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Error desconocido";

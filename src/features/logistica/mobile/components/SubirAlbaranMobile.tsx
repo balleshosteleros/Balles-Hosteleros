@@ -8,7 +8,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Camera, Upload, FileImage, Loader2, X, CheckCircle2, HelpCircle, AlertTriangle } from "lucide-react";
+import { Camera, Upload, FileImage, Loader2, X, CheckCircle2, HelpCircle, AlertTriangle, Building2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
@@ -31,6 +31,11 @@ export function SubirAlbaranMobile() {
     duplicado,
     setDuplicado,
     documentoIncompleto,
+    avisoEmpresa,
+    empresaConfirmada,
+    cambiandoEmpresa,
+    confirmarEmpresa,
+    cambiarEmpresa,
     cabecera,
     proveedor,
     setProveedor,
@@ -165,6 +170,54 @@ export function SubirAlbaranMobile() {
 
       {paso === "verificar" && (
         <div className="space-y-4">
+          {avisoEmpresa && avisoEmpresa.veredicto === "otra_empresa" && !empresaConfirmada && (
+            <div className="space-y-3 rounded-2xl border-2 border-red-300 bg-red-50 p-3.5 dark:border-red-800 dark:bg-red-950/30">
+              <div className="flex items-start gap-2">
+                <Building2 className="mt-0.5 h-5 w-5 shrink-0 text-red-600 dark:text-red-400" />
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-red-800 dark:text-red-300">
+                    {avisoEmpresa.porCif
+                      ? `Este albarán es de ${avisoEmpresa.empresaDetectada?.nombre}, no de ${avisoEmpresa.empresaActiva.nombre}`
+                      : `Este albarán parece de ${avisoEmpresa.empresaDetectada?.nombre}, y lo estás subiendo a ${avisoEmpresa.empresaActiva.nombre}`}
+                  </p>
+                  <p className="mt-1 text-xs text-red-700 dark:text-red-400">
+                    {avisoEmpresa.destinatarioTexto
+                      ? `El papel va dirigido a "${avisoEmpresa.destinatarioTexto}". `
+                      : ""}
+                    Si lo subes aquí, entrará en la empresa equivocada. Cámbiate a{" "}
+                    {avisoEmpresa.empresaDetectada?.nombre} para que se lea contra su catálogo.
+                  </p>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  className="flex-1"
+                  disabled={cambiandoEmpresa}
+                  onClick={() => avisoEmpresa.empresaDetectada && cambiarEmpresa(avisoEmpresa.empresaDetectada.id)}
+                >
+                  {cambiandoEmpresa ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                  Cambiar a {avisoEmpresa.empresaDetectada?.nombre}
+                </Button>
+                <Button variant="outline" className="shrink-0" disabled={cambiandoEmpresa} onClick={confirmarEmpresa}>
+                  Seguir en {avisoEmpresa.empresaActiva.nombre}
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {avisoEmpresa && avisoEmpresa.veredicto !== "otra_empresa" && (
+            <div className="rounded-2xl border border-amber-300 bg-amber-50 p-3.5 dark:border-amber-800 dark:bg-amber-950/30">
+              <div className="flex items-start gap-2">
+                <Building2 className="mt-0.5 h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400" />
+                <p className="text-xs text-amber-800 dark:text-amber-300">
+                  {avisoEmpresa.veredicto === "no_verificable"
+                    ? `No he podido leer a qué empresa va dirigido este albarán. Verifica que ${avisoEmpresa.empresaActiva.nombre} es la correcta antes de guardar.`
+                    : `He leído "${avisoEmpresa.destinatarioTexto}" como destinatario y no coincide con ${avisoEmpresa.empresaActiva.nombre}. Comprueba que es la empresa correcta.`}
+                </p>
+              </div>
+            </div>
+          )}
+
           {documentoIncompleto && (
             <div className="space-y-3 rounded-2xl border-2 border-red-300 bg-red-50 p-3.5 dark:border-red-800 dark:bg-red-950/30">
               <div className="flex items-start gap-2">
@@ -359,7 +412,11 @@ export function SubirAlbaranMobile() {
                 onClick={() =>
                   guardar(undefined, documentoIncompleto && insisteParcial ? { motivo: motivoParcial } : undefined)
                 }
-                disabled={!!duplicado || (!!documentoIncompleto && (!insisteParcial || !motivoParcial.trim()))}
+                disabled={
+                  !!duplicado ||
+                  (avisoEmpresa?.veredicto === "otra_empresa" && !empresaConfirmada) ||
+                  (!!documentoIncompleto && (!insisteParcial || !motivoParcial.trim()))
+                }
               >
                 {documentoIncompleto && insisteParcial ? "Guardar incompleto" : "Guardar en Revisión"}
               </Button>
