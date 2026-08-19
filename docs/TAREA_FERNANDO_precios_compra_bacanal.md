@@ -5,6 +5,43 @@
 
 ---
 
+## ✅ FERNANDO (19-ago): tu prioridad 1 HECHA — el aviso de empresa equivocada, EN LA SUBIDA
+
+Iván: el hallazgo A que destapaste (el OCR ya lee el destinatario pero nadie lo cruzaba, por
+eso tus 8 albaranes acabaron en Bacanal sin aviso) está **resuelto y en producción**
+(`660a211a`), con las cinco condiciones que pediste:
+
+1. **El OCR ya extraía el destinatario** (CIF, razón social, dirección del restaurante). Ahora
+   se **cruza con la empresa activa** en el momento de leer el albarán.
+2. Si el papel va dirigido a **OTRA empresa tuya**, salta una **tarjeta roja que BLOQUEA el
+   guardado**: *"Este albarán parece de HABANA, y lo estás subiendo a BACANAL"*. Si el cruce
+   fue por **CIF es certeza** (*"es de HABANA, no de BACANAL"*); si fue por nombre, sospecha
+   fuerte. En ambos casos no se guarda hasta resolver.
+3. Dos salidas en la propia tarjeta: **[Cambiar a HABANA]** — arma Habana como empresa activa
+   y **relee el mismo albarán contra el catálogo de Habana** (sin repetir la foto) — o
+   **[Seguir en BACANAL]** si de verdad es de Bacanal.
+4. Si el CIF del papel coincide con otra empresa tuya = **certeza**, y el texto lo dice así.
+5. Si el papel **no trae destinatario legible**, o trae uno que no cuadra con ninguna empresa
+   tuya, sale un **aviso ámbar no bloqueante**: *"no he podido comprobar a qué empresa va
+   dirigido, verifica que BACANAL es la correcta"*.
+
+**Probado E2E en vivo** (móvil, con tu Belmon 15378 cuyo destinatario es "HABANA COKTAIL",
+subiéndolo a BACANAL): saltó la tarjeta roja, Guardar bloqueado, pulsé **Cambiar a HABANA** →
+releyó las 25 líneas contra Habana y el aviso desapareció. Nada guardado, todo limpio. El
+E2E además cazó un fallo latente que ya arreglé (`03e73aed`): al cambiar de empresa, las
+incidencias del análisis anterior quedaban colgando bajo la empresa vieja; ahora el
+re-análisis las limpia siempre.
+
+Funciona en **móvil y escritorio**. Con esto quedan hechos tus dos avisos "el sistema ya tiene
+el dato pero se lo calla": empresa equivocada y documento incompleto.
+
+Detalle técnico: lib pura `empresa-destinatario.ts` (`evaluarEmpresaDestinatario`, cruce por
+CIF/razón social contra la empresa activa y las demás del usuario), `analizarIncidenciasAlbaran`
+(devuelve `avisoEmpresa` + evento `aviso_empresa_destinatario`), `use-subir-albaran.ts`
+(`cambiarEmpresa` vía `setEmpresaActiva` + re-análisis), tarjeta en móvil y escritorio.
+
+---
+
 ## ✅ FERNANDO (18-ago): tu encargo 5 HECHO — el albarán incompleto se caza EN LA SUBIDA
 
 Iván: leídas tus respuestas del 17-ago (gracias por anotar y parar) y tu encargo del 18-ago
