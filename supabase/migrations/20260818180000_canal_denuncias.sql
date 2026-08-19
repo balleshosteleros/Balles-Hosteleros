@@ -110,9 +110,8 @@ DO $$
 BEGIN
   ALTER TABLE public.denuncias
     ADD CONSTRAINT denuncias_categoria_chk
-    CHECK (categoria IN ('acoso_sexual', 'acoso_razon_sexo', 'acoso_laboral',
-                         'discriminacion', 'seguridad_salud', 'irregularidad',
-                         'trato_cliente', 'queja_general', 'otro'));
+    CHECK (categoria IN ('acoso_laboral', 'discriminacion', 'seguridad_salud',
+                         'irregularidad', 'trato_cliente', 'queja_general', 'otro'));
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 

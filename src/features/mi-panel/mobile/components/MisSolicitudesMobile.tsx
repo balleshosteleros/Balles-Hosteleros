@@ -10,6 +10,7 @@ import {
 import type { SolicitudPersonal } from "@/features/mi-panel/types";
 import { ESTADO_LABEL, SUBTIPO_LABEL } from "@/features/mi-panel/types";
 import { SolicitudModal } from "@/features/mi-panel/components/SolicitudModal";
+import { DenunciaModal } from "@/features/mi-panel/components/DenunciaModal";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -49,6 +50,7 @@ export function MisSolicitudesMobile() {
   const [loading, setLoading] = useState(true);
   const [refreshKey, setRefreshKey] = useState(0);
   const [open, setOpen] = useState(false);
+  const [denunciaOpen, setDenunciaOpen] = useState(false);
   const [tab, setTab] = useState<"todas" | "ausencias" | "trabajos">("todas");
   const [aAnular, setAAnular] = useState<SolicitudPersonal | null>(null);
   const [anulando, setAnulando] = useState(false);
@@ -193,6 +195,13 @@ export function MisSolicitudesMobile() {
       <SolicitudModal
         open={open}
         onOpenChange={setOpen}
+        onCreated={() => setRefreshKey((k) => k + 1)}
+        onElegirDenuncia={() => setDenunciaOpen(true)}
+      />
+
+      <DenunciaModal
+        open={denunciaOpen}
+        onOpenChange={setDenunciaOpen}
         onCreated={() => setRefreshKey((k) => k + 1)}
       />
 

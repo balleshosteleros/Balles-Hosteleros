@@ -8,8 +8,6 @@ import { getEmpresaActivaForUser } from "@/features/empresa/lib/empresa-server";
 export type ModalidadDenuncia = "nominal" | "anonima";
 
 export type CategoriaDenuncia =
-  | "acoso_sexual"
-  | "acoso_razon_sexo"
   | "acoso_laboral"
   | "discriminacion"
   | "seguridad_salud"

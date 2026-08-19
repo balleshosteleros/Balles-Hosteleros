@@ -17,8 +17,6 @@ import {
 } from "@/features/mi-panel/actions/denuncias-actions";
 
 export const CATEGORIA_LABEL: Record<CategoriaDenuncia, string> = {
-  acoso_sexual: "Acoso sexual",
-  acoso_razon_sexo: "Acoso por razón de sexo",
   acoso_laboral: "Acoso laboral",
   discriminacion: "Discriminación",
   seguridad_salud: "Seguridad y salud en el trabajo",
@@ -107,8 +105,12 @@ export function DenunciaModal({ open, onOpenChange, onCreated }: Props) {
               comunicación, y <strong>no se puede volver a mostrar</strong>: no queda
               guardado en ningún sitio que permita recuperarlo.
             </p>
+            {/* El código no debe desbordar en pantallas estrechas: se permite
+                partir y el tamaño sube solo a partir de sm. */}
             <div className="rounded-lg border-2 border-dashed p-4 text-center">
-              <p className="font-mono text-xl font-bold tracking-wider">{codigo}</p>
+              <p className="break-all font-mono text-lg font-bold tracking-wider sm:text-xl">
+                {codigo}
+              </p>
             </div>
             <Button
               variant="outline"
@@ -140,7 +142,7 @@ export function DenunciaModal({ open, onOpenChange, onCreated }: Props) {
   if (!modalidad) {
     return (
       <Dialog open={open} onOpenChange={cerrar}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Presentar una queja o denuncia</DialogTitle>
           </DialogHeader>
