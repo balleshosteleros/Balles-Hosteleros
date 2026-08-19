@@ -228,7 +228,11 @@ export async function createAlbaran(input: {
       if ((provs ?? []).length === 1) proveedorId = (provs![0].id as string) ?? null;
     }
 
-    const year = new Date(input.fecha || new Date().toISOString()).getFullYear();
+    // El año de la SERIE (ALB-AAAA-NNN) es el de REGISTRO, no el de la fecha del papel:
+    // el OCR lee mal el año a veces (ALB-2013-025, ALB-2023-062 en mitad de la serie 2026)
+    // y la serie interna no debe depender de eso. La fecha del proveedor se guarda aparte
+    // en `fecha`. Regla de Iván (14-ago): la serie manda sobre lo que diga el OCR.
+    const year = new Date().getFullYear();
     const insertPayload: Record<string, unknown> = {
       empresa_id: empresaId,
       // "" también cae a null: pedido_id es uuid y un string vacío rompe el casteo.
