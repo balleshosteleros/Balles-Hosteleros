@@ -12,7 +12,7 @@ import {
   Inbox, FileSignature, Trophy, UserCircle, LayoutDashboard, FileQuestion,
   LayoutGrid, CalendarClock, AlertTriangle, HelpCircle, MessageSquareWarning,
   Video, Mail, MessageSquare, Banknote, Building2, Smartphone, Trash2,
-  Bell,
+  Bell, ArrowLeftRight,
 } from "lucide-react";
 
 // ─── Icons custom ──────────────────────────────────────────────────────────
@@ -132,6 +132,7 @@ export const logisticaSubs: SubItem[] = [
   { title: "PRODUCTOS", url: "/logistica/productos", icon: Apple },
   { title: "PEDIDOS", url: "/logistica/pedidos", icon: ShoppingCart },
   { title: "STOCK", url: "/logistica/stock", icon: Warehouse },
+  { title: "MOVIMIENTOS", url: "/logistica/movimientos", icon: ArrowLeftRight },
   { title: "INVENTARIOS", url: "/logistica/inventarios", icon: ClipboardList },
 ];
 

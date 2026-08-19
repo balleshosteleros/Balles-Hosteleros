@@ -1,7 +1,70 @@
 "use server";
 
 import { getLogisticaContext } from "@/features/logistica/lib/supabase-context";
-import type { StockMovimiento } from "@/features/logistica/data/kardex";
+import type { DocumentoTipo, StockMovimiento } from "@/features/logistica/data/kardex";
+
+/** Un movimiento del almacén con el nombre del producto ya resuelto (para la vista general). */
+export interface MovimientoAlmacen extends StockMovimiento {
+  productoNombre: string;
+  productoMedida: string | null;
+}
+
+/**
+ * Todos los movimientos de stock de la empresa (kardex de almacén), con el nombre del
+ * producto resuelto. Vista general "qué entró, qué salió, por qué y cuándo" (Iván 14-ago).
+ * Hoy casi todo son entradas por albarán; se irá llenando cuando ventas/mermas/inventarios
+ * empiecen a descontar. Ordena por fecha desc; el filtro por nombre se aplica en memoria.
+ */
+export async function listMovimientosAlmacen(filtros?: {
+  desde?: string | null;
+  hasta?: string | null;
+  documentoTipo?: DocumentoTipo | null;
+  busqueda?: string | null;
+  limite?: number;
+}): Promise<{ ok: boolean; data: MovimientoAlmacen[] }> {
+  try {
+    const { supabase, empresaId } = await getLogisticaContext();
+    if (!empresaId) return { ok: false, data: [] };
+
+    let query = supabase
+      .from("stock_movimientos")
+      .select("*")
+      .eq("empresa_id", empresaId)
+      .order("fecha", { ascending: false })
+      .order("created_at", { ascending: false })
+      .limit(Math.min(filtros?.limite ?? 500, 2000));
+    if (filtros?.desde) query = query.gte("fecha", filtros.desde);
+    if (filtros?.hasta) query = query.lte("fecha", `${filtros.hasta}T23:59:59`);
+    if (filtros?.documentoTipo) query = query.eq("documento_tipo", filtros.documentoTipo);
+
+    const [{ data: movs, error }, { data: prods }] = await Promise.all([
+      query,
+      supabase.from("productos").select("id, nombre, medida").eq("empresa_id", empresaId),
+    ]);
+    if (error) throw error;
+
+    const nombre = new Map<string, { nombre: string; medida: string | null }>();
+    for (const p of prods ?? []) {
+      nombre.set(p.id as string, { nombre: (p.nombre as string) ?? "—", medida: (p.medida as string | null) ?? null });
+    }
+
+    const norm = (s: string) =>
+      s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+    const buscar = filtros?.busqueda?.trim() ? norm(filtros.busqueda.trim()) : null;
+
+    const data: MovimientoAlmacen[] = ((movs ?? []) as StockMovimiento[])
+      .map((m) => {
+        const info = nombre.get(m.producto_id);
+        return { ...m, productoNombre: info?.nombre ?? "—", productoMedida: info?.medida ?? null };
+      })
+      .filter((m) => !buscar || norm(m.productoNombre).includes(buscar) || norm(m.referencia ?? "").includes(buscar));
+
+    return { ok: true, data };
+  } catch (err) {
+    console.error("[kardex] listMovimientosAlmacen:", err);
+    return { ok: false, data: [] };
+  }
+}
 
 /** Lee si un producto controla stock (Sí/No) + cuántos movimientos tiene en histórico. */
 export async function getControlaStock(
