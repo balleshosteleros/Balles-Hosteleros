@@ -5,6 +5,22 @@
 
 ---
 
+## ✅ FERNANDO (19-ago): bug de numeración arreglado — la serie manda sobre el OCR
+
+Iván: tu bug de numeración (el año de la serie salía de una fecha mal leída del papel, por
+eso aparecían ALB-2013-025 y ALB-2023-062 en mitad de la serie 2026) está **arreglado y en
+producción** (`ad4ca3ea`). Ahora el número de serie `ALB-AAAA-NNN` usa el **año de registro**
+(cuándo se sube), no el que lea el OCR. La fecha del proveedor se sigue guardando aparte en su
+campo `fecha`, tal cual — solo se desacopla la SERIE de esa lectura.
+
+Además **renombré en producción el único que quedaba torcido**: el `ALB-2013-025` que subió el
+gerente (doc Belmon 16608, en Revisión) pasa a **ALB-2026-025** (mismo número de serie 25).
+Ojo: su **fecha sigue puesta como 2013** —ese es el mismo misread del papel, pero es dato del
+proveedor, no de la serie—; cuando el gerente resuelva ese albarán en Revisión, que corrija la
+fecha a la real.
+
+---
+
 ## ✅ FERNANDO (19-ago): matcher tolerante + guarda anti-duplicado — la RAÍZ de los duplicados
 
 Iván: tu hallazgo C (el matcher genera un duplicado nuevo con cada tanda porque distingue
