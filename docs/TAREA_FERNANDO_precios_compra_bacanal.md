@@ -247,6 +247,20 @@ cuando el que falla es el chat de la web o el redactor de correos. Hazlo genéri
 
 ### 2. 📄 Belmon Drink 15378 → **PEDIDO AL GERENTE. Queda PENDIENTE de que llegue completo**
 
+> ✅ **CERRADO (Fernando, 19-ago): llegó la página 2 y el 15378 está CARGADO ENTERO** como
+> **ALB-2026-028** (Habana, BELMONTE, 16-jul, Confirmado SIN stock — mismo criterio que
+> sus 27 hermanos del lote 30-jul, mercancía ya consumida). 26 líneas (25 de la pág. 1 + la
+> de la pág. 2), base 694,39 € cuadrada al céntimo con el papel (207,57 al 10 % + 486,82 al
+> 21 %; total 817,38 €), 0 líneas sin producto, **24 precios de compra registrados y 24
+> aliases con la REFERENCIA del proveedor** (BB11, C13, CC14… → la próxima tanda de Belmon
+> casa sola por referencia). Las dos páginas adjuntas al albarán. La pág. 2 solo traía 1
+> línea: "TEQ JOSE CUERVO REPOSADO ×1" **sin importe** → regalo a 0 € (igual que el Ron Limón
+> ×1 de la pág. 1 y que resolvimos en el 15402). **Un dato para ti**: en la pág. 2 hay una
+> anotación a mano del repartidor — *"RECOJO 1 CAJA RED BULL (SANDÍA) — HACER ABONO"*. Es
+> decir, **Belmon te debe un abono por una caja de Red Bull sandía devuelta**; no está
+> reflejado en ningún documento nuestro (no es un albarán). Compruébalo cuando llegue su
+> próxima factura/abono. Con esto, **las 4 dudas del 30-jul están las 4 cerradas**.
+
 Identificado: **Habana, 16-jul-2026, pedido grande de licores y energéticas** (Red Bull,
 ginebras, whiskies, Oxefruit); las dos fotos del 30-jul cortan en "SUMA Y SIGUE: 694,39 €".
 
@@ -542,6 +556,8 @@ movimientos de stock, los inventarios no se tocan porque son todo gastos o preci
    sí, precio 0, sin precio registrado** (la propuesta estándar de la mesa). El total del
    albarán no cambia (ya cuadraba).
 
+~~La 4ª duda sigue esperándote~~ → **CERRADA el 19-ago: ALB-2026-028 cargado entero (ver tu
+punto 2 más arriba).** Texto original:
 **La 4ª duda (Belmon Drink `15378`, Habana) sigue esperándote a ti**: faltaba la página
 final (corta en "SUMA Y SIGUE: 694,39 €"). Si tienes la foto, pásala y lo cargamos; si no,
 dinos si lo dejamos fuera definitivamente.
