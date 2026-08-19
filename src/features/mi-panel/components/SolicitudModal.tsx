@@ -55,6 +55,8 @@ interface SolicitudModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onCreated?: () => void;
+  /** Se llama al elegir "Queja o denuncia": abre el formulario del canal. */
+  onElegirDenuncia?: () => void;
 }
 
 type Paso = "tipo" | "subtipo" | "detalle";
@@ -95,7 +97,7 @@ function fechaBloqueoLabel(iso: string, recurrente: boolean): string {
   return recurrente ? `${d}/${m}` : `${d}/${m}/${y}`;
 }
 
-export function SolicitudModal({ open, onOpenChange, onCreated }: SolicitudModalProps) {
+export function SolicitudModal({ open, onOpenChange, onCreated, onElegirDenuncia }: SolicitudModalProps) {
   const [paso, setPaso] = useState<Paso>("tipo");
   const [tipo, setTipo] = useState<SolicitudTipo | null>(null);
   const [subtipo, setSubtipo] = useState<SolicitudSubtipo | null>(null);
@@ -465,6 +467,20 @@ export function SolicitudModal({ open, onOpenChange, onCreated }: SolicitudModal
                 <div className="font-semibold">Trabajo realizado</div>
                 <div className="text-xs text-muted-foreground mt-0.5">
                   Registrar horas extras o un día trabajado no fichado.
+                </div>
+              </button>
+              {/* La denuncia es un tipo más de solicitud, pero sus datos van a
+                  una tabla aparte con acceso restringido a RRHH: en
+                  `solicitudes_personal` la leería toda la plantilla. */}
+              <button
+                type="button"
+                onClick={() => { handleClose(false); onElegirDenuncia?.(); }}
+                className="text-left p-4 rounded-lg border transition-colors hover:border-primary hover:bg-primary/5 active:border-blue-600 active:bg-blue-50 active:text-blue-700"
+              >
+                <div className="font-semibold">Queja o denuncia</div>
+                <div className="text-xs text-muted-foreground mt-0.5">
+                  Acoso, discriminación, seguridad o cualquier otra queja. Es el
+                  único canal válido y lo revisa Recursos Humanos.
                 </div>
               </button>
             </div>

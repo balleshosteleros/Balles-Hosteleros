@@ -13,6 +13,8 @@ import {
 import type { SolicitudPersonal } from "@/features/mi-panel/types";
 import { ESTADO_COLOR, ESTADO_LABEL, SUBTIPO_LABEL } from "@/features/mi-panel/types";
 import { SolicitudModal } from "./SolicitudModal";
+import { DenunciaModal } from "./DenunciaModal";
+import { MisDenunciasCard } from "./MisDenunciasCard";
 
 function formatFecha(s: string): string {
   try {
@@ -101,6 +103,7 @@ export function MisAusenciasView() {
   const [loading, setLoading] = useState(true);
   const [refreshKey, setRefreshKey] = useState(0);
   const [open, setOpen] = useState(false);
+  const [denunciaOpen, setDenunciaOpen] = useState(false);
 
   useEffect(() => {
     let cancel = false;
@@ -156,9 +159,18 @@ export function MisAusenciasView() {
         />
       </div>
 
+      <MisDenunciasCard refreshKey={refreshKey} />
+
       <SolicitudModal
         open={open}
         onOpenChange={setOpen}
+        onCreated={() => setRefreshKey((k) => k + 1)}
+        onElegirDenuncia={() => setDenunciaOpen(true)}
+      />
+
+      <DenunciaModal
+        open={denunciaOpen}
+        onOpenChange={setDenunciaOpen}
         onCreated={() => setRefreshKey((k) => k + 1)}
       />
     </div>

@@ -182,22 +182,27 @@ export function CursoVista({ cursoId, admin = false }: Props) {
         {/* ─── Columna izq: reproductor + info ───────────────── */}
         <div className="space-y-4">
           <Card className="overflow-hidden">
-            <div className="relative aspect-video w-full bg-black">
-              {activa ? (
-                <video
-                  key={activa.id}
-                  src={activa.url}
-                  controls
-                  autoPlay
-                  className="h-full w-full"
-                  onEnded={() => marcarCompletada(userKey, activa.id)}
-                />
-              ) : (
-                <div className="flex h-full w-full items-center justify-center text-white/70">
-                  Este curso aún no tiene lecciones.
-                </div>
-              )}
-            </div>
+            {/* Las lecciones de solo texto (sin vídeo) no montan reproductor:
+                mostrarlo dejaría un recuadro negro y, al no dispararse
+                `onEnded`, la lección no podría marcarse como completada. */}
+            {(!activa || activa.url) && (
+              <div className="relative aspect-video w-full bg-black">
+                {activa ? (
+                  <video
+                    key={activa.id}
+                    src={activa.url}
+                    controls
+                    autoPlay
+                    className="h-full w-full"
+                    onEnded={() => marcarCompletada(userKey, activa.id)}
+                  />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center text-white/70">
+                    Este curso aún no tiene lecciones.
+                  </div>
+                )}
+              </div>
+            )}
             {activa && (
               <CardContent className="space-y-4 p-5">
                 <div className="space-y-1">

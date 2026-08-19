@@ -8,6 +8,8 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { DenunciasPanel } from "@/features/rrhh/components/denuncias/DenunciasView";
+import { SeguimientoIgualdad } from "@/features/rrhh/components/denuncias/SeguimientoIgualdad";
 import {
   Table,
   TableBody,
@@ -68,7 +70,7 @@ export function SolicitudesView() {
   const { empresaActual } = useEmpresa();
   const formatFechaHora = (s: string): string =>
     formatFechaHoraEnZona(s, empresaActual.zonaHoraria) || s;
-  const [tab, setTab] = useTabQuery(["pendientes", "todas"] as const, "pendientes");
+  const [tab, setTab] = useTabQuery(["pendientes", "todas", "denuncias"] as const, "pendientes");
   const [items, setItems] = useState<SolicitudConFlag[]>([]);
   const [loading, setLoading] = useState(true);
   const [busqueda, setBusqueda] = useState("");
@@ -85,7 +87,9 @@ export function SolicitudesView() {
 
   async function load() {
     setLoading(true);
-    const res = await listarSolicitudesEmpresa(tab);
+    // La pestaña de denuncias se sirve de su propia tabla; para la carga de
+    // solicitudes se trata como "todas".
+    const res = await listarSolicitudesEmpresa(tab === "denuncias" ? "todas" : tab);
     setItems(res.ok ? res.data : []);
     setLoading(false);
   }
@@ -230,11 +234,19 @@ export function SolicitudesView() {
   return (
     <div className="p-6 space-y-6">
       {/* Tabs + buscador */}
-      <Tabs value={tab} onValueChange={(v) => setTab(v as "pendientes" | "todas")}>
+      <Tabs value={tab} onValueChange={(v) => setTab(v as typeof tab)}>
         <TabsList>
           <TabsTrigger value="pendientes">Pendientes</TabsTrigger>
           <TabsTrigger value="todas">Historial</TabsTrigger>
+          <TabsTrigger value="denuncias">Quejas y denuncias</TabsTrigger>
         </TabsList>
+
+        {/* Las denuncias viven en su propia tabla, con acceso restringido a
+            RRHH, pero se gestionan desde aquí para no tener dos sitios. */}
+        <TabsContent value="denuncias" className="mt-4 space-y-6">
+          <DenunciasPanel embebido />
+          <SeguimientoIgualdad />
+        </TabsContent>
 
         <TabsContent value={tab} className="mt-4 space-y-4">
           <SubmoduleToolbar
