@@ -462,6 +462,10 @@ export function useSubirAlbaran({ fechaPorDefecto, creador, onCreado }: UseSubir
           dtoEur: 0,
           total: l.importe ?? Math.round(precio * l.cantidad * 100) / 100,
           nombreProveedor: l.nombre,
+          // Referencia del artículo en el catálogo DEL PROVEEDOR (BB11, C13…): ancla fuerte
+          // del matcher. Se persiste para que al crear/vincular quede memorizada y la próxima
+          // tanda de ese proveedor case por referencia, sin volver a preguntar (regla Iván).
+          referenciaProveedor: l.referenciaProveedor ?? null,
           formato: l.formato ?? null,
           // Desglose impreso en el papel ("SUBUNIDADES: 24"): trazabilidad de la
           // equivalencia; la cantidad de arriba es SIEMPRE el nº de envases.

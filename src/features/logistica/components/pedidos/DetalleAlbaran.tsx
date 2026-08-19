@@ -41,7 +41,11 @@ interface Props {
 }
 
 /** Campos extra que el flujo "subir por foto" guarda en cada línea del jsonb. */
-type LineaConOrigen = Albaran["lineas"][number] & { nombreProveedor?: string; ignorada?: boolean };
+type LineaConOrigen = Albaran["lineas"][number] & {
+  nombreProveedor?: string;
+  ignorada?: boolean;
+  referenciaProveedor?: string | null;
+};
 
 export function DetalleAlbaran({ albaran, pedidoOrigen, zonaHoraria, onBack, onEntregar, onDelete, onGenerarFactura, onConfirmadoRevision }: Props) {
   const totales = calcularTotalesLineas(albaran.lineas);
@@ -92,6 +96,7 @@ export function DetalleAlbaran({ albaran, pedidoOrigen, zonaHoraria, onBack, onE
             nombre: l.nombreProveedor ?? l.producto,
             cantidad: l.cantidad,
             precioUnitario: l.precioUC || null,
+            referenciaProveedor: l.referenciaProveedor ?? null,
           })),
         ),
         listarIncidenciasAlbaran(albaran.id),

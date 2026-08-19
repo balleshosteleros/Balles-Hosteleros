@@ -41,6 +41,8 @@ export interface LineaLeida {
   precioUnitario: number | null;
   iva?: string | null;
   formato?: string | null;
+  /** Referencia del artículo en el catálogo DEL PROVEEDOR (BB11…): ancla al crear/vincular. */
+  referenciaProveedor?: string | null;
 }
 
 export interface SugerenciaCandidato {
@@ -62,6 +64,10 @@ export interface LineaEmparejada {
   ligadoAuto: SugerenciaCandidato | null;
   /** Candidatos propuestos por si la persona quiere ligar a uno. */
   candidatos: SugerenciaCandidato[];
+  /** Texto crudo del proveedor (para memorizar como alias al crear/vincular). */
+  nombreProveedor?: string;
+  /** Referencia del proveedor leída del papel (ancla fuerte al crear/vincular). */
+  referenciaProveedor?: string | null;
 }
 
 // Tipos del OCR: viven en el extractor único (lib/albaranes/ocr-albaran.ts).
@@ -196,7 +202,7 @@ export async function emparejarLineasAlbaran(
           via: "nombre_proveedor",
           precioVigente: vigentes.get(p.id) ?? null,
         };
-        return { id: l.id, nombre: l.nombre, cantidad: l.cantidad, precioUnitario: l.precioUnitario, ligadoAuto: sug, candidatos: [sug] };
+        return { id: l.id, nombre: l.nombre, cantidad: l.cantidad, precioUnitario: l.precioUnitario, ligadoAuto: sug, candidatos: [sug], nombreProveedor: l.nombre, referenciaProveedor: l.referenciaProveedor ?? null };
       }
       // Tramo 2: similitud contra nombre/nombre_proveedor (comportamiento previo).
       const match = emparejarConCatalogo(l.nombre, catalogo);
@@ -207,6 +213,8 @@ export async function emparejarLineasAlbaran(
         precioUnitario: l.precioUnitario,
         ligadoAuto: match.exacto ? toSugerencia(match.exacto) : null,
         candidatos: match.candidatos.map(toSugerencia),
+        nombreProveedor: l.nombre,
+        referenciaProveedor: l.referenciaProveedor ?? null,
       };
     });
 
@@ -232,6 +240,8 @@ export async function crearProductoDesdeAlbaran(input: {
   precio: number;
   /** Cómo lo llamó el proveedor en el albarán (texto OCR). */
   nombreProveedor: string;
+  /** Referencia del artículo en el catálogo del proveedor (BB11…), leída del papel. */
+  referenciaProveedor?: string | null;
   formato?: string | null;
   unidad?: string;
 }): Promise<{ ok: boolean; productoId?: string; error?: string }> {
@@ -262,6 +272,19 @@ export async function crearProductoDesdeAlbaran(input: {
     }
 
     const { supabase, empresaId } = await getLogisticaContext();
+
+    // Memoriza el alias del proveedor CON su referencia en producto_proveedor_aliases
+    // (ancla fuerte del matcher): así la próxima tanda de este proveedor casa por
+    // referencia sin volver a preguntar. Regla de Iván: "no volver a pedirlos".
+    if (empresaId) {
+      await guardarAliasConReferencia(supabase, empresaId, {
+        productoId: creado.producto.id,
+        proveedorNombre: input.proveedor.trim(),
+        alias: input.nombreProveedor?.trim() || input.nombre.trim(),
+        referencia: input.referenciaProveedor?.trim() || null,
+      });
+    }
+
     const hoy = hoyEnZona(await getZonaHorariaEmpresa(supabase, empresaId));
     const precioRes = await addPrecioCompra({
       productoId: creado.producto.id,
@@ -457,6 +480,52 @@ export async function buscarProductosCompra(input: {
     const msg = err instanceof Error ? err.message : "Error desconocido";
     console.error("[asistente-albaran] buscarProductosCompra:", msg);
     return { ok: false, productos: [], total: 0, error: msg };
+  }
+}
+
+/**
+ * Escribe (idempotente) el alias del proveedor CON su referencia en
+ * `producto_proveedor_aliases`, el ancla fuerte que el matcher lee primero. Resuelve el
+ * `proveedor_id` por nombre (solo si es inequívoco). No pisa un alias ya memorizado.
+ * Silencioso ante fallos: memorizar el alias NUNCA debe tumbar la creación del producto.
+ */
+async function guardarAliasConReferencia(
+  supabase: Awaited<ReturnType<typeof getLogisticaContext>>["supabase"],
+  empresaId: string,
+  input: { productoId: string; proveedorNombre: string; alias: string; referencia: string | null },
+): Promise<void> {
+  try {
+    const alias = input.alias.trim();
+    const prov = input.proveedorNombre.trim();
+    if (!alias || !prov) return;
+    // El alta pasa el nombre_comercial interno del proveedor (no la razón social del papel),
+    // así que se resuelve por ese campo (evita el edge del .or con comas: "X, S.L.").
+    const { data: provRows } = await supabase
+      .from("proveedores")
+      .select("id")
+      .eq("empresa_id", empresaId)
+      .ilike("nombre_comercial", prov);
+    if ((provRows ?? []).length !== 1) return; // proveedor ambiguo o desconocido: sin ancla
+    const proveedorId = provRows![0].id as string;
+    const aliasNorm = alias.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/\s+/g, " ").trim();
+    const { data: ya } = await supabase
+      .from("producto_proveedor_aliases")
+      .select("id")
+      .eq("empresa_id", empresaId)
+      .eq("proveedor_id", proveedorId)
+      .eq("alias_normalizado", aliasNorm)
+      .maybeSingle();
+    if (ya) return; // ya memorizado para este proveedor: no duplicar
+    await supabase.from("producto_proveedor_aliases").insert({
+      empresa_id: empresaId,
+      producto_id: input.productoId,
+      proveedor_id: proveedorId,
+      alias,
+      alias_normalizado: aliasNorm,
+      referencia: input.referencia,
+    });
+  } catch (err) {
+    console.error("[asistente-albaran] guardarAliasConReferencia:", err);
   }
 }
 

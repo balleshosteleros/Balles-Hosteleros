@@ -148,7 +148,10 @@ export function AsistenteAlbaranPanel({
     try {
       const res = await crearProductoDesdeAlbaran({
         ...datos,
-        nombreProveedor: linea.nombre,
+        // El texto y la referencia del proveedor se leen del papel, no se vuelven a pedir:
+        // se memorizan como alias fuerte para que la próxima tanda case sola (regla Iván).
+        nombreProveedor: linea.nombreProveedor || linea.nombre,
+        referenciaProveedor: linea.referenciaProveedor,
       });
       if (!res.ok || !res.productoId) {
         setError(res.error ?? "No se pudo crear el producto");

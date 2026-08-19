@@ -209,6 +209,12 @@ export function ResolverLineaDialog({
           ) : (
             <span className="italic">sin precio</span>
           )}
+          {linea.referenciaProveedor ? (
+            <>
+              {" · Ref. proveedor: "}
+              <b>{linea.referenciaProveedor}</b>
+            </>
+          ) : null}
         </div>
 
         {/* Conmutador de modo */}
