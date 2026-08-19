@@ -12,6 +12,7 @@
 import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendEmail } from "@/lib/email/send";
+import { getSiteUrl } from "@/lib/site-url";
 import {
   getReservaEmailPlantillaSeed,
   RESERVA_EMAIL_TIPO_LABELS,
@@ -115,7 +116,7 @@ export async function enviarReservaEmail(
   const { data: reservaData, error: errR } = await admin
     .from("reservas")
     .select(
-      "empresa_id, cliente_nombre, cliente_email, fecha, hora, personas, mesa, zona, notas, tipo_categoria, garantia_importe, importe_pagado, codigo, codigo_id, email_confirmacion_at, email_reconfirmacion_at, email_recordatorio_at, email_cancelacion_at",
+      "empresa_id, cliente_nombre, cliente_email, fecha, hora, personas, mesa, zona, notas, tipo_categoria, garantia_importe, importe_pagado, codigo, codigo_id, cancelacion_token, email_confirmacion_at, email_reconfirmacion_at, email_recordatorio_at, email_cancelacion_at",
     )
     .eq("id", reservaId)
     .maybeSingle();
@@ -141,6 +142,14 @@ export async function enviarReservaEmail(
 
   const email = (reserva.cliente_email ?? "").trim();
   if (!email) return { ok: false, error: "El cliente no tiene email" };
+
+  // Enlace de cancelación: solo en correos de reserva VIVA. En el de
+  // cancelación no tiene sentido ofrecer cancelar otra vez.
+  const tokenCancelar = (reservaData.cancelacion_token as string | null) ?? null;
+  const urlCancelar =
+    tokenCancelar && tipo !== "CANCELACION"
+      ? `${getSiteUrl()}/cancelar/${tokenCancelar}`
+      : null;
 
   // Idempotencia: si ya hay timestamp en la columna del tipo, no reenviar.
   const auditCol = AUDIT_COL[tipo];
@@ -313,6 +322,7 @@ export async function enviarReservaEmail(
     politicaBloque,
     cuponBloque,
     cuponCanjeadoBloque,
+    urlCancelar,
   });
   const text = renderText({
     tipo,
@@ -328,6 +338,7 @@ export async function enviarReservaEmail(
     politicaBloque,
     cuponBloque,
     cuponCanjeadoBloque,
+    urlCancelar,
   });
 
   const res = await sendEmail({
@@ -378,6 +389,13 @@ interface RenderInput {
   politicaBloque: { horas: number; importe: number; mensajeExtra: string } | null;
   cuponBloque: { importeEur: number; mensajeExtra: string } | null;
   cuponCanjeadoBloque: { codigo: string; tituloCliente: string } | null;
+  /**
+   * Enlace para que el cliente cancele solo. Requisito de Google (E2E exige
+   * cancelación online) y del restaurante: si cancelar cuesta una llamada, el
+   * cliente no avisa y la mesa se pierde sin poder revenderse.
+   * Solo en correos de reserva viva; en CANCELACION no tiene sentido.
+   */
+  urlCancelar: string | null;
 }
 
 function renderHtml(input: RenderInput): string {
@@ -412,6 +430,16 @@ function renderHtml(input: RenderInput): string {
         <div style="font-weight:700;margin-bottom:4px;">Política de cancelación</div>
         Cancelaciones con menos de <strong>${input.politicaBloque.horas} h</strong> de antelación o no presentación: se cobrará <strong>${formatearImporte(input.politicaBloque.importe)} €</strong>.
         ${input.politicaBloque.mensajeExtra ? `<div style="margin-top:6px;">${nl2br(escapeHtml(input.politicaBloque.mensajeExtra))}</div>` : ""}
+      </div>`
+    : "";
+
+  // Cancelar en un clic. Va al final y en tono discreto: no queremos empujar a
+  // cancelar, pero sí que sea trivial avisar — una mesa liberada a tiempo se
+  // revende; un "no show" no.
+  const bloqueCancelar = input.urlCancelar
+    ? `<div style="margin-top:18px;padding-top:16px;border-top:1px solid #e2e8f0;font-size:12px;color:#94a3b8;line-height:1.6;text-align:center;">
+        ¿No puedes venir? Avísanos y liberamos tu mesa:
+        <a href="${input.urlCancelar}" style="color:#64748b;text-decoration:underline;">cancelar mi reserva</a>.
       </div>`
     : "";
 
@@ -483,6 +511,7 @@ function renderHtml(input: RenderInput): string {
                 ${bloquePolitica}
                 ${bloqueCupon}
                 ${bloqueCuponCanjeado}
+                ${bloqueCancelar}
               </td>
             </tr>
             <tr>
@@ -524,6 +553,9 @@ function renderText(input: Omit<RenderInput, "empresa"> & { empresa: string }): 
   if (input.cuponBloque) {
     lineas.push(``, `Pago recibido: ${formatearImporte(input.cuponBloque.importeEur)} €.`);
     if (input.cuponBloque.mensajeExtra) lineas.push(input.cuponBloque.mensajeExtra);
+  }
+  if (input.urlCancelar) {
+    lineas.push(``, `¿No puedes venir? Cancela tu reserva aquí: ${input.urlCancelar}`);
   }
   if (input.cuponCanjeadoBloque) {
     lineas.push(
@@ -742,6 +774,10 @@ export function previewReservaEmail(input: PreviewInput): {
     politicaBloque,
     cuponBloque: null,
     cuponCanjeadoBloque: null,
+    // Vista previa del editor: se enseña el bloque con un enlace de ejemplo
+    // para que el usuario vea cómo le queda al cliente.
+    urlCancelar:
+      input.tipo === "CANCELACION" ? null : `${getSiteUrl()}/cancelar/ejemplo`,
   });
   return { subject: asunto || RESERVA_EMAIL_TIPO_LABELS[input.tipo], html };
 }

@@ -43,10 +43,10 @@ const ESTADO_COLOR: Record<EstadoDenuncia, string> = {
 };
 
 /**
- * Panel de denuncias. Se usa embebido como pestaña dentro de Solicitudes
- * (todo se gestiona desde el mismo sitio) y también como vista propia.
+ * Panel de denuncias. Vive como pestaña dentro de Solicitudes: todo se
+ * gestiona desde el mismo sitio, sin vista aparte.
  */
-export function DenunciasPanel({ embebido = false }: { embebido?: boolean }) {
+export function DenunciasPanel() {
   const [autorizado, setAutorizado] = useState<boolean | null>(null);
   const [items, setItems] = useState<DenunciaRow[]>([]);
   const [cargando, setCargando] = useState(true);
@@ -85,7 +85,7 @@ export function DenunciasPanel({ embebido = false }: { embebido?: boolean }) {
 
   if (autorizado === false) {
     return (
-      <div className={embebido ? "" : "p-6"}>
+      <div>
         <Card>
           <CardContent className="flex flex-col items-center gap-3 py-16 text-center">
             <Lock className="h-10 w-10 text-muted-foreground" />
@@ -102,7 +102,7 @@ export function DenunciasPanel({ embebido = false }: { embebido?: boolean }) {
   }
 
   return (
-    <div className={embebido ? "space-y-6" : "p-6 space-y-6 pb-28"}>
+    <div className="space-y-6">
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <Card><CardContent className="p-4 flex items-center gap-3">
           <div className="h-10 w-10 rounded-lg bg-muted flex items-center justify-center"><Inbox className="h-5 w-5 text-muted-foreground" /></div>
@@ -295,9 +295,4 @@ function DetalleDenuncia({
       </DialogContent>
     </Dialog>
   );
-}
-
-/** Vista suelta en /rrhh/denuncias (mismo contenido, con su propio padding). */
-export function DenunciasView() {
-  return <DenunciasPanel />;
 }

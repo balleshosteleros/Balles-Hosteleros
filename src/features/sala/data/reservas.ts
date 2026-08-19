@@ -115,6 +115,24 @@ export const ZONAS_LABELS: Record<ZonaSala, string> = {
   PRIVADO: "Privado",
 };
 
+/**
+ * Etiqueta legible de una zona.
+ *
+ * ZONAS_LABELS solo cubre las 5 zonas canónicas, pero las zonas reales del
+ * plano son de texto libre (p.ej. "REDONDAS"), así que indexar el mapa a pelo
+ * devuelve `undefined` y se pinta literalmente en pantalla. Aquí caemos a la
+ * propia zona formateada en sentence case.
+ */
+export function zonaLabel(zona: string | null | undefined): string {
+  if (!zona) return "—";
+  const canonica = ZONAS_LABELS[zona as ZonaSala];
+  if (canonica) return canonica;
+  return zona
+    .toLowerCase()
+    .replace(/_/g, " ")
+    .replace(/^\p{Ll}/u, (c) => c.toUpperCase());
+}
+
 export const ESTADO_RESERVA_LABELS: Record<EstadoReserva, string> = {
   CONFIRMADA:      "Confirmada",
   RECONFIRMADA:    "Reconfirmada",

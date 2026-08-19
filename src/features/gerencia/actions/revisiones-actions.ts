@@ -158,37 +158,6 @@ export async function createRevision(input: {
   }
 }
 
-export async function updateRevision(
-  id: string,
-  input: {
-    nombre?: string;
-    ambito?: string;
-    periodicidad?: string;
-    fecha_vencimiento?: string | null;
-    fecha_ultima?: string | null;
-    responsable?: string | null;
-    proveedor?: string | null;
-    coste?: number | null;
-    notas?: string | null;
-    activo?: boolean;
-  }
-): Promise<{ ok: boolean; error?: string }> {
-  try {
-    const { supabase, empresaId } = await getContext();
-    if (!empresaId) return { ok: false, error: "No autenticado" };
-    const { error } = await supabase
-      .from("revisiones")
-      .update({ ...input, updated_at: new Date().toISOString() })
-      .eq("id", id)
-      .eq("empresa_id", empresaId);
-    if (error) throw error;
-    return { ok: true };
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : "Error desconocido";
-    console.error("[revisiones] updateRevision:", msg);
-    return { ok: false, error: msg };
-  }
-}
 
 /**
  * Anota una revisión realizada: la guarda en el historial y recalcula

@@ -29,7 +29,7 @@ import { CalendarDays, Grid3X3, Users, LayoutGrid } from "lucide-react";
 import {
   SAMPLE_MESAS,
   Mesa, Reserva, EstadoReserva, ZonaSala, TurnoReserva,
-  ZONAS_LABELS, ZONAS_SALA, ESTADO_RESERVA_LABELS, ESTADO_MESA_LABELS, ESTADOS_RESERVA,
+  ZONAS_LABELS, zonaLabel, ZONAS_SALA, ESTADO_RESERVA_LABELS, ESTADO_MESA_LABELS, ESTADOS_RESERVA,
   ESTADO_BADGE_CLASS,
   ESTADO_DOT_CLASS,
   ESTADO_ORDEN_PRIORIDAD,
@@ -228,7 +228,7 @@ function ReservaQuickPopover({
         </h4>
         {mesa && (
           <Badge variant="outline" className="text-[10px]">
-            {mesa.zona ? ZONAS_LABELS[mesa.zona] : mesa.zona} · {mesa.capacidad}p
+            {zonaLabel(mesa.zona ? String(mesa.zona) : null)} · {mesa.capacidad}p
           </Badge>
         )}
       </div>
@@ -313,7 +313,8 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
   const [form, setForm] = useState({
     cliente: "", apellidos: "", telefono: "", email: "",
     fecha, hora: "", turno,
-    comensales: mesaPreseleccionada ? Math.min(mesaPreseleccionada.capacidad, Math.max(2, mesaPreseleccionada.capacidad)) : 2,
+    // Siempre 2 por defecto: la capacidad de la mesa no dice cuánta gente viene.
+    comensales: 2,
     zona: (mesaPreseleccionada?.zona ?? "") as ZonaSala | "",
     mesaId: (mesaPreseleccionada?.id ?? "") as string,
     observaciones: "", esWalkIn: false,
@@ -437,16 +438,25 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
   const mesasSeleccionables = useMemo(() => {
     const zonasOK = new Set(zonasDisponibles.map((z) => z.value));
     return mesas
-      .filter((m) => posicionesPlano.has(m.id))
-      .filter((m) => zonasOK.size === 0 || zonasOK.has(String(m.zona)))
-      .filter((m) => !form.zona || m.zona === form.zona)
+      // La mesa ya elegida se salta los filtros: si quedara fuera de la lista,
+      // el <select> mostraría "Sin asignar" mientras el form sigue guardándola.
+      .filter((m) => m.id === form.mesaId || posicionesPlano.has(m.id))
+      .filter((m) => m.id === form.mesaId || zonasOK.size === 0 || zonasOK.has(String(m.zona)))
+      .filter((m) => m.id === form.mesaId || !form.zona || m.zona === form.zona)
       .sort((a, b) => {
         const za = String(a.zona);
         const zb = String(b.zona);
         if (za !== zb) return za.localeCompare(zb);
         return a.codigo.localeCompare(b.codigo, undefined, { numeric: true });
       });
-  }, [mesas, posicionesPlano, zonasDisponibles, form.zona]);
+  }, [mesas, posicionesPlano, zonasDisponibles, form.zona, form.mesaId]);
+
+  // Mesa que se muestra en el banner superior: siempre la del formulario,
+  // para que seleccionar otra abajo se refleje arriba (y no queden en conflicto).
+  const mesaBanner = useMemo(
+    () => (form.mesaId ? (mesas.find((m) => m.id === form.mesaId) ?? null) : null),
+    [mesas, form.mesaId],
+  );
 
   const mesasPorZona = useMemo(() => {
     const m = new Map<string, Mesa[]>();
@@ -460,13 +470,14 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
   }, [mesasSeleccionables]);
 
   // Al elegir mesa, auto-completar zona; si vacía, se respeta la zona actual.
+  // Los comensales NO se tocan: son un dato del cliente, no de la mesa (antes
+  // se subían a la capacidad de la mesa, convirtiendo 2 pax en 15 al elegir A1).
   const elegirMesa = (mesaId: string) => {
     const m = mesas.find((x) => x.id === mesaId);
     setForm((p) => ({
       ...p,
       mesaId,
       zona: m?.zona ? (String(m.zona) as ZonaSala) : p.zona,
-      comensales: m ? Math.max(p.comensales, Math.min(m.capacidad, m.capacidad)) : p.comensales,
     }));
   };
 
@@ -575,16 +586,26 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
 
   return (
     <div className="space-y-3">
-      {mesaPreseleccionada && (
+      {/* El banner refleja la mesa REALMENTE seleccionada en el formulario, no la
+          preseleccionada al abrir: si el usuario la cambia abajo, aquí se ve el
+          cambio. Si la deja sin asignar, desaparece. */}
+      {mesaBanner && (
         <div className="rounded-md border border-red-500/60 bg-red-500/5 px-3 py-1.5 text-xs flex items-center justify-between gap-2">
           <span>
-            <span className="font-semibold">Mesa pre-asignada:</span>{" "}
-            {mesaPreseleccionada.codigo}{" "}
+            <span className="font-semibold">Mesa asignada:</span>{" "}
+            {mesaBanner.codigo}{" "}
             <span className="text-muted-foreground">
-              ({mesaPreseleccionada.capacidad}p
-              {mesaPreseleccionada.zona ? ` · ${ZONAS_LABELS[mesaPreseleccionada.zona]}` : ""})
+              ({mesaBanner.capacidad}p{mesaBanner.zona ? ` · ${zonaLabel(String(mesaBanner.zona))}` : ""})
             </span>
           </span>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-6 px-2 text-[11px]"
+            onClick={() => setForm((p) => ({ ...p, mesaId: "" }))}
+          >
+            Quitar
+          </Button>
         </div>
       )}
       <div className="grid grid-cols-2 gap-2">
@@ -2587,7 +2608,7 @@ export function ReservasView() {
                         blink,
                       )}
                     >
-                      <span className="truncate text-muted-foreground">{r.zona ? ZONAS_LABELS[r.zona] : "—"}</span>
+                      <span className="truncate text-muted-foreground">{zonaLabel(r.zona ? String(r.zona) : null)}</span>
                       <span className="font-mono font-bold">{mesa?.codigo ?? "—"}</span>
                       <span className="tabular-nums">{r.hora}</span>
                       <span className="truncate font-medium flex items-center gap-1.5 min-w-0">
@@ -2837,7 +2858,7 @@ export function ReservasView() {
                 <Field label="Hora">{selectedReserva.hora}</Field>
                 <Field label="Turno">{selectedReserva.turno}</Field>
                 <Field label="Comensales">{selectedReserva.comensales}</Field>
-                <Field label="Zona">{selectedReserva.zona ? ZONAS_LABELS[selectedReserva.zona] : "—"}</Field>
+                <Field label="Zona">{zonaLabel(selectedReserva.zona ? String(selectedReserva.zona) : null)}</Field>
                 <Field label="Mesa">{mesas.find(m => m.id === selectedReserva.mesaId)?.codigo ?? "Sin asignar"}</Field>
               </div>
               <div className="flex items-center gap-2">

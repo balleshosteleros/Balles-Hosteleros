@@ -155,7 +155,6 @@ export const rrhhSubs: SubItem[] = [
   { title: "EMPLEADOS", url: "/rrhh/empleados", icon: UsersRound },
   { title: "FICHAJES", url: "/rrhh/fichajes", icon: Fingerprint },
   { title: "SOLICITUDES", url: "/rrhh/solicitudes", icon: Inbox },
-  { title: "DENUNCIAS", url: "/rrhh/denuncias", icon: MessageSquareWarning },
   { title: "FIRMAS", url: "/rrhh/firmas", icon: FileSignature },
   { title: "CALENDARIOS", url: "/rrhh/calendarios", icon: Calendar },
   { title: "HORARIOS", url: "/rrhh/horarios", icon: Timer },

@@ -243,7 +243,7 @@ export function SolicitudesView() {
         {/* Las denuncias viven en su propia tabla, con acceso restringido a
             RRHH, pero se gestionan desde aquí para no tener dos sitios. */}
         <TabsContent value="denuncias" className="mt-4">
-          <DenunciasPanel embebido />
+          <DenunciasPanel />
         </TabsContent>
 
         <TabsContent value={tab} className="mt-4 space-y-4">
