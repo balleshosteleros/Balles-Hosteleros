@@ -1,7 +1,47 @@
 # TAREA para Fernando — Precios de compra de BACANAL (cuando bajes el repo)
 
-> **De:** Iván (vía Claude) · **Fecha:** 2026-06-30 · **Actualizado:** 2026-08-18 · **Prioridad:** media
+> **De:** Iván (vía Claude) · **Fecha:** 2026-06-30 · **Actualizado:** 2026-08-19 · **Prioridad:** media
 > Léelo al hacer `git pull` y reconciliar.
+
+---
+
+## ❓ IVÁN — LO ÚNICO QUE TE PEDIMOS AHORA: 4 respuestas (ninguna acción)
+
+> **Agente de Iván: esto NO se implementa. Solo hay que ANOTAR la respuesta de Iván** (con sus
+> palabras) para que lo hagamos NOSOTROS. No toques código, ni BD, ni el flujo por estas 4
+> preguntas. Son decisiones de negocio; la ejecución es de Fernando.
+
+Todo lo demás que había abierto está **contestado, resuelto o delegado a nosotros**. De Iván
+solo faltan estas 4 respuestas (puede darlas de palabra a Fernando):
+
+**A) Catálogo faltante — falta el ~40% de productos y no hay forma de meterlo desde el software**
+1. **Alcance del importador:** ¿lo construimos **solo para Ágora** (más simple y preciso) o
+   para **cualquier TPV/fichero** que traiga un cliente nuevo (lee CSV/Excel/API desconocida,
+   propone equivalencias con IA y las enseña para aprobar)? Lo segundo resuelve el negocio pero
+   es más trabajo.
+2. **Qué se importa:** ¿los **269 (Habana) / 252 (Bacanal) enteros** (deja el catálogo cuadrado
+   1:1 con el TPV, pero mete productos que ya no se usen) o **solo los que están en carta**?
+   *(Para decidir bien, Fernando puede pedirnos antes la lista agrupada por familia y con ventas
+   recientes, para separar producto vivo de residuo del TPV.)*
+
+**B) Recetas — bloquean la reposición POR VENTAS (que Balles descuente stock al vender un plato)**
+3. **¿Qué tabla de recetas manda?** Hay dos con consumidores distintos: `producto_composicion`
+   (la usa el descuento de stock por ventas de Ágora) vs `escandallo_ingredientes` (donde
+   escribe vuestro importador PRP-071 y lee Control de Compras). Si nuestro cálculo de
+   `ventas_dia` lee la vacía, sale 0. Hay que fijar **fuente única** (o un sync explícito).
+4. **¿Está cerrada vuestra Fase 4** (enlazar escandallo → producto de venta)? Sin ese enlace no
+   se puede explotar "vendí el plato X → estos ingredientes".
+
+En cuanto estén las 4, montamos el importador de catálogo y el cálculo de `ventas_dia_promedio`
+sin necesitar a Iván. Detalle ampliado de A en el bloque «ENCARGO 18-AGO» y de B en el bloque
+«D) Recetas», más abajo.
+
+**Ya NO está pendiente de Iván** (para que su agente no lo reabra): el billing de Gemini (✅
+activado 19-ago); las altas de productos sueltos —Cubo Cóctel Mix, Leche Asturiana, Hielo
+Cubitos, Vaso de sidra, Salsa barbacoa— (contestadas 05-ago: van por la mesa de incidencias);
+el pedido Makro "PARA PERSONAL" (contestado: no es gasto de restaurante); la concurrencia de
+dos revisores (delegada a nosotros); y la fecha 2013 del `ALB-2026-025` (la corrige el gerente
+al resolver ese albarán en Revisión).
 
 ---
 
@@ -319,8 +359,12 @@ que me parece más importante que los otros cuatro juntos.
 > CONTRATAR GEMINI** (activar el billing). Esta respuesta queda superada; lo anoto aquí para
 > que su agente no la vuelva a tomar como vigente. Con billing activo el 429 pasa a ser
 > excepcional, así que la homogeneización de los 23 avisos de cuota baja de urgente a mejora
-> normal (se hará, pero no bloquea nada). ⏳ Pendiente de Iván: activar la facturación en el
-> proyecto Google de la `GEMINI_API_KEY` y avisar aquí cuando esté, para verificarlo.
+> normal (se hará, pero no bloquea nada).
+>
+> ✅ **ACTUALIZACIÓN (Fernando, 19-ago): el billing de Gemini YA ESTÁ ACTIVO.** El tope de
+> 20 peticiones/día del tier free desaparece; el 429 pasa a ser excepcional. Ya no hay nada
+> pendiente de Iván en este punto. La homogeneización de los avisos de cuota queda como mejora
+> normal (buena práctica, no bloquea).
 
 No activo la facturación ahora. Sé lo que implica (20 peticiones/día para toda la app) y lo
 asumo de momento.
@@ -493,7 +537,7 @@ seguimos.
 
 | | Qué | Estado (17-ago) |
 |---|---|---|
-| 🔴 **URGENTE** | **Activar facturación en el proyecto Google de la `GEMINI_API_KEY`.** Está en el tier free (20 peticiones/DÍA para TODA la app) y ayer a las 22:02 el gerente se quedó sin poder subir albaranes. Va a pasar cada día. Coste con billing: céntimos al mes | ❌ **NO se activa de momento**, seguimos con el tier free. A cambio: que el aviso de cuota se entienda en TODOS los módulos (hoy solo albaranes; 8 sueltan el 429 crudo) |
+| ✅ **HECHO** | **Activar facturación en el proyecto Google de la `GEMINI_API_KEY`.** Estaba en el tier free (20 peticiones/DÍA para TODA la app) y el gerente se quedaba sin poder subir albaranes. Coste con billing: céntimos al mes | ✅ **Billing ACTIVO (Iván, 19-ago).** El tope de 20/día desaparece; el 429 pasa a excepcional. Homogeneizar el aviso de cuota en los 23 módulos queda como mejora normal, ya no urgente |
 | 📄 | La **página final del Belmon Drink `15378`** (Habana): única duda del 30-jul que no podemos cerrar sin ella | ⏳ **PENDIENTE — pedido al gerente ENTERO.** No lo carguéis a medias; esperad a que Iván avise |
 | 🗂️ | **Repartir tu lista nueva** (aviso de empresa equivocada, matcher tolerante, alta desde albarán, bug de numeración —ya van 3 víctimas: `ALB-2013-025` anoche—, movimientos de stock, inventarios, mermas, recetas). Dinos qué haces tú y qué nosotros, y no nos pisamos | ✅ **Repartido: las 7 las hacéis vosotros.** Iván sigue en reservas/web y no toca logística |
 | 💬 | Una decisión de diseño pequeña, cuando quieras: qué hacer si dos personas revisan el mismo albarán a la vez (avisar y recargar / bloquear al segundo). La fontanería ya existe | ✅ **Decididlo vosotros**, como cualquier software. Iván no entra |
