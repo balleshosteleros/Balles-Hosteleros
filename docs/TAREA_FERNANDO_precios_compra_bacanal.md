@@ -5,6 +5,36 @@
 
 ---
 
+## ✅ FERNANDO (19-ago): matcher tolerante + guarda anti-duplicado — la RAÍZ de los duplicados
+
+Iván: tu hallazgo C (el matcher genera un duplicado nuevo con cada tanda porque distingue
+mayúsculas) está **atacado de raíz y en producción** (`3c8750dd`), en tres capas:
+
+1. **El emparejador tolera mucho más que una letra.** Ya no solo ignora mayúsculas y acentos
+   (eso ya lo hacía): ahora también aguanta **palabras de más, orden distinto y coletillas
+   del proveedor**. "CEBOLLA ROJA NAC. 5KG CAT.I" reconoce a "Cebolla roja"; "Roja Cebolla"
+   también. Lo hace combinando el parecido por letras (erratas) con un **solape por palabras**.
+2. **Nunca se ofrece "crear" a secas si hay algo parecido** (tu regla de UX exacta). Cuando la
+   línea no casa del todo pero hay candidatos, la mesa pregunta **"¿es alguno de estos?"** con
+   los productos parecidos ordenados y su % de parecido; "crear" queda como última opción, solo
+   si de verdad no está. Así no se crea un duplicado por un casi-fallo de lectura.
+3. **Red de seguridad en el propio alta**: crear un producto cuyo nombre —normalizado, sin
+   mayúsculas ni acentos— ya existe en la **misma empresa y el mismo tipo** queda **bloqueado**,
+   con el mensaje "Ya existe 'X', usa ese en vez de crear un duplicado". Compra y venta pueden
+   compartir nombre (es el diseño: ficha de compra + ficha de venta unidas por receta), así que
+   el tipo entra en la clave y eso NO se bloquea. Esta capa corta la generación de duplicados
+   venga del flujo que venga (albarán, alta manual).
+
+Probado con casos reales (los tuyos): "Cebolla roja" → se vincula sola a "Cebolla Roja";
+"CEBOLLA ROJA NAC. 5KG CAT.I" y "Roja Cebolla" → salen como candidato a confirmar; un producto
+de verdad nuevo → sigue ofreciendo crearlo. Con esto, cada tanda deja de sembrar duplicados.
+
+Detalle técnico: `detectar-incidencias.ts` (`similitud` con `solapeDePalabras`,
+`umbralCandidatoProducto`, candidatos en `producto_no_encontrado`), `createProducto`
+(guarda por nombre normalizado en misma empresa+tipo).
+
+---
+
 ## ✅ FERNANDO (19-ago): tu prioridad 1 HECHA — el aviso de empresa equivocada, EN LA SUBIDA
 
 Iván: el hallazgo A que destapaste (el OCR ya lee el destinatario pero nadie lo cruzaba, por
