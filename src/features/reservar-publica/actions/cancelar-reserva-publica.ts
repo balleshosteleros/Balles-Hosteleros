@@ -14,6 +14,22 @@
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { ESTADOS_NO_OCUPANTES } from "@/features/sala/lib/reserva-conflicto";
+import {
+  ZONA_HORARIA_FALLBACK,
+  zonaLocalAUtcISO,
+} from "@/features/empresa/lib/zona-horaria";
+
+/**
+ * Zona horaria configurada en los ajustes de la empresa
+ * (`empresas.config_operativa.zonaHoraria`). Aquí no podemos usar
+ * `getZonaHorariaEmpresa()` porque esta acción es pública y va con el cliente
+ * admin, así que leemos el mismo campo desde la fila ya cargada.
+ */
+function tzDeEmpresa(configOperativa: unknown): string {
+  const cfg = (configOperativa as Record<string, unknown> | null) ?? null;
+  const tz = cfg && typeof cfg.zonaHoraria === "string" ? cfg.zonaHoraria.trim() : "";
+  return tz || ZONA_HORARIA_FALLBACK;
+}
 
 const tokenSchema = z.string().guid();
 
@@ -53,13 +69,21 @@ export async function obtenerReservaPorToken(
 
     const { data: emp } = await admin
       .from("empresas")
-      .select("nombre")
+      .select("nombre, config_operativa")
       .eq("id", r.empresa_id as string)
       .maybeSingle();
 
+    // Zona horaria de los ajustes de la empresa: toda comparación de "ya pasó"
+    // debe hacerse en la hora real del restaurante, no en la del servidor.
+    const tz = tzDeEmpresa(emp?.config_operativa);
+
     const estado = r.estado as string;
-    const yaCancelada = (ESTADOS_NO_OCUPANTES as string[]).includes(estado);
-    const pasada = esPasada(r.fecha as string, r.hora as string);
+    const motivo = motivoNoCancelable(
+      estado,
+      r.fecha as string,
+      r.hora as string,
+      tz,
+    );
 
     return {
       ok: true,
@@ -70,16 +94,13 @@ export async function obtenerReservaPorToken(
         personas: (r.personas as number) ?? 1,
         clienteNombre: (r.cliente_nombre as string | null) ?? null,
         empresaNombre: (emp?.nombre as string | undefined) ?? "el restaurante",
-        bloqueada: yaCancelada || pasada,
-        motivoBloqueo: yaCancelada
-          ? "Esta reserva ya estaba cancelada."
-          : pasada
-            ? "Esta reserva ya ha pasado. Si necesitas algo, llama al restaurante."
-            : null,
+        bloqueada: motivo !== null,
+        motivoBloqueo: motivo,
         avisoPolitica: calcularAvisoPolitica(
           r.politica_cancelacion_snapshot as Record<string, unknown> | null,
           r.fecha as string,
           r.hora as string,
+          tz,
         ),
       },
     };
@@ -105,16 +126,27 @@ export async function cancelarReservaPorToken(
     if (!r) return { ok: false, error: "No encontramos esa reserva." };
 
     const estado = r.estado as string;
-    if ((ESTADOS_NO_OCUPANTES as string[]).includes(estado)) {
-      // Ya estaba cancelada: no es un error para el cliente.
+    if (estado === "CANCELADA") {
+      // Ya estaba cancelada: para el cliente no es un error, es lo que quería.
       return { ok: true, data: { cancelada: true } };
     }
-    if (esPasada(r.fecha as string, r.hora as string)) {
-      return {
-        ok: false,
-        error: "Esta reserva ya ha pasado y no se puede cancelar online.",
-      };
-    }
+
+    const { data: empTz } = await admin
+      .from("empresas")
+      .select("config_operativa")
+      .eq("id", r.empresa_id as string)
+      .maybeSingle();
+
+    // Se revalida en servidor con el MISMO criterio que la pantalla: entre que
+    // el cliente abre el enlace y pulsa el botón, la mesa puede haberse sentado
+    // o marcado como no presentada.
+    const motivo = motivoNoCancelable(
+      estado,
+      r.fecha as string,
+      r.hora as string,
+      tzDeEmpresa(empTz?.config_operativa),
+    );
+    if (motivo) return { ok: false, error: motivo };
 
     // El UPDATE libera la mesa (deja de ocupar) y dispara los triggers:
     // `liberar_slot_on_cancel` devuelve el cupo del turno — así la plaza vuelve
@@ -149,10 +181,54 @@ export async function cancelarReservaPorToken(
   }
 }
 
-/** Fecha civil del restaurante: se compara sin zona horaria. */
-function esPasada(fecha: string, hora: string): boolean {
-  const ts = new Date(`${fecha}T${hora.slice(0, 5)}:00`);
-  return ts.getTime() < Date.now();
+/**
+ * ¿La reserva ya pasó, en la hora REAL del restaurante?
+ *
+ * `fecha`/`hora` son hora local de la empresa. `new Date("2026-08-19T21:00")`
+ * las interpretaría en la zona del proceso (UTC en Vercel), desplazando la
+ * comparación 1-2 h: en la franja de madrugada el cliente recibía "esta reserva
+ * ya ha pasado" para una reserva que todavía no había ocurrido, y perdía la
+ * mesa como no-show. Convertimos a UTC con la zona de la empresa.
+ */
+function esPasada(fecha: string, hora: string, tz: string): boolean {
+  const ts = Date.parse(zonaLocalAUtcISO(fecha, hora.slice(0, 5), tz));
+  if (Number.isNaN(ts)) return false;
+  return ts < Date.now();
+}
+
+/**
+ * Por qué NO se puede cancelar, con el motivo CONCRETO. Un "no se puede"
+ * genérico deja al cliente sin saber si ha fallado la web o pasa algo con su
+ * reserva, y acaba llamando igualmente al restaurante.
+ *
+ * El ORDEN importa: el estado manda sobre la hora. Si la mesa ya está sentada
+ * o se marcó como no presentada, eso es lo que hay que decirle — no que "ya ha
+ * empezado", que sería cierto pero no explica nada.
+ *
+ * Devuelve null si la reserva SÍ se puede cancelar.
+ */
+function motivoNoCancelable(
+  estado: string,
+  fecha: string,
+  hora: string,
+  tz: string,
+): string | null {
+  switch (estado) {
+    case "CANCELADA":
+      return "Esta reserva ya está cancelada. No tienes que hacer nada más.";
+    case "NO_SHOW":
+      return "Esta reserva no se puede cancelar porque se ha marcado como no presentada. Si crees que es un error, llama al restaurante.";
+    case "WALK_IN":
+    case "TERMINANDO":
+      return "Esta reserva no se puede cancelar porque la mesa ya está sentada.";
+    case "LIBERADA":
+      return "Esta reserva ya no está activa. Si necesitas algo, llama al restaurante.";
+  }
+  // Ha llegado su hora: la mesa está guardada y el servicio en marcha.
+  if (esPasada(fecha, hora, tz)) {
+    return "Tu reserva ya está en curso y no se puede cancelar online. Si no puedes venir, llama al restaurante.";
+  }
+  return null;
 }
 
 /**
@@ -164,13 +240,17 @@ function calcularAvisoPolitica(
   snapshot: Record<string, unknown> | null,
   fecha: string,
   hora: string,
+  tz: string,
 ): { horas: number; importe: number } | null {
   if (!snapshot) return null;
   const horas = Number(snapshot.horas_antes ?? snapshot.cancelacion_horas_antes ?? 0);
   const importe = Number(snapshot.importe_eur ?? snapshot.cancelacion_importe_eur ?? 0);
   if (!(horas > 0) || !(importe > 0)) return null;
 
-  const ts = new Date(`${fecha}T${hora.slice(0, 5)}:00`).getTime();
+  // Misma corrección que en `esPasada`: con la zona del servidor el cálculo se
+  // desviaba 1-2 h y el aviso de cargo se mostraba (o se omitía) cuando no tocaba.
+  const ts = Date.parse(zonaLocalAUtcISO(fecha, hora.slice(0, 5), tz));
+  if (Number.isNaN(ts)) return null;
   const faltanHoras = (ts - Date.now()) / 3_600_000;
   return faltanHoras < horas ? { horas, importe } : null;
 }
