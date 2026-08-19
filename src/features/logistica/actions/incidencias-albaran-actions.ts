@@ -220,12 +220,14 @@ export async function analizarIncidenciasAlbaran(input: {
 
     // Re-análisis idempotente: al reanalizar la misma importación (p.ej. tras cambiar de
     // empresa por el aviso), no dejar las incidencias del análisis anterior colgando de la
-    // importación —al guardar se ligarían todas al albarán—. Se borran las abiertas sin albarán.
+    // importación. Se borran TODAS las abiertas sin albarán de esa importación —sin filtrar
+    // por empresa a propósito: si se cambió de empresa, las del análisis anterior están bajo
+    // la empresa vieja y hay que limpiarlas igual (son previsualizaciones sin guardar del
+    // mismo documento físico). RLS ya limita a las empresas accesibles del usuario.
     if (input.importacionId && !input.albaranId) {
       await supabase
         .from("albaran_incidencias")
         .delete()
-        .eq("empresa_id", empresaId)
         .eq("importacion_id", input.importacionId)
         .is("albaran_id", null);
     }
