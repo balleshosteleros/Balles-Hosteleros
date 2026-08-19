@@ -156,6 +156,12 @@ export interface ConfigDeteccion {
   umbralPropuestaProducto: number;
   /** Parecido a partir del cual se liga sin preguntar. */
   umbralAutoProducto: number;
+  /**
+   * Parecido mínimo para MOSTRAR un producto como candidato ("¿es alguno de estos?")
+   * aunque no llegue a proponerse. Sirve para que NUNCA se ofrezca "crear" a secas si hay
+   * algo parecido en el catálogo (regla de Iván, evita duplicados por casi-coincidencia).
+   */
+  umbralCandidatoProducto: number;
 }
 
 export const CONFIG_DETECCION: ConfigDeteccion = {
@@ -164,6 +170,7 @@ export const CONFIG_DETECCION: ConfigDeteccion = {
   umbralConfianzaLinea: 0.7,
   umbralPropuestaProducto: 0.55,
   umbralAutoProducto: 0.92,
+  umbralCandidatoProducto: 0.4,
 };
 
 /**
@@ -220,10 +227,7 @@ const normalizar = (s: string | null | undefined): string =>
     .replace(/\s+/g, " ")
     .trim();
 
-function similitud(a: string, b: string): number {
-  if (!a || !b) return 0;
-  if (a === b) return 1;
-  if (a.includes(b) || b.includes(a)) return 0.9;
+function distanciaCaracteres(a: string, b: string): number {
   const m = a.length;
   const n = b.length;
   const dp: number[] = Array.from({ length: n + 1 }, (_, i) => i);
@@ -237,6 +241,36 @@ function similitud(a: string, b: string): number {
     }
   }
   return 1 - dp[n] / Math.max(m, n);
+}
+
+/**
+ * Parecido por PALABRAS: qué fracción de las palabras del texto más corto aparece en el
+ * más largo (por igualdad o por subcadena de ≥4 letras). Tolera palabras de más, orden
+ * distinto y coletillas del proveedor: "CEBOLLA ROJA NAC. 5KG CAT.I" ≈ "Cebolla roja".
+ */
+function solapeDePalabras(a: string, b: string): number {
+  const ta = a.split(" ").filter((t) => t.length > 1);
+  const tb = b.split(" ").filter((t) => t.length > 1);
+  if (ta.length === 0 || tb.length === 0) return 0;
+  const [corto, largo] = ta.length <= tb.length ? [ta, tb] : [tb, ta];
+  const comunes = corto.filter((t) =>
+    largo.some((w) => w === t || (t.length >= 4 && w.includes(t)) || (w.length >= 4 && t.includes(w))),
+  ).length;
+  return comunes / corto.length;
+}
+
+/**
+ * Parecido 0..1 entre dos nombres ya normalizados. Combina distancia por caracteres
+ * (aguanta erratas y mayúsculas/acentos —ya quitados en `normalizar`—) con solape por
+ * palabras (aguanta palabras de más y orden). El solape pesa un pelín menos que un match
+ * literal para que "todas las palabras coinciden" quede JUSTO por debajo del auto-vínculo:
+ * un casi-igual se PROPONE al humano ("¿es alguno de estos?"), no se liga a ciegas.
+ */
+function similitud(a: string, b: string): number {
+  if (!a || !b) return 0;
+  if (a === b) return 1;
+  if (a.includes(b) || b.includes(a)) return 0.9;
+  return Math.max(distanciaCaracteres(a, b), solapeDePalabras(a, b) * 0.9);
 }
 
 const eur = (n: number): string =>
@@ -679,34 +713,64 @@ export function detectarIncidencias(entrada: EntradaDeteccion): ResultadoDetecci
     }
 
     if (!mejor || mejor.score < cfg.umbralPropuestaProducto) {
+      // Regla de Iván: nunca ofrecer "crear" a secas si hay algo parecido. Primero
+      // "¿es alguno de estos?" con los candidatos por parecido; crear solo si de verdad
+      // no está. Esto es lo que evita el duplicado por casi-coincidencia.
+      const cercanos = puntuados
+        .filter((x) => x.score >= cfg.umbralCandidatoProducto)
+        .slice(0, 3);
+      const accionCrear = {
+        clave: "crear",
+        etiqueta: `No está: crear "${linea.nombre}"`,
+        // Solo es la propuesta por defecto si NO hay candidatos que enseñar.
+        propuesta: cercanos.length === 0,
+        payload: {
+          nombre: linea.nombre,
+          aliasProveedor: linea.nombre,
+          referenciaProveedor: linea.referenciaProveedor,
+          iva: linea.iva,
+          precio: linea.precioUnitario,
+          unidad: linea.unidad,
+          formato: linea.formato,
+          controlaStock: true,
+        },
+      };
       incidencias.push({
         tipo: "producto_no_encontrado",
         severidad: "media",
         lineaId: linea.id,
-        titulo: `"${linea.nombre}" no está en nuestro catálogo`,
+        titulo:
+          cercanos.length > 0
+            ? `¿"${linea.nombre}" es alguno de estos?`
+            : `"${linea.nombre}" no está en nuestro catálogo`,
         explicacion:
-          `Este proveedor lo llama "${linea.nombre}". Si lo creas, se guarda con NUESTRO nombre y ` +
-          "se memoriza el suyo, así que la próxima vez lo reconoceré solo.",
+          cercanos.length > 0
+            ? `El proveedor lo llama "${linea.nombre}". Hay productos parecidos en el catálogo: ` +
+              "confirma si es uno de ellos (así no creas un duplicado) o créalo si de verdad no está."
+            : `Este proveedor lo llama "${linea.nombre}". Si lo creas, se guarda con NUESTRO nombre y ` +
+              "se memoriza el suyo, así que la próxima vez lo reconoceré solo.",
         acciones: [
-          {
-            clave: "crear",
-            etiqueta: `Crear "${linea.nombre}"`,
-            propuesta: true,
+          ...cercanos.map((c) => ({
+            clave: `vincular_${c.p.id}`,
+            etiqueta: `Es "${c.p.nombre}"`,
+            propuesta: false,
             payload: {
-              nombre: linea.nombre,
-              aliasProveedor: linea.nombre,
+              productoId: c.p.id,
+              productoNombre: c.p.nombre,
+              memorizarAlias: linea.nombre,
               referenciaProveedor: linea.referenciaProveedor,
-              iva: linea.iva,
-              precio: linea.precioUnitario,
-              unidad: linea.unidad,
-              formato: linea.formato,
-              controlaStock: true,
+              porque: `${Math.round(c.score * 100)} % de parecido`,
             },
-          },
+          })),
+          accionCrear,
           { clave: "buscar", etiqueta: "Buscarlo en todo el catálogo" },
           { clave: "ignorar", etiqueta: "Ignorar esta línea", pideMotivo: true },
         ],
-        detalle: { nombre: linea.nombre, referencia: linea.referenciaProveedor },
+        detalle: {
+          nombre: linea.nombre,
+          referencia: linea.referenciaProveedor,
+          candidatos: cercanos.map((c) => ({ id: c.p.id, nombre: c.p.nombre, score: c.score })),
+        },
       });
       continue;
     }

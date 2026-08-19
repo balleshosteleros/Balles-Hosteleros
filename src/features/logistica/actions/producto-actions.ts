@@ -15,6 +15,7 @@ import type {
   Conservacion,
 } from "@/features/logistica/data/productos";
 import { IVA_DEFAULT } from "@/features/logistica/data/productos";
+import { normalizarNombre } from "@/features/logistica/lib/albaranes/emparejar-catalogo";
 
 const ESTADOS = ["Activo", "Inactivo"] as const;
 const TIPOS = ["compra", "venta", "elaboracion"] as const;
@@ -244,7 +245,7 @@ export async function listProductos(tipo?: TipoProducto): Promise<Producto[]> {
 
 export async function createProducto(
   input: ProductoInput
-): Promise<{ error?: string; producto?: Producto }> {
+): Promise<{ error?: string; producto?: Producto; duplicado?: { id: string; nombre: string } }> {
   try {
     const user = await requireManagement();
     const parsed = productoInputSchema.safeParse(input);
@@ -257,6 +258,28 @@ export async function createProducto(
     // difieren y el producto acababa en la empresa equivocada (lote 07-ago-2026).
     const { supabase, empresaId } = await getLogisticaContext();
     if (!empresaId) return { error: "No tienes empresa asignada" };
+
+    // Guarda anti-duplicado (raíz de los duplicados de catálogo, Iván 14-ago): no crear un
+    // producto cuyo nombre —normalizado sin mayúsculas ni acentos— ya existe en la MISMA
+    // empresa y el MISMO tipo. Compra y venta pueden compartir nombre (es el diseño: ficha
+    // de compra + ficha de venta unidas por receta), por eso el tipo entra en la clave.
+    const nombreNorm = normalizarNombre(parsed.data.nombre);
+    if (nombreNorm) {
+      const { data: existentes } = await supabase
+        .from("productos")
+        .select("id, nombre, estado")
+        .eq("empresa_id", empresaId)
+        .eq("tipo", parsed.data.tipo)
+        .neq("estado", "Inactivo");
+      const dup = (existentes ?? []).find((p) => normalizarNombre((p.nombre as string) ?? "") === nombreNorm);
+      if (dup) {
+        return {
+          error: `Ya existe un producto de ${parsed.data.tipo} llamado "${dup.nombre}". Usa ese en vez de crear un duplicado.`,
+          duplicado: { id: dup.id as string, nombre: (dup.nombre as string) ?? "" },
+        };
+      }
+    }
+
     const { data: inserted, error } = await supabase
       .from("productos")
       .insert({
