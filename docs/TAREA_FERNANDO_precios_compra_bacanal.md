@@ -5,6 +5,33 @@
 
 ---
 
+## ✅ FERNANDO (19-ago): alta de producto desde el albarán — memoriza la REFERENCIA del proveedor
+
+Iván: tu regla "el alta desde el albarán debe traer puestos el nombre y la **referencia** del
+proveedor tal y como se leyeron del papel, sin volver a pedirlos" — hecha y en producción
+(`a2f1b318`). Antes la referencia (BB11, C13…) se leía por OCR pero **se perdía**: al crear un
+producto solo se guardaba el nombre del proveedor, no su referencia, que es el ancla más fuerte
+del matcher. Ahora:
+
+- La referencia se **persiste** en el albarán y viaja hasta el alta.
+- Al crear un producto desde el albarán, se **memoriza el alias del proveedor CON su referencia**
+  (en la tabla de alias que el matcher lee primero). Así la **próxima tanda de ese proveedor
+  reconoce el producto por su referencia sola**, sin preguntar — que es justo lo que pediste.
+- El diálogo de crear **muestra la "Ref. proveedor: BB11" en solo lectura**: se ve que se captura,
+  no se vuelve a pedir. El nombre de catálogo sigue editable (para poner "Cebolla roja", no
+  "CEBOLLA ROJA NAC. 5KG CAT.I"), y categoría/proveedor/IVA/precio siguen viniendo puestos.
+
+Sobre el "formato/equivalencia obligatorio cuando viene en caja": ya estaba cubierto — una línea
+en caja genera además la incidencia de formato y la confirmación queda **bloqueada** hasta que
+se define la equivalencia, así que el producto no puede nacer con el stock roto.
+
+Detalle técnico: `use-subir-albaran.ts` (persiste `referenciaProveedor` en el jsonb),
+`emparejarLineasAlbaran`/`LineaEmparejada` (la llevan), `crearProductoDesdeAlbaran` +
+`guardarAliasConReferencia` (escribe `producto_proveedor_aliases` con alias+referencia),
+`ResolverLineaDialog` (la muestra).
+
+---
+
 ## ✅ FERNANDO (19-ago): bug de numeración arreglado — la serie manda sobre el OCR
 
 Iván: tu bug de numeración (el año de la serie salía de una fecha mal leída del papel, por
