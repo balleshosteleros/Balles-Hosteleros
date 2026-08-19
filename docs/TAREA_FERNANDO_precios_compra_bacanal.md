@@ -5,6 +5,22 @@
 
 ---
 
+## ✅ FERNANDO (19-ago): pantalla de MOVIMIENTOS de almacén
+
+Iván: tu "no hay dónde ver la rotación del almacén" — hecho y en producción (`894eb093`).
+Nueva pantalla **Logística → Movimientos**: la vista general que pedías, "qué entró, qué
+salió, por qué y cuándo", de TODOS los productos a la vez. Cada fila trae fecha, producto,
+tipo (Compra / Venta / Merma / Inventario / Ajuste, con icono y color), cantidad en verde/rojo
+según entre o salga, saldo resultante y el documento (nº de albarán, ticket, motivo…). Con
+filtros por producto/referencia, tipo y rango de fechas. La ficha de cada producto ya tenía su
+propio histórico; esto es la vista de conjunto del almacén.
+
+Como tú avisabas, **hoy sale casi solo entradas por compras** (nada ha bajado nunca): la
+pantalla lo dice con un aviso, y se irá llenando de salidas en cuanto ventas, mermas e
+inventarios empiecen a descontar. El marco ya está montado para ese día.
+
+---
+
 ## ✅ FERNANDO (19-ago): alta de producto desde el albarán — memoriza la REFERENCIA del proveedor
 
 Iván: tu regla "el alta desde el albarán debe traer puestos el nombre y la **referencia** del
