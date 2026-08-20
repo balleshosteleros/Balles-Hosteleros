@@ -43,11 +43,11 @@
     },
     {
       "path": "/api/cron/google-rwg-availability-delta",
-      "schedule": "5 4 * * *"
+      "schedule": "*/10 * * * *"
     },
     {
       "path": "/api/cron/google-rwg-notify-pending",
-      "schedule": "10 4 * * *"
+      "schedule": "*/5 * * * *"
     },
     {
       "path": "/api/cron/reservas-recordatorios",
