@@ -7,14 +7,17 @@ import type {
   CategoriaMaterial,
   Entrega,
   EntregaItem,
+  EstadoDevolucion,
   EstadoEntrega,
 } from "@/features/rrhh/data/entregas";
+import { enviarActaEntregaAFirma } from "@/features/rrhh/services/entregas/enviar-a-firma";
 
 /**
  * Entregas de material y uniforme.
  *
- * RRHH registra qué le da a un trabajador; el trabajador lo firma como
- * recibido (ver `enviarEntregaAFirma`) y queda en su ficha y en su portal.
+ * Una entrega = una unidad. RRHH la registra y al trabajador le llega un correo
+ * para firmar que la ha recibido; al devolverla, otro correo para firmar que la
+ * ha devuelto. Las dos actas quedan en su ficha y en su portal.
  */
 
 function mensajeError(err: unknown): string {
@@ -59,7 +62,6 @@ type FilaItem = {
   talla: string | null;
   requiere_devolucion: boolean | null;
   devuelto_en: string | null;
-  orden: number | null;
 };
 
 type FilaEntrega = {
@@ -71,6 +73,9 @@ type FilaEntrega = {
   firma_id: string | null;
   firmada_en: string | null;
   entregado_por_nombre: string | null;
+  devolucion_estado: string | null;
+  devolucion_firma_id: string | null;
+  devuelta_en: string | null;
 };
 
 function mapItem(r: FilaItem): EntregaItem {
@@ -79,11 +84,9 @@ function mapItem(r: FilaItem): EntregaItem {
     tipoId: r.tipo_id,
     tipoNombre: r.tipo_nombre,
     categoria: (r.categoria === "uniforme" ? "uniforme" : "material") as CategoriaMaterial,
-    cantidad: r.cantidad ?? 1,
     talla: r.talla,
     requiereDevolucion: !!r.requiere_devolucion,
     devueltoEn: r.devuelto_en,
-    orden: r.orden ?? 0,
   };
 }
 
@@ -99,7 +102,9 @@ async function cargarEntregas(filtro: { empleadoId?: string } = {}): Promise<Ent
 
   let query = db
     .from("entregas_material")
-    .select("id, empleado_id, fecha, nota, estado, firma_id, firmada_en, entregado_por_nombre")
+    .select(
+      "id, empleado_id, fecha, nota, estado, firma_id, firmada_en, entregado_por_nombre, devolucion_estado, devolucion_firma_id, devuelta_en",
+    )
     .eq("empresa_id", empresaId);
   if (filtro.empleadoId) query = query.eq("empleado_id", filtro.empleadoId);
 
@@ -119,16 +124,14 @@ async function cargarEntregas(filtro: { empleadoId?: string } = {}): Promise<Ent
   const { data: items } = await db
     .from("entregas_material_items")
     .select(
-      "id, entrega_id, tipo_id, tipo_nombre, categoria, cantidad, talla, requiere_devolucion, devuelto_en, orden",
+      "id, entrega_id, tipo_id, tipo_nombre, categoria, talla, requiere_devolucion, devuelto_en",
     )
-    .in("entrega_id", ids)
-    .order("orden", { ascending: true });
+    .in("entrega_id", ids);
 
-  const porEntrega = new Map<string, EntregaItem[]>();
+  // Una pieza por entrega (garantizado por índice único en la BD).
+  const porEntrega = new Map<string, EntregaItem>();
   for (const it of (items ?? []) as FilaItem[]) {
-    const lista = porEntrega.get(it.entrega_id) ?? [];
-    lista.push(mapItem(it));
-    porEntrega.set(it.entrega_id, lista);
+    porEntrega.set(it.entrega_id, mapItem(it));
   }
 
   const empleadoIds = [...new Set(filas.map((f) => f.empleado_id))];
@@ -151,7 +154,10 @@ async function cargarEntregas(filtro: { empleadoId?: string } = {}): Promise<Ent
     firmaId: f.firma_id,
     firmadaEn: f.firmada_en,
     entregadoPorNombre: f.entregado_por_nombre,
-    items: porEntrega.get(f.id) ?? [],
+    item: porEntrega.get(f.id) ?? null,
+    devolucionEstado: (f.devolucion_estado ?? "no_procede") as EstadoDevolucion,
+    devolucionFirmaId: f.devolucion_firma_id,
+    devueltaEn: f.devuelta_en,
   }));
 }
 
@@ -191,20 +197,24 @@ export interface NuevaEntregaItem {
   tipoId: string | null;
   tipoNombre: string;
   categoria: CategoriaMaterial;
-  cantidad: number;
   talla: string | null;
   requiereDevolucion: boolean;
 }
 
 /**
- * Crea una entrega en borrador con sus líneas.
- * El envío a firma es un paso aparte, para poder revisarla antes.
+ * Registra la entrega de UNA pieza y le manda al trabajador el acta para que
+ * firme que la ha recibido.
+ *
+ * El correo se manda en el mismo paso porque una entrega sin firmar no sirve de
+ * nada: lo que da valor al registro es que el trabajador reconozca que la tiene.
+ * Si el correo falla, la entrega queda igualmente grabada en borrador y se puede
+ * reenviar; no se pierde el trabajo de registrarla.
  */
 export async function crearEntrega(input: {
   empleadoId: string;
   fecha: string;
   nota: string | null;
-  items: NuevaEntregaItem[];
+  item: NuevaEntregaItem;
 }) {
   try {
     const { supabase, empresaId, userId } = await getAppContext();
@@ -212,13 +222,9 @@ export async function crearEntrega(input: {
     const db = supabase as unknown as Awaited<ReturnType<typeof createClient>>;
 
     if (!input.empleadoId) return { ok: false as const, error: "Elige un trabajador" };
-    if (input.items.length === 0) {
-      return { ok: false as const, error: "Añade al menos una cosa a la entrega" };
+    if (!input.item?.tipoNombre.trim()) {
+      return { ok: false as const, error: "Elige qué se entrega" };
     }
-    const sinNombre = input.items.some((i) => !i.tipoNombre.trim());
-    if (sinNombre) return { ok: false as const, error: "Todas las líneas necesitan un tipo" };
-    const cantidadMala = input.items.some((i) => !Number.isInteger(i.cantidad) || i.cantidad < 1);
-    if (cantidadMala) return { ok: false as const, error: "Las cantidades deben ser números enteros mayores que 0" };
 
     // El empleado tiene que ser de esta empresa (RLS ya lo cubre, pero así el
     // mensaje de error es claro en vez de un fallo de FK).
@@ -230,6 +236,8 @@ export async function crearEntrega(input: {
       .maybeSingle();
     if (!emp) return { ok: false as const, error: "Ese trabajador no es de esta empresa" };
 
+    const solicitanteNombre = await nombreUsuarioActual(db, userId);
+
     const { data: cabecera, error: errCab } = await db
       .from("entregas_material")
       .insert({
@@ -239,33 +247,161 @@ export async function crearEntrega(input: {
         nota: input.nota?.trim() || null,
         estado: "borrador",
         entregado_por: userId,
-        entregado_por_nombre: await nombreUsuarioActual(db, userId),
+        entregado_por_nombre: solicitanteNombre,
       })
       .select("id")
       .single();
     if (errCab) throw errCab;
 
     const entregaId = (cabecera as { id: string }).id;
-    const { error: errItems } = await db.from("entregas_material_items").insert(
-      input.items.map((i, idx) => ({
-        entrega_id: entregaId,
-        tipo_id: i.tipoId,
-        tipo_nombre: i.tipoNombre.trim(),
-        categoria: i.categoria,
-        cantidad: i.cantidad,
-        talla: i.talla?.trim() || null,
-        requiere_devolucion: i.requiereDevolucion,
-        orden: idx,
-      })),
-    );
-    if (errItems) {
-      // Sin líneas la entrega no significa nada: se deshace entera.
+    const { error: errItem } = await db.from("entregas_material_items").insert({
+      entrega_id: entregaId,
+      tipo_id: input.item.tipoId,
+      tipo_nombre: input.item.tipoNombre.trim(),
+      categoria: input.item.categoria,
+      talla: input.item.talla?.trim() || null,
+      requiere_devolucion: input.item.requiereDevolucion,
+    });
+    if (errItem) {
+      // Sin la pieza la entrega no significa nada: se deshace entera.
       await db.from("entregas_material").delete().eq("id", entregaId);
-      throw errItems;
+      throw errItem;
+    }
+
+    // Y se le manda a firmar.
+    const firma = await enviarActaEntregaAFirma({
+      variante: "entrega",
+      entregaId,
+      empresaId,
+      solicitanteUserId: userId,
+      solicitanteNombre,
+    });
+
+    if (firma.ok) {
+      await db
+        .from("entregas_material")
+        .update({
+          estado: "pendiente_firma",
+          firma_id: firma.documentoId,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", entregaId);
     }
 
     revalidatePath("/rrhh/entregas");
-    return { ok: true as const, entregaId };
+    return {
+      ok: true as const,
+      entregaId,
+      // La entrega existe aunque la firma no saliera: el aviso es para que RRHH
+      // sepa que tiene que reenviarla, no un fallo del registro.
+      firmaEnviada: firma.ok,
+      errorFirma: firma.ok ? null : firma.error,
+    };
+  } catch (err) {
+    return { ok: false as const, error: mensajeError(err) };
+  }
+}
+
+/**
+ * Reenvía el acta de ENTREGA cuando el primer correo no salió o caducó.
+ * Solo mientras el trabajador no la haya firmado ya.
+ */
+export async function reenviarEntregaAFirma(entregaId: string) {
+  try {
+    const { supabase, empresaId, userId } = await getAppContext();
+    if (!empresaId || !userId) return { ok: false as const, error: "No autenticado" };
+    const db = supabase as unknown as Awaited<ReturnType<typeof createClient>>;
+
+    const { data: actual } = await db
+      .from("entregas_material")
+      .select("estado")
+      .eq("id", entregaId)
+      .eq("empresa_id", empresaId)
+      .maybeSingle();
+    if (!actual) return { ok: false as const, error: "La entrega ya no existe" };
+    if ((actual as { estado: string }).estado === "firmada") {
+      return { ok: false as const, error: "El trabajador ya ha firmado esta entrega" };
+    }
+
+    const solicitanteNombre = await nombreUsuarioActual(db, userId);
+    const firma = await enviarActaEntregaAFirma({
+      variante: "entrega",
+      entregaId,
+      empresaId,
+      solicitanteUserId: userId,
+      solicitanteNombre,
+    });
+    if (!firma.ok) return { ok: false as const, error: firma.error };
+
+    await db
+      .from("entregas_material")
+      .update({
+        estado: "pendiente_firma",
+        firma_id: firma.documentoId,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", entregaId);
+
+    revalidatePath("/rrhh/entregas");
+    return { ok: true as const };
+  } catch (err) {
+    return { ok: false as const, error: mensajeError(err) };
+  }
+}
+
+/**
+ * Pide la devolución: le manda al trabajador el acta para que firme que ha
+ * devuelto la pieza. Es el botón "Devolución" del módulo.
+ */
+export async function pedirDevolucion(entregaId: string) {
+  try {
+    const { supabase, empresaId, userId } = await getAppContext();
+    if (!empresaId || !userId) return { ok: false as const, error: "No autenticado" };
+    const db = supabase as unknown as Awaited<ReturnType<typeof createClient>>;
+
+    const { data: actual } = await db
+      .from("entregas_material")
+      .select("estado, devolucion_estado")
+      .eq("id", entregaId)
+      .eq("empresa_id", empresaId)
+      .maybeSingle();
+    if (!actual) return { ok: false as const, error: "La entrega ya no existe" };
+
+    const row = actual as { estado: string; devolucion_estado: string | null };
+    // Sin acta de entrega firmada no hay nada que devolver: el trabajador nunca
+    // reconoció haberlo recibido.
+    if (row.estado !== "firmada") {
+      return {
+        ok: false as const,
+        error: "El trabajador todavía no ha firmado que lo recibió",
+      };
+    }
+    if (row.devolucion_estado === "devuelta") {
+      return { ok: false as const, error: "Esta entrega ya está devuelta" };
+    }
+
+    const solicitanteNombre = await nombreUsuarioActual(db, userId);
+    const firma = await enviarActaEntregaAFirma({
+      variante: "devolucion",
+      entregaId,
+      empresaId,
+      solicitanteUserId: userId,
+      solicitanteNombre,
+    });
+    if (!firma.ok) return { ok: false as const, error: firma.error };
+
+    await db
+      .from("entregas_material")
+      .update({
+        devolucion_estado: "pendiente_firma",
+        devolucion_firma_id: firma.documentoId,
+        devolucion_solicitada_en: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", entregaId);
+
+    revalidatePath("/rrhh/entregas");
+    return { ok: true as const };
   } catch (err) {
     return { ok: false as const, error: mensajeError(err) };
   }
@@ -293,22 +429,42 @@ export async function actualizarNotaEntrega(entregaId: string, nota: string | nu
 }
 
 /**
- * Marca una línea como devuelta (o deshace la marca).
- * Es lo que RRHH confirma en el offboarding.
+ * Cancela una devolución pedida por error, mientras el trabajador no la haya
+ * firmado. La pieza vuelve a contar como suya.
+ *
+ * No existe un "marcar como devuelto" a mano: la devolución la acredita la firma
+ * del trabajador, no la palabra de la empresa. Para eso está `pedirDevolucion`.
  */
-export async function marcarItemDevuelto(itemId: string, devuelto: boolean) {
+export async function cancelarDevolucion(entregaId: string) {
   try {
-    const { supabase, empresaId, userId } = await getAppContext();
-    if (!empresaId || !userId) return { ok: false as const, error: "No autenticado" };
+    const { supabase, empresaId } = await getAppContext();
+    if (!empresaId) return { ok: false as const, error: "No autenticado" };
     const db = supabase as unknown as Awaited<ReturnType<typeof createClient>>;
 
+    const { data: actual } = await db
+      .from("entregas_material")
+      .select("devolucion_estado")
+      .eq("id", entregaId)
+      .eq("empresa_id", empresaId)
+      .maybeSingle();
+    if (!actual) return { ok: false as const, error: "La entrega ya no existe" };
+    if ((actual as { devolucion_estado: string | null }).devolucion_estado === "devuelta") {
+      return {
+        ok: false as const,
+        error: "El trabajador ya ha firmado la devolución y no se puede deshacer",
+      };
+    }
+
     const { error } = await db
-      .from("entregas_material_items")
+      .from("entregas_material")
       .update({
-        devuelto_en: devuelto ? new Date().toISOString() : null,
-        devuelto_por: devuelto ? userId : null,
+        devolucion_estado: "no_procede",
+        devolucion_firma_id: null,
+        devolucion_solicitada_en: null,
+        updated_at: new Date().toISOString(),
       })
-      .eq("id", itemId);
+      .eq("id", entregaId)
+      .eq("empresa_id", empresaId);
     if (error) throw error;
 
     revalidatePath("/rrhh/entregas");

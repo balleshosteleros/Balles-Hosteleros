@@ -1,16 +1,29 @@
 /**
  * Entregas de material y uniforme.
  *
- * RRHH registra lo que le da a un trabajador (uniforme o material), el
- * trabajador lo firma como recibido y queda en su ficha. Al salir, en el
- * offboarding, hay que confirmar que ha devuelto lo que estaba marcado
- * como "requiere devolucion".
+ * UNA ENTREGA = UNA UNIDAD. No hay cantidades ni entregas con varias cosas:
+ * tres camisetas son tres entregas. Asi el acta que firma el trabajador dice
+ * exactamente que pieza recibio, y la de devolucion no admite dudas ("se
+ * devuelve esto", nunca "2 de 3 camisetas").
+ *
+ * Ciclo completo, las dos mitades firmadas por el trabajador:
+ *   1. RRHH registra la pieza  -> se le manda el acta de ENTREGA por correo.
+ *   2. La firma                 -> queda como recibida y cuenta como suya.
+ *   3. RRHH pide la devolucion  -> se le manda el acta de DEVOLUCION.
+ *   4. La firma                 -> queda devuelta.
  */
 
 /** Uniforme = ropa de trabajo. Material = llaves, taquilla, EPI, dispositivos. */
 export type CategoriaMaterial = "uniforme" | "material";
 
 export type EstadoEntrega = "borrador" | "pendiente_firma" | "firmada" | "rechazada";
+
+/**
+ * Devolucion de la pieza. `no_procede` cubre dos casos que en pantalla se leen
+ * igual (no hay nada que devolver): la pieza no requiere devolucion, o aun no
+ * se ha pedido.
+ */
+export type EstadoDevolucion = "no_procede" | "pendiente_firma" | "devuelta" | "rechazada";
 
 export const CATEGORIA_LABEL: Record<CategoriaMaterial, string> = {
   uniforme: "Uniforme",
@@ -31,6 +44,20 @@ export const ESTADO_COLOR: Record<EstadoEntrega, string> = {
   rechazada: "bg-rose-50 text-rose-700 border-rose-200",
 };
 
+export const DEVOLUCION_LABEL: Record<EstadoDevolucion, string> = {
+  no_procede: "—",
+  pendiente_firma: "Devolución pendiente de firma",
+  devuelta: "Devuelta",
+  rechazada: "Devolución rechazada",
+};
+
+export const DEVOLUCION_COLOR: Record<EstadoDevolucion, string> = {
+  no_procede: "bg-zinc-50 text-zinc-700 border-zinc-200",
+  pendiente_firma: "bg-amber-50 text-amber-700 border-amber-200",
+  devuelta: "bg-emerald-50 text-emerald-700 border-emerald-200",
+  rechazada: "bg-rose-50 text-rose-700 border-rose-200",
+};
+
 /** Tallas de ropa. Las de calzado se escriben a mano (numero). */
 export const TALLAS_ROPA = ["XS", "S", "M", "L", "XL", "XXL", "XXXL"] as const;
 
@@ -45,20 +72,23 @@ export interface TipoMaterial {
   orden: number;
 }
 
-/** Una linea de una entrega. */
+/**
+ * La pieza entregada. Es una por entrega, sin cantidad: si hacen falta tres
+ * camisetas se crean tres entregas. El nombre y la categoria van congelados
+ * (copiados del catalogo al entregar) para que el acta firmada siga diciendo lo
+ * mismo aunque luego se renombre o se borre el tipo.
+ */
 export interface EntregaItem {
   id: string;
   tipoId: string | null;
   tipoNombre: string;
   categoria: CategoriaMaterial;
-  cantidad: number;
   talla: string | null;
   requiereDevolucion: boolean;
   devueltoEn: string | null;
-  orden: number;
 }
 
-/** Una entrega completa con sus lineas. */
+/** Una entrega: un trabajador, una pieza y sus dos firmas. */
 export interface Entrega {
   id: string;
   empleadoId: string;
@@ -69,10 +99,18 @@ export interface Entrega {
   firmaId: string | null;
   firmadaEn: string | null;
   entregadoPorNombre: string | null;
-  items: EntregaItem[];
+  /** La pieza. Null solo si la fila quedo huerfana por un fallo al crearla. */
+  item: EntregaItem | null;
+  devolucionEstado: EstadoDevolucion;
+  devolucionFirmaId: string | null;
+  devueltaEn: string | null;
 }
 
-/** Lo que el trabajador tiene ahora mismo: una linea por tipo, sumando cantidades. */
+/**
+ * Lo que el trabajador tiene ahora mismo. Como cada entrega es una unidad, aqui
+ * SI se agrupa por tipo y se cuenta, para no listar "Camiseta" tres veces
+ * seguidas: `cantidad` es cuantas unidades tiene, no un campo de la entrega.
+ */
 export interface ResumenMaterial {
   tipoNombre: string;
   categoria: CategoriaMaterial;
@@ -92,29 +130,32 @@ export function resumirMaterial(entregas: Entrega[]): ResumenMaterial[] {
   for (const entrega of entregas) {
     // Solo cuenta lo que el trabajador ha reconocido como recibido.
     if (entrega.estado !== "firmada") continue;
+    // Y lo que sigue teniendo: si ya lo devolvio, deja de ser suyo.
+    if (entrega.devolucionEstado === "devuelta") continue;
 
-    for (const item of entrega.items) {
-      const clave = `${item.categoria}|${item.tipoNombre.toLowerCase()}`;
-      const actual = porTipo.get(clave) ?? {
-        tipoNombre: item.tipoNombre,
-        categoria: item.categoria,
-        cantidad: 0,
-        tallas: [],
-        requiereDevolucion: item.requiereDevolucion,
-        pendienteDevolucion: 0,
-      };
+    const item = entrega.item;
+    if (!item) continue;
 
-      actual.cantidad += item.cantidad;
-      if (item.talla && !actual.tallas.includes(item.talla)) {
-        actual.tallas.push(item.talla);
-      }
-      if (item.requiereDevolucion) {
-        actual.requiereDevolucion = true;
-        if (!item.devueltoEn) actual.pendienteDevolucion += item.cantidad;
-      }
+    const clave = `${item.categoria}|${item.tipoNombre.toLowerCase()}`;
+    const actual = porTipo.get(clave) ?? {
+      tipoNombre: item.tipoNombre,
+      categoria: item.categoria,
+      cantidad: 0,
+      tallas: [],
+      requiereDevolucion: item.requiereDevolucion,
+      pendienteDevolucion: 0,
+    };
 
-      porTipo.set(clave, actual);
+    actual.cantidad += 1;
+    if (item.talla && !actual.tallas.includes(item.talla)) {
+      actual.tallas.push(item.talla);
     }
+    if (item.requiereDevolucion) {
+      actual.requiereDevolucion = true;
+      actual.pendienteDevolucion += 1;
+    }
+
+    porTipo.set(clave, actual);
   }
 
   return [...porTipo.values()].sort((a, b) => {
@@ -124,10 +165,29 @@ export function resumirMaterial(entregas: Entrega[]): ResumenMaterial[] {
   });
 }
 
-/** Lineas pendientes de devolver de un trabajador (para el offboarding). */
-export function pendientesDeDevolucion(entregas: Entrega[]): EntregaItem[] {
-  return entregas
-    .filter((e) => e.estado === "firmada")
-    .flatMap((e) => e.items)
-    .filter((i) => i.requiereDevolucion && !i.devueltoEn);
+/**
+ * Entregas a las que se les puede pedir la devolucion: firmadas por el
+ * trabajador, que requieren devolucion y que no estan ya en curso o devueltas.
+ */
+export function sePuedePedirDevolucion(entrega: Entrega): boolean {
+  return (
+    entrega.estado === "firmada" &&
+    Boolean(entrega.item?.requiereDevolucion) &&
+    (entrega.devolucionEstado === "no_procede" ||
+      entrega.devolucionEstado === "rechazada")
+  );
+}
+
+/**
+ * Entregas que el trabajador tiene y aun no ha devuelto (para el offboarding).
+ * Cuenta tambien las que estan pendientes de firmar la devolucion: pedirsela no
+ * es lo mismo que haberla recibido.
+ */
+export function pendientesDeDevolucion(entregas: Entrega[]): Entrega[] {
+  return entregas.filter(
+    (e) =>
+      e.estado === "firmada" &&
+      Boolean(e.item?.requiereDevolucion) &&
+      e.devolucionEstado !== "devuelta",
+  );
 }

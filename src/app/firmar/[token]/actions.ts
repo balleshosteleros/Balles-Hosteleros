@@ -797,6 +797,47 @@ export async function firmarDocumento(input: FirmarDocumentoInput): Promise<Firm
       }
     }
 
+    // ENTREGAS DE MATERIAL. Las dos actas del ciclo (recibirlo y devolverlo)
+    // cierran su entrega al firmarse: hasta que el trabajador no firma, la pieza
+    // no cuenta como suya ni como devuelta.
+    const tipoDoc = doc.tipo as string;
+    if (tipoDoc === "entrega_material" || tipoDoc === "devolucion_material") {
+      try {
+        const esEntrega = tipoDoc === "entrega_material";
+        const ahora = new Date().toISOString();
+        const columnaFirma = esEntrega ? "firma_id" : "devolucion_firma_id";
+
+        const { data: entrega } = await admin
+          .from("entregas_material")
+          .select("id")
+          .eq(columnaFirma, documentoId)
+          .maybeSingle();
+
+        const entregaId = (entrega as { id: string } | null)?.id;
+        if (entregaId) {
+          await admin
+            .from("entregas_material")
+            .update(
+              esEntrega
+                ? { estado: "firmada", firmada_en: ahora, updated_at: ahora }
+                : { devolucion_estado: "devuelta", devuelta_en: ahora, updated_at: ahora },
+            )
+            .eq("id", entregaId);
+
+          // La pieza también se marca devuelta, que es lo que leen la ficha y el
+          // portal para tacharla.
+          if (!esEntrega) {
+            await admin
+              .from("entregas_material_items")
+              .update({ devuelto_en: ahora })
+              .eq("entrega_id", entregaId);
+          }
+        }
+      } catch (e) {
+        console.error("[firmar/firmar] entrega de material firmada:", e);
+      }
+    }
+
     return { ok: true, descargaUrl };
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Error firmando documento";
@@ -852,7 +893,7 @@ export async function rechazarDocumento(
 
     const { data: doc } = await admin
       .from("firmas_documentos")
-      .select("estado, empleado_id")
+      .select("estado, empleado_id, tipo")
       .eq("id", documentoId)
       .maybeSingle();
     if (!doc) return { ok: false, error: "Documento no encontrado" };
@@ -887,6 +928,35 @@ export async function rechazarDocumento(
       userAgent: meta.userAgent,
       metadata: { motivo: motivo?.trim() || null },
     });
+
+    // Si el trabajador rechaza un acta de material, su entrega tiene que
+    // reflejarlo: si no, se quedaría "pendiente de firma" para siempre y RRHH no
+    // sabría que hay una discrepancia que resolver.
+    const tipoDoc = doc.tipo as string;
+    if (tipoDoc === "entrega_material" || tipoDoc === "devolucion_material") {
+      try {
+        const esEntrega = tipoDoc === "entrega_material";
+        const columnaFirma = esEntrega ? "firma_id" : "devolucion_firma_id";
+        const { data: entrega } = await admin
+          .from("entregas_material")
+          .select("id")
+          .eq(columnaFirma, documentoId)
+          .maybeSingle();
+        const entregaId = (entrega as { id: string } | null)?.id;
+        if (entregaId) {
+          await admin
+            .from("entregas_material")
+            .update(
+              esEntrega
+                ? { estado: "rechazada", updated_at: new Date().toISOString() }
+                : { devolucion_estado: "rechazada", updated_at: new Date().toISOString() },
+            )
+            .eq("id", entregaId);
+        }
+      } catch (e) {
+        console.error("[firmar/rechazar] entrega de material:", e);
+      }
+    }
 
     return { ok: true };
   } catch (err) {

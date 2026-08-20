@@ -9,7 +9,7 @@ import {
 } from "@/components/ui/table";
 import {
   ArrowLeft, Settings, PackageCheck, Shirt, Package, Trash2, Loader2,
-  AlertTriangle, CheckCircle2, RotateCcw,
+  AlertTriangle, CheckCircle2, RotateCcw, Mail, Undo2,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -26,11 +26,16 @@ import { formatFechaEnZona } from "@/features/empresa/lib/zona-horaria";
 import {
   listEntregas,
   borrarEntrega,
-  marcarItemDevuelto,
+  pedirDevolucion,
+  cancelarDevolucion,
+  reenviarEntregaAFirma,
 } from "@/features/rrhh/actions/entregas-actions";
 import {
   ESTADO_LABEL,
   ESTADO_COLOR,
+  DEVOLUCION_LABEL,
+  DEVOLUCION_COLOR,
+  sePuedePedirDevolucion,
   type Entrega,
 } from "@/features/rrhh/data/entregas";
 import { TiposMaterialConfig } from "./TiposMaterialConfig";
@@ -73,6 +78,8 @@ export function EntregasView() {
   const [busqueda, setBusqueda] = useState("");
   const [filtros, setFiltros] = useState<ToolbarFiltroActivo[]>([]);
   const [orden, setOrden] = useState<ToolbarOrdenActivo | null>(null);
+  /** Id de la entrega cuya acción está en curso, para no repetir el clic. */
+  const [accionando, setAccionando] = useState<string | null>(null);
   const { confirm, dialog } = useConfirmDelete();
   useGlobalLoadingSync(loading);
 
@@ -103,7 +110,7 @@ export function EntregasView() {
       const q = busqueda.toLowerCase();
       return (
         e.empleadoNombre.toLowerCase().includes(q) ||
-        e.items.some((i) => i.tipoNombre.toLowerCase().includes(q)) ||
+        (e.item?.tipoNombre ?? "").toLowerCase().includes(q) ||
         (e.nota ?? "").toLowerCase().includes(q)
       );
     });
@@ -113,9 +120,13 @@ export function EntregasView() {
   }, [entregas, busqueda, filtros, orden]);
 
   const stats = useMemo(() => {
-    const pendientesDevolucion = entregas
-      .flatMap((e) => e.items)
-      .filter((i) => i.requiereDevolucion && !i.devueltoEn).length;
+    // Sin devolver = firmada, hay que devolverla, y aún no la ha devuelto.
+    const pendientesDevolucion = entregas.filter(
+      (e) =>
+        e.estado === "firmada" &&
+        e.item?.requiereDevolucion &&
+        e.devolucionEstado !== "devuelta",
+    ).length;
     return {
       total: entregas.length,
       firmadas: entregas.filter((e) => e.estado === "firmada").length,
@@ -136,22 +147,43 @@ export function EntregasView() {
     toast.success("Entrega borrada");
   }
 
-  async function alternarDevuelto(entregaId: string, itemId: string, devuelto: boolean) {
-    const res = await marcarItemDevuelto(itemId, devuelto);
+  /**
+   * Pide la devolución: le manda al trabajador el acta para que firme que la ha
+   * devuelto. No la marca como devuelta — eso lo hace su firma.
+   */
+  async function solicitarDevolucion(e: Entrega) {
+    const ok = await confirm({
+      title: "Pedir la devolución",
+      description: `Se le mandará a ${e.empleadoNombre} un correo para que firme que ha devuelto ${e.item?.tipoNombre ?? "el material"}. Queda devuelta cuando lo firme.`,
+    });
+    if (!ok) return;
+
+    setAccionando(e.id);
+    const res = await pedirDevolucion(e.id);
+    setAccionando(null);
     if (!res.ok) { toast.error(res.error); return; }
-    setEntregas((prev) =>
-      prev.map((e) =>
-        e.id !== entregaId
-          ? e
-          : {
-              ...e,
-              items: e.items.map((i) =>
-                i.id === itemId ? { ...i, devueltoEn: devuelto ? new Date().toISOString() : null } : i,
-              ),
-            },
-      ),
-    );
-    toast.success(devuelto ? "Marcado como devuelto" : "Marca de devolución quitada");
+    toast.success("Le hemos mandado el correo para firmar la devolución");
+    void cargar();
+  }
+
+  /** Deshace una devolución pedida por error, si aún no la ha firmado. */
+  async function anularDevolucion(e: Entrega) {
+    setAccionando(e.id);
+    const res = await cancelarDevolucion(e.id);
+    setAccionando(null);
+    if (!res.ok) { toast.error(res.error); return; }
+    toast.success("Devolución cancelada");
+    void cargar();
+  }
+
+  /** Vuelve a mandar el acta de entrega cuando el correo no salió o caducó. */
+  async function reenviarFirmaEntrega(e: Entrega) {
+    setAccionando(e.id);
+    const res = await reenviarEntregaAFirma(e.id);
+    setAccionando(null);
+    if (!res.ok) { toast.error(res.error); return; }
+    toast.success("Correo de firma reenviado");
+    void cargar();
   }
 
   if (showConfig) {
@@ -222,6 +254,7 @@ export function EntregasView() {
                 <TableHead>Qué se entregó</TableHead>
                 <TableHead>Fecha</TableHead>
                 <TableHead>Estado</TableHead>
+                <TableHead>Devolución</TableHead>
                 <TableHead className="text-right">Acciones</TableHead>
               </TableRow>
             </TableHeader>
@@ -239,40 +272,23 @@ export function EntregasView() {
 
                   <TableCell className="align-top max-w-md">
                     <div className="space-y-1">
-                      {e.items.map((i) => (
-                        <div key={i.id} className="flex items-center gap-2 text-sm">
-                          {i.categoria === "uniforme" ? (
-                            <Shirt className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                          ) : (
-                            <Package className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                          )}
-                          <span className={i.devueltoEn ? "text-muted-foreground line-through" : ""}>
-                            {i.cantidad > 1 && `${i.cantidad}× `}
-                            {i.tipoNombre}
-                            {i.talla && ` · talla ${i.talla}`}
-                          </span>
-                          {i.requiereDevolucion && (
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              className="h-6 px-1.5 text-[10px]"
-                              onClick={() => void alternarDevuelto(e.id, i.id, !i.devueltoEn)}
-                              title={i.devueltoEn ? "Quitar la marca de devuelto" : "Marcar como devuelto"}
-                            >
-                              {i.devueltoEn ? (
-                                <>
-                                  <RotateCcw className="h-3 w-3 mr-1" />
-                                  Devuelto
-                                </>
-                              ) : (
-                                <Badge variant="outline" className="text-[10px] bg-amber-50 text-amber-700 border-amber-200">
-                                  Sin devolver
-                                </Badge>
-                              )}
-                            </Button>
-                          )}
-                        </div>
-                      ))}
+                      <div className="flex items-center gap-2 text-sm">
+                        {e.item?.categoria === "uniforme" ? (
+                          <Shirt className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                        ) : (
+                          <Package className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                        )}
+                        <span
+                          className={
+                            e.devolucionEstado === "devuelta"
+                              ? "text-muted-foreground line-through"
+                              : ""
+                          }
+                        >
+                          {e.item?.tipoNombre ?? "—"}
+                          {e.item?.talla && ` · talla ${e.item.talla}`}
+                        </span>
+                      </div>
                       {e.nota && (
                         <p className="text-xs text-muted-foreground italic pt-1">{e.nota}</p>
                       )}
@@ -287,18 +303,92 @@ export function EntregasView() {
                     </Badge>
                   </TableCell>
 
-                  <TableCell className="text-right align-top">
-                    {e.estado !== "firmada" && (
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="text-destructive hover:text-destructive"
-                        onClick={() => void borrar(e)}
-                        title="Borrar entrega"
+                  <TableCell className="align-top">
+                    {/* Solo tiene sentido hablar de devolución si hay que devolverlo. */}
+                    {!e.item?.requiereDevolucion ? (
+                      <span className="text-xs text-muted-foreground">—</span>
+                    ) : e.devolucionEstado === "no_procede" ? (
+                      <Badge
+                        variant="outline"
+                        className="text-[10px] bg-amber-50 text-amber-700 border-amber-200"
                       >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                        Sin devolver
+                      </Badge>
+                    ) : (
+                      <div className="space-y-1">
+                        <Badge variant="outline" className={DEVOLUCION_COLOR[e.devolucionEstado]}>
+                          {DEVOLUCION_LABEL[e.devolucionEstado]}
+                        </Badge>
+                        {e.devueltaEn && (
+                          <p className="text-xs text-muted-foreground whitespace-nowrap">
+                            {fmt(e.devueltaEn)}
+                          </p>
+                        )}
+                      </div>
                     )}
+                  </TableCell>
+
+                  <TableCell className="text-right align-top">
+                    <div className="flex items-center justify-end gap-1">
+                      {/* Reenviar el acta de entrega si el correo no salió. */}
+                      {(e.estado === "pendiente_firma" || e.estado === "borrador") && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          disabled={accionando === e.id}
+                          onClick={() => void reenviarFirmaEntrega(e)}
+                          title="Reenviar el correo de firma"
+                        >
+                          {accionando === e.id ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Mail className="h-4 w-4" />
+                          )}
+                        </Button>
+                      )}
+
+                      {/* Pedir la devolución: le manda el acta a firmar. */}
+                      {sePuedePedirDevolucion(e) && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={accionando === e.id}
+                          onClick={() => void solicitarDevolucion(e)}
+                        >
+                          {accionando === e.id ? (
+                            <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                          ) : (
+                            <RotateCcw className="h-4 w-4 mr-1" />
+                          )}
+                          Devolución
+                        </Button>
+                      )}
+
+                      {/* Deshacer una devolución pedida por error. */}
+                      {e.devolucionEstado === "pendiente_firma" && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          disabled={accionando === e.id}
+                          onClick={() => void anularDevolucion(e)}
+                          title="Cancelar la devolución pedida"
+                        >
+                          <Undo2 className="h-4 w-4" />
+                        </Button>
+                      )}
+
+                      {e.estado !== "firmada" && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="text-destructive hover:text-destructive"
+                          onClick={() => void borrar(e)}
+                          title="Borrar entrega"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}

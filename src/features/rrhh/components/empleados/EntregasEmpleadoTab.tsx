@@ -142,26 +142,21 @@ export function EntregasEmpleadoTab({ empleadoId }: { empleadoId: string }) {
                   </Badge>
                 </div>
 
-                <div className="space-y-1">
-                  {e.items.map((i) => (
-                    <div key={i.id} className="flex items-center gap-2 text-sm">
-                      {i.categoria === "uniforme" ? (
-                        <Shirt className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                      ) : (
-                        <Package className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                      )}
-                      <span className={i.devueltoEn ? "text-muted-foreground line-through" : ""}>
-                        {i.cantidad > 1 && `${i.cantidad}× `}
-                        {i.tipoNombre}
-                        {i.talla && ` · talla ${i.talla}`}
-                      </span>
-                      {i.devueltoEn && (
-                        <span className="text-xs text-muted-foreground">
-                          devuelto el {fmt(i.devueltoEn)}
-                        </span>
-                      )}
-                    </div>
-                  ))}
+                <div className="flex items-center gap-2 text-sm">
+                  {e.item?.categoria === "uniforme" ? (
+                    <Shirt className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                  ) : (
+                    <Package className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                  )}
+                  <span className={e.devueltaEn ? "text-muted-foreground line-through" : ""}>
+                    {e.item?.tipoNombre ?? "—"}
+                    {e.item?.talla && ` · talla ${e.item.talla}`}
+                  </span>
+                  {e.devueltaEn && (
+                    <span className="text-xs text-muted-foreground">
+                      devuelto el {fmt(e.devueltaEn)}
+                    </span>
+                  )}
                 </div>
 
                 {e.nota && <p className="text-xs text-muted-foreground italic">{e.nota}</p>}
