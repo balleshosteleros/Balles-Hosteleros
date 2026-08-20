@@ -339,6 +339,7 @@ export const CATALOGO: ModuloDef[] = [
       placeholder("firmas", "Firmas"),
       placeholder("calendarios", "Calendarios"),
       placeholder("horarios", "Horarios"),
+      placeholder("entregas", "Entregas"),
       {
         key: "reclutamiento",
         label: "Reclutamiento",

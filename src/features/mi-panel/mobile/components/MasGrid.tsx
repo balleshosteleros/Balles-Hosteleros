@@ -15,6 +15,7 @@ import {
   FileSearch,
   Network,
   Euro,
+  PackageCheck,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -34,6 +35,7 @@ const ITEMS: Item[] = [
   { href: "/m/calendario", label: "Calendario", icon: CalendarDays, hue: 211 },
   { href: "/m/condiciones", label: "Condiciones", icon: ClipboardCheck, hue: 192 },
   { href: "/m/pagos", label: "Pagos", icon: Euro, hue: 192 },
+  { href: "/m/entregas", label: "Entregas", icon: PackageCheck, hue: 192 },
   { href: "/m/documentos", label: "Documentos", icon: Files, hue: 192 },
   { href: "/m/solicitudes", label: "Solicitudes", icon: Inbox, hue: 192 },
   { href: "/m/comunicados", label: "Comunicados", icon: Megaphone, hue: 231 },

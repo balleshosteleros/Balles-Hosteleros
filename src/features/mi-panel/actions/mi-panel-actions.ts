@@ -19,6 +19,7 @@ import type {
   SolicitudSubtipoAusencia,
   SolicitudSubtipoTrabajo,
 } from "@/features/mi-panel/types";
+import { HORAS_EXTRAS_MOTIVO_MIN } from "@/features/mi-panel/types";
 import {
   calcularNivel,
   getMiBalance,
@@ -1818,6 +1819,18 @@ export async function crearSolicitudPersonal(input: NuevaSolicitudInput) {
     }
     if (input.tipo === "trabajo" && !["horas_extras", "dia_trabajado"].includes(input.subtipo)) {
       return { ok: false, error: "Subtipo de trabajo no válido" };
+    }
+
+    // Horas extras: el motivo es obligatorio. Quien las aprueba necesita saber
+    // por qué se hicieron, así que exigimos una explicación mínima.
+    if (input.subtipo === "horas_extras") {
+      const motivo = (input.motivo ?? "").trim();
+      if (motivo.length < HORAS_EXTRAS_MOTIVO_MIN) {
+        return {
+          ok: false,
+          error: `Explica por qué hiciste las horas extras (mínimo ${HORAS_EXTRAS_MOTIVO_MIN} caracteres).`,
+        };
+      }
     }
 
     // BAJA DE CONTRATO: reglas propias. Cliente solo elige fecha_fin (último día efectivo);

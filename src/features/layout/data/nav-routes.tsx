@@ -12,7 +12,7 @@ import {
   Inbox, FileSignature, Trophy, UserCircle, LayoutDashboard, FileQuestion,
   LayoutGrid, CalendarClock, AlertTriangle, HelpCircle, MessageSquareWarning,
   Video, Mail, MessageSquare, Banknote, Building2, Smartphone, Trash2,
-  Bell, ArrowLeftRight,
+  Bell, ArrowLeftRight, PackageCheck,
 } from "lucide-react";
 
 // ─── Icons custom ──────────────────────────────────────────────────────────
@@ -91,6 +91,7 @@ export const miPanelSubs: SubItem[] = [
   { title: "CUESTIONARIOS", url: "/mi-panel/cuestionarios", icon: FileQuestion },
   { title: "SOLICITUDES", url: "/mi-panel/ausencias", icon: Inbox },
   { title: "COMUNICADOS", url: "/mi-panel/comunicados", icon: Megaphone },
+  { title: "ENTREGAS", url: "/mi-panel/entregas", icon: PackageCheck },
   { title: "DOCUMENTOS", url: "/mi-panel/documentos", icon: Files },
   { title: "INSPECCIONES", url: "/mi-panel/inspecciones", icon: FileSearch },
   { title: "EQUIPO", url: "/mi-panel/equipo", icon: Network },
@@ -159,6 +160,7 @@ export const rrhhSubs: SubItem[] = [
   { title: "FIRMAS", url: "/rrhh/firmas", icon: FileSignature },
   { title: "CALENDARIOS", url: "/rrhh/calendarios", icon: Calendar },
   { title: "HORARIOS", url: "/rrhh/horarios", icon: Timer },
+  { title: "ENTREGAS", url: "/rrhh/entregas", icon: PackageCheck },
   { title: "RECLUTAMIENTO", url: "/rrhh/reclutamiento", icon: UserRoundSearch },
   { title: "BONUS", url: "/rrhh/bonus", icon: Gift },
   { title: "POINTS", url: "/rrhh/points", icon: Trophy, badge: "2ª fase" },
