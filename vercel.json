@@ -43,7 +43,7 @@
     },
     {
       "path": "/api/cron/google-rwg-availability-delta",
-      "schedule": "*/10 * * * *"
+      "schedule": "*/5 * * * *"
     },
     {
       "path": "/api/cron/google-rwg-notify-pending",
