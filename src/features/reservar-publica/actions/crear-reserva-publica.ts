@@ -263,7 +263,7 @@ export async function crearReservaPublicaAction(
     .maybeSingle();
   if (!local) {
     console.error("[reservar-publica] sin local para empresa", empresa.id);
-    return { ok: false, error: "No podemos aceptar reservas online ahora mismo. Llámanos para reservar." };
+    return { ok: false, error: "No podemos aceptar reservas online ahora mismo. Inténtalo más tarde." };
   }
   // CUPO DEL TURNO (manda sobre las mesas).
   // Si la empresa tiene tope de comensales, ese límite va PRIMERO: aunque
@@ -281,12 +281,16 @@ export async function crearReservaPublicaAction(
   });
   if (errCupo) {
     console.error("[reservar-publica] try_reservar_slot:", errCupo);
-    return { ok: false, error: "No pudimos procesar la reserva. Inténtalo de nuevo o llámanos." };
+    return { ok: false, error: "No pudimos procesar la reserva. Inténtalo de nuevo en unos minutos." };
   }
   if (cupoOk !== true) {
+    // El tope es del TURNO completo, así que no sirve de nada mandarle a probar
+    // otra hora: todas las del turno están igual de llenas. Se le ofrece el otro
+    // turno o cambiar de día, que es lo único que puede funcionar.
+    const otroTurno = turno === "COMIDA" ? "la cena" : "la comida";
     return {
       ok: false,
-      error: `Lo sentimos, ya no quedan plazas para el ${data.fecha} a las ${data.hora.slice(0, 5)}. Prueba con otra hora o llámanos.`,
+      error: `Lo sentimos, ya no quedan plazas para ${turno === "COMIDA" ? "la comida" : "la cena"} del ${data.fecha}. Prueba con ${otroTurno} o elige otro día.`,
     };
   }
 
@@ -316,17 +320,19 @@ export async function crearReservaPublicaAction(
     // Diferenciamos config rota vs. lleno para que se vea en logs.
     if (!asign.ok && asign.razon === "SIN_PLANO_ACTIVO") {
       console.error("[reservar-publica] sin plano activo en local", local.id);
-      return { ok: false, error: "No podemos aceptar reservas online ahora mismo. Llámanos para reservar." };
+      return { ok: false, error: "No podemos aceptar reservas online ahora mismo. Inténtalo más tarde." };
     }
     if (!asign.ok) {
       console.error("[reservar-publica] error asignando mesa:", asign.detalle);
-      return { ok: false, error: "No pudimos procesar la reserva. Inténtalo de nuevo o llámanos." };
+      return { ok: false, error: "No pudimos procesar la reserva. Inténtalo de nuevo en unos minutos." };
     }
     // mesa=null: SIN_CANDIDATAS o SIN_MESAS_LIBRES → local lleno para esa
     // combinación de fecha, hora y comensales.
     return {
       ok: false,
-      error: `Lo sentimos, no quedan mesas libres para ${data.personas} ${data.personas === 1 ? "persona" : "personas"} el ${data.fecha} a las ${data.hora.slice(0, 5)}. Prueba con otra hora o llámanos.`,
+      // Aquí sí es de ESA hora concreta (faltan mesas, no cupo), así que probar
+      // otra hora es un consejo útil.
+      error: `Lo sentimos, no quedan mesas libres para ${data.personas} ${data.personas === 1 ? "persona" : "personas"} el ${data.fecha} a las ${data.hora.slice(0, 5)}. Prueba con otra hora.`,
     };
   }
   const mesaFinal: string = asign.mesa.codigo;
