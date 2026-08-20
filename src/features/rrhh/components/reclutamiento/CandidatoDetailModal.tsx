@@ -651,8 +651,8 @@ function CandidatoSidebar({
   const cuestionarioOk = respuestaCuest
     ? respuestaCuest.aciertos === respuestaCuest.totalPreguntas
     : null;
-  // Reviews: nota final = media de todas las estrellas de todas las reseñas.
-  const reviewMedia = promedioEstrellas(resenas.flatMap((r) => r.puntuaciones));
+  // Reseñas: nota final = media de todas las estrellas de todas las reseñas.
+  const resenaMedia = promedioEstrellas(resenas.flatMap((r) => r.puntuaciones));
   const copyEmail = () => {
     if (typeof navigator !== "undefined" && navigator.clipboard) {
       navigator.clipboard.writeText(candidato.email).catch(() => {});
@@ -785,7 +785,7 @@ function CandidatoSidebar({
         </div>
       )}
 
-      {/* Resumen: resultado del cuestionario y nota final de reviews. */}
+      {/* Resumen: resultado del cuestionario y nota final de reseñas. */}
       <div className="rounded-lg border border-border divide-y divide-border">
         <div className="flex items-center justify-between px-3 py-2">
           <span className="text-sm font-semibold text-foreground">Cuestionario</span>
@@ -802,14 +802,14 @@ function CandidatoSidebar({
           )}
         </div>
         <div className="flex items-center justify-between px-3 py-2">
-          <span className="text-sm font-semibold text-foreground">Reviews</span>
-          {reviewMedia === null ? (
+          <span className="text-sm font-semibold text-foreground">Reseñas</span>
+          {resenaMedia === null ? (
             <span className="text-xs text-muted-foreground">Sin valorar</span>
           ) : (
             <span className="flex items-center gap-2">
-              <StarRatingFraccion value={reviewMedia} />
+              <StarRatingFraccion value={resenaMedia} />
               <span className="text-sm font-bold text-amber-600 tabular-nums">
-                {reviewMedia.toFixed(1)}
+                {resenaMedia.toFixed(1)}
                 <span className="text-xs font-medium text-muted-foreground"> / 5</span>
               </span>
             </span>

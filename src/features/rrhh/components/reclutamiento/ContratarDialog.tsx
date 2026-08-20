@@ -122,6 +122,29 @@ export function ContratarDialog({ open, onOpenChange, candidato, onDone, variant
     });
   }
 
+  // Un error de contratación puede ser TRANSITORIO (red, timeout, un paso que
+  // falló y el servidor revirtió → reintentar tiene sentido) o DEFINITIVO (el
+  // candidato ya está contratado, faltan datos obligatorios, no hay permisos →
+  // volver a pulsar el botón dará exactamente el mismo error). Solo en el primer
+  // caso se invita a reintentar; en el segundo se indica dónde continuar, sin
+  // repetir el motivo (ya lo dice el mensaje) ni regañar al usuario.
+  function pistaDeError(msg: string): string | undefined {
+    const m = msg.toLowerCase();
+    if (m.includes("ya fue contratado") || m.includes("ya en curso")) {
+      return "Puedes consultar su ficha en Empleados.";
+    }
+    if (m.includes("faltan datos obligatorios") || m.includes("documentación")) {
+      return "Completa la documentación del candidato para poder contratarlo.";
+    }
+    if (m.includes("ya existe") || m.includes("duplicad")) {
+      return "Para reincorporarlo, entra en su ficha de empleado.";
+    }
+    if (m.includes("sin permisos") || m.includes("no autenticado")) return undefined;
+    if (m.includes("solo se puede contratar")) return undefined;
+    if (m.includes("selecciona") || m.includes("indica") || m.includes("asigna")) return undefined;
+    return "Los datos siguen aquí. Pulsa el botón de nuevo para reintentar.";
+  }
+
   // Ejecuta la contratación respetando qué correos confirmó el usuario.
   function confirmarYEnviar() {
     if (!candidato) return;
@@ -152,7 +175,8 @@ export function ContratarDialog({ open, onOpenChange, candidato, onDone, variant
         } else {
           const msg = res.error ?? "No se pudo iniciar la contratación";
           setErrorMsg(msg);
-          toast.error(msg, { description: "Pulsa «Confirmar y enviar» de nuevo para reintentar." });
+          const pista = pistaDeError(msg);
+          toast.error(msg, pista ? { description: pista } : undefined);
         }
       } catch (e) {
         const msg = e instanceof Error ? e.message : "Error inesperado al contratar";
@@ -194,14 +218,13 @@ export function ContratarDialog({ open, onOpenChange, candidato, onDone, variant
         onDone();
         onOpenChange(false);
       } else {
-        // El diálogo NO se cierra: los datos siguen rellenos y basta con volver a
-        // pulsar «Contratar» para reintentar en un solo paso. El error se muestra
-        // en un banner visible dentro del diálogo (no solo un toast efímero).
+        // El diálogo NO se cierra: el error se muestra en un banner visible dentro
+        // del diálogo (no solo un toast efímero). Si el error es reintentable, los
+        // datos siguen rellenos y basta con volver a pulsar «Contratar».
         const msg = res.error ?? "No se pudo contratar";
         setErrorMsg(msg);
-        toast.error(msg, {
-          description: "Los datos siguen aquí. Pulsa «Contratar» de nuevo para reintentar.",
-        });
+        const pista = pistaDeError(msg);
+        toast.error(msg, pista ? { description: pista } : undefined);
       }
       } catch (e) {
         // Fallo inesperado (red, timeout, crash del servidor): avisa SIEMPRE en el
@@ -243,7 +266,12 @@ export function ContratarDialog({ open, onOpenChange, candidato, onDone, variant
             {errorMsg && (
               <div role="alert" className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2.5 text-sm text-destructive">
                 <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
-                <p className="text-xs text-destructive/90">{errorMsg}</p>
+                <div className="space-y-0.5">
+                  <p className="text-xs text-destructive/90">{errorMsg}</p>
+                  {pistaDeError(errorMsg) && (
+                    <p className="text-xs text-destructive/90">{pistaDeError(errorMsg)}</p>
+                  )}
+                </div>
               </div>
             )}
             <p className="text-sm text-muted-foreground">
@@ -298,10 +326,11 @@ export function ContratarDialog({ open, onOpenChange, candidato, onDone, variant
               >
                 <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
                 <div className="space-y-0.5">
-                  <p className="font-medium">La contratación no se completó y se ha revertido.</p>
-                  <p className="text-xs text-destructive/90">
-                    {errorMsg}. Los datos siguen aquí: pulsa «{esIniciar ? "Iniciar contratación" : "Contratar"}» de nuevo para reintentarlo.
-                  </p>
+                  <p className="font-medium">No se pudo contratar.</p>
+                  <p className="text-xs text-destructive/90">{errorMsg}</p>
+                  {pistaDeError(errorMsg) && (
+                    <p className="text-xs text-destructive/90">{pistaDeError(errorMsg)}</p>
+                  )}
                 </div>
               </div>
             )}

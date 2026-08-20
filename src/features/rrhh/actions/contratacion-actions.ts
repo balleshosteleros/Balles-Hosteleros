@@ -248,7 +248,13 @@ export async function contratarCandidato(input: ContratarInput): Promise<Contrat
     return { ok: false, error: "Solo se puede contratar a candidatos en las fases Contratación, Prueba o Empleado." };
   }
   if (cand.promovido_at) {
-    return { ok: false, error: "Este candidato ya fue contratado anteriormente." };
+    // Estado DEFINITIVO, no un fallo: ya existe la ficha de empleado. Se dice
+    // quién y cuándo para que se entienda que no hay nada que reintentar.
+    const quien = `${cand.nombre} ${cand.apellidos ?? ""}`.trim();
+    const cuando = new Date(cand.promovido_at).toLocaleDateString("es-ES", {
+      timeZone: "Europe/Madrid", day: "2-digit", month: "2-digit", year: "numeric",
+    });
+    return { ok: false, error: `${quien} ya fue contratado el ${cuando} y ya tiene ficha de empleado.` };
   }
   if (!input.puestoId) return { ok: false, error: "Selecciona el puesto." };
   if (!input.primerDia) return { ok: false, error: "Indica el primer día de trabajo." };

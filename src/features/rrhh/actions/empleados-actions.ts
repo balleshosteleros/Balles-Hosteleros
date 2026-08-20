@@ -4,6 +4,7 @@ import { getAppContext } from "@/lib/supabase/get-context";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
   requireAdminUser,
+  requireEmpleadosLectura,
   requireRRHHAcceso,
   altaUsuarioEmpleado,
   sincronizarLoginEmailEmpleado,
@@ -48,7 +49,9 @@ export async function listEmpleados() {
   try {
     const { empresaId } = await getAppContext();
     if (!empresaId) return { ok: false, data: [] };
-    await requireAdminUser({ empresaIds: [empresaId] });
+    // Lectura, no modificación: basta con permiso RRHH (ver) sobre la empresa
+    // activa. Exigir DIRECTOR aquí dejaba la tabla vacía a roles como GERENCIA.
+    await requireEmpleadosLectura(empresaId);
 
     let admin;
     try {
@@ -239,7 +242,9 @@ export async function listEmpleados() {
     return { ok: true, data: enriched };
   } catch (err) {
     console.error("[rrhh] listEmpleados:", err);
-    return { ok: false, data: [] };
+    // Sin el motivo, la vista pintaba "No hay empleados todavía" ante un fallo
+    // de permisos: parecía una empresa vacía en vez de un acceso denegado.
+    return { ok: false, data: [], error: friendlyError(err) };
   }
 }
 

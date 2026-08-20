@@ -198,7 +198,7 @@ export async function iniciarContratacion(
 
     const empleadoNombre = `${emp?.nombre ?? ""} ${emp?.apellidos ?? ""}`.trim() || "Trabajador";
 
-    const pdf = await generarReconocimientoMedicoPDF({
+    const { pdf, casillas } = await generarReconocimientoMedicoPDF({
       empleadoNombre,
       empleadoDni: (emp?.dni_nie as string | null) ?? null,
       empresaNombre: (empresa?.nombre as string) ?? "La empresa",
@@ -234,6 +234,8 @@ export async function iniciarContratacion(
       emailIntro: tplRecon?.cuerpo ?? null,
       // Firma sobre la zona "Firmado" del documento (lo genera el sistema).
       posicionFirmaDefault: { pagina: 1, xPct: 0.10, yPct: 0.82, anchoPct: 0.32 },
+      // Dónde van las casillas SÍ/NO, para marcar la elegida al firmar.
+      casillasReconocimiento: casillas,
     });
     reconocimientoMedicoEnviado = firma.ok;
 

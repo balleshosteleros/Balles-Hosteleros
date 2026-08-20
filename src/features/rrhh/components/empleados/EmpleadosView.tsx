@@ -141,6 +141,9 @@ export function EmpleadosView() {
 
   const [empleados, setEmpleados] = useState<EmpleadoConAcceso[]>([]);
   const [loading, setLoading] = useState(true);
+  // Motivo del fallo de carga (p. ej. sin permisos). Sin esto, cualquier error
+  // se mostraba como "No hay empleados todavía" y parecía una empresa vacía.
+  const [errorCarga, setErrorCarga] = useState<string | null>(null);
 
   useGlobalLoadingSync(loading);
 
@@ -149,6 +152,7 @@ export function EmpleadosView() {
     const res = await listEmpleados();
     const rows = (res.data ?? []) as EmpleadoBDRow[];
     setEmpleados(rows.map(bdToEmpleado));
+    setErrorCarga(res.ok ? null : (res as { error?: string }).error ?? "No se han podido cargar los empleados.");
     setLoading(false);
   }, []);
 
@@ -582,7 +586,11 @@ export function EmpleadosView() {
               {!loading && empleados.length === 0 && (
                 <tr>
                   <td colSpan={columnasRender.length} className="text-center py-12 text-muted-foreground">
-                    No hay empleados todavía. Los empleados se incorporan desde el <span className="font-medium text-foreground">portal de empleo</span> (Reclutamiento → contratación).
+                    {errorCarga ?? (
+                      <>
+                        No hay empleados todavía. Los empleados se incorporan desde el <span className="font-medium text-foreground">portal de empleo</span> (Reclutamiento → contratación).
+                      </>
+                    )}
                   </td>
                 </tr>
               )}

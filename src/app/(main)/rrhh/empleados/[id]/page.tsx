@@ -19,6 +19,7 @@ import { InspeccionesEmpleadoTab } from "@/features/rrhh/components/empleados/In
 import { CuestionariosEmpleadoTab } from "@/features/rrhh/components/empleados/CuestionariosEmpleadoTab";
 import { PagosEmpleadoTab } from "@/features/rrhh/components/empleados/PagosEmpleadoTab";
 import { PuestosEmpleadoTab } from "@/features/rrhh/components/empleados/PuestosEmpleadoTab";
+import { EntregasEmpleadoTab } from "@/features/rrhh/components/empleados/EntregasEmpleadoTab";
 import { ValidadoresEmpleadoCard } from "@/features/rrhh/components/empleados/ValidadoresEmpleadoCard";
 import { CalendarioVacacionesEmpleadoCard } from "@/features/rrhh/components/empleados/CalendarioVacacionesEmpleadoCard";
 import {
@@ -45,7 +46,7 @@ import {
   User,
   Fingerprint, Inbox, FileSignature, Calendar, Timer,
   UserRoundSearch, Gift, Trophy, Euro, Briefcase,
-  GraduationCap, FileQuestion, FileSearch,
+  GraduationCap, FileQuestion, FileSearch, PackageCheck,
   Save, Loader2,
 } from "lucide-react";
 
@@ -58,6 +59,7 @@ const TOP_TABS = [
   { id: "firmas",          label: "Firmas",         icon: FileSignature     },
   { id: "calendarios",     label: "Calendarios",    icon: Calendar          },
   { id: "horarios",        label: "Horarios",       icon: Timer             },
+  { id: "entregas",        label: "Entregas",       icon: PackageCheck      },
   { id: "reclutamiento",   label: "Reclutamiento",  icon: UserRoundSearch   },
   { id: "bonus",           label: "Bonus",          icon: Gift              },
   { id: "points",          label: "Points",         icon: Trophy            },
@@ -315,6 +317,13 @@ export default function FichaEmpleadoPage() {
         return <FirmasEmpleadoTab empleadoId={empleadoRegistro.id} />;
       case "calendarios":
         return <SubmoduloPorEmpleadoPlaceholder modulo="Calendarios" path="/rrhh/calendarios" empleado={empleado} />;
+      case "entregas":
+        return (
+          <EntregasEmpleadoTab
+            empleadoId={empleadoRegistro.id}
+            empleadoNombre={`${empleado.nombre} ${empleado.apellidos}`.trim()}
+          />
+        );
       case "reclutamiento":
         return <SubmoduloPorEmpleadoPlaceholder modulo="Reclutamiento" path="/rrhh/reclutamiento" empleado={empleado} />;
       case "bonus":

@@ -34,6 +34,54 @@ export async function requireAdminUser(opts?: { empresaIds?: string[] }) {
 }
 
 /**
+ * Guard de LECTURA de la lista de empleados de una empresa.
+ *
+ * Leer no es modificar: aquí basta con permiso de RECURSOS HUMANOS (`ver`) y
+ * acceso real a la empresa consultada. Antes esta lectura pasaba por
+ * `requireAdminUser` (solo DIRECTOR), así que un rol como GERENCIA —con RRHH
+ * concedido— recibía un error que la vista pintaba como "No hay empleados
+ * todavía": parecía una empresa vacía en vez de una falta de permisos.
+ *
+ * El director sigue siendo super-usuario cross-tenant.
+ */
+export async function requireEmpleadosLectura(empresaId: string) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error("No autenticado");
+
+  const ctx = await getRolContext(user.id);
+  if (ctx.esDirector) return user;
+
+  const tieneRRHH = ctx.permisos.some((p) => p.modulo === "RECURSOS HUMANOS" && p.ver);
+  if (!tieneRRHH) {
+    throw new Error(
+      "Sin permisos: necesitas acceso a Recursos Humanos para ver los empleados.",
+    );
+  }
+
+  // Acceso real a la empresa consultada (empresa principal ∪ usuario_empresas).
+  if (UUID_RE.test(empresaId)) {
+    const [{ data: rel }, { data: prof }] = await Promise.all([
+      supabase
+        .from("usuario_empresas")
+        .select("empresa_id")
+        .eq("user_id", user.id)
+        .eq("empresa_id", empresaId)
+        .maybeSingle(),
+      supabase.from("usuarios").select("empresa_id").eq("user_id", user.id).maybeSingle(),
+    ]);
+    const tieneAcceso = Boolean(rel) || prof?.empresa_id === empresaId;
+    if (!tieneAcceso) {
+      throw new Error("Sin permisos: no tienes acceso a esa empresa.");
+    }
+  }
+
+  return user;
+}
+
+/**
  * Guard de autorización para gestionar/duplicar empleados entre empresas.
  *
  * NO se basa en "grupo": cada empresa es individual. Exige que el usuario:
