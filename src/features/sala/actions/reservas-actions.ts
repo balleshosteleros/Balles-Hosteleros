@@ -19,20 +19,24 @@ import {
   ESTADOS_NO_OCUPANTES,
 } from "@/features/sala/lib/reserva-conflicto";
 import type { TipoMesa } from "@/features/sala/planos/data/planos";
-import { enviarReservaEmail } from "@/lib/email/reservas/mailer";
+import {
+  enviarReservaEmail,
+  type ReservaEmailActor,
+} from "@/lib/email/reservas/mailer";
 async function getContext() {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return { supabase, user: null, empresaId: null, nombre: null };
+  if (!user)
+    return { supabase, user: null, empresaId: null, nombre: null, usuarioId: null };
   const empresaId = await getEmpresaActivaForUser(supabase as unknown as SupabaseClient, user.id);
 
   const { data } = await supabase
 
     .from("usuarios")
 
-    .select("nombre, apellidos")
+    .select("id, nombre, apellidos")
 
     .eq("user_id", user.id)
 
@@ -42,6 +46,24 @@ return {
     user,
     empresaId,
     nombre: data ? data.nombre + " " + data.apellidos : null,
+    // `usuarios.id` (no auth.users): es lo que referencia el histórico de correos.
+    usuarioId: (data?.id as string | undefined) ?? null,
+  };
+}
+
+/**
+ * Actor para el histórico de correos: la persona con sesión abierta que está
+ * usando el software ahora mismo. Todo lo que se dispara desde el back office
+ * lleva su firma.
+ */
+function actorDeSesion(ctx: {
+  usuarioId: string | null;
+  nombre: string | null;
+}): ReservaEmailActor {
+  return {
+    usuarioId: ctx.usuarioId,
+    usuarioNombre: ctx.nombre,
+    origen: "MANUAL",
   };
 }
 
@@ -512,7 +534,8 @@ export async function updateReserva(
   }
 ) {
   try {
-    const { supabase, empresaId } = await getContext();
+    const ctx = await getContext();
+    const { supabase, empresaId } = ctx;
     const dbUpdates: Record<string, unknown> = {
       updated_at: new Date().toISOString(),
     };
@@ -764,12 +787,13 @@ export async function updateReserva(
     // timestamp en la columna de auditoría.
     // No await — un fallo de SMTP no debe romper el UPDATE ya confirmado.
     if (updates.notificarCliente === true) {
+      const actor = actorDeSesion(ctx);
       if (updates.estado === "RECONFIRMADA") {
-        enviarReservaEmail(id, "RECONFIRMACION").catch((e) =>
+        enviarReservaEmail(id, "RECONFIRMACION", { actor }).catch((e) =>
           console.error("[reservas] mail RECONFIRMACION:", e),
         );
       } else if (updates.estado === "CANCELADA") {
-        enviarReservaEmail(id, "CANCELACION").catch((e) =>
+        enviarReservaEmail(id, "CANCELACION", { actor }).catch((e) =>
           console.error("[reservas] mail CANCELACION:", e),
         );
       }
@@ -817,13 +841,17 @@ export async function deleteReserva(id: string) {
  * >= lead time, la reconfirmación la dispara el cron a la hora programada.
  */
 export async function notificarReservaCreadaPorEmail(reservaId: string) {
-  const res = await enviarReservaEmail(reservaId, "CONFIRMACION");
+  // La reserva se está creando desde el back office, así que hay una persona
+  // detrás: su firma va en el histórico de este correo y en el encadenado.
+  const ctxActor = await getContext();
+  const actor = actorDeSesion(ctxActor);
+  const res = await enviarReservaEmail(reservaId, "CONFIRMACION", { actor });
   if (!res.ok) return { ok: false, error: res.error };
 
   // Encadenar reconfirmación inmediata si procede. No bloqueamos la respuesta
   // ni dejamos que un fallo aquí rompa el flujo de creación.
   try {
-    const { supabase } = await getContext();
+    const { supabase } = ctxActor;
     const { data: r } = await supabase
       .from("reservas")
       .select("empresa_id, fecha, hora")
@@ -854,7 +882,7 @@ export async function notificarReservaCreadaPorEmail(reservaId: string) {
       const leadMs = diasAntes * 24 * 3600 * 1000;
       const porDebajoDelLead = diffMs > 0 && diffMs < leadMs;
       if (activa && porDebajoDelLead && envioInmediato) {
-        enviarReservaEmail(reservaId, "RECONFIRMACION").catch((e) =>
+        enviarReservaEmail(reservaId, "RECONFIRMACION", { actor }).catch((e) =>
           console.error("[reservas] mail RECONFIRMACION lt-lead:", e),
         );
       }
@@ -875,8 +903,13 @@ export async function enviarReservaEmailManual(
   reservaId: string,
   tipo: "CONFIRMACION" | "RECONFIRMACION" | "RECORDATORIO" | "CANCELACION",
 ) {
-  // `force: true` permite reenvíos manuales aunque ya haya timestamp.
-  const res = await enviarReservaEmail(reservaId, tipo, { force: true });
+  // `force: true` permite reenvíos manuales aunque ya haya timestamp. Cada
+  // reenvío deja su propia línea en el histórico, firmada por quien lo pide.
+  const ctx = await getContext();
+  const res = await enviarReservaEmail(reservaId, tipo, {
+    force: true,
+    actor: actorDeSesion(ctx),
+  });
   if (res.ok) return { ok: true };
   return { ok: false, error: res.error };
 }

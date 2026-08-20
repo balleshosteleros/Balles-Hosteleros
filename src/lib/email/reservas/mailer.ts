@@ -91,6 +91,20 @@ export type EnviarReservaEmailResult =
   | { ok: false; error: string };
 
 /**
+ * Quién provoca el envío. El mailer trabaja con service role y no ve la sesión,
+ * así que el actor tiene que venir de quien llama — que sí la tiene.
+ *
+ * `usuarioId`/`usuarioNombre` van vacíos cuando NO hay una persona detrás: el
+ * cron nocturno, el formulario público del cliente y el booking server de
+ * Google. En esos casos lo que identifica el envío es `origen`.
+ */
+export interface ReservaEmailActor {
+  usuarioId?: string | null;
+  usuarioNombre?: string | null;
+  origen: "MANUAL" | "AUTOMATICO" | "PORTAL_PUBLICO" | "GOOGLE_RWG";
+}
+
+/**
  * Lee plantilla + reserva + empresa y envía el correo del tipo solicitado.
  *
  * - Idempotencia: si `force=false` y la columna de auditoría ya tiene timestamp,
@@ -99,11 +113,14 @@ export type EnviarReservaEmailResult =
  *   `{ ok: false, error: "plantilla inactiva" }`.
  * - POLITICA_AVISO y CUPON_PAGADO no se envían como correo aparte: si se llaman
  *   directamente, devuelven error explicativo.
+ * - Cada envío efectivo deja una fila en `reserva_email_envios` con el actor
+ *   (`options.actor`). Solo se registra lo que SALE: si el correo no llega a
+ *   enviarse, no se anota nada.
  */
 export async function enviarReservaEmail(
   reservaId: string,
   tipo: ReservaEmailTipo,
-  options: { force?: boolean } = {},
+  options: { force?: boolean; actor?: ReservaEmailActor } = {},
 ): Promise<EnviarReservaEmailResult> {
   if (tipo === "POLITICA_AVISO" || tipo === "CUPON_PAGADO") {
     return {
@@ -361,13 +378,35 @@ export async function enviarReservaEmail(
     return { ok: false, error: res.error };
   }
 
-  // Auditoría
+  // Auditoría: el timestamp en `reservas` da la idempotencia (que el cron no
+  // reenvíe) y el histórico guarda la traza completa con su autor. El
+  // timestamp se machaca en cada reenvío; el histórico, no.
+  const enviadoAt = new Date().toISOString();
   if (auditCol) {
     await admin
       .from("reservas")
-      .update({ [auditCol]: new Date().toISOString() })
+      .update({ [auditCol]: enviadoAt })
       .eq("id", reservaId);
   }
+
+  // El correo YA salió: si el registro falla, no se puede deshacer el envío ni
+  // tiene sentido devolver error. Se traza y se sigue.
+  const actor = options.actor;
+  const { error: errHist } = await admin.from("reserva_email_envios").insert({
+    reserva_id: reservaId,
+    empresa_id: empresaId,
+    tipo,
+    destinatario: email,
+    asunto: subject,
+    usuario_id: actor?.usuarioId ?? null,
+    usuario_nombre: actor?.usuarioNombre ?? null,
+    origen: actor?.origen ?? "AUTOMATICO",
+    enviado_at: enviadoAt,
+  });
+  if (errHist) {
+    console.error("[reservas][mailer] histórico de envío:", errHist.message);
+  }
+
   return { ok: true, transport: res.transport };
 }
 
