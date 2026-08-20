@@ -167,7 +167,11 @@ export async function cancelarReservaPorToken(
     // llamaría al restaurante para algo que ya está hecho.
     try {
       const { enviarReservaEmail } = await import("@/lib/email/reservas/mailer");
-      void enviarReservaEmail(r.id as string, "CANCELACION").catch((e) =>
+      // Lo cancela el propio cliente desde el enlace de su correo: en el
+      // histórico consta como PORTAL_PUBLICO, sin firma de empleado.
+      void enviarReservaEmail(r.id as string, "CANCELACION", {
+        actor: { origen: "PORTAL_PUBLICO" },
+      }).catch((e) =>
         console.error("[cancelar-publica] mail CANCELACION:", e),
       );
     } catch (e) {

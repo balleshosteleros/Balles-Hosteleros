@@ -1,5 +1,5 @@
 import { createAdminClient } from "@/lib/supabase/admin";
-import { enviarReservaEmail } from "./mailer";
+import { enviarReservaEmail, type ReservaEmailActor } from "./mailer";
 
 /**
  * Correo de confirmación de una reserva recién creada, sea cual sea su origen:
@@ -15,12 +15,17 @@ import { enviarReservaEmail } from "./mailer";
  * la dispara el cron a su hora.
  *
  * Nunca lanza: un fallo de correo no puede tumbar una reserva ya creada.
+ *
+ * `origen` marca de dónde vino la reserva en el histórico de correos: aquí no
+ * hay ninguna persona del software detrás, así que no hay firma que poner.
  */
 export async function notificarReservaCreada(
   reservaId: string,
+  origen: ReservaEmailActor["origen"] = "PORTAL_PUBLICO",
 ): Promise<{ ok: boolean; error?: string }> {
   try {
-    const res = await enviarReservaEmail(reservaId, "CONFIRMACION");
+    const actor: ReservaEmailActor = { origen };
+    const res = await enviarReservaEmail(reservaId, "CONFIRMACION", { actor });
     if (!res.ok) {
       console.error("[reservas][notificarReservaCreada] CONFIRMACION:", res.error);
     }
@@ -50,7 +55,7 @@ export async function notificarReservaCreada(
     const diffMs = ts.getTime() - Date.now();
     const leadMs = diasAntes * 24 * 3600 * 1000;
     if (diffMs > 0 && diffMs < leadMs) {
-      await enviarReservaEmail(reservaId, "RECONFIRMACION").catch((e) =>
+      await enviarReservaEmail(reservaId, "RECONFIRMACION", { actor }).catch((e) =>
         console.error("[reservas][notificarReservaCreada] RECONFIRMACION:", e),
       );
     }

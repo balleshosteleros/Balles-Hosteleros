@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { getEmpresaActivaForUser } from "@/features/empresa/lib/empresa-server";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import type { ReservaEmailActor } from "@/lib/email/reservas/mailer";
 import {
   CANCELACION_HORAS_DEFAULT,
   CANCELACION_IMPORTE_DEFAULT,
@@ -19,9 +20,21 @@ import {
 async function getCtx() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { supabase, user: null, empresaId: null };
+  if (!user) return { supabase, user: null, empresaId: null, actor: null };
   const empresaId = await getEmpresaActivaForUser(supabase as unknown as SupabaseClient, user.id);
-  return { supabase, user, empresaId };
+  // Actor para el histórico de correos: guardar la configuración puede
+  // disparar reconfirmaciones, y esas llevan la firma de quien las provocó.
+  const { data: u } = await supabase
+    .from("usuarios")
+    .select("id, nombre, apellidos")
+    .eq("user_id", user.id)
+    .maybeSingle();
+  const actor: ReservaEmailActor = {
+    usuarioId: (u?.id as string | undefined) ?? null,
+    usuarioNombre: u ? `${u.nombre} ${u.apellidos}` : null,
+    origen: "MANUAL",
+  };
+  return { supabase, user, empresaId, actor };
 }
 
 const DIAS: DiaSemanaKey[] = ["lun","mar","mie","jue","vie","sab","dom"];
@@ -122,7 +135,7 @@ export async function getReservasConfig() {
  */
 export async function upsertReservasConfig(updates: Partial<EmpresaReservasConfig>) {
   try {
-    const { supabase, empresaId } = await getCtx();
+    const { supabase, empresaId, actor } = await getCtx();
     if (!empresaId) return { ok: false, error: "No autenticado" };
     const db: Record<string, unknown> = { empresa_id: empresaId };
     if ("antelacionMinMinutos" in updates) db.antelacion_min_minutos = updates.antelacionMinMinutos;
@@ -181,7 +194,7 @@ export async function upsertReservasConfig(updates: Partial<EmpresaReservasConfi
       "reconfirmacionDiasAntes" in updates ||
       "reconfirmacionEnvioInmediato" in updates
     ) {
-      barrerReconfirmacionesPendientesPorCambio(empresaId).catch((e) =>
+      barrerReconfirmacionesPendientesPorCambio(empresaId, actor).catch((e) =>
         console.error("[reservas-config] barrido reconfirmacion:", e),
       );
     }
@@ -204,7 +217,10 @@ export async function upsertReservasConfig(updates: Partial<EmpresaReservasConfi
  * tiene desactivado, el comportamiento es el mismo que al crear una reserva
  * por debajo del lead — no se envía nada y el cron tampoco las pillará.
  */
-async function barrerReconfirmacionesPendientesPorCambio(empresaId: string) {
+async function barrerReconfirmacionesPendientesPorCambio(
+  empresaId: string,
+  actor: ReservaEmailActor | null,
+) {
   const { createClient: createAdmin } = await import("@supabase/supabase-js");
   const { enviarReservaEmail } = await import("@/lib/email/reservas/mailer");
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -246,9 +262,10 @@ async function barrerReconfirmacionesPendientesPorCambio(empresaId: string) {
     const ts = new Date(`${r.fecha as string}T${(r.hora as string).slice(0, 5)}:00`);
     const diffMs = ts.getTime() - ahora.getTime();
     if (diffMs > 0 && diffMs < leadMs) {
-      await enviarReservaEmail(r.id as string, "RECONFIRMACION").catch(
-        (e: unknown) =>
-          console.error("[reservas-config] barrido send:", e),
+      await enviarReservaEmail(r.id as string, "RECONFIRMACION", {
+        actor: actor ?? { origen: "AUTOMATICO" },
+      }).catch((e: unknown) =>
+        console.error("[reservas-config] barrido send:", e),
       );
     }
   }

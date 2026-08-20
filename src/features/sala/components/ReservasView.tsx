@@ -98,6 +98,7 @@ import type {
 } from "@/features/sala/data/reservas";
 import { ReservaFlagsChips } from "@/features/sala/components/reservas/ReservaFlagsChips";
 import { ReservaExternalBadge } from "@/features/sala/components/reservas/ReservaExternalBadge";
+import { HistoricoEmailsReserva } from "@/features/sala/components/reservas/HistoricoEmailsReserva";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
@@ -3774,6 +3775,9 @@ export function ReservasView() {
                   entityId={selectedReserva.id}
                   clienteVinculadoId={selectedReserva.clienteId ?? null}
                 />
+              </div>
+              <div className="pt-2 border-t">
+                <HistoricoEmailsReserva reservaId={selectedReserva.id} />
               </div>
               <div className="space-y-2 pt-2">
                 <Label className="text-muted-foreground text-xs">Cambiar a</Label>

@@ -132,7 +132,10 @@ export async function GET(request: Request) {
           tz,
         });
         for (const r of pendientes) {
-          const res = await enviarReservaEmail(r.id, "RECORDATORIO");
+          // Sin persona detrás: lo dispara el reloj, no un empleado.
+          const res = await enviarReservaEmail(r.id, "RECORDATORIO", {
+            actor: { origen: "AUTOMATICO" },
+          });
           if (res.ok) recordatoriosOk++;
           else recordatoriosErr++;
         }
@@ -157,7 +160,9 @@ export async function GET(request: Request) {
           tz,
         });
         for (const r of pendientesR) {
-          const res = await enviarReservaEmail(r.id, "RECONFIRMACION");
+          const res = await enviarReservaEmail(r.id, "RECONFIRMACION", {
+            actor: { origen: "AUTOMATICO" },
+          });
           if (res.ok) reconfirmacionesOk++;
           else reconfirmacionesErr++;
         }

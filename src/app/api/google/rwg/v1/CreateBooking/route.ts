@@ -325,7 +325,7 @@ export const POST = withMetricas("CreateBooking", async (request) => {
   // reserva confirmada del restaurante, así que el cliente recibe el mismo
   // correo que si hubiera reservado por la web. Fire-and-forget: Google espera
   // una respuesta rápida y la reserva ya es válida aunque el correo falle.
-  notificarReservaCreada(reservaId).catch((e) =>
+  notificarReservaCreada(reservaId, "GOOGLE_RWG").catch((e) =>
     console.error("[rwg][CreateBooking] mail CONFIRMACION:", e),
   );
 
