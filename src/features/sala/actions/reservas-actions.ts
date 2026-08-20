@@ -3,14 +3,20 @@
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 
-import { getEmpresaActivaForUser } from "@/features/empresa/lib/empresa-server";
+import {
+  getEmpresaActivaForUser,
+  getZonaHorariaEmpresa,
+} from "@/features/empresa/lib/empresa-server";
+import { zonaLocalAUtcISO } from "@/features/empresa/lib/zona-horaria";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { findOrLinkClienteSala, type CampoDistinto } from "@/features/sala/lib/cliente-link";
 import { asignarMesaAutomatica } from "@/features/sala/planos/lib/asignacion-mesa";
 import { getMesasBloqueadas } from "@/features/sala/bloqueos/lib/mesas-bloqueadas";
+import { getCamposObligatoriosReserva } from "@/features/sala/lib/reserva-campos-obligatorios";
 import {
   buscarConflictoMesa,
   getDuracionReservaMin,
+  ESTADOS_NO_OCUPANTES,
 } from "@/features/sala/lib/reserva-conflicto";
 import type { TipoMesa } from "@/features/sala/planos/data/planos";
 import { enviarReservaEmail } from "@/lib/email/reservas/mailer";
@@ -125,6 +131,26 @@ export async function createReserva(input: {
   try {
     const { supabase, user, empresaId } = await getContext();
     if (!empresaId) return { ok: false, error: "No autenticado" };
+
+    // Campos obligatorios. Nombre y apellidos siempre; email y teléfono según
+    // lo marcado en Ajustes → Departamentos → Sala → Reservas. Quedan fuera
+    // WALK_IN (se atiende en el momento, sin ficha) y LISTA_ESPERA (es una cola:
+    // se apunta al cliente con lo mínimo y aún no tiene mesa ni compromiso).
+    if (input.estado !== "WALK_IN" && input.estado !== "LISTA_ESPERA") {
+      const exige = await getCamposObligatoriosReserva(empresaId);
+      if (!input.clienteNombre?.trim()) {
+        return { ok: false, error: "El nombre del cliente es obligatorio." };
+      }
+      if (!input.clienteApellidos?.trim()) {
+        return { ok: false, error: "Los apellidos del cliente son obligatorios." };
+      }
+      if (exige.telefono && !input.clienteTelefono?.trim()) {
+        return { ok: false, error: "El teléfono es obligatorio." };
+      }
+      if (exige.email && !input.clienteEmail?.trim()) {
+        return { ok: false, error: "El email es obligatorio." };
+      }
+    }
 
     // Si hay email o teléfono, vincular/crear ficha de cliente.
     // Sin contacto (walk-in puntual), se inserta la reserva sin cliente_id.
@@ -476,6 +502,13 @@ export async function updateReserva(
     reconfirmadaAt?: string | null;
     /** Override de duración. Pasa null para volver a la default empresa. */
     duracionMinutos?: number | null;
+    /**
+     * Enviar el correo al cliente por este cambio de estado (RECONFIRMADA o
+     * CANCELADA). Por defecto NO se envía: cambiar de estado es criterio del
+     * empleado y no debe notificar al cliente por su cuenta. La UI pregunta.
+     * No se persiste: solo decide si sale el correo.
+     */
+    notificarCliente?: boolean;
   }
 ) {
   try {
@@ -601,10 +634,32 @@ export async function updateReserva(
     // Bloqueo de solape al re-asignar mesa/fecha/hora. Reutiliza la
     // `duracion_reserva_min` configurada por empresa. Solo se chequea cuando
     // el UPDATE final tendrá mesa (la reserva resultante ocupa una mesa).
+    // `duracionMinutos` cuenta como cambio de slot: ampliar el tiempo de una
+    // mesa alarga su hora de fin, y eso puede pisar a la reserva que ya haya
+    // entrado detrás. Sin esto, alargar una mesa doblaba la siguiente reserva.
+    // Revivir una reserva anulada (CANCELADA/NO_SHOW/LIBERADA → estado vivo)
+    // vuelve a ocupar la mesa: mientras estuvo anulada esa mesa pudo venderse a
+    // otro cliente, así que hay que revalidar el solape antes de confirmarla.
+    let revive = false;
+    if (updates.estado !== undefined) {
+      const { data: previa } = await supabase
+        .from("reservas")
+        .select("estado")
+        .eq("id", id)
+        .maybeSingle();
+      const estabaAnulada =
+        previa?.estado != null &&
+        (ESTADOS_NO_OCUPANTES as string[]).includes(previa.estado as string);
+      const vuelveAOcupar = !(ESTADOS_NO_OCUPANTES as string[]).includes(updates.estado);
+      revive = estabaAnulada && vuelveAOcupar;
+    }
+
     const tocaSlot =
       updates.mesa !== undefined ||
       updates.fecha !== undefined ||
-      updates.hora !== undefined;
+      updates.hora !== undefined ||
+      updates.duracionMinutos !== undefined ||
+      revive;
     if (tocaSlot && empresaId) {
       const { data: actual } = await supabase
         .from("reservas")
@@ -688,23 +743,36 @@ export async function updateReserva(
       }
     }
 
+    // El filtro por empresa es imprescindible: la RLS solo acota a las empresas
+    // del usuario, no a la ACTIVA. Sin esto, un usuario de BACANAL+HABANA podía
+    // modificar (incluso cancelar) una reserva de la otra empresa por su id.
+    if (!empresaId) return { ok: false, error: "Sin empresa activa." };
     const { error } = await supabase
       .from("reservas")
       .update(dbUpdates)
-      .eq("id", id);
+      .eq("id", id)
+      .eq("empresa_id", empresaId);
     if (error) throw error;
 
-    // Disparadores de correo según transición de estado. Idempotente: el mailer
-    // no reenvía si ya hay timestamp en la columna de auditoría correspondiente.
-    // No await — fire-and-forget para que un fallo de SMTP no rompa el UPDATE.
-    if (updates.estado === "RECONFIRMADA") {
-      enviarReservaEmail(id, "RECONFIRMACION").catch((e) =>
-        console.error("[reservas] mail RECONFIRMACION:", e),
-      );
-    } else if (updates.estado === "CANCELADA") {
-      enviarReservaEmail(id, "CANCELACION").catch((e) =>
-        console.error("[reservas] mail CANCELACION:", e),
-      );
+    // Correo al cliente: SOLO si quien llama lo pide expresamente.
+    //
+    // Cambiar el estado es una valoración del empleado (marca RECONFIRMADA
+    // porque habló por teléfono, CANCELADA porque no vinieron...). Antes el
+    // simple cambio de estado disparaba el correo por su cuenta y el cliente
+    // recibía avisos que nadie había decidido enviar. Ahora la UI pregunta y
+    // pasa `notificarCliente`. Idempotente: el mailer no reenvía si ya hay
+    // timestamp en la columna de auditoría.
+    // No await — un fallo de SMTP no debe romper el UPDATE ya confirmado.
+    if (updates.notificarCliente === true) {
+      if (updates.estado === "RECONFIRMADA") {
+        enviarReservaEmail(id, "RECONFIRMACION").catch((e) =>
+          console.error("[reservas] mail RECONFIRMACION:", e),
+        );
+      } else if (updates.estado === "CANCELADA") {
+        enviarReservaEmail(id, "CANCELACION").catch((e) =>
+          console.error("[reservas] mail CANCELACION:", e),
+        );
+      }
     }
 
     return { ok: true };
@@ -717,11 +785,15 @@ export async function updateReserva(
 
 export async function deleteReserva(id: string) {
   try {
-    const { supabase } = await getContext();
+    const { supabase, empresaId } = await getContext();
+    // Ver nota en updateReserva: la RLS no distingue la empresa ACTIVA, así que
+    // sin este filtro se podía borrar una reserva de la otra empresa del usuario.
+    if (!empresaId) return { ok: false, error: "Sin empresa activa." };
     const { error } = await supabase
       .from("reservas")
       .delete()
-      .eq("id", id);
+      .eq("id", id)
+      .eq("empresa_id", empresaId);
     if (error) throw error;
     return { ok: true };
   } catch (err: unknown) {
@@ -768,7 +840,16 @@ export async function notificarReservaCreadaPorEmail(reservaId: string) {
       const activa = cfg?.reconfirmacion_activa === true;
       const diasAntes = (cfg?.reconfirmacion_dias_antes as number | null) ?? 1;
       const envioInmediato = cfg?.reconfirmacion_envio_inmediato === true;
-      const ts = new Date(`${r.fecha as string}T${(r.hora as string).slice(0, 5)}:00`);
+      // La hora de la reserva es local del restaurante: hay que convertirla con
+      // la zona de la empresa antes de compararla con "ahora" (el servidor va
+      // en UTC y desviaba el cálculo del lead 1-2 h).
+      const tzEmpresa = await getZonaHorariaEmpresa(
+        supabase as unknown as SupabaseClient,
+        r.empresa_id as string,
+      );
+      const ts = new Date(
+        zonaLocalAUtcISO(r.fecha as string, (r.hora as string).slice(0, 5), tzEmpresa),
+      );
       const diffMs = ts.getTime() - Date.now();
       const leadMs = diasAntes * 24 * 3600 * 1000;
       const porDebajoDelLead = diffMs > 0 && diffMs < leadMs;
@@ -799,3 +880,4 @@ export async function enviarReservaEmailManual(
   if (res.ok) return { ok: true };
   return { ok: false, error: res.error };
 }
+

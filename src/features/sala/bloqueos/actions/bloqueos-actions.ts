@@ -101,11 +101,13 @@ export async function createBloqueo(input: BloqueoInput) {
 
 export async function deleteBloqueo(id: string) {
   try {
-    const { supabase } = await getCtx();
+    const { supabase, empresaId } = await getCtx();
+    if (!empresaId) return { ok: false as const, error: "Sin empresa activa." };
     const { error } = await supabase
       .from("empresa_reservas_bloqueos")
       .delete()
-      .eq("id", id);
+      .eq("id", id)
+      .eq("empresa_id", empresaId);
     if (error) throw error;
     revalidatePath("/sala/reservas");
     return { ok: true as const };

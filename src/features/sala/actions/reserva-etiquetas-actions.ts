@@ -86,7 +86,8 @@ export async function updateReservaEtiqueta(id: string, updates: {
   activo?: boolean;
 }) {
   try {
-    const { supabase } = await getCtx();
+    const { supabase, empresaId } = await getCtx();
+    if (!empresaId) return { ok: false, error: "Sin empresa activa." };
     const dbUpdates: Record<string, unknown> = {};
     if (updates.nombre !== undefined) dbUpdates.nombre = updates.nombre.trim();
     if (updates.emoji !== undefined) dbUpdates.emoji = updates.emoji;
@@ -96,7 +97,8 @@ export async function updateReservaEtiqueta(id: string, updates: {
     const { error } = await supabase
       .from("empresa_reserva_etiquetas")
       .update(dbUpdates)
-      .eq("id", id);
+      .eq("id", id)
+      .eq("empresa_id", empresaId);
     if (error) throw error;
     return { ok: true };
   } catch (err: unknown) {
@@ -108,11 +110,13 @@ export async function updateReservaEtiqueta(id: string, updates: {
 
 export async function deleteReservaEtiqueta(id: string) {
   try {
-    const { supabase } = await getCtx();
+    const { supabase, empresaId } = await getCtx();
+    if (!empresaId) return { ok: false, error: "Sin empresa activa." };
     const { error } = await supabase
       .from("empresa_reserva_etiquetas")
       .delete()
-      .eq("id", id);
+      .eq("id", id)
+      .eq("empresa_id", empresaId);
     if (error) throw error;
     return { ok: true };
   } catch (err: unknown) {

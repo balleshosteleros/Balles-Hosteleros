@@ -5,6 +5,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
 import { Plus, Search } from "lucide-react";
 import { toast } from "sonner";
 import { CategoriaEtiquetasCard } from "./CategoriaEtiquetasCard";
@@ -38,6 +46,9 @@ export function EtiquetasConfigTab() {
   const [scope, setScope] = useState<EtiquetaScope>("reserva");
   const [categorias, setCategorias] = useState<EtiquetaCategoria[]>([]);
   const [etiquetas, setEtiquetas] = useState<Etiqueta[]>([]);
+  const [dialogCategoria, setDialogCategoria] = useState(false);
+  const [nuevaCategoria, setNuevaCategoria] = useState("");
+  const [creandoCategoria, setCreandoCategoria] = useState(false);
   const [etiquetasReserva, setEtiquetasReserva] = useState<ReservaEtiqueta[]>([]);
   const [loading, setLoading] = useState(true);
   const [busqueda, setBusqueda] = useState("");
@@ -79,16 +90,20 @@ export function EtiquetasConfigTab() {
   }
 
   async function handleCrearCategoria() {
-    const nombre = window.prompt("Nombre de la categoría:");
-    if (!nombre?.trim()) return;
-    const res = await createEtiquetaCategoria({
-      scope,
-      nombre: nombre.trim(),
-      orden: catsFiltradas.length + 1,
-    });
+    const nombre = nuevaCategoria.trim();
+    if (!nombre) return;
+    setCreandoCategoria(true);
+    // El orden se calcula sobre TODAS las categorías del scope, no sobre las
+    // filtradas por la búsqueda: si no, con un filtro activo la nueva categoría
+    // nacía con un orden ya ocupado.
+    const orden = categorias.filter((c) => c.scope === scope).length + 1;
+    const res = await createEtiquetaCategoria({ scope, nombre, orden });
+    setCreandoCategoria(false);
     if (!res.ok) toast.error(res.error ?? "No se pudo crear");
     else {
       toast.success("Categoría creada");
+      setNuevaCategoria("");
+      setDialogCategoria(false);
       cargar();
     }
   }
@@ -141,10 +156,44 @@ export function EtiquetasConfigTab() {
             className="h-8 pl-7"
           />
         </div>
-        <Button size="sm" onClick={handleCrearCategoria}>
+        <Button size="sm" onClick={() => { setNuevaCategoria(""); setDialogCategoria(true); }}>
           <Plus className="h-3.5 w-3.5 mr-1" /> Categoría
         </Button>
       </div>
+
+      <Dialog open={dialogCategoria} onOpenChange={setDialogCategoria}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Nueva categoría</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-1.5">
+            <Label className="text-xs">Nombre</Label>
+            <Input
+              autoFocus
+              className="h-8 text-xs"
+              value={nuevaCategoria}
+              onChange={(e) => setNuevaCategoria(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && nuevaCategoria.trim() && !creandoCategoria) {
+                  handleCrearCategoria();
+                }
+              }}
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" size="sm" onClick={() => setDialogCategoria(false)}>
+              Cancelar
+            </Button>
+            <Button
+              size="sm"
+              onClick={handleCrearCategoria}
+              disabled={!nuevaCategoria.trim() || creandoCategoria}
+            >
+              Crear
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <div className="space-y-2.5">
         {catsFiltradas.length === 0 && (

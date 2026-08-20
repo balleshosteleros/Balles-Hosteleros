@@ -116,11 +116,13 @@ export async function createHorarioExcepcion(input: CrearHorarioExcepcionInput) 
 
 export async function deleteHorarioExcepcion(id: string) {
   try {
-    const { supabase } = await getCtx();
+    const { supabase, empresaId } = await getCtx();
+    if (!empresaId) return { ok: false, error: "Sin empresa activa." };
     const { error } = await supabase
       .from("empresa_reservas_horarios_excepciones")
       .delete()
-      .eq("id", id);
+      .eq("id", id)
+      .eq("empresa_id", empresaId);
     if (error) throw error;
     return { ok: true };
   } catch (err: unknown) {

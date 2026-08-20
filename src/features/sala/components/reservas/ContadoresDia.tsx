@@ -7,7 +7,7 @@ import { listReglasReservas } from "@/features/sala/reglas/actions/reglas-action
 import { cupoEfectivoDesdeReglas } from "@/features/sala/lib/reserva-limites";
 import type { EmpresaReservasRegla } from "@/features/sala/reglas/data/reglas";
 import type { Reserva } from "@/features/sala/data/reservas";
-import { ESTADOS_NO_OCUPANTES } from "@/features/sala/data/reservas";
+import { ESTADOS_NO_ASISTEN } from "@/features/sala/data/reservas";
 
 interface Props {
   fecha: string;
@@ -15,7 +15,8 @@ interface Props {
   reservas: Reserva[];
 }
 
-const EXCLUIDOS = new Set<string>(ESTADOS_NO_OCUPANTES);
+// Del total del día solo se descuentan los que no asisten (canceladas/no-show).
+const EXCLUIDOS = new Set<string>(ESTADOS_NO_ASISTEN);
 
 export function ContadoresDia({ fecha, aforo, reservas }: Props) {
   const [reglas, setReglas] = useState<EmpresaReservasRegla[]>([]);

@@ -14,6 +14,7 @@ import type {
   EmpresaReservasHorarioExcepcion,
   TurnoReserva,
 } from "@/features/sala/data/reservas";
+import { ESTADOS_NO_ASISTEN } from "@/features/sala/data/reservas";
 import type { EmpresaReservasRegla } from "@/features/sala/reglas/data/reglas";
 
 export interface MetricasTurno {
@@ -89,9 +90,11 @@ export function useReservasMes(anio: number, mes0: number, aforoPorTurno: number
     };
   }, [desde, hasta]);
 
-  /** Agrega métricas por (fecha, turno). Excluye estados no activos. */
+  /** Agrega métricas por (fecha, turno). Excluye solo a quien no asiste. */
   const metricasPorFecha = useMemo(() => {
-    const EXCLUIDOS = new Set(["CANCELADA", "NO_SHOW", "LIBERADA"]);
+    // Antes esta lista estaba escrita a mano e incluía LIBERADA, así que los
+    // totales del mes no cuadraban con los contadores del día.
+    const EXCLUIDOS = new Set<string>(ESTADOS_NO_ASISTEN);
     const out: Record<string, MetricasDia> = {};
     for (const r of reservas) {
       if (EXCLUIDOS.has(r.estado)) continue;
