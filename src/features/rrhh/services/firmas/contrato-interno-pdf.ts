@@ -41,20 +41,39 @@ export {
 } from "@/features/rrhh/services/firmas/contrato-interno-texto";
 import { CONTRATO_INTERNO_DEFAULT, sustituirContratoInterno } from "@/features/rrhh/services/firmas/contrato-interno-texto";
 
+/** Dónde estampar la firma, medido por el propio generador. */
+export interface PosicionFirmaDefault {
+  pagina: number;
+  xPct: number;
+  yPct: number;
+  anchoPct: number;
+  altoPct: number;
+}
+
+export interface ContratoInternoResult {
+  buffer: Buffer;
+  posicionFirma: PosicionFirmaDefault;
+}
+
 export async function generarContratoInternoPDF(
   input: ContratoInternoInput,
-): Promise<Buffer> {
+): Promise<ContratoInternoResult> {
   const pdf = await PDFDocument.create();
   let page = pdf.addPage([PAGE_W, PAGE_H]);
   const font = await pdf.embedFont(StandardFonts.Helvetica);
   const fontBold = await pdf.embedFont(StandardFonts.HelveticaBold);
 
   let y = PAGE_H - 80;
+  // El cuerpo del contrato es configurable, así que "Firmado:" puede caer en
+  // cualquier página. Llevamos la cuenta para situar la firma donde de verdad
+  // queda el hueco, en vez de asumir la página 1 a una altura fija.
+  let paginaActual = 1;
 
   const nuevaPaginaSiHaceFalta = () => {
     if (y < 120) {
       page = pdf.addPage([PAGE_W, PAGE_H]);
       y = PAGE_H - 80;
+      paginaActual += 1;
     }
   };
 
@@ -116,6 +135,16 @@ export async function generarContratoInternoPDF(
   y -= LINE_HEIGHT * 3;
   nuevaPaginaSiHaceFalta();
   escribir("Firmado:", { bold: true });
+
+  // Hueco del trazo manuscrito: se reserva ANTES de escribir el nombre y el DNI,
+  // para que la firma no caiga encima de ellos.
+  const FIRMA_ALTO = 66;
+  y -= 6;
+  const firmaTopY = y;
+  const firmaPagina = paginaActual;
+  y -= FIRMA_ALTO;
+  nuevaPaginaSiHaceFalta();
+
   escribir(input.empleadoNombre);
   if (input.empleadoDni) escribir(`DNI/NIE: ${input.empleadoDni}`);
 
@@ -126,5 +155,15 @@ export async function generarContratoInternoPDF(
   );
 
   const bytes = await pdf.save();
-  return Buffer.from(bytes);
+  return {
+    buffer: Buffer.from(bytes),
+    posicionFirma: {
+      pagina: firmaPagina,
+      xPct: MARGIN_X / PAGE_W,
+      // Origen ARRIBA-izquierda, que es lo que espera el estampador.
+      yPct: (PAGE_H - firmaTopY) / PAGE_H,
+      anchoPct: 0.32,
+      altoPct: FIRMA_ALTO / PAGE_H,
+    },
+  };
 }

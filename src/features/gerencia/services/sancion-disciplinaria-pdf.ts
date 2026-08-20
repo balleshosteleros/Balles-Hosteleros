@@ -232,10 +232,13 @@ export async function generarSancionPdf(datos: DatosSancion): Promise<Uint8Array
  * a la página, coincidiendo con la banda reservada arriba. La última página es
  * la que contiene la banda; el motor de firma usa `pagina` 1-indexado, así que
  * calculamos la última al vuelo en el llamador. Aquí devolvemos el layout de la
- * caja (x/y/ancho en %). El alto lo decide el motor por el ratio del trazo.
+ * caja: x/y/ancho y el alto de la banda, para que el trazo quede centrado dentro
+ * del recuadro visible y no lo desborde.
  */
 export const SANCION_FIRMA_LAYOUT = {
   xPct: 0.1,
   yPct: 0.86,
   anchoPct: 0.5,
+  // Banda de 70pt sobre A4 (841.89pt), la misma que dibuja el recuadro arriba.
+  altoPct: 70 / 841.89,
 } as const;

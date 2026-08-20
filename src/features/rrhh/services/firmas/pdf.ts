@@ -256,6 +256,12 @@ export type PosicionFirmaPdf = {
   xPct: number;
   yPct: number;
   anchoPct: number;
+  /**
+   * Alto útil del hueco, en % de página. Cuando viene, el trazo se escala al
+   * espacio REAL medido en el documento en vez de a un tope fijo. Opcional por
+   * compatibilidad con los documentos ya emitidos, que no lo llevan.
+   */
+  altoPct?: number;
 };
 
 export async function aplicarFirmaYConcatenar(
@@ -275,15 +281,18 @@ export async function aplicarFirmaYConcatenar(
       // Ancho de la caja de firma (área reservada).
       const boxW = Math.max(20, posicion.anchoPct * pw);
       const ratio = png.width > 0 ? png.height / png.width : 0.35;
-      // Altura por el ratio del trazo, pero acotada para que no desborde la
-      // zona de firma (una firma "alta" no debe invadir el texto de alrededor).
-      // Tope proporcional al ancho y en valor absoluto (~60pt) para caber en el
-      // hueco típico de firma de los documentos que genera el sistema.
-      const maxH = Math.min(boxW * 0.4, 60);
-      let drawH = boxW * ratio;
+      // Alto máximo de la caja. Si el documento midió su hueco real (altoPct),
+      // se usa ese espacio: así la firma llena su sitio sin invadir el texto de
+      // debajo. Sin esa medida se cae al tope histórico (~60pt), que es el hueco
+      // típico de los documentos que genera el sistema.
+      const maxH = posicion.altoPct
+        ? Math.max(18, posicion.altoPct * ph)
+        : Math.min(boxW * 0.4, 60);
+      // Ajuste por contención: el trazo se escala al mayor tamaño que quepa a la
+      // vez en el ancho y en el alto de la caja, conservando su proporción.
       let drawW = boxW;
+      let drawH = boxW * ratio;
       if (drawH > maxH) {
-        // Reescalamos manteniendo proporción para que quepa en el alto máximo.
         drawH = maxH;
         drawW = ratio > 0 ? drawH / ratio : boxW;
       }
@@ -291,9 +300,12 @@ export async function aplicarFirmaYConcatenar(
       const boxX = Math.max(0, Math.min(pw - boxW, posicion.xPct * pw));
       const xPdf = boxX + (boxW - drawW) / 2;
       // PDF coords (origin bottom-left): convertir desde UI (origin top-left).
-      // La caja arranca en yPct (borde superior); centramos el trazo en su alto.
+      // La caja arranca en yPct (su borde SUPERIOR) y baja `boxH`.
       const boxTopYpdf = ph - posicion.yPct * ph;
-      const yPdf = Math.max(0, Math.min(ph - drawH, boxTopYpdf - drawH));
+      const boxH = Math.max(drawH, maxH);
+      // Centrado vertical DENTRO del hueco: un trazo más bajo que la caja debe
+      // quedar en mitad del blanco, no pegado al texto que hay debajo.
+      const yPdf = Math.max(0, Math.min(ph - drawH, boxTopYpdf - boxH + (boxH - drawH) / 2));
       page.drawImage(png, { x: xPdf, y: yPdf, width: drawW, height: drawH });
     } catch {
       // si el PNG es inválido se omite, el acta seguirá llevando los datos legales

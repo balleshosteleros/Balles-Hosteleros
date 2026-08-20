@@ -64,7 +64,14 @@ export interface CrearFirmaInternoInput {
    * Si se pasa, la pantalla de firma coloca la firma YA POSICIONADA y FIJA (el
    * candidato no la arrastra). Null = el candidato la coloca a mano (compat).
    */
-  posicionFirmaDefault?: { pagina: number; xPct: number; yPct: number; anchoPct: number } | null;
+  posicionFirmaDefault?: {
+    pagina: number;
+    xPct: number;
+    yPct: number;
+    anchoPct: number;
+    /** Alto del hueco, para que el trazo lo llene sin invadir el texto vecino. */
+    altoPct?: number;
+  } | null;
   /**
    * Solo para el RECONOCIMIENTO MÉDICO: posición de las casillas SÍ/NO dentro del
    * PDF, para poder estampar la que elija el trabajador al firmar. El documento es

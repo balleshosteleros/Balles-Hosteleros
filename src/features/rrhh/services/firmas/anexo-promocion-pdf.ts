@@ -43,7 +43,23 @@ function eur(n: number | null): string {
   return new Intl.NumberFormat("es-ES", { style: "currency", currency: "EUR" }).format(n);
 }
 
-export async function generarAnexoPromocionPDF(input: AnexoPromocionInput): Promise<Buffer> {
+/** Dónde estampar la firma, medido por el propio generador. */
+export interface PosicionFirmaDefault {
+  pagina: number;
+  xPct: number;
+  yPct: number;
+  anchoPct: number;
+  altoPct: number;
+}
+
+export interface AnexoPromocionResult {
+  buffer: Buffer;
+  posicionFirma: PosicionFirmaDefault;
+}
+
+export async function generarAnexoPromocionPDF(
+  input: AnexoPromocionInput,
+): Promise<AnexoPromocionResult> {
   const pdf = await PDFDocument.create();
   let page = pdf.addPage([PAGE_W, PAGE_H]);
   const font = await pdf.embedFont(StandardFonts.Helvetica);
@@ -131,6 +147,17 @@ export async function generarAnexoPromocionPDF(input: AnexoPromocionInput): Prom
   y -= LINE_HEIGHT * 3;
   nuevaPaginaSiHaceFalta();
   escribir("Firmado:", { bold: true });
+
+  // Hueco del trazo, reservado ANTES del nombre y el DNI para que la firma no
+  // caiga sobre ellos. Se mide porque el anexo puede ocupar varias páginas.
+  const FIRMA_ALTO = 66;
+  y -= 6;
+  const firmaTopY = y;
+  // `indexOf` es 0-indexado; el motor de firma usa páginas 1-indexadas.
+  const firmaPagina = pdf.getPages().indexOf(page) + 1;
+  y -= FIRMA_ALTO;
+  nuevaPaginaSiHaceFalta();
+
   escribir(input.empleadoNombre);
   if (input.empleadoDni) escribir(`DNI/NIE: ${input.empleadoDni}`);
 
@@ -141,5 +168,14 @@ export async function generarAnexoPromocionPDF(input: AnexoPromocionInput): Prom
   );
 
   const bytes = await pdf.save();
-  return Buffer.from(bytes);
+  return {
+    buffer: Buffer.from(bytes),
+    posicionFirma: {
+      pagina: firmaPagina,
+      xPct: MARGIN_X / PAGE_W,
+      yPct: (PAGE_H - firmaTopY) / PAGE_H,
+      anchoPct: 0.32,
+      altoPct: FIRMA_ALTO / PAGE_H,
+    },
+  };
 }

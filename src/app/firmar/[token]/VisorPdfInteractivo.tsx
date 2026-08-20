@@ -5,7 +5,7 @@ import { Document, Page, pdfjs } from "react-pdf";
 import "react-pdf/dist/Page/AnnotationLayer.css";
 import "react-pdf/dist/Page/TextLayer.css";
 import { Button } from "@/components/ui/button";
-import { Eraser, CheckCircle2, MoveDiagonal2, X, Smartphone } from "lucide-react";
+import { Eraser, CheckCircle2, X, Smartphone } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 
 pdfjs.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
@@ -15,6 +15,8 @@ export type PosicionFirma = {
   xPct: number;
   yPct: number;
   anchoPct: number;
+  /** Alto del hueco medido en el documento, en % de página. */
+  altoPct?: number;
 };
 
 type Props = {
@@ -22,17 +24,25 @@ type Props = {
   onConfirm: (data: { trazoBase64: string; posicion: PosicionFirma }) => void;
   submitting?: boolean;
   /**
-   * Si viene, la firma se coloca automáticamente en esa posición y NO es
-   * arrastrable (el candidato solo dibuja y firma). Null = colocación manual.
+   * Posición donde va la firma, detectada en el servidor. El empleado NUNCA la
+   * elige: solo dibuja el trazo. Si falta (documentos emitidos antes de la
+   * detección automática) se cae al pie de la página, nunca al centro.
    */
   posicionFija?: PosicionFirma | null;
 };
 
 const PAGE_RENDER_WIDTH = 600;
-const FIRMA_DEFAULT_WIDTH = 220;
-const FIRMA_DEFAULT_HEIGHT = 80;
 const CANVAS_W = 360;
 const CANVAS_H = 140;
+
+/** Suelo para documentos antiguos sin posición guardada: pie de la página 1. */
+const POSICION_SUELO: PosicionFirma = {
+  pagina: 1,
+  xPct: 0.1,
+  yPct: 0.82,
+  anchoPct: 0.32,
+  altoPct: 0.06,
+};
 
 function detectarMovil(): boolean {
   if (typeof window === "undefined") return false;
@@ -44,7 +54,7 @@ function detectarMovil(): boolean {
 }
 
 export function VisorPdfInteractivo({ pdfUrl, onConfirm, submitting, posicionFija }: Props) {
-  const fija = posicionFija ?? null;
+  const fija = posicionFija ?? POSICION_SUELO;
   const [numPages, setNumPages] = useState(0);
   const [trazoPng, setTrazoPng] = useState<string | null>(null);
   const [aplicada, setAplicada] = useState(false);
@@ -62,7 +72,6 @@ export function VisorPdfInteractivo({ pdfUrl, onConfirm, submitting, posicionFij
   const pagesWrapRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const trazoVacioRef = useRef(true);
-  const draggingRef = useRef<{ offX: number; offY: number } | null>(null);
 
   const setupCanvas = useCallback(() => {
     const c = canvasRef.current;
@@ -114,71 +123,21 @@ export function VisorPdfInteractivo({ pdfUrl, onConfirm, submitting, posicionFij
     const png = canvasRef.current!.toDataURL("image/png");
     setTrazoPng(png);
     setAplicada(true);
-    // Con posición FIJA: colocar la firma en la página/porcentajes indicados.
-    if (fija && pageGeom[fija.pagina]) {
-      const g = pageGeom[fija.pagina];
-      const xPx = fija.xPct * PAGE_RENDER_WIDTH;
-      const yPx = g.top + fija.yPct * g.height;
-      setPos({ pagina: fija.pagina, xPx, yPx });
-      return;
-    }
-    // Posición inicial (manual): centro de la primera página renderizada.
-    if (pageGeom[1]) {
-      const top = pageGeom[1].top;
-      const xPx = PAGE_RENDER_WIDTH / 2 - FIRMA_DEFAULT_WIDTH / 2;
-      const yPx = top + pageGeom[1].height / 2 - FIRMA_DEFAULT_HEIGHT / 2;
-      setPos({ pagina: 1, xPx, yPx });
-    }
-  }
-
-  function pageInsideAt(yPx: number): number {
-    let best = 1;
-    for (const [k, v] of Object.entries(pageGeom)) {
-      if (yPx >= v.top && yPx <= v.top + v.height) return Number(k);
-      best = Number(k);
-    }
-    return best;
-  }
-
-  function onFirmaPointerDown(e: React.PointerEvent<HTMLDivElement>) {
-    if (fija) return; // posición fija: no se puede arrastrar
-    if (!pos) return;
-    e.currentTarget.setPointerCapture(e.pointerId);
-    const wrap = pagesWrapRef.current!.getBoundingClientRect();
-    draggingRef.current = {
-      offX: e.clientX - wrap.left - pos.xPx,
-      offY: e.clientY - wrap.top - pos.yPx,
-    };
-  }
-  function onFirmaPointerMove(e: React.PointerEvent<HTMLDivElement>) {
-    const d = draggingRef.current;
-    if (!d || !pos) return;
-    const wrap = pagesWrapRef.current!.getBoundingClientRect();
-    const xRaw = e.clientX - wrap.left - d.offX;
-    const yRaw = e.clientY - wrap.top - d.offY;
-    const xPx = Math.max(0, Math.min(PAGE_RENDER_WIDTH - FIRMA_DEFAULT_WIDTH, xRaw));
-    const yPx = Math.max(0, yRaw);
-    const pagina = pageInsideAt(yPx + FIRMA_DEFAULT_HEIGHT / 2);
-    setPos({ pagina, xPx, yPx });
-  }
-  function onFirmaPointerUp() {
-    draggingRef.current = null;
+    // La firma va SIEMPRE al hueco detectado en el servidor. La previsualización
+    // reproduce el mismo encaje que hará el estampador del PDF: se escala al
+    // mayor tamaño que quepa en la caja conservando la proporción del trazo.
+    const g = pageGeom[fija.pagina];
+    if (!g) return;
+    setPos({
+      pagina: fija.pagina,
+      xPx: fija.xPct * PAGE_RENDER_WIDTH,
+      yPx: g.top + fija.yPct * g.height,
+    });
   }
 
   function confirmar() {
     if (!trazoPng) return;
-    // Posición FIJA: usa los porcentajes indicados directamente (sin arrastre).
-    if (fija) {
-      onConfirm({ trazoBase64: trazoPng, posicion: fija });
-      return;
-    }
-    if (!pos) return;
-    const geom = pageGeom[pos.pagina];
-    if (!geom) return;
-    const xPct = pos.xPx / PAGE_RENDER_WIDTH;
-    const yPct = (pos.yPx - geom.top) / geom.height;
-    const anchoPct = FIRMA_DEFAULT_WIDTH / PAGE_RENDER_WIDTH;
-    onConfirm({ trazoBase64: trazoPng, posicion: { pagina: pos.pagina, xPct, yPct, anchoPct } });
+    onConfirm({ trazoBase64: trazoPng, posicion: fija });
   }
 
   const registerPageGeom = useCallback((pagina: number, top: number, height: number) => {
@@ -201,34 +160,28 @@ export function VisorPdfInteractivo({ pdfUrl, onConfirm, submitting, posicionFij
 
           {aplicada && trazoPng && pos && (
             <div
-              onPointerDown={onFirmaPointerDown}
-              onPointerMove={onFirmaPointerMove}
-              onPointerUp={onFirmaPointerUp}
-              className="absolute touch-none cursor-move rounded-sm ring-2 ring-indigo-400/60 bg-white/60 backdrop-blur-[1px] transition"
+              className="absolute pointer-events-none"
               style={{
                 left: pos.xPx,
                 top: pos.yPx,
-                width: FIRMA_DEFAULT_WIDTH,
-                height: FIRMA_DEFAULT_HEIGHT,
+                width: fija.anchoPct * PAGE_RENDER_WIDTH,
+                height: (fija.altoPct ?? 0.06) * (pageGeom[fija.pagina]?.height ?? 0),
               }}
             >
               <img
                 src={trazoPng}
                 alt="firma"
                 draggable={false}
-                className="w-full h-full object-contain pointer-events-none"
+                className="w-full h-full object-contain"
               />
               <button
                 type="button"
                 onClick={limpiar}
-                className="absolute -top-2.5 -right-2.5 bg-white border border-zinc-200 rounded-full p-1 shadow-sm hover:shadow"
-                title="Eliminar firma"
+                className="absolute -top-2.5 -right-2.5 bg-white border border-zinc-200 rounded-full p-1 shadow-sm hover:shadow pointer-events-auto"
+                title="Borrar y volver a dibujar"
               >
                 <X className="h-3 w-3 text-zinc-500" />
               </button>
-              <div className="absolute -bottom-6 right-0 text-[10px] text-zinc-400 flex items-center gap-0.5">
-                pág. {pos.pagina} <MoveDiagonal2 className="h-2.5 w-2.5" />
-              </div>
             </div>
           )}
         </div>
@@ -264,11 +217,12 @@ export function VisorPdfInteractivo({ pdfUrl, onConfirm, submitting, posicionFij
 
         <div>
           <div className="text-[11px] uppercase tracking-wider text-zinc-400 mb-2">
-            2 · Colócala donde quieras
+            2 · Revisa y firma
           </div>
           <p className="text-xs text-zinc-500 leading-relaxed">
-            Arrastra la firma a la posición exacta del PDF. Puedes moverla a
-            cualquier página.
+            Tu firma se coloca sola en el espacio reservado del documento
+            {numPages > 1 ? `, en la página ${fija.pagina}` : ""}. Compruébala en
+            el documento y pulsa firmar.
           </p>
         </div>
 

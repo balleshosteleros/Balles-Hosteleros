@@ -287,9 +287,7 @@ export function FirmaPublicaView({
             <div className="px-1 pb-2">
               <div className="text-sm font-semibold text-zinc-900">{documento.titulo}</div>
               <div className="text-xs text-zinc-500 mt-0.5">
-                {documento.posicionFirmaDefault
-                  ? "Dibuja tu firma a la derecha. Ya está colocada en su sitio."
-                  : "Dibuja tu firma a la derecha y arrástrala al PDF."}
+                Dibuja tu firma a la derecha. Ya está colocada en su sitio.
               </div>
             </div>
             <VisorPdfInteractivo

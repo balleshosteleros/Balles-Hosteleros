@@ -304,7 +304,7 @@ export async function promocionarEmpleado(
         .eq("id", empresaId)
         .maybeSingle();
       const empleadoNombre = `${emp.nombre ?? ""} ${emp.apellidos ?? ""}`.trim() || "Trabajador";
-      const pdf = await generarAnexoPromocionPDF({
+      const anexo = await generarAnexoPromocionPDF({
         empleadoNombre,
         empleadoDni: (emp.dni_nie as string | null) ?? null,
         empresaNombre: (empresa?.nombre as string) ?? "La empresa",
@@ -322,7 +322,7 @@ export async function promocionarEmpleado(
       const firma = await crearFirmaInterno({
         empresaId,
         empleadoId: input.empleadoId,
-        pdf,
+        pdf: anexo.buffer,
         titulo: "Anexo de cambio de puesto",
         tipo: "anexo_promocion",
         modalidad: "manuscrita_digital",
@@ -332,7 +332,9 @@ export async function promocionarEmpleado(
         enviadoPorUserId: user.id,
         enviadoPorNombre: "RRHH",
         preferirEmailPersonal: true,
-        posicionFirmaDefault: { pagina: 1, xPct: 0.1, yPct: 0.82, anchoPct: 0.32 },
+        // Hueco medido por el propio generador: el anexo puede ocupar más de una
+        // página según las condiciones, así que no se asume la 1.
+        posicionFirmaDefault: anexo.posicionFirma,
       });
       anexoEnviado = firma.ok;
       if (firma.ok && promocionId) {

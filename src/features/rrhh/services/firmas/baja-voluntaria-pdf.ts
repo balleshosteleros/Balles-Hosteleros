@@ -44,6 +44,8 @@ export interface PosicionFirmaDefault {
   xPct: number;
   yPct: number;
   anchoPct: number;
+  /** Alto del hueco reservado, para que el trazo lo llene sin desbordarlo. */
+  altoPct: number;
 }
 
 export interface CartaBajaVoluntariaResult {
@@ -176,6 +178,7 @@ export async function generarCartaBajaVoluntariaPDF(
     xPct: MARGIN_X / PAGE_W,
     yPct: (PAGE_H - firmaTopY) / PAGE_H,
     anchoPct: FIRMA_ANCHO_PCT,
+    altoPct: FIRMA_ALTO / PAGE_H,
   };
 
   y -= FIRMA_ALTO;

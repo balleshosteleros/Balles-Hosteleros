@@ -8,6 +8,11 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { sha256, generarToken, hashToken } from "@/features/rrhh/services/firmas/crypto";
 import { registrarEvento, listarEventos, verificarCadena } from "@/features/rrhh/services/firmas/audit";
 import { enviarInvitacionFirma } from "@/features/rrhh/services/firmas/email";
+import {
+  detectarHuecoFirma,
+  huecoFirmaPorDefecto,
+  contarPaginas,
+} from "@/features/rrhh/services/firmas/detectar-hueco-firma";
 import { emitirNotificacion } from "@/features/notificaciones/actions/notificaciones-actions";
 import { getRolContext } from "@/features/auth/actions/permisos-actions";
 import { puedeEditarModulo } from "@/features/auth/lib/permisos";
@@ -339,6 +344,13 @@ export async function crearFirma(formData: FormData): Promise<CrearFirmaResult> 
     const pdfBuffer = Buffer.from(ab);
     const sha256Original = sha256(pdfBuffer);
 
+    // Dónde va la firma. Antes esto quedaba a null y el visor la estampaba en el
+    // centro de la página 1, tapando el documento y obligando al empleado a
+    // colocarla a mano. Ahora se localiza el hueco real (texto → IA → pie del
+    // documento) y el empleado solo dibuja el trazo.
+    const posicionFirmaDefault =
+      (await detectarHuecoFirma(pdfBuffer)) ?? huecoFirmaPorDefecto(await contarPaginas(pdfBuffer));
+
     const ahora = new Date();
     const expira = new Date(ahora.getTime() + plazoDias * 86_400_000);
 
@@ -358,6 +370,7 @@ export async function crearFirma(formData: FormData): Promise<CrearFirmaResult> 
         enviado_en: ahora.toISOString(),
         expira_en: expira.toISOString(),
         observaciones,
+        posicion_firma_default: posicionFirmaDefault,
       })
       .select("id")
       .single();

@@ -88,8 +88,14 @@ export type AbrirDocumentoResult =
         observaciones: string | null;
         empleado: { nombre: string; emailEnmascarado: string | null };
         empresa: { nombre: string; logoUrl: string | null };
-        /** Posición por defecto de la firma (si el documento la trae): { pagina, xPct, yPct, anchoPct }. */
-        posicionFirmaDefault: { pagina: number; xPct: number; yPct: number; anchoPct: number } | null;
+        /** Hueco de firma detectado en el documento. El firmante no lo elige. */
+        posicionFirmaDefault: {
+          pagina: number;
+          xPct: number;
+          yPct: number;
+          anchoPct: number;
+          altoPct?: number;
+        } | null;
         /** Zona horaria de la empresa, para mostrar fechas al firmante (PRP-069). */
         zonaHoraria: string;
         enviadoPor: string;
@@ -192,7 +198,13 @@ export async function abrirDocumento(token: string): Promise<AbrirDocumentoResul
           logoUrl: ((empresa?.isotipo_url as string | null) || (empresa?.logo_url as string | null)) ?? null,
         },
         posicionFirmaDefault:
-          (doc.posicion_firma_default as { pagina: number; xPct: number; yPct: number; anchoPct: number } | null) ?? null,
+          (doc.posicion_firma_default as {
+            pagina: number;
+            xPct: number;
+            yPct: number;
+            anchoPct: number;
+            altoPct?: number;
+          } | null) ?? null,
         zonaHoraria:
           ((empresa?.config_operativa as Record<string, unknown> | null)?.zonaHoraria as string | undefined)?.trim() ||
           "Europe/Madrid",
@@ -405,6 +417,8 @@ export type PosicionFirma = {
   xPct: number;
   yPct: number;
   anchoPct: number;
+  /** Alto del hueco medido en el documento, en % de página. */
+  altoPct?: number;
 };
 
 export type FirmarDocumentoInput = {
@@ -495,7 +509,7 @@ export async function firmarDocumento(input: FirmarDocumentoInput): Promise<Firm
     const { data: doc } = await admin
       .from("firmas_documentos")
       .select(
-        "id, empresa_id, empleado_id, titulo, tipo, modalidad, validez, estado, sha256_original, pdf_original_path, enviado_por, enviado_en, casillas_reconocimiento",
+        "id, empresa_id, empleado_id, titulo, tipo, modalidad, validez, estado, sha256_original, pdf_original_path, enviado_por, enviado_en, casillas_reconocimiento, posicion_firma_default",
       )
       .eq("id", documentoId)
       .maybeSingle();
@@ -602,11 +616,19 @@ export async function firmarDocumento(input: FirmarDocumentoInput): Promise<Firm
       }
     }
 
+    // Dónde se estampa el trazo lo decide el SERVIDOR con el hueco detectado al
+    // crear el documento, no lo que mande el navegador: así el firmante no puede
+    // desplazar la firma sobre el texto del contrato. La posición del cliente
+    // solo se usa como respaldo en documentos antiguos, que se emitieron sin
+    // hueco guardado.
+    const posicionServidor =
+      (doc.posicion_firma_default as PosicionFirma | null) ?? input.posicionFirma ?? null;
+
     const firmadoBytes = await aplicarFirmaYConcatenar(
       originalBytes,
       actaBytes,
       trazoPng,
-      input.posicionFirma ?? null,
+      posicionServidor,
     );
     const sha256Acta = sha256(Buffer.from(firmadoBytes));
 

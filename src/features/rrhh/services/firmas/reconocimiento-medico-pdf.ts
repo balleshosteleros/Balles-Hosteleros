@@ -43,6 +43,14 @@ export interface CasillaPos {
 export interface ReconocimientoMedicoPDF {
   pdf: Buffer;
   casillas: Record<DecisionReconocimiento, CasillaPos>;
+  /** Hueco del trazo manuscrito, medido por el propio generador. */
+  posicionFirma: {
+    pagina: number;
+    xPct: number;
+    yPct: number;
+    anchoPct: number;
+    altoPct: number;
+  };
 }
 
 const PAGE_W = 595.28; // A4
@@ -171,6 +179,18 @@ export async function generarReconocimientoMedicoPDF(
   y -= LINE_HEIGHT * 2;
   nuevaPaginaSiHaceFalta();
   escribir("Firmado:", { bold: true });
+
+  // Hueco del trazo, reservado ANTES del nombre y el DNI para que la firma no
+  // caiga sobre ellos. El cuerpo es configurable, así que puede acabar en
+  // cualquier página: por eso se mide aquí y no se asume la 1.
+  const FIRMA_ALTO = 66;
+  y -= 6;
+  const firmaTopY = y;
+  // `indexOf` es 0-indexado; el motor de firma usa páginas 1-indexadas.
+  const firmaPagina = pdf.getPages().indexOf(page) + 1;
+  y -= FIRMA_ALTO;
+  nuevaPaginaSiHaceFalta();
+
   escribir(input.empleadoNombre);
   if (input.empleadoDni) escribir(`DNI/NIE: ${input.empleadoDni}`);
 
@@ -181,7 +201,17 @@ export async function generarReconocimientoMedicoPDF(
   );
 
   const bytes = await pdf.save();
-  return { pdf: Buffer.from(bytes), casillas };
+  return {
+    pdf: Buffer.from(bytes),
+    casillas,
+    posicionFirma: {
+      pagina: firmaPagina,
+      xPct: MARGIN_X / PAGE_W,
+      yPct: (PAGE_H - firmaTopY) / PAGE_H,
+      anchoPct: 0.32,
+      altoPct: FIRMA_ALTO / PAGE_H,
+    },
+  };
 }
 
 /**
