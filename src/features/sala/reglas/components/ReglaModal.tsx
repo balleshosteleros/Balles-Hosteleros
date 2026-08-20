@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -34,17 +34,40 @@ interface Props {
   regla?: EmpresaReservasRegla | null;
   /** Label que acompaña al valor. Ej: "personas", "comensales". */
   unidad?: string;
+  /**
+   * Turnos que el local abre. Un turno cerrado no admite reservas, así que no se
+   * ofrece: configurar un tope para él seria configurar algo que nunca se aplica.
+   */
+  turnosAbiertos?: TurnoRegla[];
   onSaved: () => void;
 }
 
 const TURNO_DEFAULT: TurnoRegla = "AMBOS";
 const VIGENCIA_DEFAULT: VigenciaSpec = { modo: "todos_los_dias" };
 
-export function ReglaModal({ open, onOpenChange, metrica, regla, unidad = "personas", onSaved }: Props) {
+export function ReglaModal({
+  open,
+  onOpenChange,
+  metrica,
+  regla,
+  unidad = "personas",
+  turnosAbiertos,
+  onSaved,
+}: Props) {
   const [valor, setValor] = useState<string>("");
   const [turno, setTurno] = useState<TurnoRegla>(TURNO_DEFAULT);
   const [vigencia, setVigencia] = useState<VigenciaSpec>(VIGENCIA_DEFAULT);
   const [saving, setSaving] = useState(false);
+
+  // Solo los turnos abiertos. Si estamos editando una regla de un turno que
+  // luego se cerró, se conserva su opción para no cambiarla sin querer.
+  const opcionesTurno = useMemo<TurnoRegla[]>(() => {
+    const base = turnosAbiertos && turnosAbiertos.length > 0
+      ? turnosAbiertos
+      : (["COMIDA", "CENA", "AMBOS"] as TurnoRegla[]);
+    if (regla && !base.includes(regla.turno)) return [...base, regla.turno];
+    return base;
+  }, [turnosAbiertos, regla]);
 
   useEffect(() => {
     if (!open) return;
@@ -54,7 +77,9 @@ export function ReglaModal({ open, onOpenChange, metrica, regla, unidad = "perso
       setVigencia(reglaToVigencia(regla));
     } else {
       setValor("");
-      setTurno(TURNO_DEFAULT);
+      // Por defecto, el primer turno realmente disponible (si solo abre cenas,
+      // "AMBOS" no existe y seleccionarlo dejaría la regla en un turno cerrado).
+      setTurno(opcionesTurno.includes(TURNO_DEFAULT) ? TURNO_DEFAULT : opcionesTurno[0]!);
       setVigencia(VIGENCIA_DEFAULT);
     }
   }, [open, regla]);
@@ -115,7 +140,14 @@ export function ReglaModal({ open, onOpenChange, metrica, regla, unidad = "perso
             />
           </div>
 
-          <TurnoToggle value={turno} onChange={setTurno} />
+          <TurnoToggle value={turno} onChange={setTurno} options={opcionesTurno} />
+          {opcionesTurno.length < 3 && (
+            <p className="text-[11px] text-muted-foreground">
+              {opcionesTurno.length === 1
+                ? `Solo se muestra ${opcionesTurno[0] === "COMIDA" ? "la comida" : "la cena"}: el otro turno está cerrado en el horario de apertura.`
+                : "Algunos turnos no aparecen porque están cerrados en el horario de apertura."}
+            </p>
+          )}
 
           <VigenciaSelector value={vigencia} onChange={setVigencia} />
 

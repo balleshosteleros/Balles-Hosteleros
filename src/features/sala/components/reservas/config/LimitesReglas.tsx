@@ -8,7 +8,9 @@ import { toast } from "sonner";
 import {
   type EmpresaReservasRegla,
   type MetricaRegla,
+  type TurnoRegla,
 } from "@/features/sala/reglas/data/reglas";
+import { getReservasConfig } from "@/features/sala/actions/reservas-config-actions";
 import {
   deleteReglaReserva,
   listReglasReservas,
@@ -33,11 +35,25 @@ function hoyEnZonaISO(tz: string): string {
 export function LimitesReglas() {
   const [reglas, setReglas] = useState<EmpresaReservasRegla[]>([]);
   const [loading, setLoading] = useState(true);
+  // Turnos que el local abre de verdad. Un turno cerrado no admite reservas, así
+  // que ofrecer un tope de aforo para él confunde: se configura algo que nunca
+  // se va a aplicar.
+  const [turnosAbiertos, setTurnosAbiertos] = useState<TurnoRegla[]>(["COMIDA", "CENA", "AMBOS"]);
 
   const cargar = useCallback(async () => {
     setLoading(true);
-    const res = await listReglasReservas();
+    const [res, cfg] = await Promise.all([listReglasReservas(), getReservasConfig()]);
     if (res.ok) setReglas(res.data);
+    if (cfg.ok && cfg.data) {
+      const comida = !cfg.data.generalCerradoComida;
+      const cena = !cfg.data.generalCerradoCena;
+      const abiertos: TurnoRegla[] = [];
+      if (comida) abiertos.push("COMIDA");
+      if (cena) abiertos.push("CENA");
+      if (comida && cena) abiertos.push("AMBOS");
+      // Si estuvieran los dos cerrados no dejamos el selector vacío.
+      setTurnosAbiertos(abiertos.length > 0 ? abiertos : ["COMIDA", "CENA", "AMBOS"]);
+    }
     setLoading(false);
   }, []);
 
@@ -62,6 +78,7 @@ export function LimitesReglas() {
         descripcion="Número máximo de personas que aceptas en total durante el turno (sumando todas las reservas). Al alcanzar el tope, el turno se cierra a nuevas reservas."
         unidad="personas"
         reglas={reglas.filter((r) => r.metrica === "cupo")}
+        turnosAbiertos={turnosAbiertos}
         onChange={cargar}
       />
       <SeccionMetrica
@@ -70,6 +87,7 @@ export function LimitesReglas() {
         descripcion="Personas máximas en una sola reserva (una mesa o combinación de mesas). Si alguien pide más, debe gestionarse como reserva de Grupo."
         unidad="personas"
         reglas={reglas.filter((r) => r.metrica === "maxpax")}
+        turnosAbiertos={turnosAbiertos}
         onChange={cargar}
       />
     </div>
@@ -82,6 +100,7 @@ function SeccionMetrica({
   descripcion,
   unidad,
   reglas,
+  turnosAbiertos,
   onChange,
 }: {
   metrica: MetricaRegla;
@@ -89,6 +108,7 @@ function SeccionMetrica({
   descripcion: string;
   unidad: string;
   reglas: EmpresaReservasRegla[];
+  turnosAbiertos: TurnoRegla[];
   onChange: () => void;
 }) {
   const [modalOpen, setModalOpen] = useState(false);
@@ -210,6 +230,7 @@ function SeccionMetrica({
         metrica={metrica}
         regla={editando}
         unidad={unidad}
+        turnosAbiertos={turnosAbiertos}
         onSaved={onChange}
       />
       {confirmDeleteDialog}

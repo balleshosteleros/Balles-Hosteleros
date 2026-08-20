@@ -18,6 +18,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { ESTADOS_NO_OCUPANTES, horaAMinutos } from "@/features/sala/lib/reserva-conflicto";
 import { vigenciaAplicaEnFecha, type ReservaBloqueo } from "@/features/sala/bloqueos/data/bloqueos";
 import { getCamposObligatoriosReserva } from "@/features/sala/lib/reserva-campos-obligatorios";
+import { turnoDeHora } from "@/features/sala/lib/dia-negocio";
 
 const inputSchema = z.object({
   empresaSlug: z.string().min(1).max(120),
@@ -229,6 +230,27 @@ export async function listarDisponibilidadPublicaAction(
   const minAhora = ahora.getHours() * 60 + ahora.getMinutes();
   const antelacionMin = (cfg.antelacion_min_minutos as number | null) ?? 0;
 
+  // Cupo del TURNO (tope total de comensales). Se comprueba aquí y no solo al
+  // guardar: si no, el cliente elige hora, rellena todos sus datos y solo al
+  // pulsar Reservar descubre que el turno está lleno — y encima probaría otra
+  // hora, que estará igual de llena porque el tope es del turno entero.
+  // Se usa la MISMA función de BD que decide en el alta, para que lo que ve
+  // coincida con lo que puede hacer.
+  const cupoTurnoLleno: Record<Turno, boolean> = { comida: false, cena: false };
+  for (const t of ["comida", "cena"] as Turno[]) {
+    const turnoUp = t === "comida" ? "COMIDA" : "CENA";
+    const { data: cupo } = await admin.rpc("cupo_efectivo", {
+      p_empresa_id: empresaId,
+      p_fecha: fecha,
+      p_turno: turnoUp,
+    });
+    if (typeof cupo !== "number" || cupo <= 0) continue; // sin tope configurado
+    const ocupadasTurno = reservas
+      .filter((r) => turnoDeHora(r.hora ?? "") === turnoUp)
+      .reduce((s, r) => s + (r.personas ?? 0), 0);
+    cupoTurnoLleno[t] = ocupadasTurno + personas > cupo;
+  }
+
   const maxActivo = cfg.max_personas_hora_activo === true;
   const maxModo = (cfg.max_personas_hora_modo as string | null) ?? "mismo";
   const maxGlobal = (cfg.max_personas_hora_global as number | null) ?? 0;
@@ -265,8 +287,14 @@ export async function listarDisponibilidadPublicaAction(
         continue;
       }
 
+      // Turno lleno por cupo: afecta a TODAS las horas del turno por igual.
+      if (disponible && cupoTurnoLleno[t]) {
+        disponible = false;
+        motivo = "Completo";
+      }
+
       // Cierre del motor web para el turno (solo afecta al día de hoy).
-      if (cfg.cerrar_motor_web_activo === true && esHoy) {
+      if (disponible && cfg.cerrar_motor_web_activo === true && esHoy) {
         const corte = t === "comida"
           ? (cfg.cerrar_motor_web_comida as string | null)
           : (cfg.cerrar_motor_web_cena as string | null);
