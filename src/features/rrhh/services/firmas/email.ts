@@ -138,10 +138,9 @@ export async function enviarCodigoOTP(input: CodigoOTPInput): Promise<SendEmailR
     <p>Hola ${esc(input.empleadoNombre)},</p>
     <p>Para confirmar la firma del documento <strong>${esc(input.tituloDocumento)}</strong> introduce este código en la página de firma:</p>
     <p style="text-align:center;margin:20px 0;">
-      <span style="display:inline-block;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:32px;letter-spacing:8px;padding:14px 22px;background:#16a34a;color:#ffffff;border-radius:10px;font-weight:700;">
-        ${esc(input.codigo)}
-      </span>
+      <span style="display:inline-block;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:32px;padding:14px 26px;background:#16a34a;color:#ffffff;border-radius:10px;font-weight:700;">${esc(input.codigo)}</span>
     </p>
+    <p style="text-align:center;font-size:13px;color:#64748b;margin:-8px 0 20px 0;">Haz doble clic sobre el código para copiarlo.</p>
     <p style="font-size:13px;color:#64748b;">Válido durante ${input.expiraMin} minutos. Si no lo solicitaste, ignora este mensaje.</p>
   `;
   const text =
