@@ -258,6 +258,10 @@ export interface ClienteInsights {
   visitasConValoracion: number;
   visitasSinValoracion: number;
   otrosLocalesGrupo: number;
+  /** Veces que reservó y no se presentó. Decide si se le guarda la mesa. */
+  noShows: number;
+  /** Reservas que canceló él mismo. */
+  canceladas: number;
 }
 
 /** Convención para detectar reservas creadas por un Channel Manager. */
@@ -433,6 +437,41 @@ export const CANCELACION_TEXTO_FIJO =
 export const DURACION_RESERVA_MIN_MINUTOS = 15;
 export const DURACION_RESERVA_MAX_MINUTOS = 360;
 export const DURACION_RESERVA_DEFAULT_MINUTOS = 120;
+/** Salto entre opciones de duración: cuartos de hora. */
+export const DURACION_RESERVA_PASO_MINUTOS = 15;
+
+/**
+ * Duración en horas y minutos, tal y como se piensa en sala ("1, 15" = una hora
+ * y cuarto). En minutos sueltos (los 195 de "3, 15") nadie calcula de cabeza
+ * cuánto ocupa realmente una mesa.
+ */
+export function formatearDuracionReserva(minutos: number): string {
+  const h = Math.floor(minutos / 60);
+  const m = minutos % 60;
+  if (h === 0) return `${m} min`;
+  if (m === 0) return h === 1 ? "1 hora" : `${h} horas`;
+  return `${h}, ${String(m).padStart(2, "0")}`;
+}
+
+/**
+ * Tramos seleccionables de duración: de 15 minutos a 6 horas, de cuarto en
+ * cuarto de hora. Se genera en vez de escribirse a mano para que no pueda
+ * desalinearse de los límites de la migración.
+ */
+export const DURACION_RESERVA_OPCIONES: { minutos: number; label: string }[] =
+  Array.from(
+    {
+      length:
+        (DURACION_RESERVA_MAX_MINUTOS - DURACION_RESERVA_MIN_MINUTOS) /
+          DURACION_RESERVA_PASO_MINUTOS +
+        1,
+    },
+    (_, i) => {
+      const minutos =
+        DURACION_RESERVA_MIN_MINUTOS + i * DURACION_RESERVA_PASO_MINUTOS;
+      return { minutos, label: formatearDuracionReserva(minutos) };
+    },
+  );
 
 /** Límites de `reconfirmacionDiasAntes` (ver migración 20260602180000). */
 export const RECONFIRMACION_DIAS_MIN = 1;

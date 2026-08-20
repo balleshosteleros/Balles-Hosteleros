@@ -12,8 +12,8 @@ import {
 import { toast } from "sonner";
 import {
   DURACION_RESERVA_DEFAULT_MINUTOS,
-  DURACION_RESERVA_MAX_MINUTOS,
-  DURACION_RESERVA_MIN_MINUTOS,
+  DURACION_RESERVA_OPCIONES,
+  formatearDuracionReserva,
   RECONFIRMACION_DIAS_MAX,
   RECONFIRMACION_DIAS_MIN,
   type EmpresaReservasConfig,
@@ -86,24 +86,26 @@ export function ConfigTabReservas() {
         </p>
         <div className="grid grid-cols-2 gap-3 max-w-md">
           <div className="space-y-1.5">
-            <Label className="text-xs">Duración por reserva (minutos)</Label>
-            <Input
-              type="number"
-              min={DURACION_RESERVA_MIN_MINUTOS}
-              max={DURACION_RESERVA_MAX_MINUTOS}
-              step={5}
-              value={config.duracionReservaMin}
-              onChange={(e) => {
-                const raw = Number(e.target.value);
-                const n = Number.isFinite(raw)
-                  ? Math.min(DURACION_RESERVA_MAX_MINUTOS, Math.max(DURACION_RESERVA_MIN_MINUTOS, Math.round(raw)))
-                  : DURACION_RESERVA_DEFAULT_MINUTOS;
-                handleConfigChange({ duracionReservaMin: n });
-              }}
-              className="h-8"
-            />
+            <Label className="text-xs">Duración por reserva</Label>
+            <Select
+              value={String(config.duracionReservaMin)}
+              onValueChange={(v) =>
+                handleConfigChange({ duracionReservaMin: Number(v) })
+              }
+            >
+              <SelectTrigger className="h-8">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {DURACION_RESERVA_OPCIONES.map((o) => (
+                  <SelectItem key={o.minutos} value={String(o.minutos)}>
+                    {o.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <p className="text-[10px] text-muted-foreground">
-              Mínimo {DURACION_RESERVA_MIN_MINUTOS} min · máximo {DURACION_RESERVA_MAX_MINUTOS} min (6 h) · por defecto {DURACION_RESERVA_DEFAULT_MINUTOS}.
+              De 15 minutos a 6 horas, en tramos de 15. Se guarda solo · por defecto {formatearDuracionReserva(DURACION_RESERVA_DEFAULT_MINUTOS)}.
             </p>
           </div>
         </div>

@@ -31,6 +31,8 @@ export async function getClienteInsights(input: {
     visitasConValoracion: 0,
     visitasSinValoracion: 0,
     otrosLocalesGrupo: 0,
+    noShows: 0,
+    canceladas: 0,
   };
 
   try {
@@ -106,12 +108,38 @@ export async function getClienteInsights(input: {
       }
     }
 
+    // 4) Fiabilidad del cliente en ESTA empresa: cuántas veces no apareció y
+    // cuántas canceló. Es lo que decide en el momento si se le guarda la mesa
+    // o se le pide garantía.
+    let noShows = 0;
+    let canceladas = 0;
+    if (input.clienteId) {
+      const [resNo, resCan] = await Promise.all([
+        supabase
+          .from("reservas")
+          .select("id", { count: "exact", head: true })
+          .eq("empresa_id", empresaId)
+          .eq("cliente_id", input.clienteId)
+          .eq("estado", "NO_SHOW"),
+        supabase
+          .from("reservas")
+          .select("id", { count: "exact", head: true })
+          .eq("empresa_id", empresaId)
+          .eq("cliente_id", input.clienteId)
+          .eq("estado", "CANCELADA"),
+      ]);
+      noShows = resNo.count ?? 0;
+      canceladas = resCan.count ?? 0;
+    }
+
     return {
       clienteId: input.clienteId ?? null,
       visitasTotal,
       visitasConValoracion,
       visitasSinValoracion,
       otrosLocalesGrupo,
+      noShows,
+      canceladas,
     };
   } catch (err) {
     console.error("[cliente-insights] get:", err);

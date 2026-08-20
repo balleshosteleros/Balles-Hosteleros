@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -19,8 +19,8 @@ import { Plus, Settings2, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   DURACION_RESERVA_DEFAULT_MINUTOS,
-  DURACION_RESERVA_MAX_MINUTOS,
-  DURACION_RESERVA_MIN_MINUTOS,
+  DURACION_RESERVA_OPCIONES,
+  formatearDuracionReserva,
   INTERVALOS_RESERVA,
   MAX_PERSONAS_HORA_MODOS,
   MAX_PERSONAS_HORA_MODO_LABELS,
@@ -359,8 +359,6 @@ function BloqueParpadeo({ config, onChange }: Props) {
 // Bloque: duración por defecto (tiempo medio de servicio por mesa)
 // ─────────────────────────────────────────────────────────────────────
 function BloqueDuracionMesa({ config, onChange }: Props) {
-  const [valor, setValor] = useState(config.duracionReservaMin);
-  useEffect(() => setValor(config.duracionReservaMin), [config.duracionReservaMin]);
   return (
     <section className="space-y-3">
       <div>
@@ -372,25 +370,24 @@ function BloqueDuracionMesa({ config, onChange }: Props) {
       </div>
       <div className="grid grid-cols-2 gap-3 max-w-md pl-1">
         <div className="space-y-1.5">
-          <Label className="text-xs">Duración por defecto (minutos)</Label>
-          <Input
-            type="number"
-            min={DURACION_RESERVA_MIN_MINUTOS}
-            max={DURACION_RESERVA_MAX_MINUTOS}
-            step={5}
-            value={valor}
-            onChange={(e) => {
-              const raw = Number(e.target.value);
-              const n = Number.isFinite(raw)
-                ? Math.min(DURACION_RESERVA_MAX_MINUTOS, Math.max(DURACION_RESERVA_MIN_MINUTOS, Math.round(raw)))
-                : DURACION_RESERVA_DEFAULT_MINUTOS;
-              setValor(n);
-              onChange({ duracionReservaMin: n });
-            }}
-            className="h-8"
-          />
+          <Label className="text-xs">Duración por defecto</Label>
+          <Select
+            value={String(config.duracionReservaMin)}
+            onValueChange={(v) => onChange({ duracionReservaMin: Number(v) })}
+          >
+            <SelectTrigger className="h-8">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {DURACION_RESERVA_OPCIONES.map((o) => (
+                <SelectItem key={o.minutos} value={String(o.minutos)}>
+                  {o.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <p className="text-[10px] text-muted-foreground">
-            Mín {DURACION_RESERVA_MIN_MINUTOS} · máx {DURACION_RESERVA_MAX_MINUTOS} (6 h) · default {DURACION_RESERVA_DEFAULT_MINUTOS}.
+            De 15 minutos a 6 horas, en tramos de 15. Se guarda solo · por defecto {formatearDuracionReserva(DURACION_RESERVA_DEFAULT_MINUTOS)}.
           </p>
         </div>
       </div>

@@ -38,6 +38,8 @@ import {
   TIPO_RESERVA_CATEGORIA_LABELS,
   DURACION_RESERVA_MAX_MINUTOS,
   DURACION_RESERVA_MIN_MINUTOS,
+  DURACION_RESERVA_OPCIONES,
+  formatearDuracionReserva,
   RESERVA_NOMBRE_MAX_CHARS,
   RESERVA_APELLIDOS_MAX_CHARS,
 } from "@/features/sala/data/reservas";
@@ -86,6 +88,10 @@ import { LabelConRegla } from "@/shared/components/forms/LabelConRegla";
 import { listReglasReservas } from "@/features/sala/reglas/actions/reglas-actions";
 import { listPoliticasCancelacion } from "@/features/sala/actions/politicas-cancelacion-actions";
 import { getClienteInsights } from "@/features/sala/actions/cliente-insights-actions";
+import {
+  guardarDatosClienteReserva,
+  type DatosClienteReserva,
+} from "@/features/sala/actions/reserva-cliente-actions";
 import { searchClientes, type ClienteSugerencia } from "@/features/sala/actions/clientes-actions";
 import { maxpaxEfectivoDesdeReglas } from "@/features/sala/lib/reserva-limites";
 import type { EmpresaReservasRegla, TurnoRegla } from "@/features/sala/reglas/data/reglas";
@@ -1005,23 +1011,29 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
         </div>
         <div>
           <Label className="text-xs">
-            Duración (min)
+            Duración
             <span className="ml-1 font-normal text-muted-foreground">
-              · default {config?.duracionReservaMin ?? "—"}
+              · default{" "}
+              {config ? formatearDuracionReserva(config.duracionReservaMin) : "—"}
             </span>
           </Label>
-          <Input
-            type="number"
-            min={DURACION_RESERVA_MIN_MINUTOS}
-            max={DURACION_RESERVA_MAX_MINUTOS}
-            step={5}
-            placeholder={config ? String(config.duracionReservaMin) : ""}
-            className="h-8 text-xs"
+          <Select
             value={form.duracionMinutos}
-            onChange={(e) =>
-              setForm((p) => ({ ...p, duracionMinutos: e.target.value, duracionTouched: true }))
+            onValueChange={(v) =>
+              setForm((p) => ({ ...p, duracionMinutos: v, duracionTouched: true }))
             }
-          />
+          >
+            <SelectTrigger className="h-8 text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {DURACION_RESERVA_OPCIONES.map((o) => (
+                <SelectItem key={o.minutos} value={String(o.minutos)}>
+                  {o.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
         {/* Zona manda sobre mesa: se elige zona y luego una mesa de esa zona. */}
         <div className="col-span-2"><Label className="text-xs">Zona</Label>
@@ -2387,6 +2399,12 @@ export function ReservasView() {
 
   const [showDetalleReserva, setShowDetalleReserva] = useState(false);
   const [selectedInsights, setSelectedInsights] = useState<ClienteInsights | null>(null);
+  // Datos del cliente editables en la ficha. Se sincronizan con la reserva
+  // seleccionada y solo se persisten al pulsar Guardar.
+  const [clienteEdit, setClienteEdit] = useState<DatosClienteReserva>({
+    nombre: "", apellidos: "", telefono: "", email: "",
+  });
+  const [guardandoCliente, setGuardandoCliente] = useState(false);
   const [vista, setVista] = useState<"dia" | "mes">("dia");
   const [showDayPicker, setShowDayPicker] = useState(false);
   const [etiquetasReserva, setEtiquetasReserva] = useState<ReservaEtiqueta[]>([]);
@@ -2612,6 +2630,18 @@ export function ReservasView() {
       selectedReserva.duracionMinutos ?? cfgReservas?.duracionReservaMin ?? null;
     setDuracionEdit(efectiva ? String(efectiva) : "");
   }, [selectedReserva, cfgReservas]);
+
+  // Los campos del cliente se recargan al cambiar de reserva: si no, quedarían
+  // los del cliente anterior y se guardarían sobre quien no toca.
+  useEffect(() => {
+    if (!selectedReserva) return;
+    setClienteEdit({
+      nombre: selectedReserva.cliente ?? "",
+      apellidos: selectedReserva.apellidos ?? "",
+      telefono: selectedReserva.telefono ?? "",
+      email: selectedReserva.email ?? "",
+    });
+  }, [selectedReserva]);
 
   const loadReservas = useCallback(async (f?: string) => {
     setLoading(true);
@@ -2890,8 +2920,13 @@ export function ReservasView() {
    * y a partir de ese momento el sistema calcula su hora de fin con el valor
    * nuevo para dejar entrar (o no) la siguiente reserva.
    */
-  const guardarDuracion = async (id: string) => {
-    const n = Number(duracionEdit);
+  /**
+   * Guarda el tiempo de mesa. El valor llega por parámetro desde el selector:
+   * el estado de React aún no se ha propagado cuando se dispara el guardado
+   * automático, así que leerlo de `duracionEdit` guardaría el valor anterior.
+   */
+  const guardarDuracion = async (id: string, valor?: string) => {
+    const n = Number(valor ?? duracionEdit);
     if (!Number.isFinite(n) || n <= 0) {
       toast.error("Introduce un tiempo válido.");
       return;
@@ -2904,7 +2939,7 @@ export function ReservasView() {
     const res = await updateReserva(id, { duracionMinutos: clamped });
     setGuardandoDuracion(false);
     if (res.ok) {
-      toast.success(`Tiempo de mesa: ${clamped} min`);
+      toast.success(`Tiempo de mesa: ${formatearDuracionReserva(clamped)}`);
       setSelectedReserva(prev =>
         prev && prev.id === id ? { ...prev, duracionMinutos: clamped } : prev,
       );
@@ -2914,6 +2949,40 @@ export function ReservasView() {
       const msg = res.error ?? "No se pudo guardar el tiempo de mesa";
       if (/ya tiene una reserva/i.test(msg)) setAvisoOcupada(msg);
       else toast.error(msg);
+    }
+  };
+
+  /**
+   * Guarda los datos del cliente de la ficha. Un solo botón para los cuatro
+   * campos, y el cambio se propaga a la ficha del cliente y a todas sus
+   * reservas: el mismo cliente no puede quedar con dos teléfonos distintos.
+   */
+  const guardarDatosCliente = async (id: string) => {
+    if (!clienteEdit.nombre.trim()) {
+      toast.error("El nombre es obligatorio.");
+      return;
+    }
+    setGuardandoCliente(true);
+    const res = await guardarDatosClienteReserva(id, clienteEdit);
+    setGuardandoCliente(false);
+    if (res.ok) {
+      toast.success("Datos del cliente guardados");
+      // Recarga: el cambio afecta a más reservas que la abierta, así que el
+      // listado entero puede haber quedado desfasado.
+      loadReservas(fecha);
+      setSelectedReserva((prev) =>
+        prev && prev.id === id
+          ? {
+              ...prev,
+              cliente: clienteEdit.nombre.trim(),
+              apellidos: clienteEdit.apellidos.trim(),
+              telefono: clienteEdit.telefono.trim(),
+              email: clienteEdit.email.trim(),
+            }
+          : prev,
+      );
+    } else {
+      toast.error(res.error ?? "No se pudieron guardar los datos");
     }
   };
 
@@ -3708,96 +3777,186 @@ export function ReservasView() {
       </>
       )}
 
+      {/* Ficha de la reserva en dos columnas: a la izquierda todo lo que es la
+          reserva (cuándo, dónde, en qué estado), a la derecha el cliente. Son
+          dos cosas distintas y mezcladas cuesta encontrarlas. El botón de
+          guardar va abajo, fijo, y sirve a los datos del cliente. */}
       <Dialog open={showDetalleReserva} onOpenChange={setShowDetalleReserva}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle>Detalle de reserva</DialogTitle></DialogHeader>
           {selectedReserva && (
-            <div className="space-y-3 text-sm">
-              <div className="grid grid-cols-2 gap-3">
-                <Field label="Cliente">{selectedReserva.cliente || "WALK IN"} {selectedReserva.apellidos}</Field>
-                <Field label="Teléfono">{selectedReserva.telefono || "—"}</Field>
-                <Field label="Fecha">{selectedReserva.fecha}</Field>
-                <Field label="Hora">{selectedReserva.hora}</Field>
-                <Field label="Turno">{selectedReserva.turno}</Field>
-                <Field label="Comensales">{selectedReserva.comensales}</Field>
-                <Field label="Zona">{zonaLabel(selectedReserva.zona ? String(selectedReserva.zona) : null)}</Field>
-                <Field label="Mesa">{mesas.find(m => m.id === selectedReserva.mesaId)?.codigo ?? "Sin asignar"}</Field>
-              </div>
-              <div className="flex items-center gap-2">
-                <Label className="text-muted-foreground text-xs">Estado actual</Label>
-                <ReservaEstadoBadge estado={selectedReserva.estado} />
-              </div>
-              {/* Tiempo de ocupación de la mesa. Arranca en el valor por defecto
-                  de la empresa y se puede ampliar en cualquier momento sobre la
-                  marcha (mesa que se alarga), sin tocar la configuración. */}
-              <div className="pt-2 border-t space-y-1.5">
-                <Label className="text-muted-foreground text-xs">Tiempo de mesa</Label>
-                <div className="flex items-center gap-2">
-                  <Input
-                    type="number"
-                    min={DURACION_RESERVA_MIN_MINUTOS}
-                    max={DURACION_RESERVA_MAX_MINUTOS}
-                    step={5}
-                    className="h-8 text-xs w-24"
-                    placeholder={cfgReservas ? String(cfgReservas.duracionReservaMin) : ""}
-                    value={duracionEdit}
-                    onChange={(e) => setDuracionEdit(e.target.value)}
-                  />
-                  <span className="text-[11px] text-muted-foreground">min</span>
-                  <Button
-                    size="sm"
-                    className="h-8"
-                    disabled={guardandoDuracion || duracionEdit.trim() === ""}
-                    onClick={() => guardarDuracion(selectedReserva.id)}
-                  >
-                    Guardar
-                  </Button>
+            <div className="grid gap-6 text-sm md:grid-cols-2">
+
+              {/* ── Columna izquierda: la reserva ───────────────────────── */}
+              <div className="space-y-3 md:border-r md:pr-6">
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  Reserva
+                </h3>
+                <div className="grid grid-cols-2 gap-3">
+                  <Field label="Fecha">{selectedReserva.fecha}</Field>
+                  <Field label="Hora">{selectedReserva.hora}</Field>
+                  <Field label="Turno">{selectedReserva.turno}</Field>
+                  <Field label="Comensales">{selectedReserva.comensales}</Field>
+                  <Field label="Zona">{zonaLabel(selectedReserva.zona ? String(selectedReserva.zona) : null)}</Field>
+                  <Field label="Mesa">{mesas.find(m => m.id === selectedReserva.mesaId)?.codigo ?? "Sin asignar"}</Field>
                 </div>
-                <p className="text-[10px] text-muted-foreground">
-                  {(() => {
-                    const efectiva =
-                      selectedReserva.duracionMinutos ?? cfgReservas?.duracionReservaMin ?? null;
-                    if (!efectiva) return "Sin duración configurada.";
-                    const fin = horaMasMinutos(selectedReserva.hora, efectiva);
-                    return `Ocupa la mesa hasta las ${fin}. Por defecto ${cfgReservas?.duracionReservaMin ?? "—"} min.`;
-                  })()}
-                </p>
+                <div className="flex items-center gap-2">
+                  <Label className="text-muted-foreground text-xs">Estado actual</Label>
+                  <ReservaEstadoBadge estado={selectedReserva.estado} />
+                </div>
+                {/* Tiempo de ocupación de la mesa. Arranca en el valor por defecto
+                    de la empresa y se puede ampliar en cualquier momento sobre la
+                    marcha (mesa que se alarga), sin tocar la configuración. */}
+                <div className="pt-2 border-t space-y-1.5">
+                  <Label className="text-muted-foreground text-xs">Tiempo de mesa</Label>
+                  <Select
+                    value={duracionEdit}
+                    disabled={guardandoDuracion}
+                    onValueChange={(v) => {
+                      setDuracionEdit(v);
+                      guardarDuracion(selectedReserva.id, v);
+                    }}
+                  >
+                    <SelectTrigger className="h-8 text-xs w-32">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {DURACION_RESERVA_OPCIONES.map((o) => (
+                        <SelectItem key={o.minutos} value={String(o.minutos)}>
+                          {o.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-[10px] text-muted-foreground">
+                    {(() => {
+                      const efectiva =
+                        selectedReserva.duracionMinutos ?? cfgReservas?.duracionReservaMin ?? null;
+                      if (!efectiva) return "Sin duración configurada.";
+                      const fin = horaMasMinutos(selectedReserva.hora, efectiva);
+                      const def = cfgReservas?.duracionReservaMin;
+                      return `Ocupa la mesa hasta las ${fin}. Por defecto ${def ? formatearDuracionReserva(def) : "—"}.`;
+                    })()}
+                  </p>
+                </div>
+                {selectedReserva.observaciones && <Field label="Observaciones">{selectedReserva.observaciones}</Field>}
+                <div className="flex flex-wrap items-center gap-2">
+                  <ReservaFlagsChips reserva={selectedReserva} etiquetas={etiquetasReserva} insights={selectedInsights} size="md" />
+                  <ReservaExternalBadge reserva={selectedReserva} />
+                </div>
+                <div className="pt-2 border-t space-y-1.5">
+                  <Label className="text-muted-foreground text-xs">Etiquetas</Label>
+                  <EtiquetasPanel
+                    scope="reserva"
+                    entityId={selectedReserva.id}
+                    clienteVinculadoId={selectedReserva.clienteId ?? null}
+                  />
+                </div>
+                <div className="space-y-2 pt-2 border-t">
+                  <Label className="text-muted-foreground text-xs">Cambiar a</Label>
+                  <div className="grid grid-cols-3 gap-1.5">
+                    {ESTADOS_RESERVA.map((e) => (
+                      <Button
+                        key={e}
+                        size="sm"
+                        variant="outline"
+                        className={cn(
+                          "text-[10px] h-7 px-2 justify-start gap-1.5",
+                          e === selectedReserva.estado && "ring-1 ring-primary",
+                        )}
+                        onClick={() => cambiarEstadoReserva(selectedReserva.id, e)}
+                      >
+                        <ReservaEstadoDot estado={e} className="w-2 h-2" />
+                        <span className="truncate">{ESTADO_RESERVA_LABELS[e]}</span>
+                      </Button>
+                    ))}
+                  </div>
+                </div>
               </div>
-              {selectedReserva.observaciones && <Field label="Observaciones">{selectedReserva.observaciones}</Field>}
-              <div className="flex flex-wrap items-center gap-2">
-                <ReservaFlagsChips reserva={selectedReserva} etiquetas={etiquetasReserva} insights={selectedInsights} size="md" />
-                <ReservaExternalBadge reserva={selectedReserva} />
-              </div>
-              <div className="pt-2 border-t space-y-1.5">
-                <Label className="text-muted-foreground text-xs">Etiquetas</Label>
-                <EtiquetasPanel
-                  scope="reserva"
-                  entityId={selectedReserva.id}
-                  clienteVinculadoId={selectedReserva.clienteId ?? null}
-                />
-              </div>
-              <div className="pt-2 border-t">
-                <HistoricoEmailsReserva reservaId={selectedReserva.id} />
-              </div>
-              <div className="space-y-2 pt-2">
-                <Label className="text-muted-foreground text-xs">Cambiar a</Label>
-                <div className="grid grid-cols-3 gap-1.5">
-                  {ESTADOS_RESERVA.map((e) => (
-                    <Button
-                      key={e}
-                      size="sm"
-                      variant="outline"
-                      className={cn(
-                        "text-[10px] h-7 px-2 justify-start gap-1.5",
-                        e === selectedReserva.estado && "ring-1 ring-primary",
-                      )}
-                      onClick={() => cambiarEstadoReserva(selectedReserva.id, e)}
-                    >
-                      <ReservaEstadoDot estado={e} className="w-2 h-2" />
-                      <span className="truncate">{ESTADO_RESERVA_LABELS[e]}</span>
-                    </Button>
+
+              {/* ── Columna derecha: el cliente ─────────────────────────── */}
+              <div className="space-y-3">
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  Ficha del cliente
+                </h3>
+
+                {/* Fiabilidad de un vistazo: si falla mucho, se decide aquí si
+                    se le guarda la mesa. */}
+                <div className="grid grid-cols-3 gap-2 rounded-md border bg-muted/30 p-2.5">
+                  {[
+                    { valor: selectedInsights?.visitasTotal ?? 0, label: "Visitas" },
+                    { valor: selectedInsights?.noShows ?? 0, label: "No shows" },
+                    { valor: selectedInsights?.canceladas ?? 0, label: "Canceladas" },
+                  ].map((s) => (
+                    <div key={s.label} className="text-center">
+                      <div className="text-base font-semibold leading-none">{s.valor}</div>
+                      <div className="mt-1 text-[10px] text-muted-foreground">{s.label}</div>
+                    </div>
                   ))}
                 </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label className="text-muted-foreground text-xs">Nombre</Label>
+                    <Input
+                      className="h-8 text-xs"
+                      value={clienteEdit.nombre}
+                      onChange={(e) =>
+                        setClienteEdit((p) => ({ ...p, nombre: e.target.value }))
+                      }
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-muted-foreground text-xs">Apellidos</Label>
+                    <Input
+                      className="h-8 text-xs"
+                      value={clienteEdit.apellidos}
+                      onChange={(e) =>
+                        setClienteEdit((p) => ({ ...p, apellidos: e.target.value }))
+                      }
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-muted-foreground text-xs">Teléfono</Label>
+                    <Input
+                      type="tel"
+                      className="h-8 text-xs"
+                      value={clienteEdit.telefono}
+                      onChange={(e) =>
+                        setClienteEdit((p) => ({ ...p, telefono: e.target.value }))
+                      }
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-muted-foreground text-xs">Email</Label>
+                    <Input
+                      type="email"
+                      className="h-8 text-xs"
+                      value={clienteEdit.email}
+                      onChange={(e) =>
+                        setClienteEdit((p) => ({ ...p, email: e.target.value }))
+                      }
+                    />
+                  </div>
+                </div>
+                <p className="text-[10px] text-muted-foreground">
+                  Al guardar, los datos se actualizan en la ficha del cliente y en todas sus reservas.
+                </p>
+
+                <div className="pt-2 border-t">
+                  <HistoricoEmailsReserva reservaId={selectedReserva.id} />
+                </div>
+              </div>
+
+              {/* Guardar: abajo del todo y a lo ancho de las dos columnas.
+                  `pb-28` por la regla de no tapar el chat flotante. */}
+              <div className="md:col-span-2 flex justify-end border-t pt-4 pb-28">
+                <Button
+                  disabled={guardandoCliente}
+                  onClick={() => guardarDatosCliente(selectedReserva.id)}
+                >
+                  Guardar
+                </Button>
               </div>
             </div>
           )}
