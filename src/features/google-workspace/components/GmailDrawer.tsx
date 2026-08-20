@@ -684,7 +684,13 @@ export function GmailDrawer({ children }: GmailDrawerProps) {
       ? fuente
       : fuente.filter((m) => m.carpeta === carpeta);
 
-  const noLeidos = (mensajesReales ?? MOCK_MENSAJES).filter((m) => !m.leido).length;
+  // Cuenta sobre la PÁGINA cargada (50 hilos), no sobre el buzón entero: si hay
+  // más sin leer más abajo, este número se queda corto frente al badge de la
+  // barra, que sí pregunta a Gmail. Se marca con "+" para no dar por bueno un
+  // número que puede ser parcial.
+  const fuenteNoLeidos = mensajesReales ?? MOCK_MENSAJES;
+  const noLeidos = fuenteNoLeidos.filter((m) => !m.leido).length;
+  const noLeidosParcial = !!nextPageToken && noLeidos === fuenteNoLeidos.length;
 
   const tituloFiltro =
     filtro.tipo === "sistema"
@@ -796,6 +802,7 @@ export function GmailDrawer({ children }: GmailDrawerProps) {
                         {id === "inbox" && noLeidos > 0 && (
                           <span className={cn("text-xs", activo ? "font-bold" : "font-medium")}>
                             {noLeidos}
+                            {noLeidosParcial ? "+" : ""}
                           </span>
                         )}
                       </button>

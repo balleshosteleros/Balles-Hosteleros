@@ -138,9 +138,20 @@ export async function GET(request: Request) {
       SPAM: "in:spam",
     };
     partesQuery.push(scopePorCarpeta[label] ?? `in:inbox`);
+    // Recibidos = pestaña PRINCIPAL, igual que el badge (ver más abajo).
+    if (label === "INBOX") partesQuery.push("category:primary");
   } else {
     // Carpeta de sistema sin búsqueda: filtrado directo por label.
     params.set("labelIds", label);
+    // "Recibidos" muestra la pestaña PRINCIPAL, no las cuatro pestañas de
+    // Gmail. `INBOX` a secas incluye Promociones, Redes sociales y
+    // Notificaciones: la bandeja se llenaba de promociones (makro, OCU,
+    // Restaurant Guru...) que el usuario no ve en su Gmail, y el badge de la
+    // barra contaba esas mismas y se quedaba clavado en "9+".
+    // `CATEGORY_PERSONAL` es la etiqueta de la pestaña Principal; combinada con
+    // INBOX en labelIds equivale a `in:inbox category:primary`, que es lo que
+    // pregunta `/gmail/unread-count`. Los dos sitios deben ir a la par.
+    if (label === "INBOX") params.append("labelIds", "CATEGORY_PERSONAL");
   }
 
   if (partesQuery.length > 0) params.set("q", partesQuery.join(" "));

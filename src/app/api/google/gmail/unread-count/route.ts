@@ -19,12 +19,21 @@ type GmailThreadListResponse = {
  * sin detalles. Cuenta hilos, no mensajes, para que coincida con lo que se ve
  * en la bandeja (2 hilos con 3 correos sin leer = 2, no 3).
  *
+ * Se acota a la pestaña PRINCIPAL (`category:primary`). `in:inbox` a secas
+ * abarca las cuatro pestañas de Gmail, así que el badge sumaba Promociones,
+ * Redes sociales y Notificaciones: una cuenta con 1 correo real sin leer y 34
+ * promociones pintaba "9+" y no bajaba ni recargando. El badge existe para
+ * avisar de correo que hay que atender, y las promociones no lo son.
+ *
+ * IMPORTANTE: debe consultar lo MISMO que la bandeja del cajón
+ * (`/gmail/messages`, carpeta "inbox"), o los dos números vuelven a divergir.
+ *
  * `maxResults` va a 50: es el tope que muestra el badge (por encima pinta
  * "9+"), y pedir más no cambiaria lo que ve el usuario.
  */
 export async function GET() {
   const params = new URLSearchParams({
-    q: "in:inbox is:unread",
+    q: "in:inbox is:unread category:primary",
     maxResults: "50",
   });
 

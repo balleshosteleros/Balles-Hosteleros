@@ -259,11 +259,18 @@ export function useDailyCounts(): DailyCounts {
       // Habana por departamento, PERSONAL, MARKETING...) y el badge sumaría
       // eventos de calendarios que el usuario NO tiene seleccionados.
       const seleccionados = await resolverCalendarios(guardados);
-      // `[]` = no hay ningún calendario seleccionado válido → nada que contar.
+      // `[]` = no hay ningún calendario seleccionado válido → nada que contar
+      // EN CALENDARIO. El correo no depende del calendario: antes este `return`
+      // temprano ponía también `emails: 0`, así que quien desmarcaba todos sus
+      // calendarios se quedaba sin badge de correo aunque tuviera sin leer.
       if (seleccionados.length === 0) {
         eventosHoyRef.current = [];
+        const unread = await fetch("/api/google/gmail/unread-count")
+          .then((r) => r.json())
+          .then((d) => d?.unread ?? 0)
+          .catch(() => 0);
         setCounts({
-          emails: 0,
+          emails: unread,
           events: 0,
           meetings: 0,
           tasks,
