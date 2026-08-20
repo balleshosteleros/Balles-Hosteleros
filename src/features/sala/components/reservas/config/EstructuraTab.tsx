@@ -27,7 +27,7 @@ import {
 } from "@/components/ui/dialog";
 import { listZonas } from "@/features/sala/planos/actions/zonas-actions";
 import { listMesas } from "@/features/sala/planos/actions/mesas-actions";
-import { listCombinaciones } from "@/features/sala/planos/actions/combinaciones-actions";
+import { listCombinaciones, updateCombinacion } from "@/features/sala/planos/actions/combinaciones-actions";
 import { listPlanosConSalas } from "@/features/sala/planos/actions/planos-actions";
 import { ZonaConfigModal } from "./ZonaConfigModal";
 import { MesaConfigModal } from "./MesaConfigModal";
@@ -108,6 +108,26 @@ export function EstructuraTab() {
     }
     toast.success("Sala borrada");
     cargarTodo(localId);
+  }
+
+  /**
+   * Guarda el nuevo aforo de una combinación al pulsar +/− en la lista.
+   * Pinta el cambio al momento y lo revierte si el servidor lo rechaza, para
+   * que pulsar varias veces seguidas no se sienta lento.
+   */
+  async function ajustarAforo(
+    c: MesaCombinacion,
+    patch: { capacidadMin?: number } | { capacidadMax?: number },
+  ) {
+    const previas = combinaciones;
+    setCombinaciones((prev) =>
+      prev.map((x) => (x.id === c.id ? { ...x, ...patch } : x)),
+    );
+    const res = await updateCombinacion(c.id, patch);
+    if (!res.ok) {
+      setCombinaciones(previas);
+      toast.error(res.error ?? "No se pudo cambiar el aforo");
+    }
   }
 
   function zonasDeSala(salaId: string): Zona[] {
@@ -427,8 +447,25 @@ export function EstructuraTab() {
                         style={{ backgroundColor: c.colorMarca }}
                       />
                       <span className="font-mono font-semibold">{c.codigo}</span>
-                      <span className="text-xs text-muted-foreground">
-                        {c.capacidadMin}-{c.capacidadMax} pax
+                      {/* Ajuste rápido de aforo: los +/− solo se revelan al
+                          pasar el ratón, para no llenar la lista de botones. */}
+                      <span className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <AforoRapido
+                          valor={c.capacidadMin}
+                          onChange={(v) => ajustarAforo(c, { capacidadMin: v })}
+                          min={1}
+                          max={c.capacidadMax}
+                          titulo="Mínimo de personas"
+                        />
+                        <span className="opacity-40">–</span>
+                        <AforoRapido
+                          valor={c.capacidadMax}
+                          onChange={(v) => ajustarAforo(c, { capacidadMax: v })}
+                          min={c.capacidadMin}
+                          max={100}
+                          titulo="Máximo de personas"
+                        />
+                        <span>pax</span>
                         {c.tipo && ` · ${TIPO_MESA_LABELS[c.tipo]}`}
                         {c.capacidadAuto && " · auto"}
                       </span>
@@ -612,5 +649,50 @@ function SalaModal({
         </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/**
+ * Ajuste rápido del aforo de una combinación, sin abrir el modal.
+ *
+ * Los botones +/− están ocultos y solo aparecen al pasar el ratón por encima:
+ * la lista se lee limpia ("5–8 pax") y los controles salen cuando se van a
+ * usar. Sin esto había que abrir la ventana de edición para sumar una persona.
+ */
+function AforoRapido({
+  valor,
+  onChange,
+  min,
+  max,
+  titulo,
+}: {
+  valor: number;
+  onChange: (v: number) => void;
+  min: number;
+  max: number;
+  titulo: string;
+}) {
+  return (
+    <span className="group/aforo inline-flex items-center" title={titulo}>
+      <button
+        type="button"
+        aria-label={`Restar en ${titulo.toLowerCase()}`}
+        disabled={valor <= min}
+        onClick={() => onChange(valor - 1)}
+        className="w-0 overflow-hidden opacity-0 transition-all group-hover/aforo:w-4 group-hover/aforo:opacity-100 hover:text-foreground disabled:opacity-0"
+      >
+        −
+      </button>
+      <span className="tabular-nums font-medium text-foreground">{valor}</span>
+      <button
+        type="button"
+        aria-label={`Sumar en ${titulo.toLowerCase()}`}
+        disabled={valor >= max}
+        onClick={() => onChange(valor + 1)}
+        className="w-0 overflow-hidden opacity-0 transition-all group-hover/aforo:w-4 group-hover/aforo:opacity-100 hover:text-foreground disabled:opacity-0"
+      >
+        +
+      </button>
+    </span>
   );
 }
