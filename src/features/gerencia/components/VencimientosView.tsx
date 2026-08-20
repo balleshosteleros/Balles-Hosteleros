@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import * as Icons from "lucide-react";
 import {
   AlertTriangle, CheckCircle2, Timer, Plus, Search, History, FileText,
-  CalendarDays, List, ChevronLeft, ChevronRight, CircleHelp, Gavel, ShieldCheck,
+  CalendarDays, List, ChevronLeft, ChevronRight, CircleHelp, Gavel, ShieldCheck, Paperclip,
 } from "lucide-react";
 import { format, parseISO, startOfMonth, endOfMonth, eachDayOfInterval, getDay, addMonths, subMonths, isSameDay } from "date-fns";
 import { es } from "date-fns/locale";
@@ -32,6 +32,7 @@ import {
   registrarRevision,
   type VencimientoRow, type HistorialRow,
 } from "@/features/gerencia/actions/vencimientos-actions";
+import { DocumentosVencimiento } from "./DocumentosVencimiento";
 
 // ─── Estado calculado a partir de la fecha ──────────────────────────────────
 
@@ -432,8 +433,13 @@ export function VencimientosView() {
                 <Tabs defaultValue="historial">
                   <TabsList className="w-full">
                     <TabsTrigger value="historial" className="flex-1 gap-1"><History className="h-3.5 w-3.5" /> Historial ({historial.length})</TabsTrigger>
+                    <TabsTrigger value="documentos" className="flex-1 gap-1"><Paperclip className="h-3.5 w-3.5" /> Documentos</TabsTrigger>
                     <TabsTrigger value="detalle" className="flex-1 gap-1"><FileText className="h-3.5 w-3.5" /> Qué exige la ley</TabsTrigger>
                   </TabsList>
+
+                  <TabsContent value="documentos" className="mt-4">
+                    <DocumentosVencimiento vencimientoId={seleccionada.id} />
+                  </TabsContent>
 
                   <TabsContent value="historial" className="mt-4 space-y-4">
                     <div className="flex items-center justify-between gap-3 rounded-lg border p-3">
