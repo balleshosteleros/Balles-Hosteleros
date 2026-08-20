@@ -318,12 +318,7 @@ export default function FichaEmpleadoPage() {
       case "calendarios":
         return <SubmoduloPorEmpleadoPlaceholder modulo="Calendarios" path="/rrhh/calendarios" empleado={empleado} />;
       case "entregas":
-        return (
-          <EntregasEmpleadoTab
-            empleadoId={empleadoRegistro.id}
-            empleadoNombre={`${empleado.nombre} ${empleado.apellidos}`.trim()}
-          />
-        );
+        return <EntregasEmpleadoTab empleadoId={empleadoRegistro.id} />;
       case "reclutamiento":
         return <SubmoduloPorEmpleadoPlaceholder modulo="Reclutamiento" path="/rrhh/reclutamiento" empleado={empleado} />;
       case "bonus":

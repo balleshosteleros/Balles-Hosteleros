@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import {
-  PackageCheck, Shirt, Package, Loader2, AlertTriangle, Plus,
+  PackageCheck, Shirt, Package, Loader2, AlertTriangle,
 } from "lucide-react";
 import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
@@ -17,25 +17,21 @@ import {
   resumirMaterial,
   type Entrega,
 } from "@/features/rrhh/data/entregas";
-import { NuevaEntregaDialog } from "@/features/rrhh/components/entregas/NuevaEntregaDialog";
 
 /**
  * Pestaña "Entregas" de la ficha del empleado.
  *
+ * SOLO LECTURA: la ficha consulta, nunca da de alta ni edita. Registrar una
+ * entrega o marcar una devolución se hace únicamente desde el módulo Entregas,
+ * que es la fuente única; aquí solo se enlaza a él.
+ *
  * Arriba, lo que el trabajador TIENE ahora mismo (resumen de lo firmado).
  * Debajo, el histórico de cada entrega con su nota.
  */
-export function EntregasEmpleadoTab({
-  empleadoId,
-  empleadoNombre,
-}: {
-  empleadoId: string;
-  empleadoNombre: string;
-}) {
+export function EntregasEmpleadoTab({ empleadoId }: { empleadoId: string }) {
   const { empresaActual } = useEmpresa();
   const [entregas, setEntregas] = useState<Entrega[]>([]);
   const [loading, setLoading] = useState(true);
-  const [dialogOpen, setDialogOpen] = useState(false);
   useGlobalLoadingSync(loading);
 
   const cargar = useCallback(async () => {
@@ -81,15 +77,9 @@ export function EntregasEmpleadoTab({
             {sinDevolver.length > 0 && ` · ${sinDevolver.length} sin devolver`}
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <Button size="sm" onClick={() => setDialogOpen(true)}>
-            <Plus className="h-4 w-4 mr-1" />
-            Nueva entrega
-          </Button>
-          <Button variant="outline" size="sm" asChild>
-            <a href="/rrhh/entregas">Ir al módulo</a>
-          </Button>
-        </div>
+        <Button variant="outline" size="sm" asChild>
+          <a href="/rrhh/entregas">Ir al módulo</a>
+        </Button>
       </div>
 
       {/* Lo que tiene ahora mismo */}
@@ -186,13 +176,6 @@ export function EntregasEmpleadoTab({
           ))}
         </div>
       )}
-
-      <NuevaEntregaDialog
-        open={dialogOpen}
-        onOpenChange={setDialogOpen}
-        empleadoFijo={{ id: empleadoId, nombre: empleadoNombre }}
-        onCreada={() => void cargar()}
-      />
     </div>
   );
 }
