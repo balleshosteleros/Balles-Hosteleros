@@ -41,16 +41,18 @@ export async function listEmpleadosParaPagos(): Promise<{ ok: boolean; data: Emp
     const { supabase, empresaId } = await getAppContext();
     if (!empresaId) return { ok: false, data: [] };
 
-    const { data: accesosUE } = await supabase
-      .from("usuario_empresas")
-      .select("user_id")
-      .eq("empresa_id", empresaId);
-    const userIdsConAcceso = (accesosUE ?? []).map((r) => r.user_id as string);
-
-    const filtro = userIdsConAcceso.length > 0
-      ? `empresa_id.eq.${empresaId},user_id.in.(${userIdsConAcceso.join(",")})`
-      : `empresa_id.eq.${empresaId}`;
-
+    // AISLAMIENTO ESTRICTO POR EMPRESA. Solo fichas cuya empresa_id es la activa.
+    //
+    // Antes esto era un .or() que además traía cualquier ficha cuyo user_id
+    // tuviera acceso a la empresa activa (vía usuario_empresas). Esa segunda rama
+    // NO llevaba filtro de empresa, así que a un usuario multiempresa (p.ej. RRHH
+    // con acceso a las dos) se le colaban las fichas de la OTRA empresa en la
+    // pantalla de pagos: veía nóminas, DNI e IRPF de gente que no era de la
+    // empresa que tenía activa.
+    //
+    // Ojo: la RLS de `empleados` autoriza todas las empresas del usuario (por
+    // diseño, es multiempresa), así que NO corta esta fuga. El aislamiento por
+    // empresa activa lo hace este filtro y solo este filtro: no lo relajes.
     const { data, error } = await supabase
       .from("empleados")
       // El puesto REAL vive en `empleado_puestos` (M:N, uno principal).
@@ -59,35 +61,16 @@ export async function listEmpleadosParaPagos(): Promise<{ ok: boolean; data: Emp
       .select(
         "id, nombre, apellidos, puesto, estado, user_id, empresa_id, dni_nie, departamentos(nombre, area), empleado_puestos(es_principal, puestos(nombre))",
       )
-      .or(filtro)
+      .eq("empresa_id", empresaId)
       .eq("estado", "Activo")
       .order("nombre", { ascending: true });
 
     if (error) throw error;
 
-    // Dedup por user_id: un usuario con ficha en varias empresas (p.ej. director
-    // multiempresa) aparecería duplicado porque el filtro OR lo incluye por
-    // empresa_id (su empresa principal) y por user_empresas (acceso secundario).
-    // Damos prioridad a la ficha cuya empresa_id = empresaId activa.
-    const porUser = new Map<string, typeof data[number]>();
-    const sinUser: typeof data = [];
-    for (const e of data ?? []) {
-      const uid = e.user_id as string | null;
-      if (!uid) {
-        sinUser.push(e);
-        continue;
-      }
-      const prev = porUser.get(uid);
-      if (!prev) {
-        porUser.set(uid, e);
-        continue;
-      }
-      const prevPrincipal = prev.empresa_id === empresaId;
-      const currPrincipal = e.empresa_id === empresaId;
-      if (currPrincipal && !prevPrincipal) porUser.set(uid, e);
-    }
-
-    const rows: EmpleadoPagoRow[] = [...porUser.values(), ...sinUser].map((e) => {
+    // Sin dedup por user_id: con el filtro por empresa_id cada empleado aparece
+    // como mucho una vez (una ficha por empresa). El dedup anterior solo existía
+    // para limpiar los duplicados que creaba la rama user_id ya retirada.
+    const rows: EmpleadoPagoRow[] = (data ?? []).map((e) => {
       const deptoRel = e.departamentos as
         | { nombre?: string | null; area?: string | null }
         | Array<{ nombre?: string | null; area?: string | null }>

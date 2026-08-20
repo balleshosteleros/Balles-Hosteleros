@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   Sheet,
   SheetContent,
@@ -47,6 +48,7 @@ export function NotificacionBell({
   variant?: "panel" | "toolbar";
 }) {
   const { empresaActual } = useEmpresa();
+  const router = useRouter();
   const [items, setItems] = useState<NotificacionApp[]>([]);
   const [open, setOpen] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);

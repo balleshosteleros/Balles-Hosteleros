@@ -29,6 +29,10 @@ export type TipoNotificacion =
   | "gestoria_recordatorio"
   | "gestoria_contrato_subido"
   | "gestoria_contrato_firmado"
+  // Nueva incorporación: recordatorio editable a RRHH al dar el alta de contrato
+  | "nueva_incorporacion"
+  // Solicitudes de personal: aviso al validador (responsable directo)
+  | "solicitud_pendiente"
   // Cambio del correo de acceso (login) del empleado
   | "cambio_email_acceso";
 
@@ -167,6 +171,22 @@ export const TIPOS_NOTIFICACION: Record<TipoNotificacion, TipoMeta> = {
     badge: "bg-emerald-100 text-emerald-700",
     accionLabel: "Visto",
     requiereAccion: false,
+  },
+  nueva_incorporacion: {
+    label: "Nueva incorporación",
+    icono: "recordatorio",
+    color: "text-violet-600",
+    badge: "bg-violet-100 text-violet-700",
+    accionLabel: "Visto",
+    requiereAccion: false,
+  },
+  solicitud_pendiente: {
+    label: "Solicitud",
+    icono: "solicitud",
+    color: "text-amber-600",
+    badge: "bg-amber-100 text-amber-700",
+    accionLabel: "Revisar",
+    requiereAccion: true,
   },
   cambio_email_acceso: {
     label: "Correo de acceso",

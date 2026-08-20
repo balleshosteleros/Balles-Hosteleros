@@ -21,6 +21,8 @@ export interface NotificacionApp {
   createdAt: string;
   refTabla: string | null;
   refId: string | null;
+  /** Pantalla a la que lleva la notificación al pulsarla (null = no navega). */
+  accionUrl: string | null;
 }
 
 interface NotifDbRow {
@@ -36,10 +38,11 @@ interface NotifDbRow {
   created_at: string;
   entidad_tipo: string | null;
   entidad_id: string | null;
+  accion_url: string | null;
 }
 
 const APP_COLS =
-  "id, tipo, titulo, mensaje, payload, accion_label, requiere_accion, vista_at, accionada_at, created_at, entidad_tipo, entidad_id";
+  "id, tipo, titulo, mensaje, payload, accion_label, requiere_accion, vista_at, accionada_at, created_at, entidad_tipo, entidad_id, accion_url";
 
 function dbToApp(r: NotifDbRow): NotificacionApp {
   return {
@@ -55,6 +58,7 @@ function dbToApp(r: NotifDbRow): NotificacionApp {
     createdAt: r.created_at,
     refTabla: r.entidad_tipo,
     refId: r.entidad_id,
+    accionUrl: r.accion_url,
   };
 }
 
@@ -209,7 +213,7 @@ export async function listRegistroNotificaciones(): Promise<NotificacionRegistro
     const { data, error } = await supabase
       .from("notificaciones")
       .select(
-        "id, tipo, titulo, mensaje, payload, accion_label, requiere_accion, vista_at, accionada_at, created_at, entidad_tipo, entidad_id, empleado_id, usuario_id, empleados(nombre, apellidos)",
+        "id, tipo, titulo, mensaje, payload, accion_label, accion_url, requiere_accion, vista_at, accionada_at, created_at, entidad_tipo, entidad_id, empleado_id, usuario_id, empleados(nombre, apellidos)",
       )
       .eq("empresa_id", empresaId)
       .order("created_at", { ascending: false })

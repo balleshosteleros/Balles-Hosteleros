@@ -279,7 +279,13 @@ export function PagosView() {
     void getNotifLiquidacionesConfig().then(setNotifCfg);
   }, [empresaActual.id]);
 
-  const claveRango = rangoKey(calRange.range);
+  // La clave del caché lleva la EMPRESA además del rango. Sin ella, "junio en
+  // HABANA" y "junio en BACANAL" compartían entrada: al cambiar de empresa, el
+  // efecto de carga veía caché para ese periodo, cortaba (`if (...) return`) y
+  // la tabla seguía mostrando la plantilla y las nóminas de la empresa anterior.
+  // El remontaje por `key` del layout (main) debería vaciar este estado, pero es
+  // la única barrera y si falla no hay red debajo: la empresa va en la clave.
+  const claveRango = `${empresaActual.id}|${rangoKey(calRange.range)}`;
   const periodo = periodoDeRango(calRange.range);
   // Estable entre renders: si no, el `?? []` crea un array nuevo cada vez y
   // los useMemo que dependen de `pagos` se recalculan siempre.
@@ -396,7 +402,15 @@ export function PagosView() {
     cargarEmpleados();
   }, [claveRango, pagosPorRango, cargarEmpleados]);
 
-  // Re-cargar al cambiar empresa (limpia cache)
+  // Vacía el caché al cambiar de empresa. Ya NO es lo que garantiza el
+  // aislamiento (eso lo hace la empresa dentro de `claveRango`): se queda para
+  // liberar las filas de la empresa que dejamos atrás.
+  //
+  // Por sí solo no bastaba: este efecto se declara DESPUÉS del efecto de carga,
+  // así que en el commit del cambio de empresa la carga corría primero, veía
+  // caché para ese periodo (la clave no llevaba empresa) y cortaba con su
+  // `return`. Para cuando esto vaciaba el estado, la recarga ya se había
+  // saltado y la tabla se quedaba con los datos de la empresa anterior.
   useEffect(() => {
     setPagosPorRango({});
     setHorasPorRango({});
