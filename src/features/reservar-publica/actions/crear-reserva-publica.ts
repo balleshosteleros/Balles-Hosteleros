@@ -284,13 +284,11 @@ export async function crearReservaPublicaAction(
     return { ok: false, error: "No pudimos procesar la reserva. Inténtalo de nuevo en unos minutos." };
   }
   if (cupoOk !== true) {
-    // El tope es del TURNO completo, así que no sirve de nada mandarle a probar
-    // otra hora: todas las del turno están igual de llenas. Se le ofrece el otro
-    // turno o cambiar de día, que es lo único que puede funcionar.
-    const otroTurno = turno === "COMIDA" ? "la cena" : "la comida";
+    // El tope es del TURNO completo: no se sugiere otra hora porque todas las
+    // del turno están igual de llenas.
     return {
       ok: false,
-      error: `Lo sentimos, ya no quedan plazas para ${turno === "COMIDA" ? "la comida" : "la cena"} del ${data.fecha}. Prueba con ${otroTurno} o elige otro día.`,
+      error: `Lo sentimos, ya no quedan mesas libres para ${turno === "COMIDA" ? "la comida" : "la cena"} del ${data.fecha}.`,
     };
   }
 
