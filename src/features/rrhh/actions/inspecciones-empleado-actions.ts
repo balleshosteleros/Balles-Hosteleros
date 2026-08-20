@@ -56,32 +56,39 @@ function nombreRelacion(rel: unknown): string | null {
 }
 
 /**
- * Lista todas las inspecciones que existen "a nombre de" un empleado: las que
- * verificó él mismo y aquellas donde figura como jefe de sala. Resuelve todos
- * los registros de `empleados` que comparten el `user_id` (ficha espejo
- * multi-empresa) para no perder vínculos de otras empresas. El alcance por
- * empresa lo aplica la RLS de `inspeccion_envios`.
+ * Lista las inspecciones que existen "a nombre de" un empleado EN LA EMPRESA
+ * ACTIVA: las que verificó él mismo y aquellas donde figura como jefe de sala.
+ *
+ * Resuelve las fichas espejo que comparten `user_id` (multi-empresa) pero
+ * ACOTADAS a la empresa activa. Antes se recogían las de todas las empresas y
+ * la consulta no filtraba `empresa_id`, así que desde la ficha de RRHH de una
+ * empresa se listaban inspecciones realizadas en la otra. Ojo: la RLS NO
+ * delimita esto (autoriza todas las empresas del usuario, por diseño
+ * multiempresa); el alcance por empresa lo da el filtro de aquí.
  */
 export async function listInspeccionesEmpleado(empleadoId: string) {
   try {
-    const { supabase } = await getAppContext();
+    const { supabase, empresaId } = await getAppContext();
+    if (!empresaId) return { ok: false as const, error: "Sin empresa activa" };
 
     const { data: emp, error: empErr } = await supabase
       .from("empleados")
       .select("id, user_id")
       .eq("id", empleadoId)
+      .eq("empresa_id", empresaId)
       .maybeSingle();
     if (empErr) throw empErr;
     if (!emp) return { ok: false as const, error: "Empleado no encontrado" };
 
-    // Todos los ids de empleado que comparten el mismo usuario (espejo
-    // multi-empresa). Si no hay user_id, se usa solo el id recibido.
+    // Fichas del mismo usuario DENTRO de la empresa activa (normalmente una
+    // sola; el espejo de la otra empresa queda fuera a propósito).
     let empleadoIds = [emp.id];
     if (emp.user_id) {
       const { data: espejos } = await supabase
         .from("empleados")
         .select("id")
-        .eq("user_id", emp.user_id);
+        .eq("user_id", emp.user_id)
+        .eq("empresa_id", empresaId);
       const ids = (espejos ?? []).map((e) => e.id);
       if (ids.length > 0) empleadoIds = Array.from(new Set([emp.id, ...ids]));
     }
@@ -92,6 +99,7 @@ export async function listInspeccionesEmpleado(empleadoId: string) {
       .select(
         "id, numero_secuencial, fecha_inspeccion, nombre_inspector, nota_final, estado, verificado_at, verificado_por_empleado_id, jefe_sala_empleado_id, local:locales(nombre)",
       )
+      .eq("empresa_id", empresaId)
       .or(
         `verificado_por_empleado_id.in.${inList},jefe_sala_empleado_id.in.${inList}`,
       )

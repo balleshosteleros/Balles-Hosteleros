@@ -3,6 +3,7 @@
 import { getAppContext } from "@/lib/supabase/get-context";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getRolContext } from "@/features/auth/actions/permisos-actions";
+import { puedeEditarModulo } from "@/features/auth/lib/permisos";
 import { getNotifLiquidacionesConfig } from "@/features/notificaciones/actions/notif-config-actions";
 import { crearNotificaciones } from "@/features/notificaciones/actions/notificaciones-actions";
 import {
@@ -533,8 +534,10 @@ export async function reabrirConfirmacionPago(
   empleadoId: string,
 ): Promise<{ ok: boolean; error?: string }> {
   try {
-    const { esDirector } = await getRolContext();
-    if (!esDirector) return { ok: false, error: "Solo un director puede reabrir una liquidación." };
+    const { permisos } = await getRolContext();
+    if (!puedeEditarModulo(permisos, "RECURSOS HUMANOS")) {
+      return { ok: false, error: "Sin permisos: necesitas Recursos Humanos para reabrir una liquidación." };
+    }
 
     const { supabase, empresaId } = await getAppContext();
     if (!empresaId || !empleadoId || empleadoId.startsWith("ext-")) return { ok: false };
@@ -556,8 +559,8 @@ export async function reabrirConfirmacionPago(
 
 export async function puedeReabrirPagos(): Promise<boolean> {
   try {
-    const { esDirector } = await getRolContext();
-    return esDirector;
+    const { permisos } = await getRolContext();
+    return puedeEditarModulo(permisos, "RECURSOS HUMANOS");
   } catch {
     return false;
   }

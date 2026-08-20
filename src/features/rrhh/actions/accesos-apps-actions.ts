@@ -2,6 +2,8 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getAppContext } from "@/lib/supabase/get-context";
+import { TODAS_LAS_EMPRESAS } from "@/features/accesos/lib/alcance";
 import { getRolContext } from "@/features/auth/actions/permisos-actions";
 import { normalizarModulo, puedeVerHerramienta } from "@/features/auth/lib/permisos";
 import { encryptOptional, decrypt } from "@/features/accesos/lib/crypto";
@@ -34,8 +36,9 @@ function esCifrado(s: string): boolean {
 //     no lo está, el acceso NO viaja al cliente: ni etiqueta, ni usuario, ni
 //     el hecho de que exista. Antes se enviaba todo y se ocultaba al pintar.
 //
-// Dirección (es_admin_plataforma) mantiene su bypass intencional.
-// `roles` vacío en un acceso = solo dirección (fail-closed).
+// Sin bypass para dirección: los escudos se aplican a TODOS los roles, y el
+// candado de Ajustes → Roles manda también para ella.
+// `roles` vacío en un acceso = nadie lo ve (fail-closed).
 // ---------------------------------------------------------------------------
 
 /** ¿El rol puede ver una credencial concreta? Comparación sin acentos. */
@@ -287,23 +290,30 @@ async function getUserOrNull(supabase: Awaited<ReturnType<typeof createClient>>)
   return user;
 }
 
-async function userTieneRolAdminODirector(userId: string): Promise<boolean> {
-  const { esDirector } = await getRolContext(userId);
-  return esDirector;
+/**
+ * ¿El rol tiene autorizada la herramienta de accesos? Lo decide el candado
+ * HERR_ACCESOS de Ajustes → Roles: la ve CUALQUIER rol que lo tenga marcado.
+ * No hay nada atado al rol de dirección.
+ *
+ * (Antes se llamaba `userTieneRolAdminODirector`, que describía mal lo que hace
+ * y llevaba a creer que la pantalla era solo para dirección.)
+ */
+async function tieneHerramientaAccesos(userId: string): Promise<boolean> {
+  const { permisos } = await getRolContext(userId);
+  return puedeVerHerramienta(permisos, "HERR_ACCESOS");
 }
 
 /**
  * PRP-075 · Regla de Ivan: **editar exige permiso de AJUSTES**. El candado de la
  * barra es SOLO LECTURA — desde ahí no se crea ni se modifica nada. Quien no
  * tenga acceso a Ajustes no puede tocar una credencial, aunque invoque la
- * server action directamente. Dirección mantiene su bypass.
+ * server action directamente. Sin excepción para dirección: manda el permiso.
  *
  * Es la contrapartida necesaria al escudo 2: quien puede editar un acceso podría
  * marcarse a sí mismo entre los roles autorizados y verlo todo.
  */
 async function exigirPermisoEdicionAccesos(userId: string): Promise<void> {
-  const { esDirector, permisos } = await getRolContext(userId);
-  if (esDirector) return;
+  const { permisos } = await getRolContext(userId);
   const ajustes = permisos.find((p) => normalizarModulo(p.modulo) === "AJUSTES");
   if (!ajustes?.editar) {
     throw new Error("No autorizado: se necesita permiso de edición en Ajustes");
@@ -378,8 +388,7 @@ export async function listAccesosApps(empresaSlug: string): Promise<AccesoApp[]>
     return [];
   }
 
-  const { esDirector, rolNombre, permisos } = await getRolContext(user.id);
-  if (esDirector) return (data ?? []).map((r) => rowToApp(r as Row));
+  const { rolNombre, permisos } = await getRolContext(user.id);
 
   // Escudo 1 — sin el candado en Ajustes → Roles no se recibe NADA, aunque se
   // invoque esta action directamente saltándose la interfaz.
@@ -444,21 +453,43 @@ async function recortarSegunCredencialesRLS(
 }
 
 /**
- * Lista TODOS los accesos (todas las empresas). Solo admin/director.
- * Otros usuarios reciben array vacío (no se filtra: se rechaza).
+ * Lista los accesos de UNA empresa. Requiere el candado HERR_ACCESOS en el rol
+ * (Ajustes → Roles): lo ve cualquier rol que lo tenga marcado, no solo dirección.
+ * Quien no lo tenga recibe array vacío (no se filtra: se rechaza).
+ *
+ * Sin `empresaSlug` usa la EMPRESA ACTIVA. Para listar deliberadamente las de
+ * todas las empresas (vista de administración global) hay que pedirlo explícito
+ * con `"__todas__"`: antes ese era el comportamiento por defecto al omitir el
+ * argumento, así que un olvido silencioso volcaba las credenciales de todas las
+ * empresas. Esta action usa el cliente admin y se salta la RLS: aquí no hay red.
  */
 export async function listAllAccesosApps(empresaSlug?: string): Promise<AccesoApp[]> {
   const supabase = await createClient();
   const user = await getUserOrNull(supabase);
   if (!user) return [];
-  if (!(await userTieneRolAdminODirector(user.id))) return [];
+  if (!(await tieneHerramientaAccesos(user.id))) return [];
 
-  // Aislamiento por empresa: esta action usa el cliente admin (se salta la RLS),
-  // así que el filtro por empresa hay que ponerlo A MANO. Sin él, estando en
-  // Ajustes de HABANA se listaban también las credenciales de BACANAL.
+  // Sin argumento → empresa activa (seguro por defecto). Solo el centinela
+  // explícito abre el alcance a todas.
+  // OJO: `accesos_apps.empresa_slug` guarda el SLUG ("habana"), no el UUID, así
+  // que hay que traducir el id de la empresa activa a su slug.
   const admin = createAdminClient();
+  let slug = empresaSlug;
+  if (slug !== TODAS_LAS_EMPRESAS && !slug) {
+    const { empresaId } = await getAppContext();
+    if (!empresaId) return [];
+    const { data: emp } = await admin
+      .from("empresas")
+      .select("slug")
+      .eq("id", empresaId)
+      .maybeSingle();
+    const slugActivo = (emp as { slug: string | null } | null)?.slug ?? null;
+    if (!slugActivo) return [];
+    slug = slugActivo;
+  }
+
   let q = admin.from("accesos_apps").select("*");
-  if (empresaSlug) q = q.eq("empresa_slug", empresaSlug);
+  if (slug && slug !== TODAS_LAS_EMPRESAS) q = q.eq("empresa_slug", slug);
   const { data, error } = await q
     .order("empresa_slug", { ascending: true })
     .order("categoria", { ascending: true })
@@ -736,9 +767,11 @@ export async function revelarAccesoApp(
   const acc = accesos[indice];
   if (!acc) return { ok: false, error: "Acceso no encontrado" };
 
-  // Visibilidad por rol (salvo dirección/admin). Los DOS escudos, en servidor.
-  const { esDirector, rolNombre, permisos } = await getRolContext(user.id);
-  if (!esDirector) {
+  // Visibilidad por rol: los TRES escudos, en servidor y para TODOS. Antes
+  // dirección se los saltaba enteros —incluida la RLS— y podía descifrar
+  // cualquier credencial aunque tuviera el candado apagado en su rol.
+  const { rolNombre, permisos } = await getRolContext(user.id);
+  {
     // Escudo 1 — sin candado en Ajustes → Roles, no se revela nada.
     if (!puedeVerHerramienta(permisos, "HERR_ACCESOS")) {
       return { ok: false, error: "No autorizado" };

@@ -119,8 +119,13 @@ export async function proxy(request: NextRequest) {
   const adminUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
   if (!adminUrl || !serviceKey) {
-    console.warn('[proxy] SUPABASE_SERVICE_ROLE_KEY no configurada — saltando enforcement')
-    return sessionResponse
+    // FAIL-CLOSED. Sin la service key no se pueden leer rol ni permisos, así que
+    // no hay forma de saber si este usuario puede entrar. Antes se devolvía la
+    // respuesta tal cual ("saltando enforcement"): el guardia se rendía y dejaba
+    // pasar a CUALQUIERA a CUALQUIER módulo con solo escribir la URL. Si no se
+    // puede comprobar, no se pasa.
+    console.error('[proxy] SUPABASE_SERVICE_ROLE_KEY no configurada — se deniega el acceso a los módulos')
+    return NextResponse.redirect(new URL('/', request.url))
   }
   const admin = createSupabaseClient(adminUrl, serviceKey, {
     auth: { autoRefreshToken: false, persistSession: false },
@@ -158,18 +163,10 @@ export async function proxy(request: NextRequest) {
     ? await rolQuery.eq('id', rolId).maybeSingle()
     : await rolQuery.eq('empresa_id', empresaId).ilike('nombre', rolLabel as string).maybeSingle()
 
-  // 'director' (es_admin_plataforma) es rol tenant: bypass condicionado a que
-  // sea miembro real de su empresa activa (user_empresas, fuente canónica).
-  if (rolRow?.es_admin_plataforma && empresaId) {
-    const { data: membership } = await admin
-      .from('usuario_empresas')
-      .select('user_id')
-      .eq('user_id', user.id)
-      .eq('empresa_id', empresaId)
-      .maybeSingle()
-    if (membership) return sessionResponse
-  }
-
+  // Sin bypass de 'director' (es_admin_plataforma): el acceso a cada ruta lo
+  // decide SIEMPRE el permiso del rol configurado en Ajustes → Roles. Antes,
+  // ser admin de plataforma abría las 12 rutas protegidas sin mirar `permisos`,
+  // así que los toggles de dirección no surtían efecto.
   const permisos = (rolRow?.permisos ?? []) as Array<{ modulo: string; ver: boolean; editar: boolean }>
   const modulosReqNorm = new Set(modulosPermitidos(moduloReq))
   const allowed = permisos.some((p) => p.ver && modulosReqNorm.has(normalizar(p.modulo)))

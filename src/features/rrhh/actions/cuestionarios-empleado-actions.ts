@@ -37,14 +37,25 @@ export interface CuestionarioEmpleadoDetalle extends CuestionarioEmpleadoItem {
   reunionFecha: string | null;
 }
 
+/**
+ * Ids de ficha del empleado DENTRO de la empresa activa (normalmente uno).
+ *
+ * Antes recogía las fichas espejo de TODAS las empresas (solo por `user_id`) y
+ * las consultas que usan estos ids no filtraban `empresa_id`: desde la ficha de
+ * una empresa se veían puntuaciones de desempeño y notas de reunión de la otra.
+ * La RLS no lo impide (autoriza todas las empresas del usuario, por diseño), así
+ * que el acotado tiene que estar aquí.
+ */
 async function empleadoIdsEspejo(
   supabase: Awaited<ReturnType<typeof getAppContext>>["supabase"],
   empleadoId: string,
+  empresaId: string,
 ): Promise<string[] | null> {
   const { data: emp } = await supabase
     .from("empleados")
     .select("id, user_id")
     .eq("id", empleadoId)
+    .eq("empresa_id", empresaId)
     .maybeSingle();
   if (!emp) return null;
   let ids = [emp.id];
@@ -52,7 +63,8 @@ async function empleadoIdsEspejo(
     const { data: espejos } = await supabase
       .from("empleados")
       .select("id")
-      .eq("user_id", emp.user_id);
+      .eq("user_id", emp.user_id)
+      .eq("empresa_id", empresaId);
     const extra = (espejos ?? []).map((e) => e.id);
     if (extra.length > 0) ids = Array.from(new Set([emp.id, ...extra]));
   }
@@ -71,8 +83,9 @@ function rel<T>(r: unknown): T | null {
  */
 export async function listCuestionariosEmpleado(empleadoId: string) {
   try {
-    const { supabase } = await getAppContext();
-    const ids = await empleadoIdsEspejo(supabase, empleadoId);
+    const { supabase, empresaId } = await getAppContext();
+    if (!empresaId) return { ok: false as const, error: "Sin empresa activa" };
+    const ids = await empleadoIdsEspejo(supabase, empleadoId, empresaId);
     if (!ids) return { ok: false as const, error: "Empleado no encontrado" };
 
     const { data, error } = await supabase
@@ -80,6 +93,7 @@ export async function listCuestionariosEmpleado(empleadoId: string) {
       .select(
         "id, respondido_at, puntuacion, nota_sobre, aprobado, reunion_estado, campana:cuestionario_campanas(periodo, plantilla:cuestionario_plantillas(nombre))",
       )
+      .eq("empresa_id", empresaId)
       .in("empleado_id", ids)
       .order("respondido_at", { ascending: false, nullsFirst: false });
     if (error) throw error;
@@ -142,14 +156,18 @@ function resolverRespuesta(
  */
 export async function getCuestionarioEnvioEmpleadoDetalle(envioId: string) {
   try {
-    const { supabase } = await getAppContext();
+    const { supabase, empresaId } = await getAppContext();
+    if (!empresaId) return { ok: false as const, error: "Sin empresa activa" };
 
+    // El id llega del cliente: sin filtro de empresa, un envío de OTRA empresa
+    // se abriría igual (la RLS autoriza todas las del usuario).
     const { data: envio, error } = await supabase
       .from("cuestionario_envios")
       .select(
         "id, respuestas, respondido_at, puntuacion, nota_sobre, aprobado, reunion_estado, reunion_notas, reunion_fecha, campana:cuestionario_campanas(periodo, plantilla:cuestionario_plantillas(nombre, descripcion, bloques))",
       )
       .eq("id", envioId)
+      .eq("empresa_id", empresaId)
       .maybeSingle();
     if (error) throw error;
     if (!envio) return { ok: false as const, error: "Cuestionario no encontrado" };
@@ -214,14 +232,18 @@ export async function getCuestionarioEnvioEmpleadoDetalle(envioId: string) {
  */
 export async function enviarRecordatorioCuestionario(envioId: string) {
   try {
-    const { supabase } = await getAppContext();
+    const { supabase, empresaId } = await getAppContext();
+    if (!empresaId) return { ok: false as const, error: "Sin empresa activa" };
 
+    // Mismo motivo que en el detalle: el id viene del cliente y hay que atarlo a
+    // la empresa activa antes de mandar un correo en nombre de esa empresa.
     const { data: envio, error } = await supabase
       .from("cuestionario_envios")
       .select(
         "id, respondido_at, empresa_id, empleado:empleados(nombre, apellidos, email_empresa, email_personal), campana:cuestionario_campanas(plantilla:cuestionario_plantillas(nombre)), empresa:empresas(nombre)",
       )
       .eq("id", envioId)
+      .eq("empresa_id", empresaId)
       .maybeSingle();
     if (error) throw error;
     if (!envio) return { ok: false as const, error: "Cuestionario no encontrado" };

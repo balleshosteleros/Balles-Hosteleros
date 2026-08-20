@@ -1,7 +1,7 @@
 "use server";
 
-import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getAppContext } from "@/lib/supabase/get-context";
 
 export type CategoriaDocumento =
   | "nominas"
@@ -32,16 +32,18 @@ export async function listMisDocumentos(): Promise<{
     sanciones: [],
   };
   try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) return { ok: true, data: vacio };
+    const { supabase, userId, empresaId } = await getAppContext();
+    if (!userId) return { ok: true, data: vacio };
+    if (!empresaId) return { ok: true, data: vacio };
 
-    // La RLS ya limita a los documentos del propio empleado.
+    // La RLS limita a los documentos del propio empleado, pero NO por empresa:
+    // quien trabaja en las dos tiene ficha en cada una y veía aquí mezclados los
+    // documentos de ambos empleadores (dos contratos, dos juegos de nóminas) sin
+    // nada que los distinguiera. Filtramos por la empresa activa.
     const { data, error } = await supabase
       .from("documentos_empleado")
       .select("id, categoria, nombre, tipo_mime, tamano_bytes, created_at")
+      .eq("empresa_id", empresaId)
       .order("created_at", { ascending: false });
     if (error) throw error;
 
@@ -75,10 +77,14 @@ export async function listMisDocumentos(): Promise<{
     // (+ bucket `rrhh-nominas`), que es donde las deja el volcado de la gestoría.
     // Se listan aquí para que el empleado las vea en su carpeta, sin duplicar
     // ficheros. La RLS solo devuelve las SUYAS y solo de meses CONFIRMADOS por
-    // RRHH: mientras el mes está en borrador, no debe verlas.
+    // RRHH: mientras el mes está en borrador, no debe verlas. Lo que la RLS NO
+    // acota es la empresa (autoriza todas las del usuario): sin este filtro, dos
+    // nóminas del mismo mes de empresas distintas salían como "Nómina {mes}"
+    // duplicado e indistinguible.
     const { data: nominas } = await supabase
       .from("rrhh_pagos_nominas")
       .select("id, periodo, orden, created_at, nomina_path")
+      .eq("empresa_id", empresaId)
       .not("nomina_path", "is", null)
       .neq("revision_estado", "denegada")
       .order("periodo", { ascending: false })
@@ -128,21 +134,22 @@ export async function getDocumentoEmpleadoUrl(
   documentoId: string,
 ): Promise<{ ok: boolean; url?: string; error?: string }> {
   try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) return { ok: false, error: "No autenticado" };
+    const { supabase, userId, empresaId } = await getAppContext();
+    if (!userId) return { ok: false, error: "No autenticado" };
+    if (!empresaId) return { ok: false, error: "Sin empresa activa" };
 
     // Las nóminas viven en otra tabla y otro bucket: se marcan con el prefijo
-    // "nom:" al listarlas. La RLS de `rrhh_pagos_nominas` es la que garantiza que
-    // solo llega si es SUYA y de un mes ya confirmado por RRHH.
+    // "nom:" al listarlas. La RLS de `rrhh_pagos_nominas` garantiza que solo
+    // llega si es SUYA y de un mes ya confirmado por RRHH, pero NO acota la
+    // empresa: hay que atarlo aquí antes de firmar una URL de descarga, o con el
+    // id de una nómina de la otra empresa se obtenía el PDF igual.
     if (documentoId.startsWith("nom:")) {
       const nominaId = documentoId.slice(4);
       const { data: nom, error: nErr } = await supabase
         .from("rrhh_pagos_nominas")
         .select("nomina_path")
         .eq("id", nominaId)
+        .eq("empresa_id", empresaId)
         .maybeSingle();
       if (nErr) throw nErr;
       const path = (nom as { nomina_path: string | null } | null)?.nomina_path ?? null;
@@ -156,11 +163,13 @@ export async function getDocumentoEmpleadoUrl(
       return { ok: true, url: signedN?.signedUrl };
     }
 
-    // RLS garantiza que solo recupera el documento si es del propio empleado.
+    // La RLS garantiza que el documento es del propio empleado; el filtro de
+    // empresa garantiza que además es de la empresa que está mirando.
     const { data: doc, error } = await supabase
       .from("documentos_empleado")
       .select("storage_path")
       .eq("id", documentoId)
+      .eq("empresa_id", empresaId)
       .maybeSingle();
     if (error) throw error;
     if (!doc) return { ok: false, error: "Documento no disponible" };

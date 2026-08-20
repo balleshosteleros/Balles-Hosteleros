@@ -1541,9 +1541,17 @@ export async function guardarPerfilEmpleado(
 }
 export async function getMiInformacionLaboral() {
   try {
-    const { supabase, userId } = await getAppContext();
+    const { supabase, userId, empresaId } = await getAppContext();
     if (!userId) return { ok: false, error: "No autenticado" };
+    if (!empresaId) return { ok: false, error: "Sin empresa activa" };
 
+    // El filtro por empresa NO es opcional: quien trabaja en varias empresas
+    // tiene una ficha espejo en cada una, todas con el mismo `user_id`. Sin él,
+    // `maybeSingle()` devolvía una cualquiera (orden físico de Postgres, no
+    // determinista): el empleado veía su contrato de la OTRA empresa —con DNI,
+    // dirección, IBAN y nº de la Seguridad Social— y además cambiaba de una
+    // recarga a otra. La RLS no lo corta: `empleados_self_read` autoriza por
+    // `user_id`, sin empresa.
     const { data, error } = await supabase
       .from("empleados")
       .select(`
@@ -1552,6 +1560,7 @@ export async function getMiInformacionLaboral() {
         puestos_trabajo(nombre)
       `)
       .eq("user_id", userId)
+      .eq("empresa_id", empresaId)
       .maybeSingle();
 
     if (error) throw error;
