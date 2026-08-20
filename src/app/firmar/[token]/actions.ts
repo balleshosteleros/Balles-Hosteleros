@@ -411,6 +411,11 @@ export type FirmarDocumentoInput = {
   token: string;
   trazoFirmaBase64?: string | null;
   posicionFirma?: PosicionFirma | null;
+  /**
+   * Solo para el RECONOCIMIENTO MÉDICO: qué eligió el trabajador. Es obligatorio
+   * en ese documento — su realización es voluntaria y debe constar la decisión.
+   */
+  decisionReconocimiento?: "si" | "no" | null;
 };
 
 export type FirmarResult =
@@ -425,6 +430,20 @@ export async function firmarDocumento(input: FirmarDocumentoInput): Promise<Firm
     const admin = createAdminClient();
     const documentoId = res.tokenRow.documento_id as string;
     const meta = await getMeta();
+
+    // El reconocimiento médico es VOLUNTARIO: sin decisión expresa no se firma.
+    // Se comprueba ANTES de consumir el token, para no quemar el enlace del
+    // trabajador si la petición llegara sin decisión.
+    const { data: docTipo } = await admin
+      .from("firmas_documentos")
+      .select("tipo")
+      .eq("id", documentoId)
+      .maybeSingle();
+    const esReconocimiento = (docTipo?.tipo as string | undefined) === "reconocimiento_medico";
+    const decision = input.decisionReconocimiento ?? null;
+    if (esReconocimiento && decision !== "si" && decision !== "no") {
+      return { ok: false, error: "Indica si deseas o no realizarte el reconocimiento médico" };
+    }
 
     // Doble factor: el OTP debe estar validado Y esa validación debe ser RECIENTE.
     // Antes solo se miraba `validado_en` del último OTP, sin caducidad, así que un
@@ -476,7 +495,7 @@ export async function firmarDocumento(input: FirmarDocumentoInput): Promise<Firm
     const { data: doc } = await admin
       .from("firmas_documentos")
       .select(
-        "id, empresa_id, empleado_id, titulo, tipo, modalidad, validez, estado, sha256_original, pdf_original_path, enviado_por, enviado_en",
+        "id, empresa_id, empleado_id, titulo, tipo, modalidad, validez, estado, sha256_original, pdf_original_path, enviado_por, enviado_en, casillas_reconocimiento",
       )
       .eq("id", documentoId)
       .maybeSingle();
@@ -563,7 +582,26 @@ export async function firmarDocumento(input: FirmarDocumentoInput): Promise<Firm
     if (dlErr || !originalDl) {
       return { ok: false, error: "No se pudo cargar el PDF original" };
     }
-    const originalBytes = new Uint8Array(await originalDl.arrayBuffer());
+    let originalBytes = new Uint8Array(await originalDl.arrayBuffer());
+
+    // Reconocimiento médico: se estampa la casilla elegida (SÍ/NO) sobre el PDF
+    // antes de firmarlo, para que el documento archivado acredite la decisión.
+    if (esReconocimiento && decision) {
+      const casillas = doc.casillas_reconocimiento as
+        | Record<"si" | "no", { pagina: number; x: number; y: number; size: number }>
+        | null;
+      if (casillas) {
+        try {
+          const { marcarDecisionReconocimiento } = await import(
+            "@/features/rrhh/services/firmas/reconocimiento-medico-pdf"
+          );
+          originalBytes = await marcarDecisionReconocimiento(originalBytes, decision, casillas);
+        } catch (e) {
+          console.error("[firmar/firmar] marcar decisión reconocimiento:", e);
+        }
+      }
+    }
+
     const firmadoBytes = await aplicarFirmaYConcatenar(
       originalBytes,
       actaBytes,
@@ -588,6 +626,7 @@ export async function firmarDocumento(input: FirmarDocumentoInput): Promise<Firm
         metodo_firma: doc.modalidad,
         pdf_firmado_path: firmadoPath,
         sha256_acta: sha256Acta,
+        ...(esReconocimiento ? { decision_reconocimiento: decision } : {}),
       })
       .eq("id", documentoId);
 
@@ -739,11 +778,17 @@ export async function firmarDocumento(input: FirmarDocumentoInput): Promise<Firm
         const { notificarRrhhGestoria } = await import(
           "@/features/rrhh/services/gestoria/gestoria-contrato"
         );
+        // El aviso dice QUÉ decidió: si quiere pasarlo, RRHH debe darle las
+        // indicaciones de la clínica; si renuncia, solo queda constancia.
+        const mensajeDecision =
+          decision === "si"
+            ? `${datos.empleadoNombre} ha firmado el reconocimiento médico y SÍ desea realizárselo. Hay que darle las indicaciones de la clínica. Queda guardado en su carpeta de documentos.`
+            : `${datos.empleadoNombre} ha firmado el reconocimiento médico y NO desea realizárselo. Queda guardado en su carpeta de documentos.`;
         await notificarRrhhGestoria({
           empresaId: empresaIdDoc,
           tipo: "reconocimiento_medico_firmado",
-          titulo: `Reconocimiento médico firmado: ${datos.empleadoNombre}`,
-          mensaje: `${datos.empleadoNombre} ha firmado el reconocimiento médico. Queda guardado en su carpeta de documentos.`,
+          titulo: `Reconocimiento médico firmado (${decision === "si" ? "SÍ" : "NO"}): ${datos.empleadoNombre}`,
+          mensaje: mensajeDecision,
           empleadoId,
           dedupeKey: `reconocimiento_medico_firmado:${documentoId}`,
         });

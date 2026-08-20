@@ -13,7 +13,13 @@ export type TipoDocumento =
   | "onboarding"
   | "finiquito"
   | "vacaciones"
-  | "modificacion_contrato";
+  | "modificacion_contrato"
+  // Documentos del onboarding/contratación que ya emite el sistema.
+  | "contrato_interno"
+  | "contrato_oficial"
+  | "reconocimiento_medico"
+  | "anexo_promocion"
+  | "sancion_disciplinaria";
 
 export type EstadoFirma =
   | "pendiente"
@@ -58,6 +64,11 @@ export const TIPO_LABEL: Record<TipoDocumento, string> = {
   finiquito: "Finiquito",
   vacaciones: "Solicitud de vacaciones",
   modificacion_contrato: "Modificación contractual",
+  contrato_interno: "Contrato interno",
+  contrato_oficial: "Contrato oficial",
+  reconocimiento_medico: "Reconocimiento médico",
+  anexo_promocion: "Anexo de promoción",
+  sancion_disciplinaria: "Sanción disciplinaria",
 };
 
 export const MODALIDAD_LABEL: Record<ModalidadFirma, string> = {

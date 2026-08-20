@@ -28,6 +28,23 @@ export interface ReconocimientoMedicoInput {
   cuerpo?: string | null;
 }
 
+/** Decisión del trabajador: `si` = desea el examen de salud, `no` = renuncia. */
+export type DecisionReconocimiento = "si" | "no";
+
+/** Posición de una casilla dentro del PDF, para marcarla al firmar. */
+export interface CasillaPos {
+  pagina: number;
+  x: number;
+  y: number;
+  size: number;
+}
+
+/** PDF generado + dónde quedó cada casilla (se guarda en el documento de firma). */
+export interface ReconocimientoMedicoPDF {
+  pdf: Buffer;
+  casillas: Record<DecisionReconocimiento, CasillaPos>;
+}
+
 const PAGE_W = 595.28; // A4
 const PAGE_H = 841.89;
 const MARGIN_X = 64;
@@ -45,7 +62,7 @@ import { RECONOCIMIENTO_MEDICO_DEFAULT, sustituirReconocimientoMedico } from "@/
 
 export async function generarReconocimientoMedicoPDF(
   input: ReconocimientoMedicoInput,
-): Promise<Buffer> {
+): Promise<ReconocimientoMedicoPDF> {
   const pdf = await PDFDocument.create();
   let page = pdf.addPage([PAGE_W, PAGE_H]);
   const font = await pdf.embedFont(StandardFonts.Helvetica);
@@ -120,7 +137,12 @@ export async function generarReconocimientoMedicoPDF(
   escribir("Marque su decisión respecto al reconocimiento médico:", { bold: true });
   y -= 4;
 
-  const dibujarOpcion = (texto: string) => {
+  // Guardamos dónde queda cada casilla para poder ESTAMPAR la elegida al firmar
+  // (ver `marcarDecisionReconocimiento`). Sin esto el PDF archivado saldría con
+  // las dos casillas vacías y no habría constancia de qué eligió el trabajador.
+  const casillas: Record<DecisionReconocimiento, CasillaPos> = {} as Record<DecisionReconocimiento, CasillaPos>;
+
+  const dibujarOpcion = (opcion: DecisionReconocimiento, texto: string) => {
     const boxSize = 11;
     const boxY = y - 1;
     page.drawRectangle({
@@ -132,12 +154,18 @@ export async function generarReconocimientoMedicoPDF(
       borderWidth: 1,
       color: rgb(1, 1, 1),
     });
+    casillas[opcion] = {
+      pagina: pdf.getPages().indexOf(page),
+      x: MARGIN_X,
+      y: boxY,
+      size: boxSize,
+    };
     page.drawText(texto, { x: MARGIN_X + boxSize + 8, y, size: FONT_SIZE, font, color: rgb(0.06, 0.09, 0.16) });
     y -= LINE_HEIGHT + 2;
     nuevaPaginaSiHaceFalta();
   };
-  dibujarOpcion("SÍ deseo realizarme el reconocimiento médico.");
-  dibujarOpcion("NO deseo realizarme el reconocimiento médico.");
+  dibujarOpcion("si", "SÍ deseo realizarme el reconocimiento médico.");
+  dibujarOpcion("no", "NO deseo realizarme el reconocimiento médico.");
 
   // ─── Línea de firma ─────────────────────────────────────
   y -= LINE_HEIGHT * 2;
@@ -153,5 +181,38 @@ export async function generarReconocimientoMedicoPDF(
   );
 
   const bytes = await pdf.save();
-  return Buffer.from(bytes);
+  return { pdf: Buffer.from(bytes), casillas };
+}
+
+/**
+ * Estampa la decisión del trabajador sobre el PDF original: dibuja el aspa en la
+ * casilla elegida y una nota firme debajo. Se aplica al firmar, antes de
+ * concatenar el acta eIDAS, para que el documento archivado deje constancia de
+ * QUÉ eligió y no solo de que fue informado.
+ */
+export async function marcarDecisionReconocimiento(
+  pdfBytes: Uint8Array<ArrayBuffer>,
+  decision: DecisionReconocimiento,
+  casillas: Record<DecisionReconocimiento, CasillaPos>,
+): Promise<Uint8Array<ArrayBuffer>> {
+  const pos = casillas[decision];
+  if (!pos) return pdfBytes;
+
+  const pdf = await PDFDocument.load(pdfBytes);
+  const pages = pdf.getPages();
+  const page = pages[pos.pagina] ?? pages[0];
+  if (!page) return pdfBytes;
+
+  // Aspa dentro de la casilla (dos trazos), en el mismo tono que el texto.
+  const tinta = rgb(0.06, 0.09, 0.16);
+  const pad = 2.2;
+  const x0 = pos.x + pad;
+  const y0 = pos.y + pad;
+  const x1 = pos.x + pos.size - pad;
+  const y1 = pos.y + pos.size - pad;
+  page.drawLine({ start: { x: x0, y: y0 }, end: { x: x1, y: y1 }, thickness: 1.6, color: tinta });
+  page.drawLine({ start: { x: x0, y: y1 }, end: { x: x1, y: y0 }, thickness: 1.6, color: tinta });
+
+  const out = await pdf.save();
+  return new Uint8Array(out);
 }

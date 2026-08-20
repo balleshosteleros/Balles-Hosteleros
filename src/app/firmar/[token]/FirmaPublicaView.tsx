@@ -82,6 +82,13 @@ export function FirmaPublicaView({
   const [motivoRechazo, setMotivoRechazo] = useState("");
   const [rechazando, setRechazando] = useState(false);
 
+  // Reconocimiento médico: su realización es VOLUNTARIA, así que el trabajador
+  // debe elegir SÍ o NO antes de poder firmar. El "sí" pide una segunda
+  // confirmación, porque implica desplazarse por su cuenta y en su tiempo libre.
+  const esReconocimiento = documento.tipo === "reconocimiento_medico";
+  const [decision, setDecision] = useState<"si" | "no" | null>(null);
+  const [showAvisoSi, setShowAvisoSi] = useState(false);
+
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [trazoVacio, setTrazoVacio] = useState(true);
 
@@ -196,7 +203,11 @@ export function FirmaPublicaView({
     }
 
     setFirmando(true);
-    const res = await firmarDocumento({ token, trazoFirmaBase64: trazoBase64 });
+    const res = await firmarDocumento({
+      token,
+      trazoFirmaBase64: trazoBase64,
+      decisionReconocimiento: esReconocimiento ? decision : null,
+    });
     setFirmando(false);
     if (!res.ok) {
       toast.error(res.error);
@@ -213,6 +224,7 @@ export function FirmaPublicaView({
       token,
       trazoFirmaBase64: data.trazoBase64,
       posicionFirma: data.posicion,
+      decisionReconocimiento: esReconocimiento ? decision : null,
     });
     setFirmando(false);
     if (!res.ok) {
@@ -310,6 +322,44 @@ export function FirmaPublicaView({
             </dl>
           </Card>
 
+          {etapa === "leer" && esReconocimiento && (
+            <Card className="p-5 space-y-3">
+              <h2 className="text-sm font-semibold text-zinc-900">
+                ¿Deseas realizarte el reconocimiento médico?
+              </h2>
+              <p className="text-xs text-zinc-500">
+                Es voluntario. Elige una opción para poder continuar.
+              </p>
+              <div className="space-y-2">
+                <Button
+                  onClick={() => setShowAvisoSi(true)}
+                  variant={decision === "si" ? "primary" : "outline"}
+                  className="w-full"
+                >
+                  Sí quiero pasar el reconocimiento
+                </Button>
+                <Button
+                  onClick={() => setDecision("no")}
+                  variant={decision === "no" ? "primary" : "outline"}
+                  className="w-full"
+                >
+                  No quiero pasar el reconocimiento
+                </Button>
+              </div>
+              {decision && (
+                <p className="text-xs text-zinc-600">
+                  Has elegido:{" "}
+                  <strong>
+                    {decision === "si"
+                      ? "sí quiero pasar el reconocimiento"
+                      : "no quiero pasar el reconocimiento"}
+                  </strong>
+                  . Quedará marcado en el documento que firmes.
+                </p>
+              )}
+            </Card>
+          )}
+
           {etapa === "leer" && (
             <Card className="p-5 space-y-3">
               <label className="flex items-start gap-2 text-sm text-zinc-700 cursor-pointer">
@@ -326,7 +376,7 @@ export function FirmaPublicaView({
               </label>
               <Button
                 onClick={pedirOTP}
-                disabled={!acepto || enviandoOtp}
+                disabled={!acepto || enviandoOtp || (esReconocimiento && !decision)}
                 className="w-full"
                 variant="primary"
               >
@@ -456,6 +506,51 @@ export function FirmaPublicaView({
         </>
         )}
       </main>
+
+      {/* Advertencia al elegir SÍ: el desplazamiento corre por cuenta del
+          trabajador y en su tiempo libre. Se confirma dos veces, y si cancela
+          vuelve atrás sin decisión para que pueda elegir "No quiero". */}
+      <Dialog open={showAvisoSi} onOpenChange={setShowAvisoSi}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Antes de confirmar, ten en cuenta</DialogTitle>
+            <DialogDescription asChild>
+              <div className="space-y-3 text-left">
+                <p>
+                  Si decides pasar el reconocimiento médico, tendrás que
+                  desplazarte por tu cuenta hasta la clínica más cercana y
+                  realizártelo <strong>en tu tiempo libre, no en tiempo de trabajo</strong>.
+                </p>
+                <p>
+                  Una vez confirmes, recibirás más indicaciones para poder
+                  realizarlo.
+                </p>
+                <p>¿Confirmas que quieres pasar el reconocimiento médico?</p>
+              </div>
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setDecision(null);
+                setShowAvisoSi(false);
+              }}
+            >
+              No, cancelar y volver atrás
+            </Button>
+            <Button
+              variant="primary"
+              onClick={() => {
+                setDecision("si");
+                setShowAvisoSi(false);
+              }}
+            >
+              Sí, confirmo que quiero pasarlo
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={showRechazar} onOpenChange={setShowRechazar}>
         <DialogContent className="sm:max-w-md">

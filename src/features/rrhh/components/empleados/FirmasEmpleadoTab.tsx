@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { FileSignature, Download, Eye, Loader2, ShieldCheck } from "lucide-react";
+import { FileSignature, Download, Eye, Loader2, ShieldCheck, Stethoscope } from "lucide-react";
 import { toast } from "sonner";
 import {
   listFirmasPorEmpleado,
@@ -36,6 +36,7 @@ type Firma = {
   enviadoEn: string;
   firmadoEn: string | null;
   sha256Acta: string | null;
+  decisionReconocimiento: "si" | "no" | null;
 };
 
 export function FirmasEmpleadoTab({ empleadoId }: { empleadoId: string }) {
@@ -69,6 +70,7 @@ export function FirmasEmpleadoTab({ empleadoId }: { empleadoId: string }) {
         enviadoEn: d.enviadoEn,
         firmadoEn: d.firmadoEn,
         sha256Acta: d.sha256Acta,
+        decisionReconocimiento: d.decisionReconocimiento,
       })),
     );
   }, [empleadoId]);
@@ -89,6 +91,15 @@ export function FirmasEmpleadoTab({ empleadoId }: { empleadoId: string }) {
     pendientes: items.filter((d) => d.estado === "pendiente").length,
   };
 
+  // Reconocimiento médico: es voluntario, así que RRHH necesita ver de un vistazo
+  // qué contestó el trabajador y poder abrir el documento que lo acredita.
+  const reconocimiento = items.find(
+    (d) => d.tipo === "reconocimiento_medico" && d.decisionReconocimiento !== null,
+  );
+  const reconocimientoPendiente = items.find(
+    (d) => d.tipo === "reconocimiento_medico" && d.estado === "pendiente",
+  );
+
   return (
     <div className="p-6 space-y-4">
       <div className="flex items-center justify-between">
@@ -105,6 +116,57 @@ export function FirmasEmpleadoTab({ empleadoId }: { empleadoId: string }) {
           <a href="/rrhh/firmas">Ir al módulo de Firmas</a>
         </Button>
       </div>
+
+      {!loading && (reconocimiento || reconocimientoPendiente) && (
+        <div className="rounded-lg border bg-card p-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <Stethoscope className="h-4 w-4 text-primary" />
+              <span className="text-sm font-medium">Reconocimiento médico</span>
+              {reconocimiento ? (
+                <Badge
+                  variant="outline"
+                  className={
+                    reconocimiento.decisionReconocimiento === "si"
+                      ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                      : "border-zinc-200 bg-zinc-50 text-zinc-600"
+                  }
+                >
+                  {reconocimiento.decisionReconocimiento === "si"
+                    ? "Sí quiere pasarlo"
+                    : "No quiere pasarlo"}
+                </Badge>
+              ) : (
+                <Badge variant="outline" className="border-amber-200 bg-amber-50 text-amber-700">
+                  Pendiente de firma
+                </Badge>
+              )}
+            </div>
+            {reconocimiento && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => descargar(reconocimiento.id)}
+                disabled={descargando === reconocimiento.id}
+              >
+                {descargando === reconocimiento.id ? (
+                  <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                ) : (
+                  <Download className="h-4 w-4 mr-1" />
+                )}
+                Ver documento firmado
+              </Button>
+            )}
+          </div>
+          <p className="text-xs text-muted-foreground mt-2">
+            {reconocimiento
+              ? reconocimiento.decisionReconocimiento === "si"
+                ? "Contestó que sí lo desea. Firmado el " + fmt(reconocimiento.firmadoEn) + "."
+                : "Contestó que no lo desea. Firmado el " + fmt(reconocimiento.firmadoEn) + "."
+              : "Enviado para firma. El trabajador aún no ha contestado."}
+          </p>
+        </div>
+      )}
 
       {loading ? (
         <div className="flex items-center justify-center py-16 text-muted-foreground text-sm gap-2">
@@ -140,6 +202,16 @@ export function FirmasEmpleadoTab({ empleadoId }: { empleadoId: string }) {
                     <div className="text-xs text-muted-foreground">
                       Enviado por {d.enviadoPor}
                     </div>
+                    {d.decisionReconocimiento && (
+                      <div className="text-xs text-muted-foreground mt-0.5">
+                        Contestó:{" "}
+                        <strong>
+                          {d.decisionReconocimiento === "si"
+                            ? "sí quiere pasarlo"
+                            : "no quiere pasarlo"}
+                        </strong>
+                      </div>
+                    )}
                   </TableCell>
                   <TableCell className="text-sm">{TIPO_LABEL[d.tipo]}</TableCell>
                   <TableCell className="text-sm">{MODALIDAD_LABEL[d.modalidad]}</TableCell>

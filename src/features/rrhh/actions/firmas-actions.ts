@@ -38,6 +38,8 @@ type FirmaResumen = {
   sha256Original: string;
   sha256Acta: string | null;
   reenviadoCount: number;
+  /** Reconocimiento médico: qué contestó el trabajador. NULL en el resto. */
+  decisionReconocimiento: "si" | "no" | null;
 };
 
 async function getRequestMeta() {
@@ -152,7 +154,7 @@ export async function listFirmasPorEmpleado(
       .select(`
         id, titulo, tipo, modalidad, validez, estado,
         empleado_id, enviado_por, enviado_en, expira_en, firmado_en,
-        ip_firma, sha256_original, sha256_acta, reenviado_count,
+        ip_firma, sha256_original, sha256_acta, reenviado_count, decision_reconocimiento,
         empleados!firmas_documentos_empleado_id_fkey ( id, nombre, apellidos, departamentos ( nombre ) )
       `)
       .eq("empresa_id", empresaId)
@@ -166,6 +168,7 @@ export async function listFirmasPorEmpleado(
       enviado_por: string; enviado_en: string; expira_en: string;
       firmado_en: string | null; ip_firma: string | null;
       sha256_original: string; sha256_acta: string | null; reenviado_count: number;
+      decision_reconocimiento: "si" | "no" | null;
       empleados: { id: string; nombre: string | null; apellidos: string | null;
         departamentos: { nombre: string | null } | null; } | null;
     };
@@ -184,6 +187,7 @@ export async function listFirmasPorEmpleado(
       firmadoEn: r.firmado_en, ipFirma: r.ip_firma,
       sha256Original: r.sha256_original, sha256Acta: r.sha256_acta,
       reenviadoCount: r.reenviado_count,
+      decisionReconocimiento: r.decision_reconocimiento,
     }));
     return { ok: true, data: items };
   } catch (err) {
@@ -202,7 +206,7 @@ export async function listFirmas(): Promise<{ ok: true; data: FirmaResumen[] } |
       .select(`
         id, titulo, tipo, modalidad, validez, estado,
         empleado_id, enviado_por, enviado_en, expira_en, firmado_en,
-        ip_firma, sha256_original, sha256_acta, reenviado_count,
+        ip_firma, sha256_original, sha256_acta, reenviado_count, decision_reconocimiento,
         empleados!firmas_documentos_empleado_id_fkey ( id, nombre, apellidos, departamentos ( nombre ) )
       `)
       .eq("empresa_id", empresaId)
@@ -226,6 +230,7 @@ export async function listFirmas(): Promise<{ ok: true; data: FirmaResumen[] } |
       sha256_original: string;
       sha256_acta: string | null;
       reenviado_count: number;
+      decision_reconocimiento: "si" | "no" | null;
       empleados: {
         id: string;
         nombre: string | null;
@@ -260,6 +265,7 @@ export async function listFirmas(): Promise<{ ok: true; data: FirmaResumen[] } |
         sha256Original: r.sha256_original,
         sha256Acta: r.sha256_acta,
         reenviadoCount: r.reenviado_count,
+        decisionReconocimiento: r.decision_reconocimiento,
       };
     });
 

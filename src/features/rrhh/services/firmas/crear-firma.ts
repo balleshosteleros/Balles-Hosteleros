@@ -65,6 +65,12 @@ export interface CrearFirmaInternoInput {
    * candidato no la arrastra). Null = el candidato la coloca a mano (compat).
    */
   posicionFirmaDefault?: { pagina: number; xPct: number; yPct: number; anchoPct: number } | null;
+  /**
+   * Solo para el RECONOCIMIENTO MÉDICO: posición de las casillas SÍ/NO dentro del
+   * PDF, para poder estampar la que elija el trabajador al firmar. El documento es
+   * voluntario y debe quedar constancia de QUÉ decidió, no solo de que fue informado.
+   */
+  casillasReconocimiento?: Record<"si" | "no", { pagina: number; x: number; y: number; size: number }> | null;
 }
 
 export type CrearFirmaInternoResult =
@@ -159,6 +165,7 @@ export async function crearFirmaInterno(
         expira_en: expira.toISOString(),
         observaciones,
         posicion_firma_default: input.posicionFirmaDefault ?? null,
+        casillas_reconocimiento: input.casillasReconocimiento ?? null,
       })
       .select("id")
       .single();
