@@ -8,7 +8,6 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { DenunciasPanel } from "@/features/rrhh/components/denuncias/DenunciasView";
 import {
   Table,
   TableBody,
@@ -44,6 +43,10 @@ import {
   listarSolicitudesEmpresa,
   rechazarSolicitud,
 } from "@/features/mi-panel/actions/mi-panel-actions";
+import {
+  listDenunciasComoSolicitudes,
+  resolverDenunciaDesdeSolicitudes,
+} from "@/features/mi-panel/actions/denuncias-actions";
 import type { SolicitudPersonal } from "@/features/mi-panel/types";
 import {
   ESTADO_COLOR,
@@ -69,7 +72,7 @@ export function SolicitudesView() {
   const { empresaActual } = useEmpresa();
   const formatFechaHora = (s: string): string =>
     formatFechaHoraEnZona(s, empresaActual.zonaHoraria) || s;
-  const [tab, setTab] = useTabQuery(["pendientes", "todas", "denuncias"] as const, "pendientes");
+  const [tab, setTab] = useTabQuery(["pendientes", "todas"] as const, "pendientes");
   const [items, setItems] = useState<SolicitudConFlag[]>([]);
   const [loading, setLoading] = useState(true);
   const [busqueda, setBusqueda] = useState("");
@@ -86,10 +89,18 @@ export function SolicitudesView() {
 
   async function load() {
     setLoading(true);
-    // La pestaña de denuncias se sirve de su propia tabla; para la carga de
-    // solicitudes se trata como "todas".
-    const res = await listarSolicitudesEmpresa(tab === "denuncias" ? "todas" : tab);
-    setItems(res.ok ? res.data : []);
+    // Las quejas viven en su propia tabla por confidencialidad, pero para quien
+    // las gestiona son un tipo más de solicitud: se listan mezcladas.
+    const [res, quejas] = await Promise.all([
+      listarSolicitudesEmpresa(tab),
+      listDenunciasComoSolicitudes(tab === "pendientes"),
+    ]);
+    const solicitudes = res.ok ? res.data : [];
+    const denuncias = quejas.ok ? quejas.data : [];
+    const todo = [...solicitudes, ...denuncias].sort((a, b) =>
+      b.createdAt.localeCompare(a.createdAt),
+    );
+    setItems(todo);
     setLoading(false);
   }
 
@@ -99,7 +110,8 @@ export function SolicitudesView() {
   }, [tab]);
 
   const acceso = (s: SolicitudPersonal, campo: string): unknown => {
-    if (campo === "tipo") return s.tipo === "ausencia" ? "Ausencia" : "Trabajo";
+    if (campo === "tipo")
+      return s.tipo === "ausencia" ? "Ausencia" : s.tipo === "queja" ? "Queja" : "Trabajo";
     if (campo === "subtipo") return SUBTIPO_LABEL[s.subtipo];
     if (campo === "estado") return ESTADO_LABEL[s.estado];
     if (campo === "empleado") return s.empleadoNombre;
@@ -142,8 +154,17 @@ export function SolicitudesView() {
   async function confirmar() {
     if (!revisando) return;
     setWorking(true);
-    const fn = modo === "aprobar" ? aprobarSolicitud : rechazarSolicitud;
-    const res = await fn(revisando.id, notas.trim() || undefined);
+    const esQueja = revisando.tipo === "queja";
+    const res = esQueja
+      ? await resolverDenunciaDesdeSolicitudes(
+          revisando.id,
+          modo === "aprobar",
+          notas.trim() || undefined,
+        )
+      : await (modo === "aprobar" ? aprobarSolicitud : rechazarSolicitud)(
+          revisando.id,
+          notas.trim() || undefined,
+        );
     setWorking(false);
     if (!res.ok) {
       toast.error(res.error || "No se pudo procesar la solicitud");
@@ -175,7 +196,7 @@ export function SolicitudesView() {
         <TableCell key="tipo">
           <div className="flex flex-col">
             <span className="text-xs uppercase text-muted-foreground">
-              {s.tipo === "ausencia" ? "Ausencia" : "Trabajo"}
+              {s.tipo === "ausencia" ? "Ausencia" : s.tipo === "queja" ? "Queja" : "Trabajo"}
             </span>
             <span>{SUBTIPO_LABEL[s.subtipo]}</span>
           </div>
@@ -237,14 +258,7 @@ export function SolicitudesView() {
         <TabsList>
           <TabsTrigger value="pendientes">Pendientes</TabsTrigger>
           <TabsTrigger value="todas">Historial</TabsTrigger>
-          <TabsTrigger value="denuncias">Quejas y denuncias</TabsTrigger>
         </TabsList>
-
-        {/* Las denuncias viven en su propia tabla, con acceso restringido a
-            RRHH, pero se gestionan desde aquí para no tener dos sitios. */}
-        <TabsContent value="denuncias" className="mt-4">
-          <DenunciasPanel />
-        </TabsContent>
 
         <TabsContent value={tab} className="mt-4 space-y-4">
           <SubmoduleToolbar

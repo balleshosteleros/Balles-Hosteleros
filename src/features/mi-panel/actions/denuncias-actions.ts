@@ -270,3 +270,94 @@ export async function actualizarDenuncia(
     return { ok: false, error: msg };
   }
 }
+
+// ─── Integración en la lista de Solicitudes ─────────────────────────────────
+// Las denuncias son un tipo más de solicitud para quien las gestiona, aunque
+// sus datos vivan aparte por confidencialidad. Estas funciones las adaptan a la
+// forma de una fila de `solicitudes_personal` para poder listarlas mezcladas.
+
+export interface DenunciaComoSolicitud {
+  id: string;
+  empresaId: string;
+  userId: string;
+  empleadoNombre: string;
+  tipo: "queja";
+  subtipo: "denuncia";
+  fechaInicio: string;
+  fechaFin: string | null;
+  horas: number | null;
+  motivo: string;
+  estado: "pendiente" | "aprobada" | "rechazada" | "anulada";
+  createdAt: string;
+  puedoValidar: boolean;
+}
+
+/** Estado de la denuncia traducido al de una solicitud. */
+function estadoComoSolicitud(estado: EstadoDenuncia): DenunciaComoSolicitud["estado"] {
+  if (estado === "resuelta") return "aprobada";
+  if (estado === "archivada") return "rechazada";
+  return "pendiente";
+}
+
+/**
+ * Denuncias en forma de solicitud, para mezclarlas en la lista de RRHH.
+ * Devuelve vacío si el usuario no tiene acceso: la confidencialidad se mantiene.
+ */
+export async function listDenunciasComoSolicitudes(
+  soloPendientes: boolean,
+): Promise<{ ok: boolean; data: DenunciaComoSolicitud[] }> {
+  try {
+    const { supabase, user, empresaId } = await ctx();
+    if (!user || !empresaId) return { ok: true, data: [] };
+
+    const { data: permitido } = await supabase.rpc("rol_puede_ver_denuncias", { uid: user.id });
+    if (permitido !== true) return { ok: true, data: [] };
+
+    let query = supabase
+      .from("denuncias")
+      .select("*")
+      .eq("empresa_id", empresaId)
+      .order("created_at", { ascending: false });
+    if (soloPendientes) {
+      query = query.not("estado", "in", "(resuelta,archivada)");
+    }
+    const { data, error } = await query;
+    if (error) throw error;
+
+    return {
+      ok: true,
+      data: ((data ?? []) as DenunciaRow[]).map((d) => ({
+        id: d.id,
+        empresaId: empresaId,
+        userId: "",
+        // En las anónimas no hay nombre que mostrar: es el propósito del canal.
+        empleadoNombre:
+          d.modalidad === "anonima" ? "Anónima" : d.denunciante_nombre ?? "Sin nombre",
+        tipo: "queja" as const,
+        subtipo: "denuncia" as const,
+        fechaInicio: d.fecha_hechos ?? d.created_at.slice(0, 10),
+        fechaFin: null,
+        horas: null,
+        motivo: d.asunto,
+        estado: estadoComoSolicitud(d.estado),
+        createdAt: d.created_at,
+        puedoValidar: true,
+      })),
+    };
+  } catch (err) {
+    console.error("[denuncias] listDenunciasComoSolicitudes:", err);
+    return { ok: false, data: [] };
+  }
+}
+
+/** Aprobar = resuelta. Denegar = archivada. Con la nota como respuesta. */
+export async function resolverDenunciaDesdeSolicitudes(
+  id: string,
+  aprobar: boolean,
+  notas?: string,
+): Promise<{ ok: boolean; error?: string }> {
+  return actualizarDenuncia(id, {
+    estado: aprobar ? "resuelta" : "archivada",
+    respuesta: notas?.trim() || null,
+  });
+}

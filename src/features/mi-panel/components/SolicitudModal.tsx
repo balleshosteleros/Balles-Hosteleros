@@ -48,6 +48,7 @@ import type {
   SolicitudSubtipoTrabajo,
   SolicitudTipo,
 } from "@/features/mi-panel/types";
+import { HORAS_EXTRAS_MOTIVO_MIN } from "@/features/mi-panel/types";
 import { DiaTrabajadoAvisoDialog } from "@/features/mi-panel/components/DiaTrabajadoAvisoDialog";
 import { MAX_DOCUMENTO_MB, MAX_DOCUMENTO_BYTES } from "@/shared/lib/documentos";
 
@@ -310,6 +311,13 @@ export function SolicitudModal({ open, onOpenChange, onCreated, onElegirDenuncia
       }
       horasTramo = Math.round((min / 60) * 100) / 100;
     }
+    // Horas extras: sin explicación no se envía; quien aprueba necesita el porqué.
+    if (subtipo === "horas_extras" && motivo.trim().length < HORAS_EXTRAS_MOTIVO_MIN) {
+      toast.error(
+        `Explica por qué hiciste las horas extras (mínimo ${HORAS_EXTRAS_MOTIVO_MIN} caracteres)`,
+      );
+      return;
+    }
     setEnviando(true);
     const res = await crearSolicitudPersonal({
       tipo,
@@ -348,6 +356,8 @@ export function SolicitudModal({ open, onOpenChange, onCreated, onElegirDenuncia
     baja_contrato: "Baja de contrato",
     horas_extras: "Horas extras",
     dia_trabajado: "Día trabajado",
+    // No se elige desde este modal (tiene el suyo), pero el tipo lo exige.
+    denuncia: "Queja o denuncia",
   };
 
   const opcionesAusencia: { value: SolicitudSubtipoAusencia; label: string; desc: string }[] = [
@@ -386,6 +396,11 @@ export function SolicitudModal({ open, onOpenChange, onCreated, onElegirDenuncia
     const excede = diasSel > 0 && diasSel > vacInfo.diasRestantes;
     return choque || excede;
   })();
+
+  // Horas extras: el motivo es obligatorio y con un mínimo de caracteres, para
+  // que quien las aprueba sepa por qué se hicieron. El servidor revalida igual.
+  const motivoCorto =
+    subtipo === "horas_extras" && motivo.trim().length < HORAS_EXTRAS_MOTIVO_MIN;
 
   // Bloqueo de envío en cliente para baja de contrato: exige que exista la
   // fecha efectiva y que respete el preaviso legal (15-45 días naturales).
@@ -789,7 +804,9 @@ export function SolicitudModal({ open, onOpenChange, onCreated, onElegirDenuncia
               })()}
 
               <div className="space-y-1.5">
-                <Label htmlFor="motivo">Motivo o detalles</Label>
+                <Label htmlFor="motivo">
+                  {subtipo === "horas_extras" ? "Motivo o detalles *" : "Motivo o detalles"}
+                </Label>
                 <Textarea
                   id="motivo"
                   value={motivo}
@@ -803,6 +820,19 @@ export function SolicitudModal({ open, onOpenChange, onCreated, onElegirDenuncia
                         : "Detalles para tu responsable"
                   }
                 />
+                {subtipo === "horas_extras" && (
+                  motivoCorto ? (
+                    <p className="text-xs font-medium text-rose-600">
+                      Explica por qué hiciste las horas extras: faltan{" "}
+                      {HORAS_EXTRAS_MOTIVO_MIN - motivo.trim().length} caracteres
+                      (mínimo {HORAS_EXTRAS_MOTIVO_MIN}).
+                    </p>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">
+                      {motivo.trim().length} caracteres.
+                    </p>
+                  )
+                )}
               </div>
 
               {/* Parte de baja médica: hasta 3 fotos o PDFs, se envían a gestoría. */}
@@ -879,7 +909,7 @@ export function SolicitudModal({ open, onOpenChange, onCreated, onElegirDenuncia
                         ? () => setConfirmBajaOpen(true)
                         : enviar
                     }
-                    disabled={enviando || vacEnvioBloqueado || bajaEnvioBloqueado}
+                    disabled={enviando || vacEnvioBloqueado || bajaEnvioBloqueado || motivoCorto}
                     className="active:bg-blue-600"
                   >
                     {enviando && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}

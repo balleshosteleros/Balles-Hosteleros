@@ -43,8 +43,13 @@ const ESTADO_COLOR: Record<EstadoDenuncia, string> = {
 };
 
 /**
- * Panel de denuncias. Vive como pestaña dentro de Solicitudes: todo se
- * gestiona desde el mismo sitio, sin vista aparte.
+ * Panel de denuncias con el detalle completo: relato, testigos, personas
+ * implicadas y notas internas.
+ *
+ * AHORA MISMO NO SE MUESTRA. Las quejas se listan mezcladas con el resto de
+ * solicitudes (son un tipo más) y se aprueban o deniegan desde ahí. Este panel
+ * se conserva para cuando se retome el detalle: ya está escrito y probado, y
+ * volver a hacerlo costaría más que mantenerlo aquí.
  */
 export function DenunciasPanel() {
   const [autorizado, setAutorizado] = useState<boolean | null>(null);

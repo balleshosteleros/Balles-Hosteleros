@@ -1,4 +1,4 @@
-export type SolicitudTipo = "ausencia" | "trabajo";
+export type SolicitudTipo = "ausencia" | "trabajo" | "queja";
 
 export type SolicitudSubtipoAusencia =
   | "baja_medica"
@@ -6,9 +6,17 @@ export type SolicitudSubtipoAusencia =
   | "permiso"
   | "baja_contrato";
 export type SolicitudSubtipoTrabajo = "horas_extras" | "dia_trabajado";
-export type SolicitudSubtipo = SolicitudSubtipoAusencia | SolicitudSubtipoTrabajo;
+/** Las quejas y denuncias viven en su propia tabla, pero se listan aquí como un tipo más. */
+export type SolicitudSubtipoQueja = "denuncia";
+export type SolicitudSubtipo = SolicitudSubtipoAusencia | SolicitudSubtipoTrabajo | SolicitudSubtipoQueja;
 
 export type SolicitudEstado = "pendiente" | "aprobada" | "rechazada" | "anulada";
+
+/**
+ * Longitud mínima del motivo en las solicitudes de horas extras: quien las
+ * aprueba necesita saber por qué se hicieron, no vale dejarlo en blanco.
+ */
+export const HORAS_EXTRAS_MOTIVO_MIN = 20;
 
 export interface SolicitudPersonal {
   id: string;
@@ -69,6 +77,7 @@ export const SUBTIPO_LABEL: Record<SolicitudSubtipo, string> = {
   baja_contrato: "Baja de contrato",
   horas_extras: "Horas extras",
   dia_trabajado: "Día trabajado",
+  denuncia: "Queja o denuncia",
 };
 
 export const ESTADO_LABEL: Record<SolicitudEstado, string> = {
