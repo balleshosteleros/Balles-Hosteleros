@@ -46,6 +46,22 @@ export function fechaCivilDe(diaNegocio: string, hora: string): string {
   return isoDe(d);
 }
 
+/**
+ * Turno al que pertenece una hora.
+ *
+ * La madrugada es CENA, no comida: una reserva de las 00:30 es la cena de la
+ * noche anterior que se ha alargado. Antes se calculaba con `hora < 17` a
+ * secas, así que las 00:30 caían en COMIDA y sus comensales se descontaban del
+ * cupo equivocado — y a Google le llegaba el turno mal.
+ *
+ * Franja: [06:00, 18:00) → COMIDA · [18:00, 06:00) → CENA.
+ */
+export function turnoDeHora(hora: string): "COMIDA" | "CENA" {
+  const h = parseInt(hora.slice(0, 2), 10);
+  if (Number.isNaN(h)) return "CENA";
+  return h >= HORA_CORTE_DIA_NEGOCIO && h < 18 ? "COMIDA" : "CENA";
+}
+
 /** true si esa hora cae en la madrugada que aún pertenece al día anterior. */
 export function esMadrugadaDelDiaAnterior(hora: string): boolean {
   const h = parseInt(hora.slice(0, 2), 10);

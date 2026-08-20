@@ -5,15 +5,24 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { findOrLinkClienteSala, type CampoDistinto } from "@/features/sala/lib/cliente-link";
 import { asignarMesaAutomatica } from "@/features/sala/planos/lib/asignacion-mesa";
 import { validarMotorWebReserva } from "@/features/sala/lib/motor-web-validar";
+import { getCamposObligatoriosReserva } from "@/features/sala/lib/reserva-campos-obligatorios";
 import { notificarReservaCreada } from "@/lib/email/reservas/notificar-creada";
+import { turnoDeHora } from "@/features/sala/lib/dia-negocio";
+import {
+  RESERVA_NOMBRE_MAX_CHARS,
+  RESERVA_APELLIDOS_MAX_CHARS,
+} from "@/features/sala/data/reservas";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 const inputSchema = z.object({
   empresaSlug: z.string().min(1).max(120),
   origen: z.string().regex(/^[A-Z0-9_]+$/).max(32).nullable().optional(),
-  nombre: z.string().min(1).max(120),
-  apellidos: z.string().max(120).optional().nullable(),
-  telefono: z.string().min(5).max(40),
+  // Nombre y apellidos son siempre obligatorios. El teléfono y el email se
+  // exigen o no según la configuración de cada empresa, así que aquí solo se
+  // valida el formato; la obligatoriedad se comprueba abajo, con la config.
+  nombre: z.string().min(1).max(RESERVA_NOMBRE_MAX_CHARS),
+  apellidos: z.string().min(1).max(RESERVA_APELLIDOS_MAX_CHARS),
+  telefono: z.string().max(40).optional().nullable(),
   email: z.string().email().max(160).optional().nullable(),
   fecha: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   hora: z.string().regex(/^\d{2}:\d{2}(:\d{2})?$/),
@@ -61,11 +70,26 @@ export async function crearReservaPublicaAction(
     return { ok: false, error: "Restaurante no encontrado" };
   }
 
+  // Campos obligatorios configurables por empresa (email / teléfono), marcados
+  // en Ajustes → Departamentos → Sala → Reservas. Se comprueba en servidor: el
+  // navegador puede saltarse el `required` del formulario.
+  const { email: exigeEmail, telefono: exigeTelefono } =
+    await getCamposObligatoriosReserva(empresa.id as string);
+  if (exigeTelefono && (data.telefono ?? "").trim().length < 5) {
+    return { ok: false, error: "El teléfono es obligatorio." };
+  }
+  if (exigeEmail && !(data.email ?? "").trim()) {
+    return { ok: false, error: "El email es obligatorio." };
+  }
+  // Sin teléfono ni email no hay forma de avisar al cliente ni de vincular su
+  // ficha (la BD exige cliente_id cuando hay contacto), así que pedimos uno.
+  if (!(data.telefono ?? "").trim() && !(data.email ?? "").trim()) {
+    return { ok: false, error: "Indica un teléfono o un email de contacto." };
+  }
+
   // Preferencias del motor web (cierre del día actual, tope personas/hora,
   // intervalos). Aplicar antes que cualquier otro side-effect.
-  const horaMin = parseInt(data.hora.slice(0, 2), 10) * 60
-    + parseInt(data.hora.slice(3, 5), 10);
-  const turno: "COMIDA" | "CENA" = horaMin < 18 * 60 ? "COMIDA" : "CENA";
+  const turno = turnoDeHora(data.hora);
   const motor = await validarMotorWebReserva(admin, {
     empresaId: empresa.id as string,
     fecha: data.fecha,

@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getZonaHorariaEmpresa } from "@/features/empresa/lib/empresa-server";
 import { asignarMesaAutomatica } from "@/features/sala/planos/lib/asignacion-mesa";
+import { turnoDeHora } from "@/features/sala/lib/dia-negocio";
 import type {
   BatchAvailabilityLookupRequest,
   SlotTimeAvailability,
@@ -34,11 +35,8 @@ function startSecToFechaHora(startSec: number, tz: string = TZ_DEFAULT): { fecha
   };
 }
 
-/** Heurística simple v1: turno por franja horaria. */
-function deducirTurno(hora: string): "COMIDA" | "CENA" {
-  const hh = parseInt(hora.slice(0, 2), 10);
-  return hh < 17 ? "COMIDA" : "CENA";
-}
+/** Fuente única: la madrugada es cena, no comida. */
+const deducirTurno = turnoDeHora;
 
 interface AvailabilitySlot {
   fecha: string;

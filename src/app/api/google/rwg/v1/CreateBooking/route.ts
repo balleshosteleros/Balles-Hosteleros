@@ -11,6 +11,7 @@ import type {
 import { RWG_EXTERNAL_ORIGEN, RWG_ORIGEN_CANONICO } from "@/features/canales-google-rwg/lib/proto-types";
 import { validarMotorWebReserva } from "@/features/sala/lib/motor-web-validar";
 import { notificarReservaCreada } from "@/lib/email/reservas/notificar-creada";
+import { turnoDeHora } from "@/features/sala/lib/dia-negocio";
 import { asignarMesaAutomatica } from "@/features/sala/planos/lib/asignacion-mesa";
 
 export const dynamic = "force-dynamic";
@@ -62,10 +63,8 @@ function startSecToFechaHora(startSec: number, tz: string = TZ_DEFAULT): { fecha
   };
 }
 
-function deducirTurno(hora: string): "COMIDA" | "CENA" {
-  const hh = parseInt(hora.slice(0, 2), 10);
-  return hh < 17 ? "COMIDA" : "CENA";
-}
+/** Fuente única: la madrugada es cena, no comida. */
+const deducirTurno = turnoDeHora;
 
 function bookingDesdeReserva(
   reservaId: string,

@@ -12,6 +12,12 @@ import { validarCuponPublicoAction } from "@/features/reservar-publica/actions/v
 import { CuponInputReserva } from "@/features/sala/cupones/components/CuponInputReserva";
 import { TicketSelector, type ProductoTicketPublico } from "@/features/reservar-publica/components/TicketSelector";
 import { SelectorDisponibilidad } from "@/features/reservar-publica/components/SelectorDisponibilidad";
+import { turnoDeHora } from "@/features/sala/lib/dia-negocio";
+import type { CamposObligatoriosPublico } from "@/features/reservar-publica/actions/listar-disponibilidad-publica";
+import {
+  RESERVA_NOMBRE_MAX_CHARS,
+  RESERVA_APELLIDOS_MAX_CHARS,
+} from "@/features/sala/data/reservas";
 import { toast } from "sonner";
 
 interface AvisoDatosOriginales {
@@ -90,22 +96,31 @@ export function ReservaPublicaForm({
   // Consentimiento RGPD: la reserva recoge nombre, teléfono y correo. Arranca
   // SIN marcar — un consentimiento premarcado no es válido (art. 4.11 RGPD).
   const [aceptaPrivacidad, setAceptaPrivacidad] = useState(false);
+  // Campos que esta empresa exige además de los fijos. Arranca con el default
+  // del catálogo (email y teléfono) para que el asterisco no parpadee mientras
+  // llega la respuesta del servidor, que es quien manda.
+  const [obligatorios, setObligatorios] = useState<CamposObligatoriosPublico>({
+    email: true,
+    telefono: true,
+  });
 
   const accent = isHexColor(colorPrimario) ? colorPrimario : "#0a0a0a";
   const onAccent = isHexColor(colorTexto) ? colorTexto : "#ffffff";
 
   const ticketObligatorio = ticketOnly && productosTicket.length > 0;
   const ticketValido = !ticketObligatorio || Boolean(ticketProductoId);
-  const turnoPorHora = useMemo<"COMIDA" | "CENA" | null>(() => {
-    if (!hora) return null;
-    const h = Number(hora.slice(0, 2));
-    if (Number.isNaN(h)) return null;
-    if (h < 17) return "COMIDA";
-    return "CENA";
-  }, [hora]);
+  // Mismo criterio que el servidor: la madrugada es cena, no comida.
+  const turnoPorHora = useMemo<"COMIDA" | "CENA" | null>(
+    () => (hora ? turnoDeHora(hora) : null),
+    [hora],
+  );
+  // Nombre, apellidos, fecha, hora y comensales son siempre obligatorios; el
+  // email y el teléfono, solo si la empresa los exige.
   const valido =
     nombre.trim().length > 0 &&
-    telefono.trim().length >= 5 &&
+    apellidos.trim().length > 0 &&
+    (!obligatorios.telefono || telefono.trim().length >= 5) &&
+    (!obligatorios.email || email.trim().length > 0) &&
     personas > 0 &&
     fecha &&
     hora &&
@@ -123,8 +138,8 @@ export function ReservaPublicaForm({
       empresaSlug,
       origen,
       nombre: nombre.trim(),
-      apellidos: apellidos.trim() || null,
-      telefono: telefono.trim(),
+      apellidos: apellidos.trim(),
+      telefono: telefono.trim() || null,
       email: email.trim() || null,
       fecha,
       hora,
@@ -421,6 +436,7 @@ export function ReservaPublicaForm({
                 horaSeleccionada={hora}
                 onSelect={setHora}
                 accent={accent}
+                onObligatoriosChange={setObligatorios}
               />
             </div>
           </div>
@@ -434,16 +450,19 @@ export function ReservaPublicaForm({
                 value={nombre}
                 onChange={(e) => setNombre(e.target.value)}
                 required
+                maxLength={RESERVA_NOMBRE_MAX_CHARS}
                 autoComplete="given-name"
                 className="mt-1.5 h-12 sm:h-11 rounded-xl border-zinc-200 text-base sm:text-sm"
               />
             </div>
             <div>
-              <Label htmlFor="apellidos" className="text-zinc-700">Apellidos</Label>
+              <Label htmlFor="apellidos" className="text-zinc-700">Apellidos *</Label>
               <Input
                 id="apellidos"
                 value={apellidos}
                 onChange={(e) => setApellidos(e.target.value)}
+                required
+                maxLength={RESERVA_APELLIDOS_MAX_CHARS}
                 autoComplete="family-name"
                 className="mt-1.5 h-12 sm:h-11 rounded-xl border-zinc-200 text-base sm:text-sm"
               />
@@ -453,7 +472,7 @@ export function ReservaPublicaForm({
           <div>
             <Label htmlFor="telefono" className="text-zinc-700 flex items-center gap-1.5">
               <Phone className="h-3.5 w-3.5" />
-              Teléfono *
+              Teléfono{obligatorios.telefono ? " *" : ""}
             </Label>
             <Input
               id="telefono"
@@ -462,7 +481,7 @@ export function ReservaPublicaForm({
               autoComplete="tel"
               value={telefono}
               onChange={(e) => setTelefono(e.target.value)}
-              required
+              required={obligatorios.telefono}
               placeholder="612 345 678"
               className="mt-1.5 h-12 sm:h-11 rounded-xl border-zinc-200 text-base sm:text-sm"
             />
@@ -471,7 +490,7 @@ export function ReservaPublicaForm({
           <div>
             <Label htmlFor="email" className="text-zinc-700 flex items-center gap-1.5">
               <Mail className="h-3.5 w-3.5" />
-              Email
+              Email{obligatorios.email ? " *" : ""}
             </Label>
             <Input
               id="email"
@@ -480,6 +499,7 @@ export function ReservaPublicaForm({
               autoComplete="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
+              required={obligatorios.email}
               placeholder="tu@email.com"
               className="mt-1.5 h-12 sm:h-11 rounded-xl border-zinc-200 text-base sm:text-sm"
             />
