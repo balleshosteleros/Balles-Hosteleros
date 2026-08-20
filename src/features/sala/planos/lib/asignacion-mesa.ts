@@ -3,7 +3,7 @@ import type { TipoMesa } from "@/features/sala/planos/data/planos";
 import {
   ESTADOS_NO_OCUPANTES,
   getDuracionReservaMin,
-  horaAMinutos,
+  franjasSolapan,
 } from "@/features/sala/lib/reserva-conflicto";
 import { getMesasBloqueadas } from "@/features/sala/bloqueos/lib/mesas-bloqueadas";
 
@@ -47,15 +47,13 @@ async function codigosOcupadosEnFranja(
     .not("mesa", "is", null)
     .not("estado", "in", `(${ESTADOS_NO_OCUPANTES.join(",")})`);
 
-  const inicioNuevo = horaAMinutos(input.hora);
-  const finNuevo = inicioNuevo + duracionMin;
   const ocupados = new Set<string>();
   for (const r of ocupantes ?? []) {
     const codigo = (r.mesa as string) ?? "";
     if (!codigo) continue;
-    const otroInicio = horaAMinutos((r.hora as string) ?? "");
-    const otroFin = otroInicio + duracionMin;
-    if (otroInicio < finNuevo && inicioNuevo < otroFin) {
+    // Minutos de jornada: la madrugada pertenece a la noche anterior, así que
+    // una reserva de 00:30 choca con la de 23:30 que aún no ha terminado.
+    if (franjasSolapan(input.hora, duracionMin, (r.hora as string) ?? "", duracionMin)) {
       for (const parte of codigo.split("+")) {
         const limpio = parte.trim();
         if (limpio) ocupados.add(limpio);
@@ -237,8 +235,6 @@ export async function asignarMesaAutomatica(
       .not("mesa", "is", null)
       .not("estado", "in", `(${ESTADOS_NO_OCUPANTES.join(",")})`);
     if (errOcup) throw errOcup;
-    const inicioNuevo = horaAMinutos(input.hora);
-    const finNuevo = inicioNuevo + duracionMin;
     // Una reserva sobre una union guarda el codigo compuesto ("M1+M2"), asi
     // que hay que separarlo: si M1+M2 esta reservada, M1 y M2 estan ocupadas
     // individualmente y no se pueden volver a dar sueltas.
@@ -246,9 +242,8 @@ export async function asignarMesaAutomatica(
     for (const r of ocupantes ?? []) {
       const codigo = (r.mesa as string) ?? "";
       if (!codigo) continue;
-      const otroInicio = horaAMinutos((r.hora as string) ?? "");
-      const otroFin = otroInicio + duracionMin;
-      if (otroInicio < finNuevo && inicioNuevo < otroFin) {
+      // Minutos de jornada: cubre el cruce de medianoche (23:30 vs 00:30).
+      if (franjasSolapan(input.hora, duracionMin, (r.hora as string) ?? "", duracionMin)) {
         for (const parte of codigo.split("+")) {
           const limpio = parte.trim();
           if (limpio) codigosOcupados.add(limpio);

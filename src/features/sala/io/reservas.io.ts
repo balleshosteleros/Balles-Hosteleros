@@ -5,7 +5,7 @@ import type { Reserva } from "@/features/sala/data/reservas";
 import { ESTADOS_RESERVA } from "@/features/sala/data/reservas";
 
 const ESTADOS = ESTADOS_RESERVA;
-const TURNOS = ["COMIDA", "CENA", "DIA_COMPLETO"] as const;
+const TURNOS = ["COMIDA", "CENA"] as const;
 const ZONAS = ["SALA", "BARRA", "TERRAZA_INTERIOR", "TERRAZA_EXTERIOR", "PRIVADO", ""] as const;
 
 const reservaSchema = z.object({

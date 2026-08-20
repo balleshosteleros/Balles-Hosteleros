@@ -25,7 +25,7 @@ const ConfigReservasView = dynamic(
 import { Settings } from "lucide-react";
 import { EtiquetasPanel } from "@/features/sala/components/reservas/EtiquetasPanel";
 import { CalendarioMes } from "@/features/sala/components/reservas/CalendarioMes";
-import { CalendarDays, Grid3X3, Users, LayoutGrid } from "lucide-react";
+import { CalendarDays, Grid3X3, Users, LayoutGrid, AlertTriangle, Clock } from "lucide-react";
 import {
   SAMPLE_MESAS,
   Mesa, Reserva, EstadoReserva, ZonaSala, TurnoReserva,
@@ -34,9 +34,12 @@ import {
   ESTADO_DOT_CLASS,
   ESTADO_ORDEN_PRIORIDAD,
   ESTADOS_NO_OCUPANTES,
+  ESTADOS_NO_ASISTEN,
   TIPO_RESERVA_CATEGORIA_LABELS,
   DURACION_RESERVA_MAX_MINUTOS,
   DURACION_RESERVA_MIN_MINUTOS,
+  RESERVA_NOMBRE_MAX_CHARS,
+  RESERVA_APELLIDOS_MAX_CHARS,
 } from "@/features/sala/data/reservas";
 import { ReservaEstadoBadge, ReservaEstadoDot } from "@/features/sala/components/reservas/ReservaEstadoBadge";
 import {
@@ -50,6 +53,7 @@ import { CuponInputReserva } from "@/features/sala/cupones/components/CuponInput
 import { validarCuponAdminAction } from "@/features/sala/cupones/actions/validar-cupon-action";
 import { loadReservasModuleContext } from "@/features/sala/actions/reservas-module-context";
 import {
+  createBloqueo,
   crearBloqueoExcepcion,
   listBloqueoExcepciones,
   listBloqueos,
@@ -70,14 +74,21 @@ import {
   type FormaMesa,
 } from "@/features/sala/planos/data/planos";
 import { DecoBody } from "@/features/sala/planos/components/DecoBody";
-import { pickPlanoVigente } from "@/features/sala/planos/lib/plano-vigente";
 import { getReservasConfig } from "@/features/sala/actions/reservas-config-actions";
+import {
+  getDisponibilidadTurno,
+  getChoquesMesa,
+  type SlotDisponibilidad,
+  type ChoqueReserva,
+} from "@/features/sala/actions/reservas-disponibilidad-actions";
+import { useReglasSubmodulo } from "@/features/ajustes/hooks/use-reglas-submodulo";
+import { LabelConRegla } from "@/shared/components/forms/LabelConRegla";
 import { listReglasReservas } from "@/features/sala/reglas/actions/reglas-actions";
 import { listPoliticasCancelacion } from "@/features/sala/actions/politicas-cancelacion-actions";
 import { getClienteInsights } from "@/features/sala/actions/cliente-insights-actions";
 import { searchClientes, type ClienteSugerencia } from "@/features/sala/actions/clientes-actions";
 import { maxpaxEfectivoDesdeReglas } from "@/features/sala/lib/reserva-limites";
-import type { EmpresaReservasRegla } from "@/features/sala/reglas/data/reglas";
+import type { EmpresaReservasRegla, TurnoRegla } from "@/features/sala/reglas/data/reglas";
 import type {
   ReservaEtiqueta,
   TipoReservaCategoria,
@@ -129,6 +140,14 @@ const mesaBg: Record<string, string> = {
   BLOQUEADA: "bg-[#111111] hover:bg-[#1F1F1F] text-white",
 };
 
+/** Suma minutos a "HH:MM" y devuelve "HH:MM" (envuelve pasada la medianoche). */
+function horaMasMinutos(hora: string, minutos: number): string {
+  const [h, m] = hora.slice(0, 5).split(":").map(Number);
+  if (!Number.isFinite(h) || !Number.isFinite(m)) return "—";
+  const total = ((h * 60 + m + minutos) % 1440 + 1440) % 1440;
+  return `${String(Math.floor(total / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
+}
+
 /** Metadatos visuales por mesa, derivados del catálogo + zona en BD. */
 interface MesaMeta {
   forma: FormaMesa;
@@ -171,11 +190,30 @@ function addMonths(iso: string, n: number) {
   return `${nuevoAnio}-${String(nuevoMes + 1).padStart(2, "0")}-01`;
 }
 
+/**
+ * Rejilla de la lista de reservas. El origen tiene su propia columna (antes
+ * salía como chip pegado al nombre, que se leía como parte del cliente) y el
+ * estado tiene sitio suficiente para leerse entero sin recortarse.
+ */
+const LISTA_GRID = "grid grid-cols-[72px_44px_44px_minmax(0,1fr)_36px_84px_96px] gap-1.5 items-center";
+
+/**
+ * El origen viene del canal por el que entró la reserva (PORTAL_PROPIO,
+ * GOOGLE_RWG…). Sin origen = alta manual desde el back-office.
+ */
+function origenLabel(origen: string | null | undefined): string {
+  if (!origen) return "Manual";
+  const limpio = origen.replace(/_/g, " ").toLowerCase();
+  return limpio.charAt(0).toUpperCase() + limpio.slice(1);
+}
+
 function StatusDot({ estado }: { estado: EstadoReserva }) {
   return (
-    <span className="flex items-center gap-1.5">
+    <span className="flex items-center gap-1.5 min-w-0">
       <span className={cn("w-2.5 h-2.5 rounded-full shrink-0", ESTADO_DOT_CLASS[estado])} />
-      <span className="truncate">{ESTADO_RESERVA_LABELS[estado]}</span>
+      <span className="truncate text-[11px]" title={ESTADO_RESERVA_LABELS[estado]}>
+        {ESTADO_RESERVA_LABELS[estado]}
+      </span>
     </span>
   );
 }
@@ -198,26 +236,42 @@ function ReservaQuickPopover({
   onNueva,
   onEditar,
   onCambiarEstado,
-  onAccionPendiente,
+  onBloquearMesa,
+  onDesplazarReserva,
 }: {
   mesa: Mesa | null;
   reserva: Reserva | null;
   onNueva: () => void;
   onEditar: () => void;
   onCambiarEstado: (id: string, estado: EstadoReserva) => void;
-  onAccionPendiente: (label: string) => void;
+  /** Bloquea la mesa para la fecha y turno en pantalla. */
+  onBloquearMesa: (m: Mesa) => void;
+  /** Abre el selector de mesa destino para mover la reserva. */
+  onDesplazarReserva: (r: Reserva) => void;
 }) {
   type AccionRapida =
     | { tipo: "estado"; key: string; estado: EstadoReserva; label: string }
-    | { tipo: "pendiente"; key: string; label: string };
+    | { tipo: "accion"; key: string; label: string; onClick: () => void; disabled?: boolean };
 
   const acciones: AccionRapida[] = [
     { tipo: "estado", key: "TERMINANDO", estado: "TERMINANDO", label: "Terminando" },
     { tipo: "estado", key: "LIBERADA", estado: "LIBERADA", label: "Liberada" },
     { tipo: "estado", key: "CANCELADA", estado: "CANCELADA", label: "Cancelada" },
     { tipo: "estado", key: "NO_SHOW", estado: "NO_SHOW", label: "No show" },
-    { tipo: "pendiente", key: "BLOQUEAR", label: "Bloquear" },
-    { tipo: "pendiente", key: "DESPLAZAR", label: "Desplazar" },
+    {
+      tipo: "accion",
+      key: "BLOQUEAR",
+      label: "Bloquear",
+      onClick: () => { if (mesa) onBloquearMesa(mesa); },
+      disabled: !mesa,
+    },
+    {
+      tipo: "accion",
+      key: "DESPLAZAR",
+      label: "Desplazar",
+      onClick: () => { if (reserva) onDesplazarReserva(reserva); },
+      disabled: !reserva,
+    },
   ];
 
   return (
@@ -274,9 +328,10 @@ function ReservaQuickPopover({
                 "h-7 text-[10px] px-1.5 justify-center gap-1",
                 a.tipo === "estado" && reserva.estado === a.estado && "ring-1 ring-primary",
               )}
+              disabled={a.tipo === "accion" && a.disabled}
               onClick={() => {
                 if (a.tipo === "estado") onCambiarEstado(reserva.id, a.estado);
-                else onAccionPendiente(a.label);
+                else a.onClick();
               }}
             >
               {a.tipo === "estado" && <ReservaEstadoDot estado={a.estado} className="w-2 h-2" />}
@@ -289,15 +344,15 @@ function ReservaQuickPopover({
   );
 }
 
-function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, planos, planoSalas, zonasReales, mesas, posicionesPlano, getEstadoMesa }: {
+function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, zonasReales, mesas, mesasMeta, localId, getEstadoMesa }: {
   fecha: string; turno: TurnoReserva;
   onClose: () => void;
   mesaPreseleccionada?: Mesa | null;
-  planos: PlanoConfig[];
-  planoSalas: Record<string, string[]>;
   zonasReales: ZonaReal[];
   mesas: Mesa[];
-  posicionesPlano: Map<string, PlanoMesaPosicion>;
+  /** Capacidades reales del catálogo (min/max) para avisar de aforo de mesa. */
+  mesasMeta: Map<string, MesaMeta>;
+  localId: string;
   getEstadoMesa: (m: Mesa) => string;
   onSave: (r: Reserva & {
     etiquetaId?: string | null;
@@ -336,6 +391,27 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
   const [reglas, setReglas] = useState<EmpresaReservasRegla[]>([]);
   const [paxTouched, setPaxTouched] = useState(false);
 
+  // Disponibilidad real del turno: qué horas tienen mesa libre para ESTE grupo
+  // en la zona elegida, y con qué reservas se choca en las que no la tienen.
+  const [slots, setSlots] = useState<SlotDisponibilidad[]>([]);
+  const [turnoCerrado, setTurnoCerrado] = useState<{ cerrado: boolean; motivo: string | null }>({
+    cerrado: false,
+    motivo: null,
+  });
+  const [cargandoSlots, setCargandoSlots] = useState(false);
+  /**
+   * Aviso pendiente de aceptar, con TODOS los motivos de peligro juntos.
+   * Mientras esté relleno el guardado espera: el usuario debe confirmar que
+   * asume lo que se le detalla (pisar reservas y/o meter un grupo que no cabe).
+   */
+  const [aviso, setAviso] = useState<{
+    choques: ChoqueReserva[];
+    aforo: { tipo: "excede" | "insuficiente"; min: number; max: number } | null;
+    mesaCodigo: string;
+    capacidad: number;
+  } | null>(null);
+  const [comprobandoSolape, setComprobandoSolape] = useState(false);
+
   // Autocompletado de clientes por nombre, apellidos o teléfono (4+ chars).
   type CampoBusqueda = "cliente" | "apellidos" | "telefono";
   const [campoActivo, setCampoActivo] = useState<CampoBusqueda | null>(null);
@@ -362,6 +438,39 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
       if (e.ok) setReglas(e.data);
     })();
   }, [form.fecha]);
+
+  // Horas del turno con su ocupación real. Se recalcula al cambiar cualquier
+  // dato que altere la respuesta: fecha, turno, zona o nº de comensales (una
+  // mesa de 2 no sirve para 6, así que subir el grupo cambia qué horas caben).
+  useEffect(() => {
+    if (!form.fecha || !form.comensales || form.comensales < 1) {
+      setSlots([]);
+      return;
+    }
+    let cancelado = false;
+    setCargandoSlots(true);
+    (async () => {
+      const res = await getDisponibilidadTurno({
+        fecha: form.fecha,
+        turno: form.turno,
+        personas: form.comensales,
+        zona: form.zona || null,
+        localId: localId || null,
+      });
+      if (cancelado) return;
+      if (res.ok) {
+        setSlots(res.data.slots);
+        setTurnoCerrado({ cerrado: res.data.cerrado, motivo: res.data.motivo });
+      } else {
+        // Fallo al calcular: no se inventa disponibilidad, se deja la hora libre
+        // y el servidor sigue siendo la última barrera al guardar.
+        setSlots([]);
+        setTurnoCerrado({ cerrado: false, motivo: null });
+      }
+      setCargandoSlots(false);
+    })();
+    return () => { cancelado = true; };
+  }, [form.fecha, form.turno, form.comensales, form.zona, localId]);
 
   useEffect(() => {
     if (form.esWalkIn || !campoActivo) {
@@ -401,55 +510,43 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
   const excedeMaxPax = maxPax != null && form.comensales > maxPax;
   const muestraAvisoPax = paxTouched && excedeMaxPax;
 
-  // Zonas disponibles según el plano vigente del día/turno seleccionado.
-  // El plano se resuelve por cascada (fechas extra → rango → día semana → principal).
-  // Si el plano vigente solo activa unas salas, solo se muestran sus zonas:
-  // no se puede reservar en una zona que ese día no existe.
+  // Zonas del desplegable: SIEMPRE se ofrecen todas las zonas reales del local.
+  // Antes se filtraban por el plano vigente del día/turno y, si la cascada no
+  // resolvía plano o el plano no tenía salas asociadas, la lista salía vacía y
+  // no se podía elegir zona ni mesa al crear la reserva.
+  // El plano decide cómo se PINTA la sala, no dónde se puede sentar a alguien.
   const zonasDisponibles = useMemo<{ value: string; label: string }[]>(() => {
-    if (!form.fecha || (form.turno !== "COMIDA" && form.turno !== "CENA")) {
-      return [];
-    }
-    const planoVigente = pickPlanoVigente(planos, form.fecha, form.turno);
-    if (!planoVigente) return [];
-    const salaIds = new Set(planoSalas[planoVigente.id] ?? []);
-    if (salaIds.size === 0) return [];
     const vistas = new Set<string>();
     const out: { value: string; label: string }[] = [];
     for (const z of zonasReales) {
-      if (!salaIds.has(z.salaId)) continue;
       const key = z.nombre.toUpperCase();
       if (vistas.has(key)) continue;
       vistas.add(key);
       out.push({ value: key, label: z.nombre });
     }
-    return out;
-  }, [form.fecha, form.turno, planos, planoSalas, zonasReales]);
+    return out.sort((a, b) => a.label.localeCompare(b.label));
+  }, [zonasReales]);
 
-  // La zona elegida deja de existir en el plano vigente del día/turno.
-  // No se resetea automáticamente: se avisa al usuario y se bloquea guardar
-  // hasta que cambie la zona (a "Cualquiera" u otra disponible).
+  // Con todas las zonas del local siempre en la lista, la única forma de tener
+  // una zona "no disponible" es que venga de una reserva vieja cuya zona ya se
+  // borró del catálogo. Se avisa y se bloquea guardar hasta cambiarla.
   const zonaNoDisponible = useMemo(() => {
     if (!form.zona) return false;
     return !zonasDisponibles.some((z) => z.value === form.zona);
   }, [zonasDisponibles, form.zona]);
 
-  // Mesas seleccionables: solo las del plano vigente (las que tienen posición).
-  // Si hay zona elegida, se filtran a esa zona. La pre-asignada siempre aparece.
+  // Mesas seleccionables: SOLO las de la zona elegida.
+  //
+  // La zona manda sobre la mesa: toda mesa pertenece siempre a una zona, así que
+  // sin zona no hay nada que ofrecer y el selector de mesa queda deshabilitado.
+  // No se filtra por `posicionesPlano`: una mesa sin colocar en el plano sigue
+  // siendo una mesa real donde se puede sentar gente.
   const mesasSeleccionables = useMemo(() => {
-    const zonasOK = new Set(zonasDisponibles.map((z) => z.value));
+    if (!form.zona) return [];
     return mesas
-      // La mesa ya elegida se salta los filtros: si quedara fuera de la lista,
-      // el <select> mostraría "Sin asignar" mientras el form sigue guardándola.
-      .filter((m) => m.id === form.mesaId || posicionesPlano.has(m.id))
-      .filter((m) => m.id === form.mesaId || zonasOK.size === 0 || zonasOK.has(String(m.zona)))
-      .filter((m) => m.id === form.mesaId || !form.zona || m.zona === form.zona)
-      .sort((a, b) => {
-        const za = String(a.zona);
-        const zb = String(b.zona);
-        if (za !== zb) return za.localeCompare(zb);
-        return a.codigo.localeCompare(b.codigo, undefined, { numeric: true });
-      });
-  }, [mesas, posicionesPlano, zonasDisponibles, form.zona, form.mesaId]);
+      .filter((m) => String(m.zona) === form.zona)
+      .sort((a, b) => a.codigo.localeCompare(b.codigo, undefined, { numeric: true }));
+  }, [mesas, form.zona]);
 
   // Mesa que se muestra en el banner superior: siempre la del formulario,
   // para que seleccionar otra abajo se refleje arriba (y no queden en conflicto).
@@ -458,18 +555,85 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
     [mesas, form.mesaId],
   );
 
-  const mesasPorZona = useMemo(() => {
-    const m = new Map<string, Mesa[]>();
-    for (const x of mesasSeleccionables) {
-      const k = String(x.zona) || "—";
-      const arr = m.get(k);
-      if (arr) arr.push(x);
-      else m.set(k, [x]);
-    }
-    return m;
-  }, [mesasSeleccionables]);
+  /** Slot correspondiente a la hora elegida (si esa hora está en el grid). */
+  const slotElegido = useMemo(
+    () => slots.find((s) => s.hora === form.hora.slice(0, 5)) ?? null,
+    [slots, form.hora],
+  );
 
-  // Al elegir mesa, auto-completar zona; si vacía, se respeta la zona actual.
+  /** Códigos de la zona ocupados a la hora elegida (capaces o no). */
+  const codigosOcupadosAhora = useMemo(
+    () => new Set((slotElegido?.mesasOcupadas ?? []).map((c) => c.toUpperCase())),
+    [slotElegido],
+  );
+
+  /** ¿Está ocupada a esa hora la mesa `codigo`? Cubre uniones ("M1+M2"). */
+  const mesaOcupadaEn = useCallback(
+    (slot: SlotDisponibilidad | null, codigo: string) => {
+      if (!slot) return false;
+      const ocupadas = new Set(slot.mesasOcupadas.map((c) => c.toUpperCase()));
+      return codigo
+        .split("+")
+        .map((c) => c.trim().toUpperCase())
+        .filter(Boolean)
+        .some((c) => ocupadas.has(c));
+    },
+    [],
+  );
+
+  // Peligro por HORARIO (⏰): la mesa ya tiene reserva en esa franja.
+  //
+  // Con MESA ya elegida manda esa mesa: da igual que la zona tenga otras
+  // libres, si LA MESA está pillada a esa hora se pisa una reserva. Antes solo
+  // se miraba si quedaba alguna mesa CAPAZ libre en la zona, así que elegir una
+  // mesa de 3 para 2 comensales (no "capaz") no marcaba peligro alguno.
+  //
+  // Sin mesa elegida se mantiene la lectura de zona: no queda ningún hueco
+  // limpio para ese grupo.
+  const horaConflictiva = useMemo(() => {
+    if (!slotElegido) return false;
+    if (mesaBanner) return mesaOcupadaEn(slotElegido, mesaBanner.codigo);
+    return !slotElegido.hayMesaLibre;
+  }, [slotElegido, mesaBanner, mesaOcupadaEn]);
+
+  /**
+   * Peligro por AFORO (👥): el grupo no encaja en la capacidad de la mesa.
+   *
+   * Es un problema DISTINTO al del horario y por eso lleva su propio icono:
+   * aquí la mesa puede estar perfectamente libre, pero es demasiado pequeña
+   * (o demasiado grande) para el grupo según el catálogo.
+   */
+  const aforoMesa = useCallback(
+    (mesaId: string, personas: number) => {
+      const meta = mesasMeta.get(mesaId);
+      if (!meta || !personas) return null;
+      if (personas > meta.capacidadMax) {
+        return {
+          tipo: "excede" as const,
+          min: meta.capacidadMin,
+          max: meta.capacidadMax,
+        };
+      }
+      if (personas < meta.capacidadMin) {
+        return {
+          tipo: "insuficiente" as const,
+          min: meta.capacidadMin,
+          max: meta.capacidadMax,
+        };
+      }
+      return null;
+    },
+    [mesasMeta],
+  );
+
+  /** Aviso de aforo de la mesa actualmente elegida (null si encaja). */
+  const aforoConflictivo = useMemo(
+    () => (mesaBanner ? aforoMesa(mesaBanner.id, form.comensales) : null),
+    [mesaBanner, form.comensales, aforoMesa],
+  );
+
+  // Al elegir mesa se fija también su zona: la mesa siempre trae la suya, y así
+  // el dato guardado en la reserva y el selector de zona no pueden divergir.
   // Los comensales NO se tocan: son un dato del cliente, no de la mesa (antes
   // se subían a la capacidad de la mesa, convirtiendo 2 pax en 15 al elegir A1).
   const elegirMesa = (mesaId: string) => {
@@ -481,19 +645,41 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
     }));
   };
 
-  // Si cambia la zona y la mesa elegida ya no encaja, limpiamos la mesa.
-  useEffect(() => {
-    if (!form.mesaId) return;
-    const m = mesas.find((x) => x.id === form.mesaId);
-    if (!m) return;
-    if (form.zona && m.zona !== form.zona) {
-      setForm((p) => ({ ...p, mesaId: "" }));
-    }
-  }, [form.zona, form.mesaId, mesas]);
+  // Al cambiar de zona, la mesa elegida deja de pertenecer a ella: se limpia.
+  const elegirZona = (zona: ZonaSala | "") => {
+    setForm((p) => {
+      if (p.zona === zona) return p;
+      const mesaSigueEnZona =
+        p.mesaId && mesas.some((m) => m.id === p.mesaId && String(m.zona) === zona);
+      return { ...p, zona, mesaId: mesaSigueEnZona ? p.mesaId : "" };
+    });
+  };
+
+  // Campos obligatorios al crear la reserva. Nombre, apellidos, fecha, hora,
+  // comensales, turno, estado y mesa son fijos; email y teléfono los decide cada
+  // empresa en Ajustes → Departamentos → Sala → Reservas. Los walk-in quedan
+  // fuera: entran sin ficha de cliente porque se atienden en el momento.
+  const { esRequerido: reservaRequiere } = useReglasSubmodulo("sala", "reservas");
+
+  const faltanDatosCliente =
+    !form.esWalkIn &&
+    (!form.cliente.trim() ||
+      !form.apellidos.trim() ||
+      (reservaRequiere("telefono") && !form.telefono.trim()) ||
+      (reservaRequiere("email") && !form.email.trim()));
+
+  // La mesa es obligatoria salvo en walk-in, donde el cliente ya está sentado y
+  // se le asigna sitio en el momento.
+  const faltaMesa = !form.esWalkIn && !form.mesaId;
 
   const guardarBloqueado =
-    (!form.esWalkIn && !form.cliente) ||
+    faltanDatosCliente ||
+    faltaMesa ||
+    !form.fecha ||
     !form.hora ||
+    !form.turno ||
+    !form.comensales ||
+    form.comensales < 1 ||
     excedeMaxPax ||
     zonaNoDisponible ||
     cuponValido === false;
@@ -510,8 +696,56 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
     setCampoActivo(null);
   };
 
-  const handleSave = () => {
-    if (guardarBloqueado) return;
+  /** Duración efectiva de esta reserva (override del usuario o default empresa). */
+  const duracionEfectiva = useMemo(() => {
+    const n = Number(form.duracionMinutos);
+    if (form.duracionTouched && Number.isFinite(n) && n > 0) {
+      return Math.min(DURACION_RESERVA_MAX_MINUTOS, Math.max(DURACION_RESERVA_MIN_MINUTOS, Math.round(n)));
+    }
+    return config?.duracionReservaMin ?? null;
+  }, [form.duracionMinutos, form.duracionTouched, config]);
+
+  /**
+   * Paso 1 del guardado: reunir TODOS los motivos de peligro antes de crear.
+   *
+   * Son dos comprobaciones independientes y pueden darse a la vez:
+   *   ⏰ HORARIO — la mesa ya tiene reserva en esa franja (se consulta al
+   *      servidor, no al grid: el grid mira la zona y aquí importa la mesa
+   *      concreta, que además puede ser una unión).
+   *   👥 AFORO  — el grupo no encaja en la capacidad de la mesa.
+   *
+   * Si hay alguno, se abre el aviso y NO se guarda hasta que el usuario acepte.
+   */
+  const handleSave = async () => {
+    if (guardarBloqueado || comprobandoSolape) return;
+    const mesa = mesas.find((m) => m.id === (form.mesaId || mesaPreseleccionada?.id));
+    if (!mesa) {
+      emitirReserva();
+      return;
+    }
+    const aforo = aforoMesa(mesa.id, form.comensales);
+    let choques: ChoqueReserva[] = [];
+    if (form.hora) {
+      setComprobandoSolape(true);
+      const res = await getChoquesMesa({
+        fecha: form.fecha,
+        hora: form.hora,
+        mesa: mesa.codigo,
+        duracionMin: duracionEfectiva,
+      });
+      setComprobandoSolape(false);
+      if (res.ok) choques = res.data;
+    }
+    if (choques.length > 0 || aforo) {
+      setAviso({ choques, aforo, mesaCodigo: mesa.codigo, capacidad: mesa.capacidad });
+      return;
+    }
+    emitirReserva();
+  };
+
+  /** Paso 2: construir y enviar la reserva. Ya sin preguntas. */
+  const emitirReserva = () => {
+    setAviso(null);
     onSave({
       id: `r-${Date.now()}`,
       cliente: form.esWalkIn ? "" : form.cliente,
@@ -532,14 +766,9 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
       // Si no tocó nada, dejamos NULL para usar la default empresa (semántica del campo).
       duracionMinutos: (() => {
         if (!form.duracionTouched) return null;
-        const n = Number(form.duracionMinutos);
-        if (!Number.isFinite(n) || n <= 0) return null;
-        const clamped = Math.min(
-          DURACION_RESERVA_MAX_MINUTOS,
-          Math.max(DURACION_RESERVA_MIN_MINUTOS, Math.round(n)),
-        );
-        if (config && clamped === config.duracionReservaMin) return null;
-        return clamped;
+        if (duracionEfectiva == null) return null;
+        if (config && duracionEfectiva === config.duracionReservaMin) return null;
+        return duracionEfectiva;
       })(),
       notificarEmail: form.notificarEmail,
       codigoCupon: form.codigoCupon.trim() ? form.codigoCupon.trim().toUpperCase() : null,
@@ -608,6 +837,16 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
           </Button>
         </div>
       )}
+      {/* La mesa es obligatoria: sin ella no se puede guardar. La zona no se
+          pide aparte porque se deduce de la mesa elegida. */}
+      {faltaMesa && (
+        <div className="rounded-md border border-amber-500/60 bg-amber-500/5 px-3 py-1.5 text-xs">
+          <span className="font-semibold">Falta la mesa.</span>{" "}
+          <span className="text-muted-foreground">
+            Elige una mesa en el plano para poder guardar la reserva.
+          </span>
+        </div>
+      )}
       <div className="grid grid-cols-2 gap-2">
         <Button
           size="sm"
@@ -633,6 +872,7 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
               <Label className="text-xs">Nombre *</Label>
               <Input
                 className="h-8 text-xs"
+                maxLength={RESERVA_NOMBRE_MAX_CHARS}
                 value={form.cliente}
                 onFocus={() => setCampoActivo("cliente")}
                 onBlur={() => setTimeout(() => setCampoActivo((c) => (c === "cliente" ? null : c)), 150)}
@@ -641,9 +881,10 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
               {renderSugerencias("cliente")}
             </div>
             <div className="relative">
-              <Label className="text-xs">Apellidos</Label>
+              <Label className="text-xs">Apellidos *</Label>
               <Input
                 className="h-8 text-xs"
+                maxLength={RESERVA_APELLIDOS_MAX_CHARS}
                 value={form.apellidos}
                 onFocus={() => setCampoActivo("apellidos")}
                 onBlur={() => setTimeout(() => setCampoActivo((c) => (c === "apellidos" ? null : c)), 150)}
@@ -652,7 +893,14 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
               {renderSugerencias("apellidos")}
             </div>
             <div className="relative">
-              <Label className="text-xs">Teléfono</Label>
+              <LabelConRegla
+                moduloKey="sala"
+                submoduloKey="reservas"
+                campoKey="telefono"
+                className="text-xs"
+              >
+                Teléfono
+              </LabelConRegla>
               <Input
                 className="h-8 text-xs"
                 value={form.telefono}
@@ -662,19 +910,89 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
               />
               {renderSugerencias("telefono")}
             </div>
-            <div><Label className="text-xs">Email</Label><Input className="h-8 text-xs" value={form.email} onChange={e => setForm(p => ({ ...p, email: e.target.value }))} /></div>
+            <div>
+              <LabelConRegla
+                moduloKey="sala"
+                submoduloKey="reservas"
+                campoKey="email"
+                className="text-xs"
+              >
+                Email
+              </LabelConRegla>
+              <Input
+                className="h-8 text-xs"
+                value={form.email}
+                onChange={e => setForm(p => ({ ...p, email: e.target.value }))}
+              />
+            </div>
           </>
         )}
         <div><Label className="text-xs">Fecha *</Label><Input type="date" className="h-8 text-xs" value={form.fecha} onChange={e => setForm(p => ({ ...p, fecha: e.target.value }))} /></div>
-        <div><Label className="text-xs">Hora *</Label><Input type="time" className="h-8 text-xs" value={form.hora} onChange={e => setForm(p => ({ ...p, hora: e.target.value }))} /></div>
-        <div><Label className="text-xs">Turno</Label>
+        {/* Hora: solo las del horario real del turno. El ⚠ de cada hora sigue a
+            la MESA elegida si la hay (esa mesa está pillada a esa hora); si aún
+            no hay mesa, avisa cuando no queda ningún hueco para el grupo. */}
+        <div><Label className="text-xs">Hora *</Label>
+          {slots.length > 0 ? (
+            <select
+              value={form.hora.slice(0, 5)}
+              onChange={(e) => setForm((p) => ({ ...p, hora: e.target.value }))}
+              className={cn(
+                "h-8 text-xs w-full rounded-md border border-input bg-background px-2",
+                horaConflictiva && "border-amber-500",
+              )}
+            >
+              <option value="">— Elige hora —</option>
+              {slots.map((s) => {
+                // ⏰ = peligro de HORARIO. El aforo no depende de la hora, así
+                // que aquí nunca sale 👥.
+                const pisa = mesaBanner
+                  ? mesaOcupadaEn(s, mesaBanner.codigo)
+                  : !s.hayMesaLibre;
+                return (
+                  <option key={s.hora} value={s.hora}>
+                    {s.hora}{pisa ? "  ⏰" : ""}
+                  </option>
+                );
+              })}
+            </select>
+          ) : (
+            // Sin horario definido (o fallo al calcularlo): entrada libre, para
+            // no bloquear el alta por un problema de configuración.
+            <Input
+              type="time"
+              className="h-8 text-xs"
+              value={form.hora}
+              onChange={(e) => setForm((p) => ({ ...p, hora: e.target.value }))}
+            />
+          )}
+          {cargandoSlots ? (
+            <p className="mt-1 text-[10px] text-muted-foreground">Calculando disponibilidad…</p>
+          ) : turnoCerrado.cerrado ? (
+            <p className="mt-1 text-[11px] text-amber-700 dark:text-amber-300">
+              Cerrado este día en {form.turno === "CENA" ? "cena" : "comida"}
+              {turnoCerrado.motivo ? ` · ${turnoCerrado.motivo}` : ""}.
+            </p>
+          ) : horaConflictiva ? (
+            <p className="mt-1 flex items-start gap-1 text-[11px] text-amber-700 dark:text-amber-300">
+              <Clock className="mt-0.5 h-3 w-3 shrink-0" />
+              <span>
+                {mesaBanner
+                  ? `La mesa ${mesaBanner.codigo} ya tiene reserva a esta hora: se pisará.`
+                  : `Sin mesas libres para ${form.comensales} pax${
+                      form.zona ? ` en ${zonaLabel(form.zona)}` : ""
+                    } a esta hora: la reserva pisará otra existente.`}
+              </span>
+            </p>
+          ) : null}
+        </div>
+        <div><Label className="text-xs">Turno *</Label>
           <Select value={form.turno} onValueChange={v => setForm(p => ({ ...p, turno: v as TurnoReserva }))}>
             <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
             <SelectContent><SelectItem value="COMIDA">Comida</SelectItem><SelectItem value="CENA">Cena</SelectItem></SelectContent>
           </Select>
         </div>
         <div>
-          <Label className="text-xs">Comensales</Label>
+          <Label className="text-xs">Comensales *</Label>
           <Input
             type="number"
             min={1}
@@ -704,74 +1022,117 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
             }
           />
         </div>
+        {/* Zona manda sobre mesa: se elige zona y luego una mesa de esa zona. */}
         <div className="col-span-2"><Label className="text-xs">Zona</Label>
-          <Select value={form.zona || "ANY"} onValueChange={v => setForm(p => ({ ...p, zona: v === "ANY" ? "" : v as ZonaSala }))}>
+          <Select value={form.zona} onValueChange={(v) => elegirZona(v as ZonaSala)}>
             <SelectTrigger
               className={cn(
                 "h-8 text-xs",
                 zonaNoDisponible && "border-amber-500 focus-visible:ring-amber-500",
               )}
             >
-              <SelectValue placeholder="Cualquiera" />
+              <SelectValue placeholder="Elige zona" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="ANY">Cualquiera</SelectItem>
               {zonasDisponibles.map((z) => <SelectItem key={z.value} value={z.value}>{z.label}</SelectItem>)}
               {zonaNoDisponible && form.zona && (
                 <SelectItem value={form.zona} disabled>
-                  {form.zona.charAt(0) + form.zona.slice(1).toLowerCase().replace(/_/g, " ")} (no disponible)
+                  {zonaLabel(form.zona)} (no disponible)
                 </SelectItem>
               )}
             </SelectContent>
           </Select>
-          {zonaNoDisponible && (
+          {zonaNoDisponible ? (
             <p className="mt-1 text-[11px] text-amber-700 dark:text-amber-300">
-              La zona seleccionada no está disponible para esta fecha y turno. Cámbiala para poder guardar la reserva.
+              La zona seleccionada ya no existe en el catálogo de salas. Cámbiala para poder guardar la reserva.
             </p>
-          )}
+          ) : zonasDisponibles.length === 0 ? (
+            <p className="mt-1 text-[11px] text-amber-700 dark:text-amber-300">
+              Este local no tiene zonas. Créalas en Configuración → Salas.
+            </p>
+          ) : null}
         </div>
         <div className="col-span-2 space-y-1">
           <Label className="text-xs">Mesa</Label>
+          {/* Sin zona no hay mesas que ofrecer: la mesa siempre cuelga de una zona. */}
           <select
             value={form.mesaId}
             onChange={(e) => elegirMesa(e.target.value)}
-            className="h-8 text-xs w-full rounded-md border border-input bg-background px-2"
+            disabled={!form.zona}
+            className="h-8 text-xs w-full rounded-md border border-input bg-background px-2 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            <option value="">— Sin asignar —</option>
-            {Array.from(mesasPorZona.entries()).map(([zNombre, ms]) => (
-              <optgroup key={zNombre} label={zNombre}>
-                {ms.map((m) => {
-                  const est = getEstadoMesa(m);
-                  const tag =
-                    est === "LIBRE" ? "Libre" :
-                    est === "OCUPADA" ? "Sentada" :
-                    est === "RESERVADA" ? "Reservada" :
-                    est === "BLOQUEADA" ? "Bloqueada" : "";
-                  return (
-                    <option key={m.id} value={m.id}>
-                      {m.codigo} · {m.capacidad}p · {tag}
-                    </option>
-                  );
-                })}
-              </optgroup>
-            ))}
+            <option value="">{form.zona ? "— Sin asignar —" : "— Elige zona primero —"}</option>
+            {mesasSeleccionables.map((m) => {
+              const est = getEstadoMesa(m);
+              const tag =
+                est === "LIBRE" ? "Libre" :
+                est === "OCUPADA" ? "Sentada" :
+                est === "RESERVADA" ? "Reservada" :
+                est === "BLOQUEADA" ? "Bloqueada" : "";
+              // Dos peligros DISTINTOS, cada uno con su icono, y pueden salir
+              // los dos a la vez:
+              //   ⏰ = a esa hora la mesa ya tiene reserva (se pisaría).
+              //   👥 = el grupo no encaja en la capacidad de la mesa.
+              const pisa = codigosOcupadosAhora.has(m.codigo.toUpperCase());
+              const aforo = aforoMesa(m.id, form.comensales);
+              const avisos = `${pisa ? " ⏰" : ""}${aforo ? " 👥" : ""}`;
+              return (
+                <option key={m.id} value={m.id}>
+                  {m.codigo} · {m.capacidad}p · {tag}{avisos}
+                </option>
+              );
+            })}
           </select>
           {form.mesaId ? (
-            <p className="text-[10px] text-muted-foreground truncate">
-              {(() => {
-                const m = mesas.find((x) => x.id === form.mesaId);
-                if (!m) return null;
-                return (
-                  <>
-                    <span className="font-semibold">{m.codigo}</span>{" "}
-                    <span>· {m.capacidad}p · {String(m.zona)}</span>
-                  </>
-                );
-              })()}
+            <>
+              <p className="text-[10px] text-muted-foreground truncate">
+                {(() => {
+                  const m = mesas.find((x) => x.id === form.mesaId);
+                  if (!m) return null;
+                  return (
+                    <>
+                      <span className="font-semibold">{m.codigo}</span>{" "}
+                      <span>· {m.capacidad}p · {String(m.zona)}</span>
+                    </>
+                  );
+                })()}
+              </p>
+              {/* 👥 Aviso de AFORO, independiente del de horario: puede salir
+                  con la mesa completamente libre. */}
+              {aforoConflictivo && (
+                <p className="flex items-start gap-1 text-[10px] text-rose-700 dark:text-rose-300">
+                  <Users className="mt-0.5 h-3 w-3 shrink-0" />
+                  <span>
+                    {aforoConflictivo.tipo === "excede"
+                      ? `Esta mesa admite máximo ${aforoConflictivo.max} y quieres sentar a ${form.comensales}.`
+                      : `Esta mesa es para mínimo ${aforoConflictivo.min} y solo vienen ${form.comensales}.`}
+                  </span>
+                </p>
+              )}
+            </>
+          ) : !form.zona ? (
+            <p className="text-[10px] text-muted-foreground">
+              Elige antes la zona: las mesas se listan por zona.
+            </p>
+          ) : mesasSeleccionables.length === 0 ? (
+            // Nunca dejar la lista vacía en silencio: si no hay mesas, se dice por qué.
+            <p className="text-[10px] text-amber-700 dark:text-amber-300">
+              {zonaLabel(form.zona)} no tiene mesas activas. Elige otra zona.
             </p>
           ) : (
             <p className="text-[10px] text-muted-foreground">
               Sin mesa asignada — el sistema la elegirá al sentar al cliente.
+            </p>
+          )}
+          {/* Leyenda: los iconos no se adivinan. Solo se muestra si en la lista
+              hay al menos una mesa marcada. */}
+          {mesasSeleccionables.some(
+            (m) =>
+              codigosOcupadosAhora.has(m.codigo.toUpperCase()) ||
+              aforoMesa(m.id, form.comensales),
+          ) && (
+            <p className="text-[10px] text-muted-foreground">
+              ⏰ ya reservada a esa hora · 👥 el grupo no encaja en la mesa
             </p>
           )}
         </div>
@@ -870,7 +1231,7 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
               validar={(codigo) => validarCuponAdminAction({
                 codigo,
                 fecha: form.fecha,
-                turno: form.turno === "DIA_COMPLETO" ? null : (form.turno as "COMIDA" | "CENA"),
+                turno: form.turno,
               })}
               contextoSerial={`${form.fecha}|${form.turno}|${form.comensales}`}
               onResult={(r) => setCuponValido(r === null ? null : r.ok)}
@@ -911,9 +1272,88 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
         </label>
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={onClose}>Cancelar</Button>
-          <Button size="sm" onClick={handleSave} disabled={guardarBloqueado}>Reservar</Button>
+          <Button size="sm" onClick={handleSave} disabled={guardarBloqueado || comprobandoSolape}>
+            {comprobandoSolape ? "Comprobando…" : "Reservar"}
+          </Button>
         </div>
       </div>
+
+      {/* Aviso previo a crear: detalla CADA motivo de peligro por separado
+          (⏰ horario y 👥 aforo) para que se acepte sabiendo exactamente qué
+          se asume. El back-office manda, pero informado. */}
+      <Dialog open={aviso != null} onOpenChange={(v) => { if (!v) setAviso(null); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-amber-700 dark:text-amber-300">
+              <AlertTriangle className="h-4 w-4" />
+              {aviso && aviso.choques.length > 0 && aviso.aforo
+                ? "Dos avisos en esta reserva"
+                : aviso?.aforo
+                  ? "El grupo no encaja en la mesa"
+                  : "Esta mesa ya está reservada"}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 text-xs">
+            {/* ⏰ MOTIVO 1: horario */}
+            {aviso && aviso.choques.length > 0 && (
+              <div className="space-y-2">
+                <p className="flex items-center gap-1.5 font-semibold text-amber-700 dark:text-amber-300">
+                  <Clock className="h-3.5 w-3.5 shrink-0" />
+                  Se pisa {aviso.choques.length === 1 ? "una reserva" : `${aviso.choques.length} reservas`}
+                </p>
+                <p className="text-muted-foreground">
+                  Tu reserva de {form.comensales} pax ocupa la mesa {aviso.mesaCodigo} de{" "}
+                  {form.hora.slice(0, 5)} a{" "}
+                  {horaMasMinutos(form.hora, duracionEfectiva ?? 120)}, y coincide con:
+                </p>
+                {aviso.choques.map((c) => (
+                  <div
+                    key={c.reservaId}
+                    className="rounded-md border border-amber-500/40 bg-amber-500/5 px-3 py-2"
+                  >
+                    <div className="font-semibold">{c.cliente || "Sin nombre"}</div>
+                    <div className="text-muted-foreground">
+                      Mesa {c.mesa} · {c.personas} pax · termina a las {c.horaFin}
+                    </div>
+                  </div>
+                ))}
+                <p className="text-muted-foreground">
+                  La mesa quedará ocupada dos veces a la vez.
+                </p>
+              </div>
+            )}
+
+            {/* 👥 MOTIVO 2: aforo de la mesa */}
+            {aviso?.aforo && (
+              <div className="space-y-2">
+                <p className="flex items-center gap-1.5 font-semibold text-rose-700 dark:text-rose-300">
+                  <Users className="h-3.5 w-3.5 shrink-0" />
+                  El grupo no encaja en la mesa
+                </p>
+                <div className="rounded-md border border-rose-500/40 bg-rose-500/5 px-3 py-2">
+                  <div className="font-semibold">Mesa {aviso.mesaCodigo}</div>
+                  <div className="text-muted-foreground">
+                    {aviso.aforo.tipo === "excede"
+                      ? `Admite máximo ${aviso.aforo.max} ${aviso.aforo.max === 1 ? "persona" : "personas"} y quieres sentar a ${form.comensales}.`
+                      : `Es para mínimo ${aviso.aforo.min} ${aviso.aforo.min === 1 ? "persona" : "personas"} y solo vienen ${form.comensales}.`}
+                  </div>
+                </div>
+                <p className="text-muted-foreground">
+                  {aviso.aforo.tipo === "excede"
+                    ? "Puede que no quepan cómodamente."
+                    : "Estarás ocupando una mesa mayor de la necesaria."}
+                </p>
+              </div>
+            )}
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" size="sm" onClick={() => setAviso(null)}>
+              Cancelar
+            </Button>
+            <Button size="sm" onClick={emitirReserva}>Aceptar y reservar</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -1117,7 +1557,11 @@ function mapDbToReserva(row: Record<string, unknown>): Reserva {
     turno: (row.turno as TurnoReserva) ?? "COMIDA",
     comensales: (row.personas as number) ?? (row.comensales as number) ?? 0,
     zona: (row.zona as ZonaSala | "") ?? "",
-    mesaId: (row.mesa as string) ?? (row.mesa_id as string) ?? "",
+    // OJO: `reservas.mesa` guarda el CÓDIGO ("R3", "M1+M2"), no el UUID.
+    // `mesaId` se rellena después, resolviendo el código contra las mesas cargadas
+    // (ver `reservasConMesa`). Aquí solo se conserva el código en crudo.
+    mesaCodigo: (row.mesa as string) ?? "",
+    mesaId: (row.mesa_id as string) ?? "",
     estado: (row.estado as EstadoReserva) ?? "CONFIRMADA",
     observaciones: (row.notas as string) ?? (row.observaciones as string) ?? "",
     clienteId: (row.cliente_id as string | null) ?? null,
@@ -1550,7 +1994,8 @@ function PlanoCanvas({
   onNueva,
   onEditar,
   onCambiarEstado,
-  onAccionPendiente,
+  onBloquearMesa,
+  onDesplazarReserva,
   onQuitarBloqueoMesa,
 }: {
   mesas: Mesa[];
@@ -1567,7 +2012,8 @@ function PlanoCanvas({
   onNueva: (m: Mesa) => void;
   onEditar: (r: Reserva) => void;
   onCambiarEstado: (id: string, e: EstadoReserva) => void;
-  onAccionPendiente: (label: string) => void;
+  onBloquearMesa: (m: Mesa) => void;
+  onDesplazarReserva: (r: Reserva) => void;
   /** Si la mesa está BLOQUEADA y se pulsa, levanta el bloqueo solo para (fecha, turno). */
   onQuitarBloqueoMesa?: (m: Mesa) => void;
 }) {
@@ -1799,7 +2245,8 @@ function PlanoCanvas({
                     onNueva={() => onNueva(m)}
                     onEditar={() => { if (rs[0]) onEditar(rs[0]); }}
                     onCambiarEstado={onCambiarEstado}
-                    onAccionPendiente={onAccionPendiente}
+                    onBloquearMesa={onBloquearMesa}
+                    onDesplazarReserva={onDesplazarReserva}
                   />
                 )}
               </PopoverContent>
@@ -1832,7 +2279,11 @@ function PlanoCanvas({
 }
 
 export function ReservasView() {
-  const { empresaActual } = useEmpresa();
+  const { empresaActual, ajustes } = useEmpresa();
+  // Ajustes → Empresa → Reservas. Apagado (por defecto) el listado enseña las
+  // reservas de TODAS las salas del turno y cambiar de sala solo mueve el plano;
+  // encendido, cada sala enseña únicamente las suyas.
+  const listadoPorSala = ajustes.configOperativa.reservasListadoPorSala ?? false;
   const [mesas, setMesas] = useState<Mesa[]>(SAMPLE_MESAS);
   const [reservas, setReservas] = useState<Reserva[]>([]);
   const [, setLoading] = useState(true);
@@ -1850,6 +2301,25 @@ export function ReservasView() {
   const [showNueva, setShowNueva] = useState(false);
   const [showListaEspera, setShowListaEspera] = useState(false);
   const [selectedReserva, setSelectedReserva] = useState<Reserva | null>(null);
+  /** Cambio de estado pendiente de decidir si se avisa al cliente por correo. */
+  const [confirmEstado, setConfirmEstado] = useState<
+    { id: string; estado: EstadoReserva; email: string } | null
+  >(null);
+  /** Edición del tiempo de mesa desde la ficha de la reserva. */
+  const [duracionEdit, setDuracionEdit] = useState("");
+  const [guardandoDuracion, setGuardandoDuracion] = useState(false);
+  /** Aviso de peligro: la mesa ya está ocupada en esa franja. */
+  const [avisoOcupada, setAvisoOcupada] = useState<string | null>(null);
+  /** Confirmación de "Bloquear" una mesa para el día y turno en pantalla. */
+  const [confirmBloqueo, setConfirmBloqueo] = useState<
+    { mesa: Mesa; reservasActivas: number } | null
+  >(null);
+  const [guardandoBloqueo, setGuardandoBloqueo] = useState(false);
+  /** Reserva que se está moviendo de mesa con "Desplazar". */
+  const [reservaADesplazar, setReservaADesplazar] = useState<Reserva | null>(null);
+  const [mesaDestinoId, setMesaDestinoId] = useState("");
+  const [guardandoDesplazar, setGuardandoDesplazar] = useState(false);
+
   const [showDetalleReserva, setShowDetalleReserva] = useState(false);
   const [selectedInsights, setSelectedInsights] = useState<ClienteInsights | null>(null);
   const [vista, setVista] = useState<"dia" | "mes">("dia");
@@ -1859,7 +2329,7 @@ export function ReservasView() {
   const [totalesMes, setTotalesMes] = useState<{ personas: number; reservas: number }>({ personas: 0, reservas: 0 });
   const [locales, setLocales] = useState<LocalMin[]>([]);
   const [localId, setLocalId] = useState<string>("");
-  const [salasLocal, setSalasLocal] = useState<SalaConfig[]>([]);
+  const [salasLocalTodas, setSalasLocalTodas] = useState<SalaConfig[]>([]);
   const [salaActualId, setSalaActualId] = useState<string>("");
   const [navDirSala, setNavDirSala] = useState<1 | -1>(1);
   const [planosLocal, setPlanosLocal] = useState<PlanoConfig[]>([]);
@@ -1899,7 +2369,7 @@ export function ReservasView() {
       const d = ctx.data;
       setLocales(d.locales);
       if (!localId) setLocalId(d.localId);
-      setSalasLocal(d.salas);
+      setSalasLocalTodas(d.salas);
       const salaPrincipal = d.salas.find((s) => s.esPrincipal) ?? d.salas[0];
       setSalaActualId(salaPrincipal?.id ?? "");
       setPlanosLocal(d.planos);
@@ -1949,6 +2419,26 @@ export function ReservasView() {
     return () => { cancelled = true; };
   }, [empresaActual.id, localId, posicionesRefresh]);
 
+  // Salas que muestra el plano SELECCIONADO en el filtro de planos. Un plano es
+  // un conjunto de salas activas (`planoSalas`), así que elegir plano restringe
+  // qué salas —y por tanto qué mesas y zonas— se ven. Antes el filtro solo
+  // movía el check del desplegable y el plano dibujado no cambiaba nunca.
+  const salasLocal = useMemo(() => {
+    const ids = planoActualId ? planoSalas[planoActualId] : undefined;
+    if (!ids || ids.length === 0) return salasLocalTodas;
+    const permitidas = new Set(ids);
+    const filtradas = salasLocalTodas.filter((s) => permitidas.has(s.id));
+    // Si el plano no tiene ninguna sala del local, no dejamos la vista vacía.
+    return filtradas.length > 0 ? filtradas : salasLocalTodas;
+  }, [salasLocalTodas, planoSalas, planoActualId]);
+
+  // Si la sala activa no pertenece al plano elegido, saltamos a la primera suya.
+  useEffect(() => {
+    if (salasLocal.length === 0) return;
+    if (salasLocal.some((s) => s.id === salaActualId)) return;
+    setSalaActualId(salasLocal[0]!.id);
+  }, [salasLocal, salaActualId]);
+
   // Índice de la sala activa + siguiente sala en la dirección actual.
   // Cuando estamos en un extremo, la flecha invierte su sentido para indicar el final.
   const salaActualIdx = useMemo(
@@ -1984,15 +2474,28 @@ export function ReservasView() {
     [decoracionesPlano, salaActualId],
   );
 
+  // Zonas que alimentan el filtro del LISTADO. Con el listado separado por sala
+  // son las de la sala visible; con el listado unificado (por defecto) son las
+  // de todas las salas del plano, porque si no las reservas de las demás salas
+  // no encontrarían su zona y el filtro las tiraría de la lista.
+  const zonasFiltroListado = useMemo(() => {
+    if (listadoPorSala) return zonasSalaActual;
+    const salasOK = new Set(salasLocal.map((s) => s.id));
+    return zonasReales.filter((z) => salasOK.has(z.salaId));
+  }, [listadoPorSala, zonasSalaActual, zonasReales, salasLocal]);
+
   // Items que alimentan el dropdown de zonas: reales si existen, si no fallback legacy.
   const zonaItems = useMemo(() => {
-    if (zonasSalaActual.length > 0) {
-      return zonasSalaActual.map((z) => ({
-        id: z.id,
-        label: z.nombre,
-        color: z.colorPastel,
-        matchKey: z.nombre.toUpperCase(),
-      }));
+    if (zonasFiltroListado.length > 0) {
+      // Dos salas distintas pueden tener una zona con el mismo nombre. Como el
+      // filtro casa por NOMBRE, las agrupamos en una sola entrada del desplegable.
+      const porNombre = new Map<string, { id: string; label: string; color: string | undefined; matchKey: string }>();
+      for (const z of zonasFiltroListado) {
+        const matchKey = z.nombre.toUpperCase();
+        if (porNombre.has(matchKey)) continue;
+        porNombre.set(matchKey, { id: matchKey, label: z.nombre, color: z.colorPastel, matchKey });
+      }
+      return Array.from(porNombre.values());
     }
     return ZONAS_SALA.map((z) => ({
       id: z,
@@ -2000,7 +2503,7 @@ export function ReservasView() {
       color: undefined as string | undefined,
       matchKey: z,
     }));
-  }, [zonasSalaActual]);
+  }, [zonasFiltroListado]);
 
   // Cada vez que cambian los items (sala distinta), reset a "todas seleccionadas"
   useEffect(() => {
@@ -2035,6 +2538,15 @@ export function ReservasView() {
     })();
     return () => { cancelled = true; };
   }, [selectedReserva]);
+
+  // El campo de tiempo de mesa arranca con el valor de la reserva; si no tiene
+  // override, con el valor por defecto de la empresa.
+  useEffect(() => {
+    if (!selectedReserva) return;
+    const efectiva =
+      selectedReserva.duracionMinutos ?? cfgReservas?.duracionReservaMin ?? null;
+    setDuracionEdit(efectiva ? String(efectiva) : "");
+  }, [selectedReserva, cfgReservas]);
 
   const loadReservas = useCallback(async (f?: string) => {
     setLoading(true);
@@ -2173,7 +2685,31 @@ export function ReservasView() {
     [cfgReservas, fecha, tickAhora],
   );
 
-  const reservasDia = useMemo(() => reservas.filter(r => r.fecha === fecha), [reservas, fecha]);
+  // La BD guarda el CÓDIGO de mesa ("R3"), pero toda la UI compara contra el
+  // UUID (`mesas.find(m => m.id === r.mesaId)`). Sin esta resolución el `find`
+  // no encontraba nada nunca: la columna "Mesa" salía "—", el plano no pintaba
+  // las mesas reservadas y el contador de ocupadas se quedaba a 0.
+  // Las uniones se graban como "M1+M2": la reserva se ancla a la primera mesa
+  // del conjunto para que el plano tenga dónde resaltarla.
+  const mesaIdPorCodigo = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const mesa of mesas) m.set(mesa.codigo.toUpperCase(), mesa.id);
+    return m;
+  }, [mesas]);
+
+  const reservasResueltas = useMemo(() => {
+    if (mesaIdPorCodigo.size === 0) return reservas;
+    return reservas.map((r) => {
+      if (r.mesaId) return r;
+      const codigo = r.mesaCodigo?.trim();
+      if (!codigo) return r;
+      const primero = codigo.split("+")[0]?.trim().toUpperCase() ?? "";
+      const id = mesaIdPorCodigo.get(primero);
+      return id ? { ...r, mesaId: id } : r;
+    });
+  }, [reservas, mesaIdPorCodigo]);
+
+  const reservasDia = useMemo(() => reservasResueltas.filter(r => r.fecha === fecha), [reservasResueltas, fecha]);
   const reservasTurno = useMemo(() => reservasDia.filter(r => r.turno === turno), [reservasDia, turno]);
   const reservasFiltradas = useMemo(() => {
     return reservasTurno.filter(r => {
@@ -2198,15 +2734,35 @@ export function ReservasView() {
     return Array.from(set).sort();
   }, [reservasDia]);
 
-  const mesasActivas = mesas.filter(m => m.activa);
+  // Mesas de la SALA activa: el canvas recibía todas las del local mientras las
+  // zonas sí venían filtradas, así que dos salas con una zona del mismo nombre
+  // mezclaban sus mesas en el plano.
+  const mesasActivas = useMemo(() => {
+    const activas = mesas.filter((m) => m.activa);
+    const zonasOK = new Set(zonasSalaActual.map((z) => z.id));
+    if (zonasOK.size === 0) return activas;
+    return activas.filter((m) => {
+      const zonaId = mesasMeta.get(m.id)?.zonaId;
+      // Sin metadatos de zona no la escondemos: mejor mostrarla que perderla.
+      return !zonaId || zonasOK.has(zonaId);
+    });
+  }, [mesas, zonasSalaActual, mesasMeta]);
   const capacidadTotal = mesasActivas.reduce((s, m) => s + m.capacidad, 0);
-  // Las reservas canceladas (también NO_SHOW y LIBERADA) no cuentan en ningún
-  // sumatorio: si se cancela deja de ocupar plaza.
-  const reservasContables = reservasTurno.filter(
-    r => r.estado !== "CANCELADA" && r.estado !== "NO_SHOW" && r.estado !== "LIBERADA",
+  // Los contadores de arriba van SIEMPRE en función del filtro: si el usuario
+  // desmarca estados, zonas u origen, o busca un cliente, el total refleja lo
+  // que está viendo. Antes se calculaban sobre el turno entero y el número no
+  // se movía al filtrar.
+  // Sobre esa base solo se descuentan los que NO asisten (canceladas/no-show):
+  // una LIBERADA soltó la mesa, pero el cliente vino y comió, así que cuenta.
+  const reservasContables = reservasFiltradas.filter(
+    r => !ESTADOS_NO_ASISTEN.includes(r.estado),
   );
   const cubiertosReservados = reservasContables.reduce((s, r) => s + r.comensales, 0);
-  const mesasOcupadas = new Set(reservasTurno.filter(r => r.mesaId && !ESTADOS_NO_OCUPANTES.includes(r.estado)).map(r => r.mesaId)).size;
+  const mesasOcupadas = new Set(
+    reservasFiltradas
+      .filter(r => r.mesaId && !ESTADOS_NO_OCUPANTES.includes(r.estado))
+      .map(r => r.mesaId),
+  ).size;
 
   // Índice mesaId → reservas activas del turno. Se rehace solo si cambia `reservasTurno`,
   // evitando un O(N×M) en cada render (antes hacíamos un `.filter()` por cada mesa).
@@ -2233,16 +2789,79 @@ export function ReservasView() {
   const getReservasMesa = (mesaId: string): Reserva[] =>
     reservasActivasPorMesa.get(mesaId) ?? [];
 
-  const cambiarEstadoReserva = async (id: string, estado: EstadoReserva) => {
+  /**
+   * Aplica el cambio de estado. `notificarCliente` decide si sale el correo:
+   * cambiar de estado es criterio del empleado, así que por defecto NO se
+   * notifica a nadie (antes el servidor enviaba el correo por su cuenta).
+   */
+  const aplicarEstadoReserva = async (
+    id: string,
+    estado: EstadoReserva,
+    notificarCliente: boolean,
+  ) => {
     setReservas(prev => prev.map(r => r.id === id ? { ...r, estado } : r));
     setSelectedReserva(prev => (prev && prev.id === id ? { ...prev, estado } : prev));
-    const res = await updateReserva(id, { estado });
+    const res = await updateReserva(id, { estado, notificarCliente });
     if (res.ok) {
       toast.success(`Reserva actualizada a ${ESTADO_RESERVA_LABELS[estado]}`);
+      if (notificarCliente) toast.success("Correo enviado al cliente");
+      // Recargamos también en el camino feliz: el servidor puede tocar campos
+      // derivados (reconfirmada_at, origen) que el update optimista no refleja.
+      loadReservas(fecha);
     } else {
-      toast.error("Error al actualizar reserva");
+      // Reactivar una reserva anulada puede chocar con otra que haya entrado en
+      // esa mesa mientras tanto. Ese caso se muestra como aviso de peligro
+      // persistente (no un toast que se va) porque hay que recolocar a alguien.
+      const msg = res.error ?? "Error al actualizar reserva";
+      if (/ya tiene una reserva/i.test(msg)) setAvisoOcupada(msg);
+      else toast.error(msg);
       loadReservas(fecha);
     }
+  };
+
+  /**
+   * Amplía (o recorta) el tiempo que esta reserva ocupa la mesa. Se puede tocar
+   * en cualquier momento: una mesa que se alarga solo necesita más minutos aquí,
+   * y a partir de ese momento el sistema calcula su hora de fin con el valor
+   * nuevo para dejar entrar (o no) la siguiente reserva.
+   */
+  const guardarDuracion = async (id: string) => {
+    const n = Number(duracionEdit);
+    if (!Number.isFinite(n) || n <= 0) {
+      toast.error("Introduce un tiempo válido.");
+      return;
+    }
+    const clamped = Math.min(
+      DURACION_RESERVA_MAX_MINUTOS,
+      Math.max(DURACION_RESERVA_MIN_MINUTOS, Math.round(n)),
+    );
+    setGuardandoDuracion(true);
+    const res = await updateReserva(id, { duracionMinutos: clamped });
+    setGuardandoDuracion(false);
+    if (res.ok) {
+      toast.success(`Tiempo de mesa: ${clamped} min`);
+      setSelectedReserva(prev =>
+        prev && prev.id === id ? { ...prev, duracionMinutos: clamped } : prev,
+      );
+      loadReservas(fecha);
+    } else {
+      // Ampliar el tiempo puede pisar a la reserva que entró detrás.
+      const msg = res.error ?? "No se pudo guardar el tiempo de mesa";
+      if (/ya tiene una reserva/i.test(msg)) setAvisoOcupada(msg);
+      else toast.error(msg);
+    }
+  };
+
+  const cambiarEstadoReserva = async (id: string, estado: EstadoReserva) => {
+    // Solo RECONFIRMADA y CANCELADA tienen correo asociado, y solo tiene
+    // sentido preguntar si el cliente dejó email.
+    const tieneCorreo = estado === "RECONFIRMADA" || estado === "CANCELADA";
+    const reserva = reservasResueltas.find((r) => r.id === id) ?? null;
+    if (tieneCorreo && reserva?.email?.trim()) {
+      setConfirmEstado({ id, estado, email: reserva.email.trim() });
+      return;
+    }
+    await aplicarEstadoReserva(id, estado, false);
   };
 
   // Click en una mesa: la selecciona y, si tiene reserva activa, sincroniza la
@@ -2268,9 +2887,73 @@ export function ReservasView() {
     setShowDetalleReserva(true);
   };
 
-  // Placeholder para Bloquear/Desplazar (sin backend todavía).
-  const accionPendiente = (label: string) =>
-    toast.info(`${label}: disponible próximamente`);
+  // "Bloquear": deja la mesa fuera de juego solo para el día y turno que hay en
+  // pantalla (bloqueo puntual, no recurrente). Si la mesa tiene reservas activas
+  // se pide confirmación antes, porque bloquearla la saca del servicio.
+  const pedirBloqueoMesa = (m: Mesa) => {
+    const activas = reservasActivasPorMesa.get(m.id) ?? [];
+    setConfirmBloqueo({ mesa: m, reservasActivas: activas.length });
+  };
+
+  const bloquearMesaHoy = useCallback(
+    async (m: Mesa) => {
+      if (!localId) {
+        toast.error("Selecciona un local antes de bloquear la mesa.");
+        return;
+      }
+      const turnoBloqueo: TurnoRegla = turno === "COMIDA" ? "COMIDA" : "CENA";
+      setGuardandoBloqueo(true);
+      const res = await createBloqueo({
+        localId,
+        vigencia: { modo: "fechas", fechas: [fecha] },
+        turno: turnoBloqueo,
+        zonaIds: [],
+        mesaIds: [m.id],
+        motivo: "Bloqueada desde el plano de reservas",
+      });
+      setGuardandoBloqueo(false);
+      if (!res.ok) {
+        toast.error(res.error ?? "No se pudo bloquear la mesa");
+        return;
+      }
+      toast.success(
+        `Mesa ${m.codigo} bloqueada para el ${fecha} (${turnoBloqueo === "COMIDA" ? "comida" : "cena"})`,
+      );
+      setConfirmBloqueo(null);
+      setBloqueosRefresh((n) => n + 1);
+    },
+    [localId, fecha, turno],
+  );
+
+  // "Desplazar": mueve la reserva a otra mesa del mismo turno. Abre el selector
+  // con las mesas libres (y avisa de las ocupadas) en lugar de obligar a entrar
+  // en la ficha completa.
+  const abrirDesplazar = (r: Reserva) => {
+    setReservaADesplazar(r);
+    setMesaDestinoId("");
+  };
+
+  const desplazarReserva = useCallback(
+    async (r: Reserva, mesaDestino: Mesa) => {
+      setGuardandoDesplazar(true);
+      const res = await updateReserva(r.id, {
+        mesa: mesaDestino.codigo,
+        zona: mesaDestino.zona ? String(mesaDestino.zona) : undefined,
+      });
+      setGuardandoDesplazar(false);
+      if (!res.ok) {
+        const msg = res.error ?? "No se pudo desplazar la reserva";
+        if (/ya tiene una reserva/i.test(msg)) setAvisoOcupada(msg);
+        else toast.error(msg);
+        return;
+      }
+      toast.success(`Reserva movida a la mesa ${mesaDestino.codigo}`);
+      setReservaADesplazar(null);
+      setMesaDestinoId("");
+      loadReservas(fecha);
+    },
+    [fecha, loadReservas],
+  );
 
   const handleQuitarBloqueoMesa = useCallback(
     async (m: Mesa) => {
@@ -2331,11 +3014,10 @@ export function ReservasView() {
                 fecha={fecha}
                 turno={turno}
                 mesaPreseleccionada={selectedMesa}
-                planos={planosLocal}
-                planoSalas={planoSalas}
                 zonasReales={zonasReales}
                 mesas={mesas}
-                posicionesPlano={posicionesPlano}
+                mesasMeta={mesasMeta}
+                localId={localId}
                 getEstadoMesa={getMesaEstadoTurno}
                 onClose={() => setShowNueva(false)}
                 onSave={async r => {
@@ -2351,6 +3033,10 @@ export function ReservasView() {
                     hora: r.hora,
                     personas: r.comensales,
                     mesa: mesaCodigo,
+                    // Sin localId el servidor se salta la comprobación de mesas
+                    // bloqueadas: se podía reservar en una mesa bloqueada desde
+                    // el back-office (el portal público sí lo validaba).
+                    localId: localId || undefined,
                     zona: r.zona || undefined,
                     turno: r.turno,
                     estado: r.estado,
@@ -2373,6 +3059,10 @@ export function ReservasView() {
                       else toast.error(`No se pudo notificar: ${notif.error ?? "error desconocido"}`);
                     }
                   } else {
+                    // Revertir el optimistic update: si el servidor rechaza
+                    // (solape, mesa bloqueada, cupo), la fila provisional se
+                    // quedaba en la lista y parecía una reserva real.
+                    setReservas(prev => prev.filter(x => x.id !== r.id));
                     toast.error(res.error ?? "Error al crear reserva");
                   }
                 }} />
@@ -2429,7 +3119,11 @@ export function ReservasView() {
                     notas: notasFinal || undefined,
                   });
                   if (res.ok) { toast.success("Añadido a lista de espera"); loadReservas(fecha); }
-                  else { toast.error(res.error ?? "Error al guardar"); }
+                  else {
+                    // Revertir el optimista: si falla, la fila no debe quedarse.
+                    setReservas(prev => prev.filter(x => x.id !== optimista.id));
+                    toast.error(res.error ?? "Error al guardar");
+                  }
                 }}
               />
             </DialogContent>
@@ -2571,7 +3265,7 @@ export function ReservasView() {
         {panelOculto !== "lista" && (
         <div className={cn(
           "border-r flex flex-col bg-card overflow-hidden",
-          panelOculto === "ninguno" ? "w-[360px] shrink-0" : "flex-1",
+          panelOculto === "ninguno" ? "w-[460px] shrink-0" : "flex-1",
         )}>
           {(origenesPresentes.length > 0 || filtroOrigen !== "TODOS") && (
             <div className="px-3 py-1.5 border-b flex items-center gap-1.5 text-[10px]">
@@ -2582,15 +3276,16 @@ export function ReservasView() {
                 className="h-6 text-[10px] rounded border bg-background px-1.5"
               >
                 <option value="TODOS">Todos</option>
-                <option value="SIN_ORIGEN">Sin origen (manual)</option>
+                <option value="SIN_ORIGEN">Manual</option>
                 {origenesPresentes.map((o) => (
-                  <option key={o} value={o}>{o}</option>
+                  <option key={o} value={o}>{origenLabel(o)}</option>
                 ))}
               </select>
             </div>
           )}
-          <div className="grid grid-cols-[64px_40px_40px_1fr_30px_48px] gap-1 px-3 py-1.5 text-[10px] font-semibold text-muted-foreground border-b bg-muted/30 uppercase tracking-wider">
-            <span>Zona</span><span>Mesa</span><span>Hora</span><span>Nombre</span><span>Pax</span><span>Estado</span>
+          <div className={cn(LISTA_GRID, "px-3 py-2 text-[10px] font-semibold text-muted-foreground border-b bg-muted/30 uppercase tracking-wider")}>
+            <span>Zona</span><span>Mesa</span><span>Hora</span><span>Nombre</span>
+            <span className="text-center">Pax</span><span>Origen</span><span>Estado</span>
           </div>
           <div className="flex-1 overflow-y-auto">
             {reservasFiltradas.length === 0 && <p className="text-xs text-muted-foreground text-center py-8">Sin reservas para este turno</p>}
@@ -2603,25 +3298,25 @@ export function ReservasView() {
                     <button
                       onClick={() => setSelectedReserva(r)}
                       className={cn(
-                        "w-full grid grid-cols-[64px_40px_40px_1fr_30px_48px] gap-1 px-3 py-2.5 text-xs border-b hover:bg-muted/40 text-left transition-colors",
+                        "w-full text-[13px] border-b hover:bg-muted/40 text-left transition-colors",
+                        LISTA_GRID,
+                        "px-3 py-3",
                         selectedReserva?.id === r.id && "ring-2 ring-red-500 ring-inset bg-red-500/5",
                         blink,
                       )}
                     >
                       <span className="truncate text-muted-foreground">{zonaLabel(r.zona ? String(r.zona) : null)}</span>
                       <span className="font-mono font-bold">{mesa?.codigo ?? "—"}</span>
-                      <span className="tabular-nums">{r.hora}</span>
+                      <span className="tabular-nums">{r.hora.slice(0, 5)}</span>
                       <span className="truncate font-medium flex items-center gap-1.5 min-w-0">
                         <span className="truncate">{r.cliente || "WALK IN"} {r.apellidos}</span>
-                        {r.origen && (
-                          <span className="shrink-0 text-[9px] font-mono uppercase bg-sky-600/15 text-sky-700 dark:text-sky-400 border border-sky-600/30 rounded px-1 py-px" title={`Origen: ${r.origen}`}>
-                            {r.origen}
-                          </span>
-                        )}
                         {/* El chip "Cupón <CODIGO>" se pinta dentro de <ReservaFlagsChips />. */}
                         <ReservaFlagsChips reserva={r} etiquetas={etiquetasReserva} className="shrink-0" />
                       </span>
-                      <span className="text-center">{r.comensales}</span>
+                      <span className="text-center tabular-nums">{r.comensales}</span>
+                      <span className="truncate text-[11px] text-muted-foreground" title={origenLabel(r.origen)}>
+                        {origenLabel(r.origen)}
+                      </span>
                       <StatusDot estado={r.estado} />
                     </button>
                   </PopoverTrigger>
@@ -2632,7 +3327,8 @@ export function ReservasView() {
                       onNueva={() => { if (mesa) abrirNuevaConMesa(mesa); else { setSelectedMesa(null); setShowNueva(true); } }}
                       onEditar={() => abrirDetalleReserva(r)}
                       onCambiarEstado={cambiarEstadoReserva}
-                      onAccionPendiente={accionPendiente}
+                      onBloquearMesa={pedirBloqueoMesa}
+                      onDesplazarReserva={abrirDesplazar}
                     />
                   </PopoverContent>
                 </Popover>
@@ -2729,7 +3425,7 @@ export function ReservasView() {
               mesas={mesasActivas}
               posiciones={posicionesPlano}
               mesasMeta={mesasMeta}
-              zonas={zonasSalaActual.filter((z) => zonaIdsSel.includes(z.id))}
+              zonas={zonasSalaActual.filter((z) => zonaMatchSet.has(z.nombre.toUpperCase()))}
               decoraciones={decoracionesSalaActual}
               salaTieneZonas={zonasSalaActual.length > 0}
               selectedMesaId={selectedMesa?.id ?? null}
@@ -2740,7 +3436,8 @@ export function ReservasView() {
               onNueva={abrirNuevaConMesa}
               onEditar={abrirDetalleReserva}
               onCambiarEstado={cambiarEstadoReserva}
-              onAccionPendiente={accionPendiente}
+              onBloquearMesa={pedirBloqueoMesa}
+              onDesplazarReserva={abrirDesplazar}
               onQuitarBloqueoMesa={handleQuitarBloqueoMesa}
             />
           ) : (
@@ -2751,7 +3448,7 @@ export function ReservasView() {
                 </div>
               ) : (
                 zonasSalaActual
-                  .filter((z) => zonaIdsSel.includes(z.id))
+                  .filter((z) => zonaMatchSet.has(z.nombre.toUpperCase()))
                   .map((zona) => {
                     const mesasZona = mesasActivas
                       .filter((m) => (m.zona as unknown as string) === zona.nombre.toUpperCase())
@@ -2808,7 +3505,8 @@ export function ReservasView() {
                                     onNueva={() => abrirNuevaConMesa(m)}
                                     onEditar={() => { if (firstR) abrirDetalleReserva(firstR); }}
                                     onCambiarEstado={cambiarEstadoReserva}
-                                    onAccionPendiente={accionPendiente}
+                                    onBloquearMesa={pedirBloqueoMesa}
+                                    onDesplazarReserva={abrirDesplazar}
                                   />
                                 </PopoverContent>
                               </Popover>
@@ -2865,6 +3563,42 @@ export function ReservasView() {
                 <Label className="text-muted-foreground text-xs">Estado actual</Label>
                 <ReservaEstadoBadge estado={selectedReserva.estado} />
               </div>
+              {/* Tiempo de ocupación de la mesa. Arranca en el valor por defecto
+                  de la empresa y se puede ampliar en cualquier momento sobre la
+                  marcha (mesa que se alarga), sin tocar la configuración. */}
+              <div className="pt-2 border-t space-y-1.5">
+                <Label className="text-muted-foreground text-xs">Tiempo de mesa</Label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="number"
+                    min={DURACION_RESERVA_MIN_MINUTOS}
+                    max={DURACION_RESERVA_MAX_MINUTOS}
+                    step={5}
+                    className="h-8 text-xs w-24"
+                    placeholder={cfgReservas ? String(cfgReservas.duracionReservaMin) : ""}
+                    value={duracionEdit}
+                    onChange={(e) => setDuracionEdit(e.target.value)}
+                  />
+                  <span className="text-[11px] text-muted-foreground">min</span>
+                  <Button
+                    size="sm"
+                    className="h-8"
+                    disabled={guardandoDuracion || duracionEdit.trim() === ""}
+                    onClick={() => guardarDuracion(selectedReserva.id)}
+                  >
+                    Guardar
+                  </Button>
+                </div>
+                <p className="text-[10px] text-muted-foreground">
+                  {(() => {
+                    const efectiva =
+                      selectedReserva.duracionMinutos ?? cfgReservas?.duracionReservaMin ?? null;
+                    if (!efectiva) return "Sin duración configurada.";
+                    const fin = horaMasMinutos(selectedReserva.hora, efectiva);
+                    return `Ocupa la mesa hasta las ${fin}. Por defecto ${cfgReservas?.duracionReservaMin ?? "—"} min.`;
+                  })()}
+                </p>
+              </div>
               {selectedReserva.observaciones && <Field label="Observaciones">{selectedReserva.observaciones}</Field>}
               <div className="flex flex-wrap items-center gap-2">
                 <ReservaFlagsChips reserva={selectedReserva} etiquetas={etiquetasReserva} insights={selectedInsights} size="md" />
@@ -2900,6 +3634,217 @@ export function ReservasView() {
               </div>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Bloquear mesa: solo para la fecha y el turno que hay en pantalla. Se
+          confirma siempre porque saca la mesa del servicio, y se avisa si tenía
+          reservas activas encima. */}
+      <Dialog
+        open={confirmBloqueo !== null}
+        onOpenChange={(v) => { if (!v) setConfirmBloqueo(null); }}
+      >
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>
+              {confirmBloqueo ? `Bloquear mesa ${confirmBloqueo.mesa.codigo}` : ""}
+            </DialogTitle>
+          </DialogHeader>
+          {confirmBloqueo && (
+            <div className="space-y-2 text-xs">
+              <p className="text-muted-foreground">
+                La mesa queda fuera de servicio el{" "}
+                <span className="font-medium text-foreground">{fecha}</span> en{" "}
+                <span className="font-medium text-foreground">
+                  {turno === "COMIDA" ? "comida" : "cena"}
+                </span>
+                . Los demás días no se tocan.
+              </p>
+              {confirmBloqueo.reservasActivas > 0 && (
+                <div className="rounded-md border border-amber-500/40 bg-amber-500/5 px-3 py-2 flex gap-2">
+                  <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-600" />
+                  <span>
+                    Esta mesa tiene {confirmBloqueo.reservasActivas}{" "}
+                    {confirmBloqueo.reservasActivas === 1 ? "reserva" : "reservas"} en este
+                    turno. Desplázalas antes o quedarán sobre una mesa bloqueada.
+                  </span>
+                </div>
+              )}
+              <div className="flex justify-end gap-2 pt-1">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setConfirmBloqueo(null)}
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  size="sm"
+                  disabled={guardandoBloqueo}
+                  onClick={() => bloquearMesaHoy(confirmBloqueo.mesa)}
+                >
+                  Bloquear
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Desplazar: mover la reserva a otra mesa del mismo turno sin entrar en la
+          ficha. Solo se ofrecen mesas libres; las ocupadas o bloqueadas no salen. */}
+      <Dialog
+        open={reservaADesplazar !== null}
+        onOpenChange={(v) => { if (!v) { setReservaADesplazar(null); setMesaDestinoId(""); } }}
+      >
+        <DialogContent className="max-w-sm">
+          <DialogHeader><DialogTitle>Desplazar reserva</DialogTitle></DialogHeader>
+          {reservaADesplazar && (() => {
+            const mesaActual = mesas.find(m => m.id === reservaADesplazar.mesaId) ?? null;
+            const disponibles = mesas
+              .filter(m => m.id !== reservaADesplazar.mesaId)
+              .filter(m => getMesaEstadoTurno(m) === "LIBRE")
+              .sort((a, b) => a.codigo.localeCompare(b.codigo, "es", { numeric: true }));
+            const destino = disponibles.find(m => m.id === mesaDestinoId) ?? null;
+            const cabe = destino ? destino.capacidad >= reservaADesplazar.comensales : true;
+            return (
+              <div className="space-y-3 text-xs">
+                <p className="text-muted-foreground">
+                  <span className="font-medium text-foreground">
+                    {reservaADesplazar.cliente || "WALK IN"} {reservaADesplazar.apellidos}
+                  </span>{" "}
+                  · {reservaADesplazar.hora} · {reservaADesplazar.comensales} pax · mesa actual{" "}
+                  <span className="font-medium text-foreground">{mesaActual?.codigo ?? "sin asignar"}</span>
+                </p>
+                <div className="space-y-1.5">
+                  <Label className="text-muted-foreground text-xs">Mesa destino</Label>
+                  {disponibles.length === 0 ? (
+                    <p className="italic text-muted-foreground">
+                      No hay mesas libres en este turno.
+                    </p>
+                  ) : (
+                    <Select value={mesaDestinoId} onValueChange={setMesaDestinoId}>
+                      <SelectTrigger className="h-8 text-xs">
+                        <SelectValue placeholder="Elige una mesa" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {disponibles.map(m => (
+                          <SelectItem key={m.id} value={m.id} className="text-xs">
+                            {m.codigo} · {zonaLabel(m.zona ? String(m.zona) : null)} · {m.capacidad}p
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                </div>
+                {destino && !cabe && (
+                  <div className="rounded-md border border-amber-500/40 bg-amber-500/5 px-3 py-2 flex gap-2">
+                    <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-600" />
+                    <span>
+                      La mesa {destino.codigo} es de {destino.capacidad} plazas y la reserva
+                      es de {reservaADesplazar.comensales}. Puedes moverla igualmente.
+                    </span>
+                  </div>
+                )}
+                <div className="flex justify-end gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => { setReservaADesplazar(null); setMesaDestinoId(""); }}
+                  >
+                    Cancelar
+                  </Button>
+                  <Button
+                    size="sm"
+                    disabled={!destino || guardandoDesplazar}
+                    onClick={() => { if (destino) desplazarReserva(reservaADesplazar, destino); }}
+                  >
+                    Desplazar
+                  </Button>
+                </div>
+              </div>
+            );
+          })()}
+        </DialogContent>
+      </Dialog>
+
+      {/* Mesa ya ocupada: al reactivar una reserva anulada (o al ampliar su
+          tiempo) puede chocar con otra que haya entrado mientras tanto. Mismo
+          lenguaje visual que el aviso de solape al crear. */}
+      <Dialog open={avisoOcupada != null} onOpenChange={(v) => { if (!v) setAvisoOcupada(null); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-amber-700 dark:text-amber-300">
+              <AlertTriangle className="h-4 w-4" />
+              Esta mesa ya está reservada
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2 text-xs">
+            <div className="rounded-md border border-amber-500/40 bg-amber-500/5 px-3 py-2">
+              {avisoOcupada}
+            </div>
+            <p className="text-muted-foreground">
+              No se ha guardado el cambio. Cambia la mesa o la hora de esta reserva, o
+              recoloca antes a la otra.
+            </p>
+          </div>
+          <div className="flex justify-end">
+            <Button size="sm" onClick={() => setAvisoOcupada(null)}>Entendido</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Cambio de estado con correo asociado: lo decide el empleado, no el
+          sistema. Se puede cambiar el estado sin avisar al cliente. */}
+      <Dialog
+        open={confirmEstado !== null}
+        onOpenChange={(v) => { if (!v) setConfirmEstado(null); }}
+      >
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>
+              {confirmEstado
+                ? `Pasar a ${ESTADO_RESERVA_LABELS[confirmEstado.estado].toLowerCase()}`
+                : ""}
+            </DialogTitle>
+          </DialogHeader>
+          <p className="text-xs text-muted-foreground">
+            ¿Quieres avisar al cliente por correo de este cambio?
+            {confirmEstado && (
+              <>
+                {" "}Se enviaría a{" "}
+                <span className="font-medium text-foreground">{confirmEstado.email}</span>.
+              </>
+            )}
+          </p>
+          <div className="flex flex-wrap justify-end gap-2">
+            <Button variant="ghost" size="sm" onClick={() => setConfirmEstado(null)}>
+              Cancelar
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                if (!confirmEstado) return;
+                const c = confirmEstado;
+                setConfirmEstado(null);
+                aplicarEstadoReserva(c.id, c.estado, false);
+              }}
+            >
+              Cambiar sin avisar
+            </Button>
+            <Button
+              size="sm"
+              onClick={() => {
+                if (!confirmEstado) return;
+                const c = confirmEstado;
+                setConfirmEstado(null);
+                aplicarEstadoReserva(c.id, c.estado, true);
+              }}
+            >
+              Cambiar y avisar
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

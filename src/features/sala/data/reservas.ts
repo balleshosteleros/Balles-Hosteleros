@@ -29,13 +29,32 @@ export const ESTADOS_RESERVA: EstadoReserva[] = [
 ];
 
 /**
- * Estados que liberan la mesa (no cuentan como ocupantes en aforo ni en
- * detección de solape). Importar SIEMPRE desde aquí para no duplicar el set.
+ * Estados que liberan la MESA: no ocupan sitio físico, así que no cuentan en la
+ * detección de solape, en la asignación automática ni en la disponibilidad del
+ * motor web. LIBERADA entra aquí precisamente porque soltó la mesa y esa mesa
+ * se puede volver a vender.
+ *
+ * OJO: no confundir con `ESTADOS_NO_ASISTEN` (totales visibles). Una reserva
+ * LIBERADA no ocupa mesa, pero el cliente SÍ vino: cuenta en los totales.
+ * Importar SIEMPRE desde aquí para no duplicar el set.
  */
 export const ESTADOS_NO_OCUPANTES: EstadoReserva[] = [
   "CANCELADA",
   "NO_SHOW",
   "LIBERADA",
+];
+
+/**
+ * Estados que NO cuentan en los totales que ve el usuario (comensales del
+ * turno, mesas ocupadas, desglose por nº de personas, totales del calendario).
+ *
+ * Solo los que realmente NO asisten: canceladas y no-shows. El resto —incluida
+ * LIBERADA, que es gente que vino y ya terminó— sí cuenta como clientes
+ * atendidos; excluirla hacía que los totales del día se quedaran cortos.
+ */
+export const ESTADOS_NO_ASISTEN: EstadoReserva[] = [
+  "CANCELADA",
+  "NO_SHOW",
 ];
 
 /**
@@ -104,7 +123,7 @@ export const TIPO_RESERVA_CATEGORIA_LABELS: Record<TipoReservaCategoria, string>
 };
 
 export const ZONAS_SALA: ZonaSala[] = ["SALA", "BARRA", "TERRAZA_INTERIOR", "TERRAZA_EXTERIOR", "PRIVADO"];
-export type TurnoReserva = "COMIDA" | "CENA" | "DIA_COMPLETO";
+export type TurnoReserva = "COMIDA" | "CENA";
 export type TipoMesa = "MESA" | "BARRA" | "RESERVADO" | "TABURETE";
 
 export const ZONAS_LABELS: Record<ZonaSala, string> = {
@@ -179,7 +198,10 @@ export interface Reserva {
   turno: TurnoReserva;
   comensales: number;
   zona: ZonaSala | "";
+  /** UUID de la mesa. Resuelto en cliente desde `mesaCodigo` (la BD guarda el código). */
   mesaId: string;
+  /** Código de mesa tal cual lo guarda la columna `reservas.mesa` (p.ej. "R3", "M1+M2"). */
+  mesaCodigo?: string;
   estado: EstadoReserva;
   observaciones: string;
   empleadoId?: string;
@@ -349,7 +371,20 @@ export type EmpresaReservasConfig = SemanaHorarios & {
 
   intervaloReservaMin: IntervaloReservaMin;
   ocultarCanceladas:   boolean;
+
 };
+
+/**
+ * Los campos obligatorios del alta de reserva NO viven aquí: nombre, apellidos,
+ * fecha, hora, comensales, turno, estado y mesa se exigen siempre por código (la
+ * zona se deduce de la mesa), y los dos únicos configurables —teléfono y email—
+ * se marcan en Ajustes → Departamentos → Sala → Reservas, que es la barrera de
+ * seguridad superior. Se leen con `useReglasSubmodulo("sala", "reservas")`.
+ */
+
+/** Límite de caracteres de nombre y apellidos en el alta de reserva. */
+export const RESERVA_NOMBRE_MAX_CHARS = 50;
+export const RESERVA_APELLIDOS_MAX_CHARS = 80;
 
 /** Modo del tope "número máximo de personas en misma hora". */
 export type MaxPersonasHoraModo = "mismo" | "diferente_hora" | "diferente_tramo";
