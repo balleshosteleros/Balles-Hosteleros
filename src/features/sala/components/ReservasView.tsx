@@ -13,7 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { useSidebar } from "@/components/ui/sidebar";
-import { Plus, Search, ChevronLeft, ChevronRight, ListPlus, ListFilter, Check, Map as MapIcon, List as ListIcon } from "lucide-react";
+import { Plus, Search, ChevronLeft, ChevronRight, ListPlus, ListFilter, Check, Move, Map as MapIcon, List as ListIcon } from "lucide-react";
 // Configuración solo se carga cuando el usuario pulsa "Configuración" — fuera del bundle inicial.
 const ConfigReservasView = dynamic(
   () =>
@@ -1997,6 +1997,9 @@ function PlanoCanvas({
   onBloquearMesa,
   onDesplazarReserva,
   onQuitarBloqueoMesa,
+  reservaMoviendo,
+  onElegirDestino,
+  onCancelarMover,
 }: {
   mesas: Mesa[];
   posiciones: Map<string, PlanoMesaPosicion>;
@@ -2016,7 +2019,15 @@ function PlanoCanvas({
   onDesplazarReserva: (r: Reserva) => void;
   /** Si la mesa está BLOQUEADA y se pulsa, levanta el bloqueo solo para (fecha, turno). */
   onQuitarBloqueoMesa?: (m: Mesa) => void;
+  /**
+   * Reserva "en la mano" tras pulsar Desplazar. Mientras no sea null, el plano
+   * está en modo mover: el popover no se abre y el clic elige la mesa destino.
+   */
+  reservaMoviendo?: Reserva | null;
+  onElegirDestino?: (m: Mesa) => void;
+  onCancelarMover?: () => void;
 }) {
+  const moviendo = reservaMoviendo != null;
   // Mesas con posición x/y conocida.
   // Si la sala tiene zonas en BD: filtra estrictamente por las seleccionadas (zonas=[] => no muestra nada, como espera el usuario al pulsar "Ninguna").
   // Si la sala no tiene zonas en BD (legacy): muestra todas las mesas posicionadas.
@@ -2108,6 +2119,29 @@ function PlanoCanvas({
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden py-3 bg-white dark:bg-white min-h-0">
+      {/* Barra del modo mover: mientras la reserva está "en la mano" el plano
+          deja de abrir popovers y el siguiente clic elige la mesa destino. */}
+      {moviendo && reservaMoviendo && (
+        <div className="shrink-0 mx-3 mb-2 rounded-md border border-sky-500/50 bg-sky-500/10 px-3 py-2 flex items-center gap-2 text-xs">
+          <Move className="h-4 w-4 shrink-0 text-sky-600 animate-pulse" />
+          <span className="min-w-0 truncate">
+            Moviendo{" "}
+            <span className="font-semibold">
+              {reservaMoviendo.cliente || "WALK IN"} {reservaMoviendo.apellidos}
+            </span>{" "}
+            · {reservaMoviendo.hora.slice(0, 5)} · {reservaMoviendo.comensales} pax —
+            pulsa la mesa destino en el plano.
+          </span>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-7 text-[11px] ml-auto shrink-0"
+            onClick={() => onCancelarMover?.()}
+          >
+            Cancelar
+          </Button>
+        </div>
+      )}
       <div
         ref={outerRef}
         className={cn(
@@ -2179,6 +2213,10 @@ function PlanoCanvas({
           const isWalkIn = firstR?.estado === "WALK_IN";
           const isLibre = estado === "LIBRE";
           const radius = forma === "redonda" ? 9999 : 6;
+          // En modo mover, la mesa de origen no es un destino válido y las
+          // bloqueadas tampoco: se apagan para que se vea dónde SÍ se puede soltar.
+          const esOrigenMover = moviendo && reservaMoviendo?.mesaId === m.id;
+          const destinoInvalido = moviendo && (esOrigenMover || estado === "BLOQUEADA");
           return (
             <Popover key={m.id}>
               <PopoverTrigger asChild>
@@ -2188,7 +2226,18 @@ function PlanoCanvas({
                     mesaBg[estado] ?? "",
                     isLibre ? "text-foreground border-foreground/40" : "border-white/10",
                     (selectedReservaMesaId === m.id || selectedMesaId === m.id) && "ring-4 ring-red-500 z-10",
+                    moviendo && !destinoInvalido && "cursor-copy ring-2 ring-sky-500 ring-offset-1 hover:ring-4 hover:scale-105 z-10",
+                    destinoInvalido && "opacity-40 cursor-not-allowed",
                   )}
+                  title={
+                    moviendo
+                      ? esOrigenMover
+                        ? "Mesa actual de la reserva"
+                        : estado === "BLOQUEADA"
+                          ? "Mesa bloqueada en este turno"
+                          : `Mover la reserva a la mesa ${m.codigo}`
+                      : undefined
+                  }
                   style={{
                     left: c.x,
                     top: c.y,
@@ -2198,7 +2247,16 @@ function PlanoCanvas({
                     backgroundColor: isLibre ? lightenHex(meta?.colorZona ?? "#FDE68A", ZONA_LIGHTEN) : undefined,
                     transform: pos.rotation ? `rotate(${pos.rotation}deg)` : undefined,
                   }}
-                  onClick={() => onSelectMesa(m)}
+                  onClick={(e) => {
+                    if (moviendo) {
+                      // En modo mover el clic es "soltar aquí": no abrimos el
+                      // popover ni cambiamos la selección de mesa.
+                      e.preventDefault();
+                      if (!destinoInvalido) onElegirDestino?.(m);
+                      return;
+                    }
+                    onSelectMesa(m);
+                  }}
                 >
                   {/* Contra-rotación para mantener el texto legible aunque la mesa esté girada. */}
                   <div
@@ -2315,9 +2373,15 @@ export function ReservasView() {
     { mesa: Mesa; reservasActivas: number } | null
   >(null);
   const [guardandoBloqueo, setGuardandoBloqueo] = useState(false);
-  /** Reserva que se está moviendo de mesa con "Desplazar". */
+  /**
+   * Reserva "en la mano": se ha pulsado Desplazar y el plano está esperando a
+   * que se elija la mesa destino. Mientras vale algo, el mapa entra en modo mover.
+   */
   const [reservaADesplazar, setReservaADesplazar] = useState<Reserva | null>(null);
-  const [mesaDestinoId, setMesaDestinoId] = useState("");
+  /** Mesa destino elegida que pisaría a otras reservas: hay que confirmar. */
+  const [choqueDesplazar, setChoqueDesplazar] = useState<
+    { mesa: Mesa; choques: ChoqueReserva[] } | null
+  >(null);
   const [guardandoDesplazar, setGuardandoDesplazar] = useState(false);
 
   const [showDetalleReserva, setShowDetalleReserva] = useState(false);
@@ -2925,15 +2989,34 @@ export function ReservasView() {
     [localId, fecha, turno],
   );
 
-  // "Desplazar": mueve la reserva a otra mesa del mismo turno. Abre el selector
-  // con las mesas libres (y avisa de las ocupadas) en lugar de obligar a entrar
-  // en la ficha completa.
+  // "Desplazar": entra en modo mover. La reserva queda "en la mano" y el
+  // siguiente clic sobre una mesa del plano es el destino. Se puede elegir
+  // CUALQUIER mesa (tenga o no reserva): si al hacerlo pisa a alguien por
+  // horario, se avisa con quién y se deja decidir.
   const abrirDesplazar = (r: Reserva) => {
     setReservaADesplazar(r);
-    setMesaDestinoId("");
+    setChoqueDesplazar(null);
+    toast.info("Elige en el plano la mesa a la que mueves la reserva.");
   };
 
-  const desplazarReserva = useCallback(
+  const cancelarDesplazar = useCallback(() => {
+    setReservaADesplazar(null);
+    setChoqueDesplazar(null);
+  }, []);
+
+  // Escape sale del modo mover sin tocar nada, como en cualquier arrastre.
+  useEffect(() => {
+    if (!reservaADesplazar) return;
+    const onKey = (e: KeyboardEvent) => {
+      // Si hay un aviso de solape abierto, Escape lo cierra a él primero.
+      if (e.key === "Escape" && !choqueDesplazar) cancelarDesplazar();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [reservaADesplazar, choqueDesplazar, cancelarDesplazar]);
+
+  /** Aplica el movimiento. Se llama tras comprobar choques (o tras aceptarlos). */
+  const aplicarDesplazamiento = useCallback(
     async (r: Reserva, mesaDestino: Mesa) => {
       setGuardandoDesplazar(true);
       const res = await updateReserva(r.id, {
@@ -2949,10 +3032,50 @@ export function ReservasView() {
       }
       toast.success(`Reserva movida a la mesa ${mesaDestino.codigo}`);
       setReservaADesplazar(null);
-      setMesaDestinoId("");
+      setChoqueDesplazar(null);
       loadReservas(fecha);
     },
     [fecha, loadReservas],
+  );
+
+  /**
+   * Clic sobre una mesa estando en modo mover. Antes de tocar nada se pregunta
+   * al servidor si esa mesa tiene reservas que se pisen por horario con esta
+   * (contando la duración real de cada una, no solo la hora de inicio). Si las
+   * hay, se enseña el aviso y el usuario decide; si no, se mueve directamente.
+   */
+  const elegirMesaDestino = useCallback(
+    async (mesaDestino: Mesa) => {
+      const r = reservaADesplazar;
+      if (!r) return;
+      if (mesaDestino.id === r.mesaId) {
+        toast.info("La reserva ya está en esa mesa.");
+        return;
+      }
+      if (mesasBloqueadasIds.has(mesaDestino.id)) {
+        toast.error(`La mesa ${mesaDestino.codigo} está bloqueada en este turno.`);
+        return;
+      }
+      setGuardandoDesplazar(true);
+      const res = await getChoquesMesa({
+        fecha: r.fecha,
+        hora: r.hora,
+        mesa: mesaDestino.codigo,
+        duracionMin: r.duracionMinutos ?? cfgReservas?.duracionReservaMin ?? null,
+        ignoreReservaId: r.id,
+      });
+      setGuardandoDesplazar(false);
+      if (!res.ok) {
+        toast.error(res.error ?? "No se pudo comprobar la mesa");
+        return;
+      }
+      if (res.data.length > 0) {
+        setChoqueDesplazar({ mesa: mesaDestino, choques: res.data });
+        return;
+      }
+      await aplicarDesplazamiento(r, mesaDestino);
+    },
+    [reservaADesplazar, mesasBloqueadasIds, cfgReservas, aplicarDesplazamiento],
   );
 
   const handleQuitarBloqueoMesa = useCallback(
@@ -3439,9 +3562,34 @@ export function ReservasView() {
               onBloquearMesa={pedirBloqueoMesa}
               onDesplazarReserva={abrirDesplazar}
               onQuitarBloqueoMesa={handleQuitarBloqueoMesa}
+              reservaMoviendo={reservaADesplazar}
+              onElegirDestino={elegirMesaDestino}
+              onCancelarMover={cancelarDesplazar}
             />
           ) : (
             <div className="flex-1 overflow-auto p-4 space-y-4">
+              {/* Misma barra del modo mover que en el plano. */}
+              {reservaADesplazar && (
+                <div className="rounded-md border border-sky-500/50 bg-sky-500/10 px-3 py-2 flex items-center gap-2 text-xs">
+                  <Move className="h-4 w-4 shrink-0 text-sky-600 animate-pulse" />
+                  <span className="min-w-0 truncate">
+                    Moviendo{" "}
+                    <span className="font-semibold">
+                      {reservaADesplazar.cliente || "WALK IN"} {reservaADesplazar.apellidos}
+                    </span>{" "}
+                    · {reservaADesplazar.hora.slice(0, 5)} · {reservaADesplazar.comensales} pax —
+                    pulsa la mesa destino.
+                  </span>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 text-[11px] ml-auto shrink-0"
+                    onClick={cancelarDesplazar}
+                  >
+                    Cancelar
+                  </Button>
+                </div>
+              )}
               {zonasSalaActual.length === 0 ? (
                 <div className="flex items-center justify-center h-full text-xs text-muted-foreground italic">
                   Esta sala todavía no tiene zonas. Créalas en Configuración → Estructura.
@@ -3474,6 +3622,12 @@ export function ReservasView() {
                             const firstR = rs[0];
                             const isWalkIn = firstR?.estado === "WALK_IN";
                             const isLibre = estado === "LIBRE";
+                            // Mismo modo mover que en el plano: con una reserva
+                            // "en la mano", el clic elige mesa destino.
+                            const moviendoAqui = reservaADesplazar != null;
+                            const destinoInvalido =
+                              moviendoAqui &&
+                              (reservaADesplazar?.mesaId === m.id || estado === "BLOQUEADA");
                             return (
                               <Popover key={m.id}>
                                 <PopoverTrigger asChild>
@@ -3483,9 +3637,18 @@ export function ReservasView() {
                                       mesaBg[estado] ?? "",
                                       isLibre ? "text-foreground border-foreground/40" : "border-white/10",
                                       (selectedReserva?.mesaId === m.id || selectedMesa?.id === m.id) && "ring-4 ring-red-500 z-10",
+                                      moviendoAqui && !destinoInvalido && "cursor-copy ring-2 ring-sky-500 hover:ring-4 hover:scale-105 z-10",
+                                      destinoInvalido && "opacity-40 cursor-not-allowed",
                                     )}
                                     style={isLibre ? { backgroundColor: lightenHex(zona.colorPastel, ZONA_LIGHTEN) } : undefined}
-                                    onClick={() => handleSelectMesa(m)}
+                                    onClick={(e) => {
+                                      if (moviendoAqui) {
+                                        e.preventDefault();
+                                        if (!destinoInvalido) elegirMesaDestino(m);
+                                        return;
+                                      }
+                                      handleSelectMesa(m);
+                                    }}
                                   >
                                     <span className="leading-none">{m.codigo}</span>
                                     <span className={cn("text-[9px] font-normal mt-0.5", isLibre ? "text-foreground/70" : "opacity-80")}>
@@ -3691,82 +3854,61 @@ export function ReservasView() {
         </DialogContent>
       </Dialog>
 
-      {/* Desplazar: mover la reserva a otra mesa del mismo turno sin entrar en la
-          ficha. Solo se ofrecen mesas libres; las ocupadas o bloqueadas no salen. */}
+      {/* Desplazar — aviso de solape. La mesa destino se elige en el plano; si
+          pisa a otra(s) reserva(s) por horario, aquí se dice con quién y hasta
+          qué hora, y el usuario decide si mueve igualmente o cancela. */}
       <Dialog
-        open={reservaADesplazar !== null}
-        onOpenChange={(v) => { if (!v) { setReservaADesplazar(null); setMesaDestinoId(""); } }}
+        open={choqueDesplazar !== null}
+        onOpenChange={(v) => { if (!v) setChoqueDesplazar(null); }}
       >
-        <DialogContent className="max-w-sm">
-          <DialogHeader><DialogTitle>Desplazar reserva</DialogTitle></DialogHeader>
-          {reservaADesplazar && (() => {
-            const mesaActual = mesas.find(m => m.id === reservaADesplazar.mesaId) ?? null;
-            const disponibles = mesas
-              .filter(m => m.id !== reservaADesplazar.mesaId)
-              .filter(m => getMesaEstadoTurno(m) === "LIBRE")
-              .sort((a, b) => a.codigo.localeCompare(b.codigo, "es", { numeric: true }));
-            const destino = disponibles.find(m => m.id === mesaDestinoId) ?? null;
-            const cabe = destino ? destino.capacidad >= reservaADesplazar.comensales : true;
-            return (
-              <div className="space-y-3 text-xs">
-                <p className="text-muted-foreground">
-                  <span className="font-medium text-foreground">
-                    {reservaADesplazar.cliente || "WALK IN"} {reservaADesplazar.apellidos}
-                  </span>{" "}
-                  · {reservaADesplazar.hora} · {reservaADesplazar.comensales} pax · mesa actual{" "}
-                  <span className="font-medium text-foreground">{mesaActual?.codigo ?? "sin asignar"}</span>
-                </p>
-                <div className="space-y-1.5">
-                  <Label className="text-muted-foreground text-xs">Mesa destino</Label>
-                  {disponibles.length === 0 ? (
-                    <p className="italic text-muted-foreground">
-                      No hay mesas libres en este turno.
-                    </p>
-                  ) : (
-                    <Select value={mesaDestinoId} onValueChange={setMesaDestinoId}>
-                      <SelectTrigger className="h-8 text-xs">
-                        <SelectValue placeholder="Elige una mesa" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {disponibles.map(m => (
-                          <SelectItem key={m.id} value={m.id} className="text-xs">
-                            {m.codigo} · {zonaLabel(m.zona ? String(m.zona) : null)} · {m.capacidad}p
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  )}
-                </div>
-                {destino && !cabe && (
-                  <div className="rounded-md border border-amber-500/40 bg-amber-500/5 px-3 py-2 flex gap-2">
-                    <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-600" />
-                    <span>
-                      La mesa {destino.codigo} es de {destino.capacidad} plazas y la reserva
-                      es de {reservaADesplazar.comensales}. Puedes moverla igualmente.
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-amber-700 dark:text-amber-300">
+              <AlertTriangle className="h-4 w-4" />
+              Esa mesa ya está ocupada a esa hora
+            </DialogTitle>
+          </DialogHeader>
+          {choqueDesplazar && reservaADesplazar && (
+            <div className="space-y-3 text-xs">
+              <p className="text-muted-foreground">
+                Mover{" "}
+                <span className="font-medium text-foreground">
+                  {reservaADesplazar.cliente || "WALK IN"} {reservaADesplazar.apellidos}
+                </span>{" "}
+                ({reservaADesplazar.hora.slice(0, 5)} · {reservaADesplazar.comensales} pax) a la
+                mesa <span className="font-medium text-foreground">{choqueDesplazar.mesa.codigo}</span>{" "}
+                pisaría {choqueDesplazar.choques.length === 1 ? "esta reserva" : "estas reservas"}:
+              </p>
+              <div className="rounded-md border border-amber-500/40 bg-amber-500/5 divide-y divide-amber-500/20">
+                {choqueDesplazar.choques.map((c) => (
+                  <div key={c.reservaId} className="px-3 py-2 flex items-center justify-between gap-2">
+                    <span className="font-medium truncate">{c.cliente || "WALK IN"}</span>
+                    <span className="shrink-0 tabular-nums text-muted-foreground">
+                      {c.horaInicio}–{c.horaFin} · {c.personas} pax · {c.mesa}
                     </span>
                   </div>
-                )}
-                <div className="flex justify-end gap-2">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => { setReservaADesplazar(null); setMesaDestinoId(""); }}
-                  >
-                    Cancelar
-                  </Button>
-                  <Button
-                    size="sm"
-                    disabled={!destino || guardandoDesplazar}
-                    onClick={() => { if (destino) desplazarReserva(reservaADesplazar, destino); }}
-                  >
-                    Desplazar
-                  </Button>
-                </div>
+                ))}
               </div>
-            );
-          })()}
+              <p className="text-muted-foreground">
+                Si la mueves igualmente, las dos quedarán sobre la misma mesa a la vez.
+              </p>
+              <div className="flex justify-end gap-2">
+                <Button size="sm" variant="outline" onClick={() => setChoqueDesplazar(null)}>
+                  Cancelar
+                </Button>
+                <Button
+                  size="sm"
+                  disabled={guardandoDesplazar}
+                  onClick={() => aplicarDesplazamiento(reservaADesplazar, choqueDesplazar.mesa)}
+                >
+                  Mover igualmente
+                </Button>
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
+
 
       {/* Mesa ya ocupada: al reactivar una reserva anulada (o al ampliar su
           tiempo) puede chocar con otra que haya entrado mientras tanto. Mismo
