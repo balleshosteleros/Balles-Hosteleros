@@ -479,7 +479,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                           `hidden md:flex` (no un check de aparato) porque el
                           resto de la cabecera ya se recorta por ancho.
                         */}
-                        {roles.includes("director") && (
+                        {puedeVer("AJUSTES") && (
                           <DropdownMenuItem
                             onSelect={() => router.push("/ajustes")}
                             className="hidden md:flex cursor-pointer gap-2 px-3 py-1.5"

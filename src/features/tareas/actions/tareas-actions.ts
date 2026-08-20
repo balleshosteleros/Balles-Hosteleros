@@ -693,11 +693,10 @@ export async function getDepartamentosVisibles(): Promise<
         .map((m) => getModuloForCronograma(m));
     }
 
-    // El director SOLO cae al set completo si su rol no tiene permisos
-    // configurados (red de seguridad para no dejarlo sin nada). Si los tiene,
-    // se respetan: así puede quitar un módulo (p.ej. Gerencia) de su rol y
-    // dejar de ver sus tareas.
-    if (esDirectorGlobal && modulosVisibles.length === 0) {
+    // Red de seguridad: un rol SIN ningún permiso configurado cae al set
+    // completo para no quedarse sin nada. Si tiene permisos, se respetan tal
+    // cual: quitar un módulo (p.ej. Gerencia) del rol oculta sus tareas.
+    if (modulosVisibles.length === 0) {
       modulosVisibles = [
         "Dirección", "Gerencia", "RRHH", "Logística", "Cocina",
         "Sala", "Calidad", "Contabilidad", "Gestoría", "Jurídico", "Marketing",

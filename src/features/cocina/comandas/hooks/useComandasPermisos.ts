@@ -19,7 +19,7 @@ export async function getComandasPermisos(): Promise<{
   // Acceso por PERMISOS reales: el panel de Comandas (KDS) es del módulo COCINA.
   // Puede operarlo quien tiene permiso de ver COCINA (o es admin de plataforma).
   const { esDirector, permisos } = await getRolContext(userId);
-  const allowed = puedeVerModulo(esDirector, permisos, "COCINA");
+  const allowed = puedeVerModulo(permisos, "COCINA");
 
   return {
     allowed,

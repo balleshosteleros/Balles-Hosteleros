@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { Rol, PermisoModulo } from '@/features/ajustes/data/ajustes'
 import { getRolContext } from '@/features/auth/actions/permisos-actions'
+import { puedeEditarModulo, normalizarModulo } from '@/features/auth/lib/permisos'
 
 const DEV_EMPRESA_ID = '00000000-0000-0000-0000-000000000001'
 
@@ -16,9 +17,15 @@ function rolFromDepartamento(nombreDepto: string): string {
 }
 
 /**
- * Defensa server-side: solo usuarios con app_role 'director' pueden mutar
- * `empresa_roles`. Cierra el agujero de "un usuario con UI bloqueada podría
- * llamar al server action por POST y reescribir su propio rol".
+ * Defensa server-side: quién puede mutar `empresa_roles`. Cierra el agujero de
+ * "un usuario con UI bloqueada podría llamar al server action por POST y
+ * reescribir su propio rol".
+ *
+ * Manda el permiso AJUSTES (editar) configurado en Ajustes → Roles, NO el flag
+ * `es_admin_plataforma`: el rol concede, no la etiqueta de director. Antes esto
+ * solo miraba el flag y ni consultaba los permisos, así que el toggle AJUSTES
+ * de la pantalla de Roles no servía de nada.
+ *
  * Devuelve mensaje de error si no está autorizado, null si OK.
  */
 async function requireDirectorAppRole(): Promise<string | null> {
@@ -27,9 +34,9 @@ async function requireDirectorAppRole(): Promise<string | null> {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return 'No autenticado'
 
-    const { esDirector } = await getRolContext()
-    if (!esDirector) {
-      return 'Solo un director puede modificar roles de empresa'
+    const { permisos } = await getRolContext()
+    if (!puedeEditarModulo(permisos, 'AJUSTES')) {
+      return 'Sin permisos: necesitas Ajustes para modificar los roles de empresa'
     }
     return null
   } catch (e) {
@@ -239,6 +246,26 @@ export async function saveRolesToSupabase(
   try {
     const authError = await requireDirectorAppRole()
     if (authError) return { error: authError }
+
+    // RED ANTI-ENCIERRO: el rol de dirección NO puede quedarse sin AJUSTES.
+    // Ahora que manda el permiso y no el flag `es_admin_plataforma`, apagar ese
+    // toggle dejaría a la empresa sin nadie capaz de volver a tocar los roles:
+    // la pantalla se abriría, pero guardar fallaría siempre y solo se podría
+    // recuperar entrando a la base de datos a mano.
+    const rolDireccion = roles.find(
+      (r) => normalizeRolNombre(r.nombre) === normalizeRolNombre('DIRECCIÓN'),
+    )
+    if (rolDireccion) {
+      const ajustes = rolDireccion.permisos?.find(
+        (p) => normalizarModulo(p.modulo) === normalizarModulo('AJUSTES'),
+      )
+      if (!ajustes?.ver || !ajustes?.editar) {
+        return {
+          error:
+            'No puedes quitarle Ajustes al rol DIRECCIÓN: nadie podría volver a configurar los roles.',
+        }
+      }
+    }
 
     // Admin client por la misma razón que en loadRolesFromSupabase: la RLS
     // limita a la empresa primaria. La autorización ya se validó arriba

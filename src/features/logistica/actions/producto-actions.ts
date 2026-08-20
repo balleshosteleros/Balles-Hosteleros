@@ -5,6 +5,7 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { capitalizeText } from "@/shared/lib/utils";
 import { getRolContext } from "@/features/auth/actions/permisos-actions";
+import { puedeEditarModulo } from "@/features/auth/lib/permisos";
 import { getLogisticaContext } from "@/features/logistica/lib/supabase-context";
 import { getZonaHorariaEmpresa } from "@/features/empresa/lib/empresa-server";
 import { hoyEnZona } from "@/features/empresa/lib/zona-horaria";
@@ -131,9 +132,12 @@ async function requireManagement() {
 
   if (!user) throw new Error("No autenticado");
 
-  const { esDirector } = await getRolContext();
+  // Manda el permiso LOGÍSTICA (editar) de Ajustes → Roles, no el flag de director.
+  const { permisos } = await getRolContext();
 
-  if (!esDirector) throw new Error("No tienes permisos para gestionar productos");
+  if (!puedeEditarModulo(permisos, "LOGÍSTICA")) {
+    throw new Error("Sin permisos: necesitas Logística para gestionar productos");
+  }
 
   return user;
 }

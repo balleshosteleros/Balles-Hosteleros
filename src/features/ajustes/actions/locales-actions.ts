@@ -6,14 +6,15 @@ import { z } from "zod";
 
 import { getEmpresaActivaForUser } from "@/features/empresa/lib/empresa-server";
 import { getRolContext } from "@/features/auth/actions/permisos-actions";
+import { puedeEditarModulo } from "@/features/auth/lib/permisos";
 import type { SupabaseClient } from "@supabase/supabase-js";
 async function getContext() {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return { supabase, user: null, empresaId: null, esDirector: false };
-  const [empresaId, { esDirector }] = await Promise.all([
+  if (!user) return { supabase, user: null, empresaId: null, puedeOperarOtraEmpresa: false };
+  const [empresaId, { permisos }] = await Promise.all([
     getEmpresaActivaForUser(supabase as unknown as SupabaseClient, user.id),
     getRolContext(),
   ]);
@@ -21,30 +22,31 @@ async function getContext() {
     supabase,
     user,
     empresaId,
-    esDirector,
+    // Operar sobre OTRA empresa exige AJUSTES (editar), no el flag de director.
+    puedeOperarOtraEmpresa: puedeEditarModulo(permisos, "AJUSTES"),
   };
 }
 
 /**
- * Devuelve la empresa con la que operar. Si se pasa `empresaIdOverride`,
- * admin y director pueden usarlo; el resto se queda con la suya.
+ * Devuelve la empresa con la que operar. Si se pasa `empresaIdOverride`, solo
+ * quien tenga AJUSTES (editar) puede usarlo; el resto se queda con la suya.
  */
 function resolverEmpresa(
   empresaId: string | null,
-  esDirector: boolean,
+  puedeOperarOtraEmpresa: boolean,
   empresaIdOverride?: string | null
 ): string | null {
-  if (empresaIdOverride && esDirector) return empresaIdOverride;
+  if (empresaIdOverride && puedeOperarOtraEmpresa) return empresaIdOverride;
   return empresaId;
 }
 
 async function resolveEmpresaAutorizada(
   userId: string,
   empresaId: string | null,
-  esDirector: boolean,
+  puedeOperarOtraEmpresa: boolean,
   empresaIdOverride?: string | null
 ): Promise<string | null> {
-  const target = resolverEmpresa(empresaId, esDirector, empresaIdOverride);
+  const target = resolverEmpresa(empresaId, puedeOperarOtraEmpresa, empresaIdOverride);
   if (!target) return null;
   if (!empresaIdOverride || target === empresaId) return target;
 
@@ -78,12 +80,12 @@ export type LocalInput = z.infer<typeof localSchema>;
 
 export async function listLocales(empresaIdOverride?: string | null) {
   try {
-    const { user, empresaId, esDirector } = await getContext();
+    const { user, empresaId, puedeOperarOtraEmpresa } = await getContext();
     if (!user) return { ok: false, data: [], error: "No autenticado" };
     const target = await resolveEmpresaAutorizada(
       user.id,
       empresaId,
-      esDirector,
+      puedeOperarOtraEmpresa,
       empresaIdOverride
     );
     if (!target) return { ok: false, data: [], error: "Sin empresa activa" };
@@ -127,9 +129,9 @@ export async function createLocal(
 ) {
   try {
     const parsed = localSchema.parse(input);
-    const { user, empresaId, esDirector } = await getContext();
+    const { user, empresaId, puedeOperarOtraEmpresa } = await getContext();
     const target = user
-      ? await resolveEmpresaAutorizada(user.id, empresaId, esDirector, empresaIdOverride)
+      ? await resolveEmpresaAutorizada(user.id, empresaId, puedeOperarOtraEmpresa, empresaIdOverride)
       : null;
     if (!user || !target) return { ok: false, error: "No autenticado" };
     const admin = createAdminClient();
@@ -225,12 +227,12 @@ export async function listEmpleadosEmpresaParaLocales(
   empresaIdOverride?: string | null
 ) {
   try {
-    const { user, empresaId, esDirector } = await getContext();
+    const { user, empresaId, puedeOperarOtraEmpresa } = await getContext();
     if (!user) return { ok: false, data: [] };
     const target = await resolveEmpresaAutorizada(
       user.id,
       empresaId,
-      esDirector,
+      puedeOperarOtraEmpresa,
       empresaIdOverride
     );
     if (!target) return { ok: false, data: [] };

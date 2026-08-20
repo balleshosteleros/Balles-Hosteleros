@@ -63,7 +63,7 @@ export async function POST(req: Request) {
 
     // Subir canciones es GESTIÓN: requiere el permiso MÚSICA de Ajustes → Roles.
     const { esDirector, permisos } = await getRolContext(user.id);
-    if (!puedeEditarModulo(esDirector, permisos, "MÚSICA")) {
+    if (!puedeEditarModulo(permisos, "MÚSICA")) {
       return NextResponse.json(
         { error: "Tu rol no puede añadir canciones" },
         { status: 403 },

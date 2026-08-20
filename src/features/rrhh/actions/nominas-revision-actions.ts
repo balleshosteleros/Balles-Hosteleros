@@ -14,6 +14,7 @@
 import { getAppContext } from "@/lib/supabase/get-context";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getRolContext } from "@/features/auth/actions/permisos-actions";
+import { puedeEditarModulo } from "@/features/auth/lib/permisos";
 import { BUCKET_NOMINAS, EXT_POR_MIME } from "@/features/rrhh/services/nominas/procesar-nominas";
 import { revalidatePath } from "next/cache";
 
@@ -363,9 +364,9 @@ export async function reabrirMesNominas(periodo: string) {
     const { supabase, empresaId } = await getAppContext();
     if (!empresaId) return { ok: false as const, error: "No autenticado" };
 
-    const { esDirector } = await getRolContext();
-    if (!esDirector) {
-      return { ok: false as const, error: "Solo dirección puede reabrir un mes ya confirmado." };
+    const { permisos } = await getRolContext();
+    if (!puedeEditarModulo(permisos, "RECURSOS HUMANOS")) {
+      return { ok: false as const, error: "Sin permisos: necesitas Recursos Humanos para reabrir un mes ya confirmado." };
     }
 
     const { error } = await supabase

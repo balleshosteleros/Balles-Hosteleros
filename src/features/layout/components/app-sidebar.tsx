@@ -186,17 +186,16 @@ export function AppSidebar() {
   const permisosListosRef = useRef(false);
   if (mounted && permisosLoaded) permisosListosRef.current = true;
 
-  const isDirector = mounted && esAdminPlataforma;
+  // Sin atajo de director: el menú se filtra SIEMPRE por los permisos del rol.
+  // Antes, dirección veía todas las secciones aunque las tuviera apagadas.
   const permisosListos = permisosListosRef.current;
-  const sections = isDirector
-    ? allSections
-    : permisosListos
-      ? allSections.filter((s) => puedeVer(s.modulo))
-      : [];
+  const sections = permisosListos
+    ? allSections.filter((s) => puedeVer(s.modulo))
+    : [];
   // Mientras se resuelven los permisos (primer login sin caché en localStorage)
   // o aún no hemos montado, `sections` es [] y el menú salía en blanco → parecía
   // roto. Con esto pintamos un esqueleto en su lugar hasta que llegan.
-  const loadingSections = !isDirector && !permisosListos;
+  const loadingSections = !permisosListos;
 
   // La URL manda: si el usuario está dentro de un módulo de departamento o de
   // Mi Panel, el sidebar muestra ese menú. El modo guardado solo decide en

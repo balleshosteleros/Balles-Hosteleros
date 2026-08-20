@@ -21,16 +21,10 @@ const UUID_RE =
  * candidatos (`promoverCandidato`): única fuente de verdad de autorización.
  */
 export async function requireAdminUser(opts?: { empresaIds?: string[] }) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error("No autenticado");
-
-  const ctx = await getRolContext(user.id);
-  if (!ctx.esDirector) {
-    throw new Error("Sin permisos: solo admin o director pueden modificar empleados");
-  }
-  void opts?.empresaIds; // director es cross-tenant: no aplica scope por empresa
-  return user;
+  // Manda el permiso RECURSOS HUMANOS (editar) de Ajustes → Roles, no el flag
+  // de director. Delegamos en `requireRRHHAcceso`, que además valida el acceso
+  // real a las empresas objetivo: antes, el director se saltaba ese scope.
+  return requireRRHHAcceso(opts?.empresaIds ?? []);
 }
 
 /**
@@ -52,8 +46,6 @@ export async function requireEmpleadosLectura(empresaId: string) {
   if (!user) throw new Error("No autenticado");
 
   const ctx = await getRolContext(user.id);
-  if (ctx.esDirector) return user;
-
   const tieneRRHH = ctx.permisos.some((p) => p.modulo === "RECURSOS HUMANOS" && p.ver);
   if (!tieneRRHH) {
     throw new Error(
@@ -100,8 +92,8 @@ export async function requireRRHHAcceso(empresaIds: string[]) {
   if (!user) throw new Error("No autenticado");
 
   // Fuente única (PRP-063): rol + permisos derivados de usuarios.rol_id.
+  // Sin bypass de director: manda lo aprobado en Ajustes → Roles.
   const ctx = await getRolContext(user.id);
-  if (ctx.esDirector) return user; // director: super-usuario de plataforma
 
   // 1) Permiso de Recursos Humanos (editar) en el rol del usuario.
   const tieneRRHH = ctx.permisos.some((p) => p.modulo === "RECURSOS HUMANOS" && p.editar);

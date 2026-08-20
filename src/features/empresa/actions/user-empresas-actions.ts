@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getRolContext } from "@/features/auth/actions/permisos-actions";
+import { puedeVerModulo } from "@/features/auth/lib/permisos";
 
 export interface UserEmpresaRow {
   user_id: string;
@@ -131,8 +132,9 @@ export async function listAllUserEmpresas(): Promise<Record<string, string[]>> {
   if (!user) return {};
 
   const admin = createAdminClient();
-  const { esDirector } = await getRolContext(user.id);
-  if (!esDirector) {
+  // Manda el permiso AJUSTES (ver): es un mapa de accesos de administración.
+  const { permisos } = await getRolContext(user.id);
+  if (!puedeVerModulo(permisos, "AJUSTES")) {
     return {};
   }
 

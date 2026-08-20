@@ -29,6 +29,7 @@ import { getEmpresaActivaId } from "@/features/empresa/actions/empresa-activa-ac
 import { getZonaHorariaEmpresa, ZONA_HORARIA_DEFAULT } from "@/features/empresa/lib/empresa-server";
 import { minutosDiaEnZona, ahoraEnZona } from "@/features/empresa/lib/zona-horaria";
 import { getRolContext } from "@/features/auth/actions/permisos-actions";
+import { puedeEditarModulo } from "@/features/auth/lib/permisos";
 import { bloqueoSolapaRango } from "@/features/rrhh/data/calendarios-vacaciones";
 import {
   getHorarioDia,
@@ -1673,8 +1674,9 @@ function diasSolicitudEnAnio(inicio: string, fin: string | null, anio: number): 
 }
 
 async function userTieneRolDirector(userId: string): Promise<boolean> {
-  const { esDirector } = await getRolContext(userId);
-  return esDirector;
+  // Saltarse el límite anual de días exige RRHH (editar), no el flag director.
+  const { permisos } = await getRolContext(userId);
+  return puedeEditarModulo(permisos, "RECURSOS HUMANOS");
 }
 
 // Formatos de imagen/PDF que aceptamos como parte de baja (los que el móvil
@@ -2045,8 +2047,8 @@ export async function crearSolicitudPersonal(input: NuevaSolicitudInput) {
       const limite = (tipoAusencia?.limite_dias as number | null | undefined) ?? null;
 
       if (limite != null && limite > 0) {
-        const esDirector = await userTieneRolDirector(user.id);
-        if (!esDirector) {
+        const puedeSaltarLimite = await userTieneRolDirector(user.id);
+        if (!puedeSaltarLimite) {
           const anio = new Date(input.fechaInicio + "T00:00:00Z").getUTCFullYear();
           const diasSolicitados = diasSolicitudEnAnio(input.fechaInicio, input.fechaFin ?? null, anio);
 

@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getRolContext } from "@/features/auth/actions/permisos-actions";
+import { puedeEditarModulo } from "@/features/auth/lib/permisos";
 import {
   listFaqsForCurrentUser,
   listAllFaqs,
@@ -19,8 +20,9 @@ export default async function AyudaPage() {
 
   if (!user) redirect("/");
 
-  const { esDirector } = await getRolContext();
-  const canEdit = esDirector;
+  // Editar FAQs exige AJUSTES (editar) en Ajustes → Roles, no el flag director.
+  const { permisos } = await getRolContext();
+  const canEdit = puedeEditarModulo(permisos, "AJUSTES");
 
   let viewerData: Awaited<ReturnType<typeof listFaqsForCurrentUser>> = [];
   try {

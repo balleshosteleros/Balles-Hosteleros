@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 
 import { getEmpresaActivaForUser } from "@/features/empresa/lib/empresa-server";
 import { getRolContext } from "@/features/auth/actions/permisos-actions";
+import { puedeVerModulo } from "@/features/auth/lib/permisos";
 import type { SupabaseClient } from "@supabase/supabase-js";
 async function getContext() {
   const supabase = await createClient();
@@ -89,8 +90,10 @@ async function getAccesoCtx(
   userId: string,
   empresaId: string,
 ): Promise<AccesoCtx> {
-  const { esDirector } = await getRolContext(userId);
-  const esAdmin = esDirector;
+  // Acceso total a los canales: manda el permiso DIRECCIÓN de Ajustes → Roles,
+  // no el flag de director.
+  const { permisos } = await getRolContext(userId);
+  const esAdmin = puedeVerModulo(permisos, "DIRECCIÓN");
 
   const candidatos: string[] = [];
   if (!esAdmin) {

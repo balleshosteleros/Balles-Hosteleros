@@ -10,6 +10,7 @@ import { buildRecoveryActionUrl } from '@/lib/auth/recovery-link'
 import { getSiteUrl } from '@/lib/site-url'
 import { friendlyError } from '@/shared/lib/friendly-errors'
 import { getRolContext } from '@/features/auth/actions/permisos-actions'
+import { puedeVerModulo, puedeEditarModulo } from '@/features/auth/lib/permisos'
 
 /**
  * Verifica que el nombre de rol exista en empresa_roles para la empresa del usuario.
@@ -38,9 +39,28 @@ async function requireAdmin() {
 
   if (!user) throw new Error('Not authenticated')
 
-  // Fuente única (PRP-063): el director se deriva del rol del usuario.
-  const { esDirector } = await getRolContext(user.id)
-  if (!esDirector) throw new Error('Not authorized')
+  // Manda el permiso AJUSTES (editar) de Ajustes → Roles, no el flag de
+  // director: gestionar cuentas de acceso es administrar el sistema. Antes esto
+  // solo miraba `es_admin_plataforma` e ignoraba los permisos del rol.
+  const { permisos } = await getRolContext(user.id)
+  if (!puedeEditarModulo(permisos, 'AJUSTES')) {
+    throw new Error('Sin permisos: necesitas Ajustes para gestionar usuarios')
+  }
+
+  return user
+}
+
+/** Variante de LECTURA: consultar la administración exige AJUSTES (ver). */
+async function requireAjustesLectura() {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+
+  if (!user) throw new Error('Not authenticated')
+
+  const { permisos } = await getRolContext(user.id)
+  if (!puedeVerModulo(permisos, 'AJUSTES')) {
+    throw new Error('Sin permisos: necesitas Ajustes para ver los usuarios')
+  }
 
   return user
 }
@@ -174,7 +194,9 @@ export async function createEmployee(formData: FormData) {
 }
 
 export async function getEmployees() {
-  await requireAdmin()
+  // Leer no es administrar: basta con AJUSTES (ver). Con el guard de escritura,
+  // un rol que solo consulta la pestaña Roles no podía ni listar los usuarios.
+  await requireAjustesLectura()
 
   let admin: ReturnType<typeof createAdminClient>
   try {

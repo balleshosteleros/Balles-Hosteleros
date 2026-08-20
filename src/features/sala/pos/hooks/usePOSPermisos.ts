@@ -20,7 +20,7 @@ export async function getPOSPermisos(): Promise<{
   // tiene permiso de ver SALA (o es admin de plataforma). Sin nombres de rol
   // técnicos hardcodeados.
   const { esDirector, permisos } = await getRolContext(userId);
-  const allowed = puedeVerModulo(esDirector, permisos, "SALA");
+  const allowed = puedeVerModulo(permisos, "SALA");
 
   return {
     allowed,

@@ -426,7 +426,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             // MISMOS datos que acabamos de aplicar arriba.
             if (!looksRaceFailure && !fetchFailedSilently) {
               setAccesoDeptosServidor(
-                calcAccesoDepartamentos(nextEsAdmin, nextPermisos),
+                calcAccesoDepartamentos(nextPermisos),
               );
             }
 
@@ -435,7 +435,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             // arranca en "departamentos"; el resto en "paneles". Así respetamos
             // los roles reales de Ajustes, sin nombres técnicos hardcodeados.
             aplicarModoVistaPorDefecto(
-              calcAccesoDepartamentos(nextEsAdmin, nextPermisos),
+              calcAccesoDepartamentos(nextPermisos),
             );
 
             // Solo persistimos el caché si el fetch fue real. Así un fallo
@@ -503,7 +503,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // porque una revalidación que CONFIRMA los permisos vigentes es tan válida
       // como una que los corrige — si no, un usuario estable (cuyos permisos
       // nunca cambian) no quedaba confirmado jamás.
-      setAccesoDeptosServidor(calcAccesoDepartamentos(nextEsAdmin, nextPermisos));
+      setAccesoDeptosServidor(calcAccesoDepartamentos(nextPermisos));
 
       // Aplicamos SOLO si algo cambió (comparando con el valor actual vía refs),
       // para no re-renderizar en balde.
@@ -581,7 +581,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // + sin acceso" y expulsaba a un usuario legítimo.
       if (seedTieneDatos) {
         setAccesoDeptosServidor(
-          calcAccesoDepartamentos(p.esAdminPlataforma, p.permisos),
+          calcAccesoDepartamentos(p.permisos),
         );
       }
       // Sincroniza el MODO DE VISTA con los PERMISOS reales, igual que
@@ -589,7 +589,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // al instante pero en modo "paneles" hasta que el SWR corregía — y si
       // navegaba en ese estado transitorio, acababa rebotado.
       aplicarModoVistaPorDefecto(
-        calcAccesoDepartamentos(p.esAdminPlataforma, p.permisos),
+        calcAccesoDepartamentos(p.permisos),
       );
     }
     writeAuthCache(p.userId, {
@@ -673,23 +673,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const hasRole = useCallback((role: AppRole) => roles.includes(role), [roles]);
 
-  // FUENTE ÚNICA de permisos: admin de plataforma (DIRECCIÓN) ve todo; el resto
-  // según `empresa_roles.permisos`. Sin nombres de rol técnicos hardcodeados.
-  // EXCEPCIÓN — herramientas de barra (CÁMARAS, cohete, candado): mandan SIEMPRE
-  // su toggle real, sin bypass de admin. Si dirección apaga CÁMARAS en Ajustes →
-  // Roles, deja de ver el icono aunque sea admin de plataforma.
+  // FUENTE ÚNICA de permisos: SIEMPRE `empresa_roles.permisos`, es decir, lo
+  // aprobado en Ajustes → Roles. Sin nombres de rol técnicos hardcodeados y sin
+  // bypass de admin de plataforma: el rol concede, no la etiqueta de director.
+  // Lo que antes era la excepción de las herramientas de barra (si dirección
+  // apaga CÁMARAS deja de verlas) es ahora la regla para TODOS los módulos.
   const puedeVer = useCallback((modulo: string) => {
-    if (esHerramientaBarra(modulo)) return puedeVerHerramienta(permisos, modulo);
-    return puedeVerModulo(esAdminPlataforma, permisos, modulo);
-  }, [esAdminPlataforma, permisos]);
+    return puedeVerModulo(permisos, modulo);
+  }, [permisos]);
 
   const puedeEditar = useCallback((modulo: string) => {
-    return puedeEditarModulo(esAdminPlataforma, permisos, modulo);
-  }, [esAdminPlataforma, permisos]);
+    return puedeEditarModulo(permisos, modulo);
+  }, [permisos]);
 
-  // ¿Ve la vista "Mis Departamentos"? Admin de plataforma o con ≥1 departamento
-  // permitido. Un rol sin ningún departamento no ve ni el conmutador.
-  const tieneAccesoDepartamentos = calcAccesoDepartamentos(esAdminPlataforma, permisos);
+  // ¿Ve la vista "Mis Departamentos"? Quien tenga ≥1 departamento permitido.
+  // Un rol sin ninguno no ve ni el conmutador, dirección incluida.
+  const tieneAccesoDepartamentos = calcAccesoDepartamentos(permisos);
 
   return (
     <AuthContext.Provider value={{

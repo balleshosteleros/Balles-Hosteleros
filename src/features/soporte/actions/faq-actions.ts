@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { getRolContext } from "@/features/auth/actions/permisos-actions";
+import { puedeEditarModulo } from "@/features/auth/lib/permisos";
 import type { Faq, FaqInput, FaqsByCategory } from "@/features/soporte/types";
 
 const APP_ROLES = [
@@ -33,8 +34,10 @@ async function requireAdminOrDirector() {
 
   if (!user) throw new Error("No autenticado");
 
-  const { esDirector } = await getRolContext();
-  if (!esDirector) throw new Error("No tienes permisos para editar FAQs");
+  const { permisos } = await getRolContext();
+  if (!puedeEditarModulo(permisos, "AJUSTES")) {
+    throw new Error("Sin permisos: necesitas Ajustes para editar las FAQs");
+  }
 
   return user;
 }

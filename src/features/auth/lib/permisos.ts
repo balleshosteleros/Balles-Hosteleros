@@ -45,15 +45,18 @@ export function normalizarModulo(m: string): string {
 }
 
 /**
- * ¿El rol (dado su flag de admin y su lista de permisos reales) puede VER el
- * módulo indicado? Admin de plataforma ve todo; el resto según `permisos`.
+ * ¿El rol puede VER el módulo indicado? SIEMPRE según los permisos reales
+ * configurados en Ajustes → Roles.
+ *
+ * No existe bypass de `es_admin_plataforma`: el rol concede, no la etiqueta de
+ * director. La firma NO acepta el flag a propósito —igual que
+ * `puedeVerHerramienta`—, para que el bypass sea imposible de reintroducir por
+ * descuido. Antes, dirección veía módulos que tenía apagados en su propio rol.
  */
 export function puedeVerModulo(
-  esAdminPlataforma: boolean,
   permisos: PermisoModulo[],
   modulo: string,
 ): boolean {
-  if (esAdminPlataforma) return true;
   const target = normalizarModulo(modulo);
   return permisos.some((p) => p.ver && normalizarModulo(p.modulo) === target);
 }
@@ -92,30 +95,26 @@ export function puedeVerHerramienta(
 }
 
 /**
- * ¿El rol puede EDITAR el módulo indicado? Admin de plataforma siempre; el
- * resto según `permisos`.
+ * ¿El rol puede EDITAR el módulo indicado? SIEMPRE según los permisos reales.
+ * Sin bypass de admin de plataforma (ver `puedeVerModulo`).
  */
 export function puedeEditarModulo(
-  esAdminPlataforma: boolean,
   permisos: PermisoModulo[],
   modulo: string,
 ): boolean {
-  if (esAdminPlataforma) return true;
   const target = normalizarModulo(modulo);
   return permisos.some((p) => p.editar && normalizarModulo(p.modulo) === target);
 }
 
 /**
- * ¿Tiene acceso a la vista "Mis Departamentos"? Sí si es admin de plataforma o
- * si puede ver AL MENOS UN departamento. Un rol sin ningún departamento no ve
- * ni el conmutador ni la vista.
+ * ¿Tiene acceso a la vista "Mis Departamentos"? Sí si puede ver AL MENOS UN
+ * departamento. Un rol sin ningún departamento no ve ni el conmutador ni la
+ * vista — dirección incluida, si los tiene todos apagados.
  */
 export function tieneAccesoDepartamentos(
-  esAdminPlataforma: boolean,
   permisos: PermisoModulo[],
 ): boolean {
-  if (esAdminPlataforma) return true;
-  return MODULOS_DEPARTAMENTO.some((m) => puedeVerModulo(false, permisos, m));
+  return MODULOS_DEPARTAMENTO.some((m) => puedeVerModulo(permisos, m));
 }
 
 /**
@@ -123,9 +122,7 @@ export function tieneAccesoDepartamentos(
  * Vacía si no tiene acceso a ninguno.
  */
 export function departamentosVisibles(
-  esAdminPlataforma: boolean,
   permisos: PermisoModulo[],
 ): string[] {
-  if (esAdminPlataforma) return [...MODULOS_DEPARTAMENTO];
-  return MODULOS_DEPARTAMENTO.filter((m) => puedeVerModulo(false, permisos, m));
+  return MODULOS_DEPARTAMENTO.filter((m) => puedeVerModulo(permisos, m));
 }

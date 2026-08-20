@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getEmpresaActivaForUser } from "@/features/empresa/lib/empresa-server";
 import { getRolContext } from "@/features/auth/actions/permisos-actions";
+import { puedeEditarModulo } from "@/features/auth/lib/permisos";
 
 type ActionResult<T = unknown> = { ok: true; data: T } | { ok: false; error: string };
 
@@ -26,8 +27,8 @@ async function getAdminSession() {
   } = await supabase.auth.getUser();
   if (!user) return { user: null, empresaId: null, isAdmin: false };
   const empresaId = await getEmpresaActivaForUser(supabase, user.id);
-  const { esDirector } = await getRolContext(user.id);
-  const isAdmin = esDirector;
+  const { permisos } = await getRolContext(user.id);
+  const isAdmin = puedeEditarModulo(permisos, "RECURSOS HUMANOS");
   return { user, empresaId, isAdmin };
 }
 

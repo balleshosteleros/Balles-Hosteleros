@@ -10,6 +10,7 @@ import { registrarEvento, listarEventos, verificarCadena } from "@/features/rrhh
 import { enviarInvitacionFirma } from "@/features/rrhh/services/firmas/email";
 import { emitirNotificacion } from "@/features/notificaciones/actions/notificaciones-actions";
 import { getRolContext } from "@/features/auth/actions/permisos-actions";
+import { puedeEditarModulo } from "@/features/auth/lib/permisos";
 import { MAX_DOCUMENTO_MB, MAX_DOCUMENTO_BYTES } from "@/shared/lib/documentos";
 
 const BUCKET = "firmas";
@@ -57,8 +58,12 @@ async function requireAdmin(): Promise<{ userId: string; userName: string; empre
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("No autenticado");
 
-  const { esDirector } = await getRolContext();
-  if (!esDirector) throw new Error("Solo admin o director pueden gestionar firmas");
+  // Manda el permiso RECURSOS HUMANOS (editar) de Ajustes → Roles, no el flag
+  // de director.
+  const { permisos } = await getRolContext();
+  if (!puedeEditarModulo(permisos, "RECURSOS HUMANOS")) {
+    throw new Error("Sin permisos: necesitas Recursos Humanos para gestionar firmas");
+  }
 
   const { empresaId } = await getAppContext();
   if (!empresaId) throw new Error("Empresa no resuelta para el usuario actual");

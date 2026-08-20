@@ -6,6 +6,7 @@ import { distanciaMetros } from "@/features/rrhh/utils/geo";
 import { getEmpresaActivaId } from "@/features/empresa/actions/empresa-activa-actions";
 import { calcularSalidaPrevista, cerrarConReparto } from "@/features/mi-panel/utils/fichaje-multiempresa";
 import { getRolContext } from "@/features/auth/actions/permisos-actions";
+import { puedeEditarModulo } from "@/features/auth/lib/permisos";
 import { getZonaHorariaEmpresa } from "@/features/empresa/lib/empresa-server";
 import { hoyEnZona, zonaLocalAUtcISO } from "@/features/empresa/lib/zona-horaria";
 import { revalidatePath } from "next/cache";
@@ -27,14 +28,18 @@ async function requireAdminFichajes(opts?: { empresaIds?: string[] }) {
   } = await supabase.auth.getUser();
   if (!user) throw new Error("No autenticado");
 
-  const { esDirector } = await getRolContext();
-  if (!esDirector) {
+  // Manda el permiso RECURSOS HUMANOS (editar) de Ajustes → Roles, no el flag
+  // de director: quien tiene RRHH aprobado gestiona los fichajes.
+  const { permisos } = await getRolContext();
+  if (!puedeEditarModulo(permisos, "RECURSOS HUMANOS")) {
     throw new Error(
-      "Sin permisos: solo admin o director pueden gestionar fichajes",
+      "Sin permisos: necesitas Recursos Humanos para gestionar fichajes",
     );
   }
 
-  if (opts?.empresaIds && opts.empresaIds.length > 0 && !esDirector) {
+  // Scope por empresa: antes era inalcanzable (el director salía arriba), así
+  // que nadie validaba a qué empresas se estaba accediendo. Ahora sí aplica.
+  if (opts?.empresaIds && opts.empresaIds.length > 0) {
     const empresasReq = Array.from(
       new Set(
         opts.empresaIds.filter(

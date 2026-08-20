@@ -5,6 +5,7 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getRolContext } from "@/features/auth/actions/permisos-actions";
+import { puedeEditarModulo } from "@/features/auth/lib/permisos";
 import { generarEmbedding } from "@/lib/ia/embeddings";
 import { MODULOS_SOPORTE } from "@/lib/soporte/modulos";
 import type {
@@ -39,9 +40,9 @@ async function requireAdminOrDirector() {
   } = await supabase.auth.getUser();
   if (!user) throw new Error("No autenticado");
 
-  const { esDirector } = await getRolContext();
-  if (!esDirector) {
-    throw new Error("No tienes permisos para gestionar la base de conocimiento");
+  const { permisos } = await getRolContext();
+  if (!puedeEditarModulo(permisos, "AJUSTES")) {
+    throw new Error("Sin permisos: necesitas Ajustes para gestionar la base de conocimiento");
   }
   return user;
 }

@@ -7,6 +7,7 @@ import { getAppContext } from "@/lib/supabase/get-context";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getRolContext } from "@/features/auth/actions/permisos-actions";
+import { puedeEditarModulo } from "@/features/auth/lib/permisos";
 import { sha256, generarToken, hashToken } from "@/features/rrhh/services/firmas/crypto";
 import { registrarEvento } from "@/features/rrhh/services/firmas/audit";
 import { enviarInvitacionFirma } from "@/features/rrhh/services/firmas/email";
@@ -34,8 +35,10 @@ async function requireAdmin(): Promise<{ userId: string; userName: string; empre
   } = await supabase.auth.getUser();
   if (!user) throw new Error("No autenticado");
 
-  const { esDirector } = await getRolContext();
-  if (!esDirector) throw new Error("Solo dirección puede emitir sanciones disciplinarias");
+  const { permisos } = await getRolContext();
+  if (!puedeEditarModulo(permisos, "RECURSOS HUMANOS")) {
+    throw new Error("Sin permisos: necesitas Recursos Humanos para emitir sanciones disciplinarias");
+  }
 
   const { empresaId } = await getAppContext();
   if (!empresaId) throw new Error("Empresa no resuelta para el usuario actual");

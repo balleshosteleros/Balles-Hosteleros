@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getEmpresaActivaForUser, getZonaHorariaEmpresa } from "@/features/empresa/lib/empresa-server";
 import { hoyEnZona } from "@/features/empresa/lib/zona-horaria";
 import { getRolContext } from "@/features/auth/actions/permisos-actions";
+import { puedeEditarModulo } from "@/features/auth/lib/permisos";
 import { MAX_DOCUMENTOS_CIERRE, DIAS_BLOQUEO_DEFAULT } from "@/features/gerencia/types/cierres";
 import type { SupabaseClient } from "@supabase/supabase-js";
 const BUCKET = "cierres-documentos";
@@ -129,12 +130,13 @@ async function comprobarPlazoApunte(
   const retraso = Math.round((tHoy - tApunte) / msDia);
   if (retraso <= dias) return null; // dentro de plazo (o fecha futura)
 
-  // Fuera de plazo: solo pasa dirección o el rol autorizado.
-  const { esDirector, rolId } = await getRolContext();
-  if (esDirector) return null;
+  // Fuera de plazo: solo pasa el rol marcado como excepción en la configuración
+  // de cierres. Sin bypass de director: la excepción se concede ahí, no por el
+  // flag de plataforma.
+  const { rolId } = await getRolContext();
   if (cfg?.rol_excepcion_id && rolId === cfg.rol_excepcion_id) return null;
 
-  return `Fuera de plazo: no se pueden registrar apuntes con más de ${dias} ${dias === 1 ? "día" : "días"} de retraso (este lleva ${retraso}). Solo dirección puede hacerlo.`;
+  return `Fuera de plazo: no se pueden registrar apuntes con más de ${dias} ${dias === 1 ? "día" : "días"} de retraso (este lleva ${retraso}). Solo el rol autorizado puede hacerlo.`;
 }
 
 function sanitizeFilename(name: string): string {
@@ -823,11 +825,11 @@ export async function updateCierresConfig(input: {
     };
 
     if (tocaPlazo) {
-      // Cambiar el plazo es solo de dirección: si no, cualquiera se lo abriría
-      // y se saltaría la norma por la puerta de atrás.
-      const { esDirector } = await getRolContext();
-      if (!esDirector) {
-        return { ok: false, error: "Solo dirección puede cambiar el plazo para apuntar" };
+      // Cambiar el plazo exige GERENCIA (editar): si no, cualquiera se lo
+      // abriría y se saltaría la norma por la puerta de atrás.
+      const { permisos } = await getRolContext();
+      if (!puedeEditarModulo(permisos, "GERENCIA")) {
+        return { ok: false, error: "Sin permisos: necesitas Gerencia para cambiar el plazo para apuntar" };
       }
       // Plazo saneado: entero de 0 a 365 (0 = sin bloqueo).
       const diasRaw = Number(input.dias_bloqueo ?? DIAS_BLOQUEO_DEFAULT);

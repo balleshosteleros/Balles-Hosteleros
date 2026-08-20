@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getRolContext } from "@/features/auth/actions/permisos-actions";
+import { puedeEditarModulo } from "@/features/auth/lib/permisos";
 import { generarEmbeddings } from "@/lib/ia/embeddings";
 import { MODULO_GENERAL } from "@/lib/soporte/modulos";
 import type { Curso, Leccion, Puesto, Seccion } from "@/features/formacion/types";
@@ -61,9 +62,9 @@ async function requireAdminOrDirector() {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) throw new Error("No autenticado");
-  const { esDirector } = await getRolContext();
-  if (!esDirector) {
-    throw new Error("No tienes permisos para sincronizar la formación");
+  const { permisos } = await getRolContext();
+  if (!puedeEditarModulo(permisos, "AJUSTES")) {
+    throw new Error("Sin permisos: necesitas Ajustes para sincronizar la formación");
   }
 }
 

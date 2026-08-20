@@ -43,7 +43,7 @@ async function guardVer() {
     return { ok: false as const, error: "No autenticado", supabase, empresaId: null, userId: null };
   }
   const { esDirector, permisos } = await getRolContext(userId);
-  if (!puedeVerModulo(esDirector, permisos, "SALA")) {
+  if (!puedeVerModulo(permisos, "SALA")) {
     return { ok: false as const, error: "Sin acceso a Sala", supabase, empresaId: null, userId };
   }
   return { ok: true as const, supabase, empresaId, userId, esDirector, permisos };
@@ -53,7 +53,7 @@ async function guardVer() {
 async function guardGestion() {
   const base = await guardVer();
   if (!base.ok) return base;
-  if (!puedeEditarModulo(base.esDirector, base.permisos, "MÚSICA")) {
+  if (!puedeEditarModulo(base.permisos, "MÚSICA")) {
     return {
       ok: false as const,
       error: "Tu rol no puede gestionar la música. Pídelo en Ajustes → Roles.",
@@ -87,7 +87,7 @@ export async function listMusica(): Promise<{
     const { supabase, empresaId, esDirector, permisos } = ctx;
 
     const tz = await getZonaHorariaEmpresa(supabase, empresaId);
-    const puedeGestionar = puedeEditarModulo(esDirector, permisos, "MÚSICA");
+    const puedeGestionar = puedeEditarModulo(permisos, "MÚSICA");
 
     const [listasRes, cancionesRes, vinculosRes, horariosRes, usoRes] = await Promise.all([
       supabase.from("musica_listas").select("*").eq("empresa_id", empresaId)
