@@ -22,6 +22,7 @@ import {
 import {
   listarDisponibilidadPublicaAction,
   type SlotPublico,
+  type CamposObligatoriosPublico,
 } from "@/features/reservar-publica/actions/listar-disponibilidad-publica";
 
 interface Props {
@@ -31,6 +32,8 @@ interface Props {
   horaSeleccionada: string | null;
   onSelect: (hora: string) => void;
   accent: string;
+  /** Campos que la empresa exige además de los fijos (email / teléfono). */
+  onObligatoriosChange?: (o: CamposObligatoriosPublico) => void;
 }
 
 export function SelectorDisponibilidad({
@@ -40,6 +43,7 @@ export function SelectorDisponibilidad({
   horaSeleccionada,
   onSelect,
   accent,
+  onObligatoriosChange,
 }: Props) {
   const [slots, setSlots] = useState<SlotPublico[]>([]);
   const [cargando, setCargando] = useState(true);
@@ -58,12 +62,16 @@ export function SelectorDisponibilidad({
       } else {
         setSlots(r.slots);
         setMensaje(r.mensaje);
+        onObligatoriosChange?.(r.obligatorios);
       }
       setCargando(false);
     })();
     return () => {
       cancelado = true;
     };
+    // `onObligatoriosChange` se omite a propósito: el padre la redefine en cada
+    // render y volvería a lanzar la consulta de disponibilidad en bucle.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [empresaSlug, fecha, personas]);
 
   // Si la hora elegida deja de estar disponible (cambio de fecha o de

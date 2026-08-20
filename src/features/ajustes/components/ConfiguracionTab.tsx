@@ -5,6 +5,7 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 import { type DatosGenerales, type ConfigOperativa } from "@/features/ajustes/data/ajustes";
@@ -35,7 +36,7 @@ export const ConfiguracionTab = forwardRef<ConfiguracionTabHandle, { hideSaveBut
   const setD = (k: keyof DatosGenerales, v: string) =>
     setAjustes((prev) => ({ ...prev, datosGenerales: { ...prev.datosGenerales, [k]: v } }));
 
-  const setC = (k: keyof ConfigOperativa, v: string) =>
+  const setC = (k: keyof ConfigOperativa, v: string | boolean) =>
     setAjustes((prev) => ({ ...prev, configOperativa: { ...prev.configOperativa, [k]: v } }));
 
   const handleSave = async () => {
@@ -170,6 +171,27 @@ export const ConfiguracionTab = forwardRef<ConfiguracionTabHandle, { hideSaveBut
                 <SelectItem value="Domingo">Domingo</SelectItem>
               </SelectContent>
             </Select>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* ── RESERVAS ────────────────────────────────────── */}
+      <Card>
+        <CardHeader className="px-4 pt-3 pb-2"><CardTitle className="text-base">Reservas</CardTitle></CardHeader>
+        <CardContent className="px-4 pb-3 pt-0">
+          <div className="flex items-start justify-between gap-4">
+            <div className="space-y-0.5">
+              <Label className="text-xs font-bold">Separar el listado por salas</Label>
+              <p className="text-xs text-muted-foreground">
+                {c.reservasListadoPorSala
+                  ? "El listado muestra solo las reservas de la sala que estés viendo. Para ver las de otra sala hay que cambiar de sala."
+                  : "El listado muestra todas las reservas del turno juntas, sean de la sala que sean. Cambiar de sala solo cambia el plano."}
+              </p>
+            </div>
+            <Switch
+              checked={c.reservasListadoPorSala ?? false}
+              onCheckedChange={(v) => setC("reservasListadoPorSala", v)}
+            />
           </div>
         </CardContent>
       </Card>

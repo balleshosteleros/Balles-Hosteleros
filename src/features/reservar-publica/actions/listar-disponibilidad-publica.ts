@@ -17,6 +17,7 @@ import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { ESTADOS_NO_OCUPANTES, horaAMinutos } from "@/features/sala/lib/reserva-conflicto";
 import { vigenciaAplicaEnFecha, type ReservaBloqueo } from "@/features/sala/bloqueos/data/bloqueos";
+import { getCamposObligatoriosReserva } from "@/features/sala/lib/reserva-campos-obligatorios";
 
 const inputSchema = z.object({
   empresaSlug: z.string().min(1).max(120),
@@ -35,8 +36,24 @@ export interface SlotPublico {
   motivo: string | null;
 }
 
+/**
+ * Campos que la empresa exige además de los fijos (nombre, apellidos, fecha,
+ * hora y personas, siempre obligatorios). El portal los usa para marcar el
+ * asterisco y bloquear el envío.
+ */
+export interface CamposObligatoriosPublico {
+  email: boolean;
+  telefono: boolean;
+}
+
 export type ListarDisponibilidadResult =
-  | { ok: true; slots: SlotPublico[]; cerrado: boolean; mensaje: string | null }
+  | {
+      ok: true;
+      slots: SlotPublico[];
+      cerrado: boolean;
+      mensaje: string | null;
+      obligatorios: CamposObligatoriosPublico;
+    }
   | { ok: false; error: string };
 
 const MIN_POR_DIA = 1440;
@@ -137,11 +154,16 @@ export async function listarDisponibilidadPublicaAction(
     .maybeSingle();
   const cfg = (cfgRow ?? {}) as Record<string, unknown>;
 
+  // Los marca la empresa en Ajustes → Departamentos → Sala → Reservas. Se
+  // resuelven en servidor por `empresa_id` porque el portal no tiene sesión.
+  const obligatorios: CamposObligatoriosPublico =
+    await getCamposObligatoriosReserva(empresaId);
+
   // Antelación máxima: no dejamos reservar más allá del horizonte configurado.
   const maxDias = (cfg.antelacion_max_dias as number | null) ?? 90;
   const hoyISO = new Date().toISOString().slice(0, 10);
   if (fecha < hoyISO) {
-    return { ok: true, slots: [], cerrado: true, mensaje: "Esa fecha ya ha pasado." };
+    return { ok: true, slots: [], cerrado: true, mensaje: "Esa fecha ya ha pasado.", obligatorios };
   }
   const limite = new Date(`${hoyISO}T00:00:00`);
   limite.setDate(limite.getDate() + maxDias);
@@ -151,6 +173,7 @@ export async function listarDisponibilidadPublicaAction(
       slots: [],
       cerrado: true,
       mensaje: `Solo aceptamos reservas con ${maxDias} días de antelación.`,
+      obligatorios,
     };
   }
 
@@ -300,8 +323,9 @@ export async function listarDisponibilidadPublicaAction(
       slots: [],
       cerrado: true,
       mensaje: "No hay horarios disponibles para este día.",
+      obligatorios,
     };
   }
 
-  return { ok: true, slots, cerrado: false, mensaje: null };
+  return { ok: true, slots, cerrado: false, mensaje: null, obligatorios };
 }

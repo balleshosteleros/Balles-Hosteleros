@@ -125,6 +125,13 @@ export interface ConfigOperativa {
   emailTonoIA?: string;
   /** Longitud por defecto de la redacción con IA. */
   emailLongitudIA?: string;
+  /**
+   * Listado de reservas separado por sala. Desactivado (por defecto) = el
+   * listado muestra TODAS las reservas del turno, sean de la sala que sean, y
+   * cambiar de sala solo mueve el plano. Activado = el listado enseña solo las
+   * de la sala visible, así que hay que cambiar de sala para ver las suyas.
+   */
+  reservasListadoPorSala?: boolean;
 }
 
 // ─── Telefonía ──────────────────────────────────────────────────
@@ -366,6 +373,8 @@ export function buildDefaultAjustes(empresaNombre: string): AjustesEmpresa {
       localesAsociados: "", etiquetasInternas: "", colorPrimario: "#3B82F6",
       emailEstiloIA: ESTILO_EMAIL_IA_POR_DEFECTO,
       emailTonoIA: "cercano", emailLongitudIA: "medio",
+      // Apagado a propósito: el listado nace mostrando todas las salas juntas.
+      reservasListadoPorSala: false,
     },
     telefonia: {
       proveedor: "none",

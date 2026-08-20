@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -179,17 +179,22 @@ export function HorariosAperturaPanel({ config, onChange }: Props) {
   const [fin, setFin] = useState("02:00");
   const [ambito, setAmbito] = useState<Ambito>("dia_semana");
 
+  // Siempre apunta al config más reciente sin provocar re-suscripciones.
+  const configRef = useRef(config);
+  configRef.current = config;
+
   // Re-evalúa el turno por defecto cada minuto: cuando termine el turno actual
-  // pasamos automáticamente al siguiente.
+  // pasamos automáticamente al siguiente. Lee config por ref para no reiniciar
+  // el temporizador en cada guardado de slots.
   useEffect(() => {
     const id = setInterval(() => {
       setTurno((prev) => {
-        const sugerido = turnoPorHoraActual(config);
+        const sugerido = turnoPorHoraActual(configRef.current);
         return prev === sugerido ? prev : sugerido;
       });
     }, 60_000);
     return () => clearInterval(id);
-  }, [config]);
+  }, []);
 
   // Estado específico de ámbitos
   const [diaSemanaSel, setDiaSemanaSel] = useState<DiaSemanaKey>("lun");
@@ -203,18 +208,22 @@ export function HorariosAperturaPanel({ config, onChange }: Props) {
   const [cargando, setCargando] = useState(true);
   const [aplicando, setAplicando] = useState(false);
 
-  // Carga inicial del horario general para el turno seleccionado
+  // Precarga el horario general al cambiar de turno.
+  // OJO: depende SOLO de `turno`. Si dependiera también de `config`, cada click
+  // en un slot (que llama a onChange y muta config) revertiría lo que el usuario
+  // acaba de tocar arriba — p. ej. pasar de "Cerrado" a "Abierto".
   useEffect(() => {
+    const cfg = configRef.current;
     if (turno === "comida") {
-      setInicio(config.generalInicioComida ?? "13:00");
-      setFin(config.generalFinComida ?? "16:00");
-      setCerrado(Boolean(config.generalCerradoComida));
+      setInicio(cfg.generalInicioComida ?? "13:00");
+      setFin(cfg.generalFinComida ?? "16:00");
+      setCerrado(Boolean(cfg.generalCerradoComida));
     } else {
-      setInicio(config.generalInicioCena ?? "20:00");
-      setFin(config.generalFinCena ?? "02:00");
-      setCerrado(Boolean(config.generalCerradoCena));
+      setInicio(cfg.generalInicioCena ?? "20:00");
+      setFin(cfg.generalFinCena ?? "02:00");
+      setCerrado(Boolean(cfg.generalCerradoCena));
     }
-  }, [turno, config]);
+  }, [turno]);
 
   async function cargarExcepciones() {
     const r = await listHorariosExcepciones();
@@ -264,10 +273,17 @@ export function HorariosAperturaPanel({ config, onChange }: Props) {
           setAplicando(false);
           return;
         }
+        // Además del día concreto, refrescamos la ventana "general" del turno:
+        // es la que alimenta los slots de 15 min, que son comunes a todos los días.
+        const generalInicioKey = turno === "comida" ? "generalInicioComida" : "generalInicioCena";
+        const generalFinKey    = turno === "comida" ? "generalFinComida"    : "generalFinCena";
+        const generalCerradoKey = turno === "comida" ? "generalCerradoComida" : "generalCerradoCena";
         const parche: Record<string, unknown> = {
           [`${diaSemanaSel}_inicio_${turno}`]:  cerrado ? null : inicio,
           [`${diaSemanaSel}_fin_${turno}`]:     cerrado ? null : fin,
           [`${diaSemanaSel}_cerrado_${turno}`]: cerrado,
+          [generalCerradoKey]: cerrado,
+          ...(cerrado ? {} : { [generalInicioKey]: inicio, [generalFinKey]: fin }),
         };
         onChange(parche as Partial<EmpresaReservasConfig>);
         toast.success(`Horario aplicado a todos los ${DIAS_LABELS[diaSemanaSel]}`);
@@ -438,10 +454,14 @@ export function HorariosAperturaPanel({ config, onChange }: Props) {
         </div>
       </div>
 
-      {/* Indicador genérico de slots activos para reservas (mismo para todos los días) */}
+      {/* Indicador genérico de slots activos para reservas (mismo para todos los días).
+          Refleja EN VIVO el estado y las horas que estás editando arriba, no lo guardado. */}
       <SlotsActivosPicker
         turno={turno}
         config={config}
+        cerrado={cerrado}
+        inicio={inicio}
+        fin={fin}
         onChange={onChange}
       />
 
@@ -632,9 +652,9 @@ export function HorariosAperturaPanel({ config, onChange }: Props) {
  *
  * Reglas:
  *  · Aplica IGUAL a todos los días del turno (no se diferencia por día).
- *  · Los slots se generan automáticamente entre la apertura y el cierre
- *    "general" del turno (`generalInicio*`/`generalFin*`). Si abres antes
- *    o cierras después, los nuevos slots aparecen activos sin tocar nada.
+ *  · Los slots se generan entre la apertura y el cierre que el usuario tiene
+ *    EN PANTALLA (estado en vivo), no lo último guardado: así al cambiar la
+ *    hora o pasar de Cerrado a Abierto los slots se actualizan al instante.
  *  · Por defecto TODOS están activos; lo que se persiste es la lista de
  *    slots desactivados (`generalSlotsInactivos*`), por eficiencia.
  *  · Auto-guarda al hacer click (vía `onChange`).
@@ -642,16 +662,19 @@ export function HorariosAperturaPanel({ config, onChange }: Props) {
 function SlotsActivosPicker({
   turno,
   config,
+  cerrado,
+  inicio,
+  fin,
   onChange,
 }: {
   turno: TurnoKey;
   config: EmpresaReservasConfig;
+  cerrado: boolean;
+  inicio: string;
+  fin: string;
   onChange: (parche: Partial<EmpresaReservasConfig>) => void;
 }) {
-  const ini = turno === "comida" ? config.generalInicioComida : config.generalInicioCena;
-  const fin = turno === "comida" ? config.generalFinComida    : config.generalFinCena;
-  const cerrado = turno === "comida" ? config.generalCerradoComida : config.generalCerradoCena;
-  const slots = generarSlotsTurno(ini, fin);
+  const slots = cerrado ? [] : generarSlotsTurno(inicio, fin);
   const inactivosKey: keyof EmpresaReservasConfig =
     turno === "comida" ? "generalSlotsInactivosComida" : "generalSlotsInactivosCena";
   const inactivos = new Set<string>(
