@@ -249,6 +249,40 @@ export async function iniciarContratacion(
     console.error("[contratacion-fase] reconocimiento médico:", err);
   }
 
+  // 4. RECORDATORIO de nueva incorporación al equipo de RRHH (campana). A
+  //    diferencia de los avisos anteriores —que informan de un correo concreto—
+  //    este es un aviso con texto libre editable desde Ajustes → Reclutamiento y
+  //    salta SIEMPRE que hay alta de contrato, se hayan enviado o no los correos.
+  //    Best-effort: la contratación ya está hecha.
+  try {
+    const admin = createAdminClient();
+    const cfg = await getReclutamientoConfigPorEmpresa(admin, empresaId);
+    if (cfg.notif_incorporacion_activo) {
+      const { data: emp } = await admin
+        .from("empleados")
+        .select("nombre, apellidos, puesto")
+        .eq("id", empleadoId)
+        .maybeSingle();
+      const empleadoNombre = `${emp?.nombre ?? ""} ${emp?.apellidos ?? ""}`.trim() || "el nuevo trabajador";
+      const rellenar = (txt: string) =>
+        txt
+          .replaceAll("{empleado}", empleadoNombre)
+          .replaceAll("{puesto}", (emp?.puesto as string | null) ?? "su puesto")
+          .replaceAll("{fecha}", fechaEs(new Date(`${input.primerDia}T12:00:00`)));
+
+      await notificarRrhhGestoria({
+        empresaId,
+        tipo: "nueva_incorporacion",
+        titulo: rellenar(cfg.notif_incorporacion_titulo),
+        mensaje: rellenar(cfg.notif_incorporacion_mensaje),
+        empleadoId,
+        dedupeKey: `nueva_incorporacion:${empleadoId}`,
+      });
+    }
+  } catch (err) {
+    console.error("[contratacion-fase] recordatorio de incorporación:", err);
+  }
+
   revalidatePath("/rrhh/reclutamiento");
   revalidatePath("/rrhh/empleados");
   return {

@@ -6,6 +6,7 @@ import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import {
@@ -165,6 +166,63 @@ export const GestoriaConfig = forwardRef<
             );
           })}
         </div>
+      </div>
+
+      {/* Recordatorio de nueva incorporación: mensaje libre editable. No es un
+          aviso de "se ha enviado X", sino el recordatorio para preparar la
+          llegada del trabajador. Solo campana; no manda correo a nadie. */}
+      <div className="space-y-3 rounded-lg border border-border p-3">
+        <div className="flex items-start justify-between gap-4">
+          <div className="space-y-0.5">
+            <Label className="text-sm font-medium">Recordatorio de nueva incorporación</Label>
+            <p className="text-xs text-muted-foreground">
+              Cada vez que se da un alta de contrato, salta este recordatorio en la campana del
+              equipo de RRHH. No se envía ningún correo.
+            </p>
+          </div>
+          <Switch
+            checked={config.notif_incorporacion_activo}
+            onCheckedChange={(v) => setConfig((c) => c && { ...c, notif_incorporacion_activo: v })}
+          />
+        </div>
+
+        {config.notif_incorporacion_activo && (
+          <div className="space-y-3 pt-1">
+            <div className="space-y-1.5">
+              <Label htmlFor="incorporacion-titulo" className="text-sm text-foreground">
+                Título
+              </Label>
+              <Input
+                id="incorporacion-titulo"
+                value={config.notif_incorporacion_titulo}
+                onChange={(e) =>
+                  setConfig((c) => c && { ...c, notif_incorporacion_titulo: e.target.value })
+                }
+                className="h-9"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="incorporacion-mensaje" className="text-sm text-foreground">
+                Mensaje
+              </Label>
+              <Textarea
+                id="incorporacion-mensaje"
+                value={config.notif_incorporacion_mensaje}
+                onChange={(e) =>
+                  setConfig((c) => c && { ...c, notif_incorporacion_mensaje: e.target.value })
+                }
+                rows={3}
+              />
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Puedes usar <span className="font-medium text-foreground">{"{empleado}"}</span>,{" "}
+              <span className="font-medium text-foreground">{"{puesto}"}</span> y{" "}
+              <span className="font-medium text-foreground">{"{fecha}"}</span>: se sustituyen por el
+              nombre del trabajador, su puesto y el día de incorporación. Si dejas un campo vacío,
+              se usa el texto por defecto.
+            </p>
+          </div>
+        )}
       </div>
 
       {!embedded && (

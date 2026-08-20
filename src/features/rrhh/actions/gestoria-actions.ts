@@ -29,6 +29,10 @@ import {
   type GestoriaCampoKey,
   type TipoBajaContrato,
 } from "@/features/rrhh/data/campos-gestoria";
+import {
+  INCORPORACION_TITULO_DEFAULT,
+  INCORPORACION_MENSAJE_DEFAULT,
+} from "@/features/rrhh/actions/gestoria-config-server";
 
 async function getCtx() {
   const supabase = await createClient();
@@ -55,6 +59,11 @@ export interface ReclutamientoConfig {
   notif_recordatorio_gestoria: boolean;
   notif_contrato_subido: boolean;
   notif_contrato_firmado: boolean;
+  // Recordatorio de nueva incorporación al equipo de RRHH: texto libre editable
+  // que salta en la campana al dar el alta de contrato. Solo in-app.
+  notif_incorporacion_activo: boolean;
+  notif_incorporacion_titulo: string;
+  notif_incorporacion_mensaje: string;
 }
 
 const RECLUTAMIENTO_CONFIG_DEFAULT: ReclutamientoConfig = {
@@ -65,6 +74,9 @@ const RECLUTAMIENTO_CONFIG_DEFAULT: ReclutamientoConfig = {
   notif_recordatorio_gestoria: true,
   notif_contrato_subido: true,
   notif_contrato_firmado: true,
+  notif_incorporacion_activo: true,
+  notif_incorporacion_titulo: INCORPORACION_TITULO_DEFAULT,
+  notif_incorporacion_mensaje: INCORPORACION_MENSAJE_DEFAULT,
 };
 
 export async function getReclutamientoConfig(): Promise<{ ok: boolean; data: ReclutamientoConfig }> {
@@ -76,7 +88,8 @@ export async function getReclutamientoConfig(): Promise<{ ok: boolean; data: Rec
       .select(
         "gestoria_envio_auto, " +
           "gestoria_recordatorio_activo, gestoria_recordatorio_dias, " +
-          "notif_alta_gestoria, notif_recordatorio_gestoria, notif_contrato_subido, notif_contrato_firmado",
+          "notif_alta_gestoria, notif_recordatorio_gestoria, notif_contrato_subido, notif_contrato_firmado, " +
+          "notif_incorporacion_activo, notif_incorporacion_titulo, notif_incorporacion_mensaje",
       )
       .eq("empresa_id", empresaId)
       .maybeSingle<{
@@ -87,6 +100,9 @@ export async function getReclutamientoConfig(): Promise<{ ok: boolean; data: Rec
         notif_recordatorio_gestoria: boolean | null;
         notif_contrato_subido: boolean | null;
         notif_contrato_firmado: boolean | null;
+        notif_incorporacion_activo: boolean | null;
+        notif_incorporacion_titulo: string | null;
+        notif_incorporacion_mensaje: string | null;
       }>();
     return {
       ok: true,
@@ -98,6 +114,11 @@ export async function getReclutamientoConfig(): Promise<{ ok: boolean; data: Rec
         notif_recordatorio_gestoria: data?.notif_recordatorio_gestoria ?? true,
         notif_contrato_subido: data?.notif_contrato_subido ?? true,
         notif_contrato_firmado: data?.notif_contrato_firmado ?? true,
+        notif_incorporacion_activo: data?.notif_incorporacion_activo ?? true,
+        notif_incorporacion_titulo:
+          data?.notif_incorporacion_titulo || INCORPORACION_TITULO_DEFAULT,
+        notif_incorporacion_mensaje:
+          data?.notif_incorporacion_mensaje || INCORPORACION_MENSAJE_DEFAULT,
       },
     };
   } catch (err) {
@@ -122,6 +143,12 @@ export async function saveReclutamientoConfig(input: ReclutamientoConfig) {
         notif_recordatorio_gestoria: input.notif_recordatorio_gestoria,
         notif_contrato_subido: input.notif_contrato_subido,
         notif_contrato_firmado: input.notif_contrato_firmado,
+        notif_incorporacion_activo: input.notif_incorporacion_activo,
+        // Si se deja vacío, vuelve al texto por defecto: el aviso nunca sale mudo.
+        notif_incorporacion_titulo:
+          input.notif_incorporacion_titulo?.trim() || INCORPORACION_TITULO_DEFAULT,
+        notif_incorporacion_mensaje:
+          input.notif_incorporacion_mensaje?.trim() || INCORPORACION_MENSAJE_DEFAULT,
         updated_at: new Date().toISOString(),
       }, { onConflict: "empresa_id" });
     if (error) throw error;

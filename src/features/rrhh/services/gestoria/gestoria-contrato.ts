@@ -296,7 +296,9 @@ export async function notificarRrhhGestoria(params: {
     | "contrato_interno_firmado"
     | "reconocimiento_medico_enviado"
     | "reconocimiento_medico_firmado"
-    | "alta_completada";
+    | "alta_completada"
+    // Recordatorio editable de nueva incorporación (Ajustes → Reclutamiento)
+    | "nueva_incorporacion";
   titulo: string;
   mensaje: string;
   empleadoId: string;
