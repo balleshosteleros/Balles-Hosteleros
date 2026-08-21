@@ -29,6 +29,7 @@ import { generarContratoInternoPDF } from "@/features/rrhh/services/firmas/contr
 import { generarReconocimientoMedicoPDF } from "@/features/rrhh/services/firmas/reconocimiento-medico-pdf";
 import { notificarRrhhGestoria } from "@/features/rrhh/services/gestoria/gestoria-contrato";
 import { getReclutamientoConfigPorEmpresa } from "@/features/rrhh/actions/gestoria-config-server";
+import type { Segmento } from "@/features/notificaciones/types";
 import { revalidatePath } from "next/cache";
 import { getMarcaEmpresa } from "@/lib/pdf/cabecera-documento";
 
@@ -59,6 +60,43 @@ export interface IniciarContratacionResult {
 
 function fechaEs(d: Date): string {
   return d.toLocaleDateString("es-ES", { timeZone: "Europe/Madrid", day: "2-digit", month: "2-digit", year: "numeric" });
+}
+
+/**
+ * A quién avisar del recordatorio de nueva incorporación: a quien tiene el ROL
+ * de RRHH en la empresa. El nombre del rol se lee de `empresa_roles` (no se
+ * cablea: cada empresa puede renombrarlo).
+ *
+ * Si nadie tiene ese rol asignado todavía, cae al área ADMINISTRATIVA — que es
+ * a donde van el resto de avisos del flujo. Preferimos que el recordatorio
+ * llegue a Dirección/Gerencia antes que se pierda sin destinatario.
+ */
+async function segmentoRrhh(
+  admin: ReturnType<typeof createAdminClient>,
+  empresaId: string,
+): Promise<Segmento> {
+  const AREA: Segmento = { tipo: "area", area: "ADMINISTRATIVA" };
+  try {
+    const { data: roles } = await admin
+      .from("empresa_roles")
+      .select("nombre")
+      .eq("empresa_id", empresaId);
+    const rol = (roles ?? [])
+      .map((r) => (r.nombre as string | null) ?? "")
+      .find((n) => /recursos\s*humanos|rrhh/i.test(n));
+    if (!rol) return AREA;
+
+    // ¿Hay alguien con ese rol y con login? Si no, el segmento "rol" no
+    // resolvería a nadie y el aviso se perdería en silencio.
+    const { count } = await admin
+      .from("usuarios")
+      .select("user_id", { count: "exact", head: true })
+      .eq("rol_label", rol);
+    return count && count > 0 ? { tipo: "rol", rolLabel: rol } : AREA;
+  } catch (e) {
+    console.error("[contratacion-fase] segmentoRrhh:", e);
+    return AREA;
+  }
 }
 
 export async function iniciarContratacion(
@@ -284,6 +322,9 @@ export async function iniciarContratacion(
         mensaje: rellenar(cfg.notif_incorporacion_mensaje),
         empleadoId,
         dedupeKey: `nueva_incorporacion:${empleadoId}`,
+        // Este recordatorio es TAREA de RRHH, no un hito informativo: va a quien
+        // tiene el rol de RRHH, no a toda el área administrativa.
+        segmento: await segmentoRrhh(admin, empresaId),
       });
     }
   } catch (err) {

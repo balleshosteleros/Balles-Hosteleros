@@ -10,6 +10,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { generarToken, hashToken, compararToken } from "@/features/rrhh/services/firmas/crypto";
 import { emitirNotificacion } from "@/features/notificaciones/actions/notificaciones-actions";
+import type { Segmento } from "@/features/notificaciones/types";
 import { crearFirmaInterno } from "@/features/rrhh/services/firmas/crear-firma";
 import { getReclutamientoConfigPorEmpresa } from "@/features/rrhh/actions/gestoria-config-server";
 import { resolverPlantillaOnboarding, PLANTILLAS_ONBOARDING } from "@/features/rrhh/services/email-plantillas/resolver";
@@ -303,6 +304,12 @@ export async function notificarRrhhGestoria(params: {
   mensaje: string;
   empleadoId: string;
   dedupeKey?: string;
+  /**
+   * A quién se avisa. Por defecto, toda el área ADMINISTRATIVA: los hitos del
+   * flujo de gestoría interesan a Dirección y Gerencia además de a RRHH. Los
+   * avisos que sí son solo para RRHH pasan aquí su propio segmento.
+   */
+  segmento?: Segmento;
 }): Promise<void> {
   try {
     await emitirNotificacion({
@@ -311,7 +318,7 @@ export async function notificarRrhhGestoria(params: {
       tipo: params.tipo,
       titulo: params.titulo,
       mensaje: params.mensaje,
-      segmento: { tipo: "area", area: "ADMINISTRATIVA" },
+      segmento: params.segmento ?? { tipo: "area", area: "ADMINISTRATIVA" },
       refTabla: "empleados",
       refId: params.empleadoId,
       accionUrl: "/rrhh/reclutamiento",
