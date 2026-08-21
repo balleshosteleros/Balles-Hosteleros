@@ -415,7 +415,7 @@ export function EstructuraTab() {
               <div>
                 <h3 className="text-sm font-semibold">Combinaciones</h3>
                 <p className="text-[11px] text-muted-foreground">
-                  Mesas virtuales que agrupan 2+ mesas reales (T-5+T-6+T-7) para reservas grandes.
+                  Mesas virtuales que agrupan 2 o más mesas reales para reservas grandes.
                 </p>
               </div>
               <Button
