@@ -51,6 +51,19 @@ import type {
 import { HORAS_EXTRAS_MOTIVO_MIN } from "@/features/mi-panel/types";
 import { DiaTrabajadoAvisoDialog } from "@/features/mi-panel/components/DiaTrabajadoAvisoDialog";
 import { MAX_DOCUMENTO_MB, MAX_DOCUMENTO_BYTES } from "@/shared/lib/documentos";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  SOLICITUD_HORAS_AVISO,
+  SOLICITUD_HORAS_OPCIONES,
+  minutosTramo,
+  validarTramo,
+} from "@/features/mi-panel/lib/solicitud-horas";
 
 interface SolicitudModalProps {
   open: boolean;
@@ -62,8 +75,8 @@ interface SolicitudModalProps {
 
 type Paso = "tipo" | "subtipo" | "detalle";
 
+// Preaviso mínimo de la baja de contrato (días naturales). No hay tope máximo.
 const BAJA_CONTRATO_PREAVISO_MIN = 15;
-const BAJA_CONTRATO_PREAVISO_MAX = 45;
 
 // Parte de baja médica: hasta 3 fotos o PDFs, 50 MB cada uno (tope de documentos).
 const PARTE_BAJA_MAX = 3;
@@ -301,15 +314,12 @@ export function SolicitudModal({ open, onOpenChange, onCreated, onElegirDenuncia
         toast.error("Indica la hora de entrada y de salida");
         return;
       }
-      const [hi, mi] = horaInicio.split(":").map(Number);
-      const [hf, mf] = horaFin.split(":").map(Number);
-      let min = hf * 60 + mf - (hi * 60 + mi);
-      if (min < 0) min += 1440; // cruza medianoche
-      if (min === 0) {
-        toast.error("La hora de salida no puede ser igual a la de entrada");
+      const errorTramo = validarTramo(horaInicio, horaFin);
+      if (errorTramo) {
+        toast.error(errorTramo);
         return;
       }
-      horasTramo = Math.round((min / 60) * 100) / 100;
+      horasTramo = Math.round((minutosTramo(horaInicio, horaFin) / 60) * 100) / 100;
     }
     // Horas extras: sin explicación no se envía; quien aprueba necesita el porqué.
     if (subtipo === "horas_extras" && motivo.trim().length < HORAS_EXTRAS_MOTIVO_MIN) {
@@ -367,7 +377,7 @@ export function SolicitudModal({ open, onOpenChange, onCreated, onElegirDenuncia
     {
       value: "baja_contrato",
       label: "Baja de contrato",
-      desc: "Solicitar dejar la empresa (preaviso 15-45 días naturales)",
+      desc: `Solicitar dejar la empresa (preaviso mínimo de ${BAJA_CONTRATO_PREAVISO_MIN} días naturales)`,
     },
   ];
 
@@ -402,16 +412,24 @@ export function SolicitudModal({ open, onOpenChange, onCreated, onElegirDenuncia
   const motivoCorto =
     subtipo === "horas_extras" && motivo.trim().length < HORAS_EXTRAS_MOTIVO_MIN;
 
+  // Tramo inválido (mismo inicio y fin, o menos de media hora). Solo se
+  // comprueba con las dos horas elegidas: a medio rellenar no se avisa de nada.
+  const errorTramo =
+    (subtipo === "horas_extras" || subtipo === "dia_trabajado") &&
+    horaInicio &&
+    horaFin
+      ? validarTramo(horaInicio, horaFin)
+      : null;
+
   // Bloqueo de envío en cliente para baja de contrato: exige que exista la
-  // fecha efectiva y que respete el preaviso legal (15-45 días naturales).
+  // fecha efectiva y que respete el preaviso mínimo legal (15 días naturales).
   // El servidor revalida igual.
   const bajaEnvioBloqueado = (() => {
     if (subtipo !== "baja_contrato") return false;
     // Ya hay una baja en curso o aún estamos comprobándolo: no se puede enviar.
     if (bajaEnCurso || bajaComprobando) return true;
     if (!fechaFin) return true;
-    const dias = diasNaturales(todayISO(), fechaFin);
-    return dias < BAJA_CONTRATO_PREAVISO_MIN || dias > BAJA_CONTRATO_PREAVISO_MAX;
+    return diasNaturales(todayISO(), fechaFin) < BAJA_CONTRATO_PREAVISO_MIN;
   })();
 
   return (
@@ -537,11 +555,8 @@ export function SolicitudModal({ open, onOpenChange, onCreated, onElegirDenuncia
           {paso === "detalle" && subtipo && subtipo === "baja_contrato" && (() => {
             const hoy = todayISO();
             const minBaja = addDaysISO(hoy, BAJA_CONTRATO_PREAVISO_MIN);
-            const maxBaja = addDaysISO(hoy, BAJA_CONTRATO_PREAVISO_MAX);
             const dias = fechaFin ? diasNaturales(hoy, fechaFin) : 0;
-            const fueraDeRango =
-              !!fechaFin &&
-              (dias < BAJA_CONTRATO_PREAVISO_MIN || dias > BAJA_CONTRATO_PREAVISO_MAX);
+            const fueraDeRango = !!fechaFin && dias < BAJA_CONTRATO_PREAVISO_MIN;
 
             // Mientras comprobamos si ya hay una baja en curso.
             if (bajaComprobando) {
@@ -584,9 +599,9 @@ export function SolicitudModal({ open, onOpenChange, onCreated, onElegirDenuncia
                   <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
                   <div className="text-xs leading-relaxed">
                     Al enviar esta solicitud arrancas hoy ({formatFechaEs(hoy)}) tu
-                    periodo de preaviso. El plazo debe ser de entre{" "}
-                    {BAJA_CONTRATO_PREAVISO_MIN} y {BAJA_CONTRATO_PREAVISO_MAX} días
-                    naturales. Es <strong>irreversible</strong>: recibirás al momento
+                    periodo de preaviso, que debe ser de al menos{" "}
+                    {BAJA_CONTRATO_PREAVISO_MIN} días naturales. Es{" "}
+                    <strong>irreversible</strong>: recibirás al momento
                     un email con la carta de baja. La baja{" "}
                     <strong>no se confirma</strong> hasta que la firmes, y el enlace
                     de firma solo vale <strong>1 hora</strong>.
@@ -603,11 +618,10 @@ export function SolicitudModal({ open, onOpenChange, onCreated, onElegirDenuncia
                     value={fechaFin}
                     onChange={(e) => setFechaFin(e.target.value)}
                     min={minBaja}
-                    max={maxBaja}
                   />
                   <p className="text-xs text-muted-foreground">
-                    Primer día disponible: {formatFechaEs(minBaja)} · último:{" "}
-                    {formatFechaEs(maxBaja)}
+                    Primer día disponible: {formatFechaEs(minBaja)} (preaviso mínimo
+                    de {BAJA_CONTRATO_PREAVISO_MIN} días naturales).
                   </p>
                   {fechaFin && !fueraDeRango && (
                     <p className="text-xs font-medium text-emerald-700">
@@ -616,8 +630,8 @@ export function SolicitudModal({ open, onOpenChange, onCreated, onElegirDenuncia
                   )}
                   {fueraDeRango && (
                     <p className="text-xs font-medium text-rose-600">
-                      Fuera del rango permitido ({BAJA_CONTRATO_PREAVISO_MIN}-
-                      {BAJA_CONTRATO_PREAVISO_MAX} días).
+                      El preaviso mínimo es de {BAJA_CONTRATO_PREAVISO_MIN} días
+                      naturales.
                     </p>
                   )}
                 </div>
@@ -672,29 +686,52 @@ export function SolicitudModal({ open, onOpenChange, onCreated, onElegirDenuncia
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1.5">
                     <Label htmlFor="horaInicio">Hora de entrada</Label>
-                    <Input
-                      id="horaInicio"
-                      type="time"
-                      value={horaInicio}
-                      onChange={(e) => setHoraInicio(e.target.value)}
-                    />
+                    <Select
+                      value={horaInicio || undefined}
+                      onValueChange={setHoraInicio}
+                    >
+                      <SelectTrigger id="horaInicio">
+                        <SelectValue placeholder="Elige una hora" />
+                      </SelectTrigger>
+                      <SelectContent className="max-h-72">
+                        {SOLICITUD_HORAS_OPCIONES.map((h) => (
+                          <SelectItem key={h} value={h} className="tabular-nums">
+                            {h}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                   <div className="space-y-1.5">
                     <Label htmlFor="horaFin">Hora de salida</Label>
-                    <Input
-                      id="horaFin"
-                      type="time"
-                      value={horaFin}
-                      onChange={(e) => setHoraFin(e.target.value)}
-                    />
+                    <Select value={horaFin || undefined} onValueChange={setHoraFin}>
+                      <SelectTrigger id="horaFin">
+                        <SelectValue placeholder="Elige una hora" />
+                      </SelectTrigger>
+                      <SelectContent className="max-h-72">
+                        {SOLICITUD_HORAS_OPCIONES.map((h) => (
+                          <SelectItem key={h} value={h} className="tabular-nums">
+                            {h}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
-                  {horaInicio && horaFin && (
+                  {/* Regla fija: solo en punto o y media, por eso se elige de
+                      una lista cerrada en vez de teclear la hora. */}
+                  <p className="col-span-2 text-xs text-muted-foreground">
+                    {SOLICITUD_HORAS_AVISO}
+                  </p>
+                  {errorTramo && (
+                    <p className="col-span-2 text-xs font-medium text-rose-600 flex items-center gap-1.5">
+                      <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                      {errorTramo}
+                    </p>
+                  )}
+                  {horaInicio && horaFin && !errorTramo && (
                     <p className="col-span-2 text-xs text-muted-foreground">
                       Total: {(() => {
-                        const [hi, mi] = horaInicio.split(":").map(Number);
-                        const [hf, mf] = horaFin.split(":").map(Number);
-                        let min = hf * 60 + mf - (hi * 60 + mi);
-                        if (min < 0) min += 1440; // cruza medianoche
+                        const min = minutosTramo(horaInicio, horaFin);
                         const h = Math.floor(min / 60);
                         const m = min % 60;
                         return m === 0 ? `${h}h` : `${h}h ${m}m`;
@@ -805,7 +842,9 @@ export function SolicitudModal({ open, onOpenChange, onCreated, onElegirDenuncia
 
               <div className="space-y-1.5">
                 <Label htmlFor="motivo">
-                  {subtipo === "horas_extras" ? "Motivo o detalles *" : "Motivo o detalles"}
+                  {subtipo === "horas_extras"
+                    ? `Motivo o detalles (obligatorio, mínimo ${HORAS_EXTRAS_MOTIVO_MIN} caracteres)`
+                    : "Motivo o detalles"}
                 </Label>
                 <Textarea
                   id="motivo"
@@ -816,7 +855,7 @@ export function SolicitudModal({ open, onOpenChange, onCreated, onElegirDenuncia
                     subtipo === "baja_medica"
                       ? "Cuéntanos brevemente qué te pasa (opcional)…"
                       : subtipo === "horas_extras"
-                        ? "¿Por qué? ¿En qué tarea?"
+                        ? `¿Por qué? ¿En qué tarea? (mínimo ${HORAS_EXTRAS_MOTIVO_MIN} caracteres)`
                         : "Detalles para tu responsable"
                   }
                 />
@@ -825,11 +864,12 @@ export function SolicitudModal({ open, onOpenChange, onCreated, onElegirDenuncia
                     <p className="text-xs font-medium text-rose-600">
                       Explica por qué hiciste las horas extras: faltan{" "}
                       {HORAS_EXTRAS_MOTIVO_MIN - motivo.trim().length} caracteres
-                      (mínimo {HORAS_EXTRAS_MOTIVO_MIN}).
+                      para llegar al mínimo de {HORAS_EXTRAS_MOTIVO_MIN}.
                     </p>
                   ) : (
                     <p className="text-xs text-muted-foreground">
-                      {motivo.trim().length} caracteres.
+                      {motivo.trim().length} caracteres (mínimo{" "}
+                      {HORAS_EXTRAS_MOTIVO_MIN}).
                     </p>
                   )
                 )}
@@ -909,7 +949,13 @@ export function SolicitudModal({ open, onOpenChange, onCreated, onElegirDenuncia
                         ? () => setConfirmBajaOpen(true)
                         : enviar
                     }
-                    disabled={enviando || vacEnvioBloqueado || bajaEnvioBloqueado || motivoCorto}
+                    disabled={
+                      enviando ||
+                      vacEnvioBloqueado ||
+                      bajaEnvioBloqueado ||
+                      motivoCorto ||
+                      !!errorTramo
+                    }
                     className="active:bg-blue-600"
                   >
                     {enviando && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}

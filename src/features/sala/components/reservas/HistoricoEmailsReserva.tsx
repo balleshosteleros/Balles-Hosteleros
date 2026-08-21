@@ -15,6 +15,7 @@ const TIPO_LABEL: Record<ReservaEmailEnvio["tipo"], string> = {
   RECONFIRMACION: "Reconfirmación",
   RECORDATORIO: "Recordatorio",
   CANCELACION: "Cancelación",
+  SOLICITUD_VALORACION: "Solicitud de valoración",
 };
 
 /**

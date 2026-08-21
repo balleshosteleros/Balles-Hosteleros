@@ -79,6 +79,24 @@ export function NotificacionBell({
     if (r.ok) setItems((prev) => prev.map((x) => (x.id === n.id ? { ...x, vistaAt: new Date().toISOString() } : x)));
   };
 
+  // Ruta interna a la que lleva la notificación al pulsarla. Solo aceptamos
+  // rutas propias ("/..."): un `accion_url` absoluto (los hay, para enlaces de
+  // firma que van por correo) no debe sacar al usuario de la aplicación.
+  const destinoInterno = (n: NotificacionApp): string | null =>
+    n.accionUrl && n.accionUrl.startsWith("/") && !n.accionUrl.startsWith("//")
+      ? n.accionUrl
+      : null;
+
+  // Al pulsar el cuerpo: cierra la bandeja y abre la pantalla correspondiente.
+  // No damos el acuse aquí: el aviso sigue sin ver hasta que se pulse su botón,
+  // para que no se apague solo por haber echado un vistazo.
+  const onAbrir = (n: NotificacionApp) => {
+    const destino = destinoInterno(n);
+    if (!destino) return;
+    setOpen(false);
+    router.push(destino);
+  };
+
   const onConfirmLiquidar = async () => {
     if (!liquidando) return;
     setBusyId(liquidando.id);
@@ -137,17 +155,35 @@ export function NotificacionBell({
                   const esLiquidacion = n.tipo === "liquidacion" && n.requiereAccion && !!n.refId && !n.vistaAt;
                   const meta = getTipoMeta(n.tipo);
                   const Icono = getIconoTipo(meta.icono);
+                  const destino = destinoInterno(n);
                   return (
                     <li key={n.id} className={`flex gap-3 p-4 ${n.vistaAt ? "" : "bg-primary/5"}`}>
                       <span className={`mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted ${meta.color}`}>
                         <Icono className="h-4 w-4" />
                       </span>
                       <div className="min-w-0 flex-1">
-                        <div className="flex items-center justify-between gap-2">
-                          <p className="truncate text-sm font-medium">{n.titulo}</p>
-                          <span className="shrink-0 text-[11px] text-muted-foreground">{fmtFecha(n.createdAt, empresaActual.zonaHoraria)}</span>
+                        <div
+                          className={destino ? "cursor-pointer" : undefined}
+                          role={destino ? "button" : undefined}
+                          tabIndex={destino ? 0 : undefined}
+                          onClick={destino ? () => onAbrir(n) : undefined}
+                          onKeyDown={
+                            destino
+                              ? (e) => {
+                                  if (e.key === "Enter" || e.key === " ") {
+                                    e.preventDefault();
+                                    onAbrir(n);
+                                  }
+                                }
+                              : undefined
+                          }
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <p className={`truncate text-sm font-medium ${destino ? "hover:underline" : ""}`}>{n.titulo}</p>
+                            <span className="shrink-0 text-[11px] text-muted-foreground">{fmtFecha(n.createdAt, empresaActual.zonaHoraria)}</span>
+                          </div>
+                          {n.mensaje && <p className="mt-0.5 text-xs text-muted-foreground">{n.mensaje}</p>}
                         </div>
-                        {n.mensaje && <p className="mt-0.5 text-xs text-muted-foreground">{n.mensaje}</p>}
                         <div className="mt-2">
                           {n.vistaAt ? (
                             <span className="inline-flex items-center gap-1 text-xs text-emerald-600">

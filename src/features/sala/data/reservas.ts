@@ -358,6 +358,10 @@ export type EmpresaReservasConfig = SemanaHorarios & {
   // Recordatorio automático por correo (X horas antes de la reserva).
   recordatorioActivo: boolean;
   recordatorioHorasAntes: number;
+  // Solicitud de valoración por correo (X horas DESPUÉS de la reserva).
+  // Es la única regla: se aplica igual a toda reserva de cualquier cliente.
+  valoracionEmailActivo: boolean;
+  valoracionEmailHorasDespues: number;
 
   // Preferencias del motor (panel "Preferencias del motor" en /sala/configuracion).
   cerrarMotorWebActivo: boolean;

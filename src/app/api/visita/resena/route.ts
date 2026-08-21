@@ -16,10 +16,18 @@ import { z } from "zod";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
+const Estrella = z.number().int().min(1).max(5);
+
 const Schema = z.object({
   token: z.string().min(10).max(100),
-  rating: z.number().int().min(1).max(5),
+  /** Nota global: media de las tres, o la única si viene del QR de la carta. */
+  rating: Estrella,
   comentario: z.string().trim().max(1000).optional().default(""),
+  // Desglose (solo en la valoración tras una reserva). Opcionales: el cliente
+  // puede puntuar solo lo que le apetezca.
+  ratingComida: Estrella.optional(),
+  ratingServicio: Estrella.optional(),
+  ratingAmbiente: Estrella.optional(),
 });
 
 function service() {
@@ -51,16 +59,67 @@ export async function POST(req: Request) {
       { status: 400 },
     );
   }
-  const { token, rating, comentario } = parsed.data;
+  const {
+    token,
+    rating,
+    comentario,
+    ratingComida,
+    ratingServicio,
+    ratingAmbiente,
+  } = parsed.data;
 
   const supabase = service();
 
-  // Lead + empresa
-  const { data: lead } = await supabase
+  // El token puede ser de un lead del QR de la carta o del correo de
+  // valoración de una reserva. En el segundo caso la reseña queda enlazada al
+  // CLIENTE y a la RESERVA, que es lo que permite mostrar su nota en la ficha.
+  const { data: leadRow } = await supabase
     .from("visita_leads")
     .select("id, empresa_id, nombre, email, telefono")
     .eq("resena_token", token)
     .maybeSingle();
+
+  let lead: {
+    empresa_id: string;
+    nombre: string | null;
+    email: string | null;
+    telefono: string | null;
+    cliente_id: string | null;
+    reserva_id: string | null;
+    origen: "carta" | "reserva";
+  } | null = leadRow
+    ? {
+        empresa_id: leadRow.empresa_id as string,
+        nombre: (leadRow.nombre as string | null) ?? null,
+        email: (leadRow.email as string | null) ?? null,
+        telefono: (leadRow.telefono as string | null) ?? null,
+        cliente_id: null,
+        reserva_id: null,
+        origen: "carta",
+      }
+    : null;
+
+  if (!lead) {
+    const { data: reserva } = await supabase
+      .from("reservas")
+      .select(
+        "id, empresa_id, cliente_id, cliente_nombre, cliente_email, cliente_telefono",
+      )
+      .eq("valoracion_token", token)
+      .maybeSingle();
+    if (reserva) {
+      lead = {
+        empresa_id: reserva.empresa_id as string,
+        nombre: (reserva.cliente_nombre as string | null) ?? null,
+        email: (reserva.cliente_email as string | null) ?? null,
+        telefono: (reserva.cliente_telefono as string | null) ?? null,
+        cliente_id: (reserva.cliente_id as string | null) ?? null,
+        reserva_id: reserva.id as string,
+        origen: "reserva",
+      };
+    }
+  }
+
   if (!lead) {
     return NextResponse.json({ ok: false, error: "Token no válido" }, { status: 404 });
   }
@@ -73,7 +132,19 @@ export async function POST(req: Request) {
     .eq("external_id", token)
     .maybeSingle();
 
-  if (!existente) {
+  // Ya valorada con este enlace: se responde explícitamente en vez de fingir
+  // que se ha guardado. Devolver `ok` a secas hacía que el cliente que abría el
+  // correo en otro dispositivo rellenara todo otra vez y viera "gracias",
+  // creyendo que su segunda opinión contaba, cuando se descartaba en silencio.
+  if (existente) {
+    return NextResponse.json({
+      ok: true,
+      yaRespondio: true,
+      mensaje: "Esta visita ya estaba valorada. Se conserva tu primera opinión.",
+    });
+  }
+
+  {
     const { error: errIns } = await supabase.from("resenas").insert({
       empresa_id: lead.empresa_id,
       nombre_comensal: lead.nombre ?? "Comensal",
@@ -81,8 +152,13 @@ export async function POST(req: Request) {
       telefono: lead.telefono ?? null,
       comentario: comentario || null,
       rating,
+      rating_comida: ratingComida ?? null,
+      rating_servicio: ratingServicio ?? null,
+      rating_ambiente: ratingAmbiente ?? null,
       estado: ratingAEstado(rating),
-      origen: "carta",
+      origen: lead.origen,
+      cliente_id: lead.cliente_id,
+      reserva_id: lead.reserva_id,
       external_id: token,
       fecha_reseña: new Date().toISOString(),
     });

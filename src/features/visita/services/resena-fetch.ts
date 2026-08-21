@@ -26,6 +26,8 @@ export type ResenaPagina = {
     id: string;
     nombre: string;
     yaRespondio: boolean;
+    /** De dónde vino el token: decide si se piden las tres valoraciones. */
+    origen: "carta" | "reserva";
   };
 };
 
@@ -35,11 +37,45 @@ export async function fetchResenaPagina(
   try {
     const supabase = service();
 
-    const { data: lead } = await supabase
+    // El token puede venir de dos sitios: del QR de la carta (`visita_leads`)
+    // o del correo de valoración que se manda tras una reserva. Se prueba
+    // primero el lead por ser el flujo más antiguo.
+    const { data: leadRow } = await supabase
       .from("visita_leads")
       .select("id, empresa_id, nombre")
       .eq("resena_token", token)
       .maybeSingle();
+
+    let lead: {
+      id: string;
+      empresa_id: string;
+      nombre: string | null;
+      origen: "carta" | "reserva";
+    } | null = leadRow
+      ? {
+          id: leadRow.id as string,
+          empresa_id: leadRow.empresa_id as string,
+          nombre: (leadRow.nombre as string | null) ?? null,
+          origen: "carta",
+        }
+      : null;
+
+    if (!lead) {
+      const { data: reserva } = await supabase
+        .from("reservas")
+        .select("id, empresa_id, cliente_nombre")
+        .eq("valoracion_token", token)
+        .maybeSingle();
+      if (reserva) {
+        lead = {
+          id: reserva.id as string,
+          empresa_id: reserva.empresa_id as string,
+          nombre: (reserva.cliente_nombre as string | null) ?? null,
+          origen: "reserva",
+        };
+      }
+    }
+
     if (!lead) return null;
 
     const { data: empresa } = await supabase
@@ -73,9 +109,10 @@ export async function fetchResenaPagina(
         googleReviewUrl: (cfg?.google_review_url as string | null) ?? null,
       },
       lead: {
-        id: lead.id as string,
-        nombre: (lead.nombre as string) ?? "",
+        id: lead.id,
+        nombre: lead.nombre ?? "",
         yaRespondio: (count ?? 0) > 0,
+        origen: lead.origen,
       },
     };
   } catch (err) {

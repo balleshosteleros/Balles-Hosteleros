@@ -28,6 +28,7 @@ const AUDIT_COL: Record<ReservaEmailTipo, string | null> = {
   CANCELACION: "email_cancelacion_at",
   POLITICA_AVISO: null, // bloque añadido al de confirmación → sin auditoría propia
   CUPON_PAGADO: null,
+  SOLICITUD_VALORACION: "email_valoracion_at",
 };
 
 const HEADLINE_POR_TIPO: Record<ReservaEmailTipo, string> = {
@@ -37,6 +38,7 @@ const HEADLINE_POR_TIPO: Record<ReservaEmailTipo, string> = {
   CANCELACION: "Reserva cancelada",
   POLITICA_AVISO: "Política de cancelación",
   CUPON_PAGADO: "Pago recibido",
+  SOLICITUD_VALORACION: "¿Qué tal fue?",
 };
 
 const BADGE_POR_TIPO: Record<ReservaEmailTipo, string> = {
@@ -46,6 +48,7 @@ const BADGE_POR_TIPO: Record<ReservaEmailTipo, string> = {
   CANCELACION: "Cancelada",
   POLITICA_AVISO: "Política de cancelación",
   CUPON_PAGADO: "Pago recibido",
+  SOLICITUD_VALORACION: "Tu opinión",
 };
 
 type EmpresaRow = {
@@ -133,7 +136,7 @@ export async function enviarReservaEmail(
   const { data: reservaData, error: errR } = await admin
     .from("reservas")
     .select(
-      "empresa_id, cliente_nombre, cliente_email, fecha, hora, personas, mesa, zona, notas, tipo_categoria, garantia_importe, importe_pagado, codigo, codigo_id, cancelacion_token, email_confirmacion_at, email_reconfirmacion_at, email_recordatorio_at, email_cancelacion_at",
+      "empresa_id, cliente_nombre, cliente_email, fecha, hora, personas, mesa, zona, notas, estado, tipo_categoria, garantia_importe, importe_pagado, codigo, codigo_id, cancelacion_token, valoracion_token, email_confirmacion_at, email_reconfirmacion_at, email_recordatorio_at, email_cancelacion_at, email_valoracion_at",
     )
     .eq("id", reservaId)
     .maybeSingle();
@@ -161,12 +164,50 @@ export async function enviarReservaEmail(
   if (!email) return { ok: false, error: "El cliente no tiene email" };
 
   // Enlace de cancelación: solo en correos de reserva VIVA. En el de
-  // cancelación no tiene sentido ofrecer cancelar otra vez.
+  // cancelación no tiene sentido ofrecer cancelar otra vez, y en el de
+  // valoración tampoco: la visita ya ha ocurrido.
   const tokenCancelar = (reservaData.cancelacion_token as string | null) ?? null;
   const urlCancelar =
-    tokenCancelar && tipo !== "CANCELACION"
+    tokenCancelar &&
+    tipo !== "CANCELACION" &&
+    tipo !== "SOLICITUD_VALORACION"
       ? `${getSiteUrl()}/cancelar/${tokenCancelar}`
       : null;
+
+  // Enlace de valoración: cada reserva estrena token la primera vez que se le
+  // pide opinión. Es lo que identifica al cliente en la landing pública, así
+  // que la reseña queda enlazada a SU ficha (y no a un email suelto).
+  let urlValoracion: string | null = null;
+  if (tipo === "SOLICITUD_VALORACION") {
+    // Pedir opinión de algo que aún no ha pasado —o que no llegó a pasar— es
+    // absurdo para quien lo recibe. Se comprueba aquí y no en quien llama
+    // porque el envío manual usa `force` y se saltaría cualquier guarda previa.
+    const estado = (reservaData.estado as string | null) ?? "";
+    if (["CANCELADA", "NO_SHOW", "LIBERADA"].includes(estado)) {
+      return {
+        ok: false,
+        error: "No se pide valoración de una reserva cancelada o no presentada.",
+      };
+    }
+    const hoy = new Date().toISOString().slice(0, 10);
+    if ((reserva.fecha ?? "") > hoy) {
+      return {
+        ok: false,
+        error: "La reserva aún no ha ocurrido: no se puede pedir valoración.",
+      };
+    }
+
+    let token = (reservaData.valoracion_token as string | null) ?? null;
+    if (!token) {
+      token = crypto.randomUUID().replace(/-/g, "");
+      const { error: errTok } = await admin
+        .from("reservas")
+        .update({ valoracion_token: token })
+        .eq("id", reservaId);
+      if (errTok) return { ok: false, error: errTok.message };
+    }
+    urlValoracion = `${getSiteUrl()}/r/${token}`;
+  }
 
   // Idempotencia: si ya hay timestamp en la columna del tipo, no reenviar.
   const auditCol = AUDIT_COL[tipo];
@@ -340,6 +381,7 @@ export async function enviarReservaEmail(
     cuponBloque,
     cuponCanjeadoBloque,
     urlCancelar,
+    urlValoracion,
   });
   const text = renderText({
     tipo,
@@ -356,6 +398,7 @@ export async function enviarReservaEmail(
     cuponBloque,
     cuponCanjeadoBloque,
     urlCancelar,
+    urlValoracion,
   });
 
   const res = await sendEmail({
@@ -435,6 +478,11 @@ interface RenderInput {
    * Solo en correos de reserva viva; en CANCELACION no tiene sentido.
    */
   urlCancelar: string | null;
+  /**
+   * Enlace para puntuar la visita (una estrella = un clic). Solo en
+   * SOLICITUD_VALORACION.
+   */
+  urlValoracion: string | null;
 }
 
 function renderHtml(input: RenderInput): string {
@@ -458,11 +506,19 @@ function renderHtml(input: RenderInput): string {
   if (input.zona) filas.push(fila("Zona", input.zona));
   if (input.mesa) filas.push(fila("Mesa", `Mesa ${input.mesa}`));
 
-  const greeting = input.cliente
-    ? `${input.tipo === "CANCELACION" ? "Hola" : "¡Te esperamos"}${input.tipo === "CANCELACION" ? "," : ","} ${escapeHtml(input.cliente)}${input.tipo === "CANCELACION" ? "" : "!"}`
-    : input.tipo === "CANCELACION"
-      ? "Hola,"
-      : "¡Te esperamos!";
+  // El saludo cambia según el momento: "te esperamos" solo tiene sentido antes
+  // de la visita. En cancelación y en la valoración (que va DESPUÉS de venir)
+  // sería absurdo.
+  const nombreCliente = input.cliente ? escapeHtml(input.cliente) : "";
+  const greeting = (() => {
+    if (input.tipo === "SOLICITUD_VALORACION") {
+      return nombreCliente ? `¡Gracias por venir, ${nombreCliente}!` : "¡Gracias por venir!";
+    }
+    if (input.tipo === "CANCELACION") {
+      return nombreCliente ? `Hola, ${nombreCliente}` : "Hola,";
+    }
+    return nombreCliente ? `¡Te esperamos, ${nombreCliente}!` : "¡Te esperamos!";
+  })();
 
   const bloquePolitica = input.politicaBloque
     ? `<div style="margin-top:14px;padding:14px 16px;background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;font-size:13px;color:#7c2d12;line-height:1.6;">
@@ -482,6 +538,48 @@ function renderHtml(input: RenderInput): string {
       </div>`
     : "";
 
+  // Valoración en el propio correo. Tres claves —comida, servicio y ambiente—
+  // porque una nota global no dice QUÉ arreglar: un 3 puede ser gran cocina con
+  // servicio lento, o al revés, y son departamentos distintos.
+  //
+  // Diseño pensado para que conteste el máximo de gente: las estrellas de
+  // COMIDA son enlaces directos, así que el primer clic ya deja la nota
+  // guardada aunque el cliente no haga nada más. Servicio, ambiente y el
+  // comentario se completan luego en la página, y son opcionales. Pedirlo todo
+  // dentro del correo no es viable: los gestores de correo no ejecutan
+  // formularios interactivos.
+  //
+  // Se pinta con tablas y la entidad &#9733; porque SVG, iconos web y flexbox
+  // no se renderizan de forma fiable en Outlook ni en Gmail.
+  const bloqueValoracion = input.urlValoracion
+    ? `<div style="margin-top:8px;padding:22px 10px;background:${withAlpha(primario, 0.04)};border:1px solid #e2e8f0;border-radius:12px;text-align:center;">
+        <div style="font-size:16px;font-weight:600;color:#0f172a;line-height:1.5;">¿Qué tal estuvo la experiencia?</div>
+        <div style="font-size:12px;color:#94a3b8;margin-top:4px;">Solo te llevará 15 segundos</div>
+        <table role="presentation" cellpadding="0" cellspacing="0" align="center" style="margin:16px auto 0 auto;border-collapse:separate;">
+          <tr>
+            ${[1, 2, 3, 4, 5]
+              .map(
+                (n) =>
+                  `<td style="padding:0 3px;">
+                    <a href="${escapeAttr(`${input.urlValoracion}?rating=${n}`)}" style="display:block;width:40px;padding:8px 0 6px 0;background:#ffffff;border:1px solid #e2e8f0;border-radius:10px;text-decoration:none;text-align:center;">
+                      <span style="display:block;font-size:24px;line-height:1;color:#f59e0b;">&#9733;</span>
+                      <span style="display:block;margin-top:2px;font-size:11px;font-weight:600;color:#94a3b8;">${n}</span>
+                    </a>
+                  </td>`,
+              )
+              .join("")}
+          </tr>
+        </table>
+        <div style="margin-top:6px;font-size:11px;color:#cbd5e1;">
+          <span style="float:left;">Muy malo</span><span style="float:right;">Excelente</span>
+          <span style="display:block;clear:both;"></span>
+        </div>
+        <div style="margin-top:16px;">
+          <a href="${escapeAttr(input.urlValoracion)}" style="display:inline-block;padding:12px 26px;background:${primario};color:${textoSobrePrimario};border-radius:8px;font-size:14px;font-weight:600;text-decoration:none;">Valorar mi visita</a>
+        </div>
+      </div>`
+    : "";
+
   const bloqueCupon = input.cuponBloque
     ? `<div style="margin-top:14px;padding:14px 16px;background:#ecfdf5;border:1px solid #a7f3d0;border-radius:8px;font-size:13px;color:#064e3b;line-height:1.6;">
         <div style="font-weight:700;margin-bottom:4px;">Pago recibido</div>
@@ -498,8 +596,39 @@ function renderHtml(input: RenderInput): string {
       </div>`
     : "";
 
+  // En la valoración la visita YA pasó: la hora en grande no aporta y quita
+  // protagonismo a lo único que se pide, que son las estrellas. Se deja una
+  // línea discreta que sirva de recordatorio de qué visita se está valorando.
+  const tarjetaReserva =
+    input.tipo === "SOLICITUD_VALORACION"
+      ? `<div style="text-align:center;font-size:13px;color:#94a3b8;line-height:1.6;">
+          Tu visita del <strong style="color:#64748b;">${escapeHtml(input.fechaLegible)}</strong>${
+            input.horaLegible ? ` a las <strong style="color:#64748b;">${escapeHtml(input.horaLegible)}</strong>` : ""
+          }
+        </div>`
+      : `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:separate;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;">
+          <tr>
+            <td style="padding:18px 20px;background:${withAlpha(primario, 0.04)};text-align:center;border-bottom:1px solid #e2e8f0;">
+              <div style="font-size:11px;color:#64748b;letter-spacing:0.5px;text-transform:uppercase;font-weight:600;">${escapeHtml(input.fechaLegible)}</div>
+              <div style="margin-top:4px;font-size:34px;font-weight:700;color:${primario};line-height:1;letter-spacing:-0.5px;">${escapeHtml(input.horaLegible)}</div>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:14px 20px 10px 20px;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
+                ${filas.join("\n")}
+              </table>
+            </td>
+          </tr>
+        </table>`;
+
   return `<!doctype html>
 <html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <!-- Sin viewport, algunos Android encogen el correo hasta hacerlo ilegible. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+  </head>
   <body style="margin:0;padding:0;background:#ffffff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#0f172a;">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#ffffff;padding:32px 16px;">
       <tr>
@@ -519,21 +648,7 @@ function renderHtml(input: RenderInput): string {
             </tr>
             <tr>
               <td style="padding:20px 32px 8px 32px;">
-                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:separate;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;">
-                  <tr>
-                    <td style="padding:18px 20px;background:${withAlpha(primario, 0.04)};text-align:center;border-bottom:1px solid #e2e8f0;">
-                      <div style="font-size:11px;color:#64748b;letter-spacing:0.5px;text-transform:uppercase;font-weight:600;">${escapeHtml(input.fechaLegible)}</div>
-                      <div style="margin-top:4px;font-size:34px;font-weight:700;color:${primario};line-height:1;letter-spacing:-0.5px;">${escapeHtml(input.horaLegible)}</div>
-                    </td>
-                  </tr>
-                  <tr>
-                    <td style="padding:14px 20px 10px 20px;">
-                      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
-                        ${filas.join("\n")}
-                      </table>
-                    </td>
-                  </tr>
-                </table>
+                ${tarjetaReserva}
                 ${
                   input.observaciones
                     ? `<div style="margin-top:14px;padding:12px 14px;background:#ffffff;border-left:3px solid ${primario};border-radius:6px;">
@@ -547,6 +662,7 @@ function renderHtml(input: RenderInput): string {
                     ? `<div style="margin-top:14px;padding:14px 16px;background:${withAlpha(primario, 0.06)};border-radius:8px;font-size:13px;color:#334155;line-height:1.6;">${nl2br(escapeHtml(input.mensajeLibre))}</div>`
                     : ""
                 }
+                ${bloqueValoracion}
                 ${bloquePolitica}
                 ${bloqueCupon}
                 ${bloqueCuponCanjeado}
@@ -596,6 +712,13 @@ function renderText(input: Omit<RenderInput, "empresa"> & { empresa: string }): 
   if (input.urlCancelar) {
     lineas.push(``, `¿No puedes venir? Cancela tu reserva aquí: ${input.urlCancelar}`);
   }
+  if (input.urlValoracion) {
+    lineas.push(
+      ``,
+      `¿Qué tal estuvo la experiencia? Solo te llevará 15 segundos:`,
+      ...[1, 2, 3, 4, 5].map((n) => `  ${n} → ${input.urlValoracion}?rating=${n}`),
+    );
+  }
   if (input.cuponCanjeadoBloque) {
     lineas.push(
       ``,
@@ -616,6 +739,8 @@ function subtitulo(t: ReservaEmailTipo): string {
       return "Te esperamos pronto.";
     case "CANCELACION":
       return "Tu reserva ha sido cancelada.";
+    case "SOLICITUD_VALORACION":
+      return "";
     default:
       return "";
   }
@@ -639,6 +764,10 @@ function footerSegunTipo(t: ReservaEmailTipo, plain = false): string {
       return plain
         ? "Si fue un error, responde a este correo."
         : "Si crees que es un error, responde a este correo y lo revisamos.";
+    case "SOLICITUD_VALORACION":
+      // Sin coletilla: el bloque de estrellas ya lo dice todo y cualquier
+      // texto extra debajo resta claridad a la única acción que se pide.
+      return "";
     default:
       return "";
   }
@@ -816,7 +945,13 @@ export function previewReservaEmail(input: PreviewInput): {
     // Vista previa del editor: se enseña el bloque con un enlace de ejemplo
     // para que el usuario vea cómo le queda al cliente.
     urlCancelar:
-      input.tipo === "CANCELACION" ? null : `${getSiteUrl()}/cancelar/ejemplo`,
+      input.tipo === "CANCELACION" || input.tipo === "SOLICITUD_VALORACION"
+        ? null
+        : `${getSiteUrl()}/cancelar/ejemplo`,
+    urlValoracion:
+      input.tipo === "SOLICITUD_VALORACION"
+        ? `${getSiteUrl()}/r/ejemplo`
+        : null,
   });
   return { subject: asunto || RESERVA_EMAIL_TIPO_LABELS[input.tipo], html };
 }

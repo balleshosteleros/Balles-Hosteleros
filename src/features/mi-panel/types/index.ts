@@ -16,7 +16,7 @@ export type SolicitudEstado = "pendiente" | "aprobada" | "rechazada" | "anulada"
  * Longitud mínima del motivo en las solicitudes de horas extras: quien las
  * aprueba necesita saber por qué se hicieron, no vale dejarlo en blanco.
  */
-export const HORAS_EXTRAS_MOTIVO_MIN = 20;
+export const HORAS_EXTRAS_MOTIVO_MIN = 15;
 
 export interface SolicitudPersonal {
   id: string;

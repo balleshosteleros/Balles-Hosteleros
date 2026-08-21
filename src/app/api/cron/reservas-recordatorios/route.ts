@@ -1,5 +1,6 @@
 /**
- * Cron: envío de correos de RECORDATORIO y RECONFIRMACIÓN del módulo Reservas.
+ * Cron: envío de correos automáticos del módulo Reservas — RECORDATORIO,
+ * RECONFIRMACIÓN y SOLICITUD DE VALORACIÓN.
  *
  * Se ejecuta cada hora (vercel.json) y por cada empresa con la opción activa:
  *
@@ -58,6 +59,8 @@ interface ConfigEmpresa {
   recordatorio_horas_antes: number;
   reconfirmacion_activa: boolean;
   reconfirmacion_dias_antes: number;
+  valoracion_email_activo: boolean;
+  valoracion_email_horas_despues: number;
 }
 
 interface ReservaPendiente {
@@ -87,7 +90,7 @@ export async function GET(request: Request) {
   const { data: configs, error: errCfg } = await supabase
     .from("empresa_reservas_config")
     .select(
-      "empresa_id, recordatorio_activo, recordatorio_horas_antes, reconfirmacion_activa, reconfirmacion_dias_antes",
+      "empresa_id, recordatorio_activo, recordatorio_horas_antes, reconfirmacion_activa, reconfirmacion_dias_antes, valoracion_email_activo, valoracion_email_horas_despues",
     );
   if (errCfg) {
     return NextResponse.json({ ok: false, error: errCfg.message }, { status: 500 });
@@ -99,6 +102,8 @@ export async function GET(request: Request) {
   let recordatoriosErr = 0;
   let reconfirmacionesOk = 0;
   let reconfirmacionesErr = 0;
+  let valoracionesOk = 0;
+  let valoracionesErr = 0;
 
   for (const c of (configs ?? []) as ConfigEmpresa[]) {
     // Zona horaria de los ajustes de ESTA empresa: las columnas `fecha`/`hora`
@@ -171,12 +176,58 @@ export async function GET(request: Request) {
         console.error(`[cron reservas] reconfirmacion empresa ${c.empresa_id}:`, e);
       }
     }
+
+    // ── SOLICITUD DE VALORACIÓN ───────────────────────────────────────────
+    // Al revés que los otros dos: la ventana mira HACIA ATRÁS, porque la
+    // visita ya ocurrió. El plazo lo fija la empresa en Comunicaciones y rige
+    // para todas sus reservas por igual.
+    if (c.valoracion_email_activo) {
+      try {
+        const horasDespues = c.valoracion_email_horas_despues ?? 24;
+        const hastaV = new Date(ahora.getTime() - horasDespues * 3600 * 1000);
+        // Ventana de 24 h hacia atrás, no de 1 h: este cron corre UNA VEZ AL
+        // DÍA (vercel.json), así que una ventana de una hora dejaría fuera el
+        // 96% de las reservas y no se les pediría valoración nunca. Reenviar
+        // no es riesgo: `email_valoracion_at` garantiza un solo correo por
+        // reserva, y el filtro `is(auditCol, null)` descarta las ya avisadas.
+        const desdeV = new Date(hastaV.getTime() - 24 * 60 * 60 * 1000);
+        const pendientesV = await buscarPendientes(supabase, {
+          empresaId: c.empresa_id,
+          desde: desdeV,
+          hasta: hastaV,
+          // Solo a quien vino. Cancelada, no-show y lista de espera quedan
+          // fuera: preguntar "¿qué tal fue?" a quien no se sentó es peor que
+          // no preguntar nada.
+          estados: [
+            "CONFIRMADA",
+            "RECONFIRMADA",
+            "NO_RECONFIRMADA",
+            "TERMINANDO",
+            "LIBERADA",
+            "WALK_IN",
+          ],
+          auditCol: "email_valoracion_at",
+          tz,
+        });
+        for (const r of pendientesV) {
+          const res = await enviarReservaEmail(r.id, "SOLICITUD_VALORACION", {
+            actor: { origen: "AUTOMATICO" },
+          });
+          if (res.ok) valoracionesOk++;
+          else valoracionesErr++;
+        }
+      } catch (e) {
+        valoracionesErr++;
+        console.error(`[cron reservas] valoracion empresa ${c.empresa_id}:`, e);
+      }
+    }
   }
 
   return NextResponse.json({
     ok: true,
     recordatorios: { ok: recordatoriosOk, err: recordatoriosErr },
     reconfirmaciones: { ok: reconfirmacionesOk, err: reconfirmacionesErr },
+    valoraciones: { ok: valoracionesOk, err: valoracionesErr },
   });
 }
 
@@ -188,7 +239,10 @@ async function buscarPendientes(
     desde: Date;
     hasta: Date;
     estados: string[];
-    auditCol: "email_recordatorio_at" | "email_reconfirmacion_at";
+    auditCol:
+      | "email_recordatorio_at"
+      | "email_reconfirmacion_at"
+      | "email_valoracion_at";
     /** Zona horaria de los ajustes de la empresa (config_operativa.zonaHoraria). */
     tz: string;
   },

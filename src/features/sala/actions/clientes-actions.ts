@@ -171,6 +171,7 @@ export async function updateCliente(
     telefono?: string;
     email?: string;
     clasificacion?: string;
+    clasificacion_manual?: boolean;
     observaciones?: string;
     preferencias?: string;
     notas_internas?: string;

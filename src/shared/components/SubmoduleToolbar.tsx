@@ -1054,6 +1054,12 @@ export function aplicarFiltrosToolbar<T>(
     filtros.every((f) => {
       const valor = acceso(item, f.campo);
       if (f.valores?.length) {
+        // Campos multivalor (p. ej. las etiquetas de un cliente): basta con que
+        // UNA de sus valores coincida. Comparar el array entero como texto no
+        // casaría nunca con el nombre de una etiqueta suelta.
+        if (Array.isArray(valor)) {
+          return valor.some((v) => f.valores!.includes(String(v ?? "")));
+        }
         return f.valores.includes(String(valor ?? ""));
       }
       if (f.operador !== undefined && f.numVal !== undefined) {

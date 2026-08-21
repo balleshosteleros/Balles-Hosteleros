@@ -56,6 +56,23 @@ import { cn } from "@/lib/utils";
 
 const HORAS_RECORDATORIO: number[] = [1, 2, 3, 4, 6, 8, 12, 24, 48];
 
+/**
+ * Cuándo pedir la valoración, contado desde la HORA de la reserva.
+ *
+ * Los valores altos se etiquetan en días porque es como se piensa ("al día
+ * siguiente"), no en horas. Por defecto 1 día: la visita sigue reciente y el
+ * correo cae a la misma hora a la que vino, sin madrugar al cliente.
+ */
+const HORAS_VALORACION: { valor: number; etiqueta: string }[] = [
+  { valor: 2, etiqueta: "2 h" },
+  { valor: 4, etiqueta: "4 h" },
+  { valor: 12, etiqueta: "12 h" },
+  { valor: 24, etiqueta: "1 día" },
+  { valor: 48, etiqueta: "2 días" },
+  { valor: 72, etiqueta: "3 días" },
+  { valor: 168, etiqueta: "1 semana" },
+];
+
 export function ComunicacionesPanel() {
   const { confirm: confirmReset, dialog: confirmResetDialog } = useConfirmDelete();
   const [plantillas, setPlantillas] = useState<ReservaEmailPlantilla[]>([]);
@@ -125,6 +142,7 @@ export function ComunicacionesPanel() {
 
   const esBloque = RESERVA_EMAIL_TIPO_ES_BLOQUE[selectedTipo];
   const esRecordatorio = selectedTipo === "RECORDATORIO";
+  const esValoracion = selectedTipo === "SOLICITUD_VALORACION";
 
   async function guardar() {
     if (!selected) return;
@@ -308,6 +326,56 @@ export function ComunicacionesPanel() {
                       antes de la reserva
                     </Label>
                   </div>
+                )}
+              </div>
+            )}
+
+            {esValoracion && config && (
+              <div className="rounded-md border border-border bg-muted/30 px-3 py-2.5 space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <Label className="text-xs">Solicitud de valoración automática</Label>
+                  <Switch
+                    checked={config.valoracionEmailActivo}
+                    onCheckedChange={(v) =>
+                      actualizarRecordatorio({ valoracionEmailActivo: v })
+                    }
+                  />
+                </div>
+                {config.valoracionEmailActivo && (
+                  <>
+                    <div className="flex items-center gap-2">
+                      <Label className="text-xs text-muted-foreground">
+                        Enviar
+                      </Label>
+                      <Select
+                        value={String(config.valoracionEmailHorasDespues)}
+                        onValueChange={(v) =>
+                          actualizarRecordatorio({
+                            valoracionEmailHorasDespues: Number(v),
+                          })
+                        }
+                      >
+                        <SelectTrigger className="h-8 text-xs w-48">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {HORAS_VALORACION.map((h) => (
+                            <SelectItem key={h.valor} value={String(h.valor)}>
+                              {h.etiqueta}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Label className="text-xs text-muted-foreground">
+                        después de la reserva
+                      </Label>
+                    </div>
+                    <p className="text-[11px] text-muted-foreground leading-relaxed">
+                      Este plazo se aplica a todas las reservas de la empresa.
+                      Solo se pide valoración a quien vino y dejó su email, una
+                      sola vez por reserva.
+                    </p>
+                  </>
                 )}
               </div>
             )}

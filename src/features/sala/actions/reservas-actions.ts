@@ -897,11 +897,16 @@ export async function notificarReservaCreadaPorEmail(reservaId: string) {
  * Envía un correo de un tipo arbitrario para una reserva. Pensado para
  * acciones manuales desde el detalle de la reserva (p.ej. "Reenviar
  * recordatorio") y para tests. Tipos válidos: CONFIRMACION, RECONFIRMACION,
- * RECORDATORIO, CANCELACION.
+ * RECORDATORIO, CANCELACION, SOLICITUD_VALORACION.
  */
 export async function enviarReservaEmailManual(
   reservaId: string,
-  tipo: "CONFIRMACION" | "RECONFIRMACION" | "RECORDATORIO" | "CANCELACION",
+  tipo:
+    | "CONFIRMACION"
+    | "RECONFIRMACION"
+    | "RECORDATORIO"
+    | "CANCELACION"
+    | "SOLICITUD_VALORACION",
 ) {
   // `force: true` permite reenvíos manuales aunque ya haya timestamp. Cada
   // reenvío deja su propia línea en el histórico, firmada por quien lo pide.

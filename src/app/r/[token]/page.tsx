@@ -19,15 +19,18 @@ export default async function ResenaPage({
   searchParams,
 }: {
   params: Promise<{ token: string }>;
-  searchParams: Promise<{ rating?: string }>;
+  searchParams: Promise<{ rating?: string; comida?: string }>;
 }) {
   const { token } = await params;
-  const { rating } = await searchParams;
+  const { rating, comida } = await searchParams;
   const data = await fetchResenaPagina(token);
   if (!data) notFound();
 
+  // La estrella pulsada en el correo llega aquí como nota de partida, para que
+  // el cliente no tenga que repetir el clic que ya hizo. `comida` se sigue
+  // aceptando por si queda algún correo antiguo circulando.
   const ratingInicial = (() => {
-    const n = Number(rating);
+    const n = Number(rating ?? comida);
     return Number.isInteger(n) && n >= 1 && n <= 5 ? n : null;
   })();
 
@@ -42,6 +45,8 @@ export default async function ResenaPage({
         ratingInicial={ratingInicial}
         redirigir5EstrellasGoogle={data.empresa.redirigir5EstrellasGoogle}
         googleReviewUrl={data.empresa.googleReviewUrl}
+        desglosado={data.lead.origen === "reserva"}
+        yaRespondio={data.lead.yaRespondio}
       />
     </main>
   );

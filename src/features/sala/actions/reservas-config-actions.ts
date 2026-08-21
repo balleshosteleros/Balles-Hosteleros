@@ -69,6 +69,8 @@ function rowToConfig(row: Record<string, unknown>): EmpresaReservasConfig {
     reconfirmacionEnvioInmediato:   Boolean(row.reconfirmacion_envio_inmediato ?? false),
     recordatorioActivo:             Boolean(row.recordatorio_activo ?? false),
     recordatorioHorasAntes:         (row.recordatorio_horas_antes as number) ?? 3,
+    valoracionEmailActivo:          Boolean(row.valoracion_email_activo ?? true),
+    valoracionEmailHorasDespues:    (row.valoracion_email_horas_despues as number) ?? 24,
 
     cerrarMotorWebActivo:  Boolean(row.cerrar_motor_web_activo ?? false),
     cerrarMotorWebComida:  (row.cerrar_motor_web_comida as string | null) ?? null,
@@ -160,6 +162,8 @@ export async function upsertReservasConfig(updates: Partial<EmpresaReservasConfi
     if ("reconfirmacionEnvioInmediato"    in updates) db.reconfirmacion_envio_inmediato    = updates.reconfirmacionEnvioInmediato;
     if ("recordatorioActivo"              in updates) db.recordatorio_activo               = updates.recordatorioActivo;
     if ("recordatorioHorasAntes"          in updates) db.recordatorio_horas_antes          = updates.recordatorioHorasAntes;
+    if ("valoracionEmailActivo"           in updates) db.valoracion_email_activo           = updates.valoracionEmailActivo;
+    if ("valoracionEmailHorasDespues"     in updates) db.valoracion_email_horas_despues    = updates.valoracionEmailHorasDespues;
     if ("cerrarMotorWebActivo"  in updates) db.cerrar_motor_web_activo  = updates.cerrarMotorWebActivo;
     if ("cerrarMotorWebComida"  in updates) db.cerrar_motor_web_comida  = updates.cerrarMotorWebComida;
     if ("cerrarMotorWebCena"    in updates) db.cerrar_motor_web_cena    = updates.cerrarMotorWebCena;

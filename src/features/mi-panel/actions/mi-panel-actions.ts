@@ -19,7 +19,8 @@ import type {
   SolicitudSubtipoAusencia,
   SolicitudSubtipoTrabajo,
 } from "@/features/mi-panel/types";
-import { HORAS_EXTRAS_MOTIVO_MIN } from "@/features/mi-panel/types";
+import { HORAS_EXTRAS_MOTIVO_MIN, SUBTIPO_LABEL } from "@/features/mi-panel/types";
+import { validarTramo } from "@/features/mi-panel/lib/solicitud-horas";
 import {
   calcularNivel,
   getMiBalance,
@@ -1637,9 +1638,9 @@ const SUBTIPO_AUSENCIA_KEYWORD: Record<
   permiso: "permiso",
 };
 
-// Ventana de preaviso para la solicitud de baja de contrato (días naturales).
+// Preaviso mínimo para la solicitud de baja de contrato (días naturales).
+// No hay tope: el empleado puede avisar con toda la antelación que quiera.
 const BAJA_CONTRATO_PREAVISO_MIN_DIAS = 15;
-const BAJA_CONTRATO_PREAVISO_MAX_DIAS = 45;
 
 function diasNaturales(desde: string, hasta: string): number {
   const a = new Date(desde + "T00:00:00Z");
@@ -1808,6 +1809,95 @@ export async function crearBajaMedicaConParte(
   }
 }
 
+/**
+ * Avisa en la campana al responsable directo de que tiene una solicitud
+ * pendiente de revisar.
+ *
+ * Responsable = el validador asignado al solicitante según el tipo:
+ * `empleados.validador_trabajo_id` para las de trabajo (horas extras, día
+ * trabajado) y `validador_ausencias_id` para las de ausencia (vacaciones,
+ * permiso, baja médica, baja de contrato). Es exactamente el mismo criterio que
+ * usa `esValidadorAsignado` para dejar aprobar o denegar, así que el aviso le
+ * llega siempre a quien puede resolverlo.
+ *
+ * Side-effect NO bloqueante: si algo falla, la solicitud queda creada igual y
+ * el responsable la sigue viendo en la lista de pendientes.
+ */
+async function avisarValidadorSolicitudPendiente(args: {
+  supabase: ServerClient;
+  solicitudId: string;
+  empresaId: string;
+  userId: string;
+  solicitante: string;
+  tipo: SolicitudTipo;
+  subtipo: SolicitudSubtipo;
+  fechaInicio: string;
+  fechaFin: string | null;
+}): Promise<void> {
+  try {
+    const { data: emp } = await args.supabase
+      .from("empleados")
+      .select("validador_trabajo_id, validador_ausencias_id")
+      .eq("empresa_id", args.empresaId)
+      .eq("user_id", args.userId)
+      .maybeSingle();
+
+    const validadorId =
+      args.tipo === "trabajo"
+        ? ((emp?.validador_trabajo_id as string | null) ?? null)
+        : ((emp?.validador_ausencias_id as string | null) ?? null);
+    // Sin validador asignado no hay a quién avisar: la solicitud sigue su curso
+    // y aparece en pendientes de RRHH.
+    if (!validadorId) return;
+
+    const periodo =
+      args.fechaFin && args.fechaFin !== args.fechaInicio
+        ? `del ${formatFechaEs(args.fechaInicio)} al ${formatFechaEs(args.fechaFin)}`
+        : `el ${formatFechaEs(args.fechaInicio)}`;
+
+    const { emitirNotificacion } = await import(
+      "@/features/notificaciones/actions/notificaciones-actions"
+    );
+    await emitirNotificacion({
+      system: true,
+      empresaId: args.empresaId,
+      tipo: "solicitud_pendiente",
+      titulo: `${args.solicitante}: ${SUBTIPO_LABEL[args.subtipo].toLowerCase()}`,
+      mensaje: `Tienes una solicitud pendiente de revisar (${periodo}).`,
+      segmento: { tipo: "empleados", empleadoIds: [validadorId] },
+      accionUrl: "/rrhh/solicitudes",
+      accionLabel: "Revisar",
+      requiereAccion: true,
+      refTabla: "solicitudes_personal",
+      refId: args.solicitudId,
+      dedupeKey: `solicitud_pendiente:${args.solicitudId}`,
+    });
+  } catch (err) {
+    console.error(
+      "[mi-panel] avisarValidadorSolicitudPendiente:",
+      extractErrorMessage(err),
+    );
+  }
+}
+
+/**
+ * Apaga el aviso de la campana de una solicitud ya resuelta (aprobada,
+ * denegada o anulada por el empleado). Sin esto le quedaría al responsable un
+ * pendiente eterno de algo que ya está cerrado.
+ */
+async function cerrarAvisoSolicitud(solicitudId: string): Promise<void> {
+  try {
+    const { marcarNotificacionesVistasPorRef } = await import(
+      "@/features/notificaciones/actions/notificaciones-actions"
+    );
+    await marcarNotificacionesVistasPorRef("solicitudes_personal", solicitudId, {
+      accionar: true,
+    });
+  } catch (err) {
+    console.error("[mi-panel] cerrarAvisoSolicitud:", extractErrorMessage(err));
+  }
+}
+
 export async function crearSolicitudPersonal(input: NuevaSolicitudInput) {
   try {
     const { supabase, user, empresaId, nombre } = await getContext();
@@ -1823,6 +1913,13 @@ export async function crearSolicitudPersonal(input: NuevaSolicitudInput) {
       return { ok: false, error: "Subtipo de trabajo no válido" };
     }
 
+    // Tramo solicitado: horas en punto o media, y media hora como mínimo. El
+    // cliente ya lo impide, pero aquí es donde de verdad se decide.
+    if (input.tipo === "trabajo" && input.horaInicio && input.horaFin) {
+      const errorTramo = validarTramo(input.horaInicio, input.horaFin);
+      if (errorTramo) return { ok: false, error: errorTramo };
+    }
+
     // Horas extras: el motivo es obligatorio. Quien las aprueba necesita saber
     // por qué se hicieron, así que exigimos una explicación mínima.
     if (input.subtipo === "horas_extras") {
@@ -1836,7 +1933,7 @@ export async function crearSolicitudPersonal(input: NuevaSolicitudInput) {
     }
 
     // BAJA DE CONTRATO: reglas propias. Cliente solo elige fecha_fin (último día efectivo);
-    // el servidor fija fecha_inicio = hoy (primer día de preaviso) y exige 15-45 días.
+    // el servidor fija fecha_inicio = hoy (primer día de preaviso) y exige el mínimo legal.
     if (input.tipo === "ausencia" && input.subtipo === "baja_contrato") {
       const hoy = todayISO();
       if (!input.fechaFin) {
@@ -1851,12 +1948,6 @@ export async function crearSolicitudPersonal(input: NuevaSolicitudInput) {
               .toISOString()
               .split("T")[0],
           )}.`,
-        };
-      }
-      if (dias > BAJA_CONTRATO_PREAVISO_MAX_DIAS) {
-        return {
-          ok: false,
-          error: `El preaviso máximo es de ${BAJA_CONTRATO_PREAVISO_MAX_DIAS} días naturales.`,
         };
       }
       // Evita duplicados: si ya hay una baja_contrato pendiente o aprobada, bloquea.
@@ -1892,6 +1983,19 @@ export async function crearSolicitudPersonal(input: NuevaSolicitudInput) {
         .select()
         .single();
       if (error) throw error;
+
+      // Aviso en la campana al responsable directo (validador de ausencias).
+      await avisarValidadorSolicitudPendiente({
+        supabase,
+        solicitudId: (data as { id: string }).id,
+        empresaId,
+        userId: user.id,
+        solicitante: nombre || "Un empleado",
+        tipo: input.tipo,
+        subtipo: input.subtipo,
+        fechaInicio: hoy,
+        fechaFin: input.fechaFin,
+      });
 
       // Side-effects (no bloqueantes): firma eIDAS + aviso a RRHH.
       // Si fallan, la solicitud queda creada igual y RRHH la verá en pendientes.
@@ -2113,6 +2217,20 @@ export async function crearSolicitudPersonal(input: NuevaSolicitudInput) {
       .single();
     if (error) throw error;
 
+    // Aviso en la campana al responsable directo (validador de trabajo o de
+    // ausencias, según el tipo), que es quien puede aprobarla o denegarla.
+    await avisarValidadorSolicitudPendiente({
+      supabase,
+      solicitudId: (data as { id: string }).id,
+      empresaId,
+      userId: user.id,
+      solicitante: nombre || "Un empleado",
+      tipo: input.tipo,
+      subtipo: input.subtipo,
+      fechaInicio: input.fechaInicio,
+      fechaFin: input.fechaFin ?? null,
+    });
+
     // BAJA MÉDICA: avisa automáticamente a gestoría (para tramitarla) y a
     // gerencia (aviso informativo). Side-effect no bloqueante: si el email
     // falla, la solicitud queda creada igual y RRHH la ve en pendientes.
@@ -2167,6 +2285,8 @@ export async function anularMiSolicitud(id: string) {
           "Esta solicitud ya ha recibido respuesta y no se puede anular: se llevará a cabo lo que indica.",
       };
     }
+    // El empleado la retira: el responsable ya no tiene nada que revisar.
+    await cerrarAvisoSolicitud(id);
     return { ok: true };
   } catch (err: unknown) {
     const msg = extractErrorMessage(err);
@@ -2370,6 +2490,10 @@ export async function aprobarSolicitud(id: string, notasRevision?: string) {
       })
       .eq("id", id);
     if (error) throw error;
+
+    // La solicitud ya está resuelta: apaga el aviso de la campana del validador
+    // para que no le quede pendiente algo que él mismo acaba de aprobar.
+    await cerrarAvisoSolicitud(id);
 
     if (solicitud.subtipo === "baja_contrato") {
       // Recorte del horario futuro: desde el último día (fecha_fin) que indicó el
@@ -2950,6 +3074,9 @@ export async function rechazarSolicitud(id: string, notasRevision?: string) {
       })
       .eq("id", id);
     if (error) throw error;
+
+    // Resuelta: apaga el aviso de la campana del validador.
+    await cerrarAvisoSolicitud(id);
 
     if (solicitud) {
       try {

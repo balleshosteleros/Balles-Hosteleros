@@ -10,7 +10,12 @@ import type { SupabaseClient } from "@supabase/supabase-js";
  */
 export interface ReservaEmailEnvio {
   id: string;
-  tipo: "CONFIRMACION" | "RECONFIRMACION" | "RECORDATORIO" | "CANCELACION";
+  tipo:
+    | "CONFIRMACION"
+    | "RECONFIRMACION"
+    | "RECORDATORIO"
+    | "CANCELACION"
+    | "SOLICITUD_VALORACION";
   destinatario: string | null;
   asunto: string | null;
   /** Nombre de la persona que lo envió. Null si no hubo persona detrás. */

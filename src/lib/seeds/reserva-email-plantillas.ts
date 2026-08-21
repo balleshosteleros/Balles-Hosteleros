@@ -24,7 +24,8 @@ export type ReservaEmailTipo =
   | "RECORDATORIO"
   | "CANCELACION"
   | "POLITICA_AVISO"
-  | "CUPON_PAGADO";
+  | "CUPON_PAGADO"
+  | "SOLICITUD_VALORACION";
 
 export const RESERVA_EMAIL_TIPOS: ReservaEmailTipo[] = [
   "CONFIRMACION",
@@ -33,6 +34,7 @@ export const RESERVA_EMAIL_TIPOS: ReservaEmailTipo[] = [
   "CANCELACION",
   "POLITICA_AVISO",
   "CUPON_PAGADO",
+  "SOLICITUD_VALORACION",
 ];
 
 export const RESERVA_EMAIL_TIPO_LABELS: Record<ReservaEmailTipo, string> = {
@@ -42,6 +44,7 @@ export const RESERVA_EMAIL_TIPO_LABELS: Record<ReservaEmailTipo, string> = {
   CANCELACION: "Cancelación",
   POLITICA_AVISO: "Aviso de política de cancelación",
   CUPON_PAGADO: "Cupón pagado",
+  SOLICITUD_VALORACION: "Solicitud de valoración",
 };
 
 /**
@@ -55,6 +58,7 @@ export const RESERVA_EMAIL_TIPO_ES_BLOQUE: Record<ReservaEmailTipo, boolean> = {
   CANCELACION: false,
   POLITICA_AVISO: true,
   CUPON_PAGADO: true,
+  SOLICITUD_VALORACION: false,
 };
 
 export const RESERVA_EMAIL_TIPO_DESCRIPCION: Record<ReservaEmailTipo, string> = {
@@ -68,6 +72,8 @@ export const RESERVA_EMAIL_TIPO_DESCRIPCION: Record<ReservaEmailTipo, string> = 
     "Bloque que se añade al correo de confirmación cuando la reserva tiene política de cancelación.",
   CUPON_PAGADO:
     "Bloque que se añade al correo de confirmación cuando el cliente ya ha pagado por adelantado (cupón).",
+  SOLICITUD_VALORACION:
+    "Se envía X horas después de la reserva (configurable). Pide al cliente que puntúe la visita; su nota aparece en su ficha de cliente.",
 };
 
 export interface ReservaEmailPlantillaSeed {
@@ -110,6 +116,11 @@ export const RESERVA_EMAIL_PLANTILLAS_SEED: ReservaEmailPlantillaSeed[] = [
     asunto_default: "", // no aplica — es bloque
     mensaje_default:
       "Hemos recibido tu pago por adelantado. Trae este correo el día de la reserva como comprobante.",
+  },
+  {
+    tipo: "SOLICITUD_VALORACION",
+    asunto_default: "¿Qué tal fue tu visita a {{empresa}}?",
+    mensaje_default: "Nos ayudaría mucho saber qué te pareció.",
   },
 ];
 
