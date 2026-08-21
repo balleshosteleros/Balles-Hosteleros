@@ -12,9 +12,6 @@ export const SOLICITUD_PASO_MINUTOS = 30;
 export const SOLICITUD_HORAS_AVISO =
   "Solo se pueden solicitar horas en punto o y media.";
 
-/** Duración mínima de un tramo solicitado, en minutos: media hora. */
-export const SOLICITUD_DURACION_MIN_MINUTOS = 30;
-
 /** Hora por la que arranca la lista: la jornada del restaurante empieza aquí. */
 const SOLICITUD_HORA_INICIO_LISTA = 6;
 
@@ -71,11 +68,10 @@ export function validarTramo(
     return SOLICITUD_HORAS_AVISO;
   }
   const min = minutosTramo(horaInicio, horaFin);
+  // No hace falta comprobar el mínimo: si las horas van de media en media y no
+  // son la misma, el tramo más corto posible ya es media hora.
   if (min === 0) {
     return "La hora de entrada no puede ser igual a la de salida.";
-  }
-  if (min < SOLICITUD_DURACION_MIN_MINUTOS) {
-    return "Tienes que solicitar media hora como mínimo.";
   }
   if (min > SOLICITUD_DURACION_MAX_MINUTOS) {
     return `Revisa las horas: salen ${(min / 60).toFixed(1).replace(".", ",")} horas y no se pueden solicitar más de ${SOLICITUD_DURACION_MAX_MINUTOS / 60} seguidas.`;
