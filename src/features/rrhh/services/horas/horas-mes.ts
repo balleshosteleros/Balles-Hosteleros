@@ -86,6 +86,7 @@ type TurnoInfo = {
   flexHorasDia: number | null;
   flexModo: "diario" | "semanal";
   dias: string[];
+  vigenteDesde: string | null;
   vigenteHasta: string | null;
 };
 
@@ -187,7 +188,7 @@ export async function horasTeoricasMes(
   if (allTurnoIds.size > 0) {
     const { data: turnos } = await supabase
       .from("rrhh_turnos")
-      .select("id, tramos, activo, tipo_jornada, flex_horas, flex_horas_dia, flex_modo, dias, vigente_hasta")
+      .select("id, tramos, activo, tipo_jornada, flex_horas, flex_horas_dia, flex_modo, dias, vigente_desde, vigente_hasta")
       .eq("empresa_id", empresaId)
       .eq("activo", true)
       .in("id", [...allTurnoIds]);
@@ -200,6 +201,7 @@ export async function horasTeoricasMes(
         flex_horas_dia?: number | string | null;
         flex_modo?: string | null;
         dias?: string[] | null;
+        vigente_desde?: string | null;
         vigente_hasta?: string | null;
       };
       const tramos: { inicio: string; fin: string }[] = [];
@@ -211,6 +213,7 @@ export async function horasTeoricasMes(
         flexHorasDia: row.flex_horas_dia == null ? null : Number(row.flex_horas_dia),
         flexModo: (row.flex_modo as "diario" | "semanal") ?? "diario",
         dias: (row.dias as string[] | null) ?? [],
+        vigenteDesde: row.vigente_desde ?? null,
         vigenteHasta: row.vigente_hasta ?? null,
       });
     }
@@ -279,6 +282,9 @@ export async function horasTeoricasMes(
       for (const { turnoId, desde, hasta } of directosPorEmp.get(eid) ?? []) {
         const info = turnoInfo.get(turnoId);
         if (!info) continue;
+        // Un turno no cuenta antes de existir: sin esto, uno creado para la
+        // próxima temporada sumaría horas en los meses ya cerrados.
+        if (info.vigenteDesde != null && info.vigenteDesde > fecha) continue;
         if (info.vigenteHasta != null && info.vigenteHasta < fecha) continue;
         if (desde != null && desde > fecha) continue;
         if (hasta != null && hasta < fecha) continue; // asignación recortada (baja)

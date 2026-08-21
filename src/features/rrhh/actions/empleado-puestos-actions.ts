@@ -72,6 +72,11 @@ export async function setPuestosDeEmpleado(
     if (!empresaId || !user) return { ok: false, error: "No autenticado" };
 
     const nuevos = Array.from(new Set(puestoIds.filter(Boolean)));
+    // Todo empleado debe conservar al menos un puesto: de él cuelgan su horario,
+    // sus tareas del cronograma y (vía principal) su departamento.
+    if (nuevos.length === 0) {
+      return { ok: false, error: "El empleado debe tener al menos un puesto" };
+    }
     const principal = principalId && nuevos.includes(principalId) ? principalId : nuevos[0] ?? null;
 
     // AISLAMIENTO POR EMPRESA (defensa en profundidad).
@@ -154,7 +159,8 @@ export async function setPuestosDeEmpleado(
         .eq("empleado_id", empleadoId).eq("puesto_id", principal);
     }
 
-    // 4) Propagar departamento + puesto-texto del principal a `empleados` (compat)
+    // 4) Propagar departamento + puesto-texto del principal a `empleados` (compat).
+    // Siempre hay principal: `nuevos` nunca viene vacío (validado arriba).
     if (principal) {
       const { data: p } = await supabase
         .from("puestos").select("nombre, departamento_id").eq("id", principal).maybeSingle();
@@ -163,8 +169,6 @@ export async function setPuestosDeEmpleado(
           .update({ puesto: p.nombre as string, departamento_id: p.departamento_id as string | null })
           .eq("id", empleadoId);
       }
-    } else {
-      await supabase.from("empleados").update({ puesto: null }).eq("id", empleadoId);
     }
 
     revalidatePath("/rrhh/empleados");

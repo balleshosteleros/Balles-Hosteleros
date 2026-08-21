@@ -231,10 +231,11 @@ export async function createTurno(
   }
 }
 
-// Edita metadatos de la versión oficial EN SITIO (nombre, código,
-// departamento, activo). El color lo define el departamento, no el turno. El
-// HORARIO (tramos) está capado aquí: para cambiarlo hay que crear una versión
-// nueva con crearVersionTurno (PRP-053).
+// Edita SOLO metadatos de la versión oficial EN SITIO (nombre, código,
+// departamento, activo). El color lo define el departamento, no el turno.
+// Toda la JORNADA está capada aquí (tramos, tipo, días, horas flexibles y
+// vigencia): para cambiarla hay que crear una versión nueva con
+// crearVersionTurno (PRP-053), que conserva el histórico.
 export async function updateTurno(id: string, patch: Partial<TurnoInput>) {
   try {
     const { supabase } = await getAppContext();
@@ -269,22 +270,17 @@ export async function updateTurno(id: string, patch: Partial<TurnoInput>) {
     if (patch.departamento !== undefined)
       payload.departamento = patch.departamento?.trim() || null;
     if (patch.activo !== undefined) payload.activo = patch.activo;
-    // tipo_jornada NO se edita en sitio (no se cambia un fijo a flexible aquí).
-    // dias y flex_horas sí: no están versionados, a diferencia de los tramos.
-    if (patch.dias !== undefined) payload.dias = patch.dias;
-    if (patch.flexHoras !== undefined) payload.flex_horas = patch.flexHoras;
-    if (patch.flexHorasDia !== undefined) payload.flex_horas_dia = patch.flexHorasDia;
-    // Rango de validez del turno (editable mientras no esté en un patrón).
-    if (patch.vigenteDesde !== undefined) payload.vigente_desde = patch.vigenteDesde;
-    if (patch.vigenteHasta !== undefined) payload.vigente_hasta = patch.vigenteHasta;
-    if (
-      payload.vigente_hasta &&
-      typeof payload.vigente_hasta === "string" &&
-      typeof payload.vigente_desde === "string" &&
-      (payload.vigente_hasta as string) < (payload.vigente_desde as string)
-    ) {
-      return { ok: false, error: "La fecha de fin del turno no puede ser anterior a la de inicio." };
-    }
+    // NADA QUE DEFINA LA JORNADA SE EDITA EN SITIO. Un turno es el molde del que
+    // cuelgan las horas teóricas de los meses ya cerrados, y los patrones lo
+    // REFERENCIAN (no lo copian): cambiarlo aquí reescribiría el pasado de todo
+    // el que lo tenga. Para cambiar la jornada se crea una versión nueva con
+    // crearVersionTurno (PRP-053), que preserva el histórico.
+    //   - tramos       → versionado
+    //   - tipo_jornada → no se convierte un fijo en flexible
+    //   - dias / flex_horas / flex_horas_dia → son la jornada del flexible,
+    //     el equivalente a los tramos en un turno fijo
+    //   - vigente_desde/hasta → mueven qué meses ven el turno
+    // Solo quedan editables los metadatos inocuos: nombre, código, departamento.
 
     const { error } = await supabase.from("rrhh_turnos").update(payload).eq("id", id);
     if (error) throw error;
@@ -315,6 +311,20 @@ export async function deleteTurno(id: string) {
       return {
         ok: false,
         error: "No se puede eliminar: hay empleados con este turno asignado. Debe conservarse como histórico.",
+      };
+    }
+
+    // Ni si está planificado en algún cuadrante: `rrhh_planificacion.turno_id`
+    // borra EN CASCADA, así que eliminarlo se llevaría por delante días ya
+    // planificados (incluidos meses cerrados) sin dejar rastro.
+    const { count: planif } = await supabase
+      .from("rrhh_planificacion")
+      .select("id", { count: "exact", head: true })
+      .eq("turno_id", id);
+    if ((planif ?? 0) > 0) {
+      return {
+        ok: false,
+        error: "No se puede eliminar: este turno está planificado en el cuadrante. Debe conservarse como histórico.",
       };
     }
 

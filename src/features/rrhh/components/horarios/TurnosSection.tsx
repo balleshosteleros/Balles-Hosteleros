@@ -382,16 +382,9 @@ export function TurnosSection({ empresaId }: { empresaId: string }) {
     setGuardando(true);
     let turnoId = editandoId;
     if (editandoId) {
-      const res = await updateTurno(editandoId, {
-        nombre,
-        codigo,
-        tramos,
-        departamento,
-        dias: [],
-        flexHorasDia,
-        vigenteDesde,
-        vigenteHasta,
-      });
+      // Solo metadatos: la jornada (tramos, días, horas flexibles, vigencia) no
+      // se edita en sitio, se cambia creando una versión nueva del turno.
+      const res = await updateTurno(editandoId, { nombre, codigo, departamento });
       if (!res.ok) {
         // P. ej. turno en uso por un patrón: hay que cambiar antes el patrón.
         toast.error(res.error || "No se pudo guardar el turno");
@@ -750,6 +743,7 @@ export function TurnosSection({ empresaId }: { empresaId: string }) {
                   <Input
                     type="date"
                     value={draft.vigenteDesde}
+                    disabled={!!editandoId}
                     onChange={(e) => setDraft((d) => ({ ...d, vigenteDesde: e.target.value }))}
                     className="w-40"
                   />
@@ -760,11 +754,14 @@ export function TurnosSection({ empresaId }: { empresaId: string }) {
                     type="date"
                     value={draft.vigenteHasta}
                     min={draft.vigenteDesde || undefined}
+                    disabled={!!editandoId}
                     onChange={(e) => setDraft((d) => ({ ...d, vigenteHasta: e.target.value }))}
                     className="w-40"
                   />
                 </div>
-                <span className="pb-2 text-[11px] text-muted-foreground">Vacío = sin fecha de fin.</span>
+                {!editandoId && (
+                  <span className="pb-2 text-[11px] text-muted-foreground">Vacío = sin fecha de fin.</span>
+                )}
               </div>
             </div>
             )}
@@ -792,6 +789,7 @@ export function TurnosSection({ empresaId }: { empresaId: string }) {
                     max={24}
                     step={0.5}
                     value={draft.flexHorasDia || ""}
+                    disabled={!!editandoId}
                     onChange={(e) => {
                       const v = e.target.value;
                       setDraft((d) => ({
@@ -878,41 +876,47 @@ export function TurnosSection({ empresaId }: { empresaId: string }) {
                   </div>
                 ))}
               </div>
-              {editandoId && turnoEditando && (
-                <div className="pl-6 space-y-2">
-                  <p className="text-xs text-muted-foreground">
-                    El horario está bloqueado. Para cambiarlo se crea una versión
-                    nueva, conservando el histórico y aplicándola a los empleados
-                    que elijas desde una fecha.
-                  </p>
-                  <div className="flex flex-wrap gap-2">
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      className="gap-1.5"
-                      onClick={() => {
-                        setShowModal(false);
-                        setVersionandoTurno(turnoEditando);
-                      }}
-                    >
-                      <Plus className="h-3.5 w-3.5" />
-                      Crear nueva versión de turno
-                    </Button>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="ghost"
-                      className="gap-1.5"
-                      onClick={() => setHistorialTurno(turnoEditando)}
-                    >
-                      <History className="h-3.5 w-3.5" />
-                      Ver versiones
-                    </Button>
-                  </div>
-                </div>
-              )}
             </div>
+            )}
+
+            {/* La jornada entera (horario, horas del flexible y vigencia) está
+                bloqueada al editar: es el molde del que cuelgan las horas
+                teóricas ya calculadas. Se cambia creando una versión nueva. */}
+            {editandoId && turnoEditando && (
+              <div className="space-y-2 rounded-lg border bg-muted/40 px-3 py-2.5">
+                <p className="text-xs text-muted-foreground">
+                  La jornada está bloqueada: cambiarla alteraría las horas
+                  previstas de los meses ya cerrados. Para cambiarla se crea una
+                  versión nueva, conservando el histórico y aplicándola a los
+                  empleados que elijas desde una fecha. Aquí solo se editan el
+                  nombre, el código y el departamento.
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="gap-1.5"
+                    onClick={() => {
+                      setShowModal(false);
+                      setVersionandoTurno(turnoEditando);
+                    }}
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    Crear nueva versión de turno
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    className="gap-1.5"
+                    onClick={() => setHistorialTurno(turnoEditando)}
+                  >
+                    <History className="h-3.5 w-3.5" />
+                    Ver versiones
+                  </Button>
+                </div>
+              </div>
             )}
 
             {/* Total en vivo: ambos sin días. El flexible muestra sus horas/día;
