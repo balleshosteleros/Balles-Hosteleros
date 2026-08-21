@@ -24,11 +24,11 @@ import { guardarFichaCliente } from "@/features/sala/actions/cliente-ficha-actio
 import {
   listClientesEnriquecidos,
   type ClienteEnriquecido,
-  type ResenaCliente,
 } from "@/features/sala/actions/clientes-enriquecidos-actions";
 import {
   clasificacionEfectiva,
   normalizarUmbrales,
+  notaValoracion,
   type UmbralesClasificacion,
 } from "@/features/sala/lib/clasificacion-cliente";
 import { formatFechaEnZona } from "@/features/empresa/lib/zona-horaria";
@@ -109,22 +109,6 @@ function formatNota(n: number): string {
   return n.toFixed(1).replace(".", ",");
 }
 
-/**
- * Nota de una valoración: media de comida, servicio y ambiente.
- *
- * Promedia solo las categorías PUNTUADAS. Contar una categoría en blanco como
- * cero hundiría la nota de quien puso dos cincos y dejó la tercera sin tocar.
- * Si no puntuó ninguna, cae a `rating`, que es lo que manda el QR de la carta
- * (allí solo hay una estrella global, sin desglose).
- */
-function mediaDesglose(r: ResenaCliente | null): number | null {
-  if (!r) return null;
-  const notas = [r.comida, r.servicio, r.ambiente].filter(
-    (n): n is number => typeof n === "number",
-  );
-  if (notas.length === 0) return r.rating;
-  return notas.reduce((a, b) => a + b, 0) / notas.length;
-}
 
 /** Estrellas de la nota media. `size` en px para reusar en tabla y ficha. */
 function Estrellas({ nota, size = 13 }: { nota: number; size?: number }) {
@@ -298,7 +282,7 @@ export function ClientesView() {
     { campo: "clasificacion", label: "Clasificación" },
     { campo: "etiquetas", label: "Etiquetas" },
     { campo: "proximas", label: "Próximas reservas" },
-    { campo: "resenas", label: "Puntuación" },
+    { campo: "resenas", label: "Nota media" },
     { campo: "visitas", label: "Visitas" },
     { campo: "ultimaVisita", label: "Última visita" },
     { campo: "observaciones", label: "Observaciones" },
@@ -440,7 +424,7 @@ export function ClientesView() {
       th: (
         <TableColumnHeader
           key="resenas"
-          label="Puntuación"
+          label="Nota media"
           campo="resenas"
           filtroTipo="numero"
           filtros={filtros}
@@ -702,7 +686,7 @@ export function ClientesView() {
                 Google, que son anónimas y no se pueden atribuir a una ficha.
               */}
               <div className="pt-2 border-t space-y-1.5">
-                <Label className="text-muted-foreground">Puntuación</Label>
+                <Label className="text-muted-foreground">Nota media</Label>
                 {fichaExtra.resenas.length === 0 ? (
                   <p className="text-muted-foreground">
                     Todavía no ha puntuado ninguna visita.
@@ -718,16 +702,27 @@ export function ClientesView() {
                         <span className="text-xs text-muted-foreground">
                           media de {fichaExtra.resenas.length}{" "}
                           {fichaExtra.resenas.length === 1
-                            ? "puntuación"
-                            : "puntuaciones"}
+                            ? "valoración"
+                            : "valoraciones"}
                         </span>
                       </div>
                     )}
                     <ul className="space-y-1">
-                      {fichaExtra.resenas.map((r) => (
+                      {fichaExtra.resenas.map((r) => {
+                        // La nota de la valoración es la media de su desglose,
+                        // igual que en el histórico y en la columna de la lista.
+                        const nota = notaValoracion(r);
+                        return (
                         <li key={r.id} className="rounded-md border px-3 py-2">
                           <div className="flex items-center gap-2">
-                            {r.rating !== null && <Estrellas nota={r.rating} />}
+                            {nota !== null && (
+                              <>
+                                <Estrellas nota={nota} />
+                                <span className="font-medium">
+                                  {formatNota(nota)}
+                                </span>
+                              </>
+                            )}
                             <span className="text-xs text-muted-foreground">
                               {formatFechaEnZona(r.fecha, zonaHoraria)}
                             </span>
@@ -741,8 +736,8 @@ export function ClientesView() {
                                 ["Comida", r.comida],
                                 ["Servicio", r.servicio],
                                 ["Ambiente", r.ambiente],
-                              ] as const).map(([etiqueta, nota]) =>
-                                nota === null ? null : (
+                              ] as const).map(([etiqueta, notaCat]) =>
+                                notaCat === null ? null : (
                                   <span
                                     key={etiqueta}
                                     className="inline-flex items-center gap-1 text-xs"
@@ -750,7 +745,7 @@ export function ClientesView() {
                                     <span className="text-muted-foreground">
                                       {etiqueta}
                                     </span>
-                                    <Estrellas nota={nota} size={11} />
+                                    <Estrellas nota={notaCat} size={11} />
                                   </span>
                                 ),
                               )}
@@ -762,7 +757,8 @@ export function ClientesView() {
                             </p>
                           )}
                         </li>
-                      ))}
+                        );
+                      })}
                     </ul>
                   </div>
                 )}
@@ -785,7 +781,7 @@ export function ClientesView() {
                 ) : (
                   <ul className="space-y-1">
                     {fichaExtra.valoracionesSolicitadas.map((v) => {
-                      const media = mediaDesglose(v.resena);
+                      const media = notaValoracion(v.resena);
                       return (
                         <li
                           key={v.id}

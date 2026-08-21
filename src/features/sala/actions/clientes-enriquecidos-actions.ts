@@ -23,6 +23,7 @@ import { ahoraEnZona } from "@/features/empresa/lib/zona-horaria";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   normalizarUmbrales,
+  notaGlobalCliente,
   type UmbralesClasificacion,
 } from "@/features/sala/lib/clasificacion-cliente";
 
@@ -110,7 +111,11 @@ export interface ClienteEnriquecido {
   resenas: ResenaCliente[];
   /** Histórico de peticiones de valoración, de la más reciente a la más antigua. */
   valoracionesSolicitadas: ValoracionSolicitadaCliente[];
-  /** Media de las reseñas CON nota. `null` si el cliente no ha valorado nunca. */
+  /**
+   * Nota GLOBAL del cliente: media de la nota de todas sus valoraciones (cada
+   * una, a su vez, media de comida/servicio/ambiente). Con una sola valoración
+   * es esa misma nota. `null` si no ha valorado nunca.
+   */
   ratingMedio: number | null;
   /**
    * Visitas REALES: reservas del cliente que ya han ocurrido y en las que se
@@ -337,16 +342,11 @@ export async function listClientesEnriquecidos(): Promise<ClientesEnriquecidosRe
       });
     }
 
-    // Media solo sobre reseñas CON nota: una reseña sin puntuar no vale 0, es
-    // ausencia de dato y no debe hundir la media.
+    // Nota global: media de la nota de cada valoración, con el MISMO cálculo
+    // que se pinta en cada línea del histórico. Con una sola valoración es esa
+    // misma nota.
     for (const c of Object.values(out)) {
-      const notas = c.resenas
-        .map((r) => r.rating)
-        .filter((n): n is number => typeof n === "number");
-      c.ratingMedio =
-        notas.length > 0
-          ? notas.reduce((a, b) => a + b, 0) / notas.length
-          : null;
+      c.ratingMedio = notaGlobalCliente(c.resenas);
     }
 
     const umbrales = normalizarUmbrales({

@@ -17,6 +17,52 @@
 
 import type { ClasificacionCliente } from "@/features/sala/data/clientes";
 
+/** Lo mínimo que hace falta para puntuar una valoración. */
+export interface PuntuableValoracion {
+  rating: number | null;
+  comida: number | null;
+  servicio: number | null;
+  ambiente: number | null;
+}
+
+/**
+ * Nota de UNA valoración: media de comida, servicio y ambiente.
+ *
+ * Promedia solo las categorías PUNTUADAS. Contar una categoría en blanco como
+ * cero hundiría la nota de quien puso dos cincos y dejó la tercera sin tocar.
+ * Si no puntuó ninguna, cae a `rating`, que es lo que manda el QR de la carta
+ * (allí solo hay una estrella global, sin desglose).
+ *
+ * Vive aquí, y no en la pantalla, porque la nota de cada valoración y la media
+ * global del cliente tienen que salir del MISMO cálculo. Estaban duplicadas y
+ * no coincidían: la ficha promediaba el desglose y la lista usaba `rating`, así
+ * que el mismo cliente podía enseñar dos notas distintas según dónde se mirara.
+ */
+export function notaValoracion(r: PuntuableValoracion | null): number | null {
+  if (!r) return null;
+  const notas = [r.comida, r.servicio, r.ambiente].filter(
+    (n): n is number => typeof n === "number",
+  );
+  if (notas.length === 0) return r.rating;
+  return notas.reduce((a, b) => a + b, 0) / notas.length;
+}
+
+/**
+ * Nota GLOBAL del cliente: media de las notas de todas sus valoraciones.
+ *
+ * Con una sola valoración devuelve esa misma nota. Las valoraciones sin ninguna
+ * puntuación no entran en la media: son ausencia de dato, no un cero.
+ */
+export function notaGlobalCliente(
+  valoraciones: PuntuableValoracion[],
+): number | null {
+  const notas = valoraciones
+    .map(notaValoracion)
+    .filter((n): n is number => typeof n === "number");
+  if (notas.length === 0) return null;
+  return notas.reduce((a, b) => a + b, 0) / notas.length;
+}
+
 export interface UmbralesClasificacion {
   /** Visitas a partir de las cuales el cliente deja de ser NUEVO. */
   regularMin: number;
