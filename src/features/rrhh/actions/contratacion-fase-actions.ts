@@ -63,13 +63,15 @@ function fechaEs(d: Date): string {
 }
 
 /**
- * A quién avisar del recordatorio de nueva incorporación: a quien tiene el ROL
- * de RRHH en la empresa. El nombre del rol se lee de `empresa_roles` (no se
- * cablea: cada empresa puede renombrarlo).
+ * A quién avisar del recordatorio de nueva incorporación: a quien LLEVA RRHH en
+ * la empresa, entendido como «tiene acceso al módulo RECURSOS HUMANOS».
  *
- * Si nadie tiene ese rol asignado todavía, cae al área ADMINISTRATIVA — que es
- * a donde van el resto de avisos del flujo. Preferimos que el recordatorio
- * llegue a Dirección/Gerencia antes que se pierda sin destinatario.
+ * No basta con buscar un rol llamado "RECURSOS HUMANOS": quien lleva RRHH puede
+ * tener otro rol que incluya ese módulo entre sus permisos (p. ej. GERENCIA con
+ * acceso a RRHH). El criterio válido es el permiso, no el nombre del rol.
+ *
+ * Si no se resuelve a nadie, cae al área ADMINISTRATIVA —a donde van el resto de
+ * avisos del flujo— antes que perder el recordatorio sin destinatario.
  */
 async function segmentoRrhh(
   admin: ReturnType<typeof createAdminClient>,
@@ -79,20 +81,43 @@ async function segmentoRrhh(
   try {
     const { data: roles } = await admin
       .from("empresa_roles")
-      .select("nombre")
+      .select("nombre, permisos")
       .eq("empresa_id", empresaId);
-    const rol = (roles ?? [])
-      .map((r) => (r.nombre as string | null) ?? "")
-      .find((n) => /recursos\s*humanos|rrhh/i.test(n));
-    if (!rol) return AREA;
 
-    // ¿Hay alguien con ese rol y con login? Si no, el segmento "rol" no
-    // resolvería a nadie y el aviso se perdería en silencio.
-    const { count } = await admin
+    // Roles cuyo permiso incluye el módulo de RRHH con `ver`.
+    const rolesRrhh = (roles ?? [])
+      .filter((r) => {
+        const permisos = (r.permisos ?? []) as { modulo?: string; ver?: boolean }[];
+        return (Array.isArray(permisos) ? permisos : []).some(
+          (p) => /recursos\s*humanos|rrhh/i.test(p?.modulo ?? "") && p?.ver === true,
+        );
+      })
+      .map((r) => (r.nombre as string | null) ?? "")
+      .filter(Boolean);
+    if (rolesRrhh.length === 0) return AREA;
+
+    // Personas con esos roles. Se apunta a fichas concretas (segmento
+    // "empleados") porque el segmento "rol" solo admite un rol y aquí pueden ser
+    // varios. Se filtra por empleados ACTIVOS DE ESTA EMPRESA: los nombres de rol
+    // se repiten entre empresas, y el segmento "usuarios" entregaría el aviso
+    // aunque la persona no tenga ficha aquí.
+    const { data: usuarios } = await admin
       .from("usuarios")
-      .select("user_id", { count: "exact", head: true })
-      .eq("rol_label", rol);
-    return count && count > 0 ? { tipo: "rol", rolLabel: rol } : AREA;
+      .select("user_id")
+      .in("rol_label", rolesRrhh);
+    const userIds = (usuarios ?? []).map((u) => u.user_id as string).filter(Boolean);
+    if (userIds.length === 0) return AREA;
+
+    const { data: fichas } = await admin
+      .from("empleados")
+      .select("id")
+      .eq("empresa_id", empresaId)
+      .eq("estado", "Activo")
+      .in("user_id", userIds);
+    const empleadoIds = (fichas ?? []).map((f) => f.id as string);
+    if (empleadoIds.length === 0) return AREA;
+
+    return { tipo: "empleados", empleadoIds };
   } catch (e) {
     console.error("[contratacion-fase] segmentoRrhh:", e);
     return AREA;
