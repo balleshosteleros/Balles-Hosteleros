@@ -60,7 +60,7 @@ export async function listEmpleadosParaPagos(): Promise<{ ok: boolean; data: Emp
       // `empleados.puesto` es texto legacy: está vacío en varias fichas y puede
       // estar desfasado, así que solo se usa de respaldo.
       .select(
-        "id, nombre, apellidos, puesto, estado, user_id, empresa_id, dni_nie, departamentos(nombre, area), empleado_puestos(es_principal, puestos(nombre))",
+        "id, nombre, apellidos, puesto, estado, user_id, empresa_id, dni_nie, departamentos!empleados_departamento_id_fkey(nombre, area), empleado_puestos(es_principal, puestos(nombre))",
       )
       .eq("empresa_id", empresaId)
       .eq("estado", "Activo")

@@ -481,7 +481,7 @@ export async function crearFichajeManual(input: CrearFichajeManualInput) {
 
     const { data: empleado } = await supabase
       .from("empleados")
-      .select("id, user_id, local_id, nombre, apellidos, departamentos(nombre)")
+      .select("id, user_id, local_id, nombre, apellidos, departamentos!empleados_departamento_id_fkey(nombre)")
       .eq("id", input.empleadoId)
       .eq("empresa_id", empresaId)
       .maybeSingle();

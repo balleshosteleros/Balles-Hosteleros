@@ -307,7 +307,7 @@ export async function listLlamables(): Promise<{
 
     const { data, error } = await admin
       .from("empleados")
-      .select("id, user_id, nombre, apellidos, avatar_url, puesto, estado, departamentos(nombre)")
+      .select("id, user_id, nombre, apellidos, avatar_url, puesto, estado, departamentos!empleados_departamento_id_fkey(nombre)")
       .or(filtro);
     if (error) throw error;
 

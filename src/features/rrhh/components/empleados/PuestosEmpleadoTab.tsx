@@ -98,9 +98,6 @@ export function PuestosEmpleadoTab({
               {principal.departamentoNombre && (
                 <Badge variant="secondary">{principal.departamentoNombre}</Badge>
               )}
-              {actual?.nivel != null && (
-                <Badge variant="outline">Nivel {actual.nivel}</Badge>
-              )}
             </div>
 
             <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-3">
@@ -152,7 +149,6 @@ export function PuestosEmpleadoTab({
               <thead>
                 <tr className="text-left text-muted-foreground border-b">
                   <th className="py-2 pr-4 font-medium">Puesto</th>
-                  <th className="py-2 pr-4 font-medium">Nivel</th>
                   <th className="py-2 pr-4 font-medium">Salario neto</th>
                   <th className="py-2 pr-4 font-medium">Jornada</th>
                   <th className="py-2 pr-4 font-medium">Contrato</th>
@@ -173,7 +169,6 @@ export function PuestosEmpleadoTab({
                         )}
                       </span>
                     </td>
-                    <td className="py-2 pr-4">{h.nivel ?? "—"}</td>
                     <td className="py-2 pr-4">{formatoEuro(h.salarioNeto)}</td>
                     <td className="py-2 pr-4">{h.jornada ?? "—"}</td>
                     <td className="py-2 pr-4">{h.tipoContrato ?? "—"}</td>

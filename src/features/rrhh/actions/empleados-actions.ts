@@ -73,7 +73,7 @@ export async function listEmpleados() {
 
     const { data, error } = await admin
       .from("empleados")
-      .select(`*, departamentos(nombre, area)`)
+      .select(`*, departamentos!empleados_departamento_id_fkey(nombre, area)`)
       .or(filtro)
       .order("nombre", { ascending: true });
 
@@ -302,7 +302,7 @@ export async function getEmpleadosActivos(
 
     const { data, error } = await supabase
       .from("empleados")
-      .select("id, nombre, apellidos, puesto, estado, user_id, empresa_id, avatar_url, departamentos(nombre, area)")
+      .select("id, nombre, apellidos, puesto, estado, user_id, empresa_id, avatar_url, departamentos!empleados_departamento_id_fkey(nombre, area)")
       .or(filtro)
       .eq("estado", "Activo")
       .order("nombre", { ascending: true });
@@ -1304,7 +1304,7 @@ export async function getEmpleadoConPerfil(empleadoId: string) {
     const { supabase } = await getAppContext();
     const { data: emp, error } = await supabase
       .from("empleados")
-      .select(`*, departamentos(nombre)`)
+      .select(`*, departamentos!empleados_departamento_id_fkey(nombre)`)
       .eq("id", empleadoId)
       .maybeSingle();
     if (error) throw error;
@@ -1630,7 +1630,7 @@ export async function getMiInformacionLaboral() {
       .from("empleados")
       .select(`
         *,
-        departamentos(nombre),
+        departamentos!empleados_departamento_id_fkey(nombre),
         puestos_trabajo(nombre)
       `)
       .eq("user_id", userId)

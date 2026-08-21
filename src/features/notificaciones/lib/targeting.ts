@@ -67,7 +67,7 @@ export async function resolverDestinatarios(
 
   const { data, error } = await supabase
     .from("empleados")
-    .select("id, user_id, empresa_id, departamento_id, departamentos(area)")
+    .select("id, user_id, empresa_id, departamento_id, departamentos!empleados_departamento_id_fkey(area)")
     .or(filtro)
     .eq("estado", "Activo");
   if (error) {

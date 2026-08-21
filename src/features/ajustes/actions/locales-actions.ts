@@ -239,7 +239,7 @@ export async function listEmpleadosEmpresaParaLocales(
     const admin = createAdminClient();
     const { data, error } = await admin
       .from("empleados")
-      .select("id, nombre, apellidos, estado, local_id, permite_teletrabajo, departamentos(nombre)")
+      .select("id, nombre, apellidos, estado, local_id, permite_teletrabajo, departamentos!empleados_departamento_id_fkey(nombre)")
       .eq("empresa_id", target)
       .order("nombre");
     if (error) throw error;
