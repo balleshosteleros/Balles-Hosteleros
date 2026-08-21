@@ -235,53 +235,45 @@ export default function FichaEmpleadoPage() {
         // Mismo formulario que el empleado ve en Mi Panel → Perfil, pero en
         // modo editable. El guardado va contra el profile vinculado al
         // empleado vía la admin action `guardarPerfilEmpleado`.
+        // Dos columnas en pantallas anchas: los datos personales a la izquierda
+        // y la gestión laboral + documentos a la derecha. Con las secciones
+        // compactas, el perfil entero se abarca casi de una vez en vez de
+        // obligar a recorrer una sola columna estrecha hasta el final.
         return (
-          <div className="relative p-4 md:p-6">
-            <div className="sticky top-4 z-20 flex justify-end pointer-events-none">
-              <Button
-                onClick={guardarPerfilCompleto}
-                size="lg"
-                className="gap-2 pointer-events-auto shadow-md"
-                disabled={savingPerfil}
-              >
-                {savingPerfil ? (
-                  <><Loader2 className="h-4 w-4 animate-spin" />Guardando…</>
-                ) : (
-                  <><Save className="h-4 w-4" />Guardar</>
-                )}
-              </Button>
-            </div>
-            <div className="max-w-3xl mx-auto space-y-6 -mt-14">
-            <DatosPersonalesForm
-              ref={datosRef}
-              hideSaveButton
-              initial={datosPerfil}
-              targetEmpleadoId={empleadoRegistro.id}
-            />
-            <GestionEmpleadoCard
-              ref={gestionRef}
-              empleadoId={empleadoRegistro.id}
-              initial={{
-                empresaId: empleadoRegistro.empresa_id,
-                empresasAcceso: empresasAcceso.map((e) => e.id),
-                nombre: empleadoRegistro.nombre,
-                apellidos: empleadoRegistro.apellidos,
-                departamentoId: empleadoRegistro.departamento_id,
-                puesto: empleadoRegistro.puesto,
-                localId: empleadoRegistro.local_id,
-                permiteTeletrabajo: empleadoRegistro.permite_teletrabajo,
-                estado: empleadoRegistro.estado === "Activo" ? "Activo" : "Inactivo",
-                fechaBaja: empleadoRegistro.fecha_baja,
-              }}
-              onUpdated={cargarFicha}
-              onDeleted={() => router.push("/rrhh/empleados")}
-            />
-            <DocumentosIdentificativosCard
-              docDniAnversoPath={empleadoRegistro.doc_dni_anverso_path}
-              docDniReversoPath={empleadoRegistro.doc_dni_reverso_path}
-              docIbanPath={empleadoRegistro.doc_iban_path}
-              docSsPath={empleadoRegistro.doc_ss_path}
-            />
+          <div className="p-4 md:p-5">
+            <div className="grid gap-3 items-start 2xl:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
+              <DatosPersonalesForm
+                ref={datosRef}
+                hideSaveButton
+                initial={datosPerfil}
+                targetEmpleadoId={empleadoRegistro.id}
+              />
+              <div className="space-y-3">
+                <GestionEmpleadoCard
+                  ref={gestionRef}
+                  empleadoId={empleadoRegistro.id}
+                  initial={{
+                    empresaId: empleadoRegistro.empresa_id,
+                    empresasAcceso: empresasAcceso.map((e) => e.id),
+                    nombre: empleadoRegistro.nombre,
+                    apellidos: empleadoRegistro.apellidos,
+                    departamentoId: empleadoRegistro.departamento_id,
+                    puesto: empleadoRegistro.puesto,
+                    localId: empleadoRegistro.local_id,
+                    permiteTeletrabajo: empleadoRegistro.permite_teletrabajo,
+                    estado: empleadoRegistro.estado === "Activo" ? "Activo" : "Inactivo",
+                    fechaBaja: empleadoRegistro.fecha_baja,
+                  }}
+                  onUpdated={cargarFicha}
+                  onDeleted={() => router.push("/rrhh/empleados")}
+                />
+                <DocumentosIdentificativosCard
+                  docDniAnversoPath={empleadoRegistro.doc_dni_anverso_path}
+                  docDniReversoPath={empleadoRegistro.doc_dni_reverso_path}
+                  docIbanPath={empleadoRegistro.doc_iban_path}
+                  docSsPath={empleadoRegistro.doc_ss_path}
+                />
+              </div>
             </div>
           </div>
         );
@@ -342,26 +334,45 @@ export default function FichaEmpleadoPage() {
         empresas={empresasAcceso}
       />
 
-      <div className="border-b bg-card px-6 flex gap-0 overflow-x-auto shrink-0">
+      <div className="border-b bg-card px-4 md:px-6 flex gap-0 overflow-x-auto shrink-0">
         {TOP_TABS.map((tab) => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
             className={cn(
-              "flex items-center gap-2 px-4 py-3 text-sm whitespace-nowrap border-b-2 transition-colors",
+              "flex items-center gap-1.5 px-3 py-2 text-sm whitespace-nowrap border-b-2 transition-colors",
               activeTab === tab.id
                 ? "border-primary text-primary font-medium"
                 : "border-transparent text-muted-foreground hover:text-foreground"
             )}
           >
-            <tab.icon className="h-4 w-4" />
+            <tab.icon className="h-4 w-4 shrink-0" />
             {tab.label}
           </button>
         ))}
       </div>
 
-      <div className="flex-1 flex flex-col overflow-auto">
+      <div className="relative flex-1 flex flex-col overflow-auto">
         {renderTabContent()}
+
+        {/* Guardado del perfil: barra fija abajo, siempre a la vista sin tener
+            que volver arriba. El recuadro de estado tiene su propio botón. */}
+        {activeTab === "perfil" && (
+          <div className="sticky bottom-0 z-20 mt-auto flex justify-end border-t bg-card/95 px-5 py-3 backdrop-blur">
+            <Button
+              onClick={guardarPerfilCompleto}
+              size="lg"
+              className="gap-2 shadow-sm"
+              disabled={savingPerfil}
+            >
+              {savingPerfil ? (
+                <><Loader2 className="h-4 w-4 animate-spin" />Guardando…</>
+              ) : (
+                <><Save className="h-4 w-4" />Guardar</>
+              )}
+            </Button>
+          </div>
+        )}
       </div>
     </div>
   );

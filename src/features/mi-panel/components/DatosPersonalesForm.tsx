@@ -291,10 +291,10 @@ export const DatosPersonalesForm = forwardRef<DatosPersonalesFormHandle, Props>(
   const bancoSeleccionado = buscarBancoPorCodigo(form.banco_codigo);
 
   return (
-    <form onSubmit={onSubmit} className="space-y-6">
+    <form onSubmit={onSubmit} className="space-y-3">
       <fieldset
         disabled={readOnly}
-        className={readOnly ? "space-y-6 pointer-events-none" : "space-y-6"}
+        className={readOnly ? "space-y-3 pointer-events-none" : "space-y-3"}
       >
       <Section title="Identidad" icon={<IdCard className="h-4 w-4" />}>
         <Grid>
@@ -483,7 +483,6 @@ export const DatosPersonalesForm = forwardRef<DatosPersonalesFormHandle, Props>(
         <Grid>
           <Field
             label="IBAN"
-            wide
             hint={
               ibanCheck
                 ? ibanCheck.valido
@@ -502,7 +501,7 @@ export const DatosPersonalesForm = forwardRef<DatosPersonalesFormHandle, Props>(
             />
           </Field>
 
-          <Field label="Banco" wide>
+          <Field label="Banco">
             <Popover open={bancoOpen} onOpenChange={setBancoOpen}>
               <PopoverTrigger asChild>
                 <Button
@@ -586,8 +585,7 @@ export const DatosPersonalesForm = forwardRef<DatosPersonalesFormHandle, Props>(
 
           <Field
             label="Titular de la cuenta"
-            wide
-            hint="Siempre coincide con tu nombre y apellidos. Si necesitas cambiarlo, edita los datos personales arriba."
+            hint="Siempre el nombre y apellidos del empleado."
             hintTone="muted"
           >
             <Input
@@ -684,20 +682,25 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <section className="rounded-2xl border bg-card p-6 shadow-sm">
-      <header className="flex items-center gap-2 mb-4">
-        <div className="h-8 w-8 rounded-md bg-primary/10 text-primary flex items-center justify-center">
+    <section className="rounded-xl border bg-card p-4 shadow-sm">
+      <header className="flex items-center gap-2 mb-3">
+        <div className="h-7 w-7 rounded-md bg-primary/10 text-primary flex items-center justify-center shrink-0">
           {icon}
         </div>
-        <h2 className="text-base font-semibold">{title}</h2>
+        <h2 className="text-sm font-semibold">{title}</h2>
       </header>
       {children}
     </section>
   );
 }
 
+/**
+ * Rejilla adaptable: hasta 3 columnas en pantallas anchas. Con secciones
+ * compactas, el perfil entero cabe casi en una ventana en vez de exigir un
+ * scroll largo campo a campo.
+ */
 function Grid({ children }: { children: React.ReactNode }) {
-  return <div className="grid gap-4 md:grid-cols-2">{children}</div>;
+  return <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{children}</div>;
 }
 
 function Field({
@@ -724,16 +727,16 @@ function Field({
       ? "text-amber-600"
       : "text-muted-foreground";
   return (
-    <div className={wide ? "md:col-span-2 space-y-1.5" : "space-y-1.5"}>
-      <Label className="text-xs uppercase tracking-wide text-muted-foreground">
+    <div className={wide ? "sm:col-span-2 xl:col-span-3 space-y-1" : "space-y-1"}>
+      <Label className="text-[11px] uppercase tracking-wide text-muted-foreground">
         {label}
         {required ? <span className="text-rose-500 ml-0.5">*</span> : null}
       </Label>
       {children}
       {hint && (
-        <p className={`text-xs flex items-center gap-1 ${toneClass}`}>
+        <p className={`text-[11px] flex items-center gap-1 ${toneClass}`}>
           {hintTone === "error" || hintTone === "warn" ? (
-            <AlertTriangle className="h-3 w-3" />
+            <AlertTriangle className="h-3 w-3 shrink-0" />
           ) : null}
           {hint}
         </p>

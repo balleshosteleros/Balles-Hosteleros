@@ -1318,10 +1318,13 @@ export async function getEmpleadoConPerfil(empleadoId: string) {
     if (emp.user_id) {
       const { data: cuenta } = await supabase
         .from("usuarios")
-        .select("email")
+        .select("email, avatar_url")
         .eq("id", emp.user_id)
         .maybeSingle();
       emailCuenta = (cuenta?.email as string | null) ?? null;
+      // La foto puede haberla subido el propio empleado desde su perfil y no
+      // estar copiada en empleados.avatar_url: mismo fallback que el listado.
+      if (!e.avatar_url) e.avatar_url = (cuenta?.avatar_url as string | null) ?? null;
     }
 
     const datosPersonales: DatosPersonalesCompletos = {

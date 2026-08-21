@@ -296,18 +296,13 @@ export const GestionEmpleadoCard = forwardRef<GestionEmpleadoCardHandle, Props>(
   }
 
   return (
-    <div className="space-y-6">
-      <div className="rounded-lg border bg-card p-4 md:p-5 space-y-6">
-        <div className="flex items-start gap-2.5">
-          <div className="h-8 w-8 rounded-md bg-primary/10 text-primary flex items-center justify-center shrink-0">
+    <div className="space-y-3">
+      <div className="rounded-xl border bg-card p-4 space-y-4">
+        <div className="flex items-center gap-2">
+          <div className="h-7 w-7 rounded-md bg-primary/10 text-primary flex items-center justify-center shrink-0">
             <Briefcase className="h-4 w-4" />
           </div>
-          <div className="space-y-1">
-            <h3 className="text-base font-semibold text-foreground">Gestión laboral</h3>
-            <p className="text-sm text-muted-foreground">
-              Cambios administrativos del empleado en esta empresa.
-            </p>
-          </div>
+          <h3 className="text-sm font-semibold text-foreground">Gestión laboral</h3>
         </div>
 
         <div className="space-y-1.5">
@@ -318,7 +313,7 @@ export const GestionEmpleadoCard = forwardRef<GestionEmpleadoCardHandle, Props>(
           {puestosCatalogo.length === 0 ? (
             <p className="text-xs text-muted-foreground">No hay puestos — créalos en RRHH → Puestos.</p>
           ) : (
-            <div className="grid gap-1.5 sm:grid-cols-2">
+            <div className="grid gap-1.5 sm:grid-cols-2 xl:grid-cols-3">
               {puestosCatalogo.map((p) => {
                 const marcado = puestosSel.includes(p.id);
                 const esPrincipal = principalPuestoId === p.id;
@@ -361,8 +356,8 @@ export const GestionEmpleadoCard = forwardRef<GestionEmpleadoCardHandle, Props>(
             </div>
           )}
           <p className="text-[11px] text-muted-foreground">
-            Cada puesto marcado aporta su horario y sus tareas del cronograma. El principal es el que
-            fija el departamento del empleado y el puesto que aparece en su ficha.
+            Cada puesto aporta su horario y sus tareas. El principal fija el departamento y el
+            puesto que aparece en la ficha.
           </p>
           {puestosSel.length > 0 && (
             <div className="flex flex-wrap items-end gap-x-6 gap-y-2 pt-1">
@@ -418,20 +413,20 @@ export const GestionEmpleadoCard = forwardRef<GestionEmpleadoCardHandle, Props>(
           </label>
         </div>
 
-        <div className="border-t pt-6 space-y-4">
-          <div className="flex items-start gap-2.5">
-            <div className="h-8 w-8 rounded-md bg-primary/10 text-primary flex items-center justify-center shrink-0">
+        <div className="border-t pt-4 space-y-3">
+          <div className="flex items-center gap-2">
+            <div className="h-7 w-7 rounded-md bg-primary/10 text-primary flex items-center justify-center shrink-0">
               <Building2 className="h-4 w-4" />
             </div>
-            <div className="space-y-1">
+            <div className="min-w-0">
               <h4 className="text-sm font-semibold text-foreground">Acceso multiempresa</h4>
-              <p className="text-sm text-muted-foreground">
-                Marca las empresas en las que trabaja este empleado y, en cada una, sus locales de fichaje. La empresa donde está dado de alta queda siempre activa.
+              <p className="text-[11px] text-muted-foreground">
+                Empresas donde trabaja y, en cada una, sus locales de fichaje.
               </p>
             </div>
           </div>
 
-          <div className="space-y-3">
+          <div className="space-y-2">
             {empresasDisponibles.map((empresa) => {
               const marcada = empresasMarcadas.includes(empresa.id);
               const esPrincipal = empresa.id === initial.empresaId;
@@ -471,7 +466,7 @@ export const GestionEmpleadoCard = forwardRef<GestionEmpleadoCardHandle, Props>(
                       ) : (
                         <>
                           <p className="text-xs text-muted-foreground">Locales donde puede fichar:</p>
-                          <div className="grid gap-1.5 sm:grid-cols-2">
+                          <div className="grid gap-1.5 sm:grid-cols-2 xl:grid-cols-3">
                             {locales.map((local) => (
                               <label
                                 key={local.id}
@@ -499,27 +494,26 @@ export const GestionEmpleadoCard = forwardRef<GestionEmpleadoCardHandle, Props>(
             })}
           </div>
 
-          <div className="pt-1">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 pt-1">
             <CopiarEmpleadoDialog
               empleadoId={empleadoId}
               empleadoNombre={initial.nombre}
               empresasDisponibles={empresasDisponibles}
               empresasActuales={empresasMarcadas}
             />
-            <p className="mt-1.5 text-[11px] text-muted-foreground">
-              Crea su ficha en otra empresa reutilizando sus datos personales. Lo propio de cada
-              empresa (puesto, local, horario, validadores…) se configura en la nueva empresa.
+            <p className="text-[11px] text-muted-foreground">
+              Crea su ficha en otra empresa reutilizando sus datos personales.
             </p>
           </div>
         </div>
       </div>
 
-      <div className="rounded-lg border-2 border-destructive/30 bg-destructive/5 p-4 md:p-5 space-y-4">
-        <div className="flex items-start gap-2.5">
-          <div className="h-8 w-8 rounded-md bg-destructive/10 text-destructive flex items-center justify-center shrink-0">
+      <div className="rounded-xl border-2 border-destructive/30 bg-destructive/5 p-4 space-y-3">
+        <div className="flex items-start gap-2">
+          <div className="h-7 w-7 rounded-md bg-destructive/10 text-destructive flex items-center justify-center shrink-0">
             <ShieldAlert className="h-4 w-4" />
           </div>
-          <div className="flex-1 space-y-1">
+          <div className="flex-1 space-y-0.5">
             <div className="flex items-start justify-between gap-2">
               <h4 className="text-sm font-semibold text-foreground">Estado y acceso al sistema</h4>
               <HistorialEstadoDialog
@@ -528,18 +522,16 @@ export const GestionEmpleadoCard = forwardRef<GestionEmpleadoCardHandle, Props>(
                 onCargado={setTotalMovimientos}
               />
             </div>
-            <p className="text-sm text-muted-foreground">
-              Al marcar <strong className="text-foreground">Inactivo</strong> el empleado deja de poder
-              entrar al sistema con sus credenciales: pierde el acceso a <strong className="text-foreground">Mi Panel</strong>{" "}
-              y a <strong className="text-foreground">Mis Departamentos</strong>. Para darle de alta de nuevo basta con
-              cambiar el estado a <strong className="text-foreground">Activo</strong>: recupera el acceso al instante.
-              La fecha es obligatoria en ambos casos y cada movimiento queda en el historial
+            <p className="text-xs text-muted-foreground">
+              <strong className="text-foreground">Inactivo</strong> le retira el acceso al sistema
+              (Mi Panel y Mis Departamentos); <strong className="text-foreground">Activo</strong> se
+              lo devuelve al instante. La fecha es obligatoria y cada movimiento queda en el historial
               {totalMovimientos > 0 ? ` (${totalMovimientos})` : ""}.
             </p>
           </div>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-2">
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           <div className="space-y-1.5">
             <Label>Estado</Label>
             <Select
@@ -580,17 +572,17 @@ export const GestionEmpleadoCard = forwardRef<GestionEmpleadoCardHandle, Props>(
               />
             </div>
           )}
-        </div>
 
-        <div className="space-y-1.5">
-          <Label>Motivo (opcional)</Label>
-          <Input
-            value={motivoEstado}
-            onChange={(e) => setMotivoEstado(e.target.value)}
-            placeholder={
-              estado === "Activo" ? "Reincorporación, corrección…" : "Fin de contrato, baja voluntaria…"
-            }
-          />
+          <div className="space-y-1.5">
+            <Label>Motivo (opcional)</Label>
+            <Input
+              value={motivoEstado}
+              onChange={(e) => setMotivoEstado(e.target.value)}
+              placeholder={
+                estado === "Activo" ? "Reincorporación…" : "Fin de contrato, baja voluntaria…"
+              }
+            />
+          </div>
         </div>
 
         <div className="flex justify-end">

@@ -33,18 +33,18 @@ export function DocumentosIdentificativosCard(props: Props) {
     .filter((d) => !!d.path);
 
   return (
-    <section className="rounded-lg border bg-card p-4 md:p-5 space-y-3">
+    <section className="rounded-xl border bg-card p-4 space-y-2.5">
       <header className="space-y-0.5">
-        <h3 className="text-base font-semibold text-foreground">Documentación identificativa</h3>
-        <p className="text-sm text-muted-foreground">
-          Documentos aportados por el empleado en su incorporación. Solo lectura.
+        <h3 className="text-sm font-semibold text-foreground">Documentación identificativa</h3>
+        <p className="text-[11px] text-muted-foreground">
+          Aportada por el empleado en su incorporación. Solo lectura.
         </p>
       </header>
 
       {items.length > 0 ? (
         <ul className="divide-y divide-border rounded-md border">
           {items.map((d) => (
-            <li key={d.key} className="flex items-center gap-3 px-3 py-2.5">
+            <li key={d.key} className="flex items-center gap-3 px-3 py-2">
               <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
               <span className="flex-1 text-sm text-foreground">{d.label}</span>
               <a
@@ -60,9 +60,9 @@ export function DocumentosIdentificativosCard(props: Props) {
           ))}
         </ul>
       ) : (
-        <div className="flex flex-col items-center gap-2 py-6 text-center">
-          <FolderOpen className="h-8 w-8 text-muted-foreground/50" />
-          <p className="text-sm text-muted-foreground">
+        <div className="flex items-center gap-2 rounded-md border border-dashed px-3 py-3">
+          <FolderOpen className="h-4 w-4 shrink-0 text-muted-foreground/50" />
+          <p className="text-xs text-muted-foreground">
             No hay documentación identificativa guardada para este empleado.
           </p>
         </div>
