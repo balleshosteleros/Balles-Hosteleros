@@ -10,6 +10,8 @@
 -- pierde ninguna información: quien validaba sigue pudiendo validar, ahora por
 -- pertenecer a un departamento en vez de estar nombrado uno a uno.
 --
+-- Sin vuelta atrás: el modelo de validador-persona queda retirado del todo.
+--
 -- Al borrar las columnas se van con ellas sus índices y sus claves foráneas.
 --
 -- Idempotente.

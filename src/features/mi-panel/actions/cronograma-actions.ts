@@ -155,6 +155,24 @@ export async function getMiCronograma(): Promise<MiCronogramaResult> {
     const departamentoUsuario =
       ((profile?.departamento as string | null) ?? null)?.trim() || null;
 
+    // Los PUESTOS asignados mandan sobre el rol.
+    //
+    // El cronograma es 1:1 con el puesto, así que las tareas de alguien son las de
+    // los puestos que ocupa: el principal más los que se le hayan añadido a mano en
+    // su ficha. Antes esto se resolvía por el TEXTO del rol y sus permisos, así que
+    // al cambiar de puesto seguía viendo las tareas del puesto viejo (y las del
+    // nuevo solo aparecían si el texto casaba). Solo se cae al camino antiguo
+    // cuando el usuario no tiene ninguna ficha de empleado con puestos.
+    const puestosDelUsuario = await leerPuestosCronograma(supabase, userId, empresaId);
+    if (puestosDelUsuario.length > 0) {
+      return await construirCronograma(supabase, {
+        userId,
+        empresaId,
+        rolLabel,
+        rolesAccesibles: puestosDelUsuario,
+      });
+    }
+
     const modulosUsuario = new Set<string>();
     if (departamentoUsuario) modulosUsuario.add(norm(departamentoUsuario));
 
@@ -203,6 +221,75 @@ export async function getMiCronograma(): Promise<MiCronogramaResult> {
       return { ok: true, data: { rolLabel, departamentos: [] } };
     }
 
+    return await construirCronograma(supabase, {
+      userId,
+      empresaId,
+      rolLabel,
+      rolesAccesibles: accessibleRols,
+    });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Error desconocido";
+    console.error("[getMiCronograma] Fatal:", err);
+    return { ok: false, error: message };
+  }
+}
+
+type SupabaseLike = Awaited<ReturnType<typeof getAppContext>>["supabase"];
+
+/**
+ * Nombres de los puestos que ocupa el usuario en la empresa activa (el principal
+ * primero). Son los que definen sus tareas: al quitarle un puesto deja de ver su
+ * cronograma. Vacío si no tiene ficha de empleado o no tiene puestos.
+ */
+async function leerPuestosCronograma(
+  supabase: SupabaseLike,
+  userId: string,
+  empresaId: string | null,
+): Promise<string[]> {
+  if (!empresaId) return [];
+
+  const { data: empleado } = await supabase
+    .from("empleados")
+    .select("id")
+    .eq("user_id", userId)
+    .eq("empresa_id", empresaId)
+    .maybeSingle();
+  const empleadoId = (empleado?.id as string | null) ?? null;
+  if (!empleadoId) return [];
+
+  const { data: filas } = await supabase
+    .from("empleado_puestos")
+    .select("puesto_nombre, es_principal, puestos(nombre)")
+    .eq("empleado_id", empleadoId)
+    .order("es_principal", { ascending: false });
+
+  const nombres: string[] = [];
+  for (const f of filas ?? []) {
+    const nombre =
+      ((f.puestos as { nombre?: string } | null)?.nombre) ??
+      (f.puesto_nombre as string | null) ??
+      "";
+    const limpio = nombre.trim();
+    if (limpio && !nombres.some((n) => norm(n) === norm(limpio))) nombres.push(limpio);
+  }
+  return nombres;
+}
+
+/**
+ * Trae las tareas de los roles/puestos indicados y las agrupa para la vista.
+ * Compartido por los dos caminos (por puestos y, en su defecto, por rol).
+ */
+async function construirCronograma(
+  supabase: SupabaseLike,
+  params: {
+    userId: string;
+    empresaId: string | null;
+    rolLabel: string | null;
+    rolesAccesibles: string[];
+  },
+): Promise<MiCronogramaResult> {
+  const { userId, empresaId, rolLabel, rolesAccesibles: accessibleRols } = params;
+  try {
     const { data: rows, error } = await supabase
       .from("cronogramas_operativos")
       .select(
@@ -236,17 +323,21 @@ export async function getMiCronograma(): Promise<MiCronogramaResult> {
 
     const departamentos: MiCronogramaDepartamento[] = accessibleRols.map(
       (rol) => {
+        const tareas = tareasPorRol.get(rol) ?? [];
         const modulo = ROL_TO_MODULO[rol] ?? rol;
         const moduloKey = norm(modulo);
         const area: AreaMiCronograma =
           CRONOGRAMA_ROLES.find((r) => norm(r.rol) === norm(rol))?.area ??
           "ADMINISTRATIVA";
+        // Un puesto real puede no estar en el catálogo canónico de roles; en ese
+        // caso su departamento sale de sus propias tareas, no del mapa de módulos.
+        const deptoTarea = (tareas[0]?.departamento as string | null | undefined)?.trim();
         return {
           rol,
           label: ROL_LABEL[rol] ?? rol,
           area,
-          departamento: MODULO_LABEL[moduloKey] ?? modulo,
-          tareas: tareasPorRol.get(rol) ?? [],
+          departamento: MODULO_LABEL[moduloKey] ?? deptoTarea ?? modulo,
+          tareas,
         };
       },
     );

@@ -191,6 +191,11 @@ async function resolverPatronOficialDelPuesto(
  * Asigna el horario del puesto al empleado desde la fecha indicada: lo vincula al
  * patrón oficial vigente que aplica al puesto. Si el puesto no tiene horario, no
  * hace nada (ok).
+ *
+ * El horario ANTERIOR se cierra el día antes de `vigenteDesde`: a partir de esa
+ * fecha manda el nuevo y el viejo deja de generar días. Antes solo se escribía el
+ * nuevo, así que el empleado se quedaba con los dos patrones abiertos a la vez y
+ * solapados desde ese día.
  */
 export async function asignarPlantillaPuestoAEmpleado(
   empleadoId: string,
@@ -206,6 +211,8 @@ export async function asignarPlantillaPuestoAEmpleado(
 
     const patronId = await resolverPatronOficialDelPuesto(supabase, empresaId, puestoId);
     if (!patronId) return { ok: true, sinPlantilla: true };
+
+    await cerrarPatronesAnteriores(supabase, empleadoId, patronId, vigenteDesde);
 
     const { error } = await supabase
       .from("rrhh_patron_empleados")
@@ -224,5 +231,51 @@ export async function asignarPlantillaPuestoAEmpleado(
   } catch (err) {
     console.error("[rrhh] asignarPlantillaPuestoAEmpleado:", err);
     return { ok: false, error: "No se pudo asignar la plantilla" };
+  }
+}
+
+/**
+ * Cierra los patrones que el empleado tuviera abiertos (o que terminarían después
+ * del relevo) el día ANTES de que entre el nuevo, para que no queden dos horarios
+ * solapados. El patrón entrante se excluye: si es el mismo, lo reabre el upsert.
+ */
+async function cerrarPatronesAnteriores(
+  supabase: Awaited<ReturnType<typeof getContext>>["supabase"],
+  empleadoId: string,
+  patronEntranteId: string,
+  vigenteDesde: string,
+): Promise<void> {
+  const visperaIso = new Date(new Date(`${vigenteDesde}T00:00:00Z`).getTime() - 86_400_000)
+    .toISOString()
+    .slice(0, 10);
+
+  const { data: abiertos } = await supabase
+    .from("rrhh_patron_empleados")
+    .select("patron_id, vigente_desde, vigente_hasta")
+    .eq("empleado_id", empleadoId)
+    .neq("patron_id", patronEntranteId);
+
+  for (const fila of abiertos ?? []) {
+    const hasta = (fila.vigente_hasta as string | null) ?? null;
+    // Solo estorban los que siguen vivos el día del relevo o después.
+    if (hasta && hasta < vigenteDesde) continue;
+
+    const desde = (fila.vigente_desde as string | null) ?? null;
+    // Un patrón que aún no había empezado se retira entero: cerrarlo en la
+    // víspera dejaría un tramo al revés (fin anterior a su propio inicio).
+    if (desde && desde >= vigenteDesde) {
+      await supabase
+        .from("rrhh_patron_empleados")
+        .delete()
+        .eq("empleado_id", empleadoId)
+        .eq("patron_id", fila.patron_id as string);
+      continue;
+    }
+
+    await supabase
+      .from("rrhh_patron_empleados")
+      .update({ vigente_hasta: visperaIso })
+      .eq("empleado_id", empleadoId)
+      .eq("patron_id", fila.patron_id as string);
   }
 }

@@ -319,7 +319,12 @@ export default function FichaEmpleadoPage() {
       case "pagos":
         return <PagosEmpleadoTab empleadoId={empleadoRegistro.id} />;
       case "puestos":
-        return <PuestosEmpleadoTab empleadoId={empleadoRegistro.id} />;
+        return (
+          <PuestosEmpleadoTab
+            empleadoId={empleadoRegistro.id}
+            empleadoNombre={`${empleado.nombre} ${empleado.apellidos}`.trim() || "El empleado"}
+          />
+        );
       case "formacion":
         return <SubmoduloPorEmpleadoPlaceholder modulo="Formación" path="/rrhh/formacion" empleado={empleado} />;
       case "cuestionarios":

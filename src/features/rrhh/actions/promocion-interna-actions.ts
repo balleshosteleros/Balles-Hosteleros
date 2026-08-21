@@ -115,9 +115,10 @@ export async function promocionarEmpleado(
     .eq("empresa_id", empresaId)
     .maybeSingle();
   if (!emp) return { ok: false, error: "Empleado no encontrado." };
-  if ((emp.estado as string) !== "Activo") {
-    return { ok: false, error: "Solo se puede promocionar a un empleado activo." };
-  }
+  // Se permite sobre un empleado Inactivo a propósito: al reactivar a alguien hay
+  // que devolverle puesto, horario y condiciones, y esa asignación es justo el
+  // paso que lo hace. El selector de la promoción interna sigue ofreciendo solo
+  // activos; aquí se llega desde la ficha, donde el caso existe.
 
   // Puesto de ORIGEN = el principal actual (para la memoria del cambio).
   const { data: principalActual } = await admin
@@ -133,7 +134,7 @@ export async function promocionarEmpleado(
   // 2. Puesto destino + condiciones + departamento.
   const { data: puesto } = await admin
     .from("puestos")
-    .select("id, nombre, departamento_id")
+    .select("id, nombre, departamento_id, validador_departamento_id")
     .eq("id", input.puestoId)
     .eq("empresa_id", empresaId)
     .maybeSingle();
@@ -215,7 +216,15 @@ export async function promocionarEmpleado(
   }
   await admin
     .from("empleados")
-    .update({ puesto: puesto.nombre, departamento_id: puesto.departamento_id })
+    .update({
+      puesto: puesto.nombre,
+      departamento_id: puesto.departamento_id,
+      // Quién valida sus solicitudes lo define el puesto. Si el destino no lo
+      // tiene configurado se conserva el anterior, para no dejarle sin validador.
+      ...(puesto.validador_departamento_id
+        ? { validador_departamento_id: puesto.validador_departamento_id }
+        : {}),
+    })
     .eq("id", input.empleadoId)
     .eq("empresa_id", empresaId);
 
@@ -413,6 +422,47 @@ export interface CondicionesActualesEmpleado {
   horasSemanales: number | null;
   tipoContrato: string | null;
   nivel: number | null;
+  /** Nombre del patrón de horario que tiene vigente hoy. */
+  horarioNombre: string | null;
+  /** Departamento que valida sus solicitudes. */
+  validadorNombre: string | null;
+  /** Nº de tareas del cronograma de su puesto actual (null = sin puesto). */
+  cronogramaTareas: number | null;
+}
+
+/** Nombre del patrón de horario vigente HOY del empleado. */
+async function leerHorarioVigente(
+  admin: Admin,
+  empleadoId: string,
+  empresaId: string,
+): Promise<string | null> {
+  const hoy = new Date().toISOString().slice(0, 10);
+  const { data } = await admin
+    .from("rrhh_patron_empleados")
+    .select("vigente_desde, rrhh_patrones!inner(nombre, empresa_id, activo)")
+    .eq("empleado_id", empleadoId)
+    .eq("rrhh_patrones.empresa_id", empresaId)
+    .eq("rrhh_patrones.activo", true)
+    .lte("vigente_desde", hoy)
+    .or(`vigente_hasta.is.null,vigente_hasta.gte.${hoy}`)
+    .order("vigente_desde", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  return ((data?.rrhh_patrones as { nombre?: string } | null)?.nombre) ?? null;
+}
+
+/** Nº de tareas del cronograma de un puesto (1:1 puesto ↔ cronograma). */
+async function contarTareasCronograma(
+  admin: Admin,
+  puestoId: string,
+  empresaId: string,
+): Promise<number> {
+  const { count } = await admin
+    .from("cronogramas_operativos")
+    .select("id", { count: "exact", head: true })
+    .eq("puesto_id", puestoId)
+    .eq("empresa_id", empresaId);
+  return count ?? 0;
 }
 
 /**
@@ -439,7 +489,7 @@ export async function getCondicionesVigentesEmpleado(
 
   const { data: emp } = await admin
     .from("empleados")
-    .select("puesto, departamentos(nombre)")
+    .select("puesto, validador_departamento_id, departamentos(nombre)")
     .eq("id", empleadoId)
     .eq("empresa_id", empresaId)
     .maybeSingle();
@@ -448,7 +498,7 @@ export async function getCondicionesVigentesEmpleado(
   // —texto legacy— puede estar vacío en empleados antiguos). Fallback al texto.
   const { data: principal } = await admin
     .from("empleado_puestos")
-    .select("puesto_nombre, puestos(nombre)")
+    .select("puesto_id, puesto_nombre, puestos(nombre)")
     .eq("empleado_id", empleadoId)
     .eq("es_principal", true)
     .maybeSingle();
@@ -457,6 +507,22 @@ export async function getCondicionesVigentesEmpleado(
     (principal?.puesto_nombre as string | null) ??
     (emp?.puesto as string | null) ??
     null;
+
+  const puestoActualId = (principal?.puesto_id as string | null) ?? null;
+  const validadorId = (emp?.validador_departamento_id as string | null) ?? null;
+
+  const [horarioNombre, cronogramaTareas, validadorNombre] = await Promise.all([
+    leerHorarioVigente(admin, empleadoId, empresaId),
+    puestoActualId ? contarTareasCronograma(admin, puestoActualId, empresaId) : Promise.resolve(null),
+    validadorId
+      ? admin
+          .from("departamentos")
+          .select("nombre")
+          .eq("id", validadorId)
+          .maybeSingle()
+          .then((r: { data: { nombre?: string } | null }) => r.data?.nombre ?? null)
+      : Promise.resolve(null),
+  ]);
 
   const { data: rows } = await admin
     .from("empleado_condiciones")
@@ -477,8 +543,101 @@ export async function getCondicionesVigentesEmpleado(
       horasSemanales: (cond?.horas_semanales as number | null) ?? null,
       tipoContrato: (cond?.tipo_contrato as string | null) ?? null,
       nivel: (cond?.nivel as number | null) ?? null,
+      horarioNombre,
+      validadorNombre,
+      cronogramaTareas,
     },
   };
+}
+
+/** Lo que el empleado heredará del puesto destino, para la columna «Después». */
+export interface PreviewPuestoDestino {
+  horarioNombre: string | null;
+  validadorNombre: string | null;
+  cronogramaTareas: number;
+}
+
+/**
+ * Lee del puesto destino lo que NO viene en `PuestoSalarial`: nombre del patrón
+ * de horario oficial, departamento validador y nº de tareas de su cronograma.
+ * Alimenta la comparativa «antes → después» antes de aplicar el puesto.
+ */
+export async function getPreviewPuestoDestino(
+  puestoId: string,
+): Promise<{ ok: boolean; data: PreviewPuestoDestino | null }> {
+  const { user, empresaId } = await getActor();
+  if (!user || !empresaId) return { ok: false, data: null };
+  try {
+    await requireAdminUser({ empresaIds: [empresaId] });
+  } catch {
+    return { ok: false, data: null };
+  }
+  let admin: Admin;
+  try {
+    admin = createAdminClient();
+  } catch {
+    return { ok: false, data: null };
+  }
+
+  const { data: puesto } = await admin
+    .from("puestos")
+    .select("validador_departamento_id")
+    .eq("id", puestoId)
+    .eq("empresa_id", empresaId)
+    .maybeSingle();
+  const validadorId = (puesto?.validador_departamento_id as string | null) ?? null;
+
+  const [horarioNombre, cronogramaTareas, validadorNombre] = await Promise.all([
+    leerHorarioOficialPuesto(admin, puestoId, empresaId),
+    contarTareasCronograma(admin, puestoId, empresaId),
+    validadorId
+      ? admin
+          .from("departamentos")
+          .select("nombre")
+          .eq("id", validadorId)
+          .maybeSingle()
+          .then((r: { data: { nombre?: string } | null }) => r.data?.nombre ?? null)
+      : Promise.resolve(null),
+  ]);
+
+  return { ok: true, data: { horarioNombre, validadorNombre, cronogramaTareas } };
+}
+
+/**
+ * Nombre del patrón de horario oficial del puesto: el elegido en Horarios
+ * (familia en `puesto_salarios`) y, si no lo hay, la plantilla legacy propia del
+ * puesto. Mismo orden de resolución que `asignarPlantillaPuestoAEmpleado`.
+ */
+async function leerHorarioOficialPuesto(
+  admin: Admin,
+  puestoId: string,
+  empresaId: string,
+): Promise<string | null> {
+  const { data: salario } = await admin
+    .from("puesto_salarios")
+    .select("patron_familia_id")
+    .eq("puesto_id", puestoId)
+    .maybeSingle();
+
+  const familiaId = (salario?.patron_familia_id as string | null) ?? null;
+  if (familiaId) {
+    const { data } = await admin
+      .from("rrhh_patrones")
+      .select("nombre")
+      .eq("empresa_id", empresaId)
+      .eq("familia_id", familiaId)
+      .eq("es_oficial", true)
+      .maybeSingle();
+    if (data?.nombre) return data.nombre as string;
+  }
+
+  const { data: propio } = await admin
+    .from("rrhh_patrones")
+    .select("nombre")
+    .eq("puesto_id", puestoId)
+    .eq("es_oficial", true)
+    .maybeSingle();
+  return (propio?.nombre as string | null) ?? null;
 }
 
 /** Una fila del histórico de puestos/condiciones del empleado. */

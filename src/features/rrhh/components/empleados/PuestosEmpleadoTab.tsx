@@ -10,20 +10,32 @@ import {
   type CondicionHistorica,
 } from "@/features/rrhh/actions/promocion-interna-actions";
 import { getPuestosDeEmpleado, type PuestoDeEmpleado } from "@/features/rrhh/actions/empleado-puestos-actions";
+import { Button } from "@/components/ui/button";
+import { AsignarPuestoDialog } from "@/features/rrhh/components/empleados/AsignarPuestoDialog";
 import { Briefcase, Loader2, History } from "lucide-react";
 
 /**
- * Pestaña "Puestos" de la ficha del empleado. Solo lectura: muestra el puesto
- * actual con sus condiciones vigentes y el histórico de cambios de puesto.
+ * Pestaña "Puestos" de la ficha del empleado: puesto actual con sus condiciones
+ * vigentes, histórico de cambios y el botón para asignarle otro puesto.
  *
- * El histórico SOLO se modifica desde el módulo Puestos (alta al contratar o
- * cambio de puesto / promoción interna); esta vista únicamente lo refleja.
+ * Asignar un puesto le traspasa todo lo que ese puesto define (salario, jornada,
+ * horario, cronograma, validador) desde la fecha que se indique, previa
+ * comparativa campo por campo. El histórico solo se escribe por esa vía o al
+ * contratar: aquí nunca se edita a mano.
  */
-export function PuestosEmpleadoTab({ empleadoId }: { empleadoId: string }) {
+export function PuestosEmpleadoTab({
+  empleadoId,
+  empleadoNombre = "El empleado",
+}: {
+  empleadoId: string;
+  empleadoNombre?: string;
+}) {
   const [puestos, setPuestos] = useState<PuestoDeEmpleado[]>([]);
   const [actual, setActual] = useState<CondicionesActualesEmpleado | null>(null);
   const [historial, setHistorial] = useState<CondicionHistorica[]>([]);
   const [cargando, setCargando] = useState(true);
+  const [asignarOpen, setAsignarOpen] = useState(false);
+  const [recargar, setRecargar] = useState(0);
 
   useEffect(() => {
     let activo = true;
@@ -44,7 +56,7 @@ export function PuestosEmpleadoTab({ empleadoId }: { empleadoId: string }) {
     return () => {
       activo = false;
     };
-  }, [empleadoId]);
+  }, [empleadoId, recargar]);
 
   if (cargando) {
     return (
@@ -59,11 +71,24 @@ export function PuestosEmpleadoTab({ empleadoId }: { empleadoId: string }) {
 
   return (
     <div className="p-6 space-y-6 max-w-4xl mx-auto">
+      <AsignarPuestoDialog
+        open={asignarOpen}
+        onOpenChange={setAsignarOpen}
+        empleadoId={empleadoId}
+        empleadoNombre={empleadoNombre}
+        onDone={() => setRecargar((n) => n + 1)}
+      />
+
       {/* Puesto actual + condiciones vigentes */}
       <Card className="p-6">
-        <div className="flex items-center gap-2 mb-4">
-          <Briefcase className="h-5 w-5 text-primary" />
-          <h2 className="text-lg font-semibold">Puesto actual</h2>
+        <div className="flex items-center justify-between gap-2 mb-4">
+          <div className="flex items-center gap-2">
+            <Briefcase className="h-5 w-5 text-primary" />
+            <h2 className="text-lg font-semibold">Puesto actual</h2>
+          </div>
+          <Button size="sm" onClick={() => setAsignarOpen(true)}>
+            {principal ? "Cambiar de puesto" : "Asignar puesto"}
+          </Button>
         </div>
 
         {principal ? (

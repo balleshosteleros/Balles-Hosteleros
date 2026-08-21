@@ -40,7 +40,9 @@ import {
   promocionarEmpleado,
   getCondicionesVigentesEmpleado,
   getPuestosPrincipalesEmpleados,
+  getPreviewPuestoDestino,
   type CondicionesActualesEmpleado,
+  type PreviewPuestoDestino,
 } from "@/features/rrhh/actions/promocion-interna-actions";
 
 function fmtEur(n: number | null | undefined): string {
@@ -71,6 +73,9 @@ export function PromocionInternaDialog({
 
   const [empleadoId, setEmpleadoId] = useState<string>("");
   const [actuales, setActuales] = useState<CondicionesActualesEmpleado | null>(null);
+  // Lo que hereda del puesto destino y no viene en `PuestoSalarial`: horario,
+  // validador y nº de tareas del cronograma.
+  const [destino, setDestino] = useState<PreviewPuestoDestino | null>(null);
   const [puestoId, setPuestoId] = useState<string>("");
   const [primerDia, setPrimerDia] = useState<string>(hoyIso());
   const [enviarAnexo, setEnviarAnexo] = useState(true);
@@ -82,6 +87,7 @@ export function PromocionInternaDialog({
     // Reset al abrir.
     setEmpleadoId("");
     setActuales(null);
+    setDestino(null);
     setPuestoId("");
     setPrimerDia(hoyIso());
     setEnviarAnexo(true);
@@ -119,6 +125,26 @@ export function PromocionInternaDialog({
     () => puestos.find((p) => p.id === puestoId) ?? null,
     [puestos, puestoId],
   );
+
+  // Al elegir puesto destino, cargamos lo que heredará y no está en el catálogo.
+  useEffect(() => {
+    if (!puestoId) {
+      setDestino(null);
+      return;
+    }
+    let vigente = true;
+    setDestino(null);
+    getPreviewPuestoDestino(puestoId)
+      .then((r) => {
+        if (vigente) setDestino(r.ok ? r.data : null);
+      })
+      .catch(() => {
+        if (vigente) setDestino(null);
+      });
+    return () => {
+      vigente = false;
+    };
+  }, [puestoId]);
 
   // Un puesto solo es DESTINO válido de promoción si tiene TODAS las condiciones
   // esenciales rellenas (salario, jornada, horas y tipo de contrato). Devuelve la
@@ -291,6 +317,33 @@ export function PromocionInternaDialog({
                   antes: actuales?.tipoContrato || "—",
                   despues: puesto.tipoContratoDefecto || actuales?.tipoContrato || "—",
                 },
+                {
+                  campo: "Horario",
+                  antes: actuales?.horarioNombre || "Sin horario",
+                  despues: destino
+                    ? destino.horarioNombre || "Sin horario"
+                    : "…",
+                },
+                {
+                  campo: "Cronograma",
+                  // El cronograma es 1:1 con el puesto: cambia entero al cambiar de puesto.
+                  antes: actuales?.puesto
+                    ? `Cronograma de ${actuales.puesto}${
+                        actuales.cronogramaTareas != null ? ` (${actuales.cronogramaTareas} tareas)` : ""
+                      }`
+                    : "Sin cronograma",
+                  despues: destino
+                    ? `Cronograma de ${puesto.puesto} (${destino.cronogramaTareas} tareas)`
+                    : "…",
+                },
+                {
+                  campo: "Valida sus solicitudes",
+                  antes: actuales?.validadorNombre || "—",
+                  // Si el puesto destino no define validador, se conserva el actual.
+                  despues: destino
+                    ? destino.validadorNombre || actuales?.validadorNombre || "—"
+                    : "…",
+                },
               ].map((fila) => {
                 const cambia = String(fila.antes) !== String(fila.despues);
                 return (
@@ -308,7 +361,8 @@ export function PromocionInternaDialog({
               })}
               <p className="border-t border-border bg-muted/20 px-3 py-2 text-[11px] text-muted-foreground">
                 El salario actual se muestra en neto (lo guardado) y el nuevo en bruto del puesto. Al confirmar se copian
-                las condiciones del nuevo puesto y se archiva el histórico anterior.
+                las condiciones del nuevo puesto y se archiva el histórico anterior. El horario antiguo se cierra el día
+                antes, así que desde el primer día solo rige el nuevo. Las tareas del puesto anterior dejan de aparecerle.
               </p>
             </div>
           )}
