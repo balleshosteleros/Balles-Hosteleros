@@ -76,6 +76,8 @@ type FilaEntrega = {
   devolucion_estado: string | null;
   devolucion_firma_id: string | null;
   devuelta_en: string | null;
+  merma_motivo: string | null;
+  merma_en: string | null;
 };
 
 function mapItem(r: FilaItem): EntregaItem {
@@ -103,7 +105,7 @@ async function cargarEntregas(filtro: { empleadoId?: string } = {}): Promise<Ent
   let query = db
     .from("entregas_material")
     .select(
-      "id, empleado_id, fecha, nota, estado, firma_id, firmada_en, entregado_por_nombre, devolucion_estado, devolucion_firma_id, devuelta_en",
+      "id, empleado_id, fecha, nota, estado, firma_id, firmada_en, entregado_por_nombre, devolucion_estado, devolucion_firma_id, devuelta_en, merma_motivo, merma_en",
     )
     .eq("empresa_id", empresaId);
   if (filtro.empleadoId) query = query.eq("empleado_id", filtro.empleadoId);
@@ -156,6 +158,8 @@ async function cargarEntregas(filtro: { empleadoId?: string } = {}): Promise<Ent
     entregadoPorNombre: f.entregado_por_nombre,
     item: porEntrega.get(f.id) ?? null,
     devolucionEstado: (f.devolucion_estado ?? "no_procede") as EstadoDevolucion,
+    mermaMotivo: f.merma_motivo,
+    mermaEn: f.merma_en,
     devolucionFirmaId: f.devolucion_firma_id,
     devueltaEn: f.devuelta_en,
   }));
@@ -429,8 +433,79 @@ export async function actualizarNotaEntrega(entregaId: string, nota: string | nu
 }
 
 /**
- * Cancela una devolución pedida por error, mientras el trabajador no la haya
- * firmado. La pieza vuelve a contar como suya.
+ * Da de baja la pieza por deterioro: le manda al trabajador un acta donde consta
+ * que se ha roto o desgastado y que se autoriza su retirada.
+ *
+ * No es una devolución fallida: es el otro final posible del ciclo. Al firmarla,
+ * la pieza deja de contar como material suyo y no se le puede reclamar.
+ */
+export async function darDeBajaPorMerma(entregaId: string, motivo: string) {
+  try {
+    const { supabase, empresaId, userId } = await getAppContext();
+    if (!empresaId || !userId) return { ok: false as const, error: "No autenticado" };
+    const db = supabase as unknown as Awaited<ReturnType<typeof createClient>>;
+
+    const motivoLimpio = motivo?.trim() ?? "";
+    if (!motivoLimpio) {
+      return { ok: false as const, error: "Explica por qué se da de baja" };
+    }
+
+    const { data: actual } = await db
+      .from("entregas_material")
+      .select("estado, devolucion_estado")
+      .eq("id", entregaId)
+      .eq("empresa_id", empresaId)
+      .maybeSingle();
+    if (!actual) return { ok: false as const, error: "La entrega ya no existe" };
+
+    const row = actual as { estado: string; devolucion_estado: string | null };
+    // Sin acta de entrega firmada no hay nada que dar de baja: el trabajador
+    // nunca reconoció haberlo recibido.
+    if (row.estado !== "firmada") {
+      return {
+        ok: false as const,
+        error: "El trabajador todavía no ha firmado que lo recibió",
+      };
+    }
+    if (row.devolucion_estado === "devuelta") {
+      return { ok: false as const, error: "Esta entrega ya está devuelta" };
+    }
+    if (row.devolucion_estado === "merma") {
+      return { ok: false as const, error: "Esta entrega ya está dada de baja" };
+    }
+
+    const solicitanteNombre = await nombreUsuarioActual(db, userId);
+    const firma = await enviarActaEntregaAFirma({
+      variante: "merma",
+      entregaId,
+      empresaId,
+      solicitanteUserId: userId,
+      solicitanteNombre,
+      motivoMerma: motivoLimpio,
+    });
+    if (!firma.ok) return { ok: false as const, error: firma.error };
+
+    await db
+      .from("entregas_material")
+      .update({
+        devolucion_estado: "merma_pendiente_firma",
+        devolucion_firma_id: firma.documentoId,
+        devolucion_solicitada_en: new Date().toISOString(),
+        merma_motivo: motivoLimpio,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", entregaId);
+
+    revalidatePath("/rrhh/entregas");
+    return { ok: true as const };
+  } catch (err) {
+    return { ok: false as const, error: mensajeError(err) };
+  }
+}
+
+/**
+ * Cancela una devolución o una merma pedida por error, mientras el trabajador no
+ * la haya firmado. La pieza vuelve a contar como suya.
  *
  * No existe un "marcar como devuelto" a mano: la devolución la acredita la firma
  * del trabajador, no la palabra de la empresa. Para eso está `pedirDevolucion`.
@@ -448,10 +523,18 @@ export async function cancelarDevolucion(entregaId: string) {
       .eq("empresa_id", empresaId)
       .maybeSingle();
     if (!actual) return { ok: false as const, error: "La entrega ya no existe" };
-    if ((actual as { devolucion_estado: string | null }).devolucion_estado === "devuelta") {
+
+    const estadoActual = (actual as { devolucion_estado: string | null }).devolucion_estado;
+    if (estadoActual === "devuelta") {
       return {
         ok: false as const,
         error: "El trabajador ya ha firmado la devolución y no se puede deshacer",
+      };
+    }
+    if (estadoActual === "merma") {
+      return {
+        ok: false as const,
+        error: "El trabajador ya ha firmado la baja por deterioro y no se puede deshacer",
       };
     }
 
@@ -461,6 +544,8 @@ export async function cancelarDevolucion(entregaId: string) {
         devolucion_estado: "no_procede",
         devolucion_firma_id: null,
         devolucion_solicitada_en: null,
+        // Si lo cancelado era una merma, su motivo deja de tener sentido.
+        merma_motivo: null,
         updated_at: new Date().toISOString(),
       })
       .eq("id", entregaId)

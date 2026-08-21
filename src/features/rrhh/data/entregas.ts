@@ -19,11 +19,21 @@ export type CategoriaMaterial = "uniforme" | "material";
 export type EstadoEntrega = "borrador" | "pendiente_firma" | "firmada" | "rechazada";
 
 /**
- * Devolucion de la pieza. `no_procede` cubre dos casos que en pantalla se leen
+ * Desenlace de la pieza. `no_procede` cubre dos casos que en pantalla se leen
  * igual (no hay nada que devolver): la pieza no requiere devolucion, o aun no
  * se ha pedido.
+ *
+ * La MERMA vive aqui y no en un campo aparte porque es el mismo desenlace —la
+ * pieza deja de estar en manos del trabajador—: cambia el motivo (la devolvio /
+ * se le rompio), no el hecho.
  */
-export type EstadoDevolucion = "no_procede" | "pendiente_firma" | "devuelta" | "rechazada";
+export type EstadoDevolucion =
+  | "no_procede"
+  | "pendiente_firma"
+  | "devuelta"
+  | "rechazada"
+  | "merma_pendiente_firma"
+  | "merma";
 
 export const CATEGORIA_LABEL: Record<CategoriaMaterial, string> = {
   uniforme: "Uniforme",
@@ -49,6 +59,8 @@ export const DEVOLUCION_LABEL: Record<EstadoDevolucion, string> = {
   pendiente_firma: "Devolución pendiente de firma",
   devuelta: "Devuelta",
   rechazada: "Devolución rechazada",
+  merma_pendiente_firma: "Merma pendiente de firma",
+  merma: "Merma",
 };
 
 export const DEVOLUCION_COLOR: Record<EstadoDevolucion, string> = {
@@ -56,6 +68,9 @@ export const DEVOLUCION_COLOR: Record<EstadoDevolucion, string> = {
   pendiente_firma: "bg-amber-50 text-amber-700 border-amber-200",
   devuelta: "bg-emerald-50 text-emerald-700 border-emerald-200",
   rechazada: "bg-rose-50 text-rose-700 border-rose-200",
+  merma_pendiente_firma: "bg-amber-50 text-amber-700 border-amber-200",
+  // La merma no es un fallo ni un logro: es material dado de baja.
+  merma: "bg-slate-100 text-slate-700 border-slate-300",
 };
 
 /** Tallas de ropa. Las de calzado se escriben a mano (numero). */
@@ -104,6 +119,10 @@ export interface Entrega {
   devolucionEstado: EstadoDevolucion;
   devolucionFirmaId: string | null;
   devueltaEn: string | null;
+  /** Por que se dio de baja la pieza. Solo en las mermas. */
+  mermaMotivo: string | null;
+  /** Cuando firmo el trabajador la baja por deterioro. */
+  mermaEn: string | null;
 }
 
 /**
@@ -130,8 +149,9 @@ export function resumirMaterial(entregas: Entrega[]): ResumenMaterial[] {
   for (const entrega of entregas) {
     // Solo cuenta lo que el trabajador ha reconocido como recibido.
     if (entrega.estado !== "firmada") continue;
-    // Y lo que sigue teniendo: si ya lo devolvio, deja de ser suyo.
+    // Y lo que sigue teniendo: devuelto o dado de baja por deterioro, deja de serlo.
     if (entrega.devolucionEstado === "devuelta") continue;
+    if (entrega.devolucionEstado === "merma") continue;
 
     const item = entrega.item;
     if (!item) continue;
@@ -179,6 +199,20 @@ export function sePuedePedirDevolucion(entrega: Entrega): boolean {
 }
 
 /**
+ * Se puede dar de baja por deterioro lo que el trabajador tiene y aun no ha
+ * devuelto. No exige `requiereDevolucion`: una pieza puede romperse aunque no
+ * hubiera que devolverla, y aun asi conviene dejar constancia de la baja.
+ */
+export function sePuedeDarDeBajaPorMerma(entrega: Entrega): boolean {
+  return (
+    entrega.estado === "firmada" &&
+    entrega.devolucionEstado !== "devuelta" &&
+    entrega.devolucionEstado !== "merma" &&
+    entrega.devolucionEstado !== "merma_pendiente_firma"
+  );
+}
+
+/**
  * Entregas que el trabajador tiene y aun no ha devuelto (para el offboarding).
  * Cuenta tambien las que estan pendientes de firmar la devolucion: pedirsela no
  * es lo mismo que haberla recibido.
@@ -188,6 +222,8 @@ export function pendientesDeDevolucion(entregas: Entrega[]): Entrega[] {
     (e) =>
       e.estado === "firmada" &&
       Boolean(e.item?.requiereDevolucion) &&
-      e.devolucionEstado !== "devuelta",
+      e.devolucionEstado !== "devuelta" &&
+      // Lo dado de baja por deterioro ya no se le puede reclamar.
+      e.devolucionEstado !== "merma",
   );
 }

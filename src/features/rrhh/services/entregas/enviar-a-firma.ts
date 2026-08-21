@@ -41,6 +41,8 @@ interface EnviarActaInput {
   /** Quién lo solicita (RRHH). Va en `enviado_por` de la firma. */
   solicitanteUserId: string;
   solicitanteNombre: string;
+  /** Solo para la MERMA: por qué se da de baja la pieza. */
+  motivoMerma?: string | null;
 }
 
 /**
@@ -124,6 +126,7 @@ export async function enviarActaEntregaAFirma(
 
     // ─── El acta ────────────────────────────────────────────────
     const esEntrega = input.variante === "entrega";
+    const esMerma = input.variante === "merma";
     const acta = await generarActaEntregaPDF({
       variante: input.variante,
       empleadoNombre,
@@ -131,13 +134,14 @@ export async function enviarActaEntregaAFirma(
       empresaNombre,
       empresaCif,
       ciudad,
-      // La entrega se fecha el día que se entregó; la devolución, hoy.
+      // La entrega se fecha el día que se entregó; devolución y merma, hoy.
       fecha: formatFechaEs(esEntrega ? e.fecha : new Date().toISOString()),
       tipoNombre: it.tipo_nombre,
       categoria: it.categoria === "uniforme" ? "uniforme" : "material",
       talla: it.talla,
       requiereDevolucion: Boolean(it.requiere_devolucion),
       nota: e.nota,
+      motivoMerma: input.motivoMerma ?? null,
     });
 
     const titulo = tituloActa(input.variante, it.tipo_nombre);
@@ -147,14 +151,24 @@ export async function enviarActaEntregaAFirma(
       empleadoId: emp.id,
       pdf: acta.buffer,
       titulo,
-      tipo: esEntrega ? "entrega_material" : "devolucion_material",
+      tipo: esEntrega
+        ? "entrega_material"
+        : esMerma
+          ? "merma_material"
+          : "devolucion_material",
       // Doble factor, igual que el contrato: código por email + trazo manuscrito.
       modalidad: "manuscrita_digital",
       validez: "eidas_simple",
       plazoDias: 14,
-      observaciones: esEntrega
-        ? `Entrega de ${it.tipo_nombre}${it.talla ? ` (talla ${it.talla})` : ""}.`
-        : `Devolución de ${it.tipo_nombre}${it.talla ? ` (talla ${it.talla})` : ""}.`,
+      observaciones: (() => {
+        const pieza = `${it.tipo_nombre}${it.talla ? ` (talla ${it.talla})` : ""}`;
+        if (esEntrega) return `Entrega de ${pieza}.`;
+        if (esMerma) {
+          const motivo = input.motivoMerma?.trim();
+          return `Baja por deterioro de ${pieza}.${motivo ? ` Motivo: ${motivo}` : ""}`;
+        }
+        return `Devolución de ${pieza}.`;
+      })(),
       enviadoPorUserId: input.solicitanteUserId,
       enviadoPorNombre: input.solicitanteNombre || empresaNombre,
       // Documento personal: a su correo, no al corporativo (que pierde al salir).

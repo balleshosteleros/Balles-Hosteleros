@@ -1,8 +1,10 @@
 /**
- * Generador de las dos actas del ciclo de vida de una entrega de material:
+ * Generador de las tres actas del ciclo de vida de una entrega de material:
  *
  *   - ENTREGA:    el trabajador reconoce que ha recibido la pieza.
  *   - DEVOLUCIÓN: el trabajador y la empresa dejan constancia de que la ha devuelto.
+ *   - MERMA:      la pieza se ha roto o desgastado y no puede devolverse, así que
+ *                 se da de baja con el motivo y el trabajador lo firma.
  *
  * Son el mismo documento con distinto verbo, así que comparten generador: cambia
  * el título, el párrafo del cuerpo y —solo en la entrega— la advertencia de que
@@ -19,7 +21,7 @@
 import "server-only";
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 
-export type ActaEntregaVariante = "entrega" | "devolucion";
+export type ActaEntregaVariante = "entrega" | "devolucion" | "merma";
 
 export interface ActaEntregaInput {
   variante: ActaEntregaVariante;
@@ -37,6 +39,8 @@ export interface ActaEntregaInput {
   /** Solo informa en el acta de ENTREGA: hay que devolverlo al salir. */
   requiereDevolucion: boolean;
   nota: string | null;
+  /** Solo en el acta de MERMA: por qué se da de baja la pieza. */
+  motivoMerma?: string | null;
 }
 
 /** Dónde estampar la firma manuscrita, calculado por el propio generador. */
@@ -65,9 +69,9 @@ type Seg = { t: string; bold?: boolean };
 
 /** Título del documento, también usado como `titulo` de la firma. */
 export function tituloActa(variante: ActaEntregaVariante, tipoNombre: string): string {
-  return variante === "entrega"
-    ? `Entrega de ${tipoNombre}`
-    : `Devolución de ${tipoNombre}`;
+  if (variante === "entrega") return `Entrega de ${tipoNombre}`;
+  if (variante === "merma") return `Baja por deterioro de ${tipoNombre}`;
+  return `Devolución de ${tipoNombre}`;
 }
 
 export async function generarActaEntregaPDF(
@@ -108,11 +112,14 @@ export async function generarActaEntregaPDF(
   }
 
   const esEntrega = input.variante === "entrega";
+  const esMerma = input.variante === "merma";
 
   // ─── Título ───────────────────────────────────────────────────
   const titulo = esEntrega
     ? "ACTA DE ENTREGA DE MATERIAL"
-    : "ACTA DE DEVOLUCIÓN DE MATERIAL";
+    : esMerma
+      ? "ACTA DE BAJA POR DETERIORO"
+      : "ACTA DE DEVOLUCIÓN DE MATERIAL";
   page.drawText(titulo, { x: MARGIN_X, y, size: 15, font: fontBold });
   y -= LINE_HEIGHT * 2;
 
@@ -140,6 +147,16 @@ export async function generarActaEntregaPDF(
       { t: "recibido de", bold: true },
       { t: ` ${empresaConCif} el material que se detalla a continuación, en buen estado y para su uso durante mi relación laboral.` },
     ], LINE_HEIGHT * 2);
+  } else if (esMerma) {
+    drawParagraph([
+      { t: "Yo, " },
+      { t: input.empleadoNombre, bold: true },
+      { t: input.empleadoDni ? ` (con DNI/NIE ${input.empleadoDni})` : "" },
+      { t: ", hago constar que el material que se detalla a continuación, entregado por " },
+      { t: `${empresaConCif}, ` },
+      { t: "no puede ser devuelto por encontrarse deteriorado", bold: true },
+      { t: " a consecuencia del uso y desgaste propios de mi actividad laboral." },
+    ], LINE_HEIGHT * 2);
   } else {
     drawParagraph([
       { t: "Yo, " },
@@ -165,6 +182,22 @@ export async function generarActaEntregaPDF(
     drawParagraph([
       { t: "Observaciones: ", bold: true },
       { t: input.nota },
+    ], LINE_HEIGHT * 2);
+  }
+
+  // Solo en la merma: el motivo concreto y el efecto de la baja.
+  if (esMerma) {
+    if (input.motivoMerma?.trim()) {
+      drawParagraph([
+        { t: "Motivo del deterioro: ", bold: true },
+        { t: input.motivoMerma.trim() },
+      ], LINE_HEIGHT * 2);
+    }
+    drawParagraph([
+      {
+        t: "En consecuencia, se autoriza su retirada y eliminación, causando baja en el inventario de material asignado y quedando saldada mi responsabilidad sobre el mismo, sin que proceda su devolución ni cargo alguno por este concepto.",
+        bold: true,
+      },
     ], LINE_HEIGHT * 2);
   }
 

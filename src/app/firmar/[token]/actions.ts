@@ -819,13 +819,19 @@ export async function firmarDocumento(input: FirmarDocumentoInput): Promise<Firm
       }
     }
 
-    // ENTREGAS DE MATERIAL. Las dos actas del ciclo (recibirlo y devolverlo)
-    // cierran su entrega al firmarse: hasta que el trabajador no firma, la pieza
-    // no cuenta como suya ni como devuelta.
+    // ENTREGAS DE MATERIAL. Las tres actas del ciclo (recibirlo, devolverlo o
+    // darlo de baja por deterioro) cierran su entrega al firmarse: hasta que el
+    // trabajador no firma, la pieza no cuenta como suya, ni como devuelta, ni
+    // como dada de baja.
     const tipoDoc = doc.tipo as string;
-    if (tipoDoc === "entrega_material" || tipoDoc === "devolucion_material") {
+    if (
+      tipoDoc === "entrega_material" ||
+      tipoDoc === "devolucion_material" ||
+      tipoDoc === "merma_material"
+    ) {
       try {
         const esEntrega = tipoDoc === "entrega_material";
+        const esMerma = tipoDoc === "merma_material";
         const ahora = new Date().toISOString();
         const columnaFirma = esEntrega ? "firma_id" : "devolucion_firma_id";
 
@@ -837,17 +843,16 @@ export async function firmarDocumento(input: FirmarDocumentoInput): Promise<Firm
 
         const entregaId = (entrega as { id: string } | null)?.id;
         if (entregaId) {
-          await admin
-            .from("entregas_material")
-            .update(
-              esEntrega
-                ? { estado: "firmada", firmada_en: ahora, updated_at: ahora }
-                : { devolucion_estado: "devuelta", devuelta_en: ahora, updated_at: ahora },
-            )
-            .eq("id", entregaId);
+          const patch = esEntrega
+            ? { estado: "firmada", firmada_en: ahora, updated_at: ahora }
+            : esMerma
+              ? { devolucion_estado: "merma", merma_en: ahora, updated_at: ahora }
+              : { devolucion_estado: "devuelta", devuelta_en: ahora, updated_at: ahora };
 
-          // La pieza también se marca devuelta, que es lo que leen la ficha y el
-          // portal para tacharla.
+          await admin.from("entregas_material").update(patch).eq("id", entregaId);
+
+          // La pieza sale de sus manos tanto si la devuelve como si se da de
+          // baja: es lo que leen la ficha y el portal para tacharla.
           if (!esEntrega) {
             await admin
               .from("entregas_material_items")
@@ -955,7 +960,11 @@ export async function rechazarDocumento(
     // reflejarlo: si no, se quedaría "pendiente de firma" para siempre y RRHH no
     // sabría que hay una discrepancia que resolver.
     const tipoDoc = doc.tipo as string;
-    if (tipoDoc === "entrega_material" || tipoDoc === "devolucion_material") {
+    if (
+      tipoDoc === "entrega_material" ||
+      tipoDoc === "devolucion_material" ||
+      tipoDoc === "merma_material"
+    ) {
       try {
         const esEntrega = tipoDoc === "entrega_material";
         const columnaFirma = esEntrega ? "firma_id" : "devolucion_firma_id";
@@ -966,6 +975,8 @@ export async function rechazarDocumento(
           .maybeSingle();
         const entregaId = (entrega as { id: string } | null)?.id;
         if (entregaId) {
+          // Rechazar una merma la devuelve al mismo sitio que rechazar una
+          // devolución: RRHH tiene que resolver la discrepancia con el trabajador.
           await admin
             .from("entregas_material")
             .update(

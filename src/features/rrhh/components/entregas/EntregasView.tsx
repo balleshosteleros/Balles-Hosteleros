@@ -9,7 +9,7 @@ import {
 } from "@/components/ui/table";
 import {
   ArrowLeft, Settings, PackageCheck, Shirt, Package, Trash2, Loader2,
-  AlertTriangle, CheckCircle2, RotateCcw, Mail, Undo2,
+  AlertTriangle, CheckCircle2, RotateCcw, Mail, Undo2, PackageX,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -36,8 +36,10 @@ import {
   DEVOLUCION_LABEL,
   DEVOLUCION_COLOR,
   sePuedePedirDevolucion,
+  sePuedeDarDeBajaPorMerma,
   type Entrega,
 } from "@/features/rrhh/data/entregas";
+import { MermaDialog } from "./MermaDialog";
 import { TiposMaterialConfig } from "./TiposMaterialConfig";
 import { NuevaEntregaDialog } from "./NuevaEntregaDialog";
 
@@ -80,6 +82,8 @@ export function EntregasView() {
   const [orden, setOrden] = useState<ToolbarOrdenActivo | null>(null);
   /** Id de la entrega cuya acción está en curso, para no repetir el clic. */
   const [accionando, setAccionando] = useState<string | null>(null);
+  /** Entrega que se está dando de baja por deterioro. Null = diálogo cerrado. */
+  const [mermaDe, setMermaDe] = useState<Entrega | null>(null);
   const { confirm, dialog } = useConfirmDelete();
   useGlobalLoadingSync(loading);
 
@@ -252,7 +256,8 @@ export function EntregasView() {
               <TableRow>
                 <TableHead>Trabajador</TableHead>
                 <TableHead>Qué se entregó</TableHead>
-                <TableHead>Fecha</TableHead>
+                <TableHead>Entregado</TableHead>
+                <TableHead>Devuelto</TableHead>
                 <TableHead>Estado</TableHead>
                 <TableHead>Devolución</TableHead>
                 <TableHead className="text-right">Acciones</TableHead>
@@ -297,6 +302,15 @@ export function EntregasView() {
 
                   <TableCell className="text-sm align-top whitespace-nowrap">{fmt(e.fecha)}</TableCell>
 
+                  {/* Cuándo salió de sus manos: la firmó devuelta, o dada de baja. */}
+                  <TableCell className="text-sm align-top whitespace-nowrap">
+                    {e.devueltaEn || e.mermaEn ? (
+                      fmt(e.devueltaEn ?? e.mermaEn)
+                    ) : (
+                      <span className="text-muted-foreground">—</span>
+                    )}
+                  </TableCell>
+
                   <TableCell className="align-top">
                     <Badge variant="outline" className={ESTADO_COLOR[e.estado]}>
                       {ESTADO_LABEL[e.estado]}
@@ -315,16 +329,10 @@ export function EntregasView() {
                         Sin devolver
                       </Badge>
                     ) : (
-                      <div className="space-y-1">
-                        <Badge variant="outline" className={DEVOLUCION_COLOR[e.devolucionEstado]}>
-                          {DEVOLUCION_LABEL[e.devolucionEstado]}
-                        </Badge>
-                        {e.devueltaEn && (
-                          <p className="text-xs text-muted-foreground whitespace-nowrap">
-                            {fmt(e.devueltaEn)}
-                          </p>
-                        )}
-                      </div>
+                      // La fecha vive en su propia columna: aquí solo el estado.
+                      <Badge variant="outline" className={DEVOLUCION_COLOR[e.devolucionEstado]}>
+                        {DEVOLUCION_LABEL[e.devolucionEstado]}
+                      </Badge>
                     )}
                   </TableCell>
 
@@ -364,8 +372,24 @@ export function EntregasView() {
                         </Button>
                       )}
 
-                      {/* Deshacer una devolución pedida por error. */}
-                      {e.devolucionEstado === "pendiente_firma" && (
+                      {/* Baja por deterioro: lo que se rompe no se devuelve. */}
+                      {sePuedeDarDeBajaPorMerma(e) && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-8 px-2 text-xs text-muted-foreground"
+                          disabled={accionando === e.id}
+                          onClick={() => setMermaDe(e)}
+                          title="Dar de baja por rotura o desgaste"
+                        >
+                          <PackageX className="h-3.5 w-3.5 mr-1" />
+                          Merma
+                        </Button>
+                      )}
+
+                      {/* Deshacer una devolución o merma pedida por error. */}
+                      {(e.devolucionEstado === "pendiente_firma" ||
+                        e.devolucionEstado === "merma_pendiente_firma") && (
                         <Button
                           size="sm"
                           variant="ghost"
@@ -401,6 +425,12 @@ export function EntregasView() {
         open={dialogOpen}
         onOpenChange={setDialogOpen}
         onCreada={() => void cargar()}
+      />
+
+      <MermaDialog
+        entrega={mermaDe}
+        onOpenChange={(abierto) => { if (!abierto) setMermaDe(null); }}
+        onHecho={() => { setMermaDe(null); void cargar(); }}
       />
     </div>
   );
