@@ -75,16 +75,17 @@ export async function geminiJSON<T = unknown>(
 
   const modelo = opts.model || DEFAULT_MODEL;
   const genAI = new GoogleGenerativeAI(key);
-  const model = genAI.getGenerativeModel({
-    model: modelo,
-    systemInstruction: opts.systemInstruction,
-    generationConfig: {
-      responseMimeType: "application/json",
-      responseSchema: opts.responseSchema,
-      temperature: opts.temperature ?? 0.5,
-      ...(opts.maxOutputTokens ? { maxOutputTokens: opts.maxOutputTokens } : {}),
-    },
-  });
+  const crearModelo = (id: string) =>
+    genAI.getGenerativeModel({
+      model: id,
+      systemInstruction: opts.systemInstruction,
+      generationConfig: {
+        responseMimeType: "application/json",
+        responseSchema: opts.responseSchema,
+        temperature: opts.temperature ?? 0.5,
+        ...(opts.maxOutputTokens ? { maxOutputTokens: opts.maxOutputTokens } : {}),
+      },
+    });
 
   const hasAttachments = opts.attachments && opts.attachments.length > 0;
   const request = hasAttachments
@@ -105,15 +106,27 @@ export async function geminiJSON<T = unknown>(
 
   // A veces (sobre todo con imágenes) el modelo entra en bucle y devuelve un JSON
   // truncado o vacío pese al responseSchema. Es transitorio: el mismo input suele
-  // salir bien al reintentar, así que se reintenta UNA vez aquí antes de rendirse.
-  const MAX_INTENTOS = 2;
-  for (let intento = 1; intento <= MAX_INTENTOS; intento++) {
+  // salir bien al reintentar. Escalera: 2 intentos con el modelo primario y, si
+  // ambos fallan, 1 intento con un modelo más potente de respaldo (Pro sufre mucho
+  // menos ese bucle). El respaldo solo se paga cuando el primario falla dos veces.
+  const respaldo = process.env.GEMINI_MODEL_FALLBACK?.trim() || "gemini-2.5-pro";
+  const escalera = [modelo, modelo];
+  if (respaldo && respaldo !== modelo) escalera.push(respaldo);
+
+  for (let intento = 1; intento <= escalera.length; intento++) {
+    const modeloIntento = escalera[intento - 1];
     let result;
     try {
-      result = await model.generateContent(request);
+      result = await crearModelo(modeloIntento).generateContent(request);
     } catch (err) {
       // El volcado crudo del SDK (URL, JSON de violations…) no debe llegar al usuario.
       if (esErrorDeCuota(err)) throw new GeminiQuotaError();
+      // Error de red/API transitorio: si quedan peldaños en la escalera, seguir.
+      if (intento < escalera.length) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error(`[gemini] fallo de llamada (intento ${intento}/${escalera.length}, modelo=${modeloIntento}):`, msg);
+        continue;
+      }
       throw err;
     }
     const text = result.response.text();
@@ -125,13 +138,13 @@ export async function geminiJSON<T = unknown>(
         data,
         tokensInput: usage?.promptTokenCount ?? null,
         tokensOutput: usage?.candidatesTokenCount ?? null,
-        modelo,
+        modelo: modeloIntento,
       };
     } catch {
       const finishReason = result.response.candidates?.[0]?.finishReason ?? "desconocido";
       // Solo el inicio: un output degenerado puede ocupar cientos de KB.
       console.error(
-        `[gemini] JSON inválido (intento ${intento}/${MAX_INTENTOS}, finishReason=${finishReason}, ${text.length} chars). Inicio:`,
+        `[gemini] JSON inválido (intento ${intento}/${escalera.length}, modelo=${modeloIntento}, finishReason=${finishReason}, ${text.length} chars). Inicio:`,
         text.slice(0, 300),
       );
     }
