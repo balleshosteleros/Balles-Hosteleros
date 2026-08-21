@@ -14,10 +14,8 @@ import {
   Home,
   Banknote,
   Heart,
-  Shirt,
 } from "lucide-react";
 
-const TALLAS = ["XS", "S", "M", "L", "XL", "XXL", "XXXL"] as const;
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -642,40 +640,12 @@ export const DatosPersonalesForm = forwardRef<DatosPersonalesFormHandle, Props>(
         </Grid>
       </Section>
 
-      <Section title="Uniforme" icon={<Shirt className="h-4 w-4" />}>
-        <Grid>
-          <Field label="Talla de camiseta">
-            <Select
-              value={form.talla_camiseta || undefined}
-              onValueChange={(v) => update("talla_camiseta", v)}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Talla" />
-              </SelectTrigger>
-              <SelectContent>
-                {TALLAS.map((t) => (
-                  <SelectItem key={t} value={t}>{t}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </Field>
-          <Field label="Talla de pantalón">
-            <Select
-              value={form.talla_pantalon || undefined}
-              onValueChange={(v) => update("talla_pantalon", v)}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Talla" />
-              </SelectTrigger>
-              <SelectContent>
-                {TALLAS.map((t) => (
-                  <SelectItem key={t} value={t}>{t}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </Field>
-        </Grid>
-      </Section>
+      {/*
+        La sección "Uniforme" (talla de camiseta y pantalón) se quitó de aquí: la
+        talla se elige AL ENTREGAR cada prenda, en el submódulo Entregas, que es
+        donde consta qué talla se le dio realmente. Una talla suelta en la ficha
+        se quedaba desactualizada y no coincidía con lo entregado.
+      */}
       </fieldset>
 
       {!readOnly && !hideSaveButton && (
