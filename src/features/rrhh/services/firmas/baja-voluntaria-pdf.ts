@@ -11,6 +11,7 @@
 
 import "server-only";
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
+import { dibujarCabecera, type MarcaEmpresa } from "@/lib/pdf/cabecera-documento";
 
 export interface CartaBajaVoluntariaInput {
   empleadoNombre: string;
@@ -22,6 +23,8 @@ export interface CartaBajaVoluntariaInput {
   fechaBaja: string; // dd/mm/yyyy
   diasPreaviso: number;
   motivo: string | null;
+  /** Logo de la empresa para la cabecera (Ajustes → Imagen de marca). */
+  marca?: MarcaEmpresa | null;
 }
 
 const PAGE_W = 595.28; // A4
@@ -98,6 +101,19 @@ export async function generarCartaBajaVoluntariaPDF(
     }
     y -= gapAfter;
   }
+
+  // ─── Cabecera común: logo de la empresa centrado + título ─────
+  y = await dibujarCabecera({
+    pdf,
+    page,
+    pageW: PAGE_W,
+    pageH: PAGE_H,
+    marginX: MARGIN_X,
+    titulo: "CARTA DE BAJA VOLUNTARIA",
+    fontBold,
+    font,
+    marca: input.marca ?? null,
+  });
 
   // ─── Encabezado: ciudad y fecha (alineado a la derecha) ───────
   const ciudadFecha = `${input.ciudad ?? "—"}, a ${input.fechaSolicitud}`;

@@ -30,6 +30,7 @@ import { generarReconocimientoMedicoPDF } from "@/features/rrhh/services/firmas/
 import { notificarRrhhGestoria } from "@/features/rrhh/services/gestoria/gestoria-contrato";
 import { getReclutamientoConfigPorEmpresa } from "@/features/rrhh/actions/gestoria-config-server";
 import { revalidatePath } from "next/cache";
+import { getMarcaEmpresa } from "@/lib/pdf/cabecera-documento";
 
 export interface IniciarContratacionInput {
   candidatoId: string;
@@ -128,6 +129,7 @@ export async function iniciarContratacion(
       puesto: (emp?.puesto as string | null) ?? null,
       fecha: fechaEs(new Date()),
       cuerpo: (cfg.contrato_interno_plantilla as string | null) ?? null,
+      marca: await getMarcaEmpresa(empresaId),
     });
 
     // PRP-070: asunto + intro del correo de firma desde la plantilla editable
@@ -208,6 +210,7 @@ export async function iniciarContratacion(
       puesto: (emp?.puesto as string | null) ?? null,
       fecha: fechaEs(new Date()),
       cuerpo: (cfg.reconocimiento_medico_plantilla as string | null) ?? null,
+      marca: await getMarcaEmpresa(empresaId),
     });
 
     const { resolverPlantillaOnboarding, PLANTILLAS_ONBOARDING } = await import(

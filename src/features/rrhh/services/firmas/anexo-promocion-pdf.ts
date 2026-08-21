@@ -12,6 +12,7 @@
 
 import "server-only";
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
+import { dibujarCabecera, type MarcaEmpresa } from "@/lib/pdf/cabecera-documento";
 
 export interface AnexoPromocionInput {
   empleadoNombre: string;
@@ -27,6 +28,8 @@ export interface AnexoPromocionInput {
   jornada: string | null;
   horasSemanales: number | null;
   salarioNeto: number | null;
+  /** Logo de la empresa para la cabecera (Ajustes → Imagen de marca). */
+  marca?: MarcaEmpresa | null;
 }
 
 const PAGE_W = 595.28; // A4
@@ -101,11 +104,18 @@ export async function generarAnexoPromocionPDF(
     if (linea) escribir(linea);
   };
 
-  // ─── Título ─────────────────────────────────────────────
-  page.drawText("ANEXO DE MODIFICACIÓN DE CONTRATO", { x: MARGIN_X, y, size: 16, font: fontBold, color: TINTA });
-  y -= 8;
-  page.drawLine({ start: { x: MARGIN_X, y }, end: { x: PAGE_W - MARGIN_X, y }, thickness: 0.8, color: rgb(0.6, 0.65, 0.72) });
-  y -= 12;
+  // ─── Cabecera común: logo de la empresa centrado + título ───
+  y = await dibujarCabecera({
+    pdf,
+    page,
+    pageW: PAGE_W,
+    pageH: PAGE_H,
+    marginX: MARGIN_X,
+    titulo: "ANEXO DE MODIFICACIÓN DE CONTRATO",
+    fontBold,
+    font,
+    marca: input.marca ?? null,
+  });
   escribir("Cambio de puesto / promoción interna", { bold: false, size: 10 });
   y -= 12;
   nuevaPaginaSiHaceFalta();

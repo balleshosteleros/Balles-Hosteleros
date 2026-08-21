@@ -35,6 +35,7 @@ import { crearFirmaInterno } from "@/features/rrhh/services/firmas/crear-firma";
 import { generarAnexoPromocionPDF } from "@/features/rrhh/services/firmas/anexo-promocion-pdf";
 import { enviarCambioPuestoGestoria } from "@/features/rrhh/actions/gestoria-actions";
 import { revalidatePath } from "next/cache";
+import { getMarcaEmpresa } from "@/lib/pdf/cabecera-documento";
 
 type Admin = ReturnType<typeof createAdminClient>;
 
@@ -318,6 +319,7 @@ export async function promocionarEmpleado(
         jornada: cond?.jornada_contrato ?? null,
         horasSemanales: cond?.horas_semanales ?? null,
         salarioNeto: cond?.salario_neto ?? null,
+        marca: await getMarcaEmpresa(empresaId),
       });
       const firma = await crearFirmaInterno({
         empresaId,

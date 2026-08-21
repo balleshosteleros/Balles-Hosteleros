@@ -15,6 +15,7 @@
 
 import "server-only";
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
+import { dibujarCabecera, type MarcaEmpresa } from "@/lib/pdf/cabecera-documento";
 
 export interface ReconocimientoMedicoInput {
   empleadoNombre: string;
@@ -26,6 +27,8 @@ export interface ReconocimientoMedicoInput {
   fecha: string; // dd/mm/yyyy
   /** Cuerpo configurable (con placeholders ya sustituidos). null = usar default. */
   cuerpo?: string | null;
+  /** Logo de la empresa para la cabecera (Ajustes → Imagen de marca). */
+  marca?: MarcaEmpresa | null;
 }
 
 /** Decisión del trabajador: `si` = desea el examen de salud, `no` = renuncia. */
@@ -112,11 +115,18 @@ export async function generarReconocimientoMedicoPDF(
     if (linea) escribir(linea);
   };
 
-  // ─── Título ─────────────────────────────────────────────
-  page.drawText("RECONOCIMIENTO MÉDICO", { x: MARGIN_X, y, size: 16, font: fontBold, color: rgb(0.06, 0.09, 0.16) });
-  y -= 8;
-  page.drawLine({ start: { x: MARGIN_X, y }, end: { x: PAGE_W - MARGIN_X, y }, thickness: 0.8, color: rgb(0.6, 0.65, 0.72) });
-  y -= 28;
+  // ─── Cabecera común: logo de la empresa centrado + título ───
+  y = await dibujarCabecera({
+    pdf,
+    page,
+    pageW: PAGE_W,
+    pageH: PAGE_H,
+    marginX: MARGIN_X,
+    titulo: "RECONOCIMIENTO MÉDICO",
+    fontBold,
+    font,
+    marca: input.marca ?? null,
+  });
 
   // ─── Encabezado: empresa, ciudad y fecha ────────────────
   escribir(input.empresaNombre, { bold: true });

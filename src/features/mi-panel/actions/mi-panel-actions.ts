@@ -7,6 +7,7 @@ import { sendEmail } from "@/lib/email/send";
 import { bajaContratoRecibidaEmail } from "@/lib/email/templates/baja-contrato-recibida";
 import { crearFirmaInterno } from "@/features/rrhh/services/firmas/crear-firma";
 import { generarCartaBajaVoluntariaPDF } from "@/features/rrhh/services/firmas/baja-voluntaria-pdf";
+import { getMarcaEmpresa } from "@/lib/pdf/cabecera-documento";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { resolverDestinatario } from "@/features/rrhh/services/email-plantillas/resolver";
 import type {
@@ -2773,6 +2774,7 @@ async function onBajaContratoCreada(args: {
       fechaBaja: formatFechaEs(args.fechaFin),
       diasPreaviso: args.diasPreaviso,
       motivo: args.motivo,
+      marca: await getMarcaEmpresa(args.empresaId),
     });
     pdfBuffer = carta.buffer;
     posicionFirma = carta.posicionFirma;
