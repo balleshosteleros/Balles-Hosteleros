@@ -1382,7 +1382,11 @@ export async function getEmpleadoConPerfil(empleadoId: string) {
   }
 }
 
-function mapSolicitudEmpleado(row: Record<string, unknown>): SolicitudPersonal {
+function mapSolicitudEmpleado(
+  row: Record<string, unknown>,
+  nombrePorUserId?: Map<string, string>,
+): SolicitudPersonal {
+  const revisorId = (row.revisado_por as string | null) ?? null;
   return {
     id: row.id as string,
     empresaId: row.empresa_id as string,
@@ -1396,6 +1400,8 @@ function mapSolicitudEmpleado(row: Record<string, unknown>): SolicitudPersonal {
     motivo: (row.motivo as string) ?? "",
     estado: row.estado as SolicitudEstado,
     createdAt: row.created_at as string,
+    revisadoPor: revisorId ? nombrePorUserId?.get(revisorId) ?? null : null,
+    revisadoAt: (row.revisado_at as string | null) ?? null,
   };
 }
 
@@ -1424,7 +1430,34 @@ export async function listSolicitudesEmpleado(
       .limit(50);
     if (error) throw error;
 
-    return { ok: true, data: (data ?? []).map((row) => mapSolicitudEmpleado(row as Record<string, unknown>)) };
+    // Nombre de quien resolvió cada solicitud (el permiso lo da el
+    // departamento, pero aprueba una persona y su nombre queda como firma).
+    const revisorIds = Array.from(
+      new Set(
+        (data ?? [])
+          .map((r) => r.revisado_por as string | null)
+          .filter((v): v is string => Boolean(v)),
+      ),
+    );
+    const nombrePorUserId = new Map<string, string>();
+    if (revisorIds.length > 0) {
+      const { data: revisores } = await supabase
+        .from("empleados")
+        .select("user_id, nombre, apellidos")
+        .eq("empresa_id", empresaId)
+        .in("user_id", revisorIds);
+      for (const r of revisores ?? []) {
+        const nombre = `${r.nombre ?? ""} ${(r.apellidos as string | null) ?? ""}`.trim();
+        if (nombre) nombrePorUserId.set(r.user_id as string, nombre);
+      }
+    }
+
+    return {
+      ok: true,
+      data: (data ?? []).map((row) =>
+        mapSolicitudEmpleado(row as Record<string, unknown>, nombrePorUserId),
+      ),
+    };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : "Error desconocido";
     console.error("[rrhh] listSolicitudesEmpleado:", msg);

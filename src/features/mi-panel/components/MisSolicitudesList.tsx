@@ -90,6 +90,12 @@ export function MisSolicitudesList({ refreshKey = 0, onChange }: MisSolicitudesL
                 {s.motivo && (
                   <div className="text-xs text-muted-foreground mt-1 line-clamp-2">{s.motivo}</div>
                 )}
+                {s.revisadoPor && (
+                  <div className="text-xs text-muted-foreground mt-1">
+                    {s.estado === "rechazada" ? "Denegada" : "Validada"} por{" "}
+                    <span className="text-foreground">{s.revisadoPor}</span>
+                  </div>
+                )}
               </div>
               {s.estado === "pendiente" && (
                 <Button

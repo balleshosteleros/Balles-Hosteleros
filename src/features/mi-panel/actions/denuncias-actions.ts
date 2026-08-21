@@ -290,6 +290,13 @@ export interface DenunciaComoSolicitud {
   estado: "pendiente" | "aprobada" | "rechazada" | "anulada";
   createdAt: string;
   puedoValidar: boolean;
+  /**
+   * Las denuncias no registran revisor: su gestión es confidencial y sigue su
+   * propio ciclo (resuelta/archivada). Van a null para encajar en la forma
+   * común de una solicitud.
+   */
+  revisadoPor: string | null;
+  revisadoAt: string | null;
 }
 
 /** Estado de la denuncia traducido al de una solicitud. */
@@ -342,6 +349,8 @@ export async function listDenunciasComoSolicitudes(
         estado: estadoComoSolicitud(d.estado),
         createdAt: d.created_at,
         puedoValidar: true,
+        revisadoPor: null,
+        revisadoAt: null,
       })),
     };
   } catch (err) {

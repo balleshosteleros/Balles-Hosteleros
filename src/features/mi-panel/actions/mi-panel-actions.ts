@@ -33,6 +33,7 @@ import { minutosDiaEnZona, ahoraEnZona } from "@/features/empresa/lib/zona-horar
 import { getRolContext } from "@/features/auth/actions/permisos-actions";
 import { puedeEditarModulo } from "@/features/auth/lib/permisos";
 import { bloqueoSolapaRango } from "@/features/rrhh/data/calendarios-vacaciones";
+import { horasSegunTipo } from "@/features/rrhh/services/horas/computa-tiempo";
 import {
   getHorarioDia,
   semanaDeFecha,
@@ -275,8 +276,14 @@ export async function getMiFichajeHoy(): Promise<{
           const entradaMs = new Date(data.hora_entrada as string).getTime();
           const elapsed = (Date.now() - entradaMs) / 3600000;
           if (elapsed >= restante - 1 / 3600) {
-            // Cierre automático capando las horas a las que quedaban.
-            const horas = Math.round(restante * 10000) / 10000;
+            // Cierre automático capando las horas a las que quedaban (0 si el
+            // tipo de fichaje no computa tiempo).
+            const horas = await horasSegunTipo(
+              supabase,
+              empresaId,
+              data.tipo as string | null,
+              Math.round(restante * 10000) / 10000,
+            );
             const salidaISO = new Date(entradaMs + restante * 3600000).toISOString();
             const incidencia =
               (data.incidencia as string | null) ??
@@ -930,7 +937,14 @@ export async function ficharSalidaPersonal(fichajeId: string, geo?: GeoInput) {
 
     const entrada = new Date(fichaje.hora_entrada as string);
     const entradaMs = entrada.getTime();
-    const horasTotales = redondearHoras(ahora.getTime() - entradaMs);
+    // Si el tipo de fichaje NO computa tiempo, el fichaje se registra igual pero
+    // con 0 horas: se ve en el listado, pero no suma en ningún total.
+    const horasTotales = await horasSegunTipo(
+      supabase,
+      fichaje.empresa_id as string | null,
+      fichaje.tipo as string | null,
+      redondearHoras(ahora.getTime() - entradaMs),
+    );
 
     // ─── Reparto de jornada partida entre empresas ─────────────────────────
     // Si la jornada continua cubre tramos planificados de MÁS de una empresa,
@@ -998,7 +1012,14 @@ export async function ficharSalidaPersonal(fichajeId: string, geo?: GeoInput) {
               const l = localPorEmpresa.get(seg.empresaId);
               return { id: l?.id ?? null, nombre: l?.nombre ?? "" };
             })();
-      const horasSeg = redondearHoras((seg.finMin - seg.inicioMin) * 60000);
+      // Cada segmento hereda el tipo del fichaje original, así que si ese tipo
+      // no computa tiempo ninguno de los tramos suma horas (en su empresa).
+      const horasSeg = await horasSegunTipo(
+        supabase,
+        seg.empresaId,
+        fichaje.tipo as string | null,
+        redondearHoras((seg.finMin - seg.inicioMin) * 60000),
+      );
       const finISO = esUltimo ? ahora.toISOString() : isoDeMin(seg.finMin);
       const revision = !seg.cubierto;
       const motivoTxt =
@@ -1093,7 +1114,7 @@ export async function paralizarFichajePersonal(
     const { supabase } = await getContext();
     const { data: fichaje, error: fetchErr } = await supabase
       .from("fichajes")
-      .select("hora_entrada, local_id, modo_teletrabajo")
+      .select("hora_entrada, local_id, modo_teletrabajo, empresa_id, tipo")
       .eq("id", fichajeId)
       .single();
     if (fetchErr) throw fetchErr;
@@ -1123,8 +1144,12 @@ export async function paralizarFichajePersonal(
     let horasTotales = 0;
     if (fichaje?.hora_entrada) {
       const entrada = new Date(fichaje.hora_entrada as string);
-      horasTotales =
-        Math.round(((ahora.getTime() - entrada.getTime()) / 3600000) * 10000) / 10000;
+      horasTotales = await horasSegunTipo(
+        supabase,
+        fichaje.empresa_id as string | null,
+        fichaje.tipo as string | null,
+        Math.round(((ahora.getTime() - entrada.getTime()) / 3600000) * 10000) / 10000,
+      );
     }
     const { error } = await supabase
       .from("fichajes")
@@ -1422,7 +1447,15 @@ export async function getMiCalendarioMes(
 
 // ─── SOLICITUDES ─────────────────────────────────────────────
 
-function mapSolicitud(row: Record<string, unknown>): SolicitudPersonal {
+/**
+ * `nombrePorUserId` resuelve el nombre de quien revisó la solicitud. Es opcional
+ * porque no todas las vistas lo necesitan; sin él, `revisadoPor` queda a null.
+ */
+function mapSolicitud(
+  row: Record<string, unknown>,
+  nombrePorUserId?: Map<string, string>,
+): SolicitudPersonal {
+  const revisorId = (row.revisado_por as string | null) ?? null;
   return {
     id: row.id as string,
     empresaId: row.empresa_id as string,
@@ -1436,7 +1469,37 @@ function mapSolicitud(row: Record<string, unknown>): SolicitudPersonal {
     motivo: (row.motivo as string) ?? "",
     estado: row.estado as SolicitudEstado,
     createdAt: row.created_at as string,
+    revisadoPor: revisorId ? nombrePorUserId?.get(revisorId) ?? null : null,
+    revisadoAt: (row.revisado_at as string | null) ?? null,
   };
+}
+
+/** Nombre completo de cada `user_id` que aparezca como revisor de estas filas. */
+async function nombresDeRevisores(
+  supabase: ServerClient,
+  empresaId: string,
+  filas: Array<Record<string, unknown>>,
+): Promise<Map<string, string>> {
+  const mapa = new Map<string, string>();
+  const ids = Array.from(
+    new Set(
+      filas
+        .map((r) => r.revisado_por as string | null)
+        .filter((v): v is string => Boolean(v)),
+    ),
+  );
+  if (ids.length === 0) return mapa;
+
+  const { data } = await supabase
+    .from("empleados")
+    .select("user_id, nombre, apellidos")
+    .eq("empresa_id", empresaId)
+    .in("user_id", ids);
+  for (const e of data ?? []) {
+    const nombre = `${e.nombre ?? ""} ${(e.apellidos as string | null) ?? ""}`.trim();
+    if (nombre) mapa.set(e.user_id as string, nombre);
+  }
+  return mapa;
 }
 
 export async function listarMisSolicitudes(limite = 20): Promise<{
@@ -1455,7 +1518,8 @@ export async function listarMisSolicitudes(limite = 20): Promise<{
       .order("created_at", { ascending: false })
       .limit(limite);
     if (error) throw error;
-    return { ok: true, data: (data ?? []).map(mapSolicitud) };
+    const nombres = await nombresDeRevisores(supabase, empresaId, data ?? []);
+    return { ok: true, data: (data ?? []).map((r) => mapSolicitud(r, nombres)) };
   } catch (err: unknown) {
     const msg = extractErrorMessage(err);
     console.error("[mi-panel] listarMisSolicitudes:", msg);
@@ -1630,14 +1694,51 @@ export async function getMiVacacionesInfo(): Promise<{
   }
 }
 
-const SUBTIPO_AUSENCIA_KEYWORD: Record<
-  Exclude<SolicitudSubtipoAusencia, "baja_contrato">,
-  string
-> = {
-  baja_medica: "baja",
-  vacaciones: "vacacion",
-  permiso: "permiso",
+/**
+ * Tipos de ausencia que el empleado puede pedir HOY en su empresa: los que estén
+ * ACTIVOS en la configuración de RRHH. La lista es cerrada (los 4 subtipos del
+ * sistema), pero cada empresa decide cuáles habilita y con qué nombre visible.
+ *
+ * Antes esta lista estaba cableada en el modal, así que desactivar un tipo en
+ * configuración no lo quitaba de ningún sitio.
+ */
+export type TipoAusenciaDisponible = {
+  subtipo: SolicitudSubtipoAusencia;
+  nombre: string;
+  descripcion: string | null;
 };
+
+export async function getTiposAusenciaDisponibles(): Promise<{
+  ok: boolean;
+  data: TipoAusenciaDisponible[];
+  error?: string;
+}> {
+  try {
+    const { supabase, user, empresaId } = await getContext();
+    if (!user || !empresaId) return { ok: false, data: [], error: "No autenticado" };
+
+    const { data, error } = await supabase
+      .from("tipos_ausencia")
+      .select("subtipo, nombre, descripcion")
+      .eq("empresa_id", empresaId)
+      .eq("activo", true)
+      .order("orden", { ascending: true });
+    if (error) throw error;
+
+    return {
+      ok: true,
+      data: (data ?? []).map((t) => ({
+        subtipo: t.subtipo as SolicitudSubtipoAusencia,
+        nombre: (t.nombre as string) ?? "",
+        descripcion: (t.descripcion as string | null) ?? null,
+      })),
+    };
+  } catch (err: unknown) {
+    const msg = extractErrorMessage(err);
+    console.error("[mi-panel] getTiposAusenciaDisponibles:", msg);
+    return { ok: false, data: [], error: msg };
+  }
+}
 
 // Preaviso mínimo para la solicitud de baja de contrato (días naturales).
 // No hay tope: el empleado puede avisar con toda la antelación que quiera.
@@ -1926,6 +2027,24 @@ export async function crearSolicitudPersonal(input: NuevaSolicitudInput) {
       }
     }
 
+    // TIPO DE AUSENCIA ACTIVO: si RRHH lo ha desactivado en la configuración, no
+    // se puede pedir. Se valida en SERVIDOR (no basta con ocultarlo del selector)
+    // para que no cuele quien tuviera la pantalla abierta de antes.
+    if (input.tipo === "ausencia") {
+      const { data: tipoCfg } = await supabase
+        .from("tipos_ausencia")
+        .select("nombre, activo")
+        .eq("empresa_id", empresaId)
+        .eq("subtipo", input.subtipo)
+        .maybeSingle();
+      if (tipoCfg && tipoCfg.activo === false) {
+        return {
+          ok: false,
+          error: `"${tipoCfg.nombre}" no está disponible en tu empresa. Habla con RRHH si necesitas solicitarlo.`,
+        };
+      }
+    }
+
     // BAJA DE CONTRATO: reglas propias. Cliente solo elige fecha_fin (último día efectivo);
     // el servidor fija fecha_inicio = hoy (primer día de preaviso) y exige el mínimo legal.
     if (input.tipo === "ausencia" && input.subtipo === "baja_contrato") {
@@ -2130,16 +2249,19 @@ export async function crearSolicitudPersonal(input: NuevaSolicitudInput) {
         SolicitudSubtipoAusencia,
         "baja_contrato"
       >;
-      const keyword = SUBTIPO_AUSENCIA_KEYWORD[subtipoAus];
 
+      // El límite se lee por SUBTIPO (código), no buscando el nombre por texto.
+      // Antes era un `ILIKE '%baja%'`: renombrar el tipo dejaba el límite en
+      // NULL sin avisar, y ese comodín también casaba con "Baja de contrato",
+      // así que podía aplicarse el límite de otra fila. Tampoco se filtra ya por
+      // `activo`: si estuviera inactivo la solicitud se ha rechazado más arriba,
+      // y filtrar aquí hacía justo lo contrario de lo que parece — al no
+      // encontrar fila, el tope dejaba de aplicarse.
       const { data: tipoAusencia } = await supabase
         .from("tipos_ausencia")
-        .select("nombre, limite_dias, activo")
+        .select("nombre, limite_dias")
         .eq("empresa_id", empresaId)
-        .ilike("nombre", `%${keyword}%`)
-        .eq("activo", true)
-        .order("orden", { ascending: true })
-        .limit(1)
+        .eq("subtipo", subtipoAus)
         .maybeSingle();
 
       const limite = (tipoAusencia?.limite_dias as number | null | undefined) ?? null;
@@ -2345,8 +2467,9 @@ export async function listarSolicitudesEmpresa(filtro: "pendientes" | "todas" = 
       puedoValidarA = new Set(await userIdsQuePuedoValidar({ userId: user.id, empresaId }));
     }
 
+    const nombres = await nombresDeRevisores(supabase, empresaId, data ?? []);
     const dataConFlag = (data ?? []).map((row) => {
-      const base = mapSolicitud(row);
+      const base = mapSolicitud(row, nombres);
       return { ...base, puedoValidar: puedoValidarA.has(base.userId) };
     });
 

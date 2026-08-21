@@ -31,6 +31,12 @@ export interface SolicitudPersonal {
   motivo: string;
   estado: SolicitudEstado;
   createdAt: string;
+  /**
+   * Quién la resolvió. El permiso para validar es del DEPARTAMENTO, pero quien
+   * aprueba o deniega es una persona concreta y queda su nombre como firma.
+   */
+  revisadoPor: string | null;
+  revisadoAt: string | null;
 }
 
 export interface MiFichajeHoy {

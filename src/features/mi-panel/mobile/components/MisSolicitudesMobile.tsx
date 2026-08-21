@@ -162,6 +162,12 @@ export function MisSolicitudesMobile() {
                         {s.motivo}
                       </p>
                     )}
+                    {s.revisadoPor && (
+                      <p className="mt-1.5 text-xs text-muted-foreground">
+                        {s.estado === "rechazada" ? "Denegada" : "Validada"} por{" "}
+                        <span className="text-foreground">{s.revisadoPor}</span>
+                      </p>
+                    )}
                   </div>
                   <div className="flex flex-col items-end gap-2">
                     <span

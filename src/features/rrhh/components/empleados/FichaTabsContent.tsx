@@ -101,6 +101,7 @@ export function SolicitudesEmpleadoTab({ solicitudes }: { solicitudes: Solicitud
                 <TableHead>Periodo</TableHead>
                 <TableHead>Motivo</TableHead>
                 <TableHead>Estado</TableHead>
+                <TableHead>Validada por</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -128,6 +129,11 @@ export function SolicitudesEmpleadoTab({ solicitudes }: { solicitudes: Solicitud
                     <Badge variant="outline" className={ESTADO_COLOR[s.estado]}>
                       {ESTADO_LABEL[s.estado]}
                     </Badge>
+                  </TableCell>
+                  <TableCell className="whitespace-nowrap">
+                    <span className={s.revisadoPor ? "text-sm text-foreground" : "text-sm text-muted-foreground"}>
+                      {s.revisadoPor ?? "—"}
+                    </span>
                   </TableCell>
                 </TableRow>
               ))}

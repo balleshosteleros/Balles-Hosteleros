@@ -117,6 +117,7 @@ export function SolicitudesView() {
     if (campo === "empleado") return s.empleadoNombre;
     if (campo === "fechaInicio") return s.fechaInicio;
     if (campo === "createdAt") return s.createdAt;
+    if (campo === "revisadoPor") return s.revisadoPor ?? "";
     return (s as unknown as Record<string, unknown>)[campo];
   };
 
@@ -183,6 +184,7 @@ export function SolicitudesView() {
     { campo: "motivo", label: "Motivo" },
     { campo: "enviada", label: "Enviada" },
     { campo: "estado", label: "Estado" },
+    { campo: "revisadoPor", label: "Validada por" },
   ];
 
   const columnDefs: Record<string, { th: ReactNode; td: (s: SolicitudPersonal) => ReactNode }> = {
@@ -242,6 +244,25 @@ export function SolicitudesView() {
           <Badge variant="outline" className={ESTADO_COLOR[s.estado]}>
             {ESTADO_LABEL[s.estado]}
           </Badge>
+        </TableCell>
+      ),
+    },
+    // Quién la resolvió: el permiso para validar lo da el departamento, pero
+    // aprueba una persona y su nombre queda como firma de la decisión.
+    revisadoPor: {
+      th: <TableHead key="revisadoPor">Validada por</TableHead>,
+      td: (s) => (
+        <TableCell key="revisadoPor" className="whitespace-nowrap">
+          {s.revisadoPor ? (
+            <span className="text-sm text-foreground">{s.revisadoPor}</span>
+          ) : (
+            <span className="text-sm text-muted-foreground">—</span>
+          )}
+          {s.revisadoPor && s.revisadoAt && (
+            <span className="block text-xs text-muted-foreground">
+              {formatFechaHora(s.revisadoAt)}
+            </span>
+          )}
         </TableCell>
       ),
     },
