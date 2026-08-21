@@ -115,38 +115,55 @@ export async function validarMotorWebReserva(
       : [];
     const horaSlice = input.hora.slice(0, 5);
 
-    /** Cuántas personas ya tienen reserva activa exactamente a esa hora. */
-    async function personasEnHoraExacta(hora: string): Promise<number> {
-      const { data } = await supabase
-        .from("reservas")
-        .select("personas, estado")
-        .eq("empresa_id", input.empresaId)
-        .eq("fecha", input.fecha)
-        .like("hora", `${hora}%`)
-        .not("estado", "in", `(${ESTADOS_NO_OCUPANTES.join(",")})`);
-      return (data ?? []).reduce((s, r) => s + ((r.personas as number) ?? 0), 0);
-    }
-
-    /** Cuántas personas ya tienen reserva activa dentro del tramo [ini, fin). */
-    async function personasEnTramo(iniMin: number, finMin: number): Promise<number> {
-      const { data } = await supabase
+    /**
+     * Reservas activas del día. `hora` es de tipo `time` en Postgres: no se
+     * puede filtrar con LIKE, así que traemos las del día y comparamos en
+     * minutos (mismo criterio que el resto del motor).
+     */
+    async function reservasDelDia(): Promise<
+      { personas: number; horaMin: number }[] | null
+    > {
+      const { data, error: errReservas } = await supabase
         .from("reservas")
         .select("personas, hora, estado")
         .eq("empresa_id", input.empresaId)
         .eq("fecha", input.fecha)
         .not("estado", "in", `(${ESTADOS_NO_OCUPANTES.join(",")})`);
-      let total = 0;
-      for (const r of data ?? []) {
-        const m = horaAMinutos((r.hora as string) ?? "00:00");
-        if (m >= iniMin && m < finMin) total += (r.personas as number) ?? 0;
+      if (errReservas) {
+        console.error("[motor-web-validar] reservas del día:", errReservas);
+        return null;
       }
-      return total;
+      return (data ?? []).map((r) => ({
+        personas: (r.personas as number) ?? 0,
+        horaMin: horaAMinutos((r.hora as string) ?? "00:00"),
+      }));
+    }
+
+    const reservasDia = await reservasDelDia();
+    // Si no podemos contar, no aceptamos a ciegas: sería saltarse el tope.
+    if (reservasDia === null) {
+      return { ok: false, error: "No se pudo validar la reserva. Inténtalo de nuevo." };
+    }
+
+    /** Cuántas personas ya tienen reserva activa exactamente a esa hora. */
+    function personasEnHoraExacta(hora: string): number {
+      const objetivo = horaAMinutos(hora);
+      return reservasDia!
+        .filter((r) => r.horaMin === objetivo)
+        .reduce((s, r) => s + r.personas, 0);
+    }
+
+    /** Cuántas personas ya tienen reserva activa dentro del tramo [ini, fin). */
+    function personasEnTramo(iniMin: number, finMin: number): number {
+      return reservasDia!
+        .filter((r) => r.horaMin >= iniMin && r.horaMin < finMin)
+        .reduce((s, r) => s + r.personas, 0);
     }
 
     if (modo === "mismo") {
       const tope = (cfg.max_personas_hora_global as number | null) ?? 0;
       if (tope > 0) {
-        const ya = await personasEnHoraExacta(horaSlice);
+        const ya = personasEnHoraExacta(horaSlice);
         if (ya + input.personas > tope) {
           return {
             ok: false,
@@ -158,7 +175,7 @@ export async function validarMotorWebReserva(
       // Regla coincide cuando inicio == hora de la reserva.
       const r = reglas.find((x) => x.inicio === horaSlice);
       if (r && r.max > 0) {
-        const ya = await personasEnHoraExacta(horaSlice);
+        const ya = personasEnHoraExacta(horaSlice);
         if (ya + input.personas > r.max) {
           return {
             ok: false,
@@ -173,7 +190,7 @@ export async function validarMotorWebReserva(
         const fin = parseHHMM(r.fin);
         if (ini === null || fin === null) continue;
         if (horaMin >= ini && horaMin < fin && r.max > 0) {
-          const ya = await personasEnTramo(ini, fin);
+          const ya = personasEnTramo(ini, fin);
           if (ya + input.personas > r.max) {
             return {
               ok: false,

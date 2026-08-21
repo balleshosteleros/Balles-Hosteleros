@@ -23,6 +23,11 @@ import type {
 import { HORAS_EXTRAS_MOTIVO_MIN, SUBTIPO_LABEL } from "@/features/mi-panel/types";
 import { validarTramo } from "@/features/mi-panel/lib/solicitud-horas";
 import {
+  VACACIONES_REGLAS_DEFAULT,
+  validarRangoVacaciones,
+  type VacacionesReglas,
+} from "@/features/mi-panel/lib/vacaciones-reglas";
+import {
   calcularNivel,
   getMiBalance,
   getNiveles,
@@ -1598,6 +1603,38 @@ export interface MiVacacionesInfo {
   diasGastados: number;
   diasRestantes: number;
   bloqueos: { fechaInicio: string; fechaFin: string; motivo: string | null }[];
+  /** Reglas de la empresa: día obligatorio de inicio y mín/máx de días. */
+  reglas: VacacionesReglas;
+}
+
+/**
+ * Reglas de vacaciones de la empresa (RRHH → Solicitudes). Si aún no hay fila
+ * de configuración se aplican los defaults del negocio; un NULL guardado
+ * significa que esa regla concreta no se exige.
+ */
+async function getReglasVacacionesEmpresa(empresaId: string): Promise<VacacionesReglas> {
+  try {
+    const admin = createAdminClient();
+    const { data } = await admin
+      .from("empresa_rrhh_config")
+      .select("vacaciones_dia_inicio, vacaciones_dias_min, vacaciones_dias_max")
+      .eq("empresa_id", empresaId)
+      .maybeSingle();
+    if (!data) return VACACIONES_REGLAS_DEFAULT;
+    const num = (v: unknown): number | null => {
+      const n = Number(v);
+      return Number.isFinite(n) ? Math.round(n) : null;
+    };
+    return {
+      diaInicio: data.vacaciones_dia_inicio == null ? null : num(data.vacaciones_dia_inicio),
+      diasMin: data.vacaciones_dias_min == null ? null : num(data.vacaciones_dias_min),
+      diasMax: data.vacaciones_dias_max == null ? null : num(data.vacaciones_dias_max),
+    };
+  } catch {
+    // Sin admin configurado no bloqueamos al empleado con las reglas: el resto
+    // de validaciones (calendario, cupo, bloqueos) siguen aplicándose.
+    return { diaInicio: null, diasMin: null, diasMax: null };
+  }
 }
 
 /**
@@ -1614,6 +1651,10 @@ export async function getMiVacacionesInfo(): Promise<{
     const { supabase, user, empresaId } = await getContext();
     if (!user || !empresaId) return { ok: false, data: null, error: "No autenticado" };
 
+    // Las reglas de la empresa se enseñan aunque el empleado no tenga aún
+    // calendario: forman parte de cómo se piden las vacaciones aquí.
+    const reglas = await getReglasVacacionesEmpresa(empresaId);
+
     const vacio: MiVacacionesInfo = {
       tieneCalendario: false,
       esPredeterminado: false,
@@ -1623,6 +1664,7 @@ export async function getMiVacacionesInfo(): Promise<{
       diasGastados: 0,
       diasRestantes: 0,
       bloqueos: [],
+      reglas,
     };
 
     const { data: emp } = await supabase
@@ -1685,6 +1727,7 @@ export async function getMiVacacionesInfo(): Promise<{
           fechaFin: b.fecha_fin,
           motivo: b.motivo ?? null,
         })),
+        reglas,
       },
     };
   } catch (err: unknown) {
@@ -1740,15 +1783,27 @@ export async function getTiposAusenciaDisponibles(): Promise<{
   }
 }
 
-// Preaviso mínimo para la solicitud de baja de contrato (días naturales).
-// No hay tope: el empleado puede avisar con toda la antelación que quiera.
+// Ventana de preaviso para la solicitud de baja de contrato (días naturales).
+// El mínimo se anuncia en el formulario; el máximo no, solo se avisa al pasarlo.
 const BAJA_CONTRATO_PREAVISO_MIN_DIAS = 15;
+const BAJA_CONTRATO_PREAVISO_MAX_DIAS = 45;
+
+// Vacaciones y permiso se piden con antelación para poder cuadrar el turno. La
+// baja médica queda fuera a propósito: es imprevisible y se comunica al momento.
+const PREAVISO_MIN_DIAS = 30;
 
 function diasNaturales(desde: string, hasta: string): number {
   const a = new Date(desde + "T00:00:00Z");
   const b = new Date(hasta + "T00:00:00Z");
   if (Number.isNaN(a.getTime()) || Number.isNaN(b.getTime())) return 0;
   return Math.floor((b.getTime() - a.getTime()) / 86400000);
+}
+
+function addDaysISO(base: string, days: number): string {
+  const d = new Date(base + "T00:00:00Z");
+  if (Number.isNaN(d.getTime())) return base;
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().split("T")[0];
 }
 
 function formatFechaEs(iso: string): string {
@@ -1911,40 +1966,28 @@ export async function crearBajaMedicaConParte(
   }
 }
 
+/** Rol al que le saltan los avisos de solicitudes: es donde se gestionan. */
+const ROL_GESTOR_SOLICITUDES = "RECURSOS HUMANOS";
+
 /**
- * Avisa en la campana de que hay una solicitud pendiente de revisar.
+ * Avisa en la campana de que hay una solicitud pendiente de gestionar.
  *
- * El validador es un DEPARTAMENTO, así que el aviso va a TODOS los que pueden
- * resolverla: los empleados activos cuyo rol da acceso al departamento
- * validador del solicitante. Mismo criterio que `esValidadorAsignado` usa para
- * dejar aprobar o denegar, así que el aviso llega siempre a quien puede actuar.
+ * Va a TODOS los usuarios con rol de Recursos Humanos, que es donde se crean y
+ * se gestionan las solicitudes. El aviso enlaza a la pantalla de Solicitudes
+ * para resolverla desde ahí.
  *
  * Side-effect NO bloqueante: si algo falla, la solicitud queda creada igual y
- * los responsables la siguen viendo en la lista de pendientes.
+ * RRHH la sigue viendo en su lista de pendientes.
  */
-async function avisarValidadorSolicitudPendiente(args: {
-  supabase: ServerClient;
+async function avisarRRHHSolicitudPendiente(args: {
   solicitudId: string;
   empresaId: string;
-  userId: string;
   solicitante: string;
-  tipo: SolicitudTipo;
   subtipo: SolicitudSubtipo;
   fechaInicio: string;
   fechaFin: string | null;
 }): Promise<void> {
   try {
-    const { empleadosQuePuedenValidarA } = await import(
-      "@/features/rrhh/actions/validadores-actions"
-    );
-    const validadorIds = await empleadosQuePuedenValidarA({
-      empleadoUserId: args.userId,
-      empresaId: args.empresaId,
-    });
-    // Sin nadie que pueda validar no hay a quién avisar: la solicitud sigue su
-    // curso y aparece en pendientes de RRHH.
-    if (validadorIds.length === 0) return;
-
     const periodo =
       args.fechaFin && args.fechaFin !== args.fechaInicio
         ? `del ${formatFechaEs(args.fechaInicio)} al ${formatFechaEs(args.fechaFin)}`
@@ -1958,10 +2001,10 @@ async function avisarValidadorSolicitudPendiente(args: {
       empresaId: args.empresaId,
       tipo: "solicitud_pendiente",
       titulo: `${args.solicitante}: ${SUBTIPO_LABEL[args.subtipo].toLowerCase()}`,
-      mensaje: `Tienes una solicitud pendiente de revisar (${periodo}).`,
-      segmento: { tipo: "empleados", empleadoIds: validadorIds },
+      mensaje: `Solicitud pendiente de gestionar (${periodo}).`,
+      segmento: { tipo: "rol", rolLabel: ROL_GESTOR_SOLICITUDES },
       accionUrl: "/rrhh/solicitudes",
-      accionLabel: "Revisar",
+      accionLabel: "Gestionar",
       requiereAccion: true,
       refTabla: "solicitudes_personal",
       refId: args.solicitudId,
@@ -1969,7 +2012,7 @@ async function avisarValidadorSolicitudPendiente(args: {
     });
   } catch (err) {
     console.error(
-      "[mi-panel] avisarValidadorSolicitudPendiente:",
+      "[mi-panel] avisarRRHHSolicitudPendiente:",
       extractErrorMessage(err),
     );
   }
@@ -2027,6 +2070,24 @@ export async function crearSolicitudPersonal(input: NuevaSolicitudInput) {
       }
     }
 
+    // PREAVISO de vacaciones y permiso: hay que pedirlos con antelación para
+    // poder cuadrar el turno. Se valida en SERVIDOR porque el formulario solo
+    // limita el calendario, y eso se salta. La baja médica queda fuera: es
+    // imprevisible. La baja de contrato tiene su propia ventana, más abajo.
+    if (input.subtipo === "vacaciones" || input.subtipo === "permiso") {
+      const dias = diasNaturales(todayISO(), input.fechaInicio);
+      if (dias < PREAVISO_MIN_DIAS) {
+        return {
+          ok: false,
+          error:
+            `Hay que pedirlo con ${PREAVISO_MIN_DIAS} días de antelación como mínimo. ` +
+            `La fecha más cercana que puedes solicitar es el ${formatFechaEs(
+              addDaysISO(todayISO(), PREAVISO_MIN_DIAS),
+            )}.`,
+        };
+      }
+    }
+
     // TIPO DE AUSENCIA ACTIVO: si RRHH lo ha desactivado en la configuración, no
     // se puede pedir. Se valida en SERVIDOR (no basta con ocultarlo del selector)
     // para que no cuele quien tuviera la pantalla abierta de antes.
@@ -2046,7 +2107,7 @@ export async function crearSolicitudPersonal(input: NuevaSolicitudInput) {
     }
 
     // BAJA DE CONTRATO: reglas propias. Cliente solo elige fecha_fin (último día efectivo);
-    // el servidor fija fecha_inicio = hoy (primer día de preaviso) y exige el mínimo legal.
+    // el servidor fija fecha_inicio = hoy (primer día de preaviso) y exige 15-45 días.
     if (input.tipo === "ausencia" && input.subtipo === "baja_contrato") {
       const hoy = todayISO();
       if (!input.fechaFin) {
@@ -2060,6 +2121,15 @@ export async function crearSolicitudPersonal(input: NuevaSolicitudInput) {
             new Date(Date.now() + BAJA_CONTRATO_PREAVISO_MIN_DIAS * 86400000)
               .toISOString()
               .split("T")[0],
+          )}.`,
+        };
+      }
+      // Tope de preaviso: no se anuncia por adelantado, solo se dice al pasarlo.
+      if (dias > BAJA_CONTRATO_PREAVISO_MAX_DIAS) {
+        return {
+          ok: false,
+          error: `El preaviso máximo es de ${BAJA_CONTRATO_PREAVISO_MAX_DIAS} días naturales. Espera y solicita tu baja como pronto el ${formatFechaEs(
+            addDaysISO(input.fechaFin, -BAJA_CONTRATO_PREAVISO_MAX_DIAS),
           )}.`,
         };
       }
@@ -2097,14 +2167,11 @@ export async function crearSolicitudPersonal(input: NuevaSolicitudInput) {
         .single();
       if (error) throw error;
 
-      // Aviso en la campana al responsable directo (validador de ausencias).
-      await avisarValidadorSolicitudPendiente({
-        supabase,
+      // Aviso en la campana a Recursos Humanos, que es quien las gestiona.
+      await avisarRRHHSolicitudPendiente({
         solicitudId: (data as { id: string }).id,
         empresaId,
-        userId: user.id,
         solicitante: nombre || "Un empleado",
-        tipo: input.tipo,
         subtipo: input.subtipo,
         fechaInicio: hoy,
         fechaFin: input.fechaFin,
@@ -2135,6 +2202,17 @@ export async function crearSolicitudPersonal(input: NuevaSolicitudInput) {
     // VACACIONES: se validan contra el calendario de vacaciones del empleado
     // (días disponibles + periodos bloqueados). Es obligatorio tener uno.
     if (input.tipo === "ausencia" && input.subtipo === "vacaciones") {
+      // Reglas que fija la empresa en RRHH → Solicitudes: día obligatorio de
+      // inicio y mínimo/máximo de días naturales. Aquí es donde se decide de
+      // verdad; el formulario ya lo impide, pero no es de fiar.
+      const reglas = await getReglasVacacionesEmpresa(empresaId);
+      const chequeoReglas = validarRangoVacaciones(
+        reglas,
+        input.fechaInicio,
+        input.fechaFin ?? null,
+      );
+      if (!chequeoReglas.ok) return { ok: false, error: chequeoReglas.error };
+
       const { data: emp } = await supabase
         .from("empleados")
         .select("calendario_vacaciones_id")
@@ -2333,15 +2411,11 @@ export async function crearSolicitudPersonal(input: NuevaSolicitudInput) {
       .single();
     if (error) throw error;
 
-    // Aviso en la campana al responsable directo (validador de trabajo o de
-    // ausencias, según el tipo), que es quien puede aprobarla o denegarla.
-    await avisarValidadorSolicitudPendiente({
-      supabase,
+    // Aviso en la campana a Recursos Humanos, que es quien las gestiona.
+    await avisarRRHHSolicitudPendiente({
       solicitudId: (data as { id: string }).id,
       empresaId,
-      userId: user.id,
       solicitante: nombre || "Un empleado",
-      tipo: input.tipo,
       subtipo: input.subtipo,
       fechaInicio: input.fechaInicio,
       fechaFin: input.fechaFin ?? null,

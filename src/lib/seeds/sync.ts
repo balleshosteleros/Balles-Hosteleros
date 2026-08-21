@@ -16,6 +16,7 @@ import {
   normalizarDestinoDepartamento,
   type DestinoPlantilla,
 } from "@/features/rrhh/lib/plantillas-onboarding";
+import { VACACIONES_REGLAS_DEFAULT } from "@/features/mi-panel/lib/vacaciones-reglas";
 import { DEPARTAMENTOS_SEED, normalizeDeptoNombre } from "./departamentos";
 import { ROLES_SEED, normalizeRolNombre } from "./roles";
 import { PUESTOS_SEED, normalizePuestoNombre } from "./puestos";
@@ -848,10 +849,12 @@ export async function ensureReservasConfigEmpresa(
 }
 
 /**
- * Asegura la fila de `empresa_rrhh_config` con los defaults de validadores por
- * área: operativa→RECURSOS HUMANOS, administrativa→DIRECCIÓN (resueltos por
- * nombre dentro de la empresa). Debe llamarse DESPUÉS de sembrar los
- * departamentos. El dueño puede cambiarlo en Ajustes → RRHH.
+ * Asegura la fila de `empresa_rrhh_config` con los defaults de RRHH:
+ *  - Validadores por área: operativa→RECURSOS HUMANOS, administrativa→DIRECCIÓN
+ *    (resueltos por nombre dentro de la empresa).
+ *  - Reglas de vacaciones: empezar en lunes, semanas de 7 días naturales.
+ * Debe llamarse DESPUÉS de sembrar los departamentos. El dueño puede cambiarlo
+ * todo en Ajustes → RRHH → Solicitudes.
  */
 export async function ensureRrhhConfigEmpresa(
   admin: Admin,
@@ -878,6 +881,11 @@ export async function ensureRrhhConfigEmpresa(
     empresa_id: empresaId,
     validador_depto_operativa_id: await deptoIdPorNombre("RECURSOS HUMANOS"),
     validador_depto_administrativa_id: await deptoIdPorNombre("DIRECCIÓN"),
+    // Vacaciones: semanas completas empezando en lunes. El dueño lo cambia en
+    // RRHH → Solicitudes → Configuración.
+    vacaciones_dia_inicio: VACACIONES_REGLAS_DEFAULT.diaInicio,
+    vacaciones_dias_min: VACACIONES_REGLAS_DEFAULT.diasMin,
+    vacaciones_dias_max: VACACIONES_REGLAS_DEFAULT.diasMax,
   });
   if (error) throw error;
   return { creada: true };

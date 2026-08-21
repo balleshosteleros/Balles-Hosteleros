@@ -66,6 +66,11 @@ import {
   minutosTramo,
   validarTramo,
 } from "@/features/mi-panel/lib/solicitud-horas";
+import {
+  proximaFechaValida,
+  resumenReglasVacaciones,
+  validarRangoVacaciones,
+} from "@/features/mi-panel/lib/vacaciones-reglas";
 
 interface SolicitudModalProps {
   open: boolean;
@@ -77,8 +82,14 @@ interface SolicitudModalProps {
 
 type Paso = "tipo" | "subtipo" | "detalle";
 
-// Preaviso mínimo de la baja de contrato (días naturales). No hay tope máximo.
+// Ventana de preaviso de la baja de contrato (días naturales). El mínimo se
+// anuncia; el máximo NO se menciona por adelantado y solo salta como aviso si
+// el empleado elige una fecha demasiado lejana.
 const BAJA_CONTRATO_PREAVISO_MIN = 15;
+const BAJA_CONTRATO_PREAVISO_MAX = 45;
+// Vacaciones y permiso se piden con antelación para poder cuadrar el turno.
+// La baja médica no: es imprevisible y se comunica en el momento.
+const PREAVISO_MIN_DIAS = 30;
 
 // Parte de baja médica: hasta 3 fotos o PDFs, 50 MB cada uno (tope de documentos).
 const PARTE_BAJA_MAX = 3;
@@ -302,6 +313,12 @@ export function SolicitudModal({ open, onOpenChange, onCreated, onElegirDenuncia
       return;
     }
 
+    // Reglas de vacaciones de la empresa (día de inicio, mín/máx de días).
+    if (subtipo === "vacaciones" && errorReglasVac) {
+      toast.error(errorReglasVac);
+      return;
+    }
+
     // Baja médica: ruta propia con FormData (permite adjuntar hasta 3 partes).
     if (subtipo === "baja_medica") {
       setEnviando(true);
@@ -389,16 +406,21 @@ export function SolicitudModal({ open, onOpenChange, onCreated, onElegirDenuncia
     denuncia: "Queja o denuncia",
   };
 
-  // Sale de la configuración de RRHH (solo los ACTIVOS). El texto de la baja de
-  // contrato añade el preaviso mínimo, que lo fija el sistema y no configuración.
+  // Sale de la configuración de RRHH (solo los ACTIVOS). Al nombre de cada tipo
+  // le añadimos su plazo de aviso, que lo fija el sistema y no la configuración:
+  // así el empleado sabe con cuánta antelación tiene que pedirlo antes de elegir.
+  const PLAZO_POR_SUBTIPO: Partial<Record<SolicitudSubtipoAusencia, string>> = {
+    vacaciones: `Preaviso mínimo de ${PREAVISO_MIN_DIAS} días`,
+    permiso: `Preaviso mínimo de ${PREAVISO_MIN_DIAS} días`,
+    baja_contrato: `Preaviso mínimo de ${BAJA_CONTRATO_PREAVISO_MIN} días`,
+    baja_medica: "Instantánea",
+  };
+
   const opcionesAusencia: { value: SolicitudSubtipoAusencia; label: string; desc: string }[] =
     (tiposAusencia ?? []).map((t) => ({
       value: t.subtipo,
       label: t.nombre,
-      desc:
-        t.subtipo === "baja_contrato"
-          ? `Solicitar dejar la empresa (preaviso mínimo de ${BAJA_CONTRATO_PREAVISO_MIN} días naturales)`
-          : t.descripcion ?? "",
+      desc: PLAZO_POR_SUBTIPO[t.subtipo] ?? t.descripcion ?? "",
     }));
 
   const opcionesTrabajo: { value: SolicitudSubtipoTrabajo; label: string; desc: string }[] = [
@@ -406,11 +428,21 @@ export function SolicitudModal({ open, onOpenChange, onCreated, onElegirDenuncia
     { value: "dia_trabajado", label: "Día trabajado", desc: "Día de trabajo no fichado (excepcional)" },
   ];
 
+  // Reglas de la empresa para vacaciones (día de inicio y mín/máx de días).
+  // Solo se comprueba con fecha elegida: en blanco no se le riñe por nada.
+  const errorReglasVac = (() => {
+    if (subtipo !== "vacaciones" || !vacInfo || !fechaInicio) return null;
+    const res = validarRangoVacaciones(vacInfo.reglas, fechaInicio, fechaFin || null);
+    return res.ok ? null : res.error;
+  })();
+
   // Bloqueo de envío en cliente para vacaciones: sin calendario, fechas en un
-  // periodo bloqueado, o más días de los que quedan. El servidor revalida igual.
+  // periodo bloqueado, más días de los que quedan, o incumplir las reglas de la
+  // empresa. El servidor revalida igual.
   const vacEnvioBloqueado = (() => {
     if (subtipo !== "vacaciones" || !vacInfo) return false;
     if (!vacInfo.tieneCalendario) return true;
+    if (errorReglasVac) return true;
     const inicio = fechaInicio;
     if (!inicio) return false;
     const fin = fechaFin || fechaInicio;
@@ -441,15 +473,26 @@ export function SolicitudModal({ open, onOpenChange, onCreated, onElegirDenuncia
       ? validarTramo(horaInicio, horaFin)
       : null;
 
+  // Preaviso de vacaciones y permiso: hay que pedirlos con antelación para que
+  // se pueda cuadrar el turno. Se mide en días naturales desde hoy hasta el
+  // primer día solicitado. El servidor revalida igual.
+  const diasPreaviso =
+    fechaInicio ? diasNaturales(todayISO(), fechaInicio) : null;
+  const preavisoInsuficiente =
+    (subtipo === "vacaciones" || subtipo === "permiso") &&
+    diasPreaviso !== null &&
+    diasPreaviso < PREAVISO_MIN_DIAS;
+
   // Bloqueo de envío en cliente para baja de contrato: exige que exista la
-  // fecha efectiva y que respete el preaviso mínimo legal (15 días naturales).
+  // fecha efectiva y que caiga dentro de la ventana de preaviso legal.
   // El servidor revalida igual.
   const bajaEnvioBloqueado = (() => {
     if (subtipo !== "baja_contrato") return false;
     // Ya hay una baja en curso o aún estamos comprobándolo: no se puede enviar.
     if (bajaEnCurso || bajaComprobando) return true;
     if (!fechaFin) return true;
-    return diasNaturales(todayISO(), fechaFin) < BAJA_CONTRATO_PREAVISO_MIN;
+    const dias = diasNaturales(todayISO(), fechaFin);
+    return dias < BAJA_CONTRATO_PREAVISO_MIN || dias > BAJA_CONTRATO_PREAVISO_MAX;
   })();
 
   return (
@@ -586,8 +629,12 @@ export function SolicitudModal({ open, onOpenChange, onCreated, onElegirDenuncia
           {paso === "detalle" && subtipo && subtipo === "baja_contrato" && (() => {
             const hoy = todayISO();
             const minBaja = addDaysISO(hoy, BAJA_CONTRATO_PREAVISO_MIN);
+            const maxBaja = addDaysISO(hoy, BAJA_CONTRATO_PREAVISO_MAX);
             const dias = fechaFin ? diasNaturales(hoy, fechaFin) : 0;
-            const fueraDeRango = !!fechaFin && dias < BAJA_CONTRATO_PREAVISO_MIN;
+            // El mínimo se anuncia de antemano; el máximo solo se dice si lo pasa.
+            const preavisoCorto = !!fechaFin && dias < BAJA_CONTRATO_PREAVISO_MIN;
+            const preavisoLargo = !!fechaFin && dias > BAJA_CONTRATO_PREAVISO_MAX;
+            const fueraDeRango = preavisoCorto || preavisoLargo;
 
             // Mientras comprobamos si ya hay una baja en curso.
             if (bajaComprobando) {
@@ -659,10 +706,24 @@ export function SolicitudModal({ open, onOpenChange, onCreated, onElegirDenuncia
                       Preaviso: {dias} días naturales.
                     </p>
                   )}
-                  {fueraDeRango && (
+                  {preavisoCorto && (
                     <p className="text-xs font-medium text-rose-600">
                       El preaviso mínimo es de {BAJA_CONTRATO_PREAVISO_MIN} días
                       naturales.
+                    </p>
+                  )}
+                  {/* El tope no se anuncia de antemano: solo aparece si lo pasa. */}
+                  {preavisoLargo && (
+                    <p className="text-xs font-medium text-rose-600 flex items-start gap-1.5">
+                      <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+                      <span>
+                        Has pedido {dias} días de preaviso y el máximo son{" "}
+                        {BAJA_CONTRATO_PREAVISO_MAX} días naturales. Espera y solicita
+                        tu baja como pronto el {formatFechaEs(
+                          addDaysISO(fechaFin, -BAJA_CONTRATO_PREAVISO_MAX),
+                        )}
+                        , o elige una fecha no posterior al {formatFechaEs(maxBaja)}.
+                      </span>
                     </p>
                   )}
                 </div>
@@ -694,7 +755,23 @@ export function SolicitudModal({ open, onOpenChange, onCreated, onElegirDenuncia
                     id="fechaInicio"
                     type="date"
                     value={fechaInicio}
-                    onChange={(e) => setFechaInicio(e.target.value)}
+                    onChange={(e) => {
+                      const desde = e.target.value;
+                      setFechaInicio(desde);
+                      // Vacaciones: la empresa exige un mínimo de días, así que
+                      // proponemos el "hasta" que lo cumple en vez de dejar que
+                      // lo calcule él y se lleve un error al enviar. Solo si aún
+                      // no ha tocado el "hasta": no le pisamos su elección.
+                      const min = vacInfo?.reglas.diasMin ?? null;
+                      if (subtipo === "vacaciones" && desde && min && min > 1 && !fechaFin) {
+                        setFechaFin(addDaysISO(desde, min - 1));
+                      }
+                    }}
+                    min={
+                      subtipo === "vacaciones" || subtipo === "permiso"
+                        ? addDaysISO(todayISO(), PREAVISO_MIN_DIAS)
+                        : undefined
+                    }
                   />
                 </div>
                 {subtipo !== "horas_extras" && subtipo !== "dia_trabajado" && (
@@ -710,6 +787,14 @@ export function SolicitudModal({ open, onOpenChange, onCreated, onElegirDenuncia
                   </div>
                 )}
               </div>
+
+              {preavisoInsuficiente && (
+                <p className="text-xs font-medium text-rose-600">
+                  Hay que pedirlo con {PREAVISO_MIN_DIAS} días de antelación como
+                  mínimo. La fecha más cercana que puedes elegir es el{" "}
+                  {formatFechaEs(addDaysISO(todayISO(), PREAVISO_MIN_DIAS))}.
+                </p>
+              )}
 
               {/* Tramo (entrada–salida) para solicitudes de trabajo: al aprobar se
                   crea el fichaje con estas horas (dia_trabajado=normal, horas_extras=extra). */}
@@ -809,8 +894,29 @@ export function SolicitudModal({ open, onOpenChange, onCreated, onElegirDenuncia
                     )
                   : undefined;
                 const excede = diasSel > 0 && diasSel > vacInfo.diasRestantes;
+                // Las reglas se enseñan de entrada, no solo al equivocarse.
+                const resumenReglas = resumenReglasVacaciones(vacInfo.reglas);
+                const sugerida = inicio
+                  ? proximaFechaValida(vacInfo.reglas, inicio)
+                  : null;
                 return (
                   <div className="space-y-2">
+                    {resumenReglas && (
+                      <p className="text-xs text-muted-foreground rounded-md border bg-muted/20 p-2.5 leading-relaxed">
+                        {resumenReglas}
+                      </p>
+                    )}
+                    {errorReglasVac && (
+                      <p className="text-xs font-medium text-rose-600 flex items-start gap-1.5">
+                        <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+                        <span>
+                          {errorReglasVac}
+                          {sugerida && sugerida !== inicio
+                            ? ` El siguiente día válido es el ${formatFechaEs(sugerida)}.`
+                            : ""}
+                        </span>
+                      </p>
+                    )}
                     <div className="grid grid-cols-3 gap-2 rounded-lg border bg-muted/30 p-3 text-center">
                       <div>
                         <p className="text-base font-semibold">{vacInfo.diasTotales}</p>
@@ -984,6 +1090,7 @@ export function SolicitudModal({ open, onOpenChange, onCreated, onElegirDenuncia
                       enviando ||
                       vacEnvioBloqueado ||
                       bajaEnvioBloqueado ||
+                      preavisoInsuficiente ||
                       motivoCorto ||
                       !!errorTramo
                     }
