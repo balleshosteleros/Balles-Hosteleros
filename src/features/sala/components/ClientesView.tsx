@@ -16,7 +16,15 @@ import { ClienteBloqueoTicketBanner } from "@/features/sala/components/clientes/
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import Link from "next/link";
 import { Settings, Star } from "lucide-react";
+import { cn } from "@/lib/utils";
+import {
+  ESTADOS_RESERVA,
+  ESTADO_DOT_CLASS,
+  ESTADO_RESERVA_LABELS,
+  type EstadoReserva,
+} from "@/features/sala/data/reservas";
 import { Button } from "@/components/ui/button";
 import { Cliente, ClasificacionCliente } from "@/features/sala/data/clientes";
 import { listClientes, createCliente } from "@/features/sala/actions/clientes-actions";
@@ -48,6 +56,9 @@ import { TableColumnHeader } from "@/shared/components/TableColumnHeader";
 import { IOActions } from "@/shared/io";
 import { clientesIO } from "@/features/sala/io/clientes.io";
 
+/** Filas por hoja en la tabla de clientes. */
+const POR_PAGINA = 50;
+
 const clasificacionBadge: Record<ClasificacionCliente, string> = {
   "VIP": "bg-amber-100 text-amber-800 border-amber-300",
   "REGULAR": "bg-blue-100 text-blue-800 border-blue-300",
@@ -57,6 +68,8 @@ const clasificacionBadge: Record<ClasificacionCliente, string> = {
 const ENRIQUECIDO_VACIO: ClienteEnriquecido = {
   clienteId: "",
   proximas: [],
+  historico: [],
+  porEstado: {},
   etiquetas: [],
   resenas: [],
   valoracionesSolicitadas: [],
@@ -143,6 +156,7 @@ export function ClientesView() {
   const [columnasOrden, setColumnasOrden] = useState<string[] | undefined>(undefined);
   const [selectedCliente, setSelectedCliente] = useState<Cliente | null>(null);
   const [showConfig, setShowConfig] = useState(false);
+  const [pagina, setPagina] = useState(1);
 
   // Borrador de la ficha: se edita en local y solo se persiste al pulsar Guardar.
   const [borrador, setBorrador] = useState<Cliente | null>(null);
@@ -193,7 +207,10 @@ export function ClientesView() {
       if (campo === "clasificacion") return clasifDe(c);
       if (campo === "visitas") return extraDe(c.id).visitas;
       if (campo === "ultimaVisita") return extraDe(c.id).ultimaVisita ?? "";
-      if (campo === "nombre") return c.nombre;
+      // Nombre completo: la columna pinta nombre + apellidos, así que filtrar
+      // por "nombre" tiene que casar con lo que se ve, no solo con el de pila.
+      if (campo === "nombre")
+        return [c.nombre, c.apellidos].filter(Boolean).join(" ");
       if (campo === "proximas") return extraDe(c.id).proximas.length;
       if (campo === "resenas") return extraDe(c.id).ratingMedio ?? 0;
       // Array: el filtro de lista casa si coincide CUALQUIERA de las etiquetas.
@@ -219,6 +236,32 @@ export function ClientesView() {
     lista = aplicarOrdenToolbar(lista, orden, acceso);
     return lista;
   }, [clientes, busqueda, filtros, orden, acceso]);
+
+  // Al buscar o filtrar se vuelve a la primera hoja: si estabas en la 7 y el
+  // filtro deja 20 resultados, quedarte en la 7 enseña una tabla vacía.
+  useEffect(() => {
+    setPagina(1);
+  }, [busqueda, filtros]);
+
+  /**
+   * Paginación: 50 por hoja. Con la clientela de un restaurante la tabla
+   * entera son miles de filas y el navegador se arrastra al pintarlas.
+   */
+  const totalPaginas = Math.max(1, Math.ceil(filtrados.length / POR_PAGINA));
+  /**
+   * Página efectiva. Se acota en el render en vez de con un efecto: si al
+   * filtrar quedan menos hojas de las que había, la página guardada se sale de
+   * rango y la tabla se vería vacía hasta que el usuario tocara algo.
+   */
+  const paginaActual = Math.min(pagina, totalPaginas);
+  const visibles = useMemo(
+    () =>
+      filtrados.slice(
+        (paginaActual - 1) * POR_PAGINA,
+        paginaActual * POR_PAGINA,
+      ),
+    [filtrados, paginaActual],
+  );
 
   /** Etiquetas realmente en uso, para el desplegable del filtro. */
   const opcionesEtiquetas = useMemo(() => {
@@ -295,6 +338,9 @@ export function ClientesView() {
           key="nombre"
           label="Nombre"
           campo="nombre"
+          filtroTipo="texto"
+          filtros={filtros}
+          onFiltrosChange={setFiltros}
           ordenable
           orden={orden}
           onOrdenChange={setOrden}
@@ -307,11 +353,29 @@ export function ClientesView() {
       ),
     },
     telefono: {
-      th: <TableColumnHeader key="telefono" label="Teléfono" />,
+      th: (
+        <TableColumnHeader
+          key="telefono"
+          label="Teléfono"
+          campo="telefono"
+          filtroTipo="texto"
+          filtros={filtros}
+          onFiltrosChange={setFiltros}
+        />
+      ),
       td: (c) => <td key="telefono" className="p-3">{c.telefono || "—"}</td>,
     },
     email: {
-      th: <TableColumnHeader key="email" label="Email" />,
+      th: (
+        <TableColumnHeader
+          key="email"
+          label="Email"
+          campo="email"
+          filtroTipo="texto"
+          filtros={filtros}
+          onFiltrosChange={setFiltros}
+        />
+      ),
       td: (c) => <td key="email" className="p-3">{c.email || "—"}</td>,
     },
     clasificacion: {
@@ -494,7 +558,16 @@ export function ClientesView() {
       },
     },
     observaciones: {
-      th: <TableColumnHeader key="observaciones" label="Observaciones" />,
+      th: (
+        <TableColumnHeader
+          key="observaciones"
+          label="Observaciones"
+          campo="observaciones"
+          filtroTipo="texto"
+          filtros={filtros}
+          onFiltrosChange={setFiltros}
+        />
+      ),
       td: (c) => (
         <td key="observaciones" className="p-3 text-muted-foreground truncate max-w-[200px]">{c.observaciones || "—"}</td>
       ),
@@ -551,13 +624,52 @@ export function ClientesView() {
               {columnasRender.map((c) => columnDefs[c.campo]?.th)}
             </tr></thead>
             <tbody>
-              {filtrados.map(c => (
+              {visibles.map(c => (
                 <tr key={c.id} className="border-b hover:bg-muted/20 cursor-pointer" onClick={() => abrirFicha(c)}>
                   {columnasRender.map((col) => columnDefs[col.campo]?.td(c))}
                 </tr>
               ))}
             </tbody>
           </table>
+
+          {filtrados.length === 0 ? (
+            <p className="p-6 text-center text-sm text-muted-foreground">
+              No hay clientes que coincidan.
+            </p>
+          ) : (
+            <div className="flex items-center justify-between gap-4 border-t px-3 py-2 text-sm">
+              <span className="text-muted-foreground">
+                {(paginaActual - 1) * POR_PAGINA + 1}–
+                {Math.min(paginaActual * POR_PAGINA, filtrados.length)} de{" "}
+                {filtrados.length}
+              </span>
+              {totalPaginas > 1 && (
+                <div className="flex items-center gap-1">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-8"
+                    disabled={paginaActual === 1}
+                    onClick={() => setPagina(paginaActual - 1)}
+                  >
+                    Anterior
+                  </Button>
+                  <span className="px-2 text-muted-foreground">
+                    Hoja {paginaActual} de {totalPaginas}
+                  </span>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-8"
+                    disabled={paginaActual === totalPaginas}
+                    onClick={() => setPagina(paginaActual + 1)}
+                  >
+                    Siguiente
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -651,6 +763,39 @@ export function ClientesView() {
                       : "—"}
                   </p>
                 </div>
+              </div>
+
+              {/*
+                Resumen de comportamiento: de sus N reservas, cuántas en cada
+                estado. Es la lectura rápida de si un cliente cancela mucho o
+                no se presenta, sin tener que contar la lista a mano.
+              */}
+              <div className="pt-2 border-t space-y-1.5">
+                <Label className="text-muted-foreground">
+                  Reservas por estado
+                </Label>
+                {fichaExtra.historico.length === 0 ? (
+                  <p className="text-muted-foreground">Sin reservas todavía.</p>
+                ) : (
+                  <div className="flex flex-wrap gap-2">
+                    {ESTADOS_RESERVA.filter(
+                      (e) => (fichaExtra.porEstado[e] ?? 0) > 0,
+                    ).map((e) => (
+                      <span
+                        key={e}
+                        className="inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs"
+                      >
+                        <span className={cn("h-2 w-2 rounded-full", ESTADO_DOT_CLASS[e])} />
+                        <span className="text-muted-foreground">
+                          {ESTADO_RESERVA_LABELS[e]}
+                        </span>
+                        <span className="font-medium">
+                          {fichaExtra.porEstado[e]}
+                        </span>
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
 
               {/* Próximas reservas del cliente */}
@@ -834,6 +979,56 @@ export function ClientesView() {
                     setBorrador({ ...borrador, notasInternas: e.target.value })
                   }
                 />
+              </div>
+
+              {/*
+                Histórico de reservas. Cada línea lleva al día de esa reserva en
+                el plano de sala (`/sala/reservas?fecha=…`), que es donde se ve
+                en su mesa y en su contexto.
+              */}
+              <div className="pt-2 border-t space-y-1.5">
+                <Label className="text-muted-foreground">
+                  Histórico de reservas
+                </Label>
+                {fichaExtra.historico.length === 0 ? (
+                  <p className="text-muted-foreground">Sin reservas todavía.</p>
+                ) : (
+                  <ul className="space-y-1">
+                    {fichaExtra.historico.map((r) => (
+                      <li key={r.id}>
+                        <Link
+                          href={`/sala/reservas?fecha=${r.fecha}${
+                            r.turno ? `&turno=${r.turno}` : ""
+                          }`}
+                          className="flex items-center justify-between gap-3 rounded-md border px-3 py-2 hover:bg-muted/40 transition-colors"
+                        >
+                          <span className="flex items-center gap-2">
+                            <span
+                              className={cn(
+                                "h-2 w-2 shrink-0 rounded-full",
+                                ESTADO_DOT_CLASS[r.estado as EstadoReserva],
+                              )}
+                            />
+                            <span className="font-medium">
+                              {fechaLarga(r.fecha)}
+                            </span>
+                            <span className="text-muted-foreground">
+                              · {r.hora}
+                            </span>
+                          </span>
+                          <span className="shrink-0 text-xs text-muted-foreground">
+                            {ESTADO_RESERVA_LABELS[r.estado as EstadoReserva] ??
+                              r.estado}
+                            {" · "}
+                            {r.personas}{" "}
+                            {r.personas === 1 ? "persona" : "personas"}
+                            {r.mesa ? ` · Mesa ${r.mesa}` : ""}
+                          </span>
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </div>
 
               <div className="pt-2 border-t space-y-1.5">

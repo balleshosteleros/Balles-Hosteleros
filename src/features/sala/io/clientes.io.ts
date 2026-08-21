@@ -26,6 +26,9 @@ export const clientesIO: ModuleIO<Cliente> = {
   description: "Base de datos de clientes con notas y clasificación.",
   schema,
   uniqueBy: "telefono",
+  // Los cuatro formatos: la lista de clientes se lleva tanto a Excel para
+  // trabajarla como a PDF para imprimirla o mandarla.
+  supportedExportFormats: ["xlsx", "csv", "json", "pdf"],
   columns: [
     { key: "id", label: "ID", hideInImport: true },
     { key: "nombre", label: "Nombre", required: true, example: "María García" },

@@ -220,6 +220,15 @@ export function TableColumnHeader({
               filtroActivo={filtroActivo}
             />
           )}
+          {tieneFiltro && filtroTipo === "texto" && (
+            <TextoFilter
+              campo={campo!}
+              label={label}
+              filtros={filtros}
+              onFiltrosChange={onFiltrosChange!}
+              filtroActivo={filtroActivo}
+            />
+          )}
           {tieneFiltro && filtroTipo === "numero" && (
             <NumeroFilter
               campo={campo!}
@@ -451,6 +460,83 @@ function NumeroFilter({
         placeholder="Valor..."
         value={valor}
         onChange={(e) => setValor(e.target.value)}
+        className="h-8"
+      />
+      <div className="flex gap-1">
+        <Button size="sm" className="flex-1 h-7 text-xs" onClick={aplicar}>
+          Aplicar
+        </Button>
+        {filtroActivo && (
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-7 text-xs"
+            onClick={limpiar}
+          >
+            <X className="h-3 w-3" />
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Filtro "contiene" para columnas de texto libre (nombre, email, teléfono…).
+ *
+ * POR QUÉ no una lista de valores como en las columnas de catálogo: aquí cada
+ * fila trae un valor distinto, así que el desplegable tendría tantas opciones
+ * como clientes y no serviría para nada.
+ */
+function TextoFilter({
+  campo,
+  label,
+  filtros,
+  onFiltrosChange,
+  filtroActivo,
+}: {
+  campo: string;
+  label: string;
+  filtros: ToolbarFiltroActivo[];
+  onFiltrosChange: (f: ToolbarFiltroActivo[]) => void;
+  filtroActivo?: ToolbarFiltroActivo;
+}) {
+  const [valor, setValor] = useState(filtroActivo?.texto ?? "");
+
+  useEffect(() => {
+    setValor(filtroActivo?.texto ?? "");
+  }, [filtroActivo]);
+
+  function aplicar() {
+    const t = valor.trim();
+    if (!t) {
+      onFiltrosChange(reemplazarFiltro(filtros, campo, null));
+      return;
+    }
+    onFiltrosChange(
+      reemplazarFiltro(filtros, campo, {
+        id: filtroActivo?.id ?? crypto.randomUUID(),
+        campo,
+        etiqueta: label,
+        texto: t,
+      }),
+    );
+  }
+
+  function limpiar() {
+    setValor("");
+    onFiltrosChange(reemplazarFiltro(filtros, campo, null));
+  }
+
+  return (
+    <div className="space-y-2">
+      <Input
+        placeholder="Contiene..."
+        value={valor}
+        onChange={(e) => setValor(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") aplicar();
+        }}
         className="h-8"
       />
       <div className="flex gap-1">

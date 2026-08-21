@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo, useEffect, useCallback, useRef } from "react";
+import { useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -2351,6 +2352,7 @@ function PlanoCanvas({
 
 export function ReservasView() {
   const { empresaActual, ajustes } = useEmpresa();
+  const searchParams = useSearchParams();
   // Ajustes → Empresa → Reservas. Apagado (por defecto) el listado enseña las
   // reservas de TODAS las salas del turno y cambiar de sala solo mueve el plano;
   // encendido, cada sala enseña únicamente las suyas.
@@ -2358,8 +2360,34 @@ export function ReservasView() {
   const [mesas, setMesas] = useState<Mesa[]>(SAMPLE_MESAS);
   const [reservas, setReservas] = useState<Reserva[]>([]);
   const [, setLoading] = useState(true);
-  const [fecha, setFecha] = useState(new Date().toISOString().split("T")[0]);
-  const [turno, setTurno] = useState<TurnoReserva>("CENA");
+  /**
+   * Día que se está mirando. Arranca en el `?fecha=` de la URL si lo hay, para
+   * que al pinchar una reserva desde la ficha del cliente se abra directamente
+   * ese día en el plano en vez de hoy.
+   */
+  const fechaPedida = searchParams?.get("fecha") ?? null;
+  const fechaPedidaValida =
+    fechaPedida && /^\d{4}-\d{2}-\d{2}$/.test(fechaPedida) ? fechaPedida : null;
+  const [fecha, setFecha] = useState(
+    () => fechaPedidaValida ?? new Date().toISOString().split("T")[0],
+  );
+
+  // Y también DESPUÉS del montaje: si ya estabas en esta pantalla, Next reutiliza
+  // el componente al navegar y el estado inicial no se vuelve a calcular, así que
+  // sin esto el enlace desde la ficha no movería el día.
+  useEffect(() => {
+    if (fechaPedidaValida) setFecha(fechaPedidaValida);
+  }, [fechaPedidaValida]);
+  // El turno también viaja en la URL: la lista filtra por turno, así que llegar
+  // a una reserva de comida con el turno en CENA la dejaría fuera de pantalla.
+  const turnoPedido = searchParams?.get("turno") ?? null;
+  const turnoPedidoValido =
+    turnoPedido === "COMIDA" || turnoPedido === "CENA" ? turnoPedido : null;
+  const [turno, setTurno] = useState<TurnoReserva>(turnoPedidoValido ?? "CENA");
+
+  useEffect(() => {
+    if (turnoPedidoValido) setTurno(turnoPedidoValido);
+  }, [turnoPedidoValido]);
   const [busqueda, setBusqueda] = useState("");
   const [filtroEstados, setFiltroEstados] = useState<EstadoReserva[]>(ESTADOS_RESERVA);
   const [filtroOrigen, setFiltroOrigen] = useState<string>("TODOS");

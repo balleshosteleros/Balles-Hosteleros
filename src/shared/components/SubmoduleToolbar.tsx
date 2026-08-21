@@ -58,7 +58,12 @@ import {
   saveViewPreferences,
 } from "@/shared/io/view-preferences";
 
-export type ToolbarFiltroTipo = "lista" | "numero" | "fecha" | "booleano";
+export type ToolbarFiltroTipo =
+  | "lista"
+  | "numero"
+  | "fecha"
+  | "booleano"
+  | "texto";
 
 export type ToolbarCampoFiltro = {
   campo: string;
@@ -77,6 +82,8 @@ export type ToolbarFiltroActivo = {
   desde?: string;
   hasta?: string;
   bool?: boolean;
+  /** Filtro "contiene", sin distinguir mayúsculas ni acentos. */
+  texto?: string;
 };
 
 export type ToolbarOrdenOpcion = {
@@ -1078,6 +1085,16 @@ export function aplicarFiltrosToolbar<T>(
       }
       if (f.bool !== undefined) {
         return Boolean(valor) === f.bool;
+      }
+      if (f.texto) {
+        // Sin acentos ni mayúsculas: buscar "nunez" tiene que encontrar a
+        // "Núñez", o el filtro no sirve con los apellidos de media clientela.
+        const norm = (s: string) =>
+          s
+            .toLowerCase()
+            .normalize("NFD")
+            .replace(/[\u0300-\u036f]/g, "");
+        return norm(String(valor ?? "")).includes(norm(f.texto));
       }
       return true;
     }),

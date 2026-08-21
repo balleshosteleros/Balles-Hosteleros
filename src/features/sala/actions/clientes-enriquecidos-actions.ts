@@ -103,10 +103,27 @@ export interface ValoracionSolicitadaCliente {
   resena: ResenaCliente | null;
 }
 
+/** Una reserva del histórico del cliente, para la lista de su ficha. */
+export interface ReservaHistoricoCliente {
+  id: string;
+  fecha: string;
+  hora: string;
+  personas: number;
+  estado: string;
+  mesa: string | null;
+  zona: string | null;
+  /** COMIDA o CENA: hace falta para abrir el día en el turno correcto. */
+  turno: string | null;
+}
+
 export interface ClienteEnriquecido {
   clienteId: string;
   /** Reservas futuras vivas, de la más próxima a la más lejana. */
   proximas: ProximaReservaCliente[];
+  /** TODAS sus reservas, de la más reciente a la más antigua. */
+  historico: ReservaHistoricoCliente[];
+  /** Cuántas reservas tiene en cada estado. Solo estados con al menos una. */
+  porEstado: Record<string, number>;
   etiquetas: EtiquetaCliente[];
   resenas: ResenaCliente[];
   /** Histórico de peticiones de valoración, de la más reciente a la más antigua. */
@@ -189,7 +206,7 @@ export async function listClientesEnriquecidos(): Promise<ClientesEnriquecidosRe
       // visitas = asistió). Se reparte abajo, en una sola pasada.
       supabase
         .from("reservas")
-        .select("id, cliente_id, fecha, hora, personas, estado, mesa, zona")
+        .select("id, cliente_id, fecha, hora, personas, estado, mesa, zona, turno")
         .eq("empresa_id", empresaId)
         .not("cliente_id", "is", null)
         .order("fecha", { ascending: true })
@@ -237,6 +254,8 @@ export async function listClientesEnriquecidos(): Promise<ClientesEnriquecidosRe
         out[id] = {
           clienteId: id,
           proximas: [],
+          historico: [],
+          porEstado: {},
           etiquetas: [],
           resenas: [],
           valoracionesSolicitadas: [],
@@ -260,6 +279,20 @@ export async function listClientesEnriquecidos(): Promise<ClientesEnriquecidosRe
       const fecha = r.fecha as string;
       const estado = (r.estado as string) ?? "";
       reservaInfo.set(r.id as string, { clienteId: cid, fecha });
+
+      // Histórico y recuento por estado: TODAS sus reservas, sin filtrar. Es lo
+      // que responde "de sus 5 reservas, ¿cuántas canceló?".
+      b.historico.push({
+        id: r.id as string,
+        fecha,
+        hora: ((r.hora as string) ?? "").slice(0, 5),
+        personas: (r.personas as number) ?? 0,
+        estado,
+        mesa: (r.mesa as string | null) ?? null,
+        zona: (r.zona as string | null) ?? null,
+        turno: (r.turno as string | null) ?? null,
+      });
+      if (estado) b.porEstado[estado] = (b.porEstado[estado] ?? 0) + 1;
 
       if (fecha >= hoy) {
         // Futuro: solo lo que es una mesa asegurada.
@@ -347,6 +380,9 @@ export async function listClientesEnriquecidos(): Promise<ClientesEnriquecidosRe
     // misma nota.
     for (const c of Object.values(out)) {
       c.ratingMedio = notaGlobalCliente(c.resenas);
+      // Las reservas llegan de la más antigua a la más nueva (el orden que
+      // necesita el cálculo de `ultimaVisita`); el histórico se lee al revés.
+      c.historico.reverse();
     }
 
     const umbrales = normalizarUmbrales({
