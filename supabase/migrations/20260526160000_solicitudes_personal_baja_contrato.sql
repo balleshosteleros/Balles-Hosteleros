@@ -7,7 +7,7 @@
 --   - fecha_inicio = día en que el empleado envía la solicitud
 --     (primer día de preaviso).
 --   - fecha_fin    = fecha solicitada de baja (último día efectivo).
---   - preaviso = fecha_fin - fecha_inicio, mínimo 15 días naturales.
+--   - preaviso = fecha_fin - fecha_inicio, entre 15 y 45 días naturales.
 -- ============================================================
 
 alter table public.solicitudes_personal
