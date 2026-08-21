@@ -237,7 +237,7 @@ export async function listEmpleados() {
     console.error("[rrhh] listEmpleados:", err);
     // Sin el motivo, la vista pintaba "No hay empleados todavía" ante un fallo
     // de permisos: parecía una empresa vacía en vez de un acceso denegado.
-    return { ok: false, data: [], error: friendlyError(err) };
+    return { ok: false, data: [], error: friendlyError(err, "listEmpleados") };
   }
 }
 

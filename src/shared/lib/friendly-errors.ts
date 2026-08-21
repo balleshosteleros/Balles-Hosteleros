@@ -1,10 +1,48 @@
 /**
+ * Detalle técnico de un error de Supabase (`code`, `details`, `hint`), que no
+ * viaja en `message` y es justo lo que dice qué hacer para arreglarlo.
+ */
+function detalleSupabase(err: unknown): string {
+  if (!err || typeof err !== "object") return "";
+  const e = err as Record<string, unknown>;
+  const partes = (["code", "details", "hint"] as const)
+    .map((k) => (typeof e[k] === "string" && e[k] ? `${k}=${e[k] as string}` : ""))
+    .filter(Boolean);
+  return partes.length > 0 ? ` (${partes.join(" · ")})` : "";
+}
+
+/**
  * Traduce errores técnicos (Supabase, Next.js, red…) a mensajes en español
  * pensados para usuarios finales sin conocimiento técnico.
+ *
+ * Y DEJA CONSTANCIA del error real en el log del servidor. El mensaje amable es
+ * para el usuario; sin esta traza, la causa se perdía por completo: una lista
+ * entera caída se veía como "Ha ocurrido un error" y averiguar el motivo exigía
+ * reproducir la consulta a mano. Pasó con el embed ambiguo de departamentos.
+ *
+ * @param contexto Dónde ocurrió, para localizarlo en el log (ej. "listEmpleados").
  */
-export function friendlyError(err: unknown): string {
-  const raw = err instanceof Error ? err.message : typeof err === "string" ? err : "";
+export function friendlyError(err: unknown, contexto?: string): string {
+  // Los errores de Supabase NO son `Error`: son objetos planos con `message`.
+  // Sin este caso, `raw` quedaba vacío y ni se traducía el mensaje ni se
+  // registraba nada útil — justo con los errores que más importa ver.
+  const raw =
+    err instanceof Error
+      ? err.message
+      : typeof err === "string"
+        ? err
+        : typeof (err as { message?: unknown })?.message === "string"
+          ? ((err as { message: string }).message)
+          : "";
   const text = raw.toLowerCase();
+
+  // Solo en servidor: en el navegador ensuciaría la consola del usuario.
+  if (typeof window === "undefined") {
+    const donde = contexto ? `[${contexto}] ` : "";
+    console.error(
+      `${donde}${raw || "error sin mensaje"}${detalleSupabase(err)}`,
+    );
+  }
 
   // Tamaño de archivo
   if (text.includes("body exceeded") || text.includes("payload too large") || text.includes("body size")) {
