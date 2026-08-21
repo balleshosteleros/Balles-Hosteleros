@@ -22,8 +22,9 @@ const SOLICITUD_HORA_INICIO_LISTA = 6;
  * Las 48 horas seleccionables del día, empezando a las 06:00:
  * 06:00, 06:30 … 23:30, 00:00 … 05:30.
  *
- * La madrugada va al final, como continuación de la noche, porque un turno que
- * cruza la medianoche pertenece a la jornada que empezó el día anterior.
+ * La madrugada va al final porque es donde termina la jornada del restaurante,
+ * pero entrada y salida siempre pertenecen al MISMO día: un turno que acaba
+ * pasada la medianoche se pide como dos solicitudes.
  */
 export const SOLICITUD_HORAS_OPCIONES: string[] = Array.from(
   { length: (24 * 60) / SOLICITUD_PASO_MINUTOS },
@@ -37,16 +38,15 @@ export const SOLICITUD_HORAS_OPCIONES: string[] = Array.from(
 );
 
 /**
- * Minutos entre entrada y salida. Si la salida es menor que la entrada se
- * entiende que el turno cruzó la medianoche (una hora extra de madrugada es
- * normal en hostelería), así que se suman las 24 horas.
+ * Minutos entre entrada y salida, dentro del mismo día. Es una resta directa:
+ * si la salida es anterior a la entrada, sale negativo y el tramo es inválido.
+ * No se da la vuelta al reloj: un turno que acaba de madrugada se pide como dos
+ * solicitudes, una por cada día.
  */
 export function minutosTramo(horaInicio: string, horaFin: string): number {
   const [hi, mi] = horaInicio.split(":").map(Number);
   const [hf, mf] = horaFin.split(":").map(Number);
-  let min = hf * 60 + mf - (hi * 60 + mi);
-  if (min < 0) min += 1440;
-  return min;
+  return hf * 60 + mf - (hi * 60 + mi);
 }
 
 /**
@@ -60,10 +60,14 @@ export function validarTramo(
   if (!esHoraPermitida(horaInicio) || !esHoraPermitida(horaFin)) {
     return SOLICITUD_HORAS_AVISO;
   }
-  if (horaInicio === horaFin) {
+  const min = minutosTramo(horaInicio, horaFin);
+  if (min === 0) {
     return "La hora de entrada no puede ser igual a la de salida.";
   }
-  if (minutosTramo(horaInicio, horaFin) < SOLICITUD_DURACION_MIN_MINUTOS) {
+  if (min < 0) {
+    return "La hora de entrada tiene que ser anterior a la de salida. Si tu turno acabó de madrugada, pide cada día por separado.";
+  }
+  if (min < SOLICITUD_DURACION_MIN_MINUTOS) {
     return "Tienes que solicitar media hora como mínimo.";
   }
   return null;
