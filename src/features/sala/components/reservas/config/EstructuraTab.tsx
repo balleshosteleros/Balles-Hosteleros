@@ -614,9 +614,9 @@ function SalaModal({
 /**
  * Ajuste rápido del aforo de una combinación, sin abrir el modal.
  *
- * Los botones +/− están ocultos y solo aparecen al pasar el ratón por encima:
- * la lista se lee limpia ("5–8 pax") y los controles salen cuando se van a
- * usar. Sin esto había que abrir la ventana de edición para sumar una persona.
+ * Los +/− están SIEMPRE visibles: ocultarlos tras el hover obligaba a buscar a
+ * ciegas dónde pinchar. Son cuadrados pequeños, del tamaño de la cifra que
+ * acompañan (una o dos cifras), para no engordar la fila.
  */
 function AforoRapido({
   valor,
@@ -631,24 +631,29 @@ function AforoRapido({
   max: number;
   titulo: string;
 }) {
+  const boton =
+    "h-5 w-5 shrink-0 rounded border text-[13px] leading-none flex items-center justify-center " +
+    "text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-25 disabled:hover:bg-transparent";
   return (
-    <span className="group/aforo inline-flex items-center" title={titulo}>
+    <span className="inline-flex items-center gap-1" title={titulo}>
       <button
         type="button"
         aria-label={`Restar en ${titulo.toLowerCase()}`}
         disabled={valor <= min}
         onClick={() => onChange(valor - 1)}
-        className="w-0 overflow-hidden opacity-0 transition-all group-hover/aforo:w-4 group-hover/aforo:opacity-100 hover:text-foreground disabled:opacity-0"
+        className={boton}
       >
         −
       </button>
-      <span className="tabular-nums font-medium text-foreground">{valor}</span>
+      <span className="tabular-nums font-medium text-foreground w-5 text-center">
+        {valor}
+      </span>
       <button
         type="button"
         aria-label={`Sumar en ${titulo.toLowerCase()}`}
         disabled={valor >= max}
         onClick={() => onChange(valor + 1)}
-        className="w-0 overflow-hidden opacity-0 transition-all group-hover/aforo:w-4 group-hover/aforo:opacity-100 hover:text-foreground disabled:opacity-0"
+        className={boton}
       >
         +
       </button>

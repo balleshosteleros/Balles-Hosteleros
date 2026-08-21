@@ -12,7 +12,6 @@ import {
   COLORES_PASTEL_COMBINACIONES,
   TIPOS_MESA,
   TIPO_MESA_LABELS,
-  type MesaPosicion,
   type Mesa,
   type MesaCombinacion,
   type TipoMesa,
@@ -25,7 +24,6 @@ import {
   updateCombinacion,
 } from "@/features/sala/planos/actions/combinaciones-actions";
 import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
-import { listMesaPosicionesLocal } from "@/features/sala/planos/actions/mesa-posiciones-actions";
 import { SelectorMesasPlano } from "./SelectorMesasPlano";
 
 interface Props {
@@ -58,23 +56,7 @@ export function CombinacionConfigModal({
   const [tipo, setTipo] = useState<TipoMesa | "">("");
   const [color, setColor] = useState(COLORES_PASTEL_COMBINACIONES[0]);
   const [saving, setSaving] = useState(false);
-  // Posiciones del plano: son las que permiten elegir las mesas pinchando
-  // sobre el mapa en vez de buscarlas en una lista de códigos.
-  const [posiciones, setPosiciones] = useState<Map<string, MesaPosicion>>(new Map());
   const { confirm: confirmDelete, dialog: confirmDeleteDialog } = useConfirmDelete();
-
-  useEffect(() => {
-    if (!open || !localId) return;
-    let cancel = false;
-    (async () => {
-      const r = await listMesaPosicionesLocal(localId);
-      if (cancel || !r.ok) return;
-      setPosiciones(new Map(r.data.map((p) => [p.mesaId, p])));
-    })();
-    return () => {
-      cancel = true;
-    };
-  }, [open, localId]);
 
   const mesasOrdenadas = useMemo(
     () => mesaIds.map((id) => mesas.find((m) => m.id === id)).filter((x): x is Mesa => !!x),
@@ -201,9 +183,7 @@ export function CombinacionConfigModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      {/* Más ancho que un modal normal: dentro va el plano del local y hay que
-          poder distinguir las mesas para pincharlas. */}
-      <DialogContent className="sm:max-w-3xl max-h-[92vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-lg max-h-[92vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
             {esEdicion ? `Combinación: ${combinacion?.codigo}` : "Nueva combinación"}
@@ -244,7 +224,6 @@ export function CombinacionConfigModal({
             ) : (
               <SelectorMesasPlano
                 mesas={mesas}
-                posiciones={posiciones}
                 zonas={zonas}
                 seleccionadas={mesaIds}
                 onToggle={toggleMesa}
