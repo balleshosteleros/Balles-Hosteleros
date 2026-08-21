@@ -21,6 +21,7 @@ import {
   tituloActa,
   type ActaEntregaVariante,
 } from "@/features/rrhh/services/firmas/entrega-material-pdf";
+import { getMarcaEmpresa } from "@/lib/pdf/cabecera-documento";
 
 export type EnviarAFirmaResult =
   | { ok: true; documentoId: string; emailEnviado: boolean }
@@ -142,6 +143,7 @@ export async function enviarActaEntregaAFirma(
       requiereDevolucion: Boolean(it.requiere_devolucion),
       nota: e.nota,
       motivoMerma: input.motivoMerma ?? null,
+      marca: await getMarcaEmpresa(input.empresaId),
     });
 
     const titulo = tituloActa(input.variante, it.tipo_nombre);

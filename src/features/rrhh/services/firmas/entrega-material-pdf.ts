@@ -19,7 +19,12 @@
  */
 
 import "server-only";
-import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
+import { PDFDocument, StandardFonts } from "pdf-lib";
+import {
+  dibujarCabecera,
+  dibujarPie,
+  type MarcaEmpresa,
+} from "@/lib/pdf/cabecera-documento";
 
 export type ActaEntregaVariante = "entrega" | "devolucion" | "merma";
 
@@ -41,6 +46,8 @@ export interface ActaEntregaInput {
   nota: string | null;
   /** Solo en el acta de MERMA: por qué se da de baja la pieza. */
   motivoMerma?: string | null;
+  /** Logo de la empresa para la cabecera (Ajustes → Imagen de marca). */
+  marca?: MarcaEmpresa | null;
 }
 
 /** Dónde estampar la firma manuscrita, calculado por el propio generador. */
@@ -85,28 +92,57 @@ export async function generarActaEntregaPDF(
   const widthOf = (t: string, bold: boolean) =>
     (bold ? fontBold : font).widthOfTextAtSize(t, FONT_SIZE);
 
-  let y = PAGE_H - 90;
+  // Lo fija la cabecera; se inicializa aquí porque `drawParagraph` la captura.
+  let y = PAGE_H;
 
   // Párrafo con segmentos normal/negrita y salto de línea automático.
+  //
+  // Se trabaja con PALABRAS, no con espacios sueltos: el separador se añade como
+  // avance de `x` al pintar la siguiente palabra. Pintar el espacio como un token
+  // propio dejaba "Yo,Iván" pegado cuando el texto cambiaba de redonda a negrita,
+  // porque el ancho de un espacio aislado no coincide con el que la fuente aplica
+  // dentro de una cadena.
   function drawParagraph(segs: Seg[], gapAfter = LINE_HEIGHT) {
-    const words: Seg[] = [];
+    type Palabra = { t: string; bold: boolean; espacioAntes: boolean };
+    const palabras: Palabra[] = [];
+    let pendienteEspacio = false;
+
     for (const s of segs) {
-      for (const p of s.t.split(/(\s+)/)) {
+      if (s.t.length === 0) continue;
+      const trozos = s.t.split(/\s+/);
+      // Un segmento que empieza o acaba en espacio deja separación con el vecino.
+      if (/^\s/.test(s.t)) pendienteEspacio = true;
+      for (const p of trozos) {
         if (p.length === 0) continue;
-        words.push({ t: p, bold: s.bold });
+        palabras.push({ t: p, bold: !!s.bold, espacioAntes: pendienteEspacio });
+        pendienteEspacio = true; // entre palabras del mismo segmento
       }
+      pendienteEspacio = /\s$/.test(s.t);
     }
+
+    const anchoEspacio = font.widthOfTextAtSize(" ", FONT_SIZE);
     let x = MARGIN_X;
-    for (const w of words) {
-      const wWidth = widthOf(w.t, !!w.bold);
-      const esEspacio = /^\s+$/.test(w.t);
-      if (x + wWidth > MARGIN_X + TEXT_W && !esEspacio) {
+    let primeraDeLinea = true;
+
+    for (const p of palabras) {
+      const w = widthOf(p.t, p.bold);
+      // Separador antes de esta palabra: ninguno si abre línea.
+      let sep = primeraDeLinea || !p.espacioAntes ? 0 : anchoEspacio;
+
+      if (x + sep + w > MARGIN_X + TEXT_W) {
         x = MARGIN_X;
         y -= LINE_HEIGHT;
+        sep = 0;
       }
-      if (esEspacio && x === MARGIN_X) continue;
-      page.drawText(w.t, { x, y, size: FONT_SIZE, font: w.bold ? fontBold : font });
-      x += wWidth;
+
+      page.drawText(p.t, {
+        x: x + sep,
+        y,
+        size: FONT_SIZE,
+        font: p.bold ? fontBold : font,
+      });
+      x = x + sep + w;
+      primeraDeLinea = false;
     }
     y -= gapAfter;
   }
@@ -114,14 +150,24 @@ export async function generarActaEntregaPDF(
   const esEntrega = input.variante === "entrega";
   const esMerma = input.variante === "merma";
 
-  // ─── Título ───────────────────────────────────────────────────
+  // ─── Cabecera común: logo de la empresa centrado + título ──────
   const titulo = esEntrega
     ? "ACTA DE ENTREGA DE MATERIAL"
     : esMerma
       ? "ACTA DE BAJA POR DETERIORO"
       : "ACTA DE DEVOLUCIÓN DE MATERIAL";
-  page.drawText(titulo, { x: MARGIN_X, y, size: 15, font: fontBold });
-  y -= LINE_HEIGHT * 2;
+
+  y = await dibujarCabecera({
+    pdf,
+    page,
+    pageW: PAGE_W,
+    pageH: PAGE_H,
+    marginX: MARGIN_X,
+    titulo,
+    fontBold,
+    font,
+    marca: input.marca ?? null,
+  });
 
   // ─── Ciudad y fecha, a la derecha ─────────────────────────────
   const ciudadFecha = `${input.ciudad ?? "—"}, a ${input.fecha}`;
@@ -237,11 +283,8 @@ export async function generarActaEntregaPDF(
     page.drawText(`DNI/NIE: ${input.empleadoDni}`, { x: MARGIN_X, y, size: FONT_SIZE, font });
   }
 
-  // ─── Footer ───────────────────────────────────────────────────
-  page.drawText(
-    "Documento generado electrónicamente — la firma eIDAS adjunta acredita su validez.",
-    { x: MARGIN_X, y: 48, size: 8, font, color: rgb(0.55, 0.6, 0.66) },
-  );
+  // ─── Pie común ────────────────────────────────────────────────
+  dibujarPie(page, MARGIN_X, font);
 
   const bytes = await pdf.save();
   return { buffer: Buffer.from(bytes), posicionFirma };
