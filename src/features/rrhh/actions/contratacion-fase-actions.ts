@@ -30,6 +30,11 @@ import { generarReconocimientoMedicoPDF } from "@/features/rrhh/services/firmas/
 import { notificarRrhhGestoria } from "@/features/rrhh/services/gestoria/gestoria-contrato";
 import { getReclutamientoConfigPorEmpresa } from "@/features/rrhh/actions/gestoria-config-server";
 import type { Segmento } from "@/features/notificaciones/types";
+import { puedeVerModulo } from "@/features/auth/lib/permisos";
+import type { PermisoModulo } from "@/features/ajustes/data/ajustes";
+
+/** Departamento cuyo acceso define quién lleva RRHH (formato canónico). */
+const MODULO_RRHH = "RECURSOS HUMANOS";
 import { revalidatePath } from "next/cache";
 import { getMarcaEmpresa } from "@/lib/pdf/cabecera-documento";
 
@@ -63,12 +68,13 @@ function fechaEs(d: Date): string {
 }
 
 /**
- * A quién avisar del recordatorio de nueva incorporación: a quien LLEVA RRHH en
- * la empresa, entendido como «tiene acceso al módulo RECURSOS HUMANOS».
+ * A quién avisar del recordatorio de nueva incorporación: a quien tiene RECURSOS
+ * HUMANOS entre sus DEPARTAMENTOS PERMITIDOS (Ajustes → Roles).
  *
- * No basta con buscar un rol llamado "RECURSOS HUMANOS": quien lleva RRHH puede
- * tener otro rol que incluya ese módulo entre sus permisos (p. ej. GERENCIA con
- * acceso a RRHH). El criterio válido es el permiso, no el nombre del rol.
+ * El criterio es el permiso real del rol, no cómo se llame: quien lleva RRHH
+ * puede tener el rol GERENCIA con el departamento de RRHH concedido. Se usa
+ * `puedeVerModulo`, la fuente única de la app, que además normaliza acentos y
+ * mayúsculas ("Recursos Humanos" === "RECURSOS HUMANOS").
  *
  * Si no se resuelve a nadie, cae al área ADMINISTRATIVA —a donde van el resto de
  * avisos del flujo— antes que perder el recordatorio sin destinatario.
@@ -84,23 +90,23 @@ async function segmentoRrhh(
       .select("nombre, permisos")
       .eq("empresa_id", empresaId);
 
-    // Roles cuyo permiso incluye el módulo de RRHH con `ver`.
+    // Roles de ESTA empresa con RECURSOS HUMANOS entre sus departamentos
+    // permitidos. Se filtra por `empresa_id`, así que los permisos que mandan
+    // son siempre los de la empresa donde se contrata.
     const rolesRrhh = (roles ?? [])
       .filter((r) => {
-        const permisos = (r.permisos ?? []) as { modulo?: string; ver?: boolean }[];
-        return (Array.isArray(permisos) ? permisos : []).some(
-          (p) => /recursos\s*humanos|rrhh/i.test(p?.modulo ?? "") && p?.ver === true,
-        );
+        const permisos = Array.isArray(r.permisos) ? (r.permisos as PermisoModulo[]) : [];
+        return puedeVerModulo(permisos, MODULO_RRHH);
       })
       .map((r) => (r.nombre as string | null) ?? "")
       .filter(Boolean);
     if (rolesRrhh.length === 0) return AREA;
 
-    // Personas con esos roles. Se apunta a fichas concretas (segmento
-    // "empleados") porque el segmento "rol" solo admite un rol y aquí pueden ser
-    // varios. Se filtra por empleados ACTIVOS DE ESTA EMPRESA: los nombres de rol
-    // se repiten entre empresas, y el segmento "usuarios" entregaría el aviso
-    // aunque la persona no tenga ficha aquí.
+    // Personas con esos roles. Se empareja por `rol_label` y NO por `rol_id`:
+    // cada empresa tiene su propia fila de rol, pero el usuario guarda un solo
+    // `rol_id` (el de una de ellas), así que emparejar por id dejaría sin aviso
+    // a la otra empresa. El nombre es el que viaja entre empresas espejo, y el
+    // filtro de ficha activa de más abajo acota el resultado a esta empresa.
     const { data: usuarios } = await admin
       .from("usuarios")
       .select("user_id")
