@@ -237,9 +237,18 @@ export async function getMiCronograma(): Promise<MiCronogramaResult> {
 type SupabaseLike = Awaited<ReturnType<typeof getAppContext>>["supabase"];
 
 /**
- * Nombres de los puestos que ocupa el usuario en la empresa activa (el principal
- * primero). Son los que definen sus tareas: al quitarle un puesto deja de ver su
- * cronograma. Vacío si no tiene ficha de empleado o no tiene puestos.
+ * Roles del cronograma que le corresponden al usuario por los puestos que ocupa
+ * (el principal primero). Son los que definen sus tareas: al quitarle un puesto
+ * deja de ver ese cronograma.
+ *
+ * El rol se toma de las PROPIAS TAREAS del puesto (`cronogramas_operativos.rol`
+ * con ese `puesto_id`), no del nombre del puesto: hay puestos cuyo cronograma se
+ * escribió con otro nombre —DIRECTOR guarda sus tareas bajo «DIRECCION», CONTABLE
+ * bajo «CONTABILIDAD»— y comparar por nombre los dejaría sin tareas. El vínculo
+ * fiable es `puesto_id`, que es 1:1 con el cronograma.
+ *
+ * Vacío si no tiene ficha de empleado o no tiene puestos: entonces manda el
+ * camino antiguo (por rol y permisos).
  */
 async function leerPuestosCronograma(
   supabase: SupabaseLike,
@@ -259,20 +268,42 @@ async function leerPuestosCronograma(
 
   const { data: filas } = await supabase
     .from("empleado_puestos")
-    .select("puesto_nombre, es_principal, puestos(nombre)")
+    .select("puesto_id, puesto_nombre, es_principal, puestos(nombre)")
     .eq("empleado_id", empleadoId)
     .order("es_principal", { ascending: false });
+  if (!filas || filas.length === 0) return [];
 
-  const nombres: string[] = [];
-  for (const f of filas ?? []) {
-    const nombre =
+  const puestoIds = filas
+    .map((f) => f.puesto_id as string | null)
+    .filter((id): id is string => !!id);
+
+  // rol real escrito en las tareas de cada puesto.
+  const rolPorPuesto = new Map<string, string>();
+  if (puestoIds.length > 0) {
+    const { data: tareas } = await supabase
+      .from("cronogramas_operativos")
+      .select("puesto_id, rol")
+      .eq("empresa_id", empresaId)
+      .in("puesto_id", puestoIds);
+    for (const t of tareas ?? []) {
+      const pid = t.puesto_id as string | null;
+      const rol = ((t.rol as string | null) ?? "").trim();
+      if (pid && rol && !rolPorPuesto.has(pid)) rolPorPuesto.set(pid, rol);
+    }
+  }
+
+  const roles: string[] = [];
+  for (const f of filas) {
+    const pid = f.puesto_id as string | null;
+    const rol =
+      (pid ? rolPorPuesto.get(pid) : null) ??
       ((f.puestos as { nombre?: string } | null)?.nombre) ??
       (f.puesto_nombre as string | null) ??
       "";
-    const limpio = nombre.trim();
-    if (limpio && !nombres.some((n) => norm(n) === norm(limpio))) nombres.push(limpio);
+    const limpio = rol.trim();
+    if (limpio && !roles.some((r) => norm(r) === norm(limpio))) roles.push(limpio);
   }
-  return nombres;
+  return roles;
 }
 
 /**
