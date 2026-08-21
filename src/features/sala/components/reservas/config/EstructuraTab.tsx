@@ -695,13 +695,17 @@ function CombinacionesLista({
     !q || c.codigo.split("+").some((cod) => cod.trim().toUpperCase() === q);
 
   const filtradas = combinaciones.filter(coincide);
-  const nombreZona = (id: string | null) =>
-    zonas.find((z) => z.id === id)?.nombre ?? "Sin zona";
+  const zonaDe = (id: string | null) => zonas.find((z) => z.id === id);
+  const nombreZona = (id: string | null) => zonaDe(id)?.nombre ?? "Sin zona";
 
-  const grupos = new Map<string, MesaCombinacion[]>();
+  const grupos = new Map<string, { color: string | null; lista: MesaCombinacion[] }>();
   for (const c of filtradas) {
     const k = nombreZona(c.zonaId);
-    grupos.set(k, [...(grupos.get(k) ?? []), c]);
+    const actual = grupos.get(k);
+    grupos.set(k, {
+      color: actual?.color ?? zonaDe(c.zonaId)?.colorPastel ?? null,
+      lista: [...(actual?.lista ?? []), c],
+    });
   }
   const ordenados = [...grupos.entries()].sort((a, b) => a[0].localeCompare(b[0]));
 
@@ -728,7 +732,7 @@ function CombinacionesLista({
           Ninguna combinación incluye la mesa «{busqueda.trim()}».
         </p>
       ) : (
-        ordenados.map(([zona, lista]) => {
+        ordenados.map(([zona, { color: colorZona, lista }]) => {
           // Buscando, los grupos se abren solos: si has filtrado es para ver.
           const abierta = q.length > 0 || abiertas.has(zona);
           return (
@@ -738,7 +742,13 @@ function CombinacionesLista({
                 onClick={() => alternar(zona)}
                 className="w-full flex items-center justify-between px-3 py-2 text-sm hover:bg-muted/50"
               >
-                <span className="font-medium">{zona}</span>
+                <span className="flex items-center gap-2">
+                  <span
+                    className="inline-block h-3.5 w-3.5 rounded border shrink-0"
+                    style={colorZona ? { backgroundColor: colorZona } : undefined}
+                  />
+                  <span className="font-medium">{zona}</span>
+                </span>
                 <span className="text-xs text-muted-foreground">
                   {lista.length}
                   {abierta ? " ▾" : " ▸"}
@@ -752,7 +762,7 @@ function CombinacionesLista({
                       className="flex items-center justify-between px-3 py-1.5 text-sm"
                     >
                       <div className="flex items-center gap-3 min-w-0">
-                        <span className="font-mono font-semibold truncate">{c.codigo}</span>
+                        <span className="font-semibold truncate">{c.codigo}</span>
                         <span className="flex items-center gap-1.5 text-xs text-muted-foreground shrink-0">
                           <AforoRapido
                             valor={c.capacidadMin}

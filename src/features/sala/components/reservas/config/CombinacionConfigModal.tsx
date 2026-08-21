@@ -215,7 +215,7 @@ export function CombinacionConfigModal({
               </div>
             )}
             <p className="text-[11px] text-muted-foreground">
-              Código resultante: <span className="font-mono font-semibold">{codigoPreview}</span>
+              Código resultante: <span className="font-semibold">{codigoPreview}</span>
             </p>
             {mesas.length === 0 ? (
               <p className="text-xs text-muted-foreground italic px-1">

@@ -47,28 +47,41 @@ export async function getClienteInsights(input: {
 
     if (!input.clienteId && !telNorm && !emailNorm) return fallback;
 
-    // 1) Visitas totales en la empresa actual (clientes_sala.visitas).
-    let visitasTotal = 0;
-    if (input.clienteId) {
-      const { data } = await supabase
-        .from("clientes_sala")
-        .select("visitas")
-        .eq("id", input.clienteId)
-        .maybeSingle();
-      visitasTotal = (data?.visitas as number | null) ?? 0;
-    } else {
+    // 1) Visitas: se CUENTAN de sus reservas pasadas, no se lee el contador
+    //    `clientes_sala.visitas`.
+    //
+    //    POR QUÉ: ese contador se incrementaba a mano y está a 0 en todas las
+    //    fichas, así que la reserva mostraba "0 visitas" para un cliente que en
+    //    la pantalla de Clientes salía con 3. Mismo cliente, dos cifras según
+    //    dónde se mirara. El criterio es el de `listClientesEnriquecidos`:
+    //    reserva ya pasada a la que no faltó.
+    let clienteId = input.clienteId ?? null;
+    if (!clienteId) {
       const orParts: string[] = [];
       if (telNorm) orParts.push(`telefono_normalizado.eq.${telNorm}`);
       if (emailNorm) orParts.push(`email_normalizado.eq.${emailNorm}`);
       if (orParts.length > 0) {
         const { data } = await supabase
           .from("clientes_sala")
-          .select("visitas")
+          .select("id")
           .eq("empresa_id", empresaId)
           .or(orParts.join(","))
           .maybeSingle();
-        visitasTotal = (data?.visitas as number | null) ?? 0;
+        clienteId = (data?.id as string | null) ?? null;
       }
+    }
+
+    let visitasTotal = 0;
+    if (clienteId) {
+      const hoy = new Date().toISOString().slice(0, 10);
+      const { count } = await supabase
+        .from("reservas")
+        .select("id", { count: "exact", head: true })
+        .eq("empresa_id", empresaId)
+        .eq("cliente_id", clienteId)
+        .lt("fecha", hoy)
+        .not("estado", "in", "(CANCELADA,NO_SHOW)");
+      visitasTotal = count ?? 0;
     }
 
     // 2) Reseñas del mismo cliente en la empresa actual.
@@ -113,19 +126,23 @@ export async function getClienteInsights(input: {
     // o se le pide garantía.
     let noShows = 0;
     let canceladas = 0;
-    if (input.clienteId) {
+    // Se usa el `clienteId` RESUELTO, no el de entrada: cuando la reserva se
+    // identifica por teléfono o email (sin ficha enlazada todavía), el de
+    // entrada viene vacío y el historial de plantones salía siempre a cero,
+    // que es justo lo contrario de lo que sala necesita saber.
+    if (clienteId) {
       const [resNo, resCan] = await Promise.all([
         supabase
           .from("reservas")
           .select("id", { count: "exact", head: true })
           .eq("empresa_id", empresaId)
-          .eq("cliente_id", input.clienteId)
+          .eq("cliente_id", clienteId)
           .eq("estado", "NO_SHOW"),
         supabase
           .from("reservas")
           .select("id", { count: "exact", head: true })
           .eq("empresa_id", empresaId)
-          .eq("cliente_id", input.clienteId)
+          .eq("cliente_id", clienteId)
           .eq("estado", "CANCELADA"),
       ]);
       noShows = resNo.count ?? 0;
@@ -133,7 +150,7 @@ export async function getClienteInsights(input: {
     }
 
     return {
-      clienteId: input.clienteId ?? null,
+      clienteId,
       visitasTotal,
       visitasConValoracion,
       visitasSinValoracion,

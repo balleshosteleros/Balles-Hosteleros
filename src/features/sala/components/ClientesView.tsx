@@ -485,9 +485,15 @@ export function ClientesView() {
               · {siguiente.personas}{" "}
               {siguiente.personas === 1 ? "persona" : "personas"}
             </span>
+            {/*
+              Cuántas reservas MÁS tiene, no más comensales. Escrito como "(+1)"
+              y pegado al número de personas se leía como "15 personas y una
+              más", así que se dice con todas las letras.
+            */}
             {proximas.length > 1 && (
               <span className="ml-1 text-xs text-muted-foreground">
-                (+{proximas.length - 1})
+                · y {proximas.length - 1}{" "}
+                {proximas.length - 1 === 1 ? "reserva más" : "reservas más"}
               </span>
             )}
           </td>
