@@ -23,7 +23,7 @@ const TIPOS: { value: TipoCondicion; label: string }[] = [
 ];
 
 const PRESETS_ULTIMA_VISITA = [7, 30, 90, 365] as const;
-const CLASIFICACIONES = ["REGULAR", "VIP", "FRECUENTE", "NUEVO", "INACTIVO"] as const;
+const CLASIFICACIONES = ["REGULAR", "VIP", "NUEVO"] as const;
 
 function condicionVacia(tipo: TipoCondicion): SegmentoCondicion {
   switch (tipo) {

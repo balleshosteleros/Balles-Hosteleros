@@ -81,12 +81,35 @@ export interface ResenaCliente {
   ambiente: number | null;
 }
 
+/**
+ * Una petición de valoración enviada al cliente tras una visita, con lo que
+ * pasó después: o contestó (y hay nota), o no.
+ *
+ * POR QUÉ se listan los ENVÍOS y no solo las reseñas: si únicamente se pintan
+ * las respuestas, un cliente al que se le pidió opinión cinco veces y nunca
+ * contestó se ve igual que uno al que no se le pidió nunca. El silencio también
+ * es información.
+ */
+export interface ValoracionSolicitadaCliente {
+  /** Id del envío del correo. */
+  id: string;
+  reservaId: string | null;
+  /** Cuándo se le pidió la valoración. */
+  enviadoAt: string;
+  /** Fecha de la visita valorada, si se conoce la reserva. */
+  fechaVisita: string | null;
+  /** La reseña que contestó, o null si no contestó. */
+  resena: ResenaCliente | null;
+}
+
 export interface ClienteEnriquecido {
   clienteId: string;
   /** Reservas futuras vivas, de la más próxima a la más lejana. */
   proximas: ProximaReservaCliente[];
   etiquetas: EtiquetaCliente[];
   resenas: ResenaCliente[];
+  /** Histórico de peticiones de valoración, de la más reciente a la más antigua. */
+  valoracionesSolicitadas: ValoracionSolicitadaCliente[];
   /** Media de las reseñas CON nota. `null` si el cliente no ha valorado nunca. */
   ratingMedio: number | null;
   /**
@@ -149,7 +172,13 @@ export async function listClientesEnriquecidos(): Promise<ClientesEnriquecidosRe
       (clientesEmpresa ?? []).map((c) => c.id as string),
     );
 
-    const [resReservas, resEtiquetas, resResenas, resConfig] = await Promise.all([
+    const [
+      resReservas,
+      resEtiquetas,
+      resResenas,
+      resConfig,
+      resSolicitudes,
+    ] = await Promise.all([
       // Sin filtro de fecha ni de estado: la misma consulta alimenta las dos
       // cosas, que usan criterios distintos (próximas = compromiso de mesa;
       // visitas = asistió). Se reparte abajo, en una sola pasada.
@@ -175,16 +204,24 @@ export async function listClientesEnriquecidos(): Promise<ClientesEnriquecidosRe
       supabase
         .from("resenas")
         .select(
-          'id, cliente_id, rating, rating_comida, rating_servicio, rating_ambiente, comentario, origen, fecha:"fecha_reseña"',
+          'id, cliente_id, reserva_id, rating, rating_comida, rating_servicio, rating_ambiente, comentario, origen, fecha:"fecha_reseña"',
         )
         .eq("empresa_id", empresaId)
         .not("cliente_id", "is", null)
         .order("fecha_reseña", { ascending: false, nullsFirst: false }),
       supabase
         .from("empresa_reservas_config")
-        .select("clasif_regular_min, clasif_frecuente_min, clasif_vip_min")
+        .select("clasif_regular_min, clasif_vip_min")
         .eq("empresa_id", empresaId)
         .maybeSingle(),
+      // Peticiones de valoración enviadas. No traen `cliente_id`: se atribuyen
+      // al cliente a través de la reserva, más abajo.
+      supabase
+        .from("reserva_email_envios")
+        .select("id, reserva_id, enviado_at")
+        .eq("empresa_id", empresaId)
+        .eq("tipo", "SOLICITUD_VALORACION")
+        .order("enviado_at", { ascending: false }),
     ]);
 
     const out: Record<string, ClienteEnriquecido> = {};
@@ -197,6 +234,7 @@ export async function listClientesEnriquecidos(): Promise<ClientesEnriquecidosRe
           proximas: [],
           etiquetas: [],
           resenas: [],
+          valoracionesSolicitadas: [],
           ratingMedio: null,
           visitas: 0,
           ultimaVisita: null,
@@ -204,6 +242,9 @@ export async function listClientesEnriquecidos(): Promise<ClientesEnriquecidosRe
       }
       return out[id];
     };
+
+    /** reserva → (cliente, fecha), para atribuir los envíos de valoración. */
+    const reservaInfo = new Map<string, { clienteId: string; fecha: string }>();
 
     for (const r of resReservas.data ?? []) {
       const cid = r.cliente_id as string | null;
@@ -213,6 +254,7 @@ export async function listClientesEnriquecidos(): Promise<ClientesEnriquecidosRe
 
       const fecha = r.fecha as string;
       const estado = (r.estado as string) ?? "";
+      reservaInfo.set(r.id as string, { clienteId: cid, fecha });
 
       if (fecha >= hoy) {
         // Futuro: solo lo que es una mesa asegurada.
@@ -251,12 +293,15 @@ export async function listClientesEnriquecidos(): Promise<ClientesEnriquecidosRe
       });
     }
 
+    /** reserva → reseña, para saber si una petición obtuvo respuesta. */
+    const resenaPorReserva = new Map<string, ResenaCliente>();
+
     for (const r of resResenas.data ?? []) {
       const cid = r.cliente_id as string | null;
       if (!cid) continue;
       const b = bucket(cid);
       if (!b) continue;
-      b.resenas.push({
+      const resena: ResenaCliente = {
         id: r.id as string,
         rating: (r.rating as number | null) ?? null,
         comentario: (r.comentario as string | null) ?? null,
@@ -265,6 +310,30 @@ export async function listClientesEnriquecidos(): Promise<ClientesEnriquecidosRe
         comida: (r.rating_comida as number | null) ?? null,
         servicio: (r.rating_servicio as number | null) ?? null,
         ambiente: (r.rating_ambiente as number | null) ?? null,
+      };
+      b.resenas.push(resena);
+      const rid = r.reserva_id as string | null;
+      // Si una reserva tuviera más de una reseña, manda la primera que llega,
+      // que por el orden del select es la más reciente.
+      if (rid && !resenaPorReserva.has(rid)) resenaPorReserva.set(rid, resena);
+    }
+
+    // Histórico de peticiones. Se atribuye al cliente por la reserva: la tabla
+    // de envíos no guarda `cliente_id`, y usar el email del destinatario haría
+    // que una corrección posterior del correo desligara el histórico.
+    for (const s of resSolicitudes.data ?? []) {
+      const rid = s.reserva_id as string | null;
+      if (!rid) continue;
+      const info = reservaInfo.get(rid);
+      if (!info) continue;
+      const b = bucket(info.clienteId);
+      if (!b) continue;
+      b.valoracionesSolicitadas.push({
+        id: s.id as string,
+        reservaId: rid,
+        enviadoAt: s.enviado_at as string,
+        fechaVisita: info.fecha,
+        resena: resenaPorReserva.get(rid) ?? null,
       });
     }
 
@@ -282,7 +351,6 @@ export async function listClientesEnriquecidos(): Promise<ClientesEnriquecidosRe
 
     const umbrales = normalizarUmbrales({
       regularMin: resConfig.data?.clasif_regular_min as number | null,
-      frecuenteMin: resConfig.data?.clasif_frecuente_min as number | null,
       vipMin: resConfig.data?.clasif_vip_min as number | null,
     });
 

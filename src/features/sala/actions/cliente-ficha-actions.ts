@@ -22,14 +22,6 @@ import { ahoraEnZona } from "@/features/empresa/lib/zona-horaria";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 
-const CLASIFICACIONES = [
-  "REGULAR",
-  "VIP",
-  "FRECUENTE",
-  "NUEVO",
-  "INACTIVO",
-] as const;
-
 const Schema = z.object({
   nombre: z.string().trim().min(1, "El nombre es obligatorio.").max(120),
   apellidos: z.string().trim().max(120).default(""),
@@ -42,14 +34,8 @@ const Schema = z.object({
       message: "El email no es válido.",
     })
     .default(""),
-  clasificacion: z.enum(CLASIFICACIONES),
-  /**
-   * true = el usuario fija la clasificación a mano. false = vuelve a calcularse
-   * sola por visitas.
-   */
-  clasificacionManual: z.boolean(),
+  // La clasificación NO se recibe: se calcula sola por visitas y no es editable.
   observaciones: z.string().trim().max(2000).default(""),
-  preferencias: z.string().trim().max(2000).default(""),
   notasInternas: z.string().trim().max(2000).default(""),
 });
 
@@ -129,10 +115,7 @@ export async function guardarFichaCliente(
         apellidos,
         email,
         telefono,
-        clasificacion: d.clasificacion,
-        clasificacion_manual: d.clasificacionManual,
         observaciones: d.observaciones || null,
-        preferencias: d.preferencias || null,
         notas_internas: d.notasInternas || null,
         updated_at: new Date().toISOString(),
       })

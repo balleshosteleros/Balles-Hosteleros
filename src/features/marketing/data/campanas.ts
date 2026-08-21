@@ -27,7 +27,7 @@ export type SegmentoOperador = "AND" | "OR";
 export type SegmentoCondicion =
   | { tipo: "ultima_visita_hace_dias"; max: 7 | 30 | 90 | 365 }
   | { tipo: "sin_visitar_desde_dias"; min: number }
-  | { tipo: "clasificacion"; valores: Array<"REGULAR" | "VIP" | "FRECUENTE" | "NUEVO" | "INACTIVO"> }
+  | { tipo: "clasificacion"; valores: Array<"REGULAR" | "VIP" | "NUEVO"> }
   | { tipo: "visitas_min"; min: number };
 export interface SegmentoJson {
   operador: SegmentoOperador;

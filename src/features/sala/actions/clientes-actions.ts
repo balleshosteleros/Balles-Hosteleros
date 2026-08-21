@@ -97,7 +97,6 @@ export async function createCliente(input: {
   email?: string;
   clasificacion?: string;
   observaciones?: string;
-  preferencias?: string;
 }) {
   try {
     const { supabase, empresaId } = await getContext();
@@ -125,13 +124,12 @@ export async function createCliente(input: {
         };
       }
       // Cliente nuevo creado por la RPC; aplicamos campos no-contactos si los hay.
-      if (input.clasificacion || input.observaciones || input.preferencias) {
+      if (input.clasificacion || input.observaciones) {
         await supabase
           .from("clientes_sala")
           .update({
             clasificacion: input.clasificacion ?? "NUEVO",
             observaciones: input.observaciones ?? null,
-            preferencias: input.preferencias ?? null,
             updated_at: new Date().toISOString(),
           })
           .eq("id", link.result.cliente.id);
@@ -150,7 +148,6 @@ export async function createCliente(input: {
         email: null,
         clasificacion: input.clasificacion ?? "NUEVO",
         observaciones: input.observaciones ?? null,
-        preferencias: input.preferencias ?? null,
       })
       .select("id")
       .single();
@@ -171,9 +168,7 @@ export async function updateCliente(
     telefono?: string;
     email?: string;
     clasificacion?: string;
-    clasificacion_manual?: boolean;
     observaciones?: string;
-    preferencias?: string;
     notas_internas?: string;
   }
 ) {

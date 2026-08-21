@@ -16,14 +16,7 @@ import { ClienteBloqueoTicketBanner } from "@/features/sala/components/clientes/
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Settings, Star, Sparkles } from "lucide-react";
+import { Settings, Star } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Cliente, ClasificacionCliente } from "@/features/sala/data/clientes";
 import { listClientes, createCliente } from "@/features/sala/actions/clientes-actions";
@@ -31,6 +24,7 @@ import { guardarFichaCliente } from "@/features/sala/actions/cliente-ficha-actio
 import {
   listClientesEnriquecidos,
   type ClienteEnriquecido,
+  type ResenaCliente,
 } from "@/features/sala/actions/clientes-enriquecidos-actions";
 import {
   clasificacionEfectiva,
@@ -56,25 +50,16 @@ import { clientesIO } from "@/features/sala/io/clientes.io";
 
 const clasificacionBadge: Record<ClasificacionCliente, string> = {
   "VIP": "bg-amber-100 text-amber-800 border-amber-300",
-  "FRECUENTE": "bg-green-100 text-green-800 border-green-300",
   "REGULAR": "bg-blue-100 text-blue-800 border-blue-300",
   "NUEVO": "bg-purple-100 text-purple-800 border-purple-300",
-  "INACTIVO": "bg-muted text-muted-foreground",
 };
-
-const CLASIFICACIONES: ClasificacionCliente[] = [
-  "NUEVO",
-  "REGULAR",
-  "FRECUENTE",
-  "VIP",
-  "INACTIVO",
-];
 
 const ENRIQUECIDO_VACIO: ClienteEnriquecido = {
   clienteId: "",
   proximas: [],
   etiquetas: [],
   resenas: [],
+  valoracionesSolicitadas: [],
   ratingMedio: null,
   visitas: 0,
   ultimaVisita: null,
@@ -88,11 +73,9 @@ function mapDbToCliente(row: Record<string, unknown>): Cliente {
     telefono: (row.telefono as string) ?? "",
     email: (row.email as string) ?? "",
     clasificacion: (row.clasificacion as ClasificacionCliente) ?? "NUEVO",
-    clasificacionManual: (row.clasificacion_manual as boolean) ?? false,
     visitas: (row.visitas as number) ?? 0,
     ultimaVisita: (row.ultima_visita as string) ?? "",
     observaciones: (row.observaciones as string) ?? "",
-    preferencias: (row.preferencias as string) ?? "",
     notasInternas: (row.notas_internas as string) ?? "",
   };
 }
@@ -124,6 +107,23 @@ function fechaLarga(fecha: string): string {
 function formatNota(n: number): string {
   // Coma decimal (regla de formato numérico del proyecto).
   return n.toFixed(1).replace(".", ",");
+}
+
+/**
+ * Nota de una valoración: media de comida, servicio y ambiente.
+ *
+ * Promedia solo las categorías PUNTUADAS. Contar una categoría en blanco como
+ * cero hundiría la nota de quien puso dos cincos y dejó la tercera sin tocar.
+ * Si no puntuó ninguna, cae a `rating`, que es lo que manda el QR de la carta
+ * (allí solo hay una estrella global, sin desglose).
+ */
+function mediaDesglose(r: ResenaCliente | null): number | null {
+  if (!r) return null;
+  const notas = [r.comida, r.servicio, r.ambiente].filter(
+    (n): n is number => typeof n === "number",
+  );
+  if (notas.length === 0) return r.rating;
+  return notas.reduce((a, b) => a + b, 0) / notas.length;
 }
 
 /** Estrellas de la nota media. `size` en px para reusar en tabla y ficha. */
@@ -200,12 +200,7 @@ export function ClientesView() {
    */
   const clasifDe = useCallback(
     (c: Cliente): ClasificacionCliente =>
-      clasificacionEfectiva({
-        clasificacion: c.clasificacion,
-        clasificacionManual: c.clasificacionManual,
-        visitas: extraDe(c.id).visitas,
-        umbrales,
-      }),
+      clasificacionEfectiva({ visitas: extraDe(c.id).visitas, umbrales }),
     [umbrales, extraDe],
   );
 
@@ -282,10 +277,7 @@ export function ClientesView() {
         apellidos: borrador.apellidos,
         telefono: borrador.telefono,
         email: borrador.email,
-        clasificacion: borrador.clasificacion,
-        clasificacionManual: borrador.clasificacionManual,
         observaciones: borrador.observaciones,
-        preferencias: borrador.preferencias,
         notasInternas: borrador.notasInternas,
       });
       if (!res.ok) {
@@ -345,7 +337,7 @@ export function ClientesView() {
           label="Clasificación"
           campo="clasificacion"
           filtroTipo="lista"
-          opciones={["VIP", "FRECUENTE", "REGULAR", "NUEVO", "INACTIVO"]}
+          opciones={["VIP", "REGULAR", "NUEVO"]}
           filtros={filtros}
           onFiltrosChange={setFiltros}
           ordenable
@@ -357,18 +349,9 @@ export function ClientesView() {
         const clasif = clasifDe(c);
         return (
           <td key="clasificacion" className="p-3">
-            <span className="inline-flex items-center gap-1">
-              <Badge className={clasificacionBadge[clasif]} variant="outline">
-                {clasif}
-              </Badge>
-              {!c.clasificacionManual && (
-                <Sparkles
-                  className="h-3 w-3 text-muted-foreground/60"
-                  strokeWidth={1.75}
-                  aria-label="Calculada automáticamente por visitas"
-                />
-              )}
-            </span>
+            <Badge className={clasificacionBadge[clasif]} variant="outline">
+              {clasif}
+            </Badge>
           </td>
         );
       },
@@ -540,17 +523,7 @@ export function ClientesView() {
 
   const fichaExtra = borrador ? extraDe(borrador.id) : ENRIQUECIDO_VACIO;
 
-  /** La que le tocaría por sus visitas reales, ignorando el ajuste manual. */
-  const clasifAutoFicha = clasificacionEfectiva({
-    clasificacion: borrador?.clasificacion ?? "NUEVO",
-    clasificacionManual: false,
-    visitas: fichaExtra.visitas,
-    umbrales,
-  });
-  /** La que se le aplica de verdad (manual si la hay). */
   const clasifFicha = clasificacionEfectiva({
-    clasificacion: borrador?.clasificacion ?? "NUEVO",
-    clasificacionManual: borrador?.clasificacionManual ?? false,
     visitas: fichaExtra.visitas,
     umbrales,
   });
@@ -655,38 +628,14 @@ export function ClientesView() {
                 </div>
               </div>
 
-              {/* Clasificación: automática por visitas salvo que se fije a mano. */}
+              {/*
+                Clasificación: dato CALCULADO por visitas, no editable. Antes se
+                podía fijar a mano y acababa diciendo lo que hubiera puesto el
+                último que tocó la ficha, no lo mismo para todos.
+              */}
               <div className="space-y-1.5">
-                <Label>Clasificación</Label>
-                <div className="flex items-center gap-2">
-                  <Select
-                    value={borrador.clasificacionManual ? borrador.clasificacion : "AUTO"}
-                    onValueChange={(v) => {
-                      if (v === "AUTO") {
-                        setBorrador({ ...borrador, clasificacionManual: false });
-                      } else {
-                        setBorrador({
-                          ...borrador,
-                          clasificacion: v as ClasificacionCliente,
-                          clasificacionManual: true,
-                        });
-                      }
-                    }}
-                  >
-                    <SelectTrigger className="w-[260px]">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="AUTO">
-                        Automática ({clasifAutoFicha})
-                      </SelectItem>
-                      {CLASIFICACIONES.map((c) => (
-                        <SelectItem key={c} value={c}>
-                          {c} (fijada a mano)
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                <Label className="text-muted-foreground">Clasificación</Label>
+                <div>
                   <Badge
                     className={clasificacionBadge[clasifFicha]}
                     variant="outline"
@@ -695,9 +644,9 @@ export function ClientesView() {
                   </Badge>
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  Automática: {umbrales.regularMin} visitas → REGULAR ·{" "}
-                  {umbrales.frecuenteMin} → FRECUENTE · {umbrales.vipMin} → VIP.
-                  INACTIVO solo se pone a mano.
+                  Se calcula sola por visitas: menos de {umbrales.regularMin} →
+                  NUEVO · {umbrales.regularMin} → REGULAR · {umbrales.vipMin} →
+                  VIP.
                 </p>
               </div>
 
@@ -819,6 +768,55 @@ export function ClientesView() {
                 )}
               </div>
 
+              {/*
+                Histórico de peticiones: cuándo se le pidió opinión y si
+                contestó. Sin esto, un cliente al que se le ha pedido cinco
+                veces sin respuesta se ve igual que uno al que no se le pidió
+                nunca.
+              */}
+              <div className="pt-2 border-t space-y-1.5">
+                <Label className="text-muted-foreground">
+                  Valoraciones solicitadas
+                </Label>
+                {fichaExtra.valoracionesSolicitadas.length === 0 ? (
+                  <p className="text-muted-foreground">
+                    Todavía no se le ha pedido ninguna valoración.
+                  </p>
+                ) : (
+                  <ul className="space-y-1">
+                    {fichaExtra.valoracionesSolicitadas.map((v) => {
+                      const media = mediaDesglose(v.resena);
+                      return (
+                        <li
+                          key={v.id}
+                          className="flex items-center justify-between gap-3 rounded-md border px-3 py-2"
+                        >
+                          <span className="text-xs text-muted-foreground">
+                            Enviada el{" "}
+                            {formatFechaEnZona(v.enviadoAt, zonaHoraria)}
+                            {v.fechaVisita
+                              ? ` · visita del ${fechaLarga(v.fechaVisita)}`
+                              : ""}
+                          </span>
+                          {media === null ? (
+                            <span className="shrink-0 text-xs text-muted-foreground">
+                              No ha contestado
+                            </span>
+                          ) : (
+                            <span className="inline-flex shrink-0 items-center gap-1.5">
+                              <Estrellas nota={media} />
+                              <span className="font-medium">
+                                {formatNota(media)}
+                              </span>
+                            </span>
+                          )}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </div>
+
               <div className="space-y-1.5">
                 <Label htmlFor="cli-observaciones">Observaciones</Label>
                 <Textarea
@@ -827,17 +825,6 @@ export function ClientesView() {
                   value={borrador.observaciones}
                   onChange={(e) =>
                     setBorrador({ ...borrador, observaciones: e.target.value })
-                  }
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="cli-preferencias">Preferencias</Label>
-                <Textarea
-                  id="cli-preferencias"
-                  rows={2}
-                  value={borrador.preferencias}
-                  onChange={(e) =>
-                    setBorrador({ ...borrador, preferencias: e.target.value })
                   }
                 />
               </div>

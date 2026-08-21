@@ -3,7 +3,7 @@ import type { ModuleIO, RowSchema } from "@/shared/io";
 import { listClientes } from "@/features/sala/actions/clientes-actions";
 import type { Cliente } from "@/features/sala/data/clientes";
 
-const CLASIFICACIONES = ["REGULAR", "VIP", "FRECUENTE", "NUEVO", "INACTIVO"] as const;
+const CLASIFICACIONES = ["REGULAR", "VIP", "NUEVO"] as const;
 
 const clienteSchema = z.object({
   id: z.string(),
@@ -14,7 +14,6 @@ const clienteSchema = z.object({
   visitas: z.number(),
   ultimaVisita: z.string(),
   observaciones: z.string(),
-  preferencias: z.string(),
   notasInternas: z.string(),
 });
 
@@ -24,7 +23,7 @@ export const clientesIO: ModuleIO<Cliente> = {
   module: "sala",
   submodule: "clientes",
   label: "Clientes de sala",
-  description: "Base de datos de clientes con preferencias y clasificación.",
+  description: "Base de datos de clientes con notas y clasificación.",
   schema,
   uniqueBy: "telefono",
   columns: [
@@ -32,10 +31,9 @@ export const clientesIO: ModuleIO<Cliente> = {
     { key: "nombre", label: "Nombre", required: true, example: "María García" },
     { key: "telefono", label: "Teléfono", aliases: ["movil", "tlf"], required: true, unique: true, example: "612345678" },
     { key: "email", label: "Email" },
-    { key: "clasificacion", label: "Clasificación", type: "enum", values: CLASIFICACIONES, example: "FRECUENTE" },
+    { key: "clasificacion", label: "Clasificación", type: "enum", values: CLASIFICACIONES, example: "REGULAR" },
     { key: "visitas", label: "Visitas", type: "number" },
     { key: "ultimaVisita", label: "Última visita", type: "date" },
-    { key: "preferencias", label: "Preferencias" },
     { key: "observaciones", label: "Observaciones" },
     { key: "notasInternas", label: "Notas internas" },
   ],
@@ -53,7 +51,6 @@ export const clientesIO: ModuleIO<Cliente> = {
         visitas: (r.visitas as number) ?? 0,
         ultimaVisita: (r.ultima_visita as string) ?? "",
         observaciones: (r.observaciones as string) ?? "",
-        preferencias: (r.preferencias as string) ?? "",
         notasInternas: (r.notas_internas as string) ?? "",
       } as Cliente;
     });
