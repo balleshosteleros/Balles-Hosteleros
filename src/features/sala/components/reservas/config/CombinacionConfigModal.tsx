@@ -12,6 +12,7 @@ import {
   COLORES_PASTEL_COMBINACIONES,
   TIPOS_MESA,
   TIPO_MESA_LABELS,
+  type MesaPosicion,
   type Mesa,
   type MesaCombinacion,
   type TipoMesa,
@@ -24,6 +25,8 @@ import {
   updateCombinacion,
 } from "@/features/sala/planos/actions/combinaciones-actions";
 import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
+import { listMesaPosicionesLocal } from "@/features/sala/planos/actions/mesa-posiciones-actions";
+import { SelectorMesasPlano } from "./SelectorMesasPlano";
 
 interface Props {
   open: boolean;
@@ -55,7 +58,23 @@ export function CombinacionConfigModal({
   const [tipo, setTipo] = useState<TipoMesa | "">("");
   const [color, setColor] = useState(COLORES_PASTEL_COMBINACIONES[0]);
   const [saving, setSaving] = useState(false);
+  // Posiciones del plano: son las que permiten elegir las mesas pinchando
+  // sobre el mapa en vez de buscarlas en una lista de códigos.
+  const [posiciones, setPosiciones] = useState<Map<string, MesaPosicion>>(new Map());
   const { confirm: confirmDelete, dialog: confirmDeleteDialog } = useConfirmDelete();
+
+  useEffect(() => {
+    if (!open || !localId) return;
+    let cancel = false;
+    (async () => {
+      const r = await listMesaPosicionesLocal(localId);
+      if (cancel || !r.ok) return;
+      setPosiciones(new Map(r.data.map((p) => [p.mesaId, p])));
+    })();
+    return () => {
+      cancel = true;
+    };
+  }, [open, localId]);
 
   const mesasOrdenadas = useMemo(
     () => mesaIds.map((id) => mesas.find((m) => m.id === id)).filter((x): x is Mesa => !!x),
@@ -182,7 +201,9 @@ export function CombinacionConfigModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+      {/* Más ancho que un modal normal: dentro va el plano del local y hay que
+          poder distinguir las mesas para pincharlas. */}
+      <DialogContent className="sm:max-w-3xl max-h-[92vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
             {esEdicion ? `Combinación: ${combinacion?.codigo}` : "Nueva combinación"}
@@ -216,33 +237,20 @@ export function CombinacionConfigModal({
             <p className="text-[11px] text-muted-foreground">
               Código resultante: <span className="font-mono font-semibold">{codigoPreview}</span>
             </p>
-            <div className="max-h-40 overflow-y-auto border rounded-md p-2 space-y-1">
-              {mesas.length === 0 ? (
-                <p className="text-xs text-muted-foreground italic px-1">
-                  No hay mesas creadas en este local.
-                </p>
-              ) : (
-                mesas.map((m) => {
-                  const selected = mesaIds.includes(m.id);
-                  return (
-                    <label
-                      key={m.id}
-                      className="flex items-center gap-2 text-xs cursor-pointer hover:bg-accent/50 rounded px-1 py-0.5"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={selected}
-                        onChange={() => toggleMesa(m.id)}
-                      />
-                      <span className="font-mono font-semibold">{m.codigo}</span>
-                      <span className="text-muted-foreground">
-                        ({m.capacidadMin}-{m.capacidadMax}) {TIPO_MESA_LABELS[m.tipo]}
-                      </span>
-                    </label>
-                  );
-                })
-              )}
-            </div>
+            {mesas.length === 0 ? (
+              <p className="text-xs text-muted-foreground italic px-1">
+                No hay mesas creadas en este local.
+              </p>
+            ) : (
+              <SelectorMesasPlano
+                mesas={mesas}
+                posiciones={posiciones}
+                zonas={zonas}
+                seleccionadas={mesaIds}
+                onToggle={toggleMesa}
+                color={color}
+              />
+            )}
           </div>
 
           {/* Capacidad */}
