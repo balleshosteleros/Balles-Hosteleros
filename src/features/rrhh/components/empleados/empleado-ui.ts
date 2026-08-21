@@ -15,8 +15,8 @@ export interface EmpleadoUI {
   telefono: string;
   emailEmpresa: string;
   emailPersonal: string;
-  validadorTrabajo: string;
-  validadorAusencias: string;
+  /** Departamento que valida sus solicitudes ("—" si no está definido). */
+  validador: string;
 }
 
 export const ESTADOS_LABEL: Record<EstadoEmpleadoUI, string> = {

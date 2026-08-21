@@ -434,56 +434,15 @@ export function EstructuraTab() {
                 Sin combinaciones. Crea la primera para permitir reservas de grupos grandes.
               </p>
             ) : (
-              <ul className="space-y-1.5">
-                {combinaciones.map((c) => (
-                  <li
-                    key={c.id}
-                    className="flex items-center justify-between border-2 rounded-md px-3 py-2 text-sm bg-card"
-                    style={{ borderColor: c.colorMarca }}
-                  >
-                    <div className="flex items-center gap-3">
-                      <span
-                        className="inline-block h-4 w-4 rounded"
-                        style={{ backgroundColor: c.colorMarca }}
-                      />
-                      <span className="font-mono font-semibold">{c.codigo}</span>
-                      {/* Ajuste rápido de aforo: los +/− solo se revelan al
-                          pasar el ratón, para no llenar la lista de botones. */}
-                      <span className="flex items-center gap-2 text-xs text-muted-foreground">
-                        <AforoRapido
-                          valor={c.capacidadMin}
-                          onChange={(v) => ajustarAforo(c, { capacidadMin: v })}
-                          min={1}
-                          max={c.capacidadMax}
-                          titulo="Mínimo de personas"
-                        />
-                        <span className="opacity-40">–</span>
-                        <AforoRapido
-                          valor={c.capacidadMax}
-                          onChange={(v) => ajustarAforo(c, { capacidadMax: v })}
-                          min={c.capacidadMin}
-                          max={100}
-                          titulo="Máximo de personas"
-                        />
-                        <span>pax</span>
-                        {c.tipo && ` · ${TIPO_MESA_LABELS[c.tipo]}`}
-                        {c.capacidadAuto && " · auto"}
-                      </span>
-                    </div>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7 text-muted-foreground"
-                      onClick={() => {
-                        setCombinacionEdit(c);
-                        setCombinacionModalOpen(true);
-                      }}
-                    >
-                      <Pencil className="h-3.5 w-3.5" />
-                    </Button>
-                  </li>
-                ))}
-              </ul>
+              <CombinacionesLista
+                combinaciones={combinaciones}
+                zonas={zonas}
+                onEditar={(c) => {
+                  setCombinacionEdit(c);
+                  setCombinacionModalOpen(true);
+                }}
+                onAjustarAforo={ajustarAforo}
+              />
             )}
           </section>
         </>
@@ -694,5 +653,136 @@ function AforoRapido({
         +
       </button>
     </span>
+  );
+}
+
+/**
+ * Lista de combinaciones agrupada por zona y plegada.
+ *
+ * Con 80+ combinaciones una lista plana es inmanejable, así que:
+ *  · Se agrupa por zona y cada grupo arranca CERRADO (solo el título y cuántas
+ *    tiene). Se abre el que interese.
+ *  · El buscador filtra por mesa: escribiendo "TE5" salen todas las
+ *    combinaciones que la incluyen, con los grupos ya abiertos. Es la forma
+ *    real de buscar aquí — "¿qué puedo montar con esta mesa?".
+ */
+function CombinacionesLista({
+  combinaciones,
+  zonas,
+  onEditar,
+  onAjustarAforo,
+}: {
+  combinaciones: MesaCombinacion[];
+  zonas: Zona[];
+  onEditar: (c: MesaCombinacion) => void;
+  onAjustarAforo: (
+    c: MesaCombinacion,
+    patch: { capacidadMin?: number } | { capacidadMax?: number },
+  ) => void;
+}) {
+  const [busqueda, setBusqueda] = useState("");
+  const [abiertas, setAbiertas] = useState<Set<string>>(new Set());
+
+  const q = busqueda.trim().toUpperCase();
+  /** El código es "TE5+TE6": se parte para no dar por buena una coincidencia
+   *  parcial (buscar "TE1" no debe sacar TE10 ni TE19). */
+  const coincide = (c: MesaCombinacion) =>
+    !q || c.codigo.split("+").some((cod) => cod.trim().toUpperCase() === q);
+
+  const filtradas = combinaciones.filter(coincide);
+  const nombreZona = (id: string | null) =>
+    zonas.find((z) => z.id === id)?.nombre ?? "Sin zona";
+
+  const grupos = new Map<string, MesaCombinacion[]>();
+  for (const c of filtradas) {
+    const k = nombreZona(c.zonaId);
+    grupos.set(k, [...(grupos.get(k) ?? []), c]);
+  }
+  const ordenados = [...grupos.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+
+  function alternar(zona: string) {
+    setAbiertas((prev) => {
+      const next = new Set(prev);
+      if (next.has(zona)) next.delete(zona);
+      else next.add(zona);
+      return next;
+    });
+  }
+
+  return (
+    <div className="space-y-2">
+      <Input
+        value={busqueda}
+        onChange={(e) => setBusqueda(e.target.value)}
+        placeholder="Buscar por mesa (ej. TE5) para ver sus combinaciones"
+        className="h-9 text-sm"
+      />
+
+      {filtradas.length === 0 ? (
+        <p className="text-xs text-muted-foreground italic py-2">
+          Ninguna combinación incluye la mesa «{busqueda.trim()}».
+        </p>
+      ) : (
+        ordenados.map(([zona, lista]) => {
+          // Buscando, los grupos se abren solos: si has filtrado es para ver.
+          const abierta = q.length > 0 || abiertas.has(zona);
+          return (
+            <div key={zona} className="border rounded-md overflow-hidden">
+              <button
+                type="button"
+                onClick={() => alternar(zona)}
+                className="w-full flex items-center justify-between px-3 py-2 text-sm hover:bg-muted/50"
+              >
+                <span className="font-medium">{zona}</span>
+                <span className="text-xs text-muted-foreground">
+                  {lista.length}
+                  {abierta ? " ▾" : " ▸"}
+                </span>
+              </button>
+              {abierta && (
+                <ul className="divide-y border-t">
+                  {lista.map((c) => (
+                    <li
+                      key={c.id}
+                      className="flex items-center justify-between px-3 py-1.5 text-sm"
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <span className="font-mono font-semibold truncate">{c.codigo}</span>
+                        <span className="flex items-center gap-1.5 text-xs text-muted-foreground shrink-0">
+                          <AforoRapido
+                            valor={c.capacidadMin}
+                            onChange={(v) => onAjustarAforo(c, { capacidadMin: v })}
+                            min={1}
+                            max={c.capacidadMax}
+                            titulo="Mínimo de personas"
+                          />
+                          <span className="opacity-40">–</span>
+                          <AforoRapido
+                            valor={c.capacidadMax}
+                            onChange={(v) => onAjustarAforo(c, { capacidadMax: v })}
+                            min={c.capacidadMin}
+                            max={100}
+                            titulo="Máximo de personas"
+                          />
+                          <span>pax</span>
+                        </span>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 text-muted-foreground shrink-0"
+                        onClick={() => onEditar(c)}
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </Button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          );
+        })
+      )}
+    </div>
   );
 }

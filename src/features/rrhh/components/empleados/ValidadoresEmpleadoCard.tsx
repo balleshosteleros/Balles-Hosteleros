@@ -1,69 +1,32 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { toast } from "sonner";
-import { Loader2, Save, ShieldCheck } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
+import Link from "next/link";
+import { ExternalLink, ShieldCheck } from "lucide-react";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  listValidadoresElegibles,
-  setValidadoresEmpleado,
-  type AreaEmpleado,
-  type ValidadorElegible,
+  getValidadorSolicitudesEmpleado,
+  type ValidadorSolicitudesVista,
 } from "@/features/rrhh/actions/validadores-actions";
 
 type Props = {
   empleadoId: string;
-  validadorTrabajoId: string | null;
-  validadorAusenciasId: string | null;
-  onSaved?: () => Promise<void> | void;
-};
-
-const AREA_LABEL: Record<AreaEmpleado, string> = {
-  OPERATIVA: "operativa",
-  ADMINISTRATIVA: "administrativa",
 };
 
 /**
- * Configura los dos validadores del empleado: quién aprueba sus solicitudes de
- * trabajo y quién las de ausencias. Los candidatos son los empleados del
- * departamento que valida al área de este empleado (configurable en
- * Ajustes → RRHH). Ambos son obligatorios al guardar.
+ * Muestra qué departamento valida las solicitudes de este empleado y quiénes
+ * pueden aprobarlas hoy. Es solo lectura: la ficha del empleado no edita nada.
+ * El departamento validador se define en el puesto (RRHH → Puestos).
  */
-export function ValidadoresEmpleadoCard({
-  empleadoId,
-  validadorTrabajoId,
-  validadorAusenciasId,
-  onSaved,
-}: Props) {
-  const [candidatos, setCandidatos] = useState<ValidadorElegible[]>([]);
-  const [area, setArea] = useState<AreaEmpleado | null>(null);
-  const [departamentoNombre, setDepartamentoNombre] = useState<string | null>(null);
+export function ValidadoresEmpleadoCard({ empleadoId }: Props) {
+  const [datos, setDatos] = useState<ValidadorSolicitudesVista | null>(null);
   const [cargando, setCargando] = useState(true);
-  const [trabajoId, setTrabajoId] = useState<string>(validadorTrabajoId ?? "");
-  const [ausenciasId, setAusenciasId] = useState<string>(validadorAusenciasId ?? "");
-  const [guardando, setGuardando] = useState(false);
-
-  useEffect(() => {
-    setTrabajoId(validadorTrabajoId ?? "");
-    setAusenciasId(validadorAusenciasId ?? "");
-  }, [validadorTrabajoId, validadorAusenciasId]);
 
   useEffect(() => {
     let activo = true;
     setCargando(true);
-    listValidadoresElegibles({ empleadoId }).then((res) => {
+    getValidadorSolicitudesEmpleado(empleadoId).then((res) => {
       if (!activo) return;
-      setCandidatos(res.ok ? res.data : []);
-      setArea(res.area);
-      setDepartamentoNombre(res.departamentoNombre);
+      setDatos(res.data);
       setCargando(false);
     });
     return () => {
@@ -71,27 +34,8 @@ export function ValidadoresEmpleadoCard({
     };
   }, [empleadoId]);
 
-  async function guardar() {
-    if (!trabajoId || !ausenciasId) {
-      toast.error("Asigna un validador de trabajo y uno de ausencias.");
-      return;
-    }
-    setGuardando(true);
-    const res = await setValidadoresEmpleado({
-      empleadoId,
-      validadorTrabajoId: trabajoId,
-      validadorAusenciasId: ausenciasId,
-    });
-    setGuardando(false);
-    if (!res.ok) {
-      toast.error(res.error ?? "No se pudieron guardar los validadores.");
-      return;
-    }
-    toast.success("Validadores guardados.");
-    await onSaved?.();
-  }
-
-  const sinCandidatos = !cargando && candidatos.length === 0;
+  const depto = datos?.departamentoNombre ?? null;
+  const quienes = datos?.quienesPuedenValidar ?? [];
 
   return (
     <div className="rounded-lg border bg-card p-4 md:p-5 space-y-4">
@@ -100,72 +44,63 @@ export function ValidadoresEmpleadoCard({
           <ShieldCheck className="h-4 w-4" />
         </div>
         <div className="space-y-1">
-          <h3 className="text-base font-semibold text-foreground">Validadores</h3>
+          <h3 className="text-base font-semibold text-foreground">Validador de solicitudes</h3>
           <p className="text-sm text-muted-foreground">
-            Quién aprueba las solicitudes de este empleado.{" "}
-            {area && departamentoNombre ? (
-              <>
-                Al ser de área <strong className="text-foreground">{AREA_LABEL[area]}</strong>,
-                pueden validarle quienes tengan acceso a{" "}
-                <strong className="text-foreground">{departamentoNombre}</strong> en su rol.
-              </>
-            ) : (
-              <>El departamento validador se configura en Ajustes → RRHH.</>
-            )}
+            Departamento que aprueba o deniega las solicitudes de este empleado.
           </p>
         </div>
       </div>
 
       {cargando ? (
-        <p className="text-sm text-muted-foreground">Cargando candidatos…</p>
-      ) : sinCandidatos ? (
-        <p className="text-sm text-rose-600">
-          {!area
-            ? "Este empleado no tiene departamento asignado, así que no se puede determinar su área. Asígnale un departamento primero."
-            : departamentoNombre
-              ? `No hay ningún empleado activo con acceso a ${departamentoNombre} en su rol. Da acceso a ${departamentoNombre} a algún rol, o cambia el departamento validador en Ajustes → RRHH.`
-              : "No hay ningún departamento validador configurado para esta área. Configúralo en Ajustes → RRHH."}
-        </p>
+        <p className="text-sm text-muted-foreground">Cargando…</p>
       ) : (
         <>
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-1.5">
-              <Label>Validador de trabajo</Label>
-              <Select value={trabajoId} onValueChange={setTrabajoId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecciona un validador" />
-                </SelectTrigger>
-                <SelectContent>
-                  {candidatos.map((c) => (
-                    <SelectItem key={c.id} value={c.id}>{c.nombreCompleto}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
-              <Label>Validador de ausencias</Label>
-              <Select value={ausenciasId} onValueChange={setAusenciasId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecciona un validador" />
-                </SelectTrigger>
-                <SelectContent>
-                  {candidatos.map((c) => (
-                    <SelectItem key={c.id} value={c.id}>{c.nombreCompleto}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+          <div className="rounded-md border bg-muted/30 px-3 py-2.5">
+            <p className="text-xs text-muted-foreground">Valida</p>
+            <p
+              className={
+                depto ? "text-sm font-medium text-foreground" : "text-sm text-muted-foreground italic"
+              }
+            >
+              {depto ?? "Sin definir"}
+            </p>
           </div>
 
-          <div className="flex justify-end">
-            <Button onClick={guardar} disabled={guardando} className="gap-2">
-              {guardando ? (
-                <><Loader2 className="h-4 w-4 animate-spin" />Guardando…</>
+          {depto && (
+            <div>
+              <p className="text-xs text-muted-foreground mb-1.5">
+                Pueden aprobarle quienes tengan acceso a {depto} en su rol:
+              </p>
+              {quienes.length > 0 ? (
+                <div className="flex flex-wrap gap-1.5">
+                  {quienes.map((n) => (
+                    <span
+                      key={n}
+                      className="rounded-full border bg-background px-2.5 py-1 text-xs text-foreground"
+                    >
+                      {n}
+                    </span>
+                  ))}
+                </div>
               ) : (
-                <><Save className="h-4 w-4" />Guardar</>
+                <p className="text-sm text-rose-600">
+                  Ahora mismo nadie tiene acceso a {depto} en su rol, así que sus solicitudes se
+                  quedarían sin resolver.
+                </p>
               )}
-            </Button>
-          </div>
+            </div>
+          )}
+
+          <p className="text-xs text-muted-foreground">
+            Se define en el puesto y el empleado lo hereda.{" "}
+            <Link
+              href="/rrhh/puestos"
+              className="inline-flex items-center gap-1 text-primary hover:underline"
+            >
+              Ir a puestos
+              <ExternalLink className="h-3 w-3" />
+            </Link>
+          </p>
         </>
       )}
     </div>

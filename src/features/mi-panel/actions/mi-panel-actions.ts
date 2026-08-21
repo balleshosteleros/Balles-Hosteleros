@@ -1811,18 +1811,15 @@ export async function crearBajaMedicaConParte(
 }
 
 /**
- * Avisa en la campana al responsable directo de que tiene una solicitud
- * pendiente de revisar.
+ * Avisa en la campana de que hay una solicitud pendiente de revisar.
  *
- * Responsable = el validador asignado al solicitante según el tipo:
- * `empleados.validador_trabajo_id` para las de trabajo (horas extras, día
- * trabajado) y `validador_ausencias_id` para las de ausencia (vacaciones,
- * permiso, baja médica, baja de contrato). Es exactamente el mismo criterio que
- * usa `esValidadorAsignado` para dejar aprobar o denegar, así que el aviso le
- * llega siempre a quien puede resolverlo.
+ * El validador es un DEPARTAMENTO, así que el aviso va a TODOS los que pueden
+ * resolverla: los empleados activos cuyo rol da acceso al departamento
+ * validador del solicitante. Mismo criterio que `esValidadorAsignado` usa para
+ * dejar aprobar o denegar, así que el aviso llega siempre a quien puede actuar.
  *
  * Side-effect NO bloqueante: si algo falla, la solicitud queda creada igual y
- * el responsable la sigue viendo en la lista de pendientes.
+ * los responsables la siguen viendo en la lista de pendientes.
  */
 async function avisarValidadorSolicitudPendiente(args: {
   supabase: ServerClient;
@@ -1836,20 +1833,16 @@ async function avisarValidadorSolicitudPendiente(args: {
   fechaFin: string | null;
 }): Promise<void> {
   try {
-    const { data: emp } = await args.supabase
-      .from("empleados")
-      .select("validador_trabajo_id, validador_ausencias_id")
-      .eq("empresa_id", args.empresaId)
-      .eq("user_id", args.userId)
-      .maybeSingle();
-
-    const validadorId =
-      args.tipo === "trabajo"
-        ? ((emp?.validador_trabajo_id as string | null) ?? null)
-        : ((emp?.validador_ausencias_id as string | null) ?? null);
-    // Sin validador asignado no hay a quién avisar: la solicitud sigue su curso
-    // y aparece en pendientes de RRHH.
-    if (!validadorId) return;
+    const { empleadosQuePuedenValidarA } = await import(
+      "@/features/rrhh/actions/validadores-actions"
+    );
+    const validadorIds = await empleadosQuePuedenValidarA({
+      empleadoUserId: args.userId,
+      empresaId: args.empresaId,
+    });
+    // Sin nadie que pueda validar no hay a quién avisar: la solicitud sigue su
+    // curso y aparece en pendientes de RRHH.
+    if (validadorIds.length === 0) return;
 
     const periodo =
       args.fechaFin && args.fechaFin !== args.fechaInicio
@@ -1865,7 +1858,7 @@ async function avisarValidadorSolicitudPendiente(args: {
       tipo: "solicitud_pendiente",
       titulo: `${args.solicitante}: ${SUBTIPO_LABEL[args.subtipo].toLowerCase()}`,
       mensaje: `Tienes una solicitud pendiente de revisar (${periodo}).`,
-      segmento: { tipo: "empleados", empleadoIds: [validadorId] },
+      segmento: { tipo: "empleados", empleadoIds: validadorIds },
       accionUrl: "/rrhh/solicitudes",
       accionLabel: "Revisar",
       requiereAccion: true,
@@ -2301,32 +2294,26 @@ export async function anularMiSolicitud(id: string) {
 type ServerClient = Awaited<ReturnType<typeof createClient>>;
 
 /**
- * ¿El usuario es el validador asignado de esta solicitud según su tipo?
- * Las de trabajo las valida `empleados.validador_trabajo_id` del solicitante;
- * las de ausencia, `empleados.validador_ausencias_id`. Solo ese empleado puede
- * aprobar/denegar.
+ * ¿El usuario puede resolver esta solicitud?
+ *
+ * El validador es un DEPARTAMENTO, no una persona: cada empleado tiene un
+ * `validador_departamento_id` (heredado de su puesto) y puede aprobar o denegar
+ * cualquiera cuyo ROL le dé acceso a ese departamento. No se distingue entre
+ * trabajo y ausencias: hay un único validador de solicitudes.
  */
 async function esValidadorAsignado(
-  supabase: ServerClient,
+  _supabase: ServerClient,
   userId: string,
   solicitud: { empresa_id: string; user_id: string; tipo: SolicitudTipo },
 ): Promise<boolean> {
-  const empresaId = solicitud.empresa_id;
-  const [{ data: actual }, { data: solicitante }] = await Promise.all([
-    supabase.from("empleados").select("id").eq("user_id", userId).eq("empresa_id", empresaId).maybeSingle(),
-    supabase
-      .from("empleados")
-      .select("validador_trabajo_id, validador_ausencias_id")
-      .eq("user_id", solicitud.user_id)
-      .eq("empresa_id", empresaId)
-      .maybeSingle(),
-  ]);
-  if (!actual?.id || !solicitante) return false;
-  const validadorId =
-    solicitud.tipo === "trabajo"
-      ? (solicitante.validador_trabajo_id as string | null)
-      : (solicitante.validador_ausencias_id as string | null);
-  return !!validadorId && validadorId === actual.id;
+  const { userIdsQuePuedoValidar } = await import(
+    "@/features/rrhh/actions/validadores-actions"
+  );
+  const puedo = await userIdsQuePuedoValidar({
+    userId,
+    empresaId: solicitud.empresa_id,
+  });
+  return puedo.includes(solicitud.user_id);
 }
 
 export async function listarSolicitudesEmpresa(filtro: "pendientes" | "todas" = "pendientes") {
@@ -2347,37 +2334,20 @@ export async function listarSolicitudesEmpresa(filtro: "pendientes" | "todas" = 
     const { data, error } = await query;
     if (error) throw error;
 
-    // Marca cada solicitud con si el usuario actual es su validador asignado
-    // (solo él puede aprobar/denegar). Todos ven todas; el control es por fila.
-    let miEmpleadoId: string | null = null;
-    const validadoresPorUser = new Map<string, { t: string | null; a: string | null }>();
+    // Marca cada solicitud con si el usuario actual puede resolverla: lo puede
+    // hacer si su rol le da acceso al departamento validador del solicitante.
+    // Todos ven todas; el control es por fila.
+    let puedoValidarA = new Set<string>();
     if (user) {
-      const userIds = Array.from(new Set((data ?? []).map((r) => r.user_id as string)));
-      const [{ data: actual }, { data: solicitantes }] = await Promise.all([
-        supabase.from("empleados").select("id").eq("user_id", user.id).eq("empresa_id", empresaId).maybeSingle(),
-        userIds.length > 0
-          ? supabase
-              .from("empleados")
-              .select("user_id, validador_trabajo_id, validador_ausencias_id")
-              .eq("empresa_id", empresaId)
-              .in("user_id", userIds)
-          : Promise.resolve({ data: [] as Array<Record<string, unknown>> }),
-      ]);
-      miEmpleadoId = (actual?.id as string | null) ?? null;
-      for (const s of solicitantes ?? []) {
-        validadoresPorUser.set(s.user_id as string, {
-          t: (s.validador_trabajo_id as string | null) ?? null,
-          a: (s.validador_ausencias_id as string | null) ?? null,
-        });
-      }
+      const { userIdsQuePuedoValidar } = await import(
+        "@/features/rrhh/actions/validadores-actions"
+      );
+      puedoValidarA = new Set(await userIdsQuePuedoValidar({ userId: user.id, empresaId }));
     }
 
     const dataConFlag = (data ?? []).map((row) => {
       const base = mapSolicitud(row);
-      const v = validadoresPorUser.get(base.userId);
-      const validadorId = base.tipo === "trabajo" ? v?.t : v?.a;
-      const puedoValidar = !!miEmpleadoId && !!validadorId && validadorId === miEmpleadoId;
-      return { ...base, puedoValidar };
+      return { ...base, puedoValidar: puedoValidarA.has(base.userId) };
     });
 
     return { ok: true, data: dataConFlag };
@@ -3144,26 +3114,17 @@ export async function getTareasValidacionPendientes(): Promise<{
     const activo = cfg ? (cfg.tareas_validador_activo as boolean) !== false : true;
     if (!activo) return { ok: true, data: { ...vacio, activo: false } };
 
-    const { data: miEmpleado } = await supabase
-      .from("empleados")
-      .select("id")
-      .eq("user_id", user.id)
-      .eq("empresa_id", empresaId)
-      .maybeSingle();
-    if (!miEmpleado?.id) return { ok: true, data: { activo: true, ausencia: 0, trabajo: 0 } };
-    const miId = miEmpleado.id as string;
-
-    const { data: validados } = await supabase
-      .from("empleados")
-      .select("user_id, validador_trabajo_id, validador_ausencias_id")
-      .eq("empresa_id", empresaId)
-      .or(`validador_trabajo_id.eq.${miId},validador_ausencias_id.eq.${miId}`);
-    const usersTrabajo = (validados ?? [])
-      .filter((e) => e.validador_trabajo_id === miId)
-      .map((e) => e.user_id as string);
-    const usersAusencia = (validados ?? [])
-      .filter((e) => e.validador_ausencias_id === miId)
-      .map((e) => e.user_id as string);
+    // A quién puedo validar: los empleados cuyo departamento validador está
+    // entre los que mi rol me da acceso. Es la misma lista para las solicitudes
+    // de trabajo y las de ausencia (hay un único validador de solicitudes); el
+    // desglose por tipo se mantiene solo para el contador.
+    const { userIdsQuePuedoValidar } = await import(
+      "@/features/rrhh/actions/validadores-actions"
+    );
+    const misValidados = await userIdsQuePuedoValidar({ userId: user.id, empresaId });
+    if (misValidados.length === 0) {
+      return { ok: true, data: { activo: true, ausencia: 0, trabajo: 0 } };
+    }
 
     const contar = async (userIds: string[], tipo: SolicitudTipo) => {
       if (userIds.length === 0) return 0;
@@ -3177,8 +3138,8 @@ export async function getTareasValidacionPendientes(): Promise<{
       return count ?? 0;
     };
     const [trabajo, ausencia] = await Promise.all([
-      contar(usersTrabajo, "trabajo"),
-      contar(usersAusencia, "ausencia"),
+      contar(misValidados, "trabajo"),
+      contar(misValidados, "ausencia"),
     ]);
 
     return { ok: true, data: { activo: true, ausencia, trabajo } };

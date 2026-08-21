@@ -55,14 +55,12 @@ export interface PuestoSalarial {
   // Datos de gestoría (compartidos por el puesto, comunes a todos los niveles)
   convenioColectivo: string;
   tipoContratoDefecto: string;
-  // Validadores por defecto (plantilla): quién validará las solicitudes de
-  // trabajo / ausencias de quien ocupe el puesto. Se heredan al empleado al
-  // contratar. `null` = sin definir (el empleado nace sin validador y se avisa).
-  validadorTrabajoDefectoId: string | null;
-  validadorAusenciasDefectoId: string | null;
-  /** Nombres para pintar el valor actual del selector sin re-fetch. */
-  validadorTrabajoDefectoNombre: string | null;
-  validadorAusenciasDefectoNombre: string | null;
+  // Departamento que valida las solicitudes de quien ocupe el puesto. Puede
+  // aprobarlas cualquier empleado activo cuyo rol dé acceso a ese departamento.
+  // Se hereda al empleado al contratar. `null` = sin definir.
+  validadorDepartamentoId: string | null;
+  /** Nombre para pintar el valor actual del selector sin re-fetch. */
+  validadorDepartamentoNombre: string | null;
 }
 
 export interface NormaSalarial {

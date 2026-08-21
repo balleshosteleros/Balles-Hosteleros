@@ -18,10 +18,6 @@ import {
   normalizarNombre,
   normalizarNombreOrNull,
 } from "@/shared/lib/normalizar-nombre";
-import {
-  getDependientesValidador,
-  reasignarValidadorYDesactivar,
-} from "@/features/rrhh/actions/validadores-actions";
 import { resolverHorarioResumen } from "@/features/rrhh/utils/horario-empleado";
 import { getZonaHorariaEmpresa } from "@/features/empresa/lib/empresa-server";
 import { ahoraEnZona } from "@/features/empresa/lib/zona-horaria";
@@ -156,22 +152,22 @@ export async function listEmpleados() {
       if (currPrincipal && !prevPrincipal) porUser.set(uid, e);
     }
 
-    // Nombres de los validadores (de trabajo y de ausencias) de cada empleado.
+    // Nombre del departamento que valida las solicitudes de cada empleado.
     const validadorIds = Array.from(
       new Set(
         (data ?? [])
-          .flatMap((e) => [e.validador_trabajo_id, e.validador_ausencias_id])
+          .map((e) => e.validador_departamento_id)
           .filter((v): v is string => Boolean(v)),
       ),
     );
     let nombrePorEmpleadoId: Record<string, string> = {};
     if (validadorIds.length > 0) {
       const { data: vals } = await admin
-        .from("empleados")
-        .select("id, nombre, apellidos")
+        .from("departamentos")
+        .select("id, nombre")
         .in("id", validadorIds);
       nombrePorEmpleadoId = (vals ?? []).reduce<Record<string, string>>((acc, v) => {
-        acc[v.id as string] = `${(v.nombre as string) ?? ""} ${(v.apellidos as string | null) ?? ""}`.trim();
+        acc[v.id as string] = (v.nombre as string) ?? "";
         return acc;
       }, {});
     }
@@ -227,11 +223,8 @@ export async function listEmpleados() {
         : [(e.departamentos as { area?: string } | null)?.area].filter(
             (a): a is string => Boolean(a),
           ),
-      validador_trabajo_nombre: e.validador_trabajo_id
-        ? nombrePorEmpleadoId[e.validador_trabajo_id as string] ?? null
-        : null,
-      validador_ausencias_nombre: e.validador_ausencias_id
-        ? nombrePorEmpleadoId[e.validador_ausencias_id as string] ?? null
+      validador_departamento_nombre: e.validador_departamento_id
+        ? nombrePorEmpleadoId[e.validador_departamento_id as string] ?? null
         : null,
       horario_resumen: horarioPorEmpleado.get(e.id as string) ?? null,
     }));
@@ -722,16 +715,30 @@ export async function updateEmpleado(id: string, updates: UpdateEmpleadoInput) {
  * Cambia el estado del empleado. Validaciones (también las hace el constraint
  * `empleados_estado_check` en BD, esto es solo para dar errores legibles):
  *   - Para 'Inactivo' es obligatorio `fechaBaja`.
- *   - Para 'Activo' se limpia automáticamente la `fechaBaja`.
+ *   - Para 'Activo' es obligatoria `fechaAlta`.
+ *
+ * Ambas fechas son obligatorias porque este cambio es MANUAL y se salta el flujo
+ * de contratación de reclutamiento: sin fecha efectiva no hay forma de saber
+ * desde cuándo cuenta el alta o la baja a efectos de nóminas y gestoría. Todo
+ * movimiento queda registrado en `empleado_estado_historial`, y en las altas se
+ * guarda además la lista de pasos del flujo que NO se han ejecutado.
  *
  * Al guardar, el trigger `empleados_sync_estado_acceso` actualiza
- * automáticamente `profiles.estado_acceso` (Activo/Inactivo) si el empleado
+ * automáticamente `usuarios.estado_acceso` (Activo/Inactivo) si el empleado
  * tiene cuenta de portal vinculada.
+ *
+ * Al ACTIVAR se restaura además su fila en `usuario_empresas` para la empresa de
+ * esta ficha. Sin eso, reactivar a alguien desvinculado con
+ * `quitarEmpleadoDeEmpresa` lo dejaba Activo pero sin ver la empresa en el
+ * selector ni pasar las RLS. Los locales de fichaje no se recuperan (se borran
+ * al desvincular): hay que volver a marcarlos en la ficha.
  */
 export async function setEmpleadoEstado(input: {
   id: string;
   estado: EstadoEmpleado;
   fechaBaja?: string | null;
+  fechaAlta?: string | null;
+  motivo?: string | null;
 }) {
   try {
     if (input.estado !== "Activo" && !input.fechaBaja) {
@@ -740,19 +747,91 @@ export async function setEmpleadoEstado(input: {
         error: "La fecha de baja es obligatoria al desactivar a un empleado.",
       };
     }
+    if (input.estado === "Activo" && !input.fechaAlta) {
+      return {
+        ok: false,
+        error: "La fecha de alta es obligatoria al activar a un empleado.",
+      };
+    }
 
     const { supabase } = await getAppContext();
-    // La fecha de baja queda siempre reflejada: al reactivar (Activo) NO se borra,
-    // se conserva como historico de la ultima baja.
+
+    // Estado previo: hace falta para saber si esto es un movimiento real (y de
+    // qué tipo) o solo un reguardado del mismo estado, que no debe ensuciar el
+    // historial con una línea nueva. `user_id` y `empresa_id` se leen aquí para
+    // poder restaurar la pertenencia a la empresa al reactivar (ver más abajo).
+    const { data: previo } = await supabase
+      .from("empleados")
+      .select("estado, fecha_baja, user_id, empresa_id")
+      .eq("id", input.id)
+      .maybeSingle();
+    const estadoAnterior = (previo?.estado as string | null) ?? null;
+    const huboCambio = estadoAnterior !== input.estado;
+
     const patch: Record<string, unknown> = { estado: input.estado };
-    // Solo se escribe cuando viene informada. Antes se ponía `?? null` siempre, así
-    // que reactivar a alguien (Activo, sin fechaBaja) BORRABA el histórico de su
-    // última baja — justo lo contrario de lo que dice el comentario de arriba. Esa
-    // fecha es ahora el dato que sostiene el aviso de nóminas de ex-empleados.
-    if (input.fechaBaja) patch.fecha_baja = input.fechaBaja;
+    if (input.estado === "Activo") {
+      // Reactivación: la fecha de alta pasa a ser la nueva incorporación y se
+      // limpia la fecha de baja. Dejarla puesta creaba un Activo con fecha de
+      // baja en el pasado, que descuadraba los KPIs de auditoría y los avisos de
+      // nóminas de ex-empleados. El movimiento anterior no se pierde: queda en
+      // `empleado_estado_historial`, que es ahora el histórico de verdad.
+      patch.fecha_alta = input.fechaAlta;
+      patch.fecha_baja = null;
+    } else if (input.fechaBaja) {
+      patch.fecha_baja = input.fechaBaja;
+    }
 
     const { error } = await supabase.from("empleados").update(patch).eq("id", input.id);
     if (error) throw error;
+
+    // Reactivación: devolverle la pertenencia a la empresa de esta ficha. Si se
+    // le quitó con `quitarEmpleadoDeEmpresa`, su fila de `usuario_empresas` se
+    // borró, y sin ella la ficha queda Activa pero él no ve la empresa en el
+    // selector ni pasa las RLS. El upsert es idempotente: en una reactivación
+    // normal (baja simple, sin desvincular) la fila ya existe y no cambia nada.
+    // Los locales de fichaje NO se restauran: se perdieron al desvincular y hay
+    // que volver a marcarlos a mano en la ficha.
+    if (input.estado === "Activo" && previo?.user_id && previo?.empresa_id) {
+      try {
+        const admin = createAdminClient();
+        const { error: ueErr } = await admin
+          .from("usuario_empresas")
+          .upsert(
+            { user_id: previo.user_id as string, empresa_id: previo.empresa_id as string },
+            { onConflict: "user_id,empresa_id" },
+          );
+        if (ueErr) throw ueErr;
+      } catch (e) {
+        // No bloquea la reactivación: la ficha ya está Activa. Se registra para
+        // poder detectar el caso de "activo pero sin ver la empresa".
+        console.error(
+          "[rrhh] setEmpleadoEstado → restaurar usuario_empresas:",
+          e instanceof Error ? e.message : e,
+        );
+      }
+    }
+
+    if (huboCambio) {
+      const { registrarMovimientoEstado } = await import(
+        "@/features/rrhh/actions/empleado-estado-historial-actions"
+      );
+      const { PASOS_OMITIDOS_ALTA } = await import(
+        "@/features/rrhh/data/empleado-estado-pasos"
+      );
+      const esAlta = input.estado === "Activo";
+      await registrarMovimientoEstado({
+        empleadoId: input.id,
+        accion: esAlta ? "Alta" : "Baja",
+        estadoAnterior,
+        estadoNuevo: input.estado,
+        fechaEfectiva: (esAlta ? input.fechaAlta : input.fechaBaja) as string,
+        motivo: input.motivo ?? null,
+        // Un alta manual no dispara nada del flujo de contratación: se deja
+        // constancia de lo que RRHH tiene que completar a mano.
+        avisosOmitidos: esAlta ? PASOS_OMITIDOS_ALTA.map((p) => p.clave) : [],
+        origen: "ficha",
+      });
+    }
 
     // Baja efectiva: recorta el horario futuro (turnos/patrones ilimitados o que
     // terminarían después de la baja) a la fecha de baja, y limpia turnos sueltos
@@ -792,27 +871,15 @@ export async function setEmpleadoEstado(input: {
  * - Se le retira el acceso a esa empresa (`usuario_empresas`) y sus locales, de
  *   modo que en su software deja de ver nada de esa empresa.
  * - Mínimo 1: nunca puede quedarse sin empresas (debe conservar otra).
- * - Si valida a otros en esa empresa, exige sustituto (igual que el alta de baja).
  * - Si esa era su empresa de referencia (login), se mueve a otra que le quede.
  *
  * `empleadoId` identifica al usuario (cualquiera de sus fichas); `empresaId` es
- * la empresa de la que se le quita. Devuelve `needsSubstitute` cuando hay que
- * elegir un sustituto antes de continuar.
+ * la empresa de la que se le quita.
  */
 export async function quitarEmpleadoDeEmpresa(input: {
   empleadoId: string;
   empresaId: string;
-  sustitutoId?: string;
-}): Promise<
-  | { ok: true }
-  | {
-      ok: false;
-      error?: string;
-      needsSubstitute?: boolean;
-      dependientes?: unknown[];
-      reemplazos?: unknown[];
-    }
-> {
+}): Promise<{ ok: true } | { ok: false; error?: string }> {
   try {
     const { supabase } = await getAppContext();
 
@@ -853,42 +920,16 @@ export async function quitarEmpleadoDeEmpresa(input: {
 
     const objetivoId = objetivo.id as string;
 
-    // Validadores: si valida a otros en esta empresa, hace falta sustituto.
-    const dep = await getDependientesValidador(objetivoId);
-    if (dep.ok && dep.dependientes.length > 0 && !input.sustitutoId) {
-      if (dep.reemplazos.length === 0) {
-        return {
-          ok: false,
-          error:
-            "Valida a otros y no hay nadie con acceso a RRHH para sustituirle. Da acceso a RRHH a otra persona antes de quitarlo.",
-        };
-      }
-      return {
-        ok: false,
-        needsSubstitute: true,
-        dependientes: dep.dependientes,
-        reemplazos: dep.reemplazos,
-      };
-    }
-
     const hoy = new Date().toISOString().split("T")[0];
 
-    // 1) Ficha de esta empresa → Inactivo (conserva todo), reasignando validador
-    //    si procede.
-    if (dep.ok && dep.dependientes.length > 0 && input.sustitutoId) {
-      const r = await reasignarValidadorYDesactivar({
-        empleadoId: objetivoId,
-        sustitutoId: input.sustitutoId,
-        fechaBaja: hoy,
-      });
-      if (!r.ok) return { ok: false, error: r.error };
-    } else {
-      const { error: upErr } = await admin
-        .from("empleados")
-        .update({ estado: "Inactivo", fecha_baja: hoy })
-        .eq("id", objetivoId);
-      if (upErr) throw upErr;
-    }
+    // 1) Ficha de esta empresa → Inactivo (conserva todo). No hay que reasignar
+    //    validador: quien valida las solicitudes es un departamento, no esta
+    //    persona, así que su baja no deja ninguna solicitud sin resolver.
+    const { error: upErr } = await admin
+      .from("empleados")
+      .update({ estado: "Inactivo", fecha_baja: hoy })
+      .eq("id", objetivoId);
+    if (upErr) throw upErr;
 
     // 2) Desvincular: quitar acceso a esta empresa + sus locales de fichaje.
     await admin

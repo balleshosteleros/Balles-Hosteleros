@@ -52,21 +52,10 @@ type PuestoRow = {
   puesto_salarios: SalarioEmbed[] | SalarioEmbed | null;
   convenio_colectivo: string | null;
   tipo_contrato_defecto: string | null;
-  validador_trabajo_defecto_id: string | null;
-  validador_ausencias_defecto_id: string | null;
-  // Joins nombrados a empleados (dos FK a la misma tabla → alias en el select).
-  validador_trabajo: { nombre: string | null; apellidos: string | null } | null;
-  validador_ausencias: { nombre: string | null; apellidos: string | null } | null;
+  validador_departamento_id: string | null;
+  // Join nombrado al departamento validador (segunda FK a departamentos → alias).
+  validador_departamento: { nombre: string | null } | null;
 };
-
-/** "Nombre Apellidos" o null si el join no trae empleado. */
-function nombreEmpleado(
-  e: { nombre: string | null; apellidos: string | null } | null,
-): string | null {
-  if (!e) return null;
-  const full = `${e.nombre ?? ""} ${e.apellidos ?? ""}`.trim();
-  return full || null;
-}
 
 function embedToNivel(sal: SalarioEmbed): NivelSalarial {
   return {
@@ -117,10 +106,8 @@ function rowToPuesto(r: PuestoRow, conCronograma: Set<string>): PuestoSalarial {
     tieneCronograma: conCronograma.has(r.id),
     convenioColectivo: r.convenio_colectivo ?? "",
     tipoContratoDefecto: r.tipo_contrato_defecto ?? "",
-    validadorTrabajoDefectoId: r.validador_trabajo_defecto_id ?? null,
-    validadorAusenciasDefectoId: r.validador_ausencias_defecto_id ?? null,
-    validadorTrabajoDefectoNombre: nombreEmpleado(r.validador_trabajo),
-    validadorAusenciasDefectoNombre: nombreEmpleado(r.validador_ausencias),
+    validadorDepartamentoId: r.validador_departamento_id ?? null,
+    validadorDepartamentoNombre: r.validador_departamento?.nombre ?? null,
   };
 }
 
@@ -136,7 +123,7 @@ export async function listPuestosEmpresa(): Promise<{
       supabase
         .from("puestos")
         .select(
-          "id, nombre, descripcion, convenio_colectivo, tipo_contrato_defecto, validador_trabajo_defecto_id, validador_ausencias_defecto_id, validador_trabajo:empleados!validador_trabajo_defecto_id(nombre, apellidos), validador_ausencias:empleados!validador_ausencias_defecto_id(nombre, apellidos), departamentos(id, nombre), puesto_salarios(nivel, salario_bruto, nomina_neta, efectivo_extra, salario_neto, jornada_contrato, horas_semanales, dias_libres, vacaciones, horario_semanal, observaciones, objetivos, estado, updated_at)",
+          "id, nombre, descripcion, convenio_colectivo, tipo_contrato_defecto, validador_departamento_id, validador_departamento:departamentos!validador_departamento_id(nombre), departamentos!departamento_id(id, nombre), puesto_salarios(nivel, salario_bruto, nomina_neta, efectivo_extra, salario_neto, jornada_contrato, horas_semanales, dias_libres, vacaciones, horario_semanal, observaciones, objetivos, estado, updated_at)",
         )
         .eq("empresa_id", empresaId),
       supabase

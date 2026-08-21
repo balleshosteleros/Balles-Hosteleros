@@ -279,7 +279,7 @@ export async function contratarCandidato(input: ContratarInput): Promise<Contrat
   // 2. Puesto + área del departamento + condiciones del nivel
   const { data: puesto } = await admin
     .from("puestos")
-    .select("id, nombre, departamento_id, tipo_contrato_defecto, convenio_colectivo, validador_trabajo_defecto_id, validador_ausencias_defecto_id, departamentos(nombre, area)")
+    .select("id, nombre, departamento_id, tipo_contrato_defecto, convenio_colectivo, validador_departamento_id, departamentos!departamento_id(nombre, area)")
     .eq("id", input.puestoId)
     .maybeSingle();
   if (!puesto) return { ok: false, error: "Puesto no encontrado." };
@@ -450,16 +450,14 @@ export async function contratarCandidato(input: ContratarInput): Promise<Contrat
     await vincularPuestoPrincipal(admin, alta.empleadoId, input.puestoId, puesto.nombre as string, input.primerDia);
     await guardarSnapshotCondiciones(admin, empresaId, alta.empleadoId, input.puestoId, puesto.nombre as string, nivelHeredado, input.primerDia, tipoContrato, cond);
 
-    // Validadores heredados del PUESTO (plantilla). Si el puesto los tiene
-    // definidos, el empleado nace con ellos. Un validador no puede ser el propio
-    // empleado, pero como es recién creado eso no puede ocurrir aquí.
-    const valTrabajo = (puesto.validador_trabajo_defecto_id as string | null) ?? null;
-    const valAusencias = (puesto.validador_ausencias_defecto_id as string | null) ?? null;
-    if (valTrabajo || valAusencias) {
-      await admin.from("empleados").update({
-        validador_trabajo_id: valTrabajo,
-        validador_ausencias_id: valAusencias,
-      }).eq("id", alta.empleadoId);
+    // Departamento validador heredado del PUESTO: quien tenga acceso a ese
+    // departamento en su rol podrá aprobar las solicitudes del nuevo empleado.
+    const valDepto = (puesto.validador_departamento_id as string | null) ?? null;
+    if (valDepto) {
+      await admin
+        .from("empleados")
+        .update({ validador_departamento_id: valDepto })
+        .eq("id", alta.empleadoId);
     }
 
     const { error: markErr } = await admin.from("candidatos")
@@ -473,10 +471,10 @@ export async function contratarCandidato(input: ContratarInput): Promise<Contrat
     return { ok: false, error: `La contratación no se completó y se ha revertido. Puedes volver a intentarlo. (${motivo})` };
   }
 
-  // Aviso a RRHH si el PUESTO no tenía validadores por defecto: el empleado nace
-  // sin validador y sus solicitudes no podrían aprobarse hasta asignárselo. No
+  // Aviso a RRHH si el PUESTO no tenía departamento validador: el empleado nace
+  // sin validador y sus solicitudes no podrían aprobarse hasta definirlo. No
   // bloquea la contratación (best-effort). Enlaza a la ficha del empleado.
-  if (!puesto.validador_trabajo_defecto_id || !puesto.validador_ausencias_defecto_id) {
+  if (!puesto.validador_departamento_id) {
     try {
       const { emitirNotificacion } = await import(
         "@/features/notificaciones/actions/notificaciones-actions"
@@ -485,12 +483,12 @@ export async function contratarCandidato(input: ContratarInput): Promise<Contrat
         empresaId,
         system: true,
         tipo: "validador_no_configurado",
-        titulo: `Asignar validador a ${fullName}`,
-        mensaje: `El puesto ${puesto.nombre} no tiene validadores por defecto, así que ${fullName} se ha creado sin validador de trabajo/ausencias. Asígnalo en su ficha para que pueda gestionar solicitudes.`,
+        titulo: `Definir validador del puesto ${puesto.nombre}`,
+        mensaje: `El puesto ${puesto.nombre} no tiene departamento validador, así que ${fullName} se ha creado sin validador y sus solicitudes no se podrán aprobar. Defínelo en el puesto.`,
         segmento: { tipo: "area", area: "ADMINISTRATIVA" },
         refTabla: "empleados",
         refId: alta.empleadoId,
-        accionUrl: `/rrhh/empleados/${alta.empleadoId}`,
+        accionUrl: "/rrhh/puestos",
         dedupeKey: `validador_pendiente:${alta.empleadoId}`,
       });
     } catch (e) {

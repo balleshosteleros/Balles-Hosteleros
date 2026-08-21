@@ -89,8 +89,7 @@ type EmpleadoBD = {
   permite_teletrabajo: boolean | null;
   fecha_baja: string | null;
   estado: string;
-  validador_trabajo_id: string | null;
-  validador_ausencias_id: string | null;
+  validador_departamento_id: string | null;
   calendario_vacaciones_id: string | null;
   doc_dni_anverso_path: string | null;
   doc_dni_reverso_path: string | null;
@@ -120,8 +119,7 @@ function bdToEmpleadoUI(emp: EmpleadoBD): EmpleadoUI {
     telefono: emp.telefono ?? "—",
     emailEmpresa: emp.email_empresa ?? "",
     emailPersonal: emp.email_personal ?? "",
-    validadorTrabajo: "—",
-    validadorAusencias: "—",
+    validador: "—",
   };
 }
 
@@ -298,25 +296,18 @@ export default function FichaEmpleadoPage() {
       case "solicitudes":
         return (
           <div className="p-6 space-y-6">
-            <ValidadoresEmpleadoCard
-              empleadoId={empleadoRegistro.id}
-              validadorTrabajoId={empleadoRegistro.validador_trabajo_id}
-              validadorAusenciasId={empleadoRegistro.validador_ausencias_id}
-              onSaved={cargarFicha}
-            />
-            <CalendarioVacacionesEmpleadoCard
-              empresaId={empleadoRegistro.empresa_id}
-              empleadoId={empleadoRegistro.id}
-              calendarioVacacionesId={empleadoRegistro.calendario_vacaciones_id}
-              onSaved={cargarFicha}
-            />
+            <ValidadoresEmpleadoCard empleadoId={empleadoRegistro.id} />
             <SolicitudesEmpleadoTab solicitudes={solicitudes} />
           </div>
         );
       case "firmas":
         return <FirmasEmpleadoTab empleadoId={empleadoRegistro.id} />;
       case "calendarios":
-        return <SubmoduloPorEmpleadoPlaceholder modulo="Calendarios" path="/rrhh/calendarios" empleado={empleado} />;
+        return (
+          <div className="p-6 space-y-6">
+            <CalendarioVacacionesEmpleadoCard empleadoId={empleadoRegistro.id} />
+          </div>
+        );
       case "entregas":
         return <EntregasEmpleadoTab empleadoId={empleadoRegistro.id} />;
       case "reclutamiento":

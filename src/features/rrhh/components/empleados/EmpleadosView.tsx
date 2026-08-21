@@ -74,8 +74,7 @@ type EmpleadoBDRow = {
   areas?: string[];
   es_principal?: boolean;
   empresas_acceso?: Array<{ id: string; nombre: string }>;
-  validador_trabajo_nombre?: string | null;
-  validador_ausencias_nombre?: string | null;
+  validador_departamento_nombre?: string | null;
   horario_resumen?: {
     nombre: string | null;
     tipoLabel: string | null;
@@ -128,8 +127,7 @@ function bdToEmpleado(row: EmpleadoBDRow): EmpleadoConAcceso {
     telefono: row.telefono ?? "—",
     emailEmpresa: row.email_empresa ?? "",
     emailPersonal: row.email_personal ?? "",
-    validadorTrabajo: row.validador_trabajo_nombre ?? "—",
-    validadorAusencias: row.validador_ausencias_nombre ?? "—",
+    validador: row.validador_departamento_nombre ?? "—",
     esPrincipal: row.es_principal ?? true,
     empresasAcceso: row.empresas_acceso ?? [],
   };
@@ -202,8 +200,7 @@ export function EmpleadosView() {
     if (campo === "telefono") return e.telefono;
     if (campo === "emailEmpresa") return e.emailEmpresa;
     if (campo === "emailPersonal") return e.emailPersonal;
-    if (campo === "validador") return e.validadorTrabajo;
-    if (campo === "validadorAusencias") return e.validadorAusencias;
+    if (campo === "validador") return e.validador;
     return (e as unknown as Record<string, unknown>)[campo];
   };
 
@@ -250,8 +247,7 @@ export function EmpleadosView() {
     { campo: "telefono", label: "Teléfono" },
     { campo: "emailEmpresa", label: "Email empresa" },
     { campo: "emailPersonal", label: "Email personal" },
-    { campo: "validador", label: "Validador trabajo" },
-    { campo: "validadorAusencias", label: "Validador ausencias" },
+    { campo: "validador", label: "Validador" },
   ];
 
   const columnDefs: Record<string, { th: ReactNode; td: (emp: EmpleadoConAcceso) => ReactNode }> = {
@@ -478,24 +474,12 @@ export function EmpleadosView() {
       th: (
         <TableColumnHeader
           key="validador"
-          label="Validador trabajo"
+          label="Validador"
           campo="validador"
         />
       ),
       td: (emp) => (
-        <td key="validador" className="px-3 py-2 align-middle"><span className="text-sm text-foreground whitespace-nowrap">{emp.validadorTrabajo}</span></td>
-      ),
-    },
-    validadorAusencias: {
-      th: (
-        <TableColumnHeader
-          key="validadorAusencias"
-          label="Validador ausencias"
-          campo="validadorAusencias"
-        />
-      ),
-      td: (emp) => (
-        <td key="validadorAusencias" className="px-3 py-2 align-middle"><span className="text-sm text-foreground whitespace-nowrap">{emp.validadorAusencias}</span></td>
+        <td key="validador" className="px-3 py-2 align-middle"><span className="text-sm text-foreground whitespace-nowrap">{emp.validador}</span></td>
       ),
     },
   };

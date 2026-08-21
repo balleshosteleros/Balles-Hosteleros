@@ -340,9 +340,6 @@ export async function updatePuesto(input: {
   // Datos de gestoría (compartidos por el puesto)
   convenio_colectivo?: string | null;
   tipo_contrato_defecto?: string | null;
-  // Validadores por defecto (plantilla): se heredan al empleado al contratar.
-  validador_trabajo_defecto_id?: string | null;
-  validador_ausencias_defecto_id?: string | null;
 }) {
   try {
     const { supabase, empresaId } = await getContext();
@@ -375,8 +372,6 @@ export async function updatePuesto(input: {
     }
     if (input.convenio_colectivo !== undefined) patch.convenio_colectivo = input.convenio_colectivo || null;
     if (input.tipo_contrato_defecto !== undefined) patch.tipo_contrato_defecto = input.tipo_contrato_defecto || null;
-    if (input.validador_trabajo_defecto_id !== undefined) patch.validador_trabajo_defecto_id = input.validador_trabajo_defecto_id || null;
-    if (input.validador_ausencias_defecto_id !== undefined) patch.validador_ausencias_defecto_id = input.validador_ausencias_defecto_id || null;
     if (Object.keys(patch).length === 0) return { ok: true };
 
     const { data, error } = await supabase

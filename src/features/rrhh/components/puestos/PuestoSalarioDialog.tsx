@@ -12,7 +12,7 @@ import { Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { createPuesto, updatePuesto, deletePuesto, listDepartamentosCatalogo } from "@/features/rrhh/actions/vacantes-actions";
 import { upsertPuestoSalario, listNivelesDePuesto } from "@/features/rrhh/actions/puestos-actions";
-import { listValidadoresElegiblesPorDepartamento, type ValidadorElegible } from "@/features/rrhh/actions/validadores-actions";
+import { setValidadorDepartamentoPuesto } from "@/features/rrhh/actions/validadores-actions";
 import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 import type { PuestoSalarial, NivelSalarial } from "@/features/rrhh/data/puestos";
 
@@ -59,13 +59,8 @@ export function PuestoSalarioDialog({ open, onOpenChange, editing, onSaved }: Pr
   const [descripcion, setDescripcion] = useState("");
   // Datos de gestoría (compartidos por el puesto)
   const [convenio, setConvenio] = useState("");
-  // Validadores por defecto (plantilla): se heredan al empleado al contratar.
-  const [validadorTrabajoId, setValidadorTrabajoId] = useState<string>("");
-  const [validadorAusenciasId, setValidadorAusenciasId] = useState<string>("");
-  const [elegibles, setElegibles] = useState<ValidadorElegible[]>([]);
-  const [elegiblesArea, setElegiblesArea] = useState<string | null>(null);
-  const [elegiblesDepto, setElegiblesDepto] = useState<string | null>(null);
-  const [cargandoElegibles, setCargandoElegibles] = useState(false);
+  // Departamento que valida las solicitudes de quien ocupe este puesto.
+  const [validadorDepartamentoId, setValidadorDepartamentoId] = useState<string>("");
   // Niveles (condiciones por nivel)
   const [niveles, setNiveles] = useState<NivelSalarial[]>([nivelVacio(1)]);
   const [idx, setIdx] = useState(0);
@@ -89,8 +84,7 @@ export function PuestoSalarioDialog({ open, onOpenChange, editing, onSaved }: Pr
     setDepartamentoId(editing?.departamentoId ?? "");
     setDescripcion(editing?.descripcion ?? "");
     setConvenio(editing?.convenioColectivo ?? "");
-    setValidadorTrabajoId(editing?.validadorTrabajoDefectoId ?? "");
-    setValidadorAusenciasId(editing?.validadorAusenciasDefectoId ?? "");
+    setValidadorDepartamentoId(editing?.validadorDepartamentoId ?? "");
     setIdx(0);
     // Niveles: si edita, cargar de BD; si nuevo, un Nivel 1 vacío.
     if (editing) {
@@ -102,31 +96,6 @@ export function PuestoSalarioDialog({ open, onOpenChange, editing, onSaved }: Pr
       setNiveles([nivelVacio(1)]);
     }
   }, [open, editing]);
-
-  // Elegibles como validador por defecto = empleados activos cuyo rol da acceso
-  // al departamento que valida el ÁREA de este puesto (misma regla que al
-  // asignar validador por empleado). Se recarga al cambiar de departamento.
-  useEffect(() => {
-    if (!open || !departamentoId) {
-      setElegibles([]); setElegiblesArea(null); setElegiblesDepto(null);
-      return;
-    }
-    let cancel = false;
-    setCargandoElegibles(true);
-    void listValidadoresElegiblesPorDepartamento({ departamentoId })
-      .then((r) => {
-        if (cancel) return;
-        setElegibles(r.data);
-        setElegiblesArea(r.area);
-        setElegiblesDepto(r.departamentoNombre);
-        // Si el validador guardado ya no es elegible (cambió el depto), se limpia.
-        const ids = new Set(r.data.map((v) => v.id));
-        setValidadorTrabajoId((prev) => (prev && ids.has(prev) ? prev : ""));
-        setValidadorAusenciasId((prev) => (prev && ids.has(prev) ? prev : ""));
-      })
-      .finally(() => { if (!cancel) setCargandoElegibles(false); });
-    return () => { cancel = true; };
-  }, [open, departamentoId]);
 
   const addNivel = () => {
     const siguiente = Math.max(0, ...niveles.map((n) => n.nivel)) + 1;
@@ -171,8 +140,6 @@ export function PuestoSalarioDialog({ open, onOpenChange, editing, onSaved }: Pr
           departamento_id: departamentoId,
           descripcion: descripcion.trim() || null,
           convenio_colectivo: convenio,
-          validador_trabajo_defecto_id: validadorTrabajoId || null,
-          validador_ausencias_defecto_id: validadorAusenciasId || null,
         });
         if (!upd.ok) { toast.error(upd.error ?? "No se pudo actualizar el puesto"); return; }
       }
@@ -193,15 +160,29 @@ export function PuestoSalarioDialog({ open, onOpenChange, editing, onSaved }: Pr
         });
         if (!sal.ok) { toast.error(sal.error ?? "No se pudo guardar el nivel"); return; }
       }
-      // Guardar datos de gestoría y validadores también al crear (createPuesto
-      // no los acepta; se aplican con un updatePuesto inmediato tras crear).
-      if (esNuevo && (convenio || validadorTrabajoId || validadorAusenciasId)) {
-        await updatePuesto({
-          id: puestoId,
-          convenio_colectivo: convenio,
-          validador_trabajo_defecto_id: validadorTrabajoId || null,
-          validador_ausencias_defecto_id: validadorAusenciasId || null,
+      // Guardar datos de gestoría también al crear (createPuesto no los acepta;
+      // se aplican con un updatePuesto inmediato tras crear).
+      if (esNuevo && convenio) {
+        await updatePuesto({ id: puestoId, convenio_colectivo: convenio });
+      }
+
+      // El departamento validador se guarda aparte porque además propaga el
+      // cambio a los empleados que ya ocupan el puesto.
+      const valActual = editing?.validadorDepartamentoId ?? "";
+      if ((validadorDepartamentoId || "") !== valActual || esNuevo) {
+        const resVal = await setValidadorDepartamentoPuesto({
+          puestoId,
+          departamentoId: validadorDepartamentoId || null,
         });
+        if (!resVal.ok) {
+          toast.error(resVal.error ?? "No se pudo guardar el departamento validador");
+          return;
+        }
+        if (resVal.empleadosActualizados) {
+          toast.success(
+            `Departamento validador actualizado en ${resVal.empleadosActualizados} empleado(s) de este puesto.`,
+          );
+        }
       }
       toast.success(esNuevo ? "Puesto creado" : "Puesto actualizado");
       onSaved();
@@ -318,57 +299,26 @@ export function PuestoSalarioDialog({ open, onOpenChange, editing, onSaved }: Pr
           {/* Validadores por defecto: se heredan al empleado al contratar. */}
           <div className="rounded-md border border-border/60 p-3 space-y-4">
             <div>
-              <p className="text-xs font-medium text-muted-foreground">Validadores por defecto</p>
+              <p className="text-xs font-medium text-muted-foreground">Validador de solicitudes</p>
               <p className="text-[11px] text-muted-foreground mt-0.5">
-                Al contratar para este puesto, el empleado hereda estos validadores.
-                {elegiblesDepto && ` Con acceso a ${elegiblesDepto}.`}
+                Departamento que aprueba o deniega las solicitudes de quien ocupe este puesto.
+                Puede resolverlas cualquiera con acceso a ese departamento en su rol.
               </p>
             </div>
-            {!departamentoId ? (
-              <p className="text-xs text-muted-foreground">Selecciona primero el departamento.</p>
-            ) : cargandoElegibles ? (
-              <p className="text-xs text-muted-foreground">Cargando validadores elegibles…</p>
-            ) : !elegiblesArea ? (
-              <p className="text-xs text-muted-foreground">
-                El departamento no tiene área asignada; no se pueden calcular validadores.
-              </p>
-            ) : elegibles.length === 0 ? (
-              <p className="text-xs text-muted-foreground">
-                No hay empleados elegibles{elegiblesDepto ? ` con acceso a ${elegiblesDepto}` : ""}.
-                Configúralo en Ajustes → Departamentos → Recursos humanos.
-              </p>
-            ) : (
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                  <Label htmlFor="ps-val-trabajo">Validador de trabajo</Label>
-                  <select
-                    id="ps-val-trabajo"
-                    value={validadorTrabajoId}
-                    onChange={(e) => setValidadorTrabajoId(e.target.value)}
-                    className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
-                  >
-                    <option value="">Sin definir</option>
-                    {elegibles.map((v) => (
-                      <option key={v.id} value={v.id}>{v.nombreCompleto}</option>
-                    ))}
-                  </select>
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="ps-val-ausencias">Validador de ausencias</Label>
-                  <select
-                    id="ps-val-ausencias"
-                    value={validadorAusenciasId}
-                    onChange={(e) => setValidadorAusenciasId(e.target.value)}
-                    className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
-                  >
-                    <option value="">Sin definir</option>
-                    {elegibles.map((v) => (
-                      <option key={v.id} value={v.id}>{v.nombreCompleto}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-            )}
+            <div className="space-y-1.5">
+              <Label htmlFor="ps-val-depto">Valida este departamento</Label>
+              <select
+                id="ps-val-depto"
+                value={validadorDepartamentoId}
+                onChange={(e) => setValidadorDepartamentoId(e.target.value)}
+                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
+              >
+                <option value="">Sin definir</option>
+                {departamentos.map((d) => (
+                  <option key={d.id} value={d.id}>{d.nombre}</option>
+                ))}
+              </select>
+            </div>
           </div>
         </div>
 

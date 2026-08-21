@@ -86,6 +86,13 @@ export async function createCombinacion(input: {
       return { ok: false, error: "Capacidad inválida (1 <= min <= max <= 100)." };
     }
     const supabase = await createClient();
+
+    // Una combinación solo tiene sentido dentro de una zona: juntar una mesa
+    // de terraza con otra de sala no se puede montar físicamente. Se valida en
+    // servidor porque la UI puede saltarse (o quedarse desactualizada).
+    const errZona = await validarMismaZona(supabase, input.mesaIds);
+    if (errZona) return { ok: false, error: errZona };
+
     const { data: comb, error } = await supabase
       .from("mesa_combinaciones")
       .insert({
@@ -159,6 +166,9 @@ export async function updateCombinacion(
       if (updates.mesaIds.length < 2) {
         return { ok: false, error: "Una combinación necesita al menos 2 mesas." };
       }
+      // Misma regla que al crear: no se pueden mezclar zonas.
+      const errZona = await validarMismaZona(supabase, updates.mesaIds);
+      if (errZona) return { ok: false, error: errZona };
       await supabase.from("mesa_combinacion_componentes").delete().eq("combinacion_id", id);
       const componentes = updates.mesaIds.map((mesaId, idx) => ({
         combinacion_id: id,
@@ -192,4 +202,37 @@ export async function deleteCombinacion(id: string) {
     console.error("[combinaciones] delete:", msg);
     return { ok: false, error: msg };
   }
+}
+
+/**
+ * Todas las mesas de una combinación deben ser de la MISMA zona.
+ *
+ * Juntar una mesa de terraza con una de sala no se puede montar en la
+ * realidad, y si el motor la asignara aceptaría un grupo que luego no cabe.
+ *
+ * Devuelve el mensaje de error, o null si es válida.
+ */
+async function validarMismaZona(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  mesaIds: string[],
+): Promise<string | null> {
+  const { data, error } = await supabase
+    .from("mesas")
+    .select("zona_id, zonas!inner(nombre)")
+    .in("id", mesaIds);
+  if (error || !data || data.length === 0) return null; // no bloquear por un fallo de lectura
+
+  const zonas = new Set(data.map((m) => m.zona_id as string));
+  if (zonas.size <= 1) return null;
+
+  const nombres = [
+    ...new Set(
+      data.map((m) => {
+        const z = m.zonas as unknown as { nombre?: string } | { nombre?: string }[];
+        return Array.isArray(z) ? (z[0]?.nombre ?? "") : (z?.nombre ?? "");
+      }),
+    ),
+  ].filter(Boolean);
+
+  return `Solo se pueden combinar mesas de la misma zona (has elegido ${nombres.join(" y ")}).`;
 }
