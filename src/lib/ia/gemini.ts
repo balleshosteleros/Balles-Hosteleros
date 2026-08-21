@@ -50,6 +50,13 @@ export interface GeminiJSONOptions {
   temperature?: number;
   /** Adjuntos multimodales (imágenes, PDFs). Gemini los lee de forma nativa. */
   attachments?: GeminiInlineAttachment[];
+  /**
+   * Tope de tokens de salida. Sin tope, una generación degenerada (el modelo
+   * repitiéndose en bucle) corre hasta el máximo del modelo (~2,5 min) antes de
+   * devolver un JSON truncado. Ponerlo acota ese caso; dimensiónalo muy por
+   * encima de la respuesta legítima más grande esperada.
+   */
+  maxOutputTokens?: number;
 }
 
 export interface GeminiJSONResult<T> {
@@ -75,49 +82,65 @@ export async function geminiJSON<T = unknown>(
       responseMimeType: "application/json",
       responseSchema: opts.responseSchema,
       temperature: opts.temperature ?? 0.5,
+      ...(opts.maxOutputTokens ? { maxOutputTokens: opts.maxOutputTokens } : {}),
     },
   });
 
   const hasAttachments = opts.attachments && opts.attachments.length > 0;
-  let result;
-  try {
-    result = hasAttachments
-      ? await model.generateContent({
-          contents: [
-            {
-              role: "user",
-              parts: [
-                { text: prompt },
-                ...opts.attachments!.map((a) => ({
-                  inlineData: { mimeType: a.mimeType, data: a.base64 },
-                })),
-              ],
-            },
-          ],
-        })
-      : await model.generateContent(prompt);
-  } catch (err) {
-    // El volcado crudo del SDK (URL, JSON de violations…) no debe llegar al usuario.
-    if (esErrorDeCuota(err)) throw new GeminiQuotaError();
-    throw err;
-  }
-  const text = result.response.text();
+  const request = hasAttachments
+    ? {
+        contents: [
+          {
+            role: "user",
+            parts: [
+              { text: prompt },
+              ...opts.attachments!.map((a) => ({
+                inlineData: { mimeType: a.mimeType, data: a.base64 },
+              })),
+            ],
+          },
+        ],
+      }
+    : prompt;
 
-  let data: T;
-  try {
-    data = JSON.parse(text) as T;
-  } catch {
-    console.error("[gemini] JSON parse error. Raw output:", text);
-    throw new Error("El modelo no devolvió un JSON válido.");
+  // A veces (sobre todo con imágenes) el modelo entra en bucle y devuelve un JSON
+  // truncado o vacío pese al responseSchema. Es transitorio: el mismo input suele
+  // salir bien al reintentar, así que se reintenta UNA vez aquí antes de rendirse.
+  const MAX_INTENTOS = 2;
+  for (let intento = 1; intento <= MAX_INTENTOS; intento++) {
+    let result;
+    try {
+      result = await model.generateContent(request);
+    } catch (err) {
+      // El volcado crudo del SDK (URL, JSON de violations…) no debe llegar al usuario.
+      if (esErrorDeCuota(err)) throw new GeminiQuotaError();
+      throw err;
+    }
+    const text = result.response.text();
+
+    try {
+      const data = JSON.parse(text) as T;
+      const usage = result.response.usageMetadata;
+      return {
+        data,
+        tokensInput: usage?.promptTokenCount ?? null,
+        tokensOutput: usage?.candidatesTokenCount ?? null,
+        modelo,
+      };
+    } catch {
+      const finishReason = result.response.candidates?.[0]?.finishReason ?? "desconocido";
+      // Solo el inicio: un output degenerado puede ocupar cientos de KB.
+      console.error(
+        `[gemini] JSON inválido (intento ${intento}/${MAX_INTENTOS}, finishReason=${finishReason}, ${text.length} chars). Inicio:`,
+        text.slice(0, 300),
+      );
+    }
   }
 
-  const usage = result.response.usageMetadata;
-  return {
-    data,
-    tokensInput: usage?.promptTokenCount ?? null,
-    tokensOutput: usage?.candidatesTokenCount ?? null,
-    modelo,
-  };
+  // Mensaje pensado para enseñarse tal cual al usuario final.
+  throw new Error(
+    "La IA no consiguió leer el documento esta vez. Suele resolverse reintentando en unos segundos.",
+  );
 }
 
 /**

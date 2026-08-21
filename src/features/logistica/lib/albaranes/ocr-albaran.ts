@@ -368,6 +368,10 @@ export async function ejecutarOcrAlbaran(input: {
         responseSchema: OCR_ALBARAN_SCHEMA,
         temperature: 0.1,
         attachments: [{ mimeType: input.mimeType || "image/jpeg", base64: input.base64 }],
+        // ~120 tokens por línea de albarán → 16k cubre >100 líneas de sobra. El tope
+        // existe para cortar pronto la generación degenerada (bucles), no para limitar
+        // documentos reales.
+        maxOutputTokens: 16384,
       },
     );
 
