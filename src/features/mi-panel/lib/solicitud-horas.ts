@@ -22,9 +22,8 @@ const SOLICITUD_HORA_INICIO_LISTA = 6;
  * Las 48 horas seleccionables del día, empezando a las 06:00:
  * 06:00, 06:30 … 23:30, 00:00 … 05:30.
  *
- * La madrugada va al final porque es donde termina la jornada del restaurante,
- * pero entrada y salida siempre pertenecen al MISMO día: un turno que acaba
- * pasada la medianoche se pide como dos solicitudes.
+ * La madrugada va al final, como continuación de la noche: un turno que entra
+ * a las 23:00 y sale a las 03:00 se pide de una vez, no en dos solicitudes.
  */
 export const SOLICITUD_HORAS_OPCIONES: string[] = Array.from(
   { length: (24 * 60) / SOLICITUD_PASO_MINUTOS },
@@ -38,14 +37,14 @@ export const SOLICITUD_HORAS_OPCIONES: string[] = Array.from(
 );
 
 /**
- * Duración máxima de un tramo, en minutos: 12 horas.
+ * Duración máxima de un tramo, en minutos: 16 horas seguidas.
  *
  * Un turno de noche (23:00 → 03:00) y un error de tecleo (12:00 → 11:30) son
  * indistinguibles mirando solo el reloj: en los dos la salida cae "antes" que
- * la entrada. Lo que los separa es cuánto duran, y por eso hay un tope: un
- * turno real cabe de sobra en 12 horas, y dar la vuelta entera al reloj no.
+ * la entrada. Lo único que los separa es cuánto duran, así que el tope es lo
+ * que corta el segundo sin estorbar al primero.
  */
-export const SOLICITUD_DURACION_MAX_MINUTOS = 12 * 60;
+export const SOLICITUD_DURACION_MAX_MINUTOS = 16 * 60;
 
 /**
  * Minutos entre entrada y salida. Si la salida es anterior a la entrada se
@@ -75,11 +74,11 @@ export function validarTramo(
   if (min === 0) {
     return "La hora de entrada no puede ser igual a la de salida.";
   }
-  if (min < 0) {
-    return "La hora de entrada tiene que ser anterior a la de salida. Si tu turno acabó de madrugada, pide cada día por separado.";
-  }
   if (min < SOLICITUD_DURACION_MIN_MINUTOS) {
     return "Tienes que solicitar media hora como mínimo.";
+  }
+  if (min > SOLICITUD_DURACION_MAX_MINUTOS) {
+    return `Revisa las horas: salen ${(min / 60).toFixed(1).replace(".", ",")} horas y no se pueden solicitar más de ${SOLICITUD_DURACION_MAX_MINUTOS / 60} seguidas.`;
   }
   return null;
 }
