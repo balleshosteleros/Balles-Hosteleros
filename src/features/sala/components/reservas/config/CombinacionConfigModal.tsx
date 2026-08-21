@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -63,8 +63,19 @@ export function CombinacionConfigModal({
     [mesaIds, mesas],
   );
   const codigoPreview = mesasOrdenadas.map((m) => m.codigo).join("+") || "—";
-  const sumMin = mesasOrdenadas.reduce((s, m) => s + m.capacidadMin, 0);
   const sumMax = mesasOrdenadas.reduce((s, m) => s + m.capacidadMax, 0);
+  /**
+   * Mínimo sugerido: donde la combinación EMPIEZA a tener sentido.
+   *
+   * No es la suma de los mínimos — dos mesas de 2-4 darían 4, y un grupo de 4
+   * cabe en una sola mesa. Es el máximo que se alcanza con una mesa menos, +1:
+   * así la combinación arranca justo cuando el grupo ya no cabe en menos mesas.
+   */
+  const sumMin = useMemo(() => {
+    if (mesasOrdenadas.length < 2) return 1;
+    const maximos = mesasOrdenadas.map((m) => m.capacidadMax).sort((a, b) => a - b);
+    return maximos.slice(1).reduce((s, v) => s + v, 0) + 1;
+  }, [mesasOrdenadas]);
 
   useEffect(() => {
     if (!open) return;
@@ -73,6 +84,9 @@ export function CombinacionConfigModal({
         const r = await listComponentes(combinacion.id);
         const ids = r.ok ? r.data.map((c) => c.mesaId) : [];
         setMesaIds(ids);
+        // Marca la firma como ya aplicada: al abrir una combinación existente
+        // se respeta el aforo guardado en vez de recalcularlo.
+        firmaAplicadaRef.current = ids.join("|");
         setCapacidadAuto(combinacion.capacidadAuto);
         setMin(combinacion.capacidadMin);
         setMax(combinacion.capacidadMax);
@@ -81,6 +95,7 @@ export function CombinacionConfigModal({
         setColor(combinacion.colorMarca);
       } else {
         setMesaIds([]);
+        firmaAplicadaRef.current = "";
         setCapacidadAuto(true);
         setMin(1);
         setMax(100);
@@ -93,13 +108,19 @@ export function CombinacionConfigModal({
     })();
   }, [open, combinacion]);
 
-  // Auto-suma de capacidad si capacidadAuto = true
+  // Al cambiar las mesas, el aforo se recalcula solo: el máximo suma los
+  // máximos y el mínimo arranca donde el grupo deja de caber en una mesa
+  // menos. Sigue siendo editable — lo que se escriba manda hasta que se
+  // vuelvan a tocar las mesas.
+  const firmaMesas = mesaIds.join("|");
+  const firmaAplicadaRef = useRef<string>("");
   useEffect(() => {
-    if (capacidadAuto && mesasOrdenadas.length >= 2) {
-      setMin(Math.min(sumMin, 100));
-      setMax(Math.min(sumMax, 100));
-    }
-  }, [capacidadAuto, sumMin, sumMax, mesasOrdenadas.length]);
+    if (mesasOrdenadas.length < 2) return;
+    if (firmaAplicadaRef.current === firmaMesas) return;
+    firmaAplicadaRef.current = firmaMesas;
+    setMin(Math.min(sumMin, 100));
+    setMax(Math.min(sumMax, 100));
+  }, [firmaMesas, sumMin, sumMax, mesasOrdenadas.length]);
 
   // Preselecciona zona/tipo si todas las componentes coinciden
   useEffect(() => {
@@ -234,45 +255,35 @@ export function CombinacionConfigModal({
 
           {/* Capacidad */}
           <div className="space-y-2">
-            <label className="flex items-center gap-2 text-xs cursor-pointer">
-              <input
-                type="checkbox"
-                checked={capacidadAuto}
-                onChange={(e) => setCapacidadAuto(e.target.checked)}
-              />
-              <span>Capacidad automática (suma de componentes)</span>
-              {capacidadAuto && mesasOrdenadas.length >= 2 && (
-                <span className="text-muted-foreground">
-                  → {sumMin}-{sumMax} pax
-                </span>
-              )}
-            </label>
-            {!capacidadAuto && (
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <Label className="text-xs">Min</Label>
-                  <Input
-                    type="number"
-                    min={1}
-                    max={max}
-                    value={min}
-                    onChange={(e) => setMin(Number(e.target.value) || 1)}
-                    className="h-9"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs">Max</Label>
-                  <Input
-                    type="number"
-                    min={min}
-                    max={100}
-                    value={max}
-                    onChange={(e) => setMax(Number(e.target.value) || 100)}
-                    className="h-9"
-                  />
-                </div>
+            <Label className="text-xs">Capacidad automática</Label>
+            <p className="text-[11px] text-muted-foreground -mt-1">
+              Se calcula sola con los mínimos y máximos de las mesas
+              seleccionadas. Si quieres, puedes cambiarla a mano.
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label className="text-xs">Mínimo</Label>
+                <Input
+                  type="number"
+                  min={1}
+                  max={max}
+                  value={min}
+                  onChange={(e) => setMin(Number(e.target.value) || 1)}
+                  className="h-9"
+                />
               </div>
-            )}
+              <div className="space-y-1">
+                <Label className="text-xs">Máximo</Label>
+                <Input
+                  type="number"
+                  min={min}
+                  max={100}
+                  value={max}
+                  onChange={(e) => setMax(Number(e.target.value) || 100)}
+                  className="h-9"
+                />
+              </div>
+            </div>
           </div>
 
           {/* Zona */}
