@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useTiposAusencia, type TipoAusenciaRow } from "@/features/rrhh/hooks/useHorariosConfig";
 import type { ConteoDias } from "@/features/rrhh/actions/horarios-config-actions";
-import { SelectorReplicarEmpresas } from "@/features/empresa/components/SelectorReplicarEmpresas";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -11,9 +10,8 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Plus, Pencil, Trash2, Search, CalendarOff } from "lucide-react";
+import { Pencil, Search, CalendarOff } from "lucide-react";
 import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
-import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 
 type FormState = {
   nombre: string;
@@ -45,14 +43,12 @@ const formatLimite = (dias: number | null) =>
 const formatConteo = (c: ConteoDias) => (c === "naturales" ? "Naturales" : "Laborables");
 
 export function TiposAusenciaSection({ empresaId }: { empresaId: string }) {
-  const { items, loading, create, update, remove } = useTiposAusencia(empresaId);
+  const { items, loading, update } = useTiposAusencia(empresaId);
   const [busqueda, setBusqueda] = useState("");
   const [showModal, setShowModal] = useState(false);
   const [editando, setEditando] = useState<TipoAusenciaRow | null>(null);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
-  const [empresasReplicar, setEmpresasReplicar] = useState<string[]>([empresaId]);
   const [saving, setSaving] = useState(false);
-  const { confirm: confirmDelete, dialog: confirmDeleteDialog } = useConfirmDelete();
 
   useEffect(() => {
     if (showModal) {
@@ -70,36 +66,24 @@ export function TiposAusenciaSection({ empresaId }: { empresaId: string }) {
         });
       } else {
         setForm(EMPTY_FORM);
-        setEmpresasReplicar([empresaId]);
       }
     }
-  }, [showModal, editando, empresaId]);
+  }, [showModal, editando]);
 
   const filtrados = useMemo(() => items.filter((t) =>
     !busqueda || t.nombre.toLowerCase().includes(busqueda.toLowerCase())
   ), [items, busqueda]);
 
+  // Lista cerrada: solo se edita lo existente (no hay alta ni borrado).
   const guardar = async () => {
-    if (!form.nombre.trim()) return;
+    if (!editando || !form.nombre.trim()) return;
     setSaving(true);
     try {
-      const ok = editando
-        ? await update(editando.id, form)
-        : await create(form, empresasReplicar);
+      const ok = await update(editando.id, form);
       if (ok) setShowModal(false);
     } finally {
       setSaving(false);
     }
-  };
-
-  const eliminar = async (id: string) => {
-    const ok = await confirmDelete({
-      title: "¿Eliminar tipo de ausencia?",
-      description: "Esta acción no se puede deshacer.",
-      confirmLabel: "Eliminar",
-    });
-    if (!ok) return;
-    await remove(id);
   };
 
   return (
@@ -107,9 +91,11 @@ export function TiposAusenciaSection({ empresaId }: { empresaId: string }) {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-lg font-semibold flex items-center gap-2"><CalendarOff className="h-5 w-5 text-primary" />Ausencias</h2>
-          <p className="text-sm text-muted-foreground">Crea, configura y asigna las políticas de ausencias necesarias para tus empleados.</p>
+          <p className="text-sm text-muted-foreground">
+            Configura las políticas de las ausencias que pueden pedir tus empleados. Desactiva
+            las que no quieras ofrecer: dejarán de aparecer al solicitar.
+          </p>
         </div>
-        <Button variant="primary" size="sm" onClick={() => { setEditando(null); setShowModal(true); }} className="gap-1.5"><Plus className="h-4 w-4" />Nuevo</Button>
       </div>
 
       <div className="relative max-w-sm">
@@ -153,10 +139,9 @@ export function TiposAusenciaSection({ empresaId }: { empresaId: string }) {
                     />
                   </TableCell>
                   <TableCell className="text-right">
-                    <div className="flex items-center justify-end gap-1">
-                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { setEditando(t); setShowModal(true); }}><Pencil className="h-3.5 w-3.5" /></Button>
-                      <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => eliminar(t.id)}><Trash2 className="h-3.5 w-3.5" /></Button>
-                    </div>
+                    {/* Lista cerrada: se configuran, no se borran. Para retirar
+                        una ausencia se desactiva (conserva el histórico). */}
+                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { setEditando(t); setShowModal(true); }}><Pencil className="h-3.5 w-3.5" /></Button>
                   </TableCell>
                 </TableRow>
               ))
@@ -167,11 +152,14 @@ export function TiposAusenciaSection({ empresaId }: { empresaId: string }) {
 
       <Dialog open={showModal} onOpenChange={setShowModal}>
         <DialogContent className="max-w-lg">
-          <DialogHeader><DialogTitle>{editando ? "Editar ausencia" : "Crear ausencia"}</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>Editar ausencia</DialogTitle></DialogHeader>
           <div className="space-y-3">
             <div>
               <label className="text-sm font-medium">Nombre</label>
               <Input value={form.nombre} onChange={e => setForm(f => ({ ...f, nombre: e.target.value }))} placeholder="Ej: Baja médica" />
+              <p className="text-[11px] text-muted-foreground mt-1">
+                Es el nombre que verá el empleado al solicitar esta ausencia.
+              </p>
             </div>
 
             <div className="grid grid-cols-2 gap-3">
@@ -208,14 +196,15 @@ export function TiposAusenciaSection({ empresaId }: { empresaId: string }) {
             <div className="flex items-center justify-between"><span className="text-sm">Requiere aprobación</span><Switch checked={form.requiere_aprobacion} onCheckedChange={v => setForm(f => ({ ...f, requiere_aprobacion: v }))} /></div>
             <div className="flex items-center justify-between"><span className="text-sm">Requiere justificante</span><Switch checked={form.requiere_justificante} onCheckedChange={v => setForm(f => ({ ...f, requiere_justificante: v }))} /></div>
             <div className="flex items-center justify-between"><span className="text-sm">Descuenta jornada</span><Switch checked={form.descuenta_jornada} onCheckedChange={v => setForm(f => ({ ...f, descuenta_jornada: v }))} /></div>
-            <div className="flex items-center justify-between"><span className="text-sm">Activo</span><Switch checked={form.activo} onCheckedChange={v => setForm(f => ({ ...f, activo: v }))} /></div>
-            {!editando && (
-              <SelectorReplicarEmpresas
-                empresaActualId={empresaId}
-                seleccionadas={empresasReplicar}
-                onChange={setEmpresasReplicar}
-              />
-            )}
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <span className="text-sm">Activo</span>
+                <p className="text-[11px] text-muted-foreground">
+                  Si lo desactivas, el empleado deja de ver esta ausencia y no puede solicitarla.
+                </p>
+              </div>
+              <Switch checked={form.activo} onCheckedChange={v => setForm(f => ({ ...f, activo: v }))} />
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowModal(false)} disabled={saving}>Cancelar</Button>
@@ -223,7 +212,6 @@ export function TiposAusenciaSection({ empresaId }: { empresaId: string }) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-      {confirmDeleteDialog}
     </div>
   );
 }

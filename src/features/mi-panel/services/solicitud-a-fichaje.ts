@@ -16,6 +16,7 @@ import "server-only";
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { horasSegunTipo } from "@/features/rrhh/services/horas/computa-tiempo";
 
 /** "HH:MM[:SS]" → minutos del día (0–1439). null si no válido. */
 function hhmmAMin(hhmm?: string | null): number | null {
@@ -94,8 +95,15 @@ export async function materializarFichajeDeSolicitud(
 
   let min = fin - ini;
   if (min < 0) min += 1440;
-  const horasTotales = Math.round((min / 60) * 100) / 100;
   const tipo = sol.subtipo === "horas_extras" ? "EXT" : "NOR";
+  // Si el tipo resultante no computa tiempo, el fichaje se crea igual (queda el
+  // rastro de la solicitud aprobada) pero con 0 horas.
+  const horasTotales = await horasSegunTipo(
+    admin,
+    sol.empresa_id,
+    tipo,
+    Math.round((min / 60) * 100) / 100,
+  );
 
   // Construir timestamptz de entrada/salida a partir de la fecha + tramo. Se usa
   // hora local naïf (sin sufijo Z) para que la fecha del fichaje coincida.

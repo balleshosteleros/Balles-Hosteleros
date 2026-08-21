@@ -4,9 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import {
   listTiposAusencia,
-  createTipoAusencia,
   updateTipoAusencia,
-  deleteTipoAusencia,
   listTiposFichaje,
   createTipoFichaje,
   updateTipoFichaje,
@@ -38,20 +36,9 @@ export function useTiposAusencia(empresaId?: string) {
     reload();
   }, [reload]);
 
-  const create = useCallback(
-    async (input: TipoAusenciaInput, replicarEn?: string[]) => {
-      const res = await createTipoAusencia(input, replicarEn);
-      if (res.ok && res.data) {
-        setItems((prev) => [...prev, res.data!]);
-        toast.success("Tipo de ausencia creado");
-        return true;
-      }
-      toast.error(res.error ?? "No se pudo crear");
-      return false;
-    },
-    [],
-  );
-
+  // Los tipos de ausencia son una LISTA CERRADA del sistema: se configuran, no
+  // se crean ni se borran. Para retirar uno se desactiva (`activo = false`), que
+  // lo quita del selector del empleado y conserva el histórico.
   const update = useCallback(
     async (id: string, input: Partial<TipoAusenciaInput> & { orden?: number }) => {
       const res = await updateTipoAusencia(id, input);
@@ -65,23 +52,7 @@ export function useTiposAusencia(empresaId?: string) {
     [],
   );
 
-  const remove = useCallback(
-    async (id: string) => {
-      const prev = items;
-      setItems((curr) => curr.filter((it) => it.id !== id));
-      const res = await deleteTipoAusencia(id);
-      if (!res.ok) {
-        setItems(prev);
-        toast.error(res.error ?? "No se pudo eliminar");
-        return false;
-      }
-      toast.success("Eliminado");
-      return true;
-    },
-    [items],
-  );
-
-  return { items, loading, reload, create, update, remove };
+  return { items, loading, reload, update };
 }
 
 export function useTiposFichaje(empresaId?: string) {

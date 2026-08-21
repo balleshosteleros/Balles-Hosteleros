@@ -11,6 +11,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { getZonaHorariaEmpresa } from "@/features/empresa/lib/empresa-server";
 import { hoyEnZona, zonaLocalAUtcISO } from "@/features/empresa/lib/zona-horaria";
+import { codigosQueNoComputan, noComputa } from "@/features/rrhh/services/horas/computa-tiempo";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -49,7 +50,7 @@ export async function GET(request: Request) {
 
     const { data: abiertos, error } = await supabase
       .from("fichajes")
-      .select("id, hora_entrada, fecha")
+      .select("id, hora_entrada, fecha, tipo")
       .eq("empresa_id", empresaId)
       .lt("fecha", hoy)
       .is("hora_salida", null)
@@ -58,6 +59,9 @@ export async function GET(request: Request) {
       console.error("[cron/cerrar-fichajes-huerfanos]", empresaId, error.message);
       continue;
     }
+
+    // Tipos que no computan tiempo: una consulta por empresa, no por fichaje.
+    const noComputanCodigos = await codigosQueNoComputan(supabase, empresaId);
 
     for (const f of abiertos ?? []) {
       // La salida se fija al FINAL DE SU PROPIO DÍA, no al momento de ejecutarse
@@ -70,7 +74,9 @@ export async function GET(request: Request) {
       const finDeDia = zonaLocalAUtcISO(f.fecha as string, "23:59", tz);
       const entradaMs = new Date(entradaIso).getTime();
       const salidaMs = Math.max(new Date(finDeDia).getTime(), entradaMs);
-      const horas = Math.round(((salidaMs - entradaMs) / 3600000) * 100) / 100;
+      const horas = noComputa(noComputanCodigos, f.tipo as string | null)
+        ? 0
+        : Math.round(((salidaMs - entradaMs) / 3600000) * 100) / 100;
 
       const { error: upErr } = await supabase
         .from("fichajes")

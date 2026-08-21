@@ -9,6 +9,11 @@ import { getRolContext } from "@/features/auth/actions/permisos-actions";
 import { puedeEditarModulo } from "@/features/auth/lib/permisos";
 import { getZonaHorariaEmpresa } from "@/features/empresa/lib/empresa-server";
 import { hoyEnZona, zonaLocalAUtcISO } from "@/features/empresa/lib/zona-horaria";
+import {
+  horasSegunTipo,
+  codigosQueNoComputan,
+  noComputa,
+} from "@/features/rrhh/services/horas/computa-tiempo";
 import { revalidatePath } from "next/cache";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -372,7 +377,7 @@ export async function ficharSalida(fichajeId: string, geo: GeoInput) {
 
     const { data: fichaje, error: fetchErr } = await supabase
       .from("fichajes")
-      .select("hora_entrada, local_id, modo_teletrabajo, pausa_inicio, pausa_fin")
+      .select("hora_entrada, local_id, modo_teletrabajo, pausa_inicio, pausa_fin, empresa_id, tipo")
       .eq("id", fichajeId)
       .single();
     if (fetchErr) throw fetchErr;
@@ -416,11 +421,15 @@ export async function ficharSalida(fichajeId: string, geo: GeoInput) {
                 new Date(fichaje.pausa_inicio as string).getTime(),
             )
           : 0;
-      horasTotales =
+      horasTotales = await horasSegunTipo(
+        supabase,
+        (fichaje.empresa_id as string | null) ?? empresaId,
+        fichaje.tipo as string | null,
         Math.max(
           0,
           Math.round(((ahora.getTime() - entrada.getTime() - pausaMs) / 3600000) * 100) / 100,
-        );
+        ),
+      );
     }
 
     const { error } = await supabase
@@ -527,8 +536,14 @@ export async function crearFichajeManual(input: CrearFichajeManualInput) {
         pausaInicioIso && pausaFinIso
           ? Math.max(0, new Date(pausaFinIso).getTime() - new Date(pausaInicioIso).getTime())
           : 0;
-      horasTotales =
-        Math.max(0, Math.round((((salida - entrada) - pausaMs) / 3600000) * 100) / 100);
+      // El fichaje manual se crea con tipo MAN: si ese tipo no computa tiempo,
+      // se registra igual pero con 0 horas.
+      horasTotales = await horasSegunTipo(
+        supabase,
+        empresaId,
+        "MAN",
+        Math.max(0, Math.round((((salida - entrada) - pausaMs) / 3600000) * 100) / 100),
+      );
     }
 
     const nombreCompleto = `${empleado.nombre ?? ""} ${empleado.apellidos ?? ""}`.trim();
@@ -624,6 +639,8 @@ export async function cerrarFichajesAbiertos() {
     const ahora = new Date();
     let cerrados = 0;
     let revisados = 0;
+    // Tipos que no computan tiempo: se resuelven una vez para todo el lote.
+    const noComputanCodigos = await codigosQueNoComputan(admin, empresaId);
 
     for (const f of abiertos ?? []) {
       const userId = f.empleado_id as string;
@@ -655,8 +672,9 @@ export async function cerrarFichajesAbiertos() {
         if (salidaPrevista) {
           await cerrarConReparto(admin, ctx, salida, { autoCierre: true });
         } else {
-          const horas =
-            Math.round(((salida.getTime() - new Date(horaEntrada).getTime()) / 3600000) * 100) / 100;
+          const horas = noComputa(noComputanCodigos, ctx.tipo)
+            ? 0
+            : Math.round(((salida.getTime() - new Date(horaEntrada).getTime()) / 3600000) * 100) / 100;
           await admin
             .from("fichajes")
             .update({

@@ -208,6 +208,17 @@ export function FichajesView() {
     [tiposFichaje],
   );
 
+  // ¿El tipo de este fichaje computa tiempo? Los códigos legacy que no están en
+  // el catálogo computan, que es como se han comportado siempre.
+  const tipoComputaTiempo = useCallback(
+    (codigoRaw?: string | null): boolean => {
+      const codigo = (codigoRaw ?? "").toUpperCase();
+      const cfg = tiposFichaje.find((t) => t.codigo.toUpperCase() === codigo);
+      return cfg ? cfg.computa_tiempo !== false : true;
+    },
+    [tiposFichaje],
+  );
+
   // Carga de locales con su geolocalización para pintar círculos en la tab Mapa.
   // Se re-carga al cambiar de empresa activa para preservar multi-tenant.
   useEffect(() => {
@@ -386,9 +397,20 @@ export function FichajesView() {
     },
     horas: {
       th: <TableHead key="horas" className="text-right">Horas</TableHead>,
-      td: (f) => (
-        <TableCell key="horas" className="text-sm text-right font-medium">{f.horaSalida ? formatHorasDecimal(f.horasTotales) : "—"}</TableCell>
-      ),
+      td: (f) => {
+        // Tipo que no computa tiempo: el fichaje se ve, pero sus horas son 0 y
+        // no suman. Se marca en gris para que el 0 se lea como intencionado.
+        const computa = tipoComputaTiempo(f.tipo);
+        return (
+          <TableCell
+            key="horas"
+            className={`text-sm text-right font-medium ${computa ? "" : "text-muted-foreground"}`}
+            title={computa ? undefined : "Este tipo de fichaje no computa tiempo: no suma horas"}
+          >
+            {f.horaSalida ? formatHorasDecimal(f.horasTotales) : "—"}
+          </TableCell>
+        );
+      },
     },
     tipo: {
       th: <TableHead key="tipo">Tipo</TableHead>,

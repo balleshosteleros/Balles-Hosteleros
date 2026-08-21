@@ -3,6 +3,7 @@
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { getEmpresaActivaForUser } from "@/features/empresa/lib/empresa-server";
+import { horasSegunTipo } from "@/features/rrhh/services/horas/computa-tiempo";
 
 const DRIFT_MAX_SEG = Number(process.env.FICHAJE_OFFLINE_DRIFT_MAX_SEG ?? 300);
 
@@ -129,16 +130,19 @@ export async function sincronizarFichajesOffline(
       } else if (item.kind === "salida" && item.fichajeId) {
         const { data: fichaje } = await supabase
           .from("fichajes")
-          .select("hora_entrada")
+          .select("hora_entrada, empresa_id, tipo")
           .eq("id", item.fichajeId)
           .maybeSingle();
 
         let horasTotales = 0;
         if (fichaje?.hora_entrada) {
           const entrada = new Date(fichaje.hora_entrada as string);
-          horasTotales =
-            Math.round(((deviceDate.getTime() - entrada.getTime()) / 3600000) * 10000) /
-            10000;
+          horasTotales = await horasSegunTipo(
+            supabase,
+            fichaje.empresa_id as string | null,
+            fichaje.tipo as string | null,
+            Math.round(((deviceDate.getTime() - entrada.getTime()) / 3600000) * 10000) / 10000,
+          );
         }
 
         const { error } = await supabase

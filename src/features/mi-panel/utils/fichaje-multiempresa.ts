@@ -15,6 +15,7 @@ import { distanciaMetros } from "@/features/rrhh/utils/geo";
 import { getHorarioDia, hhmmAMinutos, type HorarioDia } from "@/features/rrhh/utils/horario-empleado";
 import { minutosDiaEnZona } from "@/features/empresa/lib/zona-horaria";
 import { getZonaHorariaEmpresa } from "@/features/empresa/lib/empresa-server";
+import { tipoComputaTiempo } from "@/features/rrhh/services/horas/computa-tiempo";
 
 /** Una fila de empleado del usuario en una empresa concreta. */
 export interface FilaEmpleadoEmpresa {
@@ -533,7 +534,12 @@ export async function cerrarConReparto(
 ): Promise<{ horas: number; repartido: number }> {
   const entradaMs = new Date(ctx.horaEntrada).getTime();
   const salidaMs = salida.getTime();
-  const horas = Math.round(((salidaMs - entradaMs) / 3600000) * 10000) / 10000;
+  // Un tipo de fichaje que no computa tiempo se cierra igual, pero con 0 horas:
+  // el fichaje se ve en el listado y no suma en ningún total.
+  const computa = await tipoComputaTiempo(client, ctx.empresaId, ctx.tipo);
+  const horas = computa
+    ? Math.round(((salidaMs - entradaMs) / 3600000) * 10000) / 10000
+    : 0;
   const geo = opts?.geo ?? null;
   const auto = opts?.autoCierre ?? false;
   const horaSalidaReal = auto ? null : salida.toISOString();
@@ -591,7 +597,9 @@ export async function cerrarConReparto(
       seg.empresaId === ctx.empresaId
         ? { id: ctx.localId, nombre: ctx.centro }
         : localPorEmpresa.get(seg.empresaId) ?? { id: null as string | null, nombre: "" };
-    const horasSeg = Math.round((((seg.finMin - seg.inicioMin) * 60000) / 3600000) * 10000) / 10000;
+    const horasSeg = computa
+      ? Math.round((((seg.finMin - seg.inicioMin) * 60000) / 3600000) * 10000) / 10000
+      : 0;
     const finISO = esUltimo ? salida.toISOString() : isoDeMin(seg.finMin);
     // El auto-cierre NO marca revisión (se guarda como fichaje normal); solo la
     // marca un tramo realmente no cubierto por el horario, que es otra anomalía.

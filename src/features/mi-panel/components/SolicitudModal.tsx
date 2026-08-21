@@ -39,7 +39,9 @@ import {
   crearBajaMedicaConParte,
   getMiVacacionesInfo,
   getMiBajaContratoEnCurso,
+  getTiposAusenciaDisponibles,
   type MiVacacionesInfo,
+  type TipoAusenciaDisponible,
 } from "@/features/mi-panel/actions/mi-panel-actions";
 import { bloqueoSolapaRango } from "@/features/rrhh/data/calendarios-vacaciones";
 import type {
@@ -159,6 +161,23 @@ export function SolicitudModal({ open, onOpenChange, onCreated, onElegirDenuncia
       activo = false;
     };
   }, [paso, subtipo]);
+
+  // Tipos de ausencia ACTIVOS en la empresa (configuración de RRHH). La lista es
+  // cerrada, pero cada empresa decide cuáles habilita y con qué nombre; antes
+  // estaba cableada aquí y desactivar un tipo no lo quitaba de ningún sitio.
+  const [tiposAusencia, setTiposAusencia] = useState<TipoAusenciaDisponible[] | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    let activo = true;
+    getTiposAusenciaDisponibles().then((res) => {
+      if (!activo) return;
+      setTiposAusencia(res.ok ? res.data : []);
+    });
+    return () => {
+      activo = false;
+    };
+  }, [open]);
 
   // Guarda contra el "ghost click" táctil de iOS: al cambiar de paso el
   // contenido se re-renderiza y el click sintético que el navegador dispara
@@ -370,16 +389,17 @@ export function SolicitudModal({ open, onOpenChange, onCreated, onElegirDenuncia
     denuncia: "Queja o denuncia",
   };
 
-  const opcionesAusencia: { value: SolicitudSubtipoAusencia; label: string; desc: string }[] = [
-    { value: "baja_medica", label: "Baja médica", desc: "Indisposición o enfermedad con parte médico" },
-    { value: "vacaciones", label: "Vacaciones", desc: "Días de vacaciones del año en curso" },
-    { value: "permiso", label: "Permiso", desc: "Permiso retribuido o asunto propio" },
-    {
-      value: "baja_contrato",
-      label: "Baja de contrato",
-      desc: `Solicitar dejar la empresa (preaviso mínimo de ${BAJA_CONTRATO_PREAVISO_MIN} días naturales)`,
-    },
-  ];
+  // Sale de la configuración de RRHH (solo los ACTIVOS). El texto de la baja de
+  // contrato añade el preaviso mínimo, que lo fija el sistema y no configuración.
+  const opcionesAusencia: { value: SolicitudSubtipoAusencia; label: string; desc: string }[] =
+    (tiposAusencia ?? []).map((t) => ({
+      value: t.subtipo,
+      label: t.nombre,
+      desc:
+        t.subtipo === "baja_contrato"
+          ? `Solicitar dejar la empresa (preaviso mínimo de ${BAJA_CONTRATO_PREAVISO_MIN} días naturales)`
+          : t.descripcion ?? "",
+    }));
 
   const opcionesTrabajo: { value: SolicitudSubtipoTrabajo; label: string; desc: string }[] = [
     { value: "horas_extras", label: "Horas extras", desc: "Horas trabajadas fuera de tu jornada habitual" },
@@ -520,6 +540,17 @@ export function SolicitudModal({ open, onOpenChange, onCreated, onElegirDenuncia
           )}
 
           {/* PASO 2: SUBTIPO */}
+          {paso === "subtipo" && tipo === "ausencia" && tiposAusencia === null && (
+            <div className="flex items-center justify-center gap-2 py-10 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Cargando…
+            </div>
+          )}
+          {paso === "subtipo" && tipo === "ausencia" && tiposAusencia !== null && opcionesAusencia.length === 0 && (
+            <div className="py-10 text-center text-sm text-muted-foreground">
+              Tu empresa no tiene ningún tipo de ausencia disponible. Habla con RRHH.
+            </div>
+          )}
           {paso === "subtipo" && tipo === "ausencia" && (
             <div className="grid gap-2 py-2">
               {opcionesAusencia.map((o) => (

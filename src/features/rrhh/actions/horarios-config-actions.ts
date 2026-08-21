@@ -18,10 +18,26 @@ async function resolveEmpresaUuid(
 // ─── Types ─────────────────────────────────────────────────────────────
 export type ConteoDias = "naturales" | "laborables";
 
+/**
+ * Subtipos de ausencia del sistema: LISTA CERRADA. No se pueden añadir tipos
+ * nuevos porque cada uno lleva asociado un comportamiento propio del programa
+ * (cupo de vacaciones, parte médico, baja de contrato con firma y preaviso).
+ * El admin configura los de aquí: nombre visible, color, límite, `activo`…
+ */
+export const SUBTIPOS_AUSENCIA = [
+  "vacaciones",
+  "baja_medica",
+  "permiso",
+  "baja_contrato",
+] as const;
+export type SubtipoAusencia = (typeof SUBTIPOS_AUSENCIA)[number];
+
 export type TipoAusenciaRow = {
   id: string;
   empresa_id: string;
   nombre: string;
+  /** Subtipo del sistema al que está atada la fila (lista cerrada). */
+  subtipo: SubtipoAusencia;
   descripcion: string | null;
   categoria: string;
   color: string;
@@ -117,78 +133,22 @@ export async function listTiposAusencia(empresaIdOrSlug?: string) {
   }
 }
 
-// Crea el tipo en una o varias empresas (replicación). Si replicarEn es vacío
-// o undefined usa la empresa del profile. Devuelve la fila creada en la
-// PRIMERA empresa pedida (para que el hook pueda añadirla al state local).
-export async function createTipoAusencia(
-  input: TipoAusenciaInput,
-  replicarEn?: string[],
-) {
-  try {
-    const { supabase, empresaId: empresaIdProfile, userId } = await getAppContext();
-    const targetSlugs =
-      replicarEn && replicarEn.length > 0 ? replicarEn : [empresaIdProfile ?? ""];
-    if (targetSlugs.length === 0 || !targetSlugs[0])
-      return { ok: false, error: "No autenticado" };
-
-    let primera: TipoAusenciaRow | null = null;
-    for (const idOrSlug of targetSlugs) {
-      const empresaId = await resolveEmpresaUuid(supabase, idOrSlug);
-      if (!empresaId) continue;
-      const row = await insertTipoAusencia(supabase, empresaId, userId, input);
-      if (row && !primera) primera = row;
-    }
-    if (!primera) return { ok: false, error: "No se pudo crear" };
-    return { ok: true, data: primera };
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : "Error desconocido";
-    console.error("[horarios-config] createTipoAusencia:", msg);
-    return { ok: false, error: msg };
-  }
-}
-
-async function insertTipoAusencia(
-  supabase: Awaited<ReturnType<typeof getAppContext>>["supabase"],
-  empresaId: string,
-  userId: string | null,
-  input: TipoAusenciaInput,
-): Promise<TipoAusenciaRow | null> {
-  try {
-    const nombre = input.nombre.trim();
-    if (!nombre) return null;
-
-    const orden = await nextOrden("tipos_ausencia", empresaId);
-    const { data, error } = await supabase
-      .from("tipos_ausencia")
-      .insert({
-        empresa_id: empresaId,
-        nombre,
-        descripcion: input.descripcion?.toString().trim() || null,
-        categoria: input.categoria?.trim() || "Otros",
-        color: input.color || "bg-slate-500",
-        requiere_aprobacion: input.requiere_aprobacion ?? true,
-        requiere_justificante: input.requiere_justificante ?? false,
-        descuenta_jornada: input.descuenta_jornada ?? true,
-        refleja_calendario: input.refleja_calendario ?? true,
-        limite_dias: input.limite_dias ?? null,
-        conteo_dias: input.conteo_dias ?? "naturales",
-        remunerada: input.remunerada ?? false,
-        activo: input.activo ?? true,
-        orden,
-        created_by: userId,
-      })
-      .select()
-      .single();
-    if (error) {
-      console.error("[horarios-config] insertTipoAusencia:", error.message);
-      return null;
-    }
-    return data as TipoAusenciaRow;
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : "Error desconocido";
-    console.error("[horarios-config] insertTipoAusencia:", msg);
-    return null;
-  }
+/**
+ * LISTA CERRADA: los tipos de ausencia son los 4 del sistema (vacaciones, baja
+ * médica, permiso, baja de contrato) y la migración ya los crea en cada empresa.
+ * No se pueden añadir tipos nuevos: cada subtipo lleva asociado un
+ * comportamiento propio del programa (cupo de vacaciones, parte médico, baja de
+ * contrato con firma y preaviso) que un tipo inventado no tendría.
+ *
+ * Se conserva como server action para que la UI reciba un error claro en vez de
+ * un fallo de ruta si algo la sigue llamando.
+ */
+export async function createTipoAusencia() {
+  return {
+    ok: false as const,
+    error:
+      "Los tipos de ausencia son una lista cerrada del sistema. Puedes configurar los que hay (nombre, color, límite de días, activo), pero no añadir tipos nuevos.",
+  };
 }
 
 export async function updateTipoAusencia(id: string, input: Partial<TipoAusenciaInput> & { orden?: number }) {
@@ -227,17 +187,18 @@ export async function updateTipoAusencia(id: string, input: Partial<TipoAusencia
   }
 }
 
-export async function deleteTipoAusencia(id: string) {
-  try {
-    const { supabase } = await getAppContext();
-    const { error } = await supabase.from("tipos_ausencia").delete().eq("id", id);
-    if (error) throw error;
-    return { ok: true };
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : "Error desconocido";
-    console.error("[horarios-config] deleteTipoAusencia:", msg);
-    return { ok: false, error: msg };
-  }
+/**
+ * LISTA CERRADA: tampoco se borran. Para que un tipo deje de poder pedirse se
+ * DESACTIVA (`activo = false`), que lo quita del selector del empleado y hace
+ * que el servidor rechace la solicitud, sin perder el histórico de las
+ * ausencias ya pedidas de ese tipo.
+ */
+export async function deleteTipoAusencia(_id: string) {
+  return {
+    ok: false as const,
+    error:
+      "Los tipos de ausencia no se borran. Desactívalo para que nadie pueda pedirlo; así se conserva el histórico de las ausencias ya registradas.",
+  };
 }
 
 // ─── TIPOS FICHAJE ─────────────────────────────────────────────────────

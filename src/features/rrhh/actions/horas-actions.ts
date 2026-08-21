@@ -14,6 +14,7 @@ import { horasMes, type HorasMesEmpleado } from "@/features/rrhh/services/horas/
 import { getPlanificacionHorarios } from "@/features/rrhh/actions/planificacion-actions";
 import { getZonaHorariaEmpresa } from "@/features/empresa/lib/empresa-server";
 import { formatHoraEnZona } from "@/features/empresa/lib/zona-horaria";
+import { codigosQueNoComputan, noComputa } from "@/features/rrhh/services/horas/computa-tiempo";
 
 export type HorasMesRow = HorasMesEmpleado & { empleadoId: string };
 
@@ -72,6 +73,11 @@ export interface TramoFichado {
   horaFin: string | null; // null si el fichaje sigue abierto (sin salida)
   extra: boolean; // tipo EXT
   origen: OrigenFichaje; // solicitud_id != null → 'solicitud'
+  /**
+   * `tipos_fichaje.computa_tiempo` del tipo del fichaje. Si es `false` el tramo
+   * SE PINTA igual (el fichaje existe y hay que verlo), pero no suma horas.
+   */
+  computa: boolean;
 }
 
 /** [empleadoId][fechaISO] → tramos fichados. */
@@ -117,6 +123,9 @@ export async function loadFichajesCuadrante(
       .gte("fecha", desdeISO)
       .lte("fecha", hastaISO);
 
+    // Tipos que no computan tiempo: una consulta para todo el rango.
+    const noComputanCodigos = await codigosQueNoComputan(supabase, empresaId);
+
     const out: FichadosCuadrante = {};
     for (const f of fichajes ?? []) {
       const eid = empByUser.get(f.empleado_id as string);
@@ -129,6 +138,7 @@ export async function loadFichajesCuadrante(
         horaFin: horaEnZonaHHMM(f.hora_salida as string | null, tz),
         extra: (f.tipo as string) === "EXT",
         origen: f.solicitud_id ? "solicitud" : "directo",
+        computa: !noComputa(noComputanCodigos, f.tipo as string | null),
       };
       ((out[eid] ??= {})[fecha] ??= []).push(tramo);
     }
@@ -170,7 +180,7 @@ function horasDeTramosHHMM(tramos: { inicio: string; fin: string | null }[]): nu
     const m1 = /^(\d{1,2}):(\d{2})/.exec(t.inicio ?? "");
     const m2 = t.fin ? /^(\d{1,2}):(\d{2})/.exec(t.fin) : null;
     if (!m1 || !m2) continue;
-    let ini = Number(m1[1]) * 60 + Number(m1[2]);
+    const ini = Number(m1[1]) * 60 + Number(m1[2]);
     let fin = Number(m2[1]) * 60 + Number(m2[2]);
     if (fin <= ini) fin += 1440;
     total += fin - ini;
@@ -226,8 +236,11 @@ export async function loadTimelineDia(
         previsto,
         fichado,
         horasPrevistas: horasDeTramosHHMM(previsto),
+        // Los tramos de tipos que no computan tiempo se pintan pero no suman.
         horasFichadas: horasDeTramosHHMM(
-          fichado.map((f) => ({ inicio: f.horaInicio, fin: f.horaFin })),
+          fichado
+            .filter((f) => f.computa)
+            .map((f) => ({ inicio: f.horaInicio, fin: f.horaFin })),
         ),
       };
     });
@@ -308,7 +321,12 @@ export async function loadTimelineMesEmpleado(
         previsto,
         fichado,
         horasPrevistas: horasDeTramosHHMM(previsto),
-        horasFichadas: horasDeTramosHHMM(fichado.map((f) => ({ inicio: f.horaInicio, fin: f.horaFin }))),
+        // Los tramos de tipos que no computan tiempo se pintan pero no suman.
+        horasFichadas: horasDeTramosHHMM(
+          fichado
+            .filter((f) => f.computa)
+            .map((f) => ({ inicio: f.horaInicio, fin: f.horaFin })),
+        ),
       };
     });
 
