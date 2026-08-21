@@ -9,7 +9,6 @@ import {
   crearFirma,
   reenviarFirma,
   cancelarFirma,
-  ampliarPlazoFirma,
   getDescargaFirmadoUrl,
   getAuditTrail,
 } from "@/features/rrhh/actions/firmas-actions";
@@ -52,7 +51,6 @@ import {
   Upload,
   AlertTriangle,
   RefreshCcw,
-  CalendarPlus,
   Loader2,
   Ban,
 } from "lucide-react";
@@ -165,7 +163,7 @@ export function FirmasView() {
   const [archivo, setArchivo] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const [accionPorFila, setAccionPorFila] = useState<Record<string, "ver" | "descargar" | "reenviar" | "cancelar" | "ampliar" | null>>({});
+  const [accionPorFila, setAccionPorFila] = useState<Record<string, "ver" | "descargar" | "reenviar" | "cancelar" | null>>({});
 
   const cargarItems = useCallback(async () => {
     setCargandoItems(true);
@@ -366,29 +364,6 @@ export function FirmasView() {
     await cargarItems();
   }
 
-  async function ampliarPlazo(docId: string) {
-    const input = window.prompt(
-      "¿Cuántos días de plazo añadimos? (entre 1 y 365)",
-      "14",
-    );
-    if (input === null) return;
-    const dias = parseInt(input, 10);
-    if (!Number.isFinite(dias) || dias < 1 || dias > 365) {
-      toast.error("Plazo inválido. Introduce un número entre 1 y 365.");
-      return;
-    }
-    setAccionPorFila((s) => ({ ...s, [docId]: "ampliar" }));
-    const res = await ampliarPlazoFirma(docId, dias);
-    setAccionPorFila((s) => ({ ...s, [docId]: null }));
-    if (!res.ok) return toast.error(res.error);
-    toast.success(
-      res.emailEnviado
-        ? `Plazo ampliado ${dias} días y reenviado al empleado`
-        : `Plazo ampliado ${dias} días (sin email)`,
-    );
-    await cargarItems();
-  }
-
   async function verDetalle(doc: DocumentoFirma) {
     setVerDoc(doc);
     setAuditoria(null);
@@ -578,21 +553,6 @@ export function FirmasView() {
                               )}
                             </Button>
                           </>
-                        )}
-                        {d.estado === "expirado" && (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => ampliarPlazo(d.id)}
-                            disabled={accion === "ampliar"}
-                            title="Ampliar plazo y reenviar"
-                          >
-                            {accion === "ampliar" ? (
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                            ) : (
-                              <CalendarPlus className="h-4 w-4" />
-                            )}
-                          </Button>
                         )}
                       </div>
                     </TableCell>
