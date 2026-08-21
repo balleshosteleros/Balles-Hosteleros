@@ -59,6 +59,16 @@ import { clientesIO } from "@/features/sala/io/clientes.io";
 /** Filas por hoja en la tabla de clientes. */
 const POR_PAGINA = 50;
 
+/**
+ * Enlace al día de una reserva en el plano de sala.
+ *
+ * Lleva el turno además de la fecha: la lista de reservas filtra por turno, así
+ * que abrir una de comida con el turno en cena la dejaría fuera de pantalla.
+ */
+function enlaceReserva(fecha: string, turno: string | null): string {
+  return `/sala/reservas?fecha=${fecha}${turno ? `&turno=${turno}` : ""}`;
+}
+
 const clasificacionBadge: Record<ClasificacionCliente, string> = {
   "VIP": "bg-amber-100 text-amber-800 border-amber-300",
   "REGULAR": "bg-blue-100 text-blue-800 border-blue-300",
@@ -739,11 +749,6 @@ export function ClientesView() {
                     {clasifFicha}
                   </Badge>
                 </div>
-                <p className="text-xs text-muted-foreground">
-                  Se calcula sola por visitas: menos de {umbrales.regularMin} →
-                  NUEVO · {umbrales.regularMin} → REGULAR · {umbrales.vipMin} →
-                  VIP.
-                </p>
               </div>
 
               {/*
@@ -752,7 +757,15 @@ export function ClientesView() {
               */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <Label className="text-muted-foreground">Visitas</Label>
+                  {/*
+                    "Ya vino": las reservas PASADAS a las que asistió. El
+                    recuadro de estados cuenta todas, incluidas las futuras, así
+                    que 5 confirmadas pueden ser 4 visitas + 1 por venir. Sin
+                    esta aclaración en el título, la diferencia parece un fallo.
+                  */}
+                  <Label className="text-muted-foreground">
+                    Visitas (ya vino)
+                  </Label>
                   <p>{fichaExtra.visitas}</p>
                 </div>
                 <div>
@@ -772,7 +785,7 @@ export function ClientesView() {
               */}
               <div className="pt-2 border-t space-y-1.5">
                 <Label className="text-muted-foreground">
-                  Reservas por estado
+                  Reservas por estado (todas, también las futuras)
                 </Label>
                 {fichaExtra.historico.length === 0 ? (
                   <p className="text-muted-foreground">Sin reservas todavía.</p>
@@ -806,19 +819,21 @@ export function ClientesView() {
                 ) : (
                   <ul className="space-y-1">
                     {fichaExtra.proximas.map((r) => (
-                      <li
-                        key={r.id}
-                        className="flex items-center justify-between rounded-md border px-3 py-2"
-                      >
-                        <span>
-                          <span className="font-medium">{fechaLarga(r.fecha)}</span>
-                          <span className="text-muted-foreground"> · {r.hora}</span>
-                        </span>
-                        <span className="text-muted-foreground text-xs">
-                          {r.personas} {r.personas === 1 ? "persona" : "personas"}
-                          {r.zona ? ` · ${r.zona}` : ""}
-                          {r.mesa ? ` · Mesa ${r.mesa}` : ""}
-                        </span>
+                      <li key={r.id}>
+                        <Link
+                          href={enlaceReserva(r.fecha, r.turno)}
+                          className="flex items-center justify-between gap-3 rounded-md border px-3 py-2 hover:bg-muted/40 transition-colors"
+                        >
+                          <span>
+                            <span className="font-medium">{fechaLarga(r.fecha)}</span>
+                            <span className="text-muted-foreground"> · {r.hora}</span>
+                          </span>
+                          <span className="shrink-0 text-muted-foreground text-xs">
+                            {r.personas} {r.personas === 1 ? "persona" : "personas"}
+                            {r.zona ? ` · ${r.zona}` : ""}
+                            {r.mesa ? ` · Mesa ${r.mesa}` : ""}
+                          </span>
+                        </Link>
                       </li>
                     ))}
                   </ul>
@@ -997,9 +1012,7 @@ export function ClientesView() {
                     {fichaExtra.historico.map((r) => (
                       <li key={r.id}>
                         <Link
-                          href={`/sala/reservas?fecha=${r.fecha}${
-                            r.turno ? `&turno=${r.turno}` : ""
-                          }`}
+                          href={enlaceReserva(r.fecha, r.turno)}
                           className="flex items-center justify-between gap-3 rounded-md border px-3 py-2 hover:bg-muted/40 transition-colors"
                         >
                           <span className="flex items-center gap-2">

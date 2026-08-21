@@ -38,15 +38,26 @@ export const SOLICITUD_HORAS_OPCIONES: string[] = Array.from(
 );
 
 /**
- * Minutos entre entrada y salida, dentro del mismo día. Es una resta directa:
- * si la salida es anterior a la entrada, sale negativo y el tramo es inválido.
- * No se da la vuelta al reloj: un turno que acaba de madrugada se pide como dos
- * solicitudes, una por cada día.
+ * Duración máxima de un tramo, en minutos: 12 horas.
+ *
+ * Un turno de noche (23:00 → 03:00) y un error de tecleo (12:00 → 11:30) son
+ * indistinguibles mirando solo el reloj: en los dos la salida cae "antes" que
+ * la entrada. Lo que los separa es cuánto duran, y por eso hay un tope: un
+ * turno real cabe de sobra en 12 horas, y dar la vuelta entera al reloj no.
+ */
+export const SOLICITUD_DURACION_MAX_MINUTOS = 12 * 60;
+
+/**
+ * Minutos entre entrada y salida. Si la salida es anterior a la entrada se
+ * entiende que el turno acabó de madrugada (23:00 → 03:00 son 4 horas), algo
+ * habitual en hostelería, así que se suman las 24 horas.
  */
 export function minutosTramo(horaInicio: string, horaFin: string): number {
   const [hi, mi] = horaInicio.split(":").map(Number);
   const [hf, mf] = horaFin.split(":").map(Number);
-  return hf * 60 + mf - (hi * 60 + mi);
+  let min = hf * 60 + mf - (hi * 60 + mi);
+  if (min < 0) min += 1440; // cruza medianoche
+  return min;
 }
 
 /**

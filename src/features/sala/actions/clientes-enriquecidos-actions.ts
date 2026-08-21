@@ -60,6 +60,8 @@ export interface ProximaReservaCliente {
   estado: string;
   mesa: string | null;
   zona: string | null;
+  /** COMIDA o CENA: hace falta para abrir el día en el turno correcto. */
+  turno: string | null;
 }
 
 export interface EtiquetaCliente {
@@ -305,6 +307,7 @@ export async function listClientesEnriquecidos(): Promise<ClientesEnriquecidosRe
           estado,
           mesa: (r.mesa as string | null) ?? null,
           zona: (r.zona as string | null) ?? null,
+          turno: (r.turno as string | null) ?? null,
         });
       } else {
         // Pasado: cuenta como visita salvo que no se presentara.
