@@ -25,6 +25,8 @@ import { validarTramo } from "@/features/mi-panel/lib/solicitud-horas";
 import {
   VACACIONES_REGLAS_DEFAULT,
   validarRangoVacaciones,
+  PERMISO_REGLAS_DEFAULT,
+  TEXTOS_PERMISO,
   type VacacionesReglas,
 } from "@/features/mi-panel/lib/vacaciones-reglas";
 import {
@@ -1638,10 +1640,57 @@ async function getReglasVacacionesEmpresa(empresaId: string): Promise<Vacaciones
 }
 
 /**
+ * Reglas de la empresa para solicitar PERMISOS (mín/máx de días por solicitud).
+ * Sin configurar no se exige nada: un permiso puede ser de 1 día en adelante.
+ * A diferencia de vacaciones, no hay día de la semana obligatorio de inicio.
+ */
+async function getReglasPermisoEmpresa(empresaId: string): Promise<VacacionesReglas> {
+  try {
+    const admin = createAdminClient();
+    const { data } = await admin
+      .from("empresa_rrhh_config")
+      .select("permiso_dias_min, permiso_dias_max")
+      .eq("empresa_id", empresaId)
+      .maybeSingle();
+    if (!data) return PERMISO_REGLAS_DEFAULT;
+    const num = (v: unknown): number | null => {
+      const n = Number(v);
+      return Number.isFinite(n) ? Math.round(n) : null;
+    };
+    return {
+      diaInicio: null,
+      diasMin: data.permiso_dias_min == null ? null : num(data.permiso_dias_min),
+      diasMax: data.permiso_dias_max == null ? null : num(data.permiso_dias_max),
+    };
+  } catch {
+    // Sin admin configurado no bloqueamos al empleado: el tope anual y el resto
+    // de validaciones siguen aplicándose.
+    return PERMISO_REGLAS_DEFAULT;
+  }
+}
+
+/**
  * Saldo de vacaciones del propio empleado (Mi Panel): días totales / gastados /
  * restantes del año de su calendario + los periodos bloqueados, para mostrarlo
  * y validarlo en el modal de solicitud antes de enviar.
  */
+/**
+ * Reglas de permiso de la empresa, para que el formulario del empleado avise
+ * ANTES de enviar en vez de rechazarle la solicitud después.
+ */
+export async function getReglasPermiso(): Promise<{
+  ok: boolean;
+  data: VacacionesReglas;
+}> {
+  try {
+    const { empresaId } = await getContext();
+    if (!empresaId) return { ok: false, data: PERMISO_REGLAS_DEFAULT };
+    return { ok: true, data: await getReglasPermisoEmpresa(empresaId) };
+  } catch {
+    return { ok: false, data: PERMISO_REGLAS_DEFAULT };
+  }
+}
+
 export async function getMiVacacionesInfo(): Promise<{
   ok: boolean;
   data: MiVacacionesInfo | null;
@@ -2086,6 +2135,20 @@ export async function crearSolicitudPersonal(input: NuevaSolicitudInput) {
             )}.`,
         };
       }
+    }
+
+    // PERMISO: mínimo y máximo de días por solicitud que fija la empresa en
+    // RRHH → Solicitudes. El tope ANUAL es aparte (`tipos_ausencia.limite_dias`)
+    // y se comprueba más abajo, junto con el del resto de ausencias.
+    if (input.subtipo === "permiso") {
+      const reglasPermiso = await getReglasPermisoEmpresa(empresaId);
+      const chequeo = validarRangoVacaciones(
+        reglasPermiso,
+        input.fechaInicio,
+        input.fechaFin ?? null,
+        TEXTOS_PERMISO,
+      );
+      if (!chequeo.ok) return { ok: false, error: chequeo.error };
     }
 
     // TIPO DE AUSENCIA ACTIVO: si RRHH lo ha desactivado en la configuración, no

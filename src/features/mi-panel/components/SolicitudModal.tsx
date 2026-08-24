@@ -38,6 +38,7 @@ import {
   crearSolicitudPersonal,
   crearBajaMedicaConParte,
   getMiVacacionesInfo,
+  getReglasPermiso,
   getMiBajaContratoEnCurso,
   getTiposAusenciaDisponibles,
   type MiVacacionesInfo,
@@ -70,6 +71,8 @@ import {
   proximaFechaValida,
   resumenReglasVacaciones,
   validarRangoVacaciones,
+  TEXTOS_PERMISO,
+  type VacacionesReglas,
 } from "@/features/mi-panel/lib/vacaciones-reglas";
 
 interface SolicitudModalProps {
@@ -159,6 +162,10 @@ export function SolicitudModal({ open, onOpenChange, onCreated, onElegirDenuncia
   const [vacInfo, setVacInfo] = useState<MiVacacionesInfo | null>(null);
   const [vacCargando, setVacCargando] = useState(false);
 
+  // Reglas de permiso de la empresa (mín/máx de días por solicitud). Se cargan
+  // al entrar en el detalle de un permiso; null mientras no se sepan.
+  const [permisoReglas, setPermisoReglas] = useState<VacacionesReglas | null>(null);
+
   useEffect(() => {
     if (paso !== "detalle" || subtipo !== "vacaciones") return;
     let activo = true;
@@ -167,6 +174,17 @@ export function SolicitudModal({ open, onOpenChange, onCreated, onElegirDenuncia
       if (!activo) return;
       setVacInfo(res.ok ? res.data : null);
       setVacCargando(false);
+    });
+    return () => {
+      activo = false;
+    };
+  }, [paso, subtipo]);
+
+  useEffect(() => {
+    if (paso !== "detalle" || subtipo !== "permiso") return;
+    let activo = true;
+    getReglasPermiso().then((res) => {
+      if (activo) setPermisoReglas(res.data);
     });
     return () => {
       activo = false;
@@ -319,6 +337,12 @@ export function SolicitudModal({ open, onOpenChange, onCreated, onElegirDenuncia
       return;
     }
 
+    // Reglas de permiso de la empresa (mín/máx de días por solicitud).
+    if (subtipo === "permiso" && errorReglasPermiso) {
+      toast.error(errorReglasPermiso);
+      return;
+    }
+
     // Baja médica: ruta propia con FormData (permite adjuntar hasta 3 partes).
     if (subtipo === "baja_medica") {
       setEnviando(true);
@@ -435,6 +459,26 @@ export function SolicitudModal({ open, onOpenChange, onCreated, onElegirDenuncia
     const res = validarRangoVacaciones(vacInfo.reglas, fechaInicio, fechaFin || null);
     return res.ok ? null : res.error;
   })();
+
+  // Reglas de la empresa para permisos (mín/máx de días por solicitud).
+  // Solo se comprueba con fecha elegida: en blanco no se le riñe por nada.
+  const errorReglasPermiso = (() => {
+    if (subtipo !== "permiso" || !permisoReglas || !fechaInicio) return null;
+    const res = validarRangoVacaciones(
+      permisoReglas,
+      fechaInicio,
+      fechaFin || null,
+      TEXTOS_PERMISO,
+    );
+    return res.ok ? null : res.error;
+  })();
+
+  // Resumen de las reglas de permiso, para enseñárselas antes de que se lleve
+  // un error. null si la empresa no exige nada.
+  const resumenReglasPermiso =
+    subtipo === "permiso" && permisoReglas
+      ? resumenReglasVacaciones(permisoReglas, TEXTOS_PERMISO)
+      : null;
 
   // Bloqueo de envío en cliente para vacaciones: sin calendario, fechas en un
   // periodo bloqueado, más días de los que quedan, o incumplir las reglas de la
@@ -758,12 +802,17 @@ export function SolicitudModal({ open, onOpenChange, onCreated, onElegirDenuncia
                     onChange={(e) => {
                       const desde = e.target.value;
                       setFechaInicio(desde);
-                      // Vacaciones: la empresa exige un mínimo de días, así que
-                      // proponemos el "hasta" que lo cumple en vez de dejar que
-                      // lo calcule él y se lleve un error al enviar. Solo si aún
-                      // no ha tocado el "hasta": no le pisamos su elección.
-                      const min = vacInfo?.reglas.diasMin ?? null;
-                      if (subtipo === "vacaciones" && desde && min && min > 1 && !fechaFin) {
+                      // Si la empresa exige un mínimo de días, proponemos el
+                      // "hasta" que lo cumple en vez de dejar que lo calcule él
+                      // y se lleve un error al enviar. Solo si aún no ha tocado
+                      // el "hasta": no le pisamos su elección.
+                      const min =
+                        subtipo === "vacaciones"
+                          ? vacInfo?.reglas.diasMin ?? null
+                          : subtipo === "permiso"
+                            ? permisoReglas?.diasMin ?? null
+                            : null;
+                      if (desde && min && min > 1 && !fechaFin) {
                         setFechaFin(addDaysISO(desde, min - 1));
                       }
                     }}
@@ -794,6 +843,16 @@ export function SolicitudModal({ open, onOpenChange, onCreated, onElegirDenuncia
                   mínimo. La fecha más cercana que puedes elegir es el{" "}
                   {formatFechaEs(addDaysISO(todayISO(), PREAVISO_MIN_DIAS))}.
                 </p>
+              )}
+
+              {subtipo === "permiso" && permisoReglas && (
+                errorReglasPermiso ? (
+                  <p className="text-xs font-medium text-rose-600">{errorReglasPermiso}</p>
+                ) : (
+                  resumenReglasPermiso && (
+                    <p className="text-xs text-muted-foreground">{resumenReglasPermiso}</p>
+                  )
+                )
               )}
 
               {/* Tramo (entrada–salida) para solicitudes de trabajo: al aprobar se
@@ -1091,6 +1150,7 @@ export function SolicitudModal({ open, onOpenChange, onCreated, onElegirDenuncia
                       vacEnvioBloqueado ||
                       bajaEnvioBloqueado ||
                       preavisoInsuficiente ||
+                      !!errorReglasPermiso ||
                       motivoCorto ||
                       !!errorTramo
                     }

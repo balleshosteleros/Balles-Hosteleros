@@ -16,7 +16,10 @@ import {
   normalizarDestinoDepartamento,
   type DestinoPlantilla,
 } from "@/features/rrhh/lib/plantillas-onboarding";
-import { VACACIONES_REGLAS_DEFAULT } from "@/features/mi-panel/lib/vacaciones-reglas";
+import {
+  VACACIONES_REGLAS_DEFAULT,
+  PERMISO_REGLAS_DEFAULT,
+} from "@/features/mi-panel/lib/vacaciones-reglas";
 import { DEPARTAMENTOS_SEED, normalizeDeptoNombre } from "./departamentos";
 import { ROLES_SEED, normalizeRolNombre } from "./roles";
 import { PUESTOS_SEED, normalizePuestoNombre } from "./puestos";
@@ -886,6 +889,10 @@ export async function ensureRrhhConfigEmpresa(
     vacaciones_dia_inicio: VACACIONES_REGLAS_DEFAULT.diaInicio,
     vacaciones_dias_min: VACACIONES_REGLAS_DEFAULT.diasMin,
     vacaciones_dias_max: VACACIONES_REGLAS_DEFAULT.diasMax,
+    // Permiso: sin límite de partida (de 1 día en adelante). Cada empresa
+    // decide si quiere acotarlo, en el mismo sitio que las vacaciones.
+    permiso_dias_min: PERMISO_REGLAS_DEFAULT.diasMin,
+    permiso_dias_max: PERMISO_REGLAS_DEFAULT.diasMax,
   });
   if (error) throw error;
   return { creada: true };

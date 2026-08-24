@@ -26,6 +26,47 @@ export const VACACIONES_REGLAS_DEFAULT: VacacionesReglas = {
   diasMax: 7,
 };
 
+/**
+ * Permisos: sin límite mientras la empresa no configure nada. A diferencia de
+ * vacaciones, no se exige día de la semana para empezar (`diaInicio` siempre
+ * null): un permiso puede caer cualquier día.
+ */
+export const PERMISO_REGLAS_DEFAULT: VacacionesReglas = {
+  diaInicio: null,
+  diasMin: null,
+  diasMax: null,
+};
+
+/**
+ * Cómo nombrar la ausencia en los mensajes de error. Las mismas reglas valen
+ * para vacaciones y para permisos, pero el texto tiene que sonar natural en
+ * cada caso ("las vacaciones deben" vs "el permiso debe").
+ */
+export interface TextosAusencia {
+  /** Sujeto con artículo: "Las vacaciones", "El permiso". */
+  sujeto: string;
+  /** Sin artículo, para "cada solicitud de …": "vacaciones", "permiso". */
+  singular: string;
+  /** Con artículo contraído: "tus vacaciones", "tu permiso". */
+  deLa: string;
+  /** Si el sujeto es plural, para concordar los verbos. */
+  plural: boolean;
+}
+
+export const TEXTOS_VACACIONES: TextosAusencia = {
+  sujeto: "Las vacaciones",
+  singular: "vacaciones",
+  deLa: "tus vacaciones",
+  plural: true,
+};
+
+export const TEXTOS_PERMISO: TextosAusencia = {
+  sujeto: "El permiso",
+  singular: "permiso",
+  deLa: "tu permiso",
+  plural: false,
+};
+
 /** Nombre de cada día ISO, para los mensajes. Índice 0 sin usar. */
 const DIAS_ISO = [
   "",
@@ -79,8 +120,12 @@ export function validarRangoVacaciones(
   reglas: VacacionesReglas,
   fechaInicio: string,
   fechaFin: string | null,
+  /** Cómo nombrar la ausencia en los mensajes. Por defecto, vacaciones. */
+  textos: TextosAusencia = TEXTOS_VACACIONES,
 ): { ok: true } | { ok: false; error: string } {
-  if (!fechaInicio) return { ok: false, error: "Indica la fecha de inicio de tus vacaciones." };
+  if (!fechaInicio) {
+    return { ok: false, error: `Indica la fecha de inicio de ${textos.deLa}.` };
+  }
   const fin = fechaFin || fechaInicio;
 
   // 1. Día de la semana obligatorio para empezar.
@@ -90,7 +135,7 @@ export function validarRangoVacaciones(
     if (dia !== reglas.diaInicio) {
       return {
         ok: false,
-        error: `Las vacaciones deben empezar en ${nombreDiaISO(reglas.diaInicio)} y has elegido un ${nombreDiaISO(dia)}.`,
+        error: `${textos.sujeto} debe${textos.plural ? "n" : ""} empezar en ${nombreDiaISO(reglas.diaInicio)} y has elegido un ${nombreDiaISO(dia)}.`,
       };
     }
   }
@@ -103,13 +148,13 @@ export function validarRangoVacaciones(
   if (reglas.diasMin != null && dias < reglas.diasMin) {
     return {
       ok: false,
-      error: `Cada solicitud de vacaciones debe ser de al menos ${reglas.diasMin} ${diasPalabra(reglas.diasMin)} y has pedido ${dias}.`,
+      error: `Cada solicitud de ${textos.singular} debe ser de al menos ${reglas.diasMin} ${diasPalabra(reglas.diasMin)} y has pedido ${dias}.`,
     };
   }
   if (reglas.diasMax != null && dias > reglas.diasMax) {
     return {
       ok: false,
-      error: `Cada solicitud de vacaciones puede ser como mucho de ${reglas.diasMax} ${diasPalabra(reglas.diasMax)} y has pedido ${dias}. Divídelas en varias solicitudes.`,
+      error: `Cada solicitud de ${textos.singular} puede ser como mucho de ${reglas.diasMax} ${diasPalabra(reglas.diasMax)} y has pedido ${dias}. Divídela${textos.plural ? "s" : ""} en varias solicitudes.`,
     };
   }
   return { ok: true };
@@ -123,24 +168,31 @@ function diasPalabra(n: number): string {
  * Resumen de las reglas en una frase, para enseñárselas al empleado ANTES de
  * que elija fechas. Devuelve null si la empresa no exige nada.
  */
-export function resumenReglasVacaciones(reglas: VacacionesReglas): string | null {
+export function resumenReglasVacaciones(
+  reglas: VacacionesReglas,
+  textos: TextosAusencia = TEXTOS_VACACIONES,
+): string | null {
   const partes: string[] = [];
   if (reglas.diaInicio != null) {
-    partes.push(`deben empezar en ${nombreDiaISO(reglas.diaInicio)}`);
+    partes.push(`debe${textos.plural ? "n" : ""} empezar en ${nombreDiaISO(reglas.diaInicio)}`);
   }
+  // La segunda parte se encadena con "y" solo si ya hay una primera; si no,
+  // arranca la frase ella sola ("Tu permiso debe ser de al menos 2 días").
+  const y = partes.length > 0 ? "y " : `debe${textos.plural ? "n" : ""} `;
   if (reglas.diasMin != null && reglas.diasMax != null) {
     partes.push(
       reglas.diasMin === reglas.diasMax
-        ? `y ser de ${reglas.diasMin} ${diasPalabra(reglas.diasMin)} exactos`
-        : `y durar entre ${reglas.diasMin} y ${reglas.diasMax} días naturales`,
+        ? `${y}ser de ${reglas.diasMin} ${diasPalabra(reglas.diasMin)} exactos`
+        : `${y}durar entre ${reglas.diasMin} y ${reglas.diasMax} días naturales`,
     );
   } else if (reglas.diasMin != null) {
-    partes.push(`y ser de al menos ${reglas.diasMin} ${diasPalabra(reglas.diasMin)}`);
+    partes.push(`${y}ser de al menos ${reglas.diasMin} ${diasPalabra(reglas.diasMin)}`);
   } else if (reglas.diasMax != null) {
-    partes.push(`y ser como mucho de ${reglas.diasMax} ${diasPalabra(reglas.diasMax)}`);
+    partes.push(`${y}ser como mucho de ${reglas.diasMax} ${diasPalabra(reglas.diasMax)}`);
   }
   if (partes.length === 0) return null;
-  return `Tus vacaciones ${partes.join(" ")}.`;
+  const sujeto = textos.plural ? "Tus vacaciones" : `Tu ${textos.singular}`;
+  return `${sujeto} ${partes.join(" ")}.`;
 }
 
 /**

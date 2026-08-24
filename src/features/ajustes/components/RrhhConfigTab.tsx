@@ -51,6 +51,11 @@ export function ValidadoresSolicitudesConfig({ embedded = false }: { embedded?: 
   const [diasMin, setDiasMin] = useState<string>(String(VACACIONES_REGLAS_DEFAULT.diasMin ?? 7));
   const [diasMax, setDiasMax] = useState<string>(String(VACACIONES_REGLAS_DEFAULT.diasMax ?? 7));
 
+  // Reglas de permiso: mín/máx de días por solicitud. En blanco = sin límite,
+  // que es como se comporta un permiso mientras la empresa no configure nada.
+  const [permisoMin, setPermisoMin] = useState<string>("");
+  const [permisoMax, setPermisoMax] = useState<string>("");
+
   useEffect(() => {
     let activo = true;
     setCargando(true);
@@ -67,6 +72,8 @@ export function ValidadoresSolicitudesConfig({ embedded = false }: { embedded?: 
         }
         setDiasMin(cfgRes.data.vacacionesDiasMin != null ? String(cfgRes.data.vacacionesDiasMin) : "");
         setDiasMax(cfgRes.data.vacacionesDiasMax != null ? String(cfgRes.data.vacacionesDiasMax) : "");
+        setPermisoMin(cfgRes.data.permisoDiasMin != null ? String(cfgRes.data.permisoDiasMin) : "");
+        setPermisoMax(cfgRes.data.permisoDiasMax != null ? String(cfgRes.data.permisoDiasMax) : "");
       }
       setCargando(false);
     });
@@ -84,9 +91,46 @@ export function ValidadoresSolicitudesConfig({ embedded = false }: { embedded?: 
       ? maxNum < minNum
       : false;
 
+  const permisoMinNum = permisoMin.trim() === "" ? null : Number(permisoMin);
+  const permisoMaxNum = permisoMax.trim() === "" ? null : Number(permisoMax);
+  const permisoRangoInvalido =
+    permisoMinNum != null &&
+    permisoMaxNum != null &&
+    Number.isFinite(permisoMinNum) &&
+    Number.isFinite(permisoMaxNum)
+      ? permisoMaxNum < permisoMinNum
+      : false;
+
+  // Una sola fuente para la tabla de límites: añadir un tipo aquí lo pinta,
+  // en vez de duplicar el par mínimo/máximo en otro bloque de la pantalla.
+  const LIMITES_POR_TIPO = [
+    {
+      clave: "vacaciones",
+      label: "Vacaciones",
+      min: diasMin,
+      max: diasMax,
+      setMin: setDiasMin,
+      setMax: setDiasMax,
+      invalido: rangoInvalido,
+    },
+    {
+      clave: "permiso",
+      label: "Permisos",
+      min: permisoMin,
+      max: permisoMax,
+      setMin: setPermisoMin,
+      setMax: setPermisoMax,
+      invalido: permisoRangoInvalido,
+    },
+  ];
+
   async function guardar() {
     if (rangoInvalido) {
       toast.error("El máximo de días de vacaciones no puede ser menor que el mínimo.");
+      return;
+    }
+    if (permisoRangoInvalido) {
+      toast.error("El máximo de días de permiso no puede ser menor que el mínimo.");
       return;
     }
     setGuardando(true);
@@ -98,6 +142,11 @@ export function ValidadoresSolicitudesConfig({ embedded = false }: { embedded?: 
       vacacionesDiaInicio: diaInicioActivo ? diaInicio : null,
       vacacionesDiasMin: minNum != null && Number.isFinite(minNum) ? minNum : null,
       vacacionesDiasMax: maxNum != null && Number.isFinite(maxNum) ? maxNum : null,
+      // En blanco = null = sin límite.
+      permisoDiasMin:
+        permisoMinNum != null && Number.isFinite(permisoMinNum) ? permisoMinNum : null,
+      permisoDiasMax:
+        permisoMaxNum != null && Number.isFinite(permisoMaxNum) ? permisoMaxNum : null,
     });
     setGuardando(false);
     if (!res.ok) {
@@ -171,20 +220,71 @@ export function ValidadoresSolicitudesConfig({ embedded = false }: { embedded?: 
             <Switch checked={tareasActivo} onCheckedChange={setTareasActivo} />
           </div>
 
-          {/* Reglas con las que la plantilla pide vacaciones. */}
+          {/* Días por solicitud: una sola tabla para todos los tipos, en vez
+              de repetir "mínimo / máximo" en un bloque por cada uno. */}
           <div className="space-y-4 rounded-lg border bg-muted/20 p-4">
             <div className="flex items-start gap-2.5">
               <div className="h-8 w-8 rounded-md bg-emerald-500/10 text-emerald-600 flex items-center justify-center shrink-0">
                 <Palmtree className="h-4 w-4" />
               </div>
               <div className="space-y-1">
-                <h4 className="text-sm font-semibold text-foreground">Cómo se piden las vacaciones</h4>
+                <h4 className="text-sm font-semibold text-foreground">
+                  Cuántos días puede pedir de una vez
+                </h4>
                 <p className="text-sm text-muted-foreground">
-                  Estas reglas se aplican al formulario del empleado: si no las
-                  cumple, no puede enviar la solicitud y se le explica por qué.
-                  Los días se cuentan naturales, así que de lunes a domingo son 7.
+                  Se aplica al formulario del empleado: si no lo cumple, no puede
+                  enviar la solicitud y se le explica por qué. Los días son
+                  naturales, así que de lunes a domingo son 7. Deja un campo
+                  vacío para no poner ese límite.
                 </p>
               </div>
+            </div>
+
+            <div className="space-y-3">
+              <div className="hidden md:grid grid-cols-[1fr_auto_auto] gap-3 px-1 text-xs font-medium text-muted-foreground">
+                <span>Tipo</span>
+                <span className="w-24 text-center">Mínimo</span>
+                <span className="w-24 text-center">Máximo</span>
+              </div>
+
+              {LIMITES_POR_TIPO.map((t) => (
+                <div
+                  key={t.clave}
+                  className="grid gap-2 md:grid-cols-[1fr_auto_auto] md:items-center md:gap-3 rounded-lg border bg-card p-3"
+                >
+                  <span className="text-sm font-medium">{t.label}</span>
+                  <div className="grid grid-cols-2 gap-2 md:contents">
+                    <Input
+                      type="number"
+                      min={1}
+                      max={366}
+                      value={t.min}
+                      onChange={(e) => t.setMin(e.target.value)}
+                      placeholder="Sin mín."
+                      aria-label={`Mínimo de días por solicitud de ${t.label.toLowerCase()}`}
+                      aria-invalid={t.invalido}
+                      className="md:w-24"
+                    />
+                    <Input
+                      type="number"
+                      min={1}
+                      max={366}
+                      value={t.max}
+                      onChange={(e) => t.setMax(e.target.value)}
+                      placeholder="Sin máx."
+                      aria-label={`Máximo de días por solicitud de ${t.label.toLowerCase()}`}
+                      aria-invalid={t.invalido}
+                      className="md:w-24"
+                    />
+                  </div>
+                  {t.invalido && (
+                    <p className="text-xs font-medium text-rose-600 md:col-span-3">
+                      El máximo no puede ser menor que el mínimo: nadie podría
+                      pedir {t.label.toLowerCase()}.
+                    </p>
+                  )}
+                </div>
+              ))}
             </div>
 
             <div className="flex items-start justify-between gap-4 rounded-lg border bg-card p-3">
@@ -192,7 +292,7 @@ export function ValidadoresSolicitudesConfig({ embedded = false }: { embedded?: 
                 <Label className="text-sm">Día fijo para empezar las vacaciones</Label>
                 <p className="text-xs text-muted-foreground">
                   {diaInicioActivo
-                    ? `Las vacaciones solo pueden empezar en ${nombreDiaISO(diaInicio)}.`
+                    ? `Las vacaciones solo pueden empezar en ${nombreDiaISO(diaInicio)}. Los permisos pueden empezar cualquier día.`
                     : "Desactivado: el empleado puede empezar sus vacaciones cualquier día."}
                 </p>
               </div>
@@ -216,49 +316,18 @@ export function ValidadoresSolicitudesConfig({ embedded = false }: { embedded?: 
               </div>
             )}
 
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-1.5">
-                <Label htmlFor="vacDiasMin">Mínimo de días por solicitud</Label>
-                <Input
-                  id="vacDiasMin"
-                  type="number"
-                  min={1}
-                  max={366}
-                  value={diasMin}
-                  onChange={(e) => setDiasMin(e.target.value)}
-                  placeholder="Sin mínimo"
-                />
-                <p className="text-xs text-muted-foreground">
-                  Déjalo vacío para no exigir un mínimo. Por defecto: 7.
-                </p>
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="vacDiasMax">Máximo de días por solicitud</Label>
-                <Input
-                  id="vacDiasMax"
-                  type="number"
-                  min={1}
-                  max={366}
-                  value={diasMax}
-                  onChange={(e) => setDiasMax(e.target.value)}
-                  placeholder="Sin máximo"
-                  aria-invalid={rangoInvalido}
-                />
-                <p className="text-xs text-muted-foreground">
-                  Déjalo vacío para no poner tope. Por defecto: 7.
-                </p>
-              </div>
-              {rangoInvalido && (
-                <p className="md:col-span-2 text-xs font-medium text-rose-600">
-                  El máximo no puede ser menor que el mínimo: nadie podría pedir
-                  vacaciones.
-                </p>
-              )}
-            </div>
+            <p className="text-xs text-muted-foreground">
+              El máximo de días al año se configura aparte, en RRHH → Horarios →
+              Tipos de ausencia, en el campo «Límite de días al año» de cada tipo.
+            </p>
           </div>
 
           <div className="flex justify-end">
-            <Button onClick={guardar} disabled={guardando || rangoInvalido} className="gap-2">
+            <Button
+              onClick={guardar}
+              disabled={guardando || rangoInvalido || permisoRangoInvalido}
+              className="gap-2"
+            >
               {guardando ? (
                 <><Loader2 className="h-4 w-4 animate-spin" />Guardando…</>
               ) : (

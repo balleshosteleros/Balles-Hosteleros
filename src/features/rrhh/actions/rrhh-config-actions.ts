@@ -4,7 +4,10 @@ import { getAppContext } from "@/lib/supabase/get-context";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAdminUser } from "@/features/rrhh/services/empleados-core";
 import { revalidatePath } from "next/cache";
-import { VACACIONES_REGLAS_DEFAULT } from "@/features/mi-panel/lib/vacaciones-reglas";
+import {
+  VACACIONES_REGLAS_DEFAULT,
+  PERMISO_REGLAS_DEFAULT,
+} from "@/features/mi-panel/lib/vacaciones-reglas";
 
 export interface RrhhConfig {
   /** Departamento cuyos empleados validan a los empleados de área operativa. */
@@ -22,6 +25,10 @@ export interface RrhhConfig {
   vacacionesDiasMin: number | null;
   /** Máximo de días naturales por solicitud de vacaciones. null = sin máximo. */
   vacacionesDiasMax: number | null;
+  /** Mínimo de días naturales por solicitud de permiso. null = sin mínimo. */
+  permisoDiasMin: number | null;
+  /** Máximo de días naturales por solicitud de permiso. null = sin máximo. */
+  permisoDiasMax: number | null;
 }
 
 /** Convierte a entero dentro de rango, o null si no es un valor usable. */
@@ -45,7 +52,7 @@ export async function getRrhhConfig(): Promise<{ ok: boolean; data?: RrhhConfig;
     const { data, error } = await admin
       .from("empresa_rrhh_config")
       .select(
-        "validador_depto_operativa_id, validador_depto_administrativa_id, tareas_validador_activo, vacaciones_dia_inicio, vacaciones_dias_min, vacaciones_dias_max",
+        "validador_depto_operativa_id, validador_depto_administrativa_id, tareas_validador_activo, vacaciones_dia_inicio, vacaciones_dias_min, vacaciones_dias_max, permiso_dias_min, permiso_dias_max",
       )
       .eq("empresa_id", empresaId)
       .maybeSingle();
@@ -68,6 +75,13 @@ export async function getRrhhConfig(): Promise<{ ok: boolean; data?: RrhhConfig;
         vacacionesDiasMax: data
           ? enteroEnRango(data.vacaciones_dias_max, 1, 366)
           : VACACIONES_REGLAS_DEFAULT.diasMax,
+        // Permiso: sin límite mientras la empresa no configure nada.
+        permisoDiasMin: data
+          ? enteroEnRango(data.permiso_dias_min, 1, 366)
+          : PERMISO_REGLAS_DEFAULT.diasMin,
+        permisoDiasMax: data
+          ? enteroEnRango(data.permiso_dias_max, 1, 366)
+          : PERMISO_REGLAS_DEFAULT.diasMax,
       },
     };
   } catch (err) {
@@ -85,6 +99,8 @@ export async function saveRrhhConfig(input: {
   vacacionesDiaInicio: number | null;
   vacacionesDiasMin: number | null;
   vacacionesDiasMax: number | null;
+  permisoDiasMin: number | null;
+  permisoDiasMax: number | null;
 }) {
   try {
     const { empresaId } = await getAppContext();
@@ -109,6 +125,23 @@ export async function saveRrhhConfig(input: {
       };
     }
 
+    // Mismas comprobaciones para permiso. Se sanean aquí (y no solo con el
+    // CHECK de la base de datos) para que el mensaje explique el problema.
+    const permisoMin = enteroEnRango(input.permisoDiasMin, 1, 366);
+    const permisoMax = enteroEnRango(input.permisoDiasMax, 1, 366);
+    if (input.permisoDiasMin != null && permisoMin == null) {
+      return { ok: false, error: "El mínimo de días de permiso debe estar entre 1 y 366." };
+    }
+    if (input.permisoDiasMax != null && permisoMax == null) {
+      return { ok: false, error: "El máximo de días de permiso debe estar entre 1 y 366." };
+    }
+    if (permisoMin != null && permisoMax != null && permisoMax < permisoMin) {
+      return {
+        ok: false,
+        error: "El máximo de días de permiso no puede ser menor que el mínimo.",
+      };
+    }
+
     let admin;
     try { admin = createAdminClient(); }
     catch { return { ok: false, error: "Supabase admin no configurado." }; }
@@ -124,6 +157,8 @@ export async function saveRrhhConfig(input: {
           vacaciones_dia_inicio: diaInicio,
           vacaciones_dias_min: diasMin,
           vacaciones_dias_max: diasMax,
+          permiso_dias_min: permisoMin,
+          permiso_dias_max: permisoMax,
         },
         { onConflict: "empresa_id" },
       );
