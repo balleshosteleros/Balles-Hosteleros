@@ -197,6 +197,41 @@ export async function listMisEntregas(): Promise<Entrega[]> {
   return cargarEntregas({ empleadoId });
 }
 
+/**
+ * Cuántas piezas tiene sin devolver cada trabajador de la empresa.
+ *
+ * Lo usa el offboarding: la tarjeta del Kanban avisa de lo que falta por
+ * devolver antes de dejarle salir. Devuelve un mapa empleadoId → nº de piezas;
+ * los que no aparecen no deben nada.
+ */
+export async function contarPendientesDevolucionPorEmpleado(): Promise<
+  Record<string, number>
+> {
+  const { supabase, empresaId } = await getAppContext();
+  if (!empresaId) return {};
+  const db = supabase as unknown as Awaited<ReturnType<typeof createClient>>;
+
+  // Firmada por el trabajador (es suya), pendiente de devolver, y ni devuelta
+  // ni dada de baja por deterioro.
+  const { data, error } = await db
+    .from("entregas_material")
+    .select("empleado_id, entregas_material_items!inner(requiere_devolucion)")
+    .eq("empresa_id", empresaId)
+    .eq("estado", "firmada")
+    .eq("entregas_material_items.requiere_devolucion", true)
+    .not("devolucion_estado", "in", '("devuelta","merma")');
+  if (error) {
+    console.error("[rrhh] contarPendientesDevolucionPorEmpleado:", error.message);
+    return {};
+  }
+
+  const conteo: Record<string, number> = {};
+  for (const fila of (data ?? []) as { empleado_id: string }[]) {
+    conteo[fila.empleado_id] = (conteo[fila.empleado_id] ?? 0) + 1;
+  }
+  return conteo;
+}
+
 export interface NuevaEntregaItem {
   tipoId: string | null;
   tipoNombre: string;

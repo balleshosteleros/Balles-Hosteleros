@@ -8,6 +8,7 @@ export type CategoriaDocumento =
   | "contratos"
   | "justificantes"
   | "registros-jornada"
+  | "entregas"
   | "sanciones";
 
 export interface DocumentoEmpleado {
@@ -29,6 +30,7 @@ export async function listMisDocumentos(): Promise<{
     contratos: [],
     justificantes: [],
     "registros-jornada": [],
+    entregas: [],
     sanciones: [],
   };
   try {
@@ -52,6 +54,7 @@ export async function listMisDocumentos(): Promise<{
       contratos: [],
       justificantes: [],
       "registros-jornada": [],
+      entregas: [],
       sanciones: [],
     };
     for (const row of data ?? []) {

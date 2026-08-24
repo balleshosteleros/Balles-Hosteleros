@@ -708,6 +708,42 @@ export async function firmarDocumento(input: FirmarDocumentoInput): Promise<Firm
       }
     }
 
+    // Actas de material firmadas: igual que la sanción, se archiva una copia en
+    // la carpeta «Entregas» del trabajador para que le quede de forma permanente,
+    // aunque caduque el enlace de descarga. Best-effort: si falla, la firma ya
+    // está hecha y él recibió su copia por email.
+    {
+      const tipoActa = doc.tipo as string;
+      const esActaMaterial =
+        tipoActa === "entrega_material" ||
+        tipoActa === "devolucion_material" ||
+        tipoActa === "merma_material";
+      if (esActaMaterial) {
+        try {
+          const destPath = `${doc.empresa_id}/${doc.empleado_id}/${tipoActa}-${documentoId}.pdf`;
+          const copia = await admin.storage
+            .from("empleados-docs")
+            .upload(destPath, firmadoBytes, { upsert: true, contentType: "application/pdf" });
+          if (!copia.error) {
+            await admin.from("documentos_empleado").insert({
+              empresa_id: doc.empresa_id,
+              empleado_id: doc.empleado_id,
+              categoria: "entregas",
+              nombre: `${doc.titulo} (firmada).pdf`,
+              storage_path: destPath,
+              tipo_mime: "application/pdf",
+              tamano_bytes: firmadoBytes.length,
+              created_by: (emp?.user_id as string) ?? null,
+            });
+          } else {
+            console.error("[firmar/firmar] archivar acta de material:", copia.error.message);
+          }
+        } catch (e) {
+          console.error("[firmar/firmar] archivar acta de material en documentos del empleado:", e);
+        }
+      }
+    }
+
     // Documento firmado: el aviso in-app de "documento para firmar" queda leído.
     // Corre con service role porque la firma ocurre por enlace público, sin sesión
     // del empleado. Complementario: si falla, no debe tumbar la firma ya completada.

@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useRef, useEffect, createContext, useContext } from "react";
 import {
   FASES_PRINCIPALES,
   FASES_PRINCIPALES_ORDER,
@@ -28,7 +28,7 @@ import {
   ArrowLeft, Mail, MailCheck,
   Send, X, UsersRound, CheckCircle2,
   MinusCircle, XCircle, Star, CalendarDays, Eye, FileText,
-  Building2, UserCog, User, AlertTriangle,
+  Building2, UserCog, User, AlertTriangle, PackageX,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -38,6 +38,7 @@ import {
   type PlantillaFaseInfo,
 } from "@/features/rrhh/actions/reclutamiento-email-plantillas-actions";
 import { parsearEnlacesCuerpo } from "@/features/rrhh/lib/reclutamiento-email";
+import { contarPendientesDevolucionPorEmpleado } from "@/features/rrhh/actions/entregas-actions";
 import { CandidatoDetailModal } from "@/features/rrhh/components/reclutamiento/CandidatoDetailModal";
 import { ContratarDialog } from "@/features/rrhh/components/reclutamiento/ContratarDialog";
 import { moverCandidatoAVacante } from "@/features/rrhh/actions/candidatos-actions";
@@ -92,6 +93,30 @@ function CuestionarioBadge({ aciertos, total }: { aciertos: number; total: numbe
 // Documento ROJO = el candidato aún no ha completado su documentación (paso
 // obligatorio antes de Formación); documento VERDE = ya la entregó. Ocupa una
 // posición fija en la zona de distintivos de la tarjeta (junto al cuestionario).
+/**
+ * Material sin devolver por empleado (empleadoId → nº de piezas).
+ *
+ * Va por contexto y no por props porque solo lo consume la tarjeta, al final de
+ * tres niveles de anidamiento (FaseGroup → EstadoColumn → CandidatoCard), y no
+ * tiene sentido que las columnas intermedias lo acarreen.
+ */
+const PendientesDevolucionCtx = createContext<Record<string, number>>({});
+
+/** Aviso naranja en la tarjeta: le queda material por devolver. */
+function DevolucionPendienteBadge({ piezas }: { piezas: number }) {
+  const titulo = `Material sin devolver · ${piezas} ${piezas === 1 ? "pieza" : "piezas"}`;
+  return (
+    <span
+      className="inline-flex items-center gap-0.5 shrink-0 text-amber-600"
+      title={titulo}
+      aria-label={titulo}
+    >
+      <PackageX className="h-3.5 w-3.5" />
+      <span className="text-[9px] font-semibold tabular-nums">{piezas}</span>
+    </span>
+  );
+}
+
 function DocumentacionBadge({ completa }: { completa: boolean }) {
   const titulo = completa
     ? "Documentación · recibida"
@@ -127,6 +152,10 @@ function CandidatoCard({
   onClick: (c: Candidato) => void;
 }) {
   const dias = diasEnFaseDe(candidato);
+  const pendientesPorEmpleado = useContext(PendientesDevolucionCtx);
+  const pendientesDevolucion = candidato.empleadoId
+    ? (pendientesPorEmpleado[candidato.empleadoId] ?? 0)
+    : 0;
   return (
     <div
       draggable
@@ -185,6 +214,10 @@ function CandidatoCard({
             )}
             {/* Documentación: documento rojo (pendiente) / verde (recibida). */}
             <DocumentacionBadge completa={!!candidato.documentacionCompletadaAt} />
+            {/* Offboarding: material que aún no ha devuelto. */}
+            {pendientesDevolucion > 0 && (
+              <DevolucionPendienteBadge piezas={pendientesDevolucion} />
+            )}
             {/* «Visto»: ojo verde cuando la ficha ya se revisó (se abrió). */}
             {candidato.vistoAt && (
               <span className="shrink-0 text-emerald-600" title="Candidato visto" aria-label="Candidato visto">
@@ -578,6 +611,16 @@ export function KanbanPipeline({ vacante, vacantes = [], onBack, onUpdateCandida
   // «iniciar» (PRP-070) en vez de mover directamente.
   const [iniciarContratacionCand, setIniciarContratacionCand] = useState<Candidato | null>(null);
   const draggedCandidato = useRef<Candidato | null>(null);
+  // Material sin devolver por empleado: lo pinta la tarjeta en el offboarding.
+  const [pendientesDevolucion, setPendientesDevolucion] = useState<Record<string, number>>({});
+
+  useEffect(() => {
+    let cancel = false;
+    void contarPendientesDevolucionPorEmpleado().then((data) => {
+      if (!cancel) setPendientesDevolucion(data);
+    });
+    return () => { cancel = true; };
+  }, []);
 
   const handleMoverVacante = useCallback(
     async (c: Candidato, vacanteId: string, estado: EstadoReclutamiento) => {
@@ -768,6 +811,7 @@ export function KanbanPipeline({ vacante, vacantes = [], onBack, onUpdateCandida
   }, [exEmpleadoConfirm, config, performMove]);
 
   return (
+    <PendientesDevolucionCtx.Provider value={pendientesDevolucion}>
     <div className="flex flex-col h-full">
       {/* Header */}
       <div className="flex items-center justify-between px-6 py-4 border-b border-border bg-card">
@@ -898,5 +942,6 @@ export function KanbanPipeline({ vacante, vacantes = [], onBack, onUpdateCandida
         </DialogContent>
       </Dialog>
     </div>
+    </PendientesDevolucionCtx.Provider>
   );
 }

@@ -19,7 +19,11 @@ export type TipoDocumento =
   | "contrato_oficial"
   | "reconocimiento_medico"
   | "anexo_promocion"
-  | "sancion_disciplinaria";
+  | "sancion_disciplinaria"
+  // Actas del ciclo del material: recibirlo, devolverlo o darlo de baja.
+  | "entrega_material"
+  | "devolucion_material"
+  | "merma_material";
 
 export type EstadoFirma =
   | "pendiente"
@@ -69,6 +73,9 @@ export const TIPO_LABEL: Record<TipoDocumento, string> = {
   reconocimiento_medico: "Reconocimiento médico",
   anexo_promocion: "Anexo de promoción",
   sancion_disciplinaria: "Sanción disciplinaria",
+  entrega_material: "Entrega de material",
+  devolucion_material: "Devolución de material",
+  merma_material: "Baja de material por deterioro",
 };
 
 export const MODALIDAD_LABEL: Record<ModalidadFirma, string> = {

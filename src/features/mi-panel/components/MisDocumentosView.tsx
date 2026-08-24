@@ -14,6 +14,7 @@ import {
   Download,
   Loader2,
   ShieldAlert,
+  PackageCheck,
   type LucideIcon,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
@@ -38,6 +39,7 @@ const CARPETAS: Carpeta[] = [
   { id: "contratos", nombre: "Contratos", icon: FileSignature, color: "text-emerald-600", bg: "bg-emerald-50" },
   { id: "justificantes", nombre: "Justificantes", icon: Receipt, color: "text-amber-600", bg: "bg-amber-50" },
   { id: "registros-jornada", nombre: "Registros de jornada", icon: Clock, color: "text-violet-600", bg: "bg-violet-50" },
+  { id: "entregas", nombre: "Entregas de material", icon: PackageCheck, color: "text-cyan-600", bg: "bg-cyan-50" },
   { id: "sanciones", nombre: "Sanciones disciplinarias", icon: ShieldAlert, color: "text-red-600", bg: "bg-red-50" },
 ];
 
