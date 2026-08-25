@@ -2,7 +2,11 @@
 
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { findOrLinkClienteSala, type CampoDistinto } from "@/features/sala/lib/cliente-link";
+import {
+  completarFichaCliente,
+  findOrLinkClienteSala,
+  type CampoDistinto,
+} from "@/features/sala/lib/cliente-link";
 import { asignarMesaAutomatica } from "@/features/sala/planos/lib/asignacion-mesa";
 import { validarMotorWebReserva } from "@/features/sala/lib/motor-web-validar";
 import { getCamposObligatoriosReserva } from "@/features/sala/lib/reserva-campos-obligatorios";
@@ -37,6 +41,15 @@ const inputSchema = z.object({
    * no según `exigir_zona_cliente` de la empresa.
    */
   grupoZonaId: z.string().guid().optional().nullable(),
+  /** Datos que enriquecen la ficha del cliente. Ninguno bloquea la reserva. */
+  fechaNacimiento: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional()
+    .nullable(),
+  telefonoPrefijo: z.string().max(8).optional().nullable(),
+  /** Consentimiento para comunicaciones comerciales (RGPD: nunca premarcado). */
+  aceptaMarketing: z.boolean().optional(),
 });
 
 export type CrearReservaPublicaInput = z.infer<typeof inputSchema>;
@@ -173,6 +186,14 @@ export async function crearReservaPublicaAction(
     return { ok: false, error: "No pudimos vincular tu ficha de cliente" };
   }
   const cliente = link.result.cliente;
+
+  // Datos extra de la ficha: rellenan huecos, nunca pisan lo que ya hubiera.
+  await completarFichaCliente(admin as unknown as SupabaseClient, cliente.id, {
+    fechaNacimiento: data.fechaNacimiento ?? null,
+    telefonoPrefijo: data.telefonoPrefijo ?? null,
+    aceptaMarketing: data.aceptaMarketing ?? false,
+    origen: data.origen ?? "RESERVA_WEB",
+  });
 
   // ────────────────────────────────────────────────────────────────
   // PRP-051: rama Ticket. Validar bloqueo + consumir stock atómico.

@@ -16,6 +16,22 @@ import {
   listarGruposZonasPublica,
   type GrupoZonaPublico,
 } from "@/features/reservar-publica/actions/listar-grupos-zonas-publica";
+
+/** Prefijos habituales de la clientela. España primero por ser el caso normal. */
+const PREFIJOS = [
+  { code: "+34", flag: "🇪🇸" },
+  { code: "+351", flag: "🇵🇹" },
+  { code: "+33", flag: "🇫🇷" },
+  { code: "+44", flag: "🇬🇧" },
+  { code: "+49", flag: "🇩🇪" },
+  { code: "+39", flag: "🇮🇹" },
+  { code: "+1", flag: "🇺🇸" },
+  { code: "+52", flag: "🇲🇽" },
+  { code: "+54", flag: "🇦🇷" },
+  { code: "+31", flag: "🇳🇱" },
+  { code: "+41", flag: "🇨🇭" },
+  { code: "+212", flag: "🇲🇦" },
+] as const;
 import { turnoDeHora } from "@/features/sala/lib/dia-negocio";
 import type { CamposObligatoriosPublico } from "@/features/reservar-publica/actions/listar-disponibilidad-publica";
 import {
@@ -106,6 +122,12 @@ export function ReservaPublicaForm({
   // Consentimiento RGPD: la reserva recoge nombre, teléfono y correo. Arranca
   // SIN marcar — un consentimiento premarcado no es válido (art. 4.11 RGPD).
   const [aceptaPrivacidad, setAceptaPrivacidad] = useState(false);
+  // Consentimiento comercial: separado del de privacidad y tambien sin marcar
+  // por defecto. Es opcional — no reservar por no querer publicidad seria
+  // consentimiento forzado.
+  const [aceptaMarketing, setAceptaMarketing] = useState(false);
+  const [fechaNacimiento, setFechaNacimiento] = useState("");
+  const [telefonoPrefijo, setTelefonoPrefijo] = useState("+34");
   // Campos que esta empresa exige además de los fijos. Arranca con el default
   // del catálogo (email y teléfono) para que el asterisco no parpadee mientras
   // llega la respuesta del servidor, que es quien manda.
@@ -193,6 +215,9 @@ export function ReservaPublicaForm({
       hora,
       personas,
       grupoZonaId: grupoZonaId || null,
+      fechaNacimiento: fechaNacimiento || null,
+      telefonoPrefijo: telefono.trim() ? telefonoPrefijo : null,
+      aceptaMarketing,
       codigo: codigo.trim() ? codigo.trim().toUpperCase().replace(/\s+/g, "") : null,
       ticketProductoId: ticketProductoId ?? null,
       ticketOnly: ticketOnly && productosTicket.length > 0,
@@ -558,15 +583,47 @@ export function ReservaPublicaForm({
               <Phone className="h-3.5 w-3.5" />
               Teléfono{obligatorios.telefono ? " *" : ""}
             </Label>
+            {/* Prefijo aparte: un numero extranjero sin el suyo queda
+                inservible para llamar o mandar un SMS. */}
+            <div className="mt-1.5 flex gap-2">
+              <select
+                value={telefonoPrefijo}
+                onChange={(e) => setTelefonoPrefijo(e.target.value)}
+                disabled={enviando}
+                aria-label="Prefijo del país"
+                className="h-12 sm:h-11 w-28 shrink-0 rounded-xl border border-zinc-200 bg-white px-2 text-base sm:text-sm"
+              >
+                {PREFIJOS.map((p) => (
+                  <option key={p.code} value={p.code}>
+                    {p.flag} {p.code}
+                  </option>
+                ))}
+              </select>
+              <Input
+                id="telefono"
+                type="tel"
+                inputMode="tel"
+                autoComplete="tel"
+                value={telefono}
+                onChange={(e) => setTelefono(e.target.value)}
+                required={obligatorios.telefono}
+                placeholder="612 345 678"
+                className="h-12 sm:h-11 rounded-xl border-zinc-200 text-base sm:text-sm"
+              />
+            </div>
+          </div>
+
+          <div>
+            <Label htmlFor="nacimiento" className="text-zinc-700 flex items-center gap-1.5">
+              <Calendar className="h-3.5 w-3.5" />
+              Fecha de nacimiento
+            </Label>
             <Input
-              id="telefono"
-              type="tel"
-              inputMode="tel"
-              autoComplete="tel"
-              value={telefono}
-              onChange={(e) => setTelefono(e.target.value)}
-              required={obligatorios.telefono}
-              placeholder="612 345 678"
+              id="nacimiento"
+              type="date"
+              value={fechaNacimiento}
+              onChange={(e) => setFechaNacimiento(e.target.value)}
+              max={new Date().toISOString().split("T")[0]}
               className="mt-1.5 h-12 sm:h-11 rounded-xl border-zinc-200 text-base sm:text-sm"
             />
           </div>
@@ -639,6 +696,21 @@ export function ReservaPublicaForm({
                 política de privacidad
               </a>
               .
+            </span>
+          </label>
+
+          {/* Comercial: consentimiento distinto del de privacidad y opcional.
+              Exigirlo para reservar lo invalidaria (RGPD art. 7.4). */}
+          <label className="flex items-start gap-2 text-xs leading-snug text-zinc-500">
+            <input
+              type="checkbox"
+              checked={aceptaMarketing}
+              onChange={(e) => setAceptaMarketing(e.target.checked)}
+              disabled={enviando}
+              className="mt-0.5 shrink-0"
+            />
+            <span>
+              Quiero recibir novedades y promociones del restaurante por email o SMS.
             </span>
           </label>
 

@@ -1,14 +1,11 @@
-import { useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Plus, GraduationCap, ShieldCheck, UserCog, Zap, Settings, Power, PowerOff, KeyRound, Eye, PenLine } from "lucide-react";
+import { Plus, GraduationCap, UserCog, Zap, Settings } from "lucide-react";
 import type { FichaEmpleado } from "@/features/rrhh/data/empleados-ficha";
-import { getAccesoDeEmpleado } from "@/features/rrhh/data/accesos-portal";
-import { toast } from "sonner";
 
 function Campo({ label, value }: { label: string; value: string }) {
   return (
@@ -180,114 +177,10 @@ export function JourneySection({ ficha }: { ficha: FichaEmpleado }) {
   );
 }
 
-/* ─── ACCESOS ─── */
-export function AccesosSection({ ficha, empresaId }: { ficha: FichaEmpleado; empresaId: string }) {
-  const acceso = getAccesoDeEmpleado(empresaId, ficha.empleadoId);
-  const [estado, setEstado] = useState(acceso?.estadoAcceso ?? "Sin acceso");
-
-  const activar = () => { setEstado("Activo"); toast.success("Acceso activado"); };
-  const desactivar = () => { setEstado("Inactivo"); toast.success("Acceso desactivado"); };
-
-  if (!acceso) {
-    return (
-      <Bloque titulo="Acceso al portal">
-        <div className="flex flex-col items-center justify-center py-10 text-center">
-          <ShieldCheck className="h-10 w-10 text-muted-foreground/40 mb-3" />
-          <p className="text-sm text-muted-foreground">Este empleado no tiene acceso al portal.</p>
-          <p className="text-xs text-muted-foreground mt-1">Puedes dar acceso desde Ajustes → Usuarios y accesos.</p>
-        </div>
-      </Bloque>
-    );
-  }
-
-  const estadoColor: Record<string, string> = {
-    Activo: "bg-emerald-500/10 text-emerald-600 border-emerald-500/30",
-    Inactivo: "bg-muted text-muted-foreground border-muted-foreground/30",
-    Pendiente: "bg-amber-500/10 text-amber-600 border-amber-500/30",
-  };
-
-  return (
-    <div className="space-y-6">
-      <Bloque titulo="Acceso al portal">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          <div className="space-y-1.5">
-            <Label className="text-xs text-muted-foreground">Usuario</Label>
-            <Input defaultValue={acceso.emailUsuario} className="h-9" readOnly />
-          </div>
-          <div className="space-y-1.5">
-            <Label className="text-xs text-muted-foreground">Estado</Label>
-            <div className="flex items-center gap-2 h-9">
-              <Badge variant="outline" className={`text-xs ${estadoColor[estado] ?? ""}`}>{estado}</Badge>
-            </div>
-          </div>
-          <div className="space-y-1.5">
-            <Label className="text-xs text-muted-foreground">Rol</Label>
-            <div className="flex items-center gap-2 h-9">
-              <Badge variant="secondary" className="text-xs gap-1"><UserCog className="h-3 w-3" />{acceso.rol}</Badge>
-            </div>
-          </div>
-          <div className="space-y-1.5">
-            <Label className="text-xs text-muted-foreground">Última conexión</Label>
-            <p className="text-sm text-foreground h-9 flex items-center">{acceso.ultimaConexion}</p>
-          </div>
-          <div className="space-y-1.5">
-            <Label className="text-xs text-muted-foreground">Fecha de creación</Label>
-            <p className="text-sm text-foreground h-9 flex items-center">{acceso.fechaCreacion}</p>
-          </div>
-        </div>
-      </Bloque>
-
-      <Bloque titulo="Acciones rápidas">
-        <div className="flex flex-wrap gap-2">
-          {estado !== "Activo" && (
-            <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={activar}>
-              <Power className="h-3 w-3" /> Activar acceso
-            </Button>
-          )}
-          {estado === "Activo" && (
-            <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={desactivar}>
-              <PowerOff className="h-3 w-3" /> Desactivar acceso
-            </Button>
-          )}
-          <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={() => toast.success("Contraseña reseteada")}>
-            <KeyRound className="h-3 w-3" /> Resetear contraseña
-          </Button>
-        </div>
-      </Bloque>
-
-      <Bloque titulo="Permisos del rol">
-        <div className="bg-card rounded-lg border">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b bg-muted/50">
-                <th className="text-left px-3 py-2 text-xs font-bold text-muted-foreground">MÓDULO</th>
-                <th className="text-center px-3 py-2 text-xs font-bold text-muted-foreground">
-                  <span className="flex items-center justify-center gap-1"><Eye className="h-3 w-3" /> VER</span>
-                </th>
-                <th className="text-center px-3 py-2 text-xs font-bold text-muted-foreground">
-                  <span className="flex items-center justify-center gap-1"><PenLine className="h-3 w-3" /> EDITAR</span>
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {acceso.permisos.map((p: { modulo: string; ver: boolean; editar: boolean }) => (
-                <tr key={p.modulo} className="border-b last:border-0">
-                  <td className="px-3 py-1.5 text-foreground">{p.modulo}</td>
-                  <td className="text-center px-3 py-1.5">
-                    {p.ver ? <span className="text-emerald-600">✓</span> : <span className="text-muted-foreground">—</span>}
-                  </td>
-                  <td className="text-center px-3 py-1.5">
-                    {p.editar ? <span className="text-emerald-600">✓</span> : <span className="text-muted-foreground">—</span>}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </Bloque>
-    </div>
-  );
-}
+// La sección «Acceso al portal» vivía aquí. Se elimina: era una maqueta sin
+// conectar (los botones solo cambiaban el texto en pantalla, sin tocar la BD)
+// y no estaba montada en ninguna pantalla. El acceso real se gestiona en
+// Ajustes → Usuarios y accesos.
 
 /* ─── ROLES ─── */
 export function RolesSection({ ficha }: { ficha: FichaEmpleado }) {

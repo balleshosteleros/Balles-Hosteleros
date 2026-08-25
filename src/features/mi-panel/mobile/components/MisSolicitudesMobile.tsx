@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Loader2, Inbox, Plus, X, CalendarOff, Briefcase } from "lucide-react";
+import { Loader2, Inbox, Plus, X, CalendarOff, Briefcase, PackageCheck } from "lucide-react";
 import { toast } from "sonner";
 import {
   anularMiSolicitud,
@@ -23,10 +23,11 @@ import {
 } from "@/shared/components/ui/alert-dialog";
 import { cn } from "@/shared/lib/utils";
 
-const TABS: Array<{ key: "todas" | "ausencias" | "trabajos"; label: string }> = [
+const TABS: Array<{ key: "todas" | "ausencias" | "trabajos" | "entregas"; label: string }> = [
   { key: "todas", label: "Todas" },
   { key: "ausencias", label: "Ausencias" },
   { key: "trabajos", label: "Trabajos" },
+  { key: "entregas", label: "Entregas" },
 ];
 
 const ESTADO_DOT: Record<string, string> = {
@@ -51,7 +52,7 @@ export function MisSolicitudesMobile() {
   const [refreshKey, setRefreshKey] = useState(0);
   const [open, setOpen] = useState(false);
   const [denunciaOpen, setDenunciaOpen] = useState(false);
-  const [tab, setTab] = useState<"todas" | "ausencias" | "trabajos">("todas");
+  const [tab, setTab] = useState<(typeof TABS)[number]["key"]>("todas");
   const [aAnular, setAAnular] = useState<SolicitudPersonal | null>(null);
   const [anulando, setAnulando] = useState(false);
 
@@ -70,6 +71,7 @@ export function MisSolicitudesMobile() {
   const filtered = useMemo(() => {
     if (tab === "ausencias") return items.filter((s) => s.tipo === "ausencia");
     if (tab === "trabajos") return items.filter((s) => s.tipo === "trabajo");
+    if (tab === "entregas") return items.filter((s) => s.tipo === "entrega");
     return items;
   }, [items, tab]);
 
@@ -145,17 +147,30 @@ export function MisSolicitudesMobile() {
                       <p className="truncate text-sm font-medium">
                         {s.tipo === "ausencia" ? (
                           <CalendarOff className="mr-1 inline h-3.5 w-3.5 -translate-y-px" />
+                        ) : s.tipo === "entrega" ? (
+                          <PackageCheck className="mr-1 inline h-3.5 w-3.5 -translate-y-px" />
                         ) : (
                           <Briefcase className="mr-1 inline h-3.5 w-3.5 -translate-y-px" />
                         )}
                         {SUBTIPO_LABEL[s.subtipo]}
                       </p>
                     </div>
+                    {/* En una petición de material lo que importa es la prenda,
+                        no las fechas: no las tiene. */}
                     <p className="mt-1 text-xs text-muted-foreground">
-                      {formatFecha(s.fechaInicio)}
-                      {s.fechaFin && s.fechaFin !== s.fechaInicio &&
-                        ` – ${formatFecha(s.fechaFin)}`}
-                      {s.horas != null && ` · ${s.horas}h`}
+                      {s.tipo === "entrega" ? (
+                        <>
+                          {s.entregaTipoNombre ?? "—"}
+                          {s.entregaTalla && ` · talla ${s.entregaTalla}`}
+                        </>
+                      ) : (
+                        <>
+                          {formatFecha(s.fechaInicio)}
+                          {s.fechaFin && s.fechaFin !== s.fechaInicio &&
+                            ` – ${formatFecha(s.fechaFin)}`}
+                          {s.horas != null && ` · ${s.horas}h`}
+                        </>
+                      )}
                     </p>
                     {s.motivo && (
                       <p className="mt-1.5 line-clamp-2 text-xs text-muted-foreground">

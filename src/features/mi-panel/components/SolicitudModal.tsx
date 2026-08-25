@@ -53,12 +53,16 @@ import type {
   SolicitudTipo,
 } from "@/features/mi-panel/types";
 import { HORAS_EXTRAS_MOTIVO_MIN } from "@/features/mi-panel/types";
+import { listTiposMaterialParaSolicitar } from "@/features/rrhh/actions/entregas-tipos-actions";
+import { TALLAS_ROPA, type TipoMaterial } from "@/features/rrhh/data/entregas";
 import { DiaTrabajadoAvisoDialog } from "@/features/mi-panel/components/DiaTrabajadoAvisoDialog";
 import { MAX_DOCUMENTO_MB, MAX_DOCUMENTO_BYTES } from "@/shared/lib/documentos";
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
@@ -145,6 +149,12 @@ export function SolicitudModal({ open, onOpenChange, onCreated, onElegirDenuncia
   // Parte de baja médica (fotos/PDF). Solo se usa cuando subtipo === baja_medica.
   const [partes, setPartes] = useState<File[]>([]);
 
+  // Pedir uniforme o material: catálogo de la empresa y qué elige el trabajador.
+  // null mientras se carga (para distinguir "cargando" de "no hay ninguno").
+  const [tiposMaterial, setTiposMaterial] = useState<TipoMaterial[] | null>(null);
+  const [materialTipoId, setMaterialTipoId] = useState<string>("");
+  const [materialTalla, setMaterialTalla] = useState<string>("");
+
   const [avisoOpen, setAvisoOpen] = useState(false);
   const [enviando, setEnviando] = useState(false);
 
@@ -209,6 +219,19 @@ export function SolicitudModal({ open, onOpenChange, onCreated, onElegirDenuncia
     };
   }, [open]);
 
+  // Catálogo de uniforme y material. Se carga al elegir «Entregas», no al abrir
+  // el modal: la mayoría de solicitudes no lo necesitan.
+  useEffect(() => {
+    if (tipo !== "entrega") return;
+    let activo = true;
+    listTiposMaterialParaSolicitar().then((data) => {
+      if (activo) setTiposMaterial(data);
+    });
+    return () => {
+      activo = false;
+    };
+  }, [tipo]);
+
   // Guarda contra el "ghost click" táctil de iOS: al cambiar de paso el
   // contenido se re-renderiza y el click sintético que el navegador dispara
   // ~300 ms después caía sobre el nuevo elemento (o sobre el overlay, cerrando
@@ -242,6 +265,8 @@ export function SolicitudModal({ open, onOpenChange, onCreated, onElegirDenuncia
     setBajaEnCurso(null);
     setBajaComprobando(false);
     setConfirmBajaOpen(false);
+    setMaterialTipoId("");
+    setMaterialTalla("");
     if (navLockTimer.current) clearTimeout(navLockTimer.current);
   }
 
@@ -254,6 +279,13 @@ export function SolicitudModal({ open, onOpenChange, onCreated, onElegirDenuncia
     lockNav();
     setTipo(t);
     setSubtipo(null);
+    // Entregas tiene un único subtipo, así que se salta el paso de elegirlo:
+    // se va directo a decir qué prenda quiere.
+    if (t === "entrega") {
+      setSubtipo("entrega_material");
+      setPaso("detalle");
+      return;
+    }
     setPaso("subtipo");
   }
 
@@ -327,6 +359,17 @@ export function SolicitudModal({ open, onOpenChange, onCreated, onElegirDenuncia
         toast.error("Indica el día que quieres que se haga efectiva tu baja");
         return;
       }
+    } else if (subtipo === "entrega_material") {
+      // Pedir material no tiene fechas: lo que hace falta es saber QUÉ pide.
+      const elegido = (tiposMaterial ?? []).find((t) => t.id === materialTipoId);
+      if (!elegido) {
+        toast.error("Elige qué necesitas");
+        return;
+      }
+      if (elegido.requiereTalla && !materialTalla) {
+        toast.error("Elige tu talla");
+        return;
+      }
     } else if (!fechaInicio) {
       toast.error("Indica una fecha de inicio");
       return;
@@ -390,16 +433,23 @@ export function SolicitudModal({ open, onOpenChange, onCreated, onElegirDenuncia
       return;
     }
     setEnviando(true);
+    const materialElegido = (tiposMaterial ?? []).find((t) => t.id === materialTipoId);
     const res = await crearSolicitudPersonal({
       tipo,
       subtipo,
-      // baja_contrato: el server fija fecha_inicio = hoy; mandamos un placeholder.
-      fechaInicio: subtipo === "baja_contrato" ? todayISO() : fechaInicio,
+      // baja_contrato y entrega_material no tienen fecha propia: se registran hoy.
+      fechaInicio:
+        subtipo === "baja_contrato" || subtipo === "entrega_material"
+          ? todayISO()
+          : fechaInicio,
       fechaFin: fechaFin || null,
       horas: horasTramo,
       horaInicio: horasTramo != null ? horaInicio : null,
       horaFin: horasTramo != null ? horaFin : null,
       motivo: motivo.trim(),
+      entregaTipoId: materialElegido?.id ?? null,
+      entregaTipoNombre: materialElegido?.nombre ?? null,
+      entregaTalla: materialTalla || null,
     });
     setEnviando(false);
     if (!res.ok) {
@@ -419,7 +469,8 @@ export function SolicitudModal({ open, onOpenChange, onCreated, onElegirDenuncia
   }
 
   // Etiquetas dinámicas
-  const tipoLabel = tipo === "ausencia" ? "Ausencia" : "Trabajo realizado";
+  const tipoLabel =
+    tipo === "ausencia" ? "Ausencia" : tipo === "entrega" ? "Entregas" : "Trabajo realizado";
   const subtipoLabel: Record<SolicitudSubtipo, string> = {
     baja_medica: "Baja médica",
     vacaciones: "Vacaciones",
@@ -427,6 +478,7 @@ export function SolicitudModal({ open, onOpenChange, onCreated, onElegirDenuncia
     baja_contrato: "Baja de contrato",
     horas_extras: "Horas extras",
     dia_trabajado: "Día trabajado",
+    entrega_material: "Uniforme o material",
     // No se elige desde este modal (tiene el suyo), pero el tipo lo exige.
     denuncia: "Queja o denuncia",
   };
@@ -610,6 +662,16 @@ export function SolicitudModal({ open, onOpenChange, onCreated, onElegirDenuncia
                   Registrar horas extras o un día trabajado no fichado.
                 </div>
               </button>
+              <button
+                type="button"
+                onClick={() => elegirTipo("entrega")}
+                className="text-left p-4 rounded-lg border transition-colors hover:border-primary hover:bg-primary/5 active:border-blue-600 active:bg-blue-50 active:text-blue-700"
+              >
+                <div className="font-semibold">Entregas</div>
+                <div className="text-xs text-muted-foreground mt-0.5">
+                  Pedir una prenda del uniforme o material de trabajo.
+                </div>
+              </button>
               {/* La denuncia es un tipo más de solicitud, pero sus datos van a
                   una tabla aparte con acceso restringido a RRHH: en
                   `solicitudes_personal` la leería toda la plantilla. */}
@@ -787,7 +849,100 @@ export function SolicitudModal({ open, onOpenChange, onCreated, onElegirDenuncia
             );
           })()}
 
-          {paso === "detalle" && subtipo && subtipo !== "baja_contrato" && (
+          {/* PEDIR UNIFORME O MATERIAL. No lleva fechas: se pide una prenda, y
+              es RRHH quien decide cuándo se la da al aprobarla. */}
+          {paso === "detalle" && subtipo === "entrega_material" && (() => {
+            const tipoElegido = (tiposMaterial ?? []).find((t) => t.id === materialTipoId);
+            const uniformes = (tiposMaterial ?? []).filter((t) => t.categoria === "uniforme");
+            const materiales = (tiposMaterial ?? []).filter((t) => t.categoria === "material");
+
+            if (tiposMaterial === null) {
+              return (
+                <div className="flex items-center justify-center gap-2 py-10 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Cargando…
+                </div>
+              );
+            }
+            if (tiposMaterial.length === 0) {
+              return (
+                <div className="py-10 text-center text-sm text-muted-foreground">
+                  Tu empresa todavía no tiene uniforme ni material configurado.
+                  Habla con RRHH.
+                </div>
+              );
+            }
+
+            return (
+              <div className="grid gap-4 py-2">
+                <div className="space-y-1.5">
+                  <Label htmlFor="materialTipo">Qué necesitas</Label>
+                  <Select
+                    value={materialTipoId}
+                    onValueChange={(v) => {
+                      setMaterialTipoId(v);
+                      setMaterialTalla("");
+                    }}
+                  >
+                    <SelectTrigger id="materialTipo">
+                      <SelectValue placeholder="Elige una prenda o material" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {uniformes.length > 0 && (
+                        <SelectGroup>
+                          <SelectLabel>Uniforme</SelectLabel>
+                          {uniformes.map((t) => (
+                            <SelectItem key={t.id} value={t.id}>{t.nombre}</SelectItem>
+                          ))}
+                        </SelectGroup>
+                      )}
+                      {materiales.length > 0 && (
+                        <SelectGroup>
+                          <SelectLabel>Material</SelectLabel>
+                          {materiales.map((t) => (
+                            <SelectItem key={t.id} value={t.id}>{t.nombre}</SelectItem>
+                          ))}
+                        </SelectGroup>
+                      )}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {tipoElegido?.requiereTalla && (
+                  <div className="space-y-1.5">
+                    <Label htmlFor="materialTalla">Talla</Label>
+                    <Select value={materialTalla} onValueChange={setMaterialTalla}>
+                      <SelectTrigger id="materialTalla">
+                        <SelectValue placeholder="Elige tu talla" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {TALLAS_ROPA.map((t) => (
+                          <SelectItem key={t} value={t}>{t}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+
+                <div className="space-y-1.5">
+                  <Label htmlFor="motivoEntrega">Motivo (opcional)</Label>
+                  <Textarea
+                    id="motivoEntrega"
+                    value={motivo}
+                    onChange={(e) => setMotivo(e.target.value)}
+                    placeholder="Por ejemplo: se me ha roto, o es mi primera semana."
+                    rows={3}
+                  />
+                </div>
+
+                <p className="text-xs text-muted-foreground">
+                  Se pide una unidad. Si necesitas dos, envía dos solicitudes.
+                </p>
+              </div>
+            );
+          })()}
+
+          {paso === "detalle" && subtipo && subtipo !== "baja_contrato" && subtipo !== "entrega_material" && (
             <div className="grid gap-4 py-2">
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">

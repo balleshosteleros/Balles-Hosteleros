@@ -47,12 +47,20 @@ import {
   listDenunciasComoSolicitudes,
   resolverDenunciaDesdeSolicitudes,
 } from "@/features/mi-panel/actions/denuncias-actions";
-import type { SolicitudPersonal } from "@/features/mi-panel/types";
+import type { SolicitudPersonal, SolicitudTipo } from "@/features/mi-panel/types";
 import {
   ESTADO_COLOR,
   ESTADO_LABEL,
   SUBTIPO_LABEL,
 } from "@/features/mi-panel/types";
+
+/** Familia de la solicitud, tal como se enseña en la tabla. */
+function tipoLabel(tipo: SolicitudTipo): string {
+  if (tipo === "ausencia") return "Ausencia";
+  if (tipo === "queja") return "Queja";
+  if (tipo === "entrega") return "Entrega";
+  return "Trabajo";
+}
 
 function formatFecha(s: string | null): string {
   if (!s) return "—";
@@ -110,8 +118,7 @@ export function SolicitudesView() {
   }, [tab]);
 
   const acceso = (s: SolicitudPersonal, campo: string): unknown => {
-    if (campo === "tipo")
-      return s.tipo === "ausencia" ? "Ausencia" : s.tipo === "queja" ? "Queja" : "Trabajo";
+    if (campo === "tipo") return tipoLabel(s.tipo);
     if (campo === "subtipo") return SUBTIPO_LABEL[s.subtipo];
     if (campo === "estado") return ESTADO_LABEL[s.estado];
     if (campo === "empleado") return s.empleadoNombre;
@@ -198,7 +205,7 @@ export function SolicitudesView() {
         <TableCell key="tipo">
           <div className="flex flex-col">
             <span className="text-xs uppercase text-muted-foreground">
-              {s.tipo === "ausencia" ? "Ausencia" : s.tipo === "queja" ? "Queja" : "Trabajo"}
+              {tipoLabel(s.tipo)}
             </span>
             <span>{SUBTIPO_LABEL[s.subtipo]}</span>
           </div>
@@ -223,8 +230,16 @@ export function SolicitudesView() {
       th: <TableHead key="motivo">Motivo</TableHead>,
       td: (s) => (
         <TableCell key="motivo" className="max-w-[260px]">
+          {/* En una solicitud de material lo primero es QUÉ pide: sin eso, RRHH
+              no puede decidir si la aprueba. */}
+          {s.tipo === "entrega" && s.entregaTipoNombre && (
+            <span className="block text-sm font-medium text-foreground">
+              {s.entregaTipoNombre}
+              {s.entregaTalla && ` · talla ${s.entregaTalla}`}
+            </span>
+          )}
           <span className="text-sm text-muted-foreground line-clamp-2">
-            {s.motivo || "—"}
+            {s.motivo || (s.tipo === "entrega" ? "" : "—")}
           </span>
         </TableCell>
       ),

@@ -411,65 +411,7 @@ export async function setValidadorDepartamentoPuesto(input: {
   }
 }
 
-/**
- * Desactiva a un empleado con su fecha de baja.
- *
- * Con el validador por departamento ya no hay que reasignar nada: quien valida
- * es el departamento, no esta persona, así que darle de baja no deja ninguna
- * solicitud huérfana.
- */
-export async function desactivarEmpleadoConFechaBaja(input: {
-  empleadoId: string;
-  fechaBaja: string;
-}): Promise<{ ok: boolean; error?: string }> {
-  try {
-    const { empleadoId, fechaBaja } = input;
-    if (!fechaBaja) return { ok: false, error: "La fecha de baja es obligatoria al desactivar." };
-
-    let admin;
-    try {
-      admin = createAdminClient();
-    } catch {
-      return { ok: false, error: "Supabase admin no configurado." };
-    }
-
-    const { data: previo } = await admin
-      .from("empleados")
-      .select("empresa_id, estado")
-      .eq("id", empleadoId)
-      .maybeSingle();
-    const empresaId = (previo?.empresa_id as string | null) ?? null;
-    if (!empresaId) return { ok: false, error: "Empleado no encontrado." };
-    await requireAdminUser({ empresaIds: [empresaId] });
-
-    const estadoAnterior = (previo?.estado as string | null) ?? null;
-
-    const { error: errE } = await admin
-      .from("empleados")
-      .update({ estado: "Inactivo", fecha_baja: fechaBaja })
-      .eq("id", empleadoId);
-    if (errE) throw errE;
-
-    if (estadoAnterior !== "Inactivo") {
-      const { registrarMovimientoEstado } = await import(
-        "@/features/rrhh/actions/empleado-estado-historial-actions"
-      );
-      await registrarMovimientoEstado({
-        empleadoId,
-        accion: "Baja",
-        estadoAnterior,
-        estadoNuevo: "Inactivo",
-        fechaEfectiva: fechaBaja,
-        origen: "ficha",
-      });
-    }
-
-    revalidatePath("/rrhh/empleados");
-    revalidatePath(`/rrhh/empleados/${empleadoId}`);
-    return { ok: true };
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : "Error desconocido";
-    console.error("[rrhh] desactivarEmpleadoConFechaBaja:", msg);
-    return { ok: false, error: msg };
-  }
-}
+// `desactivarEmpleadoConFechaBaja` vivía aquí. Se elimina: no la llamaba nadie
+// (era código muerto de cuando el validador era una persona y no un
+// departamento) y, al ser una server action exportada, seguía siendo invocable
+// como endpoint. Las bajas se coordinan desde Reclutamiento.

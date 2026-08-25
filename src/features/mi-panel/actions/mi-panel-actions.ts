@@ -1483,6 +1483,10 @@ function mapSolicitud(
     createdAt: row.created_at as string,
     revisadoPor: revisorId ? nombrePorUserId?.get(revisorId) ?? null : null,
     revisadoAt: (row.revisado_at as string | null) ?? null,
+    entregaTipoId: (row.entrega_tipo_id as string | null) ?? null,
+    entregaTipoNombre: (row.entrega_tipo_nombre as string | null) ?? null,
+    entregaTalla: (row.entrega_talla as string | null) ?? null,
+    entregaId: (row.entrega_id as string | null) ?? null,
   };
 }
 
@@ -1597,6 +1601,14 @@ export interface NuevaSolicitudInput {
    * fusionar y subir los ficheros. Se persiste en `justificante_path`.
    */
   justificantePath?: string | null;
+  /**
+   * Qué uniforme o material pide. Solo aplica a `entrega_material`. Se guarda
+   * el id del tipo Y su nombre: si mañana se borra del catálogo, la solicitud
+   * sigue diciendo qué se pidió.
+   */
+  entregaTipoId?: string | null;
+  entregaTipoNombre?: string | null;
+  entregaTalla?: string | null;
 }
 
 export interface MiVacacionesInfo {
@@ -2099,6 +2111,13 @@ export async function crearSolicitudPersonal(input: NuevaSolicitudInput) {
     if (input.tipo === "trabajo" && !["horas_extras", "dia_trabajado"].includes(input.subtipo)) {
       return { ok: false, error: "Subtipo de trabajo no válido" };
     }
+    if (input.tipo === "entrega" && input.subtipo !== "entrega_material") {
+      return { ok: false, error: "Subtipo de entrega no válido" };
+    }
+    // Pedir material sin decir qué se pide no significa nada.
+    if (input.tipo === "entrega" && !input.entregaTipoNombre?.trim()) {
+      return { ok: false, error: "Indica qué uniforme o material necesitas" };
+    }
 
     // Tramo solicitado: horas en punto o media, y media hora como mínimo. El
     // cliente ya lo impide, pero aquí es donde de verdad se decide.
@@ -2376,6 +2395,9 @@ export async function crearSolicitudPersonal(input: NuevaSolicitudInput) {
         hora_fin: input.horaFin ?? null,
         motivo: input.motivo ?? "",
         justificante_path: input.justificantePath ?? null,
+        entrega_tipo_id: input.entregaTipoId ?? null,
+        entrega_tipo_nombre: input.entregaTipoNombre?.trim() || null,
+        entrega_talla: input.entregaTalla?.trim() || null,
         estado: "pendiente",
       })
       .select()
@@ -2532,13 +2554,13 @@ export async function listarSolicitudesEmpresa(filtro: "pendientes" | "todas" = 
 
 export async function aprobarSolicitud(id: string, notasRevision?: string) {
   try {
-    const { supabase, user } = await getContext();
+    const { supabase, user, nombre } = await getContext();
     if (!user) return { ok: false, error: "No autenticado" };
 
     // Cargamos la solicitud antes del UPDATE para decidir si hay notificación.
     const { data: solicitud, error: fetchErr } = await supabase
       .from("solicitudes_personal")
-      .select("id, empresa_id, user_id, tipo, empleado_nombre, subtipo, fecha_inicio, fecha_fin, horas, hora_inicio, hora_fin, motivo")
+      .select("id, empresa_id, user_id, tipo, empleado_nombre, subtipo, fecha_inicio, fecha_fin, horas, hora_inicio, hora_fin, motivo, entrega_tipo_id, entrega_tipo_nombre, entrega_talla, entrega_id")
       .eq("id", id)
       .maybeSingle();
     if (fetchErr) throw fetchErr;
@@ -2621,6 +2643,34 @@ export async function aprobarSolicitud(id: string, notasRevision?: string) {
         hora_fin: (solicitud.hora_fin as string | null) ?? null,
       });
       if (!res.ok) return { ok: false, error: res.error ?? "No se pudo registrar el fichaje de la solicitud." };
+    }
+
+    // Solicitud de ENTREGA: al aprobarla se crea la entrega igual que si RRHH
+    // la hubiera registrado a mano, y se le manda el acta para que firme que la
+    // ha recibido. Si no se puede crear, NO se aprueba: una solicitud aprobada
+    // sin su entrega dejaría al trabajador esperando una prenda que no existe.
+    if (solicitud.tipo === "entrega") {
+      const { materializarEntregaDeSolicitud } = await import(
+        "@/features/mi-panel/services/solicitud-a-entrega"
+      );
+      const { createAdminClient } = await import("@/lib/supabase/admin");
+      const res = await materializarEntregaDeSolicitud(
+        createAdminClient(),
+        {
+          id: solicitud.id as string,
+          empresa_id: solicitud.empresa_id as string,
+          user_id: solicitud.user_id as string,
+          entrega_tipo_id: (solicitud.entrega_tipo_id as string | null) ?? null,
+          entrega_tipo_nombre: (solicitud.entrega_tipo_nombre as string | null) ?? null,
+          entrega_talla: (solicitud.entrega_talla as string | null) ?? null,
+          entrega_id: (solicitud.entrega_id as string | null) ?? null,
+          motivo: (solicitud.motivo as string | null) ?? null,
+        },
+        { userId: user.id, nombre: nombre || "Recursos Humanos" },
+      );
+      if (!res.ok) {
+        return { ok: false, error: res.error ?? "No se pudo registrar la entrega del material." };
+      }
     }
 
     const { error } = await supabase

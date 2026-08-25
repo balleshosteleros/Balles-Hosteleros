@@ -37,6 +37,14 @@ const Schema = z.object({
   // La clasificación NO se recibe: se calcula sola por visitas y no es editable.
   observaciones: z.string().trim().max(2000).default(""),
   notasInternas: z.string().trim().max(2000).default(""),
+  // Datos que suele dar el cliente al reservar por web.
+  fechaNacimiento: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "La fecha de nacimiento no es válida.")
+    .nullable()
+    .optional(),
+  telefonoPrefijo: z.string().trim().max(8).nullable().optional(),
+  aceptaMarketing: z.boolean().optional(),
 });
 
 export type GuardarFichaClienteInput = z.input<typeof Schema>;
@@ -117,6 +125,20 @@ export async function guardarFichaCliente(
         telefono,
         observaciones: d.observaciones || null,
         notas_internas: d.notasInternas || null,
+        ...(d.fechaNacimiento !== undefined
+          ? { fecha_nacimiento: d.fechaNacimiento || null }
+          : {}),
+        ...(d.telefonoPrefijo !== undefined
+          ? { telefono_prefijo: d.telefonoPrefijo || null }
+          : {}),
+        // Aquí sí se puede RETIRAR el consentimiento: si el cliente lo pide por
+        // teléfono, alguien tiene que poder desmarcarlo.
+        ...(d.aceptaMarketing !== undefined
+          ? {
+              acepta_marketing_email: d.aceptaMarketing,
+              acepta_marketing_sms: d.aceptaMarketing,
+            }
+          : {}),
         updated_at: new Date().toISOString(),
       })
       .eq("id", clienteId)

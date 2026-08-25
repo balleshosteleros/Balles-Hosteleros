@@ -1,4 +1,4 @@
-export type SolicitudTipo = "ausencia" | "trabajo" | "queja";
+export type SolicitudTipo = "ausencia" | "trabajo" | "entrega" | "queja";
 
 export type SolicitudSubtipoAusencia =
   | "baja_medica"
@@ -6,9 +6,15 @@ export type SolicitudSubtipoAusencia =
   | "permiso"
   | "baja_contrato";
 export type SolicitudSubtipoTrabajo = "horas_extras" | "dia_trabajado";
+/** Pedir uniforme o material. Al aprobarla se crea la entrega de verdad. */
+export type SolicitudSubtipoEntrega = "entrega_material";
 /** Las quejas y denuncias viven en su propia tabla, pero se listan aquí como un tipo más. */
 export type SolicitudSubtipoQueja = "denuncia";
-export type SolicitudSubtipo = SolicitudSubtipoAusencia | SolicitudSubtipoTrabajo | SolicitudSubtipoQueja;
+export type SolicitudSubtipo =
+  | SolicitudSubtipoAusencia
+  | SolicitudSubtipoTrabajo
+  | SolicitudSubtipoEntrega
+  | SolicitudSubtipoQueja;
 
 export type SolicitudEstado = "pendiente" | "aprobada" | "rechazada" | "anulada";
 
@@ -37,6 +43,12 @@ export interface SolicitudPersonal {
    */
   revisadoPor: string | null;
   revisadoAt: string | null;
+  /** Qué pidió, solo en las solicitudes de entrega de material. */
+  entregaTipoId?: string | null;
+  entregaTipoNombre?: string | null;
+  entregaTalla?: string | null;
+  /** Entrega creada al aprobarla. NULL mientras está pendiente o si se denegó. */
+  entregaId?: string | null;
 }
 
 export interface MiFichajeHoy {
@@ -83,6 +95,7 @@ export const SUBTIPO_LABEL: Record<SolicitudSubtipo, string> = {
   baja_contrato: "Baja de contrato",
   horas_extras: "Horas extras",
   dia_trabajado: "Día trabajado",
+  entrega_material: "Uniforme o material",
   denuncia: "Queja o denuncia",
 };
 

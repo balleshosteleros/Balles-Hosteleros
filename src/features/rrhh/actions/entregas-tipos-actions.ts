@@ -87,6 +87,16 @@ export async function listTiposMaterial(incluirInactivos = false): Promise<TipoM
   return (data ?? []).map((r) => mapTipo(r as FilaTipo));
 }
 
+/**
+ * Catálogo que ve el TRABAJADOR al pedir uniforme o material desde Solicitudes.
+ *
+ * Es la misma lista que usa RRHH, pero solo los activos y sin poder tocarla.
+ * Va aparte para dejar claro que es de lectura y que la consume el portal.
+ */
+export async function listTiposMaterialParaSolicitar(): Promise<TipoMaterial[]> {
+  return listTiposMaterial(false);
+}
+
 export async function createTipoMaterial(input: {
   nombre: string;
   categoria: CategoriaMaterial;

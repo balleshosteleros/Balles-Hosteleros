@@ -100,6 +100,9 @@ function mapDbToCliente(row: Record<string, unknown>): Cliente {
     ultimaVisita: (row.ultima_visita as string) ?? "",
     observaciones: (row.observaciones as string) ?? "",
     notasInternas: (row.notas_internas as string) ?? "",
+    fechaNacimiento: (row.fecha_nacimiento as string) ?? "",
+    telefonoPrefijo: (row.telefono_prefijo as string) ?? "",
+    aceptaMarketing: (row.acepta_marketing_email as boolean) ?? false,
   };
 }
 
@@ -316,6 +319,9 @@ export function ClientesView() {
         email: borrador.email,
         observaciones: borrador.observaciones,
         notasInternas: borrador.notasInternas,
+        fechaNacimiento: borrador.fechaNacimiento || null,
+        telefonoPrefijo: borrador.telefonoPrefijo || null,
+        aceptaMarketing: borrador.aceptaMarketing ?? false,
       });
       if (!res.ok) {
         toast.error(res.error ?? "No se pudo guardar");
@@ -740,7 +746,43 @@ export function ClientesView() {
                     }
                   />
                 </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="cli-nacimiento">Fecha de nacimiento</Label>
+                  <Input
+                    id="cli-nacimiento"
+                    type="date"
+                    value={borrador.fechaNacimiento ?? ""}
+                    max={new Date().toISOString().split("T")[0]}
+                    onChange={(e) =>
+                      setBorrador({ ...borrador, fechaNacimiento: e.target.value })
+                    }
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="cli-prefijo">Prefijo</Label>
+                  <Input
+                    id="cli-prefijo"
+                    value={borrador.telefonoPrefijo ?? ""}
+                    placeholder="+34"
+                    onChange={(e) =>
+                      setBorrador({ ...borrador, telefonoPrefijo: e.target.value })
+                    }
+                  />
+                </div>
               </div>
+
+              {/* Consentimiento comercial: lo da el cliente al reservar, pero
+                  se puede retirar desde aquí si lo pide por teléfono. */}
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={borrador.aceptaMarketing ?? false}
+                  onChange={(e) =>
+                    setBorrador({ ...borrador, aceptaMarketing: e.target.checked })
+                  }
+                />
+                <span>Acepta recibir comunicaciones comerciales</span>
+              </label>
 
               {/*
                 Clasificación: dato CALCULADO por visitas, no editable. Antes se
