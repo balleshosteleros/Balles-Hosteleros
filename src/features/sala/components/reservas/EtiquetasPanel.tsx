@@ -285,6 +285,37 @@ export function EtiquetasPanel({
                     </div>
                   );
                 })}
+              {/* Las etiquetas que se quedaron sin grupo (porque se borró el
+                  suyo) siguen siendo asignables: si no, desaparecerían del
+                  selector sin haberlas borrado. */}
+              {(() => {
+                const sueltas = ofrecidasPorCategoria.get("__sin_categoria__") ?? [];
+                if (sueltas.length === 0) return null;
+                return (
+                  <div>
+                    <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground mb-1">
+                      Sin grupo
+                    </div>
+                    <div className="flex flex-wrap gap-1">
+                      {sueltas.map((e) => (
+                        <button
+                          key={e.id}
+                          type="button"
+                          onClick={() => toggle(e)}
+                          className={cn(
+                            "transition",
+                            estaSeleccionada(e)
+                              ? "ring-2 ring-offset-1 ring-primary"
+                              : "opacity-70 hover:opacity-100",
+                          )}
+                        >
+                          <EtiquetaChip nombre={e.nombre} emoji={e.emoji} color={e.color} />
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
               {ofrecidasPorCategoria.size === 0 && (
                 <div className="text-xs text-muted-foreground text-center py-3">
                   Sin resultados.

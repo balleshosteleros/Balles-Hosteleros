@@ -222,7 +222,6 @@ export interface Reserva {
   pagoPendiente?: boolean;
   bloqueada?: boolean;
   grupoId?: string | null;
-  etiquetaId?: string | null;
   codigoId?: string | null;
   /** Código de 6 chars del cupón aplicado (PRP-052). */
   codigo?: string | null;
@@ -272,18 +271,9 @@ export function esOrigenChannelManager(origen: string | null | undefined): boole
   return o.startsWith(CHANNEL_MANAGER_ORIGEN_PREFIX) || o === "channelmanager" || o === "channel manager";
 }
 
-// --- ETIQUETAS DE RESERVA (categoría visual editable por empresa: cumpleaños, evento, romántica…) ---
-export interface ReservaEtiqueta {
-  id: string;
-  empresaId: string;
-  nombre: string;
-  emoji: string | null;
-  color: string;
-  orden: number;
-  activo: boolean;
-  createdAt: string;
-  updatedAt: string;
-}
+// Las etiquetas de reserva y de cliente viven en
+// `@/features/sala/actions/sala-etiquetas-actions` (agrupadas por categoría y
+// asignables en M:N). El catálogo plano antiguo se eliminó.
 
 // Tipos de cupones (PRP-052) viven en `@/features/sala/cupones/data/cupones`.
 // La tabla `reserva_codigos` fue rediseñada en esa migración.

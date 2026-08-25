@@ -24,19 +24,32 @@ import {
 } from "@/features/sala/actions/sala-etiquetas-actions";
 
 interface Props {
-  categoria: EtiquetaCategoria;
+  /** `null` = tarjeta de las etiquetas que se quedaron sin grupo. */
+  categoria: EtiquetaCategoria | null;
+  /** Solo se usa cuando `categoria` es null, para saber a qué scope pertenecen. */
+  scope?: "reserva" | "cliente";
   etiquetas: Etiqueta[];
+  /** Grupos del mismo scope, para poder mover una etiqueta de grupo. */
+  categorias: EtiquetaCategoria[];
   onChange: () => void;
 }
 
-export function CategoriaEtiquetasCard({ categoria, etiquetas, onChange }: Props) {
+export function CategoriaEtiquetasCard({
+  categoria,
+  scope,
+  etiquetas,
+  categorias,
+  onChange,
+}: Props) {
   const { confirm: confirmDelete, dialog: confirmDeleteDialog } = useConfirmDelete();
   const [editandoNombre, setEditandoNombre] = useState(false);
-  const [nombreLocal, setNombreLocal] = useState(categoria.nombre);
+  const [nombreLocal, setNombreLocal] = useState(categoria?.nombre ?? "");
   const [creandoEtiqueta, setCreandoEtiqueta] = useState(false);
   const [editandoEtiqueta, setEditandoEtiqueta] = useState<string | null>(null);
+  const scopeEfectivo = categoria?.scope ?? scope ?? "reserva";
 
   async function handleRenameCategoria() {
+    if (!categoria) return;
     if (!nombreLocal.trim() || nombreLocal === categoria.nombre) {
       setEditandoNombre(false);
       setNombreLocal(categoria.nombre);
@@ -53,20 +66,20 @@ export function CategoriaEtiquetasCard({ categoria, etiquetas, onChange }: Props
   }
 
   async function handleDeleteCategoria() {
-    if (categoria.sistema) {
-      toast.error("Las categorías del sistema no se pueden borrar.");
-      return;
-    }
+    if (!categoria) return;
     const ok = await confirmDelete({
-      title: "Borrar categoría",
-      description: `¿Borrar la categoría "${categoria.nombre}"? Las etiquetas dentro quedarán sin categoría.`,
+      title: "Borrar grupo",
+      description:
+        etiquetas.length > 0
+          ? `¿Borrar el grupo "${categoria.nombre}"? Sus ${etiquetas.length} etiquetas quedarán sin grupo, pero no se borran.`
+          : `¿Borrar el grupo "${categoria.nombre}"?`,
       confirmLabel: "Borrar",
     });
     if (!ok) return;
     const res = await deleteEtiquetaCategoria(categoria.id);
     if (!res.ok) toast.error(res.error ?? "No se pudo borrar");
     else {
-      toast.success("Categoría borrada");
+      toast.success("Grupo borrado");
       onChange();
     }
   }
@@ -85,7 +98,7 @@ export function CategoriaEtiquetasCard({ categoria, etiquetas, onChange }: Props
               onKeyDown={(e) => {
                 if (e.key === "Enter") handleRenameCategoria();
                 if (e.key === "Escape") {
-                  setNombreLocal(categoria.nombre);
+                  setNombreLocal(categoria?.nombre ?? "");
                   setEditandoNombre(false);
                 }
               }}
@@ -97,31 +110,39 @@ export function CategoriaEtiquetasCard({ categoria, etiquetas, onChange }: Props
           </div>
         ) : (
           <div className="flex items-center gap-2 flex-1">
-            <h5 className="text-sm font-semibold text-primary">{categoria.nombre}</h5>
-            {categoria.sistema && (
-              <span className="text-[10px] text-muted-foreground border rounded px-1.5 py-px">
-                sistema
+            <h5
+              className={
+                categoria
+                  ? "text-sm font-semibold text-primary"
+                  : "text-sm font-semibold text-muted-foreground"
+              }
+            >
+              {categoria?.nombre ?? "Sin grupo"}
+            </h5>
+            {!categoria && (
+              <span className="text-[10px] text-muted-foreground">
+                asigna un grupo desde cada etiqueta
               </span>
             )}
           </div>
         )}
         <div className="flex items-center gap-1">
-          <Button
-            size="icon"
-            variant="ghost"
-            className="h-7 w-7"
-            title="Añadir etiqueta"
-            onClick={() => setCreandoEtiqueta(true)}
-          >
-            <Plus className="h-3.5 w-3.5" />
-          </Button>
-          {!categoria.sistema && (
+          {categoria && (
             <>
               <Button
                 size="icon"
                 variant="ghost"
                 className="h-7 w-7"
-                title="Renombrar categoría"
+                title="Añadir etiqueta"
+                onClick={() => setCreandoEtiqueta(true)}
+              >
+                <Plus className="h-3.5 w-3.5" />
+              </Button>
+              <Button
+                size="icon"
+                variant="ghost"
+                className="h-7 w-7"
+                title="Renombrar grupo"
                 onClick={() => setEditandoNombre(true)}
               >
                 <Pencil className="h-3.5 w-3.5" />
@@ -130,7 +151,7 @@ export function CategoriaEtiquetasCard({ categoria, etiquetas, onChange }: Props
                 size="icon"
                 variant="ghost"
                 className="h-7 w-7 text-destructive hover:text-destructive"
-                title="Borrar categoría"
+                title="Borrar grupo"
                 onClick={handleDeleteCategoria}
               >
                 <Trash2 className="h-3.5 w-3.5" />
@@ -151,16 +172,17 @@ export function CategoriaEtiquetasCard({ categoria, etiquetas, onChange }: Props
           <EtiquetaItem
             key={e.id}
             etiqueta={e}
+            categorias={categorias}
             editando={editandoEtiqueta === e.id}
             onStartEdit={() => setEditandoEtiqueta(e.id)}
             onEndEdit={() => setEditandoEtiqueta(null)}
             onChange={onChange}
           />
         ))}
-        {creandoEtiqueta && (
+        {creandoEtiqueta && categoria && (
           <EtiquetaCrearInline
             categoriaId={categoria.id}
-            scope={categoria.scope}
+            scope={scopeEfectivo}
             orden={etiquetas.length + 1}
             onDone={() => {
               setCreandoEtiqueta(false);
@@ -179,12 +201,14 @@ export function CategoriaEtiquetasCard({ categoria, etiquetas, onChange }: Props
 // ─────────────────────────────────────────────────────────────────────────
 function EtiquetaItem({
   etiqueta,
+  categorias,
   editando,
   onStartEdit,
   onEndEdit,
   onChange,
 }: {
   etiqueta: Etiqueta;
+  categorias: EtiquetaCategoria[];
   editando: boolean;
   onStartEdit: () => void;
   onEndEdit: () => void;
@@ -194,12 +218,16 @@ function EtiquetaItem({
   const [nombre, setNombre] = useState(etiqueta.nombre);
   const [emoji, setEmoji] = useState(etiqueta.emoji ?? "");
   const [color, setColor] = useState(etiqueta.color);
+  const [categoriaId, setCategoriaId] = useState(etiqueta.categoriaId ?? "");
 
   async function guardar() {
     const patch: Parameters<typeof updateEtiqueta>[1] = {};
     if (nombre.trim() && nombre !== etiqueta.nombre) patch.nombre = nombre;
     if (emoji !== (etiqueta.emoji ?? "")) patch.emoji = emoji || null;
     if (color !== etiqueta.color) patch.color = color;
+    if (categoriaId !== (etiqueta.categoriaId ?? "")) {
+      patch.categoriaId = categoriaId || null;
+    }
     if (Object.keys(patch).length > 0) {
       const res = await updateEtiqueta(etiqueta.id, patch);
       if (!res.ok) toast.error(res.error ?? "No se pudo guardar");
@@ -215,10 +243,6 @@ function EtiquetaItem({
   }
 
   async function borrar() {
-    if (etiqueta.sistema) {
-      toast.error("Etiqueta del sistema: desactívala en lugar de borrarla.");
-      return;
-    }
     const ok = await confirmDelete({
       title: "Borrar etiqueta",
       description: `¿Borrar la etiqueta "${etiqueta.nombre}"?`,
@@ -249,7 +273,7 @@ function EtiquetaItem({
       <PopoverContent className="w-72 p-3" align="start">
         <div className="space-y-2">
           <div className="text-xs font-semibold text-muted-foreground">
-            Editar etiqueta {etiqueta.sistema ? "(sistema)" : ""}
+            Editar etiqueta
           </div>
           <div className="flex gap-1.5 items-center">
             <Input
@@ -272,6 +296,21 @@ function EtiquetaItem({
               onKeyDown={(e) => e.key === "Enter" && guardar()}
             />
           </div>
+          <div className="space-y-1">
+            <span className="text-[10px] text-muted-foreground">Grupo</span>
+            <select
+              value={categoriaId}
+              onChange={(e) => setCategoriaId(e.target.value)}
+              className="h-8 w-full rounded-md border border-input bg-background px-2 text-xs"
+            >
+              <option value="">— Sin grupo —</option>
+              {categorias.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.nombre}
+                </option>
+              ))}
+            </select>
+          </div>
           <div className="flex items-center justify-between pt-1">
             <div className="flex items-center gap-2 text-xs">
               <Switch checked={etiqueta.activo} onCheckedChange={toggleActivo} />
@@ -280,16 +319,15 @@ function EtiquetaItem({
               </span>
             </div>
             <div className="flex items-center gap-1">
-              {!etiqueta.sistema && (
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  className="h-7 w-7 text-destructive hover:text-destructive"
-                  onClick={borrar}
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </Button>
-              )}
+              <Button
+                size="icon"
+                variant="ghost"
+                className="h-7 w-7 text-destructive hover:text-destructive"
+                title="Borrar etiqueta"
+                onClick={borrar}
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </Button>
               <Button size="sm" className="h-7" onClick={guardar}>
                 Guardar
               </Button>

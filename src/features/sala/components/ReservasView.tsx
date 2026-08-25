@@ -51,7 +51,6 @@ import {
   updateReserva,
   notificarReservaCreadaPorEmail,
 } from "@/features/sala/actions/reservas-actions";
-import { listReservaEtiquetas } from "@/features/sala/actions/reserva-etiquetas-actions";
 import { CuponInputReserva } from "@/features/sala/cupones/components/CuponInputReserva";
 import { validarCuponAdminAction } from "@/features/sala/cupones/actions/validar-cupon-action";
 import { loadReservasModuleContext } from "@/features/sala/actions/reservas-module-context";
@@ -97,7 +96,6 @@ import { searchClientes, type ClienteSugerencia } from "@/features/sala/actions/
 import { maxpaxEfectivoDesdeReglas } from "@/features/sala/lib/reserva-limites";
 import type { EmpresaReservasRegla, TurnoRegla } from "@/features/sala/reglas/data/reglas";
 import type {
-  ReservaEtiqueta,
   TipoReservaCategoria,
   EmpresaReservasConfig,
   PoliticaCancelacion,
@@ -363,7 +361,6 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
   localId: string;
   getEstadoMesa: (m: Mesa) => string;
   onSave: (r: Reserva & {
-    etiquetaId?: string | null;
     tipoCategoria?: TipoReservaCategoria | null;
     politicaCancelacionId?: string | null;
     garantiaImporte?: number | null;
@@ -381,7 +378,6 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
     zona: (mesaPreseleccionada?.zona ?? "") as ZonaSala | "",
     mesaId: (mesaPreseleccionada?.id ?? "") as string,
     observaciones: "", esWalkIn: false,
-    etiquetaId: "" as string,
     tipoCategoria: "gratis" as TipoReservaCategoria | "",
     politicaCancelacionId: "" as string,
     garantiaImporte: "" as string,
@@ -393,7 +389,6 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
     codigoCupon: "" as string,
   });
   const [cuponValido, setCuponValido] = useState<boolean | null>(null);
-  const [etiquetas, setEtiquetas] = useState<ReservaEtiqueta[]>([]);
   const [politicas, setPoliticas] = useState<PoliticaCancelacion[]>([]);
   const [config, setConfig] = useState<EmpresaReservasConfig | null>(null);
   const [reglas, setReglas] = useState<EmpresaReservasRegla[]>([]);
@@ -428,13 +423,11 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
 
   useEffect(() => {
     (async () => {
-      const [t, p, c, e] = await Promise.all([
-        listReservaEtiquetas({ soloActivos: true }),
+      const [p, c, e] = await Promise.all([
         listPoliticasCancelacion({ soloActivas: true }),
         getReservasConfig(),
         listReglasReservas(),
       ]);
-      if (t.ok) setEtiquetas(t.data);
       if (p.ok) setPoliticas(p.data);
       if (c.ok) {
         setConfig(c.data);
@@ -765,7 +758,6 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
       mesaId: form.mesaId || (mesaPreseleccionada?.id ?? ""),
       estado: form.esWalkIn ? "WALK_IN" : "CONFIRMADA",
       observaciones: form.observaciones,
-      etiquetaId: form.etiquetaId || null,
       tipoCategoria: (form.tipoCategoria || null) as TipoReservaCategoria | null,
       politicaCancelacionId: form.tipoCategoria === "politica" ? (form.politicaCancelacionId || null) : null,
       garantiaImporte: form.tipoCategoria === "politica" && form.garantiaImporte ? Number(form.garantiaImporte) : null,
@@ -1150,22 +1142,8 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
             </p>
           )}
         </div>
-        <div className="col-span-2">
-          <Label className="text-xs">Etiqueta de reserva</Label>
-          {/* Select nativo: evitar Popover+cmdk dentro de Dialog (MEMORY: combobox_dentro_dialog). */}
-          <select
-            value={form.etiquetaId}
-            onChange={(e) => setForm((p) => ({ ...p, etiquetaId: e.target.value }))}
-            className="h-8 text-xs w-full rounded-md border border-input bg-background px-2"
-          >
-            <option value="">— Sin etiqueta —</option>
-            {etiquetas.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.emoji ? `${t.emoji} ` : ""}{t.nombre}
-              </option>
-            ))}
-          </select>
-        </div>
+        {/* Las etiquetas se asignan desde la ficha de la reserva, una vez
+            creada: ahí van agrupadas y admiten varias a la vez. */}
         <div className="col-span-2">
           <Label className="text-xs">Tipo de reserva</Label>
           <select
@@ -1593,7 +1571,6 @@ function mapDbToReserva(row: Record<string, unknown>): Reserva {
     pagoPendiente: (row.pago_pendiente as boolean) ?? false,
     bloqueada: (row.bloqueada as boolean) ?? false,
     grupoId: (row.grupo_id as string | null) ?? null,
-    etiquetaId: (row.etiqueta_id as string | null) ?? null,
     codigoId: (row.codigo_id as string | null) ?? null,
     codigo: (row.codigo as string | null) ?? null,
     reconfirmadaAt: (row.reconfirmada_at as string | null) ?? null,
@@ -2435,7 +2412,6 @@ export function ReservasView() {
   const [guardandoCliente, setGuardandoCliente] = useState(false);
   const [vista, setVista] = useState<"dia" | "mes">("dia");
   const [showDayPicker, setShowDayPicker] = useState(false);
-  const [etiquetasReserva, setEtiquetasReserva] = useState<ReservaEtiqueta[]>([]);
   const [showConfig, setShowConfig] = useState(false);
   const [totalesMes, setTotalesMes] = useState<{ personas: number; reservas: number }>({ personas: 0, reservas: 0 });
   const [locales, setLocales] = useState<LocalMin[]>([]);
@@ -2488,7 +2464,6 @@ export function ReservasView() {
       const planoPrincipal = d.planos.find((p) => p.esPrincipal) ?? d.planos[0];
       setPlanoActualId(planoPrincipal?.id ?? "");
       setZonasReales(d.zonas);
-      setEtiquetasReserva(d.etiquetas);
       const zonaNombrePorId = new Map<string, string>();
       const zonaColorPorId = new Map<string, string>();
       d.zonas.forEach((z) => {
@@ -3262,7 +3237,6 @@ export function ReservasView() {
                     turno: r.turno,
                     estado: r.estado,
                     notas: r.observaciones || undefined,
-                    etiquetaId: r.etiquetaId ?? null,
                     tipoCategoria: r.tipoCategoria ?? null,
                     politicaCancelacionId: r.politicaCancelacionId ?? null,
                     garantiaImporte: r.garantiaImporte ?? null,
@@ -3532,7 +3506,7 @@ export function ReservasView() {
                       <span className="truncate font-medium flex items-center gap-1.5 min-w-0">
                         <span className="truncate">{r.cliente || "WALK IN"} {r.apellidos}</span>
                         {/* El chip "Cupón <CODIGO>" se pinta dentro de <ReservaFlagsChips />. */}
-                        <ReservaFlagsChips reserva={r} etiquetas={etiquetasReserva} className="shrink-0" />
+                        <ReservaFlagsChips reserva={r} className="shrink-0" />
                       </span>
                       <span className="text-center tabular-nums">{r.comensales}</span>
                       <span className="truncate text-[11px] text-muted-foreground" title={origenLabel(r.origen)}>
@@ -3869,7 +3843,7 @@ export function ReservasView() {
                 </div>
                 {selectedReserva.observaciones && <Field label="Observaciones">{selectedReserva.observaciones}</Field>}
                 <div className="flex flex-wrap items-center gap-2">
-                  <ReservaFlagsChips reserva={selectedReserva} etiquetas={etiquetasReserva} insights={selectedInsights} size="md" />
+                  <ReservaFlagsChips reserva={selectedReserva} insights={selectedInsights} size="md" />
                   <ReservaExternalBadge reserva={selectedReserva} />
                 </div>
                 <div className="pt-2 border-t space-y-1.5">

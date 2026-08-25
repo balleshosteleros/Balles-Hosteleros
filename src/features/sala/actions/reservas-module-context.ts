@@ -9,7 +9,6 @@ import {
 import { listZonas } from "@/features/sala/planos/actions/zonas-actions";
 import { listMesas } from "@/features/sala/planos/actions/mesas-actions";
 import { listSalaDecoracionesByLocal } from "@/features/sala/planos/actions/sala-decoraciones-actions";
-import { listReservaEtiquetas } from "@/features/sala/actions/reserva-etiquetas-actions";
 import type {
   LocalMin,
   Sala,
@@ -19,7 +18,6 @@ import type {
   MesaPosicion,
   SalaDecoracion,
 } from "@/features/sala/planos/data/planos";
-import type { ReservaEtiqueta } from "@/features/sala/data/reservas";
 
 export interface ReservasModuleContext {
   locales: LocalMin[];
@@ -31,7 +29,6 @@ export interface ReservasModuleContext {
   zonas: Zona[];
   mesas: MesaConfig[];
   posiciones: MesaPosicion[];
-  etiquetas: ReservaEtiqueta[];
   decoraciones: SalaDecoracion[];
 }
 
@@ -44,7 +41,6 @@ const EMPTY: ReservasModuleContext = {
   zonas: [],
   mesas: [],
   posiciones: [],
-  etiquetas: [],
   decoraciones: [],
 };
 
@@ -68,7 +64,6 @@ export async function loadReservasModuleContext(
       zonasRes,
       mesasRes,
       planoActivoRes,
-      etiquetasRes,
       decoracionesRes,
     ] = await Promise.all([
       listSalas(localId),
@@ -76,7 +71,6 @@ export async function loadReservasModuleContext(
       listZonas(localId),
       listMesas(localId),
       getPlanoActivoConPosiciones(localId),
-      listReservaEtiquetas({ soloActivos: true }),
       listSalaDecoracionesByLocal(localId),
     ]);
 
@@ -101,7 +95,6 @@ export async function loadReservasModuleContext(
           planoActivoRes.ok && planoActivoRes.data
             ? planoActivoRes.data.posiciones
             : [],
-        etiquetas: etiquetasRes.ok ? etiquetasRes.data : [],
         decoraciones: decoracionesRes.ok ? decoracionesRes.data : [],
       },
     };

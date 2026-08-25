@@ -16,10 +16,6 @@ import { Label } from "@/components/ui/label";
 import { Plus, Search } from "lucide-react";
 import { toast } from "sonner";
 import { CategoriaEtiquetasCard } from "./CategoriaEtiquetasCard";
-import { EtiquetasReservaList } from "./EtiquetasReservaList";
-import { Separator } from "@/components/ui/separator";
-import { listReservaEtiquetas } from "@/features/sala/actions/reserva-etiquetas-actions";
-import type { ReservaEtiqueta } from "@/features/sala/data/reservas";
 import {
   createEtiquetaCategoria,
   listEtiquetaCategorias,
@@ -49,19 +45,16 @@ export function EtiquetasConfigTab() {
   const [dialogCategoria, setDialogCategoria] = useState(false);
   const [nuevaCategoria, setNuevaCategoria] = useState("");
   const [creandoCategoria, setCreandoCategoria] = useState(false);
-  const [etiquetasReserva, setEtiquetasReserva] = useState<ReservaEtiqueta[]>([]);
   const [loading, setLoading] = useState(true);
   const [busqueda, setBusqueda] = useState("");
 
   const cargar = useCallback(async () => {
-    const [c, e, t] = await Promise.all([
+    const [c, e] = await Promise.all([
       listEtiquetaCategorias(),
       listEtiquetas(),
-      listReservaEtiquetas(),
     ]);
     if (c.ok) setCategorias(c.data);
     if (e.ok) setEtiquetas(e.data);
-    if (t.ok) setEtiquetasReserva(t.data);
     setLoading(false);
   }, []);
 
@@ -88,6 +81,18 @@ export function EtiquetasConfigTab() {
       .filter((e) => e.categoriaId === catId)
       .filter((e) => !q || e.nombre.toLowerCase().includes(q));
   }
+
+  /**
+   * Etiquetas que quedaron huérfanas al borrar su grupo. Se listan aparte para
+   * poder editarlas, borrarlas o devolverlas a un grupo: si no, seguirían
+   * asignables en las fichas pero serían invisibles aquí.
+   */
+  const sueltas = useMemo(() => {
+    const q = busqueda.trim().toLowerCase();
+    return etiquetas
+      .filter((e) => e.scope === scope && e.categoriaId === null)
+      .filter((e) => !q || e.nombre.toLowerCase().includes(q));
+  }, [etiquetas, scope, busqueda]);
 
   async function handleCrearCategoria() {
     const nombre = nuevaCategoria.trim();
@@ -124,9 +129,9 @@ export function EtiquetasConfigTab() {
     <div className="space-y-4">
       <div className="space-y-2">
         <p className="text-xs text-muted-foreground">
-          Organiza etiquetas en categorías para clasificar reservas y clientes.
-          Las del sistema vienen predefinidas y no se pueden borrar (solo
-          desactivar). Crea las tuyas propias libremente.
+          Organiza etiquetas en grupos para clasificar reservas y clientes. Las
+          predefinidas vienen de fábrica, pero puedes renombrarlas, editarlas o
+          borrarlas igual que las tuyas.
         </p>
       </div>
 
@@ -196,11 +201,11 @@ export function EtiquetasConfigTab() {
       </Dialog>
 
       <div className="space-y-2.5">
-        {catsFiltradas.length === 0 && (
+        {catsFiltradas.length === 0 && sueltas.length === 0 && (
           <div className="border border-dashed rounded-md p-6 text-center text-xs text-muted-foreground">
             {busqueda
               ? "Sin resultados para la búsqueda."
-              : `Sin categorías de ${scopeActual.label.toLowerCase()}. Crea una arriba.`}
+              : `Sin grupos de ${scopeActual.label.toLowerCase()}. Crea uno arriba.`}
           </div>
         )}
         {catsFiltradas.map((cat) => (
@@ -208,14 +213,20 @@ export function EtiquetasConfigTab() {
             key={cat.id}
             categoria={cat}
             etiquetas={etiquetasDe(cat.id)}
+            categorias={categorias.filter((c) => c.scope === scope)}
             onChange={cargar}
           />
         ))}
+        {sueltas.length > 0 && (
+          <CategoriaEtiquetasCard
+            categoria={null}
+            scope={scope}
+            etiquetas={sueltas}
+            categorias={categorias.filter((c) => c.scope === scope)}
+            onChange={cargar}
+          />
+        )}
       </div>
-
-      <Separator />
-
-      <EtiquetasReservaList etiquetas={etiquetasReserva} onChange={cargar} />
     </div>
   );
 }

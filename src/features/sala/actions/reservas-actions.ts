@@ -132,7 +132,6 @@ export async function createReserva(input: {
   importePagado?: number | null;
   bloqueada?: boolean;
   grupoId?: string | null;
-  etiquetaId?: string | null;
   /** Override de duración solo para ESTA reserva (min). NULL = default empresa. */
   duracionMinutos?: number | null;
   // Asignación automática de mesa (PRP-048). Si `asignarAuto=true` y la
@@ -464,7 +463,6 @@ export async function createReserva(input: {
       pago_pendiente: pagoPendienteFinal,
       bloqueada: input.bloqueada ?? false,
       grupo_id: input.grupoId ?? null,
-      etiqueta_id: input.etiquetaId ?? null,
       codigo_id: cuponIdFinal,
       codigo: cuponCodigoFinal,
       duracion_minutos: typeof input.duracionMinutos === "number" && input.duracionMinutos > 0
@@ -520,7 +518,6 @@ export async function updateReserva(
     importePagado?: number | null;
     bloqueada?: boolean;
     grupoId?: string | null;
-    etiquetaId?: string | null;
     reconfirmadaAt?: string | null;
     /** Override de duración. Pasa null para volver a la default empresa. */
     duracionMinutos?: number | null;
@@ -629,7 +626,6 @@ export async function updateReserva(
     if (updates.importePagado !== undefined) dbUpdates.importe_pagado = updates.importePagado;
     if (updates.bloqueada !== undefined) dbUpdates.bloqueada = updates.bloqueada;
     if (updates.grupoId !== undefined) dbUpdates.grupo_id = updates.grupoId;
-    if (updates.etiquetaId !== undefined) dbUpdates.etiqueta_id = updates.etiquetaId;
     if (updates.duracionMinutos !== undefined) {
       dbUpdates.duracion_minutos =
         typeof updates.duracionMinutos === "number" && updates.duracionMinutos > 0

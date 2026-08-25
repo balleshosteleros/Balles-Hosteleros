@@ -26,7 +26,6 @@ import { PUESTOS_SEED, normalizePuestoNombre } from "./puestos";
 import { ORGANIGRAMA_SEED } from "./organigrama";
 import { INSPECTOR_EMAIL_PLANTILLAS_SEED } from "./inspector-email-plantillas";
 import { INSPECCION_PRESENTACION_SEED } from "./inspeccion-presentacion";
-import { RESERVA_ETIQUETAS_SEED, normalizeReservaEtiquetaNombre } from "./reserva-etiquetas";
 import { SALA_ETIQUETAS_SEED, normalizeEtiquetaNombre } from "./sala-etiquetas";
 import { RESERVA_EMAIL_PLANTILLAS_SEED } from "./reserva-email-plantillas";
 import { RECLUTAMIENTO_EMAIL_PLANTILLAS_SEED } from "./reclutamiento-email-plantillas";
@@ -661,40 +660,6 @@ export async function syncInspeccionPresentacionAEmpresa(
 }
 
 /**
- * Sincroniza las etiquetas canónicas de reserva a una empresa (aditivo).
- * Solo inserta los nombres del seed que aún no existen; respeta cualquier
- * etiqueta personalizada por el cliente.
- */
-export async function syncReservaEtiquetasAEmpresa(
-  admin: Admin,
-  empresaId: string,
-): Promise<{ creados: number }> {
-  const { data: existentes } = await admin
-    .from("empresa_reserva_etiquetas")
-    .select("nombre")
-    .eq("empresa_id", empresaId);
-  const setExistentes = new Set(
-    (existentes ?? []).map((t) => normalizeReservaEtiquetaNombre(t.nombre as string)),
-  );
-
-  const aCrear = RESERVA_ETIQUETAS_SEED
-    .filter((t) => !setExistentes.has(normalizeReservaEtiquetaNombre(t.nombre)))
-    .map((t) => ({
-      empresa_id: empresaId,
-      nombre: t.nombre,
-      emoji: t.emoji,
-      color: t.color,
-      orden: t.orden,
-      activo: true,
-    }));
-
-  if (aCrear.length === 0) return { creados: 0 };
-  const { error } = await admin.from("empresa_reserva_etiquetas").insert(aCrear);
-  if (error) throw error;
-  return { creados: aCrear.length };
-}
-
-/**
  * Sincroniza los agentes IA de reseñas canónicos a una empresa concreta.
  * Aditivo: solo crea los que falten por nombre. Si el cliente personalizó las
  * instrucciones o el tono de un agente existente, se respeta su versión.
@@ -747,6 +712,20 @@ export async function syncSalaEtiquetasAEmpresa(
   admin: Admin,
   empresaId: string,
 ): Promise<{ categoriasCreadas: number; etiquetasCreadas: number }> {
+  // 0) Grupos y etiquetas de fábrica que la empresa borró a propósito. Sin
+  //    esto el seed los recrearía en cada sync y el borrado no duraría nada.
+  const { data: excluidas } = await admin
+    .from("sala_etiquetas_seed_excluidas")
+    .select("tipo, scope, nombre")
+    .eq("empresa_id", empresaId);
+  const catsExcluidas = new Set<string>();
+  const etiqsExcluidas = new Set<string>();
+  for (const x of excluidas ?? []) {
+    const key = `${x.scope as string}|${normalizeEtiquetaNombre(x.nombre as string)}`;
+    if (x.tipo === "categoria") catsExcluidas.add(key);
+    else etiqsExcluidas.add(key);
+  }
+
   // 1) Categorías existentes (clave: scope|nombre normalizado).
   const { data: catsExistentes } = await admin
     .from("sala_etiqueta_categorias")
@@ -759,9 +738,10 @@ export async function syncSalaEtiquetasAEmpresa(
   }
 
   // 2) Crear categorías que falten.
-  const catsACrear = SALA_ETIQUETAS_SEED.filter(
-    (c) => !catIdPorClave.has(`${c.scope}|${normalizeEtiquetaNombre(c.nombre)}`),
-  ).map((c) => ({
+  const catsACrear = SALA_ETIQUETAS_SEED.filter((c) => {
+    const key = `${c.scope}|${normalizeEtiquetaNombre(c.nombre)}`;
+    return !catIdPorClave.has(key) && !catsExcluidas.has(key);
+  }).map((c) => ({
     empresa_id: empresaId,
     scope: c.scope,
     nombre: c.nombre,
@@ -803,7 +783,7 @@ export async function syncSalaEtiquetasAEmpresa(
     if (!categoriaId) continue;
     cat.etiquetas.forEach((e, idx) => {
       const etiqKey = `${cat.scope}|${normalizeEtiquetaNombre(e.nombre)}`;
-      if (setEtiqExistentes.has(etiqKey)) return;
+      if (setEtiqExistentes.has(etiqKey) || etiqsExcluidas.has(etiqKey)) return;
       etiqACrear.push({
         empresa_id: empresaId,
         categoria_id: categoriaId,
@@ -1128,7 +1108,6 @@ export async function seedEmpresaDefaults(
   await syncCursosPorPuestoAEmpresa(admin, empresaId);
   await syncInspectorEmailPlantillasAEmpresa(admin, empresaId);
   await syncInspeccionPresentacionAEmpresa(admin, empresaId);
-  await syncReservaEtiquetasAEmpresa(admin, empresaId);
   await syncSalaEtiquetasAEmpresa(admin, empresaId);
   await syncCategoriasProductoAEmpresa(admin, empresaId);
   await syncCatalogosLogisticaAEmpresa(admin, empresaId);
@@ -1156,7 +1135,6 @@ export async function syncSeedsToAllEmpresas(): Promise<{
     vacantesCreadas: number;
     inspectorEmailsCreadas: number;
     inspeccionPresentacionCreada: boolean;
-    reservaEtiquetasCreadas: number;
     reservasConfigCreada: boolean;
     reservaEmailsCreadas: number;
     reclutamientoEmailsCreadas: number;
@@ -1181,7 +1159,6 @@ export async function syncSeedsToAllEmpresas(): Promise<{
       vacantesCreadas: number;
       inspectorEmailsCreadas: number;
       inspeccionPresentacionCreada: boolean;
-      reservaEtiquetasCreadas: number;
       salaEtiquetasCategoriasCreadas: number;
       salaEtiquetasCreadas: number;
       categoriasProductoCreadas: number;
@@ -1205,7 +1182,6 @@ export async function syncSeedsToAllEmpresas(): Promise<{
       await syncCursosPorPuestoAEmpresa(admin, empresaId);
       const iep = await syncInspectorEmailPlantillasAEmpresa(admin, empresaId);
       const ipres = await syncInspeccionPresentacionAEmpresa(admin, empresaId);
-      const re = await syncReservaEtiquetasAEmpresa(admin, empresaId);
       const se = await syncSalaEtiquetasAEmpresa(admin, empresaId);
       const cp = await syncCategoriasProductoAEmpresa(admin, empresaId);
       const rcfg = await ensureReservasConfigEmpresa(admin, empresaId);
@@ -1223,7 +1199,6 @@ export async function syncSeedsToAllEmpresas(): Promise<{
         vacantesCreadas: v.creadas,
         inspectorEmailsCreadas: iep.creadas,
         inspeccionPresentacionCreada: ipres.creada,
-        reservaEtiquetasCreadas: re.creados,
         salaEtiquetasCategoriasCreadas: se.categoriasCreadas,
         salaEtiquetasCreadas: se.etiquetasCreadas,
         categoriasProductoCreadas: cp.creadas,

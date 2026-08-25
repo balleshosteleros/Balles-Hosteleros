@@ -152,22 +152,29 @@ export async function updateEtiquetaCategoria(id: string, updates: {
 
 export async function deleteEtiquetaCategoria(id: string) {
   try {
-    const { supabase } = await getCtx();
-    // Solo se pueden borrar categorías no-sistema (chequeo defensivo aquí
-    // además del bloqueo de la UI).
+    const { supabase, empresaId } = await getCtx();
+    if (!empresaId) return { ok: false, error: "No autenticado" };
+    // Cualquier grupo es borrable, también los que vienen de fábrica: el
+    // restaurante decide qué clasificación usa.
     const { data: cat } = await supabase
       .from("sala_etiqueta_categorias")
-      .select("sistema")
+      .select("scope, nombre, sistema")
       .eq("id", id)
       .maybeSingle();
-    if (cat?.sistema) {
-      return { ok: false, error: "Las categorías del sistema no se pueden borrar." };
-    }
     const { error } = await supabase
       .from("sala_etiqueta_categorias")
       .delete()
       .eq("id", id);
     if (error) throw error;
+    // Si era de fábrica, se anota para que el seed no vuelva a crearla.
+    if (cat?.sistema) {
+      await supabase.from("sala_etiquetas_seed_excluidas").upsert({
+        empresa_id: empresaId,
+        tipo: "categoria",
+        scope: cat.scope,
+        nombre: cat.nombre,
+      });
+    }
     return { ok: true };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : "Error desconocido";
@@ -272,20 +279,28 @@ export async function updateEtiqueta(id: string, updates: {
 
 export async function deleteEtiqueta(id: string) {
   try {
-    const { supabase } = await getCtx();
+    const { supabase, empresaId } = await getCtx();
+    if (!empresaId) return { ok: false, error: "No autenticado" };
+    // También son borrables las de fábrica: si el restaurante no usa una
+    // clasificación, no tiene por qué cargar con ella.
     const { data: et } = await supabase
       .from("sala_etiquetas")
-      .select("sistema")
+      .select("scope, nombre, sistema")
       .eq("id", id)
       .maybeSingle();
-    if (et?.sistema) {
-      return { ok: false, error: "Las etiquetas del sistema no se pueden borrar; desactívalas en su lugar." };
-    }
     const { error } = await supabase
       .from("sala_etiquetas")
       .delete()
       .eq("id", id);
     if (error) throw error;
+    if (et?.sistema) {
+      await supabase.from("sala_etiquetas_seed_excluidas").upsert({
+        empresa_id: empresaId,
+        tipo: "etiqueta",
+        scope: et.scope,
+        nombre: et.nombre,
+      });
+    }
     return { ok: true };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : "Error desconocido";
