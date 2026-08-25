@@ -1,7 +1,291 @@
 # TAREA para Fernando — Precios de compra de BACANAL (cuando bajes el repo)
 
-> **De:** Iván (vía Claude) · **Fecha:** 2026-06-30 · **Actualizado:** 2026-08-19 · **Prioridad:** media
+> **De:** Iván (vía Claude) · **Fecha:** 2026-06-30 · **Actualizado:** 2026-08-25 · **Prioridad:** media
 > Léelo al hacer `git pull` y reconciliar.
+
+---
+
+## 🔵 25-AGO — RESPUESTAS DE IVÁN + HALLAZGOS QUE CAMBIAN EL ENCARGO
+
+> **Fernando: empieza por aquí.** Iván contesta la pregunta 1 y las 3 y 4. Además, al ir a
+> preparar el importador nos hemos metido en la API de Ágora en vivo (SOLO LECTURA, no se ha
+> escrito nada ni en Ágora ni en Supabase) y **tres cosas que das por ciertas no lo son**.
+> Léelas antes de tocar nada, porque cambian el tamaño del trabajo.
+
+### ✅ P1 — Alcance del importador: **SOLO ÁGORA**
+
+Palabras de Iván: *"de momento déjalo solo para integrarnos con Ágora; más adelante la idea es
+crear nosotros el punto de venta y que todo viva en nuestro software"*.
+
+No montes la capa genérica (leer CSV/Excel/API de cualquier TPV con IA). **Motivo estratégico:**
+si el TPV va a ser nuestro, un importador universal resuelve un problema que va a desaparecer —
+es trabajo que se tira. Ágora es el caso real y presente (Bacanal + Habana) y es lo único a cubrir.
+
+**Sí se mantiene** tu planteamiento de que el importador **PROPONGA y Iván APRUEBE**, con el
+límite de lectura escrito y visible. Eso le parece correcto. Lo que se cae es solo la
+universalidad, no la revisión.
+
+### ✅ P3 y P4 — Ya estaban resueltas en el código (y la 4 no podía estar abierta)
+
+Iván señaló algo que al revisarlo resultó exacto: **la P4 es el mecanismo que hace posible la
+P3**, así que no podían estar las dos abiertas. Verificado en código y en datos de producción:
+
+**No son dos tablas rivales. Son original y copia:**
+
+| | Qué es | Quién la toca |
+|---|---|---|
+| `escandallos` + `escandallo_ingredientes` | La **receta de cocina** legible: nombre, foto, alérgenos, pasos, mermas | La escribe el jefe de cocina en el módulo Cocina |
+| `producto_composicion` | La **misma receta en versión máquina**: producto_venta / ingrediente / cantidad | **Nadie a mano.** Se genera sola |
+
+**El flujo real, verificado:**
+1. Se escribe la receta en Cocina (`escandallos`).
+2. Al guardar, `syncProductoComposicion()`
+   (`src/features/cocina/actions/escandallos-actions.ts:150`) **borra y reescribe**
+   `producto_composicion` desde esos ingredientes.
+3. Al vender, `descontar-stock-por-ventas.ts:104` lee **solo** `producto_composicion`.
+
+**→ La fuente única YA ES el escandallo de cocina.** Lo dice la propia migración
+`20260628010000_escandallo_producto_link.sql`: *"El escandallo de cocina pasa a ser la fuente
+de la receta"*. **No hay decisión de negocio que tomar aquí.**
+
+**P4 (enlace escandallo → producto): CERRADA.** La columna `escandallos.producto_id` existe con
+índice único, y **los 23 escandallos tienen su `producto_id` puesto — 0 huérfanos**.
+
+**Comprobación del sync en prod:** de 23 escandallos, **22 sincronizan perfecto** con su
+composición. El único que falla se llama "PRUEBA" y tiene 0 ingredientes.
+
+### 🔴 PERO el problema real es otro: **no hay recetas escritas**
+
+Esto es lo que de verdad bloquea la reposición por ventas, y no es lo que preguntabas:
+
+| | Bacanal | Habana |
+|---|---|---|
+| Productos de venta | 204 | 198 |
+| **Escandallos de cocina escritos** | **22** | **1** |
+| Productos de venta que hoy NO descontarían nada | **87** | **93** |
+
+Y de las **286 filas** de `producto_composicion`, **solo 22 vienen de una receta real**. Las
+otras **200 son espejos 1:1 de tu migración** (`scripts/agora/migrar-catalogo.mjs:90`): "el
+producto X gasta 1 unidad del producto X". Eso vale para una botella (vendes un Coca-Cola,
+descuentas un Coca-Cola) pero **para un plato o un cóctel es humo**: no dice qué lleva dentro.
+
+**Conclusión: aunque mañana enchufaras el descuento por ventas, no descontaría casi nada.** El
+cuello de botella no es técnico ni de decisión, es que **las ~200 recetas no están escritas por
+nadie**. Esa es la pregunta que sí hay que hacerle a Iván: quién las escribe y en qué orden.
+
+### 🔴 HALLAZGO 1 — El catálogo de Ágora **NO es único**: las familias separan local
+
+Escribiste *"Ágora devuelve el mismo catálogo de 639 para las dos (catálogo único, almacén
+distinto por empresa)"*. **No es así.** Ágora tiene 58 familias, y entre ellas:
+
+- `HABANA` (Id 162) · `BACANAL` (Id 163) · `HABA/BACA` (Id 164) · `BACA/MENU` (Id 167)
+- y muchas con el local en el nombre: `RONES BACANAL`, `GINS BACANAL`, `MENUS BACANAL`,
+  `REFRESCOS BACANAL`, `BEBIDA BACANAL`…
+
+**La familia dice a qué local pertenece cada producto.** Al cruzar respetando eso, tus cifras
+se caen:
+
+| | Tu cifra | **Real, filtrando por familia** | Lo que sobraba |
+|---|---|---|---|
+| **BACANAL** | faltan 252 | **faltan 97** | 155 eran de familia HABANA |
+| **HABANA** | faltan 269 | **faltan 45** | 224 eran de familia BACANAL |
+
+**⚠️ Si importas los 639 a cada empresa, metes ~180 productos del otro local en cada una.**
+
+Esto además **responde tu pregunta 2** ("¿los enteros o solo los de carta?"): la respuesta no es
+ninguna de las dos, es **por familia**. Por eso esa pregunta queda retirada de la lista.
+
+### 🔴 HALLAZGO 2 — Tu clasificación automática no funciona (2 campos mal leídos)
+
+Con tu criterio salían **"249 elaboraciones" en Bacanal**, que es absurdo. Dos errores:
+
+1. **`Addins` / `AskForAddins` NO significa "es una elaboración".** En Ágora significa *"al
+   vender, pregunta por complementos"* (un gin-tonic pregunta qué tónica). Por eso casi todo
+   salía como elaboración.
+2. **El precio de venta no está en `SalePrices[].Price`, sino en `Prices[].MainPrice`**
+   (lista `PriceListId: 1`). Por eso te salían **0 productos con precio de venta** — y sin
+   embargo Danza Macabra tiene `MainPrice: 9.75` en la lista 1, justo el de carta.
+
+Ejemplo real (Id 1789, Danza Macabra):
+```json
+"CostPrice": 0.60739,
+"Prices": [ {"PriceListId": 1, "MainPrice": 9.75}, {"PriceListId": 8, "MainPrice": 15} ]
+```
+
+**Ojo con esto último:** hay **4 listas de precios** (1, 8, 10, 13) con precios distintos para el
+mismo producto. El importador tiene que fijar **cuál es la buena** (parece la 1) y decirlo en
+pantalla, no elegirla en silencio.
+
+### 🔴 HALLAZGO 3 — El `CostPrice` de Ágora está corrompido en bastantes filas
+
+No es fiable como coste. Casos reales encontrados:
+
+- `Carrillera Ternera` → **coste 4.149,90 €**
+- `MissJosy` → 74,17 € · `Al Kakher Yellow` → 72,32 € · `Big Boy` → 65,91 €
+- Muchos cócteles de Habana con coste 57–70 € y **stock en decimales** (0,064 · 0,097 · −0,023)
+
+Los decimales y esos importes huelen a que en Ágora **el cóctel está dado de alta como si fuera
+la botella** (coste de botella entera, stock en fracciones de botella). **No importes `CostPrice`
+como coste sin filtro**: propónlo, marca en rojo lo que se salga de rango y que Iván lo apruebe
+uno a uno. Nuestro coste real debe venir del escandallo, no de ahí.
+
+---
+
+## 📋 LISTADO REAL DE LO QUE FALTA (25-ago, contra Ágora en vivo)
+
+Ya filtrado por familia y clasificado con los campos correctos. **Total: 97 en Bacanal, 45 en
+Habana** — no 252/269.
+
+### BACANAL — 97 productos
+
+**→ VENTA (9)** · platos de carta que se sirven hoy y no existen en el sistema. **Estos son los
+que de verdad importan:**
+`Croquetas` 14,15 € · `Ensalada Cesar` 13,85 € · `Mejillones al curry rojo` 12,85 € ·
+`Huevos rotos con setas` 14,90 € · `Ensalada de Tomate y Ventresca` 14,35 € ·
+`Alcachofas con Guacamole y Ají Amarillo` 14,80 € ·
+`Coliflor con barbacoa asiatica y salsa ranchera` 14,80 € · `SEXY GREEN` 15,50 € ·
+~~`Persona Faltante` 10,25 €~~ ← **NO es un producto**, es un cargo de mesa. Descartar.
+
+**→ COMPRA (42)** · de los cuales:
+- **Limpieza/menaje (~20): entran** — Amoniaco, Desengrasante, Fairy, Mocho, Fregona, Papel
+  Servicios, Cubo Basura, Desatascador, Bayeta Cristales, Gel Aseo…
+- **"Ud. Extra …" (9): NO son productos** (Vieira, Taco Cochinita, Bao-cadillo, Brioche
+  Ternera, Croqueta Jamon, Croqueta Carabinero, Arroz con pollo, Arroz con marisco, Arroz negro,
+  Alcachofa). Son **suplementos de línea del TPV**. Descartar todos.
+- **"Otros 0/10/21 %" (3): NO son productos**, son cajones contables de IVA. Descartar.
+- **Comida real (~10): entran** — Croquetas Carabineros, Croquetas Mixtas, Mini Burguer,
+  Pintxos (tortilla, ensaladilla, txistorra, cangrejo), Porras, Helado, Barquillos, Leche
+  Condensada, Chocogrofe, Pulco, Sour, Decoración.
+
+**→ REVISAR (25)** · vendibles pero sin precio en la lista 1:
+- **Platos reales sin precio (~13): entran como VENTA**, pero hay que ponerles precio a mano —
+  Arroz con pollo, Arroz con marisco, Arroz negro con calamares, Lomo Merluza, Carrillera
+  Ternera, Cordero Asado, Lomo Bacalao, Solomillo Vaca, Bacalao Confitado, Hummus Garbanzos,
+  Noodles Salteados, Albondigas Lentejas, Ensaladilla Rusa Ventresca, Sorbete con sandia,
+  Tortitas maiz.
+- **Componentes de menú (2):** `Entrantes Menu Platino`, `Entrantes Menu Golden` → decidir si
+  son elaboración o línea de menú.
+- **"Productos varios X%" (7) + `Señal Adelantada`: NO son productos.** Cajones de IVA y un
+  cobro a cuenta. Descartar.
+
+**→ DUPLICADOS (21)** · ya existen creados a mano, **hay que vincular por `agora_id`, NO crear**:
+Happydent menta, Abrillantador, Ambientador Sandia, Bayeta Microfibra, Bolsa Basura (×3), Cubo
+Fregona, Fairy, Fregasuelos, Gel Aseo Blanco, Lejia concentrada, Limpiacristales, Recogedor,
+Toallita Tissue Especial, Cuchillo Chef 14, Estropajo Salvauñas, Guantes, Cubo Coctel Mix, Clear
+Little Mix, Detergente Lavavajillas Maquina.
+
+### HABANA — 45 productos
+
+**→ VENTA (11)** · aquí están **los 4 cócteles que destapaste**:
+`Fiesta del Caribe` 9,25 € · `Desliz de cobra` 9,25 € · `Danza Macabra` 9,75 € ·
+`Boom-Boom` 9,75 € · `SEXY GREEN` 15,50 €
+- ⚠️ **NO son producto (6):** `Entrada Anticipada` 20,50 € · `Entrada Puerta` 25,65 € ·
+  `Reservado Anticipado` 133,25 € · `Reservado Puerta` 153,75 € · `Suplemento Copa Premium` ·
+  `Suplemento Botella Premium`. **Son aforo y reservas de discoteca**, no mercancía. Descartar
+  del catálogo (otra cosa es que interesen como ingreso, pero eso no es Logística).
+
+**→ COMPRA (9):** `MissJosy`, `Al Kakher Yellow` (tabaco de cachimba, con stock real),
+`Manguera cachimba` (stock 40), `Huevo`. El resto (`Otros 0/10/21 %`, `Copa Anticipada`,
+`Copa Puerta`) **son cajones de IVA / aforo → descartar**.
+
+**→ REVISAR (15):** casi todo es aforo de discoteca sin precio (`Una Copa`, `Una Copa Premium`,
+`Botella 150`, `Botella 180`, `Botella Anticipada`, `Botella Puerta`, `Señal Adelantada`) +
+7 `Productos varios X%`. **Prácticamente todo se descarta.**
+
+**→ DUPLICADOS (10)** · **vincular por `agora_id`, no crear**: Big Boy, Love 66, Blue Yellow,
+Kafayayo, My amor, Fight, Skimo Watermelon, Huracan, Chao Bella (los cócteles que ya existen
+como venta) + Cubo Coctel Mix.
+
+### Resumen de lo que de verdad hay que meter
+
+| | Falta bruto | Descartar (no son productos) | Vincular (duplicados) | **Crear de verdad** |
+|---|---|---|---|---|
+| **BACANAL** | 97 | ~21 | 21 | **~55** |
+| **HABANA** | 45 | ~24 | 10 | **~11** |
+
+**De 521 "productos faltantes" quedan ~66 altas reales.** El resto es ruido del TPV
+(cajones de IVA, aforo de discoteca, suplementos de línea) o productos que ya tenemos.
+
+---
+
+## 🧩 PROPUESTA DE IMPORTADOR (Iván pide que se pruebe con Habana y Bacanal)
+
+Iván: *"hazme una propuesta de lo que ves, y que se permita cambiar en la visual para aceptar lo
+más fácil posible y cerrar la tarea"*. Esto es lo que se propone construir — **NO está
+implementado, es la propuesta a validar**:
+
+**Pantalla: Logística → Importar catálogo del TPV**
+
+1. **Cabecera con el límite de lectura visible** (tu idea, se mantiene):
+   *"He leído 639 productos de Ágora. Traigo nombre, precio (lista 1), coste, familia, IVA y
+   stock. Descarto color de botón, tiempo de preparación y códigos de barras."*
+2. **Filtro por familia ya aplicado**, y dicho en pantalla: *"Mostrando solo los de familia
+   BACANAL y HABA/BACA — 97 productos. Los 155 de familia HABANA no se importan aquí."*
+3. **Una fila por producto, con la propuesta ya marcada** y un desplegable para cambiarla:
+   `[Venta ▾] Croquetas — 14,15 € — familia BACANAL — "se vende a 14,15 €"`
+   Opciones: **Venta · Compra · Elaboración · Vincular a existente · Descartar**.
+4. **Agrupado por decisión, no alfabético** — para aprobar en bloque:
+   `✅ CREAR COMO VENTA (9)` · `✅ CREAR COMO COMPRA (42)` · `🔗 VINCULAR (21)` ·
+   `⚠️ REVISAR (25)` · `🗑️ DESCARTAR (21)`.
+   Con **casilla de "aceptar todo el grupo"**, que es lo que hace la tarea rápida.
+5. **Lo dudoso se marca solo en rojo**: coste fuera de rango (Carrillera 4.149,90 €), stock en
+   decimales, vendible sin precio. Nunca se importa en silencio.
+6. **Los duplicados se proponen como VINCULAR por `agora_id`, nunca como crear** — así se
+   arreglan de paso los 6 que creaste a mano y los ~25 de Iván, sin generar dobles.
+7. **Botón final: "Importar los 66 aprobados"**, con resumen previo y **operación reversible**.
+
+**Nota de seguridad:** el script actual `migrar-catalogo.mjs` **BORRA el catálogo entero**
+(líneas 60-65: `delete().eq('empresa_id', ...)` de Bacanal y Habana) antes de insertar. El
+importador nuevo **NO puede hacer eso** — tiene que ser incremental (alta y vinculación), nunca
+borrar y reinsertar. Hoy ese borrado se llevaría por delante los ~215 productos que Bacanal
+tiene creados a mano y sus escandallos por CASCADE.
+
+**Pendiente de Iván antes de construirlo:** confirmar que la lista de "descartar" (aforo de
+discoteca, cajones de IVA, "Ud. Extra") es correcta, y decidir quién escribe las ~200 recetas.
+
+### 🍹 REGLA DE IVÁN (25-ago): las bebidas van SIEMPRE duplicadas y enlazadas
+
+Palabras de Iván: *"las bebidas dedúcelo, ya que hay muchas bebidas que se compran y se venden,
+por lo que el producto está duplicado dos veces y debe estar enlazado; y debe haber una ficha
+dentro de cada producto de venta con el escandallo que pertenece de cada producto de compra"*.
+
+**Es la regla que el importador tiene que aplicar solo, sin preguntar.** Una bebida existe dos
+veces a propósito:
+
+- **Ficha de COMPRA** — la botella que entra por albarán (Absolut 70 cl, 12,40 € del proveedor).
+  Es la que lleva stock y precio de compra.
+- **Ficha de VENTA** — la consumición que se cobra en el TPV (Absolut, 8,50 €). Es la que ve Ágora.
+- **Enlazadas por su escandallo** (`producto_composicion`): "1 Absolut de venta gasta 0,05 de la
+  botella de compra". Esa es la ficha que Iván pide ver dentro de cada producto de venta.
+
+**Buena noticia: esto YA está funcionando en producción.** Verificado hoy:
+
+| | Pares bebida (mismo nombre en compra y venta) | Enlazados por receta | Sin enlace |
+|---|---|---|---|
+| **BACANAL** | 97 | **96** | 1 |
+| **HABANA** | 106 | **105** | 1 |
+
+**201 de 203 pares están correctamente duplicados y enlazados.** El modelo de Iván ya es el que
+está montado, así que el importador **no debe inventarse nada nuevo: debe respetarlo**.
+
+**Los 2 rotos** (venden y no descuentan nada — arreglar):
+- **BACANAL:** `Gyozas Vegetales` (categoría Veganos)
+- **HABANA:** `Absolut` (categoría Vodkas)
+
+**Qué implica para el importador (regla dura):**
+1. Si un producto de Ágora **tiene precio de venta y ya existe una ficha de compra con el mismo
+   nombre** → NO crear un producto suelto: **crear la ficha de venta y enlazarla por escandallo
+   1:1 a la de compra existente**.
+2. Si **no existe la de compra** (una bebida nueva) → **crear las dos fichas y enlazarlas**, no
+   solo la de venta. Si no, entra en almacén y no sale nunca — el problema que ya describiste
+   con los cócteles.
+3. **La cantidad del enlace no siempre es 1.** Para una botella de 70 cl servida en copas de
+   5 cl, es 0,071. El importador **no puede adivinarla**: propone 1 y la marca en ámbar para que
+   Iván la ajuste. Ojo que esto conecta con el HALLAZGO 3 — los cócteles de Habana con coste
+   57-70 € y stock en decimales son exactamente este caso mal montado en Ágora.
+4. **Los 10 duplicados de Habana** (Big Boy, Love 66, Blue Yellow, Kafayayo, My amor, Fight,
+   Skimo Watermelon, Huracan, Chao Bella) ya existen como venta → **vincular por `agora_id` y
+   revisar que su escandallo apunte a la ficha de compra correcta**, no crear nada.
 
 ---
 
@@ -11,6 +295,17 @@
 > palabras) para que lo hagamos NOSOTROS. No toques código, ni BD, ni el flujo por estas 4
 > preguntas. Son decisiones de negocio; la ejecución es de Fernando.
 
+> **📌 ESTADO 25-AGO: las 4 están CERRADAS.** Ver el bloque azul de arriba para el detalle.
+> - **P1 → SOLO ÁGORA** (Iván hará su propio TPV; la capa universal se cae).
+> - **P2 → ni enteros ni solo carta: POR FAMILIA.** Las familias de Ágora separan local, así que
+>   faltan 97/45, no 252/269 (HALLAZGO 1).
+> - **P3 → ya estaba decidida en el código:** manda el escandallo de cocina; `producto_composicion`
+>   es su copia máquina. El problema real es que **no hay recetas escritas** (Habana tiene 1).
+> - **P4 → CERRADA:** los 23 escandallos tienen `producto_id`, 0 huérfanos.
+>
+> **Lo que SÍ queda pendiente de Iván** (nuevo, sustituye a las 4): confirmar la lista de
+> "descartar" y decidir **quién escribe las ~200 recetas que faltan**.
+
 Todo lo demás que había abierto está **contestado, resuelto o delegado a nosotros**. De Iván
 solo faltan estas 4 respuestas (puede darlas de palabra a Fernando):
 
@@ -19,18 +314,50 @@ solo faltan estas 4 respuestas (puede darlas de palabra a Fernando):
    para **cualquier TPV/fichero** que traiga un cliente nuevo (lee CSV/Excel/API desconocida,
    propone equivalencias con IA y las enseña para aprobar)? Lo segundo resuelve el negocio pero
    es más trabajo.
+
+   > **▸ RESPUESTA DE IVÁN (25-ago): SOLO ÁGORA. De momento déjalo solo para integrarnos con
+   > Ágora.** Nada de la capa genérica para cualquier TPV/fichero: no la montes.
+   >
+   > **El porqué (es estratégico, no de alcance):** la idea es que **más adelante creemos
+   > nosotros el punto de venta** y que **todo viva en nuestro software**. Si el TPV va a ser
+   > nuestro, un importador universal que lea el fichero de cualquier TPV desconocido es
+   > trabajo que se tira: el problema que resolvería (cliente nuevo llega con otro TPV)
+   > desaparece cuando el TPV lo ponemos nosotros. Ágora es el caso real y presente —
+   > Bacanal y Habana hoy — y es lo único que hay que cubrir.
+   >
+   > Así que: **mapeo de campos concreto de Ágora**, preciso, sin capa de IA para formatos
+   > desconocidos. El trabajo de interpretar "producto de Ágora" → nuestros tres tipos
+   > (compra/venta/elaboración) **sí sigue en pie** tal y como lo planteaste: que PROPONGA y
+   > yo APRUEBE, con el límite de lectura escrito y visible. Eso es correcto y lo quiero así.
+
 2. **Qué se importa:** ¿los **269 (Habana) / 252 (Bacanal) enteros** (deja el catálogo cuadrado
    1:1 con el TPV, pero mete productos que ya no se usen) o **solo los que están en carta**?
    *(Para decidir bien, Fernando puede pedirnos antes la lista agrupada por familia y con ventas
    recientes, para separar producto vivo de residuo del TPV.)*
+
+   > **⏳ PENDIENTE de Iván.** No contestada todavía.
 
 **B) Recetas — bloquean la reposición POR VENTAS (que Balles descuente stock al vender un plato)**
 3. **¿Qué tabla de recetas manda?** Hay dos con consumidores distintos: `producto_composicion`
    (la usa el descuento de stock por ventas de Ágora) vs `escandallo_ingredientes` (donde
    escribe vuestro importador PRP-071 y lee Control de Compras). Si nuestro cálculo de
    `ventas_dia` lee la vacía, sale 0. Hay que fijar **fuente única** (o un sync explícito).
+
+   > **▸ RESUELTA (25-ago): manda el ESCANDALLO DE COCINA.** No son rivales, son original y
+   > copia: al guardar el escandallo, `syncProductoComposicion()` reescribe
+   > `producto_composicion`, que es lo único que lee el descuento de stock. Ya estaba decidido
+   > en la migración `20260628010000_escandallo_producto_link.sql`. **Verificado: 22 de 23
+   > escandallos sincronizan perfecto.** El problema real es otro — **no hay recetas escritas**
+   > (Habana tiene 1) y 200 de las 286 filas son espejos 1:1 de la migración de Ágora, que para
+   > un plato no sirven. Detalle completo en el bloque azul del 25-ago.
+
 4. **¿Está cerrada vuestra Fase 4** (enlazar escandallo → producto de venta)? Sin ese enlace no
    se puede explotar "vendí el plato X → estos ingredientes".
+
+   > **▸ CERRADA (25-ago).** Iván señaló que esta pregunta no podía estar abierta si la 3 lo
+   > estaba, porque **este enlace es justo el mecanismo que hace posible el sync de la 3**.
+   > Correcto: `escandallos.producto_id` existe con índice único y **los 23 escandallos lo
+   > tienen puesto, 0 huérfanos**.
 
 En cuanto estén las 4, montamos el importador de catálogo y el cálculo de `ventas_dia_promedio`
 sin necesitar a Iván. Detalle ampliado de A en el bloque «ENCARGO 18-AGO» y de B en el bloque
