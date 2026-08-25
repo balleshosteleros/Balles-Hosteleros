@@ -55,6 +55,7 @@ type PuestoRow = {
   validador_departamento_id: string | null;
   // Join nombrado al departamento validador (segunda FK a departamentos → alias).
   validador_departamento: { nombre: string | null } | null;
+  calendario_vacaciones_id: string | null;
 };
 
 function embedToNivel(sal: SalarioEmbed): NivelSalarial {
@@ -108,6 +109,7 @@ function rowToPuesto(r: PuestoRow, conCronograma: Set<string>): PuestoSalarial {
     tipoContratoDefecto: r.tipo_contrato_defecto ?? "",
     validadorDepartamentoId: r.validador_departamento_id ?? null,
     validadorDepartamentoNombre: r.validador_departamento?.nombre ?? null,
+    calendarioVacacionesId: r.calendario_vacaciones_id ?? null,
   };
 }
 
@@ -123,7 +125,7 @@ export async function listPuestosEmpresa(): Promise<{
       supabase
         .from("puestos")
         .select(
-          "id, nombre, descripcion, convenio_colectivo, tipo_contrato_defecto, validador_departamento_id, validador_departamento:departamentos!validador_departamento_id(nombre), departamentos!departamento_id(id, nombre), puesto_salarios(nivel, salario_bruto, nomina_neta, efectivo_extra, salario_neto, jornada_contrato, horas_semanales, dias_libres, vacaciones, horario_semanal, observaciones, objetivos, estado, updated_at)",
+          "id, nombre, descripcion, convenio_colectivo, tipo_contrato_defecto, validador_departamento_id, calendario_vacaciones_id, validador_departamento:departamentos!validador_departamento_id(nombre), departamentos!departamento_id(id, nombre), puesto_salarios(nivel, salario_bruto, nomina_neta, efectivo_extra, salario_neto, jornada_contrato, horas_semanales, dias_libres, vacaciones, horario_semanal, observaciones, objetivos, estado, updated_at)",
         )
         .eq("empresa_id", empresaId),
       supabase

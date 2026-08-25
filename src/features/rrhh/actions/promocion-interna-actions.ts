@@ -134,7 +134,7 @@ export async function promocionarEmpleado(
   // 2. Puesto destino + condiciones + departamento.
   const { data: puesto } = await admin
     .from("puestos")
-    .select("id, nombre, departamento_id, validador_departamento_id")
+    .select("id, nombre, departamento_id, validador_departamento_id, calendario_vacaciones_id")
     .eq("id", input.puestoId)
     .eq("empresa_id", empresaId)
     .maybeSingle();
@@ -223,6 +223,12 @@ export async function promocionarEmpleado(
       // tiene configurado se conserva el anterior, para no dejarle sin validador.
       ...(puesto.validador_departamento_id
         ? { validador_departamento_id: puesto.validador_departamento_id }
+        : {}),
+      // Igual con el calendario de vacaciones: al ascender pasa a tener los
+      // días del puesto nuevo, pero si el destino no lo define se conserva el
+      // suyo para no dejarle sin poder pedir vacaciones.
+      ...(puesto.calendario_vacaciones_id
+        ? { calendario_vacaciones_id: puesto.calendario_vacaciones_id }
         : {}),
     })
     .eq("id", input.empleadoId)

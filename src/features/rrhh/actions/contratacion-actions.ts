@@ -431,6 +431,8 @@ export async function contratarCandidato(input: ContratarInput): Promise<Contrat
     fechaNacimiento: cand.fecha_nacimiento,
     departamentoId: puesto.departamento_id as string,
     puesto: puesto.nombre as string,
+    // De aquí hereda el calendario de vacaciones y el departamento validador.
+    puestoId: puesto.id as string,
     empresaPrincipalId: empresaId,
     empresasAcceso: [empresaId],
     localIds: [input.localId],
@@ -450,15 +452,10 @@ export async function contratarCandidato(input: ContratarInput): Promise<Contrat
     await vincularPuestoPrincipal(admin, alta.empleadoId, input.puestoId, puesto.nombre as string, input.primerDia);
     await guardarSnapshotCondiciones(admin, empresaId, alta.empleadoId, input.puestoId, puesto.nombre as string, nivelHeredado, input.primerDia, tipoContrato, cond);
 
-    // Departamento validador heredado del PUESTO: quien tenga acceso a ese
-    // departamento en su rol podrá aprobar las solicitudes del nuevo empleado.
-    const valDepto = (puesto.validador_departamento_id as string | null) ?? null;
-    if (valDepto) {
-      await admin
-        .from("empleados")
-        .update({ validador_departamento_id: valDepto })
-        .eq("id", alta.empleadoId);
-    }
+    // El departamento validador y el calendario de vacaciones ya los ha
+    // heredado del puesto el propio núcleo del alta (`puestoId`), así que aquí
+    // no hay que copiarlos: antes se hacía solo en esta ruta y las altas por
+    // otros caminos se quedaban sin ello.
 
     const { error: markErr } = await admin.from("candidatos")
       .update({ empleado_id: alta.empleadoId, fase: destinoFase, estado: destinoEstado }).eq("id", cand.id);

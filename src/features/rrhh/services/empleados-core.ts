@@ -148,6 +148,13 @@ export type AltaUsuarioEmpleadoInput = {
   departamentoId?: string | null;
   /** Nombre de puesto en TEXT (empleados.puesto no es FK). */
   puesto?: string | null;
+  /**
+   * Puesto del que hereda su configuración (calendario de vacaciones y
+   * departamento validador). Es lo que evita que un empleado nazca sin
+   * calendario y no pueda pedir vacaciones. Si no se pasa, se intenta
+   * resolver por el nombre de `puesto` dentro de la empresa.
+   */
+  puestoId?: string | null;
   empresaPrincipalId: string;
   /** Empresas a las que tendrá acceso (debe incluir la principal). */
   empresasAcceso: string[];
@@ -158,6 +165,90 @@ export type AltaUsuarioEmpleadoInput = {
 export type AltaUsuarioEmpleadoResult =
   | { ok: true; userId: string; empleadoId: string; tempPassword: string }
   | { ok: false; error: string };
+
+/**
+ * Configuración que un empleado hereda de su puesto al darse de alta.
+ * `null` en cualquiera de los dos = el puesto no lo tenía definido.
+ */
+type HerenciaDePuesto = {
+  calendarioVacacionesId: string | null;
+  validadorDepartamentoId: string | null;
+};
+
+/**
+ * Resuelve el calendario de vacaciones y el departamento validador que le
+ * tocan a un empleado nuevo según su puesto.
+ *
+ * El puesto se busca por id si el caller lo tiene, y si no por nombre dentro
+ * de la empresa (`empleados.puesto` es texto, no una clave). Si el puesto no
+ * define calendario, se cae al predeterminado de la empresa: sin calendario
+ * el empleado no podría pedir vacaciones, así que preferimos uno genérico a
+ * dejarlo bloqueado.
+ */
+async function resolverHerenciaDePuesto(
+  admin: AdminClient,
+  input: { empresaId: string; puestoId: string | null; puestoNombre: string | null },
+): Promise<HerenciaDePuesto> {
+  const vacio: HerenciaDePuesto = {
+    calendarioVacacionesId: null,
+    validadorDepartamentoId: null,
+  };
+  // Los tipos generados de Supabase aún no incluyen `calendario_vacaciones_id`
+  // en `puestos` (columna nueva), de ahí el tipo explícito de la fila.
+  type FilaPuesto = {
+    calendario_vacaciones_id: string | null;
+    validador_departamento_id: string | null;
+  };
+
+  try {
+    let puesto: FilaPuesto | null = null;
+
+    if (input.puestoId) {
+      const { data } = await admin
+        .from("puestos")
+        .select("calendario_vacaciones_id, validador_departamento_id")
+        .eq("id", input.puestoId)
+        .eq("empresa_id", input.empresaId)
+        .maybeSingle();
+      puesto = (data as unknown as FilaPuesto | null) ?? null;
+    } else if (input.puestoNombre?.trim()) {
+      const { data } = await admin
+        .from("puestos")
+        .select("calendario_vacaciones_id, validador_departamento_id")
+        .eq("empresa_id", input.empresaId)
+        .ilike("nombre", input.puestoNombre.trim())
+        .maybeSingle();
+      puesto = (data as unknown as FilaPuesto | null) ?? null;
+    }
+
+    let calendarioId = puesto?.calendario_vacaciones_id ?? null;
+
+    // Sin calendario en el puesto, el predeterminado de la empresa (el que
+    // vale todos los años). Es mejor eso que dejarle sin poder pedir vacaciones.
+    if (!calendarioId) {
+      const { data: cal } = await admin
+        .from("rrhh_calendarios_vacaciones")
+        .select("id")
+        .eq("empresa_id", input.empresaId)
+        .eq("activo", true)
+        .is("anio", null)
+        .order("created_at", { ascending: true })
+        .limit(1)
+        .maybeSingle();
+      calendarioId = (cal?.id as string | undefined) ?? null;
+    }
+
+    return {
+      calendarioVacacionesId: calendarioId,
+      validadorDepartamentoId: puesto?.validador_departamento_id ?? null,
+    };
+  } catch (err) {
+    // Que no se caiga un alta por esto: el empleado se crea igual y RRHH
+    // puede asignarle el calendario después.
+    console.error("[rrhh] resolverHerenciaDePuesto:", err);
+    return vacio;
+  }
+}
 
 /** Dato que provocó la coincidencia, para poder decírselo al usuario. */
 export type CampoDuplicado = "documento" | "nombre" | "correo";
@@ -392,6 +483,17 @@ export async function altaUsuarioEmpleado(
   const localDefecto =
     validos.find((l) => l.empresa_id === input.empresaPrincipalId)?.id ?? validos[0].id;
 
+  // 5b. Configuración que se hereda del PUESTO: calendario de vacaciones y
+  // departamento validador. Va aquí, en el núcleo, porque por esta función
+  // pasan TODAS las altas (manual, contratación y promoción de candidato): si
+  // se hiciera en cada caller, el que se olvidara crearía empleados sin
+  // calendario, que es justo lo que pasaba antes.
+  const herencia = await resolverHerenciaDePuesto(admin, {
+    empresaId: input.empresaPrincipalId,
+    puestoId: input.puestoId ?? null,
+    puestoNombre: input.puesto ?? null,
+  });
+
   // 6. Crear empleado vinculado (rollback si falla)
   const { data: empleado, error: empErr } = await admin
     .from("empleados")
@@ -402,6 +504,8 @@ export async function altaUsuarioEmpleado(
       apellidos: input.apellidos,
       departamento_id: input.departamentoId ?? null,
       puesto: input.puesto ?? null,
+      calendario_vacaciones_id: herencia.calendarioVacacionesId,
+      validador_departamento_id: herencia.validadorDepartamentoId,
       email_empresa: input.emailEmpresa ?? null,
       email_personal: input.emailPersonal,
       dni_nie: input.dniNie ?? null,

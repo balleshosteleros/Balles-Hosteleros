@@ -388,11 +388,16 @@ export async function setValidadorDepartamentoPuesto(input: {
       .eq("id", input.puestoId);
     if (errP) throw errP;
 
+    // Los empleados se vinculan al puesto por NOMBRE (`empleados.puesto` es
+    // texto, no una clave: no existe `empleados.puesto_id`). Antes se filtraba
+    // por esa columna inexistente y la propagación no llegaba a nadie, sin dar
+    // error: el puesto cambiaba de validador y sus empleados se quedaban con
+    // el anterior.
     const { data: afectados, error: errE } = await admin
       .from("empleados")
       .update({ validador_departamento_id: input.departamentoId })
       .eq("empresa_id", empresaId)
-      .eq("puesto_id", input.puestoId)
+      .ilike("puesto", (puesto?.nombre as string) ?? "")
       .select("id");
     if (errE) throw errE;
 
