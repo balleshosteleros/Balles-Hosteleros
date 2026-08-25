@@ -68,9 +68,6 @@ export interface Zona {
   salaId: string;
   nombre: string;
   colorPastel: string;
-  visibleCliente: boolean;
-  zonaPublicaId: string | null;
-  ocultaTotal: boolean;
   orden: number;
   /** Posición del badge "nombre de zona" en el plano. NULL = no colocada en el lienzo. */
   etiquetaX: number | null;

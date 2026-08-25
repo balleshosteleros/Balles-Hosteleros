@@ -11,9 +11,6 @@ function rowToZona(r: Record<string, unknown>): Zona {
     salaId: r.sala_id as string,
     nombre: r.nombre as string,
     colorPastel: (r.color_pastel as string) ?? "#FDE68A",
-    visibleCliente: (r.visible_cliente as boolean) ?? true,
-    zonaPublicaId: (r.zona_publica_id as string | null) ?? null,
-    ocultaTotal: (r.oculta_total as boolean) ?? false,
     orden: (r.orden as number) ?? 0,
     etiquetaX: r.etiqueta_x === null || r.etiqueta_x === undefined ? null : Number(r.etiqueta_x),
     etiquetaY: r.etiqueta_y === null || r.etiqueta_y === undefined ? null : Number(r.etiqueta_y),
@@ -77,9 +74,6 @@ export async function updateZona(
     nombre?: string;
     salaId?: string;
     colorPastel?: string;
-    visibleCliente?: boolean;
-    zonaPublicaId?: string | null;
-    ocultaTotal?: boolean;
     orden?: number;
     etiquetaX?: number | null;
     etiquetaY?: number | null;
@@ -94,9 +88,6 @@ export async function updateZona(
     }
     if (updates.salaId !== undefined) patch.sala_id = updates.salaId;
     if (updates.colorPastel !== undefined) patch.color_pastel = updates.colorPastel;
-    if (updates.visibleCliente !== undefined) patch.visible_cliente = updates.visibleCliente;
-    if (updates.zonaPublicaId !== undefined) patch.zona_publica_id = updates.zonaPublicaId;
-    if (updates.ocultaTotal !== undefined) patch.oculta_total = updates.ocultaTotal;
     if (updates.orden !== undefined) patch.orden = updates.orden;
     if (updates.etiquetaX !== undefined) patch.etiqueta_x = updates.etiquetaX;
     if (updates.etiquetaY !== undefined) patch.etiqueta_y = updates.etiquetaY;
