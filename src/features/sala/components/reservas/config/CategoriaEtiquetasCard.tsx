@@ -13,6 +13,7 @@ import { Pencil, Plus, Trash2, Check, X } from "lucide-react";
 import { toast } from "sonner";
 import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 import { EtiquetaChip } from "./EtiquetaChip";
+import { EmojiPicker } from "./EmojiPicker";
 import {
   createEtiqueta,
   deleteEtiqueta,
@@ -276,13 +277,7 @@ function EtiquetaItem({
             Editar etiqueta
           </div>
           <div className="flex gap-1.5 items-center">
-            <Input
-              value={emoji}
-              onChange={(e) => setEmoji(e.target.value)}
-              maxLength={4}
-              placeholder="🎉"
-              className="h-8 w-14 text-center"
-            />
+            <EmojiPicker value={emoji} onChange={setEmoji} />
             <Input
               type="color"
               value={color}
@@ -385,13 +380,7 @@ function EtiquetaCrearInline({
 
   return (
     <div className="flex items-center gap-1 rounded-md border border-dashed px-1.5 py-1 bg-muted/30">
-      <Input
-        value={emoji}
-        onChange={(e) => setEmoji(e.target.value)}
-        maxLength={4}
-        placeholder="🎉"
-        className="h-6 w-10 text-center text-xs"
-      />
+      <EmojiPicker value={emoji} onChange={setEmoji} size="sm" />
       <Input
         type="color"
         value={color}
