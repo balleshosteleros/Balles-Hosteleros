@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
@@ -29,12 +30,23 @@ import { ReglasIntervaloPanel } from "./ReglasIntervaloPanel";
 
 export function ConfigTabReservas() {
   const [config, setConfig] = useState<EmpresaReservasConfig | null>(null);
+  /** Solo los campos tocados desde el último guardado: se envían únicamente esos. */
+  const [pendiente, setPendiente] = useState<Partial<EmpresaReservasConfig>>({});
   const [loading, setLoading] = useState(true);
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [guardando, setGuardando] = useState(false);
+  // Los numéricos se editan como texto: si el estado fuera el número, borrar el
+  // contenido lo repondría a 0 y al teclear saldría "015" en vez de "15".
+  const [antelacionMin, setAntelacionMin] = useState("0");
+  const [antelacionMax, setAntelacionMax] = useState("90");
 
   const cargar = useCallback(async () => {
     const c = await getReservasConfig();
-    if (c.ok) setConfig(c.data);
+    if (c.ok && c.data) {
+      setConfig(c.data);
+      setPendiente({});
+      setAntelacionMin(String(c.data.antelacionMinMinutos));
+      setAntelacionMax(String(c.data.antelacionMaxDias));
+    }
     setLoading(false);
   }, []);
 
@@ -42,13 +54,28 @@ export function ConfigTabReservas() {
     cargar();
   }, [cargar]);
 
+  // Nada se escribe al vuelo: se acumula y espera al botón Guardar.
   function handleConfigChange(parche: Partial<EmpresaReservasConfig>) {
     setConfig((prev) => (prev ? ({ ...prev, ...parche } as EmpresaReservasConfig) : prev));
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(async () => {
-      const res = await upsertReservasConfig(parche);
-      if (!res.ok) toast.error(res.error ?? "No se pudo guardar");
-    }, 500);
+    setPendiente((prev) => ({ ...prev, ...parche }));
+  }
+
+  const hayCambios = Object.keys(pendiente).length > 0;
+
+  async function handleGuardar() {
+    if (!hayCambios) return;
+    setGuardando(true);
+    try {
+      const res = await upsertReservasConfig(pendiente);
+      if (!res.ok) {
+        toast.error(res.error ?? "No se pudo guardar");
+        return;
+      }
+      setPendiente({});
+      toast.success("Configuración guardada");
+    } finally {
+      setGuardando(false);
+    }
   }
 
   if (loading || !config) {
@@ -62,9 +89,25 @@ export function ConfigTabReservas() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-end">
-        <PreferenciasMotorPanelButton config={config} onChange={handleConfigChange} />
+    <div className="space-y-6 pb-28">
+      {/* Barra de guardado. Pegada arriba para que el botón esté a la vista
+          desde cualquier punto de la pestaña, que es larga. */}
+      <div
+        className={`sticky top-0 z-20 -mx-1 flex items-center justify-between gap-3 border-b px-1 py-2 backdrop-blur ${
+          hayCambios ? "bg-amber-50/95 dark:bg-amber-950/40" : "bg-background/95"
+        }`}
+      >
+        <p className={`text-xs ${hayCambios ? "font-medium text-amber-900 dark:text-amber-200" : "text-muted-foreground"}`}>
+          {hayCambios
+            ? "Tienes cambios sin guardar. Si sales ahora, se pierden."
+            : "Los cambios de esta pestaña no se guardan hasta que pulses Guardar."}
+        </p>
+        <div className="flex items-center gap-2">
+          <PreferenciasMotorPanelButton config={config} onChange={handleConfigChange} />
+          <Button size="sm" onClick={handleGuardar} disabled={!hayCambios || guardando}>
+            Guardar
+          </Button>
+        </div>
       </div>
 
       <HorariosAperturaPanel config={config} onChange={handleConfigChange} />
@@ -105,7 +148,7 @@ export function ConfigTabReservas() {
               </SelectContent>
             </Select>
             <p className="text-[10px] text-muted-foreground">
-              De 15 minutos a 6 horas, en tramos de 15. Se guarda solo · por defecto {formatearDuracionReserva(DURACION_RESERVA_DEFAULT_MINUTOS)}.
+              De 15 minutos a 6 horas, en tramos de 15. Por defecto {formatearDuracionReserva(DURACION_RESERVA_DEFAULT_MINUTOS)}.
             </p>
           </div>
         </div>
@@ -114,42 +157,75 @@ export function ConfigTabReservas() {
       <Separator />
 
       <div className="space-y-3">
-        <h4 className="text-sm font-semibold">Antelación</h4>
+        <h4 className="text-sm font-semibold">Antelación para reservar online</h4>
         <p className="text-xs text-muted-foreground -mt-2">
-          Solo valor general (no se diferencia por día).
+          Con cuánto tiempo puede el cliente reservar desde el portal de reservas
+          por internet. Solo afecta al canal online: el personal puede crear una
+          reserva desde sala a cualquier hora, sin estos límites. Valor general
+          (no se diferencia por día).
         </p>
         <div className="grid grid-cols-2 gap-3 max-w-md">
           <div className="space-y-1.5">
             <Label className="text-xs">Antelación mínima (minutos)</Label>
             <Input
               type="number"
+              inputMode="numeric"
               min={0}
               max={1440}
-              value={config.antelacionMinMinutos}
+              value={antelacionMin}
               onChange={(e) => {
-                const n = Math.min(1440, Math.max(0, Number(e.target.value) || 0));
+                // Se deja escribir libre (incluido vacío) y se acota al salir:
+                // acotar en cada tecla hace que un 0 previo se pegue delante y
+                // salga "015" al teclear.
+                const txt = e.target.value;
+                setAntelacionMin(txt);
+                const n = Number(txt);
+                if (txt !== "" && Number.isFinite(n)) {
+                  handleConfigChange({
+                    antelacionMinMinutos: Math.min(1440, Math.max(0, n)),
+                  });
+                }
+              }}
+              onBlur={() => {
+                const n = Math.min(1440, Math.max(0, Number(antelacionMin) || 0));
+                setAntelacionMin(String(n));
                 handleConfigChange({ antelacionMinMinutos: n });
               }}
               className="h-8"
             />
             <p className="text-[10px] text-muted-foreground">
-              Máximo 1.440 min (24 h). Ej.: 15, 30, 60, 120.
+              Tiempo mínimo antes de la hora de la reserva. Ej.: con 60, a las
+              20:00 la primera hora reservable online son las 21:00. Con 0, hasta
+              última hora. Máximo 1.440 min (24 h).
             </p>
           </div>
           <div className="space-y-1.5">
             <Label className="text-xs">Antelación máxima (días)</Label>
             <Input
               type="number"
+              inputMode="numeric"
               min={1}
               max={365}
-              value={config.antelacionMaxDias}
+              value={antelacionMax}
               onChange={(e) => {
-                const n = Math.min(365, Math.max(1, Number(e.target.value) || 90));
+                const txt = e.target.value;
+                setAntelacionMax(txt);
+                const n = Number(txt);
+                if (txt !== "" && Number.isFinite(n)) {
+                  handleConfigChange({
+                    antelacionMaxDias: Math.min(365, Math.max(1, n)),
+                  });
+                }
+              }}
+              onBlur={() => {
+                const n = Math.min(365, Math.max(1, Number(antelacionMax) || 90));
+                setAntelacionMax(String(n));
                 handleConfigChange({ antelacionMaxDias: n });
               }}
               className="h-8"
             />
             <p className="text-[10px] text-muted-foreground">
+              Con cuántos días de adelanto como mucho se puede reservar online.
               Máximo 365 días (1 año).
             </p>
           </div>

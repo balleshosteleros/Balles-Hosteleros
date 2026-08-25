@@ -303,7 +303,9 @@ export function HorariosAperturaPanel({ config, onChange }: Props) {
           ...(cerrado ? {} : { [generalInicioKey]: inicio, [generalFinKey]: fin }),
         };
         onChange(parche as Partial<EmpresaReservasConfig>);
-        toast.success(`Horario aplicado a todos los ${DIAS_LABELS[diaSemanaSel]}`);
+        toast.success(
+          `Horario de los ${DIAS_LABELS[diaSemanaSel]} listo. Pulsa Guardar para aplicarlo.`,
+        );
         setAplicando(false);
         return;
       }
@@ -613,9 +615,16 @@ export function HorariosAperturaPanel({ config, onChange }: Props) {
         </div>
       )}
 
-      <div className="flex justify-end">
-        <Button type="button" size="sm" onClick={aplicar} disabled={aplicando}>
-          {aplicando ? "Aplicando…" : "Aplicar"}
+      <div className="flex items-center justify-end gap-3">
+        {/* El semanal queda pendiente del Guardar de arriba; las excepciones
+            por fechas se crean en el acto, porque son filas con vida propia. */}
+        <p className="text-[10px] text-muted-foreground">
+          {ambito === "dia_semana"
+            ? "Queda pendiente hasta que pulses Guardar arriba."
+            : "La excepción se añade a la lista de abajo al instante."}
+        </p>
+        <Button type="button" size="sm" variant="outline" onClick={aplicar} disabled={aplicando}>
+          {aplicando ? "Aplicando…" : ambito === "dia_semana" ? "Aplicar al día" : "Añadir excepción"}
         </Button>
       </div>
 
