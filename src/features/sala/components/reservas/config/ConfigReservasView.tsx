@@ -8,6 +8,8 @@ import { ConfigTabReservas } from "./ConfigTabReservas";
 import { TicketsTab } from "./TicketsTab";
 import { EtiquetasConfigTab } from "./EtiquetasConfigTab";
 import { EstructuraTab } from "./EstructuraTab";
+import { OrdenAsignacionTab } from "./OrdenAsignacionTab";
+import { GruposZonasTab } from "./GruposZonasTab";
 import { PoliticasCancelacionTab } from "./PoliticasCancelacionTab";
 import { BloqueosTab } from "@/features/sala/bloqueos/components/BloqueosTab";
 import { ComunicacionesPanel } from "./ComunicacionesPanel";
@@ -30,6 +32,8 @@ export function ConfigReservasView({ onBack }: Props) {
     switch (tab) {
       case "reservas":   return <ConfigTabReservas />;
       case "estructura": return <EstructuraTab />;
+      case "orden":      return <OrdenAsignacionTab />;
+      case "zonas":      return <GruposZonasTab />;
       case "tickets":    return <TicketsTab />;
       case "etiquetas":  return <EtiquetasConfigTab />;
       case "enlaces":    return <LinksReservaPanel embedded />;
@@ -63,9 +67,11 @@ export function ConfigReservasView({ onBack }: Props) {
 
       <div className="flex-1 overflow-y-auto p-4">
         <Tabs value={tab} onValueChange={setTab}>
-          <TabsList className="grid grid-cols-10 w-full">
+          <TabsList className="grid grid-cols-12 w-full">
             <TabsTrigger value="reservas">Reservas</TabsTrigger>
             <TabsTrigger value="estructura">Estructura</TabsTrigger>
+            <TabsTrigger value="orden">Orden</TabsTrigger>
+            <TabsTrigger value="zonas">Zonas cliente</TabsTrigger>
             <TabsTrigger value="tickets">Tickets</TabsTrigger>
             <TabsTrigger value="etiquetas">Etiquetas</TabsTrigger>
             <TabsTrigger value="enlaces">Enlaces</TabsTrigger>

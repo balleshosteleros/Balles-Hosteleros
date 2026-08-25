@@ -31,6 +31,12 @@ const inputSchema = z.object({
   codigo: z.string().min(1).max(64).optional().nullable(),
   ticketProductoId: z.string().guid().optional().nullable(),
   ticketOnly: z.boolean().optional(),
+  /**
+   * Grupo de zonas elegido por el cliente ("Sala", "Terraza Exterior"). La
+   * mesa se asigna solo entre las zonas internas de ese grupo. Obligatorio o
+   * no según `exigir_zona_cliente` de la empresa.
+   */
+  grupoZonaId: z.string().guid().optional().nullable(),
 });
 
 export type CrearReservaPublicaInput = z.infer<typeof inputSchema>;
@@ -306,12 +312,54 @@ export async function crearReservaPublicaAction(
     }
   };
 
+  // Grupo de zonas: el cliente eligió "Sala" o "Terraza", que agrupa varias
+  // zonas internas. La mesa debe salir de ahí y solo de ahí.
+  let zonaIdsPermitidas: string[] | null = null;
+  let grupoZonaIdFinal: string | null = null;
+  {
+    const { data: cfgZona } = await admin
+      .from("empresa_reservas_config")
+      .select("exigir_zona_cliente")
+      .eq("empresa_id", empresa.id)
+      .maybeSingle();
+    const exigeZona = (cfgZona?.exigir_zona_cliente as boolean) ?? false;
+
+    if (data.grupoZonaId) {
+      // El grupo debe ser de ESTE local y estar activo: si no, un id manipulado
+      // podría colar mesas de otro sitio.
+      const { data: grupo } = await admin
+        .from("grupos_zonas")
+        .select("id, local_id, activa")
+        .eq("id", data.grupoZonaId)
+        .maybeSingle();
+      if (!grupo || grupo.local_id !== local.id || !grupo.activa) {
+        await liberarCupo();
+        return { ok: false, error: "La zona elegida ya no está disponible. Vuelve a elegir." };
+      }
+      const { data: rel } = await admin
+        .from("grupo_zona_zonas")
+        .select("zona_id")
+        .eq("grupo_zona_id", data.grupoZonaId);
+      const ids = (rel ?? []).map((r) => r.zona_id as string);
+      if (ids.length === 0) {
+        await liberarCupo();
+        return { ok: false, error: "La zona elegida no tiene mesas configuradas." };
+      }
+      zonaIdsPermitidas = ids;
+      grupoZonaIdFinal = data.grupoZonaId;
+    } else if (exigeZona) {
+      await liberarCupo();
+      return { ok: false, error: "Elige una zona para completar la reserva." };
+    }
+  }
+
   const asign = await asignarMesaAutomatica(admin as unknown as SupabaseClient, {
     localId: local.id as string,
     empresaId: empresa.id,
     fecha: data.fecha,
     hora: data.hora,
     personas: data.personas,
+    zonaIds: zonaIdsPermitidas,
   });
   if (!asign.ok || !asign.mesa) {
     await liberarCupo();
@@ -351,7 +399,10 @@ export async function crearReservaPublicaAction(
     hora: data.hora,
     personas: data.personas,
     mesa: mesaFinal,
+    // `zona` = zona interna real (la que ve el staff en el listado).
+    // `grupo_zona_id` = lo que eligió el cliente (lo que lee en el correo).
     zona: zonaFinal,
+    grupo_zona_id: grupoZonaIdFinal,
     notas: data.notas ?? null,
     origen: data.origen ?? null,
     estado: "CONFIRMADA",

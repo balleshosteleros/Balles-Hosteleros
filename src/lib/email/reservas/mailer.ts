@@ -136,7 +136,7 @@ export async function enviarReservaEmail(
   const { data: reservaData, error: errR } = await admin
     .from("reservas")
     .select(
-      "empresa_id, cliente_nombre, cliente_email, fecha, hora, personas, mesa, zona, notas, estado, tipo_categoria, garantia_importe, importe_pagado, codigo, codigo_id, cancelacion_token, valoracion_token, email_confirmacion_at, email_reconfirmacion_at, email_recordatorio_at, email_cancelacion_at, email_valoracion_at",
+      "empresa_id, cliente_nombre, cliente_email, fecha, hora, personas, mesa, zona, grupo_zona_id, notas, estado, tipo_categoria, garantia_importe, importe_pagado, codigo, codigo_id, cancelacion_token, valoracion_token, email_confirmacion_at, email_reconfirmacion_at, email_recordatorio_at, email_cancelacion_at, email_valoracion_at, grupos_zonas(nombre)",
     )
     .eq("id", reservaId)
     .maybeSingle();
@@ -151,7 +151,18 @@ export async function enviarReservaEmail(
     hora: reservaData.hora as string,
     personas: reservaData.personas as number,
     mesa: (reservaData.mesa as string | null) ?? null,
-    zona: (reservaData.zona as string | null) ?? null,
+    // El cliente eligió un GRUPO ("Sala"); la zona interna ("Cristalera") no
+    // le dice nada y podría hacerle pensar que le han cambiado el sitio. Se
+    // lee el nombre ACTUAL del grupo: si se renombra, los correos que se
+    // envíen a partir de entonces usan el nombre nuevo.
+    zona: (() => {
+      const g = reservaData.grupos_zonas as unknown as
+        | { nombre?: string }
+        | { nombre?: string }[]
+        | null;
+      const nombreGrupo = Array.isArray(g) ? g[0]?.nombre : g?.nombre;
+      return nombreGrupo ?? ((reservaData.zona as string | null) ?? null);
+    })(),
     notas: (reservaData.notas as string | null) ?? null,
     tipo_categoria: (reservaData.tipo_categoria as string | null) ?? null,
     garantia_importe: (reservaData.garantia_importe as number | null) ?? null,

@@ -1,17 +1,21 @@
 "use client";
 
-import { useState, useTransition, useMemo } from "react";
+import { useState, useTransition, useMemo, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { CalendarCheck, Users, Mail, Phone, Calendar, Clock, Ticket, Info } from "lucide-react";
+import { CalendarCheck, Users, Mail, Phone, Calendar, Clock, Ticket, Info, MapPin } from "lucide-react";
 import { crearReservaPublicaAction } from "@/features/reservar-publica/actions/crear-reserva-publica";
 import { comprobarClientePublicoAction } from "@/features/reservar-publica/actions/comprobar-cliente-publico";
 import { validarCuponPublicoAction } from "@/features/reservar-publica/actions/validar-cupon-publico-action";
 import { CuponInputReserva } from "@/features/sala/cupones/components/CuponInputReserva";
 import { TicketSelector, type ProductoTicketPublico } from "@/features/reservar-publica/components/TicketSelector";
 import { SelectorDisponibilidad } from "@/features/reservar-publica/components/SelectorDisponibilidad";
+import {
+  listarGruposZonasPublica,
+  type GrupoZonaPublico,
+} from "@/features/reservar-publica/actions/listar-grupos-zonas-publica";
 import { turnoDeHora } from "@/features/sala/lib/dia-negocio";
 import type { CamposObligatoriosPublico } from "@/features/reservar-publica/actions/listar-disponibilidad-publica";
 import {
@@ -84,6 +88,12 @@ export function ReservaPublicaForm({
   // abiertas (antes se fijaba "21:00" a ciegas y podía no existir ese pase).
   const [hora, setHora] = useState("");
   const [personas, setPersonas] = useState(2);
+  // Zona elegida por el cliente. Es un GRUPO de zonas ("Sala", "Terraza"), no
+  // una zona interna: el cliente no conoce nuestros nombres de sala.
+  const [grupoZonaId, setGrupoZonaId] = useState<string>("");
+  const [gruposZonas, setGruposZonas] = useState<GrupoZonaPublico[]>([]);
+  const [zonaExigida, setZonaExigida] = useState(false);
+  const [cargandoZonas, setCargandoZonas] = useState(false);
   const [codigo, setCodigo] = useState("");
   const [mostrarCodigo, setMostrarCodigo] = useState(false);
   const [cuponValido, setCuponValido] = useState<boolean | null>(null);
@@ -124,9 +134,47 @@ export function ReservaPublicaForm({
     personas > 0 &&
     fecha &&
     hora &&
+    (!zonaExigida || grupoZonaId.length > 0) &&
     ticketValido &&
     aceptaPrivacidad &&
     cuponValido !== false;
+
+  // Zonas disponibles: dependen de fecha, hora y personas, así que se
+  // recalculan cada vez que el cliente cambia algo de eso. Una zona sin hueco
+  // para ESE grupo se muestra en gris y no se puede elegir.
+  useEffect(() => {
+    if (!fecha || !hora || personas <= 0) {
+      setGruposZonas([]);
+      return;
+    }
+    let cancelado = false;
+    setCargandoZonas(true);
+    (async () => {
+      const r = await listarGruposZonasPublica({ empresaSlug, fecha, hora, personas });
+      if (cancelado) return;
+      setZonaExigida(r.exigido);
+      // Si la empresa no exige zona, el cliente no elige: ni se muestran ni se
+      // arrastra una selección previa al enviar.
+      if (!r.exigido) {
+        setGruposZonas([]);
+        setGrupoZonaId("");
+        setCargandoZonas(false);
+        return;
+      }
+      setGruposZonas(r.grupos);
+      // Si la zona elegida se ha llenado mientras tanto, se deselecciona para
+      // que el cliente no envíe una reserva que vamos a rechazar.
+      setGrupoZonaId((prev) => {
+        if (!prev) return prev;
+        const sigue = r.grupos.find((g) => g.id === prev);
+        return sigue && sigue.disponible ? prev : "";
+      });
+      setCargandoZonas(false);
+    })();
+    return () => {
+      cancelado = true;
+    };
+  }, [empresaSlug, fecha, hora, personas]);
 
   const styleVars = useMemo(
     () => ({ ["--brand" as string]: accent, ["--brand-fg" as string]: onAccent }) as React.CSSProperties,
@@ -144,6 +192,7 @@ export function ReservaPublicaForm({
       fecha,
       hora,
       personas,
+      grupoZonaId: grupoZonaId || null,
       codigo: codigo.trim() ? codigo.trim().toUpperCase().replace(/\s+/g, "") : null,
       ticketProductoId: ticketProductoId ?? null,
       ticketOnly: ticketOnly && productosTicket.length > 0,
@@ -440,6 +489,41 @@ export function ReservaPublicaForm({
               />
             </div>
           </div>
+
+          {/* Zonas. Solo si la empresa ha activado "exigir zona": si está
+              apagado, el cliente no elige y no se le muestra nada. Hace falta
+              ademas fecha/hora/personas para saber cuál está llena. */}
+          {zonaExigida && gruposZonas.length > 0 && (
+            <div>
+              <Label htmlFor="zona" className="text-zinc-700 flex items-center gap-1.5 mb-1.5">
+                <MapPin className="h-3.5 w-3.5" />
+                Zonas *
+              </Label>
+              <select
+                id="zona"
+                value={grupoZonaId}
+                onChange={(e) => setGrupoZonaId(e.target.value)}
+                disabled={cargandoZonas}
+                className="w-full h-10 rounded-md border border-zinc-300 bg-white px-3 text-sm text-zinc-900 disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-[var(--brand)]"
+              >
+                <option value="">
+                  {cargandoZonas ? "Comprobando disponibilidad…" : "Seleccione la zona"}
+                </option>
+                {gruposZonas.map((g) => (
+                  <option key={g.id} value={g.id} disabled={!g.disponible}>
+                    {g.nombre}
+                    {g.disponible ? "" : " (Zona completa)"}
+                  </option>
+                ))}
+              </select>
+              {!cargandoZonas && gruposZonas.every((g) => !g.disponible) && (
+                <p className="mt-1.5 text-xs text-red-600">
+                  No queda sitio para {personas}{" "}
+                  {personas === 1 ? "persona" : "personas"} a esa hora. Prueba con otra hora.
+                </p>
+              )}
+            </div>
+          )}
 
           {/* Datos de contacto */}
           <div className="grid grid-cols-2 gap-3">

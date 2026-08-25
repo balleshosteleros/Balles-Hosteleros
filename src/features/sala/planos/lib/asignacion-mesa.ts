@@ -15,6 +15,12 @@ export type AsignacionInput = {
   personas: number;
   salaId?: string | null;
   zonaId?: string | null;
+  /**
+   * Varias zonas a la vez: el cliente eligió un GRUPO público ("Sala") que
+   * engloba varias zonas internas (Cuadrado, Redondas, VIP…). La asignación
+   * queda restringida a esas y solo a esas.
+   */
+  zonaIds?: string[] | null;
   tipo?: TipoMesa | null;
 };
 
@@ -64,19 +70,20 @@ async function codigosOcupadosEnFranja(
 }
 
 /**
- * Busca una unión de mesas que admita al grupo y tenga TODAS sus mesas libres.
+ * Uniones que admiten al grupo, con TODAS sus mesas libres, de la más ajustada
+ * a la más grande.
  *
  * Regla del dueño: una unión solo se puede dar si todas sus mesas están libres;
  * en cuanto una está ocupada, la unión entera deja de estar disponible.
  *
- * Se elige la unión MÁS AJUSTADA (menor capacidad máxima que admita al grupo)
- * para no gastar la mesa grande en un grupo pequeño.
+ * Se ordenan por capacidad máxima ascendente para no gastar la unión grande en
+ * un grupo pequeño.
  */
-async function buscarUnionLibre(
+async function listarUnionesLibres(
   supabase: SupabaseClient,
   input: AsignacionInput,
   ctx: { codigosOcupados: Set<string>; bloqueadas: Set<string> },
-): Promise<{ id: string; codigo: string; zonaNombre: string } | null> {
+): Promise<Array<{ id: string; codigo: string; zonaNombre: string }>> {
   let query = supabase
     .from("mesa_combinaciones")
     .select("id, codigo, capacidad_min, capacidad_max, zona_id, tipo, activa")
@@ -86,10 +93,13 @@ async function buscarUnionLibre(
     .gte("capacidad_max", input.personas)
     .order("capacidad_max", { ascending: true });
   if (input.zonaId) query = query.eq("zona_id", input.zonaId);
+  if (input.zonaIds && input.zonaIds.length > 0) {
+    query = query.in("zona_id", input.zonaIds);
+  }
   if (input.tipo) query = query.eq("tipo", input.tipo);
 
   const { data: combis, error } = await query;
-  if (error || !combis || combis.length === 0) return null;
+  if (error || !combis || combis.length === 0) return [];
 
   const { data: componentes } = await supabase
     .from("mesa_combinacion_componentes")
@@ -118,6 +128,7 @@ async function buscarUnionLibre(
     porCombi.set(c.combinacion_id as string, lista);
   }
 
+  const libres: Array<{ id: string; codigo: string; zonaNombre: string }> = [];
   for (const comb of combis) {
     const partes = porCombi.get(comb.id as string) ?? [];
     if (partes.length < 2) continue; // union mal formada: no la usamos
@@ -128,11 +139,54 @@ async function buscarUnionLibre(
         !ctx.bloqueadas.has(m.id),
     );
     if (!todasUsables) continue;
-    return {
+    libres.push({
       id: comb.id as string,
       codigo: comb.codigo as string,
       zonaNombre: partes[0]?.zonaNombre ?? "",
-    };
+    });
+  }
+  return libres;
+}
+
+/**
+ * Recorre el orden de preferencia de (plano, comensales) y devuelve la primera
+ * opción que esté libre — sea mesa suelta o combinación, según lo haya
+ * ordenado el responsable en Configuración → Orden.
+ *
+ * Devuelve `null` si no hay orden definido o si ninguna de sus posiciones está
+ * libre; en ambos casos el motor cae a su criterio por defecto.
+ */
+async function primeraPreferida(
+  supabase: SupabaseClient,
+  planoId: string,
+  personas: number,
+  disponibles: {
+    mesas: Array<{ id: string; codigo: string; zonaNombre: string }>;
+    uniones: Array<{ id: string; codigo: string; zonaNombre: string }>;
+  },
+): Promise<{ id: string; codigo: string; zonaNombre: string } | null> {
+  const { data: orden, error } = await supabase
+    .from("plano_orden_asignacion")
+    .select("mesa_id, combinacion_id, posicion")
+    .eq("plano_id", planoId)
+    .eq("comensales", personas)
+    .order("posicion", { ascending: true });
+  // Un fallo leyendo la preferencia no debe tumbar la reserva: se ignora y se
+  // usa el orden por defecto.
+  if (error) {
+    console.error("[asignacion-mesa] orden preferencia:", error);
+    return null;
+  }
+  if (!orden || orden.length === 0) return null;
+
+  const mesasById = new Map(disponibles.mesas.map((m) => [m.id, m]));
+  const unionesById = new Map(disponibles.uniones.map((u) => [u.id, u]));
+
+  for (const fila of orden) {
+    const mesaId = fila.mesa_id as string | null;
+    const combiId = fila.combinacion_id as string | null;
+    const encontrada = mesaId ? mesasById.get(mesaId) : combiId ? unionesById.get(combiId) : null;
+    if (encontrada) return encontrada;
   }
   return null;
 }
@@ -149,8 +203,10 @@ async function buscarUnionLibre(
  *      filtradas por sala/zona/tipo opcionales.
  *   3. Excluir mesas con reserva viva en ±2h de la hora pedida.
  *   4. Si hay `plano_orden_asignacion(plano_id, comensales=pax)` no vacío
- *      → primera mesa libre del orden manual.
- *   5. Si no → fallback: primera por parte numérica del código.
+ *      → primera opción libre del orden manual, sea mesa suelta o unión.
+ *      La lista manda: una unión puede ir por delante de una mesa suelta.
+ *   5. Si no → fallback: mesa suelta (por código) antes que unión (la más
+ *      ajustada al grupo).
  *   6. Si ninguna libre → mesa=null, razón=SIN_MESAS_LIBRES.
  */
 export async function asignarMesaAutomatica(
@@ -196,6 +252,9 @@ export async function asignarMesaAutomatica(
       .lte("capacidad_min", input.personas)
       .gte("capacidad_max", input.personas);
     if (input.zonaId) mesasQuery = mesasQuery.eq("zona_id", input.zonaId);
+    if (input.zonaIds && input.zonaIds.length > 0) {
+      mesasQuery = mesasQuery.in("zona_id", input.zonaIds);
+    }
     if (input.tipo) mesasQuery = mesasQuery.eq("tipo", input.tipo);
 
     const { data: mesas, error: errMesas } = await mesasQuery;
@@ -213,12 +272,17 @@ export async function asignarMesaAutomatica(
     // si lo admita, asi que hay que mirarla antes de rechazar.
     if (!mesas || mesas.length === 0) {
       const ocupadosSinCandidatas = await codigosOcupadosEnFranja(supabase, input);
-      const union = await buscarUnionLibre(supabase, input, {
+      const uniones = await listarUnionesLibres(supabase, input, {
         codigosOcupados: ocupadosSinCandidatas,
         bloqueadas,
       });
-      if (union) {
-        return { ok: true, mesa: { ...union, planoId } };
+      if (uniones.length > 0) {
+        // Con solo uniones disponibles, el orden manual sigue mandando.
+        const preferida = await primeraPreferida(supabase, planoId, input.personas, {
+          mesas: [],
+          uniones,
+        });
+        return { ok: true, mesa: { ...(preferida ?? uniones[0]), planoId } };
       }
       return { ok: true, mesa: null, razon: "SIN_CANDIDATAS" };
     }
@@ -269,44 +333,37 @@ export async function asignarMesaAutomatica(
         };
       });
 
-    if (libres.length === 0) {
-      // Ninguna mesa suelta sirve (o todas ocupadas): probamos uniones.
-      const union = await buscarUnionLibre(supabase, input, {
-        codigosOcupados,
-        bloqueadas,
-      });
-      if (union) return { ok: true, mesa: { ...union, planoId } };
-      return { ok: true, mesa: null, razon: "SIN_MESAS_LIBRES" };
-    }
-
-    // 5. Orden manual por (plano, comensales).
-    const { data: orden, error: errOrden } = await supabase
-      .from("plano_orden_asignacion")
-      .select("mesa_id, posicion")
-      .eq("plano_id", planoId)
-      .eq("comensales", input.personas)
-      .order("posicion", { ascending: true });
-    if (errOrden) throw errOrden;
-
-    if (orden && orden.length > 0) {
-      const libresById = new Map(libres.map((m) => [m.id, m]));
-      for (const fila of orden) {
-        const libre = libresById.get(fila.mesa_id as string);
-        if (libre) {
-          return { ok: true, mesa: { ...libre, planoId } };
-        }
-      }
-    }
-
-    // 6. Fallback: parte numérica del código ascendente, desempate alfabético.
-    libres.sort((a, b) => {
-      const na = parteNumericaCodigo(a.codigo);
-      const nb = parteNumericaCodigo(b.codigo);
-      if (na !== nb) return na - nb;
-      return a.codigo.localeCompare(b.codigo);
+    // 5. Orden manual por (plano, comensales). Manda sobre todo lo demás: si
+    // el responsable puso una unión por delante de una mesa suelta, se respeta.
+    // Por eso las uniones se calculan ANTES de decidir, no como último recurso.
+    const uniones = await listarUnionesLibres(supabase, input, {
+      codigosOcupados,
+      bloqueadas,
     });
 
-    return { ok: true, mesa: { ...libres[0], planoId } };
+    const preferida = await primeraPreferida(supabase, planoId, input.personas, {
+      mesas: libres,
+      uniones,
+    });
+    if (preferida) return { ok: true, mesa: { ...preferida, planoId } };
+
+    // 6. Sin preferencia configurada (o toda ocupada): criterio por defecto.
+    // Mesa suelta antes que unión, para no partir mesas sin necesidad, y
+    // dentro de las sueltas por parte numérica del código.
+    if (libres.length > 0) {
+      libres.sort((a, b) => {
+        const na = parteNumericaCodigo(a.codigo);
+        const nb = parteNumericaCodigo(b.codigo);
+        if (na !== nb) return na - nb;
+        return a.codigo.localeCompare(b.codigo);
+      });
+      return { ok: true, mesa: { ...libres[0], planoId } };
+    }
+
+    // Ninguna mesa suelta libre: la unión más ajustada al grupo.
+    if (uniones.length > 0) return { ok: true, mesa: { ...uniones[0], planoId } };
+
+    return { ok: true, mesa: null, razon: "SIN_MESAS_LIBRES" };
   } catch (err: unknown) {
     const detalle = err instanceof Error ? err.message : "Error desconocido";
     console.error("[asignacion-mesa] error:", detalle);
