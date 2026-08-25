@@ -64,6 +64,34 @@ export async function listComponentes(combinacionId: string) {
   }
 }
 
+/**
+ * Componentes de TODAS las combinaciones del local, de una sola consulta.
+ * Evita el N+1 cuando hay que resolver la composición de muchas uniones a la
+ * vez (por ejemplo para saber en qué zona cae cada una).
+ */
+export async function listComponentesTodas(localId: string) {
+  try {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from("mesa_combinacion_componentes")
+      .select("combinacion_id, mesa_id, orden, mesa_combinaciones!inner(local_id)")
+      .eq("mesa_combinaciones.local_id", localId)
+      .order("orden", { ascending: true });
+    if (error) throw error;
+    return {
+      ok: true,
+      data: (data ?? []).map((r) => ({
+        combinacionId: r.combinacion_id as string,
+        mesaId: r.mesa_id as string,
+        orden: r.orden as number,
+      })) as MesaCombinacionComponente[],
+    };
+  } catch (err) {
+    console.error("[combinaciones] listComponentesTodas:", err);
+    return { ok: false, data: [] as MesaCombinacionComponente[] };
+  }
+}
+
 export async function createCombinacion(input: {
   localId: string;
   mesaIds: string[];
