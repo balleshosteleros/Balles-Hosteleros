@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
+import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -75,7 +76,7 @@ export function FacturasSinClasificar({
   async function handleReasignar(facturaId: string, casilla: string) {
     startTransition(async () => {
       const res = await reasignarFactura({ modeloId, facturaId, casilla, crearRegla: true });
-      if (!res.ok) alert(`Error: ${res.error}`);
+      if (!res.ok) toast.error(res.error ?? "No se pudo reasignar la factura");
       else onReasignada?.();
       setSeleccionadaId(null);
     });

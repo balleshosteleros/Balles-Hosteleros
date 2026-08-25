@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo, useEffect, useRef, useCallback } from "react";
+import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -253,7 +254,7 @@ export function AperturasView() {
     try {
       const prep = await prepararFotoParaSubida(file);
       if (!prep.ok) {
-        window.alert(prep.error);
+        toast.error(prep.error);
         return;
       }
       setEstudios(prev => prev.map(x => x.id === id ? { ...x, imagen: prep.dataUrl } : x));
@@ -266,7 +267,7 @@ export function AperturasView() {
       });
       if (!res.ok) {
         console.error("[aperturas] uploadFoto:", res.error);
-        window.alert(`No se pudo subir la imagen: ${res.error}`);
+        toast.error(`No se pudo subir la imagen: ${res.error}`);
         setEstudios(prev => prev.map(x => x.id === id ? { ...x, imagen: previo } : x));
         setSelected(s => s && s.id === id ? { ...s, imagen: previo } : s);
         return;
@@ -275,7 +276,7 @@ export function AperturasView() {
       setSelected(s => s && s.id === id ? { ...s, imagen: res.foto_url } : s);
     } catch (err) {
       console.error("[aperturas] uploadFoto threw:", err);
-      window.alert("No se pudo subir la imagen. Prueba con un archivo más pequeño.");
+      toast.error("No se pudo subir la imagen. Prueba con un archivo más pequeño.");
       setEstudios(prev => prev.map(x => x.id === id ? { ...x, imagen: previo } : x));
       setSelected(s => s && s.id === id ? { ...s, imagen: previo } : s);
     }
@@ -322,7 +323,7 @@ export function AperturasView() {
   const handleEnableShare = async (id: string) => {
     const res = await enableShareEstudio(id);
     if (!res.ok) {
-      window.alert(`No se pudo activar el enlace: ${res.error}`);
+      toast.error(`No se pudo activar el enlace: ${res.error}`);
       return;
     }
     const slug = res.share_slug;
@@ -335,7 +336,7 @@ export function AperturasView() {
     setSelected(s => s && s.id === id ? { ...s, shareActive: false } : s);
     const res = await disableShareEstudio(id);
     if (!res.ok) {
-      window.alert(`No se pudo desactivar el enlace: ${res.error}`);
+      toast.error(`No se pudo desactivar el enlace: ${res.error}`);
       setEstudios(prev => prev.map(x => x.id === id ? { ...x, shareActive: true } : x));
       setSelected(s => s && s.id === id ? { ...s, shareActive: true } : s);
     }
@@ -350,7 +351,7 @@ export function AperturasView() {
     if (!ok) return;
     const res = await regenerateShareEstudio(id);
     if (!res.ok) {
-      window.alert(`No se pudo regenerar: ${res.error}`);
+      toast.error(`No se pudo regenerar: ${res.error}`);
       return;
     }
     const slug = res.share_slug;
@@ -422,7 +423,7 @@ export function AperturasView() {
                 try {
                   const prep = await prepararFotoParaSubida(fotoFile);
                   if (!prep.ok) {
-                    window.alert(prep.error);
+                    toast.error(prep.error);
                     return;
                   }
                   setEstudios(prev => prev.map(x => x.id === nuevoEstudio.id ? { ...x, imagen: prep.dataUrl } : x));
@@ -434,14 +435,14 @@ export function AperturasView() {
                   });
                   if (!up.ok) {
                     console.error("[aperturas] uploadFoto:", up.error);
-                    window.alert(`No se pudo subir la imagen: ${up.error}`);
+                    toast.error(`No se pudo subir la imagen: ${up.error}`);
                     setEstudios(prev => prev.map(x => x.id === nuevoEstudio.id ? { ...x, imagen: undefined } : x));
                     return;
                   }
                   setEstudios(prev => prev.map(x => x.id === nuevoEstudio.id ? { ...x, imagen: up.foto_url } : x));
                 } catch (err) {
                   console.error("[aperturas] uploadFoto threw:", err);
-                  window.alert("No se pudo subir la imagen. Prueba con un archivo más pequeño.");
+                  toast.error("No se pudo subir la imagen. Prueba con un archivo más pequeño.");
                   setEstudios(prev => prev.map(x => x.id === nuevoEstudio.id ? { ...x, imagen: undefined } : x));
                 }
               }
@@ -670,7 +671,12 @@ function ShareMenu({
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     } catch {
-      window.prompt("Copia el enlace:", url);
+      // El portapapeles puede fallar (permisos, contexto no seguro). Se muestra
+      // el enlace para copiarlo a mano, sin recurrir al prompt del navegador.
+      toast.error("No se pudo copiar automáticamente", {
+        description: url,
+        duration: 15000,
+      });
     }
   };
 

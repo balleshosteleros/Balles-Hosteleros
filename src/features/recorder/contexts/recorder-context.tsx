@@ -732,18 +732,9 @@ export function RecorderProvider({ children }: { children: ReactNode }) {
     [options, processRecording, setCountdownValue, setElapsed, setState, stopAllStreams, stopRecording, buildCompositeVideoTracks],
   );
 
-  // Avisar antes de cerrar la pestaña si quedan grabaciones sin subir, para
-  // que nadie pierda un vídeo por cerrar el navegador (el blob vive en IndexedDB
-  // local hasta que sube). Se activa solo cuando hay pendientes.
-  useEffect(() => {
-    if (pendingCount <= 0) return;
-    const handler = (e: BeforeUnloadEvent) => {
-      e.preventDefault();
-      e.returnValue = "";
-    };
-    window.addEventListener("beforeunload", handler);
-    return () => window.removeEventListener("beforeunload", handler);
-  }, [pendingCount]);
+  // Nada de avisos del navegador al cerrar: las grabaciones pendientes viven en
+  // IndexedDB y sobreviven al cierre, y el contador de pendientes ya se ve en el
+  // botón de grabación y en el panel, que es donde se reintenta la subida.
 
   const pauseRecording = useCallback(() => {
     if (mediaRecorderRef.current?.state === "recording") {

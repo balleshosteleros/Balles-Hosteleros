@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -103,7 +104,7 @@ export function MarcaTab({
     try {
       const prep = await prepararFotoParaSubida(file);
       if (!prep.ok) {
-        window.alert(prep.error);
+        toast.error(prep.error);
         return;
       }
       if (marca.logoPath) {
@@ -118,13 +119,13 @@ export function MarcaTab({
       });
       if (!res.ok) {
         console.error("[MarcaTab] uploadLogo:", res.error);
-        window.alert(`No se pudo subir el logo: ${res.error}`);
+        toast.error(`No se pudo subir el logo: ${res.error}`);
         return;
       }
       onChange({ ...marca, logoPath: res.foto.path, logoUrl: res.foto.url }, { flush: true });
     } catch (err) {
       console.error("[MarcaTab] uploadLogo threw:", err);
-      window.alert("No se pudo subir el logo. Prueba con un archivo más pequeño.");
+      toast.error("No se pudo subir el logo. Prueba con un archivo más pequeño.");
     } finally {
       setUploadingLogo(false);
     }

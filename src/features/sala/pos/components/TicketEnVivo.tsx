@@ -6,14 +6,17 @@ import { usePOSTicket } from "../hooks/usePOSTicket";
 import { formatEur } from "../services/calculo-ticket";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { formatFechaEnZona, formatHoraEnZona } from "@/features/empresa/lib/zona-horaria";
+import { usePromptText } from "@/shared/components/PromptTextDialog";
 
 export function TicketEnVivo() {
   const { state, dispatch, totales } = usePOSTicket();
   const { empresaActual } = useEmpresa();
   const ahoraIso = new Date().toISOString();
+  const { pedirTexto, dialog: promptDialog } = usePromptText();
 
   return (
     <div className="flex h-full flex-col bg-background border rounded-md overflow-hidden">
+      {promptDialog}
       {/* Cabecera */}
       <div className="flex items-center justify-between border-b bg-muted/40 px-3 py-2 text-xs">
         <div>
@@ -103,10 +106,18 @@ export function TicketEnVivo() {
           Limpiar
         </Button>
         <Button variant="outline" size="sm" disabled={!state.seleccionLineaId}
-          onClick={() => {
+          onClick={async () => {
             const l = state.lineas.find((x) => x.id === state.seleccionLineaId);
             if (!l) return;
-            const nota = window.prompt("Nota para cocina:", l.notaCocina);
+            const nota = await pedirTexto({
+              title: "Nota para cocina",
+              label: l.nombre,
+              placeholder: "Ej.: sin cebolla, poco hecho…",
+              defaultValue: l.notaCocina,
+              multiline: true,
+              // Vaciar la nota es una acción válida: así se quita la que había.
+              required: false,
+            });
             if (nota !== null) dispatch({ type: "setNota", lineaId: l.id, nota });
           }}>
           Nota

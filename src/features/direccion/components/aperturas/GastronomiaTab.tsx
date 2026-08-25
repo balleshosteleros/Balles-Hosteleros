@@ -1,5 +1,6 @@
 "use client";
 
+import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -108,7 +109,7 @@ export function GastronomiaTab({
     try {
       const prep = await prepararFotoParaSubida(file);
       if (!prep.ok) {
-        window.alert(prep.error);
+        toast.error(prep.error);
         return;
       }
       const platoActual = (propuesta.platos ?? []).find((p) => p.id === platoId);
@@ -124,13 +125,13 @@ export function GastronomiaTab({
       });
       if (!res.ok) {
         console.error("[GastronomiaTab] uploadFoto:", res.error);
-        window.alert(`No se pudo subir la foto del plato: ${res.error}`);
+        toast.error(`No se pudo subir la foto del plato: ${res.error}`);
         return;
       }
       updatePlatoFlush(platoId, { foto: res.foto });
     } catch (err) {
       console.error("[GastronomiaTab] uploadFoto threw:", err);
-      window.alert("No se pudo subir la foto del plato. Prueba con un archivo más pequeño.");
+      toast.error("No se pudo subir la foto del plato. Prueba con un archivo más pequeño.");
     }
   };
 

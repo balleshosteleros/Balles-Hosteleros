@@ -8,6 +8,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -90,7 +91,7 @@ export function InspectorDetailDialog({
       onOpenChange(false);
       onChanged?.();
     } else {
-      alert(res.error);
+      toast.error(res.error ?? "No se pudo borrar el inspector");
     }
   }
 

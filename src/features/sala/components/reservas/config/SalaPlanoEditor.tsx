@@ -301,17 +301,6 @@ export function SalaPlanoEditor({ sala, zonas, mesas, onBack }: Props) {
     pendingDecoRemovals.size > 0 ||
     pendingZonaLabels.size > 0;
 
-  /** Aviso del navegador en refresh/cierre si hay cambios sin guardar. */
-  useEffect(() => {
-    if (!isDirty) return;
-    function handler(e: BeforeUnloadEvent) {
-      e.preventDefault();
-      e.returnValue = "";
-    }
-    window.addEventListener("beforeunload", handler);
-    return () => window.removeEventListener("beforeunload", handler);
-  }, [isDirty]);
-
   useEffect(() => {
     const el = outerRef.current;
     if (!el) return;
@@ -1095,7 +1084,7 @@ export function SalaPlanoEditor({ sala, zonas, mesas, onBack }: Props) {
         </div>
         <div className="flex items-center gap-2">
           {isDirty && !saving && (
-            <span className="text-[11px] text-muted-foreground italic">
+            <span className="rounded bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-900 dark:bg-amber-950/50 dark:text-amber-200">
               Cambios sin guardar
             </span>
           )}

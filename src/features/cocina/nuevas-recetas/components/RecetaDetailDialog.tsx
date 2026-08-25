@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Star, Archive, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { usePromptText } from "@/shared/components/PromptTextDialog";
 
 import type { RecetaConExtras } from "../actions/recetas-actions";
 import type { FaseConPolicies } from "../actions/fases-actions";
@@ -31,6 +32,8 @@ interface Props {
 
 export function RecetaDetailDialog({ open, onOpenChange, receta, fases, onRefresh }: Props) {
   const [tab, setTab] = useState("escandallo");
+  // Antes del `return null`: los hooks no pueden quedar detrás de un early return.
+  const { pedirTexto, dialog: promptDialog } = usePromptText();
 
   if (!receta) return null;
 
@@ -50,8 +53,16 @@ export function RecetaDetailDialog({ open, onOpenChange, receta, fases, onRefres
 
   async function onArchivar() {
     if (!receta) return;
-    const motivo = prompt("Motivo del archivado (opcional):") ?? undefined;
-    const res = await cambiarEstadoGeneral(receta.id, "archivada", motivo);
+    const motivo = await pedirTexto({
+      title: "Archivar receta",
+      label: "Motivo del archivado (opcional)",
+      placeholder: "Ej.: fuera de temporada, sustituida por otra…",
+      confirmLabel: "Archivar",
+      multiline: true,
+      required: false,
+    });
+    if (motivo === null) return; // canceló
+    const res = await cambiarEstadoGeneral(receta.id, "archivada", motivo || undefined);
     if (res.ok) {
       toast.success("Receta archivada");
       onRefresh();
@@ -73,6 +84,8 @@ export function RecetaDetailDialog({ open, onOpenChange, receta, fases, onRefres
   }
 
   return (
+    <>
+    {promptDialog}
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl max-h-[90vh] overflow-hidden flex flex-col">
         <DialogHeader>
@@ -192,5 +205,6 @@ export function RecetaDetailDialog({ open, onOpenChange, receta, fases, onRefres
         </Tabs>
       </DialogContent>
     </Dialog>
+    </>
   );
 }

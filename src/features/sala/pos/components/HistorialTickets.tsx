@@ -10,6 +10,7 @@ import { formatEur, calcularTotales } from "../services/calculo-ticket";
 import { htmlTicketVenta, imprimirHTML } from "../services/impresion";
 import type { Ticket } from "../types";
 import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
+import { usePromptText } from "@/shared/components/PromptTextDialog";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { formatHoraEnZona } from "@/features/empresa/lib/zona-horaria";
 
@@ -24,6 +25,7 @@ export function HistorialTickets({ open, onOpenChange }: Props) {
   const [loading, setLoading] = React.useState(false);
   const [trabajando, setTrabajando] = React.useState<string | null>(null);
   const [filtro, setFiltro] = React.useState<"TODOS" | Ticket["estado"]>("TODOS");
+  const { pedirTexto, dialog: promptDialog } = usePromptText();
 
   const recargar = React.useCallback(async () => {
     setLoading(true);
@@ -61,7 +63,13 @@ export function HistorialTickets({ open, onOpenChange }: Props) {
   };
 
   const anular = async (ticketId: string) => {
-    const motivo = window.prompt("Motivo de anulación:");
+    const motivo = await pedirTexto({
+      title: "Anular ticket",
+      description: "Se revertirá el stock de todas sus líneas.",
+      label: "Motivo de anulación",
+      placeholder: "Ej.: error al cobrar, cliente se marcha…",
+      confirmLabel: "Anular ticket",
+    });
     if (!motivo) return;
     setTrabajando(ticketId);
     try {
@@ -90,6 +98,8 @@ export function HistorialTickets({ open, onOpenChange }: Props) {
   };
 
   return (
+    <>
+    {promptDialog}
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl">
         <DialogHeader>
@@ -171,5 +181,6 @@ export function HistorialTickets({ open, onOpenChange }: Props) {
         </div>
       </DialogContent>
     </Dialog>
+    </>
   );
 }

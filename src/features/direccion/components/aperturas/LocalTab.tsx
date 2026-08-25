@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -103,7 +104,7 @@ export function LocalTab({
     try {
       const prep = await prepararFotoParaSubida(file);
       if (!prep.ok) {
-        window.alert(prep.error);
+        toast.error(prep.error);
         return;
       }
       const res = await uploadFotoCategoria({
@@ -115,14 +116,14 @@ export function LocalTab({
       });
       if (!res.ok) {
         console.error("[LocalTab] upload:", res.error);
-        window.alert(`No se pudo subir la imagen: ${res.error}`);
+        toast.error(`No se pudo subir la imagen: ${res.error}`);
         return;
       }
       const finales = [...(local.fotos[cat] ?? []), res.foto];
       onChange({ ...local, fotos: { ...local.fotos, [cat]: finales } }, { flush: true });
     } catch (err) {
       console.error("[LocalTab] upload threw:", err);
-      window.alert("No se pudo subir la imagen. Prueba con un archivo más pequeño.");
+      toast.error("No se pudo subir la imagen. Prueba con un archivo más pequeño.");
     }
   };
 
