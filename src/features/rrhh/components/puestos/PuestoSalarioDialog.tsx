@@ -13,10 +13,6 @@ import { toast } from "sonner";
 import { createPuesto, updatePuesto, deletePuesto, listDepartamentosCatalogo } from "@/features/rrhh/actions/vacantes-actions";
 import { upsertPuestoSalario, listNivelesDePuesto } from "@/features/rrhh/actions/puestos-actions";
 import { setValidadorDepartamentoPuesto } from "@/features/rrhh/actions/validadores-actions";
-import {
-  listCalendariosDeMiEmpresa,
-  setCalendarioVacacionesPuesto,
-} from "@/features/rrhh/actions/calendarios-vacaciones-actions";
 import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 import type { PuestoSalarial, NivelSalarial } from "@/features/rrhh/data/puestos";
 
@@ -65,9 +61,6 @@ export function PuestoSalarioDialog({ open, onOpenChange, editing, onSaved }: Pr
   const [convenio, setConvenio] = useState("");
   // Departamento que valida las solicitudes de quien ocupe este puesto.
   const [validadorDepartamentoId, setValidadorDepartamentoId] = useState<string>("");
-  // Calendario de vacaciones que hereda quien ocupe este puesto.
-  const [calendarioVacacionesId, setCalendarioVacacionesId] = useState<string>("");
-  const [calendarios, setCalendarios] = useState<{ id: string; nombre: string; diasTotales: number }[]>([]);
   // Niveles (condiciones por nivel)
   const [niveles, setNiveles] = useState<NivelSalarial[]>([nivelVacio(1)]);
   const [idx, setIdx] = useState(0);
@@ -86,16 +79,12 @@ export function PuestoSalarioDialog({ open, onOpenChange, editing, onSaved }: Pr
     void listDepartamentosCatalogo().then((r) => {
       if (r.ok) setDepartamentos(r.data as Depto[]);
     });
-    void listCalendariosDeMiEmpresa().then((r) => {
-      if (r.ok) setCalendarios(r.data);
-    });
     // Datos compartidos
     setNombre(editing?.puesto ?? "");
     setDepartamentoId(editing?.departamentoId ?? "");
     setDescripcion(editing?.descripcion ?? "");
     setConvenio(editing?.convenioColectivo ?? "");
     setValidadorDepartamentoId(editing?.validadorDepartamentoId ?? "");
-    setCalendarioVacacionesId(editing?.calendarioVacacionesId ?? "");
     setIdx(0);
     // Niveles: si edita, cargar de BD; si nuevo, un Nivel 1 vacío.
     if (editing) {
@@ -196,24 +185,6 @@ export function PuestoSalarioDialog({ open, onOpenChange, editing, onSaved }: Pr
         }
       }
 
-      // El calendario, igual: se guarda aparte porque también se propaga a
-      // quienes ya ocupan el puesto.
-      const calActual = editing?.calendarioVacacionesId ?? "";
-      if ((calendarioVacacionesId || "") !== calActual || esNuevo) {
-        const resCal = await setCalendarioVacacionesPuesto({
-          puestoId,
-          calendarioId: calendarioVacacionesId || null,
-        });
-        if (!resCal.ok) {
-          toast.error(resCal.error ?? "No se pudo guardar el calendario de vacaciones");
-          return;
-        }
-        if (resCal.empleadosActualizados) {
-          toast.success(
-            `Calendario de vacaciones actualizado en ${resCal.empleadosActualizados} empleado(s) de este puesto.`,
-          );
-        }
-      }
       toast.success(esNuevo ? "Puesto creado" : "Puesto actualizado");
       onSaved();
       onOpenChange(false);
@@ -351,43 +322,6 @@ export function PuestoSalarioDialog({ open, onOpenChange, editing, onSaved }: Pr
             </div>
           </div>
 
-          {/* Calendario de vacaciones: también se hereda al contratar. Sin él
-              el empleado no puede pedir vacaciones, de ahí que se avise. */}
-          <div className="rounded-md border border-border/60 p-3 space-y-4">
-            <div>
-              <p className="text-xs font-medium text-muted-foreground">Calendario de vacaciones</p>
-              <p className="text-[11px] text-muted-foreground mt-0.5">
-                Días de vacaciones al año y periodos bloqueados de quien ocupe
-                este puesto. Se le asigna solo al contratarlo.
-              </p>
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="ps-calendario">Calendario</Label>
-              <select
-                id="ps-calendario"
-                value={calendarioVacacionesId}
-                onChange={(e) => setCalendarioVacacionesId(e.target.value)}
-                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
-              >
-                <option value="">Sin definir</option>
-                {calendarios.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.nombre} ({c.diasTotales} días)
-                  </option>
-                ))}
-              </select>
-              {calendarios.length === 0 ? (
-                <p className="text-[11px] text-amber-600">
-                  No hay calendarios creados. Créalos en RRHH → Calendarios →
-                  Vacaciones, o quien ocupe este puesto no podrá pedir vacaciones.
-                </p>
-              ) : !calendarioVacacionesId ? (
-                <p className="text-[11px] text-muted-foreground">
-                  Sin definir, se usará el calendario predeterminado de la empresa.
-                </p>
-              ) : null}
-            </div>
-          </div>
         </div>
 
         <DialogFooter className="sm:justify-between">

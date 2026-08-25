@@ -13,6 +13,7 @@
  */
 
 import { getAppContext } from "@/lib/supabase/get-context";
+import { revalidatePath } from "next/cache";
 import type { SolicitudSubtipoAusencia } from "@/features/mi-panel/types";
 
 type Sb = Awaited<ReturnType<typeof getAppContext>>["supabase"];
@@ -127,5 +128,77 @@ export async function listAusenciasEmpresa(
     const msg = err instanceof Error ? err.message : "Error desconocido";
     console.error("[rrhh] listAusenciasEmpresa:", msg);
     return { ok: false, data: [], error: msg };
+  }
+}
+
+/**
+ * Registra una ausencia a un empleado desde el calendario de RRHH.
+ *
+ * Entra ya APROBADA: si la mete RRHH es porque el hecho ya ha ocurrido (el
+ * empleado ha llamado diciendo que está de baja), no es una petición que haya
+ * que decidir. Queda constancia de quién la registró.
+ *
+ * No se aplica el tope anual del tipo de ausencia: RRHH está registrando algo
+ * que ya ha pasado, y no tendría sentido impedírselo porque el empleado se
+ * pase de días. El tope existe para frenar al empleado al pedir, no a RRHH al
+ * dar de alta un hecho.
+ */
+export async function registrarAusenciaEmpleado(input: {
+  empleadoUserId: string;
+  subtipo: SolicitudSubtipoAusencia;
+  fechaInicio: string;
+  fechaFin: string | null;
+  motivo: string;
+}): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const { supabase, userId, empresaId } = await getAppContext();
+    if (!userId || !empresaId) return { ok: false, error: "No autenticado" };
+
+    if (!input.fechaInicio) return { ok: false, error: "Indica la fecha de inicio." };
+    if (input.fechaFin && input.fechaFin < input.fechaInicio) {
+      return { ok: false, error: "La fecha de fin no puede ser anterior a la de inicio." };
+    }
+    if (input.subtipo === "baja_contrato") {
+      return {
+        ok: false,
+        error: "La baja de contrato no se registra aquí: la solicita el empleado y requiere firma.",
+      };
+    }
+
+    // El empleado debe ser de esta empresa: si no, se estaría metiendo una
+    // ausencia en la plantilla de otra.
+    const { data: emp } = await supabase
+      .from("empleados")
+      .select("nombre, apellidos")
+      .eq("empresa_id", empresaId)
+      .eq("user_id", input.empleadoUserId)
+      .maybeSingle();
+    if (!emp) return { ok: false, error: "Ese empleado no es de esta empresa." };
+
+    const nombreCompleto = [emp.nombre, emp.apellidos].filter(Boolean).join(" ").trim();
+
+    const { error } = await supabase.from("solicitudes_personal").insert({
+      empresa_id: empresaId,
+      user_id: input.empleadoUserId,
+      empleado_nombre: nombreCompleto || "Sin nombre",
+      tipo: "ausencia",
+      subtipo: input.subtipo,
+      fecha_inicio: input.fechaInicio,
+      fecha_fin: input.fechaFin,
+      horas: null,
+      motivo: input.motivo.trim(),
+      estado: "aprobada",
+      revisado_por: userId,
+      revisado_at: new Date().toISOString(),
+    });
+    if (error) throw error;
+
+    revalidatePath("/rrhh/calendarios");
+    revalidatePath("/rrhh/solicitudes");
+    return { ok: true };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Error desconocido";
+    console.error("[rrhh] registrarAusenciaEmpleado:", msg);
+    return { ok: false, error: msg };
   }
 }

@@ -105,6 +105,8 @@ interface Props {
   botonNuevo: string;
   columnaExtra?: { header: string; render: (item: AusenciaItem) => React.ReactNode };
   empresaId?: string;
+  /** Qué hace el botón de registrar. Sin esto el botón no se pinta. */
+  onNuevo?: () => void;
 }
 
 function toISO(year: number, month: number, day: number): string {
@@ -135,7 +137,7 @@ function rangeMonths(mode: CalendarRangeMode, anchor: Date): { year: number; mon
   return [{ year: anchor.getFullYear(), month: anchor.getMonth() }];
 }
 
-export function CalendarioAusencias({ modalidad, items, botonNuevo, columnaExtra }: Props) {
+export function CalendarioAusencias({ modalidad, items, botonNuevo, columnaExtra, onNuevo }: Props) {
   const [busqueda, setBusqueda] = useState("");
   const [vista, setVista] = useState<"calendario" | "lista">("calendario");
   const [showConfig, setShowConfig] = useState(false);
@@ -187,7 +189,13 @@ export function CalendarioAusencias({ modalidad, items, botonNuevo, columnaExtra
             <List className="h-3.5 w-3.5" />Lista
           </Button>
         </div>
-        <Button size="sm" className="gap-1"><Plus className="h-4 w-4" />{botonNuevo}</Button>
+        {/* Sin acción no se pinta: un botón que no hace nada engaña. Los
+            festivos, por ejemplo, se generan solos y no se registran a mano. */}
+        {onNuevo && (
+          <Button size="sm" className="gap-1" onClick={onNuevo}>
+            <Plus className="h-4 w-4" />{botonNuevo}
+          </Button>
+        )}
         <ConfigButton onClick={() => setShowConfig(true)} className="ml-auto" />
       </div>
 

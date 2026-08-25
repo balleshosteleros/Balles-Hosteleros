@@ -61,12 +61,6 @@ export interface PuestoSalarial {
   validadorDepartamentoId: string | null;
   /** Nombre para pintar el valor actual del selector sin re-fetch. */
   validadorDepartamentoNombre: string | null;
-  /**
-   * Calendario de vacaciones (días al año + periodos bloqueados) que hereda
-   * quien ocupe el puesto. `null` = sin definir; se usará el predeterminado
-   * de la empresa.
-   */
-  calendarioVacacionesId: string | null;
 }
 
 export interface NormaSalarial {

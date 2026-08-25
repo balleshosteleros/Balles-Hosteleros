@@ -1709,13 +1709,11 @@ export async function getMiVacacionesInfo(): Promise<{
     const { supabase, user, empresaId } = await getContext();
     if (!user || !empresaId) return { ok: false, data: null, error: "No autenticado" };
 
-    // Las reglas de la empresa se enseñan aunque el empleado no tenga aún
-    // calendario: forman parte de cómo se piden las vacaciones aquí.
     const reglas = await getReglasVacacionesEmpresa(empresaId);
 
     const vacio: MiVacacionesInfo = {
       tieneCalendario: false,
-      esPredeterminado: false,
+      esPredeterminado: true,
       calendarioNombre: null,
       anio: new Date().getUTCFullYear(),
       diasTotales: 0,
@@ -1728,33 +1726,23 @@ export async function getMiVacacionesInfo(): Promise<{
       reglas,
     };
 
-    const { data: emp } = await supabase
-      .from("empleados")
-      .select("calendario_vacaciones_id")
+    // Los días de vacaciones al año salen del tipo de ausencia "Vacaciones"
+    // (RRHH → Horarios → Tipos de ausencia), igual que el tope del resto de
+    // ausencias. Antes venía de un calendario que había que asignar a cada
+    // empleado, y quien no lo tuviera no podía pedir vacaciones.
+    const { data: tipoVac } = await supabase
+      .from("tipos_ausencia")
+      .select("limite_dias")
       .eq("empresa_id", empresaId)
-      .eq("user_id", user.id)
+      .eq("subtipo", "vacaciones")
       .maybeSingle();
-    const calendarioId = (emp?.calendario_vacaciones_id as string | null) ?? null;
-    if (!calendarioId) return { ok: true, data: vacio };
+    const diasTotales = (tipoVac?.limite_dias as number | null | undefined) ?? 0;
+    // Sin límite configurado no hay cuenta que enseñar: el empleado pide y
+    // decide quien aprueba.
+    if (!diasTotales) return { ok: true, data: vacio };
 
-    const [{ data: cal }, { data: bloqueos }] = await Promise.all([
-      supabase
-        .from("rrhh_calendarios_vacaciones")
-        .select("nombre, anio, dias_totales")
-        .eq("id", calendarioId)
-        .maybeSingle(),
-      supabase
-        .from("rrhh_calendario_vacaciones_bloqueos")
-        .select("fecha_inicio, fecha_fin, motivo")
-        .eq("calendario_id", calendarioId)
-        .order("fecha_inicio", { ascending: true }),
-    ]);
-    if (!cal) return { ok: true, data: vacio };
-
-    // Predeterminado (anio null) → cuenta el año actual como referencia.
-    const esPredeterminado = (cal.anio as number | null) == null;
-    const anio = (cal.anio as number | null) ?? new Date().getUTCFullYear();
-    const diasTotales = cal.dias_totales as number;
+    const esPredeterminado = true;
+    const anio = new Date().getUTCFullYear();
     const inicioAnio = `${anio}-01-01`;
     const inicioAnioSig = `${anio + 1}-01-01`;
     const { data: existentes } = await supabase
@@ -1783,14 +1771,11 @@ export async function getMiVacacionesInfo(): Promise<{
       data: {
         tieneCalendario: true,
         esPredeterminado,
-        calendarioNombre: cal.nombre as string,
+        calendarioNombre: null,
         anio,
         ...saldo,
-        bloqueos: (bloqueos ?? []).map((b: { fecha_inicio: string; fecha_fin: string; motivo: string | null }) => ({
-          fechaInicio: b.fecha_inicio,
-          fechaFin: b.fecha_fin,
-          motivo: b.motivo ?? null,
-        })),
+        // Ya no hay periodos bloqueados: eran parte del calendario por empleado.
+        bloqueos: [],
         reglas,
       },
     };
@@ -2291,122 +2276,24 @@ export async function crearSolicitudPersonal(input: NuevaSolicitudInput) {
       );
       if (!chequeoReglas.ok) return { ok: false, error: chequeoReglas.error };
 
-      const { data: emp } = await supabase
-        .from("empleados")
-        .select("calendario_vacaciones_id")
-        .eq("empresa_id", empresaId)
-        .eq("user_id", user.id)
-        .maybeSingle();
-
-      const calendarioId = (emp?.calendario_vacaciones_id as string | null) ?? null;
-      if (!calendarioId) {
-        return {
-          ok: false,
-          error:
-            "No tienes un calendario de vacaciones asignado. Pídele a RRHH que te asigne uno antes de solicitar vacaciones.",
-        };
-      }
-
-      const { data: cal } = await supabase
-        .from("rrhh_calendarios_vacaciones")
-        .select("nombre, anio, dias_totales")
-        .eq("id", calendarioId)
-        .maybeSingle();
-      if (!cal) {
-        return {
-          ok: false,
-          error: "Tu calendario de vacaciones ya no está disponible. Contacta con RRHH.",
-        };
-      }
-
       const inicio = input.fechaInicio;
       const fin = input.fechaFin || input.fechaInicio;
       if (fin < inicio) {
         return { ok: false, error: "La fecha de fin no puede ser anterior a la fecha de inicio" };
       }
-
-      // Calendario predeterminado (anio null) → aplica todos los años: el año de
-      // cómputo es el de la fecha solicitada y los bloqueos se repiten cada año.
-      const esPredeterminado = (cal.anio as number | null) == null;
-      const anio =
-        (cal.anio as number | null) ??
-        new Date(inicio + "T00:00:00Z").getUTCFullYear();
-      const diasTotales = cal.dias_totales as number;
-
-      // 1) Periodos bloqueados (recurrentes si el calendario es predeterminado).
-      const { data: bloqueos } = await supabase
-        .from("rrhh_calendario_vacaciones_bloqueos")
-        .select("fecha_inicio, fecha_fin, motivo")
-        .eq("calendario_id", calendarioId);
-      const choque = (bloqueos ?? []).find(
-        (b: { fecha_inicio: string; fecha_fin: string }) =>
-          bloqueoSolapaRango(
-            { fechaInicio: b.fecha_inicio, fechaFin: b.fecha_fin },
-            inicio,
-            fin,
-            esPredeterminado,
-          ),
-      ) as { fecha_inicio: string; fecha_fin: string; motivo: string | null } | undefined;
-      if (choque) {
-        return {
-          ok: false,
-          error:
-            `Esas fechas caen en un periodo bloqueado` +
-            (choque.motivo ? ` (${choque.motivo})` : "") +
-            (esPredeterminado
-              ? ` (se repite cada año, del ${formatFechaEs(choque.fecha_inicio).slice(0, 5)} al ${formatFechaEs(choque.fecha_fin).slice(0, 5)}).`
-              : `, del ${formatFechaEs(choque.fecha_inicio)} al ${formatFechaEs(choque.fecha_fin)}.`) +
-            ` No se pueden pedir vacaciones en esos días.`,
-        };
-      }
-
-      // 2) Días disponibles según el calendario.
-      const diasSolicitados = diasSolicitudEnAnio(inicio, fin, anio);
-      if (!esPredeterminado && diasSolicitados === 0) {
-        return {
-          ok: false,
-          error: `Tu calendario de vacaciones es del año ${anio}. Selecciona fechas dentro de ese año.`,
-        };
-      }
-
-      const inicioAnio = `${anio}-01-01`;
-      const inicioAnioSig = `${anio + 1}-01-01`;
-      const { data: existentes } = await supabase
-        .from("solicitudes_personal")
-        .select("fecha_inicio, fecha_fin")
-        .eq("empresa_id", empresaId)
-        .eq("user_id", user.id)
-        .eq("tipo", "ausencia")
-        .eq("subtipo", "vacaciones")
-        .in("estado", ["pendiente", "aprobada"])
-        .lt("fecha_inicio", inicioAnioSig)
-        .or(`fecha_fin.gte.${inicioAnio},fecha_fin.is.null`);
-      const diasUsados = (existentes ?? []).reduce(
-        (acc: number, s: { fecha_inicio: string; fecha_fin: string | null }) =>
-          acc + diasSolicitudEnAnio(s.fecha_inicio, s.fecha_fin, anio),
-        0,
-      );
-
-      if (diasUsados + diasSolicitados > diasTotales) {
-        const restantes = Math.max(0, diasTotales - diasUsados);
-        return {
-          ok: false,
-          error:
-            `Te queda${restantes === 1 ? "" : "n"} ${restantes} día${restantes === 1 ? "" : "s"} de vacaciones ` +
-            `de ${diasTotales} en ${anio} (ya llevas ${diasUsados} usado${diasUsados === 1 ? "" : "s"}) ` +
-            `y estás pidiendo ${diasSolicitados}. No se puede registrar la solicitud.`,
-        };
-      }
+      // El cupo anual de vacaciones se configura como el del resto de
+      // ausencias: RRHH → Horarios → Tipos de ausencia → "Vacaciones", campo
+      // "Límite anual". Antes venía de un calendario por empleado, que era una
+      // segunda forma de configurar lo mismo y obligaba a asignárselo a cada
+      // uno. La comprobación en sí la hace el bloque común de más abajo.
     }
 
-    // Resto de ausencias (baja médica, permiso): límite anual de tipos_ausencia.
-    // Vacaciones queda fuera (su cupo es el del calendario del empleado) y
-    // baja_contrato también: se pide una vez al irse, un tope anual no aplica.
-    if (
-      input.tipo === "ausencia" &&
-      input.subtipo !== "vacaciones" &&
-      input.subtipo !== "baja_contrato"
-    ) {
+    // Límite anual de días por tipo de ausencia (vacaciones, baja médica y
+    // permiso), configurado en RRHH → Horarios → Tipos de ausencia. Vacaciones
+    // entra aquí como una más: su cupo ya no sale de un calendario aparte.
+    // baja_contrato sí queda fuera: se pide una vez al irse y un tope anual no
+    // tiene sentido.
+    if (input.tipo === "ausencia" && input.subtipo !== "baja_contrato") {
       const subtipoAus = input.subtipo as Exclude<
         SolicitudSubtipoAusencia,
         "baja_contrato"

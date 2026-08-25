@@ -8,10 +8,10 @@ import {
 } from "@/features/rrhh/actions/calendario-ausencias-actions";
 import { useFestivos } from "@/features/rrhh/hooks/useFestivos";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { CalendarDays, Palmtree, PartyPopper, HeartPulse, FileCheck, Loader2 } from "lucide-react";
-import { CalendarioLaboral } from "@/features/rrhh/components/calendarios/CalendarioLaboral";
+import { Palmtree, PartyPopper, HeartPulse, FileCheck, Loader2 } from "lucide-react";
 import { CalendarioAusencias } from "@/features/rrhh/components/calendarios/CalendarioAusencias";
-import { CalendariosVacacionesPanel } from "@/features/rrhh/components/calendarios/CalendariosVacacionesPanel";
+import { RegistrarAusenciaDialog } from "@/features/rrhh/components/calendarios/RegistrarAusenciaDialog";
+import type { SolicitudSubtipoAusencia } from "@/features/mi-panel/types";
 
 const AMBITO_LABEL: Record<string, string> = {
   nacional: "Nacional",
@@ -33,6 +33,10 @@ export function CalendariosRRHHView() {
     permisos: AusenciaCalendario[];
   }>({ vacaciones: [], bajas: [], permisos: [] });
   const [cargandoAusencias, setCargandoAusencias] = useState(true);
+  // Tipo de ausencia que RRHH está registrando a mano, o null si no hay diálogo.
+  const [registrando, setRegistrando] = useState<SolicitudSubtipoAusencia | null>(null);
+  // Cambia al guardar para forzar la recarga del calendario.
+  const [recarga, setRecarga] = useState(0);
 
   useEffect(() => {
     let activo = true;
@@ -53,7 +57,7 @@ export function CalendariosRRHHView() {
     return () => {
       activo = false;
     };
-  }, [empresaActual.id, anio]);
+  }, [empresaActual.id, anio, recarga]);
 
   const vacaciones = useMemo(() =>
     ausencias.vacaciones.map(v => ({
@@ -115,50 +119,24 @@ export function CalendariosRRHHView() {
 
   return (
     <div className="p-6 space-y-6">
-      <Tabs defaultValue="laboral" className="space-y-4">
+      <Tabs defaultValue="vacaciones" className="space-y-4">
         <TabsList className="flex-wrap h-auto gap-1">
-          <TabsTrigger value="laboral" className="gap-1"><CalendarDays className="h-4 w-4" />Laboral</TabsTrigger>
           <TabsTrigger value="vacaciones" className="gap-1"><Palmtree className="h-4 w-4" />Vacaciones</TabsTrigger>
-          <TabsTrigger value="festivos" className="gap-1"><PartyPopper className="h-4 w-4" />Festivos</TabsTrigger>
           <TabsTrigger value="bajas" className="gap-1"><HeartPulse className="h-4 w-4" />Bajas médicas</TabsTrigger>
-          <TabsTrigger value="justificadas" className="gap-1"><FileCheck className="h-4 w-4" />Justificadas</TabsTrigger>
+          <TabsTrigger value="justificadas" className="gap-1"><FileCheck className="h-4 w-4" />Permisos</TabsTrigger>
+          <TabsTrigger value="festivos" className="gap-1"><PartyPopper className="h-4 w-4" />Festivos</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="laboral">
-          <CalendarioLaboral empresaId={empresaActual.id} />
-        </TabsContent>
-
-        <TabsContent value="vacaciones" className="space-y-8">
-          <CalendariosVacacionesPanel empresaId={empresaActual.id} />
-
-          <div className="space-y-3 border-t pt-6">
-            <div>
-              <h3 className="text-sm font-semibold">Vacaciones de la plantilla</h3>
-              <p className="text-sm text-muted-foreground">
-                Vacaciones aprobadas y pendientes de {anio}, de todos los
-                empleados. Las pendientes se muestran para que veas los solapes
-                antes de aprobarlas.
-              </p>
-            </div>
-            {avisoAusencias(vacaciones.length, "vacaciones registradas")}
-            <CalendarioAusencias
-              empresaId={empresaActual.id}
-              modalidad="vacaciones"
-              titulo="Vacaciones"
-              items={vacaciones}
-              botonNuevo="Registrar vacaciones"
-              columnaExtra={{ header: "Días", render: item => <span className="font-semibold">{item.detalle}</span> }}
-            />
-          </div>
-        </TabsContent>
-
-        <TabsContent value="festivos">
+        <TabsContent value="vacaciones" className="space-y-3">
+          {avisoAusencias(vacaciones.length, "vacaciones registradas")}
           <CalendarioAusencias
             empresaId={empresaActual.id}
-            modalidad="festivos"
-            titulo="Festivos"
-            items={festivos}
-            botonNuevo="Registrar festivo"
+            modalidad="vacaciones"
+            titulo="Vacaciones"
+            items={vacaciones}
+            botonNuevo="Registrar vacaciones"
+            onNuevo={() => setRegistrando("vacaciones")}
+            columnaExtra={{ header: "Días", render: item => <span className="font-semibold">{item.detalle}</span> }}
           />
         </TabsContent>
 
@@ -170,6 +148,7 @@ export function CalendariosRRHHView() {
             titulo="Bajas médicas"
             items={bajas}
             botonNuevo="Registrar baja"
+            onNuevo={() => setRegistrando("baja_medica")}
             columnaExtra={{ header: "Motivo", render: item => <span className="text-muted-foreground">{item.detalle || "—"}</span> }}
           />
         </TabsContent>
@@ -179,13 +158,31 @@ export function CalendariosRRHHView() {
           <CalendarioAusencias
             empresaId={empresaActual.id}
             modalidad="justificadas"
-            titulo="Justificadas"
+            titulo="Permisos"
             items={justificadas}
-            botonNuevo="Registrar justificada"
+            botonNuevo="Registrar permiso"
+            onNuevo={() => setRegistrando("permiso")}
             columnaExtra={{ header: "Días", render: item => <span className="font-semibold">{item.tipo || "—"}</span> }}
           />
         </TabsContent>
+
+        <TabsContent value="festivos">
+          {/* Los festivos se generan solos según la comunidad autónoma. */}
+          <CalendarioAusencias
+            empresaId={empresaActual.id}
+            modalidad="festivos"
+            titulo="Festivos"
+            items={festivos}
+            botonNuevo="Registrar festivo"
+          />
+        </TabsContent>
       </Tabs>
+
+      <RegistrarAusenciaDialog
+        subtipo={registrando}
+        onOpenChange={(abierto) => { if (!abierto) setRegistrando(null); }}
+        onRegistrada={() => { setRegistrando(null); setRecarga((n) => n + 1); }}
+      />
     </div>
   );
 }
