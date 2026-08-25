@@ -28,7 +28,13 @@ import { HorariosAperturaPanel } from "./HorariosAperturaPanel";
 import { PreferenciasMotorPanelButton } from "./PreferenciasMotorPanel";
 import { ReglasIntervaloPanel } from "./ReglasIntervaloPanel";
 
-export function ConfigTabReservas() {
+interface ConfigTabReservasProps {
+  /** Avisa al contenedor de si quedan cambios sin guardar, para poder frenar
+   *  la salida antes de perderlos. */
+  onDirtyChange?: (hayCambios: boolean) => void;
+}
+
+export function ConfigTabReservas({ onDirtyChange }: ConfigTabReservasProps = {}) {
   const [config, setConfig] = useState<EmpresaReservasConfig | null>(null);
   /** Solo los campos tocados desde el último guardado: se envían únicamente esos. */
   const [pendiente, setPendiente] = useState<Partial<EmpresaReservasConfig>>({});
@@ -75,6 +81,16 @@ export function ConfigTabReservas() {
   const paneles = [horariosRef, aforoRef, intervaloRef];
   const hayCambios =
     hayCamposPendientes || paneles.some((p) => p.current?.hayCambios === true);
+
+  // El contenedor necesita saberlo para poder frenar la salida.
+  useEffect(() => {
+    onDirtyChange?.(hayCambios);
+  }, [hayCambios, onDirtyChange]);
+
+  // Al desmontar deja de haber nada pendiente que proteger.
+  useEffect(() => {
+    return () => onDirtyChange?.(false);
+  }, [onDirtyChange]);
 
   async function handleGuardar() {
     if (!hayCambios) return;
