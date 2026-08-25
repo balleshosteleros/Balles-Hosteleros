@@ -208,22 +208,39 @@ export function HorariosAperturaPanel({ config, onChange }: Props) {
   const [cargando, setCargando] = useState(true);
   const [aplicando, setAplicando] = useState(false);
 
-  // Precarga el horario general al cambiar de turno.
-  // OJO: depende SOLO de `turno`. Si dependiera también de `config`, cada click
-  // en un slot (que llama a onChange y muta config) revertiría lo que el usuario
-  // acaba de tocar arriba — p. ej. pasar de "Cerrado" a "Abierto".
+  // Precarga el horario al cambiar de turno, de día o de ámbito. Sin esto, al
+  // pasar del lunes al martes seguirías viendo los valores del lunes y creerías
+  // estar editando un día que no es.
+  // OJO: depende SOLO de esos tres. Si dependiera también de `config`, cada
+  // click en un slot (que llama a onChange y muta config) revertiría lo que el
+  // usuario acaba de tocar arriba — p. ej. pasar de "Cerrado" a "Abierto".
   useEffect(() => {
     const cfg = configRef.current;
+    // En ámbito semanal manda el día elegido; si ese día no tiene horario
+    // propio, se cae al general, que es lo que heredaría de verdad.
+    const ventana =
+      ambito === "dia_semana" ? ventanaEfectiva(cfg, diaSemanaSel, turno) : null;
+    const porDefecto = turno === "comida"
+      ? { inicio: "13:00", fin: "16:00" }
+      : { inicio: "20:00", fin: "02:00" };
+
+    if (ambito === "dia_semana") {
+      setCerrado(ventana?.cerrado ?? false);
+      setInicio(ventana && !ventana.cerrado ? ventana.inicio : porDefecto.inicio);
+      setFin(ventana && !ventana.cerrado ? ventana.fin : porDefecto.fin);
+      return;
+    }
+
     if (turno === "comida") {
-      setInicio(cfg.generalInicioComida ?? "13:00");
-      setFin(cfg.generalFinComida ?? "16:00");
+      setInicio(cfg.generalInicioComida ?? porDefecto.inicio);
+      setFin(cfg.generalFinComida ?? porDefecto.fin);
       setCerrado(Boolean(cfg.generalCerradoComida));
     } else {
-      setInicio(cfg.generalInicioCena ?? "20:00");
-      setFin(cfg.generalFinCena ?? "02:00");
+      setInicio(cfg.generalInicioCena ?? porDefecto.inicio);
+      setFin(cfg.generalFinCena ?? porDefecto.fin);
       setCerrado(Boolean(cfg.generalCerradoCena));
     }
-  }, [turno]);
+  }, [turno, diaSemanaSel, ambito]);
 
   async function cargarExcepciones() {
     const r = await listHorariosExcepciones();
@@ -273,16 +290,16 @@ export function HorariosAperturaPanel({ config, onChange }: Props) {
           setAplicando(false);
           return;
         }
-        // Además del día concreto, refrescamos la ventana "general" del turno:
-        // es la que alimenta los slots de 15 min, que son comunes a todos los días.
+        // Solo se escribe el día elegido. El "cerrado" general NUNCA se toca
+        // aquí: cerrar los lunes es cerrar los lunes, no cerrar el turno entero.
+        // La ventana general (horas) sí se refresca cuando el día abre, porque
+        // es la que alimenta los slots de 15 min comunes a todos los días.
         const generalInicioKey = turno === "comida" ? "generalInicioComida" : "generalInicioCena";
         const generalFinKey    = turno === "comida" ? "generalFinComida"    : "generalFinCena";
-        const generalCerradoKey = turno === "comida" ? "generalCerradoComida" : "generalCerradoCena";
         const parche: Record<string, unknown> = {
           [`${diaSemanaSel}_inicio_${turno}`]:  cerrado ? null : inicio,
           [`${diaSemanaSel}_fin_${turno}`]:     cerrado ? null : fin,
           [`${diaSemanaSel}_cerrado_${turno}`]: cerrado,
-          [generalCerradoKey]: cerrado,
           ...(cerrado ? {} : { [generalInicioKey]: inicio, [generalFinKey]: fin }),
         };
         onChange(parche as Partial<EmpresaReservasConfig>);

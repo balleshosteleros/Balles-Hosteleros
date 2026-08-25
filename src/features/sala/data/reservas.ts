@@ -445,16 +445,17 @@ export const DURACION_RESERVA_DEFAULT_MINUTOS = 120;
 export const DURACION_RESERVA_PASO_MINUTOS = 15;
 
 /**
- * Duración en horas y minutos, tal y como se piensa en sala ("1, 15" = una hora
- * y cuarto). En minutos sueltos (los 195 de "3, 15") nadie calcula de cabeza
- * cuánto ocupa realmente una mesa.
+ * Duración en horas y minutos, tal y como se piensa en sala ("1 h 15 min" = una
+ * hora y cuarto). En minutos sueltos (los 195 de "3 h 15 min") nadie calcula de
+ * cabeza cuánto ocupa realmente una mesa. La unidad se escribe siempre, también
+ * en los tramos mixtos: un "1, 15" a secas no se lee como hora y cuarto.
  */
 export function formatearDuracionReserva(minutos: number): string {
   const h = Math.floor(minutos / 60);
   const m = minutos % 60;
   if (h === 0) return `${m} min`;
   if (m === 0) return h === 1 ? "1 hora" : `${h} horas`;
-  return `${h}, ${String(m).padStart(2, "0")}`;
+  return `${h} h ${m} min`;
 }
 
 /**

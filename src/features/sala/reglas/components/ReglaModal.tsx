@@ -144,8 +144,8 @@ export function ReglaModal({
           {opcionesTurno.length < 3 && (
             <p className="text-[11px] text-muted-foreground">
               {opcionesTurno.length === 1
-                ? `Solo se muestra ${opcionesTurno[0] === "COMIDA" ? "la comida" : "la cena"}: el otro turno está cerrado en el horario de apertura.`
-                : "Algunos turnos no aparecen porque están cerrados en el horario de apertura."}
+                ? `Solo se muestra ${opcionesTurno[0] === "COMIDA" ? "la comida" : "la cena"}: el otro turno está cerrado todos los días en el horario de apertura.`
+                : "Algunos turnos no aparecen porque están cerrados todos los días en el horario de apertura."}
             </p>
           )}
 

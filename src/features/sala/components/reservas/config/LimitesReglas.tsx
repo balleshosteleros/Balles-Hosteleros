@@ -10,6 +10,7 @@ import {
   type MetricaRegla,
   type TurnoRegla,
 } from "@/features/sala/reglas/data/reglas";
+import { type EmpresaReservasConfig } from "@/features/sala/data/reservas";
 import { getReservasConfig } from "@/features/sala/actions/reservas-config-actions";
 import {
   deleteReglaReserva,
@@ -32,6 +33,31 @@ function hoyEnZonaISO(tz: string): string {
   return fmt.format(new Date()); // "YYYY-MM-DD"
 }
 
+const DIAS_SEMANA = ["lun", "mar", "mie", "jue", "vie", "sab", "dom"] as const;
+
+/**
+ * ¿El turno abre algún día de la semana? Se mira día a día, no solo el general:
+ * un local que solo da comidas los viernes tiene el general cerrado y aun así
+ * necesita poder configurar topes de aforo para la comida.
+ *
+ * Misma jerarquía que `horario-resolver`: el patrón semanal manda sobre el
+ * general, y el día solo hereda el general cuando no dice nada.
+ */
+function turnoAbreAlgunDia(
+  cfg: EmpresaReservasConfig,
+  turno: "comida" | "cena",
+): boolean {
+  const genCerrado = turno === "comida" ? cfg.generalCerradoComida : cfg.generalCerradoCena;
+  return DIAS_SEMANA.some((dia) => {
+    const cerradoDia = cfg[`${dia}_cerrado_${turno}` as const];
+    const inicioDia = cfg[`${dia}_inicio_${turno}` as const];
+    const finDia = cfg[`${dia}_fin_${turno}` as const];
+    if (cerradoDia === true) return false;
+    if (inicioDia != null || finDia != null) return true;
+    return !genCerrado;
+  });
+}
+
 export function LimitesReglas() {
   const [reglas, setReglas] = useState<EmpresaReservasRegla[]>([]);
   const [loading, setLoading] = useState(true);
@@ -45,8 +71,8 @@ export function LimitesReglas() {
     const [res, cfg] = await Promise.all([listReglasReservas(), getReservasConfig()]);
     if (res.ok) setReglas(res.data);
     if (cfg.ok && cfg.data) {
-      const comida = !cfg.data.generalCerradoComida;
-      const cena = !cfg.data.generalCerradoCena;
+      const comida = turnoAbreAlgunDia(cfg.data, "comida");
+      const cena = turnoAbreAlgunDia(cfg.data, "cena");
       const abiertos: TurnoRegla[] = [];
       if (comida) abiertos.push("COMIDA");
       if (cena) abiertos.push("CENA");
