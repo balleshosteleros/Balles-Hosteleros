@@ -8,7 +8,7 @@ import {
 } from "@/features/rrhh/actions/calendario-ausencias-actions";
 import { useFestivos } from "@/features/rrhh/hooks/useFestivos";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Palmtree, PartyPopper, HeartPulse, FileCheck, Loader2 } from "lucide-react";
+import { Palmtree, PartyPopper, HeartPulse, FileCheck, LogOut, Loader2 } from "lucide-react";
 import { CalendarioAusencias } from "@/features/rrhh/components/calendarios/CalendarioAusencias";
 import { RegistrarAusenciaDialog } from "@/features/rrhh/components/calendarios/RegistrarAusenciaDialog";
 import type { SolicitudSubtipoAusencia } from "@/features/mi-panel/types";
@@ -31,7 +31,8 @@ export function CalendariosRRHHView() {
     vacaciones: AusenciaCalendario[];
     bajas: AusenciaCalendario[];
     permisos: AusenciaCalendario[];
-  }>({ vacaciones: [], bajas: [], permisos: [] });
+    bajasContrato: AusenciaCalendario[];
+  }>({ vacaciones: [], bajas: [], permisos: [], bajasContrato: [] });
   const [cargandoAusencias, setCargandoAusencias] = useState(true);
   // Tipo de ausencia que RRHH está registrando a mano, o null si no hay diálogo.
   const [registrando, setRegistrando] = useState<SolicitudSubtipoAusencia | null>(null);
@@ -45,12 +46,14 @@ export function CalendariosRRHHView() {
       listAusenciasEmpresa(empresaActual.id, "vacaciones", anio),
       listAusenciasEmpresa(empresaActual.id, "baja_medica", anio),
       listAusenciasEmpresa(empresaActual.id, "permiso", anio),
-    ]).then(([vac, baj, per]) => {
+      listAusenciasEmpresa(empresaActual.id, "baja_contrato", anio),
+    ]).then(([vac, baj, per, bajCon]) => {
       if (!activo) return;
       setAusencias({
         vacaciones: vac.data,
         bajas: baj.data,
         permisos: per.data,
+        bajasContrato: bajCon.data,
       });
       setCargandoAusencias(false);
     });
@@ -66,6 +69,21 @@ export function CalendariosRRHHView() {
       detalle: v.dias != null ? `${v.dias} días` : "—",
     })),
     [ausencias.vacaciones]
+  );
+
+  // Baja de contrato: aquí la fecha que importa es el ÚLTIMO DÍA trabajado
+  // (`fechaFin`), no un rango de ausencia. Se marca ese día en el calendario,
+  // porque es la fecha que hay que tener presente al cuadrar turnos.
+  const bajasContrato = useMemo(() =>
+    ausencias.bajasContrato.map(b => ({
+      id: b.id,
+      empleadoNombre: b.empleadoNombre,
+      departamento: b.departamento,
+      fechaInicio: b.fechaFin ?? b.fechaInicio,
+      estado: b.estado,
+      detalle: b.fechaFin ? "Último día trabajado" : "Sin fecha efectiva",
+    })),
+    [ausencias.bajasContrato]
   );
 
   const festivos = useMemo(() =>
@@ -124,6 +142,7 @@ export function CalendariosRRHHView() {
           <TabsTrigger value="vacaciones" className="gap-1"><Palmtree className="h-4 w-4" />Vacaciones</TabsTrigger>
           <TabsTrigger value="bajas" className="gap-1"><HeartPulse className="h-4 w-4" />Bajas médicas</TabsTrigger>
           <TabsTrigger value="justificadas" className="gap-1"><FileCheck className="h-4 w-4" />Permisos</TabsTrigger>
+          <TabsTrigger value="bajas_contrato" className="gap-1"><LogOut className="h-4 w-4" />Bajas de contrato</TabsTrigger>
           <TabsTrigger value="festivos" className="gap-1"><PartyPopper className="h-4 w-4" />Festivos</TabsTrigger>
         </TabsList>
 
@@ -163,6 +182,22 @@ export function CalendariosRRHHView() {
             botonNuevo="Registrar permiso"
             onNuevo={() => setRegistrando("permiso")}
             columnaExtra={{ header: "Días", render: item => <span className="font-semibold">{item.tipo || "—"}</span> }}
+          />
+        </TabsContent>
+
+        <TabsContent value="bajas_contrato" className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            Último día trabajado de quien deja la empresa. No se registra aquí:
+            la solicita el propio empleado y requiere firma.
+          </p>
+          {avisoAusencias(bajasContrato.length, "bajas de contrato")}
+          <CalendarioAusencias
+            empresaId={empresaActual.id}
+            modalidad="bajas_contrato"
+            titulo="Bajas de contrato"
+            items={bajasContrato}
+            botonNuevo="Registrar baja de contrato"
+            columnaExtra={{ header: "Detalle", render: item => <span className="text-muted-foreground">{item.detalle || "—"}</span> }}
           />
         </TabsContent>
 
