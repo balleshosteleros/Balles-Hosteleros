@@ -347,6 +347,8 @@ export async function procesarSubidaNominasGestoria(
     return { ok: false, error: "No se pudo leer ninguna nómina del archivo", status: 422 };
   }
 
+  // Nota: si el mes estaba DEVUELTO a la gestoría, `procesarNominasConAdmin` lo
+  // devuelve a BORRADOR por su cuenta (es el punto común de las dos vías de subida).
   const resultado = await procesarNominasConAdmin(admin, row.empresa_id, nominas, row.periodo);
 
   // Registrar la subida en el token (trazabilidad + contador). El enlace NO se

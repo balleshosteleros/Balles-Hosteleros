@@ -16,6 +16,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getRolContext } from "@/features/auth/actions/permisos-actions";
 import { puedeEditarModulo } from "@/features/auth/lib/permisos";
 import { BUCKET_NOMINAS, EXT_POR_MIME } from "@/features/rrhh/services/nominas/procesar-nominas";
+import { rechazarMesNominasGestoria } from "@/features/rrhh/services/nominas/rechazo-gestoria";
+import { MOTIVO_MIN_CARACTERES } from "@/features/rrhh/lib/nominas-rechazo";
 import { revalidatePath } from "next/cache";
 
 export type RevisionEstado = "correcta" | "con_incidencia" | "denegada";
@@ -268,17 +270,29 @@ export interface EstadoMesNominas {
   puedeGestionar: boolean;
   /** TC1 del mes (recibo de cotizaciones de la EMPRESA), si se ha subido. */
   tc1: { nombre: string; importe: number | null; trabajadores: number | null } | null;
+  /** Mes DEVUELTO a la gestoría: se espera que vuelva a subirlo todo corregido. */
+  rechazado: boolean;
+  rechazadoEn: string | null;
+  /** Anomalías que RRHH comunicó a la gestoría en la última devolución. */
+  rechazoMotivo: string | null;
+  /** Entrega nº N de la gestoría para este mes (cada rechazo la sube en 1). */
+  ronda: number;
 }
 
 /** Estado de confirmación del mes de nóminas. */
 export async function getEstadoMesNominas(periodo: string): Promise<EstadoMesNominas> {
-  const vacio: EstadoMesNominas = { confirmado: false, confirmadoEn: null, puedeGestionar: false, tc1: null };
+  const vacio: EstadoMesNominas = {
+    confirmado: false, confirmadoEn: null, puedeGestionar: false, tc1: null,
+    rechazado: false, rechazadoEn: null, rechazoMotivo: null, ronda: 1,
+  };
   try {
     const { supabase, empresaId } = await getAppContext();
     if (!empresaId) return vacio;
     const { data } = await supabase
       .from("rrhh_nominas_mes")
-      .select("confirmado_en, tc1_path, tc1_nombre, tc1_importe, tc1_trabajadores")
+      .select(
+        "confirmado_en, tc1_path, tc1_nombre, tc1_importe, tc1_trabajadores, rechazado_en, rechazo_motivo, ronda",
+      )
       .eq("empresa_id", empresaId)
       .eq("periodo", periodo)
       .maybeSingle();
@@ -286,6 +300,7 @@ export async function getEstadoMesNominas(periodo: string): Promise<EstadoMesNom
     // pantalla y la base de datos no pueden discrepar.
     const { data: puede } = await supabase.rpc("puede_gestionar_pagos");
     const confirmadoEn = (data?.confirmado_en as string | null) ?? null;
+    const rechazadoEn = (data?.rechazado_en as string | null) ?? null;
     return {
       confirmado: confirmadoEn !== null,
       confirmadoEn,
@@ -297,6 +312,10 @@ export async function getEstadoMesNominas(periodo: string): Promise<EstadoMesNom
             trabajadores: data.tc1_trabajadores != null ? Number(data.tc1_trabajadores) : null,
           }
         : null,
+      rechazado: rechazadoEn !== null,
+      rechazadoEn,
+      rechazoMotivo: (data?.rechazo_motivo as string | null) ?? null,
+      ronda: Number(data?.ronda ?? 1),
     };
   } catch (err) {
     console.error("[rrhh] getEstadoMesNominas:", err);
@@ -351,6 +370,112 @@ export async function confirmarMesNominas(periodo: string) {
     const msg = err instanceof Error ? err.message : "Error desconocido";
     console.error("[rrhh] confirmarMesNominas:", msg);
     return { ok: false as const, error: msg };
+  }
+}
+
+// ── Mes RECHAZADO: se devuelve a la gestoría para que lo suba todo corregido ──
+
+/**
+ * Devuelve las nóminas del mes a la gestoría con las anomalías que redacta RRHH.
+ *
+ * Es la alternativa a confirmar: en vez de publicar al empleado, se borra todo lo
+ * que subió la gestoría, se le manda un correo con el texto de RRHH y se le
+ * reabre el enlace para que suba la entrega completa corregida. El motivo es
+ * OBLIGATORIO — sin decir qué está mal, la gestoría no puede corregir nada.
+ */
+export async function rechazarMesNominas(periodo: string, motivo: string) {
+  try {
+    const { supabase, empresaId, userId } = await getAppContext();
+    if (!empresaId || !userId) return { ok: false as const, error: "No autenticado" };
+
+    const { data: puede } = await supabase.rpc("puede_gestionar_pagos");
+    if (puede !== true) {
+      return { ok: false as const, error: "No tienes permiso para devolver las nóminas a la gestoría." };
+    }
+
+    const texto = (motivo ?? "").trim();
+    if (texto.length < MOTIVO_MIN_CARACTERES) {
+      return {
+        ok: false as const,
+        error: `Explica las anomalías con detalle (mínimo ${MOTIVO_MIN_CARACTERES} caracteres): es el mensaje que recibe la gestoría.`,
+      };
+    }
+
+    // Un mes ya confirmado está publicado al empleado: primero hay que reabrirlo.
+    const { data: mes } = await supabase
+      .from("rrhh_nominas_mes")
+      .select("confirmado_en")
+      .eq("empresa_id", empresaId)
+      .eq("periodo", periodo)
+      .maybeSingle();
+    if (mes?.confirmado_en) {
+      return {
+        ok: false as const,
+        error: "Este mes ya está confirmado y publicado a los empleados. Reábrelo antes de devolverlo a la gestoría.",
+      };
+    }
+
+    // Devolver un mes vacío no tiene sentido: no hay nada que corregir.
+    const { count } = await supabase
+      .from("rrhh_pagos_nominas")
+      .select("id", { count: "exact", head: true })
+      .eq("empresa_id", empresaId)
+      .eq("periodo", periodo);
+    if (!count) {
+      return { ok: false as const, error: "No hay nóminas de este mes que devolver." };
+    }
+
+    const admin = createAdminClient();
+    const r = await rechazarMesNominasGestoria(admin, empresaId, periodo, texto, userId);
+
+    revalidatePath("/rrhh/pagos");
+    revalidatePath("/mi-panel/documentos");
+    return { ok: true as const, ...r };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Error desconocido";
+    console.error("[rrhh] rechazarMesNominas:", msg);
+    return { ok: false as const, error: msg };
+  }
+}
+
+export interface RechazoHistorico {
+  id: string;
+  periodo: string;
+  ronda: number;
+  motivo: string;
+  nominasBorradas: number;
+  tc1Borrado: boolean;
+  emailEnviado: boolean;
+  emailDestino: string | null;
+  createdAt: string;
+}
+
+/** Devoluciones a la gestoría de un mes, más reciente primero. */
+export async function listarRechazosMes(periodo: string): Promise<RechazoHistorico[]> {
+  try {
+    const { supabase, empresaId } = await getAppContext();
+    if (!empresaId) return [];
+    const { data, error } = await supabase
+      .from("rrhh_nominas_rechazos")
+      .select("id, periodo, ronda, motivo, nominas_borradas, tc1_borrado, email_enviado, email_destino, created_at")
+      .eq("empresa_id", empresaId)
+      .eq("periodo", periodo)
+      .order("created_at", { ascending: false });
+    if (error) throw error;
+    return (data ?? []).map((r) => ({
+      id: r.id as string,
+      periodo: r.periodo as string,
+      ronda: Number(r.ronda ?? 1),
+      motivo: (r.motivo as string) ?? "",
+      nominasBorradas: Number(r.nominas_borradas ?? 0),
+      tc1Borrado: Boolean(r.tc1_borrado),
+      emailEnviado: Boolean(r.email_enviado),
+      emailDestino: (r.email_destino as string | null) ?? null,
+      createdAt: r.created_at as string,
+    }));
+  } catch (err) {
+    console.error("[rrhh] listarRechazosMes:", err);
+    return [];
   }
 }
 

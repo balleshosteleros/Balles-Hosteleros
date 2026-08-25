@@ -27,9 +27,6 @@ import {
   urlSubidaNominas,
 } from "@/features/rrhh/services/nominas/nominas-gestoria";
 
-/** Mínimo de caracteres del mensaje de anomalías. Mismo valor que el CHECK de BD. */
-export const MOTIVO_MIN_CARACTERES = 10;
-
 export interface ResultadoRechazo {
   nominasBorradas: number;
   tc1Borrado: boolean;

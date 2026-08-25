@@ -25,10 +25,12 @@ import {
   type NotifLiquidacionesConfig,
 } from "@/features/notificaciones/actions/notif-config-actions";
 import { NominasRevisionDialog } from "@/features/rrhh/components/pagos/NominasRevisionDialog";
+import { RechazarNominasDialog } from "@/features/rrhh/components/pagos/RechazarNominasDialog";
 import {
   listarNominasRevision,
   getEstadoMesNominas,
   confirmarMesNominas,
+  rechazarMesNominas,
   reabrirMesNominas,
   subirTc1Mes,
   getTc1MesUrl,
@@ -46,7 +48,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { Edit2, Banknote, Settings, Send, Lock, Unlock, CheckCircle2, Clock, Upload, ReceiptText, AlertTriangle, FileText, ShieldCheck, X } from "lucide-react";
+import { Edit2, Banknote, Settings, Send, Lock, Unlock, CheckCircle2, Clock, Upload, ReceiptText, AlertTriangle, FileText, ShieldCheck, X, Undo2 } from "lucide-react";
 import {
   SubmoduleToolbar,
   aplicarFiltrosToolbar,
@@ -258,7 +260,15 @@ export function PagosView() {
     confirmadoEn: null,
     puedeGestionar: false,
     tc1: null,
+    rechazado: false,
+    rechazadoEn: null,
+    rechazoMotivo: null,
+    ronda: 1,
   });
+  // Devolución del mes a la gestoría: diálogo con las anomalías (obligatorias).
+  const [showRechazo, setShowRechazo] = useState(false);
+  const [rechazando, setRechazando] = useState(false);
+  const [nominasEnMes, setNominasEnMes] = useState(0);
   const [incidenciasNominas, setIncidenciasNominas] = useState(0);
   const [showConfig, setShowConfig] = useState(false);
   const [enviando, setEnviando] = useState(false);
@@ -300,6 +310,9 @@ export function PagosView() {
     if (!periodo) return;
     const lista = await listarNominasRevision(periodo);
     setIncidenciasNominas(lista.filter((n) => n.estado === "con_incidencia").length);
+    // Cuántas hay en total: es lo que se elimina si el mes se devuelve, y lo que
+    // decide si hay algo que devolver.
+    setNominasEnMes(lista.length);
   }, [periodo]);
 
   useEffect(() => {
@@ -667,6 +680,35 @@ export function PagosView() {
           ? `Atención: se han cerrado ${res.conIncidencia} nómina${res.conIncidencia === 1 ? "" : "s"} con incidencia sin revisar.`
           : undefined,
     });
+  };
+
+  // Devuelve el mes a la gestoría con las anomalías que ha escrito RRHH: borra
+  // todo lo subido, les manda el correo y les reabre el enlace para que suban la
+  // entrega completa corregida.
+  const rechazarMes = async (motivo: string) => {
+    setRechazando(true);
+    const res = await rechazarMesNominas(periodo, motivo);
+    setRechazando(false);
+    if (!res.ok) {
+      toast.error(res.error ?? "No se pudieron devolver las nóminas.");
+      return;
+    }
+    setShowRechazo(false);
+    setPagosPorRango({});
+    await refrescarEstadoMes();
+    await refrescarIncidenciasNominas();
+
+    // Si el correo no salió, es lo primero que RRHH tiene que saber: el mes está
+    // devuelto igualmente, pero la gestoría no se ha enterado.
+    if (res.emailEnviado) {
+      toast.success(`Nóminas de ${mesLabelNominas} devueltas a la gestoría.`, {
+        description: `Se avisó a ${res.emailDestino} con tus anomalías y el enlace para volver a subirlas.`,
+      });
+    } else {
+      toast.warning(`Nóminas de ${mesLabelNominas} devueltas, pero el correo NO salió.`, {
+        description: "Avisa a la gestoría por otra vía: el mes ya está vacío esperando su entrega.",
+      });
+    }
   };
 
   const reabrirMes = async () => {
@@ -1184,6 +1226,20 @@ export function PagosView() {
             ? `Leyendo nóminas… ${progresoNominas.hechas}/${progresoNominas.total}`
             : "Subir documentos del mes"}
         </Button>
+        {/* Devolver a la gestoría: la otra salida de la revisión. Solo tiene
+            sentido con nóminas subidas y el mes aún sin confirmar. */}
+        {estadoMes.puedeGestionar && !estadoMes.confirmado && nominasEnMes > 0 && !esVistaAgregada && (
+          <Button
+            variant="outline"
+            className="gap-2 text-amber-700 border-amber-300 hover:bg-amber-50 dark:text-amber-400 dark:border-amber-900/50"
+            onClick={() => setShowRechazo(true)}
+            disabled={rechazando || confirmandoMes}
+            title="Devolver las nóminas a la gestoría con las anomalías, para que las corrija y las suba de nuevo"
+          >
+            <Undo2 className="h-4 w-4" />
+            Devolver a gestoría
+          </Button>
+        )}
         {estadoMes.puedeGestionar && (
           <Button
             variant={estadoMes.confirmado ? "outline" : "default"}
@@ -1300,6 +1356,39 @@ export function PagosView() {
           </p>
         </div>
       )}
+
+      {/* Mes DEVUELTO: está vacío a propósito, esperando que la gestoría suba la
+          entrega corregida. Se recuerda qué se les dijo, para no repetirlo. */}
+      {estadoMes.rechazado && (
+        <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm dark:border-amber-900/40 dark:bg-amber-950/20">
+          <Undo2 className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+          <div className="text-amber-900 dark:text-amber-200">
+            <p>
+              Las nóminas de <b>{mesLabelNominas}</b> se devolvieron a la gestoría
+              {estadoMes.rechazadoEn
+                ? ` el ${new Date(estadoMes.rechazadoEn).toLocaleDateString("es-ES", {
+                    day: "2-digit", month: "2-digit", year: "numeric",
+                  })}`
+                : ""}
+              . El mes está vacío hasta que suban la entrega corregida (será la nº {estadoMes.ronda}).
+            </p>
+            {estadoMes.rechazoMotivo && (
+              <p className="mt-1 whitespace-pre-line text-xs opacity-90">
+                <b>Se les comunicó:</b> {estadoMes.rechazoMotivo}
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+
+      <RechazarNominasDialog
+        open={showRechazo}
+        onOpenChange={setShowRechazo}
+        mesLabel={mesLabelNominas}
+        nominasEnMes={nominasEnMes}
+        enviando={rechazando}
+        onConfirmar={rechazarMes}
+      />
 
       <NominasRevisionDialog
         open={showRevision}

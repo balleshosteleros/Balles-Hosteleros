@@ -287,9 +287,41 @@ export async function procesarNominasConAdmin(
       meses.add(periodo);
     }
     res.meses = [...meses].sort();
+
+    // Si alguno de estos meses estaba DEVUELTO a la gestoría, la entrega nueva lo
+    // reabre: vuelve a BORRADOR para que RRHH lo revise otra vez. Se hace aquí, y
+    // no en cada llamador, porque este es el punto común de las dos vías de
+    // subida (enlace de la gestoría y subida manual de RRHH).
+    if (res.guardadas > 0 && !res.rechazadoTodo) {
+      for (const p of res.meses) {
+        await limpiarRechazoDelMes(admin, empresaId, p);
+      }
+    }
     return res;
   } catch (err) {
     console.error("[rrhh] procesarNominasConAdmin:", err);
     return vacio;
+  }
+}
+
+/**
+ * Quita la marca de "devuelto a la gestoría" de un mes: ya han vuelto a subir.
+ * La `ronda` NO se toca — es el contador de entregas y debe seguir creciendo.
+ * Best-effort: un fallo aquí no puede tumbar un volcado que ya se guardó.
+ */
+async function limpiarRechazoDelMes(
+  admin: SupabaseClient,
+  empresaId: string,
+  periodo: string,
+): Promise<void> {
+  try {
+    await admin
+      .from("rrhh_nominas_mes")
+      .update({ rechazado_en: null, rechazado_por: null, rechazo_motivo: null })
+      .eq("empresa_id", empresaId)
+      .eq("periodo", periodo)
+      .not("rechazado_en", "is", null);
+  } catch (e) {
+    console.error("[rrhh] limpiarRechazoDelMes:", e);
   }
 }
