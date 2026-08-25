@@ -129,7 +129,11 @@ export function TiposAusenciaSection({ empresaId }: { empresaId: string }) {
                       <p className="font-medium text-sm">{t.nombre}</p>
                     </div>
                   </TableCell>
-                  <TableCell className="text-sm text-muted-foreground">{formatLimite(t.limite_dias)}</TableCell>
+                  <TableCell className="text-sm text-muted-foreground">
+                    {/* Vacaciones no usa este límite: su cupo está en el
+                        calendario de cada empleado. */}
+                    {t.subtipo === "vacaciones" ? "Según calendario" : formatLimite(t.limite_dias)}
+                  </TableCell>
                   <TableCell className="text-sm text-muted-foreground">{formatConteo(t.conteo_dias)}</TableCell>
                   <TableCell><Badge variant={t.remunerada ? "default" : "outline"} className="text-xs">{t.remunerada ? "Sí" : "No"}</Badge></TableCell>
                   <TableCell>
@@ -165,19 +169,34 @@ export function TiposAusenciaSection({ empresaId }: { empresaId: string }) {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="text-sm font-medium">Límite anual (días)</label>
-                <Input
-                  type="number"
-                  min={1}
-                  value={form.limite_dias ?? ""}
-                  onChange={e => {
-                    const v = e.target.value;
-                    setForm(f => ({ ...f, limite_dias: v === "" ? null : Math.max(1, Number(v)) }));
-                  }}
-                  placeholder="Sin límite"
-                />
-                <p className="text-[11px] text-muted-foreground mt-1">
-                  Días máximos por año natural. Si se supera, solo un director puede aprobarlo.
-                </p>
+                {/* En vacaciones el cupo NO sale de aquí, sino del calendario
+                    asignado a cada empleado. Enseñar el campo aquí engañaba:
+                    se rellenaba y no hacía nada. */}
+                {editando?.subtipo === "vacaciones" ? (
+                  <p className="text-[11px] text-muted-foreground mt-1">
+                    Los días de vacaciones no se ponen aquí: salen del
+                    calendario de vacaciones que tenga asignado cada empleado
+                    (RRHH → Calendarios → Vacaciones), porque no todos tienen
+                    los mismos.
+                  </p>
+                ) : (
+                  <>
+                    <Input
+                      type="number"
+                      min={1}
+                      value={form.limite_dias ?? ""}
+                      onChange={e => {
+                        const v = e.target.value;
+                        setForm(f => ({ ...f, limite_dias: v === "" ? null : Math.max(1, Number(v)) }));
+                      }}
+                      placeholder="Sin límite"
+                    />
+                    <p className="text-[11px] text-muted-foreground mt-1">
+                      Días máximos por año natural. Al superarlo, el empleado no
+                      puede enviar la solicitud. Déjalo vacío para no poner tope.
+                    </p>
+                  </>
+                )}
               </div>
               <div>
                 <label className="text-sm font-medium">Conteo días</label>

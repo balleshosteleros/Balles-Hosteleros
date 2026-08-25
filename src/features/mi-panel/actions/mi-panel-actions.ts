@@ -2400,7 +2400,13 @@ export async function crearSolicitudPersonal(input: NuevaSolicitudInput) {
     }
 
     // Resto de ausencias (baja médica, permiso): límite anual de tipos_ausencia.
-    if (input.tipo === "ausencia" && input.subtipo !== "vacaciones") {
+    // Vacaciones queda fuera (su cupo es el del calendario del empleado) y
+    // baja_contrato también: se pide una vez al irse, un tope anual no aplica.
+    if (
+      input.tipo === "ausencia" &&
+      input.subtipo !== "vacaciones" &&
+      input.subtipo !== "baja_contrato"
+    ) {
       const subtipoAus = input.subtipo as Exclude<
         SolicitudSubtipoAusencia,
         "baja_contrato"
@@ -2580,6 +2586,10 @@ async function esValidadorAsignado(
   userId: string,
   solicitud: { empresa_id: string; user_id: string; tipo: SolicitudTipo },
 ): Promise<boolean> {
+  // Ojo: la regla de "nadie se resuelve lo suyo" (y su excepción para
+  // DIRECCIÓN, que no tiene a nadie por encima) vive en
+  // `userIdsQuePuedoValidar`, en un solo sitio. Aquí no se repite para no
+  // tener dos reglas que puedan contradecirse.
   const { userIdsQuePuedoValidar } = await import(
     "@/features/rrhh/actions/validadores-actions"
   );

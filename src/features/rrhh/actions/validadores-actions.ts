@@ -325,7 +325,20 @@ export async function userIdsQuePuedoValidar(input: {
       .eq("empresa_id", input.empresaId)
       .in("validador_departamento_id", deptosQueValido);
 
-    return (emps ?? []).map((e) => e.user_id as string).filter(Boolean);
+    // Nadie se valida a sí mismo, con UNA excepción: DIRECCIÓN. Es el puesto
+    // más alto, así que no hay nadie por encima que le apruebe; si se le
+    // bloqueara, no podría pedir vacaciones nunca. Cualquier otro que pertenezca
+    // al departamento que le valida (p. ej. alguien de RRHH que vea el módulo
+    // RECURSOS HUMANOS) sí queda excluido: ahí sí hay quien lo resuelva.
+    // Se filtra en memoria y no con `neq` porque un user_id nulo descartaría
+    // filas por el tratamiento de NULL en PostgREST.
+    const validoDireccion = (deptos ?? []).some(
+      (d) => deptosQueValido.includes(d.id as string) && norm((d.nombre as string) ?? "") === norm("DIRECCIÓN"),
+    );
+    return (emps ?? [])
+      .map((e) => e.user_id as string)
+      .filter(Boolean)
+      .filter((uid) => validoDireccion || uid !== input.userId);
   } catch (err) {
     console.error("[rrhh] userIdsQuePuedoValidar:", err);
     return [];
