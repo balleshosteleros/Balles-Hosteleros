@@ -14,6 +14,7 @@ import {
   type Granularidad,
 } from "@/features/sala/actions/analitica-origen-actions";
 import { ORIGEN_COLORS, ORIGEN_LABELS, type OrigenBucket } from "@/features/sala/data/origenes";
+import { CapacidadGruposPanel } from "@/features/sala/components/CapacidadGruposPanel";
 
 const MESES_LABEL = [
   "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
@@ -247,6 +248,12 @@ export function AnaliticaOrigenView() {
           })}
         </div>
       )}
+
+      {/* Capacidad por tamaño de grupo: independiente de los filtros de arriba,
+          se consulta por día porque responde a "¿me queda hueco hoy?". */}
+      <div className="border-t pt-5 mt-1">
+        <CapacidadGruposPanel />
+      </div>
     </div>
   );
 }
