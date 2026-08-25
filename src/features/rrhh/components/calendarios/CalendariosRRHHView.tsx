@@ -1,11 +1,14 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
-import { getVacacionesPorEmpresa, getBajasPorEmpresa, getJustificadasPorEmpresa } from "@/features/rrhh/data/calendarios";
+import {
+  listAusenciasEmpresa,
+  type AusenciaCalendario,
+} from "@/features/rrhh/actions/calendario-ausencias-actions";
 import { useFestivos } from "@/features/rrhh/hooks/useFestivos";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { CalendarDays, Palmtree, PartyPopper, HeartPulse, FileCheck } from "lucide-react";
+import { CalendarDays, Palmtree, PartyPopper, HeartPulse, FileCheck, Loader2 } from "lucide-react";
 import { CalendarioLaboral } from "@/features/rrhh/components/calendarios/CalendarioLaboral";
 import { CalendarioAusencias } from "@/features/rrhh/components/calendarios/CalendarioAusencias";
 import { CalendariosVacacionesPanel } from "@/features/rrhh/components/calendarios/CalendariosVacacionesPanel";
@@ -22,13 +25,43 @@ export function CalendariosRRHHView() {
   const [anio] = useState<number>(() => new Date().getFullYear());
   const { festivos: festivosBD } = useFestivos(anio);
 
+  // Ausencias reales de la plantilla (aprobadas y pendientes). Antes esta
+  // pantalla enseñaba nombres y fechas inventados.
+  const [ausencias, setAusencias] = useState<{
+    vacaciones: AusenciaCalendario[];
+    bajas: AusenciaCalendario[];
+    permisos: AusenciaCalendario[];
+  }>({ vacaciones: [], bajas: [], permisos: [] });
+  const [cargandoAusencias, setCargandoAusencias] = useState(true);
+
+  useEffect(() => {
+    let activo = true;
+    setCargandoAusencias(true);
+    Promise.all([
+      listAusenciasEmpresa(empresaActual.id, "vacaciones", anio),
+      listAusenciasEmpresa(empresaActual.id, "baja_medica", anio),
+      listAusenciasEmpresa(empresaActual.id, "permiso", anio),
+    ]).then(([vac, baj, per]) => {
+      if (!activo) return;
+      setAusencias({
+        vacaciones: vac.data,
+        bajas: baj.data,
+        permisos: per.data,
+      });
+      setCargandoAusencias(false);
+    });
+    return () => {
+      activo = false;
+    };
+  }, [empresaActual.id, anio]);
+
   const vacaciones = useMemo(() =>
-    getVacacionesPorEmpresa(empresaActual.id).map(v => ({
+    ausencias.vacaciones.map(v => ({
       id: v.id, empleadoNombre: v.empleadoNombre, departamento: v.departamento,
-      fechaInicio: v.fechaInicio, fechaFin: v.fechaFin, estado: v.estado,
-      detalle: `${v.dias} días`,
+      fechaInicio: v.fechaInicio, fechaFin: v.fechaFin ?? undefined, estado: v.estado,
+      detalle: v.dias != null ? `${v.dias} días` : "—",
     })),
-    [empresaActual.id]
+    [ausencias.vacaciones]
   );
 
   const festivos = useMemo(() =>
@@ -43,22 +76,42 @@ export function CalendariosRRHHView() {
   );
 
   const bajas = useMemo(() =>
-    getBajasPorEmpresa(empresaActual.id).map(b => ({
+    ausencias.bajas.map(b => ({
       id: b.id, empleadoNombre: b.empleadoNombre, departamento: b.departamento,
-      fechaInicio: b.fechaInicio, fechaFin: b.fechaFin, estado: b.estado,
-      detalle: b.motivo,
+      fechaInicio: b.fechaInicio, fechaFin: b.fechaFin ?? undefined, estado: b.estado,
+      // Sin fecha de alta prevista la baja sigue abierta: se dice, no se deja en blanco.
+      detalle: b.motivo ?? (b.fechaFin ? undefined : "Sin fecha de alta prevista"),
     })),
-    [empresaActual.id]
+    [ausencias.bajas]
   );
 
   const justificadas = useMemo(() =>
-    getJustificadasPorEmpresa(empresaActual.id).map(j => ({
-      id: j.id, empleadoNombre: j.empleadoNombre, departamento: j.departamento,
-      fechaInicio: j.fecha, fechaFin: j.fechaFin, estado: j.estado,
-      detalle: j.observaciones, tipo: j.tipo,
+    ausencias.permisos.map(p => ({
+      id: p.id, empleadoNombre: p.empleadoNombre, departamento: p.departamento,
+      fechaInicio: p.fechaInicio, fechaFin: p.fechaFin ?? undefined, estado: p.estado,
+      detalle: p.motivo ?? undefined,
+      tipo: p.dias != null ? `${p.dias} ${p.dias === 1 ? "día" : "días"}` : "—",
     })),
-    [empresaActual.id]
+    [ausencias.permisos]
   );
+
+  // Un calendario vacío puede ser "aún cargando" o "no hay nada este año", y
+  // sin decirlo parece que la pantalla está rota.
+  function avisoAusencias(total: number, quePlural: string) {
+    if (cargandoAusencias) {
+      return (
+        <p className="text-sm text-muted-foreground flex items-center gap-1.5">
+          <Loader2 className="h-3.5 w-3.5 animate-spin" /> Cargando…
+        </p>
+      );
+    }
+    if (total > 0) return null;
+    return (
+      <p className="text-sm text-muted-foreground">
+        No hay {quePlural} en {anio}.
+      </p>
+    );
+  }
 
   return (
     <div className="p-6 space-y-6">
@@ -80,11 +133,14 @@ export function CalendariosRRHHView() {
 
           <div className="space-y-3 border-t pt-6">
             <div>
-              <h3 className="text-sm font-semibold">Vacaciones solicitadas</h3>
+              <h3 className="text-sm font-semibold">Vacaciones de la plantilla</h3>
               <p className="text-sm text-muted-foreground">
-                Vacaciones registradas de los empleados.
+                Vacaciones aprobadas y pendientes de {anio}, de todos los
+                empleados. Las pendientes se muestran para que veas los solapes
+                antes de aprobarlas.
               </p>
             </div>
+            {avisoAusencias(vacaciones.length, "vacaciones registradas")}
             <CalendarioAusencias
               empresaId={empresaActual.id}
               modalidad="vacaciones"
@@ -106,7 +162,8 @@ export function CalendariosRRHHView() {
           />
         </TabsContent>
 
-        <TabsContent value="bajas">
+        <TabsContent value="bajas" className="space-y-3">
+          {avisoAusencias(bajas.length, "bajas médicas registradas")}
           <CalendarioAusencias
             empresaId={empresaActual.id}
             modalidad="bajas"
@@ -117,14 +174,15 @@ export function CalendariosRRHHView() {
           />
         </TabsContent>
 
-        <TabsContent value="justificadas">
+        <TabsContent value="justificadas" className="space-y-3">
+          {avisoAusencias(justificadas.length, "permisos registrados")}
           <CalendarioAusencias
             empresaId={empresaActual.id}
             modalidad="justificadas"
             titulo="Justificadas"
             items={justificadas}
             botonNuevo="Registrar justificada"
-            columnaExtra={{ header: "Tipo", render: item => <span>{item.tipo || "—"}</span> }}
+            columnaExtra={{ header: "Días", render: item => <span className="font-semibold">{item.tipo || "—"}</span> }}
           />
         </TabsContent>
       </Tabs>
