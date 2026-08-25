@@ -4,7 +4,7 @@
 -- En entornos limpios siembra salas + zonas + mesas + decoraciones + plano.
 --
 -- Estructura:
---   Sala "Terraza" (orden 0): Terraza Exterior, Terraza Cubierta
+--   Sala "Terraza" (orden 0): Terraza Exterior, Terraza Interior
 --   Sala "Sala"   (principal): Barra, Altas, Cuadrado, Super VIP, VIP, Cristalera, Redondas
 
 DO $$
@@ -14,7 +14,7 @@ DECLARE
   v_sala        uuid;
   v_plano       uuid;
   z_te          uuid; -- Terraza Exterior
-  z_tc          uuid; -- Terraza Cubierta
+  z_tc          uuid; -- Terraza Interior
   z_barra       uuid;
   z_altas       uuid;
   z_cuadrado    uuid;
@@ -39,7 +39,7 @@ BEGIN
   INSERT INTO zonas (local_id, sala_id, nombre, color_pastel, orden)
   VALUES (v_local, v_terr, 'Terraza Exterior', '#FDE68A', 1) RETURNING id INTO z_te;
   INSERT INTO zonas (local_id, sala_id, nombre, color_pastel, orden)
-  VALUES (v_local, v_terr, 'Terraza Cubierta', '#A7F3D0', 2) RETURNING id INTO z_tc;
+  VALUES (v_local, v_terr, 'Terraza Interior', '#A7F3D0', 2) RETURNING id INTO z_tc;
 
   -- Zonas - Sala
   INSERT INTO zonas (local_id, sala_id, nombre, color_pastel, orden, etiqueta_x, etiqueta_y)
@@ -76,7 +76,7 @@ BEGIN
     (v_local, z_te, 'TE15', 4, 4, 'BAJA', 'cuadrada',  90.00, 380.00),
     (v_local, z_te, 'TE16', 4, 4, 'BAJA', 'cuadrada',  90.00, 470.00);
 
-  -- Mesas Terraza Cubierta (TI1..TI6)
+  -- Mesas Terraza Interior (TI1..TI6)
   INSERT INTO mesas (local_id, zona_id, codigo, capacidad_min, capacidad_max, tipo, forma, x, y) VALUES
     (v_local, z_tc, 'TI1', 4, 4, 'BAJA', 'cuadrada', 460.00, 200.00),
     (v_local, z_tc, 'TI2', 4, 4, 'BAJA', 'cuadrada', 540.00, 200.00),
