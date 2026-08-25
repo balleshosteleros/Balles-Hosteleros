@@ -33,11 +33,17 @@ function hoyISO(): string {
   return `${d.getFullYear()}-${mm}-${dd}`;
 }
 
-/** Color de la celda según cuántas opciones quedan libres. */
+/**
+ * Color según cuántas opciones quedan LIBRES:
+ *   rojo  = ninguna (agotado)
+ *   ámbar = queda poco, y solo si había margen (5+ opciones): con 2 o 3 en
+ *           total, que quede 1 es normal, no una alarma
+ *   normal = hay sitio
+ */
 function tonoLibres(libres: number, total: number): string {
   if (total === 0) return "text-muted-foreground/50";
   if (libres === 0) return "text-destructive font-semibold";
-  if (libres <= Math.max(1, Math.round(total * 0.2))) return "text-amber-600 font-medium";
+  if (total >= 5 && libres <= Math.round(total * 0.2)) return "text-amber-600 font-medium";
   return "text-foreground";
 }
 
@@ -219,11 +225,13 @@ export function CapacidadGruposPanel() {
                             );
                           }
                           return (
-                            <td
-                              key={z}
-                              className={`px-3 py-2 text-right tabular-nums ${tonoLibres(dz.libres, dz.total)}`}
-                            >
-                              {dz.libres}
+                            <td key={z} className="px-3 py-2 text-right tabular-nums">
+                              {/* Solo se colorea lo que quede LIBRE. El total va
+                                  siempre en gris: si no, un "0/1" pintaba el 1 de
+                                  rojo y parecía que el error era ese 1. */}
+                              <span className={tonoLibres(dz.libres, dz.total)}>
+                                {dz.libres}
+                              </span>
                               <span className="text-muted-foreground/60">/{dz.total}</span>
                             </td>
                           );
