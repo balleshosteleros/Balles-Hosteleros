@@ -1,6 +1,13 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+  useState,
+  type RefObject,
+} from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -26,10 +33,18 @@ import {
   deleteHorarioExcepcion,
   listHorariosExcepciones,
 } from "@/features/sala/actions/reservas-horarios-excepciones-actions";
+import {
+  esFilaNueva,
+  useListaPendiente,
+} from "@/features/sala/reglas/hooks/useListaPendiente";
+import type { PanelPendienteHandle } from "./LimitesReglas";
 
 interface Props {
   config: EmpresaReservasConfig;
   onChange: (parche: Partial<EmpresaReservasConfig>) => void;
+  /** La pestaña lo usa para volcar las excepciones pendientes al guardar. */
+  handleRef?: RefObject<PanelPendienteHandle | null>;
+  onDirtyChange?: () => void;
 }
 
 type Ambito = "dia_semana" | "rango" | "dias_especificos";
@@ -172,7 +187,12 @@ function turnoPorHoraActual(cfg: EmpresaReservasConfig): TurnoKey {
   return distanciaA(comida) <= distanciaA(cena) ? "comida" : "cena";
 }
 
-export function HorariosAperturaPanel({ config, onChange }: Props) {
+export function HorariosAperturaPanel({
+  config,
+  onChange,
+  handleRef,
+  onDirtyChange,
+}: Props) {
   const [turno, setTurno] = useState<TurnoKey>(() => turnoPorHoraActual(config));
   const [cerrado, setCerrado] = useState(false);
   const [inicio, setInicio] = useState("20:00");
@@ -204,9 +224,30 @@ export function HorariosAperturaPanel({ config, onChange }: Props) {
   const [fechaNueva, setFechaNueva] = useState(hoyISO());
   const [motivo, setMotivo] = useState("");
 
-  const [excepciones, setExcepciones] = useState<EmpresaReservasHorarioExcepcion[]>([]);
   const [cargando, setCargando] = useState(true);
   const [aplicando, setAplicando] = useState(false);
+
+  // Las excepciones se crean y se borran, nunca se editan: no hay acción de
+  // update en el servidor. El hook lo admite igual.
+  const lista = useListaPendiente<
+    EmpresaReservasHorarioExcepcion,
+    Parameters<typeof createHorarioExcepcion>[0]
+  >({
+    idDe: (e) => e.id,
+    aInput: (e) => ({
+      turno: e.turno,
+      ambito: e.ambito,
+      fecha: e.fecha,
+      fechaInicio: e.fechaInicio,
+      fechaFin: e.fechaFin,
+      fechas: e.fechas,
+      inicio: e.inicio,
+      fin: e.fin,
+      cerrado: e.cerrado,
+      motivo: e.motivo,
+    }),
+  });
+  const { filas: excepciones, cambios, hayCambios, cargar: cargarLista } = lista;
 
   // Precarga el horario al cambiar de turno, de día o de ámbito. Sin esto, al
   // pasar del lunes al martes seguirías viendo los valores del lunes y creerías
@@ -242,15 +283,44 @@ export function HorariosAperturaPanel({ config, onChange }: Props) {
     }
   }, [turno, diaSemanaSel, ambito]);
 
-  async function cargarExcepciones() {
+  const cargarExcepciones = useCallback(async () => {
     const r = await listHorariosExcepciones();
-    if (r.ok) setExcepciones(r.data);
+    if (r.ok) cargarLista(r.data);
     setCargando(false);
-  }
+  }, [cargarLista]);
 
   useEffect(() => {
     cargarExcepciones();
-  }, []);
+  }, [cargarExcepciones]);
+
+  useEffect(() => {
+    onDirtyChange?.();
+  }, [hayCambios, onDirtyChange]);
+
+  const guardarExcepciones = useCallback(async (): Promise<boolean> => {
+    for (const id of cambios.borrar) {
+      const r = await deleteHorarioExcepcion(id);
+      if (!r.ok) {
+        toast.error(r.error ?? "No se pudo borrar una excepción de horario");
+        return false;
+      }
+    }
+    for (const input of cambios.crear) {
+      const r = await createHorarioExcepcion(input);
+      if (!r.ok) {
+        toast.error(r.error ?? "No se pudo crear una excepción de horario");
+        return false;
+      }
+    }
+    await cargarExcepciones();
+    return true;
+  }, [cambios, cargarExcepciones]);
+
+  useImperativeHandle(
+    handleRef,
+    () => ({ hayCambios, guardar: guardarExcepciones }),
+    [hayCambios, guardarExcepciones],
+  );
 
   function aniadirFechaLista() {
     if (!fechaNueva) return;
@@ -363,28 +433,34 @@ export function HorariosAperturaPanel({ config, onChange }: Props) {
           motivo: motivo.trim() || null,
         };
       }
-      const r = await createHorarioExcepcion(payload);
-      if (!r.ok) {
-        toast.error(r.error ?? "No se pudo guardar");
-      } else {
-        toast.success("Excepción de horario añadida");
-        setMotivo("");
-        setFechasLista([]);
-        cargarExcepciones();
-      }
+      // No se escribe todavía: la excepción queda en la lista, en espera del
+      // Guardar de la cabecera.
+      lista.anadir({
+        id: lista.nuevoIdTemporal(),
+        empresaId: "",
+        turno: payload.turno,
+        ambito: payload.ambito,
+        fecha: payload.fecha ?? null,
+        fechaInicio: payload.fechaInicio ?? null,
+        fechaFin: payload.fechaFin ?? null,
+        fechas: payload.fechas ?? null,
+        inicio: payload.inicio ?? null,
+        fin: payload.fin ?? null,
+        cerrado: payload.cerrado,
+        motivo: payload.motivo ?? null,
+        createdAt: "",
+        updatedAt: "",
+      });
+      toast.success("Excepción lista. Pulsa Guardar para aplicarla.");
+      setMotivo("");
+      setFechasLista([]);
     } finally {
       setAplicando(false);
     }
   }
 
   async function borrarExcepcion(id: string) {
-    const r = await deleteHorarioExcepcion(id);
-    if (!r.ok) {
-      toast.error(r.error ?? "No se pudo borrar");
-      return;
-    }
-    toast.success("Excepción borrada");
-    cargarExcepciones();
+    lista.quitar(id);
   }
 
   return (
@@ -616,12 +692,12 @@ export function HorariosAperturaPanel({ config, onChange }: Props) {
       )}
 
       <div className="flex items-center justify-end gap-3">
-        {/* El semanal queda pendiente del Guardar de arriba; las excepciones
-            por fechas se crean en el acto, porque son filas con vida propia. */}
+        {/* Todo queda pendiente del Guardar de la cabecera, también las
+            excepciones: se ven abajo marcadas como "Sin guardar". */}
         <p className="text-[10px] text-muted-foreground">
           {ambito === "dia_semana"
             ? "Queda pendiente hasta que pulses Guardar arriba."
-            : "La excepción se añade a la lista de abajo al instante."}
+            : "Se añade abajo como pendiente; pulsa Guardar arriba para aplicarla."}
         </p>
         <Button type="button" size="sm" variant="outline" onClick={aplicar} disabled={aplicando}>
           {aplicando ? "Aplicando…" : ambito === "dia_semana" ? "Aplicar al día" : "Añadir excepción"}
@@ -644,7 +720,13 @@ export function HorariosAperturaPanel({ config, onChange }: Props) {
         ) : (
           <ul className="divide-y rounded border">
             {excepciones.map((e) => (
-              <li key={e.id} className="flex items-center gap-2 px-3 py-2 text-xs">
+              <li
+                key={e.id}
+                className={cn(
+                  "flex items-center gap-2 px-3 py-2 text-xs",
+                  esFilaNueva(e.id) && "bg-amber-50/60 dark:bg-amber-950/20",
+                )}
+              >
                 <span className="font-medium w-14">{turnoLabel(e.turno)}</span>
                 <span className="flex-1 truncate">
                   {e.ambito === "fecha"  && `Día ${formateaFecha(e.fecha!)}`}
@@ -654,6 +736,11 @@ export function HorariosAperturaPanel({ config, onChange }: Props) {
                   {e.cerrado ? <span className="text-destructive">Cerrado</span> : `${e.inicio?.slice(0,5)} → ${e.fin?.slice(0,5)}`}
                   {e.motivo ? ` · ${e.motivo}` : ""}
                 </span>
+                {esFilaNueva(e.id) && (
+                  <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-900 dark:bg-amber-950/50 dark:text-amber-200">
+                    Sin guardar
+                  </span>
+                )}
                 <Button
                   type="button"
                   variant="ghost"

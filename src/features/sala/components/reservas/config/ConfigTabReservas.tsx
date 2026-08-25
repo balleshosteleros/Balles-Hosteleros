@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -23,7 +23,7 @@ import {
   getReservasConfig,
   upsertReservasConfig,
 } from "@/features/sala/actions/reservas-config-actions";
-import { LimitesReglas } from "./LimitesReglas";
+import { LimitesReglas, type PanelPendienteHandle } from "./LimitesReglas";
 import { HorariosAperturaPanel } from "./HorariosAperturaPanel";
 import { PreferenciasMotorPanelButton } from "./PreferenciasMotorPanel";
 import { ReglasIntervaloPanel } from "./ReglasIntervaloPanel";
@@ -38,6 +38,17 @@ export function ConfigTabReservas() {
   // contenido lo repondría a 0 y al teclear saldría "015" en vez de "15".
   const [antelacionMin, setAntelacionMin] = useState("0");
   const [antelacionMax, setAntelacionMax] = useState("90");
+
+  // Los paneles de listas (horarios, aforo, intervalo) llevan sus propios
+  // pendientes: viven en tablas aparte y no caben en el parche de campos. Cada
+  // uno expone si tiene cambios y cómo volcarlos.
+  const horariosRef = useRef<PanelPendienteHandle | null>(null);
+  const aforoRef = useRef<PanelPendienteHandle | null>(null);
+  const intervaloRef = useRef<PanelPendienteHandle | null>(null);
+  // Los paneles avisan cuando cambian; esto solo fuerza el repintado para que
+  // el botón Guardar se entere.
+  const [, setTickPaneles] = useState(0);
+  const avisarPanelSucio = useCallback(() => setTickPaneles((n) => n + 1), []);
 
   const cargar = useCallback(async () => {
     const c = await getReservasConfig();
@@ -60,18 +71,30 @@ export function ConfigTabReservas() {
     setPendiente((prev) => ({ ...prev, ...parche }));
   }
 
-  const hayCambios = Object.keys(pendiente).length > 0;
+  const hayCamposPendientes = Object.keys(pendiente).length > 0;
+  const paneles = [horariosRef, aforoRef, intervaloRef];
+  const hayCambios =
+    hayCamposPendientes || paneles.some((p) => p.current?.hayCambios === true);
 
   async function handleGuardar() {
     if (!hayCambios) return;
     setGuardando(true);
     try {
-      const res = await upsertReservasConfig(pendiente);
-      if (!res.ok) {
-        toast.error(res.error ?? "No se pudo guardar");
-        return;
+      if (hayCamposPendientes) {
+        const res = await upsertReservasConfig(pendiente);
+        if (!res.ok) {
+          toast.error(res.error ?? "No se pudo guardar");
+          return;
+        }
+        setPendiente({});
       }
-      setPendiente({});
+      // Cada panel vuelca lo suyo. Si uno falla, se para: ya ha avisado del
+      // motivo y lo que quede pendiente sigue en pantalla para reintentarlo.
+      for (const panel of paneles) {
+        if (!panel.current?.hayCambios) continue;
+        const ok = await panel.current.guardar();
+        if (!ok) return;
+      }
       toast.success("Configuración guardada");
     } finally {
       setGuardando(false);
@@ -110,15 +133,20 @@ export function ConfigTabReservas() {
         </div>
       </div>
 
-      <HorariosAperturaPanel config={config} onChange={handleConfigChange} />
+      <HorariosAperturaPanel
+        config={config}
+        onChange={handleConfigChange}
+        handleRef={horariosRef}
+        onDirtyChange={avisarPanelSucio}
+      />
 
       <Separator />
 
-      <LimitesReglas />
+      <LimitesReglas handleRef={aforoRef} onDirtyChange={avisarPanelSucio} />
 
       <Separator />
 
-      <ReglasIntervaloPanel />
+      <ReglasIntervaloPanel handleRef={intervaloRef} onDirtyChange={avisarPanelSucio} />
 
       <Separator />
 

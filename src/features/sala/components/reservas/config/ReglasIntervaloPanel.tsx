@@ -1,21 +1,35 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useState,
+  type RefObject,
+} from "react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Pencil, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { reglaToVigencia } from "@/features/sala/reglas/data/reglas";
+import { reglaToVigencia, vigenciaToCampos } from "@/features/sala/reglas/data/reglas";
 import {
   type EmpresaReservasIntervaloRegla,
+  type IntervaloReglaInput,
   type MetricaIntervalo,
   METRICA_INTERVALO_LABELS,
   METRICA_INTERVALO_UNIDADES,
 } from "@/features/sala/reglas/data/reglas-intervalo";
 import {
+  createReglaIntervalo,
   deleteReglaIntervalo,
   listReglasIntervalo,
+  updateReglaIntervalo,
 } from "@/features/sala/reglas/actions/reglas-intervalo-actions";
+import {
+  esFilaNueva,
+  useListaPendiente,
+} from "@/features/sala/reglas/hooks/useListaPendiente";
+import type { PanelPendienteHandle } from "./LimitesReglas";
 import { VigenciaBadge } from "@/features/sala/reglas/components/VigenciaBadge";
 import { ReglaIntervaloModal } from "./ReglaIntervaloModal";
 import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
@@ -25,20 +39,72 @@ import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
  * "máx personas por franja", con periodicidad. Va dentro de la pestaña
  * "Configuración" de Reservas.
  */
-export function ReglasIntervaloPanel() {
-  const [reglas, setReglas] = useState<EmpresaReservasIntervaloRegla[]>([]);
+interface ReglasIntervaloPanelProps {
+  handleRef?: RefObject<PanelPendienteHandle | null>;
+  onDirtyChange?: () => void;
+}
+
+export function ReglasIntervaloPanel({
+  handleRef,
+  onDirtyChange,
+}: ReglasIntervaloPanelProps) {
   const [loading, setLoading] = useState(true);
+
+  const lista = useListaPendiente<EmpresaReservasIntervaloRegla, IntervaloReglaInput>({
+    idDe: (r) => r.id,
+    aInput: (r) => ({
+      metrica: r.metrica,
+      valor: r.valor,
+      horaInicio: r.horaInicio,
+      horaFin: r.horaFin,
+      turno: r.turno,
+      vigencia: reglaToVigencia(r),
+    }),
+  });
+  const { cargar: cargarLista, filas: reglas, cambios, hayCambios } = lista;
 
   const cargar = useCallback(async () => {
     setLoading(true);
     const res = await listReglasIntervalo();
-    if (res.ok) setReglas(res.data);
+    if (res.ok) cargarLista(res.data);
     setLoading(false);
-  }, []);
+  }, [cargarLista]);
 
   useEffect(() => {
     cargar();
   }, [cargar]);
+
+  useEffect(() => {
+    onDirtyChange?.();
+  }, [hayCambios, onDirtyChange]);
+
+  const guardar = useCallback(async (): Promise<boolean> => {
+    for (const id of cambios.borrar) {
+      const res = await deleteReglaIntervalo(id);
+      if (!res.ok) {
+        toast.error(res.error ?? "No se pudo borrar una regla de intervalo");
+        return false;
+      }
+    }
+    for (const { id, input } of cambios.editar) {
+      const res = await updateReglaIntervalo(id, input);
+      if (!res.ok) {
+        toast.error(res.error ?? "No se pudo actualizar una regla de intervalo");
+        return false;
+      }
+    }
+    for (const input of cambios.crear) {
+      const res = await createReglaIntervalo(input);
+      if (!res.ok) {
+        toast.error(res.error ?? "No se pudo crear una regla de intervalo");
+        return false;
+      }
+    }
+    await cargar();
+    return true;
+  }, [cambios, cargar]);
+
+  useImperativeHandle(handleRef, () => ({ hayCambios, guardar }), [hayCambios, guardar]);
 
   if (loading) {
     return (
@@ -63,12 +129,12 @@ export function ReglasIntervaloPanel() {
       <SeccionMetrica
         metrica="max_reservas"
         reglas={reglas.filter((r) => r.metrica === "max_reservas")}
-        onChange={cargar}
+        lista={lista}
       />
       <SeccionMetrica
         metrica="max_personas"
         reglas={reglas.filter((r) => r.metrica === "max_personas")}
-        onChange={cargar}
+        lista={lista}
       />
     </div>
   );
@@ -77,11 +143,13 @@ export function ReglasIntervaloPanel() {
 function SeccionMetrica({
   metrica,
   reglas,
-  onChange,
+  lista,
 }: {
   metrica: MetricaIntervalo;
   reglas: EmpresaReservasIntervaloRegla[];
-  onChange: () => void;
+  lista: ReturnType<
+    typeof useListaPendiente<EmpresaReservasIntervaloRegla, IntervaloReglaInput>
+  >;
 }) {
   const [modalOpen, setModalOpen] = useState(false);
   const [editando, setEditando] = useState<EmpresaReservasIntervaloRegla | null>(null);
@@ -97,18 +165,39 @@ function SeccionMetrica({
   }
   async function borrar(r: EmpresaReservasIntervaloRegla) {
     const ok = await confirmDelete({
-      title: "Borrar esta regla",
-      description: "Esta acción no se puede deshacer.",
-      confirmLabel: "Borrar",
+      title: "Quitar esta regla",
+      description: esFilaNueva(r.id)
+        ? "Aún no se había guardado: desaparece sin más."
+        : "Se borrará al guardar los cambios de la pestaña.",
+      confirmLabel: "Quitar",
     });
     if (!ok) return;
-    const res = await deleteReglaIntervalo(r.id);
-    if (!res.ok) {
-      toast.error(res.error ?? "No se pudo borrar");
-      return;
+    lista.quitar(r.id);
+  }
+
+  function onModalGuardado(input: IntervaloReglaInput) {
+    const campos = {
+      metrica: input.metrica,
+      valor: input.valor,
+      horaInicio: input.horaInicio,
+      horaFin: input.horaFin,
+      turno: input.turno,
+      ...vigenciaToCampos(input.vigencia),
+    };
+    if (editando) {
+      lista.reemplazar(editando.id, { ...editando, ...campos });
+    } else {
+      lista.anadir({
+        id: lista.nuevoIdTemporal(),
+        empresaId: "",
+        prioridad: 0,
+        nombre: null,
+        activo: true,
+        createdAt: "",
+        updatedAt: "",
+        ...campos,
+      });
     }
-    toast.success("Regla borrada");
-    onChange();
   }
 
   const unidad = METRICA_INTERVALO_UNIDADES[metrica];
@@ -129,7 +218,9 @@ function SeccionMetrica({
           {reglas.map((r) => (
             <li
               key={r.id}
-              className="border rounded-md px-3 py-2 text-sm flex items-center justify-between gap-2"
+              className={`border rounded-md px-3 py-2 text-sm flex items-center justify-between gap-2 ${
+                esFilaNueva(r.id) ? "border-dashed border-amber-400 bg-amber-50/50 dark:bg-amber-950/20" : ""
+              }`}
             >
               <div className="flex flex-wrap items-center gap-2 min-w-0">
                 <strong>{r.valor}</strong>
@@ -148,6 +239,11 @@ function SeccionMetrica({
                 </span>
                 <span className="text-xs text-muted-foreground">·</span>
                 <VigenciaBadge value={reglaToVigencia(r)} />
+                {esFilaNueva(r.id) && (
+                  <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-900 dark:bg-amber-950/50 dark:text-amber-200">
+                    Sin guardar
+                  </span>
+                )}
               </div>
               <div className="flex gap-1 shrink-0">
                 <Button
@@ -186,7 +282,7 @@ function SeccionMetrica({
         onOpenChange={setModalOpen}
         metrica={metrica}
         regla={editando}
-        onSaved={onChange}
+        onSaved={onModalGuardado}
       />
       {confirmDeleteDialog}
     </section>

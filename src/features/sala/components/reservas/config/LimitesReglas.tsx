@@ -1,6 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useMemo,
+  useState,
+  type RefObject,
+} from "react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Pencil, Plus, Trash2 } from "lucide-react";
@@ -8,14 +15,23 @@ import { toast } from "sonner";
 import {
   type EmpresaReservasRegla,
   type MetricaRegla,
+  type ReglaInput,
   type TurnoRegla,
+  reglaToVigencia,
+  vigenciaToCampos,
 } from "@/features/sala/reglas/data/reglas";
 import { type EmpresaReservasConfig } from "@/features/sala/data/reservas";
 import { getReservasConfig } from "@/features/sala/actions/reservas-config-actions";
 import {
+  createReglaReserva,
   deleteReglaReserva,
   listReglasReservas,
+  updateReglaReserva,
 } from "@/features/sala/reglas/actions/reglas-actions";
+import {
+  esFilaNueva,
+  useListaPendiente,
+} from "@/features/sala/reglas/hooks/useListaPendiente";
 import { ReglaModal } from "@/features/sala/reglas/components/ReglaModal";
 import { VigenciaBadge } from "@/features/sala/reglas/components/VigenciaBadge";
 import { resolverValorEfectivo } from "@/features/sala/reglas/lib/resolver";
@@ -58,18 +74,42 @@ function turnoAbreAlgunDia(
   });
 }
 
-export function LimitesReglas() {
-  const [reglas, setReglas] = useState<EmpresaReservasRegla[]>([]);
+/** Lo que el panel expone a la pestaña para que el Guardar de arriba mande. */
+export interface PanelPendienteHandle {
+  hayCambios: boolean;
+  /** Vuelca los cambios. Devuelve false si algo falló. */
+  guardar: () => Promise<boolean>;
+}
+
+interface LimitesReglasProps {
+  /** La pestaña lo usa para saber si hay cambios y para volcarlos. */
+  handleRef?: RefObject<PanelPendienteHandle | null>;
+  /** Avisa a la pestaña de que el "hay cambios" ha cambiado. */
+  onDirtyChange?: () => void;
+}
+
+export function LimitesReglas({ handleRef, onDirtyChange }: LimitesReglasProps) {
   const [loading, setLoading] = useState(true);
   // Turnos que el local abre de verdad. Un turno cerrado no admite reservas, así
   // que ofrecer un tope de aforo para él confunde: se configura algo que nunca
   // se va a aplicar.
   const [turnosAbiertos, setTurnosAbiertos] = useState<TurnoRegla[]>(["COMIDA", "CENA", "AMBOS"]);
 
+  const lista = useListaPendiente<EmpresaReservasRegla, ReglaInput>({
+    idDe: (r) => r.id,
+    aInput: (r) => ({
+      metrica: r.metrica,
+      valor: r.valor,
+      turno: r.turno,
+      vigencia: reglaToVigencia(r),
+    }),
+  });
+  const { cargar: cargarLista, filas: reglas, cambios, hayCambios } = lista;
+
   const cargar = useCallback(async () => {
     setLoading(true);
     const [res, cfg] = await Promise.all([listReglasReservas(), getReservasConfig()]);
-    if (res.ok) setReglas(res.data);
+    if (res.ok) cargarLista(res.data);
     if (cfg.ok && cfg.data) {
       const comida = turnoAbreAlgunDia(cfg.data, "comida");
       const cena = turnoAbreAlgunDia(cfg.data, "cena");
@@ -81,11 +121,47 @@ export function LimitesReglas() {
       setTurnosAbiertos(abiertos.length > 0 ? abiertos : ["COMIDA", "CENA", "AMBOS"]);
     }
     setLoading(false);
-  }, []);
+  }, [cargarLista]);
 
   useEffect(() => {
     cargar();
   }, [cargar]);
+
+  // Se avisa a la pestaña en cuanto aparecen (o desaparecen) cambios, para que
+  // active su botón Guardar.
+  useEffect(() => {
+    onDirtyChange?.();
+  }, [hayCambios, onDirtyChange]);
+
+  const guardar = useCallback(async (): Promise<boolean> => {
+    // Borrados primero: si una regla se editó y luego se borró, no tiene sentido
+    // gastar una escritura en actualizarla antes de eliminarla.
+    for (const id of cambios.borrar) {
+      const res = await deleteReglaReserva(id);
+      if (!res.ok) {
+        toast.error(res.error ?? "No se pudo borrar una regla de aforo");
+        return false;
+      }
+    }
+    for (const { id, input } of cambios.editar) {
+      const res = await updateReglaReserva(id, input);
+      if (!res.ok) {
+        toast.error(res.error ?? "No se pudo actualizar una regla de aforo");
+        return false;
+      }
+    }
+    for (const input of cambios.crear) {
+      const res = await createReglaReserva(input);
+      if (!res.ok) {
+        toast.error(res.error ?? "No se pudo crear una regla de aforo");
+        return false;
+      }
+    }
+    await cargar();
+    return true;
+  }, [cambios, cargar]);
+
+  useImperativeHandle(handleRef, () => ({ hayCambios, guardar }), [hayCambios, guardar]);
 
   if (loading) {
     return (
@@ -105,7 +181,7 @@ export function LimitesReglas() {
         unidad="personas"
         reglas={reglas.filter((r) => r.metrica === "cupo")}
         turnosAbiertos={turnosAbiertos}
-        onChange={cargar}
+        lista={lista}
       />
       <SeccionMetrica
         metrica="maxpax"
@@ -114,7 +190,7 @@ export function LimitesReglas() {
         unidad="personas"
         reglas={reglas.filter((r) => r.metrica === "maxpax")}
         turnosAbiertos={turnosAbiertos}
-        onChange={cargar}
+        lista={lista}
       />
     </div>
   );
@@ -127,7 +203,7 @@ function SeccionMetrica({
   unidad,
   reglas,
   turnosAbiertos,
-  onChange,
+  lista,
 }: {
   metrica: MetricaRegla;
   titulo: string;
@@ -135,7 +211,7 @@ function SeccionMetrica({
   unidad: string;
   reglas: EmpresaReservasRegla[];
   turnosAbiertos: TurnoRegla[];
-  onChange: () => void;
+  lista: ReturnType<typeof useListaPendiente<EmpresaReservasRegla, ReglaInput>>;
 }) {
   const [modalOpen, setModalOpen] = useState(false);
   const [editando, setEditando] = useState<EmpresaReservasRegla | null>(null);
@@ -156,18 +232,40 @@ function SeccionMetrica({
   }
   async function borrar(r: EmpresaReservasRegla) {
     const ok = await confirmDelete({
-      title: "Borrar esta regla",
-      description: "Esta acción no se puede deshacer.",
-      confirmLabel: "Borrar",
+      title: "Quitar esta regla",
+      description: esFilaNueva(r.id)
+        ? "Aún no se había guardado: desaparece sin más."
+        : "Se borrará al guardar los cambios de la pestaña.",
+      confirmLabel: "Quitar",
     });
     if (!ok) return;
-    const res = await deleteReglaReserva(r.id);
-    if (!res.ok) {
-      toast.error(res.error ?? "No se pudo borrar");
-      return;
+    lista.quitar(r.id);
+  }
+
+  /** Vuelca lo que devuelve el modal sobre la lista en memoria. */
+  function onModalGuardado(input: ReglaInput) {
+    const campos = {
+      metrica: input.metrica,
+      valor: input.valor,
+      turno: input.turno,
+      ...vigenciaToCampos(input.vigencia),
+    };
+    if (editando) {
+      lista.reemplazar(editando.id, { ...editando, ...campos });
+    } else {
+      // Fila provisional: los campos que pone la base de datos (fechas, activo…)
+      // se rellenan de verdad al recargar tras guardar.
+      lista.anadir({
+        id: lista.nuevoIdTemporal(),
+        empresaId: "",
+        prioridad: 0,
+        nombre: null,
+        activo: true,
+        createdAt: "",
+        updatedAt: "",
+        ...campos,
+      });
     }
-    toast.success("Regla borrada");
-    onChange();
   }
 
   return (
@@ -202,7 +300,9 @@ function SeccionMetrica({
           {reglas.map((r) => (
             <li
               key={r.id}
-              className="border rounded-md px-3 py-2 text-sm flex items-center justify-between gap-2"
+              className={`border rounded-md px-3 py-2 text-sm flex items-center justify-between gap-2 ${
+                esFilaNueva(r.id) ? "border-dashed border-amber-400 bg-amber-50/50 dark:bg-amber-950/20" : ""
+              }`}
             >
               <div className="flex flex-wrap items-center gap-2 min-w-0">
                 <strong>{r.valor}</strong>
@@ -217,6 +317,11 @@ function SeccionMetrica({
                 </span>
                 <span className="text-xs text-muted-foreground">·</span>
                 <VigenciaBadge value={r} />
+                {esFilaNueva(r.id) && (
+                  <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-900 dark:bg-amber-950/50 dark:text-amber-200">
+                    Sin guardar
+                  </span>
+                )}
               </div>
               <div className="flex gap-1 shrink-0">
                 <Button
@@ -257,7 +362,7 @@ function SeccionMetrica({
         regla={editando}
         unidad={unidad}
         turnosAbiertos={turnosAbiertos}
-        onSaved={onChange}
+        onSaved={onModalGuardado}
       />
       {confirmDeleteDialog}
     </section>

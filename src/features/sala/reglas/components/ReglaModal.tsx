@@ -21,10 +21,6 @@ import {
 } from "../data/reglas";
 import { TurnoToggle } from "./TurnoToggle";
 import { VigenciaSelector } from "./VigenciaSelector";
-import {
-  createReglaReserva,
-  updateReglaReserva,
-} from "../actions/reglas-actions";
 
 interface Props {
   open: boolean;
@@ -39,7 +35,8 @@ interface Props {
    * ofrece: configurar un tope para él seria configurar algo que nunca se aplica.
    */
   turnosAbiertos?: TurnoRegla[];
-  onSaved: () => void;
+  /** Recibe la regla lista para acumular. No se ha escrito nada todavía. */
+  onSaved: (input: ReglaInput) => void;
 }
 
 const TURNO_DEFAULT: TurnoRegla = "AMBOS";
@@ -57,7 +54,6 @@ export function ReglaModal({
   const [valor, setValor] = useState<string>("");
   const [turno, setTurno] = useState<TurnoRegla>(TURNO_DEFAULT);
   const [vigencia, setVigencia] = useState<VigenciaSpec>(VIGENCIA_DEFAULT);
-  const [saving, setSaving] = useState(false);
 
   // Solo los turnos abiertos. Si estamos editando una regla de un turno que
   // luego se cerró, se conserva su opción para no cambiarla sin querer.
@@ -84,33 +80,16 @@ export function ReglaModal({
     }
   }, [open, regla]);
 
-  async function handleGuardar() {
+  // No escribe en base de datos: entrega la regla al panel, que la acumula
+  // hasta que se pulsa Guardar en la cabecera de la pestaña.
+  function handleGuardar() {
     const v = Number(valor);
     if (!Number.isFinite(v) || v < 0) {
       toast.error("Indica un número válido.");
       return;
     }
-    const input: ReglaInput = {
-      metrica,
-      valor: v,
-      turno,
-      vigencia,
-    };
-    setSaving(true);
-    try {
-      const res = regla
-        ? await updateReglaReserva(regla.id, input)
-        : await createReglaReserva(input);
-      if (!res.ok) {
-        toast.error(res.error ?? "No se pudo guardar");
-        return;
-      }
-      toast.success(regla ? "Regla actualizada" : "Regla creada");
-      onOpenChange(false);
-      onSaved();
-    } finally {
-      setSaving(false);
-    }
+    onSaved({ metrica, valor: v, turno, vigencia });
+    onOpenChange(false);
   }
 
   const titulo = regla
@@ -155,7 +134,7 @@ export function ReglaModal({
             <Button variant="outline" size="sm" onClick={() => onOpenChange(false)}>
               Cancelar
             </Button>
-            <Button size="sm" onClick={handleGuardar} disabled={saving || !valor.trim()}>
+            <Button size="sm" onClick={handleGuardar} disabled={!valor.trim()}>
               {regla ? "Guardar" : "Crear regla"}
             </Button>
           </div>

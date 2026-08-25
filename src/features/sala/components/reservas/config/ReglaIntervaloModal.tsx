@@ -23,10 +23,6 @@ import {
 } from "@/features/sala/reglas/data/reglas-intervalo";
 import { TurnoToggle } from "@/features/sala/reglas/components/TurnoToggle";
 import { VigenciaSelector } from "@/features/sala/reglas/components/VigenciaSelector";
-import {
-  createReglaIntervalo,
-  updateReglaIntervalo,
-} from "@/features/sala/reglas/actions/reglas-intervalo-actions";
 
 interface Props {
   open: boolean;
@@ -34,7 +30,8 @@ interface Props {
   metrica: MetricaIntervalo;
   /** Si viene, modo edición. */
   regla?: EmpresaReservasIntervaloRegla | null;
-  onSaved: () => void;
+  /** Recibe la regla lista para acumular. No se ha escrito nada todavía. */
+  onSaved: (input: IntervaloReglaInput) => void;
 }
 
 const TURNO_DEFAULT: TurnoRegla = "AMBOS";
@@ -46,7 +43,6 @@ export function ReglaIntervaloModal({ open, onOpenChange, metrica, regla, onSave
   const [horaFin, setHoraFin] = useState<string>("16:00");
   const [turno, setTurno] = useState<TurnoRegla>(TURNO_DEFAULT);
   const [vigencia, setVigencia] = useState<VigenciaSpec>(VIGENCIA_DEFAULT);
-  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -65,7 +61,7 @@ export function ReglaIntervaloModal({ open, onOpenChange, metrica, regla, onSave
     }
   }, [open, regla]);
 
-  async function handleGuardar() {
+  function handleGuardar() {
     const v = Number(valor);
     if (!Number.isFinite(v) || v < 0) {
       toast.error("Indica un número válido.");
@@ -89,21 +85,10 @@ export function ReglaIntervaloModal({ open, onOpenChange, metrica, regla, onSave
       turno,
       vigencia,
     };
-    setSaving(true);
-    try {
-      const res = regla
-        ? await updateReglaIntervalo(regla.id, input)
-        : await createReglaIntervalo(input);
-      if (!res.ok) {
-        toast.error(res.error ?? "No se pudo guardar");
-        return;
-      }
-      toast.success(regla ? "Regla actualizada" : "Regla creada");
-      onOpenChange(false);
-      onSaved();
-    } finally {
-      setSaving(false);
-    }
+    // No escribe en base de datos: la regla la acumula el panel hasta que se
+    // pulsa Guardar en la cabecera de la pestaña.
+    onSaved(input);
+    onOpenChange(false);
   }
 
   const unidad = METRICA_INTERVALO_UNIDADES[metrica];
@@ -160,7 +145,7 @@ export function ReglaIntervaloModal({ open, onOpenChange, metrica, regla, onSave
             <Button variant="outline" size="sm" onClick={() => onOpenChange(false)}>
               Cancelar
             </Button>
-            <Button size="sm" onClick={handleGuardar} disabled={saving || !valor.trim()}>
+            <Button size="sm" onClick={handleGuardar} disabled={!valor.trim()}>
               {regla ? "Guardar" : "Crear regla"}
             </Button>
           </div>
