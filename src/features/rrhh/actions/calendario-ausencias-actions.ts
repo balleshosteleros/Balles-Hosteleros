@@ -110,17 +110,35 @@ export async function listAusenciasEmpresa(
     const userIds = [...new Set(filas.map((f) => f.user_id as string).filter(Boolean))];
     const fichaPorUser = new Map<string, { depto: string | null; avatarUrl: string | null }>();
     if (userIds.length > 0) {
-      const { data: empleados } = await supabase
-        .from("empleados")
-        .select("user_id, avatar_url, departamentos!empleados_departamento_id_fkey(nombre)")
-        .eq("empresa_id", empresaId)
-        .in("user_id", userIds);
+      // La foto puede estar en la ficha del empleado o solo en su perfil de
+      // usuario (si se la subió él desde su cuenta y nadie la copió a la
+      // ficha). Se miran las dos, o saldrían iniciales teniendo foto.
+      const [{ data: empleados }, { data: perfiles }] = await Promise.all([
+        supabase
+          .from("empleados")
+          .select("user_id, avatar_url, departamentos!empleados_departamento_id_fkey(nombre)")
+          .eq("empresa_id", empresaId)
+          .in("user_id", userIds),
+        supabase
+          .from("usuarios")
+          .select("user_id, avatar_url")
+          .in("user_id", userIds)
+          .not("avatar_url", "is", null),
+      ]);
+
+      const fotoDePerfil = new Map<string, string>();
+      for (const p of perfiles ?? []) {
+        const url = p.avatar_url as string | null;
+        if (p.user_id && url) fotoDePerfil.set(p.user_id as string, url);
+      }
+
       for (const e of empleados ?? []) {
         const depto = e.departamentos as { nombre?: string } | null;
         if (e.user_id) {
-          fichaPorUser.set(e.user_id as string, {
+          const uid = e.user_id as string;
+          fichaPorUser.set(uid, {
             depto: depto?.nombre ?? null,
-            avatarUrl: (e.avatar_url as string | null) ?? null,
+            avatarUrl: (e.avatar_url as string | null) ?? fotoDePerfil.get(uid) ?? null,
           });
         }
       }

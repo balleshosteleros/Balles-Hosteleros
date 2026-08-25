@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -9,6 +10,12 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { PartyPopper } from "lucide-react";
 import {
   CalendarRangeToggle,
@@ -107,6 +114,12 @@ interface Props {
   /** Se llama al cambiar de año, para recargar los datos. */
   onAnioChange?: (anio: number) => void;
   cargando?: boolean;
+  /**
+   * Dónde colocar el selector de vista y la navegación. Si se pasa, suben a la
+   * cabecera de la página (junto al botón "Nuevo") y el calendario gana esa
+   * fila; si no, se quedan encima del propio calendario.
+   */
+  slotControles?: HTMLElement | null;
 }
 
 /**
@@ -117,7 +130,7 @@ interface Props {
  * Antes había una pestaña por tipo, así que para saber quién faltaba un día
  * concreto había que ir mirándolas de una en una.
  */
-export function CalendarioUnico({ ausencias, festivoEnFecha, onAnioChange, cargando }: Props) {
+export function CalendarioUnico({ ausencias, festivoEnFecha, onAnioChange, cargando, slotControles }: Props) {
   const rango = useCalendarRange("MENSUAL");
 
   // Filtros: por tipo de ausencia y por estado. Todos activos de inicio.
@@ -213,6 +226,7 @@ export function CalendarioUnico({ ausencias, festivoEnFecha, onAnioChange, carga
     const festivo = festivosOn ? festivoEnFecha(fecha) : null;
     const esHoy = fecha === hoyISO;
     const esFestivo = festivo?.tipo === "festivo";
+    const esVispera = festivo?.tipo === "vispera";
 
     // Una persona sale una vez por día aunque tenga dos cosas ese día.
     const unicos: AusenciaCalendario[] = [];
@@ -235,7 +249,11 @@ export function CalendarioUnico({ ausencias, festivoEnFecha, onAnioChange, carga
           d.alto,
           d.padding,
           esHoy && "ring-2 ring-primary ring-inset",
-          esFestivo && "bg-amber-50/60 dark:bg-amber-950/20",
+          // El festivo se tiñe; la víspera, más flojo. Antes la víspera se
+          // quedaba igual que un día normal y parecía que unos festivos se
+          // pintaban y otros no.
+          esFestivo && "border-amber-300/70 bg-amber-50 dark:border-amber-800/50 dark:bg-amber-950/25",
+          esVispera && "bg-amber-50/40 dark:bg-amber-950/10",
         )}
       >
         <div className="flex items-start justify-between gap-0.5">
@@ -244,7 +262,8 @@ export function CalendarioUnico({ ausencias, festivoEnFecha, onAnioChange, carga
               "font-medium leading-none",
               d.numero,
               esHoy ? "font-bold text-primary" : "text-foreground",
-              esFestivo && !esHoy && "text-amber-700 dark:text-amber-500",
+              esFestivo && !esHoy && "font-bold text-amber-700 dark:text-amber-500",
+              esVispera && !esHoy && "text-amber-600/80 dark:text-amber-600",
             )}
           >
             {dia}
@@ -271,20 +290,27 @@ export function CalendarioUnico({ ausencias, festivoEnFecha, onAnioChange, carga
   const densidadMeses: Densidad =
     mesesAPintar.length >= 12 ? "mini" : mesesAPintar.length > 1 ? "compacto" : "normal";
 
+  // El selector de vista y la navegación van arriba del todo, en la misma fila
+  // que el botón de "Nuevo": así el calendario empieza antes y el año entero
+  // cabe de una sola vez, sin gastar una fila propia.
+  const controles = (
+    <div className="flex flex-wrap items-center gap-2">
+      <CalendarRangeToggle mode={rango.mode} onChange={rango.setMode} />
+      <CalendarRangeNav
+        label={rango.label}
+        onPrev={rango.prev}
+        onNext={rango.next}
+        onToday={rango.goToToday}
+        isToday={rango.isToday}
+        minWidth={150}
+      />
+    </div>
+  );
+
   return (
-    <div className="space-y-4">
-      {/* Navegación y modo de vista */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <CalendarRangeToggle mode={rango.mode} onChange={rango.setMode} />
-        <CalendarRangeNav
-          label={rango.label}
-          onPrev={rango.prev}
-          onNext={rango.next}
-          onToday={rango.goToToday}
-          isToday={rango.isToday}
-          minWidth={200}
-        />
-      </div>
+    <TooltipProvider delayDuration={150}>
+    <div className="space-y-3">
+      {slotControles ? createPortal(controles, slotControles) : controles}
 
       {/* Filtros: qué se ve en el calendario */}
       <div className="flex flex-wrap items-center gap-2 rounded-lg border bg-muted/20 p-3">
@@ -313,7 +339,7 @@ export function CalendarioUnico({ ausencias, festivoEnFecha, onAnioChange, carga
         <button
           type="button"
           onClick={() => setFestivosOn((v) => !v)}
-          title="Días festivos"
+          title="Festivos y vísperas. El festivo va en color; la víspera, más flojo."
           className={cn(
             "flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors",
             festivosOn ? "bg-card" : "bg-transparent text-muted-foreground opacity-50",
@@ -391,6 +417,7 @@ export function CalendarioUnico({ ausencias, festivoEnFecha, onAnioChange, carga
         </p>
       )}
     </div>
+    </TooltipProvider>
   );
 }
 
@@ -476,27 +503,36 @@ function AvatarAusencia({
 
   return (
     <Popover>
-      <PopoverTrigger asChild>
-        <button
-          type="button"
-          className="rounded-full transition-transform hover:scale-110"
-          // El aro dice de qué tipo es; si está sin decidir, se ve calado.
-          style={{
-            boxShadow: pendiente
-              ? `0 0 0 2px hsl(var(--background)), 0 0 0 3.5px ${color}80`
-              : `0 0 0 2px hsl(var(--background)), 0 0 0 3.5px ${color}`,
-          }}
-          title={`${ausencia.empleadoNombre} · ${labelDeSubtipo(ausencia.subtipo)}`}
-        >
-          <EmpleadoAvatar
-            nombre={ausencia.empleadoNombre}
-            avatarUrl={ausencia.avatarUrl}
-            claveColor={ausencia.userId ?? ausencia.empleadoNombre}
-            className={d.avatar}
-            textoClassName={d.texto}
-          />
-        </button>
-      </PopoverTrigger>
+      {/* Con pasar el ratón ya se ve de quién es; pulsando, el detalle. */}
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <PopoverTrigger asChild>
+            <button
+              type="button"
+              className="rounded-full transition-transform hover:scale-110"
+              // El aro dice de qué tipo es; si está sin decidir, se ve calado.
+              style={{
+                boxShadow: pendiente
+                  ? `0 0 0 2px hsl(var(--background)), 0 0 0 3.5px ${color}80`
+                  : `0 0 0 2px hsl(var(--background)), 0 0 0 3.5px ${color}`,
+              }}
+            >
+              <EmpleadoAvatar
+                nombre={ausencia.empleadoNombre}
+                avatarUrl={ausencia.avatarUrl}
+                claveColor={ausencia.userId ?? ausencia.empleadoNombre}
+                className={d.avatar}
+                textoClassName={d.texto}
+              />
+            </button>
+          </PopoverTrigger>
+        </TooltipTrigger>
+        <TooltipContent side="top" className="text-xs">
+          <span className="font-medium">{ausencia.empleadoNombre}</span>
+          <span className="opacity-70"> · {labelDeSubtipo(ausencia.subtipo)}</span>
+          {pendiente && <span className="opacity-70"> (pendiente)</span>}
+        </TooltipContent>
+      </Tooltip>
       <PopoverContent className="w-64 p-3" align="start">
         <div className="flex items-start gap-2.5">
           <EmpleadoAvatar

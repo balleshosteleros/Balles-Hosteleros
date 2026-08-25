@@ -46,6 +46,8 @@ export function CalendariosRRHHView() {
   const [cargando, setCargando] = useState(true);
   // Tipo que RRHH está registrando a mano, o null si no hay diálogo abierto.
   const [registrando, setRegistrando] = useState<SolicitudSubtipoAusencia | null>(null);
+  // Hueco de la cabecera donde el calendario coloca sus controles de vista.
+  const [slotControles, setSlotControles] = useState<HTMLDivElement | null>(null);
   const [recarga, setRecarga] = useState(0);
 
   useEffect(() => {
@@ -76,8 +78,14 @@ export function CalendariosRRHHView() {
             el detalle.
           </p>
         </div>
-        {/* Un solo botón: al pulsarlo se elige qué se registra. */}
-        <DropdownMenu>
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Aquí aterrizan el selector de vista y la navegación del
+              calendario, para no gastar una fila propia y que el año entero
+              quepa en pantalla. */}
+          <div ref={setSlotControles} className="flex flex-wrap items-center gap-2" />
+
+          {/* Un solo botón: al pulsarlo se elige qué se registra. */}
+          <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button size="sm" className="gap-1">
               <Plus className="h-4 w-4" />Nuevo
@@ -98,8 +106,9 @@ export function CalendariosRRHHView() {
                 {t.label}
               </DropdownMenuItem>
             ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       </div>
 
       <CalendarioUnico
@@ -107,6 +116,7 @@ export function CalendariosRRHHView() {
         festivoEnFecha={festivoEnFecha}
         onAnioChange={handleAnio}
         cargando={cargando}
+        slotControles={slotControles}
       />
 
       <RegistrarAusenciaDialog
