@@ -12,6 +12,12 @@ import { useFestivos, type FestivoInfo } from "@/features/rrhh/hooks/useFestivos
 import { CalendarRangeToggle, CalendarRangeNav } from "@/shared/components/calendar/CalendarRangeToggle";
 import { useCalendarRange, type CalendarRangeMode } from "@/shared/components/calendar/calendar-range";
 import { cn } from "@/lib/utils";
+import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
+import { hoyEnZona } from "@/features/empresa/lib/zona-horaria";
+import {
+  momentoDeAusencia,
+  type MomentoAusencia,
+} from "@/features/rrhh/data/vacaciones-saldo";
 
 interface AusenciaItem {
   id: string;
@@ -44,6 +50,42 @@ const DOT_COLORES: Record<string, string> = {
   nacional: "bg-rose-500",
   autonomico: "bg-amber-500",
   local: "bg-violet-500",
+};
+
+/**
+ * Una ausencia aprobada de marzo y otra de diciembre son la misma "aprobada",
+ * pero una ya se disfrutó y la otra hay que cubrirla. Se distinguen por color:
+ *
+ *   - Ya disfrutada  → gris apagado (histórico, nada que hacer).
+ *   - En curso       → azul (está fuera AHORA MISMO).
+ *   - Por disfrutar  → el color de su estado (verde aprobada / ámbar pendiente).
+ *
+ * Los festivos y las rechazadas no llevan momento: conservan su color.
+ */
+function colorEvento(item: AusenciaItem, hoy: string): string {
+  const m = momentoEvento(item, hoy);
+  if (m === "disfrutada") return "bg-muted text-muted-foreground border-border";
+  if (m === "en_curso") return ESTADO_COLORES.activa;
+  return ESTADO_COLORES[item.estado] ?? "";
+}
+
+function colorPunto(item: AusenciaItem, hoy: string): string {
+  const m = momentoEvento(item, hoy);
+  if (m === "disfrutada") return "bg-muted-foreground";
+  if (m === "en_curso") return DOT_COLORES.activa;
+  return DOT_COLORES[item.estado] ?? "bg-muted-foreground";
+}
+
+/** null = no aplica (festivos, rechazadas): se quedan con su color de siempre. */
+function momentoEvento(item: AusenciaItem, hoy: string): MomentoAusencia | null {
+  if (item.estado !== "aprobada" && item.estado !== "pendiente") return null;
+  return momentoDeAusencia(item.fechaInicio, item.fechaFin ?? null, hoy);
+}
+
+const MOMENTO_LABEL: Record<MomentoAusencia, string> = {
+  disfrutada: "Ya disfrutada",
+  en_curso: "Ahora mismo",
+  futura: "Por disfrutar",
 };
 
 const TIPO_FESTIVO_LABEL: Record<string, string> = {
@@ -99,6 +141,10 @@ export function CalendarioAusencias({ modalidad, items, botonNuevo, columnaExtra
   const [showConfig, setShowConfig] = useState(false);
   const rango = useCalendarRange("MENSUAL");
   const { festivoEnFecha } = useFestivos(rango.anchor.getFullYear());
+  const { empresaActual } = useEmpresa();
+  // "Ya pasada" se decide contra el día de la empresa, no el del navegador:
+  // quien mire el calendario desde otro huso vería un día distinto.
+  const hoy = hoyEnZona(empresaActual.zonaHoraria);
 
   const filtradas = useMemo(() =>
     items.filter(v => !busqueda || v.empleadoNombre.toLowerCase().includes(busqueda.toLowerCase())),
@@ -164,6 +210,7 @@ export function CalendarioAusencias({ modalidad, items, botonNuevo, columnaExtra
               <VistaDiaria
                 anchor={rango.anchor}
                 eventosPorFecha={eventosPorFecha}
+                hoyISO={hoy}
                 festivoEnFecha={festivoEnFecha}
               />
             )}
@@ -172,6 +219,7 @@ export function CalendarioAusencias({ modalidad, items, botonNuevo, columnaExtra
               <VistaSemanal
                 anchor={rango.anchor}
                 eventosPorFecha={eventosPorFecha}
+                hoyISO={hoy}
                 festivoEnFecha={festivoEnFecha}
               />
             )}
@@ -181,6 +229,7 @@ export function CalendarioAusencias({ modalidad, items, botonNuevo, columnaExtra
                 year={meses[0].year}
                 month={meses[0].month}
                 eventosPorFecha={eventosPorFecha}
+                hoyISO={hoy}
                 festivoEnFecha={festivoEnFecha}
               />
             )}
@@ -198,11 +247,33 @@ export function CalendarioAusencias({ modalidad, items, botonNuevo, columnaExtra
                     year={year}
                     month={month}
                     eventosPorFecha={eventosPorFecha}
+                    hoyISO={hoy}
                     festivoEnFecha={festivoEnFecha}
                   />
                 ))}
               </div>
             )}
+
+            {/* Tres colores sin explicar no se entienden. La leyenda dice qué
+                significa cada uno respecto a la fecha de hoy. */}
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t pt-3 text-[11px] text-muted-foreground">
+              <span className="inline-flex items-center gap-1.5">
+                <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                Aprobada, por disfrutar
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <span className="h-2 w-2 rounded-full bg-amber-500" />
+                Pendiente de aprobar
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <span className="h-2 w-2 rounded-full bg-sky-500" />
+                Ahora mismo fuera
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <span className="h-2 w-2 rounded-full bg-muted-foreground" />
+                Ya disfrutada
+              </span>
+            </div>
           </CardContent>
         </Card>
       ) : (
@@ -227,9 +298,19 @@ export function CalendarioAusencias({ modalidad, items, botonNuevo, columnaExtra
                   <TableCell className="text-sm">{v.fechaFin || "—"}</TableCell>
                   {columnaExtra && <TableCell className="text-sm">{columnaExtra.render(v)}</TableCell>}
                   <TableCell>
-                    <Badge variant="outline" className={`text-xs ${ESTADO_COLORES[v.estado] ?? ""}`}>
-                      {v.estado.charAt(0).toUpperCase() + v.estado.slice(1)}
-                    </Badge>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <Badge variant="outline" className={`text-xs ${ESTADO_COLORES[v.estado] ?? ""}`}>
+                        {v.estado.charAt(0).toUpperCase() + v.estado.slice(1)}
+                      </Badge>
+                      {(() => {
+                        const m = momentoEvento(v, hoy);
+                        return m ? (
+                          <Badge variant="outline" className={`text-xs ${colorEvento(v, hoy)}`}>
+                            {MOMENTO_LABEL[m]}
+                          </Badge>
+                        ) : null;
+                      })()}
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}
@@ -298,10 +379,12 @@ function FestivoMarker({ festivoEnFecha, fechaISO, compact }: { festivoEnFecha: 
 function VistaDiaria({
   anchor,
   eventosPorFecha,
+  hoyISO,
 }: {
   anchor: Date;
   eventosPorFecha: Map<string, AusenciaItem[]>;
   festivoEnFecha: (f: string) => FestivoInfo | null;
+  hoyISO: string;
 }) {
   const fechaISO = toISO(anchor.getFullYear(), anchor.getMonth(), anchor.getDate());
   const eventos = eventosPorFecha.get(fechaISO) ?? [];
@@ -316,8 +399,8 @@ function VistaDiaria({
         {eventos.length === 0 ? (
           <div className="text-sm text-muted-foreground text-center py-8">Sin registros para este día.</div>
         ) : eventos.map((ev) => (
-          <div key={ev.id} className={cn("flex items-center gap-2 rounded-md border px-3 py-2", ESTADO_COLORES[ev.estado])}>
-            <div className={cn("h-2 w-2 rounded-full", DOT_COLORES[ev.estado])} />
+          <div key={ev.id} className={cn("flex items-center gap-2 rounded-md border px-3 py-2", colorEvento(ev, hoyISO))}>
+            <div className={cn("h-2 w-2 rounded-full", colorPunto(ev, hoyISO))} />
             <div className="text-sm font-medium">{ev.empleadoNombre}</div>
             <div className="text-xs text-muted-foreground ml-auto">{ev.departamento}</div>
           </div>
@@ -331,10 +414,12 @@ function VistaSemanal({
   anchor,
   eventosPorFecha,
   festivoEnFecha,
+  hoyISO,
 }: {
   anchor: Date;
   eventosPorFecha: Map<string, AusenciaItem[]>;
   festivoEnFecha: (f: string) => FestivoInfo | null;
+  hoyISO: string;
 }) {
   const iso = (anchor.getDay() + 6) % 7;
   const start = new Date(anchor);
@@ -363,8 +448,8 @@ function VistaSemanal({
             <FestivoMarker festivoEnFecha={festivoEnFecha} fechaISO={fechaISO} />
             <div className="mt-1 space-y-0.5">
               {eventos.slice(0, 4).map((ev, i) => (
-                <div key={i} className={cn("flex items-center gap-1 rounded px-1 py-0.5", ESTADO_COLORES[ev.estado] || "bg-muted")}>
-                  <div className={cn("h-1.5 w-1.5 rounded-full shrink-0", DOT_COLORES[ev.estado] || "bg-muted-foreground")} />
+                <div key={i} className={cn("flex items-center gap-1 rounded px-1 py-0.5", colorEvento(ev, hoyISO))}>
+                  <div className={cn("h-1.5 w-1.5 rounded-full shrink-0", colorPunto(ev, hoyISO))} />
                   <span className="text-[10px] truncate">{ev.empleadoNombre.split(" ")[0]}</span>
                 </div>
               ))}
@@ -382,11 +467,13 @@ function MesGrande({
   month,
   eventosPorFecha,
   festivoEnFecha,
+  hoyISO,
 }: {
   year: number;
   month: number;
   eventosPorFecha: Map<string, AusenciaItem[]>;
   festivoEnFecha: (f: string) => FestivoInfo | null;
+  hoyISO: string;
 }) {
   const daysInMonth = getDaysInMonth(year, month);
   const firstDay = getFirstDayMon(year, month);
@@ -411,8 +498,8 @@ function MesGrande({
             <FestivoMarker festivoEnFecha={festivoEnFecha} fechaISO={fechaISO} />
             <div className="mt-1 space-y-0.5">
               {eventos.slice(0, 2).map((ev, idx) => (
-                <div key={idx} className={cn("flex items-center gap-1 rounded px-1 py-0.5", ESTADO_COLORES[ev.estado] || "bg-muted")}>
-                  <div className={cn("h-1.5 w-1.5 rounded-full shrink-0", DOT_COLORES[ev.estado] || "bg-muted-foreground")} />
+                <div key={idx} className={cn("flex items-center gap-1 rounded px-1 py-0.5", colorEvento(ev, hoyISO))}>
+                  <div className={cn("h-1.5 w-1.5 rounded-full shrink-0", colorPunto(ev, hoyISO))} />
                   <span className="text-[9px] truncate">{ev.empleadoNombre.split(" ")[0]}</span>
                 </div>
               ))}
@@ -430,11 +517,13 @@ function MesMini({
   month,
   eventosPorFecha,
   festivoEnFecha,
+  hoyISO,
 }: {
   year: number;
   month: number;
   eventosPorFecha: Map<string, AusenciaItem[]>;
   festivoEnFecha: (f: string) => FestivoInfo | null;
+  hoyISO: string;
 }) {
   const daysInMonth = getDaysInMonth(year, month);
   const firstDay = getFirstDayMon(year, month);
@@ -460,7 +549,7 @@ function MesMini({
           const eventos = eventosPorFecha.get(fechaISO) ?? [];
           const count = eventos.length;
           const isToday = hoy.getFullYear() === year && hoy.getMonth() === month && hoy.getDate() === day;
-          const dominante = eventos[0]?.estado;
+          const dominante = eventos[0];
           return (
             <div
               key={day}
@@ -474,7 +563,7 @@ function MesMini({
               {day}
               <FestivoMarker festivoEnFecha={festivoEnFecha} fechaISO={fechaISO} compact />
               {count > 0 && dominante && (
-                <span className={cn("absolute bottom-0.5 h-1 w-1 rounded-full", DOT_COLORES[dominante] || "bg-muted-foreground")} />
+                <span className={cn("absolute bottom-0.5 h-1 w-1 rounded-full", colorPunto(dominante, hoyISO))} />
               )}
             </div>
           );

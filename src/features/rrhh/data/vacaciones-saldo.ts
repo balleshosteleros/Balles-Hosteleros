@@ -24,6 +24,30 @@
 /** Estados que consumen cupo. El resto (rechazada, anulada) no cuenta. */
 export const ESTADOS_QUE_GASTAN = ["pendiente", "aprobada"] as const;
 
+/**
+ * Momento de una ausencia respecto a hoy. En el calendario importa tanto como
+ * el estado: una vacación aprobada de marzo y otra de diciembre son la misma
+ * "aprobada", pero una ya se disfrutó y la otra hay que cubrirla.
+ */
+export type MomentoAusencia = "disfrutada" | "en_curso" | "futura";
+
+/**
+ * Sitúa un rango respecto al día de hoy. Las fechas son "YYYY-MM-DD", así que
+ * comparar las cadenas ordena igual que las fechas.
+ *
+ * Sin `fin` (una baja médica sin alta prevista) el rango sigue abierto: si ya
+ * empezó está en curso, nunca "disfrutada".
+ */
+export function momentoDeAusencia(
+  inicio: string,
+  fin: string | null | undefined,
+  hoy: string,
+): MomentoAusencia {
+  if (inicio > hoy) return "futura";
+  if (!fin) return "en_curso";
+  return fin < hoy ? "disfrutada" : "en_curso";
+}
+
 /** Una solicitud, con lo mínimo para repartirla. */
 export interface SolicitudParaSaldo {
   fecha_inicio: string;
