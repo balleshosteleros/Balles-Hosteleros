@@ -36,6 +36,60 @@ const MESES = [
   "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
 ];
 
+/**
+ * Cuánto ocupa cada día según cuántos meses haya en pantalla.
+ *  - normal: un mes solo, se ve todo cómodo.
+ *  - compacto: trimestre o semestre.
+ *  - mini: el año entero, que tiene que caber sin hacer scroll. Ahí solo caben
+ *    2 caras por día; el resto se ve pulsando el "+N".
+ */
+type Densidad = "normal" | "compacto" | "mini";
+
+const MEDIDAS: Record<
+  Densidad,
+  {
+    alto: string;
+    padding: string;
+    numero: string;
+    gap: string;
+    margenTop: string;
+    avatar: string;
+    texto: string;
+    tope: number;
+  }
+> = {
+  normal: {
+    alto: "min-h-[104px]",
+    padding: "p-1.5",
+    numero: "text-[11px]",
+    gap: "gap-1",
+    margenTop: "mt-1.5",
+    avatar: "h-6 w-6",
+    texto: "text-[9px]",
+    tope: 6,
+  },
+  compacto: {
+    alto: "min-h-[64px]",
+    padding: "p-1",
+    numero: "text-[10px]",
+    gap: "gap-0.5",
+    margenTop: "mt-1",
+    avatar: "h-5 w-5",
+    texto: "text-[8px]",
+    tope: 3,
+  },
+  mini: {
+    alto: "min-h-[34px]",
+    padding: "p-0.5",
+    numero: "text-[9px]",
+    gap: "gap-0.5",
+    margenTop: "mt-0.5",
+    avatar: "h-4 w-4",
+    texto: "text-[7px]",
+    tope: 2,
+  },
+};
+
 /** "YYYY-MM-DD" de una fecha local, sin pasar por UTC (que la desplazaría). */
 function ymd(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -153,8 +207,8 @@ export function CalendarioUnico({ ausencias, festivoEnFecha, onAnioChange, carga
   const hoyISO = ymd(new Date());
 
   /** Una celda de día: número, marca de festivo y los avatares de quien falta. */
-  function celdaDia(fecha: string, dia: number, opts?: { compacto?: boolean }) {
-    const compacto = opts?.compacto ?? false;
+  function celdaDia(fecha: string, dia: number, opts?: { densidad?: Densidad }) {
+    const densidad = opts?.densidad ?? "normal";
     const delDia = porFecha.get(fecha) ?? [];
     const festivo = festivosOn ? festivoEnFecha(fecha) : null;
     const esHoy = fecha === hoyISO;
@@ -170,42 +224,40 @@ export function CalendarioUnico({ ausencias, festivoEnFecha, onAnioChange, carga
       unicos.push(a);
     }
 
-    const tope = compacto ? 3 : 6;
-    const mostrados = unicos.slice(0, tope);
+    const d = MEDIDAS[densidad];
+    const mostrados = unicos.slice(0, d.tope);
     const resto = unicos.length - mostrados.length;
 
     return (
       <div
         className={cn(
-          "relative rounded-md border bg-card p-1.5 transition-colors",
-          compacto ? "min-h-[70px]" : "min-h-[104px]",
+          "relative rounded-md border bg-card transition-colors",
+          d.alto,
+          d.padding,
           esHoy && "ring-2 ring-primary ring-inset",
           esFestivo && "bg-amber-50/60 dark:bg-amber-950/20",
         )}
       >
-        <div className="flex items-start justify-between">
+        <div className="flex items-start justify-between gap-0.5">
           <span
             className={cn(
-              "text-[11px] font-medium leading-none",
+              "font-medium leading-none",
+              d.numero,
               esHoy ? "font-bold text-primary" : "text-foreground",
               esFestivo && !esHoy && "text-amber-700 dark:text-amber-500",
             )}
           >
             {dia}
           </span>
-          {festivo && <MarcaFestivo info={festivo} />}
+          {festivo && <MarcaFestivo info={festivo} mini={densidad === "mini"} />}
         </div>
 
         {unicos.length > 0 && (
-          <div className="mt-1.5 flex flex-wrap gap-1">
+          <div className={cn("flex flex-wrap items-center", d.gap, d.margenTop)}>
             {mostrados.map((a) => (
-              <AvatarAusencia key={a.id} ausencia={a} compacto={compacto} />
+              <AvatarAusencia key={a.id} ausencia={a} densidad={densidad} />
             ))}
-            {resto > 0 && (
-              <span className="self-center text-[10px] font-medium text-muted-foreground">
-                +{resto}
-              </span>
-            )}
+            {resto > 0 && <MasDelDia fecha={fecha} restantes={unicos.slice(d.tope)} densidad={densidad} />}
           </div>
         )}
       </div>
@@ -214,6 +266,10 @@ export function CalendarioUnico({ ausencias, festivoEnFecha, onAnioChange, carga
 
   const modo = rango.mode;
   const mesesAPintar = mesesDelModo(modo, rango.anchor);
+  // Cuantos más meses en pantalla, más pequeño el día. El año entero va a
+  // "mini" para que los 12 meses quepan de una vez.
+  const densidadMeses: Densidad =
+    mesesAPintar.length >= 12 ? "mini" : mesesAPintar.length > 1 ? "compacto" : "normal";
 
   return (
     <div className="space-y-4">
@@ -307,12 +363,13 @@ export function CalendarioUnico({ ausencias, festivoEnFecha, onAnioChange, carga
       ) : (
         <div
           className={cn(
-            "grid gap-4",
-            mesesAPintar.length === 1
-              ? "grid-cols-1"
-              : mesesAPintar.length <= 3
-                ? "grid-cols-1 md:grid-cols-3"
-                : "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4",
+            "grid",
+            // El año entero va apretado (4×3) para que quepa sin scroll.
+            densidadMeses === "mini"
+              ? "gap-x-3 gap-y-4 grid-cols-2 md:grid-cols-3 xl:grid-cols-4"
+              : mesesAPintar.length === 1
+                ? "gap-4 grid-cols-1"
+                : "gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3",
           )}
         >
           {mesesAPintar.map(({ anio, mes }) => (
@@ -321,7 +378,7 @@ export function CalendarioUnico({ ausencias, festivoEnFecha, onAnioChange, carga
               anio={anio}
               mes={mes}
               conTitulo={mesesAPintar.length > 1}
-              compacto={mesesAPintar.length > 1}
+              densidad={densidadMeses}
               celdaDia={celdaDia}
             />
           ))}
@@ -337,17 +394,85 @@ export function CalendarioUnico({ ausencias, festivoEnFecha, onAnioChange, carga
   );
 }
 
+/**
+ * El "+N" de un día con más gente de la que cabe. Al pulsarlo se despliegan
+ * todos los que faltan ese día, con su nombre y su tipo.
+ */
+function MasDelDia({
+  fecha,
+  restantes,
+  densidad,
+}: {
+  fecha: string;
+  restantes: AusenciaCalendario[];
+  densidad: Densidad;
+}) {
+  const d = MEDIDAS[densidad];
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className={cn(
+            "flex items-center justify-center rounded-full border border-dashed bg-muted/60 font-semibold text-muted-foreground transition-colors hover:bg-muted hover:text-foreground",
+            d.avatar,
+            d.texto,
+          )}
+          title={`Ver ${restantes.length} más`}
+        >
+          +{restantes.length}
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="w-64 p-2" align="start">
+        <p className="px-1 pb-1.5 text-xs font-semibold text-muted-foreground">
+          {formatoCorto(fecha)} · {restantes.length} más
+        </p>
+        <div className="max-h-64 space-y-0.5 overflow-y-auto">
+          {restantes.map((a) => (
+            <div key={a.id} className="flex items-center gap-2 rounded-md px-1 py-1">
+              <span
+                className="shrink-0 rounded-full"
+                style={{
+                  boxShadow:
+                    a.estado === "pendiente"
+                      ? `0 0 0 2px hsl(var(--background)), 0 0 0 3px ${colorDeSubtipo(a.subtipo)}80`
+                      : `0 0 0 2px hsl(var(--background)), 0 0 0 3px ${colorDeSubtipo(a.subtipo)}`,
+                }}
+              >
+                <EmpleadoAvatar
+                  nombre={a.empleadoNombre}
+                  avatarUrl={a.avatarUrl}
+                  claveColor={a.userId ?? a.empleadoNombre}
+                  className="h-6 w-6"
+                  textoClassName="text-[9px]"
+                />
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-xs font-medium">{a.empleadoNombre}</p>
+                <p className="truncate text-[11px] text-muted-foreground">
+                  {labelDeSubtipo(a.subtipo)}
+                  {a.estado === "pendiente" ? " · pendiente" : ""}
+                </p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 /** Avatar con el aro del color de su tipo de ausencia. */
 function AvatarAusencia({
   ausencia,
-  compacto,
+  densidad,
 }: {
   ausencia: AusenciaCalendario;
-  compacto: boolean;
+  densidad: Densidad;
 }) {
   const color = colorDeSubtipo(ausencia.subtipo);
   const pendiente = ausencia.estado === "pendiente";
-  const tam = compacto ? "h-5 w-5" : "h-6 w-6";
+  const d = MEDIDAS[densidad];
 
   return (
     <Popover>
@@ -367,8 +492,8 @@ function AvatarAusencia({
             nombre={ausencia.empleadoNombre}
             avatarUrl={ausencia.avatarUrl}
             claveColor={ausencia.userId ?? ausencia.empleadoNombre}
-            className={tam}
-            textoClassName={compacto ? "text-[8px]" : "text-[9px]"}
+            className={d.avatar}
+            textoClassName={d.texto}
           />
         </button>
       </PopoverTrigger>
@@ -415,7 +540,7 @@ function AvatarAusencia({
 }
 
 /** Marca de festivo en la esquina del día. */
-function MarcaFestivo({ info }: { info: FestivoInfo }) {
+function MarcaFestivo({ info, mini }: { info: FestivoInfo; mini?: boolean }) {
   const esVispera = info.tipo === "vispera";
   return (
     <Popover>
@@ -428,7 +553,7 @@ function MarcaFestivo({ info }: { info: FestivoInfo }) {
           )}
           title={esVispera ? `Víspera de ${info.festivo.nombre}` : info.festivo.nombre}
         >
-          <PartyPopper className={cn("h-3.5 w-3.5", esVispera && "opacity-60")} />
+          <PartyPopper className={cn(mini ? "h-2.5 w-2.5" : "h-3.5 w-3.5", esVispera && "opacity-60")} />
         </button>
       </PopoverTrigger>
       <PopoverContent className="w-56 p-3" align="end">
@@ -442,7 +567,7 @@ function MarcaFestivo({ info }: { info: FestivoInfo }) {
   );
 }
 
-type CeldaFn = (fecha: string, dia: number, opts?: { compacto?: boolean }) => React.ReactNode;
+type CeldaFn = (fecha: string, dia: number, opts?: { densidad?: Densidad }) => React.ReactNode;
 
 function VistaDia({ fecha, celdaDia }: { fecha: string; celdaDia: CeldaFn }) {
   const d = new Date(fecha + "T12:00:00");
@@ -485,13 +610,13 @@ function VistaMes({
   mes,
   celdaDia,
   conTitulo,
-  compacto,
+  densidad,
 }: {
   anio: number;
   mes: number; // 0-11
   celdaDia: CeldaFn;
   conTitulo: boolean;
-  compacto: boolean;
+  densidad: Densidad;
 }) {
   const primerDia = new Date(anio, mes, 1);
   const totalDias = new Date(anio, mes + 1, 0).getDate();
@@ -508,21 +633,23 @@ function VistaMes({
   return (
     <div>
       {conTitulo && (
-        <p className="mb-1.5 text-sm font-semibold">{MESES[mes]}</p>
+        <p className={cn("font-semibold", densidad === "mini" ? "mb-1 text-xs" : "mb-1.5 text-sm")}>
+          {MESES[mes]}
+        </p>
       )}
-      <div className="mb-1 grid grid-cols-7 gap-1">
+      <div className={cn("mb-1 grid grid-cols-7", densidad === "mini" ? "gap-px" : "gap-1")}>
         {DIAS_SEMANA.map((d) => (
           <div key={d} className="text-center text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">
-            {compacto ? d[0] : d}
+            {densidad === "normal" ? d : d[0]}
           </div>
         ))}
       </div>
-      <div className="grid grid-cols-7 gap-1">
+      <div className={cn("grid grid-cols-7", densidad === "mini" ? "gap-px" : "gap-1")}>
         {celdas.map((c, i) =>
           c.fecha ? (
-            <div key={i}>{celdaDia(c.fecha, c.dia!, { compacto })}</div>
+            <div key={i}>{celdaDia(c.fecha, c.dia!, { densidad })}</div>
           ) : (
-            <div key={i} className={compacto ? "min-h-[70px]" : "min-h-[104px]"} />
+            <div key={i} className={MEDIDAS[densidad].alto} />
           ),
         )}
       </div>

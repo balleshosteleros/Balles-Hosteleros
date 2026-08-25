@@ -8,10 +8,26 @@ import {
 } from "@/features/rrhh/actions/calendario-ausencias-actions";
 import { useFestivos } from "@/features/rrhh/hooks/useFestivos";
 import { Button } from "@/components/ui/button";
-import { Plus } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Plus, ChevronDown } from "lucide-react";
+import {
+  TIPOS_CALENDARIO,
+  colorDeSubtipo,
+} from "@/features/rrhh/data/calendario-tipos";
 import { CalendarioUnico } from "@/features/rrhh/components/calendarios/CalendarioUnico";
 import { RegistrarAusenciaDialog } from "@/features/rrhh/components/calendarios/RegistrarAusenciaDialog";
 import type { SolicitudSubtipoAusencia } from "@/features/mi-panel/types";
+
+/**
+ * Lo que RRHH puede registrar a mano. La baja de contrato queda fuera: la
+ * solicita el propio empleado y requiere firma, no se da de alta desde aquí.
+ */
+const REGISTRABLES = TIPOS_CALENDARIO.filter((t) => t.subtipo !== "baja_contrato");
 
 /**
  * Calendario de RRHH: UN solo calendario donde se ve todo a la vez —
@@ -60,17 +76,30 @@ export function CalendariosRRHHView() {
             el detalle.
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <Button size="sm" variant="outline" className="gap-1" onClick={() => setRegistrando("baja_medica")}>
-            <Plus className="h-4 w-4" />Baja médica
-          </Button>
-          <Button size="sm" variant="outline" className="gap-1" onClick={() => setRegistrando("permiso")}>
-            <Plus className="h-4 w-4" />Permiso
-          </Button>
-          <Button size="sm" variant="outline" className="gap-1" onClick={() => setRegistrando("vacaciones")}>
-            <Plus className="h-4 w-4" />Vacaciones
-          </Button>
-        </div>
+        {/* Un solo botón: al pulsarlo se elige qué se registra. */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button size="sm" className="gap-1">
+              <Plus className="h-4 w-4" />Nuevo
+              <ChevronDown className="h-4 w-4 opacity-70" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-52">
+            {REGISTRABLES.map((t) => (
+              <DropdownMenuItem
+                key={t.subtipo}
+                onSelect={() => setRegistrando(t.subtipo)}
+                className="gap-2"
+              >
+                <span
+                  className="h-2.5 w-2.5 shrink-0 rounded-full"
+                  style={{ backgroundColor: colorDeSubtipo(t.subtipo) }}
+                />
+                {t.label}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       <CalendarioUnico
