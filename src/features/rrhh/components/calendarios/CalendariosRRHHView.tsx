@@ -1,217 +1,84 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import {
   listAusenciasEmpresa,
   type AusenciaCalendario,
 } from "@/features/rrhh/actions/calendario-ausencias-actions";
 import { useFestivos } from "@/features/rrhh/hooks/useFestivos";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Palmtree, PartyPopper, HeartPulse, FileCheck, LogOut, Loader2 } from "lucide-react";
-import { CalendarioAusencias } from "@/features/rrhh/components/calendarios/CalendarioAusencias";
+import { Button } from "@/components/ui/button";
+import { Plus } from "lucide-react";
+import { CalendarioUnico } from "@/features/rrhh/components/calendarios/CalendarioUnico";
 import { RegistrarAusenciaDialog } from "@/features/rrhh/components/calendarios/RegistrarAusenciaDialog";
 import type { SolicitudSubtipoAusencia } from "@/features/mi-panel/types";
 
-const AMBITO_LABEL: Record<string, string> = {
-  nacional: "Nacional",
-  autonomico: "Autonómico",
-  local: "Local",
-};
-
+/**
+ * Calendario de RRHH: UN solo calendario donde se ve todo a la vez —
+ * vacaciones, bajas médicas, permisos, bajas de contrato y festivos—, con
+ * filtros por tipo y por estado.
+ *
+ * Antes eran cinco pestañas, una por tipo, así que para saber quién faltaba un
+ * día había que recorrerlas todas.
+ */
 export function CalendariosRRHHView() {
   const { empresaActual } = useEmpresa();
-  // Año natural en curso: festivos reales de la BD (generados automáticamente).
-  const [anio] = useState<number>(() => new Date().getFullYear());
-  const { festivos: festivosBD } = useFestivos(anio);
+  const [anio, setAnio] = useState<number>(() => new Date().getFullYear());
+  const { festivoEnFecha } = useFestivos(anio);
 
-  // Ausencias reales de la plantilla (aprobadas y pendientes). Antes esta
-  // pantalla enseñaba nombres y fechas inventados.
-  const [ausencias, setAusencias] = useState<{
-    vacaciones: AusenciaCalendario[];
-    bajas: AusenciaCalendario[];
-    permisos: AusenciaCalendario[];
-    bajasContrato: AusenciaCalendario[];
-  }>({ vacaciones: [], bajas: [], permisos: [], bajasContrato: [] });
-  const [cargandoAusencias, setCargandoAusencias] = useState(true);
-  // Tipo de ausencia que RRHH está registrando a mano, o null si no hay diálogo.
+  const [ausencias, setAusencias] = useState<AusenciaCalendario[]>([]);
+  const [cargando, setCargando] = useState(true);
+  // Tipo que RRHH está registrando a mano, o null si no hay diálogo abierto.
   const [registrando, setRegistrando] = useState<SolicitudSubtipoAusencia | null>(null);
-  // Cambia al guardar para forzar la recarga del calendario.
   const [recarga, setRecarga] = useState(0);
 
   useEffect(() => {
     let activo = true;
-    setCargandoAusencias(true);
-    Promise.all([
-      listAusenciasEmpresa(empresaActual.id, "vacaciones", anio),
-      listAusenciasEmpresa(empresaActual.id, "baja_medica", anio),
-      listAusenciasEmpresa(empresaActual.id, "permiso", anio),
-      listAusenciasEmpresa(empresaActual.id, "baja_contrato", anio),
-    ]).then(([vac, baj, per, bajCon]) => {
+    setCargando(true);
+    listAusenciasEmpresa(empresaActual.id, anio).then((res) => {
       if (!activo) return;
-      setAusencias({
-        vacaciones: vac.data,
-        bajas: baj.data,
-        permisos: per.data,
-        bajasContrato: bajCon.data,
-      });
-      setCargandoAusencias(false);
+      setAusencias(res.data);
+      setCargando(false);
     });
     return () => {
       activo = false;
     };
   }, [empresaActual.id, anio, recarga]);
 
-  const vacaciones = useMemo(() =>
-    ausencias.vacaciones.map(v => ({
-      id: v.id, empleadoNombre: v.empleadoNombre, departamento: v.departamento,
-      fechaInicio: v.fechaInicio, fechaFin: v.fechaFin ?? undefined, estado: v.estado,
-      detalle: v.dias != null ? `${v.dias} días` : "—",
-    })),
-    [ausencias.vacaciones]
-  );
-
-  // Baja de contrato: aquí la fecha que importa es el ÚLTIMO DÍA trabajado
-  // (`fechaFin`), no un rango de ausencia. Se marca ese día en el calendario,
-  // porque es la fecha que hay que tener presente al cuadrar turnos.
-  const bajasContrato = useMemo(() =>
-    ausencias.bajasContrato.map(b => ({
-      id: b.id,
-      empleadoNombre: b.empleadoNombre,
-      departamento: b.departamento,
-      fechaInicio: b.fechaFin ?? b.fechaInicio,
-      estado: b.estado,
-      detalle: b.fechaFin ? "Último día trabajado" : "Sin fecha efectiva",
-    })),
-    [ausencias.bajasContrato]
-  );
-
-  const festivos = useMemo(() =>
-    festivosBD
-      .filter(f => f.fecha.startsWith(String(anio)))
-      .sort((a, b) => a.fecha.localeCompare(b.fecha))
-      .map(f => ({
-        id: f.id, empleadoNombre: f.nombre, departamento: AMBITO_LABEL[f.ambito] ?? f.ambito,
-        fechaInicio: f.fecha, estado: f.ambito,
-      })),
-    [festivosBD, anio]
-  );
-
-  const bajas = useMemo(() =>
-    ausencias.bajas.map(b => ({
-      id: b.id, empleadoNombre: b.empleadoNombre, departamento: b.departamento,
-      fechaInicio: b.fechaInicio, fechaFin: b.fechaFin ?? undefined, estado: b.estado,
-      // Sin fecha de alta prevista la baja sigue abierta: se dice, no se deja en blanco.
-      detalle: b.motivo ?? (b.fechaFin ? undefined : "Sin fecha de alta prevista"),
-    })),
-    [ausencias.bajas]
-  );
-
-  const justificadas = useMemo(() =>
-    ausencias.permisos.map(p => ({
-      id: p.id, empleadoNombre: p.empleadoNombre, departamento: p.departamento,
-      fechaInicio: p.fechaInicio, fechaFin: p.fechaFin ?? undefined, estado: p.estado,
-      detalle: p.motivo ?? undefined,
-      tipo: p.dias != null ? `${p.dias} ${p.dias === 1 ? "día" : "días"}` : "—",
-    })),
-    [ausencias.permisos]
-  );
-
-  // Un calendario vacío puede ser "aún cargando" o "no hay nada este año", y
-  // sin decirlo parece que la pantalla está rota.
-  function avisoAusencias(total: number, quePlural: string) {
-    if (cargandoAusencias) {
-      return (
-        <p className="text-sm text-muted-foreground flex items-center gap-1.5">
-          <Loader2 className="h-3.5 w-3.5 animate-spin" /> Cargando…
-        </p>
-      );
-    }
-    if (total > 0) return null;
-    return (
-      <p className="text-sm text-muted-foreground">
-        No hay {quePlural} en {anio}.
-      </p>
-    );
-  }
+  // El calendario avisa del año que está mirando para traer sus datos.
+  const handleAnio = useCallback((a: number) => {
+    setAnio((actual) => (actual === a ? actual : a));
+  }, []);
 
   return (
-    <div className="p-6 space-y-6">
-      <Tabs defaultValue="vacaciones" className="space-y-4">
-        <TabsList className="flex-wrap h-auto gap-1">
-          <TabsTrigger value="vacaciones" className="gap-1"><Palmtree className="h-4 w-4" />Vacaciones</TabsTrigger>
-          <TabsTrigger value="bajas" className="gap-1"><HeartPulse className="h-4 w-4" />Bajas médicas</TabsTrigger>
-          <TabsTrigger value="justificadas" className="gap-1"><FileCheck className="h-4 w-4" />Permisos</TabsTrigger>
-          <TabsTrigger value="bajas_contrato" className="gap-1"><LogOut className="h-4 w-4" />Bajas de contrato</TabsTrigger>
-          <TabsTrigger value="festivos" className="gap-1"><PartyPopper className="h-4 w-4" />Festivos</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="vacaciones" className="space-y-3">
-          {avisoAusencias(vacaciones.length, "vacaciones registradas")}
-          <CalendarioAusencias
-            empresaId={empresaActual.id}
-            modalidad="vacaciones"
-            titulo="Vacaciones"
-            items={vacaciones}
-            botonNuevo="Registrar vacaciones"
-            onNuevo={() => setRegistrando("vacaciones")}
-            columnaExtra={{ header: "Días", render: item => <span className="font-semibold">{item.detalle}</span> }}
-          />
-        </TabsContent>
-
-        <TabsContent value="bajas" className="space-y-3">
-          {avisoAusencias(bajas.length, "bajas médicas registradas")}
-          <CalendarioAusencias
-            empresaId={empresaActual.id}
-            modalidad="bajas"
-            titulo="Bajas médicas"
-            items={bajas}
-            botonNuevo="Registrar baja"
-            onNuevo={() => setRegistrando("baja_medica")}
-            columnaExtra={{ header: "Motivo", render: item => <span className="text-muted-foreground">{item.detalle || "—"}</span> }}
-          />
-        </TabsContent>
-
-        <TabsContent value="justificadas" className="space-y-3">
-          {avisoAusencias(justificadas.length, "permisos registrados")}
-          <CalendarioAusencias
-            empresaId={empresaActual.id}
-            modalidad="justificadas"
-            titulo="Permisos"
-            items={justificadas}
-            botonNuevo="Registrar permiso"
-            onNuevo={() => setRegistrando("permiso")}
-            columnaExtra={{ header: "Días", render: item => <span className="font-semibold">{item.tipo || "—"}</span> }}
-          />
-        </TabsContent>
-
-        <TabsContent value="bajas_contrato" className="space-y-3">
+    <div className="space-y-4 p-6">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-semibold">Calendario</h2>
           <p className="text-sm text-muted-foreground">
-            Último día trabajado de quien deja la empresa. No se registra aquí:
-            la solicita el propio empleado y requiere firma.
+            Quién falta cada día y por qué. Pasa el ratón por una cara para ver
+            el detalle.
           </p>
-          {avisoAusencias(bajasContrato.length, "bajas de contrato")}
-          <CalendarioAusencias
-            empresaId={empresaActual.id}
-            modalidad="bajas_contrato"
-            titulo="Bajas de contrato"
-            items={bajasContrato}
-            botonNuevo="Registrar baja de contrato"
-            columnaExtra={{ header: "Detalle", render: item => <span className="text-muted-foreground">{item.detalle || "—"}</span> }}
-          />
-        </TabsContent>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button size="sm" variant="outline" className="gap-1" onClick={() => setRegistrando("baja_medica")}>
+            <Plus className="h-4 w-4" />Baja médica
+          </Button>
+          <Button size="sm" variant="outline" className="gap-1" onClick={() => setRegistrando("permiso")}>
+            <Plus className="h-4 w-4" />Permiso
+          </Button>
+          <Button size="sm" variant="outline" className="gap-1" onClick={() => setRegistrando("vacaciones")}>
+            <Plus className="h-4 w-4" />Vacaciones
+          </Button>
+        </div>
+      </div>
 
-        <TabsContent value="festivos">
-          {/* Los festivos se generan solos según la comunidad autónoma. */}
-          <CalendarioAusencias
-            empresaId={empresaActual.id}
-            modalidad="festivos"
-            titulo="Festivos"
-            items={festivos}
-            botonNuevo="Registrar festivo"
-          />
-        </TabsContent>
-      </Tabs>
+      <CalendarioUnico
+        ausencias={ausencias}
+        festivoEnFecha={festivoEnFecha}
+        onAnioChange={handleAnio}
+        cargando={cargando}
+      />
 
       <RegistrarAusenciaDialog
         subtipo={registrando}

@@ -21,8 +21,14 @@ type Sb = Awaited<ReturnType<typeof getAppContext>>["supabase"];
 /** Una ausencia ya lista para el calendario. */
 export interface AusenciaCalendario {
   id: string;
+  /** Para agrupar por persona y no repetir su avatar el mismo día. */
+  userId: string | null;
   empleadoNombre: string;
   departamento: string;
+  /** Foto del empleado; sin ella se pintan sus iniciales. */
+  avatarUrl: string | null;
+  /** Qué tipo de ausencia es: decide el color del aro del avatar. */
+  subtipo: SolicitudSubtipoAusencia;
   fechaInicio: string;
   /** null en bajas médicas sin fecha de alta prevista (siguen abiertas). */
   fechaFin: string | null;
@@ -53,16 +59,24 @@ function diasNaturales(inicio: string, fin: string | null): number | null {
   return Math.floor((b - a) / 86400000) + 1;
 }
 
+/** Los cuatro tipos que se pintan en el calendario. */
+const SUBTIPOS_CALENDARIO: SolicitudSubtipoAusencia[] = [
+  "vacaciones",
+  "baja_medica",
+  "permiso",
+  "baja_contrato",
+];
+
 /**
- * Ausencias de un subtipo (vacaciones / baja_medica / permiso) que se solapan
- * con el año pedido, en toda la empresa.
+ * TODAS las ausencias de la empresa que se solapan con el año pedido, de los
+ * cuatro tipos a la vez. Antes había que pedirlas tipo por tipo (cuatro
+ * llamadas) porque el calendario tenía una pestaña para cada uno.
  *
  * El solape se calcula con el rango completo: una baja de diciembre a enero
  * aparece en los dos años, que es lo que se espera al mirar el calendario.
  */
 export async function listAusenciasEmpresa(
   empresaIdOrSlug: string,
-  subtipo: SolicitudSubtipoAusencia,
   anio: number,
 ): Promise<{ ok: boolean; data: AusenciaCalendario[]; error?: string }> {
   try {
@@ -77,10 +91,10 @@ export async function listAusenciasEmpresa(
     // terminó después de que empezara). `fecha_fin` nula = sigue abierta.
     const { data, error } = await supabase
       .from("solicitudes_personal")
-      .select("id, user_id, empleado_nombre, fecha_inicio, fecha_fin, estado, motivo")
+      .select("id, user_id, empleado_nombre, subtipo, fecha_inicio, fecha_fin, estado, motivo")
       .eq("empresa_id", empresaId)
       .eq("tipo", "ausencia")
-      .eq("subtipo", subtipo)
+      .in("subtipo", SUBTIPOS_CALENDARIO)
       .in("estado", ["aprobada", "pendiente"])
       .lte("fecha_inicio", hasta)
       .or(`fecha_fin.gte.${desde},fecha_fin.is.null`)
@@ -90,20 +104,25 @@ export async function listAusenciasEmpresa(
     const filas = data ?? [];
     if (filas.length === 0) return { ok: true, data: [] };
 
-    // Departamento de cada empleado, en una sola consulta. El nombre se guarda
-    // en la propia solicitud, pero el departamento no, y es lo que agrupa el
-    // calendario.
+    // Departamento y foto de cada empleado, en una sola consulta. El nombre se
+    // guarda en la propia solicitud, pero la foto no, y es lo que identifica a
+    // cada persona de un vistazo en el calendario.
     const userIds = [...new Set(filas.map((f) => f.user_id as string).filter(Boolean))];
-    const deptoPorUser = new Map<string, string>();
+    const fichaPorUser = new Map<string, { depto: string | null; avatarUrl: string | null }>();
     if (userIds.length > 0) {
       const { data: empleados } = await supabase
         .from("empleados")
-        .select("user_id, departamentos!empleados_departamento_id_fkey(nombre)")
+        .select("user_id, avatar_url, departamentos!empleados_departamento_id_fkey(nombre)")
         .eq("empresa_id", empresaId)
         .in("user_id", userIds);
       for (const e of empleados ?? []) {
         const depto = e.departamentos as { nombre?: string } | null;
-        if (e.user_id && depto?.nombre) deptoPorUser.set(e.user_id as string, depto.nombre);
+        if (e.user_id) {
+          fichaPorUser.set(e.user_id as string, {
+            depto: depto?.nombre ?? null,
+            avatarUrl: (e.avatar_url as string | null) ?? null,
+          });
+        }
       }
     }
 
@@ -112,10 +131,14 @@ export async function listAusenciasEmpresa(
       data: filas.map((f) => {
         const inicio = f.fecha_inicio as string;
         const fin = (f.fecha_fin as string | null) ?? null;
+        const ficha = fichaPorUser.get(f.user_id as string);
         return {
           id: f.id as string,
+          userId: (f.user_id as string) ?? null,
           empleadoNombre: (f.empleado_nombre as string) || "Sin nombre",
-          departamento: deptoPorUser.get(f.user_id as string) ?? "Sin departamento",
+          departamento: ficha?.depto ?? "Sin departamento",
+          avatarUrl: ficha?.avatarUrl ?? null,
+          subtipo: f.subtipo as SolicitudSubtipoAusencia,
           fechaInicio: inicio,
           fechaFin: fin,
           estado: f.estado as string,
