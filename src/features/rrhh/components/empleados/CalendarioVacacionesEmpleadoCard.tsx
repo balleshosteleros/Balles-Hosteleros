@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ExternalLink, Palmtree } from "lucide-react";
 import { getSaldoVacacionesEmpleado } from "@/features/rrhh/actions/calendarios-vacaciones-actions";
 import type { SaldoVacaciones } from "@/features/rrhh/data/calendarios-vacaciones";
+import { DesgloseVacaciones } from "@/features/rrhh/components/calendarios/DesgloseVacaciones";
 
 type Props = {
   empleadoId: string;
@@ -66,20 +67,15 @@ export function CalendarioVacacionesEmpleadoCard({ empleadoId }: Props) {
           </div>
 
           {asignado && saldo && (
-            <div className="grid grid-cols-3 gap-2 rounded-lg border bg-muted/30 p-3 text-center">
-              <div>
-                <p className="text-lg font-semibold">{saldo.diasTotales}</p>
-                <p className="text-xs text-muted-foreground">Totales {saldo.anio}</p>
-              </div>
-              <div>
-                <p className="text-lg font-semibold text-amber-600">{saldo.diasGastados}</p>
-                <p className="text-xs text-muted-foreground">Gastados</p>
-              </div>
-              <div>
-                <p className="text-lg font-semibold text-emerald-600">{saldo.diasRestantes}</p>
-                <p className="text-xs text-muted-foreground">Restantes</p>
-              </div>
-            </div>
+            <DesgloseVacaciones
+              anio={saldo.anio}
+              diasTotales={saldo.diasTotales}
+              diasDisfrutados={saldo.diasDisfrutados}
+              diasAprobadosPendientes={saldo.diasAprobadosPendientes}
+              diasPendientesAprobacion={saldo.diasPendientesAprobacion}
+              diasRestantes={saldo.diasRestantes}
+              tamano="md"
+            />
           )}
 
           <p className="text-xs text-muted-foreground">

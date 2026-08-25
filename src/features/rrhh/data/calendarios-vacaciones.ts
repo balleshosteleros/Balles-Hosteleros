@@ -32,7 +32,13 @@ export interface SaldoVacaciones {
   calendarioNombre: string | null;
   anio: number;
   diasTotales: number;
-  /** Días ya consumidos (solicitudes aprobadas o pendientes). */
+  /** Ya cogidos: aprobadas que empezaron (incluye las que están en curso). */
+  diasDisfrutados: number;
+  /** Aprobados pero aún por disfrutar: compromiso firme, turno a cubrir. */
+  diasAprobadosPendientes: number;
+  /** Solicitados sin respuesta todavía. Reservan cupo, pueden denegarse. */
+  diasPendientesAprobacion: number;
+  /** Suma de los tres anteriores: todo lo que ya no está libre. */
   diasGastados: number;
   /** diasTotales - diasGastados (nunca negativo). */
   diasRestantes: number;

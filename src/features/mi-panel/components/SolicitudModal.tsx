@@ -45,6 +45,7 @@ import {
   type TipoAusenciaDisponible,
 } from "@/features/mi-panel/actions/mi-panel-actions";
 import { bloqueoSolapaRango } from "@/features/rrhh/data/calendarios-vacaciones";
+import { DesgloseVacaciones } from "@/features/rrhh/components/calendarios/DesgloseVacaciones";
 import type {
   SolicitudSubtipo,
   SolicitudSubtipoAusencia,
@@ -976,22 +977,15 @@ export function SolicitudModal({ open, onOpenChange, onCreated, onElegirDenuncia
                         </span>
                       </p>
                     )}
-                    <div className="grid grid-cols-3 gap-2 rounded-lg border bg-muted/30 p-3 text-center">
-                      <div>
-                        <p className="text-base font-semibold">{vacInfo.diasTotales}</p>
-                        <p className="text-[11px] text-muted-foreground">
-                          {vacInfo.esPredeterminado ? "Totales / año" : `Totales ${vacInfo.anio}`}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-base font-semibold text-amber-600">{vacInfo.diasGastados}</p>
-                        <p className="text-[11px] text-muted-foreground">Gastados</p>
-                      </div>
-                      <div>
-                        <p className="text-base font-semibold text-emerald-600">{vacInfo.diasRestantes}</p>
-                        <p className="text-[11px] text-muted-foreground">Restantes</p>
-                      </div>
-                    </div>
+                    <DesgloseVacaciones
+                      anio={vacInfo.anio}
+                      esPredeterminado={vacInfo.esPredeterminado}
+                      diasTotales={vacInfo.diasTotales}
+                      diasDisfrutados={vacInfo.diasDisfrutados}
+                      diasAprobadosPendientes={vacInfo.diasAprobadosPendientes}
+                      diasPendientesAprobacion={vacInfo.diasPendientesAprobacion}
+                      diasRestantes={vacInfo.diasRestantes}
+                    />
 
                     {diasSel > 0 && !choque && !excede && (
                       <p className="text-xs font-medium text-emerald-700 flex items-center gap-1.5">

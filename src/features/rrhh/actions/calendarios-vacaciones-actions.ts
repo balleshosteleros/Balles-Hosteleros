@@ -3,10 +3,16 @@
 import { getAppContext } from "@/lib/supabase/get-context";
 import { revalidatePath } from "next/cache";
 import {
-  diasEnAnio,
   type CalendarioVacaciones,
   type SaldoVacaciones,
 } from "@/features/rrhh/data/calendarios-vacaciones";
+import {
+  calcularSaldoVacaciones,
+  ESTADOS_QUE_GASTAN,
+  type SolicitudParaSaldo,
+} from "@/features/rrhh/data/vacaciones-saldo";
+import { getZonaHorariaEmpresa } from "@/features/empresa/lib/empresa-server";
+import { hoyEnZona } from "@/features/empresa/lib/zona-horaria";
 
 type Sb = Awaited<ReturnType<typeof getAppContext>>["supabase"];
 
@@ -356,23 +362,17 @@ export async function getSaldoVacacionesEmpleado(
       }
     }
 
-    const diasGastados = await contarDiasVacacionesUsados(
+    const saldo = await calcularSaldoEmpleado(
       supabase,
       emp.empresa_id as string,
       emp.user_id as string,
       anioCalc,
+      diasTotales,
     );
 
     return {
       ok: true,
-      data: {
-        calendarioId,
-        calendarioNombre,
-        anio: anioCalc,
-        diasTotales,
-        diasGastados,
-        diasRestantes: Math.max(0, diasTotales - diasGastados),
-      },
+      data: { calendarioId, calendarioNombre, anio: anioCalc, ...saldo },
     };
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Error desconocido";
@@ -381,28 +381,37 @@ export async function getSaldoVacacionesEmpleado(
   }
 }
 
-/** Suma de días naturales de vacaciones (pendientes + aprobadas) en un año. */
-async function contarDiasVacacionesUsados(
+/**
+ * Reparto de los días de vacaciones de un empleado en un año: disfrutados,
+ * aprobados por disfrutar y pendientes de aprobación. Comparte el cálculo con
+ * Mi Panel para que empleado y RRHH vean exactamente los mismos números.
+ */
+async function calcularSaldoEmpleado(
   supabase: Sb,
   empresaId: string,
   userId: string,
   anio: number,
-): Promise<number> {
+  diasTotales: number,
+) {
   const inicioAnio = `${anio}-01-01`;
   const inicioAnioSig = `${anio + 1}-01-01`;
   const { data } = await supabase
     .from("solicitudes_personal")
-    .select("fecha_inicio, fecha_fin")
+    .select("fecha_inicio, fecha_fin, estado")
     .eq("empresa_id", empresaId)
     .eq("user_id", userId)
     .eq("tipo", "ausencia")
     .eq("subtipo", "vacaciones")
-    .in("estado", ["pendiente", "aprobada"])
+    .in("estado", ESTADOS_QUE_GASTAN)
     .lt("fecha_inicio", inicioAnioSig)
     .or(`fecha_fin.gte.${inicioAnio},fecha_fin.is.null`);
-  return (data ?? []).reduce(
-    (acc: number, s: { fecha_inicio: string; fecha_fin: string | null }) =>
-      acc + diasEnAnio(s.fecha_inicio, s.fecha_fin, anio),
-    0,
+
+  // "Ya disfrutado" se decide contra el día de la empresa, no en UTC.
+  const tz = await getZonaHorariaEmpresa(supabase, empresaId);
+  return calcularSaldoVacaciones(
+    (data ?? []) as SolicitudParaSaldo[],
+    diasTotales,
+    anio,
+    hoyEnZona(tz),
   );
 }

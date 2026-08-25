@@ -36,10 +36,15 @@ import {
 } from "@/features/toques/services/toques.service";
 import { getEmpresaActivaId } from "@/features/empresa/actions/empresa-activa-actions";
 import { getZonaHorariaEmpresa, ZONA_HORARIA_DEFAULT } from "@/features/empresa/lib/empresa-server";
-import { minutosDiaEnZona, ahoraEnZona } from "@/features/empresa/lib/zona-horaria";
+import { minutosDiaEnZona, ahoraEnZona, hoyEnZona } from "@/features/empresa/lib/zona-horaria";
 import { getRolContext } from "@/features/auth/actions/permisos-actions";
 import { puedeEditarModulo } from "@/features/auth/lib/permisos";
 import { bloqueoSolapaRango } from "@/features/rrhh/data/calendarios-vacaciones";
+import {
+  calcularSaldoVacaciones,
+  ESTADOS_QUE_GASTAN,
+  type SolicitudParaSaldo,
+} from "@/features/rrhh/data/vacaciones-saldo";
 import { horasSegunTipo } from "@/features/rrhh/services/horas/computa-tiempo";
 import {
   getHorarioDia,
@@ -1601,7 +1606,11 @@ export interface MiVacacionesInfo {
   esPredeterminado: boolean;
   calendarioNombre: string | null;
   anio: number;
+  /** Cupo y su reparto en disfrutados / aprobados por disfrutar / pendientes. */
   diasTotales: number;
+  diasDisfrutados: number;
+  diasAprobadosPendientes: number;
+  diasPendientesAprobacion: number;
   diasGastados: number;
   diasRestantes: number;
   bloqueos: { fechaInicio: string; fechaFin: string; motivo: string | null }[];
@@ -1710,6 +1719,9 @@ export async function getMiVacacionesInfo(): Promise<{
       calendarioNombre: null,
       anio: new Date().getUTCFullYear(),
       diasTotales: 0,
+      diasDisfrutados: 0,
+      diasAprobadosPendientes: 0,
+      diasPendientesAprobacion: 0,
       diasGastados: 0,
       diasRestantes: 0,
       bloqueos: [],
@@ -1747,18 +1759,23 @@ export async function getMiVacacionesInfo(): Promise<{
     const inicioAnioSig = `${anio + 1}-01-01`;
     const { data: existentes } = await supabase
       .from("solicitudes_personal")
-      .select("fecha_inicio, fecha_fin")
+      .select("fecha_inicio, fecha_fin, estado")
       .eq("empresa_id", empresaId)
       .eq("user_id", user.id)
       .eq("tipo", "ausencia")
       .eq("subtipo", "vacaciones")
-      .in("estado", ["pendiente", "aprobada"])
+      .in("estado", ESTADOS_QUE_GASTAN)
       .lt("fecha_inicio", inicioAnioSig)
       .or(`fecha_fin.gte.${inicioAnio},fecha_fin.is.null`);
-    const diasGastados = (existentes ?? []).reduce(
-      (acc: number, s: { fecha_inicio: string; fecha_fin: string | null }) =>
-        acc + diasSolicitudEnAnio(s.fecha_inicio, s.fecha_fin, anio),
-      0,
+
+    // "Ya disfrutado" se decide contra el día de la empresa, no en UTC: en
+    // Indonesia o en España el mismo instante puede ser un día distinto.
+    const tz = await getZonaHorariaEmpresa(supabase, empresaId);
+    const saldo = calcularSaldoVacaciones(
+      (existentes ?? []) as SolicitudParaSaldo[],
+      diasTotales,
+      anio,
+      hoyEnZona(tz),
     );
 
     return {
@@ -1768,9 +1785,7 @@ export async function getMiVacacionesInfo(): Promise<{
         esPredeterminado,
         calendarioNombre: cal.nombre as string,
         anio,
-        diasTotales,
-        diasGastados,
-        diasRestantes: Math.max(0, diasTotales - diasGastados),
+        ...saldo,
         bloqueos: (bloqueos ?? []).map((b: { fecha_inicio: string; fecha_fin: string; motivo: string | null }) => ({
           fechaInicio: b.fecha_inicio,
           fechaFin: b.fecha_fin,
