@@ -41,6 +41,32 @@ Esto es lo más urgente, porque mientras haya negativos el sistema propone compr
 categoría empezando por bebidas (lo que más rota y más fácil de contar). Cada categoría que se
 cierre queda cuadrada para siempre.
 
+### 🙋 Lo único que necesitamos de vosotros: probar los botones nuevos
+
+Los tres cambios están desplegados y el código compila, pero **no hemos podido probarlos
+pulsándolos**: producción pide contraseña y no metemos credenciales de nadie. Lo que sí hemos
+verificado por debajo es que la base de datos acepta el movimiento de ajuste (probado de
+verdad y deshecho, sin dejar rastro), así que el riesgo es bajo — pero **nadie lo ha usado
+todavía en pantalla**.
+
+Son cinco minutos, con cualquier usuario que tenga permiso de Logística:
+
+1. **Corregir existencias.** Logística → Stock → botón de la balanza en cualquier producto.
+   Cambia la cantidad, escribe un motivo (`prueba`) y dale a Corregir.
+   → Debe avisar de la diferencia y actualizarse el listado.
+2. **Que haya quedado registrado.** Logística → Movimientos.
+   → Debe aparecer una línea nueva de tipo **Ajuste**, con tu motivo y tu nombre.
+3. **Deshacer la prueba.** Vuelve a corregir el mismo producto dejándolo como estaba
+   (motivo: `deshago la prueba`). Quedan dos apuntes, que es justo lo que se busca: **el
+   histórico no se borra ni se disimula**.
+4. **Deshacer una merma** (opcional). Cocina → Mermas → registra una de prueba y pulsa
+   **Deshacer**.
+   → El stock debe volver exactamente a como estaba y el movimiento desaparecer.
+
+Si algo no se comporta así, decídnoslo con el nombre del producto y lo miramos. Y si preferís
+que lo probemos nosotros, hace falta un usuario de pruebas en producción con permiso de
+Logística — nos lo decís y lo hacemos.
+
 ---
 
 ## 🔧 26-AGO — IMPORTADOR DE CATÁLOGO: 3 COSAS QUE ARREGLAR ANTES DE USARLO
