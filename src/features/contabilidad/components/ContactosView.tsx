@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo, useEffect, useCallback, type ReactNode } from "react";
+import { useSincronizacionEnVivo } from "@/shared/hooks/useSincronizacionEnVivo";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -88,6 +89,14 @@ export function ContactosView() {
   useEffect(() => {
     loadContactos();
   }, [loadContactos]);
+
+  // Sincronizacion en vivo: un contacto nuevo creado desde otra pantalla aparece sin recargar.
+  // Es un listado de lectura (la edicion vive en su propia ficha), asi que
+  // refrescar no puede pisar nada que se este escribiendo aqui.
+  useSincronizacionEnVivo({
+    tablas: ["contactos_contabilidad"],
+    onCambio: () => void loadContactos(),
+  });
 
   const categoriasUsadas = useMemo(
     () => [...new Set(contactos.map(c => c.categoria).filter(Boolean))].sort(),

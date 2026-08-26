@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo, useEffect, useCallback, type ReactNode } from "react";
+import { useSincronizacionEnVivo } from "@/shared/hooks/useSincronizacionEnVivo";
 import {
   type Incidencia, type Actualizacion, ESTADOS, GRAVEDADES, REPARADORES,
   type Estado, type Gravedad,
@@ -84,6 +85,16 @@ export function MantenimientoView() {
   useEffect(() => {
     loadIncidencias();
   }, [loadIncidencias]);
+
+  // Sincronizacion en vivo: las incidencias las abre y actualiza cualquiera del
+  // local desde su movil (una averia no espera). Se pausa con el alta o el
+  // detalle abiertos para no pisar lo que se este escribiendo.
+  useSincronizacionEnVivo({
+    tablas: ["mantenimiento", "mantenimiento_actualizaciones"],
+    empresaId: empresaActual.id,
+    onCambio: () => void loadIncidencias(),
+    pausado: modalOpen || !!detalleItem,
+  });
 
   useEffect(() => {
     let alive = true;

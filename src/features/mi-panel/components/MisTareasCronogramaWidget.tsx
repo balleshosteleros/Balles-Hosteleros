@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, useCallback } from "react";
+import { useSincronizacionEnVivo } from "@/shared/hooks/useSincronizacionEnVivo";
 import Link from "next/link";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -44,6 +45,14 @@ export function MisTareasCronogramaWidget() {
   useEffect(() => {
     cargar(false);
   }, [cargar]);
+
+  // Sincronizacion en vivo: si marcas una tarea desde el movil, el panel del
+  // escritorio se pone al dia solo (y al reves). Recarga SIN spinner para que el
+  // widget no parpadee cada vez que alguien completa algo.
+  useSincronizacionEnVivo({
+    tablas: ["cronograma_ejecuciones", "tareas"],
+    onCambio: () => void cargar(false),
+  });
 
   const hoyIso = useMemo(() => ymdLocal(new Date()), []);
   const tareasHoy = useMemo(

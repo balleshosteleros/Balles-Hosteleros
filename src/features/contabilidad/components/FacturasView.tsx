@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo, useEffect, useCallback, type ReactNode } from "react";
+import { useSincronizacionEnVivo } from "@/shared/hooks/useSincronizacionEnVivo";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -83,6 +84,14 @@ export function FacturasView() {
   useEffect(() => {
     loadFacturas();
   }, [loadFacturas]);
+
+  // Sincronizacion en vivo: las facturas las suben varias personas y el OCR las procesa en segundo plano.
+  // Es un listado de lectura (la edicion vive en su propia ficha), asi que
+  // refrescar no puede pisar nada que se este escribiendo aqui.
+  useSincronizacionEnVivo({
+    tablas: ["facturas"],
+    onCambio: () => void loadFacturas(),
+  });
 
   const clientesUsados = useMemo(
     () => [...new Set(facturas.map(f => f.cliente).filter(Boolean))].sort(),

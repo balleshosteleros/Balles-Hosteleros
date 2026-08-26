@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, useCallback } from "react";
+import { useSincronizacionEnVivo } from "@/shared/hooks/useSincronizacionEnVivo";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -108,6 +109,17 @@ export function EtiquetasView() {
   useEffect(() => {
     cargar();
   }, [cargar, empresaActual?.id]);
+
+  // Sincronizacion en vivo: el arbol de categorias y etiquetas lo tocan varias
+  // personas y una etiqueta nueva debe aparecer sin recargar. Se PAUSA con
+  // cualquiera de los dos dialogos abierto: dentro hay un nombre a medio
+  // escribir y refrescar lo perderia.
+  useSincronizacionEnVivo({
+    tablas: ["etiquetas"],
+    empresaId: empresaActual?.id ?? null,
+    onCambio: () => void cargar(),
+    pausado: dialogCrear.open || dialogEditar.open,
+  });
 
   const filasTab = useMemo(
     () => filas.filter((f) => f.tipo === tipoActivo),

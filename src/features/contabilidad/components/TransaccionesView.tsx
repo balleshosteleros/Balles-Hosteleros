@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo, useEffect, useCallback, type ReactNode } from "react";
+import { useSincronizacionEnVivo } from "@/shared/hooks/useSincronizacionEnVivo";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Paperclip, MoreVertical, Settings } from "lucide-react";
@@ -101,6 +102,14 @@ export function TransaccionesView() {
   useEffect(() => {
     loadTransacciones();
   }, [loadTransacciones]);
+
+  // Sincronizacion en vivo: los movimientos entran desde la conexion bancaria y desde las altas manuales.
+  // Es un listado de lectura (la edicion vive en su propia ficha), asi que
+  // refrescar no puede pisar nada que se este escribiendo aqui.
+  useSincronizacionEnVivo({
+    tablas: ["transacciones", "bank_transactions"],
+    onCambio: () => void loadTransacciones(),
+  });
 
 
   const acceso = (t: TransaccionEnriquecida, campo: string): unknown => {
