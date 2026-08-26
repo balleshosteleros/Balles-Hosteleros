@@ -26,6 +26,33 @@ Los números de familia son exactos: faltan **97 en Bacanal** y **45 en Habana**
    huecos (Boom-Boom viene a null). Todo esto queda escrito en
    `docs/AGORA_INTEGRACION_ESTADO_Y_PLAN.md` como spec del importador.
 
+### 📋 IVÁN: la lista de recetas ya está hecha, y son muchas menos de las que parecía
+
+Preguntabais quién escribe las ~200 recetas. **He mirado qué se vende de verdad (60 días de
+ventas reales) y la respuesta es que no son 200.** Está todo en
+**`docs/RECETAS_PENDIENTES_PRIORIZADAS.md`**, pero el resumen es este:
+
+| Situación | Bacanal | Habana | ¿Hace falta escribir receta? |
+|---|---|---|---|
+| Ya tiene receta real | 22 | 0 | No |
+| Espejo correcto (botellín, refresco, agua) | 36 | 28 | **No, ya está bien** |
+| Espejo pero se sirve en copa (ron, whisky, gin…) | 16 | 40 | **No: solo la medida de la copa** |
+| Sin nada (cócteles, platos, cafés) | 36 | 44 | Sí |
+
+**Solo 80 productos necesitan receta escrita de verdad.** Otros 56 no necesitan receta sino
+**un número** (cuántos centilitros lleva una copa), que para casi todos es el mismo — una pasada
+mecánica de una tarde de barra.
+
+Y no hace falta hacerlos todos: **los 15 más vendidos de cada empresa cubren ya el ~72 % de lo
+que se sirve**. Propuesta concreta: una tarde de barra para los 15 destilados más vendidos, otra
+para los 10 cócteles de Habana (las versiones "Sin" salen casi copiadas de las normales), y una
+tarde de cocina para los 12 platos de Bacanal. La cola larga se va escribiendo cuando toque.
+
+**Cada receta que se escriba entra sola en el sistema**, sin que haya que avisar ni tocar nada.
+
+Iván: con esto la pregunta ya no es "quién escribe 200 recetas" sino **"¿quién se sienta una tarde
+con la lista de 15?"**. Dinos quién y cuándo y nosotros nos encargamos del resto.
+
 **Arreglado hoy en producción (4 cosas, todas verificadas):**
 
 - 🔒 **El script `migrar-catalogo.mjs` ya no puede dispararse por accidente.** Era el riesgo más
