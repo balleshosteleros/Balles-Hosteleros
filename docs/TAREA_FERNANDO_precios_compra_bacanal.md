@@ -5,6 +5,91 @@
 
 ---
 
+## 🔧 26-AGO — IMPORTADOR DE CATÁLOGO: 3 COSAS QUE ARREGLAR ANTES DE USARLO
+
+> **Agente de Iván: esto SÍ es para implementar** (a diferencia de las preguntas de negocio de
+> más abajo, que solo se anotaban). Es vuestro código, recién subido en `8dd904ae`, y os lo
+> devolvemos con tres cosas que le faltan. Si preferís que lo hagamos nosotros, decidlo y lo
+> cogemos — pero avisad antes para no pisarnos.
+
+**⛔ MIENTRAS TANTO, QUE NADIE PULSE "IMPORTAR".** Sin el punto 1 esa importación es muy
+difícil de deshacer: crearía hasta 76 productos en Bacanal y 35 en Habana sin forma de
+revertirlos en bloque.
+
+**Primero lo bueno, que es casi todo:** el importador está bien resuelto. Recoge las tres
+correcciones de lectura de Ágora, es incremental (nunca borra), valida con Zod, y **relee Ágora
+en el servidor en vez de fiarse de lo que manda el navegador** — eso está muy bien pensado.
+Además hemos contrastado sus cifras con las nuestras, calculadas por separado, y **cuadran
+exactamente**: 21 vinculaciones en Bacanal y 10 en Habana.
+
+### 1. 🔴 No hay marcha atrás (lo más importante)
+
+**Qué pasa:** `importarCatalogoAgora` crea y vincula, pero no deja registro de qué hizo. Si el
+cliente aprueba las ~66 altas y luego se arrepiente —o el criterio estaba mal—, hay que
+deshacerlo producto a producto a mano, y encima sin saber cuáles entraron por ahí.
+
+**Por qué importa:** es justo la lección de la migración de junio. Aquella no se pudo deshacer
+y se perdieron ~208 recetas. Una importación masiva sin botón de deshacer vuelve a poner al
+cliente en esa situación.
+
+**Cómo lo haríamos** (idea, no imposición): una tabla `agora_import_lotes` con una fila por
+importación —`empresa_id`, `price_list_id`, un `resumen` y un `acciones` jsonb con
+`{agoraId, tipo: 'crear'|'vincular'|'enlazar', productoId, composicionId?, agoraIdAnterior?}`—
+y un `revertirLote(loteId)` que borre las filas de `producto_composicion` creadas, borre los
+productos **solo si no tienen ninguna referencia** (kardex, líneas de albarán, ventas, otros
+escandallos) y los desactive si la tienen, y restaure el `agora_id` anterior en los vinculados.
+Guardar `agoraIdAnterior` es lo que permite deshacer una vinculación.
+
+### 2. 🟠 Los productos nuevos se saltan `createProducto`, y eso tiene efectos
+
+**Qué pasa:** `importador-catalogo-actions.ts` inserta directamente en `productos` (línea ~283)
+en vez de llamar a `createProducto`. Se pierden cuatro cosas que esa función hace:
+
+- **Los productos de venta no reciben su escandallo borrador.** `createProducto` llama a
+  `ensureEscandalloForProductoVenta` (`producto-actions.ts:328`), que crea el escandallo en
+  estado Borrador. Sin él, los ~11 productos de venta nuevos **no aparecerán como pendientes
+  en Cocina** — justo lo contrario de lo que hace falta ahora mismo, que estamos intentando
+  que se escriban las recetas que faltan.
+- **Los de compra con precio no abren su histórico** en `producto_precios_compra`
+  (`producto-actions.ts:348`), que es la fuente de verdad del precio de compra.
+- **No se registra `created_by`**, así que no se sabe quién dio de alta cada producto.
+- **La categoría es `"Importado de Ágora"` para todos.** Se entiende la intención (localizarlos
+  después), pero deja los ~66 productos en un cajón único en vez de en su familia real, y
+  alguien tendrá que reclasificarlos a mano uno a uno. La familia de Ágora ya la tenéis leída:
+  se podría usar como categoría y dejar la marca de "importado" en `observaciones`, que ya se
+  rellena.
+
+**Sugerencia:** llamar a `createProducto` y después escribir el `agora_id` (el schema de
+`ProductoInput` no lo acepta, así que hace falta un update aparte). De paso os llega gratis su
+guarda anti-duplicado. Si preferís seguir insertando directo, al menos replicad la creación del
+escandallo borrador: es la que más duele.
+
+### 3. 🟡 `parejaCompraId` no se valida contra la empresa
+
+**Qué pasa:** en el enlace de bebida (línea ~310) se inserta en `producto_composicion` el
+`ingrediente_id` que manda el navegador, sin comprobar que ese producto sea de la empresa
+activa. El resto del módulo sí lo comprueba — la vinculación por `agora_id` filtra con
+`.eq("empresa_id", empresaId)` y falla de forma segura.
+
+**Por qué importa:** el riesgo real es bajo (es una herramienta interna y autenticada), pero es
+un agujero entre empresas: una petición manipulada o un fallo del cliente podría enlazar una
+venta de Bacanal con un ingrediente de Habana, y eso descontaría stock de la empresa
+equivocada. Basta con comprobar antes que `parejaCompraId` pertenece a `empresaId` y que es de
+tipo `compra`.
+
+### Una cosa nuestra que os afecta (ya subida, `a3594647`)
+
+El índice único de `productos.agora_id` estaba **mal declarado en el repo**: la migración 011
+lo pone sobre `(empresa_id, agora_id)`, pero producción lo tiene sobre
+`(empresa_id, agora_id, tipo)`. Sin el tipo, las fichas gemelas compra+venta con el mismo
+`agora_id` —las 197 que hay hoy, y las que cree vuestro importador— son imposibles. En
+producción no se nota porque ya está bien; el problema saldría en un entorno recreado desde las
+migraciones, que es el peor sitio para descubrirlo. Hay una migración nueva que lo alinea:
+`20260828100000_productos_agora_indice_por_tipo.sql`. **Está escrita pero sin aplicar en
+producción** (allí es un no-op de todos modos).
+
+---
+
 ## ✅ 26-AGO (Fernando) — HALLAZGOS CONFIRMADOS + 4 ARREGLOS HECHOS
 
 > **Iván / su agente: esto es información, no hay nada que hacer.** Lo pongo arriba para que no
