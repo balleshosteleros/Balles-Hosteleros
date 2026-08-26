@@ -2,7 +2,7 @@
 
 import {
   Briefcase, Calculator, FileText, Scale, User, UsersRound, Truck, Camera,
-  Wrench, Settings, CalendarDays, ChefHat, ClipboardList, ClipboardCheck,
+  Wrench, Settings, CalendarDays, ChefHat, ClipboardList, ClipboardCheck, Download,
   Gift, Crown, Network, PercentDiamond, TrendingUp, FolderOpen, Calendar,
   Timer, UserRoundSearch, Euro, Megaphone, Package, FileArchive, Files,
   KeyRound, Gavel, FileUp, ShoppingCart, Warehouse, FlaskConical, GraduationCap,
@@ -135,6 +135,7 @@ export const logisticaSubs: SubItem[] = [
   { title: "STOCK", url: "/logistica/stock", icon: Warehouse },
   { title: "MOVIMIENTOS", url: "/logistica/movimientos", icon: ArrowLeftRight },
   { title: "INVENTARIOS", url: "/logistica/inventarios", icon: ClipboardList },
+  { title: "IMPORTAR CATÁLOGO", url: "/logistica/importar-catalogo", icon: Download },
 ];
 
 export const gerenciaSubs: SubItem[] = [

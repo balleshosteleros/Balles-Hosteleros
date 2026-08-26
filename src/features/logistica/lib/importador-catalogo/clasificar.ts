@@ -191,6 +191,45 @@ export function normalizarNombre(s: string): string {
 }
 
 /**
+ * Busca la ficha de COMPRA que corresponde a una bebida/cóctel de venta.
+ *
+ * No basta con el nombre exacto: en el catálogo real la ficha de compra suele
+ * llevar el prefijo del preparado del proveedor — el cóctel "Danza Macabra" se
+ * compra como "Prebeach Danza Macabra". Sin esta tolerancia el enlace no se
+ * propone y la bebida entra en almacén sin salir nunca.
+ *
+ * Sólo acepta que el nombre de venta esté CONTENIDO en el de compra (por
+ * palabras completas), nunca al revés: "Cola" no debe casar con "Coca Cola".
+ * Si hay varias candidatas se coge la más corta (la más parecida) y si empatan
+ * no se propone ninguna, para no adivinar.
+ */
+function buscarParejaCompra(
+  clave: string,
+  comprasPorNombre: Map<string, ProductoNuestro>,
+): ProductoNuestro | null {
+  const exacta = comprasPorNombre.get(clave);
+  if (exacta) return exacta;
+  if (clave.length < 4) return null; // nombres muy cortos: demasiado riesgo
+
+  const candidatas: ProductoNuestro[] = [];
+  for (const [nombreCompra, producto] of comprasPorNombre) {
+    if (nombreCompra === clave) continue;
+    // Palabras completas: " danza macabra " dentro de " prebeach danza macabra ".
+    if (` ${nombreCompra} `.includes(` ${clave} `)) candidatas.push(producto);
+  }
+  if (candidatas.length === 0) return null;
+
+  candidatas.sort((a, b) => a.nombre.length - b.nombre.length);
+  if (
+    candidatas.length > 1 &&
+    candidatas[0].nombre.length === candidatas[1].nombre.length
+  ) {
+    return null; // empate: que lo decida una persona
+  }
+  return candidatas[0];
+}
+
+/**
  * Clasifica UN producto de Ágora que no existe en nuestro catálogo por `agora_id`.
  *
  * Orden de las reglas (importa: la primera que casa manda):
@@ -277,8 +316,7 @@ export function clasificarProducto(
   // = la botella que entra por albarán; ficha de venta = la consumición que se
   // cobra) y ambas van ENLAZADAS por escandallo 1:1. Si vamos a crear la de
   // venta y su pareja de compra ya existe, se propone el enlace.
-  const parejaCompra =
-    decision === "venta" ? (comprasPorNombre.get(clave) ?? null) : null;
+  const parejaCompra = decision === "venta" ? buscarParejaCompra(clave, comprasPorNombre) : null;
   if (parejaCompra) {
     avisos.push(
       `Se enlazará con la ficha de compra "${parejaCompra.nombre}". Revisa la cantidad: ` +
