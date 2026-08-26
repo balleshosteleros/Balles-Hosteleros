@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   MessageCircle, Search, Plus, Send, Mic, Paperclip, X, ChevronLeft, ChevronDown,
   Building2, Briefcase, Loader2, Lock, FileText, Download, Check, Users, Info,
-  Mail, MailOpen,
+  Mail, MailOpen, CheckCheck, Sparkles,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/shared/lib/utils";
@@ -14,8 +14,10 @@ import {
   listCanales, listMensajes, sendMensaje, createCanal,
   sendMensajeAdjunto, getAdjuntoSignedUrl, listEmpleadosEmpresa,
   listResumenCanales, marcarCanalLeido, marcarCanalNoLeido,
+  marcarMensajesLeidos, getLecturasCanal,
   type EmpleadoCanal,
 } from "@/features/comunicacion/actions/comunicacion-actions";
+import { mejorarTextoMensaje } from "@/features/comunicacion/actions/mejorar-texto-actions";
 import { getZonaHorariaActiva } from "@/features/mi-panel/actions/mi-panel-actions";
 import {
   formatHoraEnZona,
@@ -129,6 +131,9 @@ export function ComunicacionMobile() {
   const [buscaEmp, setBuscaEmp] = useState("");
 
   const [subiendo, setSubiendo] = useState(false);
+  // Lecturas de MIS mensajes: { [mensajeId]: nº de personas que lo han leído }.
+  const [lecturas, setLecturas] = useState<Record<string, number>>({});
+  const [mejorandoIA, setMejorandoIA] = useState(false);
   const [grabando, setGrabando] = useState(false);
   const [grabSeg, setGrabSeg] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -241,7 +246,35 @@ export function ComunicacionMobile() {
       prev.map((c) => (c.id === id ? { ...c, sinLeer: 0, marcadoNoLeido: false } : c)),
     );
     void marcarCanalLeido(id);
+    // Doble tick azul: confirmamos la lectura de los mensajes ajenos y traemos
+    // el estado de los míos.
+    void marcarMensajesLeidos(id);
+    void getLecturasCanal(id).then((res) => {
+      if (res.ok) setLecturas((prev) => ({ ...prev, ...res.data }));
+    });
   }, [canalActivo]);
+
+  // Realtime de lecturas: el tick se pone azul en cuanto alguien abre el grupo.
+  useEffect(() => {
+    if (!canalActivo || !miUserId) return;
+    const supabase = createBrowserClient();
+    const channel = supabase
+      .channel(`chat-lecturas-movil-${canalActivo}`)
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "mensajes_lecturas" },
+        (payload: { new: unknown }) => {
+          const r = payload.new as { mensaje_id?: string; user_id?: string };
+          if (!r?.mensaje_id || r.user_id === miUserId) return;
+          const mid = r.mensaje_id;
+          setLecturas((prev) =>
+            mid in prev ? { ...prev, [mid]: (prev[mid] ?? 0) + 1 } : prev,
+          );
+        },
+      )
+      .subscribe();
+    return () => { void supabase.removeChannel(channel); };
+  }, [canalActivo, miUserId]);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
@@ -253,7 +286,30 @@ export function ComunicacionMobile() {
     setInput("");
     const res = await sendMensaje(canalActivo, texto);
     if (!res.ok) { toast.error(res.error ?? "No se pudo enviar"); return; }
-    if (res.data) setMensajes((prev) => [...prev, mapMensaje(res.data as Record<string, unknown>, miUserId, zonaHoraria)]);
+    if (res.data) {
+      const real = mapMensaje(res.data as Record<string, unknown>, miUserId, zonaHoraria);
+      setMensajes((prev) => [...prev, real]);
+      // Nace con 0 lectores (tick gris); el realtime lo pondrá azul.
+      setLecturas((prev) => ({ ...prev, [real.id]: prev[real.id] ?? 0 }));
+    }
+  }
+
+  /** Reescribe el borrador en tono formal y sin carga emocional. */
+  async function mejorarConIA() {
+    const borrador = input.trim();
+    if (!borrador || mejorandoIA) return;
+    setMejorandoIA(true);
+    try {
+      const res = await mejorarTextoMensaje(borrador);
+      if (!res.ok || !res.texto) {
+        toast.error(res.error ?? "No se ha podido mejorar el mensaje");
+        return;
+      }
+      setInput(res.texto);
+      toast.success("Mensaje mejorado. Revísalo antes de enviarlo.");
+    } finally {
+      setMejorandoIA(false);
+    }
   }
 
   async function subirYEnviar(file: File, tipo: "imagen" | "audio" | "archivo") {
@@ -448,7 +504,19 @@ export function ComunicacionMobile() {
                     <MobileAdjunto path={m.adjuntoPath} tipo={m.adjuntoTipo} nombre={m.adjuntoNombre ?? "archivo"} propio={m.propio} />
                   )}
                   {m.texto && <p className="whitespace-pre-wrap break-words">{m.texto}</p>}
-                  <p className={cn("mt-1 text-right text-[10px]", m.propio ? "text-blue-100" : "text-muted-foreground")}>{m.hora}</p>
+                  <p className={cn("mt-1 flex items-center justify-end gap-1 text-right text-[10px]", m.propio ? "text-blue-100" : "text-muted-foreground")}>
+                    {m.hora}
+                    {/* Ticks solo en mis mensajes: claros = enviado,
+                        AZUL claro = ya lo han leído. */}
+                    {m.propio && (
+                      <CheckCheck
+                        className={cn(
+                          "h-3.5 w-3.5",
+                          (lecturas[m.id] ?? 0) > 0 ? "text-sky-300" : "text-blue-300/50",
+                        )}
+                      />
+                    )}
+                  </p>
                 </div>
               </div>
             ))}
@@ -475,6 +543,18 @@ export function ComunicacionMobile() {
                   placeholder={`Mensaje a ${canal.nombre}…`}
                   className="h-11 flex-1 rounded-full border-0 bg-muted/60 px-4 text-sm outline-none"
                 />
+                {/* Mejora el borrador: tono formal y sin escribir en caliente. */}
+                {input.trim() && (
+                  <button
+                    onClick={mejorarConIA}
+                    disabled={mejorandoIA}
+                    className="flex h-8 shrink-0 items-center gap-1 rounded-full border px-2.5 text-[11px] font-semibold text-muted-foreground active:bg-muted"
+                    aria-label="Mejorar el mensaje con IA"
+                  >
+                    {mejorandoIA ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+                    IA
+                  </button>
+                )}
                 {input.trim() ? (
                   <button onClick={enviar} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground active:scale-95" aria-label="Enviar"><Send className="h-4 w-4" /></button>
                 ) : (

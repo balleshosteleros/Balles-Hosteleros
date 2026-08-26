@@ -968,6 +968,97 @@ function describirMensaje(m: Record<string, unknown>): string {
   return "";
 }
 
+// ───────── Lecturas (doble tick azul) ─────────
+
+/**
+ * Marca como leídos todos los mensajes ajenos del canal para el usuario actual.
+ * Es lo que enciende el doble tick azul en el lado de quien los escribió.
+ *
+ * La operación es idempotente e irreversible por diseño: la RPC hace
+ * `on conflict do nothing`, así que la hora guardada es la de la PRIMERA lectura
+ * y no existe forma (ni acción, ni policy de update/delete) de deshacerla.
+ */
+export async function marcarMensajesLeidos(canalId: string) {
+  try {
+    const { supabase, user, empresaId } = await getContext();
+    if (!user || !empresaId) return { ok: false, error: "No autenticado" };
+    if (!(await assertAccesoCanal(supabase, user.id, empresaId, canalId))) {
+      return { ok: false, error: "Sin acceso a este canal" };
+    }
+    const { error } = await supabase.rpc("chat_marcar_leidos", { p_canal: canalId });
+    if (error) throw error;
+    return { ok: true };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "Error";
+    console.error("[comunicacion] marcarMensajesLeidos:", msg);
+    return { ok: false, error: msg };
+  }
+}
+
+/**
+ * Para cada mensaje PROPIO del canal, cuántas personas lo han leído.
+ * Devuelve { [mensajeId]: nºLectores }. Con ≥1 el tick se pinta azul.
+ */
+export async function getLecturasCanal(canalId: string): Promise<{
+  ok: boolean;
+  data: Record<string, number>;
+}> {
+  try {
+    const { supabase, user, empresaId } = await getContext();
+    if (!user || !empresaId) return { ok: true, data: {} };
+    if (!(await assertAccesoCanal(supabase, user.id, empresaId, canalId))) {
+      return { ok: true, data: {} };
+    }
+    const { data, error } = await supabase.rpc("chat_lecturas_canal", { p_canal: canalId });
+    if (error) throw error;
+    const map: Record<string, number> = {};
+    for (const r of (data ?? []) as Array<{ mensaje_id: string; lectores: number }>) {
+      map[r.mensaje_id] = r.lectores ?? 0;
+    }
+    return { ok: true, data: map };
+  } catch (err) {
+    console.error("[comunicacion] getLecturasCanal:", err);
+    return { ok: true, data: {} };
+  }
+}
+
+export interface LectorMensaje {
+  userId: string;
+  nombre: string;
+  leidoAt: string;
+}
+
+/** Quién ha leído un mensaje concreto y a qué hora ("Leído por…"). */
+export async function getLectoresMensaje(mensajeId: string): Promise<{
+  ok: boolean;
+  data: LectorMensaje[];
+}> {
+  try {
+    const { supabase, user } = await getContext();
+    if (!user) return { ok: true, data: [] };
+    const { data, error } = await supabase.rpc("chat_lectores_mensaje", {
+      p_mensaje: mensajeId,
+    });
+    if (error) throw error;
+    return {
+      ok: true,
+      data: ((data ?? []) as Array<Record<string, unknown>>).map((r) => {
+        const partes = [r.nombre, r.apellidos]
+          .filter((s): s is string => typeof s === "string" && s.trim().length > 0)
+          .map((s) => s.trim());
+        return {
+          userId: r.user_id as string,
+          nombre: partes.join(" ") || "Sin nombre",
+          leidoAt: r.leido_at as string,
+        };
+      }),
+    };
+  } catch (err) {
+    console.error("[comunicacion] getLectoresMensaje:", err);
+    return { ok: true, data: [] };
+  }
+}
+
 export async function toggleFijado(mensajeId: string, fijado: boolean) {
   try {
     const { supabase } = await getContext();

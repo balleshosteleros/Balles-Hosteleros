@@ -5,7 +5,7 @@ import {
   MessageCircle, Send, Users, Plus, Search, Pin, Smile, MoreVertical,
   BellOff, Bell, Pencil, Trash2, LogOut, Lock, ChevronLeft, ChevronDown,
   ShieldCheck, Eraser, Hourglass, X, Paperclip, Mic, Building2, Briefcase, Check,
-  FileText, Download, Loader2, Mail, MailOpen,
+  FileText, Download, Loader2, Mail, MailOpen, CheckCheck, Sparkles,
 } from "lucide-react";
 import {
   Sheet, SheetContent, SheetTitle, SheetTrigger, SheetClose,
@@ -47,9 +47,14 @@ import {
   marcarCanalLeido,
   marcarCanalNoLeido,
   listResumenCanales,
+  marcarMensajesLeidos,
+  getLecturasCanal,
+  getLectoresMensaje,
   type EmpleadoCanal,
   type MiembroCanal,
+  type LectorMensaje,
 } from "@/features/comunicacion/actions/comunicacion-actions";
+import { mejorarTextoMensaje } from "@/features/comunicacion/actions/mejorar-texto-actions";
 import { setChatCanalAbierto } from "@/features/comunicacion/hooks/useChatNotifications";
 import { refreshDailyCounts } from "@/features/google-workspace/components/useDailyCounts";
 import { createClient as createBrowserClient } from "@/lib/supabase/client";
@@ -319,6 +324,13 @@ export function ChatDrawer({ children }: { children: ReactNode }) {
   const [cargandoMsgs, setCargandoMsgs] = useState(false);
   useGlobalLoadingSync(cargando || cargandoMsgs);
   const [prefsMap, setPrefsMap] = useState<Record<string, PrefCanal>>({});
+  // Lecturas de MIS mensajes: { [mensajeId]: nº de personas que lo han leído }.
+  // Con 1 o más, el doble tick se pinta azul.
+  const [lecturas, setLecturas] = useState<Record<string, number>>({});
+  // Detalle "Leído por" del mensaje que el usuario ha pulsado.
+  const [dlgLectores, setDlgLectores] = useState<Mensaje | null>(null);
+  const [lectores, setLectores] = useState<LectorMensaje[]>([]);
+  const [mejorandoIA, setMejorandoIA] = useState(false);
 
   const [dlgNuevo, setDlgNuevo] = useState(false);
   const [nombreNuevo, setNombreNuevo] = useState("");
@@ -500,6 +512,12 @@ export function ChatDrawer({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  /** Recarga cuántas personas han leído cada mensaje mío de este canal. */
+  const cargarLecturas = useCallback(async (cId: string) => {
+    const res = await getLecturasCanal(cId);
+    if (res.ok) setLecturas((prev) => ({ ...prev, ...res.data }));
+  }, []);
+
   const cargarPrefs = useCallback(async () => {
     const res = await listCanalPreferencias();
     if (!res.ok) return;
@@ -552,9 +570,13 @@ export function ChatDrawer({ children }: { children: ReactNode }) {
         ),
       );
       void marcarCanalLeido(abierto).then(() => refreshDailyCounts());
+      // Doble tick azul: al abrir el grupo confirmamos la lectura de los
+      // mensajes ajenos y refrescamos el estado de los míos.
+      void marcarMensajesLeidos(abierto);
+      void cargarLecturas(abierto);
     }
     return () => setChatCanalAbierto(null);
-  }, [open, canalActivo]);
+  }, [open, canalActivo, cargarLecturas]);
 
   // Realtime: los mensajes del canal abierto entran al momento, sin recargar.
   useEffect(() => {
@@ -586,6 +608,9 @@ export function ChatDrawer({ children }: { children: ReactNode }) {
           // Estamos viéndolo: marcamos leído y refrescamos el badge.
           if (!(myUserId && nuevo.autorId === myUserId)) {
             void marcarCanalLeido(canalId).then(() => refreshDailyCounts());
+            // Lo estamos leyendo AHORA: se lo confirmamos a quien lo escribió,
+            // que verá su tick ponerse azul al momento.
+            void marcarMensajesLeidos(canalId);
           }
         },
       )
@@ -594,6 +619,37 @@ export function ChatDrawer({ children }: { children: ReactNode }) {
       void supabase.removeChannel(channel);
     };
   }, [open, canalActivo, empresaActual.zonaHoraria, myUserId]);
+
+  // Realtime de lecturas: cuando alguien lee un mensaje mío, su tick se pone
+  // azul sin recargar. Escuchamos los INSERT de la tabla de lecturas y, si
+  // afectan a un mensaje que tengo pintado, subimos su contador.
+  useEffect(() => {
+    if (!open || !canalActivo || !myUserId) return;
+    const supabase = createBrowserClient();
+    const channel = supabase
+      .channel(`chat-lecturas-${canalActivo}`)
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "mensajes_lecturas" },
+        (payload: { new: unknown }) => {
+          const r = payload.new as { mensaje_id?: string; user_id?: string };
+          const mensajeId = r?.mensaje_id;
+          if (!mensajeId) return;
+          // Mi propia lectura no enciende mi propio tick.
+          if (r.user_id === myUserId) return;
+          setLecturas((prev) =>
+            // Solo cuenta si el mensaje es mío (está en el mapa de lecturas).
+            mensajeId in prev
+              ? { ...prev, [mensajeId]: (prev[mensajeId] ?? 0) + 1 }
+              : prev,
+          );
+        },
+      )
+      .subscribe();
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [open, canalActivo, myUserId]);
 
   // Realtime de la lista: cualquier mensaje nuevo de la empresa actualiza el
   // último mensaje del grupo y sube su globo verde, aunque no sea el abierto.
@@ -681,11 +737,40 @@ export function ChatDrawer({ children }: { children: ReactNode }) {
       if (res.data) {
         const real = mapDbMensaje(res.data as Record<string, unknown>, empresaActual.zonaHoraria);
         setMensajes((prev) => prev.map((m) => (m.id === optimistic.id ? real : m)));
+        // Nace con 0 lectores (tick gris). Al registrarlo aquí, el realtime de
+        // lecturas puede encenderlo en azul en cuanto alguien lo abra.
+        setLecturas((prev) => ({ ...prev, [real.id]: prev[real.id] ?? 0 }));
       }
     } catch {
       toast.error("Error al enviar");
       setMensajes((prev) => prev.filter((m) => m.id !== optimistic.id));
     }
+  }
+
+  /** Reescribe el borrador en tono formal y sin carga emocional. */
+  async function mejorarConIA() {
+    const borrador = input.trim();
+    if (!borrador || mejorandoIA) return;
+    setMejorandoIA(true);
+    try {
+      const res = await mejorarTextoMensaje(borrador);
+      if (!res.ok || !res.texto) {
+        toast.error(res.error ?? "No se ha podido mejorar el mensaje");
+        return;
+      }
+      setInput(res.texto);
+      toast.success("Mensaje mejorado. Revísalo antes de enviarlo.");
+    } finally {
+      setMejorandoIA(false);
+    }
+  }
+
+  /** Abre el detalle "Leído por" de un mensaje propio. */
+  async function verLectores(m: Mensaje) {
+    setDlgLectores(m);
+    setLectores([]);
+    const res = await getLectoresMensaje(m.id);
+    if (res.ok) setLectores(res.data);
   }
 
   async function crearAsunto() {
@@ -1283,9 +1368,32 @@ export function ChatDrawer({ children }: { children: ReactNode }) {
                               {m.texto && (
                                 <p className="text-sm whitespace-pre-wrap break-words">{m.texto}</p>
                               )}
-                              <p className={cn("text-[10px] mt-1 text-right", propio ? "text-emerald-700/60 dark:text-emerald-300/60" : "text-muted-foreground")}>
+                              <p className={cn("text-[10px] mt-1 text-right flex items-center justify-end gap-1", propio ? "text-emerald-700/60 dark:text-emerald-300/60" : "text-muted-foreground")}>
                                 {m.hora}
-                                {m.fijado && <Pin className="inline ml-1 h-2.5 w-2.5" />}
+                                {m.fijado && <Pin className="inline h-2.5 w-2.5" />}
+                                {/* Ticks SOLO en mis mensajes, al lado de la hora:
+                                    gris = enviado · AZUL = ya lo han leído. */}
+                                {propio && !m.id.startsWith("m-") && (
+                                  <button
+                                    type="button"
+                                    onClick={() => verLectores(m)}
+                                    title={
+                                      (lecturas[m.id] ?? 0) > 0
+                                        ? `Leído por ${lecturas[m.id]}`
+                                        : "Enviado"
+                                    }
+                                    className="inline-flex items-center hover:opacity-70"
+                                  >
+                                    <CheckCheck
+                                      className={cn(
+                                        "h-3.5 w-3.5",
+                                        (lecturas[m.id] ?? 0) > 0
+                                          ? "text-sky-500"
+                                          : "text-muted-foreground/60",
+                                      )}
+                                    />
+                                  </button>
+                                )}
                               </p>
                             </div>
                           </div>
@@ -1353,6 +1461,25 @@ export function ChatDrawer({ children }: { children: ReactNode }) {
                         className="flex-1 h-11 rounded-full bg-muted/50 border-0 px-4"
                         disabled={canal.soloAdminsEnvian}
                       />
+                      {/* Mejora el borrador antes de enviarlo: lo pasa a tono
+                          formal y le quita la carga emocional. */}
+                      {input.trim() && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-8 shrink-0 rounded-full px-2.5 text-[11px] font-semibold gap-1"
+                          onClick={mejorarConIA}
+                          disabled={mejorandoIA || canal.soloAdminsEnvian}
+                          title="Mejorar el mensaje con IA (tono formal, sin escribir en caliente)"
+                        >
+                          {mejorandoIA ? (
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                          ) : (
+                            <Sparkles className="h-3 w-3" />
+                          )}
+                          IA
+                        </Button>
+                      )}
                       {input.trim() ? (
                         <Button onClick={enviar} size="icon" className="h-10 w-10 shrink-0 rounded-full">
                           <Send className="h-4 w-4" />
@@ -1376,6 +1503,38 @@ export function ChatDrawer({ children }: { children: ReactNode }) {
             )}
           </section>
         </div>
+
+        {/* Diálogo: quién ha leído el mensaje */}
+        <Dialog open={!!dlgLectores} onOpenChange={(v) => !v && setDlgLectores(null)}>
+          <DialogContent className="max-w-sm">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <CheckCheck className="h-4 w-4 text-sky-500" /> Leído por
+              </DialogTitle>
+            </DialogHeader>
+            {dlgLectores && (
+              <p className="rounded-lg bg-muted/50 px-3 py-2 text-sm text-muted-foreground line-clamp-3">
+                {dlgLectores.texto || "Adjunto"}
+              </p>
+            )}
+            <div className="max-h-64 space-y-1 overflow-y-auto">
+              {lectores.length === 0 ? (
+                <p className="py-4 text-center text-sm text-muted-foreground">
+                  Todavía no lo ha leído nadie
+                </p>
+              ) : (
+                lectores.map((l) => (
+                  <div key={l.userId} className="flex items-center justify-between gap-2 rounded-lg px-2 py-1.5">
+                    <span className="text-sm">{l.nombre}</span>
+                    <span className="text-[11px] text-muted-foreground">
+                      {formatHoraEnZona(l.leidoAt, empresaActual.zonaHoraria)}
+                    </span>
+                  </div>
+                ))
+              )}
+            </div>
+          </DialogContent>
+        </Dialog>
 
         {/* Diálogo: nuevo asunto */}
         <Dialog open={dlgNuevo} onOpenChange={setDlgNuevo}>
