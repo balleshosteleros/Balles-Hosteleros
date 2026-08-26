@@ -139,6 +139,7 @@ export type AltaUsuarioEmpleadoInput = {
   apellidos: string | null;
   telefono?: string | null;
   dniNie?: string | null;
+  tipoDocumento?: string | null;
   /** Datos personales aportados en la documentación del candidato (para gestoría). */
   numeroSs?: string | null;
   iban?: string | null;
@@ -473,6 +474,7 @@ export async function altaUsuarioEmpleado(
       email_empresa: input.emailEmpresa ?? null,
       email_personal: input.emailPersonal,
       dni_nie: input.dniNie ?? null,
+      tipo_documento: input.tipoDocumento ?? null,
       // Datos personales de la documentación (para que la gestoría los reciba).
       numero_ss: input.numeroSs ?? null,
       iban: input.iban ?? null,

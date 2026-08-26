@@ -53,6 +53,7 @@ export default async function DocumentacionPage({
           <FormDocumentacionPublica
             token={datos.token}
             empresaSlug={datos.empresa.empleo_slug}
+            candidatoNombre={datos.candidatoNombre}
           />
         )}
       </div>

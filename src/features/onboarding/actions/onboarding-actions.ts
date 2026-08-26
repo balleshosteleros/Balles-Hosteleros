@@ -55,8 +55,6 @@ async function contarEntidad(
       return contarTabla(supabase, "productos", empresaId);
     case "carta":
       return contarTabla(supabase, "productos", empresaId, { tipo: "venta" });
-    case "calendarios":
-      return contarTabla(supabase, "rrhh_calendarios_vacaciones", empresaId);
     case "imagen_marca": {
       // `empresas` se identifica por `id` (no empresa_id); marca = logo o color.
       const { data } = await supabase

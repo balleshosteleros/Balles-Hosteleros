@@ -43,6 +43,7 @@ const TIPOS_OK: Record<string, string> = {
 const Schema = z.object({
   token: z.string().guid(),
   dni_nie: z.string().min(1).max(20),
+  tipo_documento: z.enum(["DNI", "NIE", "PASAPORTE"]),
   iban: z.string().min(1).max(40),
   num_seguridad_social: z.string().min(1).max(20),
   direccion: z.string().min(1).max(200),
@@ -86,6 +87,7 @@ export async function POST(req: Request) {
     const parsed = Schema.safeParse({
       token: String(fd.get("token") ?? "").trim(),
       dni_nie: String(fd.get("dni_nie") ?? "").trim(),
+      tipo_documento: String(fd.get("tipo_documento") ?? "DNI").trim().toUpperCase(),
       iban: String(fd.get("iban") ?? "").trim(),
       num_seguridad_social: String(fd.get("num_seguridad_social") ?? "").trim(),
       direccion: String(fd.get("direccion") ?? "").trim(),
@@ -96,6 +98,7 @@ export async function POST(req: Request) {
       const ETIQUETAS: Record<string, string> = {
         token: "el enlace",
         dni_nie: "el número de DNI/NIE",
+        tipo_documento: "el tipo de documento",
         iban: "el número de cuenta (IBAN)",
         num_seguridad_social: "el número de la Seguridad Social",
         direccion: "la dirección postal",
@@ -212,6 +215,7 @@ export async function POST(req: Request) {
       .from("candidatos")
       .update({
         dni_nie: dniNie,
+        tipo_documento: parsed.data.tipo_documento,
         iban,
         num_seguridad_social: ss,
         doc_dni_anverso_path: anverso.path,

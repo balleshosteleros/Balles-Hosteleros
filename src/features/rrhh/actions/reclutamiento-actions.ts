@@ -135,6 +135,7 @@ interface CandidatoRowReal {
   carta_presentacion: string | null;
   // Paso «Documentación»
   dni_nie: string | null;
+  tipo_documento: string | null;
   iban: string | null;
   num_seguridad_social: string | null;
   doc_dni_anverso_path: string | null;
@@ -181,7 +182,7 @@ export async function listVacantesConCandidatos(empresaSlug?: string | null) {
           cv_url, notas, origen, canal_nombre, como_nos_conocio, fase, estado, promovido_at, empleado_id,
           activo, created_at, visto_at, fase_actualizada_at,
           genero, ubicacion, disponibilidad, experiencia_previa, carta_presentacion,
-          dni_nie, iban, num_seguridad_social,
+          dni_nie, tipo_documento, iban, num_seguridad_social,
           doc_dni_anverso_path, doc_dni_reverso_path, doc_iban_path, doc_ss_path,
           foto_perfil_path, direccion, fecha_nacimiento,
           documentacion_completada_at
@@ -337,6 +338,7 @@ export async function listVacantesConCandidatos(empresaSlug?: string | null) {
           empleadoId: c.empleado_id,
           // Paso «Documentación»
           dniNie: c.dni_nie ?? null,
+          tipoDocumento: c.tipo_documento ?? null,
           iban: c.iban ?? null,
           numSeguridadSocial: c.num_seguridad_social ?? null,
           docDniAnversoPath: c.doc_dni_anverso_path ?? null,

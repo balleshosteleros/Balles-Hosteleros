@@ -1078,10 +1078,8 @@ export async function getDatosCopiaEmpleado(input: {
     }
     const puestos = puestosOrigen.map((p) => ({ nombre: p.nombre as string, esPrincipal: p.esPrincipal, existe: puestosDest.has(p.nombre as string) }));
 
-    const [{ data: cals }, { data: locs }] = await Promise.all([
-      admin.from("rrhh_calendarios_vacaciones").select("id, nombre").eq("empresa_id", input.empresaDestinoId).order("nombre"),
-      admin.from("locales").select("id, nombre").eq("empresa_id", input.empresaDestinoId).order("nombre"),
-    ]);
+    const { data: locs } = await admin
+      .from("locales").select("id, nombre").eq("empresa_id", input.empresaDestinoId).order("nombre");
 
     const motivos: string[] = [];
     if (yaExiste) motivos.push("El empleado ya tiene ficha en esa empresa.");
@@ -1096,7 +1094,6 @@ export async function getDatosCopiaEmpleado(input: {
         motivos,
         departamento: depNombre ? { nombre: depNombre, existe: depExiste } : null,
         puestos,
-        calendarios: (cals ?? []) as { id: string; nombre: string }[],
         locales: (locs ?? []) as { id: string; nombre: string }[],
       },
     };
@@ -1118,7 +1115,6 @@ export async function copiarEmpleadoAEmpresa(input: {
   empleadoId: string;
   empresaDestinoId: string;
   emailEmpresa: string;
-  calendarioId: string;
   localIds: string[];
 }) {
   try {
@@ -1127,7 +1123,6 @@ export async function copiarEmpleadoAEmpresa(input: {
     const emailEmpresa = (input.emailEmpresa ?? "").trim();
     const localIds = Array.from(new Set((input.localIds ?? []).filter(Boolean)));
     if (!emailEmpresa) return { ok: false, error: "Indica el email de empresa." };
-    if (!input.calendarioId) return { ok: false, error: "Selecciona un calendario de vacaciones." };
     if (localIds.length === 0) return { ok: false, error: "Selecciona al menos un local de fichaje." };
 
     const { data: origen, error: origenErr } = await supabase
@@ -1159,9 +1154,7 @@ export async function copiarEmpleadoAEmpresa(input: {
       }
     }
 
-    // Calendario y locales deben ser de la empresa destino.
-    const { data: calOk } = await admin.from("rrhh_calendarios_vacaciones").select("id").eq("id", input.calendarioId).eq("empresa_id", input.empresaDestinoId).maybeSingle();
-    if (!calOk) return { ok: false, error: "El calendario elegido no es de la empresa destino." };
+    // Los locales deben ser de la empresa destino.
     const { data: locsOk } = await admin.from("locales").select("id").eq("empresa_id", input.empresaDestinoId).in("id", localIds);
     if ((locsOk ?? []).length !== localIds.length) return { ok: false, error: "Algún local elegido no es de la empresa destino." };
 
@@ -1216,7 +1209,6 @@ export async function copiarEmpleadoAEmpresa(input: {
       permite_teletrabajo: Boolean(o.permite_teletrabajo),
       tipo_jornada: o.tipo_jornada ?? "Completa",
       departamento_id: departamentoDestId,
-      calendario_vacaciones_id: input.calendarioId,
       local_id: localIds[0],
       estado: "Activo", // aunque en origen esté Inactivo, la copia entra Activa.
       perfil_completado: false, // pendiente de asignar turnos/validadores en destino.

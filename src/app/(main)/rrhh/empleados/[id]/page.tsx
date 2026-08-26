@@ -89,7 +89,6 @@ type EmpleadoBD = {
   fecha_baja: string | null;
   estado: string;
   validador_departamento_id: string | null;
-  calendario_vacaciones_id: string | null;
   doc_dni_anverso_path: string | null;
   doc_dni_reverso_path: string | null;
   doc_iban_path: string | null;
@@ -267,6 +266,8 @@ export default function FichaEmpleadoPage() {
                   onDeleted={() => router.push("/rrhh/empleados")}
                 />
                 <DocumentosIdentificativosCard
+                  empleadoId={empleadoRegistro.id}
+                  editable
                   docDniAnversoPath={empleadoRegistro.doc_dni_anverso_path}
                   docDniReversoPath={empleadoRegistro.doc_dni_reverso_path}
                   docIbanPath={empleadoRegistro.doc_iban_path}

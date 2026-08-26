@@ -1,7 +1,8 @@
-// Calendario de vacaciones (RRHH): un total de días de vacaciones para un año +
-// una lista de periodos BLOQUEADOS en los que no se pueden pedir vacaciones.
-// Cada empleado tiene un calendario asociado (empleados.calendario_vacaciones_id);
-// al solicitar vacaciones se valida contra él (fechas y días disponibles).
+// Tipos del saldo de vacaciones.
+//
+// Los "calendarios de vacaciones" como entidad ya NO existen: había uno solo por
+// empresa y sobraba. Los días al año viven ahora en la configuración del
+// submódulo Calendario (Calendario → Configuración), y de ahí sale este saldo.
 
 export interface BloqueoVacaciones {
   id: string;

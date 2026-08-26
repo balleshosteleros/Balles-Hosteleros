@@ -15,6 +15,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   esDniNieValido,
   esIbanValido,
@@ -31,6 +32,36 @@ import { MAX_IMAGEN_MB, MAX_IMAGEN_BYTES } from "@/shared/lib/documentos";
 interface Props {
   token: string;
   empresaSlug: string;
+  /** Nombre y apellidos de su candidatura: con esto se comprueba que los
+   *  documentos que sube estén a SU nombre y no a nombre de otra persona. */
+  candidatoNombre: string;
+}
+
+
+/**
+ * ¿El titular que la IA ha leído en el documento es la misma persona que se
+ * está incorporando? Se compara con tolerancia: sin tildes, sin mayúsculas y
+ * sin importar el orden (en un extracto bancario puede figurar
+ * "AGUILAR, JUAN FELIPE" y en la candidatura "Juan Felipe Aguilar").
+ *
+ * Basta con que coincidan DOS palabras (normalmente nombre + un apellido) para
+ * darlo por bueno: los documentos suelen abreviar o incluir solo un apellido.
+ */
+function mismoTitular(detectado: string, esperado: string): boolean {
+  const trocear = (v: string) =>
+    v
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toUpperCase()
+      .replace(/[^A-Z\s]/g, " ")
+      .split(/\s+/)
+      .filter((w) => w.length > 2);
+
+  const a = trocear(detectado);
+  const b = new Set(trocear(esperado));
+  if (a.length === 0 || b.size === 0) return true; // sin datos: no se juzga
+  const comunes = a.filter((w) => b.has(w)).length;
+  return comunes >= Math.min(2, b.size);
 }
 
 /** Campos cuyo número detecta la IA. */
@@ -143,7 +174,7 @@ function SubidaDoc({
           )}
           {doc.deteccion === "ajeno" && (
             <span className="inline-flex items-center gap-1 text-destructive shrink-0">
-              <AlertTriangle className="h-3.5 w-3.5" /> A nombre de otra persona
+              <AlertTriangle className="h-3.5 w-3.5" /> No podemos comprobar que sea tuyo
             </span>
           )}
           {doc.deteccion === "menor" && (
@@ -187,7 +218,7 @@ function SubidaDoc({
   );
 }
 
-export function FormDocumentacionPublica({ token, empresaSlug }: Props) {
+export function FormDocumentacionPublica({ token, empresaSlug, candidatoNombre }: Props) {
   const [dniAnverso, setDniAnverso] = useState<DocState>(DOC_VACIO);
   const [dniReverso, setDniReverso] = useState<DocState>(DOC_VACIO);
   const [docIban, setDocIban] = useState<DocState>(DOC_VACIO);
@@ -195,6 +226,10 @@ export function FormDocumentacionPublica({ token, empresaSlug }: Props) {
 
   // Números propuestos por la IA y validados/corregidos por la persona.
   const [dniNie, setDniNie] = useState("");
+  // Qué documento está subiendo. Se pregunta AQUÍ, junto a la subida, que es
+  // donde la persona lo tiene delante: preguntarlo luego, al entrar al software,
+  // era pedir dos veces lo mismo.
+  const [tipoDocumento, setTipoDocumento] = useState("DNI");
   const [iban, setIban] = useState("");
   const [ss, setSs] = useState("");
 
@@ -262,9 +297,18 @@ export function FormDocumentacionPublica({ token, empresaSlug }: Props) {
       // Verificación de titular: la captura de SS/IBAN debe llevar el MISMO DNI
       // que el documento de identidad. Si la IA leyó un DNI en el documento y NO
       // coincide con el del DNI aportado, se marca como "ajeno" (bloquea el envío).
-      if ((campo === "iban" || campo === "ss") && dniNie.trim()) {
+      if (campo === "iban" || campo === "ss") {
+        // a) Por DNI, si la IA lo leyó y el candidato ya escribió el suyo.
         const titular = data.titular_dni ? normalizarDniNie(data.titular_dni) : "";
-        if (titular && titular !== normalizarDniNie(dniNie)) {
+        const dniDistinto =
+          !!titular && !!dniNie.trim() && titular !== normalizarDniNie(dniNie);
+        // b) Por NOMBRE: es lo habitual en un extracto bancario, donde casi
+        //    nunca figura el DNI pero sí el titular de la cuenta.
+        const nombreDistinto =
+          !!data.titular_nombre?.trim() &&
+          !mismoTitular(data.titular_nombre, candidatoNombre);
+
+        if (dniDistinto || nombreDistinto) {
           if (campo === "iban") setDocIban((d) => ({ ...d, deteccion: "ajeno" }));
           else setDocSs((d) => ({ ...d, deteccion: "ajeno" }));
           return;
@@ -363,11 +407,16 @@ export function FormDocumentacionPublica({ token, empresaSlug }: Props) {
       return "No hemos podido leer tu DNI/NIE. Vuelve a hacer la foto del anverso con buena luz.";
     if (docSs.deteccion === "fallo")
       return "No hemos podido leer el nº de la Seguridad Social. Vuelve a hacer la foto.";
+    // El documento del IBAN es el que autoriza el pago de la nómina: si no se
+    // puede leer, no se puede comprobar que la cuenta sea suya. Antes pasaba
+    // cualquier captura, incluso una en la que no se viera el número.
+    if (docIban.deteccion === "fallo")
+      return "No hemos podido leer el documento de tu cuenta. Sube una captura donde se vean tu nombre y el número de cuenta completo.";
     // El documento de SS/IBAN debe ser del MISMO titular que el DNI aportado.
     if (docIban.deteccion === "ajeno")
-      return "El documento del IBAN está a nombre de otra persona: debe coincidir con el DNI que has aportado.";
+      return "No podemos comprobar que el documento de la cuenta esté a tu nombre. Sube una captura donde se vea tu nombre completo junto al número de cuenta.";
     if (docSs.deteccion === "ajeno")
-      return "El documento de la Seguridad Social está a nombre de otra persona: debe coincidir con el DNI que has aportado.";
+      return "No podemos comprobar que el documento de la Seguridad Social esté a tu nombre. Sube uno donde figure tu nombre completo.";
     // Números: distingue "falta escribirlo" de "está mal escrito".
     if (!dniNie.trim()) return "Escribe tu número de DNI/NIE en su casilla.";
     if (!esDniNieValido(dniNie)) return "El número de DNI/NIE no es válido: revísalo.";
@@ -411,6 +460,7 @@ export function FormDocumentacionPublica({ token, empresaSlug }: Props) {
         const fd = new FormData();
         fd.set("token", token);
         fd.set("dni_nie", normalizarDniNie(dniNie));
+        fd.set("tipo_documento", tipoDocumento);
         fd.set("iban", normalizarIban(iban));
         fd.set("num_seguridad_social", normalizarSeguridadSocial(ss));
         // Adjunta cada archivo con un nombre seguro (iOS a veces entrega nombres
@@ -483,7 +533,20 @@ export function FormDocumentacionPublica({ token, empresaSlug }: Props) {
     >
       {/* 1. DNI / NIE */}
       <section className="space-y-4">
-        <h2 className="text-base font-semibold">1. DNI / NIE</h2>
+        <h2 className="text-base font-semibold">1. Documento de identidad</h2>
+        <div className="space-y-1.5">
+          <Label htmlFor="tipo-doc">¿Qué documento vas a subir? *</Label>
+          <Select value={tipoDocumento} onValueChange={setTipoDocumento}>
+            <SelectTrigger id="tipo-doc" className="sm:w-56">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="DNI">DNI</SelectItem>
+              <SelectItem value="NIE">NIE</SelectItem>
+              <SelectItem value="PASAPORTE">Pasaporte</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
         <div className="grid sm:grid-cols-2 gap-4">
           <SubidaDoc
             id="dni-anverso"
@@ -499,7 +562,9 @@ export function FormDocumentacionPublica({ token, empresaSlug }: Props) {
           />
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor="num-dni">Número de DNI/NIE *</Label>
+          <Label htmlFor="num-dni">
+            Número de {tipoDocumento === "PASAPORTE" ? "pasaporte" : tipoDocumento} *
+          </Label>
           <Input
             id="num-dni"
             value={dniNie}

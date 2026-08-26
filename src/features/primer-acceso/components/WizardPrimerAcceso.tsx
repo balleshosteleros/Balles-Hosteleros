@@ -36,7 +36,6 @@ interface Prefilled {
   dni_archivo_url?: string | null;
   // Mismos campos que la ficha del empleado: lo que se pide aquí es exactamente
   // lo que allí se puede editar, para que no haya datos en un sitio y en otro no.
-  tipo_documento?: string | null;
   genero?: string | null;
   estado_civil?: string | null;
   codigo_postal?: string | null;
@@ -73,7 +72,6 @@ export function WizardPrimerAcceso({ prefilled }: { prefilled: Prefilled }) {
     contacto_emergencia_telefono: prefilled.contacto_emergencia_telefono ?? "",
     contacto_emergencia_relacion: prefilled.contacto_emergencia_relacion ?? "",
     talla_uniforme: prefilled.talla_uniforme ?? "",
-    tipo_documento: prefilled.tipo_documento ?? "",
     genero: prefilled.genero ?? "",
     estado_civil: prefilled.estado_civil ?? "",
     codigo_postal: prefilled.codigo_postal ?? "",
@@ -96,7 +94,6 @@ export function WizardPrimerAcceso({ prefilled }: { prefilled: Prefilled }) {
     // de selección (documento, IBAN, SS, dirección, fecha de nacimiento) llega
     // relleno desde su candidatura y no se le vuelve a pedir.
     if (p === 0) {
-      if (!form.tipo_documento?.trim()) return "Elige el tipo de documento";
       if (!form.estado_civil?.trim()) return "Elige el estado civil";
     }
     if (p === 1) {
@@ -226,20 +223,6 @@ export function WizardPrimerAcceso({ prefilled }: { prefilled: Prefilled }) {
           {paso === 0 && (
             <div className="space-y-3">
               <div className="grid sm:grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                  <Label>Tipo de documento *</Label>
-                  <Select
-                    value={form.tipo_documento || undefined}
-                    onValueChange={(v) => update("tipo_documento", v)}
-                  >
-                    <SelectTrigger><SelectValue placeholder="DNI / NIE / Pasaporte" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="DNI">DNI</SelectItem>
-                      <SelectItem value="NIE">NIE</SelectItem>
-                      <SelectItem value="PASAPORTE">Pasaporte</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
                 <div className="space-y-1.5">
                   <Label>Estado civil *</Label>
                   <Select

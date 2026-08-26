@@ -1,72 +1,135 @@
 "use client";
 
 /**
- * Documentos identificativos del empleado (DNI/NIE anverso+reverso, IBAN y
- * Seguridad Social) que aportó como candidato y se copiaron a su ficha al
- * contratar (bucket privado `empleados-docs`). Cada documento se abre en una
- * pestaña nueva a través del endpoint `/api/empleados/doc`, que resuelve una URL
- * firmada de corta duración. Si el empleado no tiene documentos (altas antiguas
- * o creadas a mano), se indica sin ruido.
+ * Documentación identificativa del empleado (DNI/NIE anverso+reverso, IBAN y
+ * Seguridad Social). Quien entra por el proceso de selección ya la trae: la
+ * aportó como candidato y se copió a su ficha al contratarlo. En las altas
+ * hechas a mano no hay nada, y por eso RRHH puede adjuntarla aquí.
+ *
+ * Los archivos viven en el bucket privado `empleados-docs` y se abren en una
+ * pestaña nueva a través de `/api/empleados/doc`, que firma una URL de corta
+ * duración.
  */
-import { FileText, Download, FolderOpen } from "lucide-react";
+import { useRef, useState, useTransition } from "react";
+import { toast } from "sonner";
+import { FileText, Download, Upload, Loader2 } from "lucide-react";
+import {
+  subirDocumentoEmpleado,
+  type TipoDocumentoEmpleado,
+} from "@/features/rrhh/actions/documentos-empleado-actions";
 
 interface Props {
+  empleadoId: string;
   docDniAnversoPath?: string | null;
   docDniReversoPath?: string | null;
   docIbanPath?: string | null;
   docSsPath?: string | null;
+  /** RRHH puede adjuntar; el propio empleado, no. */
+  editable?: boolean;
 }
 
-const DOCS: { key: keyof Props; label: string }[] = [
-  { key: "docDniAnversoPath", label: "DNI/NIE — anverso" },
-  { key: "docDniReversoPath", label: "DNI/NIE — reverso" },
-  { key: "docIbanPath", label: "Número de cuenta (IBAN)" },
-  { key: "docSsPath", label: "Seguridad Social" },
+const DOCS: { tipo: TipoDocumentoEmpleado; prop: keyof Props; label: string }[] = [
+  { tipo: "dni_anverso", prop: "docDniAnversoPath", label: "DNI/NIE — anverso" },
+  { tipo: "dni_reverso", prop: "docDniReversoPath", label: "DNI/NIE — reverso" },
+  { tipo: "iban", prop: "docIbanPath", label: "Número de cuenta (IBAN)" },
+  { tipo: "ss", prop: "docSsPath", label: "Seguridad Social" },
 ];
+
+const ACEPTADOS = "image/jpeg,image/png,image/webp,image/heic,image/heif,application/pdf";
 
 function hrefDoc(path: string): string {
   return `/api/empleados/doc?path=${encodeURIComponent(path)}`;
 }
 
 export function DocumentosIdentificativosCard(props: Props) {
-  const items = DOCS.map((d) => ({ ...d, path: props[d.key] as string | null | undefined }))
-    .filter((d) => !!d.path);
+  const { empleadoId, editable = false } = props;
+  const [pending, startTransition] = useTransition();
+  const [subiendo, setSubiendo] = useState<TipoDocumentoEmpleado | null>(null);
+  const inputs = useRef<Partial<Record<TipoDocumentoEmpleado, HTMLInputElement | null>>>({});
+
+  function elegir(tipo: TipoDocumentoEmpleado, file: File | undefined) {
+    if (!file) return;
+    setSubiendo(tipo);
+    startTransition(async () => {
+      const res = await subirDocumentoEmpleado({ empleadoId, tipo, file });
+      setSubiendo(null);
+      if (res.ok) toast.success("Documento adjuntado");
+      else toast.error(res.error ?? "No se pudo adjuntar el documento");
+      // Limpia el input para poder volver a elegir el mismo archivo.
+      const el = inputs.current[tipo];
+      if (el) el.value = "";
+    });
+  }
 
   return (
     <section className="rounded-xl border bg-card p-4 space-y-2.5">
       <header className="space-y-0.5">
         <h3 className="text-sm font-semibold text-foreground">Documentación identificativa</h3>
         <p className="text-[11px] text-muted-foreground">
-          Aportada por el empleado en su incorporación. Solo lectura.
+          {editable
+            ? "Aportada por el empleado en su incorporación. Puedes adjuntar la que falte."
+            : "Aportada por el empleado en su incorporación. Solo lectura."}
         </p>
       </header>
 
-      {items.length > 0 ? (
-        <ul className="divide-y divide-border rounded-md border">
-          {items.map((d) => (
-            <li key={d.key} className="flex items-center gap-3 px-3 py-2">
-              <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
-              <span className="flex-1 text-sm text-foreground">{d.label}</span>
-              <a
-                href={hrefDoc(d.path as string)}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline"
-              >
-                <Download className="h-3.5 w-3.5" />
-                Ver
-              </a>
+      <ul className="divide-y divide-border rounded-md border">
+        {DOCS.map((d) => {
+          const path = props[d.prop] as string | null | undefined;
+          const cargando = subiendo === d.tipo && pending;
+          return (
+            <li key={d.tipo} className="flex items-center gap-3 px-3 py-2">
+              <FileText
+                className={`h-4 w-4 shrink-0 ${path ? "text-muted-foreground" : "text-muted-foreground/40"}`}
+              />
+              <span className="flex-1 text-sm text-foreground">
+                {d.label}
+                {!path && (
+                  <span className="ml-2 text-[11px] text-muted-foreground">Sin adjuntar</span>
+                )}
+              </span>
+
+              {path && (
+                <a
+                  href={hrefDoc(path)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline"
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  Ver
+                </a>
+              )}
+
+              {editable && (
+                <>
+                  <input
+                    ref={(el) => {
+                      inputs.current[d.tipo] = el;
+                    }}
+                    type="file"
+                    accept={ACEPTADOS}
+                    className="hidden"
+                    onChange={(e) => elegir(d.tipo, e.target.files?.[0])}
+                  />
+                  <button
+                    type="button"
+                    disabled={pending}
+                    onClick={() => inputs.current[d.tipo]?.click()}
+                    className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline disabled:opacity-50"
+                  >
+                    {cargando ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Upload className="h-3.5 w-3.5" />
+                    )}
+                    {path ? "Reemplazar" : "Adjuntar"}
+                  </button>
+                </>
+              )}
             </li>
-          ))}
-        </ul>
-      ) : (
-        <div className="flex items-center gap-2 rounded-md border border-dashed px-3 py-3">
-          <FolderOpen className="h-4 w-4 shrink-0 text-muted-foreground/50" />
-          <p className="text-xs text-muted-foreground">
-            No hay documentación identificativa guardada para este empleado.
-          </p>
-        </div>
-      )}
+          );
+        })}
+      </ul>
     </section>
   );
 }

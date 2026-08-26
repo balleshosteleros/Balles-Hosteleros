@@ -25,7 +25,6 @@ interface DatosDestino {
   motivos: string[];
   departamento: { nombre: string; existe: boolean } | null;
   puestos: { nombre: string; esPrincipal: boolean; existe: boolean }[];
-  calendarios: { id: string; nombre: string }[];
   locales: { id: string; nombre: string }[];
 }
 
@@ -52,7 +51,6 @@ export function CopiarEmpleadoDialog({
 
   // Campos obligatorios de la empresa destino.
   const [emailEmpresa, setEmailEmpresa] = useState("");
-  const [calendarioId, setCalendarioId] = useState("");
   const [localIds, setLocalIds] = useState<string[]>([]);
 
   const opciones = useMemo(
@@ -68,7 +66,6 @@ export function CopiarEmpleadoDialog({
     }
     let activo = true;
     setCargando(true);
-    setCalendarioId("");
     setLocalIds([]);
     getDatosCopiaEmpleado({ empleadoId, empresaDestinoId: destino }).then((res) => {
       if (!activo) return;
@@ -89,7 +86,6 @@ export function CopiarEmpleadoDialog({
     !!datos &&
     !datos.bloqueado &&
     emailEmpresa.trim().length > 0 &&
-    !!calendarioId &&
     localIds.length > 0;
 
   async function copiar() {
@@ -99,7 +95,6 @@ export function CopiarEmpleadoDialog({
       empleadoId,
       empresaDestinoId: destino,
       emailEmpresa: emailEmpresa.trim(),
-      calendarioId,
       localIds,
     });
     setGuardando(false);
@@ -117,7 +112,6 @@ export function CopiarEmpleadoDialog({
     setOpen(false);
     setDestino("");
     setEmailEmpresa("");
-    setCalendarioId("");
     setLocalIds([]);
     router.refresh();
   }
@@ -227,23 +221,6 @@ export function CopiarEmpleadoDialog({
                         placeholder="correo@empresa.com"
                         className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
                       />
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <label className="text-sm font-medium">Calendario de vacaciones <span className="text-red-600">*</span></label>
-                      <select
-                        value={calendarioId}
-                        onChange={(e) => setCalendarioId(e.target.value)}
-                        className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-                      >
-                        <option value="">Selecciona un calendario…</option>
-                        {datos.calendarios.map((c) => (
-                          <option key={c.id} value={c.id}>{c.nombre}</option>
-                        ))}
-                      </select>
-                      {datos.calendarios.length === 0 && (
-                        <p className="text-[11px] text-amber-700">No hay calendarios en la empresa destino. Crea uno antes de copiar.</p>
-                      )}
                     </div>
 
                     <div className="space-y-1.5">
