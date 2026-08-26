@@ -117,14 +117,15 @@ export const OnboardingPruebaConfig = forwardRef<
           <Label htmlFor="prueba-evaluaciones" className="text-sm text-foreground">
             Validaciones durante el periodo
           </Label>
-          <Input
+          <NumberInput
             id="prueba-evaluaciones"
-            type="number"
             min={1}
             max={5}
+            decimales={false}
+            emptyValue={1}
             value={config.prueba_evaluaciones_num}
-            onChange={(e) =>
-              setConfig((c) => c && { ...c, prueba_evaluaciones_num: Number(e.target.value) })
+            onValueChange={(v) =>
+              setConfig((c) => c && { ...c, prueba_evaluaciones_num: v })
             }
             className="w-20 h-9"
           />
