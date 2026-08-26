@@ -742,7 +742,10 @@ export async function crearVersionPatron(
       throw eIns;
     }
 
-    // 3) Semanas de la versión nueva.
+    // 3) Semanas de la versión nueva. Si esto falla hay que deshacer TODO: si no,
+    //    la familia se queda sin ninguna versión oficial (la anterior ya se
+    //    desmarcó en el paso 1) y el patrón desaparece de todas las listas —
+    //    de Horarios y del selector de horario del puesto.
     if (input.semanas.length > 0) {
       const rows = input.semanas.map((s) => ({
         patron_id: nuevo.id as string,
@@ -750,7 +753,11 @@ export async function crearVersionPatron(
         dias: s.dias,
       }));
       const { error: eSem } = await supabase.from("rrhh_patron_semanas").insert(rows);
-      if (eSem) throw eSem;
+      if (eSem) {
+        await supabase.from("rrhh_patrones").delete().eq("id", nuevo.id as string);
+        await supabase.from("rrhh_patrones").update({ es_oficial: true }).eq("id", oficialId);
+        throw eSem;
+      }
     }
 
     // 4) Los empleados ya asignados NO se mueven: conservan la versión anterior
