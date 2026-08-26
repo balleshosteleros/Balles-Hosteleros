@@ -49,7 +49,7 @@ function normaDias(raw: unknown): (string | null)[] {
  * con `puesto_id`): en el modelo nuevo el puesto solo elige patrones creados en
  * Horarios, que son compartibles.
  */
-export async function getHorarioPuesto(puestoId: string): Promise<{
+export async function getHorarioPuesto(puestoId: string | null): Promise<{
   familiaSeleccionada: string | null;
   patrones: PatronElegible[];
   turnos: Turno[];
@@ -59,14 +59,18 @@ export async function getHorarioPuesto(puestoId: string): Promise<{
     const { supabase, empresaId } = await getContext();
     if (!empresaId) return vacio;
 
+    // Sin puesto (al crear uno nuevo) solo se piden los horarios de la empresa:
+    // no hay todavía fila de condiciones de la que leer la selección.
     const [turnosRes, patronesRes, salarioRes, familiasPuestoRes] = await Promise.all([
       listTurnos(empresaId),
       listPatrones(empresaId),
-      supabase
-        .from("puesto_salarios")
-        .select("patron_familia_id")
-        .eq("puesto_id", puestoId)
-        .maybeSingle(),
+      puestoId
+        ? supabase
+            .from("puesto_salarios")
+            .select("patron_familia_id")
+            .eq("puesto_id", puestoId)
+            .maybeSingle()
+        : Promise.resolve({ data: null }),
       // Familias de patrones ligados a un puesto (legacy) → se excluyen del selector.
       supabase
         .from("rrhh_patrones")

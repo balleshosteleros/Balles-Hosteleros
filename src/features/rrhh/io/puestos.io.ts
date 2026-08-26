@@ -17,7 +17,6 @@ const salarioSchema = z.object({
   diasLibres: z.number(),
   horarioSemanal: z.array(z.unknown()),
   observaciones: z.string(),
-  objetivos: z.array(z.string()),
   estado: z.enum(["activo", "borrador", "inactivo"]),
   updatedAt: z.string(),
 });
@@ -41,7 +40,6 @@ export const puestosIO: ModuleIO<PuestoSalarial> = {
     { key: "horasSemanales", label: "Horas semanales", type: "number" },
     { key: "diasLibres", label: "Días libres", type: "number" },
     { key: "vacaciones", label: "Vacaciones" },
-    { key: "objetivos", label: "Objetivos", type: "array" },
     { key: "observaciones", label: "Observaciones" },
     { key: "updatedAt", label: "Actualizado", hideInImport: true },
     { key: "horarioSemanal", label: "Horario semanal", hideInExport: true, hideInImport: true },

@@ -38,7 +38,6 @@ type SalarioEmbed = {
   vacaciones: string | null;
   horario_semanal: HorarioDia[] | null;
   observaciones: string | null;
-  objetivos: string[] | null;
   estado: "activo" | "borrador" | "inactivo";
   updated_at: string;
 };
@@ -70,7 +69,6 @@ function embedToNivel(sal: SalarioEmbed): NivelSalarial {
     diasLibres: sal.dias_libres ?? 0,
     horarioSemanal: sal.horario_semanal ?? [],
     observaciones: sal.observaciones ?? "",
-    objetivos: sal.objetivos ?? [],
     estado: sal.estado ?? "borrador",
   };
 }
@@ -100,7 +98,6 @@ function rowToPuesto(r: PuestoRow, conCronograma: Set<string>): PuestoSalarial {
     diasLibres: cab?.dias_libres ?? 0,
     horarioSemanal: cab?.horario_semanal ?? [],
     observaciones: cab?.observaciones ?? "",
-    objetivos: cab?.objetivos ?? [],
     estado: cab?.estado ?? "borrador",
     updatedAt: cab?.updated_at?.slice(0, 10) ?? "",
     tieneCronograma: conCronograma.has(r.id),
@@ -123,7 +120,7 @@ export async function listPuestosEmpresa(): Promise<{
       supabase
         .from("puestos")
         .select(
-          "id, nombre, descripcion, convenio_colectivo, tipo_contrato_defecto, validador_departamento_id, validador_departamento:departamentos!validador_departamento_id(nombre), departamentos!departamento_id(id, nombre), puesto_salarios(nivel, salario_bruto, nomina_neta, efectivo_extra, salario_neto, jornada_contrato, horas_semanales, dias_libres, vacaciones, horario_semanal, observaciones, objetivos, estado, updated_at)",
+          "id, nombre, descripcion, convenio_colectivo, tipo_contrato_defecto, validador_departamento_id, validador_departamento:departamentos!validador_departamento_id(nombre), departamentos!departamento_id(id, nombre), puesto_salarios(nivel, salario_bruto, nomina_neta, efectivo_extra, salario_neto, jornada_contrato, horas_semanales, dias_libres, vacaciones, horario_semanal, observaciones, estado, updated_at)",
         )
         .eq("empresa_id", empresaId),
       supabase
@@ -165,7 +162,6 @@ export interface UpsertSalarioInput {
   vacaciones?: string;
   horarioSemanal?: HorarioDia[];
   observaciones?: string;
-  objetivos?: string[];
   estado?: "activo" | "borrador" | "inactivo";
 }
 
@@ -191,10 +187,8 @@ export async function upsertPuestoSalario(input: UpsertSalarioInput) {
       return { ok: false, error: "Los días libres del puesto son obligatorios" };
     }
     if (!input.vacaciones?.trim()) return { ok: false, error: "Las vacaciones del puesto son obligatorias" };
-    if (!input.observaciones?.trim()) return { ok: false, error: "Las observaciones del puesto son obligatorias" };
-    if (!input.objetivos?.some((o) => o.trim())) {
-      return { ok: false, error: "Los objetivos del puesto son obligatorios" };
-    }
+    // Observaciones es el único campo que puede quedarse en blanco: es una nota
+    // libre, no un dato que viaje al contrato del empleado.
     const payload = {
       empresa_id: empresaId,
       puesto_id: input.puestoId,
@@ -209,7 +203,6 @@ export async function upsertPuestoSalario(input: UpsertSalarioInput) {
       vacaciones: input.vacaciones ?? null,
       horario_semanal: input.horarioSemanal ?? [],
       observaciones: input.observaciones ?? null,
-      objetivos: input.objetivos ?? [],
       estado: input.estado ?? "activo",
     };
     const { data, error } = await supabase
@@ -236,7 +229,7 @@ export async function listNivelesDePuesto(
     const { data, error } = await supabase
       .from("puesto_salarios")
       .select(
-        "nivel, salario_bruto, nomina_neta, efectivo_extra, salario_neto, jornada_contrato, horas_semanales, dias_libres, vacaciones, horario_semanal, observaciones, objetivos, estado, updated_at",
+        "nivel, salario_bruto, nomina_neta, efectivo_extra, salario_neto, jornada_contrato, horas_semanales, dias_libres, vacaciones, horario_semanal, observaciones, estado, updated_at",
       )
       .eq("empresa_id", empresaId)
       .eq("puesto_id", puestoId)

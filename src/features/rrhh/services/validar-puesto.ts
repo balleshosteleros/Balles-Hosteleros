@@ -11,6 +11,9 @@
  *
  * Vale para crear y para editar: un puesto ya creado tampoco se puede vaciar.
  *
+ * Única excepción: OBSERVACIONES puede quedarse en blanco (es una nota libre,
+ * no un dato que viaje al contrato del empleado).
+ *
  * Sin dependencias de servidor a propósito: se importa desde cliente y servidor.
  */
 
@@ -23,23 +26,17 @@ export interface PuestoCompletoInput {
   validadorDepartamentoId: string | null;
   /** Cronograma de tareas vinculado (rol). */
   cronogramaRol: string | null;
+  /** Horario del puesto: familia del patrón elegido en Horarios. */
+  horarioFamiliaId: string | null;
   salarioBruto: number;
   jornadaContrato: string;
   horasSemanales: number;
   diasLibres: number;
   vacaciones: string;
-  observaciones: string;
-  objetivos: string[];
-  /**
-   * true al crear un puesto nuevo. El cronograma 1:1 del puesto se crea solo en
-   * ese momento (`createPuesto`), así que todavía no existe para poder elegirlo:
-   * no se exige. Al editar sí, porque ya está creado.
-   */
-  esNuevo?: boolean;
 }
 
-/** Campos del formulario (`esNuevo` es contexto de la llamada, no un campo). */
-export type CampoPuesto = Exclude<keyof PuestoCompletoInput, "esNuevo">;
+/** Campos del formulario: todos deben venir rellenos (salvo observaciones). */
+export type CampoPuesto = keyof PuestoCompletoInput;
 
 /** Etiqueta visible de cada campo, tal cual aparece en el formulario. */
 const ETIQUETAS: Record<CampoPuesto, string> = {
@@ -49,13 +46,12 @@ const ETIQUETAS: Record<CampoPuesto, string> = {
   convenioColectivo: "Convenio colectivo",
   validadorDepartamentoId: "Valida este departamento",
   cronogramaRol: "Cronograma",
+  horarioFamiliaId: "Horario",
   salarioBruto: "Salario bruto mensual",
   jornadaContrato: "Jornada",
   horasSemanales: "Horas/semana",
   diasLibres: "Días libres",
   vacaciones: "Vacaciones",
-  observaciones: "Observaciones",
-  objetivos: "Objetivos",
 };
 
 export interface ResultadoValidacionPuesto {
@@ -88,9 +84,9 @@ export function validarPuestoCompleto(
     faltan.push("diasLibres");
   }
   if (vacio(input.vacaciones)) faltan.push("vacaciones");
-  if (!input.esNuevo && vacio(input.cronogramaRol)) faltan.push("cronogramaRol");
-  if (vacio(input.observaciones)) faltan.push("observaciones");
-  if (input.objetivos.filter((o) => o.trim()).length === 0) faltan.push("objetivos");
+  if (vacio(input.cronogramaRol)) faltan.push("cronogramaRol");
+  if (vacio(input.horarioFamiliaId)) faltan.push("horarioFamiliaId");
+  // Observaciones NO se valida: es el único campo que puede quedar en blanco.
   if (vacio(input.convenioColectivo)) faltan.push("convenioColectivo");
   if (vacio(input.validadorDepartamentoId)) faltan.push("validadorDepartamentoId");
 

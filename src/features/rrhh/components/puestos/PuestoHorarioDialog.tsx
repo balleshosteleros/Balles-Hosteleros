@@ -12,6 +12,11 @@ import { getHorarioPuesto, setHorarioPuesto, type PatronElegible } from "@/featu
 import type { Turno } from "@/features/rrhh/data/horarios";
 import type { PuestoSalarial } from "@/features/rrhh/data/puestos";
 
+/**
+ * SIN USO desde ago-2026: el horario del puesto se elige dentro de la ficha de
+ * editar (`PuestoSalarioDialog`), junto al resto de datos, y allí es obligatorio.
+ * Se conserva por si hiciera falta recuperar esta vista; se puede borrar.
+ */
 interface Props {
   open: boolean;
   onOpenChange: (v: boolean) => void;

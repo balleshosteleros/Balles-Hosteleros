@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from "@/components/ui/dialog";
@@ -18,6 +18,10 @@ import {
 } from "@/features/rrhh/actions/vacantes-actions";
 import { upsertPuestoSalario, listNivelesDePuesto } from "@/features/rrhh/actions/puestos-actions";
 import { setValidadorDepartamentoPuesto } from "@/features/rrhh/actions/validadores-actions";
+import {
+  getHorarioPuesto, setHorarioPuesto, type PatronElegible,
+} from "@/features/rrhh/actions/puesto-horario-actions";
+import type { Turno } from "@/features/rrhh/data/horarios";
 import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 import {
   validarPuestoCompleto,
@@ -41,6 +45,9 @@ const JORNADAS = ["Completa", "Partida"];
 /** Vacaciones por defecto de cualquier puesto nuevo (convenio de hostelería). */
 const VACACIONES_DEFECTO = "30 días";
 
+/** Cabeceras de la vista previa del horario. */
+const DIAS_SEMANA = ["L", "M", "X", "J", "V", "S", "D"];
+
 function nivelVacio(nivel: number): NivelSalarial {
   return {
     nivel,
@@ -54,7 +61,6 @@ function nivelVacio(nivel: number): NivelSalarial {
     diasLibres: 0,
     horarioSemanal: [],
     observaciones: "",
-    objetivos: [],
     estado: "activo",
   };
 }
@@ -84,6 +90,11 @@ export function PuestoSalarioDialog({ open, onOpenChange, editing, onSaved }: Pr
   const [cronogramas, setCronogramas] = useState<CronogramaElegible[]>([]);
   const [cronogramaRol, setCronogramaRol] = useState("");
   const [cronogramaInicial, setCronogramaInicial] = useState("");
+  // Horario del puesto: se elige aquí dentro (antes vivía en un diálogo aparte).
+  const [patrones, setPatrones] = useState<PatronElegible[]>([]);
+  const [turnos, setTurnos] = useState<Turno[]>([]);
+  const [horarioFamiliaId, setHorarioFamiliaId] = useState("");
+  const [horarioInicial, setHorarioInicial] = useState("");
   // Campos vacíos marcados tras intentar guardar. Un puesto no puede quedar
   // incompleto: al contratar, sus datos se copian al empleado.
   const [faltan, setFaltan] = useState<CampoPuesto[]>([]);
@@ -95,6 +106,14 @@ export function PuestoSalarioDialog({ open, onOpenChange, editing, onSaved }: Pr
     falta(campo) ? "border-destructive focus-visible:ring-destructive" : "";
 
   const cur = niveles[idx] ?? niveles[0];
+
+  // Vista previa de la semana del horario elegido.
+  const turnoById = useMemo(() => {
+    const m = new Map<string, Turno>();
+    turnos.forEach((t) => m.set(t.id, t));
+    return m;
+  }, [turnos]);
+  const patronElegido = patrones.find((p) => p.familiaId === horarioFamiliaId) ?? null;
 
   const setCur = (patch: Partial<NivelSalarial>) => {
     setNiveles((prev) => prev.map((n, i) => (i === idx ? { ...n, ...patch } : n)));
@@ -131,21 +150,27 @@ export function PuestoSalarioDialog({ open, onOpenChange, editing, onSaved }: Pr
         diasLibres: editing.diasLibres,
         horarioSemanal: editing.horarioSemanal,
         observaciones: editing.observaciones,
-        objetivos: editing.objetivos,
         estado: editing.estado,
       }]);
       setCronogramaRol("");
       setCronogramaInicial("");
+      setHorarioFamiliaId("");
+      setHorarioInicial("");
       void Promise.all([
         listNivelesDePuesto(editing.id),
         getCronogramaDePuesto(editing.id),
-      ]).then(([rNiveles, rCrono]) => {
+        getHorarioPuesto(editing.id),
+      ]).then(([rNiveles, rCrono, rHorario]) => {
         if (!activo) return;
         if (rNiveles.ok && rNiveles.data.length > 0) setNiveles(rNiveles.data);
         if (rCrono.ok) {
           setCronogramaRol(rCrono.rol ?? "");
           setCronogramaInicial(rCrono.rol ?? "");
         }
+        setPatrones(rHorario.patrones);
+        setTurnos(rHorario.turnos);
+        setHorarioFamiliaId(rHorario.familiaSeleccionada ?? "");
+        setHorarioInicial(rHorario.familiaSeleccionada ?? "");
         setCargando(false);
       });
     } else {
@@ -153,6 +178,15 @@ export function PuestoSalarioDialog({ open, onOpenChange, editing, onSaved }: Pr
       setNiveles([nivelVacio(1)]);
       setCronogramaRol("");
       setCronogramaInicial("");
+      setHorarioFamiliaId("");
+      setHorarioInicial("");
+      // Al crear no hay puesto todavía, pero los horarios son de la empresa:
+      // se piden sin puesto solo para poblar la lista de patrones.
+      void getHorarioPuesto(null).then((r) => {
+        if (!activo) return;
+        setPatrones(r.patrones);
+        setTurnos(r.turnos);
+      });
     }
     return () => { activo = false; };
   }, [open, editing]);
@@ -188,14 +222,12 @@ export function PuestoSalarioDialog({ open, onOpenChange, editing, onSaved }: Pr
       convenioColectivo: convenio,
       validadorDepartamentoId: validadorDepartamentoId || null,
       cronogramaRol: cronogramaRol || null,
+      horarioFamiliaId: horarioFamiliaId || null,
       salarioBruto: cur?.salarioBruto ?? 0,
       jornadaContrato: cur?.jornadaContrato ?? "",
       horasSemanales: cur?.horasSemanales ?? 0,
       diasLibres: cur?.diasLibres ?? 0,
       vacaciones: cur?.vacaciones ?? "",
-      observaciones: cur?.observaciones ?? "",
-      objetivos: cur?.objetivos ?? [],
-      esNuevo,
     });
     if (!validacion.ok) {
       setFaltan(validacion.faltan);
@@ -233,7 +265,6 @@ export function PuestoSalarioDialog({ open, onOpenChange, editing, onSaved }: Pr
           observaciones: n.observaciones,
           estado: n.estado,
           horarioSemanal: n.horarioSemanal,
-          objetivos: n.objetivos,
         });
         if (!sal.ok) { toast.error(sal.error ?? "No se pudo guardar el nivel"); return; }
       }
@@ -273,6 +304,16 @@ export function PuestoSalarioDialog({ open, onOpenChange, editing, onSaved }: Pr
         const resCrono = await vincularCronogramaAPuesto(puestoId, cronogramaRol || null);
         if (!resCrono.ok) {
           toast.error(resCrono.error ?? "No se pudo vincular el cronograma");
+          return;
+        }
+      }
+
+      // Horario del puesto. Va después de las condiciones a propósito: se guarda
+      // en `puesto_salarios`, así que esa fila debe existir ya.
+      if (horarioFamiliaId !== horarioInicial) {
+        const resHor = await setHorarioPuesto(puestoId, horarioFamiliaId || null);
+        if (!resHor.ok) {
+          toast.error(resHor.error ?? "No se pudo guardar el horario");
           return;
         }
       }
@@ -387,27 +428,54 @@ export function PuestoSalarioDialog({ open, onOpenChange, editing, onSaved }: Pr
                 ))}
               </select>
               <p className="text-[11px] text-muted-foreground">
-                {esNuevo
-                  ? "Cada puesto tiene su cronograma: se crea solo al guardar. Elige otro solo si quieres reutilizar el de un puesto ya existente."
-                  : "Cronograma de tareas que sigue quien ocupe este puesto. Se elige entre los ya creados en Dirección."}
+                Cronograma de tareas que sigue quien ocupe este puesto. Se elige entre los ya creados en Dirección.
               </p>
             </div>
 
+            {/* Horario del puesto: se hereda al empleado que se contrate. */}
             <div className="space-y-1.5">
-              <Label htmlFor="ps-obs">Observaciones</Label>
-              <Textarea id="ps-obs" value={cur?.observaciones ?? ""} onChange={(e) => setCur({ observaciones: e.target.value })} rows={2} placeholder="Condiciones particulares del puesto" className={claseFalta("observaciones")} />
+              <Label htmlFor="ps-horario">Horario</Label>
+              <select
+                id="ps-horario"
+                value={horarioFamiliaId}
+                onChange={(e) => setHorarioFamiliaId(e.target.value)}
+                className={`flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm ${claseFalta("horarioFamiliaId")}`}
+              >
+                <option value="">Selecciona…</option>
+                {patrones.map((p) => (
+                  <option key={p.familiaId} value={p.familiaId}>{p.nombre}</option>
+                ))}
+              </select>
+              {patronElegido && (
+                <div className="grid grid-cols-7 gap-0.5 pt-1">
+                  {DIAS_SEMANA.map((d, i) => {
+                    const t = patronElegido.dias[i] ? turnoById.get(patronElegido.dias[i]!) : null;
+                    return (
+                      <div key={d} className="flex flex-col items-center gap-0.5">
+                        <span className="text-[9px] text-muted-foreground">{d}</span>
+                        <span
+                          className={`h-5 w-full rounded-sm flex items-center justify-center text-[9px] font-semibold ${t ? "text-white" : "bg-muted text-muted-foreground/60"}`}
+                          style={t ? { backgroundColor: t.colorHex } : undefined}
+                          title={t ? `${t.codigo} · ${t.nombre}` : "Libre"}
+                        >
+                          {t ? t.codigo : "·"}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+              <p className="text-[11px] text-muted-foreground">
+                {patrones.length === 0
+                  ? "No hay horarios creados todavía. Créalos en Horarios → Patrones."
+                  : "Horario que sigue quien ocupe este puesto. Se elige entre los creados en Horarios."}
+              </p>
             </div>
 
+            {/* Observaciones: único campo que puede quedarse en blanco. */}
             <div className="space-y-1.5">
-              <Label htmlFor="ps-objetivos">Objetivos</Label>
-              <Textarea
-                id="ps-objetivos"
-                value={(cur?.objetivos ?? []).join("\n")}
-                onChange={(e) => setCur({ objetivos: e.target.value.split("\n").map((s) => s.trim()).filter(Boolean) })}
-                rows={3}
-                placeholder="Un objetivo por línea"
-                className={claseFalta("objetivos")}
-              />
+              <Label htmlFor="ps-obs">Observaciones (opcional)</Label>
+              <Textarea id="ps-obs" value={cur?.observaciones ?? ""} onChange={(e) => setCur({ observaciones: e.target.value })} rows={2} placeholder="Condiciones particulares del puesto" />
             </div>
           </div>
 

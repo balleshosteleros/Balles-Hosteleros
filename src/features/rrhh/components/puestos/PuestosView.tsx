@@ -7,7 +7,7 @@ import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { useTabQuery } from "@/shared/hooks/use-tab-query";
 import { type PuestoSalarial, type NormaSalarial, NORMAS_BASE, DEPARTAMENTOS_DISPONIBLES } from "@/features/rrhh/data/puestos";
 import { listPuestosEmpresa } from "@/features/rrhh/actions/puestos-actions";
-import { crearCronogramaParaPuesto } from "@/features/rrhh/actions/vacantes-actions";
+import { crearCronogramaParaPuesto, getCronogramaDePuesto } from "@/features/rrhh/actions/vacantes-actions";
 import { getCursoDePuesto } from "@/features/formacion/actions/formacion-actions";
 import { listBonusEmpresa, togglePuestoBonus } from "@/features/rrhh/actions/bonus-actions";
 import { getHorarioPuesto, type PatronElegible } from "@/features/rrhh/actions/puesto-horario-actions";
@@ -21,7 +21,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
   ArrowLeft, Plus, Settings, Settings2, Euro, Clock, Calendar,
-  Briefcase, ChevronRight, Target, FileText, Pencil, ListChecks,
+  Briefcase, ChevronRight, FileText, Pencil, ListChecks,
   UtensilsCrossed, ChefHat, Crown, User, Package, Camera, Calculator,
   CheckCircle2, Scale, Users, Gift, Loader2, GraduationCap,
 } from "lucide-react";
@@ -36,7 +36,6 @@ import {
 import { IOActions } from "@/shared/io";
 import { puestosIO } from "@/features/rrhh/io/puestos.io";
 import { PuestoSalarioDialog } from "./PuestoSalarioDialog";
-import { PuestoHorarioDialog } from "./PuestoHorarioDialog";
 
 // Solo dos estados: Activo / Inactivo. «borrador» (legacy) cuenta como Activo.
 const estadoBadge = (e: string) => {
@@ -128,7 +127,7 @@ export function PuestosView() {
 
   const selected = data.puestos.find((p) => p.id === selectedId) ?? null;
 
-  if (view === "detail" && selected) return <DetalleView puesto={selected} onBack={() => setView("list")} onChanged={reload} />;
+  if (view === "detail" && selected) return <DetalleView puesto={selected} onBack={() => setView("list")} />;
   if (view === "config") return <ConfigView puestos={data.puestos} normas={data.normas} onBack={() => setView("list")} />;
 
   return (
@@ -160,17 +159,19 @@ function ListView({
   const [, startCronoTransition] = useTransition();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingPuesto, setEditingPuesto] = useState<PuestoSalarial | null>(null);
-  const [horarioOpen, setHorarioOpen] = useState(false);
-  const [horarioPuesto, setHorarioPuesto] = useState<PuestoSalarial | null>(null);
 
-  // Cronograma del puesto (uno por puesto): si no existe lo crea y abre la
-  // pantalla de cronogramas DIRECTAMENTE en el cronograma de este puesto
-  // (vía ?rol=). Idempotente.
-  const irAlCronograma = (p: PuestoSalarial) => {
+  // Cronograma del puesto: abre la pantalla de cronogramas DIRECTAMENTE en el
+  // que tenga vinculado (vía ?rol=). El vínculo se elige al editar el puesto y
+  // puede apuntar a un cronograma con otro nombre, así que se consulta cuál es
+  // en vez de asumir el nombre del puesto. Si no tiene ninguno, lo crea.
+  const irAlCronograma = async (p: PuestoSalarial) => {
     const abrir = (rol: string) =>
       router.push(`/direccion/cronogramas?rol=${encodeURIComponent(rol)}`);
     if (p.tieneCronograma) {
-      abrir(p.puesto);
+      setPendingCronoId(p.id);
+      const res = await getCronogramaDePuesto(p.id);
+      setPendingCronoId(null);
+      abrir(res.rol || p.puesto);
       return;
     }
     setPendingCronoId(p.id);
@@ -379,13 +380,7 @@ function ListView({
                     </Button>
                     <Button
                       variant="ghost" size="sm" className="h-8 px-2"
-                      onClick={(e) => { e.stopPropagation(); setHorarioPuesto(p); setHorarioOpen(true); }}
-                    >
-                      <Calendar className="h-4 w-4 mr-1" /> Horario
-                    </Button>
-                    <Button
-                      variant="ghost" size="sm" className="h-8 px-2"
-                      onClick={(e) => { e.stopPropagation(); irAlCronograma(p); }}
+                      onClick={(e) => { e.stopPropagation(); void irAlCronograma(p); }}
                       disabled={pendingCronoId === p.id}
                       title={p.tieneCronograma ? "Ver el cronograma del puesto" : "Crear el cronograma del puesto"}
                     >
@@ -416,12 +411,6 @@ function ListView({
         onOpenChange={setDialogOpen}
         editing={editingPuesto}
         onSaved={onChanged}
-      />
-
-      <PuestoHorarioDialog
-        open={horarioOpen}
-        onOpenChange={setHorarioOpen}
-        puesto={horarioPuesto}
       />
     </div>
   );
@@ -571,7 +560,7 @@ function HorarioDelPuesto({ puestoId }: { puestoId: string }) {
         {loading ? (
           <div className="flex items-center text-sm text-muted-foreground py-2"><Loader2 className="h-4 w-4 animate-spin mr-2" />Cargando horario…</div>
         ) : !patron ? (
-          <p className="text-sm text-muted-foreground">Sin horario asignado. Usa el botón «Horario» en la lista de puestos para elegir uno.</p>
+          <p className="text-sm text-muted-foreground">Sin horario asignado. Se elige al editar el puesto.</p>
         ) : (
           <Table>
             <TableHeader>
@@ -602,9 +591,9 @@ function HorarioDelPuesto({ puestoId }: { puestoId: string }) {
   );
 }
 
-function DetalleView({ puesto, onBack, onChanged }: { puesto: PuestoSalarial; onBack: () => void; onChanged: () => void }) {
-  const [editOpen, setEditOpen] = useState(false);
-  const [horarioOpen, setHorarioOpen] = useState(false);
+// El puesto se edita SOLO desde el botón «Editar» de la lista de puestos.
+// Aquí la ficha es de consulta.
+function DetalleView({ puesto, onBack }: { puesto: PuestoSalarial; onBack: () => void }) {
   return (
     <div className="space-y-4 p-4 md:p-6">
       <div className="flex items-center gap-3">
@@ -615,12 +604,6 @@ function DetalleView({ puesto, onBack, onChanged }: { puesto: PuestoSalarial; on
         </div>
         <div className="ml-auto flex items-center gap-2">
           {estadoBadge(puesto.estado)}
-          <Button variant="ghost" size="sm" className="h-8 px-2" onClick={() => setHorarioOpen(true)}>
-            <Calendar className="h-4 w-4 mr-1" /> Horario
-          </Button>
-          <Button variant="primary" size="sm" className="h-8" onClick={() => setEditOpen(true)}>
-            <Pencil className="h-4 w-4 mr-1" /> Editar condiciones
-          </Button>
         </div>
       </div>
 
@@ -729,42 +712,9 @@ function DetalleView({ puesto, onBack, onChanged }: { puesto: PuestoSalarial; on
         </Card>
       )}
 
-      {puesto.objetivos.length > 0 && (
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base flex items-center gap-2">
-              <Target className="h-4 w-4" /> Objetivos y crecimiento
-            </CardTitle>
-            <CardDescription>Objetivos de referencia para este puesto</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <ul className="space-y-2">
-              {puesto.objetivos.map((o, i) => (
-                <li key={i} className="flex items-start gap-2 text-sm">
-                  <span className="h-5 w-5 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold shrink-0">{i + 1}</span>
-                  <span>{o}</span>
-                </li>
-              ))}
-            </ul>
-          </CardContent>
-        </Card>
-      )}
-
       <BonusDelPuesto puestoId={puesto.id} />
 
       <p className="text-xs text-muted-foreground text-right">Última actualización: {puesto.updatedAt}</p>
-
-      <PuestoSalarioDialog
-        open={editOpen}
-        onOpenChange={setEditOpen}
-        editing={puesto}
-        onSaved={onChanged}
-      />
-      <PuestoHorarioDialog
-        open={horarioOpen}
-        onOpenChange={setHorarioOpen}
-        puesto={puesto}
-      />
     </div>
   );
 }

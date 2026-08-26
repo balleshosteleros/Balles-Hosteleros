@@ -224,7 +224,6 @@ export async function syncPuestosAEmpresa(
         dias_libres: p.diasLibres,
         vacaciones: VACACIONES_SEED,
         observaciones: p.observaciones,
-        objetivos: p.objetivos,
         estado: "activo",
       };
     })

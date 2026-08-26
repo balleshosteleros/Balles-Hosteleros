@@ -20,7 +20,6 @@ export interface NivelSalarial {
   diasLibres: number;
   horarioSemanal: HorarioDia[];
   observaciones: string;
-  objetivos: string[];
   estado: "activo" | "borrador" | "inactivo";
 }
 
@@ -47,7 +46,6 @@ export interface PuestoSalarial {
   diasLibres: number;
   horarioSemanal: HorarioDia[];
   observaciones: string;
-  objetivos: string[];
   estado: "activo" | "borrador" | "inactivo";
   updatedAt: string;
   /** El puesto ya tiene un cronograma operativo vinculado (uno por puesto). */
