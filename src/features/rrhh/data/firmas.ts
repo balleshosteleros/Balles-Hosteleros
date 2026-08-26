@@ -20,6 +20,9 @@ export type TipoDocumento =
   | "reconocimiento_medico"
   | "anexo_promocion"
   | "sancion_disciplinaria"
+  // Cartas de fin de relación laboral: la pide el trabajador o la causa la empresa.
+  | "baja_voluntaria"
+  | "baja_empresa"
   // Actas del ciclo del material: recibirlo, devolverlo o darlo de baja.
   | "entrega_material"
   | "devolucion_material"
@@ -49,6 +52,12 @@ export interface DocumentoFirma {
   firmadoEn: string | null;
   expiraEn: string | null;
   ipFirma: string | null;
+  /**
+   * Primera vez que el destinatario abrió el documento (acuse de LECTURA). NULL
+   * si nunca lo abrió. En una comunicación de baja es la constancia que vale
+   * aunque el trabajador decida no firmar.
+   */
+  leidoEn?: string | null;
   hash: string | null;
   archivoUrl: string;
   observaciones?: string;
@@ -73,6 +82,8 @@ export const TIPO_LABEL: Record<TipoDocumento, string> = {
   reconocimiento_medico: "Reconocimiento médico",
   anexo_promocion: "Anexo de promoción",
   sancion_disciplinaria: "Sanción disciplinaria",
+  baja_voluntaria: "Carta de baja voluntaria",
+  baja_empresa: "Comunicación de baja de contrato",
   entrega_material: "Entrega de material",
   devolucion_material: "Devolución de material",
   merma_material: "Baja de material por deterioro",

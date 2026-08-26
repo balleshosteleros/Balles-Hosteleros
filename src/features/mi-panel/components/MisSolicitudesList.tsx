@@ -83,9 +83,21 @@ export function MisSolicitudesList({ refreshKey = 0, onChange }: MisSolicitudesL
                   </Badge>
                 </div>
                 <div className="text-xs text-muted-foreground mt-0.5">
-                  {formatFecha(s.fechaInicio)}
-                  {s.fechaFin && s.fechaFin !== s.fechaInicio && ` – ${formatFecha(s.fechaFin)}`}
-                  {s.horas != null && ` · ${s.horas}h`}
+                  {/* Pedir material no tiene rango de fechas: se enseña la prenda
+                      y el día en que se pidió, para dejar constancia. */}
+                  {s.tipo === "entrega" ? (
+                    <>
+                      {s.entregaTipoNombre ?? "—"}
+                      {s.entregaTalla && ` · talla ${s.entregaTalla}`}
+                      {` · pedida el ${formatFecha(s.fechaInicio)}`}
+                    </>
+                  ) : (
+                    <>
+                      {formatFecha(s.fechaInicio)}
+                      {s.fechaFin && s.fechaFin !== s.fechaInicio && ` – ${formatFecha(s.fechaFin)}`}
+                      {s.horas != null && ` · ${s.horas}h`}
+                    </>
+                  )}
                 </div>
                 {s.motivo && (
                   <div className="text-xs text-muted-foreground mt-1 line-clamp-2">{s.motivo}</div>

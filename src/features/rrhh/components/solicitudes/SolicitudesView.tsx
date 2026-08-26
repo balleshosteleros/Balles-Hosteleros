@@ -216,12 +216,22 @@ export function SolicitudesView() {
       th: <TableHead key="fechas">Fechas</TableHead>,
       td: (s) => (
         <TableCell key="fechas" className="text-sm">
-          {formatFecha(s.fechaInicio)}
-          {s.fechaFin && s.fechaFin !== s.fechaInicio && (
-            <> – {formatFecha(s.fechaFin)}</>
-          )}
-          {s.horas != null && (
-            <span className="text-muted-foreground"> · {s.horas}h</span>
+          {/* Una petición de material no tiene rango: su fecha es el día en que
+              se pidió, y se etiqueta para que no se lea como un periodo. */}
+          {s.tipo === "entrega" ? (
+            <span className="text-muted-foreground">
+              Pedida el {formatFecha(s.fechaInicio)}
+            </span>
+          ) : (
+            <>
+              {formatFecha(s.fechaInicio)}
+              {s.fechaFin && s.fechaFin !== s.fechaInicio && (
+                <> – {formatFecha(s.fechaFin)}</>
+              )}
+              {s.horas != null && (
+                <span className="text-muted-foreground"> · {s.horas}h</span>
+              )}
+            </>
           )}
         </TableCell>
       ),

@@ -15,6 +15,12 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { enviarActaEntregaAFirma } from "@/features/rrhh/services/entregas/enviar-a-firma";
 
+/** `yyyy-mm-dd` → `dd/mm/yyyy`, sin desplazar por zona horaria. */
+function formatFechaEs(iso: string): string {
+  const [a, m, d] = iso.split("-");
+  return a && m && d ? `${d}/${m}/${a}` : iso;
+}
+
 export interface SolicitudEntrega {
   id: string;
   empresa_id: string;
@@ -24,6 +30,8 @@ export interface SolicitudEntrega {
   entrega_talla: string | null;
   entrega_id: string | null;
   motivo: string | null;
+  /** Día en que el trabajador la pidió (`fecha_inicio` de la solicitud). */
+  fecha_inicio: string | null;
 }
 
 export interface MaterializarEntregaResult {
@@ -85,10 +93,18 @@ export async function materializarEntregaDeSolicitud(
     }
   }
 
+  // La entrega se fecha el día en que se da, no el que se pidió. Pero el día de
+  // la petición queda escrito en la nota, que es lo que ve el trabajador.
   const hoy = new Date().toISOString().slice(0, 10);
-  const nota = `Entregado a petición del trabajador.${
-    solicitud.motivo?.trim() ? ` Motivo: ${solicitud.motivo.trim()}` : ""
-  }`;
+  const pedidaEl = solicitud.fecha_inicio?.slice(0, 10);
+  const nota = [
+    pedidaEl
+      ? `Entregado a petición del trabajador (pedida el ${formatFechaEs(pedidaEl)}).`
+      : "Entregado a petición del trabajador.",
+    solicitud.motivo?.trim() ? `Motivo: ${solicitud.motivo.trim()}` : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
 
   const { data: cabecera, error: errCab } = await admin
     .from("entregas_material")

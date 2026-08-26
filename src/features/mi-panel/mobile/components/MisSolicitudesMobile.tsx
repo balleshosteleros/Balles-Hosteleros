@@ -155,13 +155,14 @@ export function MisSolicitudesMobile() {
                         {SUBTIPO_LABEL[s.subtipo]}
                       </p>
                     </div>
-                    {/* En una petición de material lo que importa es la prenda,
-                        no las fechas: no las tiene. */}
+                    {/* En una petición de material lo primero es la prenda; la
+                        fecha es la del día en que se pidió, para dejar constancia. */}
                     <p className="mt-1 text-xs text-muted-foreground">
                       {s.tipo === "entrega" ? (
                         <>
                           {s.entregaTipoNombre ?? "—"}
                           {s.entregaTalla && ` · talla ${s.entregaTalla}`}
+                          {` · pedida el ${formatFecha(s.fechaInicio)}`}
                         </>
                       ) : (
                         <>

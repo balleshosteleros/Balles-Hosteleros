@@ -2665,6 +2665,7 @@ export async function aprobarSolicitud(id: string, notasRevision?: string) {
           entrega_talla: (solicitud.entrega_talla as string | null) ?? null,
           entrega_id: (solicitud.entrega_id as string | null) ?? null,
           motivo: (solicitud.motivo as string | null) ?? null,
+          fecha_inicio: (solicitud.fecha_inicio as string | null) ?? null,
         },
         { userId: user.id, nombre: nombre || "Recursos Humanos" },
       );
