@@ -1,5 +1,7 @@
 <!-- INSTRUCCIÓN PRIORITARIA: Lee este archivo al iniciar cualquier sesión nueva antes de escribir código. -->
 
+- [AJUSTES vs CONFIGURACIÓN + coherencia visual](feedback/ajustes_vs_configuracion_y_diseno.md) — **texto literal de Iván, no reformular**. "Ajustes" = icono superior → Departamentos → departamento → módulo (90 %), o → Herramientas → herramienta si no pertenece a ningún departamento. "Configuración" = engranaje superior derecho del propio módulo/submódulo. No mezclar ambos. Y regla crítica de frontend: nunca inventar estilo nuevo si ya existe un patrón equivalente — consistencia > creatividad visual
+
 - [Estado Logística](project/logistica_estado.md) — BD poblada; pendiente reasignar proveedores y categorizar ingredientes
 - [Escandallos](project/escandallos.md) — son la composición interna del producto de venta, no lista aparte
 - [Modo autónomo](feedback/autonomia.md) — ejecutar sin pedir confirmación; elegir defaults sensatos
