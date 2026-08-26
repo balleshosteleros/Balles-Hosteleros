@@ -1,3 +1,16 @@
+// ⚠️⚠️⚠️ HISTÓRICO — NO USAR ⚠️⚠️⚠️
+//
+// Migración catálogo Ágora -> Balles del 10-jun-2026. Se conserva solo como registro.
+//
+// En modo --write BORRA EL CATÁLOGO ENTERO de Bacanal y Habana antes de insertar,
+// y el CASCADE destruye recetas (producto_composicion), stock y precios. La tabla
+// "backup_agora" que menciona el log NO existe: no hay red de seguridad. Ejecutarlo
+// hoy destruiría los ~119+20 productos creados a mano después de la migración y los
+// escandallos de cocina. Ya pasó una vez: las ~208 recetas reales se perdieron así.
+//
+// El camino vigente es el importador INCREMENTAL (Logística → Importar catálogo del
+// TPV), que crea y vincula sin borrar jamás.
+//
 // Migración catálogo Ágora -> Balles (Bacanal + Habana).
 // Lee /tmp/migracion.json (generado desde el Excel con todas las reglas) y enriquece
 // coste/unidad/stock desde la API de Ágora. DRY-RUN por defecto; --write ejecuta.
@@ -6,6 +19,21 @@ import { readFileSync, existsSync } from 'fs';
 import { resolve } from 'path';
 
 const WRITE = process.argv.includes('--write');
+// Guarda dura: la rama --write es DESTRUCTIVA (borra el catálogo entero de ambas
+// empresas). Exige doble confirmación explícita e imposible de teclear por accidente.
+if (WRITE) {
+  const flagOk = process.argv.includes('--confirmo-borrado-total');
+  const envOk = process.env.MIGRAR_CATALOGO_PELIGRO === 'SI';
+  if (!flagOk || !envOk) {
+    console.error('\n⛔ BLOQUEADO. Este script HISTÓRICO borra el catálogo ENTERO de Bacanal y');
+    console.error('Habana (productos, recetas, stock y precios vía CASCADE) antes de insertar.');
+    console.error('No existe backup. Casi seguro NO quieres esto: usa el importador incremental');
+    console.error('(Logística → Importar catálogo del TPV).');
+    console.error('\nPara ejecutarlo de verdad hacen falta LAS DOS cosas:');
+    console.error('  MIGRAR_CATALOGO_PELIGRO=SI node migrar-catalogo-2026-06-10.mjs --write --confirmo-borrado-total');
+    process.exit(1);
+  }
+}
 function loadEnv() {
   const p = resolve(process.cwd(), '.env.local');
   for (const line of readFileSync(p, 'utf-8').split('\n')) {

@@ -35,6 +35,54 @@ Ejecutado `~/agora-connectivity.sh` (GET **sin token**, solo lectura) desde fuer
 
 **Catálogo** `GET /api/export-master/?filter=Products` → `{ "Products": [ {...} ] }`. **1253 productos** (639 activos, sin `DeletionDate`), `Id` 1..2622. Campos por producto: `Id` (int), `Name`, `FamilyId`, `VatId`, `Prices:[{PriceListId, MainPrice}]`, `CostPrices:[{WarehouseId, CostPrice}]`, `DeletionDate` (los borrados lo traen), `IsMenu`.
 
+#### ⚠️ Cómo leer el catálogo sin equivocarse (verificado contra el servidor el 2026-08-26)
+
+Cuatro campos se malinterpretan con facilidad y ya han provocado cifras falsas. Esta es la
+lectura correcta, comprobada contra datos reales:
+
+**1. La familia dice a qué LOCAL pertenece el producto — el catálogo NO es común.**
+De las 58 familias que devuelve `?filter=Families`, **55 están borradas** (traen `DeletionDate`;
+entre ellas todas las históricas tipo `RONES BACANAL`, `GINS BACANAL`, `MENUS BACANAL` y también
+`BACA/MENU`, borrada el 2025-05-26). **Solo 3 están vivas y se reparten los 639 productos activos:**
+
+| FamilyId | Nombre | Productos activos | Pertenece a |
+|---|---|---|---|
+| 162 | `HABANA` | 155 | solo Habana |
+| 163 | `BACANAL` | 224 | solo Bacanal |
+| 164 | `HABA/BACA` | 260 | las dos |
+
+→ **Regla de filtrado (simple y suficiente): Bacanal = familias {163, 164}; Habana = {162, 164}.**
+Sin filtrar, cada empresa se comería ~180 productos del otro local. Con el filtro, el hueco real
+frente a lo que ya hay en Balles es **97 en Bacanal** (21 a vincular por nombre + 76 altas) y
+**45 en Habana** (10 a vincular + 35 altas), no los 252/269 que salían sin filtrar.
+
+**2. El precio de venta está en `Prices[].MainPrice` con `PriceListId = 1`.** No existe
+`SalePrices[].Price` (buscarlo ahí devuelve 0 productos con precio). Hay 4 listas —1, 8, 10 y 13—
+y **la 1 es la que casa con la carta en las DOS empresas**: Danza Macabra L1=9,75 € (carta 9,75),
+Fiesta del Caribe L1=9,25 (carta 9,25), Croquetas Jamón Ibérico L1=14,15 (carta 14,15),
+SEXY GREEN L1=15,50 (carta 15,50). Es además la más poblada (433 productos frente a 402/396/388).
+Las otras listas son tarifas alternativas: la 8 es sensiblemente más alta y la 10 tiene huecos
+(p. ej. Boom-Boom trae `L10=null` con `L1=9.75`). **Ojo, no confundir con la escritura**: el envío
+de precios *hacia* Ágora usa otra lista por empresa; eso es un flujo distinto y no aplica aquí.
+
+**3. `Addins` / `AskForAddins` NO significa "es una elaboración".** En Ágora significa *"al vender,
+pregunta por complementos"* (un gin-tonic pregunta qué tónica). Usarlo como señal de elaboración
+da 249 falsos positivos solo en Bacanal. **No hay ningún campo en Ágora que distinga
+compra / venta / elaboración**: esa clasificación es nuestra y hay que deducirla (tiene precio en
+la lista 1 → se vende; solo tiene coste y stock → se compra) y **someterla a aprobación humana**.
+
+**4. `CostPrice` no es fiable.** Viene corrupto en bastantes filas: Carrillera Ternera a 4.149,90 €,
+varios cócteles de Habana a 57-70 € con stock en decimales (0,064 · 0,097 · −0,023) — señal de que
+en Ágora el cóctel está dado de alta como si fuera la botella entera. **Nunca importarlo como coste
+en silencio**: proponerlo, marcar en rojo lo que se salga de rango y que lo apruebe el cliente. El
+coste bueno debe salir del escandallo, no de aquí.
+
+**5. `DeletionDate != null` = producto borrado.** Filtrar siempre (`1253 → 639`). Aplica igual a
+las familias.
+
+Recetas: **Ágora no las exporta** por `export-master` (solo vía `custom-query` con un `QueryGuid`
+de un informe creado en su back-office).
+
 **Ventas** `GET /api/export/?business-day=YYYY-MM-DD&filter=Invoices` → `{ "Invoices": [ { Serie, Number, BusinessDay, Workplace:{Id,Name}, DocumentType:"BasicInvoice", InvoiceItems:[ { GlobalId, Guests, SaleCenter, Lines:[ {...} ] } ] } ] }`. Muestra 2026-06-06: **123 facturas, 617 líneas**.
 
 **Línea de venta** (`InvoiceItems[].Lines[]`) — campos confirmados:

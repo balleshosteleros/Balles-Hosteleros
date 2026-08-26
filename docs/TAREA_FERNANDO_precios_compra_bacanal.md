@@ -1,7 +1,50 @@
 # TAREA para Fernando — Precios de compra de BACANAL (cuando bajes el repo)
 
-> **De:** Iván (vía Claude) · **Fecha:** 2026-06-30 · **Actualizado:** 2026-08-25 · **Prioridad:** media
+> **De:** Iván (vía Claude) · **Fecha:** 2026-06-30 · **Actualizado:** 2026-08-26 · **Prioridad:** media
 > Léelo al hacer `git pull` y reconciliar.
+
+---
+
+## ✅ 26-AGO (Fernando) — HALLAZGOS CONFIRMADOS + 4 ARREGLOS HECHOS
+
+> **Iván / su agente: esto es información, no hay nada que hacer.** Lo pongo arriba para que no
+> se trabaje sobre datos viejos.
+
+**He verificado vuestros hallazgos contra Ágora en vivo (solo lectura) y contra la BD. Cuadran.**
+Los números de familia son exactos: faltan **97 en Bacanal** y **45 en Habana**, no 252/269.
+
+**Y he podido cerrar dos cosas que se quedaron abiertas:**
+
+1. **Las familias son más simples de lo que parecía.** De las 58 familias, **55 están borradas**
+   (incluidas `RONES BACANAL`, `GINS BACANAL`, `MENUS BACANAL` y también `BACA/MENU`, borrada en
+   mayo-2025). **Solo quedan 3 vivas** y se reparten los 639 productos: `HABANA` (162) 155 ·
+   `BACANAL` (163) 224 · `HABA/BACA` (164) 260. → La regla de filtrado es directa:
+   **Bacanal = {163, 164}; Habana = {162, 164}.** No hace falta heurística por nombre.
+2. **La lista de precios buena es la 1, para las DOS empresas** (había duda entre la 1 y la 10).
+   Comprobado contra precios de carta conocidos: Danza Macabra 9,75 · Fiesta del Caribe 9,25 ·
+   Croquetas 14,15 · SEXY GREEN 15,50 — todos casan con `PriceListId 1`. La 10 además tiene
+   huecos (Boom-Boom viene a null). Todo esto queda escrito en
+   `docs/AGORA_INTEGRACION_ESTADO_Y_PLAN.md` como spec del importador.
+
+**Arreglado hoy en producción (4 cosas, todas verificadas):**
+
+- 🔒 **El script `migrar-catalogo.mjs` ya no puede dispararse por accidente.** Era el riesgo más
+  serio que había encima de la mesa: borraba el catálogo entero de las dos empresas y el CASCADE
+  se llevaba recetas, stock y precios (y el "backup" que mencionaba no existe). Hoy destruiría los
+  ~139 productos creados a mano después de junio y los escandallos de cocina. Movido a
+  `scripts/agora/_historico/` y bloqueado: en modo escritura aborta salvo que se le pasen dos
+  confirmaciones explícitas a la vez. **El importador nuevo será incremental: no borrará nunca.**
+- ✅ **Los 2 pares de bebida rotos, enlazados**: `Gyozas Vegetales` (Bacanal) y `Absolut` (Habana)
+  ya tienen su enlace venta→compra. Quedan los 203 pares completos. Ojo Iván: el de Absolut es un
+  espejo 1:1 provisional — una copa no es una botella entera, el ratio real hay que ponerlo con la
+  receta de verdad (igual que en los otros ~200).
+- 🧹 **Borrado el escandallo "PRUEBA"** de Habana (estaba vacío y era el único de los 23 que no
+  sincronizaba). Quedan 22, todos correctos.
+- 🧹 **Los 6 platos huérfanos de Habana, desactivados** (Alitas, Bao-cadillo, Burger Balles,
+  Ensaladilla rusa, Gyozas de pollo, Torreznos). Confirmado en Ágora que los 6 son de la familia
+  **163 BACANAL**: estaban creados por error en Habana. No tenían ventas, stock ni recetas. Los he
+  puesto **Inactivos, no borrados** (reversible por si alguno se sirve de verdad en Habana —
+  Iván, si es así dilo y lo reactivo).
 
 ---
 

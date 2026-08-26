@@ -19,7 +19,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import type { AgoraSyncStatus } from "@/features/logistica/types/agora";
 
 // ─── MAPA ALMACÉN ÁGORA → EMPRESA BALLES ─────────────────────────────────────
-// Mismo mapeo que la migración del catálogo (scripts/agora/migrar-catalogo.mjs).
+// Mismo mapeo que la migración del catálogo
+// (scripts/agora/_historico/migrar-catalogo-2026-06-10.mjs).
 // Almacenes Ágora: 1=HABANA FUENLABRADA · 2=almacén 2 · 3=HABANA GETAFE ·
 // 4=BACANAL FUENLABRADA · 5=HABANA ALCORCÓN. Getafe/Alcorcón pendientes de alcance.
 
