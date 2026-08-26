@@ -230,22 +230,48 @@ export async function getEmployees() {
   // que el proxy empezó a marcarla. Mostramos el MÁS RECIENTE de los dos: el
   // login dice cuándo entró, la actividad dice hasta cuándo estuvo usándolo.
   const ultimoLoginPorUser = new Map<string, string>()
+  const PER_PAGE = 1000
   try {
     // listUsers pagina de 50 en 50 por defecto; recorremos hasta agotar.
+    let loteFallido = false
     for (let page = 1; page <= 40; page++) {
       const { data: authPage, error: authError } = await admin.auth.admin.listUsers({
         page,
-        perPage: 1000,
+        perPage: PER_PAGE,
       })
-      if (authError) break
+      if (authError) {
+        // Un ÚNICO usuario con columnas de token a NULL (en vez de '') hace que
+        // GoTrue aborte el lote entero, y entonces NADIE tendría última conexión.
+        // Marcamos para reintentar de uno en uno y salvar al resto.
+        loteFallido = true
+        console.error('[getEmployees] listUsers falló en el lote:', authError.message)
+        break
+      }
       const usuariosAuth = authPage?.users ?? []
       for (const u of usuariosAuth) {
         if (u.last_sign_in_at) ultimoLoginPorUser.set(u.id, u.last_sign_in_at)
       }
-      if (usuariosAuth.length < 1000) break
+      if (usuariosAuth.length < PER_PAGE) break
     }
-  } catch {
+
+    // Repliegue: uno a uno, saltando solo el registro corrupto en lugar de
+    // perder la columna para todos los usuarios.
+    if (loteFallido) {
+      ultimoLoginPorUser.clear()
+      for (let page = 1; page <= 5000; page++) {
+        const { data: unaPagina, error: errorUno } = await admin.auth.admin.listUsers({
+          page,
+          perPage: 1,
+        })
+        if (errorUno) continue // usuario ilegible: lo saltamos, seguimos con los demás
+        const u = unaPagina?.users?.[0]
+        if (!u) break
+        if (u.last_sign_in_at) ultimoLoginPorUser.set(u.id, u.last_sign_in_at)
+      }
+    }
+  } catch (e) {
     // Sin acceso a Auth admin caemos a ultima_actividad: peor dato, no un fallo.
+    console.error('[getEmployees] Auth admin no disponible:', e)
   }
 
   const masReciente = (a: string | null, b: string | null): string | null => {
