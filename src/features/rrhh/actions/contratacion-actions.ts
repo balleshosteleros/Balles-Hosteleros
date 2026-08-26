@@ -187,6 +187,63 @@ async function vincularPuestoPrincipal(admin: Admin, empleadoId: string, puestoI
   }
 }
 
+/**
+ * Asigna al empleado recién contratado el HORARIO del puesto (patrón oficial
+ * vigente de la familia elegida en `puesto_salarios.patron_familia_id`, con el
+ * fallback legacy de la plantilla propia del puesto).
+ *
+ * Va con el cliente ADMIN a propósito: la contratación entera corre con admin y
+ * el empleado acaba de nacer, así que no se puede depender de que las políticas
+ * RLS del contratante alcancen ya sus filas.
+ *
+ * Devuelve `false` si el puesto no tiene horario configurado — eso NO es un
+ * error (hay puestos sin patrón), pero se avisa a RRHH para que no pase
+ * desapercibido: un empleado sin horario no genera cuadrante.
+ */
+async function asignarHorarioDelPuesto(
+  admin: Admin,
+  empresaId: string,
+  empleadoId: string,
+  puestoId: string,
+  userId: string,
+  primerDia: string,
+): Promise<boolean> {
+  const { data: salario } = await admin
+    .from("puesto_salarios").select("patron_familia_id").eq("puesto_id", puestoId).maybeSingle();
+
+  let patronId: string | null = null;
+  const familiaId = (salario?.patron_familia_id as string | null | undefined) ?? null;
+  if (familiaId) {
+    const { data: oficial } = await admin
+      .from("rrhh_patrones").select("id")
+      .eq("empresa_id", empresaId).eq("familia_id", familiaId).eq("es_oficial", true)
+      .maybeSingle();
+    patronId = (oficial?.id as string | undefined) ?? null;
+  }
+  if (!patronId) {
+    // Fallback legacy: plantilla propia del puesto.
+    const { data: propio } = await admin
+      .from("rrhh_patrones").select("id").eq("puesto_id", puestoId).eq("es_oficial", true).maybeSingle();
+    patronId = (propio?.id as string | undefined) ?? null;
+  }
+  if (!patronId) return false;
+
+  const { error } = await admin
+    .from("rrhh_patron_empleados")
+    .upsert(
+      {
+        patron_id: patronId,
+        empleado_id: empleadoId,
+        vigente_desde: primerDia,
+        vigente_hasta: null,
+        asignado_por_user_id: userId,
+      },
+      { onConflict: "patron_id,empleado_id" },
+    );
+  if (error) throw new Error(error.message);
+  return true;
+}
+
 async function guardarSnapshotCondiciones(
   admin: Admin,
   empresaId: string,
@@ -465,10 +522,18 @@ export async function contratarCandidato(input: ContratarInput): Promise<Contrat
   // empleado en el candidato). Si alguno falla, la contratación queda a medias:
   // borramos el empleado recién creado, revertimos el lock del candidato y
   // avisamos a RRHH. Así el candidato vuelve a ser contratable con un solo clic.
+  let horarioAsignado = false;
   try {
     await admin.from("empleados").update({ fecha_alta: input.primerDia }).eq("id", alta.empleadoId);
     await vincularPuestoPrincipal(admin, alta.empleadoId, input.puestoId, puesto.nombre as string, input.primerDia);
     await guardarSnapshotCondiciones(admin, empresaId, alta.empleadoId, input.puestoId, puesto.nombre as string, nivelHeredado, input.primerDia, tipoContrato, cond);
+    // El HORARIO del puesto se hereda aquí, dentro del bloque crítico: un empleado
+    // sin patrón no aparece en el cuadrante ni acumula horas, así que no puede
+    // quedarse fuera del alta. Antes solo lo asignaban la promoción interna y la
+    // edición manual de puestos, y quien entraba por contratación nacía sin horario.
+    horarioAsignado = await asignarHorarioDelPuesto(
+      admin, empresaId, alta.empleadoId, input.puestoId, alta.userId, input.primerDia,
+    );
 
     // El departamento validador y el calendario de vacaciones ya los ha
     // heredado del puesto el propio núcleo del alta (`puestoId`), así que aquí
@@ -508,6 +573,29 @@ export async function contratarCandidato(input: ContratarInput): Promise<Contrat
       });
     } catch (e) {
       console.error("[contratacion] aviso validador pendiente:", e);
+    }
+  }
+
+  // Aviso a RRHH si el PUESTO no tenía horario: el empleado nace sin patrón, no
+  // aparecerá en el cuadrante y no acumulará horas previstas. No bloquea la
+  // contratación (hay puestos legítimamente sin horario fijo), pero tiene que
+  // verse en vez de descubrirse semanas después con el cuadrante vacío.
+  if (!horarioAsignado) {
+    try {
+      await emitirNotificacion({
+        empresaId,
+        system: true,
+        tipo: "horario_no_configurado",
+        titulo: `Definir horario del puesto ${puesto.nombre}`,
+        mensaje: `El puesto ${puesto.nombre} no tiene horario asignado, así que ${fullName} se ha creado sin patrón y no aparecerá en el cuadrante. Asígnale un horario al puesto y vuelve a vincularlo desde su ficha.`,
+        segmento: { tipo: "area", area: "ADMINISTRATIVA" },
+        refTabla: "empleados",
+        refId: alta.empleadoId,
+        accionUrl: "/rrhh/puestos",
+        dedupeKey: `horario_pendiente:${alta.empleadoId}`,
+      });
+    } catch (e) {
+      console.error("[contratacion] aviso horario pendiente:", e);
     }
   }
 
