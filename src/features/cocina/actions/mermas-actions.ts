@@ -4,7 +4,10 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { getLogisticaContext } from "@/features/logistica/lib/supabase-context";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { registrarMovimiento } from "@/features/logistica/services/kardex";
+import {
+  registrarMovimiento,
+  revertirMovimientosPorDocumento,
+} from "@/features/logistica/services/kardex";
 
 export interface MermaRow {
   id: string;
@@ -103,10 +106,59 @@ export async function createMerma(
     );
 
     revalidatePath("/cocina/mermas");
+    revalidatePath("/logistica/stock");
+    revalidatePath("/logistica/movimientos");
     return { ok: true };
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Error desconocido";
     console.error("[mermas] createMerma:", msg);
+    return { ok: false, error: msg };
+  }
+}
+
+/**
+ * Borra una merma y **devuelve al stock lo que descontó**.
+ *
+ * POR QUÉ: una merma se apunta con prisa, en cocina, y equivocarse es normal (producto
+ * confundido, cantidad de más, apuntada dos veces). Hasta ahora no había forma de
+ * deshacerla: la fila se quedaba y el stock descontado también, así que la única salida
+ * era apuntar una entrada falsa para compensar — que ensucia el histórico y engaña al
+ * recuento. Los inventarios ya se podían revertir; las mermas no.
+ *
+ * El orden importa: primero se revierte el kardex (que devuelve el saldo y borra el
+ * movimiento) y solo después se borra la fila. Si se hiciera al revés y fallara la
+ * reversión, quedaría un movimiento huérfano apuntando a una merma que ya no existe.
+ */
+export async function deleteMerma(id: string): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const { empresaId } = await getLogisticaContext();
+    if (!empresaId) return { ok: false, error: "No autenticado" };
+
+    const admin = createAdminClient();
+    // La merma tiene que ser de la empresa activa.
+    const { data: merma } = await admin
+      .from("mermas")
+      .select("id")
+      .eq("id", id)
+      .eq("empresa_id", empresaId)
+      .maybeSingle();
+    if (!merma) return { ok: false, error: "Esa merma no existe o no es de esta empresa" };
+
+    await revertirMovimientosPorDocumento(
+      { empresaId, documentoTipo: "merma", documentoId: id },
+      admin,
+    );
+
+    const { error } = await admin.from("mermas").delete().eq("id", id).eq("empresa_id", empresaId);
+    if (error) throw error;
+
+    revalidatePath("/cocina/mermas");
+    revalidatePath("/logistica/stock");
+    revalidatePath("/logistica/movimientos");
+    return { ok: true };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Error desconocido";
+    console.error("[mermas] deleteMerma:", msg);
     return { ok: false, error: msg };
   }
 }

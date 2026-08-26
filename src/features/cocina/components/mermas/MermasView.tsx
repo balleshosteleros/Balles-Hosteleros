@@ -33,7 +33,7 @@ import {
 } from "@/shared/components/SubmoduleToolbar";
 import { listProductos } from "@/features/logistica/actions/producto-actions";
 import type { Producto, TipoProducto } from "@/features/logistica/data/productos";
-import { listMermas, createMerma, type MermaRow } from "@/features/cocina/actions/mermas-actions";
+import { listMermas, createMerma, deleteMerma, type MermaRow } from "@/features/cocina/actions/mermas-actions";
 import { formatFechaEnZona } from "@/features/empresa/lib/zona-horaria";
 
 // `created_at` es un INSTANTE: la fecha mostrada se calcula en la zona de la empresa (PRP-069).
@@ -130,7 +130,26 @@ export function MermasView() {
     { campo: "producto", label: "Producto" },
     { campo: "cantidad", label: "Cantidad" },
     { campo: "motivo", label: "Motivo" },
+    { campo: "acciones", label: "Deshacer", bloqueada: true },
   ];
+
+  // ─── Deshacer una merma ───
+  const [mermaABorrar, setMermaABorrar] = useState<MermaRow | null>(null);
+  const [borrandoId, setBorrandoId] = useState<string | null>(null);
+
+  const confirmarBorrado = async () => {
+    if (!mermaABorrar) return;
+    setBorrandoId(mermaABorrar.id);
+    const res = await deleteMerma(mermaABorrar.id);
+    setBorrandoId(null);
+    setMermaABorrar(null);
+    if (res.ok) {
+      toast.success("Merma deshecha: el stock vuelve a como estaba");
+      await recargar();
+    } else {
+      toast.error(res.error ?? "No se pudo deshacer la merma");
+    }
+  };
 
   const columnDefs: Record<string, { th: ReactNode; td: (m: MermaRow) => ReactNode }> = {
     fecha: {
@@ -153,6 +172,24 @@ export function MermasView() {
     motivo: {
       th: <TableHead key="motivo" className="text-xs">Motivo</TableHead>,
       td: (m) => <TableCell key="motivo" className="text-sm text-muted-foreground">{m.motivo}</TableCell>,
+    },
+    // Deshacer va siempre visible (no es una columna que se pueda ocultar): una merma
+    // mal apuntada descuenta stock de verdad y hay que poder corregirla en el momento.
+    acciones: {
+      th: <TableHead key="acciones" className="text-xs text-right w-[110px]">Deshacer</TableHead>,
+      td: (m) => (
+        <TableCell key="acciones" className="text-right">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-muted-foreground hover:text-destructive"
+            disabled={borrandoId === m.id}
+            onClick={() => setMermaABorrar(m)}
+          >
+            {borrandoId === m.id ? "Deshaciendo…" : "Deshacer"}
+          </Button>
+        </TableCell>
+      ),
     },
   };
 
@@ -262,6 +299,44 @@ export function MermasView() {
               disabled={guardando || !productoId || !cantidad.trim() || !motivo.trim()}
             >
               {guardando ? "Guardando…" : "Registrar merma"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Deshacer una merma devuelve stock de verdad, así que se confirma diciendo
+          exactamente qué producto y cuánto va a volver al almacén. */}
+      <Dialog open={mermaABorrar !== null} onOpenChange={(v) => !v && setMermaABorrar(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>¿Deshacer esta merma?</DialogTitle>
+          </DialogHeader>
+          {mermaABorrar && (
+            <div className="space-y-3 text-sm">
+              <p>
+                Volverán al almacén{" "}
+                <strong className="tabular-nums">
+                  {mermaABorrar.cantidad.toLocaleString("es-ES", { maximumFractionDigits: 2 })}
+                  {mermaABorrar.unidad ? ` ${mermaABorrar.unidad}` : ""}
+                </strong>{" "}
+                de <strong>{mermaABorrar.producto_nombre ?? "este producto"}</strong>.
+              </p>
+              <p className="text-muted-foreground">
+                Se borra el apunte y su movimiento, así que el almacén queda como si nunca se
+                hubiera registrado. Úsalo solo si fue un error.
+              </p>
+            </div>
+          )}
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setMermaABorrar(null)}
+              disabled={borrandoId !== null}
+            >
+              Cancelar
+            </Button>
+            <Button variant="destructive" onClick={confirmarBorrado} disabled={borrandoId !== null}>
+              {borrandoId !== null ? "Deshaciendo…" : "Sí, deshacer"}
             </Button>
           </DialogFooter>
         </DialogContent>

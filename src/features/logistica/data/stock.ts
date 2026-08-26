@@ -1,7 +1,14 @@
 // ─── Types ────────────────────────────────────────────────
 
 export interface ProductoStock {
+  /**
+   * OJO: es el id de la FILA DE STOCK si el producto ya tiene existencias registradas, y
+   * el del PRODUCTO si todavía no. Sirve para editar mínimos y máximos, pero no para
+   * identificar el producto — para eso está `productoId`.
+   */
   id: string;
+  /** Id del producto, siempre. Lo necesita todo lo que pasa por el kardex. */
+  productoId?: string;
   nombre: string;
   categoria: string;
   unidad: string;

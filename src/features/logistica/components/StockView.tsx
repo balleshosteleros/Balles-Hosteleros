@@ -9,7 +9,12 @@ import {
   CATEGORIAS_STOCK, type ProductoStock, type TemporadaStock,
 } from "@/features/logistica/data/stock";
 import { listTemporadas, updateTemporada } from "@/features/logistica/actions/temporadas-actions";
-import { listStock, updateStock as updateStockAction, updateStockBatch } from "@/features/logistica/actions/stock-actions";
+import {
+  listStock,
+  updateStock as updateStockAction,
+  updateStockBatch,
+  crearAjusteStock,
+} from "@/features/logistica/actions/stock-actions";
 import { listProductos } from "@/features/logistica/actions/producto-actions";
 import TemporadasConfig from "@/features/logistica/components/stock/TemporadasConfig";
 import { Input } from "@/components/ui/input";
@@ -23,7 +28,7 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Popover, PopoverContent, PopoverTrigger } from "@/shared/components/ui/popover";
 import {
-  ArrowUpDown, Pencil, Check, X, Sun, Settings, ChevronDown, ShoppingCart, FlaskConical, ArrowLeft,
+  ArrowUpDown, Pencil, Check, X, Sun, Settings, ChevronDown, ShoppingCart, FlaskConical, ArrowLeft, Scale,
 } from "lucide-react";
 import {
   SubmoduleToolbar,
@@ -121,6 +126,7 @@ export function StockView() {
         const s = stockByProductoId.get(p.id) ?? stockByNombre.get(p.nombre.toLowerCase());
         return {
           id: s?.id ?? p.id,
+          productoId: p.id,
           nombre: p.nombre,
           categoria: p.categoria || "Otros",
           unidad: p.medida,
@@ -285,6 +291,56 @@ export function StockView() {
     else { toast.error("Error al actualizar stock"); loadStockData(); }
   };
   const cancelEdit = () => setEditingId(null);
+
+  // ─── Corregir existencias (ajuste con motivo, vía kardex) ───────────────────
+  // Editar la cantidad a pelo descuadraría el histórico: el listado diría una cosa y los
+  // movimientos otra. Aquí se registra un movimiento de ajuste, con su motivo, igual que
+  // hacen las compras, las ventas y los inventarios.
+  const [ajusteProducto, setAjusteProducto] = useState<(ProductoStock & { displayMaximo: number; displaySeguridad: number }) | null>(null);
+  const [ajusteCantidad, setAjusteCantidad] = useState("");
+  const [ajusteMotivo, setAjusteMotivo] = useState("");
+  const [ajusteGuardando, setAjusteGuardando] = useState(false);
+
+  const abrirAjuste = (p: ProductoStock & { displayMaximo: number; displaySeguridad: number }) => {
+    setAjusteProducto(p);
+    setAjusteCantidad(String(p.stockActual ?? 0));
+    setAjusteMotivo("");
+  };
+
+  const guardarAjuste = async () => {
+    if (!ajusteProducto?.productoId) return;
+    const cantidadNueva = Number(String(ajusteCantidad).replace(",", "."));
+    if (!Number.isFinite(cantidadNueva) || cantidadNueva < 0) {
+      toast.error("La cantidad no es válida");
+      return;
+    }
+    setAjusteGuardando(true);
+    const res = await crearAjusteStock({
+      productoId: ajusteProducto.productoId,
+      cantidadNueva,
+      motivo: ajusteMotivo,
+    });
+    setAjusteGuardando(false);
+    if (res.ok) {
+      const diff = (res.saldoResultante ?? 0) - (res.saldoAnterior ?? 0);
+      toast.success(
+        diff === 0
+          ? "No había nada que corregir"
+          : `Existencias corregidas (${diff > 0 ? "+" : ""}${diff.toLocaleString("es-ES", { maximumFractionDigits: 2 })})`,
+      );
+      setAjusteProducto(null);
+      loadStockData();
+    } else {
+      toast.error(res.error ?? "No se pudo corregir las existencias");
+    }
+  };
+
+  const diferenciaAjuste = (() => {
+    if (!ajusteProducto) return 0;
+    const n = Number(String(ajusteCantidad).replace(",", "."));
+    if (!Number.isFinite(n)) return 0;
+    return n - (ajusteProducto.stockActual ?? 0);
+  })();
 
   // Resolve which product ids the mass edit should target based on scope
   const massTargetIds = useMemo<Set<string>>(() => {
@@ -768,7 +824,10 @@ export function StockView() {
                                 <Button size="icon" variant="ghost" className="h-7 w-7" onClick={cancelEdit} title="Cancelar" aria-label="Cancelar"><X className="h-3.5 w-3.5 text-destructive" /></Button>
                               </div>
                             ) : (
-                              <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => startEdit(p)} title="Editar" aria-label="Editar"><Pencil className="h-3.5 w-3.5" /></Button>
+                              <div className="flex gap-1">
+                                <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => startEdit(p)} title="Editar mínimo y máximo" aria-label="Editar mínimo y máximo"><Pencil className="h-3.5 w-3.5" /></Button>
+                                <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => abrirAjuste(p)} title="Corregir existencias" aria-label="Corregir existencias"><Scale className="h-3.5 w-3.5" /></Button>
+                              </div>
                             )}
                           </td>
                         </tr>
@@ -785,6 +844,73 @@ export function StockView() {
             </>
           )}
       </div>
+
+      {/* Corregir existencias: deja movimiento de ajuste en el kardex, con motivo. */}
+      <Dialog open={ajusteProducto !== null} onOpenChange={(v) => !v && setAjusteProducto(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Corregir existencias</DialogTitle>
+          </DialogHeader>
+          {ajusteProducto && (
+            <div className="space-y-4">
+              <div>
+                <p className="font-medium">{ajusteProducto.nombre}</p>
+                <p className="text-sm text-muted-foreground">
+                  Ahora mismo constan{" "}
+                  <strong className="tabular-nums">
+                    {ajusteProducto.stockActual.toLocaleString("es-ES", { maximumFractionDigits: 2 })}
+                  </strong>{" "}
+                  {ajusteProducto.unidad}
+                </p>
+              </div>
+
+              <div>
+                <Label>Existencias reales</Label>
+                <Input
+                  type="number"
+                  min="0"
+                  step="any"
+                  value={ajusteCantidad}
+                  onChange={(e) => setAjusteCantidad(e.target.value)}
+                  autoFocus
+                />
+                {diferenciaAjuste !== 0 && (
+                  <p className={`mt-1 text-xs ${diferenciaAjuste > 0 ? "text-emerald-600" : "text-amber-600"}`}>
+                    {diferenciaAjuste > 0 ? "Entrarán" : "Saldrán"}{" "}
+                    {Math.abs(diferenciaAjuste).toLocaleString("es-ES", { maximumFractionDigits: 2 })}{" "}
+                    {ajusteProducto.unidad} en el almacén.
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <Label>
+                  Motivo <span className="text-destructive">*</span>
+                </Label>
+                <textarea
+                  value={ajusteMotivo}
+                  onChange={(e) => setAjusteMotivo(e.target.value)}
+                  rows={2}
+                  placeholder="Por qué no cuadraba (recuento, error al recibir, rotura no apuntada…)"
+                  className="mt-1 block w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                />
+                <p className="mt-1 text-[11px] text-muted-foreground">
+                  Queda registrado en los movimientos del almacén, con quién y cuándo. Para
+                  recontar una categoría entera es mejor un inventario.
+                </p>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAjusteProducto(null)} disabled={ajusteGuardando}>
+              Cancelar
+            </Button>
+            <Button onClick={guardarAjuste} disabled={ajusteGuardando || !ajusteMotivo.trim()}>
+              {ajusteGuardando ? "Guardando…" : "Corregir"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Mass Edit Dialog */}
       <Dialog open={massOpen} onOpenChange={setMassOpen}>

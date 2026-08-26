@@ -1,6 +1,8 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { getLogisticaContext } from "@/features/logistica/lib/supabase-context";
+import { registrarMovimiento } from "@/features/logistica/services/kardex";
 
 async function getContext() {
   const { supabase, userId, empresaId } = await getLogisticaContext();
@@ -24,21 +26,114 @@ export async function listStock() {
   }
 }
 
+/**
+ * Ajusta los TOPES de un producto (mínimo de seguridad y máximo de reposición).
+ *
+ * Deliberadamente NO permite tocar `cantidad_actual`: ese saldo lo mantiene el kardex
+ * (`stock_movimientos`) y escribirlo a mano lo descuadraría — el histórico diría una cosa
+ * y el listado otra, sin rastro de quién lo cambió ni por qué. Para corregir existencias
+ * está `crearAjusteStock`, que deja el movimiento correspondiente.
+ */
 export async function updateStock(
   id: string,
-  input: { cantidad?: number; cantidad_minima?: number; cantidad_maxima?: number; notas?: string }
+  input: { cantidad_minima?: number; cantidad_maxima?: number; notas?: string }
 ) {
   try {
     const { supabase } = await getContext();
     const { error } = await supabase
       .from("stock")
-      .update({ ...input, updated_at: new Date().toISOString() })
+      .update({
+        cantidad_minima: input.cantidad_minima,
+        cantidad_maxima: input.cantidad_maxima,
+        notas: input.notas,
+        updated_at: new Date().toISOString(),
+      })
       .eq("id", id);
     if (error) throw error;
     return { ok: true };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : "Error desconocido";
     console.error("[stock] updateStock:", msg);
+    return { ok: false, error: msg };
+  }
+}
+
+/**
+ * Corrige las existencias de un producto dejando constancia en el kardex.
+ *
+ * POR QUÉ EXISTE: hasta ahora la única forma de corregir una cantidad era escribirla
+ * directamente en la tabla de stock, saltándose el histórico. El saldo quedaba bien pero
+ * el kardex no cuadraba, y nadie podía saber después de dónde salía esa diferencia.
+ *
+ * Aquí el motivo es OBLIGATORIO (mismo criterio que las mermas): un ajuste sin explicación
+ * es exactamente lo que hace que un inventario no se pueda auditar seis meses después.
+ * Para un recuento completo de una categoría es mejor un inventario, que además guarda el
+ * conteo; esto es para la corrección puntual ("me he equivocado al recibir el albarán").
+ */
+export async function crearAjusteStock(input: {
+  productoId: string;
+  /** Existencias que debe haber tras el ajuste. */
+  cantidadNueva: number;
+  motivo: string;
+}): Promise<{ ok: boolean; error?: string; saldoAnterior?: number; saldoResultante?: number }> {
+  try {
+    const { supabase, user, empresaId } = await getContext();
+    if (!empresaId) return { ok: false, error: "No tienes empresa asignada" };
+
+    const motivo = (input.motivo ?? "").trim();
+    if (!motivo) return { ok: false, error: "Explica por qué se ajusta: el motivo es obligatorio" };
+
+    const cantidadNueva = Number(input.cantidadNueva);
+    if (!Number.isFinite(cantidadNueva) || cantidadNueva < 0) {
+      return { ok: false, error: "La cantidad no es válida" };
+    }
+
+    // El producto tiene que ser de la empresa activa (multi-empresa: la del selector).
+    const { data: producto } = await supabase
+      .from("productos")
+      .select("id, nombre")
+      .eq("id", input.productoId)
+      .eq("empresa_id", empresaId)
+      .maybeSingle();
+    if (!producto) return { ok: false, error: "Ese producto no es de esta empresa" };
+
+    const { data: filaStock } = await supabase
+      .from("stock")
+      .select("cantidad_actual")
+      .eq("empresa_id", empresaId)
+      .eq("producto_id", input.productoId)
+      .maybeSingle();
+    const saldoAnterior = Number(filaStock?.cantidad_actual ?? 0);
+
+    const diferencia = cantidadNueva - saldoAnterior;
+    if (Math.abs(diferencia) < 0.0005) {
+      return { ok: true, saldoAnterior, saldoResultante: saldoAnterior };
+    }
+
+    const resultado = await registrarMovimiento({
+      empresaId,
+      productoId: input.productoId,
+      tipo: diferencia > 0 ? "entrada" : "salida",
+      cantidad: Math.abs(diferencia),
+      referencia: "Ajuste",
+      documentoTipo: "ajuste",
+      motivo,
+      createdBy: user?.id ?? null,
+    });
+
+    if (resultado.omitido) {
+      return {
+        ok: false,
+        error: `"${producto.nombre}" tiene el control de stock desactivado, así que no lleva existencias que ajustar.`,
+      };
+    }
+
+    revalidatePath("/logistica/stock");
+    revalidatePath("/logistica/movimientos");
+    return { ok: true, saldoAnterior, saldoResultante: resultado.saldoResultante };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "Error desconocido";
+    console.error("[stock] crearAjusteStock:", msg);
     return { ok: false, error: msg };
   }
 }
