@@ -4,6 +4,8 @@ import { useState, useMemo, useEffect, useCallback, type ReactNode } from "react
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { NumberInput } from "@/shared/components/NumberInput";
+import { useSincronizacionEnVivo } from "@/shared/hooks/useSincronizacionEnVivo";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -123,6 +125,15 @@ export default function TemperaturasView({ area, equiposIniciales, registrosInic
   const [orden, setOrden] = useState<ToolbarOrdenActivo | null>(null);
   const [columnasVisibles, setColumnasVisibles] = useState<ToolbarColumnaVisible>({});
   const [columnasOrden, setColumnasOrden] = useState<string[] | undefined>(undefined);
+
+  // Sincronización en vivo: las tomas de temperatura las registra quien esté en
+  // cocina, desde su propio dispositivo. Se pausa con un formulario abierto para
+  // no pisar lo que se está anotando.
+  useSincronizacionEnVivo({
+    tablas: ["registros_temperatura", "equipos_frio"],
+    onCambio: () => void loadData(),
+    pausado: showNuevoRegistro || showNuevoEquipo || showConfig || !!selectedEquipo,
+  });
 
   const equiposNombres = useMemo(() => equipos.map(e => e.nombre).sort(), [equipos]);
 
@@ -409,8 +420,8 @@ function NuevoEquipoForm({ area, onSave, onClose }: { area: AreaTemp; onSave: (e
         </div>
         <div><Label>Ubicación</Label><Input value={form.ubicacion} onChange={e => setForm(p => ({ ...p, ubicacion: e.target.value }))} /></div>
         <div className="grid grid-cols-2 gap-2">
-          <div><Label>Mín. (°C)</Label><Input type="number" value={form.rangoMin} onChange={e => setForm(p => ({ ...p, rangoMin: Number(e.target.value) }))} /></div>
-          <div><Label>Máx. (°C)</Label><Input type="number" value={form.rangoMax} onChange={e => setForm(p => ({ ...p, rangoMax: Number(e.target.value) }))} /></div>
+          <div><Label>Mín. (°C)</Label><NumberInput value={form.rangoMin} onValueChange={v => setForm(p => ({ ...p, rangoMin: v }))} /></div>
+          <div><Label>Máx. (°C)</Label><NumberInput value={form.rangoMax} onValueChange={v => setForm(p => ({ ...p, rangoMax: v }))} /></div>
         </div>
       </div>
       <div><Label>Observaciones</Label><Textarea value={form.observaciones} onChange={e => setForm(p => ({ ...p, observaciones: e.target.value }))} /></div>
@@ -438,7 +449,7 @@ function NuevoRegistroForm({ equipos, onSave, onClose }: { equipos: EquipoFrio[]
             <SelectContent>{equipos.map(e => <SelectItem key={e.id} value={e.id}>{e.nombre} ({e.tipo})</SelectItem>)}</SelectContent>
           </Select>
         </div>
-        <div><Label>Temperatura (°C) *</Label><Input type="number" step={0.1} value={form.temperatura} onChange={e => setForm(p => ({ ...p, temperatura: Number(e.target.value) }))} /></div>
+        <div><Label>Temperatura (°C) *</Label><NumberInput value={form.temperatura} onValueChange={v => setForm(p => ({ ...p, temperatura: v }))} /></div>
         <div><Label>Empleado *</Label><Input value={form.empleado} onChange={e => setForm(p => ({ ...p, empleado: e.target.value }))} /></div>
       </div>
       {equipo && (

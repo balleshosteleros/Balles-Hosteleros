@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useSincronizacionEnVivo } from "@/shared/hooks/useSincronizacionEnVivo";
 import {
   Sheet,
   SheetContent,
@@ -69,6 +70,16 @@ export function NotificacionBell({
       clearInterval(id);
     };
   }, [cargar]);
+
+  // Sincronización en vivo: un aviso nuevo enciende la campana al momento, sin
+  // esperar al refresco de cada minuto (que se mantiene como red de seguridad
+  // por si la conexión de tiempo real se cae). No se pausa: la campana no tiene
+  // nada que el usuario esté escribiendo, así que refrescar nunca le quita nada.
+  useSincronizacionEnVivo({
+    tablas: ["notificaciones"],
+    empresaId: empresaActual.id,
+    onCambio: cargar,
+  });
 
   const sinVer = items.filter((n) => !n.vistaAt).length;
 

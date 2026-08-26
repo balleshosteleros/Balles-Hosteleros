@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useSincronizacionEnVivo } from "@/shared/hooks/useSincronizacionEnVivo";
 import {
   startOfWeek,
   endOfWeek,
@@ -238,6 +239,18 @@ export function HorariosView() {
   useEffect(() => {
     cargar();
   }, [cargar]);
+
+  // Sincronización en vivo: el cuadrante lo montan varios encargados a la vez y
+  // un turno asignado por otro tiene que aparecer sin recargar. Se recarga en
+  // modo SILENCIOSO (sin spinner) para que la parrilla no parpadee. Se pausa con
+  // la configuración o el panel de asignación abiertos, y mientras se arrastra
+  // un turno: refrescar a media asignación la tiraría.
+  useSincronizacionEnVivo({
+    tablas: ["rrhh_cuadrantes", "empleados"],
+    empresaId,
+    onCambio: () => void cargar(true),
+    pausado: configOpen || panelOpen || !!activeDrag,
+  });
 
   // Al volver de la configuración, recargamos por si cambiaron turnos/patrones.
   const handleVolverDeConfig = () => {

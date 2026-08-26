@@ -4,6 +4,7 @@ import { useState, useMemo, useEffect, useCallback, type ReactNode } from "react
 import { useRouter } from "next/navigation";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
+import { useSincronizacionEnVivo } from "@/shared/hooks/useSincronizacionEnVivo";
 import { listEmpleados } from "@/features/rrhh/actions/empleados-actions";
 import { ESTADOS_LABEL, ESTADOS_COLOR, type EmpleadoUI } from "@/features/rrhh/components/empleados/empleado-ui";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -166,6 +167,17 @@ export function EmpleadosView() {
   const [columnasVisibles, setColumnasVisibles] = useState<ToolbarColumnaVisible>({});
   const [columnasOrden, setColumnasOrden] = useState<string[] | undefined>(undefined);
   const [showConfig, setShowConfig] = useState(false);
+
+  // Sincronización en vivo: altas, bajas y cambios de estado entran solos. El
+  // listado es de lectura (la edición vive en la ficha del empleado), así que
+  // refrescar aquí no le quita nada a nadie; solo se pausa con la configuración
+  // abierta.
+  useSincronizacionEnVivo({
+    tablas: ["empleados"],
+    empresaId: empresaActual.id,
+    onCambio: () => void cargar(),
+    pausado: showConfig,
+  });
 
   const departamentosUsados = useMemo(
     () => [...new Set(empleados.map((e) => e.departamento).filter((d) => d && d !== "—"))].sort(),

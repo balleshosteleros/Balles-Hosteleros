@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useEffect, useCallback, useRef, type ReactNode } from "react";
 import { toast } from "sonner";
+import { useSincronizacionEnVivo } from "@/shared/hooks/useSincronizacionEnVivo";
 import {
   CalendarDays, Plus, ChevronLeft, ChevronRight, Wallet, FileText,
   Settings, Trash2, Download, CheckCircle2, AlertTriangle, ArrowDownToLine,
@@ -15,6 +16,7 @@ import { es } from "date-fns/locale";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { NumberInput } from "@/shared/components/NumberInput";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
@@ -451,6 +453,15 @@ export function CierresView() {
   }, []);
 
   useEffect(() => { cargar(); }, [cargar]);
+
+  // Sincronización en vivo: los cierres los graba cada local al terminar su
+  // turno, así que la vista de gerencia los ve entrar solos. Se pausa con
+  // cualquier formulario abierto para no pisar lo que se esté rellenando.
+  useSincronizacionEnVivo({
+    tablas: ["cierres_semanales", "cierres_gastos"],
+    onCambio: () => void cargar(),
+    pausado: modalOpen || detalleOpen || progModalOpen || !!selected,
+  });
 
   // ── Derivados ─────────────────────────────────────────
   const cierresPorFecha = useMemo(() => {
@@ -1986,17 +1997,15 @@ export function CierresView() {
               <Label className="mb-2 block">Se repite</Label>
               <div className="flex items-center gap-2 text-sm">
                 <span>Cada</span>
-                <Input
-                  type="number"
+                <NumberInput
                   min={1}
                   max={52}
+                  decimales={false}
+                  emptyValue={1}
                   className="w-20"
                   value={progForm.intervalo_semanas}
-                  onChange={(e) =>
-                    setProgForm({
-                      ...progForm,
-                      intervalo_semanas: Math.min(52, Math.max(1, Math.round(Number(e.target.value) || 1))),
-                    })
+                  onValueChange={(v) =>
+                    setProgForm({ ...progForm, intervalo_semanas: Math.round(v) })
                   }
                 />
                 <span>{progForm.intervalo_semanas === 1 ? "semana" : "semanas"}</span>
