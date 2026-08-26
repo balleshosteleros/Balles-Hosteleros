@@ -39,9 +39,8 @@ import {
 } from "@/features/gerencia/actions/cierres-actions";
 import {
   MAX_DOCUMENTOS_CIERRE, MAX_TAMANO_DOCUMENTO_MB, MAX_TAMANO_DOCUMENTO_BYTES,
-  DIAS_BLOQUEO_DEFAULT, DIAS_BLOQUEO_MAX, fechaMinimaApunte,
+  DIAS_BLOQUEO_DEFAULT, fechaMinimaApunte,
 } from "@/features/gerencia/types/cierres";
-import { useAuth } from "@/features/auth/contexts/auth-context";
 import { createClient as createSupabaseBrowser } from "@/lib/supabase/client";
 import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
 import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
@@ -241,10 +240,6 @@ export function CierresView() {
   const [selected, setSelected] = useState<CierreRow | null>(null);
 
   const today = useMemo(() => format(new Date(), "yyyy-MM-dd"), []);
-  // Dirección puede apuntar fuera de plazo; el resto no (salvo el rol
-  // autorizado, que valida el servidor).
-  const { esAdminPlataforma } = useAuth();
-
   const gastoKeyRef = useRef(0);
   const nuevaGastoFila = useCallback((): GastoFila => {
     gastoKeyRef.current += 1;
