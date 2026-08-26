@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo, useEffect, useCallback, type ReactNode } from "react";
+import { useSincronizacionEnVivo } from "@/shared/hooks/useSincronizacionEnVivo";
 import { usePathname } from "next/navigation";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { useAuth } from "@/features/auth/contexts/auth-context";
@@ -127,6 +128,16 @@ export function InventariosView() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [createOpen, setCreateOpen] = useState(false);
   const [detalleId, setDetalleId] = useState<string | null>(null);
+
+  // Sincronizacion en vivo: un inventario lo cuentan varias personas a la vez,
+  // cada una en su zona. Se pausa con el alta o el detalle abiertos para no
+  // pisar un conteo en curso.
+  useSincronizacionEnVivo({
+    tablas: ["inventarios", "lineas_inventario"],
+    empresaId: empresaActual.id,
+    onCambio: () => void loadInventarios(),
+    pausado: createOpen || !!detalleId,
+  });
   const [showConfig, setShowConfig] = useState(false);
 
   const almacenesUsados = useMemo(

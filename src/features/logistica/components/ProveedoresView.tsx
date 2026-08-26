@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo, useEffect, useCallback, type ReactNode } from "react";
+import { useSincronizacionEnVivo } from "@/shared/hooks/useSincronizacionEnVivo";
 import { usePathname } from "next/navigation";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { hoyEnZona } from "@/features/empresa/lib/zona-horaria";
@@ -223,6 +224,15 @@ export function ProveedoresView() {
   useEffect(() => {
     loadProveedores();
   }, [loadProveedores]);
+
+  // Sincronizacion en vivo: un proveedor dado de alta desde otra pantalla
+  // aparece al momento. Se pausa con la ficha o el alta abiertas.
+  useSincronizacionEnVivo({
+    tablas: ["proveedores"],
+    empresaId: empresaActual.id,
+    onCambio: () => void loadProveedores(),
+    pausado: modalOpen || !!detalleProveedor || iaProvOpen,
+  });
 
   const categoriasUsadas = useMemo(
     () => [...new Set(proveedores.map((p) => p.categoria).filter(Boolean))].sort(),

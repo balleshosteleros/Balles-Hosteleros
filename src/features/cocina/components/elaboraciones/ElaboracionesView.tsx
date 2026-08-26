@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo, useEffect, useCallback, type ReactNode } from "react";
+import { useSincronizacionEnVivo } from "@/shared/hooks/useSincronizacionEnVivo";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import {
   listElaboraciones,
@@ -235,6 +236,14 @@ export function ElaboracionesView() {
   const [columnasOrden, setColumnasOrden] = useState<string[] | undefined>(undefined);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<ElaboracionRow | null>(null);
+
+  // Sincronizacion en vivo: las elaboraciones son fichas compartidas de cocina.
+  // Se pausa mientras se crea o edita una para no perder lo escrito.
+  useSincronizacionEnVivo({
+    tablas: ["elaboraciones"],
+    onCambio: () => void load(),
+    pausado: modalOpen || !!editing,
+  });
 
   const filtered = useMemo(() => {
     let lista = rows.filter(r => !search || r.productoNombre.toLowerCase().includes(search.toLowerCase()));

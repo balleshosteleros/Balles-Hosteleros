@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo, useCallback, useEffect } from "react";
+import { useSincronizacionEnVivo } from "@/shared/hooks/useSincronizacionEnVivo";
 import { usePathname, useRouter } from "next/navigation";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { useAuth } from "@/features/auth/contexts/auth-context";
@@ -1386,6 +1387,16 @@ export function EscandallosView() {
   const [detalleEscandallo, setDetalleEscandallo] = useState<Escandallo | null>(null);
   const [detalleOpen, setDetalleOpen] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+
+  // Sincronizacion en vivo: los escandallos dependen de precios de compra y de
+  // fichas que tocan cocina y logistica. Se pausa con el detalle abierto para no
+  // recargar por debajo una ficha que se esta consultando o editando.
+  useSincronizacionEnVivo({
+    tablas: ["escandallos", "escandallo_ingredientes"],
+    empresaId: empresaActual.id,
+    onCambio: () => void loadEscandallos(),
+    pausado: detalleOpen || !!detalleEscandallo,
+  });
   const filtered = useMemo(() => {
     let list = empresaEscandallos;
     if (search) {

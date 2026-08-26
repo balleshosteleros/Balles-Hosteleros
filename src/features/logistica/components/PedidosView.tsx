@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo, useEffect, useCallback, type ReactNode } from "react";
+import { useSincronizacionEnVivo } from "@/shared/hooks/useSincronizacionEnVivo";
 import { usePathname } from "next/navigation";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { hoyEnZona } from "@/features/empresa/lib/zona-horaria";
@@ -205,6 +206,16 @@ export function PedidosView() {
     loadAlbaranes();
     loadFacturasCount();
   }, [loadPedidos, loadAlbaranes, loadFacturasCount]);
+
+  // Sincronizacion en vivo: los pedidos y albaranes los mueven compras, almacen
+  // y cocina a la vez, y un albaran recien subido tiene que aparecer sin
+  // recargar. Se pausa con el alta o el detalle abiertos.
+  useSincronizacionEnVivo({
+    tablas: ["pedidos", "albaranes", "albaran_incidencias"],
+    empresaId: empresaActual.id,
+    onCambio: () => { void loadPedidos(); void loadAlbaranes(); },
+    pausado: modalOpen || !!detallePedido,
+  });
 
   // Al crear un albarán desde "Subir albarán", abrir su detalle en cuanto la lista lo traiga.
   useEffect(() => {
