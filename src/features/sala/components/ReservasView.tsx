@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { NumberInput } from "@/shared/components/NumberInput";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -13,6 +14,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
+import { useSincronizacionEnVivo } from "@/shared/hooks/useSincronizacionEnVivo";
 import { useSidebar } from "@/components/ui/sidebar";
 import { Plus, Search, ChevronLeft, ChevronRight, ListPlus, ListFilter, Check, Move, Map as MapIcon, List as ListIcon } from "lucide-react";
 // Configuración solo se carga cuando el usuario pulsa "Configuración" — fuera del bundle inicial.
@@ -993,12 +995,13 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
         </div>
         <div>
           <Label className="text-xs">Comensales *</Label>
-          <Input
-            type="number"
+          <NumberInput
             min={1}
+            emptyValue={1}
+            decimales={false}
             className={cn("h-8 text-xs", muestraAvisoPax && "border-amber-500 focus-visible:ring-amber-500")}
             value={form.comensales}
-            onChange={(e) => setForm((p) => ({ ...p, comensales: Number(e.target.value) }))}
+            onValueChange={(n) => setForm((p) => ({ ...p, comensales: n }))}
             onBlur={() => setPaxTouched(true)}
           />
         </div>
@@ -1450,12 +1453,13 @@ function NuevaListaEsperaForm({
           </div>
           <div>
             <Label className="text-xs">Personas *</Label>
-            <Input
-              type="number"
+            <NumberInput
               min={1}
+              emptyValue={1}
+              decimales={false}
               className="h-8 text-xs"
               value={form.personas}
-              onChange={e => setForm(p => ({ ...p, personas: Number(e.target.value) }))}
+              onValueChange={n => setForm(p => ({ ...p, personas: n }))}
             />
           </div>
         </div>
@@ -2665,6 +2669,22 @@ export function ReservasView() {
   useEffect(() => {
     loadReservas(fecha);
   }, [fecha, loadReservas]);
+
+  // Sincronización en vivo: si otra persona crea, mueve o cancela una reserva,
+  // el plano y el listado se actualizan solos. Sala es la pantalla donde más
+  // manos trabajan a la vez y donde un dato viejo se paga sentando mal una mesa.
+  //
+  // Se PAUSA mientras hay un diálogo abierto (nueva reserva, ficha, bloqueo…):
+  // refrescar bajo los pies mientras rellenas un formulario perdería lo escrito.
+  // Los cambios que lleguen entre medias se aplican al cerrar.
+  useSincronizacionEnVivo({
+    tablas: ["reservas", "mesas"],
+    empresaId: empresaActual.id,
+    onCambio: () => void loadReservas(fecha),
+    pausado:
+      showNueva || showListaEspera || !!selectedReserva || !!selectedMesa ||
+      !!confirmEstado || !!confirmBloqueo,
+  });
 
   // Bloqueos del local (Config → Bloqueos). Se cargan al cambiar de local y se
   // filtran client-side por fecha + turno para sacar las mesas que están

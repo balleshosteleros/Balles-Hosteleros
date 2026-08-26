@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useEffect, useCallback, useRef, type ReactNode } from "react";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
+import { useSincronizacionEnVivo } from "@/shared/hooks/useSincronizacionEnVivo";
 import { formatHoraEnZona } from "@/features/empresa/lib/zona-horaria";
 import { ESTADO_FICHAJE_LABEL, TIPO_FICHAJE_LABEL, TIPO_FICHAJE_BADGE, fichajeColorBadge } from "@/features/rrhh/data/fichajes";
 import type { EstadoFichaje, Fichaje, LocalGeo, ConfigFichajes, TipoFichajeCodigo } from "@/features/rrhh/data/fichajes";
@@ -26,6 +27,7 @@ import { Card, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { NumberInput } from "@/shared/components/NumberInput";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -173,6 +175,17 @@ export function FichajesView() {
     setFichajeModal(null);
     loadFichajes();
   }, [empresaActual.id, loadFichajes]);
+
+  // Sincronización en vivo: los fichajes entran solos mientras la pantalla está
+  // abierta (la gente ficha desde el móvil y desde los locales a la vez). Se
+  // pausa con la ficha de un fichaje abierta para no pisar lo que se esté
+  // revisando; lo que llegue entre medias se aplica al cerrarla.
+  useSincronizacionEnVivo({
+    tablas: ["fichajes"],
+    empresaId: empresaActual.id,
+    onCambio: () => void loadFichajes(),
+    pausado: !!fichajeModal,
+  });
 
   // Catálogo de tipos de fichaje de la empresa (color + label por código) para
   // pintar el badge de cada fichaje según el color configurado en su tipo.
@@ -559,7 +572,7 @@ export function FichajesView() {
             </div>
             <div className="flex items-center justify-between">
               <div><Label className="font-medium">Tolerancia horaria (minutos)</Label><p className="text-xs text-muted-foreground">Margen antes de generar incidencia por desfase</p></div>
-              <Input type="number" className="w-20" value={config.toleranciaMinutos} onChange={e => setConfig(c => ({ ...c, toleranciaMinutos: Number(e.target.value) }))} />
+              <NumberInput className="w-20" min={0} decimales={false} value={config.toleranciaMinutos} onValueChange={v => setConfig(c => ({ ...c, toleranciaMinutos: v }))} />
             </div>
           </div>
         </DialogContent>

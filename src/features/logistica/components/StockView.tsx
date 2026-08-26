@@ -3,6 +3,7 @@
 import { useState, useMemo, useEffect, useCallback, type ReactNode } from "react";
 import { usePathname } from "next/navigation";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
+import { useSincronizacionEnVivo } from "@/shared/hooks/useSincronizacionEnVivo";
 import {
   getStockConTemporada,
   CATEGORIAS_STOCK, type ProductoStock, type TemporadaStock,
@@ -12,6 +13,7 @@ import { listStock, updateStock as updateStockAction, updateStockBatch } from "@
 import { listProductos } from "@/features/logistica/actions/producto-actions";
 import TemporadasConfig from "@/features/logistica/components/stock/TemporadasConfig";
 import { Input } from "@/components/ui/input";
+import { NumberInput } from "@/shared/components/NumberInput";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -186,6 +188,16 @@ export function StockView() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValues, setEditValues] = useState<{ stockMaximo: number; stockSeguridad: number }>({ stockMaximo: 0, stockSeguridad: 0 });
+
+  // Sincronización en vivo: el stock lo mueven los pedidos, los inventarios y
+  // las ventas a la vez. Se pausa mientras se edita una fila para no borrar de
+  // debajo la cantidad que se está tecleando.
+  useSincronizacionEnVivo({
+    tablas: ["stock", "productos", "inventarios"],
+    empresaId: empresaActual.id,
+    onCambio: () => void loadStockData(),
+    pausado: !!editingId,
+  });
 
   // Mass edit
   const [massOpen, setMassOpen] = useState(false);
@@ -482,7 +494,7 @@ export function StockView() {
         return (
           <td key="stockMaximo" className="px-3 py-2.5 text-xs">
             {isEditing
-              ? <Input type="number" className="h-7 w-20 text-xs" value={editValues.stockMaximo} onChange={(e) => setEditValues((v) => ({ ...v, stockMaximo: +e.target.value }))} />
+              ? <NumberInput className="h-7 w-20 text-xs" value={editValues.stockMaximo} onValueChange={(n) => setEditValues((v) => ({ ...v, stockMaximo: n }))} />
               : <span className="font-medium">{p.displayMaximo}</span>}
           </td>
         );
@@ -507,7 +519,7 @@ export function StockView() {
         return (
           <td key="stockSeguridad" className="px-3 py-2.5 text-xs">
             {isEditing
-              ? <Input type="number" className="h-7 w-20 text-xs" value={editValues.stockSeguridad} onChange={(e) => setEditValues((v) => ({ ...v, stockSeguridad: +e.target.value }))} />
+              ? <NumberInput className="h-7 w-20 text-xs" value={editValues.stockSeguridad} onValueChange={(n) => setEditValues((v) => ({ ...v, stockSeguridad: n }))} />
               : <span className="font-medium">{p.displaySeguridad}</span>}
           </td>
         );

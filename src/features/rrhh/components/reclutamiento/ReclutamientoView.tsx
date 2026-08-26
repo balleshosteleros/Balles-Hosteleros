@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useEffect, useCallback } from "react";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
+import { useSincronizacionEnVivo } from "@/shared/hooks/useSincronizacionEnVivo";
 import { listVacantesConCandidatos, asegurarVacantesPorPuesto } from "@/features/rrhh/actions/reclutamiento-actions";
 import {
   publicarVacante, despublicarVacante, reordenarVacantes,
@@ -470,6 +471,15 @@ export function ReclutamientoView() {
   useGlobalLoadingSync(loading);
   const [reloadKey, setReloadKey] = useState(0);
   const recargar = useCallback(() => setReloadKey((k) => k + 1), []);
+
+  // Sincronización en vivo: si alguien mueve un candidato o toca una vacante
+  // desde otro sitio, esta pantalla se entera sola. Sin esto se trabajaba sobre
+  // la foto cargada al entrar (candidatos en fases que ya no eran las suyas).
+  useSincronizacionEnVivo({
+    tablas: ["candidatos", "vacantes"],
+    empresaId: empresaActual.id,
+    onCambio: recargar,
+  });
 
   useEffect(() => {
     let cancelled = false;
