@@ -84,9 +84,9 @@ desarrollo, y lo hacemos nosotros.
   `scripts/agora/_historico/` y bloqueado: en modo escritura aborta salvo que se le pasen dos
   confirmaciones explícitas a la vez. **El importador nuevo será incremental: no borrará nunca.**
 - ✅ **Los 2 pares de bebida rotos, enlazados**: `Gyozas Vegetales` (Bacanal) y `Absolut` (Habana)
-  ya tienen su enlace venta→compra. Quedan los 203 pares completos. Ojo Iván: el de Absolut es un
-  espejo 1:1 provisional — una copa no es una botella entera, el ratio real hay que ponerlo con la
-  receta de verdad (igual que en los otros ~200).
+  ya tienen su enlace venta→compra, así que los 203 pares están completos. Y con el enlace puesto
+  ya descuentan bien solos: un `Comb Absolut` viene marcado por Ágora como 0,1 botellas, así que
+  no hay que medir nada a mano.
 - 🧹 **Borrado el escandallo "PRUEBA"** de Habana (estaba vacío y era el único de los 23 que no
   sincronizaba). Quedan 22, todos correctos.
 - 🧹 **Los 6 platos huérfanos de Habana, desactivados** (Alitas, Bao-cadillo, Burger Balles,
