@@ -1,76 +1,43 @@
 # Recetas pendientes, ordenadas por lo que de verdad se vende
 
 > **Generado:** 2026-08-26 · **Datos:** ventas reales de Ágora de los últimos 60 días
-> (17-jun → 25-ago hay histórico completo) · **Fuente:** `pos_tickets` + `pos_ticket_lineas`
+> (hay histórico completo desde el 17-jun) · **Fuente:** `pos_tickets` + `pos_ticket_lineas`
 > cruzado con `producto_composicion`.
 >
-> **Para qué sirve:** hoy, cuando se vende un plato o un cóctel, el almacén **no se entera**.
+> **Para qué sirve:** hoy, cuando se vende un cóctel o un plato, el almacén **no se entera**.
 > Para que se entere hace falta que alguien escriba qué lleva cada cosa. Este documento dice
-> **por dónde empezar** para que el esfuerzo cunda: no hay que escribir 200 recetas de golpe.
+> **por dónde empezar** para que el esfuerzo cunda.
 
 ---
 
-## Lo primero: no son 200 recetas
+## Lo primero: son 80 productos, no 200
 
-Al mirar producto por producto, lo que falta se parte en cuatro situaciones muy distintas, y
-**dos de ellas no necesitan que nadie escriba una receta**:
+Mirando producto por producto, la mayoría de lo que se vende **ya descuenta bien**:
 
-| Situación | Bacanal | Habana | ¿Qué hace falta? |
+| Situación | Bacanal | Habana | ¿Hay que hacer algo? |
 |---|---|---|---|
-| ✅ **Ya tiene receta real** | 22 productos | 0 | Nada |
-| ✅ **Espejo correcto** (botellín, refresco, agua: vendes uno, gastas uno) | 36 | 28 | Nada |
-| 🟡 **Espejo pero se sirve en copa** (ron, whisky, ginebra, licor) | 16 | 40 | **Un número**, no una receta |
-| 🔴 **Sin nada** (cócteles, platos, cafés) | 36 | 44 | Receta de verdad |
+| ✅ Ya tiene receta escrita | 21 | 0 | No |
+| ✅ **Bebida enlazada a su botella** (el TPV ya manda la medida) | 53 | 68 | **No** |
+| 🔴 **No descuenta nada** (cócteles, platos, cafés) | **36** | **44** | Sí: escribir la receta |
 
-**Traducido:** de los ~200 productos que "no descuentan bien", solo **80 necesitan receta escrita**
-y **56 necesitan un solo número**. El resto ya está bien.
+**Solo 80 productos necesitan receta.** Los otros 121 ya están resueltos.
 
----
+### Por qué los destilados NO necesitan que nadie mida la copa
 
-## 🟡 Grupo rápido: 56 botellas que solo necesitan la medida de la copa
-
-Estas se descuentan hoy **como si cada copa se llevara la botella entera**. No hay que escribir
-receta: basta con decir **cuántos centilitros lleva una copa** y de qué botella sale. Para casi
-todas la respuesta es la misma (una copa de 5 cl de una botella de 70 cl = 0,071 botellas), así
-que es una pasada mecánica de una tarde.
-
-Ordenadas por lo que se vende (60 días):
-
-| Producto | Empresa | Uds. 60 d |
-|---|---|---|
-| Brugal | Habana | 397 |
-| Red Label | Habana | 215 |
-| Seagrams | Habana | 141 |
-| Black Label | Habana | 105 |
-| Jaggermaister | Habana | 91 |
-| Santa Teresa | Habana | 79 |
-| Beefeater | Habana | 73 |
-| Jose Cuervo | Habana | 71 |
-| Larios Rose | Habana | 68 |
-| Tequila de Fresa Diex | Habana | 62 |
-| Absolut | Habana | 53 |
-| Tequila Frutas de la Pasión Diex | Habana | 39 |
-| Ballantines | Habana | 37 |
-| Havana 7 | Habana | 35 |
-| Martin Millers | Habana | 31 |
-| Licor de Crema El Afilador | Bacanal | 28 |
-| White Label | Habana | 27 |
-| Larios 12 | Habana | 23 |
-| Rives Exotica · Licor Malibu | Habana | 22 c/u |
-| Dyc 8 | Habana | 21 |
-| Hollenbar · Rives Pink | Habana | 20 c/u |
-| …y 34 más con menos de 15 uds | | |
-
-**Con las 15 primeras se cubre el 84 % de las copas servidas.**
+Ágora manda en cada línea de venta **qué formato se ha servido y qué fracción de botella es**:
+un `Comb Brugal` viene marcado como **0,1 botellas**, un `Chupito Brugal` como 0,05, y una
+`Copa. Alma Blanco` como 0,2. El sistema ya lo aplica solo. Comprobado con los datos reales:
+Brugal sale a **0,70 botellas/día**, que es justo lo que corresponde a los combinados servidos.
+Así que ron, whisky, ginebra y vino por copas **ya descuentan correctamente** — no hay que tocar
+nada ahí.
 
 ---
 
-## 🔴 Grupo de verdad: 80 productos que no descuentan nada
+## 🔴 Los 80 que sí necesitan receta
 
-Aquí sí hace falta que cocina/barra escriba qué lleva cada cosa. **Ordenados por unidades
-vendidas en 60 días**, que es el orden en el que conviene atacarlos.
+Ordenados por unidades vendidas en 60 días, que es el orden en el que conviene atacarlos.
 
-### HABANA — top 15 (cubren el 71 % de lo que se vende sin receta)
+### HABANA — top 15 (cubren el 83 % de lo que se sirve sin receta)
 
 | # | Producto | Categoría | Uds. 60 d | € 60 d |
 |---|---|---|---|---|
@@ -90,11 +57,14 @@ vendidas en 60 días**, que es el orden en el que conviene atacarlos.
 | 14 | Orange Oasis | Cócteles | 59 | 516 |
 | 15 | Caipi-Brasileña | Cócteles | 45 | 394 |
 
-> **Atajo evidente:** las versiones "Sin" (Mojito Habanero Sin, Coco Colado Sin, Sex On Habana Sin,
-> Papagayo Sin, Banana Daiquiri Sin, The One Sin…) son la misma receta **quitando el alcohol**.
-> Escribiendo la normal, la "Sin" sale casi copiada. Son 7 productos que salen prácticamente gratis.
+> **Dos atajos que reducen el trabajo casi a la mitad:**
+> - Las versiones **"Sin"** (Mojito Habanero Sin, Coco Colado Sin, Sex On Habana Sin, Papagayo
+>   Sin, Banana Daiquiri Sin, The One Sin…) son la misma receta quitando el alcohol: salen
+>   copiadas de la normal. Son 7 productos prácticamente gratis.
+> - Las **shishas** (1 y 2 sabores, 521 uds y 8.000 € en dos meses — lo que más pesa) no son
+>   cocina: son tabaco y carbón. Una receta de dos líneas resuelve las dos.
 
-### BACANAL — top 15 (cubren el 72 %)
+### BACANAL — top 15 (cubren el 89 %)
 
 | # | Producto | Categoría | Uds. 60 d | € 60 d |
 |---|---|---|---|---|
@@ -114,35 +84,58 @@ vendidas en 60 días**, que es el orden en el que conviene atacarlos.
 | 14 | Café Solo | Cafés | 55 | 113 |
 | 15 | Tiramisú | Postres | 51 | 337 |
 
-> **Ojo con dos casos que NO son receta:**
-> - **San Miguel** (104 uds) es un botellín: no le falta receta, le falta **su ficha de compra
->   enlazada**. Es un arreglo de un minuto, como los dos que ya hemos reparado.
-> - **Servicio Pan**, **Vaso de Agua** y **Cambio de Carbón** (estos dos en Habana, a 0 €) son
->   conceptos de servicio. Decidid si interesa descontar algo o se dejan fuera.
+> **Tres casos que no son receta de cocina:**
+> - **San Miguel** (104 uds) es un botellín que no está enlazado a su ficha de compra. Es un
+>   arreglo mecánico, no una receta.
+> - **Servicio Pan** (321 uds) y, en Habana, **Vaso de Agua** y **Cambio de Carbón** (ambos a
+>   0 €) son conceptos de servicio: decidid si interesa descontar algo o se dejan fuera.
+> - Los **cafés** (216 uds entre los tres) son café + leche: una receta sirve para los tres.
+
+---
+
+## ⚠️ Antes de armar el descuento de stock hay que arreglar las unidades
+
+Al construir el cálculo de consumo ha salido un problema que conviene saber:
+
+**Las 21 recetas que ya existen están escritas en gramos, pero el sistema no lo sabe.** La receta
+del Cachopo dice "350 de Filete de vaca", que son 350 gramos — pero el producto está medido en
+**kilogramos** y nadie ha rellenado la equivalencia (`unidad_uso` y `factor_conversion` están sin
+configurar en los **693** productos). Sin esa equivalencia, el sistema entiende **350 kg de filete
+por cachopo**.
+
+Consecuencias:
+
+1. El cálculo de consumo diario **se salta a propósito** los ingredientes con la equivalencia sin
+   declarar, y los deja a 0 en vez de escribir un disparate. Por eso hoy la reposición por ventas
+   funciona bien para bebidas y no propone nada para los platos.
+2. **Esto también afecta al descuento de stock** (que hoy está desactivado). El día que se active
+   sin arreglar las unidades, un cachopo vendido restaría 350 kg de filete del almacén.
+
+**Hace falta una decisión de negocio antes de seguir:** en qué unidad se escriben las recetas
+(gramos y centilitros es lo natural en cocina) y rellenar la equivalencia en los productos que se
+compran por kilo o por litro. Es una pasada de configuración, no un desarrollo.
 
 ---
 
 ## Propuesta de orden de trabajo
 
-1. **Una tarde de barra** → los 15 destilados más vendidos (la medida de la copa). Con eso el
-   84 % del alcohol servido empieza a descontar bien.
-2. **Una tarde de barra** → los 10 cócteles más vendidos de Habana. Las versiones "Sin" salen
-   casi solas detrás.
-3. **Una tarde de cocina** → los 12 platos más vendidos de Bacanal.
-4. El resto (la cola larga: 100+ productos con menos de 30 unidades en dos meses) se va
-   escribiendo cuando toque; su impacto en el stock es pequeño.
+1. **Media hora de barra** → las 2 shishas de Habana. Son lo que más se vende y más factura.
+2. **Una tarde de barra** → los 8 cócteles más vendidos de Habana. Las versiones "Sin" salen
+   copiadas detrás.
+3. **Una tarde de cocina** → los 10 platos y postres más vendidos de Bacanal.
+4. **Aparte, y antes de activar el descuento de stock:** decidir la unidad de las recetas y
+   rellenar las equivalencias (ver el aviso de arriba).
 
-Cada receta escrita entra sola en el sistema: el cálculo de reposición por ventas la recoge
-automáticamente en cuanto existe, sin que haya que tocar nada más.
+Cada receta que se escriba entra sola en el sistema: el cálculo de reposición la recoge en cuanto
+existe, sin tocar nada más.
 
 ---
 
 ## Cómo se ha calculado
 
-- Ventana: 60 días naturales hasta hoy, tickets de origen Ágora con producto identificado.
-- "Tiene receta real" = existe alguna línea en `producto_composicion` que **no** sea el espejo
-  1:1 automático (mismo `agora_id` en venta y compra, cantidad 1) que creó la migración de junio.
-- "Espejo pero es copa" = solo tiene el espejo 1:1 y su categoría es de destilado, licor o cóctel
-  (ron, whisky, gin, vodka, licor, cava/champán): vender una copa descuenta una botella entera.
-- "Espejo OK" = solo tiene el espejo 1:1 pero se vende entero (botellín, refresco, agua), que es
-  justo lo que debe pasar.
+- Ventana: 60 días naturales hasta hoy, tickets de Ágora con producto identificado.
+- **"Ya tiene receta"** = tiene alguna línea en `producto_composicion` que no sea el espejo 1:1
+  automático que creó la migración de junio.
+- **"Bebida enlazada"** = solo tiene el espejo 1:1 con su ficha de compra. Es correcto: el
+  `sale_format_ratio` que manda Ágora en cada línea aporta la fracción de botella servida.
+- **"No descuenta nada"** = no tiene ninguna línea de composición.

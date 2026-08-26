@@ -29,29 +29,51 @@ Los números de familia son exactos: faltan **97 en Bacanal** y **45 en Habana**
 ### 📋 IVÁN: la lista de recetas ya está hecha, y son muchas menos de las que parecía
 
 Preguntabais quién escribe las ~200 recetas. **He mirado qué se vende de verdad (60 días de
-ventas reales) y la respuesta es que no son 200.** Está todo en
-**`docs/RECETAS_PENDIENTES_PRIORIZADAS.md`**, pero el resumen es este:
+ventas reales) y no son 200: son 80.** Está todo en **`docs/RECETAS_PENDIENTES_PRIORIZADAS.md`**,
+pero el resumen es este:
 
-| Situación | Bacanal | Habana | ¿Hace falta escribir receta? |
+| Situación | Bacanal | Habana | ¿Hay que hacer algo? |
 |---|---|---|---|
-| Ya tiene receta real | 22 | 0 | No |
-| Espejo correcto (botellín, refresco, agua) | 36 | 28 | **No, ya está bien** |
-| Espejo pero se sirve en copa (ron, whisky, gin…) | 16 | 40 | **No: solo la medida de la copa** |
-| Sin nada (cócteles, platos, cafés) | 36 | 44 | Sí |
+| Ya tiene receta escrita | 21 | 0 | No |
+| **Bebida enlazada a su botella** | 53 | 68 | **No, ya funciona** |
+| **No descuenta nada** (cócteles, platos, cafés) | **36** | **44** | Sí |
 
-**Solo 80 productos necesitan receta escrita de verdad.** Otros 56 no necesitan receta sino
-**un número** (cuántos centilitros lleva una copa), que para casi todos es el mismo — una pasada
-mecánica de una tarde de barra.
+**121 productos ya están resueltos; solo 80 necesitan receta.** Y ojo con esto, que es la buena
+noticia: **los destilados no necesitan que nadie mida la copa**. Ágora ya manda en cada venta qué
+formato se sirvió y qué fracción de botella es (un `Comb Brugal` = 0,1 botellas, un chupito = 0,05,
+una copa de vino = 0,2), y el sistema lo aplica solo. Comprobado con datos reales: Brugal sale a
+0,70 botellas/día, que es exactamente lo que corresponde. Ron, whisky, ginebra y vino por copas
+**ya descuentan bien**.
 
-Y no hace falta hacerlos todos: **los 15 más vendidos de cada empresa cubren ya el ~72 % de lo
-que se sirve**. Propuesta concreta: una tarde de barra para los 15 destilados más vendidos, otra
-para los 10 cócteles de Habana (las versiones "Sin" salen casi copiadas de las normales), y una
-tarde de cocina para los 12 platos de Bacanal. La cola larga se va escribiendo cuando toque.
+Tampoco hace falta escribir los 80: **los 15 más vendidos de cada empresa cubren el 83-89 %** de
+lo que se sirve. Y hay dos atajos gordos: las **shishas** de Habana (lo que más factura de la lista,
+8.000 € en dos meses) no son cocina, son tabaco y carbón — dos recetas de dos líneas; y las
+versiones **"Sin"** de los cócteles salen copiadas de la normal.
 
-**Cada receta que se escriba entra sola en el sistema**, sin que haya que avisar ni tocar nada.
+Propuesta: media hora de barra para las shishas, una tarde para los 8 cócteles top de Habana, y
+una tarde de cocina para los 10 platos top de Bacanal. **Cada receta entra sola en el sistema** en
+cuanto se escribe, sin avisar a nadie.
 
-Iván: con esto la pregunta ya no es "quién escribe 200 recetas" sino **"¿quién se sienta una tarde
-con la lista de 15?"**. Dinos quién y cuándo y nosotros nos encargamos del resto.
+Iván: la pregunta ya no es "quién escribe 200 recetas" sino **"¿quién se sienta una tarde con la
+lista de 10?"**. Dinos quién y cuándo.
+
+### ⚠️ Iván: una cosa que hay que decidir antes de activar el descuento de stock
+
+Construyendo el cálculo ha salido un problema real. **Las 21 recetas que ya existen están escritas
+en gramos, pero el sistema no lo sabe.** La receta del Cachopo dice "350 de Filete de vaca" (350
+gramos), pero ese producto se compra **por kilos** y nadie ha rellenado la equivalencia
+gramo↔kilo — está sin configurar en los 693 productos. Tal cual está, el sistema entendería
+**350 kg de filete por cachopo**.
+
+- El cálculo de consumo que he montado hoy **se salta a propósito** esos ingredientes y los deja a
+  0, en vez de escribir un disparate. Por eso la reposición por ventas ya funciona para bebidas
+  pero todavía no propone nada para los platos.
+- **El descuento de stock (hoy desactivado) tiene el mismo agujero.** Si se activa sin arreglar
+  esto, un cachopo vendido restaría 350 kg de filete del almacén.
+
+Hace falta una decisión vuestra: **¿en qué unidad se escriben las recetas?** (gramos y centilitros
+es lo natural en cocina). Con eso decidido, rellenar las equivalencias es configuración, no
+desarrollo, y lo hacemos nosotros.
 
 **Arreglado hoy en producción (4 cosas, todas verificadas):**
 

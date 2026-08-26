@@ -17,6 +17,7 @@ import {
 import { getAgoraCredenciales } from "@/features/logistica/services/agora-credenciales";
 import { descontarStockPorTicket } from "@/features/sala/pos/services/descontar-stock-por-ventas";
 import { revertirMovimientosPorDocumento } from "@/features/logistica/services/kardex";
+import { recalcularVentasDiaPromedio } from "@/features/logistica/services/ventas-dia-promedio";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -124,6 +125,16 @@ export async function GET(request: Request) {
       const r = await ingerirVentasAgoraDia(supabase, empresaId, businessDay, conexion);
       // Descontar stock vía kardex (solo desde la fecha de corte de la empresa).
       const desc = await descontarDiaSiCorte(supabase, empresaId, businessDay);
+      // Media de consumo diario por producto: alimenta la sugerencia de pedido
+      // "por ventas". Un fallo aquí no debe tumbar la ingesta, que es lo crítico.
+      let ventasDia: Record<string, unknown> | { error: string };
+      try {
+        ventasDia = { ...(await recalcularVentasDiaPromedio(supabase, empresaId)) };
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        console.error(`[cron/agora-sync] ventas_dia_promedio empresa ${empresaId}:`, msg);
+        ventasDia = { error: msg };
+      }
       await supabase.from("agora_sync_log").insert({
         empresa_id: empresaId,
         status: "ok",
@@ -136,9 +147,10 @@ export async function GET(request: Request) {
           lineas: r.lineas,
           lineas_sin_producto: r.sinProducto,
           stock: desc,
+          ventas_dia: ventasDia,
         },
       });
-      resultados.push({ empresaId, ...r, stock: desc });
+      resultados.push({ empresaId, ...r, stock: desc, ventasDia });
     } catch (err) {
       hayErrores = true;
       const msg = err instanceof Error ? err.message : String(err);
