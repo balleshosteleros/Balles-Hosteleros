@@ -33,6 +33,25 @@ const GENERALES: { key: BoolKey; label: string }[] = [
   { key: "notificar_reclutador_nueva_candidatura", label: "Notificar al reclutador cuando llega una nueva candidatura" },
 ];
 
+/** Plazos de caducidad de los enlaces que viajan por correo. */
+type DiasKey = "documentacion_dias_validez" | "gestoria_contrato_dias_validez";
+
+const PLAZOS: { key: DiasKey; label: string; ayuda: string }[] = [
+  {
+    key: "documentacion_dias_validez",
+    label: "Enlace de documentación del candidato",
+    ayuda: "Con el que sube su DNI/NIE, IBAN, Seguridad Social y foto.",
+  },
+  {
+    key: "gestoria_contrato_dias_validez",
+    label: "Enlace de contrato para la gestoría",
+    ayuda: "Con el que la gestoría sube el contrato firmado del trabajador.",
+  },
+];
+
+/** Opciones de plazo (el rango 1–90 lo valida también la base de datos). */
+const DIAS_OPCIONES = [1, 2, 3, 5, 7, 10, 15, 20, 30, 45, 60, 90];
+
 export const ConfigGeneralConfig = forwardRef<
   ConfigSectionHandle,
   { embedded?: boolean }
@@ -52,6 +71,9 @@ export const ConfigGeneralConfig = forwardRef<
     setConfig((c) => (c ? { ...c, [key]: !c[key] } : c));
   };
   const setText = (key: "idioma_portal" | "formato_fecha", value: string) => {
+    setConfig((c) => (c ? { ...c, [key]: value } : c));
+  };
+  const setDias = (key: DiasKey, value: number) => {
     setConfig((c) => (c ? { ...c, [key]: value } : c));
   };
 
@@ -147,6 +169,40 @@ export const ConfigGeneralConfig = forwardRef<
               </SelectContent>
             </Select>
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Caducidad de los enlaces que se envían por correo */}
+      <Card>
+        <div className="px-5 py-4 border-b border-border">
+          <h3 className="font-semibold text-foreground text-sm">Caducidad de los enlaces</h3>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Días que sigue funcionando cada enlace desde que se envía. Reenviar el
+            correo reinicia el plazo.
+          </p>
+        </div>
+        <CardContent className="p-5 space-y-4">
+          {PLAZOS.map((item) => (
+            <div key={item.key} className="flex items-center justify-between gap-4">
+              <div>
+                <Label className="text-sm text-foreground">{item.label}</Label>
+                <p className="text-xs text-muted-foreground mt-0.5">{item.ayuda}</p>
+              </div>
+              <Select
+                value={String(config[item.key])}
+                onValueChange={(v) => setDias(item.key, Number(v))}
+              >
+                <SelectTrigger className="w-44 h-9 shrink-0"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {DIAS_OPCIONES.map((d) => (
+                    <SelectItem key={d} value={String(d)}>
+                      {d === 1 ? "1 día" : `${d} días`}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          ))}
         </CardContent>
       </Card>
 

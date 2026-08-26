@@ -12,6 +12,7 @@ import {
   type HistorialCambioFase,
   type Vacante,
 } from "@/features/rrhh/data/reclutamiento";
+import { veredictoCuestionario } from "@/features/rrhh/data/cuestionario-vacante";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -60,22 +61,20 @@ interface KanbanPipelineProps {
 const CURRENT_USER = "Admin RRHH";
 
 // ─── Distintivo del cuestionario ────────────────────────────────
-// Solo se muestra si el candidato respondió el cuestionario de la vacante.
-//  · 5/5 aciertos  → aprobado: tick verde
-//  · 3–4 aciertos  → naranja con una línea en medio (parcial)
-//  · 0–2 aciertos  → suspenso: X roja
+// Solo se muestra si el candidato respondió el cuestionario de la vacante. El
+// veredicto se decide por fallos (ver `veredictoCuestionario`), no por
+// porcentaje, y es el mismo que muestra la ficha del candidato.
 function CuestionarioBadge({ aciertos, total }: { aciertos: number; total: number }) {
-  // 5 de 5 = aprobado pleno. El umbral "aprobado" es acertar TODAS.
-  const aprobado = total > 0 && aciertos === total;
+  const veredicto = veredictoCuestionario(aciertos, total);
   const titulo = `Cuestionario · ${aciertos}/${total} correctas`;
-  if (aprobado) {
+  if (veredicto === "aprobado") {
     return (
       <span className="shrink-0 text-emerald-600" title={titulo} aria-label={titulo}>
         <CheckCircle2 className="h-3.5 w-3.5" />
       </span>
     );
   }
-  if (aciertos >= 3) {
+  if (veredicto === "regular") {
     return (
       <span className="shrink-0 text-orange-500" title={titulo} aria-label={titulo}>
         <MinusCircle className="h-3.5 w-3.5" />
@@ -488,9 +487,12 @@ function EmailConfirmDialog({
     { id: string; asunto: string; cuerpo: string; activa: boolean }[] | undefined
   >(undefined);
   useEffect(() => {
+    // Se limpia SIEMPRE (también al cerrar): si no, al reabrir el diálogo para
+    // otra fase se seguiría viendo la previa de la anterior hasta que llegara la
+    // nueva, y se decidía enviar mirando un correo que no era el de esa fase.
+    setTpls(undefined);
     if (!open || !estadoNuevo || !candidato) return;
     let cancel = false;
-    setTpls(undefined);
     previewReclutamientoFaseEmail(candidato.id, estadoNuevo)
       .then((res) => { if (!cancel) setTpls(res); })
       .catch(() => { if (!cancel) setTpls([]); });
@@ -622,6 +624,18 @@ export function KanbanPipeline({ vacante, vacantes = [], onBack, onUpdateCandida
     return () => { cancel = true; };
   }, []);
 
+  // `candidatos` se inicializa con la foto que llegó al montar. Cuando el padre
+  // recarga desde BD (onMoved → recargar), hay que ADOPTAR esos datos frescos:
+  // sin esto la vista seguía mostrando la fase antigua de un candidato (p. ej.
+  // «Documentación» cuando ya estaba en Formación) y se decidía sobre ella.
+  useEffect(() => {
+    setCandidatos(vacante.candidatos);
+    // La ficha abierta también se re-apunta a la versión nueva del candidato.
+    setSelectedCandidato((sel) =>
+      sel ? (vacante.candidatos.find((c) => c.id === sel.id) ?? null) : null,
+    );
+  }, [vacante.candidatos]);
+
   const handleMoverVacante = useCallback(
     async (c: Candidato, vacanteId: string, estado: EstadoReclutamiento) => {
       const fase = getFasePrincipal(estado);
@@ -717,7 +731,13 @@ export function KanbanPipeline({ vacante, vacantes = [], onBack, onUpdateCandida
     } else {
       toast.info(`${c.nombre} ${c.apellidos} movido a ${label}`, { description: "Sin envío de email" });
     }
-  }, [candidatos, onUpdateCandidatos]);
+
+    // Recarga desde BD: el movimiento puede disparar cambios que el estado local
+    // no conoce (fase/estado reales, documentación, empleado vinculado…). Sin
+    // esto la vista se quedaba con la foto del momento en que se abrió y podías
+    // ver a un candidato en una fase que ya no era la suya.
+    onMoved?.();
+  }, [candidatos, onUpdateCandidatos, onMoved]);
 
   const handleDrop = useCallback((estadoDestino: EstadoReclutamiento) => {
     const c = draggedCandidato.current;

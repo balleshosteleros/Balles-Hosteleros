@@ -107,8 +107,10 @@ export async function crearTokenContratoGestoria(
   params: { empresaId: string; empleadoId: string; plazoDias?: number },
 ): Promise<{ ok: true; token: string; tokenId: string } | { ok: false; error: string }> {
   try {
-    // Máximo 7 días: el enlace de subida de contrato caduca pronto por seguridad.
-    const plazoDias = Math.max(1, Math.min(7, params.plazoDias ?? 7));
+    // Plazo configurable por empresa (Ajustes → RRHH → Reclutamiento). Se acota
+    // a 1–90 días, el mismo rango que valida la columna en BD: un enlace de
+    // subida de documentos no debe vivir indefinidamente. Sin configuración, 7.
+    const plazoDias = Math.max(1, Math.min(90, params.plazoDias ?? 7));
     const token = generarToken();
     const tokenHash = hashToken(token);
     const expira = new Date(Date.now() + plazoDias * 86_400_000).toISOString();

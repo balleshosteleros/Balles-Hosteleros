@@ -454,10 +454,13 @@ export async function previewReclutamientoFaseEmail(
       .eq("empresa_id", empresaId)
       .maybeSingle();
     const token = (cand?.documentacion_token as string | null) ?? null;
-    const { enlaceDocumentacion, DOCUMENTACION_TOKEN_DIAS } = await import(
+    const { enlaceDocumentacion, diasValidezDocumentacion } = await import(
       "@/features/rrhh/lib/documentacion-candidato"
     );
-    vars.documentacion_dias_validez = String(DOCUMENTACION_TOKEN_DIAS);
+    // El correo anuncia el plazo REAL configurado por la empresa, no un 7 fijo.
+    vars.documentacion_dias_validez = String(
+      await diasValidezDocumentacion(supabase, empresaId),
+    );
     if (token) {
       vars.enlace_documentacion = enlaceDocumentacion(token);
     } else {
@@ -655,6 +658,29 @@ export async function enviarReclutamientoFaseEmail(
   const { supabase, user, empresaId } = await ctx();
   if (!empresaId) return { sent: false, reason: "Sin empresa activa" };
 
+  // BLINDAJE: el correo de una fase SOLO se envía si el candidato está realmente
+  // en esa fase. La fase la manda el servidor (BD), nunca la pantalla que llama.
+  // Sin esto, un botón con la fase escrita a mano (p. ej. «Reenviar correo de
+  // documentación» en la ficha) enviaba su correo aunque el candidato estuviera
+  // en Entrevista: el candidato recibía un correo que no le tocaba y se le
+  // adelantaban pasos del proceso. Ver `enviarReclutamientoFaseEmailForzado`
+  // para el reenvío deliberado del correo de la fase ACTUAL.
+  const { data: candFase } = await supabase
+    .from("candidatos")
+    .select("estado")
+    .eq("id", candidatoId)
+    .eq("empresa_id", empresaId)
+    .maybeSingle();
+  const estadoReal = (candFase?.estado as string | null) ?? null;
+  if (estadoReal && estadoReal !== estado) {
+    return {
+      sent: false,
+      reason:
+        `No se ha enviado: el candidato está en «${estadoReal}» y ese correo es de «${estado}». ` +
+        `Muévelo a esa fase para enviárselo.`,
+    };
+  }
+
   const tpls = await resolverEmailsParaEstado(supabase, empresaId, estado);
   const activas = tpls.filter((t) => t.activa);
   if (activas.length === 0) {
@@ -682,11 +708,14 @@ export async function enviarReclutamientoFaseEmail(
   // Variables comunes (candidato/vacante/empresa) + placeholders por estado.
   const vars = await buildReclutamientoEmailVars(candidatoId);
   if (estado === "documentacion") {
-    const { asegurarTokenDocumentacion, enlaceDocumentacion, DOCUMENTACION_TOKEN_DIAS } =
+    const { asegurarTokenDocumentacion, enlaceDocumentacion, diasValidezDocumentacion } =
       await import("@/features/rrhh/lib/documentacion-candidato");
     const token = await asegurarTokenDocumentacion(supabase, candidatoId, empresaId);
     if (token) vars.enlace_documentacion = enlaceDocumentacion(token);
-    vars.documentacion_dias_validez = String(DOCUMENTACION_TOKEN_DIAS);
+    // El correo anuncia el plazo REAL configurado por la empresa, no un 7 fijo.
+    vars.documentacion_dias_validez = String(
+      await diasValidezDocumentacion(supabase, empresaId),
+    );
   }
   if (estado === "formacion") {
     vars.enlace_formacion = await resolverEnlaceFormacion(supabase, empresaId, candidatoId, true);

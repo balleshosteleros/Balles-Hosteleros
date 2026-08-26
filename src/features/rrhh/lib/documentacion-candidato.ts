@@ -25,8 +25,30 @@ export const DOC_TIPOS_CANDIDATO: DocTipoCandidato[] = [
 /** Bucket privado donde se guardan los documentos del candidato. */
 export const BUCKET_DOC_CANDIDATOS = "documentacion-candidatos";
 
-/** Días que el enlace de documentación permanece válido desde su envío. */
+/**
+ * Días que el enlace de documentación permanece válido desde su envío. Es solo
+ * el valor POR DEFECTO: el plazo real es configurable por empresa en
+ * Ajustes → RRHH → Reclutamiento (`reclutamiento_config.documentacion_dias_validez`).
+ * Se usa como fallback cuando no hay configuración disponible.
+ */
 export const DOCUMENTACION_TOKEN_DIAS = 7;
+
+/**
+ * Plazo configurado por la empresa para el enlace de documentación. Si no hay
+ * fila de configuración o el valor no es válido, cae al defecto (7 días).
+ */
+export async function diasValidezDocumentacion(
+  supabase: SupabaseClient,
+  empresaId: string,
+): Promise<number> {
+  const { data } = await supabase
+    .from("reclutamiento_config")
+    .select("documentacion_dias_validez")
+    .eq("empresa_id", empresaId)
+    .maybeSingle();
+  const dias = Number(data?.documentacion_dias_validez);
+  return Number.isFinite(dias) && dias >= 1 ? dias : DOCUMENTACION_TOKEN_DIAS;
+}
 
 /**
  * Base URL pública del sitio (para construir enlaces en correos). Delega en el
@@ -84,19 +106,24 @@ export async function asegurarTokenFormacion(
   return token;
 }
 
-/** Fecha de caducidad del enlace: ahora + DOCUMENTACION_TOKEN_DIAS días. */
-export function fechaCaducidadDocumentacion(): string {
-  return new Date(
-    Date.now() + DOCUMENTACION_TOKEN_DIAS * 24 * 60 * 60 * 1000,
-  ).toISOString();
+/**
+ * Fecha de caducidad del enlace: ahora + los días indicados (por defecto, los
+ * 7 de fallback). El plazo real lo decide la empresa en Ajustes → RRHH →
+ * Reclutamiento; los llamadores lo resuelven con `diasValidezDocumentacion`.
+ */
+export function fechaCaducidadDocumentacion(
+  dias: number = DOCUMENTACION_TOKEN_DIAS,
+): string {
+  return new Date(Date.now() + dias * 24 * 60 * 60 * 1000).toISOString();
 }
 
 /**
  * Devuelve el token de documentación del candidato, generándolo si aún no existe
- * (perezoso), y RENUEVA su caducidad a +7 días en cada envío (reenviar el correo
- * reinicia el plazo). Usa el cliente que reciba (service-role en el flujo
- * público, o el cliente de sesión en el Kanban). Best-effort: si falla la
- * escritura, devuelve el token igualmente para no romper el envío del correo.
+ * (perezoso), y RENUEVA su caducidad en cada envío (reenviar el correo reinicia
+ * el plazo, que es el configurado por la empresa). Usa el cliente que reciba
+ * (service-role en el flujo público, o el cliente de sesión en el Kanban).
+ * Best-effort: si falla la escritura, devuelve el token igualmente para no
+ * romper el envío del correo.
  */
 export async function asegurarTokenDocumentacion(
   supabase: SupabaseClient,
@@ -111,7 +138,9 @@ export async function asegurarTokenDocumentacion(
     .maybeSingle();
 
   const token = (cand?.documentacion_token as string | null) ?? crypto.randomUUID();
-  const expira = fechaCaducidadDocumentacion();
+  const expira = fechaCaducidadDocumentacion(
+    await diasValidezDocumentacion(supabase, empresaId),
+  );
 
   const { error } = await supabase
     .from("candidatos")

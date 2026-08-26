@@ -29,6 +29,7 @@ import {
   Send,
   CheckCircle2,
   XCircle,
+  MinusCircle,
   Trash2,
   UsersRound,
   IdCard,
@@ -97,7 +98,18 @@ import {
   type ResenaCriterio,
   type Vacante,
 } from "@/features/rrhh/data/reclutamiento";
+import {
+  veredictoCuestionario,
+  type VeredictoCuestionario,
+} from "@/features/rrhh/data/cuestionario-vacante";
 import { useCriteriosResena } from "@/features/rrhh/data/criteriosResenaStore";
+
+/** Veredicto del cuestionario → tono del contador de la pestaña. */
+const TONO_POR_VEREDICTO: Record<VeredictoCuestionario, "good" | "warn" | "bad"> = {
+  aprobado: "good",
+  regular: "warn",
+  suspenso: "bad",
+};
 import {
   getRespuestaCuestionarioCandidato,
   type RespuestaCuestionarioCandidato,
@@ -358,11 +370,12 @@ export function CandidatoDetailModal({
                       }
                       tone={
                         respuestaCuest
-                          ? respuestaCuest.aciertos === respuestaCuest.totalPreguntas
-                            ? "good"
-                            : respuestaCuest.aciertos >= respuestaCuest.totalPreguntas / 2
-                              ? "warn"
-                              : "bad"
+                          ? TONO_POR_VEREDICTO[
+                              veredictoCuestionario(
+                                respuestaCuest.aciertos,
+                                respuestaCuest.totalPreguntas,
+                              )
+                            ]
                           : "auto"
                       }
                     />
@@ -646,10 +659,10 @@ function CandidatoSidebar({
   resenas: ResenaCandidato[];
   origenes: OrigenCandidatoConfig[];
 }) {
-  // Cuestionario: tick verde solo si TODAS las respuestas son correctas; en
-  // cuanto falla una, X roja. null = aún sin responder.
-  const cuestionarioOk = respuestaCuest
-    ? respuestaCuest.aciertos === respuestaCuest.totalPreguntas
+  // Cuestionario: veredicto por nº de fallos (mismo criterio que el kanban).
+  // null = aún sin responder.
+  const cuestionarioVeredicto = respuestaCuest
+    ? veredictoCuestionario(respuestaCuest.aciertos, respuestaCuest.totalPreguntas)
     : null;
   // Reseñas: nota final = media de todas las estrellas de todas las reseñas.
   const resenaMedia = promedioEstrellas(resenas.flatMap((r) => r.puntuaciones));
@@ -789,15 +802,26 @@ function CandidatoSidebar({
       <div className="rounded-lg border border-border divide-y divide-border">
         <div className="flex items-center justify-between px-3 py-2">
           <span className="text-sm font-semibold text-foreground">Cuestionario</span>
-          {cuestionarioOk === null ? (
+          {cuestionarioVeredicto === null || !respuestaCuest ? (
             <span className="text-xs text-muted-foreground">Sin responder</span>
-          ) : cuestionarioOk ? (
-            <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-600">
-              <CheckCircle2 className="h-5 w-5" /> Correcto
-            </span>
           ) : (
-            <span className="inline-flex items-center gap-1 text-xs font-semibold text-rose-600">
-              <XCircle className="h-5 w-5" /> Suspenso
+            <span className="inline-flex items-center gap-1.5 text-xs font-semibold">
+              <span className="tabular-nums text-muted-foreground">
+                {respuestaCuest.aciertos}/{respuestaCuest.totalPreguntas}
+              </span>
+              {cuestionarioVeredicto === "aprobado" ? (
+                <span className="inline-flex items-center gap-1 text-emerald-600">
+                  <CheckCircle2 className="h-5 w-5" /> Aprobado
+                </span>
+              ) : cuestionarioVeredicto === "regular" ? (
+                <span className="inline-flex items-center gap-1 text-orange-500">
+                  <MinusCircle className="h-5 w-5" /> Regular
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 text-rose-600">
+                  <XCircle className="h-5 w-5" /> Suspenso
+                </span>
+              )}
             </span>
           )}
         </div>
@@ -1058,6 +1082,9 @@ function DocumentacionTabTrigger({ completa }: { completa: boolean }) {
 //  · Recibida  → datos aportados + documentos descargables.
 function DocumentacionTab({ candidato }: { candidato: Candidato }) {
   const completa = !!candidato.documentacionCompletadaAt;
+  // El correo de documentación SOLO se reenvía si el candidato está en esa fase:
+  // mandarlo antes (p. ej. en Entrevista) le adelanta pasos del proceso.
+  const enFaseDocumentacion = candidato.fase === "documentacion";
   const [enlace, setEnlace] = useState<string | null>(null);
   const [cargandoEnlace, setCargandoEnlace] = useState(false);
   const [reenviando, setReenviando] = useState(false);
@@ -1200,13 +1227,19 @@ function DocumentacionTab({ candidato }: { candidato: Candidato }) {
             <Copy className="h-3.5 w-3.5" /> Copiar
           </Button>
         </div>
-        <div className="flex justify-end mt-3">
+        <div className="flex items-center justify-end gap-3 mt-3">
+          {!enFaseDocumentacion && (
+            <p className="text-xs text-muted-foreground text-right">
+              El correo solo se envía cuando el candidato está en la fase
+              «Documentación». Ahora está en «{ESTADOS_CONFIG[candidato.fase]?.label ?? candidato.fase}».
+            </p>
+          )}
           <Button
             type="button"
             size="sm"
-            className="h-9 gap-1.5 text-xs"
+            className="h-9 gap-1.5 text-xs shrink-0"
             onClick={reenviarCorreo}
-            disabled={reenviando}
+            disabled={reenviando || !enFaseDocumentacion}
           >
             <Send className="h-3.5 w-3.5" />
             {reenviando ? "Enviando…" : "Reenviar correo con el enlace"}
@@ -1218,10 +1251,10 @@ function DocumentacionTab({ candidato }: { candidato: Candidato }) {
 }
 
 // ─── Cuestionarios Tab ────────────────────────────────────────
-/** Color según el ratio de aciertos (0–1): verde ≥80%, ámbar ≥50%, rojo resto. */
-function notaColor(ratio: number): string {
-  if (ratio >= 0.8) return "hsl(145, 63%, 42%)";
-  if (ratio >= 0.5) return "hsl(45, 90%, 45%)";
+/** Color del círculo de nota según el veredicto (por fallos, no por ratio). */
+function notaColor(veredicto: VeredictoCuestionario): string {
+  if (veredicto === "aprobado") return "hsl(145, 63%, 42%)";
+  if (veredicto === "regular") return "hsl(45, 90%, 45%)";
   return "hsl(0, 72%, 51%)";
 }
 
@@ -1242,8 +1275,7 @@ function CuestionariosTab({
     );
   }
 
-  const ratio = respuesta.totalPreguntas > 0 ? respuesta.aciertos / respuesta.totalPreguntas : 0;
-  const color = notaColor(ratio);
+  const color = notaColor(veredictoCuestionario(respuesta.aciertos, respuesta.totalPreguntas));
 
   return (
     <div className="space-y-5">

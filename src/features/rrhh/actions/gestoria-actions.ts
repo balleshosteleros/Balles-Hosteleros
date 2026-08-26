@@ -175,6 +175,10 @@ export interface ReclutamientoConfigGeneral {
   archivar_vacantes_cerradas_30d: boolean;
   mostrar_contador_candidatos: boolean;
   notificar_reclutador_nueva_candidatura: boolean;
+  /** Días que vive el enlace con el que el CANDIDATO sube su documentación. */
+  documentacion_dias_validez: number;
+  /** Días que vive el enlace con el que la GESTORÍA sube el contrato firmado. */
+  gestoria_contrato_dias_validez: number;
 }
 
 const CONFIG_GENERAL_DEFAULT: ReclutamientoConfigGeneral = {
@@ -188,6 +192,8 @@ const CONFIG_GENERAL_DEFAULT: ReclutamientoConfigGeneral = {
   archivar_vacantes_cerradas_30d: true,
   mostrar_contador_candidatos: true,
   notificar_reclutador_nueva_candidatura: true,
+  documentacion_dias_validez: 7,
+  gestoria_contrato_dias_validez: 7,
 };
 
 const CONFIG_GENERAL_COLS = Object.keys(CONFIG_GENERAL_DEFAULT).join(", ");
@@ -493,7 +499,18 @@ export async function enviarAltaGestoria(
     // Token único por empleado para que la gestoría suba el contrato firmado.
     // Se inserta con service role (la tabla solo permite SELECT a usuarios).
     const admin = createAdminClient();
-    const tk = await crearTokenContratoGestoria(admin, { empresaId, empleadoId });
+    // Plazo del enlace configurado por la empresa (Ajustes → RRHH → Reclutamiento).
+    const { data: plazoCfg } = await supabase
+      .from("reclutamiento_config")
+      .select("gestoria_contrato_dias_validez")
+      .eq("empresa_id", empresaId)
+      .maybeSingle();
+    const plazoGestoria = Number(plazoCfg?.gestoria_contrato_dias_validez);
+    const tk = await crearTokenContratoGestoria(admin, {
+      empresaId,
+      empleadoId,
+      plazoDias: Number.isFinite(plazoGestoria) && plazoGestoria >= 1 ? plazoGestoria : 7,
+    });
     const botonHtml = tk.ok ? botonSubidaContratoHtml(tk.token) : "";
     const enlaceText = tk.ok ? `\n\nSubir el contrato firmado: ${urlSubidaContrato(tk.token)}` : "";
 
