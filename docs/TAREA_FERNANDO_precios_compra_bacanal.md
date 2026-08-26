@@ -5,6 +5,42 @@
 
 ---
 
+## 🐢 26-AGO — IVÁN: LO DE "LA APP CADA VEZ TARDA MÁS" — MEDIDO, Y NECESITAMOS 3 DATOS TUYOS
+
+> Información + 3 preguntas para Iván. Nada que implementar.
+
+Nos dijiste que la app cada vez tarda más en cargar. **Lo hemos medido hoy contra producción
+igual que en julio** (cuenta de prueba, caché vacía, primer login) y no lo reproducimos — de
+hecho está mejor que nunca:
+
+| | Julio (cuando sí iba mal) | Hoy |
+|---|---|---|
+| Primer login hasta ver el menú | ~20 s | **2,9 s** |
+| Peticiones de arranque | 22 en cola | **6** |
+| Volver a entrar | 0,1 s | 0,1-0,2 s |
+| Desde móvil | — | **1,9 s** |
+
+También hemos descartado con datos la base de datos (sana), el peso de la descarga (ligero,
+764 kB) y la caché de la app instalada (no guarda nada que se pueda pudrir).
+
+**Eso NO significa que no te pase** — significa que lo que notas viene de otro sitio: de una
+pantalla concreta que ha ido cargando más datos, del aparato, del wifi del local, o del
+momento (cada vez que subimos una versión, la primera entrada siguiente arranca en frío, y
+últimamente subimos versiones casi a diario).
+
+### Las 3 preguntas (con esto lo cazamos a tiro hecho)
+
+1. **¿DÓNDE lo notas?** ¿Al abrir la app, o en alguna pantalla concreta? Si es una pantalla,
+   ¿cuál? (esta es la pregunta que más nos acota)
+2. **¿En qué APARATO?** ¿Tu móvil, la tablet del local, el ordenador?
+3. **¿A qué HORA suele pasarte?** ¿A primera hora del día, en pleno servicio…?
+
+Con la pantalla concreta lo reproducimos con la cuenta de prueba en minutos y arreglamos lo
+que sea de verdad, en vez de optimizar a ciegas. Contéstalas de palabra a Fernando o aquí,
+como te venga mejor.
+
+---
+
 ## 📦 26-AGO — IVÁN: EL ENCARGO 7 (CUADRAR EL STOCK) YA TIENE HERRAMIENTAS
 
 > Información + una propuesta de trabajo para el gerente. Nada que implementar por vuestra parte.
