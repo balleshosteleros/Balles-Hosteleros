@@ -208,7 +208,64 @@ como venta) + Cubo Coctel Mix.
 
 ---
 
-## 🧩 PROPUESTA DE IMPORTADOR (Iván pide que se pruebe con Habana y Bacanal)
+## ✅ IMPORTADOR DE CATÁLOGO — YA CONSTRUIDO (26-ago, commit `8dd904ae`)
+
+> **Fernando: esto ya no es una propuesta, está hecho y en el repo.** Iván dijo "sí, prepáramelo".
+> Sigue SIN ejecutarse contra producción: la pantalla existe, se ha probado en vivo contra Ágora
+> en modo lectura, pero **no se ha importado nada todavía**. La decisión de darle al botón es de Iván.
+
+**Ruta:** Logística → **IMPORTAR CATÁLOGO** (`/logistica/importar-catalogo`)
+
+**Ficheros:**
+- `src/features/logistica/lib/importador-catalogo/clasificar.ts` — librería PURA (sin BD ni red),
+  es donde vive toda la interpretación. Se puede probar sin tocar prod.
+- `src/features/logistica/types/importador-catalogo.ts` — schemas Zod de lo que entra de Ágora.
+- `src/features/logistica/services/agora-catalogo.ts` — lectura del maestro (solo lectura).
+- `src/features/logistica/actions/importador-catalogo-actions.ts` — `previsualizar…` (no escribe)
+  e `importar…` (solo lo aprobado).
+- `src/features/logistica/components/ImportarCatalogoView.tsx` — la pantalla.
+
+**Resultado real de la prueba en vivo (26-ago, sin escribir nada):**
+
+| | Propuestas | Venta | Compra | Vincular | Revisar | Descartar |
+|---|---|---|---|---|---|---|
+| **BACANAL** | 97 | 7 | 25 | 21 | 22 | 22 |
+| **HABANA** | 45 | 4 | 5 | 10 | 0 | 26 |
+
+Los 4 cócteles que destapaste salen bien clasificados como venta con su precio de carta
+(Danza Macabra 9,75 €). El payload valida con el mismo schema Zod del servidor: 0 vínculos
+huérfanos, 0 duplicados, 0 productos borrados colados.
+
+**Decisiones de diseño que te afectan:**
+
+1. **Nada de capa universal.** Solo Ágora, por la decisión estratégica de Iván (P1).
+2. **Incremental, nunca destructivo.** No hay ningún `delete`. Ojo: tu
+   `scripts/agora/migrar-catalogo.mjs` sí borra el catálogo entero (líneas 60-65) — hoy se
+   llevaría por delante los ~215 productos a mano de Bacanal y sus escandallos por CASCADE.
+   **No lo lances.**
+3. **El servidor no se fía del navegador.** Al importar se RELEE Ágora y se usa el `agora_id`
+   como clave; del cliente solo se respeta la decisión y el criterio humano (cantidad del
+   enlace y precio a mano).
+4. **Los borrados de Ágora no pueden entrar** aunque figuren en la lista que manda el navegador
+   (Ágora devuelve 1.255 productos, de los cuales 616 están borrados y 639 activos).
+5. **Guarda anti-duplicado**: si al crear ya existe ese nombre+tipo, se vincula en vez de
+   duplicar. Compra y venta sí pueden compartir nombre — es el diseño de las bebidas.
+6. **Permiso**: LOGÍSTICA (editar) de Ajustes → Roles, sin bypass de admin.
+
+**Hallazgo nuevo al probarlo — el emparejamiento de bebidas necesita tolerancia:**
+La ficha de compra de un cóctel suele llevar el prefijo del preparado: `Danza Macabra` se compra
+como **`Prebeach Danza Macabra`**. Con emparejamiento exacto el enlace no se proponía y la bebida
+entraba en almacén sin salir nunca. Ahora se acepta que el nombre de venta esté CONTENIDO en el
+de compra por palabras completas (nunca al revés: "Cola" no casa con "Coca Cola"), y **si hay dos
+candidatas empatadas no adivina** — `Boom-Boom` tiene `Prebeach Boom-Boom` y `Bengalas Boom-boom`,
+así que lo deja para que lo decida una persona.
+
+**Lo que sigue pendiente de Iván:** confirmar la lista de "descartar" y decidir quién escribe las
+~200 recetas que faltan (eso el importador no lo resuelve).
+
+---
+
+## 🧩 PROPUESTA ORIGINAL DEL IMPORTADOR (queda como referencia de lo que se pidió)
 
 Iván: *"hazme una propuesta de lo que ves, y que se permita cambiar en la visual para aceptar lo
 más fácil posible y cerrar la tarea"*. Esto es lo que se propone construir — **NO está
