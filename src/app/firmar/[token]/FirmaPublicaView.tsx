@@ -86,8 +86,19 @@ export function FirmaPublicaView({
   // debe elegir SÍ o NO antes de poder firmar. El "sí" pide una segunda
   // confirmación, porque implica desplazarse por su cuenta y en su tiempo libre.
   const esReconocimiento = documento.tipo === "reconocimiento_medico";
+  /**
+   * Comunicación de baja causada por la empresa. Es el único documento donde
+   * firmar NO es aceptar: es un acuse de recibo. Por eso no se pide declarar
+   * que la información es correcta (el trabajador puede discrepar de los
+   * hechos y firmar igualmente el recibí) ni se ofrece «rechazar»: si no
+   * quiere firmar, cierra la página y en el acta queda la constancia de que lo
+   * abrió y lo leyó.
+   */
+  const esComunicacionBaja = documento.tipo === "baja_empresa";
   const [decision, setDecision] = useState<"si" | "no" | null>(null);
   const [showAvisoSi, setShowAvisoSi] = useState(false);
+  // Distingue "cerró confirmando" de "cerró cancelando" (Escape / clic fuera).
+  const confirmadoRef = useRef(false);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [trazoVacio, setTrazoVacio] = useState(true);
@@ -360,33 +371,43 @@ export function FirmaPublicaView({
 
           {etapa === "leer" && (
             <Card className="p-5 space-y-3">
-              <label className="flex items-start gap-2 text-sm text-zinc-700 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={acepto}
-                  onChange={(e) => setAcepto(e.target.checked)}
-                  className="mt-0.5"
-                />
-                <span>
-                  He leído el documento y declaro que la información que contiene
-                  es correcta.
-                </span>
-              </label>
+              {/* En la comunicación de baja no se declara nada: solo se firma
+                  el recibí, o se cierra la página sin firmar. */}
+              {!esComunicacionBaja && (
+                <label className="flex items-start gap-2 text-sm text-zinc-700 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={acepto}
+                    onChange={(e) => setAcepto(e.target.checked)}
+                    className="mt-0.5"
+                  />
+                  <span>
+                    He leído el documento y declaro que la información que contiene
+                    es correcta.
+                  </span>
+                </label>
+              )}
               <Button
                 onClick={pedirOTP}
-                disabled={!acepto || enviandoOtp || (esReconocimiento && !decision)}
+                disabled={
+                  (!acepto && !esComunicacionBaja) ||
+                  enviandoOtp ||
+                  (esReconocimiento && !decision)
+                }
                 className="w-full"
                 variant="primary"
               >
                 <PenLine className="h-4 w-4 mr-1" />
                 {enviandoOtp ? "Enviando código…" : "Continuar a firmar"}
               </Button>
-              <button
-                onClick={() => setShowRechazar(true)}
-                className="text-xs text-rose-600 hover:underline w-full text-center"
-              >
-                Rechazar firma
-              </button>
+              {!esComunicacionBaja && (
+                <button
+                  onClick={() => setShowRechazar(true)}
+                  className="text-xs text-rose-600 hover:underline w-full text-center"
+                >
+                  Rechazar firma
+                </button>
+              )}
             </Card>
           )}
 
@@ -508,7 +529,17 @@ export function FirmaPublicaView({
       {/* Advertencia al elegir SÍ: el desplazamiento corre por cuenta del
           trabajador y en su tiempo libre. Se confirma dos veces, y si cancela
           vuelve atrás sin decisión para que pueda elegir "No quiero". */}
-      <Dialog open={showAvisoSi} onOpenChange={setShowAvisoSi}>
+      <Dialog
+        open={showAvisoSi}
+        onOpenChange={(abierto) => {
+          // Cerrarla SIN pulsar "Sí, confirmo" (Escape, clic fuera o el botón de
+          // cancelar) es cancelar: se descarta el "sí" para que no quede una
+          // decisión que el trabajador no llegó a confirmar.
+          if (!abierto && !confirmadoRef.current) setDecision(null);
+          confirmadoRef.current = false;
+          setShowAvisoSi(abierto);
+        }}
+      >
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Antes de confirmar, ten en cuenta</DialogTitle>
@@ -540,8 +571,9 @@ export function FirmaPublicaView({
             <Button
               variant="primary"
               onClick={() => {
-                setDecision("si");
+                confirmadoRef.current = true;
                 setShowAvisoSi(false);
+                setDecision("si");
               }}
             >
               Sí, confirmo que quiero pasarlo

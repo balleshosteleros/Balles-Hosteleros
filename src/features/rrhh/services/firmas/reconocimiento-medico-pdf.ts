@@ -226,9 +226,9 @@ export async function generarReconocimientoMedicoPDF(
 
 /**
  * Estampa la decisión del trabajador sobre el PDF original: dibuja el aspa en la
- * casilla elegida y una nota firme debajo. Se aplica al firmar, antes de
- * concatenar el acta eIDAS, para que el documento archivado deje constancia de
- * QUÉ eligió y no solo de que fue informado.
+ * casilla elegida. Se aplica al firmar, antes de concatenar el acta eIDAS, para
+ * que el documento archivado deje constancia de QUÉ eligió y no solo de que fue
+ * informado.
  */
 export async function marcarDecisionReconocimiento(
   pdfBytes: Uint8Array<ArrayBuffer>,
