@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo, useEffect, useCallback, type ReactNode } from "react";
+import { useSincronizacionEnVivo } from "@/shared/hooks/useSincronizacionEnVivo";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { useAuth } from "@/features/auth/contexts/auth-context";
 import { getComunicadosByEmpresa, type Comunicado, ESTADO_COMUNICADO_LABELS, RECURRENCIA_LABELS, type EstadoComunicado, type Recurrencia } from "@/features/rrhh/data/comunicados";
@@ -649,6 +650,14 @@ export function ComunicadosView() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [editorMode, setEditorMode] = useState<"list" | "create" | "edit">("list");
   const [editingComunicado, setEditingComunicado] = useState<Comunicado | null>(null);
+
+  // Sincronizacion en vivo: un comunicado publicado por otro responsable
+  // aparece sin recargar. Se pausa mientras se redacta o edita uno.
+  useSincronizacionEnVivo({
+    tablas: ["comunicados"],
+    onCambio: () => void loadComunicados(),
+    pausado: !!editingComunicado,
+  });
   const [faltantesComunicado, setFaltantesComunicado] = useState<string[]>([]);
   const [showConfig, setShowConfig] = useState(false);
   const { validar: validarComunicado } = useReglasSubmodulo("gerencia", "comunicados");

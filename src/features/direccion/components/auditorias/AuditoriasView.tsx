@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, useCallback } from "react";
+import { useSincronizacionEnVivo } from "@/shared/hooks/useSincronizacionEnVivo";
 import { toast } from "sonner";
 import { Plus, ClipboardList, ChevronRight, CircleSlash } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -79,6 +80,15 @@ export function AuditoriasView() {
       .then((d) => setDepartamentos(d.filter((x) => x.estado === "Activo")))
       .catch(() => setDepartamentos([]));
   }, [cargar]);
+
+  // Sincronizacion en vivo: una auditoria que rellena otro responsable, o las
+  // respuestas que va enviando, aparecen sin recargar. Se pausa mientras se crea
+  // una nueva para no perder lo elegido.
+  useSincronizacionEnVivo({
+    tablas: ["auditorias", "auditoria_respuestas"],
+    onCambio: () => void cargar(),
+    pausado: nuevaOpen,
+  });
 
   const periodosDisponibles = useMemo(() => {
     const set = new Set(auditorias.map((a) => a.periodo));

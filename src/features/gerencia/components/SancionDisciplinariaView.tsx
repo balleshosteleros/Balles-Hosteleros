@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo } from "react";
+import { useSincronizacionEnVivo } from "@/shared/hooks/useSincronizacionEnVivo";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { toast } from "sonner";
 import { Card, CardContent } from "@/components/ui/card";
@@ -163,6 +164,13 @@ export function SancionDisciplinariaView() {
   }, []);
 
   useEffect(() => { void load(); }, [load]);
+
+  // Sincronizacion en vivo: una sancion registrada o firmada por otro
+  // responsable aparece sin recargar.
+  useSincronizacionEnVivo({
+    tablas: ["firmas_documentos"],
+    onCambio: () => void load(),
+  });
 
   const empleadoSel = useMemo(
     () => empleados.find(e => e.userId === form.empleadoId) ?? null,

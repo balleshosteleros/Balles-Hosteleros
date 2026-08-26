@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo, useEffect, useCallback } from "react";
+import { useSincronizacionEnVivo } from "@/shared/hooks/useSincronizacionEnVivo";
 import { toast } from "sonner";
 import * as Icons from "lucide-react";
 import {
@@ -136,6 +137,14 @@ export function VencimientosView() {
   }, []);
 
   useEffect(() => { cargar(); }, [cargar]);
+
+  // Sincronizacion en vivo: los vencimientos y sus revisiones los actualiza
+  // quien renueva cada documento. Se pausa con cualquier dialogo abierto.
+  useSincronizacionEnVivo({
+    tablas: ["vencimientos_documentos", "revisiones", "revisiones_historial"],
+    onCambio: () => void cargar(),
+    pausado: detalleOpen || nuevaOpen || registrarOpen,
+  });
 
   const conEstado = useMemo(
     () => vencimientos

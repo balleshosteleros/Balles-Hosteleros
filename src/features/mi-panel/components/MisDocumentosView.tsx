@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { useSincronizacionEnVivo } from "@/shared/hooks/useSincronizacionEnVivo";
 import { toast } from "sonner";
 import {
   ChevronRight,
@@ -98,6 +99,13 @@ export function MisDocumentosView() {
   useEffect(() => {
     void cargar();
   }, [cargar]);
+
+  // Sincronizacion en vivo: un documento que RRHH sube o pone a firmar aparece
+  // en el panel del empleado al momento, sin tener que recargar.
+  useSincronizacionEnVivo({
+    tablas: ["documentos_empleado", "firmas_documentos"],
+    onCambio: () => void cargar(),
+  });
 
   const conteo = (id: CategoriaDocumento) => docs?.[id]?.length ?? 0;
 
