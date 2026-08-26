@@ -5,7 +5,7 @@ import {
   MessageCircle, Send, Users, Plus, Search, Pin, Smile, MoreVertical,
   BellOff, Bell, Pencil, Trash2, LogOut, Lock, ChevronLeft, ChevronDown,
   ShieldCheck, Eraser, Hourglass, X, Paperclip, Mic, Building2, Briefcase, Check,
-  FileText, Download, Loader2, Mail, MailOpen, CheckCheck, Sparkles,
+  FileText, Download, Loader2, Mail, MailOpen, CheckCheck, Sparkles, PanelLeft,
 } from "lucide-react";
 import {
   Sheet, SheetContent, SheetTitle, SheetTrigger, SheetClose,
@@ -331,6 +331,9 @@ export function ChatDrawer({ children }: { children: ReactNode }) {
   const [dlgLectores, setDlgLectores] = useState<Mensaje | null>(null);
   const [lectores, setLectores] = useState<LectorMensaje[]>([]);
   const [mejorandoIA, setMejorandoIA] = useState(false);
+  // Columna de grupos plegable: al ocultarla la conversación ocupa todo el
+  // ancho, que es lo que hace falta para leer mensajes largos.
+  const [listaOculta, setListaOculta] = useState(false);
 
   const [dlgNuevo, setDlgNuevo] = useState(false);
   const [nombreNuevo, setNombreNuevo] = useState("");
@@ -1058,13 +1061,7 @@ export function ChatDrawer({ children }: { children: ReactNode }) {
 
       <SheetContent
         side="right"
-        // El panel por defecto ocupa media pantalla (50vw) y con la lista de
-        // grupos al lado la conversación se quedaba en un tercio: un mensaje
-        // medianamente largo salía en columna estrecha e ilegible, y el texto
-        // que devuelve la IA (más largo) no había forma de revisarlo.
-        // Le damos ~3/4 de pantalla, con un tope para que en monitores muy
-        // anchos no quede una línea de texto interminable.
-        className="flex flex-col gap-0 p-0 [&>button]:hidden sm:w-[78vw] sm:max-w-[1500px]"
+        className="flex flex-col gap-0 p-0 [&>button]:hidden"
       >
         <SheetTitle className="sr-only">Comunicación interna</SheetTitle>
 
@@ -1090,7 +1087,15 @@ export function ChatDrawer({ children }: { children: ReactNode }) {
 
         <div className="flex flex-1 min-h-0">
           {/* Sidebar estilo WhatsApp */}
-          <aside className="w-[380px] shrink-0 border-r bg-background flex flex-col">
+          <aside
+            className={cn(
+              // 300px en vez de 380: la lista de grupos solo necesita el nombre
+              // y el último mensaje; el ancho que sobraba se lo queda la
+              // conversación. Al ocultarla desaparece del todo (w-0).
+              "shrink-0 border-r bg-background flex flex-col overflow-hidden transition-[width] duration-200",
+              listaOculta ? "w-0 border-r-0" : "w-[300px]",
+            )}
+          >
             {/* Header de comunidad */}
             <div className="border-b px-4 py-3 flex items-center gap-3">
               <GrupoAvatar logoUrl={logoUrl} iniciales={iniciales} color={colorEmpresa} size="md" />
@@ -1217,6 +1222,15 @@ export function ChatDrawer({ children }: { children: ReactNode }) {
                       title="Volver"
                     >
                       <ChevronLeft className="h-5 w-5" />
+                    </button>
+                    {/* Oculta/muestra la lista de grupos para dar todo el ancho
+                        a la conversación. */}
+                    <button
+                      onClick={() => setListaOculta((v) => !v)}
+                      className="hidden lg:flex shrink-0 items-center justify-center rounded-full p-1.5 text-muted-foreground hover:bg-muted"
+                      title={listaOculta ? "Mostrar los grupos" : "Ocultar los grupos"}
+                    >
+                      <PanelLeft className="h-5 w-5" />
                     </button>
                     <GrupoAvatar logoUrl={logoUrl} iniciales={iniciales} color={colorEmpresa} size="md" />
                     <div className="min-w-0">
@@ -1348,9 +1362,7 @@ export function ChatDrawer({ children }: { children: ReactNode }) {
                             )}
                             <div
                               className={cn(
-                                // 85% en vez de 70%: con el panel ya ancho, dejar
-                                // casi un tercio en blanco solo estrechaba el texto.
-                                "max-w-[85%] rounded-2xl px-3.5 py-2 shadow-sm",
+                                "max-w-[70%] rounded-2xl px-3.5 py-2 shadow-sm",
                                 propio
                                   // Propio: verde muy suave (estilo WhatsApp), texto normal.
                                   ? "bg-[#d9fdd3] dark:bg-emerald-900/40 text-foreground rounded-br-md"
