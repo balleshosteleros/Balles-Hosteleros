@@ -10,7 +10,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { NumberInput } from "@/shared/components/NumberInput";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import {
@@ -124,12 +124,12 @@ export function OtorgarToqueDialog({ open, onOpenChange, empresaId, onOtorgado }
             <Label htmlFor="toques-input" className="text-xs">
               Points (negativo permitido para ajustes)
             </Label>
-            <Input
+            <NumberInput
               id="toques-input"
-              type="number"
+              decimales={false}
               className="mt-1"
               value={toques}
-              onChange={(e) => setToques(Number(e.target.value) || 0)}
+              onValueChange={setToques}
             />
           </div>
           <div>

@@ -3,6 +3,7 @@
 import * as React from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { NumberInput } from "@/shared/components/NumberInput";
 import { usePOSTicket } from "../hooks/usePOSTicket";
 import { formatEur } from "../services/calculo-ticket";
 import {
@@ -76,12 +77,13 @@ export function ModalDividir({ open, onOpenChange, onConfirmar }: Props) {
         {modo === "partesIguales" && (
           <div className="flex items-center gap-3 rounded-md border bg-muted/30 p-3">
             <span>Dividir entre</span>
-            <input
-              type="number"
+            <NumberInput
               min={1}
               max={20}
+              emptyValue={1}
+              decimales={false}
               value={numPartes}
-              onChange={(e) => setNumPartes(Math.max(1, Number(e.target.value) || 1))}
+              onValueChange={setNumPartes}
               className="w-20 rounded-md border px-2 py-1 text-center font-bold"
             />
             <span>personas</span>
@@ -91,13 +93,11 @@ export function ModalDividir({ open, onOpenChange, onConfirmar }: Props) {
         {modo === "mitades" && (
           <div className="flex items-center gap-3 rounded-md border bg-muted/30 p-3">
             <span>Parte A pagará</span>
-            <input
-              type="number"
-              step="0.01"
+            <NumberInput
               min={0}
               max={totales.total}
               value={importe1}
-              onChange={(e) => setImporte1(Math.max(0, Number(e.target.value) || 0))}
+              onValueChange={setImporte1}
               className="w-28 rounded-md border px-2 py-1 text-right font-bold"
             />
             <span>€ · Parte B pagará {formatEur(totales.total - importe1)}</span>
@@ -108,12 +108,13 @@ export function ModalDividir({ open, onOpenChange, onConfirmar }: Props) {
           <>
             <div className="flex items-center gap-2 rounded-md border bg-muted/30 p-3">
               <span>Comensales:</span>
-              <input
-                type="number"
+              <NumberInput
                 min={1}
                 max={20}
+                emptyValue={1}
+                decimales={false}
                 value={numPartes}
-                onChange={(e) => setNumPartes(Math.max(1, Number(e.target.value) || 1))}
+                onValueChange={setNumPartes}
                 className="w-16 rounded-md border px-2 py-1 text-center font-bold"
               />
               <div className="ml-2 flex flex-wrap gap-1">

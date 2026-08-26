@@ -5,6 +5,7 @@ import { Plus, Megaphone, Pencil, Trash2, Cloud, CloudOff, Play, Pause, RefreshC
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { NumberInput } from "@/shared/components/NumberInput";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -332,20 +333,19 @@ export function CampanasMetaView() {
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
                   <Label>Presupuesto diario (€)</Label>
-                  <Input
-                    type="number"
+                  <NumberInput
                     min={1}
                     value={edit.presupuestoDiario}
-                    onChange={(e) => setEdit({ ...edit, presupuestoDiario: Number(e.target.value) })}
+                    onValueChange={(v) => setEdit({ ...edit, presupuestoDiario: v })}
                   />
                 </div>
                 <div className="space-y-1.5">
                   <Label>Duración (días)</Label>
-                  <Input
-                    type="number"
+                  <NumberInput
                     min={1}
+                    decimales={false}
                     value={edit.duracionDias}
-                    onChange={(e) => setEdit({ ...edit, duracionDias: Number(e.target.value) })}
+                    onValueChange={(v) => setEdit({ ...edit, duracionDias: v })}
                   />
                 </div>
               </div>
@@ -376,22 +376,22 @@ export function CampanasMetaView() {
                 <div className="grid grid-cols-3 gap-3">
                   <div className="space-y-1.5">
                     <Label className="text-xs">Edad mín.</Label>
-                    <Input
-                      type="number"
+                    <NumberInput
                       min={13}
                       max={65}
+                      decimales={false}
                       value={edit.publicoObjetivo.edadMin}
-                      onChange={(e) => setEdit({ ...edit, publicoObjetivo: { ...edit.publicoObjetivo, edadMin: Number(e.target.value) } })}
+                      onValueChange={(v) => setEdit({ ...edit, publicoObjetivo: { ...edit.publicoObjetivo, edadMin: v } })}
                     />
                   </div>
                   <div className="space-y-1.5">
                     <Label className="text-xs">Edad máx.</Label>
-                    <Input
-                      type="number"
+                    <NumberInput
                       min={13}
                       max={65}
+                      decimales={false}
                       value={edit.publicoObjetivo.edadMax}
-                      onChange={(e) => setEdit({ ...edit, publicoObjetivo: { ...edit.publicoObjetivo, edadMax: Number(e.target.value) } })}
+                      onValueChange={(v) => setEdit({ ...edit, publicoObjetivo: { ...edit.publicoObjetivo, edadMax: v } })}
                     />
                   </div>
                   <div className="space-y-1.5">

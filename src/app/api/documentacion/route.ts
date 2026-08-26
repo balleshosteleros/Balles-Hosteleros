@@ -18,6 +18,7 @@ import {
   esDniNieValido,
   esIbanValido,
   esSeguridadSocialValida,
+  motivoFechaNacimientoNoValida,
   normalizarDniNie,
   normalizarIban,
   normalizarSeguridadSocial,
@@ -110,10 +111,12 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, error }, { status: 400 });
     }
 
-    // La fecha de nacimiento debe ser real y estar en el pasado.
-    const fechaNac = new Date(`${parsed.data.fecha_nacimiento}T00:00:00Z`);
-    if (Number.isNaN(fechaNac.getTime()) || fechaNac.getTime() >= Date.now()) {
-      return NextResponse.json({ ok: false, error: "La fecha de nacimiento no es válida" }, { status: 400 });
+    // La fecha de nacimiento debe ser real, estar en el pasado y alcanzar la edad
+    // mínima legal para trabajar (16 años). Barrera definitiva: el formulario ya
+    // lo impide, pero aquí se rechaza aunque se llame a la API directamente.
+    const motivoEdad = motivoFechaNacimientoNoValida(parsed.data.fecha_nacimiento);
+    if (motivoEdad) {
+      return NextResponse.json({ ok: false, error: motivoEdad }, { status: 400 });
     }
 
     // Normaliza + valida los números confirmados por la persona.

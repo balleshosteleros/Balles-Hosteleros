@@ -25,6 +25,8 @@ import {
 import {
   MAX_PREGUNTAS_CUESTIONARIO,
   MAX_OPCIONES_PREGUNTA,
+  MAX_FALLOS_APROBADO,
+  MAX_FALLOS_REGULAR,
   preguntaVacia,
   nuevoId,
   type PreguntaCuestionario,
@@ -196,7 +198,7 @@ export function CuestionarioBuilderDialog({ open, onOpenChange, cuestionarioId, 
         <DialogHeader>
           <DialogTitle>{cuestionarioId ? "Editar cuestionario" : "Nuevo cuestionario"}</DialogTitle>
           <DialogDescription>
-            Elección múltiple con una respuesta correcta por pregunta. La nota del candidato será aciertos ÷ nº de preguntas × 10. Máximo {MAX_PREGUNTAS_CUESTIONARIO} preguntas.
+            Elección múltiple con una respuesta correcta por pregunta. Hasta {MAX_FALLOS_APROBADO} fallo el candidato sale aprobado, hasta {MAX_FALLOS_REGULAR} regular, y a partir de ahí suspenso. Máximo {MAX_PREGUNTAS_CUESTIONARIO} preguntas.
           </DialogDescription>
         </DialogHeader>
 

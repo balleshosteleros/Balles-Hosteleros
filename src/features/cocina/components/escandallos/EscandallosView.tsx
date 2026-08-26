@@ -26,6 +26,7 @@ import type { Producto } from "@/features/logistica/data/productos";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { NumberInput } from "@/shared/components/NumberInput";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -933,14 +934,13 @@ function EscandalloDetalle({
                                 onValueChange={(v) => handleIngredienteMerma(ing.id, v[0])}
                               />
                               <div className="flex items-center gap-1 shrink-0">
-                                <Input
+                                <NumberInput
                                   className="h-7 w-16 text-sm text-right"
-                                  type="number"
-                                  step="1"
-                                  min="0"
-                                  max="100"
+                                  min={0}
+                                  max={100}
+                                  decimales={false}
                                   value={ing.merma ?? 0}
-                                  onChange={(e) => handleIngredienteMerma(ing.id, +e.target.value)}
+                                  onValueChange={(v) => handleIngredienteMerma(ing.id, v)}
                                 />
                                 <span className="text-[11px] text-muted-foreground w-8">%</span>
                               </div>
@@ -1165,8 +1165,8 @@ function EscandalloDetalle({
                   <CardContent className="p-4 text-center">
                     <Euro className="h-5 w-5 mx-auto text-muted-foreground mb-1" />
                     <p className="text-xs text-muted-foreground">Coste</p>
-                    <Input className="mt-1 text-center font-bold h-9" type="number" step="0.01"
-                      value={form.costeTotal} onChange={(e) => update({ costeTotal: +e.target.value })} />
+                    <NumberInput className="mt-1 text-center font-bold h-9"
+                      value={form.costeTotal} onValueChange={(v) => update({ costeTotal: v })} />
                   </CardContent>
                 </Card>
                 <Card className="border bg-card">
@@ -1180,8 +1180,8 @@ function EscandalloDetalle({
                   <CardContent className="p-4 text-center">
                     <Euro className="h-5 w-5 mx-auto text-primary mb-1" />
                     <p className="text-xs text-muted-foreground">Precio de Venta</p>
-                    <Input className="mt-1 text-center font-bold h-9" type="number" step="0.01"
-                      value={form.pvp} onChange={(e) => update({ pvp: +e.target.value })} />
+                    <NumberInput className="mt-1 text-center font-bold h-9"
+                      value={form.pvp} onValueChange={(v) => update({ pvp: v })} />
                   </CardContent>
                 </Card>
                 <Card className="border bg-card">

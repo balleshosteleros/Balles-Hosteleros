@@ -14,6 +14,7 @@ import {
   Award,
   Crown,
   Star,
+  Hourglass,
   ChevronRight,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
@@ -27,7 +28,14 @@ const ICONS: Record<string, LucideIcon> = {
   Crown,
   Trophy,
   Star,
+  Hourglass,
 };
+
+/** Fecha de calendario YYYY-MM-DD → DD/MM/AAAA, sin tocar zonas horarias. */
+function fechaCorta(iso: string): string {
+  const [a, m, d] = iso.split("-");
+  return `${d}/${m}/${a}`;
+}
 
 interface Props {
   resumen: MiPanelResumen["points"];
@@ -64,33 +72,54 @@ export function PointsHeroCard({ resumen, loading = false }: Props) {
           <div className="text-2xl md:text-3xl font-bold text-slate-800">
             {loading ? "—" : (resumen.nivelNombre ?? "Aprendiz")}
           </div>
-          <div className="mt-3 space-y-1.5">
-            <div className="flex items-center justify-between text-xs text-muted-foreground gap-2">
-              <span>
-                <strong className="text-slate-800 tabular-nums">
-                  {resumen.acumulados}
-                </strong>{" "}
-                points acumulados
-              </span>
-              {resumen.siguienteNombre ? (
-                <span className="text-right">
-                  Faltan{" "}
-                  <strong className="text-slate-800 tabular-nums">
-                    {resumen.faltan}
-                  </strong>{" "}
-                  para{" "}
+          {/* En periodo de prueba todavía no se juega: sin barra ni cuenta de
+              points, solo hasta cuándo dura y qué pasa al superarlo. */}
+          {resumen.enPeriodoPrueba ? (
+            <div className="mt-3 text-xs text-slate-600 leading-relaxed">
+              Estás en tu periodo de prueba
+              {resumen.pruebaFechaFin && (
+                <>
+                  {" "}hasta el{" "}
                   <strong className="text-slate-800">
-                    {resumen.siguienteNombre}
+                    {fechaCorta(resumen.pruebaFechaFin)}
                   </strong>
-                </span>
-              ) : (
-                <span className="text-amber-700 font-medium">
-                  ¡Nivel máximo!
-                </span>
+                </>
               )}
+              . Cuando lo superes entrarás en{" "}
+              <strong className="text-slate-800">
+                {resumen.siguienteNombre ?? "el primer nivel"}
+              </strong>{" "}
+              y empezarás a ganar points.
             </div>
-            <Progress value={resumen.progresoPct} className="h-2" />
-          </div>
+          ) : (
+            <div className="mt-3 space-y-1.5">
+              <div className="flex items-center justify-between text-xs text-muted-foreground gap-2">
+                <span>
+                  <strong className="text-slate-800 tabular-nums">
+                    {resumen.acumulados}
+                  </strong>{" "}
+                  points acumulados
+                </span>
+                {resumen.siguienteNombre ? (
+                  <span className="text-right">
+                    Faltan{" "}
+                    <strong className="text-slate-800 tabular-nums">
+                      {resumen.faltan}
+                    </strong>{" "}
+                    para{" "}
+                    <strong className="text-slate-800">
+                      {resumen.siguienteNombre}
+                    </strong>
+                  </span>
+                ) : (
+                  <span className="text-amber-700 font-medium">
+                    ¡Nivel máximo!
+                  </span>
+                )}
+              </div>
+              <Progress value={resumen.progresoPct} className="h-2" />
+            </div>
+          )}
         </div>
 
         {/* Saldo + CTA */}

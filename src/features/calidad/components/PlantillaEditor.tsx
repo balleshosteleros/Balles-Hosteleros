@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { NumberInput } from "@/shared/components/NumberInput";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -571,12 +572,11 @@ function PreguntaBloque({
           {pregunta.tipo !== "texto_largo" && pregunta.tipo !== "observaciones" && (
             <div className="flex items-center gap-1.5 text-xs">
               <span className="text-muted-foreground">Peso:</span>
-              <Input
-                type="number"
+              <NumberInput
                 value={pregunta.peso}
-                onChange={(e) => onActualizar({ peso: parseFloat(e.target.value) || 0 })}
+                onValueChange={(v) => onActualizar({ peso: v })}
                 step="0.5"
-                min="0"
+                min={0}
                 className="h-7 w-16 text-xs"
               />
             </div>

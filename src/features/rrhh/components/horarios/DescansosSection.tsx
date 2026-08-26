@@ -24,6 +24,7 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { NumberInput } from "@/shared/components/NumberInput";
 import { Switch } from "@/components/ui/switch";
 import {
   Dialog,
@@ -600,13 +601,12 @@ function DescansoEditDialog({
               </label>
               {descanso.duracionTipo === "duracion" && (
                 <div className="ml-6">
-                  <Input
-                    type="number"
+                  <NumberInput
                     min={1}
+                    decimales={false}
+                    emptyValue={1}
                     value={descanso.duracionMinutos ?? 30}
-                    onChange={(e) =>
-                      update({ duracionMinutos: Number(e.target.value) })
-                    }
+                    onValueChange={(v) => update({ duracionMinutos: v })}
                     className="w-32"
                     placeholder="Minutos"
                   />

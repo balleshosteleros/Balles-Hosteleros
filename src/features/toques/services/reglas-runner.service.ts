@@ -61,6 +61,50 @@ export interface RunnerReport {
   inserted: number;
   by_regla: Record<string, number>;
   errores: string[];
+  /** Candidatos descartados por estar en periodo de prueba (aún no juegan). */
+  excluidos_periodo_prueba?: number;
+}
+
+/**
+ * De una lista de user_ids, cuáles tienen un periodo de prueba ABIERTO.
+ * Se resuelve vía `empleados.user_id` porque el periodo cuelga de la ficha de
+ * empleado, no del usuario de auth.
+ */
+async function usersEnPeriodoPrueba(
+  admin: SupabaseClient,
+  userIds: string[],
+): Promise<Set<string>> {
+  const vacio = new Set<string>();
+  if (userIds.length === 0) return vacio;
+  try {
+    const { data: fichas } = await admin
+      .from("empleados")
+      .select("id, user_id")
+      .in("user_id", userIds);
+    const filas = (fichas ?? []) as Array<{ id: string; user_id: string | null }>;
+    if (filas.length === 0) return vacio;
+
+    const { data: periodos } = await admin
+      .from("empleado_periodo_prueba")
+      .select("empleado_id")
+      .eq("decision", "pendiente")
+      .in("empleado_id", filas.map((f) => f.id));
+    const enPrueba = new Set(
+      ((periodos ?? []) as Array<{ empleado_id: string }>).map((p) => p.empleado_id),
+    );
+    if (enPrueba.size === 0) return vacio;
+
+    const out = new Set<string>();
+    for (const f of filas) {
+      if (f.user_id && enPrueba.has(f.id)) out.add(f.user_id);
+    }
+    return out;
+  } catch (e) {
+    // Ante un fallo de consulta NO se excluye a nadie: es preferible otorgar
+    // points de más que castigar a un trabajador por un error de infraestructura.
+    console.warn("[runner] periodo de prueba:", e instanceof Error ? e.message : e);
+    return vacio;
+  }
 }
 
 // ─── Utilidades de fecha ─────────────────────────────────────
@@ -470,6 +514,23 @@ export async function ejecutarReglasDelDia(
 
   report.candidatos = candidatos.length;
   if (!candidatos.length) return report;
+
+  // ─── Periodo de prueba: todavía no juegan ──────────────────
+  // Quien está en periodo de prueba abierto NO devenga points: su estado es
+  // «Pruebas» (nivel 0) y empieza a acumular cuando RRHH confirma que sigue.
+  // Se filtra aquí, en el único punto por el que pasan todas las reglas.
+  const enPrueba = await usersEnPeriodoPrueba(
+    admin,
+    Array.from(new Set(candidatos.map((c) => c.userId))),
+  );
+  if (enPrueba.size > 0) {
+    const antes = candidatos.length;
+    for (let i = candidatos.length - 1; i >= 0; i--) {
+      if (enPrueba.has(candidatos[i].userId)) candidatos.splice(i, 1);
+    }
+    report.excluidos_periodo_prueba = antes - candidatos.length;
+    if (!candidatos.length) return report;
+  }
 
   // Insert en batch — el índice único uniq_toques_mov_regla_diaria garantiza idempotencia.
   // Postgres rechaza el conflicto en lugar de actualizar (no usamos upsert).

@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { NumberInput } from "@/shared/components/NumberInput";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
@@ -125,14 +126,15 @@ export const GestoriaConfig = forwardRef<
             <Label htmlFor="recordatorio-dias" className="text-sm text-foreground">
               Enviar recordatorio tras
             </Label>
-            <Input
+            <NumberInput
               id="recordatorio-dias"
-              type="number"
               min={1}
               max={60}
+              decimales={false}
+              emptyValue={1}
               value={config.gestoria_recordatorio_dias}
-              onChange={(e) =>
-                setConfig((c) => c && { ...c, gestoria_recordatorio_dias: Number(e.target.value) })
+              onValueChange={(v) =>
+                setConfig((c) => c && { ...c, gestoria_recordatorio_dias: v })
               }
               className="w-20 h-9"
             />

@@ -3,7 +3,6 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { normalizarNombre } from "@/shared/lib/normalizar-nombre";
-import { esDniNieValido } from "@/features/rrhh/lib/documentacion-validacion";
 import { MAX_IMAGEN_MB, MAX_IMAGEN_BYTES } from "@/shared/lib/documentos";
 
 async function getCtx() {
@@ -13,24 +12,31 @@ async function getCtx() {
 }
 
 export interface PerfilCompletoInput {
-  dni_nie: string;
-  fecha_nacimiento: string;
+  // SOLO LECTURA: ya se pidieron en el proceso de selección (candidatura o
+  // documentación) y se copian a la ficha al contratar. Se muestran para que el
+  // empleado los reconozca, pero este asistente no los pide ni los reescribe.
+  dni_nie?: string | null;
+  fecha_nacimiento?: string | null;
+  direccion?: string | null;
+  iban?: string | null;
+  numero_ss?: string | null;
+  telefono?: string | null;
+  genero?: string | null;
+  avatar_url?: string | null;
+  dni_archivo_url?: string | null;
+
+  // Lo ÚNICO que este asistente pide: lo que nadie ha preguntado todavía.
   nacionalidad?: string | null;
-  telefono: string;
-  direccion: string;
-  iban: string;
-  numero_ss: string;
+  tipo_documento?: string | null;
+  estado_civil?: string | null;
+  codigo_postal?: string | null;
+  ciudad?: string | null;
+  provincia?: string | null;
+  pais?: string | null;
   contacto_emergencia_nombre: string;
   contacto_emergencia_telefono: string;
   contacto_emergencia_relacion: string;
   talla_uniforme?: string | null;
-  alergias_medicas?: string | null;
-  avatar_url?: string | null;
-  dni_archivo_url?: string | null;
-}
-
-function normalizarIban(s: string): string {
-  return s.toUpperCase().replace(/\s+/g, "");
 }
 
 /**
@@ -39,33 +45,20 @@ function normalizarIban(s: string): string {
  * estos datos van a la gestoría y al pago de la nómina.
  */
 function validarPerfil(p: PerfilCompletoInput): string | null {
-  if (!p.dni_nie?.trim()) return "El DNI/NIE es obligatorio";
-  const dni = p.dni_nie.toUpperCase().replace(/[\s-]/g, "");
-  if (!esDniNieValido(dni)) return "El DNI/NIE no es válido (revisa el número y la letra)";
+  // OJO: aquí solo se valida lo que ESTE asistente pide. El documento, el IBAN,
+  // la Seguridad Social, la dirección y la fecha de nacimiento se aportaron y se
+  // validaron en el proceso de selección (`/api/documentacion`), y no se vuelven
+  // a pedir: exigirlos aquí bloquearía a quien no puede ya corregirlos.
+  if (!p.tipo_documento?.trim()) return "Elige el tipo de documento";
+  if (!p.estado_civil?.trim()) return "Elige el estado civil";
 
-  if (!p.fecha_nacimiento) return "La fecha de nacimiento es obligatoria";
-  // Fecha coherente: ni futura, ni menor de 16 (edad legal para trabajar), ni
-  // absurda. Evita que un error de tecleo acabe en el alta a la gestoría.
-  const nac = new Date(`${p.fecha_nacimiento}T00:00:00Z`);
-  if (Number.isNaN(nac.getTime())) return "La fecha de nacimiento no es válida";
-  const hoy = new Date();
-  const anios = (hoy.getTime() - nac.getTime()) / (365.25 * 24 * 3600 * 1000);
-  if (anios < 16) return "La fecha de nacimiento no es válida (debes ser mayor de 16 años)";
-  if (anios > 100) return "Revisa la fecha de nacimiento";
-
-  if (!p.telefono?.trim()) return "El teléfono es obligatorio";
-  const tel = p.telefono.replace(/[\s.-]/g, "");
-  if (!/^(\+?\d{1,3})?\d{9,12}$/.test(tel)) return "El teléfono no tiene un formato válido";
-
-  if (!p.direccion?.trim()) return "La dirección es obligatoria";
-  if (p.direccion.trim().length < 8) return "Escribe la dirección completa (calle, número, código postal y ciudad)";
-
-  if (!p.numero_ss?.trim()) return "El número de la Seguridad Social es obligatorio";
-  // NAF español: 12 dígitos (2 provincia + 8 número + 2 control).
-  const naf = p.numero_ss.replace(/[\s/.-]/g, "");
-  if (!/^\d{11,12}$/.test(naf)) {
-    return "El número de la Seguridad Social debe tener 12 dígitos";
+  if (!p.codigo_postal?.trim()) return "El código postal es obligatorio";
+  if (!/^\d{4,10}$/.test(p.codigo_postal.replace(/\s/g, ""))) {
+    return "El código postal no es válido";
   }
+  if (!p.ciudad?.trim()) return "La ciudad es obligatoria";
+  if (!p.provincia?.trim()) return "La provincia es obligatoria";
+  if (!p.pais?.trim()) return "El país es obligatorio";
 
   if (!p.contacto_emergencia_nombre?.trim() || !p.contacto_emergencia_telefono?.trim()) {
     return "El contacto de emergencia es obligatorio (nombre + teléfono)";
@@ -75,26 +68,7 @@ function validarPerfil(p: PerfilCompletoInput): string | null {
     return "El teléfono del contacto de emergencia no tiene un formato válido";
   }
 
-  const ibanNorm = normalizarIban(p.iban ?? "");
-  if (!ibanNorm) return "El IBAN es obligatorio";
-  if (!/^[A-Z]{2}\d{2}[A-Z0-9]{11,30}$/.test(ibanNorm)) {
-    return "El IBAN no tiene un formato válido";
-  }
-  // Dígito de control (norma ISO 13616): detecta erratas al teclear la cuenta
-  // donde se le va a pagar la nómina.
-  if (!ibanControlValido(ibanNorm)) return "El IBAN no es correcto: revisa los dígitos";
-
   return null;
-}
-
-/** Validación del dígito de control del IBAN (mod-97). */
-function ibanControlValido(iban: string): boolean {
-  const reordenado = iban.slice(4) + iban.slice(0, 4);
-  const numerico = reordenado.replace(/[A-Z]/g, (c) => String(c.charCodeAt(0) - 55));
-  // mod 97 por trozos: el número completo excede el entero seguro de JS.
-  let resto = 0;
-  for (const ch of numerico) resto = (resto * 10 + Number(ch)) % 97;
-  return resto === 1;
 }
 
 export async function guardarPerfilCompleto(input: PerfilCompletoInput) {
@@ -117,26 +91,23 @@ export async function guardarPerfilCompleto(input: PerfilCompletoInput) {
   if (!fichas || fichas.length === 0) return { ok: false, error: "No se encontró tu ficha de empleado" };
   const empleado = fichas[0];
 
-  const ibanNorm = normalizarIban(input.iban);
-  const dniNorm = input.dni_nie.toUpperCase().replace(/\s+/g, "").replace(/-/g, "");
-
+  // Se escribe SOLO lo que este asistente pide. Todo lo que llega del proceso de
+  // selección —DNI, IBAN, SS, dirección, fecha de nacimiento, teléfono, género,
+  // foto y copia del DNI— NO se toca: mandarlo desde aquí lo borraría de la ficha.
   const { error } = await supabase
     .from("empleados")
     .update({
-      dni_nie: dniNorm,
-      fecha_nacimiento: input.fecha_nacimiento,
-      nacionalidad: input.nacionalidad ?? null,
-      telefono: input.telefono.trim(),
-      direccion: input.direccion.trim(),
-      iban: ibanNorm,
-      numero_ss: input.numero_ss.trim(),
+      nacionalidad: input.nacionalidad?.trim() || null,
       contacto_emergencia_nombre: normalizarNombre(input.contacto_emergencia_nombre),
       contacto_emergencia_telefono: input.contacto_emergencia_telefono.trim(),
       contacto_emergencia_relacion: input.contacto_emergencia_relacion.trim(),
       talla_uniforme: input.talla_uniforme ?? null,
-      alergias_medicas: input.alergias_medicas ?? null,
-      avatar_url: input.avatar_url ?? undefined,
-      dni_archivo_url: input.dni_archivo_url ?? undefined,
+      tipo_documento: input.tipo_documento?.trim() || null,
+      estado_civil: input.estado_civil?.trim() || null,
+      codigo_postal: input.codigo_postal?.trim() || null,
+      ciudad: input.ciudad?.trim() || null,
+      provincia: input.provincia?.trim() || null,
+      pais: input.pais?.trim() || null,
       perfil_completado: true,
       perfil_completado_at: new Date().toISOString(),
     })

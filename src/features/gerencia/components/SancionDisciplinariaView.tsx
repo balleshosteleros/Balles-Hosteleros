@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { NumberInput } from "@/shared/components/NumberInput";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
@@ -286,12 +287,13 @@ export function SancionDisciplinariaView() {
               </div>
               <div>
                 <Label className="text-xs text-muted-foreground">Plazo de firma (días)</Label>
-                <Input
-                  type="number"
+                <NumberInput
                   min={1}
                   max={60}
+                  decimales={false}
+                  emptyValue={15}
                   value={form.plazoDias}
-                  onChange={e => u({ plazoDias: Math.max(1, Math.min(60, Number(e.target.value) || 15)) })}
+                  onValueChange={v => u({ plazoDias: v })}
                   className="mt-1"
                 />
               </div>

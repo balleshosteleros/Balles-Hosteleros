@@ -5,16 +5,14 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
   Loader2, Check, ChevronRight, ChevronLeft, User, Home,
-  CreditCard, Heart, Shirt, Sparkles, ShieldCheck,
+  Heart, Shirt, Sparkles, ShieldCheck,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   guardarPerfilCompleto,
-  uploadDocumentoEmpleado,
   type PerfilCompletoInput,
 } from "@/features/primer-acceso/actions/perfil-actions";
 import { normalizarNombre } from "@/shared/lib/normalizar-nombre";
@@ -34,34 +32,29 @@ interface Prefilled {
   contacto_emergencia_telefono?: string | null;
   contacto_emergencia_relacion?: string | null;
   talla_uniforme?: string | null;
-  alergias_medicas?: string | null;
   avatar_url?: string | null;
   dni_archivo_url?: string | null;
+  // Mismos campos que la ficha del empleado: lo que se pide aquí es exactamente
+  // lo que allí se puede editar, para que no haya datos en un sitio y en otro no.
+  tipo_documento?: string | null;
+  genero?: string | null;
+  estado_civil?: string | null;
+  codigo_postal?: string | null;
+  ciudad?: string | null;
+  provincia?: string | null;
+  pais?: string | null;
 }
 
 const PASOS = [
   { id: "identidad", label: "Identidad", icon: User },
   { id: "domicilio", label: "Domicilio", icon: Home },
-  { id: "bancario", label: "Cuenta bancaria", icon: CreditCard },
   { id: "emergencia", label: "Emergencia", icon: Heart },
-  { id: "extras", label: "Uniforme y salud", icon: Shirt },
+  { id: "ropa", label: "Tu talla", icon: Shirt },
 ] as const;
 
 const TALLAS = ["XS", "S", "M", "L", "XL", "XXL", "XXXL"];
 
 type FormState = PerfilCompletoInput & { nacionalidad?: string | null };
-
-const ibanFormatoTolerante = (v: string): boolean => {
-  // Tolerante: no marcar error mientras esté escribiendo prefijo válido (ES + dígitos)
-  // (regla MEMORY.md de validaciones inline)
-  const norm = v.toUpperCase().replace(/\s+/g, "");
-  if (norm.length === 0) return true;
-  if (!/^[A-Z]{0,2}/.test(norm)) return false;
-  if (norm.length <= 2) return true;
-  if (!/^[A-Z]{2}\d{0,2}/.test(norm)) return false;
-  if (norm.length <= 4) return true;
-  return /^[A-Z]{2}\d{2}[A-Z0-9]{1,30}$/.test(norm);
-};
 
 export function WizardPrimerAcceso({ prefilled }: { prefilled: Prefilled }) {
   const router = useRouter();
@@ -80,54 +73,39 @@ export function WizardPrimerAcceso({ prefilled }: { prefilled: Prefilled }) {
     contacto_emergencia_telefono: prefilled.contacto_emergencia_telefono ?? "",
     contacto_emergencia_relacion: prefilled.contacto_emergencia_relacion ?? "",
     talla_uniforme: prefilled.talla_uniforme ?? "",
-    alergias_medicas: prefilled.alergias_medicas ?? "",
+    tipo_documento: prefilled.tipo_documento ?? "",
+    genero: prefilled.genero ?? "",
+    estado_civil: prefilled.estado_civil ?? "",
+    codigo_postal: prefilled.codigo_postal ?? "",
+    ciudad: prefilled.ciudad ?? "",
+    provincia: prefilled.provincia ?? "",
+    pais: prefilled.pais ?? "España",
     avatar_url: prefilled.avatar_url ?? null,
     dni_archivo_url: prefilled.dni_archivo_url ?? null,
   });
 
   const [error, setError] = useState<string | null>(null);
-  const [uploadingAvatar, setUploadingAvatar] = useState(false);
-  const [uploadingDni, setUploadingDni] = useState(false);
 
   function update<K extends keyof FormState>(k: K, v: FormState[K]) {
     setForm((p) => ({ ...p, [k]: v }));
     setError(null);
   }
 
-  async function uploadFile(tipo: "avatar" | "dni", file: File) {
-    if (tipo === "avatar") setUploadingAvatar(true);
-    else setUploadingDni(true);
-    try {
-      const res = await uploadDocumentoEmpleado({ tipo, file });
-      if (res.ok && res.path) {
-        if (tipo === "avatar") update("avatar_url", res.path);
-        else update("dni_archivo_url", res.path);
-        toast.success("Archivo subido");
-      } else {
-        toast.error(("error" in res && res.error) || "Error al subir el archivo");
-      }
-    } finally {
-      if (tipo === "avatar") setUploadingAvatar(false);
-      else setUploadingDni(false);
-    }
-  }
-
   function validarPaso(p: number): string | null {
+    // Solo se valida lo que este asistente pide. Lo que ya aportó en el proceso
+    // de selección (documento, IBAN, SS, dirección, fecha de nacimiento) llega
+    // relleno desde su candidatura y no se le vuelve a pedir.
     if (p === 0) {
-      if (!form.dni_nie?.trim()) return "El DNI/NIE es obligatorio";
-      if (!form.fecha_nacimiento) return "La fecha de nacimiento es obligatoria";
-      if (!form.telefono?.trim()) return "El teléfono es obligatorio";
+      if (!form.tipo_documento?.trim()) return "Elige el tipo de documento";
+      if (!form.estado_civil?.trim()) return "Elige el estado civil";
     }
     if (p === 1) {
-      if (!form.direccion?.trim()) return "La dirección es obligatoria";
+      if (!form.codigo_postal?.trim()) return "El código postal es obligatorio";
+      if (!form.ciudad?.trim()) return "La ciudad es obligatoria";
+      if (!form.provincia?.trim()) return "La provincia es obligatoria";
+      if (!form.pais?.trim()) return "El país es obligatorio";
     }
     if (p === 2) {
-      if (!form.iban?.trim()) return "El IBAN es obligatorio";
-      const norm = form.iban.toUpperCase().replace(/\s+/g, "");
-      if (!/^[A-Z]{2}\d{2}[A-Z0-9]{11,30}$/.test(norm)) return "El IBAN no es válido";
-      if (!form.numero_ss?.trim()) return "El número de la SS es obligatorio";
-    }
-    if (p === 3) {
       if (!form.contacto_emergencia_nombre?.trim() || !form.contacto_emergencia_telefono?.trim()) {
         return "El contacto de emergencia es obligatorio";
       }
@@ -228,10 +206,10 @@ export function WizardPrimerAcceso({ prefilled }: { prefilled: Prefilled }) {
           <div className="mb-4 flex items-start gap-2.5 rounded-lg border border-emerald-200 bg-emerald-50/60 p-3.5 dark:border-emerald-900/40 dark:bg-emerald-950/20">
             <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
             <div className="text-xs leading-relaxed text-emerald-900 dark:text-emerald-200">
-              <p className="font-medium">Solo te lo pedimos una vez</p>
+              <p className="font-medium">Solo faltan estos datos</p>
               <p className="mt-0.5">
-                Son los datos que la empresa necesita para tu contrato, tu nómina y el pago de tu
-                salario. Se guardan en tu ficha y solo los ve el equipo de RRHH.
+                Lo que ya aportaste durante el proceso de selección no te lo volvemos a pedir. Se
+                guardan en tu ficha y solo los ve el equipo de RRHH.
               </p>
             </div>
           </div>
@@ -249,74 +227,44 @@ export function WizardPrimerAcceso({ prefilled }: { prefilled: Prefilled }) {
             <div className="space-y-3">
               <div className="grid sm:grid-cols-2 gap-3">
                 <div className="space-y-1.5">
-                  <Label htmlFor="dni">DNI / NIE *</Label>
-                  <Input
-                    id="dni"
-                    value={form.dni_nie}
-                    onChange={(e) => update("dni_nie", e.target.value.toUpperCase())}
-                    placeholder="00000000A"
-                    autoComplete="off"
-                  />
+                  <Label>Tipo de documento *</Label>
+                  <Select
+                    value={form.tipo_documento || undefined}
+                    onValueChange={(v) => update("tipo_documento", v)}
+                  >
+                    <SelectTrigger><SelectValue placeholder="DNI / NIE / Pasaporte" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="DNI">DNI</SelectItem>
+                      <SelectItem value="NIE">NIE</SelectItem>
+                      <SelectItem value="PASAPORTE">Pasaporte</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="nac">Fecha de nacimiento *</Label>
-                  <Input
-                    id="nac"
-                    type="date"
-                    value={form.fecha_nacimiento}
-                    onChange={(e) => update("fecha_nacimiento", e.target.value)}
-                  />
+                  <Label>Estado civil *</Label>
+                  <Select
+                    value={form.estado_civil || undefined}
+                    onValueChange={(v) => update("estado_civil", v)}
+                  >
+                    <SelectTrigger><SelectValue placeholder="Selecciona…" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="soltero">Soltero/a</SelectItem>
+                      <SelectItem value="casado">Casado/a</SelectItem>
+                      <SelectItem value="pareja_hecho">Pareja de hecho</SelectItem>
+                      <SelectItem value="divorciado">Divorciado/a</SelectItem>
+                      <SelectItem value="viudo">Viudo/a</SelectItem>
+                      <SelectItem value="otro">Otro</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
 
-              <div className="grid sm:grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                  <Label>Nacionalidad</Label>
-                  <Input
-                    value={form.nacionalidad ?? ""}
-                    onChange={(e) => update("nacionalidad", e.target.value)}
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label>Teléfono *</Label>
-                  <Input
-                    type="tel"
-                    value={form.telefono}
-                    onChange={(e) => update("telefono", e.target.value)}
-                    autoComplete="tel"
-                  />
-                </div>
-              </div>
-
-              <div className="grid sm:grid-cols-2 gap-3 pt-2">
-                <div className="space-y-1.5">
-                  <Label>Foto de perfil (opcional)</Label>
-                  <Input
-                    type="file"
-                    accept="image/*"
-                    disabled={uploadingAvatar}
-                    onChange={(e) => {
-                      const f = e.target.files?.[0];
-                      if (f) void uploadFile("avatar", f);
-                    }}
-                  />
-                  {uploadingAvatar && <p className="text-[11px] text-muted-foreground">Subiendo…</p>}
-                  {form.avatar_url && <p className="text-[11px] text-emerald-600">✓ Foto subida</p>}
-                </div>
-                <div className="space-y-1.5">
-                  <Label>Copia DNI/NIE (opcional)</Label>
-                  <Input
-                    type="file"
-                    accept="application/pdf,image/*"
-                    disabled={uploadingDni}
-                    onChange={(e) => {
-                      const f = e.target.files?.[0];
-                      if (f) void uploadFile("dni", f);
-                    }}
-                  />
-                  {uploadingDni && <p className="text-[11px] text-muted-foreground">Subiendo…</p>}
-                  {form.dni_archivo_url && <p className="text-[11px] text-emerald-600">✓ Documento subido</p>}
-                </div>
+              <div className="space-y-1.5">
+                <Label>Nacionalidad</Label>
+                <Input
+                  value={form.nacionalidad ?? ""}
+                  onChange={(e) => update("nacionalidad", e.target.value)}
+                />
               </div>
             </div>
           )}
@@ -324,54 +272,57 @@ export function WizardPrimerAcceso({ prefilled }: { prefilled: Prefilled }) {
           {/* PASO 1 — Domicilio */}
           {paso === 1 && (
             <div className="space-y-3">
-              <div className="space-y-1.5">
-                <Label>Dirección completa *</Label>
-                <Textarea
-                  value={form.direccion}
-                  onChange={(e) => update("direccion", e.target.value)}
-                  rows={3}
-                  placeholder="Calle, número, piso, código postal, ciudad, provincia, país"
-                />
-                <p className="text-[11px] text-muted-foreground">
-                  Esta dirección se usará para el contrato y nóminas.
-                </p>
+              {form.direccion?.trim() && (
+                <div className="rounded-md border bg-muted/40 px-3 py-2">
+                  <p className="text-[11px] font-medium text-muted-foreground">Tu dirección</p>
+                  <p className="text-sm">{form.direccion}</p>
+                </div>
+              )}
+
+              <div className="grid sm:grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label>Código postal *</Label>
+                  <Input
+                    value={form.codigo_postal ?? ""}
+                    onChange={(e) => update("codigo_postal", e.target.value)}
+                    inputMode="numeric"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Ciudad *</Label>
+                  <Input
+                    value={form.ciudad ?? ""}
+                    onChange={(e) => update("ciudad", e.target.value)}
+                  />
+                </div>
               </div>
+
+              <div className="grid sm:grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label>Provincia *</Label>
+                  <Input
+                    value={form.provincia ?? ""}
+                    onChange={(e) => update("provincia", e.target.value)}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>País *</Label>
+                  <Input
+                    value={form.pais ?? ""}
+                    onChange={(e) => update("pais", e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <p className="text-[11px] text-muted-foreground">
+                Esta dirección se usará para el contrato y nóminas.
+              </p>
             </div>
           )}
 
-          {/* PASO 2 — Bancario */}
+
+          {/* PASO 2 — Contacto emergencia */}
           {paso === 2 && (
-            <div className="space-y-3">
-              <div className="space-y-1.5">
-                <Label>IBAN *</Label>
-                <Input
-                  value={form.iban}
-                  onChange={(e) => update("iban", e.target.value.toUpperCase())}
-                  placeholder="ES00 0000 0000 0000 0000 0000"
-                  autoComplete="off"
-                  className={
-                    form.iban && !ibanFormatoTolerante(form.iban) ? "border-destructive" : ""
-                  }
-                />
-                <p className="text-[11px] text-muted-foreground">
-                  Cuenta donde recibirás tu nómina. Se valida en tiempo real.
-                </p>
-              </div>
-
-              <div className="space-y-1.5">
-                <Label>Número de la Seguridad Social *</Label>
-                <Input
-                  value={form.numero_ss}
-                  onChange={(e) => update("numero_ss", e.target.value)}
-                  placeholder="00 0000000000"
-                  autoComplete="off"
-                />
-              </div>
-            </div>
-          )}
-
-          {/* PASO 3 — Contacto emergencia */}
-          {paso === 3 && (
             <div className="space-y-3">
               <p className="text-sm text-muted-foreground">
                 Persona a contactar en caso de emergencia (familiar, pareja, amigo cercano).
@@ -410,11 +361,11 @@ export function WizardPrimerAcceso({ prefilled }: { prefilled: Prefilled }) {
             </div>
           )}
 
-          {/* PASO 4 — Uniforme + salud */}
-          {paso === 4 && (
+          {/* PASO 3 — Talla de ropa de trabajo */}
+          {paso === 3 && (
             <div className="space-y-3">
               <div className="space-y-1.5">
-                <Label>Talla de uniforme</Label>
+                <Label>Tu talla de ropa</Label>
                 <Select
                   value={form.talla_uniforme ?? ""}
                   onValueChange={(v) => update("talla_uniforme", v)}
@@ -426,18 +377,8 @@ export function WizardPrimerAcceso({ prefilled }: { prefilled: Prefilled }) {
                     ))}
                   </SelectContent>
                 </Select>
-              </div>
-
-              <div className="space-y-1.5">
-                <Label>Alergias o condiciones médicas relevantes</Label>
-                <Textarea
-                  value={form.alergias_medicas ?? ""}
-                  onChange={(e) => update("alergias_medicas", e.target.value)}
-                  rows={3}
-                  placeholder="Alergias alimentarias, intolerancia al látex, asma, etc. (opcional)"
-                />
                 <p className="text-[11px] text-muted-foreground">
-                  Esta información se mantiene confidencial y solo es accesible al equipo de RRHH.
+                  Para preparar la ropa de trabajo que te toque. Puedes cambiarla más adelante.
                 </p>
               </div>
             </div>

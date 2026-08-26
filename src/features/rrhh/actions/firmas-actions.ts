@@ -46,7 +46,36 @@ type FirmaResumen = {
   reenviadoCount: number;
   /** Reconocimiento médico: qué contestó el trabajador. NULL en el resto. */
   decisionReconocimiento: "si" | "no" | null;
+  /**
+   * Primera apertura del documento por el destinatario (acuse de LECTURA), leída
+   * del acta eIDAS. NULL si nunca lo abrió. Es la constancia que sostiene una
+   * comunicación de baja cuando el trabajador decide no firmarla.
+   */
+  leidoEn: string | null;
 };
+
+/**
+ * Resuelve la PRIMERA apertura de cada documento a partir del acta (evento
+ * `abierto`). Se hace en una sola consulta para no disparar una por fila.
+ */
+async function resolverLecturas(
+  supabase: Awaited<ReturnType<typeof getAppContext>>["supabase"],
+  documentoIds: string[],
+): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  if (documentoIds.length === 0) return out;
+  const { data } = await supabase
+    .from("firmas_eventos")
+    .select("documento_id, ocurrido_en")
+    .in("documento_id", documentoIds)
+    .eq("tipo", "abierto")
+    .order("ocurrido_en", { ascending: true });
+  for (const row of (data ?? []) as { documento_id: string; ocurrido_en: string }[]) {
+    // Orden ascendente: el primero que entra es la primera lectura.
+    if (!out.has(row.documento_id)) out.set(row.documento_id, row.ocurrido_en);
+  }
+  return out;
+}
 
 async function getRequestMeta() {
   const h = await headers();
@@ -183,10 +212,10 @@ export async function listFirmasPorEmpleado(
         departamentos: { nombre: string | null } | null; } | null;
     };
     const filas = data as unknown as Row[];
-    const nombresEnviadoPor = await resolverNombresEnviadoPor(
-      supabase,
-      filas.map((r) => r.enviado_por),
-    );
+    const [nombresEnviadoPor, lecturas] = await Promise.all([
+      resolverNombresEnviadoPor(supabase, filas.map((r) => r.enviado_por)),
+      resolverLecturas(supabase, filas.map((r) => r.id)),
+    ]);
     const items: FirmaResumen[] = filas.map((r) => ({
       id: r.id, titulo: r.titulo, tipo: r.tipo, modalidad: r.modalidad,
       validez: r.validez, estado: r.estado, empleadoId: r.empleado_id,
@@ -198,6 +227,7 @@ export async function listFirmasPorEmpleado(
       sha256Original: r.sha256_original, sha256Acta: r.sha256_acta,
       reenviadoCount: r.reenviado_count,
       decisionReconocimiento: r.decision_reconocimiento,
+      leidoEn: lecturas.get(r.id) ?? null,
     }));
     return { ok: true, data: items };
   } catch (err) {
@@ -250,10 +280,10 @@ export async function listFirmas(): Promise<{ ok: true; data: FirmaResumen[] } |
     };
 
     const filas = data as unknown as Row[];
-    const nombresEnviadoPor = await resolverNombresEnviadoPor(
-      supabase,
-      filas.map((r) => r.enviado_por),
-    );
+    const [nombresEnviadoPor, lecturas] = await Promise.all([
+      resolverNombresEnviadoPor(supabase, filas.map((r) => r.enviado_por)),
+      resolverLecturas(supabase, filas.map((r) => r.id)),
+    ]);
 
     const items: FirmaResumen[] = filas.map((r) => {
       const empNombre = `${r.empleados?.nombre ?? ""} ${r.empleados?.apellidos ?? ""}`.trim();
@@ -276,6 +306,7 @@ export async function listFirmas(): Promise<{ ok: true; data: FirmaResumen[] } |
         sha256Acta: r.sha256_acta,
         reenviadoCount: r.reenviado_count,
         decisionReconocimiento: r.decision_reconocimiento,
+        leidoEn: lecturas.get(r.id) ?? null,
       };
     });
 
@@ -620,10 +651,13 @@ export async function getAuditTrail(documentoId: string) {
     if (!empresaId || !userId) return { ok: false as const, error: "No autenticado" };
 
     const { supabase } = await getAppContext();
+    // El acta solo se sirve si el documento es de la empresa activa: la RLS no
+    // aísla por sí sola la empresa en curso (ver memoria de aislamiento).
     const { data: doc, error: docErr } = await supabase
       .from("firmas_documentos")
       .select("id")
       .eq("id", documentoId)
+      .eq("empresa_id", empresaId)
       .maybeSingle();
     if (docErr || !doc) return { ok: false as const, error: "Sin acceso al documento" };
 
@@ -666,6 +700,42 @@ export async function getDescargaFirmadoUrl(
       .createSignedUrl(doc.pdf_firmado_path as string, SIGNED_URL_TTL_DESCARGA, {
         download: nombreArchivo,
       });
+    if (signed.error || !signed.data?.signedUrl) {
+      return { ok: false, error: signed.error?.message ?? "No se pudo generar URL" };
+    }
+    return { ok: true, url: signed.data.signedUrl };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Error desconocido";
+    return { ok: false, error: msg };
+  }
+}
+
+/**
+ * URL firmada del PDF ya firmado, SIN `download`, para incrustarlo en un visor
+ * dentro de la propia página. `getDescargaFirmadoUrl` fuerza la descarga con
+ * Content-Disposition: attachment, y eso deja el <iframe> en blanco.
+ */
+export async function getVisorFirmadoUrl(
+  documentoId: string,
+): Promise<{ ok: true; url: string } | { ok: false; error: string }> {
+  try {
+    const { empresaId } = await requireAdmin();
+    const admin = createAdminClient();
+
+    const { data: doc } = await admin
+      .from("firmas_documentos")
+      .select("empresa_id, estado, pdf_firmado_path")
+      .eq("id", documentoId)
+      .maybeSingle();
+    if (!doc) return { ok: false, error: "Documento no encontrado" };
+    if (doc.empresa_id !== empresaId) return { ok: false, error: "Sin acceso a este documento" };
+    if (doc.estado !== "firmado" || !doc.pdf_firmado_path) {
+      return { ok: false, error: "El documento aún no está firmado" };
+    }
+
+    const signed = await admin.storage
+      .from(BUCKET)
+      .createSignedUrl(doc.pdf_firmado_path as string, SIGNED_URL_TTL_VISOR);
     if (signed.error || !signed.data?.signedUrl) {
       return { ok: false, error: signed.error?.message ?? "No se pudo generar URL" };
     }

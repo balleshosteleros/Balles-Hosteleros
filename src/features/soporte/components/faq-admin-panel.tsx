@@ -12,6 +12,7 @@ import {
 import type { Faq, FaqInput } from "@/features/soporte/types";
 import type { AppRole } from "@/features/auth/contexts/auth-context";
 import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
+import { NumberInput } from "@/shared/components/NumberInput";
 
 const ALL_ROLES: AppRole[] = [
   "admin",
@@ -160,13 +161,12 @@ export function FaqAdminPanel({ initialFaqs }: FaqAdminPanelProps) {
               <label className="block text-xs font-medium text-muted-foreground">
                 Orden (dentro de la categoría)
               </label>
-              <input
-                type="number"
+              <NumberInput
+                min={0}
+                decimales={false}
                 value={form.orden ?? 0}
-                onChange={(e) =>
-                  setForm({ ...form, orden: parseInt(e.target.value) || 0 })
-                }
-                className="mt-1 block w-full rounded-md border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                onValueChange={(v) => setForm({ ...form, orden: v })}
+                className="mt-1 block h-auto w-full rounded-md border bg-background px-3 py-2 text-sm focus-visible:ring-0 focus-visible:ring-offset-0 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
               />
             </div>
           </div>

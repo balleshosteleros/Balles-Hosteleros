@@ -248,6 +248,10 @@ export interface ReclutamientoConfigOnboarding {
   prueba_aviso_dias: number;
   prueba_aviso_canal: PruebaAvisoCanal;
   prueba_aviso_activo: boolean;
+  /** Validaciones que RRHH debe completar durante el periodo (2 o 3). */
+  prueba_evaluaciones_num: number;
+  /** Nota mínima (0–10) para que el sistema recomiende continuar. */
+  prueba_nota_corte: number;
 }
 
 const ONBOARDING_DEFAULT: ReclutamientoConfigOnboarding = {
@@ -258,6 +262,8 @@ const ONBOARDING_DEFAULT: ReclutamientoConfigOnboarding = {
   prueba_aviso_dias: 10,
   prueba_aviso_canal: "ambos",
   prueba_aviso_activo: true,
+  prueba_evaluaciones_num: 3,
+  prueba_nota_corte: 6,
 };
 
 function normalizarCanal(v: unknown): PruebaAvisoCanal {
@@ -270,7 +276,7 @@ export async function getReclutamientoConfigOnboarding(): Promise<{ ok: boolean;
     if (!empresaId) return { ok: false, data: ONBOARDING_DEFAULT };
     const { data } = await supabase
       .from("reclutamiento_config")
-      .select("formacion_url, contrato_interno_plantilla, reconocimiento_medico_plantilla, prueba_duracion_dias, prueba_aviso_dias, prueba_aviso_canal, prueba_aviso_activo")
+      .select("formacion_url, contrato_interno_plantilla, reconocimiento_medico_plantilla, prueba_duracion_dias, prueba_aviso_dias, prueba_aviso_canal, prueba_aviso_activo, prueba_evaluaciones_num, prueba_nota_corte")
       .eq("empresa_id", empresaId)
       .maybeSingle();
     return {
@@ -283,6 +289,8 @@ export async function getReclutamientoConfigOnboarding(): Promise<{ ok: boolean;
         prueba_aviso_dias: (data?.prueba_aviso_dias as number | null) ?? 10,
         prueba_aviso_canal: normalizarCanal(data?.prueba_aviso_canal),
         prueba_aviso_activo: (data?.prueba_aviso_activo as boolean | null) ?? true,
+        prueba_evaluaciones_num: Number(data?.prueba_evaluaciones_num ?? 3),
+        prueba_nota_corte: Number(data?.prueba_nota_corte ?? 6),
       },
     };
   } catch (err) {
@@ -297,6 +305,9 @@ export async function saveReclutamientoConfigOnboarding(input: ReclutamientoConf
     if (!empresaId) return { ok: false, error: "No autenticado" };
     const dur = Math.max(1, Math.min(365, Math.round(Number(input.prueba_duracion_dias) || 30)));
     const aviso = Math.max(1, Math.min(dur, Math.round(Number(input.prueba_aviso_dias) || 10)));
+    const numEval = Math.max(1, Math.min(5, Math.round(Number(input.prueba_evaluaciones_num) || 3)));
+    const corteRaw = Number(input.prueba_nota_corte);
+    const corte = Math.round(Math.max(0, Math.min(10, Number.isFinite(corteRaw) ? corteRaw : 6)) * 10) / 10;
     const { error } = await supabase
       .from("reclutamiento_config")
       .upsert({
@@ -308,6 +319,8 @@ export async function saveReclutamientoConfigOnboarding(input: ReclutamientoConf
         prueba_aviso_dias: aviso,
         prueba_aviso_canal: normalizarCanal(input.prueba_aviso_canal),
         prueba_aviso_activo: input.prueba_aviso_activo,
+        prueba_evaluaciones_num: numEval,
+        prueba_nota_corte: corte,
         updated_at: new Date().toISOString(),
       }, { onConflict: "empresa_id" });
     if (error) throw error;

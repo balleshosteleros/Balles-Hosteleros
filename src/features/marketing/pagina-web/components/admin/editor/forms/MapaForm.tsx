@@ -1,6 +1,7 @@
 "use client";
 
 import { Input } from "@/components/ui/input";
+import { NumberInput } from "@/shared/components/NumberInput";
 import { useEditorStore } from "../../../../hooks/useEditorStore";
 import { Field, Section } from "./shared";
 import type { Bloque, MapaDatos } from "../../../../types";
@@ -22,29 +23,28 @@ export function MapaForm({ bloque }: { bloque: Extract<Bloque, { tipo: "mapa" }>
         </Field>
         <div className="grid grid-cols-2 gap-2">
           <Field label="Latitud">
-            <Input
-              type="number"
+            <NumberInput
               step="0.00001"
               value={datos.lat}
-              onChange={(e) => set({ lat: Number(e.target.value) })}
+              onValueChange={(v) => set({ lat: v })}
             />
           </Field>
           <Field label="Longitud">
-            <Input
-              type="number"
+            <NumberInput
               step="0.00001"
               value={datos.lng}
-              onChange={(e) => set({ lng: Number(e.target.value) })}
+              onValueChange={(v) => set({ lng: v })}
             />
           </Field>
         </div>
         <Field label="Zoom (1-20)">
-          <Input
-            type="number"
+          <NumberInput
             min={1}
             max={20}
+            emptyValue={15}
+            decimales={false}
             value={datos.zoom}
-            onChange={(e) => set({ zoom: Math.min(20, Math.max(1, Number(e.target.value) || 15)) })}
+            onValueChange={(v) => set({ zoom: v })}
           />
         </Field>
       </Section>

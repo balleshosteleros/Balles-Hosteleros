@@ -4,6 +4,7 @@ import { Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { NumberInput } from "@/shared/components/NumberInput";
 import { useEditorStore } from "../../../../hooks/useEditorStore";
 import { Field, Section } from "./shared";
 import type { Bloque, TestimoniosDatos } from "../../../../types";
@@ -57,16 +58,13 @@ export function TestimoniosForm({
               />
             </Field>
             <Field label="Estrellas (1-5)">
-              <Input
-                type="number"
+              <NumberInput
                 min={1}
                 max={5}
+                emptyValue={5}
+                decimales={false}
                 value={t.estrellas ?? 5}
-                onChange={(e) =>
-                  updateItem(i, {
-                    estrellas: Math.min(5, Math.max(1, Number(e.target.value) || 5)),
-                  })
-                }
+                onValueChange={(v) => updateItem(i, { estrellas: v })}
               />
             </Field>
             <Field label="Foto URL (opcional)">

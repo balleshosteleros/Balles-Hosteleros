@@ -440,21 +440,12 @@ export async function updateCandidato(
   }
 }
 
-export async function deleteCandidato(id: string) {
-  try {
-    const { supabase } = await getContext();
-    const { error } = await supabase
-      .from("candidatos")
-      .delete()
-      .eq("id", id);
-    if (error) throw error;
-    return { ok: true };
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : "Error desconocido";
-    console.error("[reclutamiento] deleteCandidato:", msg);
-    return { ok: false, error: msg };
-  }
-}
+// `deleteCandidato` vivía aquí. Se elimina: borraba la candidatura sin ninguna
+// comprobación (ni empleado vinculado, ni siquiera filtro por empresa) y, como
+// server action exportada, seguía siendo invocable aunque ningún botón la
+// usara. Un CV no se borra: se archiva en «Papelera» con `eliminarCandidato`
+// (candidatos-actions.ts), y la BD lo impide con el trigger
+// `candidatos_no_delete`.
 
 /**
  * Regla del modelo: «todo PUESTO tiene su vacante». Garantiza que cada puesto

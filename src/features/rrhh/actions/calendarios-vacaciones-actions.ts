@@ -13,6 +13,7 @@ import {
 } from "@/features/rrhh/data/vacaciones-saldo";
 import { getZonaHorariaEmpresa } from "@/features/empresa/lib/empresa-server";
 import { hoyEnZona } from "@/features/empresa/lib/zona-horaria";
+import { getDiasVacacionesAnio } from "@/features/rrhh/actions/calendario-config-actions";
 
 type Sb = Awaited<ReturnType<typeof getAppContext>>["supabase"];
 
@@ -343,24 +344,13 @@ export async function getSaldoVacacionesEmpleado(
     if (!emp) return { ok: false, data: null, error: "Empleado no encontrado" };
 
     const calendarioId = (emp.calendario_vacaciones_id as string | null) ?? null;
-    let calendarioNombre: string | null = null;
-    let diasTotales = 0;
-    let anioCalc = anio ?? new Date().getUTCFullYear();
+    const calendarioNombre: string | null = null;
+    const anioCalc = anio ?? new Date().getUTCFullYear();
 
-    if (calendarioId) {
-      const { data: cal } = await supabase
-        .from("rrhh_calendarios_vacaciones")
-        .select("nombre, anio, dias_totales")
-        .eq("id", calendarioId)
-        .maybeSingle();
-      if (cal) {
-        calendarioNombre = cal.nombre as string;
-        diasTotales = cal.dias_totales as number;
-        // Calendario predeterminado (anio null) → cuenta el año actual.
-        if (anio == null)
-          anioCalc = (cal.anio as number | null) ?? new Date().getUTCFullYear();
-      }
-    }
+    // Los días salen de la CONFIGURACIÓN de la empresa (Calendario → Días de
+    // vacaciones), no de un "calendario" por empleado: aquí hay un único
+    // calendario para todos, así que el saldo no depende de a cuál apunte.
+    const { dias: diasTotales } = await getDiasVacacionesAnio(emp.empresa_id as string);
 
     const saldo = await calcularSaldoEmpleado(
       supabase,

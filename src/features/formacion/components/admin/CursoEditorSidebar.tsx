@@ -4,6 +4,7 @@ import { useState, useRef } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { NumberInput } from "@/shared/components/NumberInput";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
@@ -483,8 +484,8 @@ export function CursoEditorSidebar({ cursoId, activaId, onSelect }: Props) {
 
             <div className="space-y-1.5 w-32">
               <Label htmlFor="lec-dur">Duración (min)</Label>
-              <Input id="lec-dur" type="number" min={0} value={lecDuracion}
-                onChange={(e) => setLecDuracion(parseInt(e.target.value) || 0)} />
+              <NumberInput id="lec-dur" min={0} decimales={false} value={lecDuracion}
+                onValueChange={(v) => setLecDuracion(v)} />
             </div>
 
             {/* Editor de cuestionario tipo test */}

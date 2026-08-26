@@ -3,6 +3,7 @@ import { type TemporadaStock, type ProductoStock, temporadasSolapan } from "@/fe
 import { createTemporada, updateTemporada, deleteTemporada } from "@/features/logistica/actions/temporadas-actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { NumberInput } from "@/shared/components/NumberInput";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -179,11 +180,11 @@ export default function TemporadasConfig({ temporadas, setTemporadas, productos,
                         <span className="text-sm font-medium flex-1 truncate">{prod.nombre}</span>
                         <div className="flex items-center gap-1">
                           <Label className="text-[10px] text-muted-foreground">Máx</Label>
-                          <Input type="number" className="h-7 w-20 text-xs" value={ov.stockMaximo} onChange={(e) => updateOverride(prodId, "stockMaximo", +e.target.value)} />
+                          <NumberInput className="h-7 w-20 text-xs" value={ov.stockMaximo} onValueChange={(v) => updateOverride(prodId, "stockMaximo", v)} />
                         </div>
                         <div className="flex items-center gap-1">
                           <Label className="text-[10px] text-muted-foreground">Seg</Label>
-                          <Input type="number" className="h-7 w-20 text-xs" value={ov.stockSeguridad} onChange={(e) => updateOverride(prodId, "stockSeguridad", +e.target.value)} />
+                          <NumberInput className="h-7 w-20 text-xs" value={ov.stockSeguridad} onValueChange={(v) => updateOverride(prodId, "stockSeguridad", v)} />
                         </div>
                         <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => removeOverride(prodId)}><Trash2 className="h-3.5 w-3.5 text-destructive" /></Button>
                       </div>

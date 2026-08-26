@@ -14,13 +14,14 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Plus, ChevronDown } from "lucide-react";
+import { Plus, ChevronDown, Settings } from "lucide-react";
 import {
   TIPOS_CALENDARIO,
   colorDeSubtipo,
 } from "@/features/rrhh/data/calendario-tipos";
 import { CalendarioUnico } from "@/features/rrhh/components/calendarios/CalendarioUnico";
 import { RegistrarAusenciaDialog } from "@/features/rrhh/components/calendarios/RegistrarAusenciaDialog";
+import { ConfigCalendarioDialog } from "@/features/rrhh/components/calendarios/ConfigCalendarioDialog";
 import type { SolicitudSubtipoAusencia } from "@/features/mi-panel/types";
 
 /**
@@ -49,6 +50,7 @@ export function CalendariosRRHHView() {
   // Hueco de la cabecera donde el calendario coloca sus controles de vista.
   const [slotControles, setSlotControles] = useState<HTMLDivElement | null>(null);
   const [recarga, setRecarga] = useState(0);
+  const [configAbierta, setConfigAbierta] = useState(false);
 
   useEffect(() => {
     let activo = true;
@@ -108,6 +110,18 @@ export function CalendariosRRHHView() {
             ))}
             </DropdownMenuContent>
           </DropdownMenu>
+
+          {/* Configuración del submódulo: de aquí salen los días de vacaciones
+              al año, que son los mismos para toda la empresa. */}
+          <Button
+            size="sm"
+            variant="outline"
+            className="gap-1"
+            onClick={() => setConfigAbierta(true)}
+          >
+            <Settings className="h-4 w-4" />
+            Configuración
+          </Button>
         </div>
       </div>
 
@@ -117,6 +131,12 @@ export function CalendariosRRHHView() {
         onAnioChange={handleAnio}
         cargando={cargando}
         slotControles={slotControles}
+      />
+
+      <ConfigCalendarioDialog
+        empresaId={empresaActual.id}
+        open={configAbierta}
+        onOpenChange={setConfigAbierta}
       />
 
       <RegistrarAusenciaDialog

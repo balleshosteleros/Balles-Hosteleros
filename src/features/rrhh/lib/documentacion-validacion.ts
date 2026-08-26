@@ -49,6 +49,54 @@ export function esIbanValido(valor: string): boolean {
   return resto === 1;
 }
 
+/**
+ * Edad mínima legal para trabajar en España (Estatuto de los Trabajadores, art. 6):
+ * ningún menor de 16 años puede ser contratado. Es un límite duro, no un aviso.
+ */
+export const EDAD_MINIMA_LABORAL = 16;
+
+/** Edad por encima de la cual la fecha se considera un error de lectura. */
+export const EDAD_MAXIMA_RAZONABLE = 75;
+
+/** Calcula la edad cumplida a día de hoy a partir de una fecha AAAA-MM-DD. */
+export function calcularEdad(fechaISO: string, hoy: Date = new Date()): number | null {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(fechaISO)) return null;
+  const nac = new Date(`${fechaISO}T00:00:00Z`);
+  if (Number.isNaN(nac.getTime())) return null;
+  let edad = hoy.getUTCFullYear() - nac.getUTCFullYear();
+  const mes = hoy.getUTCMonth() - nac.getUTCMonth();
+  // Aún no ha llegado su cumpleaños este año → resta uno.
+  if (mes < 0 || (mes === 0 && hoy.getUTCDate() < nac.getUTCDate())) edad--;
+  return edad;
+}
+
+/**
+ * Comprueba que una fecha de nacimiento es admisible para contratar.
+ * Devuelve `null` si es válida, o el MOTIVO exacto por el que no lo es.
+ *
+ * Se usa en las tres capas (lectura por IA, formulario público y API) para que
+ * el motivo que ve la persona sea siempre el mismo.
+ */
+export function motivoFechaNacimientoNoValida(
+  fechaISO: string,
+  hoy: Date = new Date(),
+): string | null {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(fechaISO)) return "La fecha de nacimiento no es válida.";
+  const nac = new Date(`${fechaISO}T00:00:00Z`);
+  if (Number.isNaN(nac.getTime())) return "La fecha de nacimiento no es válida.";
+  if (nac.getTime() >= hoy.getTime()) return "La fecha de nacimiento no puede estar en el futuro.";
+
+  const edad = calcularEdad(fechaISO, hoy);
+  if (edad === null) return "La fecha de nacimiento no es válida.";
+  if (edad < EDAD_MINIMA_LABORAL) {
+    return `Según el documento aportado tienes ${edad} años. La edad mínima legal para trabajar en España es de ${EDAD_MINIMA_LABORAL} años, así que no podemos continuar con la incorporación. Si la fecha está mal leída, corrígela; si es correcta, contacta con Recursos Humanos.`;
+  }
+  if (edad > EDAD_MAXIMA_RAZONABLE) {
+    return `La fecha de nacimiento indica ${edad} años, lo que parece un error de lectura del documento. Revísala antes de enviar.`;
+  }
+  return null;
+}
+
 /** Normaliza nº Seguridad Social: solo dígitos. */
 export function normalizarSeguridadSocial(v: string): string {
   return v.replace(/\D/g, "").trim();

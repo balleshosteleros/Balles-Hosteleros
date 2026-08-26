@@ -75,6 +75,31 @@ export function calcularNotaCuestionario(
   return { aciertos, total, nota };
 }
 
+/**
+ * Veredicto del cuestionario. Se decide por número de FALLOS, no por
+ * porcentaje: un fallo pesa lo mismo tenga el cuestionario 3 preguntas o 10.
+ */
+export type VeredictoCuestionario = "aprobado" | "regular" | "suspenso";
+
+/** Hasta este nº de fallos sigue siendo aprobado (verde). */
+export const MAX_FALLOS_APROBADO = 1;
+/** Hasta este nº de fallos es regular (naranja); a partir de aquí, suspenso. */
+export const MAX_FALLOS_REGULAR = 3;
+
+/**
+ * Fuente única del veredicto, usada por la tarjeta del kanban y por la ficha
+ * del candidato para que no puedan discrepar entre sí.
+ *  · 0–1 fallos → aprobado
+ *  · 2–3 fallos → regular
+ *  · ≥4 fallos  → suspenso
+ */
+export function veredictoCuestionario(aciertos: number, total: number): VeredictoCuestionario {
+  const fallos = Math.max(0, total - aciertos);
+  if (fallos <= MAX_FALLOS_APROBADO) return "aprobado";
+  if (fallos <= MAX_FALLOS_REGULAR) return "regular";
+  return "suspenso";
+}
+
 /** Genera un id corto estable para preguntas/opciones nuevas en el constructor. */
 export function nuevoId(prefijo: "p" | "o"): string {
   return `${prefijo}_${Math.random().toString(36).slice(2, 9)}`;

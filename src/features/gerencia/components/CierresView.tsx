@@ -37,7 +37,10 @@ import {
   type CierreRow, type CierresConfig, type CierreModo, type CierreGasto, type CierreTipo,
   type CierreProgramacion,
 } from "@/features/gerencia/actions/cierres-actions";
-import { MAX_DOCUMENTOS_CIERRE, MAX_TAMANO_DOCUMENTO_MB, MAX_TAMANO_DOCUMENTO_BYTES, DIAS_BLOQUEO_DEFAULT } from "@/features/gerencia/types/cierres";
+import {
+  MAX_DOCUMENTOS_CIERRE, MAX_TAMANO_DOCUMENTO_MB, MAX_TAMANO_DOCUMENTO_BYTES,
+  DIAS_BLOQUEO_DEFAULT, DIAS_BLOQUEO_MAX, fechaMinimaApunte,
+} from "@/features/gerencia/types/cierres";
 import { useAuth } from "@/features/auth/contexts/auth-context";
 import { createClient as createSupabaseBrowser } from "@/lib/supabase/client";
 import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
@@ -417,6 +420,20 @@ export function CierresView() {
 
   const fueraDePlazo = config.dias_bloqueo > 0 && diasDeRetraso > config.dias_bloqueo;
 
+  // Primer día que todavía se puede apuntar. Todo lo anterior se pinta en gris
+  // y no se deja elegir: apuntar cierres antiguos recalcularía en cadena el
+  // efectivo acumulado de hoy. `null` = plazo desactivado (sin límite).
+  const fechaMinima = useMemo(
+    () => fechaMinimaApunte(today, config.dias_bloqueo),
+    [today, config.dias_bloqueo],
+  );
+
+  // ¿Esta fecha (yyyy-MM-dd) queda fuera del plazo para apuntar?
+  const fechaBloqueada = useCallback(
+    (fecha: string) => fechaMinima !== null && fecha < fechaMinima,
+    [fechaMinima],
+  );
+
   // Programaciones periódicas (reglas de cierre estilo Google Calendar).
   const [programaciones, setProgramaciones] = useState<CierreProgramacion[]>([]);
   const [progModalOpen, setProgModalOpen] = useState(false);
@@ -718,7 +735,10 @@ export function CierresView() {
   // ── Handlers ──────────────────────────────────────────
   const abrirNuevo = (fecha?: string) => {
     const f = emptyForm();
-    if (fecha) f.fecha = fecha;
+    // Nunca se abre el formulario con una fecha ya cerrada: si la pedida está
+    // fuera de plazo, arranca en el primer día que sí se puede apuntar.
+    const minimo = fechaMinimaApunte(today, config.dias_bloqueo);
+    if (fecha) f.fecha = minimo && fecha < minimo ? minimo : fecha;
     setForm(f);
     setModalOpen(true);
   };
@@ -744,10 +764,12 @@ export function CierresView() {
     }
     // Aviso temprano de fuera de plazo. El candado de verdad está en el
     // servidor (que además conoce el rol autorizado); esto solo evita el
-    // viaje inútil y explica el motivo al momento.
-    if (fueraDePlazo && !esAdminPlataforma) {
+    // viaje inútil y explica el motivo al momento. Sin excepción para
+    // dirección: el servidor tampoco se la da, solo al rol autorizado.
+    if (fueraDePlazo) {
       toast.error(
-        `Fuera de plazo: no se pueden apuntar movimientos con más de ${config.dias_bloqueo} ${config.dias_bloqueo === 1 ? "día" : "días"} de retraso. Solo dirección puede.`,
+        `Fuera de plazo: no se pueden apuntar movimientos con más de ${config.dias_bloqueo} ${config.dias_bloqueo === 1 ? "día" : "días"} de retraso, `
+        + `para no alterar el efectivo acumulado actual.`,
       );
       return;
     }
@@ -1245,6 +1267,12 @@ export function CierresView() {
                   <span className="h-3 w-3 rounded ring-2 ring-primary/40" />
                   Hoy
                 </div>
+                {fechaMinima && (
+                  <div className="flex items-center gap-1.5">
+                    <span className="h-3 w-3 rounded bg-muted border opacity-60" />
+                    Fuera de plazo (no se puede apuntar)
+                  </div>
+                )}
               </div>
 
               <div className="grid grid-cols-7 gap-px bg-border rounded-lg overflow-hidden">
@@ -1266,20 +1294,35 @@ export function CierresView() {
                   const esPendiente = esProgramado && !tieneCierre && key <= today;
                   const esProgramadoFuturo = esProgramado && !tieneCierre && key > today;
 
+                  // Fuera de plazo: día cerrado para apuntar. Se sigue pudiendo
+                  // consultar lo ya registrado, pero no crear nada nuevo.
+                  const cerrado = fechaBloqueada(key);
+
                   let bg = "bg-background";
                   if (tieneCierre && cuadra) bg = "bg-emerald-100";
                   else if (tieneCierre && !cuadra) bg = "bg-amber-100";
                   else if (esPendiente) bg = "bg-red-100";
                   else if (esProgramadoFuturo) bg = "bg-blue-50";
+                  else if (cerrado) bg = "bg-muted";
+
+                  // Sin cierre que abrir y fuera de plazo → ni clic ni hover.
+                  const inerte = cerrado && !tieneCierre;
 
                   return (
                     <div
                       key={key}
-                      className={`relative ${bg} p-2 min-h-[90px] cursor-pointer transition hover:brightness-95 ${esHoy ? "ring-2 ring-primary/40 ring-inset" : ""} ${esPendiente ? "ring-1 ring-red-400 ring-inset" : esProgramadoFuturo ? "ring-1 ring-blue-300 ring-inset" : ""}`}
+                      className={`relative ${bg} p-2 min-h-[90px] transition ${inerte ? "cursor-not-allowed opacity-60" : "cursor-pointer hover:brightness-95"} ${esHoy ? "ring-2 ring-primary/40 ring-inset" : ""} ${esPendiente ? "ring-1 ring-red-400 ring-inset" : esProgramadoFuturo ? "ring-1 ring-blue-300 ring-inset" : ""}`}
+                      title={inerte ? `Fuera de plazo: solo se puede apuntar hasta ${config.dias_bloqueo} ${config.dias_bloqueo === 1 ? "día" : "días"} atrás` : undefined}
+                      aria-disabled={inerte || undefined}
                       onClick={() => {
                         if (tieneCierre) {
                           setSelected(items[0]);
                           setDetalleOpen(true);
+                        } else if (cerrado) {
+                          toast.error(
+                            `Día cerrado: solo se puede apuntar hasta ${config.dias_bloqueo} ${config.dias_bloqueo === 1 ? "día" : "días"} atrás, `
+                            + `para no alterar el efectivo acumulado actual.`,
+                          );
                         } else {
                           abrirNuevo(key);
                         }
@@ -1513,13 +1556,30 @@ export function CierresView() {
               <Input
                 type="date"
                 value={form.fecha}
-                onChange={(e) => setForm({ ...form, fecha: e.target.value })}
+                // El calendario nativo pinta en gris y no deja pulsar nada
+                // anterior al plazo. El servidor vuelve a comprobarlo.
+                min={fechaMinima ?? undefined}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  if (v && fechaBloqueada(v)) {
+                    toast.error(
+                      `Solo se puede apuntar hasta ${config.dias_bloqueo} ${config.dias_bloqueo === 1 ? "día" : "días"} atrás. `
+                      + `Las fechas anteriores están cerradas para no alterar el efectivo acumulado actual.`,
+                    );
+                    return;
+                  }
+                  setForm({ ...form, fecha: v });
+                }}
               />
+              {fechaMinima && (
+                <p className="text-xs text-muted-foreground mt-1.5">
+                  Solo se puede apuntar hasta {config.dias_bloqueo} {config.dias_bloqueo === 1 ? "día" : "días"} atrás
+                  (desde el {format(parseISO(fechaMinima), "d/MM/yyyy")}).
+                </p>
+              )}
               {fueraDePlazo && (
-                <p className={`text-xs mt-1.5 ${esAdminPlataforma ? "text-amber-700" : "text-red-600"}`}>
-                  {esAdminPlataforma
-                    ? `Fecha atrasada ${diasDeRetraso} días (el plazo es ${config.dias_bloqueo}). Puedes apuntarla porque eres dirección.`
-                    : `Fuera de plazo: ${diasDeRetraso} días de retraso y el máximo son ${config.dias_bloqueo}. Solo dirección puede apuntar aquí.`}
+                <p className="text-xs mt-1.5 text-red-600">
+                  Fuera de plazo: {diasDeRetraso} días de retraso y el máximo son {config.dias_bloqueo}.
                 </p>
               )}
             </div>

@@ -33,7 +33,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { AlertTriangle, CalendarDays, UserMinus } from "lucide-react";
+import { AlertTriangle, CalendarDays, Loader2, Sparkles, UserMinus } from "lucide-react";
 import {
   etiquetaTipoBajaEmpresa,
   TIPOS_BAJA_EMPRESA,
@@ -77,6 +77,10 @@ export function BajaContratoEmpresaDialog({
   const [tipoBaja, setTipoBaja] = useState<TipoBajaContrato>("disciplinaria");
   const [ultimoDia, setUltimoDia] = useState<string>(hoyIso());
   const [motivo, setMotivo] = useState("");
+  const [hechos, setHechos] = useState("");
+  const [mejorando, setMejorando] = useState(false);
+  /** Texto previo a la última mejora con IA, para poder deshacerla. */
+  const [hechosPrevios, setHechosPrevios] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
 
   useEffect(() => {
@@ -84,7 +88,52 @@ export function BajaContratoEmpresaDialog({
     setTipoBaja("disciplinaria");
     setUltimoDia(hoyIso());
     setMotivo("");
+    setHechos("");
+    setHechosPrevios(null);
   }, [open]);
+
+  /**
+   * Pide a la IA que reescriba los hechos con el registro formal de una carta
+   * de despido. La IA solo reformula: no inventa datos (lo que falte lo deja
+   * [entre corchetes]). El texto vuelve al campo y RRHH puede retocarlo,
+   * volver a mejorarlo o deshacer.
+   */
+  const mejorarConIa = async () => {
+    const base = hechos.trim();
+    if (!base) {
+      toast.error("Escribe primero los hechos y luego pulsa «Mejorar con IA».");
+      return;
+    }
+    setMejorando(true);
+    try {
+      const res = await fetch("/api/rrhh/ia-redactar-baja", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          borrador: base,
+          tipoBajaLabel: etiquetaTipoBajaEmpresa(tipoBaja),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data?.ok) {
+        toast.error(data?.error ?? "No se pudo redactar con IA.");
+        return;
+      }
+      setHechosPrevios(base);
+      setHechos(data.hechos as string);
+      toast.success("Hechos redactados. Revísalos antes de enviar.");
+    } catch {
+      toast.error("No se pudo conectar con la IA.");
+    } finally {
+      setMejorando(false);
+    }
+  };
+
+  const deshacerMejora = () => {
+    if (hechosPrevios == null) return;
+    setHechos(hechosPrevios);
+    setHechosPrevios(null);
+  };
 
   const diaOficial = useMemo(() => (ultimoDia ? fmt(diaSiguiente(ultimoDia)) : "—"), [ultimoDia]);
 
@@ -100,6 +149,7 @@ export function BajaContratoEmpresaDialog({
         tipoBaja,
         ultimoDiaIso: ultimoDia,
         motivo: motivo.trim() || null,
+        hechos: hechos.trim() || null,
       });
       if (!res.ok) {
         toast.error(("error" in res && res.error) || "No se pudo dar de baja");
@@ -110,6 +160,15 @@ export function BajaContratoEmpresaDialog({
       } else {
         toast.warning(
           `Baja iniciada y movido a «Baja contrato», pero no se avisó a la gestoría: ${res.gestoriaError ?? "revisa el correo de gestoría en Ajustes → Empresa."}`,
+        );
+      }
+      // La carta al trabajador no bloquea la baja: si falla, se avisa aparte
+      // para que RRHH pueda reenviarla desde el documento.
+      if (res.cartaEnviada) {
+        toast.success("Enviada al trabajador la carta de comunicación para firmar.");
+      } else {
+        toast.warning(
+          `No se pudo enviar la carta al trabajador: ${res.cartaError ?? "revisa su email en la ficha."}`,
         );
       }
       onOpenChange(false);
@@ -176,15 +235,61 @@ export function BajaContratoEmpresaDialog({
             </p>
           </div>
 
+          {/* Hechos: van en la CARTA que firma el trabajador. */}
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between gap-2">
+              <Label htmlFor="hechosBaja">Hechos que motivan la baja</Label>
+              <div className="flex items-center gap-1">
+                {hechosPrevios != null && !mejorando && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 text-xs"
+                    onClick={deshacerMejora}
+                  >
+                    Deshacer
+                  </Button>
+                )}
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-7 gap-1.5 text-xs"
+                  onClick={mejorarConIa}
+                  disabled={mejorando || !hechos.trim()}
+                >
+                  {mejorando ? (
+                    <><Loader2 className="h-3 w-3 animate-spin" /> Redactando…</>
+                  ) : (
+                    <><Sparkles className="h-3 w-3" /> Mejorar con IA</>
+                  )}
+                </Button>
+              </div>
+            </div>
+            <Textarea
+              id="hechosBaja"
+              value={hechos}
+              onChange={(e) => setHechos(e.target.value)}
+              placeholder="Escríbelos como te salgan y pulsa «Mejorar con IA» para darles forma de carta. Ej.: lleva 3 meses llegando tarde, avisado 2 veces por escrito, el 12 de agosto no vino y no avisó."
+              rows={6}
+            />
+            <p className="text-xs text-muted-foreground">
+              Este texto aparece en la carta que se envía al trabajador para que la firme. La IA
+              solo reescribe lo que pongas: si falta un dato lo deja marcado{" "}
+              <span className="font-mono">[entre corchetes]</span> para que lo completes.
+            </p>
+          </div>
+
           {/* Motivo (opcional) */}
           <div className="space-y-1.5">
-            <Label htmlFor="motivoBaja">Motivo (opcional)</Label>
+            <Label htmlFor="motivoBaja">Nota interna para la gestoría (opcional)</Label>
             <Textarea
               id="motivoBaja"
               value={motivo}
               onChange={(e) => setMotivo(e.target.value)}
-              placeholder="Detalle interno de la baja (se incluye en el aviso a la gestoría)."
-              rows={3}
+              placeholder="Detalle interno de la baja (se incluye en el aviso a la gestoría, no en la carta)."
+              rows={2}
             />
           </div>
         </div>

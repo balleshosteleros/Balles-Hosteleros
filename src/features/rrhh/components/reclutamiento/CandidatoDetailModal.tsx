@@ -41,6 +41,7 @@ import {
   UserMinus,
 } from "lucide-react";
 import { BajaContratoEmpresaDialog } from "@/features/rrhh/components/reclutamiento/BajaContratoEmpresaDialog";
+import { PeriodoPruebaPanel } from "@/features/rrhh/components/reclutamiento/PeriodoPruebaPanel";
 
 function WhatsAppIcon({ className }: { className?: string }) {
   return (
@@ -154,7 +155,7 @@ interface CandidatoDetailModalProps {
   onContratar?: (c: Candidato) => void;
 }
 
-type TabKey = "cuestionarios" | "documentacion" | "actividad" | "resenas" | "notas";
+type TabKey = "cuestionarios" | "documentacion" | "prueba" | "actividad" | "resenas" | "notas";
 
 export function CandidatoDetailModal({
   open,
@@ -250,6 +251,11 @@ export function CandidatoDetailModal({
   const cfgEstado = ESTADOS_CONFIG[candidato.fase];
   const diasEnFase = diasDesde(candidato.faseActualizadaAt);
 
+  // La pestaña «Prueba» aparece desde que entra en esa fase y sigue visible
+  // después: al pasar a Empleado hay que poder consultar cómo fue su periodo.
+  const mostrarPrueba =
+    candidato.fase === "prueba" || candidato.fase === "empleado";
+
   const total = candidatos.length;
   const goPrev = () => index > 0 && onSelectCandidato(candidatos[index - 1]);
   const goNext = () => index >= 0 && index < total - 1 && onSelectCandidato(candidatos[index + 1]);
@@ -331,7 +337,7 @@ export function CandidatoDetailModal({
                 <button
                   onClick={() => onEliminar(candidato)}
                   className="ml-1 p-1.5 rounded text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-                  title="Borrar candidato"
+                  title="Archivar candidato en «Papelera»"
                 >
                   <Trash2 className="h-4 w-4" />
                 </button>
@@ -382,6 +388,10 @@ export function CandidatoDetailModal({
                     <DocumentacionTabTrigger
                       completa={!!candidato.documentacionCompletadaAt}
                     />
+                    {/* El periodo de prueba solo existe a partir de esa fase. */}
+                    {mostrarPrueba && (
+                      <TabTriggerWithCount label="Prueba" value="prueba" />
+                    )}
                     <TabTriggerWithCount
                       label="Actividad"
                       value="actividad"
@@ -408,6 +418,15 @@ export function CandidatoDetailModal({
                     <TabsContent value="documentacion" className="m-0 outline-none">
                       <DocumentacionTab candidato={candidato} />
                     </TabsContent>
+                    {mostrarPrueba && (
+                      <TabsContent value="prueba" className="m-0 outline-none">
+                        <PeriodoPruebaPanel
+                          empleadoId={candidato.empleadoId ?? null}
+                          candidatoId={candidato.id}
+                          nombre={`${candidato.nombre} ${candidato.apellidos ?? ""}`.trim()}
+                        />
+                      </TabsContent>
+                    )}
                     <TabsContent value="actividad" className="m-0 outline-none">
                       <ActividadTab historial={historial} candidato={candidato} vacante={vacante} />
                     </TabsContent>

@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { NumberInput } from "@/shared/components/NumberInput";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
@@ -411,16 +412,16 @@ export function PedidoModal({ open, onClose, onSave, item, empresaId, empresaNom
                         productos={productosList}
                       />
                     </td>
-                    <td className="px-2 py-1"><Input className="h-8 text-xs w-16" type="number" value={l.cantidad} onChange={(e) => updateLinea(i, "cantidad", +e.target.value)} /></td>
+                    <td className="px-2 py-1"><NumberInput className="h-8 text-xs w-16" value={l.cantidad} onValueChange={(v) => updateLinea(i, "cantidad", v)} /></td>
                     <td className="px-2 py-1"><Input className="h-8 text-xs w-14" value={l.unidad} onChange={(e) => updateLinea(i, "unidad", e.target.value)} /></td>
-                    <td className="px-2 py-1"><Input className="h-8 text-xs w-20" type="number" step="0.01" value={l.precioUC} onChange={(e) => updateLinea(i, "precioUC", +e.target.value)} /></td>
+                    <td className="px-2 py-1"><NumberInput className="h-8 text-xs w-20" value={l.precioUC} onValueChange={(v) => updateLinea(i, "precioUC", v)} /></td>
                     <td className="px-2 py-1">
                       <span className="inline-flex h-8 w-14 items-center justify-center rounded-md bg-muted/50 text-xs font-medium text-muted-foreground border border-border">
                         {l.impuesto}%
                       </span>
                     </td>
-                    <td className="px-2 py-1"><Input className="h-8 text-xs w-14" type="number" value={l.dtoPct} onChange={(e) => updateLinea(i, "dtoPct", +e.target.value)} /></td>
-                    <td className="px-2 py-1"><Input className="h-8 text-xs w-16" type="number" step="0.01" value={l.dtoEur} onChange={(e) => updateLinea(i, "dtoEur", +e.target.value)} /></td>
+                    <td className="px-2 py-1"><NumberInput className="h-8 text-xs w-14" value={l.dtoPct} onValueChange={(v) => updateLinea(i, "dtoPct", v)} /></td>
+                    <td className="px-2 py-1"><NumberInput className="h-8 text-xs w-16" value={l.dtoEur} onValueChange={(v) => updateLinea(i, "dtoEur", v)} /></td>
                     <td className="px-2 py-1 font-semibold text-foreground">{formatNumero(calcLineaTotal(l), { min: 2, max: 2 })}</td>
                     <td className="px-2 py-1"><Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => removeLinea(i)}><Trash2 className="h-3 w-3 text-destructive" /></Button></td>
                   </tr>
@@ -435,8 +436,8 @@ export function PedidoModal({ open, onClose, onSave, item, empresaId, empresaNom
           {/* Izquierda: descuentos y notas */}
           <div className="space-y-3">
             <div className="grid grid-cols-2 gap-3">
-              <div><Label className="text-xs font-semibold">Dto % global</Label><Input type="number" value={form.dtoPct} onChange={(e) => setField("dtoPct", +e.target.value)} /></div>
-              <div><Label className="text-xs font-semibold">Dto € global</Label><Input type="number" step="0.01" value={form.dtoEur} onChange={(e) => setField("dtoEur", +e.target.value)} /></div>
+              <div><Label className="text-xs font-semibold">Dto % global</Label><NumberInput value={form.dtoPct} onValueChange={(v) => setField("dtoPct", v)} /></div>
+              <div><Label className="text-xs font-semibold">Dto € global</Label><NumberInput value={form.dtoEur} onValueChange={(v) => setField("dtoEur", v)} /></div>
             </div>
             <div><Label className="text-xs font-semibold">Notas</Label><Textarea value={form.notas} onChange={(e) => setField("notas", e.target.value)} rows={3} /></div>
           </div>

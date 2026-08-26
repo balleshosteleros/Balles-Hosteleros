@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { NumberInput } from "@/shared/components/NumberInput";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
@@ -159,7 +160,7 @@ export function AmortizacionTab({ lineas, onChange, readOnly = false }: Props) {
             <div className="space-y-3">
               <div className="grid grid-cols-2 gap-3">
                 <div><Label>Fecha</Label><Input type="date" value={editing.fecha} onChange={e => upd("fecha", e.target.value)} /></div>
-                <div><Label>Año</Label><Input type="number" value={editing.ano} onChange={e => upd("ano", Number(e.target.value))} /></div>
+                <div><Label>Año</Label><NumberInput decimales={false} value={editing.ano} onValueChange={v => upd("ano", v)} /></div>
                 <div><Label>Trimestre</Label>
                   <Select value={editing.trimestre} onValueChange={v => upd("trimestre", v)}>
                     <SelectTrigger><SelectValue /></SelectTrigger>

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { NumberInput } from "@/shared/components/NumberInput";
 import { Label } from "@/components/ui/label";
 import { X, Users, Plus } from "lucide-react";
 import type { SegmentoJson, SegmentoCondicion } from "@/features/marketing/data/campanas";
@@ -132,11 +132,12 @@ function CondicionRow({
         {condicion.tipo === "sin_visitar_desde_dias" && (
           <>
             <Label className="text-xs">Sin visitar &gt;</Label>
-            <Input
-              type="number"
+            <NumberInput
               min={1}
+              emptyValue={1}
+              decimales={false}
               value={condicion.min}
-              onChange={(e) => onChange({ tipo: "sin_visitar_desde_dias", min: Number(e.target.value) || 1 })}
+              onValueChange={(v) => onChange({ tipo: "sin_visitar_desde_dias", min: v })}
               className="h-7 w-20 text-xs"
             />
             <span className="text-xs text-muted-foreground">días</span>
@@ -168,11 +169,12 @@ function CondicionRow({
         {condicion.tipo === "visitas_min" && (
           <>
             <Label className="text-xs">Visitas ≥</Label>
-            <Input
-              type="number"
+            <NumberInput
               min={1}
+              emptyValue={1}
+              decimales={false}
               value={condicion.min}
-              onChange={(e) => onChange({ tipo: "visitas_min", min: Number(e.target.value) || 1 })}
+              onValueChange={(v) => onChange({ tipo: "visitas_min", min: v })}
               className="h-7 w-20 text-xs"
             />
           </>

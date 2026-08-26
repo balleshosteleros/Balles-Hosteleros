@@ -36,6 +36,7 @@ import {
 } from "@/features/toques/services/toques.service";
 import { getEmpresaActivaId } from "@/features/empresa/actions/empresa-activa-actions";
 import { getZonaHorariaEmpresa, ZONA_HORARIA_DEFAULT } from "@/features/empresa/lib/empresa-server";
+import { getDiasVacacionesAnio } from "@/features/rrhh/actions/calendario-config-actions";
 import { minutosDiaEnZona, ahoraEnZona, hoyEnZona } from "@/features/empresa/lib/zona-horaria";
 import { getRolContext } from "@/features/auth/actions/permisos-actions";
 import { puedeEditarModulo } from "@/features/auth/lib/permisos";
@@ -1748,9 +1749,11 @@ export async function getMiVacacionesInfo(): Promise<{
       .eq("empresa_id", empresaId)
       .eq("subtipo", "vacaciones")
       .maybeSingle();
-    const diasTotales = (tipoVac?.limite_dias as number | null | undefined) ?? 0;
-    // Sin límite configurado no hay cuenta que enseñar: el empleado pide y
-    // decide quien aprueba.
+    // Fuente ÚNICA de los días al año: la configuración del submódulo Calendario
+    // (Calendario → Días de vacaciones). Antes se leía `limite_dias` del tipo de
+    // ausencia, que era un número distinto del que veía RRHH en la ficha: el
+    // empleado y RRHH podían ver saldos diferentes para el mismo año.
+    const { dias: diasTotales } = await getDiasVacacionesAnio(empresaId);
     if (!diasTotales) return { ok: true, data: vacio };
 
     const esPredeterminado = true;
@@ -2769,6 +2772,36 @@ export async function aprobarSolicitud(id: string, notasRevision?: string) {
               extractErrorMessage(e),
             );
           }
+
+          // TODA baja se coordina desde RECLUTAMIENTO: la tarjeta del trabajador
+          // pasa a la fase de offboarding «Baja contrato», igual que cuando la
+          // causa la empresa. Sin esto la baja voluntaria quedaba fuera del
+          // Kanban y nadie la cerraba: el empleado seguía Activo indefinidamente.
+          // No bloquea la aprobación si falla (se avisa en el log).
+          try {
+            const { data: cand } = await supabase
+              .from("candidatos")
+              .select("id, fase, estado")
+              .eq("empresa_id", solicitud.empresa_id as string)
+              .eq("empleado_id", empleadoBajaId)
+              .maybeSingle();
+            if (cand?.id && cand.estado !== "ex_empleado") {
+              const { moverCandidatoFase } = await import(
+                "@/features/rrhh/actions/candidatos-actions"
+              );
+              await moverCandidatoFase(cand.id as string, "offboarding", "baja_contrato");
+            } else if (!cand?.id) {
+              console.warn(
+                "[mi-panel] aprobarSolicitud → baja sin tarjeta en Reclutamiento:",
+                empleadoBajaId,
+              );
+            }
+          } catch (e) {
+            console.error(
+              "[mi-panel] aprobarSolicitud → mover a offboarding:",
+              extractErrorMessage(e),
+            );
+          }
         }
       }
 
@@ -3385,6 +3418,13 @@ export interface MiPanelResumen {
     siguienteNombre: string | null;
     progresoPct: number;
     faltan: number;
+    /**
+     * El trabajador está en periodo de prueba: aún no juega. Su nivel se
+     * muestra como «Pruebas» y no devenga points hasta superarlo.
+     */
+    enPeriodoPrueba: boolean;
+    /** Fin previsto del periodo (YYYY-MM-DD). Solo la fecha: sin cuenta atrás. */
+    pruebaFechaFin: string | null;
   };
   fichajes: {
     mesCount: number;
@@ -3422,6 +3462,8 @@ const EMPTY_RESUMEN: MiPanelResumen = {
     siguienteNombre: null,
     progresoPct: 0,
     faltan: 0,
+    enPeriodoPrueba: false,
+    pruebaFechaFin: null,
   },
   fichajes: { mesCount: 0, mesHoras: 0, incidencias: 0 },
   solicitudes: { pendientes: 0, aprobadas: 0, rechazadas: 0 },
@@ -3479,6 +3521,37 @@ export async function getMiPanelResumen(): Promise<{
 
     const nivelProgreso = calcularNivel(balance.toquesAcumulados, niveles);
 
+    // ─── Periodo de prueba ────────────────────────────────────
+    // Mientras dure, el trabajador no juega: su estado en points es «Pruebas»
+    // (nivel de orden 0) y no acumula. Solo se le muestra hasta cuándo dura,
+    // sin cuenta atrás ni notas: las evaluaciones son cosa de RRHH.
+    //
+    // El periodo cuelga de `empleados.id`, que NO es el `user_id`: hay que
+    // resolver la ficha del usuario en esta empresa antes de consultarlo.
+    const { data: fichaEmpleado } = await supabase
+      .from("empleados")
+      .select("id")
+      .eq("empresa_id", empresaId)
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    const pruebaRow = fichaEmpleado
+      ? (
+          await supabase
+            .from("empleado_periodo_prueba")
+            .select("fecha_fin")
+            .eq("empresa_id", empresaId)
+            .eq("empleado_id", fichaEmpleado.id as string)
+            .eq("decision", "pendiente")
+            .maybeSingle()
+        ).data
+      : null;
+
+    const enPeriodoPrueba = Boolean(pruebaRow);
+    const nivelPruebas = enPeriodoPrueba
+      ? (niveles.find((n) => n.orden === 0) ?? null)
+      : null;
+
     const fRows = (fichajesMes.data ?? []) as Array<{
       horas_totales: number | null;
       estado: string | null;
@@ -3502,12 +3575,25 @@ export async function getMiPanelResumen(): Promise<{
         points: {
           acumulados: balance.toquesAcumulados,
           canjeables: balance.toquesCanjeables,
-          nivelNombre: nivelProgreso.actual?.nombre ?? null,
-          nivelColor: nivelProgreso.actual?.badgeColor ?? null,
-          nivelIcon: nivelProgreso.actual?.badgeIcon ?? null,
-          siguienteNombre: nivelProgreso.siguiente?.nombre ?? null,
-          progresoPct: nivelProgreso.progresoPct,
-          faltan: nivelProgreso.toquesParaSiguiente,
+          // En periodo de prueba el nivel mostrado es «Pruebas» y el siguiente
+          // es el primero real: aún no está jugando, está por entrar.
+          nivelNombre: enPeriodoPrueba
+            ? (nivelPruebas?.nombre ?? "Pruebas")
+            : (nivelProgreso.actual?.nombre ?? null),
+          nivelColor: enPeriodoPrueba
+            ? (nivelPruebas?.badgeColor ?? "#94a3b8")
+            : (nivelProgreso.actual?.badgeColor ?? null),
+          nivelIcon: enPeriodoPrueba
+            ? (nivelPruebas?.badgeIcon ?? "Hourglass")
+            : (nivelProgreso.actual?.badgeIcon ?? null),
+          siguienteNombre: enPeriodoPrueba
+            ? (niveles.find((n) => n.orden === 1)?.nombre ?? null)
+            : (nivelProgreso.siguiente?.nombre ?? null),
+          // Sin barra de progreso durante la prueba: no hay nada que acumular.
+          progresoPct: enPeriodoPrueba ? 0 : nivelProgreso.progresoPct,
+          faltan: enPeriodoPrueba ? 0 : nivelProgreso.toquesParaSiguiente,
+          enPeriodoPrueba,
+          pruebaFechaFin: (pruebaRow?.fecha_fin as string | null) ?? null,
         },
         fichajes: {
           mesCount: fRows.length,

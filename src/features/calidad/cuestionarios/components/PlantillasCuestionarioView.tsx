@@ -5,6 +5,7 @@ import { ArrowLeft, Loader2, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { NumberInput } from "@/shared/components/NumberInput";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -357,12 +358,13 @@ function PlantillaDialog({ open, onOpenChange, plantilla, onGuardada }: Plantill
 
             <div className="space-y-2">
               <Label>Duración (min)</Label>
-              <Input
-                type="number"
+              <NumberInput
                 min={1}
                 max={240}
+                emptyValue={15}
+                decimales={false}
                 value={duracionMinutos}
-                onChange={(e) => setDuracionMinutos(Number(e.target.value) || 15)}
+                onValueChange={(v) => setDuracionMinutos(v)}
               />
             </div>
           </div>
@@ -372,12 +374,12 @@ function PlantillaDialog({ open, onOpenChange, plantilla, onGuardada }: Plantill
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-2">
                   <Label>Nota de corte (%)</Label>
-                  <Input
-                    type="number"
+                  <NumberInput
                     min={0}
                     max={100}
+                    decimales={false}
                     value={notaCorte}
-                    onChange={(e) => setNotaCorte(Number(e.target.value) || 0)}
+                    onValueChange={(v) => setNotaCorte(v)}
                   />
                 </div>
                 <div className="space-y-2 flex flex-col">

@@ -2,6 +2,7 @@
 
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { NumberInput } from "@/shared/components/NumberInput";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
@@ -172,12 +173,13 @@ export function SelectorDiasTarea({
             Repetir cada
           </Label>
           <div className="flex items-center gap-2 mt-1.5">
-            <Input
-              type="number"
+            <NumberInput
               min={1}
               max={99}
+              emptyValue={1}
+              decimales={false}
               value={intervaloVal}
-              onChange={(e) => setIntervalo(Number(e.target.value))}
+              onValueChange={(v) => setIntervalo(v)}
               disabled={!isRecurrente}
               className="w-16 text-center"
             />

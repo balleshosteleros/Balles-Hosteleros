@@ -5,6 +5,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { NumberInput } from "@/shared/components/NumberInput";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
@@ -311,13 +312,14 @@ export function ToquesAdminTab() {
                           </Badge>
                         </td>
                         <td className="py-2 pr-3">
-                          <Input
-                            type="number"
+                          <NumberInput
+                            min={0}
+                            decimales={false}
                             value={draft.toques}
-                            onChange={(e) =>
+                            onValueChange={(n) =>
                               setReglasDraft((prev) => ({
                                 ...prev,
-                                [r.id]: { ...draft, toques: Number(e.target.value) || 0 },
+                                [r.id]: { ...draft, toques: n },
                               }))
                             }
                             className="h-8 w-20"
@@ -422,13 +424,14 @@ export function ToquesAdminTab() {
                           </Badge>
                         </td>
                         <td className="py-2 pr-3">
-                          <Input
-                            type="number"
+                          <NumberInput
+                            min={0}
+                            decimales={false}
                             value={draft.costeToques}
-                            onChange={(e) =>
+                            onValueChange={(n) =>
                               setRecompensasDraft((prev) => ({
                                 ...prev,
-                                [rec.id]: { ...draft, costeToques: Number(e.target.value) || 0 },
+                                [rec.id]: { ...draft, costeToques: n },
                               }))
                             }
                             className="h-8 w-24"
@@ -524,13 +527,14 @@ export function ToquesAdminTab() {
                           />
                         </td>
                         <td className="py-2 pr-3">
-                          <Input
-                            type="number"
+                          <NumberInput
+                            min={0}
+                            decimales={false}
                             value={draft.toquesMin}
-                            onChange={(e) =>
+                            onValueChange={(n) =>
                               setNivelesDraft((prev) => ({
                                 ...prev,
-                                [nv.id]: { ...draft, toquesMin: Number(e.target.value) || 0 },
+                                [nv.id]: { ...draft, toquesMin: n },
                               }))
                             }
                             className="h-8"
@@ -621,10 +625,11 @@ function NuevaRecompensaCard({ value, onChange, onSubmit, saving }: NuevaRecompe
         </div>
         <div>
           <Label className="text-xs">Coste (points)</Label>
-          <Input
-            type="number"
+          <NumberInput
+            min={0}
+            decimales={false}
             value={value.costeToques}
-            onChange={(e) => onChange({ ...value, costeToques: Number(e.target.value) || 0 })}
+            onValueChange={(n) => onChange({ ...value, costeToques: n })}
             className="h-8 mt-1"
           />
         </div>

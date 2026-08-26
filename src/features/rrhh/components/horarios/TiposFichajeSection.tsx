@@ -7,6 +7,7 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { NumberInput } from "@/shared/components/NumberInput";
 import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -220,20 +221,20 @@ export function TiposFichajeSection({ empresaId }: { empresaId: string }) {
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className="text-sm font-medium">Margen antes (min)</label>
-                      <Input
-                        type="number"
+                      <NumberInput
                         min={0}
+                        decimales={false}
                         value={form.margen_antes_min}
-                        onChange={e => setForm(f => ({ ...f, margen_antes_min: Math.max(0, Number(e.target.value) || 0) }))}
+                        onValueChange={v => setForm(f => ({ ...f, margen_antes_min: v }))}
                       />
                     </div>
                     <div>
                       <label className="text-sm font-medium">Margen después (min)</label>
-                      <Input
-                        type="number"
+                      <NumberInput
                         min={0}
+                        decimales={false}
                         value={form.margen_despues_min}
-                        onChange={e => setForm(f => ({ ...f, margen_despues_min: Math.max(0, Number(e.target.value) || 0) }))}
+                        onValueChange={v => setForm(f => ({ ...f, margen_despues_min: v }))}
                       />
                     </div>
                   </div>

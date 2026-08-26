@@ -6,6 +6,7 @@ import { Loader2, Upload, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { NumberInput } from "@/shared/components/NumberInput";
 import { useEditorStore } from "../../../../hooks/useEditorStore";
 import { Field, Section } from "./shared";
 import { subirAsset } from "../../../../services/asset-upload";
@@ -148,13 +149,12 @@ export function HeroForm({ bloque }: { bloque: Extract<Bloque, { tipo: "hero" }>
           />
         </Field>
         <Field label="Overlay oscuro" hint="0 = sin overlay, 1 = negro opaco">
-          <Input
-            type="number"
+          <NumberInput
             min={0}
             max={1}
             step={0.05}
             value={datos.overlay ?? 0.4}
-            onChange={(e) => set({ overlay: Math.max(0, Math.min(1, Number(e.target.value) || 0)) })}
+            onValueChange={(v) => set({ overlay: v })}
           />
         </Field>
       </Section>

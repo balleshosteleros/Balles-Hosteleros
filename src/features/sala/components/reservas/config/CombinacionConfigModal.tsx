@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { NumberInput } from "@/shared/components/NumberInput";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Trash2, X } from "lucide-react";
@@ -263,23 +263,25 @@ export function CombinacionConfigModal({
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
                 <Label className="text-xs">Mínimo</Label>
-                <Input
-                  type="number"
+                <NumberInput
                   min={1}
                   max={max}
+                  emptyValue={1}
+                  decimales={false}
                   value={min}
-                  onChange={(e) => setMin(Number(e.target.value) || 1)}
+                  onValueChange={setMin}
                   className="h-9"
                 />
               </div>
               <div className="space-y-1">
                 <Label className="text-xs">Máximo</Label>
-                <Input
-                  type="number"
+                <NumberInput
                   min={min}
                   max={100}
+                  emptyValue={100}
+                  decimales={false}
                   value={max}
-                  onChange={(e) => setMax(Number(e.target.value) || 100)}
+                  onValueChange={setMax}
                   className="h-9"
                 />
               </div>

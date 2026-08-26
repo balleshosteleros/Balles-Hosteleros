@@ -16,6 +16,8 @@ import { createClient as createServiceClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import { geminiJSON, GeminiKeyMissingError } from "@/lib/ia/gemini";
 import {
+  calcularEdad,
+  EDAD_MINIMA_LABORAL,
   normalizarDniNie,
   normalizarIban,
   normalizarSeguridadSocial,
@@ -50,6 +52,12 @@ const PROMPTS: Record<"dni_nie" | "dni_reverso" | "iban" | "ss", string> = {
     "Esta imagen debe ser un DNI español o una tarjeta de NIE (documento de identidad de extranjero en España). " +
     "Extrae el número del documento (DNI: 8 dígitos + letra; NIE: letra X/Y/Z + 7 dígitos + letra), " +
     "la fecha de nacimiento del titular y su domicilio/dirección postal si aparece. " +
+    "MUY IMPORTANTE sobre la fecha de nacimiento: estos documentos muestran VARIAS fechas juntas y es " +
+    "fácil confundirlas. Devuelve ÚNICAMENTE la que aparece bajo la etiqueta 'FECHA DE NACIMIENTO' " +
+    "(o 'DATE OF BIRTH' / 'FECHA DE NACIMENTO'). NO devuelvas la fecha de expedición ('FECHA DE EXPEDICIÓN', " +
+    "'DATE OF ISSUE'), NI la fecha de caducidad o validez ('VALIDEZ', 'FECHA DE CADUCIDAD', 'DATE OF EXPIRY'), " +
+    "NI la fecha que acompaña al número de soporte. Si NO puedes identificar con seguridad cuál es la fecha " +
+    "de nacimiento porque la etiqueta no se lee, devuelve la fecha de nacimiento VACÍA en lugar de adivinar. " +
     "Responde SOLO con un JSON: {\"valor\":\"<numero o vacío>\",\"fecha_nacimiento\":\"<AAAA-MM-DD o vacío>\",\"direccion\":\"<domicilio completo o vacío>\"}. " +
     "La fecha SIEMPRE en formato AAAA-MM-DD (año-mes-día). La dirección tal cual aparece. Sin texto adicional.",
   dni_reverso:
@@ -146,6 +154,9 @@ export async function POST(req: Request) {
     let direccion: string | null = null;
     let titularDni: string | null = null;
     let titularNombre: string | null = null;
+    // Edad mínima legal: el documento acredita que no puede ser contratado.
+    let menorDeEdad = false;
+    let edadTitular: number | null = null;
     try {
       const { data } = await geminiJSON<{
         valor?: string; fecha_nacimiento?: string; direccion?: string; titular_dni?: string; titular_nombre?: string;
@@ -160,7 +171,16 @@ export async function POST(req: Request) {
         const f = typeof data.fecha_nacimiento === "string" ? data.fecha_nacimiento.trim() : "";
         if (/^\d{4}-\d{2}-\d{2}$/.test(f)) {
           const d = new Date(`${f}T00:00:00Z`);
-          if (!Number.isNaN(d.getTime()) && d.getTime() < Date.now()) fechaNacimiento = f;
+          if (!Number.isNaN(d.getTime()) && d.getTime() < Date.now()) {
+            fechaNacimiento = f;
+            // Si el documento acredita que no alcanza la edad mínima legal, se
+            // informa del motivo para que el formulario lo rechace y no avance.
+            const edad = calcularEdad(f);
+            if (edad !== null && edad < EDAD_MINIMA_LABORAL) {
+              edadTitular = edad;
+              menorDeEdad = true;
+            }
+          }
         }
       }
       // Dirección: del DNI/NIE (aparece en el reverso; también la aceptamos si el
@@ -194,6 +214,7 @@ export async function POST(req: Request) {
     return NextResponse.json({
       ok: true, valor, fecha_nacimiento: fechaNacimiento, direccion,
       titular_dni: titularDni, titular_nombre: titularNombre,
+      menor_de_edad: menorDeEdad, edad: edadTitular,
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Error desconocido";

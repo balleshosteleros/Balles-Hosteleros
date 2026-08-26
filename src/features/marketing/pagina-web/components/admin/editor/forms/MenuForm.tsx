@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
+import { NumberInput } from "@/shared/components/NumberInput";
 import {
   Select,
   SelectContent,
@@ -130,14 +131,13 @@ export function MenuForm({ bloque }: { bloque: Extract<Bloque, { tipo: "menu" }>
                   />
                 </Field>
                 <Field label="Precio €">
-                  <Input
-                    type="number"
+                  <NumberInput
                     step="0.01"
                     min={0}
                     value={item.precio}
-                    onChange={(e) => {
+                    onValueChange={(v) => {
                       const arr = [...manuales];
-                      arr[i] = { ...arr[i], precio: Number(e.target.value) || 0 };
+                      arr[i] = { ...arr[i], precio: v };
                       set({ items_manual: arr });
                     }}
                   />

@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { NumberInput } from "@/shared/components/NumberInput";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -2491,20 +2492,18 @@ function PilarBloque({
                 />
               </td>
               <td className="p-2">
-                <Input
-                  type="number"
+                <NumberInput
                   className="h-8 w-28 text-sm"
                   value={p.fijo}
-                  onChange={(e) => onUpdatePartida(p.id, "fijo", Number(e.target.value))}
+                  onValueChange={(v) => onUpdatePartida(p.id, "fijo", v)}
                 />
               </td>
               <td className="p-2">
-                <Input
-                  type="number"
+                <NumberInput
                   step={0.5}
                   className="h-8 w-20 text-sm"
                   value={p.variablePct}
-                  onChange={(e) => onUpdatePartida(p.id, "variablePct", Number(e.target.value))}
+                  onValueChange={(v) => onUpdatePartida(p.id, "variablePct", v)}
                 />
               </td>
               <td className="p-2 text-muted-foreground">{fmt((ventas * p.variablePct / 100) * factor)}€</td>

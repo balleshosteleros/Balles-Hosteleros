@@ -32,6 +32,7 @@ import {
 import { toast } from "sonner";
 
 import { Input } from "@/components/ui/input";
+import { NumberInput } from "@/shared/components/NumberInput";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -304,15 +305,12 @@ export function AppClientesConfigPanel() {
         <CardContent className="space-y-3">
           <div className="flex items-center gap-2">
             <span className="text-xs text-muted-foreground">Enviar después de</span>
-            <Input
-              type="number"
+            <NumberInput
               min={0}
+              decimales={false}
               value={delayValor}
-              onChange={(e) =>
-                set(
-                  "email_delay_minutos",
-                  tiempoADelay(Number(e.target.value) || 0, delayUnidad),
-                )
+              onValueChange={(v) =>
+                set("email_delay_minutos", tiempoADelay(v, delayUnidad))
               }
               className="h-8 w-20 text-sm"
             />

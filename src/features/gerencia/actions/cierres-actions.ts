@@ -6,7 +6,7 @@ import { getEmpresaActivaForUser, getZonaHorariaEmpresa } from "@/features/empre
 import { hoyEnZona } from "@/features/empresa/lib/zona-horaria";
 import { getRolContext } from "@/features/auth/actions/permisos-actions";
 import { puedeEditarModulo } from "@/features/auth/lib/permisos";
-import { MAX_DOCUMENTOS_CIERRE, DIAS_BLOQUEO_DEFAULT } from "@/features/gerencia/types/cierres";
+import { MAX_DOCUMENTOS_CIERRE, DIAS_BLOQUEO_DEFAULT, DIAS_BLOQUEO_MAX } from "@/features/gerencia/types/cierres";
 import type { SupabaseClient } from "@supabase/supabase-js";
 const BUCKET = "cierres-documentos";
 const SIGNED_URL_TTL_SECONDS = 60 * 60;
@@ -114,8 +114,11 @@ async function comprobarPlazoApunte(
     .eq("empresa_id", empresaId)
     .maybeSingle();
 
-  const dias = Number(cfg?.dias_bloqueo ?? DIAS_BLOQUEO_DEFAULT);
-  if (!Number.isFinite(dias) || dias <= 0) return null; // 0 = sin bloqueo
+  // El tope manda incluso sobre lo guardado: filas antiguas con plazos largos
+  // (7, 30…) quedan recortadas al máximo, no se respetan tal cual.
+  const diasCfg = Number(cfg?.dias_bloqueo ?? DIAS_BLOQUEO_DEFAULT);
+  const dias = Number.isFinite(diasCfg) ? Math.min(DIAS_BLOQUEO_MAX, diasCfg) : DIAS_BLOQUEO_DEFAULT;
+  if (dias <= 0) return null; // 0 = sin bloqueo
 
   // "Hoy" según la empresa, no según el servidor.
   const tz = await getZonaHorariaEmpresa(supabase as unknown as SupabaseClient, empresaId);
@@ -789,7 +792,9 @@ export async function getCierresConfig(): Promise<{ ok: true; data: CierresConfi
       data: {
         modo: ((data.modo as string) ?? "libre") as CierreModo,
         dia_semana: (data.dia_semana as number | null) ?? null,
-        dias_bloqueo: Number(data.dias_bloqueo ?? DIAS_BLOQUEO_DEFAULT),
+        // Recortado al tope: la pantalla debe ver exactamente el plazo que el
+        // servidor va a aplicar, aunque en BD haya un valor antiguo mayor.
+        dias_bloqueo: Math.min(DIAS_BLOQUEO_MAX, Number(data.dias_bloqueo ?? DIAS_BLOQUEO_DEFAULT) || 0),
         rol_excepcion_id: (data.rol_excepcion_id as string | null) ?? null,
       },
     };
@@ -831,10 +836,12 @@ export async function updateCierresConfig(input: {
       if (!puedeEditarModulo(permisos, "GERENCIA")) {
         return { ok: false, error: "Sin permisos: necesitas Gerencia para cambiar el plazo para apuntar" };
       }
-      // Plazo saneado: entero de 0 a 365 (0 = sin bloqueo).
+      // Plazo saneado: entero de 0 a DIAS_BLOQUEO_MAX (0 = sin bloqueo).
+      // El tope es duro: más días permitirían apuntar cierres antiguos que
+      // recalculan en cadena el efectivo acumulado de hoy.
       const diasRaw = Number(input.dias_bloqueo ?? DIAS_BLOQUEO_DEFAULT);
       fila.dias_bloqueo = Number.isFinite(diasRaw)
-        ? Math.min(365, Math.max(0, Math.round(diasRaw)))
+        ? Math.min(DIAS_BLOQUEO_MAX, Math.max(0, Math.round(diasRaw)))
         : DIAS_BLOQUEO_DEFAULT;
       fila.rol_excepcion_id = input.rol_excepcion_id ?? null;
     }

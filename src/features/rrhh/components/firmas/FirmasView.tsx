@@ -16,6 +16,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { NumberInput } from "@/shared/components/NumberInput";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -53,6 +54,7 @@ import {
   RefreshCcw,
   Loader2,
   Ban,
+  MailOpen,
 } from "lucide-react";
 import {
   SubmoduleToolbar,
@@ -188,6 +190,7 @@ export function FirmasView() {
       firmadoEn: d.firmadoEn,
       expiraEn: d.expiraEn,
       ipFirma: d.ipFirma,
+      leidoEn: d.leidoEn,
       hash: d.sha256Acta ?? d.sha256Original,
       archivoUrl: "#",
     }));
@@ -437,9 +440,24 @@ export function FirmasView() {
       th: <TableHead key="estado">Estado</TableHead>,
       td: (d) => (
         <TableCell key="estado">
-          <Badge variant="outline" className={ESTADO_COLOR[d.estado]}>
-            {ESTADO_LABEL[d.estado]}
-          </Badge>
+          <div className="flex flex-col items-start gap-1">
+            <Badge variant="outline" className={ESTADO_COLOR[d.estado]}>
+              {ESTADO_LABEL[d.estado]}
+            </Badge>
+            {/* Acuse de LECTURA: solo aporta información mientras el documento
+                no está firmado. Una vez firmado, la firma ya lo dice todo. */}
+            {d.leidoEn && d.estado !== "firmado" && (
+              <span
+                className="flex items-center gap-1 text-[11px] text-muted-foreground"
+                title={`Abierto el ${formatFechaHora(d.leidoEn)}`}
+              >
+                <MailOpen className="h-3 w-3" /> Leído {formatFechaHora(d.leidoEn)}
+              </span>
+            )}
+            {!d.leidoEn && d.estado === "pendiente" && (
+              <span className="text-[11px] text-muted-foreground">Sin abrir</span>
+            )}
+          </div>
         </TableCell>
       ),
     },
@@ -635,14 +653,13 @@ export function FirmasView() {
 
               <div className="space-y-1.5 col-span-2">
                 <Label>Plazo de firma (días)</Label>
-                <Input
-                  type="number"
+                <NumberInput
                   min={1}
                   max={60}
+                  decimales={false}
+                  emptyValue={7}
                   value={diasExpiracion}
-                  onChange={(e) =>
-                    setDiasExpiracion(Math.max(1, Number(e.target.value) || 7))
-                  }
+                  onValueChange={(v) => setDiasExpiracion(v)}
                 />
               </div>
             </div>

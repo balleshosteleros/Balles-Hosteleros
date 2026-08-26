@@ -14,6 +14,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { NumberInput } from "@/shared/components/NumberInput";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
@@ -513,13 +514,14 @@ function AgenteDialog({
             </div>
             <div>
               <Label htmlFor="maxdia">Máx. borradores/día</Label>
-              <Input
+              <NumberInput
                 id="maxdia"
-                type="number"
                 min={1}
                 max={500}
+                emptyValue={50}
+                decimales={false}
                 value={maxDia}
-                onChange={(e) => setMaxDia(parseInt(e.target.value, 10) || 50)}
+                onValueChange={(v) => setMaxDia(v)}
               />
             </div>
           </div>

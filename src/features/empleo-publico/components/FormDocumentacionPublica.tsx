@@ -22,6 +22,9 @@ import {
   normalizarDniNie,
   normalizarIban,
   normalizarSeguridadSocial,
+  motivoFechaNacimientoNoValida,
+  calcularEdad,
+  EDAD_MINIMA_LABORAL,
 } from "@/features/rrhh/lib/documentacion-validacion";
 import { MAX_IMAGEN_MB, MAX_IMAGEN_BYTES } from "@/shared/lib/documentos";
 
@@ -71,11 +74,21 @@ async function comprimirImagen(file: File): Promise<File> {
 /** Estado de un documento adjunto (con detección IA si es imagen). */
 interface DocState {
   file: File | null;
-  /** "ok" si la IA detectó algo, "fallo" si no, "n/a" si es PDF/no procesado. */
-  deteccion: "idle" | "procesando" | "ok" | "fallo" | "na" | "ajeno";
+  /**
+   * "ok" si la IA detectó algo, "fallo" si no, "na" si es PDF/no procesado,
+   * "ajeno" si el titular no coincide y "menor" si el documento acredita que
+   * la persona no alcanza la edad mínima legal para trabajar.
+   */
+  deteccion: "idle" | "procesando" | "ok" | "fallo" | "na" | "ajeno" | "menor";
 }
 
 const DOC_VACIO: DocState = { file: null, deteccion: "idle" };
+
+/** Muestra una fecha ISO (AAAA-MM-DD) como dd/mm/aaaa, sin depender de la zona horaria. */
+function formatearFechaES(iso: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : iso;
+}
 
 /**
  * Bloque de subida de UN documento: botones "Hacer foto" / "Subir archivo".
@@ -131,6 +144,11 @@ function SubidaDoc({
           {doc.deteccion === "ajeno" && (
             <span className="inline-flex items-center gap-1 text-destructive shrink-0">
               <AlertTriangle className="h-3.5 w-3.5" /> A nombre de otra persona
+            </span>
+          )}
+          {doc.deteccion === "menor" && (
+            <span className="inline-flex items-center gap-1 text-destructive shrink-0">
+              <AlertTriangle className="h-3.5 w-3.5" /> Documento no admitido: no se alcanza la edad mínima legal
             </span>
           )}
           {/* Papelera para quitar el documento y subir otro. En móvil siempre
@@ -223,6 +241,23 @@ export function FormDocumentacionPublica({ token, empresaSlug }: Props) {
       if (campo === "dni_nie" || campo === "dni_reverso") {
         if (data.fecha_nacimiento && !fechaNacimiento) setFechaNacimiento(data.fecha_nacimiento);
         if (data.direccion && !direccion.trim()) setDireccion(data.direccion);
+        // EDAD MÍNIMA LEGAL: si el propio documento acredita que la persona no
+        // llega a los 16 años, el documento NO se admite. Se retira el archivo,
+        // se explica el motivo y el formulario queda bloqueado (no deja avanzar).
+        if (data.fecha_nacimiento) {
+          const edad = calcularEdad(data.fecha_nacimiento);
+          if (edad !== null && edad < EDAD_MINIMA_LABORAL) {
+            marcarDeteccion(campo, "menor");
+            mostrarError(
+              `No podemos admitir este documento: según la fecha de nacimiento que figura en él ` +
+              `(${formatearFechaES(data.fecha_nacimiento)}) tienes ${edad} años. La edad mínima legal ` +
+              `para trabajar en España es de ${EDAD_MINIMA_LABORAL} años, por lo que no es posible ` +
+              `continuar con la incorporación. Si la fecha no es correcta, revisa que la foto sea nítida ` +
+              `y vuelve a subirla; si es correcta, ponte en contacto con Recursos Humanos.`,
+            );
+            return;
+          }
+        }
       }
       // Verificación de titular: la captura de SS/IBAN debe llevar el MISMO DNI
       // que el documento de identidad. Si la IA leyó un DNI en el documento y NO
@@ -246,10 +281,18 @@ export function FormDocumentacionPublica({ token, empresaSlug }: Props) {
   }
 
   function marcarDeteccion(campo: Campo, estado: DocState["deteccion"]) {
-    if (campo === "dni_nie") setDniAnverso((d) => ({ ...d, deteccion: estado }));
-    else if (campo === "dni_reverso") setDniReverso((d) => ({ ...d, deteccion: estado }));
-    else if (campo === "iban") setDocIban((d) => ({ ...d, deteccion: estado }));
-    else if (campo === "ss") setDocSs((d) => ({ ...d, deteccion: estado }));
+    // Documento de un menor de edad: además de marcarlo, se RETIRA el archivo.
+    // No se guarda ni se envía documentación de quien no puede ser contratado.
+    const file = estado === "menor" ? null : undefined;
+    const aplicar = (d: DocState): DocState => ({
+      ...d,
+      deteccion: estado,
+      ...(file === null ? { file: null } : {}),
+    });
+    if (campo === "dni_nie") setDniAnverso(aplicar);
+    else if (campo === "dni_reverso") setDniReverso(aplicar);
+    else if (campo === "iban") setDocIban(aplicar);
+    else if (campo === "ss") setDocSs(aplicar);
   }
 
   /** Gestiona un archivo adjunto: valida tipo/tamaño y lanza IA si procede. */
@@ -309,8 +352,12 @@ export function FormDocumentacionPublica({ token, empresaSlug }: Props) {
     if (!fotoPerfil.file) return "Adjunta tu foto de perfil";
     if (!direccion.trim()) return "Indica tu dirección postal";
     if (!fechaNacimiento) return "Indica tu fecha de nacimiento";
-    if (new Date(`${fechaNacimiento}T00:00:00`) >= new Date())
-      return "La fecha de nacimiento no es válida";
+    // Edad mínima legal: bloquea también si la fecha se escribe a mano.
+    const motivoEdad = motivoFechaNacimientoNoValida(normalizarFechaISO(fechaNacimiento));
+    if (motivoEdad) return motivoEdad;
+    // Documento rechazado por no alcanzar la edad mínima: no se puede continuar.
+    if (dniAnverso.deteccion === "menor" || dniReverso.deteccion === "menor")
+      return `No podemos continuar: el documento aportado acredita que no alcanzas los ${EDAD_MINIMA_LABORAL} años, edad mínima legal para trabajar en España.`;
     // El anverso del DNI con IA fallida obliga a rehacer la foto (regla acordada).
     if (dniAnverso.deteccion === "fallo")
       return "No hemos podido leer tu DNI/NIE. Vuelve a hacer la foto del anverso con buena luz.";
@@ -330,6 +377,29 @@ export function FormDocumentacionPublica({ token, empresaSlug }: Props) {
     if (!esSeguridadSocialValida(ss)) return "El nº de la Seguridad Social no es válido: revísalo.";
     return null;
   }
+
+  /**
+   * Fecha máxima seleccionable: el día en que se cumplen los 16 años. El propio
+   * calendario impide ya elegir una fecha de quien no puede ser contratado.
+   */
+  const fechaMaximaNacimiento = (() => {
+    const hoy = new Date();
+    const limite = new Date(
+      Date.UTC(hoy.getUTCFullYear() - EDAD_MINIMA_LABORAL, hoy.getUTCMonth(), hoy.getUTCDate()),
+    );
+    return limite.toISOString().slice(0, 10);
+  })();
+
+  /** Motivo por el que la fecha escrita no es admisible (o null si lo es). */
+  const avisoEdad = fechaNacimiento
+    ? motivoFechaNacimientoNoValida(normalizarFechaISO(fechaNacimiento))
+    : null;
+
+  /** Bloqueo duro del envío: documento de menor rechazado o fecha no admisible. */
+  const bloqueadoPorEdad =
+    Boolean(avisoEdad) ||
+    dniAnverso.deteccion === "menor" ||
+    dniReverso.deteccion === "menor";
 
   function enviar() {
     setError(null);
@@ -516,9 +586,14 @@ export function FormDocumentacionPublica({ token, empresaSlug }: Props) {
             type="date"
             value={fechaNacimiento}
             onChange={(e) => setFechaNacimiento(e.target.value)}
-            max={new Date().toISOString().slice(0, 10)}
+            max={fechaMaximaNacimiento}
             className="w-44"
+            aria-invalid={Boolean(avisoEdad)}
           />
+          {/* Aviso inline: la persona ve el motivo en el propio campo, no solo al enviar. */}
+          {avisoEdad && (
+            <p className="text-[12px] text-destructive font-medium">{avisoEdad}</p>
+          )}
         </div>
       </section>
 
@@ -540,7 +615,7 @@ export function FormDocumentacionPublica({ token, empresaSlug }: Props) {
         <p className="text-[11px] text-muted-foreground">
           Al enviar aceptas el tratamiento de tus datos para gestionar tu incorporación.
         </p>
-        <Button type="submit" disabled={pending} size="lg">
+        <Button type="submit" disabled={pending || bloqueadoPorEdad} size="lg">
           {pending ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Send className="h-4 w-4 mr-1.5" />}
           Confirmar y enviar
         </Button>

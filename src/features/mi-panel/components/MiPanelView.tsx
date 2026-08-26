@@ -35,6 +35,8 @@ const EMPTY_RESUMEN: MiPanelResumen = {
     siguienteNombre: null,
     progresoPct: 0,
     faltan: 0,
+    enPeriodoPrueba: false,
+    pruebaFechaFin: null,
   },
   fichajes: { mesCount: 0, mesHoras: 0, incidencias: 0 },
   solicitudes: { pendientes: 0, aprobadas: 0, rechazadas: 0 },

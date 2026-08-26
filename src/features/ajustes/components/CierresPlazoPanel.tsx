@@ -4,14 +4,14 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { CalendarClock } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { NumberInput } from "@/shared/components/NumberInput";
 import { Label } from "@/components/ui/label";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { getCierresConfig, updateCierresConfig } from "@/features/gerencia/actions/cierres-actions";
 import { loadRolesFromSupabase } from "@/features/ajustes/actions/roles-actions";
-import { DIAS_BLOQUEO_DEFAULT } from "@/features/gerencia/types/cierres";
+import { DIAS_BLOQUEO_DEFAULT, DIAS_BLOQUEO_MAX } from "@/features/gerencia/types/cierres";
 
 /**
  * Plazo para apuntar en Cierres. Vive en Ajustes → Departamentos → Gerencia →
@@ -78,7 +78,9 @@ export function CierresPlazoPanel({ embedded = false }: { embedded?: boolean } =
           <h3 className="text-base font-semibold text-foreground">Plazo para apuntar</h3>
           <p className="text-sm text-muted-foreground">
             Días de retraso admitidos para registrar un apunte en Cierres (cierre, retirada o
-            ingreso). Pasado ese plazo, nadie puede apuntar con fecha atrasada salvo dirección.
+            ingreso). Los días anteriores salen en gris en el calendario y no se pueden elegir.
+            El máximo son {DIAS_BLOQUEO_MAX} días: apuntar cierres antiguos alteraría el efectivo
+            acumulado actual.
           </p>
         </div>
       </div>
@@ -89,14 +91,13 @@ export function CierresPlazoPanel({ embedded = false }: { embedded?: boolean } =
         <>
           <div className="rounded-lg border p-4 space-y-4">
             <div className="flex items-center gap-3">
-              <Input
-                type="number"
+              <NumberInput
                 min={0}
-                max={365}
-                step={1}
+                max={DIAS_BLOQUEO_MAX}
+                decimales={false}
                 className="w-24"
-                value={String(dias)}
-                onChange={(e) => setDias(Math.max(0, Math.min(365, Number(e.target.value) || 0)))}
+                value={dias}
+                onValueChange={(v) => setDias(Math.min(DIAS_BLOQUEO_MAX, Math.max(0, v)))}
               />
               <span className="text-sm text-muted-foreground">
                 {dias === 0

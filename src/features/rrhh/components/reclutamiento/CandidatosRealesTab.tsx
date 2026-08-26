@@ -244,11 +244,9 @@ export function CandidatosRealesTab() {
     void (async () => {
       const nombre = `${c.nombre} ${c.apellidos ?? ""}`.trim();
       const ok = await confirm({
-        title: "Borrar candidato",
-        description: c.promovido_at
-          ? `Se eliminará la candidatura de ${nombre} (notas, reseñas y actividad). Su ficha de empleado NO se borra. Esta acción no se puede deshacer.`
-          : `Se eliminará a ${nombre} junto con sus notas, reseñas y actividad. Esta acción no se puede deshacer.`,
-        confirmLabel: "Borrar candidato",
+        title: "Archivar candidato",
+        description: `${nombre} pasa a «Papelera» y desaparece de la vista. Su candidatura, notas y reseñas se conservan: un CV no se borra.`,
+        confirmLabel: "Archivar candidato",
       });
       if (!ok) return;
       startTransition(async () => {
@@ -256,9 +254,9 @@ export function CandidatosRealesTab() {
         if (res.ok) {
           setItems((prev) => prev.filter((x) => x.id !== c.id));
           setSelected((prev) => (prev && prev.id === c.id ? null : prev));
-          toast.success("Candidato borrado");
+          toast.success("Candidato archivado en «Papelera»");
         } else {
-          toast.error(("error" in res && res.error) || "No se pudo borrar el candidato");
+          toast.error(("error" in res && res.error) || "No se pudo archivar el candidato");
         }
       });
     })();
@@ -517,7 +515,7 @@ export function CandidatosRealesTab() {
                           className="h-8 w-8 text-muted-foreground hover:text-destructive"
                           onClick={() => handleEliminar(c)}
                           disabled={pending}
-                          title="Borrar candidato"
+                          title="Archivar candidato en «Papelera»"
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>

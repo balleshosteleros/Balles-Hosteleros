@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { NumberInput } from "@/shared/components/NumberInput";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -121,15 +122,14 @@ export function NuevaPresentacionModal({ open, onOpenChange }: Props) {
           <div className="grid grid-cols-3 gap-3">
             <div className="space-y-1.5">
               <Label htmlFor="slides">Nº slides</Label>
-              <Input
+              <NumberInput
                 id="slides"
-                type="number"
                 min={3}
                 max={30}
+                emptyValue={10}
+                decimales={false}
                 value={numSlides}
-                onChange={(e) =>
-                  setNumSlides(Math.min(30, Math.max(3, Number(e.target.value) || 10)))
-                }
+                onValueChange={(v) => setNumSlides(v)}
                 disabled={generando}
               />
             </div>

@@ -20,8 +20,7 @@ import { CuestionariosEmpleadoTab } from "@/features/rrhh/components/empleados/C
 import { PagosEmpleadoTab } from "@/features/rrhh/components/empleados/PagosEmpleadoTab";
 import { PuestosEmpleadoTab } from "@/features/rrhh/components/empleados/PuestosEmpleadoTab";
 import { EntregasEmpleadoTab } from "@/features/rrhh/components/empleados/EntregasEmpleadoTab";
-import { ValidadoresEmpleadoCard } from "@/features/rrhh/components/empleados/ValidadoresEmpleadoCard";
-import { CalendarioVacacionesEmpleadoCard } from "@/features/rrhh/components/empleados/CalendarioVacacionesEmpleadoCard";
+import { CalendarioEmpleadoTab } from "@/features/rrhh/components/empleados/CalendarioEmpleadoTab";
 import {
   DatosPersonalesForm,
   type DatosPersonalesFormHandle,
@@ -287,8 +286,7 @@ export default function FichaEmpleadoPage() {
         return <div className="p-6"><HorariosTab horario={horarioActual} /></div>;
       case "solicitudes":
         return (
-          <div className="p-6 space-y-6">
-            <ValidadoresEmpleadoCard empleadoId={empleadoRegistro.id} />
+          <div className="p-6">
             <SolicitudesEmpleadoTab solicitudes={solicitudes} />
           </div>
         );
@@ -296,9 +294,11 @@ export default function FichaEmpleadoPage() {
         return <FirmasEmpleadoTab empleadoId={empleadoRegistro.id} />;
       case "calendarios":
         return (
-          <div className="p-6 space-y-6">
-            <CalendarioVacacionesEmpleadoCard empleadoId={empleadoRegistro.id} />
-          </div>
+          <CalendarioEmpleadoTab
+            empleadoId={empleadoRegistro.id}
+            empresaId={empleadoRegistro.empresa_id}
+            userId={empleadoRegistro.user_id}
+          />
         );
       case "entregas":
         return <EntregasEmpleadoTab empleadoId={empleadoRegistro.id} />;

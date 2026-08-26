@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { NumberInput } from "@/shared/components/NumberInput";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useFormacionStore } from "../../store/use-formacion-store";
@@ -160,12 +161,12 @@ export function LeccionFormDialog({ cursoId, mode, onClose }: Props) {
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="grid gap-2">
               <Label htmlFor="lec-min">Duración (min)</Label>
-              <Input
+              <NumberInput
                 id="lec-min"
-                type="number"
                 min={1}
+                decimales={false}
                 value={duracionMin}
-                onChange={(e) => setDuracionMin(Number(e.target.value))}
+                onValueChange={(v) => setDuracionMin(v)}
               />
             </div>
             <div className="grid gap-2">

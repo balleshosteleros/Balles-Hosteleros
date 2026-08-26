@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { NumberInput } from "@/shared/components/NumberInput";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import {
@@ -234,15 +235,11 @@ function BloqueMaxPersonas({ config, onChange }: Props) {
           {modo === "mismo" && (
             <div className="space-y-1.5 max-w-xs">
               <Label className="text-xs">Personas como máximo</Label>
-              <Input
-                type="number"
+              <NumberInput
                 min={0}
-                step={1}
+                decimales={false}
                 value={config.maxPersonasHoraGlobal ?? 0}
-                onChange={(e) => {
-                  const n = Math.max(0, Math.round(Number(e.target.value) || 0));
-                  onChange({ maxPersonasHoraGlobal: n });
-                }}
+                onValueChange={(n) => onChange({ maxPersonasHoraGlobal: Math.round(n) })}
                 className="h-8"
               />
               <p className="text-[10px] text-muted-foreground">
@@ -256,11 +253,11 @@ function BloqueMaxPersonas({ config, onChange }: Props) {
               <div className="grid grid-cols-[1fr_1fr_1fr_auto] items-end gap-2 max-w-2xl">
                 <div className="space-y-1">
                   <Label className="text-[11px] text-muted-foreground">Personas</Label>
-                  <Input
-                    type="number"
+                  <NumberInput
                     min={0}
+                    decimales={false}
                     value={draft.max}
-                    onChange={(e) => setDraft({ ...draft, max: Number(e.target.value) || 0 })}
+                    onValueChange={(n) => setDraft({ ...draft, max: n })}
                     className="h-8 text-xs"
                   />
                 </div>

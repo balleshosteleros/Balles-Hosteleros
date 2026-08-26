@@ -13,7 +13,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { NumberInput } from "@/shared/components/NumberInput";
 import { Label } from "@/components/ui/label";
 import { updateCalidadKpiThresholds } from "@/features/calidad/actions/dashboard-actions";
 import type { KpiThresholds } from "@/features/calidad/types/dashboard";
@@ -195,15 +195,11 @@ export function CalidadKpiConfigDialog({
                             OK
                           </Label>
                           <div className="flex items-center gap-1">
-                            <Input
-                              type="number"
+                            <NumberInput
                               step={row.step ?? 1}
                               value={values[row.ok] ?? 0}
-                              onChange={(e) =>
-                                setValues((prev) => ({
-                                  ...prev,
-                                  [row.ok]: Number(e.target.value),
-                                }))
+                              onValueChange={(v) =>
+                                setValues((prev) => ({ ...prev, [row.ok]: v }))
                               }
                               className="h-8"
                             />
@@ -218,15 +214,11 @@ export function CalidadKpiConfigDialog({
                             Aviso
                           </Label>
                           <div className="flex items-center gap-1">
-                            <Input
-                              type="number"
+                            <NumberInput
                               step={row.step ?? 1}
                               value={values[row.warning] ?? 0}
-                              onChange={(e) =>
-                                setValues((prev) => ({
-                                  ...prev,
-                                  [row.warning]: Number(e.target.value),
-                                }))
+                              onValueChange={(v) =>
+                                setValues((prev) => ({ ...prev, [row.warning]: v }))
                               }
                               className="h-8"
                             />

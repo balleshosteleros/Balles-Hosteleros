@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
+import { NumberInput } from "@/shared/components/NumberInput";
 import { Button } from "@/components/ui/button";
 import { Loader2, Save, Send } from "lucide-react";
 import { toast } from "sonner";
@@ -152,12 +152,13 @@ export function NominasGestoriaConfigPanel() {
           <div className="space-y-1.5 rounded-lg border bg-muted/20 p-3">
             <Label className="text-sm">Día del mes en el que se envía</Label>
             <div className="flex items-center gap-2">
-              <Input
-                type="number"
+              <NumberInput
                 min={1}
                 max={28}
+                decimales={false}
+                emptyValue={1}
                 value={cfg.diaEnvio}
-                onChange={(e) => set("diaEnvio", Number(e.target.value))}
+                onValueChange={(v) => set("diaEnvio", v)}
                 className="w-24"
               />
               <span className="text-sm text-muted-foreground">de cada mes (1 a 28)</span>

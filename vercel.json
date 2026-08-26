@@ -14,6 +14,10 @@
       "schedule": "10 8 * * *"
     },
     {
+      "path": "/api/cron/bajas-efectivas",
+      "schedule": "0 5 * * *"
+    },
+    {
       "path": "/api/points/cron/devengo-diario",
       "schedule": "55 23 * * *"
     },

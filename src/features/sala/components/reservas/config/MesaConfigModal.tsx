@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { NumberInput } from "@/shared/components/NumberInput";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Minus, Plus, Trash2 } from "lucide-react";
@@ -231,12 +232,13 @@ function CapInput({
     <div className="space-y-1.5">
       <Label className="text-xs">{label}</Label>
       <div className="flex items-center gap-1">
-        <Input
-          type="number"
+        <NumberInput
           value={value}
           min={min}
           max={max}
-          onChange={(e) => onChange(Math.max(min, Math.min(max, Number(e.target.value) || min)))}
+          emptyValue={min}
+          decimales={false}
+          onValueChange={onChange}
           className="h-9 text-sm flex-1"
         />
         <Button

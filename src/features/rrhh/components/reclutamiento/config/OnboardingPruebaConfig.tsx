@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { NumberInput } from "@/shared/components/NumberInput";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -98,18 +99,63 @@ export const OnboardingPruebaConfig = forwardRef<
           <Label htmlFor="prueba-duracion" className="text-sm text-foreground">
             Duración del periodo de prueba (días)
           </Label>
-          <Input
+          <NumberInput
             id="prueba-duracion"
-            type="number"
             min={1}
             max={365}
+            decimales={false}
+            emptyValue={1}
             value={config.prueba_duracion_dias}
-            onChange={(e) =>
-              setConfig((c) => c && { ...c, prueba_duracion_dias: Number(e.target.value) })
+            onValueChange={(v) =>
+              setConfig((c) => c && { ...c, prueba_duracion_dias: v })
             }
             className="w-20 h-9"
           />
         </div>
+
+        <div className="flex items-center gap-2">
+          <Label htmlFor="prueba-evaluaciones" className="text-sm text-foreground">
+            Validaciones durante el periodo
+          </Label>
+          <Input
+            id="prueba-evaluaciones"
+            type="number"
+            min={1}
+            max={5}
+            value={config.prueba_evaluaciones_num}
+            onChange={(e) =>
+              setConfig((c) => c && { ...c, prueba_evaluaciones_num: Number(e.target.value) })
+            }
+            className="w-20 h-9"
+          />
+        </div>
+        <p className="text-xs text-muted-foreground -mt-2">
+          RRHH puntúa al trabajador de 0 a 10 en cada una. Se reparten a lo largo del
+          periodo y la última coincide con su final.
+        </p>
+
+        <div className="flex items-center gap-2">
+          <Label htmlFor="prueba-corte" className="text-sm text-foreground">
+            Nota mínima para superarlo
+          </Label>
+          <Input
+            id="prueba-corte"
+            type="number"
+            min={0}
+            max={10}
+            step={0.5}
+            value={config.prueba_nota_corte}
+            onChange={(e) =>
+              setConfig((c) => c && { ...c, prueba_nota_corte: Number(e.target.value) })
+            }
+            className="w-20 h-9"
+          />
+          <span className="text-sm text-muted-foreground">sobre 10</span>
+        </div>
+        <p className="text-xs text-muted-foreground -mt-2">
+          Con la media de las validaciones el sistema recomienda si es apto. La decisión
+          de continuidad la toma siempre RRHH.
+        </p>
 
         {/* Toggle aviso */}
         <div className="flex items-start justify-between gap-4">
@@ -129,15 +175,16 @@ export const OnboardingPruebaConfig = forwardRef<
           <Label htmlFor="prueba-aviso-dias" className="text-sm text-foreground">
             Avisar a RRHH cuando hayan pasado
           </Label>
-          <Input
+          <NumberInput
             id="prueba-aviso-dias"
-            type="number"
             min={1}
             max={365}
+            decimales={false}
+            emptyValue={1}
             disabled={!avisoActivo}
             value={config.prueba_aviso_dias}
-            onChange={(e) =>
-              setConfig((c) => c && { ...c, prueba_aviso_dias: Number(e.target.value) })
+            onValueChange={(v) =>
+              setConfig((c) => c && { ...c, prueba_aviso_dias: v })
             }
             className="w-20 h-9"
           />

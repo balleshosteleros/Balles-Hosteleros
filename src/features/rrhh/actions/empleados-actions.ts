@@ -1178,15 +1178,6 @@ export async function copiarEmpleadoAEmpresa(input: {
     });
     if (dupDestino) return { ok: false, error: mensajeDuplicado(dupDestino) };
 
-    // Nº de empleado correlativo al último de la empresa destino.
-    const { data: nums } = await admin.from("empleados").select("numero_empleado").eq("empresa_id", input.empresaDestinoId);
-    let maxN = 0;
-    for (const r of nums ?? []) {
-      const n = parseInt(String((r as { numero_empleado: string | null }).numero_empleado ?? "").replace(/\D/g, ""), 10);
-      if (Number.isFinite(n) && n > maxN) maxN = n;
-    }
-    const numeroEmpleado = String(maxN + 1);
-
     const nuevo = {
       empresa_id: input.empresaDestinoId,
       user_id: origen.user_id,
@@ -1221,14 +1212,12 @@ export async function copiarEmpleadoAEmpresa(input: {
       talla_uniforme: o.talla_uniforme ?? null,
       talla_camiseta: o.talla_camiseta ?? null,
       talla_pantalon: o.talla_pantalon ?? null,
-      alergias_medicas: o.alergias_medicas ?? null,
       avatar_url: o.avatar_url ?? null,
       permite_teletrabajo: Boolean(o.permite_teletrabajo),
       tipo_jornada: o.tipo_jornada ?? "Completa",
       departamento_id: departamentoDestId,
       calendario_vacaciones_id: input.calendarioId,
       local_id: localIds[0],
-      numero_empleado: numeroEmpleado,
       estado: "Activo", // aunque en origen esté Inactivo, la copia entra Activa.
       perfil_completado: false, // pendiente de asignar turnos/validadores en destino.
     };

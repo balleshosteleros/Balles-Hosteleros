@@ -3,6 +3,7 @@ import { type Conteo } from "@/features/logistica/data/inventarios";
 import { type ProductoStock } from "@/features/logistica/data/stock";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { NumberInput } from "@/shared/components/NumberInput";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
@@ -178,13 +179,11 @@ export default function ConteoSection({ conteos, onConteosChange, productos, rea
                           {readOnly ? (
                             <span className="font-semibold">{l.cantidadReal}</span>
                           ) : (
-                            <Input
-                              type="number"
+                            <NumberInput
                               className="h-7 w-24 text-xs"
                               value={l.cantidadReal}
                               min={0}
-                              step="any"
-                              onChange={(e) => updateCantidad(c.id, l.productoId, parseFloat(e.target.value) || 0)}
+                              onValueChange={(v) => updateCantidad(c.id, l.productoId, v)}
                             />
                           )}
                         </td>

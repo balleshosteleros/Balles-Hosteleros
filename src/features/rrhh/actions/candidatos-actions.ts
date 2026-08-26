@@ -221,6 +221,23 @@ export async function moverCandidatoFase(
       }
     }
 
+    // Al ENTRAR en Prueba se abre su periodo con los hitos de validación ya
+    // repartidos. Idempotente: si vuelve a entrar en la fase no se duplica.
+    // No exige `empleado_id`: el periodo puede colgar solo del candidato.
+    if (estado === "prueba" && cand?.estado !== "prueba") {
+      try {
+        const { abrirPeriodoPrueba } = await import(
+          "@/features/rrhh/actions/periodo-prueba-actions"
+        );
+        await abrirPeriodoPrueba({
+          empleadoId: (cand?.empleado_id as string | null) ?? null,
+          candidatoId: id,
+        });
+      } catch (e) {
+        console.error("[candidatos] periodo de prueba al pasar a prueba:", e);
+      }
+    }
+
     // Offboarding cerrado: al pasar a EX-EMPLEADO, el empleado queda Inactivo HOY
     // (el día en que se le pasa a ex-empleado) y su usuario pierde el acceso (el
     // trigger empleados_sync_estado_acceso pone usuarios.estado_acceso = 'Inactivo'
@@ -463,29 +480,44 @@ export async function actualizarDatosCandidato(
   }
 }
 
+/**
+ * ARCHIVA una candidatura moviéndola a «Papelera».
+ *
+ * Un CV no se borra nunca: se queda en la base de datos como historial (la BD
+ * lo impide con el trigger `candidatos_no_delete`). «Borrar» en la interfaz
+ * significa retirarlo de la vista, no destruirlo — así no se puede perder el
+ * rastro de una persona ni el vínculo que sostiene su offboarding.
+ */
 export async function eliminarCandidato(id: string) {
   try {
     const { supabase, empresaId } = await getContext();
     if (!empresaId) return { ok: false, error: "No autenticado" };
 
-    // Un candidato ya contratado (promovido a empleado) NO puede borrarse: su
-    // candidatura debe perdurar en la base de datos como historial.
     const { data: cand } = await supabase
       .from("candidatos")
-      .select("promovido_at")
+      .select("promovido_at, empleado_id, fase")
       .eq("id", id)
       .eq("empresa_id", empresaId)
       .single();
-    if (cand?.promovido_at) {
-      return { ok: false, error: "Este candidato ya es empleado; su candidatura no se puede borrar." };
+    if (!cand) return { ok: false, error: "Candidato no encontrado" };
+
+    // Quien ya es (o fue) empleado no se archiva: su tarjeta es la que sostiene
+    // el offboarding y el histórico de la relación laboral.
+    if (cand.promovido_at || cand.empleado_id) {
+      return {
+        ok: false,
+        error: "Este candidato ya es empleado; su candidatura no se puede archivar.",
+      };
+    }
+    if (cand.fase === "descartado") return { ok: true };
+
+    // «Papelera» es un ESTADO dentro de la fase «descartado» (ver OFFBOARDING/
+    // DESCARTADO_CONFIG en data/reclutamiento.ts).
+    const mov = await moverCandidatoFase(id, "descartado", "papelera");
+    if (!mov.ok) {
+      return { ok: false, error: ("error" in mov && mov.error) || "No se pudo archivar" };
     }
 
-    const { error } = await supabase
-      .from("candidatos")
-      .delete()
-      .eq("id", id)
-      .eq("empresa_id", empresaId);
-    if (error) throw error;
     revalidatePath("/rrhh/reclutamiento");
     return { ok: true };
   } catch (err: unknown) {
@@ -512,6 +544,11 @@ export async function darBajaContratoEmpresa(
     tipoBaja: TipoBajaContrato;
     ultimoDiaIso: string;
     motivo?: string | null;
+    /**
+     * Hechos que motivan la baja, redactados por RRHH (opcionalmente pulidos
+     * con IA). Van en la carta que se comunica al trabajador.
+     */
+    hechos?: string | null;
   },
 ) {
   try {
@@ -561,6 +598,39 @@ export async function darBajaContratoEmpresa(
       return { ok: false, error: ("error" in mov && mov.error) || "No se pudo mover a Baja contrato" };
     }
 
+    // 3) Carta de comunicación al TRABAJADOR, a firmar como acuse de recibo.
+    //    NO BLOQUEANTE: la baja ya está tramitada. Si el trabajador no firma —o
+    //    ni siquiera abre el enlace— la baja sigue siendo válida; lo que queda
+    //    en el acta eIDAS es la constancia de si lo leyó y cuándo.
+    let cartaEnviada = false;
+    let cartaError: string | null = null;
+    try {
+      const { enviarCartaBajaEmpresa } = await import(
+        "@/features/rrhh/services/firmas/enviar-baja-empresa"
+      );
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      const { data: quien } = user
+        ? await supabase.from("usuarios").select("full_name").eq("user_id", user.id).maybeSingle()
+        : { data: null };
+
+      const carta = await enviarCartaBajaEmpresa({
+        empresaId,
+        empleadoId: cand.empleado_id as string,
+        ultimoDiaIso: input.ultimoDiaIso,
+        tipoBajaLabel: etiquetaTipoBajaEmpresa(input.tipoBaja),
+        hechos: input.hechos?.trim() || null,
+        enviadoPorUserId: user?.id ?? "",
+        enviadoPorNombre: (quien?.full_name as string | null) ?? "Recursos Humanos",
+      });
+      cartaEnviada = carta.ok;
+      if (!carta.ok) cartaError = carta.error;
+    } catch (e) {
+      cartaError = e instanceof Error ? e.message : "No se pudo enviar la carta";
+      console.error("[rrhh] darBajaContratoEmpresa → carta:", cartaError);
+    }
+
     revalidatePath("/rrhh/reclutamiento");
     // Un fallo de ENVÍO (no de datos) no bloquea la baja: la baja se registró
     // igual y se informa para que RRHH pueda reenviarlo.
@@ -569,6 +639,8 @@ export async function darBajaContratoEmpresa(
       gestoriaAvisada: avisoGestoria.ok,
       gestoriaDestino: avisoGestoria.ok ? avisoGestoria.destino ?? null : null,
       gestoriaError: avisoGestoria.ok ? null : (avisoGestoria.error ?? "No se pudo avisar a la gestoría"),
+      cartaEnviada,
+      cartaError,
     };
   } catch (err: unknown) {
     return { ok: false, error: mensajeError(err) };

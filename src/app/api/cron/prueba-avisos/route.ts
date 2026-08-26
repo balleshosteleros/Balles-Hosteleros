@@ -161,5 +161,137 @@ export async function GET(request: Request) {
     }
   }
 
-  return NextResponse.json({ ok: true, ejecutadoEn: new Date().toISOString(), avisos });
+  // ─── Validaciones vencidas y cierre del periodo ─────────────
+  // Además del aviso general de arriba, RRHH recibe un recordatorio por cada
+  // validación que llega a su fecha sin estar puntuada, y otro cuando el
+  // periodo termina y hay que decidir la continuidad. Cada uno con su propia
+  // dedupeKey, así que se emite una sola vez por hito.
+  const avisosHitos = await avisarHitosYCierre(admin);
+
+  return NextResponse.json({
+    ok: true,
+    ejecutadoEn: new Date().toISOString(),
+    avisos,
+    avisosHitos,
+  });
+}
+
+/** Fecha de calendario YYYY-MM-DD → DD/MM/AAAA. */
+function fechaCorta(iso: string): string {
+  const [a, m, d] = iso.split("-");
+  return `${d}/${m}/${a}`;
+}
+
+interface FilaAviso {
+  id: string;
+  empresa_id: string;
+  empleado_id: string | null;
+  candidato_id: string | null;
+  fecha_fin: string;
+  nota_final: number | null;
+  nota_corte: number;
+  empleados?: { nombre: string | null; apellidos: string | null } | null;
+  candidatos?: { nombre: string | null; apellidos: string | null } | null;
+}
+
+function nombreDe(p: FilaAviso): string {
+  const emp = `${p.empleados?.nombre ?? ""} ${p.empleados?.apellidos ?? ""}`.trim();
+  if (emp) return emp;
+  const cand = `${p.candidatos?.nombre ?? ""} ${p.candidatos?.apellidos ?? ""}`.trim();
+  return cand || "El trabajador";
+}
+
+async function avisarHitosYCierre(
+  admin: ReturnType<typeof createAdminClient>,
+): Promise<number> {
+  const hoy = new Date().toISOString().slice(0, 10);
+  let emitidos = 0;
+
+  const { data: periodos } = await admin
+    .from("empleado_periodo_prueba")
+    .select(
+      `id, empresa_id, empleado_id, candidato_id, fecha_fin, nota_final, nota_corte,
+       empleados ( nombre, apellidos ),
+       candidatos ( nombre, apellidos )`,
+    )
+    .eq("decision", "pendiente");
+
+  for (const raw of (periodos ?? []) as unknown as FilaAviso[]) {
+    const nombre = nombreDe(raw);
+    const refTabla = raw.empleado_id ? "empleados" : "candidatos";
+    const refId = raw.empleado_id ?? raw.candidato_id;
+    if (!refId) continue;
+
+    // 1. Validaciones que ya tocaban y siguen sin nota.
+    const { data: hitos } = await admin
+      .from("empleado_prueba_evaluaciones")
+      .select("id, numero, fecha_prevista")
+      .eq("periodo_id", raw.id)
+      .eq("estado", "pendiente")
+      .lte("fecha_prevista", hoy);
+
+    for (const h of (hitos ?? []) as Array<{
+      id: string;
+      numero: number;
+      fecha_prevista: string;
+    }>) {
+      try {
+        await emitirNotificacion({
+          empresaId: raw.empresa_id,
+          system: true,
+          tipo: "prueba_evaluacion",
+          titulo: `Validación ${h.numero} pendiente: ${nombre}`,
+          mensaje:
+            `Toca validar a ${nombre} (validación ${h.numero}, prevista el ` +
+            `${fechaCorta(h.fecha_prevista)}) y aún no tiene nota. ` +
+            `Puntúala del 0 al 10 en su ficha para poder decidir su continuidad.`,
+          segmento: { tipo: "area", area: "ADMINISTRATIVA" },
+          refTabla,
+          refId,
+          accionUrl: "/rrhh/reclutamiento",
+          dedupeKey: `prueba_hito:${h.id}`,
+        });
+        emitidos++;
+      } catch (e) {
+        console.error("[cron/prueba-avisos] hito:", e);
+      }
+    }
+
+    // 2. Periodo terminado: hay que decidir.
+    if (raw.fecha_fin <= hoy) {
+      const nota = raw.nota_final === null ? null : Number(raw.nota_final);
+      const corte = Number(raw.nota_corte);
+      const veredicto =
+        nota === null
+          ? "todavía sin validaciones puntuadas"
+          : nota >= corte
+            ? `nota ${nota.toFixed(1).replace(".", ",")} sobre un corte de ${corte
+                .toFixed(1)
+                .replace(".", ",")} (apto)`
+            : `nota ${nota.toFixed(1).replace(".", ",")} sobre un corte de ${corte
+                .toFixed(1)
+                .replace(".", ",")} (no apto)`;
+      try {
+        await emitirNotificacion({
+          empresaId: raw.empresa_id,
+          system: true,
+          tipo: "prueba_cierre",
+          titulo: `Periodo de prueba finalizado: ${nombre}`,
+          mensaje:
+            `El periodo de prueba de ${nombre} terminó el ${fechaCorta(raw.fecha_fin)} ` +
+            `con ${veredicto}. Decide si continúa en la empresa desde su ficha.`,
+          segmento: { tipo: "area", area: "ADMINISTRATIVA" },
+          refTabla,
+          refId,
+          accionUrl: "/rrhh/reclutamiento",
+          dedupeKey: `prueba_cierre:${raw.id}`,
+        });
+        emitidos++;
+      } catch (e) {
+        console.error("[cron/prueba-avisos] cierre:", e);
+      }
+    }
+  }
+
+  return emitidos;
 }
