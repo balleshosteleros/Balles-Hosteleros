@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo, type ReactNode } from "react";
+import { useSincronizacionEnVivo } from "@/shared/hooks/useSincronizacionEnVivo";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -199,6 +200,14 @@ export function ClientesView() {
   useEffect(() => {
     loadClientes();
   }, [loadClientes]);
+
+  // Sincronizacion en vivo: la ficha de un cliente se actualiza sola cuando otro
+  // la edita o llega una reserva suya. Se pausa con la ficha abierta.
+  useSincronizacionEnVivo({
+    tablas: ["clientes_sala", "reservas"],
+    onCambio: () => void loadClientes(),
+    pausado: !!selectedCliente,
+  });
 
   const extraDe = useCallback(
     (id: string): ClienteEnriquecido => enriquecidos[id] ?? ENRIQUECIDO_VACIO,

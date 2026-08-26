@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { useSincronizacionEnVivo } from "@/shared/hooks/useSincronizacionEnVivo";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -146,6 +147,14 @@ export function CanjesAdminView() {
   useEffect(() => {
     void cargar();
   }, [cargar]);
+
+  // Sincronizacion en vivo: una solicitud de canje entra en cuanto el empleado
+  // la pide, sin recargar. Se pausa con el dialogo de otorgar abierto.
+  useSincronizacionEnVivo({
+    tablas: ["toques_canjes", "toques_movimientos"],
+    onCambio: () => void cargar(),
+    pausado: otorgarOpen,
+  });
 
   const handleAprobar = async () => {
     if (!aprobando) return;

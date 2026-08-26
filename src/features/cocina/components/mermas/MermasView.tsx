@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo, useEffect, useCallback, type ReactNode } from "react";
+import { useSincronizacionEnVivo } from "@/shared/hooks/useSincronizacionEnVivo";
 import { toast } from "sonner";
 import { Trash } from "lucide-react";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
@@ -61,6 +62,15 @@ export function MermasView() {
 
   // ─── Modal nueva merma ───
   const [open, setOpen] = useState(false);
+
+  // Sincronizacion en vivo: las mermas las anota cada partida segun ocurren.
+  // Se pausa con el alta abierta para no perder lo que se esta registrando.
+  useSincronizacionEnVivo({
+    tablas: ["mermas"],
+    empresaId: empresaActual?.id ?? null,
+    onCambio: () => void recargar(),
+    pausado: open,
+  });
   const [tipoProd, setTipoProd] = useState<TipoProducto>("compra");
   const [productos, setProductos] = useState<Producto[]>([]);
   const [productoId, setProductoId] = useState("");

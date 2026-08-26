@@ -10,6 +10,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useSincronizacionEnVivo } from "@/shared/hooks/useSincronizacionEnVivo";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -179,6 +180,14 @@ export function ContratacionesView() {
   useEffect(() => {
     load();
   }, [load]);
+
+  // Sincronizacion en vivo: el panel de contrataciones refleja las altas y bajas
+  // segun se envian a la gestoria y segun ella sube los contratos firmados. Es
+  // de lectura, asi que refrescar no puede pisar nada.
+  useSincronizacionEnVivo({
+    tablas: ["gestoria_contrato_tokens", "gestoria_bajas", "empleado_condiciones"],
+    onCambio: () => void load(),
+  });
 
   const counts = useMemo(() => {
     const c: Record<TipoContratacion, number> = { alta: 0, baja: 0, modificacion: 0 };

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useSincronizacionEnVivo } from "@/shared/hooks/useSincronizacionEnVivo";
 import { Receipt, Settings, ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
 
@@ -63,6 +64,14 @@ export function FacturasTab({ openFacturaId, onOpened }: Props) {
   useEffect(() => {
     void load();
   }, [load]);
+
+  // Sincronizacion en vivo: las facturas de proveedor las suben varias personas
+  // y el OCR las procesa aparte. Se pausa con el dialogo abierto.
+  useSincronizacionEnVivo({
+    tablas: ["facturas_proveedor"],
+    onCambio: () => void load(),
+    pausado: dialogOpen || !!selectedId,
+  });
 
   // Cuando llega un openFacturaId externo (desde albarán), abrir el dialog
   useEffect(() => {
