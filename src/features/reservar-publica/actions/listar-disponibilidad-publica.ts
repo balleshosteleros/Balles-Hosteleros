@@ -17,7 +17,10 @@ import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { ESTADOS_NO_OCUPANTES, horaAMinutos } from "@/features/sala/lib/reserva-conflicto";
 import { vigenciaAplicaEnFecha, type ReservaBloqueo } from "@/features/sala/bloqueos/data/bloqueos";
-import { getCamposObligatoriosReserva } from "@/features/sala/lib/reserva-campos-obligatorios";
+import {
+  getCamposObligatoriosReserva,
+  type CamposObligatoriosReserva,
+} from "@/features/sala/lib/reserva-campos-obligatorios";
 import { turnoDeHora } from "@/features/sala/lib/dia-negocio";
 
 const inputSchema = z.object({
@@ -41,11 +44,11 @@ export interface SlotPublico {
  * Campos que la empresa exige además de los fijos (nombre, apellidos, fecha,
  * hora y personas, siempre obligatorios). El portal los usa para marcar el
  * asterisco y bloquear el envío.
+ *
+ * Es el mismo tipo que usa el back office: se reexporta en vez de duplicarlo
+ * para que ambos lados no puedan divergir.
  */
-export interface CamposObligatoriosPublico {
-  email: boolean;
-  telefono: boolean;
-}
+export type CamposObligatoriosPublico = CamposObligatoriosReserva;
 
 export type ListarDisponibilidadResult =
   | {
