@@ -36,6 +36,7 @@ interface Prefilled {
   dni_archivo_url?: string | null;
   // Mismos campos que la ficha del empleado: lo que se pide aquí es exactamente
   // lo que allí se puede editar, para que no haya datos en un sitio y en otro no.
+  tipo_documento?: string | null;
   genero?: string | null;
   estado_civil?: string | null;
   codigo_postal?: string | null;
@@ -72,6 +73,7 @@ export function WizardPrimerAcceso({ prefilled }: { prefilled: Prefilled }) {
     contacto_emergencia_telefono: prefilled.contacto_emergencia_telefono ?? "",
     contacto_emergencia_relacion: prefilled.contacto_emergencia_relacion ?? "",
     talla_uniforme: prefilled.talla_uniforme ?? "",
+    tipo_documento: prefilled.tipo_documento ?? "",
     genero: prefilled.genero ?? "",
     estado_civil: prefilled.estado_civil ?? "",
     codigo_postal: prefilled.codigo_postal ?? "",
@@ -94,9 +96,12 @@ export function WizardPrimerAcceso({ prefilled }: { prefilled: Prefilled }) {
     // de selección (documento, IBAN, SS, dirección, fecha de nacimiento) llega
     // relleno desde su candidatura y no se le vuelve a pedir.
     if (p === 0) {
+      if (!form.tipo_documento?.trim()) return "Elige el tipo de documento";
+      if (!form.genero?.trim()) return "Elige el género";
       if (!form.estado_civil?.trim()) return "Elige el estado civil";
     }
     if (p === 1) {
+      if (!form.direccion?.trim()) return "La dirección es obligatoria";
       if (!form.codigo_postal?.trim()) return "El código postal es obligatorio";
       if (!form.ciudad?.trim()) return "La ciudad es obligatoria";
       if (!form.provincia?.trim()) return "La provincia es obligatoria";
@@ -197,16 +202,18 @@ export function WizardPrimerAcceso({ prefilled }: { prefilled: Prefilled }) {
           })}
         </div>
 
-        {/* Por qué se piden estos datos: se está pidiendo el IBAN y el DNI, así
-            que conviene decir para qué se usan y quién los ve. */}
+        {/* Este asistente es SOLO para los empleados que ya estaban en el
+            sistema antes de que la documentación se pidiera entera en el proceso
+            de selección. Quien entra hoy por reclutamiento llega con la ficha
+            completa y no lo ve nunca (`perfil_completado` ya viene a true). */}
         {paso === 0 && (
           <div className="mb-4 flex items-start gap-2.5 rounded-lg border border-emerald-200 bg-emerald-50/60 p-3.5 dark:border-emerald-900/40 dark:bg-emerald-950/20">
             <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
             <div className="text-xs leading-relaxed text-emerald-900 dark:text-emerald-200">
-              <p className="font-medium">Solo faltan estos datos</p>
+              <p className="font-medium">Solo te lo pedimos una vez</p>
               <p className="mt-0.5">
-                Lo que ya aportaste durante el proceso de selección no te lo volvemos a pedir. Se
-                guardan en tu ficha y solo los ve el equipo de RRHH.
+                Son los datos que la empresa necesita para tu contrato y tu nómina. Se guardan en
+                tu ficha y solo los ve el equipo de RRHH.
               </p>
             </div>
           </div>
@@ -222,6 +229,36 @@ export function WizardPrimerAcceso({ prefilled }: { prefilled: Prefilled }) {
           {/* PASO 0 — Identidad */}
           {paso === 0 && (
             <div className="space-y-3">
+              <div className="grid sm:grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label>Tipo de documento *</Label>
+                  <Select
+                    value={form.tipo_documento || undefined}
+                    onValueChange={(v) => update("tipo_documento", v)}
+                  >
+                    <SelectTrigger><SelectValue placeholder="DNI / NIE / Pasaporte" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="DNI">DNI</SelectItem>
+                      <SelectItem value="NIE">NIE</SelectItem>
+                      <SelectItem value="PASAPORTE">Pasaporte</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Género *</Label>
+                  <Select
+                    value={form.genero || undefined}
+                    onValueChange={(v) => update("genero", v)}
+                  >
+                    <SelectTrigger><SelectValue placeholder="Selecciona…" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="mujer">Mujer</SelectItem>
+                      <SelectItem value="hombre">Hombre</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
               <div className="grid sm:grid-cols-2 gap-3">
                 <div className="space-y-1.5">
                   <Label>Estado civil *</Label>
@@ -255,12 +292,14 @@ export function WizardPrimerAcceso({ prefilled }: { prefilled: Prefilled }) {
           {/* PASO 1 — Domicilio */}
           {paso === 1 && (
             <div className="space-y-3">
-              {form.direccion?.trim() && (
-                <div className="rounded-md border bg-muted/40 px-3 py-2">
-                  <p className="text-[11px] font-medium text-muted-foreground">Tu dirección</p>
-                  <p className="text-sm">{form.direccion}</p>
-                </div>
-              )}
+              <div className="space-y-1.5">
+                <Label>Dirección *</Label>
+                <Input
+                  value={form.direccion ?? ""}
+                  onChange={(e) => update("direccion", e.target.value)}
+                  placeholder="Calle, número, piso…"
+                />
+              </div>
 
               <div className="grid sm:grid-cols-2 gap-3">
                 <div className="space-y-1.5">

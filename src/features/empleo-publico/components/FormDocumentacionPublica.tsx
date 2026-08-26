@@ -230,6 +230,17 @@ export function FormDocumentacionPublica({ token, empresaSlug, candidatoNombre }
   // donde la persona lo tiene delante: preguntarlo luego, al entrar al software,
   // era pedir dos veces lo mismo.
   const [tipoDocumento, setTipoDocumento] = useState("DNI");
+  // Resto de datos que la empresa necesita para el contrato. Se piden AQUÍ, de
+  // una vez, y no después al entrar al software: quien llega a este formulario
+  // ya ha sido elegido y sabe que se va a incorporar.
+  const [estadoCivil, setEstadoCivil] = useState("");
+  const [codigoPostal, setCodigoPostal] = useState("");
+  const [ciudad, setCiudad] = useState("");
+  const [provincia, setProvincia] = useState("");
+  const [pais, setPais] = useState("España");
+  const [emgNombre, setEmgNombre] = useState("");
+  const [emgTelefono, setEmgTelefono] = useState("");
+  const [emgRelacion, setEmgRelacion] = useState("");
   const [iban, setIban] = useState("");
   const [ss, setSs] = useState("");
 
@@ -424,6 +435,17 @@ export function FormDocumentacionPublica({ token, empresaSlug, candidatoNombre }
     if (!esIbanValido(iban)) return "El IBAN no es válido: revísalo.";
     if (!ss.trim()) return "Escribe tu número de la Seguridad Social en su casilla.";
     if (!esSeguridadSocialValida(ss)) return "El nº de la Seguridad Social no es válido: revísalo.";
+    // Datos para el contrato.
+    if (!codigoPostal.trim()) return "Escribe tu código postal.";
+    if (!/^\d{4,10}$/.test(codigoPostal.replace(/\s/g, ""))) return "El código postal no es válido.";
+    if (!ciudad.trim()) return "Escribe tu ciudad.";
+    if (!provincia.trim()) return "Escribe tu provincia.";
+    if (!pais.trim()) return "Escribe tu país.";
+    if (!estadoCivil.trim()) return "Elige tu estado civil.";
+    if (!emgNombre.trim()) return "Escribe el nombre de tu contacto de emergencia.";
+    if (!emgTelefono.trim()) return "Escribe el teléfono de tu contacto de emergencia.";
+    if (!/^(\+?\d{1,3})?\d{9,12}$/.test(emgTelefono.replace(/[\s.-]/g, "")))
+      return "El teléfono del contacto de emergencia no es válido.";
     return null;
   }
 
@@ -477,6 +499,14 @@ export function FormDocumentacionPublica({ token, empresaSlug, candidatoNombre }
         adj("doc_ss", docSs, "jpg");
         adj("foto_perfil", fotoPerfil, "jpg");
         fd.set("direccion", direccion.trim());
+        fd.set("codigo_postal", codigoPostal.trim());
+        fd.set("ciudad", ciudad.trim());
+        fd.set("provincia", provincia.trim());
+        fd.set("pais", pais.trim());
+        fd.set("estado_civil", estadoCivil);
+        fd.set("emg_nombre", emgNombre.trim());
+        fd.set("emg_telefono", emgTelefono.trim());
+        fd.set("emg_relacion", emgRelacion.trim());
         // Fecha SIEMPRE en formato ISO (AAAA-MM-DD). En iOS el input date puede
         // devolver un valor no-ISO que rompe el envío; lo normalizamos aquí.
         fd.set("fecha_nacimiento", normalizarFechaISO(fechaNacimiento));
@@ -635,30 +665,124 @@ export function FormDocumentacionPublica({ token, empresaSlug, candidatoNombre }
           onFile={(f) => onDocFile(setFotoPerfil, null, f)}
         />
         <div className="space-y-1.5">
-          <Label htmlFor="direccion">Dirección postal *</Label>
+          <Label htmlFor="direccion">Dirección *</Label>
           <Input
             id="direccion"
             value={direccion}
             onChange={(e) => setDireccion(e.target.value)}
-            placeholder="Calle, número, piso, código postal y localidad"
+            placeholder="Calle, número, piso…"
             autoComplete="street-address"
           />
         </div>
+        <div className="grid sm:grid-cols-2 gap-4">
+          <div className="space-y-1.5">
+            <Label htmlFor="cp">Código postal *</Label>
+            <Input
+              id="cp"
+              value={codigoPostal}
+              onChange={(e) => setCodigoPostal(e.target.value)}
+              inputMode="numeric"
+              autoComplete="postal-code"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="ciudad">Ciudad *</Label>
+            <Input
+              id="ciudad"
+              value={ciudad}
+              onChange={(e) => setCiudad(e.target.value)}
+              autoComplete="address-level2"
+            />
+          </div>
+        </div>
+        <div className="grid sm:grid-cols-2 gap-4">
+          <div className="space-y-1.5">
+            <Label htmlFor="provincia">Provincia *</Label>
+            <Input
+              id="provincia"
+              value={provincia}
+              onChange={(e) => setProvincia(e.target.value)}
+              autoComplete="address-level1"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="pais">País *</Label>
+            <Input
+              id="pais"
+              value={pais}
+              onChange={(e) => setPais(e.target.value)}
+              autoComplete="country-name"
+            />
+          </div>
+        </div>
+        <div className="grid sm:grid-cols-2 gap-4">
+          <div className="space-y-1.5">
+            <Label htmlFor="fecha-nac">Fecha de nacimiento *</Label>
+            <Input
+              id="fecha-nac"
+              type="date"
+              value={fechaNacimiento}
+              onChange={(e) => setFechaNacimiento(e.target.value)}
+              max={fechaMaximaNacimiento}
+              aria-invalid={Boolean(avisoEdad)}
+            />
+            {/* Aviso inline: la persona ve el motivo en el propio campo, no solo al enviar. */}
+            {avisoEdad && (
+              <p className="text-[12px] text-destructive font-medium">{avisoEdad}</p>
+            )}
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="estado-civil">Estado civil *</Label>
+            <Select value={estadoCivil} onValueChange={setEstadoCivil}>
+              <SelectTrigger id="estado-civil"><SelectValue placeholder="Selecciona…" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="soltero">Soltero/a</SelectItem>
+                <SelectItem value="casado">Casado/a</SelectItem>
+                <SelectItem value="pareja_hecho">Pareja de hecho</SelectItem>
+                <SelectItem value="divorciado">Divorciado/a</SelectItem>
+                <SelectItem value="viudo">Viudo/a</SelectItem>
+                <SelectItem value="otro">Otro</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+      </section>
+
+      <hr className="border-border" />
+
+      {/* 5. Contacto de emergencia */}
+      <section className="space-y-4">
+        <h2 className="text-base font-semibold">5. Contacto de emergencia</h2>
+        <p className="text-[12px] text-muted-foreground">
+          A quién avisamos si te ocurre algo durante el trabajo.
+        </p>
+        <div className="grid sm:grid-cols-2 gap-4">
+          <div className="space-y-1.5">
+            <Label htmlFor="emg-nombre">Nombre completo *</Label>
+            <Input
+              id="emg-nombre"
+              value={emgNombre}
+              onChange={(e) => setEmgNombre(e.target.value)}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="emg-tel">Teléfono *</Label>
+            <Input
+              id="emg-tel"
+              type="tel"
+              value={emgTelefono}
+              onChange={(e) => setEmgTelefono(e.target.value)}
+            />
+          </div>
+        </div>
         <div className="space-y-1.5">
-          <Label htmlFor="fecha-nac">Fecha de nacimiento *</Label>
+          <Label htmlFor="emg-rel">Relación</Label>
           <Input
-            id="fecha-nac"
-            type="date"
-            value={fechaNacimiento}
-            onChange={(e) => setFechaNacimiento(e.target.value)}
-            max={fechaMaximaNacimiento}
-            className="w-44"
-            aria-invalid={Boolean(avisoEdad)}
+            id="emg-rel"
+            value={emgRelacion}
+            onChange={(e) => setEmgRelacion(e.target.value)}
+            placeholder="Madre, pareja, hermano/a…"
           />
-          {/* Aviso inline: la persona ve el motivo en el propio campo, no solo al enviar. */}
-          {avisoEdad && (
-            <p className="text-[12px] text-destructive font-medium">{avisoEdad}</p>
-          )}
         </div>
       </section>
 

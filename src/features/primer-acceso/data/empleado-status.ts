@@ -20,6 +20,7 @@ export interface EmpleadoStatus {
     contacto_emergencia_telefono?: string | null;
     contacto_emergencia_relacion?: string | null;
     talla_uniforme?: string | null;
+    tipo_documento?: string | null;
     genero?: string | null;
     estado_civil?: string | null;
     codigo_postal?: string | null;
@@ -74,7 +75,7 @@ export const getEmpleadoStatus = cache(async (): Promise<EmpleadoStatus> => {
   const { data: empleado } = await supabase
     .from("empleados")
     .select(
-      "id, empresa_id, perfil_completado, nombre, apellidos, email_personal, telefono, dni_nie, fecha_nacimiento, direccion, iban, numero_ss, contacto_emergencia_nombre, contacto_emergencia_telefono, contacto_emergencia_relacion, talla_uniforme, genero, estado_civil, codigo_postal, ciudad, provincia, pais, avatar_url, dni_archivo_url"
+      "id, empresa_id, perfil_completado, nombre, apellidos, email_personal, telefono, dni_nie, fecha_nacimiento, direccion, iban, numero_ss, contacto_emergencia_nombre, contacto_emergencia_telefono, contacto_emergencia_relacion, talla_uniforme, tipo_documento, genero, estado_civil, codigo_postal, ciudad, provincia, pais, avatar_url, dni_archivo_url"
     )
     // Varias empresas = varias fichas. Se prioriza la que esté PENDIENTE, que es
     // la que el asistente tiene que rellenar (con `.maybeSingle()` esto fallaba
@@ -113,6 +114,7 @@ export const getEmpleadoStatus = cache(async (): Promise<EmpleadoStatus> => {
       contacto_emergencia_telefono: empleado.contacto_emergencia_telefono,
       contacto_emergencia_relacion: empleado.contacto_emergencia_relacion,
       talla_uniforme: empleado.talla_uniforme,
+      tipo_documento: empleado.tipo_documento,
       genero: empleado.genero,
       estado_civil: empleado.estado_civil,
       codigo_postal: empleado.codigo_postal,

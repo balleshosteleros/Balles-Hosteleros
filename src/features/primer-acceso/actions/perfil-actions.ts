@@ -12,20 +12,20 @@ async function getCtx() {
 }
 
 export interface PerfilCompletoInput {
-  // SOLO LECTURA: ya se pidieron en el proceso de selección (candidatura o
-  // documentación) y se copian a la ficha al contratar. Se muestran para que el
-  // empleado los reconozca, pero este asistente no los pide ni los reescribe.
+  // Solo lectura: vienen de su ficha y no se reescriben desde aquí.
   dni_nie?: string | null;
   fecha_nacimiento?: string | null;
-  direccion?: string | null;
   iban?: string | null;
   numero_ss?: string | null;
   telefono?: string | null;
-  genero?: string | null;
   avatar_url?: string | null;
   dni_archivo_url?: string | null;
 
-  // Lo ÚNICO que este asistente pide: lo que nadie ha preguntado todavía.
+  // Lo que este asistente pide a los empleados ANTIGUOS. Quien entra hoy por
+  // reclutamiento ya lo aportó allí y no llega a ver el asistente.
+  direccion?: string | null;
+  tipo_documento?: string | null;
+  genero?: string | null;
   nacionalidad?: string | null;
   estado_civil?: string | null;
   codigo_postal?: string | null;
@@ -48,7 +48,10 @@ function validarPerfil(p: PerfilCompletoInput): string | null {
   // la Seguridad Social, la dirección y la fecha de nacimiento se aportaron y se
   // validaron en el proceso de selección (`/api/documentacion`), y no se vuelven
   // a pedir: exigirlos aquí bloquearía a quien no puede ya corregirlos.
+  if (!p.tipo_documento?.trim()) return "Elige el tipo de documento";
+  if (!p.genero?.trim()) return "Elige el género";
   if (!p.estado_civil?.trim()) return "Elige el estado civil";
+  if (!p.direccion?.trim()) return "La dirección es obligatoria";
 
   if (!p.codigo_postal?.trim()) return "El código postal es obligatorio";
   if (!/^\d{4,10}$/.test(p.codigo_postal.replace(/\s/g, ""))) {
@@ -96,6 +99,9 @@ export async function guardarPerfilCompleto(input: PerfilCompletoInput) {
     .from("empleados")
     .update({
       nacionalidad: input.nacionalidad?.trim() || null,
+      direccion: input.direccion?.trim() || null,
+      tipo_documento: input.tipo_documento?.trim() || null,
+      genero: input.genero?.trim() || null,
       contacto_emergencia_nombre: normalizarNombre(input.contacto_emergencia_nombre),
       contacto_emergencia_telefono: input.contacto_emergencia_telefono.trim(),
       contacto_emergencia_relacion: input.contacto_emergencia_relacion.trim(),

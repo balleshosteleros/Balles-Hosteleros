@@ -47,6 +47,14 @@ const Schema = z.object({
   iban: z.string().min(1).max(40),
   num_seguridad_social: z.string().min(1).max(20),
   direccion: z.string().min(1).max(200),
+  codigo_postal: z.string().min(1).max(10),
+  ciudad: z.string().min(1).max(80),
+  provincia: z.string().min(1).max(80),
+  pais: z.string().min(1).max(60),
+  estado_civil: z.enum(["soltero", "casado", "pareja_hecho", "divorciado", "viudo", "otro"]),
+  emg_nombre: z.string().min(1).max(120),
+  emg_telefono: z.string().min(1).max(20),
+  emg_relacion: z.string().max(60).optional().default(""),
   // YYYY-MM-DD; debe ser una fecha real y anterior a hoy.
   fecha_nacimiento: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Fecha no válida"),
 });
@@ -91,6 +99,14 @@ export async function POST(req: Request) {
       iban: String(fd.get("iban") ?? "").trim(),
       num_seguridad_social: String(fd.get("num_seguridad_social") ?? "").trim(),
       direccion: String(fd.get("direccion") ?? "").trim(),
+      codigo_postal: String(fd.get("codigo_postal") ?? "").trim(),
+      ciudad: String(fd.get("ciudad") ?? "").trim(),
+      provincia: String(fd.get("provincia") ?? "").trim(),
+      pais: String(fd.get("pais") ?? "").trim(),
+      estado_civil: String(fd.get("estado_civil") ?? "").trim(),
+      emg_nombre: String(fd.get("emg_nombre") ?? "").trim(),
+      emg_telefono: String(fd.get("emg_telefono") ?? "").trim(),
+      emg_relacion: String(fd.get("emg_relacion") ?? "").trim(),
       fecha_nacimiento: String(fd.get("fecha_nacimiento") ?? "").trim(),
     });
     if (!parsed.success) {
@@ -102,6 +118,13 @@ export async function POST(req: Request) {
         iban: "el número de cuenta (IBAN)",
         num_seguridad_social: "el número de la Seguridad Social",
         direccion: "la dirección postal",
+        codigo_postal: "el código postal",
+        ciudad: "la ciudad",
+        provincia: "la provincia",
+        pais: "el país",
+        estado_civil: "el estado civil",
+        emg_nombre: "el nombre del contacto de emergencia",
+        emg_telefono: "el teléfono del contacto de emergencia",
         fecha_nacimiento: "la fecha de nacimiento",
       };
       const campos = [
@@ -224,6 +247,14 @@ export async function POST(req: Request) {
         doc_ss_path: ssDoc.path,
         foto_perfil_path: fotoDoc.path,
         direccion: parsed.data.direccion,
+        codigo_postal: parsed.data.codigo_postal,
+        ciudad: parsed.data.ciudad,
+        provincia: parsed.data.provincia,
+        pais: parsed.data.pais,
+        estado_civil: parsed.data.estado_civil,
+        contacto_emergencia_nombre: parsed.data.emg_nombre,
+        contacto_emergencia_telefono: parsed.data.emg_telefono,
+        contacto_emergencia_relacion: parsed.data.emg_relacion || null,
         fecha_nacimiento: parsed.data.fecha_nacimiento,
         documentacion_completada_at: new Date().toISOString(),
       })

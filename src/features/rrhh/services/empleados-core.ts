@@ -140,6 +140,14 @@ export type AltaUsuarioEmpleadoInput = {
   telefono?: string | null;
   dniNie?: string | null;
   tipoDocumento?: string | null;
+  codigoPostal?: string | null;
+  ciudad?: string | null;
+  provincia?: string | null;
+  pais?: string | null;
+  estadoCivil?: string | null;
+  emgNombre?: string | null;
+  emgTelefono?: string | null;
+  emgRelacion?: string | null;
   /** Datos personales aportados en la documentación del candidato (para gestoría). */
   numeroSs?: string | null;
   iban?: string | null;
@@ -460,6 +468,18 @@ export async function altaUsuarioEmpleado(
     puestoNombre: input.puesto ?? null,
   });
 
+  // ¿Trae ya todo lo que antes se preguntaba al entrar por primera vez?
+  const perfilYaCompleto = Boolean(
+    input.tipoDocumento &&
+      input.estadoCivil &&
+      input.codigoPostal &&
+      input.ciudad &&
+      input.provincia &&
+      input.pais &&
+      input.emgNombre &&
+      input.emgTelefono,
+  );
+
   // 6. Crear empleado vinculado (rollback si falla)
   const { data: empleado, error: empErr } = await admin
     .from("empleados")
@@ -475,6 +495,14 @@ export async function altaUsuarioEmpleado(
       email_personal: input.emailPersonal,
       dni_nie: input.dniNie ?? null,
       tipo_documento: input.tipoDocumento ?? null,
+      codigo_postal: input.codigoPostal ?? null,
+      ciudad: input.ciudad ?? null,
+      provincia: input.provincia ?? null,
+      pais: input.pais ?? null,
+      estado_civil: input.estadoCivil ?? null,
+      contacto_emergencia_nombre: input.emgNombre ?? null,
+      contacto_emergencia_telefono: input.emgTelefono ?? null,
+      contacto_emergencia_relacion: input.emgRelacion ?? null,
       // Datos personales de la documentación (para que la gestoría los reciba).
       numero_ss: input.numeroSs ?? null,
       iban: input.iban ?? null,
@@ -484,7 +512,12 @@ export async function altaUsuarioEmpleado(
       fecha_alta: new Date().toISOString().slice(0, 10),
       estado: "Activo",
       tipo_jornada: "Completa",
-      perfil_completado: false,
+      // El asistente de primer acceso solo existe para los empleados ANTIGUOS,
+      // los que ya estaban antes de que la documentación se pidiera entera en el
+      // proceso de selección. Si el alta viene de reclutamiento con los datos
+      // del contrato, la ficha ya está completa y no hay nada que preguntarle:
+      // entra directo a trabajar.
+      perfil_completado: perfilYaCompleto,
       local_id: localDefecto,
     })
     .select("id")

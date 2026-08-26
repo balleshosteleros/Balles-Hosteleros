@@ -136,6 +136,14 @@ interface CandidatoRowReal {
   // Paso «Documentación»
   dni_nie: string | null;
   tipo_documento: string | null;
+  codigo_postal: string | null;
+  ciudad: string | null;
+  provincia: string | null;
+  pais: string | null;
+  estado_civil: string | null;
+  contacto_emergencia_nombre: string | null;
+  contacto_emergencia_telefono: string | null;
+  contacto_emergencia_relacion: string | null;
   iban: string | null;
   num_seguridad_social: string | null;
   doc_dni_anverso_path: string | null;
@@ -183,6 +191,8 @@ export async function listVacantesConCandidatos(empresaSlug?: string | null) {
           activo, created_at, visto_at, fase_actualizada_at,
           genero, ubicacion, disponibilidad, experiencia_previa, carta_presentacion,
           dni_nie, tipo_documento, iban, num_seguridad_social,
+          codigo_postal, ciudad, provincia, pais, estado_civil,
+          contacto_emergencia_nombre, contacto_emergencia_telefono, contacto_emergencia_relacion,
           doc_dni_anverso_path, doc_dni_reverso_path, doc_iban_path, doc_ss_path,
           foto_perfil_path, direccion, fecha_nacimiento,
           documentacion_completada_at
@@ -339,6 +349,14 @@ export async function listVacantesConCandidatos(empresaSlug?: string | null) {
           // Paso «Documentación»
           dniNie: c.dni_nie ?? null,
           tipoDocumento: c.tipo_documento ?? null,
+          codigoPostal: c.codigo_postal ?? null,
+          ciudad: c.ciudad ?? null,
+          provincia: c.provincia ?? null,
+          pais: c.pais ?? null,
+          estadoCivil: c.estado_civil ?? null,
+          emgNombre: c.contacto_emergencia_nombre ?? null,
+          emgTelefono: c.contacto_emergencia_telefono ?? null,
+          emgRelacion: c.contacto_emergencia_relacion ?? null,
           iban: c.iban ?? null,
           numSeguridadSocial: c.num_seguridad_social ?? null,
           docDniAnversoPath: c.doc_dni_anverso_path ?? null,
