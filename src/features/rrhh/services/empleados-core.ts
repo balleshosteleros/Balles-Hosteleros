@@ -370,7 +370,7 @@ export async function altaUsuarioEmpleado(
     user_metadata: { full_name: input.fullName },
   });
   if (createErr || !created?.user) {
-    return { ok: false, error: createErr ? friendlyError(createErr) : "No se pudo crear el usuario" };
+    return { ok: false, error: createErr ? friendlyError(createErr, "alta:createUser") : "No se pudo crear el usuario" };
   }
   const userId = created.user.id;
 
@@ -424,7 +424,7 @@ export async function altaUsuarioEmpleado(
     .upsert(accesosRows, { onConflict: "user_id,empresa_id" });
   if (accesoErr) {
     await admin.auth.admin.deleteUser(userId);
-    return { ok: false, error: `Error asignando acceso a empresas: ${friendlyError(accesoErr)}` };
+    return { ok: false, error: `Error asignando acceso a empresas: ${friendlyError(accesoErr, "alta:usuarioEmpresas")}` };
   }
 
   // 5. Validar los locales: deben existir y pertenecer a una de las empresas
@@ -489,7 +489,7 @@ export async function altaUsuarioEmpleado(
     .single();
   if (empErr || !empleado) {
     await admin.auth.admin.deleteUser(userId);
-    return { ok: false, error: empErr ? friendlyError(empErr) : "No se pudo crear el empleado" };
+    return { ok: false, error: empErr ? friendlyError(empErr, "alta:insertEmpleado") : "No se pudo crear el empleado" };
   }
 
   // 7. Conjunto de locales donde puede fichar (tabla puente). Rollback si falla.
@@ -497,7 +497,7 @@ export async function altaUsuarioEmpleado(
   const { error: puenteErr } = await admin.from("empleado_locales").insert(puenteRows);
   if (puenteErr) {
     await admin.auth.admin.deleteUser(userId);
-    return { ok: false, error: `Error asignando locales: ${friendlyError(puenteErr)}` };
+    return { ok: false, error: `Error asignando locales: ${friendlyError(puenteErr, "alta:empleadoLocales")}` };
   }
 
   return { ok: true, userId, empleadoId: empleado.id, tempPassword };

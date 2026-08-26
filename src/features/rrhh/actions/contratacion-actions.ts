@@ -36,6 +36,15 @@ import { emitirNotificacion } from "@/features/notificaciones/actions/notificaci
 import { revalidatePath } from "next/cache";
 
 /**
+ * Hoy (YYYY-MM-DD) en la zona horaria del negocio. El servidor puede correr en
+ * UTC, así que `new Date().toISOString()` daría un día distinto al que ve quien
+ * contrata; `en-CA` formatea justo como YYYY-MM-DD.
+ */
+function hoyIsoMadrid(): string {
+  return new Date().toLocaleDateString("en-CA", { timeZone: "Europe/Madrid" });
+}
+
+/**
  * Deshace una contratación que quedó a medias: revierte el LOCK del candidato
  * (`promovido_at`/`promovido_por`/`empleado_id` a null) para que vuelva a ser
  * CONTRATABLE con un solo clic, y AVISA al equipo de RRHH (área administrativa)
@@ -62,7 +71,10 @@ async function revertirContratacionFallida(
     await emitirNotificacion({
       empresaId,
       system: true,
-      tipo: "warning",
+      // "alerta", no "warning": el CHECK de `notificaciones.tipo` solo admite los
+      // tipos canónicos. Con "warning" el INSERT fallaba (23514) y el aviso de
+      // contratación fallida no llegaba nunca a RRHH.
+      tipo: "alerta",
       titulo: `Contratación fallida: ${nombreCandidato}`,
       mensaje: `No se pudo completar la contratación de ${nombreCandidato} y se ha revertido automáticamente. Vuelve a pulsar «Contratar» para reintentarlo. Motivo: ${motivo}`,
       segmento: { tipo: "area", area: "ADMINISTRATIVA" },
@@ -229,7 +241,7 @@ export async function contratarCandidato(input: ContratarInput): Promise<Contrat
     .eq("id", input.candidatoId)
     .eq("empresa_id", empresaId)
     .maybeSingle<CandidatoRow>();
-  if (candErr) return { ok: false, error: friendlyError(candErr) };
+  if (candErr) return { ok: false, error: friendlyError(candErr, "contratar:cargarCandidato") };
   if (!cand) return { ok: false, error: "Candidato no encontrado" };
 
   // CONTRATAR disponible al ENTRAR en Contratación (PRP-070) y, por compat, en
@@ -258,6 +270,12 @@ export async function contratarCandidato(input: ContratarInput): Promise<Contrat
   }
   if (!input.puestoId) return { ok: false, error: "Selecciona el puesto." };
   if (!input.primerDia) return { ok: false, error: "Indica el primer día de trabajo." };
+  // El primer día es hoy o futuro: no se puede dar de alta a alguien con fecha
+  // pasada. Se valida también en el SERVIDOR porque el `min` del calendario es
+  // solo UI. Cadenas YYYY-MM-DD: comparar como texto ya es comparar fechas.
+  if (input.primerDia < hoyIsoMadrid()) {
+    return { ok: false, error: "El primer día de trabajo no puede ser anterior a hoy." };
+  }
   if (!input.localId) return { ok: false, error: "Asigna un local al nuevo empleado." };
 
   // Datos completos OBLIGATORIOS para contratar: un candidato no puede convertirse
@@ -376,7 +394,7 @@ export async function contratarCandidato(input: ContratarInput): Promise<Contrat
     .eq("id", cand.id)
     .is("promovido_at", null)
     .select("id");
-  if (lockErr) return { ok: false, error: friendlyError(lockErr) };
+  if (lockErr) return { ok: false, error: friendlyError(lockErr, "contratar:lock") };
   if (!lockRows || lockRows.length === 0) {
     return { ok: false, error: "Contratación ya en curso (otro click más rápido)." };
   }
@@ -495,10 +513,18 @@ export async function contratarCandidato(input: ContratarInput): Promise<Contrat
 
   // Copia la documentación y la foto del candidato a la ficha del empleado
   // (copia física a empleados-docs; la foto se fija como avatar permanente).
-  // Se conserva también en reclutamiento. Best-effort: no bloquea la contratación.
-  await copiarDocumentacionCandidatoAEmpleado({
-    admin, empresaId, candidatoId: cand.id, empleadoId: alta.empleadoId, userId: alta.userId,
-  });
+  // Se conserva también en reclutamiento. Best-effort DE VERDAD: llegados aquí el
+  // empleado YA existe y la contratación está hecha. Si la copia de archivos
+  // falla (R2 caído, un documento corrupto), no puede tumbar una contratación
+  // consumada —el usuario vería un error y no hay nada que reintentar—: se
+  // registra y se sigue. Los documentos se recuperan desde la ficha del candidato.
+  try {
+    await copiarDocumentacionCandidatoAEmpleado({
+      admin, empresaId, candidatoId: cand.id, empleadoId: alta.empleadoId, userId: alta.userId,
+    });
+  } catch (e) {
+    console.error("[contratacion] copiar documentación del candidato:", e);
+  }
 
   // 6. Email de acceso al trabajador (al email de login = personal u empresa según área).
   //    Se OMITE al entrar en Contratación (enviarAcceso=false): el acceso se

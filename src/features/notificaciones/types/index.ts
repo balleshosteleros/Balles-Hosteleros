@@ -23,6 +23,13 @@ export interface EmitirInput {
   /** Empresa destino. Obligatoria cuando se inyecta cliente service (crons); si
    *  se omite, se usa la empresa activa del usuario autenticado. */
   empresaId?: string;
+  /**
+   * OJO: el `| string` desactiva la comprobación de tipos, pero la BD sí tiene un
+   * CHECK (`notificaciones_tipo_check`). Un tipo inventado compila y falla en
+   * ejecución con un 23514, dejando la notificación sin enviar en silencio: pasó
+   * con "warning" en contratación fallida y en sanciones disciplinarias.
+   * Usa siempre un valor de `TipoNotificacion`.
+   */
   tipo: TipoNotificacion | string;
   titulo: string;
   mensaje?: string;

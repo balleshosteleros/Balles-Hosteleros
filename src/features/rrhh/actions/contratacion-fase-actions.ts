@@ -37,6 +37,7 @@ import type { PermisoModulo } from "@/features/ajustes/data/ajustes";
 const MODULO_RRHH = "RECURSOS HUMANOS";
 import { revalidatePath } from "next/cache";
 import { getMarcaEmpresa } from "@/lib/pdf/cabecera-documento";
+import { friendlyError } from "@/shared/lib/friendly-errors";
 
 export interface IniciarContratacionInput {
   candidatoId: string;
@@ -133,11 +134,22 @@ async function segmentoRrhh(
 export async function iniciarContratacion(
   input: IniciarContratacionInput,
 ): Promise<IniciarContratacionResult> {
-  const supabase = await createServerClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { ok: false, error: "No autenticado" };
-  const empresaId = await getEmpresaActivaForUser(supabase, user.id);
-  if (!empresaId) return { ok: false, error: "No autenticado" };
+  // Resolver sesión y empresa activa puede LANZAR (`.single()` sobre `usuarios`,
+  // sesión caducada). Sin capturarlo, la excepción sale del server action y el
+  // usuario recibe el error opaco de Next.js en vez de un motivo entendible.
+  let user: { id: string };
+  let empresaId: string;
+  try {
+    const supabase = await createServerClient();
+    const { data: { user: u } } = await supabase.auth.getUser();
+    if (!u) return { ok: false, error: "No autenticado" };
+    const emp = await getEmpresaActivaForUser(supabase, u.id);
+    if (!emp) return { ok: false, error: "No autenticado" };
+    user = u;
+    empresaId = emp;
+  } catch (e) {
+    return { ok: false, error: friendlyError(e, "iniciarContratacion:sesion") };
+  }
 
   try {
     await requireAdminUser({ empresaIds: [empresaId] });
@@ -152,20 +164,29 @@ export async function iniciarContratacion(
   const enviarReconocimientoMedico = input.enviarReconocimientoMedico !== false;
 
   // 1. Materializar el empleado (alta gestoría según confirmación). Sin email de acceso.
-  const contratado = await contratarCandidato({
-    candidatoId: input.candidatoId,
-    puestoId: input.puestoId,
-    nivel: 1,
-    primerDia: input.primerDia,
-    localId: input.localId,
-    emailEmpresa: input.emailEmpresa ?? null,
-    enviarAcceso: false,
-    enviarGestoria,
-    // Entrar en Contratación ES el acto de contratar: el candidato aún está en su
-    // fase anterior (Selección, etc.), así que se permite desde cualquier fase.
-    permitirDesdeCualquierFase: true,
-    destino: { fase: "contratacion", estado: "contratacion" },
-  });
+  //    `contratarCandidato` controla sus propios fallos, pero varias consultas
+  //    internas (puesto, salarios, vacante, alta del usuario) están fuera de su
+  //    try/catch y pueden lanzar. Se captura aquí para que el diálogo muestre el
+  //    motivo real en vez del error genérico de Next.js.
+  let contratado: Awaited<ReturnType<typeof contratarCandidato>>;
+  try {
+    contratado = await contratarCandidato({
+      candidatoId: input.candidatoId,
+      puestoId: input.puestoId,
+      nivel: 1,
+      primerDia: input.primerDia,
+      localId: input.localId,
+      emailEmpresa: input.emailEmpresa ?? null,
+      enviarAcceso: false,
+      enviarGestoria,
+      // Entrar en Contratación ES el acto de contratar: el candidato aún está en su
+      // fase anterior (Selección, etc.), así que se permite desde cualquier fase.
+      permitirDesdeCualquierFase: true,
+      destino: { fase: "contratacion", estado: "contratacion" },
+    });
+  } catch (e) {
+    return { ok: false, error: friendlyError(e, "iniciarContratacion:contratar") };
+  }
   if (!contratado.ok || !contratado.empleadoId) {
     return { ok: false, error: contratado.error ?? "No se pudo iniciar la contratación" };
   }
@@ -371,6 +392,75 @@ export async function iniciarContratacion(
     contratoInternoEnviado,
     reconocimientoMedicoEnviado,
   };
+}
+
+/** Catálogos que rellenan los selectores del diálogo de contratación. */
+export interface CatalogosContratacion {
+  puestos: { id: string; nombre: string; departamento_id: string | null }[];
+  departamentos: { id: string; nombre: string; area: string | null }[];
+  locales: { id: string; nombre: string }[];
+}
+
+/**
+ * Los tres catálogos del diálogo de contratación EN UNA SOLA llamada.
+ *
+ * Antes el diálogo pedía puestos, departamentos y locales con tres server
+ * actions distintas. Aunque el cliente las lanzaba con `Promise.all`, Next.js
+ * SERIALIZA las server actions: se ejecutaban en fila, y cada una repetía su
+ * propio preámbulo —`auth.getUser()` (ida y vuelta al servidor de Auth) más la
+ * resolución de la empresa activa (1-2 consultas)—. Eran ~9 saltos de red
+ * encadenados para traer unas pocas decenas de filas, y el diálogo se abría con
+ * los selectores vacíos mientras tanto.
+ *
+ * Aquí el contexto se resuelve UNA vez y las tres consultas sí van de verdad en
+ * paralelo. Se piden solo las columnas que el diálogo usa: `listLocales` traía
+ * además el recuento de empleados por local (una consulta extra a
+ * `empleado_locales`) que aquí no pinta nada.
+ */
+export async function getCatalogosContratacion(): Promise<{
+  ok: boolean;
+  data: CatalogosContratacion;
+  error?: string;
+}> {
+  const vacio: CatalogosContratacion = { puestos: [], departamentos: [], locales: [] };
+  try {
+    const supabase = await createServerClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { ok: false, data: vacio, error: "No autenticado" };
+    const empresaId = await getEmpresaActivaForUser(supabase, user.id);
+    if (!empresaId) return { ok: false, data: vacio, error: "Sin empresa activa" };
+
+    const [puestos, departamentos, locales] = await Promise.all([
+      supabase.from("puestos")
+        .select("id,nombre,departamento_id")
+        .eq("empresa_id", empresaId).eq("estado", "activo").order("nombre"),
+      supabase.from("departamentos")
+        .select("id,nombre,area")
+        .eq("empresa_id", empresaId).order("nombre"),
+      // Solo locales OPERATIVOS: no se contrata a nadie en un local dado de baja.
+      supabase.from("locales")
+        .select("id,nombre")
+        .eq("empresa_id", empresaId).eq("activo", true).order("nombre"),
+    ]);
+
+    // Una consulta que falla NO lanza: devuelve `{ data: null, error }`. Sin esta
+    // comprobación el diálogo recibiría `ok: true` con las listas vacías, que es
+    // justo el síntoma que se quería arreglar —selectores en blanco— pero encima
+    // sin ningún mensaje que explique por qué.
+    const fallo = puestos.error ?? departamentos.error ?? locales.error;
+    if (fallo) throw fallo;
+
+    return {
+      ok: true,
+      data: {
+        puestos: (puestos.data ?? []) as CatalogosContratacion["puestos"],
+        departamentos: (departamentos.data ?? []) as CatalogosContratacion["departamentos"],
+        locales: (locales.data ?? []) as CatalogosContratacion["locales"],
+      },
+    };
+  } catch (e) {
+    return { ok: false, data: vacio, error: friendlyError(e, "getCatalogosContratacion") };
+  }
 }
 
 /**

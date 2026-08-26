@@ -10,12 +10,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { listPuestosCatalogo, listDepartamentosCatalogo } from "@/features/rrhh/actions/vacantes-actions";
-import { listLocales } from "@/features/ajustes/actions/locales-actions";
 import { contratarCandidato } from "@/features/rrhh/actions/contratacion-actions";
 import {
   iniciarContratacion,
   previewContratacionEmails,
+  getCatalogosContratacion,
   type EmailContratacionPreview,
 } from "@/features/rrhh/actions/contratacion-fase-actions";
 
@@ -44,7 +43,15 @@ interface Props {
   variante?: "final" | "iniciar";
 }
 
-const hoy = () => new Date().toISOString().slice(0, 10);
+/**
+ * Hoy en formato YYYY-MM-DD usando la fecha LOCAL, no UTC: `toISOString()` a
+ * secas devuelve el día en UTC y adelanta o atrasa la fecha según la zona.
+ */
+function hoy(): string {
+  const d = new Date();
+  const off = d.getTimezoneOffset() * 60000;
+  return new Date(d.getTime() - off).toISOString().slice(0, 10);
+}
 
 export function ContratarDialog({ open, onOpenChange, candidato, onDone, variante = "final" }: Props) {
   const esIniciar = variante === "iniciar";
@@ -63,8 +70,12 @@ export function ContratarDialog({ open, onOpenChange, candidato, onDone, variant
   const [emails, setEmails] = useState<EmailContratacionPreview[] | null>(null);
   const [enviarFlags, setEnviarFlags] = useState<Record<string, boolean>>({});
   const [cargandoPreview, setCargandoPreview] = useState(false);
+  const [cargandoCatalogos, setCargandoCatalogos] = useState(false);
 
   const [pending, startTransition] = useTransition();
+
+  // Comparación de cadenas YYYY-MM-DD: es orden lexicográfico y cronológico a la vez.
+  const esFechaPasada = !!primerDia && primerDia < hoy();
 
   const puestoSel = puestos.find((p) => p.id === puestoId) ?? null;
   const deptoSel = departamentos.find((d) => d.id === puestoSel?.departamento_id) ?? null;
@@ -87,15 +98,26 @@ export function ContratarDialog({ open, onOpenChange, candidato, onDone, variant
     // Default inmediato: el puesto de la vacante sale ya seleccionado aunque el
     // catálogo aún esté cargando (sin esperar al fetch).
     setPuestoId(vacantePuestoId ?? "");
-    void Promise.all([listPuestosCatalogo(), listDepartamentosCatalogo(), listLocales()]).then(
-      ([p, d, l]) => {
-        setPuestos((p.data ?? []) as PuestoRef[]);
-        setDepartamentos((d.data ?? []) as DeptoRef[]);
-        const locs = (l.data ?? []) as LocalRef[];
-        setLocales(locs);
-        setLocalId(locs.length === 1 ? locs[0].id : "");
-      },
-    );
+    // UNA sola llamada para los tres catálogos: las server actions se ejecutan
+    // en serie, así que tres llamadas eran tres rondas de autenticación
+    // encadenadas y el diálogo se quedaba con los selectores vacíos.
+    setCargandoCatalogos(true);
+    let cancelado = false;
+    void getCatalogosContratacion()
+      .then((res) => {
+        if (cancelado) return;
+        setPuestos(res.data.puestos as PuestoRef[]);
+        setDepartamentos(res.data.departamentos as DeptoRef[]);
+        setLocales(res.data.locales);
+        setLocalId(res.data.locales.length === 1 ? res.data.locales[0].id : "");
+        if (!res.ok) setErrorMsg(res.error ?? "No se pudieron cargar los datos del formulario");
+      })
+      .finally(() => {
+        if (!cancelado) setCargandoCatalogos(false);
+      });
+    // Si se cierra el diálogo o se cambia de candidato antes de que llegue la
+    // respuesta, no se pisan los datos del candidato nuevo con los del anterior.
+    return () => { cancelado = true; };
   }, [open, candidatoId, vacantePuestoId]);
 
   // Valida los datos y, en la variante «iniciar», avanza al paso de confirmar los
@@ -104,6 +126,7 @@ export function ContratarDialog({ open, onOpenChange, candidato, onDone, variant
     if (!candidato) return;
     if (!puestoId) { toast.error("Selecciona el puesto"); return; }
     if (!primerDia) { toast.error("Indica el primer día de trabajo"); return; }
+    if (esFechaPasada) { toast.error("El primer día no puede ser anterior a hoy"); return; }
     if (!localId) { toast.error("Selecciona el local"); return; }
     if (esAdministrativo && !emailEmpresa.trim()) { toast.error("Los puestos administrativos requieren email de empresa"); return; }
     setErrorMsg(null);
@@ -190,6 +213,7 @@ export function ContratarDialog({ open, onOpenChange, candidato, onDone, variant
     if (!candidato) return;
     if (!puestoId) { toast.error("Selecciona el puesto"); return; }
     if (!primerDia) { toast.error("Indica el primer día de trabajo"); return; }
+    if (esFechaPasada) { toast.error("El primer día no puede ser anterior a hoy"); return; }
     if (!localId) { toast.error("Selecciona el local"); return; }
     if (esAdministrativo && !emailEmpresa.trim()) { toast.error("Los puestos administrativos requieren email de empresa"); return; }
     startTransition(async () => {
@@ -342,7 +366,7 @@ export function ContratarDialog({ open, onOpenChange, candidato, onDone, variant
                 onChange={(e) => setPuestoId(e.target.value)}
                 className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
               >
-                <option value="">Selecciona…</option>
+                <option value="">{cargandoCatalogos ? "Cargando…" : "Selecciona…"}</option>
                 {puestos.map((p) => <option key={p.id} value={p.id}>{p.nombre}</option>)}
                 {/* El puesto de la vacante puede no estar en el catálogo activo
                     (p. ej. desactivado): lo añadimos para que el default sea visible. */}
@@ -360,7 +384,20 @@ export function ContratarDialog({ open, onOpenChange, candidato, onDone, variant
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label htmlFor="ct-fecha">Primer día de trabajo</Label>
-                <Input id="ct-fecha" type="date" value={primerDia} onChange={(e) => setPrimerDia(e.target.value)} />
+                {/* `min` deja en gris (no pulsables) los días anteriores a hoy en el
+                    calendario: nunca se puede contratar con fecha pasada. */}
+                <Input
+                  id="ct-fecha"
+                  type="date"
+                  min={hoy()}
+                  value={primerDia}
+                  onChange={(e) => setPrimerDia(e.target.value)}
+                />
+                {esFechaPasada && (
+                  <p className="text-xs text-destructive">
+                    El primer día no puede ser anterior a hoy.
+                  </p>
+                )}
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="ct-local">Local</Label>
@@ -370,7 +407,7 @@ export function ContratarDialog({ open, onOpenChange, candidato, onDone, variant
                   onChange={(e) => setLocalId(e.target.value)}
                   className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
                 >
-                  <option value="">Selecciona…</option>
+                  <option value="">{cargandoCatalogos ? "Cargando…" : "Selecciona…"}</option>
                   {locales.map((l) => <option key={l.id} value={l.id}>{l.nombre}</option>)}
                 </select>
               </div>
@@ -405,9 +442,11 @@ export function ContratarDialog({ open, onOpenChange, candidato, onDone, variant
           ) : (
             <>
               <Button variant="outline" onClick={() => onOpenChange(false)} disabled={pending || cargandoPreview}>Cancelar</Button>
-              <Button onClick={esIniciar ? irAConfirmarEmails : contratar} disabled={pending || cargandoPreview}>
-                {(pending || cargandoPreview)
-                  ? <><Loader2 className="h-4 w-4 mr-1 animate-spin" /> {esIniciar ? "Preparando…" : "Contratando…"}</>
+              {/* Bloqueado mientras cargan los catálogos: sin puestos ni locales
+                  la validación fallaría por unos datos que aún no han llegado. */}
+              <Button onClick={esIniciar ? irAConfirmarEmails : contratar} disabled={pending || cargandoPreview || cargandoCatalogos}>
+                {(pending || cargandoPreview || cargandoCatalogos)
+                  ? <><Loader2 className="h-4 w-4 mr-1 animate-spin" /> {cargandoCatalogos ? "Cargando…" : (esIniciar ? "Preparando…" : "Contratando…")}</>
                   : (esIniciar ? "Continuar" : "Contratar")}
               </Button>
             </>

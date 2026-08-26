@@ -237,7 +237,9 @@ export async function crearSancionDisciplinaria(
       const base = (process.env.NEXT_PUBLIC_APP_URL ?? "https://sistema.balleshosteleros.com").replace(/\/$/, "");
       await emitirNotificacion({
         empresaId,
-        tipo: "warning",
+        // "alerta": el CHECK de `notificaciones.tipo` no admite "warning", y con
+        // él el aviso de firma no llegaba al empleado sancionado.
+        tipo: "alerta",
         titulo: "Sanción disciplinaria — firma requerida",
         mensaje: "Has recibido una comunicación de sanción disciplinaria. Fírmala como acuse de recibo (leído).",
         segmento: { tipo: "empleados", empleadoIds: [empleadoId] },

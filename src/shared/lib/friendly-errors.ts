@@ -137,6 +137,12 @@ export function friendlyError(err: unknown, contexto?: string): string {
     return raw;
   }
 
-  // Por defecto: mensaje neutro
-  return "Ha ocurrido un error. Inténtalo de nuevo.";
+  // Por defecto: mensaje neutro. Se añade el CONTEXTO entre paréntesis cuando lo
+  // hay: "Ha ocurrido un error" a secas no distingue un fallo al crear el
+  // usuario de uno al insertar el empleado, y obliga a reproducir el caso a mano
+  // para saber cuál fue. Con la etiqueta, el mismo texto que ve el usuario sirve
+  // para encontrar la traza exacta en el log del servidor.
+  return contexto
+    ? `Ha ocurrido un error. Inténtalo de nuevo. (${contexto})`
+    : "Ha ocurrido un error. Inténtalo de nuevo.";
 }
