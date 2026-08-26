@@ -181,6 +181,20 @@ export async function upsertPuestoSalario(input: UpsertSalarioInput) {
     // gestoría lee ese campo y lo etiqueta "Salario neto", un puesto de 1.800 €
     // brutos generaba un contrato que declaraba 1.800 € NETOS.
     const bruto = input.salarioBruto ?? 0;
+    // NORMA: las condiciones del puesto no admiten huecos. Se copian al empleado
+    // al contratar, así que un salario a 0 o unas horas sin poner acababan
+    // dentro de su contrato y en el alta a la gestoría.
+    if (!(bruto > 0)) return { ok: false, error: "El salario bruto del puesto es obligatorio" };
+    if (!input.jornadaContrato?.trim()) return { ok: false, error: "La jornada del puesto es obligatoria" };
+    if (!(Number(input.horasSemanales) > 0)) return { ok: false, error: "Las horas semanales del puesto son obligatorias" };
+    if (input.diasLibres === null || input.diasLibres === undefined) {
+      return { ok: false, error: "Los días libres del puesto son obligatorios" };
+    }
+    if (!input.vacaciones?.trim()) return { ok: false, error: "Las vacaciones del puesto son obligatorias" };
+    if (!input.observaciones?.trim()) return { ok: false, error: "Las observaciones del puesto son obligatorias" };
+    if (!input.objetivos?.some((o) => o.trim())) {
+      return { ok: false, error: "Los objetivos del puesto son obligatorios" };
+    }
     const payload = {
       empresa_id: empresaId,
       puesto_id: input.puestoId,

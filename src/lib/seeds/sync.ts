@@ -22,7 +22,9 @@ import {
 } from "@/features/mi-panel/lib/vacaciones-reglas";
 import { DEPARTAMENTOS_SEED, normalizeDeptoNombre } from "./departamentos";
 import { ROLES_SEED, normalizeRolNombre } from "./roles";
-import { PUESTOS_SEED, normalizePuestoNombre } from "./puestos";
+import {
+  PUESTOS_SEED, normalizePuestoNombre, CONVENIO_SEED, VACACIONES_SEED,
+} from "./puestos";
 import { ORGANIGRAMA_SEED } from "./organigrama";
 import { INSPECTOR_EMAIL_PLANTILLAS_SEED } from "./inspector-email-plantillas";
 import { INSPECCION_PRESENTACION_SEED } from "./inspeccion-presentacion";
@@ -188,13 +190,52 @@ export async function syncPuestosAEmpresa(
       empresa_id: empresaId,
       departamento_id: deptoId,
       nombre: p.nombre,
+      // El puesto nace COMPLETO: si no, al contratar da de alta empleados con
+      // datos incompletos (sus condiciones se copian al empleado).
+      descripcion: p.descripcion,
+      convenio_colectivo: CONVENIO_SEED,
       estado: "activo",
     });
   }
 
   if (aCrear.length === 0) return { creados: 0 };
-  const { error } = await admin.from("puestos").insert(aCrear);
+  const { data: creados, error } = await admin
+    .from("puestos")
+    .insert(aCrear)
+    .select("id, nombre");
   if (error) throw error;
+
+  // Condiciones (nivel 1) de cada puesto recién creado. Sin esto el puesto
+  // quedaría a 0 € y sin jornada, que es justo lo que se quiere evitar.
+  const datosPorNombre = new Map(
+    PUESTOS_SEED.map((p) => [normalizePuestoNombre(p.nombre), p]),
+  );
+  const condiciones = ((creados ?? []) as Array<{ id: string; nombre: string }>)
+    .map((row) => {
+      const p = datosPorNombre.get(normalizePuestoNombre(row.nombre));
+      if (!p) return null;
+      return {
+        empresa_id: empresaId,
+        puesto_id: row.id,
+        nivel: 1,
+        salario_bruto: p.salarioBruto,
+        jornada_contrato: p.jornada,
+        horas_semanales: p.horasSemanales,
+        dias_libres: p.diasLibres,
+        vacaciones: VACACIONES_SEED,
+        observaciones: p.observaciones,
+        objetivos: p.objetivos,
+        estado: "activo",
+      };
+    })
+    .filter(Boolean);
+  if (condiciones.length > 0) {
+    const { error: errCond } = await admin
+      .from("puesto_salarios")
+      .upsert(condiciones, { onConflict: "puesto_id,nivel" });
+    if (errCond) throw errCond;
+  }
+
   return { creados: aCrear.length };
 }
 

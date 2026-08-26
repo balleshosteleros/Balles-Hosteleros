@@ -288,6 +288,13 @@ export async function createPuesto(input: { nombre: string; departamento_id?: st
     if (!empresaId) return { ok: false, error: "No autenticado" };
     const nombre = input.nombre?.trim() ?? "";
     if (!nombre) return { ok: false, error: "El nombre es obligatorio" };
+    // NORMA: no se crea un puesto sin sus datos. Un puesto incompleto da de alta
+    // empleados con datos incompletos, porque al contratar sus condiciones se
+    // copian al empleado y de ahí viajan al contrato y a la gestoría.
+    if (!input.departamento_id) return { ok: false, error: "El departamento es obligatorio" };
+    if (!String(input.descripcion ?? "").trim()) {
+      return { ok: false, error: "La descripción del puesto es obligatoria" };
+    }
 
     // Nombre único por empresa (ignorando mayúsculas/minúsculas y espacios).
     // Dos puestos deben diferenciarse al menos en una letra.
@@ -370,7 +377,15 @@ export async function updatePuesto(input: {
       if (!input.departamento_id) return { ok: false, error: "El departamento es obligatorio" };
       patch.departamento_id = input.departamento_id;
     }
-    if (input.convenio_colectivo !== undefined) patch.convenio_colectivo = input.convenio_colectivo || null;
+    // Un puesto no se puede vaciar: sus datos se copian al empleado al contratar.
+    if (input.descripcion !== undefined && !String(input.descripcion ?? "").trim()) {
+      return { ok: false, error: "La descripción del puesto es obligatoria" };
+    }
+    if (input.convenio_colectivo !== undefined) {
+      const conv = String(input.convenio_colectivo ?? "").trim();
+      if (!conv) return { ok: false, error: "El convenio colectivo es obligatorio" };
+      patch.convenio_colectivo = conv;
+    }
     if (input.tipo_contrato_defecto !== undefined) patch.tipo_contrato_defecto = input.tipo_contrato_defecto || null;
     if (Object.keys(patch).length === 0) return { ok: true };
 
@@ -540,5 +555,110 @@ export async function listPuestosParaCronograma(): Promise<{
   } catch (err) {
     console.error("[rrhh] listPuestosParaCronograma:", err);
     return { ok: false, data: [] };
+  }
+}
+
+/** Un cronograma de la empresa, para elegirlo desde la ficha del puesto. */
+export type CronogramaElegible = {
+  rol: string;
+  departamento: string;
+  /** Nº de tareas que tiene ese cronograma. */
+  tareas: number;
+};
+
+/**
+ * Cronogramas existentes de la empresa, agrupados por rol. Es la lista que se
+ * ofrece en la ficha del puesto para vincular uno.
+ */
+export async function listCronogramasElegibles(): Promise<{
+  ok: boolean;
+  data: CronogramaElegible[];
+}> {
+  try {
+    const { supabase, empresaId } = await getContext();
+    if (!empresaId) return { ok: false, data: [] };
+    const { data, error } = await supabase
+      .from("cronogramas_operativos")
+      .select("rol, departamento")
+      .eq("empresa_id", empresaId)
+      .order("rol");
+    if (error) throw error;
+    // Un cronograma = un rol. Se agrupan las tareas para contarlas.
+    const porRol = new Map<string, CronogramaElegible>();
+    for (const fila of (data ?? []) as Array<{ rol: string | null; departamento: string | null }>) {
+      const rol = (fila.rol ?? "").trim();
+      if (!rol) continue;
+      const actual = porRol.get(rol);
+      if (actual) actual.tareas += 1;
+      else porRol.set(rol, { rol, departamento: fila.departamento ?? "", tareas: 1 });
+    }
+    const lista = [...porRol.values()].sort((a, b) => a.rol.localeCompare(b.rol));
+    return { ok: true, data: lista };
+  } catch (err) {
+    console.error("[rrhh] listCronogramasElegibles:", err);
+    return { ok: false, data: [] };
+  }
+}
+
+/** Cronograma (rol) al que está vinculado un puesto. `rol` null = ninguno. */
+export async function getCronogramaDePuesto(
+  puestoId: string,
+): Promise<{ ok: boolean; rol: string | null }> {
+  try {
+    const { supabase, empresaId } = await getContext();
+    if (!empresaId) return { ok: false, rol: null };
+    const { data, error } = await supabase
+      .from("cronogramas_operativos")
+      .select("rol")
+      .eq("empresa_id", empresaId)
+      .eq("puesto_id", puestoId)
+      .limit(1)
+      .maybeSingle();
+    if (error) throw error;
+    return { ok: true, rol: (data?.rol as string | null) ?? null };
+  } catch (err) {
+    console.error("[rrhh] getCronogramaDePuesto:", err);
+    return { ok: false, rol: null };
+  }
+}
+
+/**
+ * Vincula el puesto al cronograma del rol indicado. `rol` vacío o null lo
+ * desvincula. Varios puestos pueden compartir el mismo cronograma: se apunta
+ * `puesto_id` en todas las tareas de ese rol que aún no tengan puesto, y se
+ * suelta el vínculo anterior del puesto.
+ */
+export async function vincularCronogramaAPuesto(puestoId: string, rol: string | null) {
+  try {
+    const { supabase, empresaId } = await getContext();
+    if (!empresaId) return { ok: false, error: "No autenticado" };
+    const destino = (rol ?? "").trim();
+
+    // Soltar el vínculo anterior: las tareas que apuntaban a este puesto dejan
+    // de hacerlo (el cronograma en sí no se toca, lo pueden usar otros puestos).
+    const { error: errSoltar } = await supabase
+      .from("cronogramas_operativos")
+      .update({ puesto_id: null })
+      .eq("empresa_id", empresaId)
+      .eq("puesto_id", puestoId);
+    if (errSoltar) throw errSoltar;
+
+    if (destino) {
+      const { error: errVincular } = await supabase
+        .from("cronogramas_operativos")
+        .update({ puesto_id: puestoId })
+        .eq("empresa_id", empresaId)
+        .eq("rol", destino)
+        .is("puesto_id", null);
+      if (errVincular) throw errVincular;
+    }
+
+    revalidatePath("/rrhh/puestos");
+    revalidatePath("/direccion/cronogramas");
+    return { ok: true };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "Error desconocido";
+    console.error("[rrhh] vincularCronogramaAPuesto:", msg);
+    return { ok: false, error: msg };
   }
 }
