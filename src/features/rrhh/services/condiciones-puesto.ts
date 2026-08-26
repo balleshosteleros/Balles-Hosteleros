@@ -19,8 +19,6 @@ import type { createAdminClient } from "@/lib/supabase/admin";
 // mantener (y que ademas hacia que TS se atascase al comprobar el encaje).
 type Admin = ReturnType<typeof createAdminClient>;
 
-type Fila = Record<string, unknown>;
-
 export interface CondicionesPuesto {
   nivel: number;
   /** Salario BRUTO pactado: la cifra del convenio y la que se declara a gestoría. */

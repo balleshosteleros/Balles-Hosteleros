@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import type { Bloque, BrandingSnapshot } from "../../types";
 import { BloquePublico } from "./BloquePublico";
 import { BannerCookies, EnlaceConfigurarCookies } from "./BannerCookies";
@@ -85,9 +86,9 @@ function PieLegal() {
   return (
     <nav className="border-t border-white/10 px-4 py-5">
       <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-center gap-x-4 gap-y-2 text-xs text-white/50">
-        <a href="/" className="transition-colors hover:text-white/90">
+        <Link href="/" className="transition-colors hover:text-white/90">
           Inicio
-        </a>
+        </Link>
         <a href="/politica-de-privacidad" className="transition-colors hover:text-white/90">
           Política de privacidad
         </a>

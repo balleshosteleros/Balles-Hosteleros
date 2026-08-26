@@ -53,7 +53,9 @@ export function FicharCard({ jornadaHoy }: Props) {
   const [cargado, setCargado] = useState(false);
   const [habilitado, setHabilitado] = useState(false);
   const [fichaje, setFichaje] = useState<MiFichajeHoy | null>(null);
-  const [elapsed, setElapsed] = useState(0);
+  // Marca de tiempo del ultimo refresco del contador. Solo la escribe el
+  // intervalo (efecto); el render la usa, nunca consulta el reloj.
+  const [ahora, setAhora] = useState<number | null>(null);
 
   const estado = deriveEstado(fichaje);
   const trabajando = estado === "trabajando" || estado === "pausa";
@@ -69,16 +71,14 @@ export function FicharCard({ jornadaHoy }: Props) {
     void refetch();
   }, [refetch]);
 
-  // Contador en vivo mientras hay jornada abierta. El reloj se consulta aqui
-  // (efecto) y no durante el render, que debe ser puro.
+  // Contador en vivo mientras hay jornada abierta. El reloj es un sistema
+  // externo: se consulta aqui (efecto) y nunca durante el render, que debe ser
+  // puro. El primer refresco pinta el tiempo ya corrido sin esperar un segundo.
   const entradaMs = fichaje?.horaEntrada ? new Date(fichaje.horaEntrada).getTime() : null;
   useEffect(() => {
-    if (!trabajando || entradaMs === null) {
-      setElapsed(0);
-      return;
-    }
-    const refrescar = () => setElapsed(Date.now() - entradaMs);
-    refrescar(); // pinta el tiempo ya corrido sin esperar al primer segundo
+    if (!trabajando || entradaMs === null) return;
+    const refrescar = () => setAhora(Date.now());
+    refrescar();
     const i = setInterval(refrescar, 1000);
     return () => clearInterval(i);
   }, [trabajando, entradaMs]);
@@ -102,6 +102,9 @@ export function FicharCard({ jornadaHoy }: Props) {
   if (!habilitado) return null;
 
   const { libra, texto } = textoJornada(jornadaHoy);
+  const elapsed = trabajando && entradaMs !== null && ahora !== null
+    ? Math.max(0, ahora - entradaMs)
+    : 0;
   return (
     <section className="mx-5 mt-4 overflow-hidden rounded-3xl border border-border/60 bg-card shadow-sm">
       {/* Cabecera: jornada de hoy o contador en vivo */}
