@@ -36,7 +36,7 @@ export async function listStock() {
  */
 export async function updateStock(
   id: string,
-  input: { cantidad_minima?: number; cantidad_maxima?: number; notas?: string }
+  input: { cantidad_minima?: number; cantidad_maxima?: number }
 ) {
   try {
     const { supabase } = await getContext();
@@ -45,7 +45,6 @@ export async function updateStock(
       .update({
         cantidad_minima: input.cantidad_minima,
         cantidad_maxima: input.cantidad_maxima,
-        notas: input.notas,
         updated_at: new Date().toISOString(),
       })
       .eq("id", id);

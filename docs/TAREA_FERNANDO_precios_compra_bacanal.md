@@ -5,6 +5,44 @@
 
 ---
 
+## 📦 26-AGO — IVÁN: EL ENCARGO 7 (CUADRAR EL STOCK) YA TIENE HERRAMIENTAS
+
+> Información + una propuesta de trabajo para el gerente. Nada que implementar por vuestra parte.
+
+Tu última tarea pendiente era **cuadrar el stock inflado de los lotes**. Lo hemos medido y el
+diagnóstico completo está en **`docs/STOCK_CUADRE_DIAGNOSTICO.md`**. El resumen:
+
+**El listado de stock casi no tiene respaldo documental.** De los 319 productos con existencias,
+**257 no tienen ni un movimiento** que las justifique: **3.343 unidades sin justificar en
+Bacanal y 2.957 en Habana**. El histórico de almacén entero tiene 63 movimientos, todos de
+albarán y todos de junio-julio. Viene de que los números se volcaron desde el Excel de la
+migración de junio, antes de que existiera el histórico — no es que nadie hiciera nada mal.
+
+**Y hay 12 productos con existencias negativas**, que es imposible: Boquillas a **−150**, carne
+picada a −19 kg, hamburguesas a −11… Se ha descontado de un stock que nunca se dio de alta.
+Esto es lo más urgente, porque mientras haya negativos el sistema propone comprar de más.
+
+**Herramientas, dos y ya están:**
+
+- **Inventarios** (Logística → Inventarios) ya existía y **nunca se ha usado** — cero
+  inventarios registrados. Es el camino bueno: se cuenta, se confirma, y el sistema deja un
+  movimiento por cada diferencia. Reversible si se cuenta mal.
+- **Corregir existencias** (nuevo hoy): botón de balanza en cada producto de Logística → Stock.
+  Para el fallo puntual. **El motivo es obligatorio**, para que dentro de seis meses se pueda
+  auditar de dónde salió cada diferencia.
+- **Deshacer una merma** (nuevo hoy): antes una merma mal apuntada no se podía quitar y había
+  que compensarla con una entrada falsa. Ahora tiene su botón y devuelve exactamente lo que
+  descontó.
+- **Cerrado un agujero:** ya no se puede editar la cantidad a mano sin dejar rastro. La ficha
+  solo cambia mínimo y máximo; la cantidad se mueve por compra, venta, inventario, merma o
+  ajuste, y todas dejan movimiento.
+
+**Propuesta para el gerente:** primero los 12 negativos (un rato), después un inventario por
+categoría empezando por bebidas (lo que más rota y más fácil de contar). Cada categoría que se
+cierre queda cuadrada para siempre.
+
+---
+
 ## 🔧 26-AGO — IMPORTADOR DE CATÁLOGO: 3 COSAS QUE ARREGLAR ANTES DE USARLO
 
 > **Agente de Iván: esto SÍ es para implementar** (a diferencia de las preguntas de negocio de
