@@ -37,6 +37,7 @@ import {
 import { getEmpresasAccesibles, type EmpresaAccesible } from "@/features/empresa/actions/empresas-accesibles-actions";
 import { CopiarEmpleadoDialog } from "@/features/rrhh/components/empleados/CopiarEmpleadoDialog";
 import { HistorialEstadoDialog } from "@/features/rrhh/components/empleados/HistorialEstadoDialog";
+import { getNombreValidadorEmpleado } from "@/features/rrhh/actions/validadores-actions";
 import { PASOS_OMITIDOS_ALTA } from "@/features/rrhh/data/empleado-estado-pasos";
 
 type DepartamentoOpt = { id: string; nombre: string };
@@ -102,6 +103,8 @@ export const GestionEmpleadoCard = forwardRef<GestionEmpleadoCardHandle, Props>(
   const router = useRouter();
   const [quitarEmpresa, setQuitarEmpresa] = useState<{ id: string; nombre: string } | null>(null);
   const [quitando, setQuitando] = useState(false);
+  // Departamento que valida sus solicitudes. Solo lectura: se hereda del puesto.
+  const [validador, setValidador] = useState<string | null>(null);
 
   useEffect(() => {
     listDepartamentos().then((res) => {
@@ -120,6 +123,9 @@ export const GestionEmpleadoCard = forwardRef<GestionEmpleadoCardHandle, Props>(
     });
     getLocalesEmpleado(empleadoId).then((res) => {
       setLocalesSeleccionados(res.ok ? res.data : []);
+    });
+    getNombreValidadorEmpleado(empleadoId).then((res) => {
+      setValidador(res.nombre);
     });
   }, [empleadoId]);
 
@@ -411,6 +417,16 @@ export const GestionEmpleadoCard = forwardRef<GestionEmpleadoCardHandle, Props>(
             />
             <span>Permitir fichaje fuera de los locales asignados</span>
           </label>
+        </div>
+
+        <div className="space-y-2">
+          <Label>Validador de solicitudes</Label>
+          <p className="rounded-md border bg-muted/30 px-3 py-2 text-sm">
+            {validador ?? <span className="text-muted-foreground">Sin definir</span>}
+          </p>
+          <p className="text-[11px] text-muted-foreground">
+            Departamento que aprueba sus solicitudes. Se define en el puesto y el empleado lo hereda.
+          </p>
         </div>
 
         <div className="border-t pt-4 space-y-3">

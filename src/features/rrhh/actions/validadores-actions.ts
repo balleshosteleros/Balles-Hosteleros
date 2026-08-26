@@ -189,3 +189,44 @@ export async function setValidadorDepartamentoPuesto(input: {
 // (era código muerto de cuando el validador era una persona y no un
 // departamento) y, al ser una server action exportada, seguía siendo invocable
 // como endpoint. Las bajas se coordinan desde Reclutamiento.
+
+/**
+ * Nombre del departamento que valida las solicitudes de un empleado, para
+ * mostrarlo en su ficha. Solo lectura: el dato se hereda del puesto y se
+ * cambia allí, no en el empleado.
+ */
+export async function getNombreValidadorEmpleado(
+  empleadoId: string,
+): Promise<{ ok: boolean; nombre: string | null }> {
+  try {
+    let admin;
+    try {
+      admin = createAdminClient();
+    } catch {
+      return { ok: false, nombre: null };
+    }
+
+    const { data: emp } = await admin
+      .from("empleados")
+      .select("empresa_id, validador_departamento_id")
+      .eq("id", empleadoId)
+      .maybeSingle();
+    if (!emp) return { ok: false, nombre: null };
+
+    await requireAdminUser({ empresaIds: [emp.empresa_id as string] });
+
+    const deptoId = (emp.validador_departamento_id as string | null) ?? null;
+    if (!deptoId) return { ok: true, nombre: null };
+
+    const { data: depto } = await admin
+      .from("departamentos")
+      .select("nombre")
+      .eq("id", deptoId)
+      .maybeSingle();
+
+    return { ok: true, nombre: (depto?.nombre as string | null) ?? null };
+  } catch (err) {
+    console.error("[rrhh] getNombreValidadorEmpleado:", err);
+    return { ok: false, nombre: null };
+  }
+}
