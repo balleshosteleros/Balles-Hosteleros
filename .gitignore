@@ -97,6 +97,8 @@ Sin confirmar*
 # Artefactos de Playwright (logs y outputs de tests locales)
 .playwright-cli/
 output/
+test-results/
+playwright-report/
 
 # Videos de referencia (Banktrack, demos, etc.)
 Bancktrack/
