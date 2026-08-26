@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo, useEffect, useCallback, type ReactNode } from "react";
+import { useSincronizacionEnVivo } from "@/shared/hooks/useSincronizacionEnVivo";
 import { usePathname } from "next/navigation";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import {
@@ -109,6 +110,15 @@ export function ProcesosView() {
   useEffect(() => {
     loadProcesos();
   }, [loadProcesos]);
+
+  // Sincronizacion en vivo: un proceso o un documento nuevo aparece sin
+  // recargar. Se pausa con el alta o el detalle abiertos.
+  useSincronizacionEnVivo({
+    tablas: ["procesos_juridicos", "documentos_juridicos"],
+    empresaId: empresaActual.id,
+    onCambio: () => void loadProcesos(),
+    pausado: modalOpen || !!detalleItem,
+  });
 
   const isCerrado = (e: EstadoProceso) => e === "CERRADO";
 

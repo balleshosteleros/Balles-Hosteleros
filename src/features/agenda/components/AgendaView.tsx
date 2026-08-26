@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useSincronizacionEnVivo } from "@/shared/hooks/useSincronizacionEnVivo";
 import {
   Search,
   Plus,
@@ -119,6 +120,14 @@ export function AgendaView() {
   useEffect(() => {
     cargarContactos();
   }, [cargarContactos]);
+
+  // Sincronizacion en vivo: la agenda es compartida, un contacto que anade otro
+  // aparece sin recargar. Se pausa con el dialogo de alta/edicion abierto.
+  useSincronizacionEnVivo({
+    tablas: ["contactos_agenda"],
+    onCambio: () => void cargarContactos(),
+    pausado: dialogOpen,
+  });
 
   // Al entrar en la agenda y ver los contactos, marcamos como vistos para ESTE
   // usuario: el badge de "contactos nuevos" se pone a 0 solo para él (los demás

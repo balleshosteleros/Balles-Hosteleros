@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useSincronizacionEnVivo } from "@/shared/hooks/useSincronizacionEnVivo";
 import {
   AlertCircle,
   Bot,
@@ -160,6 +161,16 @@ export function ResenasPipeline() {
   useEffect(() => {
     cargar();
   }, [cargar, empresaActual.id]);
+
+  // Sincronizacion en vivo: las resenas entran solas segun se sincronizan desde
+  // Google, y varias personas responden a la vez. Se pausa con el detalle o los
+  // agentes IA abiertos para no pisar una respuesta a medio redactar.
+  useSincronizacionEnVivo({
+    tablas: ["resenas"],
+    empresaId: empresaActual.id,
+    onCambio: () => void cargar(),
+    pausado: agentesOpen || !!detalleResena,
+  });
 
   // ─── Filtrado por búsqueda + período ─────────────────────────
   const rango = useMemo(

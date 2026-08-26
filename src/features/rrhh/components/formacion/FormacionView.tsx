@@ -14,6 +14,7 @@
 // los datos reales.
 
 import { useState, useMemo, useEffect } from "react";
+import { useSincronizacionEnVivo } from "@/shared/hooks/useSincronizacionEnVivo";
 import {
   BookOpen,
   GraduationCap,
@@ -84,6 +85,15 @@ export function FormacionView() {
       alive = false;
     };
   }, [empresaActual.dbId]);
+
+  // Sincronizacion en vivo: el panel de RRHH ve entrar el progreso de la gente
+  // segun avanza en el portal, y los cambios de curso que hace otro admin. No se
+  // pausa: aqui no se escribe (la edicion vive en el editor de curso), asi que
+  // refrescar no puede quitar nada.
+  useSincronizacionEnVivo({
+    tablas: ["formacion_cursos", "formacion_lecciones", "formacion_progreso"],
+    onCambio: () => void hydrate(""),
+  });
 
   const cursosEmpresa = useMemo(
     () => cursos.filter((c) => c.empresaId === empresaActual.id),
