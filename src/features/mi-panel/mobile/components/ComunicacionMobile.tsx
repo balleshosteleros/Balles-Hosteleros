@@ -532,16 +532,30 @@ export function ComunicacionMobile() {
                 <button onClick={() => detenerGrabacion(false)} className="flex h-9 w-9 items-center justify-center rounded-full bg-red-600 text-white active:bg-red-700" aria-label="Enviar"><Send className="h-4 w-4" /></button>
               </div>
             ) : (
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-end gap-1.5">
                 <button onClick={() => fileInputRef.current?.click()} disabled={subiendo} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-muted-foreground active:bg-muted" aria-label="Adjuntar">
                   {subiendo ? <Loader2 className="h-5 w-5 animate-spin" /> : <Paperclip className="h-5 w-5" />}
                 </button>
-                <input
+                {/* Crece con el texto (hasta 6 líneas) para poder releer lo
+                    largo —y lo que devuelve la IA— antes de enviarlo. */}
+                <textarea
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && enviar()}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      void enviar();
+                    }
+                  }}
+                  rows={1}
                   placeholder={`Mensaje a ${canal.nombre}…`}
-                  className="h-11 flex-1 rounded-full border-0 bg-muted/60 px-4 text-sm outline-none"
+                  className="max-h-36 flex-1 resize-none overflow-y-auto rounded-2xl border-0 bg-muted/60 px-4 py-2.5 text-sm outline-none"
+                  style={{ height: "auto", minHeight: "2.75rem" }}
+                  ref={(el) => {
+                    if (!el) return;
+                    el.style.height = "auto";
+                    el.style.height = `${Math.min(el.scrollHeight, 144)}px`;
+                  }}
                 />
                 {/* Mejora el borrador: tono formal y sin escribir en caliente. */}
                 {input.trim() && (

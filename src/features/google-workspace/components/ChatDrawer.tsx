@@ -1058,7 +1058,13 @@ export function ChatDrawer({ children }: { children: ReactNode }) {
 
       <SheetContent
         side="right"
-        className="flex flex-col gap-0 p-0 [&>button]:hidden"
+        // El panel por defecto ocupa media pantalla (50vw) y con la lista de
+        // grupos al lado la conversación se quedaba en un tercio: un mensaje
+        // medianamente largo salía en columna estrecha e ilegible, y el texto
+        // que devuelve la IA (más largo) no había forma de revisarlo.
+        // Le damos ~3/4 de pantalla, con un tope para que en monitores muy
+        // anchos no quede una línea de texto interminable.
+        className="flex flex-col gap-0 p-0 [&>button]:hidden sm:w-[78vw] sm:max-w-[1500px]"
       >
         <SheetTitle className="sr-only">Comunicación interna</SheetTitle>
 
@@ -1342,7 +1348,9 @@ export function ChatDrawer({ children }: { children: ReactNode }) {
                             )}
                             <div
                               className={cn(
-                                "max-w-[70%] rounded-2xl px-3.5 py-2 shadow-sm",
+                                // 85% en vez de 70%: con el panel ya ancho, dejar
+                                // casi un tercio en blanco solo estrechaba el texto.
+                                "max-w-[85%] rounded-2xl px-3.5 py-2 shadow-sm",
                                 propio
                                   // Propio: verde muy suave (estilo WhatsApp), texto normal.
                                   ? "bg-[#d9fdd3] dark:bg-emerald-900/40 text-foreground rounded-br-md"
@@ -1439,7 +1447,9 @@ export function ChatDrawer({ children }: { children: ReactNode }) {
                       </Button>
                     </div>
                   ) : (
-                    <div className="flex items-center gap-2">
+                    // items-end: al crecer la caja, los botones se quedan abajo
+                    // en vez de flotar en el centro.
+                    <div className="flex items-end gap-2">
                       <Button variant="ghost" size="icon" className="h-10 w-10 shrink-0">
                         <Smile className="h-5 w-5" />
                       </Button>
@@ -1453,12 +1463,34 @@ export function ChatDrawer({ children }: { children: ReactNode }) {
                       >
                         {subiendo ? <Loader2 className="h-5 w-5 animate-spin" /> : <Paperclip className="h-5 w-5" />}
                       </Button>
-                      <Input
+                      {/* Caja que CRECE con el texto (hasta 8 líneas). Antes era
+                          de una sola línea: un mensaje largo —y sobre todo el que
+                          devuelve la IA— quedaba oculto y no había forma de
+                          revisarlo antes de enviarlo.
+                          Enter envía; Mayús+Enter hace salto de línea. */}
+                      <textarea
                         value={input}
                         onChange={(e) => setInput(e.target.value)}
-                        onKeyDown={(e) => e.key === "Enter" && enviar()}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" && !e.shiftKey) {
+                            e.preventDefault();
+                            void enviar();
+                          }
+                        }}
+                        rows={1}
                         placeholder={canal.soloAdminsEnvian ? "Solo administradores pueden enviar" : `Mensaje a ${canal.nombre}…`}
-                        className="flex-1 h-11 rounded-full bg-muted/50 border-0 px-4"
+                        className="flex-1 max-h-48 resize-none overflow-y-auto rounded-2xl bg-muted/50 border-0 px-4 py-2.5 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+                        style={{
+                          // Alto automático: se ajusta al contenido en cada render
+                          // sin necesidad de medir con JavaScript.
+                          height: "auto",
+                          minHeight: "2.75rem",
+                        }}
+                        ref={(el) => {
+                          if (!el) return;
+                          el.style.height = "auto";
+                          el.style.height = `${Math.min(el.scrollHeight, 192)}px`;
+                        }}
                         disabled={canal.soloAdminsEnvian}
                       />
                       {/* Mejora el borrador antes de enviarlo: lo pasa a tono
@@ -1513,7 +1545,8 @@ export function ChatDrawer({ children }: { children: ReactNode }) {
               </DialogTitle>
             </DialogHeader>
             {dlgLectores && (
-              <p className="rounded-lg bg-muted/50 px-3 py-2 text-sm text-muted-foreground line-clamp-3">
+              /* Sin recorte a 3 líneas: se lee entero, con scroll si hace falta. */
+              <p className="max-h-40 overflow-y-auto whitespace-pre-wrap break-words rounded-lg bg-muted/50 px-3 py-2 text-sm text-muted-foreground">
                 {dlgLectores.texto || "Adjunto"}
               </p>
             )}
