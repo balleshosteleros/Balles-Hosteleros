@@ -98,10 +98,6 @@ export async function proxy(request: NextRequest) {
       .or(`ultima_actividad.is.null,ultima_actividad.lt.${cutoffActividad}`)
   }
 
-  // Paso 3: autorización por módulo (solo para prefijos protegidos).
-  const moduloReq = moduloRequerido(pathname)
-  if (!moduloReq) return sessionResponse
-
   // Cliente SSR solo para signOut si la cuenta está inactiva (abajo).
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -124,7 +120,8 @@ export async function proxy(request: NextRequest) {
     // respuesta tal cual ("saltando enforcement"): el guardia se rendía y dejaba
     // pasar a CUALQUIERA a CUALQUIER módulo con solo escribir la URL. Si no se
     // puede comprobar, no se pasa.
-    console.error('[proxy] SUPABASE_SERVICE_ROLE_KEY no configurada — se deniega el acceso a los módulos')
+    console.error('[proxy] SUPABASE_SERVICE_ROLE_KEY no configurada — se deniega el acceso')
+    await supabase.auth.signOut()
     return NextResponse.redirect(new URL('/', request.url))
   }
   const admin = createSupabaseClient(adminUrl, serviceKey, {
@@ -137,22 +134,41 @@ export async function proxy(request: NextRequest) {
     .eq('user_id', user.id)
     .maybeSingle()
 
-  // Cuenta deshabilitada (p.ej. el empleado fue dado de baja en RRHH y el
-  // trigger sync_profile_estado_from_empleado puso estado_acceso=Inactivo).
-  // Cerramos sesión y mandamos al login con un flag para que la UI lo explique.
+  // Paso 3: PUERTA DE ACCESO. Va ANTES del filtro por módulo a propósito.
+  // Si se comprobara solo en rutas de módulo (/rrhh, /gerencia…), una cuenta
+  // Inactiva o sin empresa seguiría entrando por Mi Panel, el móvil (/m) o la
+  // portada — que es justo lo que pasaba: una cuenta "Inactiva" y sin empresa
+  // navegaba con normalidad y ni siquiera aparecía en Ajustes → Usuarios
+  // (esa pantalla filtra por empresa activa, así que era invisible).
   const estadoAcceso = (profile?.estado_acceso as string | null) ?? null
-  if (estadoAcceso === 'Inactivo') {
-    await supabase.auth.signOut()
-    const url = new URL('/', request.url)
-    url.searchParams.set('error', 'cuenta_inactiva')
-    return NextResponse.redirect(url)
-  }
-
   const rolId = (profile?.rol_id as string | null) ?? null
   const rolLabel = (profile?.rol_label as string | null) ?? null
   const empresaId = (profile?.empresa_id as string | null) ?? null
 
-  if ((!rolId && !rolLabel) || !empresaId) {
+  // Sin ficha en `usuarios`: cuenta huérfana en Auth. No debe navegar.
+  // Inactivo: cuenta deshabilitada (p.ej. baja en RRHH → el trigger
+  // sync_profile_estado_from_empleado pone estado_acceso=Inactivo).
+  // Sin empresa: cuenta a medio crear; no pertenece a ningún sitio.
+  const motivoBloqueo = !profile
+    ? 'sin_ficha'
+    : estadoAcceso === 'Inactivo'
+      ? 'cuenta_inactiva'
+      : !empresaId
+        ? 'sin_empresa'
+        : null
+
+  if (motivoBloqueo) {
+    await supabase.auth.signOut()
+    const url = new URL('/', request.url)
+    url.searchParams.set('error', motivoBloqueo === 'cuenta_inactiva' ? 'cuenta_inactiva' : 'sin_acceso')
+    return NextResponse.redirect(url)
+  }
+
+  // Paso 4: autorización por módulo (solo para prefijos protegidos).
+  const moduloReq = moduloRequerido(pathname)
+  if (!moduloReq) return sessionResponse
+
+  if (!rolId && !rolLabel) {
     return NextResponse.redirect(new URL('/', request.url))
   }
 

@@ -34,6 +34,9 @@ const ERROR_MESSAGES: Record<string, string> = {
   sin_password: SIN_PASSWORD_MESSAGE,
   sesion_expirada: SESION_EXPIRADA_MESSAGE,
   sin_acceso_google: GENERIC_ACCESS_MESSAGE,
+  // Cuenta sin ficha en `usuarios` o sin empresa asignada: el proxy la expulsa
+  // en cualquier ruta, no solo en los módulos.
+  sin_acceso: GENERIC_ACCESS_MESSAGE,
 }
 
 export function LoginForm() {
