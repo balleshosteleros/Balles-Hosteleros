@@ -210,9 +210,39 @@ como venta) + Cubo Coctel Mix.
 
 ## ✅ IMPORTADOR DE CATÁLOGO — YA CONSTRUIDO (26-ago, commit `8dd904ae`)
 
-> **Fernando: esto ya no es una propuesta, está hecho y en el repo.** Iván dijo "sí, prepáramelo".
+> **Fernando: esto ya no es una propuesta, está hecho y en el repo.**
 > Sigue SIN ejecutarse contra producción: la pantalla existe, se ha probado en vivo contra Ágora
 > en modo lectura, pero **no se ha importado nada todavía**. La decisión de darle al botón es de Iván.
+
+### ⚠️ Por qué se ha escrito código, si tu documento decía "anotar y parar"
+
+**Tienes razón en la regla y hay que decirlo claro.** Tu nota del 15-ago (`2461b088`) dice que el
+agente de Iván debe **ANOTAR y PARAR**, que la ejecución es tuya, y que la única excepción son las
+tareas que Iván se asigne a sí mismo — avisando antes de tocar ficheros compartidos de logística.
+**Este importador es exactamente ese caso: Iván se lo asignó a sí mismo, en directo.**
+
+Cómo fue, por orden, para que puedas juzgarlo:
+
+1. Se te contestaron las 4 preguntas y **no se tocó nada** — solo el documento, como pedías.
+2. Al preparar la respuesta se leyó Ágora en vivo (solo lectura) y salieron los 3 hallazgos.
+3. Iván pidió: *"hazme una propuesta de lo que ves y que se permita cambiar en la visual"*. Se
+   escribió la propuesta **en este documento, sin código**.
+4. Iván dijo literalmente: **"si prepáramelo"**. Ahí es cuando se construyó.
+
+O sea: **no se te ha pisado la tarea por iniciativa propia, la reasignó Iván.** Aun así, tres
+cosas para que el reparto siga limpio:
+
+- **No se ha ejecutado nada contra producción.** Ni una fila escrita, ni en Supabase ni en Ágora.
+  Todo lo que se ha hecho contra prod es lectura. La importación real la dispara quien vosotros
+  decidáis, cuando lo decidáis.
+- **Se han tocado ficheros de tu lane** (logística/albaranes es tuyo). Los ficheros son **nuevos**,
+  ninguno de los tuyos se ha modificado: no hay conflicto de merge esperable. La única excepción
+  es `nav-routes.tsx`, donde se ha añadido una línea al menú.
+- **Si prefieres reescribirlo a tu manera, adelante.** La parte que de verdad importa no es el
+  código, es lo que se aprendió probándolo contra Ágora en vivo: los 3 errores de lectura, el
+  filtro por familia y lo del prefijo "Prebeach". Eso vale igual aunque tires la pantalla entera.
+
+Si esto rompe vuestro reparto, dilo y se revierte — es un commit aislado (`8dd904ae`).
 
 **Ruta:** Logística → **IMPORTAR CATÁLOGO** (`/logistica/importar-catalogo`)
 
@@ -224,6 +254,25 @@ como venta) + Cubo Coctel Mix.
 - `src/features/logistica/actions/importador-catalogo-actions.ts` — `previsualizar…` (no escribe)
   e `importar…` (solo lo aprobado).
 - `src/features/logistica/components/ImportarCatalogoView.tsx` — la pantalla.
+
+**Cómo funciona, para cuando la abras:**
+
+Al entrar no hace nada: hay un botón **"Leer el catálogo de Ágora"**. Se lee a mano a propósito
+—no queremos que la pantalla interrogue al TPV sola cada vez que alguien la abre—. Al pulsarlo
+sale una cabecera con **el límite de lectura escrito**, tal y como planteaste: *"He leído 639
+productos. Traigo nombre, precio de la lista de carta, coste del almacén, familia, stock y si se
+vende por peso. Descarto color de botón, tiempo de preparación, códigos de barras y las tarifas
+que no son la de carta"*. Y dice cuántos productos se dejan fuera por ser del otro local.
+
+Debajo, **las filas agrupadas por decisión** (no alfabéticamente), cada grupo con su casilla de
+**"Aceptar todo"** — que es lo que hace la tarea rápida cuando tienes 97 productos delante. Cada
+fila lleva un desplegable para cambiar la decisión (y entonces la fila salta de grupo), el motivo
+escrito en cristiano, y los avisos en ámbar debajo. Donde hace falta criterio humano aparece el
+campo: precio si Ágora no lo trae, y la cantidad del enlace si es una bebida. Abajo, fija, una
+barra con el recuento y el botón **"Importar los N aprobados"**.
+
+Por defecto vienen marcados venta, compra y vincular; **revisar y descartar vienen desmarcados**,
+así que aunque alguien le dé al botón sin mirar, no entra basura.
 
 **Resultado real de la prueba en vivo (26-ago, sin escribir nada):**
 
@@ -260,8 +309,24 @@ de compra por palabras completas (nunca al revés: "Cola" no casa con "Coca Cola
 candidatas empatadas no adivina** — `Boom-Boom` tiene `Prebeach Boom-Boom` y `Bengalas Boom-boom`,
 así que lo deja para que lo decida una persona.
 
-**Lo que sigue pendiente de Iván:** confirmar la lista de "descartar" y decidir quién escribe las
-~200 recetas que faltan (eso el importador no lo resuelve).
+**⚠️ Lo que este importador NO resuelve — y es lo gordo:**
+
+Aunque metas los ~66 productos que faltan, **el stock seguirá sin bajar al vender**, porque el
+cuello de botella no es el catálogo: son **las ~200 recetas sin escribir** (Habana tiene 1
+escandallo; Bacanal, 22). Ver el bloque de la P3 más arriba. El importador deja el catálogo
+cuadrado con el TPV y enlaza las bebidas que puede, pero un plato sin escandallo no descuenta
+nada haga lo que haga.
+
+**Pendiente de Iván (lo único que le queda):**
+1. Confirmar la lista de "descartar" — sobre todo que el aforo de discoteca de Habana (Entrada
+   Puerta, Reservado, Suplementos) no debe entrar en Logística.
+2. Decidir **quién escribe las ~200 recetas** y en qué orden.
+
+**Pendiente vuestro (no necesita a Iván):**
+- Los 2 pares de bebida rotos: `Gyozas Vegetales` (Bacanal) y `Absolut` (Habana) venden y no
+  descuentan.
+- El cálculo de `ventas_dia_promedio`, que ya podéis montar: la P3 está resuelta (manda el
+  escandallo de cocina, y `producto_composicion` es lo que hay que leer).
 
 ---
 
