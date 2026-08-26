@@ -1,5 +1,7 @@
 import "server-only";
 
+import type { createAdminClient } from "@/lib/supabase/admin";
+
 /**
  * Condiciones del puesto → empleado (snapshot versionado).
  *
@@ -12,19 +14,22 @@ import "server-only";
  * mucho UNA vigente (`vigente_hasta IS NULL`, garantizado por índice único).
  */
 
-// Cliente admin de Supabase (createAdminClient()). Se tipa laxo a propósito para
-// no acoplar este helper al tipado generado.
-type Admin = {
-  from: (t: string) => any;
-};
+// Cliente admin de Supabase. Se usa el tipo REAL de createAdminClient() en vez
+// de describir la API a mano: asi no hay `any` ni una interfaz paralela que
+// mantener (y que ademas hacia que TS se atascase al comprobar el encaje).
+type Admin = ReturnType<typeof createAdminClient>;
+
+type Fila = Record<string, unknown>;
 
 export interface CondicionesPuesto {
   nivel: number;
   /** Salario BRUTO pactado: la cifra del convenio y la que se declara a gestoría. */
   salario_bruto: number | null;
-  nomina_neta: number;
+  /** Neto: `null` mientras no exista calculo real. NUNCA se rellena con el bruto. */
+  nomina_neta: number | null;
   efectivo_extra: number;
-  salario_neto: number;
+  /** Neto: `null` mientras no exista calculo real. NUNCA se rellena con el bruto. */
+  salario_neto: number | null;
   jornada_contrato: string | null;
   horas_semanales: number | null;
   dias_libres: number | null;
@@ -50,16 +55,25 @@ export async function leerCondicionesPuesto(
     .limit(1);
   const row = data?.[0];
   if (!row) return null;
+  // Los `numeric` de Postgres llegan como string: se convierten aquí para que
+  // el resto del flujo (contrato, gestoria) reciba numeros de verdad.
+  const num = (v: unknown): number | null => {
+    if (v === null || v === undefined || v === "") return null;
+    const n = Number(v);
+    return Number.isFinite(n) ? n : null;
+  };
+  const texto = (v: unknown): string | null =>
+    typeof v === "string" ? v : v === null || v === undefined ? null : String(v);
   return {
-    nivel: (row.nivel as number | null) ?? 1,
-    salario_bruto: row.salario_bruto,
-    nomina_neta: row.nomina_neta,
-    efectivo_extra: row.efectivo_extra,
-    salario_neto: row.salario_neto,
-    jornada_contrato: row.jornada_contrato,
-    horas_semanales: row.horas_semanales,
-    dias_libres: row.dias_libres,
-    vacaciones: row.vacaciones,
+    nivel: num(row.nivel) ?? 1,
+    salario_bruto: num(row.salario_bruto),
+    nomina_neta: num(row.nomina_neta),
+    efectivo_extra: num(row.efectivo_extra) ?? 0,
+    salario_neto: num(row.salario_neto),
+    jornada_contrato: texto(row.jornada_contrato),
+    horas_semanales: num(row.horas_semanales),
+    dias_libres: num(row.dias_libres),
+    vacaciones: texto(row.vacaciones),
     horario_semanal: row.horario_semanal,
   };
 }
