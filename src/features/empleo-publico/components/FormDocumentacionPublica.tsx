@@ -77,7 +77,7 @@ interface DocState {
   /**
    * "ok" si la IA detectó algo, "fallo" si no, "na" si es PDF/no procesado,
    * "ajeno" si el titular no coincide y "menor" si el documento acredita que
-   * la persona no alcanza la edad mínima legal para trabajar.
+   * la persona no es mayor de edad (la empresa no admite menores).
    */
   deteccion: "idle" | "procesando" | "ok" | "fallo" | "na" | "ajeno" | "menor";
 }
@@ -148,7 +148,7 @@ function SubidaDoc({
           )}
           {doc.deteccion === "menor" && (
             <span className="inline-flex items-center gap-1 text-destructive shrink-0">
-              <AlertTriangle className="h-3.5 w-3.5" /> Documento no admitido: no se alcanza la edad mínima legal
+              <AlertTriangle className="h-3.5 w-3.5" /> Documento no admitido: es necesario ser mayor de edad
             </span>
           )}
           {/* Papelera para quitar el documento y subir otro. En móvil siempre
@@ -250,8 +250,8 @@ export function FormDocumentacionPublica({ token, empresaSlug }: Props) {
             marcarDeteccion(campo, "menor");
             mostrarError(
               `No podemos admitir este documento: según la fecha de nacimiento que figura en él ` +
-              `(${formatearFechaES(data.fecha_nacimiento)}) tienes ${edad} años. La edad mínima legal ` +
-              `para trabajar en España es de ${EDAD_MINIMA_LABORAL} años, por lo que no es posible ` +
+              `(${formatearFechaES(data.fecha_nacimiento)}) tienes ${edad} años. Para incorporarte a ` +
+              `la empresa es necesario ser mayor de edad (${EDAD_MINIMA_LABORAL} años), por lo que no es posible ` +
               `continuar con la incorporación. Si la fecha no es correcta, revisa que la foto sea nítida ` +
               `y vuelve a subirla; si es correcta, ponte en contacto con Recursos Humanos.`,
             );
@@ -355,9 +355,9 @@ export function FormDocumentacionPublica({ token, empresaSlug }: Props) {
     // Edad mínima legal: bloquea también si la fecha se escribe a mano.
     const motivoEdad = motivoFechaNacimientoNoValida(normalizarFechaISO(fechaNacimiento));
     if (motivoEdad) return motivoEdad;
-    // Documento rechazado por no alcanzar la edad mínima: no se puede continuar.
+    // Documento rechazado por no ser mayor de edad: no se puede continuar.
     if (dniAnverso.deteccion === "menor" || dniReverso.deteccion === "menor")
-      return `No podemos continuar: el documento aportado acredita que no alcanzas los ${EDAD_MINIMA_LABORAL} años, edad mínima legal para trabajar en España.`;
+      return `No podemos continuar: el documento aportado acredita que no eres mayor de edad. Para incorporarte a la empresa es necesario tener ${EDAD_MINIMA_LABORAL} años cumplidos.`;
     // El anverso del DNI con IA fallida obliga a rehacer la foto (regla acordada).
     if (dniAnverso.deteccion === "fallo")
       return "No hemos podido leer tu DNI/NIE. Vuelve a hacer la foto del anverso con buena luz.";
@@ -379,7 +379,7 @@ export function FormDocumentacionPublica({ token, empresaSlug }: Props) {
   }
 
   /**
-   * Fecha máxima seleccionable: el día en que se cumplen los 16 años. El propio
+   * Fecha máxima seleccionable: el día en que se cumplen los 18 años. El propio
    * calendario impide ya elegir una fecha de quien no puede ser contratado.
    */
   const fechaMaximaNacimiento = (() => {

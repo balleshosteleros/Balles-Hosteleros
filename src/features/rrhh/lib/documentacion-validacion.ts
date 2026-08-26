@@ -50,10 +50,14 @@ export function esIbanValido(valor: string): boolean {
 }
 
 /**
- * Edad mínima legal para trabajar en España (Estatuto de los Trabajadores, art. 6):
- * ningún menor de 16 años puede ser contratado. Es un límite duro, no un aviso.
+ * Edad mínima para incorporarse a la empresa: 18 años (mayoría de edad).
+ *
+ * La ley española permite contratar desde los 16 con autorización de los padres
+ * o tutores y con jornada limitada (sin nocturnidad ni horas extra). La empresa
+ * NO admite menores de edad, así que el límite se fija en 18. Es un límite duro,
+ * no un aviso: bloquea la documentación y el envío.
  */
-export const EDAD_MINIMA_LABORAL = 16;
+export const EDAD_MINIMA_LABORAL = 18;
 
 /** Edad por encima de la cual la fecha se considera un error de lectura. */
 export const EDAD_MAXIMA_RAZONABLE = 75;
@@ -89,7 +93,7 @@ export function motivoFechaNacimientoNoValida(
   const edad = calcularEdad(fechaISO, hoy);
   if (edad === null) return "La fecha de nacimiento no es válida.";
   if (edad < EDAD_MINIMA_LABORAL) {
-    return `Según el documento aportado tienes ${edad} años. La edad mínima legal para trabajar en España es de ${EDAD_MINIMA_LABORAL} años, así que no podemos continuar con la incorporación. Si la fecha está mal leída, corrígela; si es correcta, contacta con Recursos Humanos.`;
+    return `Según el documento aportado tienes ${edad} años. Para incorporarte a la empresa es necesario ser mayor de edad (${EDAD_MINIMA_LABORAL} años), así que no podemos continuar con la incorporación. Si la fecha está mal leída, corrígela; si es correcta, contacta con Recursos Humanos.`;
   }
   if (edad > EDAD_MAXIMA_RAZONABLE) {
     return `La fecha de nacimiento indica ${edad} años, lo que parece un error de lectura del documento. Revísala antes de enviar.`;
