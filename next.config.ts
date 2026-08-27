@@ -17,6 +17,19 @@ const QR_HOST = process.env.NEXT_PUBLIC_QR_HOST?.trim() || 'qr.balleshosteleros.
 const SOFTWARE_HOST =
   process.env.NEXT_PUBLIC_SOFTWARE_HOST?.trim() || 'software.balleshosteleros.com'
 
+// Subdominios del dominio principal que sirven una PÁGINA WEB de empresa y no la
+// app (p.ej. `bacanal.balleshosteleros.com`). Sirven para enseñar una web antes de
+// apuntarle su dominio real, sin tocar el DNS de producción del cliente.
+//
+// Va AQUÍ y no solo en el proxy por lo mismo que el QR: "/" se sirve como página
+// estática resuelta en el routing de Vercel, ANTES del middleware, así que el
+// rewrite a `/__site` del proxy no llegaba a ejecutarse y salía la app (login).
+// Debe coincidir con `hostsPreviewWeb()` en hostname-resolver.ts.
+const PREVIEW_WEB_HOSTS = (process.env.PAGINAS_WEB_PREVIEW_HOSTS ?? '')
+  .split(',')
+  .map((h) => h.trim().toLowerCase())
+  .filter(Boolean)
+
 const nextConfig: NextConfig = {
   // Versión del build horneada en el bundle del cliente. El auto-actualizador
   // de la PWA (VersionAutoUpdate) la compara contra /api/version para recargar
@@ -65,6 +78,22 @@ const nextConfig: NextConfig = {
         has: [{ type: 'host', value: QR_HOST }],
         destination: '/q/:codigo',
       },
+      // Subdominios de preview de páginas web: sirven la web de la empresa desde
+      // la ruta pública `/__site`, igual que hace el proxy con un dominio propio.
+      // La portada y las páginas internas (política de privacidad, etc.) van por
+      // separado porque el destino cambia: "" vs el slug de la ruta.
+      ...PREVIEW_WEB_HOSTS.flatMap((host) => [
+        {
+          source: '/',
+          has: [{ type: 'host' as const, value: host }],
+          destination: '/__site',
+        },
+        {
+          source: '/:ruta((?!__site|_next/|api/|favicon|robots|sitemap)[^/.]+)',
+          has: [{ type: 'host' as const, value: host }],
+          destination: '/__site/:ruta',
+        },
+      ]),
     ]
   },
   async redirects() {
