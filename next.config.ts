@@ -23,7 +23,7 @@ const SOFTWARE_HOST =
 //
 // Va AQUÍ y no solo en el proxy por lo mismo que el QR: "/" se sirve como página
 // estática resuelta en el routing de Vercel, ANTES del middleware, así que el
-// rewrite a `/__site` del proxy no llegaba a ejecutarse y salía la app (login).
+// rewrite a `/sitio-publico` del proxy no llegaba a ejecutarse y salía la app (login).
 // Debe coincidir con `hostsPreviewWeb()` en hostname-resolver.ts.
 const PREVIEW_WEB_HOSTS = (process.env.PAGINAS_WEB_PREVIEW_HOSTS ?? '')
   .split(',')
@@ -92,19 +92,19 @@ const nextConfig: NextConfig = {
         destination: '/q/:codigo',
       },
       // Subdominios de preview de páginas web: sirven la web de la empresa desde
-      // la ruta pública `/__site`, igual que hace el proxy con un dominio propio.
+      // la ruta pública `/sitio-publico`, igual que hace el proxy con un dominio propio.
       // La portada y las páginas internas (política de privacidad, etc.) van por
       // separado porque el destino cambia: "" vs el slug de la ruta.
       ...PREVIEW_WEB_HOSTS.flatMap((host) => [
         {
           source: '/',
           has: [{ type: 'host' as const, value: host }],
-          destination: '/__site',
+          destination: '/sitio-publico',
         },
         {
-          source: '/:ruta((?!__site|_next/|api/|favicon|robots|sitemap)[^/.]+)',
+          source: '/:ruta((?!sitio-publico|_next/|api/|favicon|robots|sitemap)[^/.]+)',
           has: [{ type: 'host' as const, value: host }],
-          destination: '/__site/:ruta',
+          destination: '/sitio-publico/:ruta',
         },
       ]),
     ]

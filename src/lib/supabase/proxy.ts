@@ -22,7 +22,7 @@ export type UpdateSessionResult = {
 // sesión. Si no fuera pública, el proxy la mandaría al login antes de ejecutarse y
 // nunca llegaría a borrar las cookies (que son HttpOnly: solo el servidor puede).
 const AUTH_PATHS = ['/', '/salir', '/callback', '/auth/confirm', '/forgot-password', '/update-password', '/check-email', '/acceso-demo']
-const PUBLIC_PREFIXES = ['/carta', '/__site', '/api/google/connect', '/api/google/vincular-callback', '/empleo', '/api/empleo', '/documentacion', '/api/documentacion', '/firmar', '/inspectores', '/inspecciones/verificar', '/v', '/r', '/api/visita',
+const PUBLIC_PREFIXES = ['/carta', '/sitio-publico', '/api/google/connect', '/api/google/vincular-callback', '/empleo', '/api/empleo', '/documentacion', '/api/documentacion', '/firmar', '/inspectores', '/inspecciones/verificar', '/v', '/r', '/api/visita',
   // Redirección de códigos QR: la abre un cliente anónimo con el móvil desde una
   // carta impresa. Si exigiera login, el QR mandaría al cliente a la pantalla de
   // acceso del sistema en vez de a la carta.
@@ -59,7 +59,7 @@ const PUBLIC_PREFIXES = ['/carta', '/__site', '/api/google/connect', '/api/googl
  * La web de un restaurante enlaza su carta y su portal de empleo (botones "Ver
  * carta digital" y "Trabaja con nosotros"), pero esas pantallas son módulos del
  * software, no páginas del CMS. Sin esta excepción, el rewrite las convertía en
- * `/__site/carta/...`, el resolvedor buscaba una página con ese slug, no la
+ * `/sitio-publico/carta/...`, el resolvedor buscaba una página con ese slug, no la
  * encontraba y el visitante veía un 404 al pulsar el botón.
  */
 const RUTAS_PUBLICAS_EN_DOMINIO_CLIENTE = [
@@ -132,7 +132,7 @@ export async function updateSession(
     const isAsset = /\.[a-z0-9]+$/i.test(pathname) || pathname.startsWith('/api/') || pathname.startsWith('/_next/')
     if (!isAsset && !esRutaPublicaDeCliente(pathname)) {
       const target = request.nextUrl.clone()
-      target.pathname = `/__site${pathname === '/' ? '' : pathname}`
+      target.pathname = `/sitio-publico${pathname === '/' ? '' : pathname}`
       const res = NextResponse.rewrite(target)
       res.headers.set('x-paginas-web-host', rawHost)
       return { response: res, user: null }
