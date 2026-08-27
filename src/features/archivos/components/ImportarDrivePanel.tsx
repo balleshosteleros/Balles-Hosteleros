@@ -221,6 +221,17 @@ export function ImportarDrivePanel() {
     ? inventario.carpetas.filter((c) => !mapeo[c.id]).length
     : 0;
 
+  // Lo que se va a copiar de verdad, para saber a qué se atiene uno antes de
+  // lanzar una copia que puede durar horas.
+  const seleccion = inventario
+    ? inventario.carpetas
+        .filter((c) => mapeo[c.id])
+        .reduce(
+          (acc, c) => ({ archivos: acc.archivos + c.archivos, bytes: acc.bytes + c.bytes }),
+          { archivos: 0, bytes: 0 },
+        )
+    : { archivos: 0, bytes: 0 };
+
   return (
     <div className="space-y-5 py-2">
       <div>
@@ -345,11 +356,27 @@ export function ImportarDrivePanel() {
             </p>
           )}
 
+          {seleccion.archivos > 0 && !importando && (
+            <p className="text-xs">
+              Se van a copiar{" "}
+              <span className="font-medium">
+                {seleccion.archivos.toLocaleString("es-ES")} archivos ·{" "}
+                {tamano(seleccion.bytes)}
+              </span>
+              {seleccion.bytes > 20 * 1024 ** 3 && (
+                <span className="text-amber-600">
+                  {" "}
+                  · con este volumen la copia dura horas
+                </span>
+              )}
+            </p>
+          )}
+
           <Button
             size="sm"
             className="gap-1 bg-cyan-600 text-white hover:bg-cyan-700"
             onClick={() => void onImportar()}
-            disabled={importando}
+            disabled={importando || seleccion.archivos === 0}
           >
             {importando ? "Importando…" : "Importar"}
           </Button>
