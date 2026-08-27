@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import {
   Accordion,
   AccordionContent,
@@ -20,6 +21,17 @@ import { ArchivosConfigPanel } from "@/features/archivos/components/ArchivosConf
 const SIN_BADGE = new Set<ToolNotifKey>(["videovigilancia", "aplicaciones", "archivos"]);
 
 export function HerramientasTab() {
+  // Al volver de Google tras dar el permiso de Drive se abre "Archivos" sola:
+  // si no, se aterriza en Ajustes con todo plegado y hay que buscar a mano
+  // dónde estabas.
+  const [abiertos, setAbiertos] = useState<string[]>(() => {
+    if (typeof window === "undefined") return [];
+    return new URLSearchParams(window.location.search).get("google") ===
+      "vinculada"
+      ? ["archivos"]
+      : [];
+  });
+
   return (
     <div className="space-y-4">
       <div>
@@ -31,7 +43,12 @@ export function HerramientasTab() {
         </p>
       </div>
 
-      <Accordion type="multiple" className="rounded-lg border bg-card">
+      <Accordion
+        type="multiple"
+        value={abiertos}
+        onValueChange={setAbiertos}
+        className="rounded-lg border bg-card"
+      >
         {HERRAMIENTAS.map(({ id, nombre, descripcion, Icon, colorKey }) => (
           <AccordionItem
             key={id}

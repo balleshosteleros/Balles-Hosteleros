@@ -73,6 +73,24 @@ export function ImportarDrivePanel() {
     void listCarpetasRaiz().then((r) => r.ok && setRaices(r.data));
   }, [cargarHistorial]);
 
+  // Vuelta de Google tras dar el permiso. Sin esto se regresaba a Ajustes sin
+  // ningún mensaje y con el panel cerrado: parecía que no había pasado nada y
+  // había que volver a buscar la pantalla a mano.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("google") !== "vinculada") return;
+
+    // Se limpia de la URL para que no se repita al recargar.
+    params.delete("google");
+    const limpia = `${window.location.pathname}${params.toString() ? `?${params}` : ""}`;
+    window.history.replaceState(null, "", limpia);
+
+    toast.success("Permiso de Drive concedido");
+    // Se reintenta solo: el usuario ya dijo lo que quería hacer.
+    void onConectar();
+    // Solo al montar, con lo que traiga la URL.
+  }, []);
+
   const onConectar = async () => {
     setCargando(true);
     setFaltaPermiso(false);
@@ -170,11 +188,12 @@ export function ImportarDrivePanel() {
         <div className="rounded-md border border-amber-300 bg-amber-50 p-3 dark:border-amber-800 dark:bg-amber-950/40">
           <p className="flex items-start gap-1.5 text-xs text-amber-800 dark:text-amber-300">
             <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-            Tu conexión con Google es anterior al permiso de Drive. Vuelve a
-            conectar la cuenta y acepta el acceso a Drive para poder importar.
+            Tu cuenta de Google ya está conectada para el correo y el
+            calendario, pero le falta el permiso para leer Drive. Se pide una
+            sola vez: Google te preguntará y volverás aquí.
           </p>
           <Button size="sm" className="mt-2" onClick={reconectar}>
-            Reconectar cuenta de Google
+            Dar permiso de Drive
           </Button>
         </div>
       )}
