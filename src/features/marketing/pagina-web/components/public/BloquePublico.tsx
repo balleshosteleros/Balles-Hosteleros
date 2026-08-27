@@ -810,12 +810,30 @@ function VideoPublico({ bloque }: { bloque: Extract<Bloque, { tipo: "video" }> }
             controls
             autoPlay={autoplay}
             muted={muted}
-            className="w-full h-full"
+            loop={autoplay}
+            playsInline
+            // `metadata` (y no "auto") para que el navegador no se baje los ~2,5 MB
+            // del vídeo antes de que al visitante le dé tiempo a verlo: con
+            // autoplay se descarga igual, pero deja de bloquear la primera pintura.
+            preload={autoplay ? "auto" : "metadata"}
+            poster={posterDeVideo(url)}
+            className="w-full h-full object-cover"
           />
         )}
       </div>
     </section>
   );
+}
+
+/**
+ * Los vídeos migrados traen su fotograma como `<nombre>-poster.jpg` en el mismo
+ * bucket. Sirve de cartel mientras carga: sin él la portada arranca en negro.
+ */
+function posterDeVideo(url: string): string | undefined {
+  if (!url.includes("/storage/v1/object/public/")) return undefined;
+  const m = url.match(/^(.*)\.(mp4|webm|mov)(\?.*)?$/i);
+  if (!m) return undefined;
+  return imagenOptimizada(`${m[1]}-poster.jpg`, { width: 1200, quality: 70 });
 }
 
 function toYouTubeEmbed(url: string, autoplay: boolean, muted: boolean): string {
