@@ -43,6 +43,15 @@ export function MobileBottomNav() {
             <li key={item.href} className="flex-1">
               <Link
                 href={item.href}
+                // Sin prefetch: el layout de /m es `force-dynamic`, así que cada
+                // prefetch NO es gratis — ejecuta el layout entero en el
+                // servidor (sesión, guard de empleado, datos). Con la barra
+                // siempre en pantalla, Next los lanzaba todos a la vez y en los
+                // logs se veían GET simultáneos a tareas, solicitudes, points,
+                // perfil, pagos, llamar, horario… en el mismo segundo. Esa
+                // avalancha es la que tumbaba la pestaña en móviles con poca
+                // memoria. La navegación sigue siendo instantánea al tocar.
+                prefetch={false}
                 className={cn(
                   // 5 iconos dejan ~62 px por celda en un iPhone SE: la
                   // etiqueta se achica un punto y no se parte en dos líneas.

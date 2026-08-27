@@ -216,15 +216,27 @@ export function ArchivosExplorador({ variante, abierto = true, renderAcciones }:
     setCargando(false);
   }, []);
 
+  // Carpetas cuya carga ya falló: no se vuelve a intentar en esta sesión de la
+  // vista. Sin esto, el fallo entraba en bucle (ver el comentario del efecto).
+  const carpetasFallidas = useRef<Set<string>>(new Set());
+
   const cargarCarpeta = useCallback(async (id: string) => {
     setCargando(true);
     const res = await getContenidoCarpeta(id);
     if (res.ok) {
+      carpetasFallidas.current.delete(id);
       setCarpeta(res.data.carpeta);
       setRuta(res.data.ruta);
       setSubcarpetas(res.data.subcarpetas);
       setArchivos(res.data.archivos);
     } else {
+      // Volver a la raíz al fallar cambia `carpetaId`, que es dependencia del
+      // efecto de abajo: se recargaba, volvía a fallar y vuelta a empezar. En
+      // los logs eran 60 POST a /m/archivos en pocos segundos, con ráfagas de
+      // más de 50 peticiones por segundo que acababan matando la pestaña
+      // ("This page couldn't load"). Se anota la carpeta como fallida para no
+      // reintentarla y se sale a la raíz una sola vez.
+      carpetasFallidas.current.add(id);
       toast.error(res.error);
       setCarpetaId(null);
     }
@@ -233,8 +245,13 @@ export function ArchivosExplorador({ variante, abierto = true, renderAcciones }:
 
   useEffect(() => {
     if (!abierto) return;
-    if (carpetaId) void cargarCarpeta(carpetaId);
-    else void cargarRaices();
+    if (carpetaId) {
+      // Ya falló antes: no se reintenta (evita el bucle error → raíz → error).
+      if (carpetasFallidas.current.has(carpetaId)) return;
+      void cargarCarpeta(carpetaId);
+    } else {
+      void cargarRaices();
+    }
   }, [abierto, carpetaId, cargarCarpeta, cargarRaices]);
 
   /* ── Subida ─────────────────────────────────────────────────────────── */

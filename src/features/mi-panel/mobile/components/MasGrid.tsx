@@ -71,6 +71,15 @@ export function MasGrid() {
           <Link
             key={it.href}
             href={it.href}
+            // Sin prefetch: son 16 accesos visibles a la vez en la pantalla de
+            // inicio y el layout de /m es `force-dynamic`, así que cada uno
+            // ejecutaba el layout completo en el servidor solo por estar en
+            // pantalla. En los logs salían 16 GET simultáneos (fichajes,
+            // cronograma, horario, pagos, perfil, points…) en el mismo segundo,
+            // más de 50 peticiones por segundo en total. Eso es lo que dejaba
+            // sin memoria a la pestaña. Al tocar, la navegación sigue siendo
+            // igual de rápida.
+            prefetch={false}
             className="group relative flex aspect-square flex-col items-center justify-center gap-[4cqi] overflow-hidden rounded-2xl border text-center font-medium shadow-sm transition-all active:scale-[0.97]"
             style={{
               borderColor: `hsl(${it.hue} 60% 60% / 0.25)`,
