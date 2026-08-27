@@ -40,7 +40,7 @@ interface Props {
 const PLACEHOLDER = `Ejemplo:
 - El neto de Marta Ruiz no coincide con su contrato (aparece 1.180 € y debería ser 1.320 €).
 - Falta la nómina de Javier Soto, que se incorporó el día 3.
-- El TC1 no cuadra con la suma de las nóminas: hay 214,50 € de diferencia.`;
+- Los TC1 no cuadran con la suma de las nóminas: hay 214,50 € de diferencia.`;
 
 export function RechazarNominasDialog({
   open,
@@ -75,7 +75,7 @@ export function RechazarNominasDialog({
             <div className="text-amber-900 dark:text-amber-200 space-y-1">
               <p>
                 Se eliminarán las <b>{nominasEnMes} nómina{nominasEnMes === 1 ? "" : "s"}</b> de este
-                mes y su TC1, y la gestoría recibirá un correo con tus anomalías y un enlace para
+                mes y sus TC1, y la gestoría recibirá un correo con tus anomalías y un enlace para
                 subirlo <b>todo de nuevo</b>.
               </p>
               <p>Nada de esto llega al empleado: las nóminas solo se publican al confirmarlas.</p>

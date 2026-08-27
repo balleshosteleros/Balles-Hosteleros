@@ -12,6 +12,7 @@ import "server-only";
  * que `gestoria_contrato_tokens`: solo se persiste el HMAC del token.
  */
 
+import { createHash } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { generarToken, hashToken, compararToken } from "@/features/rrhh/services/firmas/crypto";
 import { sendEmail } from "@/lib/email/send";
@@ -537,8 +538,13 @@ export async function guardarTc1Gestoria(
     return { ok: false, error: "Las nóminas de este mes ya están cerradas por la empresa.", status: 409 };
   }
 
-  const path = `${row.empresa_id}/${row.periodo}/TC1.${ext}`;
   const buffer = Buffer.from(await file.arrayBuffer());
+  // La huella va en el nombre del archivo: la gestoría manda a menudo DOS TC1 del
+  // mismo mes (la liquidación ordinaria y la complementaria de vacaciones) y con
+  // un nombre fijo el segundo pisaba al primero. Re-subir el MISMO documento cae
+  // en el mismo path, así que tampoco se cuenta dos veces.
+  const sha256 = createHash("sha256").update(buffer).digest("hex");
+  const path = `${row.empresa_id}/${row.periodo}/TC1-${sha256.slice(0, 12)}.${ext}`;
   const up = await admin.storage
     .from(BUCKET_NOMINAS)
     .upload(path, buffer, { upsert: true, contentType: file.type });
@@ -549,17 +555,18 @@ export async function guardarTc1Gestoria(
   // el TC1 se guarda igual (sin comprobación automática).
   const datos = await extraerDatosTc1(buffer, file.type);
 
-  const { error } = await admin.from("rrhh_nominas_mes").upsert(
+  const { error } = await admin.from("rrhh_nominas_tc1").upsert(
     {
       empresa_id: row.empresa_id,
       periodo: row.periodo,
-      tc1_path: path,
-      tc1_nombre: file.name,
-      tc1_importe: datos.liquidoTotal,
-      tc1_trabajadores: datos.trabajadores,
-      tc1_subido_en: new Date().toISOString(),
+      path,
+      nombre: file.name,
+      importe: datos.liquidoTotal,
+      trabajadores: datos.trabajadores,
+      periodo_documento: datos.periodo || null,
+      subido_en: new Date().toISOString(),
     },
-    { onConflict: "empresa_id,periodo" },
+    { onConflict: "empresa_id,path" },
   );
   if (error) return { ok: false, error: error.message, status: 500 };
 
@@ -578,13 +585,17 @@ const CUADRE_TOLERANCIA_EUR = 0;
 export interface CuadreTc1 {
   /** Total de cotizaciones sumado de las nóminas (trabajador + empresa). */
   totalNominas: number;
-  /** Líquido del TC1, si se ha podido leer. */
+  /** SUMA de los líquidos de TODOS los TC1 del mes, si se han podido leer. */
   totalTc1: number | null;
   diferencia: number | null;
   cuadra: boolean;
   /** Nº de nóminas volcadas frente a los trabajadores que declara el TC1. */
   numNominas: number;
   trabajadoresTc1: number | null;
+  /** Cuántos TC1 hay adjuntos al mes (ordinaria + complementarias). */
+  numTc1: number;
+  /** Alguno de los TC1 se guardó sin líquido legible: el cuadre no es fiable. */
+  tc1SinImporte: number;
 }
 
 /**
@@ -613,16 +624,29 @@ export async function cuadrarTc1ConNominas(
       ) * 100,
     ) / 100;
 
-  const { data: mes } = await admin
-    .from("rrhh_nominas_mes")
-    .select("tc1_importe, tc1_trabajadores")
+  // TODOS los TC1 del mes: la ordinaria y las complementarias son cargos
+  // distintos que la empresa ingresa por separado, así que el total del mes es la
+  // suma de sus líquidos.
+  const { data: tc1s } = await admin
+    .from("rrhh_nominas_tc1")
+    .select("importe, trabajadores")
     .eq("empresa_id", empresaId)
-    .eq("periodo", periodo)
-    .maybeSingle();
+    .eq("periodo", periodo);
 
-  const totalTc1 = mes?.tc1_importe != null ? Number(mes.tc1_importe) : null;
+  const lista = tc1s ?? [];
+  const conImporte = lista.filter((t) => t.importe != null);
+  const totalTc1 =
+    conImporte.length > 0
+      ? Math.round(conImporte.reduce((a, t) => a + Number(t.importe), 0) * 100) / 100
+      : null;
   const diferencia =
     totalTc1 != null ? Math.round((totalTc1 - totalNominas) * 100) / 100 : null;
+
+  // Trabajadores: se suman los declarados por cada recibo. En un mes con
+  // complementaria, la misma persona puede contar en los dos; es orientativo.
+  const trabajadores = lista
+    .map((t) => (t.trabajadores != null ? Number(t.trabajadores) : null))
+    .filter((n): n is number => n != null);
 
   return {
     totalNominas,
@@ -631,7 +655,9 @@ export async function cuadrarTc1ConNominas(
     // Sin importe de TC1 no se puede afirmar que NO cuadre: se da por bueno.
     cuadra: diferencia == null || Math.abs(diferencia) <= CUADRE_TOLERANCIA_EUR,
     numNominas: (filas ?? []).length,
-    trabajadoresTc1: mes?.tc1_trabajadores != null ? Number(mes.tc1_trabajadores) : null,
+    trabajadoresTc1: trabajadores.length > 0 ? trabajadores.reduce((a, n) => a + n, 0) : null,
+    numTc1: lista.length,
+    tc1SinImporte: lista.length - conImporte.length,
   };
 }
 
@@ -647,13 +673,12 @@ async function cerrarSiEstanLosDosDocumentos(
   admin: SupabaseClient,
   row: { id: string; empresa_id: string; periodo: string },
 ): Promise<void> {
-  const { data: mes } = await admin
-    .from("rrhh_nominas_mes")
-    .select("tc1_path")
+  const { count: numTc1 } = await admin
+    .from("rrhh_nominas_tc1")
+    .select("id", { count: "exact", head: true })
     .eq("empresa_id", row.empresa_id)
-    .eq("periodo", row.periodo)
-    .maybeSingle();
-  if (!mes?.tc1_path) return; // falta el TC1: el enlace sigue abierto
+    .eq("periodo", row.periodo);
+  if (!numTc1) return; // falta el TC1: el enlace sigue abierto
 
   const { count } = await admin
     .from("rrhh_pagos_nominas")

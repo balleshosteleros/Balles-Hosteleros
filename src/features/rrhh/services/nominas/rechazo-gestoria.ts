@@ -122,36 +122,34 @@ async function limpiarImportesDeNomina(
   }
 }
 
-/** Borra el TC1 del mes (documento y datos). Devuelve si había alguno. */
+/**
+ * Borra TODOS los TC1 del mes (documentos y datos). Puede haber varios: la
+ * liquidación ordinaria y las complementarias. Devuelve si había alguno.
+ */
 async function borrarTc1DelMes(
   admin: SupabaseClient,
   empresaId: string,
   periodo: string,
 ): Promise<boolean> {
   const { data } = await admin
-    .from("rrhh_nominas_mes")
-    .select("tc1_path")
+    .from("rrhh_nominas_tc1")
+    .select("id, path")
     .eq("empresa_id", empresaId)
-    .eq("periodo", periodo)
-    .maybeSingle();
-  const path = (data?.tc1_path as string | null) ?? null;
-  if (!path) return false;
+    .eq("periodo", periodo);
+  const filas = data ?? [];
+  if (filas.length === 0) return false;
 
   await admin
-    .from("rrhh_nominas_mes")
-    .update({
-      tc1_path: null,
-      tc1_nombre: null,
-      tc1_importe: null,
-      tc1_trabajadores: null,
-      tc1_subido_en: null,
-      tc1_subido_por: null,
-    })
+    .from("rrhh_nominas_tc1")
+    .delete()
     .eq("empresa_id", empresaId)
     .eq("periodo", periodo);
 
-  const { error } = await admin.storage.from(BUCKET_NOMINAS).remove([path]);
-  if (error) console.error("[nominas-rechazo] TC1 huérfano:", error.message);
+  const paths = filas.map((f) => f.path as string).filter(Boolean);
+  if (paths.length > 0) {
+    const { error } = await admin.storage.from(BUCKET_NOMINAS).remove(paths);
+    if (error) console.error("[nominas-rechazo] TC1 huérfano:", error.message);
+  }
   return true;
 }
 
@@ -198,7 +196,7 @@ async function avisarGestoriaRechazo(
            Volver a subir las nóminas
          </a>
          <p style="color:#888;font-size:12px;margin-top:8px">
-           Subid de nuevo <b>todas</b> las nóminas del mes y el TC1, ya corregidos.
+           Subid de nuevo <b>todas</b> las nóminas del mes y sus TC1, ya corregidos.
            Lo anterior se ha eliminado del sistema.
          </p>
        </div>`

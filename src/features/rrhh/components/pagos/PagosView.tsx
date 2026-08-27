@@ -284,7 +284,7 @@ export function PagosView() {
     confirmado: false,
     confirmadoEn: null,
     puedeGestionar: false,
-    tc1: null,
+    tc1: [],
     rechazado: false,
     rechazadoEn: null,
     rechazoMotivo: null,
@@ -294,6 +294,8 @@ export function PagosView() {
   const [showRechazo, setShowRechazo] = useState(false);
   const [rechazando, setRechazando] = useState(false);
   const [nominasEnMes, setNominasEnMes] = useState(0);
+  // Suma de SS (trabajador + empresa) de las nóminas del mes: el contraste de los TC1.
+  const [ssNominasMes, setSsNominasMes] = useState(0);
   const [incidenciasNominas, setIncidenciasNominas] = useState(0);
   const [showConfig, setShowConfig] = useState(false);
   const [enviando, setEnviando] = useState(false);
@@ -344,6 +346,15 @@ export function PagosView() {
     // Cuántas hay en total: es lo que se elimina si el mes se devuelve, y lo que
     // decide si hay algo que devolver.
     setNominasEnMes(lista.length);
+    // Cotización total del mes según las nóminas (trabajador + empresa), sin las
+    // denegadas: es contra esto contra lo que cuadran los TC1.
+    setSsNominasMes(
+      Math.round(
+        lista
+          .filter((n) => n.estado !== "denegada")
+          .reduce((a, n) => a + n.ssEmpleado + n.ssEmpresa, 0) * 100,
+      ) / 100,
+    );
   }, [periodo]);
 
   useEffect(() => {
@@ -379,6 +390,21 @@ export function PagosView() {
       setEstadoSubidaMeses(mapa);
     });
   }, [showDocsMes, periodo, mesesSubida, nominasEnMes]);
+
+  // ── Cuadre de los TC1 del mes ─────────────────────────────────────────────
+  // El TC1 y las nóminas son el MISMO dinero de dos formas: el recibo agrupa por
+  // concepto de cotización y las nóminas lo reparten por trabajador. Con varias
+  // liquidaciones (ordinaria + complementaria de vacaciones) el total del mes es
+  // la suma de todas.
+  const hayTc1 = estadoMes.tc1.length > 0;
+  const tc1ConImporte = estadoMes.tc1.filter((t) => t.importe != null);
+  const tc1SinImporte = estadoMes.tc1.length - tc1ConImporte.length;
+  const totalTc1 =
+    tc1ConImporte.length > 0
+      ? Math.round(tc1ConImporte.reduce((a, t) => a + (t.importe ?? 0), 0) * 100) / 100
+      : null;
+  // Al céntimo: no se admite holgura, igual que en el cuadre del servidor.
+  const cuadraTc1 = totalTc1 == null || Math.abs(totalTc1 - ssNominasMes) < 0.005;
 
   const mesSubidaLabel = useMemo(() => nombreMesLargo(mesSubida), [mesSubida]);
   const estadoMesSubida = estadoSubidaMeses[mesSubida];
@@ -693,7 +719,18 @@ export function PagosView() {
         return;
       }
       await refrescarEstadoMes();
-      toast.success(`TC1 de ${mesLabelNominas} adjuntado.`);
+      // Aviso (no error): el complementario de vacaciones declara el mes al que
+      // se imputa la cotización, que puede ser anterior al mes en que se ingresa.
+      const otroMes =
+        res.periodoDocumento && res.periodoDocumento !== periodo
+          ? `El documento declara ${nombreMesLargo(res.periodoDocumento)}; se ha sumado a ${mesLabelNominas}.`
+          : undefined;
+      toast.success(
+        res.importe != null
+          ? `TC1 adjuntado · ${fmt(res.importe)}`
+          : "TC1 adjuntado. No se pudo leer el importe: revisa el cuadre a mano.",
+        { description: otroMes },
+      );
     } catch {
       toast.error("No se pudo subir el TC1.");
     } finally {
@@ -701,20 +738,20 @@ export function PagosView() {
     }
   };
 
-  const abrirTc1 = async () => {
-    const res = await getTc1MesUrl(periodo);
+  const abrirTc1 = async (tc1Id: string) => {
+    const res = await getTc1MesUrl(tc1Id);
     if (res.ok) window.open(res.url, "_blank", "noopener,noreferrer");
     else toast.error(res.error ?? "No se pudo abrir el TC1.");
   };
 
-  const quitarTc1 = async () => {
+  const quitarTc1 = async (tc1Id: string, nombre: string) => {
     const ok = await confirm({
-      title: `Quitar el TC1 de ${mesLabelNominas}`,
-      description: "Se borrará el documento del mes. Podrás volver a adjuntarlo cuando quieras.",
+      title: `Quitar ${nombre}`,
+      description: "Se borrará este recibo del mes. Podrás volver a adjuntarlo cuando quieras.",
       confirmLabel: "Quitar TC1",
     });
     if (!ok) return;
-    const res = await borrarTc1Mes(periodo);
+    const res = await borrarTc1Mes(tc1Id);
     if (!res.ok) {
       toast.error(res.error ?? "No se pudo quitar el TC1.");
       return;
@@ -1698,61 +1735,105 @@ export function PagosView() {
               )}
             </div>
 
-            {/* 2) El TC1: documento de EMPRESA, no de un empleado */}
+            {/* 2) Los TC1: documentos de EMPRESA, no de un empleado. Puede
+                haber VARIOS en un mes (la liquidación ordinaria y la
+                complementaria de vacaciones): la Seguridad Social las cobra por
+                separado, así que el total del mes es la SUMA de sus importes. */}
             <div className="rounded-lg border p-4">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <p className="text-sm font-medium">TC1 · Recibo de cotizaciones</p>
-                  {/* El TC1 va SIEMPRE al mes que se está viendo, no al elegido
-                      arriba: se nombra el mes para que no se confundan. */}
+                  <p className="text-sm font-medium">TC1 · Recibos de cotizaciones</p>
+                  {/* Los TC1 van SIEMPRE al mes que se está viendo, no al elegido
+                      arriba para las nóminas: se nombra el mes para no confundir. */}
                   <p className="mt-0.5 text-xs text-muted-foreground">
-                    {estadoMes.tc1
-                      ? `Ya adjuntado a ${mesLabelNominas}. Debe cuadrar con la suma de las nóminas.`
-                      : `Documento de la empresa con las bases y cuotas de ${mesLabelNominas}.`}
+                    {hayTc1
+                      ? `Adjuntados a ${mesLabelNominas}. Su suma debe cuadrar con la Seguridad Social de las nóminas.`
+                      : `Documentos de la empresa con las bases y cuotas de ${mesLabelNominas}. Si hay liquidación complementaria (vacaciones), adjunta las dos.`}
                   </p>
-                  {estadoMes.tc1 && (
-                    <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
-                      <button
-                        type="button"
-                        onClick={abrirTc1}
-                        className="font-medium underline-offset-2 hover:underline"
-                      >
-                        Ver documento
-                      </button>
-                      {estadoMes.tc1.importe != null && (
-                        <span className="tabular-nums text-muted-foreground">
-                          {estadoMes.tc1.importe.toLocaleString("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
-                        </span>
-                      )}
-                      {estadoMes.tc1.trabajadores != null && (
-                        <span className="text-muted-foreground">{estadoMes.tc1.trabajadores} trabajadores</span>
-                      )}
-                    </div>
-                  )}
                 </div>
-                {estadoMes.tc1 ? (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="shrink-0 gap-1.5 text-muted-foreground hover:text-destructive"
-                    onClick={quitarTc1}
-                  >
-                    <X className="h-4 w-4" />
-                    Quitar
-                  </Button>
-                ) : (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="shrink-0 gap-1.5"
-                    disabled={subiendoTc1}
-                    onClick={() => tc1InputRef.current?.click()}
-                  >
-                    {subiendoTc1 ? <Clock className="h-4 w-4 animate-pulse" /> : <Upload className="h-4 w-4" />}
-                    {subiendoTc1 ? "Subiendo…" : "Adjuntar"}
-                  </Button>
-                )}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="shrink-0 gap-1.5"
+                  disabled={subiendoTc1 || estadoMes.confirmado}
+                  onClick={() => tc1InputRef.current?.click()}
+                >
+                  {subiendoTc1 ? <Clock className="h-4 w-4 animate-pulse" /> : <Upload className="h-4 w-4" />}
+                  {subiendoTc1 ? "Leyendo…" : hayTc1 ? "Añadir otro" : "Adjuntar"}
+                </Button>
               </div>
+
+              {hayTc1 && (
+                <div className="mt-3 space-y-2">
+                  {estadoMes.tc1.map((t) => (
+                    <div key={t.id} className="flex items-start justify-between gap-3 rounded-md border px-3 py-2">
+                      <div className="min-w-0">
+                        <button
+                          type="button"
+                          onClick={() => abrirTc1(t.id)}
+                          className="truncate text-xs font-medium underline-offset-2 hover:underline"
+                        >
+                          {t.nombre}
+                        </button>
+                        <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                          {t.importe != null ? (
+                            <span className="tabular-nums">{fmt(t.importe)}</span>
+                          ) : (
+                            <span className="text-amber-600">Importe no leído</span>
+                          )}
+                          {t.trabajadores != null && <span>{t.trabajadores} trabajadores</span>}
+                          {/* Un complementario de vacaciones declara el mes al que
+                              se imputa la cotización, no el mes en que se paga. */}
+                          {t.periodoDocumento && t.periodoDocumento !== periodo && (
+                            <span className="text-amber-600">
+                              El documento es de {nombreMesLargo(t.periodoDocumento)}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="shrink-0 gap-1.5 text-muted-foreground hover:text-destructive"
+                        disabled={estadoMes.confirmado}
+                        onClick={() => quitarTc1(t.id, t.nombre)}
+                      >
+                        <X className="h-4 w-4" />
+                        Quitar
+                      </Button>
+                    </div>
+                  ))}
+
+                  {/* Cuadre: la suma de los TC1 frente a la Seguridad Social de
+                      las nóminas del mes. Es el mismo dinero de dos formas. */}
+                  <div className="rounded-md bg-muted/50 px-3 py-2 text-xs">
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-muted-foreground">
+                        Total TC1{estadoMes.tc1.length > 1 ? ` (${estadoMes.tc1.length} recibos)` : ""}
+                      </span>
+                      <span className="tabular-nums font-medium">
+                        {totalTc1 != null ? fmt(totalTc1) : "—"}
+                      </span>
+                    </div>
+                    <div className="mt-1 flex items-center justify-between gap-3">
+                      <span className="text-muted-foreground">Seguridad Social de las nóminas</span>
+                      <span className="tabular-nums font-medium">{fmt(ssNominasMes)}</span>
+                    </div>
+                    {totalTc1 != null && (
+                      <p className={`mt-1.5 ${cuadraTc1 ? "text-muted-foreground" : "text-destructive font-medium"}`}>
+                        {cuadraTc1
+                          ? "Cuadra con las nóminas."
+                          : `No cuadra: ${fmt(Math.abs(totalTc1 - ssNominasMes))} de diferencia.`}
+                      </p>
+                    )}
+                    {tc1SinImporte > 0 && (
+                      <p className="mt-1.5 text-amber-600">
+                        {tc1SinImporte} recibo{tc1SinImporte === 1 ? "" : "s"} sin importe leído: revisa el cuadre a mano.
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 

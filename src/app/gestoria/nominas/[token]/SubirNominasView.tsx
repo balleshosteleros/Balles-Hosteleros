@@ -17,6 +17,8 @@ interface MesIncorrecto {
 }
 
 interface Cuadre {
+  /** Cuántos TC1 hay adjuntos (ordinaria + complementarias). */
+  numTc1?: number;
   totalNominas: number;
   totalTc1: number | null;
   diferencia: number | null;
@@ -77,10 +79,13 @@ export function SubirNominasView({ endpoint, empresaNombre, mesLabel }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
   const tc1Ref = useRef<HTMLInputElement>(null);
   const [subiendoTc1, setSubiendoTc1] = useState(false);
-  const [tc1Subido, setTc1Subido] = useState(false);
+  // Nombres de los TC1 ya subidos. Es una LISTA porque un mes puede llevar varias
+  // liquidaciones (la ordinaria y la complementaria de vacaciones), que la
+  // Seguridad Social emite y cobra por separado.
+  const [tc1Subidos, setTc1Subidos] = useState<string[]>([]);
 
   // El TC1 se sube por separado: es un documento de la EMPRESA (bases y cuotas de
-  // toda la plantilla), no una nómina, así que no pasa por la lectura por IA.
+  // toda la plantilla), no una nómina.
   const subirTc1 = async (f: File | null) => {
     if (!f) return;
     setError(null);
@@ -95,7 +100,7 @@ export function SubirNominasView({ endpoint, empresaNombre, mesLabel }: Props) {
       fd.append("documento", "tc1");
       const res = await fetch(endpoint, { method: "POST", body: fd });
       const json = await res.json();
-      if (json.ok) setTc1Subido(true);
+      if (json.ok) setTc1Subidos((prev) => [...prev, f.name]);
       else setError(json.error ?? "No se pudo subir el TC1.");
     } catch {
       setError("No se pudo conectar. Inténtalo de nuevo.");
@@ -181,7 +186,8 @@ export function SubirNominasView({ endpoint, empresaNombre, mesLabel }: Props) {
               archivos sueltos. Se leen y se asignan a cada trabajador automáticamente.
             </li>
             <li>
-              <b>El TC1</b> (Recibo de Liquidación de Cotizaciones) de la empresa.
+              <b>El TC1</b> (Recibo de Liquidación de Cotizaciones) de la empresa. Si el mes lleva
+              liquidación complementaria (vacaciones), adjunta también ese recibo.
             </li>
           </ol>
         </div>
@@ -190,11 +196,11 @@ export function SubirNominasView({ endpoint, empresaNombre, mesLabel }: Props) {
         <div className="mt-4 rounded-xl border border-zinc-200 p-4">
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0">
-              <p className="text-sm font-semibold text-zinc-900">TC1 · Recibo de cotizaciones</p>
+              <p className="text-sm font-semibold text-zinc-900">TC1 · Recibos de cotizaciones</p>
               <p className="mt-0.5 text-xs text-zinc-600">
-                {tc1Subido
-                  ? "Recibido correctamente."
-                  : "El documento de la empresa con las bases y cuotas del mes."}
+                {tc1Subidos.length > 0
+                  ? `${tc1Subidos.length} recibo${tc1Subidos.length === 1 ? "" : "s"} recibido${tc1Subidos.length === 1 ? "" : "s"}. Si hay complementaria, adjúntala también.`
+                  : "Los documentos de la empresa con las bases y cuotas del mes."}
               </p>
             </div>
             <input
@@ -207,23 +213,27 @@ export function SubirNominasView({ endpoint, empresaNombre, mesLabel }: Props) {
                 e.target.value = "";
               }}
             />
-            {tc1Subido ? (
-              <span className="inline-flex shrink-0 items-center gap-1.5 text-sm font-medium text-emerald-700">
-                <CheckCircle2 className="h-4 w-4" />
-                Subido
-              </span>
-            ) : (
-              <button
-                type="button"
-                onClick={() => tc1Ref.current?.click()}
-                disabled={subiendoTc1}
-                className="shrink-0 inline-flex items-center gap-1.5 rounded-lg border border-zinc-300 px-3 py-1.5 text-sm font-medium text-zinc-700 transition hover:bg-zinc-50 disabled:opacity-50"
-              >
-                {subiendoTc1 ? <Loader2 className="h-4 w-4 animate-spin" /> : <UploadCloud className="h-4 w-4" />}
-                {subiendoTc1 ? "Subiendo…" : "Adjuntar TC1"}
-              </button>
-            )}
+            <button
+              type="button"
+              onClick={() => tc1Ref.current?.click()}
+              disabled={subiendoTc1}
+              className="shrink-0 inline-flex items-center gap-1.5 rounded-lg border border-zinc-300 px-3 py-1.5 text-sm font-medium text-zinc-700 transition hover:bg-zinc-50 disabled:opacity-50"
+            >
+              {subiendoTc1 ? <Loader2 className="h-4 w-4 animate-spin" /> : <UploadCloud className="h-4 w-4" />}
+              {subiendoTc1 ? "Subiendo…" : tc1Subidos.length > 0 ? "Adjuntar otro" : "Adjuntar TC1"}
+            </button>
           </div>
+
+          {tc1Subidos.length > 0 && (
+            <ul className="mt-3 space-y-1">
+              {tc1Subidos.map((nombre, i) => (
+                <li key={`${nombre}-${i}`} className="flex items-center gap-1.5 text-xs text-emerald-700">
+                  <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
+                  <span className="truncate">{nombre}</span>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
 
         <p className="mt-4 text-sm font-semibold text-zinc-900">Nóminas del mes</p>
@@ -315,7 +325,7 @@ export function SubirNominasView({ endpoint, empresaNombre, mesLabel }: Props) {
               <div className="text-sm text-rose-900">
                 <p className="font-semibold">Los importes NO cuadran · entrega no válida</p>
                 <p className="mt-1">
-                  El total del TC1 no coincide con la suma de las cotizaciones de las nóminas
+                  El total de los TC1 no coincide con la suma de las cotizaciones de las nóminas
                   que habéis subido:
                 </p>
                 <ul className="mt-2 space-y-1">
@@ -324,7 +334,12 @@ export function SubirNominasView({ endpoint, empresaNombre, mesLabel }: Props) {
                     <b className="tabular-nums">{eur(resultado.cuadre.totalNominas)}</b>
                   </li>
                   <li className="flex justify-between gap-4">
-                    <span>Líquido de totales del TC1</span>
+                    <span>
+                      Líquido de totales
+                      {(resultado.cuadre.numTc1 ?? 1) > 1
+                        ? ` (${resultado.cuadre.numTc1} recibos)`
+                        : " del TC1"}
+                    </span>
                     <b className="tabular-nums">{eur(resultado.cuadre.totalTc1)}</b>
                   </li>
                   <li className="flex justify-between gap-4 border-t border-rose-300 pt-1">
@@ -334,7 +349,7 @@ export function SubirNominasView({ endpoint, empresaNombre, mesLabel }: Props) {
                 </ul>
                 {resultado.cuadre.trabajadoresTc1 != null && (
                   <p className="mt-2">
-                    El TC1 declara <b>{resultado.cuadre.trabajadoresTc1} trabajadores</b> y hemos
+                    Los TC1 declaran <b>{resultado.cuadre.trabajadoresTc1} trabajadores</b> y hemos
                     recibido <b>{resultado.cuadre.numNominas} nóminas</b>.
                   </p>
                 )}
@@ -344,9 +359,10 @@ export function SubirNominasView({ endpoint, empresaNombre, mesLabel }: Props) {
                   a subirlo.
                 </p>
                 <p className="mt-2 text-xs text-rose-800">
-                  Comprobad si falta alguna nómina o si hay algún concepto del TC1 que no aparece
-                  desglosado en ellas. Si el descuadre tuviera una explicación correcta, poneos en
-                  contacto con el departamento de RRHH de la empresa antes de continuar.
+                  Comprobad si falta alguna nómina, si queda por adjuntar alguna liquidación
+                  complementaria (vacaciones) o si hay algún concepto de los TC1 que no aparece
+                  desglosado en las nóminas. Si el descuadre tuviera una explicación correcta,
+                  poneos en contacto con el departamento de RRHH de la empresa antes de continuar.
                 </p>
               </div>
             </div>
