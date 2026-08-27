@@ -118,9 +118,10 @@ export async function GET(request: Request) {
         .maybeSingle();
       if (!emp || emp.estado !== "Activo") continue;
 
-      // Vía preferente: mover la tarjeta a «Ex-empleados». Así el Kanban queda
-      // coherente y la desactivación la hace el mismo código que un arrastre
-      // manual (registra actividad e historial).
+      // El Kanban debe quedar coherente: si el trabajador tiene tarjeta, pasa a
+      // «Ex-empleados». Se escribe directamente y no con `moverCandidatoFase`
+      // porque esa action resuelve la empresa desde la SESIÓN del usuario, y en
+      // un cron no hay sesión: devolvería «No autenticado» siempre.
       const { data: cand } = await supabase
         .from("candidatos")
         .select("id, estado")
@@ -128,48 +129,91 @@ export async function GET(request: Request) {
         .eq("empleado_id", empleadoId)
         .maybeSingle();
 
+      let viaKanban = false;
       if (cand?.id && cand.estado !== "ex_empleado") {
-        const { moverCandidatoFase } = await import(
-          "@/features/rrhh/actions/candidatos-actions"
-        );
-        const mov = await moverCandidatoFase(cand.id as string, "descartado", "ex_empleado");
-        if (mov.ok) {
-          desactivados++;
-          detalle.push({ empleadoId, empresaId, ultimoDia, via: "kanban" });
-          continue;
+        const { error: candErr } = await supabase
+          .from("candidatos")
+          .update({
+            fase: "descartado",
+            estado: "ex_empleado",
+            fase_actualizada_at: new Date().toISOString(),
+          })
+          .eq("id", cand.id as string)
+          .eq("empresa_id", empresaId);
+        if (candErr) {
+          console.error(
+            "[cron/bajas-efectivas] mover a ex_empleado falló:",
+            empleadoId,
+            candErr.message,
+          );
+        } else {
+          viaKanban = true;
         }
-        console.error(
-          "[cron/bajas-efectivas] mover a ex_empleado falló:",
-          empleadoId,
-          "error" in mov ? mov.error : "",
-        );
       }
 
       // RED DE SEGURIDAD: sin tarjeta (o si el movimiento falló) se desactiva
       // igualmente. Nadie puede quedarse con acceso solo por no tener ficha en
       // el Kanban — que es justo el fallo que este cron viene a cerrar.
-      const { setEmpleadoEstado } = await import(
-        "@/features/rrhh/actions/empleados-actions"
-      );
-      const res = await setEmpleadoEstado({
-        id: empleadoId,
-        estado: "Inactivo",
-        // La fecha de baja REAL es la pactada, no la del día en que corre el
-        // cron: así el histórico cuadra con lo comunicado a la gestoría.
-        fechaBaja: diaSiguiente(ultimoDia),
+      //
+      // Se escribe con el cliente ADMIN, no con `setEmpleadoEstado`: esa action
+      // resuelve el contexto desde la SESIÓN del usuario, y en un cron no hay
+      // sesión, así que la RLS bloqueaba el UPDATE sin devolver error — el cron
+      // informaba de bajas aplicadas que en realidad nunca se escribieron.
+      // La fecha de baja es la PACTADA (día oficial = último + 1), no la del día
+      // en que corre el cron, para que el histórico cuadre con la gestoría.
+      const fechaBajaOficial = diaSiguiente(ultimoDia);
+      const { error: upErr } = await supabase
+        .from("empleados")
+        .update({ estado: "Inactivo", fecha_baja: fechaBajaOficial })
+        .eq("id", empleadoId)
+        .eq("empresa_id", empresaId);
+
+      if (upErr) {
+        incidencias.push({ empleadoId, empresaId, motivo: upErr.message });
+        console.error("[cron/bajas-efectivas] desactivar falló:", empleadoId, upErr.message);
+        continue;
+      }
+
+      // Rastro del movimiento, igual que una baja hecha a mano desde la ficha.
+      const { error: histErr } = await supabase.from("empleado_estado_historial").insert({
+        empresa_id: empresaId,
+        empleado_id: empleadoId,
+        accion: "Baja",
+        estado_anterior: "Activo",
+        estado_nuevo: "Inactivo",
+        fecha_efectiva: fechaBajaOficial,
         motivo: "Baja efectiva aplicada automáticamente al llegar su fecha.",
+        origen: "cron",
       });
-      if (res.ok) {
-        desactivados++;
-        detalle.push({ empleadoId, empresaId, ultimoDia, via: "directo" });
-      } else {
-        incidencias.push({
+      if (histErr) {
+        console.error("[cron/bajas-efectivas] historial:", empleadoId, histErr.message);
+      }
+
+      // Recorte de turnos futuros, como en cualquier otra baja.
+      try {
+        const { recortarHorarioFuturoPorBaja } = await import(
+          "@/features/rrhh/services/baja-horario"
+        );
+        await recortarHorarioFuturoPorBaja(supabase, {
           empleadoId,
           empresaId,
-          motivo: ("error" in res && res.error) || "No se pudo desactivar",
+          fechaBaja: fechaBajaOficial,
         });
-        console.error("[cron/bajas-efectivas] setEmpleadoEstado falló:", empleadoId);
+      } catch (e) {
+        console.error(
+          "[cron/bajas-efectivas] recorte horario:",
+          empleadoId,
+          e instanceof Error ? e.message : e,
+        );
       }
+
+      desactivados++;
+      detalle.push({
+        empleadoId,
+        empresaId,
+        ultimoDia,
+        via: viaKanban ? "kanban+estado" : "directo",
+      });
     }
   }
 
