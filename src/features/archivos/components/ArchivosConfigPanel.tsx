@@ -69,8 +69,8 @@ export function ArchivosConfigPanel() {
         <p className="mt-1.5 text-xs text-muted-foreground">
           {tamano(uso.bytesTotal)} de {tamano(uso.bytesLimite)} usados en total.{" "}
           {uso.numArchivos === 0
-            ? "Todavía no hay fotos ni vídeos."
-            : `Fotos y vídeos: ${tamano(uso.bytesArchivos)} en ${uso.numArchivos} ${
+            ? "Todavía no hay archivos."
+            : `Archivos: ${tamano(uso.bytesArchivos)} en ${uso.numArchivos} ${
                 uso.numArchivos === 1 ? "archivo" : "archivos"
               }.`}
         </p>

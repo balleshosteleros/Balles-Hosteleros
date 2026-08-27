@@ -12,13 +12,13 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getEmpresaActivaForUser } from "@/features/empresa/lib/empresa-server";
 
 export interface UsoArchivos {
-  /** Bytes ocupados por la galería de Archivos. */
+  /** Bytes ocupados por los archivos de la herramienta Archivos. */
   bytesArchivos: number;
   /** Bytes ocupados en total por la empresa (incluye grabaciones). */
   bytesTotal: number;
   /** Cuota contratada. */
   bytesLimite: number;
-  /** Número de fotos y vídeos guardados. */
+  /** Número de archivos guardados. */
   numArchivos: number;
   /** Desglose por departamento, de mayor a menor. */
   porDepartamento: Array<{ departamento: string; bytes: number; num: number }>;

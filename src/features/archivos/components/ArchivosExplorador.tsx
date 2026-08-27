@@ -8,9 +8,12 @@
  *  · móvil      → `/m/archivos`, una pantalla completa.
  *
  * Carpeta raíz por departamento (solo las que el rol ve), subcarpetas libres
- * dentro, y cuadrícula de miniaturas de fotos y vídeos. La subida va DIRECTA
- * del navegador a R2 con URL firmada, en cola de 4 en paralelo: es lo que hace
- * que subir 200 fotos desde el iPhone sea rápido.
+ * dentro, y cuadrícula de archivos: miniatura para fotos y vídeos, icono del
+ * tipo para el resto (PDF, hojas de cálculo…). Admite CUALQUIER tipo y tamaño;
+ * el único límite es la cuota de la empresa.
+ *
+ * La subida va DIRECTA del navegador a R2 con URL firmada, en cola de 4 en
+ * paralelo: es lo que hace que subir 200 archivos desde el iPhone sea rápido.
  */
 
 import { ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -26,6 +29,11 @@ import {
   ImageIcon,
   MoreVertical,
   FolderInput,
+  FileText,
+  FileSpreadsheet,
+  FileArchive,
+  FileAudio,
+  File as FileIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -60,7 +68,8 @@ import {
 } from "@/features/archivos/actions/archivos-actions";
 import {
   esVideo,
-  MAX_BYTES_ARCHIVO,
+  esImagen,
+  tieneVistaPrevia,
   type Archivo,
   type Carpeta,
 } from "@/features/archivos/types";
@@ -105,6 +114,39 @@ function formatearTamano(bytes: number): string {
   if (bytes < 1024 ** 2) return `${(bytes / 1024).toFixed(0)} KB`;
   if (bytes < 1024 ** 3) return `${(bytes / 1024 ** 2).toFixed(1).replace(".", ",")} MB`;
   return `${(bytes / 1024 ** 3).toFixed(2).replace(".", ",")} GB`;
+}
+
+/**
+ * Icono para los archivos SIN vista previa (PDF, hojas de cálculo, ZIP…).
+ * Las fotos y los vídeos se pintan con su miniatura, no con un icono.
+ */
+function iconoArchivo(mime: string, nombre: string) {
+  const ext = nombre.split(".").pop()?.toLowerCase() ?? "";
+  if (mime.startsWith("audio/")) return FileAudio;
+  if (mime.includes("pdf") || ext === "pdf") return FileText;
+  if (
+    mime.includes("sheet") ||
+    mime.includes("excel") ||
+    ["xls", "xlsx", "csv", "numbers"].includes(ext)
+  ) {
+    return FileSpreadsheet;
+  }
+  if (
+    mime.includes("zip") ||
+    mime.includes("compressed") ||
+    ["zip", "rar", "7z", "tar", "gz"].includes(ext)
+  ) {
+    return FileArchive;
+  }
+  if (
+    mime.includes("word") ||
+    mime.includes("document") ||
+    mime.startsWith("text/") ||
+    ["doc", "docx", "txt", "rtf", "pages"].includes(ext)
+  ) {
+    return FileText;
+  }
+  return FileIcon;
 }
 
 function formatearDuracion(seg: number): string {
@@ -219,10 +261,6 @@ export function ArchivosExplorador({ variante, abierto = true, renderAcciones }:
         setSubidas((prev) => prev.map((s, i) => (i === indice ? { ...s, ...patch } : s)));
 
       try {
-        if (file.size > MAX_BYTES_ARCHIVO) {
-          throw new Error(`Supera los ${formatearTamano(MAX_BYTES_ARCHIVO)}`);
-        }
-
         const firma = await presignSubida(destinoId, file.name, file.type, file.size);
         if (!firma.ok) throw new Error(firma.error);
 
@@ -430,14 +468,15 @@ export function ArchivosExplorador({ variante, abierto = true, renderAcciones }:
 
 
         {/*
-          El selector nativo: en iPhone abre directamente la galería de Fotos y
-          permite marcar muchas de una vez. `multiple` es lo que hace que se
-          puedan mandar 200 fotos en una sola pasada.
+          El selector nativo. `multiple` es lo que permite mandar 200 archivos
+          en una sola pasada. Sin `accept`, en el iPhone ofrece tanto la galería
+          de Fotos como la app Archivos (PDF, hojas de cálculo…).
         */}
         <input
           ref={inputRef}
           type="file"
-          accept="image/*,video/*"
+          /* Sin `accept`: cabe cualquier documento. En el iPhone esto muestra
+             el selector con Fotos Y Archivos, no solo la galería. */
           multiple
           className="hidden"
           onChange={(e) => void onArchivosElegidos(e.target.files)}
@@ -584,7 +623,7 @@ export function ArchivosExplorador({ variante, abierto = true, renderAcciones }:
                 </div>
               )}
 
-              {/* Cuadrícula de fotos y vídeos */}
+              {/* Cuadrícula de archivos: miniatura si la hay, icono si no */}
               {archivos.length === 0 && subcarpetas.length === 0 ? (
                 <div className="py-10 text-center">
                   <ImageIcon className="mx-auto mb-3 h-8 w-8 text-muted-foreground/50" />
@@ -653,17 +692,36 @@ export function ArchivosExplorador({ variante, abierto = true, renderAcciones }:
                         onClick={() => setVisor(a)}
                         className="block h-full w-full"
                       >
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={`/api/archivos/ver?id=${a.id}&thumb=1`}
-                        alt={a.nombre}
-                        loading="lazy"
-                        className="h-full w-full object-cover transition-transform group-hover:scale-105"
-                      />
-                      {esVideo(a.mime) && (
-                        <span className="absolute inset-0 flex items-center justify-center bg-black/25">
-                          <Play className="h-6 w-6 fill-white text-white" />
-                        </span>
+                      {a.miniaturaKey ? (
+                        <>
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={`/api/archivos/ver?id=${a.id}&thumb=1`}
+                            alt={a.nombre}
+                            loading="lazy"
+                            className="h-full w-full object-cover transition-transform group-hover:scale-105"
+                          />
+                          {esVideo(a.mime) && (
+                            <span className="absolute inset-0 flex items-center justify-center bg-black/25">
+                              <Play className="h-6 w-6 fill-white text-white" />
+                            </span>
+                          )}
+                        </>
+                      ) : (
+                        // Sin miniatura (PDF, hoja de cálculo, ZIP…): icono del
+                        // tipo y el nombre, que aquí es lo único que identifica
+                        // el archivo.
+                        (() => {
+                          const Icono = iconoArchivo(a.mime, a.nombre);
+                          return (
+                            <span className="flex h-full w-full flex-col items-center justify-center gap-1.5 p-2 text-center">
+                              <Icono className="h-8 w-8 shrink-0 text-muted-foreground" />
+                              <span className="line-clamp-2 break-all text-[10px] leading-tight text-muted-foreground">
+                                {a.nombre}
+                              </span>
+                            </span>
+                          );
+                        })()
                       )}
                         {a.duracionSeg != null && (
                           <span className="absolute bottom-1 right-1 rounded bg-black/70 px-1 text-[10px] text-white">
@@ -713,7 +771,11 @@ export function ArchivosExplorador({ variante, abierto = true, renderAcciones }:
               )}
             </div>
           </DialogHeader>
-          <div className="flex max-h-[75vh] items-center justify-center bg-black">
+          <div
+            className={`flex max-h-[75vh] items-center justify-center ${
+              visor && tieneVistaPrevia(visor.mime) ? "bg-black" : "bg-muted"
+            }`}
+          >
             {visor && esVideo(visor.mime) ? (
               <video
                 src={`/api/archivos/ver?id=${visor.id}`}
@@ -721,13 +783,47 @@ export function ArchivosExplorador({ variante, abierto = true, renderAcciones }:
                 autoPlay
                 className="max-h-[75vh] w-full"
               />
-            ) : visor ? (
+            ) : visor && esImagen(visor.mime) ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={`/api/archivos/ver?id=${visor.id}`}
                 alt={visor.nombre}
                 className="max-h-[75vh] w-auto object-contain"
               />
+            ) : visor ? (
+              // PDF, hojas de cálculo, documentos… no se pintan aquí: el
+              // navegador los abre en su propia pestaña (los PDF los enseña
+              // nativamente) o los descarga.
+              (() => {
+                const Icono = iconoArchivo(visor.mime, visor.nombre);
+                return (
+                  <div className="flex flex-col items-center gap-3 px-6 py-16 text-center">
+                    <Icono className="h-14 w-14 text-muted-foreground" />
+                    <p className="max-w-xs break-all text-sm font-medium">
+                      {visor.nombre}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {formatearTamano(visor.tamanoBytes)}
+                    </p>
+                    <div className="mt-1 flex items-center gap-2">
+                      <a
+                        href={`/api/archivos/ver?id=${visor.id}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex h-9 items-center rounded-md bg-cyan-600 px-4 text-sm font-medium text-white hover:bg-cyan-700"
+                      >
+                        Abrir
+                      </a>
+                      <a
+                        href={`/api/archivos/ver?id=${visor.id}&descargar=1`}
+                        className="inline-flex h-9 items-center rounded-md border px-4 text-sm font-medium hover:bg-background"
+                      >
+                        Descargar
+                      </a>
+                    </div>
+                  </div>
+                );
+              })()
             ) : null}
           </div>
         </DialogContent>

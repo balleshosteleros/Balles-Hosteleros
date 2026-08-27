@@ -1,8 +1,12 @@
 /**
  * PRP-079 — Archivos: el Drive propio del software.
  *
- * Almacén de fotos y vídeos de la empresa en Cloudflare R2, con una carpeta
- * raíz por departamento y subcarpetas libres dentro. Sustituye a Google Drive.
+ * Almacén de archivos de la empresa en Cloudflare R2, con una carpeta raíz por
+ * departamento y subcarpetas libres dentro. Sustituye a Google Drive.
+ *
+ * Admite CUALQUIER tipo de archivo (fotos, vídeos, PDF, hojas de cálculo,
+ * documentos…) y cualquier tamaño: el único límite es la cuota contratada por
+ * la empresa.
  */
 
 /** Carpeta del explorador. Las raíz (`esRaiz`) son las de departamento. */
@@ -64,19 +68,23 @@ export interface RegistrarArchivoInput {
   duracionSeg?: number | null;
 }
 
-/** Tipos que la galería acepta. Solo foto y vídeo: no es un gestor documental. */
-export const MIME_PERMITIDOS = /^(image|video)\//;
-
 /**
- * Tope por archivo: 2 GB.
+ * NO hay lista de tipos permitidos ni tope por archivo (decisión de Iván,
+ * 27-ago-2026): aquí cabe cualquier documento —foto, vídeo, PDF, hoja de
+ * cálculo, lo que sea— y del peso que haga falta.
  *
- * NO son los 50 MB de los documentos: aquel límite existe porque los PDF pasan
- * por Supabase Storage, mientras que aquí el archivo va DIRECTO del móvil a R2
- * con URL firmada, igual que las grabaciones. Un vídeo de un minuto grabado con
- * un iPhone ronda los 100-170 MB, así que 50 MB dejaría fuera casi cualquier
- * vídeo. El límite real que manda es la cuota de 500 GB por empresa.
+ * El único límite es la CUOTA DE LA EMPRESA, que se comprueba en el servidor
+ * antes de firmar cada subida. Poner además un tope por archivo solo serviría
+ * para rechazar un vídeo largo que sí cabe en la cuota contratada.
+ *
+ * Que no haya límite por archivo es posible porque la subida va DIRECTA del
+ * navegador a R2 con URL firmada: el archivo nunca pasa por el servidor, así
+ * que no aplica el límite de tamaño de petición de Vercel.
  */
-export const MAX_BYTES_ARCHIVO = 2 * 1024 * 1024 * 1024;
 
 export const esVideo = (mime: string) => mime.startsWith("video/");
 export const esImagen = (mime: string) => mime.startsWith("image/");
+
+/** ¿Se puede mostrar una vista previa? El resto se pinta con un icono. */
+export const tieneVistaPrevia = (mime: string) =>
+  esImagen(mime) || esVideo(mime);

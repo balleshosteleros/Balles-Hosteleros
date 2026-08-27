@@ -28,8 +28,6 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getEmpresaActivaForUser } from "@/features/empresa/lib/empresa-server";
 import { presignPutR2, deleteObjectR2 } from "@/shared/lib/r2";
 import {
-  MAX_BYTES_ARCHIVO,
-  MIME_PERMITIDOS,
   type Archivo,
   type Carpeta,
   type ContenidoCarpeta,
@@ -592,14 +590,9 @@ export async function presignSubida(
     const ctx = await getContext();
     if (!ctx) return fallo("No autenticado");
 
-    if (!MIME_PERMITIDOS.test(mime)) {
-      return fallo("Solo se admiten fotos y vídeos");
-    }
+    // Sin lista de tipos ni tope por archivo: cabe cualquier documento y del
+    // peso que sea. El único límite es la cuota de la empresa, más abajo.
     if (!tamanoBytes || tamanoBytes <= 0) return fallo("Archivo vacío");
-    if (tamanoBytes > MAX_BYTES_ARCHIVO) {
-      const gb = (MAX_BYTES_ARCHIVO / 1024 ** 3).toFixed(0);
-      return fallo(`El archivo supera el máximo de ${gb} GB`);
-    }
 
     const { data: carpeta } = await ctx.supabase
       .from("carpetas_documentos")

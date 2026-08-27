@@ -7,11 +7,10 @@
  * escritorio. Aquí las acciones (Carpeta / Subir) van en la cabecera fija,
  * junto al botón de volver.
  *
- * Es la vía principal para subir fotos y vídeos desde el iPhone: el botón
- * "Subir" abre la galería nativa y admite seleccionar muchos de una vez.
+ * Es la vía principal para subir archivos desde el iPhone: el botón "Subir"
+ * abre el selector nativo y admite marcar muchos de una vez.
  */
 
-import { FolderOpen } from "lucide-react";
 import { MobilePageHeader } from "@/features/mi-panel/mobile/components/MobilePageHeader";
 import { ArchivosExplorador } from "@/features/archivos/components/ArchivosExplorador";
 
@@ -24,11 +23,7 @@ export function ArchivosMobile() {
           <div className="sticky top-0 z-40 bg-background/95 backdrop-blur">
             <MobilePageHeader title="Archivos" />
             {acciones && (
-              <div className="flex items-center justify-between gap-2 border-b px-3 py-2">
-                <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <FolderOpen className="h-3.5 w-3.5 text-cyan-600" />
-                  Fotos y vídeos de la empresa
-                </span>
+              <div className="flex items-center justify-end gap-2 border-b px-3 py-2">
                 {acciones}
               </div>
             )}
