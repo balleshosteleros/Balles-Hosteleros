@@ -30,6 +30,9 @@ import { createClient } from "@/lib/supabase/client";
  * no lo estén simplemente no avisan (la vista sigue funcionando como antes).
  */
 
+/** Sufijo incremental para que cada montaje tenga su propio canal. */
+let contadorCanales = 0;
+
 export interface SincronizacionEnVivoOpts {
   /** Tablas a vigilar. Un cambio en cualquiera dispara `onCambio`. */
   tablas: string[];
@@ -80,7 +83,21 @@ export function useSincronizacionEnVivo({
     if (desactivado || tablas.length === 0) return;
 
     const supabase = createClient();
-    const nombreCanal = `sync:${claveTablas}:${empresaId ?? "global"}`;
+    // Nombre ÚNICO por montaje, no solo por (tablas + empresa).
+    //
+    // `supabase.channel(nombre)` NO crea uno nuevo si ya existe otro con ese
+    // nombre: devuelve el que hay. Con un nombre fijo, dos vistas que vigilaran
+    // las mismas tablas —o la misma vista mientras su canal anterior aún no se
+    // había cerrado del todo— recuperaban un canal YA suscrito y le añadían
+    // callbacks encima. Eso lanza:
+    //
+    //   cannot add `postgres_changes` callbacks for realtime:… after `subscribe()`
+    //
+    // La excepción sube durante el render, React aborta el árbol (error #310:
+    // "cambió el número de hooks") y Next pinta su pantalla de error. Es el
+    // "This page couldn't load" que salía al entrar en Mi Panel, donde varios
+    // widgets montan este hook a la vez.
+    const nombreCanal = `sync:${claveTablas}:${empresaId ?? "global"}:${++contadorCanales}`;
     const canal = supabase.channel(nombreCanal);
 
     const solicitarRecarga = () => {
@@ -96,25 +113,37 @@ export function useSincronizacionEnVivo({
       }, margenMs);
     };
 
-    for (const tabla of claveTablas.split(",")) {
-      canal.on(
-        "postgres_changes",
-        {
-          event: "*", // altas, cambios y bajas
-          schema: "public",
-          table: tabla,
-          ...(empresaId ? { filter: `empresa_id=eq.${empresaId}` } : {}),
-        },
-        solicitarRecarga,
-      );
-    }
+    // Blindaje: la sincronización en vivo es una COMODIDAD (ver los cambios sin
+    // recargar). Si el canal falla, la vista debe seguir funcionando — nunca
+    // tumbar la página entera, que es lo que pasaba: la excepción subía durante
+    // el render y Next mostraba su pantalla de error.
+    try {
+      for (const tabla of claveTablas.split(",")) {
+        canal.on(
+          "postgres_changes",
+          {
+            event: "*", // altas, cambios y bajas
+            schema: "public",
+            table: tabla,
+            ...(empresaId ? { filter: `empresa_id=eq.${empresaId}` } : {}),
+          },
+          solicitarRecarga,
+        );
+      }
 
-    canal.subscribe();
+      canal.subscribe();
+    } catch (e) {
+      console.error("[sincronizacion-en-vivo] no se pudo suscribir:", e);
+    }
 
     return () => {
       if (temporizadorRef.current) clearTimeout(temporizadorRef.current);
       temporizadorRef.current = null;
-      void supabase.removeChannel(canal);
+      try {
+        void supabase.removeChannel(canal);
+      } catch {
+        /* el canal ya pudo cerrarse solo: nada que hacer */
+      }
     };
   }, [claveTablas, empresaId, desactivado, margenMs, tablas.length]);
 
