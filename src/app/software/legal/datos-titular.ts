@@ -18,12 +18,15 @@ export const TITULAR = {
   email: "balleshosteleros@gmail.com",
   telefono: "91 999 41 41",
   /**
-   * Dominio REAL de venta del software. Ojo: no es `balleshosteleros.com` a
-   * secas — el sitio del SaaS vive en el subdominio `sistema.`, que es el que
-   * declara `metadataBase` en el layout raíz. Las URLs canónicas y el sitemap
-   * tienen que apuntar aquí, o Google indexa un dominio que no sirve la web.
+   * Dominio público del software. Es el mismo que está escrito en la Google
+   * Auth Platform (página principal y enlaces legales de la pantalla de
+   * consentimiento), así que estas URLs y las del panel tienen que coincidir:
+   * si divergen, el revisor abre un enlace que no existe y rechaza la app.
+   *
+   * Ahí las legales cuelgan de la raíz (`/legal/privacidad`), no de
+   * `/software/legal/...`; el rewrite de `next.config.ts` hace la traducción.
    */
-  dominio: "sistema.balleshosteleros.com",
+  dominio: "software.balleshosteleros.com",
 } as const;
 
 /** Base absoluta del sitio, para URLs canónicas y sitemap. */

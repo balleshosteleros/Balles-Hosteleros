@@ -13,10 +13,10 @@ import { ArrowLeft } from "lucide-react";
 export const ULTIMA_ACTUALIZACION = "27 de agosto de 2026";
 
 const paginas = [
-  { href: "/software/legal/aviso-legal", label: "Aviso legal" },
-  { href: "/software/legal/privacidad", label: "Privacidad" },
-  { href: "/software/legal/cookies", label: "Cookies" },
-  { href: "/software/legal/terminos", label: "Términos" },
+  { href: "/legal/aviso-legal", label: "Aviso legal" },
+  { href: "/legal/privacidad", label: "Privacidad" },
+  { href: "/legal/cookies", label: "Cookies" },
+  { href: "/legal/terminos", label: "Términos" },
 ];
 
 export function LegalLayout({

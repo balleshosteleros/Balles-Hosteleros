@@ -21,7 +21,7 @@ export default function AuthLayout({
         <footer className="mt-10 flex flex-col items-center gap-3 text-xs text-slate-500">
           <nav className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2">
             <Link
-              href="/software/legal/privacidad"
+              href="/legal/privacidad"
               className="transition-colors hover:text-slate-300"
             >
               Privacidad
@@ -30,7 +30,7 @@ export default function AuthLayout({
               ·
             </span>
             <Link
-              href="/software/legal/terminos"
+              href="/legal/terminos"
               className="transition-colors hover:text-slate-300"
             >
               Términos
@@ -39,7 +39,7 @@ export default function AuthLayout({
               ·
             </span>
             <Link
-              href="/software/legal/cookies"
+              href="/legal/cookies"
               className="transition-colors hover:text-slate-300"
             >
               Cookies
@@ -48,7 +48,7 @@ export default function AuthLayout({
               ·
             </span>
             <Link
-              href="/software/legal/aviso-legal"
+              href="/legal/aviso-legal"
               className="transition-colors hover:text-slate-300"
             >
               Aviso legal

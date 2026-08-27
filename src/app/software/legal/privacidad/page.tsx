@@ -6,7 +6,7 @@ export const metadata: Metadata = {
   title: "Política de privacidad — Balles Hosteleros",
   description:
     "Qué datos trata Balles Hosteleros, con qué finalidad, durante cuánto tiempo y cómo ejercer tus derechos.",
-  alternates: { canonical: "https://sistema.balleshosteleros.com/software/legal/privacidad" },
+  alternates: { canonical: "https://software.balleshosteleros.com/legal/privacidad" },
 };
 
 export default function PrivacidadPage() {

@@ -59,7 +59,14 @@ const PUBLIC_PREFIXES = ['/carta', '/sitio-publico', '/api/google/connect', '/ap
   // Además es REQUISITO de la verificación OAuth de Google: el revisor abre la
   // política de privacidad SIN cuenta, y una redirección al login es motivo de
   // rechazo directo.
-  '/software']
+  '/software',
+  // Los mismos documentos servidos en la raíz de `software.balleshosteleros.com`
+  // (`/legal/privacidad`), que es la URL escrita en la pantalla de
+  // consentimiento de Google. El rewrite de next.config las manda a
+  // `/software/legal/...`, pero el proxy ve la ruta ORIGINAL: sin esta entrada
+  // las mandaría al login y el revisor de Google se encontraría la pantalla de
+  // acceso en vez de la política de privacidad.
+  '/legal']
 
 /**
  * Rutas que en el dominio de un cliente se sirven TAL CUAL, sin mandarlas al

@@ -5,9 +5,9 @@ import { TITULAR, DOMICILIO_LINEA } from "../datos-titular";
 export const metadata: Metadata = {
   title: "Aviso legal — Balles Hosteleros",
   description:
-    "Datos identificativos del titular de sistema.balleshosteleros.com y condiciones de uso del sitio web.",
+    "Datos identificativos del titular de software.balleshosteleros.com y condiciones de uso del sitio web.",
   alternates: {
-    canonical: "https://sistema.balleshosteleros.com/software/legal/aviso-legal",
+    canonical: "https://software.balleshosteleros.com/legal/aviso-legal",
   },
 };
 

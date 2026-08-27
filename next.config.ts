@@ -79,26 +79,45 @@ const nextConfig: NextConfig = {
       // array plano por defecto) el rewrite solo se aplica si la ruta no existe,
       // y "/" existe siempre —es la home de la app—, así que ganaba ella y el
       // subdominio seguía mostrando el login en vez de la web del restaurante.
-      beforeFiles: PREVIEW_WEB_HOSTS.flatMap((host) => [
+      beforeFiles: [
+        ...PREVIEW_WEB_HOSTS.flatMap((host) => [
+          {
+            source: '/',
+            has: [{ type: 'host' as const, value: host }],
+            destination: '/sitio-publico',
+          },
+          {
+            source: '/:ruta((?!sitio-publico|_next/|api/|favicon|robots|sitemap)[^/.]+)',
+            has: [{ type: 'host' as const, value: host }],
+            destination: '/sitio-publico/:ruta',
+          },
+        ]),
+        // `software.balleshosteleros.com` sirve la landing integrada sin exponer
+        // `/software` en la URL ni mantener un segundo proyecto de Vercel.
+        //
+        // Va en `beforeFiles` y NO en `afterFiles` por lo mismo que los hosts de
+        // preview: en `afterFiles` el rewrite solo entra si la ruta no existe, y
+        // "/" existe siempre —es el login—, así que ganaba el login y el
+        // subdominio nunca llegaba a enseñar la landing.
         {
           source: '/',
-          has: [{ type: 'host' as const, value: host }],
-          destination: '/sitio-publico',
+          has: [{ type: 'host' as const, value: SOFTWARE_HOST }],
+          destination: '/software',
         },
+        // Documentos legales en la raíz del subdominio: `/legal/privacidad` en
+        // vez de `/software/legal/privacidad`.
+        //
+        // Estas URLs cortas son las que están escritas en la Google Auth
+        // Platform (pantalla de consentimiento). El revisor las abre SIN cuenta,
+        // y hasta ahora devolvían 404: motivo de rechazo directo. Al vivir aquí,
+        // el panel de Google no hay que tocarlo.
         {
-          source: '/:ruta((?!sitio-publico|_next/|api/|favicon|robots|sitemap)[^/.]+)',
-          has: [{ type: 'host' as const, value: host }],
-          destination: '/sitio-publico/:ruta',
+          source: '/legal/:documento(privacidad|terminos|cookies|aviso-legal)',
+          has: [{ type: 'host' as const, value: SOFTWARE_HOST }],
+          destination: '/software/legal/:documento',
         },
-      ]),
+      ],
       afterFiles: [
-      // `software.balleshosteleros.com` sirve la landing integrada sin exponer
-      // `/software` en la URL ni mantener un segundo proyecto de Vercel.
-      {
-        source: '/',
-        has: [{ type: 'host', value: SOFTWARE_HOST }],
-        destination: '/software',
-      },
       // Subdominio de códigos QR: `qr.balleshosteleros.com/a3k9` → `/q/a3k9`.
       //
       // Va AQUÍ y no en el proxy porque los rewrites de next.config se aplican en

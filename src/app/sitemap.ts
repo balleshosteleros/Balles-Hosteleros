@@ -8,6 +8,7 @@
  */
 import type { MetadataRoute } from "next";
 import { createAnonClient } from "@/lib/supabase/anon";
+import { SITIO_URL } from "./software/legal/datos-titular";
 
 export const revalidate = 3600;
 
@@ -15,18 +16,23 @@ export const revalidate = 3600;
  * Páginas del propio SaaS (no de las webs de clientes). Las legales entran
  * aquí porque la verificación de Google exige que la política de privacidad
  * sea públicamente accesible y rastreable.
+ *
+ * Las rutas son las CORTAS (`/legal/privacidad`), que es como las sirve
+ * `software.balleshosteleros.com` y como están escritas en la pantalla de
+ * consentimiento de Google. El rewrite de `next.config.ts` las traduce a
+ * `/software/legal/...` por dentro.
  */
 const PAGINAS_SAAS: MetadataRoute.Sitemap = [
-  "/software",
-  "/software/legal/aviso-legal",
-  "/software/legal/privacidad",
-  "/software/legal/cookies",
-  "/software/legal/terminos",
+  "/",
+  "/legal/aviso-legal",
+  "/legal/privacidad",
+  "/legal/cookies",
+  "/legal/terminos",
 ].map((path) => ({
-  url: `https://sistema.balleshosteleros.com${path}`,
+  url: `${SITIO_URL}${path === "/" ? "" : path}`,
   lastModified: new Date(),
   changeFrequency: "monthly" as const,
-  priority: path === "/software" ? 1 : 0.3,
+  priority: path === "/" ? 1 : 0.3,
 }));
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {

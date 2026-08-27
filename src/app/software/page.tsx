@@ -796,7 +796,7 @@ export default function SoftwareLanding() {
               <ul className="mt-4 space-y-3 text-sm text-slate-500">
                 <li>
                   <Link
-                    href="/software/legal/aviso-legal"
+                    href="/legal/aviso-legal"
                     className="hover:text-slate-300"
                   >
                     Aviso legal
@@ -804,7 +804,7 @@ export default function SoftwareLanding() {
                 </li>
                 <li>
                   <Link
-                    href="/software/legal/privacidad"
+                    href="/legal/privacidad"
                     className="hover:text-slate-300"
                   >
                     Privacidad
@@ -812,7 +812,7 @@ export default function SoftwareLanding() {
                 </li>
                 <li>
                   <Link
-                    href="/software/legal/cookies"
+                    href="/legal/cookies"
                     className="hover:text-slate-300"
                   >
                     Cookies
@@ -820,7 +820,7 @@ export default function SoftwareLanding() {
                 </li>
                 <li>
                   <Link
-                    href="/software/legal/terminos"
+                    href="/legal/terminos"
                     className="hover:text-slate-300"
                   >
                     Términos

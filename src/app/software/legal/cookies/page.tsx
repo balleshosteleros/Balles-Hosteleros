@@ -7,7 +7,7 @@ export const metadata: Metadata = {
   description:
     "Qué cookies usa Balles Hosteleros, para qué sirven y cómo gestionarlas.",
   alternates: {
-    canonical: "https://sistema.balleshosteleros.com/software/legal/cookies",
+    canonical: "https://software.balleshosteleros.com/legal/cookies",
   },
 };
 

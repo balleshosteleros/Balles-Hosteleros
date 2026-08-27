@@ -7,7 +7,7 @@ export const metadata: Metadata = {
   description:
     "Condiciones de contratación y uso del software Balles Hosteleros: precios, pagos, duración y responsabilidades.",
   alternates: {
-    canonical: "https://sistema.balleshosteleros.com/software/legal/terminos",
+    canonical: "https://software.balleshosteleros.com/legal/terminos",
   },
 };
 
