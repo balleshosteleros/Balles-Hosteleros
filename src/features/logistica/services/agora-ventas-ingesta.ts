@@ -136,6 +136,11 @@ export async function ingerirVentasAgoraDia(
         lineaRows.push({
           ticket_id: ticketId,
           producto_id: pid,
+          // El identificador de Ágora se guarda SIEMPRE, encuentre o no el producto.
+          // Antes solo sobrevivía el nombre, así que una línea de algo que aún no
+          // está dado de alta quedaba imposible de enlazar después (y los nombres
+          // no sirven de ancla: difieren entre los dos sistemas, con erratas).
+          agora_product_id: ln.ProductId,
           nombre: ln.ProductName ?? `Ágora ${ln.ProductId}`,
           cantidad: toNum(ln.Quantity),
           precio_unitario: toNum(ln.UnitPrice),
