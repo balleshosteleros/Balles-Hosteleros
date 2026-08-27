@@ -216,7 +216,6 @@ export const CATALOGO: ModuloDef[] = [
     submodulos: [
       placeholder("organigrama", "Organigrama"),
       placeholder("cronogramas", "Cronogramas"),
-      placeholder("documentacion", "Documentación"),
       placeholder("aperturas", "Aperturas"),
       {
         key: "presentaciones",
