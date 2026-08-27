@@ -88,7 +88,11 @@ export async function getUsoArchivos(): Promise<
       },
     };
   } catch (err) {
-    const msg = err instanceof Error ? err.message : "Error desconocido";
+    // Los errores de Supabase son objetos planos, no instancias de `Error`.
+    const msg =
+      err instanceof Error
+        ? err.message
+        : ((err as { message?: string })?.message ?? "Error desconocido");
     console.error("[archivos] getUsoArchivos:", msg);
     return { ok: false, error: msg };
   }

@@ -48,6 +48,24 @@ type Res<T> = { ok: true; data: T } | { ok: false; error: string };
 
 const fallo = (error: string): { ok: false; error: string } => ({ ok: false, error });
 
+/**
+ * Mensaje legible de cualquier fallo.
+ *
+ * Los errores de Supabase NO son instancias de `Error`: son objetos planos con
+ * `message`/`details`/`hint`. Comprobando solo `instanceof Error` se perdía el
+ * motivo real y el usuario veía siempre "Error desconocido" — pasó con los
+ * límites heredados de la tabla, que decían exactamente qué fallaba.
+ */
+function mensajeError(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  if (err && typeof err === "object") {
+    const e = err as { message?: string; details?: string; hint?: string };
+    const partes = [e.message, e.details, e.hint].filter(Boolean);
+    if (partes.length) return partes.join(" · ");
+  }
+  return "Error desconocido";
+}
+
 /** Contexto de la petición: usuario, empresa activa y departamentos visibles. */
 async function getContext(): Promise<Ctx | null> {
   const supabase = await createClient();
@@ -147,7 +165,7 @@ export async function listCarpetasRaiz(): Promise<Res<Carpeta[]>> {
 
     return { ok: true, data: visibles };
   } catch (err) {
-    const msg = err instanceof Error ? err.message : "Error desconocido";
+    const msg = mensajeError(err);
     console.error("[archivos] listCarpetasRaiz:", msg);
     return fallo(msg);
   }
@@ -236,7 +254,7 @@ export async function getContenidoCarpeta(
       },
     };
   } catch (err) {
-    const msg = err instanceof Error ? err.message : "Error desconocido";
+    const msg = mensajeError(err);
     console.error("[archivos] getContenidoCarpeta:", msg);
     return fallo(msg);
   }
@@ -292,7 +310,7 @@ export async function createSubcarpeta(
 
     return { ok: true, data: aCarpeta(data as FilaCarpeta) };
   } catch (err) {
-    const msg = err instanceof Error ? err.message : "Error desconocido";
+    const msg = mensajeError(err);
     console.error("[archivos] createSubcarpeta:", msg);
     return fallo(msg);
   }
@@ -334,7 +352,7 @@ export async function renameCarpeta(
 
     return { ok: true, data: null };
   } catch (err) {
-    const msg = err instanceof Error ? err.message : "Error desconocido";
+    const msg = mensajeError(err);
     console.error("[archivos] renameCarpeta:", msg);
     return fallo(msg);
   }
@@ -387,7 +405,7 @@ export async function deleteCarpeta(carpetaId: string): Promise<Res<null>> {
 
     return { ok: true, data: null };
   } catch (err) {
-    const msg = err instanceof Error ? err.message : "Error desconocido";
+    const msg = mensajeError(err);
     console.error("[archivos] deleteCarpeta:", msg);
     return fallo(msg);
   }
@@ -458,7 +476,7 @@ export async function listDestinosMover(
         .sort((a, b) => a.etiqueta.localeCompare(b.etiqueta)),
     };
   } catch (err) {
-    const msg = err instanceof Error ? err.message : "Error desconocido";
+    const msg = mensajeError(err);
     console.error("[archivos] listDestinosMover:", msg);
     return fallo(msg);
   }
@@ -564,7 +582,7 @@ export async function moverCarpeta(
 
     return { ok: true, data: null };
   } catch (err) {
-    const msg = err instanceof Error ? err.message : "Error desconocido";
+    const msg = mensajeError(err);
     console.error("[archivos] moverCarpeta:", msg);
     return fallo(msg);
   }
@@ -643,7 +661,7 @@ export async function presignSubida(
       },
     };
   } catch (err) {
-    const msg = err instanceof Error ? err.message : "Error desconocido";
+    const msg = mensajeError(err);
     console.error("[archivos] presignSubida:", msg);
     return fallo(msg);
   }
@@ -717,7 +735,7 @@ export async function registrarArchivo(
       },
     };
   } catch (err) {
-    const msg = err instanceof Error ? err.message : "Error desconocido";
+    const msg = mensajeError(err);
     console.error("[archivos] registrarArchivo:", msg);
     return fallo(msg);
   }
@@ -761,7 +779,7 @@ export async function renameArchivo(
 
     return { ok: true, data: null };
   } catch (err) {
-    const msg = err instanceof Error ? err.message : "Error desconocido";
+    const msg = mensajeError(err);
     console.error("[archivos] renameArchivo:", msg);
     return fallo(msg);
   }
@@ -821,7 +839,7 @@ export async function moverArchivo(
 
     return { ok: true, data: null };
   } catch (err) {
-    const msg = err instanceof Error ? err.message : "Error desconocido";
+    const msg = mensajeError(err);
     console.error("[archivos] moverArchivo:", msg);
     return fallo(msg);
   }
@@ -869,7 +887,7 @@ export async function deleteArchivo(archivoId: string): Promise<Res<null>> {
 
     return { ok: true, data: null };
   } catch (err) {
-    const msg = err instanceof Error ? err.message : "Error desconocido";
+    const msg = mensajeError(err);
     console.error("[archivos] deleteArchivo:", msg);
     return fallo(msg);
   }
