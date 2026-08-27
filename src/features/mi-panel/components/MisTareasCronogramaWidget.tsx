@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { useSincronizacionEnVivo } from "@/shared/hooks/useSincronizacionEnVivo";
 import Link from "next/link";
 import { Card } from "@/components/ui/card";
@@ -32,10 +32,25 @@ export function MisTareasCronogramaWidget() {
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
+  // El sembrado (`syncTareasCronograma`) solo se hace UNA vez por montaje.
+  //
+  // `syncTareasCronograma` INSERTA en `tareas`, que es justo una de las tablas
+  // que escucha la sincronización en vivo de abajo. Sembrar dentro de `cargar`
+  // cerraba el círculo: sembrar → insert en `tareas` → el realtime avisa →
+  // `cargar` → vuelve a sembrar… Cada vuelta reprocesaba los 196 candidatos del
+  // cronograma en el servidor, y la avalancha acababa tumbando la pestaña
+  // ("This page couldn't load") justo al entrar en Mi Panel, sin dejar volver.
+  const sembrado = useRef(false);
+
   const cargar = useCallback(async (mostrarSpinner = false) => {
     if (mostrarSpinner) setRefreshing(true);
-    const seed = await syncTareasCronograma();
-    if (seed.ok) setRol(seed.data.rol);
+    // Se siembra en el primer montaje y cuando el usuario pulsa "Actualizar"
+    // (`mostrarSpinner`): un clic no se encadena solo, así que ahí no hay bucle.
+    if (!sembrado.current || mostrarSpinner) {
+      sembrado.current = true;
+      const seed = await syncTareasCronograma();
+      if (seed.ok) setRol(seed.data.rol);
+    }
     const list = await listTareasMias();
     if (list.ok) setTareas(list.data);
     setIsLoading(false);
@@ -49,6 +64,8 @@ export function MisTareasCronogramaWidget() {
   // Sincronizacion en vivo: si marcas una tarea desde el movil, el panel del
   // escritorio se pone al dia solo (y al reves). Recarga SIN spinner para que el
   // widget no parpadee cada vez que alguien completa algo.
+  //
+  // Solo relee (`listTareasMias`); el sembrado queda fuera por lo dicho arriba.
   useSincronizacionEnVivo({
     tablas: ["cronograma_ejecuciones", "tareas"],
     onCambio: () => void cargar(false),
