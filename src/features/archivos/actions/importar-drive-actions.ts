@@ -40,6 +40,16 @@ import type {
   Mapeo,
 } from "@/features/archivos/types/paneles";
 
+/**
+ * Tope por archivo en la importación: 200 MB.
+ *
+ * No es un límite del almacén (ahí cabe cualquier cosa), sino de la copia: el
+ * archivo se carga en memoria para poder firmar la subida, y uno enorme
+ * agotaría la memoria de la función y tumbaría la tanda entera. Lo que pase de
+ * aquí se aparta y se sube a mano.
+ */
+const MAX_BYTES_EN_MEMORIA = 200 * 1024 * 1024;
+
 type Res<T> = { ok: true; data: T } | { ok: false; error: string };
 const fallo = (error: string): { ok: false; error: string } => ({ ok: false, error });
 
@@ -339,6 +349,17 @@ export async function importarUnidad(
           continue;
         }
 
+        // La copia carga el archivo en memoria para poder firmarlo. Por
+        // encima de este tamaño la función se quedaría sin memoria y moriría,
+        // perdiendo la tanda entera: mejor apartarlo y decir cuál es.
+        if (hijo.tamano > MAX_BYTES_EN_MEMORIA) {
+          errores.push({
+            archivo: hijo.nombre,
+            motivo: `Demasiado grande (${(hijo.tamano / 1024 ** 3).toFixed(2)} GB). Súbelo a mano desde Archivos.`,
+          });
+          continue;
+        }
+
         try {
           const bytes = await copiarArchivo(
             token,
@@ -419,7 +440,7 @@ async function copiarArchivo(
   bucket: string,
 ): Promise<number> {
   const { mime, nombre } = formatoDestino(archivo.mime, archivo.nombre);
-  const { body, tamano } = await descargarArchivo(token, archivo.id, archivo.mime);
+  const { body } = await descargarArchivo(token, archivo.id, archivo.mime);
 
   const archivoId = crypto.randomUUID();
   const carpetaFisica =
@@ -428,21 +449,23 @@ async function copiarArchivo(
   const ext = nombre.split(".").pop()?.toLowerCase() ?? "bin";
   const r2Key = `empresa_${empresaId}/archivos/${carpetaFisica}/${archivoId}.${ext}`;
 
-  // El SDK acepta el stream directamente: el archivo no se carga en memoria.
-  // ContentLength es obligatorio para R2, así que si Drive no lo dice (pasa al
-  // exportar Google Docs) se materializa el buffer — son documentos pequeños.
-  let cuerpo: Buffer | ReadableStream<Uint8Array> = body;
-  let tamanoFinal = tamano ?? archivo.tamano;
-  if (!tamanoFinal) {
-    cuerpo = Buffer.from(await new Response(body).arrayBuffer());
-    tamanoFinal = cuerpo.length;
-  }
+  // El archivo se materializa en memoria antes de subirlo.
+  //
+  // Pasarle el stream directamente al SDK falla con "Unable to calculate hash
+  // for flowing readable stream": para firmar la petición necesita el
+  // contenido entero, y un stream solo se puede leer una vez. Era la causa de
+  // que fallaran cientos de archivos seguidos.
+  //
+  // El coste es tener el archivo en memoria mientras se sube; por eso los muy
+  // grandes se saltan (ver más abajo) en vez de tumbar la función.
+  const cuerpo = Buffer.from(await new Response(body).arrayBuffer());
+  const tamanoFinal = cuerpo.length;
 
   await client.send(
     new PutObjectCommand({
       Bucket: bucket,
       Key: r2Key,
-      Body: cuerpo as never,
+      Body: cuerpo,
       ContentType: mime,
       ContentLength: tamanoFinal,
     }),
@@ -460,7 +483,10 @@ async function copiarArchivo(
     created_by: userId,
     drive_file_id: archivo.id,
   });
-  if (error) throw error;
+  // 23505 = ya estaba importado. No es un fallo: se dio por copiado en una
+  // tanda anterior cuyo contador se perdió. Contarlo como error llenaba la
+  // lista de "duplicate key" que no significaban nada.
+  if (error && error.code !== "23505") throw error;
 
   return tamanoFinal;
 }
