@@ -24,7 +24,7 @@ export function HeaderRestaurante({ empresa }: { empresa: CartaEmpresaPublica })
   return (
     <header className="relative isolate">
       <div
-        className="relative h-[42vh] min-h-[280px] w-full overflow-hidden sm:h-[52vh] sm:min-h-[360px]"
+        className="relative h-[30vh] min-h-[210px] w-full overflow-hidden sm:h-[36vh] sm:min-h-[260px]"
         style={{
           // Con imagen de cabecera el fondo solo rellena lo que sobra: en negro
           // pasa desapercibido. Sin imagen, el degradado de marca lo tapa entero.
@@ -59,7 +59,7 @@ export function HeaderRestaurante({ empresa }: { empresa: CartaEmpresaPublica })
               className="absolute inset-0"
               style={{
                 background:
-                  "radial-gradient(115% 75% at 50% 22%, color-mix(in srgb, var(--carta-acento) 92%, #fff) 0%, var(--carta-primario) 42%, #060505 100%)",
+                  "radial-gradient(115% 78% at 50% 20%, color-mix(in srgb, var(--carta-acento) 92%, #fff) 0%, var(--carta-primario) 40%, var(--carta-fondo) 100%)",
               }}
             />
             <div
@@ -91,7 +91,7 @@ export function HeaderRestaurante({ empresa }: { empresa: CartaEmpresaPublica })
           style={{
             opacity: heroOpacity,
             background:
-              "linear-gradient(180deg, rgba(0,0,0,0.15) 0%, rgba(0,0,0,0.05) 35%, rgba(0,0,0,0.55) 100%)",
+              "linear-gradient(180deg, rgba(0,0,0,0.12) 0%, rgba(0,0,0,0.04) 40%, rgba(0,0,0,0.30) 100%)",
           }}
         />
 
@@ -110,15 +110,33 @@ export function HeaderRestaurante({ empresa }: { empresa: CartaEmpresaPublica })
                 // se duplicaba con el <h1> justo debajo. Y va sobre un disco
                 // claro sólido —no un cristal translúcido— porque un isotipo
                 // dorado sobre un hero dorado desaparecía por completo.
-                <div className="mb-5 flex h-[74px] w-[74px] items-center justify-center overflow-hidden rounded-full bg-white shadow-[0_6px_28px_rgba(0,0,0,0.35)] ring-1 ring-black/5 sm:h-[88px] sm:w-[88px]">
-                  <Image
-                    src={marcaUrl}
-                    alt=""
-                    width={88}
-                    height={88}
-                    className="h-full w-full object-contain p-2.5"
+                // Isotipo DORADO sobre disco NEGRO. Dorado a secas sobre el
+                // hero —que también es dorado— volvía a desaparecer: el color
+                // de marca necesita el negro detrás para leerse. El PNG es
+                // negro con alfa, así que el trazo se tiñe con `mask-image`.
+                <span
+                  aria-hidden
+                  className="mb-4 flex h-[76px] w-[76px] items-center justify-center rounded-full shadow-[0_6px_26px_rgba(0,0,0,0.5)] sm:h-[90px] sm:w-[90px]"
+                  style={{
+                    backgroundColor: "#0B0B0B",
+                    border: "1px solid color-mix(in srgb, var(--carta-acento) 45%, transparent)",
+                  }}
+                >
+                  <span
+                    className="h-[58%] w-[58%]"
+                    style={{
+                      backgroundColor: "var(--carta-acento)",
+                      WebkitMaskImage: `url(${marcaUrl})`,
+                      maskImage: `url(${marcaUrl})`,
+                      WebkitMaskRepeat: "no-repeat",
+                      maskRepeat: "no-repeat",
+                      WebkitMaskPosition: "center",
+                      maskPosition: "center",
+                      WebkitMaskSize: "contain",
+                      maskSize: "contain",
+                    }}
                   />
-                </div>
+                </span>
               ) : null}
 
               <h1
@@ -138,44 +156,29 @@ export function HeaderRestaurante({ empresa }: { empresa: CartaEmpresaPublica })
         </div>
       </div>
 
+      {/* Barra al hacer scroll: SOLO el nombre. Antes repetía el isotipo que ya
+          preside el hero justo encima —el mismo icono dos veces en pantalla— y
+          un rótulo "Carta digital" que no dice nada al comensal: ya sabe que
+          está leyendo la carta, la abrió con el QR de su mesa. */}
       <div
-        className={`sticky top-0 z-30 border-b transition-all ${compact ? "shadow-sm" : ""}`}
+        className="sticky top-0 z-30 transition-all"
         style={{
           backgroundColor: compact ? "var(--carta-fondo)" : "transparent",
-          borderColor: compact ? "var(--carta-borde)" : "transparent",
+          boxShadow: compact ? "0 1px 0 var(--carta-borde)" : "none",
           backdropFilter: compact ? "saturate(140%) blur(10px)" : "none",
           WebkitBackdropFilter: compact ? "saturate(140%) blur(10px)" : "none",
         }}
       >
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-2.5 sm:px-6">
-          <div className="flex items-center gap-2.5 overflow-hidden">
-            {compact && marcaUrl ? (
-              <span className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full bg-white ring-1 ring-black/5">
-                <Image
-                  src={marcaUrl}
-                  alt=""
-                  width={28}
-                  height={28}
-                  className="h-full w-full object-contain p-0.5"
-                />
-              </span>
-            ) : null}
-            <span
-              className={`truncate font-light tracking-wide transition-all ${compact ? "text-base opacity-100" : "text-base opacity-0"}`}
-              style={{ fontFamily: "var(--carta-fuente-titulos)", color: "var(--carta-texto)" }}
-            >
-              {empresa.nombre}
-            </span>
-          </div>
-
+        <div className="mx-auto flex max-w-6xl items-center px-4 py-2.5 sm:px-6">
           <span
-            className="hidden text-[10px] font-medium uppercase tracking-[0.3em] sm:inline"
-            style={{ color: "var(--carta-texto-tenue)" }}
+            className={`truncate text-base font-light tracking-[0.14em] transition-opacity duration-300 ${compact ? "opacity-100" : "opacity-0"}`}
+            style={{ fontFamily: "var(--carta-fuente-titulos)", color: "var(--carta-texto)" }}
           >
-            Carta digital
+            {empresa.nombre}
           </span>
         </div>
       </div>
+
     </header>
   );
 }
