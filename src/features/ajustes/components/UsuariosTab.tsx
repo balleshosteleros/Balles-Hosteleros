@@ -1012,7 +1012,8 @@ function EditarUsuarioModal({
               contraseña y se avisa al empleado. También es con el que entra por Google.
             </p>
           </div>
-          <div>
+          {/* Ancho completo: antes compartia fila con el selector ESTADO, ya retirado. */}
+          <div className="col-span-2">
             <Label className="text-xs font-bold">ROL</Label>
             <Select value={rolValue} onValueChange={cambiarRol}>
               <SelectTrigger><SelectValue placeholder="Selecciona rol" /></SelectTrigger>
@@ -1027,16 +1028,10 @@ function EditarUsuarioModal({
               Los departamentos y permisos se configuran en cada rol.
             </p>
           </div>
-          <div>
-            <Label className="text-xs font-bold">ESTADO</Label>
-            <Select value={form.estadoAcceso} onValueChange={(v) => setForm((p) => ({ ...p, estadoAcceso: v as EstadoAcceso }))}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="Activo">Activo</SelectItem>
-                <SelectItem value="Inactivo">Inactivo</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+          {/* El selector ESTADO vivía aquí. Se elimina: no se guardaba (al guardar
+              solo viajan nombre, apellidos, rol y esEmpleado), así que aparentaba
+              desactivar a alguien sin hacerlo. Para eso está el botón «Desactivar»
+              de cada fila de la lista, que sí escribe en la base de datos. */}
           <div className="col-span-2 rounded-md border bg-muted/30 px-2.5 py-2">
             <label className="flex items-start gap-2 cursor-pointer">
               <Checkbox
