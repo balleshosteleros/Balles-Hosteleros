@@ -203,14 +203,29 @@ export async function importarUnidad(
     let omitidos = 0;
     const errores: Array<{ archivo: string; motivo: string }> = [];
 
-    // Margen de seguridad: se para antes de que la función se corte sola, para
-    // poder guardar el progreso. La pantalla vuelve a llamar y sigue.
-    const limite = Date.now() + 4.5 * 60 * 1000;
-    let terminada = true;
+    // El árbol de la unidad se lee UNA sola vez y se guarda en la importación.
+    //
+    // Antes se releía en cada llamada, y con 12.000 archivos esa lectura tarda
+    // más que la ventana de ejecución: el bucle salía por tiempo antes de
+    // copiar el primer archivo, guardaba "0 copiados", y la llamada siguiente
+    // empezaba de cero. Nunca avanzaba.
+    const { data: guardado } = await admin
+      .from("archivos_importaciones")
+      .select("arbol")
+      .eq("id", impId)
+      .maybeSingle();
 
-    // La unidad se lee ENTERA una vez, no carpeta por carpeta: con cientos de
-    // carpetas eran cientos de llamadas en serie y no avanzaba.
-    const todos = await listarUnidadCompleta(token, unidadId);
+    let todos: Awaited<ReturnType<typeof listarUnidadCompleta>>;
+    if (Array.isArray(guardado?.arbol) && guardado.arbol.length) {
+      todos = guardado.arbol as typeof todos;
+    } else {
+      todos = await listarUnidadCompleta(token, unidadId);
+      await admin
+        .from("archivos_importaciones")
+        .update({ arbol: todos, total_archivos: todos.filter((f) => !f.esCarpeta).length })
+        .eq("id", impId);
+    }
+
     const hijosDe = new Map<string, typeof todos>();
     for (const f of todos) {
       const padre = f.padreId ?? unidadId;
@@ -218,6 +233,16 @@ export async function importarUnidad(
       lista.push(f);
       hijosDe.set(padre, lista);
     }
+
+    // Margen de seguridad: se para antes de que la función se corte sola, para
+    // poder guardar el progreso. La pantalla vuelve a llamar y sigue.
+    //
+    // El reloj arranca AQUÍ, ya con el árbol resuelto: si empezara antes, la
+    // lectura de Drive se comería la ventana entera y no daría tiempo a copiar
+    // ni un archivo.
+    const limite = Date.now() + 4 * 60 * 1000;
+    let terminada = true;
+
 
     // Cada rama arranca en la carpeta de departamento que se le asignó.
     const pendientes: Array<{ driveId: string; destinoId: string; depto: string }> = [];
