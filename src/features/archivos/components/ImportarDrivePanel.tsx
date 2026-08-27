@@ -18,7 +18,6 @@ import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
 import { toast } from "sonner";
 import {
   listarUnidades,
-  inventariarUnidad,
   importarUnidad,
   getImportaciones,
 } from "@/features/archivos/actions/importar-drive-actions";
@@ -63,7 +62,7 @@ export function ImportarDrivePanel() {
   const [faltaPermiso, setFaltaPermiso] = useState(false);
   // Permite salir de una lectura que se eterniza: sin esto, la pantalla se
   // quedaba con todo deshabilitado y sin ninguna salida.
-  const cancelado = useRef(false);
+  const cancelado = useRef<AbortController | null>(null);
   const [historial, setHistorial] = useState<EstadoImportacion[]>([]);
 
   const cargarHistorial = useCallback(async () => {
@@ -117,24 +116,49 @@ export function ImportarDrivePanel() {
   };
 
   const onElegirUnidad = async (u: UnidadCompartidaUI) => {
-    cancelado.current = false;
+    // Abortable de verdad: cancelar corta la petición, no solo ignora
+    // la respuesta. Y con tope de tiempo, para no esperar indefinidamente.
+    const ctrl = new AbortController();
+    cancelado.current = ctrl;
+    const corte = setTimeout(() => ctrl.abort(), 5 * 60 * 1000);
     setCargando(true);
-    const res = await inventariarUnidad(u.id, u.nombre);
-    // Si se canceló mientras Drive respondía, no se pisa la pantalla.
-    if (cancelado.current) return;
-    if (res.ok) {
-      setInventario(res.data);
+
+    try {
+      const params = new URLSearchParams({
+        unidadId: u.id,
+        unidadNombre: u.nombre,
+      });
+      const res = await fetch(`/api/archivos/drive/inventario?${params}`, {
+        signal: ctrl.signal,
+      });
+      const json = (await res.json()) as
+        | { ok: true; data: Inventario }
+        | { ok: false; error: string };
+
+      if (!json.ok) {
+        if (json.error.includes("permiso de Drive")) setFaltaPermiso(true);
+        else toast.error(json.error);
+        return;
+      }
+
+      setInventario(json.data);
       // Propuesta automática: el usuario solo corrige lo que no encaje.
       const propuesto: Record<string, string> = {};
-      for (const c of res.data.carpetas) {
+      for (const c of json.data.carpetas) {
         const destino = proponerDestino(c.nombre, raices);
         if (destino) propuesto[c.id] = destino;
       }
       setMapeo(propuesto);
-    } else {
-      toast.error(res.error);
+    } catch (err) {
+      // Cancelar (a mano o por tiempo) no es un error que reportar.
+      if ((err as Error)?.name !== "AbortError") {
+        toast.error("No se pudo leer la unidad. Inténtalo de nuevo.");
+      }
+    } finally {
+      clearTimeout(corte);
+      cancelado.current = null;
+      setCargando(false);
     }
-    setCargando(false);
   };
 
   const onImportar = async () => {
@@ -233,10 +257,7 @@ export function ImportarDrivePanel() {
               <span>Leyendo Drive… con muchas carpetas puede tardar un rato.</span>
               <button
                 className="ml-auto shrink-0 underline hover:text-foreground"
-                onClick={() => {
-                  cancelado.current = true;
-                  setCargando(false);
-                }}
+                onClick={() => cancelado.current?.abort()}
               >
                 Cancelar
               </button>

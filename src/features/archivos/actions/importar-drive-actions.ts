@@ -36,9 +36,7 @@ import { cookies } from "next/headers";
 // Los tipos viven aparte: un fichero "use server" solo puede exportar
 // funciones async, y exportar interfaces desde aquí rompe el componente.
 import type {
-  CarpetaRaizDrive,
   EstadoImportacion,
-  Inventario,
   Mapeo,
 } from "@/features/archivos/types/paneles";
 
@@ -102,93 +100,6 @@ export async function listarUnidades(): Promise<Res<UnidadCompartida[]>> {
 /* ─────────────────────────────────────────────────────────────────────────
  * 2 · INVENTARIO
  * ────────────────────────────────────────────────────────────────────────*/
-
-/**
- * Inventario de la unidad: qué carpetas tiene arriba, cuántos archivos cuelgan
- * de cada una y cuánto pesan. Es lo que se enseña antes de importar nada.
- *
- * Se lee la unidad ENTERA de una vez y el árbol se arma aquí. Antes se pedía
- * carpeta por carpeta y con cientos de carpetas eran cientos de llamadas en
- * serie: se quedaba "Leyendo Drive…" más de diez minutos.
- */
-export async function inventariarUnidad(
-  unidadId: string,
-  unidadNombre: string,
-): Promise<Res<Inventario>> {
-  try {
-    const token = await getAccessToken();
-    if (!token) return fallo("Conecta primero la cuenta de Google.");
-
-    const todos = await listarUnidadCompleta(token, unidadId);
-
-    // Hijos por carpeta, para poder bajar por el árbol sin volver a Drive.
-    const hijosDe = new Map<string, typeof todos>();
-    for (const f of todos) {
-      const padre = f.padreId ?? unidadId;
-      const lista = hijosDe.get(padre) ?? [];
-      lista.push(f);
-      hijosDe.set(padre, lista);
-    }
-
-    /** Suma todo lo que cuelga de una carpeta, ya en memoria. */
-    const contarRama = (carpetaId: string) => {
-      let archivos = 0;
-      let bytes = 0;
-      const pendientes = [carpetaId];
-      const vistos = new Set<string>();
-      while (pendientes.length) {
-        const actual = pendientes.pop()!;
-        // Un atajo de Drive puede crear un ciclo: se corta.
-        if (vistos.has(actual)) continue;
-        vistos.add(actual);
-        for (const h of hijosDe.get(actual) ?? []) {
-          if (h.esCarpeta) pendientes.push(h.id);
-          else {
-            archivos++;
-            bytes += h.tamano;
-          }
-        }
-      }
-      return { archivos, bytes };
-    };
-
-    const carpetas: CarpetaRaizDrive[] = [];
-    let sueltos = 0;
-    let sueltosBytes = 0;
-
-    for (const item of hijosDe.get(unidadId) ?? []) {
-      if (item.esCarpeta) {
-        const { archivos, bytes } = contarRama(item.id);
-        carpetas.push({ id: item.id, nombre: item.nombre, archivos, bytes });
-      } else {
-        sueltos++;
-        sueltosBytes += item.tamano;
-      }
-    }
-
-    return {
-      ok: true,
-      data: {
-        unidadId,
-        unidadNombre,
-        carpetas: carpetas.sort((a, b) => a.nombre.localeCompare(b.nombre)),
-        sueltos,
-        sueltosBytes,
-        totalArchivos: carpetas.reduce((s, c) => s + c.archivos, 0) + sueltos,
-        totalBytes: carpetas.reduce((s, c) => s + c.bytes, 0) + sueltosBytes,
-      },
-    };
-  } catch (err) {
-    const msg = mensajeError(err);
-    console.error("[importar-drive] inventariarUnidad:", msg);
-    if (msg.includes("SCOPE_INSUFFICIENT") || msg.includes("insufficient")) {
-      return fallo(
-        "Tu conexión con Google es anterior al permiso de Drive. Vuelve a conectar la cuenta y acepta el acceso a Drive.",
-      );
-    }
-    return fallo(msg);
-  }
-}
 
 /* ─────────────────────────────────────────────────────────────────────────
  * 3 · IMPORTAR
