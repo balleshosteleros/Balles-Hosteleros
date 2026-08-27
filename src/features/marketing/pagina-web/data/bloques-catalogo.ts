@@ -41,6 +41,8 @@ export const BLOQUES_CATALOGO: BloqueCatalogoEntrada[] = [
   { tipo: "video", label: "Video", descripcion: "YouTube / Vimeo / MP4", icon: PlayCircle },
   { tipo: "bolsa_inspectores", label: "Bolsa inspectores", descripcion: "CTA para inscripción de inspectores externos", icon: Briefcase },
   { tipo: "redes", label: "Redes sociales", descripcion: "Enlaces que salen de Ajustes de la empresa", icon: Share2 },
+  { tipo: "instagram", label: "Instagram", descripcion: "Tarjeta de perfil con seguidores y verificado", icon: Images },
+  { tipo: "historia", label: "Nuestra historia", descripcion: "Relato + foto + valoración de Google", icon: Images },
   { tipo: "premios", label: "Premios", descripcion: "Insignias y reconocimientos (Restaurant Guru…)", icon: Images },
   { tipo: "collage_carta", label: "Collage + carta", descripcion: "Mosaico de fotos con el botón a la carta digital", icon: Images },
 ];

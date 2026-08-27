@@ -112,6 +112,18 @@ export function crearBloqueDefault(tipo: BloqueTipo, orden: number): Bloque {
           descripcion: "Todo lo que pasa en el local, cada día.",
         },
       };
+    case "instagram":
+      return {
+        ...base,
+        tipo,
+        datos: { usuario: "", titulo: "Síguenos en Instagram", cta_label: "Seguir", verificado: false },
+      };
+    case "historia":
+      return {
+        ...base,
+        tipo,
+        datos: { desde: "2022", titulo: "Nuestra historia", parrafos: [] },
+      };
     case "premios":
       return {
         ...base,

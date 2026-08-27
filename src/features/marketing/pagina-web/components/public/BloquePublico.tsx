@@ -54,6 +54,10 @@ export function BloquePublico({
       return <CollageCartaPublico bloque={bloque} contexto={contexto} />;
     case "premios":
       return <PremiosPublico bloque={bloque} />;
+    case "historia":
+      return <HistoriaPublica bloque={bloque} />;
+    case "instagram":
+      return <InstagramPublico bloque={bloque} />;
   }
 }
 
@@ -130,6 +134,157 @@ function RedesPublico({
  * comprobar: un premio que no se puede verificar resta credibilidad en vez de
  * sumarla.
  */
+/**
+ * Nuestra historia: foto a un lado, relato al otro, con el año de apertura en
+ * grande y la valoración de Google como prueba social. Antes era un
+ * `texto_libre`: un párrafo suelto, sin imagen ni jerarquía, que se leía como
+ * un pie de página perdido a mitad de web.
+ */
+/**
+ * Tarjeta de Instagram al estilo del propio perfil: avatar con aro de color,
+ * arroba, tick de verificado y contador de seguidores. Un CTA de texto plano
+ * ("Síguenos en Instagram") no transmite la comunidad que hay detrás.
+ */
+function InstagramPublico({ bloque }: { bloque: Extract<Bloque, { tipo: "instagram" }> }) {
+  const { usuario, titulo, frase, seguidores, publicaciones, verificado, avatar_url, cta_label } =
+    bloque.datos;
+  const href = `https://www.instagram.com/${usuario.replace(/^@/, "")}`;
+
+  return (
+    <section className="px-4 py-20 md:py-28 text-center" id="instagram">
+      <h2 className="pw-h2 font-extrabold">{titulo}</h2>
+      {frase ? <p className="mx-auto mt-4 max-w-2xl opacity-75">{frase}</p> : null}
+
+      <a
+        href={href}
+        target="_blank"
+        rel="noreferrer noopener"
+        className="mx-auto mt-10 flex max-w-md flex-col items-center gap-4 rounded-2xl border border-white/10 bg-white/[0.04] px-8 py-9 transition-colors hover:bg-white/[0.07]"
+      >
+        {/* Aro degradado de Instagram alrededor del avatar. */}
+        <span
+          className="flex h-[86px] w-[86px] items-center justify-center rounded-full p-[3px]"
+          style={{ background: "linear-gradient(45deg,#f09433,#e6683c,#dc2743,#cc2366,#bc1888)" }}
+        >
+          <span className="flex h-full w-full items-center justify-center overflow-hidden rounded-full bg-black">
+            {avatar_url ? (
+              /* eslint-disable-next-line @next/next/no-img-element */
+              <img src={avatar_url} alt={usuario} className="h-full w-full object-cover" />
+            ) : (
+              <svg viewBox="0 0 24 24" fill="currentColor" className="h-9 w-9 text-white/80">
+                <path d="M12 2.2c3.2 0 3.6 0 4.9.07 1.2.05 1.8.25 2.2.42.6.22 1 .48 1.4.9.43.42.7.82.92 1.4.17.4.37 1 .42 2.2.06 1.3.07 1.7.07 4.9s0 3.6-.07 4.9c-.05 1.2-.25 1.8-.42 2.2-.22.6-.5 1-.92 1.4-.42.43-.82.7-1.4.92-.4.17-1 .37-2.2.42-1.3.06-1.7.07-4.9.07s-3.6 0-4.9-.07c-1.2-.05-1.8-.25-2.2-.42-.6-.22-1-.5-1.4-.92-.43-.42-.7-.82-.92-1.4-.17-.4-.37-1-.42-2.2C2.2 15.6 2.2 15.2 2.2 12s0-3.6.07-4.9c.05-1.2.25-1.8.42-2.2.22-.6.5-1 .92-1.4.42-.43.82-.7 1.4-.92.4-.17 1-.37 2.2-.42C8.4 2.2 8.8 2.2 12 2.2zm0 5.4a4.4 4.4 0 100 8.8 4.4 4.4 0 000-8.8zm0 7.25a2.85 2.85 0 110-5.7 2.85 2.85 0 010 5.7zm5.6-7.42a1.03 1.03 0 11-2.05 0 1.03 1.03 0 012.05 0z" />
+              </svg>
+            )}
+          </span>
+        </span>
+
+        <span className="flex items-center justify-center gap-1.5">
+          <span className="text-lg font-bold">@{usuario.replace(/^@/, "")}</span>
+          {verificado ? (
+            /* Tick azul de cuenta verificada, dibujado (no es una imagen de Meta). */
+            <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" aria-label="Cuenta verificada">
+              <path
+                fill="#3897F0"
+                d="M12 1.8l2.4 1.9 3-.3 1.1 2.8 2.7 1.4-.6 3 1.7 2.5-2 2.3.2 3-3 .8-1.6 2.6-2.9-1-2.9 1-1.6-2.6-3-.8.2-3-2-2.3L4.4 8.6 3.8 5.6l2.7-1.4L7.6 1.4l3 .3z"
+              />
+              <path fill="#fff" d="M10.6 15.2l-2.9-2.9 1.3-1.3 1.6 1.6 4-4 1.3 1.3z" />
+            </svg>
+          ) : null}
+        </span>
+
+        {seguidores || publicaciones ? (
+          <span className="flex items-center gap-8">
+            {publicaciones ? (
+              <span className="text-center">
+                <span className="block text-xl font-extrabold">{publicaciones}</span>
+                <span className="block text-[11px] uppercase tracking-wider opacity-55">Publicaciones</span>
+              </span>
+            ) : null}
+            {seguidores ? (
+              <span className="text-center">
+                <span className="block text-xl font-extrabold" style={{ color: "var(--pw-primario)" }}>
+                  {seguidores}
+                </span>
+                <span className="block text-[11px] uppercase tracking-wider opacity-55">Seguidores</span>
+              </span>
+            ) : null}
+          </span>
+        ) : null}
+
+        <span
+          className="mt-2 inline-block rounded-full px-8 py-3 text-xs font-bold uppercase tracking-wider text-black"
+          style={{ backgroundColor: "var(--pw-primario)" }}
+        >
+          {cta_label}
+        </span>
+      </a>
+    </section>
+  );
+}
+
+function HistoriaPublica({ bloque }: { bloque: Extract<Bloque, { tipo: "historia" }> }) {
+  const { desde, titulo, parrafos, imagen_url, rating, rating_total, rating_href } = bloque.datos;
+
+  return (
+    <section className="px-4 py-20 md:py-28" id="historia">
+      <div className="mx-auto grid max-w-6xl items-center gap-12 md:grid-cols-2 md:gap-16">
+        {imagen_url ? (
+          <div className="relative order-1 md:order-none">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={imagenOptimizada(imagen_url, { width: 900, quality: 74 })}
+              srcSet={srcSetOptimizado(imagen_url, [600, 900, 1200])}
+              sizes="(max-width: 768px) 92vw, 45vw"
+              alt={titulo}
+              loading="lazy"
+              decoding="async"
+              className="aspect-[4/5] w-full rounded-2xl object-cover"
+            />
+            {/* Año de apertura montado sobre la foto: ancla la historia de un vistazo. */}
+            <div
+              className="absolute -bottom-5 left-6 rounded-xl px-6 py-3 text-center shadow-xl"
+              style={{ backgroundColor: "var(--pw-primario)" }}
+            >
+              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-black/70">Desde</p>
+              <p className="text-2xl font-extrabold leading-none text-black">{desde}</p>
+            </div>
+          </div>
+        ) : null}
+
+        <div className="text-left">
+          <span className="mb-6 block h-px w-14" style={{ backgroundColor: "var(--pw-primario)" }} />
+          <h2 className="pw-h2 font-extrabold leading-tight">{titulo}</h2>
+          <div className="mt-6 space-y-4">
+            {parrafos.map((t, i) => (
+              <p key={i} className="text-[15px] leading-relaxed opacity-80 md:text-base">
+                {t}
+              </p>
+            ))}
+          </div>
+
+          {rating ? (
+            <a
+              href={rating_href ?? "#"}
+              {...(rating_href ? { target: "_blank", rel: "noreferrer noopener" } : {})}
+              className="mt-9 inline-flex items-center gap-4 rounded-xl border border-white/10 bg-white/[0.04] px-6 py-4 transition-colors hover:bg-white/[0.07]"
+            >
+              <span className="text-3xl font-extrabold leading-none" style={{ color: "var(--pw-primario)" }}>
+                {rating}
+              </span>
+              <span className="text-left">
+                <span className="block text-sm" style={{ color: "var(--pw-primario)" }}>
+                  {"★".repeat(5)}
+                </span>
+                <span className="block text-xs opacity-60">{rating_total}</span>
+              </span>
+            </a>
+          ) : null}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function PremiosPublico({ bloque }: { bloque: Extract<Bloque, { tipo: "premios" }> }) {
   const { titulo, frase, href, items } = bloque.datos;
   if (!items.length) return null;
@@ -217,7 +372,9 @@ function IframeAutoAlto({ src, titulo }: { src: string; titulo: string }) {
       ref={ref}
       src={src}
       title={titulo}
-      className="w-full overflow-hidden rounded-xl border-0 bg-white"
+      // Sin fondo blanco ni bordes: el formulario tiene que leerse como parte
+      // de la web, no como un recuadro pegado encima.
+      className="w-full overflow-hidden border-0 bg-transparent"
       style={{ height: `${alto}px` }}
       scrolling="no"
       loading="lazy"
@@ -336,7 +493,10 @@ function HeroPublico({ bloque }: { bloque: Extract<Bloque, { tipo: "hero" }> }) 
           loop
           playsInline
           preload="metadata"
-          className="absolute inset-0 h-full w-full object-cover"
+          // Desenfoque y oscurecido suaves: el vídeo es AMBIENTE, no una tele
+          // encendida. `scale-105` evita el borde claro que deja el blur.
+          className="absolute inset-0 h-full w-full scale-105 object-cover"
+          style={{ filter: "blur(3px) brightness(0.62) saturate(0.92)" }}
         />
       ) : poster ? (
         <div
@@ -572,7 +732,7 @@ function ReservasPublico({
   const { modo, url } = bloque.datos;
   const slug = contexto?.empresaSlug ?? null;
   return (
-    <section className="py-20 md:py-28 px-4 max-w-3xl mx-auto text-center" id="reservas">
+    <section className="py-20 md:py-28 px-4 max-w-5xl mx-auto text-center" id="reservas">
       <h2 className="pw-h2 font-extrabold">{bloque.datos.titulo ?? "Reservas"}</h2>
       {bloque.datos.subtitulo ? (
         <p className="mt-3 text-muted-foreground max-w-2xl mx-auto">
@@ -890,6 +1050,7 @@ function FormularioPublico({
 
 function MapaPublico({ bloque }: { bloque: Extract<Bloque, { tipo: "mapa" }> }) {
   const { lat, lng, zoom, direccion_texto } = bloque.datos;
+  const [mapaActivo, setMapaActivo] = useState(false);
   const src = `https://www.openstreetmap.org/export/embed.html?bbox=${lng - 0.01},${lat - 0.01},${lng + 0.01},${lat + 0.01}&layer=mapnik&marker=${lat},${lng}&zoom=${zoom}`;
   // `id="mapa"`: el pie enlaza la dirección con href="#mapa". Sin este ancla el
   // enlace no hacía nada al pulsarlo.
@@ -916,8 +1077,30 @@ function MapaPublico({ bloque }: { bloque: Extract<Bloque, { tipo: "mapa" }> }) 
       </p>
       {/* Fondo claro bajo el iframe: si el mapa tarda o falla, se ve un hueco
           gris en vez de un agujero negro sobre el fondo oscuro de la web. */}
-      <div className="aspect-[16/9] w-full overflow-hidden rounded-xl border border-white/10 bg-neutral-200">
-        <iframe src={src} className="h-full w-full" title="Mapa" loading="lazy" />
+      {/* El mapa NO captura la rueda del ratón: al bajar por la web con el
+          cursor encima, en vez de seguir bajando hacía zoom. El velo invisible
+          se lleva el scroll; al pulsar sobre el mapa se desactiva y ya se puede
+          arrastrar y hacer zoom con normalidad. */}
+      <div className="relative aspect-[16/9] w-full overflow-hidden rounded-xl border border-white/10 bg-neutral-200">
+        <iframe
+          src={src}
+          className="h-full w-full"
+          title="Mapa"
+          loading="lazy"
+          style={{ pointerEvents: mapaActivo ? "auto" : "none" }}
+        />
+        {!mapaActivo ? (
+          <button
+            type="button"
+            onClick={() => setMapaActivo(true)}
+            aria-label="Activar el mapa"
+            className="absolute inset-0 flex items-end justify-center bg-transparent pb-4"
+          >
+            <span className="rounded-full bg-black/70 px-4 py-2 text-xs font-semibold text-white backdrop-blur-sm">
+              Pulsa para mover el mapa
+            </span>
+          </button>
+        ) : null}
       </div>
     </section>
   );
@@ -929,11 +1112,14 @@ function FooterPublico({ bloque }: { bloque: Extract<Bloque, { tipo: "footer" }>
     /* `id="contacto"`: la barra superior enlaza aquí (href="#contacto"), donde
        viven teléfono, correo y horarios. */
     <footer className="bg-black text-white py-16 px-4 scroll-mt-24" id="contacto">
-      <div className="max-w-6xl mx-auto grid md:grid-cols-4 gap-8">
+      <div className="mx-auto grid max-w-6xl gap-10 md:grid-cols-3">
         {columnas.map((c, i) => (
           <div key={i}>
-            <h4 className="font-semibold mb-3">{c.titulo}</h4>
-            <ul className="space-y-1 text-sm opacity-80">
+            <h4 className="mb-1 text-xs font-bold uppercase tracking-[0.22em]" style={{ color: "var(--pw-primario)" }}>
+              {c.titulo}
+            </h4>
+            <span className="mb-4 block h-px w-10" style={{ backgroundColor: "var(--pw-primario)", opacity: 0.5 }} />
+            <ul className="space-y-2 text-sm opacity-75">
               {c.items.map((it, j) => {
                 // Los horarios se guardan como items con href="#" porque no
                 // llevan a ninguna parte. Pintados como enlace, al pulsarlos

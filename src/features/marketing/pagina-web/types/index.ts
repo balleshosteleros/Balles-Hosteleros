@@ -24,6 +24,8 @@ export const BLOQUE_TIPOS = [
   "redes",
   "collage_carta",
   "premios",
+  "historia",
+  "instagram",
 ] as const;
 
 export type BloqueTipo = (typeof BLOQUE_TIPOS)[number];
@@ -156,7 +158,9 @@ export type Bloque =
   | (BloqueBase & { tipo: "bolsa_inspectores"; datos: BolsaInspectoresDatos })
   | (BloqueBase & { tipo: "redes"; datos: RedesDatos })
   | (BloqueBase & { tipo: "collage_carta"; datos: CollageCartaDatos })
-  | (BloqueBase & { tipo: "premios"; datos: PremiosDatos });
+  | (BloqueBase & { tipo: "premios"; datos: PremiosDatos })
+  | (BloqueBase & { tipo: "historia"; datos: HistoriaDatos })
+  | (BloqueBase & { tipo: "instagram"; datos: InstagramDatos });
 
 export type BloqueDatos<T extends BloqueTipo> = Extract<Bloque, { tipo: T }>["datos"];
 
@@ -205,6 +209,38 @@ export interface PremiosDatos {
     fuente?: string;
     imagen_url?: string;
   }>;
+}
+
+/**
+ * Nuestra historia: texto a un lado, foto al otro, con el año de apertura
+ * destacado y la valoración de Google. Sustituye al `texto_libre`, que pintaba
+ * un párrafo suelto sin jerarquía ni imagen.
+ */
+export interface HistoriaDatos {
+  desde: string;
+  titulo: string;
+  parrafos: string[];
+  imagen_url?: string;
+  /** Valoración de Google: se muestra como prueba social junto a la historia. */
+  rating?: string;
+  rating_total?: string;
+  rating_href?: string;
+}
+
+/**
+ * Tarjeta de Instagram al estilo del propio perfil: avatar, arroba, tick de
+ * verificado y seguidores. Un CTA de texto plano no transmite la comunidad que
+ * hay detrás; el número sí.
+ */
+export interface InstagramDatos {
+  usuario: string;
+  titulo: string;
+  frase?: string;
+  seguidores?: string;
+  publicaciones?: string;
+  verificado?: boolean;
+  avatar_url?: string;
+  cta_label: string;
 }
 
 export interface BrandingSnapshot {

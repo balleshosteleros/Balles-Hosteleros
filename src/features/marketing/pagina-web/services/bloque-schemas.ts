@@ -188,6 +188,27 @@ export const premiosDatosSchema = z.object({
     .max(12),
 });
 
+export const historiaDatosSchema = z.object({
+  desde: z.string().min(1).max(20),
+  titulo: z.string().min(1).max(200),
+  parrafos: z.array(z.string().max(1200)).max(6),
+  imagen_url: z.string().url().max(1000).optional(),
+  rating: z.string().max(10).optional(),
+  rating_total: z.string().max(30).optional(),
+  rating_href: z.string().url().max(1000).optional(),
+});
+
+export const instagramDatosSchema = z.object({
+  usuario: z.string().min(1).max(60),
+  titulo: z.string().min(1).max(200),
+  frase: z.string().max(400).optional(),
+  seguidores: z.string().max(20).optional(),
+  publicaciones: z.string().max(20).optional(),
+  verificado: z.boolean().optional(),
+  avatar_url: z.string().url().max(1000).optional(),
+  cta_label: z.string().min(1).max(60),
+});
+
 export const redesDatosSchema = z.object({
   titulo: z.string().min(1).max(200),
   descripcion: z.string().max(500).optional(),
@@ -209,6 +230,8 @@ export const datosSchemaPorTipo = {
   redes: redesDatosSchema,
   collage_carta: collageCartaDatosSchema,
   premios: premiosDatosSchema,
+  historia: historiaDatosSchema,
+  instagram: instagramDatosSchema,
 } as const;
 
 export const bloqueSchema = z.discriminatedUnion("tipo", [
@@ -227,6 +250,8 @@ export const bloqueSchema = z.discriminatedUnion("tipo", [
   bloqueBaseSchema.extend({ tipo: z.literal("redes"), datos: redesDatosSchema }),
   bloqueBaseSchema.extend({ tipo: z.literal("collage_carta"), datos: collageCartaDatosSchema }),
   bloqueBaseSchema.extend({ tipo: z.literal("premios"), datos: premiosDatosSchema }),
+  bloqueBaseSchema.extend({ tipo: z.literal("historia"), datos: historiaDatosSchema }),
+  bloqueBaseSchema.extend({ tipo: z.literal("instagram"), datos: instagramDatosSchema }),
 ]);
 
 export const bloquesArraySchema = z.array(bloqueSchema).max(80);
