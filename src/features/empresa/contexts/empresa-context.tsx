@@ -152,6 +152,9 @@ const EmpresaContext = createContext<EmpresaContextValue | null>(null);
 export function EmpresaProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
   const isHydrated = useRef(false);
+  // Se rearmó ya la cookie de empresa en esta carga. Evita el ciclo
+  // rearmar → router.refresh() → rearmar… que recargaba la vista sin parar.
+  const rearmadoCookie = useRef(false);
   const [, startTransition] = useTransition();
   const showLoading = useGlobalLoading((s) => s.show);
   const hideLoading = useGlobalLoading((s) => s.hide);
@@ -243,7 +246,19 @@ export function EmpresaProvider({ children }: { children: ReactNode }) {
           const elegida =
             restored ?? list.find((e) => e.id === EMPRESAS[0].id) ?? list[0];
           setEmpresaId(elegida.id);
-          if (elegida.dbId) {
+          // El re-armado de cookie + refresh se hace UNA SOLA VEZ por carga.
+          //
+          // `router.refresh()` vuelve a ejecutar este efecto. Si al volver la
+          // cookie sigue sin casar (por ejemplo, porque la respuesta aún no la
+          // había fijado en el navegador), se rearmaba y se refrescaba otra vez,
+          // y otra: la pantalla se recargaba sola cada ~21 s indefinidamente.
+          // En los logs se veía como un GET a /mi-panel cada 21 s exactos, con
+          // ráfagas de casi 30 server actions por segundo detrás de cada uno,
+          // hasta que el navegador tiraba la pestaña ("This page couldn't load").
+          // Le tocaba a quien tiene DOS empresas, que es cuando la cookie puede
+          // no casar con la empresa de la ficha.
+          if (elegida.dbId && !rearmadoCookie.current) {
+            rearmadoCookie.current = true;
             setEmpresaActiva(elegida.dbId)
               .then((res) => {
                 // La primera pintura pudo salir con la empresa del servidor (otra):
