@@ -252,7 +252,7 @@ function CollageCartaPublico({
       {/* Mosaico: en móvil 2 columnas, en escritorio 3. Las fotos van a sangre
           y en blanco y negro suave, para que el texto de encima se lea siempre
           sin depender de lo clara que sea cada foto. */}
-      <div className="grid grid-cols-2 md:grid-cols-3">
+      <div className="grid h-[420px] grid-cols-2 grid-rows-2 md:h-[460px] md:grid-cols-3">
         {fotos.map((img, i) => (
           /* eslint-disable-next-line @next/next/no-img-element */
           <img
@@ -263,7 +263,7 @@ function CollageCartaPublico({
             alt={img.alt}
             loading="lazy"
             decoding="async"
-            className={`h-44 w-full object-cover md:h-72 ${i > 3 ? "hidden md:block" : ""}`}
+            className={`h-full w-full object-cover ${i > 3 ? "hidden md:block" : ""}`}
           />
         ))}
       </div>
@@ -888,8 +888,8 @@ function MapaPublico({ bloque }: { bloque: Extract<Bloque, { tipo: "mapa" }> }) 
   )}`;
 
   return (
-    <section className="py-12 px-4 max-w-6xl mx-auto scroll-mt-24" id="mapa">
-      <h2 className="text-3xl font-bold text-center mb-4">Cómo llegar</h2>
+    <section className="py-20 md:py-28 px-4 max-w-6xl mx-auto scroll-mt-24" id="mapa">
+      <h2 className="pw-h2 font-extrabold text-center mb-4">Cómo llegar</h2>
       <p className="text-center text-muted-foreground mb-3">{direccion_texto}</p>
       <p className="text-center mb-6">
         <a
@@ -902,8 +902,10 @@ function MapaPublico({ bloque }: { bloque: Extract<Bloque, { tipo: "mapa" }> }) 
           Abrir en Google Maps
         </a>
       </p>
-      <div className="aspect-[16/9] w-full rounded-md overflow-hidden border">
-        <iframe src={src} className="w-full h-full" title="Mapa" loading="lazy" />
+      {/* Fondo claro bajo el iframe: si el mapa tarda o falla, se ve un hueco
+          gris en vez de un agujero negro sobre el fondo oscuro de la web. */}
+      <div className="aspect-[16/9] w-full overflow-hidden rounded-xl border border-white/10 bg-neutral-200">
+        <iframe src={src} className="h-full w-full" title="Mapa" loading="lazy" />
       </div>
     </section>
   );
@@ -1011,7 +1013,9 @@ function VideoPublico({ bloque }: { bloque: Extract<Bloque, { tipo: "video" }> }
         ) : (
           <video
             src={url}
-            controls
+            // Con autoplay es fondo cinematográfico (como en GHL): sin controles
+            // ni barra de progreso. Sin autoplay sí los lleva, para poder darle.
+            controls={!autoplay}
             autoPlay={autoplay}
             muted={muted}
             loop={autoplay}
