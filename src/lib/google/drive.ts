@@ -147,6 +147,10 @@ export async function listarUnidadCompleta(
   const salida: DriveArchivo[] = [];
   let pageToken: string | undefined;
 
+  // Tope duro: una unidad enorme dejaría la pantalla colgada indefinidamente.
+  // 50.000 entradas son ~50 páginas; por encima, más vale avisar que esperar.
+  const MAX_ENTRADAS = 50_000;
+
   do {
     const params = new URLSearchParams({
       q: "trashed = false",
@@ -185,6 +189,12 @@ export async function listarUnidadCompleta(
     }
     onProgreso?.(salida.length);
     pageToken = json.nextPageToken;
+
+    if (salida.length >= MAX_ENTRADAS) {
+      throw new Error(
+        `Esta unidad tiene más de ${MAX_ENTRADAS.toLocaleString("es-ES")} elementos: demasiados para leerla de una vez. Importa carpetas más pequeñas por separado.`,
+      );
+    }
   } while (pageToken);
 
   return salida;

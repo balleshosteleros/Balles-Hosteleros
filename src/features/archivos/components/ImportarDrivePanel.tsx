@@ -11,7 +11,7 @@
  * miles de archivos es la única forma de que no se corte a medias.
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { HardDriveDownload, ChevronRight, AlertTriangle, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
@@ -61,6 +61,9 @@ export function ImportarDrivePanel() {
   // El permiso de Drive se añadió después de que muchas cuentas se
   // conectaran: sus tokens no lo llevan y hay que rehacer la conexión.
   const [faltaPermiso, setFaltaPermiso] = useState(false);
+  // Permite salir de una lectura que se eterniza: sin esto, la pantalla se
+  // quedaba con todo deshabilitado y sin ninguna salida.
+  const cancelado = useRef(false);
   const [historial, setHistorial] = useState<EstadoImportacion[]>([]);
 
   const cargarHistorial = useCallback(async () => {
@@ -114,8 +117,11 @@ export function ImportarDrivePanel() {
   };
 
   const onElegirUnidad = async (u: UnidadCompartidaUI) => {
+    cancelado.current = false;
     setCargando(true);
     const res = await inventariarUnidad(u.id, u.nombre);
+    // Si se canceló mientras Drive respondía, no se pisa la pantalla.
+    if (cancelado.current) return;
     if (res.ok) {
       setInventario(res.data);
       // Propuesta automática: el usuario solo corrige lo que no encaje.
@@ -224,7 +230,16 @@ export function ImportarDrivePanel() {
           {cargando && (
             <div className="flex items-center gap-2 pt-3 text-xs text-muted-foreground">
               <LoadingSpinner />
-              Leyendo Drive… con muchas carpetas puede tardar un rato.
+              <span>Leyendo Drive… con muchas carpetas puede tardar un rato.</span>
+              <button
+                className="ml-auto shrink-0 underline hover:text-foreground"
+                onClick={() => {
+                  cancelado.current = true;
+                  setCargando(false);
+                }}
+              >
+                Cancelar
+              </button>
             </div>
           )}
         </div>
