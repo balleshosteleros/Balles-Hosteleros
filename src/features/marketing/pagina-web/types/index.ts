@@ -23,6 +23,7 @@ export const BLOQUE_TIPOS = [
   "bolsa_inspectores",
   "redes",
   "collage_carta",
+  "premios",
 ] as const;
 
 export type BloqueTipo = (typeof BLOQUE_TIPOS)[number];
@@ -152,7 +153,8 @@ export type Bloque =
   | (BloqueBase & { tipo: "video"; datos: VideoDatos })
   | (BloqueBase & { tipo: "bolsa_inspectores"; datos: BolsaInspectoresDatos })
   | (BloqueBase & { tipo: "redes"; datos: RedesDatos })
-  | (BloqueBase & { tipo: "collage_carta"; datos: CollageCartaDatos });
+  | (BloqueBase & { tipo: "collage_carta"; datos: CollageCartaDatos })
+  | (BloqueBase & { tipo: "premios"; datos: PremiosDatos });
 
 export type BloqueDatos<T extends BloqueTipo> = Extract<Bloque, { tipo: T }>["datos"];
 
@@ -178,6 +180,29 @@ export interface CollageCartaDatos {
   cta_label: string;
   /** Vacío = usa las fotos de la galería de la propia página. */
   imagenes?: Array<{ url: string; alt: string }>;
+}
+
+/**
+ * Reconocimientos externos (Restaurant Guru y equivalentes).
+ *
+ * Los datos se guardan en el bloque y NO se scrapean en cada carga: la web de
+ * un tercero puede cambiar de maquetado o caerse, y no queremos que eso rompa
+ * la portada ni que dependa de una petición externa para pintar.
+ */
+export interface PremiosDatos {
+  titulo: string;
+  frase?: string;
+  /** Enlace a la ficha pública, para que el visitante pueda comprobarlo. */
+  href?: string;
+  items: Array<{
+    /** Ej. "Best in the city" */
+    nombre: string;
+    /** Ej. "2025 · 2026" */
+    anios: string;
+    /** Ej. "Restaurant Guru" */
+    fuente?: string;
+    imagen_url?: string;
+  }>;
 }
 
 export interface BrandingSnapshot {

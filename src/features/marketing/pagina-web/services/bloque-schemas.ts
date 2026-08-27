@@ -171,6 +171,22 @@ export const collageCartaDatosSchema = z.object({
     .optional(),
 });
 
+export const premiosDatosSchema = z.object({
+  titulo: z.string().min(1).max(200),
+  frase: z.string().max(400).optional(),
+  href: z.string().url().max(1000).optional(),
+  items: z
+    .array(
+      z.object({
+        nombre: z.string().min(1).max(120),
+        anios: z.string().min(1).max(60),
+        fuente: z.string().max(80).optional(),
+        imagen_url: z.string().url().max(1000).optional(),
+      }),
+    )
+    .max(12),
+});
+
 export const redesDatosSchema = z.object({
   titulo: z.string().min(1).max(200),
   descripcion: z.string().max(500).optional(),
@@ -191,6 +207,7 @@ export const datosSchemaPorTipo = {
   bolsa_inspectores: bolsaInspectoresDatosSchema,
   redes: redesDatosSchema,
   collage_carta: collageCartaDatosSchema,
+  premios: premiosDatosSchema,
 } as const;
 
 export const bloqueSchema = z.discriminatedUnion("tipo", [
@@ -208,6 +225,7 @@ export const bloqueSchema = z.discriminatedUnion("tipo", [
   bloqueBaseSchema.extend({ tipo: z.literal("bolsa_inspectores"), datos: bolsaInspectoresDatosSchema }),
   bloqueBaseSchema.extend({ tipo: z.literal("redes"), datos: redesDatosSchema }),
   bloqueBaseSchema.extend({ tipo: z.literal("collage_carta"), datos: collageCartaDatosSchema }),
+  bloqueBaseSchema.extend({ tipo: z.literal("premios"), datos: premiosDatosSchema }),
 ]);
 
 export const bloquesArraySchema = z.array(bloqueSchema).max(80);

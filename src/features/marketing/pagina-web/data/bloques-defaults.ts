@@ -112,6 +112,16 @@ export function crearBloqueDefault(tipo: BloqueTipo, orden: number): Bloque {
           descripcion: "Todo lo que pasa en el local, cada día.",
         },
       };
+    case "premios":
+      return {
+        ...base,
+        tipo,
+        datos: {
+          titulo: "Reconocimientos",
+          frase: "El reconocimiento de quienes nos visitan.",
+          items: [],
+        },
+      };
     case "collage_carta":
       return {
         ...base,

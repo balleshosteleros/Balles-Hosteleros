@@ -52,6 +52,8 @@ export function BloquePublico({
       return <RedesPublico bloque={bloque} contexto={contexto} />;
     case "collage_carta":
       return <CollageCartaPublico bloque={bloque} contexto={contexto} />;
+    case "premios":
+      return <PremiosPublico bloque={bloque} />;
   }
 }
 
@@ -122,6 +124,79 @@ function RedesPublico({
  * especialmente incómodo. Al ser mismo origen podemos medir el documento de
  * dentro y ajustar el alto, así el formulario se ve entero de una vez.
  */
+/**
+ * Reconocimientos externos. Medallas en el color de marca con el nombre del
+ * premio y los años, más un enlace a la ficha pública para que se pueda
+ * comprobar: un premio que no se puede verificar resta credibilidad en vez de
+ * sumarla.
+ */
+function PremiosPublico({ bloque }: { bloque: Extract<Bloque, { tipo: "premios" }> }) {
+  const { titulo, frase, href, items } = bloque.datos;
+  if (!items.length) return null;
+
+  return (
+    <section className="py-20 md:py-28 px-4 text-center" id="premios">
+      <h2 className="pw-h2 font-extrabold">{titulo}</h2>
+      {frase ? (
+        <p className="mx-auto mt-4 max-w-2xl text-base md:text-lg opacity-75 leading-relaxed">
+          {frase}
+        </p>
+      ) : null}
+
+      <div className="mx-auto mt-12 flex max-w-5xl flex-wrap items-stretch justify-center gap-5">
+        {items.map((p, i) => (
+          <div
+            key={i}
+            className="flex w-[150px] flex-col items-center gap-3 rounded-xl border border-white/10 bg-white/[0.04] px-4 py-6 md:w-[190px]"
+          >
+            {p.imagen_url ? (
+              /* eslint-disable-next-line @next/next/no-img-element */
+              <img
+                src={p.imagen_url}
+                alt={p.nombre}
+                loading="lazy"
+                decoding="async"
+                className="h-20 w-auto md:h-24"
+              />
+            ) : (
+              /* Sin insignia oficial: medalla dibujada con el color de marca,
+                 que queda mejor que un hueco vacío. */
+              <div
+                className="flex h-16 w-16 items-center justify-center rounded-full border-2 text-2xl md:h-20 md:w-20"
+                style={{ borderColor: "var(--pw-primario)", color: "var(--pw-primario)" }}
+              >
+                ★
+              </div>
+            )}
+            <p className="text-[13px] font-bold leading-snug md:text-sm">{p.nombre}</p>
+            <p
+              className="text-xs font-semibold tracking-wider"
+              style={{ color: "var(--pw-primario)" }}
+            >
+              {p.anios}
+            </p>
+            {p.fuente ? (
+              <p className="text-[11px] uppercase tracking-wider opacity-45">{p.fuente}</p>
+            ) : null}
+          </div>
+        ))}
+      </div>
+
+      {href ? (
+        <a
+          href={href}
+          target="_blank"
+          rel="noreferrer noopener"
+          className="mt-10 inline-block text-sm font-semibold underline-offset-4 hover:underline"
+          style={{ color: "var(--pw-primario)" }}
+        >
+          Ver nuestra ficha completa
+        </a>
+      ) : null}
+    </section>
+  );
+}
+
 function IframeAutoAlto({ src, titulo }: { src: string; titulo: string }) {
   const [alto, setAlto] = useState(720);
   const ref = useRef<HTMLIFrameElement | null>(null);
