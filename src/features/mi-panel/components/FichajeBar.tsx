@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -61,6 +61,8 @@ export function FichajeBar({
   const [tiposDisponibles, setTiposDisponibles] = useState<TipoFichajeDisponible[]>([]);
   const [eligiendoTipo, setEligiendoTipo] = useState(false);
   const [tipoElegido, setTipoElegido] = useState<string | undefined>(undefined);
+  // Id del fichaje cuyo autocierre ya se disparó: evita el bucle refresh→efecto.
+  const autocierreHechoRef = useRef<string | null>(null);
 
   async function refresh() {
     const res = await getMiFichajeHoy();
@@ -110,7 +112,15 @@ export function FichajeBar({
       onChange?.();
     };
     if (restanteMs <= 0) {
-      void cerrar();
+      // Objetivo ya superado. Cerramos UNA sola vez por fichaje: `cerrar()`
+      // llama a refresh() → cambia `fichaje` → este efecto se vuelve a
+      // ejecutar. Sin este guardia entraba otra vez por aquí y se quedaba en
+      // bucle (refresh → efecto → refresh…), congelando y matando la pestaña
+      // a quien tuviera un fichaje flexible pasado de horas.
+      if (autocierreHechoRef.current !== fichaje.id) {
+        autocierreHechoRef.current = fichaje.id;
+        void cerrar();
+      }
       return;
     }
     const id = setTimeout(() => void cerrar(), restanteMs + 500);

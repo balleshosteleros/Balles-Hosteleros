@@ -61,7 +61,33 @@ function moduloRequerido(pathname: string): string | null {
   return null
 }
 
+// Cookie de puerta ya comprobada. Guarda el veredicto del Paso 3 durante unos
+// segundos para no repetir las consultas de perfil y rol en CADA petición.
+//
+// Sin esto, una sola navegación (documento + su cascada de peticiones RSC y
+// server actions) disparaba el UPDATE de actividad + SELECT de perfil + SELECT
+// de rol varias veces seguidas. Con la red lenta o el pool de Supabase ocupado,
+// alguna se pasaba de tiempo, el proxy lanzaba excepción y Next respondía con
+// su página de error (`<html id="__next_error__">`): "This page couldn't load"
+// en cada clic. El caso real fue Alejandro (2 empresas y el mayor número de
+// notificaciones: las peticiones más pesadas y las primeras en caerse).
+const COOKIE_PUERTA = 'bh_puerta_ok'
+const PUERTA_TTL_S = 30
+
 export async function proxy(request: NextRequest) {
+  try {
+    return await proxyInterno(request)
+  } catch (e) {
+    // NUNCA tumbar la navegación por un fallo del guardia. Si la comprobación
+    // no se puede completar (timeout de Supabase, red), dejamos pasar la
+    // petición: la autorización real vuelve a validarse en cada server action
+    // y en cada route handler, así que esto no abre ninguna puerta.
+    console.error('[proxy] fallo no controlado — se deja pasar la petición:', e)
+    return NextResponse.next()
+  }
+}
+
+async function proxyInterno(request: NextRequest) {
   const { pathname } = request.nextUrl
 
   // Paso 1: refresco de sesión + rewrite de hostnames custom + redirect
@@ -77,6 +103,23 @@ export async function proxy(request: NextRequest) {
 
   if (!user) return sessionResponse
 
+  // ¿Hay que comprobar la puerta en esta petición?
+  //
+  // La puerta (estado_acceso / empresa) se comprueba una vez cada PUERTA_TTL_S
+  // por usuario, no en cada petición. El veredicto viaja en una cookie de
+  // sesión atada al `user.id`: si otro usuario entra en el mismo navegador la
+  // cookie no le sirve, y al caducar se vuelve a comprobar contra la BD.
+  //
+  // Las rutas de módulo (/rrhh, /gerencia…) SIEMPRE comprueban permisos abajo:
+  // la caché solo evita repetir la puerta, nunca el filtro por módulo.
+  const moduloReq = moduloRequerido(pathname)
+  const puertaCacheada = request.cookies.get(COOKIE_PUERTA)?.value === user.id
+  // Sin módulo que autorizar y con la puerta ya validada hace poco: no hay nada
+  // que consultar. Este es el atajo que devuelve el `return` temprano que el
+  // commit e0a87e95 había eliminado, pero SIN reabrir el agujero: la puerta se
+  // sigue comprobando, solo que una vez cada PUERTA_TTL_S en lugar de siempre.
+  if (!moduloReq && puertaCacheada) return sessionResponse
+
   const adminUrlActividad = process.env.NEXT_PUBLIC_SUPABASE_URL
   const serviceKeyActividad = process.env.SUPABASE_SERVICE_ROLE_KEY
 
@@ -91,11 +134,19 @@ export async function proxy(request: NextRequest) {
       auth: { autoRefreshToken: false, persistSession: false },
     })
     const cutoffActividad = new Date(Date.now() - 30_000).toISOString()
-    await adminActividad
+    // Sin `await`: la marca de actividad es un apunte informativo ("última
+    // conexión" en Ajustes → Usuarios), no una comprobación de seguridad.
+    // Esperarla sumaba una ida y vuelta a la BD a cada petición y, si tardaba,
+    // arrastraba a toda la navegación. Que falle no debe costarle nada al
+    // usuario: por eso se lanza y se ignora el resultado.
+    void adminActividad
       .from('usuarios')
       .update({ ultima_actividad: new Date().toISOString() })
       .eq('user_id', user.id)
       .or(`ultima_actividad.is.null,ultima_actividad.lt.${cutoffActividad}`)
+      .then(({ error }) => {
+        if (error) console.error('[proxy] marca de actividad:', error.message)
+      })
   }
 
   // Cliente SSR solo para signOut si la cuenta está inactiva (abajo).
@@ -161,11 +212,23 @@ export async function proxy(request: NextRequest) {
     await supabase.auth.signOut()
     const url = new URL('/', request.url)
     url.searchParams.set('error', motivoBloqueo === 'cuenta_inactiva' ? 'cuenta_inactiva' : 'sin_acceso')
-    return NextResponse.redirect(url)
+    const redir = NextResponse.redirect(url)
+    // La cuenta acaba de ser expulsada: fuera el veredicto cacheado.
+    redir.cookies.delete(COOKIE_PUERTA)
+    return redir
   }
 
+  // Puerta superada: la sellamos unos segundos para que la ráfaga de peticiones
+  // de esta misma navegación no repita las consultas de perfil y rol.
+  sessionResponse.cookies.set(COOKIE_PUERTA, user.id, {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: process.env.NODE_ENV === 'production',
+    path: '/',
+    maxAge: PUERTA_TTL_S,
+  })
+
   // Paso 4: autorización por módulo (solo para prefijos protegidos).
-  const moduloReq = moduloRequerido(pathname)
   if (!moduloReq) return sessionResponse
 
   if (!rolId && !rolLabel) {
