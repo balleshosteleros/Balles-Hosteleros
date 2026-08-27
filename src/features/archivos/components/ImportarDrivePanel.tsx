@@ -18,7 +18,6 @@ import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
 import { toast } from "sonner";
 import {
   listarUnidades,
-  importarUnidad,
   getImportaciones,
 } from "@/features/archivos/actions/importar-drive-actions";
 import type {
@@ -57,6 +56,10 @@ export function ImportarDrivePanel() {
   const [mapeo, setMapeo] = useState<Record<string, string>>({});
   const [cargando, setCargando] = useState(false);
   const [importando, setImportando] = useState(false);
+  // Con miles de archivos hace falta ver que avanza, no solo "Importando…".
+  const [progreso, setProgreso] = useState<{ copiados: number; total: number } | null>(
+    null,
+  );
   // El permiso de Drive se añadió después de que muchas cuentas se
   // conectaran: sus tokens no lo llevan y hay que rehacer la conexión.
   const [faltaPermiso, setFaltaPermiso] = useState(false);
@@ -173,18 +176,35 @@ export function ImportarDrivePanel() {
     try {
       // Se relanza hasta terminar: cada pasada copia lo que le da tiempo.
       for (let vuelta = 0; vuelta < 200; vuelta++) {
-        const res = await importarUnidad(
-          inventario.unidadId,
-          inventario.unidadNombre,
-          Object.fromEntries(asignadas),
-          impId,
-        );
+        const peticion = await fetch("/api/archivos/drive/importar", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            unidadId: inventario.unidadId,
+            unidadNombre: inventario.unidadNombre,
+            mapeo: Object.fromEntries(asignadas),
+            importacionId: impId,
+          }),
+        });
+        const res = (await peticion.json()) as
+          | { ok: true; data: { importacionId: string; terminada: boolean } }
+          | { ok: false; error: string };
         if (!res.ok) {
           toast.error(res.error);
           break;
         }
         impId = res.data.importacionId;
-        await cargarHistorial();
+        const actualizado = await getImportaciones();
+        if (actualizado.ok) {
+          setHistorial(actualizado.data);
+          const actual = actualizado.data.find((h) => h.id === impId);
+          if (actual) {
+            setProgreso({
+              copiados: actual.copiados + actual.omitidos,
+              total: inventario.totalArchivos,
+            });
+          }
+        }
         if (res.data.terminada) {
           toast.success("Importación terminada");
           break;
@@ -192,6 +212,7 @@ export function ImportarDrivePanel() {
       }
     } finally {
       setImportando(false);
+      setProgreso(null);
       void cargarHistorial();
     }
   };
@@ -334,10 +355,28 @@ export function ImportarDrivePanel() {
           </Button>
 
           {importando && (
-            <p className="text-xs text-muted-foreground">
-              No cierres esta pantalla. Puede tardar bastante con mucho contenido;
-              si se corta, vuelve a darle y sigue donde se quedó.
-            </p>
+            <div className="space-y-1.5">
+              {progreso && progreso.total > 0 && (
+                <>
+                  <div className="h-1.5 overflow-hidden rounded-full bg-muted">
+                    <div
+                      className="h-full bg-cyan-600 transition-all"
+                      style={{
+                        width: `${Math.min(100, (progreso.copiados / progreso.total) * 100)}%`,
+                      }}
+                    />
+                  </div>
+                  <p className="text-xs font-medium">
+                    {progreso.copiados.toLocaleString("es-ES")} de{" "}
+                    {progreso.total.toLocaleString("es-ES")} archivos
+                  </p>
+                </>
+              )}
+              <p className="text-xs text-muted-foreground">
+                No cierres esta pantalla. Con mucho contenido tarda horas; si se
+                corta, vuelve a darle y sigue donde se quedó sin repetir nada.
+              </p>
+            </div>
           )}
         </div>
       )}

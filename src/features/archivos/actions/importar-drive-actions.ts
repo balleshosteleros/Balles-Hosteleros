@@ -205,7 +205,7 @@ export async function importarUnidad(
 
     // Margen de seguridad: se para antes de que la función se corte sola, para
     // poder guardar el progreso. La pantalla vuelve a llamar y sigue.
-    const limite = Date.now() + 4 * 60 * 1000;
+    const limite = Date.now() + 4.5 * 60 * 1000;
     let terminada = true;
 
     // La unidad se lee ENTERA una vez, no carpeta por carpeta: con cientos de
