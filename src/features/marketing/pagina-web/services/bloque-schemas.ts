@@ -161,6 +161,16 @@ export const bolsaInspectoresDatosSchema = z.object({
 });
 
 /** Los enlaces salen de la empresa (Ajustes), aquí solo se guarda el texto. */
+export const collageCartaDatosSchema = z.object({
+  titulo: z.string().min(1).max(200),
+  frase: z.string().max(400).optional(),
+  cta_label: z.string().min(1).max(60),
+  imagenes: z
+    .array(z.object({ url: z.string().url().max(1000), alt: z.string().max(200) }))
+    .max(12)
+    .optional(),
+});
+
 export const redesDatosSchema = z.object({
   titulo: z.string().min(1).max(200),
   descripcion: z.string().max(500).optional(),
@@ -180,6 +190,7 @@ export const datosSchemaPorTipo = {
   video: videoDatosSchema,
   bolsa_inspectores: bolsaInspectoresDatosSchema,
   redes: redesDatosSchema,
+  collage_carta: collageCartaDatosSchema,
 } as const;
 
 export const bloqueSchema = z.discriminatedUnion("tipo", [
@@ -196,6 +207,7 @@ export const bloqueSchema = z.discriminatedUnion("tipo", [
   bloqueBaseSchema.extend({ tipo: z.literal("video"), datos: videoDatosSchema }),
   bloqueBaseSchema.extend({ tipo: z.literal("bolsa_inspectores"), datos: bolsaInspectoresDatosSchema }),
   bloqueBaseSchema.extend({ tipo: z.literal("redes"), datos: redesDatosSchema }),
+  bloqueBaseSchema.extend({ tipo: z.literal("collage_carta"), datos: collageCartaDatosSchema }),
 ]);
 
 export const bloquesArraySchema = z.array(bloqueSchema).max(80);

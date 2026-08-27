@@ -2,6 +2,7 @@
  * Catálogo visual de los 11 tipos de bloque (biblioteca del editor).
  */
 import {
+  Images,
   Image as ImageIcon,
   LayoutTemplate,
   UtensilsCrossed,
@@ -40,6 +41,7 @@ export const BLOQUES_CATALOGO: BloqueCatalogoEntrada[] = [
   { tipo: "video", label: "Video", descripcion: "YouTube / Vimeo / MP4", icon: PlayCircle },
   { tipo: "bolsa_inspectores", label: "Bolsa inspectores", descripcion: "CTA para inscripción de inspectores externos", icon: Briefcase },
   { tipo: "redes", label: "Redes sociales", descripcion: "Enlaces que salen de Ajustes de la empresa", icon: Share2 },
+  { tipo: "collage_carta", label: "Collage + carta", descripcion: "Mosaico de fotos con el botón a la carta digital", icon: Images },
 ];
 
 export function getCatalogo(tipo: BloqueTipo): BloqueCatalogoEntrada {

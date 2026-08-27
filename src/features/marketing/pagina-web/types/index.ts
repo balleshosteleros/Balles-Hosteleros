@@ -22,6 +22,7 @@ export const BLOQUE_TIPOS = [
   "video",
   "bolsa_inspectores",
   "redes",
+  "collage_carta",
 ] as const;
 
 export type BloqueTipo = (typeof BLOQUE_TIPOS)[number];
@@ -150,7 +151,8 @@ export type Bloque =
   | (BloqueBase & { tipo: "texto_libre"; datos: TextoLibreDatos })
   | (BloqueBase & { tipo: "video"; datos: VideoDatos })
   | (BloqueBase & { tipo: "bolsa_inspectores"; datos: BolsaInspectoresDatos })
-  | (BloqueBase & { tipo: "redes"; datos: RedesDatos });
+  | (BloqueBase & { tipo: "redes"; datos: RedesDatos })
+  | (BloqueBase & { tipo: "collage_carta"; datos: CollageCartaDatos });
 
 export type BloqueDatos<T extends BloqueTipo> = Extract<Bloque, { tipo: T }>["datos"];
 
@@ -159,6 +161,23 @@ export interface SeoConfig {
   description?: string;
   og_image?: string;
   robots?: string;
+}
+
+/**
+ * Mosaico de fotos con la llamada a la carta encima.
+ *
+ * POR QUÉ NO SE INCRUSTA LA CARTA:
+ * Son 124 platos en BACANAL y 133 en HABANA, con categorías y alérgenos.
+ * Metidos en la portada, el visitante que viene a reservar se come un scroll
+ * enorme antes de llegar al formulario. El collage vende con foto y manda a
+ * /carta/[slug], que ya está hecha para leerse en el móvil.
+ */
+export interface CollageCartaDatos {
+  titulo: string;
+  frase?: string;
+  cta_label: string;
+  /** Vacío = usa las fotos de la galería de la propia página. */
+  imagenes?: Array<{ url: string; alt: string }>;
 }
 
 export interface BrandingSnapshot {

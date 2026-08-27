@@ -50,6 +50,8 @@ export function BloquePublico({
       return <BolsaInspectoresPublico bloque={bloque} contexto={contexto} />;
     case "redes":
       return <RedesPublico bloque={bloque} contexto={contexto} />;
+    case "collage_carta":
+      return <CollageCartaPublico bloque={bloque} contexto={contexto} />;
   }
 }
 
@@ -98,6 +100,68 @@ function RedesPublico({
             {label}
           </a>
         ))}
+      </div>
+    </section>
+  );
+}
+
+/**
+ * Mosaico de fotos a sangre con la llamada a la carta encima.
+ *
+ * La carta NO se incrusta (124-133 platos): el collage vende con imagen y el
+ * botón lleva a /carta/[slug], que ya está pensada para leerse en el móvil.
+ * Si el bloque no trae fotos propias usa las de la galería de la página, así
+ * no hay que volver a subirlas.
+ */
+function CollageCartaPublico({
+  bloque,
+  contexto,
+}: {
+  bloque: Extract<Bloque, { tipo: "collage_carta" }>;
+  contexto?: PaginaContexto;
+}) {
+  const { titulo, frase, cta_label, imagenes } = bloque.datos;
+  const slug = contexto?.empresaSlug ?? null;
+  const fotos = (imagenes ?? []).slice(0, 6);
+  if (!fotos.length || !slug) return null;
+
+  return (
+    <section className="relative isolate overflow-hidden" id="carta">
+      {/* Mosaico: en móvil 2 columnas, en escritorio 3. Las fotos van a sangre
+          y en blanco y negro suave, para que el texto de encima se lea siempre
+          sin depender de lo clara que sea cada foto. */}
+      <div className="grid grid-cols-2 md:grid-cols-3">
+        {fotos.map((img, i) => (
+          /* eslint-disable-next-line @next/next/no-img-element */
+          <img
+            key={i}
+            src={imagenOptimizada(img.url, { width: 700, quality: 72 })}
+            srcSet={srcSetOptimizado(img.url, [400, 700, 1000])}
+            sizes="(max-width: 768px) 50vw, 33vw"
+            alt={img.alt}
+            loading="lazy"
+            decoding="async"
+            className={`h-44 w-full object-cover md:h-72 ${i > 3 ? "hidden md:block" : ""}`}
+          />
+        ))}
+      </div>
+
+      {/* Velo oscuro + contenido centrado encima del mosaico. */}
+      <div className="absolute inset-0 bg-black/65" />
+      <div className="absolute inset-0 flex flex-col items-center justify-center px-5 text-center">
+        <h2 className="pw-h2 font-extrabold text-white drop-shadow-lg">{titulo}</h2>
+        {frase ? (
+          <p className="mt-4 max-w-2xl text-sm md:text-lg text-white/85 drop-shadow">
+            {frase}
+          </p>
+        ) : null}
+        <a
+          href={`/carta/${slug}`}
+          className="mt-7 inline-block rounded-full px-9 py-4 text-sm font-bold uppercase tracking-wider text-black transition-transform hover:scale-105"
+          style={{ backgroundColor: "var(--pw-primario)" }}
+        >
+          {cta_label}
+        </a>
       </div>
     </section>
   );

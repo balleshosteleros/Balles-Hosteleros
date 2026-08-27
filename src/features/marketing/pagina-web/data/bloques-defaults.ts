@@ -112,5 +112,16 @@ export function crearBloqueDefault(tipo: BloqueTipo, orden: number): Bloque {
           descripcion: "Todo lo que pasa en el local, cada día.",
         },
       };
+    case "collage_carta":
+      return {
+        ...base,
+        tipo,
+        datos: {
+          titulo: "Nuestra carta",
+          frase: "Cocina de producto para compartir.",
+          cta_label: "Ver la carta",
+          imagenes: [],
+        },
+      };
   }
 }
