@@ -9,6 +9,8 @@ export interface PaginaContexto {
   empresaId: string | null;
   paginaId: string | null;
   empresaSlug?: string | null;
+  /** Isotipo de la empresa: marcador del mapa. */
+  logoUrl?: string | null;
   /** Enlaces ya normalizados desde Ajustes → datos generales. */
   redes?: {
     instagram: string | null;
@@ -71,7 +73,7 @@ export function PaginaPublicaShell({
           <BloquePublico key={b.id} bloque={b} contexto={contexto} />
         ))}
       </main>
-      <PieLegal redes={contexto?.redes ?? null} />
+      <PieLegal />
       <BannerCookies hrefPolitica={hrefPoliticaCookies} />
       <FuenteMarca nombre={tipografia} />
       <EstilosPublicos />
@@ -88,10 +90,9 @@ export function PaginaPublicaShell({
  * tiene que ser accesible desde cualquier página (RGPD) y el enlace de cookies
  * es la vía para retirar el consentimiento (AEPD).
  */
-function PieLegal({ redes }: { redes?: PaginaContexto["redes"] }) {
+function PieLegal() {
   return (
     <nav className="border-t border-white/10 px-4 py-8">
-      {redes ? <RedesPie redes={redes} /> : null}
       <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-center gap-x-4 gap-y-2 text-xs text-white/50">
         <a href="/politica-de-privacidad" className="transition-colors hover:text-white/90">
           Política de privacidad
@@ -213,50 +214,6 @@ function FuenteMarca({ nombre }: { nombre: string }) {
   const familia = encodeURIComponent(nombre.trim()).replace(/%20/g, "+");
   const href = `https://fonts.googleapis.com/css2?family=${familia}:wght@300;400;500;600;700;800&display=swap`;
   return <link rel="stylesheet" href={href} />;
-}
-
-/**
- * Redes al pie con su icono de marca. Los enlaces salen de Ajustes (datos
- * generales), así que cambiar Instagram allí actualiza la web sola.
- */
-function RedesPie({ redes }: { redes: NonNullable<PaginaContexto["redes"]> }) {
-  const items = [
-    { k: "instagram", label: "Instagram", url: redes.instagram, d: "M12 2.2c3.2 0 3.6 0 4.9.07 1.2.05 1.8.25 2.2.42.6.22 1 .48 1.4.9.43.42.7.82.92 1.4.17.4.37 1 .42 2.2.06 1.3.07 1.7.07 4.9s0 3.6-.07 4.9c-.05 1.2-.25 1.8-.42 2.2-.22.6-.5 1-.92 1.4-.42.43-.82.7-1.4.92-.4.17-1 .37-2.2.42-1.3.06-1.7.07-4.9.07s-3.6 0-4.9-.07c-1.2-.05-1.8-.25-2.2-.42-.6-.22-1-.5-1.4-.92-.43-.42-.7-.82-.92-1.4-.17-.4-.37-1-.42-2.2C2.2 15.6 2.2 15.2 2.2 12s0-3.6.07-4.9c.05-1.2.25-1.8.42-2.2.22-.6.5-1 .92-1.4.42-.43.82-.7 1.4-.92.4-.17 1-.37 2.2-.42C8.4 2.2 8.8 2.2 12 2.2zm0 5.4a4.4 4.4 0 100 8.8 4.4 4.4 0 000-8.8zm0 7.25a2.85 2.85 0 110-5.7 2.85 2.85 0 010 5.7zm5.6-7.42a1.03 1.03 0 11-2.05 0 1.03 1.03 0 012.05 0z" },
-    { k: "facebook", label: "Facebook", url: redes.facebook, d: "M22 12.06C22 6.5 17.52 2 12 2S2 6.5 2 12.06c0 5 3.66 9.15 8.44 9.94v-7.03H7.9v-2.9h2.54V9.85c0-2.52 1.5-3.91 3.77-3.91 1.09 0 2.24.2 2.24.2v2.46h-1.26c-1.24 0-1.63.78-1.63 1.57v1.89h2.78l-.44 2.9h-2.34V22c4.78-.79 8.44-4.93 8.44-9.94z" },
-    { k: "tiktok", label: "TikTok", url: redes.tiktok, d: "M16.6 5.82A4.28 4.28 0 0115.54 3h-3.09v12.4a2.59 2.59 0 01-2.59 2.5 2.59 2.59 0 01-2.59-2.59 2.59 2.59 0 013.19-2.51V9.66a5.7 5.7 0 00-.6-.03A5.68 5.68 0 004.18 15.3 5.68 5.68 0 009.86 21a5.68 5.68 0 005.68-5.68V9.01a7.35 7.35 0 004.3 1.38V7.3a4.29 4.29 0 01-3.24-1.48z" },
-    { k: "whatsapp", label: "WhatsApp", url: redes.whatsapp, d: "M17.47 14.38c-.3-.15-1.75-.86-2.02-.96-.27-.1-.47-.15-.67.15-.2.3-.77.96-.94 1.16-.17.2-.35.22-.64.07-.3-.15-1.25-.46-2.38-1.47-.88-.78-1.47-1.75-1.64-2.05-.17-.3-.02-.46.13-.6.13-.14.3-.35.45-.52.15-.17.2-.3.3-.5.1-.2.05-.37-.02-.52-.08-.15-.67-1.6-.92-2.2-.24-.58-.49-.5-.67-.5h-.57c-.2 0-.52.07-.79.37-.27.3-1.04 1.01-1.04 2.47s1.06 2.86 1.21 3.06c.15.2 2.1 3.2 5.08 4.49.71.3 1.26.49 1.69.63.71.22 1.36.19 1.87.12.57-.09 1.75-.72 2-1.41.25-.7.25-1.29.17-1.41-.07-.13-.27-.2-.57-.35zM12.04 2C6.58 2 2.13 6.45 2.13 11.91c0 1.75.46 3.45 1.32 4.95L2 22l5.25-1.38a9.86 9.86 0 004.79 1.22h.01c5.46 0 9.91-4.45 9.91-9.91S17.5 2 12.04 2z" },
-  ].filter((r) => Boolean(r.url));
-
-  if (!items.length) return null;
-
-  return (
-    <div className="mb-7 flex items-center justify-center gap-3">
-      {items.map((r) => (
-        <a
-          key={r.k}
-          href={r.url as string}
-          target="_blank"
-          rel="noreferrer noopener"
-          aria-label={r.label}
-          title={`Síguenos en ${r.label}`}
-          className="flex h-11 w-11 items-center justify-center rounded-full border border-white/15 text-white/70 transition-all hover:scale-110 hover:text-black"
-          style={{ ["--hover" as string]: "var(--pw-primario)" }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.backgroundColor = "var(--pw-primario)";
-            e.currentTarget.style.borderColor = "var(--pw-primario)";
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.backgroundColor = "transparent";
-            e.currentTarget.style.borderColor = "rgba(255,255,255,0.15)";
-          }}
-        >
-          <svg viewBox="0 0 24 24" fill="currentColor" className="h-5 w-5">
-            <path d={r.d} />
-          </svg>
-        </a>
-      ))}
-    </div>
-  );
 }
 
 function EstilosPublicos() {

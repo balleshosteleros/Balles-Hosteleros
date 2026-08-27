@@ -75,6 +75,7 @@ export default async function PublicCatchAllPage({ params }: PageProps) {
         empresaId: match.empresa_id,
         paginaId: match.pagina_id,
         empresaSlug: match.empresa_slug,
+        logoUrl: match.logo_url,
         redes: match.redes,
       }}
       hrefPoliticaCookies="/politica-de-cookies"

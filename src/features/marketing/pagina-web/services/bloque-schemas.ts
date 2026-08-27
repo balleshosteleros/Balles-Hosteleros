@@ -210,6 +210,10 @@ export const instagramDatosSchema = z.object({
   verificado: z.boolean().optional(),
   avatar_url: z.string().url().max(1000).optional(),
   cta_label: z.string().min(1).max(60),
+  feed: z
+    .array(z.object({ url: z.string().url().max(1000), alt: z.string().max(200) }))
+    .max(9)
+    .optional(),
 });
 
 export const redesDatosSchema = z.object({

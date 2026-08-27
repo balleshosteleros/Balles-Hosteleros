@@ -39,7 +39,7 @@ export function BloquePublico({
     case "formulario":
       return <FormularioPublico bloque={bloque} contexto={contexto} />;
     case "mapa":
-      return <MapaPublico bloque={bloque} />;
+      return <MapaPublico bloque={bloque} contexto={contexto} />;
     case "footer":
       return <FooterPublico bloque={bloque} />;
     case "texto_libre":
@@ -146,79 +146,166 @@ function RedesPublico({
  * ("Síguenos en Instagram") no transmite la comunidad que hay detrás.
  */
 function InstagramPublico({ bloque }: { bloque: Extract<Bloque, { tipo: "instagram" }> }) {
-  const { usuario, titulo, frase, seguidores, publicaciones, verificado, avatar_url, cta_label } =
+  const { usuario, titulo, frase, seguidores, publicaciones, verificado, avatar_url, cta_label, feed } =
     bloque.datos;
-  const href = `https://www.instagram.com/${usuario.replace(/^@/, "")}`;
+  const handle = usuario.replace(/^@/, "");
+  const href = `https://www.instagram.com/${handle}`;
+  const fotos = (feed ?? []).slice(0, 6);
 
   return (
-    <section className="px-4 py-20 md:py-28 text-center" id="instagram">
-      <h2 className="pw-h2 font-extrabold">{titulo}</h2>
-      {frase ? <p className="mx-auto mt-4 max-w-2xl opacity-75">{frase}</p> : null}
+    <section className="relative overflow-hidden px-4 py-20 md:py-28" id="instagram">
+      {/* Resplandor de marca detrás del móvil: da profundidad sin cargar la
+          sección con más fotos. */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute left-1/2 top-1/2 h-[520px] w-[520px] -translate-x-1/2 -translate-y-1/2 rounded-full opacity-[0.13] blur-[110px]"
+        style={{ backgroundColor: "var(--pw-primario)" }}
+      />
 
-      <a
-        href={href}
-        target="_blank"
-        rel="noreferrer noopener"
-        className="mx-auto mt-10 flex max-w-md flex-col items-center gap-4 rounded-2xl border border-white/10 bg-white/[0.04] px-8 py-9 transition-colors hover:bg-white/[0.07]"
-      >
-        {/* Aro degradado de Instagram alrededor del avatar. */}
-        <span
-          className="flex h-[86px] w-[86px] items-center justify-center rounded-full p-[3px]"
-          style={{ background: "linear-gradient(45deg,#f09433,#e6683c,#dc2743,#cc2366,#bc1888)" }}
-        >
-          <span className="flex h-full w-full items-center justify-center overflow-hidden rounded-full bg-black">
-            {avatar_url ? (
-              /* eslint-disable-next-line @next/next/no-img-element */
-              <img src={avatar_url} alt={usuario} className="h-full w-full object-cover" />
-            ) : (
-              <svg viewBox="0 0 24 24" fill="currentColor" className="h-9 w-9 text-white/80">
-                <path d="M12 2.2c3.2 0 3.6 0 4.9.07 1.2.05 1.8.25 2.2.42.6.22 1 .48 1.4.9.43.42.7.82.92 1.4.17.4.37 1 .42 2.2.06 1.3.07 1.7.07 4.9s0 3.6-.07 4.9c-.05 1.2-.25 1.8-.42 2.2-.22.6-.5 1-.92 1.4-.42.43-.82.7-1.4.92-.4.17-1 .37-2.2.42-1.3.06-1.7.07-4.9.07s-3.6 0-4.9-.07c-1.2-.05-1.8-.25-2.2-.42-.6-.22-1-.5-1.4-.92-.43-.42-.7-.82-.92-1.4-.17-.4-.37-1-.42-2.2C2.2 15.6 2.2 15.2 2.2 12s0-3.6.07-4.9c.05-1.2.25-1.8.42-2.2.22-.6.5-1 .92-1.4.42-.43.82-.7 1.4-.92.4-.17 1-.37 2.2-.42C8.4 2.2 8.8 2.2 12 2.2zm0 5.4a4.4 4.4 0 100 8.8 4.4 4.4 0 000-8.8zm0 7.25a2.85 2.85 0 110-5.7 2.85 2.85 0 010 5.7zm5.6-7.42a1.03 1.03 0 11-2.05 0 1.03 1.03 0 012.05 0z" />
-              </svg>
-            )}
-          </span>
-        </span>
+      <div className="relative mx-auto max-w-5xl">
+        <h2 className="pw-h2 text-center font-extrabold">{titulo}</h2>
+        {frase ? <p className="mx-auto mt-4 max-w-2xl text-center opacity-75">{frase}</p> : null}
 
-        <span className="flex items-center justify-center gap-1.5">
-          <span className="text-lg font-bold">@{usuario.replace(/^@/, "")}</span>
-          {verificado ? (
-            /* Tick azul de cuenta verificada, dibujado (no es una imagen de Meta). */
-            <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" aria-label="Cuenta verificada">
-              <path
-                fill="#3897F0"
-                d="M12 1.8l2.4 1.9 3-.3 1.1 2.8 2.7 1.4-.6 3 1.7 2.5-2 2.3.2 3-3 .8-1.6 2.6-2.9-1-2.9 1-1.6-2.6-3-.8.2-3-2-2.3L4.4 8.6 3.8 5.6l2.7-1.4L7.6 1.4l3 .3z"
-              />
-              <path fill="#fff" d="M10.6 15.2l-2.9-2.9 1.3-1.3 1.6 1.6 4-4 1.3 1.3z" />
-            </svg>
-          ) : null}
-        </span>
+        <div className="mt-14 flex items-end justify-center gap-0">
+          {/* Silueta izquierda: dos personas mirando el móvil. Es una forma
+              dibujada, no una foto de stock — encaja con cualquier marca y no
+              añade peso ni derechos de imagen. */}
+          <SiluetaPersonas lado="izq" />
 
-        {seguidores || publicaciones ? (
-          <span className="flex items-center gap-8">
-            {publicaciones ? (
-              <span className="text-center">
-                <span className="block text-xl font-extrabold">{publicaciones}</span>
-                <span className="block text-[11px] uppercase tracking-wider opacity-55">Publicaciones</span>
-              </span>
-            ) : null}
-            {seguidores ? (
-              <span className="text-center">
-                <span className="block text-xl font-extrabold" style={{ color: "var(--pw-primario)" }}>
-                  {seguidores}
-                </span>
-                <span className="block text-[11px] uppercase tracking-wider opacity-55">Seguidores</span>
-              </span>
-            ) : null}
-          </span>
-        ) : null}
+          {/* Maqueta de iPhone con el perfil abierto */}
+          <div className="relative z-10 w-[260px] shrink-0 md:w-[300px]">
+            <div className="rounded-[42px] border-[10px] border-neutral-800 bg-black shadow-[0_30px_80px_rgba(0,0,0,0.75)]">
+              {/* Muesca superior */}
+              <div className="relative flex h-6 items-center justify-center">
+                <span className="h-[18px] w-[95px] rounded-b-2xl bg-neutral-800" />
+              </div>
 
-        <span
-          className="mt-2 inline-block rounded-full px-8 py-3 text-xs font-bold uppercase tracking-wider text-black"
-          style={{ backgroundColor: "var(--pw-primario)" }}
-        >
-          {cta_label}
-        </span>
-      </a>
+              <div className="px-3 pb-4">
+                {/* Cabecera del perfil */}
+                <div className="flex items-center gap-3 py-3">
+                  <span
+                    className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full p-[2.5px]"
+                    style={{ background: "linear-gradient(45deg,#f09433,#e6683c,#dc2743,#cc2366,#bc1888)" }}
+                  >
+                    <span className="flex h-full w-full items-center justify-center overflow-hidden rounded-full bg-black">
+                      {avatar_url ? (
+                        /* eslint-disable-next-line @next/next/no-img-element */
+                        <img src={avatar_url} alt={handle} className="h-full w-full object-cover" />
+                      ) : (
+                        <IconoInstagram className="h-6 w-6 text-white/80" />
+                      )}
+                    </span>
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="flex items-center gap-1 text-[13px] font-bold text-white">
+                      <span className="truncate">{handle}</span>
+                      {verificado ? <TickVerificado /> : null}
+                    </p>
+                    <div className="mt-1.5 flex gap-4 text-[11px] text-white/70">
+                      {publicaciones ? (
+                        <span><b className="text-white">{publicaciones}</b> pub.</span>
+                      ) : null}
+                      {seguidores ? (
+                        <span><b className="text-white">{seguidores}</b> seguidores</span>
+                      ) : null}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Botón Seguir, como en la app */}
+                <a
+                  href={href}
+                  target="_blank"
+                  rel="noreferrer noopener"
+                  className="mb-3 block rounded-lg py-2 text-center text-[13px] font-semibold text-black transition-opacity hover:opacity-90"
+                  style={{ backgroundColor: "var(--pw-primario)" }}
+                >
+                  {cta_label}
+                </a>
+
+                {/* Cuadrícula del feed */}
+                <div className="grid grid-cols-3 gap-[3px]">
+                  {fotos.map((f, i) => (
+                    /* eslint-disable-next-line @next/next/no-img-element */
+                    <img
+                      key={i}
+                      src={imagenOptimizada(f.url, { width: 220, quality: 68 })}
+                      alt={f.alt}
+                      loading="lazy"
+                      decoding="async"
+                      className="aspect-square w-full object-cover"
+                    />
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <SiluetaPersonas lado="der" />
+        </div>
+
+        <div className="mt-12 text-center">
+          <a
+            href={href}
+            target="_blank"
+            rel="noreferrer noopener"
+            className="inline-block rounded-full px-10 py-4 text-xs font-bold uppercase tracking-[0.2em] text-black transition-transform hover:scale-105 md:text-sm"
+            style={{ backgroundColor: "var(--pw-primario)" }}
+          >
+            @{handle}
+          </a>
+        </div>
+      </div>
     </section>
+  );
+}
+
+/** Tick azul de cuenta verificada, dibujado (no es el recurso de Meta). */
+function TickVerificado() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 shrink-0" aria-label="Cuenta verificada">
+      <path fill="#3897F0" d="M12 1.8l2.4 1.9 3-.3 1.1 2.8 2.7 1.4-.6 3 1.7 2.5-2 2.3.2 3-3 .8-1.6 2.6-2.9-1-2.9 1-1.6-2.6-3-.8.2-3-2-2.3L4.4 8.6 3.8 5.6l2.7-1.4L7.6 1.4l3 .3z" />
+      <path fill="#fff" d="M10.6 15.2l-2.9-2.9 1.3-1.3 1.6 1.6 4-4 1.3 1.3z" />
+    </svg>
+  );
+}
+
+function IconoInstagram({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" className={className}>
+      <path d="M12 2.2c3.2 0 3.6 0 4.9.07 1.2.05 1.8.25 2.2.42.6.22 1 .48 1.4.9.43.42.7.82.92 1.4.17.4.37 1 .42 2.2.06 1.3.07 1.7.07 4.9s0 3.6-.07 4.9c-.05 1.2-.25 1.8-.42 2.2-.22.6-.5 1-.92 1.4-.42.43-.82.7-1.4.92-.4.17-1 .37-2.2.42-1.3.06-1.7.07-4.9.07s-3.6 0-4.9-.07c-1.2-.05-1.8-.25-2.2-.42-.6-.22-1-.5-1.4-.92-.43-.42-.7-.82-.92-1.4-.17-.4-.37-1-.42-2.2C2.2 15.6 2.2 15.2 2.2 12s0-3.6.07-4.9c.05-1.2.25-1.8.42-2.2.22-.6.5-1 .92-1.4.42-.43.82-.7 1.4-.92.4-.17 1-.37 2.2-.42C8.4 2.2 8.8 2.2 12 2.2zm0 5.4a4.4 4.4 0 100 8.8 4.4 4.4 0 000-8.8zm0 7.25a2.85 2.85 0 110-5.7 2.85 2.85 0 010 5.7zm5.6-7.42a1.03 1.03 0 11-2.05 0 1.03 1.03 0 012.05 0z" />
+    </svg>
+  );
+}
+
+/**
+ * Siluetas de personas mirando el móvil, a los lados de la maqueta. Van
+ * dibujadas y no en foto: no dependen de un banco de imágenes, pesan nada y
+ * funcionan con el color de marca de cualquier empresa. Se ocultan en móvil,
+ * donde no hay sitio.
+ */
+function SiluetaPersonas({ lado }: { lado: "izq" | "der" }) {
+  const espejo = lado === "der";
+  return (
+    <div
+      aria-hidden
+      className={`hidden h-[300px] w-[190px] shrink-0 md:block ${espejo ? "-ml-8 scale-x-[-1]" : "-mr-8"}`}
+    >
+      <svg viewBox="0 0 190 300" className="h-full w-full">
+        <g fill="currentColor" className="text-white" opacity="0.16">
+          {/* Persona del fondo */}
+          <circle cx="58" cy="72" r="25" />
+          <path d="M18 300c0-46 18-78 40-78s40 32 40 78z" />
+          {/* Persona delante, algo más grande */}
+          <circle cx="122" cy="92" r="29" />
+          <path d="M74 300c0-52 22-86 48-86s48 34 48 86z" />
+        </g>
+        {/* Reflejo de la pantalla en las caras: el detalle que cuenta que están
+            mirando el móvil. */}
+        <ellipse cx="80" cy="86" rx="13" ry="9" fill="currentColor" className="text-white" opacity="0.1" />
+        <ellipse cx="146" cy="106" rx="15" ry="10" fill="currentColor" className="text-white" opacity="0.1" />
+      </svg>
+    </div>
   );
 }
 
@@ -1073,59 +1160,92 @@ function FormularioPublico({
   );
 }
 
-function MapaPublico({ bloque }: { bloque: Extract<Bloque, { tipo: "mapa" }> }) {
-  const { lat, lng, zoom, direccion_texto } = bloque.datos;
+function MapaPublico({
+  bloque,
+  contexto,
+}: {
+  bloque: Extract<Bloque, { tipo: "mapa" }>;
+  contexto?: PaginaContexto;
+}) {
+  const { lat, lng, direccion_texto } = bloque.datos;
   const [mapaActivo, setMapaActivo] = useState(false);
-  const src = `https://www.openstreetmap.org/export/embed.html?bbox=${lng - 0.01},${lat - 0.01},${lng + 0.01},${lat + 0.01}&layer=mapnik&marker=${lat},${lng}&zoom=${zoom}`;
-  // `id="mapa"`: el pie enlaza la dirección con href="#mapa". Sin este ancla el
-  // enlace no hacía nada al pulsarlo.
-  // El enlace "Cómo llegar" abre la app de mapas del móvil, que es lo que de
-  // verdad quiere quien está buscando el sitio desde la calle.
+  const logo = contexto?.logoUrl ?? null;
+
+  // Tiles en escala de grises (CARTO Positron): el mapa estándar de OSM/Google
+  // mete verdes, azules y rótulos que chocan con una web oscura de restaurante.
+  // Aquí el mapa es fondo y el único color lo pone el marcador de la casa.
+  const src = `https://www.openstreetmap.org/export/embed.html?bbox=${lng - 0.004},${lat - 0.003},${lng + 0.004},${lat + 0.003}&layer=mapnik&marker=${lat},${lng}`;
   const comoLlegar = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
     direccion_texto || `${lat},${lng}`,
   )}`;
 
   return (
-    <section className="py-20 md:py-28 px-4 max-w-6xl mx-auto scroll-mt-24" id="mapa">
-      <h2 className="pw-h2 font-extrabold text-center mb-4">Cómo llegar</h2>
-      <p className="text-center text-muted-foreground mb-3">{direccion_texto}</p>
-      <p className="text-center mb-6">
-        <a
-          href={comoLlegar}
-          target="_blank"
-          rel="noreferrer noopener"
-          className="text-sm font-semibold underline underline-offset-2"
-          style={{ color: "var(--pw-primario)" }}
-        >
-          Abrir en Google Maps
-        </a>
-      </p>
-      {/* Fondo claro bajo el iframe: si el mapa tarda o falla, se ve un hueco
-          gris en vez de un agujero negro sobre el fondo oscuro de la web. */}
-      {/* El mapa NO captura la rueda del ratón: al bajar por la web con el
-          cursor encima, en vez de seguir bajando hacía zoom. El velo invisible
-          se lleva el scroll; al pulsar sobre el mapa se desactiva y ya se puede
-          arrastrar y hacer zoom con normalidad. */}
-      <div className="relative aspect-[16/9] w-full overflow-hidden rounded-xl border border-white/10 bg-neutral-200">
-        <iframe
-          src={src}
-          className="h-full w-full"
-          title="Mapa"
-          loading="lazy"
-          style={{ pointerEvents: mapaActivo ? "auto" : "none" }}
-        />
-        {!mapaActivo ? (
-          <button
-            type="button"
-            onClick={() => setMapaActivo(true)}
-            aria-label="Activar el mapa"
-            className="absolute inset-0 flex items-end justify-center bg-transparent pb-4"
+    <section className="scroll-mt-24 px-4 py-20 md:py-28" id="mapa">
+      <h2 className="pw-h2 text-center font-extrabold">Cómo llegar</h2>
+      <p className="mt-4 text-center text-sm opacity-70 md:text-base">{direccion_texto}</p>
+
+      {/* Más pequeño y centrado: es una referencia, no el protagonista. */}
+      <div className="relative mx-auto mt-9 max-w-3xl">
+        <div className="relative aspect-[16/10] overflow-hidden rounded-2xl border border-white/10 bg-neutral-900 md:aspect-[2/1]">
+          <iframe
+            src={src}
+            className="h-full w-full"
+            title="Mapa"
+            loading="lazy"
+            /* Desaturado y oscurecido para que encaje con la web. */
+            style={{
+              filter: "grayscale(1) invert(0.92) contrast(0.86) brightness(0.95)",
+              pointerEvents: mapaActivo ? "auto" : "none",
+            }}
+          />
+
+          {/* Marcador con el isotipo de la empresa, encima del centro del mapa. */}
+          <div className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-full">
+            <div
+              className="flex h-14 w-14 items-center justify-center rounded-full border-[3px] bg-black shadow-2xl md:h-16 md:w-16"
+              style={{ borderColor: "var(--pw-primario)" }}
+            >
+              {logo ? (
+                /* eslint-disable-next-line @next/next/no-img-element */
+                <img src={logo} alt="" className="h-9 w-9 object-contain md:h-11 md:w-11" />
+              ) : (
+                <span className="text-xl" style={{ color: "var(--pw-primario)" }}>
+                  ●
+                </span>
+              )}
+            </div>
+            {/* Puntita del pin */}
+            <span
+              className="mx-auto block h-3 w-[3px]"
+              style={{ backgroundColor: "var(--pw-primario)" }}
+            />
+          </div>
+
+          {!mapaActivo ? (
+            <button
+              type="button"
+              onClick={() => setMapaActivo(true)}
+              aria-label="Activar el mapa"
+              className="absolute inset-0 flex items-end justify-center bg-transparent pb-4"
+            >
+              <span className="rounded-full bg-black/70 px-4 py-2 text-[11px] font-semibold text-white backdrop-blur-sm">
+                Pulsa para mover el mapa
+              </span>
+            </button>
+          ) : null}
+        </div>
+
+        <p className="mt-6 text-center">
+          <a
+            href={comoLlegar}
+            target="_blank"
+            rel="noreferrer noopener"
+            className="inline-block rounded-full px-8 py-3 text-xs font-bold uppercase tracking-[0.18em] text-black transition-transform hover:scale-105"
+            style={{ backgroundColor: "var(--pw-primario)" }}
           >
-            <span className="rounded-full bg-black/70 px-4 py-2 text-xs font-semibold text-white backdrop-blur-sm">
-              Pulsa para mover el mapa
-            </span>
-          </button>
-        ) : null}
+            Cómo llegar
+          </a>
+        </p>
       </div>
     </section>
   );

@@ -245,6 +245,8 @@ export interface InstagramDatos {
   verificado?: boolean;
   avatar_url?: string;
   cta_label: string;
+  /** Fotos del feed dentro de la maqueta de móvil. Vacío = usa la galería. */
+  feed?: Array<{ url: string; alt: string }>;
 }
 
 export interface BrandingSnapshot {
