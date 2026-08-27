@@ -84,22 +84,20 @@ const SUBIDAS_EN_PARALELO = 4;
  * lateral. `allSections` es la fuente única de ese orden: si allí cambia, aquí
  * cambia solo. Se compara por clave canónica, que es lo que guarda la carpeta.
  */
-const ORDEN_DEPARTAMENTOS = allSections.map((s) =>
-  s.modulo.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().trim(),
-);
+const sinAcentos = (v: string) =>
+  v.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().trim();
 
-/** Posición en el menú lateral. Lo desconocido va al final. */
-function ordenDepartamento(departamento: string): number {
-  const clave = departamento
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toUpperCase()
-    .trim();
-  // La carpeta guarda la clave canónica (RRHH), el menú el nombre largo
-  // (RECURSOS HUMANOS): vale que uno empiece por el otro.
-  const i = ORDEN_DEPARTAMENTOS.findIndex(
-    (m) => m === clave || m.startsWith(clave) || clave.startsWith(m),
-  );
+const ORDEN_DEPARTAMENTOS = allSections.map((s) => sinAcentos(s.modulo));
+
+/**
+ * Posición en el menú lateral. Lo desconocido va al final.
+ *
+ * Se compara por el NOMBRE de la carpeta ("RECURSOS HUMANOS"), que es idéntico
+ * al del menú, y no por su clave canónica ("RRHH"), que no coincide con nada:
+ * ordenando por la clave, RRHH no se encontraba y caía al final de la lista.
+ */
+function ordenDepartamento(carpeta: Carpeta): number {
+  const i = ORDEN_DEPARTAMENTOS.indexOf(sinAcentos(carpeta.nombre));
   return i === -1 ? Number.MAX_SAFE_INTEGER : i;
 }
 
@@ -208,9 +206,7 @@ export function ArchivosExplorador({ variante, abierto = true, renderAcciones }:
     const res = await listCarpetasRaiz();
     if (res.ok)
       setRaices(
-        [...res.data].sort(
-          (a, b) => ordenDepartamento(a.departamento) - ordenDepartamento(b.departamento),
-        ),
+        [...res.data].sort((a, b) => ordenDepartamento(a) - ordenDepartamento(b)),
       );
     else toast.error(res.error);
     setCargando(false);
