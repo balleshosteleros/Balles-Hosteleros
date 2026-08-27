@@ -9,7 +9,7 @@ import {
 } from "@/components/ui/table";
 import {
   ArrowLeft, Settings, PackageCheck, Shirt, Package, Trash2, Loader2,
-  AlertTriangle, CheckCircle2, RotateCcw, Mail, Undo2, PackageX,
+  AlertTriangle, CheckCircle2, RotateCcw, Mail, Undo2, PackageX, History,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -39,6 +39,7 @@ import {
   sePuedeDarDeBajaPorMerma,
   type Entrega,
 } from "@/features/rrhh/data/entregas";
+import { HistorialEntregaDialog } from "@/features/rrhh/components/entregas/HistorialEntregaDialog";
 import { MermaDialog } from "./MermaDialog";
 import { TiposMaterialConfig } from "./TiposMaterialConfig";
 import { NuevaEntregaDialog } from "./NuevaEntregaDialog";
@@ -84,6 +85,8 @@ export function EntregasView() {
   const [accionando, setAccionando] = useState<string | null>(null);
   /** Entrega que se está dando de baja por deterioro. Null = diálogo cerrado. */
   const [mermaDe, setMermaDe] = useState<Entrega | null>(null);
+  /** Entrega cuyo historial se está mirando. Null = diálogo cerrado. */
+  const [historialDe, setHistorialDe] = useState<Entrega | null>(null);
   const { confirm, dialog } = useConfirmDelete();
   useGlobalLoadingSync(loading);
 
@@ -157,6 +160,9 @@ export function EntregasView() {
    */
   async function solicitarDevolucion(e: Entrega) {
     const ok = await confirm({
+      // No borra nada: aquí "Borrar" en rojo se leía igual que "Cancelar".
+      tono: "normal",
+      confirmLabel: "Pedir la devolución",
       title: "Pedir la devolución",
       description: `Se le mandará a ${e.empleadoNombre} un correo para que firme que ha devuelto ${e.item?.tipoNombre ?? "el material"}. Queda devuelta cuando lo firme.`,
     });
@@ -338,6 +344,16 @@ export function EntregasView() {
 
                   <TableCell className="text-right align-top">
                     <div className="flex items-center justify-end gap-1">
+                      {/* El rastro de los correos y el documento firmado. */}
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => setHistorialDe(e)}
+                        title="Ver el documento firmado y el historial de correos"
+                      >
+                        <History className="h-4 w-4" />
+                      </Button>
+
                       {/* Reenviar el acta de entrega si el correo no salió. */}
                       {(e.estado === "pendiente_firma" || e.estado === "borrador") && (
                         <Button
@@ -425,6 +441,11 @@ export function EntregasView() {
         open={dialogOpen}
         onOpenChange={setDialogOpen}
         onCreada={() => void cargar()}
+      />
+
+      <HistorialEntregaDialog
+        entrega={historialDe}
+        onOpenChange={(abierto) => { if (!abierto) setHistorialDe(null); }}
       />
 
       <MermaDialog

@@ -227,3 +227,38 @@ export function pendientesDeDevolucion(entregas: Entrega[]): Entrega[] {
       e.devolucionEstado !== "merma",
   );
 }
+
+/**
+ * Historial de una entrega: sus actas y, dentro de cada una, cuándo se le mandó
+ * el correo, cuántas veces, cuándo lo abrió y cuándo firmó.
+ *
+ * RRHH necesita poder responder «¿le llegó?, ¿cuándo?, ¿se le insistió?» sin
+ * salir del módulo, y tener a mano el PDF firmado como prueba.
+ */
+export type ActaEntregaTipo = "entrega" | "devolucion" | "merma";
+
+/** Un hito del acta, ya en lenguaje llano para la pantalla. */
+export interface HitoActa {
+  /** Momento exacto, ISO en UTC. Se formatea con la zona de la empresa. */
+  fecha: string;
+  /** Qué pasó: "Correo enviado", "Firmado"… */
+  titulo: string;
+  /** Detalle, si lo hay: a qué correo se mandó, si falló el envío… */
+  detalle: string | null;
+}
+
+/** Un acta de la entrega con toda su trazabilidad. */
+export interface ActaEntrega {
+  documentoId: string;
+  tipo: ActaEntregaTipo;
+  titulo: string;
+  /** Estado del documento de firma: pendiente, firmado, rechazado, expirado. */
+  estado: string;
+  enviadoEn: string | null;
+  firmadoEn: string | null;
+  /** Cuántas veces se le volvió a mandar el correo tras el primer envío. */
+  reenvios: number;
+  /** Hay PDF firmado descargable. */
+  tieneDocumentoFirmado: boolean;
+  hitos: HitoActa[];
+}

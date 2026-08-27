@@ -18,6 +18,13 @@ type ConfirmOptions = {
   description?: string;
   confirmLabel?: string;
   cancelLabel?: string;
+  /**
+   * "destructiva" (por defecto) pinta el aviso en rojo con el triángulo: se va a
+   * borrar algo. "normal" es para confirmaciones que no destruyen nada (pedir
+   * una devolución, mandar un correo): botón azul y sin alarma, porque ahí
+   * "Borrar" en rojo no significa nada y confunde con "Cancelar".
+   */
+  tono?: "destructiva" | "normal";
 };
 
 type PendingState = ConfirmOptions & {
@@ -42,6 +49,8 @@ export function useConfirmDelete() {
     setPending(null);
   }, []);
 
+  const esDestructiva = (pending?.tono ?? "destructiva") === "destructiva";
+
   const dialog = (
     <AlertDialog
       open={pending !== null}
@@ -52,13 +61,16 @@ export function useConfirmDelete() {
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle className="flex items-center gap-2">
-            <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-destructive/10 text-destructive">
-              <AlertTriangle className="h-5 w-5" />
-            </span>
+            {esDestructiva && (
+              <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-destructive/10 text-destructive">
+                <AlertTriangle className="h-5 w-5" />
+              </span>
+            )}
             {pending?.title ?? "¿Estás seguro?"}
           </AlertDialogTitle>
           <AlertDialogDescription>
-            {pending?.description ?? "Esta acción no se puede deshacer."}
+            {pending?.description ??
+              (esDestructiva ? "Esta acción no se puede deshacer." : "")}
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
@@ -67,9 +79,13 @@ export function useConfirmDelete() {
           </AlertDialogCancel>
           <AlertDialogAction
             onClick={() => close(true)}
-            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            className={
+              esDestructiva
+                ? "bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                : undefined
+            }
           >
-            {pending?.confirmLabel ?? "Borrar"}
+            {pending?.confirmLabel ?? (esDestructiva ? "Borrar" : "Aceptar")}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
