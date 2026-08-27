@@ -31,6 +31,19 @@ const PREVIEW_WEB_HOSTS = (process.env.PAGINAS_WEB_PREVIEW_HOSTS ?? '')
   .filter(Boolean)
 
 const nextConfig: NextConfig = {
+  // Probar la app desde el MÓVIL contra el localhost del Mac.
+  //
+  // En desarrollo, Next bloquea por seguridad las peticiones a sus recursos
+  // internos (/_next/*) que no vengan de "localhost". Al abrir la app desde el
+  // teléfono por la IP de la red (http://192.168.x.x:3000) ese bloqueo hacía
+  // que la página entera respondiera 404 —- confuso, porque la ruta existía y
+  // desde el Mac cargaba bien.
+  //
+  // Se autorizan los rangos privados enteros (no una IP fija) para que siga
+  // funcionando cuando el router reasigne la dirección del Mac. Solo aplica a
+  // `next dev`: en producción esta opción se ignora.
+  allowedDevOrigins: ['192.168.0.0/16', '10.0.0.0/8', '172.16.0.0/12'],
+
   // Versión del build horneada en el bundle del cliente. El auto-actualizador
   // de la PWA (VersionAutoUpdate) la compara contra /api/version para recargar
   // cuando hay un deploy nuevo, sin que el usuario reinstale nada.

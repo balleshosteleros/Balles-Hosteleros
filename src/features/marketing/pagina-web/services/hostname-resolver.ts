@@ -237,9 +237,31 @@ export function esHostPreviewWeb(rawHost: string): boolean {
   return hostsPreviewWeb().includes(host);
 }
 
+/**
+ * ¿Es una IP de la red local (192.168.x.x, 10.x.x.x, 172.16-31.x.x)?
+ *
+ * Se trata como host principal, igual que `localhost`: es como se abre la app
+ * desde el MÓVIL contra el localhost del Mac (http://192.168.1.50:3000). Sin
+ * esto, la IP no casaba con ningún dominio conocido, el proxy la tomaba por la
+ * web pública de una empresa y TODA la app respondía 404 desde el teléfono
+ * mientras desde el ordenador cargaba con normalidad.
+ */
+function esIpRedLocal(host: string): boolean {
+  const soloIp = host.split(":")[0];
+  return (
+    /^192\.168\.\d{1,3}\.\d{1,3}$/.test(soloIp) ||
+    /^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(soloIp) ||
+    /^172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}$/.test(soloIp) ||
+    soloIp === "127.0.0.1"
+  );
+}
+
 export function esHostPrincipal(rawHost: string): boolean {
   const host = normalizarHost(rawHost);
   if (!host) return true;
+  // La app abierta desde el móvil por la IP del Mac es la app, no una web de
+  // empresa. Va lo primero: una IP no puede ser el dominio de ningún cliente.
+  if (esIpRedLocal(host)) return true;
   // Los subdominios de preview sirven web de empresa, no la app: se comprueba
   // ANTES del match por sufijo, que si no los daría por principales.
   if (esHostPreviewWeb(host)) return false;
