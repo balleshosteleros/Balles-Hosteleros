@@ -688,9 +688,19 @@ export async function registrarArchivo(
       return fallo("No tienes acceso a esta carpeta");
     }
 
-    // La clave firmada se generó para esta empresa: si no encaja, se rechaza.
-    if (!input.r2Key.startsWith(`empresa_${ctx.empresaId}/archivos/`)) {
-      return fallo("Ruta de archivo no válida");
+    // La clave firmada lleva empresa Y departamento en la ruta. Se comprueban
+    // los dos: si solo se mirara la empresa, un archivo firmado para una
+    // carpeta podría registrarse en otra.
+    //
+    // Pasaba de verdad: subiendo a dos carpetas casi a la vez, la firma salía
+    // para la primera y el registro llegaba con la segunda ya activa, y la foto
+    // acababa guardada en la ruta física de otro departamento.
+    const carpetaFisica = sanitizar(departamento) || "_sin_departamento";
+    const prefijoEsperado = `empresa_${ctx.empresaId}/archivos/${carpetaFisica}/`;
+    if (!input.r2Key.startsWith(prefijoEsperado)) {
+      return fallo(
+        "La subida no corresponde a esta carpeta. Vuelve a intentarlo sin cambiar de carpeta mientras sube.",
+      );
     }
 
     const { data, error } = await ctx.supabase

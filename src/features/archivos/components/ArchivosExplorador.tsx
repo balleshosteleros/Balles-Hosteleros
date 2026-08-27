@@ -198,6 +198,10 @@ export function ArchivosExplorador({ variante, abierto = true, renderAcciones }:
   const [renombrandoArchivo, setRenombrandoArchivo] = useState<Archivo | null>(null);
 
   const inputRef = useRef<HTMLInputElement>(null);
+  // Carpeta activa "en vivo": los callbacks de subida se crean una vez y
+  // capturarían un `carpetaId` congelado.
+  const carpetaIdRef = useRef<string | null>(null);
+  carpetaIdRef.current = carpetaId;
 
   /* ── Carga ──────────────────────────────────────────────────────────── */
 
@@ -290,7 +294,12 @@ export function ArchivosExplorador({ variante, abierto = true, renderAcciones }:
         if (!reg.ok) throw new Error(reg.error);
 
         marcar({ progreso: 100 });
-        setArchivos((prev) => [reg.data, ...prev]);
+        // Solo se pinta si seguimos en la carpeta a la que se subió: si el
+        // usuario navegó a otra mientras subía, aparecería un archivo que no
+        // pertenece a la carpeta que está viendo.
+        setArchivos((prev) =>
+          reg.data.carpetaId === carpetaIdRef.current ? [reg.data, ...prev] : prev,
+        );
       } catch (err) {
         const msg = err instanceof Error ? err.message : "Error al subir";
         marcar({ error: msg });
