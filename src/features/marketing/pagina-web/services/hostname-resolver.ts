@@ -206,9 +206,43 @@ export function esHostQr(rawHost: string): boolean {
   return host === hostQr();
 }
 
+/**
+ * Subdominios del dominio principal que, pese a terminar en
+ * `.balleshosteleros.com`, sirven una PÁGINA WEB de empresa y no la app.
+ *
+ * POR QUÉ EXISTE ESTO:
+ * `esHostPrincipal()` da por buena cualquier dirección acabada en el dominio
+ * principal, así que un `bacanal.balleshosteleros.com` caía en el enrutado
+ * normal y devolvía la app (login) en vez de la web del restaurante. Sirve para
+ * enseñar una web antes de apuntarle su dominio real: el cliente la revisa sin
+ * tocar el DNS del dominio en producción, que es un cambio de cara al público.
+ *
+ * El dominio real (bacanalmadrid.com) NO necesita estar aquí: al no terminar en
+ * el dominio principal, `esHostPrincipal()` ya lo manda al motor de webs.
+ *
+ * Se configura por entorno (coma separada) para no tener que tocar código al
+ * añadir una web nueva.
+ */
+export function hostsPreviewWeb(): string[] {
+  const env = process.env.PAGINAS_WEB_PREVIEW_HOSTS ?? "";
+  return env
+    .split(",")
+    .map((h) => normalizarHost(h))
+    .filter(Boolean);
+}
+
+export function esHostPreviewWeb(rawHost: string): boolean {
+  const host = normalizarHost(rawHost);
+  if (!host) return false;
+  return hostsPreviewWeb().includes(host);
+}
+
 export function esHostPrincipal(rawHost: string): boolean {
   const host = normalizarHost(rawHost);
   if (!host) return true;
+  // Los subdominios de preview sirven web de empresa, no la app: se comprueba
+  // ANTES del match por sufijo, que si no los daría por principales.
+  if (esHostPreviewWeb(host)) return false;
   const principales = hostnamesPrincipales();
   // Match exacto o por sufijo (p.ej. staging.balleshosteleros.com)
   return principales.some((h) => host === h || host.endsWith(`.${h}`));
