@@ -1,7 +1,58 @@
 # TAREA para Fernando — Precios de compra de BACANAL (cuando bajes el repo)
 
-> **De:** Iván (vía Claude) · **Fecha:** 2026-06-30 · **Actualizado:** 2026-08-27 · **Prioridad:** media
+> **De:** Iván (vía Claude) · **Fecha:** 2026-06-30 · **Actualizado:** 2026-08-28 · **Prioridad:** media
 > Léelo al hacer `git pull` y reconciliar.
+
+---
+
+## ✅ 28-AGO (Fernando) — LOS DOS URGENTES, HECHOS Y EN PRODUCCIÓN
+
+> Información. Nada que implementar por vuestra parte.
+
+Gracias por las respuestas y por probar los botones — la prueba de Iván ha valido para destapar
+un fallo de verdad. Los dos urgentes que marcabais ya están arreglados y desplegados.
+
+### 1. Una merma ya no puede dejar el almacén en negativo
+
+Era el nº 13 de la lista, y teníais razón en que es **la fábrica de negativos nuevos**: el
+sistema dejó sacar 5 unidades de Larios Rose habiendo 2,4, y se quedó en −2,6 sin decir nada.
+
+Ahora se comprueba **antes de apuntar nada** y, si no llega, lo dice con el dato en la mano:
+
+> *"Solo quedan 2,4 ud en el almacén y estás apuntando 5. Corrige la cantidad, o ajusta primero
+> las existencias en Logística → Stock si el dato está mal."*
+
+Dos detalles pensados a propósito:
+
+- **El freno es solo para lo que apunta una persona en el momento** (las mermas). Las ventas y
+  las recepciones de albarán **siguen pudiendo dejar negativo**, y debe ser así: son hechos ya
+  ocurridos, y negarse a registrarlos escondería el problema real (stock sin dar de alta) además
+  de romper el cron. Ahí el negativo es el síntoma, no la causa.
+- Si alguien vacía el almacén justo mientras otro apunta la merma, se retira el apunte y se avisa,
+  para no dejar nunca una merma sin su movimiento.
+
+**La merma de prueba, borrada.** Preguntabais cuándo: ya está hecho. Antes la verificamos entera
+en la base de datos (merma, movimiento y saldo cuadraban: **el circuito funciona**), y al borrarla
+hemos devuelto su efecto — **Larios Rose vuelve a 2,4 en Habana**. Un negativo menos de la lista.
+
+### 2. La ingesta ya no tira el `ProductId` — el bloqueante, resuelto
+
+Buen hallazgo, y la raíz era exactamente la que decíais. Las líneas de ticket ahora guardan
+**siempre** el identificador de Ágora, exista o no el producto en Balles (columna nueva
+`agora_product_id`, ya aplicada en producción).
+
+A partir de ahora **no se pierde ni una línea más**, y las que entren de los 5 productos que
+faltan se podrán enlazar solas en cuanto se den de alta.
+
+⚠️ **Las 288 líneas viejas siguen sin recuperar**: se guardaron antes del arreglo y su número ya
+se perdió. Enlazarlas a posteriori requeriría reprocesar esos días contra Ágora — se puede hacer,
+pero es un trabajo aparte; decidnos si lo queréis.
+
+### Lo que sigue en nuestro tejado
+
+Los **3 arreglos del importador** y el **PRP-080**. El orden que proponéis nos parece bien, y el
+que ya no se puede invertir queda claro: **primero los escandallos de Iván, después cortar el
+ratio de Ágora**. Avisad cuando los tengáis pasados y los cargamos.
 
 ---
 
