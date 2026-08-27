@@ -583,7 +583,26 @@ export async function enviarAltaGestoria(
     }
 
     const res = await sendEmail({ to, subject, html, text, empresaId });
-    if (!res.ok) return { ok: false, error: "No se pudo enviar el email (revisa el SMTP)." };
+    if (!res.ok) {
+      // El token se creó ANTES de enviar (el correo necesita el enlace). Si el
+      // envío falla, ese token es un FANTASMA: su valor en claro solo existía en
+      // el correo que nunca salió, así que nadie puede usarlo — pero deja el alta
+      // como «enviada» en Gestoría → Contrataciones y bloquea el reenvío. Se borra.
+      if (tk.ok) {
+        await admin.from("gestoria_contrato_tokens").delete().eq("id", tk.tokenId);
+      }
+      // Motivo REAL del fallo, no un genérico: el caso más común no es el SMTP,
+      // es el guard de enlaces (correo lanzado desde una copia local → el botón
+      // apuntaría a localhost y sería inservible para la gestoría).
+      const motivo =
+        "blocked" in res && res.blocked
+          ? `No se envió: el enlace del correo no es válido para la gestoría (${res.error}). ` +
+            "Envía el alta desde el sistema en producción, no desde una copia local."
+          : !res.configured
+            ? "No se envió: el correo saliente no está configurado."
+            : `No se pudo enviar el email: ${res.error}`;
+      return { ok: false, error: motivo };
+    }
 
     // Registrar el email en la actividad del candidato (aparece en la pestaña
     // «Actividad» de su ficha, con su asunto y el HTML enviado).

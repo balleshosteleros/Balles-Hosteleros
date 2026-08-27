@@ -1,12 +1,15 @@
 "use client";
 
 /**
- * Gestoría → CONTRATACIONES. Visor de SOLO LECTURA.
+ * Gestoría → CONTRATACIONES. Visor de consulta.
  *
  * Histórico de todo lo que se ha comunicado a la gestoría desde RRHH: altas,
- * bajas y modificaciones. No se crea ni se edita nada aquí — la fuente es RRHH.
- * La gestoría entra como una usuaria más con acceso al departamento y consulta
- * lo que se le ha enviado, con los MISMOS datos que recibió por correo.
+ * bajas y modificaciones. La fuente es RRHH. La gestoría entra como una usuaria
+ * más con acceso al departamento y consulta lo que se le ha enviado, con los
+ * MISMOS datos que recibió por correo.
+ *
+ * ÚNICA acción: «Reenviar alta», visible solo para quien puede editar RRHH y
+ * solo en altas cuyo contrato sigue sin llegar (ver `ReenviarAltaButton`).
  */
 
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
@@ -22,6 +25,7 @@ import {
   UserPlus,
   UserMinus,
   FileSignature,
+  Send,
 } from "lucide-react";
 import {
   SubmoduleToolbar,
@@ -36,10 +40,14 @@ import {
 } from "@/shared/components/SubmoduleToolbar";
 import { TableColumnHeader } from "@/shared/components/TableColumnHeader";
 import { ResizableColumnsProvider } from "@/shared/components/ResizableColumns";
-import { listContrataciones } from "@/features/gestoria/contrataciones/actions/contrataciones-actions";
+import {
+  listContrataciones,
+  reenviarAltaGestoria,
+} from "@/features/gestoria/contrataciones/actions/contrataciones-actions";
 import type { ContratacionRow, TipoContratacion } from "@/features/gestoria/contrataciones/types";
 import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
+import { useAuth } from "@/features/auth/contexts/auth-context";
 import { formatFechaHoraEnZona } from "@/features/empresa/lib/zona-horaria";
 
 /** Etiqueta de la fecha clave según el tipo de trámite. */
@@ -97,6 +105,53 @@ function EstadoBadge({ row }: { row: ContratacionRow }) {
       </Badge>
       {detalle && <span className="text-[11px] text-muted-foreground leading-tight">{detalle}</span>}
     </div>
+  );
+}
+
+/**
+ * Reenvío del alta a la gestoría. Solo aparece en ALTAS que siguen esperando el
+ * contrato (pendientes o con el enlace caducado) y solo para quien puede editar
+ * RRHH: la gestoría consulta esta pantalla, no se auto-envía las altas.
+ *
+ * Es el único reintento posible cuando el correo del alta no llegó a salir —
+ * recontratar está cerrado una vez el candidato tiene ficha de empleado.
+ */
+function ReenviarAltaButton({ row, onHecho }: { row: ContratacionRow; onHecho: () => void }) {
+  const { puedeEditar, permisosLoaded } = useAuth();
+  const [enviando, setEnviando] = useState(false);
+
+  const aplica =
+    row.tipo === "alta" &&
+    row.empleado_id != null &&
+    (row.pendiente_de === "contrato_gestoria" ||
+      row.pendiente_de === "enlace_caducado" ||
+      row.pendiente_de === "email_fallido");
+  // `permisosLoaded` evita que el botón parpadee antes de saber si hay permiso.
+  if (!aplica || !permisosLoaded || !puedeEditar("RECURSOS HUMANOS")) return null;
+
+  const reenviar = async () => {
+    setEnviando(true);
+    const res = await reenviarAltaGestoria(row.empleado_id as string);
+    setEnviando(false);
+    if (res.ok) {
+      toast.success(`Alta reenviada a la gestoría: ${row.nombre}`);
+      onHecho();
+    } else {
+      toast.error("No se pudo reenviar el alta", { description: res.error });
+    }
+  };
+
+  return (
+    <Button
+      variant="outline"
+      size="sm"
+      className="h-6 px-2 text-[11px]"
+      disabled={enviando}
+      onClick={reenviar}
+    >
+      <Send className="h-3 w-3 mr-1" />
+      {enviando ? "Enviando…" : "Reenviar alta"}
+    </Button>
   );
 }
 
@@ -326,7 +381,14 @@ export function ContratacionesView() {
           onOrdenChange={setOrden}
         />
       ),
-      td: (r) => <td key="estado" className="px-3 py-2.5"><EstadoBadge row={r} /></td>,
+      td: (r) => (
+        <td key="estado" className="px-3 py-2.5">
+          <div className="flex flex-col gap-1.5 items-start">
+            <EstadoBadge row={r} />
+            <ReenviarAltaButton row={r} onHecho={load} />
+          </div>
+        </td>
+      ),
     },
   };
 

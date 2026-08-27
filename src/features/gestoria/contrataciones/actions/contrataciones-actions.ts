@@ -1,12 +1,16 @@
 "use server";
 
 /**
- * Visor de CONTRATACIONES (Gestoría) — SOLO LECTURA.
+ * Visor de CONTRATACIONES (Gestoría) — lectura, salvo el reenvío del alta.
  *
- * No crea, no edita, no envía correos. Únicamente LEE el histórico de lo que
- * RRHH ya ha comunicado a la gestoría. La fuente de verdad es RRHH; esta
- * pantalla es un espejo para que la gestoría (que entra como una usuaria más con
- * acceso al departamento) vea todo lo que se le ha mandado.
+ * LEE el histórico de lo que RRHH ya ha comunicado a la gestoría. La fuente de
+ * verdad es RRHH; esta pantalla es un espejo para que la gestoría (que entra
+ * como una usuaria más con acceso al departamento) vea todo lo que se le ha
+ * mandado.
+ *
+ * ÚNICA escritura: `reenviarAltaGestoria`, reservada a quien puede editar RRHH
+ * (la gestoría no la ve). Es el único punto de reintento cuando el correo del
+ * alta no llegó a salir — ver el comentario de esa función.
  *
  * Fuentes reales por tipo:
  *   · altas          → `gestoria_contrato_tokens` + ficha/condiciones del empleado
@@ -14,7 +18,10 @@
  *   · modificaciones → `empleado_promociones` (avisadas: gestoria_enviado_at)
  */
 
+import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { getRolContext } from "@/features/auth/actions/permisos-actions";
+import { puedeEditarModulo } from "@/features/auth/lib/permisos";
 import { getEmpresaActivaForUser, getZonaHorariaEmpresa } from "@/features/empresa/lib/empresa-server";
 import { hoyEnZona } from "@/features/empresa/lib/zona-horaria";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -113,7 +120,20 @@ async function listAltas(
     .order("alta_enviada_en", { ascending: false });
   if (error) throw error;
   const filas = data ?? [];
-  if (filas.length === 0) return [];
+
+  // Altas que NUNCA se comunicaron: empleados con ficha creada desde
+  // Reclutamiento pero sin token de subida. El token se crea al enviar el alta,
+  // así que su ausencia significa que el correo no llegó a salir (o que se
+  // borró tras fallar el envío). Sin esto quedaban INVISIBLES aquí: el trámite
+  // no existía para nadie y nadie podía reintentarlo.
+  const sinEnviar = await listAltasNuncaEnviadas(
+    supabase,
+    empresaId,
+    hoy,
+    new Set(filas.map((f) => f.empleado_id as string).filter(Boolean)),
+  );
+
+  if (filas.length === 0) return sinEnviar;
 
   const empleadoIds = Array.from(new Set(filas.map((f) => f.empleado_id as string).filter(Boolean)));
   const firmaIds = filas.map((f) => f.firma_documento_id as string | null).filter(Boolean) as string[];
@@ -162,7 +182,7 @@ async function listAltas(
     ]),
   );
 
-  return filas.map((f) => {
+  return [...sinEnviar, ...filas.map((f) => {
     const empId = f.empleado_id as string;
     const emp = empleados.get(empId);
     const subido = f.contrato_subido_en != null;
@@ -192,6 +212,89 @@ async function listAltas(
       ...calcularAviso(pendiente, fechaEvento, hoy, {
         hoy: "Empieza HOY y el contrato sigue sin cerrar",
         pasado: "Ya ha empezado a trabajar y el contrato sigue sin cerrar",
+      }),
+    };
+  })];
+}
+
+/**
+ * Altas que NUNCA llegaron a comunicarse a la gestoría.
+ *
+ * El alta se envía una sola vez, dentro del flujo de contratación, y el token de
+ * subida se crea en ese mismo envío. Un empleado promovido desde Reclutamiento
+ * SIN token es, por tanto, un alta que no salió: el caso real fue el guard de
+ * enlaces bloqueando el correo porque se lanzó desde una copia local y el botón
+ * apuntaba a `localhost`.
+ *
+ * Antes estas altas no aparecían en ninguna parte — ni pendientes ni nada — y el
+ * trámite se quedaba muerto en silencio. Ahora salen como pendientes por
+ * `email_fallido`, con su botón de reenvío.
+ */
+async function listAltasNuncaEnviadas(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  empresaId: string,
+  hoy: string,
+  conToken: Set<string>,
+): Promise<ContratacionRow[]> {
+  // Candidatos ya promovidos a empleado: es el momento en que el alta debía salir.
+  const { data, error } = await supabase
+    .from("candidatos")
+    .select("empleado_id, promovido_at")
+    .eq("empresa_id", empresaId)
+    .not("empleado_id", "is", null)
+    .not("promovido_at", "is", null);
+  if (error) throw error;
+
+  const huerfanos = (data ?? [])
+    .filter((c) => !conToken.has(c.empleado_id as string));
+  if (huerfanos.length === 0) return [];
+
+  const ids = huerfanos.map((c) => c.empleado_id as string);
+  const [empleadosRes, condicionesRes] = await Promise.all([
+    supabase.from("empleados").select("id, nombre, apellidos, dni_nie, puesto, fecha_alta").in("id", ids),
+    supabase
+      .from("empleado_condiciones")
+      .select("empleado_id, primer_dia, vigente_hasta, vigente_desde")
+      .in("empleado_id", ids)
+      .order("vigente_desde", { ascending: false, nullsFirst: false }),
+  ]);
+
+  const empleados = new Map(
+    (empleadosRes.data ?? []).map((e) => [(e as Record<string, unknown>).id as string, e as Record<string, unknown>]),
+  );
+  // Mismo criterio que en `listAltas`: gana la fila vigente; si no hay, la más reciente.
+  const primerDia = new Map<string, string | null>();
+  const tieneVigente = new Set<string>();
+  for (const c of (condicionesRes.data ?? []) as Array<Record<string, unknown>>) {
+    const empId = c.empleado_id as string;
+    const vigente = c.vigente_hasta == null;
+    if (tieneVigente.has(empId)) continue;
+    if (vigente || !primerDia.has(empId)) {
+      primerDia.set(empId, (c.primer_dia as string | null) ?? null);
+      if (vigente) tieneVigente.add(empId);
+    }
+  }
+
+  return huerfanos.map((c) => {
+    const empId = c.empleado_id as string;
+    const emp = empleados.get(empId);
+    const fechaEvento = primerDia.get(empId) ?? (emp?.fecha_alta as string | null) ?? null;
+    return {
+      // No hay token: el id de la fila es el del empleado (único y estable aquí).
+      id: `sin-envio-${empId}`,
+      tipo: "alta" as TipoContratacion,
+      empleado_id: empId,
+      nombre: nombreDe(emp?.nombre, emp?.apellidos) || "Trabajador",
+      dni_nie: (emp?.dni_nie as string | null) ?? null,
+      puesto: (emp?.puesto as string | null) ?? null,
+      // Se ordena por el momento de la contratación: es cuando debió comunicarse.
+      enviado_en: c.promovido_at as string,
+      fecha_evento: fechaEvento,
+      estado: "pendiente" as const,
+      pendiente_de: "email_fallido" as MotivoPendiente,
+      ...calcularAviso(true, fechaEvento, hoy, {
+        hoy: "Empieza HOY y la gestoría no ha recibido el alta",
+        pasado: "Ya ha empezado a trabajar y la gestoría no ha recibido el alta",
       }),
     };
   });
@@ -324,4 +427,55 @@ async function listModificaciones(
       puesto_nuevo: (m.puesto_destino_nombre as string | null) ?? null,
     };
   });
+}
+
+/**
+ * REENVÍO del alta a la gestoría (única acción de escritura de esta pantalla).
+ *
+ * Existe porque el alta se envía UNA sola vez, dentro del flujo de contratación
+ * (`contratarCandidato`, paso 7). Si ese correo no sale — el caso real: el alta
+ * se lanzó desde una copia local y el guard de enlaces bloqueó el envío porque
+ * el botón apuntaba a `localhost` — no había forma de reintentarlo: recontratar
+ * está cerrado (`promovido_at` ya está puesto) y no existía ningún botón. El
+ * trámite quedaba muerto y había que tocar la BD a mano.
+ *
+ * Solo lo ve y lo ejecuta quien puede EDITAR Recursos Humanos: la gestoría entra
+ * a esta pantalla como usuaria de consulta y no debe poder auto-enviarse el alta.
+ */
+export async function reenviarAltaGestoria(
+  empleadoId: string,
+): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const { empresaId } = await getContext();
+    if (!empresaId) return { ok: false, error: "Sin empresa" };
+
+    const { permisos } = await getRolContext();
+    if (!puedeEditarModulo(permisos, "RECURSOS HUMANOS")) {
+      return { ok: false, error: "Sin permisos: necesitas Recursos Humanos para reenviar el alta." };
+    }
+
+    // El empleado debe ser de la empresa activa: el `empleadoId` viene del
+    // cliente y no puede servir para enviar altas de otra empresa.
+    const supabaseSrv = await createClient();
+    const { data: emp } = await supabaseSrv
+      .from("empleados")
+      .select("id")
+      .eq("id", empleadoId)
+      .eq("empresa_id", empresaId)
+      .maybeSingle();
+    if (!emp) return { ok: false, error: "El trabajador no pertenece a esta empresa." };
+
+    // `forzar`: el envío automático ya se dio por hecho una vez; este reenvío es
+    // una acción manual y explícita, no debe depender del toggle de envío auto.
+    const { enviarAltaGestoria } = await import("@/features/rrhh/actions/gestoria-actions");
+    const res = await enviarAltaGestoria(empleadoId, { forzar: true });
+    if (!res.ok) return { ok: false, error: res.error ?? "No se pudo reenviar el alta." };
+
+    revalidatePath("/gestoria/contrataciones");
+    return { ok: true };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Error desconocido";
+    console.error("[contrataciones] reenviarAlta:", msg);
+    return { ok: false, error: msg };
+  }
 }
