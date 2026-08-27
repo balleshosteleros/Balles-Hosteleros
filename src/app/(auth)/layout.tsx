@@ -1,4 +1,5 @@
 import Image from "next/image";
+import Link from "next/link";
 
 export default function AuthLayout({
   children,
@@ -13,15 +14,56 @@ export default function AuthLayout({
           <div className="w-full max-w-[400px]">{children}</div>
         </div>
 
-        {/* Footer */}
-        <footer className="mt-10 flex flex-col items-center justify-between gap-2 text-xs text-slate-500 sm:flex-row">
-          <span>© {new Date().getFullYear()} Balles Hosteleros</span>
-          <a
-            href="mailto:info@balleshosteleros.com"
-            className="transition-colors hover:text-slate-300"
-          >
-            info@balleshosteleros.com
-          </a>
+        {/* Footer.
+            Los enlaces legales son REQUISITO de la verificación OAuth de
+            Google: el revisor busca la política de privacidad desde la misma
+            pantalla donde se pide el acceso, no solo en la web comercial. */}
+        <footer className="mt-10 flex flex-col items-center gap-3 text-xs text-slate-500">
+          <nav className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2">
+            <Link
+              href="/software/legal/privacidad"
+              className="transition-colors hover:text-slate-300"
+            >
+              Privacidad
+            </Link>
+            <span aria-hidden className="text-slate-700">
+              ·
+            </span>
+            <Link
+              href="/software/legal/terminos"
+              className="transition-colors hover:text-slate-300"
+            >
+              Términos
+            </Link>
+            <span aria-hidden className="text-slate-700">
+              ·
+            </span>
+            <Link
+              href="/software/legal/cookies"
+              className="transition-colors hover:text-slate-300"
+            >
+              Cookies
+            </Link>
+            <span aria-hidden className="text-slate-700">
+              ·
+            </span>
+            <Link
+              href="/software/legal/aviso-legal"
+              className="transition-colors hover:text-slate-300"
+            >
+              Aviso legal
+            </Link>
+          </nav>
+
+          <div className="flex w-full flex-col items-center justify-between gap-2 sm:flex-row">
+            <span>© {new Date().getFullYear()} Balles Hosteleros</span>
+            <a
+              href="mailto:info@balleshosteleros.com"
+              className="transition-colors hover:text-slate-300"
+            >
+              info@balleshosteleros.com
+            </a>
+          </div>
         </footer>
       </div>
 

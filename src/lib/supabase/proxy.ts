@@ -50,7 +50,16 @@ const PUBLIC_PREFIXES = ['/carta', '/sitio-publico', '/api/google/connect', '/ap
   // Pasa por aquí solo para NO rebotar al login. El borrador es material
   // interno, así que la propia página exige sesión + empresa antes de
   // enseñar nada (ver src/app/pagina-web-preview/[id]/page.tsx).
-  '/pagina-web-preview']
+  '/pagina-web-preview',
+  // Landing comercial del SaaS y sus cuatro documentos legales (aviso legal,
+  // privacidad, cookies y términos). Son páginas de venta: si el proxy las
+  // manda al login, quien llega desde Google se encuentra una pantalla de
+  // acceso en vez de la web del producto.
+  //
+  // Además es REQUISITO de la verificación OAuth de Google: el revisor abre la
+  // política de privacidad SIN cuenta, y una redirección al login es motivo de
+  // rechazo directo.
+  '/software']
 
 /**
  * Rutas que en el dominio de un cliente se sirven TAL CUAL, sin mandarlas al

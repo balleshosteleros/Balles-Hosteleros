@@ -760,7 +760,7 @@ export default function SoftwareLanding() {
               <ul className="mt-4 space-y-3 text-sm text-slate-500">
                 <li>
                   <a
-                    href="https://balleshosteleros.com"
+                    href="https://sistema.balleshosteleros.com/software"
                     target="_blank"
                     rel="noopener noreferrer"
                     className="hover:text-slate-300"
@@ -795,24 +795,36 @@ export default function SoftwareLanding() {
               </p>
               <ul className="mt-4 space-y-3 text-sm text-slate-500">
                 <li>
-                  <a href="#" className="hover:text-slate-300">
+                  <Link
+                    href="/software/legal/aviso-legal"
+                    className="hover:text-slate-300"
+                  >
                     Aviso legal
-                  </a>
+                  </Link>
                 </li>
                 <li>
-                  <a href="#" className="hover:text-slate-300">
+                  <Link
+                    href="/software/legal/privacidad"
+                    className="hover:text-slate-300"
+                  >
                     Privacidad
-                  </a>
+                  </Link>
                 </li>
                 <li>
-                  <a href="#" className="hover:text-slate-300">
+                  <Link
+                    href="/software/legal/cookies"
+                    className="hover:text-slate-300"
+                  >
                     Cookies
-                  </a>
+                  </Link>
                 </li>
                 <li>
-                  <a href="#" className="hover:text-slate-300">
+                  <Link
+                    href="/software/legal/terminos"
+                    className="hover:text-slate-300"
+                  >
                     Términos
-                  </a>
+                  </Link>
                 </li>
               </ul>
             </div>

@@ -17,7 +17,7 @@ export const metadata: Metadata = {
     title: "Balles Hosteleros — Software de gestión para hostelería",
     description:
       "Cocina, equipo, proveedores, números y operativa. Todo conectado, todo medido, todo bajo control.",
-    url: "https://balleshosteleros.com/software",
+    url: "https://sistema.balleshosteleros.com/software",
     siteName: "Balles Hosteleros",
     images: [
       {
