@@ -299,12 +299,31 @@ Tabla completa producto a producto: **`docs/PRODUCTOS_VENTA_BALLES_VS_AGORA.csv`
 
 ---
 
-### ❓ Lo que sigue pendiente de Iván
+### ✅ Lo que Iván ya ha cerrado (no preguntes de nuevo)
 
-1. ~~Precio bueno de Delizia y Licor de Crema El afilador~~ → **RESUELTO**: eran multiformato, no
-   precios mal puestos. Ver la corrección de arriba.
-2. **Botella entera** (Bot Red Label 92,25 €, Bot Black Label 112,75 €): ¿es uno de los 5 formatos?
-3. Quién escribe los escandallos y cuándo (tu pregunta del 26-ago, sigue abierta).
+- **Precio de Delizia y Licor de Crema** → eran **multiformato**, no precios mal puestos. Ver la
+  corrección de más arriba con los precios reales de Ágora.
+- **Botella entera** (Bot Red Label 92,25 €, Bot Black Label 112,75 €) → **sí, es un formato más**,
+  el tercero junto a combinado y chupito. No es un producto aparte.
+- **Los 3 arreglos del importador** → los coges tú (detalle abajo).
+- **La merma de prueba de Larios Rose** → se deja puesta para que la compruebes. **Dinos cuándo la
+  podemos borrar.**
+
+### ✅ TU PREGUNTA DEL 26-AGO, RESUELTA: **IVÁN YA TIENE LOS ESCANDALLOS**
+
+Preguntabas *"¿quién se sienta una tarde con la lista de 10?"*. **No hace falta: Iván ya los tiene
+hechos** y los va a pasar para cargarlos en el sistema.
+
+Eso **desbloquea el cuello de botella** que llevaba parado desde junio, y cambia el orden de trabajo:
+la parte de negocio ya no espera a nadie.
+
+⚠️ **Ojo con el número, que ha cambiado con la decisión 4:** ya no son 80 escandallos, son **201**,
+porque las 121 bebidas dejan de resolverse solas al cortar el ratio de Ágora. Muchas se generan
+automáticamente desde los 203 pares venta→compra ya enlazados; lo que necesita criterio humano son
+las **~56 medidas de copa** (cuánto lleva un combinado, un chupito, una copa de vino).
+
+**Cuando estén cargados, el orden obligatorio de la decisión 4 deja de ser un freno** y se puede
+cortar el ratio de Ágora.
 
 ### 📌 Y lo tuyo que sigue esperando respuesta
 
@@ -316,7 +335,28 @@ Tabla completa producto a producto: **`docs/PRODUCTOS_VENTA_BALLES_VS_AGORA.csv`
   **El aviso sigue en pie: que nadie pulse "Importar".**
 - **Usuarios de prueba:** `agora.demo@balleshosteleros.com` y `fmaroto2016@gmail.com` están **ambos
   Inactivos** en producción. Si quieres probar en pantalla, hay que activarlos — dilo y se hace.
-- **Los 6 platos huérfanos de Habana** que dejaste Inactivos: confirmado que la decisión es correcta.
+- **Los 6 platos huérfanos de Habana** que dejaste Inactivos: **confirmado, la decisión es correcta.**
+  Iván verifica que Alitas, Bao-cadillo, Burger Balles, Ensaladilla rusa, Gyozas de pollo y Torreznos
+  no se sirven en Habana. Se quedan Inactivos.
+- **Los arroces del listado de productos sin enlazar** (Arroz con pollo, Arroz con marisco): Iván
+  confirma que **son de Bacanal, no de Habana**. Las 4 unidades a **0,00 €** que aparecen en tickets
+  de Habana son comandas picadas por error. **No se dan de alta allí.**
+
+---
+
+### 🧭 Resumen de por dónde empezar
+
+1. **Lo urgente:** el fallo del stock negativo (una merma no puede dejar el stock bajo cero) y que
+   la ingesta guarde el `ProductId` — **eso segundo bloquea el alta de los 5 productos que llevan
+   meses vendiéndose sin registrar** (288 líneas de ticket).
+2. **Lo tuyo pendiente:** los 3 arreglos del importador. Hasta entonces, nadie pulsa "Importar".
+3. **Lo grande:** las 6 decisiones de modelo. El orden está en el PRP-080, y hay uno que no se puede
+   invertir: **primero se cargan los escandallos, después se corta el ratio de Ágora.** Los
+   escandallos ya los tiene Iván, así que ese paso deja de ser el freno que era.
+
+Todo el detalle técnico, con las cifras medidas en producción, está en
+`.claude/PRPs/PRP-080-escandallos-fuente-unica-y-stock-unificado.md`. La tabla producto a producto,
+en `docs/PRODUCTOS_VENTA_BALLES_VS_AGORA.csv`.
 
 ---
 
