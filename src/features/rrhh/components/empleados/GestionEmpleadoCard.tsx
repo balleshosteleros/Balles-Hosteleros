@@ -1,6 +1,6 @@
 "use client";
 
-import { forwardRef, useEffect, useImperativeHandle, useState } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Loader2, UserRoundX, ShieldAlert, Briefcase, Building2, Star } from "lucide-react";
@@ -74,6 +74,20 @@ export const GestionEmpleadoCard = forwardRef<GestionEmpleadoCardHandle, Props>(
   const [localesSeleccionados, setLocalesSeleccionados] = useState<string[]>([]);
   const [empresasDisponibles, setEmpresasDisponibles] = useState<EmpresaAccesible[]>([]);
   const [empresasMarcadas, setEmpresasMarcadas] = useState<string[]>(initial.empresasAcceso);
+  // Referencia de lo que había al cargar. Guardar solo escribe lo que cambió
+  // respecto a esto: tocar un email no puede reescribir puestos ni accesos.
+  const baseline = useRef({
+    empresas: [...initial.empresasAcceso].sort().join(","),
+    locales: "",
+    puestos: "",
+    principal: "",
+    teletrabajo: Boolean(initial.permiteTeletrabajo),
+  });
+  // Los accesos y locales llegan por fetch. Hasta que no están, la tarjeta no
+  // puede guardarlos: un array vacío "en tránsito" borraría las empresas.
+  const [accesosCargados, setAccesosCargados] = useState(false);
+  const [localesCargados, setLocalesCargados] = useState(false);
+  const [puestosCargados, setPuestosCargados] = useState(false);
   // Un empleado puede ocupar VARIOS puestos del catálogo; uno es el principal
   // (de él cuelga el departamento + puesto-texto legacy). El departamento ya no
   // se edita a mano: se hereda de los puestos.
@@ -114,27 +128,49 @@ export const GestionEmpleadoCard = forwardRef<GestionEmpleadoCardHandle, Props>(
       setPuestosCatalogo((res.data ?? []) as Array<{ id: string; nombre: string; departamento_id: string | null }>);
     });
     getPuestosDeEmpleado(empleadoId).then((rows) => {
-      setPuestosSel(rows.map((r) => r.puestoId));
+      const ids = rows.map((r) => r.puestoId);
       const pr = rows.find((r) => r.esPrincipal);
-      setPrincipalPuestoId(pr?.puestoId ?? rows[0]?.puestoId ?? "");
+      const principal = pr?.puestoId ?? rows[0]?.puestoId ?? "";
+      setPuestosSel(ids);
+      setPrincipalPuestoId(principal);
+      baseline.current.puestos = [...ids].sort().join(",");
+      baseline.current.principal = principal;
+      setPuestosCargados(true);
     });
     getEmpresasAccesibles().then((res) => {
       setEmpresasDisponibles(res.ok ? res.data : []);
     });
     getLocalesEmpleado(empleadoId).then((res) => {
-      setLocalesSeleccionados(res.ok ? res.data : []);
+      const ids = res.ok ? res.data : [];
+      setLocalesSeleccionados(ids);
+      baseline.current.locales = [...ids].sort().join(",");
+      setLocalesCargados(res.ok);
     });
     getNombreValidadorEmpleado(empleadoId).then((res) => {
       setValidador(res.nombre);
     });
   }, [empleadoId]);
 
+  // `initial` es un objeto literal que la página recrea en CADA render, así que
+  // no sirve como dependencia: reescribiría el estado continuamente y podría
+  // dejar las empresas vacías mientras la carga aún está en vuelo. Se compara
+  // por valor. La empresa de alta se fuerza siempre: por regla de negocio no
+  // puede faltar, y sin ella "Guardar" creía que se la estaban quitando.
+  const empresasAccesoKey = [...initial.empresasAcceso].sort().join(",");
   useEffect(() => {
-    setEmpresasMarcadas(initial.empresasAcceso);
+    const ids = empresasAccesoKey ? empresasAccesoKey.split(",") : [];
+    const conPrincipal = ids.includes(initial.empresaId) ? ids : [...ids, initial.empresaId];
+    setEmpresasMarcadas(conPrincipal);
+    baseline.current.empresas = [...conPrincipal].sort().join(",");
+    setAccesosCargados(ids.length > 0);
+  }, [empresasAccesoKey, initial.empresaId]);
+
+  useEffect(() => {
     setPermiteTeletrabajo(Boolean(initial.permiteTeletrabajo));
+    baseline.current.teletrabajo = Boolean(initial.permiteTeletrabajo);
     setEstado(initial.estado);
     setFechaBaja(initial.fechaBaja ?? "");
-  }, [initial]);
+  }, [initial.permiteTeletrabajo, initial.estado, initial.fechaBaja]);
 
   function togglePuesto(id: string, checked: boolean) {
     setPuestosSel((prev) => {
@@ -208,35 +244,65 @@ export const GestionEmpleadoCard = forwardRef<GestionEmpleadoCardHandle, Props>(
   // toast. El botón "Guardar" superior de la ficha orquesta esto + los datos
   // personales con un único aviso. El recuadro rojo (estado) va aparte.
   async function saveGeneral(): Promise<{ ok: boolean; error?: string }> {
-    if (!empresasMarcadas.includes(initial.empresaId)) {
+    // Solo se escribe lo que el usuario tocó de verdad. Cambiar un email no
+    // debe arrastrar puestos, locales ni accesos multiempresa: además de ser
+    // innecesario, si un fetch aún no había llegado se guardaría un valor vacío.
+    const empresasKey = [...empresasMarcadas].sort().join(",");
+    const localesKey = [...localesSeleccionados].sort().join(",");
+    const puestosKey = [...puestosSel].sort().join(",");
+    const principalActual = principalPuestoId || puestosSel[0] || "";
+
+    const cambioEmpresas = accesosCargados && empresasKey !== baseline.current.empresas;
+    const cambioLocales = localesCargados && localesKey !== baseline.current.locales;
+    const cambioPuestos =
+      puestosCargados &&
+      (puestosKey !== baseline.current.puestos || principalActual !== baseline.current.principal);
+    const cambioTeletrabajo = permiteTeletrabajo !== baseline.current.teletrabajo;
+
+    if (!cambioEmpresas && !cambioLocales && !cambioPuestos && !cambioTeletrabajo) {
+      return { ok: true };
+    }
+
+    if (cambioEmpresas && !empresasMarcadas.includes(initial.empresaId)) {
       return { ok: false, error: "No se puede quitar la empresa donde el empleado está dado de alta." };
     }
     // Cada empresa marcada necesita ≥1 local: sin local no puede fichar ahí.
-    const sel = new Set(localesSeleccionados);
-    const sinLocal = empresasMarcadas.filter((empId) => {
-      const locales = localesPorEmpresa[empId] ?? [];
-      return !locales.some((l) => sel.has(l.id));
-    });
-    if (sinLocal.length > 0) {
-      const nombres = sinLocal.map(
-        (id) => empresasDisponibles.find((e) => e.id === id)?.nombre ?? id,
-      );
-      return {
-        ok: false,
-        error: `Marca al menos un local de fichaje en cada empresa (falta en: ${nombres.join(", ")})`,
-      };
+    // Solo se valida si se están tocando empresas o locales.
+    if (cambioEmpresas || cambioLocales) {
+      const sel = new Set(localesSeleccionados);
+      const sinLocal = empresasMarcadas.filter((empId) => {
+        const locales = localesPorEmpresa[empId] ?? [];
+        return !locales.some((l) => sel.has(l.id));
+      });
+      if (sinLocal.length > 0) {
+        const nombres = sinLocal.map(
+          (id) => empresasDisponibles.find((e) => e.id === id)?.nombre ?? id,
+        );
+        return {
+          ok: false,
+          error: `Marca al menos un local de fichaje en cada empresa (falta en: ${nombres.join(", ")})`,
+        };
+      }
     }
 
     const [resEmpleado, resLocal, resTeletrabajo, resEmpresas] = await Promise.all([
       // Reconcilia los puestos (M:N): asigna la plantilla de horario de cada uno,
       // marca el principal y propaga su departamento + puesto-texto a `empleados`.
-      setPuestosDeEmpleado(
-        empleadoId, puestosSel, principalPuestoId || puestosSel[0] || null,
-        fechaInicioHorario, fechaFinHorario || null,
-      ),
-      setLocalesEmpleado(empleadoId, localesSeleccionados),
-      setEmpleadoTeletrabajo(empleadoId, permiteTeletrabajo),
-      updateEmpleadoEmpresasAcceso({ empleadoId, empresaIds: empresasMarcadas }),
+      cambioPuestos
+        ? setPuestosDeEmpleado(
+            empleadoId, puestosSel, principalActual || null,
+            fechaInicioHorario, fechaFinHorario || null,
+          )
+        : Promise.resolve({ ok: true as const }),
+      cambioLocales
+        ? setLocalesEmpleado(empleadoId, localesSeleccionados)
+        : Promise.resolve({ ok: true as const }),
+      cambioTeletrabajo
+        ? setEmpleadoTeletrabajo(empleadoId, permiteTeletrabajo)
+        : Promise.resolve({ ok: true as const }),
+      cambioEmpresas
+        ? updateEmpleadoEmpresasAcceso({ empleadoId, empresaIds: empresasMarcadas })
+        : Promise.resolve({ ok: true as const }),
     ]);
 
     const error = !resEmpleado.ok
