@@ -11,6 +11,7 @@ import { useEffect, useState } from "react";
 import { HardDrive } from "lucide-react";
 import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
 import { getUsoArchivos, type UsoArchivos } from "@/features/archivos/actions/uso-actions";
+import { ImportarDrivePanel } from "@/features/archivos/components/ImportarDrivePanel";
 
 function tamano(bytes: number): string {
   if (bytes < 1024 ** 2) return `${(bytes / 1024).toFixed(0)} KB`;
@@ -99,6 +100,10 @@ export function ArchivosConfigPanel() {
         Cada departamento tiene su propia carpeta. Solo la ve quien tenga ese
         departamento visible en su rol.
       </p>
+
+      <div className="border-t pt-4">
+        <ImportarDrivePanel />
+      </div>
     </div>
   );
 }

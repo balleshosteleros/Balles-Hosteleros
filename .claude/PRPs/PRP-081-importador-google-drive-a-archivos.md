@@ -1,6 +1,6 @@
 # PRP-081 — Importador de Google Drive → Archivos
 
-**Estado:** propuesto — pendiente de aprobación
+**Estado:** IMPLEMENTADO — 2026-08-27
 **Fecha:** 2026-08-27
 **Objetivo:** vaciar los Drive de BACANAL y HABANA para dejar de pagar Google
 
@@ -116,7 +116,18 @@ desde cuentas propias, no bloquea.
 
 ---
 
-## 7. Riesgos
+## 7. Dónde está
+
+- `src/lib/google/drive.ts` — acceso a Drive (solo lectura): unidades, árbol,
+  descarga en streaming y exportación de Google Docs a Office.
+- `src/features/archivos/actions/importar-drive-actions.ts` — inventario,
+  mapeo y copia servidor a servidor, reanudable.
+- `src/features/archivos/components/ImportarDrivePanel.tsx` — la pantalla, en
+  Ajustes → Herramientas → Archivos.
+- `.claude/migrations/015_importador_drive.sql`
+- Scope `drive.readonly` añadido en `/api/google/connect`.
+
+## 8. Riesgos
 
 | Riesgo | Mitigación |
 |---|---|

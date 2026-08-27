@@ -16,6 +16,10 @@ const SCOPES = [
   "https://www.googleapis.com/auth/calendar.events",
   "https://www.googleapis.com/auth/contacts.readonly",
   "https://www.googleapis.com/auth/contacts.other.readonly",
+  // Importador de Drive (PRP-081): SOLO LECTURA. El software nunca borra ni
+  // mueve nada en Drive — el vaciado lo hace Iván a mano cuando haya
+  // verificado que está todo copiado en Archivos.
+  "https://www.googleapis.com/auth/drive.readonly",
 ].join(" ");
 
 // Vida corta: si el usuario tarda más de 10 minutos en volver de Google, se
