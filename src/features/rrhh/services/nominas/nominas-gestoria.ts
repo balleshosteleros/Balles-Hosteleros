@@ -652,8 +652,13 @@ export async function cuadrarTc1ConNominas(
     totalNominas,
     totalTc1,
     diferencia,
-    // Sin importe de TC1 no se puede afirmar que NO cuadre: se da por bueno.
-    cuadra: diferencia == null || Math.abs(diferencia) <= CUADRE_TOLERANCIA_EUR,
+    // Sin importe legible no se puede afirmar que NO cuadre: se da por bueno.
+    // Ojo: con ALGÚN recibo sin importe la suma está incompleta, así que tampoco
+    // se puede afirmar lo contrario; se trata igual que no tener importe.
+    cuadra:
+      diferencia == null ||
+      lista.length !== conImporte.length ||
+      Math.abs(diferencia) <= CUADRE_TOLERANCIA_EUR,
     numNominas: (filas ?? []).length,
     trabajadoresTc1: trabajadores.length > 0 ? trabajadores.reduce((a, n) => a + n, 0) : null,
     numTc1: lista.length,

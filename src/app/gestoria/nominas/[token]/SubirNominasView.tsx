@@ -19,6 +19,8 @@ interface MesIncorrecto {
 interface Cuadre {
   /** Cuántos TC1 hay adjuntos (ordinaria + complementarias). */
   numTc1?: number;
+  /** Recibos guardados sin líquido legible: el total está incompleto. */
+  tc1SinImporte?: number;
   totalNominas: number;
   totalTc1: number | null;
   diferencia: number | null;
@@ -246,7 +248,8 @@ export function SubirNominasView({ endpoint, empresaNombre, mesLabel }: Props) {
           {/* AVISO INMEDIATO: nada más subir el recibo se compara su líquido (leído
               por IA) con la cotización de las nóminas ya recibidas. Así la gestoría
               sabe al momento si cuadra, en vez de enterarse al final. */}
-          {cuadreTc1 && cuadreTc1.numNominas > 0 && cuadreTc1.totalTc1 != null && (
+          {cuadreTc1 && cuadreTc1.numNominas > 0 && cuadreTc1.totalTc1 != null &&
+            (cuadreTc1.tc1SinImporte ?? 0) === 0 && (
             <div
               className={`mt-3 rounded-lg border p-3 text-xs ${
                 cuadreTc1.cuadra
@@ -299,9 +302,11 @@ export function SubirNominasView({ endpoint, empresaNombre, mesLabel }: Props) {
           )}
 
           {/* Guardado pero sin líquido legible: no se puede afirmar que cuadre. */}
-          {cuadreTc1 && cuadreTc1.numNominas > 0 && cuadreTc1.totalTc1 == null && (
+          {cuadreTc1 && cuadreTc1.numNominas > 0 &&
+            (cuadreTc1.totalTc1 == null || (cuadreTc1.tc1SinImporte ?? 0) > 0) && (
             <p className="mt-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900">
-              Recibido, pero no hemos podido leer el <b>líquido de totales</b> del documento, así
+              Recibido, pero no hemos podido leer el <b>líquido de totales</b>
+              {(cuadreTc1.tc1SinImporte ?? 0) > 1 ? " de algunos recibos" : " del documento"}, así
               que no se ha podido comprobar si coincide con las nóminas. Revisadlo con RRHH.
             </p>
           )}

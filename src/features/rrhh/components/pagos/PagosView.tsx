@@ -37,6 +37,7 @@ import {
   borrarTc1Mes,
   getEstadoSubidaMeses,
   type EstadoMesNominas,
+  type EstadoSubidaMes,
 } from "@/features/rrhh/actions/nominas-revision-actions";
 import { MAX_NOMINAS_MB, MAX_NOMINAS_BYTES } from "@/shared/lib/documentos";
 import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
@@ -306,7 +307,7 @@ export function PagosView() {
   // mes anterior y hay que poder colocarlas en el suyo sin navegar el calendario.
   const [mesSubida, setMesSubida] = useState<string>("");
   // Nóminas ya subidas / cierre de cada mes ofrecido en el selector.
-  const [estadoSubidaMeses, setEstadoSubidaMeses] = useState<Record<string, { nominas: number; confirmado: boolean }>>({});
+  const [estadoSubidaMeses, setEstadoSubidaMeses] = useState<Record<string, EstadoSubidaMes>>({});
   const [esDirector, setEsDirector] = useState(false);
   const [notifCfg, setNotifCfg] = useState<NotifLiquidacionesConfig | null>(null);
   const { confirm, dialog: confirmDialog } = useConfirmDelete();
@@ -379,17 +380,22 @@ export function PagosView() {
   // interminable.
   const mesesSubida = useMemo(() => mesesHaciaAtras(18), []);
 
-  // Al abrir el diálogo se propone el mes que se está viendo y se consulta qué
-  // meses tienen ya entrega (para avisar y bloquear).
+  // Qué tiene ya cada mes ofrecido: nóminas, TC1 y si está cerrado. Es lo que
+  // decide qué se puede subir y el cuadre que se enseña en el diálogo.
+  const refrescarEstadoSubida = useCallback(async () => {
+    const filas = await getEstadoSubidaMeses(mesesSubida);
+    const mapa: Record<string, EstadoSubidaMes> = {};
+    for (const f of filas) mapa[f.periodo] = f;
+    setEstadoSubidaMeses(mapa);
+  }, [mesesSubida]);
+
+  // Al abrir el diálogo se propone el mes que se está viendo y se consulta el
+  // estado de todos los meses ofrecidos.
   useEffect(() => {
     if (!showDocsMes) return;
     setMesSubida((prev) => (prev && mesesSubida.includes(prev) ? prev : periodo));
-    void getEstadoSubidaMeses(mesesSubida).then((filas) => {
-      const mapa: Record<string, { nominas: number; confirmado: boolean }> = {};
-      for (const f of filas) mapa[f.periodo] = { nominas: f.nominas, confirmado: f.confirmado };
-      setEstadoSubidaMeses(mapa);
-    });
-  }, [showDocsMes, periodo, mesesSubida, nominasEnMes]);
+    void refrescarEstadoSubida();
+  }, [showDocsMes, periodo, mesesSubida, nominasEnMes, refrescarEstadoSubida]);
 
   // ── Cuadre de los TC1 del mes ─────────────────────────────────────────────
   // El TC1 y las nóminas son el MISMO dinero de dos formas: el recibo agrupa por
@@ -403,11 +409,33 @@ export function PagosView() {
     tc1ConImporte.length > 0
       ? Math.round(tc1ConImporte.reduce((a, t) => a + (t.importe ?? 0), 0) * 100) / 100
       : null;
-  // Al céntimo: no se admite holgura, igual que en el cuadre del servidor.
-  const cuadraTc1 = totalTc1 == null || Math.abs(totalTc1 - ssNominasMes) < 0.005;
+  // Al céntimo: no se admite holgura, igual que en el cuadre del servidor. Si
+  // algún recibo se guardó sin líquido legible, el total está INCOMPLETO y no se
+  // puede afirmar que cuadre: se trata como "no comprobable", no como correcto.
+  const tc1Comprobable = hayTc1 && totalTc1 != null && tc1SinImporte === 0;
+  const cuadraTc1 = !tc1Comprobable || Math.abs(totalTc1! - ssNominasMes) < 0.005;
 
   const mesSubidaLabel = useMemo(() => nombreMesLargo(mesSubida), [mesSubida]);
   const estadoMesSubida = estadoSubidaMeses[mesSubida];
+
+  // Lo mismo, pero del MES ELEGIDO en el diálogo de subida: ahí la entrega entera
+  // (nóminas y TC1) va al mes que se elija, que no tiene por qué ser el que se
+  // está viendo en la tabla.
+  const tc1Subida = estadoMesSubida?.tc1 ?? [];
+  const hayTc1Subida = tc1Subida.length > 0;
+  const tc1SubidaConImporte = tc1Subida.filter((t) => t.importe != null);
+  const tc1SubidaSinImporte = tc1Subida.length - tc1SubidaConImporte.length;
+  const totalTc1Subida =
+    tc1SubidaConImporte.length > 0
+      ? Math.round(tc1SubidaConImporte.reduce((a, t) => a + (t.importe ?? 0), 0) * 100) / 100
+      : null;
+  const ssNominasSubida = estadoMesSubida?.ssNominas ?? 0;
+  // Mismo criterio que arriba: con algún recibo sin importe legible el total está
+  // incompleto y el cuadre no es afirmable.
+  const tc1SubidaComprobable =
+    hayTc1Subida && totalTc1Subida != null && tc1SubidaSinImporte === 0;
+  const cuadraTc1Subida =
+    !tc1SubidaComprobable || Math.abs(totalTc1Subida! - ssNominasSubida) < 0.005;
   // El mes elegido YA tiene entrega: con un solo documento subido basta para no
   // admitir más. Se avisa en pantalla y se desactiva el botón de adjuntar.
   const mesSubidaYaTieneNominas = (estadoMesSubida?.nominas ?? 0) > 0;
@@ -611,10 +639,7 @@ export function PagosView() {
     setSubiendoNominas(false);
     if (proc.yaSubidas) {
       // Otra pestaña (o la gestoría) subió la entrega mientras tanto.
-      setEstadoSubidaMeses((prev) => ({
-        ...prev,
-        [periodoDestino]: { nominas: prev[periodoDestino]?.nominas || 1, confirmado: prev[periodoDestino]?.confirmado ?? false },
-      }));
+      void refrescarEstadoSubida();
       toast.error(`Las nóminas de ${nombreMesLargo(periodoDestino)} ya están subidas.`, {
         description: "Para cambiarlas, devuelve el mes a la gestoría o reábrelo.",
       });
@@ -629,13 +654,9 @@ export function PagosView() {
     // Recargar caché para que se vean las nóminas nuevas al navegar por meses.
     setPagosPorRango({});
     refrescarIncidenciasNominas();
-    // El mes de la entrega ya no admite más documentos: reflejarlo en el selector.
-    if (r.guardadas > 0) {
-      setEstadoSubidaMeses((prev) => ({
-        ...prev,
-        [periodoDestino]: { nominas: (prev[periodoDestino]?.nominas ?? 0) + r.guardadas, confirmado: prev[periodoDestino]?.confirmado ?? false },
-      }));
-    }
+    // El mes de la entrega ya no admite más documentos, y su cuadre ha cambiado:
+    // se relee el estado en vez de parchear el contador a mano.
+    if (r.guardadas > 0) void refrescarEstadoSubida();
 
     const nombreMes = nombreMesLargo;
 
@@ -692,10 +713,13 @@ export function PagosView() {
     }
   };
 
-  // TC1 del mes: documento de EMPRESA (bases y cuotas de toda la plantilla). Se
-  // guarda aparte de las nóminas y NO se reparte a ningún empleado.
+  // TC1: documento de EMPRESA (bases y cuotas de toda la plantilla). Se guarda
+  // aparte de las nóminas y NO se reparte a ningún empleado. Va al MISMO mes que
+  // se haya elegido para la entrega, para poder subirlo todo de una vez.
   const subirTc1 = async (file: File | null) => {
     if (!file) return;
+    const periodoDestino = mesSubida || periodo;
+    if (!periodoDestino) return;
     if (file.size > MAX_NOMINAS_BYTES) {
       toast.error(`El archivo supera ${MAX_NOMINAS_MB} MB.`);
       return;
@@ -709,7 +733,7 @@ export function PagosView() {
         fr.readAsDataURL(file);
       });
       const res = await subirTc1Mes({
-        periodo,
+        periodo: periodoDestino,
         nombre: file.name,
         mimeType: file.type || "application/pdf",
         archivoBase64: base64,
@@ -718,12 +742,13 @@ export function PagosView() {
         toast.error(res.error ?? "No se pudo subir el TC1.");
         return;
       }
-      await refrescarEstadoMes();
+      // El mes visto y el elegido pueden ser distintos: se refrescan los dos.
+      await Promise.all([refrescarEstadoMes(), refrescarEstadoSubida()]);
       // Aviso (no error): el complementario de vacaciones declara el mes al que
       // se imputa la cotización, que puede ser anterior al mes en que se ingresa.
       const otroMes =
-        res.periodoDocumento && res.periodoDocumento !== periodo
-          ? `El documento declara ${nombreMesLargo(res.periodoDocumento)}; se ha sumado a ${mesLabelNominas}.`
+        res.periodoDocumento && res.periodoDocumento !== periodoDestino
+          ? `El documento declara ${nombreMesLargo(res.periodoDocumento)}; se ha sumado a ${nombreMesLargo(periodoDestino)}.`
           : undefined;
       toast.success(
         res.importe != null
@@ -756,7 +781,7 @@ export function PagosView() {
       toast.error(res.error ?? "No se pudo quitar el TC1.");
       return;
     }
-    await refrescarEstadoMes();
+    await Promise.all([refrescarEstadoMes(), refrescarEstadoSubida()]);
     toast.success("TC1 quitado.");
   };
 
@@ -1323,7 +1348,7 @@ export function PagosView() {
           title={
             estadoMes.confirmado
               ? "Las nóminas de este mes ya están confirmadas: para subir otras hay que reabrir el mes"
-              : "Sube las nóminas del mes y el TC1; la IA los lee y vuelca los datos"
+              : "Elige el mes y sube sus nóminas y TC1; la IA los lee y vuelca los datos"
           }
         >
           <Upload className="h-4 w-4" />
@@ -1386,7 +1411,7 @@ export function PagosView() {
       {!esVistaAgregada && (hayTc1 || ssNominasMes > 0) && (
         <div
           className={`rounded-lg border p-4 ${
-            !hayTc1 || totalTc1 == null
+            !tc1Comprobable
               ? "border-amber-300 bg-amber-50/50 dark:bg-amber-950/20 dark:border-amber-900/50"
               : cuadraTc1
                 ? "border-emerald-300 bg-emerald-50/50 dark:bg-emerald-950/20 dark:border-emerald-900/50"
@@ -1395,7 +1420,7 @@ export function PagosView() {
         >
           <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
             <div className="flex items-center gap-2 min-w-0">
-              {!hayTc1 || totalTc1 == null ? (
+              {!tc1Comprobable ? (
                 <AlertTriangle className="h-5 w-5 shrink-0 text-amber-600" />
               ) : cuadraTc1 ? (
                 <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-600" />
@@ -1406,8 +1431,8 @@ export function PagosView() {
                 <p className="text-sm font-medium">
                   {!hayTc1
                     ? `Falta el TC1 de ${mesLabelNominas}`
-                    : totalTc1 == null
-                      ? "No se pudo leer el importe de los TC1"
+                    : !tc1Comprobable
+                      ? "No se pudo leer el importe de todos los TC1"
                       : cuadraTc1
                         ? "Los TC1 cuadran con las nóminas"
                         : "Los TC1 NO cuadran con las nóminas"}
@@ -1415,8 +1440,8 @@ export function PagosView() {
                 <p className="mt-0.5 text-xs text-muted-foreground">
                   {!hayTc1
                     ? "Sin el recibo de cotizaciones no se puede comprobar la Seguridad Social del mes."
-                    : totalTc1 == null
-                      ? "Comprueba a mano que la suma de los recibos coincide con la Seguridad Social de las nóminas."
+                    : !tc1Comprobable
+                      ? `${tc1SinImporte} de ${estadoMes.tc1.length} recibos sin importe legible: comprueba el cuadre a mano.`
                       : cuadraTc1
                         ? `La suma de ${estadoMes.tc1.length} recibo${estadoMes.tc1.length === 1 ? "" : "s"} coincide con la Seguridad Social de ${nominasEnMes} nómina${nominasEnMes === 1 ? "" : "s"}.`
                         : "Revisa si falta alguna liquidación complementaria (vacaciones) o alguna nómina."}
@@ -1439,13 +1464,13 @@ export function PagosView() {
                 </p>
                 <p className="text-sm font-semibold tabular-nums">{fmt(ssNominasMes)}</p>
               </div>
-              {totalTc1 != null && !cuadraTc1 && (
+              {tc1Comprobable && !cuadraTc1 && (
                 <div className="text-right">
                   <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
                     Diferencia
                   </p>
                   <p className="text-sm font-semibold tabular-nums text-destructive">
-                    {fmt(Math.abs(totalTc1 - ssNominasMes))}
+                    {fmt(Math.abs((totalTc1 ?? 0) - ssNominasMes))}
                   </p>
                 </div>
               )}
@@ -1738,10 +1763,37 @@ export function PagosView() {
       <Dialog open={showDocsMes} onOpenChange={setShowDocsMes}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>Subir nóminas</DialogTitle>
+            <DialogTitle>Subir nóminas y TC1</DialogTitle>
           </DialogHeader>
 
           <div className="space-y-3">
+            {/* EL MES manda sobre TODA la entrega: nóminas y TC1 van al mes que
+                se elija aquí, no al que muestre el calendario. La gestoría envía a
+                menudo el mes atrasado completo, y se sube de una vez. */}
+            <div className="rounded-lg border bg-muted/30 p-4">
+              <Label className="text-xs text-muted-foreground">Mes de la entrega</Label>
+              <Select value={mesSubida} onValueChange={setMesSubida} disabled={subiendoNominas || subiendoTc1}>
+                <SelectTrigger className="mt-1.5 h-9">
+                  <SelectValue placeholder="Elige el mes" />
+                </SelectTrigger>
+                <SelectContent>
+                  {mesesSubida.map((m) => {
+                    const est = estadoSubidaMeses[m];
+                    const subido = (est?.nominas ?? 0) > 0;
+                    return (
+                      <SelectItem key={m} value={m}>
+                        {nombreMesLargo(m)}
+                        {subido ? " · ya subidas" : ""}
+                      </SelectItem>
+                    );
+                  })}
+                </SelectContent>
+              </Select>
+              <p className="mt-1.5 text-xs text-muted-foreground">
+                Las nóminas y los TC1 que adjuntes se guardarán en {mesSubidaLabel || "el mes elegido"}.
+              </p>
+            </div>
+
             {/* 1) Las nóminas */}
             <div className="rounded-lg border p-4">
               <div className="flex items-start justify-between gap-3">
@@ -1771,45 +1823,22 @@ export function PagosView() {
                 </Button>
               </div>
 
-              {/* MES de la entrega. La gestoría envía a menudo nóminas atrasadas:
-                  se elige aquí a qué mes van, y toda nómina que la IA lea de un
-                  mes distinto se rechaza (no se guarda nada del archivo). */}
-              <div className="mt-3 space-y-1.5">
-                <Label className="text-xs text-muted-foreground">Mes de las nóminas</Label>
-                <Select value={mesSubida} onValueChange={setMesSubida} disabled={subiendoNominas}>
-                  <SelectTrigger className="h-9">
-                    <SelectValue placeholder="Elige el mes" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {mesesSubida.map((m) => {
-                      const est = estadoSubidaMeses[m];
-                      const subido = (est?.nominas ?? 0) > 0;
-                      return (
-                        <SelectItem key={m} value={m}>
-                          {nombreMesLargo(m)}
-                          {subido ? " · ya subidas" : ""}
-                        </SelectItem>
-                      );
-                    })}
-                  </SelectContent>
-                </Select>
-                {mesSubidaYaTieneNominas ? (
-                  <p className="text-xs text-amber-600">
-                    Las nóminas de {mesSubidaLabel} ya están subidas
-                    {estadoMesSubida?.nominas ? ` (${estadoMesSubida.nominas})` : ""}.
-                    {mesSubidaConfirmado
-                      ? " El mes está confirmado: para cambiarlas hay que reabrirlo."
-                      : " Para cambiarlas, devuelve el mes a la gestoría."}
-                  </p>
-                ) : (
-                  <p className="text-xs text-muted-foreground">
-                    Si alguna nómina del archivo no es de {mesSubidaLabel || "ese mes"}, se rechaza
-                    el archivo entero y no se guarda nada.
-                  </p>
-                )}
-              </div>
+              {mesSubidaYaTieneNominas ? (
+                <p className="mt-2 text-xs text-amber-600">
+                  Las nóminas de {mesSubidaLabel} ya están subidas
+                  {estadoMesSubida?.nominas ? ` (${estadoMesSubida.nominas})` : ""}.
+                  {mesSubidaConfirmado
+                    ? " El mes está confirmado: para cambiarlas hay que reabrirlo."
+                    : " Para cambiarlas, devuelve el mes a la gestoría."}
+                </p>
+              ) : (
+                <p className="mt-2 text-xs text-muted-foreground">
+                  Si alguna nómina del archivo no es de {mesSubidaLabel || "ese mes"}, se rechaza
+                  el archivo entero y no se guarda nada.
+                </p>
+              )}
 
-              {estadoMes.tc1 == null && incidenciasNominas > 0 && (
+              {!hayTc1Subida && incidenciasNominas > 0 && (
                 <p className="mt-2 text-xs text-amber-600">
                   {incidenciasNominas} nómina{incidenciasNominas === 1 ? "" : "s"} con incidencia por revisar.
                 </p>
@@ -1827,26 +1856,26 @@ export function PagosView() {
                   {/* Los TC1 van SIEMPRE al mes que se está viendo, no al elegido
                       arriba para las nóminas: se nombra el mes para no confundir. */}
                   <p className="mt-0.5 text-xs text-muted-foreground">
-                    {hayTc1
-                      ? `Adjuntados a ${mesLabelNominas}. Su suma debe cuadrar con la Seguridad Social de las nóminas.`
-                      : `Documentos de la empresa con las bases y cuotas de ${mesLabelNominas}. Si hay liquidación complementaria (vacaciones), adjunta las dos.`}
+                    {hayTc1Subida
+                      ? `Adjuntados a ${mesSubidaLabel}. Su suma debe cuadrar con la Seguridad Social de las nóminas.`
+                      : `Documentos de la empresa con las bases y cuotas de ${mesSubidaLabel}. Si hay liquidación complementaria (vacaciones), adjunta las dos.`}
                   </p>
                 </div>
                 <Button
                   variant="outline"
                   size="sm"
                   className="shrink-0 gap-1.5"
-                  disabled={subiendoTc1 || estadoMes.confirmado}
+                  disabled={subiendoTc1 || mesSubidaConfirmado}
                   onClick={() => tc1InputRef.current?.click()}
                 >
                   {subiendoTc1 ? <Clock className="h-4 w-4 animate-pulse" /> : <Upload className="h-4 w-4" />}
-                  {subiendoTc1 ? "Leyendo…" : hayTc1 ? "Añadir otro" : "Adjuntar"}
+                  {subiendoTc1 ? "Leyendo…" : hayTc1Subida ? "Añadir otro" : "Adjuntar"}
                 </Button>
               </div>
 
-              {hayTc1 && (
+              {hayTc1Subida && (
                 <div className="mt-3 space-y-2">
-                  {estadoMes.tc1.map((t) => (
+                  {tc1Subida.map((t) => (
                     <div key={t.id} className="flex items-start justify-between gap-3 rounded-md border px-3 py-2">
                       <div className="min-w-0">
                         <button
@@ -1865,7 +1894,7 @@ export function PagosView() {
                           {t.trabajadores != null && <span>{t.trabajadores} trabajadores</span>}
                           {/* Un complementario de vacaciones declara el mes al que
                               se imputa la cotización, no el mes en que se paga. */}
-                          {t.periodoDocumento && t.periodoDocumento !== periodo && (
+                          {t.periodoDocumento && t.periodoDocumento !== mesSubida && (
                             <span className="text-amber-600">
                               El documento es de {nombreMesLargo(t.periodoDocumento)}
                             </span>
@@ -1876,7 +1905,7 @@ export function PagosView() {
                         variant="ghost"
                         size="sm"
                         className="shrink-0 gap-1.5 text-muted-foreground hover:text-destructive"
-                        disabled={estadoMes.confirmado}
+                        disabled={mesSubidaConfirmado}
                         onClick={() => quitarTc1(t.id, t.nombre)}
                       >
                         <X className="h-4 w-4" />
@@ -1890,26 +1919,26 @@ export function PagosView() {
                   <div className="rounded-md bg-muted/50 px-3 py-2 text-xs">
                     <div className="flex items-center justify-between gap-3">
                       <span className="text-muted-foreground">
-                        Total TC1{estadoMes.tc1.length > 1 ? ` (${estadoMes.tc1.length} recibos)` : ""}
+                        Total TC1{tc1Subida.length > 1 ? ` (${tc1Subida.length} recibos)` : ""}
                       </span>
                       <span className="tabular-nums font-medium">
-                        {totalTc1 != null ? fmt(totalTc1) : "—"}
+                        {totalTc1Subida != null ? fmt(totalTc1Subida) : "—"}
                       </span>
                     </div>
                     <div className="mt-1 flex items-center justify-between gap-3">
                       <span className="text-muted-foreground">Seguridad Social de las nóminas</span>
-                      <span className="tabular-nums font-medium">{fmt(ssNominasMes)}</span>
+                      <span className="tabular-nums font-medium">{fmt(ssNominasSubida)}</span>
                     </div>
-                    {totalTc1 != null && (
-                      <p className={`mt-1.5 ${cuadraTc1 ? "text-muted-foreground" : "text-destructive font-medium"}`}>
-                        {cuadraTc1
+                    {tc1SubidaComprobable && (
+                      <p className={`mt-1.5 ${cuadraTc1Subida ? "text-muted-foreground" : "text-destructive font-medium"}`}>
+                        {cuadraTc1Subida
                           ? "Cuadra con las nóminas."
-                          : `No cuadra: ${fmt(Math.abs(totalTc1 - ssNominasMes))} de diferencia.`}
+                          : `No cuadra: ${fmt(Math.abs((totalTc1Subida ?? 0) - ssNominasSubida))} de diferencia.`}
                       </p>
                     )}
-                    {tc1SinImporte > 0 && (
+                    {tc1SubidaSinImporte > 0 && (
                       <p className="mt-1.5 text-amber-600">
-                        {tc1SinImporte} recibo{tc1SinImporte === 1 ? "" : "s"} sin importe leído: revisa el cuadre a mano.
+                        {tc1SubidaSinImporte} recibo{tc1SubidaSinImporte === 1 ? "" : "s"} sin importe leído: revisa el cuadre a mano.
                       </p>
                     )}
                   </div>

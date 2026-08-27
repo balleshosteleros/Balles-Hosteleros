@@ -790,6 +790,10 @@ export interface EstadoSubidaMes {
   nominas: number;
   /** Mes ya cerrado: inmutable hasta reabrirlo. */
   confirmado: boolean;
+  /** TC1 ya adjuntos a ese mes (ordinaria + complementarias). */
+  tc1: Tc1Mes[];
+  /** Cotización total (trabajador + empresa) de las nóminas NO denegadas del mes. */
+  ssNominas: number;
 }
 
 /** Nóminas ya subidas y estado de cierre de cada mes indicado (AAAA-MM). */
@@ -800,13 +804,38 @@ export async function getEstadoSubidaMeses(periodos: string[]): Promise<EstadoSu
 
     const { data: filas } = await supabase
       .from("rrhh_pagos_nominas")
-      .select("periodo")
+      .select("periodo, ss_empleado, ss_empresa, revision_estado")
       .eq("empresa_id", empresaId)
       .in("periodo", periodos);
     const cuenta = new Map<string, number>();
+    const ss = new Map<string, number>();
     for (const f of filas ?? []) {
       const p = f.periodo as string;
       cuenta.set(p, (cuenta.get(p) ?? 0) + 1);
+      // Las denegadas no cuentan: no forman parte de lo que cuadra con el TC1.
+      if (f.revision_estado !== "denegada") {
+        ss.set(p, (ss.get(p) ?? 0) + Number(f.ss_empleado ?? 0) + Number(f.ss_empresa ?? 0));
+      }
+    }
+
+    const { data: tc1Filas } = await supabase
+      .from("rrhh_nominas_tc1")
+      .select("id, periodo, nombre, importe, trabajadores, periodo_documento")
+      .eq("empresa_id", empresaId)
+      .in("periodo", periodos)
+      .order("subido_en", { ascending: true });
+    const tc1PorMes = new Map<string, Tc1Mes[]>();
+    for (const t of tc1Filas ?? []) {
+      const p = t.periodo as string;
+      const lista = tc1PorMes.get(p) ?? [];
+      lista.push({
+        id: t.id as string,
+        nombre: (t.nombre as string | null) ?? "TC1",
+        importe: t.importe != null ? Number(t.importe) : null,
+        trabajadores: t.trabajadores != null ? Number(t.trabajadores) : null,
+        periodoDocumento: (t.periodo_documento as string | null) ?? null,
+      });
+      tc1PorMes.set(p, lista);
     }
 
     const { data: meses } = await supabase
@@ -822,6 +851,8 @@ export async function getEstadoSubidaMeses(periodos: string[]): Promise<EstadoSu
       periodo: p,
       nominas: cuenta.get(p) ?? 0,
       confirmado: confirmados.has(p),
+      tc1: tc1PorMes.get(p) ?? [],
+      ssNominas: Math.round((ss.get(p) ?? 0) * 100) / 100,
     }));
   } catch (err) {
     console.error("[rrhh] getEstadoSubidaMeses:", err);
