@@ -46,7 +46,7 @@ export async function getEstructuraEtiquetas(
     const [{ data: puestos }, { data: deptos }] = await Promise.all([
       supabase
         .from("puestos")
-        .select("nombre, estado, departamento:departamentos(nombre)")
+        .select("nombre, estado, departamento:departamentos!puestos_departamento_id_fkey(nombre)")
         .eq("empresa_id", empresaId),
       supabase.from("departamentos").select("nombre").eq("empresa_id", empresaId),
     ]);

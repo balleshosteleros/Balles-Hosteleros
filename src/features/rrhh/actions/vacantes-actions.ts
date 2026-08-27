@@ -494,7 +494,7 @@ export async function crearCronogramaParaPuesto(puestoId: string) {
 
     const { data: puesto } = await supabase
       .from("puestos")
-      .select("nombre, departamentos(nombre)")
+      .select("nombre, departamentos!puestos_departamento_id_fkey(nombre)")
       .eq("id", puestoId)
       .maybeSingle();
     if (!puesto) return { ok: false, error: "Puesto no encontrado" };
@@ -541,7 +541,7 @@ export async function listPuestosParaCronograma(): Promise<{
     const { supabase, empresaId } = await getContext();
     if (!empresaId) return { ok: false, data: [] };
     const [puestosRes, cronosRes] = await Promise.all([
-      supabase.from("puestos").select("id, nombre, departamentos(nombre)").eq("empresa_id", empresaId).order("nombre"),
+      supabase.from("puestos").select("id, nombre, departamentos!puestos_departamento_id_fkey(nombre)").eq("empresa_id", empresaId).order("nombre"),
       supabase.from("cronogramas_operativos").select("puesto_id").eq("empresa_id", empresaId).not("puesto_id", "is", null),
     ]);
     const conCrono = new Set((cronosRes.data ?? []).map((c) => (c as { puesto_id: string }).puesto_id));

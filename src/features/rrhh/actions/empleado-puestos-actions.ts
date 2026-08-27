@@ -28,7 +28,7 @@ export async function getPuestosDeEmpleado(empleadoId: string): Promise<PuestoDe
     const { supabase } = await getContext();
     const { data, error } = await supabase
       .from("empleado_puestos")
-      .select("es_principal, puesto_nombre, puestos(id, nombre, departamento_id, departamentos(nombre))")
+      .select("es_principal, puesto_nombre, puestos(id, nombre, departamento_id, departamentos!puestos_departamento_id_fkey(nombre))")
       .eq("empleado_id", empleadoId);
     if (error) throw error;
     type Row = {

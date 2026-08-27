@@ -107,7 +107,7 @@ export async function listPuestosFormacion(): Promise<{ ok: boolean; data: Puest
     if (!empresaId) return { ok: true, data: [] };
     const { data, error } = await supabase
       .from("puestos")
-      .select("id, nombre, estado, departamento:departamentos(nombre)")
+      .select("id, nombre, estado, departamento:departamentos!puestos_departamento_id_fkey(nombre)")
       .eq("empresa_id", empresaId)
       .order("nombre");
     if (error) throw error;

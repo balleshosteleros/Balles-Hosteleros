@@ -519,7 +519,7 @@ export async function getEmpleadosSinAcceso() {
 
   const { data, error } = await supabase
     .from('empleados')
-    .select('id, nombre, apellidos, email_personal, email_empresa, departamentos(nombre)')
+    .select('id, nombre, apellidos, email_personal, email_empresa, departamentos!empleados_departamento_id_fkey(nombre)')
     .eq('empresa_id', profile.empresa_id)
     .eq('estado', 'Activo')
     .is('user_id', null)

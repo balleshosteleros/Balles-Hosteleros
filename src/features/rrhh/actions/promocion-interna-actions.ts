@@ -489,7 +489,7 @@ export async function getCondicionesVigentesEmpleado(
 
   const { data: emp } = await admin
     .from("empleados")
-    .select("puesto, validador_departamento_id, departamentos(nombre)")
+    .select("puesto, validador_departamento_id, departamentos!empleados_departamento_id_fkey(nombre)")
     .eq("id", empleadoId)
     .eq("empresa_id", empresaId)
     .maybeSingle();
