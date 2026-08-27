@@ -172,6 +172,19 @@ function EstilosPublicos() {
   return (
     <style>{`
       .pw-root { scroll-behavior: smooth; }
+
+      /* Escala tipográfica copiada de las webs de GoHighLevel que replicamos:
+         55px de titular en escritorio y 28-30px en móvil. Con text-3xl/4xl de
+         Tailwind (30/36px) los titulares se quedaban pequeños y la web no se
+         parecía por mucho que el texto fuera el mismo. */
+      .pw-h1 { font-size: 30px; line-height: 1.12; letter-spacing: -0.01em; }
+      .pw-h2 { font-size: 28px; line-height: 1.18; letter-spacing: -0.01em; }
+      @media (min-width: 768px) {
+        .pw-h1 { font-size: 55px; }
+        .pw-h2 { font-size: 45px; }
+      }
+      /* GHL centra el contenido en ~1080px, no en el ancho completo. */
+      .pw-root section > * { margin-left: auto; margin-right: auto; }
       .pw-reveal { opacity: 0; transform: translateY(28px); transition: opacity .7s ease, transform .7s ease; }
       .pw-reveal.pw-visible { opacity: 1; transform: none; }
       @media (prefers-reduced-motion: reduce) {

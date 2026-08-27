@@ -79,8 +79,8 @@ function RedesPublico({
   if (!items.length) return null;
 
   return (
-    <section className="py-14 px-4 text-center" id="redes">
-      <h2 className="text-3xl font-bold">{titulo}</h2>
+    <section className="py-20 md:py-28 px-4 text-center" id="redes">
+      <h2 className="pw-h2 font-extrabold">{titulo}</h2>
       {descripcion ? (
         <p className="mt-3 text-muted-foreground max-w-xl mx-auto">{descripcion}</p>
       ) : null}
@@ -116,7 +116,7 @@ function BolsaInspectoresPublico({
   return (
     <section className="py-20 px-4 bg-gradient-to-br from-slate-900 to-slate-700 text-white text-center">
       <div className="max-w-2xl mx-auto space-y-4">
-        <h2 className="text-3xl md:text-4xl font-bold">{titulo}</h2>
+        <h2 className="pw-h2 font-extrabold">{titulo}</h2>
         {descripcion && (
           <p className="text-lg text-white/80">{descripcion}</p>
         )}
@@ -143,7 +143,7 @@ function HeroPublico({ bloque }: { bloque: Extract<Bloque, { tipo: "hero" }> }) 
   const { titulo, subtitulo, cta, foto_url, overlay } = bloque.datos;
   return (
     <section
-      className="relative w-full min-h-[60vh] flex items-center justify-center text-center text-white"
+      className="relative w-full min-h-[88vh] md:min-h-screen flex items-center justify-center text-center text-white"
       style={
         foto_url
           ? {
@@ -160,13 +160,20 @@ function HeroPublico({ bloque }: { bloque: Extract<Bloque, { tipo: "hero" }> }) 
           style={{ background: `rgba(0,0,0,${overlay ?? 0.4})` }}
         />
       ) : null}
-      <div className="relative z-10 px-4 max-w-3xl">
-        <h1 className="text-4xl md:text-5xl font-bold">{titulo}</h1>
-        {subtitulo ? <p className="mt-4 text-lg md:text-xl opacity-90">{subtitulo}</p> : null}
+      <div className="relative z-10 px-4 max-w-4xl">
+        {/* GHL pone el eyebrow ("EXPERIENCIA") ENCIMA del titular, pequeño y
+            con mucho tracking. Debajo quedaba como un subtítulo cualquiera. */}
+        {subtitulo ? (
+          <p className="mb-5 text-xs md:text-sm font-semibold uppercase tracking-[0.28em] opacity-90">
+            {subtitulo}
+          </p>
+        ) : null}
+        <h1 className="pw-h1 font-extrabold leading-tight">{titulo}</h1>
         {cta ? (
           <a
             href={cta.href}
-            className="inline-block mt-8 rounded-md bg-white px-6 py-3 text-black font-semibold hover:bg-white/90"
+            className="mt-9 inline-block rounded-full px-9 py-4 text-sm font-bold uppercase tracking-wider text-black transition-transform hover:scale-105"
+            style={{ backgroundColor: "var(--pw-primario)" }}
           >
             {cta.label}
           </a>
@@ -181,7 +188,7 @@ function GaleriaPublica({ bloque }: { bloque: Extract<Bloque, { tipo: "galeria" 
   if (!imagenes.length) return null;
   if (layout === "carrusel") {
     return (
-      <section className="py-8 overflow-x-auto">
+      <section className="py-14 md:py-20 overflow-x-auto">
         <div className="flex gap-3 px-4 min-w-max">
           {imagenes.map((img, i) => (
             /* eslint-disable-next-line @next/next/no-img-element */
@@ -201,7 +208,7 @@ function GaleriaPublica({ bloque }: { bloque: Extract<Bloque, { tipo: "galeria" 
     );
   }
   return (
-    <section className="py-8 px-4 max-w-6xl mx-auto">
+    <section className="py-14 md:py-20 px-4 max-w-6xl mx-auto">
       <div className={`grid gap-3 ${layout === "masonry" ? "grid-cols-2 md:grid-cols-3" : "grid-cols-2 md:grid-cols-4"}`}>
         {imagenes.map((img, i) => (
           /* eslint-disable-next-line @next/next/no-img-element */
@@ -282,15 +289,15 @@ function MenuPublico({ bloque }: { bloque: Extract<Bloque, { tipo: "menu" }> }) 
   if (datos.fuente === "manual") {
     if (!datos.items_manual?.length) {
       return (
-        <section className="py-12 px-4 max-w-4xl mx-auto text-center" id="menu">
-          <h2 className="text-3xl font-bold mb-2">Carta</h2>
+        <section className="py-20 md:py-28 px-4 max-w-4xl mx-auto text-center" id="menu">
+          <h2 className="pw-h2 font-extrabold mb-2">Carta</h2>
           <p className="text-sm text-muted-foreground">Sin platos manuales añadidos.</p>
         </section>
       );
     }
     return (
-      <section className="py-12 px-4 max-w-4xl mx-auto" id="menu">
-        <h2 className="text-3xl font-bold text-center mb-8">Carta</h2>
+      <section className="py-20 md:py-28 px-4 max-w-4xl mx-auto" id="menu">
+        <h2 className="pw-h2 font-extrabold text-center mb-8">Carta</h2>
         <ul className="divide-y">
           {datos.items_manual.map((p, i) => (
             <li key={i} className="py-3 flex items-start justify-between gap-4">
@@ -317,8 +324,8 @@ function MenuPublico({ bloque }: { bloque: Extract<Bloque, { tipo: "menu" }> }) 
       : categorias;
 
   return (
-    <section className="py-12 px-4 max-w-4xl mx-auto" id="menu">
-      <h2 className="text-3xl font-bold text-center mb-8">Carta</h2>
+    <section className="py-20 md:py-28 px-4 max-w-4xl mx-auto" id="menu">
+      <h2 className="pw-h2 font-extrabold text-center mb-8">Carta</h2>
       {cargando ? (
         <div className="flex items-center justify-center py-6">
           <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -367,8 +374,8 @@ function ReservasPublico({
   const { modo, url } = bloque.datos;
   const slug = contexto?.empresaSlug ?? null;
   return (
-    <section className="py-12 px-4 max-w-3xl mx-auto text-center" id="reservas">
-      <h2 className="text-3xl font-bold">{bloque.datos.titulo ?? "Reservas"}</h2>
+    <section className="py-20 md:py-28 px-4 max-w-3xl mx-auto text-center" id="reservas">
+      <h2 className="pw-h2 font-extrabold">{bloque.datos.titulo ?? "Reservas"}</h2>
       {bloque.datos.subtitulo ? (
         <p className="mt-3 text-muted-foreground max-w-2xl mx-auto">
           {bloque.datos.subtitulo}
@@ -481,8 +488,8 @@ function TestimoniosPublico({
   if (!bloque.datos.items.length) return null;
   const { titulo, subtitulo } = bloque.datos;
   return (
-    <section className="py-12 px-4 max-w-6xl mx-auto">
-      <h2 className="text-3xl font-bold text-center">
+    <section className="py-20 md:py-28 px-4 max-w-6xl mx-auto">
+      <h2 className="pw-h2 font-extrabold text-center">
         {titulo ?? "Lo que dicen nuestros clientes"}
       </h2>
       {subtitulo ? (
@@ -494,12 +501,22 @@ function TestimoniosPublico({
       )}
       <div className="grid gap-6 md:grid-cols-3">
         {bloque.datos.items.map((t, i) => (
-          <blockquote key={i} className="rounded-lg border p-5 bg-muted/20">
+          <blockquote
+            key={i}
+            /* Tarjeta sobria sobre fondo oscuro, como en GHL: borde tenue en
+               blanco y no el `border`/`bg-muted` del tema claro, que sobre negro
+               se veía como una caja gris flotando. */
+            className="rounded-xl border border-white/10 bg-white/[0.04] p-7 text-left"
+          >
             {t.estrellas ? (
-              <div className="text-yellow-500 mb-2">{"★".repeat(t.estrellas)}</div>
+              <div className="mb-3 text-lg" style={{ color: "var(--pw-primario)" }}>
+                {"★".repeat(t.estrellas)}
+              </div>
             ) : null}
-            <p className="italic">&quot;{t.texto}&quot;</p>
-            <footer className="mt-3 text-sm font-semibold">— {t.nombre}</footer>
+            <p className="text-[15px] leading-relaxed opacity-85">{t.texto}</p>
+            <footer className="mt-5 text-sm font-bold uppercase tracking-wider" style={{ color: "var(--pw-primario)" }}>
+              {t.nombre}
+            </footer>
           </blockquote>
         ))}
       </div>
@@ -516,16 +533,21 @@ function CtaPublico({ bloque }: { bloque: Extract<Bloque, { tipo: "cta" }> }) {
   const externo = /^https?:\/\//i.test(boton.href);
 
   return (
-    <section className="py-14 px-4 text-center">
-      <h2 className="text-3xl font-bold">{titulo}</h2>
-      {texto ? <p className="mt-3 max-w-xl mx-auto opacity-70">{texto}</p> : null}
+    <section className="py-20 md:py-28 px-4 text-center">
+      <h2 className="pw-h2 font-extrabold">{titulo}</h2>
+      {texto ? (
+        <p className="mt-5 max-w-2xl mx-auto text-base md:text-lg opacity-75 leading-relaxed">
+          {texto}
+        </p>
+      ) : null}
       <a
         href={boton.href}
         {...(externo ? { target: "_blank", rel: "noreferrer noopener" } : {})}
-        className="inline-block mt-6 rounded-md px-6 py-3 font-semibold transition-transform hover:scale-105"
+        /* GHL: pastilla redonda, versalitas y tracking; no un rectángulo. */
+        className="mt-9 inline-block rounded-full px-9 py-4 text-sm font-bold uppercase tracking-wider transition-transform hover:scale-105"
         style={
           boton.variante === "primary"
-            ? { backgroundColor: "var(--pw-primario)", color: "#111" }
+            ? { backgroundColor: "var(--pw-primario)", color: "#000" }
             : {
                 border: "1px solid var(--pw-primario)",
                 color: "var(--pw-primario)",
