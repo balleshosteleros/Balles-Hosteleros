@@ -799,9 +799,14 @@ export async function renameArchivo(
  * Mueve un archivo a cualquier carpeta o subcarpeta que el rol pueda ver,
  * incluso de otro departamento (como en Drive).
  *
- * Solo cambia la fila: el objeto sigue en su ruta de R2. La ruta física es un
- * detalle interno; quien manda para los permisos es la columna `departamento`,
- * que se reetiqueta con la del destino.
+ * Solo cambia la fila: el objeto SIGUE en su ruta original de R2, así que tras
+ * un movimiento entre departamentos la ruta física deja de coincidir con la
+ * columna `departamento`. Es NORMAL y no es un fallo: la ruta es un detalle
+ * interno, y copiar el objeto de sitio obligaría a mover gigabytes cada vez
+ * que se arrastra una carpeta.
+ *
+ * Quien manda para los permisos es SIEMPRE la columna `departamento`, que se
+ * reetiqueta con la del destino. Nadie debe deducir permisos de la ruta.
  */
 export async function moverArchivo(
   archivoId: string,
