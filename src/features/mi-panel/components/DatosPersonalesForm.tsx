@@ -244,7 +244,13 @@ export const DatosPersonalesForm = forwardRef<DatosPersonalesFormHandle, Props>(
     return { ok: true, payload };
   }
 
-  async function doSave(): Promise<{ ok: boolean; error?: string }> {
+  async function doSave(): Promise<{
+    ok: boolean;
+    error?: string;
+    /** Correo de acceso movido por este guardado (para avisar a quien edita). */
+    loginActualizado?: { anterior: string | null; nuevo: string } | null;
+    avisoLogin?: string;
+  }> {
     const built = buildPayload();
     if (!built.ok) return { ok: false, error: built.error };
 
@@ -259,7 +265,15 @@ export const DatosPersonalesForm = forwardRef<DatosPersonalesFormHandle, Props>(
       if (!res.ok) {
         return { ok: false, error: res.error ?? "No se pudieron guardar los datos" };
       }
-      return { ok: true };
+      const extra = res as {
+        loginActualizado?: { anterior: string | null; nuevo: string } | null;
+        avisoLogin?: string;
+      };
+      return {
+        ok: true,
+        loginActualizado: extra.loginActualizado ?? null,
+        avisoLogin: extra.avisoLogin,
+      };
     } catch (err) {
       return { ok: false, error: err instanceof Error ? err.message : "Error inesperado" };
     } finally {
@@ -279,12 +293,26 @@ export const DatosPersonalesForm = forwardRef<DatosPersonalesFormHandle, Props>(
     const res = await doSave();
     if (!res.ok) {
       toast.error(res.error ?? "No se pudieron guardar los datos");
-    } else {
-      toast.success(
-        targetEmpleadoId
-          ? "Cambios guardados — visibles para el empleado al instante"
-          : "Datos personales guardados",
-      );
+      return;
+    }
+
+    toast.success(
+      targetEmpleadoId
+        ? "Cambios guardados — visibles para el empleado al instante"
+        : "Datos personales guardados",
+    );
+
+    // El correo de acceso se ha movido: hay que decirlo, y decir cuál es.
+    if (res.loginActualizado) {
+      toast.info(`El acceso ahora es con ${res.loginActualizado.nuevo}`, {
+        description:
+          `El correo anterior ya no sirve para entrar, tampoco con Google. ` +
+          `Se ha enviado un correo al empleado avisando del cambio. La contraseña no cambia.`,
+        duration: 12000,
+      });
+    }
+    if (res.avisoLogin) {
+      toast.warning(res.avisoLogin, { duration: 12000 });
     }
   }
 

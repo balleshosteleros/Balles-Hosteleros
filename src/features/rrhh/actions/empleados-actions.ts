@@ -619,6 +619,21 @@ export async function updateEmpleado(id: string, updates: UpdateEmpleadoInput) {
 
     if (Object.keys(patch).length === 0) return { ok: true };
 
+    // Correos que la ficha tenía ANTES de guardar: son los que permiten saber
+    // con cuál de los dos entraba la persona y decidir si este cambio le mueve
+    // el correo de acceso. Hay que leerlos antes del UPDATE.
+    let emailEmpresaAnterior: string | null = null;
+    let emailPersonalAnterior: string | null = null;
+    if (updates.emailEmpresa !== undefined || updates.emailPersonal !== undefined) {
+      const { data: antes } = await supabase
+        .from("empleados")
+        .select("email_empresa, email_personal")
+        .eq("id", id)
+        .maybeSingle();
+      emailEmpresaAnterior = (antes?.email_empresa as string | null) ?? null;
+      emailPersonalAnterior = (antes?.email_personal as string | null) ?? null;
+    }
+
     const { error } = await supabase.from("empleados").update(patch).eq("id", id);
     if (error) throw error;
 
@@ -675,6 +690,8 @@ export async function updateEmpleado(id: string, updates: UpdateEmpleadoInput) {
           empleadoId: id,
           emailEmpresa: emp?.email_empresa ?? null,
           emailPersonal: emp?.email_personal ?? null,
+          emailEmpresaAnterior,
+          emailPersonalAnterior,
         });
         if (!sync.ok) {
           // No revertimos la ficha: informamos del fallo de sincronización.
@@ -1525,11 +1542,15 @@ export async function guardarPerfilEmpleado(
 
     const { data: emp, error: empErr } = await admin
       .from("empleados")
-      .select("id, user_id, empresa_id")
+      .select("id, user_id, empresa_id, email_empresa, email_personal")
       .eq("id", empleadoId)
       .maybeSingle();
     if (empErr) return { ok: false, error: friendlyError(empErr) };
     if (!emp) return { ok: false, error: "Empleado no encontrado" };
+
+    // Correos ANTES de guardar: con ellos se sabe con cuál entraba la persona.
+    const emailEmpresaAnterior = (emp.email_empresa as string | null) ?? null;
+    const emailPersonalAnterior = (emp.email_personal as string | null) ?? null;
 
     // 2) Gate de scope por empresa, ya conocida la empresa del empleado.
     //    Un admin de empresa A no puede editar perfil de un empleado de B.
@@ -1587,10 +1608,38 @@ export async function guardarPerfilEmpleado(
       .eq("id", empleadoId);
     if (updErr) return { ok: false, error: friendlyError(updErr) };
 
+    // Si se ha tocado el correo con el que la persona ENTRA, se mueve su acceso
+    // (auth + `usuarios`), se anula el antiguo —también en Google— y se le avisa
+    // por correo y dentro del sistema. Fuente única de la regla en empleados-core.
+    let loginActualizado: { anterior: string | null; nuevo: string } | null = null;
+    let avisoLogin: string | undefined;
+    const correosTocados =
+      (payload.email_empresa as string | null) !== emailEmpresaAnterior ||
+      (payload.email_personal as string | null) !== emailPersonalAnterior;
+    if (correosTocados) {
+      const sync = await sincronizarLoginEmailEmpleado({
+        admin,
+        empleadoId,
+        emailEmpresa: (payload.email_empresa as string | null) ?? null,
+        emailPersonal: (payload.email_personal as string | null) ?? null,
+        emailEmpresaAnterior,
+        emailPersonalAnterior,
+      });
+      if (!sync.ok) {
+        // La ficha ya está guardada: informamos del fallo, no revertimos.
+        console.error("[rrhh] guardarPerfilEmpleado sync login:", sync.error);
+        avisoLogin =
+          "Los datos se guardaron, pero no se pudo actualizar el correo de acceso: " +
+          sync.error;
+      } else if (sync.cambiado) {
+        loginActualizado = { anterior: sync.anterior, nuevo: sync.nuevo };
+      }
+    }
+
     revalidatePath(`/rrhh/empleados/${empleadoId}`);
     revalidatePath("/rrhh/empleados");
     revalidatePath("/mi-panel/datos-personales");
-    return { ok: true };
+    return { ok: true, loginActualizado, avisoLogin };
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Error guardando perfil";
     console.error("[rrhh] guardarPerfilEmpleado:", msg);

@@ -916,7 +916,12 @@ function EditarUsuarioModal({
       toast.error(res.error);
       return;
     }
-    toast.success("Correo de acceso actualizado. La contraseña no cambia.");
+    toast.success(`El acceso ahora es con ${emailNormalizado}`, {
+      description:
+        "El correo anterior ya no sirve para entrar, tampoco con Google. " +
+        "Se ha enviado un correo al empleado avisando del cambio. La contraseña no cambia.",
+      duration: 12000,
+    });
     setForm((p) => ({ ...p, emailUsuario: emailNormalizado }));
   };
 

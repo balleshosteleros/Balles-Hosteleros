@@ -538,29 +538,24 @@ export async function altaUsuarioEmpleado(
   return { ok: true, userId, empleadoId: empleado.id, tempPassword };
 }
 
-/**
- * Regla única y canónica de qué correo es la IDENTIDAD DE LOGIN de un empleado.
- *
- * Login = email de EMPRESA si existe; si no, el email PERSONAL del empleado.
- * (Sustituye a la lógica antigua que decidía por área del puesto; ahora es una
- * sola regla para todas las vías: alta directa, contratación y edición.)
- *
- * Normaliza (trim + lowercase). Devuelve null si no hay ninguno de los dos:
- * en ese caso el caller no debe crear/actualizar el login.
- */
-export function resolverLoginEmail(input: {
-  emailEmpresa?: string | null;
-  emailPersonal?: string | null;
-}): string | null {
-  const empresa = (input.emailEmpresa ?? "").trim().toLowerCase() || null;
-  const personal = (input.emailPersonal ?? "").trim().toLowerCase() || null;
-  return empresa ?? personal ?? null;
-}
+
+
+// La regla de qué correo es el login y cuándo se mueve vive en un módulo aparte
+// (sin `server-only`) para poder probarla sin BD. Se reexporta para no romper a
+// quien ya la importaba desde aquí.
+export {
+  resolverLoginEmail,
+  debeMoverAccesoAlEditarFicha,
+} from "@/features/rrhh/services/acceso-email-regla";
+import {
+  resolverLoginEmail,
+  debeMoverAccesoAlEditarFicha,
+} from "@/features/rrhh/services/acceso-email-regla";
 
 /**
- * Sincroniza el email de login (auth.users) de un empleado con el que dicta la
- * regla `resolverLoginEmail`, SIN tocar la contraseña (se conserva). Idempotente:
- * si el login ya coincide, no hace nada.
+ * Sincroniza el email de login (auth.users + usuarios.email) de un empleado con
+ * el que dicta la regla `resolverLoginEmail`, SIN tocar la contraseña (se
+ * conserva). Idempotente: si el login ya coincide, no hace nada.
  *
  * Notifica al propio empleado in-app cuando el login cambia, para que sepa que a
  * partir de ahora entra con el nuevo correo (misma contraseña).
@@ -579,9 +574,17 @@ export async function sincronizarLoginEmailEmpleado(input: {
   /**
    * Cambiar el correo de acceso aunque la cuenta ya tenga uno fijado. Solo
    * para el cambio deliberado desde Ajustes → Usuarios. En el guardado normal
-   * de la ficha va a false: el login no se mueve por editar un buzón.
+   * de la ficha va a false: el login se mueve solo si se ha editado el correo
+   * con el que la persona entraba (ver la regla dentro de la función).
    */
   forzar?: boolean;
+  /**
+   * Correos que la ficha tenía ANTES de guardar. Son los que permiten saber con
+   * cuál de los dos entraba la persona y, por tanto, si este cambio le mueve el
+   * acceso. Sin ellos la función no toca el acceso de una cuenta ya creada.
+   */
+  emailEmpresaAnterior?: string | null;
+  emailPersonalAnterior?: string | null;
 }): Promise<
   | { ok: true; cambiado: false }
   | { ok: true; cambiado: true; anterior: string | null; nuevo: string }
@@ -613,13 +616,19 @@ export async function sincronizarLoginEmailEmpleado(input: {
   const anterior = (authUser.user.email ?? "").trim().toLowerCase() || null;
   if (anterior === nuevoLogin) return { ok: true, cambiado: false }; // ya coincide
 
-  // El login se fija en el alta de la PRIMERA empresa y no se mueve solo. Quien
-  // trabaja en dos empresas tiene un buzón de trabajo por empresa, pero una
-  // única cuenta: si esto siguiera a `resolverLoginEmail` sin más, dar de alta
-  // en la segunda empresa (o editar allí el correo) le cambiaría el correo de
-  // acceso por debajo y entraría con uno distinto al que se le comunicó.
-  // Cambiar el acceso es una decisión explícita → `forzar`.
-  if (anterior && !input.forzar) return { ok: true, cambiado: false };
+  // ¿Debe moverse el acceso? Regla completa (y tabla de casos) en
+  // `debeMoverAccesoAlEditarFicha`. `forzar` (Ajustes → Usuarios) se salta el
+  // análisis: allí cambiar el acceso es una decisión explícita.
+  if (!input.forzar) {
+    const mover = debeMoverAccesoAlEditarFicha({
+      accesoActual: anterior,
+      emailEmpresaAntes: input.emailEmpresaAnterior ?? null,
+      emailPersonalAntes: input.emailPersonalAnterior ?? null,
+      emailEmpresaAhora: input.emailEmpresa ?? null,
+      emailPersonalAhora: input.emailPersonal ?? null,
+    });
+    if (!mover) return { ok: true, cambiado: false };
+  }
 
   // Cambiar SOLO el email en auth.users. La contraseña se conserva intacta.
   // email_confirm: true → el nuevo correo queda confirmado sin pedir verificación.
@@ -628,6 +637,101 @@ export async function sincronizarLoginEmailEmpleado(input: {
     email_confirm: true,
   });
   if (updErr) return { ok: false, error: friendlyError(updErr) };
+
+  // `usuarios` es la fuente única del acceso (el candado `handle_new_user()`
+  // valida contra `usuarios.email`): si no se actualiza aquí, la cuenta quedaría
+  // con el correo viejo en la tabla que manda y el nuevo no podría entrar.
+  const { error: usuErr } = await admin
+    .from("usuarios")
+    .update({ email: nuevoLogin, updated_at: new Date().toISOString() })
+    .eq("user_id", emp.user_id);
+  if (usuErr) {
+    // Revertir auth para no dejar las dos tablas divergentes.
+    if (anterior) {
+      await admin.auth.admin.updateUserById(emp.user_id, {
+        email: anterior,
+        email_confirm: true,
+      });
+    }
+    return { ok: false, error: friendlyError(usuErr) };
+  }
+
+  // Anular el acceso por el correo ANTIGUO también en Google: al cambiar el
+  // email, Supabase conserva la identity OAuth vieja y la persona seguiría
+  // pudiendo entrar con "Continuar con Google" usando el correo anterior. El
+  // trigger `purge_old_identities_on_email_change` ya las borra en BD; esto es
+  // el cinturón de seguridad por si el trigger no estuviera presente.
+  try {
+    const { data: ident } = await admin.auth.admin.getUserById(emp.user_id);
+    const sobrantes = (ident?.user?.identities ?? []).filter(
+      (i) => ((i.identity_data?.email as string | undefined) ?? "").trim().toLowerCase() !== nuevoLogin,
+    );
+    for (const i of sobrantes) {
+      // @ts-expect-error la firma de deleteIdentity espera el objeto identity completo
+      await admin.auth.admin.deleteIdentity(i);
+    }
+  } catch (e) {
+    console.error("[rrhh] purgar identidades del correo antiguo:", e);
+  }
+
+  // Correo al empleado avisando de que a partir de ahora entra con el nuevo.
+  if (input.notificar !== false) {
+    try {
+      const { data: fichaMail } = await admin
+        .from("empleados")
+        .select("nombre, apellidos, email_personal, email_empresa, empresas(nombre)")
+        .eq("id", empleadoId)
+        .maybeSingle();
+
+      // Se avisa a AMBOS buzones conocidos (el nuevo de acceso y el otro), y al
+      // antiguo: si alguien pierde el acceso al viejo, el aviso le llega igual
+      // al que sí controla.
+      const destinos = Array.from(
+        new Set(
+          [
+            nuevoLogin,
+            anterior,
+            (fichaMail?.email_personal as string | null) ?? null,
+            (fichaMail?.email_empresa as string | null) ?? null,
+          ]
+            .map((e) => (e ?? "").trim().toLowerCase())
+            .filter(Boolean),
+        ),
+      );
+
+      const empresaNombre =
+        ((fichaMail?.empresas as { nombre?: string } | null)?.nombre ?? "").trim() ||
+        "Balles Hosteleros";
+      const nombreCompleto = [fichaMail?.nombre, fichaMail?.apellidos]
+        .filter(Boolean)
+        .join(" ")
+        .trim();
+
+      const { sendEmail } = await import("@/lib/email/send");
+      const { cambioEmailAccesoEmail } = await import(
+        "@/lib/email/templates/cambio-email-acceso"
+      );
+      const plantilla = cambioEmailAccesoEmail({
+        recipientName: nombreCompleto || "Hola",
+        empresaNombre,
+        anterior,
+        nuevo: nuevoLogin,
+      });
+
+      for (const to of destinos) {
+        await sendEmail({
+          to,
+          subject: plantilla.subject,
+          html: plantilla.html,
+          text: plantilla.text,
+          empresaId: (emp.empresa_id as string | null) ?? undefined,
+        });
+      }
+    } catch (e) {
+      // El correo es un aviso: nunca rompe el cambio de acceso.
+      console.error("[rrhh] correo cambio_email_acceso:", e);
+    }
+  }
 
   // Aviso in-app al propio empleado (no rompe si falla).
   if (input.notificar !== false && emp.empresa_id) {
