@@ -217,6 +217,17 @@ export async function importarUnidad(
 
     const { client, bucket } = getR2();
 
+    // Lo ya acumulado en tandas anteriores: los guardados parciales suman
+    // sobre esto en vez de releerlo cada vez.
+    const { data: acumulado } = await admin
+      .from("archivos_importaciones")
+      .select("copiados, copiados_bytes, omitidos")
+      .eq("id", impId)
+      .maybeSingle();
+    const baseCopiados = Number(acumulado?.copiados ?? 0);
+    const baseBytes = Number(acumulado?.copiados_bytes ?? 0);
+    const baseOmitidos = Number(acumulado?.omitidos ?? 0);
+
     let copiados = 0;
     let copiadosBytes = 0;
     let omitidos = 0;
@@ -269,7 +280,12 @@ export async function importarUnidad(
     // El reloj arranca AQUÍ, ya con el árbol resuelto: si empezara antes, la
     // lectura de Drive se comería la ventana entera y no daría tiempo a copiar
     // ni un archivo.
-    const limite = Date.now() + 4 * 60 * 1000;
+    //
+    // 3 min sobre los 5 de la ruta: un vídeo grande puede tardar en subir
+    // DESPUÉS del último control de tiempo, y si la función muere antes de
+    // guardar, el progreso de toda la tanda se pierde. Pasó: había archivos ya
+    // copiados en R2 y el contador seguía a cero.
+    const limite = Date.now() + 3 * 60 * 1000;
     let terminada = true;
 
 
@@ -338,6 +354,21 @@ export async function importarUnidad(
           yaImportados.add(hijo.id);
           copiados++;
           copiadosBytes += bytes;
+
+          // Se guarda cada 25 archivos, no solo al final: si la función muere
+          // a mitad de tanda, lo copiado hasta ese punto no se pierde y la
+          // pantalla ve avanzar el contador.
+          if (copiados % 25 === 0) {
+            await admin
+              .from("archivos_importaciones")
+              .update({
+                copiados: baseCopiados + copiados,
+                copiados_bytes: baseBytes + copiadosBytes,
+                omitidos: baseOmitidos + omitidos,
+                updated_at: new Date().toISOString(),
+              })
+              .eq("id", impId);
+          }
         } catch (err) {
           errores.push({ archivo: hijo.nombre, motivo: mensajeError(err) });
         }
@@ -347,7 +378,7 @@ export async function importarUnidad(
     // Se acumula sobre lo que ya hubiera: esta función puede correr varias veces.
     const { data: previa } = await admin
       .from("archivos_importaciones")
-      .select("copiados, copiados_bytes, omitidos, fallidos, errores")
+      .select("fallidos, errores")
       .eq("id", impId)
       .single();
 
@@ -355,9 +386,9 @@ export async function importarUnidad(
       .from("archivos_importaciones")
       .update({
         estado: terminada ? "terminada" : "en_curso",
-        copiados: Number(previa?.copiados ?? 0) + copiados,
-        copiados_bytes: Number(previa?.copiados_bytes ?? 0) + copiadosBytes,
-        omitidos: Number(previa?.omitidos ?? 0) + omitidos,
+        copiados: baseCopiados + copiados,
+        copiados_bytes: baseBytes + copiadosBytes,
+        omitidos: baseOmitidos + omitidos,
         fallidos: Number(previa?.fallidos ?? 0) + errores.length,
         errores: [
           ...((previa?.errores as Array<unknown>) ?? []),

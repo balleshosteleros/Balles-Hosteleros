@@ -234,16 +234,9 @@ export function ImportarDrivePanel() {
 
   return (
     <div className="space-y-5 py-2">
-      <div>
-        <div className="mb-1 flex items-center gap-2">
-          <HardDriveDownload className="h-4 w-4 text-cyan-600" />
-          <span className="text-sm font-medium">Importar desde Google Drive</span>
-        </div>
-        <p className="text-xs text-muted-foreground">
-          Trae una unidad compartida completa a Archivos, respetando carpetas y
-          nombres. Los documentos de Google se convierten a Excel y Word
-          editables. No se borra ni se modifica nada en Drive.
-        </p>
+      <div className="flex items-center gap-2">
+        <HardDriveDownload className="h-4 w-4 text-cyan-600" />
+        <span className="text-sm font-medium">Importar desde Google Drive</span>
       </div>
 
       {faltaPermiso && (
