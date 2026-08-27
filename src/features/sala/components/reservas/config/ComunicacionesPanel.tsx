@@ -393,7 +393,7 @@ export function ComunicacionesPanel() {
                   }}
                 />
                 <p className="mt-1 text-[10px] text-muted-foreground">
-                  Variables: {"{{fecha}}"}, {"{{hora}}"}, {"{{empresa}}"}, {"{{nombre}}"}, {"{{personas}}"}, {"{{mesa}}"}, {"{{zona}}"}.
+                  Variables: {"{{fecha}}"}, {"{{hora}}"}, {"{{empresa}}"}, {"{{nombre}}"}, {"{{personas}}"}, {"{{zona}}"}.
                 </p>
               </div>
             )}

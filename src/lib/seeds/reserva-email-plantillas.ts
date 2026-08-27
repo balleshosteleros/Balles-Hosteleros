@@ -14,7 +14,6 @@
  *   {{fecha}}         → fecha legible (ej. "martes, 2 de junio de 2026")
  *   {{hora}}          → hora HH:MM
  *   {{personas}}      → nº de comensales
- *   {{mesa}}          → código de mesa (puede ir vacío)
  *   {{zona}}          → nombre de la zona
  */
 

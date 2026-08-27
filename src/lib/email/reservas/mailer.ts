@@ -65,7 +65,6 @@ type ReservaRow = {
   fecha: string;
   hora: string;
   personas: number;
-  mesa: string | null;
   zona: string | null;
   notas: string | null;
   tipo_categoria: string | null;
@@ -136,7 +135,7 @@ export async function enviarReservaEmail(
   const { data: reservaData, error: errR } = await admin
     .from("reservas")
     .select(
-      "empresa_id, cliente_nombre, cliente_email, fecha, hora, personas, mesa, zona, grupo_zona_id, notas, estado, tipo_categoria, garantia_importe, importe_pagado, codigo, codigo_id, cancelacion_token, valoracion_token, email_confirmacion_at, email_reconfirmacion_at, email_recordatorio_at, email_cancelacion_at, email_valoracion_at, grupos_zonas(nombre)",
+      "empresa_id, cliente_nombre, cliente_email, fecha, hora, personas, zona, grupo_zona_id, notas, estado, tipo_categoria, garantia_importe, importe_pagado, codigo, codigo_id, cancelacion_token, valoracion_token, email_confirmacion_at, email_reconfirmacion_at, email_recordatorio_at, email_cancelacion_at, email_valoracion_at, grupos_zonas(nombre)",
     )
     .eq("id", reservaId)
     .maybeSingle();
@@ -150,7 +149,6 @@ export async function enviarReservaEmail(
     fecha: reservaData.fecha as string,
     hora: reservaData.hora as string,
     personas: reservaData.personas as number,
-    mesa: (reservaData.mesa as string | null) ?? null,
     // El cliente eligió un GRUPO ("Sala"); la zona interna ("Cristalera") no
     // le dice nada y podría hacerle pensar que le han cambiado el sitio. Se
     // lee el nombre ACTUAL del grupo: si se renombra, los correos que se
@@ -304,7 +302,6 @@ export async function enviarReservaEmail(
     fecha: fechaLegible,
     hora: horaLegible,
     personas: String(reserva.personas),
-    mesa: reserva.mesa ?? "",
     zona: reserva.zona ? capitalizar(reserva.zona) : "",
   };
 
@@ -384,7 +381,6 @@ export async function enviarReservaEmail(
     fechaLegible,
     horaLegible,
     personasTxt,
-    mesa: reserva.mesa,
     zona: reserva.zona ? capitalizar(reserva.zona) : null,
     observaciones: reserva.notas,
     mensajeLibre,
@@ -401,7 +397,6 @@ export async function enviarReservaEmail(
     fechaLegible,
     horaLegible,
     personasTxt,
-    mesa: reserva.mesa,
     zona: reserva.zona ? capitalizar(reserva.zona) : null,
     observaciones: reserva.notas,
     mensajeLibre,
@@ -475,7 +470,6 @@ interface RenderInput {
   fechaLegible: string;
   horaLegible: string;
   personasTxt: string;
-  mesa: string | null;
   zona: string | null;
   observaciones: string | null;
   mensajeLibre: string;
@@ -515,7 +509,6 @@ function renderHtml(input: RenderInput): string {
     fila("Comensales", input.personasTxt),
   ];
   if (input.zona) filas.push(fila("Zona", input.zona));
-  if (input.mesa) filas.push(fila("Mesa", `Mesa ${input.mesa}`));
 
   // El saludo cambia según el momento: "te esperamos" solo tiene sentido antes
   // de la visita. En cancelación y en la valoración (que va DESPUÉS de venir)
@@ -706,7 +699,6 @@ function renderText(input: Omit<RenderInput, "empresa"> & { empresa: string }): 
     `- Comensales: ${input.personasTxt}`,
   ];
   if (input.zona) lineas.push(`- Zona: ${input.zona}`);
-  if (input.mesa) lineas.push(`- Mesa: ${input.mesa}`);
   if (input.observaciones) lineas.push(``, `Observaciones: ${input.observaciones}`);
   if (input.mensajeLibre) lineas.push(``, input.mensajeLibre);
   if (input.politicaBloque) {
@@ -909,7 +901,6 @@ export function previewReservaEmail(input: PreviewInput): {
     fecha: formatearFecha("2026-06-15"),
     hora: "21:00",
     personas: "4",
-    mesa: "12",
     zona: "Terraza",
   };
   const seed = getReservaEmailPlantillaSeed(input.tipo);
@@ -946,7 +937,6 @@ export function previewReservaEmail(input: PreviewInput): {
     fechaLegible: placeholders.fecha,
     horaLegible: placeholders.hora,
     personasTxt: `${placeholders.personas} personas`,
-    mesa: placeholders.mesa,
     zona: placeholders.zona,
     observaciones: null,
     mensajeLibre,
