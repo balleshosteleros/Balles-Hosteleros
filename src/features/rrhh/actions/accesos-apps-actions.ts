@@ -37,7 +37,10 @@ function esCifrado(s: string): boolean {
 //     el hecho de que exista. Antes se enviaba todo y se ocultaba al pintar.
 //
 // Sin bypass para dirección: los escudos se aplican a TODOS los roles, y el
-// candado de Ajustes → Roles manda también para ella.
+// candado de Ajustes → Roles manda también para ella. Que dirección vea todas
+// las credenciales se consigue MARCÁNDOLA en cada una (dato), no abriéndole un
+// atajo en el código: así la regla sigue siendo una sola y se puede auditar
+// mirando la propia credencial.
 // `roles` vacío en un acceso = nadie lo ve (fail-closed).
 // ---------------------------------------------------------------------------
 
