@@ -732,7 +732,9 @@ function MapaPublico({ bloque }: { bloque: Extract<Bloque, { tipo: "mapa" }> }) 
 function FooterPublico({ bloque }: { bloque: Extract<Bloque, { tipo: "footer" }> }) {
   const { columnas, redes, texto_legal } = bloque.datos;
   return (
-    <footer className="bg-black text-white py-10 px-4">
+    /* `id="contacto"`: la barra superior enlaza aquí (href="#contacto"), donde
+       viven teléfono, correo y horarios. */
+    <footer className="bg-black text-white py-16 px-4 scroll-mt-24" id="contacto">
       <div className="max-w-6xl mx-auto grid md:grid-cols-4 gap-8">
         {columnas.map((c, i) => (
           <div key={i}>

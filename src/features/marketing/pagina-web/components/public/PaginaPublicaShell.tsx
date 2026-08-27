@@ -66,7 +66,7 @@ export function PaginaPublicaShell({
         } as React.CSSProperties
       }
     >
-      <NavPublica logo={logo} titulo={tituloNav} hayReservas={hayReservas} />
+      <NavPublica logo={logo} titulo={tituloNav} hayReservas={hayReservas} slug={contexto?.empresaSlug ?? null} />
       <main>
         {ordenados.map((b) => (
           <BloquePublico key={b.id} bloque={b} contexto={contexto} />
@@ -115,10 +115,13 @@ function NavPublica({
   logo,
   titulo,
   hayReservas,
+  slug,
 }: {
   logo: string | null;
   titulo: string;
   hayReservas: boolean;
+  /** Slug de la empresa: enlaza los portales (/carta, /empleo). */
+  slug: string | null;
 }) {
   const [solida, setSolida] = useState(false);
 
@@ -143,10 +146,34 @@ function NavPublica({
         ) : (
           <span className="font-semibold tracking-wide text-sm text-white/90">{titulo}</span>
         )}
+        {/* Menú como el de GHL (Carta · Ubicación · Contacto · Trabaja con
+            nosotros), pero apuntando a NUESTROS portales. Se oculta en móvil:
+            ahí manda el botón de reservar, que es la acción principal. */}
+        <nav className="ml-auto hidden items-center gap-7 md:flex">
+          {slug ? (
+            <a href={`/carta/${slug}`} className="text-sm font-medium text-white/85 transition-colors hover:text-white">
+              Carta
+            </a>
+          ) : null}
+          <a href="#mapa" className="text-sm font-medium text-white/85 transition-colors hover:text-white">
+            Ubicación
+          </a>
+          <a href="#contacto" className="text-sm font-medium text-white/85 transition-colors hover:text-white">
+            Contacto
+          </a>
+          {slug ? (
+            <a
+              href={`/empleo/${slug}?o=WEB`}
+              className="text-sm font-medium text-white/85 transition-colors hover:text-white"
+            >
+              Trabaja con nosotros
+            </a>
+          ) : null}
+        </nav>
         {hayReservas ? (
           <a
             href="#reservas"
-            className="ml-auto rounded-full px-5 py-2 text-sm font-semibold text-black transition-transform hover:scale-105"
+            className="ml-auto rounded-full px-5 py-2 text-sm font-bold uppercase tracking-wider text-black transition-transform hover:scale-105 md:ml-7"
             style={{ backgroundColor: "var(--pw-primario)" }}
           >
             Reservar
