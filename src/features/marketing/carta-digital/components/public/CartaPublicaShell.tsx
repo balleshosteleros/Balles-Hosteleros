@@ -108,7 +108,7 @@ export function CartaPublicaShell({ carta }: { carta: CartaPublica }) {
         <HeaderRestaurante empresa={carta.empresa} />
 
         <div className="mx-auto max-w-6xl px-4 pb-24 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-1 gap-8 pt-8 lg:grid-cols-[220px_1fr] lg:gap-12 lg:pt-12">
+          <div className="grid grid-cols-1 gap-8 pt-2 lg:grid-cols-[220px_1fr] lg:gap-12 lg:pt-8">
             <CategoriaSidebar
               categorias={carta.categorias}
               activeId={activeCat}
@@ -116,25 +116,24 @@ export function CartaPublicaShell({ carta }: { carta: CartaPublica }) {
             />
 
             <div className="min-w-0">
-              <FiltroAlergenos
-                excluidos={filtroExcluidos}
-                onChange={setFiltroExcluidos}
-                totalItems={totalItems}
-                itemsVisibles={itemsVisibles}
-              />
-
               <ItemList
                 ref={listRef}
                 categorias={carta.categorias}
                 filtroExcluidos={filtroExcluidos}
                 counters={counters}
                 likedSet={likedSet}
-                estiloCards={theme.estiloCards}
                 onOpen={setOpenItem}
               />
             </div>
           </div>
         </div>
+
+        <FiltroAlergenos
+          excluidos={filtroExcluidos}
+          onChange={setFiltroExcluidos}
+          totalItems={totalItems}
+          itemsVisibles={itemsVisibles}
+        />
 
         <ItemFichaModal
           item={openItem}

@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { Filter, X, Wheat, Egg, Fish, Nut, Milk, Bean, Leaf } from "lucide-react";
+import { useEffect, useState } from "react";
+import { X, Wheat, Egg, Fish, Nut, Milk, Bean, Leaf, ShieldCheck } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { ALERGENOS_UE, type Alergeno } from "../../types";
 
@@ -33,6 +33,17 @@ export function AlergenoIcon({ alergeno, className }: { alergeno: Alergeno | str
   return <Icon className={className} strokeWidth={1.5} />;
 }
 
+/**
+ * Filtro de alérgenos — botón discreto, no cartel.
+ *
+ * Antes ocupaba una franja entera encima de la carta con letras grandes; a la
+ * mayoría de comensales no le afecta y se comía el sitio de la primera fila de
+ * fotos. Ahora es un botón redondo con escudo, anclado abajo a la derecha, que
+ * siempre está a mano mientras se hace scroll pero no le quita protagonismo a
+ * los platos. Quien lo necesita lo busca; quien no, ni lo nota.
+ *
+ * Al pulsarlo abre un panel inferior con los 14 alérgenos UE.
+ */
 export function FiltroAlergenos({
   excluidos,
   onChange,
@@ -48,6 +59,15 @@ export function FiltroAlergenos({
   const activeCount = excluidos.size;
   const ocultos = totalItems - itemsVisibles;
 
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [open]);
+
   const toggle = (a: Alergeno) => {
     const next = new Set(excluidos);
     if (next.has(a)) next.delete(a);
@@ -55,90 +75,159 @@ export function FiltroAlergenos({
     onChange(next);
   };
 
-  const clear = () => onChange(new Set());
-
   return (
-    <div className="mb-6">
-      <div className="flex flex-wrap items-center gap-2">
-        <button
-          type="button"
-          onClick={() => setOpen((v) => !v)}
-          className="inline-flex items-center gap-2 rounded-full border px-4 py-2 text-[12px] font-semibold uppercase tracking-[0.14em] transition"
+    <>
+      {/* ── Botón flotante ─────────────────────────────────────────── */}
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        aria-label={
+          activeCount > 0
+            ? `Filtro de alérgenos activo, ${activeCount} excluidos`
+            : "Filtrar por alérgenos"
+        }
+        className="fixed bottom-5 right-4 z-40 inline-flex h-12 w-12 items-center justify-center rounded-full shadow-[0_6px_24px_rgba(0,0,0,0.28)] backdrop-blur-md transition-transform duration-200 active:scale-90 sm:bottom-6 sm:right-6"
+        style={{
+          backgroundColor:
+            activeCount > 0
+              ? "var(--carta-primario)"
+              : "color-mix(in srgb, var(--carta-superficie) 88%, transparent)",
+          color: activeCount > 0 ? "var(--carta-sobre-marca)" : "var(--carta-texto-suave)",
+          border: "1px solid var(--carta-borde)",
+        }}
+      >
+        <ShieldCheck className="h-5 w-5" strokeWidth={1.6} />
+        {activeCount > 0 ? (
+          <span
+            className="absolute -right-0.5 -top-0.5 inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[10px] font-bold tabular-nums ring-2"
+            style={{
+              backgroundColor: "var(--carta-acento)",
+              color: "#1A1A1A",
+              // El anillo tiñe del fondo de la carta para que el número no se
+              // pegue al borde del botón.
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              ["--tw-ring-color" as any]: "var(--carta-fondo)",
+            }}
+          >
+            {activeCount}
+          </span>
+        ) : null}
+      </button>
+
+      {/* Aviso de platos ocultos: si el filtro está escondiendo comida, hay que
+          decirlo, o el comensal piensa que la carta es más corta de lo que es. */}
+      {activeCount > 0 && ocultos > 0 ? (
+        <span
+          className="fixed bottom-[76px] right-4 z-40 rounded-full px-3 py-1.5 text-[11px] font-medium tabular-nums shadow-[0_4px_16px_rgba(0,0,0,0.22)] backdrop-blur-md sm:bottom-[84px] sm:right-6"
           style={{
-            borderColor: activeCount > 0 ? "var(--carta-primario)" : "var(--carta-borde)",
-            color: activeCount > 0 ? "var(--carta-primario)" : "var(--carta-texto-suave)",
-            backgroundColor: activeCount > 0 ? "color-mix(in srgb, var(--carta-primario) 8%, transparent)" : "transparent",
+            backgroundColor: "color-mix(in srgb, var(--carta-superficie) 92%, transparent)",
+            color: "var(--carta-texto-suave)",
+            border: "1px solid var(--carta-borde)",
           }}
         >
-          <Filter className="h-3.5 w-3.5" strokeWidth={1.75} />
-          Sin alérgenos
-          {activeCount > 0 ? (
-            <span
-              className="inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[10px] font-bold tabular-nums"
-              style={{ backgroundColor: "var(--carta-primario)", color: "var(--carta-sobre-marca)" }}
-            >
-              {activeCount}
-            </span>
-          ) : null}
-        </button>
+          {ocultos} {ocultos === 1 ? "plato oculto" : "platos ocultos"}
+        </span>
+      ) : null}
 
-        {activeCount > 0 ? (
-          <>
-            <button
-              type="button"
-              onClick={clear}
-              className="inline-flex items-center gap-1 rounded-full px-3 py-2 text-[11px] font-medium uppercase tracking-[0.14em] transition hover:opacity-100"
-              style={{ color: "var(--carta-texto-tenue)" }}
-            >
-              <X className="h-3 w-3" strokeWidth={2} />
-              Limpiar
-            </button>
-            {ocultos > 0 ? (
-              <span
-                className="ml-auto text-[11px] font-light tabular-nums italic"
-                style={{ color: "var(--carta-texto-tenue)" }}
-              >
-                {ocultos} {ocultos === 1 ? "plato oculto" : "platos ocultos"}
-              </span>
-            ) : null}
-          </>
-        ) : null}
-      </div>
-
+      {/* ── Panel ───────────────────────────────────────────────────── */}
       {open ? (
         <div
-          className="mt-3 rounded-2xl border p-4 shadow-sm"
-          style={{ backgroundColor: "var(--carta-superficie)", borderColor: "var(--carta-borde)" }}
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/45 backdrop-blur-sm sm:items-center sm:p-6"
+          onClick={() => setOpen(false)}
+          role="dialog"
+          aria-modal="true"
         >
-          <p
-            className="mb-3 text-[10px] font-semibold uppercase tracking-[0.25em]"
-            style={{ color: "var(--carta-texto-tenue)" }}
+          <div
+            className="w-full max-w-md animate-[filtroIn_.28s_cubic-bezier(.2,.9,.3,1.05)] rounded-t-[26px] p-5 shadow-2xl sm:rounded-[26px]"
+            onClick={(e) => e.stopPropagation()}
+            style={{ backgroundColor: "var(--carta-superficie)" }}
           >
-            Excluir platos con
-          </p>
-          <div className="flex flex-wrap gap-1.5">
-            {ALERGENOS_UE.map((a) => {
-              const active = excluidos.has(a);
-              return (
-                <button
-                  key={a}
-                  type="button"
-                  onClick={() => toggle(a)}
-                  className="inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[11px] font-medium transition"
-                  style={{
-                    backgroundColor: active ? "var(--carta-primario)" : "transparent",
-                    borderColor: active ? "var(--carta-primario)" : "var(--carta-borde)",
-                    color: active ? "var(--carta-sobre-marca)" : "var(--carta-texto-suave)",
-                  }}
+            <div className="mb-4 flex items-start justify-between gap-3">
+              <div>
+                <p
+                  className="text-[17px] font-light"
+                  style={{ fontFamily: "var(--carta-fuente-titulos)", color: "var(--carta-texto)" }}
                 >
-                  <AlergenoIcon alergeno={a} className="h-3 w-3" />
-                  {alergenoLabel(a)}
-                </button>
-              );
-            })}
+                  Alérgenos
+                </p>
+                <p className="mt-0.5 text-[12px] font-light" style={{ color: "var(--carta-texto-tenue)" }}>
+                  Marca lo que quieras evitar y ocultamos esos platos.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setOpen(false)}
+                aria-label="Cerrar"
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition active:scale-90"
+                style={{
+                  backgroundColor: "var(--carta-superficie-enfasis)",
+                  color: "var(--carta-texto-suave)",
+                }}
+              >
+                <X className="h-4 w-4" strokeWidth={1.75} />
+              </button>
+            </div>
+
+            <div className="flex flex-wrap gap-1.5">
+              {ALERGENOS_UE.map((a) => {
+                const active = excluidos.has(a);
+                return (
+                  <button
+                    key={a}
+                    type="button"
+                    onClick={() => toggle(a)}
+                    className="inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[11.5px] font-medium transition"
+                    style={{
+                      backgroundColor: active ? "var(--carta-primario)" : "transparent",
+                      borderColor: active ? "var(--carta-primario)" : "var(--carta-borde)",
+                      color: active ? "var(--carta-sobre-marca)" : "var(--carta-texto-suave)",
+                    }}
+                  >
+                    <AlergenoIcon alergeno={a} className="h-3 w-3" />
+                    {alergenoLabel(a)}
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="mt-5 flex items-center justify-between gap-3">
+              <button
+                type="button"
+                onClick={() => onChange(new Set())}
+                disabled={activeCount === 0}
+                className="text-[11px] font-medium uppercase tracking-[0.16em] transition disabled:opacity-35"
+                style={{ color: "var(--carta-texto-tenue)" }}
+              >
+                Limpiar
+              </button>
+              <button
+                type="button"
+                onClick={() => setOpen(false)}
+                className="rounded-full px-5 py-2 text-[12px] font-semibold uppercase tracking-[0.14em] transition active:scale-95"
+                style={{
+                  backgroundColor: "var(--carta-primario)",
+                  color: "var(--carta-sobre-marca)",
+                }}
+              >
+                Ver {itemsVisibles} platos
+              </button>
+            </div>
           </div>
+
+          <style jsx>{`
+            @keyframes filtroIn {
+              0% {
+                transform: translateY(30px);
+                opacity: 0;
+              }
+              100% {
+                transform: translateY(0);
+                opacity: 1;
+              }
+            }
+          `}</style>
         </div>
       ) : null}
-    </div>
+    </>
   );
 }

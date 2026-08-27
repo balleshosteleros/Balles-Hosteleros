@@ -3,211 +3,125 @@
 import Image from "next/image";
 import { Heart, Star } from "lucide-react";
 import type { CartaItem } from "../../types";
-import { AlergenoIcon } from "./FiltroAlergenos";
 
 /**
- * Ficha de plato.
+ * Ficha de plato — formato fotográfico.
  *
- * DOS FORMATOS, NO UNO:
- * Casi ninguna carta nace con fotos —hacerlas cuesta tiempo y dinero— y un
- * hueco gris con un cubierto dibujado ocupa un tercio de la fila para no decir
- * nada: la carta parece incompleta desde el primer día.
+ * La foto es lo que vende, así que ocupa el ancho completo de la tarjeta y el
+ * texto vive debajo, no al lado: una foto de 96px compite con el texto y
+ * pierde; una foto a sangre de 4:3 es la que hace levantar la vista de la
+ * carta y pedir el plato.
  *
- *  - Sin foto → formato editorial de carta impresa: nombre, línea de puntos
- *    guiando al precio, y descripción debajo. Es el lenguaje que un comensal
- *    reconoce, y se sostiene solo.
- *  - Con foto → la imagen manda, porque una foto buena vende el plato.
+ * El precio va sobre la foto, en una píldora de cristal: así el ojo hace un
+ * solo recorrido (foto → precio → nombre) en vez de saltar a una columna
+ * derecha. Es el patrón de Mr Yum / Sunday, y es el que mejor convierte.
  *
- * Así la carta se ve terminada sin fotos, y mejora sola a medida que entran.
+ * Los alérgenos NO se pintan aquí: en un grid de fotos son ruido visual y
+ * nadie los lee a ese tamaño. Viven en la ficha del plato, que es donde
+ * alguien con una alergia va a mirar de verdad.
  */
 export function ItemCard({
   item,
   likes,
   liked,
-  estiloCards,
   onOpen,
 }: {
   item: CartaItem;
   likes: number;
   liked: boolean;
-  estiloCards: "plana" | "sombra" | "borde";
   onOpen: () => void;
 }) {
-  const conFoto = !!item.foto_url;
   const precio = `${item.precio.toFixed(2).replace(".", ",")}€`;
-
-  const alergenos =
-    item.alergenos.length > 0 ? (
-      <div className="mt-2 flex flex-wrap items-center gap-1">
-        {item.alergenos.slice(0, 6).map((a) => (
-          <span
-            key={a}
-            className="inline-flex h-5 w-5 items-center justify-center rounded-full"
-            style={{
-              backgroundColor: "color-mix(in srgb, var(--carta-acento) 18%, transparent)",
-              color: "var(--carta-primario)",
-            }}
-            title={a}
-          >
-            <AlergenoIcon alergeno={a} className="h-2.5 w-2.5" />
-          </span>
-        ))}
-        {item.alergenos.length > 6 ? (
-          <span className="text-[10px]" style={{ color: "var(--carta-texto-tenue)" }}>
-            +{item.alergenos.length - 6}
-          </span>
-        ) : null}
-      </div>
-    ) : null;
-
-  const contadorLikes =
-    likes > 0 || liked ? (
-      <span className="inline-flex items-center gap-1">
-        <Heart
-          className={`h-3 w-3 ${liked ? "fill-current" : ""}`}
-          strokeWidth={1.75}
-          style={{ color: liked ? "var(--carta-primario)" : "var(--carta-texto-tenue)" }}
-        />
-        <span
-          className="text-[10px] font-medium tabular-nums"
-          style={{ color: "var(--carta-texto-tenue)" }}
-        >
-          {likes}
-        </span>
-      </span>
-    ) : null;
-
-  const estrella = item.destacado ? (
-    <Star
-      className="h-3.5 w-3.5 shrink-0 fill-amber-400 text-amber-500 drop-shadow-[0_1px_1.5px_rgba(146,64,14,0.45)]"
-      strokeWidth={1.5}
-      aria-label="Plato destacado"
-    />
-  ) : null;
-
-  // ── Sin foto: formato de carta impresa ────────────────────────────
-  if (!conFoto) {
-    return (
-      <button
-        type="button"
-        onClick={onOpen}
-        className="group relative w-full rounded-xl px-3 py-3.5 text-left transition-colors duration-200 hover:bg-[color-mix(in_srgb,var(--carta-acento)_9%,transparent)] active:scale-[0.995]"
-      >
-        {/* Nombre · guía de puntos · precio. La guía es lo que hace que el ojo
-            llegue del plato a su precio sin perderse, como en la carta de papel. */}
-        <div className="flex items-baseline gap-2">
-          <span className="flex min-w-0 items-baseline gap-1.5">
-            {estrella}
-            <h3
-              className="truncate text-[15.5px] font-medium leading-snug sm:text-[17px]"
-              style={{ color: "var(--carta-texto)", fontFamily: "var(--carta-fuente-titulos)" }}
-            >
-              {item.nombre}
-            </h3>
-          </span>
-
-          <span
-            aria-hidden
-            className="mx-1 hidden h-[1px] flex-1 translate-y-[-3px] sm:block"
-            style={{
-              backgroundImage:
-                "radial-gradient(circle, color-mix(in srgb, var(--carta-texto-tenue) 55%, transparent) 1px, transparent 1px)",
-              backgroundSize: "6px 1px",
-              backgroundRepeat: "repeat-x",
-            }}
-          />
-
-          <span
-            className="ml-auto shrink-0 whitespace-nowrap text-[15px] font-semibold tabular-nums sm:ml-0 sm:text-[16.5px]"
-            style={{ color: "var(--carta-primario)", fontFamily: "var(--carta-fuente-titulos)" }}
-          >
-            {precio}
-          </span>
-        </div>
-
-        {item.descripcion ? (
-          <p
-            className="mt-1 max-w-[62ch] text-[13px] font-light italic leading-relaxed sm:text-[13.5px]"
-            style={{ color: "var(--carta-texto-suave)" }}
-          >
-            {item.descripcion}
-          </p>
-        ) : null}
-
-        <div className="flex items-center justify-between gap-3">
-          {alergenos ?? <span />}
-          {contadorLikes ? <span className="mt-2">{contadorLikes}</span> : null}
-        </div>
-      </button>
-    );
-  }
-
-  // ── Con foto: la imagen manda ─────────────────────────────────────
-  const cardClass =
-    estiloCards === "sombra"
-      ? "shadow-[0_1px_2px_rgba(0,0,0,0.04)] hover:shadow-[0_8px_24px_rgba(0,0,0,0.10)]"
-      : estiloCards === "borde"
-        ? "border"
-        : "";
+  const conFoto = !!item.foto_url;
 
   return (
     <button
       type="button"
       onClick={onOpen}
-      className={`group relative flex w-full items-stretch gap-4 overflow-hidden rounded-2xl p-3 text-left transition-all duration-300 hover:-translate-y-0.5 active:scale-[0.99] ${cardClass}`}
-      style={{
-        backgroundColor: "var(--carta-superficie)",
-        borderColor: estiloCards === "borde" ? "var(--carta-borde)" : undefined,
-      }}
+      className="group relative flex w-full flex-col overflow-hidden rounded-2xl text-left transition-all duration-500 ease-out hover:-translate-y-1 active:scale-[0.99]"
+      style={{ backgroundColor: "var(--carta-superficie)" }}
     >
-      <div className="relative h-24 w-24 shrink-0 overflow-hidden rounded-xl sm:h-32 sm:w-32">
-        <Image
-          src={item.foto_url as string}
-          alt={item.nombre}
-          fill
-          sizes="(max-width: 640px) 96px, 128px"
-          className="object-cover transition-transform duration-700 group-hover:scale-110"
+      {/* ── Foto ────────────────────────────────────────────────────── */}
+      <div
+        className="relative aspect-[4/3] w-full overflow-hidden"
+        style={{ backgroundColor: "var(--carta-superficie-enfasis)" }}
+      >
+        {conFoto ? (
+          <Image
+            src={item.foto_url as string}
+            alt={item.nombre}
+            fill
+            sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 300px"
+            className="object-cover transition-transform duration-[900ms] ease-out group-hover:scale-[1.07]"
+          />
+        ) : (
+          // Sin foto: un lienzo de marca vacío. NO se repite aquí el nombre
+          // del plato —ya está justo debajo— porque leerlo dos veces seguidas
+          // delata el hueco en lugar de disimularlo.
+          <div
+            className="h-full w-full"
+            style={{
+              background:
+                "radial-gradient(120% 95% at 50% 0%, color-mix(in srgb, var(--carta-acento) 34%, transparent) 0%, var(--carta-superficie-enfasis) 72%)",
+            }}
+          />
+        )}
+
+        {/* Velo inferior: sostiene el precio sin oscurecer el plato. */}
+        <div
+          aria-hidden
+          className="absolute inset-x-0 bottom-0 h-2/5"
+          style={{ background: "linear-gradient(180deg, transparent 0%, rgba(0,0,0,0.55) 100%)" }}
         />
+
+        {/* Precio en píldora de cristal sobre la foto. */}
+        <span
+          className="absolute bottom-2.5 right-2.5 rounded-full px-2.5 py-1 text-[13px] font-semibold tabular-nums text-white shadow-[0_2px_10px_rgba(0,0,0,0.35)] backdrop-blur-md sm:text-[14px]"
+          style={{
+            backgroundColor: "rgba(255,255,255,0.16)",
+            fontFamily: "var(--carta-fuente-titulos)",
+          }}
+        >
+          {precio}
+        </span>
+
         {item.destacado ? (
           <span
-            className="absolute left-1.5 top-1.5 inline-flex h-7 w-7 items-center justify-center rounded-full bg-white/90 shadow-[0_2px_6px_rgba(180,83,9,0.45)] ring-1 ring-amber-200/80 backdrop-blur"
+            className="absolute left-2.5 top-2.5 inline-flex h-7 w-7 items-center justify-center rounded-full bg-black/35 shadow-[0_2px_8px_rgba(0,0,0,0.4)] ring-1 ring-white/25 backdrop-blur-md"
             title="Plato destacado"
           >
-            <Star
-              className="h-4 w-4 fill-amber-400 text-amber-500 drop-shadow-[0_1px_1.5px_rgba(146,64,14,0.6)]"
-              strokeWidth={1.5}
+            <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" strokeWidth={1.5} />
+          </span>
+        ) : null}
+
+        {likes > 0 || liked ? (
+          <span className="absolute right-2.5 top-2.5 inline-flex items-center gap-1 rounded-full bg-black/35 px-2 py-1 shadow-[0_2px_8px_rgba(0,0,0,0.35)] ring-1 ring-white/20 backdrop-blur-md">
+            <Heart
+              className={`h-3 w-3 text-white ${liked ? "fill-current" : ""}`}
+              strokeWidth={2}
             />
+            <span className="text-[10px] font-semibold tabular-nums text-white">{likes}</span>
           </span>
         ) : null}
       </div>
 
-      <div className="flex min-w-0 flex-1 flex-col">
-        <div className="flex items-start justify-between gap-3">
-          <h3
-            className="text-[15.5px] font-medium leading-snug sm:text-[17px]"
-            style={{ color: "var(--carta-texto)", fontFamily: "var(--carta-fuente-titulos)" }}
-          >
-            {item.nombre}
-          </h3>
-          <span
-            className="shrink-0 whitespace-nowrap text-[15px] font-semibold tabular-nums sm:text-[16.5px]"
-            style={{ color: "var(--carta-primario)", fontFamily: "var(--carta-fuente-titulos)" }}
-          >
-            {precio}
-          </span>
-        </div>
+      {/* ── Texto ───────────────────────────────────────────────────── */}
+      <div className="flex flex-1 flex-col px-3 pb-3.5 pt-2.5">
+        <h3
+          className="text-[14.5px] font-medium leading-snug sm:text-[16px]"
+          style={{ color: "var(--carta-texto)", fontFamily: "var(--carta-fuente-titulos)" }}
+        >
+          {item.nombre}
+        </h3>
 
         {item.descripcion ? (
           <p
-            className="mt-1.5 line-clamp-2 text-[13px] font-light italic leading-relaxed sm:text-[13.5px]"
+            className="mt-1 line-clamp-2 text-[12px] font-light leading-relaxed sm:text-[12.5px]"
             style={{ color: "var(--carta-texto-suave)" }}
           >
             {item.descripcion}
           </p>
         ) : null}
-
-        {alergenos}
-        {contadorLikes ? <div className="mt-auto pt-2">{contadorLikes}</div> : null}
       </div>
     </button>
   );

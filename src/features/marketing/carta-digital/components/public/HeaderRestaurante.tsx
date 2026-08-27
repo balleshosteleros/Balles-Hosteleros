@@ -13,6 +13,10 @@ export function HeaderRestaurante({ empresa }: { empresa: CartaEmpresaPublica })
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
+  // Marca de la carta = ISOTIPO de imagen de marca (icono sin texto). Sólo se
+  // cae al logo alternativo/principal si la empresa aún no ha subido isotipo.
+  const marcaUrl = empresa.isotipo_url || empresa.logo_alt_url || empresa.logo_url || null;
+
   const compact = scrollY > 80;
   const heroOpacity = Math.max(0, 1 - scrollY / 320);
   const heroParallax = scrollY * 0.4;
@@ -101,14 +105,18 @@ export function HeaderRestaurante({ empresa }: { empresa: CartaEmpresaPublica })
             <h1 className="sr-only">{empresa.nombre}</h1>
           ) : (
             <>
-              {empresa.logo_alt_url || empresa.logo_url ? (
-                <div className="mb-4 flex h-16 w-16 items-center justify-center overflow-hidden rounded-full bg-white/10 ring-1 ring-white/30 backdrop-blur sm:h-20 sm:w-20">
+              {marcaUrl ? (
+                // ISOTIPO, no logotipo: el logotipo lleva el nombre dentro y
+                // se duplicaba con el <h1> justo debajo. Y va sobre un disco
+                // claro sólido —no un cristal translúcido— porque un isotipo
+                // dorado sobre un hero dorado desaparecía por completo.
+                <div className="mb-5 flex h-[74px] w-[74px] items-center justify-center overflow-hidden rounded-full bg-white shadow-[0_6px_28px_rgba(0,0,0,0.35)] ring-1 ring-black/5 sm:h-[88px] sm:w-[88px]">
                   <Image
-                    src={(empresa.logo_alt_url ?? empresa.logo_url) as string}
+                    src={marcaUrl}
                     alt=""
-                    width={80}
-                    height={80}
-                    className="h-full w-full object-contain p-1.5"
+                    width={88}
+                    height={88}
+                    className="h-full w-full object-contain p-2.5"
                   />
                 </div>
               ) : null}
@@ -141,10 +149,10 @@ export function HeaderRestaurante({ empresa }: { empresa: CartaEmpresaPublica })
       >
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-2.5 sm:px-6">
           <div className="flex items-center gap-2.5 overflow-hidden">
-            {compact && empresa.logo_url ? (
+            {compact && marcaUrl ? (
               <span className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full bg-white ring-1 ring-black/5">
                 <Image
-                  src={empresa.logo_url}
+                  src={marcaUrl}
                   alt=""
                   width={28}
                   height={28}

@@ -37,6 +37,7 @@ interface EmpresaRow {
   carta_descripcion: string | null;
   logo_url: string | null;
   logo_alt_url: string | null;
+  isotipo_url: string | null;
   color: string | null;
   color_secundario: string | null;
   color_texto: string | null;
@@ -125,7 +126,7 @@ export async function fetchCartaPorSlug(slug: string): Promise<CartaPublica | nu
     const { data: empresa, error: empresaErr } = await supabase
       .from("empresas")
       .select(
-        "id, nombre, carta_slug, carta_publicada, carta_descripcion, logo_url, logo_alt_url, color, color_secundario, color_texto, carta_color_fondo, carta_color_acento, carta_fuente_titulos, carta_fuente_cuerpo, carta_hero_url, carta_estilo_cards, carta_modo",
+        "id, nombre, carta_slug, carta_publicada, carta_descripcion, logo_url, logo_alt_url, isotipo_url, color, color_secundario, color_texto, carta_color_fondo, carta_color_acento, carta_fuente_titulos, carta_fuente_cuerpo, carta_hero_url, carta_estilo_cards, carta_modo",
       )
       .eq("carta_slug", slug)
       .eq("carta_publicada", true)
@@ -145,6 +146,7 @@ export async function fetchCartaPorSlug(slug: string): Promise<CartaPublica | nu
       carta_descripcion: empresa.carta_descripcion,
       logo_url: empresa.logo_url,
       logo_alt_url: empresa.logo_alt_url,
+      isotipo_url: empresa.isotipo_url,
       color_primario: empresa.color,
       color_secundario: empresa.color_secundario,
       color_texto: empresa.color_texto,

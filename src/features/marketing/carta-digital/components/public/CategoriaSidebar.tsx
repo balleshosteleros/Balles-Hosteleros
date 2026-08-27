@@ -27,7 +27,7 @@ export function CategoriaSidebar({
     <>
       {/* Mobile: tabs horizontales sticky */}
       <nav
-        className="sticky top-[44px] z-20 -mx-4 mb-4 border-b px-4 backdrop-blur lg:hidden"
+        className="sticky top-[44px] z-20 -mx-4 mb-6 mt-4 border-b px-4 backdrop-blur lg:hidden"
         style={{
           backgroundColor: "color-mix(in srgb, var(--carta-fondo) 92%, transparent)",
           borderColor: "var(--carta-borde)",

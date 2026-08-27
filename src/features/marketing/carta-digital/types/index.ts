@@ -61,6 +61,7 @@ export type CartaEmpresaPublica = {
   carta_descripcion: string | null;
   logo_url?: string | null;
   logo_alt_url?: string | null;
+  isotipo_url?: string | null;
   color_primario?: string | null;
   color_secundario?: string | null;
   color_texto?: string | null;
