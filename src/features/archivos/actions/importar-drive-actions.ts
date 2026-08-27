@@ -164,7 +164,26 @@ export async function importarUnidad(
     const admin = createAdminClient();
 
     // Reanudar la importación en curso, o abrir una nueva.
+    //
+    // Si no viene id, se busca una anterior de la MISMA unidad y empresa antes
+    // de crear otra: cada importación nueva empieza sin árbol y vuelve a leer
+    // los 12.000 archivos de Drive, gastando la ventana entera en releer lo
+    // que ya estaba guardado. Volver a darle al botón debe CONTINUAR, no
+    // empezar de cero.
     let impId = importacionId ?? "";
+    if (!impId) {
+      const { data: previa } = await admin
+        .from("archivos_importaciones")
+        .select("id")
+        .eq("empresa_id", ctx.empresaId)
+        .eq("unidad_id", unidadId)
+        .in("estado", ["en_curso", "parada"])
+        .not("arbol", "is", null)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (previa) impId = previa.id as string;
+    }
     if (!impId) {
       const { data, error } = await admin
         .from("archivos_importaciones")
@@ -219,11 +238,21 @@ export async function importarUnidad(
     if (Array.isArray(guardado?.arbol) && guardado.arbol.length) {
       todos = guardado.arbol as typeof todos;
     } else {
+      // Leer 12.000 archivos consume casi toda la ventana. Se guarda el árbol
+      // y se DEVUELVE el control: copiar en esta misma llamada no daría tiempo
+      // ni a un archivo, y el progreso se perdería. La pantalla vuelve a
+      // llamar y esa segunda vuelta ya dedica su ventana entera a copiar.
       todos = await listarUnidadCompleta(token, unidadId);
       await admin
         .from("archivos_importaciones")
-        .update({ arbol: todos, total_archivos: todos.filter((f) => !f.esCarpeta).length })
+        .update({
+          arbol: todos,
+          total_archivos: todos.filter((f) => !f.esCarpeta).length,
+          updated_at: new Date().toISOString(),
+        })
         .eq("id", impId);
+
+      return { ok: true, data: { importacionId: impId, terminada: false } };
     }
 
     const hijosDe = new Map<string, typeof todos>();
