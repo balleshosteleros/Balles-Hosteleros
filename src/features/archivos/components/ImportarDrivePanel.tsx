@@ -58,6 +58,9 @@ export function ImportarDrivePanel() {
   const [mapeo, setMapeo] = useState<Record<string, string>>({});
   const [cargando, setCargando] = useState(false);
   const [importando, setImportando] = useState(false);
+  // El permiso de Drive se añadió después de que muchas cuentas se
+  // conectaran: sus tokens no lo llevan y hay que rehacer la conexión.
+  const [faltaPermiso, setFaltaPermiso] = useState(false);
   const [historial, setHistorial] = useState<EstadoImportacion[]>([]);
 
   const cargarHistorial = useCallback(async () => {
@@ -72,14 +75,24 @@ export function ImportarDrivePanel() {
 
   const onConectar = async () => {
     setCargando(true);
+    setFaltaPermiso(false);
     const res = await listarUnidades();
     if (res.ok) {
       setUnidades(res.data);
       if (!res.data.length) toast.info("Esta cuenta no ve ninguna unidad compartida.");
+    } else if (res.error.includes("anterior al permiso de Drive")) {
+      setFaltaPermiso(true);
     } else {
       toast.error(res.error);
     }
     setCargando(false);
+  };
+
+  /** Rehace la conexión con Google para que el token incluya Drive. */
+  const reconectar = () => {
+    window.location.href = `/api/google/connect?next=${encodeURIComponent(
+      "/ajustes?tab=herramientas",
+    )}`;
   };
 
   const onElegirUnidad = async (u: UnidadCompartidaUI) => {
@@ -153,8 +166,21 @@ export function ImportarDrivePanel() {
         </p>
       </div>
 
+      {faltaPermiso && (
+        <div className="rounded-md border border-amber-300 bg-amber-50 p-3 dark:border-amber-800 dark:bg-amber-950/40">
+          <p className="flex items-start gap-1.5 text-xs text-amber-800 dark:text-amber-300">
+            <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+            Tu conexión con Google es anterior al permiso de Drive. Vuelve a
+            conectar la cuenta y acepta el acceso a Drive para poder importar.
+          </p>
+          <Button size="sm" className="mt-2" onClick={reconectar}>
+            Reconectar cuenta de Google
+          </Button>
+        </div>
+      )}
+
       {/* Paso 1 — elegir unidad */}
-      {!inventario && (
+      {!inventario && !faltaPermiso && (
         <div>
           {!unidades ? (
             <Button size="sm" onClick={() => void onConectar()} disabled={cargando}>

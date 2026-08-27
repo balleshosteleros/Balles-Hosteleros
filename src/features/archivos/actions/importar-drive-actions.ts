@@ -86,6 +86,15 @@ export async function listarUnidades(): Promise<Res<UnidadCompartida[]>> {
   } catch (err) {
     const msg = mensajeError(err);
     console.error("[importar-drive] listarUnidades:", msg);
+
+    // El permiso de Drive se añadió DESPUÉS de que muchas cuentas se
+    // conectaran: sus tokens no lo llevan y Google responde 403. El error
+    // crudo no dice qué hacer, así que se traduce a la acción concreta.
+    if (msg.includes("SCOPE_INSUFFICIENT") || msg.includes("insufficient")) {
+      return fallo(
+        "Tu conexión con Google es anterior al permiso de Drive. Desconecta y vuelve a conectar la cuenta de Google (Ajustes → Correo) y acepta el acceso a Drive.",
+      );
+    }
     return fallo(msg);
   }
 }
