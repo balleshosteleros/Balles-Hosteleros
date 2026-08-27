@@ -143,41 +143,35 @@ function PremiosPublico({ bloque }: { bloque: Extract<Bloque, { tipo: "premios" 
         </p>
       ) : null}
 
-      <div className="mx-auto mt-12 flex max-w-5xl flex-wrap items-stretch justify-center gap-5">
+      <div className="mx-auto mt-12 flex max-w-5xl flex-wrap items-stretch justify-center gap-6">
         {items.map((p, i) => (
-          <div
-            key={i}
-            className="flex w-[150px] flex-col items-center gap-3 rounded-xl border border-white/10 bg-white/[0.04] px-4 py-6 md:w-[190px]"
-          >
+          <div key={i} className="flex w-[150px] flex-col items-center gap-2 md:w-[200px]">
             {p.imagen_url ? (
+              /* La insignia oficial YA lleva dentro "Recomendado", el año y
+                 "Restaurant Guru": repetirlo debajo era ruido. Se deja solo la
+                 imagen, a buen tamaño, con el año como apoyo accesible. */
               /* eslint-disable-next-line @next/next/no-img-element */
               <img
                 src={p.imagen_url}
-                alt={p.nombre}
+                alt={`${p.nombre} ${p.anios} · ${p.fuente ?? ""}`.trim()}
                 loading="lazy"
                 decoding="async"
-                className="h-20 w-auto md:h-24"
+                className="h-[130px] w-[130px] md:h-[170px] md:w-[170px]"
               />
             ) : (
-              /* Sin insignia oficial: medalla dibujada con el color de marca,
-                 que queda mejor que un hueco vacío. */
-              <div
-                className="flex h-16 w-16 items-center justify-center rounded-full border-2 text-2xl md:h-20 md:w-20"
-                style={{ borderColor: "var(--pw-primario)", color: "var(--pw-primario)" }}
-              >
-                ★
-              </div>
+              <>
+                <div
+                  className="flex h-16 w-16 items-center justify-center rounded-full border-2 text-2xl md:h-20 md:w-20"
+                  style={{ borderColor: "var(--pw-primario)", color: "var(--pw-primario)" }}
+                >
+                  ★
+                </div>
+                <p className="text-[13px] font-bold leading-snug md:text-sm">{p.nombre}</p>
+                <p className="text-xs font-semibold tracking-wider" style={{ color: "var(--pw-primario)" }}>
+                  {p.anios}
+                </p>
+              </>
             )}
-            <p className="text-[13px] font-bold leading-snug md:text-sm">{p.nombre}</p>
-            <p
-              className="text-xs font-semibold tracking-wider"
-              style={{ color: "var(--pw-primario)" }}
-            >
-              {p.anios}
-            </p>
-            {p.fuente ? (
-              <p className="text-[11px] uppercase tracking-wider opacity-45">{p.fuente}</p>
-            ) : null}
           </div>
         ))}
       </div>
