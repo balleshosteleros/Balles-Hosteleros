@@ -107,6 +107,19 @@ function PieLegal() {
         </a>
         <EnlaceConfigurarCookies className="transition-colors hover:text-white/90" />
       </div>
+      {/* Firma discreta del software. Deliberadamente pequeña y sin logo: es una
+          marca de tecnología, no un anuncio; la web es del restaurante. */}
+      <p className="mt-5 text-center text-[11px] text-white/25">
+        Tecnología por{" "}
+        <a
+          href="https://software.balleshosteleros.com"
+          target="_blank"
+          rel="noreferrer noopener"
+          className="font-medium transition-colors hover:text-white/50"
+        >
+          Balles Hosteleros
+        </a>
+      </p>
     </nav>
   );
 }
@@ -149,7 +162,11 @@ function NavPublica({
         {/* Menú como el de GHL (Carta · Ubicación · Contacto · Trabaja con
             nosotros), pero apuntando a NUESTROS portales. Se oculta en móvil:
             ahí manda el botón de reservar, que es la acción principal. */}
-        <nav className="ml-auto hidden items-center gap-7 md:flex">
+        <nav
+          className={`ml-auto hidden items-center gap-7 rounded-full px-6 py-2 transition-all md:flex ${
+            solida ? "" : "bg-gradient-to-r from-black/70 via-black/60 to-black/70 backdrop-blur-sm"
+          }`}
+        >
           {slug ? (
             <a href={`/carta/${slug}`} className="text-sm font-medium text-white/85 transition-colors hover:text-white">
               Carta

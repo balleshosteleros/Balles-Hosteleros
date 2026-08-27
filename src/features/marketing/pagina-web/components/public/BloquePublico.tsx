@@ -7,7 +7,7 @@
  * NOTA: texto_libre usa dangerouslySetInnerHTML; el HTML se sanitiza server-side
  * en la action antes de persistir (Fase 7).
  */
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { Bloque } from "../../types";
 import { imagenOptimizada, srcSetOptimizado } from "../../services/imagen-optimizada";
@@ -113,6 +113,53 @@ function RedesPublico({
  * Si el bloque no trae fotos propias usa las de la galería de la página, así
  * no hay que volver a subirlas.
  */
+/**
+ * Iframe que crece hasta el alto de su contenido, para que el formulario de
+ * reservas NO tenga scroll propio.
+ *
+ * POR QUÉ: con alto fijo (760px) el visitante se encontraba una caja con barra
+ * de desplazamiento dentro de la página — dos scrolls anidados, que en móvil es
+ * especialmente incómodo. Al ser mismo origen podemos medir el documento de
+ * dentro y ajustar el alto, así el formulario se ve entero de una vez.
+ */
+function IframeAutoAlto({ src, titulo }: { src: string; titulo: string }) {
+  const [alto, setAlto] = useState(720);
+  const ref = useRef<HTMLIFrameElement | null>(null);
+
+  useEffect(() => {
+    const medir = () => {
+      const doc = ref.current?.contentDocument;
+      if (!doc?.body) return;
+      const h = Math.max(doc.body.scrollHeight, doc.documentElement?.scrollHeight ?? 0);
+      if (h > 100) setAlto(h);
+    };
+    medir();
+    // El contenido cambia de alto al elegir día o número de personas.
+    const id = window.setInterval(medir, 600);
+    window.addEventListener("resize", medir);
+    return () => {
+      window.clearInterval(id);
+      window.removeEventListener("resize", medir);
+    };
+  }, []);
+
+  return (
+    <iframe
+      ref={ref}
+      src={src}
+      title={titulo}
+      className="w-full overflow-hidden rounded-xl border-0 bg-white"
+      style={{ height: `${alto}px` }}
+      scrolling="no"
+      loading="lazy"
+      onLoad={() => {
+        const doc = ref.current?.contentDocument;
+        if (doc?.body) setAlto(Math.max(doc.body.scrollHeight, 480));
+      }}
+    />
+  );
+}
+
 function CollageCartaPublico({
   bloque,
   contexto,
@@ -450,13 +497,7 @@ function ReservasPublico({
         slug ? (
           // Motor propio: mismo origen, así que no hace falta postMessage para
           // el alto — le damos sitio suficiente y el iframe scrollea solo.
-          <iframe
-            src={`/reservar/${slug}/embed`}
-            title="Reservar mesa"
-            className="w-full border-0 rounded-md bg-white"
-            style={{ height: "760px" }}
-            loading="lazy"
-          />
+          <IframeAutoAlto src={`/reservar/${slug}/embed`} titulo="Reservar mesa" />
         ) : (
           <p className="text-sm text-muted-foreground">
             (Configura el slug de la empresa para activar las reservas)
