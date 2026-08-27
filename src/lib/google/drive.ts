@@ -128,21 +128,30 @@ export async function listarUnidadesCompartidas(
   return salida;
 }
 
-/** Contenido directo de una carpeta (o de la raíz de una unidad compartida). */
-export async function listarHijos(
+/**
+ * TODOS los archivos y carpetas de una unidad compartida, de una sola vez.
+ *
+ * Drive permite pedir el contenido de una unidad entera sin ir carpeta por
+ * carpeta: se traen páginas de 1000 y el árbol se reconstruye después con los
+ * `parents`. Es la diferencia entre una consulta por carpeta (cientos de
+ * llamadas en serie, minutos de espera) y unas pocas páginas.
+ *
+ * `onProgreso` permite ir informando: con muchos archivos la primera lectura
+ * sigue tardando, pero al menos se ve avanzar.
+ */
+export async function listarUnidadCompleta(
   accessToken: string,
-  carpetaId: string,
   unidadId: string,
+  onProgreso?: (leidos: number) => void,
 ): Promise<DriveArchivo[]> {
   const salida: DriveArchivo[] = [];
   let pageToken: string | undefined;
 
   do {
     const params = new URLSearchParams({
-      q: `'${carpetaId}' in parents and trashed = false`,
+      q: "trashed = false",
       pageSize: "1000",
       fields: `nextPageToken,files(${CAMPOS})`,
-      // Obligatorios para ver dentro de una unidad compartida.
       supportsAllDrives: "true",
       includeItemsFromAllDrives: "true",
       corpora: "drive",
@@ -174,6 +183,7 @@ export async function listarHijos(
         modificado: f.modifiedTime ?? null,
       });
     }
+    onProgreso?.(salida.length);
     pageToken = json.nextPageToken;
   } while (pageToken);
 

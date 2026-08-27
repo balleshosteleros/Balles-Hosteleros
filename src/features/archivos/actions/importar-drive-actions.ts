@@ -27,7 +27,7 @@ import { PutObjectCommand } from "@aws-sdk/client-s3";
 import {
   descargarArchivo,
   formatoDestino,
-  listarHijos,
+  listarUnidadCompleta,
   listarUnidadesCompartidas,
   type DriveArchivo,
   type UnidadCompartida,
@@ -103,35 +103,13 @@ export async function listarUnidades(): Promise<Res<UnidadCompartida[]>> {
  * 2 · INVENTARIO
  * ────────────────────────────────────────────────────────────────────────*/
 
-/** Recorre una rama entera y suma archivos y bytes. */
-async function contarRama(
-  token: string,
-  carpetaId: string,
-  unidadId: string,
-): Promise<{ archivos: number; bytes: number }> {
-  let archivos = 0;
-  let bytes = 0;
-  const pendientes = [carpetaId];
-
-  // Recorrido iterativo, no recursivo: un árbol muy profundo desbordaría la
-  // pila, y así se puede limitar sin tocar la lógica.
-  while (pendientes.length) {
-    const actual = pendientes.pop()!;
-    const hijos = await listarHijos(token, actual, unidadId);
-    for (const h of hijos) {
-      if (h.esCarpeta) pendientes.push(h.id);
-      else {
-        archivos++;
-        bytes += h.tamano;
-      }
-    }
-  }
-  return { archivos, bytes };
-}
-
 /**
  * Inventario de la unidad: qué carpetas tiene arriba, cuántos archivos cuelgan
  * de cada una y cuánto pesan. Es lo que se enseña antes de importar nada.
+ *
+ * Se lee la unidad ENTERA de una vez y el árbol se arma aquí. Antes se pedía
+ * carpeta por carpeta y con cientos de carpetas eran cientos de llamadas en
+ * serie: se quedaba "Leyendo Drive…" más de diez minutos.
  */
 export async function inventariarUnidad(
   unidadId: string,
@@ -141,16 +119,46 @@ export async function inventariarUnidad(
     const token = await getAccessToken();
     if (!token) return fallo("Conecta primero la cuenta de Google.");
 
-    // En una unidad compartida, la raíz se consulta con el id de la unidad.
-    const raiz = await listarHijos(token, unidadId, unidadId);
+    const todos = await listarUnidadCompleta(token, unidadId);
+
+    // Hijos por carpeta, para poder bajar por el árbol sin volver a Drive.
+    const hijosDe = new Map<string, typeof todos>();
+    for (const f of todos) {
+      const padre = f.padreId ?? unidadId;
+      const lista = hijosDe.get(padre) ?? [];
+      lista.push(f);
+      hijosDe.set(padre, lista);
+    }
+
+    /** Suma todo lo que cuelga de una carpeta, ya en memoria. */
+    const contarRama = (carpetaId: string) => {
+      let archivos = 0;
+      let bytes = 0;
+      const pendientes = [carpetaId];
+      const vistos = new Set<string>();
+      while (pendientes.length) {
+        const actual = pendientes.pop()!;
+        // Un atajo de Drive puede crear un ciclo: se corta.
+        if (vistos.has(actual)) continue;
+        vistos.add(actual);
+        for (const h of hijosDe.get(actual) ?? []) {
+          if (h.esCarpeta) pendientes.push(h.id);
+          else {
+            archivos++;
+            bytes += h.tamano;
+          }
+        }
+      }
+      return { archivos, bytes };
+    };
 
     const carpetas: CarpetaRaizDrive[] = [];
     let sueltos = 0;
     let sueltosBytes = 0;
 
-    for (const item of raiz) {
+    for (const item of hijosDe.get(unidadId) ?? []) {
       if (item.esCarpeta) {
-        const { archivos, bytes } = await contarRama(token, item.id, unidadId);
+        const { archivos, bytes } = contarRama(item.id);
         carpetas.push({ id: item.id, nombre: item.nombre, archivos, bytes });
       } else {
         sueltos++;
@@ -173,6 +181,11 @@ export async function inventariarUnidad(
   } catch (err) {
     const msg = mensajeError(err);
     console.error("[importar-drive] inventariarUnidad:", msg);
+    if (msg.includes("SCOPE_INSUFFICIENT") || msg.includes("insufficient")) {
+      return fallo(
+        "Tu conexión con Google es anterior al permiso de Drive. Vuelve a conectar la cuenta y acepta el acceso a Drive.",
+      );
+    }
     return fallo(msg);
   }
 }
@@ -284,6 +297,17 @@ export async function importarUnidad(
     const limite = Date.now() + 4 * 60 * 1000;
     let terminada = true;
 
+    // La unidad se lee ENTERA una vez, no carpeta por carpeta: con cientos de
+    // carpetas eran cientos de llamadas en serie y no avanzaba.
+    const todos = await listarUnidadCompleta(token, unidadId);
+    const hijosDe = new Map<string, typeof todos>();
+    for (const f of todos) {
+      const padre = f.padreId ?? unidadId;
+      const lista = hijosDe.get(padre) ?? [];
+      lista.push(f);
+      hijosDe.set(padre, lista);
+    }
+
     // Cada rama arranca en la carpeta de departamento que se le asignó.
     const pendientes: Array<{ driveId: string; destinoId: string; depto: string }> = [];
     for (const [driveCarpetaId, destinoId] of Object.entries(mapeo)) {
@@ -307,7 +331,7 @@ export async function importarUnidad(
         break;
       }
       const rama = pendientes.pop()!;
-      const hijos = await listarHijos(token, rama.driveId, unidadId);
+      const hijos = hijosDe.get(rama.driveId) ?? [];
 
       for (const hijo of hijos) {
         if (Date.now() > limite) {
