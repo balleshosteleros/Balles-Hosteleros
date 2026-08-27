@@ -21,6 +21,8 @@ export interface HostnameMatch {
   } | null;
   nombre_empresa: string;
   nombre_pagina: string;
+  /** Logo de marca. Es el icono al guardar la web en la pantalla de inicio. */
+  logo_url: string | null;
   /**
    * Redes de la empresa (Ajustes → datos generales). Se resuelven aquí y no se
    * guardan en el bloque: cambiar la red en Ajustes actualiza la web sola.
@@ -146,23 +148,36 @@ export async function resolverHostname(
       seo: HostnameMatch["seo"];
     };
 
+    // Vía `empresas_web_publica` y NO `empresas`: la tabla solo tiene política
+    // para `authenticated`, así que el visitante anónimo leía null y la web salía
+    // como "Restaurante" y sin logo. La vista expone solo los campos públicos de
+    // las empresas que YA tienen web publicada (migración 015).
     const { data: empresaRow } = await supabase
-      .from("empresas")
-      .select("id, nombre, slug, datos_generales")
+      .from("empresas_web_publica")
+      .select("id, nombre, slug, logo_url, instagram, facebook, tiktok, whatsapp")
       .eq("id", pag.empresa_id)
       .maybeSingle();
 
-    const dg = ((empresaRow as { datos_generales?: Record<string, unknown> } | null)
-      ?.datos_generales ?? {}) as Record<string, string | undefined>;
+    const emp = (empresaRow ?? {}) as {
+      nombre?: string;
+      slug?: string | null;
+      logo_url?: string | null;
+      instagram?: string | null;
+      facebook?: string | null;
+      tiktok?: string | null;
+      whatsapp?: string | null;
+    };
+    const dg = emp as Record<string, string | undefined>;
 
     return {
       empresa_id: pag.empresa_id,
-      empresa_slug: (empresaRow as { slug?: string | null } | null)?.slug ?? null,
+      empresa_slug: emp.slug ?? null,
       pagina_id: pag.id,
       hostname,
       bloques: pag.bloques ?? [],
       seo: pag.seo ?? null,
-      nombre_empresa: (empresaRow as { nombre?: string } | null)?.nombre ?? "Restaurante",
+      nombre_empresa: emp.nombre ?? "Restaurante",
+      logo_url: emp.logo_url ?? null,
       nombre_pagina: pag.nombre,
       redes: {
         instagram: urlRed("instagram", dg.instagram),

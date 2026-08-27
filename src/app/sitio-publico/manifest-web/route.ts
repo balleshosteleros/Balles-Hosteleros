@@ -14,7 +14,6 @@
 import { NextResponse } from "next/server";
 import { headers } from "next/headers";
 import { resolverHostname } from "@/features/marketing/pagina-web/services/hostname-resolver";
-import { createAnonClient } from "@/lib/supabase/anon";
 
 export const dynamic = "force-dynamic";
 
@@ -28,17 +27,7 @@ export async function GET() {
     return NextResponse.json({ error: "not found" }, { status: 404 });
   }
 
-  // El logo vive en `datos_generales.logoUrl` (Ajustes → Imagen de marca).
-  const supabase = createAnonClient();
-  const { data: empresaRow } = await supabase
-    .from("empresas")
-    .select("datos_generales")
-    .eq("id", match.empresa_id)
-    .maybeSingle();
-
-  const dg = ((empresaRow as { datos_generales?: Record<string, unknown> } | null)
-    ?.datos_generales ?? {}) as Record<string, string | undefined>;
-  const logo = dg.logoUrl?.trim() || null;
+  const logo = match.logo_url;
 
   const nombre = match.nombre_empresa;
 
