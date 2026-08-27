@@ -22,6 +22,7 @@ import {
   MessageCircle,
   Phone,
   Notebook,
+  FolderOpen,
   Cctv,
   Rocket,
   Lock,
@@ -41,6 +42,7 @@ export const TOOL_COLORS = {
   yellow: { text: "text-yellow-500", bg: "bg-yellow-500" },
   slate: { text: "text-slate-700", bg: "bg-slate-700" },
   amber: { text: "text-amber-600", bg: "bg-amber-600" },
+  cyan: { text: "text-cyan-600", bg: "bg-cyan-600" },
 } as const;
 
 export type ToolColorKey = keyof typeof TOOL_COLORS;
@@ -56,6 +58,7 @@ export type HerramientaId =
   | "calendario"
   | "reuniones"
   | "grabacion"
+  | "archivos"
   | "tareas"
   | "chat"
   | "telefono"
@@ -110,6 +113,14 @@ export const HERRAMIENTAS: HerramientaDef[] = [
     // En reposo es gris pizarra; al estar grabando el icono se pone rojo vivo
     // (excepción gestionada en RecordingTrigger, no es un color de catálogo).
     colorKey: "slate",
+  },
+  {
+    id: "archivos",
+    nombre: "Archivos",
+    descripcion:
+      "Fotos y vídeos de la empresa, en carpetas por departamento. El Drive propio del software.",
+    Icon: FolderOpen,
+    colorKey: "cyan",
   },
   {
     id: "tareas",

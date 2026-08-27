@@ -176,6 +176,7 @@ export type ToolNotifKey =
   | "calendario"
   | "reuniones"
   | "grabacion"
+  | "archivos"
   | "tareas"
   | "chat"
   | "telefono"
@@ -188,6 +189,7 @@ export interface NotificacionesConfig {
   calendario: ToolNotifConfig;
   reuniones: ToolNotifConfig;
   grabacion: ToolNotifConfig;
+  archivos: ToolNotifConfig;
   tareas: ToolNotifConfig;
   chat: ToolNotifConfig;
   telefono: ToolNotifConfig;
@@ -232,6 +234,7 @@ export function buildDefaultNotificaciones(): NotificacionesConfig {
     calendario: defaultToolNotif(),
     reuniones: defaultToolNotif(),
     grabacion: defaultToolNotif(),
+    archivos: defaultToolNotif(),
     tareas: defaultToolNotif(),
     chat: defaultToolNotif(),
     telefono: defaultToolNotif(),
@@ -255,6 +258,7 @@ export function mergeNotificaciones(
     calendario: m(d.calendario, stored?.calendario),
     reuniones: m(d.reuniones, stored?.reuniones),
     grabacion: m(d.grabacion, stored?.grabacion),
+    archivos: m(d.archivos, stored?.archivos),
     tareas: m(d.tareas, stored?.tareas),
     chat: m(d.chat, stored?.chat),
     telefono: m(d.telefono, stored?.telefono),

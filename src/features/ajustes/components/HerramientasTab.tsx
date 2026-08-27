@@ -14,9 +14,10 @@ import { EmailRedaccionPanel } from "@/features/ajustes/components/EmailRedaccio
 import { AccesosTab } from "@/features/ajustes/components/AccesosTab";
 import type { ToolNotifKey } from "@/features/ajustes/data/ajustes";
 import { HERRAMIENTAS, toolTextColor } from "@/features/layout/data/herramientas";
+import { ArchivosConfigPanel } from "@/features/archivos/components/ArchivosConfigPanel";
 
 // Iconos sin contador real → se oculta el toggle del círculo de aviso.
-const SIN_BADGE = new Set<ToolNotifKey>(["videovigilancia", "aplicaciones"]);
+const SIN_BADGE = new Set<ToolNotifKey>(["videovigilancia", "aplicaciones", "archivos"]);
 
 export function HerramientasTab() {
   return (
@@ -81,6 +82,13 @@ export function HerramientasTab() {
                   <EmailRedaccionPanel />
                   <div className="border-t pt-4">
                     <ToolNotifPanel toolKey="email" hasBadge />
+                  </div>
+                </div>
+              ) : id === "archivos" ? (
+                <div className="space-y-6">
+                  <ArchivosConfigPanel />
+                  <div className="border-t pt-4">
+                    <ToolNotifPanel toolKey="archivos" hasBadge={false} />
                   </div>
                 </div>
               ) : id === "accesos" ? (

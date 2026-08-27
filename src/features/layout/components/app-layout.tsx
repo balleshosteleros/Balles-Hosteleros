@@ -38,6 +38,7 @@ import {
   useDailyCounts,
 } from "@/features/google-workspace/components";
 import { AgendaDrawer } from "@/features/agenda/components/AgendaDrawer";
+import { ArchivosDrawer } from "@/features/archivos/components/ArchivosDrawer";
 import { useChatNotifications } from "@/features/comunicacion/hooks/useChatNotifications";
 import {
   AplicacionesDrawer,
@@ -69,6 +70,7 @@ const ToolIcon = {
   email: HERRAMIENTA.email.Icon,
   calendario: HERRAMIENTA.calendario.Icon,
   reuniones: HERRAMIENTA.reuniones.Icon,
+  archivos: HERRAMIENTA.archivos.Icon,
   tareas: HERRAMIENTA.tareas.Icon,
   chat: HERRAMIENTA.chat.Icon,
   telefono: HERRAMIENTA.telefono.Icon,
@@ -297,6 +299,17 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
                     {/* Separador visual */}
                     <span className="w-px h-5 bg-border mx-0.5" />
+
+                    {/* Archivos — el Drive propio (PRP-079) */}
+                    <ArchivosDrawer>
+                      <Button
+                        variant="ghost" size="icon"
+                        className="relative h-8 w-8"
+                        title="Archivos"
+                      >
+                        <ToolIcon.archivos className={`!h-[18px] !w-[18px] ${toolTextColor(HERRAMIENTA.archivos.colorKey)}`} />
+                      </Button>
+                    </ArchivosDrawer>
 
                     {/* Tareas */}
                     <TareasDrawer>
