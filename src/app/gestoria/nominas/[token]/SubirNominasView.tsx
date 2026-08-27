@@ -83,6 +83,9 @@ export function SubirNominasView({ endpoint, empresaNombre, mesLabel }: Props) {
   // liquidaciones (la ordinaria y la complementaria de vacaciones), que la
   // Seguridad Social emite y cobra por separado.
   const [tc1Subidos, setTc1Subidos] = useState<string[]>([]);
+  // Cuadre devuelto al subir un TC1: se enseña AL MOMENTO, sin esperar a las
+  // nóminas, para que la gestoría sepa ya si el recibo cuadra o falta alguno.
+  const [cuadreTc1, setCuadreTc1] = useState<Cuadre | null>(null);
 
   // El TC1 se sube por separado: es un documento de la EMPRESA (bases y cuotas de
   // toda la plantilla), no una nómina.
@@ -100,8 +103,10 @@ export function SubirNominasView({ endpoint, empresaNombre, mesLabel }: Props) {
       fd.append("documento", "tc1");
       const res = await fetch(endpoint, { method: "POST", body: fd });
       const json = await res.json();
-      if (json.ok) setTc1Subidos((prev) => [...prev, f.name]);
-      else setError(json.error ?? "No se pudo subir el TC1.");
+      if (json.ok) {
+        setTc1Subidos((prev) => [...prev, f.name]);
+        setCuadreTc1((json.cuadre as Cuadre | null) ?? null);
+      } else setError(json.error ?? "No se pudo subir el TC1.");
     } catch {
       setError("No se pudo conectar. Inténtalo de nuevo.");
     } finally {
@@ -151,6 +156,9 @@ export function SubirNominasView({ endpoint, empresaNombre, mesLabel }: Props) {
           cuadre: json.cuadre ?? null,
           rechazadoTodo: json.rechazadoTodo ?? false,
         });
+        // Las nóminas cambian el lado del contraste: el recuadro del TC1 tiene
+        // que reflejar el cuadre nuevo, no el de antes de subirlas.
+        setCuadreTc1((json.cuadre as Cuadre | null) ?? null);
         setFile(null);
         if (inputRef.current) inputRef.current.value = "";
       } else {
@@ -233,6 +241,69 @@ export function SubirNominasView({ endpoint, empresaNombre, mesLabel }: Props) {
                 </li>
               ))}
             </ul>
+          )}
+
+          {/* AVISO INMEDIATO: nada más subir el recibo se compara su líquido (leído
+              por IA) con la cotización de las nóminas ya recibidas. Así la gestoría
+              sabe al momento si cuadra, en vez de enterarse al final. */}
+          {cuadreTc1 && cuadreTc1.numNominas > 0 && cuadreTc1.totalTc1 != null && (
+            <div
+              className={`mt-3 rounded-lg border p-3 text-xs ${
+                cuadreTc1.cuadra
+                  ? "border-emerald-300 bg-emerald-50 text-emerald-900"
+                  : "border-rose-300 bg-rose-50 text-rose-900"
+              }`}
+            >
+              <p className="flex items-center gap-1.5 font-semibold">
+                {cuadreTc1.cuadra ? (
+                  <CheckCircle2 className="h-4 w-4 shrink-0" />
+                ) : (
+                  <AlertTriangle className="h-4 w-4 shrink-0" />
+                )}
+                {cuadreTc1.cuadra ? "Coincide con las nóminas" : "NO coincide con las nóminas"}
+              </p>
+              <ul className="mt-2 space-y-1">
+                <li className="flex justify-between gap-4">
+                  <span>
+                    Líquido de totales
+                    {(cuadreTc1.numTc1 ?? 1) > 1 ? ` (${cuadreTc1.numTc1} recibos)` : ""}
+                  </span>
+                  <b className="tabular-nums">{eur(cuadreTc1.totalTc1)}</b>
+                </li>
+                <li className="flex justify-between gap-4">
+                  <span>Cotizaciones de las {cuadreTc1.numNominas} nóminas</span>
+                  <b className="tabular-nums">{eur(cuadreTc1.totalNominas)}</b>
+                </li>
+                {!cuadreTc1.cuadra && (
+                  <li className="flex justify-between gap-4 border-t border-rose-300 pt-1">
+                    <span>Diferencia</span>
+                    <b className="tabular-nums">{eur(Math.abs(cuadreTc1.diferencia ?? 0))}</b>
+                  </li>
+                )}
+              </ul>
+              {!cuadreTc1.cuadra && (
+                <p className="mt-2">
+                  Revisad si falta alguna liquidación complementaria (vacaciones) por adjuntar o
+                  alguna nómina por subir. Los importes deben coincidir <b>exactamente</b>.
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* El TC1 llega antes que las nóminas: no hay contra qué compararlo
+              todavía. Se dice, para que no se lea como un "todo correcto". */}
+          {cuadreTc1 && cuadreTc1.numNominas === 0 && (
+            <p className="mt-3 rounded-lg border border-zinc-200 bg-zinc-50 p-3 text-xs text-zinc-700">
+              Recibido. La comprobación se hará cuando subáis las nóminas del mes.
+            </p>
+          )}
+
+          {/* Guardado pero sin líquido legible: no se puede afirmar que cuadre. */}
+          {cuadreTc1 && cuadreTc1.numNominas > 0 && cuadreTc1.totalTc1 == null && (
+            <p className="mt-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900">
+              Recibido, pero no hemos podido leer el <b>líquido de totales</b> del documento, así
+              que no se ha podido comprobar si coincide con las nóminas. Revisadlo con RRHH.
+            </p>
           )}
         </div>
 

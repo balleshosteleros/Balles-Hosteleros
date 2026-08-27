@@ -1376,6 +1376,87 @@ export function PagosView() {
         </Button>
       </div>
 
+      {/* CUADRE DEL MES: los TC1 y las nóminas son el MISMO dinero de dos formas
+          —el recibo agrupa por concepto de cotización y las nóminas lo reparten
+          por trabajador—, así que la suma de los líquidos de TODOS los recibos del
+          mes debe dar la Seguridad Social (trabajador + empresa) de las nóminas.
+          Va arriba y siempre a la vista: es la comprobación que decide si la
+          entrega del mes es válida. En trimestre/año no se pinta: sería mezclar
+          meses. */}
+      {!esVistaAgregada && (hayTc1 || ssNominasMes > 0) && (
+        <div
+          className={`rounded-lg border p-4 ${
+            !hayTc1 || totalTc1 == null
+              ? "border-amber-300 bg-amber-50/50 dark:bg-amber-950/20 dark:border-amber-900/50"
+              : cuadraTc1
+                ? "border-emerald-300 bg-emerald-50/50 dark:bg-emerald-950/20 dark:border-emerald-900/50"
+                : "border-destructive/50 bg-destructive/5"
+          }`}
+        >
+          <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
+            <div className="flex items-center gap-2 min-w-0">
+              {!hayTc1 || totalTc1 == null ? (
+                <AlertTriangle className="h-5 w-5 shrink-0 text-amber-600" />
+              ) : cuadraTc1 ? (
+                <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-600" />
+              ) : (
+                <AlertTriangle className="h-5 w-5 shrink-0 text-destructive" />
+              )}
+              <div className="min-w-0">
+                <p className="text-sm font-medium">
+                  {!hayTc1
+                    ? `Falta el TC1 de ${mesLabelNominas}`
+                    : totalTc1 == null
+                      ? "No se pudo leer el importe de los TC1"
+                      : cuadraTc1
+                        ? "Los TC1 cuadran con las nóminas"
+                        : "Los TC1 NO cuadran con las nóminas"}
+                </p>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  {!hayTc1
+                    ? "Sin el recibo de cotizaciones no se puede comprobar la Seguridad Social del mes."
+                    : totalTc1 == null
+                      ? "Comprueba a mano que la suma de los recibos coincide con la Seguridad Social de las nóminas."
+                      : cuadraTc1
+                        ? `La suma de ${estadoMes.tc1.length} recibo${estadoMes.tc1.length === 1 ? "" : "s"} coincide con la Seguridad Social de ${nominasEnMes} nómina${nominasEnMes === 1 ? "" : "s"}.`
+                        : "Revisa si falta alguna liquidación complementaria (vacaciones) o alguna nómina."}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
+              <div className="text-right">
+                <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                  TC1{hayTc1 && estadoMes.tc1.length > 1 ? ` · ${estadoMes.tc1.length} recibos` : ""}
+                </p>
+                <p className="text-sm font-semibold tabular-nums">
+                  {totalTc1 != null ? fmt(totalTc1) : "—"}
+                </p>
+              </div>
+              <div className="text-right">
+                <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                  SS de las nóminas
+                </p>
+                <p className="text-sm font-semibold tabular-nums">{fmt(ssNominasMes)}</p>
+              </div>
+              {totalTc1 != null && !cuadraTc1 && (
+                <div className="text-right">
+                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                    Diferencia
+                  </p>
+                  <p className="text-sm font-semibold tabular-nums text-destructive">
+                    {fmt(Math.abs(totalTc1 - ssNominasMes))}
+                  </p>
+                </div>
+              )}
+              <Button variant="outline" size="sm" onClick={() => setShowDocsMes(true)}>
+                {hayTc1 ? "Ver documentos" : "Adjuntar TC1"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <SubmoduleToolbar
         busqueda={busqueda}
         onBusquedaChange={setBusqueda}
