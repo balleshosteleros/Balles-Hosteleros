@@ -87,6 +87,12 @@ export interface CtaDatos {
   titulo: string;
   texto?: string;
   boton: { label: string; href: string; variante: "primary" | "ghost" };
+  /**
+   * Foto de fondo, difuminada tras el texto. Sin ella la llamada a la acción
+   * queda como un titular suelto sobre negro; con el equipo detrás se ve DÓNDE
+   * se trabaja, que es lo que de verdad convence a quien busca empleo.
+   */
+  imagen_url?: string;
 }
 
 export interface FormularioCampo {

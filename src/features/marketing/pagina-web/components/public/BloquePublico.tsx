@@ -244,17 +244,6 @@ function InstagramPublico({ bloque }: { bloque: Extract<Bloque, { tipo: "instagr
           <SiluetaPersonas lado="der" />
         </div>
 
-        <div className="mt-12 text-center">
-          <a
-            href={href}
-            target="_blank"
-            rel="noreferrer noopener"
-            className="inline-block rounded-full px-10 py-4 text-xs font-bold uppercase tracking-[0.2em] text-black transition-transform hover:scale-105 md:text-sm"
-            style={{ backgroundColor: "var(--pw-primario)" }}
-          >
-            @{handle}
-          </a>
-        </div>
       </div>
     </section>
   );
@@ -357,25 +346,72 @@ function HistoriaPublica({ bloque }: { bloque: Extract<Bloque, { tipo: "historia
           </div>
 
           {rating ? (
-            <a
-              href={rating_href ?? "#"}
-              {...(rating_href ? { target: "_blank", rel: "noreferrer noopener" } : {})}
-              className="mt-9 inline-flex items-center gap-4 rounded-xl border border-white/10 bg-white/[0.04] px-6 py-4 transition-colors hover:bg-white/[0.07]"
-            >
-              <span className="text-3xl font-extrabold leading-none" style={{ color: "var(--pw-primario)" }}>
-                {rating}
-              </span>
-              <span className="text-left">
-                <span className="block text-sm" style={{ color: "var(--pw-primario)" }}>
-                  {"★".repeat(5)}
-                </span>
-                <span className="block text-xs opacity-60">{rating_total}</span>
-              </span>
-            </a>
+            <NotaGoogle
+              rating={rating}
+              rating_total={rating_total}
+              rating_href={rating_href}
+              className="mt-9"
+            />
           ) : null}
         </div>
       </div>
     </section>
+  );
+}
+
+/**
+ * Nota de Google como prueba social.
+ *
+ * Lleva la "G" OFICIAL con sus cuatro colores, no la palabra "Google" escrita
+ * en el texto: el logo se reconoce de un vistazo y es lo que hace creíble la
+ * nota. Mismo trazado que publica Google en su guía de marca, inline como SVG
+ * para no depender de un CDN externo.
+ */
+function GoogleG({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 48 48" className={className} aria-hidden focusable="false">
+      <path fill="#4285F4" d="M45.12 24.5c0-1.56-.14-3.06-.4-4.5H24v8.51h11.84c-.51 2.75-2.06 5.08-4.39 6.64v5.52h7.11c4.16-3.83 6.56-9.47 6.56-16.17z" />
+      <path fill="#34A853" d="M24 46c5.94 0 10.92-1.97 14.56-5.33l-7.11-5.52c-1.97 1.32-4.49 2.1-7.45 2.1-5.73 0-10.58-3.87-12.31-9.07H4.34v5.7C7.96 41.07 15.4 46 24 46z" />
+      <path fill="#FBBC05" d="M11.69 28.18C11.25 26.86 11 25.45 11 24s.25-2.86.69-4.18v-5.7H4.34C2.85 17.09 2 20.45 2 24s.85 6.91 2.34 9.88l7.35-5.7z" />
+      <path fill="#EA4335" d="M24 10.75c3.23 0 6.13 1.11 8.41 3.29l6.31-6.31C34.91 4.18 29.93 2 24 2 15.4 2 7.96 6.93 4.34 14.12l7.35 5.7c1.73-5.2 6.58-9.07 12.31-9.07z" />
+    </svg>
+  );
+}
+
+/** Píldora con la nota media de Google. Se usa en Historia y en Testimonios. */
+function NotaGoogle({
+  rating,
+  rating_total,
+  rating_href,
+  className,
+}: {
+  rating: string;
+  rating_total?: string;
+  rating_href?: string;
+  className?: string;
+}) {
+  const inner = (
+    <>
+      <GoogleG className="h-7 w-7 shrink-0" />
+      <span className="h-9 w-px bg-white/10" aria-hidden />
+      <span className="text-3xl font-extrabold leading-none" style={{ color: "var(--pw-primario)" }}>
+        {rating}
+      </span>
+      <span className="text-left">
+        <span className="block text-sm leading-none" style={{ color: "var(--pw-primario)" }}>
+          {"★".repeat(5)}
+        </span>
+        {rating_total ? <span className="mt-1 block text-xs opacity-60">{rating_total}</span> : null}
+      </span>
+    </>
+  );
+  const cls = `inline-flex items-center gap-4 rounded-2xl border border-white/10 bg-white/[0.05] px-6 py-4 transition-colors hover:bg-white/[0.09] ${className ?? ""}`;
+  return rating_href ? (
+    <a href={rating_href} target="_blank" rel="noreferrer noopener" className={cls}>
+      {inner}
+    </a>
+  ) : (
+    <div className={cls}>{inner}</div>
   );
 }
 
@@ -392,21 +428,37 @@ function PremiosPublico({ bloque }: { bloque: Extract<Bloque, { tipo: "premios" 
         </p>
       ) : null}
 
-      <div className="mx-auto mt-12 flex max-w-5xl flex-wrap items-stretch justify-center gap-6">
+      <div className="mx-auto mt-12 flex max-w-5xl flex-wrap items-stretch justify-center gap-8 md:gap-10">
         {items.map((p, i) => (
           <div key={i} className="flex w-[150px] flex-col items-center gap-2 md:w-[200px]">
             {p.imagen_url ? (
               /* La insignia oficial YA lleva dentro "Recomendado", el año y
                  "Restaurant Guru": repetirlo debajo era ruido. Se deja solo la
-                 imagen, a buen tamaño, con el año como apoyo accesible. */
-              /* eslint-disable-next-line @next/next/no-img-element */
-              <img
-                src={p.imagen_url}
-                alt={`${p.nombre} ${p.anios} · ${p.fuente ?? ""}`.trim()}
-                loading="lazy"
-                decoding="async"
-                className="h-[130px] w-[130px] md:h-[170px] md:w-[170px]"
-              />
+                 imagen, a buen tamaño, con el año como apoyo accesible.
+
+                 El sello se presenta sobre un disco oscuro con halo dorado y
+                 filo de luz: suelto sobre el negro se veía como un recorte
+                 pegado, y son cuatro años de reconocimiento — merecen leerse
+                 como una medalla, no como un adhesivo. */
+              <span
+                className="group relative inline-flex h-[150px] w-[150px] items-center justify-center rounded-full transition-transform duration-500 hover:-translate-y-1.5 md:h-[190px] md:w-[190px]"
+                style={{
+                  background:
+                    "radial-gradient(circle at 50% 32%, color-mix(in srgb, var(--pw-primario) 22%, transparent) 0%, rgba(255,255,255,0.04) 45%, rgba(255,255,255,0.015) 100%)",
+                  border: "1px solid color-mix(in srgb, var(--pw-primario) 38%, transparent)",
+                  boxShadow:
+                    "0 18px 40px -18px color-mix(in srgb, var(--pw-primario) 60%, transparent), inset 0 1px 0 rgba(255,255,255,0.12)",
+                }}
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={p.imagen_url}
+                  alt={`${p.nombre} ${p.anios} · ${p.fuente ?? ""}`.trim()}
+                  loading="lazy"
+                  decoding="async"
+                  className="h-[118px] w-[118px] drop-shadow-[0_4px_10px_rgba(0,0,0,0.55)] md:h-[150px] md:w-[150px]"
+                />
+              </span>
             ) : (
               <>
                 <div
@@ -940,21 +992,9 @@ function TestimoniosPublico({
       {/* Nota media de Google sobre los testimonios: da contexto a las opiniones
           sueltas (una reseña buena convence menos que un 4,6 con miles detrás). */}
       {rating ? (
-        <a
-          href={rating_href ?? "#"}
-          {...(rating_href ? { target: "_blank", rel: "noreferrer noopener" } : {})}
-          className="mx-auto mt-7 flex w-fit items-center gap-4 rounded-full border border-white/10 bg-white/[0.04] px-7 py-3 transition-colors hover:bg-white/[0.07]"
-        >
-          <span className="text-3xl font-extrabold leading-none" style={{ color: "var(--pw-primario)" }}>
-            {rating}
-          </span>
-          <span className="text-left">
-            <span className="block text-sm leading-none" style={{ color: "var(--pw-primario)" }}>
-              {"★".repeat(5)}
-            </span>
-            <span className="mt-1 block text-xs opacity-60">{rating_total}</span>
-          </span>
-        </a>
+        <div className="mt-7 flex justify-center">
+          <NotaGoogle rating={rating} rating_total={rating_total} rating_href={rating_href} />
+        </div>
       ) : null}
       {subtitulo ? (
         <p className="mt-3 mb-8 text-center text-muted-foreground max-w-2xl mx-auto">
@@ -989,18 +1029,34 @@ function TestimoniosPublico({
 }
 
 function CtaPublico({ bloque }: { bloque: Extract<Bloque, { tipo: "cta" }> }) {
-  const { titulo, texto, boton } = bloque.datos;
+  const { titulo, texto, boton, imagen_url } = bloque.datos;
 
   // Los colores salen del tema de la empresa (--pw-primario). Antes eran negro
   // fijo sobre `bg-muted/30`: en una web de fondo oscuro, el botón secundario
   // quedaba con borde y texto negro sobre negro, es decir, invisible.
   const externo = /^https?:\/\//i.test(boton.href);
 
-  return (
-    <section className="py-20 md:py-28 px-4 text-center">
+  // Botón SIEMPRE sólido en la variante primaria y con sombra propia: sobre una
+  // foto de fondo, un botón de solo borde se pierde entre el ruido de la imagen.
+  const botonStyle =
+    boton.variante === "primary"
+      ? {
+          backgroundColor: "var(--pw-primario)",
+          color: "#000",
+          boxShadow: "0 10px 30px -8px color-mix(in srgb, var(--pw-primario) 65%, transparent)",
+        }
+      : {
+          backgroundColor: "color-mix(in srgb, var(--pw-primario) 14%, transparent)",
+          border: "1px solid var(--pw-primario)",
+          color: "var(--pw-primario)",
+          backdropFilter: "blur(6px)",
+        };
+
+  const contenido = (
+    <>
       <h2 className="pw-h2 font-extrabold">{titulo}</h2>
       {texto ? (
-        <p className="mt-5 max-w-2xl mx-auto text-base md:text-lg opacity-75 leading-relaxed">
+        <p className="mt-5 max-w-2xl mx-auto text-base md:text-lg opacity-80 leading-relaxed">
           {texto}
         </p>
       ) : null}
@@ -1008,18 +1064,37 @@ function CtaPublico({ bloque }: { bloque: Extract<Bloque, { tipo: "cta" }> }) {
         href={boton.href}
         {...(externo ? { target: "_blank", rel: "noreferrer noopener" } : {})}
         /* GHL: pastilla redonda, versalitas y tracking; no un rectángulo. */
-        className="mt-9 inline-block rounded-full px-9 py-4 text-sm font-bold uppercase tracking-wider transition-transform hover:scale-105"
-        style={
-          boton.variante === "primary"
-            ? { backgroundColor: "var(--pw-primario)", color: "#000" }
-            : {
-                border: "1px solid var(--pw-primario)",
-                color: "var(--pw-primario)",
-              }
-        }
+        className="mt-9 inline-block rounded-full px-10 py-4 text-sm font-bold uppercase tracking-wider transition-transform hover:scale-105"
+        style={botonStyle}
       >
         {boton.label}
       </a>
+    </>
+  );
+
+  // Sin foto: la sección de siempre, centrada sobre el fondo de la página.
+  if (!imagen_url) {
+    return <section className="py-20 md:py-28 px-4 text-center">{contenido}</section>;
+  }
+
+  // Con foto: el equipo al fondo, DIFUMINADO y oscurecido. La imagen ambienta,
+  // no compite — si se deja nítida, el titular deja de leerse.
+  return (
+    <section className="relative isolate overflow-hidden px-4 py-24 text-center md:py-32">
+      <div
+        aria-hidden
+        className="absolute inset-0 -z-10 scale-110 bg-cover bg-center"
+        style={{ backgroundImage: `url(${imagen_url})`, filter: "blur(7px) saturate(115%)" }}
+      />
+      <div
+        aria-hidden
+        className="absolute inset-0 -z-10"
+        style={{
+          background:
+            "linear-gradient(180deg, rgba(0,0,0,0.82) 0%, rgba(0,0,0,0.62) 45%, rgba(0,0,0,0.86) 100%)",
+        }}
+      />
+      <div className="relative">{contenido}</div>
     </section>
   );
 }
@@ -1180,13 +1255,31 @@ function MapaPublico({
   )}`;
 
   return (
+    /* Mapa a un LADO, no a toda página: llegar es un dato práctico, no el
+       argumento de venta. Ocupando media pantalla robaba el sitio a la comida.
+       A la izquierda la dirección y el botón; a la derecha el mapa, pequeño. */
     <section className="scroll-mt-24 px-4 py-20 md:py-28" id="mapa">
-      <h2 className="pw-h2 text-center font-extrabold">Cómo llegar</h2>
-      <p className="mt-4 text-center text-sm opacity-70 md:text-base">{direccion_texto}</p>
+      <div className="mx-auto grid max-w-5xl items-center gap-10 md:grid-cols-[1fr_1.15fr] md:gap-14">
+        <div className="text-center md:text-left">
+          <h2 className="pw-h2 font-extrabold">Cómo llegar</h2>
+          <p className="mt-4 text-sm opacity-70 md:text-base">{direccion_texto}</p>
 
-      {/* Más pequeño y centrado: es una referencia, no el protagonista. */}
-      <div className="relative mx-auto mt-9 max-w-3xl">
-        <div className="relative aspect-[16/10] overflow-hidden rounded-2xl border border-white/10 bg-neutral-900 md:aspect-[2/1]">
+          <a
+            href={comoLlegar}
+            target="_blank"
+            rel="noreferrer noopener"
+            className="mt-7 inline-block rounded-full px-8 py-3.5 text-xs font-bold uppercase tracking-[0.18em] text-black transition-transform hover:scale-105"
+            style={{
+              backgroundColor: "var(--pw-primario)",
+              boxShadow: "0 10px 30px -10px color-mix(in srgb, var(--pw-primario) 70%, transparent)",
+            }}
+          >
+            Cómo llegar
+          </a>
+        </div>
+
+        <div className="relative">
+        <div className="relative aspect-[4/3] overflow-hidden rounded-2xl border border-white/10 bg-neutral-900 md:aspect-[4/3]">
           <iframe
             src={src}
             className="h-full w-full"
@@ -1235,19 +1328,54 @@ function MapaPublico({
           ) : null}
         </div>
 
-        <p className="mt-6 text-center">
-          <a
-            href={comoLlegar}
-            target="_blank"
-            rel="noreferrer noopener"
-            className="inline-block rounded-full px-8 py-3 text-xs font-bold uppercase tracking-[0.18em] text-black transition-transform hover:scale-105"
-            style={{ backgroundColor: "var(--pw-primario)" }}
-          >
-            Cómo llegar
-          </a>
-        </p>
+        </div>
       </div>
     </section>
+  );
+}
+
+/**
+ * Icono de red social, dibujado inline.
+ *
+ * Se usan los trazados de marca (Instagram, Facebook, TikTok, WhatsApp) en
+ * `currentColor` para que hereden el color del pie y del hover. Inline y no un
+ * paquete de iconos: son cuatro y así no se carga una librería entera.
+ */
+function IconoRed({ red }: { red: string }) {
+  const k = red.toLowerCase();
+  const cls = "h-[18px] w-[18px]";
+  if (k.includes("insta")) {
+    return (
+      <svg viewBox="0 0 24 24" className={cls} fill="currentColor" aria-hidden>
+        <path d="M12 2.16c3.2 0 3.58.01 4.85.07 1.17.05 1.8.25 2.23.41.56.22.96.48 1.38.9.42.42.68.82.9 1.38.16.42.36 1.06.41 2.23.06 1.27.07 1.65.07 4.85s-.01 3.58-.07 4.85c-.05 1.17-.25 1.8-.41 2.23-.22.56-.48.96-.9 1.38-.42.42-.82.68-1.38.9-.42.16-1.06.36-2.23.41-1.27.06-1.65.07-4.85.07s-3.58-.01-4.85-.07c-1.17-.05-1.8-.25-2.23-.41-.56-.22-.96-.48-1.38-.9-.42-.42-.68-.82-.9-1.38-.16-.42-.36-1.06-.41-2.23C2.17 15.58 2.16 15.2 2.16 12s.01-3.58.07-4.85c.05-1.17.25-1.8.41-2.23.22-.56.48-.96.9-1.38.42-.42.82-.68 1.38-.9.42-.16 1.06-.36 2.23-.41C8.42 2.17 8.8 2.16 12 2.16Zm0 1.98c-3.14 0-3.51.01-4.75.07-.9.04-1.39.19-1.71.32-.43.17-.74.37-1.06.69-.32.32-.52.63-.69 1.06-.13.32-.28.81-.32 1.71-.06 1.24-.07 1.61-.07 4.75s.01 3.51.07 4.75c.4.9.19 1.39.32 1.71.17.43.37.74.69 1.06.32.32.63.52 1.06.69.32.13.81.28 1.71.32 1.24.06 1.61.07 4.75.07s3.51-.01 4.75-.07c.9-.04 1.39-.19 1.71-.32.43-.17.74-.37 1.06-.69.32-.32.52-.63.69-1.06.13-.32.28-.81.32-1.71.06-1.24.07-1.61.07-4.75s-.01-3.51-.07-4.75c-.04-.9-.19-1.39-.32-1.71a2.86 2.86 0 0 0-.69-1.06 2.86 2.86 0 0 0-1.06-.69c-.32-.13-.81-.28-1.71-.32-1.24-.06-1.61-.07-4.75-.07Zm0 3.37a4.49 4.49 0 1 1 0 8.98 4.49 4.49 0 0 1 0-8.98Zm0 7.4a2.91 2.91 0 1 0 0-5.82 2.91 2.91 0 0 0 0 5.82Zm5.72-7.58a1.05 1.05 0 1 1-2.1 0 1.05 1.05 0 0 1 2.1 0Z" />
+      </svg>
+    );
+  }
+  if (k.includes("face")) {
+    return (
+      <svg viewBox="0 0 24 24" className={cls} fill="currentColor" aria-hidden>
+        <path d="M22 12.06C22 6.5 17.52 2 12 2S2 6.5 2 12.06c0 5.02 3.66 9.18 8.44 9.94v-7.03H7.9v-2.91h2.54V9.85c0-2.52 1.49-3.91 3.77-3.91 1.09 0 2.24.2 2.24.2v2.46h-1.26c-1.24 0-1.63.78-1.63 1.57v1.89h2.78l-.44 2.91h-2.34V22c4.78-.76 8.44-4.92 8.44-9.94Z" />
+      </svg>
+    );
+  }
+  if (k.includes("tik")) {
+    return (
+      <svg viewBox="0 0 24 24" className={cls} fill="currentColor" aria-hidden>
+        <path d="M16.6 5.82A4.28 4.28 0 0 1 15.54 3h-3.09v12.4a2.59 2.59 0 0 1-2.59 2.5 2.59 2.59 0 1 1 .77-5.06V9.7a5.68 5.68 0 1 0 4.91 5.63V9.01a7.35 7.35 0 0 0 4.3 1.38V7.3a4.29 4.29 0 0 1-3.24-1.48Z" />
+      </svg>
+    );
+  }
+  if (k.includes("whats")) {
+    return (
+      <svg viewBox="0 0 24 24" className={cls} fill="currentColor" aria-hidden>
+        <path d="M12.04 2c-5.5 0-9.96 4.46-9.96 9.96 0 1.76.46 3.48 1.34 5L2 22l5.16-1.35a9.92 9.92 0 0 0 4.88 1.25h.01c5.5 0 9.96-4.46 9.96-9.96 0-2.66-1.04-5.16-2.92-7.04A9.89 9.89 0 0 0 12.04 2Zm0 18.15h-.01a8.26 8.26 0 0 1-4.2-1.15l-.3-.18-3.12.82.83-3.04-.2-.31a8.25 8.25 0 0 1-1.27-4.41c0-4.57 3.72-8.28 8.29-8.28 2.21 0 4.29.86 5.85 2.43a8.22 8.22 0 0 1 2.42 5.86c0 4.57-3.72 8.26-8.29 8.26Zm4.54-6.19c-.25-.13-1.47-.72-1.7-.81-.23-.08-.39-.12-.56.13-.16.24-.64.8-.79.97-.14.16-.29.19-.54.06-.25-.12-1.05-.39-2-1.23-.74-.66-1.24-1.47-1.38-1.72-.15-.25-.02-.38.11-.5.11-.11.25-.29.37-.44.12-.15.16-.25.25-.41.08-.17.04-.31-.02-.44-.06-.12-.56-1.35-.77-1.84-.2-.49-.4-.42-.56-.43-.14 0-.31-.01-.47-.01a.9.9 0 0 0-.66.31c-.22.24-.87.85-.87 2.08s.89 2.41 1.02 2.58c.12.16 1.75 2.67 4.23 3.74.59.26 1.05.41 1.41.52.59.19 1.13.16 1.56.1.47-.07 1.47-.6 1.68-1.18.2-.58.2-1.08.14-1.18-.06-.11-.22-.17-.47-.29Z" />
+      </svg>
+    );
+  }
+  return (
+    <svg viewBox="0 0 24 24" className={cls} fill="currentColor" aria-hidden>
+      <circle cx="12" cy="12" r="9" />
+    </svg>
   );
 }
 
@@ -1287,10 +1415,30 @@ function FooterPublico({ bloque }: { bloque: Extract<Bloque, { tipo: "footer" }>
         ))}
       </div>
       {redes && redes.length ? (
-        <div className="max-w-6xl mx-auto mt-6 flex gap-3 justify-center">
+        /* ICONOS de marca, no el nombre de la red subrayado: en un pie, "instagram"
+           escrito parece un enlace legal más y se pierde entre "Aviso legal" y
+           "Cookies". El icono se reconoce sin leer. */
+        <div className="mx-auto mt-10 flex max-w-6xl justify-center gap-3">
           {redes.map((r, i) => (
-            <a key={i} href={r.url} className="text-sm underline opacity-80 hover:opacity-100">
-              {r.red}
+            <a
+              key={i}
+              href={r.url}
+              target="_blank"
+              rel="noreferrer noopener"
+              aria-label={r.red}
+              title={r.red}
+              className="flex h-11 w-11 items-center justify-center rounded-full border border-white/15 text-white/75 transition-all hover:-translate-y-0.5 hover:text-black"
+              style={{ ["--hov" as string]: "var(--pw-primario)" }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = "var(--pw-primario)";
+                e.currentTarget.style.borderColor = "var(--pw-primario)";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = "transparent";
+                e.currentTarget.style.borderColor = "rgba(255,255,255,0.15)";
+              }}
+            >
+              <IconoRed red={r.red} />
             </a>
           ))}
         </div>
