@@ -18,7 +18,7 @@ import { HERRAMIENTAS, toolTextColor } from "@/features/layout/data/herramientas
 import { ArchivosConfigPanel } from "@/features/archivos/components/ArchivosConfigPanel";
 
 // Iconos sin contador real → se oculta el toggle del círculo de aviso.
-const SIN_BADGE = new Set<ToolNotifKey>(["videovigilancia", "aplicaciones", "archivos"]);
+const SIN_BADGE = new Set<ToolNotifKey>(["videovigilancia", "aplicaciones"]);
 
 export function HerramientasTab() {
   // Al volver de Google tras dar el permiso de Drive se abre "Archivos" sola:
@@ -102,12 +102,9 @@ export function HerramientasTab() {
                   </div>
                 </div>
               ) : id === "archivos" ? (
-                <div className="space-y-6">
-                  <ArchivosConfigPanel />
-                  <div className="border-t pt-4">
-                    <ToolNotifPanel toolKey="archivos" hasBadge={false} />
-                  </div>
-                </div>
+                // Sin panel de avisos: Archivos no tiene contador ni hace
+                // falta anunciarlo con un pop-up (Iván, 27-ago).
+                <ArchivosConfigPanel />
               ) : id === "accesos" ? (
                 <AccesosTab />
               ) : (
