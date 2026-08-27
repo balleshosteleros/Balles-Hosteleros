@@ -1292,7 +1292,7 @@ export function PagosView() {
           <Upload className="h-4 w-4" />
           {subiendoNominas
             ? `Leyendo nóminas… ${progresoNominas.hechas}/${progresoNominas.total}`
-            : "Subir documentos del mes"}
+            : "Subir nóminas"}
         </Button>
         {/* Devolver a la gestoría: la otra salida de la revisión. Solo tiene
             sentido con nóminas subidas y el mes aún sin confirmar. */}
@@ -1620,7 +1620,7 @@ export function PagosView() {
       <Dialog open={showDocsMes} onOpenChange={setShowDocsMes}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>Documentos de {mesLabelNominas}</DialogTitle>
+            <DialogTitle>Subir nóminas</DialogTitle>
           </DialogHeader>
 
           <div className="space-y-3">
@@ -1703,10 +1703,12 @@ export function PagosView() {
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <p className="text-sm font-medium">TC1 · Recibo de cotizaciones</p>
+                  {/* El TC1 va SIEMPRE al mes que se está viendo, no al elegido
+                      arriba: se nombra el mes para que no se confundan. */}
                   <p className="mt-0.5 text-xs text-muted-foreground">
                     {estadoMes.tc1
-                      ? "Ya adjuntado. Debe cuadrar con la suma de las nóminas."
-                      : "Documento de la empresa con las bases y cuotas del mes."}
+                      ? `Ya adjuntado a ${mesLabelNominas}. Debe cuadrar con la suma de las nóminas.`
+                      : `Documento de la empresa con las bases y cuotas de ${mesLabelNominas}.`}
                   </p>
                   {estadoMes.tc1 && (
                     <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
