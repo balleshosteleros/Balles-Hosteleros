@@ -70,6 +70,9 @@ export const reservasDatosSchema = z.object({
 export const testimoniosDatosSchema = z.object({
   titulo: z.string().max(200).optional(),
   subtitulo: z.string().max(400).optional(),
+  rating: z.string().max(10).optional(),
+  rating_total: z.string().max(40).optional(),
+  rating_href: z.string().url().max(1000).optional(),
   items: z
     .array(
       z.object({

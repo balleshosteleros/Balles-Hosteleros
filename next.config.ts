@@ -151,6 +151,9 @@ const nextConfig: NextConfig = {
           { type: 'query', key: 'auth' },
           { type: 'query', key: 'error' },
           { type: 'host', value: QR_HOST },
+          // Los subdominios de preview sirven la WEB del restaurante: /m es la
+          // app de empleados y ahi no existe (404). Mismo caso que el host de QR.
+          ...PREVIEW_WEB_HOSTS.map((h) => ({ type: 'host' as const, value: h })),
         ],
         destination: '/m',
         permanent: false,

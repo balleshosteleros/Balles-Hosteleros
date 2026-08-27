@@ -402,42 +402,40 @@ function CollageCartaPublico({
 }) {
   const { titulo, frase, cta_label, imagenes } = bloque.datos;
   const slug = contexto?.empresaSlug ?? null;
-  const fotos = (imagenes ?? []).slice(0, 6);
-  if (!fotos.length || !slug) return null;
+  // UNA sola foto, no un mosaico: seis imágenes competían entre sí y la sección
+  // se leía cargada. Con una buena foto a sangre el mensaje llega antes.
+  const foto = imagenes?.[0];
+  if (!foto || !slug) return null;
 
   return (
     <section className="relative isolate overflow-hidden" id="carta">
-      {/* Mosaico: en móvil 2 columnas, en escritorio 3. Las fotos van a sangre
-          y en blanco y negro suave, para que el texto de encima se lea siempre
-          sin depender de lo clara que sea cada foto. */}
-      <div className="grid h-[420px] grid-cols-2 grid-rows-2 md:h-[460px] md:grid-cols-3">
-        {fotos.map((img, i) => (
-          /* eslint-disable-next-line @next/next/no-img-element */
-          <img
-            key={i}
-            src={imagenOptimizada(img.url, { width: 700, quality: 72 })}
-            srcSet={srcSetOptimizado(img.url, [400, 700, 1000])}
-            sizes="(max-width: 768px) 50vw, 33vw"
-            alt={img.alt}
-            loading="lazy"
-            decoding="async"
-            className={`h-full w-full object-cover ${i > 3 ? "hidden md:block" : ""}`}
-          />
-        ))}
-      </div>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={imagenOptimizada(foto.url, { width: 1600, quality: 74 })}
+        srcSet={srcSetOptimizado(foto.url, [800, 1200, 1600])}
+        sizes="100vw"
+        alt={foto.alt}
+        loading="lazy"
+        decoding="async"
+        className="h-[440px] w-full object-cover md:h-[560px]"
+      />
 
-      {/* Velo oscuro + contenido centrado encima del mosaico. */}
-      <div className="absolute inset-0 bg-black/65" />
-      <div className="absolute inset-0 flex flex-col items-center justify-center px-5 text-center">
-        <h2 className="pw-h2 font-extrabold text-white drop-shadow-lg">{titulo}</h2>
+      {/* Velo plano + degradado: contraste garantizado y unión suave con la
+          sección siguiente, sin el corte duro de un velo uniforme. */}
+      <div className="absolute inset-0 bg-black/60" />
+      <div className="absolute inset-0 bg-gradient-to-b from-black/50 via-transparent to-black" />
+
+      <div className="absolute inset-0 flex flex-col items-center justify-center px-6 text-center">
+        <span className="mb-7 block h-px w-14" style={{ backgroundColor: "var(--pw-primario)" }} />
+        <h2 className="pw-h2 max-w-3xl font-extrabold text-white drop-shadow-[0_2px_16px_rgba(0,0,0,0.6)]">
+          {titulo}
+        </h2>
         {frase ? (
-          <p className="mt-4 max-w-2xl text-sm md:text-lg text-white/85 drop-shadow">
-            {frase}
-          </p>
+          <p className="mt-5 max-w-xl text-sm text-white/80 md:text-base">{frase}</p>
         ) : null}
         <a
           href={`/carta/${slug}`}
-          className="mt-7 inline-block rounded-full px-9 py-4 text-sm font-bold uppercase tracking-wider text-black transition-transform hover:scale-105"
+          className="mt-9 inline-block rounded-full px-10 py-4 text-xs font-bold uppercase tracking-[0.2em] text-black transition-transform hover:scale-105 md:text-sm"
           style={{ backgroundColor: "var(--pw-primario)" }}
         >
           {cta_label}
@@ -845,12 +843,32 @@ function TestimoniosPublico({
   bloque: Extract<Bloque, { tipo: "testimonios" }>;
 }) {
   if (!bloque.datos.items.length) return null;
-  const { titulo, subtitulo } = bloque.datos;
+  const { titulo, subtitulo, rating, rating_total, rating_href } = bloque.datos;
   return (
     <section className="py-20 md:py-28 px-4 max-w-6xl mx-auto">
       <h2 className="pw-h2 font-extrabold text-center">
         {titulo ?? "Lo que dicen nuestros clientes"}
       </h2>
+
+      {/* Nota media de Google sobre los testimonios: da contexto a las opiniones
+          sueltas (una reseña buena convence menos que un 4,6 con miles detrás). */}
+      {rating ? (
+        <a
+          href={rating_href ?? "#"}
+          {...(rating_href ? { target: "_blank", rel: "noreferrer noopener" } : {})}
+          className="mx-auto mt-7 flex w-fit items-center gap-4 rounded-full border border-white/10 bg-white/[0.04] px-7 py-3 transition-colors hover:bg-white/[0.07]"
+        >
+          <span className="text-3xl font-extrabold leading-none" style={{ color: "var(--pw-primario)" }}>
+            {rating}
+          </span>
+          <span className="text-left">
+            <span className="block text-sm leading-none" style={{ color: "var(--pw-primario)" }}>
+              {"★".repeat(5)}
+            </span>
+            <span className="mt-1 block text-xs opacity-60">{rating_total}</span>
+          </span>
+        </a>
+      ) : null}
       {subtitulo ? (
         <p className="mt-3 mb-8 text-center text-muted-foreground max-w-2xl mx-auto">
           {subtitulo}

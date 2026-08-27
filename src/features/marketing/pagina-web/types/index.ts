@@ -76,6 +76,10 @@ export interface TestimoniosDatos {
   /** Sin título se pinta el genérico "Lo que dicen nuestros clientes". */
   titulo?: string;
   subtitulo?: string;
+  /** Valoración global de Google, como cabecera de los testimonios. */
+  rating?: string;
+  rating_total?: string;
+  rating_href?: string;
   items: Array<{ nombre: string; texto: string; estrellas?: number; foto_url?: string }>;
 }
 
