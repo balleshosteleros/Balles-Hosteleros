@@ -10,7 +10,8 @@
 import { useEffect, useState } from "react";
 import { HardDrive } from "lucide-react";
 import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
-import { getUsoArchivos, type UsoArchivos } from "@/features/archivos/actions/uso-actions";
+import { getUsoArchivos } from "@/features/archivos/actions/uso-actions";
+import type { UsoArchivos } from "@/features/archivos/types/paneles";
 import { ImportarDrivePanel } from "@/features/archivos/components/ImportarDrivePanel";
 
 function tamano(bytes: number): string {

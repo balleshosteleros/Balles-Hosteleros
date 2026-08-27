@@ -10,19 +10,9 @@
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getEmpresaActivaForUser } from "@/features/empresa/lib/empresa-server";
-
-export interface UsoArchivos {
-  /** Bytes ocupados por los archivos de la herramienta Archivos. */
-  bytesArchivos: number;
-  /** Bytes ocupados en total por la empresa (incluye grabaciones). */
-  bytesTotal: number;
-  /** Cuota contratada. */
-  bytesLimite: number;
-  /** Número de archivos guardados. */
-  numArchivos: number;
-  /** Desglose por departamento, de mayor a menor. */
-  porDepartamento: Array<{ departamento: string; bytes: number; num: number }>;
-}
+// El tipo vive aparte: un fichero "use server" solo puede exportar funciones
+// async, y exportar interfaces desde aquí rompe el componente que las importa.
+import type { UsoArchivos } from "@/features/archivos/types/paneles";
 
 export async function getUsoArchivos(): Promise<
   { ok: true; data: UsoArchivos } | { ok: false; error: string }

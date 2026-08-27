@@ -33,6 +33,14 @@ import {
   type UnidadCompartida,
 } from "@/lib/google/drive";
 import { cookies } from "next/headers";
+// Los tipos viven aparte: un fichero "use server" solo puede exportar
+// funciones async, y exportar interfaces desde aquí rompe el componente.
+import type {
+  CarpetaRaizDrive,
+  EstadoImportacion,
+  Inventario,
+  Mapeo,
+} from "@/features/archivos/types/paneles";
 
 type Res<T> = { ok: true; data: T } | { ok: false; error: string };
 const fallo = (error: string): { ok: false; error: string } => ({ ok: false, error });
@@ -85,25 +93,6 @@ export async function listarUnidades(): Promise<Res<UnidadCompartida[]>> {
 /* ─────────────────────────────────────────────────────────────────────────
  * 2 · INVENTARIO
  * ────────────────────────────────────────────────────────────────────────*/
-
-export interface CarpetaRaizDrive {
-  id: string;
-  nombre: string;
-  archivos: number;
-  bytes: number;
-}
-
-export interface Inventario {
-  unidadId: string;
-  unidadNombre: string;
-  /** Carpetas de primer nivel: son las que se mapean a departamento. */
-  carpetas: CarpetaRaizDrive[];
-  /** Archivos sueltos en la raíz de la unidad, sin carpeta que los agrupe. */
-  sueltos: number;
-  sueltosBytes: number;
-  totalArchivos: number;
-  totalBytes: number;
-}
 
 /** Recorre una rama entera y suma archivos y bytes. */
 async function contarRama(
@@ -182,9 +171,6 @@ export async function inventariarUnidad(
 /* ─────────────────────────────────────────────────────────────────────────
  * 3 · IMPORTAR
  * ────────────────────────────────────────────────────────────────────────*/
-
-/** Carpeta de Drive → id de la carpeta raíz de departamento en el software. */
-export type Mapeo = Record<string, string>;
 
 /** Crea (o reutiliza) una subcarpeta dentro de otra. */
 async function asegurarCarpeta(
@@ -453,18 +439,6 @@ async function copiarArchivo(
 /* ─────────────────────────────────────────────────────────────────────────
  * 4 · SEGUIMIENTO
  * ────────────────────────────────────────────────────────────────────────*/
-
-export interface EstadoImportacion {
-  id: string;
-  unidadNombre: string;
-  estado: string;
-  copiados: number;
-  copiadosBytes: number;
-  omitidos: number;
-  fallidos: number;
-  errores: Array<{ archivo: string; motivo: string }>;
-  createdAt: string;
-}
 
 export async function getImportaciones(): Promise<Res<EstadoImportacion[]>> {
   try {

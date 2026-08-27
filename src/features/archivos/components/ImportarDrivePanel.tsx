@@ -21,13 +21,14 @@ import {
   inventariarUnidad,
   importarUnidad,
   getImportaciones,
-  type Inventario,
-  type EstadoImportacion,
 } from "@/features/archivos/actions/importar-drive-actions";
+import type {
+  Inventario,
+  EstadoImportacion,
+  UnidadCompartidaUI,
+} from "@/features/archivos/types/paneles";
 import { listCarpetasRaiz } from "@/features/archivos/actions/archivos-actions";
 import type { Carpeta } from "@/features/archivos/types";
-
-type Unidad = { id: string; nombre: string };
 
 function tamano(bytes: number): string {
   if (bytes < 1024 ** 2) return `${(bytes / 1024).toFixed(0)} KB`;
@@ -51,7 +52,7 @@ function proponerDestino(nombreDrive: string, raices: Carpeta[]): string {
 }
 
 export function ImportarDrivePanel() {
-  const [unidades, setUnidades] = useState<Unidad[] | null>(null);
+  const [unidades, setUnidades] = useState<UnidadCompartidaUI[] | null>(null);
   const [raices, setRaices] = useState<Carpeta[]>([]);
   const [inventario, setInventario] = useState<Inventario | null>(null);
   const [mapeo, setMapeo] = useState<Record<string, string>>({});
@@ -81,7 +82,7 @@ export function ImportarDrivePanel() {
     setCargando(false);
   };
 
-  const onElegirUnidad = async (u: Unidad) => {
+  const onElegirUnidad = async (u: UnidadCompartidaUI) => {
     setCargando(true);
     const res = await inventariarUnidad(u.id, u.nombre);
     if (res.ok) {
