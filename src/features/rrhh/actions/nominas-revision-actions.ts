@@ -716,3 +716,55 @@ export async function borrarTc1Mes(periodo: string) {
     return { ok: false as const, error: msg };
   }
 }
+
+// ── ¿Se puede subir la entrega de UN mes concreto? ───────────────────────────
+// Las nóminas se suben eligiendo a qué mes pertenecen (no tiene por qué ser el
+// mes que muestre el calendario). Antes de dejar adjuntar hay que saber si ese
+// mes YA tiene entrega: con que haya UN solo documento, la entrega está hecha y
+// no se admiten más — para cambiarla hay que devolver el mes a la gestoría o
+// reabrirlo, no acumular archivos encima.
+
+export interface EstadoSubidaMes {
+  periodo: string;
+  /** Nº de nóminas ya subidas de ese mes (0 = mes libre). */
+  nominas: number;
+  /** Mes ya cerrado: inmutable hasta reabrirlo. */
+  confirmado: boolean;
+}
+
+/** Nóminas ya subidas y estado de cierre de cada mes indicado (AAAA-MM). */
+export async function getEstadoSubidaMeses(periodos: string[]): Promise<EstadoSubidaMes[]> {
+  try {
+    const { supabase, empresaId } = await getAppContext();
+    if (!empresaId || periodos.length === 0) return [];
+
+    const { data: filas } = await supabase
+      .from("rrhh_pagos_nominas")
+      .select("periodo")
+      .eq("empresa_id", empresaId)
+      .in("periodo", periodos);
+    const cuenta = new Map<string, number>();
+    for (const f of filas ?? []) {
+      const p = f.periodo as string;
+      cuenta.set(p, (cuenta.get(p) ?? 0) + 1);
+    }
+
+    const { data: meses } = await supabase
+      .from("rrhh_nominas_mes")
+      .select("periodo, confirmado_en")
+      .eq("empresa_id", empresaId)
+      .in("periodo", periodos);
+    const confirmados = new Set(
+      (meses ?? []).filter((m) => m.confirmado_en != null).map((m) => m.periodo as string),
+    );
+
+    return periodos.map((p) => ({
+      periodo: p,
+      nominas: cuenta.get(p) ?? 0,
+      confirmado: confirmados.has(p),
+    }));
+  } catch (err) {
+    console.error("[rrhh] getEstadoSubidaMeses:", err);
+    return [];
+  }
+}

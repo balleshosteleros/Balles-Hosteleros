@@ -176,10 +176,25 @@ export async function procesarNominasLeidas(
   nominas: NominaLeida[],
   periodoDefecto: string,
   archivoNombre?: string,
-): Promise<{ ok: boolean; error?: string; resultado?: ResultadoProceso }> {
+): Promise<{ ok: boolean; error?: string; yaSubidas?: boolean; resultado?: ResultadoProceso }> {
   try {
-    const { empresaId, userId } = await getAppContext();
+    const { supabase, empresaId, userId } = await getAppContext();
     if (!empresaId) return { ok: false, error: "No autorizado" };
+
+    // La entrega de un mes se hace UNA vez. Con que ese mes ya tenga UN documento
+    // subido, no se admiten más: mezclar entregas deja el mes descuadrado sin que
+    // nadie sepa qué archivo manda. Para cambiarla hay que devolver el mes a la
+    // gestoría (lo vacía) o reabrirlo. Se comprueba aquí, y no solo en pantalla,
+    // porque esta acción también la puede llamar una pestaña con datos viejos.
+    const { count } = await supabase
+      .from("rrhh_pagos_nominas")
+      .select("id", { count: "exact", head: true })
+      .eq("empresa_id", empresaId)
+      .eq("periodo", periodoDefecto);
+    if ((count ?? 0) > 0) {
+      return { ok: false, yaSubidas: true, error: "Las nóminas de ese mes ya están subidas." };
+    }
+
     const admin = createAdminClient();
     const resultado = await procesarNominasConAdmin(admin, empresaId, nominas, periodoDefecto);
     // Histórico de la subida manual (auditoría, mismo registro que la gestoría).

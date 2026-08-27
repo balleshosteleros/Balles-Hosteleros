@@ -35,6 +35,7 @@ import {
   subirTc1Mes,
   getTc1MesUrl,
   borrarTc1Mes,
+  getEstadoSubidaMeses,
   type EstadoMesNominas,
 } from "@/features/rrhh/actions/nominas-revision-actions";
 import { MAX_NOMINAS_MB, MAX_NOMINAS_BYTES } from "@/shared/lib/documentos";
@@ -48,6 +49,7 @@ import { Button } from "@/components/ui/button";
 import { NumberInput } from "@/shared/components/NumberInput";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Edit2, Banknote, Settings, Send, Lock, Unlock, CheckCircle2, Clock, Upload, ReceiptText, AlertTriangle, FileText, ShieldCheck, X, Undo2 } from "lucide-react";
 import {
   SubmoduleToolbar,
@@ -95,6 +97,29 @@ function periodoDeRango(rango: { start: Date }): string {
   const y = rango.start.getFullYear();
   const m = String(rango.start.getMonth() + 1).padStart(2, "0");
   return `${y}-${m}`;
+}
+
+const NOMBRES_MES = [
+  "enero", "febrero", "marzo", "abril", "mayo", "junio",
+  "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
+];
+
+/** 'AAAA-MM' → "marzo 2026". Cadena vacía si el periodo no es válido. */
+function nombreMesLargo(periodo: string): string {
+  const [y, m] = (periodo ?? "").split("-");
+  if (!m) return "";
+  return `${NOMBRES_MES[Number(m) - 1] ?? ""} ${y}`.trim();
+}
+
+/** Los `n` meses anteriores al actual más el actual, del más reciente al más antiguo. */
+function mesesHaciaAtras(n: number): string[] {
+  const hoy = new Date();
+  const out: string[] = [];
+  for (let i = 0; i <= n; i++) {
+    const d = new Date(hoy.getFullYear(), hoy.getMonth() - i, 1);
+    out.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
+  }
+  return out;
 }
 
 /** Conceptos que vienen de la nómina y por tanto se pueden desglosar por documento. */
@@ -274,6 +299,12 @@ export function PagosView() {
   const [enviando, setEnviando] = useState(false);
   const [subiendoNominas, setSubiendoNominas] = useState(false);
   const [progresoNominas, setProgresoNominas] = useState({ hechas: 0, total: 0 });
+  // MES al que pertenece la entrega que se va a subir. Arranca en el mes que se
+  // está viendo, pero se puede cambiar: la gestoría manda a menudo nóminas de un
+  // mes anterior y hay que poder colocarlas en el suyo sin navegar el calendario.
+  const [mesSubida, setMesSubida] = useState<string>("");
+  // Nóminas ya subidas / cierre de cada mes ofrecido en el selector.
+  const [estadoSubidaMeses, setEstadoSubidaMeses] = useState<Record<string, { nominas: number; confirmado: boolean }>>({});
   const [esDirector, setEsDirector] = useState(false);
   const [notifCfg, setNotifCfg] = useState<NotifLiquidacionesConfig | null>(null);
   const { confirm, dialog: confirmDialog } = useConfirmDelete();
@@ -330,11 +361,31 @@ export function PagosView() {
     refrescarEstadoMes();
   }, [refrescarEstadoMes]);
 
-  const mesLabelNominas = useMemo(() => {
-    const [y, m] = (periodo ?? "").split("-");
-    const MESES = ["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"];
-    return m ? `${MESES[Number(m) - 1] ?? ""} ${y}`.trim() : "";
-  }, [periodo]);
+  const mesLabelNominas = useMemo(() => nombreMesLargo(periodo), [periodo]);
+
+  // Meses ofrecidos al subir: los 18 anteriores al actual más el actual. Cubre de
+  // sobra los retrasos de la gestoría sin convertir el desplegable en un listado
+  // interminable.
+  const mesesSubida = useMemo(() => mesesHaciaAtras(18), []);
+
+  // Al abrir el diálogo se propone el mes que se está viendo y se consulta qué
+  // meses tienen ya entrega (para avisar y bloquear).
+  useEffect(() => {
+    if (!showDocsMes) return;
+    setMesSubida((prev) => (prev && mesesSubida.includes(prev) ? prev : periodo));
+    void getEstadoSubidaMeses(mesesSubida).then((filas) => {
+      const mapa: Record<string, { nominas: number; confirmado: boolean }> = {};
+      for (const f of filas) mapa[f.periodo] = { nominas: f.nominas, confirmado: f.confirmado };
+      setEstadoSubidaMeses(mapa);
+    });
+  }, [showDocsMes, periodo, mesesSubida, nominasEnMes]);
+
+  const mesSubidaLabel = useMemo(() => nombreMesLargo(mesSubida), [mesSubida]);
+  const estadoMesSubida = estadoSubidaMeses[mesSubida];
+  // El mes elegido YA tiene entrega: con un solo documento subido basta para no
+  // admitir más. Se avisa en pantalla y se desactiva el botón de adjuntar.
+  const mesSubidaYaTieneNominas = (estadoMesSubida?.nominas ?? 0) > 0;
+  const mesSubidaConfirmado = estadoMesSubida?.confirmado === true;
 
   // Formatea horas decimales a "8h" o "8h 30m".
   const fmtHoras = (h: number): string => {
@@ -497,6 +548,9 @@ export function PagosView() {
   // enviados (bloqueados) se saltan.
   const subirNominas = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
+    // El mes de la entrega es el ELEGIDO en el diálogo, no el del calendario.
+    const periodoDestino = mesSubida || periodo;
+    if (!periodoDestino) return;
     const lista = Array.from(files);
     setSubiendoNominas(true);
     setProgresoNominas({ hechas: 0, total: lista.length });
@@ -527,8 +581,19 @@ export function PagosView() {
     }
 
     const nombreArchivo = lista.length === 1 ? lista[0].name : `${lista.length} archivos`;
-    const proc = await procesarNominasLeidas(todas, periodo, nombreArchivo);
+    const proc = await procesarNominasLeidas(todas, periodoDestino, nombreArchivo);
     setSubiendoNominas(false);
+    if (proc.yaSubidas) {
+      // Otra pestaña (o la gestoría) subió la entrega mientras tanto.
+      setEstadoSubidaMeses((prev) => ({
+        ...prev,
+        [periodoDestino]: { nominas: prev[periodoDestino]?.nominas || 1, confirmado: prev[periodoDestino]?.confirmado ?? false },
+      }));
+      toast.error(`Las nóminas de ${nombreMesLargo(periodoDestino)} ya están subidas.`, {
+        description: "Para cambiarlas, devuelve el mes a la gestoría o reábrelo.",
+      });
+      return;
+    }
     if (!proc.ok || !proc.resultado) {
       toast.error(proc.error ?? "No se pudieron guardar las nóminas.");
       return;
@@ -538,12 +603,15 @@ export function PagosView() {
     // Recargar caché para que se vean las nóminas nuevas al navegar por meses.
     setPagosPorRango({});
     refrescarIncidenciasNominas();
+    // El mes de la entrega ya no admite más documentos: reflejarlo en el selector.
+    if (r.guardadas > 0) {
+      setEstadoSubidaMeses((prev) => ({
+        ...prev,
+        [periodoDestino]: { nominas: (prev[periodoDestino]?.nominas ?? 0) + r.guardadas, confirmado: prev[periodoDestino]?.confirmado ?? false },
+      }));
+    }
 
-    const nombreMes = (p: string) => {
-      const [y, m] = p.split("-");
-      const MESES = ["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"];
-      return `${MESES[Number(m) - 1] ?? ""} ${y}`.trim();
-    };
+    const nombreMes = nombreMesLargo;
 
     // Archivo RECHAZADO por completo: tiene errores, NO se guardó nada.
     if (r.rechazadoTodo) {
@@ -1560,7 +1628,7 @@ export function PagosView() {
             <div className="rounded-lg border p-4">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <p className="text-sm font-medium">Nóminas del mes</p>
+                  <p className="text-sm font-medium">Nóminas</p>
                   <p className="mt-0.5 text-xs text-muted-foreground">
                     Un PDF con todas (una por página) o varios archivos. Se leen y se asignan a
                     cada trabajador.
@@ -1570,7 +1638,12 @@ export function PagosView() {
                   variant="outline"
                   size="sm"
                   className="shrink-0 gap-1.5"
-                  disabled={subiendoNominas}
+                  disabled={subiendoNominas || mesSubidaYaTieneNominas || mesSubidaConfirmado}
+                  title={
+                    mesSubidaYaTieneNominas
+                      ? `Las nóminas de ${mesSubidaLabel} ya están subidas`
+                      : undefined
+                  }
                   onClick={() => nominasInputRef.current?.click()}
                 >
                   {subiendoNominas ? <Clock className="h-4 w-4 animate-pulse" /> : <Upload className="h-4 w-4" />}
@@ -1579,6 +1652,45 @@ export function PagosView() {
                     : "Adjuntar"}
                 </Button>
               </div>
+
+              {/* MES de la entrega. La gestoría envía a menudo nóminas atrasadas:
+                  se elige aquí a qué mes van, y toda nómina que la IA lea de un
+                  mes distinto se rechaza (no se guarda nada del archivo). */}
+              <div className="mt-3 space-y-1.5">
+                <Label className="text-xs text-muted-foreground">Mes de las nóminas</Label>
+                <Select value={mesSubida} onValueChange={setMesSubida} disabled={subiendoNominas}>
+                  <SelectTrigger className="h-9">
+                    <SelectValue placeholder="Elige el mes" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {mesesSubida.map((m) => {
+                      const est = estadoSubidaMeses[m];
+                      const subido = (est?.nominas ?? 0) > 0;
+                      return (
+                        <SelectItem key={m} value={m}>
+                          {nombreMesLargo(m)}
+                          {subido ? " · ya subidas" : ""}
+                        </SelectItem>
+                      );
+                    })}
+                  </SelectContent>
+                </Select>
+                {mesSubidaYaTieneNominas ? (
+                  <p className="text-xs text-amber-600">
+                    Las nóminas de {mesSubidaLabel} ya están subidas
+                    {estadoMesSubida?.nominas ? ` (${estadoMesSubida.nominas})` : ""}.
+                    {mesSubidaConfirmado
+                      ? " El mes está confirmado: para cambiarlas hay que reabrirlo."
+                      : " Para cambiarlas, devuelve el mes a la gestoría."}
+                  </p>
+                ) : (
+                  <p className="text-xs text-muted-foreground">
+                    Si alguna nómina del archivo no es de {mesSubidaLabel || "ese mes"}, se rechaza
+                    el archivo entero y no se guarda nada.
+                  </p>
+                )}
+              </div>
+
               {estadoMes.tc1 == null && incidenciasNominas > 0 && (
                 <p className="mt-2 text-xs text-amber-600">
                   {incidenciasNominas} nómina{incidenciasNominas === 1 ? "" : "s"} con incidencia por revisar.
