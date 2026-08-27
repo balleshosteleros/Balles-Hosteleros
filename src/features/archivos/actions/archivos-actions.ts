@@ -395,6 +395,183 @@ export async function deleteCarpeta(carpetaId: string): Promise<Res<null>> {
   }
 }
 
+/**
+ * Destinos a los que se puede MOVER una carpeta: todas las carpetas visibles
+ * (raíces de departamento y subcarpetas), menos la propia carpeta y su
+ * descendencia. Solo salen departamentos que el rol ve — si no lo ves, ese
+ * destino no existe para ti.
+ */
+export async function listDestinosMover(
+  carpetaId: string,
+): Promise<Res<Array<{ id: string; etiqueta: string; departamento: string }>>> {
+  try {
+    const ctx = await getContext();
+    if (!ctx) return fallo("No autenticado");
+
+    const { data, error } = await ctx.supabase
+      .from("carpetas_documentos")
+      .select(COLS_CARPETA)
+      .eq("empresa_id", ctx.empresaId)
+      .order("nombre");
+    if (error) throw error;
+
+    const todas = (data as FilaCarpeta[]).filter(
+      (c) => c.departamento && veDepartamento(ctx, c.departamento),
+    );
+
+    // Descendencia de la carpeta que se mueve: meterla dentro de sí misma
+    // dejaría el árbol en un ciclo y esa rama desaparecería de la vista.
+    const prohibidos = new Set<string>([carpetaId]);
+    let creció = true;
+    while (creció) {
+      creció = false;
+      for (const c of todas) {
+        if (c.parent_id && prohibidos.has(c.parent_id) && !prohibidos.has(c.id)) {
+          prohibidos.add(c.id);
+          creció = true;
+        }
+      }
+    }
+
+    // Etiqueta con la ruta completa, para distinguir dos "Fotos" de sitios
+    // distintos.
+    const porId = new Map(todas.map((c) => [c.id, c]));
+    const rutaDe = (c: FilaCarpeta): string => {
+      const partes: string[] = [c.nombre];
+      let actual = c;
+      for (let i = 0; i < 20 && actual.parent_id; i++) {
+        const padre = porId.get(actual.parent_id);
+        if (!padre) break;
+        partes.unshift(padre.nombre);
+        actual = padre;
+      }
+      return partes.join(" / ");
+    };
+
+    return {
+      ok: true,
+      data: todas
+        .filter((c) => !prohibidos.has(c.id))
+        .map((c) => ({
+          id: c.id,
+          etiqueta: rutaDe(c),
+          departamento: c.departamento ?? "",
+        }))
+        .sort((a, b) => a.etiqueta.localeCompare(b.etiqueta)),
+    };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Error desconocido";
+    console.error("[archivos] listDestinosMover:", msg);
+    return fallo(msg);
+  }
+}
+
+/**
+ * Mueve una subcarpeta a otra carpeta, incluso de otro departamento (como en
+ * Drive). Exige ver el departamento de ORIGEN y el de DESTINO.
+ *
+ * Al cambiar de departamento, la carpeta y TODA su descendencia (subcarpetas y
+ * archivos) se reetiquetan con el departamento nuevo: si no, quedarían visibles
+ * para quien ve el departamento antiguo y no para el nuevo.
+ */
+export async function moverCarpeta(
+  carpetaId: string,
+  destinoId: string,
+): Promise<Res<null>> {
+  try {
+    const ctx = await getContext();
+    if (!ctx) return fallo("No autenticado");
+    if (carpetaId === destinoId) return fallo("No se puede mover a sí misma");
+
+    const { data: filas, error } = await ctx.supabase
+      .from("carpetas_documentos")
+      .select(COLS_CARPETA)
+      .eq("empresa_id", ctx.empresaId);
+    if (error) throw error;
+    const todas = filas as FilaCarpeta[];
+
+    const carpeta = todas.find((c) => c.id === carpetaId);
+    const destino = todas.find((c) => c.id === destinoId);
+    if (!carpeta) return fallo("La carpeta no existe");
+    if (!destino) return fallo("La carpeta de destino no existe");
+    if (carpeta.es_raiz) return fallo("Las carpetas de departamento no se pueden mover");
+
+    if (!veDepartamento(ctx, carpeta.departamento ?? "")) {
+      return fallo("No tienes acceso a esta carpeta");
+    }
+    if (!veDepartamento(ctx, destino.departamento ?? "")) {
+      return fallo("No tienes acceso al departamento de destino");
+    }
+
+    // Toda la descendencia: ni destino ni reetiquetado sin ella.
+    const descendencia = new Set<string>([carpetaId]);
+    let creció = true;
+    while (creció) {
+      creció = false;
+      for (const c of todas) {
+        if (c.parent_id && descendencia.has(c.parent_id) && !descendencia.has(c.id)) {
+          descendencia.add(c.id);
+          creció = true;
+        }
+      }
+    }
+    if (descendencia.has(destinoId)) {
+      return fallo("No se puede mover una carpeta dentro de sí misma");
+    }
+
+    // Nombre repetido en el destino: el índice único lo rechazaría con un error
+    // feo, así que se avisa antes.
+    const choca = todas.some(
+      (c) =>
+        c.parent_id === destinoId &&
+        c.id !== carpetaId &&
+        c.nombre.toLowerCase() === carpeta.nombre.toLowerCase(),
+    );
+    if (choca) return fallo("Ya existe una carpeta con ese nombre en el destino");
+
+    const deptoNuevo = destino.departamento ?? "";
+    const cambiaDepto = deptoNuevo !== (carpeta.departamento ?? "");
+
+    const { error: errMover } = await ctx.supabase
+      .from("carpetas_documentos")
+      .update({ parent_id: destinoId, departamento: deptoNuevo })
+      .eq("empresa_id", ctx.empresaId)
+      .eq("id", carpetaId);
+    if (errMover) {
+      if (errMover.code === "23505") {
+        return fallo("Ya existe una carpeta con ese nombre en el destino");
+      }
+      throw errMover;
+    }
+
+    if (cambiaDepto) {
+      const ids = [...descendencia];
+      // La descendencia cambia de departamento con la carpeta: si no, quedaría
+      // visible para el departamento equivocado.
+      const [{ error: e1 }, { error: e2 }] = await Promise.all([
+        ctx.supabase
+          .from("carpetas_documentos")
+          .update({ departamento: deptoNuevo })
+          .eq("empresa_id", ctx.empresaId)
+          .in("id", ids),
+        ctx.supabase
+          .from("documentos")
+          .update({ departamento: deptoNuevo })
+          .eq("empresa_id", ctx.empresaId)
+          .in("carpeta_id", ids),
+      ]);
+      if (e1) throw e1;
+      if (e2) throw e2;
+    }
+
+    return { ok: true, data: null };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Error desconocido";
+    console.error("[archivos] moverCarpeta:", msg);
+    return fallo(msg);
+  }
+}
+
 /* ─────────────────────────────────────────────────────────────────────────
  * SUBIDA
  * ────────────────────────────────────────────────────────────────────────*/
@@ -549,6 +726,110 @@ export async function registrarArchivo(
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Error desconocido";
     console.error("[archivos] registrarArchivo:", msg);
+    return fallo(msg);
+  }
+}
+
+/**
+ * Renombra un archivo. Solo cambia la etiqueta que se ve: el objeto de R2
+ * conserva su clave, así que no hay que copiar ni mover nada en el almacén.
+ *
+ * Puede hacerlo cualquiera que vea el departamento — no es destructivo, a
+ * diferencia de borrar.
+ */
+export async function renameArchivo(
+  archivoId: string,
+  nombre: string,
+): Promise<Res<null>> {
+  try {
+    const ctx = await getContext();
+    if (!ctx) return fallo("No autenticado");
+
+    const limpio = nombre.trim();
+    if (!limpio) return fallo("El nombre no puede estar vacío");
+
+    const { data: archivo } = await ctx.supabase
+      .from("documentos")
+      .select("id, departamento")
+      .eq("empresa_id", ctx.empresaId)
+      .eq("id", archivoId)
+      .maybeSingle();
+    if (!archivo) return fallo("El archivo no existe");
+    if (!veDepartamento(ctx, (archivo.departamento as string) ?? "")) {
+      return fallo("No tienes acceso a este archivo");
+    }
+
+    const { error } = await ctx.supabase
+      .from("documentos")
+      .update({ nombre: limpio })
+      .eq("empresa_id", ctx.empresaId)
+      .eq("id", archivoId);
+    if (error) throw error;
+
+    return { ok: true, data: null };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Error desconocido";
+    console.error("[archivos] renameArchivo:", msg);
+    return fallo(msg);
+  }
+}
+
+/**
+ * Mueve un archivo a cualquier carpeta o subcarpeta que el rol pueda ver,
+ * incluso de otro departamento (como en Drive).
+ *
+ * Solo cambia la fila: el objeto sigue en su ruta de R2. La ruta física es un
+ * detalle interno; quien manda para los permisos es la columna `departamento`,
+ * que se reetiqueta con la del destino.
+ */
+export async function moverArchivo(
+  archivoId: string,
+  destinoId: string,
+): Promise<Res<null>> {
+  try {
+    const ctx = await getContext();
+    if (!ctx) return fallo("No autenticado");
+
+    const [{ data: archivo }, { data: destino }] = await Promise.all([
+      ctx.supabase
+        .from("documentos")
+        .select("id, carpeta_id, departamento")
+        .eq("empresa_id", ctx.empresaId)
+        .eq("id", archivoId)
+        .maybeSingle(),
+      ctx.supabase
+        .from("carpetas_documentos")
+        .select("id, departamento")
+        .eq("empresa_id", ctx.empresaId)
+        .eq("id", destinoId)
+        .maybeSingle(),
+    ]);
+
+    if (!archivo) return fallo("El archivo no existe");
+    if (!destino) return fallo("La carpeta de destino no existe");
+    if (archivo.carpeta_id === destinoId) return fallo("Ya está en esa carpeta");
+
+    if (!veDepartamento(ctx, (archivo.departamento as string) ?? "")) {
+      return fallo("No tienes acceso a este archivo");
+    }
+    if (!veDepartamento(ctx, (destino.departamento as string) ?? "")) {
+      return fallo("No tienes acceso al departamento de destino");
+    }
+
+    const { error } = await ctx.supabase
+      .from("documentos")
+      .update({
+        carpeta_id: destinoId,
+        departamento: (destino.departamento as string) ?? "",
+      })
+      .eq("empresa_id", ctx.empresaId)
+      .eq("id", archivoId);
+    if (error) throw error;
+
+    return { ok: true, data: null };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Error desconocido";
+    console.error("[archivos] moverArchivo:", msg);
     return fallo(msg);
   }
 }

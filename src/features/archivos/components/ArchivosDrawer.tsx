@@ -24,6 +24,8 @@ import {
   Download,
   Pencil,
   ImageIcon,
+  MoreVertical,
+  FolderInput,
 } from "lucide-react";
 import {
   Sheet,
@@ -33,6 +35,12 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/shared/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import {
   Dialog,
@@ -52,6 +60,10 @@ import {
   presignSubida,
   registrarArchivo,
   deleteArchivo,
+  renameArchivo,
+  moverArchivo,
+  moverCarpeta,
+  listDestinosMover,
 } from "@/features/archivos/actions/archivos-actions";
 import {
   esVideo,
@@ -60,9 +72,34 @@ import {
   type Carpeta,
 } from "@/features/archivos/types";
 import { generarMiniatura, leerDimensiones } from "@/features/archivos/lib/miniaturas";
+import { allSections } from "@/features/layout/data/nav-routes";
 
 /** Cuántos archivos se suben a la vez. Más en paralelo satura el móvil. */
 const SUBIDAS_EN_PARALELO = 4;
+
+/**
+ * Las carpetas de departamento se listan en el MISMO orden que el menú
+ * lateral. `allSections` es la fuente única de ese orden: si allí cambia, aquí
+ * cambia solo. Se compara por clave canónica, que es lo que guarda la carpeta.
+ */
+const ORDEN_DEPARTAMENTOS = allSections.map((s) =>
+  s.modulo.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().trim(),
+);
+
+/** Posición en el menú lateral. Lo desconocido va al final. */
+function ordenDepartamento(departamento: string): number {
+  const clave = departamento
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toUpperCase()
+    .trim();
+  // La carpeta guarda la clave canónica (RRHH), el menú el nombre largo
+  // (RECURSOS HUMANOS): vale que uno empiece por el otro.
+  const i = ORDEN_DEPARTAMENTOS.findIndex(
+    (m) => m === clave || m.startsWith(clave) || clave.startsWith(m),
+  );
+  return i === -1 ? Number.MAX_SAFE_INTEGER : i;
+}
 
 type EstadoSubida = {
   nombre: string;
@@ -101,6 +138,14 @@ export function ArchivosDrawer({ children }: { children: ReactNode }) {
   const [renombrando, setRenombrando] = useState<Carpeta | null>(null);
   const [nombreEdit, setNombreEdit] = useState("");
   const [aBorrar, setABorrar] = useState<Archivo | Carpeta | null>(null);
+  // Mover: qué se mueve, a dónde puede ir y qué destino se ha elegido.
+  const [aMover, setAMover] = useState<Archivo | Carpeta | null>(null);
+  const [destinos, setDestinos] = useState<
+    Array<{ id: string; etiqueta: string; departamento: string }>
+  >([]);
+  const [destinoElegido, setDestinoElegido] = useState<string>("");
+  const [cargandoDestinos, setCargandoDestinos] = useState(false);
+  const [renombrandoArchivo, setRenombrandoArchivo] = useState<Archivo | null>(null);
 
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -109,7 +154,12 @@ export function ArchivosDrawer({ children }: { children: ReactNode }) {
   const cargarRaices = useCallback(async () => {
     setCargando(true);
     const res = await listCarpetasRaiz();
-    if (res.ok) setRaices(res.data);
+    if (res.ok)
+      setRaices(
+        [...res.data].sort(
+          (a, b) => ordenDepartamento(a.departamento) - ordenDepartamento(b.departamento),
+        ),
+      );
     else toast.error(res.error);
     setCargando(false);
   }, []);
@@ -266,6 +316,59 @@ export function ArchivosDrawer({ children }: { children: ReactNode }) {
     );
     setRenombrando(null);
     toast.success("Carpeta renombrada");
+  };
+
+  /** Abre el diálogo de mover y pide los destinos permitidos al servidor. */
+  const abrirMover = async (item: Archivo | Carpeta) => {
+    setAMover(item);
+    setDestinoElegido("");
+    setCargandoDestinos(true);
+    // Para un archivo no hay descendencia que excluir: se pide con su carpeta
+    // actual, que ya queda fuera de la lista por ser el origen.
+    const res = await listDestinosMover(
+      "esRaiz" in item ? item.id : item.carpetaId,
+    );
+    if (res.ok) {
+      setDestinos(
+        "esRaiz" in item
+          ? res.data
+          : // Un archivo sí puede volver a su propia carpeta padre, pero no
+            // tiene sentido ofrecer la carpeta en la que ya está.
+            res.data.filter((d) => d.id !== item.carpetaId),
+      );
+    } else {
+      toast.error(res.error);
+      setDestinos([]);
+    }
+    setCargandoDestinos(false);
+  };
+
+  const onConfirmarMover = async () => {
+    if (!aMover || !destinoElegido) return;
+    const esCarpeta = "esRaiz" in aMover;
+    const res = esCarpeta
+      ? await moverCarpeta(aMover.id, destinoElegido)
+      : await moverArchivo(aMover.id, destinoElegido);
+    if (!res.ok) return toast.error(res.error);
+
+    // Sale de la vista actual: se quita de la lista sin recargar todo.
+    if (esCarpeta) setSubcarpetas((prev) => prev.filter((c) => c.id !== aMover.id));
+    else setArchivos((prev) => prev.filter((a) => a.id !== aMover.id));
+    setAMover(null);
+    toast.success(esCarpeta ? "Carpeta movida" : "Archivo movido");
+  };
+
+  const onRenombrarArchivo = async () => {
+    if (!renombrandoArchivo || !nombreEdit.trim()) return;
+    const res = await renameArchivo(renombrandoArchivo.id, nombreEdit.trim());
+    if (!res.ok) return toast.error(res.error);
+    setArchivos((prev) =>
+      prev.map((a) =>
+        a.id === renombrandoArchivo.id ? { ...a, nombre: nombreEdit.trim() } : a,
+      ),
+    );
+    setRenombrandoArchivo(null);
+    toast.success("Archivo renombrado");
   };
 
   const onConfirmarBorrado = async () => {
@@ -437,23 +540,38 @@ export function ArchivosDrawer({ children }: { children: ReactNode }) {
                         <Folder className="h-4 w-4 shrink-0 text-cyan-600" />
                         <span className="truncate">{c.nombre}</span>
                       </button>
-                      <button
-                        className="opacity-0 transition-opacity group-hover:opacity-100"
-                        title="Renombrar"
-                        onClick={() => {
-                          setRenombrando(c);
-                          setNombreEdit(c.nombre);
-                        }}
-                      >
-                        <Pencil className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground" />
-                      </button>
-                      <button
-                        className="opacity-0 transition-opacity group-hover:opacity-100"
-                        title="Eliminar"
-                        onClick={() => setABorrar(c)}
-                      >
-                        <Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive" />
-                      </button>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <button
+                            className="rounded p-0.5 opacity-0 transition-opacity hover:bg-muted-foreground/10 group-hover:opacity-100 data-[state=open]:opacity-100"
+                            title="Acciones"
+                          >
+                            <MoreVertical className="h-3.5 w-3.5 text-muted-foreground" />
+                          </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem
+                            onClick={() => {
+                              setRenombrando(c);
+                              setNombreEdit(c.nombre);
+                            }}
+                          >
+                            <Pencil className="mr-2 h-3.5 w-3.5" />
+                            Renombrar
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => void abrirMover(c)}>
+                            <FolderInput className="mr-2 h-3.5 w-3.5" />
+                            Mover a…
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            className="text-destructive focus:text-destructive"
+                            onClick={() => setABorrar(c)}
+                          >
+                            <Trash2 className="mr-2 h-3.5 w-3.5" />
+                            Eliminar
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </div>
                   ))}
                 </div>
@@ -471,18 +589,59 @@ export function ArchivosDrawer({ children }: { children: ReactNode }) {
                     onClick={() => inputRef.current?.click()}
                   >
                     <Upload className="h-3.5 w-3.5" />
-                    Subir fotos o vídeos
+                    Subir
                   </Button>
                 </div>
               ) : (
                 <div className="grid grid-cols-3 gap-2">
                   {archivos.map((a) => (
-                    <button
+                    <div
                       key={a.id}
-                      onClick={() => setVisor(a)}
                       className="group relative aspect-square overflow-hidden rounded-md bg-muted"
                       title={a.nombre}
                     >
+                      {/* Menú de acciones del archivo. Va fuera del botón que
+                          abre el visor: un botón dentro de otro no es válido. */}
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <button
+                            className="absolute right-1 top-1 z-10 rounded bg-black/50 p-1 opacity-0 transition-opacity hover:bg-black/70 group-hover:opacity-100 data-[state=open]:opacity-100"
+                            title="Acciones"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <MoreVertical className="h-3.5 w-3.5 text-white" />
+                          </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem
+                            onClick={() => {
+                              setRenombrandoArchivo(a);
+                              setNombreEdit(a.nombre);
+                            }}
+                          >
+                            <Pencil className="mr-2 h-3.5 w-3.5" />
+                            Renombrar
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => void abrirMover(a)}>
+                            <FolderInput className="mr-2 h-3.5 w-3.5" />
+                            Mover a…
+                          </DropdownMenuItem>
+                          {a.puedeBorrar && (
+                            <DropdownMenuItem
+                              className="text-destructive focus:text-destructive"
+                              onClick={() => setABorrar(a)}
+                            >
+                              <Trash2 className="mr-2 h-3.5 w-3.5" />
+                              Eliminar
+                            </DropdownMenuItem>
+                          )}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+
+                      <button
+                        onClick={() => setVisor(a)}
+                        className="block h-full w-full"
+                      >
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
                         src={`/api/archivos/ver?id=${a.id}&thumb=1`}
@@ -495,12 +654,13 @@ export function ArchivosDrawer({ children }: { children: ReactNode }) {
                           <Play className="h-6 w-6 fill-white text-white" />
                         </span>
                       )}
-                      {a.duracionSeg != null && (
-                        <span className="absolute bottom-1 right-1 rounded bg-black/70 px-1 text-[10px] text-white">
-                          {formatearDuracion(a.duracionSeg)}
-                        </span>
-                      )}
-                    </button>
+                        {a.duracionSeg != null && (
+                          <span className="absolute bottom-1 right-1 rounded bg-black/70 px-1 text-[10px] text-white">
+                            {formatearDuracion(a.duracionSeg)}
+                          </span>
+                        )}
+                      </button>
+                    </div>
                   ))}
                 </div>
               )}
@@ -604,6 +764,77 @@ export function ArchivosDrawer({ children }: { children: ReactNode }) {
               Cancelar
             </Button>
             <Button onClick={() => void onRenombrar()}>Guardar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Renombrar archivo */}
+      <Dialog
+        open={!!renombrandoArchivo}
+        onOpenChange={(v) => !v && setRenombrandoArchivo(null)}
+      >
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Renombrar archivo</DialogTitle>
+          </DialogHeader>
+          <Input
+            autoFocus
+            value={nombreEdit}
+            onChange={(e) => setNombreEdit(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && void onRenombrarArchivo()}
+          />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRenombrandoArchivo(null)}>
+              Cancelar
+            </Button>
+            <Button onClick={() => void onRenombrarArchivo()}>Guardar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Mover a otra carpeta — solo salen destinos que el rol puede ver */}
+      <Dialog open={!!aMover} onOpenChange={(v) => !v && setAMover(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              {aMover && "esRaiz" in aMover ? "Mover carpeta" : "Mover archivo"}
+            </DialogTitle>
+          </DialogHeader>
+
+          {cargandoDestinos ? (
+            <div className="flex h-32 items-center justify-center">
+              <LoadingSpinner />
+            </div>
+          ) : destinos.length === 0 ? (
+            <p className="py-4 text-sm text-muted-foreground">
+              No hay ninguna otra carpeta a la que puedas mover esto.
+            </p>
+          ) : (
+            <div className="max-h-72 space-y-0.5 overflow-y-auto">
+              {destinos.map((d) => (
+                <button
+                  key={d.id}
+                  onClick={() => setDestinoElegido(d.id)}
+                  className={`flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm ${
+                    destinoElegido === d.id
+                      ? "bg-cyan-600/10 font-medium text-cyan-700 dark:text-cyan-400"
+                      : "hover:bg-muted"
+                  }`}
+                >
+                  <Folder className="h-4 w-4 shrink-0 text-cyan-600" />
+                  <span className="truncate">{d.etiqueta}</span>
+                </button>
+              ))}
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAMover(null)}>
+              Cancelar
+            </Button>
+            <Button disabled={!destinoElegido} onClick={() => void onConfirmarMover()}>
+              Mover
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
