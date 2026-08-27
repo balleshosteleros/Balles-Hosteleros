@@ -54,12 +54,21 @@ export const menuDatosSchema = z.object({
 });
 
 export const reservasDatosSchema = z.object({
-  modo: z.enum(["embed_cover", "formulario_propio", "enlace_externo"]),
+  // Títulos opcionales: sin ellos el bloque pinta un genérico ("Reservas"), que
+  // no permitía replicar el copy real de cada web ("Reserva aquí tu experiencia
+  // inolvidable"). Opcionales para no romper los bloques ya guardados.
+  titulo: z.string().max(200).optional(),
+  subtitulo: z.string().max(400).optional(),
+  // `portal_propio` = motor de reservas propio. Faltaba en el enum aunque el
+  // editor y el render público YA lo usaban: guardar el bloque fallaba.
+  modo: z.enum(["portal_propio", "embed_cover", "formulario_propio", "enlace_externo"]),
   url: z.string().url().max(1000).optional(),
   campos: z.array(z.string().max(40)).max(20).optional(),
 });
 
 export const testimoniosDatosSchema = z.object({
+  titulo: z.string().max(200).optional(),
+  subtitulo: z.string().max(400).optional(),
   items: z
     .array(
       z.object({

@@ -61,9 +61,15 @@ export interface ReservasDatos {
   modo: "portal_propio" | "embed_cover" | "formulario_propio" | "enlace_externo";
   url?: string;
   campos?: string[];
+  /** Sin título se pinta el genérico "Reservas". */
+  titulo?: string;
+  subtitulo?: string;
 }
 
 export interface TestimoniosDatos {
+  /** Sin título se pinta el genérico "Lo que dicen nuestros clientes". */
+  titulo?: string;
+  subtitulo?: string;
   items: Array<{ nombre: string; texto: string; estrellas?: number; foto_url?: string }>;
 }
 

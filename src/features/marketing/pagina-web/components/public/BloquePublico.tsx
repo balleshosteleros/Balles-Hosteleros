@@ -10,6 +10,7 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { Bloque } from "../../types";
+import { imagenOptimizada, srcSetOptimizado } from "../../services/imagen-optimizada";
 import type { PaginaContexto } from "./PaginaPublicaShell";
 import { Loader2, AtSign, ThumbsUp, MessageCircle, Music2 } from "lucide-react";
 
@@ -145,7 +146,11 @@ function HeroPublico({ bloque }: { bloque: Extract<Bloque, { tipo: "hero" }> }) 
       className="relative w-full min-h-[60vh] flex items-center justify-center text-center text-white"
       style={
         foto_url
-          ? { backgroundImage: `url(${foto_url})`, backgroundSize: "cover", backgroundPosition: "center" }
+          ? {
+              backgroundImage: `url(${imagenOptimizada(foto_url, { width: 1600, quality: 72 })})`,
+              backgroundSize: "cover",
+              backgroundPosition: "center",
+            }
           : { background: "linear-gradient(135deg, #111, #333)" }
       }
     >
@@ -182,8 +187,12 @@ function GaleriaPublica({ bloque }: { bloque: Extract<Bloque, { tipo: "galeria" 
             /* eslint-disable-next-line @next/next/no-img-element */
             <img
               key={i}
-              src={img.url}
+              src={imagenOptimizada(img.url, { width: 600 })}
+              srcSet={srcSetOptimizado(img.url, [400, 600, 900])}
+              sizes="(max-width: 768px) 60vw, 320px"
               alt={img.alt}
+              loading="lazy"
+              decoding="async"
               className="h-64 w-auto rounded-md object-cover"
             />
           ))}
@@ -198,8 +207,13 @@ function GaleriaPublica({ bloque }: { bloque: Extract<Bloque, { tipo: "galeria" 
           /* eslint-disable-next-line @next/next/no-img-element */
           <img
             key={i}
-            src={img.url}
+            src={imagenOptimizada(img.url, { width: 600 })}
+            srcSet={srcSetOptimizado(img.url, [400, 600, 900])}
+            sizes="(max-width: 768px) 50vw, 300px"
             alt={img.alt}
+            // Las 4 primeras entran en pantalla; el resto solo al bajar.
+            loading={i < 4 ? "eager" : "lazy"}
+            decoding="async"
             className={`w-full object-cover rounded-md ${layout === "masonry" ? "h-auto" : "aspect-square"}`}
           />
         ))}
@@ -354,7 +368,13 @@ function ReservasPublico({
   const slug = contexto?.empresaSlug ?? null;
   return (
     <section className="py-12 px-4 max-w-3xl mx-auto text-center" id="reservas">
-      <h2 className="text-3xl font-bold mb-4">Reservas</h2>
+      <h2 className="text-3xl font-bold">{bloque.datos.titulo ?? "Reservas"}</h2>
+      {bloque.datos.subtitulo ? (
+        <p className="mt-3 text-muted-foreground max-w-2xl mx-auto">
+          {bloque.datos.subtitulo}
+        </p>
+      ) : null}
+      <div className="mb-4" />
       {modo === "portal_propio" ? (
         slug ? (
           // Motor propio: mismo origen, así que no hace falta postMessage para
@@ -459,9 +479,19 @@ function TestimoniosPublico({
   bloque: Extract<Bloque, { tipo: "testimonios" }>;
 }) {
   if (!bloque.datos.items.length) return null;
+  const { titulo, subtitulo } = bloque.datos;
   return (
     <section className="py-12 px-4 max-w-6xl mx-auto">
-      <h2 className="text-3xl font-bold text-center mb-8">Lo que dicen nuestros clientes</h2>
+      <h2 className="text-3xl font-bold text-center">
+        {titulo ?? "Lo que dicen nuestros clientes"}
+      </h2>
+      {subtitulo ? (
+        <p className="mt-3 mb-8 text-center text-muted-foreground max-w-2xl mx-auto">
+          {subtitulo}
+        </p>
+      ) : (
+        <div className="mb-8" />
+      )}
       <div className="grid gap-6 md:grid-cols-3">
         {bloque.datos.items.map((t, i) => (
           <blockquote key={i} className="rounded-lg border p-5 bg-muted/20">
