@@ -382,10 +382,22 @@ export function ReservaPublicaForm({
 
   return (
     <main
-      className="min-h-[100dvh] bg-white sm:bg-gradient-to-b sm:from-zinc-50 sm:to-zinc-100 sm:py-8 sm:px-6"
+      // Incrustado en una web: sin fondo propio ni alto de pantalla, para que se
+      // lea como una sección más y no como un recuadro pegado encima.
+      className={
+        embedded
+          ? "bg-transparent"
+          : "min-h-[100dvh] bg-white sm:bg-gradient-to-b sm:from-zinc-50 sm:to-zinc-100 sm:py-8 sm:px-6"
+      }
       style={styleVars}
     >
-      <div className="max-w-md mx-auto pb-[max(env(safe-area-inset-bottom),1.5rem)]">
+      <div
+        className={
+          embedded
+            ? "mx-auto w-full max-w-3xl"
+            : "max-w-md mx-auto pb-[max(env(safe-area-inset-bottom),1.5rem)]"
+        }
+      >
         {/* HERO con logo — oculto en embed para que el iframe quede limpio. */}
         {!embedded && (
           <header className="text-center pt-[max(env(safe-area-inset-top),1.5rem)] sm:pt-0 pb-4">

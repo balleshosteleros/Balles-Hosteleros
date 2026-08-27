@@ -227,9 +227,13 @@ function HistoriaPublica({ bloque }: { bloque: Extract<Bloque, { tipo: "historia
 
   return (
     <section className="px-4 py-20 md:py-28" id="historia">
-      <div className="mx-auto grid max-w-6xl items-center gap-12 md:grid-cols-2 md:gap-16">
+      <div
+        className={`mx-auto grid max-w-6xl items-center gap-14 md:gap-16 ${
+          imagen_url ? "md:grid-cols-2" : "max-w-3xl"
+        }`}
+      >
         {imagen_url ? (
-          <div className="relative order-1 md:order-none">
+          <div className="relative mb-6 md:mb-0">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={imagenOptimizada(imagen_url, { width: 900, quality: 74 })}
@@ -239,10 +243,13 @@ function HistoriaPublica({ bloque }: { bloque: Extract<Bloque, { tipo: "historia
               loading="lazy"
               decoding="async"
               className="aspect-[4/5] w-full rounded-2xl object-cover"
+              onError={(e) => {
+                e.currentTarget.src = imagen_url;
+              }}
             />
             {/* Año de apertura montado sobre la foto: ancla la historia de un vistazo. */}
             <div
-              className="absolute -bottom-5 left-6 rounded-xl px-6 py-3 text-center shadow-xl"
+              className="absolute bottom-4 left-4 rounded-xl px-6 py-3 text-center shadow-xl"
               style={{ backgroundColor: "var(--pw-primario)" }}
             >
               <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-black/70">Desde</p>
