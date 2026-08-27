@@ -17,7 +17,6 @@ export function HeaderRestaurante({ empresa }: { empresa: CartaEmpresaPublica })
   // cae al logo alternativo/principal si la empresa aún no ha subido isotipo.
   const marcaUrl = empresa.isotipo_url || empresa.logo_alt_url || empresa.logo_url || null;
 
-  const compact = scrollY > 80;
   const heroOpacity = Math.max(0, 1 - scrollY / 320);
   const heroParallax = scrollY * 0.4;
 
@@ -156,29 +155,10 @@ export function HeaderRestaurante({ empresa }: { empresa: CartaEmpresaPublica })
         </div>
       </div>
 
-      {/* Barra al hacer scroll: SOLO el nombre. Antes repetía el isotipo que ya
-          preside el hero justo encima —el mismo icono dos veces en pantalla— y
-          un rótulo "Carta digital" que no dice nada al comensal: ya sabe que
-          está leyendo la carta, la abrió con el QR de su mesa. */}
-      <div
-        className="sticky top-0 z-30 transition-all"
-        style={{
-          backgroundColor: compact ? "var(--carta-fondo)" : "transparent",
-          boxShadow: compact ? "0 1px 0 var(--carta-borde)" : "none",
-          backdropFilter: compact ? "saturate(140%) blur(10px)" : "none",
-          WebkitBackdropFilter: compact ? "saturate(140%) blur(10px)" : "none",
-        }}
-      >
-        <div className="mx-auto flex max-w-6xl items-center px-4 py-2.5 sm:px-6">
-          <span
-            className={`truncate text-base font-light tracking-[0.14em] transition-opacity duration-300 ${compact ? "opacity-100" : "opacity-0"}`}
-            style={{ fontFamily: "var(--carta-fuente-titulos)", color: "var(--carta-texto)" }}
-          >
-            {empresa.nombre}
-          </span>
-        </div>
-      </div>
-
+      {/* Sin barra pegajosa de cabecera: su unico contenido era el nombre, que
+          ya preside el hero justo encima —se leia BACANAL dos veces a la vez—.
+          Quien navega la carta se orienta por la barra de CATEGORIAS, que es la
+          que de verdad hace falta y ahora queda pegada al borde superior. */}
     </header>
   );
 }

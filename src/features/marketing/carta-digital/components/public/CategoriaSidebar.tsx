@@ -27,7 +27,7 @@ export function CategoriaSidebar({
     <>
       {/* Mobile: tabs horizontales sticky */}
       <nav
-        className="sticky top-[44px] z-20 -mx-4 mb-6 mt-4 border-b px-4 backdrop-blur lg:hidden"
+        className="sticky top-0 z-20 -mx-4 mb-6 mt-4 border-b px-4 backdrop-blur lg:hidden"
         style={{
           backgroundColor: "color-mix(in srgb, var(--carta-fondo) 92%, transparent)",
           borderColor: "var(--carta-borde)",
@@ -65,8 +65,8 @@ export function CategoriaSidebar({
       </nav>
 
       {/* Desktop: sidebar fija */}
-      <aside className="sticky top-[60px] hidden self-start lg:block lg:max-h-[calc(100vh-80px)]">
-        <div className="overflow-y-auto pr-2 lg:max-h-[calc(100vh-80px)]">
+      <aside className="sticky top-6 hidden self-start lg:block lg:max-h-[calc(100vh-48px)]">
+        <div className="overflow-y-auto pr-2 lg:max-h-[calc(100vh-48px)]">
           <ul className="flex flex-col gap-0.5 py-2">
             {categorias.map((c) => {
               const active = activeId === c.id;
