@@ -187,7 +187,7 @@ export async function previewReservaEmailPlantilla(input: {
     const [{ data: empresa }, { data: cfg }] = await Promise.all([
       supabase
         .from("empresas")
-        .select("nombre, logo_url, color")
+        .select("nombre, logo_url, color, datos_generales")
         .eq("id", empresaId)
         .maybeSingle(),
       supabase
@@ -202,6 +202,13 @@ export async function previewReservaEmailPlantilla(input: {
       empresaNombre: (empresa?.nombre as string | undefined) ?? "",
       logoUrl: (empresa?.logo_url as string | null | undefined) ?? null,
       colorPrimario: (empresa?.color as string | null | undefined) ?? null,
+      telefono: (() => {
+        const dg = empresa?.datos_generales as
+          | { telefonoPrincipal?: string | null }
+          | null
+          | undefined;
+        return dg?.telefonoPrincipal?.trim() || null;
+      })(),
       asuntoOverride: input.asuntoOverride,
       mensajeOverride: input.mensajeOverride,
       config: {

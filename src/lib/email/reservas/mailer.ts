@@ -57,6 +57,13 @@ type EmpresaRow = {
   isotipo_url: string | null;
   color: string | null;
   color_secundario: string | null;
+  /**
+   * Teléfono público del restaurante (`datos_generales.telefonoPrincipal`).
+   * Es la ÚNICA vía de contacto que se le ofrece al cliente: estos correos
+   * salen desde una dirección no-reply que nadie lee, así que invitarle a
+   * responder sería mandarle a un buzón muerto.
+   */
+  telefono: string | null;
 };
 
 type ReservaRow = {
@@ -231,7 +238,7 @@ export async function enviarReservaEmail(
     await Promise.all([
       admin
         .from("empresas")
-        .select("nombre, logo_url, isotipo_url, color, color_secundario")
+        .select("nombre, logo_url, isotipo_url, color, color_secundario, datos_generales")
         .eq("id", empresaId)
         .maybeSingle(),
       admin
@@ -256,6 +263,14 @@ export async function enviarReservaEmail(
     color: (empresaData?.color as string | null | undefined) ?? null,
     color_secundario:
       (empresaData?.color_secundario as string | null | undefined) ?? null,
+    telefono: (() => {
+      const dg = empresaData?.datos_generales as
+        | { telefonoPrincipal?: string | null }
+        | null
+        | undefined;
+      const tel = dg?.telefonoPrincipal?.trim();
+      return tel ? tel : null;
+    })(),
   };
 
   const config: ConfigRow = {
@@ -377,6 +392,7 @@ export async function enviarReservaEmail(
   const html = renderHtml({
     tipo,
     empresa,
+    telefono: empresa.telefono,
     cliente: placeholders.nombre,
     fechaLegible,
     horaLegible,
@@ -393,6 +409,7 @@ export async function enviarReservaEmail(
   const text = renderText({
     tipo,
     empresa: empresa.nombre,
+    telefono: empresa.telefono,
     cliente: placeholders.nombre,
     fechaLegible,
     horaLegible,
@@ -466,6 +483,9 @@ export async function enviarReservaEmail(
 interface RenderInput {
   tipo: ReservaEmailTipo;
   empresa: EmpresaRow;
+  /** Teléfono del restaurante para el pie. Duplicado de `empresa.telefono`
+   *  porque `renderText` recibe la empresa solo como nombre. */
+  telefono: string | null;
   cliente: string;
   fechaLegible: string;
   horaLegible: string;
@@ -676,8 +696,11 @@ function renderHtml(input: RenderInput): string {
             <tr>
               <td style="padding:24px 32px 28px 32px;border-top:1px solid #e2e8f0;">
                 <p style="margin:0;font-size:12px;color:#94a3b8;line-height:1.6;text-align:center;">
-                  ${footerSegunTipo(input.tipo)}
+                  ${footerSegunTipo(input.tipo, input.empresa.telefono)}
                   ${empresaNombre ? `<br/><strong style="color:#475569;">${escapeHtml(empresaNombre)}</strong>` : ""}
+                </p>
+                <p style="margin:10px 0 0 0;font-size:11px;color:#cbd5e1;line-height:1.5;text-align:center;">
+                  ${AVISO_NO_REPLY}
                 </p>
               </td>
             </tr>
@@ -728,7 +751,9 @@ function renderText(input: Omit<RenderInput, "empresa"> & { empresa: string }): 
       `Cupón aplicado: ${input.cuponCanjeadoBloque.codigo} - ${input.cuponCanjeadoBloque.tituloCliente}`,
     );
   }
-  lineas.push(``, footerSegunTipo(input.tipo, true));
+  const coletilla = footerSegunTipo(input.tipo, input.telefono, true);
+  if (coletilla) lineas.push(``, coletilla);
+  lineas.push(``, AVISO_NO_REPLY);
   return lineas.join("\n");
 }
 
@@ -749,24 +774,44 @@ function subtitulo(t: ReservaEmailTipo): string {
   }
 }
 
-function footerSegunTipo(t: ReservaEmailTipo, plain = false): string {
+/**
+ * Coletilla de contacto del pie.
+ *
+ * NUNCA se invita a responder al correo: estos envíos salen desde una
+ * dirección no-reply que nadie lee, así que un cliente que conteste se queda
+ * esperando una respuesta que no llega (y en el peor caso, cancela creyendo
+ * que ya ha avisado). Se le da el TELÉFONO del restaurante, que sí se atiende.
+ * Si la empresa no tiene teléfono cargado se omite la frase entera antes que
+ * mandarle a un buzón muerto.
+ */
+function footerSegunTipo(
+  t: ReservaEmailTipo,
+  telefono: string | null,
+  plain = false,
+): string {
+  const tel = telefono?.trim() || null;
+  // Sin teléfono no hay vía de contacto que ofrecer. El enlace de cancelar,
+  // que va en su propio bloque, sigue cubriendo el caso importante.
+  if (!tel) return "";
+  const telTxt = plain ? tel : telefonoHtml(tel);
+
   switch (t) {
     case "CONFIRMACION":
       return plain
-        ? "Si necesitas cancelar o modificar, responde a este correo."
-        : "¿Necesitas cancelar o modificar la reserva? Responde a este correo y te ayudamos.";
+        ? `Para cancelar o modificar la reserva, llámanos al ${telTxt}.`
+        : `¿Necesitas cancelar o modificar la reserva? Llámanos al ${telTxt}.`;
     case "RECONFIRMACION":
       return plain
-        ? "Responde a este correo para confirmar."
-        : "Responde a este correo para confirmar tu asistencia.";
+        ? `Para confirmar tu asistencia, llámanos al ${telTxt}.`
+        : `Para confirmar tu asistencia, llámanos al ${telTxt}.`;
     case "RECORDATORIO":
       return plain
-        ? "Si ya no puedes venir, responde a este correo."
-        : "Si finalmente no puedes venir, avísanos respondiendo a este correo.";
+        ? `Si ya no puedes venir, avísanos en el ${telTxt}.`
+        : `Si finalmente no puedes venir, avísanos en el ${telTxt}.`;
     case "CANCELACION":
       return plain
-        ? "Si fue un error, responde a este correo."
-        : "Si crees que es un error, responde a este correo y lo revisamos.";
+        ? `Si crees que es un error, llámanos al ${telTxt}.`
+        : `Si crees que es un error, llámanos al ${telTxt} y lo revisamos.`;
     case "SOLICITUD_VALORACION":
       // Sin coletilla: el bloque de estrellas ya lo dice todo y cualquier
       // texto extra debajo resta claridad a la única acción que se pide.
@@ -775,6 +820,23 @@ function footerSegunTipo(t: ReservaEmailTipo, plain = false): string {
       return "";
   }
 }
+
+/**
+ * Teléfono como enlace `tel:` — en el móvil, que es donde se lee casi todo el
+ * correo, llamar pasa a ser un solo toque.
+ */
+function telefonoHtml(tel: string): string {
+  const marcable = tel.replace(/[^\d+]/g, "");
+  return `<a href="tel:${escapeAttr(marcable)}" style="color:#64748b;text-decoration:underline;white-space:nowrap;">${escapeHtml(tel)}</a>`;
+}
+
+/**
+ * Aviso de buzón no monitorizado. Va en TODOS los correos de reserva, incluida
+ * la solicitud de valoración: el cliente debe saber que si contesta no le va a
+ * leer nadie, ANTES de escribir, no después de esperar respuesta.
+ */
+const AVISO_NO_REPLY =
+  "Este mensaje se ha enviado desde una dirección que no admite respuestas: los correos que se envíen aquí no se reciben ni se leen.";
 
 // ────────────────────────────────────────────────────────────────────────────
 // Helpers visuales y de texto
@@ -882,6 +944,9 @@ export interface PreviewInput {
   logoUrl: string | null;
   isotipoUrl?: string | null;
   colorPrimario: string | null;
+  /** Teléfono público del restaurante: el pie lo enseña como única vía de
+   *  contacto, así que la vista previa debe mostrar el real. */
+  telefono?: string | null;
   asuntoOverride: string | null;
   mensajeOverride: string | null;
   config: {
@@ -932,7 +997,9 @@ export function previewReservaEmail(input: PreviewInput): {
       isotipo_url: input.isotipoUrl ?? null,
       color: input.colorPrimario,
       color_secundario: null,
+      telefono: input.telefono ?? null,
     },
+    telefono: input.telefono ?? null,
     cliente: placeholders.nombre,
     fechaLegible: placeholders.fecha,
     horaLegible: placeholders.hora,

@@ -91,7 +91,7 @@ export const RESERVA_EMAIL_PLANTILLAS_SEED: ReservaEmailPlantillaSeed[] = [
     tipo: "RECONFIRMACION",
     asunto_default: "¿Mantienes tu reserva? · {{fecha}} {{hora}} · {{empresa}}",
     mensaje_default:
-      "Te escribimos para confirmar que mantienes la reserva. Si no nos contestas a este correo daremos por hecho que vienes.",
+      "Te escribimos para confirmar que mantienes la reserva. Si no nos dices lo contrario, daremos por hecho que vienes.",
   },
   {
     tipo: "RECORDATORIO",
@@ -102,7 +102,7 @@ export const RESERVA_EMAIL_PLANTILLAS_SEED: ReservaEmailPlantillaSeed[] = [
     tipo: "CANCELACION",
     asunto_default: "Reserva cancelada · {{fecha}} {{hora}} · {{empresa}}",
     mensaje_default:
-      "Hemos cancelado tu reserva. Si crees que es un error, responde a este correo y lo revisamos.",
+      "Hemos cancelado tu reserva. Si crees que es un error, llámanos y lo revisamos.",
   },
   {
     tipo: "POLITICA_AVISO",
