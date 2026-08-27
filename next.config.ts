@@ -72,7 +72,26 @@ const nextConfig: NextConfig = {
     ],
   },
   async rewrites() {
-    return [
+    return {
+      // beforeFiles: se evalúa ANTES que las páginas existentes.
+      //
+      // Los subdominios de preview TIENEN que ir aquí: en `afterFiles` (el
+      // array plano por defecto) el rewrite solo se aplica si la ruta no existe,
+      // y "/" existe siempre —es la home de la app—, así que ganaba ella y el
+      // subdominio seguía mostrando el login en vez de la web del restaurante.
+      beforeFiles: PREVIEW_WEB_HOSTS.flatMap((host) => [
+        {
+          source: '/',
+          has: [{ type: 'host' as const, value: host }],
+          destination: '/sitio-publico',
+        },
+        {
+          source: '/:ruta((?!sitio-publico|_next/|api/|favicon|robots|sitemap)[^/.]+)',
+          has: [{ type: 'host' as const, value: host }],
+          destination: '/sitio-publico/:ruta',
+        },
+      ]),
+      afterFiles: [
       // `software.balleshosteleros.com` sirve la landing integrada sin exponer
       // `/software` en la URL ni mantener un segundo proyecto de Vercel.
       {
@@ -91,23 +110,8 @@ const nextConfig: NextConfig = {
         has: [{ type: 'host', value: QR_HOST }],
         destination: '/q/:codigo',
       },
-      // Subdominios de preview de páginas web: sirven la web de la empresa desde
-      // la ruta pública `/sitio-publico`, igual que hace el proxy con un dominio propio.
-      // La portada y las páginas internas (política de privacidad, etc.) van por
-      // separado porque el destino cambia: "" vs el slug de la ruta.
-      ...PREVIEW_WEB_HOSTS.flatMap((host) => [
-        {
-          source: '/',
-          has: [{ type: 'host' as const, value: host }],
-          destination: '/sitio-publico',
-        },
-        {
-          source: '/:ruta((?!sitio-publico|_next/|api/|favicon|robots|sitemap)[^/.]+)',
-          has: [{ type: 'host' as const, value: host }],
-          destination: '/sitio-publico/:ruta',
-        },
-      ]),
-    ]
+      ],
+    }
   },
   async redirects() {
     return [
