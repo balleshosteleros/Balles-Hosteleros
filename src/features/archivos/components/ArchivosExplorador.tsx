@@ -1,0 +1,878 @@
+"use client";
+
+/**
+ * PRP-079 — Explorador de Archivos: TODA la lógica del Drive propio.
+ *
+ * Se usa desde dos sitios y por eso vive aparte, sin duplicarse:
+ *  · escritorio → `ArchivosDrawer`, el panel lateral de la barra superior.
+ *  · móvil      → `/m/archivos`, una pantalla completa.
+ *
+ * Carpeta raíz por departamento (solo las que el rol ve), subcarpetas libres
+ * dentro, y cuadrícula de miniaturas de fotos y vídeos. La subida va DIRECTA
+ * del navegador a R2 con URL firmada, en cola de 4 en paralelo: es lo que hace
+ * que subir 200 fotos desde el iPhone sea rápido.
+ */
+
+import { ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  Folder,
+  FolderPlus,
+  Upload,
+  ChevronRight,
+  Play,
+  Trash2,
+  Download,
+  Pencil,
+  ImageIcon,
+  MoreVertical,
+  FolderInput,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/shared/components/ui/dropdown-menu";
+import { Input } from "@/components/ui/input";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { toast } from "sonner";
+import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
+import {
+  listCarpetasRaiz,
+  getContenidoCarpeta,
+  createSubcarpeta,
+  renameCarpeta,
+  deleteCarpeta,
+  presignSubida,
+  registrarArchivo,
+  deleteArchivo,
+  renameArchivo,
+  moverArchivo,
+  moverCarpeta,
+  listDestinosMover,
+} from "@/features/archivos/actions/archivos-actions";
+import {
+  esVideo,
+  MAX_BYTES_ARCHIVO,
+  type Archivo,
+  type Carpeta,
+} from "@/features/archivos/types";
+import { generarMiniatura, leerDimensiones } from "@/features/archivos/lib/miniaturas";
+import { allSections } from "@/features/layout/data/nav-routes";
+
+/** Cuántos archivos se suben a la vez. Más en paralelo satura el móvil. */
+const SUBIDAS_EN_PARALELO = 4;
+
+/**
+ * Las carpetas de departamento se listan en el MISMO orden que el menú
+ * lateral. `allSections` es la fuente única de ese orden: si allí cambia, aquí
+ * cambia solo. Se compara por clave canónica, que es lo que guarda la carpeta.
+ */
+const ORDEN_DEPARTAMENTOS = allSections.map((s) =>
+  s.modulo.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().trim(),
+);
+
+/** Posición en el menú lateral. Lo desconocido va al final. */
+function ordenDepartamento(departamento: string): number {
+  const clave = departamento
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toUpperCase()
+    .trim();
+  // La carpeta guarda la clave canónica (RRHH), el menú el nombre largo
+  // (RECURSOS HUMANOS): vale que uno empiece por el otro.
+  const i = ORDEN_DEPARTAMENTOS.findIndex(
+    (m) => m === clave || m.startsWith(clave) || clave.startsWith(m),
+  );
+  return i === -1 ? Number.MAX_SAFE_INTEGER : i;
+}
+
+type EstadoSubida = {
+  nombre: string;
+  progreso: number;
+  error?: string;
+};
+
+function formatearTamano(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 ** 2) return `${(bytes / 1024).toFixed(0)} KB`;
+  if (bytes < 1024 ** 3) return `${(bytes / 1024 ** 2).toFixed(1).replace(".", ",")} MB`;
+  return `${(bytes / 1024 ** 3).toFixed(2).replace(".", ",")} GB`;
+}
+
+function formatearDuracion(seg: number): string {
+  const m = Math.floor(seg / 60);
+  const s = Math.floor(seg % 60);
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
+
+interface Props {
+  /**
+   * Sitio desde el que se abre. En "drawer" el explorador solo carga cuando el
+   * panel está abierto; en "pagina" (móvil) carga de entrada.
+   */
+  variante: "drawer" | "pagina";
+  /** Solo para "drawer": si el panel está abierto. */
+  abierto?: boolean;
+  /**
+   * Acciones de la cabecera (Carpeta / Subir). El envoltorio decide dónde
+   * pintarlas: en el título del Sheet, o en la cabecera de la pantalla móvil.
+   */
+  renderAcciones?: (acciones: ReactNode) => ReactNode;
+}
+
+export function ArchivosExplorador({ variante, abierto = true, renderAcciones }: Props) {
+  // En el móvil no existe el "pasar por encima": los menús de acciones se ven
+  // siempre. En escritorio aparecen al pasar el ratón para no ensuciar la vista.
+  const accionSiempreVisible = variante === "pagina";
+  const [cargando, setCargando] = useState(false);
+
+  // null = estamos en la pantalla inicial (lista de departamentos).
+  const [carpetaId, setCarpetaId] = useState<string | null>(null);
+  const [raices, setRaices] = useState<Carpeta[]>([]);
+  const [carpeta, setCarpeta] = useState<Carpeta | null>(null);
+  const [ruta, setRuta] = useState<Carpeta[]>([]);
+  const [subcarpetas, setSubcarpetas] = useState<Carpeta[]>([]);
+  const [archivos, setArchivos] = useState<Archivo[]>([]);
+
+  const [subidas, setSubidas] = useState<EstadoSubida[]>([]);
+  const [visor, setVisor] = useState<Archivo | null>(null);
+  const [nuevaCarpeta, setNuevaCarpeta] = useState<string | null>(null);
+  const [renombrando, setRenombrando] = useState<Carpeta | null>(null);
+  const [nombreEdit, setNombreEdit] = useState("");
+  const [aBorrar, setABorrar] = useState<Archivo | Carpeta | null>(null);
+  // Mover: qué se mueve, a dónde puede ir y qué destino se ha elegido.
+  const [aMover, setAMover] = useState<Archivo | Carpeta | null>(null);
+  const [destinos, setDestinos] = useState<
+    Array<{ id: string; etiqueta: string; departamento: string }>
+  >([]);
+  const [destinoElegido, setDestinoElegido] = useState<string>("");
+  const [cargandoDestinos, setCargandoDestinos] = useState(false);
+  const [renombrandoArchivo, setRenombrandoArchivo] = useState<Archivo | null>(null);
+
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  /* ── Carga ──────────────────────────────────────────────────────────── */
+
+  const cargarRaices = useCallback(async () => {
+    setCargando(true);
+    const res = await listCarpetasRaiz();
+    if (res.ok)
+      setRaices(
+        [...res.data].sort(
+          (a, b) => ordenDepartamento(a.departamento) - ordenDepartamento(b.departamento),
+        ),
+      );
+    else toast.error(res.error);
+    setCargando(false);
+  }, []);
+
+  const cargarCarpeta = useCallback(async (id: string) => {
+    setCargando(true);
+    const res = await getContenidoCarpeta(id);
+    if (res.ok) {
+      setCarpeta(res.data.carpeta);
+      setRuta(res.data.ruta);
+      setSubcarpetas(res.data.subcarpetas);
+      setArchivos(res.data.archivos);
+    } else {
+      toast.error(res.error);
+      setCarpetaId(null);
+    }
+    setCargando(false);
+  }, []);
+
+  useEffect(() => {
+    if (!abierto) return;
+    if (carpetaId) void cargarCarpeta(carpetaId);
+    else void cargarRaices();
+  }, [abierto, carpetaId, cargarCarpeta, cargarRaices]);
+
+  /* ── Subida ─────────────────────────────────────────────────────────── */
+
+  /** Sube un archivo a R2 con seguimiento de progreso real. */
+  const subirAR2 = (url: string, file: Blob, onProgreso: (p: number) => void) =>
+    new Promise<void>((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open("PUT", url);
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable) onProgreso(Math.round((e.loaded / e.total) * 100));
+      };
+      xhr.onload = () =>
+        xhr.status >= 200 && xhr.status < 300
+          ? resolve()
+          : reject(new Error(`Error ${xhr.status} al subir`));
+      xhr.onerror = () => reject(new Error("Fallo de red"));
+      xhr.send(file);
+    });
+
+  const subirUno = useCallback(
+    async (file: File, indice: number, destinoId: string) => {
+      const marcar = (patch: Partial<EstadoSubida>) =>
+        setSubidas((prev) => prev.map((s, i) => (i === indice ? { ...s, ...patch } : s)));
+
+      try {
+        if (file.size > MAX_BYTES_ARCHIVO) {
+          throw new Error(`Supera los ${formatearTamano(MAX_BYTES_ARCHIVO)}`);
+        }
+
+        const firma = await presignSubida(destinoId, file.name, file.type, file.size);
+        if (!firma.ok) throw new Error(firma.error);
+
+        // Miniatura y dimensiones se calculan en el navegador: así el servidor
+        // no tiene que procesar vídeo ni añadimos dependencias nuevas.
+        const [miniatura, dimensiones] = await Promise.all([
+          generarMiniatura(file).catch(() => null),
+          leerDimensiones(file).catch(() => null),
+        ]);
+
+        await subirAR2(firma.data.uploadUrl, file, (p) => marcar({ progreso: p }));
+
+        if (miniatura) {
+          // Sin miniatura la galería sigue funcionando: no se aborta la subida.
+          await subirAR2(firma.data.miniaturaUploadUrl, miniatura, () => {}).catch(
+            () => {},
+          );
+        }
+
+        const reg = await registrarArchivo({
+          carpetaId: destinoId,
+          nombre: file.name,
+          r2Key: firma.data.r2Key,
+          miniaturaKey: miniatura ? firma.data.miniaturaKey : null,
+          mime: file.type,
+          tamanoBytes: file.size,
+          ancho: dimensiones?.ancho ?? null,
+          alto: dimensiones?.alto ?? null,
+          duracionSeg: dimensiones?.duracionSeg ?? null,
+        });
+        if (!reg.ok) throw new Error(reg.error);
+
+        marcar({ progreso: 100 });
+        setArchivos((prev) => [reg.data, ...prev]);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : "Error al subir";
+        marcar({ error: msg });
+      }
+    },
+    [],
+  );
+
+  const onArchivosElegidos = useCallback(
+    async (files: FileList | null) => {
+      if (!files?.length || !carpetaId) return;
+      const lista = Array.from(files);
+      const destinoId = carpetaId;
+
+      setSubidas(lista.map((f) => ({ nombre: f.name, progreso: 0 })));
+
+      // Cola con tope de concurrencia: 200 fotos a la vez tumbarían el móvil.
+      let siguiente = 0;
+      const trabajador = async () => {
+        while (siguiente < lista.length) {
+          const i = siguiente++;
+          await subirUno(lista[i], i, destinoId);
+        }
+      };
+      await Promise.all(
+        Array.from({ length: Math.min(SUBIDAS_EN_PARALELO, lista.length) }, trabajador),
+      );
+
+      setSubidas((prev) => {
+        const fallidos = prev.filter((s) => s.error);
+        if (fallidos.length) {
+          toast.error(`${fallidos.length} de ${lista.length} archivos no se pudieron subir`);
+          return fallidos;
+        }
+        toast.success(
+          lista.length === 1 ? "Archivo subido" : `${lista.length} archivos subidos`,
+        );
+        return [];
+      });
+
+      if (inputRef.current) inputRef.current.value = "";
+    },
+    [carpetaId, subirUno],
+  );
+
+  /* ── Carpetas ───────────────────────────────────────────────────────── */
+
+  const onCrearCarpeta = async () => {
+    if (!carpetaId || !nuevaCarpeta?.trim()) return;
+    const res = await createSubcarpeta(carpetaId, nuevaCarpeta.trim());
+    if (!res.ok) return toast.error(res.error);
+    setSubcarpetas((prev) =>
+      [...prev, res.data].sort((a, b) => a.nombre.localeCompare(b.nombre)),
+    );
+    setNuevaCarpeta(null);
+    toast.success("Carpeta creada");
+  };
+
+  const onRenombrar = async () => {
+    if (!renombrando || !nombreEdit.trim()) return;
+    const res = await renameCarpeta(renombrando.id, nombreEdit.trim());
+    if (!res.ok) return toast.error(res.error);
+    setSubcarpetas((prev) =>
+      prev
+        .map((c) => (c.id === renombrando.id ? { ...c, nombre: nombreEdit.trim() } : c))
+        .sort((a, b) => a.nombre.localeCompare(b.nombre)),
+    );
+    setRenombrando(null);
+    toast.success("Carpeta renombrada");
+  };
+
+  /** Abre el diálogo de mover y pide los destinos permitidos al servidor. */
+  const abrirMover = async (item: Archivo | Carpeta) => {
+    setAMover(item);
+    setDestinoElegido("");
+    setCargandoDestinos(true);
+    // Para un archivo no hay descendencia que excluir: se pide con su carpeta
+    // actual, que ya queda fuera de la lista por ser el origen.
+    const res = await listDestinosMover(
+      "esRaiz" in item ? item.id : item.carpetaId,
+    );
+    if (res.ok) {
+      setDestinos(
+        "esRaiz" in item
+          ? res.data
+          : // Un archivo sí puede volver a su propia carpeta padre, pero no
+            // tiene sentido ofrecer la carpeta en la que ya está.
+            res.data.filter((d) => d.id !== item.carpetaId),
+      );
+    } else {
+      toast.error(res.error);
+      setDestinos([]);
+    }
+    setCargandoDestinos(false);
+  };
+
+  const onConfirmarMover = async () => {
+    if (!aMover || !destinoElegido) return;
+    const esCarpeta = "esRaiz" in aMover;
+    const res = esCarpeta
+      ? await moverCarpeta(aMover.id, destinoElegido)
+      : await moverArchivo(aMover.id, destinoElegido);
+    if (!res.ok) return toast.error(res.error);
+
+    // Sale de la vista actual: se quita de la lista sin recargar todo.
+    if (esCarpeta) setSubcarpetas((prev) => prev.filter((c) => c.id !== aMover.id));
+    else setArchivos((prev) => prev.filter((a) => a.id !== aMover.id));
+    setAMover(null);
+    toast.success(esCarpeta ? "Carpeta movida" : "Archivo movido");
+  };
+
+  const onRenombrarArchivo = async () => {
+    if (!renombrandoArchivo || !nombreEdit.trim()) return;
+    const res = await renameArchivo(renombrandoArchivo.id, nombreEdit.trim());
+    if (!res.ok) return toast.error(res.error);
+    setArchivos((prev) =>
+      prev.map((a) =>
+        a.id === renombrandoArchivo.id ? { ...a, nombre: nombreEdit.trim() } : a,
+      ),
+    );
+    setRenombrandoArchivo(null);
+    toast.success("Archivo renombrado");
+  };
+
+  const onConfirmarBorrado = async () => {
+    if (!aBorrar) return;
+    const esCarpeta = "esRaiz" in aBorrar;
+    const res = esCarpeta
+      ? await deleteCarpeta(aBorrar.id)
+      : await deleteArchivo(aBorrar.id);
+    if (!res.ok) {
+      setABorrar(null);
+      return toast.error(res.error);
+    }
+    if (esCarpeta) setSubcarpetas((prev) => prev.filter((c) => c.id !== aBorrar.id));
+    else setArchivos((prev) => prev.filter((a) => a.id !== aBorrar.id));
+    setABorrar(null);
+    toast.success(esCarpeta ? "Carpeta eliminada" : "Archivo eliminado");
+  };
+
+  /* ── Render ─────────────────────────────────────────────────────────── */
+
+  const enRaiz = carpetaId === null;
+  const migas = useMemo(() => (carpeta ? [...ruta, carpeta] : []), [ruta, carpeta]);
+
+  const acciones = !enRaiz ? (
+    <div className="flex items-center gap-1.5">
+      <Button
+        size="sm"
+        variant="outline"
+        className="h-7 gap-1"
+        onClick={() => setNuevaCarpeta("")}
+      >
+        <FolderPlus className="h-3.5 w-3.5" />
+        Carpeta
+      </Button>
+      <Button
+        size="sm"
+        className="h-7 gap-1 bg-cyan-600 text-white hover:bg-cyan-700"
+        onClick={() => inputRef.current?.click()}
+      >
+        <Upload className="h-3.5 w-3.5" />
+        Subir
+      </Button>
+    </div>
+  ) : null;
+
+  return (
+    <>
+      {renderAcciones?.(acciones)}
+
+
+        {/*
+          El selector nativo: en iPhone abre directamente la galería de Fotos y
+          permite marcar muchas de una vez. `multiple` es lo que hace que se
+          puedan mandar 200 fotos en una sola pasada.
+        */}
+        <input
+          ref={inputRef}
+          type="file"
+          accept="image/*,video/*"
+          multiple
+          className="hidden"
+          onChange={(e) => void onArchivosElegidos(e.target.files)}
+        />
+
+        {/* Miga de pan */}
+        {!enRaiz && (
+          <div className="flex items-center gap-1 overflow-x-auto border-b px-4 py-2 text-xs shrink-0">
+            <button
+              className="shrink-0 text-muted-foreground hover:text-foreground"
+              onClick={() => setCarpetaId(null)}
+            >
+              Departamentos
+            </button>
+            {migas.map((c) => (
+              <span key={c.id} className="flex shrink-0 items-center gap-1">
+                <ChevronRight className="h-3 w-3 text-muted-foreground" />
+                <button
+                  className={
+                    c.id === carpetaId
+                      ? "font-medium text-foreground"
+                      : "text-muted-foreground hover:text-foreground"
+                  }
+                  onClick={() => setCarpetaId(c.id)}
+                >
+                  {c.nombre}
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
+
+        {/* Progreso de subida */}
+        {subidas.length > 0 && (
+          <div className="max-h-40 space-y-1.5 overflow-y-auto border-b bg-muted/40 px-4 py-2 shrink-0">
+            {subidas.map((s, i) => (
+              <div key={`${s.nombre}-${i}`} className="text-xs">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="truncate">{s.nombre}</span>
+                  <span
+                    className={
+                      s.error
+                        ? "shrink-0 text-destructive"
+                        : "shrink-0 text-muted-foreground"
+                    }
+                  >
+                    {s.error ?? `${s.progreso} %`}
+                  </span>
+                </div>
+                {!s.error && (
+                  <div className="mt-1 h-1 overflow-hidden rounded-full bg-muted">
+                    <div
+                      className="h-full bg-cyan-600 transition-all"
+                      style={{ width: `${s.progreso}%` }}
+                    />
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div className="flex-1 overflow-y-auto p-4">
+          {cargando ? (
+            <div className="flex h-40 items-center justify-center">
+              <LoadingSpinner />
+            </div>
+          ) : enRaiz ? (
+            /* Lista de departamentos. Solo los que el rol puede ver. */
+            raices.length === 0 ? (
+              <p className="py-10 text-center text-sm text-muted-foreground">
+                No tienes ningún departamento con archivos disponibles.
+              </p>
+            ) : (
+              <div className="space-y-1">
+                {raices.map((c) => (
+                  <button
+                    key={c.id}
+                    onClick={() => setCarpetaId(c.id)}
+                    className="flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-left text-sm hover:bg-muted"
+                  >
+                    <Folder className="h-4 w-4 shrink-0 text-cyan-600" />
+                    <span className="truncate">{c.nombre}</span>
+                    <ChevronRight className="ml-auto h-4 w-4 shrink-0 text-muted-foreground" />
+                  </button>
+                ))}
+              </div>
+            )
+          ) : (
+            <>
+              {/* Subcarpetas */}
+              {subcarpetas.length > 0 && (
+                <div className="mb-4 space-y-1">
+                  {subcarpetas.map((c) => (
+                    <div
+                      key={c.id}
+                      className="group flex items-center gap-2 rounded-md px-3 py-2 text-sm hover:bg-muted"
+                    >
+                      <button
+                        onClick={() => setCarpetaId(c.id)}
+                        className="flex min-w-0 flex-1 items-center gap-3 text-left"
+                      >
+                        <Folder className="h-4 w-4 shrink-0 text-cyan-600" />
+                        <span className="truncate">{c.nombre}</span>
+                      </button>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <button
+                            className={`rounded p-0.5 transition-opacity hover:bg-muted-foreground/10 data-[state=open]:opacity-100 ${
+                              accionSiempreVisible
+                                ? "opacity-100"
+                                : "opacity-0 group-hover:opacity-100"
+                            }`}
+                            title="Acciones"
+                          >
+                            <MoreVertical className="h-3.5 w-3.5 text-muted-foreground" />
+                          </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem
+                            onClick={() => {
+                              setRenombrando(c);
+                              setNombreEdit(c.nombre);
+                            }}
+                          >
+                            <Pencil className="mr-2 h-3.5 w-3.5" />
+                            Renombrar
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => void abrirMover(c)}>
+                            <FolderInput className="mr-2 h-3.5 w-3.5" />
+                            Mover a…
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            className="text-destructive focus:text-destructive"
+                            onClick={() => setABorrar(c)}
+                          >
+                            <Trash2 className="mr-2 h-3.5 w-3.5" />
+                            Eliminar
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Cuadrícula de fotos y vídeos */}
+              {archivos.length === 0 && subcarpetas.length === 0 ? (
+                <div className="py-10 text-center">
+                  <ImageIcon className="mx-auto mb-3 h-8 w-8 text-muted-foreground/50" />
+                  <p className="text-sm text-muted-foreground">Esta carpeta está vacía.</p>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="mt-3 gap-1"
+                    onClick={() => inputRef.current?.click()}
+                  >
+                    <Upload className="h-3.5 w-3.5" />
+                    Subir
+                  </Button>
+                </div>
+              ) : (
+                <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+                  {archivos.map((a) => (
+                    <div
+                      key={a.id}
+                      className="group relative aspect-square overflow-hidden rounded-md bg-muted"
+                      title={a.nombre}
+                    >
+                      {/* Menú de acciones del archivo. Va fuera del botón que
+                          abre el visor: un botón dentro de otro no es válido. */}
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <button
+                            className={`absolute right-1 top-1 z-10 rounded bg-black/50 p-1 transition-opacity hover:bg-black/70 data-[state=open]:opacity-100 ${
+                              accionSiempreVisible
+                                ? "opacity-100"
+                                : "opacity-0 group-hover:opacity-100"
+                            }`}
+                            title="Acciones"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <MoreVertical className="h-3.5 w-3.5 text-white" />
+                          </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem
+                            onClick={() => {
+                              setRenombrandoArchivo(a);
+                              setNombreEdit(a.nombre);
+                            }}
+                          >
+                            <Pencil className="mr-2 h-3.5 w-3.5" />
+                            Renombrar
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => void abrirMover(a)}>
+                            <FolderInput className="mr-2 h-3.5 w-3.5" />
+                            Mover a…
+                          </DropdownMenuItem>
+                          {a.puedeBorrar && (
+                            <DropdownMenuItem
+                              className="text-destructive focus:text-destructive"
+                              onClick={() => setABorrar(a)}
+                            >
+                              <Trash2 className="mr-2 h-3.5 w-3.5" />
+                              Eliminar
+                            </DropdownMenuItem>
+                          )}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+
+                      <button
+                        onClick={() => setVisor(a)}
+                        className="block h-full w-full"
+                      >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={`/api/archivos/ver?id=${a.id}&thumb=1`}
+                        alt={a.nombre}
+                        loading="lazy"
+                        className="h-full w-full object-cover transition-transform group-hover:scale-105"
+                      />
+                      {esVideo(a.mime) && (
+                        <span className="absolute inset-0 flex items-center justify-center bg-black/25">
+                          <Play className="h-6 w-6 fill-white text-white" />
+                        </span>
+                      )}
+                        {a.duracionSeg != null && (
+                          <span className="absolute bottom-1 right-1 rounded bg-black/70 px-1 text-[10px] text-white">
+                            {formatearDuracion(a.duracionSeg)}
+                          </span>
+                        )}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+
+
+      {/* Visor a pantalla completa */}
+      <Dialog open={!!visor} onOpenChange={(v) => !v && setVisor(null)}>
+        <DialogContent className="max-w-4xl gap-0 p-0">
+          <DialogHeader className="flex-row items-center justify-between gap-2 border-b px-4 py-2.5 pr-12">
+            <DialogTitle className="truncate text-sm font-medium">
+              {visor?.nombre}
+            </DialogTitle>
+            <div className="flex shrink-0 items-center gap-1.5">
+              <span className="text-xs text-muted-foreground">
+                {visor ? formatearTamano(visor.tamanoBytes) : ""}
+              </span>
+              <a
+                href={visor ? `/api/archivos/ver?id=${visor.id}&descargar=1` : "#"}
+                title="Descargar"
+                className="rounded p-1.5 hover:bg-muted"
+              >
+                <Download className="h-4 w-4" />
+              </a>
+              {visor?.puedeBorrar && (
+                <button
+                  title="Eliminar"
+                  className="rounded p-1.5 hover:bg-muted"
+                  onClick={() => {
+                    const objetivo = visor;
+                    setVisor(null);
+                    setABorrar(objetivo);
+                  }}
+                >
+                  <Trash2 className="h-4 w-4 text-destructive" />
+                </button>
+              )}
+            </div>
+          </DialogHeader>
+          <div className="flex max-h-[75vh] items-center justify-center bg-black">
+            {visor && esVideo(visor.mime) ? (
+              <video
+                src={`/api/archivos/ver?id=${visor.id}`}
+                controls
+                autoPlay
+                className="max-h-[75vh] w-full"
+              />
+            ) : visor ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={`/api/archivos/ver?id=${visor.id}`}
+                alt={visor.nombre}
+                className="max-h-[75vh] w-auto object-contain"
+              />
+            ) : null}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Nueva carpeta */}
+      <Dialog
+        open={nuevaCarpeta !== null}
+        onOpenChange={(v) => !v && setNuevaCarpeta(null)}
+      >
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Nueva carpeta</DialogTitle>
+          </DialogHeader>
+          <Input
+            autoFocus
+            value={nuevaCarpeta ?? ""}
+            placeholder="Nombre de la carpeta"
+            onChange={(e) => setNuevaCarpeta(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && void onCrearCarpeta()}
+          />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setNuevaCarpeta(null)}>
+              Cancelar
+            </Button>
+            <Button onClick={() => void onCrearCarpeta()}>Crear</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Renombrar carpeta */}
+      <Dialog open={!!renombrando} onOpenChange={(v) => !v && setRenombrando(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Renombrar carpeta</DialogTitle>
+          </DialogHeader>
+          <Input
+            autoFocus
+            value={nombreEdit}
+            onChange={(e) => setNombreEdit(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && void onRenombrar()}
+          />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRenombrando(null)}>
+              Cancelar
+            </Button>
+            <Button onClick={() => void onRenombrar()}>Guardar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Renombrar archivo */}
+      <Dialog
+        open={!!renombrandoArchivo}
+        onOpenChange={(v) => !v && setRenombrandoArchivo(null)}
+      >
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Renombrar archivo</DialogTitle>
+          </DialogHeader>
+          <Input
+            autoFocus
+            value={nombreEdit}
+            onChange={(e) => setNombreEdit(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && void onRenombrarArchivo()}
+          />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRenombrandoArchivo(null)}>
+              Cancelar
+            </Button>
+            <Button onClick={() => void onRenombrarArchivo()}>Guardar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Mover a otra carpeta — solo salen destinos que el rol puede ver */}
+      <Dialog open={!!aMover} onOpenChange={(v) => !v && setAMover(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              {aMover && "esRaiz" in aMover ? "Mover carpeta" : "Mover archivo"}
+            </DialogTitle>
+          </DialogHeader>
+
+          {cargandoDestinos ? (
+            <div className="flex h-32 items-center justify-center">
+              <LoadingSpinner />
+            </div>
+          ) : destinos.length === 0 ? (
+            <p className="py-4 text-sm text-muted-foreground">
+              No hay ninguna otra carpeta a la que puedas mover esto.
+            </p>
+          ) : (
+            <div className="max-h-72 space-y-0.5 overflow-y-auto">
+              {destinos.map((d) => (
+                <button
+                  key={d.id}
+                  onClick={() => setDestinoElegido(d.id)}
+                  className={`flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm ${
+                    destinoElegido === d.id
+                      ? "bg-cyan-600/10 font-medium text-cyan-700 dark:text-cyan-400"
+                      : "hover:bg-muted"
+                  }`}
+                >
+                  <Folder className="h-4 w-4 shrink-0 text-cyan-600" />
+                  <span className="truncate">{d.etiqueta}</span>
+                </button>
+              ))}
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAMover(null)}>
+              Cancelar
+            </Button>
+            <Button disabled={!destinoElegido} onClick={() => void onConfirmarMover()}>
+              Mover
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Confirmación de borrado — UI propia, nunca confirm() del navegador */}
+      <Dialog open={!!aBorrar} onOpenChange={(v) => !v && setABorrar(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>
+              {aBorrar && "esRaiz" in aBorrar ? "Eliminar carpeta" : "Eliminar archivo"}
+            </DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            {aBorrar && "esRaiz" in aBorrar
+              ? "La carpeta debe estar vacía. Esta acción no se puede deshacer."
+              : "El archivo se borrará definitivamente. Esta acción no se puede deshacer."}
+          </p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setABorrar(null)}>
+              Cancelar
+            </Button>
+            <Button variant="destructive" onClick={() => void onConfirmarBorrado()}>
+              Eliminar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}

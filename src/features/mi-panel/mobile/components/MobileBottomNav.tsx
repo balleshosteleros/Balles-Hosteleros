@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, CheckSquare2, MessageCircle, Phone } from "lucide-react";
+import { Home, CheckSquare2, MessageCircle, Phone, FolderOpen } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
 
 type NavItem = {
@@ -17,6 +17,7 @@ const items: readonly NavItem[] = [
   { href: "/m/llamar", label: "Llamar", icon: Phone },
   { href: "/m/tareas", label: "Tareas", icon: CheckSquare2, primary: true },
   { href: "/m/comunicacion", label: "Chat", icon: MessageCircle },
+  { href: "/m/archivos", label: "Archivos", icon: FolderOpen },
 ];
 
 export function MobileBottomNav() {
@@ -43,7 +44,9 @@ export function MobileBottomNav() {
               <Link
                 href={item.href}
                 className={cn(
-                  "flex flex-col items-center justify-center gap-0.5 py-2.5 text-[11px] font-medium transition-colors",
+                  // 5 iconos dejan ~62 px por celda en un iPhone SE: la
+                  // etiqueta se achica un punto y no se parte en dos líneas.
+                  "flex flex-col items-center justify-center gap-0.5 px-0.5 py-2.5 text-[10px] font-medium leading-tight transition-colors",
                   active ? "text-foreground" : "text-muted-foreground hover:text-foreground",
                 )}
               >
@@ -54,7 +57,7 @@ export function MobileBottomNav() {
                   )}
                   strokeWidth={active ? 2.4 : 2}
                 />
-                <span>{item.label}</span>
+                <span className="w-full truncate text-center">{item.label}</span>
               </Link>
             </li>
           );
