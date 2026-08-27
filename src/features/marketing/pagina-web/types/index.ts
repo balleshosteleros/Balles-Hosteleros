@@ -36,6 +36,8 @@ export interface BloqueBase {
 }
 
 export interface HeroDatos {
+  /** Vídeo de fondo (mp4). Manda sobre `foto_url`, que queda de cartel. */
+  video_url?: string;
   titulo: string;
   subtitulo?: string;
   cta?: { label: string; href: string };

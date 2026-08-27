@@ -320,39 +320,57 @@ function BolsaInspectoresPublico({
 }
 
 function HeroPublico({ bloque }: { bloque: Extract<Bloque, { tipo: "hero" }> }) {
-  const { titulo, subtitulo, cta, foto_url, overlay } = bloque.datos;
+  const { titulo, subtitulo, cta, foto_url, overlay, video_url } = bloque.datos;
+  const poster = foto_url ? imagenOptimizada(foto_url, { width: 1600, quality: 72 }) : undefined;
+
   return (
-    <section
-      className="relative w-full min-h-[88vh] md:min-h-screen flex items-center justify-center text-center text-white"
-      style={
-        foto_url
-          ? {
-              backgroundImage: `url(${imagenOptimizada(foto_url, { width: 1600, quality: 72 })})`,
-              backgroundSize: "cover",
-              backgroundPosition: "center",
-            }
-          : { background: "linear-gradient(135deg, #111, #333)" }
-      }
-    >
-      {foto_url ? (
+    <section className="relative w-full min-h-[92vh] md:min-h-screen flex items-center justify-center overflow-hidden text-center text-white">
+      {/* Fondo: vídeo si lo hay (como en GHL), si no la foto. El vídeo entra en
+          bucle, mudo y sin controles: es ambiente, no un reproductor. */}
+      {video_url ? (
+        <video
+          src={video_url}
+          poster={poster}
+          autoPlay
+          muted
+          loop
+          playsInline
+          preload="metadata"
+          className="absolute inset-0 h-full w-full object-cover"
+        />
+      ) : poster ? (
         <div
           className="absolute inset-0"
-          style={{ background: `rgba(0,0,0,${overlay ?? 0.4})` }}
+          style={{ backgroundImage: `url(${poster})`, backgroundSize: "cover", backgroundPosition: "center" }}
         />
-      ) : null}
-      <div className="relative z-10 px-4 max-w-4xl">
-        {/* GHL pone el eyebrow ("EXPERIENCIA") ENCIMA del titular, pequeño y
-            con mucho tracking. Debajo quedaba como un subtítulo cualquiera. */}
+      ) : (
+        <div className="absolute inset-0" style={{ background: "linear-gradient(135deg, #111, #333)" }} />
+      )}
+
+      {/* Doble velo: uno plano que garantiza contraste y un degradado que funde
+          la parte baja con el fondo de la web. Un velo uniforme dejaba un corte
+          duro entre la foto y la sección siguiente. */}
+      <div className="absolute inset-0" style={{ background: `rgba(0,0,0,${overlay ?? 0.5})` }} />
+      <div className="absolute inset-0 bg-gradient-to-b from-black/70 via-transparent to-black" />
+
+      <div className="relative z-10 mx-auto max-w-4xl px-6">
         {subtitulo ? (
-          <p className="mb-5 text-xs md:text-sm font-semibold uppercase tracking-[0.28em] opacity-90">
+          <p className="mb-6 text-[11px] font-semibold uppercase tracking-[0.42em] text-white/75 md:text-xs">
             {subtitulo}
           </p>
         ) : null}
-        <h1 className="pw-h1 font-extrabold leading-tight">{titulo}</h1>
+        {/* Filete corto sobre el titular: detalle de marca que ordena el bloque. */}
+        <span
+          className="mx-auto mb-7 block h-px w-16 md:w-20"
+          style={{ backgroundColor: "var(--pw-primario)" }}
+        />
+        <h1 className="pw-h1 font-extrabold leading-[1.08] drop-shadow-[0_2px_18px_rgba(0,0,0,0.55)]">
+          {titulo}
+        </h1>
         {cta ? (
           <a
             href={cta.href}
-            className="mt-9 inline-block rounded-full px-9 py-4 text-sm font-bold uppercase tracking-wider text-black transition-transform hover:scale-105"
+            className="mt-11 inline-block rounded-full px-10 py-4 text-xs font-bold uppercase tracking-[0.2em] text-black transition-transform hover:scale-105 md:text-sm"
             style={{ backgroundColor: "var(--pw-primario)" }}
           >
             {cta.label}
@@ -401,7 +419,7 @@ function GaleriaPublica({ bloque }: { bloque: Extract<Bloque, { tipo: "galeria" 
             // Las 4 primeras entran en pantalla; el resto solo al bajar.
             loading={i < 4 ? "eager" : "lazy"}
             decoding="async"
-            className={`w-full object-cover rounded-md ${layout === "masonry" ? "h-auto" : "aspect-square"}`}
+            className="aspect-square w-full rounded-lg object-cover transition-transform duration-500 hover:scale-[1.03]"
           />
         ))}
       </div>

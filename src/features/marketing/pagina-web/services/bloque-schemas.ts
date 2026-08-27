@@ -14,6 +14,7 @@ const bloqueBaseSchema = z.object({
 });
 
 export const heroDatosSchema = z.object({
+  video_url: z.string().url().max(1000).optional(),
   titulo: z.string().min(1).max(200),
   subtitulo: z.string().max(400).optional(),
   cta: z

@@ -148,7 +148,9 @@ function NavPublica({
   return (
     <header
       className={`fixed top-0 inset-x-0 z-50 transition-all duration-300 ${
-        solida ? "bg-black/85 backdrop-blur-md py-2 shadow-lg" : "bg-transparent py-4"
+        solida
+          ? "bg-black/95 py-2.5 shadow-[0_2px_20px_rgba(0,0,0,0.6)] backdrop-blur-md"
+          : "bg-gradient-to-b from-black/90 via-black/60 to-transparent py-5"
       }`}
     >
       <div className="mx-auto max-w-6xl px-5 flex items-center gap-3">
@@ -163,25 +165,23 @@ function NavPublica({
             nosotros), pero apuntando a NUESTROS portales. Se oculta en móvil:
             ahí manda el botón de reservar, que es la acción principal. */}
         <nav
-          className={`ml-auto hidden items-center gap-7 rounded-full px-6 py-2 transition-all md:flex ${
-            solida ? "" : "bg-gradient-to-r from-black/70 via-black/60 to-black/70 backdrop-blur-sm"
-          }`}
+          className="ml-auto hidden items-center gap-8 md:flex"
         >
           {slug ? (
-            <a href={`/carta/${slug}`} className="text-sm font-medium text-white/85 transition-colors hover:text-white">
+            <a href={`/carta/${slug}`} className="text-[13px] font-semibold uppercase tracking-wider text-white/85 transition-colors hover:text-white">
               Carta
             </a>
           ) : null}
-          <a href="#mapa" className="text-sm font-medium text-white/85 transition-colors hover:text-white">
+          <a href="#mapa" className="text-[13px] font-semibold uppercase tracking-wider text-white/85 transition-colors hover:text-white">
             Ubicación
           </a>
-          <a href="#contacto" className="text-sm font-medium text-white/85 transition-colors hover:text-white">
+          <a href="#contacto" className="text-[13px] font-semibold uppercase tracking-wider text-white/85 transition-colors hover:text-white">
             Contacto
           </a>
           {slug ? (
             <a
               href={`/empleo/${slug}?o=WEB`}
-              className="text-sm font-medium text-white/85 transition-colors hover:text-white"
+              className="text-[13px] font-semibold uppercase tracking-wider text-white/85 transition-colors hover:text-white"
             >
               Trabaja con nosotros
             </a>
