@@ -5,7 +5,7 @@
  * Se ejecuta en Server Components de la ruta catch-all (public-site).
  */
 import { createAnonClient } from "@/lib/supabase/anon";
-import type { Bloque } from "../types";
+import type { Bloque, BrandingSnapshot } from "../types";
 
 export interface HostnameMatch {
   empresa_id: string;
@@ -23,6 +23,8 @@ export interface HostnameMatch {
   nombre_pagina: string;
   /** Logo de marca. Es el icono al guardar la web en la pantalla de inicio. */
   logo_url: string | null;
+  /** Colores y tipografía de la empresa. Sin esto la web sale con el tema por defecto. */
+  branding: BrandingSnapshot | null;
   /**
    * Redes de la empresa (Ajustes → datos generales). Se resuelven aquí y no se
    * guardan en el bloque: cambiar la red en Ajustes actualiza la web sola.
@@ -113,7 +115,7 @@ export async function resolverHostname(
     // pueda servir páginas de otra.
     let consulta = supabase
       .from("paginas_web")
-      .select("id, empresa_id, nombre, bloques, seo, estado")
+      .select("id, empresa_id, nombre, bloques, seo, estado, branding")
       .eq("estado", "PUBLICADA");
 
     if (slug) {
@@ -146,6 +148,7 @@ export async function resolverHostname(
       nombre: string;
       bloques: Bloque[];
       seo: HostnameMatch["seo"];
+      branding: BrandingSnapshot | null;
     };
 
     // Vía `empresas_web_publica` y NO `empresas`: la tabla solo tiene política
@@ -178,6 +181,8 @@ export async function resolverHostname(
       seo: pag.seo ?? null,
       nombre_empresa: emp.nombre ?? "Restaurante",
       logo_url: emp.logo_url ?? null,
+      // El logo de la empresa alimenta también la barra de navegación.
+      branding: pag.branding ? { ...pag.branding, logo_url: emp.logo_url ?? undefined } : (emp.logo_url ? { logo_url: emp.logo_url } : null),
       nombre_pagina: pag.nombre,
       redes: {
         instagram: urlRed("instagram", dg.instagram),

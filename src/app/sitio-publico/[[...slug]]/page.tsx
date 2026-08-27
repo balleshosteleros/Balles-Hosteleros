@@ -70,6 +70,7 @@ export default async function PublicCatchAllPage({ params }: PageProps) {
   return (
     <PaginaPublicaShell
       bloques={match.bloques}
+      branding={match.branding}
       contexto={{
         empresaId: match.empresa_id,
         paginaId: match.pagina_id,

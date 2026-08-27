@@ -43,6 +43,10 @@ export function PaginaPublicaShell({
   const primario = branding?.color_primario ?? "#d0a000";
   const fondo = branding?.color_fondo ?? "#0b0b0c";
   const logo = branding?.logo_url ?? null;
+  // Tipografía de marca. Las webs replicadas usan Montserrat (la misma que GHL);
+  // el valor viejo "serif" no era una fuente real, así que caía al serif del
+  // navegador y por eso no se parecían.
+  const tipografia = branding?.tipografia?.trim() || "Montserrat";
 
   const hero = ordenados.find((b) => b.tipo === "hero");
   const tituloNav = hero?.tipo === "hero" ? hero.datos.subtitulo ?? "" : "";
@@ -55,6 +59,8 @@ export function PaginaPublicaShell({
         {
           "--pw-primario": primario,
           "--pw-fondo": fondo,
+          "--pw-fuente": `"${tipografia}", ui-sans-serif, system-ui, sans-serif`,
+          fontFamily: `"${tipografia}", ui-sans-serif, system-ui, sans-serif`,
           backgroundColor: fondo,
           color: "#f5f5f4",
         } as React.CSSProperties
@@ -68,6 +74,7 @@ export function PaginaPublicaShell({
       </main>
       <PieLegal />
       <BannerCookies hrefPolitica={hrefPoliticaCookies} />
+      <FuenteMarca nombre={tipografia} />
       <EstilosPublicos />
     </div>
   );
@@ -151,6 +158,16 @@ function NavPublica({
 }
 
 /** Animación de aparición al entrar en pantalla, respetando "reducir movimiento". */
+/**
+ * Carga la tipografía de marca desde Google Fonts. `display=swap` para que el
+ * texto se lea desde el primer momento aunque la fuente aún no haya bajado.
+ */
+function FuenteMarca({ nombre }: { nombre: string }) {
+  const familia = encodeURIComponent(nombre.trim()).replace(/%20/g, "+");
+  const href = `https://fonts.googleapis.com/css2?family=${familia}:wght@300;400;500;600;700;800&display=swap`;
+  return <link rel="stylesheet" href={href} />;
+}
+
 function EstilosPublicos() {
   return (
     <style>{`
