@@ -1,7 +1,322 @@
 # TAREA para Fernando — Precios de compra de BACANAL (cuando bajes el repo)
 
-> **De:** Iván (vía Claude) · **Fecha:** 2026-06-30 · **Actualizado:** 2026-08-26 · **Prioridad:** media
+> **De:** Iván (vía Claude) · **Fecha:** 2026-06-30 · **Actualizado:** 2026-08-27 · **Prioridad:** media
 > Léelo al hacer `git pull` y reconciliar.
+
+---
+
+## 📐 27-AGO — IVÁN: DECISIONES DE MODELO SOBRE ESCANDALLOS, STOCK Y ÁGORA — LO IMPLEMENTAS TÚ
+
+> **Fernando: esto es para ti.** Iván ha tomado una tanda de decisiones de modelo que responden a
+> tus preguntas del 26-ago y además cambian cosas que dabas por cerradas. **Desde nuestro lado no se
+> ha tocado ni una línea de código** — el encargo es tuyo, para que no nos pisemos.
+> Todo el detalle técnico está en `.claude/PRPs/PRP-080-escandallos-fuente-unica-y-stock-unificado.md`.
+
+### Respuestas a tus 3 preguntas del 26-ago
+
+**1. La lentitud: era su ordenador, no la app.** Tenía Claude con muchas ventanas abiertas y el
+equipo iba lento. Tu medición era correcta. **Asunto cerrado**, no busques más.
+
+**2. Los botones de stock: probados.** Iván registró una merma de prueba de **5 ud de Larios Rose
+(HABANA, motivo `prueba`)**. Funcionó: se apuntó la merma y se generó su movimiento de salida.
+**La merma se deja puesta a propósito para que puedas comprobar tú el descuento.** Dinos cuándo la
+podemos borrar.
+
+⚠️ **Pero destapó un fallo:** el stock de Larios Rose quedó en **−2,6**. El sistema dejó mermar 5
+unidades habiendo 2,4, sin avisar ni bloquear. **Es el agujero que sigue generando negativos
+nuevos** — el nº 13 de tu lista de 12. Una merma no puede dejar el stock bajo cero.
+
+**3. La unidad de los escandallos: la manda el producto.** Ver abajo.
+
+---
+
+### DECISIÓN 1 — Stock y Movimientos son UN SOLO submódulo
+
+Todo lo de movimientos vive **dentro de Stock**. Al desplegar un producto salen todos sus
+movimientos, ordenados por fecha. **La pantalla suelta `/logistica/movimientos` se elimina**
+(ruta, nav y `MovimientosAlmacenView.tsx`).
+
+Cada movimiento debe mostrar: **fecha y hora · tipo · cantidad ± · stock resultante · coste
+unitario · valor total**.
+
+> Ejemplo: 2 botellas de vino a 5 € → `+2 ud` · `5,00 €/ud` · `+10,00 €`.
+
+**Los dos últimos no existen en la BD.** `stock_movimientos` no guarda coste. Hay que añadir
+`coste_unitario` y `valor_total`, y **escribirlos en el momento del movimiento** (congelados): si
+se calculan a posteriori, el histórico miente cuando cambia el precio.
+
+---
+
+### DECISIÓN 2 — Cierre de almacén: fuera el "Deshacer" (REGLA FUNDAMENTAL)
+
+Iván: *"no puede existir un botón de deshacer, no tiene sentido"*. Y tiene razón — tu propia nota
+dice que el histórico no se borra, pero el botón lo borra.
+
+Lo resuelve por una vía mejor que las dos que le propusimos:
+
+| Estado | Qué se puede hacer |
+|---|---|
+| **Almacén abierto** | Cualquier movimiento se crea, modifica o borra. **El sistema recalcula el stock histórico.** |
+| **Almacén cerrado** | **Nada anterior al corte se toca.** Ni mermas, ni albaranes, ni ventas, ni ajustes. |
+
+**Al aceptar un inventario** aparece **"Cerrar almacén en esta fecha y hora"** → crea un **punto de
+corte histórico**. Así una modificación posterior no puede descuadrar lo ya inventariado.
+
+**Verificado: no existe nada de esto** en código ni en BD. Es funcionalidad nueva completa. Lo más
+delicado es el **recálculo en cascada** de `saldo_resultante` de todos los movimientos posteriores
+de un producto cuando se toca uno del pasado.
+
+Se quitan los tres "Deshacer" que borran histórico: **Mermas**, **Elaboraciones** e **Inventarios**.
+`revertirMovimientosPorDocumento()` **se mantiene solo** para el cron de Ágora (reproceso automático,
+no botón de usuario).
+
+**Pendiente de definir:** quién puede cerrar, si se puede reabrir y con qué permiso, y si el corte
+es por empresa o por almacén.
+
+---
+
+### DECISIÓN 3 — La unidad del escandallo la manda el producto
+
+Al añadir un producto a un escandallo, se escribe **en la unidad configurada del producto**. Sin
+conversiones. El campo de unidad pasa a **solo lectura**: se hereda, no se teclea.
+
+Cubre el **92 %** del catálogo (545 en unidades · 90 en kilos · 16 en litros) y **resuelve el
+cachopo**: el filete está en Kilogramos → `0,35 Kg` → descuenta 0,35 kg.
+
+**Bebidas:** se compran y cuentan **por unidades (botellas)** aunque la descripción diga "0,7 L".
+Manda la unidad configurada, no el texto del formato. Los combinados van a `0,1 ud` sobre botella
+de 0,70 L.
+
+**Especias:** si se compra en kilos, la equivalencia va en kilos. Iván quiere **estudiar** permitir
+escribir en gramos con conversión automática, pero **exige definir muy bien dónde sí y dónde no**
+antes de implementarlo. **De momento, kilos.**
+
+**Deuda a limpiar:** las 87 líneas existentes tienen la unidad escrita de **nueve formas distintas**
+(`Gr`, `GR`, `g`, `ud`, `Uni`, `uni`, `kg`, `KG`, `L`) porque hoy es texto libre. Hay que convertirlas.
+
+---
+
+### DECISIÓN 4 — Ágora NO es fuente de configuración
+
+De Ágora solo se recibe: **qué producto se ha vendido · cuántas unidades · fecha y hora**.
+
+**Todo lo demás se ignora**, aunque siga configurado allí: composiciones, medidas, formatos, costes.
+Motivo de Iván: *"dos sistemas con datos editables es una invitación formal al caos"*. Si mañana
+cambia un escandallo, se cambia en Balles y entra en vigor desde ahí.
+
+**Qué se corta:** el `sale_format_ratio` como fuente de consumo, y con él **el camino "sin
+escandallo"** — hoy un producto sin escandallo descuenta igualmente usando lo que dice Ágora. A
+partir de ahora, **sin escandallo no se descuenta nada**: un producto sin escandallo está sin
+configurar y debe cantar.
+
+⚠️ **Esto cambia tu cuenta de recetas: no son 80, son 201.** Las 121 bebidas que das por resueltas
+pasan a necesitar escandallo. No es trabajo perdido — son de una línea, y muchas se pueden generar
+solas desde los 203 pares venta→compra ya enlazados. Lo que requiere criterio humano son las ~56
+medidas de copa.
+
+⚠️ **ORDEN OBLIGATORIO: primero se escriben los escandallos, después se corta el ratio.** Hoy hay
+22 escandallos frente a 402 productos de venta. Si se corta antes, el descuento de stock no se
+podrá activar en meses.
+
+**Lo que SÍ se sigue leyendo:** el `sale_format_id` (identifica *qué* formato se vendió) y los
+importes de venta (`precio_unitario`, IVA, descuento) — no son configuración, son el hecho de la
+venta.
+
+---
+
+### DECISIÓN 5 — Catálogo de Productos: venta directa vs. venta por formato
+
+**Palabras de Iván, para montar el Catálogo de Productos:**
+
+Cada producto de venta elige **uno de dos tipos**:
+
+**1. Venta directa** — un producto, **un precio**, **un escandallo**.
+> Ejemplo: Hamburguesa Clásica → 1 precio → 1 escandallo.
+
+**2. Venta por formato** — hasta **5 formatos** del mismo producto, cada uno con:
+- **Nombre** (Pequeño, Mediano, Grande, Individual, Doble…)
+- **Precio de venta propio**
+- **Escandallo propio**
+
+> Ejemplo: Mojito → Normal (8 €, escandallo normal) · Grande (12 €, escandallo grande).
+
+**Caso de los destilados — Iván confirma que son TRES formatos:**
+
+| Formato | Escandallo | Ejemplo de precio |
+|---|---|---|
+| **Combinado** | `0,1 ud` de la botella | Brugal 8,78 € |
+| **Chupito** | `0,05 ud` de la botella | Brugal 2,87 € |
+| **Botella entera** | `1 ud` de la botella | Bot Red Label 92,25 € · Bot Black Label 112,75 € |
+
+La botella entera (reservados de discoteca) **es un formato más del mismo producto**, no un producto
+aparte. Tres formatos de los cinco disponibles.
+
+**Regla:** en venta directa, 1 precio y 1 escandallo. En venta por formato, **cada formato debe
+tener obligatoriamente nombre, precio y escandallo**. El stock descuenta **el escandallo del formato
+exacto vendido**.
+
+#### Por qué hace falta: el modelo actual no da para representarlo
+
+**Brugal es un producto con dos precios reales** y un solo campo `precio_venta`:
+
+| Formato | `sale_format_id` | Ratio | Precio | Ventas |
+|---|---|---|---|---|
+| Comb Brugal | 1741 | 0,1 | **8,78 €** | 393 |
+| Chupito Brugal | 1840 | 0,05 | **2,87 €** | 3 |
+
+Por eso los 67 destilados tienen `precio_venta` a `null`: **no era un descuido, es que no cabía**.
+Son **26 productos multiformato**.
+
+#### Cómo enlaza (verificado en los tickets)
+
+Ágora manda **dos** identificadores: **`agora_id`** (ProductId: 1550 = Brugal) identifica el
+producto, y **`sale_format_id`** (1741 = Comb, 1840 = Chupito) identifica el formato. El enlace es
+la pareja de los dos.
+
+Ojo: el índice único que alineaste a `(empresa_id, agora_id, tipo)` necesitará un paso más para
+contemplar el formato.
+
+---
+
+### 🔴 BLOQUEANTE — La ingesta de Ágora TIRA el `ProductId`
+
+**Ágora está vendiendo 7 productos que no existen en Balles: 288 líneas de ticket perdidas en
+silencio.**
+
+| Producto en Ágora | Empresa | Ventas | Precio | Qué hacer |
+|---|---|---|---|---|
+| **Boom-Boom** | HABANA | 86 líneas / 88 uds | 9,75 € | Dar de alta |
+| **Danza Macabra** | HABANA | 76 líneas / 94 uds | 9,75 € | Dar de alta |
+| **MENU BACANAL** | **BACANAL** | 56 líneas / 172 uds | 17,50 € | Dar de alta |
+| **Desliz de cobra** | HABANA | 36 líneas / 36 uds | 9,25 € | Dar de alta |
+| **Fiesta del Caribe** | HABANA | 30 líneas / 29 uds | 9,25 € | Dar de alta |
+| Arroz con pollo | HABANA | 2 uds | **0,00 €** | **NO** — plato de Bacanal picado por error |
+| Arroz con marisco | HABANA | 2 uds | **0,00 €** | **NO** — íd. |
+
+**El problema:** `agora-ventas-ingesta.ts:134` usa el `ProductId` para buscar el producto y, si no
+lo encuentra, **lo descarta**. La línea queda con `producto_id` en null y solo conserva el nombre.
+
+**Consecuencia: no se pueden enlazar**, porque el número que los une se perdió. Y los nombres no
+sirven de ancla — de 402 productos, 3 se llaman distinto en cada sistema (`Vieiras con salsa kimchi
+flambeadas` → `Vieira del Pacifico`; `Curry Rojo con Verduras` → `Curry rojo con rerduras y
+corvina`, con la errata; `Royal bliss limon` → doble espacio).
+
+**Hay que arreglar la raíz: que la ingesta guarde siempre el `ProductId`**, exista o no el producto.
+Sin eso tampoco se puede construir el aviso de producto nuevo (decisión 6).
+
+---
+
+### DECISIÓN 6 — Producto sin enlazar: avisar y OBLIGAR
+
+Cuando llegue una venta de un producto que no existe en Balles, el sistema debe **avisar y obligar**
+a crearlo y rellenar su ficha. No es una sugerencia que se pueda ignorar.
+
+**Las ventas quedan en espera, no se descartan**, y **se procesan hacia atrás** al completar la
+ficha. Si no, se pierde el consumo de los días que tarde el alta.
+
+---
+
+### 📊 Revisión de precios de venta (pedida por Iván)
+
+Comparado `productos.precio_venta` con lo facturado por Ágora, sobre **10.093 ventas**:
+
+| Estado | Productos | Ventas |
+|---|---|---|
+| Coinciden | 136 | 7.402 |
+| **Sin precio en Balles** | **67** | 2.065 |
+| Difieren | 18 | 626 |
+
+**Los 67 sin precio son los que más se venden** — Brugal (393), Red Label (222), Seagrams (135),
+Black Label, Beefeater, Larios Rose, Havana 7… **todos los destilados de HABANA**. La causa es la
+decisión 5: no cabían dos precios en un campo. **Se arregla con venta por formato.**
+
+**De los 18 que difieren, la mayoría NO son errores** (terraza, menú, suplementos).
+
+#### ⚠️ Corrección: los 2 casos que dimos por "precio mal puesto" son MULTIFORMATO
+
+Iván lo revisó en Ágora y **nuestro diagnóstico inicial estaba mal**: habíamos hecho una media
+entre formatos distintos (copas con botellas, chupitos con combinados), y salían precios que no
+existen en ninguna carta. Los precios reales de Ágora, verificados línea a línea:
+
+**Delizia** (es un **vino que se sirve por copas**, no un destilado):
+
+| Formato | Ratio | HABANA | BACANAL |
+|---|---|---|---|
+| **Copa Delizia** | 0,2 | **3,60 €** (26 ventas) | **3,40 €** (61 ventas) |
+| **Botella Delizia** | 1 | 19,00 € (1) | 19,50 € (9) |
+
+**Licor de Crema El afilador:**
+
+| Formato | Ratio | Precio |
+|---|---|---|
+| **Chupito Licor de Crema** | 0,05 | **2,60 €** (15 ventas) |
+| **Comb Licor de Crema** | 0,1 | **8,00 €** (16 ventas) |
+
+**Lo que sí es un error de datos:** los valores grabados en la ficha desde la migración del
+10-jun — Delizia HABANA a **12,85 €** y Licor de Crema a **2,50 €** — **no corresponden a ningún
+formato real**. Ni copa, ni botella, ni chupito, ni combinado. Son números inventados que llevan
+ahí desde el principio y que hay que sustituir por los formatos de arriba.
+
+**Dos conclusiones para el modelo (decisión 5):**
+
+1. **Los formatos no son solo de destilados.** Delizia es vino por copas (`0,2`). El modelo de
+   hasta 5 formatos con nombre libre cubre bien estos casos.
+2. **Hay fichas duplicadas que el modelo absorbe.** Existe un producto suelto `Copa Delizia Menú`
+   (`agora_id` 2372) aparte del `Delizia` (`agora_id` 1883). Con venta por formato, eso pasa a ser
+   **un formato más** en vez de una ficha independiente. Conviene barrer el catálogo buscando otros
+   casos iguales antes de migrar.
+
+Se propone un aviso cuando el precio esté vacío o se desvíe de forma sostenida — **avisar, no
+corregir solo**: Ágora informa, no manda.
+
+---
+
+### 🔤 Nomenclatura: ESCANDALLOS, nunca "recetas"
+
+Iván: *"No utilizaremos la palabra Recetas en el sistema. El término correcto es Escandallos. Una
+receta puede contener otros datos diferentes; aquí hablamos de la composición y el coste de los
+productos vendidos."*
+
+Afecta a la interfaz y a los documentos — incluido `docs/RECETAS_PENDIENTES_PRIORIZADAS.md`, que
+pasaría a `ESCANDALLOS_PENDIENTES_PRIORIZADOS.md`.
+
+---
+
+### 📎 Estado del catálogo (medido hoy, 27-ago)
+
+| Dato | Valor |
+|---|---|
+| Productos de venta | 402 (204 BACANAL · 198 HABANA) |
+| Sin `agora_id` | 6 — son tus 6 platos huérfanos Inactivos |
+| **Sin escandallo** | **178** · de ellos **80 con ventas reales** |
+| Sin precio de venta | 114 |
+| Nunca vendidos | 176 |
+| Escandallos de cocina escritos | 22 |
+| Movimientos en `stock_movimientos` | 63, todos `entrada`, todos de albarán, jun-jul |
+| Mermas / inventarios / ajustes | 0 (salvo la merma de prueba de hoy) |
+
+Tabla completa producto a producto: **`docs/PRODUCTOS_VENTA_BALLES_VS_AGORA.csv`**.
+
+---
+
+### ❓ Lo que sigue pendiente de Iván
+
+1. ~~Precio bueno de Delizia y Licor de Crema El afilador~~ → **RESUELTO**: eran multiformato, no
+   precios mal puestos. Ver la corrección de arriba.
+2. **Botella entera** (Bot Red Label 92,25 €, Bot Black Label 112,75 €): ¿es uno de los 5 formatos?
+3. Quién escribe los escandallos y cuándo (tu pregunta del 26-ago, sigue abierta).
+
+### 📌 Y lo tuyo que sigue esperando respuesta
+
+- **⚠️ LOS 3 ARREGLOS DEL IMPORTADOR — LOS COGES TÚ.** Los marcaste como *"Agente de Iván: esto SÍ
+  es para implementar"*, pero **Iván ha decidido que no toquemos nada desde aquí**. Tu propia nota
+  ofrecía: *"Si preferís que lo hagamos nosotros, decidlo y lo cogemos"* → **decidido: los coges tú.**
+  Son: (1) sin marcha atrás, (2) se salta `createProducto` y los productos de venta se quedan sin
+  escandallo borrador, (3) `parejaCompraId` sin validar contra la empresa.
+  **El aviso sigue en pie: que nadie pulse "Importar".**
+- **Usuarios de prueba:** `agora.demo@balleshosteleros.com` y `fmaroto2016@gmail.com` están **ambos
+  Inactivos** en producción. Si quieres probar en pantalla, hay que activarlos — dilo y se hace.
+- **Los 6 platos huérfanos de Habana** que dejaste Inactivos: confirmado que la decisión es correcta.
 
 ---
 

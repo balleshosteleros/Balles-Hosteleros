@@ -1,0 +1,403 @@
+﻿Empresa;Nombre en BALLES;agora_id (ENLACE);Nombre en AGORA;Precio venta;Categoria;Estado;Lineas escandallo;Escandallo cocina;Ventas
+BACANAL;Alhambra;2414;Alhambra;4.1;Cervezas;Activo;1;0;229
+BACANAL;Tortilla trufada huevo;1839;Tortilla trufada huevo;15.4;Para empezar;Activo;0;0;191
+BACANAL;Agua Fuenteliviana Grande;1872;Agua Fuenteliviana Grande;4.6;Refrescos;Activo;1;0;187
+BACANAL;Servicio Pan;1909;Servicio Pan;1.5;Para empezar;Activo;0;0;185
+BACANAL;Entrecot Lomo bajo frisona;2573;Entrecot Lomo bajo frisona;26;De la tierra;Activo;0;0;147
+BACANAL;Tinto de Verano;1942;Tinto de Verano;4.1;Vinos tintos;Activo;0;0;147
+BACANAL;Entraña con chimichurri y guarnicion;2022;Entraña con chimichurri y guarnicion;20.1;De la tierra;Activo;3;1;145
+BACANAL;Cocacola Zero;1533;Cocacola Zero;3.55;Refrescos;Activo;1;0;143
+BACANAL;Brioche meloso de ternera;1849;Brioche meloso de ternera;17.75;De la tierra;Activo;4;1;135
+BACANAL;Tarta de queso;1854;Tarta de queso;7.3;Postres;Activo;1;1;132
+BACANAL;Torreznos con guacamole y pico de gallo;2425;Torreznos con guacamole y pico de gallo;14.9;Para empezar;Activo;0;0;117
+BACANAL;Torrijas con helado de vainilla;2427;Torrijas con helado de vainilla;6.7;Postres;Activo;0;0;113
+BACANAL;Croquetas Jamon Iberico;1838;Croquetas Jamon Iberico;14.15;Para empezar;Activo;1;1;107
+BACANAL;San Miguel;2417;San Miguel;3.65;Cervezas;Activo;0;0;107
+BACANAL;Cafe con Leche;1901;Cafe con Leche;2.7;Cafes e infusiones;Activo;0;0;96
+BACANAL;Cocacola;1532;Cocacola;3.55;Refrescos;Activo;1;0;96
+BACANAL;Ensalada de Burrata;1834;Ensalada de Burrata;15.5;Para empezar;Activo;3;1;90
+BACANAL;Vieiras con salsa kimchi flambeadas;1840;Vieira del Pacifico;19;De la mar;Activo;4;1;89
+BACANAL;Burger Bacanal 2.0;2544;Burger Bacanal 2.0;14.8;De la tierra;Activo;6;1;86
+BACANAL;Coulant de Chocolate;1997;Coulant de Chocolate;6.6;Postres;Activo;0;0;84
+BACANAL;Falso risotto con setas;2271;Falso risotto con setas;15.9;Arroces;Activo;0;0;83
+BACANAL;Alcachofas con huevo de codorniz;2610;Alcachofas con huevo de codorniz;14;Para empezar;Activo;0;0;78
+BACANAL;Ensaladilla Rusa;1833;Ensaladilla Rusa;12.7;Para empezar;Activo;0;0;78
+BACANAL;Burger Balles Hosteleros;2543;Burger Balles Hosteleros;14.8;De la tierra;Activo;6;1;77
+BACANAL;San miguel 0,0 Tostada;2532;San miguel 0,0 Tostada;3.6;Cervezas;Activo;1;0;74
+BACANAL;Irreverente Joven;1890;Irreverente Joven;;Vinos tintos;Activo;1;0;72
+BACANAL;Delizia;1883;Delizia;;Vinos blancos;Activo;1;0;70
+BACANAL;Alma Blanco;2184;Alma Blanco;;Vinos blancos;Activo;1;0;69
+BACANAL;Bao-cadillo de oreja a baja temperatura con brava y lima;1850;Bao-cadillo de oreja a baja temperatura con brava y lima;17.75;De la tierra;Activo;3;1;67
+BACANAL;Cafe con Hielo;1899;Cafe con Hielo;2.6;Cafes e infusiones;Activo;0;0;67
+BACANAL;Agua Fuenteliviana Pequeña;1871;Agua Fuenteliviana Pequeña;3.45;Refrescos;Activo;1;0;64
+BACANAL;Cachopo con Jamon y Queso curado;2179;Cachopo con Jamon y Queso curado;27.2;De la tierra;Activo;4;1;63
+BACANAL;Radler Tercio;2419;Radler Tercio;3.75;Cervezas;Activo;1;0;60
+BACANAL;Ceviche Thai;2609;Ceviche Thai;14;Para empezar;Activo;6;1;58
+BACANAL;Cafe Solo;1898;Cafe Solo;2.4;Cafes e infusiones;Activo;0;0;57
+BACANAL;Costillas a baja temperatura;2266;Costillas a baja temperatura;19.5;De la tierra;Activo;3;1;55
+BACANAL;Tiramisu;2272;Tiramisu;6.6;Postres;Activo;0;0;53
+BACANAL;Gyozas pollo al curry;1848;Gyozas pollo al curry;14.8;De la tierra;Activo;0;0;50
+BACANAL;Huevos rotos con jamon iberico;2020;Huevos rotos con jamon iberico;16.55;Para empezar;Activo;3;1;50
+BACANAL;Fuze Tea;1536;Fuze Tea;3.75;Refrescos;Activo;1;0;46
+BACANAL;Alitas de pollo glaseadas en bbq asiatica y mayo de aji asiatico;2379;Alitas de pollo glaseadas en bbq asiatica y mayo de aji asiatico;13.35;Para empezar;Activo;0;0;45
+BACANAL;Tartar de Salmon;2618;Tartar de Salmon;18;De la mar;Activo;6;1;45
+BACANAL;Agua Fuentelivia con Gas Pequeña;2174;Agua Fuentelivia con Gas Pequeña;3.95;Refrescos;Activo;1;0;43
+BACANAL;Cazon en adobo y una base de lechuga y wakame;2278;Cazon en adobo y una base de lechuga y wakame;12.3;De la mar;Activo;4;1;42
+BACANAL;Arabe;2308;Arabe;;Vinos blancos;Activo;1;0;41
+BACANAL;Cafe Cortado;1900;Cafe Cortado;2.6;Cafes e infusiones;Activo;0;0;41
+BACANAL;Hallazgo Crianza;1888;Hallazgo Crianza;;Vinos tintos;Activo;1;0;34
+BACANAL;San miguel Tercio;2416;San miguel Tercio;3.55;Cervezas;Activo;1;0;33
+BACANAL;Aquarius Limon;1530;Aquarius Limon;3.85;Refrescos;Activo;1;0;32
+BACANAL;Coronita;2222;Coronita;4.1;Cervezas;Activo;1;0;32
+BACANAL;Fanta Naranja;1535;Fanta Naranja;3.55;Refrescos;Activo;1;0;31
+BACANAL;Arroz de Secreto;2615;Arroz de Secreto;29;Arroces;Activo;5;1;29
+BACANAL;Licor de Crema El afilador;1947;Licor de Crema El afilador;2.5;Licores;Activo;1;0;25
+BACANAL;San miguel 0,0;2415;San miguel 0,0;3.55;Cervezas;Activo;1;0;19
+BACANAL;Arroz de señoret;2613;Arroz de señoret;29;Arroces;Activo;5;1;17
+BACANAL;Margarita;2046;Margarita;8.75;Nuestros cocteles;Activo;0;0;16
+BACANAL;Jamon Iberico con Pan Cristal;2612;Jamon Iberico con Pan Cristal;18.5;Para empezar;Activo;3;1;15
+BACANAL;Mojito Classic;1941;Mojito Classic;8.75;Nuestros cocteles;Activo;0;0;13
+BACANAL;Aquarius Naranja;1531;Aquarius Naranja;3.85;Refrescos;Activo;1;0;11
+BACANAL;Curry Rojo con Verduras;2616;Curry rojo con rerduras y corvina;14;Veganos;Activo;6;1;11
+BACANAL;Alma Rosado;2185;Alma Rosado;;Vinos rosados;Activo;1;0;10
+BACANAL;Daiquiri;2010;Daiquiri;8.75;Nuestros cocteles;Activo;0;0;10
+BACANAL;Desenfreno;1937;Desenfreno;8.75;Nuestros cocteles;Activo;0;0;10
+BACANAL;Fingers de pollo con patatas;2546;Fingers de pollo con patatas;9.5;Para niños;Activo;2;1;9
+BACANAL;Arroz negro;2614;Arroz negro;29;Arroces;Activo;5;1;8
+BACANAL;Vaso de Agua;1595;Vaso de Agua;;Otros;Activo;0;0;8
+BACANAL;Bacanal Colada;1934;Bacanal Colada;8.75;Nuestros cocteles;Activo;0;0;7
+BACANAL;Cafe Americano;2381;Cafe Americano;2.6;Cafes e infusiones;Activo;0;0;7
+BACANAL;Cafe Bombon;1902;Cafe Bombon;3.4;Cafes e infusiones;Activo;0;0;7
+BACANAL;Fanta Limon;1534;Fanta Limon;3.55;Refrescos;Activo;1;0;7
+BACANAL;Huevos rotos con jamon iberico y patatas;2545;Huevos rotos con jamon iberico y patatas;9.5;Para niños;Activo;0;0;7
+BACANAL;Mojito Sin Alcohol;2009;Mojito Sin Alcohol;7.7;Nuestros cocteles;Activo;0;0;7
+BACANAL;Gyozas Vegetales;2157;Gyozas Vegetales;14.8;Veganos;Activo;1;0;6
+BACANAL;Pazo San Mauro;1887;Pazo San Mauro;;Vinos blancos;Activo;1;0;6
+BACANAL;Sprite;1540;Sprite;3.5;Refrescos;Activo;1;0;6
+BACANAL;Te Verde;2048;Te Verde;3.6;Cafes e infusiones;Activo;1;0;6
+BACANAL;Licor de Hierbas El afilador;1946;Licor de Hierbas El afilador;;Licores;Activo;1;0;5
+BACANAL;Te Rojo;2047;Te Rojo;3.6;Cafes e infusiones;Activo;1;0;5
+BACANAL;Aceite Usado;2036;Aceite Usado;;Otros;Activo;0;0;4
+BACANAL;Amazing Moscow Mule;1935;Amazing Moscow Mule;8.75;Nuestros cocteles;Activo;0;0;4
+BACANAL;Bacanal;1936;Bacanal;9.75;Nuestros cocteles;Activo;0;0;4
+BACANAL;Cafe Manchado;2380;Cafe Manchado;2.6;Cafes e infusiones;Activo;0;0;4
+BACANAL;Daiquiri Sin Alcohol;2013;Daiquiri Sin Alcohol;7.7;Nuestros cocteles;Activo;0;0;4
+BACANAL;Manzanilla;2409;Manzanilla;2.6;Cafes e infusiones;Activo;1;0;4
+BACANAL;Martini Rojo;1933;Martini Rojo;4;Licores;Activo;1;0;4
+BACANAL;Seagrams;1475;Seagrams;;Gins;Activo;1;0;4
+BACANAL;Te Negro;2049;Te Negro;3.6;Cafes e infusiones;Activo;1;0;4
+BACANAL;Tonica Nordic;1543;Tonica Nordic;3.45;Refrescos;Activo;1;0;4
+BACANAL;Lado Oscuro;1939;Lado Oscuro;8.75;Nuestros cocteles;Activo;0;0;3
+BACANAL;Licor de Manzana S/A;1944;Licor de Manzana S/A;;Licores;Activo;1;0;3
+BACANAL;Tomahawk;2617;Tomahawk;84;De la tierra;Activo;3;1;3
+BACANAL;Brugal;1550;Brugal;;Rones;Activo;1;0;2
+BACANAL;Conde San Cristobal;1893;Conde San Cristobal;;Vinos tintos;Activo;1;0;2
+BACANAL;Havana 7;2322;Havana 7;;Rones;Activo;1;0;2
+BACANAL;Jaggermaister;1282;Jaggermaister;;Licores;Activo;1;0;2
+BACANAL;Martin Millers;2188;Martin Millers;;Gins;Activo;1;0;2
+BACANAL;Radler;2418;Radler;3.65;Cervezas;Activo;0;0;2
+BACANAL;Red Bull;1537;Red Bull;4.25;Refrescos;Activo;1;0;2
+BACANAL;Red Label;1569;Red Label;;Whiskys;Activo;1;0;2
+BACANAL;San miguel Sin Gluten;2529;San miguel Sin Gluten;4.6;Cervezas;Activo;1;0;2
+BACANAL;Servicio Pan Sin Gluten;2531;Servicio Pan Sin Gluten;1.5;Para empezar;Activo;0;0;2
+BACANAL;Absolut;1558;Absolut;;Vodkas;Activo;1;0;1
+BACANAL;Beefeater;1464;Beefeater;;Gins;Activo;1;0;1
+BACANAL;Ciroc;1560;Ciroc;;Vodkas;Activo;1;0;1
+BACANAL;Cofrutos Naranja;1547;Cofrutos Naranja;3.9;Refrescos;Activo;1;0;1
+BACANAL;Cofrutos Piña;1548;Cofrutos Piña;3.9;Refrescos;Activo;1;0;1
+BACANAL;Dyc 8;2213;Dyc 8;;Whiskys;Activo;1;0;1
+BACANAL;G'Vine;1469;G'Vine;;Gins;Activo;1;0;1
+BACANAL;Hollenbar;1735;Hollenbar;;Licores;Activo;1;0;1
+BACANAL;Marques de Vargas Reserva;1892;Marques de Vargas Reserva;;Vinos tintos;Activo;1;0;1
+BACANAL;Martini Blanco;1932;Martini Blanco;4;Licores;Activo;1;0;1
+BACANAL;Moet Chandon;1284;Moet Chandon;87.15;Champagne;Activo;1;0;1
+BACANAL;Tequila de Fresa Diex;1288;Tequila de Fresa Diex;;Licores;Activo;1;0;1
+BACANAL;Tequila de Frutas de Pasion Diex;2210;Tequila de Frutas de Pasion Diex;;Licores;Activo;1;0;1
+BACANAL;Aguardiente Antioqueño;2247;(nunca vendido);3;Licores;Activo;1;0;0
+BACANAL;Ballantines;1562;(nunca vendido);;Whiskys;Activo;1;0;0
+BACANAL;Black Label;1563;(nunca vendido);;Whiskys;Activo;1;0;0
+BACANAL;Bot Absolut;1630;(nunca vendido);92.25;Botellas;Activo;0;0;0
+BACANAL;Bot Agua ardiente;2248;(nunca vendido);87.15;Botellas;Activo;0;0;0
+BACANAL;Bot Ballantines;1631;(nunca vendido);92.25;Botellas;Activo;0;0;0
+BACANAL;Bot Beefeater;1655;(nunca vendido);92.25;Botellas;Activo;0;0;0
+BACANAL;Bot Black Label;1634;(nunca vendido);112.75;Botellas;Activo;0;0;0
+BACANAL;Bot Brockmans;1635;(nunca vendido);112.75;Botellas;Activo;0;0;0
+BACANAL;Bot Brugal;1636;(nunca vendido);92.25;Botellas;Activo;0;0;0
+BACANAL;Bot Brugal Extra Viejo;2212;(nunca vendido);117.9;Botellas;Activo;0;0;0
+BACANAL;Bot Chivas;2526;(nunca vendido);190;Botellas;Activo;0;0;0
+BACANAL;Bot Ciroc;1640;(nunca vendido);133.25;Botellas;Activo;0;0;0
+BACANAL;Bot Ciroc Coco;1732;(nunca vendido);133.25;Botellas;Activo;0;0;0
+BACANAL;Bot Ciroc Manzana;1730;(nunca vendido);133.25;Botellas;Activo;0;0;0
+BACANAL;Bot Don Julio;2527;(nunca vendido);200;Botellas;Activo;0;0;0
+BACANAL;Bot Dyc 8;2214;(nunca vendido);102.5;Botellas;Activo;0;0;0
+BACANAL;Bot G' Vine;1641;(nunca vendido);190;Botellas;Activo;0;0;0
+BACANAL;Bot Gold Label;1642;(nunca vendido);133.25;Botellas;Activo;0;0;0
+BACANAL;Bot Jaggermeister;1645;(nunca vendido);102.5;Botellas;Activo;0;0;0
+BACANAL;Bot Jim Beam;2177;(nunca vendido);102.5;Botellas;Activo;0;0;0
+BACANAL;Bot Jose Cuervo;1659;(nunca vendido);92.25;Botellas;Activo;0;0;0
+BACANAL;Bot Larios 12;2182;(nunca vendido);92.25;Botellas;Activo;0;0;0
+BACANAL;Bot Larios Rose;2325;(nunca vendido);87.15;Botellas;Activo;0;0;0
+BACANAL;Bot Martin Millers;2189;(nunca vendido);106.1;Botellas;Activo;0;0;0
+BACANAL;Bot Pink Rives;1648;(nunca vendido);92.25;Botellas;Activo;0;0;0
+BACANAL;Bot Red Label;1649;(nunca vendido);92.25;Botellas;Activo;0;0;0
+BACANAL;Bot Rives 1880;1739;(nunca vendido);92.25;Botellas;Activo;0;0;0
+BACANAL;Bot Rives Exotica;1737;(nunca vendido);102.5;Botellas;Activo;0;0;0
+BACANAL;Bot Santa Teresa;2521;(nunca vendido);92.25;Botellas;Activo;0;0;0
+BACANAL;Bot Seagrams;1650;(nunca vendido);92.25;Botellas;Activo;0;0;0
+BACANAL;Bot Smirnoff;1651;(nunca vendido);92.25;Botellas;Activo;0;0;0
+BACANAL;Bot White Label;2523;(nunca vendido);92.25;Botellas;Activo;0;0;0
+BACANAL;Bot Zacapa;1654;(nunca vendido);112.75;Botellas;Activo;0;0;0
+BACANAL;Brockmans;1466;(nunca vendido);;Gins;Activo;1;0;0
+BACANAL;Brugal Extra Viejo;2211;(nunca vendido);;Rones;Activo;1;0;0
+BACANAL;Chivas;2323;(nunca vendido);;Whiskys;Activo;1;0;0
+BACANAL;Ciroc coco;1731;(nunca vendido);;Vodkas;Activo;1;0;0
+BACANAL;Ciroc Manzana;1729;(nunca vendido);;Vodkas;Activo;1;0;0
+BACANAL;Cofrutos Melocoton;1546;(nunca vendido);3.9;Refrescos;Activo;1;0;0
+BACANAL;Copa Alma Blanco Menú;2374;(nunca vendido);;Bebida menu;Activo;0;0;0
+BACANAL;Copa Alma Rosado Menú;2375;(nunca vendido);;Bebida menu;Activo;0;0;0
+BACANAL;Copa Arabe Menú;2413;(nunca vendido);;Bebida menu;Activo;0;0;0
+BACANAL;Copa Delizia Menú;2372;(nunca vendido);;Bebida menu;Activo;0;0;0
+BACANAL;Copa Hallazgo Menú;2373;(nunca vendido);;Bebida menu;Activo;0;0;0
+BACANAL;Copa Irreverente Joven Menú;2371;(nunca vendido);;Bebida menu;Activo;0;0;0
+BACANAL;Cotton candy Ice 0%;2316;(nunca vendido);13;Vapers;Activo;1;0;0
+BACANAL;Cotton candy Ice 2%;2311;(nunca vendido);13;Vapers;Activo;1;0;0
+BACANAL;Don julio Reposado;2408;(nunca vendido);;Licores;Activo;1;0;0
+BACANAL;Four Roses;2321;(nunca vendido);;Whiskys;Activo;1;0;0
+BACANAL;Gold Label;1566;(nunca vendido);;Whiskys;Activo;1;0;0
+BACANAL;Imagen colaboradores;1804;(nunca vendido);;Otros;Activo;0;0;0
+BACANAL;Jameson;2320;(nunca vendido);;Whiskys;Activo;1;0;0
+BACANAL;Jim Beam;2175;(nunca vendido);;Whiskys;Activo;1;0;0
+BACANAL;Jose Cuervo;1658;(nunca vendido);;Licores;Activo;1;0;0
+BACANAL;Larios 12;2180;(nunca vendido);;Gins;Activo;1;0;0
+BACANAL;Larios Rose;2324;(nunca vendido);;Gins;Activo;1;0;0
+BACANAL;Licor Malibu;1371;(nunca vendido);;Licores;Activo;1;0;0
+BACANAL;Menthol Mojito 0 %;2319;(nunca vendido);13;Vapers;Activo;1;0;0
+BACANAL;Menthol Mojito 2 %;2314;(nunca vendido);13;Vapers;Activo;1;0;0
+BACANAL;Provolone con pesto;2270;(nunca vendido);9.2;Para empezar;Activo;0;0;0
+BACANAL;Red Bull Sa;1539;(nunca vendido);4.25;Refrescos;Activo;1;0;0
+BACANAL;Rives 1880;1738;(nunca vendido);;Gins;Activo;1;0;0
+BACANAL;Rives Exotica;1736;(nunca vendido);;Gins;Activo;1;0;0
+BACANAL;Rives Pink;1473;(nunca vendido);;Gins;Activo;1;0;0
+BACANAL;Royal bliss berry;1688;(nunca vendido);3.95;Refrescos;Activo;1;0;0
+BACANAL;Royal bliss limon;1689;(nunca vendido);3.45;Refrescos;Activo;1;0;0
+BACANAL;Royal bliss tonica;1687;(nunca vendido);3.6;Refrescos;Activo;1;0;0
+BACANAL;Sabor Coco;1766;(nunca vendido);0.65;Sabores;Activo;0;0;0
+BACANAL;Sabor Fresa;1768;(nunca vendido);0.65;Sabores;Activo;0;0;0
+BACANAL;Sabor Jengibre;2012;(nunca vendido);0.65;Sabores;Activo;0;0;0
+BACANAL;Sabor Mango;1767;(nunca vendido);0.65;Sabores;Activo;0;0;0
+BACANAL;Sabor Mango Picante;2011;(nunca vendido);0.65;Sabores;Activo;0;0;0
+BACANAL;Sabor Maracuya;1765;(nunca vendido);0.65;Sabores;Activo;0;0;0
+BACANAL;Sabor Melon;1761;(nunca vendido);0.65;Sabores;Activo;0;0;0
+BACANAL;Sabor Piña;1762;(nunca vendido);0.65;Sabores;Activo;0;0;0
+BACANAL;Sabor Platano;1763;(nunca vendido);0.65;Sabores;Activo;0;0;0
+BACANAL;Sabor Sandia;1764;(nunca vendido);0.65;Sabores;Activo;0;0;0
+BACANAL;Santa Teresa;2520;(nunca vendido);;Rones;Activo;1;0;0
+BACANAL;Smirnoff;1561;(nunca vendido);;Vodkas;Activo;1;0;0
+BACANAL;Strawbeery Ice 0%;2315;(nunca vendido);13;Vapers;Activo;1;0;0
+BACANAL;Strawbeery Ice 2%;2310;(nunca vendido);13;Vapers;Activo;1;0;0
+BACANAL;Strawberry Watermelon Bubblegum 0%;2318;(nunca vendido);13;Vapers;Activo;1;0;0
+BACANAL;Strawberry Watermelon Bubblegum 2 %;2313;(nunca vendido);13;Vapers;Activo;1;0;0
+BACANAL;Tinto de Verano La Casera;2326;(nunca vendido);3.8;Vinos tintos;Activo;1;0;0
+BACANAL;Tortilla trufada huevo Concurso;2597;(nunca vendido);10;Otros;Activo;0;0;0
+BACANAL;Triple Melon 0%;2317;(nunca vendido);13;Vapers;Activo;1;0;0
+BACANAL;Triple Melon 2 %;2312;(nunca vendido);13;Vapers;Activo;1;0;0
+BACANAL;White Label;2522;(nunca vendido);;Whiskys;Activo;1;0;0
+BACANAL;Zacapa;1557;(nunca vendido);;Rones;Activo;1;0;0
+HABANA;Brugal;1550;Brugal;;Rones;Activo;1;0;395
+HABANA;Shisha 1 Sabor;1314;Shisha 1 Sabor;15.5;Shishas;Activo;0;0;388
+HABANA;Mojito Habanero;1373;Mojito Habanero;8.75;Nuestros cocteles;Activo;0;0;324
+HABANA;Coronita;2222;Coronita;4.1;Cervezas;Activo;1;0;309
+HABANA;Alhambra;2414;Alhambra;4.1;Cervezas;Activo;1;0;259
+HABANA;Coco Colado;1364;Coco Colado;8.75;Nuestros cocteles;Activo;0;0;249
+HABANA;Sex On Habana;1382;Sex On Habana;8.75;Nuestros cocteles;Activo;0;0;239
+HABANA;Red Label;1569;Red Label;;Whiskys;Activo;1;0;223
+HABANA;Shisha 2 Sabor;1315;Shisha 2 Sabor;15.5;Shishas;Activo;0;0;198
+HABANA;Papagayo;1377;Papagayo;8.75;Nuestros cocteles;Activo;0;0;171
+HABANA;Mojito Habanero Sin;1622;Mojito Habanero Sin;7.7;Nuestros cocteles sin;Activo;0;0;139
+HABANA;Seagrams;1475;Seagrams;;Gins;Activo;1;0;136
+HABANA;Cocacola;1532;Cocacola;3.8;Refrescos;Activo;1;0;127
+HABANA;Spicy Margarit;1384;Spicy Margarit;8.75;Nuestros cocteles;Activo;0;0;115
+HABANA;Aquabona;1529;Aquabona;3.1;Refrescos;Activo;1;0;112
+HABANA;Alma Blanco;2184;Alma Blanco;;Vinos blancos;Activo;1;0;107
+HABANA;Black Label;1563;Black Label;;Whiskys;Activo;1;0;103
+HABANA;Coco Colado Sin;1618;Coco Colado Sin;7.7;Nuestros cocteles sin;Activo;0;0;89
+HABANA;Cocacola Zero;1533;Cocacola Zero;3.8;Refrescos;Activo;1;0;86
+HABANA;Jaggermaister;1282;Jaggermaister;;Licores;Activo;1;0;83
+HABANA;Sex On Habana Sin;1626;Sex On Habana Sin;7.7;Nuestros cocteles sin;Activo;0;0;82
+HABANA;Habanito;1370;Habanito;8.75;Nuestros cocteles;Activo;0;0;76
+HABANA;Tinto de Verano;1942;Tinto de Verano;4.1;Vinos tintos;Activo;0;0;75
+HABANA;Beefeater;1464;Beefeater;;Gins;Activo;1;0;74
+HABANA;Blue Watermelon;1361;Blue Watermelon;8.75;Nuestros cocteles;Activo;0;0;70
+HABANA;Santa Teresa;2520;Santa Teresa;;Rones;Activo;1;0;69
+HABANA;Red Bull;1537;Red Bull;4.25;Refrescos;Activo;1;0;67
+HABANA;Larios Rose;2324;Larios Rose;;Gins;Activo;1;0;64
+HABANA;Orange Oasis;1374;Orange Oasis;8.75;Nuestros cocteles;Activo;0;0;64
+HABANA;Banana Daiquiri;1359;Banana Daiquiri;8.75;Nuestros cocteles;Activo;0;0;57
+HABANA;Absolut;1558;Absolut;;Vodkas;Activo;1;0;52
+HABANA;San miguel Tercio;2416;San miguel Tercio;3.55;Cervezas;Activo;1;0;52
+HABANA;Caipi-Brasileña;1363;Caipi-Brasileña;8.75;Nuestros cocteles;Activo;0;0;50
+HABANA;Fuze Tea;1536;Fuze Tea;3.75;Refrescos;Activo;1;0;45
+HABANA;Papagayo Sin;1624;Papagayo Sin;7.7;Nuestros cocteles sin;Activo;0;0;45
+HABANA;Pink Limonade;1379;Pink Limonade;8.75;Nuestros cocteles;Activo;0;0;43
+HABANA;Cambio de Carbon;1663;Cambio de Carbon;;Otros;Activo;0;0;42
+HABANA;Jose Cuervo;1658;Jose Cuervo;;Licores;Activo;1;0;41
+HABANA;Ballantines;1562;Ballantines;;Whiskys;Activo;1;0;38
+HABANA;The One SIN;1386;The One SIN;7.7;Nuestros cocteles sin;Activo;0;0;38
+HABANA;Radler Tercio;2419;Radler Tercio;3.75;Cervezas;Activo;1;0;32
+HABANA;Martin Millers;2188;Martin Millers;;Gins;Activo;1;0;31
+HABANA;Aquarius Limon;1530;Aquarius Limon;3.95;Refrescos;Activo;1;0;30
+HABANA;Banana Daiquiri Sin;1615;Banana Daiquiri Sin;7.7;Nuestros cocteles sin;Activo;0;0;30
+HABANA;Tequila de Fresa Diex;1288;Tequila de Fresa Diex;;Licores;Activo;1;0;30
+HABANA;Havana 7;2322;Havana 7;;Rones;Activo;1;0;29
+HABANA;Vaso de Agua;1595;Vaso de Agua;;Otros;Activo;0;0;28
+HABANA;Blue Watermelon Sin;1616;Blue Watermelon Sin;7.7;Nuestros cocteles sin;Activo;0;0;27
+HABANA;Delizia;1883;Delizia;12.85;Vinos blancos;Activo;1;0;27
+HABANA;Fanta Naranja;1535;Fanta Naranja;3.8;Refrescos;Activo;1;0;27
+HABANA;Larios 12;2180;Larios 12;;Gins;Activo;1;0;26
+HABANA;Batido Oreo;1572;Batido Oreo;6.15;Milshakes xxl;Activo;0;0;24
+HABANA;Negroni Classic;2517;Negroni Classic;8.75;Nuestros cocteles;Activo;0;0;24
+HABANA;Tonica Nordic;1543;Tonica Nordic;3.8;Refrescos;Activo;1;0;24
+HABANA;Rives Pink;1473;Rives Pink;;Gins;Activo;1;0;22
+HABANA;San miguel 0,0 Tostada;2532;San miguel 0,0 Tostada;3.6;Cervezas;Activo;1;0;22
+HABANA;White Label;2522;White Label;;Whiskys;Activo;1;0;21
+HABANA;Dyc 8;2213;Dyc 8;;Whiskys;Activo;1;0;20
+HABANA;Licor Malibu;1371;Licor Malibu;;Licores;Activo;1;0;20
+HABANA;Tequila de Frutas de Pasion Diex;2210;Tequila de Frutas de Pasion Diex;;Licores;Activo;1;0;20
+HABANA;Aquarius Naranja;1531;Aquarius Naranja;3.95;Refrescos;Activo;1;0;19
+HABANA;Pink Lemonade Sin;1625;Pink Lemonade Sin;7.7;Nuestros cocteles sin;Activo;0;0;17
+HABANA;Rives Exotica;1736;Rives Exotica;;Gins;Activo;1;0;16
+HABANA;Natural Juice Sandia;1584;Natural Juice Sandia;6.15;Zumos naturales;Activo;0;0;15
+HABANA;Aguardiente Antioqueño;2247;Aguardiente Antioqueño;3;Licores;Activo;1;0;14
+HABANA;Batido Fresa;1570;Batido Fresa;6.15;Milshakes xxl;Activo;0;0;14
+HABANA;Natural Juice Coco;1578;Natural Juice Coco;6.15;Zumos naturales;Activo;0;0;14
+HABANA;Natural Juice Fresa;1579;Natural Juice Fresa;6.15;Zumos naturales;Activo;0;0;14
+HABANA;Batido Chocolate;1571;Batido Chocolate;6.15;Milshakes xxl;Activo;0;0;13
+HABANA;Batido Vainilla;1574;Batido Vainilla;6.15;Milshakes xxl;Activo;0;0;13
+HABANA;Fanta Limon;1534;Fanta Limon;3.2;Refrescos;Activo;1;0;12
+HABANA;Gofre;1412;Gofre;5.15;Meriendas;Activo;1;0;12
+HABANA;Gold Label;1566;Gold Label;;Whiskys;Activo;1;0;12
+HABANA;Brockmans;1466;Brockmans;;Gins;Activo;1;0;11
+HABANA;Brugal Extra Viejo;2211;Brugal Extra Viejo;;Rones;Activo;1;0;11
+HABANA;Natural Juice Mango;1580;Natural Juice Mango;6.15;Zumos naturales;Activo;0;0;11
+HABANA;Sprite;1540;Sprite;3.8;Refrescos;Activo;1;0;11
+HABANA;Batido Platano;1573;Batido Platano;6.15;Milshakes xxl;Activo;0;0;8
+HABANA;Red Bull Sa;1539;Red Bull Sa;4.25;Refrescos;Activo;1;0;8
+HABANA;Zacapa;1557;Zacapa;;Rones;Activo;1;0;8
+HABANA;Alma Rosado;2185;Alma Rosado;;Vinos rosados;Activo;1;0;7
+HABANA;Frape Chocolate;1576;Frape Chocolate;6.15;Frappes;Activo;0;0;7
+HABANA;G'Vine;1469;G'Vine;;Gins;Activo;1;0;7
+HABANA;Hollenbar;1735;Hollenbar;;Licores;Activo;1;0;7
+HABANA;Martini Blanco;1932;Martini Blanco;;Licores;Activo;1;0;7
+HABANA;San miguel 0,0;2415;San miguel 0,0;3.55;Cervezas;Activo;1;0;7
+HABANA;Imagen colaboradores;1804;Imagen colaboradores;;Otros;Activo;0;0;6
+HABANA;Jim Beam;2175;Jim Beam;;Whiskys;Activo;1;0;6
+HABANA;Licor de Crema El afilador;1947;Licor de Crema El afilador;2.5;Licores;Activo;1;0;6
+HABANA;Ciroc Manzana;1729;Ciroc Manzana;;Vodkas;Activo;1;0;5
+HABANA;Don julio Reposado;2408;Don julio Reposado;;Licores;Activo;1;0;5
+HABANA;Frape Caramelo;1575;Frape Caramelo;6.15;Frappes;Activo;0;0;5
+HABANA;Martini Rojo;1933;Martini Rojo;;Licores;Activo;1;0;5
+HABANA;Cofrutos Piña;1548;Cofrutos Piña;3.3;Refrescos;Activo;1;0;4
+HABANA;Frape Vainilla;1577;Frape Vainilla;6.15;Frappes;Activo;0;0;4
+HABANA;Jameson;2320;Jameson;;Whiskys;Activo;1;0;4
+HABANA;Royal bliss berry;1688;Royal bliss berry;4.25;Refrescos;Activo;1;0;4
+HABANA;Smirnoff;1561;Smirnoff;;Vodkas;Activo;1;0;4
+HABANA;Bot Red Label;1649;Bot Red Label;92.25;Botellas;Activo;0;0;3
+HABANA;Ciroc coco;1731;Ciroc coco;;Vodkas;Activo;1;0;3
+HABANA;Cofrutos Naranja;1547;Cofrutos Naranja;3.3;Refrescos;Activo;1;0;3
+HABANA;Natural Juice Melon;1581;Natural Juice Melon;6.15;Zumos naturales;Activo;0;0;3
+HABANA;Natural Juice Platano;1583;Natural Juice Platano;6.15;Zumos naturales;Activo;0;0;3
+HABANA;Revisar Carbones;1596;Revisar Carbones;;Otros;Activo;0;0;2
+HABANA;Royal bliss limon;1689;Royal bliss  limon;4.25;Refrescos;Activo;1;0;2
+HABANA;Strawbeery Ice 2%;2310;Strawbeery Ice 2%;13;Vapers;Activo;1;0;2
+HABANA;Bot Black Label;1634;Bot Black Label;112.75;Botellas;Activo;0;0;1
+HABANA;Bot Seagrams;1650;Bot Seagrams;92.25;Botellas;Activo;0;0;1
+HABANA;Cazoleta cachimba;2457;Cazoleta cachimba;10.25;Otros;Activo;1;0;1
+HABANA;Chivas;2323;Chivas;;Whiskys;Activo;1;0;1
+HABANA;Ciroc;1560;Ciroc;;Vodkas;Activo;1;0;1
+HABANA;Four Roses;2321;Four Roses;;Whiskys;Activo;1;0;1
+HABANA;1 Shisha Sabor Liquidacion;2462;(nunca vendido);12.5;Shishas;Activo;0;0;0
+HABANA;2 Shisha Sabor Liquidacion;2463;(nunca vendido);12.5;Shishas;Activo;0;0;0
+HABANA;Al Kaher Yelow;2593;(nunca vendido);15.5;Shishas;Activo;1;0;0
+HABANA;Alitas de pollo glaseadas en BBQ asiática;;(nunca vendido);13.35;Delicateses para cenar;Inactivo;0;0;0
+HABANA;Bao-cadillo de oreja a baja temperatura con brava y lima;;(nunca vendido);17.75;Delicateses para cenar;Inactivo;0;0;0
+HABANA;Base cachimba;2456;(nunca vendido);30.75;Otros;Activo;1;0;0
+HABANA;Belaire luxe ice;1747;(nunca vendido);87.15;Champagne;Activo;1;0;0
+HABANA;Belaire rose;1746;(nunca vendido);87.15;Champagne;Activo;1;0;0
+HABANA;Big Boy;1683;(nunca vendido);15.5;Shishas;Activo;1;0;0
+HABANA;Blue Yellow;1680;(nunca vendido);15.5;Shishas;Activo;1;0;0
+HABANA;Bot Absolut;1630;(nunca vendido);92.25;Botellas;Activo;0;0;0
+HABANA;Bot Agua ardiente;2248;(nunca vendido);87.15;Botellas;Activo;0;0;0
+HABANA;Bot Ballantines;1631;(nunca vendido);92.25;Botellas;Activo;0;0;0
+HABANA;Bot Beefeater;1655;(nunca vendido);92.25;Botellas;Activo;0;0;0
+HABANA;Bot Belvedere 3L;2147;(nunca vendido);410;Botellas;Activo;0;0;0
+HABANA;Bot Brockmans;1635;(nunca vendido);92.25;Botellas;Activo;0;0;0
+HABANA;Bot Brugal;1636;(nunca vendido);92.25;Botellas;Activo;0;0;0
+HABANA;Bot Brugal Extra Viejo;2212;(nunca vendido);102.5;Botellas;Activo;0;0;0
+HABANA;Bot Chivas;2526;(nunca vendido);130;Botellas;Activo;0;0;0
+HABANA;Bot Ciroc;1640;(nunca vendido);123;Botellas;Activo;0;0;0
+HABANA;Bot Ciroc Coco;1732;(nunca vendido);133.25;Botellas;Activo;0;0;0
+HABANA;Bot Ciroc Manzana;1730;(nunca vendido);133.25;Botellas;Activo;0;0;0
+HABANA;Bot Don Julio;2527;(nunca vendido);150;Botellas;Activo;0;0;0
+HABANA;Bot Dyc 8;2214;(nunca vendido);87.15;Botellas;Activo;0;0;0
+HABANA;Bot G' Vine;1641;(nunca vendido);123;Botellas;Activo;0;0;0
+HABANA;Bot Gold Label;1642;(nunca vendido);153.75;Botellas;Activo;0;0;0
+HABANA;Bot Jaggermeister;1645;(nunca vendido);102.5;Botellas;Activo;0;0;0
+HABANA;Bot Jim Beam;2177;(nunca vendido);92.25;Botellas;Activo;0;0;0
+HABANA;Bot Jose Cuervo;1659;(nunca vendido);92.25;Botellas;Activo;0;0;0
+HABANA;Bot Larios 12;2182;(nunca vendido);82;Botellas;Activo;0;0;0
+HABANA;Bot Larios Rose;2325;(nunca vendido);92.25;Botellas;Activo;0;0;0
+HABANA;Bot Martin Millers;2189;(nunca vendido);123;Botellas;Activo;0;0;0
+HABANA;Bot Pink Rives;1648;(nunca vendido);92.25;Botellas;Activo;0;0;0
+HABANA;Bot Rives 1880;1739;(nunca vendido);82;Botellas;Activo;0;0;0
+HABANA;Bot Rives Exotica;1737;(nunca vendido);92.25;Botellas;Activo;0;0;0
+HABANA;Bot Santa Teresa;2521;(nunca vendido);92.25;Botellas;Activo;0;0;0
+HABANA;Bot Smirnoff;1651;(nunca vendido);92.25;Botellas;Activo;0;0;0
+HABANA;Bot White Label;2523;(nunca vendido);92.25;Botellas;Activo;0;0;0
+HABANA;Bot Zacapa;1654;(nunca vendido);123;Botellas;Activo;0;0;0
+HABANA;Burger Balles Hosteleros;;(nunca vendido);14.80;Delicateses para cenar;Inactivo;0;0;0
+HABANA;Casper;1684;(nunca vendido);15;Shishas;Activo;1;0;0
+HABANA;Catton Candy;1669;(nunca vendido);15.5;Shishas;Activo;1;0;0
+HABANA;Chao Bella;2293;(nunca vendido);15.5;Shishas;Activo;1;0;0
+HABANA;Cofrutos Melocoton;1546;(nunca vendido);3.3;Refrescos;Activo;1;0;0
+HABANA;Cotton candy Ice 0%;2316;(nunca vendido);13;Vapers;Activo;1;0;0
+HABANA;Cotton candy Ice 2%;2311;(nunca vendido);13;Vapers;Activo;1;0;0
+HABANA;Ensaladilla rusa con pan suflado y huevas de tobiko;;(nunca vendido);10.70;Delicateses para cenar;Inactivo;0;0;0
+HABANA;Fight;1697;(nunca vendido);15.5;Shishas;Activo;1;0;0
+HABANA;Fuera de Carta Tabaco;1976;(nunca vendido);;Shishas;Activo;0;0;0
+HABANA;Gyozas de pollo al curry con perlas de arroz;;(nunca vendido);14.80;Delicateses para cenar;Inactivo;0;0;0
+HABANA;Hawai;1679;(nunca vendido);15.5;Shishas;Activo;1;0;0
+HABANA;Huracan;2281;(nunca vendido);15.5;Shishas;Activo;1;0;0
+HABANA;Kafayayo;1685;(nunca vendido);15.5;Shishas;Activo;1;0;0
+HABANA;Lady Killer;1672;(nunca vendido);15;Shishas;Activo;1;0;0
+HABANA;Love 66;1681;(nunca vendido);15.5;Shishas;Activo;1;0;0
+HABANA;Mango Tango;1676;(nunca vendido);15;Shishas;Activo;1;0;0
+HABANA;Menthol Mojito 0 %;2319;(nunca vendido);13;Vapers;Activo;1;0;0
+HABANA;Menthol Mojito 2 %;2314;(nunca vendido);13;Vapers;Activo;1;0;0
+HABANA;MissJossy;2294;(nunca vendido);15.5;Shishas;Activo;1;0;0
+HABANA;Moet Chandon;1284;(nunca vendido);87.15;Champagne;Activo;1;0;0
+HABANA;Moon Dream;1673;(nunca vendido);15;Shishas;Activo;1;0;0
+HABANA;My amor;1686;(nunca vendido);15.5;Shishas;Activo;1;0;0
+HABANA;Play;1675;(nunca vendido);15;Shishas;Activo;1;0;0
+HABANA;Rives 1880;1738;(nunca vendido);;Gins;Activo;1;0;0
+HABANA;Royal bliss tonica;1687;(nunca vendido);4.25;Refrescos;Activo;1;0;0
+HABANA;Sabor Coco;1766;(nunca vendido);;Sabores;Activo;0;0;0
+HABANA;Sabor Fresa;1768;(nunca vendido);;Sabores;Activo;0;0;0
+HABANA;Sabor Jengibre;2012;(nunca vendido);;Sabores;Activo;0;0;0
+HABANA;Sabor Mango;1767;(nunca vendido);;Sabores;Activo;0;0;0
+HABANA;Sabor Maracuya;1765;(nunca vendido);;Sabores;Activo;0;0;0
+HABANA;Sabor Melon;1761;(nunca vendido);;Sabores;Activo;0;0;0
+HABANA;Sabor Piña;1762;(nunca vendido);;Sabores;Activo;0;0;0
+HABANA;Sabor Platano;1763;(nunca vendido);;Sabores;Activo;0;0;0
+HABANA;Sabor Sandia;1764;(nunca vendido);;Sabores;Activo;0;0;0
+HABANA;Servilleta;2006;(nunca vendido);;Otros;Activo;0;0;0
+HABANA;Sexy Sheba;2482;(nunca vendido);15.5;Shishas;Activo;1;0;0
+HABANA;Skimo Watermelon;2173;(nunca vendido);15.5;Shishas;Activo;1;0;0
+HABANA;Strawbeery Ice 0%;2315;(nunca vendido);13;Vapers;Activo;1;0;0
+HABANA;Strawberry Watermelon Bubblegum 0%;2318;(nunca vendido);13;Vapers;Activo;1;0;0
+HABANA;Strawberry Watermelon Bubblegum 2 %;2313;(nunca vendido);13;Vapers;Activo;1;0;0
+HABANA;Tinto de Verano La Casera;2326;(nunca vendido);;Vinos tintos;Activo;1;0;0
+HABANA;Tornado;1682;(nunca vendido);15;Shishas;Activo;1;0;0
+HABANA;Torreznos con guacamole y pico de gallo;;(nunca vendido);14.90;Delicateses para cenar;Inactivo;0;0;0
+HABANA;Triple Melon 0%;2317;(nunca vendido);13;Vapers;Activo;1;0;0
+HABANA;Triple Melon 2 %;2312;(nunca vendido);13;Vapers;Activo;1;0;0
+HABANA;White Cake;1671;(nunca vendido);15.5;Shishas;Activo;1;0;0
