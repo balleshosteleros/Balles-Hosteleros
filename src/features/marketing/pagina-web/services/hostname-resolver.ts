@@ -170,7 +170,7 @@ export async function resolverHostname(
     // las empresas que YA tienen web publicada (migración 015).
     const { data: empresaRow } = await supabase
       .from("empresas_web_publica")
-      .select("id, nombre, slug, logo_url, isotipo_url, instagram, facebook, tiktok, whatsapp")
+      .select("id, nombre, slug, logo_url, isotipo_url, instagram, facebook, tiktok, whatsapp, color_primario, color_secundario, color_texto")
       .eq("id", pag.empresa_id)
       .maybeSingle();
 
@@ -179,6 +179,9 @@ export async function resolverHostname(
       slug?: string | null;
       logo_url?: string | null;
       isotipo_url?: string | null;
+      color_primario?: string | null;
+      color_secundario?: string | null;
+      color_texto?: string | null;
       instagram?: string | null;
       facebook?: string | null;
       tiktok?: string | null;
@@ -197,7 +200,16 @@ export async function resolverHostname(
       logo_url: emp.logo_url ?? null,
       isotipo_url: emp.isotipo_url ?? emp.logo_url ?? null,
       // El logo de la empresa alimenta también la barra de navegación.
-      branding: pag.branding ? { ...pag.branding, logo_url: emp.logo_url ?? undefined } : (emp.logo_url ? { logo_url: emp.logo_url } : null),
+      // Los colores mandan desde Ajustes → Imagen de marca, NO desde el bloque:
+      // `paginas_web.branding` está vacío en las páginas legales y caían al
+      // color por defecto del código (en HABANA salía el dorado de otra
+      // empresa). Así cambiar la marca en Ajustes actualiza todas las páginas.
+      branding: {
+        ...(pag.branding ?? {}),
+        color_primario: emp.color_primario ?? pag.branding?.color_primario,
+        color_secundario: emp.color_secundario ?? pag.branding?.color_secundario,
+        logo_url: emp.logo_url ?? undefined,
+      },
       nombre_pagina: pag.nombre,
       redes: {
         instagram: urlRed("instagram", dg.instagram),
