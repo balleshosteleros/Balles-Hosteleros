@@ -2093,6 +2093,7 @@ function PlanoCanvas({
   salaTieneZonas,
   selectedMesaId,
   selectedReservaMesaId,
+  mesasResaltadasIds,
   onSelectMesa,
   getEstadoMesa,
   getReservasMesa,
@@ -2115,6 +2116,12 @@ function PlanoCanvas({
   salaTieneZonas: boolean;
   selectedMesaId: string | null;
   selectedReservaMesaId: string | null;
+  /**
+   * Mesas de la reserva que el raton tiene encima en la lista. Es un conjunto
+   * porque una reserva puede ocupar VARIAS mesas (las uniones se guardan como
+   * "M1+M2"): se resaltan todas a la vez.
+   */
+  mesasResaltadasIds: Set<string>;
   onSelectMesa: (m: Mesa | null) => void;
   getEstadoMesa: (m: Mesa) => string;
   getReservasMesa: (mesaId: string) => Reserva[];
@@ -2335,7 +2342,10 @@ function PlanoCanvas({
                     "sala-mesa absolute flex flex-col items-center justify-center text-[11px] font-semibold border-2 transition-all cursor-pointer px-1 overflow-hidden",
                     mesaBg[estado] ?? "",
                     isLibre ? "text-foreground border-foreground/40" : "border-white/10",
-                    (selectedReservaMesaId === m.id || selectedMesaId === m.id) && "ring-4 ring-red-500 z-10",
+                    (selectedReservaMesaId === m.id ||
+                      selectedMesaId === m.id ||
+                      mesasResaltadasIds.has(m.id)) &&
+                      "ring-4 ring-red-500 z-10",
                     moviendo && !destinoInvalido && "cursor-copy ring-2 ring-sky-500 ring-offset-1 hover:ring-4 hover:scale-105 z-10",
                     destinoInvalido && "opacity-40 cursor-not-allowed",
                   )}
@@ -2513,6 +2523,13 @@ export function ReservasView() {
   // Se incrementa tras cada cambio para que la Actividad se vuelva a leer y
   // muestre la línea recién grabada sin cerrar y reabrir la ficha.
   const [actividadVersion, setActividadVersion] = useState(0);
+
+  /**
+   * Reserva sobre la que esta el raton en la lista. Resalta en rojo a la vez la
+   * fila y su mesa (o sus mesas) en el plano, para ver de un vistazo donde se
+   * sienta esa gente sin tener que hacer clic. Al quitar el raton se apaga todo.
+   */
+  const [reservaHoverId, setReservaHoverId] = useState<string | null>(null);
   const [guardandoDuracion, setGuardandoDuracion] = useState(false);
   // Fecha y hora editables desde la ficha. Cambiar la hora recalcula el turno
   // en el servidor (y con el, en que mapa sale la reserva), asi que aqui solo
@@ -3007,6 +3024,29 @@ export function ReservasView() {
       return id ? { ...r, mesaId: id } : r;
     });
   }, [reservas, mesaIdPorCodigo]);
+
+  /**
+   * Mesas que hay que resaltar en el plano por el hover de la lista. Se parte
+   * el codigo por "+" porque una union ("M1+M2") ocupa DOS mesas fisicas y las
+   * dos tienen que encenderse: `mesaId` solo guarda la primera.
+   */
+  const mesasResaltadasIds = useMemo(() => {
+    if (!reservaHoverId) return new Set<string>();
+    const r = reservasResueltas.find((x) => x.id === reservaHoverId);
+    if (!r) return new Set<string>();
+    const ids = new Set<string>();
+    const codigos = (r.mesaCodigo ?? "")
+      .split("+")
+      .map((c) => c.trim().toUpperCase())
+      .filter(Boolean);
+    for (const c of codigos) {
+      const id = mesaIdPorCodigo.get(c);
+      if (id) ids.add(id);
+    }
+    // Sin codigo (o sin correspondencia) queda el id ya resuelto de la reserva.
+    if (ids.size === 0 && r.mesaId) ids.add(r.mesaId);
+    return ids;
+  }, [reservaHoverId, reservasResueltas, mesaIdPorCodigo]);
 
   const reservasDia = useMemo(() => reservasResueltas.filter(r => r.fecha === fecha), [reservasResueltas, fecha]);
   const reservasTurno = useMemo(() => reservasDia.filter(r => r.turno === turno), [reservasDia, turno]);
@@ -3870,11 +3910,16 @@ export function ReservasView() {
                   <PopoverTrigger asChild>
                     <button
                       onClick={() => setSelectedReserva(r)}
+                      onMouseEnter={() => setReservaHoverId(r.id)}
+                      onMouseLeave={() => setReservaHoverId(null)}
                       className={cn(
                         "w-full text-[13px] border-b hover:bg-muted/40 text-left transition-colors",
                         LISTA_GRID,
                         "px-3 py-3",
-                        selectedReserva?.id === r.id && "ring-2 ring-red-500 ring-inset bg-red-500/5",
+                        // El mismo recuadro rojo que marca la seleccion sirve
+                        // para el hover: fila y mesa se encienden a la vez.
+                        (selectedReserva?.id === r.id || reservaHoverId === r.id) &&
+                          "ring-2 ring-red-500 ring-inset bg-red-500/5",
                         blink,
                       )}
                     >
@@ -4044,6 +4089,7 @@ export function ReservasView() {
               salaTieneZonas={zonasSalaActual.length > 0}
               selectedMesaId={selectedMesa?.id ?? null}
               selectedReservaMesaId={selectedReserva?.mesaId ?? null}
+              mesasResaltadasIds={mesasResaltadasIds}
               onSelectMesa={handleSelectMesa}
               getEstadoMesa={getMesaEstadoTurno}
               getReservasMesa={getReservasMesa}
@@ -4131,7 +4177,10 @@ export function ReservasView() {
                                       "h-20 rounded-md flex flex-col items-center justify-center text-[11px] font-bold shadow-sm border-2 transition-all cursor-pointer px-1",
                                       mesaBg[estado] ?? "",
                                       isLibre ? "text-foreground border-foreground/40" : "border-white/10",
-                                      (selectedReserva?.mesaId === m.id || selectedMesa?.id === m.id) && "ring-4 ring-red-500 z-10",
+                                      (selectedReserva?.mesaId === m.id ||
+                                        selectedMesa?.id === m.id ||
+                                        mesasResaltadasIds.has(m.id)) &&
+                                        "ring-4 ring-red-500 z-10",
                                       moviendoAqui && !destinoInvalido && "cursor-copy ring-2 ring-sky-500 hover:ring-4 hover:scale-105 z-10",
                                       destinoInvalido && "opacity-40 cursor-not-allowed",
                                     )}
