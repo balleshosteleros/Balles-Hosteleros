@@ -253,6 +253,13 @@ export interface InstagramDatos {
   verificado?: boolean;
   avatar_url?: string;
   cta_label: string;
+  /** Web que aparece bajo la bio, como el enlace del perfil real. */
+  web?: string;
+  /**
+   * Historias destacadas (CÓCTELES, INFO, BRUNCH…). Sin ellas el perfil se ve
+   * a medio hacer: en un perfil real de restaurante siempre hay varias.
+   */
+  destacados?: Array<{ nombre: string; imagen_url?: string }>;
   /** Fotos del feed dentro de la maqueta de móvil. Vacío = usa la galería. */
   feed?: Array<{ url: string; alt: string }>;
 }

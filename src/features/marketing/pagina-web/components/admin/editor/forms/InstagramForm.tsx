@@ -1,5 +1,7 @@
 "use client";
 
+import { Plus, Trash2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
@@ -69,7 +71,62 @@ export function InstagramForm({ bloque }: { bloque: Extract<Bloque, { tipo: "ins
         </Field>
       </Section>
 
-      <Section title={`Fotos del feed (${datos.feed?.length ?? 0})`}>
+      <Section title="Enlace del perfil">
+        <Field label="Web" hint="La que sale bajo la bio en tu perfil.">
+          <Input
+            value={datos.web ?? ""}
+            onChange={(e) => set({ web: e.target.value })}
+            placeholder="www.mirestaurante.com"
+          />
+        </Field>
+      </Section>
+
+      <Section title={`Historias destacadas (${datos.destacados?.length ?? 0}/5)`}>
+        {(datos.destacados ?? []).map((d, i) => {
+          const lista = datos.destacados ?? [];
+          const setItem = (patch: Partial<{ nombre: string; imagen_url: string }>) => {
+            const copia = [...lista];
+            copia[i] = { ...copia[i], ...patch };
+            set({ destacados: copia });
+          };
+          return (
+            <div key={i} className="rounded-md border p-2 space-y-2 bg-muted/20">
+              <div className="flex items-center gap-2">
+                <Input
+                  value={d.nombre}
+                  onChange={(e) => setItem({ nombre: e.target.value })}
+                  placeholder="CÓCTELES"
+                />
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7 shrink-0 text-red-600"
+                  onClick={() => set({ destacados: lista.filter((_, j) => j !== i) })}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+              <SubirImagenUnica
+                valor={d.imagen_url}
+                onChange={(url) => setItem({ imagen_url: url })}
+                etiqueta="Subir portada"
+              />
+            </div>
+          );
+        })}
+        {(datos.destacados?.length ?? 0) < 5 && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="w-full"
+            onClick={() => set({ destacados: [...(datos.destacados ?? []), { nombre: "" }] })}
+          >
+            <Plus className="h-3.5 w-3.5 mr-1" /> Añadir destacada
+          </Button>
+        )}
+      </Section>
+
+      <Section title={`Fotos del feed (${datos.feed?.length ?? 0}/9)`}>
         <ListaImagenes
           imagenes={datos.feed ?? []}
           onChange={(feed) => set({ feed })}

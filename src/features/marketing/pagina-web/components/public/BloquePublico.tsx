@@ -57,7 +57,7 @@ export function BloquePublico({
     case "historia":
       return <HistoriaPublica bloque={bloque} />;
     case "instagram":
-      return <InstagramPublico bloque={bloque} />;
+      return <InstagramPublico bloque={bloque} contexto={contexto} />;
   }
 }
 
@@ -145,14 +145,23 @@ function RedesPublico({
  * arroba, tick de verificado y contador de seguidores. Un CTA de texto plano
  * ("Síguenos en Instagram") no transmite la comunidad que hay detrás.
  */
-function InstagramPublico({ bloque }: { bloque: Extract<Bloque, { tipo: "instagram" }> }) {
-  const { usuario, titulo, frase, seguidores, publicaciones, verificado, avatar_url, cta_label, feed } =
-    bloque.datos;
+function InstagramPublico({
+  bloque,
+  contexto,
+}: {
+  bloque: Extract<Bloque, { tipo: "instagram" }>;
+  contexto?: PaginaContexto;
+}) {
+  const {
+    usuario, titulo, frase, seguidores, publicaciones, verificado,
+    avatar_url, cta_label, feed, web, destacados,
+  } = bloque.datos;
   const handle = usuario.replace(/^@/, "");
   const href = `https://www.instagram.com/${handle}`;
   // 9 fotos = tres filas de tres, que es lo que llena la pantalla del móvil.
   // Con 6 quedaba un tercio inferior en negro, como si el perfil no cargara.
   const fotos = (feed ?? []).slice(0, 9);
+  const avatar = avatar_url || contexto?.logoUrl || null;
 
   return (
     <section className="relative overflow-hidden px-4 py-20 md:py-28" id="instagram">
@@ -164,10 +173,9 @@ function InstagramPublico({ bloque }: { bloque: Extract<Bloque, { tipo: "instagr
         style={{ backgroundColor: "var(--pw-primario)" }}
       />
 
+      {/* NO se repite aquí el título ni la bio: ya salen DENTRO del móvil, en
+          el perfil. Fuera se leían dos veces seguidas. */}
       <div className="relative mx-auto max-w-5xl">
-        <h2 className="pw-h2 text-center font-extrabold">{titulo}</h2>
-        {frase ? <p className="mx-auto mt-4 max-w-2xl text-center opacity-75">{frase}</p> : null}
-
         {/* Foto real de una mano sujetando el móvil, con el perfil montado
             DENTRO de la pantalla. Las medidas (33%/19% y 37%×58%) son la
             posición exacta de la pantalla en esta foto: si algún día se cambia
@@ -188,7 +196,7 @@ function InstagramPublico({ bloque }: { bloque: Extract<Bloque, { tipo: "instagr
 
           {/* La pantalla: aquí dentro va el perfil */}
           <div className="absolute left-[33%] top-[19%] h-[58%] w-[37%] overflow-hidden bg-black">
-            <div className="absolute inset-0 origin-top-left scale-[0.62] [height:161.3%] [width:161.3%]">
+            <div className="absolute inset-0 origin-top-left scale-[0.55] [height:181.8%] [width:181.8%]">
               {/* Hora e iconos de estado. La muesca NO se dibuja: ya viene en
                   la foto del teléfono. */}
               <div className="relative flex h-7 items-center justify-between px-4 pt-1">
@@ -233,9 +241,12 @@ function InstagramPublico({ bloque }: { bloque: Extract<Bloque, { tipo: "instagr
                     style={{ background: "linear-gradient(45deg,#f09433,#e6683c,#dc2743,#cc2366,#bc1888)" }}
                   >
                     <span className="flex h-full w-full items-center justify-center overflow-hidden rounded-full bg-black">
-                      {avatar_url ? (
+                      {/* Sin avatar propio cae al isotipo de la empresa: el
+                          icono genérico de Instagram hacía parecer que el
+                          perfil no había cargado. */}
+                      {avatar ? (
                         /* eslint-disable-next-line @next/next/no-img-element */
-                        <img src={avatar_url} alt={handle} className="h-full w-full object-cover" />
+                        <img src={avatar} alt={handle} className="h-full w-full object-cover p-1" />
                       ) : (
                         <IconoInstagram className="h-6 w-6 text-white/80" />
                       )}
@@ -259,25 +270,68 @@ function InstagramPublico({ bloque }: { bloque: Extract<Bloque, { tipo: "instagr
                   </div>
                 </div>
 
-                {/* Bio: el nombre del negocio y la frase que ya escribe la
-                    empresa. Sin esto el perfil se ve a medio cargar. */}
+                {/* Bio: el nombre del negocio, la frase y el enlace, en el
+                    mismo orden que los pone Instagram. */}
                 <div className="pb-2.5">
                   <p className="text-[12px] font-semibold text-white">{titulo}</p>
                   {frase ? (
                     <p className="mt-0.5 text-[11px] leading-snug text-white/70">{frase}</p>
                   ) : null}
+                  {web ? (
+                    <p className="mt-1 flex items-center gap-1 text-[11px] font-medium text-[#e0f1ff]">
+                      <svg viewBox="0 0 24 24" className="h-3 w-3 shrink-0" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M10 13a5 5 0 007 0l3-3a5 5 0 00-7-7l-1 1" />
+                        <path d="M14 11a5 5 0 00-7 0l-3 3a5 5 0 007 7l1-1" />
+                      </svg>
+                      {web.replace(/^https?:\/\//, "")}
+                    </p>
+                  ) : null}
                 </div>
 
                 {/* Botón Seguir, como en la app */}
-                <a
-                  href={href}
-                  target="_blank"
-                  rel="noreferrer noopener"
-                  className="mb-3 block rounded-lg py-2 text-center text-[13px] font-semibold text-black transition-opacity hover:opacity-90"
-                  style={{ backgroundColor: "var(--pw-primario)" }}
-                >
-                  {cta_label}
-                </a>
+                {/* Fila de botones: Seguir manda (es la acción que queremos),
+                    y al lado los dos que trae cualquier perfil de restaurante. */}
+                <div className="mb-3 flex gap-1.5">
+                  <a
+                    href={href}
+                    target="_blank"
+                    rel="noreferrer noopener"
+                    className="flex-1 rounded-lg py-1.5 text-center text-[12px] font-semibold text-black transition-opacity hover:opacity-90"
+                    style={{ backgroundColor: "var(--pw-primario)" }}
+                  >
+                    {cta_label}
+                  </a>
+                  <span className="flex-1 rounded-lg bg-white/10 py-1.5 text-center text-[12px] font-semibold text-white">
+                    Mensaje
+                  </span>
+                  <span className="rounded-lg bg-white/10 px-2.5 py-1.5 text-center text-[12px] font-semibold text-white">
+                    <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2" />
+                      <circle cx="9" cy="7" r="4" />
+                      <path d="M19 8v6M22 11h-6" />
+                    </svg>
+                  </span>
+                </div>
+
+                {/* Historias destacadas. Se recortan a 5: en la pantalla del
+                    móvil no caben más sin apelotonarse. */}
+                {destacados?.length ? (
+                  <div className="mb-3 flex gap-2.5 overflow-hidden">
+                    {destacados.slice(0, 5).map((d) => (
+                      <span key={d.nombre} className="flex w-[46px] shrink-0 flex-col items-center gap-1">
+                        <span className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-full border border-white/25 bg-neutral-900">
+                          {d.imagen_url ? (
+                            /* eslint-disable-next-line @next/next/no-img-element */
+                            <img src={d.imagen_url} alt="" className="h-full w-full object-cover" />
+                          ) : null}
+                        </span>
+                        <span className="w-full truncate text-center text-[8px] uppercase text-white/70">
+                          {d.nombre}
+                        </span>
+                      </span>
+                    ))}
+                  </div>
+                ) : null}
 
                 {/* Barra de pestañas: cuadrícula / reels / etiquetadas. La
                     primera va activa, como al abrir un perfil. */}
