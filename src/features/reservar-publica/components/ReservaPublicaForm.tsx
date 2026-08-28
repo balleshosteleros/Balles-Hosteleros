@@ -7,7 +7,6 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { CalendarCheck, Users, Mail, Phone, Calendar, Clock, Ticket, Info, MapPin } from "lucide-react";
 import { crearReservaPublicaAction } from "@/features/reservar-publica/actions/crear-reserva-publica";
-import { comprobarClientePublicoAction } from "@/features/reservar-publica/actions/comprobar-cliente-publico";
 import { validarCuponPublicoAction } from "@/features/reservar-publica/actions/validar-cupon-publico-action";
 import { CuponInputReserva } from "@/features/sala/cupones/components/CuponInputReserva";
 import { TicketSelector, type ProductoTicketPublico } from "@/features/reservar-publica/components/TicketSelector";
@@ -39,21 +38,6 @@ import {
   RESERVA_APELLIDOS_MAX_CHARS,
 } from "@/features/sala/data/reservas";
 import { toast } from "sonner";
-
-interface AvisoDatosOriginales {
-  nombre: string;
-  apellidos: string | null;
-  email: string | null;
-  telefono: string | null;
-}
-
-interface MatchCliente {
-  nombre: string;
-  apellidos: string | null;
-  email: string | null;
-  telefono: string | null;
-  matchPor: "email" | "telefono";
-}
 
 interface Props {
   empresaSlug: string;
@@ -116,8 +100,6 @@ export function ReservaPublicaForm({
   const [ticketProductoId, setTicketProductoId] = useState<string | null>(null);
   const [enviando, startTransition] = useTransition();
   const [exito, setExito] = useState(false);
-  const [avisoDatos, setAvisoDatos] = useState<AvisoDatosOriginales | null>(null);
-  const [match, setMatch] = useState<MatchCliente | null>(null);
   const [cuponAplicado, setCuponAplicado] = useState<{ codigo: string; tituloCliente: string } | null>(null);
   // Consentimiento RGPD: la reserva recoge nombre, teléfono y correo. Arranca
   // SIN marcar — un consentimiento premarcado no es válido (art. 4.11 RGPD).
@@ -226,42 +208,21 @@ export function ReservaPublicaForm({
       toast.error(r.error);
       return;
     }
-    if (r.clienteExistente && r.camposDistintos.length > 0) {
-      setAvisoDatos(r.datosCliente);
-    } else {
-      setAvisoDatos(null);
-    }
     setCuponAplicado(r.cuponAplicado);
     setExito(true);
   }
 
+  // La web NUNCA comprueba ni dice si ese email o teléfono ya tiene ficha.
+  //
+  // Antes se avisaba en pantalla con los datos del titular ("este teléfono
+  // pertenece a María López, maria@…"), y eso convertía el formulario en una
+  // forma de averiguar los datos de cualquier cliente probando teléfonos
+  // ajenos. Ahora la reserva entra directa: si engancha con una ficha existente
+  // y los datos no coinciden, queda marcada para que lo revise el restaurante,
+  // y quien reserva recibe el aviso en SU correo de confirmación.
   function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!valido) return;
-    startTransition(async () => {
-      // 1) Comprobar si ya hay ficha con ese email o teléfono.
-      const check = await comprobarClientePublicoAction({
-        empresaSlug,
-        email: email.trim() || null,
-        telefono: telefono.trim() || null,
-      });
-      if (check.ok && check.match) {
-        const m = check.match;
-        const formNombre = `${nombre.trim()} ${apellidos.trim()}`.trim().toLowerCase();
-        const dbNombre = `${m.nombre} ${m.apellidos ?? ""}`.trim().toLowerCase();
-        // Si el nombre no coincide, mostrar modal de confirmación.
-        if (formNombre !== dbNombre) {
-          setMatch(m);
-          return;
-        }
-      }
-      // 2) Sin match (o nombre idéntico): enviar directamente.
-      await enviarReserva();
-    });
-  }
-
-  function continuarConDatosGuardados() {
-    setMatch(null);
     startTransition(async () => {
       await enviarReserva();
     });
@@ -342,35 +303,6 @@ export function ReservaPublicaForm({
               <p className="text-sm text-amber-900">{cuponAplicado.tituloCliente}</p>
             </div>
           )}
-          {avisoDatos ? (
-            <div className="text-left rounded-xl border border-amber-200 bg-amber-50 p-4 space-y-2">
-              <div className="flex items-start gap-2">
-                <Info className="h-4 w-4 mt-0.5 text-amber-700 shrink-0" />
-                <p className="text-sm text-amber-900">
-                  Detectamos que ya tienes una ficha con nosotros. Tu reserva se ha vinculado a ella y hemos
-                  mantenido los datos originales:
-                </p>
-              </div>
-              <ul className="text-sm text-amber-900 pl-6 list-disc space-y-0.5">
-                <li>
-                  Nombre: <strong>{avisoDatos.nombre}{avisoDatos.apellidos ? ` ${avisoDatos.apellidos}` : ""}</strong>
-                </li>
-                {avisoDatos.email ? (
-                  <li>
-                    Email: <strong>{avisoDatos.email}</strong>
-                  </li>
-                ) : null}
-                {avisoDatos.telefono ? (
-                  <li>
-                    Teléfono: <strong>{avisoDatos.telefono}</strong>
-                  </li>
-                ) : null}
-              </ul>
-              <p className="text-xs text-amber-800">
-                Si necesitas actualizar tus datos, díselo al restaurante al confirmar.
-              </p>
-            </div>
-          ) : null}
           <div className="pt-4 border-t border-zinc-100">
             <p className="text-sm text-zinc-500">Gracias por reservar en</p>
             <p className="text-lg font-semibold mt-1">{empresaNombre}</p>
@@ -742,55 +674,6 @@ export function ReservaPublicaForm({
         </footer>
       </div>
 
-      <Dialog open={!!match} onOpenChange={(o) => !o && setMatch(null)}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-base">
-              <Info className="h-4 w-4 text-amber-600" />
-              Ya estás en nuestra base
-            </DialogTitle>
-          </DialogHeader>
-          {match && (
-            <div className="space-y-3 text-sm">
-              <p className="text-zinc-700">
-                Este {match.matchPor === "email" ? "email" : "teléfono"} pertenece a:
-              </p>
-              <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-3 space-y-0.5 text-zinc-900">
-                <p className="font-semibold">
-                  {match.nombre}
-                  {match.apellidos ? ` ${match.apellidos}` : ""}
-                </p>
-                {match.email && <p className="text-xs text-zinc-600">{match.email}</p>}
-                {match.telefono && <p className="text-xs text-zinc-600">{match.telefono}</p>}
-              </div>
-              <p className="text-xs text-zinc-600">
-                No se pueden repetir email ni teléfono. Reserva con estos datos o cambia los del
-                formulario.
-              </p>
-            </div>
-          )}
-          <DialogFooter className="flex flex-col-reverse sm:flex-row gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              className="w-full sm:w-auto"
-              onClick={() => setMatch(null)}
-              disabled={enviando}
-            >
-              Cambiar datos
-            </Button>
-            <Button
-              type="button"
-              className="w-full sm:w-auto"
-              style={{ background: accent, color: onAccent }}
-              onClick={continuarConDatosGuardados}
-              disabled={enviando}
-            >
-              {enviando ? "Enviando..." : "Reservar con estos datos"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </main>
   );
 }

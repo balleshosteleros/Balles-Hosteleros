@@ -4,6 +4,8 @@ import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
   completarFichaCliente,
+  construirDatosDeclarados,
+  deducirMotivoVinculacion,
   findOrLinkClienteSala,
   type CampoDistinto,
 } from "@/features/sala/lib/cliente-link";
@@ -405,6 +407,29 @@ export async function crearReservaPublicaAction(
   const mesaFinal: string = asign.mesa.codigo;
   const zonaFinal: string | null = asign.mesa.zonaNombre || null;
 
+  // ────────────────────────────────────────────────────────────────
+  // Vinculación pendiente de revisión.
+  //
+  // La reserva ha enganchado con una ficha que ya existía (por email o por
+  // teléfono, nunca por nombre) pero el resto de datos no coinciden. Puede ser
+  // la misma persona con otro nombre, o alguien distinto usando el móvil de un
+  // familiar. Eso no lo puede decidir el sistema: se conserva lo que escribió
+  // y lo resuelve el restaurante desde la ficha de la reserva.
+  // ────────────────────────────────────────────────────────────────
+  const camposDistintos = link.result.camposDistintos;
+  const hayQueRevisar = link.result.existed && camposDistintos.length > 0;
+  const datosDeclarados = hayQueRevisar
+    ? construirDatosDeclarados(camposDistintos, {
+        nombre: data.nombre,
+        apellidos: data.apellidos,
+        email: data.email,
+        telefono: data.telefono,
+      })
+    : null;
+  const motivoVinculacion = hayQueRevisar
+    ? deducirMotivoVinculacion(camposDistintos, data.email)
+    : null;
+
   // Id generado en código para poder disparar el correo sin releer la fila.
   const reservaId = crypto.randomUUID();
   const { error } = await admin.from("reservas").insert({
@@ -415,7 +440,14 @@ export async function crearReservaPublicaAction(
     cliente_nombre: cliente.nombre,
     cliente_apellidos: cliente.apellidos,
     cliente_telefono: cliente.telefono,
-    cliente_email: cliente.email,
+    // Excepción: el correo de confirmación tiene que llegarle a QUIEN ha
+    // reservado, no al titular de la ficha. Si enganchó por teléfono y aportó
+    // otro email, ése es su buzón; mandarlo al de la ficha avisaría a alguien
+    // que no ha reservado (y le revelaría datos de un tercero).
+    cliente_email: datosDeclarados?.email ?? cliente.email,
+    datos_declarados: datosDeclarados,
+    vinculacion_motivo: motivoVinculacion,
+    vinculacion_estado: hayQueRevisar ? "PENDIENTE" : null,
     fecha: data.fecha,
     hora: data.hora,
     personas: data.personas,

@@ -33,6 +33,7 @@ const CAMPO_LABEL: Record<string, string> = {
   duracion_minutos: "Tiempo de mesa",
   notas: "Observaciones",
   bloqueada: "Bloqueada",
+  vinculacion: "Vinculación de cliente",
 };
 
 /**
@@ -149,15 +150,21 @@ export function ActividadReserva({ reservaId }: { reservaId: string }) {
                     {tz ? formatFechaHoraEnZona(a.createdAt, tz) : "—"}
                   </span>
                 </div>
-                <div className="mt-0.5 text-muted-foreground">
-                  <span className="line-through">
-                    {valorLegible(a.campo, a.valorAnterior)}
-                  </span>
-                  {" → "}
-                  <span className="font-medium text-foreground">
-                    {valorLegible(a.campo, a.valorNuevo)}
-                  </span>
-                </div>
+                {/* La vinculación no es un cambio de valor sino una nota de lo
+                    que decidió el restaurante: se lee entera, sin tachado. */}
+                {a.campo === "vinculacion" ? (
+                  <div className="mt-0.5 text-foreground">{a.valorNuevo}</div>
+                ) : (
+                  <div className="mt-0.5 text-muted-foreground">
+                    <span className="line-through">
+                      {valorLegible(a.campo, a.valorAnterior)}
+                    </span>
+                    {" → "}
+                    <span className="font-medium text-foreground">
+                      {valorLegible(a.campo, a.valorNuevo)}
+                    </span>
+                  </div>
+                )}
                 <div className="mt-0.5 text-muted-foreground">{autor(a)}</div>
               </li>
             ))}

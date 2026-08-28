@@ -206,6 +206,12 @@ export interface Reserva {
   observaciones: string;
   empleadoId?: string;
   clienteId?: string | null;
+  /**
+   * La reserva enganchó con una ficha que ya existía (mismo email o teléfono)
+   * pero el resto de datos no coinciden, y nadie lo ha revisado todavía. El
+   * nombre que se ve es el de la ficha, no necesariamente el de quien reservó.
+   */
+  vinculacionPendiente?: boolean;
   origen?: string | null;
   // Flags acumulables (PRP-047)
   tarjetaIntroducida?: boolean;

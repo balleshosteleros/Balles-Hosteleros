@@ -16,10 +16,61 @@ export interface ClienteSalaRow {
 
 export type CampoDistinto = "nombre" | "apellidos" | "email" | "telefono";
 
+/** Qué dato provocó el enganche con una ficha existente. */
+export type VinculacionMotivo = "email" | "telefono";
+
 export interface FindOrLinkClienteResult {
   cliente: ClienteSalaRow;
   existed: boolean;
   camposDistintos: CampoDistinto[];
+}
+
+/** Datos tal y como los escribió quien reservó, cuando difieren de la ficha. */
+export interface DatosDeclarados {
+  nombre?: string;
+  apellidos?: string;
+  email?: string;
+  telefono?: string;
+}
+
+/**
+ * Deduce por qué dato enganchó la reserva con la ficha.
+ *
+ * La RPC empareja por email O por teléfono y devuelve qué campos difieren. Si
+ * el email NO está entre los distintos, es que coincidía: ése fue el enganche.
+ * En caso contrario sólo pudo ser el teléfono.
+ */
+export function deducirMotivoVinculacion(
+  camposDistintos: CampoDistinto[],
+  emailAportado: string | null | undefined,
+): VinculacionMotivo {
+  const hayEmail = Boolean((emailAportado ?? "").trim());
+  if (hayEmail && !camposDistintos.includes("email")) return "email";
+  return "telefono";
+}
+
+/**
+ * Qué escribió quien reservó en los campos que NO coinciden con la ficha.
+ *
+ * Sólo se guarda lo que difiere: repetir lo que ya es igual no aporta nada a
+ * quien tenga que revisar la vinculación en Sala.
+ */
+export function construirDatosDeclarados(
+  camposDistintos: CampoDistinto[],
+  formulario: { nombre: string; apellidos?: string | null; email?: string | null; telefono?: string | null },
+): DatosDeclarados | null {
+  const out: DatosDeclarados = {};
+  if (camposDistintos.includes("nombre")) out.nombre = formulario.nombre.trim();
+  if (camposDistintos.includes("apellidos") && formulario.apellidos?.trim()) {
+    out.apellidos = formulario.apellidos.trim();
+  }
+  if (camposDistintos.includes("email") && formulario.email?.trim()) {
+    out.email = formulario.email.trim();
+  }
+  if (camposDistintos.includes("telefono") && formulario.telefono?.trim()) {
+    out.telefono = formulario.telefono.trim();
+  }
+  return Object.keys(out).length > 0 ? out : null;
 }
 
 interface FindOrLinkInput {

@@ -111,6 +111,7 @@ import { ReservaFlagsChips } from "@/features/sala/components/reservas/ReservaFl
 import { ReservaExternalBadge } from "@/features/sala/components/reservas/ReservaExternalBadge";
 import { HistoricoEmailsReserva } from "@/features/sala/components/reservas/HistoricoEmailsReserva";
 import { ActividadReserva } from "@/features/sala/components/reservas/ActividadReserva";
+import { RevisionVinculacion } from "@/features/sala/components/reservas/RevisionVinculacion";
 import { ActividadCliente } from "@/features/sala/components/clientes/ActividadCliente";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -1666,6 +1667,9 @@ function mapDbToReserva(row: Record<string, unknown>): Reserva {
     estado: (row.estado as EstadoReserva) ?? "CONFIRMADA",
     observaciones: (row.notas as string) ?? (row.observaciones as string) ?? "",
     clienteId: (row.cliente_id as string | null) ?? null,
+    // Enganchó con una ficha existente y los datos no coinciden: hasta que
+    // alguien lo revise, el nombre que se ve puede no ser el de quien reservó.
+    vinculacionPendiente: row.vinculacion_estado === "PENDIENTE",
     origen: (row.origen as string | null) ?? null,
     tarjetaIntroducida: (row.tarjeta_introducida as boolean) ?? false,
     esTicket: (row.es_ticket as boolean) ?? false,
@@ -3898,6 +3902,16 @@ export function ReservasView() {
                           lo que se necesita para llamar sin abrir la ficha. */}
                       <span className="flex min-w-0 flex-col leading-tight">
                         <span className="flex min-w-0 items-center gap-1.5">
+                          {/* Enganchó con una ficha existente y nadie lo ha
+                              revisado: el nombre de al lado puede no ser el de
+                              quien reservó. Va delante para que se vea antes
+                              que el nombre al que avisa. */}
+                          {r.vinculacionPendiente && (
+                            <AlertTriangle
+                              className="size-3.5 shrink-0 text-amber-500"
+                              aria-label="Datos sin revisar"
+                            />
+                          )}
                           <span
                             className="truncate font-medium"
                             title={`${r.cliente || "WALK IN"} ${r.apellidos ?? ""}`.trim()}
@@ -4205,6 +4219,21 @@ export function ReservasView() {
           <DialogHeader><DialogTitle>Detalle de reserva</DialogTitle></DialogHeader>
           {selectedReserva && (
             <div className="grid gap-6 text-sm md:grid-cols-2">
+
+              {/* Vinculación pendiente de revisar: va lo primero y a lo ancho
+                  de las dos columnas. Es lo más importante de esta ficha —los
+                  datos que se ven abajo pueden no ser los de quien reservó— y
+                  no se pinta nada cuando no hay nada que revisar. */}
+              <div className="md:col-span-2 empty:hidden">
+                <RevisionVinculacion
+                  key={`${selectedReserva.id}-${actividadVersion}`}
+                  reservaId={selectedReserva.id}
+                  onResuelto={() => {
+                    setActividadVersion((v) => v + 1);
+                    void loadReservas(fecha);
+                  }}
+                />
+              </div>
 
               {/* ── Columna izquierda: la reserva ───────────────────────── */}
               <div className="space-y-3 md:border-r md:pr-6">

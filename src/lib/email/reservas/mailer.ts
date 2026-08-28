@@ -142,7 +142,7 @@ export async function enviarReservaEmail(
   const { data: reservaData, error: errR } = await admin
     .from("reservas")
     .select(
-      "empresa_id, cliente_nombre, cliente_email, fecha, hora, personas, zona, grupo_zona_id, notas, estado, tipo_categoria, garantia_importe, importe_pagado, codigo, codigo_id, cancelacion_token, valoracion_token, email_confirmacion_at, email_reconfirmacion_at, email_recordatorio_at, email_cancelacion_at, email_valoracion_at, grupos_zonas(nombre)",
+      "empresa_id, cliente_nombre, cliente_apellidos, cliente_email, fecha, hora, personas, zona, grupo_zona_id, notas, estado, tipo_categoria, garantia_importe, importe_pagado, codigo, codigo_id, cancelacion_token, valoracion_token, vinculacion_estado, vinculacion_motivo, datos_declarados, email_confirmacion_at, email_reconfirmacion_at, email_recordatorio_at, email_cancelacion_at, email_valoracion_at, grupos_zonas(nombre)",
     )
     .eq("id", reservaId)
     .maybeSingle();
@@ -425,8 +425,33 @@ export async function enviarReservaEmail(
     }
   }
 
+  // ---- Aviso de vinculación pendiente ----------------------------------------------
+  //
+  // Sólo en el correo de CONFIRMACIÓN: es el momento en que el cliente puede
+  // corregirlo. Repetirlo en recordatorios sería alarmar sin motivo, y si el
+  // restaurante ya resolvió la revisión (`vinculacion_estado` deja de ser
+  // PENDIENTE) el aviso desaparece solo.
+  //
+  // El apellido va abreviado a su inicial a propósito: identifica lo justo para
+  // que el cliente reconozca si es él o no, sin que este correo sirva para
+  // averiguar quién hay detrás de un teléfono ajeno.
+  const vinculacionAviso: { motivo: "email" | "telefono"; nombreFicha: string } | null =
+    tipo === "CONFIRMACION" && reservaData.vinculacion_estado === "PENDIENTE"
+      ? {
+          motivo:
+            (reservaData.vinculacion_motivo as "email" | "telefono" | null) ?? "telefono",
+          nombreFicha: (() => {
+            const nombre = ((reservaData.cliente_nombre as string | null) ?? "").trim();
+            const apellidos = ((reservaData.cliente_apellidos as string | null) ?? "").trim();
+            const inicial = apellidos ? ` ${apellidos.charAt(0).toUpperCase()}.` : "";
+            return `${nombre}${inicial}`;
+          })(),
+        }
+      : null;
+
   // ---- Render HTML / texto ---------------------------------------------------------
   const html = renderHtml({
+    vinculacionAviso,
     tipo,
     empresa,
     telefono: empresa.telefono,
@@ -444,6 +469,7 @@ export async function enviarReservaEmail(
     urlValoracion,
   });
   const text = renderText({
+    vinculacionAviso,
     tipo,
     empresa: empresa.nombre,
     telefono: empresa.telefono,
@@ -531,6 +557,12 @@ interface RenderInput {
   observaciones: string | null;
   mensajeLibre: string;
   politicaBloque: { horas: number; importe: number; mensajeExtra: string } | null;
+  /**
+   * La reserva enganchó con una ficha existente y los datos no coinciden.
+   * `nombreFicha` va abreviado (nombre + inicial del apellido): nunca se
+   * exponen el email ni el teléfono del titular.
+   */
+  vinculacionAviso: { motivo: "email" | "telefono"; nombreFicha: string } | null;
   cuponBloque: { importeEur: number; mensajeExtra: string } | null;
   cuponCanjeadoBloque: { codigo: string; tituloCliente: string } | null;
   /**
@@ -580,6 +612,21 @@ function renderHtml(input: RenderInput): string {
     }
     return nombreCliente ? `¡Te esperamos, ${nombreCliente}!` : "¡Te esperamos!";
   })();
+
+  // Aviso de vinculación: el dato de contacto que indicó ya estaba registrado
+  // con otros datos, así que la reserva figura a nombre de la ficha existente.
+  //
+  // Se le da el nombre y la INICIAL del apellido, y nada más: es lo mínimo para
+  // que entienda a nombre de quién está y pueda corregirlo al llegar. Poner el
+  // email o el teléfono del titular convertiría este correo en una vía para
+  // averiguar los datos de otro cliente probando teléfonos ajenos.
+  const bloqueVinculacion = input.vinculacionAviso
+    ? `<div style="margin-top:14px;padding:14px 16px;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;font-size:13px;color:#78350f;line-height:1.6;">
+        <div style="font-weight:700;margin-bottom:4px;">&#9888; Comprueba tus datos</div>
+        El ${input.vinculacionAviso.motivo === "email" ? "correo" : "teléfono"} que has indicado ya estaba registrado con otros datos de contacto, así que tu reserva figura a nombre de <strong>${escapeHtml(input.vinculacionAviso.nombreFicha)}</strong>.
+        <div style="margin-top:6px;">Si no es correcto, avísanos al llegar${input.telefono ? ` o llámanos al <strong>${escapeHtml(input.telefono)}</strong>` : ""}.</div>
+      </div>`
+    : "";
 
   const bloquePolitica = input.politicaBloque
     ? `<div style="margin-top:14px;padding:14px 16px;background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;font-size:13px;color:#7c2d12;line-height:1.6;">
@@ -724,6 +771,7 @@ function renderHtml(input: RenderInput): string {
                     : ""
                 }
                 ${bloqueValoracion}
+                ${bloqueVinculacion}
                 ${bloquePolitica}
                 ${bloqueCupon}
                 ${bloqueCuponCanjeado}
@@ -761,6 +809,13 @@ function renderText(input: Omit<RenderInput, "empresa"> & { empresa: string }): 
   if (input.zona) lineas.push(`- Zona: ${input.zona}`);
   if (input.observaciones) lineas.push(``, `Observaciones: ${input.observaciones}`);
   if (input.mensajeLibre) lineas.push(``, input.mensajeLibre);
+  if (input.vinculacionAviso) {
+    lineas.push(
+      ``,
+      `[!] Comprueba tus datos: el ${input.vinculacionAviso.motivo === "email" ? "correo" : "teléfono"} que has indicado ya estaba registrado con otros datos de contacto, así que tu reserva figura a nombre de ${input.vinculacionAviso.nombreFicha}.`,
+      `Si no es correcto, avísanos al llegar${input.telefono ? ` o llámanos al ${input.telefono}` : ""}.`,
+    );
+  }
   if (input.politicaBloque) {
     lineas.push(
       ``,
@@ -1027,6 +1082,10 @@ export function previewReservaEmail(input: PreviewInput): {
       : null;
 
   const html = renderHtml({
+    // El aviso de vinculación no se configura ni se personaliza: lo decide el
+    // sistema cuando una reserva concreta engancha con una ficha existente. En
+    // la vista previa de la plantilla no pinta nada.
+    vinculacionAviso: null,
     tipo: input.tipo,
     empresa: {
       nombre: input.empresaNombre || "Tu restaurante",
