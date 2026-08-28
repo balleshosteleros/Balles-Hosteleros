@@ -3,7 +3,7 @@ import { NotificacionBell } from "@/features/notificaciones/components/Notificac
 import type { MobileInicioData } from "../lib/mobile-inicio-data";
 
 export function InicioHeader({ data }: { data: MobileInicioData }) {
-  const { nombre, rolLabel, avatarUrl, empresaActual, empresas } = data;
+  const { nombre, avatarUrl, empresaActual, empresas } = data;
 
   return (
     // OJO con el fondo: la columna de la app está centrada y limitada a 640px
@@ -27,12 +27,11 @@ export function InicioHeader({ data }: { data: MobileInicioData }) {
       </div>
 
       {/* Fila superior: campana a la izquierda del todo; pill de perfil
-          (logo empresa + nombre/rol + foto→menú) a la derecha. */}
+          (logo empresa + foto→menú) a la derecha. */}
       <div className="relative flex items-center justify-between gap-2">
         <NotificacionBell />
         <PerfilPill
           nombre={nombre}
-          rolLabel={rolLabel}
           avatarUrl={avatarUrl}
           empresaActual={empresaActual}
           empresas={empresas}

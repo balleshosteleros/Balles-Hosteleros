@@ -39,14 +39,21 @@ export function MobilePageHeader({ title, subtitle, backHref = "/m" }: Props) {
         )}
       </div>
 
-      {/* Empresa + empleado: pareja fija, en todas las pantallas. */}
-      <div className="flex shrink-0 items-center gap-1.5 rounded-full border border-border/60 bg-card py-0.5 pl-1 pr-0.5">
+      {/*
+        Empresa + empleado: pareja fija, en todas las pantallas.
+
+        Mismo pill que el software de ordenador (`bg-muted/40`), pero SIN nombre
+        ni puesto: en el móvil ocupan demasiado y aquí manda el título de la
+        pantalla (Iván, 28-ago). El fondo gris del pill es además lo que hace
+        visible un isotipo de trazo fino, que sobre blanco se pierde.
+      */}
+      <div className="flex shrink-0 items-center gap-0.5 rounded-full border bg-muted/40 px-1.5 py-1">
         <EmpresaSwitcherMobile
           empresaActual={empresaActual}
           empresas={empresas}
           size="sm"
         />
-        <span className="h-5 w-px shrink-0 bg-border" />
+        <span className="mx-1 h-5 w-px shrink-0 bg-border" />
         <EmpleadoMenuMobile nombre={nombre} avatarUrl={avatarUrl} size="sm" />
       </div>
     </header>

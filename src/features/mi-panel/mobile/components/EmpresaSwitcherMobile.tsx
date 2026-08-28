@@ -63,6 +63,10 @@ export function EmpresaSwitcherMobile({ empresaActual, empresas, size = "md" }: 
         className="flex items-center gap-0.5 rounded-full active:opacity-70 disabled:opacity-100"
       >
         {logo ? (
+          // Isotipo suelto, exactamente como en el software de ordenador
+          // (`EmpresaSelector`): sin recuadro ni borde propios. Lo que lo hace
+          // visible es el fondo `bg-muted/40` del pill que lo envuelve — sobre
+          // blanco puro, un isotipo de trazo fino como el de BACANAL se pierde.
           <Image
             src={logo}
             alt={actual?.nombre ?? ""}
