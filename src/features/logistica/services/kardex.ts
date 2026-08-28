@@ -28,6 +28,17 @@ export interface RegistrarMovimientoInput {
   motivo?: string | null;
   createdBy?: string | null;
   fecha?: string; // ISO; default NOW() en BD
+  /**
+   * Rechaza el movimiento si dejaría el saldo por debajo de cero, en vez de
+   * registrarlo. Solo para las salidas que APUNTA UNA PERSONA en el momento
+   * (mermas): ahí un saldo negativo significa que se ha tecleado de más y se
+   * puede avisar antes de guardar.
+   *
+   * NO se usa en ventas ni recepciones: esas son hechos ya ocurridos, y
+   * negarse a registrarlas escondería el problema real (stock sin dar de alta)
+   * además de romper el cron. Ahí el negativo es el síntoma, no la causa.
+   */
+  impedirNegativo?: boolean;
 }
 
 export interface MovimientoResultado {
@@ -35,6 +46,8 @@ export interface MovimientoResultado {
   saldoResultante: number;
   duplicado: boolean; // true si el origen ya estaba registrado (idempotencia)
   omitido?: boolean; // true si el producto no controla stock (no se registró nada)
+  /** true si `impedirNegativo` frenó el movimiento: no se registró nada. */
+  rechazado?: boolean;
 }
 
 /** Lee el saldo actual del producto (0 si no tiene fila de stock todavía). */
@@ -132,6 +145,14 @@ export async function registrarMovimiento(
 
   const { saldo: saldoAnterior, existeFila } = await leerSaldo(admin, input.empresaId, input.productoId);
   const saldoResultante = saldoAnterior + signo * cantidad;
+
+  // Freno para las salidas apuntadas a mano: no se puede sacar del almacén más
+  // de lo que hay. Sin esto, mermar 5 de algo que tiene 2,4 dejaba el saldo en
+  // -2,6 sin decir nada (caso real de Larios Rose, 27-ago) — y así es como se
+  // fabrican los stocks negativos que luego falsean la reposición.
+  if (input.impedirNegativo && saldoResultante < 0) {
+    return { saldoAnterior, saldoResultante: saldoAnterior, duplicado: false, rechazado: true };
+  }
 
   await admin.from("stock_movimientos").insert({
     empresa_id: input.empresaId,

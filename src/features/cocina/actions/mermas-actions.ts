@@ -76,6 +76,27 @@ export async function createMerma(
     const { productoId, cantidad, unidad, motivo } = parsed.data;
 
     const admin = createAdminClient();
+
+    // No se puede tirar más de lo que hay. Se comprueba ANTES de apuntar nada,
+    // para poder decir cuánto queda de verdad en vez de un "no se pudo".
+    const { data: filaStock } = await admin
+      .from("stock")
+      .select("cantidad_actual")
+      .eq("empresa_id", empresaId)
+      .eq("producto_id", productoId)
+      .maybeSingle();
+    const disponible = Number(filaStock?.cantidad_actual ?? 0);
+    if (cantidad > disponible) {
+      const fmt = (n: number) => n.toLocaleString("es-ES", { maximumFractionDigits: 3 });
+      return {
+        ok: false,
+        error:
+          disponible <= 0
+            ? "No queda nada de este producto en el almacén, así que no hay merma que apuntar. Si el stock está mal, corrígelo primero en Logística → Stock."
+            : `Solo quedan ${fmt(disponible)}${unidad ? " " + unidad : ""} en el almacén y estás apuntando ${fmt(cantidad)}. Corrige la cantidad, o ajusta primero las existencias en Logística → Stock si el dato está mal.`,
+      };
+    }
+
     const { data: merma, error } = await admin
       .from("mermas")
       .insert({
@@ -90,7 +111,7 @@ export async function createMerma(
       .single();
     if (error) throw error;
 
-    await registrarMovimiento(
+    const mov = await registrarMovimiento(
       {
         empresaId,
         productoId,
@@ -101,9 +122,22 @@ export async function createMerma(
         documentoId: merma.id as string,
         motivo,
         createdBy: userId ?? null,
+        impedirNegativo: true,
       },
       admin,
     );
+
+    // Red de seguridad por si otra persona vació el almacén entre la
+    // comprobación de arriba y este punto: se retira la merma recién apuntada
+    // para no dejarla sin su movimiento (una merma que no descuenta engaña más
+    // que no tenerla).
+    if (mov.rechazado) {
+      await admin.from("mermas").delete().eq("id", merma.id as string);
+      return {
+        ok: false,
+        error: "Alguien ha movido el stock de este producto mientras lo apuntabas. Vuelve a mirar lo que queda e inténtalo de nuevo.",
+      };
+    }
 
     revalidatePath("/cocina/mermas");
     revalidatePath("/logistica/stock");
