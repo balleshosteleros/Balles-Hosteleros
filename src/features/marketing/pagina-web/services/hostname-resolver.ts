@@ -21,8 +21,14 @@ export interface HostnameMatch {
   } | null;
   nombre_empresa: string;
   nombre_pagina: string;
-  /** Logo de marca. Es el icono al guardar la web en la pantalla de inicio. */
+  /** Logo completo (marca + texto). Cabecera de la web. */
   logo_url: string | null;
+  /**
+   * Isotipo: la marca SIN texto. Es lo que va en el favicon, el icono de la PWA
+   * y el pin del mapa — un logotipo con letras es ilegible a 32px. Cae al logo
+   * si la empresa no tiene isotipo cargado.
+   */
+  isotipo_url: string | null;
   /** Colores y tipografía de la empresa. Sin esto la web sale con el tema por defecto. */
   branding: BrandingSnapshot | null;
   /**
@@ -157,7 +163,7 @@ export async function resolverHostname(
     // las empresas que YA tienen web publicada (migración 015).
     const { data: empresaRow } = await supabase
       .from("empresas_web_publica")
-      .select("id, nombre, slug, logo_url, instagram, facebook, tiktok, whatsapp")
+      .select("id, nombre, slug, logo_url, isotipo_url, instagram, facebook, tiktok, whatsapp")
       .eq("id", pag.empresa_id)
       .maybeSingle();
 
@@ -165,6 +171,7 @@ export async function resolverHostname(
       nombre?: string;
       slug?: string | null;
       logo_url?: string | null;
+      isotipo_url?: string | null;
       instagram?: string | null;
       facebook?: string | null;
       tiktok?: string | null;
@@ -181,6 +188,7 @@ export async function resolverHostname(
       seo: pag.seo ?? null,
       nombre_empresa: emp.nombre ?? "Restaurante",
       logo_url: emp.logo_url ?? null,
+      isotipo_url: emp.isotipo_url ?? emp.logo_url ?? null,
       // El logo de la empresa alimenta también la barra de navegación.
       branding: pag.branding ? { ...pag.branding, logo_url: emp.logo_url ?? undefined } : (emp.logo_url ? { logo_url: emp.logo_url } : null),
       nombre_pagina: pag.nombre,

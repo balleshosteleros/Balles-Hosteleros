@@ -35,7 +35,9 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   // Logo de la empresa: es el icono que queda al guardar la web en la pantalla
   // de inicio del móvil. En GoHighLevel sale un icono genérico porque no declara
   // ni manifest propio ni apple-touch-icon.
-  const logo = match.logo_url;
+  // Favicon y apple-touch-icon: SIEMPRE el isotipo, nunca el logotipo con texto
+  // (a 32px las letras no se leen). Vale para cualquier empresa futura.
+  const logo = match.isotipo_url;
 
   return {
     title: match.seo?.title ?? `${match.nombre_empresa} — ${match.nombre_pagina}`,
@@ -75,7 +77,7 @@ export default async function PublicCatchAllPage({ params }: PageProps) {
         empresaId: match.empresa_id,
         paginaId: match.pagina_id,
         empresaSlug: match.empresa_slug,
-        logoUrl: match.logo_url,
+        logoUrl: match.isotipo_url,
         redes: match.redes,
       }}
       hrefPoliticaCookies="/politica-de-cookies"

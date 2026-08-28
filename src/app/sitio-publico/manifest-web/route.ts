@@ -27,7 +27,8 @@ export async function GET() {
     return NextResponse.json({ error: "not found" }, { status: 404 });
   }
 
-  const logo = match.logo_url;
+  // Icono de la PWA: el isotipo (ver comentario en la página).
+  const logo = match.isotipo_url;
 
   const nombre = match.nombre_empresa;
 
