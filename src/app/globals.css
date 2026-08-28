@@ -34,6 +34,17 @@
 
     --radius: 0.5rem;
 
+    /* Decoraciones del plano de sala (paredes, barra, cocina, WC, plantas).
+       Viven en :root y no en el ámbito del tema de Reservas porque `DecoBody`
+       es compartido: lo usan tanto el plano de reservas como el EDITOR de
+       planos, que no está bajo `.sala-tema`. El tema oscuro solo los
+       redefine. */
+    --deco-fondo: #ffffff;
+    --deco-borde: hsl(240 4% 46%);
+    --deco-borde-fuerte: hsl(240 5% 26%);
+    --deco-texto: hsl(240 5% 34%);
+    --deco-trazo: rgb(0 0 0 / 0.45);
+
     /* Sidebar */
     --sidebar-background: 220 25% 14%;
     --sidebar-foreground: 220 15% 85%;
@@ -105,4 +116,188 @@
     @apply bg-background text-foreground;
     font-family: 'Inter', system-ui, -apple-system, sans-serif;
   }
+}
+
+/* ---------------------------------------------------------------------------
+   TEMA DE SALA / RESERVAS (ámbito local, no global)
+   ---------------------------------------------------------------------------
+   El resto del software es de tema CLARO. Reservas es la vista que se mira
+   durante todo el servicio, muchas veces en sala con luz baja, así que tiene
+   su propio conmutador claro/oscuro. Para no arrastrar a los demás módulos, el
+   tema NO se aplica en <html> sino en el contenedor raíz de la vista, que
+   marca `.sala-tema` (+ `.sala-oscuro` cuando toca oscuro).
+
+   Los tokens shadcn (--background, --card, --border…) se REDEFINEN dentro de
+   ese ámbito, así que todos los componentes hijos que ya usan `bg-card`,
+   `text-muted-foreground`, etc. se adaptan solos sin tocar sus clases.
+   --------------------------------------------------------------------------- */
+
+.sala-tema {
+  /* Halo ambiental del fondo (los dos focos difuminados detrás del plano). */
+  --sala-halo-1: 220 70% 55%;
+  --sala-halo-2: 200 70% 50%;
+  --sala-halo-alpha: 0.07;
+  /* Sombra propia de cada mesa. */
+  --sala-mesa-sombra: 220 40% 25%;
+  --sala-mesa-sombra-alpha: 0.22;
+
+}
+
+.sala-tema.sala-oscuro {
+  /* Azul marino profundo — no negro puro: mantiene el tinte 220 del software. */
+  --background: 220 42% 9%;
+  --foreground: 213 30% 92%;
+
+  --card: 221 38% 13%;
+  --card-foreground: 213 30% 92%;
+
+  --popover: 221 40% 12%;
+  --popover-foreground: 213 30% 92%;
+
+  --primary: 213 88% 62%;
+  --primary-foreground: 220 45% 8%;
+
+  --secondary: 220 30% 19%;
+  --secondary-foreground: 213 25% 85%;
+
+  --muted: 220 30% 17%;
+  --muted-foreground: 215 20% 65%;
+
+  --accent: 220 32% 22%;
+  --accent-foreground: 213 30% 90%;
+
+  --destructive: 0 62% 48%;
+  --destructive-foreground: 0 0% 100%;
+
+  /* Separadores: en oscuro NO se dibuja linea entre paneles. El borde se
+     iguala al propio fondo, asi que la division existe (los paneles siguen
+     siendo dos superficies distintas) pero no se aprecia ningun trazo: todo
+     se lee como un unico azul marino continuo. El `--input` si conserva algo
+     de contraste, porque ahi la linea es el borde de un control y tiene que
+     verse para saber donde se escribe. */
+  --border: 220 42% 9%;
+  --input: 220 25% 22%;
+  --ring: 213 88% 62%;
+
+  --sala-halo-1: 213 90% 60%;
+  --sala-halo-2: 190 85% 55%;
+  --sala-halo-alpha: 0.13;
+  --sala-mesa-sombra: 220 90% 3%;
+  --sala-mesa-sombra-alpha: 0.55;
+
+  /* Arquitectura en oscuro: azul grisáceo apagado, por debajo de las mesas en
+     protagonismo pero con borde suficiente para leer la forma de la sala. */
+  --deco-fondo: hsl(217 24% 26%);
+  --deco-borde: hsl(215 22% 44%);
+  --deco-borde-fuerte: hsl(214 25% 54%);
+  --deco-texto: hsl(213 22% 74%);
+  --deco-trazo: hsl(213 25% 70% / 0.5);
+}
+
+/* Fondo de la vista: base plana + dos halos difuminados muy amplios. En claro
+   son casi imperceptibles; en oscuro dan la profundidad "tecnológica". */
+.sala-tema {
+  background-color: hsl(var(--background));
+  background-image:
+    radial-gradient(
+      70rem 45rem at 12% -10%,
+      hsl(var(--sala-halo-1) / var(--sala-halo-alpha)),
+      transparent 60%
+    ),
+    radial-gradient(
+      60rem 40rem at 105% 110%,
+      hsl(var(--sala-halo-2) / var(--sala-halo-alpha)),
+      transparent 60%
+    );
+}
+
+/* Lienzo del plano.
+   SIN caja: nada de borde, fondo propio ni sombra alrededor. El lienzo tiene un
+   tamaño fijo (1200x640) que no coincide con el área visible, así que cualquier
+   recuadro dibuja una línea a media pantalla que se lee como si el mapa
+   estuviera cortado por arriba y por abajo. La sala tiene que fundirse con el
+   fondo de la vista y verse continua.
+   SIN cuadrícula tampoco: la rejilla es una ayuda para alinear mesas y vive
+   solo en el editor de planos. */
+.sala-lienzo {
+  background-color: transparent;
+}
+
+/* Sombra difuminada de cada mesa sobre el lienzo. */
+.sala-mesa {
+  box-shadow:
+    0 1px 2px hsl(var(--sala-mesa-sombra) / calc(var(--sala-mesa-sombra-alpha) * 0.7)),
+    0 6px 14px -4px hsl(var(--sala-mesa-sombra) / var(--sala-mesa-sombra-alpha));
+}
+
+/* ---------------------------------------------------------------------------
+   LEGIBILIDAD EN OSCURO
+   ---------------------------------------------------------------------------
+   El variant `outline` de shadcn es `border border-input bg-background` y NO
+   fija color de texto: lo hereda del contenedor. En la barra de Reservas (que
+   es `bg-card`) eso dejaba el texto oscuro sobre fondo oscuro — botones como
+   "Estados", "Locales", "Planos" o la fecha resultaban ilegibles. Además
+   `bg-background` es MÁS oscuro que `bg-card`, así que el botón se hundía en la
+   barra en vez de destacar.
+
+   Aquí se corrige dentro del ámbito de sala: superficie un punto por encima de
+   la barra, texto claro explícito y borde visible. No se toca el botón global.
+   --------------------------------------------------------------------------- */
+.sala-oscuro button,
+.sala-oscuro [role="combobox"],
+.sala-oscuro [role="tab"] {
+  color: hsl(var(--foreground));
+}
+
+/* Superficie de los controles de la barra y del plano.
+
+   El azul es EXACTAMENTE el del menu lateral (`--sidebar-background`), no un
+   azul propio de Reservas: el menu esta siempre a la vista junto al modulo y
+   dos azules casi iguales pero distintos se leen como un fallo de pintura, no
+   como una jerarquia. El menu manda; Reservas se alinea a el. */
+.sala-oscuro .border-input,
+.sala-oscuro .border.bg-background {
+  background-color: hsl(var(--sidebar-background));
+  border-color: hsl(var(--sidebar-border));
+}
+
+.sala-oscuro .border-input:hover,
+.sala-oscuro .border.bg-background:hover {
+  /* El hover solo aclara el mismo azul, sin cambiar de tono. */
+  background-color: hsl(220 25% 20%);
+}
+
+/* Los selects nativos (filtro de origen) no heredan bien en oscuro. */
+.sala-oscuro select {
+  background-color: hsl(var(--sidebar-background));
+  color: hsl(var(--foreground));
+  border-color: hsl(var(--sidebar-border));
+}
+
+
+/* Texto atenuado: en oscuro el 45% de luminosidad del tema claro se volvía
+   ilegible. Se sube para que las etiquetas secundarias (zona, estado, "Sin
+   reservas para este turno") sigan leyéndose. */
+.sala-oscuro .text-muted-foreground {
+  color: hsl(214 22% 72%);
+}
+
+/* Decoraciones (paredes, barra, cocina, WC, plantas, puertas).
+   `DecoBody` las pinta con estas utilidades en vez de blancos y grises fijos,
+   para que la misma arquitectura se lea sobre lienzo blanco y sobre lienzo
+   oscuro. NO se resuelve invirtiendo colores: invertir blanco da negro y las
+   paredes desaparecían contra el lienzo oscuro.
+   En oscuro son deliberadamente más apagadas que las mesas: son el decorado,
+   no la información que hay que leer de un vistazo. */
+.deco-superficie {
+  background-color: var(--deco-fondo);
+}
+.deco-borde {
+  border-color: var(--deco-borde);
+}
+.deco-borde-fuerte {
+  border-color: var(--deco-borde-fuerte);
+}
+.deco-texto {
+  color: var(--deco-texto);
 }
