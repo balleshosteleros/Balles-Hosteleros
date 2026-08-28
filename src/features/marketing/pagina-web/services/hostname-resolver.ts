@@ -36,6 +36,8 @@ export interface HostnameMatch {
    * guardan en el bloque: cambiar la red en Ajustes actualiza la web sola.
    */
   redes: RedesEmpresa;
+  /** Hay vacantes publicadas ahora mismo. Gobierna el enlace "Empleo" del menú. */
+  empleo_activo: boolean;
 }
 
 export interface RedesEmpresa {
@@ -171,11 +173,26 @@ export async function resolverHostname(
     // para `authenticated`, así que el visitante anónimo leía null y la web salía
     // como "Restaurante" y sin logo. La vista expone solo los campos públicos de
     // las empresas que YA tienen web publicada (migración 015).
-    const { data: empresaRow } = await supabase
-      .from("empresas_web_publica")
-      .select("id, nombre, slug, logo_url, isotipo_url, instagram, facebook, tiktok, whatsapp, color_primario, color_secundario, color_texto")
-      .eq("id", pag.empresa_id)
-      .maybeSingle();
+    // Las dos lecturas van en paralelo: son independientes y encadenarlas
+    // sumaba su latencia a cada carga de la portada.
+    const [{ data: empresaRow }, { count: vacantesPublicas }] = await Promise.all([
+      supabase
+        .from("empresas_web_publica")
+        .select("id, nombre, slug, logo_url, isotipo_url, instagram, facebook, tiktok, whatsapp, color_primario, color_secundario, color_texto")
+        .eq("id", pag.empresa_id)
+        .maybeSingle(),
+      // ¿Hay ofertas de verdad? El enlace "Empleo" del menú lleva a un portal
+      // propio: si la empresa no tiene vacantes publicadas, mandar ahí al
+      // visitante es enseñarle una página vacía. Se mira el dato real en vez de
+      // pedir un interruptor en Ajustes, que alguien tendría que acordarse de
+      // apagar y encender cada vez que abre o cierra un proceso.
+      supabase
+        .from("vacantes")
+        .select("id", { count: "exact", head: true })
+        .eq("empresa_id", pag.empresa_id)
+        .eq("visible_publicamente", true)
+        .eq("estado_publicacion", "publicada"),
+    ]);
 
     const emp = (empresaRow ?? {}) as {
       nombre?: string;
@@ -214,6 +231,9 @@ export async function resolverHostname(
         logo_url: emp.logo_url ?? undefined,
       },
       nombre_pagina: pag.nombre,
+      // `null` (error de lectura) se trata como "sí hay": ante la duda es mejor
+      // enseñar el enlace que esconder por error un portal con ofertas activas.
+      empleo_activo: vacantesPublicas === null ? true : vacantesPublicas > 0,
       redes: {
         instagram: urlRed("instagram", dg.instagram),
         facebook: urlRed("facebook", dg.facebook),

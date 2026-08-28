@@ -67,39 +67,75 @@ export function PaginaPublicaShell({
   const hero = ordenados.find((b) => b.tipo === "hero");
   const tituloNav = hero?.tipo === "hero" ? hero.datos.subtitulo ?? "" : "";
 
-  // El menú SALE DE LA WEB, no está cableado: cada enlace aparece solo si su
-  // sección existe y está visible. Antes "Ubicación" o "Contacto" se pintaban
-  // siempre, así que un cliente que quitara el mapa dejaba en la barra un
-  // enlace que no llevaba a ninguna parte.
-  const visible = (tipo: Bloque["tipo"]) =>
-    ordenados.some((b) => b.tipo === tipo && b.visible);
-  const hayReservas = visible("reservas");
-  const nav: Array<{ href: string; label: string }> = [];
-  // La carta es un portal aparte (/carta/slug); el bloque de la web solo es la
-  // llamada. Sin ese bloque, el cliente no quiere enseñar carta.
-  if (contexto?.empresaSlug && (visible("collage_carta") || visible("menu"))) {
-    nav.push({ href: `/carta/${contexto.empresaSlug}`, label: "Carta" });
-  }
-  if (visible("mapa")) nav.push({ href: "#mapa", label: "Ubicación" });
-  if (visible("footer")) nav.push({ href: "#contacto", label: "Contacto" });
-  // Empleo: igual que la carta, es un portal propio. Se enseña solo si la web
-  // monta la llamada a empleo; si el cliente no capta personal, no aparece.
-  if (contexto?.empresaSlug && contexto?.empleoActivo !== false && visible("cta")) {
-    nav.push({ href: `/empleo/${contexto.empresaSlug}?o=WEB`, label: "Empleo" });
-  }
+  // ORDEN IMPORTANTE: primero se decide qué secciones sobreviven, y DESPUÉS se
+  // construye el menú a partir de esas. Al revés, el menú se calculaba sobre los
+  // bloques originales y anunciaba secciones que luego se caían.
+  const visibleEn = (lista: Bloque[], tipo: Bloque["tipo"]) =>
+    lista.some((b) => b.tipo === tipo && b.visible);
+
+  // Sin vacantes publicadas, la llamada a empleo se cae entera: su botón lleva
+  // al portal de ofertas, y ese portal estaría vacío.
+  const empleoCerrado = contexto?.empleoActivo === false;
+  const conEmpleoResuelto = ordenados.map((b) =>
+    empleoCerrado && b.tipo === "cta" && esEnlaceEmpleo(b.datos.boton?.href)
+      ? { ...b, visible: false }
+      : b,
+  );
 
   // Anclas que EXISTEN en esta web. Un botón que apunta a "#reservas" cuando el
   // cliente ha quitado la sección de reservas deja al visitante donde estaba,
   // sin que nada se mueva: parece que la web está rota. Aquí se detecta y el
   // botón simplemente no se pinta.
   const anclasVivas = new Set<string>();
-  if (hayReservas) anclasVivas.add("#reservas");
-  if (visible("mapa")) anclasVivas.add("#mapa");
-  if (visible("footer")) anclasVivas.add("#contacto");
-  if (visible("collage_carta")) anclasVivas.add("#carta");
-  if (visible("historia")) anclasVivas.add("#historia");
+  for (const [tipo, ancla] of [
+    ["reservas", "#reservas"],
+    ["mapa", "#mapa"],
+    ["footer", "#contacto"],
+    ["historia", "#historia"],
+  ] as Array<[Bloque["tipo"], string]>) {
+    if (visibleEn(conEmpleoResuelto, tipo)) anclasVivas.add(ancla);
+  }
 
-  const bloquesLimpios = ordenados.map((b) => limpiarEnlacesRotos(b, anclasVivas));
+  // #carta aparte: la sección existe solo si además tiene foto.
+  if (
+    conEmpleoResuelto.some(
+      (b) => b.tipo === "collage_carta" && b.visible && (b.datos.imagenes?.length ?? 0) > 0,
+    )
+  ) {
+    anclasVivas.add("#carta");
+  }
+
+  const bloquesLimpios = conEmpleoResuelto.map((b) => limpiarEnlacesRotos(b, anclasVivas));
+
+  // El menú SALE DE LA WEB YA RESUELTA, no está cableado: cada enlace aparece
+  // solo si su sección ha sobrevivido. Antes "Ubicación" o "Contacto" se
+  // pintaban siempre, así que un cliente que quitara el mapa se quedaba con un
+  // enlace en la barra que no llevaba a ninguna parte.
+  const visible = (tipo: Bloque["tipo"]) => visibleEn(bloquesLimpios, tipo);
+  const hayReservas = visible("reservas");
+  const nav: Array<{ href: string; label: string }> = [];
+  // La carta es un portal aparte (/carta/slug); el bloque de la web solo es la
+  // llamada. Sin ese bloque, el cliente no quiere enseñar carta.
+  // La sección de la carta solo se pinta si tiene foto (es una imagen a sangre
+  // con el texto encima). Mientras el cliente no la suba, la sección no existe
+  // y el menú no debe anunciarla.
+  const hayCarta =
+    bloquesLimpios.some(
+      (b) => b.tipo === "collage_carta" && b.visible && (b.datos.imagenes?.length ?? 0) > 0,
+    ) || visible("menu");
+  if (contexto?.empresaSlug && hayCarta) {
+    nav.push({ href: `/carta/${contexto.empresaSlug}`, label: "Carta" });
+  }
+  if (visible("mapa")) nav.push({ href: "#mapa", label: "Ubicación" });
+  if (visible("footer")) nav.push({ href: "#contacto", label: "Contacto" });
+  // Empleo: igual que la carta, es un portal propio. Solo si la llamada sigue
+  // en pie tras la limpieza.
+  const hayLlamadaEmpleo = bloquesLimpios.some(
+    (b) => b.tipo === "cta" && b.visible && esEnlaceEmpleo(b.datos.boton?.href),
+  );
+  if (contexto?.empresaSlug && hayLlamadaEmpleo) {
+    nav.push({ href: `/empleo/${contexto.empresaSlug}?o=WEB`, label: "Empleo" });
+  }
 
   return (
     <div
@@ -130,6 +166,11 @@ export function PaginaPublicaShell({
   );
 }
 
+/** ¿Este botón lleva al portal de empleo? */
+function esEnlaceEmpleo(href?: string): boolean {
+  return typeof href === "string" && href.includes("/empleo/");
+}
+
 /**
  * Quita del bloque los enlaces internos que apuntan a una sección que esta web
  * no tiene. Devuelve el bloque tal cual si no hay nada que limpiar, para no
@@ -146,8 +187,11 @@ function limpiarEnlacesRotos(bloque: Bloque, anclasVivas: Set<string>): Bloque {
     const { cta: _descartado, ...resto } = bloque.datos;
     return { ...bloque, datos: resto };
   }
-  if (bloque.tipo === "cta" && rota(bloque.datos.boton?.href)) {
-    // El botón ES la sección: sin destino no tiene sentido enseñarla.
+  // El botón ES la sección: sin destino (ancla muerta o href vacío) no tiene
+  // sentido enseñarla. El href vacío pasa cuando la web se creó antes de que la
+  // empresa tuviera slug.
+  const hrefCta = bloque.tipo === "cta" ? bloque.datos.boton?.href : undefined;
+  if (bloque.tipo === "cta" && (rota(hrefCta) || !hrefCta?.trim())) {
     return { ...bloque, visible: false };
   }
   if (bloque.tipo === "footer") {

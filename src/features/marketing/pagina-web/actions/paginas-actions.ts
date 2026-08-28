@@ -111,14 +111,13 @@ export async function crearPagina(input: {
     // se usa para páginas sueltas, donde el patrón no aplica.
     const { data: empresa } = await supabase
       .from("empresas")
-      .select("nombre")
+      .select("nombre, slug")
       .eq("id", empresaId)
       .maybeSingle();
 
+    const emp = empresa as { nombre?: string; slug?: string } | null;
     const bloquesIniciales =
-      input.tipo === "WEB_PRINCIPAL"
-        ? crearBloquesPlantilla((empresa as { nombre?: string } | null)?.nombre)
-        : [];
+      input.tipo === "WEB_PRINCIPAL" ? crearBloquesPlantilla(emp?.nombre, emp?.slug) : [];
 
     const { data, error } = await supabase
       .from("paginas_web")

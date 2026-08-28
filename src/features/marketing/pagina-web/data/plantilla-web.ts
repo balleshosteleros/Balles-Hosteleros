@@ -47,9 +47,12 @@ function uuid(): string {
  * @param nombreEmpresa Nombre real de la empresa. Se usa en los textos para que
  *   el borrador no hable de un restaurante que no es el suyo. Sin él se queda
  *   el nombre ficticio, que es una señal clara de "esto hay que cambiarlo".
+ * @param slugEmpresa Slug de la empresa: enlaza los portales propios (carta y
+ *   empleo). Sin él esos botones se quedan sin destino y no se pintan.
  */
-export function crearBloquesPlantilla(nombreEmpresa?: string): Bloque[] {
+export function crearBloquesPlantilla(nombreEmpresa?: string, slugEmpresa?: string): Bloque[] {
   const marca = nombreEmpresa?.trim() || RESTAURANTE_EJEMPLO;
+  const slug = slugEmpresa?.trim() ?? "";
 
   const bloques: Array<Omit<Bloque, "id" | "orden">> = [
     {
@@ -124,7 +127,13 @@ export function crearBloquesPlantilla(nombreEmpresa?: string): Bloque[] {
       datos: {
         titulo: "Aquí tu talento se nota",
         texto: `Únete al equipo de ${marca}`,
-        boton: { label: "Ver ofertas de empleo", href: "#empleo", variante: "primary" },
+        // Al portal de empleo, no a un ancla de esta página: las ofertas viven
+        // en /empleo/[slug]. El slug real lo pone `crearPagina` al crear la web.
+        boton: {
+          label: "Ver ofertas de empleo",
+          href: slug ? `/empleo/${slug}?o=WEB` : "",
+          variante: "primary",
+        },
         imagen_url: FOTO_PENDIENTE,
       },
     },
@@ -156,9 +165,9 @@ export function crearBloquesPlantilla(nombreEmpresa?: string): Bloque[] {
           {
             titulo: "Navegación",
             items: [
-              { label: "Carta", href: "#carta" },
+              { label: "Carta", href: slug ? `/carta/${slug}` : "#carta" },
               { label: "Reservar", href: "#reservas" },
-              { label: "Empleo", href: "#empleo" },
+              ...(slug ? [{ label: "Empleo", href: `/empleo/${slug}?o=WEB` }] : []),
             ],
           },
         ],
