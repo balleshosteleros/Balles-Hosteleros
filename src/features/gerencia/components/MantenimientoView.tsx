@@ -4,13 +4,15 @@ import { useState, useMemo, useEffect, useCallback, type ReactNode } from "react
 import { useSincronizacionEnVivo } from "@/shared/hooks/useSincronizacionEnVivo";
 import {
   type Incidencia, type Actualizacion, ESTADOS, GRAVEDADES, REPARADORES,
-  type Estado, type Gravedad,
+  type Estado, type Gravedad, diasSinActualizar,
 } from "@/features/empresa/data/mantenimiento";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { getEmpleadosActivos, type EmpleadoActivo } from "@/features/rrhh/actions/empleados-actions";
 import { listLocales } from "@/features/ajustes/actions/locales-actions";
 import { listMantenimiento, createIncidenciaMantenimiento, updateIncidencia, addActualizacion as serverAddActualizacion } from "@/features/gerencia/actions/mantenimiento-actions";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
+import { hoyEnZona, ZONA_HORARIA_FALLBACK } from "@/features/empresa/lib/zona-horaria";
 import { StatusBadge, GravedadBadge } from "@/features/mantenimiento/components/Badges";
 import { IncidenciaModal } from "@/features/mantenimiento/components/IncidenciaModal";
 import { DetalleIncidencia } from "@/features/mantenimiento/components/DetalleIncidencia";
@@ -34,6 +36,19 @@ import { TableColumnHeader } from "@/shared/components/TableColumnHeader";
 import { ResizableColumnsProvider } from "@/shared/components/ResizableColumns";
 
 function mapDbToIncidencia(row: Record<string, unknown>): Incidencia {
+  const actualizaciones: Actualizacion[] = Array.isArray(row.mantenimiento_actualizaciones)
+    ? (row.mantenimiento_actualizaciones as Record<string, unknown>[])
+        .map((a) => ({
+          id: a.id as string,
+          texto: (a.texto as string) ?? "",
+          fecha: ((a.fecha as string) ?? "").slice(0, 10),
+          apuntadoPor: (a.apuntado_por as string) ?? "",
+          resultado: (a.resultado as Actualizacion["resultado"]) ?? "EN PROGRESO",
+          minutos: (a.minutos as number) ?? 15,
+        }))
+        .sort((x, y) => x.fecha.localeCompare(y.fecha))
+    : [];
+  const fechaAlta = (row.fecha_publicado as string) ?? "";
   return {
     id: row.id as string,
     desperfecto: (row.desperfecto as string) ?? "",
@@ -44,18 +59,12 @@ function mapDbToIncidencia(row: Record<string, unknown>): Incidencia {
     reparador: (row.reparador as string) ?? "",
     fechaPublicado: (row.fecha_publicado as string) ?? "",
     comentarios: (row.comentarios as string) ?? "",
-    actualizaciones: Array.isArray(row.mantenimiento_actualizaciones)
-      ? (row.mantenimiento_actualizaciones as Record<string, unknown>[])
-          .map((a) => ({
-            id: a.id as string,
-            texto: (a.texto as string) ?? "",
-            fecha: ((a.fecha as string) ?? "").slice(0, 10),
-            apuntadoPor: (a.apuntado_por as string) ?? "",
-            resultado: (a.resultado as Actualizacion["resultado"]) ?? "EN PROGRESO",
-            minutos: (a.minutos as number) ?? 15,
-          }))
-          .sort((x, y) => x.fecha.localeCompare(y.fecha))
-      : [],
+    actualizaciones,
+    // Sin actualizaciones, el reloj corre desde el alta: lo que interesa es
+    // cuanto lleva el desperfecto sin que nadie diga nada de el.
+    ultimaActualizacion: actualizaciones.length
+      ? actualizaciones[actualizaciones.length - 1].fecha
+      : fechaAlta,
   };
 }
 
@@ -74,6 +83,10 @@ export function MantenimientoView() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editItem, setEditItem] = useState<Incidencia | null>(null);
   const [detalleItem, setDetalleItem] = useState<Incidencia | null>(null);
+
+  // Hoy en la zona de la empresa: los dias sin actualizar se cuentan contra el
+  // dia del local, no contra el del navegador de quien mira.
+  const hoy = hoyEnZona(empresaActual.zonaHoraria ?? ZONA_HORARIA_FALLBACK);
 
   const loadIncidencias = useCallback(async () => {
     setLoading(true);
@@ -231,6 +244,7 @@ export function MantenimientoView() {
     { campo: "apuntaDesperfecto", label: "Apuntado por" },
     { campo: "reparador", label: "Reparador" },
     { campo: "fechaPublicado", label: "Fecha" },
+    { campo: "ultimaActualizacion", label: "Última actualización" },
     { campo: "comentarios", label: "Comentarios" },
   ];
 
@@ -427,6 +441,42 @@ export function MantenimientoView() {
           <Input type="date" value={item.fechaPublicado} onChange={(e) => updateField(item.id, "fechaPublicado", e.target.value)} className="h-8 text-xs w-[130px]" />
         </td>
       ),
+    },
+    ultimaActualizacion: {
+      th: (
+        <TableColumnHeader
+          key="ultimaActualizacion"
+          label="Última actualización"
+          campo="ultimaActualizacion"
+          filtroTipo="fecha"
+          filtros={filtros}
+          onFiltrosChange={setFiltros}
+          ordenable
+          orden={orden}
+          onOrdenChange={setOrden}
+        />
+      ),
+      td: (item) => {
+        const dias = diasSinActualizar(item.ultimaActualizacion, hoy);
+        const nunca = item.actualizaciones.length === 0;
+        // Cuantos mas dias sin noticias, mas llama la atencion: es la senal de
+        // que el desperfecto se esta quedando olvidado.
+        const color =
+          dias >= 90 ? "text-severity-critical"
+          : dias >= 30 ? "text-severity-serious"
+          : "text-muted-foreground";
+        return (
+          <td key="ultimaActualizacion" className="px-3 py-2.5 whitespace-nowrap">
+            <span className={cn("block text-[11px] font-bold leading-tight", color)}>
+              {dias === 0 ? "Hoy" : `${dias} ${dias === 1 ? "día" : "días"} sin actualizar`}
+            </span>
+            <span className="block text-xs text-foreground">
+              {item.ultimaActualizacion || "—"}
+              {nunca && <span className="text-muted-foreground"> (alta)</span>}
+            </span>
+          </td>
+        );
+      },
     },
     comentarios: {
       th: (

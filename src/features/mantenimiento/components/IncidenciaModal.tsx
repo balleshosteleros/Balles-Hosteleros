@@ -72,6 +72,9 @@ export function IncidenciaModal({ open, onClose, onSave, item }: Props) {
     fechaPublicado: item?.fechaPublicado ?? new Date().toISOString().slice(0, 10),
     comentarios: item?.comentarios ?? "",
     actualizaciones: item?.actualizaciones ?? [],
+    // Al crear, la ultima noticia del desperfecto es su propia alta.
+    ultimaActualizacion:
+      item?.ultimaActualizacion ?? item?.fechaPublicado ?? new Date().toISOString().slice(0, 10),
   });
 
   // Todos los campos son obligatorios: una incidencia a medio rellenar no sirve

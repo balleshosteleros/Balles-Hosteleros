@@ -25,6 +25,18 @@ export interface Incidencia {
   fechaPublicado: string;
   comentarios: string;
   actualizaciones: Actualizacion[];
+  /**
+   * Fecha de la ultima actualizacion. Si nunca se ha actualizado, cae en la
+   * fecha de alta: lo que se mide es cuanto lleva el desperfecto sin noticias.
+   */
+  ultimaActualizacion: string;
+}
+
+/** Dias transcurridos desde la ultima actualizacion hasta hoy. */
+export function diasSinActualizar(desde: string, hoy: string): number {
+  if (!desde) return 0;
+  const ms = new Date(hoy).getTime() - new Date(desde).getTime();
+  return Math.max(0, Math.floor(ms / 86400000));
 }
 
 export const LOCALES = ["HABANA", "BACANAL", "CENTRAL", "TERRAZA", "ALMACÉN"];
@@ -50,7 +62,7 @@ export function formatearDuracion(min: number): string {
   return `${h} h ${m} min`;
 }
 
-export const SAMPLE_DATA: Incidencia[] = [
+const SAMPLE_BASE: Omit<Incidencia, "ultimaActualizacion">[] = [
   { id: "1", desperfecto: "Gotera en techo del salón principal", local: "HABANA", estado: "PENDIENTE", gravedad: "GRAVE", apuntaDesperfecto: "GERENCIA", reparador: "MANTENIMIENTO", fechaPublicado: "2026-03-28", comentarios: "Se detectó humedad creciente tras las lluvias. Revisar impermeabilización.", actualizaciones: [
     { id: "1a", texto: "Se ha colocado un cubo provisional para recoger el agua.", fecha: "2026-03-29", apuntadoPor: "MANTENIMIENTO", resultado: "EN PROGRESO", minutos: 30 },
     { id: "1b", texto: "Presupuesto solicitado al proveedor de impermeabilización.", fecha: "2026-04-02", apuntadoPor: "GERENCIA", resultado: "EN PROGRESO", minutos: 15 },
@@ -67,3 +79,11 @@ export const SAMPLE_DATA: Incidencia[] = [
   { id: "9", desperfecto: "Fuga de agua en cocina", local: "HABANA", estado: "ESCALADO", gravedad: "GRAVE", apuntaDesperfecto: "GERENCIA", reparador: "PROVEEDOR EXTERNO", fechaPublicado: "2026-04-04", comentarios: "Tubería corroída. Necesita sustitución de tramo completo.", actualizaciones: [] },
   { id: "10", desperfecto: "Pintura descascarada en fachada", local: "TERRAZA", estado: "PENDIENTE", gravedad: "LEVE", apuntaDesperfecto: "MANTENIMIENTO", reparador: "PROVEEDOR EXTERNO", fechaPublicado: "2026-04-05", comentarios: "Solicitar presupuesto a pintor habitual.", actualizaciones: [] },
 ];
+
+/** La ultima actualizacion se deriva de las propias actualizaciones de cada fila. */
+export const SAMPLE_DATA: Incidencia[] = SAMPLE_BASE.map((i) => ({
+  ...i,
+  ultimaActualizacion: i.actualizaciones.length
+    ? i.actualizaciones[i.actualizaciones.length - 1].fecha
+    : i.fechaPublicado,
+}));
