@@ -228,8 +228,8 @@ export function MovimientosStockSection({
                   <th className="py-2 font-medium">Tipo</th>
                   <th className="py-2 text-right font-medium">Cantidad</th>
                   <th className="py-2 text-right font-medium">Saldo</th>
-                  <th className="py-2 text-right font-medium">Coste ud.</th>
-                  <th className="py-2 text-right font-medium">Valor</th>
+                  <th className="py-2 pl-4 text-right font-medium">Coste ud.</th>
+                  <th className="py-2 pl-4 pr-6 text-right font-medium">Valor</th>
                   <th className="py-2 font-medium">Referencia</th>
                 </tr>
               </thead>
@@ -272,10 +272,10 @@ export function MovimientosStockSection({
                           )}
                         </td>
                         <td className="py-2 text-right tabular-nums">{fmtNum(m.saldo_resultante)}</td>
-                        <td className="py-2 text-right tabular-nums text-muted-foreground">
+                        <td className="py-2 pl-4 text-right tabular-nums text-muted-foreground">
                           {fmtEuros(m.coste_unitario)}
                         </td>
-                        <td className="py-2 text-right tabular-nums">
+                        <td className="py-2 pl-4 pr-6 text-right tabular-nums">
                           {m.valor_total == null
                             ? "—"
                             : `${m.signo === 1 ? "+" : "−"}${fmtEuros(Math.abs(Number(m.valor_total)))}`}
