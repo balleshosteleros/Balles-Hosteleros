@@ -21,6 +21,11 @@ import {
   resumirTextos,
   type CambioTexto,
 } from "../services/chat-textos";
+import {
+  colocarFotos,
+  destinosDisponibles,
+  type FotoAColocar,
+} from "../services/chat-fotos";
 import type { Bloque, PaginaWeb } from "../types";
 
 type ActionResult<T = void> =
@@ -49,6 +54,18 @@ Reglas:
 - No inventes datos del negocio (teléfonos, precios, horarios, direcciones,
   valoraciones, número de seguidores, premios). Si hacen falta y no los tienes,
   pídelos. Nunca te inventes un testimonio ni una reseña: son de personas reales.
+
+FOTOS ADJUNTAS:
+- Si te adjuntan fotos, te paso su url y la lista de DESTINOS POSIBLES de esta web.
+- Pon cada foto en "fotos" con su url exacta y la CLAVE de un destino de esa lista.
+  No inventes claves ni uses una que no esté en la lista.
+- Coloca una foto SOLO si la persona ha dicho dónde va ("esta para la portada",
+  "estas para la carta"). Si no lo ha dicho, o si hay varias fotos y no está
+  claro cuál va dónde, devuelve "fotos" vacío y PREGUNTA en "respuesta" a qué
+  sección va cada una, nombrando los destinos posibles en cristiano.
+- "alt" es una descripción corta de lo que se ve, para quien no puede ver la
+  imagen y para Google. Describe solo lo evidente; no te inventes el plato ni el
+  sitio si no te lo han dicho.
 - Nunca menciones "bloques", "campos", "JSON" ni jerga técnica en "respuesta".`;
 
 /** Fuerza la forma de la respuesta: Gemini no puede devolver otra cosa. */
@@ -58,6 +75,23 @@ const ESQUEMA_RESPUESTA: Schema = {
     respuesta: {
       type: SchemaType.STRING,
       description: "Qué has hecho, 1-2 frases en español llano, sin jerga técnica.",
+    },
+    fotos: {
+      type: SchemaType.ARRAY,
+      description:
+        "Dónde va cada foto adjunta. Una entrada por foto que sepas colocar; vacío si no lo tienes claro.",
+      items: {
+        type: SchemaType.OBJECT,
+        properties: {
+          url: { type: SchemaType.STRING, description: "La url exacta de la foto adjunta." },
+          destino: { type: SchemaType.STRING, description: "Clave del destino elegido." },
+          alt: {
+            type: SchemaType.STRING,
+            description: "Descripción corta de la foto, para accesibilidad y SEO.",
+          },
+        },
+        required: ["url", "destino", "alt"],
+      },
     },
     cambios: {
       type: SchemaType.ARRAY,
@@ -73,7 +107,7 @@ const ESQUEMA_RESPUESTA: Schema = {
       },
     },
   },
-  required: ["respuesta", "cambios"],
+  required: ["respuesta", "cambios", "fotos"],
 };
 
 export interface RespuestaChatWeb {
@@ -120,10 +154,17 @@ export async function enviarMensajeChatWeb(input: {
   paginaId: string;
   mensaje: string;
   historial?: Array<{ rol: "user" | "assistant"; texto: string }>;
+  /** Fotos YA subidas al bucket por el navegador, listas para colocar. */
+  fotos?: Array<{ url: string; nombre: string }>;
 }): Promise<ActionResult<RespuestaChatWeb>> {
   try {
     const mensaje = input.mensaje?.trim() ?? "";
-    if (!mensaje) return { ok: false, error: "Escribe qué quieres cambiar." };
+    const fotosAdjuntas = (input.fotos ?? []).filter((f) => f.url?.trim());
+    // Con fotos adjuntas no hace falta escribir nada: adjuntar y decir "para la
+    // portada" en el mismo envío es lo normal, pero soltar la foto sola también.
+    if (!mensaje && fotosAdjuntas.length === 0) {
+      return { ok: false, error: "Escribe qué quieres cambiar." };
+    }
 
     const ctx = await cargarPagina(input.paginaId);
     if (ctx.error !== undefined) return { ok: false, error: ctx.error };
@@ -145,15 +186,30 @@ export async function enviarMensajeChatWeb(input: {
       .map((m) => `${m.rol === "user" ? "Usuario" : "Tú"}: ${m.texto}`)
       .join("\n");
 
+    const destinos = destinosDisponibles(bloques);
+    const bloqueFotos = fotosAdjuntas.length
+      ? [
+          `\nFOTOS ADJUNTAS (${fotosAdjuntas.length}):`,
+          ...fotosAdjuntas.map((f, i) => `  ${i + 1}. url: ${f.url} · archivo: "${f.nombre}"`),
+          `\nDESTINOS POSIBLES EN ESTA WEB:`,
+          ...destinos.map((d) => `  · ${d.clave} — ${d.etiqueta}. ${d.ayuda}`),
+        ].join("\n")
+      : "";
+
     const prompt = [
       `TEXTOS ACTUALES DE LA WEB:\n${contexto}`,
+      bloqueFotos,
       historial ? `\nCONVERSACIÓN PREVIA:\n${historial}` : "",
-      `\nPETICIÓN DEL USUARIO:\n${mensaje}`,
+      `\nPETICIÓN DEL USUARIO:\n${mensaje || "(solo ha adjuntado fotos, sin texto)"}`,
     ].join("\n");
 
-    let parsed: { respuesta?: string; cambios?: CambioTexto[] };
+    let parsed: { respuesta?: string; cambios?: CambioTexto[]; fotos?: FotoAColocar[] };
     try {
-      const { data } = await geminiJSON<{ respuesta: string; cambios: CambioTexto[] }>(
+      const { data } = await geminiJSON<{
+        respuesta: string;
+        cambios: CambioTexto[];
+        fotos: FotoAColocar[];
+      }>(
         prompt,
         {
           systemInstruction: SYSTEM,
@@ -177,24 +233,44 @@ export async function enviarMensajeChatWeb(input: {
     }
 
     const cambios = Array.isArray(parsed.cambios) ? parsed.cambios : [];
+    const fotos = Array.isArray(parsed.fotos) ? parsed.fotos : [];
     const respuesta = (parsed.respuesta ?? "").trim() || "Hecho.";
 
-    if (cambios.length === 0) {
+    if (cambios.length === 0 && fotos.length === 0) {
+      // Ni textos ni fotos colocadas: la IA está preguntando algo. Si había
+      // fotos adjuntas se quedan sin colocar, y hay que decirlo — si no, el
+      // cliente cree que ya están puestas.
+      const aviso =
+        fotosAdjuntas.length > 0
+          ? `${respuesta}\n\n(De momento no he colocado ${
+              fotosAdjuntas.length === 1 ? "la foto" : "las fotos"
+            }.)`
+          : respuesta;
       return {
         ok: true,
-        data: { respuesta, aplicados: 0, detalle: [], hayDeshacer: false },
+        data: { respuesta: aviso, aplicados: 0, detalle: [], hayDeshacer: false },
       };
     }
 
-    const { bloques: nuevos, aplicados, descartados } = aplicarCambios(bloques, cambios);
+    // Las fotos se colocan primero y los textos después, sobre el resultado: así
+    // una sola escritura deja las dos cosas y un único punto de deshacer.
+    const urlsPermitidas = new Set(fotosAdjuntas.map((f) => f.url));
+    const resFotos = colocarFotos(bloques, fotos, urlsPermitidas);
+    const {
+      bloques: nuevos,
+      aplicados,
+      descartados,
+    } = aplicarCambios(resFotos.bloques, cambios);
 
-    if (aplicados.length === 0) {
-      console.warn("[chat-web] todos descartados:", descartados);
+    if (aplicados.length === 0 && resFotos.colocadas.length === 0) {
+      console.warn("[chat-web] todos descartados:", descartados, resFotos.descartadas);
+      const motivo = resFotos.descartadas[0]?.motivo;
       return {
         ok: true,
         data: {
           respuesta:
-            "No he podido hacer ese cambio. Dime con otras palabras qué texto quieres cambiar.",
+            motivo ??
+            "No he podido hacer ese cambio. Dime con otras palabras qué quieres cambiar.",
           aplicados: 0,
           detalle: [],
           hayDeshacer: false,
@@ -215,10 +291,19 @@ export async function enviarMensajeChatWeb(input: {
 
     revalidatePath(`/marketing/pagina-web/${input.paginaId}`);
 
-    const detalle = aplicados.map((c) => `Cambiado el ${etiquetaCampo(c.campo)}`);
+    const detalle = [
+      ...resFotos.colocadas.map((f) => `Foto puesta en ${f.etiqueta}`),
+      ...aplicados.map((c) => `Cambiado el ${etiquetaCampo(c.campo)}`),
+      ...resFotos.descartadas.map((d) => `Sin colocar: ${d.motivo}`),
+    ];
     return {
       ok: true,
-      data: { respuesta, aplicados: aplicados.length, detalle, hayDeshacer: true },
+      data: {
+        respuesta,
+        aplicados: aplicados.length + resFotos.colocadas.length,
+        detalle,
+        hayDeshacer: true,
+      },
     };
   } catch (err) {
     console.error("[chat-web][enviar] fatal:", err);

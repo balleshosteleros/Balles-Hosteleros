@@ -9,7 +9,7 @@
  */
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { Download, Loader2, Send, Sparkles, Undo2, X } from "lucide-react";
+import { Download, ImagePlus, Loader2, Send, Sparkles, Trash2, Undo2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useEditorStore } from "../../../hooks/useEditorStore";
@@ -19,6 +19,7 @@ import {
   enviarMensajeChatWeb,
 } from "../../../actions/chat-web-actions";
 import { ImportarDeUrlDialog } from "./ImportarDeUrlDialog";
+import { useSubidaImagenes, type ImagenItem } from "./forms/imagenes";
 
 interface Props {
   paginaId: string;
@@ -43,13 +44,17 @@ export function ChatWebPane({ paginaId, onCerrar }: Props) {
     {
       rol: "assistant",
       texto:
-        "Dime qué quieres cambiar de la web y lo hago. De momento puedo retocar los textos: títulos, presentaciones y botones.",
+        "Dime qué quieres cambiar de la web y lo hago. Puedo retocar los textos (títulos, presentaciones y botones) y colocar las fotos que me adjuntes: dime a qué parte de la web va cada una.",
     },
   ]);
   const [texto, setTexto] = useState("");
   const [enviando, setEnviando] = useState(false);
   const [puedeDeshacer, setPuedeDeshacer] = useState(false);
   const [showImportar, setShowImportar] = useState(false);
+  // Fotos ya subidas al bucket, esperando a que el usuario diga dónde van.
+  const [adjuntas, setAdjuntas] = useState<ImagenItem[]>([]);
+  const { subir, subiendo } = useSubidaImagenes();
+  const fotoRef = useRef<HTMLInputElement>(null);
   const finRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -64,14 +69,24 @@ export function ChatWebPane({ paginaId, onCerrar }: Props) {
 
   const enviar = async (mensajeTexto?: string) => {
     const contenido = (mensajeTexto ?? texto).trim();
-    if (!contenido || enviando) return;
+    // Con fotos adjuntas se puede enviar sin escribir nada.
+    if ((!contenido && adjuntas.length === 0) || enviando) return;
 
-    setMensajes((prev) => [...prev, { rol: "user", texto: contenido }]);
+    const fotos = adjuntas.map((f) => ({ url: f.url, nombre: f.alt }));
+    const etiquetaFotos =
+      fotos.length > 0
+        ? `${fotos.length} foto${fotos.length > 1 ? "s" : ""} adjunta${fotos.length > 1 ? "s" : ""}`
+        : "";
+    setMensajes((prev) => [
+      ...prev,
+      { rol: "user", texto: contenido || `(${etiquetaFotos})`, detalle: contenido && etiquetaFotos ? [etiquetaFotos] : undefined },
+    ]);
     setTexto("");
+    setAdjuntas([]);
     setEnviando(true);
 
     const historial = mensajes.map((m) => ({ rol: m.rol, texto: m.texto }));
-    const res = await enviarMensajeChatWeb({ paginaId, mensaje: contenido, historial });
+    const res = await enviarMensajeChatWeb({ paginaId, mensaje: contenido, historial, fotos });
 
     if (!res.ok) {
       setMensajes((prev) => [...prev, { rol: "assistant", texto: res.error }]);
@@ -186,11 +201,66 @@ export function ChatWebPane({ paginaId, onCerrar }: Props) {
       </div>
 
       <div className="border-t bg-background p-2">
+        {/* Fotos ya subidas, a la espera de destino. Se ven antes de enviar
+            para que nadie mande la foto equivocada. */}
+        {adjuntas.length > 0 && (
+          <div className="mb-2 flex flex-wrap gap-1.5">
+            {adjuntas.map((f, i) => (
+              <div key={f.url} className="relative group">
+                <div
+                  className="h-14 w-14 rounded border bg-muted bg-cover bg-center"
+                  style={{ backgroundImage: `url(${f.url})` }}
+                  title={f.alt}
+                />
+                <button
+                  type="button"
+                  onClick={() => setAdjuntas((prev) => prev.filter((_, j) => j !== i))}
+                  className="absolute -right-1.5 -top-1.5 rounded-full bg-background border p-0.5 text-red-600 opacity-0 group-hover:opacity-100 transition"
+                  title="Quitar esta foto"
+                >
+                  <Trash2 className="h-3 w-3" />
+                </button>
+              </div>
+            ))}
+            <p className="w-full text-[11px] text-muted-foreground">
+              Dime a qué parte de la web va cada foto.
+            </p>
+          </div>
+        )}
+
+        <input
+          ref={fotoRef}
+          type="file"
+          accept="image/*"
+          multiple
+          className="hidden"
+          onChange={async (e) => {
+            if (!e.target.files?.length) return;
+            const nuevas = await subir(e.target.files, 10 - adjuntas.length);
+            if (nuevas.length) setAdjuntas((prev) => [...prev, ...nuevas]);
+            if (fotoRef.current) fotoRef.current.value = "";
+          }}
+        />
+
         <div className="flex items-end gap-2">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-9 w-9 shrink-0"
+            onClick={() => fotoRef.current?.click()}
+            disabled={enviando || subiendo || adjuntas.length >= 10}
+            title="Adjuntar fotos"
+          >
+            {subiendo ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <ImagePlus className="h-4 w-4" />
+            )}
+          </Button>
           <Textarea
             value={texto}
             onChange={(e) => setTexto(e.target.value)}
-            placeholder="Escribe qué quieres cambiar…"
+            placeholder="Escribe qué quieres cambiar, o adjunta fotos…"
             rows={2}
             className="resize-none text-sm"
             disabled={enviando}
@@ -206,7 +276,7 @@ export function ChatWebPane({ paginaId, onCerrar }: Props) {
             size="icon"
             className="h-9 w-9 shrink-0"
             onClick={() => enviar()}
-            disabled={enviando || !texto.trim()}
+            disabled={enviando || (!texto.trim() && adjuntas.length === 0)}
             title="Enviar"
           >
             <Send className="h-4 w-4" />
