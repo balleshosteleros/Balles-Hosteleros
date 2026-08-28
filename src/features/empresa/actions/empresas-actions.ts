@@ -111,6 +111,29 @@ export async function saveEmpresaAjustes(input: {
   }
 }
 
+/**
+ * Datos que una empresa NO puede dejar sin rellenar al darse de alta.
+ *
+ * No es burocracia: el teléfono y el correo alimentan los correos a clientes
+ * (reservas sale desde un no-reply, así que el teléfono es la única vía de
+ * contacto que se le ofrece), los de reclutamiento y los textos legales de la
+ * web pública. La identidad fiscal la exigen facturas y modelos.
+ *
+ * Se comprueba también en el servidor porque la validación del formulario se
+ * puede saltar llamando a la action directamente.
+ */
+const DATOS_ALTA_OBLIGATORIOS: { campo: keyof DatosGenerales; label: string }[] = [
+  { campo: "razonSocial", label: "Razón social" },
+  { campo: "cif", label: "CIF" },
+  { campo: "direccionFiscal", label: "Dirección" },
+  { campo: "ciudad", label: "Ciudad" },
+  { campo: "provincia", label: "Provincia" },
+  { campo: "pais", label: "País" },
+  { campo: "codigoPostal", label: "Código postal" },
+  { campo: "telefonoPrincipal", label: "Teléfono principal" },
+  { campo: "correoGeneral", label: "Correo general" },
+];
+
 export async function createEmpresa(input: {
   nombre: string;
   iniciales: string;
@@ -124,6 +147,23 @@ export async function createEmpresa(input: {
       data: { user },
     } = await supabase.auth.getUser();
     if (!user) return { ok: false, error: "No autenticado" };
+
+    // Datos completos obligatorios: una empresa a medio rellenar deja correos
+    // y textos legales cojos, y el fallo aparece semanas después.
+    const dg = input.datosGenerales ?? {};
+    const faltan = DATOS_ALTA_OBLIGATORIOS.filter(
+      ({ campo }) => !String(dg[campo] ?? "").trim(),
+    ).map(({ label }) => label);
+    if (faltan.length > 0) {
+      return {
+        ok: false,
+        error: `Faltan datos obligatorios de la empresa: ${faltan.join(", ")}`,
+      };
+    }
+    const correo = String(dg.correoGeneral ?? "").trim();
+    if (!/^[^\s@]+@[^\s@.]+\.[^\s@]+$/.test(correo)) {
+      return { ok: false, error: "El correo general no es válido" };
+    }
 
     const admin = createAdminClient();
     const slug = slugify(input.nombre);

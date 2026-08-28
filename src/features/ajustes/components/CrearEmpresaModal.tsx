@@ -32,6 +32,10 @@ type FormState = {
   pais: string;
   codigoPostal: string;
   estado: "Activa" | "Inactiva";
+  // Contacto
+  telefonoPrincipal: string;
+  telefonoSecundario: string;
+  correoGeneral: string;
   // Web y redes sociales
   web: string;
   whatsapp: string;
@@ -56,6 +60,9 @@ const EMPTY: FormState = {
   pais: "España",
   codigoPostal: "",
   estado: "Activa",
+  telefonoPrincipal: "",
+  telefonoSecundario: "",
+  correoGeneral: "",
   web: "",
   whatsapp: "",
   instagram: "",
@@ -68,13 +75,54 @@ const EMPTY: FormState = {
   primerDiaSemana: "Lunes",
 };
 
-// Campos obligatorios (regla "datos completos obligatorio"): la identidad fiscal.
-// Web/redes son opcionales (no toda empresa tiene TikTok) y la config regional
-// ya trae valores por defecto.
+// Campos obligatorios (regla "datos completos obligatorio"): la identidad fiscal
+// Y el contacto. El teléfono no es un adorno: es la vía que se le da al cliente
+// en los correos de reservas (que salen desde un no-reply), la que aparece en
+// los correos de reclutamiento y en los textos legales de la web pública. Sin
+// él, esos textos salen cojos y no hay forma de que nadie conteste.
+// Web/redes son opcionales (no toda empresa tiene TikTok), el teléfono
+// secundario también, y la config regional ya trae valores por defecto.
 const REQUERIDOS: (keyof FormState)[] = [
   "nombreComercial", "razonSocial", "cif",
   "direccionFiscal", "ciudad", "provincia", "pais", "codigoPostal",
+  "telefonoPrincipal", "correoGeneral",
 ];
+
+const ETIQUETAS: Partial<Record<keyof FormState, string>> = {
+  nombreComercial: "Nombre comercial",
+  razonSocial: "Razón social",
+  cif: "CIF",
+  direccionFiscal: "Dirección",
+  ciudad: "Ciudad",
+  provincia: "Provincia",
+  pais: "País",
+  codigoPostal: "Código postal",
+  telefonoPrincipal: "Teléfono principal",
+  correoGeneral: "Correo general",
+};
+
+/**
+ * Validación tolerante mientras se escribe: el aviso solo aparece cuando el
+ * valor YA no puede llegar a ser correcto, nunca a medio teclear.
+ */
+function errorTelefono(v: string): string | null {
+  const t = v.trim();
+  if (!t) return null;
+  if (/[^\d\s+()-]/.test(t)) return "El teléfono solo puede llevar números";
+  const digitos = t.replace(/\D/g, "");
+  // Más de 15 dígitos es imposible (E.164). Por debajo, aún está escribiendo.
+  if (digitos.length > 15) return "El teléfono tiene demasiados dígitos";
+  return null;
+}
+
+function errorCorreo(v: string): string | null {
+  const t = v.trim();
+  if (!t) return null;
+  // Sin "@" todavía puede estar escribiéndolo; con "@" ya se puede exigir
+  // que lo que venga detrás tenga forma de dominio.
+  if (!t.includes("@")) return null;
+  return /^[^\s@]+@[^\s@.]+\.[^\s@]+$/.test(t) ? null : "Correo no válido";
+}
 
 // Iniciales del chip: primeras letras de hasta 2 palabras del nombre.
 function inicialesDe(nombre: string): string {
@@ -91,13 +139,24 @@ function colorDe(nombre: string): string {
 }
 
 // Mismo Field que ConfiguracionTab para que la visual sea idéntica.
-function Field({ label, value, onChange, type = "text", placeholder = "" }: {
+function Field({ label, value, onChange, type = "text", placeholder = "", requerido = false, error = null }: {
   label: string; value: string; onChange: (v: string) => void; type?: string; placeholder?: string;
+  requerido?: boolean; error?: string | null;
 }) {
   return (
     <div>
-      <Label className="text-xs font-bold">{label}</Label>
-      <Input type={type} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} className="mt-1" />
+      <Label className="text-xs font-bold">
+        {label}
+        {requerido ? <span className="text-destructive"> *</span> : null}
+      </Label>
+      <Input
+        type={type}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        className={`mt-1${error ? " border-destructive" : ""}`}
+      />
+      {error ? <p className="mt-1 text-xs text-destructive">{error}</p> : null}
     </div>
   );
 }
@@ -114,7 +173,23 @@ export function CrearEmpresaModal({ open, onOpenChange }: { open: boolean; onOpe
   const handleSave = async () => {
     const faltan = REQUERIDOS.filter((k) => !String(form[k]).trim());
     if (faltan.length > 0) {
-      toast.error("Rellena todos los datos de la empresa antes de crearla");
+      // Decir CUÁLES faltan: "rellena todo" obliga a buscarlos a ojo en un
+      // formulario de tres tarjetas.
+      const nombres = faltan.map((k) => ETIQUETAS[k] ?? k).join(", ");
+      toast.error(`Faltan datos obligatorios: ${nombres}`);
+      return;
+    }
+    const errTel = errorTelefono(form.telefonoPrincipal);
+    const errTel2 = errorTelefono(form.telefonoSecundario);
+    const errMail = errorCorreo(form.correoGeneral);
+    if (errTel || errTel2 || errMail) {
+      toast.error(errTel ?? errTel2 ?? errMail ?? "Revisa los datos de contacto");
+      return;
+    }
+    // El correo general se exige completo aquí aunque la validación inline sea
+    // tolerante mientras se escribe (puede no haber tecleado aún la "@").
+    if (!/^[^\s@]+@[^\s@.]+\.[^\s@]+$/.test(form.correoGeneral.trim())) {
+      toast.error("El correo general no es válido");
       return;
     }
 
@@ -133,6 +208,9 @@ export function CrearEmpresaModal({ open, onOpenChange }: { open: boolean; onOpe
         provincia: form.provincia.trim(),
         pais: form.pais.trim(),
         codigoPostal: form.codigoPostal.trim(),
+        telefonoPrincipal: form.telefonoPrincipal.trim(),
+        telefonoSecundario: form.telefonoSecundario.trim(),
+        correoGeneral: form.correoGeneral.trim(),
         web: form.web.trim(),
         whatsapp: form.whatsapp.trim(),
         instagram: form.instagram.trim(),
@@ -196,14 +274,14 @@ export function CrearEmpresaModal({ open, onOpenChange }: { open: boolean; onOpe
           <Card>
             <CardHeader className="px-4 pt-3 pb-2"><CardTitle className="text-base">Información de la empresa</CardTitle></CardHeader>
             <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 px-4 pb-3 pt-0">
-              <Field label="Nombre comercial" value={form.nombreComercial} onChange={(v) => set("nombreComercial", v)} />
-              <Field label="Razón social"     value={form.razonSocial}     onChange={(v) => set("razonSocial", v)} />
-              <Field label="CIF"              value={form.cif}             onChange={(v) => set("cif", v)} />
-              <Field label="Dirección"        value={form.direccionFiscal} onChange={(v) => set("direccionFiscal", v)} />
-              <Field label="Ciudad"           value={form.ciudad}          onChange={(v) => set("ciudad", v)} />
-              <Field label="Provincia"        value={form.provincia}       onChange={(v) => set("provincia", v)} />
-              <Field label="País"             value={form.pais}            onChange={(v) => set("pais", v)} />
-              <Field label="Código postal"    value={form.codigoPostal}    onChange={(v) => set("codigoPostal", v)} />
+              <Field label="Nombre comercial" requerido value={form.nombreComercial} onChange={(v) => set("nombreComercial", v)} />
+              <Field label="Razón social"     requerido value={form.razonSocial}     onChange={(v) => set("razonSocial", v)} />
+              <Field label="CIF"              requerido value={form.cif}             onChange={(v) => set("cif", v)} />
+              <Field label="Dirección"        requerido value={form.direccionFiscal} onChange={(v) => set("direccionFiscal", v)} />
+              <Field label="Ciudad"           requerido value={form.ciudad}          onChange={(v) => set("ciudad", v)} />
+              <Field label="Provincia"        requerido value={form.provincia}       onChange={(v) => set("provincia", v)} />
+              <Field label="País"             requerido value={form.pais}            onChange={(v) => set("pais", v)} />
+              <Field label="Código postal"    requerido value={form.codigoPostal}    onChange={(v) => set("codigoPostal", v)} />
               <div>
                 <Label className="text-xs font-bold">Estado de la empresa</Label>
                 <Select value={form.estado} onValueChange={(v) => set("estado", v as FormState["estado"])}>
@@ -214,6 +292,28 @@ export function CrearEmpresaModal({ open, onOpenChange }: { open: boolean; onOpe
                   </SelectContent>
                 </Select>
               </div>
+            </CardContent>
+          </Card>
+
+          {/* ── CONTACTO ────────────────────────────────────── */}
+          <Card>
+            <CardHeader className="px-4 pt-3 pb-2"><CardTitle className="text-base">Contacto</CardTitle></CardHeader>
+            <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 px-4 pb-3 pt-0">
+              <Field
+                label="Teléfono principal" requerido type="tel" placeholder="912345678"
+                value={form.telefonoPrincipal} onChange={(v) => set("telefonoPrincipal", v)}
+                error={errorTelefono(form.telefonoPrincipal)}
+              />
+              <Field
+                label="Teléfono secundario" type="tel" placeholder="Opcional"
+                value={form.telefonoSecundario} onChange={(v) => set("telefonoSecundario", v)}
+                error={errorTelefono(form.telefonoSecundario)}
+              />
+              <Field
+                label="Correo general" requerido type="email" placeholder="hola@turestaurante.com"
+                value={form.correoGeneral} onChange={(v) => set("correoGeneral", v)}
+                error={errorCorreo(form.correoGeneral)}
+              />
             </CardContent>
           </Card>
 
@@ -294,9 +394,11 @@ export function CrearEmpresaModal({ open, onOpenChange }: { open: boolean; onOpe
           <div className="flex items-start gap-2 px-3 py-2 rounded-md bg-muted/50">
             <Info className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
             <p className="text-xs text-muted-foreground">
-              Al crearla se genera de cero toda la estructura estándar del software (departamentos, roles,
-              organigrama, plantillas de correo, configuraciones base…), igual que el resto de empresas. El logo y
-              el resto de datos se completan después en Ajustes → Empresa.
+              Los campos marcados con <span className="text-destructive">*</span> son obligatorios: el teléfono y el
+              correo se usan en los correos a clientes, en los de reclutamiento y en los textos legales de la web,
+              así que la empresa no puede quedarse sin ellos. Al crearla se genera de cero toda la estructura
+              estándar del software (departamentos, roles, organigrama, plantillas de correo, configuraciones
+              base…), igual que el resto de empresas. El logo se añade después en Ajustes → Empresa.
             </p>
           </div>
         </div>

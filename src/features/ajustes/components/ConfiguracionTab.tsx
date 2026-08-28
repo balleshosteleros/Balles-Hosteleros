@@ -84,12 +84,16 @@ export const ConfiguracionTab = forwardRef<ConfiguracionTabHandle, { hideSaveBut
           <Field label="Provincia"           value={d.provincia}          onChange={(v) => setD("provincia", v)} />
           <Field label="País"                value={d.pais}               onChange={(v) => setD("pais", v)} />
           <Field label="Código postal"       value={d.codigoPostal}       onChange={(v) => setD("codigoPostal", v)} />
+          <Field label="Dirección del local"  value={d.direccionLocal}     onChange={(v) => setD("direccionLocal", v)} placeholder="Si es distinta de la fiscal" />
+          <Field label="Teléfono principal"   type="tel"   value={d.telefonoPrincipal}   onChange={(v) => setD("telefonoPrincipal", v)} placeholder="912345678" />
+          <Field label="Teléfono secundario"  type="tel"   value={d.telefonoSecundario}  onChange={(v) => setD("telefonoSecundario", v)} placeholder="Opcional" />
         </CardContent>
       </Card>
 
       <Card>
         <CardHeader className="px-4 pt-3 pb-2"><CardTitle className="text-base">Correos electrónicos</CardTitle></CardHeader>
         <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 px-4 pb-3 pt-0">
+          <Field label="Correo general"       type="email" value={d.correoGeneral}       onChange={(v) => setD("correoGeneral", v)} />
           <Field label="Correo RRHH"          type="email" value={d.correoRrhh}          onChange={(v) => setD("correoRrhh", v)} />
           <Field label="Correo contabilidad"  type="email" value={d.correoContabilidad}  onChange={(v) => setD("correoContabilidad", v)} />
           <Field label="Correo logística"     type="email" value={d.correoLogistica}     onChange={(v) => setD("correoLogistica", v)} />
