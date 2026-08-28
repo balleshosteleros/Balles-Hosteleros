@@ -41,7 +41,7 @@ export const MODULOS_WEB: ModuloDefinicion[] = [
   { clave: "reservas", label: "Reservas", descripcion: "Motor de reservas propio, con disponibilidad real", pordefecto: true },
   { clave: "testimonios", label: "Reseñas", descripcion: "Opiniones reales de Google ya sincronizadas", pordefecto: true },
   { clave: "redes", label: "Redes sociales", descripcion: "Enlaces que salen de Ajustes de la empresa", pordefecto: true },
-  { clave: "empleo", label: "Trabaja con nosotros", descripcion: "Portal de empleo con las vacantes abiertas", pordefecto: true },
+  { clave: "empleo", label: "Empleo", descripcion: "Portal de empleo con las vacantes abiertas", pordefecto: true },
   { clave: "inspecciones", label: "Bolsa de inspectores", descripcion: "Inscripción de inspectores externos", pordefecto: false },
   { clave: "mapa", label: "Cómo llegar", descripcion: "Mapa con la dirección del local", pordefecto: true },
   { clave: "contacto", label: "Pie de página", descripcion: "Teléfono, dirección, horarios y legal", pordefecto: true },
@@ -213,7 +213,7 @@ export function generarBloquesPrototipo(
     }
     if (activos.has("reservas")) navegar.push({ label: "Reservar", href: "#reservas" });
     if (activos.has("empleo") && d.empleoSlug) {
-      navegar.push({ label: "Trabaja con nosotros", href: `/empleo/${d.empleoSlug}` });
+      navegar.push({ label: "Empleo", href: `/empleo/${d.empleoSlug}` });
     }
     if (navegar.length) columnas.push({ titulo: d.nombre, items: navegar });
     if (contacto.length) columnas.push({ titulo: "Contacto", items: contacto });

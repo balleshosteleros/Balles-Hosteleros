@@ -214,7 +214,7 @@ function NavPublica({
               href={`/empleo/${slug}?o=WEB`}
               className="text-[13px] font-semibold uppercase tracking-wider text-white/85 transition-colors hover:text-white"
             >
-              Trabaja con nosotros
+              Empleo
             </a>
           ) : null}
         </nav>
