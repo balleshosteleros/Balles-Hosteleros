@@ -59,8 +59,11 @@ export function urlRed(red: keyof RedesEmpresa, valor: string | null | undefined
     case "instagram":
       return `https://www.instagram.com/${encodeURIComponent(handle)}`;
     case "facebook":
-      // El nombre de página de Facebook no lleva espacios en la URL: se
-      // guardan por comodidad ("Bacanal fuenlabrada") y aquí se quitan.
+      // OJO: quitar los espacios NO convierte un nombre visible en la URL del
+      // perfil. "Restaurante Bacanal fuenlabrada" da
+      // /RestauranteBacanalfuenlabrada, que no existe: el perfil real es
+      // /Bacanalfuenlabrada. Lo fiable es pegar la URL completa en Ajustes —
+      // eso ya lo cubre el `if` de arriba, que la devuelve tal cual.
       return `https://www.facebook.com/${encodeURIComponent(handle.replace(/\s+/g, ""))}`;
     case "tiktok":
       return `https://www.tiktok.com/@${encodeURIComponent(handle)}`;
