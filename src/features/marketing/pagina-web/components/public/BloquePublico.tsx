@@ -919,7 +919,7 @@ function ReservasPublico({
 
         {/* Tres apoyos antes del formulario: quitan la duda de "¿esto qué me
             pide?" justo donde el visitante decide si sigue o se va. */}
-        <ul className="mx-auto mt-9 flex flex-wrap items-center justify-center gap-x-8 gap-y-3 text-[13px] opacity-70">
+        <ul className="mx-auto mt-9 mb-4 flex flex-wrap items-center justify-center gap-x-8 gap-y-3 text-[13px] opacity-70">
           <li className="flex items-center gap-2">
             <Punto /> Confirmación inmediata
           </li>
@@ -935,9 +935,18 @@ function ReservasPublico({
           slug ? (
             /* Tarjeta con esquinas muy redondeadas y cristal difuminado: el
                formulario deja de ser un recuadro pegado y se integra en la web. */
-            <div className="mt-12 overflow-hidden rounded-[28px] border border-white/10 bg-white/[0.04] p-2 shadow-[0_24px_70px_rgba(0,0,0,0.5)] backdrop-blur-xl md:rounded-[34px] md:p-3">
-              <div className="overflow-hidden rounded-[22px] bg-white md:rounded-[26px]">
-                <IframeAutoAlto src={`/reservar/${slug}/embed`} titulo="Reservar mesa" />
+            <div className="relative mt-14">
+              {/* Halo de marca difuminado detrás de la tarjeta: despega el
+                  formulario del fondo sin dibujarle un borde duro. */}
+              <div
+                aria-hidden
+                className="pointer-events-none absolute -inset-6 rounded-[44px] opacity-[0.18] blur-3xl"
+                style={{ backgroundColor: "var(--pw-primario)" }}
+              />
+              <div className="relative overflow-hidden rounded-[28px] border border-white/10 bg-white/[0.04] p-2 shadow-[0_24px_70px_rgba(0,0,0,0.5)] backdrop-blur-xl md:rounded-[34px] md:p-3">
+                <div className="overflow-hidden rounded-[22px] bg-white md:rounded-[26px]">
+                  <IframeAutoAlto src={`/reservar/${slug}/embed`} titulo="Reservar mesa" />
+                </div>
               </div>
             </div>
           ) : (

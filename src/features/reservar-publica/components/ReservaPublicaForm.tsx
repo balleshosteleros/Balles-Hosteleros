@@ -503,7 +503,7 @@ export function ReservaPublicaForm({
                 onChange={(e) => setFecha(e.target.value)}
                 min={new Date().toISOString().split("T")[0]}
                 required
-                className="mt-1.5 h-12 w-full min-w-0 max-w-full rounded-xl border-zinc-200 bg-white text-sm sm:h-11"
+                className="mt-1.5 h-11 w-full min-w-0 max-w-full appearance-none rounded-xl border-zinc-200 bg-white px-3 text-sm"
               />
             </div>
 
@@ -630,16 +630,13 @@ export function ReservaPublicaForm({
               <Calendar className="h-3.5 w-3.5" />
               Fecha de nacimiento
             </Label>
-            {/* Más estrecha que el resto: una fecha ocupa poco y a ancho
-                completo desequilibraba el formulario. En móvil el navegador ya
-                abre su propio selector de día/mes/año. */}
             <Input
               id="nacimiento"
               type="date"
               value={fechaNacimiento}
               onChange={(e) => setFechaNacimiento(e.target.value)}
               max={new Date().toISOString().split("T")[0]}
-              className="mt-1.5 h-11 w-full max-w-[220px] rounded-xl border-zinc-200 text-sm"
+              className="mt-1.5 h-11 w-full min-w-0 appearance-none rounded-xl border-zinc-200 px-3 text-sm"
             />
           </div>
 
