@@ -16,6 +16,8 @@ import { hoyEnZona, ZONA_HORARIA_FALLBACK } from "@/features/empresa/lib/zona-ho
 import { StatusBadge, GravedadBadge } from "@/features/mantenimiento/components/Badges";
 import { IncidenciaModal } from "@/features/mantenimiento/components/IncidenciaModal";
 import { DetalleIncidencia } from "@/features/mantenimiento/components/DetalleIncidencia";
+import { ListaMovil } from "@/features/mantenimiento/components/ListaMovil";
+import { useIsMobile } from "@/shared/hooks/use-mobile";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -87,6 +89,7 @@ export function MantenimientoView() {
   // Hoy en la zona de la empresa: los dias sin actualizar se cuentan contra el
   // dia del local, no contra el del navegador de quien mira.
   const hoy = hoyEnZona(empresaActual.zonaHoraria ?? ZONA_HORARIA_FALLBACK);
+  const esMovil = useIsMobile();
 
   const loadIncidencias = useCallback(async () => {
     setLoading(true);
@@ -509,14 +512,14 @@ export function MantenimientoView() {
     <div className="p-4 md:p-6 space-y-5">
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {statCards.map((s) => (
-          <div key={s.key} className={`rounded-lg border-2 p-4 text-center ${s.color}`}>
-            <div className="text-3xl font-black">{counts[s.key]}</div>
-            <div className="text-xs font-bold mt-1">{s.label}</div>
+          <div key={s.key} className={`rounded-lg border-2 p-2.5 md:p-4 text-center ${s.color}`}>
+            <div className="text-xl md:text-3xl font-black">{counts[s.key]}</div>
+            <div className="text-[10px] md:text-xs font-bold mt-0.5 md:mt-1">{s.label}</div>
           </div>
         ))}
       </div>
 
-      <div className="grid grid-cols-3 gap-3">
+      <div className="hidden md:grid grid-cols-3 gap-3">
         {(["LEVE", "GRAVE", "MUY GRAVE"] as Gravedad[]).map((g) => (
           <div key={g} className="rounded-lg border bg-card p-3 text-center">
             <GravedadBadge value={g} />
@@ -544,6 +547,9 @@ export function MantenimientoView() {
         }
       />
 
+      {esMovil ? (
+        <ListaMovil items={filtered} hoy={hoy} onAbrir={setDetalleItem} />
+      ) : (
       <ResizableColumnsProvider storageKey="gerencia-mantenimiento">
       <div className="bg-card rounded-lg border overflow-x-auto">
         <table className="w-full text-sm">
@@ -571,6 +577,7 @@ export function MantenimientoView() {
         </table>
       </div>
       </ResizableColumnsProvider>
+      )}
       <div className="text-xs text-muted-foreground text-right">{filtered.length} de {data.length} incidencias</div>
 
       <IncidenciaModal open={modalOpen} onClose={() => setModalOpen(false)} onSave={handleSave} item={editItem} />

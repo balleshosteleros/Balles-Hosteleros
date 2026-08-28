@@ -144,7 +144,7 @@ export function ActualizarIncidenciaDialog({ open, onClose, item, onGuardar }: P
                     type="button"
                     onClick={() => { setResultado(s.valor); limpiarError("resultado"); }}
                     className={cn(
-                      "rounded-lg border-2 p-3 text-left transition-colors",
+                      "rounded-lg border-2 p-3 min-h-[72px] text-left transition-colors",
                       elegido ? s.activo : "border-border hover:bg-muted/50"
                     )}
                   >
@@ -180,11 +180,12 @@ export function ActualizarIncidenciaDialog({ open, onClose, item, onGuardar }: P
             <MsgError campo="texto" />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <Label>Fecha</Label>
               <Input
                 type="date"
+                className="h-11 sm:h-10"
                 value={fecha}
                 onChange={(e) => { setFecha(e.target.value); limpiarError("fecha"); }}
               />
@@ -196,7 +197,7 @@ export function ActualizarIncidenciaDialog({ open, onClose, item, onGuardar }: P
                 value={minutos ? String(minutos) : ""}
                 onValueChange={(v) => { setMinutos(Number(v)); limpiarError("minutos"); }}
               >
-                <SelectTrigger><SelectValue placeholder="Selecciona" /></SelectTrigger>
+                <SelectTrigger className="h-11 sm:h-10"><SelectValue placeholder="Selecciona" /></SelectTrigger>
                 <SelectContent>
                   {MINUTOS_OPCIONES.map((m) => (
                     <SelectItem key={m} value={String(m)}>{formatearDuracion(m)}</SelectItem>
@@ -213,7 +214,7 @@ export function ActualizarIncidenciaDialog({ open, onClose, item, onGuardar }: P
               value={apuntadoPor}
               onValueChange={(v) => { setApuntadoPor(v); limpiarError("apuntadoPor"); }}
             >
-              <SelectTrigger><SelectValue placeholder="Selecciona empleado" /></SelectTrigger>
+              <SelectTrigger className="h-11 sm:h-10"><SelectValue placeholder="Selecciona empleado" /></SelectTrigger>
               <SelectContent>
                 {apuntadoPor && !empleados.some((e) => e.nombreCompleto === apuntadoPor) && (
                   <SelectItem value={apuntadoPor}>{apuntadoPor}</SelectItem>
@@ -234,9 +235,9 @@ export function ActualizarIncidenciaDialog({ open, onClose, item, onGuardar }: P
           </div>
         </div>
 
-        <div className="flex justify-end gap-2 mt-5">
-          <Button variant="outline" onClick={onClose}>Cancelar</Button>
-          <Button onClick={handleGuardar}>Guardar</Button>
+        <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 mt-5">
+          <Button variant="outline" className="h-11 sm:h-10" onClick={onClose}>Cancelar</Button>
+          <Button className="h-11 sm:h-10" onClick={handleGuardar}>Guardar</Button>
         </div>
       </DialogContent>
     </Dialog>

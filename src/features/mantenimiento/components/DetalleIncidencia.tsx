@@ -25,9 +25,9 @@ export function DetalleIncidencia({ open, onClose, item, onAddActualizacion }: P
 
   return (
     <Sheet open={open} onOpenChange={(o) => !o && onClose()}>
-      <SheetContent className="overflow-y-auto">
+      <SheetContent className="overflow-y-auto w-full sm:max-w-md">
         <SheetHeader className="pb-4">
-          <SheetTitle className="text-lg font-bold">MÁS INFORMACIÓN</SheetTitle>
+          <SheetTitle className="text-lg font-bold">Más información</SheetTitle>
         </SheetHeader>
 
         {/* Summary */}
@@ -39,27 +39,27 @@ export function DetalleIncidencia({ open, onClose, item, onAddActualizacion }: P
 
           <div className="grid grid-cols-2 gap-3 text-sm">
             <div>
-              <span className="text-muted-foreground text-xs">LOCAL</span>
+              <span className="text-muted-foreground text-xs">Local</span>
               <p className="font-medium text-foreground">{item.local}</p>
             </div>
             <div>
-              <span className="text-muted-foreground text-xs">ESTADO</span>
+              <span className="text-muted-foreground text-xs">Estado</span>
               <div className="mt-0.5"><StatusBadge value={item.estado} /></div>
             </div>
             <div>
-              <span className="text-muted-foreground text-xs">GRAVEDAD</span>
+              <span className="text-muted-foreground text-xs">Gravedad</span>
               <div className="mt-0.5"><GravedadBadge value={item.gravedad} /></div>
             </div>
             <div>
-              <span className="text-muted-foreground text-xs">REPARADOR</span>
+              <span className="text-muted-foreground text-xs">Reparador</span>
               <p className="font-medium text-foreground">{item.reparador}</p>
             </div>
             <div>
-              <span className="text-muted-foreground text-xs">APUNTADA POR</span>
+              <span className="text-muted-foreground text-xs">Apuntada por</span>
               <p className="font-medium text-foreground">{item.apuntaDesperfecto}</p>
             </div>
             <div>
-              <span className="text-muted-foreground text-xs">FECHA PUBLICADO</span>
+              <span className="text-muted-foreground text-xs">Fecha publicado</span>
               <p className="font-medium text-foreground">{item.fechaPublicado}</p>
             </div>
           </div>
@@ -68,7 +68,7 @@ export function DetalleIncidencia({ open, onClose, item, onAddActualizacion }: P
           <div className="rounded-lg border-2 border-primary/20 bg-primary/5 p-4 flex items-center gap-3">
             <Clock className="h-5 w-5 text-primary shrink-0" />
             <div>
-              <p className="text-xs font-bold text-muted-foreground">TIEMPO TRANSCURRIDO DESDE LA CREACIÓN</p>
+              <p className="text-xs font-bold text-muted-foreground">Tiempo transcurrido desde la creación</p>
               <p className="text-lg font-black text-primary">{tiempoDesdeCreacion}</p>
             </div>
           </div>
@@ -77,9 +77,9 @@ export function DetalleIncidencia({ open, onClose, item, onAddActualizacion }: P
 
           {/* Updates section */}
           <div className="flex items-center justify-between">
-            <h4 className="font-bold text-foreground text-sm">HISTORIAL DE ACTUALIZACIONES</h4>
-            <Button size="sm" className="gap-1.5" onClick={() => setShowForm(true)}>
-              <Plus className="h-3.5 w-3.5" /> ACTUALIZAR
+            <h4 className="font-bold text-foreground text-sm">Historial de actualizaciones</h4>
+            <Button size="sm" className="gap-1.5 h-10 sm:h-9" onClick={() => setShowForm(true)}>
+              <Plus className="h-3.5 w-3.5" /> Actualizar
             </Button>
           </div>
 
