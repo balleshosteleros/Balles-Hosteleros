@@ -316,8 +316,13 @@
 
    Se apaga el borde igualandolo al propio fondo del menu: la separacion sigue
    existiendo por el cambio de superficie, pero no se dibuja ningun trazo.
+
+   OJO: `--border` NO se toca aqui. Al redefinirlo para todo el contenedor se
+   pintaba de azul casi negro CUALQUIER borde de la cabecera, y la pildora de
+   herramientas (campanas, correo, calendario...) aparecia recuadrada en negro,
+   que es algo que nunca ha tenido. El ajuste se limita al menu lateral, que es
+   el unico elemento que se pinta fuera de la vista y necesitaba el arreglo.
    --------------------------------------------------------------------------- */
 .software-oscuro {
   --sidebar-border: 220 25% 14%;
-  --border: 220 25% 14%;
 }
