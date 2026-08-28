@@ -22,7 +22,7 @@ import {
   MessageCircle,
   Phone,
   Notebook,
-  FolderOpen,
+  Folder,
   Cctv,
   Rocket,
   Lock,
@@ -119,7 +119,7 @@ export const HERRAMIENTAS: HerramientaDef[] = [
     nombre: "Archivos",
     descripcion:
       "Archivos de la empresa, en carpetas por departamento. El Drive propio del software.",
-    Icon: FolderOpen,
+    Icon: Folder,
     colorKey: "cyan",
   },
   {

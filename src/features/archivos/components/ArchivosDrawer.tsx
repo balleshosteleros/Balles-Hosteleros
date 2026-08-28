@@ -10,7 +10,7 @@
  */
 
 import { ReactNode, useState } from "react";
-import { FolderOpen } from "lucide-react";
+import { Folder } from "lucide-react";
 import {
   Sheet,
   SheetContent,
@@ -34,7 +34,7 @@ export function ArchivosDrawer({ children }: { children: ReactNode }) {
             <SheetHeader className="border-b py-3 pl-5 pr-14 shrink-0">
               <div className="flex items-center justify-between gap-2">
                 <SheetTitle className="flex items-center gap-2 text-base">
-                  <FolderOpen className="h-4 w-4 text-cyan-600" />
+                  <Folder className="h-4 w-4 text-cyan-600" />
                   Archivos
                 </SheetTitle>
                 {acciones}

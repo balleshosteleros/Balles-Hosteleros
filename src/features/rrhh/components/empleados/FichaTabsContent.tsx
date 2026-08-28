@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { formatFechaHoraEnZona } from "@/features/empresa/lib/zona-horaria";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Clock, CalendarDays, BarChart3, FileSignature, FolderOpen, Star, Plus } from "lucide-react";
+import { Clock, CalendarDays, BarChart3, FileSignature, Folder, Star, Plus } from "lucide-react";
 import type { FichaEmpleado } from "@/features/rrhh/data/empleados-ficha";
 import type { EmpleadoUI } from "@/features/rrhh/components/empleados/empleado-ui";
 import type { FichajeEmpleadoResumen } from "@/features/rrhh/actions/fichajes-actions";
@@ -237,7 +237,7 @@ export function DocumentosTab({ ficha }: { ficha: FichaEmpleado }) {
             </TableBody>
           </Table>
         </div>
-      ) : <EmptyState icon={FolderOpen} texto="No hay documentos subidos." />}
+      ) : <EmptyState icon={Folder} texto="No hay documentos subidos." />}
     </div>
   );
 }

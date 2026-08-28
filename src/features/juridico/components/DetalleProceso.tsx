@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
-import { Clock, Plus, User, CalendarDays, MessageSquare, FileText, Download, Upload, FolderOpen, Paperclip, Trash2, Loader2 } from "lucide-react";
+import { Clock, Plus, User, CalendarDays, MessageSquare, FileText, Download, Upload, Folder, Paperclip, Trash2, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { listDocumentosByProceso, uploadDocumentoJuridico, deleteDocumentoJuridico } from "@/features/juridico/actions/documentos-actions";
 import { MAX_DOCUMENTO_MB, MAX_DOCUMENTO_BYTES } from "@/shared/lib/documentos";
@@ -308,7 +308,7 @@ export function DetalleProceso({ open, onClose, item, onAddActualizacion, onAddD
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <h4 className="font-bold text-foreground text-sm flex items-center gap-1.5">
-                <FolderOpen className="h-4 w-4" /> DOCUMENTACIÓN DEL EXPEDIENTE
+                <Folder className="h-4 w-4" /> DOCUMENTACIÓN DEL EXPEDIENTE
                 <Badge variant="secondary" className="text-[10px] ml-1">{totalDocsGeneral}</Badge>
               </h4>
               <Button size="sm" variant="outline" className="gap-1.5 h-7 text-xs" onClick={() => setShowDocForm(!showDocForm)}>
@@ -337,7 +337,7 @@ export function DetalleProceso({ open, onClose, item, onAddActualizacion, onAddD
             <DocumentosList
               docs={item.documentos}
               label="Documentos generales"
-              icon={FolderOpen}
+              icon={Folder}
               onRemove={isUuid ? handleRemoveGeneralDoc : undefined}
             />
           </div>

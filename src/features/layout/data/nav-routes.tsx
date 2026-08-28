@@ -3,7 +3,7 @@
 import {
   Briefcase, Calculator, FileText, Scale, User, UsersRound, Truck, Camera,
   Wrench, Settings, CalendarDays, ChefHat, ClipboardList, ClipboardCheck, Download,
-  Gift, Crown, Network, PercentDiamond, TrendingUp, FolderOpen, Calendar,
+  Gift, Crown, Network, PercentDiamond, TrendingUp, Folder, Calendar,
   Timer, UserRoundSearch, Euro, Megaphone, Package, Files,
   KeyRound, Gavel, FileUp, ShoppingCart, Warehouse, FlaskConical, GraduationCap,
   UtensilsCrossed, BookOpen, Contact, Thermometer, Sparkles, FileSearch, PenLine, Music,
@@ -171,7 +171,7 @@ export const rrhhSubs: SubItem[] = [
 
 export const marketingSubs: SubItem[] = [
   { title: "CALENDARIO", url: "/marketing/calendario", icon: CalendarDays },
-  { title: "CONTENIDO", url: "/marketing/contenido", icon: FolderOpen },
+  { title: "CONTENIDO", url: "/marketing/contenido", icon: Folder },
   { title: "CAMPAÑAS", url: "/marketing/campanas", icon: Send },
   { title: "CARTA DIGITAL", url: "/marketing/carta-digital", icon: QrCode },
   { title: "CÓDIGOS QR", url: "/marketing/qr", icon: Link2 },
