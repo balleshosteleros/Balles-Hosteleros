@@ -9,19 +9,43 @@
  */
 import type { Bloque } from "../types";
 
-/** Campos de texto editables por chat, por tipo de bloque. */
+/**
+ * Campos de texto editables por chat, por tipo de bloque.
+ *
+ * ESTA LISTA ES EL LÍMITE DE LO QUE LA IA PUEDE TOCAR. Lo que no esté aquí no
+ * se cambia por conversación, aunque el usuario lo pida. Quedan fuera a
+ * propósito:
+ *
+ * - URLs y enlaces (`href`, `url`): un enlace mal escrito rompe la navegación
+ *   o manda al visitante fuera de la web, y eso no se ve hasta que alguien lo
+ *   pulsa. Se cambian en el editor.
+ * - Imágenes: la IA no sube fotos; se suben desde el editor o se adjuntan.
+ * - Datos verificables (dirección, coordenadas, valoraciones, seguidores,
+ *   premios, testimonios): son hechos, no redacción. Si la IA los reescribe,
+ *   publica algo falso. Los testimonios además son de personas reales.
+ * - Precios y carta: salen del módulo de Cocina, no se escriben aquí.
+ */
 const CAMPOS_TEXTO: Record<string, string[]> = {
   hero: ["titulo", "subtitulo", "cta.label"],
   texto_libre: ["html_seguro"],
   cta: ["titulo", "texto", "boton.label"],
   galeria: [],
   menu: ["titulo"],
-  testimonios: [],
+  testimonios: ["titulo", "subtitulo"],
   formulario: ["titulo", "texto_boton"],
-  mapa: ["direccion_texto"],
+  mapa: [],
   footer: [],
   video: ["titulo"],
-  reservas: [],
+  reservas: ["titulo", "subtitulo"],
+  collage_carta: ["titulo", "frase", "cta_label"],
+  // "parrafos.0", "parrafos.1"… El relato SÍ es redacción, y es justo lo que
+  // el dueño querrá pulir hablando. Se permite por índice para que la IA
+  // reescriba un párrafo concreto sin poder añadir ni quitar párrafos.
+  historia: ["titulo", "parrafos.0", "parrafos.1", "parrafos.2", "parrafos.3"],
+  premios: ["titulo", "frase"],
+  instagram: ["titulo", "frase", "cta_label"],
+  redes: ["titulo", "descripcion"],
+  bolsa_inspectores: ["titulo", "descripcion", "cta_label"],
 };
 
 export interface CambioTexto {
@@ -58,10 +82,15 @@ function escribirCampo(
   for (let i = 0; i < partes.length - 1; i++) {
     const k = partes[i];
     const actual = cursor[k];
-    const siguiente =
-      actual && typeof actual === "object" ? { ...(actual as Record<string, unknown>) } : {};
+    // Un array se copia como array: con {...} se convertiría en un objeto
+    // {"0": "…"} y el bloque dejaría de pintar (parrafos.0 del bloque historia).
+    const siguiente = Array.isArray(actual)
+      ? [...actual]
+      : actual && typeof actual === "object"
+        ? { ...(actual as Record<string, unknown>) }
+        : {};
     cursor[k] = siguiente;
-    cursor = siguiente;
+    cursor = siguiente as Record<string, unknown>;
   }
   cursor[partes[partes.length - 1]] = valor;
   return copia;
@@ -125,6 +154,14 @@ export function aplicarCambios(
       descartados.push({ ...c, motivo: "Texto demasiado largo" });
       continue;
     }
+    // Un campo indexado ("parrafos.2") solo vale si ese elemento YA existe:
+    // si no, la IA estaría añadiendo contenido nuevo, no reescribiendo.
+    if (
+      leerCampo((bloque.datos ?? {}) as unknown as Record<string, unknown>, c.campo) === undefined
+    ) {
+      descartados.push({ ...c, motivo: "Ese texto no existe en la web" });
+      continue;
+    }
 
     const idx = nuevos.findIndex((b) => b.id === c.bloqueId);
     const actual = nuevos[idx];
@@ -148,6 +185,9 @@ export function etiquetaCampo(campo: string): string {
     titulo: "título",
     subtitulo: "subtítulo",
     texto: "texto",
+    frase: "frase",
+    descripcion: "descripción",
+    cta_label: "botón",
     html_seguro: "contenido",
     "cta.label": "botón",
     "boton.label": "botón",

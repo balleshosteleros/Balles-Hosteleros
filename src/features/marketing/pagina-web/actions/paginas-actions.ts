@@ -6,6 +6,7 @@
  */
 import { revalidatePath } from "next/cache";
 import { getAppContext } from "@/lib/supabase/get-context";
+import { crearBloquesPlantilla } from "../data/plantilla-web";
 import type { PaginaWeb, PaginaWebTipo, PaginaWebEstado } from "../types";
 
 type ActionResult<T = void> =
@@ -105,6 +106,20 @@ export async function crearPagina(input: {
       slug = `${baseSlug}-${n}`;
     }
 
+    // La web principal nace con el patrón único (mismo orden para todas las
+    // empresas) y textos de ejemplo a sustituir. Una ONE_PAGE nace vacía:
+    // se usa para páginas sueltas, donde el patrón no aplica.
+    const { data: empresa } = await supabase
+      .from("empresas")
+      .select("nombre")
+      .eq("id", empresaId)
+      .maybeSingle();
+
+    const bloquesIniciales =
+      input.tipo === "WEB_PRINCIPAL"
+        ? crearBloquesPlantilla((empresa as { nombre?: string } | null)?.nombre)
+        : [];
+
     const { data, error } = await supabase
       .from("paginas_web")
       .insert({
@@ -112,7 +127,7 @@ export async function crearPagina(input: {
         tipo: input.tipo,
         nombre,
         slug_interno: slug,
-        bloques: [],
+        bloques: bloquesIniciales,
         estado: "BORRADOR",
         created_by: userId,
       })

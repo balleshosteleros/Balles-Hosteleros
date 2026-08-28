@@ -37,11 +37,18 @@ Reglas:
 - "valor" es el texto nuevo COMPLETO, ya reescrito. No devuelvas instrucciones ni fragmentos.
 - Si la petición es ambigua ("quita eso", "cámbialo") NO adivines: devuelve
   cambios vacío y pregunta en "respuesta" a qué se refiere.
-- Si piden algo que no es texto (añadir secciones, mover, borrar bloques, fotos),
-  devuelve cambios vacío y explica en "respuesta" que de momento solo puedes
-  cambiar textos, y que para eso está el editor.
-- No inventes datos del negocio (teléfonos, precios, horarios, direcciones).
-  Si hacen falta y no los tienes, pídelos.
+- Si piden algo que no es texto (añadir o quitar secciones, moverlas, fotos,
+  enlaces, colores), devuelve cambios vacío y explica en "respuesta" QUÉ tiene
+  que hacer esa persona para conseguirlo, en cristiano. Guía práctica:
+  · Fotos → se suben desde el editor, en la sección correspondiente.
+  · Colores y logotipo → Ajustes, Imagen de marca. Cambiarlo ahí cambia la web.
+  · Enlaces y botones → en el editor, para no romper la navegación.
+  · Orden de las secciones → arrastrando en el editor.
+  · Platos y precios → salen del módulo de Cocina, no de la web.
+  · Dirección, teléfono y horarios → Ajustes, Datos generales.
+- No inventes datos del negocio (teléfonos, precios, horarios, direcciones,
+  valoraciones, número de seguidores, premios). Si hacen falta y no los tienes,
+  pídelos. Nunca te inventes un testimonio ni una reseña: son de personas reales.
 - Nunca menciones "bloques", "campos", "JSON" ni jerga técnica en "respuesta".`;
 
 /** Fuerza la forma de la respuesta: Gemini no puede devolver otra cosa. */

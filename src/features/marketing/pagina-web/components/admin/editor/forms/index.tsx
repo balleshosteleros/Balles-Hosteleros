@@ -14,6 +14,10 @@ import { TextoLibreForm } from "./TextoLibreForm";
 import { VideoForm } from "./VideoForm";
 import { BolsaInspectoresForm } from "./BolsaInspectoresForm";
 import { RedesForm } from "./RedesForm";
+import { CollageCartaForm } from "./CollageCartaForm";
+import { PremiosForm } from "./PremiosForm";
+import { HistoriaForm } from "./HistoriaForm";
+import { InstagramForm } from "./InstagramForm";
 
 export function BloqueForm({ bloque }: { bloque: Bloque }) {
   switch (bloque.tipo) {
@@ -43,5 +47,13 @@ export function BloqueForm({ bloque }: { bloque: Bloque }) {
       return <BolsaInspectoresForm bloque={bloque} />;
     case "redes":
       return <RedesForm bloque={bloque} />;
+    case "collage_carta":
+      return <CollageCartaForm bloque={bloque} />;
+    case "premios":
+      return <PremiosForm bloque={bloque} />;
+    case "historia":
+      return <HistoriaForm bloque={bloque} />;
+    case "instagram":
+      return <InstagramForm bloque={bloque} />;
   }
 }
