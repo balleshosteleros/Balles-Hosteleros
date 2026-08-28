@@ -2470,6 +2470,12 @@ export function ReservasView() {
   // muestre la línea recién grabada sin cerrar y reabrir la ficha.
   const [actividadVersion, setActividadVersion] = useState(0);
   const [guardandoDuracion, setGuardandoDuracion] = useState(false);
+  // Fecha y hora editables desde la ficha. Cambiar la hora recalcula el turno
+  // en el servidor (y con el, en que mapa sale la reserva), asi que aqui solo
+  // se manda el dato nuevo y se recarga.
+  const [fechaEdit, setFechaEdit] = useState("");
+  const [horaEdit, setHoraEdit] = useState("");
+  const [guardandoCuando, setGuardandoCuando] = useState(false);
   /** Aviso de peligro: la mesa ya está ocupada en esa franja. */
   const [avisoOcupada, setAvisoOcupada] = useState<string | null>(null);
   /** Confirmación de "Bloquear" una mesa para el día y turno en pantalla. */
@@ -2724,6 +2730,8 @@ export function ReservasView() {
   useEffect(() => {
     if (!selectedReserva) return;
     setComensalesEdit(selectedReserva.comensales);
+    setFechaEdit(selectedReserva.fecha);
+    setHoraEdit(selectedReserva.hora.slice(0, 5));
   }, [selectedReserva]);
 
   // Los campos del cliente se recargan al cambiar de reserva: si no, quedarían
@@ -3063,6 +3071,57 @@ export function ReservasView() {
       if (/ya tiene una reserva/i.test(msg)) setAvisoOcupada(msg);
       else toast.error(msg);
     }
+  };
+
+  /**
+   * Cambia el cuándo de la reserva: fecha u hora. El turno lo recalcula el
+   * servidor a partir de la hora, así que al pasar una reserva de las 14:00 a
+   * las 21:00 deja de salir en el mapa de comida y aparece en el de cena sola.
+   * Cambiar de día la saca del mapa del día viejo y la lleva al nuevo.
+   */
+  const guardarCuando = async (
+    id: string,
+    campo: "fecha" | "hora",
+    valor: string,
+  ) => {
+    if (!valor) {
+      toast.error(
+        campo === "fecha" ? "Elige una fecha." : "Elige una hora.",
+      );
+      setFechaEdit(selectedReserva?.fecha ?? "");
+      setHoraEdit(selectedReserva?.hora.slice(0, 5) ?? "");
+      return;
+    }
+    const actual =
+      campo === "fecha"
+        ? selectedReserva?.fecha
+        : selectedReserva?.hora.slice(0, 5);
+    if (valor === actual) return;
+
+    setGuardandoCuando(true);
+    const res = await updateReserva(id, { [campo]: valor });
+    setGuardandoCuando(false);
+
+    if (!res.ok) {
+      const msg = res.error ?? "No se pudo guardar el cambio.";
+      if (/ya tiene una reserva/i.test(msg)) setAvisoOcupada(msg);
+      else toast.error(msg);
+      setFechaEdit(selectedReserva?.fecha ?? "");
+      setHoraEdit(selectedReserva?.hora.slice(0, 5) ?? "");
+      return;
+    }
+
+    toast.success(campo === "fecha" ? "Fecha actualizada" : "Hora actualizada");
+    setActividadVersion((v) => v + 1);
+    // Recarga completa: el turno (y por tanto el mapa en el que sale) lo ha
+    // recalculado el servidor, y si cambió el día esta reserva ya no pertenece
+    // al listado que hay en pantalla.
+    loadReservas(fecha);
+    setSelectedReserva((prev) =>
+      prev && prev.id === id
+        ? { ...prev, [campo]: campo === "hora" ? `${valor}:00` : valor }
+        : prev,
+    );
   };
 
   /**
@@ -4006,9 +4065,43 @@ export function ReservasView() {
                   Reserva
                 </h3>
                 <div className="grid grid-cols-2 gap-3">
-                  <Field label="Fecha">{selectedReserva.fecha}</Field>
-                  <Field label="Hora">{selectedReserva.hora}</Field>
-                  <Field label="Turno">{selectedReserva.turno}</Field>
+                  {/* Fecha y hora editables: mover una reserva era el caso
+                      más común y no se podía hacer desde aquí. */}
+                  <div>
+                    <Label className="text-[10px] text-muted-foreground uppercase tracking-wider">
+                      Fecha
+                    </Label>
+                    <Input
+                      type="date"
+                      className="h-8 text-sm font-medium"
+                      disabled={guardandoCuando}
+                      value={fechaEdit}
+                      onChange={(e) => setFechaEdit(e.target.value)}
+                      onBlur={() =>
+                        guardarCuando(selectedReserva.id, "fecha", fechaEdit)
+                      }
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-[10px] text-muted-foreground uppercase tracking-wider">
+                      Hora
+                    </Label>
+                    <Input
+                      type="time"
+                      className="h-8 text-sm font-medium"
+                      disabled={guardandoCuando}
+                      value={horaEdit}
+                      onChange={(e) => setHoraEdit(e.target.value)}
+                      onBlur={() =>
+                        guardarCuando(selectedReserva.id, "hora", horaEdit)
+                      }
+                    />
+                  </div>
+                  {/* El turno NO se elige: sale de la hora. Se enseña para que
+                      se vea en qué mapa cae, pero no es un campo que se toque. */}
+                  <Field label="Turno">
+                    {selectedReserva.turno === "CENA" ? "Cena" : "Comida"}
+                  </Field>
                   {/* Comensales: editable. Antes era solo lectura y la única
                       forma de corregir "somos dos más" era borrar la reserva y
                       volver a crearla. */}
