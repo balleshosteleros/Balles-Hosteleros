@@ -2,14 +2,31 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { getEmpresaActivaForUser } from "@/features/empresa/lib/empresa-server";
+import { registrarCambioDatosCliente } from "@/features/sala/lib/cliente-actividad";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 async function getCtx() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { supabase, user: null, empresaId: null };
+  if (!user) return { supabase, user: null, empresaId: null, usuarioId: null, nombre: null };
   const empresaId = await getEmpresaActivaForUser(supabase as unknown as SupabaseClient, user.id);
-  return { supabase, user, empresaId };
+  // Quién firma el cambio en la actividad: sin esto la línea saldría como
+  // "Sin registrar" y no serviría para saber a quién preguntar.
+  const { data: usuario } = await supabase
+    .from("usuarios")
+    .select("id, nombre, apellidos")
+    .eq("user_id", user.id)
+    .maybeSingle();
+  const nombre = usuario
+    ? [usuario.nombre, usuario.apellidos].filter(Boolean).join(" ").trim() || null
+    : null;
+  return {
+    supabase,
+    user,
+    empresaId,
+    usuarioId: (usuario?.id as string | null) ?? null,
+    nombre,
+  };
 }
 
 export interface DatosClienteReserva {
@@ -38,7 +55,8 @@ export async function guardarDatosClienteReserva(
   datos: DatosClienteReserva,
 ) {
   try {
-    const { supabase, empresaId } = await getCtx();
+    const ctx = await getCtx();
+    const { supabase, empresaId } = ctx;
     if (!empresaId) return { ok: false, error: "Sin empresa activa." };
 
     const nombre = datos.nombre.trim();
@@ -49,9 +67,11 @@ export async function guardarDatosClienteReserva(
 
     // El filtro por empresa es imprescindible: la RLS acota a las empresas del
     // usuario, no a la ACTIVA (mismo motivo que en el resto de reservas).
+    // Se leen también los datos ANTERIORES: son la mitad de la línea de
+    // actividad y hay que capturarlos antes de sobrescribirlos.
     const { data: reserva, error: errR } = await supabase
       .from("reservas")
-      .select("cliente_id")
+      .select("cliente_id, cliente_nombre, cliente_apellidos, cliente_email, cliente_telefono")
       .eq("id", reservaId)
       .eq("empresa_id", empresaId)
       .maybeSingle();
@@ -59,6 +79,12 @@ export async function guardarDatosClienteReserva(
     if (!reserva) return { ok: false, error: "Reserva no encontrada." };
 
     const clienteId = (reserva.cliente_id as string | null) ?? null;
+    const antes = {
+      cliente_nombre: (reserva.cliente_nombre as string | null) ?? null,
+      cliente_apellidos: (reserva.cliente_apellidos as string | null) ?? null,
+      cliente_email: (reserva.cliente_email as string | null) ?? null,
+      cliente_telefono: (reserva.cliente_telefono as string | null) ?? null,
+    };
 
     // 1) La ficha del cliente es la fuente de verdad: se actualiza primero.
     //    Los campos `*_normalizado` son columnas generadas, se recalculan solas.
@@ -97,6 +123,29 @@ export async function guardarDatosClienteReserva(
         .eq("id", reservaId)
         .eq("empresa_id", empresaId);
       if (error) throw error;
+    }
+
+    // 3) Actividad DEL CLIENTE, no de la reserva. Cambiar un email no le pasa a
+    //    esta reserva: le pasa a la persona, y hay que poder verlo desde su
+    //    ficha aunque se haya editado desde aquí. La actividad de la reserva
+    //    queda solo para lo suyo (mesa, hora, estado…).
+    //
+    //    Un walk-in sin ficha no tiene dónde registrarlo: sus datos no son de
+    //    ningún cliente, viven solo en esa reserva.
+    if (clienteId) {
+      await registrarCambioDatosCliente(supabase as unknown as SupabaseClient, {
+        empresaId,
+        clienteId,
+        antes: {
+          nombre: antes.cliente_nombre,
+          apellidos: antes.cliente_apellidos,
+          email: antes.cliente_email,
+          telefono: antes.cliente_telefono,
+        },
+        despues: { nombre, apellidos, email, telefono },
+        usuarioId: ctx.usuarioId,
+        usuarioNombre: ctx.nombre,
+      });
     }
 
     return { ok: true, clienteId };

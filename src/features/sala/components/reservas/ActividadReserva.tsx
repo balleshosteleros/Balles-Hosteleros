@@ -75,9 +75,14 @@ function autor(a: ReservaActividad): string {
 }
 
 /**
- * Actividad de la reserva: cada cambio de estado, de mesa, de hora o de
- * comensales, con quién lo hizo y cuándo. Solo se lee: es un registro
- * histórico y no se puede modificar.
+ * Actividad de ESTA reserva: cada cambio de estado, de mesa, de hora o de
+ * comensales, con quién lo hizo y cuándo. Al abrir otra reserva del mismo
+ * cliente se ve la actividad de esa otra reserva, no la de esta.
+ *
+ * Los cambios de los DATOS DEL CLIENTE (email, teléfono, nombre) no salen aquí:
+ * no le pasan a la reserva, le pasan a la persona, y van en `ActividadCliente`.
+ *
+ * Solo se lee: es un registro histórico y no se puede modificar.
  */
 export function ActividadReserva({ reservaId }: { reservaId: string }) {
   const { empresaActual } = useEmpresa();
@@ -108,7 +113,7 @@ export function ActividadReserva({ reservaId }: { reservaId: string }) {
     <Collapsible open={abierto} onOpenChange={setAbierto} className="space-y-2">
       <CollapsibleTrigger className="flex w-full items-center gap-2 text-xs font-medium text-muted-foreground hover:text-foreground">
         <History className="h-3.5 w-3.5 shrink-0" />
-        <span>Actividad</span>
+        <span>Actividad de la reserva</span>
         {!cargando && filas.length > 0 && (
           <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
             {filas.length}

@@ -32,6 +32,7 @@ import { Button } from "@/components/ui/button";
 import { Cliente, ClasificacionCliente } from "@/features/sala/data/clientes";
 import { listClientes, createCliente } from "@/features/sala/actions/clientes-actions";
 import { guardarFichaCliente } from "@/features/sala/actions/cliente-ficha-actions";
+import { ActividadCliente } from "@/features/sala/components/clientes/ActividadCliente";
 import {
   listClientesEnriquecidos,
   type ClienteEnriquecido,
@@ -1189,6 +1190,13 @@ export function ClientesView() {
                   se refresca al cerrar la ficha.
                 */}
                 <EtiquetasPanel scope="cliente" entityId={borrador.id} />
+              </div>
+
+              {/* Actividad DEL CLIENTE: los cambios de sus datos de contacto,
+                  se hayan hecho aquí o desde cualquiera de sus reservas. La
+                  actividad de cada reserva va en su propia ficha. */}
+              <div className="pt-2 border-t">
+                <ActividadCliente clienteId={borrador.id} />
               </div>
             </div>
           )}

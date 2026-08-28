@@ -19,6 +19,7 @@ import {
   getZonaHorariaEmpresa,
 } from "@/features/empresa/lib/empresa-server";
 import { ahoraEnZona } from "@/features/empresa/lib/zona-horaria";
+import { registrarCambioDatosCliente } from "@/features/sala/lib/cliente-actividad";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 
@@ -114,6 +115,21 @@ export async function guardarFichaCliente(
       }
     }
 
+    // Foto de ANTES para la actividad del cliente: hay que leerla mientras los
+    // valores viejos siguen en la tabla. También se aprovecha para saber quién
+    // firma el cambio.
+    const { data: fichaPrevia } = await supabase
+      .from("clientes_sala")
+      .select("nombre, apellidos, email, telefono")
+      .eq("id", clienteId)
+      .eq("empresa_id", empresaId)
+      .maybeSingle();
+    const { data: usuarioActual } = await supabase
+      .from("usuarios")
+      .select("id, nombre, apellidos")
+      .eq("user_id", user.id)
+      .maybeSingle();
+
     // 1) La ficha manda: se actualiza primero. Las columnas `*_normalizado` son
     //    generadas, se recalculan solas.
     const { error: errFicha } = await supabase
@@ -159,6 +175,29 @@ export async function guardarFichaCliente(
       .eq("cliente_id", clienteId)
       .eq("empresa_id", empresaId);
     if (errRes) throw errRes;
+
+    // 3) Actividad del cliente: la misma que se ve si el cambio se hace desde
+    //    una reserva. El histórico del cliente es uno, se edite donde se edite.
+    if (fichaPrevia) {
+      await registrarCambioDatosCliente(supabase as unknown as SupabaseClient, {
+        empresaId,
+        clienteId,
+        antes: {
+          nombre: (fichaPrevia.nombre as string | null) ?? null,
+          apellidos: (fichaPrevia.apellidos as string | null) ?? null,
+          email: (fichaPrevia.email as string | null) ?? null,
+          telefono: (fichaPrevia.telefono as string | null) ?? null,
+        },
+        despues: { nombre, apellidos, email, telefono },
+        usuarioId: (usuarioActual?.id as string | null) ?? null,
+        usuarioNombre: usuarioActual
+          ? [usuarioActual.nombre, usuarioActual.apellidos]
+              .filter(Boolean)
+              .join(" ")
+              .trim() || null
+          : null,
+      });
+    }
 
     return { ok: true };
   } catch (err: unknown) {

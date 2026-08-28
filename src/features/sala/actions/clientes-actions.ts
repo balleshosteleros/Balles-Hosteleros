@@ -57,8 +57,10 @@ export async function searchClientes(
   limit = 8,
 ): Promise<{ ok: boolean; data: ClienteSugerencia[] }> {
   try {
+    // Mismo mínimo que la UI: por debajo de 5 caracteres la búsqueda casa con
+    // demasiadas fichas y el desplegable deja de ser útil.
     const q = (query ?? "").trim();
-    if (q.length < 3) return { ok: true, data: [] };
+    if (q.length < 5) return { ok: true, data: [] };
     const { supabase, empresaId } = await getContext();
     if (!empresaId) return { ok: true, data: [] };
 

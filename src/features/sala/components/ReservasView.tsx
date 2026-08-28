@@ -111,6 +111,7 @@ import { ReservaFlagsChips } from "@/features/sala/components/reservas/ReservaFl
 import { ReservaExternalBadge } from "@/features/sala/components/reservas/ReservaExternalBadge";
 import { HistoricoEmailsReserva } from "@/features/sala/components/reservas/HistoricoEmailsReserva";
 import { ActividadReserva } from "@/features/sala/components/reservas/ActividadReserva";
+import { ActividadCliente } from "@/features/sala/components/clientes/ActividadCliente";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useModoInmersivoActivo } from "@/features/layout/hooks/useModoInmersivoActivo";
@@ -4443,6 +4444,20 @@ export function ReservasView() {
                 <p className="text-[10px] text-muted-foreground">
                   Al guardar, los datos se actualizan en la ficha del cliente y en todas sus reservas.
                 </p>
+
+                {/* Actividad DEL CLIENTE: los cambios de sus datos, se hayan
+                    hecho aquí o desde su ficha. Va junto a los campos que la
+                    generan, y separada de la actividad de la reserva —que está
+                    más abajo y cuenta otra cosa: lo que le ha pasado a ESTA
+                    reserva. Un walk-in sin ficha no tiene actividad de cliente. */}
+                {selectedReserva.clienteId && (
+                  <div className="pt-2 border-t">
+                    <ActividadCliente
+                      key={`${selectedReserva.clienteId}-${actividadVersion}`}
+                      clienteId={selectedReserva.clienteId}
+                    />
+                  </div>
+                )}
 
                 <div className="pt-2 border-t">
                   <HistoricoEmailsReserva reservaId={selectedReserva.id} />
