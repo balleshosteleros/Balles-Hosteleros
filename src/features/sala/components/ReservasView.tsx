@@ -44,6 +44,7 @@ import {
   DURACION_RESERVA_MIN_MINUTOS,
   DURACION_RESERVA_OPCIONES,
   formatearDuracionReserva,
+  origenLabel,
   RESERVA_NOMBRE_MAX_CHARS,
   RESERVA_APELLIDOS_MAX_CHARS,
 } from "@/features/sala/data/reservas";
@@ -266,23 +267,6 @@ function addMonths(iso: string, n: number) {
 const LISTA_GRID =
   "grid grid-cols-[50px_62px_minmax(0,1fr)_26px_56px_86px] gap-1.5 items-center";
 
-/**
- * El origen viene del canal por el que entró la reserva (PORTAL_PROPIO,
- * GOOGLE_RWG…). Sin origen = alta manual desde el back-office.
- */
-function origenLabel(origen: string | null | undefined): string {
-  if (!origen) return "Manual";
-  // Todo lo que entra por el motor de reservas de la web se lee igual: "Web".
-  // Da igual que venga del enlace pelado o de un enlace de campaña con su
-  // palabra clave — el canal es el mismo y en sala se pregunta por el canal.
-  const clave = origen.toUpperCase();
-  if (clave === "RESERVA_WEB" || clave === "PORTAL_PROPIO" || clave === "WEB") {
-    return "Web";
-  }
-  const limpio = origen.replace(/_/g, " ").toLowerCase();
-  return limpio.charAt(0).toUpperCase() + limpio.slice(1);
-}
-
 function StatusDot({ estado }: { estado: EstadoReserva }) {
   return (
     <span className="flex min-w-0 items-center gap-1.5 overflow-hidden">
@@ -484,9 +468,13 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
     capacidad: number;
   } | null>(null);
   const [comprobandoSolape, setComprobandoSolape] = useState(false);
+  // El formulario no regaña de entrada: los avisos de campos obligatorios solo
+  // aparecen cuando el usuario ya ha intentado guardar al menos una vez.
+  const [intentoGuardar, setIntentoGuardar] = useState(false);
 
-  // Autocompletado de clientes por nombre, apellidos o teléfono (4+ chars).
-  type CampoBusqueda = "cliente" | "apellidos" | "telefono";
+  // Autocompletado de clientes: cualquiera de los cuatro datos de contacto
+  // sirve para buscar, a partir de 5 caracteres escritos.
+  type CampoBusqueda = "cliente" | "apellidos" | "telefono" | "email";
   const [campoActivo, setCampoActivo] = useState<CampoBusqueda | null>(null);
   const [sugerencias, setSugerencias] = useState<ClienteSugerencia[]>([]);
   const [buscando, setBuscando] = useState(false);
@@ -553,9 +541,13 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
         ? form.cliente
         : campoActivo === "apellidos"
           ? form.apellidos
-          : form.telefono;
-    const minimo = campoActivo === "telefono" ? 4 : 4;
-    if ((valor ?? "").trim().length < minimo) {
+          : campoActivo === "email"
+            ? form.email
+            : form.telefono;
+    // 5 caracteres: por debajo, cualquier texto casa con media base de datos y
+    // el desplegable estorba más de lo que ayuda.
+    const MINIMO_BUSQUEDA = 5;
+    if ((valor ?? "").trim().length < MINIMO_BUSQUEDA) {
       setSugerencias([]);
       return;
     }
@@ -571,7 +563,7 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
       cancelado = true;
       clearTimeout(handle);
     };
-  }, [form.cliente, form.apellidos, form.telefono, form.esWalkIn, campoActivo]);
+  }, [form.cliente, form.apellidos, form.telefono, form.email, form.esWalkIn, campoActivo]);
 
   const maxPax = useMemo(
     () => maxpaxEfectivoDesdeReglas(reglas, form.fecha, form.turno),
@@ -732,28 +724,47 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
   // fuera: entran sin ficha de cliente porque se atienden en el momento.
   const { esRequerido: reservaRequiere } = useReglasSubmodulo("sala", "reservas");
 
-  const faltanDatosCliente =
-    !form.esWalkIn &&
-    (!form.cliente.trim() ||
-      !form.apellidos.trim() ||
-      (reservaRequiere("telefono") && !form.telefono.trim()) ||
-      (reservaRequiere("email") && !form.email.trim()));
-
   // La mesa es obligatoria salvo en walk-in, donde el cliente ya está sentado y
   // se le asigna sitio en el momento.
   const faltaMesa = !form.esWalkIn && !form.mesaId;
 
+  /**
+   * Qué falta por rellenar, en lenguaje del usuario. No bloquea el botón: se
+   * enseña solo cuando se intenta guardar, para no recibir al usuario con un
+   * aviso rojo antes de haber escrito nada.
+   */
+  const camposQueFaltan = useMemo(() => {
+    const faltan: string[] = [];
+    if (!form.esWalkIn) {
+      if (!form.cliente.trim()) faltan.push("nombre");
+      if (!form.apellidos.trim()) faltan.push("apellidos");
+      if (reservaRequiere("telefono") && !form.telefono.trim()) faltan.push("teléfono");
+      if (reservaRequiere("email") && !form.email.trim()) faltan.push("email");
+    }
+    if (!form.fecha) faltan.push("fecha");
+    if (!form.hora) faltan.push("hora");
+    if (!form.turno) faltan.push("turno");
+    if (!form.comensales || form.comensales < 1) faltan.push("comensales");
+    if (faltaMesa) faltan.push("mesa");
+    return faltan;
+  }, [
+    form.esWalkIn,
+    form.cliente,
+    form.apellidos,
+    form.telefono,
+    form.email,
+    form.fecha,
+    form.hora,
+    form.turno,
+    form.comensales,
+    faltaMesa,
+    reservaRequiere,
+  ]);
+
+  // Bloqueos duros: no dependen de rellenar campos, sino de que lo elegido no
+  // es válido. Estos sí deshabilitan el botón porque no hay nada que escribir.
   const guardarBloqueado =
-    faltanDatosCliente ||
-    faltaMesa ||
-    !form.fecha ||
-    !form.hora ||
-    !form.turno ||
-    !form.comensales ||
-    form.comensales < 1 ||
-    excedeMaxPax ||
-    zonaNoDisponible ||
-    cuponValido === false;
+    excedeMaxPax || zonaNoDisponible || cuponValido === false;
 
   const seleccionarCliente = (c: ClienteSugerencia) => {
     setForm((p) => ({
@@ -789,6 +800,9 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
    */
   const handleSave = async () => {
     if (guardarBloqueado || comprobandoSolape) return;
+    // Aquí es donde el formulario se permite avisar: solo al intentar guardar.
+    setIntentoGuardar(true);
+    if (camposQueFaltan.length > 0) return;
     const mesa = mesas.find((m) => m.id === (form.mesaId || mesaPreseleccionada?.id));
     if (!mesa) {
       emitirReserva();
@@ -864,12 +878,14 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
             onClick={() => seleccionarCliente(c)}
             className="flex w-full items-start gap-2 px-2 py-1.5 text-left text-xs hover:bg-muted"
           >
+            {/* Se enseñan los cuatro datos: al elegir de la lista se rellenan
+                todos, así que el usuario debe ver exactamente qué se copia. */}
             <div className="flex-1 min-w-0">
               <div className="truncate font-medium">
-                {[c.nombre, c.apellidos].filter(Boolean).join(" ")}
+                {[c.nombre, c.apellidos].filter(Boolean).join(" ") || "Sin nombre"}
               </div>
               <div className="truncate text-[10px] text-muted-foreground">
-                {[c.telefono, c.email].filter(Boolean).join(" · ") || "Sin contacto"}
+                {c.telefono || "Sin teléfono"} · {c.email || "Sin email"}
               </div>
             </div>
             {typeof c.visitas === "number" && c.visitas > 0 && (
@@ -884,7 +900,7 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
   };
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-2">
       {/* El banner refleja la mesa REALMENTE seleccionada en el formulario, no la
           preseleccionada al abrir: si el usuario la cambia abajo, aquí se ve el
           cambio. Si la deja sin asignar, desaparece. */}
@@ -907,35 +923,45 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
           </Button>
         </div>
       )}
-      {/* La mesa es obligatoria: sin ella no se puede guardar. La zona no se
-          pide aparte porque se deduce de la mesa elegida. */}
-      {faltaMesa && (
+      {/* Aviso de campos obligatorios: solo tras intentar guardar. Antes de eso
+          el formulario no dice nada, para no recibir al usuario con un error. */}
+      {intentoGuardar && camposQueFaltan.length > 0 && (
         <div className="rounded-md border border-amber-500/60 bg-amber-500/5 px-3 py-1.5 text-xs">
-          <span className="font-semibold">Falta la mesa.</span>{" "}
+          <span className="font-semibold">
+            {camposQueFaltan.length === 1 ? "Falta un dato:" : "Faltan datos:"}
+          </span>{" "}
           <span className="text-muted-foreground">
-            Elige una mesa en el plano para poder guardar la reserva.
+            {camposQueFaltan.join(", ")}.
           </span>
         </div>
       )}
-      <div className="grid grid-cols-2 gap-2">
-        <Button
-          size="sm"
-          variant={!form.esWalkIn ? "default" : "outline"}
-          className="text-xs h-8"
-          onClick={() => setForm((p) => ({ ...p, esWalkIn: false }))}
-        >
-          Cliente
-        </Button>
-        <Button
-          size="sm"
-          variant={form.esWalkIn ? "default" : "outline"}
-          className="text-xs h-8"
-          onClick={() => setForm((p) => ({ ...p, esWalkIn: true }))}
-        >
-          Walk-in
-        </Button>
+      {/* Selector cliente / walk-in: una sola pastilla con dos mitades, para que
+          se vea de un vistazo cuál de los dos está activo. */}
+      <div className="grid w-full max-w-xs grid-cols-2 gap-1 rounded-lg border bg-muted/60 p-1">
+        {[
+          { walkIn: false, label: "Cliente" },
+          { walkIn: true, label: "Walk-in" },
+        ].map((op) => {
+          const activo = form.esWalkIn === op.walkIn;
+          return (
+            <button
+              key={op.label}
+              type="button"
+              aria-pressed={activo}
+              onClick={() => setForm((p) => ({ ...p, esWalkIn: op.walkIn }))}
+              className={cn(
+                "h-8 rounded-md text-xs font-medium transition-colors",
+                activo
+                  ? "bg-background text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              {op.label}
+            </button>
+          );
+        })}
       </div>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-3 gap-x-3 gap-y-2">
         {!form.esWalkIn && (
           <>
             <div className="relative">
@@ -980,7 +1006,7 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
               />
               {renderSugerencias("telefono")}
             </div>
-            <div>
+            <div className="relative">
               <LabelConRegla
                 moduloKey="sala"
                 submoduloKey="reservas"
@@ -992,8 +1018,11 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
               <Input
                 className="h-8 text-xs"
                 value={form.email}
+                onFocus={() => setCampoActivo("email")}
+                onBlur={() => setTimeout(() => setCampoActivo((c) => (c === "email" ? null : c)), 150)}
                 onChange={e => setForm(p => ({ ...p, email: e.target.value }))}
               />
+              {renderSugerencias("email")}
             </div>
           </>
         )}
@@ -1098,13 +1127,12 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
           {config && (
             <p className="pt-1 text-[10px] text-muted-foreground/80">
               <span className="align-super">*</span> Por defecto{" "}
-              {formatearDuracionReserva(config.duracionReservaMin)}, según lo
-              configurado en ajustes.
+              {formatearDuracionReserva(config.duracionReservaMin)}.
             </p>
           )}
         </div>
         {/* Zona manda sobre mesa: se elige zona y luego una mesa de esa zona. */}
-        <div className="col-span-2"><Label className="text-xs">Zona</Label>
+        <div className="col-span-1"><Label className="text-xs">Zona</Label>
           <Select value={form.zona} onValueChange={(v) => elegirZona(v as ZonaSala)}>
             <SelectTrigger
               className={cn(
@@ -1219,7 +1247,7 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
         </div>
         {/* Las etiquetas se asignan desde la ficha de la reserva, una vez
             creada: ahí van agrupadas y admiten varias a la vez. */}
-        <div className="col-span-2">
+        <div className="col-span-3">
           <Label className="text-xs">Tipo de reserva</Label>
           <select
             value={form.tipoCategoria}
@@ -1276,7 +1304,7 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
           </>
         )}
         {form.tipoCategoria === "cupon" && (
-          <div className="col-span-2">
+          <div className="col-span-3">
             <Label className="text-xs">Importe pagado por adelantado (€)</Label>
             <Input
               type="number"
@@ -1291,7 +1319,7 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
         )}
         {/* Cupón NO coexiste con 'gratis' ni con 'ticket' (son tipos distintos). */}
         {form.tipoCategoria !== "gratis" && form.tipoCategoria !== "ticket" && (
-          <div className="col-span-2">
+          <div className="col-span-3">
             <CuponInputReserva
               value={form.codigoCupon}
               onChange={(v) => setForm((p) => ({ ...p, codigoCupon: v }))}
@@ -2230,7 +2258,7 @@ function PlanoCanvas({
         }}
       >
       <div
-        className="sala-lienzo relative rounded-xl overflow-hidden"
+        className="sala-lienzo relative rounded-xl"
         style={{
           width: PLANO_CANVAS_W,
           height: PLANO_CANVAS_H,
@@ -2508,7 +2536,24 @@ export function ReservasView() {
   const [clienteEdit, setClienteEdit] = useState<DatosClienteReserva>({
     nombre: "", apellidos: "", telefono: "", email: "",
   });
+  // Copia intacta de los datos tal y como estaban al abrir la ficha: es lo que
+  // se restaura si el usuario rechaza modificar el cliente.
+  const [datosClienteOriginales, setDatosClienteOriginales] = useState<DatosClienteReserva>({
+    nombre: "", apellidos: "", telefono: "", email: "",
+  });
   const [guardandoCliente, setGuardandoCliente] = useState(false);
+  /**
+   * Confirmación al editar los datos de un cliente que ya tiene ficha. Editar
+   * aquí reescribe SU ficha y todas sus reservas, así que no puede pasar de
+   * largo: o se acepta el cambio, o los campos vuelven a como estaban. No hay
+   * término medio (guardar la reserva con datos distintos de la ficha dejaría
+   * al mismo cliente con dos versiones de sí mismo).
+   */
+  const [confirmCambioCliente, setConfirmCambioCliente] = useState<{
+    reservaId: string;
+    original: DatosClienteReserva;
+    cambios: { campo: string; antes: string; despues: string }[];
+  } | null>(null);
   const [vista, setVista] = useState<"dia" | "mes">("dia");
   const [showDayPicker, setShowDayPicker] = useState(false);
   const [showConfig, setShowConfig] = useState(false);
@@ -2742,15 +2787,19 @@ export function ReservasView() {
   }, [selectedReserva]);
 
   // Los campos del cliente se recargan al cambiar de reserva: si no, quedarían
-  // los del cliente anterior y se guardarían sobre quien no toca.
+  // los del cliente anterior y se guardarían sobre quien no toca. Se guarda
+  // aparte una copia intacta: es a lo que se vuelve si el usuario decide NO
+  // modificar la ficha del cliente.
   useEffect(() => {
     if (!selectedReserva) return;
-    setClienteEdit({
+    const datos: DatosClienteReserva = {
       nombre: selectedReserva.cliente ?? "",
       apellidos: selectedReserva.apellidos ?? "",
       telefono: selectedReserva.telefono ?? "",
       email: selectedReserva.email ?? "",
-    });
+    };
+    setClienteEdit(datos);
+    setDatosClienteOriginales(datos);
   }, [selectedReserva]);
 
   const loadReservas = useCallback(async (f?: string) => {
@@ -3190,11 +3239,44 @@ export function ReservasView() {
       toast.error("El nombre es obligatorio.");
       return;
     }
+    // Antes de tocar nada: si los datos difieren de los que tenía la ficha, se
+    // pregunta. La respuesta es binaria — se cambia la ficha o se restaura.
+    const original = datosClienteOriginales;
+    const campos: { clave: keyof DatosClienteReserva; campo: string }[] = [
+      { clave: "nombre", campo: "Nombre" },
+      { clave: "apellidos", campo: "Apellidos" },
+      { clave: "telefono", campo: "Teléfono" },
+      { clave: "email", campo: "Email" },
+    ];
+    const cambios = campos
+      .filter((c) => clienteEdit[c.clave].trim() !== original[c.clave].trim())
+      .map((c) => ({
+        campo: c.campo,
+        antes: original[c.clave].trim() || "—",
+        despues: clienteEdit[c.clave].trim() || "—",
+      }));
+    if (cambios.length > 0 && !confirmCambioCliente) {
+      setConfirmCambioCliente({
+        reservaId: id,
+        original,
+        cambios,
+      });
+      return;
+    }
+    setConfirmCambioCliente(null);
     setGuardandoCliente(true);
     const res = await guardarDatosClienteReserva(id, clienteEdit);
     setGuardandoCliente(false);
     if (res.ok) {
       toast.success("Datos del cliente guardados");
+      // Lo guardado pasa a ser el nuevo punto de partida: un segundo cambio se
+      // compara contra esto, no contra lo que había al abrir la ficha.
+      setDatosClienteOriginales({
+        nombre: clienteEdit.nombre.trim(),
+        apellidos: clienteEdit.apellidos.trim(),
+        telefono: clienteEdit.telefono.trim(),
+        email: clienteEdit.email.trim(),
+      });
       // Recarga: el cambio afecta a más reservas que la abierta, así que el
       // listado entero puede haber quedado desfasado.
       loadReservas(fecha);
@@ -3210,6 +3292,9 @@ export function ReservasView() {
           : prev,
       );
     } else {
+      // Si el guardado falla, los campos no pueden quedarse con datos que no
+      // están en ninguna parte: se vuelve a lo que hay en la ficha real.
+      setClienteEdit(datosClienteOriginales);
       toast.error(res.error ?? "No se pudieron guardar los datos");
     }
   };
@@ -3439,7 +3524,9 @@ export function ReservasView() {
             <DialogTrigger asChild>
               <Button size="sm" className="text-xs h-8 gap-1.5 px-2.5" onClick={() => setSelectedMesa(null)}><Plus className="h-3.5 w-3.5" />Nueva</Button>
             </DialogTrigger>
-            <DialogContent className="max-w-lg">
+            {/* Ancho generoso y contenido en 3 columnas: la reserva se rellena
+                entera sin tener que bajar por el diálogo. */}
+            <DialogContent className="max-w-3xl">
               <DialogHeader><DialogTitle>Nueva reserva</DialogTitle></DialogHeader>
               <NuevaReservaForm
                 fecha={fecha}
@@ -4067,7 +4154,15 @@ export function ReservasView() {
           reserva (cuándo, dónde, en qué estado), a la derecha el cliente. Son
           dos cosas distintas y mezcladas cuesta encontrarlas. El botón de
           guardar va abajo, fijo, y sirve a los datos del cliente. */}
-      <Dialog open={showDetalleReserva} onOpenChange={setShowDetalleReserva}>
+      <Dialog
+        open={showDetalleReserva}
+        onOpenChange={(v) => {
+          // Cerrar sin guardar no deja los datos del cliente a medias: se
+          // restauran los originales, que es lo que hay realmente en su ficha.
+          if (!v) setClienteEdit(datosClienteOriginales);
+          setShowDetalleReserva(v);
+        }}
+      >
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle>Detalle de reserva</DialogTitle></DialogHeader>
           {selectedReserva && (
@@ -4320,6 +4415,70 @@ export function ReservasView() {
                   onClick={() => guardarDatosCliente(selectedReserva.id)}
                 >
                   Guardar
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Editar los datos de un cliente reescribe SU ficha y todas sus reservas,
+          no solo la abierta. Por eso se confirma, y la respuesta es binaria: se
+          modifica la ficha, o los campos vuelven a los datos originales. No se
+          permite guardar la reserva con datos distintos de los del cliente. */}
+      <Dialog
+        open={confirmCambioCliente !== null}
+        onOpenChange={(v) => {
+          // Cerrar por la X o por fuera equivale a NO modificar: se restaura.
+          if (!v && confirmCambioCliente) {
+            setClienteEdit(confirmCambioCliente.original);
+            setConfirmCambioCliente(null);
+          }
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Modificar los datos del cliente</DialogTitle>
+          </DialogHeader>
+          {confirmCambioCliente && (
+            <div className="space-y-3 text-xs">
+              <p className="text-muted-foreground">
+                Estos datos son los de la ficha del cliente. Si los cambias, se
+                actualizan en su ficha y en todas sus reservas.
+              </p>
+              <div className="rounded-md border divide-y">
+                {confirmCambioCliente.cambios.map((c) => (
+                  <div key={c.campo} className="grid grid-cols-[5rem_1fr] gap-2 px-3 py-2">
+                    <span className="text-muted-foreground">{c.campo}</span>
+                    <span className="min-w-0">
+                      <span className="line-through text-muted-foreground break-words">
+                        {c.antes}
+                      </span>{" "}
+                      <span className="font-medium break-words">{c.despues}</span>
+                    </span>
+                  </div>
+                ))}
+              </div>
+              <p className="text-muted-foreground">
+                Si no quieres modificarlos, los campos vuelven a como estaban.
+              </p>
+              <div className="flex justify-end gap-2 pt-1">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setClienteEdit(confirmCambioCliente.original);
+                    setConfirmCambioCliente(null);
+                  }}
+                >
+                  No modificar
+                </Button>
+                <Button
+                  size="sm"
+                  disabled={guardandoCliente}
+                  onClick={() => guardarDatosCliente(confirmCambioCliente.reservaId)}
+                >
+                  Modificar la ficha
                 </Button>
               </div>
             </div>

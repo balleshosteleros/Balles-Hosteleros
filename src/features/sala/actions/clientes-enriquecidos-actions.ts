@@ -116,6 +116,10 @@ export interface ReservaHistoricoCliente {
   zona: string | null;
   /** COMIDA o CENA: hace falta para abrir el día en el turno correcto. */
   turno: string | null;
+  /** Canal por el que entró (web, Google, manual…). */
+  origen: string | null;
+  /** Lo que pidió esa vez. Es lo que explica una cancelación o un no-show. */
+  notas: string | null;
 }
 
 export interface ClienteEnriquecido {
@@ -208,7 +212,9 @@ export async function listClientesEnriquecidos(): Promise<ClientesEnriquecidosRe
       // visitas = asistió). Se reparte abajo, en una sola pasada.
       supabase
         .from("reservas")
-        .select("id, cliente_id, fecha, hora, personas, estado, mesa, zona, turno")
+        .select(
+          "id, cliente_id, fecha, hora, personas, estado, mesa, zona, turno, origen, notas",
+        )
         .eq("empresa_id", empresaId)
         .not("cliente_id", "is", null)
         .order("fecha", { ascending: true })
@@ -293,6 +299,8 @@ export async function listClientesEnriquecidos(): Promise<ClientesEnriquecidosRe
         mesa: (r.mesa as string | null) ?? null,
         zona: (r.zona as string | null) ?? null,
         turno: (r.turno as string | null) ?? null,
+        origen: (r.origen as string | null) ?? null,
+        notas: (r.notas as string | null) ?? null,
       });
       if (estado) b.porEstado[estado] = (b.porEstado[estado] ?? 0) + 1;
 

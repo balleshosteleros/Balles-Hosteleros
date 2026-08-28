@@ -613,3 +613,24 @@ export const SAMPLE_LISTA_ESPERA: ListaEspera[] = [
   { id: "le1", cliente: "Raúl Gómez", telefono: "611222333", comensales: 4, zona: "SALA", hora: "21:00", fecha: hoy, observaciones: "Prefiere interior", estado: "ESPERANDO" },
   { id: "le2", cliente: "Marta Díaz", telefono: "622333444", comensales: 2, zona: "", hora: "21:30", fecha: hoy, observaciones: "", estado: "ESPERANDO" },
 ];
+
+/**
+ * Etiqueta legible del canal por el que entró la reserva (PORTAL_PROPIO,
+ * GOOGLE_RWG…). Sin origen = alta manual desde el back-office.
+ *
+ * Vive aquí y no en la vista porque la lista de sala y el histórico de la
+ * ficha del cliente tienen que leer el canal igual: si cada una lo formatea
+ * por su cuenta, la misma reserva sale con dos nombres distintos.
+ */
+export function origenLabel(origen: string | null | undefined): string {
+  if (!origen) return "Manual";
+  // Todo lo que entra por el motor de reservas de la web se lee igual: "Web".
+  // Da igual que venga del enlace pelado o de un enlace de campaña con su
+  // palabra clave — el canal es el mismo y en sala se pregunta por el canal.
+  const clave = origen.toUpperCase();
+  if (clave === "RESERVA_WEB" || clave === "PORTAL_PROPIO" || clave === "WEB") {
+    return "Web";
+  }
+  const limpio = origen.replace(/_/g, " ").toLowerCase();
+  return limpio.charAt(0).toUpperCase() + limpio.slice(1);
+}

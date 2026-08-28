@@ -24,6 +24,8 @@ import {
   ESTADOS_RESERVA,
   ESTADO_DOT_CLASS,
   ESTADO_RESERVA_LABELS,
+  origenLabel,
+  zonaLabel,
   type EstadoReserva,
 } from "@/features/sala/data/reservas";
 import { Button } from "@/components/ui/button";
@@ -115,6 +117,24 @@ function fechaCorta(fecha: string, hora: string): string {
     return hora ? `${txt} · ${hora}` : txt;
   } catch {
     return `${fecha} ${hora}`.trim();
+  }
+}
+
+/**
+ * Fecha corta CON año, para el histórico. `fechaLarga` no lo lleva, y un
+ * histórico abarca varios años: "martes, 3 de marzo" no dice de cuál.
+ */
+function fechaConAnio(fecha: string): string {
+  try {
+    const d = new Date(`${fecha}T00:00:00`);
+    return d.toLocaleDateString("es-ES", {
+      weekday: "short",
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    });
+  } catch {
+    return fecha;
   }
 }
 
@@ -1056,50 +1076,106 @@ export function ClientesView() {
               </div>
 
               {/*
-                Histórico de reservas. Cada línea lleva al día de esa reserva en
-                el plano de sala (`/sala/reservas?fecha=…`), que es donde se ve
-                en su mesa y en su contexto.
+                Histórico de reservas: TODAS, en cualquier estado, de la más
+                reciente a la más antigua. En columnas y no en una línea de
+                texto corrida porque así se lee en vertical — se ve de un
+                vistazo cuántas canceló o en qué canal reserva siempre.
+
+                Cada fila lleva al día de esa reserva en el plano de sala
+                (`/sala/reservas?fecha=…`), que es donde se ve en su mesa y en
+                su contexto.
               */}
               <div className="pt-2 border-t space-y-1.5">
                 <Label className="text-muted-foreground">
                   Histórico de reservas
+                  {fichaExtra.historico.length > 0 && (
+                    <span className="ml-1.5 font-normal">
+                      ({fichaExtra.historico.length})
+                    </span>
+                  )}
                 </Label>
                 {fichaExtra.historico.length === 0 ? (
                   <p className="text-muted-foreground">Sin reservas todavía.</p>
                 ) : (
-                  <ul className="space-y-1">
-                    {fichaExtra.historico.map((r) => (
-                      <li key={r.id}>
-                        <Link
-                          href={enlaceReserva(r.fecha, r.turno)}
-                          className="flex items-center justify-between gap-3 rounded-md border px-3 py-2 hover:bg-muted/40 transition-colors"
-                        >
-                          <span className="flex items-center gap-2">
-                            <span
-                              className={cn(
-                                "h-2 w-2 shrink-0 rounded-full",
-                                ESTADO_DOT_CLASS[r.estado as EstadoReserva],
-                              )}
-                            />
-                            <span className="font-medium">
-                              {fechaLarga(r.fecha)}
-                            </span>
-                            <span className="text-muted-foreground">
-                              · {r.hora}
-                            </span>
-                          </span>
-                          <span className="shrink-0 text-xs text-muted-foreground">
-                            {ESTADO_RESERVA_LABELS[r.estado as EstadoReserva] ??
-                              r.estado}
-                            {" · "}
-                            {r.personas}{" "}
-                            {r.personas === 1 ? "persona" : "personas"}
-                            {r.mesa ? ` · Mesa ${r.mesa}` : ""}
-                          </span>
-                        </Link>
-                      </li>
-                    ))}
-                  </ul>
+                  /*
+                    Alto acotado con scroll propio: un cliente habitual acumula
+                    cientos de reservas y sin tope empujan fuera de pantalla lo
+                    que hay debajo (etiquetas, botón de guardar).
+                  */
+                  <div className="max-h-72 overflow-y-auto rounded-md border">
+                    <table className="w-full text-xs">
+                      <thead className="sticky top-0 z-10 bg-muted/60 backdrop-blur-sm">
+                        <tr className="text-left text-muted-foreground">
+                          <th className="px-2 py-1.5 font-medium">Fecha</th>
+                          <th className="px-2 py-1.5 font-medium">Hora</th>
+                          <th className="px-2 py-1.5 font-medium">Estado</th>
+                          <th className="px-2 py-1.5 text-right font-medium">
+                            Pax
+                          </th>
+                          <th className="px-2 py-1.5 font-medium">Mesa</th>
+                          <th className="px-2 py-1.5 font-medium">Zona</th>
+                          <th className="px-2 py-1.5 font-medium">Canal</th>
+                          <th className="px-2 py-1.5 font-medium">Notas</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {fichaExtra.historico.map((r) => (
+                          <tr
+                            key={r.id}
+                            className="border-t hover:bg-muted/40 transition-colors"
+                          >
+                            {/*
+                              El enlace va dentro de la primera celda: envolver
+                              el <tr> entero en un <a> no es HTML válido dentro
+                              de una tabla y el navegador lo saca de sitio.
+                            */}
+                            <td className="px-2 py-1.5 whitespace-nowrap">
+                              <Link
+                                href={enlaceReserva(r.fecha, r.turno)}
+                                className="font-medium hover:underline"
+                              >
+                                {fechaConAnio(r.fecha)}
+                              </Link>
+                            </td>
+                            <td className="px-2 py-1.5 whitespace-nowrap text-muted-foreground">
+                              {r.hora || "—"}
+                            </td>
+                            <td className="px-2 py-1.5 whitespace-nowrap">
+                              <span className="flex items-center gap-1.5">
+                                <span
+                                  className={cn(
+                                    "h-2 w-2 shrink-0 rounded-full",
+                                    ESTADO_DOT_CLASS[r.estado as EstadoReserva],
+                                  )}
+                                />
+                                {ESTADO_RESERVA_LABELS[
+                                  r.estado as EstadoReserva
+                                ] ?? r.estado}
+                              </span>
+                            </td>
+                            <td className="px-2 py-1.5 text-right tabular-nums">
+                              {r.personas || "—"}
+                            </td>
+                            <td className="px-2 py-1.5 whitespace-nowrap text-muted-foreground">
+                              {r.mesa || "—"}
+                            </td>
+                            <td className="px-2 py-1.5 whitespace-nowrap text-muted-foreground">
+                              {zonaLabel(r.zona)}
+                            </td>
+                            <td className="px-2 py-1.5 whitespace-nowrap text-muted-foreground">
+                              {origenLabel(r.origen)}
+                            </td>
+                            <td
+                              className="max-w-[16rem] truncate px-2 py-1.5 text-muted-foreground"
+                              title={r.notas ?? undefined}
+                            >
+                              {r.notas || "—"}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 )}
               </div>
 
