@@ -87,10 +87,10 @@ export function CuponInputReserva({
           id="cupon-codigo"
           value={value}
           onChange={e => onChange(e.target.value.toUpperCase().replace(/\s+/g, "").slice(0, 6))}
-          placeholder="6 caracteres (ej. K7M2X9)"
+          placeholder="Mínimo 6 caracteres"
           maxLength={6}
           disabled={disabled}
-          className="font-mono uppercase pr-9"
+          className="pr-9 tracking-wide"
         />
         <span className="absolute right-2 top-1/2 -translate-y-1/2">
           {estado.kind === "validando" && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}

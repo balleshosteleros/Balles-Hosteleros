@@ -493,6 +493,18 @@ function PremiosPublico({ bloque }: { bloque: Extract<Bloque, { tipo: "premios" 
 }
 
 /** Viñeta en el color de marca para las listas de apoyo. */
+/** Logo de Google con sus colores: identifica el origen de la reseña. */
+function IconoGoogle({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 48 48" className={className} aria-label="Google">
+      <path fill="#4285F4" d="M45.1 24.5c0-1.6-.1-2.7-.4-4H24v7.3h12.1c-.2 1.9-1.6 4.8-4.5 6.8l6.9 5.3c4.1-3.8 6.6-9.4 6.6-15.4z" />
+      <path fill="#34A853" d="M24 46c5.9 0 10.9-2 14.5-5.3l-6.9-5.3c-1.8 1.3-4.3 2.2-7.6 2.2-5.8 0-10.7-3.8-12.5-9.1l-7.1 5.5C8.1 41.1 15.4 46 24 46z" />
+      <path fill="#FBBC05" d="M11.5 28.5c-.5-1.4-.7-2.9-.7-4.5s.3-3.1.7-4.5l-7.1-5.5C2.9 17 2 20.4 2 24s.9 7 2.4 10z" />
+      <path fill="#EA4335" d="M24 10.6c4.1 0 6.9 1.8 8.5 3.2l6.2-6C34.9 4.3 29.9 2 24 2 15.4 2 8.1 6.9 4.4 14l7.1 5.5c1.8-5.3 6.7-9 12.5-9z" />
+    </svg>
+  );
+}
+
 function Punto() {
   return (
     <span
@@ -1057,15 +1069,38 @@ function TestimoniosPublico({
                se veía como una caja gris flotando. */
             className="rounded-xl border border-white/10 bg-white/[0.04] p-7 text-left"
           >
-            {t.estrellas ? (
-              <div className="mb-3 text-lg" style={{ color: "var(--pw-primario)" }}>
-                {"★".repeat(t.estrellas)}
+            {/* Cabecera tipo Google: avatar + nombre + estrellas. Una reseña con
+                cara detrás se lee como de una persona real, no como un texto
+                puesto por la casa. */}
+            <div className="mb-4 flex items-center gap-3">
+              {t.foto_url ? (
+                /* eslint-disable-next-line @next/next/no-img-element */
+                <img
+                  src={t.foto_url}
+                  alt=""
+                  loading="lazy"
+                  decoding="async"
+                  className="h-11 w-11 shrink-0 rounded-full object-cover"
+                />
+              ) : (
+                <span
+                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-base font-bold text-black"
+                  style={{ backgroundColor: "var(--pw-primario)" }}
+                >
+                  {t.nombre.charAt(0).toUpperCase()}
+                </span>
+              )}
+              <div className="min-w-0">
+                <p className="truncate text-sm font-bold">{t.nombre}</p>
+                {t.estrellas ? (
+                  <p className="text-sm leading-none" style={{ color: "var(--pw-primario)" }}>
+                    {"★".repeat(t.estrellas)}
+                  </p>
+                ) : null}
               </div>
-            ) : null}
+              <IconoGoogle className="ml-auto h-5 w-5 shrink-0 opacity-70" />
+            </div>
             <p className="text-[15px] leading-relaxed opacity-85">{t.texto}</p>
-            <footer className="mt-5 text-sm font-bold uppercase tracking-wider" style={{ color: "var(--pw-primario)" }}>
-              {t.nombre}
-            </footer>
           </blockquote>
         ))}
       </div>

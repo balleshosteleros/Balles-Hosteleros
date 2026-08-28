@@ -9,7 +9,7 @@
  */
 
 import { useEffect, useState } from "react";
-import { Loader2, Clock } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -125,10 +125,7 @@ export function SelectorDisponibilidad({
           className="h-12 rounded-xl border-zinc-200 bg-white text-base data-[placeholder]:text-zinc-400 sm:h-11 sm:text-sm"
           style={horaSeleccionada ? { borderColor: accent } : undefined}
         >
-          <span className="flex items-center gap-2">
-            <Clock className="h-4 w-4 shrink-0 text-zinc-400" />
-            <SelectValue placeholder="Elige una hora" />
-          </span>
+          <SelectValue placeholder="Elige una hora" />
         </SelectTrigger>
         <SelectContent className="max-h-72">
           {grupos.map((g) => (
@@ -155,10 +152,6 @@ export function SelectorDisponibilidad({
           ))}
         </SelectContent>
       </Select>
-      <p className="text-xs text-zinc-400">
-        {libres} {libres === 1 ? "hora disponible" : "horas disponibles"} para {personas}{" "}
-        {personas === 1 ? "persona" : "personas"}.
-      </p>
     </div>
   );
 }
