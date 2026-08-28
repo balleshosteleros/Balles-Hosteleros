@@ -275,12 +275,10 @@ export function SubmoduleToolbar({
             variant="primary"
             size="sm"
             onClick={onNuevo}
-            className="gap-1.5 px-2 md:px-3"
-            title={textoNuevo}
-            aria-label={textoNuevo}
+            className="gap-1.5"
           >
             <Plus className="h-4 w-4" />
-            <span className="hidden md:inline">{textoNuevo}</span>
+            {textoNuevo}
           </Button>
         )}
         {extraIzquierda}
@@ -288,13 +286,13 @@ export function SubmoduleToolbar({
 
       <div className="ml-auto flex flex-nowrap md:flex-wrap items-center gap-1.5 md:gap-2 flex-1 md:flex-none min-w-0">
         {tieneBusqueda && (
-          <div className="relative flex-1 min-w-0 md:w-64 md:flex-none">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <div className="relative flex-1 min-w-[72px] md:w-64 md:flex-none">
+            <Search className="absolute left-2 md:left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
               placeholder={placeholderBusqueda}
               value={busqueda}
               onChange={(e) => onBusquedaChange?.(e.target.value)}
-              className="pl-9 h-9"
+              className="pl-7 md:pl-9 h-9 text-xs md:text-sm"
             />
           </div>
         )}

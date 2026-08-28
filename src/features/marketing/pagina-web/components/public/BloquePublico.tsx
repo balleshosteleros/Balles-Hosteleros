@@ -150,7 +150,9 @@ function InstagramPublico({ bloque }: { bloque: Extract<Bloque, { tipo: "instagr
     bloque.datos;
   const handle = usuario.replace(/^@/, "");
   const href = `https://www.instagram.com/${handle}`;
-  const fotos = (feed ?? []).slice(0, 6);
+  // 9 fotos = tres filas de tres, que es lo que llena la pantalla del móvil.
+  // Con 6 quedaba un tercio inferior en negro, como si el perfil no cargara.
+  const fotos = (feed ?? []).slice(0, 9);
 
   return (
     <section className="relative overflow-hidden px-4 py-20 md:py-28" id="instagram">
@@ -166,16 +168,31 @@ function InstagramPublico({ bloque }: { bloque: Extract<Bloque, { tipo: "instagr
         <h2 className="pw-h2 text-center font-extrabold">{titulo}</h2>
         {frase ? <p className="mx-auto mt-4 max-w-2xl text-center opacity-75">{frase}</p> : null}
 
-        <div className="relative mt-14 flex justify-center">
-          {/* Maqueta de iPhone con el perfil abierto, sujeta por una mano */}
-          <div className="relative z-10 w-[260px] shrink-0 md:w-[300px]">
-            <div className="rounded-[42px] border-[10px] border-neutral-800 bg-black shadow-[0_30px_80px_rgba(0,0,0,0.75)]">
-              {/* Muesca superior con la hora y los iconos de estado, como en
-                  cualquier iPhone: es lo que hace que se lea como una captura
-                  de pantalla real y no como un dibujo de un teléfono. */}
+        {/* Foto real de una mano sujetando el móvil, con el perfil montado
+            DENTRO de la pantalla. Las medidas (33%/19% y 37%×58%) son la
+            posición exacta de la pantalla en esta foto: si algún día se cambia
+            la imagen, hay que volver a medirlas o el perfil bailará.
+            Foto de Unsplash, libre para uso comercial. */}
+        <div className="relative mx-auto mt-14 w-full max-w-[520px]">
+          {/* Los bordes ya vienen fundidos a negro EN el propio archivo: hacerlo
+              con mask-image dependía del navegador y no siempre se aplicaba. */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/mano-movil.jpg"
+            alt=""
+            aria-hidden
+            loading="lazy"
+            decoding="async"
+            className="w-full select-none"
+          />
+
+          {/* La pantalla: aquí dentro va el perfil */}
+          <div className="absolute left-[33%] top-[19%] h-[58%] w-[37%] overflow-hidden bg-black">
+            <div className="absolute inset-0 origin-top-left scale-[0.62] [height:161.3%] [width:161.3%]">
+              {/* Hora e iconos de estado. La muesca NO se dibuja: ya viene en
+                  la foto del teléfono. */}
               <div className="relative flex h-7 items-center justify-between px-4 pt-1">
                 <span className="text-[10px] font-semibold text-white">9:41</span>
-                <span className="absolute left-1/2 top-0 h-[18px] w-[95px] -translate-x-1/2 rounded-b-2xl bg-neutral-800" />
                 <span className="flex items-center gap-1 text-white">
                   <svg viewBox="0 0 18 12" className="h-2.5 w-4" fill="currentColor">
                     <rect x="0" y="8" width="3" height="4" rx="1" />
@@ -236,9 +253,9 @@ function InstagramPublico({ bloque }: { bloque: Extract<Bloque, { tipo: "instagr
                         <b className="text-[13px] text-white">{seguidores}</b> seguidores
                       </span>
                     ) : null}
-                    <span className="flex flex-col">
-                      <b className="text-[13px] text-white">·</b> siguiendo
-                    </span>
+                    {/* NO se pinta "siguiendo" ni la fila de "le siguen fulano
+                        y mengano": esas son cuentas de personas reales y no
+                        pintan nada en la web pública de un restaurante. */}
                   </div>
                 </div>
 
