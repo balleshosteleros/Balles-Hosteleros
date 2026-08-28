@@ -85,6 +85,8 @@ export interface TestimoniosDatos {
 
 export interface CtaDatos {
   titulo: string;
+  /** Fotos de fondo, difuminadas (p. ej. el equipo en "Únete a nosotros"). */
+  fondo_imagenes?: Array<{ url: string; alt: string }>;
   texto?: string;
   boton: { label: string; href: string; variante: "primary" | "ghost" };
   /**

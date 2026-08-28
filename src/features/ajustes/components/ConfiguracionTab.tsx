@@ -94,7 +94,6 @@ export const ConfiguracionTab = forwardRef<ConfiguracionTabHandle, { hideSaveBut
             value={d.whatsapp}
             onChange={(v) => setD("whatsapp", v)}
             placeholder="612 345 678"
-            ayuda="Móvil con WhatsApp. Es el número del botón flotante de la web: si se deja vacío, el botón no aparece."
           />
         </CardContent>
       </Card>

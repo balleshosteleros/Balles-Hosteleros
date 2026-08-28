@@ -87,6 +87,10 @@ export const testimoniosDatosSchema = z.object({
 
 export const ctaDatosSchema = z.object({
   titulo: z.string().min(1).max(160),
+  fondo_imagenes: z
+    .array(z.object({ url: z.string().url().max(1000), alt: z.string().max(200) }))
+    .max(8)
+    .optional(),
   texto: z.string().max(400).optional(),
   boton: z.object({
     label: z.string().min(1).max(60),

@@ -1431,53 +1431,8 @@ function MapaPublico({
   );
 }
 
-/**
- * Icono de red social, dibujado inline.
- *
- * Se usan los trazados de marca (Instagram, Facebook, TikTok, WhatsApp) en
- * `currentColor` para que hereden el color del pie y del hover. Inline y no un
- * paquete de iconos: son cuatro y así no se carga una librería entera.
- */
-function IconoRed({ red }: { red: string }) {
-  const k = red.toLowerCase();
-  const cls = "h-[18px] w-[18px]";
-  if (k.includes("insta")) {
-    return (
-      <svg viewBox="0 0 24 24" className={cls} fill="currentColor" aria-hidden>
-        <path d="M12 2.16c3.2 0 3.58.01 4.85.07 1.17.05 1.8.25 2.23.41.56.22.96.48 1.38.9.42.42.68.82.9 1.38.16.42.36 1.06.41 2.23.06 1.27.07 1.65.07 4.85s-.01 3.58-.07 4.85c-.05 1.17-.25 1.8-.41 2.23-.22.56-.48.96-.9 1.38-.42.42-.82.68-1.38.9-.42.16-1.06.36-2.23.41-1.27.06-1.65.07-4.85.07s-3.58-.01-4.85-.07c-1.17-.05-1.8-.25-2.23-.41-.56-.22-.96-.48-1.38-.9-.42-.42-.68-.82-.9-1.38-.16-.42-.36-1.06-.41-2.23C2.17 15.58 2.16 15.2 2.16 12s.01-3.58.07-4.85c.05-1.17.25-1.8.41-2.23.22-.56.48-.96.9-1.38.42-.42.82-.68 1.38-.9.42-.16 1.06-.36 2.23-.41C8.42 2.17 8.8 2.16 12 2.16Zm0 1.98c-3.14 0-3.51.01-4.75.07-.9.04-1.39.19-1.71.32-.43.17-.74.37-1.06.69-.32.32-.52.63-.69 1.06-.13.32-.28.81-.32 1.71-.06 1.24-.07 1.61-.07 4.75s.01 3.51.07 4.75c.4.9.19 1.39.32 1.71.17.43.37.74.69 1.06.32.32.63.52 1.06.69.32.13.81.28 1.71.32 1.24.06 1.61.07 4.75.07s3.51-.01 4.75-.07c.9-.04 1.39-.19 1.71-.32.43-.17.74-.37 1.06-.69.32-.32.52-.63.69-1.06.13-.32.28-.81.32-1.71.06-1.24.07-1.61.07-4.75s-.01-3.51-.07-4.75c-.04-.9-.19-1.39-.32-1.71a2.86 2.86 0 0 0-.69-1.06 2.86 2.86 0 0 0-1.06-.69c-.32-.13-.81-.28-1.71-.32-1.24-.06-1.61-.07-4.75-.07Zm0 3.37a4.49 4.49 0 1 1 0 8.98 4.49 4.49 0 0 1 0-8.98Zm0 7.4a2.91 2.91 0 1 0 0-5.82 2.91 2.91 0 0 0 0 5.82Zm5.72-7.58a1.05 1.05 0 1 1-2.1 0 1.05 1.05 0 0 1 2.1 0Z" />
-      </svg>
-    );
-  }
-  if (k.includes("face")) {
-    return (
-      <svg viewBox="0 0 24 24" className={cls} fill="currentColor" aria-hidden>
-        <path d="M22 12.06C22 6.5 17.52 2 12 2S2 6.5 2 12.06c0 5.02 3.66 9.18 8.44 9.94v-7.03H7.9v-2.91h2.54V9.85c0-2.52 1.49-3.91 3.77-3.91 1.09 0 2.24.2 2.24.2v2.46h-1.26c-1.24 0-1.63.78-1.63 1.57v1.89h2.78l-.44 2.91h-2.34V22c4.78-.76 8.44-4.92 8.44-9.94Z" />
-      </svg>
-    );
-  }
-  if (k.includes("tik")) {
-    return (
-      <svg viewBox="0 0 24 24" className={cls} fill="currentColor" aria-hidden>
-        <path d="M16.6 5.82A4.28 4.28 0 0 1 15.54 3h-3.09v12.4a2.59 2.59 0 0 1-2.59 2.5 2.59 2.59 0 1 1 .77-5.06V9.7a5.68 5.68 0 1 0 4.91 5.63V9.01a7.35 7.35 0 0 0 4.3 1.38V7.3a4.29 4.29 0 0 1-3.24-1.48Z" />
-      </svg>
-    );
-  }
-  if (k.includes("whats")) {
-    return (
-      <svg viewBox="0 0 24 24" className={cls} fill="currentColor" aria-hidden>
-        <path d="M12.04 2c-5.5 0-9.96 4.46-9.96 9.96 0 1.76.46 3.48 1.34 5L2 22l5.16-1.35a9.92 9.92 0 0 0 4.88 1.25h.01c5.5 0 9.96-4.46 9.96-9.96 0-2.66-1.04-5.16-2.92-7.04A9.89 9.89 0 0 0 12.04 2Zm0 18.15h-.01a8.26 8.26 0 0 1-4.2-1.15l-.3-.18-3.12.82.83-3.04-.2-.31a8.25 8.25 0 0 1-1.27-4.41c0-4.57 3.72-8.28 8.29-8.28 2.21 0 4.29.86 5.85 2.43a8.22 8.22 0 0 1 2.42 5.86c0 4.57-3.72 8.26-8.29 8.26Zm4.54-6.19c-.25-.13-1.47-.72-1.7-.81-.23-.08-.39-.12-.56.13-.16.24-.64.8-.79.97-.14.16-.29.19-.54.06-.25-.12-1.05-.39-2-1.23-.74-.66-1.24-1.47-1.38-1.72-.15-.25-.02-.38.11-.5.11-.11.25-.29.37-.44.12-.15.16-.25.25-.41.08-.17.04-.31-.02-.44-.06-.12-.56-1.35-.77-1.84-.2-.49-.4-.42-.56-.43-.14 0-.31-.01-.47-.01a.9.9 0 0 0-.66.31c-.22.24-.87.85-.87 2.08s.89 2.41 1.02 2.58c.12.16 1.75 2.67 4.23 3.74.59.26 1.05.41 1.41.52.59.19 1.13.16 1.56.1.47-.07 1.47-.6 1.68-1.18.2-.58.2-1.08.14-1.18-.06-.11-.22-.17-.47-.29Z" />
-      </svg>
-    );
-  }
-  return (
-    <svg viewBox="0 0 24 24" className={cls} fill="currentColor" aria-hidden>
-      <circle cx="12" cy="12" r="9" />
-    </svg>
-  );
-}
-
 function FooterPublico({ bloque }: { bloque: Extract<Bloque, { tipo: "footer" }> }) {
-  const { columnas, redes, texto_legal } = bloque.datos;
+  const { columnas } = bloque.datos;
   return (
     /* `id="contacto"`: la barra superior enlaza aquí (href="#contacto"), donde
        viven teléfono, correo y horarios. */
@@ -1511,38 +1466,10 @@ function FooterPublico({ bloque }: { bloque: Extract<Bloque, { tipo: "footer" }>
           </div>
         ))}
       </div>
-      {redes && redes.length ? (
-        /* ICONOS de marca, no el nombre de la red subrayado: en un pie, "instagram"
-           escrito parece un enlace legal más y se pierde entre "Aviso legal" y
-           "Cookies". El icono se reconoce sin leer. */
-        <div className="mx-auto mt-10 flex max-w-6xl justify-center gap-3">
-          {redes.map((r, i) => (
-            <a
-              key={i}
-              href={r.url}
-              target="_blank"
-              rel="noreferrer noopener"
-              aria-label={r.red}
-              title={r.red}
-              className="flex h-11 w-11 items-center justify-center rounded-full border border-white/15 text-white/75 transition-all hover:-translate-y-0.5 hover:text-black"
-              style={{ ["--hov" as string]: "var(--pw-primario)" }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.backgroundColor = "var(--pw-primario)";
-                e.currentTarget.style.borderColor = "var(--pw-primario)";
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.backgroundColor = "transparent";
-                e.currentTarget.style.borderColor = "rgba(255,255,255,0.15)";
-              }}
-            >
-              <IconoRed red={r.red} />
-            </a>
-          ))}
-        </div>
-      ) : null}
-      {texto_legal ? (
-        <p className="max-w-6xl mx-auto mt-6 text-center text-xs opacity-60">{texto_legal}</p>
-      ) : null}
+      {/* Ni iconos de redes ni texto legal aquí: ambos viven ahora en el pie
+          del shell (PieLegal), que cierra TODAS las páginas —incluidas las
+          legales, que no montan este bloque—. Tenerlos en los dos sitios
+          duplicaba los iconos en la portada. */}
     </footer>
   );
 }

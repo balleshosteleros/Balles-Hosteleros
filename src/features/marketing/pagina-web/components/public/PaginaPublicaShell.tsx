@@ -40,6 +40,11 @@ export function PaginaPublicaShell({
   hrefPoliticaCookies,
 }: Props) {
   const ordenados = [...bloques].sort((a, b) => a.orden - b.orden);
+  // El copyright se declara en el bloque `footer` pero se pinta en el pie del
+  // shell, que cierra TODAS las páginas (las legales no montan ese bloque).
+  const bloqueFooter = ordenados.find((b) => b.tipo === "footer");
+  const textoLegal =
+    bloqueFooter?.tipo === "footer" ? bloqueFooter.datos.texto_legal ?? null : null;
 
   const primario = branding?.color_primario ?? "#d0a000";
   const fondo = branding?.color_fondo ?? "#0b0b0c";
@@ -77,7 +82,7 @@ export function PaginaPublicaShell({
           <BloquePublico key={b.id} bloque={b} contexto={contexto} />
         ))}
       </main>
-      <PieLegal redes={contexto?.redes ?? null} />
+      <PieLegal redes={contexto?.redes ?? null} textoLegal={textoLegal} />
       <BotonWhatsApp url={contexto?.redes?.whatsapp ?? null} />
       <BannerCookies hrefPolitica={hrefPoliticaCookies} />
       <FuenteMarca nombre={tipografia} />
@@ -95,7 +100,7 @@ export function PaginaPublicaShell({
  * tiene que ser accesible desde cualquier página (RGPD) y el enlace de cookies
  * es la vía para retirar el consentimiento (AEPD).
  */
-function PieLegal({ redes }: { redes?: PaginaContexto["redes"] }) {
+function PieLegal({ redes, textoLegal }: { redes?: PaginaContexto["redes"]; textoLegal?: string | null }) {
   return (
     <nav className="border-t border-white/10 px-4 py-8">
       {redes ? <RedesPie redes={redes} /> : null}
@@ -111,6 +116,12 @@ function PieLegal({ redes }: { redes?: PaginaContexto["redes"] }) {
         </a>
         <EnlaceConfigurarCookies className="transition-colors hover:text-white/90" />
       </div>
+      {/* Copyright de la empresa, justo encima de la firma del software: cierra
+          la web con el nombre del restaurante y deja la marca de tecnología
+          debajo, en segundo plano. */}
+      {textoLegal ? (
+        <p className="mt-6 text-center text-xs text-white/45">{textoLegal}</p>
+      ) : null}
       {/* Firma discreta del software. Deliberadamente pequeña y sin logo: es una
           marca de tecnología, no un anuncio; la web es del restaurante. */}
       <p className="mt-5 text-center text-[11px] text-white/25">
