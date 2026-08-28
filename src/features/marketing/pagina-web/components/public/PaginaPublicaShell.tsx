@@ -11,6 +11,12 @@ export interface PaginaContexto {
   empresaSlug?: string | null;
   /** Isotipo de la empresa: marcador del mapa. */
   logoUrl?: string | null;
+  /**
+   * Portal de empleo abierto. `false` esconde el enlace del menú aunque la web
+   * monte la llamada a empleo: un cliente puede no captar personal por aquí, y
+   * enviarle visitantes a un portal sin vacantes es una vía muerta.
+   */
+  empleoActivo?: boolean;
   /** Enlaces ya normalizados desde Ajustes → datos generales. */
   redes?: {
     instagram: string | null;
@@ -60,7 +66,40 @@ export function PaginaPublicaShell({
 
   const hero = ordenados.find((b) => b.tipo === "hero");
   const tituloNav = hero?.tipo === "hero" ? hero.datos.subtitulo ?? "" : "";
-  const hayReservas = ordenados.some((b) => b.tipo === "reservas" && b.visible);
+
+  // El menú SALE DE LA WEB, no está cableado: cada enlace aparece solo si su
+  // sección existe y está visible. Antes "Ubicación" o "Contacto" se pintaban
+  // siempre, así que un cliente que quitara el mapa dejaba en la barra un
+  // enlace que no llevaba a ninguna parte.
+  const visible = (tipo: Bloque["tipo"]) =>
+    ordenados.some((b) => b.tipo === tipo && b.visible);
+  const hayReservas = visible("reservas");
+  const nav: Array<{ href: string; label: string }> = [];
+  // La carta es un portal aparte (/carta/slug); el bloque de la web solo es la
+  // llamada. Sin ese bloque, el cliente no quiere enseñar carta.
+  if (contexto?.empresaSlug && (visible("collage_carta") || visible("menu"))) {
+    nav.push({ href: `/carta/${contexto.empresaSlug}`, label: "Carta" });
+  }
+  if (visible("mapa")) nav.push({ href: "#mapa", label: "Ubicación" });
+  if (visible("footer")) nav.push({ href: "#contacto", label: "Contacto" });
+  // Empleo: igual que la carta, es un portal propio. Se enseña solo si la web
+  // monta la llamada a empleo; si el cliente no capta personal, no aparece.
+  if (contexto?.empresaSlug && contexto?.empleoActivo !== false && visible("cta")) {
+    nav.push({ href: `/empleo/${contexto.empresaSlug}?o=WEB`, label: "Empleo" });
+  }
+
+  // Anclas que EXISTEN en esta web. Un botón que apunta a "#reservas" cuando el
+  // cliente ha quitado la sección de reservas deja al visitante donde estaba,
+  // sin que nada se mueva: parece que la web está rota. Aquí se detecta y el
+  // botón simplemente no se pinta.
+  const anclasVivas = new Set<string>();
+  if (hayReservas) anclasVivas.add("#reservas");
+  if (visible("mapa")) anclasVivas.add("#mapa");
+  if (visible("footer")) anclasVivas.add("#contacto");
+  if (visible("collage_carta")) anclasVivas.add("#carta");
+  if (visible("historia")) anclasVivas.add("#historia");
+
+  const bloquesLimpios = ordenados.map((b) => limpiarEnlacesRotos(b, anclasVivas));
 
   return (
     <div
@@ -76,9 +115,9 @@ export function PaginaPublicaShell({
         } as React.CSSProperties
       }
     >
-      <NavPublica logo={logo} titulo={tituloNav} hayReservas={hayReservas} slug={contexto?.empresaSlug ?? null} />
+      <NavPublica logo={logo} titulo={tituloNav} hayReservas={hayReservas} enlaces={nav} />
       <main>
-        {ordenados.map((b) => (
+        {bloquesLimpios.map((b) => (
           <BloquePublico key={b.id} bloque={b} contexto={contexto} />
         ))}
       </main>
@@ -89,6 +128,37 @@ export function PaginaPublicaShell({
       <EstilosPublicos />
     </div>
   );
+}
+
+/**
+ * Quita del bloque los enlaces internos que apuntan a una sección que esta web
+ * no tiene. Devuelve el bloque tal cual si no hay nada que limpiar, para no
+ * crear objetos nuevos en cada render sin motivo.
+ *
+ * Solo mira anclas internas ("#loquesea"): un enlace externo o a otro portal
+ * (/carta, /empleo) no se toca, porque su destino no vive en esta página.
+ */
+function limpiarEnlacesRotos(bloque: Bloque, anclasVivas: Set<string>): Bloque {
+  const rota = (href?: string) =>
+    typeof href === "string" && href.startsWith("#") && !anclasVivas.has(href);
+
+  if (bloque.tipo === "hero" && rota(bloque.datos.cta?.href)) {
+    const { cta: _descartado, ...resto } = bloque.datos;
+    return { ...bloque, datos: resto };
+  }
+  if (bloque.tipo === "cta" && rota(bloque.datos.boton?.href)) {
+    // El botón ES la sección: sin destino no tiene sentido enseñarla.
+    return { ...bloque, visible: false };
+  }
+  if (bloque.tipo === "footer") {
+    const columnas = bloque.datos.columnas?.map((c) => ({
+      ...c,
+      items: c.items.filter((i) => !rota(i.href)),
+    }));
+    const cambia = columnas?.some((c, i) => c.items.length !== bloque.datos.columnas?.[i]?.items.length);
+    if (cambia) return { ...bloque, datos: { ...bloque.datos, columnas: columnas ?? [] } };
+  }
+  return bloque;
 }
 
 /**
@@ -143,13 +213,13 @@ function NavPublica({
   logo,
   titulo,
   hayReservas,
-  slug,
+  enlaces,
 }: {
   logo: string | null;
   titulo: string;
   hayReservas: boolean;
-  /** Slug de la empresa: enlaza los portales (/carta, /empleo). */
-  slug: string | null;
+  /** Enlaces ya filtrados: solo los que tienen sección detrás. */
+  enlaces: Array<{ href: string; label: string }>;
 }) {
   const [solida, setSolida] = useState(false);
 
@@ -198,25 +268,15 @@ function NavPublica({
         <nav
           className="ml-auto hidden items-center gap-8 md:flex"
         >
-          {slug ? (
-            <a href={`/carta/${slug}`} className="text-[13px] font-semibold uppercase tracking-wider text-white/85 transition-colors hover:text-white">
-              Carta
-            </a>
-          ) : null}
-          <a href="#mapa" className="text-[13px] font-semibold uppercase tracking-wider text-white/85 transition-colors hover:text-white">
-            Ubicación
-          </a>
-          <a href="#contacto" className="text-[13px] font-semibold uppercase tracking-wider text-white/85 transition-colors hover:text-white">
-            Contacto
-          </a>
-          {slug ? (
+          {enlaces.map((e) => (
             <a
-              href={`/empleo/${slug}?o=WEB`}
+              key={e.href}
+              href={e.href}
               className="text-[13px] font-semibold uppercase tracking-wider text-white/85 transition-colors hover:text-white"
             >
-              Empleo
+              {e.label}
             </a>
-          ) : null}
+          ))}
         </nav>
         {hayReservas ? (
           <a
