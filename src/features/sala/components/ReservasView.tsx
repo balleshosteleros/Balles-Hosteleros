@@ -4284,10 +4284,16 @@ export function ReservasView() {
                 />
               </div>
 
-              {/* ── Columna izquierda: la reserva ───────────────────────── */}
-              <div className="space-y-3 md:border-r md:pr-6">
+              {/* ── Columna izquierda: la reserva ─────────────────────────
+                  Las dos mitades van sobre fondos distintos porque cuentan
+                  cosas distintas: a la izquierda lo que le pasa a ESTA reserva
+                  (mesa, hora, estado, sus etiquetas, sus correos), a la derecha
+                  la persona, que sigue existiendo entre reserva y reserva. Sin
+                  esa separacion las dos "Etiquetas" y las dos "Actividad" se
+                  leian como lo mismo. */}
+              <div className="space-y-3 rounded-lg border bg-muted/25 p-3">
                 <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  Reserva
+                  Esta reserva
                 </h3>
                 <div className="grid grid-cols-2 gap-3">
                   {/* Fecha y hora editables: mover una reserva era el caso
@@ -4438,11 +4444,29 @@ export function ReservasView() {
                   <ReservaExternalBadge reserva={selectedReserva} />
                 </div>
                 <div className="pt-2 border-t space-y-1.5">
-                  <Label className="text-muted-foreground text-xs">Etiquetas</Label>
+                  {/* "de la reserva" en el titulo: el cliente tiene sus PROPIAS
+                      etiquetas en su columna, y sin apellido las dos se leian
+                      como la misma cosa. */}
+                  <Label className="text-muted-foreground text-xs">
+                    Etiquetas de la reserva
+                  </Label>
                   <EtiquetasPanel
                     scope="reserva"
                     entityId={selectedReserva.id}
                     clienteVinculadoId={selectedReserva.clienteId ?? null}
+                  />
+                </div>
+
+                {/* Correos y actividad de ESTA reserva: viven en la columna de
+                    la reserva, que es de lo que hablan. Antes estaban en la del
+                    cliente y parecian suyos. */}
+                <div className="pt-2 border-t">
+                  <HistoricoEmailsReserva reservaId={selectedReserva.id} />
+                </div>
+                <div className="pt-2 border-t">
+                  <ActividadReserva
+                    key={actividadVersion}
+                    reservaId={selectedReserva.id}
                   />
                 </div>
                 <div className="space-y-2 pt-2 border-t">
@@ -4468,8 +4492,8 @@ export function ReservasView() {
               </div>
 
               {/* ── Columna derecha: el cliente ─────────────────────────── */}
-              <div className="space-y-3">
-                <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              <div className="space-y-3 rounded-lg border border-sky-500/25 bg-sky-500/[0.06] p-3">
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-sky-700 dark:text-sky-300">
                   Ficha del cliente
                 </h3>
 
@@ -4542,24 +4566,29 @@ export function ReservasView() {
                     más abajo y cuenta otra cosa: lo que le ha pasado a ESTA
                     reserva. Un walk-in sin ficha no tiene actividad de cliente. */}
                 {selectedReserva.clienteId && (
-                  <div className="pt-2 border-t">
-                    <ActividadCliente
-                      key={`${selectedReserva.clienteId}-${actividadVersion}`}
-                      clienteId={selectedReserva.clienteId}
-                    />
-                  </div>
+                  <>
+                    {/* Etiquetas DE LA PERSONA (alergias, VIP, moroso...): le
+                        acompanan en todas sus reservas, a diferencia de las de
+                        la reserva, que valen solo para esa noche. */}
+                    <div className="pt-2 border-t border-sky-500/20 space-y-1.5">
+                      <Label className="text-muted-foreground text-xs">
+                        Etiquetas del cliente
+                      </Label>
+                      <EtiquetasPanel
+                        scope="cliente"
+                        entityId={selectedReserva.clienteId}
+                        clienteVinculadoId={selectedReserva.clienteId}
+                      />
+                    </div>
+                    <div className="pt-2 border-t border-sky-500/20">
+                      <ActividadCliente
+                        key={`${selectedReserva.clienteId}-${actividadVersion}`}
+                        clienteId={selectedReserva.clienteId}
+                      />
+                    </div>
+                  </>
                 )}
 
-                <div className="pt-2 border-t">
-                  <HistoricoEmailsReserva reservaId={selectedReserva.id} />
-                </div>
-
-                <div className="pt-2 border-t">
-                  <ActividadReserva
-                    key={actividadVersion}
-                    reservaId={selectedReserva.id}
-                  />
-                </div>
               </div>
 
               {/* Guardar: abajo del todo y a lo ancho de las dos columnas.
