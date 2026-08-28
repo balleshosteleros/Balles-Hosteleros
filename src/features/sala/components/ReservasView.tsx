@@ -256,8 +256,15 @@ function addMonths(iso: string, n: number) {
  * salía como chip pegado al nombre, que se leía como parte del cliente) y el
  * estado tiene sitio suficiente para leerse entero sin recortarse.
  */
+/**
+ * Rejilla de la lista. El panel mide 460 px, así que el ancho fijo tiene que
+ * dejar sitio de verdad al nombre: con columnas más anchas el nombre se
+ * quedaba en ~44 px y los datos se pisaban unos a otros. Reparto: hora 50,
+ * mesa 62, pax 26, origen 56, estado 86 + 5 huecos de 6 px + 24 de padding =
+ * 334 px, y los ~126 restantes son para el nombre.
+ */
 const LISTA_GRID =
-  "grid grid-cols-[64px_68px_minmax(0,1fr)_36px_76px_96px] gap-2 items-center";
+  "grid grid-cols-[50px_62px_minmax(0,1fr)_26px_56px_86px] gap-1.5 items-center";
 
 /**
  * El origen viene del canal por el que entró la reserva (PORTAL_PROPIO,
@@ -278,9 +285,9 @@ function origenLabel(origen: string | null | undefined): string {
 
 function StatusDot({ estado }: { estado: EstadoReserva }) {
   return (
-    <span className="flex items-center gap-1.5 min-w-0">
+    <span className="flex min-w-0 items-center gap-1.5 overflow-hidden">
       <span className={cn("w-2.5 h-2.5 rounded-full shrink-0", ESTADO_DOT_CLASS[estado])} />
-      <span className="truncate text-[11px]" title={ESTADO_RESERVA_LABELS[estado]}>
+      <span className="truncate text-[11px] leading-tight" title={ESTADO_RESERVA_LABELS[estado]}>
         {ESTADO_RESERVA_LABELS[estado]}
       </span>
     </span>
@@ -3720,8 +3727,12 @@ export function ReservasView() {
             </div>
           )}
           <div className={cn(LISTA_GRID, "px-3 py-2 text-[10px] font-semibold text-muted-foreground border-b bg-muted/30 uppercase tracking-wider")}>
-            <span>Hora</span><span>Mesa</span><span>Nombre</span>
-            <span className="text-center">Pax</span><span>Origen</span><span>Estado</span>
+            <span className="truncate">Hora</span>
+            <span className="truncate">Mesa</span>
+            <span className="truncate">Nombre</span>
+            <span className="truncate text-center">Pax</span>
+            <span className="truncate">Origen</span>
+            <span className="truncate">Estado</span>
           </div>
           <div className="flex-1 overflow-y-auto">
             {reservasFiltradas.length === 0 && <p className="text-xs text-muted-foreground text-center py-8">Sin reservas para este turno</p>}
@@ -3744,14 +3755,17 @@ export function ReservasView() {
                       {/* La hora es lo primero que se busca en una lista de
                           reservas: va en grande y en tabular para que las
                           cifras queden alineadas de fila a fila. */}
-                      <span className="text-base font-semibold tabular-nums">
+                      <span className="truncate text-[15px] font-semibold tabular-nums">
                         {r.hora.slice(0, 5)}
                       </span>
                       {/* Mesa y zona, una encima de otra: son el mismo dato
                           (dónde se sienta) y antes competían en dos columnas.
                           La mesa manda, la zona la acompaña en pequeño. */}
                       <span className="flex min-w-0 flex-col leading-tight">
-                        <span className="font-mono text-base font-bold">
+                        <span
+                          className="truncate font-mono text-[15px] font-bold leading-tight"
+                          title={mesa?.codigo ?? undefined}
+                        >
                           {mesa?.codigo ?? "—"}
                         </span>
                         <span className="truncate text-[10px] text-muted-foreground">
@@ -3774,8 +3788,8 @@ export function ReservasView() {
                           </span>
                         )}
                       </span>
-                      <span className="text-center tabular-nums">{r.comensales}</span>
-                      <span className="truncate text-[11px] text-muted-foreground" title={origenLabel(r.origen)}>
+                      <span className="min-w-0 text-center tabular-nums">{r.comensales}</span>
+                      <span className="min-w-0 truncate text-[11px] text-muted-foreground" title={origenLabel(r.origen)}>
                         {origenLabel(r.origen)}
                       </span>
                       <StatusDot estado={r.estado} />
