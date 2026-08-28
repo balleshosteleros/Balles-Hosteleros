@@ -492,6 +492,17 @@ function PremiosPublico({ bloque }: { bloque: Extract<Bloque, { tipo: "premios" 
   );
 }
 
+/** Viñeta en el color de marca para las listas de apoyo. */
+function Punto() {
+  return (
+    <span
+      aria-hidden
+      className="inline-block h-1.5 w-1.5 shrink-0 rounded-full"
+      style={{ backgroundColor: "var(--pw-primario)" }}
+    />
+  );
+}
+
 function IframeAutoAlto({ src, titulo }: { src: string; titulo: string }) {
   const [alto, setAlto] = useState(720);
   const ref = useRef<HTMLIFrameElement | null>(null);
@@ -876,40 +887,74 @@ function ReservasPublico({
   const { modo, url } = bloque.datos;
   const slug = contexto?.empresaSlug ?? null;
   return (
-    <section className="py-20 md:py-28 px-4 max-w-5xl mx-auto text-center" id="reservas">
-      <h2 className="pw-h2 font-extrabold">{bloque.datos.titulo ?? "Reservas"}</h2>
-      {bloque.datos.subtitulo ? (
-        <p className="mt-3 text-muted-foreground max-w-2xl mx-auto">
-          {bloque.datos.subtitulo}
-        </p>
-      ) : null}
-      <div className="mb-4" />
-      {modo === "portal_propio" ? (
-        slug ? (
-          // Motor propio: mismo origen, así que no hace falta postMessage para
-          // el alto — le damos sitio suficiente y el iframe scrollea solo.
-          <IframeAutoAlto src={`/reservar/${slug}/embed`} titulo="Reservar mesa" />
-        ) : (
-          <p className="text-sm text-muted-foreground">
-            (Configura el slug de la empresa para activar las reservas)
+    <section className="relative overflow-hidden px-4 py-20 md:py-28" id="reservas">
+      {/* Resplandor de marca detrás del formulario: separa visualmente la
+          sección de las contiguas sin meter otra franja de color. */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute left-1/2 top-24 h-[420px] w-[820px] -translate-x-1/2 rounded-full opacity-[0.10] blur-[130px]"
+        style={{ backgroundColor: "var(--pw-primario)" }}
+      />
+
+      <div className="relative mx-auto max-w-4xl text-center">
+        <span className="mx-auto mb-6 block h-px w-14" style={{ backgroundColor: "var(--pw-primario)" }} />
+        <h2 className="pw-h2 font-extrabold">{bloque.datos.titulo ?? "Reservas"}</h2>
+        {bloque.datos.subtitulo ? (
+          <p className="mx-auto mt-5 max-w-2xl text-base opacity-75 md:text-lg">
+            {bloque.datos.subtitulo}
           </p>
-        )
-      ) : modo === "enlace_externo" && url ? (
-        <a
-          href={url}
-          className="inline-block rounded-md bg-black text-white px-6 py-3 font-semibold"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Reservar ahora
-        </a>
-      ) : modo === "embed_cover" && url ? (
-        <ReservasEmbed url={url} />
-      ) : (
-        <p className="text-sm text-muted-foreground">
-          Formulario de reserva (Fase 7 conecta con captura de leads).
-        </p>
-      )}
+        ) : null}
+
+        {/* Tres apoyos antes del formulario: quitan la duda de "¿esto qué me
+            pide?" justo donde el visitante decide si sigue o se va. */}
+        <ul className="mx-auto mt-9 flex flex-wrap items-center justify-center gap-x-8 gap-y-3 text-[13px] opacity-70">
+          <li className="flex items-center gap-2">
+            <Punto /> Confirmación inmediata
+          </li>
+          <li className="flex items-center gap-2">
+            <Punto /> Sin coste ni comisiones
+          </li>
+          <li className="flex items-center gap-2">
+            <Punto /> Cancela cuando quieras
+          </li>
+        </ul>
+
+        {modo === "portal_propio" ? (
+          slug ? (
+            /* Tarjeta con esquinas muy redondeadas y cristal difuminado: el
+               formulario deja de ser un recuadro pegado y se integra en la web. */
+            <div className="mt-12 overflow-hidden rounded-[28px] border border-white/10 bg-white/[0.04] p-2 shadow-[0_24px_70px_rgba(0,0,0,0.5)] backdrop-blur-xl md:rounded-[34px] md:p-3">
+              <div className="overflow-hidden rounded-[22px] bg-white md:rounded-[26px]">
+                <IframeAutoAlto src={`/reservar/${slug}/embed`} titulo="Reservar mesa" />
+              </div>
+            </div>
+          ) : (
+            <p className="mt-10 text-sm text-muted-foreground">
+              (Configura el slug de la empresa para activar las reservas)
+            </p>
+          )
+        ) : modo === "enlace_externo" && url ? (
+          <a
+            href={url}
+            className="mt-10 inline-block rounded-full px-10 py-4 text-xs font-bold uppercase tracking-[0.2em] text-black transition-transform hover:scale-105"
+            style={{ backgroundColor: "var(--pw-primario)" }}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Reservar ahora
+          </a>
+        ) : modo === "embed_cover" && url ? (
+          <div className="mt-12 overflow-hidden rounded-[28px] border border-white/10 bg-white/[0.04] p-2 shadow-[0_24px_70px_rgba(0,0,0,0.5)] backdrop-blur-xl md:rounded-[34px] md:p-3">
+            <div className="overflow-hidden rounded-[22px] bg-white md:rounded-[26px]">
+              <ReservasEmbed url={url} />
+            </div>
+          </div>
+        ) : (
+          <p className="mt-10 text-sm text-muted-foreground">
+            Reservas no configuradas.
+          </p>
+        )}
+      </div>
     </section>
   );
 }
