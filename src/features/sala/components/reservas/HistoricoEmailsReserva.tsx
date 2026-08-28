@@ -1,8 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Mail } from "lucide-react";
+import { ChevronDown, Mail } from "lucide-react";
 
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+import { cn } from "@/lib/utils";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { formatFechaHoraEnZona } from "@/features/empresa/lib/zona-horaria";
 import {
@@ -49,6 +55,7 @@ export function HistoricoEmailsReserva({ reservaId }: { reservaId: string }) {
     reservaId: string;
     envios: ReservaEmailEnvio[];
   } | null>(null);
+  const [abierto, setAbierto] = useState(false);
 
   useEffect(() => {
     let vigente = true;
@@ -68,12 +75,28 @@ export function HistoricoEmailsReserva({ reservaId }: { reservaId: string }) {
   const tz = empresaActual?.zonaHoraria;
 
   return (
-    <div className="space-y-2">
-      <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
-        <Mail className="h-3.5 w-3.5" />
-        Correos enviados
-      </div>
+    <Collapsible open={abierto} onOpenChange={setAbierto} className="space-y-2">
+      {/* Plegado por defecto: en la ficha lo que se consulta a diario es la
+          reserva, no los correos. Se abre cuando hace falta comprobar qué se
+          le ha mandado al cliente. El número va en la cabecera para saberlo
+          sin desplegar. */}
+      <CollapsibleTrigger className="flex w-full items-center gap-2 text-xs font-medium text-muted-foreground hover:text-foreground">
+        <Mail className="h-3.5 w-3.5 shrink-0" />
+        <span>Comunicaciones</span>
+        {!cargando && envios.length > 0 && (
+          <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+            {envios.length}
+          </span>
+        )}
+        <ChevronDown
+          className={cn(
+            "ml-auto h-3.5 w-3.5 shrink-0 transition-transform",
+            abierto && "rotate-180",
+          )}
+        />
+      </CollapsibleTrigger>
 
+      <CollapsibleContent className="space-y-2">
       {cargando ? (
         <p className="text-xs text-muted-foreground">Cargando…</p>
       ) : envios.length === 0 ? (
@@ -104,6 +127,7 @@ export function HistoricoEmailsReserva({ reservaId }: { reservaId: string }) {
           ))}
         </ul>
       )}
-    </div>
+      </CollapsibleContent>
+    </Collapsible>
   );
 }

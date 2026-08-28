@@ -25,7 +25,8 @@ const ConfigReservasView = dynamic(
     ),
   { ssr: false },
 );
-import { Settings } from "lucide-react";
+import { Settings, Sun, Moon } from "lucide-react";
+import { useSalaTema } from "@/features/sala/hooks/useSalaTema";
 import { EtiquetasPanel } from "@/features/sala/components/reservas/EtiquetasPanel";
 import { CalendarioMes } from "@/features/sala/components/reservas/CalendarioMes";
 import { CalendarDays, Grid3X3, Users, LayoutGrid, AlertTriangle, Clock } from "lucide-react";
@@ -106,6 +107,7 @@ import type {
 import { ReservaFlagsChips } from "@/features/sala/components/reservas/ReservaFlagsChips";
 import { ReservaExternalBadge } from "@/features/sala/components/reservas/ReservaExternalBadge";
 import { HistoricoEmailsReserva } from "@/features/sala/components/reservas/HistoricoEmailsReserva";
+import { ActividadReserva } from "@/features/sala/components/reservas/ActividadReserva";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
@@ -125,8 +127,53 @@ function lightenHex(hex: string, ratio: number): string {
   return `#${out.toString(16).padStart(6, "0")}`;
 }
 
+/**
+ * Versión oscura de un pastel de zona.
+ *
+ * No se puede mezclar el hex con azul marino en RGB: los amarillos y naranjas
+ * salían marrones. Se trabaja en HSL para CONSERVAR el matiz de la zona (lo que
+ * la identifica de un vistazo) y bajar solo luminosidad y saturación, de modo
+ * que el amarillo siga leyéndose como amarillo, pero apagado.
+ */
+function zonaOscura(hex: string): string {
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex);
+  if (!m) return hex;
+  const n = parseInt(m[1], 16);
+  const r = ((n >> 16) & 0xff) / 255;
+  const g = ((n >> 8) & 0xff) / 255;
+  const b = (n & 0xff) / 255;
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const l = (max + min) / 2;
+  const d = max - min;
+  let h = 0;
+  let sat = 0;
+  if (d !== 0) {
+    sat = d / (1 - Math.abs(2 * l - 1));
+    if (max === r) h = ((g - b) / d) % 6;
+    else if (max === g) h = (b - r) / d + 2;
+    else h = (r - g) / d + 4;
+    h *= 60;
+    if (h < 0) h += 360;
+  }
+  // Matiz intacto; saturación contenida y luminosidad baja para que la mesa
+  // libre sea una superficie tintada sobre el lienzo, no un bloque de color.
+  const satOut = Math.min(sat, 0.42) * 100;
+  const lumOut = 26;
+  return `hsl(${h.toFixed(0)} ${satOut.toFixed(0)}% ${lumOut}%)`;
+}
+
 /** Cuánto aclaramos los pasteles de zona (tirando a blanco, sutil). */
 const ZONA_LIGHTEN = 0.35;
+
+/**
+ * Color de fondo de una zona según el tema activo: aclarado hacia blanco en
+ * claro, mezclado con azul marino en oscuro. Único punto donde se decide, para
+ * que plano, etiquetas y listado por zonas no diverjan.
+ */
+function colorZona(hex: string, esOscuro: boolean): string {
+  return esOscuro ? zonaOscura(hex) : lightenHex(hex, ZONA_LIGHTEN);
+}
 
 /** Rampa pastel arcoíris construida con la paleta canónica de zonas. */
 const LIBRE_RAINBOW = `linear-gradient(135deg, ${COLORES_PASTEL_ZONAS
@@ -145,7 +192,13 @@ const mesaBg: Record<string, string> = {
   LIBRE: "",
   OCUPADA: "bg-[#1F6F3E] hover:bg-[#22783F] text-white",
   RESERVADA: "bg-[#4ADE80] hover:bg-[#22C55E] text-zinc-900",
-  BLOQUEADA: "bg-[#111111] hover:bg-[#1F1F1F] text-white",
+  // En tema oscuro el negro puro se confundía con el lienzo azul marino: la
+  // mesa bloqueada pasa a un gris azulado con borde marcado para seguir
+  // leyéndose como "apagada" sin desaparecer del plano.
+  BLOQUEADA:
+    "bg-[#111111] hover:bg-[#1F1F1F] text-white " +
+    "[.sala-oscuro_&]:bg-[#0A0F1A] [.sala-oscuro_&]:hover:bg-[#131A29] " +
+    "[.sala-oscuro_&]:!border-white/25 [.sala-oscuro_&]:text-zinc-300",
 };
 
 /** Suma minutos a "HH:MM" y devuelve "HH:MM" (envuelve pasada la medianoche). */
@@ -203,7 +256,8 @@ function addMonths(iso: string, n: number) {
  * salía como chip pegado al nombre, que se leía como parte del cliente) y el
  * estado tiene sitio suficiente para leerse entero sin recortarse.
  */
-const LISTA_GRID = "grid grid-cols-[72px_44px_44px_minmax(0,1fr)_36px_84px_96px] gap-1.5 items-center";
+const LISTA_GRID =
+  "grid grid-cols-[64px_68px_minmax(0,1fr)_36px_76px_96px] gap-2 items-center";
 
 /**
  * El origen viene del canal por el que entró la reserva (PORTAL_PROPIO,
@@ -211,6 +265,13 @@ const LISTA_GRID = "grid grid-cols-[72px_44px_44px_minmax(0,1fr)_36px_84px_96px]
  */
 function origenLabel(origen: string | null | undefined): string {
   if (!origen) return "Manual";
+  // Todo lo que entra por el motor de reservas de la web se lee igual: "Web".
+  // Da igual que venga del enlace pelado o de un enlace de campaña con su
+  // palabra clave — el canal es el mismo y en sala se pregunta por el canal.
+  const clave = origen.toUpperCase();
+  if (clave === "RESERVA_WEB" || clave === "PORTAL_PROPIO" || clave === "WEB") {
+    return "Web";
+  }
   const limpio = origen.replace(/_/g, " ").toLowerCase();
   return limpio.charAt(0).toUpperCase() + limpio.slice(1);
 }
@@ -1008,10 +1069,7 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
         <div>
           <Label className="text-xs">
             Duración
-            <span className="ml-1 font-normal text-muted-foreground">
-              · default{" "}
-              {config ? formatearDuracionReserva(config.duracionReservaMin) : "—"}
-            </span>
+            {config && <span className="align-super">*</span>}
           </Label>
           <Select
             value={form.duracionMinutos}
@@ -1030,6 +1088,13 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
               ))}
             </SelectContent>
           </Select>
+          {config && (
+            <p className="pt-1 text-[10px] text-muted-foreground/80">
+              <span className="align-super">*</span> Por defecto{" "}
+              {formatearDuracionReserva(config.duracionReservaMin)}, según lo
+              configurado en ajustes.
+            </p>
+          )}
         </div>
         {/* Zona manda sobre mesa: se elige zona y luego una mesa de esa zona. */}
         <div className="col-span-2"><Label className="text-xs">Zona</Label>
@@ -1995,6 +2060,7 @@ function PlanoCanvas({
   reservaMoviendo,
   onElegirDestino,
   onCancelarMover,
+  esOscuro,
 }: {
   mesas: Mesa[];
   posiciones: Map<string, PlanoMesaPosicion>;
@@ -2021,6 +2087,8 @@ function PlanoCanvas({
   reservaMoviendo?: Reserva | null;
   onElegirDestino?: (m: Mesa) => void;
   onCancelarMover?: () => void;
+  /** Tema activo de la vista: decide si los pasteles de zona se aclaran u oscurecen. */
+  esOscuro: boolean;
 }) {
   const moviendo = reservaMoviendo != null;
   // Mesas con posición x/y conocida.
@@ -2113,7 +2181,7 @@ function PlanoCanvas({
   }
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden py-3 bg-white dark:bg-white min-h-0">
+    <div className="flex-1 flex flex-col overflow-hidden py-3 min-h-0">
       {/* Barra del modo mover: mientras la reserva está "en la mano" el plano
           deja de abrir popovers y el siguiente clic elige la mesa destino. */}
       {moviendo && reservaMoviendo && (
@@ -2155,7 +2223,7 @@ function PlanoCanvas({
         }}
       >
       <div
-        className="relative bg-white rounded-lg"
+        className="sala-lienzo relative rounded-xl overflow-hidden"
         style={{
           width: PLANO_CANVAS_W,
           height: PLANO_CANVAS_H,
@@ -2169,7 +2237,7 @@ function PlanoCanvas({
         {decoraciones.map((d) => (
           <div
             key={d.id}
-            className="absolute pointer-events-none select-none"
+            className="sala-deco absolute pointer-events-none select-none"
             style={{
               left: Math.max(0, Math.min(PLANO_CANVAS_W - d.width, d.x)),
               top: Math.max(0, Math.min(PLANO_CANVAS_H - d.height, d.y)),
@@ -2190,8 +2258,11 @@ function PlanoCanvas({
         {labelsZonas.map((l) => (
           <span
             key={l.id}
-            className="absolute px-2 py-0.5 rounded text-[11px] font-bold tracking-wide text-zinc-800 shadow-sm pointer-events-none"
-            style={{ left: l.x, top: Math.max(8, l.y), backgroundColor: lightenHex(l.color, ZONA_LIGHTEN) }}
+            className={cn(
+              "absolute px-2 py-0.5 rounded text-[11px] font-bold tracking-wide shadow-sm pointer-events-none",
+              esOscuro ? "text-zinc-100" : "text-zinc-800",
+            )}
+            style={{ left: l.x, top: Math.max(8, l.y), backgroundColor: colorZona(l.color, esOscuro) }}
           >
             {l.nombre}
           </span>
@@ -2217,7 +2288,7 @@ function PlanoCanvas({
               <PopoverTrigger asChild>
                 <button
                   className={cn(
-                    "absolute flex flex-col items-center justify-center text-[11px] font-semibold shadow-md border-2 transition-all cursor-pointer px-1 overflow-hidden",
+                    "sala-mesa absolute flex flex-col items-center justify-center text-[11px] font-semibold border-2 transition-all cursor-pointer px-1 overflow-hidden",
                     mesaBg[estado] ?? "",
                     isLibre ? "text-foreground border-foreground/40" : "border-white/10",
                     (selectedReservaMesaId === m.id || selectedMesaId === m.id) && "ring-4 ring-red-500 z-10",
@@ -2239,7 +2310,7 @@ function PlanoCanvas({
                     width: dims.w,
                     height: dims.h,
                     borderRadius: radius,
-                    backgroundColor: isLibre ? lightenHex(meta?.colorZona ?? "#FDE68A", ZONA_LIGHTEN) : undefined,
+                    backgroundColor: isLibre ? colorZona(meta?.colorZona ?? "#FDE68A", esOscuro) : undefined,
                     transform: pos.rotation ? `rotate(${pos.rotation}deg)` : undefined,
                   }}
                   onClick={(e) => {
@@ -2334,6 +2405,9 @@ function PlanoCanvas({
 export function ReservasView() {
   const { empresaActual, ajustes } = useEmpresa();
   const searchParams = useSearchParams();
+  // Tema visual SOLO de esta vista (claro / oscuro azul marino). No toca el
+  // resto del software, que sigue siendo de tema claro.
+  const { esOscuro, alternarTema } = useSalaTema();
   // Ajustes → Empresa → Reservas. Apagado (por defecto) el listado enseña las
   // reservas de TODAS las salas del turno y cambiar de sala solo mueve el plano;
   // encendido, cada sala enseña únicamente las suyas.
@@ -2387,6 +2461,14 @@ export function ReservasView() {
   >(null);
   /** Edición del tiempo de mesa desde la ficha de la reserva. */
   const [duracionEdit, setDuracionEdit] = useState("");
+  // Comensales editables desde la ficha. Como el tiempo de mesa: se escriben
+  // aquí y se guardan al salir del campo, sin pasar por el botón Guardar (que
+  // sirve a los datos del cliente).
+  const [comensalesEdit, setComensalesEdit] = useState<number>(0);
+  const [guardandoComensales, setGuardandoComensales] = useState(false);
+  // Se incrementa tras cada cambio para que la Actividad se vuelva a leer y
+  // muestre la línea recién grabada sin cerrar y reabrir la ficha.
+  const [actividadVersion, setActividadVersion] = useState(0);
   const [guardandoDuracion, setGuardandoDuracion] = useState(false);
   /** Aviso de peligro: la mesa ya está ocupada en esa franja. */
   const [avisoOcupada, setAvisoOcupada] = useState<string | null>(null);
@@ -2637,6 +2719,12 @@ export function ReservasView() {
       selectedReserva.duracionMinutos ?? cfgReservas?.duracionReservaMin ?? null;
     setDuracionEdit(efectiva ? String(efectiva) : "");
   }, [selectedReserva, cfgReservas]);
+
+  // Los comensales del campo editable arrancan con los de la reserva abierta.
+  useEffect(() => {
+    if (!selectedReserva) return;
+    setComensalesEdit(selectedReserva.comensales);
+  }, [selectedReserva]);
 
   // Los campos del cliente se recargan al cambiar de reserva: si no, quedarían
   // los del cliente anterior y se guardarían sobre quien no toca.
@@ -2923,6 +3011,7 @@ export function ReservasView() {
     if (res.ok) {
       toast.success(`Reserva actualizada a ${ESTADO_RESERVA_LABELS[estado]}`);
       if (notificarCliente) toast.success("Correo enviado al cliente");
+      setActividadVersion((v) => v + 1);
       // Recargamos también en el camino feliz: el servidor puede tocar campos
       // derivados (reconfirmada_at, origen) que el update optimista no refleja.
       loadReservas(fecha);
@@ -2966,12 +3055,62 @@ export function ReservasView() {
       setSelectedReserva(prev =>
         prev && prev.id === id ? { ...prev, duracionMinutos: clamped } : prev,
       );
+      setActividadVersion((v) => v + 1);
       loadReservas(fecha);
     } else {
       // Ampliar el tiempo puede pisar a la reserva que entró detrás.
       const msg = res.error ?? "No se pudo guardar el tiempo de mesa";
       if (/ya tiene una reserva/i.test(msg)) setAvisoOcupada(msg);
       else toast.error(msg);
+    }
+  };
+
+  /**
+   * Guarda los comensales de la reserva. Se puede corregir en cualquier
+   * momento: vienen dos más de los que dijeron al reservar y hay que dejarlo
+   * apuntado. El aforo de la mesa NO bloquea el cambio, solo avisa: en sala
+   * mandan las personas que hay, y ya se recolocará la mesa si hace falta.
+   */
+  const guardarComensales = async (id: string, valor: number) => {
+    if (!Number.isFinite(valor) || valor < 1) {
+      toast.error("Introduce un número de comensales válido.");
+      setComensalesEdit(selectedReserva?.comensales ?? 1);
+      return;
+    }
+    if (valor === selectedReserva?.comensales) return;
+
+    setGuardandoComensales(true);
+    const res = await updateReserva(id, { personas: valor });
+    setGuardandoComensales(false);
+
+    if (!res.ok) {
+      toast.error(res.error ?? "No se pudieron guardar los comensales.");
+      setComensalesEdit(selectedReserva?.comensales ?? 1);
+      return;
+    }
+
+    setReservas((prev) =>
+      prev.map((r) => (r.id === id ? { ...r, comensales: valor } : r)),
+    );
+    setSelectedReserva((prev) =>
+      prev && prev.id === id ? { ...prev, comensales: valor } : prev,
+    );
+    setActividadVersion((v) => v + 1);
+    toast.success("Comensales actualizados");
+
+    // Aviso (no bloqueo) si la mesa asignada se queda corta o grande.
+    const mesa = mesas.find((m) => m.id === selectedReserva?.mesaId);
+    const meta = mesa ? mesasMeta.get(mesa.id) : null;
+    if (mesa && meta) {
+      if (valor > meta.capacidadMax) {
+        toast.warning(
+          `La mesa ${mesa.codigo} admite máximo ${meta.capacidadMax}.`,
+        );
+      } else if (valor < meta.capacidadMin) {
+        toast.warning(
+          `La mesa ${mesa.codigo} es para mínimo ${meta.capacidadMin}.`,
+        );
+      }
     }
   };
 
@@ -3194,7 +3333,12 @@ export function ReservasView() {
 
   if (showConfig) {
     return (
-      <div className="flex flex-col h-[calc(100vh-3.5rem)] overflow-hidden">
+      <div
+        className={cn(
+          "sala-tema flex flex-col h-[calc(100vh-3.5rem)] overflow-hidden",
+          esOscuro && "sala-oscuro",
+        )}
+      >
         <ConfigReservasView
           onBack={() => {
             setShowConfig(false);
@@ -3206,7 +3350,12 @@ export function ReservasView() {
   }
 
   return (
-    <div className="flex flex-col h-[calc(100vh-3.5rem)] overflow-hidden">
+    <div
+      className={cn(
+        "sala-tema flex flex-col h-[calc(100vh-3.5rem)] overflow-hidden",
+        esOscuro && "sala-oscuro",
+      )}
+    >
       {/* TOP BAR — todo en una sola línea: acciones + filtros + turno + sala/zonas + vista + fecha + ajustes */}
       <div className="shrink-0 border-b bg-card px-2 py-1.5 flex items-center gap-1.5 flex-wrap">
         {/* Acciones: NUEVA · Lista espera · Estados · Buscar — solo en vista día */}
@@ -3450,15 +3599,28 @@ export function ReservasView() {
           )}
         </div>
 
-        <Button
-          variant="outline"
-          size="icon"
-          className="h-8 w-8 ml-auto"
-          onClick={() => setShowConfig(true)}
-          title="Configuración de reservas"
-        >
-          <Settings className="h-4 w-4" />
-        </Button>
+        <div className="ml-auto flex items-center gap-1.5">
+          <Button
+            variant="outline"
+            size="icon"
+            className="h-8 w-8"
+            onClick={alternarTema}
+            title={esOscuro ? "Cambiar a vista clara" : "Cambiar a vista oscura"}
+            aria-label={esOscuro ? "Cambiar a vista clara" : "Cambiar a vista oscura"}
+            aria-pressed={esOscuro}
+          >
+            {esOscuro ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+          </Button>
+          <Button
+            variant="outline"
+            size="icon"
+            className="h-8 w-8"
+            onClick={() => setShowConfig(true)}
+            title="Configuración de reservas"
+          >
+            <Settings className="h-4 w-4" />
+          </Button>
+        </div>
       </div>
 
       {vista === "mes" ? (
@@ -3499,7 +3661,7 @@ export function ReservasView() {
             </div>
           )}
           <div className={cn(LISTA_GRID, "px-3 py-2 text-[10px] font-semibold text-muted-foreground border-b bg-muted/30 uppercase tracking-wider")}>
-            <span>Zona</span><span>Mesa</span><span>Hora</span><span>Nombre</span>
+            <span>Hora</span><span>Mesa</span><span>Nombre</span>
             <span className="text-center">Pax</span><span>Origen</span><span>Estado</span>
           </div>
           <div className="flex-1 overflow-y-auto">
@@ -3520,13 +3682,38 @@ export function ReservasView() {
                         blink,
                       )}
                     >
-                      <span className="truncate text-muted-foreground">{zonaLabel(r.zona ? String(r.zona) : null)}</span>
-                      <span className="font-mono font-bold">{mesa?.codigo ?? "—"}</span>
-                      <span className="tabular-nums">{r.hora.slice(0, 5)}</span>
-                      <span className="truncate font-medium flex items-center gap-1.5 min-w-0">
-                        <span className="truncate">{r.cliente || "WALK IN"} {r.apellidos}</span>
-                        {/* El chip "Cupón <CODIGO>" se pinta dentro de <ReservaFlagsChips />. */}
-                        <ReservaFlagsChips reserva={r} className="shrink-0" />
+                      {/* La hora es lo primero que se busca en una lista de
+                          reservas: va en grande y en tabular para que las
+                          cifras queden alineadas de fila a fila. */}
+                      <span className="text-base font-semibold tabular-nums">
+                        {r.hora.slice(0, 5)}
+                      </span>
+                      {/* Mesa y zona, una encima de otra: son el mismo dato
+                          (dónde se sienta) y antes competían en dos columnas.
+                          La mesa manda, la zona la acompaña en pequeño. */}
+                      <span className="flex min-w-0 flex-col leading-tight">
+                        <span className="font-mono text-base font-bold">
+                          {mesa?.codigo ?? "—"}
+                        </span>
+                        <span className="truncate text-[10px] text-muted-foreground">
+                          {zonaLabel(r.zona ? String(r.zona) : null) || "—"}
+                        </span>
+                      </span>
+                      {/* Nombre legible y, debajo, el teléfono en pequeño: es
+                          lo que se necesita para llamar sin abrir la ficha. */}
+                      <span className="flex min-w-0 flex-col leading-tight">
+                        <span className="flex min-w-0 items-center gap-1.5">
+                          <span className="truncate font-medium">
+                            {r.cliente || "WALK IN"} {r.apellidos}
+                          </span>
+                          {/* El chip "Cupón <CODIGO>" se pinta dentro de <ReservaFlagsChips />. */}
+                          <ReservaFlagsChips reserva={r} className="shrink-0" />
+                        </span>
+                        {r.telefono && (
+                          <span className="truncate text-[10px] tabular-nums text-muted-foreground">
+                            {r.telefono}
+                          </span>
+                        )}
                       </span>
                       <span className="text-center tabular-nums">{r.comensales}</span>
                       <span className="truncate text-[11px] text-muted-foreground" title={origenLabel(r.origen)}>
@@ -3603,7 +3790,7 @@ export function ReservasView() {
 
         {/* RIGHT PANEL — CANVAS PLANO si vistaPlano === "mapa" y hay intersección posiciones↔mesasActivas; sino, GRID agrupado por zona */}
         {panelOculto !== "mapa" && (
-        <div className="relative flex-1 flex flex-col overflow-hidden bg-white">
+        <div className="relative flex-1 flex flex-col overflow-hidden">
           {/* Toggle pequeño dentro del lienzo: alterna entre vista mapa y vista listado (común a todas las empresas).
              Estilo y posición igualados al botón de configuración del header para quedar visualmente justo debajo. */}
           <Button
@@ -3657,6 +3844,7 @@ export function ReservasView() {
               reservaMoviendo={reservaADesplazar}
               onElegirDestino={elegirMesaDestino}
               onCancelarMover={cancelarDesplazar}
+              esOscuro={esOscuro}
             />
           ) : (
             <div className="flex-1 overflow-auto p-4 space-y-4">
@@ -3698,8 +3886,11 @@ export function ReservasView() {
                       <section key={zona.id} className="space-y-2">
                         <div className="flex items-center gap-2">
                           <span
-                            className="inline-block px-2.5 py-1 rounded-md text-[11px] font-bold tracking-wide text-zinc-800"
-                            style={{ backgroundColor: lightenHex(zona.colorPastel, ZONA_LIGHTEN) }}
+                            className={cn(
+                              "inline-block px-2.5 py-1 rounded-md text-[11px] font-bold tracking-wide",
+                              esOscuro ? "text-zinc-100" : "text-zinc-800",
+                            )}
+                            style={{ backgroundColor: colorZona(zona.colorPastel, esOscuro) }}
                           >
                             {zona.nombre}
                           </span>
@@ -3732,7 +3923,7 @@ export function ReservasView() {
                                       moviendoAqui && !destinoInvalido && "cursor-copy ring-2 ring-sky-500 hover:ring-4 hover:scale-105 z-10",
                                       destinoInvalido && "opacity-40 cursor-not-allowed",
                                     )}
-                                    style={isLibre ? { backgroundColor: lightenHex(zona.colorPastel, ZONA_LIGHTEN) } : undefined}
+                                    style={isLibre ? { backgroundColor: colorZona(zona.colorPastel, esOscuro) } : undefined}
                                     onClick={(e) => {
                                       if (moviendoAqui) {
                                         e.preventDefault();
@@ -3818,7 +4009,26 @@ export function ReservasView() {
                   <Field label="Fecha">{selectedReserva.fecha}</Field>
                   <Field label="Hora">{selectedReserva.hora}</Field>
                   <Field label="Turno">{selectedReserva.turno}</Field>
-                  <Field label="Comensales">{selectedReserva.comensales}</Field>
+                  {/* Comensales: editable. Antes era solo lectura y la única
+                      forma de corregir "somos dos más" era borrar la reserva y
+                      volver a crearla. */}
+                  <div>
+                    <Label className="text-[10px] text-muted-foreground uppercase tracking-wider">
+                      Comensales
+                    </Label>
+                    <NumberInput
+                      min={1}
+                      emptyValue={1}
+                      decimales={false}
+                      className="h-8 text-sm font-medium"
+                      disabled={guardandoComensales}
+                      value={comensalesEdit}
+                      onValueChange={(n) => setComensalesEdit(n)}
+                      onBlur={() =>
+                        guardarComensales(selectedReserva.id, comensalesEdit)
+                      }
+                    />
+                  </div>
                   <Field label="Zona">{zonaLabel(selectedReserva.zona ? String(selectedReserva.zona) : null)}</Field>
                   <Field label="Mesa">{mesas.find(m => m.id === selectedReserva.mesaId)?.codigo ?? "Sin asignar"}</Field>
                 </div>
@@ -3850,16 +4060,34 @@ export function ReservasView() {
                       ))}
                     </SelectContent>
                   </Select>
-                  <p className="text-[10px] text-muted-foreground">
-                    {(() => {
-                      const efectiva =
-                        selectedReserva.duracionMinutos ?? cfgReservas?.duracionReservaMin ?? null;
-                      if (!efectiva) return "Sin duración configurada.";
-                      const fin = horaMasMinutos(selectedReserva.hora, efectiva);
-                      const def = cfgReservas?.duracionReservaMin;
-                      return `Ocupa la mesa hasta las ${fin}. Por defecto ${def ? formatearDuracionReserva(def) : "—"}.`;
-                    })()}
-                  </p>
+                  {(() => {
+                    const efectiva =
+                      selectedReserva.duracionMinutos ?? cfgReservas?.duracionReservaMin ?? null;
+                    if (!efectiva) {
+                      return (
+                        <p className="text-[10px] text-muted-foreground">
+                          Sin duración configurada.
+                        </p>
+                      );
+                    }
+                    const fin = horaMasMinutos(selectedReserva.hora, efectiva);
+                    const def = cfgReservas?.duracionReservaMin;
+                    return (
+                      <>
+                        <p className="text-[10px] text-muted-foreground">
+                          Ocupa la mesa hasta las {fin}.
+                          {def != null && <span className="align-super">*</span>}
+                        </p>
+                        {def != null && (
+                          <p className="pt-1 text-[10px] text-muted-foreground/80">
+                            <span className="align-super">*</span> Por defecto{" "}
+                            {formatearDuracionReserva(def)}, según lo configurado en
+                            ajustes.
+                          </p>
+                        )}
+                      </>
+                    );
+                  })()}
                 </div>
                 {selectedReserva.observaciones && <Field label="Observaciones">{selectedReserva.observaciones}</Field>}
                 <div className="flex flex-wrap items-center gap-2">
@@ -3967,6 +4195,13 @@ export function ReservasView() {
 
                 <div className="pt-2 border-t">
                   <HistoricoEmailsReserva reservaId={selectedReserva.id} />
+                </div>
+
+                <div className="pt-2 border-t">
+                  <ActividadReserva
+                    key={actividadVersion}
+                    reservaId={selectedReserva.id}
+                  />
                 </div>
               </div>
 

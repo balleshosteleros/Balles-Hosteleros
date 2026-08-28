@@ -13,6 +13,7 @@ import { findOrLinkClienteSala, type CampoDistinto } from "@/features/sala/lib/c
 import { asignarMesaAutomatica } from "@/features/sala/planos/lib/asignacion-mesa";
 import { getMesasBloqueadas } from "@/features/sala/bloqueos/lib/mesas-bloqueadas";
 import { getCamposObligatoriosReserva } from "@/features/sala/lib/reserva-campos-obligatorios";
+import { turnoDeHora } from "@/features/sala/lib/dia-negocio";
 import {
   buscarConflictoMesa,
   getDuracionReservaMin,
@@ -506,6 +507,12 @@ export async function updateReserva(
     mesa?: string;
     zona?: string;
     turno?: string;
+    /**
+     * Local de la mesa. Solo se usa para deducir la zona al cambiar de mesa:
+     * los códigos de mesa se repiten entre locales (hay una "A1" en cada uno),
+     * así que sin el local la zona no se puede resolver sin ambigüedad.
+     */
+    localId?: string | null;
     estado?: string;
     notas?: string;
     origen?: string | null;
@@ -599,6 +606,42 @@ export async function updateReserva(
     if (updates.personas !== undefined) dbUpdates.personas = updates.personas;
     if (updates.mesa !== undefined) dbUpdates.mesa = updates.mesa;
     if (updates.zona !== undefined) dbUpdates.zona = updates.zona;
+
+    // Turno y zona NO se editan a mano: se deducen de la hora y de la mesa, que
+    // es lo que de verdad se cambia. Si se movía una reserva de las 14:00 a las
+    // 21:00 seguía marcada como COMIDA y no aparecía en el mapa de cena (y al
+    // revés). Lo mismo al cambiarla de mesa: conservaba la zona de la mesa
+    // anterior. Se recalculan aquí, en el único punto por el que pasan todos
+    // los cambios, para que no puedan quedar descuadrados.
+    if (updates.hora !== undefined && updates.turno === undefined) {
+      dbUpdates.turno = turnoDeHora(updates.hora);
+    }
+    if (
+      updates.mesa !== undefined &&
+      updates.zona === undefined &&
+      updates.localId
+    ) {
+      const codigoMesa = (updates.mesa ?? "").trim();
+      if (!codigoMesa) {
+        // Se ha quitado la mesa: sin mesa no hay zona que deducir.
+        dbUpdates.zona = null;
+      } else {
+        const { data: mesaRow } = await supabase
+          .from("mesas")
+          .select("zonas(nombre)")
+          .eq("local_id", updates.localId)
+          .eq("codigo", codigoMesa)
+          .maybeSingle();
+        const z = mesaRow?.zonas as unknown as
+          | { nombre?: string }
+          | { nombre?: string }[]
+          | null;
+        const nombreZona = Array.isArray(z) ? z[0]?.nombre : z?.nombre;
+        // Si la mesa no resuelve zona, se deja la que hubiera: es mejor
+        // conservar el dato anterior que vaciarlo por un fallo de lectura.
+        if (nombreZona) dbUpdates.zona = nombreZona;
+      }
+    }
     if (updates.turno !== undefined) dbUpdates.turno = updates.turno;
     if (updates.estado !== undefined) dbUpdates.estado = updates.estado;
     if (updates.notas !== undefined) dbUpdates.notas = updates.notas;
@@ -766,12 +809,58 @@ export async function updateReserva(
     // del usuario, no a la ACTIVA. Sin esto, un usuario de BACANAL+HABANA podía
     // modificar (incluso cancelar) una reserva de la otra empresa por su id.
     if (!empresaId) return { ok: false, error: "Sin empresa activa." };
+
+    // Foto de ANTES para la actividad: hay que leerla mientras los valores
+    // viejos siguen en la tabla. Se piden solo los campos que se van a tocar.
+    const camposAuditables = CAMPOS_ACTIVIDAD.filter((c) => c in dbUpdates);
+    let previo: Record<string, unknown> | null = null;
+    if (camposAuditables.length > 0) {
+      const { data } = await supabase
+        .from("reservas")
+        .select(camposAuditables.join(","))
+        .eq("id", id)
+        .eq("empresa_id", empresaId)
+        .maybeSingle();
+      previo = (data as Record<string, unknown> | null) ?? null;
+    }
+
     const { error } = await supabase
       .from("reservas")
       .update(dbUpdates)
       .eq("id", id)
       .eq("empresa_id", empresaId);
     if (error) throw error;
+
+    // Actividad: una fila por campo que REALMENTE cambia de valor. Si se
+    // guarda sin tocar nada, no se inventa actividad. Nunca rompe el guardado:
+    // el cambio ya está hecho y no se puede deshacer por un fallo del registro.
+    if (previo) {
+      const filas = camposAuditables
+        .map((campo) => ({
+          campo,
+          anterior: normalizarValorActividad(previo?.[campo]),
+          nuevo: normalizarValorActividad(dbUpdates[campo]),
+        }))
+        .filter((f) => f.anterior !== f.nuevo)
+        .map((f) => ({
+          empresa_id: empresaId,
+          reserva_id: id,
+          campo: f.campo,
+          valor_anterior: f.anterior,
+          valor_nuevo: f.nuevo,
+          usuario_id: ctx.usuarioId,
+          usuario_nombre: ctx.nombre,
+          origen: "MANUAL",
+        }));
+      if (filas.length > 0) {
+        const { error: errHist } = await supabase
+          .from("reserva_historial")
+          .insert(filas);
+        if (errHist) {
+          console.error("[reservas] actividad:", errHist.message);
+        }
+      }
+    }
 
     // Correo al cliente: SOLO si quien llama lo pide expresamente.
     //
@@ -797,10 +886,61 @@ export async function updateReserva(
 
     return { ok: true };
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : "Error desconocido";
-    console.error("[reservas] updateReserva:", msg);
+    // Los errores de Supabase NO son instancias de Error: son objetos planos
+    // ({ message, details, hint, code }). Con `instanceof Error` a secas todos
+    // acababan en "Error desconocido", que no dice nada ni al usuario ni a
+    // quien tiene que arreglarlo. Se saca el mensaje real siempre que exista.
+    const msg = mensajeDeError(err) ?? "Error al actualizar la reserva.";
+    console.error("[reservas] updateReserva:", msg, err);
     return { ok: false, error: msg };
   }
+}
+
+/**
+ * Campos cuyo cambio se registra en la actividad de la reserva. Son los que se
+ * preguntan en sala cuando algo no cuadra ("¿quién ha movido esta mesa?").
+ * Quedan fuera los que no dicen nada a una persona (tokens, sellos de correo,
+ * `updated_at`): llenarían la actividad de ruido.
+ */
+const CAMPOS_ACTIVIDAD = [
+  "estado",
+  "mesa",
+  "zona",
+  "personas",
+  "fecha",
+  "hora",
+  "turno",
+  "duracion_minutos",
+  "notas",
+  "bloqueada",
+] as const;
+
+/**
+ * Valor de un campo como texto para poder compararlo y guardarlo. NULL y
+ * cadena vacía son lo mismo aquí (una mesa sin asignar), para que quitar algo
+ * que ya estaba vacío no cuente como cambio.
+ */
+function normalizarValorActividad(v: unknown): string | null {
+  if (v === null || v === undefined) return null;
+  const s = typeof v === "string" ? v.trim() : String(v);
+  return s.length > 0 ? s : null;
+}
+
+/**
+ * Mensaje legible de cualquier cosa que se pueda lanzar: Error, error de
+ * Supabase/PostgREST (objeto plano con `message`) o string.
+ */
+function mensajeDeError(err: unknown): string | null {
+  if (err instanceof Error) return err.message;
+  if (typeof err === "string" && err.trim()) return err;
+  if (err && typeof err === "object") {
+    const o = err as { message?: unknown; details?: unknown; hint?: unknown };
+    const partes = [o.message, o.details, o.hint].filter(
+      (p): p is string => typeof p === "string" && p.trim().length > 0,
+    );
+    if (partes.length > 0) return partes.join(" · ");
+  }
+  return null;
 }
 
 export async function deleteReserva(id: string) {

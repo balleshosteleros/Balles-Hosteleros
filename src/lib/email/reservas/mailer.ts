@@ -231,7 +231,44 @@ export async function enviarReservaEmail(
     const yaEnviado = reservaData[auditCol as keyof typeof reservaData] as
       | string
       | null;
-    if (yaEnviado) return { ok: true, idempotente: true };
+    if (yaEnviado) {
+      // El correo salió, pero puede no constar en el histórico: el sello de
+      // `reservas` y la fila de `reserva_email_envios` no se escriben juntos, y
+      // los envíos anteriores a que existiera el histórico solo dejaron sello.
+      // Sin esto, un correo enviado de verdad no aparecía en Comunicaciones
+      // (le pasaba al de confirmación mientras el de cancelación sí salía).
+      // Se rellena con el sello como fecha de envío, que es cuando ocurrió.
+      const { count } = await admin
+        .from("reserva_email_envios")
+        .select("id", { count: "exact", head: true })
+        .eq("reserva_id", reservaId)
+        .eq("tipo", tipo);
+      if ((count ?? 0) === 0) {
+        const actorPrevio = options.actor;
+        const { error: errBackfill } = await admin
+          .from("reserva_email_envios")
+          .insert({
+            reserva_id: reservaId,
+            empresa_id: empresaId,
+            tipo,
+            destinatario: email,
+            asunto: null,
+            // No se puede saber quién lo mandó en su momento: se deja sin
+            // firma en vez de atribuirlo a quien pasa por aquí ahora.
+            usuario_id: null,
+            usuario_nombre: null,
+            origen: actorPrevio?.origen ?? "AUTOMATICO",
+            enviado_at: yaEnviado,
+          });
+        if (errBackfill) {
+          console.error(
+            "[reservas][mailer] histórico (recuperar envío previo):",
+            errBackfill.message,
+          );
+        }
+      }
+      return { ok: true, idempotente: true };
+    }
   }
 
   const [{ data: empresaData }, { data: configData }, { data: plantillaData }] =

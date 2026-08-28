@@ -425,7 +425,11 @@ export async function crearReservaPublicaAction(
     zona: zonaFinal,
     grupo_zona_id: grupoZonaIdFinal,
     notas: data.notas ?? null,
-    origen: data.origen ?? null,
+    // Esta reserva ENTRA por el motor de la web: aunque no venga con la palabra
+    // clave de un enlace de campaña, su origen es la web y así debe constar.
+    // Con `null` el listado la daba por "Manual", que es justo lo contrario:
+    // parecía que la había metido alguien del restaurante a mano.
+    origen: data.origen ?? "RESERVA_WEB",
     estado: "CONFIRMADA",
     turno,
     codigo_id: codigoId,
