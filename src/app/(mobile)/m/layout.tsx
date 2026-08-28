@@ -5,6 +5,8 @@ import { PWARegister } from "@/features/mi-panel/mobile/components/PWARegister";
 import { MobileBottomNav } from "@/features/mi-panel/mobile/components/MobileBottomNav";
 import { MobileFichajeProvider } from "@/features/mi-panel/mobile/components/MobileFichajeProvider";
 import { VersionAutoUpdate } from "@/features/mi-panel/mobile/components/VersionAutoUpdate";
+import { MobileIdentidadProvider } from "@/features/mi-panel/mobile/components/MobileIdentidadProvider";
+import { getMobileIdentidad } from "@/features/mi-panel/mobile/lib/mobile-identidad-data";
 // import { NotificacionesGate } from "@/features/notificaciones/components/NotificacionesGate"; // desactivado en pruebas
 
 export const dynamic = "force-dynamic";
@@ -70,6 +72,11 @@ export default async function MobileLayout({ children }: { children: React.React
     redirect("/primer-acceso");
   }
 
+  // Identidad (quién eres + en qué empresa estás) una sola vez para toda la
+  // app móvil: la cabecera de CUALQUIER pantalla pinta el icono de empresa
+  // junto al del empleado, para poder cambiar de empresa desde donde estés.
+  const identidad = await getMobileIdentidad();
+
   return (
     // Columna a altura de pantalla: el contenido crece y la barra queda abajo
     // pegada por `sticky`. Antes era `pb-24` a ojo sobre una barra `fixed`, y en
@@ -81,6 +88,7 @@ export default async function MobileLayout({ children }: { children: React.React
     // pantalla de 720px). Es `clip` y NO `hidden` a propósito: `hidden` crea un
     // contenedor de scroll y rompería el `position: sticky` de la cabecera y de
     // la barra inferior.
+    <MobileIdentidadProvider value={identidad}>
     <div
       className="flex min-h-dvh flex-col overflow-x-clip bg-background text-foreground antialiased [--nav-h:calc(3.5rem+env(safe-area-inset-bottom))]"
     >
@@ -107,5 +115,6 @@ export default async function MobileLayout({ children }: { children: React.React
           los empleados no deben verse forzados a pulsar "Visto" para trabajar. */}
       {/* <NotificacionesGate /> */}
     </div>
+    </MobileIdentidadProvider>
   );
 }

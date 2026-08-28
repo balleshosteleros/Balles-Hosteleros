@@ -46,6 +46,8 @@ function inicialesNombre(nombre: string): string {
 interface Props {
   nombre: string;
   avatarUrl: string | null;
+  /** Tamaño del avatar: `sm` para la cabecera compacta de módulos. */
+  size?: "sm" | "md";
 }
 
 /**
@@ -53,7 +55,9 @@ interface Props {
  * software): cambiar vista paneles/departamentos y, abajo del todo, cerrar
  * sesión. No incluye "Ajustes" (eso es exclusivo del software de escritorio).
  */
-export function EmpleadoMenuMobile({ nombre, avatarUrl }: Props) {
+export function EmpleadoMenuMobile({ nombre, avatarUrl, size = "md" }: Props) {
+  const box = size === "sm" ? "h-7 w-7" : "h-9 w-9";
+  const px = size === "sm" ? 28 : 36;
   const router = useRouter();
   const pathname = usePathname() ?? "/m";
   const [confirmando, setConfirmando] = useState(false);
@@ -138,14 +142,14 @@ export function EmpleadoMenuMobile({ nombre, avatarUrl }: Props) {
             aria-label="Mi panel"
             className="flex shrink-0 items-center justify-center rounded-full focus:outline-none active:opacity-70"
           >
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-primary/10 ring-1 ring-border">
+            <span className={`${box} flex shrink-0 items-center justify-center overflow-hidden rounded-full bg-primary/10 ring-1 ring-border`}>
               {avatarUrl ? (
                 <Image
                   src={avatarUrl}
                   alt={nombre}
-                  width={36}
-                  height={36}
-                  className="h-9 w-9 object-cover"
+                  width={px}
+                  height={px}
+                  className={`${box} object-cover`}
                   unoptimized
                 />
               ) : (
