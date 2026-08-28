@@ -43,7 +43,11 @@ export function PaginaPublicaShell({
 
   const primario = branding?.color_primario ?? "#d0a000";
   const fondo = branding?.color_fondo ?? "#0b0b0c";
-  const logo = branding?.logo_url ?? null;
+  // ISOTIPO (icono sin texto), no el logotipo: el logotipo lleva dentro el
+  // nombre y la bajada "restaurante & tapeo", que a la altura de una barra se
+  // vuelven ilegibles. `contexto.logoUrl` ya resuelve el isotipo de la empresa
+  // y cae al logo solo si no hay isotipo cargado.
+  const logo = contexto?.logoUrl ?? branding?.logo_url ?? null;
   // Tipografía de marca. Las webs replicadas usan Montserrat (la misma que GHL);
   // el valor viejo "serif" no era una fuente real, así que caía al serif del
   // navegador y por eso no se parecían.
@@ -155,14 +159,24 @@ function NavPublica({
     >
       <div className="mx-auto max-w-6xl px-5 flex items-center gap-3">
         {logo ? (
-          // Logo ya redimensionado en el bucket: <img> directo, sin optimizador.
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={logo}
-            alt=""
-            /* Isotipo grande: el logo completo (marca + bajada) se veía
-               diminuto e ilegible a la altura de una barra. */
-            className={`w-auto object-contain transition-all ${solida ? "h-12" : "h-16 md:h-20"}`}
+          /* El isotipo es un PNG negro con transparencia: sobre la barra negra
+             se perdía por completo. Se pinta con `mask-image` usando el color
+             de marca, así el trazo se lee siempre sea cual sea el fondo. */
+          <span
+            aria-hidden
+            className={`block shrink-0 transition-all ${solida ? "h-11 w-11" : "h-14 w-14 md:h-16 md:w-16"}`}
+            style={{
+              backgroundColor: "var(--pw-primario)",
+              WebkitMaskImage: `url(${logo})`,
+              maskImage: `url(${logo})`,
+              WebkitMaskRepeat: "no-repeat",
+              maskRepeat: "no-repeat",
+              WebkitMaskPosition: "center",
+              maskPosition: "center",
+              WebkitMaskSize: "contain",
+              maskSize: "contain",
+              filter: "drop-shadow(0 2px 6px rgba(0,0,0,0.6))",
+            }}
           />
         ) : (
           <span className="font-semibold tracking-wide text-sm text-white/90">{titulo}</span>
