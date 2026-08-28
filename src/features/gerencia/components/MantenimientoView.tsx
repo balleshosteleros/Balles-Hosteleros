@@ -44,7 +44,18 @@ function mapDbToIncidencia(row: Record<string, unknown>): Incidencia {
     reparador: (row.reparador as string) ?? "",
     fechaPublicado: (row.fecha_publicado as string) ?? "",
     comentarios: (row.comentarios as string) ?? "",
-    actualizaciones: Array.isArray(row.actualizaciones) ? row.actualizaciones : [],
+    actualizaciones: Array.isArray(row.mantenimiento_actualizaciones)
+      ? (row.mantenimiento_actualizaciones as Record<string, unknown>[])
+          .map((a) => ({
+            id: a.id as string,
+            texto: (a.texto as string) ?? "",
+            fecha: ((a.fecha as string) ?? "").slice(0, 10),
+            apuntadoPor: (a.apuntado_por as string) ?? "",
+            resultado: (a.resultado as Actualizacion["resultado"]) ?? "EN PROGRESO",
+            minutos: (a.minutos as number) ?? 15,
+          }))
+          .sort((x, y) => x.fecha.localeCompare(y.fecha))
+      : [],
   };
 }
 
@@ -166,6 +177,7 @@ export function MantenimientoView() {
         apuntaDesperfecto: item.apuntaDesperfecto,
         reparador: item.reparador,
         comentarios: item.comentarios,
+        fechaPublicado: item.fechaPublicado,
       });
       if (res.ok) toast.success("Incidencia actualizada");
       else { toast.error("Error al actualizar incidencia"); loadIncidencias(); }
@@ -173,10 +185,12 @@ export function MantenimientoView() {
       const res = await createIncidenciaMantenimiento({
         desperfecto: item.desperfecto,
         localNombre: item.local,
+        estado: item.estado,
         gravedad: item.gravedad,
         apuntaDesperfecto: item.apuntaDesperfecto,
         reparador: item.reparador,
         comentarios: item.comentarios,
+        fechaPublicado: item.fechaPublicado,
       });
       if (res.ok) { toast.success("Incidencia creada"); loadIncidencias(); }
       else { toast.error(res.error ?? "Error al crear incidencia"); loadIncidencias(); }
@@ -190,9 +204,16 @@ export function MantenimientoView() {
       setDetalleItem(updated);
       return updated;
     }));
-    const res = await serverAddActualizacion(incidenciaId, act.texto, act.apuntadoPor);
-    if (res.ok) toast.success("Actualizacion agregada");
-    else { toast.error("Error al agregar actualizacion"); loadIncidencias(); }
+    const res = await serverAddActualizacion(
+      incidenciaId, act.texto, act.apuntadoPor, act.resultado, act.minutos, act.fecha
+    );
+    if (res.ok) {
+      toast.success("Actualización guardada");
+      loadIncidencias(); // el estado de la incidencia sigue al resultado elegido
+    } else {
+      toast.error(res.error ?? "Error al agregar actualizacion");
+      loadIncidencias();
+    }
   };
 
   const statCards: { label: string; key: Estado; color: string }[] = [

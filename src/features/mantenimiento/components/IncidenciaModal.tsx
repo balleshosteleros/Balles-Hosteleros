@@ -10,6 +10,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
+import { capitalizeText } from "@/shared/lib/utils";
+
+// Minimo de texto en comentarios: una incidencia sin describir no se puede reparar.
+const MIN_COMENTARIOS = 15;
 
 interface Props {
   open: boolean;
@@ -70,12 +74,44 @@ export function IncidenciaModal({ open, onClose, onSave, item }: Props) {
     actualizaciones: item?.actualizaciones ?? [],
   });
 
-  const set = (k: keyof typeof form, v: string) => setForm((p) => ({ ...p, [k]: v }));
+  // Todos los campos son obligatorios: una incidencia a medio rellenar no sirve
+  // para reclamar al seguro ni para reparto de trabajo.
+  const [errores, setErrores] = useState<Record<string, string>>({});
+
+  const set = (k: keyof typeof form, v: string) => {
+    setForm((p) => ({ ...p, [k]: v }));
+    setErrores((p) => {
+      if (!p[k]) return p;
+      const { [k]: _quitado, ...resto } = p;
+      return resto;
+    });
+  };
+
+  const validar = () => {
+    const faltan: Record<string, string> = {};
+    if (!form.desperfecto.trim()) faltan.desperfecto = "Describe el desperfecto";
+    if (!form.local) faltan.local = "Elige el local";
+    if (!form.estado) faltan.estado = "Elige el estado";
+    if (!form.gravedad) faltan.gravedad = "Elige la gravedad";
+    if (!form.apuntaDesperfecto) faltan.apuntaDesperfecto = "Elige quién lo apunta";
+    if (!form.reparador) faltan.reparador = "Elige el reparador";
+    if (!form.fechaPublicado) faltan.fechaPublicado = "Indica la fecha";
+    const comentarios = form.comentarios.trim();
+    if (!comentarios) faltan.comentarios = "Escribe un comentario";
+    else if (comentarios.length < MIN_COMENTARIOS)
+      faltan.comentarios = `Describe el desperfecto con al menos ${MIN_COMENTARIOS} caracteres (llevas ${comentarios.length})`;
+    setErrores(faltan);
+    return Object.keys(faltan).length === 0;
+  };
 
   const handleSave = () => {
+    if (!validar()) return;
     onSave({ ...form, id: item?.id ?? crypto.randomUUID() } as Incidencia);
     onClose();
   };
+
+  const MsgError = ({ campo }: { campo: string }) =>
+    errores[campo] ? <p className="text-xs text-destructive mt-1">{errores[campo]}</p> : null;
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
@@ -86,7 +122,13 @@ export function IncidenciaModal({ open, onClose, onSave, item }: Props) {
         <div className="grid grid-cols-2 gap-4 mt-2">
           <div className="col-span-2">
             <Label>Desperfecto</Label>
-            <Input value={form.desperfecto} onChange={(e) => set("desperfecto", e.target.value)} placeholder="Descripción del desperfecto..." />
+            <Input
+              value={form.desperfecto}
+              onChange={(e) => set("desperfecto", e.target.value)}
+              onBlur={(e) => set("desperfecto", capitalizeText(e.target.value.trim()))}
+              placeholder="Descripción del desperfecto..."
+            />
+            <MsgError campo="desperfecto" />
           </div>
           <div>
             <Label>Local</Label>
@@ -99,6 +141,7 @@ export function IncidenciaModal({ open, onClose, onSave, item }: Props) {
                 {locales.map((l) => <SelectItem key={l} value={l}>{l}</SelectItem>)}
               </SelectContent>
             </Select>
+            <MsgError campo="local" />
           </div>
           <div>
             <Label>Estado</Label>
@@ -106,6 +149,7 @@ export function IncidenciaModal({ open, onClose, onSave, item }: Props) {
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>{ESTADOS.map((e) => <SelectItem key={e} value={e}>{e}</SelectItem>)}</SelectContent>
             </Select>
+            <MsgError campo="estado" />
           </div>
           <div>
             <Label>Gravedad</Label>
@@ -113,6 +157,7 @@ export function IncidenciaModal({ open, onClose, onSave, item }: Props) {
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>{GRAVEDADES.map((g) => <SelectItem key={g} value={g}>{g}</SelectItem>)}</SelectContent>
             </Select>
+            <MsgError campo="gravedad" />
           </div>
           <div>
             <Label>Apuntado por</Label>
@@ -134,6 +179,7 @@ export function IncidenciaModal({ open, onClose, onSave, item }: Props) {
                 ))}
               </SelectContent>
             </Select>
+            <MsgError campo="apuntaDesperfecto" />
           </div>
           <div>
             <Label>Reparador</Label>
@@ -141,14 +187,22 @@ export function IncidenciaModal({ open, onClose, onSave, item }: Props) {
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>{REPARADORES.map((r) => <SelectItem key={r} value={r}>{r}</SelectItem>)}</SelectContent>
             </Select>
+            <MsgError campo="reparador" />
           </div>
           <div>
             <Label>Fecha publicado</Label>
             <Input type="date" value={form.fechaPublicado} onChange={(e) => set("fechaPublicado", e.target.value)} />
+            <MsgError campo="fechaPublicado" />
           </div>
           <div className="col-span-2">
             <Label>Comentarios</Label>
             <Textarea value={form.comentarios} onChange={(e) => set("comentarios", e.target.value)} rows={3} placeholder="Notas adicionales..." />
+            {!errores.comentarios && (
+              <p className="text-xs text-muted-foreground mt-1">
+                Mínimo {MIN_COMENTARIOS} caracteres para describirlo
+              </p>
+            )}
+            <MsgError campo="comentarios" />
           </div>
         </div>
         <div className="flex justify-end gap-2 mt-4">

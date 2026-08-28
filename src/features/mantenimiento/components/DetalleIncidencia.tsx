@@ -1,16 +1,11 @@
-import { useState, useEffect } from "react";
-import { Incidencia, Actualizacion } from "@/features/empresa/data/mantenimiento";
-import { getEmpleadosActivos, type EmpleadoActivo } from "@/features/rrhh/actions/empleados-actions";
-import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
-import { useAuth } from "@/features/auth/contexts/auth-context";
+import { useState } from "react";
+import { Incidencia, Actualizacion, formatearDuracion } from "@/features/empresa/data/mantenimiento";
+import { ActualizarIncidenciaDialog } from "@/features/mantenimiento/components/ActualizarIncidenciaDialog";
 import { tiempoTranscurrido } from "@/shared/lib/timeUtils";
+import { cn } from "@/lib/utils";
 import { StatusBadge, GravedadBadge } from "@/features/mantenimiento/components/Badges";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Clock, Plus, User, CalendarDays, MessageSquare } from "lucide-react";
 
@@ -23,46 +18,8 @@ interface Props {
 
 export function DetalleIncidencia({ open, onClose, item, onAddActualizacion }: Props) {
   const hoy = new Date().toISOString().slice(0, 10);
-  const { empresaActual } = useEmpresa();
-  const { user } = useAuth();
 
   const [showForm, setShowForm] = useState(false);
-  const [texto, setTexto] = useState("");
-  const [fecha, setFecha] = useState(hoy);
-  const [apuntadoPor, setApuntadoPor] = useState("");
-  const [empleados, setEmpleados] = useState<EmpleadoActivo[]>([]);
-
-  useEffect(() => {
-    let alive = true;
-    getEmpleadosActivos(empresaActual.dbId).then((r) => {
-      if (!alive) return;
-      const lista = r.ok ? r.data : [];
-      setEmpleados(lista);
-      // Preseleccionar al empleado de la sesión por userId (identificador fiable),
-      // usando su nombreCompleto de la lista para que el value case exacto con una
-      // opción (evita el duplicado "huérfano" sin puesto/departamento).
-      const yo = lista.find((e) => e.userId && e.userId === user?.id);
-      if (yo) setApuntadoPor((p) => (p ? p : yo.nombreCompleto));
-    });
-    return () => { alive = false; };
-  }, [empresaActual.dbId, user?.id]);
-
-  const nombreSesion = empleados.find((e) => e.userId && e.userId === user?.id)?.nombreCompleto ?? "";
-
-  const handleAdd = () => {
-    if (!texto.trim()) return;
-    const act: Actualizacion = {
-      id: crypto.randomUUID(),
-      texto: texto.trim(),
-      fecha,
-      apuntadoPor,
-    };
-    onAddActualizacion(item.id, act);
-    setTexto("");
-    setFecha(hoy);
-    setApuntadoPor(nombreSesion);
-    setShowForm(false);
-  };
 
   const tiempoDesdeCreacion = tiempoTranscurrido(item.fechaPublicado, hoy);
 
@@ -121,51 +78,26 @@ export function DetalleIncidencia({ open, onClose, item, onAddActualizacion }: P
           {/* Updates section */}
           <div className="flex items-center justify-between">
             <h4 className="font-bold text-foreground text-sm">HISTORIAL DE ACTUALIZACIONES</h4>
-            <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setShowForm(!showForm)}>
-              <Plus className="h-3.5 w-3.5" /> AÑADIR ACTUALIZACIÓN
+            <Button size="sm" className="gap-1.5" onClick={() => setShowForm(true)}>
+              <Plus className="h-3.5 w-3.5" /> ACTUALIZAR
             </Button>
           </div>
 
-          {/* New update form */}
-          {showForm && (
-            <div className="rounded-lg border bg-muted/30 p-4 space-y-3">
-              <div>
-                <Label className="text-xs font-bold">ACTUALIZAR DESPERFECTO</Label>
-                <Textarea value={texto} onChange={(e) => setTexto(e.target.value)} rows={3} placeholder="Detalle de la actualización..." />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <Label className="text-xs font-bold">FECHA DE ACTUALIZACIÓN</Label>
-                  <Input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} />
-                </div>
-                <div>
-                  <Label className="text-xs font-bold">APUNTADO POR</Label>
-                  <Select value={apuntadoPor} onValueChange={setApuntadoPor}>
-                    <SelectTrigger><SelectValue placeholder="Selecciona empleado" /></SelectTrigger>
-                    <SelectContent>
-                      {apuntadoPor && !empleados.some((e) => e.nombreCompleto === apuntadoPor) && (
-                        <SelectItem value={apuntadoPor}>{apuntadoPor}</SelectItem>
-                      )}
-                      {empleados.map((e) => (
-                        <SelectItem key={e.empleadoId} value={e.nombreCompleto}>
-                          {e.nombreCompleto}
-                          {(e.puesto || e.departamento) && (
-                            <span className="text-muted-foreground">
-                              {" — "}{[e.puesto, e.departamento].filter(Boolean).join(" · ")}
-                            </span>
-                          )}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              <div className="flex justify-end gap-2">
-                <Button size="sm" variant="ghost" onClick={() => setShowForm(false)}>CANCELAR</Button>
-                <Button size="sm" onClick={handleAdd}>GUARDAR ACTUALIZACIÓN</Button>
-              </div>
-            </div>
-          )}
+          <ActualizarIncidenciaDialog
+            open={showForm}
+            onClose={() => setShowForm(false)}
+            item={item}
+            onGuardar={({ texto, fecha, apuntadoPor, resultado, minutos }) => {
+              onAddActualizacion(item.id, {
+                id: crypto.randomUUID(),
+                texto,
+                fecha,
+                apuntadoPor,
+                resultado,
+                minutos,
+              });
+            }}
+          />
 
           {/* Timeline */}
           {item.actualizaciones.length === 0 && !showForm && (
@@ -199,6 +131,20 @@ export function DetalleIncidencia({ open, onClose, item, onAddActualizacion }: P
                         <User className="h-3.5 w-3.5" />
                         <span className="font-semibold">{act.apuntadoPor}</span>
                       </div>
+                    </div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className={cn(
+                        "inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold border",
+                        act.resultado === "TERMINADO"
+                          ? "bg-status-done/15 text-status-done border-status-done/30"
+                          : "bg-status-progress/15 text-status-progress border-status-progress/30"
+                      )}>
+                        {act.resultado}
+                      </span>
+                      <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                        <Clock className="h-3 w-3" /> Dedicado:{" "}
+                        <strong className="text-foreground">{formatearDuracion(act.minutos)}</strong>
+                      </span>
                     </div>
                     <p className="text-sm text-foreground">{act.texto}</p>
                     <div className="flex flex-wrap gap-3 text-[11px] text-muted-foreground">
