@@ -64,8 +64,15 @@ export function urlRed(red: keyof RedesEmpresa, valor: string | null | undefined
       return `https://www.facebook.com/${encodeURIComponent(handle.replace(/\s+/g, ""))}`;
     case "tiktok":
       return `https://www.tiktok.com/@${encodeURIComponent(handle)}`;
-    case "whatsapp":
-      return `https://wa.me/${handle.replace(/\D/g, "")}`;
+    case "whatsapp": {
+      // wa.me exige el número con prefijo de país y sin signos. En Ajustes se
+      // escribe como se tenga a mano ("612 345 678", "+34 612345678",
+      // "0034612345678"): aquí se normaliza para que el enlace funcione siempre.
+      let n = handle.replace(/\D/g, "");
+      if (n.startsWith("00")) n = n.slice(2);
+      if (n.length === 9) n = `34${n}`; // móvil español sin prefijo
+      return n.length >= 11 ? `https://wa.me/${n}` : null;
+    }
   }
 }
 

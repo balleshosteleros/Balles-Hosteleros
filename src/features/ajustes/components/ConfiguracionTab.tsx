@@ -11,13 +11,14 @@ import { toast } from "sonner";
 import { type DatosGenerales, type ConfigOperativa } from "@/features/ajustes/data/ajustes";
 import { saveEmpresaAjustes } from "@/features/empresa/actions/empresas-actions";
 
-function Field({ label, value, onChange, type = "text", placeholder = "" }: {
-  label: string; value: string; onChange: (v: string) => void; type?: string; placeholder?: string;
+function Field({ label, value, onChange, type = "text", placeholder = "", ayuda = "" }: {
+  label: string; value: string; onChange: (v: string) => void; type?: string; placeholder?: string; ayuda?: string;
 }) {
   return (
     <div>
       <Label className="text-xs font-bold">{label}</Label>
       <Input type={type} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} className="mt-1" />
+      {ayuda ? <p className="mt-1 text-[11px] leading-snug text-muted-foreground">{ayuda}</p> : null}
     </div>
   );
 }
@@ -87,6 +88,14 @@ export const ConfiguracionTab = forwardRef<ConfiguracionTabHandle, { hideSaveBut
           <Field label="Dirección del local"  value={d.direccionLocal}     onChange={(v) => setD("direccionLocal", v)} placeholder="Si es distinta de la fiscal" />
           <Field label="Teléfono principal"   type="tel"   value={d.telefonoPrincipal}   onChange={(v) => setD("telefonoPrincipal", v)} placeholder="912345678" />
           <Field label="Teléfono secundario"  type="tel"   value={d.telefonoSecundario}  onChange={(v) => setD("telefonoSecundario", v)} placeholder="Opcional" />
+          <Field
+            label="WhatsApp de empresa"
+            type="tel"
+            value={d.whatsapp}
+            onChange={(v) => setD("whatsapp", v)}
+            placeholder="612 345 678"
+            ayuda="Móvil con WhatsApp. Es el número del botón flotante de la web: si se deja vacío, el botón no aparece."
+          />
         </CardContent>
       </Card>
 
@@ -110,7 +119,6 @@ export const ConfiguracionTab = forwardRef<ConfiguracionTabHandle, { hideSaveBut
         <CardHeader className="px-4 pt-3 pb-2"><CardTitle className="text-base">Web y redes sociales</CardTitle></CardHeader>
         <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 px-4 pb-3 pt-0">
           <Field label="Web"             value={d.web}       onChange={(v) => setD("web", v)} />
-          <Field label="WhatsApp" value={d.whatsapp} onChange={(v) => setD("whatsapp", v)} />
           <Field label="Instagram"        value={d.instagram} onChange={(v) => setD("instagram", v)} />
           <Field label="Facebook"         value={d.facebook}  onChange={(v) => setD("facebook", v)} />
           <Field label="TikTok"           value={d.tiktok}    onChange={(v) => setD("tiktok", v)} />
