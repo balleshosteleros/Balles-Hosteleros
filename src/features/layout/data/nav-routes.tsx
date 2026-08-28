@@ -132,7 +132,6 @@ export const logisticaSubs: SubItem[] = [
   { title: "PRODUCTOS", url: "/logistica/productos", icon: Apple },
   { title: "PEDIDOS", url: "/logistica/pedidos", icon: ShoppingCart },
   { title: "STOCK", url: "/logistica/stock", icon: Warehouse },
-  { title: "MOVIMIENTOS", url: "/logistica/movimientos", icon: ArrowLeftRight },
   { title: "INVENTARIOS", url: "/logistica/inventarios", icon: ClipboardList },
   { title: "IMPORTAR CATÁLOGO", url: "/logistica/importar-catalogo", icon: Download },
 ];

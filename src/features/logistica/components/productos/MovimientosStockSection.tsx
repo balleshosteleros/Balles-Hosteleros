@@ -39,7 +39,15 @@ import { formatFechaEnZona } from "@/features/empresa/lib/zona-horaria";
 
 // `fecha` es TIMESTAMPTZ (instante): se muestra en la zona de la empresa (PRP-069).
 function fmtFecha(iso: string, tz: string): string {
-  return formatFechaEnZona(iso, tz, { day: "2-digit", month: "short", year: "numeric" });
+  return formatFechaEnZona(iso, tz, {
+    day: "2-digit", month: "short", year: "numeric",
+    hour: "2-digit", minute: "2-digit",
+  });
+}
+/** Importes: dos decimales o guion si no se sabe (null != 0 euros). */
+function fmtEuros(n: number | null | undefined): string {
+  if (n == null) return "—";
+  return `${formatNumero(Number(n), { max: 2, min: 2 })} €`;
 }
 function fmtNum(n: number): string {
   return formatNumero(Number(n), { max: 2 });
@@ -54,14 +62,44 @@ const ICONO_TIPO: Record<string, { Icon: typeof ArrowDownToLine; color: string }
   ajuste: { Icon: ArrowDownToLine, color: "text-muted-foreground" },
 };
 
+/**
+ * Envoltorios del historial. En la ficha del producto va en una tarjeta con título; dentro
+ * de la pantalla de Stock se despliega bajo una fila, donde la tarjeta sobra y descuadra.
+ * Definidos aquí fuera a propósito: crearlos dentro del render remontaría el subárbol en
+ * cada pintado y se perderían los filtros que el usuario acabara de poner.
+ */
+function Envoltorio({ compacto, children }: { compacto: boolean; children: React.ReactNode }) {
+  if (compacto) return <div className="rounded-md border bg-muted/20 p-3">{children}</div>;
+  return <Card>{children}</Card>;
+}
+function Cabecera({
+  compacto,
+  className,
+  children,
+}: {
+  compacto: boolean;
+  className?: string;
+  children: React.ReactNode;
+}) {
+  if (compacto) return <div className={className}>{children}</div>;
+  return <CardHeader className={className}>{children}</CardHeader>;
+}
+function Cuerpo({ compacto, children }: { compacto: boolean; children: React.ReactNode }) {
+  if (compacto) return <div>{children}</div>;
+  return <CardContent>{children}</CardContent>;
+}
+
 /** Histórico de movimientos (kardex) dentro de la ficha del producto. SIN columna de almacén.
  *  Incluye el interruptor "Controlar stock" (Sí/No) con aviso y conservación del histórico. */
 export function MovimientosStockSection({
   productoId,
   unidad,
+  compacto = false,
 }: {
   productoId: string;
   unidad?: string;
+  /** Sin tarjeta ni titulo: para desplegarlo dentro de otra tabla (pantalla de Stock). */
+  compacto?: boolean;
 }) {
   const { empresaActual } = useEmpresa();
   const tz = empresaActual?.zonaHoraria ?? "";
@@ -109,10 +147,10 @@ export function MovimientosStockSection({
   }
 
   return (
-    <Card>
-      <CardHeader className="pb-3">
+    <Envoltorio compacto={compacto}>
+      <Cabecera compacto={compacto} className={compacto ? "pb-2" : "pb-3"}>
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <CardTitle className="text-base">Movimientos de stock</CardTitle>
+          {!compacto && <CardTitle className="text-base">Movimientos de stock</CardTitle>}
           <label className="flex items-center gap-2 text-xs text-muted-foreground">
             Controlar stock
             <select
@@ -161,8 +199,8 @@ export function MovimientosStockSection({
             )}
           </div>
         )}
-      </CardHeader>
-      <CardContent>
+      </Cabecera>
+      <Cuerpo compacto={compacto}>
         {controla === false ? (
           <div className="rounded-md border border-amber-300 bg-amber-50/60 p-4 text-sm dark:border-amber-900/50 dark:bg-amber-950/30">
             <p className="font-medium text-foreground">Control de stock desactivado</p>
@@ -190,6 +228,8 @@ export function MovimientosStockSection({
                   <th className="py-2 font-medium">Tipo</th>
                   <th className="py-2 text-right font-medium">Cantidad</th>
                   <th className="py-2 text-right font-medium">Saldo</th>
+                  <th className="py-2 text-right font-medium">Coste ud.</th>
+                  <th className="py-2 text-right font-medium">Valor</th>
                   <th className="py-2 font-medium">Referencia</th>
                 </tr>
               </thead>
@@ -232,6 +272,14 @@ export function MovimientosStockSection({
                           )}
                         </td>
                         <td className="py-2 text-right tabular-nums">{fmtNum(m.saldo_resultante)}</td>
+                        <td className="py-2 text-right tabular-nums text-muted-foreground">
+                          {fmtEuros(m.coste_unitario)}
+                        </td>
+                        <td className="py-2 text-right tabular-nums">
+                          {m.valor_total == null
+                            ? "—"
+                            : `${m.signo === 1 ? "+" : "−"}${fmtEuros(Math.abs(Number(m.valor_total)))}`}
+                        </td>
                         <td className="py-2">
                           <span className="inline-flex items-center gap-1">
                             {desplegable &&
@@ -246,7 +294,7 @@ export function MovimientosStockSection({
                       </tr>
                       {abiertaEsta && m.documento_id && (
                         <tr>
-                          <td colSpan={5} className="pb-3">
+                          <td colSpan={7} className="pb-3">
                             <FacturaAgoraInline ticketId={m.documento_id} />
                           </td>
                         </tr>
@@ -258,7 +306,7 @@ export function MovimientosStockSection({
             </table>
           </div>
         )}
-      </CardContent>
+      </Cuerpo>
 
       <AlertDialog open={pendiente !== null} onOpenChange={(o) => !o && setPendiente(null)}>
         <AlertDialogContent>
@@ -282,6 +330,6 @@ export function MovimientosStockSection({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </Card>
+    </Envoltorio>
   );
 }

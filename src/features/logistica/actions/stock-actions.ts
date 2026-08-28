@@ -128,7 +128,6 @@ export async function crearAjusteStock(input: {
     }
 
     revalidatePath("/logistica/stock");
-    revalidatePath("/logistica/movimientos");
     return { ok: true, saldoAnterior, saldoResultante: resultado.saldoResultante };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : "Error desconocido";

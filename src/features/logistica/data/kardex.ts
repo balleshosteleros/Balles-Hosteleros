@@ -13,6 +13,10 @@ export interface StockMovimiento {
   cantidad: number;
   signo: 1 | -1;
   saldo_resultante: number;
+  /** Coste por unidad de stock, congelado al registrar. null = no se pudo saber. */
+  coste_unitario: number | null;
+  /** cantidad x coste_unitario, congelado al registrar. */
+  valor_total: number | null;
   referencia: string | null;
   documento_tipo: DocumentoTipo;
   documento_id: string | null;

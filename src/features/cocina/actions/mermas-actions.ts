@@ -141,7 +141,6 @@ export async function createMerma(
 
     revalidatePath("/cocina/mermas");
     revalidatePath("/logistica/stock");
-    revalidatePath("/logistica/movimientos");
     return { ok: true };
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Error desconocido";
@@ -188,7 +187,6 @@ export async function deleteMerma(id: string): Promise<{ ok: boolean; error?: st
 
     revalidatePath("/cocina/mermas");
     revalidatePath("/logistica/stock");
-    revalidatePath("/logistica/movimientos");
     return { ok: true };
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Error desconocido";

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect, useCallback, type ReactNode } from "react";
+import { Fragment, useState, useMemo, useEffect, useCallback, type ReactNode } from "react";
 import { usePathname } from "next/navigation";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { useSincronizacionEnVivo } from "@/shared/hooks/useSincronizacionEnVivo";
@@ -17,6 +17,7 @@ import {
 } from "@/features/logistica/actions/stock-actions";
 import { listProductos } from "@/features/logistica/actions/producto-actions";
 import TemporadasConfig from "@/features/logistica/components/stock/TemporadasConfig";
+import { MovimientosStockSection } from "@/features/logistica/components/productos/MovimientosStockSection";
 import { Input } from "@/components/ui/input";
 import { NumberInput } from "@/shared/components/NumberInput";
 import { Button } from "@/components/ui/button";
@@ -28,7 +29,7 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Popover, PopoverContent, PopoverTrigger } from "@/shared/components/ui/popover";
 import {
-  ArrowUpDown, Pencil, Check, X, Sun, Settings, ChevronDown, ShoppingCart, FlaskConical, ArrowLeft, Scale,
+  ArrowUpDown, Pencil, Check, X, Sun, Settings, ChevronDown, ChevronRight, ShoppingCart, FlaskConical, ArrowLeft, Scale,
 } from "lucide-react";
 import {
   SubmoduleToolbar,
@@ -291,6 +292,11 @@ export function StockView() {
     else { toast.error("Error al actualizar stock"); loadStockData(); }
   };
   const cancelEdit = () => setEditingId(null);
+
+  // Historial desplegable por producto (PRP-080: Movimientos deja de ser pantalla aparte).
+  // Se indexa por productoId a proposito: `p.id` es el id de la FILA DE STOCK cuando ya
+  // hay existencias, y el del producto cuando todavia no — no sirve como clave estable.
+  const [historialAbierto, setHistorialAbierto] = useState<string | null>(null);
 
   // ─── Corregir existencias (ajuste con motivo, vía kardex) ───────────────────
   // Editar la cantidad a pelo descuadraría el histórico: el listado diría una cosa y los
@@ -811,8 +817,10 @@ export function StockView() {
                   <tbody>
                     {filtered.map((p) => {
                       const isEditing = editingId === p.id;
+                      const abierto = !!p.productoId && historialAbierto === p.productoId;
                       return (
-                        <tr key={p.id} className="border-b hover:bg-muted/30 transition-colors">
+                        <Fragment key={p.id}>
+                        <tr className="border-b hover:bg-muted/30 transition-colors">
                           <td className="px-3 py-2.5">
                             <Checkbox checked={selected.has(p.id)} onCheckedChange={() => toggleSelect(p.id)} />
                           </td>
@@ -825,12 +833,36 @@ export function StockView() {
                               </div>
                             ) : (
                               <div className="flex gap-1">
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  className="h-7 w-7"
+                                  disabled={!p.productoId}
+                                  onClick={() => p.productoId && setHistorialAbierto(abierto ? null : p.productoId)}
+                                  title={abierto ? "Ocultar movimientos" : "Ver movimientos"}
+                                  aria-label={abierto ? "Ocultar movimientos" : "Ver movimientos"}
+                                  aria-expanded={abierto}
+                                >
+                                  {abierto ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+                                </Button>
                                 <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => startEdit(p)} title="Editar mínimo y máximo" aria-label="Editar mínimo y máximo"><Pencil className="h-3.5 w-3.5" /></Button>
                                 <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => abrirAjuste(p)} title="Corregir existencias" aria-label="Corregir existencias"><Scale className="h-3.5 w-3.5" /></Button>
                               </div>
                             )}
                           </td>
                         </tr>
+                        {abierto && p.productoId && (
+                          <tr className="border-b bg-muted/10">
+                            <td colSpan={columnasRender.length + 2} className="px-3 pb-3">
+                              <MovimientosStockSection
+                                productoId={p.productoId}
+                                unidad={p.unidad}
+                                compacto
+                              />
+                            </td>
+                          </tr>
+                        )}
+                        </Fragment>
                       );
                     })}
                     {filtered.length === 0 && (

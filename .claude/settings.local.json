@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git -C ../la-forja-de-saas remote -v)",
+      "Bash(sed -E 's#\\(https://\\)[^@/]+@#\\\\1***@#g')",
+      "Bash(ssh -o BatchMode=yes -o ConnectTimeout=10 -T git@github.com)"
+    ]
+  }
+}
