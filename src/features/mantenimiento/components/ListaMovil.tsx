@@ -78,14 +78,23 @@ export function ListaMovil({ items, hoy, onVerDatos, onActualizar }: Props) {
 
             {/* Botón a lo ancho: es la acción principal desde el móvil. Un
                 desperfecto terminado ya no se actualiza. */}
-            <Button
-              variant={terminado ? "secondary" : "exito"}
-              disabled={terminado}
-              className="w-full h-11"
-              onClick={(e) => { e.stopPropagation(); onActualizar(item); }}
-            >
-              {terminado ? "Terminado" : "Actualizar"}
-            </Button>
+            {terminado ? (
+              <Button
+                variant="secondary"
+                className="w-full h-11"
+                onClick={(e) => { e.stopPropagation(); onVerDatos(item); }}
+              >
+                Ver actualizaciones
+              </Button>
+            ) : (
+              <Button
+                variant="exito"
+                className="w-full h-11"
+                onClick={(e) => { e.stopPropagation(); onActualizar(item); }}
+              >
+                Actualizar
+              </Button>
+            )}
           </div>
         );
       })}

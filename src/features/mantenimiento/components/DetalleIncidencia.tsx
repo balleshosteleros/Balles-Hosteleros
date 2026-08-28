@@ -1,4 +1,13 @@
 import { useState, useEffect } from "react";
+import { listHistorialEstados } from "@/features/gerencia/actions/mantenimiento-actions";
+
+type HistorialEstado = {
+  id: string;
+  estado_anterior: string | null;
+  estado_nuevo: string;
+  cambiado_por_nombre: string | null;
+  fecha: string;
+};
 import { Incidencia, Actualizacion, formatearDuracion } from "@/features/empresa/data/mantenimiento";
 import { ActualizarIncidenciaDialog } from "@/features/mantenimiento/components/ActualizarIncidenciaDialog";
 import { tiempoTranscurrido } from "@/shared/lib/timeUtils";
@@ -28,6 +37,16 @@ export function DetalleIncidencia({ open, onClose, item, onAddActualizacion, abr
   const terminado = item.estado === "TERMINADO";
 
   const [showForm, setShowForm] = useState(abrirActualizar && !terminado);
+  const [historialEstados, setHistorialEstados] = useState<HistorialEstado[]>([]);
+
+  useEffect(() => {
+    if (!open) return;
+    let alive = true;
+    listHistorialEstados(item.id).then((r) => {
+      if (alive && r.ok) setHistorialEstados(r.data as unknown as HistorialEstado[]);
+    });
+    return () => { alive = false; };
+  }, [open, item.id, item.estado]);
 
   // Al abrir la ficha para actualizar, el formulario sale ya desplegado (el
   // estado inicial no basta: la ficha puede seguir montada de una apertura
@@ -87,6 +106,22 @@ export function DetalleIncidencia({ open, onClose, item, onAddActualizacion, abr
               <p className="text-lg font-black text-primary">{tiempoDesdeCreacion}</p>
             </div>
           </div>
+
+          {historialEstados.length > 0 && (
+            <div className="rounded-lg border bg-muted/30 p-3 space-y-1.5">
+              <p className="text-xs font-bold text-muted-foreground">Cambios de estado</p>
+              {historialEstados.map((h) => (
+                <p key={h.id} className="text-xs text-foreground">
+                  <span className="text-muted-foreground">{h.fecha.slice(0, 10)}</span>{" "}
+                  {h.estado_anterior ? `${h.estado_anterior} → ` : "Alta: "}
+                  <strong>{h.estado_nuevo}</strong>
+                  {h.cambiado_por_nombre && (
+                    <span className="text-muted-foreground"> · {h.cambiado_por_nombre}</span>
+                  )}
+                </p>
+              ))}
+            </div>
+          )}
 
           <Separator />
 

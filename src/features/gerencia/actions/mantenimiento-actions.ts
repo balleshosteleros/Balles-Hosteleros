@@ -121,6 +121,25 @@ export async function updateIncidencia(
 ) {
   try {
     const { supabase } = await getContext();
+
+    // Un desperfecto TERMINADO se consulta, no se edita. Lo unico que sigue
+    // abierto es el estado, para poder reabrirlo si se cerro por error o si la
+    // averia vuelve.
+    const { data: actual } = await supabase
+      .from("mantenimiento")
+      .select("estado")
+      .eq("id", id)
+      .single();
+    if (actual?.estado === "TERMINADO") {
+      const soloEstado =
+        Object.keys(updates).length === 1 && updates.estado !== undefined;
+      if (!soloEstado)
+        return {
+          ok: false,
+          error: "Este desperfecto está terminado: solo se puede reabrir cambiando su estado",
+        };
+    }
+
     // Convert camelCase inputs to snake_case DB fields
     const dbUpdates: Record<string, unknown> = {
       updated_at: new Date().toISOString(),
@@ -199,6 +218,23 @@ export async function addActualizacion(
     const msg = err instanceof Error ? err.message : "Error desconocido";
     console.error("[mantenimiento] addActualizacion:", msg);
     return { ok: false, error: msg };
+  }
+}
+
+/** Historial de cambios de estado: quien lo movio, de que a que y cuando. */
+export async function listHistorialEstados(incidenciaId: string) {
+  try {
+    const { supabase } = await getContext();
+    const { data, error } = await supabase
+      .from("mantenimiento_estados_historial")
+      .select("*")
+      .eq("incidencia_id", incidenciaId)
+      .order("fecha", { ascending: true });
+    if (error) throw error;
+    return { ok: true, data: data ?? [] };
+  } catch (err) {
+    console.error("[mantenimiento] listHistorialEstados:", err);
+    return { ok: false, data: [] };
   }
 }
 

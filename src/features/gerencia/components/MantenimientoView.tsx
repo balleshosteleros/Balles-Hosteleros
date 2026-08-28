@@ -307,7 +307,7 @@ export function MantenimientoView() {
       ),
       td: (item) => (
         <td key="local" className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
-          <Select value={item.local} onValueChange={(v) => updateField(item.id, "local", v)}>
+          <Select value={item.local} disabled={item.estado === "TERMINADO"} onValueChange={(v) => updateField(item.id, "local", v)}>
             <SelectTrigger className="h-8 text-xs w-[110px]"><SelectValue placeholder="Local" /></SelectTrigger>
             <SelectContent>
               {item.local && !locales.includes(item.local) && (
@@ -360,7 +360,7 @@ export function MantenimientoView() {
       ),
       td: (item) => (
         <td key="gravedad" className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
-          <Select value={item.gravedad} onValueChange={(v) => updateField(item.id, "gravedad", v)}>
+          <Select value={item.gravedad} disabled={item.estado === "TERMINADO"} onValueChange={(v) => updateField(item.id, "gravedad", v)}>
             <SelectTrigger className="h-8 text-xs w-[120px] border-0 p-0"><GravedadBadge value={item.gravedad} /></SelectTrigger>
             <SelectContent>{GRAVEDADES.map((g) => <SelectItem key={g} value={g}>{g}</SelectItem>)}</SelectContent>
           </Select>
@@ -384,7 +384,7 @@ export function MantenimientoView() {
       ),
       td: (item) => (
         <td key="apuntaDesperfecto" className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
-          <Select value={item.apuntaDesperfecto} onValueChange={(v) => updateField(item.id, "apuntaDesperfecto", v)}>
+          <Select value={item.apuntaDesperfecto} disabled={item.estado === "TERMINADO"} onValueChange={(v) => updateField(item.id, "apuntaDesperfecto", v)}>
             <SelectTrigger className="h-8 text-xs w-[160px]"><SelectValue placeholder="Empleado" /></SelectTrigger>
             <SelectContent>
               {item.apuntaDesperfecto && !empleados.some((e) => e.nombreCompleto === item.apuntaDesperfecto) && (
@@ -422,7 +422,7 @@ export function MantenimientoView() {
       ),
       td: (item) => (
         <td key="reparador" className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
-          <Select value={item.reparador} onValueChange={(v) => updateField(item.id, "reparador", v)}>
+          <Select value={item.reparador} disabled={item.estado === "TERMINADO"} onValueChange={(v) => updateField(item.id, "reparador", v)}>
             <SelectTrigger className="h-8 text-xs w-[150px]"><SelectValue /></SelectTrigger>
             <SelectContent>{REPARADORES.map((r) => <SelectItem key={r} value={r}>{r}</SelectItem>)}</SelectContent>
           </Select>
@@ -445,7 +445,7 @@ export function MantenimientoView() {
       ),
       td: (item) => (
         <td key="fechaPublicado" className="px-3 py-2.5 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
-          <Input type="date" value={item.fechaPublicado} onChange={(e) => updateField(item.id, "fechaPublicado", e.target.value)} className="h-8 text-xs w-[130px]" />
+          <Input type="date" value={item.fechaPublicado} disabled={item.estado === "TERMINADO"} onChange={(e) => updateField(item.id, "fechaPublicado", e.target.value)} className="h-8 text-xs w-[130px]" />
         </td>
       ),
     },
@@ -581,7 +581,10 @@ export function MantenimientoView() {
           </thead>
           <tbody>
             {filtered.map((item) => (
-              <tr key={item.id} className="border-b hover:bg-muted/30 transition-colors cursor-pointer" onClick={() => { setEditItem(item); setModalOpen(true); }}>
+              <tr key={item.id} className="border-b hover:bg-muted/30 transition-colors cursor-pointer" onClick={() => {
+                if (item.estado === "TERMINADO") { setAbrirActualizar(false); setDetalleItem(item); return; }
+                setEditItem(item); setModalOpen(true);
+              }}>
                 {columnasRender.map((c) => columnDefs[c.campo]?.td(item))}
                 <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
                   <Button variant="ghost" size="sm" className="gap-1.5 text-xs text-primary" onClick={() => { setAbrirActualizar(false); setDetalleItem(item); }}>
