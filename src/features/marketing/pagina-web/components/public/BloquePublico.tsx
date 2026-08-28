@@ -1173,7 +1173,10 @@ function CtaPublico({ bloque }: { bloque: Extract<Bloque, { tipo: "cta" }> }) {
       <div
         aria-hidden
         className="absolute inset-0 -z-10 scale-110 bg-cover bg-center"
-        style={{ backgroundImage: `url(${imagen_url})`, filter: "blur(7px) saturate(115%)" }}
+        style={{
+          backgroundImage: `url(${imagenOptimizada(imagen_url, { width: 1400, quality: 68 })})`,
+          filter: "blur(7px) saturate(115%)",
+        }}
       />
       <div
         aria-hidden
