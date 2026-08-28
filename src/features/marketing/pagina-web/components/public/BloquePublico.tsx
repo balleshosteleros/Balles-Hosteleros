@@ -166,21 +166,49 @@ function InstagramPublico({ bloque }: { bloque: Extract<Bloque, { tipo: "instagr
         <h2 className="pw-h2 text-center font-extrabold">{titulo}</h2>
         {frase ? <p className="mx-auto mt-4 max-w-2xl text-center opacity-75">{frase}</p> : null}
 
-        <div className="mt-14 flex items-end justify-center gap-0">
-          {/* Silueta izquierda: dos personas mirando el móvil. Es una forma
-              dibujada, no una foto de stock — encaja con cualquier marca y no
-              añade peso ni derechos de imagen. */}
-          <SiluetaPersonas lado="izq" />
-
-          {/* Maqueta de iPhone con el perfil abierto */}
+        <div className="relative mt-14 flex justify-center">
+          {/* Maqueta de iPhone con el perfil abierto, sujeta por una mano */}
           <div className="relative z-10 w-[260px] shrink-0 md:w-[300px]">
             <div className="rounded-[42px] border-[10px] border-neutral-800 bg-black shadow-[0_30px_80px_rgba(0,0,0,0.75)]">
-              {/* Muesca superior */}
-              <div className="relative flex h-6 items-center justify-center">
-                <span className="h-[18px] w-[95px] rounded-b-2xl bg-neutral-800" />
+              {/* Muesca superior con la hora y los iconos de estado, como en
+                  cualquier iPhone: es lo que hace que se lea como una captura
+                  de pantalla real y no como un dibujo de un teléfono. */}
+              <div className="relative flex h-7 items-center justify-between px-4 pt-1">
+                <span className="text-[10px] font-semibold text-white">9:41</span>
+                <span className="absolute left-1/2 top-0 h-[18px] w-[95px] -translate-x-1/2 rounded-b-2xl bg-neutral-800" />
+                <span className="flex items-center gap-1 text-white">
+                  <svg viewBox="0 0 18 12" className="h-2.5 w-4" fill="currentColor">
+                    <rect x="0" y="8" width="3" height="4" rx="1" />
+                    <rect x="4.5" y="6" width="3" height="6" rx="1" />
+                    <rect x="9" y="3" width="3" height="9" rx="1" />
+                    <rect x="13.5" y="0" width="3" height="12" rx="1" />
+                  </svg>
+                  <svg viewBox="0 0 26 12" className="h-2.5 w-4" fill="none">
+                    <rect x="0.5" y="0.5" width="21" height="11" rx="3" stroke="currentColor" opacity="0.5" />
+                    <rect x="2" y="2" width="17" height="8" rx="1.5" fill="currentColor" />
+                    <path d="M23 4v4a2 2 0 000-4z" fill="currentColor" opacity="0.5" />
+                  </svg>
+                </span>
               </div>
 
-              <div className="px-3 pb-4">
+              {/* Barra de la app: el arroba a la izquierda, como en Instagram */}
+              <div className="flex items-center justify-between border-b border-white/10 px-3 pb-2">
+                <span className="flex items-center gap-1 text-[13px] font-semibold text-white">
+                  {handle}
+                  {verificado ? <TickVerificado /> : null}
+                </span>
+                <span className="flex gap-3 text-white/70">
+                  <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
+                    <rect x="4" y="4" width="16" height="16" rx="3" />
+                    <path d="M12 8v8M8 12h8" />
+                  </svg>
+                  <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M4 6h16M4 12h16M4 18h16" />
+                  </svg>
+                </span>
+              </div>
+
+              <div className="px-3 pb-3">
                 {/* Cabecera del perfil */}
                 <div className="flex items-center gap-3 py-3">
                   <span
@@ -196,20 +224,31 @@ function InstagramPublico({ bloque }: { bloque: Extract<Bloque, { tipo: "instagr
                       )}
                     </span>
                   </span>
-                  <div className="min-w-0 flex-1">
-                    <p className="flex items-center gap-1 text-[13px] font-bold text-white">
-                      <span className="truncate">{handle}</span>
-                      {verificado ? <TickVerificado /> : null}
-                    </p>
-                    <div className="mt-1.5 flex gap-4 text-[11px] text-white/70">
-                      {publicaciones ? (
-                        <span><b className="text-white">{publicaciones}</b> pub.</span>
-                      ) : null}
-                      {seguidores ? (
-                        <span><b className="text-white">{seguidores}</b> seguidores</span>
-                      ) : null}
-                    </div>
+                  {/* Los tres contadores en columna, como los pone Instagram */}
+                  <div className="flex flex-1 justify-around text-center text-[11px] text-white/70">
+                    {publicaciones ? (
+                      <span className="flex flex-col">
+                        <b className="text-[13px] text-white">{publicaciones}</b> pub.
+                      </span>
+                    ) : null}
+                    {seguidores ? (
+                      <span className="flex flex-col">
+                        <b className="text-[13px] text-white">{seguidores}</b> seguidores
+                      </span>
+                    ) : null}
+                    <span className="flex flex-col">
+                      <b className="text-[13px] text-white">·</b> siguiendo
+                    </span>
                   </div>
+                </div>
+
+                {/* Bio: el nombre del negocio y la frase que ya escribe la
+                    empresa. Sin esto el perfil se ve a medio cargar. */}
+                <div className="pb-2.5">
+                  <p className="text-[12px] font-semibold text-white">{titulo}</p>
+                  {frase ? (
+                    <p className="mt-0.5 text-[11px] leading-snug text-white/70">{frase}</p>
+                  ) : null}
                 </div>
 
                 {/* Botón Seguir, como en la app */}
@@ -222,6 +261,36 @@ function InstagramPublico({ bloque }: { bloque: Extract<Bloque, { tipo: "instagr
                 >
                   {cta_label}
                 </a>
+
+                {/* Barra de pestañas: cuadrícula / reels / etiquetadas. La
+                    primera va activa, como al abrir un perfil. */}
+                <div className="mb-[3px] flex border-t border-white/10 pt-1.5">
+                  {["cuadricula", "reels", "etiquetas"].map((t, i) => (
+                    <span
+                      key={t}
+                      className={`flex flex-1 justify-center pb-1.5 ${
+                        i === 0 ? "border-b-2 border-white text-white" : "text-white/40"
+                      }`}
+                    >
+                      {i === 0 ? (
+                        <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2">
+                          <rect x="3" y="3" width="18" height="18" rx="1" />
+                          <path d="M9 3v18M15 3v18M3 9h18M3 15h18" />
+                        </svg>
+                      ) : i === 1 ? (
+                        <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2">
+                          <rect x="3" y="3" width="18" height="18" rx="4" />
+                          <path d="M10 8.5v7l6-3.5z" />
+                        </svg>
+                      ) : (
+                        <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M12 3l9 7v11H3V10z" />
+                          <circle cx="12" cy="13" r="2.5" />
+                        </svg>
+                      )}
+                    </span>
+                  ))}
+                </div>
 
                 {/* Cuadrícula del feed */}
                 <div className="grid grid-cols-3 gap-[3px]">
@@ -240,8 +309,6 @@ function InstagramPublico({ bloque }: { bloque: Extract<Bloque, { tipo: "instagr
               </div>
             </div>
           </div>
-
-          <SiluetaPersonas lado="der" />
         </div>
 
       </div>
@@ -264,37 +331,6 @@ function IconoInstagram({ className }: { className?: string }) {
     <svg viewBox="0 0 24 24" fill="currentColor" className={className}>
       <path d="M12 2.2c3.2 0 3.6 0 4.9.07 1.2.05 1.8.25 2.2.42.6.22 1 .48 1.4.9.43.42.7.82.92 1.4.17.4.37 1 .42 2.2.06 1.3.07 1.7.07 4.9s0 3.6-.07 4.9c-.05 1.2-.25 1.8-.42 2.2-.22.6-.5 1-.92 1.4-.42.43-.82.7-1.4.92-.4.17-1 .37-2.2.42-1.3.06-1.7.07-4.9.07s-3.6 0-4.9-.07c-1.2-.05-1.8-.25-2.2-.42-.6-.22-1-.5-1.4-.92-.43-.42-.7-.82-.92-1.4-.17-.4-.37-1-.42-2.2C2.2 15.6 2.2 15.2 2.2 12s0-3.6.07-4.9c.05-1.2.25-1.8.42-2.2.22-.6.5-1 .92-1.4.42-.43.82-.7 1.4-.92.4-.17 1-.37 2.2-.42C8.4 2.2 8.8 2.2 12 2.2zm0 5.4a4.4 4.4 0 100 8.8 4.4 4.4 0 000-8.8zm0 7.25a2.85 2.85 0 110-5.7 2.85 2.85 0 010 5.7zm5.6-7.42a1.03 1.03 0 11-2.05 0 1.03 1.03 0 012.05 0z" />
     </svg>
-  );
-}
-
-/**
- * Siluetas de personas mirando el móvil, a los lados de la maqueta. Van
- * dibujadas y no en foto: no dependen de un banco de imágenes, pesan nada y
- * funcionan con el color de marca de cualquier empresa. Se ocultan en móvil,
- * donde no hay sitio.
- */
-function SiluetaPersonas({ lado }: { lado: "izq" | "der" }) {
-  const espejo = lado === "der";
-  return (
-    <div
-      aria-hidden
-      className={`hidden h-[300px] w-[190px] shrink-0 md:block ${espejo ? "-ml-8 scale-x-[-1]" : "-mr-8"}`}
-    >
-      <svg viewBox="0 0 190 300" className="h-full w-full">
-        <g fill="currentColor" className="text-white" opacity="0.16">
-          {/* Persona del fondo */}
-          <circle cx="58" cy="72" r="25" />
-          <path d="M18 300c0-46 18-78 40-78s40 32 40 78z" />
-          {/* Persona delante, algo más grande */}
-          <circle cx="122" cy="92" r="29" />
-          <path d="M74 300c0-52 22-86 48-86s48 34 48 86z" />
-        </g>
-        {/* Reflejo de la pantalla en las caras: el detalle que cuenta que están
-            mirando el móvil. */}
-        <ellipse cx="80" cy="86" rx="13" ry="9" fill="currentColor" className="text-white" opacity="0.1" />
-        <ellipse cx="146" cy="106" rx="15" ry="10" fill="currentColor" className="text-white" opacity="0.1" />
-      </svg>
-    </div>
   );
 }
 
