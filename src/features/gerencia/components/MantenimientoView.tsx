@@ -33,6 +33,7 @@ import {
   type ToolbarOrdenActivo,
   type ToolbarColumnaVisible,
   type ToolbarColumna,
+  type ToolbarCampoFiltro,
 } from "@/shared/components/SubmoduleToolbar";
 import { TableColumnHeader } from "@/shared/components/TableColumnHeader";
 import { ResizableColumnsProvider } from "@/shared/components/ResizableColumns";
@@ -504,6 +505,16 @@ export function MantenimientoView() {
     },
   };
 
+  // En movil se filtra desde la barra: no hay cabeceras de columna donde
+  // hacerlo, porque la tabla se sustituye por tarjetas.
+  const camposFiltroMovil: ToolbarCampoFiltro[] = [
+    { campo: "local", label: "Local", tipo: "lista", opciones: locales },
+    { campo: "estado", label: "Estado", tipo: "lista", opciones: [...ESTADOS] },
+    { campo: "gravedad", label: "Gravedad", tipo: "lista", opciones: [...GRAVEDADES] },
+    { campo: "reparador", label: "Reparador", tipo: "lista", opciones: [...REPARADORES] },
+    { campo: "apuntaDesperfecto", label: "Apuntado por", tipo: "lista", opciones: apuntaOpciones },
+  ];
+
   const columnasRender = ordenarColumnas(columnasDef, columnasOrden).filter(
     (c) => c.bloqueada || colVisible(columnasVisibles, c.campo),
   );
@@ -535,6 +546,7 @@ export function MantenimientoView() {
         onNuevo={() => { setEditItem(null); setModalOpen(true); }}
         filtros={filtros}
         onFiltrosChange={setFiltros}
+        campos={esMovil ? camposFiltroMovil : undefined}
         columnas={columnasDef}
         columnasVisibles={columnasVisibles}
         onColumnasVisiblesChange={setColumnasVisibles}

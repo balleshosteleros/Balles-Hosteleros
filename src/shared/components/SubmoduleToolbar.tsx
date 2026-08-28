@@ -57,6 +57,7 @@ import {
   loadViewPreferences,
   saveViewPreferences,
 } from "@/shared/io/view-preferences";
+import { useIsMobile } from "@/shared/hooks/use-mobile";
 
 export type ToolbarFiltroTipo =
   | "lista"
@@ -195,7 +196,12 @@ export function SubmoduleToolbar({
       ? filtros
       : filtros.filter((f) => !filtrosDefault.some((d) => filtrosEquivalentes(f, d)));
   const tieneOrden = ordenOpciones.length > 0 && !!onOrdenChange;
-  const tieneColumnas = columnas.length > 0 && !!onColumnasVisiblesChange;
+  const esMovil = useIsMobile();
+  // NORMA: en movil no aparece ningun boton de configuracion (columnas, ajustes
+  // de vista, engranaje de configuracion base). Configurar es tarea de
+  // escritorio; en el movil se trabaja sobre la marcha y esos botones solo
+  // ocupan sitio y se pulsan sin querer. Buscar, filtrar y crear SI se quedan.
+  const tieneColumnas = !esMovil && columnas.length > 0 && !!onColumnasVisiblesChange;
 
   // Persistencia de visibilidad de columnas por usuario × empresa × vista.
   // El viewKey por defecto es el pathname (sin slashes laterales) — cada
@@ -322,7 +328,7 @@ export function SubmoduleToolbar({
           />
         )}
 
-        {extraDerecha}
+        {!esMovil && extraDerecha}
       </div>
 
       {filtrosVisibles.length > 0 && !!onFiltrosChange && (
