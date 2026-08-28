@@ -24,14 +24,17 @@ interface Props {
 export function DetalleIncidencia({ open, onClose, item, onAddActualizacion, abrirActualizar = false }: Props) {
   const hoy = new Date().toISOString().slice(0, 10);
 
-  const [showForm, setShowForm] = useState(abrirActualizar);
+  // Un desperfecto terminado ya no se actualiza.
+  const terminado = item.estado === "TERMINADO";
+
+  const [showForm, setShowForm] = useState(abrirActualizar && !terminado);
 
   // Al abrir la ficha para actualizar, el formulario sale ya desplegado (el
   // estado inicial no basta: la ficha puede seguir montada de una apertura
   // anterior).
   useEffect(() => {
-    if (open && abrirActualizar) setShowForm(true);
-  }, [open, abrirActualizar, item.id]);
+    if (open && abrirActualizar && !terminado) setShowForm(true);
+  }, [open, abrirActualizar, terminado, item.id]);
 
   const tiempoDesdeCreacion = tiempoTranscurrido(item.fechaPublicado, hoy);
 
@@ -90,8 +93,14 @@ export function DetalleIncidencia({ open, onClose, item, onAddActualizacion, abr
           {/* Updates section */}
           <div className="flex items-center justify-between">
             <h4 className="font-bold text-foreground text-sm">Historial de actualizaciones</h4>
-            <Button size="sm" className="gap-1.5 h-10 sm:h-9" onClick={() => setShowForm(true)}>
-              <Plus className="h-3.5 w-3.5" /> Actualizar
+            <Button
+              size="sm"
+              variant={terminado ? "secondary" : "exito"}
+              disabled={terminado}
+              className="gap-1.5 h-10 sm:h-9"
+              onClick={() => setShowForm(true)}
+            >
+              <Plus className="h-3.5 w-3.5" /> {terminado ? "Terminado" : "Actualizar"}
             </Button>
           </div>
 

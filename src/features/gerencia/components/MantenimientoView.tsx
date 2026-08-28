@@ -566,7 +566,8 @@ export function MantenimientoView() {
         <ListaMovil
           items={filtered}
           hoy={hoy}
-          onAbrir={(item) => { setAbrirActualizar(true); setDetalleItem(item); }}
+          onVerDatos={(item) => { setAbrirActualizar(false); setDetalleItem(item); }}
+          onActualizar={(item) => { setAbrirActualizar(true); setDetalleItem(item); }}
         />
       ) : (
       <ResizableColumnsProvider storageKey="gerencia-mantenimiento">

@@ -124,7 +124,7 @@ export function ActualizarIncidenciaDialog({ open, onClose, item, onGuardar }: P
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto overflow-x-hidden p-4 sm:p-6">
         <DialogHeader>
           <DialogTitle className="text-lg font-bold">Actualizar desperfecto</DialogTitle>
         </DialogHeader>
@@ -180,12 +180,12 @@ export function ActualizarIncidenciaDialog({ open, onClose, item, onGuardar }: P
             <MsgError campo="texto" />
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 [&>div]:min-w-0">
             <div>
               <Label>Fecha</Label>
               <Input
                 type="date"
-                className="h-11 sm:h-10"
+                className="h-11 sm:h-10 w-full max-w-full min-w-0 block"
                 value={fecha}
                 onChange={(e) => { setFecha(e.target.value); limpiarError("fecha"); }}
               />
@@ -237,7 +237,7 @@ export function ActualizarIncidenciaDialog({ open, onClose, item, onGuardar }: P
 
         <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 mt-5">
           <Button variant="outline" className="h-11 sm:h-10" onClick={onClose}>Cancelar</Button>
-          <Button className="h-11 sm:h-10" onClick={handleGuardar}>Guardar</Button>
+          <Button variant="exito" className="h-11 sm:h-10" onClick={handleGuardar}>Guardar</Button>
         </div>
       </DialogContent>
     </Dialog>

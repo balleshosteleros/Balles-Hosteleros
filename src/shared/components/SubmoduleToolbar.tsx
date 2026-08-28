@@ -265,28 +265,30 @@ export function SubmoduleToolbar({
   return (
     <div
       className={cn(
-        "flex flex-wrap items-center gap-1.5 md:gap-2 rounded-xl border border-border bg-card px-2 py-1.5 md:px-3 md:py-2.5 shadow-sm",
+        "flex flex-nowrap md:flex-wrap items-center gap-1.5 md:gap-2 rounded-xl border border-border bg-card px-2 py-1.5 md:px-3 md:py-2.5 shadow-sm",
         className,
       )}
     >
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 shrink-0">
         {!ocultarNuevo && onNuevo && (
           <Button
             variant="primary"
             size="sm"
             onClick={onNuevo}
-            className="gap-1.5"
+            className="gap-1.5 px-2 md:px-3"
+            title={textoNuevo}
+            aria-label={textoNuevo}
           >
             <Plus className="h-4 w-4" />
-            {textoNuevo}
+            <span className="hidden md:inline">{textoNuevo}</span>
           </Button>
         )}
         {extraIzquierda}
       </div>
 
-      <div className="ml-auto flex flex-wrap items-center gap-2">
+      <div className="ml-auto flex flex-nowrap md:flex-wrap items-center gap-1.5 md:gap-2 flex-1 md:flex-none min-w-0">
         {tieneBusqueda && (
-          <div className="relative flex-1 min-w-[110px] sm:w-64 sm:flex-none">
+          <div className="relative flex-1 min-w-0 md:w-64 md:flex-none">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
               placeholder={placeholderBusqueda}
@@ -417,7 +419,10 @@ function FiltrosPopover({
         bool: tempBool === "si",
       };
     }
-    if (nuevo) onChange([...filtros, nuevo]);
+    // Un solo filtro por campo: volver a filtrar por Estado REEMPLAZA el filtro
+    // de Estado anterior en vez de sumarse. Filtrar por campos distintos si
+    // combina (Estado + Local), pero nunca dos condiciones del mismo campo.
+    if (nuevo) onChange([...filtros.filter((f) => f.campo !== nuevo!.campo), nuevo]);
     setOpen(false);
     setPaso("campo");
   }
@@ -434,7 +439,7 @@ function FiltrosPopover({
         <Button
           variant="outline"
           size="sm"
-          className="h-9 w-9 p-0 relative"
+          className="h-9 w-9 p-0 relative shrink-0"
           title="Filtrar"
           aria-label="Filtrar"
         >
@@ -657,7 +662,7 @@ function OrdenPopover({
         <Button
           variant="outline"
           size="sm"
-          className={cn("h-9 w-9 p-0", valor && "border-primary text-primary")}
+          className={cn("h-9 w-9 p-0 shrink-0", valor && "border-primary text-primary")}
           aria-label="Ordenar"
           title="Ordenar"
         >
@@ -842,7 +847,7 @@ function ColumnasPopover({
         <Button
           variant="outline"
           size="sm"
-          className="h-9 w-9 p-0"
+          className="h-9 w-9 p-0 shrink-0"
           title="Columnas"
           aria-label="Ajustes de columnas"
         >
