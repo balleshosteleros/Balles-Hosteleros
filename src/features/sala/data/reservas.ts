@@ -234,6 +234,12 @@ export interface Reserva {
    * reserva; no expone configuración general.
    */
   duracionMinutos?: number | null;
+  /**
+   * Instante UTC en que se dio de alta la reserva. Informativo: dice con
+   * cuánta antelación se pidió la mesa, que es distinto de la fecha para la
+   * que se pidió. No se edita nunca.
+   */
+  createdAt?: string | null;
 }
 
 // --- POLÍTICAS DE CANCELACIÓN ---
@@ -633,4 +639,46 @@ export function origenLabel(origen: string | null | undefined): string {
   }
   const limpio = origen.replace(/_/g, " ").toLowerCase();
   return limpio.charAt(0).toUpperCase() + limpio.slice(1);
+}
+
+/** Milisegundos que tiene un día entero. */
+const MS_POR_DIA = 24 * 60 * 60 * 1000;
+
+/**
+ * Días ENTEROS transcurridos entre dos instantes.
+ *
+ * Cuenta bloques completos de 24 horas, no cambios de fecha en el calendario:
+ * una reserva hecha ayer a las 23:00 y mirada hoy a las 09:00 lleva 0 días,
+ * no 1, porque no han pasado 24 horas. Se trunca siempre hacia abajo.
+ *
+ * Al contar tiempo real y no días de calendario, el resultado no depende de la
+ * zona horaria: da igual desde dónde se mire.
+ *
+ * Devuelve `null` si la fecha no es válida, y 0 si el instante es futuro (una
+ * reserva no puede haberse creado dentro de un rato).
+ */
+export function diasEnterosTranscurridos(
+  iso: string | null | undefined,
+  ahora: number = Date.now(),
+): number | null {
+  if (!iso) return null;
+  const t = new Date(iso).getTime();
+  if (Number.isNaN(t)) return null;
+  const transcurrido = ahora - t;
+  if (transcurrido < 0) return 0;
+  return Math.floor(transcurrido / MS_POR_DIA);
+}
+
+/**
+ * "Hoy" / "Hace 1 día" / "Hace 5 días", según los días enteros pasados.
+ * Devuelve "" si la fecha no es válida.
+ */
+export function etiquetaDiasTranscurridos(
+  iso: string | null | undefined,
+  ahora: number = Date.now(),
+): string {
+  const dias = diasEnterosTranscurridos(iso, ahora);
+  if (dias === null) return "";
+  if (dias === 0) return "Hoy";
+  return `Hace ${dias} ${dias === 1 ? "día" : "días"}`;
 }

@@ -14,6 +14,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
+import { formatFechaHoraEnZona } from "@/features/empresa/lib/zona-horaria";
 import { useSincronizacionEnVivo } from "@/shared/hooks/useSincronizacionEnVivo";
 import { useSidebar } from "@/components/ui/sidebar";
 import { Plus, Search, ChevronLeft, ChevronRight, ListPlus, ListFilter, Check, Move, Map as MapIcon, List as ListIcon } from "lucide-react";
@@ -44,6 +45,7 @@ import {
   DURACION_RESERVA_MIN_MINUTOS,
   DURACION_RESERVA_OPCIONES,
   formatearDuracionReserva,
+  etiquetaDiasTranscurridos,
   origenLabel,
   RESERVA_NOMBRE_MAX_CHARS,
   RESERVA_APELLIDOS_MAX_CHARS,
@@ -111,6 +113,8 @@ import { HistoricoEmailsReserva } from "@/features/sala/components/reservas/Hist
 import { ActividadReserva } from "@/features/sala/components/reservas/ActividadReserva";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { useModoInmersivoActivo } from "@/features/layout/hooks/useModoInmersivoActivo";
+import { useModoInmersivo } from "@/features/layout/contexts/modo-inmersivo-context";
 
 /**
  * Mezcla un hex con blanco para suavizar los pasteles de zona.
@@ -1680,6 +1684,7 @@ function mapDbToReserva(row: Record<string, unknown>): Reserva {
     reconfirmadaAt: (row.reconfirmada_at as string | null) ?? null,
     externalId: (row.external_id as string | null) ?? null,
     externalOrigen: (row.external_origen as string | null) ?? null,
+    createdAt: (row.created_at as string | null) ?? null,
     duracionMinutos: (row.duracion_minutos as number | null) ?? null,
   };
 }
@@ -2258,7 +2263,7 @@ function PlanoCanvas({
         }}
       >
       <div
-        className="sala-lienzo relative rounded-xl"
+        className="sala-lienzo relative"
         style={{
           width: PLANO_CANVAS_W,
           height: PLANO_CANVAS_H,
@@ -2557,6 +2562,19 @@ export function ReservasView() {
   const [vista, setVista] = useState<"dia" | "mes">("dia");
   const [showDayPicker, setShowDayPicker] = useState(false);
   const [showConfig, setShowConfig] = useState(false);
+  // BARRA SUPERIOR REPLEGADA. Reservas se mira durante todo el servicio y la
+  // barra de herramientas del software no se usa en ese rato: ocupa alto y su
+  // fondo claro rompe el tema oscuro del plano. Se repliega SOLO en la vista
+  // frontal — en Configuración (`showConfig`) se está trabajando en el
+  // software, así que ahí la barra baja como en cualquier otro módulo.
+  //
+  // Para recuperarla basta acercar el cursor al menú lateral: el menú ya se
+  // expande solo por hover, y la barra acompaña ese mismo gesto.
+  useModoInmersivoActivo(!showConfig);
+  const { inmersivo } = useModoInmersivo();
+  const { state: sidebarState, isMobile: sidebarIsMobile } = useSidebar();
+  const barraReplegada =
+    inmersivo && !showConfig && !sidebarIsMobile && sidebarState === "collapsed";
   const [totalesMes, setTotalesMes] = useState<{ personas: number; reservas: number }>({ personas: 0, reservas: 0 });
   const [locales, setLocales] = useState<LocalMin[]>([]);
   const [localId, setLocalId] = useState<string>("");
@@ -3269,6 +3287,9 @@ export function ReservasView() {
     setGuardandoCliente(false);
     if (res.ok) {
       toast.success("Datos del cliente guardados");
+      // El cambio deja línea en la actividad: hay que releerla para que se vea
+      // sin cerrar y reabrir la ficha.
+      setActividadVersion((v) => v + 1);
       // Lo guardado pasa a ser el nuevo punto de partida: un segundo cambio se
       // compara contra esto, no contra lo que había al abrir la ficha.
       setDatosClienteOriginales({
@@ -3503,7 +3524,10 @@ export function ReservasView() {
   return (
     <div
       className={cn(
-        "sala-tema flex flex-col h-[calc(100vh-3.5rem)] overflow-hidden",
+        "sala-tema flex flex-col overflow-hidden",
+        // Con la barra replegada solo queda el reborde superior (0.5rem);
+        // con la barra visible se le descuentan sus 3.5rem.
+        barraReplegada ? "h-[calc(100vh-0.5rem)]" : "h-[calc(100vh-3.5rem)]",
         esOscuro && "sala-oscuro",
       )}
     >
@@ -4292,6 +4316,31 @@ export function ReservasView() {
                   })()}
                 </div>
                 {selectedReserva.observaciones && <Field label="Observaciones">{selectedReserva.observaciones}</Field>}
+                {/* Cuándo se PIDIÓ la mesa, que no es cuándo es la reserva: dice
+                    con cuánta antelación llegó. Informativo, nunca editable.
+                    Se pinta en la zona de la empresa, no en la del navegador de
+                    quien mira, y los días son enteros (24 h cumplidas): una
+                    reserva de ayer a las 23:00 vista hoy a las 9:00 sigue
+                    poniendo "hoy", porque no ha pasado un día completo. */}
+                {selectedReserva.createdAt && (
+                  <div className="pt-2 border-t space-y-0.5">
+                    <Label className="text-muted-foreground text-xs">
+                      Reserva hecha el
+                    </Label>
+                    <p className="text-sm font-medium">
+                      {formatFechaHoraEnZona(
+                        selectedReserva.createdAt,
+                        empresaActual.zonaHoraria,
+                      )}
+                    </p>
+                    <p className="text-[10px] text-muted-foreground">
+                      {etiquetaDiasTranscurridos(
+                        selectedReserva.createdAt,
+                        tickAhora,
+                      )}
+                    </p>
+                  </div>
+                )}
                 <div className="flex flex-wrap items-center gap-2">
                   <ReservaFlagsChips reserva={selectedReserva} insights={selectedInsights} size="md" />
                   <ReservaExternalBadge reserva={selectedReserva} />
