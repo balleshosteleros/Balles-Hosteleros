@@ -1380,7 +1380,15 @@ function MapaPublico({
             >
               {logo ? (
                 /* eslint-disable-next-line @next/next/no-img-element */
-                <img src={logo} alt="" className="h-9 w-9 object-contain md:h-11 md:w-11" />
+                /* `p-1.5` + tamaño algo menor: hay isotipos que vienen SIN
+                   margen en el archivo (ocupan el lienzo entero) y tocaban el
+                   borde del círculo. Así respiran igual venga como venga. */
+                /* eslint-disable-next-line @next/next/no-img-element */
+                <img
+                  src={logo}
+                  alt=""
+                  className="h-8 w-8 rounded-full object-contain p-0.5 md:h-10 md:w-10"
+                />
               ) : (
                 <span className="text-xl" style={{ color: "var(--pw-primario)" }}>
                   ●
