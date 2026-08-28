@@ -5,6 +5,74 @@
 
 ---
 
+## 🚧 28-AGO (tarde) — FASE 1 DEL PRP-080, YA EN PRODUCCIÓN + 2 PREGUNTAS NUEVAS
+
+> **2 preguntas para Iván**, ninguna urgente. El resto es información.
+
+Ya está subido y funcionando lo primero que pedisteis del PRP-080 (**DECISIÓN 1**): la pantalla
+suelta de Movimientos ha desaparecido y **el historial se despliega dentro de cada producto, en
+Logística → Stock**, pulsando la flechita de su fila. Ahí se ve la fecha **con hora**, el tipo de
+movimiento, la cantidad con su signo, el saldo que quedó, **lo que costó la unidad ese día** y el
+**valor** de esa línea.
+
+Dos cosas que conviene saber:
+
+- **El coste se congela.** Cada movimiento guarda lo que costaba en ese momento y no se recalcula
+  nunca. Si mañana sube el precio del proveedor, el historial de junio seguirá diciendo lo que se
+  pagó en junio — que es justo lo que hace falta para poder auditar un margen meses después.
+- Los **63 movimientos que ya había** llevan su coste rellenado hacia atrás, sacado del precio real
+  de cada albarán. Ojo al detalle de las cajas: si un albarán trae una caja de 12 a 24 €, el coste
+  que se guarda es **2 € la unidad**, no 24.
+
+Lo hemos probado entrando en la aplicación de verdad, no solo mirando la base de datos.
+
+### ❓ Pregunta 1 — El "deshacer" del importador de catálogo: ¿también sobra?
+
+El 26-ago os dijimos que lo más importante que le faltaba a vuestro importador era **poder dar
+marcha atrás** a una importación (crea hasta ~66 productos de golpe y no queda registro de cuáles
+fueron). Al día siguiente Iván decidió justo lo contrario como regla general: **fuera el
+"deshacer"** (DECISIÓN 2). Antes de ponernos con ello queremos que lo confirméis vosotros, porque
+la contradicción es solo aparente pero la decisión es de Iván.
+
+**Cómo lo vemos nosotros:** la regla de "fuera el deshacer" es sobre el **almacén** — mermas,
+inventarios, elaboraciones—, donde deshacer significa **borrar movimientos ya ocurridos** y por eso
+falsea el histórico. Una importación de catálogo **no mueve stock**: crea fichas de producto. Dar
+marcha atrás ahí no borra ningún movimiento, solo retira unas altas recién hechas. Y en el diseño
+que propusimos, un producto que ya tenga historial (compras, ventas, escandallos) **no se borra
+nunca: se desactiva**.
+
+**Nuestra recomendación: mantener la marcha atrás del importador**, y que la regla de "fuera el
+deshacer" se quede donde es útil, en el almacén. Si Iván prefiere lo contrario, lo hacemos igual;
+en ese caso lo que sí hay que dejar sí o sí es **el registro de qué se importó**, para poder
+deshacerlo a mano sabiendo cuáles fueron.
+
+### ❓ Pregunta 2 — Los albaranes salen "a las 02:00" en el historial
+
+Pequeña, pero es de las que generan una llamada. Pedisteis **fecha y hora** en el historial y así
+está. El problema es que **un albarán solo guarda la fecha del papel**, no la hora, así que en el
+historial aparece como *"31 jul 2026, 02:00"* — parece que la mercancía llegó de madrugada.
+
+Las ventas y las mermas sí tienen hora de verdad, y ahí el dato es útil.
+
+**Nuestra propuesta:** en los movimientos que **solo tienen fecha** (los albaranes), mostrar solo el
+día — *"31 jul 2026"* — y dejar la hora en los que la tienen de verdad. Es un cambio de diez
+minutos. Decidnos si lo hacemos así o preferís que salga la hora siempre, aunque sea inventada.
+
+### ⚠️ Aviso: en la fase 3 van a cambiar números en pantalla (y estará bien)
+
+Lo siguiente que tocamos es lo de **la unidad la manda el producto** (DECISIÓN 3). Hay **87 líneas
+de escandallo** y **46 están escritas en gramos** aunque su producto se compre en kilos. Esas 46 no
+se pueden solo reetiquetar: **hay que convertirlas**. Es decir, donde hoy pone `350 Gr` va a pasar a
+poner `0,35 Kg`.
+
+Es la misma cantidad, pero **el número que se ve en pantalla cambia**, y si nadie lo avisa parecerá
+que se ha estropeado algo. Las revisaremos una a una antes de aplicarlo — son pocas y equivocarse
+ahí sale caro (un `0,7` donde iba `0,07` es exactamente lo que Iván temía).
+
+Si preferís **ver la lista de las 46 antes** de que la toquemos, decidlo y os la pasamos.
+
+---
+
 ## 🚧 28-AGO — ARRANCAMOS EL PRP-080: 3 PREGUNTAS Y 2 AVISOS
 
 > Información + 3 preguntas para Iván. Nada que implementar por vuestra parte: las fases 1-3 las
