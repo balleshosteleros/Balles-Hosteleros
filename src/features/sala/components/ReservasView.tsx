@@ -2142,12 +2142,15 @@ function PlanoCanvas({
       .filter((m) => !salaTieneZonas || zonaNombres.has((m.zona as unknown as string) ?? ""));
   }, [mesas, posiciones, zonas, salaTieneZonas]);
 
-  // Autoescala el lienzo 1200x640 para llenar el contenedor visible.
-  // El plano se dimensiona como si el sidebar global estuviera colapsado (su
-  // estado "natural"). Si el sidebar se expande — empujando el contenido —
-  // sumamos esa diferencia al ancho efectivo para que la escala no se reduzca:
-  // el plano conserva el tamaño y el menú simplemente tapa su lado izquierdo.
-  const { state: sidebarState } = useSidebar();
+  // Autoescala el lienzo 1200x640 al espacio que HAY, exactamente igual que el
+  // editor de Ajustes (misma formula, mismo tope de 1). Asi el plano que se
+  // dibuja y el que se ve son el mismo tamano y nada puede quedarse fuera.
+  //
+  // Antes se dimensionaba como si el menu lateral estuviera siempre plegado:
+  // se le sumaban al ancho 208 px que en realidad no estaban disponibles, y
+  // con el menu abierto el plano se salia por la izquierda. El tope de 1 evita
+  // lo contrario: que al haber sitio de sobra el plano se ampliara mas que en
+  // Ajustes y las mesas del borde se fueran fuera del lienzo.
   const outerRef = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(1);
   useEffect(() => {
@@ -2157,17 +2160,14 @@ function PlanoCanvas({
       const w = el.clientWidth;
       const h = el.clientHeight;
       if (w <= 0 || h <= 0) return;
-      // 16rem (expandido) − 3rem (colapsado/icon) ≈ 208 px de diferencia.
-      const SIDEBAR_EXPAND_DIFF = 208;
-      const effectiveW = w + (sidebarState === "expanded" ? SIDEBAR_EXPAND_DIFF : 0);
-      const s = Math.min(effectiveW / PLANO_CANVAS_W, h / PLANO_CANVAS_H);
+      const s = Math.min(w / PLANO_CANVAS_W, h / PLANO_CANVAS_H, 1);
       setScale(s > 0 ? s : 1);
     };
     update();
     const ro = new ResizeObserver(update);
     ro.observe(el);
     return () => ro.disconnect();
-  }, [sidebarState]);
+  }, []);
 
   // Encuadra una posición dentro del lienzo estándar (mismas bounds que el editor).
   // Recibe las dimensiones reales de la mesa para que las rectangulares no se
@@ -2249,11 +2249,10 @@ function PlanoCanvas({
       <div
         ref={outerRef}
         className={cn(
-          "flex-1 flex items-center overflow-hidden min-h-0",
-          // Cuando el sidebar está expandido el lienzo conserva su tamaño y
-          // sobresale por la izquierda: anclamos a la derecha para que el
-          // recorte caiga bajo el menú en lugar de partir el plano por el centro.
-          sidebarState === "expanded" ? "justify-end" : "justify-center",
+          // El plano ya se escala al espacio real, asi que siempre cabe entero
+          // y se centra. Antes se anclaba a la derecha para que el trozo que
+          // sobresalia cayera bajo el menu; ya no sobresale nada.
+          "flex-1 flex items-center justify-center overflow-hidden min-h-0",
         )}
       >
       <div
@@ -3827,7 +3826,11 @@ export function ReservasView() {
         {panelOculto !== "lista" && (
         <div className={cn(
           "border-r flex flex-col bg-card overflow-hidden",
-          panelOculto === "ninguno" ? "w-[460px] shrink-0" : "flex-1",
+          // 560 px (antes 460): el nombre y los apellidos del cliente no se
+          // leian enteros y es el dato por el que se busca a la gente en sala.
+          // Lo que crece la lista lo cede el plano, que aguanta bien menos
+          // ancho porque se escala solo.
+          panelOculto === "ninguno" ? "w-[560px] shrink-0" : "flex-1",
         )}>
           {(origenesPresentes.length > 0 || filtroOrigen !== "TODOS") && (
             <div className="px-3 py-1.5 border-b flex items-center gap-1.5 text-[10px]">
@@ -3895,7 +3898,10 @@ export function ReservasView() {
                           lo que se necesita para llamar sin abrir la ficha. */}
                       <span className="flex min-w-0 flex-col leading-tight">
                         <span className="flex min-w-0 items-center gap-1.5">
-                          <span className="truncate font-medium">
+                          <span
+                            className="truncate font-medium"
+                            title={`${r.cliente || "WALK IN"} ${r.apellidos ?? ""}`.trim()}
+                          >
                             {r.cliente || "WALK IN"} {r.apellidos}
                           </span>
                           {/* El chip "Cupón <CODIGO>" se pinta dentro de <ReservaFlagsChips />. */}
