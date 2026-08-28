@@ -36,20 +36,34 @@ interface ModoInmersivoContextValue {
   inmersivo: boolean;
   /** Lo activa/desactiva la vista montada (Reservas). */
   setInmersivo: (valor: boolean) => void;
+  /**
+   * True cuando la vista inmersiva está además en tema OSCURO. El menú lateral
+   * se pinta fuera del contenedor de la vista, así que su CSS no puede leer la
+   * clase `.sala-oscuro`: sin esta señal, el borde derecho del menú se queda
+   * con el gris claro del tema del software y contra el azul marino de
+   * Reservas se ve como una línea blanca cortando la pantalla.
+   */
+  inmersivoOscuro: boolean;
+  setInmersivoOscuro: (valor: boolean) => void;
 }
 
 const ModoInmersivoContext = createContext<ModoInmersivoContextValue | null>(null);
 
 export function ModoInmersivoProvider({ children }: { children: ReactNode }) {
   const [inmersivo, setInmersivoState] = useState(false);
+  const [inmersivoOscuro, setInmersivoOscuroState] = useState(false);
 
   const setInmersivo = useCallback((valor: boolean) => {
     setInmersivoState(valor);
   }, []);
 
+  const setInmersivoOscuro = useCallback((valor: boolean) => {
+    setInmersivoOscuroState(valor);
+  }, []);
+
   const value = useMemo<ModoInmersivoContextValue>(
-    () => ({ inmersivo, setInmersivo }),
-    [inmersivo, setInmersivo],
+    () => ({ inmersivo, setInmersivo, inmersivoOscuro, setInmersivoOscuro }),
+    [inmersivo, setInmersivo, inmersivoOscuro, setInmersivoOscuro],
   );
 
   return (
@@ -67,6 +81,13 @@ export function ModoInmersivoProvider({ children }: { children: ReactNode }) {
  */
 export function useModoInmersivo(): ModoInmersivoContextValue {
   const ctx = useContext(ModoInmersivoContext);
-  if (!ctx) return { inmersivo: false, setInmersivo: () => {} };
+  if (!ctx) {
+    return {
+      inmersivo: false,
+      setInmersivo: () => {},
+      inmersivoOscuro: false,
+      setInmersivoOscuro: () => {},
+    };
+  }
   return ctx;
 }

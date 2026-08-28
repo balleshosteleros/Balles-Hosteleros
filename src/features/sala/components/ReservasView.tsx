@@ -2572,7 +2572,14 @@ export function ReservasView() {
   // Para recuperarla basta acercar el cursor al menú lateral: el menú ya se
   // expande solo por hover, y la barra acompaña ese mismo gesto.
   useModoInmersivoActivo(!showConfig);
-  const { inmersivo } = useModoInmersivo();
+  const { inmersivo, setInmersivoOscuro } = useModoInmersivo();
+  // Se avisa al chrome del software (menu lateral) de que esta vista va en
+  // oscuro, para que su borde derecho no se quede con el gris claro del tema
+  // del software y aparezca como una linea blanca contra el azul marino.
+  useEffect(() => {
+    setInmersivoOscuro(esOscuro);
+    return () => setInmersivoOscuro(false);
+  }, [esOscuro, setInmersivoOscuro]);
   const { state: sidebarState, isMobile: sidebarIsMobile } = useSidebar();
   const barraReplegada =
     inmersivo && !showConfig && !sidebarIsMobile && sidebarState === "collapsed";

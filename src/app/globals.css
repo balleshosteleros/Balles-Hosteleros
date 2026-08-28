@@ -259,6 +259,10 @@
 .sala-oscuro .border.bg-background {
   background-color: hsl(var(--sidebar-background));
   border-color: hsl(var(--sidebar-border));
+  /* El color de texto tambien: estas cajas (contadores de personas y mesas)
+     no fijan color propio, asi que heredaban el gris oscuro del tema claro y
+     las cifras quedaban casi negras sobre el azul marino. */
+  color: hsl(var(--foreground));
 }
 
 .sala-oscuro .border-input:hover,
@@ -300,4 +304,20 @@
 }
 .deco-texto {
   color: var(--deco-texto);
+}
+
+/* ---------------------------------------------------------------------------
+   CHROME OSCURO (menu lateral) DURANTE LA VISTA INMERSIVA DE RESERVAS
+   ---------------------------------------------------------------------------
+   El menu lateral se pinta FUERA del contenedor de la vista, asi que no le
+   llega la clase `.sala-oscuro` del tema de sala. Sin esto, su borde derecho
+   conserva el gris claro del software y contra el azul marino de Reservas se
+   lee como una linea blanca cortando la pantalla de arriba abajo.
+
+   Se apaga el borde igualandolo al propio fondo del menu: la separacion sigue
+   existiendo por el cambio de superficie, pero no se dibuja ningun trazo.
+   --------------------------------------------------------------------------- */
+.software-oscuro {
+  --sidebar-border: 220 25% 14%;
+  --border: 220 25% 14%;
 }

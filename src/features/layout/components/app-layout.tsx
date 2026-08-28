@@ -1,7 +1,8 @@
 "use client";
 
 import { usePathname, useRouter } from "next/navigation";
-import { SidebarProvider } from "@/components/ui/sidebar";
+import { cn } from "@/lib/utils";
+import { SidebarProvider, useSidebar } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/features/layout/components/app-sidebar";
 import { AuthContext } from "@/features/auth/contexts/auth-context";
 import { Button } from "@/components/ui/button";
@@ -15,7 +16,7 @@ import {
   ArrowLeft,
 } from "lucide-react";
 import { getRouteMeta, allSections } from "@/features/layout/data/nav-routes";
-import { useEffect, useState, useContext, useRef } from "react";
+import { useEffect, useState, useContext, useRef, useCallback } from "react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -59,6 +60,10 @@ import { MiniReproductor } from "@/features/sala/musica/components/MiniReproduct
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { useViewMode } from "@/features/layout/contexts/view-mode-context";
 import {
+  ModoInmersivoProvider,
+  useModoInmersivo,
+} from "@/features/layout/contexts/modo-inmersivo-context";
+import {
   HERRAMIENTA,
   toolTextColor,
   toolBadgeBg,
@@ -92,7 +97,22 @@ function NavBadge({ count, color }: { count: number; color: ToolColorKey }) {
   );
 }
 
+/**
+ * Providers del chrome del software. `AppLayoutInterno` va DENTRO de ellos
+ * porque necesita leer el estado del menú lateral (`useSidebar`) y el modo
+ * inmersivo para decidir si la barra superior se repliega.
+ */
 export function AppLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <SidebarProvider>
+      <ModoInmersivoProvider>
+        <AppLayoutInterno>{children}</AppLayoutInterno>
+      </ModoInmersivoProvider>
+    </SidebarProvider>
+  );
+}
+
+function AppLayoutInterno({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const auth = useContext(AuthContext);
   
@@ -154,6 +174,44 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const showUi = mounted && sesionVistaRef.current;
   const counts = useDailyCounts();
 
+  // BARRA SUPERIOR REPLEGADA (Reservas). La vista pide el modo inmersivo y la
+  // barra se recoge a altura cero. Vuelve a bajar cuando el menú lateral está
+  // expandido: acercar el cursor al borde izquierdo saca las dos a la vez y
+  // apartarlo las recoge, porque el menú ya se expande/colapsa solo por hover.
+  //
+  // En MÓVIL nunca se repliega: allí no hay menú lateral con el que volver a
+  // sacarla, así que esconderla dejaría la barra irrecuperable.
+  const { state: sidebarState, isMobile: sidebarIsMobile } = useSidebar();
+  const { inmersivo, inmersivoOscuro } = useModoInmersivo();
+  // Hover sobre el reborde superior: la barra tambien se saca por arriba, sin
+  // tener que ir hasta el menu lateral.
+  const [hoverBarraSuperior, setHoverBarraSuperior] = useState(false);
+  const puedeReplegar = inmersivo && !sidebarIsMobile;
+  const headerReplegado =
+    puedeReplegar && sidebarState === "collapsed" && !hoverBarraSuperior;
+
+  /**
+   * Recoge la barra al salir el raton, PERO no mientras haya un panel suyo
+   * abierto (correo, calendario, avatar, cualquier desplegable). Esos paneles
+   * se pintan flotando fuera de la barra, asi que mover el raton hacia ellos
+   * dispara el `onMouseLeave` de la cabecera: sin esta comprobacion la barra
+   * se recogeria justo cuando el usuario va a usarla.
+   *
+   * Se buscan SOLO los paneles flotantes (los que Radix saca a un portal con
+   * su propio `role`), no cualquier `[data-state="open"]`: ese atributo lo
+   * llevan tambien el menu lateral y los acordeones del propio menu, asi que
+   * casi siempre habia alguno y la barra no se recogia nunca.
+   */
+  const recogerBarraSuperior = useCallback(() => {
+    if (typeof document !== "undefined") {
+      const panelAbierto = document.querySelector(
+        '[role="menu"][data-state="open"], [role="dialog"][data-state="open"], [role="listbox"][data-state="open"]',
+      );
+      if (panelAbierto) return;
+    }
+    setHoverBarraSuperior(false);
+  }, []);
+
   const { title: headerLabel, icon: ModuleIcon } = getRouteMeta(pathname);
 
   // VOLVER (solo móvil). En el teléfono las pantallas de módulo son las mismas
@@ -208,11 +266,51 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <RecorderProvider>
     <MusicaProvider>
-    <SidebarProvider>
-      <div className="h-screen flex w-full overflow-hidden">
+      {/* `software-oscuro` marca el chrome entero (menu lateral incluido) cuando
+          la vista inmersiva esta en tema oscuro. El menu se pinta FUERA del
+          contenedor de la vista, asi que sin esta clase su borde derecho se
+          quedaba con el gris claro del software y contra el azul marino de
+          Reservas se veia como una linea blanca partiendo la pantalla. */}
+      <div
+        className={cn(
+          "h-screen flex w-full overflow-hidden",
+          inmersivoOscuro && "software-oscuro",
+        )}
+      >
         <AppSidebar />
         <div className="flex-1 flex flex-col min-w-0 h-screen">
-          <header className="sticky top-0 z-30 h-14 flex items-center border-b bg-card px-3 md:px-4 shrink-0 gap-2 md:gap-3">
+          {/* REBORDE superior cuando la barra esta recogida: una franja fina
+              azul marino que hace dos cosas a la vez. Cierra la vista por
+              arriba (sin ella el plano quedaba pegado al borde de la pantalla)
+              y es la zona sensible que vuelve a sacar la barra al acercar el
+              raton — si no existiera, la unica forma de recuperarla seria ir
+              hasta el menu lateral. */}
+          {puedeReplegar && (
+            <div
+              onMouseEnter={() => setHoverBarraSuperior(true)}
+              aria-hidden
+              className={cn(
+                "shrink-0 bg-sidebar transition-[height] duration-200 ease-out",
+                headerReplegado ? "h-2" : "h-0",
+              )}
+            />
+          )}
+          {/* La barra NO se desmonta al replegarse: se le quita el alto. Así
+              los contadores, el reproductor y los drawers abiertos siguen
+              vivos y volver a mostrarla no recarga nada. `invisible` evita que
+              el contenido replegado siga siendo enfocable con el tabulador.
+              Al salir el raton de la barra desplegada, vuelve a recogerse. */}
+          <header
+            onMouseEnter={() => puedeReplegar && setHoverBarraSuperior(true)}
+            onMouseLeave={() => puedeReplegar && recogerBarraSuperior()}
+            className={cn(
+              "sticky top-0 z-30 flex items-center bg-card px-3 md:px-4 shrink-0 gap-2 md:gap-3",
+              "transition-[height,opacity] duration-200 ease-out",
+              headerReplegado
+                ? "h-0 overflow-hidden border-b-0 opacity-0 invisible"
+                : "h-14 border-b opacity-100",
+            )}
+          >
             {/*
               En MÓVIL no hay menú lateral: la navegación del teléfono son las
               viñetas de /m, y el desplegable de escritorio (con todos los
@@ -533,7 +631,6 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       <RecordingOverlay />
       <CountdownOverlay />
       <WebcamPip />
-    </SidebarProvider>
     </MusicaProvider>
     </RecorderProvider>
   );
