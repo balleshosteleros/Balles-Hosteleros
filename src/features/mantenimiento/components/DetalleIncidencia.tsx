@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Incidencia, Actualizacion, formatearDuracion } from "@/features/empresa/data/mantenimiento";
 import { ActualizarIncidenciaDialog } from "@/features/mantenimiento/components/ActualizarIncidenciaDialog";
 import { tiempoTranscurrido } from "@/shared/lib/timeUtils";
@@ -14,12 +14,24 @@ interface Props {
   onClose: () => void;
   item: Incidencia;
   onAddActualizacion: (incidenciaId: string, act: Actualizacion) => void;
+  /**
+   * Abre la ficha con el formulario de actualizar ya desplegado. Desde el movil
+   * se entra para actualizar, no para leer: un paso intermedio sobra.
+   */
+  abrirActualizar?: boolean;
 }
 
-export function DetalleIncidencia({ open, onClose, item, onAddActualizacion }: Props) {
+export function DetalleIncidencia({ open, onClose, item, onAddActualizacion, abrirActualizar = false }: Props) {
   const hoy = new Date().toISOString().slice(0, 10);
 
-  const [showForm, setShowForm] = useState(false);
+  const [showForm, setShowForm] = useState(abrirActualizar);
+
+  // Al abrir la ficha para actualizar, el formulario sale ya desplegado (el
+  // estado inicial no basta: la ficha puede seguir montada de una apertura
+  // anterior).
+  useEffect(() => {
+    if (open && abrirActualizar) setShowForm(true);
+  }, [open, abrirActualizar, item.id]);
 
   const tiempoDesdeCreacion = tiempoTranscurrido(item.fechaPublicado, hoy);
 
@@ -85,7 +97,12 @@ export function DetalleIncidencia({ open, onClose, item, onAddActualizacion }: P
 
           <ActualizarIncidenciaDialog
             open={showForm}
-            onClose={() => setShowForm(false)}
+            onClose={() => {
+              setShowForm(false);
+              // Si se entro solo a actualizar (movil), al salir del formulario
+              // se cierra tambien la ficha: no hay nada mas que hacer ahi.
+              if (abrirActualizar) onClose();
+            }}
             item={item}
             onGuardar={({ texto, fecha, apuntadoPor, resultado, minutos }) => {
               onAddActualizacion(item.id, {

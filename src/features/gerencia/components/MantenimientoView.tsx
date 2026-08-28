@@ -86,6 +86,9 @@ export function MantenimientoView() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editItem, setEditItem] = useState<Incidencia | null>(null);
   const [detalleItem, setDetalleItem] = useState<Incidencia | null>(null);
+  // Desde el movil se entra a actualizar, no a leer: la ficha se abre con el
+  // formulario ya desplegado.
+  const [abrirActualizar, setAbrirActualizar] = useState(false);
 
   // Hoy en la zona de la empresa: los dias sin actualizar se cuentan contra el
   // dia del local, no contra el del navegador de quien mira.
@@ -520,12 +523,12 @@ export function MantenimientoView() {
   );
 
   return (
-    <div className="p-4 md:p-6 space-y-5">
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+    <div className="p-3 md:p-6 space-y-3 md:space-y-5">
+      <div className="grid grid-cols-4 gap-1.5 md:gap-3">
         {statCards.map((s) => (
-          <div key={s.key} className={`rounded-lg border-2 p-2.5 md:p-4 text-center ${s.color}`}>
-            <div className="text-xl md:text-3xl font-black">{counts[s.key]}</div>
-            <div className="text-[10px] md:text-xs font-bold mt-0.5 md:mt-1">{s.label}</div>
+          <div key={s.key} className={`rounded-lg border md:border-2 px-1 py-1.5 md:p-4 text-center ${s.color}`}>
+            <div className="text-base md:text-3xl font-black leading-none">{counts[s.key]}</div>
+            <div className="text-[9px] md:text-xs font-bold mt-0.5 md:mt-1 leading-tight">{s.label}</div>
           </div>
         ))}
       </div>
@@ -560,7 +563,11 @@ export function MantenimientoView() {
       />
 
       {esMovil ? (
-        <ListaMovil items={filtered} hoy={hoy} onAbrir={setDetalleItem} />
+        <ListaMovil
+          items={filtered}
+          hoy={hoy}
+          onAbrir={(item) => { setAbrirActualizar(true); setDetalleItem(item); }}
+        />
       ) : (
       <ResizableColumnsProvider storageKey="gerencia-mantenimiento">
       <div className="bg-card rounded-lg border overflow-x-auto">
@@ -576,7 +583,7 @@ export function MantenimientoView() {
               <tr key={item.id} className="border-b hover:bg-muted/30 transition-colors cursor-pointer" onClick={() => { setEditItem(item); setModalOpen(true); }}>
                 {columnasRender.map((c) => columnDefs[c.campo]?.td(item))}
                 <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
-                  <Button variant="ghost" size="sm" className="gap-1.5 text-xs text-primary" onClick={() => setDetalleItem(item)}>
+                  <Button variant="ghost" size="sm" className="gap-1.5 text-xs text-primary" onClick={() => { setAbrirActualizar(false); setDetalleItem(item); }}>
                     <Info className="h-3.5 w-3.5" /> Más info
                   </Button>
                 </td>
@@ -594,7 +601,7 @@ export function MantenimientoView() {
 
       <IncidenciaModal open={modalOpen} onClose={() => setModalOpen(false)} onSave={handleSave} item={editItem} />
       {detalleItem && (
-        <DetalleIncidencia open={!!detalleItem} onClose={() => setDetalleItem(null)} item={detalleItem} onAddActualizacion={addActualizacionHandler} />
+        <DetalleIncidencia open={!!detalleItem} onClose={() => { setDetalleItem(null); setAbrirActualizar(false); }} item={detalleItem} onAddActualizacion={addActualizacionHandler} abrirActualizar={abrirActualizar} />
       )}
     </div>
   );

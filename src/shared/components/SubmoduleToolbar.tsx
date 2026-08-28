@@ -265,7 +265,7 @@ export function SubmoduleToolbar({
   return (
     <div
       className={cn(
-        "flex flex-wrap items-center gap-2 rounded-xl border border-border bg-card px-3 py-2.5 shadow-sm",
+        "flex flex-wrap items-center gap-1.5 md:gap-2 rounded-xl border border-border bg-card px-2 py-1.5 md:px-3 md:py-2.5 shadow-sm",
         className,
       )}
     >
@@ -286,7 +286,7 @@ export function SubmoduleToolbar({
 
       <div className="ml-auto flex flex-wrap items-center gap-2">
         {tieneBusqueda && (
-          <div className="relative w-full sm:w-64">
+          <div className="relative flex-1 min-w-[110px] sm:w-64 sm:flex-none">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
               placeholder={placeholderBusqueda}
@@ -431,11 +431,16 @@ function FiltrosPopover({
       }}
     >
       <PopoverTrigger asChild>
-        <Button variant="outline" size="sm" className="h-9 gap-1.5">
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-9 w-9 p-0 relative"
+          title="Filtrar"
+          aria-label="Filtrar"
+        >
           <SlidersHorizontal className="h-4 w-4" />
-          Filtrar
           {conteoIndicador > 0 && (
-            <Badge className="ml-0.5 h-4 min-w-[16px] px-1 text-[10px] rounded-full">
+            <Badge className="absolute -top-1 -right-1 h-4 min-w-[16px] px-1 text-[10px] rounded-full">
               {conteoIndicador}
             </Badge>
           )}
@@ -838,6 +843,7 @@ function ColumnasPopover({
           variant="outline"
           size="sm"
           className="h-9 w-9 p-0"
+          title="Columnas"
           aria-label="Ajustes de columnas"
         >
           <Columns3 className="h-4 w-4" />
