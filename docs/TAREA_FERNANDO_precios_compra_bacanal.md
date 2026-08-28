@@ -5,6 +5,65 @@
 
 ---
 
+## 🚧 28-AGO — ARRANCAMOS EL PRP-080: 3 PREGUNTAS Y 2 AVISOS
+
+> Información + 3 preguntas para Iván. Nada que implementar por vuestra parte: las fases 1-3 las
+> hacemos nosotros.
+
+Empezamos con las fases 1 a 3, que no dependen de Ágora ni de nada pendiente. Al explorar el
+código para planificarlo han salido cosas que conviene que sepáis.
+
+### ❓ Las 3 reglas del cierre de almacén que quedaron sin definir
+
+El PRP las deja abiertas ("quién puede cerrar, si se puede reabrir, si el corte es por empresa o
+por almacén"). Para no quedarnos parados **hemos elegido un valor por defecto para cada una**, y
+el modelo aguanta el cambio si Iván decide otra cosa. Pero son decisiones suyas, así que aquí van:
+
+| | Pregunta | Lo que hemos puesto por defecto |
+|---|---|---|
+| 1 | **¿Quién puede cerrar el almacén?** | Cualquiera con permiso de Logística |
+| 2 | **¿Se puede reabrir? ¿Quién?** | Sí, con el mismo permiso, dejando registro de quién, cuándo y por qué |
+| 3 | **¿El corte es por empresa o por almacén?** | Por empresa |
+
+Si alguna no os cuadra, decidlo y se cambia — cuanto antes, más barato.
+
+### ⚠️ Aviso operativo: los albaranes atrasados se van a bloquear
+
+Esto va a generar llamadas si nadie lo avisa antes. **Un albarán se guarda con la fecha del papel,
+no con la del día en que se teclea.** En cuanto haya un cierre de almacén, cualquier albarán de un
+día ya cerrado quedará bloqueado — y en un restaurante los albaranes en papel se meten días después.
+
+Es el comportamiento correcto según vuestra regla, y no lo cambiamos. Pero conviene que lo sepáis
+antes de encender el primer cierre, porque el encargado que meta el albarán del lunes un jueves ya
+cerrado se va a encontrar un "no se puede". Lo que hacemos para que no se pierda: **queda
+registrado como desfase** y se resuelve en el inventario siguiente.
+
+### 🔴 Elaboraciones está rota, y lo arreglamos de camino
+
+Al revisar el módulo para quitarle el "deshacer" hemos visto tres cosas:
+
+1. **No funciona.** Su función de base de datos lee una columna de producto que se renombró en
+   junio, así que **fallaría al confirmar cualquier elaboración**. No se había notado porque el
+   módulo **no se ha usado nunca** (cero elaboraciones registradas).
+2. **Se salta el historial de almacén.** Escribe las existencias directamente, sin dejar
+   movimiento. Es otro agujero como el que cerramos el 26-ago: si se dejara así, el cierre de
+   almacén no lo cubriría y seguiría tocando el stock por debajo.
+3. **Solo suma, no resta.** Al confirmar una elaboración añade el producto elaborado al almacén
+   **pero no descuenta los ingredientes que ha consumido**. Fabrica kilos de la nada.
+
+Lo arreglamos entero dentro de la fase 2: pasa por el historial como todo lo demás, y una
+elaboración descontará sus ingredientes según su escandallo. Y si un producto de elaboración no
+tiene escandallo, no se podrá confirmar — misma regla que decidisteis para las ventas.
+
+### 📋 Y dos cosas menores que hemos anotado
+
+- **Los ajustes de stock no se pueden deshacer** ni siquiera con el almacén abierto: nacen sin
+  identificador de documento. Lo dejamos fuera de esta tanda, pero que conste por si alguien lo pide.
+- **La pantalla de Movimientos desaparece** (fase 1): su contenido pasa a verse desplegando cada
+  producto dentro de Stock, como pedisteis.
+
+---
+
 ## ✅ 28-AGO (Fernando) — LOS DOS URGENTES, HECHOS Y EN PRODUCCIÓN
 
 > Información. Nada que implementar por vuestra parte.

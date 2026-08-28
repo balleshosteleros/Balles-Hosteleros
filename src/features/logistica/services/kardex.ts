@@ -2,6 +2,7 @@ import "server-only";
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { signoDeTipo, type DocumentoTipo, type TipoMovimiento } from "@/features/logistica/data/kardex";
+import { getCosteEnFecha } from "@/features/logistica/services/coste-producto";
 
 /**
  * Servicio del kardex de stock (PRP-057).
@@ -39,6 +40,16 @@ export interface RegistrarMovimientoInput {
    * además de romper el cron. Ahí el negativo es el síntoma, no la causa.
    */
   impedirNegativo?: boolean;
+  /**
+   * Coste por UNIDAD DE STOCK en el momento del movimiento. Se guarda **congelado**: el
+   * historial debe seguir diciendo lo que costó, no lo que cuesta hoy.
+   *
+   * Si no se pasa, se resuelve solo desde el histórico de precios de compra a la fecha del
+   * movimiento (`getCostesEnFecha`). Pásalo cuando el documento ya lo sepa mejor — un
+   * albarán conoce el precio exacto de esa entrega — y ojo entonces con la unidad: si la
+   * línea viene en cajas de 12, el coste unitario es el de LA UNIDAD, no el de la caja.
+   */
+  costeUnitario?: number | null;
 }
 
 export interface MovimientoResultado {
@@ -154,6 +165,15 @@ export async function registrarMovimiento(
     return { saldoAnterior, saldoResultante: saldoAnterior, duplicado: false, rechazado: true };
   }
 
+  // Coste congelado: lo que costaba ESE DÍA, no lo que cueste cuando se mire el historial.
+  // Si el documento no lo aporta, se busca en el histórico de precios a la fecha del
+  // movimiento. `null` significa "no se sabe" y se guarda como tal: un 0 sería mentira.
+  let costeUnitario = input.costeUnitario ?? null;
+  if (costeUnitario == null) {
+    costeUnitario = await getCosteEnFecha(admin, input.productoId, fechaISO);
+  }
+  const valorTotal = costeUnitario == null ? null : costeUnitario * cantidad;
+
   await admin.from("stock_movimientos").insert({
     empresa_id: input.empresaId,
     producto_id: input.productoId,
@@ -162,6 +182,8 @@ export async function registrarMovimiento(
     cantidad,
     signo,
     saldo_resultante: saldoResultante,
+    coste_unitario: costeUnitario,
+    valor_total: valorTotal,
     referencia: input.referencia ?? null,
     documento_tipo: input.documentoTipo,
     documento_id: input.documentoId ?? null,
