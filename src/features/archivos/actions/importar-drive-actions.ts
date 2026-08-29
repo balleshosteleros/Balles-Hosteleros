@@ -65,6 +65,38 @@ function mensajeError(err: unknown): string {
  */
 const COPIAS_EN_PARALELO = 6;
 
+/**
+ * Lo que puede tardar UN archivo antes de darlo por encallado.
+ *
+ * El reloj de la ventana solo se mira entre tandas, así que sin este tope un
+ * único vídeo lento estira la vuelta entera y la ruta la corta a los 5 min sin
+ * guardar nada. Minuto y medio da de sobra para varios GB; lo que no quepa se
+ * reintenta en la vuelta siguiente, donde arrancará con la ventana entera.
+ */
+const TOPE_POR_ARCHIVO_MS = 90 * 1000;
+
+/** Corta una promesa si tarda más de lo debido. */
+async function conTiempo<T>(
+  promesa: Promise<T>,
+  ms: number,
+  nombre: string,
+): Promise<T> {
+  let reloj: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      promesa,
+      new Promise<never>((_, rechazar) => {
+        reloj = setTimeout(
+          () => rechazar(new Error(`"${nombre}" tardó demasiado; se reintenta luego`)),
+          ms,
+        );
+      }),
+    ]);
+  } finally {
+    if (reloj) clearTimeout(reloj);
+  }
+}
+
 /** Token de Google de la cuenta conectada. */
 async function getAccessToken(): Promise<string | null> {
   const c = await cookies();
@@ -410,12 +442,10 @@ export async function ejecutarImportacion(args: {
     // guardar, el progreso de toda la tanda se pierde. Pasó: había archivos ya
     // copiados en R2 y el contador seguía a cero.
     //
-    // 2 min sobre los 5 de la ruta, no 3, porque el reloj se mira ANTES de
-    // lanzar cada tanda: si arranca justo en el límite con seis vídeos de
-    // varios GB, la tanda sigue subiendo mucho después. Con las copias en
-    // paralelo cada tanda mueve bastante más, así que sobra tiempo y lo que
-    // hace falta es margen para que la última quepa dentro de la ventana.
-    const limite = Date.now() + 2 * 60 * 1000;
+    // 3 min sobre los 5 de la ruta. El reloj se mira ANTES de lanzar cada
+    // tanda, así que la última puede empezar justo en el límite: con el tope
+    // por archivo (90 s) el peor caso son 3 + 1,5 = 4,5 min, dentro de los 5.
+    const limite = Date.now() + 3 * 60 * 1000;
     let terminada = true;
 
 
@@ -580,18 +610,28 @@ export async function ejecutarImportacion(args: {
         const hechas = await Promise.all(
           tanda.map(async (hijo) => {
             try {
-              const bytes = await conTokenVivo(token, (t) =>
-                copiarArchivo(
-                  t,
-                  hijo,
-                  ctx.empresaId,
-                  rama.destinoId,
-                  rama.depto,
-                  ctx.userId,
-                  admin,
-                  client,
-                  bucket,
+              // Tope por archivo: el reloj de la ventana solo se mira ENTRE
+              // tandas, así que un vídeo enorme (o una subida encallada) podía
+              // estirar la vuelta muy por encima del límite. Se midieron
+              // vueltas de 8 minutos con la ventana en 2, y la ruta se corta a
+              // los 5: la función moría sin guardar. El archivo que no cabe se
+              // deja para la vuelta siguiente.
+              const bytes = await conTiempo(
+                conTokenVivo(token, (t) =>
+                  copiarArchivo(
+                    t,
+                    hijo,
+                    ctx.empresaId,
+                    rama.destinoId,
+                    rama.depto,
+                    ctx.userId,
+                    admin,
+                    client,
+                    bucket,
+                  ),
                 ),
+                TOPE_POR_ARCHIVO_MS,
+                hijo.nombre,
               );
               return { ok: true as const, id: hijo.id, bytes };
             } catch (err) {
@@ -605,6 +645,11 @@ export async function ejecutarImportacion(args: {
             yaImportados.add(r.id);
             copiados++;
             copiadosBytes += r.bytes;
+          } else if (r.motivo.includes("tardó demasiado")) {
+            // No es un fallo del archivo: se quedó sin tiempo. No se apunta
+            // como fallido —quedaría marcado para siempre— y la importación no
+            // se da por terminada, así que la vuelta siguiente lo reintenta.
+            terminada = false;
           } else {
             errores.push({ archivo: r.nombre, motivo: r.motivo });
           }
@@ -616,8 +661,10 @@ export async function ejecutarImportacion(args: {
         await guardarProgreso();
       }
 
-      // La rama ya volvió a la cola dentro del bucle si se agotó el tiempo.
-      if (!terminada) break;
+      // Solo se corta por reloj agotado. Un archivo que tardó demasiado marca
+      // `terminada = false` para que se reintente, pero no debe parar la
+      // vuelta: queda tiempo para seguir con el resto.
+      if (Date.now() > limite) break;
     }
 
     // Se acumula sobre lo que ya hubiera: esta función puede correr varias veces.
