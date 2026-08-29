@@ -502,14 +502,16 @@ function AppLayoutInterno({ children }: { children: React.ReactNode }) {
 
                   {/* Bloque final: empresa + nombre + ajustes + avatar — todo en un pill */}
                   <div className="flex items-center gap-0.5 rounded-full border bg-muted/40 py-1 px-1.5">
-                    {/* Logo empresa. Oculto en móvil: cambiar de empresa es una
-                        acción de escritorio y aquí solo se llegaba de rebote,
-                        al caer en una vista de ordenador desde el teléfono. */}
-                    <div className="hidden md:block">
-                      <EmpresaSelector />
-                    </div>
+                    {/* Logo empresa. SIEMPRE visible, también en móvil.
+                        Estaba `hidden md:block` porque se dio por hecho que a
+                        las vistas de ordenador solo se llegaba de rebote desde
+                        el teléfono; no es cierto —submódulos como Gerencia →
+                        Mantenimiento se usan a diario desde el móvil— y allí
+                        desaparecía la única forma de cambiar de empresa
+                        (Iván, 28-ago: "nunca puede desaparecer"). */}
+                    <EmpresaSelector />
 
-                    <div className="hidden md:block h-5 w-px bg-border mx-1" />
+                    <div className="h-5 w-px bg-border mx-1" />
 
                     {/* Nombre + Rol del empleado */}
                     <div className="hidden md:flex flex-col justify-center px-1 max-w-[140px]">
