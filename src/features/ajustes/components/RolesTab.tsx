@@ -8,10 +8,8 @@ import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { ChevronDown, ChevronRight, Plus, Trash2, Settings, Users, Cctv, Rocket, KeyRound, Music } from "lucide-react";
+import { ChevronDown, ChevronRight, Settings, Users, Cctv, Rocket, KeyRound, Music } from "lucide-react";
 import { toast } from "sonner";
 import { saveRolesToSupabase, loadRolesFromSupabase } from "@/features/ajustes/actions/roles-actions";
 import { getEmployees } from "@/actions/admin";
@@ -72,9 +70,6 @@ export function RolesTab() {
   const { ajustes, setAjustes, empresaActual } = useEmpresa();
   const empresaDbId = empresaActual.dbId;
   const [expandedRol, setExpandedRol] = useState<string | null>(null);
-  const [showCreateModal, setShowCreateModal] = useState(false);
-  const [deleteRol, setDeleteRol] = useState<Rol | null>(null);
-  const [nuevoNombre, setNuevoNombre] = useState("");
   const [isPending, startTransition] = useTransition();
   const [usuariosSupabase, setUsuariosSupabase] = useState<UsuarioRol[]>([]);
 
@@ -189,45 +184,10 @@ export function RolesTab() {
     persistRoles(nextRoles);
   };
 
-  const crearRol = () => {
-    if (!nuevoNombre.trim()) return;
-    const permisos = [...MODULOS_NAV, MODULO_AJUSTES, MODULO_CAMARAS, MODULO_APLICACIONES, MODULO_ACCESOS, MODULO_MUSICA].map((m) => ({ modulo: m, ver: false, editar: false }));
-    const nuevoRol: Rol = {
-      id: `rol-${Date.now()}`,
-      nombre: nuevoNombre.trim(),
-      descripcion: "",
-      permisos,
-    };
-    setAjustes((prev) => {
-      const nextRoles = [...prev.roles, nuevoRol];
-      persistRoles(nextRoles);
-      return { ...prev, roles: nextRoles };
-    });
-    setNuevoNombre("");
-    setShowCreateModal(false);
-    setExpandedRol(nuevoRol.id);
-    toast.success(`Rol "${nuevoRol.nombre}" creado`);
-  };
 
-  const confirmarEliminar = () => {
-    if (!deleteRol) return;
-    setAjustes((prev) => {
-      const nextRoles = prev.roles.filter((r) => r.id !== deleteRol.id);
-      persistRoles(nextRoles);
-      return { ...prev, roles: nextRoles };
-    });
-    toast.success(`Rol "${deleteRol.nombre}" eliminado`);
-    setDeleteRol(null);
-  };
 
   return (
     <div className="space-y-2">
-      <div className="flex justify-end">
-        <Button size="sm" className="gap-1.5" onClick={() => setShowCreateModal(true)} disabled={isPending}>
-          <Plus className="h-4 w-4" />Nuevo
-        </Button>
-      </div>
-
       {ajustes.roles.map((rol) => {
         const isOpen = expandedRol === rol.id;
         const { nav: permisosNav, ajustes: permisoAjustes, camaras: permisoCamaras, aplicaciones: permisoAplicaciones, accesos: permisoAccesos, musica: permisoMusica } = buildPermisosCompletos(rol.permisos);
@@ -300,14 +260,6 @@ export function RolesTab() {
                       )}
                     </PopoverContent>
                   </Popover>
-                  {rol.nombre !== "Director" && (
-                    <Button
-                      variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10"
-                      onClick={(e) => { e.stopPropagation(); setDeleteRol(rol); }}
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
-                  )}
                 </div>
               </div>
             </CardHeader>
@@ -449,51 +401,6 @@ export function RolesTab() {
         );
       })}
 
-      {/* Modal crear rol */}
-      <Dialog open={showCreateModal} onOpenChange={setShowCreateModal}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>NUEVO ROL</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-3">
-            <div>
-              <Label className="text-xs font-bold">NOMBRE DEL ROL</Label>
-              <Input
-                value={nuevoNombre}
-                onChange={(e) => setNuevoNombre(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && crearRol()}
-                placeholder="Ej: Encargado de sala"
-                autoFocus
-              />
-            </div>
-            <p className="text-xs text-muted-foreground">
-              El rol se creará sin permisos. Configúralos después expandiendo el rol.
-            </p>
-            <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setShowCreateModal(false)}>CANCELAR</Button>
-              <Button onClick={crearRol} disabled={!nuevoNombre.trim()}>CREAR</Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* Confirmación eliminar */}
-      <AlertDialog open={!!deleteRol} onOpenChange={(o) => !o && setDeleteRol(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>¿Eliminar rol?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Se eliminará el rol <strong>{deleteRol?.nombre}</strong> permanentemente. Los usuarios asignados a este rol perderán sus permisos.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>CANCELAR</AlertDialogCancel>
-            <AlertDialogAction className="bg-destructive hover:bg-destructive/90 text-white" onClick={confirmarEliminar}>
-              ELIMINAR
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   );
 }

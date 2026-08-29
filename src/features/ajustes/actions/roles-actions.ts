@@ -179,11 +179,6 @@ export async function deleteRolEmpresa(
   }
 }
 
-/** Detecta si un id es un UUID real (rol persistido) frente a uno provisional de UI (`rol-<timestamp>`). */
-function esUuid(id: string): boolean {
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)
-}
-
 /** Normaliza el nombre de rol para emparejar entre empresas del grupo (trim + upper). */
 function normalizeRolNombre(nombre: string): string {
   return nombre.trim().toUpperCase()
@@ -290,33 +285,19 @@ export async function saveRolesToSupabase(
         if (esEmpresaActual) return { error: readError.message }
         continue // otra empresa del grupo: no bloquear el guardado principal
       }
-      const idsEnBd = new Set((existentes ?? []).map((r) => r.id as string))
 
       let filas: Array<{ id: string; empresa_id: string; nombre: string; descripcion: string; permisos: PermisoModulo[] }>
-      const idsEntrantes = new Set<string>()
 
-      if (esEmpresaActual) {
-        // Empresa actual: la UI es la fuente de verdad completa (crea/borra/renombra).
-        filas = roles.map((r) => {
-          const id = esUuid(r.id) ? r.id : crypto.randomUUID()
-          idsEntrantes.add(id)
-          return {
-            id,
-            empresa_id: emp,
-            nombre: r.nombre,
-            descripcion: r.descripcion,
-            permisos: r.permisos,
-          }
-        })
-      } else {
-        // Otra empresa del grupo: solo actualizamos permisos/descr. de los roles
-        // que YA existen allí con el mismo nombre. No creamos ni borramos: cada
-        // empresa mantiene su propio conjunto de roles y sus asignaciones.
+      {
+        // Los roles son FIJOS: los del catálogo del software (src/lib/seeds/roles.ts).
+        // Esta pantalla SOLO ajusta permisos y descripción de los roles que ya
+        // existen, emparejando por NOMBRE. Nunca crea ni borra: si llegara un rol
+        // desconocido (petición manipulada o estado viejo en el navegador), se
+        // ignora en silencio en vez de darlo de alta.
         filas = (existentes ?? [])
           .map((row) => {
             const match = permisosPorNombre.get(normalizeRolNombre(row.nombre as string))
             if (!match) return null
-            idsEntrantes.add(row.id as string)
             return {
               id: row.id as string,
               empresa_id: emp,
@@ -335,26 +316,7 @@ export async function saveRolesToSupabase(
         if (upsertError && esEmpresaActual) return { error: upsertError.message }
       }
 
-      // Borrado selectivo SOLO en la empresa actual (las demás no se tocan).
-      if (esEmpresaActual) {
-        const aBorrar = [...idsEnBd].filter((id) => !idsEntrantes.has(id))
-        if (aBorrar.length > 0) {
-          const { data: ocupados } = await admin
-            .from('usuarios')
-            .select('rol_id')
-            .in('rol_id', aBorrar)
-          const idsOcupados = new Set((ocupados ?? []).map((u) => u.rol_id as string))
-          const borrables = aBorrar.filter((id) => !idsOcupados.has(id))
-          if (borrables.length > 0) {
-            const { error: deleteError } = await admin
-              .from('empresa_roles')
-              .delete()
-              .eq('empresa_id', emp)
-              .in('id', borrables)
-            if (deleteError) return { error: deleteError.message }
-          }
-        }
-      }
+      // No hay borrado: los roles del catálogo no se eliminan desde la interfaz.
     }
 
     return {}
