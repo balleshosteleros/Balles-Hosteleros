@@ -46,7 +46,7 @@ import { faviconDesdeUrl } from "@/features/rrhh/data/accesos-apps";
 import { useAuth } from "@/features/auth/contexts/auth-context";
 import { GoogleIcon } from "@/shared/components/GoogleIcon";
 
-// ── Logo de la app (favicon/simpleicons con fallback a inicial) ───────────
+// ── Logo de la app (logo propio en /logos-apps, con fallback a inicial) ──
 // `size` permite agrandarlo en el panel de aplicaciones (lanzador visual).
 function AppLogo({
   nombre,
@@ -72,7 +72,7 @@ function AppLogo({
         alt={nombre}
         onError={() => setErr(true)}
         className={`${box} ${radius} object-contain p-1 shrink-0 ${
-          efectivo.includes("simpleicons.org")
+          efectivo.endsWith(".svg")
             ? "bg-transparent"
             : "bg-white dark:bg-white/90 border border-border/40"
         }`}

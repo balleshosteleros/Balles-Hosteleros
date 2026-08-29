@@ -15,7 +15,7 @@ export function AppLogo({ nombre, logoUrl }: { nombre: string; logoUrl?: string 
         alt={nombre}
         onError={() => setErr(true)}
         className={`h-7 w-7 rounded-md object-contain p-0.5 ${
-          logoUrl.includes("simpleicons.org")
+          logoUrl.endsWith(".svg")
             ? "bg-transparent"
             : "bg-white dark:bg-white/90 border border-border/40"
         }`}

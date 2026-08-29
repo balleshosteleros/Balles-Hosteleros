@@ -108,32 +108,50 @@ export const CATEGORIAS_APP = [
 ];
 
 /**
- * Marcas conocidas → logo nítido (simpleicons). Permite resolver el logo por
- * NOMBRE cuando la app no tiene URL (ej. "Revolut", "Caja Fuerte" no, pero
- * "Stripe" sí). Clave = substring en minúsculas que debe contener el nombre.
+ * Marcas conocidas → logo servido por la PROPIA app (`public/logos-apps`).
+ *
+ * Antes esto apuntaba a CDNs externos (simpleicons, favicons de Google), con
+ * dos problemas: el navegador de cada empleado pedía las imágenes fuera, y
+ * varias marcas ya no existían allí (BBVA, Mercadona, Makro, Amazon y Microsoft
+ * devolvían 404, así que la app salía como una letra en un cuadro gris).
+ * Ahora los logos viajan con el proyecto: sin peticiones externas y sin 404.
+ *
+ * Clave = substring en minúsculas que debe contener el nombre. Permite resolver
+ * el logo por NOMBRE aunque la app no tenga URL.
  */
 const LOGOS_POR_NOMBRE: Array<[string, string]> = [
-  ["revolut", "https://cdn.simpleicons.org/revolut/0666EB"],
-  ["stripe", "https://cdn.simpleicons.org/stripe/635BFF"],
-  ["instagram", "https://cdn.simpleicons.org/instagram/E4405F"],
-  ["facebook", "https://cdn.simpleicons.org/facebook/1877F2"],
-  ["tiktok", "https://cdn.simpleicons.org/tiktok/000000"],
-  ["spotify", "https://cdn.simpleicons.org/spotify/1DB954"],
-  ["amazon", "https://cdn.simpleicons.org/amazon/FF9900"],
-  ["youtube", "https://cdn.simpleicons.org/youtube/FF0000"],
-  ["whatsapp", "https://cdn.simpleicons.org/whatsapp/25D366"],
-  ["adyen", "https://cdn.simpleicons.org/adyen/0ABF53"],
-  ["mercadona", "https://www.google.com/s2/favicons?domain=mercadona.es&sz=128"],
-  ["makro", "https://www.google.com/s2/favicons?domain=makro.es&sz=128"],
-  ["google", "https://cdn.simpleicons.org/google/4285F4"],
-  ["gmail", "https://cdn.simpleicons.org/gmail/EA4335"],
-  ["drive", "https://cdn.simpleicons.org/googledrive/4285F4"],
-  ["microsoft", "https://cdn.simpleicons.org/microsoft/5E5E5E"],
-  ["sesame", "https://www.google.com/s2/favicons?domain=sesametime.com&sz=128"],
-  ["bbva", "https://www.google.com/s2/favicons?domain=bbva.es&sz=128"],
-  ["ágora", "https://www.google.com/s2/favicons?domain=agorapos.com&sz=128"],
-  ["agora", "https://www.google.com/s2/favicons?domain=agorapos.com&sz=128"],
-  ["b2com", "https://www.google.com/s2/favicons?domain=b2com.com&sz=128"],
+  ["revolut", "/logos-apps/revolut.svg"],
+  ["stripe", "/logos-apps/stripe.svg"],
+  ["instagram", "/logos-apps/instagram.svg"],
+  ["facebook", "/logos-apps/facebook.svg"],
+  ["tiktok", "/logos-apps/tiktok.svg"],
+  ["spotify", "/logos-apps/spotify.svg"],
+  ["amazon", "/logos-apps/amazon.png"],
+  ["aliexpress", "/logos-apps/aliexpress.svg"],
+  ["youtube", "/logos-apps/youtube.svg"],
+  ["whatsapp", "/logos-apps/whatsapp.svg"],
+  ["adyen", "/logos-apps/adyen.svg"],
+  ["mercadona", "/logos-apps/mercadona.png"],
+  ["makro", "/logos-apps/makro.png"],
+  ["gmail", "/logos-apps/gmail.svg"],
+  ["drive", "/logos-apps/googledrive.svg"],
+  ["google", "/logos-apps/google.svg"],
+  ["microsoft", "/logos-apps/microsoft.png"],
+  ["sesame", "/logos-apps/sesametime.png"],
+  ["bbva", "/logos-apps/bbva.png"],
+  ["ágora", "/logos-apps/agorapos.png"],
+  ["agora", "/logos-apps/agorapos.png"],
+  ["b2com", "/logos-apps/b2com.png"],
+  ["cover manager", "/logos-apps/covermanager.png"],
+  ["covermanager", "/logos-apps/covermanager.png"],
+  ["high level", "/logos-apps/gohighlevel.png"],
+  ["highlevel", "/logos-apps/gohighlevel.png"],
+  ["siteground", "/logos-apps/siteground.png"],
+  ["banktrack", "/logos-apps/banktrack.png"],
+  ["gamma", "/logos-apps/gamma.png"],
+  ["asgae", "/logos-apps/somos-musica.png"],
+  ["infojobs", "/logos-apps/infojobs.png"],
+  ["tripadvisor", "/logos-apps/tripadvisor.svg"],
 ];
 
 /** Logo por nombre de marca conocida (sin necesidad de URL). "" si no hay match. */
@@ -146,8 +164,8 @@ export function logoDesdeNombre(nombre: string): string {
 }
 
 /**
- * Logo automático de una app: prioriza marca conocida por nombre; si no, saca
- * el favicon nítido del dominio de la URL. "" si no hay nada utilizable.
+ * Logo automático de una app: prioriza marca conocida por nombre; si no, pide
+ * el favicon del dominio a nuestra propia ruta `/api/logo-app`. "" si no hay nada utilizable.
  */
 export function faviconDesdeUrl(url: string, nombre?: string): string {
   // 1) Marca conocida por nombre (logo de máxima calidad).
@@ -155,11 +173,12 @@ export function faviconDesdeUrl(url: string, nombre?: string): string {
     const porNombre = logoDesdeNombre(nombre);
     if (porNombre) return porNombre;
   }
-  // 2) Favicon del dominio de la URL.
+  // 2) Favicon del dominio, servido por nuestra propia ruta: el navegador del
+  //    empleado nunca pide la imagen a un tercero.
   try {
     const host = new URL(url.startsWith("http") ? url : `https://${url}`).hostname;
-    if (!host) return "";
-    return `https://www.google.com/s2/favicons?domain=${host}&sz=128`;
+    if (!host || !host.includes(".")) return "";
+    return `/api/logo-app?dominio=${encodeURIComponent(host)}`;
   } catch {
     return "";
   }
