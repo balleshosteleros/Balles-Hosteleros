@@ -324,56 +324,18 @@ async function exigirPermisoEdicionAccesos(userId: string): Promise<void> {
 }
 
 /**
- * Normaliza un nombre de departamento para comparar sin depender de mayúsculas,
- * acentos ni variantes (RRHH ↔ Recursos Humanos). Devuelve minúsculas sin tildes.
- */
-function normDepto(s: string): string {
-  const base = (s ?? "")
-    .trim()
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, ""); // quita acentos
-  // Sinónimos: RRHH = recursos humanos.
-  if (base === "rrhh" || base === "recursos humanos") return "recursos humanos";
-  return base;
-}
-
-/**
- * Departamentos que el ROL del usuario le permite VER en la empresa indicada.
- *
- * FUENTE ÚNICA DE VERDAD: la tabla puente `empresa_role_departamentos`
- * (M:N rol↔departamento). Si tu rol tiene un departamento asignado ahí, lo ves;
- * si se lo quitas, dejas de verlo al instante. No hay ningún otro atajo (no se
- * usa el nombre del rol). Dirección/admin no pasa por aquí (ve todo).
- */
-async function departamentosVisiblesDelRol(userId: string): Promise<Set<string>> {
-  const set = new Set<string>();
-  const { rolId } = await getRolContext(userId);
-  if (!rolId) return set;
-
-  const admin = createAdminClient();
-  const { data } = await admin
-    .from("empresa_role_departamentos")
-    .select("departamentos:departamento_id ( nombre )")
-    .eq("rol_id", rolId);
-  for (const row of data ?? []) {
-    const nombre = (row as { departamentos?: { nombre?: string } | null }).departamentos?.nombre;
-    if (nombre) set.add(normDepto(nombre));
-  }
-  return set;
-}
-
-/**
  * Lista accesos de UNA empresa. RLS enforça que el usuario pertenezca a ella.
  *
- * SEGURIDAD (panel de aplicaciones): además del tenant, filtra por los
- * DEPARTAMENTOS QUE EL ROL DEL USUARIO PUEDE VER. Una app solo se devuelve si:
- *  - el usuario es dirección/admin (ve todo), o
- *  - la app no tiene departamentos asignados (visible para toda la empresa), o
- *  - la app incluye "Todos", o
- *  - algún departamento de la app está entre los que su ROL puede ver.
- * Si tu rol NO tiene ese departamento, NO ves la app. El cliente nunca recibe
- * apps de departamentos ajenos (el filtrado es en servidor).
+ * SEGURIDAD: además del tenant, los DOS ESCUDOS de arriba — el candado
+ * HERR_ACCESOS y los roles marcados en cada credencial. Nada más.
+ *
+ * Antes había un TERCER filtro por el departamento de la app, y era la causa
+ * del fallo que reportó Iván: no se ve ni se puede editar en Ajustes → Accesos
+ * (donde solo existe la columna «Roles»), así que marcabas GERENCIA en una
+ * credencial, guardabas, y seguía sin aparecer sin explicación posible. Peor
+ * aún, el alta nueva guarda `departamentos: []`, con lo que el filtro solo
+ * castigaba a las apps migradas con departamentos ya puestos.
+ * La visibilidad la deciden ahora los dos permisos que SÍ se configuran.
  */
 export async function listAccesosApps(empresaSlug: string): Promise<AccesoApp[]> {
   const supabase = await createClient();
@@ -397,18 +359,12 @@ export async function listAccesosApps(empresaSlug: string): Promise<AccesoApp[]>
   // invoque esta action directamente saltándose la interfaz.
   if (!puedeVerHerramienta(permisos, "HERR_ACCESOS")) return [];
 
-  const misDeptos = await departamentosVisiblesDelRol(user.id);
-
-  const visibles = (data ?? []).filter((r) => {
-    const deptos = ((r as Row).departamentos ?? []).map((d) => normDepto(d));
-    if (deptos.length === 0) return true; // sin restricción = toda la empresa
-    if (deptos.includes("todos")) return true;
-    return deptos.some((d) => misDeptos.has(d));
-  });
-
   // Escudo 2 — solo las credenciales donde este rol esté marcado. El resto no
   // sale del servidor (antes viajaban y se ocultaban al pintar).
-  const filtradas = filtrarAccesosPorRol(visibles.map((r) => rowToApp(r as Row)), rolNombre);
+  const filtradas = filtrarAccesosPorRol(
+    (data ?? []).map((r) => rowToApp(r as Row)),
+    rolNombre,
+  );
 
   // Red de seguridad (PRP-075): contrastamos con lo que la tabla `credenciales`
   // deja pasar por RLS. Si la BD devuelve MENOS de lo que hemos calculado aquí,
