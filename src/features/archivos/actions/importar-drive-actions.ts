@@ -403,7 +403,12 @@ export async function ejecutarImportacion(args: {
 
       for (const hijo of hijos) {
         if (Date.now() > limite) {
+          // Se devuelve la rama a la cola: queda a medias, y sin esto el bucle
+          // de fuera seguía vaciando carpetas sin copiar nada y acababa
+          // declarando la importación terminada con miles de archivos sin
+          // traer.
           terminada = false;
+          pendientes.push(rama);
           break;
         }
 
