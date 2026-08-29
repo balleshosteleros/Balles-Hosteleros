@@ -104,9 +104,13 @@ type SmtpConfig = {
  * de las obligatorias (host/user/pass): señal de "transporte no configurado".
  */
 function resolverSmtpConfig(): SmtpConfig | null {
-  // Resend tiene PRIORIDAD sobre Gmail cuando hay key: sin tope de 2.000/día
-  // (el de Google no se amplía pagando) y mejor entregabilidad. Si algún día se
-  // quita `RESEND_API_KEY`, se vuelve solo a Gmail sin tocar código.
+  // Resend es HOY el único transporte configurado: sin el tope de 2.000/día de
+  // Google (que no se amplía pagando) y con mejor entregabilidad.
+  // El respaldo por Gmail se retiró el 2026-08-30 al eliminarse su buzón de
+  // Workspace: las SMTP_* ya no existen en ningún entorno, así que si falta
+  // `RESEND_API_KEY` NO hay caída a Gmail — el correo queda sin transporte y
+  // sendEmail() devuelve `configured: false`. Para volver a tener respaldo hay
+  // que dar de alta un buzón que exista y reponer SMTP_HOST/PORT/USER/PASS.
   const resendKey = process.env.RESEND_API_KEY?.trim();
   if (resendKey) {
     const from = process.env.EMAIL_FROM?.trim() || process.env.EMAIL_NOREPLY?.trim();
