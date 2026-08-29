@@ -27,9 +27,14 @@ const DEFAULT_MODEL = process.env.GEMINI_MODEL?.trim() || "gemini-2.5-flash";
  * Se eligió `gemini-3.7-flash` tras comparar salidas reales: capta esos matices
  * y responde en ~3 s. El `pro` razona algo mejor, pero tarda ~13 s, demasiado
  * para un botón que se pulsa y se espera mirando la pantalla.
+ *
+ * ⚠️ 29-ago-2026: Google dejó `gemini-3.7-flash` sin servicio (timeout/503
+ * sostenido) y retiró `gemini-2.5-pro` (404). Bajamos a `gemini-3.6-flash`, que
+ * responde igual de bien y sí está disponible. Se puede volver a 3.7 con la env
+ * var cuando Google lo estabilice.
  */
 export const MODELO_REDACCION =
-  process.env.GEMINI_MODEL_REDACCION?.trim() || "gemini-3.7-flash";
+  process.env.GEMINI_MODEL_REDACCION?.trim() || "gemini-3.6-flash";
 
 /**
  * Modelo para leer DOCUMENTOS que llegan como foto o PDF (albaranes, nóminas).
@@ -49,9 +54,16 @@ export const MODELO_REDACCION =
  * Ojo: leer los IMPORTES se les da parecido a los dos (ambos clavaron total,
  * base, IVA y las 8 líneas de una factura fotografiada boca abajo). Lo que
  * cambia es la FIABILIDAD del formato de salida, que es lo que rompía.
+ *
+ * ⚠️ 29-ago-2026: `gemini-3.7-flash` dejó de responder (timeout/503) y el
+ * respaldo `gemini-2.5-pro` fue retirado (404) — por eso "el modelo da error" al
+ * subir albaranes. Se pasa a `gemini-3.5-flash` (disponible y rápido) como
+ * primario, con `gemini-3.6-flash` de respaldo (ver la escalera abajo). En el
+ * tier free la cuota es POR MODELO y POR DÍA, así que primario y respaldo van a
+ * modelos distintos a propósito: son dos cupos separados.
  */
 export const MODELO_DOCUMENTOS =
-  process.env.GEMINI_MODEL_DOCUMENTOS?.trim() || "gemini-3.7-flash";
+  process.env.GEMINI_MODEL_DOCUMENTOS?.trim() || "gemini-3.5-flash";
 
 export class GeminiKeyMissingError extends Error {
   constructor() {
@@ -165,9 +177,15 @@ export async function geminiJSON<T = unknown>(
   // A veces (sobre todo con imágenes) el modelo entra en bucle y devuelve un JSON
   // truncado o vacío pese al responseSchema. Es transitorio: el mismo input suele
   // salir bien al reintentar. Escalera: 2 intentos con el modelo primario y, si
-  // ambos fallan, 1 intento con un modelo más potente de respaldo (Pro sufre mucho
-  // menos ese bucle). El respaldo solo se paga cuando el primario falla dos veces.
-  const respaldo = process.env.GEMINI_MODEL_FALLBACK?.trim() || "gemini-2.5-pro";
+  // ambos fallan, 1 intento con un modelo de respaldo DISTINTO — que además cubre
+  // el caso de que el primario esté caído (503/timeout) o retirado (404), no solo
+  // el bucle de JSON. El respaldo solo se paga cuando el primario falla dos veces.
+  //
+  // Antes el respaldo era `gemini-2.5-pro`, pero Google lo retiró (404) y con esta
+  // clave los Pro dan 429 (sin cuota Pro). Por eso el respaldo es otro flash
+  // reciente y disponible; al ser modelo distinto del primario, en el tier free
+  // cuenta contra un cupo diario aparte.
+  const respaldo = process.env.GEMINI_MODEL_FALLBACK?.trim() || "gemini-3.6-flash";
   const escalera = [modelo, modelo];
   if (respaldo && respaldo !== modelo) escalera.push(respaldo);
 
