@@ -142,6 +142,37 @@ const COLS_ARCHIVO =
   "id, carpeta_id, departamento, nombre, r2_key, miniatura_key, tipo_mime, tamano_bytes, ancho, alto, duracion_seg, subido_por, created_at";
 
 /**
+ * Todos los archivos de una carpeta, en tandas.
+ *
+ * Supabase devuelve 1.000 filas como mucho por consulta. Una carpeta traída de
+ * Drive puede tener miles: sin pedir tanda a tanda, el resto no se veía y la
+ * carpeta parecía haberse quedado a medias.
+ */
+async function archivosDeCarpeta(
+  supabase: Awaited<ReturnType<typeof getContext>> extends null
+    ? never
+    : NonNullable<Awaited<ReturnType<typeof getContext>>>["supabase"],
+  empresaId: string,
+  carpetaId: string,
+): Promise<Record<string, unknown>[]> {
+  const TANDA = 1000;
+  const salida: Record<string, unknown>[] = [];
+  for (let desde = 0; ; desde += TANDA) {
+    const { data } = await supabase
+      .from("documentos")
+      .select(COLS_ARCHIVO)
+      .eq("empresa_id", empresaId)
+      .eq("carpeta_id", carpetaId)
+      .not("r2_key", "is", null)
+      .order("created_at", { ascending: false })
+      .range(desde, desde + TANDA - 1);
+    const tanda = (data ?? []) as Record<string, unknown>[];
+    salida.push(...tanda);
+    if (tanda.length < TANDA) return salida;
+  }
+}
+
+/**
  * Carpetas raíz VISIBLES: una por departamento que el rol pueda ver. Las demás
  * ni se devuelven.
  */
@@ -212,20 +243,14 @@ export async function getContenidoCarpeta(
       ruta.unshift(actual);
     }
 
-    const [{ data: subs }, { data: archivos }] = await Promise.all([
+    const [{ data: subs }, archivos] = await Promise.all([
       ctx.supabase
         .from("carpetas_documentos")
         .select(COLS_CARPETA)
         .eq("empresa_id", ctx.empresaId)
         .eq("parent_id", carpetaId)
         .order("nombre"),
-      ctx.supabase
-        .from("documentos")
-        .select(COLS_ARCHIVO)
-        .eq("empresa_id", ctx.empresaId)
-        .eq("carpeta_id", carpetaId)
-        .not("r2_key", "is", null)
-        .order("created_at", { ascending: false }),
+      archivosDeCarpeta(ctx.supabase, ctx.empresaId, carpetaId),
     ]);
 
     return {
@@ -234,7 +259,7 @@ export async function getContenidoCarpeta(
         carpeta,
         ruta,
         subcarpetas: ((subs ?? []) as FilaCarpeta[]).map(aCarpeta),
-        archivos: ((archivos ?? []) as Record<string, unknown>[]).map((a) => ({
+        archivos: archivos.map((a) => ({
           id: a.id as string,
           carpetaId: a.carpeta_id as string,
           departamento: (a.departamento as string) ?? "",
