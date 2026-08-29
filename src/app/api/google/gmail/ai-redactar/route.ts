@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
-import { geminiJSON, GeminiKeyMissingError } from "@/lib/ia/gemini";
+import { geminiJSON, GeminiKeyMissingError, MODELO_REDACCION } from "@/lib/ia/gemini";
 
 const InputSchema = z.object({
   borrador: z.string().max(8000).optional().default(""),
@@ -163,6 +163,9 @@ export async function POST(request: Request) {
       const res = await geminiJSON<{ asunto: string; cuerpo: string }>(
         construirPrompt(input),
         {
+          // Redactar pide un modelo mejor que el de extraer datos: ver
+          // MODELO_REDACCION en lib/ia/gemini.ts.
+          model: MODELO_REDACCION,
           systemInstruction: SYSTEM,
           responseSchema: ResponseSchema as never,
           temperature: 0.6,

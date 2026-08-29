@@ -13,7 +13,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
-import { geminiJSON, GeminiKeyMissingError } from "@/lib/ia/gemini";
+import { geminiJSON, GeminiKeyMissingError, MODELO_REDACCION } from "@/lib/ia/gemini";
 
 const InputSchema = z.object({
   /** Hechos en bruto tal y como los escribe RRHH. */
@@ -114,6 +114,9 @@ export async function POST(request: Request) {
 
     try {
       const res = await geminiJSON<{ hechos: string }>(construirPrompt(input), {
+        // Texto que leerá una persona (y que acaba en un documento legal):
+        // usa el modelo de redacción, no el de extraer datos.
+        model: MODELO_REDACCION,
         systemInstruction: SYSTEM,
         responseSchema: ResponseSchema as never,
         // Temperatura baja: aquí interesa fidelidad al borrador, no creatividad.

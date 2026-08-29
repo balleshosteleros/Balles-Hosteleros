@@ -8,6 +8,27 @@ import { GoogleGenerativeAI, type Schema } from "@google/generative-ai";
 
 const DEFAULT_MODEL = process.env.GEMINI_MODEL?.trim() || "gemini-2.5-flash";
 
+/**
+ * Modelo para REDACCIÓN (correos, textos que lee una persona).
+ *
+ * Va aparte del `DEFAULT_MODEL` a propósito. El modelo por defecto es un
+ * `flash-lite`: barato y rápido, perfecto para el grueso del software, que es
+ * EXTRAER datos de documentos (facturas, nóminas, modelos AEAT) — ahí la
+ * respuesta es un JSON de campos y el matiz literario da igual.
+ *
+ * Redactar es otra tarea. `flash-lite` hilvana las frases sin entender la
+ * relación entre ellas: en un aviso de avería resumía "el técnico confirmó que
+ * estaba arreglada, pero el error persiste" y se le perdía lo importante — que
+ * vino y NO lo arregló. Se notaba al lado del "Pulir" de Gmail, que usa un
+ * modelo grande.
+ *
+ * Se eligió `gemini-3.7-flash` tras comparar salidas reales: capta esos matices
+ * y responde en ~3 s. El `pro` razona algo mejor, pero tarda ~13 s, demasiado
+ * para un botón que se pulsa y se espera mirando la pantalla.
+ */
+export const MODELO_REDACCION =
+  process.env.GEMINI_MODEL_REDACCION?.trim() || "gemini-3.7-flash";
+
 export class GeminiKeyMissingError extends Error {
   constructor() {
     super("GEMINI_API_KEY no configurada en variables de entorno");
