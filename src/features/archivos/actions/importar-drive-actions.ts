@@ -55,6 +55,16 @@ function mensajeError(err: unknown): string {
   return "Error desconocido";
 }
 
+/**
+ * Cuántos archivos se copian a la vez.
+ *
+ * Copiar es sobre todo esperar a la red (bajar de Drive, subir a R2), así que
+ * solapar copias multiplica el ritmo sin consumir más CPU. Se queda en 6
+ * porque cada copia mantiene en memoria las partes en vuelo de su subida
+ * (8 MB x 4), y con vídeos de varios GB pasarse agota la función.
+ */
+const COPIAS_EN_PARALELO = 6;
+
 /** Token de Google de la cuenta conectada. */
 async function getAccessToken(): Promise<string | null> {
   const c = await cookies();
@@ -390,7 +400,13 @@ export async function ejecutarImportacion(args: {
     // DESPUÉS del último control de tiempo, y si la función muere antes de
     // guardar, el progreso de toda la tanda se pierde. Pasó: había archivos ya
     // copiados en R2 y el contador seguía a cero.
-    const limite = Date.now() + 3 * 60 * 1000;
+    //
+    // 2 min sobre los 5 de la ruta, no 3, porque el reloj se mira ANTES de
+    // lanzar cada tanda: si arranca justo en el límite con seis vídeos de
+    // varios GB, la tanda sigue subiendo mucho después. Con las copias en
+    // paralelo cada tanda mueve bastante más, así que sobra tiempo y lo que
+    // hace falta es margen para que la última quepa dentro de la ventana.
+    const limite = Date.now() + 2 * 60 * 1000;
     let terminada = true;
 
 
@@ -444,6 +460,54 @@ export async function ejecutarImportacion(args: {
       `[importar-drive] arranque: ${pendientes.length} ramas, ${todos.length} entradas en el árbol, ${yaImportados.size} ya importados`,
     );
 
+    // Cuántos archivos cuelgan de cada carpeta y cuántos faltan por copiar,
+    // contando TODA la descendencia. Se calcula una vez y permite descartar de
+    // un vistazo las ramas ya completas.
+    const totalPorRama = new Map<string, number>();
+    const faltanPorRama = new Map<string, number>();
+    const contar = (id: string): { total: number; faltan: number } => {
+      const yaCalc = totalPorRama.get(id);
+      if (yaCalc !== undefined) {
+        return { total: yaCalc, faltan: faltanPorRama.get(id) ?? 0 };
+      }
+      // Se marca antes de bajar: un enlace circular en el árbol colgaría esto.
+      totalPorRama.set(id, 0);
+      faltanPorRama.set(id, 0);
+      let total = 0;
+      let faltan = 0;
+      for (const h of hijosDe.get(id) ?? []) {
+        if (h.esCarpeta) {
+          const sub = contar(h.id);
+          total += sub.total;
+          faltan += sub.faltan;
+        } else {
+          total++;
+          if (!yaImportados.has(h.id)) faltan++;
+        }
+      }
+      totalPorRama.set(id, total);
+      faltanPorRama.set(id, faltan);
+      return { total, faltan };
+    };
+    for (const r of pendientes) contar(r.driveId);
+    const pendientesDe = (id: string) => faltanPorRama.get(id) ?? 0;
+    const archivosDe = (id: string) => totalPorRama.get(id) ?? 0;
+
+    /** Guarda el progreso de la tanda. Se llama cada pocos archivos. */
+    const guardarProgreso = () =>
+      admin
+        .from("archivos_importaciones")
+        .update({
+          copiados: baseCopiados + copiados,
+          copiados_bytes: baseBytes + copiadosBytes,
+          // Lo que ya estaba antes de esta vuelta. No se cuenta sobre la
+          // marcha: en la última vuelta no se copia ni se salta nada nuevo, y
+          // ese cero borraba el total.
+          omitidos: Math.max(0, yaImportados.size - copiados),
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", impId);
+
     while (pendientes.length) {
       if (Date.now() > limite) {
         terminada = false;
@@ -452,7 +516,47 @@ export async function ejecutarImportacion(args: {
       const rama = pendientes.pop()!;
       const hijos = hijosDe.get(rama.driveId) ?? [];
 
+      // Las ramas ya terminadas se saltan enteras, con toda su descendencia.
+      //
+      // Cada vuelta recorre el árbol desde el principio, y en una migración
+      // avanzada la mayoría de carpetas ya están copiadas por completo. Sin
+      // este atajo, HABANA gastaba casi toda su ventana repasando 1.633
+      // archivos ya traídos para llegar a los pocos que faltaban: una vuelta
+      // entera copió UN archivo.
+      if (pendientesDe(rama.driveId) === 0) {
+        omitidos += archivosDe(rama.driveId);
+        continue;
+      }
+
+      // Las carpetas se resuelven antes: crean la estructura y añaden ramas,
+      // y hacerlo en medio de las copias obligaría a serializar.
+      const archivos: typeof hijos = [];
       for (const hijo of hijos) {
+        if (!hijo.esCarpeta) {
+          if (yaImportados.has(hijo.id)) omitidos++;
+          else archivos.push(hijo);
+          continue;
+        }
+        // La estructura se replica: misma carpeta, mismo nombre.
+        const subId = await asegurarCarpeta(
+          admin,
+          ctx.empresaId,
+          rama.destinoId,
+          rama.depto,
+          hijo.nombre,
+          ctx.userId,
+        );
+        pendientes.push({ driveId: hijo.id, destinoId: subId, depto: rama.depto });
+      }
+
+      // Los archivos se copian de VARIOS EN VARIOS, no de uno en uno.
+      //
+      // Copiar es esperar a la red: se baja de Drive y se sube a R2, y durante
+      // casi todo ese rato la función está parada. En serie se copiaban ~50
+      // archivos por ventana de 3 minutos; con 124 GB por delante eso son días.
+      // Con varias copias solapadas se aprovecha la espera de unas para
+      // adelantar las otras.
+      for (let i = 0; i < archivos.length; i += COPIAS_EN_PARALELO) {
         if (Date.now() > limite) {
           // Se devuelve la rama a la cola: queda a medias, y sin esto el bucle
           // de fuera seguía vaciando carpetas sin copiar nada y acababa
@@ -463,64 +567,48 @@ export async function ejecutarImportacion(args: {
           break;
         }
 
-        if (hijo.esCarpeta) {
-          // La estructura se replica: misma carpeta, mismo nombre.
-          const subId = await asegurarCarpeta(
-            admin,
-            ctx.empresaId,
-            rama.destinoId,
-            rama.depto,
-            hijo.nombre,
-            ctx.userId,
-          );
-          pendientes.push({ driveId: hijo.id, destinoId: subId, depto: rama.depto });
-          continue;
-        }
+        const tanda = archivos.slice(i, i + COPIAS_EN_PARALELO);
+        const hechas = await Promise.all(
+          tanda.map(async (hijo) => {
+            try {
+              const bytes = await conTokenVivo(token, (t) =>
+                copiarArchivo(
+                  t,
+                  hijo,
+                  ctx.empresaId,
+                  rama.destinoId,
+                  rama.depto,
+                  ctx.userId,
+                  admin,
+                  client,
+                  bucket,
+                ),
+              );
+              return { ok: true as const, id: hijo.id, bytes };
+            } catch (err) {
+              return { ok: false as const, nombre: hijo.nombre, motivo: mensajeError(err) };
+            }
+          }),
+        );
 
-        if (yaImportados.has(hijo.id)) {
-          omitidos++;
-          continue;
-        }
-
-        try {
-          const bytes = await conTokenVivo(token, (t) =>
-            copiarArchivo(
-              t,
-              hijo,
-              ctx.empresaId,
-              rama.destinoId,
-              rama.depto,
-              ctx.userId,
-              admin,
-              client,
-              bucket,
-            ),
-          );
-          yaImportados.add(hijo.id);
-          copiados++;
-          copiadosBytes += bytes;
-
-          // Se guarda cada 25 archivos, no solo al final: si la función muere
-          // a mitad de tanda, lo copiado hasta ese punto no se pierde y la
-          // pantalla ve avanzar el contador.
-          if (copiados % 25 === 0) {
-            await admin
-              .from("archivos_importaciones")
-              .update({
-                copiados: baseCopiados + copiados,
-                copiados_bytes: baseBytes + copiadosBytes,
-                // Lo que ya estaba antes de esta vuelta. No se cuenta sobre la
-                // marcha: en la última vuelta no se copia ni se salta nada
-                // nuevo, y ese cero borraba el total.
-                omitidos: Math.max(0, yaImportados.size - copiados),
-                updated_at: new Date().toISOString(),
-              })
-              .eq("id", impId);
+        for (const r of hechas) {
+          if (r.ok) {
+            yaImportados.add(r.id);
+            copiados++;
+            copiadosBytes += r.bytes;
+          } else {
+            errores.push({ archivo: r.nombre, motivo: r.motivo });
           }
-        } catch (err) {
-          errores.push({ archivo: hijo.nombre, motivo: mensajeError(err) });
         }
+
+        // Se guarda al cerrar cada tanda, no solo al final: si la función muere
+        // a mitad, lo copiado hasta ese punto no se pierde y la pantalla ve
+        // avanzar el contador.
+        await guardarProgreso();
       }
+
+      // La rama ya volvió a la cola dentro del bucle si se agotó el tiempo.
+      if (!terminada) break;
     }
 
     // Se acumula sobre lo que ya hubiera: esta función puede correr varias veces.
@@ -595,8 +683,11 @@ async function copiarArchivo(
   const subida = new Upload({
     client,
     params: { Bucket: bucket, Key: r2Key, Body: body, ContentType: mime },
-    partSize: 8 * 1024 * 1024,
-    queueSize: 4,
+    // Partes de 16 MB y 6 en vuelo: con vídeos de varios GB, trocear de 8 en
+    // 8 MB obligaba a firmar y enviar cientos de partes por archivo, y cada
+    // una es una ida y vuelta a R2. El doble de tamaño es la mitad de viajes.
+    partSize: 16 * 1024 * 1024,
+    queueSize: 6,
   });
   await subida.done();
 
