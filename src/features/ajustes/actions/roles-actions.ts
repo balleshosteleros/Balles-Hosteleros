@@ -5,8 +5,8 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { Rol, PermisoModulo } from '@/features/ajustes/data/ajustes'
 import { getRolContext } from '@/features/auth/actions/permisos-actions'
 import { puedeEditarModulo, normalizarModulo } from '@/features/auth/lib/permisos'
+import { resolverEmpresaAjustes } from '@/features/ajustes/actions/resolver-empresa'
 
-const DEV_EMPRESA_ID = '00000000-0000-0000-0000-000000000001'
 
 // El nombre del rol coincide siempre con el del departamento (multi-tenant
 // uniforme). El seed real de los 11 roles canónicos se hace por trigger en BD
@@ -49,41 +49,15 @@ async function requireDirectorAppRole(): Promise<string | null> {
  * - Si llega `empresaIdParam` se valida que el usuario tenga acceso (user_empresas)
  *   o que sea su empresa primaria (profiles.empresa_id) — ambos casos son válidos.
  * - Si no llega, cae a la empresa primaria del perfil.
- * - Si nada de lo anterior funciona, DEV_EMPRESA_ID (entorno sin sesión).
  */
-async function resolveEmpresaId(empresaIdParam?: string): Promise<string> {
+async function resolveEmpresaId(empresaIdParam?: string): Promise<string | null> {
   try {
     const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return empresaIdParam ?? DEV_EMPRESA_ID
-
-    if (empresaIdParam) {
-      const { data: acceso } = await supabase
-        .from('usuario_empresas')
-        .select('empresa_id')
-        .eq('user_id', user.id)
-        .eq('empresa_id', empresaIdParam)
-        .maybeSingle()
-      if (acceso) return empresaIdParam
-
-      const { data: profile } = await supabase
-        .from('usuarios')
-        .select('empresa_id')
-        .eq('user_id', user.id)
-        .maybeSingle()
-      if (profile?.empresa_id === empresaIdParam) return empresaIdParam
-      // El usuario pidió una empresa a la que no tiene acceso: silenciar y caer a la suya.
-    }
-
-    const { data: profile } = await supabase
-      .from('usuarios')
-      .select('empresa_id')
-      .eq('user_id', user.id)
-      .single()
-
-    return profile?.empresa_id ?? DEV_EMPRESA_ID
+    return await resolverEmpresaAjustes(supabase, empresaIdParam)
   } catch {
-    return empresaIdParam ?? DEV_EMPRESA_ID
+    // Ante la duda no se elige empresa: escribir en la sociedad equivocada
+    // es peor que no escribir.
+    return null
   }
 }
 
@@ -95,6 +69,9 @@ export async function getRolesEmpresaNombres(empresaIdParam?: string): Promise<s
   try {
     const admin = createAdminClient()
     const empresa_id = await resolveEmpresaId(empresaIdParam)
+    // Sin empresa activa resuelta no se opera: escribir en la sociedad
+    // equivocada es peor que no escribir.
+    if (!empresa_id) return []
     const { data, error } = await admin
       .from('empresa_roles')
       .select('nombre')
@@ -127,6 +104,9 @@ export async function addRolEmpresa(
     const rolNombre = rolFromDepartamento(dpto)
     const admin = createAdminClient()
     const empresa_id = await resolveEmpresaId(empresaIdParam)
+    // Sin empresa activa resuelta no se opera: escribir en la sociedad
+    // equivocada es peor que no escribir.
+    if (!empresa_id) return { error: 'Sin empresa activa: no se puede operar sobre Ajustes' }
 
     const { data: existente } = await admin
       .from('empresa_roles')
@@ -184,6 +164,9 @@ export async function deleteRolEmpresa(
     const rolNombre = rolFromDepartamento(dpto)
     const admin = createAdminClient()
     const empresa_id = await resolveEmpresaId(empresaIdParam)
+    // Sin empresa activa resuelta no se opera: escribir en la sociedad
+    // equivocada es peor que no escribir.
+    if (!empresa_id) return { error: 'Sin empresa activa: no se puede operar sobre Ajustes' }
     const { error } = await admin
       .from('empresa_roles')
       .delete()
@@ -273,6 +256,9 @@ export async function saveRolesToSupabase(
     // sea accesible para el usuario.
     const admin = createAdminClient()
     const empresa_id = await resolveEmpresaId(empresaIdParam)
+    // Sin empresa activa resuelta no se opera: escribir en la sociedad
+    // equivocada es peor que no escribir.
+    if (!empresa_id) return { error: 'Sin empresa activa: no se puede operar sobre Ajustes' }
 
     // Los ROLES son del GRUPO, no por empresa: propagamos los permisos a TODAS
     // las empresas del director, emparejando por NOMBRE de rol. Así apagar un
@@ -387,6 +373,9 @@ export async function loadRolesFromSupabase(
     // acceso, así que el bypass de RLS aquí es seguro.
     const admin = createAdminClient()
     const empresa_id = await resolveEmpresaId(empresaIdParam)
+    // Sin empresa activa resuelta no se opera: escribir en la sociedad
+    // equivocada es peor que no escribir.
+    if (!empresa_id) return null
 
     const { data, error } = await admin
       .from('empresa_roles')

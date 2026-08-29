@@ -11,6 +11,7 @@ import { getSiteUrl } from '@/lib/site-url'
 import { friendlyError } from '@/shared/lib/friendly-errors'
 import { getRolContext } from '@/features/auth/actions/permisos-actions'
 import { puedeVerModulo, puedeEditarModulo } from '@/features/auth/lib/permisos'
+import { getEmpresaActivaForUser } from '@/features/empresa/lib/empresa-server'
 
 /**
  * Verifica que el nombre de rol exista en empresa_roles para la empresa del usuario.
@@ -109,11 +110,13 @@ export async function createEmployee(formData: FormData) {
   // Validar que el rol exista en empresa_roles del invocador.
   const supabase = await createClient()
   const { data: { user: invoker } } = await supabase.auth.getUser()
-  const { data: invokerProfile } = invoker
-    ? await admin.from('usuarios').select('empresa_id').eq('user_id', invoker.id).maybeSingle()
-    : { data: null }
-  const empresaId = invokerProfile?.empresa_id
-  if (!empresaId) return { error: 'No se pudo determinar la empresa del invocador.' }
+  // El alta va a la empresa que se está VIENDO (selector), no a la empresa de
+  // origen del que da de alta: si no, un director multiempresa creaba la
+  // persona en la sociedad equivocada.
+  const empresaId = invoker
+    ? await getEmpresaActivaForUser(supabase, invoker.id)
+    : null
+  if (!empresaId) return { error: 'No se pudo determinar la empresa activa.' }
   const validation = await assertRoleExistsInEmpresa(admin, empresaId, rolLabelInput)
   if (validation.error) return { error: validation.error }
 
@@ -509,18 +512,15 @@ export async function getEmpleadosSinAcceso() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { data: [] }
 
-  const { data: profile } = await supabase
-    .from('usuarios')
-    .select('empresa_id')
-    .eq('user_id', user.id)
-    .single()
-
-  if (!profile?.empresa_id) return { data: [] }
+  // Solo la plantilla de la empresa activa: antes ofrecía los empleados de la
+  // empresa de origen, y vincularlos creaba accesos cruzados entre sociedades.
+  const empresaId = await getEmpresaActivaForUser(supabase, user.id)
+  if (!empresaId) return { data: [] }
 
   const { data, error } = await supabase
     .from('empleados')
     .select('id, nombre, apellidos, email_personal, email_empresa, departamentos!empleados_departamento_id_fkey(nombre)')
-    .eq('empresa_id', profile.empresa_id)
+    .eq('empresa_id', empresaId)
     .eq('estado', 'Activo')
     .is('user_id', null)
     .order('nombre')
@@ -568,16 +568,19 @@ export async function updateEmployeeProfile(
     if (trimmed) {
       const supabase = await createClient()
       const { data: { user: invoker } } = await supabase.auth.getUser()
-      const { data: invokerProfile } = invoker
-        ? await admin.from('usuarios').select('empresa_id').eq('user_id', invoker.id).maybeSingle()
-        : { data: null }
+      // Se valida contra la empresa ACTIVA (la que alimenta el dropdown), no
+      // contra la de origen: si no, se aceptaba un rol que solo existe en otra
+      // sociedad y se guardaba una etiqueta inexistente aquí.
+      const empresaActivaInvoker = invoker
+        ? await getEmpresaActivaForUser(supabase, invoker.id)
+        : null
       const { data: target } = await admin
         .from('usuarios')
         .select('empresa_id')
         .eq('id', profileId)
         .maybeSingle()
 
-      const empresasACheckear = [invokerProfile?.empresa_id, target?.empresa_id]
+      const empresasACheckear = [empresaActivaInvoker, target?.empresa_id]
         .filter((id): id is string => Boolean(id))
       const empresasUnicas = Array.from(new Set(empresasACheckear))
 

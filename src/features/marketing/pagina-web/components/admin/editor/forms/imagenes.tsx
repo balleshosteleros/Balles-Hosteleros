@@ -16,29 +16,11 @@ import { Input } from "@/components/ui/input";
 import { subirAsset } from "../../../../services/asset-upload";
 import { MAX_IMAGEN_MB, MAX_IMAGEN_BYTES, traducirErrorSubida } from "@/shared/lib/documentos";
 import { useEditorStore } from "../../../../hooks/useEditorStore";
+import { obtenerEmpresaActivaCliente } from "@/features/empresa/actions/empresa-activa-cliente-actions";
 
 export interface ImagenItem {
   url: string;
   alt: string;
-}
-
-async function obtenerEmpresaId(): Promise<string | null> {
-  try {
-    const { createClient } = await import("@/lib/supabase/client");
-    const supabase = createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) return null;
-    const { data } = await supabase
-      .from("usuarios")
-      .select("empresa_id")
-      .eq("user_id", user.id)
-      .single();
-    return (data?.empresa_id as string) ?? null;
-  } catch {
-    return null;
-  }
 }
 
 /** Hook con la subida ya resuelta: devuelve las URLs listas para guardar. */
@@ -53,7 +35,7 @@ export function useSubidaImagenes() {
     }
     setSubiendo(true);
     try {
-      const empresaId = await obtenerEmpresaId();
+      const empresaId = await obtenerEmpresaActivaCliente();
       if (!empresaId) {
         toast.error("Sin contexto de empresa.");
         return [];

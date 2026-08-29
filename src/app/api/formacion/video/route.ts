@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { PutObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
 import { createClient as createServerClient } from "@/lib/supabase/server";
+import { getEmpresaActivaForUser } from "@/features/empresa/lib/empresa-server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getR2 } from "@/shared/lib/r2";
 
@@ -18,13 +19,11 @@ export async function POST(req: Request) {
     } = await supabase.auth.getUser();
     if (!user) return NextResponse.json({ error: "No autenticado" }, { status: 401 });
 
-    const { data: profile } = await supabase
-      .from("usuarios")
-      .select("empresa_id")
-      .eq("user_id", user.id)
-      .single();
-    if (!profile?.empresa_id) {
-      return NextResponse.json({ error: "Usuario sin empresa asignada" }, { status: 403 });
+    // El vídeo se guarda y se factura a la empresa ACTIVA: con la de origen,
+    // subir desde una sociedad dejaba el fichero y el consumo en otra.
+    const empresaId = await getEmpresaActivaForUser(supabase, user.id);
+    if (!empresaId) {
+      return NextResponse.json({ error: "Sin empresa activa" }, { status: 403 });
     }
 
     const formData = await req.formData();
@@ -39,7 +38,7 @@ export async function POST(req: Request) {
     const { data: usage } = await admin
       .from("storage_usage_por_empresa")
       .select("bytes_used, bytes_limit")
-      .eq("empresa_id", profile.empresa_id)
+      .eq("empresa_id", empresaId)
       .single();
     const bytesUsed = Number(usage?.bytes_used ?? 0);
     const bytesLimit = Number(usage?.bytes_limit ?? 500 * 1024 ** 3);
@@ -58,7 +57,7 @@ export async function POST(req: Request) {
     const { client: r2Client, bucket: BUCKET_NAME, publicUrl: PUBLIC_URL } = getR2();
     const fileId = crypto.randomUUID();
     const ext = mimeType.includes("webm") ? "webm" : mimeType.includes("quicktime") ? "mov" : "mp4";
-    const r2Key = `empresa_${profile.empresa_id}/formacion/${fileId}.${ext}`;
+    const r2Key = `empresa_${empresaId}/formacion/${fileId}.${ext}`;
     const buffer = Buffer.from(await file.arrayBuffer());
 
     try {
@@ -87,7 +86,7 @@ export async function POST(req: Request) {
       r2_key: r2Key,
       duration,
       file_size: buffer.length,
-      empresa_id: profile.empresa_id,
+      empresa_id: empresaId,
       owner_user_id: user.id,
       type: "formacion",
     });

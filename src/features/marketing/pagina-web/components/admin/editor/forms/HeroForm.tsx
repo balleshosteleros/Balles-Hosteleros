@@ -13,24 +13,7 @@ import { subirAsset } from "../../../../services/asset-upload";
 import { createClient } from "@/lib/supabase/client";
 import { MAX_IMAGEN_MB, MAX_IMAGEN_BYTES, traducirErrorSubida } from "@/shared/lib/documentos";
 import type { Bloque, HeroDatos } from "../../../../types";
-
-async function obtenerEmpresaId(): Promise<string | null> {
-  try {
-    const supabase = createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) return null;
-    const { data } = await supabase
-      .from("usuarios")
-      .select("empresa_id")
-      .eq("user_id", user.id)
-      .single();
-    return (data?.empresa_id as string) ?? null;
-  } catch {
-    return null;
-  }
-}
+import { obtenerEmpresaActivaCliente } from "@/features/empresa/actions/empresa-activa-cliente-actions";
 
 export function HeroForm({ bloque }: { bloque: Extract<Bloque, { tipo: "hero" }> }) {
   const actualizar = useEditorStore((s) => s.actualizarBloque);
@@ -52,7 +35,7 @@ export function HeroForm({ bloque }: { bloque: Extract<Bloque, { tipo: "hero" }>
       return;
     }
     setSubiendo(true);
-    const empresaId = await obtenerEmpresaId();
+    const empresaId = await obtenerEmpresaActivaCliente();
     if (!empresaId) {
       toast.error("Sin contexto de empresa.");
       setSubiendo(false);

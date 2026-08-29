@@ -3,8 +3,8 @@
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { addRolEmpresa, deleteRolEmpresa } from '@/features/ajustes/actions/roles-actions'
+import { resolverEmpresaAjustes } from '@/features/ajustes/actions/resolver-empresa'
 
-const DEV_EMPRESA_ID = '00000000-0000-0000-0000-000000000001'
 
 export type DepartamentoRow = {
   id: string
@@ -23,37 +23,14 @@ export type DepartamentoRow = {
  * tenga acceso (user_empresas) o que sea su empresa primaria. Si no se pasa
  * `empresaIdParam`, usa la primaria del perfil.
  */
-async function resolveEmpresaId(empresaIdParam?: string): Promise<string> {
+async function resolveEmpresaId(empresaIdParam?: string): Promise<string | null> {
   try {
     const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return empresaIdParam ?? DEV_EMPRESA_ID
-
-    if (empresaIdParam) {
-      const { data: acceso } = await supabase
-        .from('usuario_empresas')
-        .select('empresa_id')
-        .eq('user_id', user.id)
-        .eq('empresa_id', empresaIdParam)
-        .maybeSingle()
-      if (acceso) return empresaIdParam
-
-      const { data: profile } = await supabase
-        .from('usuarios')
-        .select('empresa_id')
-        .eq('user_id', user.id)
-        .maybeSingle()
-      if (profile?.empresa_id === empresaIdParam) return empresaIdParam
-    }
-
-    const { data: profile } = await supabase
-      .from('usuarios')
-      .select('empresa_id')
-      .eq('user_id', user.id)
-      .single()
-    return profile?.empresa_id ?? DEV_EMPRESA_ID
+    return await resolverEmpresaAjustes(supabase, empresaIdParam)
   } catch {
-    return empresaIdParam ?? DEV_EMPRESA_ID
+    // Ante la duda no se elige empresa: escribir en la sociedad equivocada
+    // es peor que no escribir.
+    return null
   }
 }
 
@@ -61,6 +38,9 @@ export async function listDepartamentos(empresaIdParam?: string): Promise<Depart
   try {
     const admin = createAdminClient()
     const empresa_id = await resolveEmpresaId(empresaIdParam)
+    // Sin empresa activa resuelta no se opera: escribir en la sociedad
+    // equivocada es peor que no escribir.
+    if (!empresa_id) return []
     const { data, error } = await admin
       .from('departamentos')
       .select('id, empresa_id, nombre, descripcion, responsable_id, estado, area, created_at, updated_at')
@@ -85,6 +65,9 @@ export async function createDepartamento(input: {
     if (!nombre) return { error: 'El nombre del departamento es obligatorio.' }
     const admin = createAdminClient()
     const empresa_id = await resolveEmpresaId(input.empresaId)
+    // Sin empresa activa resuelta no se opera: escribir en la sociedad
+    // equivocada es peor que no escribir.
+    if (!empresa_id) return { error: 'Sin empresa activa: no se puede operar sobre Ajustes' }
 
     const { data, error } = await admin
       .from('departamentos')
@@ -120,6 +103,9 @@ export async function updateDepartamento(
   try {
     const admin = createAdminClient()
     const empresa_id = await resolveEmpresaId(patch.empresaId)
+    // Sin empresa activa resuelta no se opera: escribir en la sociedad
+    // equivocada es peor que no escribir.
+    if (!empresa_id) return { error: 'Sin empresa activa: no se puede operar sobre Ajustes' }
     const update: Record<string, unknown> = {}
     if (patch.nombre !== undefined) update.nombre = patch.nombre.trim()
     if (patch.descripcion !== undefined) update.descripcion = patch.descripcion
@@ -151,6 +137,9 @@ export async function deleteDepartamento(
   try {
     const admin = createAdminClient()
     const empresa_id = await resolveEmpresaId(empresaIdParam)
+    // Sin empresa activa resuelta no se opera: escribir en la sociedad
+    // equivocada es peor que no escribir.
+    if (!empresa_id) return { error: 'Sin empresa activa: no se puede operar sobre Ajustes' }
 
     // Recupera nombre antes del delete para borrar el rol asociado.
     const { data: dep } = await admin

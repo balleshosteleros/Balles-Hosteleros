@@ -17,6 +17,7 @@ import { Field, Section } from "./shared";
 import { subirAsset } from "../../../../services/asset-upload";
 import type { Bloque, GaleriaDatos } from "../../../../types";
 import { MAX_IMAGEN_MB, MAX_IMAGEN_BYTES, traducirErrorSubida } from "@/shared/lib/documentos";
+import { obtenerEmpresaActivaCliente } from "@/features/empresa/actions/empresa-activa-cliente-actions";
 
 export function GaleriaForm({ bloque }: { bloque: Extract<Bloque, { tipo: "galeria" }> }) {
   const actualizar = useEditorStore((s) => s.actualizarBloque);
@@ -33,7 +34,7 @@ export function GaleriaForm({ bloque }: { bloque: Extract<Bloque, { tipo: "galer
       return;
     }
     setSubiendo(true);
-    const empresaId = await obtenerEmpresaId();
+    const empresaId = await obtenerEmpresaActivaCliente();
     if (!empresaId) {
       toast.error("Sin contexto de empresa.");
       setSubiendo(false);
@@ -163,21 +164,4 @@ export function GaleriaForm({ bloque }: { bloque: Extract<Bloque, { tipo: "galer
   );
 }
 
-async function obtenerEmpresaId(): Promise<string | null> {
-  try {
-    const { createClient } = await import("@/lib/supabase/client");
-    const supabase = createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) return null;
-    const { data } = await supabase
-      .from("usuarios")
-      .select("empresa_id")
-      .eq("user_id", user.id)
-      .single();
-    return (data?.empresa_id as string) ?? null;
-  } catch {
-    return null;
-  }
-}
+

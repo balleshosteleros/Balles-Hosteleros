@@ -8,6 +8,7 @@ import { getLogoUrls, getIsotipoUrls } from "@/features/empresa/actions/logo-act
 import { listEmpresasCompletas } from "@/features/empresa/actions/empresas-actions";
 import { listEmpresasDeUsuario } from "@/features/empresa/actions/user-empresas-actions";
 import { setEmpresaActiva, getEmpresaActivaId } from "@/features/empresa/actions/empresa-activa-actions";
+import { setEmpresaActivaCliente } from "@/lib/supabase/empresa-activa-cliente";
 import { useGlobalLoading } from "@/shared/stores/use-global-loading";
 
 export interface Empresa {
@@ -259,6 +260,8 @@ export function EmpresaProvider({ children }: { children: ReactNode }) {
           // no casar con la empresa de la ficha.
           if (elegida.dbId && !rearmadoCookie.current) {
             rearmadoCookie.current = true;
+            // Copia local para que el cliente Supabase mande `x-bh-empresa`.
+            setEmpresaActivaCliente(elegida.dbId);
             setEmpresaActiva(elegida.dbId)
               .then((res) => {
                 // La primera pintura pudo salir con la empresa del servidor (otra):
@@ -414,6 +417,9 @@ export function EmpresaProvider({ children }: { children: ReactNode }) {
     if (!isHydrated.current) return;
     const empresa = empresasList.find((e) => e.id === id);
     if (!empresa?.dbId) return;
+    // Antes de navegar: el cliente Supabase debe mandar YA la empresa nueva,
+    // o las primeras consultas saldrían pidiendo la anterior.
+    setEmpresaActivaCliente(empresa.dbId);
     showLoading("Cambiando de empresa…");
     setEmpresaActiva(empresa.dbId)
       .then((res) => {
