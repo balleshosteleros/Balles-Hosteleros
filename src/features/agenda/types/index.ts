@@ -56,19 +56,3 @@ export interface ContactoInput {
   direccion?: string | null;
   notas?: string | null;
 }
-
-/**
- * El movil lleva WhatsApp; el fijo no. Ya no se adivina mirando si el numero
- * empieza por 6 o 7: el dato manda, cada numero esta en su columna.
- *
- * Aqui solo se normaliza para el enlace de wa.me, que pide el numero con
- * prefijo de pais y sin espacios ni guiones.
- */
-export function whatsappHref(movil: string | null): string | null {
-  if (!movil) return null;
-  let d = movil.replace(/[^\d]/g, "");
-  if (d.startsWith("00")) d = d.slice(2);
-  if (!d) return null;
-  if (/^\d{9}$/.test(d)) d = `34${d}`;
-  return `https://wa.me/${d}`;
-}

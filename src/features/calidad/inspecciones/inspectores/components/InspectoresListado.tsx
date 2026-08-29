@@ -1,19 +1,13 @@
 "use client";
 
 import { Phone, MessageCircle } from "lucide-react";
+import { whatsappHref } from "@/shared/lib/telefono";
 import { Badge } from "@/components/ui/badge";
 import { FASES_INSPECTOR_CONFIG } from "../data";
 import type { InspectorListItem } from "../types";
 import { llamarDesdeApp } from "@/features/google-workspace/components/TelefonoDrawer";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { formatFechaEnZona } from "@/features/empresa/lib/zona-horaria";
-
-function telefonoParaWhatsapp(input: string | null | undefined): string {
-  if (!input) return "";
-  const limpio = input.replace(/[^\d]/g, "");
-  if (limpio.length === 9 && /^[679]/.test(limpio)) return "34" + limpio;
-  return limpio;
-}
 
 interface Props {
   inspectores: InspectorListItem[];
@@ -75,16 +69,18 @@ export function InspectoresListado({ inspectores, onSelect }: Props) {
                         <Phone className="h-3.5 w-3.5" />
                       </button>
                       <span>{i.telefono}</span>
-                      <a
-                        href={`https://wa.me/${telefonoParaWhatsapp(i.telefono)}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        onClick={(e) => e.stopPropagation()}
-                        title="Abrir WhatsApp"
-                        className="text-emerald-600 hover:text-emerald-700 transition-colors"
-                      >
-                        <MessageCircle className="h-3.5 w-3.5" />
-                      </a>
+                      {whatsappHref(i.telefono) && (
+                        <a
+                          href={whatsappHref(i.telefono)!}
+                          target="_blank"
+                          rel="noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          title="Abrir WhatsApp"
+                          className="text-emerald-600 hover:text-emerald-700 transition-colors"
+                        >
+                          <MessageCircle className="h-3.5 w-3.5" />
+                        </a>
+                      )}
                     </div>
                   ) : (
                     "—"

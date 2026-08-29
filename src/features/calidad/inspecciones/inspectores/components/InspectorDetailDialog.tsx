@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { whatsappHref } from "@/shared/lib/telefono";
 import {
   Dialog,
   DialogContent,
@@ -29,13 +30,6 @@ import { llamarDesdeApp } from "@/features/google-workspace/components/TelefonoD
 import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { formatFechaEnZona } from "@/features/empresa/lib/zona-horaria";
-
-function telefonoParaWhatsapp(input: string | null | undefined): string {
-  if (!input) return "";
-  const limpio = input.replace(/[^\d]/g, "");
-  if (limpio.length === 9 && /^[679]/.test(limpio)) return "34" + limpio;
-  return limpio;
-}
 
 interface Props {
   inspectorId: string | null;
@@ -143,15 +137,17 @@ export function InspectorDetailDialog({
                     >
                       {data.telefono}
                     </button>
-                    <a
-                      href={`https://wa.me/${telefonoParaWhatsapp(data.telefono)}`}
-                      target="_blank"
-                      rel="noreferrer"
-                      title="Abrir WhatsApp"
-                      className="text-emerald-600 hover:text-emerald-700 transition-colors"
-                    >
-                      <MessageCircle className="h-3.5 w-3.5" />
-                    </a>
+                    {whatsappHref(data.telefono) && (
+                      <a
+                        href={whatsappHref(data.telefono)!}
+                        target="_blank"
+                        rel="noreferrer"
+                        title="Abrir WhatsApp"
+                        className="text-emerald-600 hover:text-emerald-700 transition-colors"
+                      >
+                        <MessageCircle className="h-3.5 w-3.5" />
+                      </a>
+                    )}
                   </div>
                 )}
                 {data.email && (

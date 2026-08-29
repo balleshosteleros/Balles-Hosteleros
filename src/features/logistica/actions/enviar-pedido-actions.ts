@@ -13,6 +13,7 @@
  * (enviado_at/canal/email) quedan propuestas para que Iván decida sobre el esquema.
  */
 import { getLogisticaContext } from "@/features/logistica/lib/supabase-context";
+import { whatsappHref, whatsappNumero } from "@/shared/lib/telefono";
 import { generarPedidoPDF, type LineaPedidoPDF } from "@/features/logistica/lib/pedido-pdf";
 import { evaluarReparto, describirReparto, type RepartoProveedor } from "@/features/logistica/data/pedidos";
 import { sendEmail } from "@/lib/email/send";
@@ -160,13 +161,21 @@ export async function prepararWhatsappPedido(pedidoId: string): Promise<{ ok: bo
   try {
     const { supabase } = await getLogisticaContext();
     const { pedido, lineas, proveedor, empresaNombre } = await cargarPedido(supabase, pedidoId);
-    const tel = (proveedor?.telefono_principal || proveedor?.telefono_comercial || "")
-      .replace(/[^\d+]/g, "").replace(/^\+/, "");
     const ref = refPedido(pedido);
     const lineasTxt = lineas.map((l) => `• ${l.producto_nombre}: ${Number(l.cantidad)} ${l.unidad ?? "ud"}`).join("\n");
     const texto = `*Pedido ${ref} — ${empresaNombre}*\n${lineasTxt}\nTotal: ${(Number(pedido.total) || 0).toFixed(2)} €\n(Te enviamos el PDF por email.)`;
-    const url = `https://wa.me/${tel}?text=${encodeURIComponent(texto)}`;
-    return { ok: true, url, telefono: tel || null };
+
+    // El movil es `telefono_principal`; el secundario es el fijo del almacen y
+    // no tiene WhatsApp. Sin movil se avisa en vez de abrir un chat que no
+    // existe: el pedido se manda por email igual.
+    const url = whatsappHref(proveedor?.telefono_principal || proveedor?.telefono_comercial, texto);
+    if (!url) {
+      return {
+        ok: false,
+        error: "Este proveedor no tiene móvil guardado, solo fijo. Añádelo en su ficha o envía el pedido por email.",
+      };
+    }
+    return { ok: true, url, telefono: whatsappNumero(proveedor?.telefono_principal || proveedor?.telefono_comercial) };
   } catch (err) {
     console.error("[pedidos] prepararWhatsappPedido RAW:", JSON.stringify(err), err);
     return { ok: false, error: mensajeError(err) };

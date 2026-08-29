@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { whatsappHref } from "@/shared/lib/telefono";
 import { Dialog, DialogPortal, DialogOverlay } from "@/components/ui/dialog";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -70,14 +71,6 @@ function diasDesde(desde: string | null | undefined): number | null {
   return Math.max(0, Math.floor(ms / 86_400_000));
 }
 
-function getWhatsAppLink(telefono: string): string {
-  const trimmed = telefono.trim();
-  if (trimmed.startsWith("+")) return `https://wa.me/${trimmed.replace(/\D/g, "")}`;
-  const digits = trimmed.replace(/\D/g, "");
-  if (digits.startsWith("00")) return `https://wa.me/${digits.slice(2)}`;
-  if (digits.startsWith("34")) return `https://wa.me/${digits}`;
-  return `https://wa.me/34${digits}`;
-}
 import {
   ESTADOS_CONFIG,
   FASES_PRINCIPALES,
@@ -692,7 +685,7 @@ function CandidatoSidebar({
     }
   };
 
-  const whatsappLink = getWhatsAppLink(candidato.telefono);
+  const whatsappLink = whatsappHref(candidato.telefono);
 
   return (
     <div className="p-5 space-y-4">
@@ -881,11 +874,11 @@ function CandidatoSidebar({
           Email
         </a>
         <a
-          href={whatsappLink}
+          href={whatsappLink ?? "#"}
           target="_blank"
           rel="noreferrer"
-          title="Abrir la conversación de WhatsApp con el candidato"
-          className={`flex flex-col items-center justify-center gap-1 rounded-lg border border-border py-2.5 text-xs font-medium text-foreground hover:bg-emerald-50 hover:border-emerald-200 hover:text-emerald-700 transition-colors ${candidato.telefono ? "" : "pointer-events-none opacity-40"}`}
+          title={whatsappLink ? "Abrir la conversación de WhatsApp con el candidato" : "Este número no admite WhatsApp"}
+          className={`flex flex-col items-center justify-center gap-1 rounded-lg border border-border py-2.5 text-xs font-medium text-foreground hover:bg-emerald-50 hover:border-emerald-200 hover:text-emerald-700 transition-colors ${whatsappLink ? "" : "pointer-events-none opacity-40"}`}
         >
           <WhatsAppIcon className="h-4 w-4 text-[#25D366]" />
           WhatsApp

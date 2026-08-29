@@ -29,8 +29,8 @@ import {
   type Contacto,
   type ContactoCategoria,
   type ContactoInput,
-  whatsappHref,
 } from "@/features/agenda/types";
+import { whatsappHref } from "@/shared/lib/telefono";
 import {
   listContactos,
   createContacto,

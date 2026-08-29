@@ -45,8 +45,8 @@ import {
   type Contacto,
   type ContactoCategoria,
   type ContactoInput,
-  whatsappHref,
 } from "@/features/agenda/types";
+import { whatsappHref } from "@/shared/lib/telefono";
 import { toast } from "sonner";
 import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
 import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { whatsappHref } from "@/shared/lib/telefono";
 import { Mail, MapPin, Phone, GripVertical, FileSearch, MessageCircle } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
@@ -15,13 +16,6 @@ import {
 } from "../data";
 import type { InspectorFase, InspectorListItem } from "../types";
 import { moverInspectorFase } from "../actions";
-
-function telefonoParaWhatsapp(input: string | null | undefined): string {
-  if (!input) return "";
-  const limpio = input.replace(/[^\d]/g, "");
-  if (limpio.length === 9 && /^[679]/.test(limpio)) return "34" + limpio;
-  return limpio;
-}
 
 interface Props {
   inspectores: InspectorListItem[];
@@ -72,16 +66,18 @@ function InspectorCard({
                 <Phone className="h-3 w-3 shrink-0" />
               </button>
               <span className="truncate">{insp.telefono}</span>
-              <a
-                href={`https://wa.me/${telefonoParaWhatsapp(insp.telefono)}`}
-                target="_blank"
-                rel="noreferrer"
-                onClick={(e) => e.stopPropagation()}
-                title="Abrir WhatsApp"
-                className="text-emerald-600 hover:text-emerald-700 transition-colors"
-              >
-                <MessageCircle className="h-3 w-3 shrink-0" />
-              </a>
+              {whatsappHref(insp.telefono) && (
+                <a
+                  href={whatsappHref(insp.telefono)!}
+                  target="_blank"
+                  rel="noreferrer"
+                  onClick={(e) => e.stopPropagation()}
+                  title="Abrir WhatsApp"
+                  className="text-emerald-600 hover:text-emerald-700 transition-colors"
+                >
+                  <MessageCircle className="h-3 w-3 shrink-0" />
+                </a>
+              )}
             </div>
           )}
           {insp.ciudad && (
