@@ -326,3 +326,16 @@
 .software-oscuro {
   --sidebar-border: 220 25% 14%;
 }
+
+/* El borde derecho del menu lateral se pinta con `border-r` a secas, que toma
+   `--border` (el gris del software), NO `--sidebar-border`. Por eso redefinir
+   el token del sidebar no bastaba.
+
+   Se ataca el panel fijo del menu (el hijo `.fixed` que lleva ese `border-r`)
+   en vez de redefinir `--border` para todo el contenedor: eso ultimo tenia de
+   negro cualquier otro borde de la cabecera y dejaba la pildora de
+   herramientas recuadrada. `[data-variant]` identifica el menu; `> .fixed`, el
+   panel concreto que dibuja la linea. */
+.software-oscuro [data-variant] > .fixed {
+  border-color: hsl(var(--sidebar-background));
+}
