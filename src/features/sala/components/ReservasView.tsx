@@ -16,7 +16,6 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { formatFechaHoraEnZona } from "@/features/empresa/lib/zona-horaria";
 import { useSincronizacionEnVivo } from "@/shared/hooks/useSincronizacionEnVivo";
-import { useSidebar } from "@/components/ui/sidebar";
 import { Plus, Search, ChevronLeft, ChevronRight, ListPlus, ListFilter, Check, Move, Map as MapIcon, List as ListIcon } from "lucide-react";
 // Configuración solo se carga cuando el usuario pulsa "Configuración" — fuera del bundle inicial.
 const ConfigReservasView = dynamic(
@@ -2601,9 +2600,6 @@ export function ReservasView() {
     setInmersivoOscuro(esOscuro);
     return () => setInmersivoOscuro(false);
   }, [esOscuro, setInmersivoOscuro]);
-  const { state: sidebarState, isMobile: sidebarIsMobile } = useSidebar();
-  const barraReplegada =
-    inmersivo && !showConfig && !sidebarIsMobile && sidebarState === "collapsed";
   const [totalesMes, setTotalesMes] = useState<{ personas: number; reservas: number }>({ personas: 0, reservas: 0 });
   const [locales, setLocales] = useState<LocalMin[]>([]);
   const [localId, setLocalId] = useState<string>("");
@@ -3559,7 +3555,8 @@ export function ReservasView() {
     return (
       <div
         className={cn(
-          "sala-tema flex flex-col h-[calc(100vh-3.5rem)] overflow-hidden",
+          // `h-full`, igual que la vista principal: el alto lo da el layout.
+          "sala-tema flex flex-col h-full min-h-0 overflow-hidden",
           esOscuro && "sala-oscuro",
         )}
       >
@@ -3576,10 +3573,12 @@ export function ReservasView() {
   return (
     <div
       className={cn(
-        "sala-tema flex flex-col overflow-hidden",
-        // Con la barra replegada solo queda el reborde superior (0.5rem);
-        // con la barra visible se le descuentan sus 3.5rem.
-        barraReplegada ? "h-[calc(100vh-0.5rem)]" : "h-[calc(100vh-3.5rem)]",
+        // `h-full` en vez de calcular a mano sobre 100vh: el hueco ya lo da el
+        // layout, que es una columna de alto completo. Restando 3.5rem la
+        // cuenta fallaba al sacar la barra con el ratón (pasa a 3.5rem y el
+        // reborde a 0, pero `barraReplegada` no mira el hover), y la vista
+        // quedaba más alta que su sitio (Iván, 29-ago).
+        "sala-tema flex flex-col overflow-hidden h-full min-h-0",
         esOscuro && "sala-oscuro",
       )}
     >

@@ -621,7 +621,18 @@ function AppLayoutInterno({ children }: { children: React.ReactNode }) {
               )}
             </div>
           </header>
-          <main className="flex-1 overflow-y-auto overflow-x-hidden min-h-0 overscroll-contain pb-28">
+          {/* `pb-28` es el aire para que el botón "Guardar" no tape lo último
+              del formulario. En una vista INMERSIVA (Reservas) no pinta nada:
+              esa vista ya ocupa el alto completo y se hace su propio scroll,
+              así que esos 7rem quedaban como una franja vacía por debajo del
+              plano por la que se podía seguir bajando (Iván, 29-ago). Sin
+              scroll propio tampoco: lo lleva la vista. */}
+          <main
+            className={cn(
+              "flex-1 overflow-x-hidden min-h-0 overscroll-contain",
+              inmersivo ? "overflow-y-hidden" : "overflow-y-auto pb-28",
+            )}
+          >
             <AvatarRequiredGuard>{children}</AvatarRequiredGuard>
           </main>
         </div>
