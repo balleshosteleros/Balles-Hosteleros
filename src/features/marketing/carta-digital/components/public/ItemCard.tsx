@@ -31,7 +31,10 @@ export function ItemCard({
   liked: boolean;
   onOpen: () => void;
 }) {
-  const precio = `${item.precio.toFixed(2).replace(".", ",")}€`;
+  // Precio 0 = el plato no se cobra aparte (va dentro de un menú cerrado).
+  // Pintar "0,00 €" hacía pensar que era gratis; mejor no pintar nada y dejar
+  // que el precio del menú lo diga el título de la categoría.
+  const precio = item.precio > 0 ? `${item.precio.toFixed(2).replace(".", ",")}€` : null;
   const conFoto = !!item.foto_url;
 
   return (
@@ -67,14 +70,18 @@ export function ItemCard({
           />
         )}
 
-        {/* Velo inferior: sostiene el precio sin oscurecer el plato. */}
-        <div
-          aria-hidden
-          className="absolute inset-x-0 bottom-0 h-2/5"
-          style={{ background: "linear-gradient(180deg, transparent 0%, rgba(0,0,0,0.55) 100%)" }}
-        />
+        {/* Velo inferior: sostiene el precio sin oscurecer el plato. Sin precio
+            que sostener, sobra: oscurecía la foto para nada. */}
+        {precio ? (
+          <div
+            aria-hidden
+            className="absolute inset-x-0 bottom-0 h-2/5"
+            style={{ background: "linear-gradient(180deg, transparent 0%, rgba(0,0,0,0.55) 100%)" }}
+          />
+        ) : null}
 
         {/* Precio en píldora de cristal sobre la foto. */}
+        {precio ? (
         <span
           className="absolute bottom-2.5 right-2.5 rounded-full px-2.5 py-1 text-[13px] font-semibold tabular-nums text-white shadow-[0_2px_10px_rgba(0,0,0,0.35)] backdrop-blur-md sm:text-[14px]"
           style={{
@@ -84,6 +91,7 @@ export function ItemCard({
         >
           {precio}
         </span>
+        ) : null}
 
         {item.destacado ? (
           <span
