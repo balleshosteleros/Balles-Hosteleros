@@ -1,11 +1,12 @@
 "use client";
 
 import { useState, useMemo, useEffect, useCallback, useRef, type ReactNode } from "react";
+import { useRouter } from "next/navigation";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { useSincronizacionEnVivo } from "@/shared/hooks/useSincronizacionEnVivo";
 import { formatHoraEnZona } from "@/features/empresa/lib/zona-horaria";
 import { ESTADO_FICHAJE_LABEL, TIPO_FICHAJE_LABEL, TIPO_FICHAJE_BADGE, fichajeColorBadge } from "@/features/rrhh/data/fichajes";
-import type { EstadoFichaje, Fichaje, LocalGeo, ConfigFichajes, TipoFichajeCodigo } from "@/features/rrhh/data/fichajes";
+import type { EstadoFichaje, Fichaje, LocalGeo, TipoFichajeCodigo } from "@/features/rrhh/data/fichajes";
 import { listFichajes, crearFichajeManual } from "@/features/rrhh/actions/fichajes-actions";
 import { listTiposFichaje, type TipoFichajeRow } from "@/features/rrhh/actions/horarios-config-actions";
 import { getEmpleadosActivos } from "@/features/rrhh/actions/empleados-actions";
@@ -27,8 +28,6 @@ import { Card, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { NumberInput } from "@/shared/components/NumberInput";
-import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -106,23 +105,17 @@ function mapDbToFichaje(row: Record<string, unknown>): Fichaje {
 }
 
 export function FichajesView() {
+  const router = useRouter();
   const { empresaActual } = useEmpresa();
   const empresaActivaRef = useRef(empresaActual.id);
   const [fichajes, setFichajes] = useState<Fichaje[]>([]);
   const [, setLoading] = useState(true);
-  const [config, setConfig] = useState<ConfigFichajes>({
-    permitirManual: true,
-    requiereValidacion: true,
-    toleranciaMinutos: 10,
-    pausasActivas: true,
-  });
   const [busqueda, setBusqueda] = useState("");
   const [filtros, setFiltros] = useState<ToolbarFiltroActivo[]>([]);
   const [orden, setOrden] = useState<ToolbarOrdenActivo | null>(null);
   const [columnasVisibles, setColumnasVisibles] = useState<ToolbarColumnaVisible>({});
   const [columnasOrden, setColumnasOrden] = useState<string[] | undefined>(undefined);
   const [fichajeModal, setFichajeModal] = useState<Fichaje | null>(null);
-  const [showConfig, setShowConfig] = useState(false);
   const [showNuevo, setShowNuevo] = useState(false);
   const [empleadosOpts, setEmpleadosOpts] = useState<EmpleadoOpcion[]>([]);
   const [manualForm, setManualForm] = useState(initialManualForm());
@@ -491,13 +484,16 @@ export function FichajesView() {
               exportRecords={fichajesFiltrados}
               onSuccess={() => window.location.reload()}
             />
+            {/* Lleva a la configuración REAL (Ajustes → Departamentos → RRHH).
+                Antes abría un diálogo propio de 3 campos que no cargaba ni
+                guardaba nada: se movían los controles y al cerrar se perdía. */}
             <Button
               size="icon"
-              variant={showConfig ? "default" : "outline"}
+              variant="outline"
               className="h-9 w-9"
-              onClick={() => setShowConfig(true)}
-              title="Configuración"
-              aria-label="Configuración"
+              onClick={() => router.push("/ajustes?tab=departamentos")}
+              title="Configuración de fichajes"
+              aria-label="Configuración de fichajes"
             >
               <Settings className="h-4 w-4" strokeWidth={1.75} />
             </Button>
@@ -554,29 +550,6 @@ export function FichajesView() {
           </TableBody>
         </Table>
       </Card>
-
-      <Dialog open={showConfig} onOpenChange={setShowConfig}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Configuración de fichajes</DialogTitle>
-            <CardDescription className="text-xs">Ajustes generales del sistema de fichajes</CardDescription>
-          </DialogHeader>
-          <div className="space-y-6 py-2">
-            <div className="flex items-center justify-between">
-              <div><Label className="font-medium">Permitir fichaje manual</Label><p className="text-xs text-muted-foreground">Los empleados pueden registrar fichajes manualmente</p></div>
-              <Switch checked={config.permitirManual} onCheckedChange={v => setConfig(c => ({ ...c, permitirManual: v }))} />
-            </div>
-            <div className="flex items-center justify-between">
-              <div><Label className="font-medium">Requiere validación</Label><p className="text-xs text-muted-foreground">Los fichajes deben ser validados por un responsable</p></div>
-              <Switch checked={config.requiereValidacion} onCheckedChange={v => setConfig(c => ({ ...c, requiereValidacion: v }))} />
-            </div>
-            <div className="flex items-center justify-between">
-              <div><Label className="font-medium">Tolerancia horaria (minutos)</Label><p className="text-xs text-muted-foreground">Margen antes de generar incidencia por desfase</p></div>
-              <NumberInput className="w-20" min={0} decimales={false} value={config.toleranciaMinutos} onValueChange={v => setConfig(c => ({ ...c, toleranciaMinutos: v }))} />
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
 
       <FichajeDetalleDialog
         fichaje={fichajeModal}

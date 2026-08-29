@@ -27,7 +27,7 @@ import {
   type EstadoEmpleado,
 } from "@/features/rrhh/actions/empleados-actions";
 import { listPuestosCatalogo } from "@/features/rrhh/actions/vacantes-actions";
-import { getPuestosDeEmpleado, setPuestosDeEmpleado } from "@/features/rrhh/actions/empleado-puestos-actions";
+import { getPuestosDeEmpleado, setPuestosDeEmpleado, getVigenciaHorarioEmpleado } from "@/features/rrhh/actions/empleado-puestos-actions";
 import {
   getLocalesEmpleado,
   setLocalesEmpleado,
@@ -82,12 +82,17 @@ export const GestionEmpleadoCard = forwardRef<GestionEmpleadoCardHandle, Props>(
     puestos: "",
     principal: "",
     teletrabajo: Boolean(initial.permiteTeletrabajo),
+    // Vigencia del horario. Se rellena con lo realmente guardado en cuanto
+    // llega el fetch; hasta entonces `vigenciaCargada` impide compararla.
+    horarioDesde: "",
+    horarioHasta: "",
   });
   // Los accesos y locales llegan por fetch. Hasta que no están, la tarjeta no
   // puede guardarlos: un array vacío "en tránsito" borraría las empresas.
   const [accesosCargados, setAccesosCargados] = useState(false);
   const [localesCargados, setLocalesCargados] = useState(false);
   const [puestosCargados, setPuestosCargados] = useState(false);
+  const [vigenciaCargada, setVigenciaCargada] = useState(false);
   // Un empleado puede ocupar VARIOS puestos del catálogo; uno es el principal
   // (de él cuelga el departamento + puesto-texto legacy). El departamento ya no
   // se edita a mano: se hereda de los puestos.
@@ -149,6 +154,15 @@ export const GestionEmpleadoCard = forwardRef<GestionEmpleadoCardHandle, Props>(
     getNombreValidadorEmpleado(empleadoId).then((res) => {
       setValidador(res.nombre);
     });
+    // Fechas del horario tal y como están guardadas. Si el empleado aún no
+    // tiene asignación, se deja hoy como propuesta de alta.
+    getVigenciaHorarioEmpleado(empleadoId).then(({ desde, hasta }) => {
+      if (desde) setFechaInicioHorario(desde);
+      setFechaFinHorario(hasta ?? "");
+      baseline.current.horarioDesde = desde ?? "";
+      baseline.current.horarioHasta = hasta ?? "";
+      setVigenciaCargada(true);
+    });
   }, [empleadoId]);
 
   // `initial` es un objeto literal que la página recrea en CADA render, así que
@@ -165,12 +179,26 @@ export const GestionEmpleadoCard = forwardRef<GestionEmpleadoCardHandle, Props>(
     setAccesosCargados(ids.length > 0);
   }, [empresasAccesoKey, initial.empresaId]);
 
+  // Estado y fecha de baja los guarda SOLO el botón del recuadro de estado. El
+  // "Guardar" azul de la ficha recarga los datos al terminar, y esa recarga
+  // llegaba hasta aquí y reponía ambos a lo que hubiera en BD: si el usuario
+  // había puesto "Inactivo" con su fecha y pulsaba el azul, se le descartaba lo
+  // escrito sin avisar. Ahora, en cuanto los toca, mandan sus valores hasta que
+  // los guarde o cambie de empleado.
+  const estadoTocado = useRef(false);
+
   useEffect(() => {
     setPermiteTeletrabajo(Boolean(initial.permiteTeletrabajo));
     baseline.current.teletrabajo = Boolean(initial.permiteTeletrabajo);
+    if (estadoTocado.current) return;
     setEstado(initial.estado);
     setFechaBaja(initial.fechaBaja ?? "");
   }, [initial.permiteTeletrabajo, initial.estado, initial.fechaBaja]);
+
+  // Al cambiar de empleado se parte de cero otra vez.
+  useEffect(() => {
+    estadoTocado.current = false;
+  }, [empleadoId]);
 
   function togglePuesto(id: string, checked: boolean) {
     setPuestosSel((prev) => {
@@ -258,8 +286,17 @@ export const GestionEmpleadoCard = forwardRef<GestionEmpleadoCardHandle, Props>(
       puestosCargados &&
       (puestosKey !== baseline.current.puestos || principalActual !== baseline.current.principal);
     const cambioTeletrabajo = permiteTeletrabajo !== baseline.current.teletrabajo;
+    // Las fechas de vigencia del horario cuentan como cambio por sí solas: se
+    // editan en su propio recuadro y antes se ignoraban, así que tocarlas sin
+    // tocar nada más salía por el early-return de abajo mostrando "Cambios
+    // guardados" sin haber escrito nada.
+    const cambioVigencia =
+      vigenciaCargada &&
+      puestosSel.length > 0 &&
+      (fechaInicioHorario !== baseline.current.horarioDesde ||
+        (fechaFinHorario || "") !== baseline.current.horarioHasta);
 
-    if (!cambioEmpresas && !cambioLocales && !cambioPuestos && !cambioTeletrabajo) {
+    if (!cambioEmpresas && !cambioLocales && !cambioPuestos && !cambioTeletrabajo && !cambioVigencia) {
       return { ok: true };
     }
 
@@ -288,7 +325,7 @@ export const GestionEmpleadoCard = forwardRef<GestionEmpleadoCardHandle, Props>(
     const [resEmpleado, resLocal, resTeletrabajo, resEmpresas] = await Promise.all([
       // Reconcilia los puestos (M:N): asigna la plantilla de horario de cada uno,
       // marca el principal y propaga su departamento + puesto-texto a `empleados`.
-      cambioPuestos
+      cambioPuestos || cambioVigencia
         ? setPuestosDeEmpleado(
             empleadoId, puestosSel, principalActual || null,
             fechaInicioHorario, fechaFinHorario || null,
@@ -316,6 +353,19 @@ export const GestionEmpleadoCard = forwardRef<GestionEmpleadoCardHandle, Props>(
             : null;
 
     if (error) return { ok: false, error: error ?? "No se pudieron guardar los cambios" };
+
+    // Lo guardado pasa a ser la nueva referencia: sin esto, volver a pulsar
+    // Guardar reescribiría los mismos datos una y otra vez.
+    if (cambioPuestos || cambioVigencia) {
+      baseline.current.puestos = puestosKey;
+      baseline.current.principal = principalActual;
+      baseline.current.horarioDesde = fechaInicioHorario;
+      baseline.current.horarioHasta = fechaFinHorario || "";
+    }
+    if (cambioLocales) baseline.current.locales = localesKey;
+    if (cambioEmpresas) baseline.current.empresas = empresasKey;
+    if (cambioTeletrabajo) baseline.current.teletrabajo = permiteTeletrabajo;
+
     return { ok: true };
   }
 
@@ -358,6 +408,8 @@ export const GestionEmpleadoCard = forwardRef<GestionEmpleadoCardHandle, Props>(
     if (estado === "Activo") setFechaBaja("");
     setMotivoEstado("");
     setHistorialKey((k) => k + 1);
+    // Ya está persistido: la ficha vuelve a mandar sobre estos dos campos.
+    estadoTocado.current = false;
 
     toast.success(
       estado === "Activo"
@@ -618,7 +670,10 @@ export const GestionEmpleadoCard = forwardRef<GestionEmpleadoCardHandle, Props>(
             <Label>Estado</Label>
             <Select
               value={estado}
-              onValueChange={(value) => setEstado(value as EstadoEmpleado)}
+              onValueChange={(value) => {
+                estadoTocado.current = true;
+                setEstado(value as EstadoEmpleado);
+              }}
             >
               <SelectTrigger>
                 <SelectValue />
@@ -650,7 +705,10 @@ export const GestionEmpleadoCard = forwardRef<GestionEmpleadoCardHandle, Props>(
               <Input
                 type="date"
                 value={fechaBaja}
-                onChange={(e) => setFechaBaja(e.target.value)}
+                onChange={(e) => {
+                  estadoTocado.current = true;
+                  setFechaBaja(e.target.value);
+                }}
               />
             </div>
           )}
@@ -674,9 +732,11 @@ export const GestionEmpleadoCard = forwardRef<GestionEmpleadoCardHandle, Props>(
             className="gap-2"
             onClick={onGuardarClick}
           >
+            {/* "Guardar estado", no "Guardar" a secas: en esta misma pestaña
+                está el Guardar general, y con el mismo texto se confundían. */}
             {savingEstado
               ? <><Loader2 className="h-4 w-4 animate-spin" />Actualizando…</>
-              : <><UserRoundX className="h-4 w-4" />Guardar</>}
+              : <><UserRoundX className="h-4 w-4" />Guardar estado</>}
           </Button>
 
           <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>

@@ -53,7 +53,9 @@ interface KanbanPipelineProps {
   /** Todas las vacantes (para reasignar un candidato a otra). */
   vacantes?: Vacante[];
   onBack: () => void;
-  onUpdateCandidatos: (candidatos: Candidato[]) => void;
+  // Devuelve `false` si algún movimiento no se pudo guardar, para que el
+  // llamante no envíe el email de una fase que no llegó a aplicarse.
+  onUpdateCandidatos: (candidatos: Candidato[]) => void | Promise<boolean | void>;
   /** Se llama tras reasignar un candidato a otra vacante (para refrescar). */
   onMoved?: () => void;
 }
@@ -716,9 +718,18 @@ export function KanbanPipeline({ vacante, vacantes = [], onBack, onUpdateCandida
     );
 
     setCandidatos(updated);
-    onUpdateCandidatos(updated);
+    // Se ESPERA a que el movimiento quede guardado antes de escribir a nadie:
+    // el email se lanzaba en paralelo, así que si el movimiento fallaba (p. ej.
+    // el candidato ya es empleado) el candidato no se movía pero el correo ya
+    // había salido.
+    const persistido = await onUpdateCandidatos(updated);
 
     const label = `${FASES_PRINCIPALES[faseNueva].label} / ${ESTADOS_CONFIG[estadoNuevo].label}`;
+    if (persistido === false) {
+      // El toast del error concreto ya lo ha mostrado quien persiste.
+      onMoved?.();
+      return;
+    }
     if (enviarEmail) {
       const res = await enviarReclutamientoFaseEmail(c.id, estadoNuevo);
       if (res.sent) {

@@ -4,8 +4,7 @@ import { useState, useMemo, useEffect, useCallback, useTransition } from "react"
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
-import { useTabQuery } from "@/shared/hooks/use-tab-query";
-import { type PuestoSalarial, type NormaSalarial, NORMAS_BASE, DEPARTAMENTOS_DISPONIBLES } from "@/features/rrhh/data/puestos";
+import { type PuestoSalarial, type NormaSalarial, NORMAS_BASE } from "@/features/rrhh/data/puestos";
 import { listPuestosEmpresa } from "@/features/rrhh/actions/puestos-actions";
 import { crearCronogramaParaPuesto, getCronogramaDePuesto } from "@/features/rrhh/actions/vacantes-actions";
 import { getCursoDePuesto } from "@/features/formacion/actions/formacion-actions";
@@ -17,10 +16,9 @@ import { PERIODICIDAD_LABEL } from "@/features/rrhh/data/bonus";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
-  ArrowLeft, Plus, Settings, Settings2, Euro, Clock, Calendar,
+  ArrowLeft, Plus, Euro, Clock, Calendar,
   Briefcase, ChevronRight, FileText, Pencil, ListChecks,
   UtensilsCrossed, ChefHat, Crown, User, Package, Camera, Calculator,
   CheckCircle2, Scale, Users, Gift, Loader2, GraduationCap,
@@ -128,13 +126,11 @@ export function PuestosView() {
   const selected = data.puestos.find((p) => p.id === selectedId) ?? null;
 
   if (view === "detail" && selected) return <DetalleView puesto={selected} onBack={() => setView("list")} />;
-  if (view === "config") return <ConfigView puestos={data.puestos} normas={data.normas} onBack={() => setView("list")} />;
 
   return (
     <ListView
       puestos={data.puestos}
       onDetail={(id) => { setSelectedId(id); setView("detail"); }}
-      onConfig={() => setView("config")}
       onChanged={reload}
       empresaId={empresaActual.id}
     />
@@ -144,13 +140,11 @@ export function PuestosView() {
 function ListView({
   puestos,
   onDetail,
-  onConfig,
   onChanged,
   empresaId,
 }: {
   puestos: PuestoSalarial[];
   onDetail: (id: string) => void;
-  onConfig: () => void;
   onChanged: () => void;
   empresaId: string;
 }) {
@@ -295,16 +289,6 @@ function ListView({
                 context={{ empresaId }}
                 onSuccess={() => window.location.reload()}
               />
-              <Button
-                size="icon"
-                variant="outline"
-                className="h-9 w-9"
-                onClick={onConfig}
-                title="Configuración"
-                aria-label="Configuración"
-              >
-                <Settings className="h-4 w-4" strokeWidth={1.75} />
-              </Button>
             </>
           }
         />
@@ -718,107 +702,3 @@ function DetalleView({ puesto, onBack }: { puesto: PuestoSalarial; onBack: () =>
     </div>
   );
 }
-
-function ConfigView({ puestos, normas, onBack }: { puestos: PuestoSalarial[]; normas: NormaSalarial[]; onBack: () => void }) {
-  const [tab, setTab] = useTabQuery(["puestos", "departamentos", "normas"] as const, "puestos");
-
-  return (
-    <div className="space-y-4 p-4 md:p-6">
-      <div className="flex items-center gap-3">
-        <Button variant="ghost" size="icon" onClick={onBack}><ArrowLeft className="h-4 w-4" /></Button>
-        <div>
-          <h2 className="text-base font-semibold text-foreground">Configuración de puestos</h2>
-          <p className="text-muted-foreground text-sm">Gestión de departamentos, puestos y condiciones</p>
-        </div>
-      </div>
-
-      <Tabs value={tab} onValueChange={(v) => setTab(v as "puestos" | "departamentos" | "normas")}>
-        <TabsList>
-          <TabsTrigger value="puestos">Puestos</TabsTrigger>
-          <TabsTrigger value="departamentos">Departamentos</TabsTrigger>
-          <TabsTrigger value="normas">Normas</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="puestos">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between pb-3">
-              <CardTitle className="text-base">Todos los puestos</CardTitle>
-              <Button variant="primary" size="sm"><Plus className="h-4 w-4" />Nuevo</Button>
-            </CardHeader>
-            <CardContent className="p-0">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Puesto</TableHead>
-                    <TableHead>Departamento</TableHead>
-                    <TableHead className="text-right">Salario bruto</TableHead>
-                    <TableHead className="text-center">Jornada</TableHead>
-                    <TableHead className="text-center">Estado</TableHead>
-                    <TableHead className="text-right">Acciones</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {puestos.map((p) => (
-                    <TableRow key={p.id}>
-                      <TableCell className="font-medium">{p.puesto}</TableCell>
-                      <TableCell>{p.departamento}</TableCell>
-                      <TableCell className="text-right">{eur(p.salarioBruto)}</TableCell>
-                      <TableCell className="text-center">{p.jornadaContrato}</TableCell>
-                      <TableCell className="text-center">{estadoBadge(p.estado)}</TableCell>
-                      <TableCell className="text-right">
-                        <Button variant="ghost" size="sm"><Settings2 className="h-4 w-4" /></Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="departamentos">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between pb-3">
-              <CardTitle className="text-base">Departamentos disponibles</CardTitle>
-              <Button variant="primary" size="sm"><Plus className="h-4 w-4" />Nuevo</Button>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                {DEPARTAMENTOS_DISPONIBLES.map((d) => {
-                  const count = puestos.filter((p) => p.departamento === d).length;
-                  return (
-                    <div key={d} className="border rounded-lg p-3 flex items-center justify-between">
-                      <span className="font-medium text-sm">{d}</span>
-                      <Badge variant="secondary">{count}</Badge>
-                    </div>
-                  );
-                })}
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="normas">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between pb-3">
-              <CardTitle className="text-base">Normas y cláusulas</CardTitle>
-              <Button variant="primary" size="sm"><Plus className="h-4 w-4" />Nuevo</Button>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {normas.map((n) => (
-                <div key={n.id} className="border rounded-lg p-4">
-                  <div className="flex items-center justify-between mb-1">
-                    <h4 className="font-semibold text-sm">{n.titulo}</h4>
-                    <Button variant="ghost" size="sm"><Settings2 className="h-4 w-4" /></Button>
-                  </div>
-                  <p className="text-sm text-muted-foreground">{n.descripcion}</p>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
-    </div>
-  );
-}
-

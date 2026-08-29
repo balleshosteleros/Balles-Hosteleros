@@ -152,6 +152,15 @@ export async function setPuestosDeEmpleado(
       await asignarPlantillaPuestoAEmpleado(empleadoId, puestoId, vigenteDesde, vigenteHasta ?? null);
     }
 
+    // 2-bis) Las fechas de vigencia se aplican también a los puestos que YA
+    // tenía. Antes solo viajaban con las altas, así que cambiar la fecha de
+    // inicio del horario sin tocar los puestos no escribía nada (la ficha decía
+    // "Cambios guardados" igualmente).
+    const yaTenia = nuevos.filter((id) => actuales.has(id));
+    for (const puestoId of yaTenia) {
+      await asignarPlantillaPuestoAEmpleado(empleadoId, puestoId, vigenteDesde, vigenteHasta ?? null);
+    }
+
     // 3) Marcar principal (uno solo). Limpiar primero para respetar el índice único parcial.
     await supabase.from("empleado_puestos").update({ es_principal: false }).eq("empleado_id", empleadoId);
     if (principal) {
@@ -177,5 +186,38 @@ export async function setPuestosDeEmpleado(
   } catch (err) {
     console.error("[rrhh] setPuestosDeEmpleado:", err);
     return { ok: false, error: "No se pudieron guardar los puestos del empleado" };
+  }
+}
+
+/**
+ * Vigencia del horario del empleado (la asignación de patrón abierta más
+ * reciente). La ficha la necesita para mostrar las fechas REALES guardadas: si
+ * no, el campo "Inicio del horario" arrancaba siempre en hoy y no había forma de
+ * saber si lo que se veía estaba guardado o era el valor por defecto.
+ */
+export async function getVigenciaHorarioEmpleado(
+  empleadoId: string,
+): Promise<{ desde: string | null; hasta: string | null }> {
+  try {
+    const { supabase, empresaId } = await getContext();
+    if (!empresaId) return { desde: null, hasta: null };
+
+    const { data, error } = await supabase
+      .from("rrhh_patron_empleados")
+      .select("vigente_desde, vigente_hasta")
+      .eq("empleado_id", empleadoId)
+      .order("vigente_desde", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (error) throw error;
+    if (!data) return { desde: null, hasta: null };
+
+    return {
+      desde: (data.vigente_desde as string | null) ?? null,
+      hasta: (data.vigente_hasta as string | null) ?? null,
+    };
+  } catch (err) {
+    console.error("[rrhh] getVigenciaHorarioEmpleado:", err);
+    return { desde: null, hasta: null };
   }
 }

@@ -25,7 +25,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
-import { CheckCircle2, XCircle, Loader2, Inbox, Settings, Lock } from "lucide-react";
+import { CheckCircle2, XCircle, Loader2, Inbox, Lock } from "lucide-react";
 import {
   SubmoduleToolbar,
   aplicarFiltrosToolbar,
@@ -93,7 +93,6 @@ export function SolicitudesView() {
   const [modo, setModo] = useState<Modo>("aprobar");
   const [notas, setNotas] = useState("");
   const [working, setWorking] = useState(false);
-  const [showConfig, setShowConfig] = useState(false);
 
   async function load() {
     setLoading(true);
@@ -321,18 +320,6 @@ export function SolicitudesView() {
             onColumnasVisiblesChange={setColumnasVisibles}
             columnasOrden={columnasOrden}
             onColumnasOrdenChange={setColumnasOrden}
-            extraDerecha={
-              <Button
-                size="icon"
-                variant={showConfig ? "default" : "outline"}
-                className="h-9 w-9"
-                onClick={() => setShowConfig((v) => !v)}
-                title="Configuración"
-                aria-label="Configuración"
-              >
-                <Settings className="h-4 w-4" strokeWidth={1.75} />
-              </Button>
-            }
           />
           <Card>
             {loading ? (

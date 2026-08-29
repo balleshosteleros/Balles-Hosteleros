@@ -640,11 +640,16 @@ export function ReclutamientoView() {
                   return prev && prev.fase !== c.fase;
                 });
                 setSelectedVacante({ ...selectedVacante, candidatos: updated });
+                // Devuelve si TODOS los movimientos se guardaron: quien llama
+                // usa esto para no enviar el email de una fase que no llegó a
+                // aplicarse (antes el correo salía igualmente).
+                let todoOk = true;
                 for (const c of cambios) {
                   const fase = (Object.entries(FASES_PRINCIPALES) as Array<[FasePrincipal, { estados: EstadoReclutamiento[] }]>)
                     .find(([, cfg]) => cfg.estados.includes(c.fase as EstadoReclutamiento))?.[0];
-                  if (!fase) continue;
+                  if (!fase) { todoOk = false; continue; }
                   const res = await moverCandidatoFase(c.id, fase, c.fase);
+                  if (!res.ok) todoOk = false;
                   if (!res.ok && "error" in res && res.error === "YA_EMPLEADO") {
                     toast.error("Este candidato ya es empleado y no puede descartarse desde aquí. Gestiona su baja desde la ficha del empleado.");
                   } else if (!res.ok && "error" in res && res.error === "NO_FUE_EMPLEADO") {
@@ -657,6 +662,7 @@ export function ReclutamientoView() {
                 }
                 // Sincroniza la lista global tras los cambios
                 if (cambios.length > 0) recargar();
+                return todoOk;
               }}
             />
           </div>

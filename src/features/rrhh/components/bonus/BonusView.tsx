@@ -31,7 +31,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import {
   Plus, MoreHorizontal, ArrowLeft, Trash2, TrendingUp, Package, ClipboardCheck,
-  Heart, Coins, Gift, AlertTriangle, CreditCard, ShieldCheck, Users, Settings, Settings2, FileText,
+  Heart, Coins, Gift, AlertTriangle, CreditCard, ShieldCheck, Users, Settings2, FileText,
   BarChart3, Eye, Calendar, CheckCircle2, Info, Briefcase, Loader2,
 } from "lucide-react";
 import {
@@ -64,7 +64,6 @@ function ListadoBonus({ bonus, onSelect, onCrear, onEliminar, empresaId }: {
   const [busqueda, setBusqueda] = useState("");
   const [filtros, setFiltros] = useState<ToolbarFiltroActivo[]>([]);
   const [orden, setOrden] = useState<ToolbarOrdenActivo | null>(null);
-  const [showConfig, setShowConfig] = useState(false);
 
 
   const acceso = (b: Bonus, campo: string): unknown => {
@@ -102,16 +101,6 @@ function ListadoBonus({ bonus, onSelect, onCrear, onEliminar, empresaId }: {
         extraDerecha={
           <>
             <IOActions config={bonusIO} context={{ empresaId: eId }} onSuccess={() => window.location.reload()} />
-            <Button
-              size="icon"
-              variant={showConfig ? "default" : "outline"}
-              className="h-9 w-9"
-              onClick={() => setShowConfig((v) => !v)}
-              title="Configuración"
-              aria-label="Configuración"
-            >
-              <Settings className="h-4 w-4" strokeWidth={1.75} />
-            </Button>
           </>
         }
       />
@@ -155,9 +144,6 @@ function ListadoBonus({ bonus, onSelect, onCrear, onEliminar, empresaId }: {
                       <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onSelect(b, "config"); }}>
                         <Settings2 className="h-4 w-4 mr-2" />Configuración
                       </DropdownMenuItem>
-                      <DropdownMenuItem>Duplicar</DropdownMenuItem>
-                      <DropdownMenuItem>Desactivar</DropdownMenuItem>
-                      <DropdownMenuItem>Archivar</DropdownMenuItem>
                       <DropdownMenuItem
                         className="text-destructive"
                         onClick={(e) => { e.stopPropagation(); onEliminar(b); }}

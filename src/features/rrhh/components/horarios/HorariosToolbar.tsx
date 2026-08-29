@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronLeft, ChevronRight, Settings, CalendarDays, Download, UserPlus } from "lucide-react";
+import { ChevronLeft, ChevronRight, Settings, CalendarDays, Download } from "lucide-react";
 import { Button } from "@/shared/components/ui/button";
 import { Calendar } from "@/shared/components/ui/calendar";
 import {
@@ -46,23 +46,12 @@ export function HorariosToolbar({
   return (
     <div className="space-y-3">
       {/* Fila principal — BARRA HORIZONTAL 1 (estándar) */}
-      {/* "+ Nuevo" abre la configuración de horarios; "Asignar" abre el panel
-          de asignación (turnos/patrones a empleados). El ⚙️ queda inerte de
-          momento (reservado para futuros ajustes). */}
+      {/* Cada botón hace lo que dice: "+ Nuevo" abre la asignación de turnos y
+          patrones, y el ⚙️ abre la configuración. Antes estaban cruzados
+          ("Nuevo" abría la configuración) y el ⚙️ no hacía nada. */}
       <SubmoduleToolbar
-        onNuevo={onAbrirConfig}
+        onNuevo={onNuevo}
         textoNuevo="Nuevo"
-        extraIzquierda={
-          <Button
-            size="sm"
-            variant="outline"
-            className="gap-1.5"
-            onClick={onNuevo}
-          >
-            <UserPlus className="h-4 w-4" strokeWidth={1.75} />
-            Asignar
-          </Button>
-        }
         extraDerecha={
           <>
             <Button
@@ -79,6 +68,7 @@ export function HorariosToolbar({
               size="icon"
               variant="outline"
               className="h-9 w-9"
+              onClick={onAbrirConfig}
               title="Configuración"
               aria-label="Configuración"
             >
