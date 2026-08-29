@@ -5,6 +5,53 @@
 
 ---
 
+## 🛡️ 29-AGO — SUBIDA DE ALBARANES: DECISIÓN DE IVÁN (cómo blindarla para que NUNCA se bloquee)
+
+> **Decisión para Iván.** El error de hoy ya está arreglado; esto es para que no vuelva a dejar
+> tirado a un gerente. No hemos construido nada todavía: elige tú qué hacemos.
+
+El fallo de hoy (los dos modelos de IA caídos a la vez) lo hemos tapado, pero destapa una cuestión
+de fondo que conviene decidir bien: **hoy, si la IA no consigue leer el albarán, el gerente se queda
+bloqueado.** Le sale el error y vuelve a la pantalla de la foto; puede reintentar, pero si la IA está
+caída, reintentar falla otra vez. **No hay forma de guardar el albarán sin que la IA lo lea.**
+
+Y esto va a repetirse: Google jubila modelos cada pocos meses y algún día tiene caídas. La pregunta
+no es "¿podemos hacer que la IA no falle nunca?" (no se puede, es un servicio de fuera), sino "¿qué
+hacemos para que el gerente pueda con su albarán **pase lo que pase**?".
+
+Hay tres cosas que se pueden hacer. **No son excluyentes**, y tienen pesos distintos:
+
+### Opción 1 — Meter el albarán a mano si la IA falla  ·  *(la de verdad, la recomendamos)*
+Si el OCR no lee el documento, que el gerente pueda **teclear él** el proveedor, la fecha y las
+líneas en esa misma pantalla (que ya es editable) y guardarlo igual. Es lo único que **garantiza al
+100%** que nunca se quede bloqueado: funciona con la IA caída, con Google caído o sin cuota. Es la
+red de seguridad. Trabajo acotado.
+
+### Opción 2 — Que el sistema se auto-repare y cambie de modelo solo
+Que, al detectar un modelo caído o retirado, el sistema **consulte los modelos vivos de Google,
+pruebe y se quede con uno válido**, sin que nadie toque nada (lo que esta vez hicimos a mano). Baja
+**mucho** la frecuencia de fallos, pero no la elimina del todo (un modelo puede figurar como
+disponible y aun así fallar, y no cubre una caída general de Google ni quedarse sin cuota). Trabajo
+medio.
+
+### Opción 3 — Pasar la cuenta de IA a plan de pago
+La cuenta es **gratuita**, con tope de peticiones por día y sin acceso a los modelos grandes. El plan
+de pago **quita el tope**, abre los **modelos grandes** (más fiables y estables) y da **mejor
+disponibilidad** → **menos fallos**. Tiene coste (a confirmar, se paga por uso; con el volumen actual
+de albaranes sería poco). **Ojo:** reduce los fallos, pero **no sustituye a la Opción 1** — Google
+sigue pudiendo retirar modelos o caerse, así que la red de "meter a mano" hace falta igual.
+
+### Nuestra recomendación
+- **La Opción 1 sí o sí** — es la única que cumple tu "nunca bloqueado".
+- **La Opción 2** encima, para que la 1 casi nunca haga falta.
+- **La Opción 3** si quieres reducir aún más los fallos y poder usar modelos grandes; la miramos y te
+  pasamos coste antes de contratar nada.
+
+**Dinos cuál(es) hacemos** y nos ponemos. Si no dices nada, con lo arreglado hoy los albaranes van;
+esto es para que sea a prueba de bombas.
+
+---
+
 ## ✅ 29-AGO — EL ERROR AL SUBIR ALBARANES, ARREGLADO Y EN PRODUCCIÓN
 
 > Información. Nada que hacer por vuestra parte — probad a subir un albarán y debería ir.
