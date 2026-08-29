@@ -471,12 +471,14 @@ export function ImportarDrivePanel() {
               </div>
             ))}
           </div>
-          <p className="mt-3 flex items-start gap-1.5 text-xs text-amber-600">
-            <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-            No canceles Google Drive hasta comprobar aquí que está todo copiado y
-            se abre bien. Google borra el contenido pasado un plazo y no hay
-            marcha atrás.
-          </p>
+          {/* Solo cuando ya hay algo terminado: mientras copia no toca decidir
+              nada sobre Drive, y el aviso permanente ensucia la pantalla. */}
+          {historial.some((h) => h.estado === "terminada") && (
+            <p className="mt-3 text-xs text-muted-foreground">
+              Antes de cancelar Google Drive, comprueba aquí que está todo y que
+              se abre bien: pasado un plazo Google lo borra.
+            </p>
+          )}
         </div>
       )}
     </div>
