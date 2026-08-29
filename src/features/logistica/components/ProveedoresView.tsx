@@ -159,7 +159,8 @@ export function ProveedoresView() {
         deshabilitadoSiVacio: true,
       },
       { key: "personaContacto", label: "Contacto", obligatorio: false, tipo: "texto" },
-      { key: "telefonoPrincipal", label: "Teléfono", obligatorio: false, tipo: "texto" },
+      { key: "telefonoPrincipal", label: "Móvil", obligatorio: false, tipo: "texto" },
+      { key: "telefonoSecundario", label: "Teléfono fijo", obligatorio: false, tipo: "texto" },
       { key: "emailPrincipal", label: "Email", obligatorio: false, tipo: "texto" },
       { key: "emailPedidos", label: "Email pedidos", obligatorio: false, tipo: "texto" },
       { key: "direccion", label: "Dirección", obligatorio: false, tipo: "texto" },
@@ -692,8 +693,11 @@ function ProveedorModal({ open, onClose, onSave, item, empresaId, zonaHoraria, c
           {/* Contacto empresa */}
           <div>
             <h3 className="text-sm font-bold text-foreground mb-3">Contacto de la empresa</h3>
-            <div className="grid grid-cols-3 gap-3">
-              <div><LabelConRegla moduloKey="logistica" submoduloKey="proveedores" campoKey="telefonoPrincipal">Teléfono</LabelConRegla><Input value={form.telefonoPrincipal} onChange={(e) => upd("telefonoPrincipal", e.target.value)} /></div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><LabelConRegla moduloKey="logistica" submoduloKey="proveedores" campoKey="telefonoPrincipal">Móvil</LabelConRegla><Input value={form.telefonoPrincipal} onChange={(e) => upd("telefonoPrincipal", e.target.value)} /><p className="mt-1 text-[11px] text-muted-foreground">Llamar y WhatsApp</p></div>
+              <div><Label>Teléfono fijo</Label><Input value={form.telefonoSecundario} onChange={(e) => upd("telefonoSecundario", e.target.value)} /><p className="mt-1 text-[11px] text-muted-foreground">Solo llamar</p></div>
+            </div>
+            <div className="mt-3 grid grid-cols-2 gap-3">
               <div><LabelConRegla moduloKey="logistica" submoduloKey="proveedores" campoKey="emailPrincipal">Email</LabelConRegla><Input type="email" value={form.emailPrincipal} onChange={(e) => upd("emailPrincipal", e.target.value)} /></div>
               <div><Label>Web</Label><Input value={form.web} onChange={(e) => upd("web", e.target.value)} /></div>
             </div>

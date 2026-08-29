@@ -29,7 +29,7 @@ import {
   type Contacto,
   type ContactoCategoria,
   type ContactoInput,
-  whatsappDesdeTelefono,
+  whatsappHref,
 } from "@/features/agenda/types";
 import {
   listContactos,
@@ -70,6 +70,7 @@ const EMPTY_FORM: ContactoInput = {
   empresa_contacto: "",
   categoria: "proveedores",
   telefono: "",
+  telefono_fijo: "",
   email: "",
   direccion: "",
   notas: "",
@@ -467,7 +468,13 @@ function FichaContacto({
 
         {/* Datos */}
         <div className="space-y-1">
-          <DatoFicha icon={Phone} label="Teléfono" valor={c.telefono} href={c.telefono ? `tel:${c.telefono}` : null} />
+          <DatoFicha icon={Phone} label="Móvil" valor={c.telefono} href={c.telefono ? `tel:${c.telefono}` : null} />
+          <DatoFicha
+            icon={Phone}
+            label="Teléfono fijo"
+            valor={c.telefono_fijo}
+            href={c.telefono_fijo ? `tel:${c.telefono_fijo}` : null}
+          />
           <DatoFicha icon={Mail} label="Email" valor={c.email} href={c.email ? `mailto:${c.email}` : null} />
           <DatoFicha icon={Building2} label="Empresa" valor={c.empresa_contacto} />
           <DatoFicha icon={MapPin} label="Dirección" valor={c.direccion} />
@@ -484,9 +491,9 @@ function FichaContacto({
               <Phone className="h-4 w-4" /> Llamar
             </a>
           )}
-          {whatsappDesdeTelefono(c.telefono) && (
+          {whatsappHref(c.telefono) && (
             <a
-              href={`https://wa.me/${whatsappDesdeTelefono(c.telefono)}`}
+              href={whatsappHref(c.telefono)!}
               target="_blank"
               rel="noreferrer"
               className="flex h-11 flex-1 items-center justify-center gap-2 rounded-2xl bg-[#25D366] text-sm font-semibold text-white active:brightness-95"

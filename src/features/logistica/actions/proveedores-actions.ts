@@ -34,6 +34,7 @@ async function upsertContactoAgendaFromProveedor(opts: {
   nombreComercial: string;
   personaContacto: string | null;
   telefonoPrincipal: string | null;
+  telefonoSecundario: string | null;
   emailPrincipal: string | null;
 }) {
   try {
@@ -56,6 +57,7 @@ async function upsertContactoAgendaFromProveedor(opts: {
           nombre,
           empresa_contacto: empresaContacto,
           telefono: opts.telefonoPrincipal,
+          telefono_fijo: opts.telefonoSecundario,
           email: opts.emailPrincipal,
           updated_at: new Date().toISOString(),
         })
@@ -67,6 +69,7 @@ async function upsertContactoAgendaFromProveedor(opts: {
         empresa_contacto: empresaContacto,
         categoria: "proveedores",
         telefono: opts.telefonoPrincipal,
+        telefono_fijo: opts.telefonoSecundario,
         email: opts.emailPrincipal,
         created_by: opts.userId,
       });
@@ -173,6 +176,7 @@ export async function createProveedor(input: ProveedorImport) {
       nombreComercial,
       personaContacto,
       telefonoPrincipal,
+      telefonoSecundario: input.telefonoSecundario ?? null,
       emailPrincipal,
     });
 
@@ -190,7 +194,7 @@ export async function updateProveedor(id: string, input: Partial<ProveedorImport
 
     const { data: before } = await supabase
       .from("proveedores")
-      .select("nombre_comercial, persona_contacto, telefono_principal, email_principal, empresa_id")
+      .select("nombre_comercial, persona_contacto, telefono_principal, telefono_secundario, email_principal, empresa_id")
       .eq("id", id)
       .maybeSingle();
 
@@ -244,6 +248,9 @@ export async function updateProveedor(id: string, input: Partial<ProveedorImport
       const finalTelefono = input.telefonoPrincipal !== undefined
         ? (input.telefonoPrincipal ?? null)
         : ((before.telefono_principal as string | null) ?? null);
+      const finalTelefonoFijo = input.telefonoSecundario !== undefined
+        ? (input.telefonoSecundario ?? null)
+        : ((before.telefono_secundario as string | null) ?? null);
       const finalEmail = input.emailPrincipal !== undefined
         ? (input.emailPrincipal ?? null)
         : ((before.email_principal as string | null) ?? null);
@@ -256,6 +263,7 @@ export async function updateProveedor(id: string, input: Partial<ProveedorImport
         nombreComercial: finalNombreComercial,
         personaContacto: finalPersonaContacto,
         telefonoPrincipal: finalTelefono,
+        telefonoSecundario: finalTelefonoFijo,
         emailPrincipal: finalEmail,
       });
     }
@@ -382,6 +390,7 @@ export async function bulkImportProveedores(proveedores: ProveedorImport[]) {
         nombreComercial: r.nombre_comercial,
         personaContacto: r.persona_contacto,
         telefonoPrincipal: r.telefono_principal,
+        telefonoSecundario: r.telefono_secundario,
         emailPrincipal: r.email_principal,
       });
     }

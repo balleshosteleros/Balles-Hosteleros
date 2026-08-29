@@ -54,7 +54,7 @@ import {
   type Contacto,
   type ContactoCategoria,
   type ContactoInput,
-  whatsappDesdeTelefono,
+  whatsappHref,
 } from "@/features/agenda/types";
 import {
   listContactos,
@@ -90,6 +90,7 @@ const EMPTY_FORM: ContactoInput = {
   empresa_contacto: "",
   categoria: "proveedores",
   telefono: "",
+  telefono_fijo: "",
   email: "",
   direccion: "",
   notas: "",
@@ -106,6 +107,11 @@ export function AgendaDrawer({ children }: { children: ReactNode }) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [form, setForm] = useState<ContactoInput>(EMPTY_FORM);
+
+  // El fijo solo se pide en proveedores: almacen o centralita. A una persona
+  // se le llama al movil.
+  const esProveedor =
+    form.categoria === "proveedores" || form.categoria === "proveedores_inactivos";
 
   const cargar = useCallback(async () => {
     try {
@@ -168,6 +174,7 @@ export function AgendaDrawer({ children }: { children: ReactNode }) {
       empresa_contacto: c.empresa_contacto,
       categoria: c.categoria,
       telefono: c.telefono,
+      telefono_fijo: c.telefono_fijo,
       email: c.email,
       direccion: c.direccion,
       notas: c.notas,
@@ -356,9 +363,19 @@ export function AgendaDrawer({ children }: { children: ReactNode }) {
                             Email
                           </a>
                         )}
-                        {whatsappDesdeTelefono(c.telefono) && (
+                        {c.telefono_fijo && (
                           <a
-                            href={`https://wa.me/${whatsappDesdeTelefono(c.telefono)}`}
+                            href={`tel:${c.telefono_fijo}`}
+                            title={`Llamar a ${c.telefono_fijo}`}
+                            className="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] font-medium text-foreground transition-colors hover:border-teal-300 hover:bg-teal-50 hover:text-teal-700"
+                          >
+                            <Phone className="h-3 w-3" />
+                            {c.telefono_fijo}
+                          </a>
+                        )}
+                        {whatsappHref(c.telefono) && (
+                          <a
+                            href={whatsappHref(c.telefono)!}
                             target="_blank"
                             rel="noreferrer"
                             title="Abrir WhatsApp"
@@ -459,18 +476,26 @@ export function AgendaDrawer({ children }: { children: ReactNode }) {
                 </SelectContent>
               </Select>
             </div>
-            <div>
-              <Label>Teléfono</Label>
-              <Input
-                value={form.telefono ?? ""}
-                onChange={(e) => setForm({ ...form, telefono: e.target.value })}
-                placeholder="+34 600 000 000"
-              />
-              {whatsappDesdeTelefono(form.telefono ?? null) && (
-                <p className="mt-1 flex items-center gap-1 text-[11px] text-emerald-600">
-                  <MessageCircle className="h-3 w-3" />
-                  Se podrá enviar WhatsApp a este número
-                </p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <Label>Móvil</Label>
+                <Input
+                  value={form.telefono ?? ""}
+                  onChange={(e) => setForm({ ...form, telefono: e.target.value })}
+                  placeholder="+34 600 000 000"
+                />
+                <p className="mt-1 text-[11px] text-muted-foreground">Llamar y WhatsApp</p>
+              </div>
+              {esProveedor && (
+                <div>
+                  <Label>Teléfono fijo</Label>
+                  <Input
+                    value={form.telefono_fijo ?? ""}
+                    onChange={(e) => setForm({ ...form, telefono_fijo: e.target.value })}
+                    placeholder="+34 910 000 000"
+                  />
+                  <p className="mt-1 text-[11px] text-muted-foreground">Solo llamar</p>
+                </div>
               )}
             </div>
             <div>

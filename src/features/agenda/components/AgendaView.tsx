@@ -45,7 +45,7 @@ import {
   type Contacto,
   type ContactoCategoria,
   type ContactoInput,
-  whatsappDesdeTelefono,
+  whatsappHref,
 } from "@/features/agenda/types";
 import { toast } from "sonner";
 import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
@@ -78,6 +78,7 @@ const EMPTY_FORM: ContactoInput = {
   empresa_contacto: "",
   categoria: "proveedores",
   telefono: "",
+  telefono_fijo: "",
   email: "",
   direccion: "",
   notas: "",
@@ -100,6 +101,11 @@ export function AgendaView() {
   const [editId, setEditId] = useState<string | null>(null);
   const [soloLectura, setSoloLectura] = useState(false);
   const [form, setForm] = useState<ContactoInput>(EMPTY_FORM);
+
+  // El fijo solo tiene sentido en proveedores: un almacen o una centralita.
+  // A una persona se le llama al movil, y ahi el fijo solo estorba.
+  const esProveedor =
+    form.categoria === "proveedores" || form.categoria === "proveedores_inactivos";
 
   const cargarContactos = useCallback(async () => {
     try {
@@ -199,6 +205,7 @@ export function AgendaView() {
       empresa_contacto: c.empresa_contacto,
       categoria: c.categoria,
       telefono: c.telefono,
+      telefono_fijo: c.telefono_fijo,
       email: c.email,
       direccion: c.direccion,
       notas: c.notas,
@@ -352,9 +359,19 @@ export function AgendaView() {
                       {c.telefono}
                     </a>
                   )}
-                  {whatsappDesdeTelefono(c.telefono) && (
+                  {c.telefono_fijo && (
                     <a
-                      href={`https://wa.me/${whatsappDesdeTelefono(c.telefono)}`}
+                      href={`tel:${c.telefono_fijo}`}
+                      onClick={(e) => e.stopPropagation()}
+                      className="flex items-center gap-2 text-foreground hover:text-primary"
+                    >
+                      <Phone className="h-3.5 w-3.5 text-muted-foreground" />
+                      {c.telefono_fijo}
+                    </a>
+                  )}
+                  {whatsappHref(c.telefono) && (
+                    <a
+                      href={whatsappHref(c.telefono)!}
                       target="_blank"
                       rel="noreferrer"
                       onClick={(e) => e.stopPropagation()}
@@ -493,14 +510,29 @@ export function AgendaView() {
                 </SelectContent>
               </Select>
             </div>
-            <div>
-              <Label>Teléfono</Label>
-              <Input
-                value={form.telefono ?? ""}
-                onChange={(e) => setForm({ ...form, telefono: e.target.value })}
-                placeholder="+34 600 000 000"
-                disabled={soloLectura}
-              />
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <Label>Móvil</Label>
+                <Input
+                  value={form.telefono ?? ""}
+                  onChange={(e) => setForm({ ...form, telefono: e.target.value })}
+                  placeholder="+34 600 000 000"
+                  disabled={soloLectura}
+                />
+                <p className="mt-1 text-[11px] text-muted-foreground">Llamar y WhatsApp</p>
+              </div>
+              {esProveedor && (
+                <div>
+                  <Label>Teléfono fijo</Label>
+                  <Input
+                    value={form.telefono_fijo ?? ""}
+                    onChange={(e) => setForm({ ...form, telefono_fijo: e.target.value })}
+                    placeholder="+34 910 000 000"
+                    disabled={soloLectura}
+                  />
+                  <p className="mt-1 text-[11px] text-muted-foreground">Solo llamar</p>
+                </div>
+              )}
             </div>
             <div>
               <Label>Email</Label>
