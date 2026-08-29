@@ -32,6 +32,8 @@ export interface EmpresaPublica {
   empleo_slug: string;
   nombre: string;
   logo_url: string | null;
+  /** Icono sin texto: es el que se usa de favicon del portal. */
+  isotipo_url: string | null;
   color: string | null;
   color_secundario: string | null;
   color_texto: string | null;
@@ -74,12 +76,14 @@ interface EmpresaRow {
   empleo_slug: string | null;
   nombre: string;
   logo_url: string | null;
+  isotipo_url: string | null;
   color: string | null;
   color_secundario: string | null;
   color_texto: string | null;
 }
 
-const EMPRESA_COLS = "id, slug, empleo_slug, nombre, logo_url, color, color_secundario, color_texto";
+const EMPRESA_COLS =
+  "id, slug, empleo_slug, nombre, logo_url, isotipo_url, color, color_secundario, color_texto";
 
 /**
  * Resuelve la empresa pública por su URL de empleo personalizada (`empleo_slug`)
@@ -137,6 +141,7 @@ function rowToEmpresa(r: EmpresaRow): EmpresaPublica {
     empleo_slug: r.empleo_slug ?? r.slug,
     nombre: r.nombre,
     logo_url: r.logo_url,
+    isotipo_url: r.isotipo_url,
     color: r.color,
     color_secundario: r.color_secundario,
     color_texto: r.color_texto,

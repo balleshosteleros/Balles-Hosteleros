@@ -1,4 +1,5 @@
 import { abrirDocumento } from "./actions";
+import { iconsDeUrl } from "@/shared/lib/favicon-empresa";
 import { FirmaPublicaView } from "./FirmaPublicaView";
 import { FileX2, Clock, AlertTriangle } from "lucide-react";
 
@@ -40,4 +41,21 @@ export default async function FirmarPage({
   }
 
   return <FirmaPublicaView documento={res.documento} token={token} />;
+}
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ token: string }>;
+}) {
+  // La empresa sale del propio token del enlace de firma: quien firma ve el
+  // icono de SU empresa en la pestana, no el del software. `logoUrl` ya viene
+  // resuelto como isotipo-con-preferencia desde `abrirDocumento`.
+  const { token } = await params;
+  const res = await abrirDocumento(token);
+  return {
+    title: "Firmar documento",
+    robots: { index: false, follow: false },
+    icons: iconsDeUrl(res.ok ? res.documento.empresa.logoUrl : null),
+  };
 }

@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { iconsDeEmpresa } from "@/shared/lib/favicon-empresa";
 import { fetchBolsaPublicaEmpresa } from "@/features/calidad/inspecciones/inspectores/public-data";
 import { BolsaPublicaShell } from "@/features/calidad/inspecciones/inspectores/components/BolsaPublicaShell";
 
@@ -22,5 +23,7 @@ export async function generateMetadata({ params }: Props) {
   return {
     title: `Bolsa de inspectores · ${data.empresa.nombre}`,
     description: `Únete como inspector externo en ${data.empresa.nombre}`,
+    // Favicon = isotipo de ESTA empresa, no el del software.
+    icons: await iconsDeEmpresa({ slug }),
   };
 }

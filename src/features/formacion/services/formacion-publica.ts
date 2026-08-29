@@ -50,6 +50,8 @@ export interface EmpresaMarcaPublica {
   empleo_slug: string;
   nombre: string;
   logo_url: string | null;
+  /** Icono sin texto: es el que se usa de favicon del portal. */
+  isotipo_url: string | null;
   color: string | null;
   color_secundario: string | null;
   color_texto: string | null;
@@ -69,7 +71,7 @@ export interface FormacionPublica {
 }
 
 const EMPRESA_COLS =
-  "id, slug, empleo_slug, nombre, logo_url, color, color_secundario, color_texto";
+  "id, slug, empleo_slug, nombre, logo_url, isotipo_url, color, color_secundario, color_texto";
 
 type EmpresaRow = {
   id: string;
@@ -77,6 +79,7 @@ type EmpresaRow = {
   empleo_slug: string | null;
   nombre: string | null;
   logo_url: string | null;
+  isotipo_url: string | null;
   color: string | null;
   color_secundario: string | null;
   color_texto: string | null;
@@ -90,6 +93,7 @@ function rowToEmpresa(r: EmpresaRow): EmpresaMarcaPublica {
     empleo_slug: r.empleo_slug ?? slug,
     nombre: r.nombre ?? "",
     logo_url: r.logo_url,
+    isotipo_url: r.isotipo_url,
     color: r.color,
     color_secundario: r.color_secundario,
     color_texto: r.color_texto,

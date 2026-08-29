@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { iconsDeEmpresa } from "@/shared/lib/favicon-empresa";
 import type { Viewport } from "next";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { ReservaPublicaForm } from "@/features/reservar-publica/components/ReservaPublicaForm";
@@ -104,6 +105,8 @@ export async function generateMetadata({
   const { slug } = await params;
   const empresa = await fetchEmpresaBySlug(slug);
   return {
+    // Favicon = isotipo de ESTA empresa, no el del software.
+    icons: await iconsDeEmpresa({ slug }),
     title: empresa ? `Reservar — ${empresa.nombre}` : "Reservar",
     description: empresa ? `Reserva tu mesa en ${empresa.nombre}` : undefined,
   };

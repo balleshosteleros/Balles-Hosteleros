@@ -1,4 +1,5 @@
 import { fetchInspeccionPublica } from "@/features/calidad/inspecciones/public-data";
+import { iconsDeEmpresa } from "@/shared/lib/favicon-empresa";
 import { SlideRenderer } from "@/features/calidad/inspecciones/components/SlideRenderer";
 import { PublicFormulario } from "@/features/calidad/inspecciones/components/PublicFormulario";
 import { InvalidLinkScreen } from "@/features/calidad/inspecciones/components/InvalidLinkScreen";
@@ -66,4 +67,19 @@ export default async function InspectoresPublicPage({
       />
     </main>
   );
+}
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ token: string }>;
+}) {
+  // La empresa se resuelve por el propio token del enlace: asi el favicon es el
+  // de SU restaurante y no el del software.
+  const { token } = await params;
+  const data = await fetchInspeccionPublica(token);
+  return {
+    robots: { index: false, follow: false },
+    icons: await iconsDeEmpresa({ id: data?.empresa.id ?? "" }),
+  };
 }

@@ -1,4 +1,5 @@
 import { FileX2, Clock, AlertTriangle } from "lucide-react";
+import { iconsDeEmpresa } from "@/shared/lib/favicon-empresa";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { resolverTokenContratoPorHash } from "@/features/rrhh/services/gestoria/gestoria-contrato";
 import { SubirContratoView } from "../../[token]/SubirContratoView";
@@ -67,4 +68,19 @@ export default async function SubirContratoPorHashPage({
       empresaNombre={(empresa?.nombre as string) ?? "la empresa"}
     />
   );
+}
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ hash: string }>;
+}) {
+  // La empresa se resuelve por el propio enlace: la asesoria ve el icono de SU
+  // cliente en la pestana, no el del software.
+  const { hash } = await params;
+  const res = await resolverTokenContratoPorHash(createAdminClient(), hash);
+  return {
+    robots: { index: false, follow: false },
+    icons: await iconsDeEmpresa({ id: res.ok ? res.row.empresa_id : "" }),
+  };
 }

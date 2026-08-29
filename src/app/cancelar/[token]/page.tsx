@@ -1,14 +1,26 @@
 import type { Metadata } from "next";
+import { iconsDeEmpresa } from "@/shared/lib/favicon-empresa";
 import { obtenerReservaPorToken } from "@/features/reservar-publica/actions/cancelar-reserva-publica";
 import { CancelarClient } from "./CancelarClient";
 
 export const dynamic = "force-dynamic";
 
-export const metadata: Metadata = {
-  title: "Cancelar reserva",
-  // Es una URL con un secreto: no debe acabar en buscadores.
-  robots: { index: false, follow: false },
-};
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ token: string }>;
+}): Promise<Metadata> {
+  // La empresa sale del propio token de la reserva: el cliente ve el icono de
+  // SU restaurante en la pestana, no el del software.
+  const { token } = await params;
+  const res = await obtenerReservaPorToken(token);
+  return {
+    title: "Cancelar reserva",
+    // Es una URL con un secreto: no debe acabar en buscadores.
+    robots: { index: false, follow: false },
+    icons: await iconsDeEmpresa({ id: res.ok ? res.data.empresaId : "" }),
+  };
+}
 
 export default async function CancelarReservaPage({
   params,

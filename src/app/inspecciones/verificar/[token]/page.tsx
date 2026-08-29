@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { iconsDeEmpresa } from "@/shared/lib/favicon-empresa";
 import Image from "next/image";
 import {
   XCircle,
@@ -154,4 +155,15 @@ function Shell({
       </div>
     </main>
   );
+}
+
+export async function generateMetadata({ params }: Props) {
+  // La empresa se resuelve por el propio token del QR: asi el favicon es el de
+  // SU restaurante y no el del software.
+  const { token } = await params;
+  const empresa = await fetchEmpresaThemeFromQrToken(token);
+  return {
+    robots: { index: false, follow: false },
+    icons: await iconsDeEmpresa({ id: empresa?.id ?? "" }),
+  };
 }

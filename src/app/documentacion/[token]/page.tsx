@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { iconsDeUrl } from "@/shared/lib/favicon-empresa";
 import { CheckCircle2, Clock } from "lucide-react";
 import { fetchDocumentacionPorToken } from "@/features/empleo-publico/services/empleo-fetch";
 import { EmpleoBrandingShell } from "@/features/empleo-publico/components/EmpleoBrandingShell";
@@ -61,6 +62,18 @@ export default async function DocumentacionPage({
   );
 }
 
-export async function generateMetadata() {
-  return { title: "Aporta tu documentación", robots: { index: false, follow: false } };
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ token: string }>;
+}) {
+  // La empresa se resuelve por el propio token del enlace: asi el favicon es el
+  // de SU restaurante y no el del software.
+  const { token } = await params;
+  const datos = await fetchDocumentacionPorToken(token);
+  return {
+    title: "Aporta tu documentación",
+    robots: { index: false, follow: false },
+    icons: iconsDeUrl(datos ? datos.empresa.isotipo_url || datos.empresa.logo_url : null),
+  };
 }

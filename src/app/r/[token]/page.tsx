@@ -9,6 +9,7 @@
  */
 
 import { notFound } from "next/navigation";
+import { iconsDeEmpresa } from "@/shared/lib/favicon-empresa";
 import { fetchResenaPagina } from "@/features/visita/services/resena-fetch";
 import { ResenaForm } from "@/features/visita/components/ResenaForm";
 
@@ -52,6 +53,17 @@ export default async function ResenaPage({
   );
 }
 
-export function generateMetadata() {
-  return { title: "Tu opinión nos importa" };
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ token: string }>;
+}) {
+  // La empresa se resuelve por el propio token del enlace: asi el favicon es el
+  // de SU restaurante y no el del software.
+  const { token } = await params;
+  const data = await fetchResenaPagina(token);
+  return {
+    title: "Tu opinión nos importa",
+    icons: await iconsDeEmpresa({ id: data?.empresa.id ?? "" }),
+  };
 }

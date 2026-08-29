@@ -1,4 +1,5 @@
 import { FileX2, Clock } from "lucide-react";
+import { iconsDeEmpresa } from "@/shared/lib/favicon-empresa";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
   resolverTokenNominasGestoria,
@@ -55,4 +56,19 @@ export default async function SubirNominasPage({
       mesLabel={nombreMes(res.row.periodo)}
     />
   );
+}
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ token: string }>;
+}) {
+  // La empresa se resuelve por el propio token del enlace: asi la asesoria ve
+  // el icono de SU cliente en la pestana, no el del software.
+  const { token } = await params;
+  const res = await resolverTokenNominasGestoria(createAdminClient(), token);
+  return {
+    robots: { index: false, follow: false },
+    icons: await iconsDeEmpresa({ id: res.ok ? res.row.empresa_id : "" }),
+  };
 }

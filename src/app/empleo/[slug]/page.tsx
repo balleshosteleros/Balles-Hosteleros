@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { iconsDeUrl } from "@/shared/lib/favicon-empresa";
 import { fetchPortalEmpleoPorSlug } from "@/features/empleo-publico/services/empleo-fetch";
 import { EmpleoBrandingShell } from "@/features/empleo-publico/components/EmpleoBrandingShell";
 import { ListadoOfertasPublico } from "@/features/empleo-publico/components/ListadoOfertasPublico";
@@ -39,6 +40,8 @@ export async function generateMetadata({
   return {
     title: `Empleo · ${portal.empresa.nombre}`,
     description: desc,
+    // Favicon = isotipo de ESTA empresa, no el del software.
+    icons: iconsDeUrl(portal.empresa.isotipo_url || portal.empresa.logo_url),
     openGraph: {
       title: `Empleo en ${portal.empresa.nombre}`,
       description: desc,

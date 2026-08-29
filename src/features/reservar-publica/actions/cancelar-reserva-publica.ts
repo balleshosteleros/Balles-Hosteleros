@@ -40,6 +40,8 @@ export interface ReservaCancelable {
   personas: number;
   clienteNombre: string | null;
   empresaNombre: string;
+  /** Para resolver el favicon de la pagina: el icono es el del restaurante. */
+  empresaId: string;
   /** true si ya no se puede cancelar (ya pasó, o ya estaba cancelada). */
   bloqueada: boolean;
   motivoBloqueo: string | null;
@@ -94,6 +96,7 @@ export async function obtenerReservaPorToken(
         personas: (r.personas as number) ?? 1,
         clienteNombre: (r.cliente_nombre as string | null) ?? null,
         empresaNombre: (emp?.nombre as string | undefined) ?? "el restaurante",
+        empresaId: r.empresa_id as string,
         bloqueada: motivo !== null,
         motivoBloqueo: motivo,
         avisoPolitica: calcularAvisoPolitica(

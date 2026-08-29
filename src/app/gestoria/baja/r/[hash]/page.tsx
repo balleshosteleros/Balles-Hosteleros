@@ -1,4 +1,5 @@
 import { FileX2, Clock } from "lucide-react";
+import { iconsDeEmpresa } from "@/shared/lib/favicon-empresa";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
   resolverTokenDocsBajaPorHash,
@@ -78,4 +79,19 @@ export default async function SubirDocsBajaPorHashPage({
       documentos={documentos}
     />
   );
+}
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ hash: string }>;
+}) {
+  // La empresa se resuelve por el propio enlace: la asesoria ve el icono de SU
+  // cliente en la pestana, no el del software.
+  const { hash } = await params;
+  const res = await resolverTokenDocsBajaPorHash(createAdminClient(), hash);
+  return {
+    robots: { index: false, follow: false },
+    icons: await iconsDeEmpresa({ id: res.ok ? res.row.empresa_id : "" }),
+  };
 }

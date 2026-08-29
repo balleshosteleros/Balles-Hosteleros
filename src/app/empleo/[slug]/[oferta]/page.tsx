@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { iconsDeUrl } from "@/shared/lib/favicon-empresa";
 import { notFound } from "next/navigation";
 import { ArrowLeft, MapPin, Clock, Briefcase, FileText } from "lucide-react";
 import { fetchOfertaPublica, fetchOrigenesPublicos, fetchCamposFormularioPublico } from "@/features/empleo-publico/services/empleo-fetch";
@@ -118,6 +119,8 @@ export async function generateMetadata({
   return {
     title: `${detalle.oferta.titulo} · ${detalle.empresa.nombre}`,
     description: desc,
+    // Favicon = isotipo de ESTA empresa, no el del software.
+    icons: iconsDeUrl(detalle.empresa.isotipo_url || detalle.empresa.logo_url),
     openGraph: {
       title: `${detalle.oferta.titulo} — ${detalle.empresa.nombre}`,
       description: desc,
