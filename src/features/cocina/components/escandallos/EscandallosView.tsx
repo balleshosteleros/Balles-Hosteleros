@@ -18,6 +18,7 @@ import {
   listEscandallos, createEscandallo, updateEscandallo,
   listEmpleadosCreadores, getCostesIngredientes,
 } from "@/features/cocina/actions/escandallos-actions";
+import { mismaBase } from "@/features/cocina/lib/normalizar-unidad";
 import { useEscandallosConfig, type EscandalloConfigItem, type GrupoCodigo } from "@/features/cocina/hooks/useEscandallosConfig";
 import { listConfigItems } from "@/features/cocina/actions/escandallos-config-actions";
 import { listPartidas } from "@/features/cocina/actions/partidas-actions";
@@ -917,7 +918,16 @@ function EscandalloDetalle({
                                   value={ing.cantidad || ""}
                                   onChange={(e) => handleIngredienteCantidad(ing.id, +e.target.value)}
                                 />
-                                <span className="text-[11px] text-muted-foreground w-8 truncate">{ing.unidad || ""}</span>
+                                {ing.unidadRevisar ? (
+                                  <span
+                                    className="text-[11px] text-amber-600 w-8 truncate cursor-help"
+                                    title={`Revisar: la receta dice "${ing.unidad}" pero el producto se mide en "${ing.medidaProducto}". No cuadran y no se pueden convertir solas — ajusta la cantidad y la unidad a mano.`}
+                                  >
+                                    ⚠ {ing.unidad}
+                                  </span>
+                                ) : (
+                                  <span className="text-[11px] text-muted-foreground w-8 truncate">{ing.unidad || ""}</span>
+                                )}
                               </div>
                               <span className="w-16 text-right text-sm font-semibold shrink-0">
                                 {formatNumero(ing.precio ?? 0, { min: 2, max: 2 })}€
@@ -1263,11 +1273,24 @@ export function EscandallosView() {
 
     const rawIngredientes = Array.isArray(row.ingredientes) ? row.ingredientes : [];
     const ingredientes: IngredienteEscandallo[] = (rawIngredientes as Array<Record<string, unknown>>).map((r) => {
-      const prod = r.productos as { alergenos?: string[] } | null;
+      const prod = r.productos as { alergenos?: string[]; medida?: string } | null;
+      const medidaProducto = (prod?.medida as string) ?? undefined;
+      const unidadGuardada = (r.unidad as string) ?? "";
+      // La unidad la manda el producto (DECISIÓN 3). Si el producto la fija y coincide
+      // (misma unidad canónica), se muestra la del producto. Si NO cuadra ni se puede
+      // convertir sola (gramos de un producto por unidad, etc.), se deja la guardada y
+      // se marca para revisar: nunca se reetiqueta a ciegas, que mentiría sobre la cantidad.
+      let unidad = unidadGuardada;
+      let unidadRevisar = false;
+      if (medidaProducto) {
+        if (mismaBase(unidadGuardada, medidaProducto)) unidad = medidaProducto;
+        else if (!unidadGuardada) unidad = medidaProducto;
+        else unidadRevisar = true;
+      }
       return {
         id: (r.id as string) ?? `i-${Math.random().toString(36).slice(2)}`,
         ingrediente: (r.nombre as string) ?? "",
-        unidad: (r.unidad as string) ?? "",
+        unidad,
         cantidad: Number(r.cantidad ?? 0),
         tipo: (r.tipo as "compra" | "elaboracion" | null) ?? undefined,
         productoId: (r.producto_id as string) ?? undefined,
@@ -1275,6 +1298,8 @@ export function EscandallosView() {
         precio: r.coste_total != null ? Number(r.coste_total) : undefined,
         merma: r.merma_pct != null ? Number(r.merma_pct) : 0,
         alergenos: Array.isArray(prod?.alergenos) ? prod!.alergenos! : [],
+        medidaProducto,
+        unidadRevisar,
       };
     });
 

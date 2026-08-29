@@ -69,6 +69,14 @@ export interface IngredienteEscandallo {
   // Permite a la UI derivar los alérgenos del escandallo automáticamente
   // mostrando de qué ingrediente viene cada uno.
   alergenos?: string[];
+  // Medida del producto vinculado (productos.medida), hidratada por el JOIN.
+  // La unidad la manda el producto (DECISIÓN 3): si difiere de `unidad`, la que
+  // vale es esta. La columna `unidad` es solo una caché que el servidor reescribe.
+  medidaProducto?: string;
+  // true cuando la unidad guardada NO cuadra con la medida del producto y NO se
+  // puede convertir sola (p. ej. gramos de un producto que se compra por unidad).
+  // La UI lo marca para que una persona lo revise; no se toca el número a ciegas.
+  unidadRevisar?: boolean;
 }
 
 export interface PasoElaboracion {
