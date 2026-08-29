@@ -309,6 +309,53 @@ export async function recordarSolicitudNominasGestoria(
 }
 
 /**
+ * ¿Este mes admite todavía nóminas? Dos motivos para decir que no:
+ *
+ *  1. RRHH ya CONFIRMÓ el mes: es inmutable y no se reabre por este camino.
+ *  2. El mes YA TIENE nóminas: cada mes se entrega UNA sola vez. Si hay que
+ *     corregirlas, RRHH devuelve el mes a la gestoría — eso borra la entrega y
+ *     reabre el enlace, que es la vía prevista para resubir.
+ *
+ * Sin esto, una segunda subida volcaría encima de lo ya revisado por RRHH.
+ */
+async function mesCerradoParaNominas(
+  admin: SupabaseClient,
+  empresaId: string,
+  periodo: string,
+): Promise<{ ok: false; error: string; status: number } | null> {
+  const { data: mesRow } = await admin
+    .from("rrhh_nominas_mes")
+    .select("confirmado_en")
+    .eq("empresa_id", empresaId)
+    .eq("periodo", periodo)
+    .maybeSingle();
+  if (mesRow?.confirmado_en) {
+    return {
+      ok: false,
+      error: `Las nóminas de ${nombreMes(periodo)} ya están cerradas por la empresa: este mes no admite más subidas.`,
+      status: 409,
+    };
+  }
+
+  const { count } = await admin
+    .from("rrhh_pagos_nominas")
+    .select("id", { count: "exact", head: true })
+    .eq("empresa_id", empresaId)
+    .eq("periodo", periodo);
+  if ((count ?? 0) > 0) {
+    return {
+      ok: false,
+      error:
+        `Las nóminas de ${nombreMes(periodo)} ya se subieron. Si hay que corregirlas, ` +
+        `el departamento de RRHH debe devolver el mes: entonces este enlace vuelve a admitir la entrega completa.`,
+      status: 409,
+    };
+  }
+
+  return null;
+}
+
+/**
  * Núcleo de la subida de nóminas por la gestoría (llamado por la API pública).
  * Lee TODAS las nóminas del archivo con IA, las empareja con los empleados de la
  * empresa y las vuelca a `rrhh_pagos` (neto/SS/IRPF + PDF adjunto). Registra la
@@ -332,6 +379,11 @@ export async function procesarSubidaNominasGestoria(
   }
   const mime = resolverMimeNomina(file);
   if (!mime) return { ok: false, error: "Formato no admitido (usa PDF, JPG, PNG o WebP)", status: 400 };
+
+  // Un mes solo admite UNA entrega de nóminas. Se comprueba ANTES de leer con IA:
+  // no tiene sentido gastar la lectura de un archivo que no se va a guardar.
+  const bloqueo = await mesCerradoParaNominas(admin, row.empresa_id, row.periodo);
+  if (bloqueo) return bloqueo;
 
   const buffer = Buffer.from(await file.arrayBuffer());
 

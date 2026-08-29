@@ -181,6 +181,18 @@ export async function procesarNominasLeidas(
     const { supabase, empresaId, userId } = await getAppContext();
     if (!empresaId) return { ok: false, error: "No autorizado" };
 
+    // Mes ya confirmado por RRHH: es inmutable, no admite más nóminas por ninguna
+    // vía. Hay que reabrirlo antes de tocar nada.
+    const { data: mesRow } = await supabase
+      .from("rrhh_nominas_mes")
+      .select("confirmado_en")
+      .eq("empresa_id", empresaId)
+      .eq("periodo", periodoDefecto)
+      .maybeSingle();
+    if (mesRow?.confirmado_en) {
+      return { ok: false, error: "Las nóminas de ese mes ya están confirmadas: reabre el mes para poder cambiarlas." };
+    }
+
     // La entrega de un mes se hace UNA vez. Con que ese mes ya tenga UN documento
     // subido, no se admiten más: mezclar entregas deja el mes descuadrado sin que
     // nadie sepa qué archivo manda. Para cambiarla hay que devolver el mes a la
