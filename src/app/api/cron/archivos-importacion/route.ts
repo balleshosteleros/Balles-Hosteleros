@@ -25,21 +25,25 @@ export const runtime = "nodejs";
 export const maxDuration = 300;
 
 /**
- * Se ignoran las tocadas hace menos de un minuto: si la pantalla sigue abierta
- * ya está trabajando, y dos procesos copiando lo mismo se pisan.
+ * Se ignoran las tocadas hace muy poco: si otra vuelta sigue abierta ya está
+ * trabajando, y dos procesos copiando lo mismo se pisan.
+ *
+ * Bajado de 60 a 15 s por la fecha límite: con el progreso guardándose al
+ * cerrar cada tanda, una vuelta recién terminada deja hueco enseguida, y un
+ * minuto de espera entre vueltas era tiempo muerto que no sobra.
  */
-const MARGEN_SEGUNDOS = 60;
+const MARGEN_SEGUNDOS = 15;
 
 /**
  * Cuántas migraciones avanzan a la vez.
  *
- * Cada una consume su propia ventana de 3 minutos copiando de Drive a R2, y
+ * Cada una consume su propia ventana copiando de Drive a R2, y
  * son empresas y cuentas de Google distintas: no compiten entre ellas. Con dos
  * abiertas (Marketing de HABANA y de BACANAL) las dos avanzan a ritmo completo
  * en vez de turnarse. El tope evita que media docena de migraciones agoten a la
  * vez la memoria de la función.
  */
-const MAX_EN_PARALELO = 3;
+const MAX_EN_PARALELO = 4;
 
 export async function GET(request: Request) {
   const cronSecret = process.env.CRON_SECRET;

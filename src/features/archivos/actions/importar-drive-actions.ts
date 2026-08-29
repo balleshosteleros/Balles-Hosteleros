@@ -59,21 +59,23 @@ function mensajeError(err: unknown): string {
  * Cuántos archivos se copian a la vez.
  *
  * Copiar es sobre todo esperar a la red (bajar de Drive, subir a R2), así que
- * solapar copias multiplica el ritmo sin consumir más CPU. Se queda en 6
- * porque cada copia mantiene en memoria las partes en vuelo de su subida
- * (8 MB x 4), y con vídeos de varios GB pasarse agota la función.
+ * solapar copias multiplica el ritmo sin consumir más CPU.
+ *
+ * Subido a 16 por la fecha límite: Drive borra el material el 30-ago-2026 y
+ * quedaban ~7.000 archivos. Es agresivo —cada copia sostiene en memoria sus
+ * partes en vuelo (16 MB x 6)— pero la máquina aguanta y el tiempo manda.
  */
-const COPIAS_EN_PARALELO = 6;
+const COPIAS_EN_PARALELO = 16;
 
 /**
  * Lo que puede tardar UN archivo antes de darlo por encallado.
  *
  * El reloj de la ventana solo se mira entre tandas, así que sin este tope un
  * único vídeo lento estira la vuelta entera y la ruta la corta a los 5 min sin
- * guardar nada. Minuto y medio da de sobra para varios GB; lo que no quepa se
+ * guardar nada. 2,5 min dan de sobra para varios GB; lo que no quepa se
  * reintenta en la vuelta siguiente, donde arrancará con la ventana entera.
  */
-const TOPE_POR_ARCHIVO_MS = 90 * 1000;
+const TOPE_POR_ARCHIVO_MS = 150 * 1000;
 
 /** Corta una promesa si tarda más de lo debido. */
 async function conTiempo<T>(
