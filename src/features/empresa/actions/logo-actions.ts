@@ -1,6 +1,7 @@
 "use server";
 
 import { createAdminClient } from "@/lib/supabase/admin";
+import { esImagenPermitida, IMAGEN_FORMATOS_TEXTO } from "@/shared/lib/documentos";
 
 const BUCKET = "empresa-logos";
 
@@ -36,6 +37,10 @@ async function uploadVariant(empresaSlug: string, formData: FormData, variant: L
 
   const ext = file.name.split(".").pop() ?? "png";
   const path = `${empresaSlug}/${variantPrefix(variant)}_${Date.now()}.${ext}`;
+
+  if (!esImagenPermitida(file)) {
+    throw new Error(`Ese formato de imagen no se admite. Usa ${IMAGEN_FORMATOS_TEXTO}.`);
+  }
 
   const { error: uploadError } = await supabase.storage
     .from(BUCKET)

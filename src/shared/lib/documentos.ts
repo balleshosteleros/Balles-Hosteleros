@@ -23,6 +23,33 @@ export const MAX_NOMINAS_BYTES = MAX_NOMINAS_MB * 1024 * 1024;
 export const MAX_IMAGEN_MB = 10;
 export const MAX_IMAGEN_BYTES = MAX_IMAGEN_MB * 1024 * 1024;
 
+// Formatos que el almacenamiento acepta de verdad para imágenes de marca.
+// El selector de archivos ofrecía `image/*`, así que el móvil colaba HEIC y el
+// navegador AVIF/GIF: el archivo se elegía bien y fallaba después al subirlo,
+// con un "Ha ocurrido un error" que no decía nada. Esta es la lista real.
+export const IMAGEN_MIME_PERMITIDOS = [
+  "image/png",
+  "image/jpeg",
+  "image/jpg",
+  "image/svg+xml",
+  "image/webp",
+] as const;
+
+// Para el atributo `accept` del input: el mismo criterio que valida la subida.
+export const IMAGEN_ACCEPT = IMAGEN_MIME_PERMITIDOS.join(",");
+
+/** Nombres de formato para el usuario: "PNG, JPG, SVG o WebP". */
+export const IMAGEN_FORMATOS_TEXTO = "PNG, JPG, SVG o WebP";
+
+/** ¿El almacenamiento acepta este archivo? Vale el tipo o, si viene vacío, la extensión. */
+export function esImagenPermitida(file: File): boolean {
+  const tipo = file.type.toLowerCase();
+  if (tipo) return (IMAGEN_MIME_PERMITIDOS as readonly string[]).includes(tipo);
+  // Algunos navegadores no rellenan `type`; caemos a la extensión.
+  const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
+  return ["png", "jpg", "jpeg", "svg", "webp"].includes(ext);
+}
+
 // Mensaje estándar cuando un archivo supera el tope.
 export function mensajeDocumentoDemasiadoGrande(nombre?: string): string {
   return nombre

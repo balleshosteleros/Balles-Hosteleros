@@ -21,7 +21,13 @@ import { friendlyError } from "@/shared/lib/friendly-errors";
 import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
 import { ImportarMarcaDialog } from "./ImportarMarcaDialog";
 import type { MarcaImportada } from "@/features/empresa/actions/marca-import-actions";
-import { MAX_IMAGEN_MB, MAX_IMAGEN_BYTES } from "@/shared/lib/documentos";
+import {
+  MAX_IMAGEN_MB,
+  MAX_IMAGEN_BYTES,
+  IMAGEN_ACCEPT,
+  IMAGEN_FORMATOS_TEXTO,
+  esImagenPermitida,
+} from "@/shared/lib/documentos";
 
 const MAX_LOGO_BYTES = MAX_IMAGEN_BYTES; // 10 MB (tope de imágenes)
 const HEX_RE = /^#[0-9a-fA-F]{6}$/;
@@ -99,6 +105,10 @@ export function ImagenMarcaTab() {
       toast.error(`El logotipo es demasiado grande. Usa una imagen de menos de ${MAX_IMAGEN_MB} MB.`);
       return;
     }
+    if (!esImagenPermitida(file)) {
+      toast.error(`Ese formato de imagen no se admite. Usa ${IMAGEN_FORMATOS_TEXTO}.`);
+      return;
+    }
     setSubiendoPrincipal(true);
     try {
       const fd = new FormData();
@@ -118,6 +128,10 @@ export function ImagenMarcaTab() {
   const subirIsotipoFile = async (file: File) => {
     if (file.size > MAX_LOGO_BYTES) {
       toast.error(`El isotipo es demasiado grande. Usa una imagen de menos de ${MAX_IMAGEN_MB} MB.`);
+      return;
+    }
+    if (!esImagenPermitida(file)) {
+      toast.error(`Ese formato de imagen no se admite. Usa ${IMAGEN_FORMATOS_TEXTO}.`);
       return;
     }
     setSubiendoIsotipo(true);
@@ -464,7 +478,7 @@ function LogoSlot({
         <input
           ref={fileRef}
           type="file"
-          accept="image/*"
+          accept={IMAGEN_ACCEPT}
           className="hidden"
           onChange={(e) => {
             const file = e.target.files?.[0];
