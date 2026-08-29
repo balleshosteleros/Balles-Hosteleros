@@ -44,6 +44,7 @@ import {
 import type { AccesoApp } from "@/features/rrhh/data/accesos-apps";
 import { faviconDesdeUrl } from "@/features/rrhh/data/accesos-apps";
 import { useAuth } from "@/features/auth/contexts/auth-context";
+import { GoogleIcon } from "@/shared/components/GoogleIcon";
 
 // ── Logo de la app (favicon/simpleicons con fallback a inicial) ───────────
 // `size` permite agrandarlo en el panel de aplicaciones (lanzador visual).
@@ -688,7 +689,8 @@ export function AccesosDrawer({
                             // No hay contraseña: se entra con la cuenta de Google.
                             <div className="flex items-start justify-between gap-3 text-xs">
                               <span className="shrink-0 text-muted-foreground">Entrar:</span>
-                              <span className="min-w-0 text-right text-muted-foreground">
+                              <span className="flex min-w-0 items-center gap-1.5 text-right text-muted-foreground">
+                                <GoogleIcon className="h-3.5 w-3.5 shrink-0" />
                                 con la cuenta de Google
                               </span>
                             </div>
