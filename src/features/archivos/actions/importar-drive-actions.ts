@@ -61,11 +61,12 @@ function mensajeError(err: unknown): string {
  * Copiar es sobre todo esperar a la red (bajar de Drive, subir a R2), así que
  * solapar copias multiplica el ritmo sin consumir más CPU.
  *
- * Subido a 16 por la fecha límite: Drive borra el material el 30-ago-2026 y
- * quedaban ~7.000 archivos. Es agresivo —cada copia sostiene en memoria sus
- * partes en vuelo (16 MB x 6)— pero la máquina aguanta y el tiempo manda.
+ * Subido a 8 por la fecha límite: Drive borra el material el 30-ago-2026 y
+ * quedaban ~7.000 archivos. No más: con 16 el servidor se quedó sin memoria y
+ * murió a mitad de vuelta (cada copia sostiene sus partes en vuelo, 16 MB x 6,
+ * y los vídeos de Marketing pesan varios GB). Ocho va rápido y aguanta.
  */
-const COPIAS_EN_PARALELO = 16;
+const COPIAS_EN_PARALELO = 8;
 
 /**
  * Lo que puede tardar UN archivo antes de darlo por encallado.

@@ -43,7 +43,7 @@ const MARGEN_SEGUNDOS = 15;
  * en vez de turnarse. El tope evita que media docena de migraciones agoten a la
  * vez la memoria de la función.
  */
-const MAX_EN_PARALELO = 4;
+const MAX_EN_PARALELO = 2;
 
 export async function GET(request: Request) {
   const cronSecret = process.env.CRON_SECRET;
