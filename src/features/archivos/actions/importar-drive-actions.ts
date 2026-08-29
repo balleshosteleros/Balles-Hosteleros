@@ -393,6 +393,10 @@ export async function ejecutarImportacion(args: {
       });
     }
 
+    console.log(
+      `[importar-drive] arranque: ${pendientes.length} ramas, ${todos.length} entradas en el árbol, ${yaImportados.size} ya importados`,
+    );
+
     while (pendientes.length) {
       if (Date.now() > limite) {
         terminada = false;
@@ -495,6 +499,9 @@ export async function ejecutarImportacion(args: {
       })
       .eq("id", impId);
 
+    console.log(
+      `[importar-drive] fin de tanda: copiados=${copiados} omitidos=${omitidos} errores=${errores.length} terminada=${terminada}`,
+    );
     return { ok: true, data: { importacionId: impId, terminada } };
   } catch (err) {
     const msg = mensajeError(err);
