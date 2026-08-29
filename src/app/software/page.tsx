@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { TITULAR } from "./legal/datos-titular";
 import {
   ChevronDown,
   LayoutDashboard,
@@ -45,11 +46,6 @@ const gallery = [
     src: "/images/landing/producto.jpg",
     title: "Producto",
     caption: "Del proveedor al plato, trazabilidad real.",
-  },
-  {
-    src: "/images/landing/experiencia.jpg",
-    title: "Experiencia",
-    caption: "Un local que funciona sin depender solo de ti.",
   },
   {
     src: "/images/landing/barra.jpg",
@@ -426,7 +422,7 @@ export default function SoftwareLanding() {
       {/* GALERÍA */}
       <section className="px-6 pb-28">
         <div className="mx-auto max-w-6xl">
-          <div className="mb-12 text-center">
+          <div className="mb-14 text-center">
             <p className="mb-4 text-sm font-medium tracking-widest text-blue-400 uppercase">
               Hecho para ti
             </p>
@@ -435,16 +431,17 @@ export default function SoftwareLanding() {
             </h2>
           </div>
 
-          <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-6 lg:grid-rows-2">
+          {/* Mosaico 4×2 = 8 celdas: la primera pieza ocupa un cuadrante 2×2
+              (4 celdas) y las otras cuatro una celda cada una. La cuenta cierra
+              exacta, así que ninguna imagen cae huérfana a una tercera fila.
+              Si añades una pieza más, sube el grid a 6 columnas y reparte;
+              no la cuelgues sin recalcular o vuelve a descuadrarse. */}
+          <div className="grid grid-cols-2 gap-4 lg:grid-cols-4 lg:grid-rows-2">
             {gallery.map((g, i) => (
               <div
                 key={g.src}
                 className={`group relative overflow-hidden rounded-xl border border-white/5 ${
-                  i === 0
-                    ? "col-span-2 row-span-2 lg:col-span-3"
-                    : i === 3
-                      ? "col-span-2 lg:col-span-3"
-                      : "lg:col-span-2"
+                  i === 0 ? "col-span-2 row-span-2" : ""
                 }`}
               >
                 <Image
@@ -453,7 +450,9 @@ export default function SoftwareLanding() {
                   width={1200}
                   height={900}
                   sizes="(min-width: 1024px) 50vw, 100vw"
-                  className="h-full min-h-[180px] w-full object-cover transition duration-500 group-hover:scale-[1.03]"
+                  className={`h-full w-full object-cover transition duration-500 group-hover:scale-[1.03] ${
+                    i === 0 ? "min-h-[380px]" : "min-h-[182px]"
+                  }`}
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
                 <div className="absolute bottom-0 left-0 right-0 p-4">
@@ -490,7 +489,7 @@ export default function SoftwareLanding() {
       {/* MÓDULOS */}
       <section id="modulos" className="scroll-mt-20 px-6 py-28">
         <div className="mx-auto max-w-5xl">
-          <div className="mb-16 text-center">
+          <div className="mb-14 text-center">
             <p className="mb-4 text-sm font-medium tracking-widest text-blue-400 uppercase">
               Módulos
             </p>
@@ -501,15 +500,18 @@ export default function SoftwareLanding() {
 
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {modules.map((m) => (
+              // Icono y título en línea: la tarjeta solo lleva esos dos
+              // elementos, y apilarlos dejaba media caja vacía frente a las
+              // tarjetas de las demás secciones, que sí tienen descripción.
               <div
                 key={m.title}
-                className="group rounded-xl border border-white/5 bg-white/[0.02] p-7 transition hover:border-white/10 hover:bg-white/[0.04]"
+                className="group flex items-center gap-3 rounded-xl border border-white/5 bg-white/[0.02] p-6 transition hover:border-white/10 hover:bg-white/[0.04]"
               >
                 <m.icon
-                  size={24}
-                  className="mb-4 text-blue-400 transition group-hover:text-blue-300"
+                  size={22}
+                  className="shrink-0 text-blue-400 transition group-hover:text-blue-300"
                 />
-                <h3 className="text-[15px] font-semibold">{m.title}</h3>
+                <h3 className="text-base font-semibold">{m.title}</h3>
               </div>
             ))}
           </div>
@@ -519,7 +521,7 @@ export default function SoftwareLanding() {
       {/* CÓMO FUNCIONA */}
       <section id="como-funciona" className="scroll-mt-20 px-6 py-28">
         <div className="mx-auto max-w-5xl">
-          <div className="mb-16 text-center">
+          <div className="mb-14 text-center">
             <p className="mb-4 text-sm font-medium tracking-widest text-blue-400 uppercase">
               Cómo funciona
             </p>
@@ -532,10 +534,10 @@ export default function SoftwareLanding() {
             {steps.map((s) => (
               <div
                 key={s.n}
-                className="relative rounded-xl border border-white/5 bg-white/[0.02] p-7"
+                className="relative rounded-xl border border-white/5 bg-white/[0.02] p-6"
               >
                 <span className="text-xs font-bold tracking-widest text-blue-400">{s.n}</span>
-                <h3 className="mt-3 text-lg font-semibold">{s.title}</h3>
+                <h3 className="mt-3 text-base font-semibold">{s.title}</h3>
                 <p className="mt-2 text-sm leading-relaxed text-slate-400">{s.desc}</p>
               </div>
             ))}
@@ -546,7 +548,7 @@ export default function SoftwareLanding() {
       {/* CONFIANZA */}
       <section className="px-6 py-28">
         <div className="mx-auto max-w-5xl">
-          <div className="mb-16 text-center">
+          <div className="mb-14 text-center">
             <p className="mb-4 text-sm font-medium tracking-widest text-blue-400 uppercase">
               Confianza
             </p>
@@ -562,7 +564,7 @@ export default function SoftwareLanding() {
                 className="rounded-xl border border-white/5 bg-white/[0.02] p-6"
               >
                 <t.icon size={22} className="mb-4 text-blue-400" />
-                <h3 className="text-[15px] font-semibold">{t.title}</h3>
+                <h3 className="text-base font-semibold">{t.title}</h3>
                 <p className="mt-2 text-sm leading-relaxed text-slate-400">{t.desc}</p>
               </div>
             ))}
@@ -573,14 +575,14 @@ export default function SoftwareLanding() {
       {/* PLANES */}
       <section id="planes" className="scroll-mt-20 px-6 py-28">
         <div className="mx-auto max-w-5xl">
-          <div className="mb-10 text-center">
+          <div className="mb-14 text-center">
             <p className="mb-4 text-sm font-medium tracking-widest text-blue-400 uppercase">
               Planes
             </p>
             <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">
               Elige lo que necesitas hoy
             </h2>
-            <p className="mt-4 text-slate-400">
+            <p className="mt-6 text-lg leading-relaxed text-slate-400">
               Sin permanencia. Sin letra pequeña. Cancela cuando quieras.
             </p>
             <BillingToggle annual={annual} onChange={setAnnual} />
@@ -595,7 +597,7 @@ export default function SoftwareLanding() {
               return (
                 <div
                   key={plan.name}
-                  className={`relative rounded-xl border p-8 transition ${
+                  className={`relative rounded-xl border p-6 transition ${
                     plan.popular
                       ? "border-blue-500/40 bg-blue-600/[0.07] shadow-[0_0_0_1px_rgba(59,130,246,0.15),0_20px_60px_-20px_rgba(59,130,246,0.35)]"
                       : "border-white/5 bg-white/[0.02] hover:border-white/10"
@@ -606,7 +608,7 @@ export default function SoftwareLanding() {
                       Más popular
                     </span>
                   )}
-                  <h3 className="text-lg font-bold">{plan.name}</h3>
+                  <h3 className="text-base font-bold">{plan.name}</h3>
                   <p className="mt-1 text-sm text-slate-400">{plan.desc}</p>
 
                   <div className="mt-6">
@@ -656,7 +658,7 @@ export default function SoftwareLanding() {
           <p className="mt-10 text-center text-xs text-slate-500">
             ¿Grupo con más de 10 centros?{" "}
             <a
-              href="mailto:balleshosteleros@gmail.com"
+              href={`mailto:${TITULAR.email}`}
               className="text-blue-400 hover:text-blue-300"
             >
               Hablemos de un plan a medida
@@ -669,7 +671,10 @@ export default function SoftwareLanding() {
       {/* FAQ */}
       <section id="faq" className="scroll-mt-20 px-6 py-28">
         <div className="mx-auto max-w-2xl">
-          <div className="mb-12 text-center">
+          <div className="mb-14 text-center">
+            <p className="mb-4 text-sm font-medium tracking-widest text-blue-400 uppercase">
+              Dudas
+            </p>
             <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">
               Preguntas frecuentes
             </h2>
@@ -695,12 +700,15 @@ export default function SoftwareLanding() {
           <div className="absolute inset-0 bg-gradient-to-b from-[#0b1120] via-[#0b1120]/90 to-[#0b1120]" />
         </div>
         <div className="relative z-10 mx-auto max-w-2xl text-center">
+          <p className="mb-4 text-sm font-medium tracking-widest text-blue-400 uppercase">
+            Empieza hoy
+          </p>
           <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">
             Tu negocio merece un sistema,
             <br />
             no más improvisación
           </h2>
-          <p className="mt-4 text-slate-400">
+          <p className="mt-6 text-lg leading-relaxed text-slate-400">
             Empieza gratis. Sin tarjeta. Sin compromiso.
           </p>
           <Link
@@ -770,7 +778,7 @@ export default function SoftwareLanding() {
                 </li>
                 <li>
                   <a
-                    href="mailto:balleshosteleros@gmail.com"
+                    href={`mailto:${TITULAR.email}`}
                     className="hover:text-slate-300"
                   >
                     Contacto

@@ -1,5 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
+import { TITULAR } from "@/app/software/legal/datos-titular";
 
 export default function AuthLayout({
   children,
@@ -55,13 +56,16 @@ export default function AuthLayout({
             </Link>
           </nav>
 
+          {/* El correo sale de los datos del titular (fuente única de las
+              legales). No cablear aquí ninguna dirección: el buzón que había
+              antes se eliminó de Workspace y el enlace quedó muerto. */}
           <div className="flex w-full flex-col items-center justify-between gap-2 sm:flex-row">
             <span>© {new Date().getFullYear()} Balles Hosteleros</span>
             <a
-              href="mailto:info@balleshosteleros.com"
+              href={`mailto:${TITULAR.email}`}
               className="transition-colors hover:text-slate-300"
             >
-              info@balleshosteleros.com
+              {TITULAR.email}
             </a>
           </div>
         </footer>

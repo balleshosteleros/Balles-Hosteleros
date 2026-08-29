@@ -1,6 +1,6 @@
 -- Contador diario de correos enviados por la plataforma.
--- Motivo: el transporte SMTP es Gmail Workspace (info@balleshosteleros.com) con
--- límite gratuito de ~2.000 envíos/día para TODA la plataforma. Esta tabla cuenta
+-- Motivo: cuando se creó, el transporte era Gmail Workspace, con límite gratuito
+-- de ~2.000 envíos/día para TODA la plataforma. Esta tabla cuenta
 -- los envíos del día y permite avisar por email al dueño cuando se acerca al tope.
 -- Tabla interna: solo el service-role accede (RLS activado SIN políticas).
 
