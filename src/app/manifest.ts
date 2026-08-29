@@ -35,21 +35,30 @@ export default function manifest(): MetadataRoute.Manifest {
     theme_color: "#0a0a0a",
     lang: "es-ES",
     categories: ["business", "productivity"],
+    // `?v=` al final de cada icono: al cambiar el dibujo hay que SUBIR ESE
+    // NÚMERO. Para el móvil la dirección pasa a ser otra, así que se baja el
+    // icono nuevo en vez de reutilizar el que tiene guardado, y la pantalla de
+    // inicio se actualiza sola en unos días sin que nadie reinstale nada
+    // (Iván, 29-ago: "ninguna app te dice desinstala y vuélvela a instalar").
+    //
+    // Solo Android e escritorio lo aprovechan. iOS congela el icono al añadir
+    // la app a la pantalla de inicio y no vuelve a mirarlo nunca: ahí no hay
+    // forma de refrescarlo, es una limitación de Apple.
     icons: [
       {
-        src: "/icons/icon-192.png",
+        src: "/icons/icon-192.png?v=2",
         sizes: "192x192",
         type: "image/png",
         purpose: "any",
       },
       {
-        src: "/icons/icon-512.png",
+        src: "/icons/icon-512.png?v=2",
         sizes: "512x512",
         type: "image/png",
         purpose: "any",
       },
       {
-        src: "/icons/icon-maskable.png",
+        src: "/icons/icon-maskable.png?v=2",
         sizes: "512x512",
         type: "image/png",
         purpose: "maskable",
