@@ -1,6 +1,7 @@
 "use server";
 
 import { getAppContext } from "@/lib/supabase/get-context";
+import { unidadAlGuardar } from "@/features/cocina/lib/normalizar-unidad";
 
 // ─── Tipos compartidos con la UI ───────────────────────────────────
 // Mantengo los nombres en camelCase aquí pero el mapeo a la fila de
@@ -120,12 +121,25 @@ async function replaceIngredientes(
 
   if (ingredientes.length === 0) return;
 
+  // La unidad la manda el producto (DECISIÓN 3): para cada línea con producto,
+  // se estampa su `medida`, ignorando la grafía que venga del cliente. Sin producto,
+  // se homogeneiza el texto libre. Así no vuelven a entrar las nueve grafías.
+  const idsProducto = [...new Set(ingredientes.map((i) => i.productoId).filter(Boolean) as string[])];
+  const medidaPorProducto = new Map<string, string | null>();
+  if (idsProducto.length > 0) {
+    const { data: prods } = await supabase
+      .from("productos")
+      .select("id, medida")
+      .in("id", idsProducto);
+    for (const p of prods ?? []) medidaPorProducto.set(p.id as string, (p.medida as string) ?? null);
+  }
+
   const rows = ingredientes.map((ing, idx) => ({
     escandallo_id: escandalloId,
     producto_id: ing.productoId ?? null,
     nombre: ing.nombre,
     cantidad: ing.cantidad,
-    unidad: ing.unidad || "ud",
+    unidad: unidadAlGuardar(ing.productoId ? medidaPorProducto.get(ing.productoId) : null, ing.unidad),
     coste_unitario: ing.costeUnitario ?? 0,
     coste_total: ing.precio ?? +(((ing.costeUnitario ?? 0) * ing.cantidad).toFixed(2)),
     merma_pct: ing.mermaPct ?? 0,
@@ -210,7 +224,7 @@ export async function listEscandallos() {
     // ("Gluten · viene de Harina (compra), Bechamel (elaboración)").
     let query = supabase
       .from("escandallos")
-      .select("*, ingredientes:escandallo_ingredientes(*, productos(alergenos, tipo))")
+      .select("*, ingredientes:escandallo_ingredientes(*, productos(alergenos, tipo, medida))")
       .order("created_at", { ascending: false });
     if (empresaId) query = query.eq("empresa_id", empresaId);
     const { data, error } = await query;

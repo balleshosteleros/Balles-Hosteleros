@@ -30,14 +30,16 @@ export function nuevaLinea(): IngredienteLinea {
     producto_id: null,
     nombre_libre: "",
     cantidad: null,
-    unidad: "g",
+    unidad: "Kilogramos",
     prioridad: "secundario",
   };
 }
 
-// Unidades permitidas para productos PROPUESTOS (aún no dados de alta)
-// Se limita a formatos estándar — no se permite texto libre.
-const UNIDADES_PROPUESTA = ["g", "kg", "ml", "L", "ud", "caja", "docena"];
+// Unidades permitidas para productos PROPUESTOS (aún no dados de alta).
+// Alineadas con la tabla `medidas` / `productos.medida`: un producto se mide en
+// Kilogramos, Litros o Unidades — nunca en gramos (eso es cantidad, no medida).
+// Cuando el ingrediente se vincula a un producto real, manda su `medida`.
+const UNIDADES_PROPUESTA = ["Kilogramos", "Litros", "Unidades"];
 
 interface Props {
   value: IngredienteLinea[];

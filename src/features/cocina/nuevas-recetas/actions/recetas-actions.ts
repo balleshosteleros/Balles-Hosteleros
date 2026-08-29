@@ -1,6 +1,7 @@
 "use server";
 
 import { getAppContext } from "@/lib/supabase/get-context";
+import { unidadDeIngrediente } from "@/features/cocina/lib/normalizar-unidad";
 import type {
   ActionResult, Receta, Ingrediente, HistorialEntry,
   CrearRecetaInput, MoverRecetaInput, EstadoGeneral,
@@ -150,7 +151,9 @@ export async function createReceta(
         producto_id: ing.producto_id ?? null,
         nombre_libre: ing.nombre_libre ?? null,
         cantidad: ing.cantidad ?? null,
-        unidad: ing.unidad ?? "g",
+        // Nada de "g" por defecto: la unidad se homogeneiza a la forma canónica.
+        // Al publicar, la manda la `medida` del producto (publicar-oficial).
+        unidad: unidadDeIngrediente(null, ing.unidad),
         prioridad: ing.prioridad,
         orden: idx,
       }));

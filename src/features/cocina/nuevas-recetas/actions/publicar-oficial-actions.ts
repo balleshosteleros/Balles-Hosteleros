@@ -1,6 +1,7 @@
 "use server";
 
 import { getAppContext } from "@/lib/supabase/get-context";
+import { unidadDeIngrediente, MEDIDA_CANONICA } from "@/features/cocina/lib/normalizar-unidad";
 import type { ActionResult } from "../types";
 
 /**
@@ -101,14 +102,20 @@ export async function publicarOficial(
         continue;
       }
 
+      const medidaNueva = unidadDeIngrediente(null, ing.unidad as string | null, MEDIDA_CANONICA.masa);
       const { data: nuevo, error: pErr } = await supabase
         .from("productos")
         .insert({
           empresa_id: empresaId,
           nombre,
-          tipo: "Compra",
+          // `tipo` en minúscula: es lo que filtran el coste y el kardex
+          // (`tipo in ('compra','elaboracion')`). "Compra" con mayúscula dejaba
+          // el producto invisible para el cálculo de coste.
+          tipo: "compra",
           categoria: "Sin categoría",
-          unidad: (ing.unidad as string) ?? "g",
+          // `medida`, NO `unidad`: esa columna se renombró en junio y este INSERT
+          // fallaba en producción. La unidad la manda el producto desde su alta.
+          medida: medidaNueva,
           estado: "Activo",
           created_by: userId,
         })
@@ -130,12 +137,20 @@ export async function publicarOficial(
     await supabase.from("escandallo_ingredientes").delete().eq("escandallo_id", fichaId);
 
     if (ingredientes.length > 0) {
+      // La unidad la manda el producto (DECISIÓN 3): se lee la `medida` de cada
+      // producto vinculado y se estampa, en vez de copiar el texto libre del borrador.
+      const idsProd = [...new Set(ingredientes.map((i) => i.producto_id).filter(Boolean) as string[])];
+      const medidaPorProducto = new Map<string, string | null>();
+      if (idsProd.length > 0) {
+        const { data: prods } = await supabase.from("productos").select("id, medida").in("id", idsProd);
+        for (const p of prods ?? []) medidaPorProducto.set(p.id as string, (p.medida as string) ?? null);
+      }
       const rows = ingredientes.map((ing, idx) => ({
         escandallo_id: fichaId,
         producto_id: ing.producto_id,
         nombre: (ing.nombre_libre as string) || "Ingrediente",
         cantidad: ing.cantidad ?? 0,
-        unidad: ing.unidad ?? "g",
+        unidad: unidadDeIngrediente(ing.producto_id ? medidaPorProducto.get(ing.producto_id) : null, ing.unidad as string | null),
         prioridad: ing.prioridad,
         orden: idx,
       }));
@@ -168,9 +183,10 @@ export async function publicarOficial(
         .insert({
           empresa_id: empresaId,
           nombre: compra.producto_nombre_propuesto as string,
-          tipo: "Compra",
+          tipo: "compra",
           categoria: "Sin categoría",
-          unidad: (compra.unidad as string) ?? "kg",
+          // `medida`, NO `unidad` (columna renombrada en junio; este INSERT fallaba).
+          medida: unidadDeIngrediente(null, compra.unidad as string | null, MEDIDA_CANONICA.masa),
           estado: "Activo",
           created_by: userId,
         })
