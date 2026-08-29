@@ -29,13 +29,12 @@ import {
   type Contacto,
   type ContactoCategoria,
   type ContactoInput,
-  type Etiqueta,
+  whatsappDesdeTelefono,
 } from "@/features/agenda/types";
 import {
   listContactos,
   createContacto,
   deleteContacto,
-  listEtiquetas,
   getContactosVistosAt,
   marcarContactosVistos,
 } from "@/features/agenda/actions/contactos-actions";
@@ -70,10 +69,8 @@ const EMPTY_FORM: ContactoInput = {
   nombre: "",
   empresa_contacto: "",
   categoria: "proveedores",
-  etiqueta_id: null,
   telefono: "",
   email: "",
-  whatsapp: "",
   direccion: "",
   notas: "",
 };
@@ -82,11 +79,9 @@ export function AgendaMobile() {
   const { ajustes } = useEmpresa();
   const diasAnuncio = ajustes.notificaciones.agenda.diasAnuncio;
   const [contactos, setContactos] = useState<Contacto[]>([]);
-  const [etiquetas, setEtiquetas] = useState<Etiqueta[]>([]);
   const [cargando, setCargando] = useState(true);
   const [busqueda, setBusqueda] = useState("");
   const [grupo, setGrupo] = useState<ContactoCategoria | "todos">("todos");
-  const [etiquetaFiltro, setEtiquetaFiltro] = useState<string | null>(null);
   // Corte "visto hasta": los contactos creados después se resaltan como nuevos.
   const [vistosAt, setVistosAt] = useState<string | null>(null);
 
@@ -101,18 +96,12 @@ export function AgendaMobile() {
   const cargar = useCallback(async () => {
     try {
       setCargando(true);
-      // Independientes: si fallan las etiquetas, los contactos igualmente se ven.
       const [c, corte] = await Promise.all([
         listContactos(),
         getContactosVistosAt(diasAnuncio),
       ]);
       setContactos(c);
       setVistosAt(corte);
-      try {
-        setEtiquetas(await listEtiquetas());
-      } catch {
-        setEtiquetas([]);
-      }
     } catch (err) {
       toast.error("Error al cargar contactos", { description: friendlyError(err, "AgendaMobile") });
     } finally {
@@ -143,10 +132,6 @@ export function AgendaMobile() {
     [vistosAt],
   );
 
-  useEffect(() => {
-    setEtiquetaFiltro(null);
-  }, [grupo]);
-
   const conteos = useMemo(() => {
     const c: Record<ContactoCategoria, number> = {
       mantenimiento: 0,
@@ -162,21 +147,9 @@ export function AgendaMobile() {
     return c;
   }, [contactos]);
 
-  const etiquetaById = useMemo(() => {
-    const m = new Map<string, Etiqueta>();
-    etiquetas.forEach((e) => m.set(e.id, e));
-    return m;
-  }, [etiquetas]);
-
-  const etiquetasGrupo = useMemo(
-    () => (grupo === "todos" ? [] : etiquetas.filter((e) => e.categoria === grupo)),
-    [etiquetas, grupo],
-  );
-
   const filtrados = useMemo(() => {
     let lista = contactos;
     if (grupo !== "todos") lista = lista.filter((c) => c.categoria === grupo);
-    if (etiquetaFiltro) lista = lista.filter((c) => c.etiqueta_id === etiquetaFiltro);
     if (busqueda.trim()) {
       const q = busqueda.toLowerCase();
       lista = lista.filter(
@@ -187,9 +160,9 @@ export function AgendaMobile() {
       );
     }
     return lista;
-  }, [contactos, grupo, etiquetaFiltro, busqueda]);
+  }, [contactos, grupo, busqueda]);
 
-  // Agrupado por categoría cuando estamos en "Todos" (vista por etiquetas)
+  // Agrupado por categoría cuando estamos en "Todos"
   const secciones = useMemo(() => {
     if (grupo !== "todos") return null;
     return CONTACTO_CATEGORIAS.map((cat) => ({
@@ -299,30 +272,6 @@ export function AgendaMobile() {
         })}
       </div>
 
-      {/* Sub-etiquetas de la categoría */}
-      {grupo !== "todos" && etiquetasGrupo.length > 0 && (
-        <div className="-mx-3 flex gap-1.5 overflow-x-auto px-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          <button
-            onClick={() => setEtiquetaFiltro(null)}
-            className={`shrink-0 rounded-full border px-2 py-0.5 text-[11px] ${
-              etiquetaFiltro === null ? "border-foreground text-foreground" : "border-border text-muted-foreground"
-            }`}
-          >
-            Todas
-          </button>
-          {etiquetasGrupo.map((e) => (
-            <button
-              key={e.id}
-              onClick={() => setEtiquetaFiltro(etiquetaFiltro === e.id ? null : e.id)}
-              className={`shrink-0 rounded-full border px-2 py-0.5 text-[11px] ${
-                etiquetaFiltro === e.id ? "border-foreground text-foreground" : "border-border text-muted-foreground"
-              }`}
-            >
-              {e.nombre}
-            </button>
-          ))}
-        </div>
-      )}
 
       {/* Lista */}
       {cargando ? (
@@ -343,7 +292,6 @@ export function AgendaMobile() {
                   <FilaContacto
                     key={c.id}
                     c={c}
-                    etiqueta={c.etiqueta_id ? etiquetaById.get(c.etiqueta_id) : null}
                     nuevo={esNuevo(c)}
                     onAbrir={() => setDetalle(c)}
                   />
@@ -358,7 +306,6 @@ export function AgendaMobile() {
             <FilaContacto
               key={c.id}
               c={c}
-              etiqueta={c.etiqueta_id ? etiquetaById.get(c.etiqueta_id) : null}
               nuevo={esNuevo(c)}
               onAbrir={() => setDetalle(c)}
             />
@@ -454,7 +401,6 @@ export function AgendaMobile() {
       {detalle && (
         <FichaContacto
           c={detalle}
-          etiqueta={detalle.etiqueta_id ? etiquetaById.get(detalle.etiqueta_id) : null}
           borrando={borrando}
           onCerrar={() => setDetalle(null)}
           onEliminar={() => eliminar(detalle)}
@@ -468,13 +414,11 @@ export function AgendaMobile() {
 
 function FichaContacto({
   c,
-  etiqueta,
   borrando,
   onCerrar,
   onEliminar,
 }: {
   c: Contacto;
-  etiqueta?: Etiqueta | null;
   borrando: boolean;
   onCerrar: () => void;
   onEliminar: () => void;
@@ -511,7 +455,6 @@ function FichaContacto({
             </h2>
             <p className="text-xs text-muted-foreground">
               {CATEGORIA_LABELS[c.categoria]}
-              {etiqueta ? ` · ${etiqueta.nombre}` : ""}
             </p>
           </div>
           <button
@@ -525,12 +468,6 @@ function FichaContacto({
         {/* Datos */}
         <div className="space-y-1">
           <DatoFicha icon={Phone} label="Teléfono" valor={c.telefono} href={c.telefono ? `tel:${c.telefono}` : null} />
-          <DatoFicha
-            icon={MessageCircle}
-            label="WhatsApp"
-            valor={c.whatsapp}
-            href={c.whatsapp ? `https://wa.me/${c.whatsapp.replace(/[^\d]/g, "")}` : null}
-          />
           <DatoFicha icon={Mail} label="Email" valor={c.email} href={c.email ? `mailto:${c.email}` : null} />
           <DatoFicha icon={Building2} label="Empresa" valor={c.empresa_contacto} />
           <DatoFicha icon={MapPin} label="Dirección" valor={c.direccion} />
@@ -545,6 +482,16 @@ function FichaContacto({
               className="flex h-11 flex-1 items-center justify-center gap-2 rounded-2xl bg-emerald-500 text-sm font-semibold text-white active:bg-emerald-600"
             >
               <Phone className="h-4 w-4" /> Llamar
+            </a>
+          )}
+          {whatsappDesdeTelefono(c.telefono) && (
+            <a
+              href={`https://wa.me/${whatsappDesdeTelefono(c.telefono)}`}
+              target="_blank"
+              rel="noreferrer"
+              className="flex h-11 flex-1 items-center justify-center gap-2 rounded-2xl bg-[#25D366] text-sm font-semibold text-white active:brightness-95"
+            >
+              <MessageCircle className="h-4 w-4" /> WhatsApp
             </a>
           )}
           {c.email && (
@@ -625,12 +572,10 @@ function Campo({ label, children }: { label: string; children: React.ReactNode }
 
 function FilaContacto({
   c,
-  etiqueta,
   nuevo,
   onAbrir,
 }: {
   c: Contacto;
-  etiqueta?: Etiqueta | null;
   nuevo?: boolean;
   onAbrir: () => void;
 }) {
@@ -665,11 +610,8 @@ function FilaContacto({
               </span>
             )}
           </p>
-          {(sub || etiqueta) && (
-            <p className="truncate text-[11px] text-muted-foreground">
-              {etiqueta ? `${etiqueta.nombre}${sub ? " · " : ""}` : ""}
-              {sub}
-            </p>
+          {sub && (
+            <p className="truncate text-[11px] text-muted-foreground">{sub}</p>
           )}
         </div>
       </button>

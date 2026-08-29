@@ -45,6 +45,7 @@ import {
   type Contacto,
   type ContactoCategoria,
   type ContactoInput,
+  whatsappDesdeTelefono,
 } from "@/features/agenda/types";
 import { toast } from "sonner";
 import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
@@ -76,10 +77,8 @@ const EMPTY_FORM: ContactoInput = {
   nombre: "",
   empresa_contacto: "",
   categoria: "proveedores",
-  etiqueta_id: null,
   telefono: "",
   email: "",
-  whatsapp: "",
   direccion: "",
   notas: "",
 };
@@ -199,10 +198,8 @@ export function AgendaView() {
       nombre: c.nombre,
       empresa_contacto: c.empresa_contacto,
       categoria: c.categoria,
-      etiqueta_id: c.etiqueta_id,
       telefono: c.telefono,
       email: c.email,
-      whatsapp: c.whatsapp,
       direccion: c.direccion,
       notas: c.notas,
     });
@@ -355,9 +352,9 @@ export function AgendaView() {
                       {c.telefono}
                     </a>
                   )}
-                  {c.whatsapp && (
+                  {whatsappDesdeTelefono(c.telefono) && (
                     <a
-                      href={`https://wa.me/${c.whatsapp.replace(/[^\d]/g, "")}`}
+                      href={`https://wa.me/${whatsappDesdeTelefono(c.telefono)}`}
                       target="_blank"
                       rel="noreferrer"
                       onClick={(e) => e.stopPropagation()}
@@ -496,25 +493,14 @@ export function AgendaView() {
                 </SelectContent>
               </Select>
             </div>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div>
-                <Label>Teléfono</Label>
-                <Input
-                  value={form.telefono ?? ""}
-                  onChange={(e) => setForm({ ...form, telefono: e.target.value })}
-                  placeholder="+34 600 000 000"
-                  disabled={soloLectura}
-                />
-              </div>
-              <div>
-                <Label>WhatsApp</Label>
-                <Input
-                  value={form.whatsapp ?? ""}
-                  onChange={(e) => setForm({ ...form, whatsapp: e.target.value })}
-                  placeholder="+34 600 000 000"
-                  disabled={soloLectura}
-                />
-              </div>
+            <div>
+              <Label>Teléfono</Label>
+              <Input
+                value={form.telefono ?? ""}
+                onChange={(e) => setForm({ ...form, telefono: e.target.value })}
+                placeholder="+34 600 000 000"
+                disabled={soloLectura}
+              />
             </div>
             <div>
               <Label>Email</Label>
