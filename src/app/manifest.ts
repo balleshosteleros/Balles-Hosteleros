@@ -26,7 +26,12 @@ export default function manifest(): MetadataRoute.Manifest {
     scope: "/",
     display: "standalone",
     orientation: "portrait",
-    background_color: "#ffffff",
+    // Azul del propio isotipo, NO blanco. Al instalar la app en escritorio
+    // (Dock del Mac, Chrome "Instalar"), el sistema pinta el icono sobre un
+    // lienzo de este color y luego lo redondea: en blanco salía un marco
+    // alrededor del icono azul y el dibujo parecía recortado (Iván, 29-ago).
+    // También es el color de la pantalla de arranque de la PWA.
+    background_color: "#0a4f7a",
     theme_color: "#0a0a0a",
     lang: "es-ES",
     categories: ["business", "productivity"],
