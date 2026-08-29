@@ -12,9 +12,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from "@/components/ui/select";
 import { Check, ChevronRight, DoorClosed, DoorOpen, Plus, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -54,6 +51,16 @@ const DIAS_LABELS: Record<DiaSemanaKey, string> = {
   vie: "viernes", sab: "sábado", dom: "domingo",
 };
 const DIAS_ORDEN: DiaSemanaKey[] = ["lun","mar","mie","jue","vie","sab","dom"];
+
+/** "lunes", "lunes y martes", "lunes, martes y jueves", "todos los días". */
+function listaDias(dias: DiaSemanaKey[]): string {
+  const orden = DIAS_ORDEN.filter((d) => dias.includes(d));
+  if (orden.length === 0) return "ningún día";
+  if (orden.length === DIAS_ORDEN.length) return "todos los días";
+  const nombres = orden.map((d) => DIAS_LABELS[d]);
+  if (nombres.length === 1) return nombres[0];
+  return `${nombres.slice(0, -1).join(", ")} y ${nombres[nombres.length - 1]}`;
+}
 
 function hoyISO(): string {
   const d = new Date();
@@ -217,7 +224,12 @@ export function HorariosAperturaPanel({
   }, []);
 
   // Estado específico de ámbitos
-  const [diaSemanaSel, setDiaSemanaSel] = useState<DiaSemanaKey>("lun");
+  // Se pueden marcar varios días a la vez y aplicarles el mismo horario de una
+  // pasada. Siempre hay al menos uno: sin días no habría nada que cambiar.
+  const [diasSemanaSel, setDiasSemanaSel] = useState<DiaSemanaKey[]>(["lun"]);
+  // El horario que se precarga y con el que se compara es el del primero de la
+  // selección, en orden de semana: es el que representa lo que se está editando.
+  const diaSemanaRef = DIAS_ORDEN.find((d) => diasSemanaSel.includes(d)) ?? "lun";
   const [rangoIni, setRangoIni] = useState(hoyISO());
   const [rangoFin, setRangoFin] = useState(hoyISO());
   const [fechasLista, setFechasLista] = useState<string[]>([]);
@@ -260,7 +272,7 @@ export function HorariosAperturaPanel({
     // En ámbito semanal manda el día elegido; si ese día no tiene horario
     // propio, se cae al general, que es lo que heredaría de verdad.
     const ventana =
-      ambito === "dia_semana" ? ventanaEfectiva(cfg, diaSemanaSel, turno) : null;
+      ambito === "dia_semana" ? ventanaEfectiva(cfg, diaSemanaRef, turno) : null;
     const porDefecto = turno === "comida"
       ? { inicio: "13:00", fin: "16:00" }
       : { inicio: "20:00", fin: "02:00" };
@@ -281,7 +293,7 @@ export function HorariosAperturaPanel({
       setFin(cfg.generalFinCena ?? porDefecto.fin);
       setCerrado(Boolean(cfg.generalCerradoCena));
     }
-  }, [turno, diaSemanaSel, ambito]);
+  }, [turno, diaSemanaRef, ambito]);
 
   const cargarExcepciones = useCallback(async () => {
     const r = await listHorariosExcepciones();
@@ -292,10 +304,6 @@ export function HorariosAperturaPanel({
   useEffect(() => {
     cargarExcepciones();
   }, [cargarExcepciones]);
-
-  useEffect(() => {
-    onDirtyChange?.();
-  }, [hayCambios, onDirtyChange]);
 
   const guardarExcepciones = useCallback(async (): Promise<boolean> => {
     for (const id of cambios.borrar) {
@@ -316,12 +324,6 @@ export function HorariosAperturaPanel({
     return true;
   }, [cambios, cargarExcepciones]);
 
-  useImperativeHandle(
-    handleRef,
-    () => ({ hayCambios, guardar: guardarExcepciones }),
-    [hayCambios, guardarExcepciones],
-  );
-
   function aniadirFechaLista() {
     if (!fechaNueva) return;
     if (fechasLista.includes(fechaNueva)) return;
@@ -331,6 +333,83 @@ export function HorariosAperturaPanel({
   function quitarFechaLista(f: string) {
     setFechasLista(fechasLista.filter((x) => x !== f));
   }
+
+  /**
+   * Traduce el horario que se está editando arriba a un parche de config para
+   * TODOS los días marcados. Se escriben esos días y nada más: la ventana
+   * general (horas y cerrado) NUNCA se toca aquí. Es el horario que heredan los
+   * días sin horario propio, así que pisarla al editar los lunes cambiaba de
+   * paso todos los demás días. Cambiar los lunes es cambiar los lunes.
+   * Devuelve null si la validación comida/cena lo impide (ya ha avisado).
+   */
+  const parcheHorarioSemanal = useCallback((): Partial<EmpresaReservasConfig> | null => {
+    if (diasSemanaSel.length === 0) {
+      toast.error("Elige al menos un día de la semana");
+      return null;
+    }
+    const ventanaEdicion: VentanaTurno = cerrado
+      ? { cerrado: true, inicio: "", fin: "" }
+      : { cerrado: false, inicio, fin };
+    const otroTurno: TurnoKey = turno === "comida" ? "cena" : "comida";
+
+    // Cada día se valida por separado: el otro turno puede tener horas
+    // distintas en cada uno, y basta con que choque en uno para no aplicar nada.
+    const parche: Record<string, unknown> = {};
+    for (const dia of diasSemanaSel) {
+      const otra = ventanaEfectiva(configRef.current, dia, otroTurno);
+      const err = turno === "comida"
+        ? validaOrdenComidaCena(ventanaEdicion, otra)
+        : validaOrdenComidaCena(otra, ventanaEdicion);
+      if (err) {
+        toast.error(`En ${DIAS_LABELS[dia]}: ${err}`);
+        return null;
+      }
+      parche[`${dia}_inicio_${turno}`]  = cerrado ? null : inicio;
+      parche[`${dia}_fin_${turno}`]     = cerrado ? null : fin;
+      parche[`${dia}_cerrado_${turno}`] = cerrado;
+    }
+    return parche as Partial<EmpresaReservasConfig>;
+  }, [cerrado, inicio, fin, turno, diasSemanaSel]);
+
+  /**
+   * ¿El horario que se ve arriba difiere del guardado en ALGUNO de los días
+   * marcados? Sin esto, cambiar la hora y pulsar Guardar no haría nada: el
+   * borrador vive solo aquí y el botón de la cabecera no se enteraría de que
+   * hay algo que escribir. Basta con que un día difiera, porque el horario se
+   * aplica a todos los marcados por igual.
+   * Solo aplica al ámbito semanal; en rango y días específicos el borrador se
+   * materializa como excepción, y eso ya lo cuenta la lista.
+   */
+  const horarioSemanalPendiente =
+    ambito === "dia_semana" &&
+    (cerrado || (Boolean(inicio) && Boolean(fin))) &&
+    diasSemanaSel.some((dia) => {
+      const guardada = ventanaEfectiva(config, dia, turno);
+      if (cerrado) return guardada?.cerrado !== true;
+      return (
+        guardada?.cerrado !== false ||
+        guardada.inicio !== inicio ||
+        guardada.fin !== fin
+      );
+    });
+
+  useEffect(() => {
+    onDirtyChange?.();
+  }, [hayCambios, horarioSemanalPendiente, onDirtyChange]);
+
+  // El Guardar de la cabecera pide primero el horario que se ve arriba, lo
+  // fusiona con el resto de campos de config y lo escribe todo de una vez;
+  // después llama a `guardar` para las excepciones, que van a su propia tabla.
+  useImperativeHandle(
+    handleRef,
+    () => ({
+      hayCambios: hayCambios || horarioSemanalPendiente,
+      guardar: guardarExcepciones,
+      parcheConfigPendiente: () =>
+        horarioSemanalPendiente ? parcheHorarioSemanal() : {},
+    }),
+    [hayCambios, horarioSemanalPendiente, parcheHorarioSemanal, guardarExcepciones],
+  );
 
   async function aplicar() {
     if (!cerrado && (!inicio || !fin)) {
@@ -352,34 +431,8 @@ export function HorariosAperturaPanel({
           : validaOrdenComidaCena(otra, ventanaEdicion);
       };
 
-      // Caso semanal: escribe en la config por día de la semana elegido
-      if (ambito === "dia_semana") {
-        const err = validarEnDia(diaSemanaSel);
-        if (err) {
-          toast.error(err);
-          setAplicando(false);
-          return;
-        }
-        // Solo se escribe el día elegido. El "cerrado" general NUNCA se toca
-        // aquí: cerrar los lunes es cerrar los lunes, no cerrar el turno entero.
-        // La ventana general (horas) sí se refresca cuando el día abre, porque
-        // es la que alimenta los slots de 15 min comunes a todos los días.
-        const generalInicioKey = turno === "comida" ? "generalInicioComida" : "generalInicioCena";
-        const generalFinKey    = turno === "comida" ? "generalFinComida"    : "generalFinCena";
-        const parche: Record<string, unknown> = {
-          [`${diaSemanaSel}_inicio_${turno}`]:  cerrado ? null : inicio,
-          [`${diaSemanaSel}_fin_${turno}`]:     cerrado ? null : fin,
-          [`${diaSemanaSel}_cerrado_${turno}`]: cerrado,
-          ...(cerrado ? {} : { [generalInicioKey]: inicio, [generalFinKey]: fin }),
-        };
-        onChange(parche as Partial<EmpresaReservasConfig>);
-        toast.success(
-          `Horario de los ${DIAS_LABELS[diaSemanaSel]} listo. Pulsa Guardar para aplicarlo.`,
-        );
-        setAplicando(false);
-        return;
-      }
-
+      // Solo llega aquí desde rango o días específicos: el patrón semanal ya no
+      // tiene botón, lo vuelca el Guardar de la cabecera.
       // Casos que crean excepción por rango/lista
       let payload: Parameters<typeof createHorarioExcepcion>[0];
       if (ambito === "rango") {
@@ -600,19 +653,59 @@ export function HorariosAperturaPanel({
       {/* Sub-controles según ámbito */}
       {ambito === "dia_semana" && (
         <div className="space-y-1.5">
-          <Label className="text-xs">Día de la semana</Label>
-          <Select value={diaSemanaSel} onValueChange={(v) => setDiaSemanaSel(v as DiaSemanaKey)}>
-            <SelectTrigger className="h-8 w-40 text-xs">
-              <SelectValue placeholder="Elige día" />
-            </SelectTrigger>
-            <SelectContent>
-              {DIAS_ORDEN.map((d) => (
-                <SelectItem key={d} value={d} className="text-xs">
-                  {DIAS_LABELS[d].charAt(0).toUpperCase() + DIAS_LABELS[d].slice(1)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <Label className="text-xs">
+            Días de la semana{" "}
+            <span className="font-normal text-muted-foreground">
+              | marca todos los que quieras
+            </span>
+          </Label>
+          <div className="flex flex-wrap items-center gap-1.5">
+            <div className="inline-flex rounded-md border bg-background p-0.5">
+              {DIAS_ORDEN.map((d) => {
+                const activo = diasSemanaSel.includes(d);
+                return (
+                  <button
+                    key={d}
+                    type="button"
+                    aria-pressed={activo}
+                    onClick={() =>
+                      setDiasSemanaSel((prev) =>
+                        prev.includes(d) ? prev.filter((x) => x !== d) : [...prev, d],
+                      )
+                    }
+                    className={cn(
+                      "px-3 h-8 rounded text-xs font-medium capitalize transition-colors",
+                      activo
+                        ? "bg-primary text-primary-foreground"
+                        : "text-muted-foreground hover:text-foreground",
+                    )}
+                  >
+                    {DIAS_LABELS[d].slice(0, 3)}
+                  </button>
+                );
+              })}
+            </div>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="h-8 text-xs"
+              onClick={() =>
+                setDiasSemanaSel((prev) =>
+                  prev.length === DIAS_ORDEN.length ? [] : [...DIAS_ORDEN],
+                )
+              }
+            >
+              {diasSemanaSel.length === DIAS_ORDEN.length ? "Ninguno" : "Todos"}
+            </Button>
+          </div>
+          {/* El horario que se ve arriba es el del primer día marcado. Si los
+              días elegidos hoy tienen horarios distintos, aplicar los iguala. */}
+          <p className="text-[10px] text-muted-foreground">
+            {diasSemanaSel.length === 0
+              ? "Marca al menos un día para poder aplicar el horario."
+              : `Se aplicará el mismo horario a ${listaDias(diasSemanaSel)}.`}
+          </p>
         </div>
       )}
 
@@ -691,17 +784,20 @@ export function HorariosAperturaPanel({
         </div>
       )}
 
+      {/* El patrón semanal no tiene botón propio: lo que se ve arriba ya queda
+          pendiente y lo escribe el Guardar de la cabecera. Rango y días
+          específicos sí lo necesitan: crean una excepción en la lista de abajo. */}
       <div className="flex items-center justify-end gap-3">
-        {/* Todo queda pendiente del Guardar de la cabecera, también las
-            excepciones: se ven abajo marcadas como "Sin guardar". */}
         <p className="text-[10px] text-muted-foreground">
           {ambito === "dia_semana"
-            ? "Queda pendiente hasta que pulses Guardar arriba."
+            ? `Solo cambia ${listaDias(diasSemanaSel)}. Pulsa Guardar arriba para aplicarlo.`
             : "Se añade abajo como pendiente; pulsa Guardar arriba para aplicarla."}
         </p>
-        <Button type="button" size="sm" variant="outline" onClick={aplicar} disabled={aplicando}>
-          {aplicando ? "Aplicando…" : ambito === "dia_semana" ? "Aplicar al día" : "Añadir excepción"}
-        </Button>
+        {ambito !== "dia_semana" && (
+          <Button type="button" size="sm" variant="outline" onClick={aplicar} disabled={aplicando}>
+            {aplicando ? "Aplicando…" : "Añadir excepción"}
+          </Button>
+        )}
       </div>
 
       {/* Listado de excepciones activas */}

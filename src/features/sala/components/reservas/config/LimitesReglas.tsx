@@ -79,6 +79,14 @@ export interface PanelPendienteHandle {
   hayCambios: boolean;
   /** Vuelca los cambios. Devuelve false si algo falló. */
   guardar: () => Promise<boolean>;
+  /**
+   * Parche de campos de `empresas_reservas_config` que el panel tiene en
+   * borrador y aún no ha mandado por `onChange`. La pestaña lo fusiona con lo
+   * suyo antes de escribir, porque la config se guarda de una sola vez y antes
+   * que los paneles. Devuelve null si el borrador es inválido (ya ha avisado).
+   * Los paneles que no editan config no lo implementan.
+   */
+  parcheConfigPendiente?: () => Partial<EmpresaReservasConfig> | null;
 }
 
 interface LimitesReglasProps {

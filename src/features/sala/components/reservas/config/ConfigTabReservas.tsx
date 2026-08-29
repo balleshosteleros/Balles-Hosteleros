@@ -96,12 +96,24 @@ export function ConfigTabReservas({ onDirtyChange }: ConfigTabReservasProps = {}
     if (!hayCambios) return;
     setGuardando(true);
     try {
-      if (hayCamposPendientes) {
-        const res = await upsertReservasConfig(pendiente);
+      // Algún panel puede tener campos de config en borrador (p. ej. la hora de
+      // apertura que se ve arriba sin haber pulsado "Aplicar al día"). Se piden
+      // ANTES de escribir: la config va en un solo upsert, así que lo que
+      // llegase después se perdería.
+      let parche = { ...pendiente };
+      for (const panel of paneles) {
+        const suyo = panel.current?.parcheConfigPendiente?.();
+        if (suyo === null) return; // borrador inválido; el panel ya ha avisado
+        if (suyo) parche = { ...parche, ...suyo };
+      }
+
+      if (Object.keys(parche).length > 0) {
+        const res = await upsertReservasConfig(parche);
         if (!res.ok) {
           toast.error(res.error ?? "No se pudo guardar");
           return;
         }
+        setConfig((prev) => (prev ? ({ ...prev, ...parche } as EmpresaReservasConfig) : prev));
         setPendiente({});
       }
       // Cada panel vuelca lo suyo. Si uno falla, se para: ya ha avisado del
