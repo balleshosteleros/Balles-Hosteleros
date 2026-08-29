@@ -187,22 +187,30 @@ export async function listHistorialLlamadas(
 
     const rows = (data ?? []).map(rowToLlamada);
 
-    // Enriquecer con la contraparte (mismo empresa → profiles legible por RLS).
+    // Enriquecer con la contraparte. La RLS de `usuarios` solo deja ver la ficha
+    // propia, asi que con el cliente normal no se encontraba a nadie y todas las
+    // llamadas salian como "Empleado". Se resuelve con admin, pidiendo unicamente
+    // nombre y avatar de las personas con las que uno ha hablado.
     const contraparteIds = Array.from(
       new Set(rows.map((l) => (l.callerId === userId ? l.calleeId : l.callerId))),
     );
     const nombres = new Map<string, { nombre: string; avatar: string | null }>();
     if (contraparteIds.length > 0) {
-      const { data: profs } = await supabase
-        .from("usuarios")
-        .select("user_id, nombre, apellidos, avatar_url")
-        .in("user_id", contraparteIds);
-      for (const p of (profs ?? []) as Row[]) {
-        const nombre = `${(p.nombre as string) ?? ""} ${(p.apellidos as string) ?? ""}`.trim();
-        nombres.set(p.user_id as string, {
-          nombre: nombre || "Empleado",
-          avatar: (p.avatar_url as string | null) ?? null,
-        });
+      try {
+        const admin = createAdminClient();
+        const { data: profs } = await admin
+          .from("usuarios")
+          .select("user_id, nombre, apellidos, avatar_url")
+          .in("user_id", contraparteIds);
+        for (const p of (profs ?? []) as Row[]) {
+          const nombre = `${(p.nombre as string) ?? ""} ${(p.apellidos as string) ?? ""}`.trim();
+          nombres.set(p.user_id as string, {
+            nombre: nombre || "Empleado",
+            avatar: (p.avatar_url as string | null) ?? null,
+          });
+        }
+      } catch {
+        // Sin admin configurado el historial se ve igual, solo sin nombres.
       }
     }
 
@@ -311,6 +319,22 @@ export async function listLlamables(): Promise<{
       .or(filtro);
     if (error) throw error;
 
+    // La foto puede estar en la ficha de empleado o en la cuenta de usuario:
+    // quien se la puso desde su perfil la tiene solo en `usuarios`, y sin esto
+    // el directorio le mostraba las iniciales aunque tuviera foto.
+    const userIds = [...new Set(((data ?? []) as Row[]).map((r) => r.user_id as string | null).filter(Boolean) as string[])];
+    const avatarUsuario = new Map<string, string>();
+    if (userIds.length > 0) {
+      const { data: usuarios } = await admin
+        .from("usuarios")
+        .select("id, avatar_url")
+        .in("id", userIds);
+      for (const u of (usuarios ?? []) as Row[]) {
+        const url = u.avatar_url as string | null;
+        if (url) avatarUsuario.set(u.id as string, url);
+      }
+    }
+
     const vistos = new Set<string>();
     const llamables: EmpleadoLlamable[] = [];
     for (const r of (data ?? []) as Row[]) {
@@ -329,7 +353,7 @@ export async function listLlamables(): Promise<{
         nombre,
         apellidos,
         nombreCompleto: `${nombre} ${apellidos ?? ""}`.trim() || "Empleado",
-        avatarUrl: (r.avatar_url as string | null) ?? null,
+        avatarUrl: (r.avatar_url as string | null) || avatarUsuario.get(uid) || null,
         puesto: (r.puesto as string | null) ?? null,
         departamento: dep?.nombre ?? null,
       });
