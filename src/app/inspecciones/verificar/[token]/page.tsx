@@ -15,10 +15,6 @@ import type { EmpresaTheme } from "@/features/calidad/inspecciones/types";
 
 export const dynamic = "force-dynamic";
 
-export const metadata = {
-  title: "Firmar inspección · Balles Hosteleros",
-};
-
 interface Props {
   params: Promise<{ token: string }>;
 }
@@ -163,6 +159,9 @@ export async function generateMetadata({ params }: Props) {
   const { token } = await params;
   const empresa = await fetchEmpresaThemeFromQrToken(token);
   return {
+    // El título vivía en un `export const metadata` aparte; Next.js no admite
+    // los dos a la vez, así que va aquí dentro.
+    title: "Firmar inspección · Balles Hosteleros",
     robots: { index: false, follow: false },
     icons: await iconsDeEmpresa({ id: empresa?.id ?? "" }),
   };
