@@ -18,6 +18,13 @@ export interface AccesoCredencial {
    */
   roles?: string[];
   /**
+   * Se entra con la cuenta de Google, no con usuario y contraseña propios
+   * (ej. Gamma: se accede con balleshosteleros@gmail.com). Cuando está activo
+   * solo se guarda el correo: no hay contraseña que pedir ni que revelar, y la
+   * ficha deja de parecer incompleta. Regla de Iván (2026-08-29).
+   */
+  accesoGoogle?: boolean;
+  /**
    * Solo en datos que viajan al cliente: indica si el acceso TIENE contraseña
    * guardada (para pintar ••••). La contraseña real no viaja; se obtiene con
    * `revelarAccesoApp` tras verificación. No se persiste en BD.
@@ -52,10 +59,17 @@ export interface DatoExtra {
 export const MAX_ACCESOS_POR_APP = 50;
 
 /**
- * Máximo de datos extra (PIN, PUK, código de empresa…) por acceso.
- * Cada acceso lleva ya usuario y contraseña; estos 5 son datos adicionales.
+ * Máximo de datos extra por acceso. Cada acceso lleva ya usuario y contraseña;
+ * estos son los adicionales.
+ *
+ * Son DOS y no más por decisión de Iván (2026-08-29): una credencial es un
+ * usuario y una contraseña, y como mucho el par PIN + PUK de un móvil o SIM
+ * —que van juntos pero deben poder copiarse por separado—. Lo que no encaje
+ * en ese molde es otra credencial distinta, no un campo más: por eso el código
+ * de desbloqueo del móvil de logística se separó en su propia ficha, y las
+ * claves de API de Adyen dejaron de vivir aquí.
  */
-export const MAX_DATOS_EXTRA_POR_ACCESO = 5;
+export const MAX_DATOS_EXTRA_POR_ACCESO = 2;
 
 export interface AccesoApp {
   id: string;

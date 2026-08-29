@@ -22,7 +22,19 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Plus, Pencil, Eye, Copy, Search, ChevronDown, X, ArrowUpRight } from "lucide-react";
+import { Plus, Pencil, Eye, Copy, Search, ChevronDown, X, ArrowUpRight, Check } from "lucide-react";
+
+/** Logotipo de Google en sus cuatro colores (lucide no lo trae). */
+function GoogleIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" aria-hidden="true">
+      <path fill="#4285F4" d="M23.5 12.3c0-.9-.1-1.5-.2-2.2H12v4.1h6.6c-.1 1.1-.9 2.8-2.5 3.9l3.8 3c2.3-2.1 3.6-5.2 3.6-8.8z" />
+      <path fill="#34A853" d="M12 24c3.2 0 6-1.1 8-2.9l-3.8-3c-1 .7-2.4 1.2-4.2 1.2-3.2 0-5.9-2.1-6.8-5l-4 3.1C3.2 21.3 7.3 24 12 24z" />
+      <path fill="#FBBC05" d="M5.2 14.3c-.2-.7-.4-1.5-.4-2.3s.1-1.6.4-2.3l-4-3.1C.4 8.2 0 10 0 12s.4 3.8 1.2 5.4l4-3.1z" />
+      <path fill="#EA4335" d="M12 4.8c2.3 0 3.8 1 4.7 1.8l3.4-3.3C18 1.2 15.2 0 12 0 7.3 0 3.2 2.7 1.2 6.6l4 3.1C6.1 6.8 8.8 4.8 12 4.8z" />
+    </svg>
+  );
+}
 import {
   type AccesoApp,
   type AccesoCredencial,
@@ -48,6 +60,7 @@ const accesoVacio: AccesoCredencial = {
   etiqueta: "",
   usuario: "",
   contrasena: "",
+  accesoGoogle: false,
   roles: [],
   datosExtra: [],
 };
@@ -466,11 +479,20 @@ function AccesosTabInner() {
                       </span>
                     </div>
                   )}
-                  <PasswordAdmin
-                    appId={app.id}
-                    indice={app.accesos[0]?.indiceReal ?? 0}
-                    tiene={app.accesos[0]?.tieneContrasena ?? false}
-                  />
+                  {app.accesos[0]?.accesoGoogle ? (
+                    // Se entra con la cuenta de Google: no hay contraseña que
+                    // revelar, así que se dice en vez de pintar un candado vacío.
+                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                      <GoogleIcon />
+                      Acceso con Google
+                    </div>
+                  ) : (
+                    <PasswordAdmin
+                      appId={app.id}
+                      indice={app.accesos[0]?.indiceReal ?? 0}
+                      tiene={app.accesos[0]?.tieneContrasena ?? false}
+                    />
+                  )}
                   {(app.accesos[0]?.datosExtra ?? [])
                     .filter((d) => d.tiene)
                     .map((d) => (
@@ -584,19 +606,46 @@ function AccesosTabInner() {
                       <Input
                         value={acc.usuario}
                         onChange={(e) => updateAcceso(idx, { usuario: e.target.value })}
-                        placeholder="usuario@empresa.es"
+                        placeholder={acc.accesoGoogle ? "correo@gmail.com" : "usuario@empresa.es"}
                         autoComplete="off"
                         className="h-8 text-xs"
                       />
-                      <Input
-                        value={acc.contrasena}
-                        onChange={(e) => updateAcceso(idx, { contrasena: e.target.value })}
-                        placeholder="Dejar vacío = no cambiar"
-                        type="password"
-                        autoComplete="new-password"
-                        className="h-8 text-xs"
-                      />
+                      {acc.accesoGoogle ? (
+                        <div className="flex h-8 items-center rounded-md border border-dashed border-input px-2.5 text-xs text-muted-foreground">
+                          Sin contraseña
+                        </div>
+                      ) : (
+                        <Input
+                          value={acc.contrasena}
+                          onChange={(e) => updateAcceso(idx, { contrasena: e.target.value })}
+                          placeholder="Dejar vacío = no cambiar"
+                          type="password"
+                          autoComplete="new-password"
+                          className="h-8 text-xs"
+                        />
+                      )}
                     </div>
+                    {/* Se entra con la cuenta de Google: solo el correo, sin contraseña. */}
+                    <button
+                      type="button"
+                      onClick={() =>
+                        updateAcceso(idx, {
+                          accesoGoogle: !acc.accesoGoogle,
+                          // Al activarlo se limpia lo que hubiera escrito: con Google
+                          // no hay contraseña. El servidor borra también la guardada.
+                          ...(acc.accesoGoogle ? {} : { contrasena: "" }),
+                        })
+                      }
+                      className={`flex w-fit items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs transition-colors ${
+                        acc.accesoGoogle
+                          ? "border-primary bg-primary/10 text-primary"
+                          : "border-input text-muted-foreground hover:bg-accent/30"
+                      }`}
+                    >
+                      <GoogleIcon />
+                      Acceso con Google
+                      {acc.accesoGoogle && <Check className="h-3 w-3" />}
+                    </button>
                     {/* Roles que pueden ver este acceso */}
                     <Popover
                       open={rolesPopoverIdx === idx}

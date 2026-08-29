@@ -124,19 +124,32 @@ function normalizarDatosExtra(acc: unknown): DatoExtraInterno[] {
     .slice(0, MAX_DATOS_EXTRA_POR_ACCESO);
 }
 
-/** Normaliza la lista de accesos: filtra vacíos y aplica el tope. */
+/**
+ * Normaliza la lista de accesos: filtra vacíos y aplica el tope.
+ *
+ * «Acceso con Google» manda: si está marcado no hay contraseña ni datos extra
+ * que guardar —se entra con la cuenta de Google y solo importa el correo—, así
+ * que se vacían aquí, en servidor. Si no, cambiar el interruptor en una ficha
+ * que ya tenía contraseña la dejaría cifrada y colgando en BD.
+ */
 function normalizarAccesos(accesos?: AccesoCredencial[] | null): AccesoCredencial[] {
   const list = (accesos ?? [])
-    .map((a) => ({
-      etiqueta: (a.etiqueta ?? "").trim(),
-      usuario: (a.usuario ?? "").trim(),
-      contrasena: a.contrasena ?? "",
-      roles: Array.isArray(a.roles)
-        ? a.roles.map((r) => (r ?? "").trim()).filter(Boolean)
-        : [],
-      datosExtra: normalizarDatosExtra(a),
-    }))
-    .filter((a) => a.etiqueta || a.usuario || a.contrasena || a.datosExtra.length > 0);
+    .map((a) => {
+      const accesoGoogle = a.accesoGoogle === true;
+      return {
+        etiqueta: (a.etiqueta ?? "").trim(),
+        usuario: (a.usuario ?? "").trim(),
+        contrasena: accesoGoogle ? "" : (a.contrasena ?? ""),
+        accesoGoogle,
+        roles: Array.isArray(a.roles)
+          ? a.roles.map((r) => (r ?? "").trim()).filter(Boolean)
+          : [],
+        datosExtra: accesoGoogle ? [] : normalizarDatosExtra(a),
+      };
+    })
+    .filter(
+      (a) => a.etiqueta || a.usuario || a.contrasena || a.accesoGoogle || a.datosExtra.length > 0,
+    );
   return list.slice(0, MAX_ACCESOS_POR_APP);
 }
 
@@ -211,7 +224,12 @@ function appToRow(
 
     const entrante = acc.contrasena ?? "";
     let contrasena: string;
-    if (entrante && !esCifrado(entrante)) {
+    if (acc.accesoGoogle) {
+      // Acceso con Google: no hay contraseña. Y si la ficha tenía una de antes,
+      // se BORRA — preservarla dejaría un secreto cifrado colgando en BD que ya
+      // nadie puede ver ni usar.
+      contrasena = "";
+    } else if (entrante && !esCifrado(entrante)) {
       // El cliente mandó una contraseña nueva en claro → cifrar.
       contrasena = encryptOptional(entrante);
     } else if (esCifrado(entrante)) {
@@ -223,7 +241,8 @@ function appToRow(
     }
 
     // Datos extra previos de este acceso (forma BD: {nombre, valor_cifrado}).
-    const previosExtra = normalizarDatosExtra(previo);
+    // Con «acceso con Google» no hay ninguno: `normalizarAccesos` ya los vació.
+    const previosExtra = acc.accesoGoogle ? [] : normalizarDatosExtra(previo);
     const datosExtra = normalizarDatosExtra(acc).map((d) => {
       const valor = d.valor ?? "";
       let valorCifrado: string;
@@ -243,6 +262,7 @@ function appToRow(
       etiqueta: acc.etiqueta ?? "",
       usuario: acc.usuario ?? "",
       contrasena,
+      accesoGoogle: acc.accesoGoogle === true,
       roles: acc.roles ?? [],
       datos_extra: datosExtra,
     };

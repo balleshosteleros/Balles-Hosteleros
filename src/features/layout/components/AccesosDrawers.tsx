@@ -508,8 +508,12 @@ export function AccesosDrawer({
           const hay = rows.some((app) =>
             app.estado === "Activo" &&
             app.accesos.some((acc) => {
+              // «Acceso con Google» no tiene secreto que revelar, pero sí un
+              // correo con el que entrar: cuenta como credencial mostrable.
               const tieneSecreto =
-                acc.tieneContrasena || (acc.datosExtra ?? []).some((d) => d.tiene);
+                acc.accesoGoogle ||
+                acc.tieneContrasena ||
+                (acc.datosExtra ?? []).some((d) => d.tiene);
               if (!tieneSecreto) return false;
               if (soyDirector) return true;
               const r = (acc.roles ?? []).map((x) => x.trim().toLowerCase());
@@ -553,7 +557,9 @@ export function AccesosDrawer({
             .map((acc, i) => ({ acc, indiceOriginal: acc.indiceReal ?? i }))
             .filter(
               ({ acc }) =>
-                (acc.tieneContrasena || (acc.datosExtra ?? []).some((d) => d.tiene)) &&
+                (acc.accesoGoogle ||
+                  acc.tieneContrasena ||
+                  (acc.datosExtra ?? []).some((d) => d.tiene)) &&
                 puedoVerAcceso(acc.roles),
             ),
         }))
@@ -678,11 +684,21 @@ export function AccesosDrawer({
                               <span className="min-w-0 break-all text-right font-mono">{acc.usuario}</span>
                             </div>
                           )}
-                          {acc.tieneContrasena && (
+                          {acc.accesoGoogle ? (
+                            // No hay contraseña: se entra con la cuenta de Google.
                             <div className="flex items-start justify-between gap-3 text-xs">
-                              <span className="shrink-0 text-muted-foreground">Contraseña:</span>
-                              <PasswordCell appId={app.id} indice={indiceOriginal} tiene />
+                              <span className="shrink-0 text-muted-foreground">Entrar:</span>
+                              <span className="min-w-0 text-right text-muted-foreground">
+                                con la cuenta de Google
+                              </span>
                             </div>
+                          ) : (
+                            acc.tieneContrasena && (
+                              <div className="flex items-start justify-between gap-3 text-xs">
+                                <span className="shrink-0 text-muted-foreground">Contraseña:</span>
+                                <PasswordCell appId={app.id} indice={indiceOriginal} tiene />
+                              </div>
+                            )
                           )}
                           {datosExtra.map((d) => (
                             <div
