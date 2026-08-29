@@ -262,6 +262,15 @@ export interface InstagramDatos {
   destacados?: Array<{ nombre: string; imagen_url?: string }>;
   /** Fotos del feed dentro de la maqueta de móvil. Vacío = usa la galería. */
   feed?: Array<{ url: string; alt: string }>;
+  /**
+   * Captura REAL del perfil, tal cual se ve en el teléfono.
+   *
+   * Cuando está, la pantalla del móvil la muestra entera y se ignoran avatar,
+   * contadores, destacados y feed: recomponer el perfil a mano nunca acaba de
+   * parecerse al de verdad —los números se quedan viejos y las fotos no son las
+   * que el cliente ve al entrar— y aquí lo que vende es que sea auténtico.
+   */
+  captura_url?: string;
 }
 
 export interface BrandingSnapshot {

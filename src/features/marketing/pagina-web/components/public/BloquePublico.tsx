@@ -154,7 +154,7 @@ function InstagramPublico({
 }) {
   const {
     usuario, titulo, frase, seguidores, publicaciones, verificado,
-    avatar_url, cta_label, feed, web, destacados,
+    avatar_url, cta_label, feed, web, destacados, captura_url,
   } = bloque.datos;
   const handle = usuario.replace(/^@/, "");
   const href = `https://www.instagram.com/${handle}`;
@@ -196,6 +196,29 @@ function InstagramPublico({
 
           {/* La pantalla: aquí dentro va el perfil */}
           <div className="absolute left-[33%] top-[19%] h-[58%] w-[37%] overflow-hidden bg-black">
+            {captura_url ? (
+              /* Captura REAL del perfil dentro de la pantalla. Se muestra tal
+                 cual, sin recomponer nada: los seguidores y la cuadrícula son
+                 los de verdad, y no se quedan viejos al cambiar el perfil.
+                 `object-top` ancla arriba para que se lea el @usuario aunque la
+                 captura sea más larga que la pantalla. */
+              <a
+                href={href}
+                target="_blank"
+                rel="noreferrer noopener"
+                className="block h-full w-full"
+                aria-label={`Perfil de @${handle} en Instagram`}
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={captura_url}
+                  alt={`Perfil de @${handle} en Instagram`}
+                  loading="lazy"
+                  decoding="async"
+                  className="h-full w-full object-cover object-top"
+                />
+              </a>
+            ) : (
             <div className="absolute inset-0 origin-top-left scale-[0.55] [height:181.8%] [width:181.8%]">
               {/* Hora e iconos de estado. La muesca NO se dibuja: ya viene en
                   la foto del teléfono. */}
@@ -379,6 +402,7 @@ function InstagramPublico({
                 </div>
               </div>
             </div>
+            )}
           </div>
         </div>
 
