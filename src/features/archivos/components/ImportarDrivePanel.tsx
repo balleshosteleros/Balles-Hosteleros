@@ -451,8 +451,7 @@ export function ImportarDrivePanel() {
                 </div>
                 <p className="text-muted-foreground">
                   {h.copiados + h.omitidos} listos ({tamano(h.copiadosBytes)})
-                  {h.omitidos > 0 &&
-                    ` · ${h.copiados} en esta tanda, ${h.omitidos} de antes`}
+                  {h.omitidos > 0 && ` · ${h.omitidos} ya copiados antes`}
                   {h.fallidos > 0 && ` · ${h.fallidos} fallidos`}
                 </p>
                 {h.errores.length > 0 && (
