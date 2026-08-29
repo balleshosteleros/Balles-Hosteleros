@@ -602,6 +602,28 @@ export async function guardarTc1Gestoria(
  */
 const CUADRE_TOLERANCIA_EUR = 0;
 
+/** Cuadre de UN mes cotizado: sus recibos contra las nóminas de ESE mes. */
+export interface CuadreMesCotizado {
+  /** Mes que se cotiza (AAAA-MM). */
+  periodo: string;
+  /** Cotizaciones (trabajador + empresa) de las nóminas de ese mes. */
+  totalNominas: number;
+  /** Suma de los líquidos de sus recibos, si se han podido leer. */
+  totalTc1: number | null;
+  diferencia: number | null;
+  cuadra: boolean;
+  /** Nóminas de ese mes que hay en el sistema. */
+  numNominas: number;
+  numTc1: number;
+  tc1SinImporte: number;
+  /**
+   * No hay NINGUNA nómina de ese mes: no es que no cuadre, es que todavía no hay
+   * contra qué comparar. Pasa al recibir el TC1 de un mes cuyas nóminas aún no se
+   * han subido, que es lo normal si la entrega va con retraso.
+   */
+  sinNominas: boolean;
+}
+
 export interface CuadreTc1 {
   /** Total de cotizaciones sumado de las nóminas (trabajador + empresa). */
   totalNominas: number;
@@ -616,51 +638,111 @@ export interface CuadreTc1 {
   numTc1: number;
   /** Alguno de los TC1 se guardó sin líquido legible: el cuadre no es fiable. */
   tc1SinImporte: number;
+  /**
+   * Desglose por MES COTIZADO. Es el cuadre que de verdad importa: cada recibo se
+   * compara con las nóminas del mes que cotiza, no con las de la entrega.
+   */
+  porMesCotizado: CuadreMesCotizado[];
+  /** Meses cotizados cuyos recibos están a la espera de sus nóminas. */
+  mesesSinNominas: string[];
 }
 
 /**
- * Compara el TC1 con las nóminas del mes. Son el MISMO dinero expresado de dos
- * formas: el TC1 agrupa por concepto de cotización, y las nóminas lo reparten por
- * trabajador. Así que la suma de (SS trabajador + SS empresa) de todas las
- * nóminas debe coincidir con el líquido del TC1.
+ * Compara los TC1 con las nóminas del mes que COTIZAN. Son el MISMO dinero
+ * expresado de dos formas: el TC1 agrupa por concepto de cotización, y las
+ * nóminas lo reparten por trabajador, así que la suma de (SS trabajador + SS
+ * empresa) debe coincidir con el líquido del recibo.
+ *
+ * OJO con el mes: la Seguridad Social se liquida a mes VENCIDO, así que en la
+ * entrega de agosto llegan las nóminas de agosto y el TC1 de JULIO. Comparar ese
+ * recibo con las nóminas de agosto da un descuadre falso: son meses distintos.
+ * Por eso cada recibo se cuadra contra las nóminas de SU mes cotizado, y la
+ * entrega puede llevar recibos de varios meses (una complementaria atrasada).
  */
 export async function cuadrarTc1ConNominas(
   admin: SupabaseClient,
   empresaId: string,
   periodo: string,
 ): Promise<CuadreTc1> {
-  const { data: filas } = await admin
-    .from("rrhh_pagos_nominas")
-    .select("ss_empleado, ss_empresa")
-    .eq("empresa_id", empresaId)
-    .eq("periodo", periodo)
-    .neq("revision_estado", "denegada");
-
-  const totalNominas =
-    Math.round(
-      (filas ?? []).reduce(
-        (a, r) => a + Number(r.ss_empleado ?? 0) + Number(r.ss_empresa ?? 0),
-        0,
-      ) * 100,
-    ) / 100;
-
-  // TODOS los TC1 del mes: la ordinaria y las complementarias son cargos
-  // distintos que la empresa ingresa por separado, así que el total del mes es la
-  // suma de sus líquidos.
+  // TODOS los TC1 de la entrega: la ordinaria y las complementarias son cargos
+  // distintos que la empresa ingresa por separado.
   const { data: tc1s } = await admin
     .from("rrhh_nominas_tc1")
-    .select("importe, trabajadores")
+    .select("importe, trabajadores, periodo_cotizacion")
     .eq("empresa_id", empresaId)
     .eq("periodo", periodo);
 
   const lista = tc1s ?? [];
+  // Mes que cotiza cada recibo. Sin dato (histórico antiguo), el anterior al de
+  // la entrega, que es la regla de siempre.
+  const mesDe = (t: { periodo_cotizacion: string | null }): string =>
+    (t.periodo_cotizacion as string | null) ?? mesAnterior(periodo);
+  const mesesCotizados = [...new Set(lista.map(mesDe))].sort();
+
+  // Cotizaciones de las nóminas de TODOS los meses implicados, de una vez.
+  const { data: filasNominas } = await admin
+    .from("rrhh_pagos_nominas")
+    .select("periodo, ss_empleado, ss_empresa")
+    .eq("empresa_id", empresaId)
+    .in("periodo", mesesCotizados.length > 0 ? mesesCotizados : [periodo])
+    .neq("revision_estado", "denegada");
+
+  const ssPorMes = new Map<string, { total: number; n: number }>();
+  for (const f of filasNominas ?? []) {
+    const p = f.periodo as string;
+    const acc = ssPorMes.get(p) ?? { total: 0, n: 0 };
+    acc.total += Number(f.ss_empleado ?? 0) + Number(f.ss_empresa ?? 0);
+    acc.n += 1;
+    ssPorMes.set(p, acc);
+  }
+
+  const porMesCotizado: CuadreMesCotizado[] = mesesCotizados.map((mes) => {
+    const recibos = lista.filter((t) => mesDe(t) === mes);
+    const conImp = recibos.filter((t) => t.importe != null);
+    const tc1Mes =
+      conImp.length > 0
+        ? Math.round(conImp.reduce((a, t) => a + Number(t.importe), 0) * 100) / 100
+        : null;
+    const acc = ssPorMes.get(mes) ?? { total: 0, n: 0 };
+    const nominasMes = Math.round(acc.total * 100) / 100;
+    const dif = tc1Mes != null ? Math.round((tc1Mes - nominasMes) * 100) / 100 : null;
+    // Sin nóminas de ese mes no hay comparación posible: ni cuadra ni descuadra.
+    const sinNominas = acc.n === 0;
+    return {
+      periodo: mes,
+      totalNominas: nominasMes,
+      totalTc1: tc1Mes,
+      diferencia: sinNominas ? null : dif,
+      cuadra:
+        sinNominas ||
+        dif == null ||
+        recibos.length !== conImp.length ||
+        Math.abs(dif) <= CUADRE_TOLERANCIA_EUR,
+      numNominas: acc.n,
+      numTc1: recibos.length,
+      tc1SinImporte: recibos.length - conImp.length,
+      sinNominas,
+    };
+  });
+
   const conImporte = lista.filter((t) => t.importe != null);
   const totalTc1 =
     conImporte.length > 0
       ? Math.round(conImporte.reduce((a, t) => a + Number(t.importe), 0) * 100) / 100
       : null;
+
+  // Totales de cara a la pantalla: se refieren a los meses que SÍ tienen nóminas,
+  // para no restar contra un cero que solo significa "aún no han llegado".
+  const comparables = porMesCotizado.filter((m) => !m.sinNominas);
+  const totalNominas =
+    Math.round(comparables.reduce((a, m) => a + m.totalNominas, 0) * 100) / 100;
+  const totalTc1Comparable = comparables.some((m) => m.totalTc1 != null)
+    ? Math.round(comparables.reduce((a, m) => a + (m.totalTc1 ?? 0), 0) * 100) / 100
+    : null;
   const diferencia =
-    totalTc1 != null ? Math.round((totalTc1 - totalNominas) * 100) / 100 : null;
+    totalTc1Comparable != null
+      ? Math.round((totalTc1Comparable - totalNominas) * 100) / 100
+      : null;
 
   // Trabajadores: se suman los declarados por cada recibo. En un mes con
   // complementaria, la misma persona puede contar en los dos; es orientativo.
@@ -672,17 +754,15 @@ export async function cuadrarTc1ConNominas(
     totalNominas,
     totalTc1,
     diferencia,
-    // Sin importe legible no se puede afirmar que NO cuadre: se da por bueno.
-    // Ojo: con ALGÚN recibo sin importe la suma está incompleta, así que tampoco
-    // se puede afirmar lo contrario; se trata igual que no tener importe.
-    cuadra:
-      diferencia == null ||
-      lista.length !== conImporte.length ||
-      Math.abs(diferencia) <= CUADRE_TOLERANCIA_EUR,
-    numNominas: (filas ?? []).length,
+    // Cuadra solo si cuadran TODOS los meses comparables. Los que esperan sus
+    // nóminas no cuentan como descuadre: no hay nada contra qué contrastar.
+    cuadra: porMesCotizado.every((m) => m.cuadra),
+    numNominas: comparables.reduce((a, m) => a + m.numNominas, 0),
     trabajadoresTc1: trabajadores.length > 0 ? trabajadores.reduce((a, n) => a + n, 0) : null,
     numTc1: lista.length,
     tc1SinImporte: lista.length - conImporte.length,
+    porMesCotizado,
+    mesesSinNominas: porMesCotizado.filter((m) => m.sinNominas).map((m) => m.periodo),
   };
 }
 
@@ -714,6 +794,10 @@ async function cerrarSiEstanLosDosDocumentos(
 
   const cuadre = await cuadrarTc1ConNominas(admin, row.empresa_id, row.periodo);
   if (!cuadre.cuadra) return; // descuadre: abierto para que lo corrijan
+
+  // Un recibo cuyas nóminas todavía no están NO se ha podido comprobar: cerrar
+  // aquí daría por buena una entrega sin contrastar. Se deja abierto.
+  if (cuadre.mesesSinNominas.length > 0) return;
 
   await cerrarTokenNominasGestoria(admin, row.id);
 }

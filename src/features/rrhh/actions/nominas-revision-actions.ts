@@ -807,6 +807,29 @@ export async function borrarTc1Mes(tc1Id: string) {
 // no se admiten más — para cambiarla hay que devolver el mes a la gestoría o
 // reabrirlo, no acumular archivos encima.
 
+/**
+ * Cuadre de los recibos de UN mes cotizado contra las nóminas de ESE mes.
+ *
+ * Los seguros sociales van a mes vencido: en la entrega de agosto llega el TC1 de
+ * julio. Compararlo con las nóminas de agosto da un descuadre falso, así que cada
+ * recibo se contrasta con las nóminas del mes que cotiza.
+ */
+export interface CuadreMesCotizadoUI {
+  /** Mes que se cotiza (AAAA-MM). */
+  periodo: string;
+  /** Cotización (trabajador + empresa) de las nóminas de ese mes. */
+  ssNominas: number;
+  /** Suma de los líquidos de sus recibos, si se leyeron todos. */
+  totalTc1: number | null;
+  numNominas: number;
+  numTc1: number;
+  /** No hay nóminas de ese mes todavía: no hay contra qué comparar. */
+  sinNominas: boolean;
+  /** Hay datos suficientes para afirmar si cuadra o no. */
+  comprobable: boolean;
+  cuadra: boolean;
+}
+
 export interface EstadoSubidaMes {
   periodo: string;
   /** Nº de nóminas ya subidas de ese mes (0 = mes libre). */
@@ -817,6 +840,8 @@ export interface EstadoSubidaMes {
   tc1: Tc1Mes[];
   /** Cotización total (trabajador + empresa) de las nóminas NO denegadas del mes. */
   ssNominas: number;
+  /** Cuadre desglosado por el mes que cotiza cada recibo. */
+  cuadrePorMesCotizado: CuadreMesCotizadoUI[];
 }
 
 /** Nóminas ya subidas y estado de cierre de cada mes indicado (AAAA-MM). */
@@ -871,13 +896,73 @@ export async function getEstadoSubidaMeses(periodos: string[]): Promise<EstadoSu
       (meses ?? []).filter((m) => m.confirmado_en != null).map((m) => m.periodo as string),
     );
 
-    return periodos.map((p) => ({
-      periodo: p,
-      nominas: cuenta.get(p) ?? 0,
-      confirmado: confirmados.has(p),
-      tc1: tc1PorMes.get(p) ?? [],
-      ssNominas: Math.round((ss.get(p) ?? 0) * 100) / 100,
-    }));
+    // Cotización de los meses que COTIZAN los recibos y que no estaban entre los
+    // pedidos: un TC1 de julio entregado en agosto se cuadra contra las nóminas de
+    // JULIO, así que hay que traerlas aunque julio no se esté mirando.
+    const mesesCotizados = new Set<string>();
+    for (const lista of tc1PorMes.values()) {
+      for (const t of lista) {
+        const m = t.periodoCotizacion ?? null;
+        if (m && !ss.has(m)) mesesCotizados.add(m);
+      }
+    }
+    if (mesesCotizados.size > 0) {
+      const { data: extra } = await supabase
+        .from("rrhh_pagos_nominas")
+        .select("periodo, ss_empleado, ss_empresa")
+        .eq("empresa_id", empresaId)
+        .in("periodo", [...mesesCotizados])
+        .neq("revision_estado", "denegada");
+      for (const f of extra ?? []) {
+        const p = f.periodo as string;
+        ss.set(p, (ss.get(p) ?? 0) + Number(f.ss_empleado ?? 0) + Number(f.ss_empresa ?? 0));
+        cuenta.set(p, (cuenta.get(p) ?? 0) + 1);
+      }
+    }
+
+    return periodos.map((p) => {
+      const recibos = tc1PorMes.get(p) ?? [];
+      // Cuadre por MES COTIZADO: cada recibo contra las nóminas del mes que
+      // cotiza, no contra las de la entrega en la que llegó.
+      const porMes = new Map<string, Tc1Mes[]>();
+      for (const t of recibos) {
+        const m = t.periodoCotizacion ?? mesAnterior(p);
+        porMes.set(m, [...(porMes.get(m) ?? []), t]);
+      }
+      const cuadrePorMesCotizado: CuadreMesCotizadoUI[] = [...porMes.entries()]
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([mes, lista]) => {
+          const conImporte = lista.filter((t) => t.importe != null);
+          const totalTc1 =
+            conImporte.length > 0
+              ? Math.round(conImporte.reduce((a, t) => a + (t.importe ?? 0), 0) * 100) / 100
+              : null;
+          const ssMes = Math.round((ss.get(mes) ?? 0) * 100) / 100;
+          const numNominas = cuenta.get(mes) ?? 0;
+          // Sin nóminas de ese mes no hay comparación: ni cuadra ni descuadra.
+          const sinNominas = numNominas === 0;
+          const comprobable = !sinNominas && totalTc1 != null && conImporte.length === lista.length;
+          return {
+            periodo: mes,
+            ssNominas: ssMes,
+            totalTc1,
+            numNominas,
+            numTc1: lista.length,
+            sinNominas,
+            comprobable,
+            cuadra: !comprobable || Math.abs((totalTc1 ?? 0) - ssMes) < 0.005,
+          };
+        });
+
+      return {
+        periodo: p,
+        nominas: cuenta.get(p) ?? 0,
+        confirmado: confirmados.has(p),
+        tc1: recibos,
+        ssNominas: Math.round((ss.get(p) ?? 0) * 100) / 100,
+        cuadrePorMesCotizado,
+      };
+    });
   } catch (err) {
     console.error("[rrhh] getEstadoSubidaMeses:", err);
     return [];

@@ -388,11 +388,20 @@ export function PagosView() {
   // Qué tiene ya cada mes ofrecido: nóminas, TC1 y si está cerrado. Es lo que
   // decide qué se puede subir y el cuadre que se enseña en el diálogo.
   const refrescarEstadoSubida = useCallback(async () => {
-    const filas = await getEstadoSubidaMeses(mesesSubida);
+    // El mes que se está viendo entra siempre: de él sale el cuadre de la tarjeta
+    // principal, que se pinta aunque no se haya abierto el diálogo de subida.
+    const meses = mesesSubida.includes(periodo) ? mesesSubida : [periodo, ...mesesSubida];
+    const filas = await getEstadoSubidaMeses(meses);
     const mapa: Record<string, EstadoSubidaMes> = {};
     for (const f of filas) mapa[f.periodo] = f;
     setEstadoSubidaMeses(mapa);
-  }, [mesesSubida]);
+  }, [mesesSubida, periodo]);
+
+  // La tarjeta de cuadre necesita el estado del mes visto desde el principio, no
+  // solo al abrir el diálogo de subida.
+  useEffect(() => {
+    void refrescarEstadoSubida();
+  }, [refrescarEstadoSubida]);
 
   // Al abrir el diálogo se propone el mes que se está viendo y se consulta el
   // estado de todos los meses ofrecidos.
@@ -421,11 +430,26 @@ export function PagosView() {
     tc1ConImporte.length > 0
       ? Math.round(tc1ConImporte.reduce((a, t) => a + (t.importe ?? 0), 0) * 100) / 100
       : null;
+  // El cuadre se hace contra las nóminas del mes que COTIZAN los recibos, no
+  // contra las del mes que se está viendo: los seguros sociales van a mes
+  // vencido, así que con las nóminas de agosto llega el TC1 de julio y
+  // compararlos entre sí daría un descuadre que no existe.
+  const cuadrePorMesVisto = estadoSubidaMeses[periodo]?.cuadrePorMesCotizado ?? [];
+  const mesesVistoSinNominas = cuadrePorMesVisto.filter((c) => c.sinNominas);
   // Al céntimo: no se admite holgura, igual que en el cuadre del servidor. Si
   // algún recibo se guardó sin líquido legible, el total está INCOMPLETO y no se
   // puede afirmar que cuadre: se trata como "no comprobable", no como correcto.
-  const tc1Comprobable = hayTc1 && totalTc1 != null && tc1SinImporte === 0;
-  const cuadraTc1 = !tc1Comprobable || Math.abs(totalTc1! - ssNominasMes) < 0.005;
+  const tc1Comprobable = cuadrePorMesVisto.some((c) => c.comprobable);
+  const cuadraTc1 = cuadrePorMesVisto.every((c) => c.cuadra);
+  // Cotización de los meses cotizados que sí se han podido contrastar: es lo que
+  // se enseña enfrente del total de los recibos.
+  const ssCotizadaComparable =
+    Math.round(
+      cuadrePorMesVisto.filter((c) => !c.sinNominas).reduce((a, c) => a + c.ssNominas, 0) * 100,
+    ) / 100;
+  // Los meses que cotizan los recibos del mes visto, para nombrarlos en pantalla.
+  const mesesCotizadosVistos = cuadrePorMesVisto.map((c) => c.periodo);
+  const etiquetaMesesCotizados = mesesCotizadosVistos.map(nombreMesLargo).join(" y ");
 
   const mesSubidaLabel = useMemo(() => nombreMesLargo(mesSubida), [mesSubida]);
   const estadoMesSubida = estadoSubidaMeses[mesSubida];
@@ -451,19 +475,10 @@ export function PagosView() {
   // está viendo en la tabla.
   const tc1Subida = estadoMesSubida?.tc1 ?? [];
   const hayTc1Subida = tc1Subida.length > 0;
-  const tc1SubidaConImporte = tc1Subida.filter((t) => t.importe != null);
-  const tc1SubidaSinImporte = tc1Subida.length - tc1SubidaConImporte.length;
-  const totalTc1Subida =
-    tc1SubidaConImporte.length > 0
-      ? Math.round(tc1SubidaConImporte.reduce((a, t) => a + (t.importe ?? 0), 0) * 100) / 100
-      : null;
-  const ssNominasSubida = estadoMesSubida?.ssNominas ?? 0;
-  // Mismo criterio que arriba: con algún recibo sin importe legible el total está
-  // incompleto y el cuadre no es afirmable.
-  const tc1SubidaComprobable =
-    hayTc1Subida && totalTc1Subida != null && tc1SubidaSinImporte === 0;
-  const cuadraTc1Subida =
-    !tc1SubidaComprobable || Math.abs(totalTc1Subida! - ssNominasSubida) < 0.005;
+  // Cuadre por MES COTIZADO: cada recibo contra las nóminas del mes que cotiza,
+  // que con los seguros sociales a mes vencido NO es el de la entrega. Es el
+  // desglose que se pinta; no hay un total único que tenga sentido enseñar.
+  const cuadrePorMes = estadoMesSubida?.cuadrePorMesCotizado ?? [];
   // El mes elegido YA tiene entrega: con un solo documento subido basta para no
   // admitir más. Se avisa en pantalla y se desactiva el botón de adjuntar.
   const mesSubidaYaTieneNominas = (estadoMesSubida?.nominas ?? 0) > 0;
@@ -1462,20 +1477,24 @@ export function PagosView() {
                 <p className="text-sm font-medium">
                   {!hayTc1
                     ? `Falta el TC1 de ${mesLabelNominas}`
-                    : !tc1Comprobable
-                      ? "No se pudo leer el importe de todos los TC1"
-                      : cuadraTc1
-                        ? "Los TC1 cuadran con las nóminas"
-                        : "Los TC1 NO cuadran con las nóminas"}
+                    : mesesVistoSinNominas.length > 0
+                      ? `Faltan las nóminas de ${mesesVistoSinNominas.map((c) => nombreMesLargo(c.periodo)).join(" y ")}`
+                      : !tc1Comprobable
+                        ? "No se pudo leer el importe de todos los TC1"
+                        : cuadraTc1
+                          ? "Los TC1 cuadran con las nóminas"
+                          : "Los TC1 NO cuadran con las nóminas"}
                 </p>
                 <p className="mt-0.5 text-xs text-muted-foreground">
                   {!hayTc1
                     ? "Sin el recibo de cotizaciones no se puede comprobar la Seguridad Social del mes."
-                    : !tc1Comprobable
-                      ? `${tc1SinImporte} de ${estadoMes.tc1.length} recibos sin importe legible: comprueba el cuadre a mano.`
-                      : cuadraTc1
-                        ? `La suma de ${estadoMes.tc1.length} recibo${estadoMes.tc1.length === 1 ? "" : "s"} coincide con la Seguridad Social de ${nominasEnMes} nómina${nominasEnMes === 1 ? "" : "s"}.`
-                        : "Revisa si falta alguna liquidación complementaria (vacaciones) o alguna nómina."}
+                    : mesesVistoSinNominas.length > 0
+                      ? `Estos recibos cotizan ${etiquetaMesesCotizados}, y de ese mes no hay nóminas en el sistema. Súbelas para poder comprobar el cuadre.`
+                      : !tc1Comprobable
+                        ? `${tc1SinImporte} de ${estadoMes.tc1.length} recibos sin importe legible: comprueba el cuadre a mano.`
+                        : cuadraTc1
+                          ? `La suma de ${estadoMes.tc1.length} recibo${estadoMes.tc1.length === 1 ? "" : "s"} coincide con la Seguridad Social de ${etiquetaMesesCotizados}.`
+                          : `Revisa si falta alguna liquidación complementaria (vacaciones) o alguna nómina de ${etiquetaMesesCotizados}.`}
                 </p>
               </div>
             </div>
@@ -1491,9 +1510,15 @@ export function PagosView() {
               </div>
               <div className="text-right">
                 <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
-                  SS de las nóminas
+                  {/* Se nombra el mes COTIZADO: es contra esas nóminas contra las
+                      que cuadra el recibo, no contra las del mes que se ve. */}
+                  SS de las nóminas{etiquetaMesesCotizados ? ` · ${etiquetaMesesCotizados}` : ""}
                 </p>
-                <p className="text-sm font-semibold tabular-nums">{fmt(ssNominasMes)}</p>
+                <p className="text-sm font-semibold tabular-nums">
+                  {mesesVistoSinNominas.length > 0 && ssCotizadaComparable === 0
+                    ? "—"
+                    : fmt(ssCotizadaComparable)}
+                </p>
               </div>
               {tc1Comprobable && !cuadraTc1 && (
                 <div className="text-right">
@@ -1501,7 +1526,7 @@ export function PagosView() {
                     Diferencia
                   </p>
                   <p className="text-sm font-semibold tabular-nums text-destructive">
-                    {fmt(Math.abs((totalTc1 ?? 0) - ssNominasMes))}
+                    {fmt(Math.abs((totalTc1 ?? 0) - ssCotizadaComparable))}
                   </p>
                 </div>
               )}
@@ -1981,34 +2006,51 @@ export function PagosView() {
                     </div>
                   ))}
 
-                  {/* Cuadre: la suma de los TC1 frente a la Seguridad Social de
-                      las nóminas del mes. Es el mismo dinero de dos formas. */}
-                  <div className="rounded-md bg-muted/50 px-3 py-2 text-xs">
-                    <div className="flex items-center justify-between gap-3">
-                      <span className="text-muted-foreground">
-                        Total TC1{tc1Subida.length > 1 ? ` (${tc1Subida.length} recibos)` : ""}
-                      </span>
-                      <span className="tabular-nums font-medium">
-                        {totalTc1Subida != null ? fmt(totalTc1Subida) : "—"}
-                      </span>
-                    </div>
-                    <div className="mt-1 flex items-center justify-between gap-3">
-                      <span className="text-muted-foreground">Seguridad Social de las nóminas</span>
-                      <span className="tabular-nums font-medium">{fmt(ssNominasSubida)}</span>
-                    </div>
-                    {tc1SubidaComprobable && (
-                      <p className={`mt-1.5 ${cuadraTc1Subida ? "text-muted-foreground" : "text-destructive font-medium"}`}>
-                        {cuadraTc1Subida
-                          ? "Cuadra con las nóminas."
-                          : `No cuadra: ${fmt(Math.abs((totalTc1Subida ?? 0) - ssNominasSubida))} de diferencia.`}
+                  {/* Cuadre POR MES COTIZADO: cada recibo frente a la Seguridad
+                      Social de las nóminas del mes que cotiza. Con los seguros
+                      sociales a mes vencido ese mes NO es el de la entrega, así
+                      que compararlo con ella daría un descuadre falso. */}
+                  {cuadrePorMes.map((c) => (
+                    <div key={c.periodo} className="rounded-md bg-muted/50 px-3 py-2 text-xs">
+                      <p className="font-medium">
+                        Cotización de {nombreMesLargo(c.periodo)}
                       </p>
-                    )}
-                    {tc1SubidaSinImporte > 0 && (
-                      <p className="mt-1.5 text-amber-600">
-                        {tc1SubidaSinImporte} recibo{tc1SubidaSinImporte === 1 ? "" : "s"} sin importe leído: revisa el cuadre a mano.
-                      </p>
-                    )}
-                  </div>
+                      <div className="mt-1 flex items-center justify-between gap-3">
+                        <span className="text-muted-foreground">
+                          Total TC1{c.numTc1 > 1 ? ` (${c.numTc1} recibos)` : ""}
+                        </span>
+                        <span className="tabular-nums font-medium">
+                          {c.totalTc1 != null ? fmt(c.totalTc1) : "—"}
+                        </span>
+                      </div>
+                      <div className="mt-1 flex items-center justify-between gap-3">
+                        <span className="text-muted-foreground">
+                          Seguridad Social de las nóminas de {nombreMesLargo(c.periodo)}
+                        </span>
+                        <span className="tabular-nums font-medium">
+                          {c.sinNominas ? "—" : fmt(c.ssNominas)}
+                        </span>
+                      </div>
+                      {/* Aún no hay nóminas de ese mes: no es un descuadre, es que
+                          falta la otra mitad para poder comparar. */}
+                      {c.sinNominas ? (
+                        <p className="mt-1.5 text-amber-600">
+                          No hay nóminas de {nombreMesLargo(c.periodo)} en el sistema, así que no se
+                          puede comprobar. Súbelas para cuadrar estos seguros sociales.
+                        </p>
+                      ) : c.comprobable ? (
+                        <p className={`mt-1.5 ${c.cuadra ? "text-muted-foreground" : "text-destructive font-medium"}`}>
+                          {c.cuadra
+                            ? "Cuadra con las nóminas."
+                            : `No cuadra: ${fmt(Math.abs((c.totalTc1 ?? 0) - c.ssNominas))} de diferencia.`}
+                        </p>
+                      ) : (
+                        <p className="mt-1.5 text-amber-600">
+                          Falta el importe de algún recibo: revisa el cuadre a mano.
+                        </p>
+                      )}
+                    </div>
+                  ))}
                 </div>
               )}
             </div>

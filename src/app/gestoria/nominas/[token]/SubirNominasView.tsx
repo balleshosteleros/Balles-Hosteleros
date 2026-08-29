@@ -19,6 +19,20 @@ interface MesIncorrecto {
   periodoLeido: string;
 }
 
+/** Cuadre de los recibos de UN mes cotizado contra las nóminas de ESE mes. */
+interface CuadreMesCotizado {
+  periodo: string;
+  totalNominas: number;
+  totalTc1: number | null;
+  diferencia: number | null;
+  cuadra: boolean;
+  numNominas: number;
+  numTc1: number;
+  tc1SinImporte: number;
+  /** No hay nóminas de ese mes todavía: no hay contra qué comparar. */
+  sinNominas: boolean;
+}
+
 interface Cuadre {
   /** Cuántos TC1 hay adjuntos (ordinaria + complementarias). */
   numTc1?: number;
@@ -30,6 +44,10 @@ interface Cuadre {
   cuadra: boolean;
   numNominas: number;
   trabajadoresTc1: number | null;
+  /** Desglose por el mes que cotiza cada recibo. */
+  porMesCotizado?: CuadreMesCotizado[];
+  /** Meses cotizados cuyos recibos esperan a que lleguen sus nóminas. */
+  mesesSinNominas?: string[];
 }
 
 interface Resultado {
@@ -299,7 +317,8 @@ export function SubirNominasView({ endpoint, empresaNombre, periodo, mesLabel }:
           {/* AVISO INMEDIATO: nada más subir el recibo se compara su líquido (leído
               por IA) con la cotización de las nóminas ya recibidas. Así la gestoría
               sabe al momento si cuadra, en vez de enterarse al final. */}
-          {cuadreTc1 && cuadreTc1.numNominas > 0 && cuadreTc1.totalTc1 != null &&
+          {cuadreTc1 && (cuadreTc1.mesesSinNominas?.length ?? 0) === 0 &&
+            cuadreTc1.numNominas > 0 && cuadreTc1.totalTc1 != null &&
             (cuadreTc1.tc1SinImporte ?? 0) === 0 && (
             <div
               className={`mt-3 rounded-lg border p-3 text-xs ${
@@ -346,14 +365,20 @@ export function SubirNominasView({ endpoint, empresaNombre, periodo, mesLabel }:
 
           {/* El TC1 llega antes que las nóminas: no hay contra qué compararlo
               todavía. Se dice, para que no se lea como un "todo correcto". */}
-          {cuadreTc1 && cuadreTc1.numNominas === 0 && (
+          {cuadreTc1 && ((cuadreTc1.mesesSinNominas?.length ?? 0) > 0 || cuadreTc1.numNominas === 0) && (
             <p className="mt-3 rounded-lg border border-zinc-200 bg-zinc-50 p-3 text-xs text-zinc-700">
-              Recibido. La comprobación se hará cuando subáis las nóminas del mes.
+              Recibido. Estos seguros sociales son de{" "}
+              <b>
+                {(cuadreTc1.mesesSinNominas ?? []).map(nombreMesCorto).join(" y ") ||
+                  nombreMesCorto(mesTc1)}
+              </b>
+              , y de ese mes todavía no constan las nóminas: la comprobación se hará cuando estén.
             </p>
           )}
 
           {/* Guardado pero sin líquido legible: no se puede afirmar que cuadre. */}
-          {cuadreTc1 && cuadreTc1.numNominas > 0 &&
+          {cuadreTc1 && (cuadreTc1.mesesSinNominas?.length ?? 0) === 0 &&
+            cuadreTc1.numNominas > 0 &&
             (cuadreTc1.totalTc1 == null || (cuadreTc1.tc1SinImporte ?? 0) > 0) && (
             <p className="mt-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900">
               Recibido, pero no hemos podido leer el <b>líquido de totales</b>
@@ -445,7 +470,9 @@ export function SubirNominasView({ endpoint, empresaNombre, periodo, mesLabel }:
         {/* DESCUADRE TC1 ↔ nóminas: el TC1 y las nóminas son el mismo dinero
             expresado de dos formas, así que la suma de cotizaciones de las
             nóminas debe coincidir con el líquido del TC1. */}
-        {resultado?.cuadre && !resultado.cuadre.cuadra && resultado.cuadre.totalTc1 != null && (
+        {resultado?.cuadre && !resultado.cuadre.cuadra &&
+          (resultado.cuadre.mesesSinNominas?.length ?? 0) === 0 &&
+          resultado.cuadre.totalTc1 != null && (
           <div className="mt-4 rounded-xl border-2 border-rose-300 bg-rose-50 p-4">
             <div className="flex items-start gap-2">
               <AlertTriangle className="h-5 w-5 text-rose-600 shrink-0 mt-0.5" />
@@ -453,7 +480,13 @@ export function SubirNominasView({ endpoint, empresaNombre, periodo, mesLabel }:
                 <p className="font-semibold">Los importes NO cuadran · entrega no válida</p>
                 <p className="mt-1">
                   El total de los TC1 no coincide con la suma de las cotizaciones de las nóminas
-                  que habéis subido:
+                  del mes que cotizan
+                  {(resultado.cuadre.porMesCotizado ?? []).length > 0
+                    ? ` (${(resultado.cuadre.porMesCotizado ?? [])
+                        .map((c) => nombreMesCorto(c.periodo))
+                        .join(" y ")})`
+                    : ""}
+                  :
                 </p>
                 <ul className="mt-2 space-y-1">
                   <li className="flex justify-between gap-4">
