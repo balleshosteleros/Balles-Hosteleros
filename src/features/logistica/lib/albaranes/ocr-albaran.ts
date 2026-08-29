@@ -23,7 +23,12 @@ import "server-only";
 
 import { randomUUID } from "crypto";
 import { SchemaType, type Schema } from "@google/generative-ai";
-import { geminiJSON, GeminiKeyMissingError, GeminiQuotaError } from "@/lib/ia/gemini";
+import {
+  geminiJSON,
+  GeminiKeyMissingError,
+  GeminiQuotaError,
+  MODELO_DOCUMENTOS,
+} from "@/lib/ia/gemini";
 
 /** Datos fiscales impresos en el documento, para contrastar con la ficha del proveedor. */
 export interface FiscalOcrAlbaran {
@@ -364,6 +369,10 @@ export async function ejecutarOcrAlbaran(input: {
     const ocr = await geminiJSON<OcrAlbaranRaw>(
       "Extrae los datos estructurados de este albarán del proveedor.",
       {
+        // Leer una foto de albarán Y respetar este esquema largo: ver
+        // MODELO_DOCUMENTOS en lib/ia/gemini.ts. Con el modelo por defecto,
+        // 1 de cada 2 lecturas devolvía una estructura inventada.
+        model: MODELO_DOCUMENTOS,
         systemInstruction: OCR_ALBARAN_SYSTEM,
         responseSchema: OCR_ALBARAN_SCHEMA,
         temperature: 0.1,

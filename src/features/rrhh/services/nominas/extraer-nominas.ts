@@ -14,7 +14,7 @@ import "server-only";
  */
 
 import { PDFDocument } from "pdf-lib";
-import { geminiJSON, GeminiKeyMissingError } from "@/lib/ia/gemini";
+import { geminiJSON, GeminiKeyMissingError, MODELO_DOCUMENTOS } from "@/lib/ia/gemini";
 import { normalizarDniNie, esDniNieValido } from "@/features/rrhh/lib/documentacion-validacion";
 import type { NominaLeida } from "@/features/rrhh/services/nominas/procesar-nominas";
 
@@ -113,6 +113,10 @@ function normalizarPeriodo(v: unknown): string {
 async function leerNomina(mimeType: string, base64: string): Promise<IaLeida | null> {
   try {
     const { data } = await geminiJSON<IaLeida>(PROMPT, {
+      // Leer un PDF/foto de nómina: mismo caso que los albaranes, y aquí un
+      // DNI mal leído asigna la nómina al empleado equivocado. Ver
+      // MODELO_DOCUMENTOS en lib/ia/gemini.ts.
+      model: MODELO_DOCUMENTOS,
       responseSchema: RESPUESTA_SCHEMA as never,
       temperature: 0,
       attachments: [{ mimeType, base64 }],

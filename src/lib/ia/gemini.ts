@@ -29,6 +29,28 @@ const DEFAULT_MODEL = process.env.GEMINI_MODEL?.trim() || "gemini-2.5-flash";
 export const MODELO_REDACCION =
   process.env.GEMINI_MODEL_REDACCION?.trim() || "gemini-3.7-flash";
 
+/**
+ * Modelo para leer DOCUMENTOS que llegan como foto o PDF (albaranes, nóminas).
+ *
+ * Aquí no basta con "extraer datos": hay que leer una imagen —a menudo una foto
+ * de móvil, torcida o del revés— Y ceñirse a un esquema JSON largo. `flash-lite`
+ * falla en lo segundo: en 8 pasadas sobre albaranes reales devolvió la
+ * estructura correcta solo 4 veces; las otras 4 se inventó las claves
+ * (`{cabecera, lineas}` en vez del esquema pedido) y la importación se caía con
+ * "El modelo no devolvió un JSON válido". Eso son 15 de 69 importaciones
+ * perdidas en producción (22%), que había que volver a subir a mano.
+ *
+ * `gemini-3.7-flash` acertó 8 de 8 en la misma prueba. Tarda ~9 s en lugar de
+ * ~6 s, irrelevante en un proceso que ya es de fondo y que el usuario no espera
+ * mirando la pantalla.
+ *
+ * Ojo: leer los IMPORTES se les da parecido a los dos (ambos clavaron total,
+ * base, IVA y las 8 líneas de una factura fotografiada boca abajo). Lo que
+ * cambia es la FIABILIDAD del formato de salida, que es lo que rompía.
+ */
+export const MODELO_DOCUMENTOS =
+  process.env.GEMINI_MODEL_DOCUMENTOS?.trim() || "gemini-3.7-flash";
+
 export class GeminiKeyMissingError extends Error {
   constructor() {
     super("GEMINI_API_KEY no configurada en variables de entorno");
