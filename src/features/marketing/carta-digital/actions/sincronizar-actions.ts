@@ -35,6 +35,35 @@ export interface ResumenSincronizacion {
  * Vista previa: qué entraría en la carta y qué se queda fuera y por qué.
  * No escribe nada.
  */
+
+/**
+ * Alérgenos derivados del escandallo, para los productos en modo AUTOMÁTICO.
+ *
+ * La derivación es recursiva (un plato lleva una salsa que lleva harina) y vive
+ * en la RPC `alergenos_derivados`, así que se resuelve en la BD, producto a
+ * producto. Solo se piden los que están en automático: los manuales ya traen su
+ * propia lista y preguntar por ellos sería trabajo tirado.
+ *
+ * Si una RPC falla no se rompe la sincronización: ese plato se queda con lo que
+ * tuviera. Es preferible una carta publicada a una carta que no sale.
+ */
+async function resolverDerivados(
+  supabase: Awaited<ReturnType<typeof getAppContext>>["supabase"],
+  productos: Array<{ id: string; alergenos_modo?: string | null }>,
+): Promise<Map<string, string[]>> {
+  const auto = productos.filter((p) => p.alergenos_modo !== "manual");
+  const mapa = new Map<string, string[]>();
+  await Promise.all(
+    auto.map(async (p) => {
+      const { data, error } = await supabase.rpc("alergenos_derivados", {
+        p_producto_id: p.id,
+      });
+      if (!error && Array.isArray(data)) mapa.set(p.id, data as string[]);
+    }),
+  );
+  return mapa;
+}
+
 export async function previsualizarSincronizacion(): Promise<
   ActionResult<{
     porCategoria: Array<{ categoria: string; platos: number }>;
@@ -49,7 +78,7 @@ export async function previsualizarSincronizacion(): Promise<
     const { data, error } = await supabase
       .from("productos")
       .select(
-        "id, nombre, categoria, precio_venta, carta_nombre, carta_texto, carta_destacado, alergenos, estilo_imagen_url, estado, visible_carta",
+        "id, nombre, categoria, precio_venta, carta_nombre, carta_texto, carta_destacado, alergenos, alergenos_modo, estilo_imagen_url, estado, visible_carta",
       )
       .eq("empresa_id", empresaId)
       .eq("tipo", "venta");
@@ -59,8 +88,10 @@ export async function previsualizarSincronizacion(): Promise<
       return { ok: false, error: "No se pudieron leer los productos." };
     }
 
+    const productos = (data ?? []) as ProductoVenta[];
     const { items, descartados } = prepararItemsDesdeProductos(
-      (data ?? []) as ProductoVenta[],
+      productos,
+      await resolverDerivados(supabase, productos),
     );
 
     const cuenta = new Map<string, number>();
@@ -95,7 +126,7 @@ export async function sincronizarCartaDesdeProductos(): Promise<
     const { data: productos, error: errProd } = await supabase
       .from("productos")
       .select(
-        "id, nombre, categoria, precio_venta, carta_nombre, carta_texto, carta_destacado, alergenos, estilo_imagen_url, estado, visible_carta",
+        "id, nombre, categoria, precio_venta, carta_nombre, carta_texto, carta_destacado, alergenos, alergenos_modo, estilo_imagen_url, estado, visible_carta",
       )
       .eq("empresa_id", empresaId)
       .eq("tipo", "venta");
@@ -105,8 +136,10 @@ export async function sincronizarCartaDesdeProductos(): Promise<
       return { ok: false, error: "No se pudieron leer los productos." };
     }
 
+    const listaProductos = (productos ?? []) as ProductoVenta[];
     const { items, categorias, descartados } = prepararItemsDesdeProductos(
-      (productos ?? []) as ProductoVenta[],
+      listaProductos,
+      await resolverDerivados(supabase, listaProductos),
     );
 
     if (items.length === 0) {

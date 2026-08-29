@@ -32,6 +32,8 @@ export interface ProductoVenta {
   carta_texto: string | null;
   carta_destacado: boolean | null;
   alergenos: string[] | null;
+  /** auto = derivados del escandallo; manual = los de la propia lista. */
+  alergenos_modo?: string | null;
   estilo_imagen_url: string | null;
   estado?: string | null;
   /** Interruptor maestro: si es false, este producto no es de carta. */
@@ -88,6 +90,12 @@ export function parsePrecio(valor: string | null | undefined): number | null {
  */
 export function prepararItemsDesdeProductos(
   productos: ProductoVenta[],
+  /**
+   * Alérgenos derivados del escandallo por producto, para los que están en
+   * modo automático. Se resuelven fuera (hace falta la BD) y se pasan aquí
+   * para que esta función siga siendo pura y testeable.
+   */
+  derivados?: Map<string, string[]>,
 ): ResultadoSincronizacion {
   const items: ItemSincronizado[] = [];
   const descartados: ResultadoSincronizacion["descartados"] = [];
@@ -128,7 +136,12 @@ export function prepararItemsDesdeProductos(
       nombre: (p.carta_nombre?.trim() || p.nombre).trim(),
       descripcion: p.carta_texto?.trim() || null,
       precio,
-      alergenos: (p.alergenos ?? []) as Alergeno[],
+      // En AUTOMÁTICO los alérgenos no viven en el producto: se derivan del
+      // escandallo. `derivados` los trae ya resueltos desde la BD; si el
+      // producto es manual, manda su propia lista.
+      alergenos: (p.alergenos_modo === "manual"
+        ? (p.alergenos ?? [])
+        : (derivados?.get(p.id) ?? p.alergenos ?? [])) as Alergeno[],
       destacado: Boolean(p.carta_destacado),
       foto_url: p.estilo_imagen_url ?? null,
       orden,

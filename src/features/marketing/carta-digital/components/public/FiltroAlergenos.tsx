@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { X, Wheat, Egg, Fish, Nut, Milk, Bean, Leaf, ShieldCheck } from "lucide-react";
+import { X, Wheat, Egg, Fish, Nut, Milk, Bean, Leaf, Check } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { ALERGENOS_UE, type Alergeno } from "../../types";
 
@@ -29,8 +29,46 @@ export function alergenoLabel(a: Alergeno | string): string {
 }
 
 export function AlergenoIcon({ alergeno, className }: { alergeno: Alergeno | string; className?: string }) {
-  const Icon = ALERGENO_ICON[alergeno as Alergeno] ?? Leaf;
+  // "Sin alérgenos" no es un alérgeno sino su declaración contraria: lleva un
+  // check, no una hoja, para que no se confunda con un ingrediente más.
+  const Icon = alergeno === "Sin alérgenos" ? Check : (ALERGENO_ICON[alergeno as Alergeno] ?? Leaf);
   return <Icon className={className} strokeWidth={1.5} />;
+}
+
+
+/**
+ * Icono de alérgenos: espiga dentro de un círculo tachado.
+ *
+ * El escudo genérico que había antes no decía nada —podía ser seguridad, o
+ * privacidad—. La espiga tachada es el símbolo que se reconoce en cartas y
+ * envases de medio mundo como "alérgenos e intolerancias", así que el comensal
+ * que lo necesita lo identifica sin leer nada.
+ */
+export function IconoAlergenos({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden
+    >
+      {/* Tallo de la espiga */}
+      <path d="M12 21V9" />
+      {/* Granos, en tres pares que se abren hacia arriba */}
+      <path d="M12 9c0-1.7-1-3-2.6-3.4C9 7.2 9.8 8.6 12 9Z" />
+      <path d="M12 9c0-1.7 1-3 2.6-3.4C15 7.2 14.2 8.6 12 9Z" />
+      <path d="M12 13c0-1.7-1-3-2.6-3.4C9 11.2 9.8 12.6 12 13Z" />
+      <path d="M12 13c0-1.7 1-3 2.6-3.4C15 11.2 14.2 12.6 12 13Z" />
+      <path d="M12 17c0-1.7-1-3-2.6-3.4C9 15.2 9.8 16.6 12 17Z" />
+      <path d="M12 17c0-1.7 1-3 2.6-3.4C15 15.2 14.2 16.6 12 17Z" />
+      {/* Barra de tachado: es lo que convierte la espiga en "alérgenos" */}
+      <path d="M4.5 19.5 19.5 4.5" />
+    </svg>
+  );
 }
 
 /**
@@ -96,7 +134,7 @@ export function FiltroAlergenos({
           border: "1px solid var(--carta-borde)",
         }}
       >
-        <ShieldCheck className="h-5 w-5" strokeWidth={1.6} />
+        <IconoAlergenos className="h-5 w-5" />
         {activeCount > 0 ? (
           <span
             className="absolute -right-0.5 -top-0.5 inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[10px] font-bold tabular-nums ring-2"

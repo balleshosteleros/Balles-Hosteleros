@@ -98,6 +98,24 @@ export const ALERGENOS_UE_14 = [
 
 export type AlergenoUE = typeof ALERGENOS_UE_14[number];
 
+/**
+ * Declaración explícita de que un producto NO contiene ninguno de los 14.
+ *
+ * No es un alérgeno: es la forma de distinguir "revisado y no lleva ninguno"
+ * de "todavía nadie lo ha mirado". Sin esto, una lista vacía significaba las
+ * dos cosas a la vez, y publicar en la carta como libre de alérgenos algo que
+ * nadie ha declarado es un problema legal, no un detalle.
+ *
+ * En modo MANUAL siempre hay que marcar algo: uno o varios alérgenos, o esto.
+ */
+export const SIN_ALERGENOS = "Sin alérgenos" as const;
+
+/** Lo que puede aparecer en `productos.alergenos`: los 14 UE o el marcador. */
+export const ALERGENOS_SELECCIONABLES = [...ALERGENOS_UE_14, SIN_ALERGENOS] as const;
+
+/** Cómo se declaran los alérgenos de un producto. */
+export type AlergenosModo = "auto" | "manual";
+
 export interface Producto {
   id: string;
   numeroSecuencial?: number;
@@ -139,6 +157,8 @@ export interface Producto {
    */
   visibleCarta?: boolean;
   alergenos: string[];
+  /** auto = derivados del escandallo; manual = marcados a mano. Compra: siempre manual. */
+  alergenosModo?: AlergenosModo;
 }
 
 // ─── Estilo POS (solo productos de venta) ─────────────────────

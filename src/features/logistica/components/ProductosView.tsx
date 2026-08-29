@@ -11,6 +11,8 @@ import {
   IVA_DEFAULT,
   desglosarIva,
   formatProductoId,
+  SIN_ALERGENOS,
+  type AlergenosModo,
 } from "@/features/logistica/data/productos";
 import {
   listProductos, createProducto, updateProducto, deleteProducto, getProductoById,
@@ -35,7 +37,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 import {
   ShoppingCart, Store, Settings,
-  ArrowLeft, Trash2, AlertTriangle, FlaskConical, Star, Eye, EyeOff,
+  ArrowLeft, Trash2, AlertTriangle, FlaskConical, Star, Eye, EyeOff, Check,
 } from "lucide-react";
 import { toast } from "sonner";
 import { IOActions } from "@/shared/io";
@@ -198,6 +200,11 @@ function ProductoDetalle({
   // Interruptor maestro de la carta digital (ver ficha del producto de venta).
   const [visibleCarta, setVisibleCarta] = useState<boolean>(producto?.visibleCarta ?? false);
   const [alergenos, setAlergenos] = useState<string[]>(producto?.alergenos ?? []);
+  // Cómo se declaran los alérgenos. Los de COMPRA son siempre manuales: son la
+  // raíz de la cascada y no tienen escandallo del que derivar.
+  const [alergenosModo, setAlergenosModo] = useState<AlergenosModo>(
+    producto?.alergenosModo ?? (producto?.tipo === "compra" ? "manual" : "auto"),
+  );
   const [alergenosDerivados, setAlergenosDerivados] = useState<string[]>([]);
   const [alergenosOrigenes, setAlergenosOrigenes] = useState<AlergenoOrigen[]>([]);
   const [alergenosLoading, setAlergenosLoading] = useState(false);
@@ -315,6 +322,12 @@ function ProductoDetalle({
     if (!nombre.trim()) errs.push("El nombre es obligatorio");
     if (!categoria) errs.push("Selecciona una categoría");
     if (!esVenta && !unidad) errs.push("Selecciona una unidad");
+    // En modo manual hay que declarar SIEMPRE: uno o mas alergenos, o "Sin
+    // alergenos". Guardar la lista vacia dejaria el producto en un limbo donde
+    // no se sabe si no lleva nada o si nadie lo ha revisado.
+    if ((esCompra || alergenosModo === "manual") && alergenos.length === 0) {
+      errs.push('Declara los alérgenos: marca los que lleva, o "Sin alérgenos"');
+    }
     if (errs.length > 0) { setErrors(errs); return; }
 
     setSaving(true);
@@ -342,7 +355,11 @@ function ProductoDetalle({
       cartaTexto: esVenta ? (cartaTexto.trim() || null) : null,
       cartaDestacado: esVenta ? cartaDestacado : false,
       visibleCarta: esVenta ? visibleCarta : false,
-      alergenos: !esVenta ? alergenos : [],
+      // En modo AUTOMÁTICO los alérgenos no se guardan: se derivan del
+      // escandallo cada vez que se leen, así que persistirlos solo crearía una
+      // copia que se queda vieja en cuanto cambie un ingrediente.
+      alergenos: esCompra || alergenosModo === "manual" ? alergenos : [],
+      alergenosModo: esCompra ? "manual" : alergenosModo,
     };
     if (!esCompra) {
       payload.iva = mostrarIva && iva && iva !== "none" ? iva : null;
@@ -690,47 +707,128 @@ function ProductoDetalle({
         </Card>
       )}
 
-      {/* Alérgenos — Compra: fuente de verdad editable. Elaboración: derivados del escandallo (readonly). */}
-      {esCompra && (
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base">Alérgenos</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-xs text-muted-foreground mb-3">
-              Marca los alérgenos UE que contiene este producto. Se propagan automáticamente a las elaboraciones y escandallos que lo usen como ingrediente.
-            </p>
-            <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2">
-              {ALERGENOS_UE_14.map((a) => {
-                const checked = alergenos.includes(a);
-                return (
-                  <label
-                    key={a}
-                    className="flex items-center gap-2 rounded-md border px-2 py-1.5 text-xs cursor-pointer hover:bg-muted/50"
-                  >
-                    <Checkbox
-                      checked={checked}
-                      onCheckedChange={(v) => {
-                        setAlergenos((prev) =>
-                          v === true
-                            ? Array.from(new Set([...prev, a]))
-                            : prev.filter((x) => x !== a),
-                        );
-                      }}
-                    />
-                    <span className="select-none">{a}</span>
-                  </label>
-                );
-              })}
+      {/* Alérgenos.
+          - COMPRA: siempre manual. Es la raíz de la cascada, no deriva de nada.
+          - VENTA y ELABORACIÓN: el gestor elige entre AUTOMÁTICO (los toma de
+            los productos de su escandallo) o MANUAL (los marca a mano).
+          En modo manual hay que declarar SIEMPRE algo: uno o más alérgenos, o
+          "Sin alérgenos". Una lista vacía significaba a la vez "no lleva" y
+          "nadie lo ha mirado", y eso en una carta pública es un problema. */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">Alérgenos</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {!esCompra && (
+            <div className="flex flex-wrap gap-2">
+              {(["auto", "manual"] as const).map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => setAlergenosModo(m)}
+                  className={`rounded-md border px-3 py-1.5 text-xs font-medium transition-colors ${
+                    alergenosModo === m
+                      ? "border-primary bg-primary text-primary-foreground"
+                      : "hover:bg-muted/50"
+                  }`}
+                >
+                  {m === "auto" ? "Automático" : "Manual"}
+                </button>
+              ))}
             </div>
-            {alergenos.length === 0 && (
-              <p className="mt-3 text-[11px] text-muted-foreground italic">
-                Sin alérgenos marcados. Si el producto no contiene ninguno, déjalo así.
+          )}
+
+          {!esCompra && alergenosModo === "auto" ? (
+            <>
+              <p className="text-xs text-muted-foreground">
+                Se toman de los productos del escandallo: la unión de los alérgenos de
+                sus ingredientes y de cualquier sub-elaboración. Para cambiarlos, edita
+                los alérgenos del producto de compra de origen.
               </p>
-            )}
-          </CardContent>
-        </Card>
-      )}
+              {alergenosLoading ? (
+                <p className="text-xs text-muted-foreground italic">Calculando…</p>
+              ) : alergenosDerivados.length === 0 ? (
+                <p className="text-xs text-muted-foreground italic">
+                  Los ingredientes de este escandallo no declaran ningún alérgeno.
+                </p>
+              ) : (
+                <div className="flex flex-wrap gap-1.5">
+                  {alergenosDerivados.map((a) => (
+                    <Badge
+                      key={a}
+                      variant="outline"
+                      className="text-[11px] bg-amber-50 text-amber-800 border-amber-200 dark:bg-amber-900/20 dark:text-amber-200 dark:border-amber-800/40"
+                    >
+                      {a}
+                    </Badge>
+                  ))}
+                </div>
+              )}
+            </>
+          ) : (
+            <>
+              <p className="text-xs text-muted-foreground">
+                {esCompra
+                  ? "Marca los alérgenos que contiene. Se propagan a las elaboraciones y escandallos que lo usen como ingrediente."
+                  : "Marca a mano los alérgenos de este producto."}{" "}
+                Si no lleva ninguno, marca <strong>Sin alérgenos</strong>.
+              </p>
+
+              {/* "Sin alérgenos" va aparte y es EXCLUYENTE: marcarlo limpia el
+                  resto, y marcar cualquier alérgeno lo desmarca a él. Decir a la
+                  vez "lleva gluten" y "no lleva nada" no significa nada. */}
+              <button
+                type="button"
+                onClick={() =>
+                  setAlergenos((prev) =>
+                    prev.includes(SIN_ALERGENOS) ? [] : [SIN_ALERGENOS],
+                  )
+                }
+                className={`flex w-full items-center gap-2 rounded-md border px-3 py-2 text-xs font-medium transition-colors sm:w-auto ${
+                  alergenos.includes(SIN_ALERGENOS)
+                    ? "border-emerald-500 bg-emerald-500 text-white"
+                    : "hover:bg-muted/50"
+                }`}
+              >
+                <Check className="h-3.5 w-3.5" />
+                Sin alérgenos
+              </button>
+
+              <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2">
+                {ALERGENOS_UE_14.map((a) => {
+                  const checked = alergenos.includes(a);
+                  return (
+                    <label
+                      key={a}
+                      className="flex items-center gap-2 rounded-md border px-2 py-1.5 text-xs cursor-pointer hover:bg-muted/50"
+                    >
+                      <Checkbox
+                        checked={checked}
+                        onCheckedChange={(v) => {
+                          setAlergenos((prev) => {
+                            // Marcar un alérgeno anula el "Sin alérgenos".
+                            const limpio = prev.filter((x) => x !== SIN_ALERGENOS);
+                            return v === true
+                              ? Array.from(new Set([...limpio, a]))
+                              : limpio.filter((x) => x !== a);
+                          });
+                        }}
+                      />
+                      <span className="select-none">{a}</span>
+                    </label>
+                  );
+                })}
+              </div>
+
+              {alergenos.length === 0 && (
+                <p className="text-[11px] font-medium text-amber-600 dark:text-amber-400">
+                  Falta declarar: marca los alérgenos que lleva, o &quot;Sin alérgenos&quot;.
+                </p>
+              )}
+            </>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Histórico de precios de compra (solo productos de tipo compra ya creados) */}
       {esCompra && !isNew && (

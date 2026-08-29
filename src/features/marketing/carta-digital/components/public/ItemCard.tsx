@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { Heart, Star } from "lucide-react";
+import { AlergenoIcon } from "./FiltroAlergenos";
 import type { CartaItem } from "../../types";
 
 /**
@@ -16,9 +17,10 @@ import type { CartaItem } from "../../types";
  * solo recorrido (foto → precio → nombre) en vez de saltar a una columna
  * derecha. Es el patrón de Mr Yum / Sunday, y es el que mejor convierte.
  *
- * Los alérgenos NO se pintan aquí: en un grid de fotos son ruido visual y
- * nadie los lee a ese tamaño. Viven en la ficha del plato, que es donde
- * alguien con una alergia va a mirar de verdad.
+ * Los alérgenos se pintan como iconos pequeños bajo la descripción: quien
+ * tiene una alergia necesita descartar de un vistazo, sin abrir plato por
+ * plato. Van en gris y a 12px —se leen si los buscas, no compiten con la
+ * foto— y el detalle con el nombre de cada uno sigue en la ficha del plato.
  */
 export function ItemCard({
   item,
@@ -129,6 +131,29 @@ export function ItemCard({
           >
             {item.descripcion}
           </p>
+        ) : null}
+
+        {/* Alérgenos del plato. `Sin alérgenos` es una declaración explícita
+            (alguien lo ha revisado), no la ausencia de datos, así que también
+            se muestra: al celíaco le sirve tanto saber qué lleva como saber
+            que está comprobado. */}
+        {item.alergenos.length > 0 ? (
+          <span className="mt-2 flex flex-wrap items-center gap-1.5">
+            {item.alergenos.map((a) => (
+              <span
+                key={a}
+                title={a}
+                className="inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] leading-none"
+                style={{
+                  color: "var(--carta-texto-suave)",
+                  border: "1px solid var(--carta-borde)",
+                }}
+              >
+                <AlergenoIcon alergeno={a} className="h-3 w-3" />
+                <span className="sr-only">{a}</span>
+              </span>
+            ))}
+          </span>
         ) : null}
       </div>
     </button>

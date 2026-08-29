@@ -52,6 +52,7 @@ const productoInputSchema = z.object({
   cartaDestacado: z.boolean().optional(),
   visibleCarta: z.boolean().optional(),
   alergenos: z.array(z.string()).optional(),
+  alergenosModo: z.enum(["auto", "manual"]).optional(),
 });
 
 export type ProductoInput = z.infer<typeof productoInputSchema>;
@@ -86,6 +87,7 @@ type ProductoRow = {
   carta_destacado: boolean | null;
   visible_carta: boolean | null;
   alergenos: string[] | null;
+  alergenos_modo: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -119,6 +121,7 @@ function rowToProducto(r: ProductoRow): Producto {
     cartaDestacado: r.carta_destacado ?? false,
     visibleCarta: r.visible_carta ?? false,
     alergenos: Array.isArray(r.alergenos) ? r.alergenos : [],
+    alergenosModo: (r.alergenos_modo === "manual" ? "manual" : "auto"),
     createdAt: r.created_at ?? undefined,
     ultimaActualizacion: r.updated_at?.slice(0, 10) ?? "",
   };
@@ -315,6 +318,7 @@ export async function createProducto(
         carta_destacado: parsed.data.cartaDestacado ?? false,
         visible_carta: parsed.data.visibleCarta ?? false,
         alergenos: parsed.data.alergenos ?? [],
+        alergenos_modo: parsed.data.alergenosModo ?? (parsed.data.tipo === "compra" ? "manual" : "auto"),
         created_by: user.id,
       })
       .select("*")
@@ -436,6 +440,7 @@ export async function bulkImportProductos(
       carta_destacado: p.cartaDestacado ?? false,
       visible_carta: p.visibleCarta ?? false,
       alergenos: p.alergenos ?? [],
+      alergenos_modo: p.tipo === "compra" ? "manual" : (p.alergenosModo ?? "auto"),
       created_by: user.id,
     }));
 
@@ -513,6 +518,7 @@ export async function updateProducto(
     if (input.cartaDestacado !== undefined) updates.carta_destacado = input.cartaDestacado;
     if (input.visibleCarta !== undefined) updates.visible_carta = input.visibleCarta;
     if (input.alergenos !== undefined) updates.alergenos = input.alergenos ?? [];
+    if (input.alergenosModo !== undefined) updates.alergenos_modo = input.alergenosModo;
 
     const { error } = await supabase.from("productos").update(updates).eq("id", id);
     if (error) return { error: error.message };
