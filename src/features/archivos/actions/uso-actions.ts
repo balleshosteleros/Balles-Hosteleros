@@ -29,17 +29,31 @@ export async function getUsoArchivos(): Promise<
 
     const admin = createAdminClient();
 
-    const [{ data: usage }, { data: filas }, { data: raices }] = await Promise.all([
+    // Los documentos se piden por tandas: Supabase devuelve 1.000 filas como
+    // mucho, y el desglose se quedaba clavado en "1000" con una fracción del
+    // peso real en cuanto una empresa pasaba de mil archivos.
+    const leerDocumentos = async () => {
+      const todas: Array<Record<string, unknown>> = [];
+      for (let desde = 0; ; desde += 1000) {
+        const { data } = await admin
+          .from("documentos")
+          .select("departamento, tamano_bytes")
+          .eq("empresa_id", empresaId)
+          .not("r2_key", "is", null)
+          .range(desde, desde + 999);
+        const tanda = data ?? [];
+        todas.push(...tanda);
+        if (tanda.length < 1000) return todas;
+      }
+    };
+
+    const [{ data: usage }, filas, { data: raices }] = await Promise.all([
       admin
         .from("storage_usage_por_empresa")
         .select("bytes_used, bytes_limit")
         .eq("empresa_id", empresaId)
         .maybeSingle(),
-      admin
-        .from("documentos")
-        .select("departamento, tamano_bytes")
-        .eq("empresa_id", empresaId)
-        .not("r2_key", "is", null),
+      leerDocumentos(),
       // `documentos.departamento` guarda la clave canónica (RRHH, LOGISTICA…).
       // Para mostrarla usamos el nombre legible de su carpeta raíz.
       admin
@@ -56,7 +70,7 @@ export async function getUsoArchivos(): Promise<
     const acumulado = new Map<string, { bytes: number; num: number }>();
     let bytesArchivos = 0;
 
-    for (const f of filas ?? []) {
+    for (const f of filas) {
       const clave = (f.departamento as string) || "";
       const depto = etiqueta.get(clave) || clave || "Sin departamento";
       const bytes = Number(f.tamano_bytes ?? 0);
@@ -71,7 +85,7 @@ export async function getUsoArchivos(): Promise<
         bytesArchivos,
         bytesTotal: Number(usage?.bytes_used ?? 0),
         bytesLimite: Number(usage?.bytes_limit ?? 500 * 1024 ** 3),
-        numArchivos: filas?.length ?? 0,
+        numArchivos: filas.length,
         porDepartamento: [...acumulado.entries()]
           .map(([departamento, v]) => ({ departamento, ...v }))
           .sort((a, b) => b.bytes - a.bytes),
