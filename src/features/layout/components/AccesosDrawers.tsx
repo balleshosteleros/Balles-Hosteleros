@@ -403,7 +403,7 @@ export function AplicacionesDrawer({
   return (
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger asChild>{children}</SheetTrigger>
-      <SheetContent side="right" className="flex flex-col gap-0 p-0">
+      <SheetContent side="right" maximizable className="flex flex-col gap-0 p-0">
         <SheetHeader className="border-b py-3 pl-5 pr-14 shrink-0">
           <SheetTitle className="flex items-center gap-2 text-base">
             <Rocket className="h-4 w-4 text-amber-600" />
@@ -584,7 +584,7 @@ export function AccesosDrawer({
     <VerificacionAccesosProvider>
       <Sheet open={open} onOpenChange={setOpen}>
         <SheetTrigger asChild>{children}</SheetTrigger>
-        <SheetContent side="right" className="flex flex-col gap-0 p-0">
+        <SheetContent side="right" maximizable className="flex flex-col gap-0 p-0">
           <SheetHeader className="border-b py-3 pl-5 pr-14 shrink-0">
             <SheetTitle className="flex items-center gap-2 text-base">
               <Lock className="h-4 w-4 text-red-500" />

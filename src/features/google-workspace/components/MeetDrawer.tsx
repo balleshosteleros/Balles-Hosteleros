@@ -6,7 +6,7 @@ import {
   ChevronLeft, ChevronRight, List, CalendarRange, Menu as MenuIcon,
 } from "lucide-react";
 import {
-  Sheet, SheetClose, SheetContent, SheetHeader, SheetTitle, SheetTrigger,
+  Sheet, SheetClose, SheetContent, SheetHeader, SheetMaximizeButton, SheetTitle, SheetTrigger,
 } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -323,7 +323,7 @@ export function MeetDrawer({ children }: { children: ReactNode }) {
   return (
     <Sheet open={abierto} onOpenChange={setAbierto}>
       <SheetTrigger asChild>{children}</SheetTrigger>
-      <SheetContent side="right" className="flex flex-col gap-0 p-0 bg-[#f6f8fc] [&>button]:hidden">
+      <SheetContent side="right" maximizable className="flex flex-col gap-0 p-0 bg-[#f6f8fc] [&>button]:hidden">
         <SheetTitle className="sr-only">Google Meet — Reuniones</SheetTitle>
         <SheetHeader className="bg-[#f6f8fc] px-2 py-2 border-b border-transparent">
           <div className="flex items-center gap-2">
@@ -350,6 +350,7 @@ export function MeetDrawer({ children }: { children: ReactNode }) {
               </button>
               <SelectorTZ tz={tzSecundaria} onChange={cambiarTz} />
               <GoogleAccountButton />
+              <SheetMaximizeButton className="text-[#5f6368]" />
               <SheetClose asChild>
                 <button
                   type="button"

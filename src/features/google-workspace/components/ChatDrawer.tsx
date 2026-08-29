@@ -8,7 +8,7 @@ import {
   FileText, Download, Loader2, Mail, MailOpen, CheckCheck, Sparkles, PanelLeft,
 } from "lucide-react";
 import {
-  Sheet, SheetContent, SheetTitle, SheetTrigger, SheetClose,
+  Sheet, SheetContent, SheetMaximizeButton, SheetTitle, SheetTrigger, SheetClose,
 } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -1062,6 +1062,7 @@ export function ChatDrawer({ children }: { children: ReactNode }) {
 
       <SheetContent
         side="right"
+        maximizable
         className="flex flex-col gap-0 p-0 [&>button]:hidden"
       >
         <SheetTitle className="sr-only">Comunicación interna</SheetTitle>
@@ -1075,15 +1076,18 @@ export function ChatDrawer({ children }: { children: ReactNode }) {
               <p className="text-[11px] text-muted-foreground leading-tight">{empresaActual.nombre} · Departamentos</p>
             </div>
           </div>
-          <SheetClose asChild>
-            <button
-              type="button"
-              className="rounded-full p-2 hover:bg-black/5 transition-colors"
-              title="Cerrar"
-            >
-              <X className="h-5 w-5 text-[#5f6368]" />
-            </button>
-          </SheetClose>
+          <div className="flex items-center gap-1">
+            <SheetMaximizeButton className="p-2 text-[#5f6368]" />
+            <SheetClose asChild>
+              <button
+                type="button"
+                className="rounded-full p-2 hover:bg-black/5 transition-colors"
+                title="Cerrar"
+              >
+                <X className="h-5 w-5 text-[#5f6368]" />
+              </button>
+            </SheetClose>
+          </div>
         </header>
 
         <div className="flex flex-1 min-h-0">

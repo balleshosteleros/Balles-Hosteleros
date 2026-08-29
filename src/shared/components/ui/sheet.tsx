@@ -1,6 +1,6 @@
 import * as SheetPrimitive from "@radix-ui/react-dialog";
 import { cva, type VariantProps } from "class-variance-authority";
-import { X } from "lucide-react";
+import { Maximize2, Minimize2, X } from "lucide-react";
 import * as React from "react";
 
 import { cn } from "@/lib/utils";
@@ -40,6 +40,14 @@ const sheetVariants = cva(
         right:
           "inset-y-0 right-0 h-full w-full sm:w-[50vw] sm:max-w-[50vw] border-l data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right",
       },
+      /**
+       * Panel a pantalla completa. Sólo lo usan las herramientas: en el resto
+       * de sheets la variante queda sin definir y nada cambia.
+       */
+      maximizado: {
+        true: "sm:!w-screen sm:!max-w-none sm:transition-[width,max-width] sm:duration-200",
+        false: "sm:transition-[width,max-width] sm:duration-200",
+      },
     },
     defaultVariants: {
       side: "right",
@@ -49,21 +57,103 @@ const sheetVariants = cva(
 
 interface SheetContentProps
   extends React.ComponentPropsWithoutRef<typeof SheetPrimitive.Content>,
-    VariantProps<typeof sheetVariants> {}
+    Omit<VariantProps<typeof sheetVariants>, "maximizado"> {
+  /**
+   * Herramientas (Email, Calendario, Chat...): añade el botón de ampliar a
+   * pantalla completa. Siempre abren en tamaño normal; ampliar es una acción
+   * del usuario y no se recuerda entre aperturas.
+   */
+  maximizable?: boolean;
+}
+
+/** Estado de "pantalla completa" del panel, para que la cabecera de cada herramienta lo lea. */
+const SheetMaximizeContext = React.createContext<{
+  maximizado: boolean;
+  alternar: () => void;
+} | null>(null);
+
+/** Sólo dentro de un SheetContent con `maximizable`. Devuelve null si no aplica. */
+function useSheetMaximize() {
+  return React.useContext(SheetMaximizeContext);
+}
+
+/**
+ * Botón de ampliar / reducir el panel. Se coloca en la cabecera de cada
+ * herramienta, junto al de cerrar. No se pinta en móvil: allí el panel ya
+ * ocupa toda la pantalla.
+ */
+const SheetMaximizeButton = ({
+  className,
+  iconClassName,
+}: {
+  className?: string;
+  iconClassName?: string;
+}) => {
+  const ctx = useSheetMaximize();
+  if (!ctx) return null;
+  const Icono = ctx.maximizado ? Minimize2 : Maximize2;
+  const etiqueta = ctx.maximizado ? "Reducir" : "Ampliar a pantalla completa";
+  return (
+    <button
+      type="button"
+      onClick={ctx.alternar}
+      title={etiqueta}
+      className={cn(
+        "hidden sm:inline-flex items-center justify-center rounded-full p-3 opacity-70 transition-colors hover:bg-black/5 hover:opacity-100",
+        className,
+      )}
+    >
+      <Icono className={cn("h-5 w-5", iconClassName)} />
+      <span className="sr-only">{etiqueta}</span>
+    </button>
+  );
+};
+SheetMaximizeButton.displayName = "SheetMaximizeButton";
 
 const SheetContent = React.forwardRef<React.ElementRef<typeof SheetPrimitive.Content>, SheetContentProps>(
-  ({ side = "right", className, children, ...props }, ref) => (
-    <SheetPortal>
-      <SheetOverlay />
-      <SheetPrimitive.Content ref={ref} className={cn(sheetVariants({ side }), className)} {...props}>
-        {children}
-        <SheetPrimitive.Close className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity data-[state=open]:bg-secondary hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none">
-          <X className="h-4 w-4" />
-          <span className="sr-only">Close</span>
-        </SheetPrimitive.Close>
-      </SheetPrimitive.Content>
-    </SheetPortal>
-  ),
+  ({ side = "right", maximizable = false, className, children, ...props }, ref) => {
+    const [maximizado, setMaximizado] = React.useState(false);
+    const alternar = React.useCallback(() => setMaximizado((v) => !v), []);
+    const ctx = React.useMemo(() => ({ maximizado, alternar }), [maximizado, alternar]);
+
+    return (
+      <SheetPortal>
+        <SheetOverlay />
+        <SheetPrimitive.Content
+          ref={ref}
+          className={cn(
+            sheetVariants({ side, maximizado: maximizable ? maximizado : undefined }),
+            className,
+          )}
+          {...props}
+        >
+          <SheetMaximizeContext.Provider value={maximizable ? ctx : null}>
+            {children}
+          </SheetMaximizeContext.Provider>
+          {/*
+            Panel sin cabecera propia: el botón de ampliar acompaña a la X de
+            cerrar. Los que sí tienen cabecera ocultan ambos con
+            `[&>button]:hidden` y colocan <SheetMaximizeButton /> donde toca.
+          */}
+          {maximizable && (
+            <button
+              type="button"
+              onClick={alternar}
+              title={maximizado ? "Reducir" : "Ampliar a pantalla completa"}
+              className="absolute right-11 top-4 hidden rounded-sm opacity-70 transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 sm:inline-flex"
+            >
+              {maximizado ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+              <span className="sr-only">{maximizado ? "Reducir" : "Ampliar a pantalla completa"}</span>
+            </button>
+          )}
+          <SheetPrimitive.Close className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity data-[state=open]:bg-secondary hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none">
+            <X className="h-4 w-4" />
+            <span className="sr-only">Close</span>
+          </SheetPrimitive.Close>
+        </SheetPrimitive.Content>
+      </SheetPortal>
+    );
+  },
 );
 SheetContent.displayName = SheetPrimitive.Content.displayName;
 
@@ -97,6 +187,7 @@ export {
   Sheet,
   SheetClose,
   SheetContent,
+  SheetMaximizeButton,
   SheetDescription,
   SheetFooter,
   SheetHeader,
@@ -104,4 +195,5 @@ export {
   SheetPortal,
   SheetTitle,
   SheetTrigger,
+  useSheetMaximize,
 };

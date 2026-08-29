@@ -34,6 +34,7 @@ import {
   Sheet,
   SheetContent,
   SheetHeader,
+  SheetMaximizeButton,
   SheetTitle,
   SheetClose,
 } from "@/components/ui/sheet";
@@ -103,7 +104,7 @@ export function RecordingDrawer() {
 
   return (
     <Sheet open={isDrawerOpen} onOpenChange={handleOpenChange}>
-      <SheetContent side="right" className="flex flex-col gap-0 p-0 [&>button]:hidden">
+      <SheetContent side="right" maximizable className="flex flex-col gap-0 p-0 [&>button]:hidden">
         <SheetTitle className="sr-only">Grabadora de Pantalla</SheetTitle>
 
         <SheetHeader className="border-b px-4 py-3">
@@ -124,11 +125,14 @@ export function RecordingDrawer() {
               </div>
             </div>
 
-            <SheetClose asChild>
-              <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full">
-                <X className="h-4 w-4" />
-              </Button>
-            </SheetClose>
+            <div className="flex items-center gap-1">
+              <SheetMaximizeButton className="h-8 w-8 p-0" iconClassName="h-4 w-4" />
+              <SheetClose asChild>
+                <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full">
+                  <X className="h-4 w-4" />
+                </Button>
+              </SheetClose>
+            </div>
           </div>
         </SheetHeader>
 

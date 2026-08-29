@@ -327,6 +327,7 @@ export function AgendaDrawer({ children }: { children: ReactNode }) {
       <SheetTrigger asChild>{children}</SheetTrigger>
       <SheetContent
         side="right"
+        maximizable
         className="flex flex-col gap-0 p-0"
       >
         <SheetHeader className="border-b py-3 pl-5 pr-14 shrink-0">

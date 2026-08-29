@@ -596,7 +596,7 @@ export function TareasDrawer({ children }: { children: ReactNode }) {
   return (
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger asChild>{children}</SheetTrigger>
-      <SheetContent side="right" className="p-0 flex flex-col gap-0 border-l-violet-100 shadow-2xl">
+      <SheetContent side="right" maximizable className="p-0 flex flex-col gap-0 border-l-violet-100 shadow-2xl">
         <SheetHeader className="border-b px-5 py-3 shrink-0 bg-white">
           <div className="flex items-center justify-between">
             <div className="flex flex-col gap-0.5">

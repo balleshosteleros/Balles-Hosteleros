@@ -26,7 +26,7 @@ export function ArchivosDrawer({ children }: { children: ReactNode }) {
   return (
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger asChild>{children}</SheetTrigger>
-      <SheetContent side="right" className="flex flex-col gap-0 p-0">
+      <SheetContent side="right" maximizable className="flex flex-col gap-0 p-0">
         <ArchivosExplorador
           variante="drawer"
           abierto={open}

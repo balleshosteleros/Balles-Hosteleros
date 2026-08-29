@@ -21,6 +21,7 @@ import {
   SheetClose,
   SheetContent,
   SheetHeader,
+  SheetMaximizeButton,
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
@@ -880,6 +881,7 @@ export function CalendarDrawer({ children }: CalendarDrawerProps) {
       <SheetTrigger asChild>{children}</SheetTrigger>
       <SheetContent
         side="right"
+        maximizable
         className="flex flex-col gap-0 p-0 bg-[#f6f8fc] [&>button]:hidden"
       >
         <SheetTitle className="sr-only">Calendario · Google Calendar</SheetTitle>
@@ -913,6 +915,7 @@ export function CalendarDrawer({ children }: CalendarDrawerProps) {
               </button>
               <SelectorTZ tz={tzSecundaria} onChange={cambiarTz} />
               <GoogleAccountButton />
+              <SheetMaximizeButton className="text-[#5f6368]" />
               <SheetClose asChild>
                 <button
                   type="button"

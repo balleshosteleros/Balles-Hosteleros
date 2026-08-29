@@ -44,6 +44,7 @@ import {
   SheetClose,
   SheetContent,
   SheetHeader,
+  SheetMaximizeButton,
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
@@ -752,6 +753,7 @@ export function GmailDrawer({ children }: GmailDrawerProps) {
       <SheetTrigger asChild>{children}</SheetTrigger>
       <SheetContent
         side="right"
+        maximizable
         className="flex flex-col gap-0 p-0 bg-[#f6f8fc] [&>button]:hidden"
       >
         <SheetTitle className="sr-only">Email · Google Workspace</SheetTitle>
@@ -795,6 +797,7 @@ export function GmailDrawer({ children }: GmailDrawerProps) {
             <div className="pl-1">
               <GoogleAccountButton />
             </div>
+            <SheetMaximizeButton className="text-[#5f6368]" />
             <SheetClose asChild>
               <button
                 type="button"
