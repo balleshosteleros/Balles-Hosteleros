@@ -5,6 +5,55 @@
 
 ---
 
+## 🔤 29-AGO — FASE 3 (unidades): AL REVISAR, 21 RECETAS NECESITAN TU OJO
+
+> **1 decisión para Iván.** El resto es información. Ya está en producción la parte que no
+> depende de ti; la que sí depende, no la tocamos hasta que nos digas.
+
+Antes de convertir las líneas en gramos las revisamos una a una, como prometimos. La foto real
+es más matizada de lo que parecía, y para bien: **la mayoría se arregla sola, pero hay 21 líneas
+que son decisión tuya porque tocan tus recetas.**
+
+### Lo que ya está hecho y desplegado (no toca stock, no depende de ti)
+
+- **Se cierran las rutas por las que entraba unidad en texto libre.** A partir de ahora, cuando un
+  ingrediente está enlazado a un producto, **la unidad la manda el producto** (tu DECISIÓN 3),
+  siempre, se importe por donde se importe. Se acabaron las nueve grafías (`Gr`, `GR`, `g`, `Uni`…).
+- **Arreglado un fallo que teníais escondido:** al publicar una receta oficial, crear el producto
+  del ingrediente **fallaba** (escribía en una columna que se renombró en junio). Nadie lo había
+  notado porque ese camino se usa poco. Ya funciona.
+
+### Las 21 líneas que necesitan tu decisión
+
+El problema: la receta está escrita en **gramos**, pero el **producto al que apunta se mide en
+Unidades**. No es que la grafía esté mal — es que no se puede convertir sola: *150 gramos de un
+producto que se compra "por unidad"* no es "0,15 unidades" ni "150 unidades". Alguien que conozca
+la receta tiene que decidir. Por eso **no las tocamos**: en pantalla salen con un aviso ⚠ para
+revisar, pero el número se queda como está hasta que tú digas.
+
+Se reparten así:
+
+- **13 son elaboraciones** (patatas fritas, salsas, fingers, maíz frito, caldo…). Estos "productos"
+  son en realidad sub-recetas medidas en "Unidades" por defecto. Cuadran con el arreglo de
+  Elaboraciones que ya está previsto en la fase 2, así que lo natural es **resolverlas ahí**.
+- **8 son productos de compra** cuya medida seguramente está mal: canónigos, rúcula, jamón, pan…
+  que en el mundo real se compran por **peso**, no por unidad. Aquí hay uno que canta: en *Jamón
+  Ibérico con Pan Cristal* pone **"80 KG de JAMÓN"** — son 80 gramos, casi seguro, con la unidad y
+  la medida del producto mal a la vez.
+
+**La lista completa de las 21, con receta y producto, la tenemos preparada.** Dinos si prefieres
+(a) que te la pasemos para revisarla tú, o (b) que propongamos nosotros la corrección producto a
+producto y tú solo la apruebes. Las 13 elaboraciones, en cualquier caso, caen dentro de la fase 2.
+
+### Lo que convertimos nosotros (26 líneas, seguro)
+
+Las **26 líneas de gramos de productos que SÍ se compran por kilo** (secreto, costilla, cazón,
+verduras del curry…) sí son conversión limpia: `350 Gr → 0,35 Kg`. Es más que cosmético — hoy esas
+líneas calculan el coste **×1000 de más** (tratan 350 gramos como 350 kilos). Esa conversión está
+lista y revisada, pendiente solo del último visto bueno interno antes de aplicarla.
+
+---
+
 ## 🤖 29-AGO — LA IA QUE LEE ALBARANES Y NÓMINAS ES OTRA (mejor), Y AHORA HAY TOPE DE GASTO
 
 > **Todo esto ya está subido y funcionando.** No hay que hacer nada, pero conviene saberlo
