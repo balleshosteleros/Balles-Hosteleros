@@ -313,29 +313,38 @@ export async function ejecutarImportacion(args: {
     // con más de mil copiados el importador creía que el resto faltaba y los
     // volvía a traer. El contador se quedaba clavado en "1000 ya copiados".
     const yaImportados = new Set<string>();
+    // Los bytes ya traídos salen de esta misma lectura: son los que valen para
+    // el contador, y así no hace falta una consulta aparte.
+    let yaImportadosBytes = 0;
     for (let desde = 0; ; desde += 1000) {
       const { data: previos } = await admin
         .from("documentos")
-        .select("drive_file_id")
+        .select("drive_file_id, tamano_bytes")
         .eq("empresa_id", ctx.empresaId)
         .not("drive_file_id", "is", null)
         .range(desde, desde + 999);
       const tanda = previos ?? [];
-      for (const p of tanda) yaImportados.add(p.drive_file_id as string);
+      for (const p of tanda) {
+        yaImportados.add(p.drive_file_id as string);
+        yaImportadosBytes += Number(p.tamano_bytes ?? 0);
+      }
       if (tanda.length < 1000) break;
     }
 
     const { client, bucket } = getR2();
 
-    // Lo ya acumulado en tandas anteriores: los guardados parciales suman
-    // sobre esto en vez de releerlo cada vez.
-    const { data: acumulado } = await admin
-      .from("archivos_importaciones")
-      .select("copiados, copiados_bytes, omitidos")
-      .eq("id", impId)
-      .maybeSingle();
-    const baseCopiados = Number(acumulado?.copiados ?? 0);
-    const baseBytes = Number(acumulado?.copiados_bytes ?? 0);
+    // Lo ya copiado se cuenta sobre los DOCUMENTOS REALES, no sobre lo que
+    // marcaba el contador.
+    //
+    // Antes se leía `copiados` al empezar y se guardaba `base + copiados de
+    // esta vuelta`. Con una sola importación por vuelta valía, pero desde que
+    // el cron corre varias a la vez, dos vueltas de la misma importación
+    // pueden solaparse: la lenta guarda un total calculado sobre una foto
+    // vieja y pisa lo que la otra ya había escrito. Pasó: el contador de
+    // HABANA retrocedió de 1.700 a 1.688 archivos con los ficheros ya en su
+    // sitio. Contando filas el número no puede ir hacia atrás.
+    const baseCopiados = yaImportados.size;
+    const baseBytes = yaImportadosBytes;
     // Los omitidos NO se acumulan entre tandas.
     //
     // Cada vuelta recorre el árbol otra vez y se salta todo lo ya copiado, así
