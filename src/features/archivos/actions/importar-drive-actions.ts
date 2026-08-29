@@ -70,9 +70,26 @@ async function getAccessToken(): Promise<string | null> {
  * problema. Aquí se renueva y se reintenta una vez.
  */
 async function conTokenVivo<T>(
-  token: { valor: string; refresh: string | null },
+  token: { valor: string; refresh: string | null; renovadoEn?: number },
   accion: (t: string) => Promise<T>,
 ): Promise<T> {
+  // Se renueva ANTES de que caduque, no solo cuando ya ha fallado.
+  //
+  // Esperar al 401 pierde un archivo por cada caducidad, y con archivos
+  // grandes es peor: la descarga entrega un stream y el permiso puede morir
+  // mientras se sube a R2, donde reintentar ya no sirve. En una importación de
+  // Marketing eso dejó 2.623 archivos marcados como fallidos que no tenían
+  // nada malo. Google da una hora; se renueva a los 45 minutos.
+  const AHORA = Date.now();
+  token.renovadoEn ??= AHORA;
+  if (token.refresh && AHORA - token.renovadoEn > 45 * 60 * 1000) {
+    const nuevo = await refreshAccessToken(token.refresh);
+    if (nuevo) {
+      token.valor = nuevo;
+      token.renovadoEn = AHORA;
+    }
+  }
+
   try {
     return await accion(token.valor);
   } catch (err) {
@@ -81,6 +98,7 @@ async function conTokenVivo<T>(
     const nuevo = await refreshAccessToken(token.refresh);
     if (!nuevo) throw err;
     token.valor = nuevo;
+    token.renovadoEn = Date.now();
     return await accion(nuevo);
   }
 }
@@ -378,6 +396,7 @@ export async function ejecutarImportacion(args: {
 
     // Cada rama arranca en la carpeta de departamento que se le asignó.
     const pendientes: Array<{ driveId: string; destinoId: string; depto: string }> = [];
+    const ramasHuerfanas: string[] = [];
     for (const [driveCarpetaId, destinoId] of Object.entries(mapeo)) {
       const { data: destino } = await admin
         .from("carpetas_documentos")
@@ -385,12 +404,40 @@ export async function ejecutarImportacion(args: {
         .eq("empresa_id", ctx.empresaId)
         .eq("id", destinoId)
         .maybeSingle();
-      if (!destino) continue;
+      if (!destino) {
+        ramasHuerfanas.push(destinoId);
+        continue;
+      }
       pendientes.push({
         driveId: driveCarpetaId,
         destinoId,
         depto: (destino.departamento as string) ?? "",
       });
+    }
+
+    // Una carpeta destino de OTRA empresa dejaba la importación sin nada que
+    // hacer, y como `terminada` empieza en true se daba por acabada al
+    // instante sin copiar un solo archivo: parecía que funcionaba.
+    //
+    // Pasó con Marketing: la importación se creó desde BACANAL apuntando a la
+    // carpeta de HABANA, y cada intento respondía "terminada" en segundos.
+    // Ahora se para y se dice, que es un fallo de configuración, no un final.
+    if (!pendientes.length) {
+      const detalle = ramasHuerfanas.length
+        ? `las carpetas de destino no son de esta empresa (${ramasHuerfanas.join(", ")})`
+        : "no hay ninguna carpeta de destino asignada";
+      await admin
+        .from("archivos_importaciones")
+        .update({
+          estado: "parada",
+          errores: [{ archivo: "(configuración)", motivo: `Sin ramas que copiar: ${detalle}.` }],
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", impId);
+      console.error(`[importar-drive] sin ramas que copiar: ${detalle}`);
+      return fallo(
+        "Esta importación apunta a carpetas que no son de la empresa activa. Vuelve a elegir el destino.",
+      );
     }
 
     console.log(
