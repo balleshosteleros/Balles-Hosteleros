@@ -66,18 +66,6 @@ function DriveLogo({ className }: { className?: string }) {
 export function ImportarDrivePanel() {
   const [unidades, setUnidades] = useState<CarpetaDriveUI[] | null>(null);
 
-  // De qué cuenta va a traer. Es la misma que está conectada arriba para el
-  // correo y el calendario, y no siempre es obvio: cada empresa tiene la suya
-  // y traer Marketing de Habana con la cuenta de Bacanal no da ningún error,
-  // simplemente no aparece la carpeta.
-  const [cuentaGoogle, setCuentaGoogle] = useState<string | null>(null);
-  useEffect(() => {
-    const c = document.cookie
-      .split("; ")
-      .find((x) => x.startsWith("g_email="))
-      ?.split("=")[1];
-    setCuentaGoogle(c ? decodeURIComponent(c) : null);
-  }, []);
   const [raices, setRaices] = useState<Carpeta[]>([]);
   const [inventario, setInventario] = useState<Inventario | null>(null);
   const [mapeo, setMapeo] = useState<Record<string, string>>({});
@@ -267,13 +255,8 @@ export function ImportarDrivePanel() {
       </div>
 
       <p className="-mt-3 text-xs text-muted-foreground">
-        Trae las carpetas de{" "}
-        {cuentaGoogle ? (
-          <span className="font-medium text-foreground">{cuentaGoogle}</span>
-        ) : (
-          "la cuenta de Google conectada arriba"
-        )}
-        . Para traer las de otra empresa, cambia de cuenta en la barra superior.
+        Trae las carpetas de la cuenta de Google conectada arriba. Para traer
+        las de otra empresa, cambia de cuenta en la barra superior.
       </p>
 
       {faltaPermiso && (

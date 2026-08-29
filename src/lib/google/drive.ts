@@ -321,7 +321,28 @@ export async function descargarArchivo(
     ? `${DRIVE_API}/files/${archivoId}/export?mimeType=${encodeURIComponent(exp.mime)}`
     : `${DRIVE_API}/files/${archivoId}?alt=media&supportsAllDrives=true`;
 
-  const res = await driveFetch(url, accessToken);
+  let res: Response;
+  try {
+    res = await driveFetch(url, accessToken);
+  } catch (err) {
+    // Hay archivos que Drive declara como .xlsx o .docx pero que en realidad
+    // son documentos nativos suyos: al pedirlos responde "usa Export". El tipo
+    // declarado miente, así que no hay forma de saberlo de antemano. Si pasa,
+    // se reintenta exportando en el formato Office que le corresponde.
+    const esNativoEncubierto =
+      !exp && String(err).includes("Only files with binary content");
+    if (!esNativoEncubierto) throw err;
+
+    const destino = mime.includes("spreadsheet")
+      ? EXPORTACIONES["application/vnd.google-apps.spreadsheet"]
+      : mime.includes("presentation")
+        ? EXPORTACIONES["application/vnd.google-apps.presentation"]
+        : EXPORTACIONES["application/vnd.google-apps.document"];
+    res = await driveFetch(
+      `${DRIVE_API}/files/${archivoId}/export?mimeType=${encodeURIComponent(destino.mime)}`,
+      accessToken,
+    );
+  }
   if (!res.body) throw new Error("Drive devolvió una respuesta vacía");
 
   const largo = res.headers.get("content-length");
