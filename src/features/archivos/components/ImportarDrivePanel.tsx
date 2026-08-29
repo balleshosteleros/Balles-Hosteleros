@@ -12,7 +12,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { HardDriveDownload, ChevronRight, AlertTriangle, Check } from "lucide-react";
+import { ChevronRight, AlertTriangle, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
 import { toast } from "sonner";
@@ -49,8 +49,35 @@ function proponerDestino(nombreDrive: string, raices: Carpeta[]): string {
   return match?.id ?? "";
 }
 
+/** Logo de Google Drive: deja claro de dónde sale el material. */
+function DriveLogo({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 87.3 78" className={className} aria-hidden="true" focusable="false">
+      <path fill="#0066da" d="M6.6 66.85l3.85 6.65c.8 1.4 1.95 2.5 3.3 3.3l13.75-23.8H0c0 1.55.4 3.1 1.2 4.5z" />
+      <path fill="#00ac47" d="M43.65 25L29.9 1.2c-1.35.8-2.5 1.9-3.3 3.3l-25.4 44A9.06 9.06 0 000 53h27.5z" />
+      <path fill="#ea4335" d="M73.55 76.8c1.35-.8 2.5-1.9 3.3-3.3l1.6-2.75L86.1 57.5c.8-1.4 1.2-2.95 1.2-4.5H59.798l5.852 11.5z" />
+      <path fill="#00832d" d="M43.65 25L57.4 1.2C56.05.4 54.5 0 52.9 0H34.4c-1.6 0-3.15.45-4.5 1.2z" />
+      <path fill="#2684fc" d="M59.8 53H27.5L13.75 76.8c1.35.8 2.9 1.2 4.5 1.2h50.8c1.6 0 3.15-.45 4.5-1.2z" />
+      <path fill="#ffba00" d="M73.4 26.5l-12.7-22c-.8-1.4-1.95-2.5-3.3-3.3L43.65 25L59.8 53h27.45c0-1.55-.4-3.1-1.2-4.5z" />
+    </svg>
+  );
+}
+
 export function ImportarDrivePanel() {
   const [unidades, setUnidades] = useState<CarpetaDriveUI[] | null>(null);
+
+  // De qué cuenta va a traer. Es la misma que está conectada arriba para el
+  // correo y el calendario, y no siempre es obvio: cada empresa tiene la suya
+  // y traer Marketing de Habana con la cuenta de Bacanal no da ningún error,
+  // simplemente no aparece la carpeta.
+  const [cuentaGoogle, setCuentaGoogle] = useState<string | null>(null);
+  useEffect(() => {
+    const c = document.cookie
+      .split("; ")
+      .find((x) => x.startsWith("g_email="))
+      ?.split("=")[1];
+    setCuentaGoogle(c ? decodeURIComponent(c) : null);
+  }, []);
   const [raices, setRaices] = useState<Carpeta[]>([]);
   const [inventario, setInventario] = useState<Inventario | null>(null);
   const [mapeo, setMapeo] = useState<Record<string, string>>({});
@@ -235,9 +262,19 @@ export function ImportarDrivePanel() {
   return (
     <div className="space-y-5 py-2">
       <div className="flex items-center gap-2">
-        <HardDriveDownload className="h-4 w-4 text-cyan-600" />
+        <DriveLogo className="h-4 w-4" />
         <span className="text-sm font-medium">Importar desde Google Drive</span>
       </div>
+
+      <p className="-mt-3 text-xs text-muted-foreground">
+        Trae las carpetas de{" "}
+        {cuentaGoogle ? (
+          <span className="font-medium text-foreground">{cuentaGoogle}</span>
+        ) : (
+          "la cuenta de Google conectada arriba"
+        )}
+        . Para traer las de otra empresa, cambia de cuenta en la barra superior.
+      </p>
 
       {faltaPermiso && (
         <div className="rounded-md border border-amber-300 bg-amber-50 p-3 dark:border-amber-800 dark:bg-amber-950/40">
@@ -258,7 +295,14 @@ export function ImportarDrivePanel() {
         <div>
           {!unidades ? (
             <Button size="sm" onClick={() => void onConectar()} disabled={cargando}>
-              {cargando ? "Buscando…" : "Ver carpetas de Drive"}
+              {cargando ? (
+                "Buscando…"
+              ) : (
+                <>
+                  <DriveLogo className="mr-1.5 h-3.5 w-3.5" />
+                  Ver carpetas de Drive
+                </>
+              )}
             </Button>
           ) : (
             <div className="space-y-1">
@@ -269,7 +313,7 @@ export function ImportarDrivePanel() {
                   disabled={cargando}
                   className="flex w-full items-center gap-2 rounded-md border px-3 py-2 text-left text-sm hover:bg-muted disabled:opacity-50"
                 >
-                  <HardDriveDownload className="h-4 w-4 shrink-0 text-cyan-600" />
+                  <DriveLogo className="h-4 w-4 shrink-0" />
                   <span className="truncate">{u.nombre}</span>
                   <ChevronRight className="ml-auto h-4 w-4 shrink-0 text-muted-foreground" />
                 </button>
