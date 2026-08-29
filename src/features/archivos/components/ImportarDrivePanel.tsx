@@ -414,6 +414,7 @@ export function ImportarDrivePanel() {
                     />
                   </div>
                   <p className="text-xs font-medium">
+                    {Math.floor((progreso.copiados / progreso.total) * 100)}% ·{" "}
                     {progreso.copiados.toLocaleString("es-ES")} de{" "}
                     {progreso.total.toLocaleString("es-ES")} archivos listos
                   </p>
