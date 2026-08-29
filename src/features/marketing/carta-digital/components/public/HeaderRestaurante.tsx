@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { useEffect, useState } from "react";
+import { VolverAWebPublica } from "@/shared/components/VolverAWebPublica";
 import type { CartaEmpresaPublica } from "../../types";
 
 export function HeaderRestaurante({ empresa }: { empresa: CartaEmpresaPublica }) {
@@ -24,66 +25,43 @@ export function HeaderRestaurante({ empresa }: { empresa: CartaEmpresaPublica })
     <header className="relative isolate">
       <div
         className="relative h-[30vh] min-h-[210px] w-full overflow-hidden sm:h-[36vh] sm:min-h-[260px]"
-        style={{
-          // Con imagen de cabecera el fondo solo rellena lo que sobra: en negro
-          // pasa desapercibido. Sin imagen, el degradado de marca lo tapa entero.
-          backgroundColor: empresa.carta_hero_url ? "#0a0a0a" : "var(--carta-primario)",
-        }}
+        style={{ backgroundColor: "var(--carta-primario)" }}
       >
-        {empresa.carta_hero_url ? (
+        {/* Fondo de marca SIEMPRE, haya o no imagen de cabecera. Antes, con
+            imagen, el fondo era negro plano: las cabeceras reales son logos
+            cuadrados sobre blanco, y `object-contain` dejaba un recuadro
+            blanco flotando en un mar negro. Ahora la imagen se apoya sobre el
+            mismo degradado de marca que la version sin foto. */}
+        <div className="absolute inset-0 transition-opacity" style={{ opacity: heroOpacity }}>
           <div
-            className="absolute inset-0 transition-transform duration-100 ease-out will-change-transform"
-            style={{ transform: `translateY(${heroParallax}px)`, opacity: heroOpacity }}
-          >
-            {/* `object-contain` y sin `scale`: estas cabeceras suelen ser el
-                rótulo del negocio, y recortarlas se comía parte del nombre.
-                El fondo en negro rellena lo que sobra sin bandas raras. */}
-            <Image
-              src={empresa.carta_hero_url}
-              alt={empresa.nombre}
-              fill
-              priority
-              sizes="100vw"
-              className="object-contain"
-            />
-          </div>
-        ) : (
-          // Sin foto de cabecera —lo normal al empezar— un degradado plano deja
-          // la carta con aire de plantilla sin terminar. Estas tres capas dan
-          // profundidad usando SOLO el color de marca de la empresa: halo de
-          // luz, viñeta que cierra los bordes y una trama fina que rompe el
-          // plano de color. Funciona igual sea cual sea el color del cliente.
-          <div className="absolute inset-0 transition-opacity" style={{ opacity: heroOpacity }}>
-            <div
-              className="absolute inset-0"
-              style={{
-                background:
-                  "radial-gradient(115% 78% at 50% 20%, color-mix(in srgb, var(--carta-acento) 92%, #fff) 0%, var(--carta-primario) 40%, var(--carta-fondo) 100%)",
-              }}
-            />
-            <div
-              className="absolute inset-0"
-              style={{
-                background:
-                  "radial-gradient(60% 42% at 50% 26%, rgba(255,255,255,0.30) 0%, transparent 62%)",
-              }}
-            />
-            <div
-              className="absolute inset-0 opacity-[0.16] mix-blend-overlay"
-              style={{
-                backgroundImage:
-                  "repeating-linear-gradient(115deg, rgba(255,255,255,.55) 0 1px, transparent 1px 7px)",
-              }}
-            />
-            <div
-              className="absolute inset-0"
-              style={{
-                background:
-                  "radial-gradient(125% 95% at 50% 40%, transparent 42%, rgba(0,0,0,0.62) 100%)",
-              }}
-            />
-          </div>
-        )}
+            className="absolute inset-0"
+            style={{
+              background:
+                "radial-gradient(85% 62% at 50% 30%, color-mix(in srgb, var(--carta-acento) 58%, var(--carta-fondo)) 0%, color-mix(in srgb, var(--carta-primario) 45%, var(--carta-fondo)) 45%, var(--carta-fondo) 100%)",
+            }}
+          />
+          <div
+            className="absolute inset-0"
+            style={{
+              background:
+                "radial-gradient(50% 36% at 50% 30%, rgba(255,255,255,0.14) 0%, transparent 66%)",
+            }}
+          />
+          <div
+            className="absolute inset-0 opacity-[0.07] mix-blend-overlay"
+            style={{
+              backgroundImage:
+                "repeating-linear-gradient(115deg, rgba(255,255,255,.55) 0 1px, transparent 1px 7px)",
+            }}
+          />
+          <div
+            className="absolute inset-0"
+            style={{
+              background:
+                "radial-gradient(110% 82% at 50% 38%, transparent 34%, rgba(0,0,0,0.78) 100%)",
+            }}
+          />
+        </div>
 
         <div
           className="absolute inset-0 transition-opacity"
@@ -94,14 +72,40 @@ export function HeaderRestaurante({ empresa }: { empresa: CartaEmpresaPublica })
           }}
         />
 
-        {/* Cuando hay imagen de cabecera, esa imagen SUELE llevar ya el nombre
-            y el logotipo del negocio (es la que usan en redes). Repetirlos
-            encima tapaba la imagen y dejaba el nombre ilegible sobre el
-            propio rótulo. Con foto: la imagen habla sola y el nombre queda
-            para lectores de pantalla. Sin foto: el nombre es el protagonista. */}
+        {/* Salida hacia la web del restaurante: la carta es una ruta propia y
+            sin esto el cliente se quedaba encerrado en ella. */}
+        <div className="absolute left-4 top-4 z-20 sm:left-6 sm:top-6">
+          <VolverAWebPublica />
+        </div>
+
+        {/* La imagen de cabecera que suben los clientes es su ROTULO: un logo
+            cuadrado, casi siempre sobre fondo blanco. Tratarla como foto
+            panoramica dejaba un recuadro blanco pegado en medio del negro.
+            Va como marca centrada, con ancho acotado y esquinas redondeadas,
+            para que el blanco se lea como una placa y no como un hueco. */}
         <div className="relative z-10 flex h-full flex-col items-center justify-center px-6 text-center">
           {empresa.carta_hero_url ? (
-            <h1 className="sr-only">{empresa.nombre}</h1>
+            <>
+              <h1 className="sr-only">{empresa.nombre}</h1>
+              <span
+                aria-hidden
+                className="relative block h-[54%] w-auto max-w-[min(78vw,340px)] overflow-hidden rounded-2xl shadow-[0_10px_40px_rgba(0,0,0,0.45)] transition-transform duration-100 ease-out will-change-transform"
+                style={{
+                  aspectRatio: "1 / 1",
+                  transform: `translateY(${heroParallax * 0.35}px)`,
+                  border: "1px solid color-mix(in srgb, var(--carta-acento) 40%, transparent)",
+                }}
+              >
+                <Image
+                  src={empresa.carta_hero_url}
+                  alt=""
+                  fill
+                  priority
+                  sizes="(max-width: 640px) 78vw, 340px"
+                  className="object-contain"
+                />
+              </span>
+            </>
           ) : (
             <>
               {marcaUrl ? (
@@ -146,6 +150,7 @@ export function HeaderRestaurante({ empresa }: { empresa: CartaEmpresaPublica })
               </h1>
             </>
           )}
+
 
           {empresa.carta_descripcion ? (
             <p className="mt-3 max-w-xl text-sm font-light italic leading-relaxed text-white/85 drop-shadow sm:text-base">

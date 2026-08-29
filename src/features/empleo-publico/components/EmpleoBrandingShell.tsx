@@ -1,5 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
+import { VolverAWebPublica } from "@/shared/components/VolverAWebPublica";
 import type { EmpresaPublica } from "../services/empleo-fetch";
 
 export function EmpleoBrandingShell({
@@ -46,7 +47,12 @@ export function EmpleoBrandingShell({
 
       {/* Cabecera con isotipo centrado (sin logo arriba a la izquierda) */}
       <header className="w-full">
-        <div className="max-w-5xl mx-auto px-4 pt-10 pb-2 md:pt-14 flex flex-col items-center text-center gap-3">
+        {/* Salida hacia la web del restaurante: el portal de empleo es una ruta
+            propia y sin esto el candidato se quedaba encerrado en ella. */}
+        <div className="max-w-5xl mx-auto px-4 pt-5">
+          <VolverAWebPublica className="!border-border !bg-background/70 !text-foreground hover:!bg-muted" />
+        </div>
+        <div className="max-w-5xl mx-auto px-4 pt-6 pb-2 md:pt-8 flex flex-col items-center text-center gap-3">
           <Link
             href={`/empleo/${empresa.empleo_slug}`}
             className="flex flex-col items-center gap-3 hover:opacity-90 transition-opacity"

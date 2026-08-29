@@ -195,7 +195,11 @@ function InstagramPublico({
           />
 
           {/* La pantalla: aquí dentro va el perfil */}
-          <div className="absolute left-[33%] top-[19%] h-[58%] w-[37%] overflow-hidden bg-black">
+          {/* Las esquinas van REDONDEADAS: la pantalla de la foto es un movil
+              real, con sus cuatro cantos curvos. Recortando en angulo recto,
+              la captura sobresalia por las esquinas y el montaje cantaba.
+              El radio es porcentual para que siga a la foto al escalar. */}
+          <div className="absolute left-[33.4%] top-[17.6%] h-[61.5%] w-[36.4%] overflow-hidden rounded-[10%/5%] bg-black">
             {captura_url ? (
               /* Captura REAL del perfil dentro de la pantalla. Se muestra tal
                  cual, sin recomponer nada: los seguidores y la cuadrícula son
@@ -210,13 +214,18 @@ function InstagramPublico({
                 aria-label={`Perfil de @${handle} en Instagram`}
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
+                {/* `object-contain`, no `cover`: una captura de perfil es
+                    estrecha y alta, y `cover` la recortaba por los lados
+                    comiendose el avatar y los contadores. Contenida entra
+                    entera y encaja con la pantalla del movil. */}
                 <img
                   src={captura_url}
                   alt={`Perfil de @${handle} en Instagram`}
                   loading="lazy"
                   decoding="async"
-                  className="h-full w-full object-cover object-top"
+                  className="h-full w-full object-contain object-top"
                 />
+
               </a>
             ) : (
             <div className="absolute inset-0 origin-top-left scale-[0.55] [height:181.8%] [width:181.8%]">
@@ -406,6 +415,32 @@ function InstagramPublico({
           </div>
         </div>
 
+        {/* Llamada a seguir el perfil, FUERA del movil y a tamano real. Dentro
+            de la pantalla el boton mide 12px: se ve, pero nadie lo pulsa. La
+            frase no es la de manual ("siguenos para no perderte nada"): habla
+            de lo que de verdad se cuenta en el perfil de un cocteleria. */}
+        <div className="mt-12 flex flex-col items-center gap-3 text-center">
+          <p className="flex items-center gap-1.5 text-lg font-semibold md:text-xl">
+            <span className="opacity-90">@{handle}</span>
+            {verificado ? <TickVerificado /> : null}
+          </p>
+          <p className="max-w-md text-sm opacity-70 md:text-base">
+            Lo bueno pasa antes de salir en la carta.
+          </p>
+          <a
+            href={href}
+            target="_blank"
+            rel="noreferrer noopener"
+            className="mt-1 inline-flex items-center gap-2 rounded-full px-7 py-3 text-sm font-bold text-black transition-transform hover:-translate-y-0.5 md:text-base"
+            style={{
+              backgroundColor: "var(--pw-primario)",
+              boxShadow: "0 14px 34px -14px color-mix(in srgb, var(--pw-primario) 75%, transparent)",
+            }}
+          >
+            <IconoInstagram className="h-4 w-4" />
+            Míranos de cerca
+          </a>
+        </div>
       </div>
     </section>
   );
@@ -547,7 +582,7 @@ function NotaGoogle({
 }
 
 function PremiosPublico({ bloque }: { bloque: Extract<Bloque, { tipo: "premios" }> }) {
-  const { titulo, frase, href, items } = bloque.datos;
+  const { titulo, frase, items } = bloque.datos;
   if (!items.length) return null;
 
   return (
@@ -608,17 +643,9 @@ function PremiosPublico({ bloque }: { bloque: Extract<Bloque, { tipo: "premios" 
         ))}
       </div>
 
-      {href ? (
-        <a
-          href={href}
-          target="_blank"
-          rel="noreferrer noopener"
-          className="mt-10 inline-block text-sm font-semibold underline-offset-4 hover:underline"
-          style={{ color: "var(--pw-primario)" }}
-        >
-          Ver nuestra ficha completa
-        </a>
-      ) : null}
+      {/* SIN enlace a la ficha externa: mandaba al cliente fuera de la web,
+          a Restaurant Guru. Las insignias se quedan —el reconocimiento es
+          nuestro— pero la visita no se regala a un tercero. */}
     </section>
   );
 }
