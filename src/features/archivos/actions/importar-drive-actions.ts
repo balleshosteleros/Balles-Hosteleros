@@ -70,17 +70,15 @@ async function getAccessToken(): Promise<string | null> {
  * problema. Aquí se renueva y se reintenta una vez.
  */
 async function conTokenVivo<T>(
-  token: { valor: string },
+  token: { valor: string; refresh: string | null },
   accion: (t: string) => Promise<T>,
 ): Promise<T> {
   try {
     return await accion(token.valor);
   } catch (err) {
     if (!String(err).includes("Drive 401")) throw err;
-    const c = await cookies();
-    const refresh = c.get("g_refresh_token")?.value;
-    if (!refresh) throw err;
-    const nuevo = await refreshAccessToken(refresh);
+    if (!token.refresh) throw err;
+    const nuevo = await refreshAccessToken(token.refresh);
     if (!nuevo) throw err;
     token.valor = nuevo;
     return await accion(nuevo);
@@ -180,14 +178,55 @@ export async function importarUnidad(
   mapeo: Mapeo,
   importacionId?: string,
 ): Promise<Res<{ importacionId: string; terminada: boolean }>> {
+  const ctx = await getCtx();
+  if (!ctx) return fallo("No autenticado");
+  const tokenInicial = await getAccessToken();
+  const c = await cookies();
+  return ejecutarImportacion({
+    empresaId: ctx.empresaId,
+    userId: ctx.userId,
+    tokenInicial,
+    refreshToken: c.get("g_refresh_token")?.value ?? null,
+    googleEmail: c.get("g_email")?.value ?? null,
+    unidadId,
+    unidadNombre,
+    mapeo,
+    importacionId,
+  });
+}
+
+/**
+ * El trabajo de verdad, sin depender de cookies ni de quién llame.
+ *
+ * Lo usan dos sitios: la pantalla (con la sesión del usuario) y el cron que
+ * continúa las importaciones a medias cuando no hay nadie delante.
+ */
+export async function ejecutarImportacion(args: {
+  empresaId: string;
+  userId: string;
+  tokenInicial: string | null;
+  /** Para renovar el permiso a mitad: el de Google caduca a la hora. */
+  refreshToken?: string | null;
+  googleEmail: string | null;
+  unidadId: string;
+  unidadNombre: string;
+  mapeo: Mapeo;
+  importacionId?: string;
+}): Promise<Res<{ importacionId: string; terminada: boolean }>> {
+  const {
+    unidadId,
+    unidadNombre,
+    mapeo,
+    importacionId,
+    tokenInicial,
+    googleEmail,
+  } = args;
+  const ctx = { empresaId: args.empresaId, userId: args.userId };
   try {
-    const ctx = await getCtx();
-    if (!ctx) return fallo("No autenticado");
-    const tokenInicial = await getAccessToken();
     if (!tokenInicial) return fallo("Conecta primero la cuenta de Google.");
     // Caja mutable: si el permiso caduca a mitad, se renueva aquí dentro y el
     // resto de la tanda sigue con el nuevo sin volver a empezar.
-    const token = { valor: tokenInicial };
+    const token = { valor: tokenInicial, refresh: args.refreshToken ?? null };
     if (!Object.keys(mapeo).length) {
       return fallo("Asigna al menos una carpeta a un departamento.");
     }
@@ -225,6 +264,8 @@ export async function importarUnidad(
           mapeo,
           estado: "en_curso",
           creado_por: ctx.userId,
+          // Con qué cuenta seguir cuando no haya nadie delante.
+          google_email: googleEmail,
         })
         .select("id")
         .single();

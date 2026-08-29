@@ -1,6 +1,12 @@
 {
-  "regions": ["dub1"],
+  "regions": [
+    "dub1"
+  ],
   "crons": [
+    {
+      "path": "/api/cron/archivos-importacion",
+      "schedule": "*/5 * * * *"
+    },
     {
       "path": "/api/cron/empresas-purga",
       "schedule": "0 1 * * *"
