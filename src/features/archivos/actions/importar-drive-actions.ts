@@ -29,9 +29,9 @@ import {
   descargarArchivo,
   formatoDestino,
   listarUnidadCompleta,
-  listarUnidadesCompartidas,
+  listarCarpetasDeDrive,
   type DriveArchivo,
-  type UnidadCompartida,
+  type CarpetaDrive,
 } from "@/lib/google/drive";
 import { cookies } from "next/headers";
 // Los tipos viven aparte: un fichero "use server" solo puede exportar
@@ -75,13 +75,13 @@ async function getCtx() {
  * 1 · ELEGIR UNIDAD
  * ────────────────────────────────────────────────────────────────────────*/
 
-export async function listarUnidades(): Promise<Res<UnidadCompartida[]>> {
+export async function listarUnidades(): Promise<Res<CarpetaDrive[]>> {
   try {
     const token = await getAccessToken();
     if (!token) {
       return fallo("Conecta primero la cuenta de Google donde están las carpetas.");
     }
-    return { ok: true, data: await listarUnidadesCompartidas(token) };
+    return { ok: true, data: await listarCarpetasDeDrive(token) };
   } catch (err) {
     const msg = mensajeError(err);
     console.error("[importar-drive] listarUnidades:", msg);

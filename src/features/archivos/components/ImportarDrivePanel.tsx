@@ -23,7 +23,7 @@ import {
 import type {
   Inventario,
   EstadoImportacion,
-  UnidadCompartidaUI,
+  CarpetaDriveUI,
 } from "@/features/archivos/types/paneles";
 import { listCarpetasRaiz } from "@/features/archivos/actions/archivos-actions";
 import type { Carpeta } from "@/features/archivos/types";
@@ -50,7 +50,7 @@ function proponerDestino(nombreDrive: string, raices: Carpeta[]): string {
 }
 
 export function ImportarDrivePanel() {
-  const [unidades, setUnidades] = useState<UnidadCompartidaUI[] | null>(null);
+  const [unidades, setUnidades] = useState<CarpetaDriveUI[] | null>(null);
   const [raices, setRaices] = useState<Carpeta[]>([]);
   const [inventario, setInventario] = useState<Inventario | null>(null);
   const [mapeo, setMapeo] = useState<Record<string, string>>({});
@@ -118,7 +118,7 @@ export function ImportarDrivePanel() {
     )}`;
   };
 
-  const onElegirUnidad = async (u: UnidadCompartidaUI) => {
+  const onElegirUnidad = async (u: CarpetaDriveUI) => {
     // Abortable de verdad: cancelar corta la petición, no solo ignora
     // la respuesta. Y con tope de tiempo, para no esperar indefinidamente.
     const ctrl = new AbortController();

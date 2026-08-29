@@ -30,8 +30,8 @@ export interface DriveArchivo {
   modificado: string | null;
 }
 
-/** Unidad compartida (Shared Drive). */
-export interface UnidadCompartida {
+/** Una carpeta de Drive que se puede importar. */
+export interface CarpetaDrive {
   id: string;
   nombre: string;
 }
@@ -105,41 +105,17 @@ async function driveFetch(
   throw new Error(`Drive no responde tras ${intentos} intentos (${ultimoError})`);
 }
 
-/** Unidades compartidas visibles para la cuenta conectada. */
-export async function listarUnidadesCompartidas(
+/**
+ * Carpetas de primer nivel de "Mi unidad": los orígenes que se pueden importar.
+ *
+ * Antes miraba también en unidades compartidas, pero se deshicieron (ago-2026)
+ * y cada empresa se quedó su material en su propia cuenta. Se busca solo donde
+ * está de verdad.
+ */
+export async function listarCarpetasDeDrive(
   accessToken: string,
-): Promise<UnidadCompartida[]> {
-  const salida: UnidadCompartida[] = [];
-  let pageToken: string | undefined;
-
-  do {
-    const params = new URLSearchParams({ pageSize: "100", fields: "nextPageToken,drives(id,name)" });
-    if (pageToken) params.set("pageToken", pageToken);
-
-    const res = await driveFetch(`${DRIVE_API}/drives?${params}`, accessToken);
-    const json = (await res.json()) as {
-      drives?: Array<{ id: string; name: string }>;
-      nextPageToken?: string;
-    };
-    for (const d of json.drives ?? []) salida.push({ id: d.id, nombre: d.name });
-    pageToken = json.nextPageToken;
-  } while (pageToken);
-
-  // Las carpetas de primer nivel de "Mi unidad" cuentan como orígenes.
-  //
-  // Las unidades compartidas se deshicieron (ago-2026) y cada empresa se quedó
-  // su material en su propia cuenta, así que sin esto el importador no
-  // encuentra nada que traer.
-  salida.push(...(await listarCarpetasDeMiUnidad(accessToken)));
-
-  return salida;
-}
-
-/** Carpetas de primer nivel de "Mi unidad", como orígenes de importación. */
-async function listarCarpetasDeMiUnidad(
-  accessToken: string,
-): Promise<UnidadCompartida[]> {
-  const salida: UnidadCompartida[] = [];
+): Promise<CarpetaDrive[]> {
+  const salida: CarpetaDrive[] = [];
   let pageToken: string | undefined;
 
   do {

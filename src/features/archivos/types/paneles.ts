@@ -59,7 +59,7 @@ export interface UsoArchivos {
 }
 
 /** Unidad compartida de Drive. */
-export interface UnidadCompartidaUI {
+export interface CarpetaDriveUI {
   id: string;
   nombre: string;
 }
