@@ -412,7 +412,10 @@ export async function importarUnidad(
               .update({
                 copiados: baseCopiados + copiados,
                 copiados_bytes: baseBytes + copiadosBytes,
-                omitidos,
+                // Lo que ya estaba antes de esta vuelta. No se cuenta sobre la
+                // marcha: en la última vuelta no se copia ni se salta nada
+                // nuevo, y ese cero borraba el total.
+                omitidos: Math.max(0, yaImportados.size - copiados),
                 updated_at: new Date().toISOString(),
               })
               .eq("id", impId);
@@ -436,7 +439,7 @@ export async function importarUnidad(
         estado: terminada ? "terminada" : "en_curso",
         copiados: baseCopiados + copiados,
         copiados_bytes: baseBytes + copiadosBytes,
-        omitidos,
+        omitidos: Math.max(0, yaImportados.size - copiados),
         fallidos: Number(previa?.fallidos ?? 0) + errores.length,
         errores: [
           ...((previa?.errores as Array<unknown>) ?? []),
