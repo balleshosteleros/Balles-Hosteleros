@@ -62,10 +62,6 @@ export const ROLES_SEED: RolSeed[] = [
   { nombre: "SALA", descripcion: "Servicio y atención en sala", departamento: null, protected: false, permisos: [{ modulo: "SALA", ver: true, editar: true }] },
   { nombre: "ARTISTAS", descripcion: "Rol de artistas sin acceso a departamentos.", departamento: "ARTISTAS", protected: false, permisos: [] },
   { nombre: "MANTENIMIENTO", descripcion: "Rol de mantenimiento sin acceso a departamentos.", departamento: "MANTENIMIENTO", protected: false, permisos: [] },
-  // Rol técnico para colaboradores de desarrollo. NO da rango de plataforma ni
-  // acceso a módulos de negocio, y deliberadamente NO se le asignan credenciales
-  // (ROL VISIBLE) en el módulo de Accesos: nunca podrá ver contraseñas.
-  { nombre: "PROGRAMADOR", descripcion: "Colaborador de desarrollo. Sin acceso a credenciales ni a módulos de negocio.", departamento: null, protected: false, permisos: [] },
 ];
 
 export function normalizeRolNombre(nombre: string): string {

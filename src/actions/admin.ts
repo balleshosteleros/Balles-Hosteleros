@@ -30,7 +30,7 @@ async function assertRoleExistsInEmpresa(
     .limit(1)
     .maybeSingle()
   if (error) return { error: `Error validando rol: ${friendlyError(error)}` }
-  if (!data) return { error: `El rol "${rolLabel}" no existe en empresa_roles. Créalo primero en la pestaña Roles.` }
+  if (!data) return { error: `El rol "${rolLabel}" no existe en esta empresa.` }
   return {}
 }
 
