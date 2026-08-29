@@ -110,8 +110,7 @@ export async function GET(request: Request) {
       const dg = (empresa?.datos_generales as Record<string, unknown> | null) ?? {};
       const correoRrhh =
         (typeof dg.correoRrhh === "string" ? dg.correoRrhh : "") ||
-        ((empresa?.email_contacto as string | null) ?? "") ||
-        (typeof dg.correoGeneral === "string" ? dg.correoGeneral : "");
+        ((empresa?.email_contacto as string | null) ?? "");
       const empresaNombre = (empresa?.nombre as string) ?? "la empresa";
 
       {

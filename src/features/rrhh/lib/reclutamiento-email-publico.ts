@@ -116,13 +116,9 @@ async function buildVarsPublico(
     empresa_nombre: (emp?.nombre as string | null) ?? "",
     // Correo de RRHH: `email_rrhh` (recomendado) y `empresa_email` (alias) con el mismo valor.
     email_rrhh:
-      dgStr("correoRrhh") ||
-      ((emp?.email_contacto as string | null) ?? "") ||
-      dgStr("correoGeneral"),
+      dgStr("correoRrhh") || ((emp?.email_contacto as string | null) ?? ""),
     empresa_email:
-      dgStr("correoRrhh") ||
-      ((emp?.email_contacto as string | null) ?? "") ||
-      dgStr("correoGeneral"),
+      dgStr("correoRrhh") || ((emp?.email_contacto as string | null) ?? ""),
     empresa_telefono: dgStr("telefonoPrincipal") || dgStr("telefonoSecundario"),
     empresa_web: dgStr("web"),
     empresa_direccion: dgStr("direccionLocal") || ((emp?.direccion as string | null) ?? ""),

@@ -74,8 +74,8 @@ export async function getDestinatariosAutomaticos(): Promise<{ rrhh: string; ges
   const dg = (emp?.datos_generales as Record<string, unknown> | null) ?? {};
   const dgStr = (k: string) => (typeof dg[k] === "string" ? (dg[k] as string).trim() : "");
   return {
-    rrhh: dgStr("correoRrhh") || ((emp?.email_contacto as string | null)?.trim() ?? "") || dgStr("correoGeneral"),
-    gestoria: dgStr("correoGestoria") || dgStr("correoGeneral"),
+    rrhh: dgStr("correoRrhh") || ((emp?.email_contacto as string | null)?.trim() ?? ""),
+    gestoria: dgStr("correoGestoria"),
   };
 }
 
@@ -946,13 +946,9 @@ export async function buildReclutamientoEmailVars(
     // Correo de RRHH (Ajustes → RRHH → Reclutamiento). `email_rrhh` es el código
     // recomendado; `empresa_email` es un alias antiguo con el MISMO valor.
     email_rrhh:
-      dgStr("correoRrhh") ||
-      ((emp?.email_contacto as string | null) ?? "") ||
-      dgStr("correoGeneral"),
+      dgStr("correoRrhh") || ((emp?.email_contacto as string | null) ?? ""),
     empresa_email:
-      dgStr("correoRrhh") ||
-      ((emp?.email_contacto as string | null) ?? "") ||
-      dgStr("correoGeneral"),
+      dgStr("correoRrhh") || ((emp?.email_contacto as string | null) ?? ""),
     empresa_telefono: dgStr("telefonoPrincipal") || dgStr("telefonoSecundario"),
     empresa_web: dgStr("web"),
     empresa_direccion: dgStr("direccionLocal") || ((emp?.direccion as string | null) ?? ""),

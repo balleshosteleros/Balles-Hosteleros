@@ -115,7 +115,7 @@ async function reunirDatosEmpresa(empresaId: string): Promise<DatosEmpresaWeb | 
     colorSecundario: (emp.color_secundario as string | null) ?? null,
     direccion: (dg.direccionLocal ?? dg.direccionFiscal ?? "").trim() || null,
     telefono: (dg.telefonoPrincipal ?? "").trim() || null,
-    email: (dg.correoReservas ?? dg.correoGeneral ?? dg.correoGerencia ?? "").trim() || null,
+    email: (dg.correoReservas ?? dg.correoGerencia ?? "").trim() || null,
     ciudad: (dg.ciudad ?? "").trim() || null,
     tieneAlgunaRed,
     testimonios,

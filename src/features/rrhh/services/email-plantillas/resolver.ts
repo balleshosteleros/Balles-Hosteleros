@@ -109,12 +109,13 @@ export async function resolverDestinatario(
       .maybeSingle();
     const dg = (data?.datos_generales as Record<string, unknown> | null) ?? {};
     const dgStr = (k: string) => (typeof dg[k] === "string" ? (dg[k] as string) : "");
-    const clave = limpio(norm.destinoEmail) || "correoGeneral";
+    // Cada envío usa el correo de SU departamento: no hay comodín al que caer,
+    // porque un correo genérico manda el mensaje a un buzón que no es el suyo.
+    const clave = limpio(norm.destinoEmail);
     return {
       to:
-        limpio(dgStr(clave)) ||
-        limpio(data?.email_contacto as string | null) ||
-        limpio(dgStr("correoGeneral")),
+        (clave ? limpio(dgStr(clave)) : "") ||
+        limpio(data?.email_contacto as string | null),
       cc: null,
     };
   }

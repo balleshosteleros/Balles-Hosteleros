@@ -35,7 +35,6 @@ type FormState = {
   // Contacto
   telefonoPrincipal: string;
   telefonoSecundario: string;
-  correoGeneral: string;
   // Web y redes sociales
   web: string;
   whatsapp: string;
@@ -62,7 +61,6 @@ const EMPTY: FormState = {
   estado: "Activa",
   telefonoPrincipal: "",
   telefonoSecundario: "",
-  correoGeneral: "",
   web: "",
   whatsapp: "",
   instagram: "",
@@ -75,17 +73,24 @@ const EMPTY: FormState = {
   primerDiaSemana: "Lunes",
 };
 
-// Campos obligatorios (regla "datos completos obligatorio"): la identidad fiscal
-// Y el contacto. El teléfono no es un adorno: es la vía que se le da al cliente
-// en los correos de reservas (que salen desde un no-reply), la que aparece en
-// los correos de reclutamiento y en los textos legales de la web pública. Sin
-// él, esos textos salen cojos y no hay forma de que nadie conteste.
+// Campos obligatorios (regla "datos completos obligatorio"): la identidad
+// fiscal y el TELÉFONO. El teléfono no es un adorno y no tiene sustituto: es
+// la vía que se le da al cliente en los correos de reservas (que salen desde
+// un no-reply), la que aparece en los correos de reclutamiento y en los textos
+// legales de la web pública.
+//
+// El correo general NO se exige: es solo el último eslabón de una cascada
+// (gerencia → jurídico → admin → general para los textos legales; departamento
+// → general en las plantillas de RRHH). Con los correos por departamento
+// puestos, nunca se llega a usar, así que bloquear el alta por él sería pedir
+// un dato que no hace falta.
+//
 // Web/redes son opcionales (no toda empresa tiene TikTok), el teléfono
 // secundario también, y la config regional ya trae valores por defecto.
 const REQUERIDOS: (keyof FormState)[] = [
   "nombreComercial", "razonSocial", "cif",
   "direccionFiscal", "ciudad", "provincia", "pais", "codigoPostal",
-  "telefonoPrincipal", "correoGeneral",
+  "telefonoPrincipal",
 ];
 
 const ETIQUETAS: Partial<Record<keyof FormState, string>> = {
@@ -98,7 +103,6 @@ const ETIQUETAS: Partial<Record<keyof FormState, string>> = {
   pais: "País",
   codigoPostal: "Código postal",
   telefonoPrincipal: "Teléfono principal",
-  correoGeneral: "Correo general",
 };
 
 /**
@@ -113,15 +117,6 @@ function errorTelefono(v: string): string | null {
   // Más de 15 dígitos es imposible (E.164). Por debajo, aún está escribiendo.
   if (digitos.length > 15) return "El teléfono tiene demasiados dígitos";
   return null;
-}
-
-function errorCorreo(v: string): string | null {
-  const t = v.trim();
-  if (!t) return null;
-  // Sin "@" todavía puede estar escribiéndolo; con "@" ya se puede exigir
-  // que lo que venga detrás tenga forma de dominio.
-  if (!t.includes("@")) return null;
-  return /^[^\s@]+@[^\s@.]+\.[^\s@]+$/.test(t) ? null : "Correo no válido";
 }
 
 // Iniciales del chip: primeras letras de hasta 2 palabras del nombre.
@@ -181,15 +176,8 @@ export function CrearEmpresaModal({ open, onOpenChange }: { open: boolean; onOpe
     }
     const errTel = errorTelefono(form.telefonoPrincipal);
     const errTel2 = errorTelefono(form.telefonoSecundario);
-    const errMail = errorCorreo(form.correoGeneral);
-    if (errTel || errTel2 || errMail) {
-      toast.error(errTel ?? errTel2 ?? errMail ?? "Revisa los datos de contacto");
-      return;
-    }
-    // El correo general se exige completo aquí aunque la validación inline sea
-    // tolerante mientras se escribe (puede no haber tecleado aún la "@").
-    if (!/^[^\s@]+@[^\s@.]+\.[^\s@]+$/.test(form.correoGeneral.trim())) {
-      toast.error("El correo general no es válido");
+    if (errTel || errTel2) {
+      toast.error(errTel ?? errTel2 ?? "Revisa los teléfonos");
       return;
     }
 
@@ -210,7 +198,6 @@ export function CrearEmpresaModal({ open, onOpenChange }: { open: boolean; onOpe
         codigoPostal: form.codigoPostal.trim(),
         telefonoPrincipal: form.telefonoPrincipal.trim(),
         telefonoSecundario: form.telefonoSecundario.trim(),
-        correoGeneral: form.correoGeneral.trim(),
         web: form.web.trim(),
         whatsapp: form.whatsapp.trim(),
         instagram: form.instagram.trim(),
@@ -309,11 +296,6 @@ export function CrearEmpresaModal({ open, onOpenChange }: { open: boolean; onOpe
                 value={form.telefonoSecundario} onChange={(v) => set("telefonoSecundario", v)}
                 error={errorTelefono(form.telefonoSecundario)}
               />
-              <Field
-                label="Correo general" requerido type="email" placeholder="hola@turestaurante.com"
-                value={form.correoGeneral} onChange={(v) => set("correoGeneral", v)}
-                error={errorCorreo(form.correoGeneral)}
-              />
             </CardContent>
           </Card>
 
@@ -394,9 +376,9 @@ export function CrearEmpresaModal({ open, onOpenChange }: { open: boolean; onOpe
           <div className="flex items-start gap-2 px-3 py-2 rounded-md bg-muted/50">
             <Info className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
             <p className="text-xs text-muted-foreground">
-              Los campos marcados con <span className="text-destructive">*</span> son obligatorios: el teléfono y el
-              correo se usan en los correos a clientes, en los de reclutamiento y en los textos legales de la web,
-              así que la empresa no puede quedarse sin ellos. Al crearla se genera de cero toda la estructura
+              Los campos marcados con <span className="text-destructive">*</span> son obligatorios: el teléfono se usa
+              en los correos a clientes, en los de reclutamiento y en los textos legales de la web, así que la
+              empresa no puede quedarse sin él. Al crearla se genera de cero toda la estructura
               estándar del software (departamentos, roles, organigrama, plantillas de correo, configuraciones
               base…), igual que el resto de empresas. El logo se añade después en Ajustes → Empresa.
             </p>

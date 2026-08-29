@@ -131,7 +131,6 @@ const DATOS_ALTA_OBLIGATORIOS: { campo: keyof DatosGenerales; label: string }[] 
   { campo: "pais", label: "País" },
   { campo: "codigoPostal", label: "Código postal" },
   { campo: "telefonoPrincipal", label: "Teléfono principal" },
-  { campo: "correoGeneral", label: "Correo general" },
 ];
 
 export async function createEmpresa(input: {
@@ -159,10 +158,6 @@ export async function createEmpresa(input: {
         ok: false,
         error: `Faltan datos obligatorios de la empresa: ${faltan.join(", ")}`,
       };
-    }
-    const correo = String(dg.correoGeneral ?? "").trim();
-    if (!/^[^\s@]+@[^\s@.]+\.[^\s@]+$/.test(correo)) {
-      return { ok: false, error: "El correo general no es válido" };
     }
 
     const admin = createAdminClient();

@@ -101,7 +101,6 @@ export const ConfiguracionTab = forwardRef<ConfiguracionTabHandle, { hideSaveBut
       <Card>
         <CardHeader className="px-4 pt-3 pb-2"><CardTitle className="text-base">Correos electrónicos</CardTitle></CardHeader>
         <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 px-4 pb-3 pt-0">
-          <Field label="Correo general"       type="email" value={d.correoGeneral}       onChange={(v) => setD("correoGeneral", v)} />
           <Field label="Correo RRHH"          type="email" value={d.correoRrhh}          onChange={(v) => setD("correoRrhh", v)} />
           <Field label="Correo contabilidad"  type="email" value={d.correoContabilidad}  onChange={(v) => setD("correoContabilidad", v)} />
           <Field label="Correo logística"     type="email" value={d.correoLogistica}     onChange={(v) => setD("correoLogistica", v)} />

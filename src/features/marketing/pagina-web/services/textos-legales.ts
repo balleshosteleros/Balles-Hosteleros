@@ -84,8 +84,7 @@ export function extraerDatosLegales(
   const correoDerechos =
     limpio(d.correoGerencia) ||
     limpio(d.correoJuridico) ||
-    limpio(d.correoAdmin) ||
-    limpio(d.correoGeneral);
+    limpio(d.correoAdmin);
 
   return {
     razonSocial: limpio(d.razonSocial),

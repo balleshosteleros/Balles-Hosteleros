@@ -3045,8 +3045,7 @@ async function onBajaContratoCreada(args: {
     const v = dgEmpresa?.[k];
     return typeof v === "string" && v.trim() ? v.trim() : null;
   };
-  const destinoEmpresa =
-    pickCorreoEmpresa("correoRrhh") ?? pickCorreoEmpresa("correoGeneral");
+  const destinoEmpresa = pickCorreoEmpresa("correoRrhh");
   if (destinoEmpresa) {
     const appUrl =
       process.env.NEXT_PUBLIC_APP_URL ?? "https://sistema.balleshosteleros.com";

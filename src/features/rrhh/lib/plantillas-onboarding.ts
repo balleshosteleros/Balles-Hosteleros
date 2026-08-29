@@ -99,7 +99,6 @@ export const DEPARTAMENTOS_CORREO = [
   { clave: "correoDireccion", label: "Dirección" },
   { clave: "correoMarketing", label: "Marketing" },
   { clave: "correoJuridico", label: "Jurídico" },
-  { clave: "correoGeneral", label: "General" },
 ] as const;
 
 export type DepartamentoCorreoClave = (typeof DEPARTAMENTOS_CORREO)[number]["clave"];

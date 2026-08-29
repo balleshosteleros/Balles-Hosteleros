@@ -10,7 +10,7 @@ export function ResumenGeneral() {
     { label: "Empresa", value: d.nombreComercial || empresaActual.nombre, icon: Building2, color: "text-primary" },
     { label: "Usuarios con acceso", value: String(ajustes.usuarios.length), icon: Users, color: "text-blue-500" },
     { label: "Departamentos", value: String(ajustes.departamentos.filter((dp) => dp.estado === "Activo").length), icon: Layers, color: "text-purple-500" },
-    { label: "Correo principal", value: d.correoGeneral || "Sin configurar", icon: Mail, color: "text-orange-500" },
+    { label: "Correo de gerencia", value: d.correoGerencia || "Sin configurar", icon: Mail, color: "text-orange-500" },
     { label: "Teléfono principal", value: d.telefonoPrincipal || "Sin configurar", icon: Phone, color: "text-teal-500" },
     { label: "Dirección", value: d.direccionLocal || "Sin configurar", icon: MapPin, color: "text-rose-500" },
     { label: "Última actualización", value: ajustes.auditoria.length > 0 ? ajustes.auditoria[ajustes.auditoria.length - 1].fecha : "—", icon: CalendarDays, color: "text-muted-foreground" },

@@ -7,7 +7,6 @@ export interface DatosGenerales {
   direccionLocal: string;
   telefonoPrincipal: string;
   telefonoSecundario: string;
-  correoGeneral: string;
   correoAdmin: string;
   correoRrhh: string;
   correoContabilidad: string;
@@ -70,7 +69,6 @@ export interface Rol {
 }
 
 export interface Contacto {
-  correoGeneral: string;
   correoReservas: string;
   correoAdmin: string;
   correoRrhh: string;
@@ -328,7 +326,6 @@ export function buildDefaultAjustes(empresaNombre: string): AjustesEmpresa {
       direccionLocal: "",
       telefonoPrincipal: "",
       telefonoSecundario: "",
-      correoGeneral: "",
       correoAdmin: "",
       correoRrhh: "",
       correoContabilidad: "",
@@ -363,7 +360,7 @@ export function buildDefaultAjustes(empresaNombre: string): AjustesEmpresa {
     departamentos: buildDepts(),
     roles: buildRoles(),
     contactos: {
-      correoGeneral: "", correoReservas: "", correoAdmin: "", correoRrhh: "",
+      correoReservas: "", correoAdmin: "", correoRrhh: "",
       correoContabilidad: "", correoMarketing: "", correoJuridico: "", correoIncidencias: "",
       telefonoGeneral: "", whatsapp: "", web: "", instagram: "", facebook: "", tiktok: "",
     },
