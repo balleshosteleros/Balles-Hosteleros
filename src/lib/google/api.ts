@@ -32,7 +32,7 @@ export async function getGoogleTokens(): Promise<GoogleTokens> {
  * Intenta canjear un refresh_token por un nuevo access_token.
  * Devuelve null si no hay creds configuradas o Google rechaza la petición.
  */
-async function refreshAccessToken(refreshToken: string): Promise<string | null> {
+export async function refreshAccessToken(refreshToken: string): Promise<string | null> {
   const clientId = process.env.GOOGLE_CLIENT_ID;
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
   if (!clientId || !clientSecret) {

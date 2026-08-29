@@ -338,10 +338,18 @@ export async function descargarArchivo(
       : mime.includes("presentation")
         ? EXPORTACIONES["application/vnd.google-apps.presentation"]
         : EXPORTACIONES["application/vnd.google-apps.document"];
-    res = await driveFetch(
-      `${DRIVE_API}/files/${archivoId}/export?mimeType=${encodeURIComponent(destino.mime)}`,
-      accessToken,
-    );
+    try {
+      res = await driveFetch(
+        `${DRIVE_API}/files/${archivoId}/export?mimeType=${encodeURIComponent(destino.mime)}`,
+        accessToken,
+      );
+    } catch {
+      // Si tampoco admite esa conversión, se dice en claro en vez de soltar el
+      // error crudo de Google, que no ayuda a nadie.
+      throw new Error(
+        "Google no deja descargar ni exportar este archivo. Ábrelo en Drive y guárdalo como Office para poder traerlo.",
+      );
+    }
   }
   if (!res.body) throw new Error("Drive devolvió una respuesta vacía");
 

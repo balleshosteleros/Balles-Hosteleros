@@ -34,6 +34,7 @@ import {
   type CarpetaDrive,
 } from "@/lib/google/drive";
 import { cookies } from "next/headers";
+import { refreshAccessToken } from "@/lib/google/api";
 // Los tipos viven aparte: un fichero "use server" solo puede exportar
 // funciones async, y exportar interfaces desde aquí rompe el componente.
 import type {
@@ -58,6 +59,32 @@ function mensajeError(err: unknown): string {
 async function getAccessToken(): Promise<string | null> {
   const c = await cookies();
   return c.get("g_access_token")?.value ?? null;
+}
+
+/**
+ * El permiso de Google caduca a la hora, y una importación de miles de
+ * archivos dura más que eso.
+ *
+ * Cuando caducaba, cada archivo restante fallaba con "credenciales inválidas"
+ * uno detrás de otro: cientos de fallos seguidos que en realidad eran el mismo
+ * problema. Aquí se renueva y se reintenta una vez.
+ */
+async function conTokenVivo<T>(
+  token: { valor: string },
+  accion: (t: string) => Promise<T>,
+): Promise<T> {
+  try {
+    return await accion(token.valor);
+  } catch (err) {
+    if (!String(err).includes("Drive 401")) throw err;
+    const c = await cookies();
+    const refresh = c.get("g_refresh_token")?.value;
+    if (!refresh) throw err;
+    const nuevo = await refreshAccessToken(refresh);
+    if (!nuevo) throw err;
+    token.valor = nuevo;
+    return await accion(nuevo);
+  }
 }
 
 async function getCtx() {
@@ -156,8 +183,11 @@ export async function importarUnidad(
   try {
     const ctx = await getCtx();
     if (!ctx) return fallo("No autenticado");
-    const token = await getAccessToken();
-    if (!token) return fallo("Conecta primero la cuenta de Google.");
+    const tokenInicial = await getAccessToken();
+    if (!tokenInicial) return fallo("Conecta primero la cuenta de Google.");
+    // Caja mutable: si el permiso caduca a mitad, se renueva aquí dentro y el
+    // resto de la tanda sigue con el nuevo sin volver a empezar.
+    const token = { valor: tokenInicial };
     if (!Object.keys(mapeo).length) {
       return fallo("Asigna al menos una carpeta a un departamento.");
     }
@@ -227,7 +257,12 @@ export async function importarUnidad(
       .maybeSingle();
     const baseCopiados = Number(acumulado?.copiados ?? 0);
     const baseBytes = Number(acumulado?.copiados_bytes ?? 0);
-    const baseOmitidos = Number(acumulado?.omitidos ?? 0);
+    // Los omitidos NO se acumulan entre tandas.
+    //
+    // Cada vuelta recorre el árbol otra vez y se salta todo lo ya copiado, así
+    // que sumarlos a lo anterior los contaba una vez por vuelta: con 5.263
+    // archivos el contador llegó a marcar 9.422 omitidos. Es un recuento de
+    // esta vuelta, no un total.
 
     let copiados = 0;
     let copiadosBytes = 0;
@@ -254,7 +289,7 @@ export async function importarUnidad(
       // y se DEVUELVE el control: copiar en esta misma llamada no daría tiempo
       // ni a un archivo, y el progreso se perdería. La pantalla vuelve a
       // llamar y esa segunda vuelta ya dedica su ventana entera a copiar.
-      todos = await listarUnidadCompleta(token, unidadId);
+      todos = await listarUnidadCompleta(token.valor, unidadId);
       await admin
         .from("archivos_importaciones")
         .update({
@@ -341,16 +376,18 @@ export async function importarUnidad(
         }
 
         try {
-          const bytes = await copiarArchivo(
-            token,
-            hijo,
-            ctx.empresaId,
-            rama.destinoId,
-            rama.depto,
-            ctx.userId,
-            admin,
-            client,
-            bucket,
+          const bytes = await conTokenVivo(token, (t) =>
+            copiarArchivo(
+              t,
+              hijo,
+              ctx.empresaId,
+              rama.destinoId,
+              rama.depto,
+              ctx.userId,
+              admin,
+              client,
+              bucket,
+            ),
           );
           yaImportados.add(hijo.id);
           copiados++;
@@ -365,7 +402,7 @@ export async function importarUnidad(
               .update({
                 copiados: baseCopiados + copiados,
                 copiados_bytes: baseBytes + copiadosBytes,
-                omitidos: baseOmitidos + omitidos,
+                omitidos,
                 updated_at: new Date().toISOString(),
               })
               .eq("id", impId);
@@ -389,7 +426,7 @@ export async function importarUnidad(
         estado: terminada ? "terminada" : "en_curso",
         copiados: baseCopiados + copiados,
         copiados_bytes: baseBytes + copiadosBytes,
-        omitidos: baseOmitidos + omitidos,
+        omitidos,
         fallidos: Number(previa?.fallidos ?? 0) + errores.length,
         errores: [
           ...((previa?.errores as Array<unknown>) ?? []),
