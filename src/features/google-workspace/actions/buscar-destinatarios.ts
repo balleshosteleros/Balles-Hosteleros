@@ -108,6 +108,141 @@ async function buscarEnGoogle(q: string, cuenta: string): Promise<Destinatario[]
   return out;
 }
 
+type GmailListaMensajes = { messages?: { id: string }[] };
+type GmailMensajeMeta = {
+  payload?: { headers?: { name: string; value: string }[] };
+};
+
+/** "Nombre Apellido <a@b.com>" → sus partes; admite varias direcciones. */
+function partirDirecciones(cabecera: string): { nombre: string; email: string }[] {
+  return cabecera
+    .split(",")
+    .map((trozo) => {
+      const m = trozo.match(/^\s*(.*?)\s*<([^>]+)>\s*$/);
+      if (m) return { nombre: m[1].replace(/["']/g, "").trim(), email: m[2].trim() };
+      const suelto = trozo.trim();
+      return suelto ? { nombre: suelto, email: suelto } : null;
+    })
+    .filter((d): d is { nombre: string; email: string } => !!d && d.email.includes("@"));
+}
+
+/**
+ * LIBRETA DE DIRECCIONES DEL BUZÓN: con quién se ha intercambiado correo de
+ * verdad, sacado de las cabeceras de los últimos mensajes.
+ *
+ * Es lo que hace Gmail al escribir en "Para": no mira solo la agenda, sino a
+ * quién has escrito y quién te ha escrito.
+ *
+ * Va aparte de People a propósito. `otherContacts` cubre en teoría lo mismo,
+ * pero depende de que la People API esté habilitada en el proyecto de Google
+ * (si no lo está, responde 403 a todo y el campo "Para" se queda mudo sin que
+ * nada lo indique). Esta libreta usa el mismo permiso de Gmail que ya necesita
+ * la bandeja, así que funciona siempre que el correo se vea.
+ *
+ * Se barre el buzón UNA vez y se filtra en memoria, en lugar de preguntar a
+ * Gmail por cada término. El motivo es que los operadores `to:`/`from:` casan
+ * palabras COMPLETAS: buscando "iber" Gmail no devuelve nada, y el
+ * autocompletado no aparecía hasta tener el nombre casi escrito — justo cuando
+ * ya no hace falta. Filtrando por subcadena, "iber" encuentra a Iberdrola y
+ * "bel" a Belén, como en Gmail.
+ */
+const MENSAJES_A_BARRER = 50;
+
+/** Una entrada de la libreta. */
+type EntradaLibreta = { nombre: string; email: string; detalle: string };
+
+/**
+ * Libreta ya calculada, por cuenta de Google. El barrido son ~100 peticiones a
+ * Gmail: hacerlo en cada tecla dejaría el campo inservible. Se guarda en el
+ * proceso con caducidad corta; un contacto nuevo aparece en el siguiente ciclo.
+ */
+const libretaCache = new Map<string, { libreta: EntradaLibreta[]; expira: number }>();
+const LIBRETA_TTL_MS = 10 * 60 * 1000;
+
+async function obtenerLibreta(cuenta: string): Promise<EntradaLibreta[]> {
+  const cacheada = libretaCache.get(cuenta);
+  if (cacheada && cacheada.expira > Date.now()) return cacheada.libreta;
+
+  const porEmail = new Map<string, EntradaLibreta>();
+
+  // Enviados y recibidos por separado: en los enviados interesan `To`/`Cc`
+  // (a quién escribes) y en el resto `From` (quién te escribe).
+  const barridos: Array<{ consulta: string; cabeceras: string[]; detalle: string }> = [
+    { consulta: "in:sent", cabeceras: ["To", "Cc"], detalle: "Le has escrito" },
+    {
+      consulta: "in:anywhere -in:spam -in:trash",
+      cabeceras: ["From"],
+      detalle: "Te ha escrito",
+    },
+  ];
+
+  for (const barrido of barridos) {
+    const params = new URLSearchParams({
+      q: barrido.consulta,
+      maxResults: String(MENSAJES_A_BARRER),
+    });
+    const lista = await googleFetchAuto<GmailListaMensajes>(
+      `https://gmail.googleapis.com/gmail/v1/users/me/messages?${params.toString()}`,
+    );
+    // Sin cuenta válida no hay libreta: se devuelve lo reunido hasta ahora sin
+    // cachear, para reintentar cuando el token vuelva a servir.
+    if (lista.needsReauth) return Array.from(porEmail.values());
+
+    const cabecerasUrl = barrido.cabeceras
+      .map((h) => `metadataHeaders=${h}`)
+      .join("&");
+
+    const metas = await Promise.all(
+      (lista.data?.messages ?? []).map((m) =>
+        googleFetchAuto<GmailMensajeMeta>(
+          `https://gmail.googleapis.com/gmail/v1/users/me/messages/${m.id}?format=metadata&${cabecerasUrl}`,
+        ).then((r) => r.data),
+      ),
+    );
+
+    for (const meta of metas) {
+      for (const h of meta?.payload?.headers ?? []) {
+        for (const d of partirDirecciones(h.value)) {
+          const clave = d.email.toLowerCase();
+          // Uno mismo no es un destinatario: la propia cuenta aparece en el
+          // `To` de los hilos donde te has puesto en copia y en el `From` de
+          // los correos que te mandas. Gmail tampoco se autosugiere.
+          if (clave === cuenta.toLowerCase()) continue;
+          // La primera vez manda: los enviados van antes porque escribir a
+          // alguien es mejor señal que recibir su publicidad.
+          if (porEmail.has(clave)) continue;
+          porEmail.set(clave, {
+            nombre: d.nombre || d.email,
+            email: d.email,
+            detalle: barrido.detalle,
+          });
+        }
+      }
+    }
+  }
+
+  const libreta = Array.from(porEmail.values());
+  libretaCache.set(cuenta, { libreta, expira: Date.now() + LIBRETA_TTL_MS });
+  return libreta;
+}
+
+async function buscarEnHistorial(q: string, cuenta: string): Promise<Destinatario[]> {
+  const termino = q.toLowerCase();
+  const libreta = await obtenerLibreta(cuenta);
+  return libreta
+    .filter(
+      (e) =>
+        e.email.toLowerCase().includes(termino) ||
+        e.nombre.toLowerCase().includes(termino),
+    )
+    .map((e) => ({
+      nombre: e.nombre,
+      email: e.email,
+      origen: "Gmail" as const,
+      detalle: e.detalle,
+    }));
+}
+
 export async function buscarDestinatarios(
   termino: string,
 ): Promise<{ ok: boolean; data: Destinatario[] }> {
@@ -184,7 +319,14 @@ export async function buscarDestinatarios(
     // ofrecen los contactos de otra.
     const { email: cuentaGoogle } = await getGoogleTokens();
     if (cuentaGoogle) {
-      resultados.push(...(await buscarEnGoogle(q, cuentaGoogle)));
+      // Las dos fuentes de Google en paralelo: la agenda (People) y el
+      // historial de correo. Se lanzan juntas porque el campo "Para" espera
+      // por ellas mientras el usuario teclea.
+      const [deAgendaGoogle, deHistorial] = await Promise.all([
+        buscarEnGoogle(q, cuentaGoogle),
+        buscarEnHistorial(q, cuentaGoogle),
+      ]);
+      resultados.push(...deAgendaGoogle, ...deHistorial);
     }
 
     // Un mismo correo puede estar en varias fuentes: se deja la primera.

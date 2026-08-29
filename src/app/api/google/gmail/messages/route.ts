@@ -138,20 +138,22 @@ export async function GET(request: Request) {
       SPAM: "in:spam",
     };
     partesQuery.push(scopePorCarpeta[label] ?? `in:inbox`);
-    // Recibidos = pestaña PRINCIPAL, igual que el badge (ver más abajo).
-    if (label === "INBOX") partesQuery.push("category:primary");
   } else {
     // Carpeta de sistema sin búsqueda: filtrado directo por label.
+    //
+    // "Recibidos" es el INBOX COMPLETO, exactamente lo que el usuario ve al
+    // abrir gmail.com.
+    //
+    // NO acotar con `CATEGORY_PERSONAL`. Hubo una versión que lo hacía, con la
+    // idea de mostrar "la pestaña Principal" y esquivar las promociones, pero
+    // parte de una premisa falsa: estas cuentas tienen Gmail con UNA sola
+    // bandeja, sin pestañas. Cuando las pestañas están desactivadas Google ni
+    // siquiera categoriza la mayoría de los mensajes — en el buzón de Bacanal,
+    // 4 de 7 correos no traen ninguna etiqueta `CATEGORY_*` —, así que filtrar
+    // por `CATEGORY_PERSONAL` no seleccionaba una pestaña: descartaba todo el
+    // correo sin clasificar, que es correo de trabajo corriente. La bandeja
+    // enseñaba 3 de 7 y no había manera de llegar al resto desde el software.
     params.set("labelIds", label);
-    // "Recibidos" muestra la pestaña PRINCIPAL, no las cuatro pestañas de
-    // Gmail. `INBOX` a secas incluye Promociones, Redes sociales y
-    // Notificaciones: la bandeja se llenaba de promociones (makro, OCU,
-    // Restaurant Guru...) que el usuario no ve en su Gmail, y el badge de la
-    // barra contaba esas mismas y se quedaba clavado en "9+".
-    // `CATEGORY_PERSONAL` es la etiqueta de la pestaña Principal; combinada con
-    // INBOX en labelIds equivale a `in:inbox category:primary`, que es lo que
-    // pregunta `/gmail/unread-count`. Los dos sitios deben ir a la par.
-    if (label === "INBOX") params.append("labelIds", "CATEGORY_PERSONAL");
   }
 
   if (partesQuery.length > 0) params.set("q", partesQuery.join(" "));
