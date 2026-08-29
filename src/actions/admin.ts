@@ -199,7 +199,7 @@ export async function createEmployee(formData: FormData) {
 export async function getEmployees() {
   // Leer no es administrar: basta con AJUSTES (ver). Con el guard de escritura,
   // un rol que solo consulta la pestaña Roles no podía ni listar los usuarios.
-  await requireAjustesLectura()
+  const user = await requireAjustesLectura()
 
   let admin: ReturnType<typeof createAdminClient>
   try {
@@ -209,10 +209,32 @@ export async function getEmployees() {
     return { data: [] }
   }
 
-  const { data: profiles, error } = await admin
-    .from('usuarios')
-    .select('*')
-    .order('created_at', { ascending: false })
+  // SOLO los usuarios de la empresa activa. Esta consulta usa el cliente admin
+  // (se salta la RLS a propósito, para poder leer datos de Auth), asi que el
+  // filtro por empresa hay que ponerlo aquí a mano: sin él, Ajustes → Usuarios,
+  // Roles y Departamentos listaban los usuarios de TODAS las empresas — por eso
+  // BALLES, que no tiene ninguno propio, mostraba gente de HABANA y BACANAL.
+  //
+  // Un usuario pertenece a la empresa si es la suya de origen (usuarios.empresa_id)
+  // o si se le copió expresamente a ella (usuario_empresas).
+  const supabaseSesion = await createClient()
+  const empresaActiva = await getEmpresaActivaForUser(supabaseSesion, user.id)
+  if (!empresaActiva) return { data: [] }
+
+  const { data: copiados } = await admin
+    .from('usuario_empresas')
+    .select('user_id')
+    .eq('empresa_id', empresaActiva)
+  const userIdsCopiados = (copiados ?? [])
+    .map((r: { user_id: string | null }) => r.user_id)
+    .filter((id): id is string => Boolean(id))
+
+  let consulta = admin.from('usuarios').select('*')
+  consulta = userIdsCopiados.length
+    ? consulta.or(`empresa_id.eq.${empresaActiva},user_id.in.(${userIdsCopiados.join(',')})`)
+    : consulta.eq('empresa_id', empresaActiva)
+
+  const { data: profiles, error } = await consulta.order('created_at', { ascending: false })
 
   if (error) return { error: friendlyError(error), data: [] }
 
