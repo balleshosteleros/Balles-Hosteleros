@@ -373,6 +373,7 @@ export async function ejecutarOcrAlbaran(input: {
         // MODELO_DOCUMENTOS en lib/ia/gemini.ts. Con el modelo por defecto,
         // 1 de cada 2 lecturas devolvía una estructura inventada.
         model: MODELO_DOCUMENTOS,
+        feature: "albaranes.ocr",
         systemInstruction: OCR_ALBARAN_SYSTEM,
         responseSchema: OCR_ALBARAN_SCHEMA,
         temperature: 0.1,

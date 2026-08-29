@@ -117,6 +117,7 @@ export async function POST(request: Request) {
         // Texto que leerá una persona (y que acaba en un documento legal):
         // usa el modelo de redacción, no el de extraer datos.
         model: MODELO_REDACCION,
+        feature: "rrhh.carta_baja",
         systemInstruction: SYSTEM,
         responseSchema: ResponseSchema as never,
         // Temperatura baja: aquí interesa fidelidad al borrador, no creatividad.

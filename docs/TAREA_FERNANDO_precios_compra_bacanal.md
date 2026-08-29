@@ -1,7 +1,105 @@
 # TAREA para Fernando — Precios de compra de BACANAL (cuando bajes el repo)
 
-> **De:** Iván (vía Claude) · **Fecha:** 2026-06-30 · **Actualizado:** 2026-08-28 · **Prioridad:** media
+> **De:** Iván (vía Claude) · **Fecha:** 2026-06-30 · **Actualizado:** 2026-08-29 · **Prioridad:** media
 > Léelo al hacer `git pull` y reconciliar.
+
+---
+
+## 🤖 29-AGO — LA IA QUE LEE ALBARANES Y NÓMINAS ES OTRA (mejor), Y AHORA HAY TOPE DE GASTO
+
+> **Todo esto ya está subido y funcionando.** No hay que hacer nada, pero conviene saberlo
+> porque cambia el comportamiento de cosas que ya usáis.
+
+### Lo que estaba pasando: 1 de cada 5 albaranes se perdía
+
+Mirando la base de datos aparecieron **15 de 69 importaciones de albarán en estado `error`** (un
+22%), todas con el mismo mensaje: *"El modelo no devolvió un JSON válido"*. Es decir, se subía el
+albarán, la IA lo leía y el resultado se tiraba a la basura: había que volver a subirlo a mano.
+
+Bajamos dos de esos albaranes que fallaron —fotos de móvil, una de ellas **boca abajo**— y los
+pasamos 8 veces por los dos modelos:
+
+| Modelo | Devolvió la estructura correcta |
+|---|---|
+| `gemini-3.1-flash-lite` (el que había) | **4 de 8** |
+| `gemini-3.7-flash` (el nuevo) | **8 de 8** |
+
+El detalle importante, porque es contraintuitivo: **leyendo los importes son igual de buenos**. Los
+dos clavaron el total (122,37 €), la base, el IVA y las 8 líneas de la factura fotografiada del
+revés. Lo que falla en el modelo pequeño no es la vista, es **ceñirse a un esquema JSON largo**:
+cuando el documento se complica se inventa las claves (devuelve `{cabecera, lineas}` en vez del
+esquema pedido) y la importación se cae. Regla que nos llevamos: cuantos más campos pide el
+`responseSchema`, menos fiable es `flash-lite`.
+
+### Lo que hemos cambiado
+
+Ahora hay **tres modelos según la tarea**, definidos en `src/lib/ia/gemini.ts`:
+
+| Constante | Modelo | Para qué |
+|---|---|---|
+| `DEFAULT_MODEL` | `gemini-3.1-flash-lite` | Extraer datos de texto. Los ~17 sitios que no son foto ni redacción. Barato y va bien. |
+| `MODELO_DOCUMENTOS` | `gemini-3.7-flash` | **Lo que llega como foto o PDF**: OCR de albaranes y extracción de nóminas. |
+| `MODELO_REDACCION` | `gemini-3.7-flash` | **Texto que lee una persona**: el "pulir" del correo y la carta de baja. |
+
+Al añadir una función de IA, la pregunta es: ¿lo lee una persona? → `MODELO_REDACCION`. ¿Entra una
+foto/PDF o el esquema de salida es largo? → `MODELO_DOCUMENTOS`. ¿Texto plano a datos simples? →
+el de por defecto, no tocar nada.
+
+Las dos son variables de entorno (`GEMINI_MODEL_DOCUMENTOS`, `GEMINI_MODEL_REDACCION`), así que se
+puede cambiar sin tocar código.
+
+> **Por qué no subimos el `GEMINI_MODEL` global y ya:** lo usan ~21 sitios, y casi todos extraen
+> datos de facturas, nóminas y modelos AEAT donde `flash-lite` va perfecto. Subirlo encarecía las
+> 21 llamadas sin arreglar nada que no estuviera ya bien.
+
+**Coste:** el modelo bueno sale a ~0,36 céntimos por documento frente a 0,07. A 500 documentos al
+mes son 1,79 € contra 0,36 €. El sobrecoste (≈1,44 €/mes) no compite con repetir a mano una de cada
+cinco importaciones.
+
+### ⚠️ NUEVO: tope de gasto de IA (5 €/mes) — cuidado al probar cosas
+
+Esto es lo que más os puede afectar en el día a día, así que atención.
+
+La cuenta de Google **no se para sola**: el crédito cargado no es un monedero que se vacía, es una
+cuenta de facturación. Si el consumo lo supera, Google lo cobra a la tarjeta. Un bucle o una subida
+masiva podían gastar sin techo sin que nadie se enterara hasta la factura.
+
+Ahora, en `src/lib/ia/presupuesto.ts`:
+
+- **Cada llamada a la IA apunta sus tokens** en `ia_uso_log` (esto lo hace el propio cliente de
+  Gemini, no hay que acordarse de nada).
+- **Antes de cada llamada** se suma lo gastado en el mes y se compara con el tope
+  (`IA_TOPE_EUROS_MES`, 5 € por defecto).
+- **Al 80%** sale un correo de aviso a administración. **Al 100%** la IA deja de responder hasta el
+  día 1 del mes siguiente.
+
+Dos decisiones deliberadas que conviene respetar si tocáis esto:
+
+1. **Al usuario no se le dice nada de dinero.** Si el tope salta, en pantalla sale
+   *"No se ha podido completar la operación. Inténtalo de nuevo más tarde."* y punto. Un camarero o
+   un cocinero no tiene por qué enterarse de cuánto gasta la empresa en IA ni de que existe un
+   límite. Las cifras viajan **solo por correo** a administración.
+2. **El coste se calcula al alza** (tarifas en dólares × 0,95, y un modelo desconocido se cobra
+   con la tarifa más cara de la tabla). Preferimos frenar antes de tiempo que después de la factura.
+
+**Para que os hagáis idea del margen:** con 5 € caben unos **2.950 correos pulidos** o **1.350
+albaranes** al mes. En uso normal no se llega ni de lejos; el tope está para cuando algo se
+descontrola. Aun así, si un día la IA "no responde" y no entendéis por qué, mirad esto antes de
+volveros locos: puede ser el tope, no un fallo.
+
+### Un cambio en la base de datos (ya aplicado)
+
+`ia_uso_log.empresa_id` **pasa a ser opcional**
+(`supabase/migrations/20260829170000_ia_uso_log_empresa_opcional.sql`).
+
+Lo descubrimos probando el flujo completo, no leyendo el esquema: la columna era obligatoria, así
+que **ninguna** llamada conseguía registrarse —fallaba con `null value in column empresa_id
+violates not-null constraint` y el error se tragaba en silencio—. El contador se habría quedado en
+0 € para siempre y el tope no habría saltado nunca. El freno era decorativo hasta ese arreglo.
+
+Es a propósito que admita vacío: el gasto es **global** (una sola cuenta de Google para las tres
+sociedades) y hay llamadas que no son de ninguna empresa concreta (un OCR lanzado por cron, las
+marcas internas de "ya avisé este mes"). La clave foránea a `empresas` sigue intacta.
 
 ---
 

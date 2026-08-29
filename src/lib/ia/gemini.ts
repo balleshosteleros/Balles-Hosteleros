@@ -5,6 +5,8 @@
  * Usa structured output (responseSchema) para garantizar JSON válido.
  */
 import { GoogleGenerativeAI, type Schema } from "@google/generative-ai";
+import { comprobarPresupuesto, registrarConsumo } from "@/lib/ia/presupuesto";
+import { avisarGastoIa } from "@/lib/ia/aviso-gasto";
 
 const DEFAULT_MODEL = process.env.GEMINI_MODEL?.trim() || "gemini-2.5-flash";
 
@@ -100,6 +102,11 @@ export interface GeminiJSONOptions {
    * encima de la respuesta legítima más grande esperada.
    */
   maxOutputTokens?: number;
+  /**
+   * Quién está gastando ("correo.pulir", "albaranes.ocr"...). Se guarda en
+   * `ia_uso_log` para poder ver en qué se va el presupuesto de IA.
+   */
+  feature?: string;
 }
 
 export interface GeminiJSONResult<T> {
@@ -115,6 +122,14 @@ export async function geminiJSON<T = unknown>(
 ): Promise<GeminiJSONResult<T>> {
   const key = process.env.GEMINI_API_KEY?.trim();
   if (!key) throw new GeminiKeyMissingError();
+
+  // Freno de gasto: si el mes ya agotó el tope, ni se llama a Google. Lanza
+  // PresupuestoIaAgotadoError, que el caller enseña como un fallo genérico.
+  const presupuesto = await comprobarPresupuesto();
+  if (presupuesto.enAviso) {
+    // Sin await: avisar no debe retrasar la respuesta al usuario.
+    void avisarGastoIa("aviso", presupuesto.gastado, presupuesto.tope);
+  }
 
   const modelo = opts.model || DEFAULT_MODEL;
   const genAI = new GoogleGenerativeAI(key);
@@ -177,6 +192,15 @@ export async function geminiJSON<T = unknown>(
     try {
       const data = JSON.parse(text) as T;
       const usage = result.response.usageMetadata;
+      // Se apunta lo gastado ANTES de devolver, para que la siguiente llamada
+      // ya cuente con ello. Sin await: no retrasa la respuesta.
+      void registrarConsumo({
+        feature: opts.feature ?? "sin_identificar",
+        modelo: modeloIntento,
+        tokensEntrada: usage?.promptTokenCount ?? null,
+        tokensSalida: usage?.candidatesTokenCount ?? null,
+      });
+
       return {
         data,
         tokensInput: usage?.promptTokenCount ?? null,

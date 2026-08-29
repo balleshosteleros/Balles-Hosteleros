@@ -166,6 +166,7 @@ export async function POST(request: Request) {
           // Redactar pide un modelo mejor que el de extraer datos: ver
           // MODELO_REDACCION en lib/ia/gemini.ts.
           model: MODELO_REDACCION,
+          feature: "correo.pulir",
           systemInstruction: SYSTEM,
           responseSchema: ResponseSchema as never,
           temperature: 0.6,

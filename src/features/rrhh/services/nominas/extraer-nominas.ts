@@ -117,6 +117,7 @@ async function leerNomina(mimeType: string, base64: string): Promise<IaLeida | n
       // DNI mal leído asigna la nómina al empleado equivocado. Ver
       // MODELO_DOCUMENTOS en lib/ia/gemini.ts.
       model: MODELO_DOCUMENTOS,
+      feature: "nominas.extraer",
       responseSchema: RESPUESTA_SCHEMA as never,
       temperature: 0,
       attachments: [{ mimeType, base64 }],
