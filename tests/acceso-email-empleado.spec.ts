@@ -1,136 +1,74 @@
 /**
- * Tests — NORMA: al cambiar en la ficha el correo con el que el empleado ENTRA,
- * su correo de acceso se mueve con él; si se edita el otro buzón, no se toca.
+ * Tests — NORMA: el correo de ACCESO de una cuenta ya creada NO se mueve solo.
  *
- * Regla de Iván (27-ago-2026). El de empresa manda sobre el personal, igual que
- * en el alta. Estos tests cubren la decisión pura (sin BD), que es donde vive el
- * riesgo real: equivocarse aquí deja a alguien fuera del sistema.
+ * Regla de Iván (29-ago-2026), que sustituye a la del 27-ago (entonces editar en
+ * la ficha el correo con el que la persona entraba arrastraba el acceso).
+ *
+ *   · Editar el correo personal o el de empresa en la ficha = cambio de
+ *     CONTACTO. No toca el login.
+ *   · Cambiar el login es deliberado y se hace a mano en Ajustes → Usuarios.
+ *   · Lo único automático es FIJARLO la primera vez, al crear el usuario
+ *     (alta por reclutamiento): empresa si tiene; si no, personal.
+ *
+ * Aquí se prueba `resolverLoginEmail`, que es lo que decide ese primer correo.
+ * Es donde vive el riesgo real: equivocarse deja a alguien fuera del sistema.
  *
  * EJECUTAR:
  *   npx playwright test tests/acceso-email-empleado.spec.ts
  */
 
 import { test, expect } from "@playwright/test";
-import { debeMoverAccesoAlEditarFicha } from "@/features/rrhh/services/acceso-email-regla";
+import { resolverLoginEmail } from "@/features/rrhh/services/acceso-email-regla";
 
-test.describe("Acceso del empleado · correo de login al editar la ficha", () => {
-  test("entra con el de EMPRESA y cambia el de empresa → se mueve", () => {
+test.describe("Acceso del empleado · correo de login al crear el usuario", () => {
+  test("tiene correo de EMPRESA y personal → manda el de empresa", () => {
     expect(
-      debeMoverAccesoAlEditarFicha({
-        accesoActual: "dir@bacanal.com",
-        emailEmpresaAntes: "dir@bacanal.com",
-        emailPersonalAntes: "juan@gmail.com",
-        emailEmpresaAhora: "direccion@bacanal.com",
-        emailPersonalAhora: "juan@gmail.com",
+      resolverLoginEmail({
+        emailEmpresa: "dir@bacanal.com",
+        emailPersonal: "juan@gmail.com",
       }),
-    ).toBe(true);
+    ).toBe("dir@bacanal.com");
   });
 
-  test("entra con el PERSONAL y cambia el personal → se mueve", () => {
+  test("solo tiene PERSONAL → ese es el login", () => {
     expect(
-      debeMoverAccesoAlEditarFicha({
-        accesoActual: "juan@gmail.com",
-        emailEmpresaAntes: null,
-        emailPersonalAntes: "juan@gmail.com",
-        emailEmpresaAhora: null,
-        emailPersonalAhora: "juan.nuevo@gmail.com",
+      resolverLoginEmail({
+        emailEmpresa: null,
+        emailPersonal: "juan@gmail.com",
       }),
-    ).toBe(true);
+    ).toBe("juan@gmail.com");
   });
 
-  test("entra con el personal y se le PONE uno de empresa → se mueve (empresa manda)", () => {
+  test("solo tiene el de EMPRESA → ese es el login", () => {
     expect(
-      debeMoverAccesoAlEditarFicha({
-        accesoActual: "juan@gmail.com",
-        emailEmpresaAntes: null,
-        emailPersonalAntes: "juan@gmail.com",
-        emailEmpresaAhora: "juan@bacanal.com",
-        emailPersonalAhora: "juan@gmail.com",
+      resolverLoginEmail({
+        emailEmpresa: "dir@bacanal.com",
+        emailPersonal: null,
       }),
-    ).toBe(true);
+    ).toBe("dir@bacanal.com");
   });
 
-  test("entra con el personal y solo se edita el de empresa que ya tenía → NO se mueve", () => {
+  test("sin ningún correo → null (no se crea login)", () => {
     expect(
-      debeMoverAccesoAlEditarFicha({
-        accesoActual: "juan@gmail.com",
-        emailEmpresaAntes: "viejo@bacanal.com",
-        emailPersonalAntes: "juan@gmail.com",
-        emailEmpresaAhora: "nuevo@bacanal.com",
-        emailPersonalAhora: "juan@gmail.com",
-      }),
-    ).toBe(false);
+      resolverLoginEmail({ emailEmpresa: null, emailPersonal: null }),
+    ).toBeNull();
   });
 
-  test("entra con el de empresa y se le BORRA ese buzón → se mueve al personal", () => {
+  test("cadenas vacías o en blanco cuentan como ausentes", () => {
     expect(
-      debeMoverAccesoAlEditarFicha({
-        accesoActual: "dir@bacanal.com",
-        emailEmpresaAntes: "dir@bacanal.com",
-        emailPersonalAntes: "juan@gmail.com",
-        emailEmpresaAhora: null,
-        emailPersonalAhora: "juan@gmail.com",
-      }),
-    ).toBe(true);
+      resolverLoginEmail({ emailEmpresa: "   ", emailPersonal: "juan@gmail.com" }),
+    ).toBe("juan@gmail.com");
+    expect(
+      resolverLoginEmail({ emailEmpresa: "", emailPersonal: "" }),
+    ).toBeNull();
   });
 
-  test("el acceso se cambió a mano en Ajustes → Usuarios: manda ese, no se mueve", () => {
+  test("normaliza espacios y mayúsculas", () => {
     expect(
-      debeMoverAccesoAlEditarFicha({
-        accesoActual: "manual@otro.com",
-        emailEmpresaAntes: "e@bacanal.com",
-        emailPersonalAntes: "juan@gmail.com",
-        emailEmpresaAhora: "e@bacanal.com",
-        emailPersonalAhora: "otro@gmail.com",
+      resolverLoginEmail({
+        emailEmpresa: null,
+        emailPersonal: "  JUAN@Gmail.com ",
       }),
-    ).toBe(false);
-  });
-
-  test("entra con el de empresa y solo se edita el personal → NO se mueve", () => {
-    expect(
-      debeMoverAccesoAlEditarFicha({
-        accesoActual: "dir@bacanal.com",
-        emailEmpresaAntes: "dir@bacanal.com",
-        emailPersonalAntes: "juan@gmail.com",
-        emailEmpresaAhora: "dir@bacanal.com",
-        emailPersonalAhora: "nuevo@gmail.com",
-      }),
-    ).toBe(false);
-  });
-
-  test("cuenta sin correo de acceso todavía → se fija", () => {
-    expect(
-      debeMoverAccesoAlEditarFicha({
-        accesoActual: null,
-        emailEmpresaAntes: null,
-        emailPersonalAntes: "juan@gmail.com",
-        emailEmpresaAhora: null,
-        emailPersonalAhora: "juan@gmail.com",
-      }),
-    ).toBe(true);
-  });
-
-  test("se queda sin ningún correo → no se toca el acceso", () => {
-    expect(
-      debeMoverAccesoAlEditarFicha({
-        accesoActual: "juan@gmail.com",
-        emailEmpresaAntes: null,
-        emailPersonalAntes: "juan@gmail.com",
-        emailEmpresaAhora: null,
-        emailPersonalAhora: null,
-      }),
-    ).toBe(false);
-  });
-
-  test("mayúsculas y espacios no cuentan como cambio", () => {
-    expect(
-      debeMoverAccesoAlEditarFicha({
-        accesoActual: "juan@gmail.com",
-        emailEmpresaAntes: null,
-        emailPersonalAntes: "juan@gmail.com",
-        emailEmpresaAhora: null,
-        emailPersonalAhora: "  JUAN@Gmail.com ",
-      }),
-    ).toBe(false);
+    ).toBe("juan@gmail.com");
   });
 });

@@ -540,17 +540,11 @@ export async function altaUsuarioEmpleado(
 
 
 
-// La regla de qué correo es el login y cuándo se mueve vive en un módulo aparte
-// (sin `server-only`) para poder probarla sin BD. Se reexporta para no romper a
+// La regla de qué correo es el login vive en un módulo aparte (sin
+// `server-only`) para poder probarla sin BD. Se reexporta para no romper a
 // quien ya la importaba desde aquí.
-export {
-  resolverLoginEmail,
-  debeMoverAccesoAlEditarFicha,
-} from "@/features/rrhh/services/acceso-email-regla";
-import {
-  resolverLoginEmail,
-  debeMoverAccesoAlEditarFicha,
-} from "@/features/rrhh/services/acceso-email-regla";
+export { resolverLoginEmail } from "@/features/rrhh/services/acceso-email-regla";
+import { resolverLoginEmail } from "@/features/rrhh/services/acceso-email-regla";
 
 /**
  * Sincroniza el email de login (auth.users + usuarios.email) de un empleado con
@@ -616,18 +610,17 @@ export async function sincronizarLoginEmailEmpleado(input: {
   const anterior = (authUser.user.email ?? "").trim().toLowerCase() || null;
   if (anterior === nuevoLogin) return { ok: true, cambiado: false }; // ya coincide
 
-  // ¿Debe moverse el acceso? Regla completa (y tabla de casos) en
-  // `debeMoverAccesoAlEditarFicha`. `forzar` (Ajustes → Usuarios) se salta el
-  // análisis: allí cambiar el acceso es una decisión explícita.
-  if (!input.forzar) {
-    const mover = debeMoverAccesoAlEditarFicha({
-      accesoActual: anterior,
-      emailEmpresaAntes: input.emailEmpresaAnterior ?? null,
-      emailPersonalAntes: input.emailPersonalAnterior ?? null,
-      emailEmpresaAhora: input.emailEmpresa ?? null,
-      emailPersonalAhora: input.emailPersonal ?? null,
-    });
-    if (!mover) return { ok: true, cambiado: false };
+  // Regla de Iván (29-ago-2026), que sustituye a la del 27-ago: el correo de
+  // acceso de una cuenta YA CREADA no se mueve nunca solo. Editar en la ficha
+  // el correo personal o el de empresa es un cambio de CONTACTO y no toca el
+  // login: cambiarlo es una decisión deliberada que se hace a mano entrando al
+  // usuario en Ajustes → Usuarios (`forzar: true`).
+  //
+  // Lo único automático es FIJARLO la primera vez, cuando la cuenta aún no
+  // tiene correo de acceso: es el alta que llega por reclutamiento, y ahí manda
+  // `resolverLoginEmail` (empresa si tiene; si no, personal).
+  if (!input.forzar && anterior !== null) {
+    return { ok: true, cambiado: false };
   }
 
   // Cambiar SOLO el email en auth.users. La contraseña se conserva intacta.
