@@ -239,12 +239,22 @@ export async function importarUnidad(
     }
 
     // Lo ya importado se salta: hace la operación repetible sin duplicar.
-    const { data: previos } = await admin
-      .from("documentos")
-      .select("drive_file_id")
-      .eq("empresa_id", ctx.empresaId)
-      .not("drive_file_id", "is", null);
-    const yaImportados = new Set((previos ?? []).map((p) => p.drive_file_id as string));
+    //
+    // Se pide por tandas: Supabase devuelve 1.000 filas como mucho, así que
+    // con más de mil copiados el importador creía que el resto faltaba y los
+    // volvía a traer. El contador se quedaba clavado en "1000 ya copiados".
+    const yaImportados = new Set<string>();
+    for (let desde = 0; ; desde += 1000) {
+      const { data: previos } = await admin
+        .from("documentos")
+        .select("drive_file_id")
+        .eq("empresa_id", ctx.empresaId)
+        .not("drive_file_id", "is", null)
+        .range(desde, desde + 999);
+      const tanda = previos ?? [];
+      for (const p of tanda) yaImportados.add(p.drive_file_id as string);
+      if (tanda.length < 1000) break;
+    }
 
     const { client, bucket } = getR2();
 
