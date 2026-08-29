@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { googleFetchAuto } from "@/lib/google/api";
+import { googleFetchAuto, getGoogleTokens } from "@/lib/google/api";
 
 type GmailThreadListResponse = {
   threads?: { id: string; historyId: string }[];
@@ -35,6 +35,85 @@ function parseFrom(value: string): { name: string; email: string } {
   const m = value.match(/^(.*?)\s*<(.+)>$/);
   if (m) return { name: m[1].replace(/"/g, "").trim(), email: m[2] };
   return { name: value, email: value };
+}
+
+/** Varias direcciones en una cabecera ("a@b.com, Ana <c@d.com>"). */
+function parseLista(value: string): { name: string; email: string }[] {
+  if (!value.trim()) return [];
+  return value
+    .split(",")
+    .map((t) => t.trim())
+    .filter(Boolean)
+    .map(parseFrom)
+    .filter((d) => d.email.includes("@"));
+}
+
+/**
+ * NOMBRE DE LOS PARTICIPANTES DEL HILO, COMO GMAIL.
+ *
+ * Gmail no muestra "el remitente del último mensaje": muestra QUIÉN habla en la
+ * conversación, en el orden en que intervino, y a uno mismo lo llama "yo".
+ * Reglas que se reproducen aquí:
+ *
+ *  · Si el mensaje lo has mandado tú, sales como "yo".
+ *  · En un hilo con varias personas se listan todas separadas por coma
+ *    ("yo, Marta, Luis"), sin repetir a nadie aunque haya escrito diez veces.
+ *  · Con más de un participante se usa solo el NOMBRE DE PILA, que es como cabe
+ *    la lista en la columna; con uno solo se deja el nombre completo.
+ *  · Un hilo que solo tienes tú (un borrador, un correo a ti mismo) se queda en
+ *    "yo" en vez de mostrar tu propia dirección.
+ *  · Si el contacto no tiene nombre guardado, Gmail enseña la parte anterior a
+ *    la arroba, no la dirección entera.
+ *
+ * En "Enviados" Gmail muestra en cambio a los DESTINATARIOS ("Para: ..."), que
+ * es la información útil ahí: ya sabes que lo mandaste tú.
+ */
+function nombreVisible(d: { name: string; email: string }, soloNombre: boolean): string {
+  const limpio = d.name.trim();
+  const base =
+    limpio && limpio.toLowerCase() !== d.email.toLowerCase()
+      ? limpio
+      : d.email.split("@")[0];
+  if (!soloNombre) return base;
+  // "Marta García Ruiz" → "Marta". Una dirección sin nombre no se parte.
+  return base.split(/\s+/)[0] || base;
+}
+
+function participantesDelHilo(
+  msgs: GmailMessage[],
+  cuenta: string,
+  esEnviados: boolean,
+): string {
+  const orden: Array<{ name: string; email: string; soyYo: boolean }> = [];
+  const vistos = new Set<string>();
+  const mia = cuenta.toLowerCase();
+
+  const anotar = (d: { name: string; email: string }) => {
+    const clave = d.email.toLowerCase();
+    if (vistos.has(clave)) return;
+    vistos.add(clave);
+    orden.push({ ...d, soyYo: clave === mia });
+  };
+
+  for (const m of msgs) {
+    if (esEnviados) {
+      // En Enviados interesa a quién se escribió, no quién escribe.
+      parseLista(header(m, "To")).forEach(anotar);
+    } else {
+      anotar(parseFrom(header(m, "From")));
+    }
+  }
+
+  if (orden.length === 0) return "(sin remitente)";
+
+  // Un hilo donde solo apareces tú (nota para uno mismo, borrador) es "yo".
+  const otros = orden.filter((d) => !d.soyYo);
+  const lista = otros.length > 0 ? orden : orden.slice(0, 1);
+
+  const soloNombre = lista.length > 1;
+  return lista
+    .map((d) => (d.soyYo ? "yo" : nombreVisible(d, soloNombre)))
+    .join(", ");
 }
 
 function quitarPrefijoRe(asunto: string): string {
@@ -158,6 +237,10 @@ export async function GET(request: Request) {
 
   if (partesQuery.length > 0) params.set("q", partesQuery.join(" "));
 
+  // Se necesita la dirección propia para poder decir "yo" en los hilos donde
+  // el que escribe eres tú, exactamente como hace Gmail.
+  const { email: cuentaPropia } = await getGoogleTokens();
+
   // 1) Listado de hilos (conversaciones), igual que Gmail web
   const listRes = await googleFetchAuto<GmailThreadListResponse>(
     `https://gmail.googleapis.com/gmail/v1/users/me/threads?${params.toString()}`,
@@ -177,7 +260,7 @@ export async function GET(request: Request) {
   const detalles = await Promise.all(
     list.threads.slice(0, maxResults).map((t) =>
       googleFetchAuto<GmailThreadResponse>(
-        `https://gmail.googleapis.com/gmail/v1/users/me/threads/${t.id}?format=metadata&metadataHeaders=From&metadataHeaders=Subject&metadataHeaders=Date`,
+        `https://gmail.googleapis.com/gmail/v1/users/me/threads/${t.id}?format=metadata&metadataHeaders=From&metadataHeaders=To&metadataHeaders=Subject&metadataHeaders=Date`,
       ).then((r) => r.data),
     ),
   );
@@ -191,7 +274,13 @@ export async function GET(request: Request) {
       const msgs = t.messages!;
       const ultimoMsg = msgs[msgs.length - 1];
       const primerMsg = msgs[0];
-      const fromUltimo = parseFrom(header(ultimoMsg, "From"));
+      const esEnviados = carpeta === "enviados";
+      // La dirección "de la fila": en Enviados es el destinatario (a quién le
+      // escribiste), en el resto el remitente. Es la que usan el avatar y el
+      // botón de responder, así que tiene que ser la persona que se ve escrita.
+      const contraparte = esEnviados
+        ? parseLista(header(ultimoMsg, "To"))[0] ?? parseFrom(header(ultimoMsg, "From"))
+        : parseFrom(header(ultimoMsg, "From"));
 
       // Estado agregado del hilo (Gmail considera el hilo no leído si CUALQUIER
       // mensaje lo está; idem con la estrella). También unimos todas las labels
@@ -213,8 +302,8 @@ export async function GET(request: Request) {
       return {
         id: ultimoMsg.id,
         threadId: t.id,
-        remitente: fromUltimo.name,
-        email: fromUltimo.email,
+        remitente: participantesDelHilo(msgs, cuentaPropia ?? "", esEnviados),
+        email: contraparte.email,
         asunto,
         preview: ultimoMsg.snippet,
         fecha: fechaCorta(ultimoMsg.internalDate),

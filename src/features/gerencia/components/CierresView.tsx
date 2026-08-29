@@ -6,7 +6,7 @@ import { useSincronizacionEnVivo } from "@/shared/hooks/useSincronizacionEnVivo"
 import {
   CalendarDays, Plus, ChevronLeft, ChevronRight, Wallet, FileText,
   Settings, Trash2, Download, CheckCircle2, AlertTriangle, ArrowDownToLine,
-  ArrowUpFromLine, TrendingUp, Receipt, X, Repeat, Pencil, CalendarClock, ListFilter,
+  ArrowUpFromLine, TrendingUp, Receipt, X, Repeat, Pencil, CalendarClock, ListFilter, Lock,
 } from "lucide-react";
 import {
   format, startOfMonth, endOfMonth, eachDayOfInterval, getDay, addMonths,
@@ -1508,7 +1508,7 @@ export function CierresView() {
 
       {/* ── Modal Nuevo cierre ── */}
       <Dialog open={modalOpen} onOpenChange={setModalOpen}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-5xl">
           <DialogHeader>
             <DialogTitle>
               {form.tipo === "retirada" ? "Registrar retirada"
@@ -1539,7 +1539,7 @@ export function CierresView() {
             })}
           </div>
 
-          <div className="grid grid-cols-2 gap-4 mt-2">
+          <div className="grid grid-cols-3 gap-4 mt-2">
             <div>
               <Label>
                 {form.tipo === "retirada"
@@ -1610,7 +1610,7 @@ export function CierresView() {
               )}
             </div>
 
-            <div className={form.tipo === "retirada" ? "col-span-2" : undefined}>
+            <div className={form.tipo === "retirada" ? "col-span-3" : undefined}>
               <Label>
                 {form.tipo === "retirada"
                   ? "Importe del movimiento (€)"
@@ -1697,7 +1697,7 @@ export function CierresView() {
 
             {/* Descuadre calculado automáticamente = retirado − cierre */}
             {form.tipo === "cierre" && (
-            <div className="col-span-2">
+            <div className="col-span-1">
               <Label className="mb-2 block">Descuadre (calculado automáticamente)</Label>
               <div
                 className={`flex items-center justify-between rounded-lg border px-4 py-3 ${
@@ -1747,7 +1747,7 @@ export function CierresView() {
             {/* Cuando SOBRA dinero no hay elección: no se ha pagado nada, así que no
                 hay gasto que declarar. Solo cabe dejar el justificante por escrito. */}
             {sobraDinero && (
-            <div className="col-span-2">
+            <div className="col-span-1">
               <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3">
                 <ArrowUpFromLine className="h-4 w-4 shrink-0 text-amber-600 mt-0.5" />
                 <div>
@@ -1816,7 +1816,7 @@ export function CierresView() {
 
             {/* Gastos declarados: solo cuando hay descuadre y se eligió justificarlo con gastos. */}
             {puedeDeclararGastos && (
-            <div className="col-span-2">
+            <div className="col-span-3">
               <div className="flex items-center justify-between mb-2">
                 <Label className="flex items-center gap-1.5">
                   <Receipt className="h-4 w-4 text-muted-foreground" />
@@ -1977,7 +1977,7 @@ export function CierresView() {
             </div>
             )}
 
-            <div className="col-span-2">
+            <div className="col-span-1">
               <Label>
                 {sobraDinero
                   ? "Justificante del sobrante"
@@ -2140,7 +2140,7 @@ export function CierresView() {
 
       {/* ── Modal Detalle ── */}
       <Dialog open={detalleOpen} onOpenChange={setDetalleOpen}>
-        <DialogContent className="max-w-xl">
+        <DialogContent className="max-w-3xl">
           {selected && (
             <>
               <DialogHeader>
@@ -2149,8 +2149,8 @@ export function CierresView() {
                 </DialogTitle>
               </DialogHeader>
 
-              <div className="space-y-4 mt-2">
-                <div className="flex flex-wrap items-center gap-2">
+              <div className="mt-2 grid gap-4 md:grid-cols-2 md:items-start">
+                <div className="flex flex-wrap items-center gap-2 md:col-span-2">
                   <Badge variant="outline" className={`text-xs ${TIPO_BADGE_CLASS[selected.tipo]}`}>
                     {TIPO_LABEL[selected.tipo]}
                   </Badge>
@@ -2171,7 +2171,7 @@ export function CierresView() {
                   )}
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-2 gap-3 self-start">
                   <div>
                     <Label className="text-xs text-muted-foreground">
                       {selected.tipo === "retirada" ? "Importe del movimiento" : "Efectivo retirado"}
@@ -2213,6 +2213,7 @@ export function CierresView() {
                   )}
                 </div>
 
+                <div className="space-y-4 self-start">
                 {selected.gastos.length > 0 && (
                   <div>
                     <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
@@ -2273,12 +2274,21 @@ export function CierresView() {
                     ))}
                   </div>
                 )}
+                </div>
               </div>
 
-              <DialogFooter className="mt-4">
-                <Button variant="outline" className="text-red-600 hover:bg-red-50" onClick={() => handleEliminar(selected.id)}>
-                  <Trash2 className="h-4 w-4 mr-1" /> Eliminar
-                </Button>
+              <DialogFooter className="mt-4 sm:justify-between">
+                {fechaBloqueada(selected.fecha) ? (
+                  <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <Lock className="h-3.5 w-3.5 shrink-0" />
+                    Cerrado: los apuntes de hace más de {config.dias_bloqueo}{" "}
+                    {config.dias_bloqueo === 1 ? "día" : "días"} no se pueden borrar.
+                  </span>
+                ) : (
+                  <Button variant="outline" className="text-red-600 hover:bg-red-50" onClick={() => handleEliminar(selected.id)}>
+                    <Trash2 className="h-4 w-4 mr-1" /> Eliminar
+                  </Button>
+                )}
                 <Button variant="outline" onClick={() => setDetalleOpen(false)}>Cerrar</Button>
               </DialogFooter>
             </>

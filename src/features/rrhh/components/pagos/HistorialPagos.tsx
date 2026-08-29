@@ -88,9 +88,9 @@ function PagoCard({ pago }: { pago: PagoAbonado }) {
             )}
             {pago.irpf > 0 && <Fila label="IRPF" valor={`−${fmtEur(pago.irpf)}`} rojo />}
             <Fila label="Nómina neta" valor={fmtEur(pago.nomina)} destacado />
-            {pago.propina > 0 && <Fila label="Propina" valor={fmtEur(pago.propina)} />}
-            {pago.propinaMesAnterior > 0 && (
-              <Fila label="Propina mes anterior" valor={fmtEur(pago.propinaMesAnterior)} />
+            {pago.complemento > 0 && <Fila label="Complemento" valor={fmtEur(pago.complemento)} />}
+            {pago.complementoMesAnterior > 0 && (
+              <Fila label="Complemento mes anterior" valor={fmtEur(pago.complementoMesAnterior)} />
             )}
             {pago.horasExtras > 0 && (
               <Fila label="Horas extras" valor={fmtEur(pago.horasExtras)} />

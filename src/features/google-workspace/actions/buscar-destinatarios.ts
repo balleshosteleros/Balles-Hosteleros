@@ -19,6 +19,8 @@ export interface Destinatario {
   origen: "Agenda" | "Empleado" | "Gmail";
   /** Cargo, empresa o departamento; ayuda a desambiguar homónimos. */
   detalle?: string;
+  /** Foto de perfil de Google, cuando el contacto la tiene guardada. */
+  foto?: string;
 }
 
 const MAX = 8;
@@ -29,6 +31,7 @@ type PeopleResp = {
       names?: Array<{ displayName?: string }>;
       emailAddresses?: Array<{ value?: string }>;
       organizations?: Array<{ name?: string; title?: string }>;
+      photos?: Array<{ url?: string; default?: boolean }>;
     };
   }>;
 };
@@ -53,8 +56,8 @@ function urlPeople(ep: EndpointPeople, q: string): string {
   url.searchParams.set(
     "readMask",
     ep === "otherContacts:search"
-      ? "names,emailAddresses"
-      : "names,emailAddresses,organizations",
+      ? "names,emailAddresses,photos"
+      : "names,emailAddresses,organizations,photos",
   );
   return url.toString();
 }
@@ -92,11 +95,15 @@ async function buscarEnGoogle(q: string, cuenta: string): Promise<Destinatario[]
         const email = r.person?.emailAddresses?.[0]?.value;
         if (!email) continue;
         const org = r.person?.organizations?.[0];
+        // `default: true` es el avatar genérico de Google (la silueta gris): no
+        // aporta nada, así que se ignora y se cae en la inicial del nombre.
+        const foto = r.person?.photos?.find((f) => f.url && !f.default)?.url;
         out.push({
           nombre: r.person?.names?.[0]?.displayName ?? email,
           email,
           origen: "Gmail",
           detalle: [org?.title, org?.name].filter(Boolean).join(" · ") || undefined,
+          foto,
         });
       }
     } catch (err) {
@@ -243,6 +250,47 @@ async function buscarEnHistorial(q: string, cuenta: string): Promise<Destinatari
     }));
 }
 
+/**
+ * Completa las fotos que faltan preguntando a People por cada dirección.
+ *
+ * Las sugerencias que salen de la libreta del buzón o de la agenda del software
+ * no traen foto: se busca aquí, una vez ya recortada la lista a las que se van a
+ * pintar, para no gastar peticiones en contactos que nadie va a ver.
+ */
+async function completarFotos(lista: Destinatario[]): Promise<Destinatario[]> {
+  const pendientes = lista.filter((d) => !d.foto);
+  if (pendientes.length === 0) return lista;
+
+  const encontradas = new Map<string, string>();
+  await Promise.all(
+    pendientes.map(async (d) => {
+      for (const ep of ["people:searchContacts", "otherContacts:search"] as const) {
+        try {
+          const { data } = await googleFetchAuto<PeopleResp>(urlPeople(ep, d.email));
+          for (const r of data?.results ?? []) {
+            const coincide = (r.person?.emailAddresses ?? []).some(
+              (e) => e.value?.toLowerCase() === d.email.toLowerCase(),
+            );
+            if (!coincide) continue;
+            const foto = r.person?.photos?.find((f) => f.url && !f.default)?.url;
+            if (foto) {
+              encontradas.set(d.email.toLowerCase(), foto);
+              return;
+            }
+          }
+        } catch {
+          /* sin People no hay foto: se pinta la inicial */
+        }
+      }
+    }),
+  );
+
+  if (encontradas.size === 0) return lista;
+  return lista.map((d) =>
+    d.foto ? d : { ...d, foto: encontradas.get(d.email.toLowerCase()) },
+  );
+}
+
 export async function buscarDestinatarios(
   termino: string,
 ): Promise<{ ok: boolean; data: Destinatario[] }> {
@@ -338,7 +386,11 @@ export async function buscarDestinatarios(
       return true;
     });
 
-    return { ok: true, data: unicos.slice(0, MAX) };
+    const finales = unicos.slice(0, MAX);
+    return {
+      ok: true,
+      data: cuentaGoogle ? await completarFotos(finales) : finales,
+    };
   } catch (err) {
     console.error("[correo] buscarDestinatarios:", err);
     return { ok: false, data: [] };

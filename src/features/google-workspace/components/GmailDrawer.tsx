@@ -91,6 +91,8 @@ type Mensaje = {
   cuerpo: string;
   cuerpoHtml?: string;
   labelIds?: string[];
+  /** Nº de mensajes del hilo; Gmail lo pinta junto a los participantes. */
+  mensajesCount?: number;
   mensajesHilo?: MensajeHilo[];
 };
 
@@ -171,6 +173,10 @@ interface GmailDrawerProps {
 
 type ComposeState = {
   to: string;
+  /** Copia visible: todos los destinatarios ven quién más lo ha recibido. */
+  cc: string;
+  /** Copia OCULTA: nadie ve estas direcciones, ni siquiera entre ellas. */
+  bcc: string;
   subject: string;
   body: string;
   inReplyTo?: string;
@@ -183,6 +189,30 @@ type ComposeState = {
 };
 
 type AISugerencia = { asunto: string; cuerpo: string };
+
+/**
+ * Inicial del avatar. El nombre visible puede ser "yo" o una lista de
+ * participantes ("yo, Marta"), y ninguna de las dos cosas da una inicial útil:
+ * en esos casos se toma la de la dirección de la contraparte, que es la persona
+ * que representa la fila.
+ */
+/**
+ * Texto del remitente para las CITAS de respuesta y reenvío. En pantalla vale
+ * "yo" o "yo, Marta", pero dentro del correo citado eso no dice nada al que lo
+ * recibe: ahí se cita siempre la dirección de verdad.
+ */
+function remitenteParaCita(nombre: string, email: string): string {
+  const limpio = nombre.trim();
+  const generico = !limpio || limpio === "yo" || limpio.includes(",");
+  return generico ? email : `${limpio} <${email}>`;
+}
+
+function inicialAvatar(nombre: string, email: string): string {
+  const limpio = nombre.trim();
+  const generico = !limpio || limpio === "yo" || limpio.includes(",");
+  const base = generico ? email || limpio : limpio;
+  return (base.trim()[0] ?? "?").toUpperCase();
+}
 
 type CarpetaSistemaId =
   | "inbox"
@@ -237,6 +267,10 @@ export function GmailDrawer({ children }: GmailDrawerProps) {
   }
 
   const [compose, setCompose] = useState<ComposeState | null>(null);
+  // Las copias solo se pintan si se piden; se reinician con cada compositor
+  // nuevo para que un Cco de un correo anterior no reaparezca por descuido.
+  const [mostrarCc, setMostrarCc] = useState(false);
+  const [mostrarCco, setMostrarCco] = useState(false);
   const [enviando, setEnviando] = useState(false);
   useGlobalLoadingSync(enviando);
   const [firmaHtml, setFirmaHtml] = useState<string>("");
@@ -528,6 +562,11 @@ export function GmailDrawer({ children }: GmailDrawerProps) {
     }
   }
 
+  function resetCopias() {
+    setMostrarCc(false);
+    setMostrarCco(false);
+  }
+
   function resetIA() {
     setAiSugerencia(null);
     setAiInstruccion("");
@@ -538,26 +577,31 @@ export function GmailDrawer({ children }: GmailDrawerProps) {
   function cerrarCompose() {
     setCompose(null);
     resetIA();
+    resetCopias();
   }
 
   function abrirRedactar() {
     resetIA();
-    setCompose({ to: "", subject: "", body: "" });
+    resetCopias();
+    setCompose({ to: "", cc: "", bcc: "", subject: "", body: "" });
   }
 
   function abrirResponder() {
     if (!seleccionado) return;
     resetIA();
+    resetCopias();
     setCompose({
       to: seleccionado.email,
+      cc: "",
+      bcc: "",
       subject: seleccionado.asunto.startsWith("Re:")
         ? seleccionado.asunto
         : `Re: ${seleccionado.asunto}`,
-      body: `\n\n--- En respuesta a ${seleccionado.remitente} ---\n${seleccionado.cuerpo}`,
+      body: `\n\n--- En respuesta a ${remitenteParaCita(seleccionado.remitente, seleccionado.email)} ---\n${seleccionado.cuerpo}`,
       inReplyTo: seleccionado.id,
       threadId: seleccionado.threadId,
       emailOriginal: {
-        remitente: `${seleccionado.remitente} <${seleccionado.email}>`,
+        remitente: remitenteParaCita(seleccionado.remitente, seleccionado.email),
         asunto: seleccionado.asunto,
         cuerpo: seleccionado.cuerpo,
       },
@@ -567,14 +611,17 @@ export function GmailDrawer({ children }: GmailDrawerProps) {
   function abrirReenviar() {
     if (!seleccionado) return;
     resetIA();
+    resetCopias();
     setCompose({
       to: "",
+      cc: "",
+      bcc: "",
       subject: seleccionado.asunto.startsWith("Fwd:")
         ? seleccionado.asunto
         : `Fwd: ${seleccionado.asunto}`,
-      body: `\n\n---------- Mensaje reenviado ----------\nDe: ${seleccionado.remitente} <${seleccionado.email}>\nAsunto: ${seleccionado.asunto}\n\n${seleccionado.cuerpo}`,
+      body: `\n\n---------- Mensaje reenviado ----------\nDe: ${remitenteParaCita(seleccionado.remitente, seleccionado.email)}\nAsunto: ${seleccionado.asunto}\n\n${seleccionado.cuerpo}`,
       emailOriginal: {
-        remitente: `${seleccionado.remitente} <${seleccionado.email}>`,
+        remitente: remitenteParaCita(seleccionado.remitente, seleccionado.email),
         asunto: seleccionado.asunto,
         cuerpo: seleccionado.cuerpo,
       },
@@ -650,8 +697,11 @@ export function GmailDrawer({ children }: GmailDrawerProps) {
       return;
     }
     // Se corta aquí para no gastar la llamada a Gmail con una dirección que ya
-    // sabemos que va a rechazar.
-    const malas = direccionesInvalidas(compose.to);
+    // sabemos que va a rechazar. Se revisan también las copias: una dirección
+    // mal escrita en Cco tumbaría el envío entero igual que una del "Para".
+    const malas = direccionesInvalidas(
+      [compose.to, compose.cc, compose.bcc].filter(Boolean).join(","),
+    );
     if (malas.length > 0) {
       toast.error(
         `La dirección "${malas[0]}" no es válida. Revisa que el dominio esté completo (por ejemplo, gmail.com).`,
@@ -912,10 +962,61 @@ export function GmailDrawer({ children }: GmailDrawerProps) {
                 </button>
               </div>
               <div className="flex-1 overflow-y-auto p-4 space-y-3">
-                <CampoDestinatario
-                  valor={compose.to}
-                  onChange={(to) => setCompose({ ...compose, to })}
-                />
+                <div className="relative">
+                  <CampoDestinatario
+                    valor={compose.to}
+                    onChange={(to) => setCompose({ ...compose, to })}
+                  />
+                  {/* Como en Gmail: las copias están escondidas hasta que se
+                      piden, para que el compositor no arranque con tres campos
+                      vacíos que casi nunca se usan. */}
+                  <div className="absolute right-0 top-0 flex gap-2 text-[11px]">
+                    {!mostrarCc && (
+                      <button
+                        type="button"
+                        onClick={() => setMostrarCc(true)}
+                        className="text-muted-foreground hover:text-foreground hover:underline"
+                      >
+                        Cc
+                      </button>
+                    )}
+                    {!mostrarCco && (
+                      <button
+                        type="button"
+                        onClick={() => setMostrarCco(true)}
+                        className="text-muted-foreground hover:text-foreground hover:underline"
+                      >
+                        Cco
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {mostrarCc && (
+                  <CampoDestinatario
+                    etiqueta="Cc"
+                    autoFocus
+                    placeholder="Copia visible para todos"
+                    valor={compose.cc}
+                    onChange={(cc) => setCompose({ ...compose, cc })}
+                  />
+                )}
+
+                {mostrarCco && (
+                  <div>
+                    <CampoDestinatario
+                      etiqueta="Cco"
+                      autoFocus
+                      placeholder="Copia oculta: nadie ve estas direcciones"
+                      valor={compose.bcc}
+                      onChange={(bcc) => setCompose({ ...compose, bcc })}
+                    />
+                    <p className="mt-1 text-[11px] text-muted-foreground">
+                      Cada persona en Cco recibe el correo sin ver al resto de
+                      destinatarios, y los demás no saben que la has incluido.
+                    </p>
+                  </div>
+                )}
                 <div>
                   <Label className="text-[11px]">Asunto</Label>
                   <Input
@@ -1298,6 +1399,14 @@ function ListaMensajes({
                   )}
                 >
                   {m.remitente}
+                  {/* Gmail acompaña a los participantes con el nº de mensajes
+                      del hilo, para que se vea de un vistazo que hay
+                      conversación y no un correo suelto. */}
+                  {m.mensajesCount && m.mensajesCount > 1 ? (
+                    <span className="ml-1 font-normal text-[#5f6368]">
+                      {m.mensajesCount}
+                    </span>
+                  ) : null}
                 </span>
 
                 <div className="flex-1 min-w-0 flex items-center gap-2">
@@ -1579,7 +1688,7 @@ function MensajeHiloItem({
         className="w-full flex items-start gap-3 py-2 px-3 rounded-lg hover:bg-[#f8f9fa] text-left transition-colors"
       >
         <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#1a73e8] text-xs font-medium text-white">
-          {mensaje.remitente.charAt(0).toUpperCase()}
+          {inicialAvatar(mensaje.remitente, mensaje.email)}
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-baseline gap-2">
@@ -1613,7 +1722,7 @@ function MensajeHiloItem({
           />
         ) : (
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#1a73e8] text-sm font-medium text-white">
-            {mensaje.remitente.charAt(0).toUpperCase()}
+            {inicialAvatar(mensaje.remitente, mensaje.email)}
           </div>
         )}
         <div className="flex-1 min-w-0">
@@ -1699,7 +1808,7 @@ function BloqueMensajeUnico({
           />
         ) : (
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#1a73e8] text-sm font-medium text-white">
-            {mensaje.remitente.charAt(0).toUpperCase()}
+            {inicialAvatar(mensaje.remitente, mensaje.email)}
           </div>
         )}
         <div className="flex-1 min-w-0">

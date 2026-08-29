@@ -127,7 +127,7 @@ export interface PagoGuardado {
   nomina: number;
   horasReales: number;
   horasTrabajadas: number;
-  propina: number;
+  complemento: number;
   ajuste: number;
   horasExtras: number;
   bonus: number;
@@ -159,11 +159,11 @@ type PagoDbRow = {
   nomina: number | string;
   horas_reales: number | string;
   horas_trabajadas: number | string;
-  propina: number | string;
+  complemento: number | string;
   ajuste: number | string;
   horas_extras: number | string;
   bonus: number | string;
-  propina_mes_anterior: number | string;
+  complemento_mes_anterior: number | string;
   ss_empleado: number | string;
   ss_empresa: number | string;
   irpf: number | string;
@@ -175,7 +175,7 @@ type PagoDbRow = {
 };
 
 const PAGO_COLS =
-  "empleado_id, empleado_nombre, fijo, pago, nomina, horas_reales, horas_trabajadas, propina, ajuste, horas_extras, bonus, propina_mes_anterior, ss_empleado, ss_empresa, irpf, total, pagado, nomina_path, confirmacion_enviada_at, confirmacion_aceptada_at";
+  "empleado_id, empleado_nombre, fijo, pago, nomina, horas_reales, horas_trabajadas, complemento, ajuste, horas_extras, bonus, complemento_mes_anterior, ss_empleado, ss_empresa, irpf, total, pagado, nomina_path, confirmacion_enviada_at, confirmacion_aceptada_at";
 
 function dbToPago(r: PagoDbRow): PagoGuardado {
   return {
@@ -186,11 +186,11 @@ function dbToPago(r: PagoDbRow): PagoGuardado {
     nomina: Number(r.nomina),
     horasReales: Number(r.horas_reales),
     horasTrabajadas: Number(r.horas_trabajadas),
-    propina: Number(r.propina),
+    complemento: Number(r.complemento),
     ajuste: Number(r.ajuste),
     horasExtras: Number(r.horas_extras),
     bonus: Number(r.bonus),
-    propinaMantenimiento: Number(r.propina_mes_anterior),
+    propinaMantenimiento: Number(r.complemento_mes_anterior),
     ssEmpleado: Number(r.ss_empleado),
     ssEmpresa: Number(r.ss_empresa),
     irpf: Number(r.irpf),
@@ -288,11 +288,11 @@ export async function savePago(
         nomina: row.nomina,
         horas_reales: row.horasReales,
         horas_trabajadas: row.horasTrabajadas,
-        propina: row.propina,
+        complemento: row.complemento,
         ajuste: row.ajuste,
         horas_extras: row.horasExtras,
         bonus: row.bonus,
-        propina_mes_anterior: row.propinaMantenimiento,
+        complemento_mes_anterior: row.propinaMantenimiento,
         ss_empleado: row.ssEmpleado,
         ss_empresa: row.ssEmpresa,
         irpf: row.irpf,
@@ -338,7 +338,7 @@ export async function enviarConfirmacionesPago(
       .in("empleado_id", ids)
       .is("confirmacion_enviada_at", null)
       .select(
-        "id, empleado_id, empleado_nombre, fijo, pago, nomina, propina, ajuste, horas_extras, bonus, propina_mes_anterior, ss_empleado, ss_empresa, irpf, total",
+        "id, empleado_id, empleado_nombre, fijo, pago, nomina, complemento, ajuste, horas_extras, bonus, complemento_mes_anterior, ss_empleado, ss_empresa, irpf, total",
       );
     if (error) throw error;
     const updated = data ?? [];
@@ -368,11 +368,11 @@ export async function enviarConfirmacionesPago(
               periodo,
               pago: Number(r.pago),
               nomina: Number(r.nomina),
-              propina: Number(r.propina),
+              complemento: Number(r.complemento),
               ajuste: Number(r.ajuste),
               horasExtras: Number(r.horas_extras),
               bonus: Number(r.bonus),
-              propinaMantenimiento: Number(r.propina_mes_anterior),
+              propinaMantenimiento: Number(r.complemento_mes_anterior),
               total: Number(r.total),
               textoLiquidar: cfg.textoLiquidar,
               requiereAprobacion: cfg.requiereAprobacion,
@@ -411,11 +411,11 @@ export async function enviarConfirmacionesPago(
               fijo: Boolean(r.fijo),
               pago: Number(r.pago),
               nomina: Number(r.nomina),
-              propina: Number(r.propina),
+              complemento: Number(r.complemento),
               ajuste: Number(r.ajuste),
               horasExtras: Number(r.horas_extras),
               bonus: Number(r.bonus),
-              propinaMantenimiento: Number(r.propina_mes_anterior),
+              propinaMantenimiento: Number(r.complemento_mes_anterior),
               ssEmpleado: Number(r.ss_empleado),
               ssEmpresa: Number(r.ss_empresa),
               irpf: Number(r.irpf),
@@ -580,8 +580,8 @@ export interface PagoAbonado {
   nomina: number;       // nómina neta
   ssEmpleado: number;
   irpf: number;
-  propina: number;
-  propinaMesAnterior: number;
+  complemento: number;
+  complementoMesAnterior: number;
   horasExtras: number;
   bonus: number;
   ajuste: number;
@@ -591,7 +591,7 @@ export interface PagoAbonado {
 }
 
 const PAGO_ABONADO_COLS =
-  "id, periodo, total, nomina, ss_empleado, irpf, propina, propina_mes_anterior, " +
+  "id, periodo, total, nomina, ss_empleado, irpf, complemento, complemento_mes_anterior, " +
   "horas_extras, bonus, ajuste, pagado_at, nomina_path";
 
 function bdToPagoAbonado(r: Record<string, unknown>, tz: string): PagoAbonado {
@@ -605,8 +605,8 @@ function bdToPagoAbonado(r: Record<string, unknown>, tz: string): PagoAbonado {
     nomina: Number(r.nomina),
     ssEmpleado: Number(r.ss_empleado),
     irpf: Number(r.irpf),
-    propina: Number(r.propina),
-    propinaMesAnterior: Number(r.propina_mes_anterior),
+    complemento: Number(r.complemento),
+    complementoMesAnterior: Number(r.complemento_mes_anterior),
     horasExtras: Number(r.horas_extras),
     bonus: Number(r.bonus),
     ajuste: Number(r.ajuste),
@@ -725,7 +725,7 @@ export async function loadPagosRango(
       prev.nomina += p.nomina;
       prev.horasReales += p.horasReales;
       prev.horasTrabajadas += p.horasTrabajadas;
-      prev.propina += p.propina;
+      prev.complemento += p.complemento;
       prev.ajuste += p.ajuste;
       prev.horasExtras += p.horasExtras;
       prev.bonus += p.bonus;
@@ -740,7 +740,7 @@ export async function loadPagosRango(
     const r2 = (n: number) => Math.round(n * 100) / 100;
     const filas = [...acc.values()].map((p) => ({
       ...p,
-      pago: r2(p.pago), nomina: r2(p.nomina), propina: r2(p.propina),
+      pago: r2(p.pago), nomina: r2(p.nomina), complemento: r2(p.complemento),
       ajuste: r2(p.ajuste), horasExtras: r2(p.horasExtras), bonus: r2(p.bonus),
       propinaMantenimiento: r2(p.propinaMantenimiento),
       ssEmpleado: r2(p.ssEmpleado), ssEmpresa: r2(p.ssEmpresa), irpf: r2(p.irpf),

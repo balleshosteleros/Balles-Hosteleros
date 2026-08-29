@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { googleFetchAuto } from "@/lib/google/api";
+import { googleFetchAuto, getGoogleTokens } from "@/lib/google/api";
 
 type GmailFullMessage = {
   id: string;
@@ -87,14 +87,32 @@ function fechaLarga(internalDate?: string): string {
   });
 }
 
-function decodificarMensaje(msg: GmailFullMessage) {
+/**
+ * Nombre del remitente tal y como lo escribe Gmail: si el mensaje lo mandaste
+ * tú, pone "yo"; si el contacto no tiene nombre guardado, la parte anterior a
+ * la arroba en vez de la dirección completa.
+ */
+function nombreRemitente(
+  from: { name: string; email: string },
+  cuentaPropia: string,
+): string {
+  if (cuentaPropia && from.email.toLowerCase() === cuentaPropia.toLowerCase()) {
+    return "yo";
+  }
+  const limpio = from.name.trim();
+  return limpio && limpio.toLowerCase() !== from.email.toLowerCase()
+    ? limpio
+    : from.email.split("@")[0];
+}
+
+function decodificarMensaje(msg: GmailFullMessage, cuentaPropia = "") {
   const html = findPart(msg.payload, "text/html");
   const text = findPart(msg.payload, "text/plain") || findAnyBody(msg.payload);
   const from = parseFrom(header(msg, "From"));
   return {
     id: msg.id,
     threadId: msg.threadId,
-    remitente: from.name,
+    remitente: nombreRemitente(from, cuentaPropia),
     email: from.email,
     fecha: fechaLarga(msg.internalDate),
     asunto: header(msg, "Subject"),
@@ -109,6 +127,7 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   const id = url.searchParams.get("id");
   const threadId = url.searchParams.get("threadId");
+  const { email: cuentaPropia } = await getGoogleTokens();
 
   // Hilo completo: devolver todos los mensajes (como Gmail)
   if (threadId) {
@@ -122,7 +141,9 @@ export async function GET(request: Request) {
     if (!thread || !thread.messages) {
       return NextResponse.json({ connected: true, mensajes: [] });
     }
-    const mensajes = thread.messages.map(decodificarMensaje);
+    const mensajes = thread.messages.map((m) =>
+      decodificarMensaje(m, cuentaPropia ?? ""),
+    );
     return NextResponse.json({ connected: true, mensajes });
   }
 
@@ -141,7 +162,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ connected: true, cuerpo: "", cuerpoHtml: "" });
   }
 
-  const decoded = decodificarMensaje(msg);
+  const decoded = decodificarMensaje(msg, cuentaPropia ?? "");
   return NextResponse.json({
     connected: true,
     cuerpo: decoded.cuerpo,

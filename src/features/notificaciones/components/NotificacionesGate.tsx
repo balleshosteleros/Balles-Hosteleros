@@ -98,7 +98,7 @@ export function NotificacionesGate() {
     ? [
         { label: "Pago", value: num(actual.payload.pago) },
         { label: "Nómina", value: num(actual.payload.nomina) },
-        { label: "Propina", value: num(actual.payload.propina) },
+        { label: "Complemento", value: num(actual.payload.complemento) },
         { label: "Horas extras", value: num(actual.payload.horasExtras) },
         { label: "Bonus", value: num(actual.payload.bonus) },
         { label: "Propina mantenimiento", value: num(actual.payload.propinaMantenimiento) },

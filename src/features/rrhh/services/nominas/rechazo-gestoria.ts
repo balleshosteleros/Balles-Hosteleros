@@ -40,7 +40,7 @@ export interface ResultadoRechazo {
 /**
  * Borra TODAS las nóminas del mes (filas + documentos del bucket) y deja los
  * importes de nómina de `rrhh_pagos` a cero, sin tocar el resto del desglose
- * (propinas, horas extras, bonus…), que no vienen de la gestoría.
+ * (complementos, horas extras, bonus…), que no vienen de la gestoría.
  */
 async function borrarNominasDelMes(
   admin: SupabaseClient,
@@ -91,7 +91,7 @@ async function limpiarImportesDeNomina(
   for (const empleadoId of empleadoIds) {
     const { data: prev } = await admin
       .from("rrhh_pagos")
-      .select("pago, propina, horas_extras, bonus, propina_mes_anterior, ajuste")
+      .select("pago, complemento, horas_extras, bonus, complemento_mes_anterior, ajuste")
       .eq("empresa_id", empresaId)
       .eq("empleado_id", empleadoId)
       .eq("periodo", periodo)
@@ -100,10 +100,10 @@ async function limpiarImportesDeNomina(
 
     const total =
       Number(prev.pago ?? 0) +
-      Number(prev.propina ?? 0) +
+      Number(prev.complemento ?? 0) +
       Number(prev.horas_extras ?? 0) +
       Number(prev.bonus ?? 0) +
-      Number(prev.propina_mes_anterior ?? 0) +
+      Number(prev.complemento_mes_anterior ?? 0) +
       Number(prev.ajuste ?? 0);
 
     await admin

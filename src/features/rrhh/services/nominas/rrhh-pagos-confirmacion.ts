@@ -30,7 +30,7 @@ export interface LiquidacionDetalle {
   fijo: boolean;
   pago: number;
   nomina: number;
-  propina: number;
+  complemento: number;
   ajuste: number;
   horasExtras: number;
   bonus: number;
@@ -127,7 +127,7 @@ export async function detalleLiquidacionPorToken(
   const { data: pago } = await admin
     .from("rrhh_pagos")
     .select(
-      "empleado_nombre, fijo, pago, nomina, propina, ajuste, horas_extras, bonus, propina_mes_anterior, ss_empleado, ss_empresa, irpf, total, confirmacion_aceptada_at",
+      "empleado_nombre, fijo, pago, nomina, complemento, ajuste, horas_extras, bonus, complemento_mes_anterior, ss_empleado, ss_empresa, irpf, total, confirmacion_aceptada_at",
     )
     .eq("id", row.pago_id)
     .maybeSingle();
@@ -146,11 +146,11 @@ export async function detalleLiquidacionPorToken(
       fijo: Boolean(pago.fijo),
       pago: Number(pago.pago),
       nomina: Number(pago.nomina),
-      propina: Number(pago.propina),
+      complemento: Number(pago.complemento),
       ajuste: Number(pago.ajuste),
       horasExtras: Number(pago.horas_extras),
       bonus: Number(pago.bonus),
-      propinaMantenimiento: Number(pago.propina_mes_anterior),
+      propinaMantenimiento: Number(pago.complemento_mes_anterior),
       ssEmpleado: Number(pago.ss_empleado),
       ssEmpresa: Number(pago.ss_empresa),
       irpf: Number(pago.irpf),
@@ -230,8 +230,8 @@ function recuadroLiquidacionHtml(d: LiquidacionDetalle): string {
   if (d.irpf) filas.push(fila("IRPF", `−${fmtEur(d.irpf)}`, { rojo: true }));
   filas.push(fila("Nómina neta", fmtEur(d.nomina), { destacado: true, separador: true }));
   // Resto de conceptos que se suman a la liquidación.
-  if (d.propina) filas.push(fila("Propina", fmtEur(d.propina)));
-  if (d.propinaMantenimiento) filas.push(fila("Propina mes anterior", fmtEur(d.propinaMantenimiento)));
+  if (d.complemento) filas.push(fila("Complemento", fmtEur(d.complemento)));
+  if (d.propinaMantenimiento) filas.push(fila("Complemento mes anterior", fmtEur(d.propinaMantenimiento)));
   if (d.horasExtras) filas.push(fila("Horas extras", fmtEur(d.horasExtras)));
   if (d.bonus) filas.push(fila("Bonus", fmtEur(d.bonus)));
   if (d.ajuste) filas.push(fila("Ajuste", `${d.ajuste > 0 ? "+" : "−"}${fmtEur(Math.abs(d.ajuste))}`, { rojo: d.ajuste < 0 }));

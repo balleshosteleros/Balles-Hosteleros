@@ -116,7 +116,7 @@ export async function guardarNominaArchivo(
 /**
  * Guarda los DATOS leídos de la nómina (SS empleado/empresa + neto a percibir) en
  * el pago del empleado para ESE periodo, SIN tocar el resto de columnas (pago,
- * propina, ajuste, total…). Update parcial idempotente: crea la fila si no existe.
+ * complemento, ajuste, total…). Update parcial idempotente: crea la fila si no existe.
  * Se usa al subir nóminas para no pisar datos de otros meses.
  */
 export async function guardarDatosNomina(

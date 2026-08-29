@@ -30,7 +30,7 @@ export interface PagoEmpleado {
   nomina: number;
   horasReales: number;
   horasTrabajadas: number;
-  propina: number;
+  complemento: number;
   ajuste: number; // manual con signo: + suma al total, − resta (antes "descuento")
   horasExtras: number;
   bonus: number;
@@ -65,7 +65,7 @@ export interface PagoEmpleado {
 export interface ResumenPagos {
   totalPagos: number;
   totalNomina: number;
-  totalPropinas: number;
+  totalComplementos: number;
   totalAjustes: number; // suma con signo de los ajustes
   totalExtras: number;
   totalBonus: number;
@@ -77,17 +77,17 @@ export interface ResumenPagos {
   negativo: number;
   efectivoAhorro: number;
   prestamos: number;
-  propinasAcumuladas: number;
+  complementosAcumulados: number;
 }
 
 export function calcularTotalPago(p: PagoEmpleado): number {
-  return p.pago + p.nomina + p.propina + p.horasExtras + p.bonus + p.propinaMantenimiento + p.ajuste;
+  return p.pago + p.nomina + p.complemento + p.horasExtras + p.bonus + p.propinaMantenimiento + p.ajuste;
 }
 
 export function getResumenPagos(pagos: PagoEmpleado[]): ResumenPagos {
   const totalPagos = pagos.reduce((s, p) => s + p.pago, 0);
   const totalNomina = pagos.reduce((s, p) => s + p.nomina, 0);
-  const totalPropinas = pagos.reduce((s, p) => s + p.propina, 0);
+  const totalComplementos = pagos.reduce((s, p) => s + p.complemento, 0);
   const totalAjustes = pagos.reduce((s, p) => s + p.ajuste, 0);
   const ajustesPositivos = pagos.reduce((s, p) => s + Math.max(0, p.ajuste), 0);
   const ajustesNegativos = pagos.reduce((s, p) => s + Math.max(0, -p.ajuste), 0);
@@ -97,13 +97,13 @@ export function getResumenPagos(pagos: PagoEmpleado[]): ResumenPagos {
   const totalSsEmpresa = pagos.reduce((s, p) => s + p.ssEmpresa, 0);
   const totalSs = totalSsEmpleado + totalSsEmpresa;
   const totalFinal = pagos.reduce((s, p) => s + p.total, 0);
-  const positivo = totalPagos + totalPropinas + totalExtras + totalBonus + ajustesPositivos;
+  const positivo = totalPagos + totalComplementos + totalExtras + totalBonus + ajustesPositivos;
   const negativo = ajustesNegativos;
   const efectivoAhorro = totalFinal - totalNomina;
   const prestamos = Math.round(ajustesNegativos * 0.4);
-  const propinasAcumuladas = totalPropinas + pagos.reduce((s, p) => s + p.propinaMantenimiento, 0);
+  const complementosAcumulados = totalComplementos + pagos.reduce((s, p) => s + p.propinaMantenimiento, 0);
 
-  return { totalPagos, totalNomina, totalPropinas, totalAjustes, totalExtras, totalBonus, totalSsEmpleado, totalSsEmpresa, totalSs, totalFinal, positivo, negativo, efectivoAhorro, prestamos, propinasAcumuladas };
+  return { totalPagos, totalNomina, totalComplementos, totalAjustes, totalExtras, totalBonus, totalSsEmpleado, totalSsEmpresa, totalSs, totalFinal, positivo, negativo, efectivoAhorro, prestamos, complementosAcumulados };
 }
 
 /** Coste total de Seguridad Social de un pago (empleado + empresa). Informativo. */

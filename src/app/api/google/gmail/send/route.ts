@@ -141,7 +141,7 @@ function mensajeErrorGmail(status: number, cuerpo: string, destino?: string): st
 /**
  * Envía un email con la API de Gmail.
  *
- * Body esperado: { to, subject, body, replyTo?, threadId?, inReplyTo?, sinFirma? }
+ * Body esperado: { to, subject, body, cc?, bcc?, replyTo?, threadId?, inReplyTo?, sinFirma? }
  * Construye un mensaje RFC2822 en HTML, añade la firma corporativa configurada
  * en Gmail (a menos que `sinFirma=true`) y lo codifica en base64url.
  */
@@ -156,6 +156,8 @@ export async function POST(request: Request) {
 
   const body = (await request.json().catch(() => ({}))) as {
     to?: string;
+    cc?: string;
+    bcc?: string;
     subject?: string;
     body?: string;
     replyTo?: string;
@@ -172,8 +174,13 @@ export async function POST(request: Request) {
   }
 
   // Se valida ANTES de llamar a Gmail: así el aviso dice qué dirección falla en
-  // vez de devolver el JSON crudo que responde Google.
-  const malas = direccionesInvalidas(body.to);
+  // vez de devolver el JSON crudo que responde Google. Las copias entran en la
+  // misma comprobación: Gmail rechaza el envío completo por una sola dirección
+  // mal escrita, esté en "Para", en "Cc" o en "Cco".
+  const todasLasDirecciones = [body.to, body.cc, body.bcc]
+    .filter((c): c is string => !!c && c.trim().length > 0)
+    .join(",");
+  const malas = direccionesInvalidas(todasLasDirecciones);
   if (malas.length > 0) {
     return NextResponse.json(
       {
@@ -194,6 +201,13 @@ export async function POST(request: Request) {
   const lines: string[] = [];
   lines.push(`From: ${email ?? "me"}`);
   lines.push(`To: ${body.to}`);
+  // Copia visible: va en la cabecera y todos los destinatarios la ven.
+  if (body.cc?.trim()) lines.push(`Cc: ${body.cc.trim()}`);
+  // COPIA OCULTA. Gmail hace exactamente esto: la cabecera `Bcc` viaja en el
+  // mensaje que se le entrega a la API, el servidor la usa para repartir y la
+  // BORRA antes de entregar cada copia. Así nadie —tampoco quien está en Cco—
+  // ve al resto de direcciones ocultas.
+  if (body.bcc?.trim()) lines.push(`Bcc: ${body.bcc.trim()}`);
   lines.push(`Subject: =?UTF-8?B?${Buffer.from(body.subject).toString("base64")}?=`);
   if (body.replyTo) lines.push(`Reply-To: ${body.replyTo}`);
   if (body.inReplyTo) {
@@ -233,7 +247,7 @@ export async function POST(request: Request) {
     return NextResponse.json(
       {
         error: "send_failed",
-        message: mensajeErrorGmail(res.status, errBody, body.to),
+        message: mensajeErrorGmail(res.status, errBody, todasLasDirecciones),
         status: res.status,
       },
       { status: 500 },

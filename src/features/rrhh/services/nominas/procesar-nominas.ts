@@ -254,16 +254,16 @@ export async function procesarNominasConAdmin(
         // importe distinto al que muestra su liquidación.
         const { data: prev } = await admin
           .from("rrhh_pagos")
-          .select("pago, propina, horas_extras, bonus, propina_mes_anterior, ajuste")
+          .select("pago, complemento, horas_extras, bonus, complemento_mes_anterior, ajuste")
           .eq("id", ex.id)
           .maybeSingle();
         const total =
           Number(prev?.pago ?? 0) +
           suma.nomina +
-          Number(prev?.propina ?? 0) +
+          Number(prev?.complemento ?? 0) +
           Number(prev?.horas_extras ?? 0) +
           Number(prev?.bonus ?? 0) +
-          Number(prev?.propina_mes_anterior ?? 0) +
+          Number(prev?.complemento_mes_anterior ?? 0) +
           Number(prev?.ajuste ?? 0);
         await admin
           .from("rrhh_pagos")

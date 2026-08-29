@@ -178,7 +178,7 @@ function fromGuardado(
     nomina: g.nomina,
     horasReales: g.horasReales,
     horasTrabajadas: g.horasTrabajadas,
-    propina: g.propina,
+    complemento: g.complemento,
     ajuste: g.ajuste,
     horasExtras: g.horasExtras,
     bonus: g.bonus,
@@ -205,7 +205,7 @@ function toGuardado(p: PagoEmpleado): PagoGuardado {
     nomina: p.nomina,
     horasReales: p.horasReales,
     horasTrabajadas: p.horasTrabajadas,
-    propina: p.propina,
+    complemento: p.complemento,
     ajuste: p.ajuste,
     horasExtras: p.horasExtras,
     bonus: p.bonus,
@@ -242,7 +242,7 @@ function nuevoPagoVacio(
     nomina: 0,
     horasReales: 0,
     horasTrabajadas: 0,
-    propina: 0,
+    complemento: 0,
     ajuste: 0,
     horasExtras: 0,
     bonus: 0,
@@ -917,7 +917,7 @@ export function PagosView() {
         // que se persiste, la que viaja en el correo de liquidación y la que
         // cobra el empleado, así que no puede quedar desincronizada del desglose
         // que se le enseña. Antes solo se movía por el delta del ajuste, de modo
-        // que corregir la nómina (o propina, horas extras…) cambiaba el desglose
+        // que corregir la nómina (o complemento, horas extras…) cambiaba el desglose
         // pero dejaba el total anterior.
         updated.total = Math.round(calcularTotalPago(updated) * 100) / 100;
         actualizado = updated;
@@ -1079,7 +1079,7 @@ export function PagosView() {
     { campo: "nomina", label: "Nómina neta" },
     { campo: "horasReales", label: "H.R" },
     { campo: "horasTrabajadas", label: "H.T" },
-    { campo: "propina", label: "Complemento" },
+    { campo: "complemento", label: "Complemento" },
     { campo: "ajuste", label: "Ajuste" },
     { campo: "horasExtras", label: "H.Extras" },
     { campo: "bonus", label: "Bonus" },
@@ -1184,9 +1184,9 @@ export function PagosView() {
       th: th("horasTrabajadas", "H.T", "numero"),
       td: (p) => <TableCell key="horasTrabajadas" className="text-right tabular-nums">{p.horasTrabajadas}h</TableCell>,
     },
-    propina: {
-      th: th("propina", "Complemento", "numero"),
-      td: (p) => <TableCell key="propina" className="text-right tabular-nums whitespace-nowrap">{fmt(p.propina)}</TableCell>,
+    complemento: {
+      th: th("complemento", "Complemento", "numero"),
+      td: (p) => <TableCell key="complemento" className="text-right tabular-nums whitespace-nowrap">{fmt(p.complemento)}</TableCell>,
     },
     ajuste: {
       th: th("ajuste", "Ajuste", "numero"),
@@ -1343,7 +1343,7 @@ export function PagosView() {
     nomina: <TableCell key="t-nomina" className="text-right tabular-nums font-semibold">{fmtDato(resumen.totalNomina, hayNominaProcesada)}</TableCell>,
     horasReales: <TableCell key="t-hr" className="text-right tabular-nums">{pagosFiltrados.reduce((s, p) => s + p.horasReales, 0)}h</TableCell>,
     horasTrabajadas: <TableCell key="t-ht" className="text-right tabular-nums">{pagosFiltrados.reduce((s, p) => s + p.horasTrabajadas, 0)}h</TableCell>,
-    propina: <TableCell key="t-propina" className="text-right tabular-nums">{fmt(resumen.totalPropinas)}</TableCell>,
+    complemento: <TableCell key="t-complemento" className="text-right tabular-nums">{fmt(resumen.totalComplementos)}</TableCell>,
     ajuste: (
       <TableCell key="t-ajuste" className={`text-right tabular-nums ${resumen.totalAjustes < 0 ? "text-destructive" : resumen.totalAjustes > 0 ? "text-emerald-600" : ""}`}>
         {resumen.totalAjustes === 0 ? "—" : `${resumen.totalAjustes > 0 ? "+" : "−"}${fmt(Math.abs(resumen.totalAjustes))}`}
@@ -2085,7 +2085,7 @@ function EditForm({ pago, onSave }: { pago: PagoEmpleado; onSave: (d: Partial<Pa
   const [form, setForm] = useState({ ...pago });
   // Editables a mano: conceptos que NO salen de la nómina.
   const campos: { key: keyof PagoEmpleado; label: string }[] = [
-    { key: "propina", label: "Complemento" },
+    { key: "complemento", label: "Complemento" },
     { key: "ajuste", label: "Ajuste (+/−)" },
     { key: "horasExtras", label: "H. Extras" },
     { key: "bonus", label: "Bonus" },

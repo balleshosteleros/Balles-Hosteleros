@@ -107,6 +107,7 @@ async function comprobarPlazoApunte(
   supabase: Awaited<ReturnType<typeof createClient>>,
   empresaId: string,
   fecha: string,
+  accion: "registrar" | "borrar" = "registrar",
 ): Promise<string | null> {
   const { data: cfg } = await supabase
     .from("cierres_config")
@@ -139,7 +140,10 @@ async function comprobarPlazoApunte(
   const { rolId } = await getRolContext();
   if (cfg?.rol_excepcion_id && rolId === cfg.rol_excepcion_id) return null;
 
-  return `Fuera de plazo: no se pueden registrar apuntes con más de ${dias} ${dias === 1 ? "día" : "días"} de retraso (este lleva ${retraso}). Solo el rol autorizado puede hacerlo.`;
+  const queHace = accion === "borrar"
+    ? `no se pueden borrar apuntes de hace más de ${dias} ${dias === 1 ? "día" : "días"} (este es de hace ${retraso})`
+    : `no se pueden registrar apuntes con más de ${dias} ${dias === 1 ? "día" : "días"} de retraso (este lleva ${retraso})`;
+  return `Fuera de plazo: ${queHace}. Solo el rol autorizado puede hacerlo.`;
 }
 
 function sanitizeFilename(name: string): string {
@@ -728,10 +732,19 @@ export async function deleteCierre(id: string): Promise<{ ok: boolean; error?: s
 
     const { data: row } = await supabase
       .from("cierres_semanales")
-      .select("storage_path, documentos")
+      .select("fecha, storage_path, documentos")
       .eq("id", id)
       .eq("empresa_id", empresaId)
       .single();
+
+    if (!row) return { ok: false, error: "El apunte ya no existe" };
+
+    // El plazo que impide APUNTAR fuera de fecha vale igual para BORRAR: si no,
+    // el bloqueo tendría puerta trasera (borrar y volver a apuntar cambiaría un
+    // cierre antiguo sin dejar rastro). Solo el rol autorizado en Configuración
+    // puede borrar un apunte que ya está fuera de plazo.
+    const bloqueo = await comprobarPlazoApunte(supabase, empresaId, String(row.fecha), "borrar");
+    if (bloqueo) return { ok: false, error: bloqueo };
 
     // Recopilar todas las rutas a borrar (array `documentos` + doc legacy), sin duplicados.
     const paths = new Set<string>();
