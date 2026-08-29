@@ -5,6 +5,33 @@
 
 ---
 
+## ✅ 29-AGO — EL ERROR AL SUBIR ALBARANES, ARREGLADO Y EN PRODUCCIÓN
+
+> Información. Nada que hacer por vuestra parte — probad a subir un albarán y debería ir.
+
+Teníais razón: **Google retiró el modelo de IA que usábamos.** Al mirarlo de cerca eran dos golpes
+a la vez:
+
+- El modelo que **leía los albaranes** (`gemini-3.7-flash`) dejó de responder: da "saturado" de
+  forma sostenida, no un pico puntual.
+- El modelo de **respaldo** que teníamos por detrás (`gemini-2.5-pro`) Google **lo ha retirado**
+  directamente (responde "ya no está disponible"). Ese es el que "han quitado".
+
+Como los dos peldaños de la escalera estaban caídos, la lectura fallaba entera y salía el error.
+
+**Qué hemos hecho:** cambiar a dos modelos que sí funcionan y responden rápido — `gemini-3.5-flash`
+para leer, con `gemini-3.6-flash` de respaldo. Probamos los dos con un albarán de ejemplo antes de
+subirlo: extraen proveedor, total y líneas correctamente. Ya está desplegado.
+
+**Un apunte para el futuro:** esto va a volver a pasar de vez en cuando — Google jubila modelos cada
+pocos meses. Dos cosas lo hacen fácil de sobrellevar: (1) el modelo se puede cambiar sin tocar
+código, con una variable de entorno, así que la próxima vez es un minuto; y (2) la cuenta de IA es
+del plan **gratuito**, con un tope de peticiones por día y por modelo. Con el volumen de albaranes
+que tenéis (unos pocos al día) sobra de largo, pero si algún día se hace intensivo, pasar a un plan
+de pago quita el tope y da acceso a los modelos grandes (que ahora mismo esta cuenta no puede usar).
+
+---
+
 ## 🍳 29-AGO — ANTES DE LA FASE 2: CÓMO QUIERES QUE FUNCIONEN LAS ELABORACIONES
 
 > **1 pregunta para Iván**, con calma (estamos esperando tus respuestas, no corre). Es la única que
