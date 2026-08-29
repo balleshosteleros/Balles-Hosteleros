@@ -30,6 +30,17 @@ export const maxDuration = 300;
  */
 const MARGEN_SEGUNDOS = 60;
 
+/**
+ * Cuántas migraciones avanzan a la vez.
+ *
+ * Cada una consume su propia ventana de 3 minutos copiando de Drive a R2, y
+ * son empresas y cuentas de Google distintas: no compiten entre ellas. Con dos
+ * abiertas (Marketing de HABANA y de BACANAL) las dos avanzan a ritmo completo
+ * en vez de turnarse. El tope evita que media docena de migraciones agoten a la
+ * vez la memoria de la función.
+ */
+const MAX_EN_PARALELO = 3;
+
 export async function GET(request: Request) {
   const cronSecret = process.env.CRON_SECRET;
   if (!cronSecret) {
@@ -46,56 +57,71 @@ export async function GET(request: Request) {
   );
 
   const corte = new Date(Date.now() - MARGEN_SEGUNDOS * 1000).toISOString();
-  const { data: pendiente } = await admin
+  const { data: pendientes } = await admin
     .from("archivos_importaciones")
     .select("id, empresa_id, unidad_id, unidad_nombre, mapeo, creado_por, google_email")
     .in("estado", ["en_curso", "parada"])
     .lt("updated_at", corte)
     .order("updated_at", { ascending: true })
-    .limit(1)
-    .maybeSingle();
+    .limit(MAX_EN_PARALELO);
 
-  if (!pendiente) {
+  if (!pendientes?.length) {
     return NextResponse.json({ ok: true, mensaje: "Nada pendiente" });
   }
 
-  // El permiso de Google: el de la cookie no existe aquí, así que se canjea el
-  // refresh token guardado. Sin cuenta anotada se coge la primera del usuario,
-  // que es lo que había antes de guardarla.
-  const cuentas = await readAccountsFor(pendiente.creado_por as string);
-  const cuenta =
-    cuentas.find((c) => c.email === pendiente.google_email) ?? cuentas[0];
-  if (!cuenta?.refreshToken) {
-    console.error(
-      `[cron/archivos-importacion] sin permiso de Google para ${pendiente.google_email ?? "(sin cuenta anotada)"}`,
-    );
-    return NextResponse.json({ ok: false, error: "Sin permiso de Google" });
-  }
+  // Las importaciones de empresas distintas avanzan A LA VEZ.
+  //
+  // Antes se cogía una sola por vuelta: con dos migraciones abiertas se iban
+  // alternando y cada una avanzaba a la mitad de ritmo, aunque no compitieran
+  // por nada (empresas, cuentas de Google y carpetas distintas). Corren en
+  // paralelo dentro de la misma ventana.
+  const resultados = await Promise.all(
+    pendientes.map(async (pendiente) => {
+      // El permiso de Google: el de la cookie no existe aquí, así que se canjea
+      // el refresh token guardado. Sin cuenta anotada se coge la primera del
+      // usuario, que es lo que había antes de guardarla.
+      const cuentas = await readAccountsFor(pendiente.creado_por as string);
+      const cuenta =
+        cuentas.find((c) => c.email === pendiente.google_email) ?? cuentas[0];
+      if (!cuenta?.refreshToken) {
+        console.error(
+          `[cron/archivos-importacion] sin permiso de Google para ${pendiente.google_email ?? "(sin cuenta anotada)"}`,
+        );
+        return { unidad: pendiente.unidad_nombre, ok: false, error: "Sin permiso de Google" };
+      }
 
-  const token = await refreshAccessToken(cuenta.refreshToken);
-  if (!token) {
-    return NextResponse.json({ ok: false, error: "No se pudo renovar el permiso" });
-  }
+      const token = await refreshAccessToken(cuenta.refreshToken);
+      if (!token) {
+        return {
+          unidad: pendiente.unidad_nombre,
+          ok: false,
+          error: "No se pudo renovar el permiso",
+        };
+      }
 
-  const res = await ejecutarImportacion({
-    empresaId: pendiente.empresa_id as string,
-    userId: pendiente.creado_por as string,
-    tokenInicial: token,
-    refreshToken: cuenta.refreshToken,
-    googleEmail: cuenta.email,
-    unidadId: pendiente.unidad_id as string,
-    unidadNombre: pendiente.unidad_nombre as string,
-    mapeo: pendiente.mapeo as Mapeo,
-    importacionId: pendiente.id as string,
-  });
+      const res = await ejecutarImportacion({
+        empresaId: pendiente.empresa_id as string,
+        userId: pendiente.creado_por as string,
+        tokenInicial: token,
+        refreshToken: cuenta.refreshToken,
+        googleEmail: cuenta.email,
+        unidadId: pendiente.unidad_id as string,
+        unidadNombre: pendiente.unidad_nombre as string,
+        mapeo: pendiente.mapeo as Mapeo,
+        importacionId: pendiente.id as string,
+      });
 
-  if (!res.ok) {
-    console.error("[cron/archivos-importacion]", res.error);
-    return NextResponse.json({ ok: false, error: res.error });
-  }
-  return NextResponse.json({
-    ok: true,
-    unidad: pendiente.unidad_nombre,
-    terminada: res.data.terminada,
-  });
+      if (!res.ok) {
+        console.error("[cron/archivos-importacion]", pendiente.unidad_nombre, res.error);
+        return { unidad: pendiente.unidad_nombre, ok: false, error: res.error };
+      }
+      return {
+        unidad: pendiente.unidad_nombre,
+        ok: true,
+        terminada: res.data.terminada,
+      };
+    }),
+  );
+
+  return NextResponse.json({ ok: true, importaciones: resultados });
 }
