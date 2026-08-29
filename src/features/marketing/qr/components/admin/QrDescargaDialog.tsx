@@ -13,6 +13,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import type { CodigoQr } from "../../types";
+import { friendlyError } from "@/shared/lib/friendly-errors";
 
 /** Lado del PNG en píxeles. 2000 px aguanta un QR grande en una carta impresa sin
  *  que se vea pixelado; por debajo de eso la imprenta se queja. */
@@ -48,8 +49,8 @@ export function QrDescargaDialog({
     try {
       await navigator.clipboard.writeText(url);
       toast.success("Enlace copiado");
-    } catch {
-      toast.error("No se pudo copiar el enlace.");
+    } catch (err) {
+      toast.error("No se pudo copiar el enlace.", { description: friendlyError(err, "copiarEnlace") });
     }
   }
 

@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getEmpresaActivaForUser } from "@/features/empresa/lib/empresa-server";
+import { friendlyError } from "@/shared/lib/friendly-errors";
 import type {
   Curso,
   Seccion,
@@ -101,7 +102,7 @@ function toNovedad(r: NovedadRow): NovedadFormacion {
 }
 
 // ─── Puestos reales de la empresa ───────────────────────────────
-export async function listPuestosFormacion(): Promise<{ ok: boolean; data: PuestoRef[] }> {
+export async function listPuestosFormacion(): Promise<{ ok: boolean; data: PuestoRef[]; error?: string }> {
   try {
     const { supabase, empresaId } = await ctx();
     if (!empresaId) return { ok: true, data: [] };
@@ -125,7 +126,7 @@ export async function listPuestosFormacion(): Promise<{ ok: boolean; data: Puest
     return { ok: true, data: data2 };
   } catch (err) {
     console.error("[formacion] listPuestosFormacion:", err);
-    return { ok: false, data: [] };
+    return { ok: false, data: [], error: friendlyError(err, "depObj") };
   }
 }
 
@@ -178,7 +179,7 @@ export async function getCursoDePuesto(
 }
 
 /** Nombres de los puestos reales del empleado autenticado (principal primero). */
-export async function getMisPuestosNombres(): Promise<{ ok: boolean; data: string[] }> {
+export async function getMisPuestosNombres(): Promise<{ ok: boolean; data: string[]; error?: string }> {
   try {
     const { supabase, userId, empresaId } = await ctx();
     if (!userId || !empresaId) return { ok: true, data: [] };
@@ -208,7 +209,7 @@ export async function getMisPuestosNombres(): Promise<{ ok: boolean; data: strin
     return { ok: true, data: nombres };
   } catch (err) {
     console.error("[formacion] getMisPuestosNombres:", err);
-    return { ok: false, data: [] };
+    return { ok: false, data: [], error: friendlyError(err, "obj") };
   }
 }
 
@@ -267,7 +268,7 @@ export interface FormacionData {
   progresoLeccionIds: string[];
 }
 
-export async function getFormacionData(): Promise<{ ok: boolean; data: FormacionData }> {
+export async function getFormacionData(): Promise<{ ok: boolean; data: FormacionData; error?: string }> {
   const vacio: FormacionData = { cursos: [], secciones: [], lecciones: [], novedades: [], progresoLeccionIds: [] };
   try {
     const { supabase, userId, empresaId } = await ctx();
@@ -300,7 +301,7 @@ export async function getFormacionData(): Promise<{ ok: boolean; data: Formacion
     return { ok: true, data };
   } catch (err) {
     console.error("[formacion] getFormacionData:", err);
-    return { ok: false, data: vacio };
+    return { ok: false, data: vacio, error: friendlyError(err, "getFormacionData") };
   }
 }
 

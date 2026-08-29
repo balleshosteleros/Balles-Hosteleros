@@ -14,6 +14,7 @@ import { nombreMes } from "@/features/rrhh/services/nominas/nominas-gestoria";
 import { getZonaHorariaEmpresa } from "@/features/empresa/lib/empresa-server";
 import { formatFechaEnZona } from "@/features/empresa/lib/zona-horaria";
 import type { DetalleNomina } from "@/features/rrhh/data/pagos";
+import { friendlyError } from "@/shared/lib/friendly-errors";
 
 const MESES_PAGOS = [
   "enero", "febrero", "marzo", "abril", "mayo", "junio",
@@ -37,7 +38,7 @@ export interface EmpleadoPagoRow {
   area: EmpleadoArea;
 }
 
-export async function listEmpleadosParaPagos(): Promise<{ ok: boolean; data: EmpleadoPagoRow[] }> {
+export async function listEmpleadosParaPagos(): Promise<{ ok: boolean; data: EmpleadoPagoRow[]; error?: string }> {
   try {
     const { supabase, empresaId } = await getAppContext();
     if (!empresaId) return { ok: false, data: [] };
@@ -110,7 +111,7 @@ export async function listEmpleadosParaPagos(): Promise<{ ok: boolean; data: Emp
     return { ok: true, data: rows };
   } catch (err) {
     console.error("[rrhh] listEmpleadosParaPagos:", err);
-    return { ok: false, data: [] };
+    return { ok: false, data: [], error: friendlyError(err, "nombreDeVinculo") };
   }
 }
 
@@ -206,7 +207,7 @@ function dbToPago(r: PagoDbRow): PagoGuardado {
 
 export async function loadPagos(
   periodo: string,
-): Promise<{ ok: boolean; data: PagoGuardado[] }> {
+): Promise<{ ok: boolean; data: PagoGuardado[]; error?: string }> {
   try {
     const { supabase, empresaId } = await getAppContext();
     if (!empresaId) return { ok: false, data: [] };
@@ -253,7 +254,7 @@ export async function loadPagos(
     return { ok: true, data: filas };
   } catch (err) {
     console.error("[rrhh] loadPagos:", err);
-    return { ok: false, data: [] };
+    return { ok: false, data: [], error: friendlyError(err, "filas") };
   }
 }
 
@@ -619,7 +620,7 @@ function bdToPagoAbonado(r: Record<string, unknown>, tz: string): PagoAbonado {
 // Histórico para la FICHA de RRHH (empleado concreto, empresa activa).
 export async function listPagosAbonadosEmpleado(
   empleadoId: string,
-): Promise<{ ok: boolean; data: PagoAbonado[] }> {
+): Promise<{ ok: boolean; data: PagoAbonado[]; error?: string }> {
   try {
     const { supabase, empresaId } = await getAppContext();
     if (!empresaId || !empleadoId) return { ok: false, data: [] };
@@ -636,14 +637,14 @@ export async function listPagosAbonadosEmpleado(
     return { ok: true, data: (data ?? []).map((r) => bdToPagoAbonado(r as unknown as Record<string, unknown>, tz)) };
   } catch (err) {
     console.error("[rrhh] listPagosAbonadosEmpleado:", err);
-    return { ok: false, data: [] };
+    return { ok: false, data: [], error: friendlyError(err, "listPagosAbonadosEmpleado") };
   }
 }
 
 // Histórico para el PORTAL del empleado logueado (sus fichas, empresa activa).
 // Cada nómina está aislada por empresa: la RLS de rrhh_pagos y el filtro por
 // empresa_id garantizan que solo vea los pagos de la empresa activa.
-export async function listMisPagosAbonados(): Promise<{ ok: boolean; data: PagoAbonado[] }> {
+export async function listMisPagosAbonados(): Promise<{ ok: boolean; data: PagoAbonado[]; error?: string }> {
   try {
     const { supabase, empresaId, userId } = await getAppContext();
     if (!empresaId || !userId) return { ok: false, data: [] };
@@ -668,7 +669,7 @@ export async function listMisPagosAbonados(): Promise<{ ok: boolean; data: PagoA
     return { ok: true, data: (data ?? []).map((r) => bdToPagoAbonado(r as unknown as Record<string, unknown>, tz)) };
   } catch (err) {
     console.error("[rrhh] listMisPagosAbonados:", err);
-    return { ok: false, data: [] };
+    return { ok: false, data: [], error: friendlyError(err, "fichaIds") };
   }
 }
 
@@ -689,7 +690,7 @@ export async function listMisPagosAbonados(): Promise<{ ok: boolean; data: PagoA
  */
 export async function loadPagosRango(
   periodos: string[],
-): Promise<{ ok: boolean; data: PagoGuardado[]; meses: number }> {
+): Promise<{ ok: boolean; data: PagoGuardado[]; meses: number; error?: string }> {
   try {
     const { supabase, empresaId } = await getAppContext();
     if (!empresaId || periodos.length === 0) return { ok: false, data: [], meses: 0 };

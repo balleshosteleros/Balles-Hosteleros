@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import { UploadCloud, FileText, CheckCircle2, AlertTriangle, Loader2 } from "lucide-react";
 import { MAX_DOCUMENTO_MB, MAX_DOCUMENTO_BYTES } from "@/shared/lib/documentos";
+import { friendlyError } from "@/shared/lib/friendly-errors";
 
 interface DocItem {
   clave: string;
@@ -143,8 +144,8 @@ function DocUploader({
       const json = await res.json();
       if (json.ok) onSubido();
       else setError(json.error ?? "No se pudo subir el documento.");
-    } catch {
-      setError("No se pudo conectar. Inténtalo de nuevo.");
+    } catch (err) {
+      setError(friendlyError(err, "subir"));
     } finally {
       setEnviando(false);
     }

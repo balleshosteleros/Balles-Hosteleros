@@ -7,6 +7,7 @@ import { revalidatePath } from "next/cache";
 import { getAppContext } from "@/lib/supabase/get-context";
 import { normalizarSlug, validarSlugFormato } from "../services/slug-validator";
 import type { SlugValidationResult } from "../types";
+import { friendlyError } from "@/shared/lib/friendly-errors";
 
 export async function setSlugEmpresa(slugInput: string): Promise<SlugValidationResult> {
   try {
@@ -45,7 +46,7 @@ export async function setSlugEmpresa(slugInput: string): Promise<SlugValidationR
     return { ok: true, slug: normalizado };
   } catch (err) {
     console.error("[slug-actions] fatal:", err);
-    return { ok: false, error: "Error inesperado." };
+    return { ok: false, error: friendlyError(err, "setSlugEmpresa") };
   }
 }
 
@@ -80,7 +81,7 @@ export async function togglePublicarCarta(publicar: boolean): Promise<{ ok: bool
     return { ok: true };
   } catch (err) {
     console.error("[slug-actions] publicar fatal:", err);
-    return { ok: false, error: "Error inesperado." };
+    return { ok: false, error: friendlyError(err, "slug") };
   }
 }
 
@@ -98,6 +99,6 @@ export async function actualizarDescripcionCarta(descripcion: string): Promise<{
     return { ok: true };
   } catch (err) {
     console.error("[slug-actions] descripcion:", err);
-    return { ok: false, error: "Error inesperado." };
+    return { ok: false, error: friendlyError(err, "actualizarDescripcionCarta") };
   }
 }

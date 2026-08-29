@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
+import { friendlyError } from "@/shared/lib/friendly-errors";
 
 /**
  * Grupos de zonas: lo que el cliente ve en el desplegable al reservar online.
@@ -237,7 +238,7 @@ export async function getExigirZonaCliente(empresaId: string) {
     return { ok: true, data: (data?.exigir_zona_cliente as boolean) ?? false };
   } catch (err) {
     console.error("[grupos-zonas] getExigir:", err);
-    return { ok: false, data: false };
+    return { ok: false, data: false, error: friendlyError(err, "getExigirZonaCliente") };
   }
 }
 

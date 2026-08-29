@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { getEmpresaActivaForUser } from "@/features/empresa/lib/empresa-server";
+import { friendlyError } from "@/shared/lib/friendly-errors";
 
 async function getContext() {
   const supabase = await createClient();
@@ -30,7 +31,7 @@ export async function listProcesos() {
     return { ok: true, data: data ?? [] };
   } catch (err) {
     console.error("[juridico] listProcesos:", err);
-    return { ok: false, data: [] };
+    return { ok: false, data: [], error: friendlyError(err, "listProcesos") };
   }
 }
 

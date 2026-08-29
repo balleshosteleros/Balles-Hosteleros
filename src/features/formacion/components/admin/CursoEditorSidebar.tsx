@@ -28,6 +28,7 @@ import {
   type PreguntaCuestionario, type OpcionCuestionario,
 } from "@/features/formacion/actions/formacion-interaccion-actions";
 import type { Leccion, Seccion } from "@/features/formacion/types";
+import { friendlyError } from "@/shared/lib/friendly-errors";
 
 interface Props {
   cursoId: string;
@@ -212,8 +213,8 @@ export function CursoEditorSidebar({ cursoId, activaId, onSelect }: Props) {
       }
       setLecVideoUrl(data.url);
       toast.success("Vídeo subido correctamente");
-    } catch {
-      toast.error("Error al subir el vídeo");
+    } catch (err) {
+      toast.error("Error al subir el vídeo", { description: friendlyError(err, "handleSubirVideo") });
     } finally {
       setSubiendoVideo(false);
     }

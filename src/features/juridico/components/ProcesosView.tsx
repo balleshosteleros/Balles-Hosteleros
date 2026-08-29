@@ -31,6 +31,7 @@ import {
   type ToolbarColumna,
 } from "@/shared/components/SubmoduleToolbar";
 import { TableColumnHeader } from "@/shared/components/TableColumnHeader";
+import { friendlyError } from "@/shared/lib/friendly-errors";
 
 function mapDbToProceso(row: Record<string, unknown>, empresa: string, empresaId: string): ProcesoJuridico {
   const docsDb = Array.isArray(row.documentos) ? (row.documentos as Array<Record<string, unknown>>) : [];
@@ -99,8 +100,8 @@ export function ProcesosView() {
         toast.error("Error al cargar procesos");
         setData(getProcesosPorEmpresa(empresaActual.id));
       }
-    } catch {
-      toast.error("Error de conexion al cargar procesos");
+    } catch (err) {
+      toast.error("Error de conexion al cargar procesos", { description: friendlyError(err, "ProcesosView") });
       setData(getProcesosPorEmpresa(empresaActual.id));
     } finally {
       setLoading(false);
@@ -193,8 +194,8 @@ export function ProcesosView() {
           loadProcesos();
         }
       }
-    } catch {
-      toast.error("Error de conexion");
+    } catch (err) {
+      toast.error("Error de conexion", { description: friendlyError(err, "handleSave") });
       loadProcesos();
     }
   };
@@ -210,8 +211,8 @@ export function ProcesosView() {
         toast.error("Error al actualizar campo");
         loadProcesos();
       }
-    } catch {
-      toast.error("Error de conexion");
+    } catch (err) {
+      toast.error("Error de conexion", { description: friendlyError(err, "updateField") });
       loadProcesos();
     }
   };

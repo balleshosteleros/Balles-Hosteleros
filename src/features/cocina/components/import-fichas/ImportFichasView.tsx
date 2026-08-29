@@ -37,6 +37,7 @@ import { toast } from "sonner";
 import { MAX_DOCUMENTO_MB, MAX_DOCUMENTO_BYTES, traducirErrorSubida } from "@/shared/lib/documentos";
 import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
 import { CorregirMatchDialog } from "./CorregirMatchDialog";
+import { friendlyError } from "@/shared/lib/friendly-errors";
 
 /** Decisión del usuario sobre cada línea. */
 type DecisionTipo = "confirmado" | "corregido" | "elaboracion" | "falta" | "pendiente";
@@ -108,8 +109,8 @@ export function ImportFichasView() {
         });
         setDecisiones(init);
         toast.success(`${res.data.resumen.platos} platos leídos`);
-      } catch {
-        toast.error("No se pudo leer el archivo.");
+      } catch (err) {
+        toast.error("No se pudo leer el archivo.", { description: friendlyError(err, "ImportFichasView") });
       } finally {
         setCargando(false);
       }
@@ -178,8 +179,8 @@ export function ImportFichasView() {
       toast.success(
         `${res.informe.creados} creadas · ${res.informe.actualizados} actualizadas`
       );
-    } catch {
-      toast.error("Falló la importación.");
+    } catch (err) {
+      toast.error("Falló la importación.", { description: friendlyError(err, "ImportFichasView") });
     } finally {
       setImportando(false);
     }

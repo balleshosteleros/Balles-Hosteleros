@@ -6,6 +6,7 @@ import { getEmpresaActivaForUser } from "@/features/empresa/lib/empresa-server";
 import { getRolContext } from "@/features/auth/actions/permisos-actions";
 import { puedeVerModulo } from "@/features/auth/lib/permisos";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { friendlyError } from "@/shared/lib/friendly-errors";
 async function getContext() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -454,7 +455,7 @@ export async function listMensajes(canalId: string) {
     return { ok: true, data: data ?? [] };
   } catch (err) {
     console.error("[comunicacion] listMensajes:", err);
-    return { ok: false, data: [] };
+    return { ok: false, data: [], error: friendlyError(err, "listMensajes") };
   }
 }
 
@@ -666,7 +667,7 @@ export async function listCanalPreferencias() {
     return { ok: true, data: data ?? [] };
   } catch (err) {
     console.error("[comunicacion] listCanalPreferencias:", err);
-    return { ok: false, data: [] };
+    return { ok: false, data: [], error: friendlyError(err, "listCanalPreferencias") };
   }
 }
 

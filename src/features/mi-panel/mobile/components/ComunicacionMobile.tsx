@@ -19,6 +19,7 @@ import {
 } from "@/features/comunicacion/actions/comunicacion-actions";
 import { mejorarTextoMensaje } from "@/features/comunicacion/actions/mejorar-texto-actions";
 import { getZonaHorariaActiva } from "@/features/mi-panel/actions/mi-panel-actions";
+import { friendlyError } from "@/shared/lib/friendly-errors";
 import {
   formatHoraEnZona,
   ZONA_HORARIA_FALLBACK,
@@ -329,8 +330,8 @@ export function ComunicacionMobile() {
       });
       if (!res.ok) { toast.error(res.error ?? "No se pudo enviar el adjunto"); return; }
       if (res.data) setMensajes((prev) => [...prev, mapMensaje(res.data as Record<string, unknown>, miUserId, zonaHoraria)]);
-    } catch {
-      toast.error("No se pudo subir el archivo");
+    } catch (err) {
+      toast.error("No se pudo subir el archivo", { description: friendlyError(err, "subirYEnviar") });
     } finally {
       setSubiendo(false);
     }
@@ -367,8 +368,8 @@ export function ComunicacionMobile() {
       setGrabando(true);
       setGrabSeg(0);
       grabTimerRef.current = setInterval(() => setGrabSeg((t) => t + 1), 1000);
-    } catch {
-      toast.error("Sin acceso al micrófono");
+    } catch (err) {
+      toast.error("Sin acceso al micrófono", { description: friendlyError(err, "iniciarGrabacion") });
     }
   }
 

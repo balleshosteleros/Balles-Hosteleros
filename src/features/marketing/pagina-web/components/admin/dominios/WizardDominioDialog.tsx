@@ -37,6 +37,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { anadirDominio, verificarDominio } from "../../../actions/dominios-actions";
 import type { DnsHint } from "../../../types";
+import { friendlyError } from "@/shared/lib/friendly-errors";
 
 type Paso = "DIRECCION" | "DNS" | "VERIFICAR" | "LISTO";
 
@@ -148,8 +149,8 @@ export function WizardDominioDialog({ open, onOpenChange, paginaId, onCompletado
     try {
       await navigator.clipboard.writeText(valor);
       toast.success(`${etiqueta} copiado`);
-    } catch {
-      toast.error("No se pudo copiar. Selecciónalo y cópialo a mano.");
+    } catch (err) {
+      toast.error("No se pudo copiar. Selecciónalo y cópialo a mano.", { description: friendlyError(err, "copiar") });
     }
   };
 

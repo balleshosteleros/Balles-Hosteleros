@@ -599,13 +599,13 @@ export async function sincronizarLoginEmailEmpleado(input: {
     .select("user_id, empresa_id")
     .eq("id", empleadoId)
     .maybeSingle();
-  if (empErr) return { ok: false, error: friendlyError(empErr) };
+  if (empErr) return { ok: false, error: friendlyError(empErr, "sincronizarLoginEmailEmpleado") };
   if (!emp?.user_id) return { ok: true, cambiado: false }; // empleado sin login vinculado
 
   // Email actual en auth.users.
   const { data: authUser, error: getErr } = await admin.auth.admin.getUserById(emp.user_id);
   if (getErr || !authUser?.user) {
-    return { ok: false, error: getErr ? friendlyError(getErr) : "Usuario de acceso no encontrado." };
+    return { ok: false, error: getErr ? friendlyError(getErr, "sincronizarLoginEmailEmpleado") : "Usuario de acceso no encontrado." };
   }
   const anterior = (authUser.user.email ?? "").trim().toLowerCase() || null;
   if (anterior === nuevoLogin) return { ok: true, cambiado: false }; // ya coincide
@@ -629,7 +629,7 @@ export async function sincronizarLoginEmailEmpleado(input: {
     email: nuevoLogin,
     email_confirm: true,
   });
-  if (updErr) return { ok: false, error: friendlyError(updErr) };
+  if (updErr) return { ok: false, error: friendlyError(updErr, "anterior") };
 
   // `usuarios` es la fuente única del acceso (el candado `handle_new_user()`
   // valida contra `usuarios.email`): si no se actualiza aquí, la cuenta quedaría
@@ -646,7 +646,7 @@ export async function sincronizarLoginEmailEmpleado(input: {
         email_confirm: true,
       });
     }
-    return { ok: false, error: friendlyError(usuErr) };
+    return { ok: false, error: friendlyError(usuErr, "anterior") };
   }
 
   // Anular el acceso por el correo ANTIGUO también en Google: al cambiar el

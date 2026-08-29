@@ -50,6 +50,7 @@ import {
   shortTZLabel,
 } from "../lib/timezones";
 import { SelectorTZ } from "./SelectorTZ";
+import { friendlyError } from "@/shared/lib/friendly-errors";
 
 type GoogleCalendar = {
   id: string;
@@ -634,8 +635,8 @@ export function CalendarDrawer({ children }: CalendarDrawerProps) {
         });
         if (!res.ok) throw new Error();
         toast.success("Evento actualizado");
-      } catch {
-        toast.error("No se pudo mover el evento");
+      } catch (err) {
+        toast.error("No se pudo mover el evento", { description: friendlyError(err, "onUp") });
         setEventos((prev) =>
           prev.map((x) =>
             x.id === m.evId ? aplicarHorario(x, m.origDayIso, m.origInicioMin, m.origDurMin) : x,

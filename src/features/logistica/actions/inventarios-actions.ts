@@ -5,6 +5,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { registrarMovimiento, revertirMovimientosPorDocumento } from "@/features/logistica/services/kardex";
 import { getZonaHorariaEmpresa } from "@/features/empresa/lib/empresa-server";
 import { hoyEnZona } from "@/features/empresa/lib/zona-horaria";
+import { friendlyError } from "@/shared/lib/friendly-errors";
 
 async function getContext() {
   const { supabase, userId, empresaId } = await getLogisticaContext();
@@ -24,7 +25,7 @@ export async function listInventarios() {
     return { ok: true, data: data ?? [] };
   } catch (err) {
     console.error("[inventarios] listInventarios:", err);
-    return { ok: false, data: [] };
+    return { ok: false, data: [], error: friendlyError(err, "listInventarios") };
   }
 }
 

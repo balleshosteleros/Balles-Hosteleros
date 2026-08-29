@@ -49,6 +49,7 @@ import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { useAuth } from "@/features/auth/contexts/auth-context";
 import { formatFechaHoraEnZona } from "@/features/empresa/lib/zona-horaria";
+import { friendlyError } from "@/shared/lib/friendly-errors";
 
 /** Etiqueta de la fecha clave según el tipo de trámite. */
 const LABEL_FECHA_EVENTO: Record<TipoContratacion, string> = {
@@ -225,8 +226,8 @@ export function ContratacionesView() {
       const r = await listContrataciones();
       if (r.ok) setRows(r.data);
       else toast.error(r.error ?? "Error al cargar el histórico");
-    } catch {
-      toast.error("Error de conexión");
+    } catch (err) {
+      toast.error("Error de conexión", { description: friendlyError(err, "ContratacionesView") });
     } finally {
       setLoading(false);
     }

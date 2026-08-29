@@ -7,6 +7,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { reservarCodigoLibre } from "../services/codigos";
 import { destinoValido, normalizarDestino } from "../lib/normalizar-destino";
 import type { CodigoQr, DestinoHistorico } from "../types";
+import { friendlyError } from "@/shared/lib/friendly-errors";
 
 type ActionResult<T = void> =
   | (T extends void ? { ok: true } : { ok: true; data: T })
@@ -60,7 +61,7 @@ export async function listarCodigosQr(): Promise<ActionResult<CodigoQr[]>> {
     return { ok: true, data: (data ?? []) as CodigoQr[] };
   } catch (err) {
     console.error("[qr][listarCodigosQr] fatal:", err);
-    return { ok: false, error: "Error inesperado." };
+    return { ok: false, error: friendlyError(err, "listarCodigosQr") };
   }
 }
 
@@ -107,7 +108,7 @@ export async function crearCodigoQr(
     return { ok: true, data: data as CodigoQr };
   } catch (err) {
     console.error("[qr][crearCodigoQr] fatal:", err);
-    return { ok: false, error: "Error inesperado." };
+    return { ok: false, error: friendlyError(err, "crearCodigoQr") };
   }
 }
 
@@ -162,7 +163,7 @@ export async function editarCodigoQr(
     return { ok: true };
   } catch (err) {
     console.error("[qr][editarCodigoQr] fatal:", err);
-    return { ok: false, error: "Error inesperado." };
+    return { ok: false, error: friendlyError(err, "anterior") };
   }
 }
 
@@ -189,7 +190,7 @@ export async function cambiarEstadoCodigoQr(
     return { ok: true };
   } catch (err) {
     console.error("[qr][cambiarEstadoCodigoQr] fatal:", err);
-    return { ok: false, error: "Error inesperado." };
+    return { ok: false, error: friendlyError(err, "cambiarEstadoCodigoQr") };
   }
 }
 
@@ -214,7 +215,7 @@ export async function listarHistoricoDestinos(
     return { ok: true, data: (data ?? []) as DestinoHistorico[] };
   } catch (err) {
     console.error("[qr][listarHistoricoDestinos] fatal:", err);
-    return { ok: false, error: "Error inesperado." };
+    return { ok: false, error: friendlyError(err, "listarHistoricoDestinos") };
   }
 }
 

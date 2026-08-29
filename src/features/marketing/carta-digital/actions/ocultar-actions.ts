@@ -18,6 +18,7 @@
 
 import { revalidatePath } from "next/cache";
 import { getAppContext } from "@/lib/supabase/get-context";
+import { friendlyError } from "@/shared/lib/friendly-errors";
 
 type ActionResult<T = void> =
   | (T extends void ? { ok: true } : { ok: true; data: T })
@@ -76,7 +77,7 @@ export async function ocultarItemCarta(
     return { ok: true };
   } catch (err) {
     console.error("[carta][ocultarItem] fatal:", err);
-    return { ok: false, error: "Error inesperado." };
+    return { ok: false, error: friendlyError(err, "ocultarItemCarta") };
   }
 }
 
@@ -106,6 +107,6 @@ export async function mostrarItemCarta(itemId: string): Promise<ActionResult> {
     return { ok: true };
   } catch (err) {
     console.error("[carta][mostrarItem] fatal:", err);
-    return { ok: false, error: "Error inesperado." };
+    return { ok: false, error: friendlyError(err, "mostrarItemCarta") };
   }
 }

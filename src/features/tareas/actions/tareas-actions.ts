@@ -7,6 +7,7 @@ import { parseISO, format } from "date-fns";
 import { es } from "date-fns/locale";
 import { fallbackCronogramas } from "@/features/direccion/data/cronogramasMockData";
 import { getModuloForCronograma } from "@/features/direccion/data/cronogramaAreas";
+import { friendlyError } from "@/shared/lib/friendly-errors";
 
 export type TareaPrioridad = "alta" | "media" | "baja";
 export type TareaTipo = "manual" | "nueva_receta_fase" | "sistema" | "cronograma";
@@ -376,7 +377,7 @@ export async function listTareasSugeridas() {
     return { ok: true, data: data ?? [] };
   } catch (err) {
     console.error("[tareas] listTareasSugeridas:", err);
-    return { ok: false, data: [] };
+    return { ok: false, data: [], error: friendlyError(err, "listTareasSugeridas") };
   }
 }
 

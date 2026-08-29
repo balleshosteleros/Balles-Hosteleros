@@ -1,6 +1,7 @@
 "use server";
 
 import { getAppContext } from "@/lib/supabase/get-context";
+import { friendlyError } from "@/shared/lib/friendly-errors";
 import type {
   Cuestionario,
   BloqueCuestionario,
@@ -94,10 +95,7 @@ const SELECT_ENVIO =
   "mensaje_no_aprobado, bloques))";
 
 /** Cuestionarios (envíos) asignados al empleado autenticado, con su estado. */
-export async function listMisCuestionarios(): Promise<{
-  ok: boolean;
-  data: MiCuestionarioItem[];
-}> {
+export async function listMisCuestionarios(): Promise<{ ok: boolean; data: MiCuestionarioItem[]; error?: string }> {
   try {
     const { supabase, userId } = await getAppContext();
     if (!userId) return { ok: true, data: [] };
@@ -140,7 +138,7 @@ export async function listMisCuestionarios(): Promise<{
     return { ok: true, data: items };
   } catch (err) {
     console.error("[mi-panel] listMisCuestionarios:", err);
-    return { ok: false, data: [] };
+    return { ok: false, data: [], error: friendlyError(err, "listMisCuestionarios") };
   }
 }
 

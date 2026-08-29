@@ -29,6 +29,7 @@ import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
 import { CalendarRangeToggle, CalendarRangeNav } from "@/shared/components/calendar/CalendarRangeToggle";
 import { useCalendarRange, type CalendarRangeMode } from "@/shared/components/calendar/calendar-range";
 import { cn } from "@/lib/utils";
+import { friendlyError } from "@/shared/lib/friendly-errors";
 
 const MESES = [
   "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
@@ -115,8 +116,8 @@ export function CambiosCartaCalendario() {
         return true;
       });
       setCambios(dedup);
-    } catch {
-      toast.error("Error cargando cambios de carta");
+    } catch (err) {
+      toast.error("Error cargando cambios de carta", { description: friendlyError(err, "CambiosCartaCalendario") });
     } finally {
       setCargando(false);
     }

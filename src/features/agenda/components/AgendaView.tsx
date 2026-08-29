@@ -59,6 +59,7 @@ import {
 } from "@/features/agenda/actions/contactos-actions";
 import { refreshDailyCounts } from "@/features/google-workspace/components/useDailyCounts";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
+import { friendlyError } from "@/shared/lib/friendly-errors";
 
 const CATEGORIA_ICON: Record<ContactoCategoria, React.ElementType> = {
   mantenimiento: Wrench,
@@ -110,8 +111,8 @@ export function AgendaView() {
       ]);
       setContactos(data);
       setVistosAt(corte);
-    } catch {
-      toast.error("Error al cargar contactos");
+    } catch (err) {
+      toast.error("Error al cargar contactos", { description: friendlyError(err, "AgendaView") });
     } finally {
       setCargando(false);
     }
@@ -225,8 +226,8 @@ export function AgendaView() {
       }
       setDialogOpen(false);
       await cargarContactos();
-    } catch {
-      toast.error("Error al guardar contacto");
+    } catch (err) {
+      toast.error("Error al guardar contacto", { description: friendlyError(err, "guardar") });
     }
   }
 
@@ -236,8 +237,8 @@ export function AgendaView() {
       if (!res.ok) { toast.error(res.error ?? "Error al eliminar"); return; }
       setContactos((prev) => prev.filter((c) => c.id !== id));
       toast.success("Contacto eliminado");
-    } catch {
-      toast.error("Error al eliminar contacto");
+    } catch (err) {
+      toast.error("Error al eliminar contacto", { description: friendlyError(err, "eliminar") });
     }
   }
 

@@ -179,7 +179,7 @@ export async function promoverCandidato(input: PromoverInput): Promise<PromoverR
     .eq("empresa_id", empresaId)
     .maybeSingle<CandidatoRow>();
 
-  if (candErr) return { ok: false, error: friendlyError(candErr) };
+  if (candErr) return { ok: false, error: friendlyError(candErr, "promoverCandidato") };
   if (!cand) return { ok: false, error: "Candidato no encontrado" };
 
   if (cand.estado !== "prueba" || cand.fase !== "seleccionado") {
@@ -202,7 +202,7 @@ export async function promoverCandidato(input: PromoverInput): Promise<PromoverR
     .is("promovido_at", null)
     .select("id");
 
-  if (lockErr) return { ok: false, error: friendlyError(lockErr) };
+  if (lockErr) return { ok: false, error: friendlyError(lockErr, "promoverCandidato") };
   if (!lockRows || lockRows.length === 0) {
     return { ok: false, error: "Promoción ya en curso (otro click más rápido)." };
   }

@@ -11,6 +11,7 @@
 import { revalidatePath } from "next/cache";
 import { getAppContext } from "@/lib/supabase/get-context";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { friendlyError } from "@/shared/lib/friendly-errors";
 import {
   generarBloquesPrototipo,
   generarBrandingPrototipo,
@@ -171,7 +172,7 @@ export async function estadoModulosPrototipo(): Promise<Result<ModuloEstado[]>> 
     };
   } catch (err) {
     console.error("[pagina-web][estadoModulosPrototipo]", err);
-    return { ok: false, error: "Error inesperado." };
+    return { ok: false, error: friendlyError(err, "estadoModulosPrototipo") };
   }
 }
 
@@ -228,6 +229,6 @@ export async function crearWebPrototipo(
     return { ok: true, data: { paginaId: data.id as string } };
   } catch (err) {
     console.error("[pagina-web][crearWebPrototipo] fatal:", err);
-    return { ok: false, error: "Error inesperado." };
+    return { ok: false, error: friendlyError(err, "crearWebPrototipo") };
   }
 }

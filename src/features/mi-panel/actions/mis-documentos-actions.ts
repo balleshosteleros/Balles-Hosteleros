@@ -2,6 +2,7 @@
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getAppContext } from "@/lib/supabase/get-context";
+import { friendlyError } from "@/shared/lib/friendly-errors";
 
 export type CategoriaDocumento =
   | "nominas"
@@ -21,10 +22,7 @@ export interface DocumentoEmpleado {
 }
 
 /** Documentos personales del empleado autenticado, agrupados por categoría. */
-export async function listMisDocumentos(): Promise<{
-  ok: boolean;
-  data: Record<CategoriaDocumento, DocumentoEmpleado[]>;
-}> {
+export async function listMisDocumentos(): Promise<{ ok: boolean; data: Record<CategoriaDocumento, DocumentoEmpleado[]>; error?: string }> {
   const vacio: Record<CategoriaDocumento, DocumentoEmpleado[]> = {
     nominas: [],
     contratos: [],
@@ -112,7 +110,7 @@ export async function listMisDocumentos(): Promise<{
     return { ok: true, data: grupos };
   } catch (err) {
     console.error("[mi-panel] listMisDocumentos:", err);
-    return { ok: false, data: vacio };
+    return { ok: false, data: vacio, error: friendlyError(err, "total") };
   }
 }
 

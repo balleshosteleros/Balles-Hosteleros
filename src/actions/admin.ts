@@ -29,7 +29,7 @@ async function assertRoleExistsInEmpresa(
     .ilike('nombre', rolLabel.trim())
     .limit(1)
     .maybeSingle()
-  if (error) return { error: `Error validando rol: ${friendlyError(error)}` }
+  if (error) return { error: `Error validando rol: ${friendlyError(error, "assertRoleExistsInEmpresa")}` }
   if (!data) return { error: `El rol "${rolLabel}" no existe en esta empresa.` }
   return {}
 }
@@ -145,7 +145,7 @@ export async function createEmployee(formData: FormData) {
     user_metadata: { full_name: fullName },
   })
 
-  if (error) return { error: friendlyError(error) }
+  if (error) return { error: friendlyError(error, "createEmployee") }
 
   // Completar empresa + nombre + (departamento opcional) + rol_label en el profile.
   // avatar_obligatorio=true solo para empleados → fuerza la foto en primer login.
@@ -171,7 +171,7 @@ export async function createEmployee(formData: FormData) {
     .update(profilePatch)
     .eq('id', data.user.id)
 
-  if (profileError) return { error: friendlyError(profileError) }
+  if (profileError) return { error: friendlyError(profileError, "createEmployee") }
 
   // El rol se enlaza por usuarios.rol_id (fijado arriba en el profilePatch);
   // la tabla legacy usuario_roles ya no se usa (fuente única PRP-063).
@@ -189,7 +189,7 @@ export async function createEmployee(formData: FormData) {
     .from('usuario_empresas')
     .insert(finalEmpresaIds.map((eid) => ({ user_id: data.user.id, empresa_id: eid })))
 
-  if (empresasError) return { error: friendlyError(empresasError) }
+  if (empresasError) return { error: friendlyError(empresasError, "createEmployee") }
 
   revalidatePath('/admin/empleados')
   revalidatePath('/ajustes')
@@ -236,7 +236,7 @@ export async function getEmployees() {
 
   const { data: profiles, error } = await consulta.order('created_at', { ascending: false })
 
-  if (error) return { error: friendlyError(error), data: [] }
+  if (error) return { error: friendlyError(error, "getEmployees"), data: [] }
 
   // Rol de plataforma (director/empleado) derivado de la FUENTE ÚNICA:
   // empresa_roles.es_admin_plataforma del rol del usuario (usuarios.rol_id).
@@ -339,7 +339,7 @@ export async function resetEmployeePassword(userId: string, newPassword: string)
     password: newPassword,
   })
 
-  if (error) return { error: friendlyError(error) }
+  if (error) return { error: friendlyError(error, "resetEmployeePassword") }
 
   return { success: true }
 }
@@ -375,7 +375,7 @@ export async function updateEmployeeLoginEmail(userId: string, nuevoEmailRaw: st
   // Email actual (para no hacer nada si ya coincide y para el aviso).
   const { data: authUser, error: getErr } = await admin.auth.admin.getUserById(userId)
   if (getErr || !authUser?.user) {
-    return { error: getErr ? friendlyError(getErr) : 'Usuario no encontrado.' }
+    return { error: getErr ? friendlyError(getErr, "nuevoEmail") : 'Usuario no encontrado.' }
   }
   const anterior = (authUser.user.email ?? '').trim().toLowerCase() || null
   if (anterior === nuevoEmail) return { success: true, sinCambios: true }
@@ -411,13 +411,13 @@ export async function updateEmployeeLoginEmail(userId: string, nuevoEmailRaw: st
       email: nuevoEmail,
       email_confirm: true,
     })
-    if (updErr) return { error: friendlyError(updErr) }
+    if (updErr) return { error: friendlyError(updErr, "anterior") }
 
     const { error: usuErr } = await admin
       .from('usuarios')
       .update({ email: nuevoEmail, updated_at: new Date().toISOString() })
       .eq('user_id', userId)
-    if (usuErr) return { error: friendlyError(usuErr) }
+    if (usuErr) return { error: friendlyError(usuErr, "anterior") }
   }
 
   revalidatePath('/ajustes')
@@ -452,7 +452,7 @@ export async function sendPasswordResetEmail(profileId: string) {
     .eq('id', profileId)
     .maybeSingle()
 
-  if (pErr) return { error: friendlyError(pErr) }
+  if (pErr) return { error: friendlyError(pErr, "sendPasswordResetEmail") }
   if (!profile?.email) return { error: 'El usuario no tiene email asociado.' }
 
   const siteUrl = getSiteUrl()
@@ -467,7 +467,7 @@ export async function sendPasswordResetEmail(profileId: string) {
 
   const actionUrl = buildRecoveryActionUrl(siteUrl, linkData?.properties ?? undefined)
   if (linkErr || !actionUrl) {
-    return { error: linkErr ? friendlyError(linkErr) : 'No se pudo generar el enlace de recuperación.' }
+    return { error: linkErr ? friendlyError(linkErr, "sendPasswordResetEmail") : 'No se pudo generar el enlace de recuperación.' }
   }
   const recipientName =
     [profile.nombre, profile.apellidos].filter(Boolean).join(' ').trim() ||
@@ -503,7 +503,7 @@ export async function sendPasswordResetEmail(profileId: string) {
     redirectTo,
   })
 
-  if (rErr) return { error: friendlyError(rErr) }
+  if (rErr) return { error: friendlyError(rErr, "sendPasswordResetEmail") }
 
   return { success: true, email: profile.email, transport: 'supabase' as const }
 }
@@ -523,7 +523,7 @@ export async function updateEmployeeStatus(profileId: string, estado: 'Activo' |
     .update({ estado_acceso: estado })
     .eq('id', profileId)
 
-  if (error) return { error: friendlyError(error) }
+  if (error) return { error: friendlyError(error, "updateEmployeeStatus") }
 
   revalidatePath('/ajustes')
   return { success: true }
@@ -547,7 +547,7 @@ export async function getEmpleadosSinAcceso() {
     .is('user_id', null)
     .order('nombre')
 
-  if (error) return { error: friendlyError(error), data: [] }
+  if (error) return { error: friendlyError(error, "getEmpleadosSinAcceso"), data: [] }
   return { data: data ?? [] }
 }
 
@@ -629,7 +629,7 @@ export async function updateEmployeeProfile(
       .from('usuarios')
       .update(profileUpdate)
       .eq('id', profileId)
-    if (error) return { error: friendlyError(error) }
+    if (error) return { error: friendlyError(error, "updateEmployeeProfile") }
   }
 
   revalidatePath('/ajustes')
@@ -647,7 +647,7 @@ export async function getDepartamentosDisponibles(): Promise<{
       .from('cronogramas_operativos')
       .select('rol')
       .not('rol', 'is', null)
-    if (error) return { data: [], error: friendlyError(error) }
+    if (error) return { data: [], error: friendlyError(error, "getDepartamentosDisponibles") }
     const set = new Set<string>()
     for (const row of data ?? []) {
       const r = (row as { rol: string | null }).rol
@@ -737,7 +737,7 @@ export async function deleteEmployee(userId: string) {
   ]
   for (const { table, column } of cleanups) {
     const { error: cleanErr } = await admin.from(table).delete().eq(column, userId)
-    if (cleanErr) return { error: friendlyError(cleanErr) }
+    if (cleanErr) return { error: friendlyError(cleanErr, "deleteEmployee") }
   }
   // profiles.id == auth.user.id en este proyecto (mismo UUID); cubrimos también user_id por legacy.
   await admin.from('usuarios').delete().eq('id', userId)
@@ -745,7 +745,7 @@ export async function deleteEmployee(userId: string) {
 
   const { error } = await admin.auth.admin.deleteUser(userId)
 
-  if (error) return { error: friendlyError(error) }
+  if (error) return { error: friendlyError(error, "deleteEmployee") }
 
   revalidatePath('/admin/empleados')
   revalidatePath('/ajustes')

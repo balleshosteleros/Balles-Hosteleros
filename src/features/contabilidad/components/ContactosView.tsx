@@ -29,6 +29,7 @@ import { NuevoContactoDialog } from "@/features/contabilidad/components/NuevoCon
 import { EditContactoDialog } from "@/features/contabilidad/components/EditContactoDialog";
 import { Sparkles } from "lucide-react";
 import { toast } from "sonner";
+import { friendlyError } from "@/shared/lib/friendly-errors";
 
 const TABS: { id: string; label: string }[] = [
   { id: "TODOS", label: "Todos" },
@@ -79,8 +80,8 @@ export function ContactosView() {
       } else {
         toast.error("Error al cargar contactos");
       }
-    } catch {
-      toast.error("Error de conexion al cargar contactos");
+    } catch (err) {
+      toast.error("Error de conexion al cargar contactos", { description: friendlyError(err, "ContactosView") });
     } finally {
       setLoading(false);
     }

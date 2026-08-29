@@ -1,6 +1,7 @@
 "use server";
 
 import { getLogisticaContext } from "@/features/logistica/lib/supabase-context";
+import { friendlyError } from "@/shared/lib/friendly-errors";
 
 export type CategoriaProveedorRow = {
   id: string;
@@ -179,7 +180,7 @@ export async function getProveedoresConfig() {
     return { ok: true as const, data: (data ?? DEFAULT_PROVEEDORES_CONFIG) as ProveedoresConfig };
   } catch (err) {
     console.error("[proveedores-config] get:", err);
-    return { ok: false as const, data: DEFAULT_PROVEEDORES_CONFIG };
+    return { ok: false as const, data: DEFAULT_PROVEEDORES_CONFIG, error: friendlyError(err, "getProveedoresConfig") };
   }
 }
 

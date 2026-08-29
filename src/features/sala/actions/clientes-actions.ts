@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getEmpresaActivaForUser } from "@/features/empresa/lib/empresa-server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { findOrLinkClienteSala } from "@/features/sala/lib/cliente-link";
+import { friendlyError } from "@/shared/lib/friendly-errors";
 
 async function getContext() {
   const supabase = await createClient();
@@ -38,7 +39,7 @@ export async function listClientes() {
     return { ok: true, data: data ?? [] };
   } catch (err) {
     console.error("[clientes] listClientes:", err);
-    return { ok: false, data: [] };
+    return { ok: false, data: [], error: friendlyError(err, "listClientes") };
   }
 }
 
@@ -55,7 +56,7 @@ export type ClienteSugerencia = {
 export async function searchClientes(
   query: string,
   limit = 8,
-): Promise<{ ok: boolean; data: ClienteSugerencia[] }> {
+): Promise<{ ok: boolean; data: ClienteSugerencia[]; error?: string }> {
   try {
     // Mismo mínimo que la UI: por debajo de 5 caracteres la búsqueda casa con
     // demasiadas fichas y el desplegable deja de ser útil.
@@ -88,7 +89,7 @@ export async function searchClientes(
     return { ok: true, data: (data ?? []) as ClienteSugerencia[] };
   } catch (err) {
     console.error("[clientes] searchClientes:", err);
-    return { ok: false, data: [] };
+    return { ok: false, data: [], error: friendlyError(err, "q") };
   }
 }
 

@@ -11,6 +11,7 @@ import {
 } from "../services/vercel-domains";
 import { normalizarHost } from "../services/hostname-resolver";
 import type { DominioEstado, PaginaWebDominio } from "../types";
+import { friendlyError } from "@/shared/lib/friendly-errors";
 
 type ActionResult<T = void> =
   | (T extends void ? { ok: true } : { ok: true; data: T })
@@ -38,7 +39,7 @@ export async function listarDominios(paginaId: string): Promise<ActionResult<Pag
     return { ok: true, data: (data ?? []) as PaginaWebDominio[] };
   } catch (err) {
     console.error("[dominios][listar] fatal:", err);
-    return { ok: false, error: "Error inesperado." };
+    return { ok: false, error: friendlyError(err, "listarDominios") };
   }
 }
 
@@ -63,7 +64,7 @@ export async function listarDominiosEmpresa(): Promise<ActionResult<PaginaWebDom
     return { ok: true, data: (data ?? []) as PaginaWebDominio[] };
   } catch (err) {
     console.error("[dominios][listarEmpresa] fatal:", err);
-    return { ok: false, error: "Error inesperado." };
+    return { ok: false, error: friendlyError(err, "listarDominiosEmpresa") };
   }
 }
 
@@ -117,7 +118,7 @@ export async function anadirDominio(input: {
     return { ok: true, data: { id: (data as { id: string }).id, dns } };
   } catch (err) {
     console.error("[dominios][anadir] fatal:", err);
-    return { ok: false, error: "Error inesperado." };
+    return { ok: false, error: friendlyError(err, "anadirDominio") };
   }
 }
 
@@ -165,7 +166,7 @@ export async function verificarDominio(dominioId: string): Promise<
     return { ok: true, data: { estado, ssl } };
   } catch (err) {
     console.error("[dominios][verificar] fatal:", err);
-    return { ok: false, error: "Error inesperado." };
+    return { ok: false, error: friendlyError(err, "hostname") };
   }
 }
 
@@ -199,6 +200,6 @@ export async function eliminarDominio(dominioId: string): Promise<ActionResult> 
     return { ok: true };
   } catch (err) {
     console.error("[dominios][eliminar] fatal:", err);
-    return { ok: false, error: "Error inesperado." };
+    return { ok: false, error: friendlyError(err, "hostname") };
   }
 }

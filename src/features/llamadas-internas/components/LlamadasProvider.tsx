@@ -29,6 +29,7 @@ import type {
 } from "@/features/llamadas-internas/types";
 import { LlamadaEntranteCard } from "@/features/llamadas-internas/components/LlamadaEntranteCard";
 import { LlamadaEnCursoView } from "@/features/llamadas-internas/components/LlamadaEnCursoView";
+import { friendlyError } from "@/shared/lib/friendly-errors";
 
 interface LlamadasContextValue {
   iniciarLlamada: (callee: EmpleadoLlamable) => Promise<void>;
@@ -234,8 +235,8 @@ export function LlamadasProvider({ children }: { children: React.ReactNode }) {
       noAnswerRef.current = window.setTimeout(() => {
         void noContesta();
       }, 35000);
-    } catch {
-      toast.error("No se pudo acceder al micrófono");
+    } catch (err) {
+      toast.error("No se pudo acceder al micrófono", { description: friendlyError(err, "duracionSeg") });
       void updateEstadoLlamada({ id: res.id, estado: "cancelada" });
       clearTimers();
       useLlamadaStore.getState().reset();
@@ -249,8 +250,8 @@ export function LlamadasProvider({ children }: { children: React.ReactNode }) {
     useLlamadaStore.getState().setFase("conectando");
     try {
       await peerRef.current?.answerCall(llamada.callId, llamada.peerUserId, llamada.offer);
-    } catch {
-      toast.error("No se pudo acceder al micrófono");
+    } catch (err) {
+      toast.error("No se pudo acceder al micrófono", { description: friendlyError(err, "duracionSeg") });
       await peerRef.current?.hangup(true);
       void updateEstadoLlamada({ id: llamada.callId, estado: "finalizada" });
       useLlamadaStore.getState().reset();

@@ -3,6 +3,7 @@
 import { getLogisticaContext } from "@/features/logistica/lib/supabase-context";
 import type { EscandalloImport } from "@/features/logistica/types/import";
 import type { NecesidadCompraRow } from "@/features/logistica/types/db";
+import { friendlyError } from "@/shared/lib/friendly-errors";
 
 async function getContext() {
   const { supabase, userId, empresaId } = await getLogisticaContext();
@@ -23,7 +24,7 @@ export async function listEscandallos(productoVentaId: string) {
     return { ok: true as const, data: data ?? [] };
   } catch (err) {
     console.error("[escandallos] listEscandallos:", err);
-    return { ok: false as const, data: [] };
+    return { ok: false as const, data: [], error: friendlyError(err, "listEscandallos") };
   }
 }
 
@@ -77,7 +78,7 @@ export async function getAlergenosDerivados(productoId: string) {
     return { ok: true as const, data: (data as string[] | null) ?? [] };
   } catch (err) {
     console.error("[escandallos] getAlergenosDerivados:", err);
-    return { ok: false as const, data: [] };
+    return { ok: false as const, data: [], error: friendlyError(err, "getAlergenosDerivados") };
   }
 }
 
@@ -258,7 +259,7 @@ export async function listEscandallosConPrecios(productoVentaId: string) {
     return { ok: true as const, data: result };
   } catch (err) {
     console.error("[escandallos] listEscandallosConPrecios:", err);
-    return { ok: false as const, data: [] };
+    return { ok: false as const, data: [], error: friendlyError(err, "subtotal") };
   }
 }
 

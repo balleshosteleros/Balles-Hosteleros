@@ -88,6 +88,7 @@ import { SeguimientoCalidadResena } from "./SeguimientoCalidadResena";
 import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
+import { friendlyError } from "@/shared/lib/friendly-errors";
 
 // ─── Filtro de período ────────────────────────────────────────
 type PeriodoResenas = "todo" | "semana" | "mes" | "personalizado";
@@ -1155,8 +1156,8 @@ function DetalleResenaDialog({
     try {
       await navigator.clipboard.writeText(respuesta);
       toast.success("Copiada al portapapeles");
-    } catch {
-      toast.error("No se pudo copiar");
+    } catch (err) {
+      toast.error("No se pudo copiar", { description: friendlyError(err, "onCopiar") });
     }
   };
 

@@ -11,6 +11,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getEmpresaActivaForUser } from "@/features/empresa/lib/empresa-server";
 import { sendEmail } from "@/lib/email/send";
 import { escapeHtml } from "@/lib/email/escape-html";
+import { friendlyError } from "@/shared/lib/friendly-errors";
 import {
   crearTokenContratoGestoria,
   botonSubidaContratoHtml,
@@ -79,7 +80,7 @@ const RECLUTAMIENTO_CONFIG_DEFAULT: ReclutamientoConfig = {
   notif_incorporacion_mensaje: INCORPORACION_MENSAJE_DEFAULT,
 };
 
-export async function getReclutamientoConfig(): Promise<{ ok: boolean; data: ReclutamientoConfig }> {
+export async function getReclutamientoConfig(): Promise<{ ok: boolean; data: ReclutamientoConfig; error?: string }> {
   try {
     const { supabase, empresaId } = await getCtx();
     if (!empresaId) return { ok: false, data: RECLUTAMIENTO_CONFIG_DEFAULT };
@@ -123,7 +124,7 @@ export async function getReclutamientoConfig(): Promise<{ ok: boolean; data: Rec
     };
   } catch (err) {
     console.error("[rrhh] getReclutamientoConfig:", err);
-    return { ok: false, data: RECLUTAMIENTO_CONFIG_DEFAULT };
+    return { ok: false, data: RECLUTAMIENTO_CONFIG_DEFAULT, error: friendlyError(err, "getReclutamientoConfig") };
   }
 }
 
@@ -198,7 +199,7 @@ const CONFIG_GENERAL_DEFAULT: ReclutamientoConfigGeneral = {
 
 const CONFIG_GENERAL_COLS = Object.keys(CONFIG_GENERAL_DEFAULT).join(", ");
 
-export async function getReclutamientoConfigGeneral(): Promise<{ ok: boolean; data: ReclutamientoConfigGeneral }> {
+export async function getReclutamientoConfigGeneral(): Promise<{ ok: boolean; data: ReclutamientoConfigGeneral; error?: string }> {
   try {
     const { supabase, empresaId } = await getCtx();
     if (!empresaId) return { ok: false, data: CONFIG_GENERAL_DEFAULT };
@@ -210,7 +211,7 @@ export async function getReclutamientoConfigGeneral(): Promise<{ ok: boolean; da
     return { ok: true, data: { ...CONFIG_GENERAL_DEFAULT, ...(data ?? {}) } };
   } catch (err) {
     console.error("[rrhh] getReclutamientoConfigGeneral:", err);
-    return { ok: false, data: CONFIG_GENERAL_DEFAULT };
+    return { ok: false, data: CONFIG_GENERAL_DEFAULT, error: friendlyError(err, "getReclutamientoConfigGeneral") };
   }
 }
 
@@ -270,7 +271,7 @@ function normalizarCanal(v: unknown): PruebaAvisoCanal {
   return v === "notificacion" || v === "email" ? v : "ambos";
 }
 
-export async function getReclutamientoConfigOnboarding(): Promise<{ ok: boolean; data: ReclutamientoConfigOnboarding }> {
+export async function getReclutamientoConfigOnboarding(): Promise<{ ok: boolean; data: ReclutamientoConfigOnboarding; error?: string }> {
   try {
     const { supabase, empresaId } = await getCtx();
     if (!empresaId) return { ok: false, data: ONBOARDING_DEFAULT };
@@ -295,7 +296,7 @@ export async function getReclutamientoConfigOnboarding(): Promise<{ ok: boolean;
     };
   } catch (err) {
     console.error("[rrhh] getReclutamientoConfigOnboarding:", err);
-    return { ok: false, data: ONBOARDING_DEFAULT };
+    return { ok: false, data: ONBOARDING_DEFAULT, error: friendlyError(err, "getReclutamientoConfigOnboarding") };
   }
 }
 
@@ -336,7 +337,7 @@ export async function saveReclutamientoConfigOnboarding(input: ReclutamientoConf
 // Vive en `reclutamiento_config.campos_formulario` (jsonb), 1 fila por empresa.
 // ============================================================
 
-export async function getCamposFormularioCandidatura(): Promise<{ ok: boolean; data: CamposFormularioConfig }> {
+export async function getCamposFormularioCandidatura(): Promise<{ ok: boolean; data: CamposFormularioConfig; error?: string }> {
   try {
     const { supabase, empresaId } = await getCtx();
     if (!empresaId) return { ok: false, data: normalizarCamposFormulario(null) };

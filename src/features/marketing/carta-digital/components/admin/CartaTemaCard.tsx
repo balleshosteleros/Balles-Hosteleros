@@ -146,7 +146,7 @@ export function CartaTemaCard({ empresaSlug, nombreEmpresa }: { empresaSlug: str
       setEstado((p) => ({ ...p, heroUrl: url }));
       toast.success("Cabecera de la carta guardada");
     } catch (err) {
-      toast.error(friendlyError(err));
+      toast.error(friendlyError(err, "subirHero"));
     } finally {
       setSubiendoHero(false);
     }
@@ -159,7 +159,7 @@ export function CartaTemaCard({ empresaSlug, nombreEmpresa }: { empresaSlug: str
       setEstado((p) => ({ ...p, heroUrl: null }));
       toast.success("Cabecera eliminada");
     } catch (err) {
-      toast.error(friendlyError(err));
+      toast.error(friendlyError(err, "borrarHero"));
     } finally {
       setSubiendoHero(false);
     }
@@ -181,7 +181,7 @@ export function CartaTemaCard({ empresaSlug, nombreEmpresa }: { empresaSlug: str
       });
       toast.success("Estilo de la carta guardado");
     } catch (err) {
-      toast.error(friendlyError(err));
+      toast.error(friendlyError(err, "guardar"));
     } finally {
       setGuardando(false);
     }

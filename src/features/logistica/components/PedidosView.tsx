@@ -51,6 +51,7 @@ import { ResizableColumnsProvider } from "@/shared/components/ResizableColumns";
 import { IOActions } from "@/shared/io";
 import { pedidosIO } from "@/features/logistica/io/pedidos.io";
 import { toast } from "sonner";
+import { friendlyError } from "@/shared/lib/friendly-errors";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -150,8 +151,8 @@ export function PedidosView() {
       } else {
         toast.error("Error al cargar pedidos");
       }
-    } catch {
-      toast.error("Error de conexion al cargar pedidos");
+    } catch (err) {
+      toast.error("Error de conexion al cargar pedidos", { description: friendlyError(err, "PedidosView") });
     } finally {
       setLoading(false);
     }
@@ -406,7 +407,7 @@ export function PedidosView() {
   // Recepción del albarán: pasa a "Entregado" y suma stock (la action aplica el kardex).
   const handleEntregarAlbaran = async (alb: Albaran) => {
     const res = await serverUpdateAlbaranEstado(alb.id, "Entregado");
-    if (!res.ok) { toast.error("Error al marcar el albarán como entregado"); return; }
+    if (!res.ok) { toast.error("Error al marcar el albarán como entregado", { description: res.error }); return; }
 
     setAlbaranes((prev) => prev.map((a) => a.id === alb.id ? { ...a, estado: "Entregado" as EstadoAlbaran } : a));
     setDetalleAlbaran((prev) => prev && prev.id === alb.id ? { ...prev, estado: "Entregado" } : prev);

@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import { UploadCloud, FileText, CheckCircle2, AlertTriangle, Loader2, ShieldQuestion } from "lucide-react";
 import { MAX_NOMINAS_MB, MAX_NOMINAS_BYTES } from "@/shared/lib/documentos";
 import { mesAnterior } from "@/features/rrhh/lib/nominas-periodos";
+import { friendlyError } from "@/shared/lib/friendly-errors";
 
 interface Props {
   /** Endpoint POST al que se suben las nóminas. */
@@ -148,8 +149,8 @@ export function SubirNominasView({ endpoint, empresaNombre, periodo, mesLabel }:
         setTc1Subidos((prev) => [...prev, { nombre: f.name, mes: json.periodoCotizacion ?? mesTc1 }]);
         setCuadreTc1((json.cuadre as Cuadre | null) ?? null);
       } else setError(json.error ?? "No se pudo subir el TC1.");
-    } catch {
-      setError("No se pudo conectar. Inténtalo de nuevo.");
+    } catch (err) {
+      setError(friendlyError(err, "subirTc1"));
     } finally {
       setSubiendoTc1(false);
     }
@@ -205,8 +206,8 @@ export function SubirNominasView({ endpoint, empresaNombre, periodo, mesLabel }:
       } else {
         setError(json.error ?? "No se pudieron subir las nóminas.");
       }
-    } catch {
-      setError("No se pudo conectar. Inténtalo de nuevo.");
+    } catch (err) {
+      setError(friendlyError(err, "subir"));
     } finally {
       setEnviando(false);
     }

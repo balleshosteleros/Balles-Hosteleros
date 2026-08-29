@@ -23,6 +23,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
+import { friendlyError } from "@/shared/lib/friendly-errors";
 import {
   listConectores,
   createConector,
@@ -310,8 +311,8 @@ function PairingView({
       await navigator.clipboard.writeText(code);
       setCopiado(true);
       setTimeout(() => setCopiado(false), 1500);
-    } catch {
-      toast.error("No se pudo copiar");
+    } catch (err) {
+      toast.error("No se pudo copiar", { description: friendlyError(err, "copiar") });
     }
   }
 

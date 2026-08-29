@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { CheckCircle2, AlertTriangle, Loader2, ShieldCheck } from "lucide-react";
 import type { LiquidacionDetalle } from "@/features/rrhh/services/nominas/rrhh-pagos-confirmacion";
+import { friendlyError } from "@/shared/lib/friendly-errors";
 
 interface Props {
   /** Endpoint POST para confirmar. */
@@ -28,8 +29,8 @@ export function ConfirmarLiquidacionView({ endpoint, detalle }: Props) {
       const json = await res.json();
       if (json.ok) setConfirmada(true);
       else setError(json.error ?? "No se pudo confirmar. Inténtalo de nuevo.");
-    } catch {
-      setError("No se pudo conectar. Inténtalo de nuevo.");
+    } catch (err) {
+      setError(friendlyError(err, "confirmar"));
     } finally {
       setConfirmando(false);
     }

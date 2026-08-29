@@ -33,6 +33,7 @@ import {
 } from "@/shared/components/SubmoduleToolbar";
 import { TableColumnHeader } from "@/shared/components/TableColumnHeader";
 import { ResizableColumnsProvider } from "@/shared/components/ResizableColumns";
+import { friendlyError } from "@/shared/lib/friendly-errors";
 
 type Vista = "kanban" | "tabla" | "calendario";
 
@@ -61,8 +62,8 @@ export function NuevasRecetasView() {
       if (fasesRes.ok) setFases(fasesRes.data);
       if (recetasRes.ok) setRecetas(recetasRes.data);
       else toast.error(recetasRes.error);
-    } catch {
-      toast.error("Error cargando datos");
+    } catch (err) {
+      toast.error("Error cargando datos", { description: friendlyError(err, "NuevasRecetasView") });
     } finally {
       setCargando(false);
     }

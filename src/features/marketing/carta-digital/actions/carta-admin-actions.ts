@@ -6,6 +6,7 @@
 import { revalidatePath } from "next/cache";
 import { getAppContext } from "@/lib/supabase/get-context";
 import { ALERGENOS_UE, type Alergeno } from "../types";
+import { friendlyError } from "@/shared/lib/friendly-errors";
 
 type ActionResult<T = void> =
   | (T extends void ? { ok: true } : { ok: true; data: T })
@@ -73,7 +74,7 @@ export async function crearCategoria(input: {
     return { ok: true, data: { id: (data as { id: string }).id } };
   } catch (err) {
     console.error("[carta][crearCategoria] fatal:", err);
-    return { ok: false, error: "Error inesperado." };
+    return { ok: false, error: friendlyError(err, "orden") };
   }
 }
 
@@ -109,7 +110,7 @@ export async function actualizarCategoria(input: {
     return { ok: true };
   } catch (err) {
     console.error("[carta][actualizarCategoria] fatal:", err);
-    return { ok: false, error: "Error inesperado." };
+    return { ok: false, error: friendlyError(err, "actualizarCategoria") };
   }
 }
 
@@ -130,7 +131,7 @@ export async function borrarCategoria(id: string): Promise<ActionResult> {
     return { ok: true };
   } catch (err) {
     console.error("[carta][borrarCategoria] fatal:", err);
-    return { ok: false, error: "Error inesperado." };
+    return { ok: false, error: friendlyError(err, "borrarCategoria") };
   }
 }
 
@@ -149,7 +150,7 @@ export async function reordenarCategorias(orden: { id: string; orden: number }[]
     return { ok: true };
   } catch (err) {
     console.error("[carta][reordenarCategorias] fatal:", err);
-    return { ok: false, error: "Error inesperado." };
+    return { ok: false, error: friendlyError(err, "reordenarCategorias") };
   }
 }
 
@@ -219,7 +220,7 @@ export async function crearItem(input: {
     return { ok: true, data: { id: (data as { id: string }).id } };
   } catch (err) {
     console.error("[carta][crearItem] fatal:", err);
-    return { ok: false, error: "Error inesperado." };
+    return { ok: false, error: friendlyError(err, "orden") };
   }
 }
 
@@ -269,7 +270,7 @@ export async function actualizarItem(input: {
     return { ok: true };
   } catch (err) {
     console.error("[carta][actualizarItem] fatal:", err);
-    return { ok: false, error: "Error inesperado." };
+    return { ok: false, error: friendlyError(err, "actualizarItem") };
   }
 }
 
@@ -303,7 +304,7 @@ export async function borrarItem(id: string): Promise<ActionResult> {
     return { ok: true };
   } catch (err) {
     console.error("[carta][borrarItem] fatal:", err);
-    return { ok: false, error: "Error inesperado." };
+    return { ok: false, error: friendlyError(err, "storagePath") };
   }
 }
 
@@ -322,6 +323,6 @@ export async function reordenarItems(orden: { id: string; orden: number }[]): Pr
     return { ok: true };
   } catch (err) {
     console.error("[carta][reordenarItems] fatal:", err);
-    return { ok: false, error: "Error inesperado." };
+    return { ok: false, error: friendlyError(err, "reordenarItems") };
   }
 }

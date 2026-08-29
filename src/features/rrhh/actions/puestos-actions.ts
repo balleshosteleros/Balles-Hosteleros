@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getEmpresaActivaForUser } from "@/features/empresa/lib/empresa-server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { revalidatePath } from "next/cache";
+import { friendlyError } from "@/shared/lib/friendly-errors";
 import {
   NORMAS_BASE,
   type PuestoSalarial,
@@ -222,7 +223,7 @@ export async function upsertPuestoSalario(input: UpsertSalarioInput) {
 /** Lista los niveles (condiciones) de un puesto, ordenados por nivel. */
 export async function listNivelesDePuesto(
   puestoId: string,
-): Promise<{ ok: boolean; data: NivelSalarial[] }> {
+): Promise<{ ok: boolean; data: NivelSalarial[]; error?: string }> {
   try {
     const { supabase, empresaId } = await getContext();
     if (!empresaId) return { ok: false, data: [] };
@@ -239,7 +240,7 @@ export async function listNivelesDePuesto(
     return { ok: true, data: niveles };
   } catch (err) {
     console.error("[rrhh] listNivelesDePuesto:", err);
-    return { ok: false, data: [] };
+    return { ok: false, data: [], error: friendlyError(err, "niveles") };
   }
 }
 

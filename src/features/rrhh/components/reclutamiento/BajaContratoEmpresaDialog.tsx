@@ -40,6 +40,7 @@ import {
   type TipoBajaContrato,
 } from "@/features/rrhh/data/campos-gestoria";
 import { darBajaContratoEmpresa } from "@/features/rrhh/actions/candidatos-actions";
+import { friendlyError } from "@/shared/lib/friendly-errors";
 
 function hoyIso(): string {
   const d = new Date();
@@ -122,8 +123,8 @@ export function BajaContratoEmpresaDialog({
       setHechosPrevios(base);
       setHechos(data.hechos as string);
       toast.success("Hechos redactados. Revísalos antes de enviar.");
-    } catch {
-      toast.error("No se pudo conectar con la IA.");
+    } catch (err) {
+      toast.error("No se pudo conectar con la IA.", { description: friendlyError(err, "mejorarConIa") });
     } finally {
       setMejorando(false);
     }

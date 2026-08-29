@@ -143,7 +143,7 @@ export function DescuentosView() {
     const updated = descuentos.map((x) => x.id === d.id ? { ...x, activo: !x.activo, ultimaActualizacion: new Date().toISOString().slice(0, 10) } : x);
     setDescuentos(updated);
     const res = await updateDescuento(d.id, { activo: !d.activo });
-    if (!res.ok) { toast.error("Error al actualizar estado"); loadDescuentos(); }
+    if (!res.ok) { toast.error("Error al actualizar estado", { description: res.error }); loadDescuentos(); }
   }
 
   async function eliminar(d: Descuento) {

@@ -60,6 +60,7 @@ import { useReglasSubmodulo } from "@/features/ajustes/hooks/use-reglas-submodul
 import { ValidacionFaltantesDialog } from "@/features/ajustes/components/ValidacionFaltantesDialog";
 import { toast } from "sonner";
 import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
+import { friendlyError } from "@/shared/lib/friendly-errors";
 
 function EstadoBadge({ value }: { value: EstadoProveedor }) {
   const cls: Record<string, string> = {
@@ -214,8 +215,8 @@ export function ProveedoresView() {
       } else {
         toast.error("Error al cargar proveedores");
       }
-    } catch {
-      toast.error("Error de conexion al cargar proveedores");
+    } catch (err) {
+      toast.error("Error de conexion al cargar proveedores", { description: friendlyError(err, "handleGuardarOperativa") });
     } finally {
       setLoading(false);
     }
@@ -295,7 +296,7 @@ export function ProveedoresView() {
 
     if (exists) {
       const res = await updateProveedor(item.id, payload);
-      if (!res.ok) { toast.error("Error al actualizar proveedor"); loadProveedores(); return false; }
+      if (!res.ok) { toast.error("Error al actualizar proveedor", { description: res.error }); loadProveedores(); return false; }
       return true;
     }
     const res = await createProveedor(payload);

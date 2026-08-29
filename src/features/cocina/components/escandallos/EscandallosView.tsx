@@ -56,6 +56,7 @@ import {
 } from "@/shared/components/SubmoduleToolbar";
 import { formatNumero, parseDecimal } from "@/shared/lib/numero";
 import { MargenesAnalisis } from "@/features/cocina/components/escandallos/MargenesAnalisis";
+import { friendlyError } from "@/shared/lib/friendly-errors";
 
 // ─── Estado colors ─────────────────────────────────────────────
 const ESTADO_COLORS: Record<EstadoEscandallo, string> = {
@@ -1345,8 +1346,8 @@ export function EscandallosView() {
       } else {
         toast.error("Error al cargar escandallos");
       }
-    } catch {
-      toast.error("Error de conexión al cargar escandallos");
+    } catch (err) {
+      toast.error("Error de conexión al cargar escandallos", { description: friendlyError(err, "mapped") });
     } finally {
       setLoading(false);
     }
@@ -1513,8 +1514,8 @@ export function EscandallosView() {
       }
       // Recargamos para tener el id real (BD) y los ingredientes ya con id de fila.
       loadEscandallos();
-    } catch {
-      toast.error("Error de conexión al guardar escandallo");
+    } catch (err) {
+      toast.error("Error de conexión al guardar escandallo", { description: friendlyError(err, "openNew") });
       loadEscandallos();
     }
   }, [empresaCats, loadEscandallos, toEscandalloInput]);

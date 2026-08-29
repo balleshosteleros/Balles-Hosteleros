@@ -3,6 +3,7 @@
 import { getLogisticaContext } from "@/features/logistica/lib/supabase-context";
 import { getZonaHorariaEmpresa } from "@/features/empresa/lib/empresa-server";
 import { hoyEnZona } from "@/features/empresa/lib/zona-horaria";
+import { friendlyError } from "@/shared/lib/friendly-errors";
 
 async function getContext() {
   const { supabase, userId, empresaId } = await getLogisticaContext();
@@ -36,7 +37,7 @@ export async function listPedidos() {
     return { ok: true, data: data ?? [] };
   } catch (err) {
     console.error("[pedidos] listPedidos:", err);
-    return { ok: false, data: [] };
+    return { ok: false, data: [], error: friendlyError(err, "listPedidos") };
   }
 }
 

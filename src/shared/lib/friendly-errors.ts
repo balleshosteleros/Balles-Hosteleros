@@ -36,30 +36,43 @@ export function friendlyError(err: unknown, contexto?: string): string {
           : "";
   const text = raw.toLowerCase();
 
-  // Solo en servidor: en el navegador ensuciaría la consola del usuario.
-  if (typeof window === "undefined") {
+  // Deja constancia SIEMPRE, también en el navegador. Antes solo se registraba
+  // en servidor "para no ensuciar la consola del usuario", pero la mayoría de
+  // los errores que ve la gente ocurren en el cliente (guardar, subir, cargar
+  // un listado): ahí no quedaba ni una traza, así que un aviso genérico era un
+  // callejón sin salida incluso para nosotros. La consola no la ve el usuario;
+  // perder la causa sí le afecta.
+  {
     const donde = contexto ? `[${contexto}] ` : "";
     console.error(
       `${donde}${raw || "error sin mensaje"}${detalleSupabase(err)}`,
+      err,
     );
   }
 
   // Tamaño de archivo
-  if (text.includes("body exceeded") || text.includes("payload too large") || text.includes("body size")) {
-    return "El archivo es demasiado grande. Usa una imagen más pequeña (máx. 5 MB).";
+  if (
+    text.includes("body exceeded") ||
+    text.includes("payload too large") ||
+    text.includes("body size") ||
+    text.includes("413") ||
+    text.includes("maximum size") ||
+    text.includes("the object exceeded")
+  ) {
+    return "El archivo es demasiado grande. Usa uno más pequeño o súbelo en varias partes.";
   }
   if (text.includes("file size") && text.includes("exceed")) {
-    return "El archivo supera el tamaño permitido.";
+    return "El archivo supera el tamaño permitido. Usa uno más pequeño.";
   }
 
   // Formato no soportado
   if (text.includes("mime type") || text.includes("invalid file type") || text.includes("unsupported")) {
-    return "Formato no permitido. Usa PNG, JPG, SVG o WebP.";
+    return "Ese formato de archivo no se admite. Para imágenes usa PNG, JPG, SVG o WebP.";
   }
 
   // Permisos / RLS
   if (text.includes("row-level security") || text.includes("rls") || text.includes("permission denied") || text.includes("not authorized")) {
-    return "No tienes permisos para realizar esta acción.";
+    return "No tienes permisos para hacer esto. Pídeselo a un responsable si crees que deberías tenerlos.";
   }
 
   // Sesión / autenticación
@@ -107,9 +120,20 @@ export function friendlyError(err: unknown, contexto?: string): string {
     return "El registro está desactivado. Contacta con un administrador.";
   }
 
-  // Conectividad
-  if (text.includes("network") || text.includes("failed to fetch") || text.includes("offline") || text.includes("timeout")) {
-    return "Sin conexión. Comprueba tu internet e inténtalo de nuevo.";
+  // Conectividad. Se separa el "tardó demasiado" del "no hay red": mandar a
+  // alguien a mirar su wifi cuando lo que pasa es que la operación excedió el
+  // tiempo le hace perder el rato buscando donde no es.
+  if (text.includes("timeout") || text.includes("timed out") || text.includes("etimedout")) {
+    return "La operación ha tardado demasiado y se ha cancelado. Inténtalo de nuevo; si es un archivo grande, prueba con uno más pequeño.";
+  }
+  if (text.includes("network") || text.includes("failed to fetch") || text.includes("offline") || text.includes("networkerror")) {
+    return "No se ha podido conectar. Comprueba tu conexión a internet e inténtalo de nuevo.";
+  }
+
+  // Fallo del servidor / servicio externo: no es culpa del usuario ni lo
+  // arregla reintentando sin más, así que se le dice explícitamente.
+  if (text.includes("500") || text.includes("internal server error") || text.includes("502") || text.includes("503") || text.includes("bad gateway") || text.includes("service unavailable")) {
+    return "El servicio no está respondiendo en este momento. Espera unos minutos e inténtalo de nuevo; si sigue igual, avísanos.";
   }
 
   // Bucket / Storage no encontrado
@@ -117,17 +141,22 @@ export function friendlyError(err: unknown, contexto?: string): string {
     return "Almacenamiento no configurado. Contacta con soporte.";
   }
   if (text.includes("not found")) {
-    return "Recurso no encontrado.";
+    return "No se ha encontrado. Puede que alguien lo haya eliminado: refresca la página.";
   }
 
   // Conflictos
   if (text.includes("duplicate") || text.includes("already exists") || text.includes("unique constraint")) {
-    return "Ya existe un registro con esos datos.";
+    return "Ya existe un registro con esos datos. Revisa si está repetido.";
+  }
+
+  // Registro enlazado con otros: el borrado lo bloquea una clave foránea.
+  if (text.includes("foreign key") || text.includes("violates foreign key")) {
+    return "No se puede borrar porque está en uso en otra parte del sistema. Quita primero lo que lo utiliza.";
   }
 
   // Validación
   if (text.includes("required") || text.includes("not null")) {
-    return "Faltan campos obligatorios.";
+    return "Faltan campos obligatorios por rellenar.";
   }
 
   // Si el mensaje original ya parece estar en español (acentos, ñ o palabras
@@ -137,12 +166,14 @@ export function friendlyError(err: unknown, contexto?: string): string {
     return raw;
   }
 
-  // Por defecto: mensaje neutro. Se añade el CONTEXTO entre paréntesis cuando lo
-  // hay: "Ha ocurrido un error" a secas no distingue un fallo al crear el
-  // usuario de uno al insertar el empleado, y obliga a reproducir el caso a mano
-  // para saber cuál fue. Con la etiqueta, el mismo texto que ve el usuario sirve
-  // para encontrar la traza exacta en el log del servidor.
+  // Último recurso: no se ha reconocido la causa. Aun así el aviso NO puede
+  // dejar al usuario sin salida, así que dice qué hacer (reintentar y, si
+  // insiste, avisar) en vez de un "Ha ocurrido un error" a secas.
+  //
+  // El CONTEXTO va entre paréntesis cuando lo hay: distingue un fallo al crear
+  // el usuario de uno al insertar el empleado, y hace que el mismo texto que ve
+  // el usuario sirva para encontrar la traza exacta en el log.
   return contexto
-    ? `Ha ocurrido un error. Inténtalo de nuevo. (${contexto})`
-    : "Ha ocurrido un error. Inténtalo de nuevo.";
+    ? `No se ha podido completar la operación. Inténtalo de nuevo; si vuelve a fallar, avisa indicando este código: ${contexto}`
+    : "No se ha podido completar la operación. Inténtalo de nuevo; si vuelve a fallar, avísanos.";
 }

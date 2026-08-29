@@ -11,6 +11,7 @@
 
 import { getAppContext } from "@/lib/supabase/get-context";
 import { googleFetchAuto, getGoogleTokens } from "@/lib/google/api";
+import { friendlyError } from "@/shared/lib/friendly-errors";
 
 export interface Destinatario {
   nombre: string;
@@ -293,7 +294,7 @@ async function completarFotos(lista: Destinatario[]): Promise<Destinatario[]> {
 
 export async function buscarDestinatarios(
   termino: string,
-): Promise<{ ok: boolean; data: Destinatario[] }> {
+): Promise<{ ok: boolean; data: Destinatario[]; error?: string }> {
   try {
     const q = termino.trim();
     if (q.length < 2) return { ok: true, data: [] };
@@ -393,6 +394,6 @@ export async function buscarDestinatarios(
     };
   } catch (err) {
     console.error("[correo] buscarDestinatarios:", err);
-    return { ok: false, data: [] };
+    return { ok: false, data: [], error: friendlyError(err, "buscarDestinatarios") };
   }
 }

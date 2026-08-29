@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 
 import { getEmpresaActivaForUser } from "@/features/empresa/lib/empresa-server";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { friendlyError } from "@/shared/lib/friendly-errors";
 async function getContext() {
   const supabase = await createClient();
   const {
@@ -27,7 +28,7 @@ export async function listDescuentos() {
     return { ok: true, data: data ?? [] };
   } catch (err) {
     console.error("[descuentos] listDescuentos:", err);
-    return { ok: false, data: [] };
+    return { ok: false, data: [], error: friendlyError(err, "listDescuentos") };
   }
 }
 

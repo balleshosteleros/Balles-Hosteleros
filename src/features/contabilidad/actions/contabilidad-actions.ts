@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 
 import { getEmpresaActivaForUser } from "@/features/empresa/lib/empresa-server";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { friendlyError } from "@/shared/lib/friendly-errors";
 async function getContext() {
   const supabase = await createClient();
   const {
@@ -29,7 +30,7 @@ export async function listContactos() {
     return { ok: true, data: data ?? [] };
   } catch (err) {
     console.error("[contabilidad] listContactos:", err);
-    return { ok: false, data: [] };
+    return { ok: false, data: [], error: friendlyError(err, "listContactos") };
   }
 }
 
@@ -153,7 +154,7 @@ export async function listFacturas(tipo?: string) {
     return { ok: true, data: data ?? [] };
   } catch (err) {
     console.error("[contabilidad] listFacturas:", err);
-    return { ok: false, data: [] };
+    return { ok: false, data: [], error: friendlyError(err, "listFacturas") };
   }
 }
 
@@ -233,7 +234,7 @@ export async function listTransacciones(mes?: string) {
     return { ok: true, data: data ?? [] };
   } catch (err) {
     console.error("[contabilidad] listTransacciones:", err);
-    return { ok: false, data: [] };
+    return { ok: false, data: [], error: friendlyError(err, "listTransacciones") };
   }
 }
 

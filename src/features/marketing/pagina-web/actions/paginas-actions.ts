@@ -8,6 +8,7 @@ import { revalidatePath } from "next/cache";
 import { getAppContext } from "@/lib/supabase/get-context";
 import { crearBloquesPlantilla } from "../data/plantilla-web";
 import type { PaginaWeb, PaginaWebTipo, PaginaWebEstado } from "../types";
+import { friendlyError } from "@/shared/lib/friendly-errors";
 
 type ActionResult<T = void> =
   | (T extends void ? { ok: true } : { ok: true; data: T })
@@ -45,7 +46,7 @@ export async function listarPaginas(): Promise<ActionResult<PaginaWeb[]>> {
     return { ok: true, data: (data ?? []) as PaginaWeb[] };
   } catch (err) {
     console.error("[pagina-web][listarPaginas] fatal:", err);
-    return { ok: false, error: "Error inesperado." };
+    return { ok: false, error: friendlyError(err, "listarPaginas") };
   }
 }
 
@@ -69,7 +70,7 @@ export async function obtenerPagina(id: string): Promise<ActionResult<PaginaWeb>
     return { ok: true, data: data as PaginaWeb };
   } catch (err) {
     console.error("[pagina-web][obtenerPagina] fatal:", err);
-    return { ok: false, error: "Error inesperado." };
+    return { ok: false, error: friendlyError(err, "obtenerPagina") };
   }
 }
 
@@ -142,7 +143,7 @@ export async function crearPagina(input: {
     return { ok: true, data: { id: (data as { id: string }).id } };
   } catch (err) {
     console.error("[pagina-web][crearPagina] fatal:", err);
-    return { ok: false, error: "Error inesperado." };
+    return { ok: false, error: friendlyError(err, "crearPagina") };
   }
 }
 
@@ -171,7 +172,7 @@ export async function renombrarPagina(input: {
     return { ok: true };
   } catch (err) {
     console.error("[pagina-web][renombrarPagina] fatal:", err);
-    return { ok: false, error: "Error inesperado." };
+    return { ok: false, error: friendlyError(err, "renombrarPagina") };
   }
 }
 
@@ -200,7 +201,7 @@ export async function cambiarEstadoPagina(input: {
     return { ok: true };
   } catch (err) {
     console.error("[pagina-web][cambiarEstado] fatal:", err);
-    return { ok: false, error: "Error inesperado." };
+    return { ok: false, error: friendlyError(err, "cambiarEstadoPagina") };
   }
 }
 
@@ -223,6 +224,6 @@ export async function borrarPagina(id: string): Promise<ActionResult> {
     return { ok: true };
   } catch (err) {
     console.error("[pagina-web][borrarPagina] fatal:", err);
-    return { ok: false, error: "Error inesperado." };
+    return { ok: false, error: friendlyError(err, "borrarPagina") };
   }
 }

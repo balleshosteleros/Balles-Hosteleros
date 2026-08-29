@@ -15,6 +15,7 @@ import { getPlanificacionHorarios } from "@/features/rrhh/actions/planificacion-
 import { getZonaHorariaEmpresa } from "@/features/empresa/lib/empresa-server";
 import { formatHoraEnZona } from "@/features/empresa/lib/zona-horaria";
 import { codigosQueNoComputan, noComputa } from "@/features/rrhh/services/horas/computa-tiempo";
+import { friendlyError } from "@/shared/lib/friendly-errors";
 
 export type HorasMesRow = HorasMesEmpleado & { empleadoId: string };
 
@@ -22,7 +23,7 @@ export type HorasMesRow = HorasMesEmpleado & { empleadoId: string };
 export async function loadHorasMes(
   periodo: string,
   empleadoIds: string[],
-): Promise<{ ok: boolean; data: HorasMesRow[] }> {
+): Promise<{ ok: boolean; data: HorasMesRow[]; error?: string }> {
   try {
     const { supabase, empresaId } = await getAppContext();
     const ids = empleadoIds.filter((id) => id && !id.startsWith("ext-"));
@@ -33,14 +34,14 @@ export async function loadHorasMes(
     return { ok: true, data };
   } catch (err) {
     console.error("[rrhh] loadHorasMes:", err);
-    return { ok: false, data: [] };
+    return { ok: false, data: [], error: friendlyError(err, "loadHorasMes") };
   }
 }
 
 /** Balance del mes del TRABAJADOR logueado (su propia ficha de la empresa activa). */
 export async function miBalanceHorasMes(
   periodo: string,
-): Promise<{ ok: boolean; data: HorasMesEmpleado | null }> {
+): Promise<{ ok: boolean; data: HorasMesEmpleado | null; error?: string }> {
   try {
     const { supabase, empresaId, userId } = await getAppContext();
     if (!empresaId || !userId) return { ok: false, data: null };
@@ -56,7 +57,7 @@ export async function miBalanceHorasMes(
     return { ok: true, data: mapa.get(empleadoId) ?? null };
   } catch (err) {
     console.error("[rrhh] miBalanceHorasMes:", err);
-    return { ok: false, data: null };
+    return { ok: false, data: null, error: friendlyError(err, "miBalanceHorasMes") };
   }
 }
 
@@ -94,7 +95,7 @@ export async function loadFichajesCuadrante(
   empleadoIds: string[],
   desdeISO: string,
   hastaISO: string,
-): Promise<{ ok: boolean; data: FichadosCuadrante }> {
+): Promise<{ ok: boolean; data: FichadosCuadrante; error?: string }> {
   try {
     const { supabase, empresaId } = await getAppContext();
     const ids = empleadoIds.filter((id) => id && !id.startsWith("ext-"));
@@ -195,7 +196,7 @@ function horasDeTramosHHMM(tramos: { inicio: string; fin: string | null }[]): nu
 export async function loadTimelineDia(
   fechaISO: string,
   cuadranteId?: string | null,
-): Promise<{ ok: boolean; data: TimelineFichajeRow[] }> {
+): Promise<{ ok: boolean; data: TimelineFichajeRow[]; error?: string }> {
   try {
     const { empresaId } = await getAppContext();
     if (!empresaId) return { ok: true, data: [] };
@@ -248,7 +249,7 @@ export async function loadTimelineDia(
     return { ok: true, data: rows };
   } catch (err) {
     console.error("[rrhh] loadTimelineDia:", err);
-    return { ok: false, data: [] };
+    return { ok: false, data: [], error: friendlyError(err, "loadTimelineDia") };
   }
 }
 
@@ -285,7 +286,7 @@ function diasDelMes(periodo: string): { desde: string; hasta: string; dias: stri
 export async function loadTimelineMesEmpleado(
   empleadoId: string,
   periodo: string,
-): Promise<{ ok: boolean; data: TimelineMesEmpleado }> {
+): Promise<{ ok: boolean; data: TimelineMesEmpleado; error?: string }> {
   const vacio: TimelineMesEmpleado = { dias: [], horasFichadasMes: 0, horasTeoricasMes: 0 };
   try {
     const { supabase, empresaId } = await getAppContext();
@@ -340,6 +341,6 @@ export async function loadTimelineMesEmpleado(
     };
   } catch (err) {
     console.error("[rrhh] loadTimelineMesEmpleado:", err);
-    return { ok: false, data: vacio };
+    return { ok: false, data: vacio, error: friendlyError(err, "loadTimelineMesEmpleado") };
   }
 }

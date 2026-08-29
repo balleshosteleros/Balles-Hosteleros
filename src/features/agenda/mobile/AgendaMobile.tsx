@@ -42,6 +42,7 @@ import {
 import { refreshDailyCounts } from "@/features/google-workspace/components/useDailyCounts";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
+import { friendlyError } from "@/shared/lib/friendly-errors";
 
 const CATEGORIA_ICON: Record<ContactoCategoria, React.ElementType> = {
   mantenimiento: Wrench,
@@ -112,8 +113,8 @@ export function AgendaMobile() {
       } catch {
         setEtiquetas([]);
       }
-    } catch {
-      toast.error("Error al cargar contactos");
+    } catch (err) {
+      toast.error("Error al cargar contactos", { description: friendlyError(err, "AgendaMobile") });
     } finally {
       setCargando(false);
     }
@@ -213,8 +214,8 @@ export function AgendaMobile() {
       setNuevoOpen(false);
       setForm(EMPTY_FORM);
       await cargar();
-    } catch {
-      toast.error("Error al crear contacto");
+    } catch (err) {
+      toast.error("Error al crear contacto", { description: friendlyError(err, "guardar") });
     } finally {
       setGuardando(false);
     }
@@ -237,8 +238,8 @@ export function AgendaMobile() {
       setContactos((prev) => prev.filter((x) => x.id !== c.id));
       setDetalle(null);
       toast.success("Contacto eliminado");
-    } catch {
-      toast.error("Error al eliminar contacto");
+    } catch (err) {
+      toast.error("Error al eliminar contacto", { description: friendlyError(err, "eliminar") });
     } finally {
       setBorrando(false);
     }

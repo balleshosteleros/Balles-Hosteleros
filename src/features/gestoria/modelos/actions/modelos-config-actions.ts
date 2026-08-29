@@ -1,6 +1,7 @@
 "use server";
 
 import { getAppContext } from "@/lib/supabase/get-context";
+import { friendlyError } from "@/shared/lib/friendly-errors";
 import {
   MODELOS_CONFIG_COLS,
   MODELOS_CONFIG_DEFAULT,
@@ -11,7 +12,7 @@ import {
   type ModelosConfigRow,
 } from "../services/modelos-config";
 
-export async function getModelosConfig(): Promise<{ ok: boolean; data: ModelosConfig }> {
+export async function getModelosConfig(): Promise<{ ok: boolean; data: ModelosConfig; error?: string }> {
   try {
     const { supabase, empresaId } = await getAppContext();
     if (!empresaId) return { ok: false, data: MODELOS_CONFIG_DEFAULT };
@@ -23,7 +24,7 @@ export async function getModelosConfig(): Promise<{ ok: boolean; data: ModelosCo
     return { ok: true, data: normalizarModelosConfig(data) };
   } catch (err) {
     console.error("[modelos] getModelosConfig:", err);
-    return { ok: false, data: MODELOS_CONFIG_DEFAULT };
+    return { ok: false, data: MODELOS_CONFIG_DEFAULT, error: friendlyError(err, "getModelosConfig") };
   }
 }
 

@@ -65,6 +65,7 @@ import { getOrganigrama } from "@/features/direccion/actions/organigrama-actions
 import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
 import { orgChartsPorEmpresa } from "@/features/direccion/data/direccion";
 import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
+import { friendlyError } from "@/shared/lib/friendly-errors";
 
 type Canal = {
   id: string;
@@ -744,8 +745,8 @@ export function ChatDrawer({ children }: { children: ReactNode }) {
         // lecturas puede encenderlo en azul en cuanto alguien lo abra.
         setLecturas((prev) => ({ ...prev, [real.id]: prev[real.id] ?? 0 }));
       }
-    } catch {
-      toast.error("Error al enviar");
+    } catch (err) {
+      toast.error("Error al enviar", { description: friendlyError(err, "enviar") });
       setMensajes((prev) => prev.filter((m) => m.id !== optimistic.id));
     }
   }
@@ -804,8 +805,8 @@ export function ChatDrawer({ children }: { children: ReactNode }) {
       setDeptosNuevo(new Set());
       setBusquedaEmpleados("");
       toast.success("Asunto creado");
-    } catch {
-      toast.error("No se pudo crear el asunto");
+    } catch (err) {
+      toast.error("No se pudo crear el asunto", { description: friendlyError(err, "crearAsunto") });
     }
   }
 

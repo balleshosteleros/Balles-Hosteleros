@@ -21,6 +21,7 @@ import {
   type ResultadoProceso,
 } from "@/features/rrhh/services/nominas/procesar-nominas";
 import { registrarSubidaHistorico } from "@/features/rrhh/services/nominas/nominas-gestoria";
+import { friendlyError } from "@/shared/lib/friendly-errors";
 
 const BUCKET = "rrhh-nominas";
 const SIGNED_URL_TTL = 60 * 10; // 10 min para verla
@@ -426,10 +427,7 @@ export async function getNominasMesUrl(
  * confirmado, con la fecha y el nº de documentos de ese mes. La descarga de cada
  * una va por `getMiNominaUrl`.
  */
-export async function listMisNominas(): Promise<{
-  ok: boolean;
-  data: { periodo: string; periodoLabel: string; documentos: number }[];
-}> {
+export async function listMisNominas(): Promise<{ ok: boolean; data: { periodo: string; periodoLabel: string; documentos: number }[]; error?: string }> {
   try {
     const { supabase, empresaId, userId } = await getAppContext();
     if (!empresaId || !userId) return { ok: false, data: [] };
@@ -467,7 +465,7 @@ export async function listMisNominas(): Promise<{
     return { ok: true, data };
   } catch (err) {
     console.error("[rrhh] listMisNominas:", err);
-    return { ok: false, data: [] };
+    return { ok: false, data: [], error: friendlyError(err, "listMisNominas") };
   }
 }
 

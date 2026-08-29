@@ -13,6 +13,7 @@
 
 import { revalidatePath } from "next/cache";
 import { getAppContext } from "@/lib/supabase/get-context";
+import { friendlyError } from "@/shared/lib/friendly-errors";
 import {
   prepararItemsDesdeProductos,
   ordenarCategorias,
@@ -73,7 +74,7 @@ export async function previsualizarSincronizacion(): Promise<
     return { ok: true, data: { porCategoria, total: items.length, descartados } };
   } catch (err) {
     console.error("[carta][previsualizarSincronizacion] fatal:", err);
-    return { ok: false, error: "Error inesperado." };
+    return { ok: false, error: friendlyError(err, "previsualizarSincronizacion") };
   }
 }
 
@@ -234,6 +235,6 @@ export async function sincronizarCartaDesdeProductos(): Promise<
     };
   } catch (err) {
     console.error("[carta][sincronizar] fatal:", err);
-    return { ok: false, error: "Error inesperado." };
+    return { ok: false, error: friendlyError(err, "sincronizarCartaDesdeProductos") };
   }
 }

@@ -10,6 +10,7 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import { MAX_DOCUMENTO_MB, MAX_DOCUMENTO_BYTES } from "@/shared/lib/documentos";
+import { friendlyError } from "@/shared/lib/friendly-errors";
 
 interface Modelo {
   tipo: string;
@@ -151,13 +152,13 @@ export function SubirModelosView({
           [modelo.tipo]: { ...prev[modelo.tipo], estado: "error", msg: motivo },
         }));
       }
-    } catch {
+    } catch (err) {
       setFilas((prev) => ({
         ...prev,
         [modelo.tipo]: {
           ...prev[modelo.tipo],
           estado: "error",
-          msg: "No se pudo conectar. Inténtalo de nuevo.",
+          msg: friendlyError(err, "adjuntar"),
         },
       }));
     }
@@ -183,8 +184,8 @@ export function SubirModelosView({
         );
         setFaltan(Array.isArray(json.faltan) ? json.faltan : []);
       }
-    } catch {
-      setEnvioError("No se pudo conectar. Inténtalo de nuevo.");
+    } catch (err) {
+      setEnvioError(friendlyError(err, "enviarTodo"));
       setFaltan([]);
     } finally {
       setEnviando(false);

@@ -27,6 +27,7 @@ import { facturasIO } from "@/features/contabilidad/io/facturas.io";
 import { ImportadorIAFacturasDialog } from "@/features/contabilidad/components/ImportadorIAFacturasDialog";
 import { Sparkles } from "lucide-react";
 import { toast } from "sonner";
+import { friendlyError } from "@/shared/lib/friendly-errors";
 
 const TABS = [{ id: "TODAS", label: "Todas" }, { id: "VENTA", label: "Ventas" }, { id: "COMPRA", label: "Compras" }];
 
@@ -74,8 +75,8 @@ export function FacturasView() {
       } else {
         toast.error("Error al cargar facturas");
       }
-    } catch {
-      toast.error("Error de conexion al cargar facturas");
+    } catch (err) {
+      toast.error("Error de conexion al cargar facturas", { description: friendlyError(err, "FacturasView") });
     } finally {
       setLoading(false);
     }

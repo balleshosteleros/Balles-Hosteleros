@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { getLogisticaContext } from "@/features/logistica/lib/supabase-context";
 import { registrarMovimiento } from "@/features/logistica/services/kardex";
+import { friendlyError } from "@/shared/lib/friendly-errors";
 
 async function getContext() {
   const { supabase, userId, empresaId } = await getLogisticaContext();
@@ -22,7 +23,7 @@ export async function listStock() {
     return { ok: true, data: data ?? [] };
   } catch (err) {
     console.error("[stock] listStock:", err);
-    return { ok: false, data: [] };
+    return { ok: false, data: [], error: friendlyError(err, "listStock") };
   }
 }
 

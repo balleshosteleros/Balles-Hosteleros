@@ -1,6 +1,7 @@
 "use server";
 
 import { getLogisticaContext } from "@/features/logistica/lib/supabase-context";
+import { friendlyError } from "@/shared/lib/friendly-errors";
 
 const SIN_PROVEEDOR_ID = "__sin_proveedor__";
 const SIN_PROVEEDOR_LABEL = "Sin proveedor asignado";
@@ -160,10 +161,7 @@ function agruparPorProveedor(
  * Sugerencias por stock: productos cuyo stock actual está por debajo del stock máximo.
  * Cantidad propuesta = stock_maximo - stock_actual.
  */
-export async function getSugerenciasPorStock(): Promise<{
-  ok: boolean;
-  data: SugerenciaProveedorGrupo[];
-}> {
+export async function getSugerenciasPorStock(): Promise<{ ok: boolean; data: SugerenciaProveedorGrupo[]; error?: string }> {
   try {
     const base = await fetchBase();
     if (!base) return { ok: false, data: [] };
@@ -201,7 +199,7 @@ export async function getSugerenciasPorStock(): Promise<{
     };
   } catch (err) {
     console.error("[sugerencias] getSugerenciasPorStock:", err);
-    return { ok: false, data: [] };
+    return { ok: false, data: [], error: friendlyError(err, "getSugerenciasPorStock") };
   }
 }
 
@@ -214,7 +212,7 @@ export async function getSugerenciasPorStock(): Promise<{
 export async function getSugerenciasPorVentas(opts?: {
   diasMinimos?: number;
   diasObjetivo?: number;
-}): Promise<{ ok: boolean; data: SugerenciaProveedorGrupo[] }> {
+}): Promise<{ ok: boolean; data: SugerenciaProveedorGrupo[]; error?: string }> {
   const diasMinimos = opts?.diasMinimos ?? 7;
   const diasObjetivo = opts?.diasObjetivo ?? 14;
 
@@ -259,7 +257,7 @@ export async function getSugerenciasPorVentas(opts?: {
     };
   } catch (err) {
     console.error("[sugerencias] getSugerenciasPorVentas:", err);
-    return { ok: false, data: [] };
+    return { ok: false, data: [], error: friendlyError(err, "getSugerenciasPorVentas") };
   }
 }
 
@@ -270,7 +268,7 @@ export async function getSugerenciasPorVentas(opts?: {
  */
 export async function getCatalogoProveedor(
   proveedorId: string | null
-): Promise<{ ok: boolean; data: CatalogoProductoProveedor[] }> {
+): Promise<{ ok: boolean; data: CatalogoProductoProveedor[]; error?: string }> {
   try {
     const { supabase, empresaId } = await getContext();
     if (!empresaId) return { ok: false, data: [] };
@@ -329,6 +327,6 @@ export async function getCatalogoProveedor(
     return { ok: true, data };
   } catch (err) {
     console.error("[sugerencias] getCatalogoProveedor:", err);
-    return { ok: false, data: [] };
+    return { ok: false, data: [], error: friendlyError(err, "getCatalogoProveedor") };
   }
 }

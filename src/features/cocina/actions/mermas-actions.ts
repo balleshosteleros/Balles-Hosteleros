@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { getLogisticaContext } from "@/features/logistica/lib/supabase-context";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { friendlyError } from "@/shared/lib/friendly-errors";
 import {
   registrarMovimiento,
   revertirMovimientosPorDocumento,
@@ -29,7 +30,7 @@ const mermaSchema = z.object({
 export type MermaInput = z.input<typeof mermaSchema>;
 
 /** Lista las mermas de la empresa (más recientes primero). */
-export async function listMermas(): Promise<{ ok: boolean; data: MermaRow[] }> {
+export async function listMermas(): Promise<{ ok: boolean; data: MermaRow[]; error?: string }> {
   try {
     const { supabase, empresaId } = await getLogisticaContext();
     if (!empresaId) return { ok: false, data: [] };
@@ -54,7 +55,7 @@ export async function listMermas(): Promise<{ ok: boolean; data: MermaRow[] }> {
     return { ok: true, data: rows };
   } catch (err) {
     console.error("[mermas] listMermas:", err);
-    return { ok: false, data: [] };
+    return { ok: false, data: [], error: friendlyError(err, "listMermas") };
   }
 }
 

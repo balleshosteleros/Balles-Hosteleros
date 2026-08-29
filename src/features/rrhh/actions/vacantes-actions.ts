@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getEmpresaActivaForUser } from "@/features/empresa/lib/empresa-server";
+import { friendlyError } from "@/shared/lib/friendly-errors";
 
 async function getContext() {
   const supabase = await createClient();
@@ -54,7 +55,7 @@ export async function listVacantes() {
     return { ok: true, data: data ?? [] };
   } catch (err) {
     console.error("[rrhh] listVacantes:", err);
-    return { ok: false, data: [] };
+    return { ok: false, data: [], error: friendlyError(err, "listVacantes") };
   }
 }
 
@@ -74,7 +75,7 @@ export async function getVacanteById(id: string) {
     return { ok: true, data };
   } catch (err) {
     console.error("[rrhh] getVacanteById:", err);
-    return { ok: false, data: null };
+    return { ok: false, data: null, error: friendlyError(err, "getVacanteById") };
   }
 }
 
@@ -261,7 +262,7 @@ export async function listPuestosCatalogo() {
     return { ok: true, data: data ?? [] };
   } catch (err) {
     console.error("[rrhh] listPuestosCatalogo:", err);
-    return { ok: false, data: [] };
+    return { ok: false, data: [], error: friendlyError(err, "listPuestosCatalogo") };
   }
 }
 
@@ -278,7 +279,7 @@ export async function listDepartamentosCatalogo() {
     return { ok: true, data: data ?? [] };
   } catch (err) {
     console.error("[rrhh] listDepartamentosCatalogo:", err);
-    return { ok: false, data: [] };
+    return { ok: false, data: [], error: friendlyError(err, "listDepartamentosCatalogo") };
   }
 }
 
@@ -533,10 +534,7 @@ export async function crearCronogramaParaPuesto(puestoId: string) {
 }
 
 /** Puestos de la empresa para el desplegable de "Nuevo cronograma". */
-export async function listPuestosParaCronograma(): Promise<{
-  ok: boolean;
-  data: Array<{ id: string; nombre: string; departamento: string; tieneCronograma: boolean }>;
-}> {
+export async function listPuestosParaCronograma(): Promise<{ ok: boolean; data: Array<{ id: string; nombre: string; departamento: string; tieneCronograma: boolean }>; error?: string }> {
   try {
     const { supabase, empresaId } = await getContext();
     if (!empresaId) return { ok: false, data: [] };
@@ -554,7 +552,7 @@ export async function listPuestosParaCronograma(): Promise<{
     return { ok: true, data };
   } catch (err) {
     console.error("[rrhh] listPuestosParaCronograma:", err);
-    return { ok: false, data: [] };
+    return { ok: false, data: [], error: friendlyError(err, "listPuestosParaCronograma") };
   }
 }
 
@@ -570,10 +568,7 @@ export type CronogramaElegible = {
  * Cronogramas existentes de la empresa, agrupados por rol. Es la lista que se
  * ofrece en la ficha del puesto para vincular uno.
  */
-export async function listCronogramasElegibles(): Promise<{
-  ok: boolean;
-  data: CronogramaElegible[];
-}> {
+export async function listCronogramasElegibles(): Promise<{ ok: boolean; data: CronogramaElegible[]; error?: string }> {
   try {
     const { supabase, empresaId } = await getContext();
     if (!empresaId) return { ok: false, data: [] };
@@ -596,7 +591,7 @@ export async function listCronogramasElegibles(): Promise<{
     return { ok: true, data: lista };
   } catch (err) {
     console.error("[rrhh] listCronogramasElegibles:", err);
-    return { ok: false, data: [] };
+    return { ok: false, data: [], error: friendlyError(err, "rol") };
   }
 }
 

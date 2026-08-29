@@ -7,6 +7,7 @@
  */
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { friendlyError } from "@/shared/lib/friendly-errors";
 
 const leadInputSchema = z.object({
   empresaId: z.string().guid(),
@@ -66,7 +67,7 @@ export async function insertarLead(input: LeadInput): Promise<
     return { ok: true, id: (data as { id: string }).id };
   } catch (err) {
     console.error("[pagina-web][insertarLead] fatal:", err);
-    return { ok: false, error: "Error inesperado." };
+    return { ok: false, error: friendlyError(err, "insertarLead") };
   }
 }
 

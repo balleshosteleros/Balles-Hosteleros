@@ -1,6 +1,7 @@
 "use server";
 
 import { getAppContext } from "@/lib/supabase/get-context";
+import { friendlyError } from "@/shared/lib/friendly-errors";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Análisis de márgenes de escandallos.
@@ -152,7 +153,7 @@ interface IngredienteRaw {
  */
 export async function analiticaMargenesEscandallos(
   periodo: PeriodoMargen = "mes",
-): Promise<{ ok: boolean; data: EscandalloMargenRow[] }> {
+): Promise<{ ok: boolean; data: EscandalloMargenRow[]; error?: string }> {
   try {
     const { supabase, empresaId } = await getAppContext();
     if (!empresaId) return { ok: true, data: [] };
@@ -281,7 +282,7 @@ export async function analiticaMargenesEscandallos(
     return { ok: true, data: filas.slice(0, 5) };
   } catch (err) {
     console.error("[escandallos] analiticaMargenesEscandallos:", err);
-    return { ok: false, data: [] };
+    return { ok: false, data: [], error: friendlyError(err, "ingredientes") };
   }
 }
 
@@ -316,7 +317,7 @@ interface LineaAlbaranJson {
 export async function albaranesRecientesConProducto(
   productoId: string,
   limit = 12,
-): Promise<{ ok: boolean; data: AlbaranConProducto[] }> {
+): Promise<{ ok: boolean; data: AlbaranConProducto[]; error?: string }> {
   try {
     const { supabase, empresaId } = await getAppContext();
     if (!empresaId || !productoId) return { ok: true, data: [] };
@@ -350,6 +351,6 @@ export async function albaranesRecientesConProducto(
     return { ok: true, data: filas };
   } catch (err) {
     console.error("[escandallos] albaranesRecientesConProducto:", err);
-    return { ok: false, data: [] };
+    return { ok: false, data: [], error: friendlyError(err, "albaranesRecientesConProducto") };
   }
 }

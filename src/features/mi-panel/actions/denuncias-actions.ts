@@ -4,6 +4,7 @@ import { createHash, randomBytes } from "crypto";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getEmpresaActivaForUser } from "@/features/empresa/lib/empresa-server";
+import { friendlyError } from "@/shared/lib/friendly-errors";
 
 export type ModalidadDenuncia = "nominal" | "anonima";
 
@@ -142,7 +143,7 @@ export async function presentarDenuncia(
 }
 
 /** Denuncias que el empleado presentó a su nombre. Las anónimas no salen aquí. */
-export async function listMisDenuncias(): Promise<{ ok: boolean; data: DenunciaRow[] }> {
+export async function listMisDenuncias(): Promise<{ ok: boolean; data: DenunciaRow[]; error?: string }> {
   try {
     const { supabase, user, empresaId } = await ctx();
     if (!user || !empresaId) return { ok: true, data: [] };
@@ -157,7 +158,7 @@ export async function listMisDenuncias(): Promise<{ ok: boolean; data: DenunciaR
     return { ok: true, data: (data ?? []) as DenunciaRow[] };
   } catch (err) {
     console.error("[denuncias] listMisDenuncias:", err);
-    return { ok: false, data: [] };
+    return { ok: false, data: [], error: friendlyError(err, "listMisDenuncias") };
   }
 }
 
@@ -198,7 +199,7 @@ export async function consultarPorCodigo(
 // ─── Bandeja de RRHH ────────────────────────────────────────────────────────
 
 /** Todas las denuncias de la empresa. La RLS ya restringe esto a RRHH. */
-export async function listDenunciasRRHH(): Promise<{ ok: boolean; data: DenunciaRow[] }> {
+export async function listDenunciasRRHH(): Promise<{ ok: boolean; data: DenunciaRow[]; error?: string }> {
   try {
     const { supabase, empresaId } = await ctx();
     if (!empresaId) return { ok: true, data: [] };
@@ -211,7 +212,7 @@ export async function listDenunciasRRHH(): Promise<{ ok: boolean; data: Denuncia
     return { ok: true, data: (data ?? []) as DenunciaRow[] };
   } catch (err) {
     console.error("[denuncias] listDenunciasRRHH:", err);
-    return { ok: false, data: [] };
+    return { ok: false, data: [], error: friendlyError(err, "listDenunciasRRHH") };
   }
 }
 
@@ -312,7 +313,7 @@ function estadoComoSolicitud(estado: EstadoDenuncia): DenunciaComoSolicitud["est
  */
 export async function listDenunciasComoSolicitudes(
   soloPendientes: boolean,
-): Promise<{ ok: boolean; data: DenunciaComoSolicitud[] }> {
+): Promise<{ ok: boolean; data: DenunciaComoSolicitud[]; error?: string }> {
   try {
     const { supabase, user, empresaId } = await ctx();
     if (!user || !empresaId) return { ok: true, data: [] };
@@ -355,7 +356,7 @@ export async function listDenunciasComoSolicitudes(
     };
   } catch (err) {
     console.error("[denuncias] listDenunciasComoSolicitudes:", err);
-    return { ok: false, data: [] };
+    return { ok: false, data: [], error: friendlyError(err, "listDenunciasComoSolicitudes") };
   }
 }
 

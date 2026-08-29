@@ -23,6 +23,7 @@ import {
 import { IOActions } from "@/shared/io";
 import { transaccionesIO } from "@/features/contabilidad/io/transacciones.io";
 import { toast } from "sonner";
+import { friendlyError } from "@/shared/lib/friendly-errors";
 
 const TABS = [{ id: "TODAS", label: "Todas" }, { id: "COBRO", label: "Cobros" }, { id: "PAGO", label: "Pagos" }];
 
@@ -92,8 +93,8 @@ export function TransaccionesView() {
       if (manual.ok) lista.push(...manual.data.map(mapDbToTransaccion));
       if (psd2.ok) lista.push(...psd2.data.map((r) => mapBankTxToTransaccion(r as Record<string, unknown>)));
       setTxs(lista);
-    } catch {
-      toast.error("Error de conexión al cargar transacciones");
+    } catch (err) {
+      toast.error("Error de conexión al cargar transacciones", { description: friendlyError(err, "TransaccionesView") });
     } finally {
       setLoading(false);
     }

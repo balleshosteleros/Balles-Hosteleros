@@ -12,6 +12,7 @@
 
 import { revalidatePath } from "next/cache";
 import { getAppContext } from "@/lib/supabase/get-context";
+import { friendlyError } from "@/shared/lib/friendly-errors";
 import {
   calcularNotaFinal,
   calcularProgreso,
@@ -206,7 +207,7 @@ export async function abrirPeriodoPrueba(input: {
 export async function getPeriodoPrueba(input: {
   empleadoId?: string | null;
   candidatoId?: string | null;
-}): Promise<{ ok: boolean; data: PeriodoPruebaVista | null }> {
+}): Promise<{ ok: boolean; data: PeriodoPruebaVista | null; error?: string }> {
   try {
     const { supabase, empresaId } = await getAppContext();
     if (!empresaId) return { ok: false, data: null };
@@ -228,7 +229,7 @@ export async function getPeriodoPrueba(input: {
     return { ok: true, data: componerVista(mapPeriodo(elegida)) };
   } catch (err) {
     console.error("[rrhh] getPeriodoPrueba:", err);
-    return { ok: false, data: null };
+    return { ok: false, data: null, error: friendlyError(err, "filas") };
   }
 }
 

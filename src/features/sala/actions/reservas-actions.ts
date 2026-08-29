@@ -20,6 +20,7 @@ import {
   ESTADOS_NO_OCUPANTES,
 } from "@/features/sala/lib/reserva-conflicto";
 import type { TipoMesa } from "@/features/sala/planos/data/planos";
+import { friendlyError } from "@/shared/lib/friendly-errors";
 import {
   enviarReservaEmail,
   type ReservaEmailActor,
@@ -83,7 +84,7 @@ export async function listReservas(fecha?: string) {
     return { ok: true, data: data ?? [] };
   } catch (err) {
     console.error("[reservas] listReservas:", err);
-    return { ok: false, data: [] };
+    return { ok: false, data: [], error: friendlyError(err, "listReservas") };
   }
 }
 
@@ -106,7 +107,7 @@ export async function listReservasRango(fechaDesde: string, fechaHasta: string) 
     return { ok: true, data: data ?? [] };
   } catch (err) {
     console.error("[reservas] listReservasRango:", err);
-    return { ok: false, data: [] };
+    return { ok: false, data: [], error: friendlyError(err, "listReservasRango") };
   }
 }
 

@@ -77,6 +77,7 @@ import {
   CalendarRangeNav,
 } from "@/shared/components/calendar/CalendarRangeToggle";
 import { useCalendarRange, type CalendarRangeMode } from "@/shared/components/calendar/calendar-range";
+import { friendlyError } from "@/shared/lib/friendly-errors";
 
 // Los pagos se registran por MES, pero se pueden ver agregados por trimestre o
 // año: entonces se suman todos los importes de cada trabajador en el rango.
@@ -754,8 +755,8 @@ export function PagosView() {
       const res = await getNominaArchivoUrl(periodo, p.empleadoId);
       if (res.ok) window.open(res.url, "_blank", "noopener,noreferrer");
       else toast.error(res.error ?? "No se pudo abrir la nómina.");
-    } catch {
-      toast.error("No se pudo abrir la nómina.");
+    } catch (err) {
+      toast.error("No se pudo abrir la nómina.", { description: friendlyError(err, "abrirNominaEmpleado") });
     } finally {
       setAbriendoNomina(null);
     }
@@ -770,8 +771,8 @@ export function PagosView() {
       const res = await getNominasMesUrl(periodo);
       if (res.ok) window.open(res.url, "_blank", "noopener,noreferrer");
       else toast.error(res.error);
-    } catch {
-      toast.error("No se pudieron descargar las nóminas del mes.");
+    } catch (err) {
+      toast.error("No se pudieron descargar las nóminas del mes.", { description: friendlyError(err, "descargarNominasDelMes") });
     } finally {
       setDescargandoMes(false);
     }
@@ -823,8 +824,8 @@ export function PagosView() {
           : "TC1 adjuntado. No se pudo leer el importe: revisa el cuadre a mano.",
         { description: otroMes },
       );
-    } catch {
-      toast.error("No se pudo subir el TC1.");
+    } catch (err) {
+      toast.error("No se pudo subir el TC1.", { description: friendlyError(err, "subirTc1") });
     } finally {
       setSubiendoTc1(false);
     }

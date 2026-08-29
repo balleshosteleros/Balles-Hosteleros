@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getEmpresaActivaForUser } from "@/features/empresa/lib/empresa-server";
 import { capitalizeText } from "@/shared/lib/utils";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { friendlyError } from "@/shared/lib/friendly-errors";
 
 // Todos los campos son obligatorios y los comentarios necesitan un minimo de
 // texto: una incidencia sin describir no sirve para reparar ni para reclamar.
@@ -65,7 +66,7 @@ export async function listMantenimiento() {
     return { ok: true, data: data ?? [] };
   } catch (err) {
     console.error("[mantenimiento] listMantenimiento:", err);
-    return { ok: false, data: [] };
+    return { ok: false, data: [], error: friendlyError(err, "listMantenimiento") };
   }
 }
 
@@ -234,7 +235,7 @@ export async function listHistorialEstados(incidenciaId: string) {
     return { ok: true, data: data ?? [] };
   } catch (err) {
     console.error("[mantenimiento] listHistorialEstados:", err);
-    return { ok: false, data: [] };
+    return { ok: false, data: [], error: friendlyError(err, "listHistorialEstados") };
   }
 }
 
@@ -250,6 +251,6 @@ export async function listActualizaciones(incidenciaId: string) {
     return { ok: true, data: data ?? [] };
   } catch (err) {
     console.error("[mantenimiento] listActualizaciones:", err);
-    return { ok: false, data: [] };
+    return { ok: false, data: [], error: friendlyError(err, "listActualizaciones") };
   }
 }

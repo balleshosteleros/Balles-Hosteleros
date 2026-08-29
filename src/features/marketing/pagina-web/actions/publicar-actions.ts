@@ -7,6 +7,7 @@
 import { revalidatePath } from "next/cache";
 import { getAppContext } from "@/lib/supabase/get-context";
 import type { PaginaWebVersion } from "../types";
+import { friendlyError } from "@/shared/lib/friendly-errors";
 
 type ActionResult<T = void> =
   | (T extends void ? { ok: true } : { ok: true; data: T })
@@ -49,7 +50,7 @@ export async function publicarPagina(paginaId: string): Promise<ActionResult> {
     return { ok: true };
   } catch (err) {
     console.error("[publicar] fatal:", err);
-    return { ok: false, error: "Error inesperado." };
+    return { ok: false, error: friendlyError(err, "publicarPagina") };
   }
 }
 
@@ -74,7 +75,7 @@ export async function despublicarPagina(paginaId: string): Promise<ActionResult>
     return { ok: true };
   } catch (err) {
     console.error("[despublicar] fatal:", err);
-    return { ok: false, error: "Error inesperado." };
+    return { ok: false, error: friendlyError(err, "despublicarPagina") };
   }
 }
 
@@ -97,7 +98,7 @@ export async function listarVersiones(paginaId: string): Promise<ActionResult<Pa
     return { ok: true, data: (data ?? []) as PaginaWebVersion[] };
   } catch (err) {
     console.error("[versiones] fatal:", err);
-    return { ok: false, error: "Error inesperado." };
+    return { ok: false, error: friendlyError(err, "listarVersiones") };
   }
 }
 
@@ -137,6 +138,6 @@ export async function restaurarVersion(input: {
     return { ok: true };
   } catch (err) {
     console.error("[restaurar] fatal:", err);
-    return { ok: false, error: "Error inesperado." };
+    return { ok: false, error: friendlyError(err, "snapshot") };
   }
 }

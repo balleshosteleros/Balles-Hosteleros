@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { getEmpresaActivaForUser } from "@/features/empresa/lib/empresa-server";
 import { CATALOGO_VENCIMIENTOS, MESES_PERIODICIDAD, type PeriodicidadVencimiento } from "@/features/gerencia/data/catalogo-vencimientos";
+import { friendlyError } from "@/shared/lib/friendly-errors";
 
 export interface VencimientoRow {
   id: string;
@@ -46,7 +47,7 @@ function calcularProximoVencimiento(desde: string, periodicidad: string): string
   return fecha.toISOString().slice(0, 10);
 }
 
-export async function listVencimientos(): Promise<{ ok: boolean; data: VencimientoRow[] }> {
+export async function listVencimientos(): Promise<{ ok: boolean; data: VencimientoRow[]; error?: string }> {
   try {
     const { supabase, empresaId } = await getContext();
     if (!empresaId) return { ok: false, data: [] };
@@ -59,11 +60,11 @@ export async function listVencimientos(): Promise<{ ok: boolean; data: Vencimien
     return { ok: true, data: (data ?? []) as VencimientoRow[] };
   } catch (err) {
     console.error("[vencimientos] listVencimientos:", err);
-    return { ok: false, data: [] };
+    return { ok: false, data: [], error: friendlyError(err, "listVencimientos") };
   }
 }
 
-export async function listHistorial(revisionId: string): Promise<{ ok: boolean; data: HistorialRow[] }> {
+export async function listHistorial(revisionId: string): Promise<{ ok: boolean; data: HistorialRow[]; error?: string }> {
   try {
     const { supabase, empresaId } = await getContext();
     if (!empresaId) return { ok: false, data: [] };
@@ -77,7 +78,7 @@ export async function listHistorial(revisionId: string): Promise<{ ok: boolean; 
     return { ok: true, data: (data ?? []) as HistorialRow[] };
   } catch (err) {
     console.error("[vencimientos] listHistorial:", err);
-    return { ok: false, data: [] };
+    return { ok: false, data: [], error: friendlyError(err, "listHistorial") };
   }
 }
 
@@ -241,7 +242,7 @@ function sanitizeFilename(name: string): string {
 
 export async function listDocumentos(
   vencimientoId: string,
-): Promise<{ ok: boolean; data: DocumentoVencimiento[] }> {
+): Promise<{ ok: boolean; data: DocumentoVencimiento[]; error?: string }> {
   try {
     const { supabase, empresaId } = await getContext();
     if (!empresaId) return { ok: true, data: [] };
@@ -255,7 +256,7 @@ export async function listDocumentos(
     return { ok: true, data: (data ?? []) as DocumentoVencimiento[] };
   } catch (err) {
     console.error("[vencimientos] listDocumentos:", err);
-    return { ok: false, data: [] };
+    return { ok: false, data: [], error: friendlyError(err, "listDocumentos") };
   }
 }
 

@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { getEmpresaActivaForUser } from "@/features/empresa/lib/empresa-server";
+import { friendlyError } from "@/shared/lib/friendly-errors";
 import type {
   Estado,
   Presentacion,
@@ -24,7 +25,7 @@ async function getContext() {
 export async function listPresentaciones(filtros?: {
   estado?: Estado | "todas";
   search?: string;
-}): Promise<{ ok: boolean; data: Presentacion[] }> {
+}): Promise<{ ok: boolean; data: Presentacion[]; error?: string }> {
   try {
     const { supabase, empresaId } = await getContext();
     if (!empresaId) return { ok: false, data: [] };
@@ -43,7 +44,7 @@ export async function listPresentaciones(filtros?: {
     return { ok: true, data: (data ?? []) as Presentacion[] };
   } catch (err) {
     console.error("[presentaciones] list:", err);
-    return { ok: false, data: [] };
+    return { ok: false, data: [], error: friendlyError(err, "listPresentaciones") };
   }
 }
 

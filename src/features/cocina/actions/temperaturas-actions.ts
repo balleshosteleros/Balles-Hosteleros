@@ -1,6 +1,7 @@
 "use server";
 
 import { getAppContext } from "@/lib/supabase/get-context";
+import { friendlyError } from "@/shared/lib/friendly-errors";
 
 export async function listEquipos() {
   try {
@@ -15,7 +16,7 @@ export async function listEquipos() {
     return { ok: true, data: data ?? [] };
   } catch (err) {
     console.error("[temperaturas] listEquipos:", err);
-    return { ok: false, data: [] };
+    return { ok: false, data: [], error: friendlyError(err, "listEquipos") };
   }
 }
 
@@ -65,7 +66,7 @@ export async function listRegistros(equipoId?: string) {
     return { ok: true, data: data ?? [] };
   } catch (err) {
     console.error("[temperaturas] listRegistros:", err);
-    return { ok: false, data: [] };
+    return { ok: false, data: [], error: friendlyError(err, "listRegistros") };
   }
 }
 

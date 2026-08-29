@@ -119,7 +119,7 @@ export function ImagenMarcaTab() {
       toast.success("Logotipo principal guardado");
     } catch (err) {
       console.error("[ImagenMarcaTab] uploadLogo:", err);
-      toast.error(friendlyError(err));
+      toast.error(friendlyError(err, "subirLogoPrincipal"));
     } finally {
       setSubiendoPrincipal(false);
     }
@@ -144,7 +144,7 @@ export function ImagenMarcaTab() {
       toast.success("Isotipo guardado");
     } catch (err) {
       console.error("[ImagenMarcaTab] uploadIsotipo:", err);
-      toast.error(friendlyError(err));
+      toast.error(friendlyError(err, "subirIsotipoFile"));
     } finally {
       setSubiendoIsotipo(false);
     }
@@ -159,7 +159,7 @@ export function ImagenMarcaTab() {
       toast.success("Logotipo eliminado");
     } catch (err) {
       console.error("[ImagenMarcaTab] deleteLogo:", err);
-      toast.error(friendlyError(err));
+      toast.error(friendlyError(err, "borrarPrincipal"));
     } finally {
       setSubiendoPrincipal(false);
     }
@@ -174,7 +174,7 @@ export function ImagenMarcaTab() {
       toast.success("Isotipo eliminado");
     } catch (err) {
       console.error("[ImagenMarcaTab] deleteIsotipo:", err);
-      toast.error(friendlyError(err));
+      toast.error(friendlyError(err, "borrarIsotipo"));
     } finally {
       setSubiendoIsotipo(false);
     }
@@ -230,7 +230,7 @@ export function ImagenMarcaTab() {
       }));
     } catch (err) {
       console.error("[ImagenMarcaTab] aplicarMarcaImportada:", err);
-      throw new Error(friendlyError(err));
+      throw new Error(friendlyError(err, "ext"));
     } finally {
       setAplicandoImport(false);
     }
@@ -253,7 +253,7 @@ export function ImagenMarcaTab() {
       toast.success("Marca guardada");
     } catch (err) {
       console.error("[ImagenMarcaTab] saveBrandColors:", err);
-      toast.error(friendlyError(err));
+      toast.error(friendlyError(err, "guardarColores"));
     } finally {
       setGuardando(false);
     }

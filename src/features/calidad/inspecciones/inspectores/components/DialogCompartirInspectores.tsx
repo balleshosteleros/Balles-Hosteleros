@@ -45,6 +45,7 @@ import {
   listPlantillas,
 } from "../../actions";
 import { getBolsaConfig } from "../actions";
+import { friendlyError } from "@/shared/lib/friendly-errors";
 
 interface Props {
   open: boolean;
@@ -172,8 +173,8 @@ function PresentacionPaso({ onBack }: { onBack: () => void }) {
       setCopied(true);
       toast.success("Enlace copiado");
       setTimeout(() => setCopied(false), 2000);
-    } catch {
-      toast.error("No se pudo copiar");
+    } catch (err) {
+      toast.error("No se pudo copiar", { description: friendlyError(err, "copyLink") });
     }
   }
 

@@ -27,6 +27,7 @@ import {
   type FotoAColocar,
 } from "../services/chat-fotos";
 import type { Bloque, PaginaWeb } from "../types";
+import { friendlyError } from "@/shared/lib/friendly-errors";
 
 type ActionResult<T = void> =
   | (T extends void ? { ok: true } : { ok: true; data: T })
@@ -307,7 +308,7 @@ export async function enviarMensajeChatWeb(input: {
     };
   } catch (err) {
     console.error("[chat-web][enviar] fatal:", err);
-    return { ok: false, error: "Error inesperado." };
+    return { ok: false, error: friendlyError(err, "respuesta") };
   }
 }
 
@@ -347,6 +348,6 @@ export async function deshacerUltimoCambioChat(
     return { ok: true, data: { bloques: previos } };
   } catch (err) {
     console.error("[chat-web][deshacer] fatal:", err);
-    return { ok: false, error: "Error inesperado." };
+    return { ok: false, error: friendlyError(err, "previos") };
   }
 }

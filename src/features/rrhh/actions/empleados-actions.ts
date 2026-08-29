@@ -270,7 +270,7 @@ export interface EmpleadoActivo {
  */
 export async function getEmpleadosActivos(
   empresaDbId?: string,
-): Promise<{ ok: boolean; data: EmpleadoActivo[] }> {
+): Promise<{ ok: boolean; data: EmpleadoActivo[]; error?: string }> {
   try {
     const { supabase, empresaId: empresaActivaId } = await getAppContext();
     // Preferimos el UUID explícito del cliente (empresaActual.dbId) para evitar
@@ -392,7 +392,7 @@ export async function getEmpleadosActivos(
     return { ok: true, data: rows };
   } catch (err) {
     console.error("[rrhh] getEmpleadosActivos:", err);
-    return { ok: false, data: [] };
+    return { ok: false, data: [], error: friendlyError(err, "apellidos") };
   }
 }
 
@@ -494,7 +494,7 @@ export async function createEmpleado(input: {
     return { ok: true, tempPassword: alta.tempPassword, email, empleadoId: alta.empleadoId };
   } catch (err: unknown) {
     console.error("[rrhh] createEmpleado:", err);
-    return { ok: false, error: friendlyError(err) };
+    return { ok: false, error: friendlyError(err, "isRealId") };
   }
 }
 
@@ -1545,7 +1545,7 @@ export async function guardarPerfilEmpleado(
       .select("id, user_id, empresa_id, email_empresa, email_personal")
       .eq("id", empleadoId)
       .maybeSingle();
-    if (empErr) return { ok: false, error: friendlyError(empErr) };
+    if (empErr) return { ok: false, error: friendlyError(empErr, "guardarPerfilEmpleado") };
     if (!emp) return { ok: false, error: "Empleado no encontrado" };
 
     // Correos ANTES de guardar: con ellos se sabe con cuál entraba la persona.
@@ -1606,7 +1606,7 @@ export async function guardarPerfilEmpleado(
       .from("empleados")
       .update(payload)
       .eq("id", empleadoId);
-    if (updErr) return { ok: false, error: friendlyError(updErr) };
+    if (updErr) return { ok: false, error: friendlyError(updErr, "trim") };
 
     // Si se ha tocado el correo con el que la persona ENTRA, se mueve su acceso
     // (auth + `usuarios`), se anula el antiguo —también en Google— y se le avisa

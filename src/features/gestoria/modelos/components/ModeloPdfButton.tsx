@@ -4,6 +4,7 @@ import { useState } from "react";
 import { FileDown, Loader2, FileX } from "lucide-react";
 import { toast } from "sonner";
 import { getModeloPdfSignedUrl } from "../actions/modelos-pdf-actions";
+import { friendlyError } from "@/shared/lib/friendly-errors";
 
 /**
  * Icono clicable que abre el PDF adjunto de un modelo en una pestaña nueva
@@ -42,8 +43,8 @@ export function ModeloPdfButton({
       } else {
         toast.error(res.error ?? "No se pudo abrir el documento");
       }
-    } catch {
-      toast.error("No se pudo abrir el documento");
+    } catch (err) {
+      toast.error("No se pudo abrir el documento", { description: friendlyError(err, "abrir") });
     } finally {
       setCargando(false);
     }

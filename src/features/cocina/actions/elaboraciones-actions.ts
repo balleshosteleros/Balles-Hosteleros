@@ -1,6 +1,7 @@
 "use server";
 
 import { getAppContext } from "@/lib/supabase/get-context";
+import { friendlyError } from "@/shared/lib/friendly-errors";
 
 export async function listElaboraciones() {
   try {
@@ -15,7 +16,7 @@ export async function listElaboraciones() {
     return { ok: true, data: data ?? [] };
   } catch (err) {
     console.error("[elaboraciones] listElaboraciones:", err);
-    return { ok: false, data: [] };
+    return { ok: false, data: [], error: friendlyError(err, "listElaboraciones") };
   }
 }
 
@@ -34,7 +35,7 @@ export async function listProductosElaboracion() {
     return { ok: true, data: data ?? [] };
   } catch (err) {
     console.error("[elaboraciones] listProductosElaboracion:", err);
-    return { ok: false, data: [] };
+    return { ok: false, data: [], error: friendlyError(err, "listProductosElaboracion") };
   }
 }
 

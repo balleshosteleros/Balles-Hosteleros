@@ -40,6 +40,7 @@ import {
 } from "../actions/etiquetas-actions";
 import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
 import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
+import { friendlyError } from "@/shared/lib/friendly-errors";
 
 const TABS: { label: string; tipo: EtiquetaTipo }[] = [
   { label: "Categorías",   tipo: "CATEGORIA" },
@@ -99,8 +100,8 @@ export function EtiquetasView() {
       } else {
         toast.error("No se pudieron cargar las etiquetas");
       }
-    } catch {
-      toast.error("Error de conexión al cargar etiquetas");
+    } catch (err) {
+      toast.error("Error de conexión al cargar etiquetas", { description: friendlyError(err, "EtiquetasView") });
     } finally {
       setLoading(false);
     }

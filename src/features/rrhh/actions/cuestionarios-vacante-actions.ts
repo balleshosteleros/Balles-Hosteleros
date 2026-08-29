@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getEmpresaActivaForUser } from "@/features/empresa/lib/empresa-server";
+import { friendlyError } from "@/shared/lib/friendly-errors";
 import {
   MAX_PREGUNTAS_CUESTIONARIO,
   MAX_OPCIONES_PREGUNTA,
@@ -121,7 +122,7 @@ export async function getCuestionarioVacante(id: string) {
     return { ok: true, data: rowToCuestionario(data as unknown as CuestionarioRow, (count ?? 0) > 0) };
   } catch (err) {
     console.error("[rrhh] getCuestionarioVacante:", err);
-    return { ok: false, data: null };
+    return { ok: false, data: null, error: friendlyError(err, "getCuestionarioVacante") };
   }
 }
 
@@ -305,7 +306,7 @@ export interface RespuestaCuestionarioCandidato {
 /** Respuesta + nota del candidato para mostrar en su ficha. */
 export async function getRespuestaCuestionarioCandidato(
   candidatoId: string,
-): Promise<{ ok: boolean; data: RespuestaCuestionarioCandidato | null }> {
+): Promise<{ ok: boolean; data: RespuestaCuestionarioCandidato | null; error?: string }> {
   try {
     const { supabase, empresaId } = await getContext();
     if (!empresaId) return { ok: false, data: null };
@@ -332,6 +333,6 @@ export async function getRespuestaCuestionarioCandidato(
     };
   } catch (err) {
     console.error("[rrhh] getRespuestaCuestionarioCandidato:", err);
-    return { ok: false, data: null };
+    return { ok: false, data: null, error: friendlyError(err, "getRespuestaCuestionarioCandidato") };
   }
 }

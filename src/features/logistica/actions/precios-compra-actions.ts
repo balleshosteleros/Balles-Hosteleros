@@ -3,6 +3,7 @@
 import { getLogisticaContext } from "@/features/logistica/lib/supabase-context";
 import { getZonaHorariaEmpresa } from "@/features/empresa/lib/empresa-server";
 import { hoyEnZona } from "@/features/empresa/lib/zona-horaria";
+import { friendlyError } from "@/shared/lib/friendly-errors";
 
 export interface PrecioCompraRow {
   id: string;
@@ -125,10 +126,7 @@ async function recomputeFechaFin(
  * El primero del array es el más reciente (el "vigente" si su fecha_inicio <= hoy
  * y su fecha_fin no ha pasado).
  */
-export async function listPreciosCompra(productoId: string): Promise<{
-  ok: boolean;
-  data: PrecioCompraRow[];
-}> {
+export async function listPreciosCompra(productoId: string): Promise<{ ok: boolean; data: PrecioCompraRow[]; error?: string }> {
   try {
     const { supabase } = await getContext();
     const { data, error } = await supabase
@@ -141,7 +139,7 @@ export async function listPreciosCompra(productoId: string): Promise<{
     return { ok: true, data: (data ?? []) as PrecioCompraRow[] };
   } catch (err) {
     console.error("[precios-compra] listPreciosCompra:", err);
-    return { ok: false, data: [] };
+    return { ok: false, data: [], error: friendlyError(err, "listPreciosCompra") };
   }
 }
 

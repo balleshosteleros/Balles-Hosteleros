@@ -34,6 +34,7 @@ import {
 } from "@/shared/components/SubmoduleToolbar";
 import { TableColumnHeader } from "@/shared/components/TableColumnHeader";
 import { ResizableColumnsProvider } from "@/shared/components/ResizableColumns";
+import { friendlyError } from "@/shared/lib/friendly-errors";
 
 const TIPOS: TipoEquipo[] = ["NEVERA", "CONGELADOR", "CÁMARA", "BOTELLERO", "OTRO"];
 
@@ -106,8 +107,8 @@ export default function TemperaturasView({ area, equiposIniciales, registrosInic
       } else {
         toast.error("Error al cargar registros");
       }
-    } catch {
-      toast.error("Error de conexión al cargar datos de temperatura");
+    } catch (err) {
+      toast.error("Error de conexión al cargar datos de temperatura", { description: friendlyError(err, "areaEqs") });
     } finally {
       setLoading(false);
     }
@@ -169,9 +170,9 @@ export default function TemperaturasView({ area, equiposIniciales, registrosInic
         temp_min: eq.rangoMin,
         temp_max: eq.rangoMax,
       });
-      if (!res.ok) { toast.error("Error al crear equipo en servidor"); loadData(); }
-    } catch {
-      toast.error("Error de conexión al crear equipo");
+      if (!res.ok) { toast.error("Error al crear equipo en servidor", { description: res.error }); loadData(); }
+    } catch (err) {
+      toast.error("Error de conexión al crear equipo", { description: friendlyError(err, "handleCreateEquipo") });
       loadData();
     }
   };
@@ -186,9 +187,9 @@ export default function TemperaturasView({ area, equiposIniciales, registrosInic
         temperatura: r.temperatura,
         notas: r.observaciones || r.medidasTomadas || undefined,
       });
-      if (!res.ok) { toast.error("Error al registrar temperatura en servidor"); loadData(); }
-    } catch {
-      toast.error("Error de conexión al registrar temperatura");
+      if (!res.ok) { toast.error("Error al registrar temperatura en servidor", { description: res.error }); loadData(); }
+    } catch (err) {
+      toast.error("Error de conexión al registrar temperatura", { description: friendlyError(err, "handleRegistrarTemp") });
       loadData();
     }
   };

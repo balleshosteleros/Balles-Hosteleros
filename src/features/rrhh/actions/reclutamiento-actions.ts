@@ -6,6 +6,7 @@ import { getOrganigrama } from "@/features/direccion/actions/organigrama-actions
 import { orgChartsPorEmpresa, type AreaType, type OrgNode } from "@/features/direccion/data/direccion";
 import { getEmpresaActivaForUser, getZonaHorariaEmpresa } from "@/features/empresa/lib/empresa-server";
 import { FASES_ORDER } from "@/features/rrhh/data/reclutamiento";
+import { friendlyError } from "@/shared/lib/friendly-errors";
 
 /**
  * Fecha+hora de un instante UTC en la zona horaria de la empresa (Ajustes →
@@ -84,7 +85,7 @@ export async function listCandidatos() {
     return { ok: true, data: data ?? [] };
   } catch (err) {
     console.error("[reclutamiento] listCandidatos:", err);
-    return { ok: false, data: [] };
+    return { ok: false, data: [], error: friendlyError(err, "listCandidatos") };
   }
 }
 
@@ -381,7 +382,7 @@ export async function listVacantesConCandidatos(empresaSlug?: string | null) {
     return { ok: true, data };
   } catch (err) {
     console.error("[reclutamiento] listVacantesConCandidatos:", err);
-    return { ok: false, data: [] };
+    return { ok: false, data: [], error: friendlyError(err, "norm") };
   }
 }
 

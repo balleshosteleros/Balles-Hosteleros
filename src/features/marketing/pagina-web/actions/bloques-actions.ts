@@ -9,6 +9,7 @@ import { getAppContext } from "@/lib/supabase/get-context";
 import { bloquesArraySchema } from "../services/bloque-schemas";
 import { sanitizarBloqueTextoLibre } from "../services/sanitize-html";
 import type { Bloque } from "../types";
+import { friendlyError } from "@/shared/lib/friendly-errors";
 
 type ActionResult<T = void> =
   | (T extends void ? { ok: true } : { ok: true; data: T })
@@ -71,6 +72,6 @@ export async function guardarBloques(
     return { ok: true, data: { updated_at: (data as { updated_at: string }).updated_at } };
   } catch (err) {
     console.error("[pagina-web][guardarBloques] fatal:", err);
-    return { ok: false, error: "Error inesperado." };
+    return { ok: false, error: friendlyError(err, "guardarBloques") };
   }
 }

@@ -117,6 +117,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useModoInmersivoActivo } from "@/features/layout/hooks/useModoInmersivoActivo";
 import { useModoInmersivo } from "@/features/layout/contexts/modo-inmersivo-context";
+import { friendlyError } from "@/shared/lib/friendly-errors";
 
 /**
  * Mezcla un hex con blanco para suavizar los pasteles de zona.
@@ -2857,8 +2858,8 @@ export function ReservasView() {
       } else {
         toast.error("Error al cargar reservas");
       }
-    } catch {
-      toast.error("Error de conexion al cargar reservas");
+    } catch (err) {
+      toast.error("Error de conexion al cargar reservas", { description: friendlyError(err, "irSiguienteSala") });
     } finally {
       setLoading(false);
     }

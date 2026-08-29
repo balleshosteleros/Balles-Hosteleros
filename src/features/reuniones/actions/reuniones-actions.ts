@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 
 import { getEmpresaActivaForUser } from "@/features/empresa/lib/empresa-server";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { friendlyError } from "@/shared/lib/friendly-errors";
 type ReunionInput = {
   titulo: string;
   fecha: string;
@@ -34,7 +35,7 @@ export async function listReuniones() {
     return { ok: true, data: data ?? [] };
   } catch (err) {
     console.error("[reuniones] list:", err);
-    return { ok: false, data: [] };
+    return { ok: false, data: [], error: friendlyError(err, "listReuniones") };
   }
 }
 

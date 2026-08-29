@@ -2,6 +2,7 @@
 
 import { getLogisticaContext } from "@/features/logistica/lib/supabase-context";
 import type { DocumentoTipo, StockMovimiento } from "@/features/logistica/data/kardex";
+import { friendlyError } from "@/shared/lib/friendly-errors";
 
 /** Un movimiento del almacén con el nombre del producto ya resuelto (para la vista general). */
 export interface MovimientoAlmacen extends StockMovimiento {
@@ -21,7 +22,7 @@ export async function listMovimientosAlmacen(filtros?: {
   documentoTipo?: DocumentoTipo | null;
   busqueda?: string | null;
   limite?: number;
-}): Promise<{ ok: boolean; data: MovimientoAlmacen[] }> {
+}): Promise<{ ok: boolean; data: MovimientoAlmacen[]; error?: string }> {
   try {
     const { supabase, empresaId } = await getLogisticaContext();
     if (!empresaId) return { ok: false, data: [] };
@@ -62,7 +63,7 @@ export async function listMovimientosAlmacen(filtros?: {
     return { ok: true, data };
   } catch (err) {
     console.error("[kardex] listMovimientosAlmacen:", err);
-    return { ok: false, data: [] };
+    return { ok: false, data: [], error: friendlyError(err, "norm") };
   }
 }
 
@@ -131,7 +132,7 @@ export interface FacturaAgora {
 export async function listMovimientosProducto(
   productoId: string,
   rango?: { desde?: string | null; hasta?: string | null },
-): Promise<{ ok: boolean; data: StockMovimiento[] }> {
+): Promise<{ ok: boolean; data: StockMovimiento[]; error?: string }> {
   try {
     const { supabase } = await getLogisticaContext();
     let query = supabase
@@ -146,14 +147,14 @@ export async function listMovimientosProducto(
     return { ok: true, data: (data ?? []) as StockMovimiento[] };
   } catch (err) {
     console.error("[kardex] listMovimientosProducto:", err);
-    return { ok: false, data: [] };
+    return { ok: false, data: [], error: friendlyError(err, "listMovimientosProducto") };
   }
 }
 
 /** Factura de Ágora (ticket POS) para desplegar inline en una fila de venta. */
 export async function getFacturaAgora(
   ticketId: string,
-): Promise<{ ok: boolean; data: FacturaAgora | null }> {
+): Promise<{ ok: boolean; data: FacturaAgora | null; error?: string }> {
   try {
     const { supabase } = await getLogisticaContext();
     const { data: t, error } = await supabase
@@ -192,6 +193,6 @@ export async function getFacturaAgora(
     };
   } catch (err) {
     console.error("[kardex] getFacturaAgora:", err);
-    return { ok: false, data: null };
+    return { ok: false, data: null, error: friendlyError(err, "getFacturaAgora") };
   }
 }

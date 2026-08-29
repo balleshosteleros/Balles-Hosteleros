@@ -27,6 +27,7 @@ import {
 import { toast } from "sonner";
 import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
 import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
+import { friendlyError } from "@/shared/lib/friendly-errors";
 import {
   listReuniones,
   createReunion,
@@ -80,8 +81,8 @@ export function ReunionesView() {
         }));
         setReuniones(mapped);
       }
-    } catch {
-      toast.error("Error al cargar reuniones");
+    } catch (err) {
+      toast.error("Error al cargar reuniones", { description: friendlyError(err, "ReunionesView") });
     } finally {
       setCargando(false);
     }
@@ -128,8 +129,8 @@ export function ReunionesView() {
       });
       toast.success("Reunión registrada");
       await cargarReuniones();
-    } catch {
-      toast.error("Error al crear reunión");
+    } catch (err) {
+      toast.error("Error al crear reunión", { description: friendlyError(err, "crear") });
     }
   }
 

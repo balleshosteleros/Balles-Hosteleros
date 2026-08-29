@@ -15,6 +15,7 @@ import {
   noComputa,
 } from "@/features/rrhh/services/horas/computa-tiempo";
 import { revalidatePath } from "next/cache";
+import { friendlyError } from "@/shared/lib/friendly-errors";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -206,7 +207,7 @@ export async function listFichajes(fecha?: string) {
     return { ok: true, data: enriched };
   } catch (err) {
     console.error("[fichajes] listFichajes:", err);
-    return { ok: false, data: [] };
+    return { ok: false, data: [], error: friendlyError(err, "lngSalida") };
   }
 }
 

@@ -2,6 +2,7 @@
 
 import { getAppContext } from "@/lib/supabase/get-context";
 import { unidadAlGuardar } from "@/features/cocina/lib/normalizar-unidad";
+import { friendlyError } from "@/shared/lib/friendly-errors";
 
 // ─── Tipos compartidos con la UI ───────────────────────────────────
 // Mantengo los nombres en camelCase aquí pero el mapeo a la fila de
@@ -232,7 +233,7 @@ export async function listEscandallos() {
     return { ok: true as const, data: data ?? [] };
   } catch (err) {
     console.error("[escandallos] listEscandallos:", err);
-    return { ok: false as const, data: [] };
+    return { ok: false as const, data: [], error: friendlyError(err, "listEscandallos") };
   }
 }
 
@@ -281,7 +282,7 @@ export async function getCostesIngredientes() {
     return { ok: true as const, data: map };
   } catch (err) {
     console.error("[escandallos] getCostesIngredientes:", err);
-    return { ok: false as const, data: vacio };
+    return { ok: false as const, data: vacio, error: friendlyError(err, "getCostesIngredientes") };
   }
 }
 

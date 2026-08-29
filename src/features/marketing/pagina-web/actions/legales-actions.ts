@@ -19,6 +19,7 @@ import {
   type TipoPaginaLegal,
 } from "../services/textos-legales";
 import type { Bloque } from "../types";
+import { friendlyError } from "@/shared/lib/friendly-errors";
 
 type ActionResult<T = void> =
   | (T extends void ? { ok: true } : { ok: true; data: T })
@@ -82,7 +83,7 @@ export async function previsualizarTextosLegales(): Promise<
     };
   } catch (err) {
     console.error("[pagina-web][previsualizarTextosLegales] fatal:", err);
-    return { ok: false, error: "Error inesperado." };
+    return { ok: false, error: friendlyError(err, "previsualizarTextosLegales") };
   }
 }
 
@@ -213,6 +214,6 @@ export async function generarPaginasLegales(
     return { ok: true, data: { paginas: resumen, avisos } };
   } catch (err) {
     console.error("[pagina-web][generarPaginasLegales] fatal:", err);
-    return { ok: false, error: "Error inesperado." };
+    return { ok: false, error: friendlyError(err, "generarPaginasLegales") };
   }
 }

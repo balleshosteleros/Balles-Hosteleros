@@ -12,6 +12,7 @@ import {
   ESTADOS_COMPRA_CONFIRMADA,
 } from "@/features/logistica/data/albaranes";
 import { MAX_DOCUMENTO_MB, MAX_DOCUMENTO_BYTES } from "@/shared/lib/documentos";
+import { friendlyError } from "@/shared/lib/friendly-errors";
 
 async function getContext() {
   const { supabase, userId, empresaId } = await getLogisticaContext();
@@ -31,7 +32,7 @@ export async function listAlbaranes() {
     return { ok: true, data: data ?? [] };
   } catch (err) {
     console.error("[albaranes] listAlbaranes:", err);
-    return { ok: false, data: [] };
+    return { ok: false, data: [], error: friendlyError(err, "listAlbaranes") };
   }
 }
 
@@ -72,7 +73,7 @@ interface LineaAlbaranJson {
  */
 export async function listComprasPorProducto(
   productoId: string,
-): Promise<{ ok: boolean; data: CompraProductoRow[] }> {
+): Promise<{ ok: boolean; data: CompraProductoRow[]; error?: string }> {
   try {
     const { supabase, empresaId } = await getContext();
     if (!empresaId || !productoId) return { ok: true, data: [] };
@@ -115,7 +116,7 @@ export async function listComprasPorProducto(
     return { ok: true, data: rows };
   } catch (err) {
     console.error("[albaranes] listComprasPorProducto:", err);
-    return { ok: false, data: [] };
+    return { ok: false, data: [], error: friendlyError(err, "listComprasPorProducto") };
   }
 }
 

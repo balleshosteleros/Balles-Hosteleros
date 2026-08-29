@@ -37,6 +37,7 @@ import {
 } from "@/shared/components/SubmoduleToolbar";
 import { TableColumnHeader } from "@/shared/components/TableColumnHeader";
 import { ResizableColumnsProvider } from "@/shared/components/ResizableColumns";
+import { friendlyError } from "@/shared/lib/friendly-errors";
 
 function mapDbToIncidencia(row: Record<string, unknown>): Incidencia {
   const actualizaciones: Actualizacion[] = Array.isArray(row.mantenimiento_actualizaciones)
@@ -106,8 +107,8 @@ export function MantenimientoView() {
       } else {
         toast.error("Error al cargar incidencias");
       }
-    } catch {
-      toast.error("Error de conexion al cargar incidencias");
+    } catch (err) {
+      toast.error("Error de conexion al cargar incidencias", { description: friendlyError(err, "MantenimientoView") });
     } finally {
       setLoading(false);
     }
@@ -180,7 +181,7 @@ export function MantenimientoView() {
     const serverField = fieldMap[field];
     if (serverField) {
       const res = await updateIncidencia(id, { [serverField]: value });
-      if (!res.ok) { toast.error("Error al actualizar campo"); loadIncidencias(); }
+      if (!res.ok) { toast.error("Error al actualizar campo", { description: res.error }); loadIncidencias(); }
     }
   };
 

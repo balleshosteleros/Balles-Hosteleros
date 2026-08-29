@@ -59,6 +59,7 @@ import {
 import { TableColumnHeader } from "@/shared/components/TableColumnHeader";
 import { IOActions } from "@/shared/io";
 import { clientesIO } from "@/features/sala/io/clientes.io";
+import { friendlyError } from "@/shared/lib/friendly-errors";
 
 /** Filas por hoja en la tabla de clientes. */
 const POR_PAGINA = 50;
@@ -213,8 +214,8 @@ export function ClientesView() {
         setUmbrales(extra.umbrales);
         setZonaHoraria(extra.zonaHoraria);
       }
-    } catch {
-      toast.error("Error de conexion al cargar clientes");
+    } catch (err) {
+      toast.error("Error de conexion al cargar clientes", { description: friendlyError(err, "ClientesView") });
     }
   }, []);
 

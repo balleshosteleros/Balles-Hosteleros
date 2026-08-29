@@ -9,6 +9,7 @@ import {
 } from "@/shared/lib/normalizar-nombre";
 import type { FasePrincipal } from "@/features/rrhh/data/reclutamiento";
 import { etiquetaTipoBajaEmpresa, type TipoBajaContrato } from "@/features/rrhh/data/campos-gestoria";
+import { friendlyError } from "@/shared/lib/friendly-errors";
 
 async function getContext() {
   const supabase = await createClient();
@@ -119,7 +120,7 @@ export async function listCandidatosReales() {
     return { ok: true, data: rows };
   } catch (err) {
     console.error("[rrhh] listCandidatosReales:", err);
-    return { ok: false, data: [] };
+    return { ok: false, data: [], error: friendlyError(err, "resenas") };
   }
 }
 
