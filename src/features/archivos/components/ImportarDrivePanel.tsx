@@ -415,7 +415,7 @@ export function ImportarDrivePanel() {
                   </div>
                   <p className="text-xs font-medium">
                     {progreso.copiados.toLocaleString("es-ES")} de{" "}
-                    {progreso.total.toLocaleString("es-ES")} archivos
+                    {progreso.total.toLocaleString("es-ES")} archivos listos
                   </p>
                 </>
               )}
@@ -449,8 +449,9 @@ export function ImportarDrivePanel() {
                   </span>
                 </div>
                 <p className="text-muted-foreground">
-                  {h.copiados} copiados ({tamano(h.copiadosBytes)})
-                  {h.omitidos > 0 && ` · ${h.omitidos} ya estaban`}
+                  {h.copiados + h.omitidos} listos ({tamano(h.copiadosBytes)})
+                  {h.omitidos > 0 &&
+                    ` · ${h.copiados} en esta tanda, ${h.omitidos} de antes`}
                   {h.fallidos > 0 && ` · ${h.fallidos} fallidos`}
                 </p>
                 {h.errores.length > 0 && (
