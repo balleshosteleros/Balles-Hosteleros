@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { PutObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
 import { createClient as createServerClient } from "@/lib/supabase/server";
+import { getEmpresaActivaForUser } from "@/features/empresa/lib/empresa-server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getR2 } from "@/shared/lib/r2";
 
@@ -10,9 +11,22 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   try {
     const supabase = await createServerClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) {
+      return NextResponse.json({ error: "No autenticado" }, { status: 401 });
+    }
+
+    // El listado sigue al selector de empresa: la RLS no aísla la empresa
+    // activa, así que sin este filtro se verían grabaciones de otra sociedad.
+    const empresaId = await getEmpresaActivaForUser(supabase, user.id);
+    if (!empresaId) return NextResponse.json([]);
+
     const { data, error } = await supabase
       .from("recordings")
       .select("*")
+      .eq("empresa_id", empresaId)
       .order("created_at", { ascending: false });
 
     if (error) {
@@ -35,13 +49,11 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "No autenticado" }, { status: 401 });
     }
 
-    const { data: profile } = await supabase
-      .from("usuarios")
-      .select("empresa_id")
-      .eq("user_id", user.id)
-      .single();
+    // La empresa la manda el selector (cookie), no la de origen del usuario:
+    // si no, el almacenamiento de una empresa se vería desde otra.
+    const empresaId = await getEmpresaActivaForUser(supabase, user.id);
 
-    if (!profile?.empresa_id) {
+    if (!empresaId) {
       return NextResponse.json({ error: "Usuario sin empresa asignada" }, { status: 403 });
     }
 
@@ -56,7 +68,7 @@ export async function POST(req: Request) {
         return NextResponse.json({ error: "r2Key requerido" }, { status: 400 });
       }
       // El key debe pertenecer a la empresa del usuario (evita registrar objetos ajenos).
-      if (!r2Key.startsWith(`empresa_${profile.empresa_id}/`)) {
+      if (!r2Key.startsWith(`empresa_${empresaId}/`)) {
         return NextResponse.json({ error: "Clave de objeto inválida" }, { status: 403 });
       }
 
@@ -71,7 +83,7 @@ export async function POST(req: Request) {
       let departamento: string | null = null;
       if (departamentoIn) {
         const { data: depsData } = await supabase.rpc("bh_departamentos_usuario", {
-          p_empresa: profile.empresa_id,
+          p_empresa: empresaId,
         });
         const misDeptos: string[] = Array.isArray(depsData) ? (depsData as string[]) : [];
         const match = misDeptos.find((d) => d.toUpperCase() === departamentoIn.toUpperCase());
@@ -90,7 +102,7 @@ export async function POST(req: Request) {
           r2_key: r2Key,
           duration,
           file_size: fileSize,
-          empresa_id: profile.empresa_id,
+          empresa_id: empresaId,
           owner_user_id: user.id,
           type: "grabacion",
           departamento,
@@ -126,7 +138,7 @@ export async function POST(req: Request) {
     const { data: usage } = await admin
       .from("storage_usage_por_empresa")
       .select("bytes_used, bytes_limit")
-      .eq("empresa_id", profile.empresa_id)
+      .eq("empresa_id", empresaId)
       .single();
 
     const bytesUsed = Number(usage?.bytes_used ?? 0);
@@ -147,7 +159,7 @@ export async function POST(req: Request) {
     const { client: r2Client, bucket: BUCKET_NAME, publicUrl: PUBLIC_URL } = getR2();
     const fileId = crypto.randomUUID();
     const ext = mimeType.includes("mp4") ? "mp4" : "webm";
-    const r2Key = `empresa_${profile.empresa_id}/grabaciones/${fileId}.${ext}`;
+    const r2Key = `empresa_${empresaId}/grabaciones/${fileId}.${ext}`;
     const buffer = Buffer.from(await file.arrayBuffer());
 
     try {
@@ -176,7 +188,7 @@ export async function POST(req: Request) {
         r2_key: r2Key,
         duration,
         file_size: buffer.length,
-        empresa_id: profile.empresa_id,
+        empresa_id: empresaId,
         owner_user_id: user.id,
         type: "grabacion",
       })

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient as createServerClient } from "@/lib/supabase/server";
+import { getEmpresaActivaForUser } from "@/features/empresa/lib/empresa-server";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -25,13 +26,11 @@ export async function GET() {
       return NextResponse.json({ error: "No autenticado" }, { status: 401 });
     }
 
-    const { data: profile } = await supabase
-      .from("usuarios")
-      .select("empresa_id")
-      .eq("user_id", user.id)
-      .single();
+    // La empresa la manda el selector (cookie), no la de origen del usuario:
+    // si no, el almacenamiento de una empresa se vería desde otra.
+    const empresaId = await getEmpresaActivaForUser(supabase, user.id);
 
-    if (!profile?.empresa_id) {
+    if (!empresaId) {
       return NextResponse.json({ error: "Usuario sin empresa asignada" }, { status: 403 });
     }
 
@@ -41,14 +40,14 @@ export async function GET() {
     const { data: usage } = await admin
       .from("storage_usage_por_empresa")
       .select("bytes_used, bytes_limit")
-      .eq("empresa_id", profile.empresa_id)
+      .eq("empresa_id", empresaId)
       .single();
 
     // Desglose por tipo: sumamos file_size agrupando por `type`.
     const { data: rows } = await admin
       .from("recordings")
       .select("type, file_size")
-      .eq("empresa_id", profile.empresa_id);
+      .eq("empresa_id", empresaId);
 
     const porTipo = new Map<string, { bytes: number; count: number }>();
     for (const r of rows ?? []) {

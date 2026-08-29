@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient as createServerClient } from "@/lib/supabase/server";
+import { getEmpresaActivaForUser } from "@/features/empresa/lib/empresa-server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -22,13 +23,11 @@ export async function GET() {
       return NextResponse.json({ error: "No autenticado" }, { status: 401 });
     }
 
-    const { data: profile } = await supabase
-      .from("usuarios")
-      .select("empresa_id")
-      .eq("user_id", user.id)
-      .single();
+    // La empresa la manda el selector (cookie), no la de origen del usuario:
+    // si no, el almacenamiento de una empresa se vería desde otra.
+    const empresaId = await getEmpresaActivaForUser(supabase, user.id);
 
-    if (!profile?.empresa_id) {
+    if (!empresaId) {
       return NextResponse.json({ departamentos: [] });
     }
 
@@ -36,7 +35,7 @@ export async function GET() {
     // bh_departamentos_usuario usa auth.uid() internamente, así que lo invocamos
     // con el cliente de sesión (respeta el uid del usuario).
     const { data, error } = await supabase.rpc("bh_departamentos_usuario", {
-      p_empresa: profile.empresa_id,
+      p_empresa: empresaId,
     });
 
     if (error) {

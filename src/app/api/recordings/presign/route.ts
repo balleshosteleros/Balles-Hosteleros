@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient as createServerClient } from "@/lib/supabase/server";
+import { getEmpresaActivaForUser } from "@/features/empresa/lib/empresa-server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { presignPutR2 } from "@/shared/lib/r2";
 
@@ -24,13 +25,11 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "No autenticado" }, { status: 401 });
     }
 
-    const { data: profile } = await supabase
-      .from("usuarios")
-      .select("empresa_id")
-      .eq("user_id", user.id)
-      .single();
+    // La empresa la manda el selector (cookie), no la de origen del usuario:
+    // si no, el almacenamiento de una empresa se vería desde otra.
+    const empresaId = await getEmpresaActivaForUser(supabase, user.id);
 
-    if (!profile?.empresa_id) {
+    if (!empresaId) {
       return NextResponse.json(
         { error: "Usuario sin empresa asignada" },
         { status: 403 },
@@ -57,7 +56,7 @@ export async function POST(req: Request) {
     // bh_departamentos_usuario devuelve ya la lista canónica (misma fuente que
     // el chat/tareas), así que validamos contra ella.
     const { data: depsData } = await supabase.rpc("bh_departamentos_usuario", {
-      p_empresa: profile.empresa_id,
+      p_empresa: empresaId,
     });
     const misDeptos: string[] = Array.isArray(depsData)
       ? [...new Set((depsData as string[]).filter(Boolean))]
@@ -94,7 +93,7 @@ export async function POST(req: Request) {
     const { data: usage } = await admin
       .from("storage_usage_por_empresa")
       .select("bytes_used, bytes_limit")
-      .eq("empresa_id", profile.empresa_id)
+      .eq("empresa_id", empresaId)
       .single();
 
     const bytesUsed = Number(usage?.bytes_used ?? 0);
@@ -120,7 +119,7 @@ export async function POST(req: Request) {
     const carpeta = departamento
       ? departamento.replace(/[^A-Za-z0-9._-]/g, "_")
       : "_sin_departamento";
-    const r2Key = `empresa_${profile.empresa_id}/grabaciones/${carpeta}/${fileId}.${ext}`;
+    const r2Key = `empresa_${empresaId}/grabaciones/${carpeta}/${fileId}.${ext}`;
 
     const uploadUrl = presignPutR2(r2Key, mimeType);
 
