@@ -3,11 +3,14 @@
 import { useRef, useState } from "react";
 import { UploadCloud, FileText, CheckCircle2, AlertTriangle, Loader2, ShieldQuestion } from "lucide-react";
 import { MAX_NOMINAS_MB, MAX_NOMINAS_BYTES } from "@/shared/lib/documentos";
+import { mesAnterior } from "@/features/rrhh/lib/nominas-periodos";
 
 interface Props {
   /** Endpoint POST al que se suben las nóminas. */
   endpoint: string;
   empresaNombre: string;
+  /** Mes de la entrega, 'AAAA-MM': el de las nóminas que pide el enlace. */
+  periodo: string;
   mesLabel: string;
 }
 
@@ -73,7 +76,18 @@ const TIPOS_OK = [
   "image/heif",
 ];
 
-export function SubirNominasView({ endpoint, empresaNombre, mesLabel }: Props) {
+/** Los 12 meses hasta `hasta` (incluido), del más reciente al más antiguo. */
+function mesesHasta(hasta: string, n = 12): string[] {
+  const out: string[] = [];
+  let p = hasta;
+  for (let i = 0; i < n; i++) {
+    out.push(p);
+    p = mesAnterior(p);
+  }
+  return out;
+}
+
+export function SubirNominasView({ endpoint, empresaNombre, periodo, mesLabel }: Props) {
   const [file, setFile] = useState<File | null>(null);
   const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -84,7 +98,12 @@ export function SubirNominasView({ endpoint, empresaNombre, mesLabel }: Props) {
   // Nombres de los TC1 ya subidos. Es una LISTA porque un mes puede llevar varias
   // liquidaciones (la ordinaria y la complementaria de vacaciones), que la
   // Seguridad Social emite y cobra por separado.
-  const [tc1Subidos, setTc1Subidos] = useState<string[]>([]);
+  const [tc1Subidos, setTc1Subidos] = useState<{ nombre: string; mes: string }[]>([]);
+  // Mes que se está COTIZANDO en el recibo. Por defecto el anterior al de las
+  // nóminas: la Seguridad Social se liquida a mes vencido, así que con las
+  // nóminas de agosto llega el TC1 de julio. Es lo normal, no un error.
+  const [mesTc1, setMesTc1] = useState(() => mesAnterior(periodo));
+  const mesesTc1 = mesesHasta(periodo);
   // Cuadre devuelto al subir un TC1: se enseña AL MOMENTO, sin esperar a las
   // nóminas, para que la gestoría sepa ya si el recibo cuadra o falta alguno.
   const [cuadreTc1, setCuadreTc1] = useState<Cuadre | null>(null);
@@ -103,10 +122,12 @@ export function SubirNominasView({ endpoint, empresaNombre, mesLabel }: Props) {
       const fd = new FormData();
       fd.append("archivo", f);
       fd.append("documento", "tc1");
+      // A qué mes corresponden estos seguros sociales (lo dice la gestoría).
+      fd.append("periodoCotizacion", mesTc1);
       const res = await fetch(endpoint, { method: "POST", body: fd });
       const json = await res.json();
       if (json.ok) {
-        setTc1Subidos((prev) => [...prev, f.name]);
+        setTc1Subidos((prev) => [...prev, { nombre: f.name, mes: json.periodoCotizacion ?? mesTc1 }]);
         setCuadreTc1((json.cuadre as Cuadre | null) ?? null);
       } else setError(json.error ?? "No se pudo subir el TC1.");
     } catch {
@@ -196,8 +217,10 @@ export function SubirNominasView({ endpoint, empresaNombre, mesLabel }: Props) {
               archivos sueltos. Se leen y se asignan a cada trabajador automáticamente.
             </li>
             <li>
-              <b>El TC1</b> (Recibo de Liquidación de Cotizaciones) de la empresa. Si el mes lleva
-              liquidación complementaria (vacaciones), adjunta también ese recibo.
+              <b>El TC1</b> (Recibo de Liquidación de Cotizaciones) de la empresa, indicando de qué
+              mes son esos seguros sociales: normalmente el <b>anterior</b> al de las nóminas, porque
+              se liquidan a mes vencido. Si hay liquidación complementaria (vacaciones), adjunta
+              también ese recibo.
             </li>
           </ol>
         </div>
@@ -234,12 +257,40 @@ export function SubirNominasView({ endpoint, empresaNombre, mesLabel }: Props) {
             </button>
           </div>
 
+          {/* MES COTIZADO: se pregunta, no se supone. Los seguros sociales van a
+              mes vencido, así que con las nóminas de agosto llega el TC1 de julio;
+              se propone ese y la gestoría lo cambia si el recibo es de otro. */}
+          <div className="mt-3">
+            <label htmlFor="mes-tc1" className="block text-xs font-medium text-zinc-700">
+              Mes de estos seguros sociales
+            </label>
+            <select
+              id="mes-tc1"
+              value={mesTc1}
+              onChange={(e) => setMesTc1(e.target.value)}
+              disabled={subiendoTc1}
+              className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 disabled:opacity-50"
+            >
+              {mesesTc1.map((m) => (
+                <option key={m} value={m}>
+                  {nombreMesCorto(m)}
+                  {m === mesAnterior(periodo) ? " · lo habitual" : ""}
+                </option>
+              ))}
+            </select>
+            <p className="mt-1 text-xs text-zinc-600">
+              Elígelo <b>antes</b> de adjuntar el recibo. Si el mes lleva liquidación
+              complementaria de otro periodo, adjúntala aparte con su propio mes.
+            </p>
+          </div>
+
           {tc1Subidos.length > 0 && (
             <ul className="mt-3 space-y-1">
-              {tc1Subidos.map((nombre, i) => (
-                <li key={`${nombre}-${i}`} className="flex items-center gap-1.5 text-xs text-emerald-700">
+              {tc1Subidos.map((t, i) => (
+                <li key={`${t.nombre}-${i}`} className="flex items-center gap-1.5 text-xs text-emerald-700">
                   <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
-                  <span className="truncate">{nombre}</span>
+                  <span className="truncate">{t.nombre}</span>
+                  <span className="shrink-0 text-emerald-600">· {nombreMesCorto(t.mes)}</span>
                 </li>
               ))}
             </ul>

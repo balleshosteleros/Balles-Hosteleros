@@ -39,6 +39,7 @@ import {
   type EstadoMesNominas,
   type EstadoSubidaMes,
 } from "@/features/rrhh/actions/nominas-revision-actions";
+import { mesAnterior } from "@/features/rrhh/lib/nominas-periodos";
 import { MAX_NOMINAS_MB, MAX_NOMINAS_BYTES } from "@/shared/lib/documentos";
 import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 import { toast } from "sonner";
@@ -278,6 +279,10 @@ export function PagosView() {
   const [confirmandoMes, setConfirmandoMes] = useState(false);
   const [subiendoTc1, setSubiendoTc1] = useState(false);
   const tc1InputRef = useRef<HTMLInputElement>(null);
+  // Mes que se COTIZA en el TC1 que se va a adjuntar. No es el de la entrega: los
+  // seguros sociales se liquidan a mes vencido, así que con las nóminas de agosto
+  // llega el recibo de julio. Vacío = sigue al mes de la entrega (el anterior).
+  const [mesTc1Elegido, setMesTc1Elegido] = useState<string | null>(null);
   // Diálogo único de la entrega del mes: nóminas + TC1.
   const [showDocsMes, setShowDocsMes] = useState(false);
   // Estado del mes: en borrador se puede corregir; confirmado es inmutable.
@@ -397,6 +402,13 @@ export function PagosView() {
     void refrescarEstadoSubida();
   }, [showDocsMes, periodo, mesesSubida, nominasEnMes, refrescarEstadoSubida]);
 
+  // Al cambiar el mes de la entrega (o cerrar el diálogo), el mes del TC1 vuelve a
+  // proponerse solo: el anterior al elegido. Si se dejara fijo, la propuesta se
+  // quedaría colgada de una entrega que ya no es la que se está subiendo.
+  useEffect(() => {
+    setMesTc1Elegido(null);
+  }, [mesSubida, showDocsMes]);
+
   // ── Cuadre de los TC1 del mes ─────────────────────────────────────────────
   // El TC1 y las nóminas son el MISMO dinero de dos formas: el recibo agrupa por
   // concepto de cotización y las nóminas lo reparten por trabajador. Con varias
@@ -417,6 +429,22 @@ export function PagosView() {
 
   const mesSubidaLabel = useMemo(() => nombreMesLargo(mesSubida), [mesSubida]);
   const estadoMesSubida = estadoSubidaMeses[mesSubida];
+
+  // Mes cotizado del TC1 que se va a adjuntar. Si no se ha tocado el selector,
+  // sigue al mes de la entrega proponiendo el ANTERIOR, que es lo que hace la
+  // gestoría siempre. Los meses ofrecidos llegan hasta el de la propia entrega,
+  // por si alguna vez el recibo fuera del mismo mes.
+  const mesCotizadoTc1 = mesTc1Elegido ?? mesAnterior(mesSubida || periodo);
+  const mesesCotizacionTc1 = useMemo(() => {
+    const base = mesSubida || periodo;
+    const out: string[] = [];
+    let p = base;
+    for (let i = 0; i < 13; i++) {
+      out.push(p);
+      p = mesAnterior(p);
+    }
+    return out;
+  }, [mesSubida, periodo]);
 
   // Lo mismo, pero del MES ELEGIDO en el diálogo de subida: ahí la entrega entera
   // (nóminas y TC1) va al mes que se elija, que no tiene por qué ser el que se
@@ -734,6 +762,9 @@ export function PagosView() {
       });
       const res = await subirTc1Mes({
         periodo: periodoDestino,
+        // Mes que se cotiza en el recibo: lo elige quien sube, porque los seguros
+        // sociales van a mes vencido (con las nóminas de agosto, el TC1 de julio).
+        periodoCotizacion: mesCotizadoTc1,
         nombre: file.name,
         mimeType: file.type || "application/pdf",
         archivoBase64: base64,
@@ -744,11 +775,11 @@ export function PagosView() {
       }
       // El mes visto y el elegido pueden ser distintos: se refrescan los dos.
       await Promise.all([refrescarEstadoMes(), refrescarEstadoSubida()]);
-      // Aviso (no error): el complementario de vacaciones declara el mes al que
-      // se imputa la cotización, que puede ser anterior al mes en que se ingresa.
+      // Aviso (no error): se contrasta lo ELEGIDO con lo que la IA lee del papel.
+      // Manda lo elegido; esto solo avisa por si hubo un despiste.
       const otroMes =
-        res.periodoDocumento && res.periodoDocumento !== periodoDestino
-          ? `El documento declara ${nombreMesLargo(res.periodoDocumento)}; se ha sumado a ${nombreMesLargo(periodoDestino)}.`
+        res.periodoDocumento && res.periodoDocumento !== res.periodoCotizacion
+          ? `Lo has marcado como ${nombreMesLargo(res.periodoCotizacion)}, pero el documento declara ${nombreMesLargo(res.periodoDocumento)}. Compruébalo.`
           : undefined;
       toast.success(
         res.importe != null
@@ -1853,12 +1884,12 @@ export function PagosView() {
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <p className="text-sm font-medium">TC1 · Recibos de cotizaciones</p>
-                  {/* Los TC1 van SIEMPRE al mes que se está viendo, no al elegido
-                      arriba para las nóminas: se nombra el mes para no confundir. */}
+                  {/* Los TC1 entran con la entrega de este mes, pero cotizan otro:
+                      la Seguridad Social se liquida a mes vencido. */}
                   <p className="mt-0.5 text-xs text-muted-foreground">
                     {hayTc1Subida
-                      ? `Adjuntados a ${mesSubidaLabel}. Su suma debe cuadrar con la Seguridad Social de las nóminas.`
-                      : `Documentos de la empresa con las bases y cuotas de ${mesSubidaLabel}. Si hay liquidación complementaria (vacaciones), adjunta las dos.`}
+                      ? `Llegan con la entrega de ${mesSubidaLabel}. Su suma debe cuadrar con la Seguridad Social de las nóminas.`
+                      : `Documentos de la empresa con las bases y cuotas. Si hay liquidación complementaria (vacaciones), adjunta las dos.`}
                   </p>
                 </div>
                 <Button
@@ -1871,6 +1902,35 @@ export function PagosView() {
                   {subiendoTc1 ? <Clock className="h-4 w-4 animate-pulse" /> : <Upload className="h-4 w-4" />}
                   {subiendoTc1 ? "Leyendo…" : hayTc1Subida ? "Añadir otro" : "Adjuntar"}
                 </Button>
+              </div>
+
+              {/* MES COTIZADO: se elige antes de adjuntar. Los seguros sociales
+                  van a mes vencido, así que con las nóminas de agosto llega el
+                  TC1 de julio: se propone ese, y se cambia si el recibo es otro
+                  (por ejemplo, una complementaria de un periodo anterior). */}
+              <div className="mt-3">
+                <Label className="text-xs text-muted-foreground">Mes de estos seguros sociales</Label>
+                <Select
+                  value={mesCotizadoTc1}
+                  onValueChange={setMesTc1Elegido}
+                  disabled={subiendoTc1 || mesSubidaConfirmado}
+                >
+                  <SelectTrigger className="mt-1.5 h-9">
+                    <SelectValue placeholder="Elige el mes" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {mesesCotizacionTc1.map((m) => (
+                      <SelectItem key={m} value={m}>
+                        {nombreMesLargo(m)}
+                        {m === mesAnterior(mesSubida || periodo) ? " · lo habitual" : ""}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="mt-1.5 text-xs text-muted-foreground">
+                  Elígelo antes de adjuntar. Cada recibo se guarda con el mes que tenga marcado
+                  aquí, así que si hay complementaria de otro periodo, adjúntala aparte.
+                </p>
               </div>
 
               {hayTc1Subida && (
@@ -1892,11 +1952,18 @@ export function PagosView() {
                             <span className="text-amber-600">Importe no leído</span>
                           )}
                           {t.trabajadores != null && <span>{t.trabajadores} trabajadores</span>}
-                          {/* Un complementario de vacaciones declara el mes al que
-                              se imputa la cotización, no el mes en que se paga. */}
-                          {t.periodoDocumento && t.periodoDocumento !== mesSubida && (
+                          {/* Mes cotizado que se marcó al subirlo: es el dato que
+                              manda, y normalmente es el anterior al de la entrega. */}
+                          {t.periodoCotizacion && (
+                            <span>Cotiza {nombreMesLargo(t.periodoCotizacion)}</span>
+                          )}
+                          {/* Aviso solo si el papel dice otra cosa que lo marcado:
+                              puede ser un despiste al elegir el mes. */}
+                          {t.periodoDocumento &&
+                            t.periodoCotizacion &&
+                            t.periodoDocumento !== t.periodoCotizacion && (
                             <span className="text-amber-600">
-                              El documento es de {nombreMesLargo(t.periodoDocumento)}
+                              El documento declara {nombreMesLargo(t.periodoDocumento)}
                             </span>
                           )}
                         </div>

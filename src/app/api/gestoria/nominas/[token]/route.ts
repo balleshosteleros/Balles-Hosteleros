@@ -77,12 +77,21 @@ export async function POST(req: Request, ctx: { params: Promise<{ token: string 
     if (documento === "tc1") {
       const tc1 = fd.get("archivo") as File | null;
       if (!tc1) return NextResponse.json({ ok: false, error: "Adjunta el TC1" }, { status: 400 });
-      const guardado = await guardarTc1Gestoria(admin, res.row, tc1);
+      // Mes que se cotiza en ese recibo, elegido por la gestoría: con las nóminas
+      // de agosto llega el TC1 de julio, porque la Seguridad Social se liquida a
+      // mes vencido.
+      const periodoCotizacion = (fd.get("periodoCotizacion") as string | null) ?? null;
+      const guardado = await guardarTc1Gestoria(admin, res.row, tc1, periodoCotizacion);
       if (!guardado.ok) {
         return NextResponse.json({ ok: false, error: guardado.error }, { status: guardado.status });
       }
       const cuadre = await cuadrarTc1ConNominas(admin, res.row.empresa_id, res.row.periodo);
-      return NextResponse.json({ ok: true, documento: "tc1", cuadre });
+      return NextResponse.json({
+        ok: true,
+        documento: "tc1",
+        periodoCotizacion: guardado.periodoCotizacion,
+        cuadre,
+      });
     }
 
     const file = fd.get("archivo") as File | null;

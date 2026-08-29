@@ -51,6 +51,7 @@ export default async function SubirNominasPage({
     <SubirNominasView
       endpoint={`/api/gestoria/nominas/${encodeURIComponent(token)}`}
       empresaNombre={(empresa?.nombre as string) ?? "la empresa"}
+      periodo={res.row.periodo}
       mesLabel={nombreMes(res.row.periodo)}
     />
   );

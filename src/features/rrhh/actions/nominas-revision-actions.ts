@@ -20,6 +20,7 @@ import { BUCKET_NOMINAS, EXT_POR_MIME } from "@/features/rrhh/services/nominas/p
 import { extraerDatosTc1 } from "@/features/rrhh/services/nominas/extraer-nominas";
 import { rechazarMesNominasGestoria } from "@/features/rrhh/services/nominas/rechazo-gestoria";
 import { MOTIVO_MIN_CARACTERES } from "@/features/rrhh/lib/nominas-rechazo";
+import { mesAnterior, esPeriodoValido } from "@/features/rrhh/lib/nominas-periodos";
 import { revalidatePath } from "next/cache";
 
 export type RevisionEstado = "correcta" | "con_incidencia" | "denegada";
@@ -271,7 +272,13 @@ export interface Tc1Mes {
   nombre: string;
   importe: number | null;
   trabajadores: number | null;
-  /** Periodo que declara el propio documento: si no es el del mes, se avisa. */
+  /**
+   * Mes que se COTIZA en este recibo, según quien lo subió. Normalmente el
+   * anterior al de la entrega: los seguros sociales van a mes vencido, así que
+   * con las nóminas de agosto llega el TC1 de julio.
+   */
+  periodoCotizacion: string | null;
+  /** Periodo que declara el propio documento (lectura IA): sirve para contrastar. */
   periodoDocumento: string | null;
 }
 
@@ -315,7 +322,7 @@ export async function getEstadoMesNominas(periodo: string): Promise<EstadoMesNom
     // Los TC1 del mes: puede haber varios (ordinaria + complementarias).
     const { data: tc1Filas } = await supabase
       .from("rrhh_nominas_tc1")
-      .select("id, nombre, importe, trabajadores, periodo_documento")
+      .select("id, nombre, importe, trabajadores, periodo_cotizacion, periodo_documento")
       .eq("empresa_id", empresaId)
       .eq("periodo", periodo)
       .order("subido_en", { ascending: true });
@@ -333,6 +340,7 @@ export async function getEstadoMesNominas(periodo: string): Promise<EstadoMesNom
         nombre: (t.nombre as string | null) ?? "TC1",
         importe: t.importe != null ? Number(t.importe) : null,
         trabajadores: t.trabajadores != null ? Number(t.trabajadores) : null,
+        periodoCotizacion: (t.periodo_cotizacion as string | null) ?? null,
         periodoDocumento: (t.periodo_documento as string | null) ?? null,
       })),
       rechazado: rechazadoEn !== null,
@@ -628,6 +636,12 @@ export async function borrarNominaSubida(nominaId: string) {
  */
 export async function subirTc1Mes(input: {
   periodo: string;
+  /**
+   * Mes que se COTIZA en el recibo. Normalmente el anterior al de la entrega: la
+   * Seguridad Social se liquida a mes vencido, así que con las nóminas de agosto
+   * llega el TC1 de julio. Si no viene, se asume esa regla.
+   */
+  periodoCotizacion?: string | null;
   nombre: string;
   mimeType: string;
   archivoBase64: string;
@@ -641,6 +655,12 @@ export async function subirTc1Mes(input: {
 
     const ext = EXT_POR_MIME[input.mimeType];
     if (!ext) return { ok: false as const, error: "Formato no admitido. Usa PDF o imagen." };
+
+    // Mes cotizado: el elegido al subir; si no viene, el anterior al de la entrega
+    // (Seguridad Social a mes vencido). No cambia a qué mes suma el importe.
+    const mesCotizado = esPeriodoValido(input.periodoCotizacion)
+      ? (input.periodoCotizacion as string)
+      : mesAnterior(input.periodo);
 
     // Mes confirmado = inmutable: tampoco se le añaden TC1.
     const { data: mesRow } = await supabase
@@ -676,6 +696,7 @@ export async function subirTc1Mes(input: {
         nombre: input.nombre,
         importe: datos.liquidoTotal,
         trabajadores: datos.trabajadores,
+        periodo_cotizacion: mesCotizado,
         periodo_documento: datos.periodo || null,
         subido_en: new Date().toISOString(),
         subido_por: userId,
@@ -688,8 +709,10 @@ export async function subirTc1Mes(input: {
     return {
       ok: true as const,
       importe: datos.liquidoTotal,
-      // Aviso, NO error: un complementario de vacaciones declara el mes al que se
-      // imputa la cotización, que puede ser anterior al mes en que se ingresa.
+      // Mes cotizado que se ha guardado (el elegido).
+      periodoCotizacion: mesCotizado,
+      // Lo que declara el papel según la IA. Solo se avisa si NO coincide con el
+      // mes elegido: manda lo que ha dicho quien sube, no la lectura automática.
       periodoDocumento: datos.periodo || null,
     };
   } catch (err) {
@@ -820,7 +843,7 @@ export async function getEstadoSubidaMeses(periodos: string[]): Promise<EstadoSu
 
     const { data: tc1Filas } = await supabase
       .from("rrhh_nominas_tc1")
-      .select("id, periodo, nombre, importe, trabajadores, periodo_documento")
+      .select("id, periodo, nombre, importe, trabajadores, periodo_cotizacion, periodo_documento")
       .eq("empresa_id", empresaId)
       .in("periodo", periodos)
       .order("subido_en", { ascending: true });
@@ -833,6 +856,7 @@ export async function getEstadoSubidaMeses(periodos: string[]): Promise<EstadoSu
         nombre: (t.nombre as string | null) ?? "TC1",
         importe: t.importe != null ? Number(t.importe) : null,
         trabajadores: t.trabajadores != null ? Number(t.trabajadores) : null,
+        periodoCotizacion: (t.periodo_cotizacion as string | null) ?? null,
         periodoDocumento: (t.periodo_documento as string | null) ?? null,
       });
       tc1PorMes.set(p, lista);

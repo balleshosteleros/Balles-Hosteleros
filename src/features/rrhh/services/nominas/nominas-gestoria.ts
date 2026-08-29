@@ -32,6 +32,7 @@ import {
   type NominaLeida,
   type ResultadoProceso,
 } from "@/features/rrhh/services/nominas/procesar-nominas";
+import { mesAnterior, esPeriodoValido } from "@/features/rrhh/lib/nominas-periodos";
 
 const MESES = [
   "enero", "febrero", "marzo", "abril", "mayo", "junio",
@@ -518,7 +519,17 @@ export async function guardarTc1Gestoria(
   admin: SupabaseClient,
   row: { id: string; empresa_id: string; periodo: string },
   file: File,
-): Promise<{ ok: true } | { ok: false; error: string; status: number }> {
+  /**
+   * Mes que se está COTIZANDO en este recibo, elegido por la gestoría. Con las
+   * nóminas de agosto llega el TC1 de julio: la Seguridad Social se liquida a mes
+   * vencido y así lo hacen siempre. Si no se indica, se asume esa misma regla (el
+   * mes anterior al de la entrega).
+   *
+   * No cambia a qué mes SUMA el importe: eso lo sigue mandando `periodo`, que es
+   * el mes de la entrega con la que llega el recibo.
+   */
+  periodoCotizacion?: string | null,
+): Promise<{ ok: true; periodoCotizacion: string } | { ok: false; error: string; status: number }> {
   if (!file || file.size === 0) return { ok: false, error: "Adjunta el TC1", status: 400 };
   if (file.size > MAX_NOMINAS_BYTES) {
     const mb = Math.round(MAX_NOMINAS_BYTES / (1024 * 1024));
@@ -526,6 +537,12 @@ export async function guardarTc1Gestoria(
   }
   const ext = EXT_POR_MIME[file.type];
   if (!ext) return { ok: false, error: "Formato no admitido. Usa un PDF o una imagen.", status: 400 };
+
+  // Mes cotizado: el que elige la gestoría. Sin elección válida, el anterior al de
+  // la entrega, que es la regla de siempre (Seguridad Social a mes vencido).
+  const mesCotizado = esPeriodoValido(periodoCotizacion)
+    ? (periodoCotizacion as string)
+    : mesAnterior(row.periodo);
 
   // El mes ya confirmado por RRHH es inmutable: tampoco se le cambia el TC1.
   const { data: mesRow } = await admin
@@ -563,6 +580,9 @@ export async function guardarTc1Gestoria(
       nombre: file.name,
       importe: datos.liquidoTotal,
       trabajadores: datos.trabajadores,
+      // Mes cotizado: lo que ha DICHO la gestoría.
+      periodo_cotizacion: mesCotizado,
+      // Mes que declara el papel según la IA: sirve para contrastar lo elegido.
       periodo_documento: datos.periodo || null,
       subido_en: new Date().toISOString(),
     },
@@ -572,7 +592,7 @@ export async function guardarTc1Gestoria(
 
   // Si las nóminas ya estaban, con el TC1 se completa el envío: se cierra.
   await cerrarSiEstanLosDosDocumentos(admin, row);
-  return { ok: true };
+  return { ok: true, periodoCotizacion: mesCotizado };
 }
 
 /**
