@@ -49,8 +49,9 @@ producto y tú solo la apruebes. Las 13 elaboraciones, en cualquier caso, caen d
 
 Las **26 líneas de gramos de productos que SÍ se compran por kilo** (secreto, costilla, cazón,
 verduras del curry…) sí son conversión limpia: `350 Gr → 0,35 Kg`. Es más que cosmético — hoy esas
-líneas calculan el coste **×1000 de más** (tratan 350 gramos como 350 kilos). Esa conversión está
-lista y revisada, pendiente solo del último visto bueno interno antes de aplicarla.
+líneas calculan el coste **×1000 de más** (tratan 350 gramos como 350 kilos). Esa conversión ya
+está **aplicada en producción** (revisada una a una): el cachopo pasó a `0,35 Kg`, la costilla a
+`0,5 Kg`, etc. Las 21 en conflicto no se tocaron.
 
 ---
 
