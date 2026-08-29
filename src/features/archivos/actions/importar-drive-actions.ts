@@ -16,14 +16,15 @@
  *
  * La copia es servidor a servidor y en streaming: el archivo no pasa por el
  * navegador ni se carga entero en memoria, así que un vídeo de 1 GB no tumba
- * la función.
+ * la función. La subida a R2 va por partes (multipart), de ahí que el tamaño
+ * del archivo ya no imponga ningún límite.
  */
 
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getEmpresaActivaForUser } from "@/features/empresa/lib/empresa-server";
 import { getR2 } from "@/shared/lib/r2";
-import { PutObjectCommand } from "@aws-sdk/client-s3";
+import { Upload } from "@aws-sdk/lib-storage";
 import {
   descargarArchivo,
   formatoDestino,
@@ -39,16 +40,6 @@ import type {
   EstadoImportacion,
   Mapeo,
 } from "@/features/archivos/types/paneles";
-
-/**
- * Tope por archivo en la importación: 200 MB.
- *
- * No es un límite del almacén (ahí cabe cualquier cosa), sino de la copia: el
- * archivo se carga en memoria para poder firmar la subida, y uno enorme
- * agotaría la memoria de la función y tumbaría la tanda entera. Lo que pase de
- * aquí se aparta y se sube a mano.
- */
-const MAX_BYTES_EN_MEMORIA = 200 * 1024 * 1024;
 
 type Res<T> = { ok: true; data: T } | { ok: false; error: string };
 const fallo = (error: string): { ok: false; error: string } => ({ ok: false, error });
@@ -349,17 +340,6 @@ export async function importarUnidad(
           continue;
         }
 
-        // La copia carga el archivo en memoria para poder firmarlo. Por
-        // encima de este tamaño la función se quedaría sin memoria y moriría,
-        // perdiendo la tanda entera: mejor apartarlo y decir cuál es.
-        if (hijo.tamano > MAX_BYTES_EN_MEMORIA) {
-          errores.push({
-            archivo: hijo.nombre,
-            motivo: `Demasiado grande (${(hijo.tamano / 1024 ** 3).toFixed(2)} GB). Súbelo a mano desde Archivos.`,
-          });
-          continue;
-        }
-
         try {
           const bytes = await copiarArchivo(
             token,
@@ -440,7 +420,11 @@ async function copiarArchivo(
   bucket: string,
 ): Promise<number> {
   const { mime, nombre } = formatoDestino(archivo.mime, archivo.nombre);
-  const { body } = await descargarArchivo(token, archivo.id, archivo.mime);
+  const { body, tamano: tamanoDescarga } = await descargarArchivo(
+    token,
+    archivo.id,
+    archivo.mime,
+  );
 
   const archivoId = crypto.randomUUID();
   const carpetaFisica =
@@ -449,27 +433,27 @@ async function copiarArchivo(
   const ext = nombre.split(".").pop()?.toLowerCase() ?? "bin";
   const r2Key = `empresa_${empresaId}/archivos/${carpetaFisica}/${archivoId}.${ext}`;
 
-  // El archivo se materializa en memoria antes de subirlo.
+  // El archivo se sube por partes, no de una pieza.
   //
-  // Pasarle el stream directamente al SDK falla con "Unable to calculate hash
-  // for flowing readable stream": para firmar la petición necesita el
-  // contenido entero, y un stream solo se puede leer una vez. Era la causa de
-  // que fallaran cientos de archivos seguidos.
+  // Con PutObject había que materializarlo entero en memoria para poder
+  // firmar la petición (un stream solo se lee una vez), así que los vídeos
+  // grandes agotaban la memoria de la función y había que apartarlos.
   //
-  // El coste es tener el archivo en memoria mientras se sube; por eso los muy
-  // grandes se saltan (ver más abajo) en vez de tumbar la función.
-  const cuerpo = Buffer.from(await new Response(body).arrayBuffer());
-  const tamanoFinal = cuerpo.length;
+  // Upload trocea el stream y firma cada parte por separado: la memoria que
+  // consume es el tamaño de una parte, no el del archivo, así que entra
+  // cualquier tamaño. Las partes van de 8 MB y sube 4 a la vez.
+  const subida = new Upload({
+    client,
+    params: { Bucket: bucket, Key: r2Key, Body: body, ContentType: mime },
+    partSize: 8 * 1024 * 1024,
+    queueSize: 4,
+  });
+  await subida.done();
 
-  await client.send(
-    new PutObjectCommand({
-      Bucket: bucket,
-      Key: r2Key,
-      Body: cuerpo,
-      ContentType: mime,
-      ContentLength: tamanoFinal,
-    }),
-  );
+  // Upload no devuelve el tamaño. Preferimos el de la descarga (un Google Doc
+  // exportado a Office no pesa lo mismo que el original) y, si no viene, el
+  // que declara Drive.
+  const tamanoFinal = tamanoDescarga ?? archivo.tamano;
 
   const { error } = await admin.from("documentos").insert({
     empresa_id: empresaId,

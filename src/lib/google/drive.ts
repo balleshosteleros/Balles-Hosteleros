@@ -125,6 +125,41 @@ export async function listarUnidadesCompartidas(
     pageToken = json.nextPageToken;
   } while (pageToken);
 
+  // Las carpetas de primer nivel de "Mi unidad" cuentan como orígenes.
+  //
+  // Las unidades compartidas se deshicieron (ago-2026) y cada empresa se quedó
+  // su material en su propia cuenta, así que sin esto el importador no
+  // encuentra nada que traer.
+  salida.push(...(await listarCarpetasDeMiUnidad(accessToken)));
+
+  return salida;
+}
+
+/** Carpetas de primer nivel de "Mi unidad", como orígenes de importación. */
+async function listarCarpetasDeMiUnidad(
+  accessToken: string,
+): Promise<UnidadCompartida[]> {
+  const salida: UnidadCompartida[] = [];
+  let pageToken: string | undefined;
+
+  do {
+    const params = new URLSearchParams({
+      q: `'root' in parents and mimeType = '${MIME_CARPETA}' and trashed = false`,
+      pageSize: "100",
+      fields: "nextPageToken,files(id,name)",
+      orderBy: "name",
+    });
+    if (pageToken) params.set("pageToken", pageToken);
+
+    const res = await driveFetch(`${DRIVE_API}/files?${params}`, accessToken);
+    const json = (await res.json()) as {
+      files?: Array<{ id: string; name: string }>;
+      nextPageToken?: string;
+    };
+    for (const f of json.files ?? []) salida.push({ id: f.id, nombre: f.name });
+    pageToken = json.nextPageToken;
+  } while (pageToken);
+
   return salida;
 }
 
@@ -139,6 +174,91 @@ export async function listarUnidadesCompartidas(
  * `onProgreso` permite ir informando: con muchos archivos la primera lectura
  * sigue tardando, pero al menos se ve avanzar.
  */
+/** ¿Ese id es una unidad compartida, o una carpeta normal? */
+async function esDriveId(accessToken: string, id: string): Promise<boolean> {
+  try {
+    const res = await driveFetch(`${DRIVE_API}/drives/${id}?fields=id`, accessToken);
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Recorre una carpeta y todo lo que cuelga de ella, nivel a nivel.
+ *
+ * Para las carpetas de "Mi unidad" no vale la consulta de unidad completa:
+ * hay que preguntar por los hijos de cada carpeta. Se pregunta por tandas de
+ * carpetas para no hacer una petición por cada una.
+ */
+async function listarCarpetaRecursiva(
+  accessToken: string,
+  raizId: string,
+  onProgreso?: (leidos: number) => void,
+): Promise<DriveArchivo[]> {
+  const salida: DriveArchivo[] = [];
+  const MAX_ENTRADAS = 50_000;
+  let porVisitar = [raizId];
+
+  while (porVisitar.length) {
+    // La consulta admite varios padres a la vez: de 50 en 50.
+    const tanda = porVisitar.splice(0, 50);
+    const filtro = tanda.map((id) => `'${id}' in parents`).join(" or ");
+    const siguientes: string[] = [];
+    let pageToken: string | undefined;
+
+    do {
+      const params = new URLSearchParams({
+        q: `(${filtro}) and trashed = false`,
+        pageSize: "1000",
+        fields: `nextPageToken,files(${CAMPOS})`,
+        supportsAllDrives: "true",
+        includeItemsFromAllDrives: "true",
+      });
+      if (pageToken) params.set("pageToken", pageToken);
+
+      const res = await driveFetch(`${DRIVE_API}/files?${params}`, accessToken);
+      const json = (await res.json()) as {
+        files?: Array<{
+          id: string;
+          name: string;
+          mimeType: string;
+          size?: string;
+          parents?: string[];
+          modifiedTime?: string;
+        }>;
+        nextPageToken?: string;
+      };
+
+      for (const f of json.files ?? []) {
+        const esCarpeta = f.mimeType === MIME_CARPETA;
+        salida.push({
+          id: f.id,
+          nombre: f.name,
+          mime: f.mimeType,
+          tamano: Number(f.size ?? 0),
+          esCarpeta,
+          padreId: f.parents?.[0] ?? null,
+          modificado: f.modifiedTime ?? null,
+        });
+        if (esCarpeta) siguientes.push(f.id);
+      }
+      onProgreso?.(salida.length);
+      pageToken = json.nextPageToken;
+
+      if (salida.length >= MAX_ENTRADAS) {
+        throw new Error(
+          `Esta carpeta tiene más de ${MAX_ENTRADAS.toLocaleString("es-ES")} elementos: demasiados para leerla de una vez. Importa carpetas más pequeñas por separado.`,
+        );
+      }
+    } while (pageToken);
+
+    porVisitar = porVisitar.concat(siguientes);
+  }
+
+  return salida;
+}
+
 export async function listarUnidadCompleta(
   accessToken: string,
   unidadId: string,
@@ -150,6 +270,14 @@ export async function listarUnidadCompleta(
   // Tope duro: una unidad enorme dejaría la pantalla colgada indefinidamente.
   // 50.000 entradas son ~50 páginas; por encima, más vale avisar que esperar.
   const MAX_ENTRADAS = 50_000;
+
+  // ¿Es una unidad compartida o una carpeta de "Mi unidad"? En el primer caso
+  // se pide la unidad entera de golpe; en el segundo hay que ir bajando
+  // carpeta por carpeta, porque la API no sabe listar "todo lo que cuelga de
+  // aquí" fuera de una unidad compartida.
+  if (!(await esDriveId(accessToken, unidadId))) {
+    return listarCarpetaRecursiva(accessToken, unidadId, onProgreso);
+  }
 
   do {
     const params = new URLSearchParams({
