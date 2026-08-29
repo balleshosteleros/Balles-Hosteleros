@@ -74,6 +74,22 @@ function moduloRequerido(pathname: string): string | null {
 const COOKIE_PUERTA = 'bh_puerta_ok'
 const PUERTA_TTL_S = 30
 
+// ¿Es una petición INTERNA de Next (RSC / prefetch), no una navegación real?
+//
+// Al pulsar un submódulo, Next pide primero el documento y DESPUÉS lanza una
+// ráfaga de peticiones RSC para el mismo destino. Un redirect contestado a una
+// de esas peticiones no se ve como un bloqueo limpio: la pantalla ya se ha
+// pintado, así que el usuario ve el submódulo y un segundo después se le
+// expulsa al índice del módulo. Quien decide el acceso es la navegación real
+// (el documento); estas peticiones derivadas no deben redirigir a nadie.
+function esPeticionInterna(request: NextRequest): boolean {
+  return (
+    request.nextUrl.searchParams.has('_rsc') ||
+    request.headers.get('rsc') === '1' ||
+    request.headers.get('next-router-prefetch') === '1'
+  )
+}
+
 export async function proxy(request: NextRequest) {
   try {
     return await proxyInterno(request)
@@ -179,11 +195,20 @@ async function proxyInterno(request: NextRequest) {
     auth: { autoRefreshToken: false, persistSession: false },
   })
 
-  const { data: profile } = await admin
+  const { data: profile, error: profileError } = await admin
     .from('usuarios')
     .select('rol_id, rol_label, empresa_id, estado_acceso')
     .eq('user_id', user.id)
     .maybeSingle()
+
+  // Misma regla que abajo con el rol: si la consulta FALLA no sabemos nada del
+  // usuario, y aquí el precio de equivocarse es aún más alto (este bloque cierra
+  // la sesión). "No he podido comprobarlo" nunca puede tratarse como "no tiene
+  // ficha": se deja pasar y la autorización real se revalida más adelante.
+  if (profileError) {
+    console.error('[proxy] no se pudo comprobar el perfil — se deja pasar:', profileError)
+    return sessionResponse
+  }
 
   // Paso 3: PUERTA DE ACCESO. Va ANTES del filtro por módulo a propósito.
   // Si se comprobara solo en rutas de módulo (/rrhh, /gerencia…), una cuenta
@@ -231,6 +256,9 @@ async function proxyInterno(request: NextRequest) {
   // Paso 4: autorización por módulo (solo para prefijos protegidos).
   if (!moduloReq) return sessionResponse
 
+  // Las peticiones internas de Next no expulsan (ver `esPeticionInterna`).
+  if (esPeticionInterna(request)) return sessionResponse
+
   if (!rolId && !rolLabel) {
     return NextResponse.redirect(new URL('/', request.url))
   }
@@ -238,9 +266,21 @@ async function proxyInterno(request: NextRequest) {
   // Rol del usuario (fuente única PRP-063): por rol_id; fallback defensivo a
   // rol_label (texto) por si algún usuario en transición aún no tiene rol_id.
   const rolQuery = admin.from('empresa_roles').select('permisos, es_admin_plataforma')
-  const { data: rolRow } = rolId
+  const { data: rolRow, error: rolError } = rolId
     ? await rolQuery.eq('id', rolId).maybeSingle()
     : await rolQuery.eq('empresa_id', empresaId).ilike('nombre', rolLabel as string).maybeSingle()
+
+  // La consulta del rol FALLÓ (timeout, pool ocupado, red). Eso NO significa
+  // "sin permisos": significa "no lo he podido comprobar". Tratarlo como una
+  // denegación expulsaba a un usuario legítimo en mitad de la navegación — la
+  // página se pintaba y un segundo después saltaba fuera del submódulo, porque
+  // basta con que falle UNA de la ráfaga de peticiones de esa navegación.
+  // Se deja pasar, igual que hace el catch general de `proxy()`: la
+  // autorización real se revalida en cada server action y route handler.
+  if (rolError) {
+    console.error('[proxy] no se pudo comprobar el rol — se deja pasar:', rolError)
+    return sessionResponse
+  }
 
   // Sin bypass de 'director' (es_admin_plataforma): el acceso a cada ruta lo
   // decide SIEMPRE el permiso del rol configurado en Ajustes → Roles. Antes,

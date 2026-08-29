@@ -39,7 +39,7 @@ function EmpresaAvatar({ empresa, logoUrl, size = "md" }: { empresa: Empresa; lo
 export function EmpresaSelector() {
   // Avatar pequeño = ISOTIPO (icono sin texto). Si no hay isotipo, iniciales (nunca el logo con texto).
   const { empresas, empresaActual, setEmpresaId, getIsotipoUrl } = useEmpresa();
-  const { puedeVer } = useAuth();
+  const { puedeVer, permisosLoaded } = useAuth();
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
 
@@ -48,7 +48,14 @@ export function EmpresaSelector() {
   // para que elija entre los disponibles. La decisión se calcula con la ruta
   // actual + permisos del usuario (misma lógica que el sidebar).
   const cambiarEmpresa = (id: string) => {
-    const destino = resolveDestinoCambioEmpresa(pathname, puedeVer);
+    // Solo decidimos el destino si los permisos están CARGADOS. Con los
+    // permisos a medias `puedeVer()` devuelve false para todo — no porque
+    // falte el permiso, sino porque aún no ha llegado — y el usuario acababa
+    // expulsado del submódulo en el que estaba. Sin veredicto fiable pasamos
+    // `null`: se queda donde está y solo se refrescan los datos.
+    const destino = permisosLoaded
+      ? resolveDestinoCambioEmpresa(pathname, puedeVer)
+      : null;
     setEmpresaId(id, destino);
     setOpen(false);
   };
