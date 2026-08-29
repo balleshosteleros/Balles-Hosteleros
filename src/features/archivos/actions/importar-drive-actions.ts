@@ -79,7 +79,7 @@ export async function listarUnidades(): Promise<Res<UnidadCompartida[]>> {
   try {
     const token = await getAccessToken();
     if (!token) {
-      return fallo("Conecta primero la cuenta de Google que ve las unidades compartidas.");
+      return fallo("Conecta primero la cuenta de Google donde están las carpetas.");
     }
     return { ok: true, data: await listarUnidadesCompartidas(token) };
   } catch (err) {

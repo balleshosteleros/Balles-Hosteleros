@@ -3,7 +3,7 @@
 /**
  * PRP-081 — Importar desde Google Drive.
  *
- * Cuatro pasos: elegir unidad compartida → inventario → mapear cada carpeta a
+ * Cuatro pasos: elegir carpeta de origen → inventario → mapear cada carpeta a
  * su departamento → importar con progreso.
  *
  * La importación se relanza sola hasta terminar: cada llamada copia lo que le
@@ -102,7 +102,7 @@ export function ImportarDrivePanel() {
     const res = await listarUnidades();
     if (res.ok) {
       setUnidades(res.data);
-      if (!res.data.length) toast.info("Esta cuenta no ve ninguna unidad compartida.");
+      if (!res.data.length) toast.info("Esta cuenta de Google no tiene ninguna carpeta en Drive.");
     } else if (res.error.includes("anterior al permiso de Drive")) {
       setFaltaPermiso(true);
     } else {
@@ -155,7 +155,7 @@ export function ImportarDrivePanel() {
     } catch (err) {
       // Cancelar (a mano o por tiempo) no es un error que reportar.
       if ((err as Error)?.name !== "AbortError") {
-        toast.error("No se pudo leer la unidad. Inténtalo de nuevo.");
+        toast.error("No se pudo leer la carpeta. Inténtalo de nuevo.");
       }
     } finally {
       clearTimeout(corte);
@@ -253,12 +253,12 @@ export function ImportarDrivePanel() {
         </div>
       )}
 
-      {/* Paso 1 — elegir unidad */}
+      {/* Paso 1 — elegir carpeta de origen */}
       {!inventario && !faltaPermiso && (
         <div>
           {!unidades ? (
             <Button size="sm" onClick={() => void onConectar()} disabled={cargando}>
-              {cargando ? "Buscando…" : "Ver unidades compartidas"}
+              {cargando ? "Buscando…" : "Ver carpetas de Drive"}
             </Button>
           ) : (
             <div className="space-y-1">
