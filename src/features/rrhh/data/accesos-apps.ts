@@ -123,13 +123,17 @@ const LOGOS_POR_NOMBRE: Array<[string, string]> = [
   ["youtube", "https://cdn.simpleicons.org/youtube/FF0000"],
   ["whatsapp", "https://cdn.simpleicons.org/whatsapp/25D366"],
   ["adyen", "https://cdn.simpleicons.org/adyen/0ABF53"],
-  ["mercadona", "https://cdn.simpleicons.org/mercadona/008E5A"],
-  ["makro", "https://cdn.simpleicons.org/makro/E2001A"],
+  ["mercadona", "https://www.google.com/s2/favicons?domain=mercadona.es&sz=128"],
+  ["makro", "https://www.google.com/s2/favicons?domain=makro.es&sz=128"],
   ["google", "https://cdn.simpleicons.org/google/4285F4"],
   ["gmail", "https://cdn.simpleicons.org/gmail/EA4335"],
   ["drive", "https://cdn.simpleicons.org/googledrive/4285F4"],
   ["microsoft", "https://cdn.simpleicons.org/microsoft/5E5E5E"],
-  ["sesame", "https://icon.horse/icon/sesamehr.com"],
+  ["sesame", "https://www.google.com/s2/favicons?domain=sesametime.com&sz=128"],
+  ["bbva", "https://www.google.com/s2/favicons?domain=bbva.es&sz=128"],
+  ["ágora", "https://www.google.com/s2/favicons?domain=agorapos.com&sz=128"],
+  ["agora", "https://www.google.com/s2/favicons?domain=agorapos.com&sz=128"],
+  ["b2com", "https://www.google.com/s2/favicons?domain=b2com.com&sz=128"],
 ];
 
 /** Logo por nombre de marca conocida (sin necesidad de URL). "" si no hay match. */
