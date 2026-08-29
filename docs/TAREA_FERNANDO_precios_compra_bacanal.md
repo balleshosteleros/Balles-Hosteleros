@@ -5,6 +5,40 @@
 
 ---
 
+## 🍳 29-AGO — ANTES DE LA FASE 2: CÓMO QUIERES QUE FUNCIONEN LAS ELABORACIONES
+
+> **1 pregunta para Iván**, con calma (estamos esperando tus respuestas, no corre). Es la única que
+> nos falta para poder construir bien la parte grande.
+
+La Fase 2 arregla Elaboraciones, que hoy está rota (te lo contamos: solo suma el elaborado y no
+descuenta los ingredientes). La vamos a reescribir para que una elaboración **consuma sus
+ingredientes y produzca el producto elaborado**, todo pasando por el historial de almacén.
+
+El problema es que **ese módulo no lo habéis usado nunca**, así que no hay una forma de trabajar que
+podamos copiar. Y aquí no queremos adivinar. Necesitamos que nos digas cómo lo imaginas:
+
+1. **Cuando se hace una tanda —por ejemplo, salsa brava o patatas fritas— ¿cuánto se produce de una
+   vez?** Dos formas posibles, dinos cuál:
+   - **La marca el escandallo** (la receta "rinde" 2 kg de salsa) y el cocinero solo dice "he hecho
+     una tanda".
+   - **La teclea el cocinero** cada vez ("hoy he hecho 3 kg"), y el sistema descuenta los
+     ingredientes en proporción.
+
+2. **¿En qué unidad se mide cada elaborado?** La salsa brava, el puré, las patatas fritas… ¿en
+   **kilos**, en **litros**, o en **raciones/unidades**? Hoy están todas puestas como "Unidades" por
+   defecto, y creemos que la mayoría deberían ser kilos o litros.
+
+**Por qué te lo preguntamos justo ahora:** esta segunda respuesta **resuelve de paso 13 de las 21
+líneas** que te señalábamos arriba (las que están en gramos apuntando a una elaboración: patatas
+fritas, salsas, fingers, maíz frito, caldo…). En cuanto sepamos en qué unidad va cada elaborado,
+esas 13 se ajustan solas y no tienes que revisarlas una a una. Las otras 8 (canónigos, rúcula,
+jamón, pan…) son productos de compra y esas sí las miramos aparte.
+
+Sin esto podemos hacer todo lo demás de la Fase 2 (el cierre de almacén en sí), pero la parte de
+Elaboraciones la dejaríamos para el final, cuando nos respondas.
+
+---
+
 ## 🔤 29-AGO — FASE 3 (unidades): AL REVISAR, 21 RECETAS NECESITAN TU OJO
 
 > **1 decisión para Iván.** El resto es información. Ya está en producción la parte que no
