@@ -18,7 +18,11 @@ import {
   type PagoGuardado,
 } from "@/features/rrhh/actions/pagos-actions";
 import { loadHorasMes, type HorasMesRow } from "@/features/rrhh/actions/horas-actions";
-import { procesarNominasLeidas, getNominaArchivoUrl } from "@/features/rrhh/actions/nominas-archivo-actions";
+import {
+  procesarNominasLeidas,
+  getNominaArchivoUrl,
+  getNominasMesUrl,
+} from "@/features/rrhh/actions/nominas-archivo-actions";
 import type { NominaLeida } from "@/features/rrhh/services/nominas/procesar-nominas";
 import {
   getNotifLiquidacionesConfig,
@@ -52,7 +56,7 @@ import { NumberInput } from "@/shared/components/NumberInput";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Edit2, Banknote, Settings, Send, Lock, Unlock, CheckCircle2, Clock, Upload, ReceiptText, AlertTriangle, FileText, ShieldCheck, X, Undo2 } from "lucide-react";
+import { Edit2, Banknote, Settings, Send, Lock, Unlock, CheckCircle2, Clock, Upload, ReceiptText, AlertTriangle, FileText, ShieldCheck, X, Undo2, Download, Loader2 } from "lucide-react";
 import {
   SubmoduleToolbar,
   aplicarFiltrosToolbar,
@@ -276,6 +280,7 @@ export function PagosView() {
   const [showRevision, setShowRevision] = useState(false);
   // empleadoId cuya nómina se está abriendo (para el indicador del icono).
   const [abriendoNomina, setAbriendoNomina] = useState<string | null>(null);
+  const [descargandoMes, setDescargandoMes] = useState(false);
   const [confirmandoMes, setConfirmandoMes] = useState(false);
   const [subiendoTc1, setSubiendoTc1] = useState(false);
   const tc1InputRef = useRef<HTMLInputElement>(null);
@@ -753,6 +758,22 @@ export function PagosView() {
       toast.error("No se pudo abrir la nómina.");
     } finally {
       setAbriendoNomina(null);
+    }
+  };
+
+  // TODAS las nóminas del mes en un PDF: el archivo que manda la gestoría,
+  // reconstruido desde lo guardado. Ordenado por empleado, con su finiquito al
+  // lado si lo tiene.
+  const descargarNominasDelMes = async () => {
+    setDescargandoMes(true);
+    try {
+      const res = await getNominasMesUrl(periodo);
+      if (res.ok) window.open(res.url, "_blank", "noopener,noreferrer");
+      else toast.error(res.error);
+    } catch {
+      toast.error("No se pudieron descargar las nóminas del mes.");
+    } finally {
+      setDescargandoMes(false);
     }
   };
 
@@ -1386,9 +1407,27 @@ export function PagosView() {
             e.target.value = "";
           }}
         />
+        {/* Todas las nóminas del mes en un PDF. Solo con nóminas subidas: si no,
+            no hay nada que descargar. */}
+        {nominasEnMes > 0 && !esVistaAgregada && (
+          <Button
+            variant="outline"
+            size="icon"
+            className="ml-auto"
+            onClick={descargarNominasDelMes}
+            disabled={descargandoMes}
+            title="Descargar todas las nóminas del mes en un PDF"
+          >
+            {descargandoMes ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Download className="h-4 w-4" />
+            )}
+          </Button>
+        )}
         <Button
           variant="outline"
-          className="ml-auto gap-2"
+          className={nominasEnMes > 0 && !esVistaAgregada ? "gap-2" : "ml-auto gap-2"}
           onClick={() => setShowDocsMes(true)}
           disabled={subiendoNominas || estadoMes.confirmado || esVistaAgregada}
           title={

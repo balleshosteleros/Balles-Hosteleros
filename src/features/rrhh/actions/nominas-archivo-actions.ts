@@ -226,6 +226,34 @@ export async function procesarNominasLeidas(
 }
 
 /**
+ * La MISMA nómina, pero pedida por el propio trabajador desde su portal. No
+ * recibe `empleadoId` de fuera: se resuelve desde la sesión, así que nadie puede
+ * pedir la de otro cambiando el parámetro. La RLS ya solo le deja ver las suyas
+ * de un mes confirmado; esto lo hace explícito en el servidor.
+ */
+export async function getMiNominaUrl(
+  periodo: string,
+): Promise<{ ok: true; url: string } | { ok: false; error: string }> {
+  try {
+    const { supabase, empresaId, userId } = await getAppContext();
+    if (!empresaId || !userId) return { ok: false, error: "No autorizado" };
+
+    const { data: emp } = await supabase
+      .from("empleados")
+      .select("id")
+      .eq("empresa_id", empresaId)
+      .eq("user_id", userId)
+      .maybeSingle();
+    const empleadoId = emp?.id as string | undefined;
+    if (!empleadoId) return { ok: false, error: "Sin ficha de empleado en esta empresa" };
+
+    return await getNominaArchivoUrl(periodo, empleadoId);
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Error" };
+  }
+}
+
+/**
  * URL firmada para VER la(s) nómina(s) de un empleado/mes. Si tiene UNA, devuelve
  * su URL directa. Si tiene VARIAS (finiquito + normal…), COMBINA los PDFs en uno
  * solo (una nómina seguida de la otra) y devuelve la URL del combinado.
@@ -317,4 +345,139 @@ export async function getNominaArchivoUrl(
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : "Error" };
   }
+}
+
+/**
+ * TODAS las nóminas de un mes en un solo PDF, para RRHH: el archivo que la
+ * gestoría manda de una pieza, reconstruido desde lo que hay guardado. Las
+ * páginas van por empleado (alfabético) y, dentro, por orden — así el finiquito
+ * queda junto a la nómina de esa persona.
+ */
+export async function getNominasMesUrl(
+  periodo: string,
+): Promise<{ ok: true; url: string; nominas: number } | { ok: false; error: string }> {
+  try {
+    const { supabase, empresaId } = await getAppContext();
+    if (!empresaId) return { ok: false, error: "No autorizado" };
+
+    const { data: puede } = await supabase.rpc("puede_gestionar_pagos");
+    if (puede !== true) return { ok: false, error: "No tienes permiso para descargar las nóminas." };
+
+    const { data: filas } = await supabase
+      .from("rrhh_pagos_nominas")
+      .select("nomina_path, orden, empleado_id, empleados(nombre, apellidos)")
+      .eq("empresa_id", empresaId)
+      .eq("periodo", periodo)
+      .not("nomina_path", "is", null)
+      .order("orden", { ascending: true });
+
+    const ordenadas = (filas ?? [])
+      .map((r) => {
+        const e = r.empleados as { nombre?: string; apellidos?: string } | null;
+        return {
+          path: r.nomina_path as string,
+          orden: Number(r.orden ?? 0),
+          nombre: `${e?.apellidos ?? ""} ${e?.nombre ?? ""}`.trim().toLowerCase(),
+        };
+      })
+      .sort((a, b) => a.nombre.localeCompare(b.nombre) || a.orden - b.orden);
+
+    if (ordenadas.length === 0) return { ok: false, error: "Este mes no tiene nóminas adjuntas." };
+
+    const admin = createAdminClient();
+    const { PDFDocument } = await import("pdf-lib");
+    const combinado = await PDFDocument.create();
+    for (const { path } of ordenadas) {
+      const dl = await admin.storage.from(BUCKET).download(path);
+      if (dl.error || !dl.data) continue;
+      try {
+        const src = await PDFDocument.load(new Uint8Array(await dl.data.arrayBuffer()), {
+          ignoreEncryption: true,
+        });
+        const pgs = await combinado.copyPages(src, src.getPageIndices());
+        pgs.forEach((pg) => combinado.addPage(pg));
+      } catch (e) {
+        console.error("[rrhh] combinar nóminas del mes:", path, e);
+      }
+    }
+    if (combinado.getPageCount() === 0) {
+      return { ok: false, error: "No se pudo leer ninguna de las nóminas del mes." };
+    }
+
+    const bytes = await combinado.save();
+    const destino = `${empresaId}/${periodo}/_mes-completo.pdf`;
+    const up = await admin.storage
+      .from(BUCKET)
+      .upload(destino, Buffer.from(bytes), { upsert: true, contentType: "application/pdf" });
+    if (up.error) return { ok: false, error: up.error.message };
+
+    const signed = await admin.storage.from(BUCKET).createSignedUrl(destino, SIGNED_URL_TTL);
+    if (signed.error || !signed.data?.signedUrl) {
+      return { ok: false, error: signed.error?.message ?? "No se pudo generar el enlace" };
+    }
+    return { ok: true, url: signed.data.signedUrl, nominas: ordenadas.length };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Error" };
+  }
+}
+
+/**
+ * Las nóminas del trabajador para su carpeta de Documentos: una entrada por mes
+ * confirmado, con la fecha y el nº de documentos de ese mes. La descarga de cada
+ * una va por `getMiNominaUrl`.
+ */
+export async function listMisNominas(): Promise<{
+  ok: boolean;
+  data: { periodo: string; periodoLabel: string; documentos: number }[];
+}> {
+  try {
+    const { supabase, empresaId, userId } = await getAppContext();
+    if (!empresaId || !userId) return { ok: false, data: [] };
+
+    const { data: emp } = await supabase
+      .from("empleados")
+      .select("id")
+      .eq("empresa_id", empresaId)
+      .eq("user_id", userId)
+      .maybeSingle();
+    const empleadoId = emp?.id as string | undefined;
+    if (!empleadoId) return { ok: true, data: [] };
+
+    // La RLS ya limita a los meses confirmados: lo no publicado no sale.
+    const { data: filas } = await supabase
+      .from("rrhh_pagos_nominas")
+      .select("periodo")
+      .eq("empresa_id", empresaId)
+      .eq("empleado_id", empleadoId)
+      .not("nomina_path", "is", null);
+
+    const porMes = new Map<string, number>();
+    for (const f of filas ?? []) {
+      const p = f.periodo as string;
+      porMes.set(p, (porMes.get(p) ?? 0) + 1);
+    }
+
+    const data = [...porMes.entries()]
+      .sort((a, b) => b[0].localeCompare(a[0]))
+      .map(([periodo, documentos]) => ({
+        periodo,
+        periodoLabel: mesLargo(periodo),
+        documentos,
+      }));
+    return { ok: true, data };
+  } catch (err) {
+    console.error("[rrhh] listMisNominas:", err);
+    return { ok: false, data: [] };
+  }
+}
+
+const MESES_LARGOS = [
+  "enero", "febrero", "marzo", "abril", "mayo", "junio",
+  "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
+];
+
+function mesLargo(periodo: string): string {
+  const [a, m] = periodo.split("-");
+  const nombre = MESES_LARGOS[Number(m) - 1] ?? periodo;
+  return `${nombre.charAt(0).toUpperCase()}${nombre.slice(1)} ${a}`;
 }

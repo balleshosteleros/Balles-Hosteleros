@@ -25,6 +25,17 @@ import {
   type CategoriaDocumento,
   type DocumentoEmpleado,
 } from "@/features/mi-panel/actions/mis-documentos-actions";
+import {
+  listMisNominas,
+  getMiNominaUrl,
+} from "@/features/rrhh/actions/nominas-archivo-actions";
+
+/** Una nómina publicada, para la carpeta "Nóminas". */
+interface MiNomina {
+  periodo: string;
+  periodoLabel: string;
+  documentos: number;
+}
 
 interface Carpeta {
   id: CategoriaDocumento;
@@ -49,6 +60,43 @@ function tamanoLegible(bytes: number | null): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+/**
+ * Una nómina del mes. No vive en `documentos_empleado` como el resto: sale de
+ * `rrhh_pagos_nominas`, que es donde la deja la gestoría. Si el mes tiene varias
+ * (finiquito + nómina), se descargan combinadas en un solo PDF.
+ */
+function FilaNomina({ nomina }: { nomina: MiNomina }) {
+  const [bajando, setBajando] = useState(false);
+
+  const descargar = async () => {
+    setBajando(true);
+    const res = await getMiNominaUrl(nomina.periodo);
+    setBajando(false);
+    if (res.ok) window.open(res.url, "_blank", "noopener,noreferrer");
+    else toast.error(res.error);
+  };
+
+  return (
+    <button
+      onClick={descargar}
+      className="flex items-center gap-3 w-full p-3 rounded-lg border bg-card hover:border-primary/40 hover:shadow-sm transition-all text-left"
+    >
+      <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-medium truncate">Nómina de {nomina.periodoLabel.toLowerCase()}</p>
+        {nomina.documentos > 1 && (
+          <p className="text-xs text-muted-foreground">{nomina.documentos} documentos</p>
+        )}
+      </div>
+      {bajando ? (
+        <Loader2 className="h-4 w-4 animate-spin text-muted-foreground shrink-0" />
+      ) : (
+        <Download className="h-4 w-4 text-muted-foreground shrink-0" />
+      )}
+    </button>
+  );
 }
 
 function FilaDocumento({ doc }: { doc: DocumentoEmpleado }) {
@@ -90,10 +138,12 @@ function FilaDocumento({ doc }: { doc: DocumentoEmpleado }) {
 export function MisDocumentosView() {
   const [carpetaActiva, setCarpetaActiva] = useState<Carpeta | null>(null);
   const [docs, setDocs] = useState<Record<CategoriaDocumento, DocumentoEmpleado[]> | null>(null);
+  const [nominas, setNominas] = useState<MiNomina[]>([]);
 
   const cargar = useCallback(async () => {
-    const res = await listMisDocumentos();
+    const [res, nom] = await Promise.all([listMisDocumentos(), listMisNominas()]);
     setDocs(res.ok ? res.data : null);
+    setNominas(nom.ok ? nom.data : []);
   }, []);
 
   useEffect(() => {
@@ -107,11 +157,15 @@ export function MisDocumentosView() {
     onCambio: () => void cargar(),
   });
 
-  const conteo = (id: CategoriaDocumento) => docs?.[id]?.length ?? 0;
+  // Las nóminas no están en `documentos_empleado`: se suman aparte a su carpeta.
+  const conteo = (id: CategoriaDocumento) =>
+    (docs?.[id]?.length ?? 0) + (id === "nominas" ? nominas.length : 0);
 
   if (carpetaActiva) {
     const Icon = carpetaActiva.icon;
     const lista = docs?.[carpetaActiva.id] ?? [];
+    const nominasCarpeta = carpetaActiva.id === "nominas" ? nominas : [];
+    const total = lista.length + nominasCarpeta.length;
     return (
       <div className="p-4 md:p-6 max-w-5xl mx-auto space-y-4">
         <div className="flex items-center gap-2 text-sm">
@@ -133,12 +187,12 @@ export function MisDocumentosView() {
           <div>
             <h2 className="text-xl font-semibold">{carpetaActiva.nombre}</h2>
             <p className="text-xs text-muted-foreground">
-              {lista.length} {lista.length === 1 ? "archivo" : "archivos"}
+              {total} {total === 1 ? "archivo" : "archivos"}
             </p>
           </div>
         </div>
 
-        {lista.length === 0 ? (
+        {total === 0 ? (
           <Card className="p-10 flex flex-col items-center justify-center text-center text-muted-foreground">
             <Inbox className="h-8 w-8 mb-2" />
             <p className="text-sm font-medium">Esta carpeta está vacía</p>
@@ -149,6 +203,9 @@ export function MisDocumentosView() {
           </Card>
         ) : (
           <div className="space-y-2">
+            {nominasCarpeta.map((n) => (
+              <FilaNomina key={n.periodo} nomina={n} />
+            ))}
             {lista.map((d) => (
               <FilaDocumento key={d.id} doc={d} />
             ))}

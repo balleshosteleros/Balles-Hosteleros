@@ -39,5 +39,5 @@ export function PagosEmpleadoTab({ empleadoId }: { empleadoId: string }) {
     );
   }
 
-  return <HistorialPagos pagos={pagos} />;
+  return <HistorialPagos pagos={pagos} empleadoId={empleadoId} />;
 }

@@ -2,9 +2,14 @@
 
 import { useState } from "react";
 import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/shared/lib/utils";
 import type { PagoAbonado } from "@/features/rrhh/actions/pagos-actions";
-import { CheckCircle2, ChevronDown, Euro } from "lucide-react";
+import {
+  getMiNominaUrl,
+  getNominaArchivoUrl,
+} from "@/features/rrhh/actions/nominas-archivo-actions";
+import { CheckCircle2, ChevronDown, Euro, FileText, Loader2 } from "lucide-react";
 
 function fmtEur(n: number): string {
   return (
@@ -21,7 +26,17 @@ function fmtEur(n: number): string {
  * Se usa tanto en el portal del empleado ("Mis pagos") como en la ficha del
  * empleado del lado de RRHH.
  */
-export function HistorialPagos({ pagos }: { pagos: PagoAbonado[] }) {
+export function HistorialPagos({
+  pagos,
+  empleadoId,
+}: {
+  pagos: PagoAbonado[];
+  /**
+   * Solo desde la ficha de RRHH: de quién son estos pagos. En el portal del
+   * trabajador se omite y la nómina se pide con la sesión, sin id por medio.
+   */
+  empleadoId?: string;
+}) {
   if (pagos.length === 0) {
     return (
       <Card className="p-10 flex flex-col items-center justify-center text-center gap-2">
@@ -40,14 +55,32 @@ export function HistorialPagos({ pagos }: { pagos: PagoAbonado[] }) {
   return (
     <div className="space-y-2.5">
       {pagos.map((p) => (
-        <PagoCard key={p.id} pago={p} />
+        <PagoCard key={p.id} pago={p} empleadoId={empleadoId} />
       ))}
     </div>
   );
 }
 
-function PagoCard({ pago }: { pago: PagoAbonado }) {
+function PagoCard({ pago, empleadoId }: { pago: PagoAbonado; empleadoId?: string }) {
   const [abierto, setAbierto] = useState(false);
+  const [abriendo, setAbriendo] = useState(false);
+  const [errorNomina, setErrorNomina] = useState<string | null>(null);
+
+  // La nómina se abre en una pestaña nueva con una URL firmada temporal. Si el
+  // mes tiene varias (finiquito + normal), llegan combinadas en un solo PDF.
+  async function abrirNomina() {
+    setAbriendo(true);
+    setErrorNomina(null);
+    try {
+      const res = empleadoId
+        ? await getNominaArchivoUrl(pago.periodo, empleadoId)
+        : await getMiNominaUrl(pago.periodo);
+      if (res.ok) window.open(res.url, "_blank", "noopener,noreferrer");
+      else setErrorNomina(res.error);
+    } finally {
+      setAbriendo(false);
+    }
+  }
   // Bruto = nómina neta + SS trabajador + IRPF (lo que la empresa declara).
   const bruto = Math.round((pago.nomina + pago.ssEmpleado + pago.irpf) * 100) / 100;
 
@@ -105,6 +138,26 @@ function PagoCard({ pago }: { pago: PagoAbonado }) {
             )}
             <Fila label="Total a percibir" valor={fmtEur(pago.total)} destacado />
           </dl>
+
+          {pago.nominaPath && (
+            <div className="mt-3 flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1.5"
+                onClick={abrirNomina}
+                disabled={abriendo}
+              >
+                {abriendo ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <FileText className="h-3.5 w-3.5" />
+                )}
+                Ver nómina
+              </Button>
+              {errorNomina && <span className="text-xs text-destructive">{errorNomina}</span>}
+            </div>
+          )}
         </div>
       )}
     </Card>
