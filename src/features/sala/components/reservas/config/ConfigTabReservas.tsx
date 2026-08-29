@@ -23,6 +23,7 @@ import {
   getReservasConfig,
   upsertReservasConfig,
 } from "@/features/sala/actions/reservas-config-actions";
+import { useConfirmSalida } from "@/shared/components/ConfirmSalidaDialog";
 import { LimitesReglas, type PanelPendienteHandle } from "./LimitesReglas";
 import { HorariosAperturaPanel } from "./HorariosAperturaPanel";
 import { PreferenciasMotorPanelButton } from "./PreferenciasMotorPanel";
@@ -44,6 +45,8 @@ export function ConfigTabReservas({ onDirtyChange }: ConfigTabReservasProps = {}
   // contenido lo repondría a 0 y al teclear saldría "015" en vez de "15".
   const [antelacionMin, setAntelacionMin] = useState("0");
   const [antelacionMax, setAntelacionMax] = useState("90");
+  // Descartar destruye trabajo, así que se confirma con diálogo propio.
+  const { confirmarSalida, dialog: confirmDescartarDialog } = useConfirmSalida();
 
   // Los paneles de listas (horarios, aforo, intervalo) llevan sus propios
   // pendientes: viven en tablas aparte y no caben en el parche de campos. Cada
@@ -129,6 +132,29 @@ export function ConfigTabReservas({ onDirtyChange }: ConfigTabReservasProps = {}
     }
   }
 
+  /**
+   * Deja la pestaña como está en la base de datos: es la única forma de
+   * deshacer sin salir de ella. Se recarga todo en vez de recomponer estados a
+   * mano, que es lo único que garantiza que no quede nada del borrador: los
+   * clicks en slots ya habían mutado `config` en memoria, y `setLoading(true)`
+   * desmonta los paneles, que vuelven a leer sus listas al montarse.
+   */
+  async function handleDescartar() {
+    if (!hayCambios) return;
+    const seguro = await confirmarSalida({
+      title: "¿Descartar los cambios?",
+      description:
+        "Todo lo que has tocado en esta pestaña volverá a como estaba guardado. No se puede deshacer.",
+      quedarseLabel: "Seguir editando",
+      salirLabel: "Descartar cambios",
+    });
+    if (!seguro) return;
+    setPendiente({});
+    setLoading(true);
+    await cargar();
+    toast.success("Cambios descartados");
+  }
+
   if (loading || !config) {
     return (
       <div className="space-y-3">
@@ -155,6 +181,16 @@ export function ConfigTabReservas({ onDirtyChange }: ConfigTabReservasProps = {}
         </p>
         <div className="flex items-center gap-2">
           <PreferenciasMotorPanelButton config={config} onChange={handleConfigChange} />
+          {hayCambios && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleDescartar}
+              disabled={guardando}
+            >
+              Descartar
+            </Button>
+          )}
           <Button size="sm" onClick={handleGuardar} disabled={!hayCambios || guardando}>
             Guardar
           </Button>
@@ -379,6 +415,7 @@ export function ConfigTabReservas({ onDirtyChange }: ConfigTabReservasProps = {}
         )}
       </div>
 
+      {confirmDescartarDialog}
     </div>
   );
 }
