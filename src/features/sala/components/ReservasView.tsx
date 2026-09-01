@@ -16,7 +16,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { formatFechaHoraEnZona } from "@/features/empresa/lib/zona-horaria";
 import { useSincronizacionEnVivo } from "@/shared/hooks/useSincronizacionEnVivo";
-import { Plus, Search, ChevronLeft, ChevronRight, ListPlus, ListFilter, Check, Move, Map as MapIcon, List as ListIcon } from "lucide-react";
+import { Plus, Search, ChevronLeft, ChevronRight, ListPlus, ListFilter, Check, Move, Map as MapIcon, List as ListIcon, Ticket } from "lucide-react";
 // Configuración solo se carga cuando el usuario pulsa "Configuración" — fuera del bundle inicial.
 const ConfigReservasView = dynamic(
   () =>
@@ -1996,6 +1996,12 @@ function mapDbToReserva(row: Record<string, unknown>): Reserva {
     ticketUnidades: (row.ticket_unidades as number | null) ?? null,
     ticketImporte: (row.ticket_importe as number | null) ?? null,
     ticketIva: (row.ticket_iva as number | null) ?? null,
+    ticketCodigo: (row.ticket_codigo as string | null) ?? null,
+    ticketProductoNombre: (() => {
+      const p = row.reserva_ticket_productos as unknown as
+        | { nombre?: string } | { nombre?: string }[] | null;
+      return (Array.isArray(p) ? p[0]?.nombre : p?.nombre) ?? null;
+    })(),
     pagoPendiente: (row.pago_pendiente as boolean) ?? false,
     bloqueada: (row.bloqueada as boolean) ?? false,
     grupoId: (row.grupo_id as string | null) ?? null,
@@ -5226,6 +5232,40 @@ export function ReservasView() {
                         tickAhora,
                       )}
                     </p>
+                  </div>
+                )}
+                {/* Datos del Ticket. Todo de solo lectura: el tipo de reserva,
+                    el código y el dinero quedan congelados desde el canje (lo
+                    impide también la base de datos, no solo esta pantalla). */}
+                {selectedReserva.esTicket && (
+                  <div className="rounded-lg border border-red-500/30 bg-red-500/5 p-3">
+                    <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-red-600">
+                      <Ticket className="h-3.5 w-3.5" />
+                      Reserva con Ticket
+                    </div>
+                    <div className="mt-2 space-y-1 text-sm">
+                      {selectedReserva.ticketProductoNombre && (
+                        <p className="font-medium">{selectedReserva.ticketProductoNombre}</p>
+                      )}
+                      {selectedReserva.ticketImporte != null && selectedReserva.ticketImporte > 0 && (
+                        <p className="text-muted-foreground">
+                          {(() => {
+                            const uds = selectedReserva.ticketUnidades ?? selectedReserva.comensales ?? 1;
+                            const total = selectedReserva.ticketImporte ?? 0;
+                            const unit = uds > 0 ? total / uds : total;
+                            const eur = (n: number) => `${n.toFixed(2).replace(".", ",")} €`;
+                            return uds > 1
+                              ? `${uds} personas × ${eur(unit)} = ${eur(total)} total`
+                              : `${eur(total)} total`;
+                          })()}
+                        </p>
+                      )}
+                      {selectedReserva.ticketCodigo && (
+                        <p className="font-mono text-xs text-muted-foreground">
+                          Código {selectedReserva.ticketCodigo}
+                        </p>
+                      )}
+                    </div>
                   </div>
                 )}
                 <div className="flex flex-wrap items-center gap-2">
