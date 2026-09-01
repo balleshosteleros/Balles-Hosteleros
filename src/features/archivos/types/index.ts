@@ -85,6 +85,37 @@ export interface RegistrarArchivoInput {
 export const esVideo = (mime: string) => mime.startsWith("video/");
 export const esImagen = (mime: string) => mime.startsWith("image/");
 
-/** ¿Se puede mostrar una vista previa? El resto se pinta con un icono. */
+/**
+ * Formatos de imagen que NINGÚN navegador sabe pintar.
+ *
+ * Son RAW de cámara: el archivo en bruto del sensor, sin revelar. En el Drive
+ * de la empresa hay cientos (las fotos de producto se disparan en RAW). Pasan
+ * el filtro `image/*`, así que sin esta lista el visor intentaba pintarlos y
+ * salía el icono de imagen rota; ahora se tratan como un documento más: se
+ * ofrecen para descargar o abrir con la app del ordenador que sí los revela.
+ */
+const RAW_NO_PINTABLE = [
+  "image/arw", // Sony
+  "image/cr2", // Canon
+  "image/cr3",
+  "image/nef", // Nikon
+  "image/dng",
+  "image/raf", // Fujifilm
+  "image/orf", // Olympus
+  "image/rw2", // Panasonic
+  "image/x-adobe-dng",
+];
+
+/** ¿Es una imagen que el navegador puede PINTAR? (el RAW, no.) */
+export const esImagenPintable = (mime: string) =>
+  esImagen(mime) && !RAW_NO_PINTABLE.includes(mime.toLowerCase());
+
+/**
+ * ¿Se puede mostrar una vista previa? El resto se pinta con un icono.
+ *
+ * HEIC/HEIF entran a propósito: son el formato nativo del iPhone y Safari los
+ * pinta sin problema. En un navegador de escritorio que no los soporte se ve
+ * el hueco, pero los botones de descargar y compartir siguen funcionando.
+ */
 export const tieneVistaPrevia = (mime: string) =>
-  esImagen(mime) || esVideo(mime);
+  esImagenPintable(mime) || esVideo(mime);

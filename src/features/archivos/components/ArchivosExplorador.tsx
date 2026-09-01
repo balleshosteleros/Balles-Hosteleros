@@ -28,11 +28,15 @@ import {
   Pencil,
   ImageIcon,
   MoreVertical,
+  Share2,
+  X,
+  Loader2,
   FolderInput,
   FileText,
   FileSpreadsheet,
   FileArchive,
   FileAudio,
+  FileVideo,
   File as FileIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -68,12 +72,17 @@ import {
 } from "@/features/archivos/actions/archivos-actions";
 import {
   esVideo,
-  esImagen,
+  esImagenPintable,
   tieneVistaPrevia,
   type Archivo,
   type Carpeta,
 } from "@/features/archivos/types";
 import { generarMiniatura, leerDimensiones } from "@/features/archivos/lib/miniaturas";
+import {
+  compartirArchivo,
+  descargarArchivo,
+  puedeCompartirArchivos,
+} from "@/features/archivos/lib/compartir";
 import { allSections } from "@/features/layout/data/nav-routes";
 
 /** Cuántos archivos se suben a la vez. Más en paralelo satura el móvil. */
@@ -121,6 +130,9 @@ function formatearTamano(bytes: number): string {
 function iconoArchivo(mime: string, nombre: string) {
   const ext = nombre.split(".").pop()?.toLowerCase() ?? "";
   if (mime.startsWith("audio/")) return FileAudio;
+  // Un vídeo SIN miniatura (los importados de Drive no la tienen) llega aquí:
+  // sin este caso caía en el icono genérico y no se distinguía de un ZIP.
+  if (mime.startsWith("video/")) return FileVideo;
   if (mime.includes("pdf") || ext === "pdf") return FileText;
   if (
     mime.includes("sheet") ||
@@ -196,6 +208,77 @@ export function ArchivosExplorador({ variante, abierto = true, renderAcciones }:
   const [destinoElegido, setDestinoElegido] = useState<string>("");
   const [cargandoDestinos, setCargandoDestinos] = useState(false);
   const [renombrandoArchivo, setRenombrandoArchivo] = useState<Archivo | null>(null);
+
+  /*
+   * Guardar / compartir (reporte de Iván, 01-sep-2026).
+   *
+   * `soportaCompartir` se resuelve DESPUÉS de montar, nunca al renderizar: en
+   * el servidor no existe `navigator`, y decidirlo durante el render daría un
+   * HTML distinto al del cliente (error de hidratación).
+   */
+  const [soportaCompartir, setSoportaCompartir] = useState(false);
+  const [ocupado, setOcupado] = useState<"compartir" | "descargar" | null>(null);
+
+  useEffect(() => {
+    setSoportaCompartir(puedeCompartirArchivos());
+  }, []);
+
+  /*
+   * El gesto "atrás" cierra la foto (y no la app).
+   *
+   * La app instalada va en `standalone`: no hay barra del navegador, así que el
+   * único "atrás" es el deslizamiento desde el borde. Sin esto, ese gesto sobre
+   * una foto abierta te sacaba de la pantalla de Archivos entera, con la foto
+   * todavía puesta encima: la sensación era que la app se quedaba colgada.
+   *
+   * Se añade una entrada al historial al abrir el visor y se consume al cerrar,
+   * de modo que el gesto solo deshace la foto.
+   */
+  useEffect(() => {
+    if (!visor) return;
+
+    window.history.pushState({ visorArchivos: true }, "");
+    const alVolver = () => setVisor(null);
+    window.addEventListener("popstate", alVolver);
+
+    return () => {
+      window.removeEventListener("popstate", alVolver);
+      // Si el visor se cerró con el botón (no con el gesto), la entrada que se
+      // metió sigue en el historial: se retira para no dejar un "atrás" muerto
+      // que obligue a pulsar dos veces para salir de la carpeta.
+      if (window.history.state?.visorArchivos) window.history.back();
+    };
+  }, [visor]);
+
+  /**
+   * Entrega el archivo al sistema: hoja nativa en el móvil, descarga en el
+   * ordenador. Es lo que hace que "Guardar imagen" llegue de verdad a la
+   * galería del iPhone y que WhatsApp reciba la foto en vez de un enlace.
+   */
+  const onCompartir = useCallback(async (a: Archivo) => {
+    setOcupado("compartir");
+    try {
+      const res = await compartirArchivo(a.id, a.nombre, a.mime);
+      // Si el sistema no sabe compartir ficheros, se descarga: mejor eso que
+      // dejar el botón sin hacer nada.
+      if (res === "no-soportado") await descargarArchivo(a.id, a.nombre, a.mime);
+    } catch {
+      toast.error("No se pudo compartir el archivo.");
+    } finally {
+      setOcupado(null);
+    }
+  }, []);
+
+  const onDescargar = useCallback(async (a: Archivo) => {
+    setOcupado("descargar");
+    try {
+      await descargarArchivo(a.id, a.nombre, a.mime);
+    } catch {
+      toast.error("No se pudo descargar el archivo.");
+    } finally {
+      setOcupado(null);
+    }
+  }, []);
 
   const inputRef = useRef<HTMLInputElement>(null);
   // Carpeta activa "en vivo": los callbacks de subida se crean una vez y
@@ -685,6 +768,16 @@ export function ArchivosExplorador({ variante, abierto = true, renderAcciones }:
                           </button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
+                          {soportaCompartir && (
+                            <DropdownMenuItem onClick={() => void onCompartir(a)}>
+                              <Share2 className="mr-2 h-3.5 w-3.5" />
+                              Compartir
+                            </DropdownMenuItem>
+                          )}
+                          <DropdownMenuItem onClick={() => void onDescargar(a)}>
+                            <Download className="mr-2 h-3.5 w-3.5" />
+                            Descargar
+                          </DropdownMenuItem>
                           <DropdownMenuItem
                             onClick={() => {
                               setRenombrandoArchivo(a);
@@ -762,33 +855,80 @@ export function ArchivosExplorador({ variante, abierto = true, renderAcciones }:
 
       {/* Visor a pantalla completa */}
       <Dialog open={!!visor} onOpenChange={(v) => !v && setVisor(null)}>
-        <DialogContent className="max-w-4xl gap-0 p-0">
-          <DialogHeader className="flex-row items-center justify-between gap-2 border-b px-4 py-2.5 pr-12">
-            <DialogTitle className="truncate text-sm font-medium">
-              {visor?.nombre}
-            </DialogTitle>
-            <div className="flex shrink-0 items-center gap-1.5">
-              <span className="text-xs text-muted-foreground">
+        {/*
+          `[&>button]:hidden` esconde la X por defecto del Dialog: es diminuta y
+          en el móvil quedaba pegada al borde, encima de la imagen. Se sustituye
+          por el botón "Volver" de la izquierda, del tamaño de un dedo.
+        */}
+        <DialogContent className="max-w-4xl gap-0 p-0 [&>button]:hidden">
+          <DialogHeader className="flex-row items-center justify-between gap-2 border-b px-2 py-2 sm:px-4">
+            {/*
+              VOLVER (reporte de Iván, 01-sep-2026): antes, desde la vista previa
+              del móvil no había forma de regresar y había que cerrar la app
+              entera. Va el primero, donde se espera el "atrás", y con área de
+              pulsación de 40px.
+            */}
+            <div className="flex min-w-0 flex-1 items-center gap-1">
+              <button
+                onClick={() => setVisor(null)}
+                aria-label="Volver"
+                className="-ml-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-muted-foreground active:bg-muted hover:bg-muted"
+              >
+                <X className="h-5 w-5" />
+              </button>
+              <DialogTitle className="truncate text-sm font-medium">
+                {visor?.nombre}
+              </DialogTitle>
+            </div>
+            <div className="flex shrink-0 items-center gap-0.5">
+              <span className="hidden text-xs text-muted-foreground sm:inline">
                 {visor ? formatearTamano(visor.tamanoBytes) : ""}
               </span>
-              <a
-                href={visor ? `/api/archivos/ver?id=${visor.id}&descargar=1` : "#"}
+              {/*
+                COMPARTIR: solo donde el sistema sabe hacerlo (móvil). Entrega el
+                archivo, no un enlace, que es lo que rompía el envío por WhatsApp
+                y lo que impedía que "Guardar imagen" llegara a la galería.
+              */}
+              {soportaCompartir && (
+                <button
+                  title="Compartir"
+                  aria-label="Compartir"
+                  disabled={ocupado !== null}
+                  className="flex h-10 w-10 items-center justify-center rounded-full hover:bg-muted active:bg-muted disabled:opacity-50"
+                  onClick={() => visor && void onCompartir(visor)}
+                >
+                  {ocupado === "compartir" ? (
+                    <Loader2 className="h-[18px] w-[18px] animate-spin" />
+                  ) : (
+                    <Share2 className="h-[18px] w-[18px]" />
+                  )}
+                </button>
+              )}
+              <button
                 title="Descargar"
-                className="rounded p-1.5 hover:bg-muted"
+                aria-label="Descargar"
+                disabled={ocupado !== null}
+                className="flex h-10 w-10 items-center justify-center rounded-full hover:bg-muted active:bg-muted disabled:opacity-50"
+                onClick={() => visor && void onDescargar(visor)}
               >
-                <Download className="h-4 w-4" />
-              </a>
+                {ocupado === "descargar" ? (
+                  <Loader2 className="h-[18px] w-[18px] animate-spin" />
+                ) : (
+                  <Download className="h-[18px] w-[18px]" />
+                )}
+              </button>
               {visor?.puedeBorrar && (
                 <button
                   title="Eliminar"
-                  className="rounded p-1.5 hover:bg-muted"
+                  aria-label="Eliminar"
+                  className="flex h-10 w-10 items-center justify-center rounded-full hover:bg-muted active:bg-muted"
                   onClick={() => {
                     const objetivo = visor;
                     setVisor(null);
                     setABorrar(objetivo);
                   }}
                 >
-                  <Trash2 className="h-4 w-4 text-destructive" />
+                  <Trash2 className="h-[18px] w-[18px] text-destructive" />
                 </button>
               )}
             </div>
@@ -805,7 +945,7 @@ export function ArchivosExplorador({ variante, abierto = true, renderAcciones }:
                 autoPlay
                 className="max-h-[75vh] w-full"
               />
-            ) : visor && esImagen(visor.mime) ? (
+            ) : visor && esImagenPintable(visor.mime) ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={`/api/archivos/ver?id=${visor.id}`}
@@ -836,12 +976,13 @@ export function ArchivosExplorador({ variante, abierto = true, renderAcciones }:
                       >
                         Abrir
                       </a>
-                      <a
-                        href={`/api/archivos/ver?id=${visor.id}&descargar=1`}
-                        className="inline-flex h-9 items-center rounded-md border px-4 text-sm font-medium hover:bg-background"
+                      <button
+                        disabled={ocupado !== null}
+                        onClick={() => void onDescargar(visor)}
+                        className="inline-flex h-9 items-center rounded-md border px-4 text-sm font-medium hover:bg-background disabled:opacity-50"
                       >
-                        Descargar
-                      </a>
+                        {ocupado === "descargar" ? "Descargando…" : "Descargar"}
+                      </button>
                     </div>
                   </div>
                 );
