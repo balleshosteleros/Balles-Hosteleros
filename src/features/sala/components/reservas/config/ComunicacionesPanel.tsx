@@ -58,6 +58,7 @@ import {
 } from "@/features/sala/actions/reservas-config-actions";
 import type { EmpresaReservasConfig } from "@/features/sala/data/reservas";
 import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
+import { CanalesMensajeriaPanel } from "@/features/mensajeria/components/CanalesMensajeriaPanel";
 import { cn } from "@/lib/utils";
 
 const HORAS_RECORDATORIO: number[] = [1, 2, 3, 4, 6, 8, 12, 24, 48];
@@ -212,8 +213,13 @@ export function ComunicacionesPanel() {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       {confirmResetDialog}
+
+      {/* WhatsApp y SMS van primero: es el canal que el cliente lee de verdad,
+          y el correo es el que queda siempre por debajo como red de seguridad. */}
+      <CanalesMensajeriaPanel />
+
       <div>
         <h2 className="text-base font-semibold text-foreground">Plantillas de correo al cliente</h2>
         <p className="text-xs text-muted-foreground mt-0.5">
