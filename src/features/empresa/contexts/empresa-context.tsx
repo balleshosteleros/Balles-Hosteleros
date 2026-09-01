@@ -134,6 +134,17 @@ function buildInitialAjustes(): Record<string, AjustesEmpresa> {
 interface EmpresaContextValue {
   empresas: Empresa[];
   empresaActual: Empresa;
+  /**
+   * ¿`empresaActual` es ya la empresa REAL del usuario (cookie/localStorage
+   * resueltos), o todavía el valor por defecto del primer render?
+   *
+   * Mientras es `false`, `empresaActual` apunta a `EMPRESAS[0]` — que para la
+   * mayoría de usuarios NO es su empresa. Quien consulte datos por empresa en
+   * ese momento pregunta por la equivocada y recibe cero filas. Eso apagaba en
+   * gris el cohete y el candado al entrar (parecían "sin accesos") hasta que la
+   * cookie resolvía y una segunda consulta los encendía.
+   */
+  empresaResuelta: boolean;
   setEmpresaId: (id: string, destino?: string | null) => void;
   datos: Incidencia[];
   setDatos: (updater: (prev: Incidencia[]) => Incidencia[]) => void;
@@ -161,6 +172,10 @@ export function EmpresaProvider({ children }: { children: ReactNode }) {
   const hideLoading = useGlobalLoading((s) => s.hide);
   const [empresasList, setEmpresasList] = useState<Empresa[]>(EMPRESAS);
   const [empresaId, setEmpresaId] = useState(EMPRESAS[0].id);
+  // `empresaId` arranca en el default de la lista, no en la empresa del usuario.
+  // Esta bandera distingue "todavía es el default" de "ya es la real", para que
+  // los consumidores no lancen consultas por empresa contra el slug equivocado.
+  const [empresaResuelta, setEmpresaResuelta] = useState(false);
   const [allData, setAllData] = useState<Record<string, Incidencia[]>>(buildInitialData);
   const [allAjustes, setAllAjustes] = useState<Record<string, AjustesEmpresa>>(buildInitialAjustes);
   // Logo URLs cargadas desde Supabase Storage (fuente de verdad)
@@ -197,7 +212,14 @@ export function EmpresaProvider({ children }: { children: ReactNode }) {
       listEmpresasDeUsuario(),
     ])
       .then(([rows, activaDbId, userEmpresaIds]) => {
-        if (!alive || rows.length === 0) return;
+        if (!alive) return;
+        // Sin empresas que hidratar nos quedamos con el default, pero la espera
+        // TERMINA igual: si no, quien aguarda a `empresaResuelta` se quedaría
+        // esperando para siempre (cohete y candado, en gris permanente).
+        if (rows.length === 0) {
+          setEmpresaResuelta(true);
+          return;
+        }
 
         const allowed = new Set(userEmpresaIds);
         const filtered = allowed.size > 0
@@ -271,6 +293,10 @@ export function EmpresaProvider({ children }: { children: ReactNode }) {
               .catch(() => {});
           }
         }
+        // La empresa ya está decidida (por cookie, por localStorage o por el
+        // default de la lista real). A partir de aquí `empresaActual` es la
+        // buena y quien consulta por empresa pregunta por la correcta.
+        setEmpresaResuelta(true);
         isHydrated.current = true;
 
         // Hidratar ajustes con lo que haya en Supabase, mergeado contra los defaults.
@@ -298,6 +324,9 @@ export function EmpresaProvider({ children }: { children: ReactNode }) {
       })
       .catch((err) => {
         console.error("[empresa-context] hidratación falló:", err);
+        // La espera termina también en el error: mejor consultar con el default
+        // que dejar la UI que depende de esta señal congelada a medio pintar.
+        if (alive) setEmpresaResuelta(true);
       });
     return () => { alive = false; };
     // Hidratación de una sola vez al montar; `router` es estable (useRouter).
@@ -452,7 +481,7 @@ export function EmpresaProvider({ children }: { children: ReactNode }) {
 
   return (
     <EmpresaContext.Provider
-      value={{ empresas: empresasList, empresaActual, setEmpresaId: handleSetEmpresaId, datos, setDatos, ajustes, setAjustes, getLogoUrl, getIsotipoUrl, setLogoUrl, setIsotipoUrl, addEmpresa, updateEmpresa, deleteEmpresa }}
+      value={{ empresas: empresasList, empresaActual, empresaResuelta, setEmpresaId: handleSetEmpresaId, datos, setDatos, ajustes, setAjustes, getLogoUrl, getIsotipoUrl, setLogoUrl, setIsotipoUrl, addEmpresa, updateEmpresa, deleteEmpresa }}
     >
       {children}
     </EmpresaContext.Provider>
