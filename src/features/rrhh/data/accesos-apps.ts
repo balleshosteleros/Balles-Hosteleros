@@ -152,6 +152,8 @@ const LOGOS_POR_NOMBRE: Array<[string, string]> = [
   ["asgae", "/logos-apps/somos-musica.png"],
   ["infojobs", "/logos-apps/infojobs.png"],
   ["tripadvisor", "/logos-apps/tripadvisor.svg"],
+  ["prosegur", "/logos-apps/prosegur.png"],
+  ["canaluz", "/logos-apps/canaluz.png"],
 ];
 
 /** Logo por nombre de marca conocida (sin necesidad de URL). "" si no hay match. */
