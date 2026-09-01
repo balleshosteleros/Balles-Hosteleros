@@ -30,6 +30,10 @@ import {
   Wand2,
   RotateCcw,
   Check,
+  OctagonAlert,
+  MailOpen,
+  Mail,
+  Minus,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -161,7 +165,7 @@ const CARPETAS = [
   { id: "enviados", label: "Enviados", icon: Send },
   { id: "borradores", label: "Borradores", icon: FileText },
   { id: "todos", label: "Todos", icon: Archive },
-  { id: "spam", label: "Spam", icon: Trash2 },
+  { id: "spam", label: "Spam", icon: OctagonAlert },
   { id: "papelera", label: "Papelera", icon: Trash2 },
 ] as const;
 
@@ -237,6 +241,10 @@ export function GmailDrawer({ children }: GmailDrawerProps) {
   // server-side: consulta TODO el buzón, no solo lo cargado en cliente.
   const [busquedaAplicada, setBusquedaAplicada] = useState("");
   const [mensajesReales, setMensajesReales] = useState<Mensaje[] | null>(null);
+  // Conversaciones marcadas con la casilla. Se guardan por id para que la
+  // selección sobreviva a un refresco de la lista.
+  const [seleccion, setSeleccion] = useState<Set<string>>(new Set());
+  const [aplicandoLote, setAplicandoLote] = useState(false);
   const [cargando, setCargando] = useState(false);
   // Paginación: token de la siguiente página (null = no hay más) y nº de página.
   const [nextPageToken, setNextPageToken] = useState<string | null>(null);
@@ -415,6 +423,7 @@ export function GmailDrawer({ children }: GmailDrawerProps) {
     // Cambió carpeta o término de búsqueda → volver a la primera página.
     setPagina(0);
     setPageTokens([]);
+    setSeleccion(new Set());
     recargar();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [connected, filtro, abierto, busquedaAplicada]);
@@ -561,6 +570,75 @@ export function GmailDrawer({ children }: GmailDrawerProps) {
     } else {
       toast.error("No se pudo aplicar");
     }
+  }
+
+  /**
+   * Aplica una acción a TODAS las conversaciones marcadas. Gmail las procesa
+   * en bloque y deja la lista limpia al terminar; aquí se lanzan en paralelo
+   * y solo se recarga una vez, para no pedir la bandeja una vez por correo.
+   */
+  async function actuarSobreSeleccion(action: string, labelId?: string) {
+    if (!connected) {
+      toast.error("Conecta Google primero");
+      return;
+    }
+    const ids = [...seleccion];
+    if (ids.length === 0) return;
+    setAplicandoLote(true);
+    const resultados = await Promise.all(
+      ids.map((id) => {
+        const threadId = mensajesReales?.find((m) => m.id === id)?.threadId;
+        return fetch("/api/google/gmail/modify", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id, threadId, action, labelId }),
+        })
+          .then((r) => r.ok)
+          .catch(() => false);
+      }),
+    );
+    setAplicandoLote(false);
+    const fallos = resultados.filter((ok) => !ok).length;
+    const hechos = ids.length - fallos;
+    if (hechos > 0) {
+      const etiquetas: Record<string, string> = {
+        archive: "archivadas",
+        trash: "movidas a la papelera",
+        spam: "marcadas como spam",
+        unspam: "marcadas como no spam",
+        read: "marcadas como leídas",
+        unread: "marcadas como no leídas",
+        star: "destacadas",
+        unstar: "sin destacar",
+        moveToLabel: "movidas",
+      };
+      toast.success(
+        `${hechos} ${hechos === 1 ? "conversación" : "conversaciones"} ${etiquetas[action] ?? "actualizadas"}`,
+      );
+    }
+    if (fallos > 0) {
+      toast.error(
+        `No se pudo aplicar a ${fallos} ${fallos === 1 ? "conversación" : "conversaciones"}`,
+      );
+    }
+    setSeleccion(new Set());
+    // Archivar, borrar, spam y mover sacan la conversación de la carpeta
+    // actual: se quitan de la lista sin volver a pedirla. El resto (leído,
+    // estrella) solo cambia el aspecto de la fila, así que se recarga.
+    const sacaDelListado =
+      action === "archive" ||
+      action === "trash" ||
+      action === "spam" ||
+      action === "unspam" ||
+      action === "moveToLabel";
+    if (sacaDelListado) {
+      setMensajesReales((prev) =>
+        prev ? prev.filter((m) => !ids.includes(m.id)) : prev,
+      );
+    } else {
+      recargar(pagina === 0 ? undefined : pageTokens[pagina - 1]);
+    }
+    refreshDailyCounts();
   }
 
   function resetCopias() {
@@ -940,6 +1018,12 @@ export function GmailDrawer({ children }: GmailDrawerProps) {
                 onEstrella={(m) =>
                   actuar(m.estrella ? "unstar" : "star", m.id)
                 }
+                seleccion={seleccion}
+                onSeleccion={setSeleccion}
+                onAccionLote={actuarSobreSeleccion}
+                aplicandoLote={aplicandoLote}
+                enSpam={filtro.tipo === "sistema" && filtro.id === "spam"}
+                carpetasUsuario={carpetasUsuario}
               />
             )}
           </div>
@@ -1253,6 +1337,14 @@ interface ListaMensajesProps {
   onArchivar: (id: string) => void;
   onPapelera: (id: string) => void;
   onEstrella: (m: Mensaje) => void;
+  /** Ids de las conversaciones marcadas con la casilla. */
+  seleccion: Set<string>;
+  onSeleccion: (s: Set<string>) => void;
+  onAccionLote: (action: string, labelId?: string) => void;
+  aplicandoLote: boolean;
+  /** En Spam el botón ofrece "No es spam" en lugar de "Marcar como spam". */
+  enSpam: boolean;
+  carpetasUsuario: CarpetaUsuario[];
 }
 
 function ListaMensajes({
@@ -1269,43 +1361,222 @@ function ListaMensajes({
   onArchivar,
   onPapelera,
   onEstrella,
+  seleccion,
+  onSeleccion,
+  onAccionLote,
+  aplicandoLote,
+  enSpam,
+  carpetasUsuario,
 }: ListaMensajesProps) {
+  const idsPagina = mensajes.map((m) => m.id);
+  const marcados = idsPagina.filter((id) => seleccion.has(id)).length;
+  const todosMarcados = idsPagina.length > 0 && marcados === idsPagina.length;
+  const algunoMarcado = marcados > 0;
+  // Gmail decide con la casilla de cabecera: si hay algo marcado, la desmarca
+  // todo; si no hay nada, marca la página entera.
+  function alternarTodos() {
+    onSeleccion(algunoMarcado ? new Set() : new Set(idsPagina));
+  }
+  function alternarUno(id: string) {
+    const siguiente = new Set(seleccion);
+    if (siguiente.has(id)) siguiente.delete(id);
+    else siguiente.add(id);
+    onSeleccion(siguiente);
+  }
+  function seleccionar(ids: string[]) {
+    onSeleccion(new Set(ids));
+  }
+  // Con selección, todas las filas marcadas sin leer → la acción es "leído";
+  // si ya están todas leídas, se ofrece "no leído" (igual que Gmail).
+  const marcadosMensajes = mensajes.filter((m) => seleccion.has(m.id));
+  const hayNoLeidos = marcadosMensajes.some((m) => !m.leido);
+
   return (
     <>
       {/* Toolbar superior estilo Gmail */}
       <div className="flex items-center gap-1 px-4 py-2 border-b border-[#e8eaed]">
+        {/* Casilla de cabecera con los tres estados de Gmail: vacía, marcada y
+            "algunas" (guion). Es un botón y no un <input>, porque el estado
+            intermedio no se puede pintar con una casilla nativa. */}
         <button
           type="button"
-          className="rounded-full p-2 hover:bg-black/5"
-          title="Seleccionar"
+          onClick={alternarTodos}
+          disabled={idsPagina.length === 0}
+          className="rounded-full p-2 hover:bg-black/5 disabled:opacity-30"
+          title={algunoMarcado ? "Anular la selección" : "Seleccionar todos"}
+          aria-label={algunoMarcado ? "Anular la selección" : "Seleccionar todos"}
+          aria-checked={
+            todosMarcados ? "true" : algunoMarcado ? "mixed" : "false"
+          }
+          role="checkbox"
         >
-          <input
-            type="checkbox"
-            className="h-4 w-4 cursor-pointer accent-[#5f6368]"
-          />
+          <span
+            className={cn(
+              "flex h-4 w-4 items-center justify-center rounded-[2px] border-2",
+              algunoMarcado
+                ? "border-[#1a73e8] bg-[#1a73e8] text-white"
+                : "border-[#5f6368] bg-transparent",
+            )}
+          >
+            {todosMarcados ? (
+              <Check className="h-3 w-3" strokeWidth={3} />
+            ) : algunoMarcado ? (
+              <Minus className="h-3 w-3" strokeWidth={3} />
+            ) : null}
+          </span>
         </button>
-        <button
-          type="button"
-          className="rounded-full p-2 hover:bg-black/5 text-[#5f6368]"
-          title="Más opciones de selección"
-        >
-          <ChevronDown className="h-4 w-4" />
-        </button>
-        <button
-          type="button"
-          onClick={onRefrescar}
-          className="rounded-full p-2 hover:bg-black/5 text-[#5f6368]"
-          title="Recibir correo nuevo"
-        >
-          <RefreshCw className={cn("h-4 w-4", cargando && "animate-spin")} />
-        </button>
-        <button
-          type="button"
-          className="rounded-full p-2 hover:bg-black/5 text-[#5f6368]"
-          title="Más"
-        >
-          <MoreVertical className="h-4 w-4" />
-        </button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              className="rounded-full p-2 hover:bg-black/5 text-[#5f6368]"
+              title="Más opciones de selección"
+            >
+              <ChevronDown className="h-4 w-4" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="w-44">
+            <DropdownMenuItem onClick={() => seleccionar(idsPagina)}>
+              Todos
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => seleccionar([])}>
+              Ninguno
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={() =>
+                seleccionar(mensajes.filter((m) => !m.leido).map((m) => m.id))
+              }
+            >
+              No leídos
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={() =>
+                seleccionar(mensajes.filter((m) => m.leido).map((m) => m.id))
+              }
+            >
+              Leídos
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={() =>
+                seleccionar(mensajes.filter((m) => m.estrella).map((m) => m.id))
+              }
+            >
+              Destacados
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={() =>
+                seleccionar(mensajes.filter((m) => !m.estrella).map((m) => m.id))
+              }
+            >
+              Sin destacar
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+
+        {/* Sin selección: refrescar. Con selección, Gmail sustituye la barra
+            por las acciones que se aplican a lo marcado. */}
+        {!algunoMarcado ? (
+          <>
+            <button
+              type="button"
+              onClick={onRefrescar}
+              className="rounded-full p-2 hover:bg-black/5 text-[#5f6368]"
+              title="Recibir correo nuevo"
+            >
+              <RefreshCw className={cn("h-4 w-4", cargando && "animate-spin")} />
+            </button>
+            <button
+              type="button"
+              className="rounded-full p-2 hover:bg-black/5 text-[#5f6368]"
+              title="Más"
+            >
+              <MoreVertical className="h-4 w-4" />
+            </button>
+          </>
+        ) : (
+          <>
+            <div className="w-px h-6 bg-[#e8eaed] mx-1" />
+            <button
+              type="button"
+              disabled={aplicandoLote}
+              onClick={() => onAccionLote("archive")}
+              className="rounded-full p-2 hover:bg-black/5 text-[#5f6368] disabled:opacity-40"
+              title="Archivar"
+            >
+              <Archive className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              disabled={aplicandoLote}
+              onClick={() => onAccionLote(enSpam ? "unspam" : "spam")}
+              className="rounded-full p-2 hover:bg-black/5 text-[#5f6368] disabled:opacity-40"
+              title={enSpam ? "No es spam" : "Marcar como spam"}
+            >
+              <OctagonAlert className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              disabled={aplicandoLote}
+              onClick={() => onAccionLote("trash")}
+              className="rounded-full p-2 hover:bg-black/5 text-[#5f6368] disabled:opacity-40"
+              title="Eliminar"
+            >
+              <Trash2 className="h-4 w-4" />
+            </button>
+            <div className="w-px h-6 bg-[#e8eaed] mx-1" />
+            <button
+              type="button"
+              disabled={aplicandoLote}
+              onClick={() => onAccionLote(hayNoLeidos ? "read" : "unread")}
+              className="rounded-full p-2 hover:bg-black/5 text-[#5f6368] disabled:opacity-40"
+              title={
+                hayNoLeidos ? "Marcar como leído" : "Marcar como no leído"
+              }
+            >
+              {hayNoLeidos ? (
+                <MailOpen className="h-4 w-4" />
+              ) : (
+                <Mail className="h-4 w-4" />
+              )}
+            </button>
+            {carpetasUsuario.length > 0 && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    disabled={aplicandoLote}
+                    className="rounded-full p-2 hover:bg-black/5 text-[#5f6368] disabled:opacity-40"
+                    title="Mover a"
+                  >
+                    <FolderInput className="h-4 w-4" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent
+                  align="start"
+                  className="max-h-72 w-56 overflow-y-auto"
+                >
+                  <DropdownMenuLabel>Mover a</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  {carpetasUsuario.map((c) => (
+                    <DropdownMenuItem
+                      key={c.id}
+                      onClick={() => onAccionLote("moveToLabel", c.id)}
+                    >
+                      <Folder className="mr-2 h-3.5 w-3.5 text-muted-foreground" />
+                      <span className="truncate">{c.nombre}</span>
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
+            <span className="ml-2 text-xs text-[#5f6368]">
+              {marcados} {marcados === 1 ? "seleccionada" : "seleccionadas"}
+            </span>
+            {aplicandoLote && (
+              <Loader2 className="ml-1 h-4 w-4 animate-spin text-[#5f6368]" />
+            )}
+          </>
+        )}
 
         <div className="ml-auto flex items-center gap-1 text-xs text-[#5f6368]">
           <span>
@@ -1358,21 +1629,40 @@ function ListaMensajes({
                 key={m.id}
                 className={cn(
                   "group flex items-center gap-3 border-b border-[#f1f3f4] px-4 py-[6px] cursor-pointer transition-shadow hover:shadow-[inset_1px_0_0_#dadce0,inset_-1px_0_0_#dadce0,0_1px_2px_0_rgba(60,64,67,0.30),0_1px_3px_1px_rgba(60,64,67,0.15)] hover:z-10",
-                  !m.leido ? "bg-white" : "bg-[#f2f6fc]",
+                  seleccion.has(m.id)
+                    ? "bg-[#c2dbff]"
+                    : !m.leido
+                      ? "bg-white"
+                      : "bg-[#f2f6fc]",
                 )}
                 onClick={() => onSeleccionar(m)}
               >
                 <button
                   type="button"
-                  onClick={(e) => e.stopPropagation()}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    alternarUno(m.id);
+                  }}
                   className="rounded-full p-1 hover:bg-black/5 shrink-0"
-                  title="Seleccionar"
+                  title={seleccion.has(m.id) ? "Anular la selección" : "Seleccionar"}
+                  aria-label={
+                    seleccion.has(m.id) ? "Anular la selección" : "Seleccionar"
+                  }
+                  role="checkbox"
+                  aria-checked={seleccion.has(m.id)}
                 >
-                  <input
-                    type="checkbox"
-                    onClick={(e) => e.stopPropagation()}
-                    className="h-4 w-4 cursor-pointer accent-[#5f6368]"
-                  />
+                  <span
+                    className={cn(
+                      "flex h-4 w-4 items-center justify-center rounded-[2px] border-2",
+                      seleccion.has(m.id)
+                        ? "border-[#1a73e8] bg-[#1a73e8] text-white"
+                        : "border-[#5f6368] bg-transparent",
+                    )}
+                  >
+                    {seleccion.has(m.id) && (
+                      <Check className="h-3 w-3" strokeWidth={3} />
+                    )}
+                  </span>
                 </button>
                 <button
                   type="button"
