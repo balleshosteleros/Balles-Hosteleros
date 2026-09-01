@@ -20,8 +20,15 @@ interface Props {
   compacto?: boolean;
   /** Ocultar la cabecera interna (mes + KPIs) cuando ya se controla desde fuera. */
   hideHeader?: boolean;
-  /** Notifica al padre los totales agregados del mes mostrado (personas + reservas). */
-  onTotalesChange?: (t: { personas: number; reservas: number }) => void;
+  /** Notifica al padre los totales agregados del mes mostrado (por turno y global). */
+  onTotalesChange?: (t: {
+    comida: { personas: number; reservas: number };
+    cena: { personas: number; reservas: number };
+    personas: number;
+    reservas: number;
+  }) => void;
+  /** Cambia este número para forzar la recarga de horarios y reservas. */
+  refreshKey?: number;
 }
 
 const MESES_ES = [
@@ -40,6 +47,7 @@ export function CalendarioMes({
   compacto = false,
   hideHeader = false,
   onTotalesChange,
+  refreshKey = 0,
 }: Props) {
   const base = new Date(fecha + "T12:00:00");
   const [anio, setAnio] = useState(base.getFullYear());
@@ -55,12 +63,12 @@ export function CalendarioMes({
     setMes0(d.getMonth());
   }, [fecha]);
 
-  const { loading, metricasFecha, horarioFecha, totales } = useReservasMes(anio, mes0, aforoPorTurno);
+  const { loading, metricasFecha, horarioFecha, totales } = useReservasMes(anio, mes0, aforoPorTurno, refreshKey);
   const grid = gridFechasMes(anio, mes0);
 
   useEffect(() => {
-    onTotalesChange?.({ personas: totales.personas, reservas: totales.reservas });
-  }, [totales.personas, totales.reservas, onTotalesChange]);
+    onTotalesChange?.(totales);
+  }, [totales, onTotalesChange]);
 
   function navegar(delta: number) {
     let nuevoMes = mes0 + delta;
@@ -113,7 +121,7 @@ export function CalendarioMes({
           </Button>
         </div>
         {!compacto && (
-          <div className="ml-auto flex items-center gap-4 text-xs">
+          <div className="ml-auto flex items-center gap-4 text-sm">
             <div className="flex items-center gap-1.5">
               <Users className="h-4 w-4 text-emerald-500" />
               <span className="font-semibold">{totales.personas}</span>
@@ -132,10 +140,10 @@ export function CalendarioMes({
       {/* Cabecera de días */}
       <div className={cn(
         "grid grid-cols-7 border-b font-medium text-muted-foreground bg-muted/30",
-        compacto ? "text-[10px]" : "text-[11px]",
+        compacto ? "text-[11px]" : "text-[13px]",
       )}>
         {DIAS_HEADER.map((d) => (
-          <div key={d} className={cn("text-center", compacto ? "px-1 py-1" : "px-2 py-1.5")}>
+          <div key={d} className={cn("text-center", compacto ? "px-1 py-1" : "px-2 py-2")}>
             {d}
           </div>
         ))}
@@ -174,7 +182,7 @@ export function CalendarioMes({
             >
               {compacto ? (
                 <>
-                  <span className="text-xs font-semibold">{d.getDate().toString().padStart(2, "0")}</span>
+                  <span className="text-[13px] font-semibold">{d.getDate().toString().padStart(2, "0")}</span>
                   {!loading && totalReservasDia > 0 && (
                     <span
                       className={cn(
@@ -186,7 +194,7 @@ export function CalendarioMes({
                 </>
               ) : (
                 <>
-                  <div className="flex items-center justify-between text-[11px] w-full">
+                  <div className="flex items-center justify-between text-[13px] w-full">
                     <span
                       className={cn(
                         "font-semibold",
@@ -198,10 +206,10 @@ export function CalendarioMes({
                   </div>
 
                   {!loading && (
-                    <div className="flex-1 flex flex-col justify-center gap-0.5">
+                    <div className="flex-1 flex flex-col justify-center gap-1">
                       {ambasCerradas ? (
                         <div className={cn(
-                          "text-center text-[11px] font-medium uppercase tracking-wide",
+                          "text-center text-[12px] font-medium uppercase tracking-wide",
                           esSeleccionado ? "text-primary-foreground/90" : "text-red-600 dark:text-red-300",
                         )}>
                           Cerrado
@@ -209,27 +217,44 @@ export function CalendarioMes({
                       ) : (
                         <>
                           {(comidaActiva || comidaCerrada) && (
-                            <HorarioLinea turno="comida" h={h!.comida} selected={esSeleccionado} />
+                            <HorarioLinea
+                              turno="comida"
+                              h={h!.comida}
+                              selected={esSeleccionado}
+                              personas={m.comida.personas}
+                              reservas={m.comida.reservas}
+                            />
                           )}
                           {(cenaActiva || cenaCerrada) && (
-                            <HorarioLinea turno="cena" h={h!.cena} selected={esSeleccionado} />
+                            <HorarioLinea
+                              turno="cena"
+                              h={h!.cena}
+                              selected={esSeleccionado}
+                              personas={m.cena.personas}
+                              reservas={m.cena.reservas}
+                            />
                           )}
                         </>
                       )}
                     </div>
                   )}
 
+                  {/* Total general del día: suma de TODOS los turnos, locales,
+                      planos, salas y zonas. No depende de lo que se esté
+                      visualizando en la vista día. */}
                   {!loading && (totalReservasDia > 0 || totalPersonasDia > 0) && (
                     <div className={cn(
-                      "flex items-center justify-end gap-2 text-[10px] tabular-nums",
-                      esSeleccionado ? "text-primary-foreground/90" : "text-muted-foreground",
+                      "flex items-center justify-end gap-2.5 text-[12px] tabular-nums border-t pt-1 mt-0.5",
+                      esSeleccionado
+                        ? "text-primary-foreground/90 border-primary-foreground/25"
+                        : "text-foreground/80 border-border/60",
                     )}>
-                      <span className="inline-flex items-center gap-0.5">
-                        <Utensils className={cn("h-2.5 w-2.5", esSeleccionado ? "" : "text-sky-500")} />
+                      <span className="inline-flex items-center gap-1" title="Mesas reservadas en el día">
+                        <Utensils className={cn("h-3.5 w-3.5", esSeleccionado ? "" : "text-sky-500")} />
                         <span className="font-semibold">{totalReservasDia}</span>
                       </span>
-                      <span className="inline-flex items-center gap-0.5">
-                        <Users className={cn("h-2.5 w-2.5", esSeleccionado ? "" : "text-emerald-500")} />
+                      <span className="inline-flex items-center gap-1" title="Personas en el día">
+                        <Users className={cn("h-3.5 w-3.5", esSeleccionado ? "" : "text-emerald-500")} />
                         <span className="font-semibold">{totalPersonasDia}</span>
                       </span>
                     </div>
@@ -248,29 +273,54 @@ function HorarioLinea({
   turno,
   h,
   selected,
+  personas,
+  reservas,
 }: {
   turno: "comida" | "cena";
   h: HorarioResuelto;
   selected: boolean;
+  /** Personas del turno en ese día (solo de ese turno). */
+  personas: number;
+  /** Mesas reservadas del turno en ese día (solo de ese turno). */
+  reservas: number;
 }) {
   const Icon = turno === "comida" ? Sun : Moon;
   const tono = turno === "comida" ? "text-amber-500" : "text-indigo-400";
   const cerrado = h.cerrado;
   const ini = (h.inicio ?? "").slice(0, 5);
   const fin = (h.fin ?? "").slice(0, 5);
+  const hayDatos = reservas > 0 || personas > 0;
   return (
     <div
       className={cn(
-        "flex items-center gap-1 text-[10px] leading-tight tabular-nums",
+        "flex items-center gap-1 text-[12px] leading-tight tabular-nums",
         cerrado && !selected && "text-red-600 dark:text-red-300",
       )}
       title={turno === "comida" ? "Comida" : "Cena"}
     >
-      <Icon className={cn("h-3 w-3 shrink-0", !selected && (cerrado ? "text-red-500" : tono))} />
+      <Icon className={cn("h-3.5 w-3.5 shrink-0", !selected && (cerrado ? "text-red-500" : tono))} />
       {cerrado ? (
         <span className="font-medium">Cerrado</span>
       ) : (
         <span className="font-medium">{ini}–{fin}</span>
+      )}
+      {/* Totales SOLO de este turno. */}
+      {!cerrado && hayDatos && (
+        <span
+          className={cn(
+            "ml-auto inline-flex items-center gap-1.5 shrink-0",
+            selected ? "text-primary-foreground/90" : "text-muted-foreground",
+          )}
+        >
+          <span className="inline-flex items-center gap-0.5" title="Mesas reservadas del turno">
+            <Utensils className={cn("h-3 w-3", selected ? "" : "text-sky-500")} />
+            <span className="font-semibold">{reservas}</span>
+          </span>
+          <span className="inline-flex items-center gap-0.5" title="Personas del turno">
+            <Users className={cn("h-3 w-3", selected ? "" : "text-emerald-500")} />
+            <span className="font-semibold">{personas}</span>
+          </span>
+        </span>
       )}
     </div>
   );

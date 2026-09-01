@@ -60,7 +60,13 @@ export function gridFechasMes(anio: number, mes0: number): string[] {
   return out;
 }
 
-export function useReservasMes(anio: number, mes0: number, aforoPorTurno: number) {
+export function useReservasMes(
+  anio: number,
+  mes0: number,
+  aforoPorTurno: number,
+  /** Cambia este número para forzar una recarga (p. ej. al volver de Configuración). */
+  refreshKey = 0,
+) {
   const [reservas, setReservas] = useState<Array<{ fecha: string; turno: string; personas: number; estado: string }>>([]);
   const [config, setConfig] = useState<EmpresaReservasConfig | null>(null);
   const [reglas, setReglas] = useState<EmpresaReservasRegla[]>([]);
@@ -88,7 +94,7 @@ export function useReservasMes(anio: number, mes0: number, aforoPorTurno: number
     return () => {
       cancelado = true;
     };
-  }, [desde, hasta]);
+  }, [desde, hasta, refreshKey]);
 
   /** Agrega métricas por (fecha, turno). Excluye solo a quien no asiste. */
   const metricasPorFecha = useMemo(() => {
@@ -144,16 +150,31 @@ export function useReservasMes(anio: number, mes0: number, aforoPorTurno: number
     );
   }
 
-  // Totales del mes
+  // Totales del mes. Se agregan por turno y en global; siempre sobre TODAS las
+  // reservas de la empresa en el rango, sin filtrar por local, plano, sala ni
+  // zona: los indicadores de cabecera son globales del mes.
   const totales = useMemo(() => {
-    let personas = 0;
-    let reservasN = 0;
+    let personasComida = 0;
+    let reservasComida = 0;
+    let personasCena = 0;
+    let reservasCena = 0;
+    // El grid muestra días de los meses contiguos, pero el total del mes solo
+    // cuenta los días que pertenecen realmente al mes mostrado.
+    const { desde: ini, hasta: fin } = rangoMes(anio, mes0);
     for (const k in metricasPorFecha) {
-      personas += metricasPorFecha[k].comida.personas + metricasPorFecha[k].cena.personas;
-      reservasN += metricasPorFecha[k].comida.reservas + metricasPorFecha[k].cena.reservas;
+      if (k < ini || k > fin) continue;
+      personasComida += metricasPorFecha[k].comida.personas;
+      reservasComida += metricasPorFecha[k].comida.reservas;
+      personasCena   += metricasPorFecha[k].cena.personas;
+      reservasCena   += metricasPorFecha[k].cena.reservas;
     }
-    return { personas, reservas: reservasN };
-  }, [metricasPorFecha]);
+    return {
+      comida: { personas: personasComida, reservas: reservasComida },
+      cena:   { personas: personasCena,   reservas: reservasCena },
+      personas: personasComida + personasCena,
+      reservas: reservasComida + reservasCena,
+    };
+  }, [metricasPorFecha, anio, mes0]);
 
   /** Devuelve el horario resuelto (comida + cena) para una fecha. */
   function horarioFecha(fecha: string): { comida: HorarioResuelto; cena: HorarioResuelto } | null {
