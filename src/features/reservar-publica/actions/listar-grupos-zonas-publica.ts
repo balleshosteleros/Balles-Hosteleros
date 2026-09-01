@@ -13,13 +13,14 @@
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getGruposZonasDisponibles } from "@/features/sala/lib/grupos-zonas-disponibilidad";
+import { MAX_COMENSALES_ENTRADA } from "@/features/sala/data/reservas";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 const inputSchema = z.object({
   empresaSlug: z.string().min(1).max(120),
   fecha: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   hora: z.string().regex(/^\d{2}:\d{2}(:\d{2})?$/),
-  personas: z.number().int().min(1).max(50),
+  personas: z.number().int().min(1).max(MAX_COMENSALES_ENTRADA),
 });
 
 export interface GrupoZonaPublico {

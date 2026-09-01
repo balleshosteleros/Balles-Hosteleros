@@ -47,7 +47,7 @@ async function codigosOcupadosEnFranja(
   const duracionMin = await getDuracionReservaMin(supabase, input.empresaId);
   const { data: ocupantes } = await supabase
     .from("reservas")
-    .select("mesa, hora")
+    .select("mesa, hora, duracion_minutos")
     .eq("empresa_id", input.empresaId)
     .eq("fecha", input.fecha)
     .not("mesa", "is", null)
@@ -57,9 +57,15 @@ async function codigosOcupadosEnFranja(
   for (const r of ocupantes ?? []) {
     const codigo = (r.mesa as string) ?? "";
     if (!codigo) continue;
+    // Cada reserva ocupa su mesa durante SU duración, no la de la empresa: si
+    // no, una comida larga ya guardada dejaba su mesa como libre en la parte
+    // final de su intervalo y se le podía asignar a otro grupo encima.
+    const durOtra = Number(r.duracion_minutos);
+    const duracionOtra =
+      Number.isFinite(durOtra) && durOtra > 0 ? durOtra : duracionMin;
     // Minutos de jornada: la madrugada pertenece a la noche anterior, así que
     // una reserva de 00:30 choca con la de 23:30 que aún no ha terminado.
-    if (franjasSolapan(input.hora, duracionMin, (r.hora as string) ?? "", duracionMin)) {
+    if (franjasSolapan(input.hora, duracionMin, (r.hora as string) ?? "", duracionOtra)) {
       for (const parte of codigo.split("+")) {
         const limpio = parte.trim();
         if (limpio) ocupados.add(limpio);
@@ -293,7 +299,7 @@ export async function asignarMesaAutomatica(
     const duracionMin = await getDuracionReservaMin(supabase, input.empresaId);
     const { data: ocupantes, error: errOcup } = await supabase
       .from("reservas")
-      .select("mesa, hora")
+      .select("mesa, hora, duracion_minutos")
       .eq("empresa_id", input.empresaId)
       .eq("fecha", input.fecha)
       .not("mesa", "is", null)
@@ -306,8 +312,12 @@ export async function asignarMesaAutomatica(
     for (const r of ocupantes ?? []) {
       const codigo = (r.mesa as string) ?? "";
       if (!codigo) continue;
+      // Cada reserva ocupa su mesa durante SU duración (ver arriba).
+      const durOtra = Number(r.duracion_minutos);
+      const duracionOtra =
+        Number.isFinite(durOtra) && durOtra > 0 ? durOtra : duracionMin;
       // Minutos de jornada: cubre el cruce de medianoche (23:30 vs 00:30).
-      if (franjasSolapan(input.hora, duracionMin, (r.hora as string) ?? "", duracionMin)) {
+      if (franjasSolapan(input.hora, duracionMin, (r.hora as string) ?? "", duracionOtra)) {
         for (const parte of codigo.split("+")) {
           const limpio = parte.trim();
           if (limpio) codigosOcupados.add(limpio);

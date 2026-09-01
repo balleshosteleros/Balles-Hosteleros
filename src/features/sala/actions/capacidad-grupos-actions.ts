@@ -138,7 +138,7 @@ export async function getCapacidadPorGrupo(params: {
       const duracionMin = await getDuracionReservaMin(supabase, empresaId);
       const { data: reservas, error: errRes } = await supabase
         .from("reservas")
-        .select("mesa, hora")
+        .select("mesa, hora, duracion_minutos")
         .eq("empresa_id", empresaId)
         .eq("fecha", fecha)
         .not("mesa", "is", null)
@@ -151,7 +151,12 @@ export async function getCapacidadPorGrupo(params: {
         // Sin hora concreta miramos el día entero; con hora, solo lo que solapa.
         if (hora) {
           const horaReserva = (r.hora as string) ?? "";
-          if (!franjasSolapan(hora, duracionMin, horaReserva, duracionMin)) continue;
+          // Cada reserva ocupa su mesa durante SU duración: una comida larga ya
+          // guardada bloquea todo su intervalo, no solo la duración por defecto.
+          const durOtra = Number(r.duracion_minutos);
+          const duracionOtra =
+            Number.isFinite(durOtra) && durOtra > 0 ? durOtra : duracionMin;
+          if (!franjasSolapan(hora, duracionMin, horaReserva, duracionOtra)) continue;
         }
         for (const parte of codigo.split("+")) {
           const limpio = parte.trim();

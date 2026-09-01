@@ -120,7 +120,7 @@ export async function getGruposZonasDisponibles(
   const duracionMin = await getDuracionReservaMin(supabase, params.empresaId);
   const { data: reservas } = await supabase
     .from("reservas")
-    .select("mesa, hora")
+    .select("mesa, hora, duracion_minutos")
     .eq("empresa_id", params.empresaId)
     .eq("fecha", params.fecha)
     .not("mesa", "is", null)
@@ -130,7 +130,14 @@ export async function getGruposZonasDisponibles(
   for (const r of reservas ?? []) {
     const codigo = (r.mesa as string) ?? "";
     if (!codigo) continue;
-    if (!franjasSolapan(params.hora, duracionMin, (r.hora as string) ?? "", duracionMin)) {
+    // Cada reserva ocupa su mesa durante SU duración, no la de la empresa: una
+    // comida de 3 h ya guardada bloquea las tres horas, aunque la duración por
+    // defecto sea de 2. Comparar ambas franjas con la duración por defecto
+    // dejaba libres huecos que en realidad estaban pillados.
+    const durOtra = Number(r.duracion_minutos);
+    const duracionOtra =
+      Number.isFinite(durOtra) && durOtra > 0 ? durOtra : duracionMin;
+    if (!franjasSolapan(params.hora, duracionMin, (r.hora as string) ?? "", duracionOtra)) {
       continue;
     }
     for (const parte of codigo.split("+")) {
