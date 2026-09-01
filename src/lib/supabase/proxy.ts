@@ -6,8 +6,10 @@ import { LANDING_PATH } from '@/features/auth/lib/role-redirect'
 import { checkProfileGuard } from '@/features/auth/lib/profile-guard'
 import {
   SESION_INICIO_COOKIE,
+  SESION_INICIO_DUENO_COOKIE,
   SESION_EXPIRADA_CODE,
   esDispositivoMovil,
+  huellaUsuario,
   sesionCaducada,
 } from '@/features/auth/lib/session-expiry'
 
@@ -103,6 +105,21 @@ function isPublicPath(pathname: string) {
   if (pathname.startsWith('/api/')) return true
   if (/\.[a-z0-9]+$/i.test(pathname)) return true
   return PUBLIC_PREFIXES.some((p) => pathname.startsWith(p))
+}
+
+/**
+ * ¿El reloj de caducidad de 8h que trae el navegador pertenece a ESTE usuario?
+ *
+ * Solo si la respuesta es sí podemos afirmar que hubo una caducidad real y
+ * mostrar el aviso "tu sesión ha caducado por seguridad". Si el reloj viene sin
+ * dueño (sembrado por una versión anterior a este cambio) o el dueño es otro
+ * (restos de otro entorno o de otra cuenta en el mismo navegador), no sabemos
+ * que haya caducado nada y el aviso no se muestra.
+ */
+function sesionInicioEsDeEsteUsuario(request: NextRequest, userId: string): boolean {
+  const dueno = request.cookies.get(SESION_INICIO_DUENO_COOKIE)?.value
+  if (!dueno) return false
+  return dueno === huellaUsuario(userId)
 }
 
 export async function updateSession(
@@ -201,6 +218,7 @@ export async function updateSession(
         if (c.name.startsWith('sb-')) limpio.cookies.delete(c.name)
       }
       limpio.cookies.delete(SESION_INICIO_COOKIE)
+      limpio.cookies.delete(SESION_INICIO_DUENO_COOKIE)
       return { response: limpio, user: null }
     }
   }
@@ -229,28 +247,72 @@ export async function updateSession(
       if (sesionCaducada(inicioCookie, ahora)) {
         await supabase.auth.signOut()
         const url = new URL('/', request.url)
-        url.searchParams.set('error', SESION_EXPIRADA_CODE)
+        // El aviso "tu sesión ha caducado" SOLO se muestra si el reloj de 8h
+        // pertenece de verdad a ESTA sesión (mismo usuario que lo sembró).
+        //
+        // Sin esa comprobación el aviso saltaba nada más entrar en el entorno de
+        // pruebas: pruebas vive en otra dirección y sobre otra base de datos, así
+        // que el navegador llega con un reloj viejo que aquí no corresponde a
+        // ninguna sesión iniciada. Eso no es una caducidad — no ha fallado nada,
+        // simplemente hay que identificarse — pero se anunciaba como un corte de
+        // seguridad, que es el mensaje que peor describe lo ocurrido.
+        //
+        // Si el reloj no es atribuible a esta sesión, se va al login EN SILENCIO.
+        if (sesionInicioEsDeEsteUsuario(request, user.id)) {
+          url.searchParams.set('error', SESION_EXPIRADA_CODE)
+        }
         const res = NextResponse.redirect(url)
         res.cookies.delete(SESION_INICIO_COOKIE)
+        res.cookies.delete(SESION_INICIO_DUENO_COOKIE)
         return { response: res, user: null }
       }
       // Primera petición con sesión activa sin marca de inicio (login recién
       // hecho, sea por contraseña, Google o demo): sembramos el reloj de 8h.
-      if (!inicioCookie) sembrarInicioSesion = ahora
+      //
+      // Se resiembra SOLO si no hay reloj, o si el reloj que hay es de otro
+      // usuario (restos de otra cuenta en este navegador): ese contador no
+      // describe cuándo entró quien está dentro ahora, y respetarlo cortaría su
+      // sesión legítima antes de tiempo.
+      //
+      // Un reloj SIN dueño no se resiembra: es de una sesión anterior a este
+      // cambio y su hora de inicio sigue siendo buena. Resembrarlo en cada
+      // visita reiniciaría la cuenta atrás una y otra vez, y las 8h no se
+      // cumplirían nunca. Se le añade el dueño y se conserva la hora original.
+      const relojEsDeOtro =
+        !!inicioCookie &&
+        !!request.cookies.get(SESION_INICIO_DUENO_COOKIE)?.value &&
+        !sesionInicioEsDeEsteUsuario(request, user.id)
+
+      if (!inicioCookie || relojEsDeOtro) {
+        sembrarInicioSesion = ahora
+      } else if (!request.cookies.get(SESION_INICIO_DUENO_COOKIE)?.value) {
+        // Reloj heredado sin dueño: se adopta conservando su hora de inicio.
+        // Si el valor no fuese una hora válida, se arranca de cero (no se puede
+        // conservar lo que no se entiende, y dejarlo sin dueño lo repetiría).
+        const heredado = Number(inicioCookie)
+        sembrarInicioSesion =
+          Number.isFinite(heredado) && heredado > 0 ? heredado : ahora
+      }
     }
   }
 
   // Escribe la cookie de inicio de sesión (8h) en el response dado, si procede.
+  // Junto al instante se guarda a QUIÉN pertenece ese reloj, para poder
+  // distinguir una caducidad real de un resto de sesión de otro entorno.
   const conInicioSesion = (res: NextResponse): NextResponse => {
     if (sembrarInicioSesion !== null) {
-      res.cookies.set(SESION_INICIO_COOKIE, String(sembrarInicioSesion), {
+      const opciones = {
         httpOnly: true,
-        sameSite: 'lax',
+        sameSite: 'lax' as const,
         secure: process.env.NODE_ENV === 'production',
         path: '/',
         // Sin maxAge propio: el corte lo decide el proxy comparando el
         // timestamp. Cookie de sesión del navegador.
-      })
+      }
+      res.cookies.set(SESION_INICIO_COOKIE, String(sembrarInicioSesion), opciones)
+      if (user) {
+        res.cookies.set(SESION_INICIO_DUENO_COOKIE, huellaUsuario(user.id), opciones)
+      }
     }
     return res
   }
@@ -269,6 +331,7 @@ export async function updateSession(
         if (c.name.startsWith('sb-')) limpio.cookies.set(c.name, '', { path: '/', maxAge: 0 })
       }
       limpio.cookies.delete(SESION_INICIO_COOKIE)
+      limpio.cookies.delete(SESION_INICIO_DUENO_COOKIE)
       return { response: limpio, user: null }
     }
 

@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { cookies } from "next/headers";
-import { SESION_INICIO_COOKIE } from "@/features/auth/lib/session-expiry";
+import {
+  SESION_INICIO_COOKIE,
+  SESION_INICIO_DUENO_COOKIE,
+} from "@/features/auth/lib/session-expiry";
 
 export async function POST() {
   const cookieStore = await cookies();
@@ -61,6 +64,7 @@ export async function POST() {
   response.cookies.delete("g_accounts_meta");
   // Reloj de caducidad de 8h: se borra para que el próximo login arranque limpio.
   response.cookies.delete(SESION_INICIO_COOKIE);
+  response.cookies.delete(SESION_INICIO_DUENO_COOKIE);
 
   return response;
 }

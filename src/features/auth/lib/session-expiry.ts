@@ -17,6 +17,18 @@ export const SESION_MAX_MS = 8 * 60 * 60 * 1000
 /** Cookie que guarda el timestamp (ms epoch) del inicio de sesión. */
 export const SESION_INICIO_COOKIE = 'bh_sesion_inicio'
 
+/**
+ * Cookie que guarda a QUÉ usuario pertenece el reloj de `SESION_INICIO_COOKIE`.
+ *
+ * Existe para poder responder a una pregunta que antes no se podía: cuando el
+ * reloj está vencido, ¿es una caducidad real de ESTA sesión, o un resto de otra?
+ *
+ * Sin ella, entrar en el entorno de pruebas (otra dirección, otra base de datos)
+ * con restos del software real mostraba "tu sesión ha caducado por seguridad"
+ * nada más entrar, sin que hubiera caducado nada.
+ */
+export const SESION_INICIO_DUENO_COOKIE = 'bh_sesion_dueno'
+
 /** Code de error con el que redirigimos al login cuando caduca la sesión. */
 export const SESION_EXPIRADA_CODE = 'sesion_expirada'
 
@@ -44,4 +56,22 @@ export function sesionCaducada(inicioCookie: string | undefined, ahoraMs: number
   const inicio = Number(inicioCookie)
   if (!Number.isFinite(inicio) || inicio <= 0) return false
   return ahoraMs - inicio >= SESION_MAX_MS
+}
+
+/**
+ * Huella corta y estable de un usuario, para marcar de quién es el reloj de 8h.
+ *
+ * NO se guarda el id en claro: la cookie viaja al navegador y el id de usuario no
+ * tiene por qué estar ahí. Basta con poder comparar "¿es el mismo de antes?", y
+ * para eso sirve una huella no reversible. Es un hash sencillo (FNV-1a): no es
+ * criptografía y no lo pretende — no protege nada, solo distingue sesiones, y
+ * quien tenga la cookie ya tiene la sesión entera.
+ */
+export function huellaUsuario(userId: string): string {
+  let h = 0x811c9dc5
+  for (let i = 0; i < userId.length; i++) {
+    h ^= userId.charCodeAt(i)
+    h = Math.imul(h, 0x01000193)
+  }
+  return (h >>> 0).toString(36)
 }

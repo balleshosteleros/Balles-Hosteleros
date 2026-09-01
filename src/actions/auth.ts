@@ -7,7 +7,10 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { landingPorRol } from '@/features/auth/lib/role-redirect'
 import { getRolContext } from '@/features/auth/actions/permisos-actions'
-import { SESION_INICIO_COOKIE } from '@/features/auth/lib/session-expiry'
+import {
+  SESION_INICIO_COOKIE,
+  SESION_INICIO_DUENO_COOKIE,
+} from '@/features/auth/lib/session-expiry'
 import {
   checkProfileGuard,
   PROFILE_GUARD_MESSAGES,
@@ -120,7 +123,9 @@ export async function signout() {
   await supabase.auth.signOut(isDemo ? { scope: 'local' } : undefined)
 
   // Reloj de caducidad de 8h: se borra para que el próximo login arranque limpio.
-  ;(await cookies()).delete(SESION_INICIO_COOKIE)
+  const cookieStore = await cookies()
+  cookieStore.delete(SESION_INICIO_COOKIE)
+  cookieStore.delete(SESION_INICIO_DUENO_COOKIE)
 
   revalidatePath('/', 'layout')
   redirect('/')

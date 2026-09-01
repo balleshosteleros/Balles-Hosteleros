@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { cookies } from "next/headers";
-import { SESION_INICIO_COOKIE } from "@/features/auth/lib/session-expiry";
+import {
+  SESION_INICIO_COOKIE,
+  SESION_INICIO_DUENO_COOKIE,
+} from "@/features/auth/lib/session-expiry";
 
 /**
  * SALIDA DE EMERGENCIA — `sistema.balleshosteleros.com/salir`
@@ -130,6 +133,7 @@ export async function GET() {
     "g_accounts",
     "g_accounts_meta",
     SESION_INICIO_COOKIE,
+    SESION_INICIO_DUENO_COOKIE,
   ]) {
     response.cookies.set(nombre, "", { path: "/", maxAge: 0 });
   }
