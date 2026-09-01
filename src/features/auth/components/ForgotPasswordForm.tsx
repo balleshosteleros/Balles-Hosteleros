@@ -40,7 +40,8 @@ export function ForgotPasswordForm() {
     return (
       <div className="rounded-lg border border-emerald-900/50 bg-emerald-950/30 px-4 py-5 text-center">
         <p className="text-sm text-emerald-300">
-          Revisa tu correo para ver el enlace de recuperación.
+          Enlace de recuperación enviado. Revisa tu correo, y también la carpeta
+          de spam si no aparece en unos minutos.
         </p>
       </div>
     )

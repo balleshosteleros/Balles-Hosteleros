@@ -4,6 +4,7 @@ import { headers, cookies } from 'next/headers'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { landingPorRol } from '@/features/auth/lib/role-redirect'
 import { getRolContext } from '@/features/auth/actions/permisos-actions'
 import { SESION_INICIO_COOKIE } from '@/features/auth/lib/session-expiry'
@@ -125,9 +126,49 @@ export async function signout() {
   redirect('/')
 }
 
+// Mensaje cuando el correo escrito no pertenece a ningún usuario del sistema.
+// Decisión de Ivan (2026-09-02): la pantalla NO puede decir "revisa tu correo"
+// cuando no se ha enviado nada — el usuario se quedaba esperando un email que
+// nunca iba a llegar. Se corta el proceso y se dice la verdad.
+const EMAIL_SIN_CUENTA_MESSAGE =
+  'Ese correo no está asociado a ninguna cuenta del sistema. Comprueba que sea el correo con el que accedes.'
+
 export async function resetPassword(formData: FormData) {
   const supabase = await createClient()
-  const email = formData.get('email') as string
+  const email = String(formData.get('email') ?? '').trim().toLowerCase()
+
+  if (!email) {
+    return { error: EMAIL_SIN_CUENTA_MESSAGE }
+  }
+
+  // Supabase responde "enviado" siempre, exista o no la dirección (protección
+  // anti-enumeración). Por eso la existencia se comprueba aquí, contra la
+  // tabla de usuarios, ANTES de pedir el envío: el correo de acceso es
+  // usuarios.email. Se usa el cliente admin porque esta pantalla es pública
+  // (sin sesión) y la RLS no dejaría leer nada.
+  let existe = false
+  try {
+    const admin = createAdminClient()
+    const { data, error } = await admin
+      .from('usuarios')
+      .select('id')
+      .ilike('email', email)
+      .limit(1)
+
+    // Si la comprobación falla (BD caída, falta la service key), NO se bloquea
+    // al usuario legítimo: se sigue adelante y que Supabase decida.
+    if (error) {
+      existe = true
+    } else {
+      existe = (data?.length ?? 0) > 0
+    }
+  } catch {
+    existe = true
+  }
+
+  if (!existe) {
+    return { error: EMAIL_SIN_CUENTA_MESSAGE }
+  }
 
   // URL base centralizada en getSiteUrl(): NEXT_PUBLIC_APP_URL → SITE_URL →
   // VERCEL_URL → localhost, y en producción falla si cae a localhost (guard).
