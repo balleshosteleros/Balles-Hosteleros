@@ -8,7 +8,7 @@
  * pase existe y está lleno (en vez de desaparecer sin explicación).
  */
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Loader2 } from "lucide-react";
 import {
   Select,
@@ -34,6 +34,12 @@ interface Props {
   accent: string;
   /** Campos que la empresa exige además de los fijos (email / teléfono). */
   onObligatoriosChange?: (o: CamposObligatoriosPublico) => void;
+  /**
+   * Filtro extra de horas. Lo usa el canje de un Ticket: las horas que su
+   * producto no permite ni se enseñan, en vez de dejar que las elija y
+   * rechazarlas después.
+   */
+  horaPermitida?: (hora: string) => boolean;
 }
 
 export function SelectorDisponibilidad({
@@ -42,12 +48,21 @@ export function SelectorDisponibilidad({
   personas,
   horaSeleccionada,
   onSelect,
+  horaPermitida,
   accent,
   onObligatoriosChange,
 }: Props) {
-  const [slots, setSlots] = useState<SlotPublico[]>([]);
+  const [slotsCrudos, setSlotsCrudos] = useState<SlotPublico[]>([]);
   const [cargando, setCargando] = useState(true);
   const [mensaje, setMensaje] = useState<string | null>(null);
+
+  // Las horas que el ticket no permite se quitan de la lista. A diferencia de
+  // las horas completas, éstas no se enseñan deshabilitadas: para este cliente
+  // ese pase no existe, y mostrarlo solo genera la duda de por qué no puede.
+  const slots = useMemo(
+    () => (horaPermitida ? slotsCrudos.filter((s) => horaPermitida(s.hora)) : slotsCrudos),
+    [slotsCrudos, horaPermitida],
+  );
 
   useEffect(() => {
     if (!fecha) return;
@@ -57,10 +72,10 @@ export function SelectorDisponibilidad({
       const r = await listarDisponibilidadPublicaAction({ empresaSlug, fecha, personas });
       if (cancelado) return;
       if (!r.ok) {
-        setSlots([]);
+        setSlotsCrudos([]);
         setMensaje(r.error);
       } else {
-        setSlots(r.slots);
+        setSlotsCrudos(r.slots);
         setMensaje(r.mensaje);
         onObligatoriosChange?.(r.obligatorios);
       }
