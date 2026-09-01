@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Check, ChevronRight, DoorClosed, DoorOpen, Plus, Trash2, X } from "lucide-react";
+import { SelectorHoraCuartos } from "@/features/sala/components/reservas/SelectorHoraCuartos";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import type {
@@ -24,7 +25,12 @@ import type {
   SemanaHorarioFinKey,
   SemanaHorarioCerradoKey,
 } from "@/features/sala/data/reservas";
-import { DIA_SEMANA_KEY, generarSlotsTurno } from "@/features/sala/data/reservas";
+import {
+  DIA_SEMANA_KEY,
+  DIAS_SEMANA_LABELS,
+  DIAS_SEMANA_ORDEN,
+  generarSlotsTurno,
+} from "@/features/sala/data/reservas";
 import {
   createHorarioExcepcion,
   deleteHorarioExcepcion,
@@ -46,11 +52,8 @@ interface Props {
 
 type Ambito = "dia_semana" | "rango" | "dias_especificos";
 
-const DIAS_LABELS: Record<DiaSemanaKey, string> = {
-  lun: "lunes", mar: "martes", mie: "miércoles", jue: "jueves",
-  vie: "viernes", sab: "sábado", dom: "domingo",
-};
-const DIAS_ORDEN: DiaSemanaKey[] = ["lun","mar","mie","jue","vie","sab","dom"];
+const DIAS_LABELS = DIAS_SEMANA_LABELS;
+const DIAS_ORDEN = DIAS_SEMANA_ORDEN;
 
 /** "lunes", "lunes y martes", "lunes, martes y jueves", "todos los días". */
 function listaDias(dias: DiaSemanaKey[]): string {
@@ -582,21 +585,23 @@ export function HorariosAperturaPanel({
           <Label className="text-xs">
             Horario <span className="text-muted-foreground font-normal">| Apertura y cierre de reservas</span>
           </Label>
+          {/* En cuartos, igual que las reservas. De estas dos horas salen los
+              slots que se ofrecen al reservar: una apertura a las 13:07
+              generaba 13:07, 13:22, 13:37… y ninguna hora del día caía en la
+              cuadrícula, que es justo lo que la regla evita. */}
           <div className="flex items-center gap-2">
-            <Input
-              type="time"
+            <SelectorHoraCuartos
               value={inicio}
-              onChange={(e) => setInicio(e.target.value)}
+              onChange={setInicio}
               disabled={cerrado}
-              className="h-8 w-28 text-xs"
+              className="w-28"
             />
             <ChevronRight className="h-4 w-4 text-muted-foreground" />
-            <Input
-              type="time"
+            <SelectorHoraCuartos
               value={fin}
-              onChange={(e) => setFin(e.target.value)}
+              onChange={setFin}
               disabled={cerrado}
-              className="h-8 w-28 text-xs"
+              className="w-28"
             />
           </div>
         </div>

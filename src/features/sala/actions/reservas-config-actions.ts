@@ -64,6 +64,14 @@ function rowToConfig(row: Record<string, unknown>): EmpresaReservasConfig {
     cancelacionImporteEur:           Number(row.cancelacion_importe_eur ?? CANCELACION_IMPORTE_DEFAULT),
     cancelacionPersonalizarMensaje:  Boolean(row.cancelacion_personalizar_mensaje ?? false),
     cancelacionMensajePersonalizado: (row.cancelacion_mensaje_personalizado as string | null) ?? null,
+    cancelacionDesdePax:      Number(row.cancelacion_desde_pax ?? 0),
+    cancelacionDiasSemana:    Array.isArray(row.cancelacion_dias_semana)    ? (row.cancelacion_dias_semana as DiaSemanaKey[]) : [],
+    cancelacionFechas:        Array.isArray(row.cancelacion_fechas)         ? (row.cancelacion_fechas as string[])            : [],
+    cancelacionTurnos:        Array.isArray(row.cancelacion_turnos)         ? (row.cancelacion_turnos as string[])            : [],
+    cancelacionHoraDesde:     (row.cancelacion_hora_desde as string | null) ?? null,
+    cancelacionHoraHasta:     (row.cancelacion_hora_hasta as string | null) ?? null,
+    cancelacionGrupoZonaIds:  Array.isArray(row.cancelacion_grupo_zona_ids) ? (row.cancelacion_grupo_zona_ids as string[])    : [],
+    cancelacionMesaIds:       Array.isArray(row.cancelacion_mesa_ids)       ? (row.cancelacion_mesa_ids as string[])          : [],
     garantiaActiva:                  Boolean(row.garantia_activa ?? false),
     garantiaImporteEur:              Number(row.garantia_importe_eur ?? GARANTIA_IMPORTE_DEFAULT),
     garantiaModo:                    ((row.garantia_modo as GarantiaModo | null) ?? "reserva"),
@@ -77,6 +85,7 @@ function rowToConfig(row: Record<string, unknown>): EmpresaReservasConfig {
     garantiaHoraHasta:    (row.garantia_hora_hasta as string | null)  ?? null,
     garantiaGrupoZonaIds: Array.isArray(row.garantia_grupo_zona_ids)  ? (row.garantia_grupo_zona_ids as string[])    : [],
     garantiaMesaIds:      Array.isArray(row.garantia_mesa_ids)        ? (row.garantia_mesa_ids as string[])          : [],
+    garantiaHorasAntes:   Number(row.garantia_horas_antes ?? 24),
     productoPersonalizarMensaje:     Boolean(row.producto_personalizar_mensaje ?? false),
     productoMensajePersonalizado:    (row.producto_mensaje_personalizado as string | null) ?? null,
     reconfirmacionActiva:           Boolean(row.reconfirmacion_activa ?? true),
@@ -181,6 +190,15 @@ export async function upsertReservasConfig(updates: Partial<EmpresaReservasConfi
     if ("garantiaHoraHasta"    in updates) db.garantia_hora_hasta     = updates.garantiaHoraHasta;
     if ("garantiaGrupoZonaIds" in updates) db.garantia_grupo_zona_ids = updates.garantiaGrupoZonaIds ?? [];
     if ("garantiaMesaIds"      in updates) db.garantia_mesa_ids       = updates.garantiaMesaIds      ?? [];
+    if ("garantiaHorasAntes"   in updates) db.garantia_horas_antes    = updates.garantiaHorasAntes;
+    if ("cancelacionDesdePax"      in updates) db.cancelacion_desde_pax      = updates.cancelacionDesdePax;
+    if ("cancelacionDiasSemana"    in updates) db.cancelacion_dias_semana    = updates.cancelacionDiasSemana   ?? [];
+    if ("cancelacionFechas"        in updates) db.cancelacion_fechas         = updates.cancelacionFechas       ?? [];
+    if ("cancelacionTurnos"        in updates) db.cancelacion_turnos         = updates.cancelacionTurnos       ?? [];
+    if ("cancelacionHoraDesde"     in updates) db.cancelacion_hora_desde     = updates.cancelacionHoraDesde;
+    if ("cancelacionHoraHasta"     in updates) db.cancelacion_hora_hasta     = updates.cancelacionHoraHasta;
+    if ("cancelacionGrupoZonaIds"  in updates) db.cancelacion_grupo_zona_ids = updates.cancelacionGrupoZonaIds ?? [];
+    if ("cancelacionMesaIds"       in updates) db.cancelacion_mesa_ids       = updates.cancelacionMesaIds      ?? [];
     if ("productoPersonalizarMensaje"     in updates) db.producto_personalizar_mensaje     = updates.productoPersonalizarMensaje;
     if ("productoMensajePersonalizado"    in updates) db.producto_mensaje_personalizado    = updates.productoMensajePersonalizado;
     if ("reconfirmacionActiva"            in updates) db.reconfirmacion_activa             = updates.reconfirmacionActiva;

@@ -15,6 +15,11 @@ import { getCamposObligatoriosReserva } from "@/features/sala/lib/reserva-campos
 import { notificarReservaCreada } from "@/lib/email/reservas/notificar-creada";
 import { turnoDeHora } from "@/features/sala/lib/dia-negocio";
 import {
+  calcularPolitica,
+  politicaDesdeRow,
+  POLITICA_COLUMNAS_SELECT,
+} from "@/features/sala/lib/politicas-tarjeta";
+import {
   RESERVA_NOMBRE_MAX_CHARS,
   RESERVA_COMENTARIO_MAX_CHARS,
   RESERVA_APELLIDOS_MAX_CHARS,
@@ -413,6 +418,34 @@ export async function crearReservaPublicaAction(
   const zonaFinal: string | null = asign.mesa.zonaNombre || null;
 
   // ────────────────────────────────────────────────────────────────
+  // Políticas de tarjeta (PRP-082 fase 1).
+  //
+  // Se resuelven AQUÍ, con la mesa y la zona ya decididas, porque las
+  // condiciones pueden depender de ellas (un reservado que siempre exige
+  // garantía). El importe se congela en la reserva: si mañana cambia la
+  // configuración, esta reserva conserva lo que se le dijo al cliente.
+  //
+  // Esta fase solo marca y calcula. La tarjeta llega en la fase 2.
+  // ────────────────────────────────────────────────────────────────
+  const { data: cfgPoliticas } = await admin
+    .from("empresa_reservas_config")
+    .select(POLITICA_COLUMNAS_SELECT)
+    .eq("empresa_id", empresa.id)
+    .maybeSingle();
+
+  const datosPolitica = {
+    personas: data.personas,
+    fecha: data.fecha,
+    hora: data.hora,
+    turno,
+    grupoZonaId: grupoZonaIdFinal,
+    mesaId: asign.mesa.id,
+  };
+  const cfgRow = cfgPoliticas as Record<string, unknown> | null;
+  const garantia = calcularPolitica(politicaDesdeRow(cfgRow, "garantia"), datosPolitica);
+  const cancelacion = calcularPolitica(politicaDesdeRow(cfgRow, "cancelacion"), datosPolitica);
+
+  // ────────────────────────────────────────────────────────────────
   // Vinculación pendiente de revisión.
   //
   // La reserva ha enganchado con una ficha que ya existía (por email o por
@@ -472,6 +505,10 @@ export async function crearReservaPublicaAction(
     codigo_id: codigoId,
     codigo: codigoTexto,
     tipo_categoria: tipoCategoriaFinal,
+    tiene_garantia: garantia.aplica,
+    garantia_importe: garantia.aplica ? garantia.importe : null,
+    tiene_cancelacion: cancelacion.aplica,
+    cancelacion_importe: cancelacion.aplica ? cancelacion.importe : null,
     ticket_producto_id: ticketProductoIdFinal,
     ticket_unidades: ticketUnidadesFinal,
     ticket_importe: ticketImporteFinal,

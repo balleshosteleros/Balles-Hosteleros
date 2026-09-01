@@ -285,6 +285,18 @@ export type TurnoKey = "comida" | "cena";
 /** Mapea Date.getDay() (0=domingo) a la clave del día usada en la config. */
 export const DIA_SEMANA_KEY: DiaSemanaKey[] = ["dom","lun","mar","mie","jue","vie","sab"];
 
+/**
+ * Los mismos días en el orden en que se leen (la semana empieza el lunes), y
+ * su nombre en minúscula: los textos de la aplicación van en sentence case, y
+ * quien necesite capitalizarlos lo hace en su sitio.
+ */
+export const DIAS_SEMANA_ORDEN: DiaSemanaKey[] = ["lun","mar","mie","jue","vie","sab","dom"];
+
+export const DIAS_SEMANA_LABELS: Record<DiaSemanaKey, string> = {
+  lun: "lunes", mar: "martes", mie: "miércoles", jue: "jueves",
+  vie: "viernes", sab: "sábado", dom: "domingo",
+};
+
 /** Claves planas de horario por día × turno (inicio, fin, cerrado). */
 export type SemanaHorarioInicioKey  = `${DiaSemanaKey}_inicio_${TurnoKey}`;
 export type SemanaHorarioFinKey     = `${DiaSemanaKey}_fin_${TurnoKey}`;
@@ -327,6 +339,15 @@ export type EmpresaReservasConfig = SemanaHorarios & {
   cancelacionImporteEur: number;      // €, mín 1.00, máx 2 decimales
   cancelacionPersonalizarMensaje: boolean;
   cancelacionMensajePersonalizado: string | null;
+  // Condiciones que deciden CUÁNDO se pide tarjeta de cancelación (PRP-082).
+  cancelacionDesdePax: number;
+  cancelacionDiasSemana: DiaSemanaKey[];
+  cancelacionFechas: string[];          // "YYYY-MM-DD"
+  cancelacionTurnos: string[];          // "COMIDA" | "CENA"
+  cancelacionHoraDesde: string | null;  // "HH:MM"
+  cancelacionHoraHasta: string | null;
+  cancelacionGrupoZonaIds: string[];
+  cancelacionMesaIds: string[];
   // Política de garantía: importe que se retiene al confirmar la reserva y se
   // libera al presentarse el cliente. Independiente de la de cancelación:
   // cada una tiene su propio interruptor y pueden convivir.
@@ -336,6 +357,17 @@ export type EmpresaReservasConfig = SemanaHorarios & {
   garantiaDesdePax: number;           // 0 = todas las reservas
   garantiaPersonalizarMensaje: boolean;
   garantiaMensajePersonalizado: string | null;
+  // Condiciones que deciden CUÁNDO se pide garantía (PRP-082). Cada eje vacío
+  // no restringe; todos se cumplen a la vez.
+  garantiaDiasSemana: DiaSemanaKey[];
+  garantiaFechas: string[];          // "YYYY-MM-DD"
+  garantiaTurnos: string[];          // "COMIDA" | "CENA"
+  garantiaHoraDesde: string | null;  // "HH:MM"
+  garantiaHoraHasta: string | null;
+  garantiaGrupoZonaIds: string[];
+  garantiaMesaIds: string[];
+  /** Plazo mínimo de aviso para NO pagar la garantía. Horas completas. */
+  garantiaHorasAntes: number;
   // Mensaje al pedir tarjeta al SELECCIONAR UN PRODUCTO (PRP-051, tipo_categoria='ticket').
   // El toggle vive en el tab de Ticket; el texto se añade al correo cuando aplique.
   productoPersonalizarMensaje: boolean;
@@ -444,8 +476,11 @@ export const GARANTIA_IMPORTE_MIN = 1.0;
 export const GARANTIA_IMPORTE_MAX = 9999.99;
 export const GARANTIA_IMPORTE_DEFAULT = 20.0;
 
-/** Comensales a partir de los cuales se pide garantía. 0 = todas las reservas. */
-export const GARANTIA_DESDE_PAX_OPCIONES = [0, 2, 4, 6, 8, 10, 12, 15, 20] as const;
+/**
+ * Comensales a partir de los cuales una política de tarjeta pide tarjeta.
+ * 0 = todas las reservas. Lo usan las dos políticas (PRP-082).
+ */
+export const POLITICA_DESDE_PAX_OPCIONES = [0, 2, 4, 6, 8, 10, 12, 15, 20] as const;
 
 /**
  * Texto fijo (idéntico para todas las empresas) que se muestra en la

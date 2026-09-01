@@ -22,7 +22,6 @@ import {
   CANCELACION_IMPORTE_MAX,
   CANCELACION_IMPORTE_MIN,
   CANCELACION_TEXTO_FIJO,
-  GARANTIA_DESDE_PAX_OPCIONES,
   GARANTIA_IMPORTE_DEFAULT,
   GARANTIA_IMPORTE_MAX,
   GARANTIA_IMPORTE_MIN,
@@ -36,6 +35,10 @@ import {
   getReservasConfig,
   upsertReservasConfig,
 } from "@/features/sala/actions/reservas-config-actions";
+import {
+  CondicionesPoliticaPanel,
+  type CondicionesValor,
+} from "./CondicionesPoliticaPanel";
 
 const HORAS_OPCIONES = [1, 2, 3, 4, 6, 8, 12, 24, 48, 72] as const;
 
@@ -222,6 +225,12 @@ export function PoliticasCancelacionTab() {
                 directamente) se configura en el apartado de Ticket.
               </p>
             </div>
+
+            <CondicionesPoliticaPanel
+              acento="cancelacion"
+              valor={condicionesDe(config, "cancelacion")}
+              onChange={(parche) => patchConfig(prefijar(parche, "cancelacion"))}
+            />
           </>
         )}
       </section>
@@ -299,29 +308,29 @@ export function PoliticasCancelacionTab() {
               </p>
 
               <div className="space-y-1.5">
-                <Label className="text-xs">A partir de</Label>
+                <Label className="text-xs">Tiempo mínimo de aviso</Label>
                 <Select
-                  value={String(config.garantiaDesdePax)}
+                  value={String(config.garantiaHorasAntes)}
                   onValueChange={(v) => {
                     const n = Number(v);
-                    if (Number.isFinite(n)) patchConfig({ garantiaDesdePax: n });
+                    if (Number.isFinite(n)) patchConfig({ garantiaHorasAntes: n });
                   }}
                 >
                   <SelectTrigger className="h-8 text-xs">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {GARANTIA_DESDE_PAX_OPCIONES.map((n) => (
-                      <SelectItem key={n} value={String(n)} className="text-xs">
-                        {n === 0 ? "Todas las reservas" : `${n} comensales`}
+                    {HORAS_OPCIONES.map((h) => (
+                      <SelectItem key={h} value={String(h)} className="text-xs">
+                        {h} {h === 1 ? "hora" : "horas"}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
               <p className="text-[11px] text-muted-foreground md:pt-7">
-                Número de comensales a partir del cual se pide garantía. Por debajo de
-                ese número, la reserva no la lleva.
+                Con cuánta antelación tiene que cancelar el cliente para que no se le
+                cobre la garantía. Si cancela más tarde, o no se presenta, se cobra.
               </p>
             </div>
 
@@ -346,11 +355,50 @@ export function PoliticasCancelacionTab() {
                 />
               )}
             </div>
+
+            <CondicionesPoliticaPanel
+              acento="garantia"
+              valor={condicionesDe(config, "garantia")}
+              onChange={(parche) => patchConfig(prefijar(parche, "garantia"))}
+            />
           </>
         )}
       </section>
     </div>
   );
+}
+
+/**
+ * Las condiciones de las dos políticas viven en `EmpresaReservasConfig` con el
+ * nombre de la política como prefijo (`garantiaDesdePax`,
+ * `cancelacionDesdePax`…). Estas dos funciones traducen entre ese formato y el
+ * que usa el panel, que es igual para ambas.
+ */
+type Prefijo = "cancelacion" | "garantia";
+
+function condicionesDe(config: EmpresaReservasConfig, p: Prefijo): CondicionesValor {
+  const c = config as unknown as Record<string, unknown>;
+  return {
+    desdePax: Number(c[`${p}DesdePax`] ?? 0),
+    diasSemana: (c[`${p}DiasSemana`] as CondicionesValor["diasSemana"]) ?? [],
+    fechas: (c[`${p}Fechas`] as string[]) ?? [],
+    turnos: (c[`${p}Turnos`] as string[]) ?? [],
+    horaDesde: (c[`${p}HoraDesde`] as string | null) ?? null,
+    horaHasta: (c[`${p}HoraHasta`] as string | null) ?? null,
+    grupoZonaIds: (c[`${p}GrupoZonaIds`] as string[]) ?? [],
+    mesaIds: (c[`${p}MesaIds`] as string[]) ?? [],
+  };
+}
+
+function prefijar(
+  parche: Partial<CondicionesValor>,
+  p: Prefijo,
+): Partial<EmpresaReservasConfig> {
+  const out: Record<string, unknown> = {};
+  for (const [clave, valor] of Object.entries(parche)) {
+    out[`${p}${clave.charAt(0).toUpperCase()}${clave.slice(1)}`] = valor;
+  }
+  return out as Partial<EmpresaReservasConfig>;
 }
 
 /** Cabecera de una política: título, explicación y el interruptor que la activa. */
