@@ -10,6 +10,7 @@ import {
   Trash2,
   Archive,
   Reply,
+  ReplyAll,
   Forward,
   Loader2,
   Pencil,
@@ -31,6 +32,8 @@ import {
   RotateCcw,
   Check,
   OctagonAlert,
+  Expand,
+  Shrink,
   MailOpen,
   Mail,
   Minus,
@@ -43,6 +46,16 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuSub,
+  ContextMenuSubContent,
+  ContextMenuSubTrigger,
+  ContextMenuTrigger,
+} from "@/components/ui/context-menu";
 import {
   Sheet,
   SheetClose,
@@ -98,6 +111,8 @@ type Mensaje = {
   labelIds?: string[];
   /** Nº de mensajes del hilo; Gmail lo pinta junto a los participantes. */
   mensajesCount?: number;
+  /** Para + Cc del último mensaje; los usa "Responder a todos". */
+  destinatarios?: string[];
   mensajesHilo?: MensajeHilo[];
 };
 
@@ -212,6 +227,26 @@ function remitenteParaCita(nombre: string, email: string): string {
   return generico ? email : `${limpio} <${email}>`;
 }
 
+/**
+ * Direcciones que van a Cc en "Responder a todos": el resto de destinatarios
+ * del correo, quitando al remitente (ya va en Para) y la propia cuenta, porque
+ * Gmail nunca se pone a uno mismo en copia.
+ */
+function otrosDestinatarios(m: Mensaje, cuentaPropia: string | null): string {
+  const fuera = new Set(
+    [m.email, cuentaPropia].filter(Boolean).map((e) => e!.toLowerCase()),
+  );
+  const vistos = new Set<string>();
+  return (m.destinatarios ?? [])
+    .filter((e) => {
+      const clave = e.toLowerCase();
+      if (fuera.has(clave) || vistos.has(clave)) return false;
+      vistos.add(clave);
+      return true;
+    })
+    .join(", ");
+}
+
 function inicialAvatar(nombre: string, email: string): string {
   const limpio = nombre.trim();
   const generico = !limpio || limpio === "yo" || limpio.includes(",");
@@ -280,6 +315,9 @@ export function GmailDrawer({ children }: GmailDrawerProps) {
   // nuevo para que un Cco de un correo anterior no reaparezca por descuido.
   const [mostrarCc, setMostrarCc] = useState(false);
   const [mostrarCco, setMostrarCco] = useState(false);
+  // Compositor a pantalla completa (el "↗" de Gmail). Se reinicia con cada
+  // compositor nuevo para que no arranque gigante sin haberlo pedido.
+  const [composeGrande, setComposeGrande] = useState(false);
   const [enviando, setEnviando] = useState(false);
   useGlobalLoadingSync(enviando);
   const [firmaHtml, setFirmaHtml] = useState<string>("");
@@ -655,6 +693,7 @@ export function GmailDrawer({ children }: GmailDrawerProps) {
 
   function cerrarCompose() {
     setCompose(null);
+    setComposeGrande(false);
     resetIA();
     resetCopias();
   }
@@ -665,44 +704,52 @@ export function GmailDrawer({ children }: GmailDrawerProps) {
     setCompose({ to: "", cc: "", bcc: "", subject: "", body: "" });
   }
 
-  function abrirResponder() {
-    if (!seleccionado) return;
+  /**
+   * Responder / Reenviar reciben el mensaje por parámetro: además del correo
+   * abierto, ahora se disparan desde el menú contextual de una fila, donde no
+   * hay nada "seleccionado". Sin parámetro siguen usando el correo abierto.
+   *
+   * `todos` = Responder a todos: suma al resto de destinatarios en Cc, menos
+   * la propia dirección del usuario (Gmail nunca se pone a uno mismo).
+   */
+  function abrirResponder(mensaje?: Mensaje, todos = false) {
+    const m = mensaje ?? seleccionado;
+    if (!m) return;
     resetIA();
     resetCopias();
+    const cc = todos ? otrosDestinatarios(m, userEmail) : "";
+    if (cc) setMostrarCc(true);
     setCompose({
-      to: seleccionado.email,
-      cc: "",
+      to: m.email,
+      cc,
       bcc: "",
-      subject: seleccionado.asunto.startsWith("Re:")
-        ? seleccionado.asunto
-        : `Re: ${seleccionado.asunto}`,
-      body: `\n\n--- En respuesta a ${remitenteParaCita(seleccionado.remitente, seleccionado.email)} ---\n${seleccionado.cuerpo}`,
-      inReplyTo: seleccionado.id,
-      threadId: seleccionado.threadId,
+      subject: m.asunto.startsWith("Re:") ? m.asunto : `Re: ${m.asunto}`,
+      body: `\n\n--- En respuesta a ${remitenteParaCita(m.remitente, m.email)} ---\n${m.cuerpo}`,
+      inReplyTo: m.id,
+      threadId: m.threadId,
       emailOriginal: {
-        remitente: remitenteParaCita(seleccionado.remitente, seleccionado.email),
-        asunto: seleccionado.asunto,
-        cuerpo: seleccionado.cuerpo,
+        remitente: remitenteParaCita(m.remitente, m.email),
+        asunto: m.asunto,
+        cuerpo: m.cuerpo,
       },
     });
   }
 
-  function abrirReenviar() {
-    if (!seleccionado) return;
+  function abrirReenviar(mensaje?: Mensaje) {
+    const m = mensaje ?? seleccionado;
+    if (!m) return;
     resetIA();
     resetCopias();
     setCompose({
       to: "",
       cc: "",
       bcc: "",
-      subject: seleccionado.asunto.startsWith("Fwd:")
-        ? seleccionado.asunto
-        : `Fwd: ${seleccionado.asunto}`,
-      body: `\n\n---------- Mensaje reenviado ----------\nDe: ${remitenteParaCita(seleccionado.remitente, seleccionado.email)}\nAsunto: ${seleccionado.asunto}\n\n${seleccionado.cuerpo}`,
+      subject: m.asunto.startsWith("Fwd:") ? m.asunto : `Fwd: ${m.asunto}`,
+      body: `\n\n---------- Mensaje reenviado ----------\nDe: ${remitenteParaCita(m.remitente, m.email)}\nAsunto: ${m.asunto}\n\n${m.cuerpo}`,
       emailOriginal: {
-        remitente: remitenteParaCita(seleccionado.remitente, seleccionado.email),
-        asunto: seleccionado.asunto,
-        cuerpo: seleccionado.cuerpo,
+        remitente: remitenteParaCita(m.remitente, m.email),
+        asunto: m.asunto,
+        cuerpo: m.cuerpo,
       },
     });
   }
@@ -1018,6 +1065,11 @@ export function GmailDrawer({ children }: GmailDrawerProps) {
                 onEstrella={(m) =>
                   actuar(m.estrella ? "unstar" : "star", m.id)
                 }
+                onResponder={(m) => abrirResponder(m)}
+                onResponderTodos={(m) => abrirResponder(m, true)}
+                onReenviar={(m) => abrirReenviar(m)}
+                onNoLeido={(m) => actuar("unread", m.id)}
+                onMover={(id, labelId) => actuar("moveToLabel", id, labelId)}
                 seleccion={seleccion}
                 onSeleccion={setSeleccion}
                 onAccionLote={actuarSobreSeleccion}
@@ -1030,8 +1082,22 @@ export function GmailDrawer({ children }: GmailDrawerProps) {
         </div>
 
         {compose && (
-          <div className="absolute inset-0 z-50 flex items-end justify-end bg-black/30 p-4">
-            <div className="flex h-[80%] w-full max-w-lg flex-col rounded-t-lg border bg-card shadow-2xl">
+          <div
+            className={cn(
+              "absolute inset-0 z-50 flex bg-black/30",
+              composeGrande
+                ? "items-center justify-center p-6"
+                : "items-end justify-end p-4",
+            )}
+          >
+            <div
+              className={cn(
+                "flex flex-col border bg-card shadow-2xl",
+                composeGrande
+                  ? "h-full w-full rounded-lg"
+                  : "h-[80%] w-full max-w-lg rounded-t-lg",
+              )}
+            >
               <div className="flex items-center justify-between border-b bg-[#404040] px-4 py-2 text-white rounded-t-lg">
                 <p className="text-sm font-semibold">
                   {compose.inReplyTo
@@ -1040,13 +1106,34 @@ export function GmailDrawer({ children }: GmailDrawerProps) {
                       ? "Reenviar"
                       : "Mensaje nuevo"}
                 </p>
-                <button
-                  type="button"
-                  onClick={cerrarCompose}
-                  className="rounded p-1 hover:bg-white/20"
-                >
-                  <X className="h-4 w-4" />
-                </button>
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setComposeGrande((v) => !v)}
+                    className="rounded p-1 hover:bg-white/20"
+                    title={
+                      composeGrande ? "Salir de pantalla completa" : "Pantalla completa"
+                    }
+                    aria-label={
+                      composeGrande ? "Salir de pantalla completa" : "Pantalla completa"
+                    }
+                  >
+                    {composeGrande ? (
+                      <Shrink className="h-4 w-4" />
+                    ) : (
+                      <Expand className="h-4 w-4" />
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={cerrarCompose}
+                    className="rounded p-1 hover:bg-white/20"
+                    title="Cerrar"
+                    aria-label="Cerrar"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
               </div>
               <div className="flex-1 overflow-y-auto p-4 space-y-3">
                 <div className="relative">
@@ -1345,6 +1432,12 @@ interface ListaMensajesProps {
   /** En Spam el botón ofrece "No es spam" en lugar de "Marcar como spam". */
   enSpam: boolean;
   carpetasUsuario: CarpetaUsuario[];
+  /** Acciones del menú contextual (clic derecho sobre la fila). */
+  onResponder: (m: Mensaje) => void;
+  onResponderTodos: (m: Mensaje) => void;
+  onReenviar: (m: Mensaje) => void;
+  onNoLeido: (m: Mensaje) => void;
+  onMover: (id: string, labelId: string) => void;
 }
 
 function ListaMensajes({
@@ -1367,6 +1460,11 @@ function ListaMensajes({
   aplicandoLote,
   enSpam,
   carpetasUsuario,
+  onResponder,
+  onResponderTodos,
+  onReenviar,
+  onNoLeido,
+  onMover,
 }: ListaMensajesProps) {
   const idsPagina = mensajes.map((m) => m.id);
   const marcados = idsPagina.filter((id) => seleccion.has(id)).length;
@@ -1625,150 +1723,204 @@ function ListaMensajes({
               .map((id) => ({ id, nombre: labelIdToNombre.get(id)! }));
 
             return (
-              <li
-                key={m.id}
-                className={cn(
-                  "group flex items-center gap-3 border-b border-[#f1f3f4] px-4 py-[6px] cursor-pointer transition-shadow hover:shadow-[inset_1px_0_0_#dadce0,inset_-1px_0_0_#dadce0,0_1px_2px_0_rgba(60,64,67,0.30),0_1px_3px_1px_rgba(60,64,67,0.15)] hover:z-10",
-                  seleccion.has(m.id)
-                    ? "bg-[#c2dbff]"
-                    : !m.leido
-                      ? "bg-white"
-                      : "bg-[#f2f6fc]",
-                )}
-                onClick={() => onSeleccionar(m)}
-              >
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    alternarUno(m.id);
-                  }}
-                  className="rounded-full p-1 hover:bg-black/5 shrink-0"
-                  title={seleccion.has(m.id) ? "Anular la selección" : "Seleccionar"}
-                  aria-label={
-                    seleccion.has(m.id) ? "Anular la selección" : "Seleccionar"
-                  }
-                  role="checkbox"
-                  aria-checked={seleccion.has(m.id)}
-                >
-                  <span
+                <ContextMenu key={m.id}>
+                  <ContextMenuTrigger asChild>
+                  <li
                     className={cn(
-                      "flex h-4 w-4 items-center justify-center rounded-[2px] border-2",
+                      "group flex items-center gap-3 border-b border-[#f1f3f4] px-4 py-[6px] cursor-pointer transition-shadow hover:shadow-[inset_1px_0_0_#dadce0,inset_-1px_0_0_#dadce0,0_1px_2px_0_rgba(60,64,67,0.30),0_1px_3px_1px_rgba(60,64,67,0.15)] hover:z-10",
                       seleccion.has(m.id)
-                        ? "border-[#1a73e8] bg-[#1a73e8] text-white"
-                        : "border-[#5f6368] bg-transparent",
+                        ? "bg-[#c2dbff]"
+                        : !m.leido
+                          ? "bg-white"
+                          : "bg-[#f2f6fc]",
                     )}
+                    onClick={() => onSeleccionar(m)}
                   >
-                    {seleccion.has(m.id) && (
-                      <Check className="h-3 w-3" strokeWidth={3} />
-                    )}
-                  </span>
-                </button>
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onEstrella(m);
-                  }}
-                  className="rounded-full p-1 hover:bg-black/5 shrink-0"
-                  title={m.estrella ? "Quitar estrella" : "Destacar"}
-                >
-                  <Star
-                    className={cn(
-                      "h-4 w-4",
-                      m.estrella
-                        ? "fill-[#f9ab00] text-[#f9ab00]"
-                        : "text-[#5f6368]",
-                    )}
-                  />
-                </button>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        alternarUno(m.id);
+                      }}
+                      className="rounded-full p-1 hover:bg-black/5 shrink-0"
+                      title={seleccion.has(m.id) ? "Anular la selección" : "Seleccionar"}
+                      aria-label={
+                        seleccion.has(m.id) ? "Anular la selección" : "Seleccionar"
+                      }
+                      role="checkbox"
+                      aria-checked={seleccion.has(m.id)}
+                    >
+                      <span
+                        className={cn(
+                          "flex h-4 w-4 items-center justify-center rounded-[2px] border-2",
+                          seleccion.has(m.id)
+                            ? "border-[#1a73e8] bg-[#1a73e8] text-white"
+                            : "border-[#5f6368] bg-transparent",
+                        )}
+                      >
+                        {seleccion.has(m.id) && (
+                          <Check className="h-3 w-3" strokeWidth={3} />
+                        )}
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onEstrella(m);
+                      }}
+                      className="rounded-full p-1 hover:bg-black/5 shrink-0"
+                      title={m.estrella ? "Quitar estrella" : "Destacar"}
+                    >
+                      <Star
+                        className={cn(
+                          "h-4 w-4",
+                          m.estrella
+                            ? "fill-[#f9ab00] text-[#f9ab00]"
+                            : "text-[#5f6368]",
+                        )}
+                      />
+                    </button>
 
-                <span
-                  className={cn(
-                    "w-44 shrink-0 truncate text-sm",
-                    !m.leido
-                      ? "font-bold text-[#202124]"
-                      : "text-[#5f6368]",
-                  )}
-                >
-                  {m.remitente}
-                  {/* Gmail acompaña a los participantes con el nº de mensajes
-                      del hilo, para que se vea de un vistazo que hay
-                      conversación y no un correo suelto. */}
-                  {m.mensajesCount && m.mensajesCount > 1 ? (
-                    <span className="ml-1 font-normal text-[#5f6368]">
-                      {m.mensajesCount}
-                    </span>
-                  ) : null}
-                </span>
-
-                <div className="flex-1 min-w-0 flex items-center gap-2">
-                  {labelsVisibles.length > 0 && (
-                    <div className="flex items-center gap-1 shrink-0">
-                      {labelsVisibles.slice(0, 3).map((l) => (
-                        <span
-                          key={l.id}
-                          className="inline-flex items-center rounded border border-[#dadce0] bg-white px-1.5 py-px text-[11px] uppercase tracking-wide text-[#5f6368] max-w-[180px] truncate"
-                          title={l.nombre}
-                        >
-                          {acortarLabel(l.nombre)}
+                    <span
+                      className={cn(
+                        "w-44 shrink-0 truncate text-sm",
+                        !m.leido
+                          ? "font-bold text-[#202124]"
+                          : "text-[#5f6368]",
+                      )}
+                    >
+                      {m.remitente}
+                      {/* Gmail acompaña a los participantes con el nº de mensajes
+                          del hilo, para que se vea de un vistazo que hay
+                          conversación y no un correo suelto. */}
+                      {m.mensajesCount && m.mensajesCount > 1 ? (
+                        <span className="ml-1 font-normal text-[#5f6368]">
+                          {m.mensajesCount}
                         </span>
-                      ))}
-                    </div>
-                  )}
-                  <p
-                    className={cn(
-                      "truncate text-sm",
-                      !m.leido
-                        ? "font-bold text-[#202124]"
-                        : "text-[#5f6368]",
-                    )}
-                  >
-                    <span>{m.asunto}</span>
-                    <span className="text-[#5f6368] font-normal">
-                      {" "}
-                      - {m.preview}
+                      ) : null}
                     </span>
-                  </p>
-                </div>
 
-                {/* Acciones hover (a la derecha, sustituyen a la fecha) */}
-                <div className="hidden group-hover:flex items-center gap-1 shrink-0">
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onArchivar(m.id);
-                    }}
-                    className="rounded-full p-1.5 hover:bg-black/10 text-[#5f6368]"
-                    title="Archivar"
-                  >
-                    <Archive className="h-4 w-4" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onPapelera(m.id);
-                    }}
-                    className="rounded-full p-1.5 hover:bg-black/10 text-[#5f6368]"
-                    title="Eliminar"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
-                </div>
+                    <div className="flex-1 min-w-0 flex items-center gap-2">
+                      {labelsVisibles.length > 0 && (
+                        <div className="flex items-center gap-1 shrink-0">
+                          {labelsVisibles.slice(0, 3).map((l) => (
+                            <span
+                              key={l.id}
+                              className="inline-flex items-center rounded border border-[#dadce0] bg-white px-1.5 py-px text-[11px] uppercase tracking-wide text-[#5f6368] max-w-[180px] truncate"
+                              title={l.nombre}
+                            >
+                              {acortarLabel(l.nombre)}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                      <p
+                        className={cn(
+                          "truncate text-sm",
+                          !m.leido
+                            ? "font-bold text-[#202124]"
+                            : "text-[#5f6368]",
+                        )}
+                      >
+                        <span>{m.asunto}</span>
+                        <span className="text-[#5f6368] font-normal">
+                          {" "}
+                          - {m.preview}
+                        </span>
+                      </p>
+                    </div>
 
-                <span
-                  className={cn(
-                    "group-hover:hidden shrink-0 text-xs w-16 text-right",
-                    !m.leido
-                      ? "font-bold text-[#202124]"
-                      : "text-[#5f6368]",
-                  )}
-                >
-                  {m.fecha}
-                </span>
-              </li>
+                    {/* Acciones hover (a la derecha, sustituyen a la fecha) */}
+                    <div className="hidden group-hover:flex items-center gap-1 shrink-0">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onArchivar(m.id);
+                        }}
+                        className="rounded-full p-1.5 hover:bg-black/10 text-[#5f6368]"
+                        title="Archivar"
+                      >
+                        <Archive className="h-4 w-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onPapelera(m.id);
+                        }}
+                        className="rounded-full p-1.5 hover:bg-black/10 text-[#5f6368]"
+                        title="Eliminar"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+
+                    <span
+                      className={cn(
+                        "group-hover:hidden shrink-0 text-xs w-16 text-right",
+                        !m.leido
+                          ? "font-bold text-[#202124]"
+                          : "text-[#5f6368]",
+                      )}
+                    >
+                      {m.fecha}
+                    </span>
+                  </li>
+                  </ContextMenuTrigger>
+                  {/* Menú de clic derecho, con las acciones de Gmail que se
+                      usan de verdad sobre una fila. */}
+                  <ContextMenuContent className="w-60">
+                    <ContextMenuItem onClick={() => onResponder(m)}>
+                      <Reply className="mr-2 h-3.5 w-3.5 text-muted-foreground" />
+                      Responder
+                    </ContextMenuItem>
+                    <ContextMenuItem onClick={() => onResponderTodos(m)}>
+                      <ReplyAll className="mr-2 h-3.5 w-3.5 text-muted-foreground" />
+                      Responder a todos
+                    </ContextMenuItem>
+                    <ContextMenuItem onClick={() => onReenviar(m)}>
+                      <Forward className="mr-2 h-3.5 w-3.5 text-muted-foreground" />
+                      Reenviar
+                    </ContextMenuItem>
+                    <ContextMenuSeparator />
+                    <ContextMenuItem onClick={() => onArchivar(m.id)}>
+                      <Archive className="mr-2 h-3.5 w-3.5 text-muted-foreground" />
+                      Archivar
+                    </ContextMenuItem>
+                    <ContextMenuItem onClick={() => onPapelera(m.id)}>
+                      <Trash2 className="mr-2 h-3.5 w-3.5 text-muted-foreground" />
+                      Eliminar
+                    </ContextMenuItem>
+                    <ContextMenuItem onClick={() => onNoLeido(m)}>
+                      <Mail className="mr-2 h-3.5 w-3.5 text-muted-foreground" />
+                      Marcar como no leído
+                    </ContextMenuItem>
+                    {carpetasUsuario.length > 0 && (
+                      <>
+                        <ContextMenuSeparator />
+                        <ContextMenuSub>
+                          <ContextMenuSubTrigger>
+                            <FolderInput className="mr-2 h-3.5 w-3.5 text-muted-foreground" />
+                            Mover a
+                          </ContextMenuSubTrigger>
+                          <ContextMenuSubContent className="max-h-72 w-56 overflow-y-auto">
+                            {carpetasUsuario.map((c) => (
+                              <ContextMenuItem
+                                key={c.id}
+                                onClick={() => onMover(m.id, c.id)}
+                              >
+                                <Folder className="mr-2 h-3.5 w-3.5 text-muted-foreground" />
+                                <span className="truncate">{c.nombre}</span>
+                              </ContextMenuItem>
+                            ))}
+                          </ContextMenuSubContent>
+                        </ContextMenuSub>
+                      </>
+                    )}
+                  </ContextMenuContent>
+                </ContextMenu>
             );
           })
         )}

@@ -312,6 +312,12 @@ export async function GET(request: Request) {
         carpeta,
         labelIds: Array.from(todosLabels),
         mensajesCount: msgs.length,
+        // Destinatarios del último mensaje: los necesita "Responder a todos"
+        // del menú contextual, que sin esto no tendría a quién poner en Cc.
+        destinatarios: [
+          ...parseLista(header(ultimoMsg, "To")),
+          ...parseLista(header(ultimoMsg, "Cc")),
+        ].map((d) => d.email),
       };
     });
 
