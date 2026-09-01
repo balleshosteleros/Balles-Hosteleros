@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
@@ -15,7 +14,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import {
   CANCELACION_HORAS_MAX,
@@ -24,29 +22,28 @@ import {
   CANCELACION_IMPORTE_MAX,
   CANCELACION_IMPORTE_MIN,
   CANCELACION_TEXTO_FIJO,
+  GARANTIA_DESDE_PAX_OPCIONES,
+  GARANTIA_IMPORTE_DEFAULT,
+  GARANTIA_IMPORTE_MAX,
+  GARANTIA_IMPORTE_MIN,
+  GARANTIA_MODO_LABELS,
+  GARANTIA_MODOS,
+  GARANTIA_TEXTO_FIJO,
   type EmpresaReservasConfig,
-  type PoliticaCancelacion,
+  type GarantiaModo,
 } from "@/features/sala/data/reservas";
 import {
   getReservasConfig,
   upsertReservasConfig,
 } from "@/features/sala/actions/reservas-config-actions";
-import {
-  listPoliticasCancelacion,
-  createPoliticaCancelacion,
-  updatePoliticaCancelacion,
-  deletePoliticaCancelacion,
-} from "@/features/sala/actions/politicas-cancelacion-actions";
-import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 
 const HORAS_OPCIONES = [1, 2, 3, 4, 6, 8, 12, 24, 48, 72] as const;
 
 export function PoliticasCancelacionTab() {
-  const { confirm: confirmDelete, dialog: confirmDeleteDialog } = useConfirmDelete();
-  // --- Configuración GLOBAL de política de cancelación (1 por empresa) ---
   const [config, setConfig] = useState<EmpresaReservasConfig | null>(null);
-  const [configLoading, setConfigLoading] = useState(true);
+  const [loading, setLoading] = useState(true);
   const [importeStr, setImporteStr] = useState("");
+  const [garantiaImporteStr, setGarantiaImporteStr] = useState("");
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const cargarConfig = useCallback(async () => {
@@ -54,8 +51,9 @@ export function PoliticasCancelacionTab() {
     if (c.ok && c.data) {
       setConfig(c.data);
       setImporteStr(c.data.cancelacionImporteEur.toFixed(2));
+      setGarantiaImporteStr(c.data.garantiaImporteEur.toFixed(2));
     }
-    setConfigLoading(false);
+    setLoading(false);
   }, []);
 
   useEffect(() => {
@@ -71,340 +69,314 @@ export function PoliticasCancelacionTab() {
     }, 500);
   }
 
-  function commitImporte(raw: string) {
-    // Acepta coma o punto, máximo 2 decimales, mínimo 1.00.
+  /**
+   * Valida un importe en euros escrito a mano (acepta coma o punto) y lo
+   * persiste si cambió. Sirve a las dos políticas: solo cambian los límites y
+   * la clave de config que se guarda.
+   */
+  function commitImporte(
+    raw: string,
+    opts: {
+      actual: number;
+      min: number;
+      max: number;
+      fallback: number;
+      setStr: (v: string) => void;
+      guardar: (v: number) => void;
+    },
+  ) {
     const norm = raw.replace(",", ".").trim();
     const n = Number(norm);
-    if (!Number.isFinite(n) || n < CANCELACION_IMPORTE_MIN) {
-      toast.error(`El importe mínimo es ${CANCELACION_IMPORTE_MIN.toFixed(2)} €`);
-      const fallback = config?.cancelacionImporteEur ?? CANCELACION_IMPORTE_DEFAULT;
-      setImporteStr(fallback.toFixed(2));
+    if (!Number.isFinite(n) || n < opts.min) {
+      toast.error(`El importe mínimo es ${opts.min.toFixed(2)} €`);
+      opts.setStr((opts.actual || opts.fallback).toFixed(2));
       return;
     }
-    if (n > CANCELACION_IMPORTE_MAX) {
-      toast.error(`El importe máximo es ${CANCELACION_IMPORTE_MAX.toFixed(2)} €`);
-      setImporteStr(CANCELACION_IMPORTE_MAX.toFixed(2));
-      patchConfig({ cancelacionImporteEur: CANCELACION_IMPORTE_MAX });
+    if (n > opts.max) {
+      toast.error(`El importe máximo es ${opts.max.toFixed(2)} €`);
+      opts.setStr(opts.max.toFixed(2));
+      opts.guardar(opts.max);
       return;
     }
     const redondeado = Math.round(n * 100) / 100;
-    setImporteStr(redondeado.toFixed(2));
-    if (redondeado !== config?.cancelacionImporteEur) {
-      patchConfig({ cancelacionImporteEur: redondeado });
-    }
+    opts.setStr(redondeado.toFixed(2));
+    if (redondeado !== opts.actual) opts.guardar(redondeado);
   }
 
-  // --- Lista (legacy) de políticas custom por empresa ---
-  const [politicas, setPoliticas] = useState<PoliticaCancelacion[]>([]);
-  const [politicasLoading, setPoliticasLoading] = useState(true);
-  const [creando, setCreando] = useState(false);
-  const [form, setForm] = useState({
-    nombre: "",
-    descripcion: "",
-    horasAntes: "",
-    penalizacionPct: "",
-  });
-
-  const loadPoliticas = useCallback(async () => {
-    setPoliticasLoading(true);
-    const res = await listPoliticasCancelacion();
-    if (res.ok) setPoliticas(res.data);
-    setPoliticasLoading(false);
-  }, []);
-
-  useEffect(() => { loadPoliticas(); }, [loadPoliticas]);
-
-  async function handleCreate() {
-    if (!form.nombre.trim()) {
-      toast.error("El nombre es obligatorio");
-      return;
-    }
-    setCreando(true);
-    const res = await createPoliticaCancelacion({
-      nombre: form.nombre,
-      descripcion: form.descripcion.trim() || null,
-      horasAntes: form.horasAntes ? Number(form.horasAntes) : null,
-      penalizacionPct: form.penalizacionPct ? Number(form.penalizacionPct) : null,
-      orden: politicas.length + 1,
-    });
-    setCreando(false);
-    if (!res.ok) {
-      toast.error(res.error ?? "No se pudo crear");
-      return;
-    }
-    toast.success("Política añadida");
-    setForm({ nombre: "", descripcion: "", horasAntes: "", penalizacionPct: "" });
-    loadPoliticas();
-  }
-
-  async function patchPolitica(id: string, p: Parameters<typeof updatePoliticaCancelacion>[1]) {
-    const res = await updatePoliticaCancelacion(id, p);
-    if (!res.ok) toast.error(res.error ?? "No se pudo guardar");
-    else loadPoliticas();
-  }
-
-  async function handleDelete(id: string, nombre: string) {
-    const ok = await confirmDelete({
-      title: "Borrar política",
-      description: `¿Borrar la política "${nombre}"?`,
-      confirmLabel: "Borrar",
-    });
-    if (!ok) return;
-    const res = await deletePoliticaCancelacion(id);
-    if (!res.ok) toast.error(res.error ?? "No se pudo borrar");
-    else {
-      toast.success("Política borrada");
-      loadPoliticas();
-    }
+  if (loading || !config) {
+    return (
+      <div className="space-y-6">
+        <Skeleton className="h-48 w-full" />
+        <Skeleton className="h-48 w-full" />
+      </div>
+    );
   }
 
   return (
     <div className="space-y-6">
-      {confirmDeleteDialog}
-      {/* === Política de cancelación (global, texto fijo) === */}
+      {/* === Política de cancelación === */}
       <section className="space-y-4">
-        <div>
-          <h4 className="text-sm font-semibold mb-1">Política de cancelación</h4>
-          <p className="text-xs text-muted-foreground">
-            Condiciones que se aplican cuando una reserva se marca con &quot;Política de
-            cancelación&quot;. El texto que ve el cliente es el mismo para todas las
-            empresas; solo el importe y las horas son editables.
-          </p>
-        </div>
+        <PoliticaCabecera
+          titulo="Política de cancelación"
+          descripcion={
+            'Condiciones que se aplican cuando una reserva se marca con "Política de cancelación". El texto que ve el cliente es el mismo para todas las empresas; solo el importe y las horas son editables.'
+          }
+          activa={config.cancelacionActiva}
+          onToggle={(v) => patchConfig({ cancelacionActiva: v })}
+        />
 
-        <div className="rounded-md border bg-muted/30 p-3 text-xs leading-relaxed text-foreground/90">
-          {CANCELACION_TEXTO_FIJO}
-        </div>
-
-        {configLoading || !config ? (
-          <Skeleton className="h-24 w-full" />
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-[260px_1fr] gap-3 items-start">
-            <div className="space-y-1.5">
-              <Label className="text-xs">Tiempo mínimo de cancelación</Label>
-              <Select
-                value={String(config.cancelacionHorasAntes)}
-                onValueChange={(v) => {
-                  const n = Number(v);
-                  if (Number.isFinite(n)) patchConfig({ cancelacionHorasAntes: n });
-                }}
-              >
-                <SelectTrigger className="h-8 text-xs">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {HORAS_OPCIONES.map((h) => (
-                    <SelectItem key={h} value={String(h)} className="text-xs">
-                      {h} {h === 1 ? "hora" : "horas"}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+        {config.cancelacionActiva && (
+          <>
+            <div className="rounded-md border bg-muted/30 p-3 text-xs leading-relaxed text-foreground/90">
+              {CANCELACION_TEXTO_FIJO}
             </div>
-            <p className="text-[11px] text-muted-foreground md:pt-7">
-              Tiempo mínimo en el que el cliente puede cancelar sin que se le aplique
-              política de cancelación. Solo horas completas ({CANCELACION_HORAS_MIN}–
-              {CANCELACION_HORAS_MAX} h).
-            </p>
 
-            <div className="space-y-1.5">
-              <Label className="text-xs">Importe a cobrar (€)</Label>
-              <Input
-                type="text"
-                inputMode="decimal"
-                placeholder="Euros"
-                value={importeStr}
-                onChange={(e) => {
-                  // Permite escribir libremente; valida al perder foco.
-                  const v = e.target.value;
-                  if (/^[0-9]*[.,]?[0-9]{0,2}$/.test(v) || v === "") setImporteStr(v);
-                }}
-                onBlur={(e) => commitImporte(e.target.value)}
-                className="h-8 text-xs"
-              />
-            </div>
-            <p className="text-[11px] text-muted-foreground md:pt-7">
-              Se efectuará un cargo al cliente por esta cantidad si no se presenta o
-              cancela a menos de ({config.cancelacionHorasAntes}) horas. Mínimo{" "}
-              {CANCELACION_IMPORTE_MIN.toFixed(2)} €, máximo 2 decimales.
-            </p>
-          </div>
-        )}
-      </section>
-
-      <Separator />
-
-      {/* === Mensaje al pedir tarjeta === */}
-      <section className="space-y-3">
-        <h4 className="text-sm font-semibold">Mensaje al pedir tarjeta</h4>
-        {configLoading || !config ? (
-          <Skeleton className="h-16 w-full" />
-        ) : (
-          <div className="space-y-3">
-            <div className="flex items-start justify-between gap-4">
-              <div className="text-xs text-foreground/90 leading-relaxed max-w-[70%]">
-                Personalizar mensaje por defecto al pedir tarjeta de política de
-                cancelación
-              </div>
-              <SiNoRadio
-                value={config.cancelacionPersonalizarMensaje}
-                onChange={(v) =>
-                  patchConfig({
-                    cancelacionPersonalizarMensaje: v,
-                    // Si lo apaga, no borra el texto: lo conserva por si lo reactivan.
-                  })
-                }
-              />
-            </div>
-            {config.cancelacionPersonalizarMensaje && (
-              <Textarea
-                placeholder="Texto que se añadirá al correo cuando la reserva tenga política de cancelación."
-                value={config.cancelacionMensajePersonalizado ?? ""}
-                onChange={(e) => patchConfig({ cancelacionMensajePersonalizado: e.target.value })}
-                className="text-xs min-h-[80px]"
-              />
-            )}
-            <p className="text-[11px] text-muted-foreground">
-              El otro caso (mensaje al pedir tarjeta cuando se vende un producto
-              directamente) se configura en el apartado de Ticket.
-            </p>
-          </div>
-        )}
-      </section>
-
-      <Separator />
-
-      {/* === Políticas custom (legacy, opcional) === */}
-      <section className="space-y-3">
-        <div>
-          <h4 className="text-sm font-semibold mb-1">Políticas custom (avanzado)</h4>
-          <p className="text-xs text-muted-foreground">
-            Reglas adicionales que se pueden asignar manualmente a una reserva
-            cuando se necesita algo distinto a la política general (eventos
-            especiales, grupos, etc.).
-          </p>
-        </div>
-
-        <div className="border rounded-md divide-y">
-          <div className="grid grid-cols-[1fr_2fr_90px_90px_90px_40px] gap-2 px-3 py-2 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider bg-muted/30">
-            <span>Nombre</span>
-            <span>Descripción</span>
-            <span className="text-right">Horas antes</span>
-            <span className="text-right">% Penaliz.</span>
-            <span className="text-center">Activa</span>
-            <span></span>
-          </div>
-          {politicasLoading ? (
-            <div className="p-4 text-center text-xs text-muted-foreground">Cargando…</div>
-          ) : politicas.length === 0 ? (
-            <div className="p-4 text-center text-xs text-muted-foreground">
-              Sin políticas custom. Añade una abajo si la necesitas.
-            </div>
-          ) : (
-            politicas.map((p) => (
-              <div
-                key={p.id}
-                className="grid grid-cols-[1fr_2fr_90px_90px_90px_40px] gap-2 px-3 py-2 items-center"
-              >
-                <Input
-                  defaultValue={p.nombre}
-                  className="h-8 text-xs"
-                  onBlur={(e) =>
-                    e.target.value.trim() &&
-                    e.target.value !== p.nombre &&
-                    patchPolitica(p.id, { nombre: e.target.value })
-                  }
-                />
-                <Input
-                  defaultValue={p.descripcion ?? ""}
-                  className="h-8 text-xs"
-                  onBlur={(e) =>
-                    e.target.value !== (p.descripcion ?? "") &&
-                    patchPolitica(p.id, { descripcion: e.target.value || null })
-                  }
-                />
-                <Input
-                  type="number"
-                  min={0}
-                  defaultValue={p.horasAntes ?? ""}
-                  className="h-8 text-xs text-right"
-                  placeholder="—"
-                  onBlur={(e) => {
-                    const v = e.target.value ? Number(e.target.value) : null;
-                    if (v !== p.horasAntes) patchPolitica(p.id, { horasAntes: v });
+            <div className="grid grid-cols-1 md:grid-cols-[260px_1fr] gap-3 items-start">
+              <div className="space-y-1.5">
+                <Label className="text-xs">Tiempo mínimo de cancelación</Label>
+                <Select
+                  value={String(config.cancelacionHorasAntes)}
+                  onValueChange={(v) => {
+                    const n = Number(v);
+                    if (Number.isFinite(n)) patchConfig({ cancelacionHorasAntes: n });
                   }}
-                />
-                <Input
-                  type="number"
-                  min={0}
-                  max={100}
-                  step="0.01"
-                  defaultValue={p.penalizacionPct ?? ""}
-                  className="h-8 text-xs text-right"
-                  placeholder="—"
-                  onBlur={(e) => {
-                    const v = e.target.value ? Number(e.target.value) : null;
-                    if (v !== p.penalizacionPct) patchPolitica(p.id, { penalizacionPct: v });
-                  }}
-                />
-                <div className="flex justify-center">
-                  <Switch
-                    checked={p.activa}
-                    onCheckedChange={(v) => patchPolitica(p.id, { activa: v })}
-                  />
-                </div>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8 text-destructive hover:text-destructive"
-                  onClick={() => handleDelete(p.id, p.nombre)}
                 >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
+                  <SelectTrigger className="h-8 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {HORAS_OPCIONES.map((h) => (
+                      <SelectItem key={h} value={String(h)} className="text-xs">
+                        {h} {h === 1 ? "hora" : "horas"}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
-            ))
-          )}
-        </div>
+              <p className="text-[11px] text-muted-foreground md:pt-7">
+                Tiempo mínimo en el que el cliente puede cancelar sin que se le aplique
+                política de cancelación. Solo horas completas ({CANCELACION_HORAS_MIN}–
+                {CANCELACION_HORAS_MAX} h).
+              </p>
 
-        <div className="border rounded-md p-3 bg-muted/30 space-y-2">
-          <div className="text-xs font-medium">Añadir política custom</div>
-          <div className="grid grid-cols-[1fr_90px_90px_120px] gap-2">
-            <Input
-              placeholder="Nombre (p.ej. 'Grupo 12 pax')"
-              value={form.nombre}
-              onChange={(e) => setForm((p) => ({ ...p, nombre: e.target.value }))}
-              className="h-8 text-xs"
-            />
-            <Input
-              type="number"
-              min={0}
-              placeholder="Horas"
-              value={form.horasAntes}
-              onChange={(e) => setForm((p) => ({ ...p, horasAntes: e.target.value }))}
-              className="h-8 text-xs text-right"
-            />
-            <Input
-              type="number"
-              min={0}
-              max={100}
-              step="0.01"
-              placeholder="% Penaliz."
-              value={form.penalizacionPct}
-              onChange={(e) => setForm((p) => ({ ...p, penalizacionPct: e.target.value }))}
-              className="h-8 text-xs text-right"
-            />
-            <Button size="sm" onClick={handleCreate} disabled={creando} className="h-8">
-              <Plus className="h-3.5 w-3.5 mr-1" /> Añadir
-            </Button>
-          </div>
-          <Textarea
-            placeholder="Descripción (opcional) — qué se cobra y cuándo."
-            value={form.descripcion}
-            onChange={(e) => setForm((p) => ({ ...p, descripcion: e.target.value }))}
-            className="text-xs min-h-[60px]"
-          />
-        </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Importe a cobrar (€)</Label>
+                <Input
+                  type="text"
+                  inputMode="decimal"
+                  placeholder="Euros"
+                  value={importeStr}
+                  onChange={(e) => {
+                    // Permite escribir libremente; valida al perder foco.
+                    const v = e.target.value;
+                    if (/^[0-9]*[.,]?[0-9]{0,2}$/.test(v) || v === "") setImporteStr(v);
+                  }}
+                  onBlur={(e) =>
+                    commitImporte(e.target.value, {
+                      actual: config.cancelacionImporteEur,
+                      min: CANCELACION_IMPORTE_MIN,
+                      max: CANCELACION_IMPORTE_MAX,
+                      fallback: CANCELACION_IMPORTE_DEFAULT,
+                      setStr: setImporteStr,
+                      guardar: (v) => patchConfig({ cancelacionImporteEur: v }),
+                    })
+                  }
+                  className="h-8 text-xs"
+                />
+              </div>
+              <p className="text-[11px] text-muted-foreground md:pt-7">
+                Se efectuará un cargo al cliente por esta cantidad si no se presenta o
+                cancela a menos de ({config.cancelacionHorasAntes}) horas. Mínimo{" "}
+                {CANCELACION_IMPORTE_MIN.toFixed(2)} €, máximo 2 decimales.
+              </p>
+            </div>
+
+            <div className="space-y-3">
+              <div className="flex items-start justify-between gap-4">
+                <div className="text-xs text-foreground/90 leading-relaxed max-w-[70%]">
+                  Personalizar mensaje por defecto al pedir tarjeta de política de
+                  cancelación
+                </div>
+                <SiNoRadio
+                  value={config.cancelacionPersonalizarMensaje}
+                  onChange={(v) =>
+                    patchConfig({
+                      cancelacionPersonalizarMensaje: v,
+                      // Si lo apaga, no borra el texto: lo conserva por si lo reactivan.
+                    })
+                  }
+                />
+              </div>
+              {config.cancelacionPersonalizarMensaje && (
+                <Textarea
+                  placeholder="Texto que se añadirá al correo cuando la reserva tenga política de cancelación."
+                  value={config.cancelacionMensajePersonalizado ?? ""}
+                  onChange={(e) =>
+                    patchConfig({ cancelacionMensajePersonalizado: e.target.value })
+                  }
+                  className="text-xs min-h-[80px]"
+                />
+              )}
+              <p className="text-[11px] text-muted-foreground">
+                El otro caso (mensaje al pedir tarjeta cuando se vende un producto
+                directamente) se configura en el apartado de Ticket.
+              </p>
+            </div>
+          </>
+        )}
       </section>
+
+      <Separator />
+
+      {/* === Política de garantía === */}
+      <section className="space-y-4">
+        <PoliticaCabecera
+          titulo="Política de garantía"
+          descripcion={
+            'Importe que se retiene al confirmar la reserva y se libera al presentarse el cliente. Se aplica a las reservas marcadas con "Política de garantía".'
+          }
+          activa={config.garantiaActiva}
+          onToggle={(v) => patchConfig({ garantiaActiva: v })}
+        />
+
+        {config.garantiaActiva && (
+          <>
+            <div className="rounded-md border bg-muted/30 p-3 text-xs leading-relaxed text-foreground/90">
+              {GARANTIA_TEXTO_FIJO}
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-[260px_1fr] gap-3 items-start">
+              <div className="space-y-1.5">
+                <Label className="text-xs">Importe a retener (€)</Label>
+                <Input
+                  type="text"
+                  inputMode="decimal"
+                  placeholder="Euros"
+                  value={garantiaImporteStr}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    if (/^[0-9]*[.,]?[0-9]{0,2}$/.test(v) || v === "") setGarantiaImporteStr(v);
+                  }}
+                  onBlur={(e) =>
+                    commitImporte(e.target.value, {
+                      actual: config.garantiaImporteEur,
+                      min: GARANTIA_IMPORTE_MIN,
+                      max: GARANTIA_IMPORTE_MAX,
+                      fallback: GARANTIA_IMPORTE_DEFAULT,
+                      setStr: setGarantiaImporteStr,
+                      guardar: (v) => patchConfig({ garantiaImporteEur: v }),
+                    })
+                  }
+                  className="h-8 text-xs"
+                />
+              </div>
+              <p className="text-[11px] text-muted-foreground md:pt-7">
+                Cantidad que se retiene por reserva al introducir la tarjeta. Mínimo{" "}
+                {GARANTIA_IMPORTE_MIN.toFixed(2)} €, máximo 2 decimales.
+              </p>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs">Se aplica</Label>
+                <Select
+                  value={config.garantiaModo}
+                  onValueChange={(v) => patchConfig({ garantiaModo: v as GarantiaModo })}
+                >
+                  <SelectTrigger className="h-8 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {GARANTIA_MODOS.map((m) => (
+                      <SelectItem key={m} value={m} className="text-xs">
+                        {GARANTIA_MODO_LABELS[m]}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <p className="text-[11px] text-muted-foreground md:pt-7">
+                Si eliges &quot;por comensal&quot;, el importe retenido se multiplica por
+                el número de personas de la reserva.
+              </p>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs">A partir de</Label>
+                <Select
+                  value={String(config.garantiaDesdePax)}
+                  onValueChange={(v) => {
+                    const n = Number(v);
+                    if (Number.isFinite(n)) patchConfig({ garantiaDesdePax: n });
+                  }}
+                >
+                  <SelectTrigger className="h-8 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {GARANTIA_DESDE_PAX_OPCIONES.map((n) => (
+                      <SelectItem key={n} value={String(n)} className="text-xs">
+                        {n === 0 ? "Todas las reservas" : `${n} comensales`}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <p className="text-[11px] text-muted-foreground md:pt-7">
+                Número de comensales a partir del cual se pide garantía. Por debajo de
+                ese número, la reserva no la lleva.
+              </p>
+            </div>
+
+            <div className="space-y-3">
+              <div className="flex items-start justify-between gap-4">
+                <div className="text-xs text-foreground/90 leading-relaxed max-w-[70%]">
+                  Personalizar mensaje por defecto al pedir tarjeta de garantía
+                </div>
+                <SiNoRadio
+                  value={config.garantiaPersonalizarMensaje}
+                  onChange={(v) => patchConfig({ garantiaPersonalizarMensaje: v })}
+                />
+              </div>
+              {config.garantiaPersonalizarMensaje && (
+                <Textarea
+                  placeholder="Texto que se añadirá al correo cuando la reserva tenga política de garantía."
+                  value={config.garantiaMensajePersonalizado ?? ""}
+                  onChange={(e) =>
+                    patchConfig({ garantiaMensajePersonalizado: e.target.value })
+                  }
+                  className="text-xs min-h-[80px]"
+                />
+              )}
+            </div>
+          </>
+        )}
+      </section>
+    </div>
+  );
+}
+
+/** Cabecera de una política: título, explicación y el interruptor que la activa. */
+function PoliticaCabecera({
+  titulo,
+  descripcion,
+  activa,
+  onToggle,
+}: {
+  titulo: string;
+  descripcion: string;
+  activa: boolean;
+  onToggle: (v: boolean) => void;
+}) {
+  return (
+    <div className="flex items-start justify-between gap-6">
+      <div>
+        <h4 className="text-sm font-semibold mb-1">{titulo}</h4>
+        <p className="text-xs text-muted-foreground">{descripcion}</p>
+      </div>
+      <div className="flex items-center gap-2 shrink-0 pt-0.5">
+        <span className="text-xs text-muted-foreground">
+          {activa ? "Activa" : "Inactiva"}
+        </span>
+        <Switch checked={activa} onCheckedChange={onToggle} />
+      </div>
     </div>
   );
 }

@@ -108,7 +108,6 @@ import {
 import { useReglasSubmodulo } from "@/features/ajustes/hooks/use-reglas-submodulo";
 import { LabelConRegla } from "@/shared/components/forms/LabelConRegla";
 import { listReglasReservas } from "@/features/sala/reglas/actions/reglas-actions";
-import { listPoliticasCancelacion } from "@/features/sala/actions/politicas-cancelacion-actions";
 import { getClienteInsights } from "@/features/sala/actions/cliente-insights-actions";
 import {
   guardarDatosClienteReserva,
@@ -120,7 +119,6 @@ import type { EmpresaReservasRegla, TurnoRegla } from "@/features/sala/reglas/da
 import type {
   TipoReservaCategoria,
   EmpresaReservasConfig,
-  PoliticaCancelacion,
   ClienteInsights,
 } from "@/features/sala/data/reservas";
 import { ReservaFlagsChips } from "@/features/sala/components/reservas/ReservaFlagsChips";
@@ -384,7 +382,6 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
   getEstadoMesa: (m: Mesa) => string;
   onSave: (r: Reserva & {
     tipoCategoria?: TipoReservaCategoria | null;
-    politicaCancelacionId?: string | null;
     garantiaImporte?: number | null;
     importePagado?: number | null;
     duracionMinutos?: number | null;
@@ -401,7 +398,6 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
     mesaId: (mesaPreseleccionada?.id ?? "") as string,
     observaciones: "", esWalkIn: false,
     tipoCategoria: "gratis" as TipoReservaCategoria | "",
-    politicaCancelacionId: "" as string,
     garantiaImporte: "" as string,
     importePagado: "" as string,
     /** Si el usuario tocó la duración → guarda override; vacío = default empresa. */
@@ -410,7 +406,6 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
     codigoCupon: "" as string,
   });
   const [cuponValido, setCuponValido] = useState<boolean | null>(null);
-  const [politicas, setPoliticas] = useState<PoliticaCancelacion[]>([]);
   const [config, setConfig] = useState<EmpresaReservasConfig | null>(null);
   const [reglas, setReglas] = useState<EmpresaReservasRegla[]>([]);
   const [paxTouched, setPaxTouched] = useState(false);
@@ -482,12 +477,10 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
 
   useEffect(() => {
     (async () => {
-      const [p, c, e] = await Promise.all([
-        listPoliticasCancelacion({ soloActivas: true }),
+      const [c, e] = await Promise.all([
         getReservasConfig(),
         listReglasReservas(),
       ]);
-      if (p.ok) setPoliticas(p.data);
       if (c.ok) {
         setConfig(c.data);
         // Default visible para duración (sin marcar override hasta que el usuario lo edite)
@@ -1024,7 +1017,6 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
       estado: form.esWalkIn ? "WALK_IN" : "CONFIRMADA",
       observaciones: form.observaciones,
       tipoCategoria: (form.tipoCategoria || null) as TipoReservaCategoria | null,
-      politicaCancelacionId: form.tipoCategoria === "politica" ? (form.politicaCancelacionId || null) : null,
       garantiaImporte: form.tipoCategoria === "politica" && form.garantiaImporte ? Number(form.garantiaImporte) : null,
       importePagado: form.tipoCategoria === "cupon" && form.importePagado ? Number(form.importePagado) : null,
       // Solo enviamos override si el usuario tocó la duración y es distinta del default.
@@ -1433,7 +1425,6 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
                 ...p,
                 tipoCategoria: nuevoTipo,
                 // Limpia los campos que dejan de aplicar al cambiar de tipo.
-                politicaCancelacionId: nuevoTipo === "politica" ? p.politicaCancelacionId : "",
                 garantiaImporte: nuevoTipo === "politica" ? p.garantiaImporte : "",
                 importePagado: nuevoTipo === "cupon" ? p.importePagado : "",
                 // Si el tipo es incompatible con cupón, limpia el código.
@@ -1450,33 +1441,18 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
           </select>
         </div>
         {form.tipoCategoria === "politica" && (
-          <>
-            <div>
-              <Label className="text-xs">Política de cancelación</Label>
-              <select
-                value={form.politicaCancelacionId}
-                onChange={(e) => setForm((p) => ({ ...p, politicaCancelacionId: e.target.value }))}
-                className="h-8 text-xs w-full rounded-md border border-input bg-background px-2"
-              >
-                <option value="">— Sin política —</option>
-                {politicas.map((p) => (
-                  <option key={p.id} value={p.id}>{p.nombre}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <Label className="text-xs">Importe retenido (€)</Label>
-              <Input
-                type="number"
-                min={0}
-                step="0.01"
-                className="h-8 text-xs"
-                placeholder="0,00"
-                value={form.garantiaImporte}
-                onChange={(e) => setForm((p) => ({ ...p, garantiaImporte: e.target.value }))}
-              />
-            </div>
-          </>
+          <div>
+            <Label className="text-xs">Importe retenido (€)</Label>
+            <Input
+              type="number"
+              min={0}
+              step="0.01"
+              className="h-8 text-xs"
+              placeholder="0,00"
+              value={form.garantiaImporte}
+              onChange={(e) => setForm((p) => ({ ...p, garantiaImporte: e.target.value }))}
+            />
+          </div>
         )}
         {form.tipoCategoria === "cupon" && (
           <div className="col-span-3">
@@ -2014,7 +1990,6 @@ function mapDbToReserva(row: Record<string, unknown>): Reserva {
     tarjetaIntroducida: (row.tarjeta_introducida as boolean) ?? false,
     esTicket: (row.es_ticket as boolean) ?? false,
     tipoCategoria: (row.tipo_categoria as TipoReservaCategoria | null) ?? null,
-    politicaCancelacionId: (row.politica_cancelacion_id as string | null) ?? null,
     garantiaImporte: (row.garantia_importe as number | null) ?? null,
     importePagado: (row.importe_pagado as number | null) ?? null,
     ticketProductoId: (row.ticket_producto_id as string | null) ?? null,
@@ -4333,7 +4308,6 @@ export function ReservasView() {
                     estado: r.estado,
                     notas: r.observaciones || undefined,
                     tipoCategoria: r.tipoCategoria ?? null,
-                    politicaCancelacionId: r.politicaCancelacionId ?? null,
                     garantiaImporte: r.garantiaImporte ?? null,
                     importePagado: r.importePagado ?? null,
                     duracionMinutos: r.duracionMinutos ?? null,

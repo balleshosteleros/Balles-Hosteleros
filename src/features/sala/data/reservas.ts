@@ -217,7 +217,6 @@ export interface Reserva {
   tarjetaIntroducida?: boolean;
   esTicket?: boolean;
   tipoCategoria?: TipoReservaCategoria | null;
-  politicaCancelacionId?: string | null;
   garantiaImporte?: number | null;
   importePagado?: number | null;
   // PRP-051: ticket comprado al reservar.
@@ -246,20 +245,6 @@ export interface Reserva {
    * que se pidió. No se edita nunca.
    */
   createdAt?: string | null;
-}
-
-// --- POLÍTICAS DE CANCELACIÓN ---
-export interface PoliticaCancelacion {
-  id: string;
-  empresaId: string;
-  nombre: string;
-  descripcion: string | null;
-  horasAntes: number | null;
-  penalizacionPct: number | null;
-  activa: boolean;
-  orden: number;
-  createdAt: string;
-  updatedAt: string;
 }
 
 // --- INSIGHTS DE CLIENTE (computados al abrir detalle de reserva) ---
@@ -337,10 +322,20 @@ export type EmpresaReservasConfig = SemanaHorarios & {
   generalSlotsInactivosCena:   string[];
   // Política de cancelación (texto fijo en código; solo estas dos cifras
   // y el mensaje opcional son configurables por empresa).
+  cancelacionActiva: boolean;         // interruptor: si está apagada, no se aplica
   cancelacionHorasAntes: number;      // entero 1–168, horas completas
   cancelacionImporteEur: number;      // €, mín 1.00, máx 2 decimales
   cancelacionPersonalizarMensaje: boolean;
   cancelacionMensajePersonalizado: string | null;
+  // Política de garantía: importe que se retiene al confirmar la reserva y se
+  // libera al presentarse el cliente. Independiente de la de cancelación:
+  // cada una tiene su propio interruptor y pueden convivir.
+  garantiaActiva: boolean;
+  garantiaImporteEur: number;         // €, mín 1.00, máx 2 decimales
+  garantiaModo: GarantiaModo;         // fijo por reserva o multiplicado por comensal
+  garantiaDesdePax: number;           // 0 = todas las reservas
+  garantiaPersonalizarMensaje: boolean;
+  garantiaMensajePersonalizado: string | null;
   // Mensaje al pedir tarjeta al SELECCIONAR UN PRODUCTO (PRP-051, tipo_categoria='ticket').
   // El toggle vive en el tab de Ticket; el texto se añade al correo cuando aplique.
   productoPersonalizarMensaje: boolean;
@@ -430,6 +425,37 @@ export const CANCELACION_HORAS_DEFAULT = 6;
 export const CANCELACION_IMPORTE_MIN = 1.0;
 export const CANCELACION_IMPORTE_MAX = 9999.99;
 export const CANCELACION_IMPORTE_DEFAULT = 10.0;
+
+/**
+ * Modo de cálculo del importe retenido en garantía:
+ *   · "reserva"  → se retiene el importe tal cual, sea cual sea el grupo.
+ *   · "comensal" → el importe se multiplica por el número de personas.
+ */
+export type GarantiaModo = "reserva" | "comensal";
+
+export const GARANTIA_MODOS: GarantiaModo[] = ["reserva", "comensal"];
+
+export const GARANTIA_MODO_LABELS: Record<GarantiaModo, string> = {
+  reserva: "Por reserva",
+  comensal: "Por comensal",
+};
+
+export const GARANTIA_IMPORTE_MIN = 1.0;
+export const GARANTIA_IMPORTE_MAX = 9999.99;
+export const GARANTIA_IMPORTE_DEFAULT = 20.0;
+
+/** Comensales a partir de los cuales se pide garantía. 0 = todas las reservas. */
+export const GARANTIA_DESDE_PAX_OPCIONES = [0, 2, 4, 6, 8, 10, 12, 15, 20] as const;
+
+/**
+ * Texto fijo (idéntico para todas las empresas) que se muestra en la
+ * configuración de la política de garantía y en el correo al cliente cuando la
+ * reserva la lleva.
+ */
+export const GARANTIA_TEXTO_FIJO =
+  "Al efectuar la reserva se retiene un importe en garantía con los datos de " +
+  "la tarjeta del cliente. El importe se libera al presentarse en el " +
+  "restaurante y se pierde en caso de no presentación.";
 
 /**
  * Texto fijo (idéntico para todas las empresas) que se muestra en la

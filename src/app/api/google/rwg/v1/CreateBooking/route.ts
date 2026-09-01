@@ -244,16 +244,6 @@ export const POST = withMetricas("CreateBooking", async (request) => {
   }
   const cliente = linkRes.result.cliente;
 
-  // 6. Snapshot de política de cancelación vigente
-  const { data: politicaActiva } = await admin
-    .from("politicas_cancelacion")
-    .select("*")
-    .eq("empresa_id", merchant.empresaId)
-    .eq("activa", true)
-    .order("orden", { ascending: true })
-    .limit(1)
-    .maybeSingle();
-
   // 7. INSERT reserva (id generado en código → mismo valor para external_id)
   const reservaId = crypto.randomUUID();
   const { error: insertErr } = await admin.from("reservas").insert({
@@ -276,8 +266,6 @@ export const POST = withMetricas("CreateBooking", async (request) => {
     external_id: reservaId,
     external_origen: RWG_EXTERNAL_ORIGEN,
     external_idempotency_token: data.idempotency_token,
-    politica_cancelacion_id: (politicaActiva?.id as string) ?? null,
-    politica_cancelacion_snapshot: politicaActiva ?? null,
   });
 
   if (insertErr) {

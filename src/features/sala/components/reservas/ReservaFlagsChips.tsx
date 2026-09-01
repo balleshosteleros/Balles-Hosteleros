@@ -4,7 +4,6 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import {
   CreditCard,
   Ticket,
-  ShieldAlert,
   Wallet,
   Lock,
   Users,
@@ -46,16 +45,21 @@ export function ReservaFlagsChips({
   const tieneObs = !!reserva.observaciones && reserva.observaciones.trim().length > 0;
   const reconfirmada = !!reserva.reconfirmadaAt;
 
-  const chips: Array<{ key: string; label: string; icon: React.ReactNode; cls: string; extra?: string }> = [];
+  const chips: Array<{
+    key: string;
+    label: string;
+    icon: React.ReactNode;
+    cls: string;
+    extra?: string;
+    /** Contenido del tooltip cuando no basta con la etiqueta (comentario completo). */
+    tooltip?: React.ReactNode;
+  }> = [];
 
   if (reserva.tarjetaIntroducida) {
     chips.push({ key: "tarjeta", label: "Tarjeta introducida", icon: <CreditCard className={iconSize} />, cls: "text-emerald-500 border-emerald-500/40 bg-emerald-500/10" });
   }
   if (reserva.esTicket) {
     chips.push({ key: "ticket", label: "Reserva tipo Ticket", icon: <Ticket className={iconSize} />, cls: "text-pink-500 border-pink-500/40 bg-pink-500/10" });
-  }
-  if (reserva.politicaCancelacionId) {
-    chips.push({ key: "politica", label: "Política de cancelación", icon: <ShieldAlert className={iconSize} />, cls: "text-sky-500 border-sky-500/40 bg-sky-500/10" });
   }
   if (reserva.garantiaImporte != null && reserva.garantiaImporte > 0) {
     chips.push({ key: "garantia", label: `Importe retenido ${reserva.garantiaImporte}€`, icon: <Wallet className={iconSize} />, cls: "text-amber-600 border-amber-500/40 bg-amber-500/10" });
@@ -82,7 +86,15 @@ export function ReservaFlagsChips({
     chips.push({ key: "grupo", label: "Reserva de grupo", icon: <Users className={iconSize} />, cls: "text-rose-500 border-rose-500/40 bg-rose-500/10" });
   }
   if (tieneObs) {
-    chips.push({ key: "comentario", label: "Tiene comentario", icon: <MessageSquare className={iconSize} />, cls: "text-muted-foreground border-border" });
+    // El tooltip de este chip NO es una etiqueta: enseña el comentario entero.
+    // Se lee pasando el ratón por encima, sin abrir la ficha.
+    chips.push({
+      key: "comentario",
+      label: "Comentarios",
+      icon: <MessageSquare className={iconSize} />,
+      cls: "text-muted-foreground border-border",
+      tooltip: reserva.observaciones!.trim(),
+    });
   }
   if (reconfirmada) {
     chips.push({ key: "reconfirmada", label: "Reserva reconfirmada", icon: <CheckCheck className={iconSize} />, cls: "text-teal-500 border-teal-500/40 bg-teal-500/10" });
@@ -141,7 +153,9 @@ export function ReservaFlagsChips({
                 {c.extra && <span>{c.extra}</span>}
               </span>
             </TooltipTrigger>
-            <TooltipContent side="top">{c.label}</TooltipContent>
+            <TooltipContent side="top" className={c.tooltip ? "max-w-xs whitespace-pre-wrap text-left" : undefined}>
+              {c.tooltip ?? c.label}
+            </TooltipContent>
           </Tooltip>
         ))}
       </div>

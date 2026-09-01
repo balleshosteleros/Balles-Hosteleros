@@ -63,7 +63,7 @@ export async function obtenerReservaPorToken(
     const { data: r } = await admin
       .from("reservas")
       .select(
-        "id, empresa_id, estado, fecha, hora, personas, cliente_nombre, politica_cancelacion_snapshot",
+        "id, empresa_id, estado, fecha, hora, personas, cliente_nombre",
       )
       .eq("cancelacion_token", parsed.data)
       .maybeSingle();
@@ -73,6 +73,14 @@ export async function obtenerReservaPorToken(
       .from("empresas")
       .select("nombre, config_operativa")
       .eq("id", r.empresa_id as string)
+      .maybeSingle();
+
+    // La política de cancelación es la general de la empresa (Configuración →
+    // Reservas → Políticas). Si está apagada, no hay aviso de cargo.
+    const { data: cfg } = await admin
+      .from("empresa_reservas_config")
+      .select("cancelacion_activa, cancelacion_horas_antes, cancelacion_importe_eur")
+      .eq("empresa_id", r.empresa_id as string)
       .maybeSingle();
 
     // Zona horaria de los ajustes de la empresa: toda comparación de "ya pasó"
@@ -100,7 +108,7 @@ export async function obtenerReservaPorToken(
         bloqueada: motivo !== null,
         motivoBloqueo: motivo,
         avisoPolitica: calcularAvisoPolitica(
-          r.politica_cancelacion_snapshot as Record<string, unknown> | null,
+          cfg,
           r.fecha as string,
           r.hora as string,
           tz,
@@ -239,19 +247,20 @@ function motivoNoCancelable(
 }
 
 /**
- * Si la reserva tiene política y se cancela dentro de la ventana de cargo,
- * se avisa ANTES de confirmar. No cobramos aquí: solo informamos, que es lo
- * que el cliente aceptó al reservar.
+ * Si la empresa tiene política de cancelación activa y el cliente cancela
+ * dentro de la ventana de cargo, se avisa ANTES de confirmar. No cobramos
+ * aquí: solo informamos, que es lo que el cliente aceptó al reservar.
  */
 function calcularAvisoPolitica(
-  snapshot: Record<string, unknown> | null,
+  config: Record<string, unknown> | null,
   fecha: string,
   hora: string,
   tz: string,
 ): { horas: number; importe: number } | null {
-  if (!snapshot) return null;
-  const horas = Number(snapshot.horas_antes ?? snapshot.cancelacion_horas_antes ?? 0);
-  const importe = Number(snapshot.importe_eur ?? snapshot.cancelacion_importe_eur ?? 0);
+  if (!config) return null;
+  if (config.cancelacion_activa === false) return null;
+  const horas = Number(config.cancelacion_horas_antes ?? 0);
+  const importe = Number(config.cancelacion_importe_eur ?? 0);
   if (!(horas > 0) || !(importe > 0)) return null;
 
   // Misma corrección que en `esPasada`: con la zona del servidor el cálculo se
