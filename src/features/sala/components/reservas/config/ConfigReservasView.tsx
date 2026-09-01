@@ -16,6 +16,7 @@ import { BloqueosTab } from "@/features/sala/bloqueos/components/BloqueosTab";
 import { ComunicacionesPanel } from "./ComunicacionesPanel";
 import { LinksReservaPanel } from "@/features/sala/components/reservas/LinksReservaPanel";
 import { CanalesTab } from "./CanalesTab";
+import { MonederoPanel } from "@/features/mensajeria/components/MonederoPanel";
 
 interface Props {
   onBack: () => void;
@@ -56,6 +57,7 @@ export function ConfigReservasView({ onBack }: Props) {
       case "bloqueos":   return <BloqueosTab />;
       case "comunicaciones": return <ComunicacionesPanel />;
       case "canales":    return <CanalesTab />;
+      case "monedero":   return <MonederoPanel />;
       default:           return null;
     }
   }
@@ -82,7 +84,7 @@ export function ConfigReservasView({ onBack }: Props) {
 
       <div className="flex-1 overflow-y-auto p-4">
         <Tabs value={tab} onValueChange={(v) => salirSiProcede(() => setTab(v))}>
-          <TabsList className="grid grid-cols-11 w-full">
+          <TabsList className="grid grid-cols-12 w-full">
             <TabsTrigger value="reservas">Reservas</TabsTrigger>
             <TabsTrigger value="estructura">Estructura</TabsTrigger>
             <TabsTrigger value="orden">Orden</TabsTrigger>
@@ -94,6 +96,7 @@ export function ConfigReservasView({ onBack }: Props) {
             <TabsTrigger value="bloqueos">Bloqueos</TabsTrigger>
             <TabsTrigger value="comunicaciones">Comunicaciones</TabsTrigger>
             <TabsTrigger value="canales">Canales</TabsTrigger>
+            <TabsTrigger value="monedero">Monedero</TabsTrigger>
           </TabsList>
         </Tabs>
         <div className="mt-4">{renderTab()}</div>
