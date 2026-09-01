@@ -807,14 +807,42 @@ export function ArchivosExplorador({ variante, abierto = true, renderAcciones }:
                         onClick={() => setVisor(a)}
                         className="block h-full w-full"
                       >
-                      {a.miniaturaKey ? (
+                      {/*
+                          Se pide la miniatura si ya existe O si es una foto
+                          que el servidor puede reducir al vuelo: los archivos
+                          traídos de Drive no traen `miniaturaKey` y sin esto
+                          seguirían saliendo como cuadrados grises.
+                       */}
+                      {a.miniaturaKey || esImagenPintable(a.mime) ? (
                         <>
+                          {/*
+                            Icono de fondo: se ve mientras la miniatura carga y
+                            se queda si no llegara a generarse. Va DETRÁS de la
+                            imagen, que lo tapa al aparecer.
+                          */}
+                          {(() => {
+                            const Icono = iconoArchivo(a.mime, a.nombre);
+                            return (
+                              <span className="absolute inset-0 flex items-center justify-center">
+                                <Icono className="h-8 w-8 text-muted-foreground/40" />
+                              </span>
+                            );
+                          })()}
                           {/* eslint-disable-next-line @next/next/no-img-element */}
                           <img
                             src={`/api/archivos/ver?id=${a.id}&thumb=1`}
                             alt={a.nombre}
                             loading="lazy"
                             className="h-full w-full object-cover transition-transform group-hover:scale-105"
+                            /*
+                             * Si la miniatura no se puede generar (un formato
+                             * que el servidor no entienda, un original
+                             * corrupto), se esconde la imagen rota y asoma el
+                             * icono que ya está pintado debajo.
+                             */
+                            onError={(e) => {
+                              e.currentTarget.style.display = "none";
+                            }}
                           />
                           {esVideo(a.mime) && (
                             <span className="absolute inset-0 flex items-center justify-center bg-black/25">

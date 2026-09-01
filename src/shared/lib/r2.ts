@@ -179,6 +179,23 @@ export async function getObjectR2(
   };
 }
 
+/**
+ * Descarga un objeto de R2 ENTERO en memoria.
+ *
+ * A diferencia de `getObjectR2`, que devuelve un stream para ir sirviéndolo,
+ * aquí hace falta el archivo completo: generar una miniatura exige tener toda
+ * la imagen. Úsese solo con originales de tamaño razonable —una foto—, nunca
+ * con un vídeo de varios GB.
+ */
+export async function getObjectBufferR2(key: string): Promise<Buffer> {
+  const { client, bucket } = getR2();
+  const res = await client.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
+  const bytes = await (
+    res.Body as unknown as { transformToByteArray: () => Promise<Uint8Array> }
+  ).transformToByteArray();
+  return Buffer.from(bytes);
+}
+
 /** Borra un objeto de R2. No lanza si el objeto ya no existe. */
 export async function deleteObjectR2(key: string): Promise<void> {
   const { client, bucket } = getR2();
