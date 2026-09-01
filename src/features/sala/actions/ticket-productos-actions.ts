@@ -8,9 +8,12 @@ import {
   validarTicketInput,
   type ReservaTicketProducto,
   type ReservaTicketProductoInput,
+  type TicketCobroModo,
   type TicketModoPrecio,
   type TicketStockModo,
+  type TicketTurno,
 } from "@/features/sala/data/ticket-productos";
+import type { DiaSemanaKey } from "@/features/sala/data/reservas";
 
 async function getCtx() {
   const supabase = await createClient();
@@ -40,6 +43,17 @@ function rowToTicket(row: Record<string, unknown>): ReservaTicketProducto {
     ocultarAlAgotar: (row.ocultar_al_agotar as boolean) ?? true,
     activo: (row.activo as boolean) ?? true,
     orden: (row.orden as number) ?? 0,
+    cobroModo: (row.cobro_modo as TicketCobroModo) ?? "revolut",
+    ventaPublica: (row.venta_publica as boolean) ?? true,
+    validezDias: (row.validez_dias as number | null) ?? null,
+    canjeHasta: (row.canje_hasta as string | null) ?? null,
+    diasSemana: (row.dias_semana as DiaSemanaKey[] | null) ?? [],
+    diasExcluidos: (row.dias_excluidos as string[] | null) ?? [],
+    turnos: (row.turnos as TicketTurno[] | null) ?? [],
+    horaDesde: (row.hora_desde as string | null) ?? null,
+    horaHasta: (row.hora_hasta as string | null) ?? null,
+    horasExcluidas: (row.horas_excluidas as string[] | null) ?? [],
+    grupoZonaIds: (row.grupo_zona_ids as string[] | null) ?? [],
     createdAt: row.created_at as string,
     updatedAt: row.updated_at as string,
   };
@@ -61,6 +75,17 @@ function inputToRow(input: Partial<ReservaTicketProductoInput>): Record<string, 
   if (input.ocultarAlAgotar !== undefined) db.ocultar_al_agotar = input.ocultarAlAgotar;
   if (input.activo !== undefined) db.activo = input.activo;
   if (input.orden !== undefined) db.orden = input.orden;
+  if (input.cobroModo !== undefined) db.cobro_modo = input.cobroModo;
+  if (input.ventaPublica !== undefined) db.venta_publica = input.ventaPublica;
+  if (input.validezDias !== undefined) db.validez_dias = input.validezDias;
+  if (input.canjeHasta !== undefined) db.canje_hasta = input.canjeHasta || null;
+  if (input.diasSemana !== undefined) db.dias_semana = input.diasSemana;
+  if (input.diasExcluidos !== undefined) db.dias_excluidos = input.diasExcluidos;
+  if (input.turnos !== undefined) db.turnos = input.turnos;
+  if (input.horaDesde !== undefined) db.hora_desde = input.horaDesde || null;
+  if (input.horaHasta !== undefined) db.hora_hasta = input.horaHasta || null;
+  if (input.horasExcluidas !== undefined) db.horas_excluidas = input.horasExcluidas;
+  if (input.grupoZonaIds !== undefined) db.grupo_zona_ids = input.grupoZonaIds;
   return db;
 }
 
@@ -207,5 +232,43 @@ export async function reorderTicketProductos(orderedIds: string[]) {
     const msg = err instanceof Error ? err.message : "Error";
     console.error("[ticket-productos] reorder:", msg);
     return { ok: false, error: msg };
+  }
+}
+
+/**
+ * Zonas comerciales de la empresa activa, para elegir en qué zonas vale un
+ * Ticket. Se listan todas las de la empresa, no las de un local concreto: el
+ * producto se configura a nivel de empresa.
+ */
+export async function listGruposZonasEmpresa() {
+  try {
+    const { supabase, empresaId } = await getCtx();
+    if (!empresaId) return { ok: false, data: [] as { id: string; nombre: string }[] };
+
+    const { data: locales, error: errLocales } = await supabase
+      .from("locales")
+      .select("id")
+      .eq("empresa_id", empresaId);
+    if (errLocales) throw errLocales;
+
+    const ids = (locales ?? []).map((l) => l.id as string);
+    if (ids.length === 0) return { ok: true, data: [] as { id: string; nombre: string }[] };
+
+    const { data, error } = await supabase
+      .from("grupos_zonas")
+      .select("id, nombre")
+      .in("local_id", ids)
+      .eq("activa", true)
+      .order("orden", { ascending: true })
+      .order("nombre", { ascending: true });
+    if (error) throw error;
+
+    return {
+      ok: true,
+      data: (data ?? []).map((z) => ({ id: z.id as string, nombre: z.nombre as string })),
+    };
+  } catch (err) {
+    console.error("[ticket-productos] listGruposZonasEmpresa:", err);
+    return { ok: false, data: [] as { id: string; nombre: string }[] };
   }
 }

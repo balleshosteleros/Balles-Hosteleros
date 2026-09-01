@@ -11,14 +11,20 @@ import {
 } from "@/components/ui/select";
 import { toast } from "sonner";
 import {
+  TICKET_COBRO_MODO_LABELS,
   TICKET_MODO_PRECIO_LABELS,
   TICKET_STOCK_MODO_LABELS,
   validarTicketInput,
   type ReservaTicketProducto,
   type ReservaTicketProductoInput,
+  type TicketCobroModo,
   type TicketModoPrecio,
   type TicketStockModo,
 } from "@/features/sala/data/ticket-productos";
+import {
+  TicketCondicionesPanel,
+  type CondicionesState,
+} from "./TicketCondicionesPanel";
 import {
   createTicketProducto,
   updateTicketProducto,
@@ -41,6 +47,11 @@ interface FormState {
   stockTotal: string;
   ocultarAlAgotar: boolean;
   activo: boolean;
+  cobroModo: TicketCobroModo;
+  ventaPublica: boolean;
+  validezDias: string;
+  canjeHasta: string;
+  condiciones: CondicionesState;
 }
 
 function toState(p: ReservaTicketProducto | null): FormState {
@@ -55,6 +66,19 @@ function toState(p: ReservaTicketProducto | null): FormState {
     stockTotal: p?.stockTotal != null ? String(p.stockTotal) : "",
     ocultarAlAgotar: p?.ocultarAlAgotar ?? true,
     activo: p?.activo ?? true,
+    cobroModo: p?.cobroModo ?? "revolut",
+    ventaPublica: p?.ventaPublica ?? true,
+    validezDias: p?.validezDias != null ? String(p.validezDias) : "",
+    canjeHasta: p?.canjeHasta ?? "",
+    condiciones: {
+      diasSemana: p?.diasSemana ?? [],
+      diasExcluidos: p?.diasExcluidos ?? [],
+      turnos: p?.turnos ?? [],
+      horaDesde: p?.horaDesde ?? "",
+      horaHasta: p?.horaHasta ?? "",
+      horasExcluidas: p?.horasExcluidas ?? [],
+      grupoZonaIds: p?.grupoZonaIds ?? [],
+    },
   };
 }
 
@@ -73,6 +97,17 @@ export function TicketProductoForm({ producto, onSaved, onCancel }: Props) {
     stockTotal: s.stockModo === "limitado" ? Number(s.stockTotal) : null,
     ocultarAlAgotar: s.ocultarAlAgotar,
     activo: s.activo,
+    cobroModo: s.cobroModo,
+    ventaPublica: s.ventaPublica,
+    validezDias: s.validezDias.trim() ? Number(s.validezDias) : null,
+    canjeHasta: s.canjeHasta || null,
+    diasSemana: s.condiciones.diasSemana,
+    diasExcluidos: s.condiciones.diasExcluidos,
+    turnos: s.condiciones.turnos,
+    horaDesde: s.condiciones.horaDesde || null,
+    horaHasta: s.condiciones.horaHasta || null,
+    horasExcluidas: s.condiciones.horasExcluidas,
+    grupoZonaIds: s.condiciones.grupoZonaIds,
   }), [s]);
 
   const validation = validarTicketInput(input);
@@ -167,6 +202,79 @@ export function TicketProductoForm({ producto, onSaved, onCancel }: Props) {
         </div>
       </div>
 
+      {/* ── Cómo se cobra ──────────────────────────────────── */}
+      <div className="rounded-md border p-3 space-y-3">
+        <div className="space-y-1.5">
+          <Label className="text-xs">Cobro *</Label>
+          <Select
+            value={s.cobroModo}
+            onValueChange={(v) => setS({ ...s, cobroModo: v as TicketCobroModo })}
+          >
+            <SelectTrigger className="h-9">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {(Object.keys(TICKET_COBRO_MODO_LABELS) as TicketCobroModo[]).map((m) => (
+                <SelectItem key={m} value={m}>{TICKET_COBRO_MODO_LABELS[m]}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="text-[10px] text-muted-foreground">
+            {s.cobroModo === "revolut"
+              ? "El cliente paga con tarjeta antes de recibir su código. Requiere tener el cobro configurado en la pestaña Cobro."
+              : "No se cobra nada: el cliente recibe el código directamente."}
+          </p>
+        </div>
+
+        <div className="flex items-start justify-between gap-3 rounded-md border p-3">
+          <div className="space-y-0.5">
+            <Label className="text-xs font-medium" htmlFor="venta-publica">
+              A la venta
+            </Label>
+            <p className="text-[10px] text-muted-foreground">
+              Aparece en la tienda para que el cliente lo compre por su cuenta.
+              Si lo desactivas, solo se puede usar desde el motor de reservas.
+            </p>
+          </div>
+          <Switch
+            id="venta-publica"
+            checked={s.ventaPublica}
+            onCheckedChange={(v) => setS({ ...s, ventaPublica: Boolean(v) })}
+          />
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1.5">
+            <Label className="text-xs">Días para canjear</Label>
+            <Input
+              type="number"
+              inputMode="numeric"
+              min={1}
+              step={1}
+              value={s.validezDias}
+              onChange={(e) => setS({ ...s, validezDias: e.target.value })}
+              placeholder="Sin límite"
+              className="h-9"
+            />
+            <p className="text-[10px] text-muted-foreground">
+              Desde la compra. Vacío: el código no caduca.
+            </p>
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs">O fecha límite</Label>
+            <Input
+              type="date"
+              value={s.canjeHasta}
+              onChange={(e) => setS({ ...s, canjeHasta: e.target.value })}
+              className="h-9"
+            />
+            <p className="text-[10px] text-muted-foreground">
+              Manda sobre los días de arriba.
+            </p>
+          </div>
+        </div>
+      </div>
+
       <div className="space-y-1.5">
         <Label className="text-xs">Comentarios (uso interno)</Label>
         <Textarea
@@ -235,6 +343,21 @@ export function TicketProductoForm({ producto, onSaved, onCancel }: Props) {
             />
           </div>
         )}
+      </div>
+
+      {/* ── Condiciones de canje ───────────────────────────── */}
+      <div className="rounded-md border p-3 space-y-3">
+        <div>
+          <Label className="text-xs font-medium">Condiciones de canje</Label>
+          <p className="mt-0.5 text-[10px] text-muted-foreground">
+            Cuando el cliente use su código, el motor de reservas solo le dejará
+            elegir lo que cumpla estas condiciones. Lo que dejes vacío no restringe.
+          </p>
+        </div>
+        <TicketCondicionesPanel
+          value={s.condiciones}
+          onChange={(c) => setS({ ...s, condiciones: c })}
+        />
       </div>
 
       <div className="flex items-start justify-between gap-3 rounded-md border p-3">
