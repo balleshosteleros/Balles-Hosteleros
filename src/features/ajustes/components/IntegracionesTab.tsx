@@ -34,6 +34,8 @@ import {
 } from "@/features/ajustes/components/IntegracionLogo";
 import { FichaGooglePanel } from "@/features/ajustes/components/FichaGooglePanel";
 import { AgoraPanel } from "@/features/ajustes/components/AgoraPanel";
+import { RevolutPanel } from "@/features/ajustes/components/RevolutPanel";
+import { getRevolutConfig } from "@/features/ajustes/actions/revolut-config-actions";
 
 /** Estado de conexión de cada integración. */
 type EstadoConexion = "conectado" | "sin_conectar";
@@ -59,6 +61,12 @@ const INTEGRACIONES: IntegracionDef[] = [
     resumen: "Importa cada día las ventas de tu TPV.",
     logo: "agora",
   },
+  {
+    key: "revolut",
+    nombre: "Revolut",
+    resumen: "Cobra por adelantado las reservas y los tickets.",
+    logo: "revolut",
+  },
 ];
 
 export function IntegracionesTab() {
@@ -73,18 +81,26 @@ export function IntegracionesTab() {
   // distintivo refleje lo que se acabe de conectar sin recargar la página.
   const cargarEstados = () => {
     setCargando(true);
-    Promise.all([getEmpresaPlaceInfo(), getAgoraIntegracion()]).then(
-      ([place, agora]) => {
-        setEstados({
-          google: place?.googlePlaceId ? "conectado" : "sin_conectar",
-          agora:
-            agora.ok && agora.estado.activo && agora.estado.tieneToken
-              ? "conectado"
-              : "sin_conectar",
-        });
-        setCargando(false);
-      },
-    );
+    Promise.all([
+      getEmpresaPlaceInfo(),
+      getAgoraIntegracion(),
+      getRevolutConfig(),
+    ]).then(([place, agora, revolut]) => {
+      setEstados({
+        google: place?.googlePlaceId ? "conectado" : "sin_conectar",
+        agora:
+          agora.ok && agora.estado.activo && agora.estado.tieneToken
+            ? "conectado"
+            : "sin_conectar",
+        // Conectado solo si además del alta hay webhook: sin él los pagos
+        // entran pero el software no se entera, así que no está listo.
+        revolut:
+          revolut.configurado && revolut.activo && revolut.webhookConfigurado
+            ? "conectado"
+            : "sin_conectar",
+      });
+      setCargando(false);
+    });
   };
 
   useEffect(() => {
@@ -199,6 +215,7 @@ export function IntegracionesTab() {
 
               {abierta === "google" ? <FichaGooglePanel /> : null}
               {abierta === "agora" ? <AgoraPanel /> : null}
+              {abierta === "revolut" ? <RevolutPanel /> : null}
             </>
           ) : null}
         </DialogContent>

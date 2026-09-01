@@ -21,9 +21,9 @@ import {
   guardarRevolutConfig,
   probarRevolutConfig,
   type RevolutConfigVista,
-} from "@/features/sala/actions/revolut-config-actions";
+} from "@/features/ajustes/actions/revolut-config-actions";
 
-export function RevolutConfigPanel() {
+export function RevolutPanel() {
   const [cfg, setCfg] = useState<RevolutConfigVista | null>(null);
   const [cargando, setCargando] = useState(true);
   const [guardando, setGuardando] = useState(false);
@@ -95,15 +95,12 @@ export function RevolutConfigPanel() {
   }
 
   return (
-    <div className="max-w-2xl space-y-6 pb-28">
+    <div className="space-y-5">
       <div className="flex items-start justify-between gap-4">
-        <div>
-          <h3 className="text-sm font-semibold">Cobro con Revolut</h3>
-          <p className="mt-1 text-xs text-muted-foreground">
-            Necesario para vender productos de tipo Ticket que se pagan por adelantado.
-            El dinero entra en la cuenta de Revolut de esta empresa.
-          </p>
-        </div>
+        <p className="text-xs text-muted-foreground">
+          El dinero entra en la cuenta de Revolut de esta empresa. Cada empresa
+          usa sus propias claves.
+        </p>
         {cfg?.configurado && (
           <Badge variant={cfg.activo ? "default" : "secondary"} className="shrink-0">
             {cfg.activo ? "Activo" : "Inactivo"}

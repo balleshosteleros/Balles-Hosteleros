@@ -221,7 +221,7 @@ export function TicketProductoForm({ producto, onSaved, onCancel }: Props) {
           </Select>
           <p className="text-[10px] text-muted-foreground">
             {s.cobroModo === "revolut"
-              ? "El cliente paga con tarjeta antes de recibir su código. Requiere tener el cobro configurado en la pestaña Cobro."
+              ? "El cliente paga con tarjeta antes de recibir su código. La pasarela se conecta en Ajustes → Integraciones."
               : "No se cobra nada: el cliente recibe el código directamente."}
           </p>
         </div>

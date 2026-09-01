@@ -25,10 +25,8 @@ import {
   listTicketProductos,
   unarchiveTicketProducto,
 } from "@/features/sala/actions/ticket-productos-actions";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 import { TicketProductoForm } from "./TicketProductoForm";
-import { RevolutConfigPanel } from "./RevolutConfigPanel";
 
 function fmtEuro(n: number, iva: number): string {
   const total = n * (1 + iva / 100);
@@ -37,7 +35,6 @@ function fmtEuro(n: number, iva: number): string {
 
 export function TicketsTab() {
   const { confirm: confirmDelete, dialog: confirmDeleteDialog } = useConfirmDelete();
-  const [subTab, setSubTab] = useState<"productos" | "cobro">("productos");
   const [productos, setProductos] = useState<ReservaTicketProducto[]>([]);
   const [loading, setLoading] = useState(true);
   const [editando, setEditando] = useState<ReservaTicketProducto | null>(null);
@@ -95,15 +92,6 @@ export function TicketsTab() {
     <div className="space-y-3">
       {confirmDeleteDialog}
 
-      <Tabs value={subTab} onValueChange={(v) => setSubTab(v as "productos" | "cobro")}>
-        <TabsList>
-          <TabsTrigger value="productos">Productos</TabsTrigger>
-          <TabsTrigger value="cobro">Cobro</TabsTrigger>
-        </TabsList>
-      </Tabs>
-
-      {subTab === "cobro" ? <RevolutConfigPanel /> : (
-      <div className="space-y-3">
       <div className="flex items-center justify-between gap-3">
         <Button size="sm" onClick={() => setCreando(true)}>
           <Plus className="h-3.5 w-3.5 mr-1" /> Nuevo
@@ -199,8 +187,6 @@ export function TicketsTab() {
             );
           })}
         </div>
-      )}
-      </div>
       )}
 
       <Dialog

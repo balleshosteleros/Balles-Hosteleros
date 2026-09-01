@@ -39,7 +39,26 @@ function GoogleLogo({ size }: { size: number }) {
   );
 }
 
-export type IntegracionLogoKey = "google" | "agora";
+/** Marca de Revolut: la "R" sobre su azul corporativo. */
+function RevolutLogo({ size }: { size: number }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 48 48"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <rect width="48" height="48" rx="10" fill="#0666EB" />
+      <path
+        fill="#ffffff"
+        d="M14 12h12.4c4.7 0 8 2.9 8 7.3 0 3.5-2 6-5.3 7l6.2 9.7h-6.4l-5.6-9.1h-3.6V36H14V12zm5.7 4.7v5.9h6.1c2 0 3.2-1.1 3.2-2.9 0-1.9-1.2-3-3.2-3h-6.1z"
+      />
+    </svg>
+  );
+}
+
+export type IntegracionLogoKey = "google" | "agora" | "revolut";
 
 const FICHEROS: Record<string, string> = {
   agora: "/icons/apps/agora.png",
@@ -56,6 +75,7 @@ export function IntegracionLogo({
   size?: number;
 }) {
   if (logo === "google") return <GoogleLogo size={size} />;
+  if (logo === "revolut") return <RevolutLogo size={size} />;
 
   const src = FICHEROS[logo];
   if (!src) return null;

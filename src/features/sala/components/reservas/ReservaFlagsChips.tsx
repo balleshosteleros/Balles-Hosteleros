@@ -55,7 +55,36 @@ export function ReservaFlagsChips({
     chips.push({ key: "tarjeta", label: "Tarjeta introducida", icon: <CreditCard className={iconSize} />, cls: "text-emerald-500 border-emerald-500/40 bg-emerald-500/10" });
   }
   if (reserva.esTicket) {
-    chips.push({ key: "ticket", label: "Reserva tipo Ticket", icon: <Ticket className={iconSize} />, cls: "text-pink-500 border-pink-500/40 bg-pink-500/10" });
+    // Rojo y al lado del nombre: es la marca de que esa mesa ya está pagada.
+    // Al pasar el ratón se ve qué compró y cuánto, sin abrir la ficha.
+    const unidades = reserva.ticketUnidades ?? reserva.comensales ?? 1;
+    const total = reserva.ticketImporte ?? 0;
+    const unitario = unidades > 0 ? total / unidades : total;
+    chips.push({
+      key: "ticket",
+      label: "Reserva con Ticket",
+      icon: <Ticket className={iconSize} />,
+      cls: "text-red-600 border-red-500/40 bg-red-500/10",
+      tooltip: (
+        <span className="block text-left leading-relaxed">
+          <span className="block font-medium">
+            {reserva.ticketProductoNombre ?? "Reserva con Ticket"}
+          </span>
+          {total > 0 && (
+            <span className="block">
+              {unidades > 1
+                ? `${unidades} personas × ${fmtEuro(unitario)} = ${fmtEuro(total)}`
+                : fmtEuro(total)}
+            </span>
+          )}
+          {reserva.ticketCodigo && (
+            <span className="block font-mono text-[10px] opacity-70">
+              {reserva.ticketCodigo}
+            </span>
+          )}
+        </span>
+      ),
+    });
   }
   if (reserva.garantiaImporte != null && reserva.garantiaImporte > 0) {
     chips.push({ key: "garantia", label: `Importe retenido ${reserva.garantiaImporte}€`, icon: <Wallet className={iconSize} />, cls: "text-amber-600 border-amber-500/40 bg-amber-500/10" });

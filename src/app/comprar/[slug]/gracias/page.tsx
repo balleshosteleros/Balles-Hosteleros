@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getCredencialesRevolut } from "@/features/sala/actions/revolut-config-actions";
+import { getCredencialesRevolut } from "@/features/ajustes/actions/revolut-config-actions";
 import { obtenerOrden, estaPagada } from "@/lib/revolut/merchant";
 import { enviarEmailCompraTicket } from "@/lib/email/tickets/enviar-compra";
 import { iconsDeEmpresa } from "@/shared/lib/favicon-empresa";
