@@ -14,6 +14,7 @@ import {
 } from "@/features/sala/lib/reserva-conflicto";
 import {
   DURACION_RESERVA_DEFAULT_MINUTOS,
+  RESERVA_SLOT_MIN,
   type TurnoKey,
   type TurnoReserva,
 } from "@/features/sala/data/reservas";
@@ -105,15 +106,17 @@ function minutosAHHMM(min: number): string {
 }
 
 /** Genera las horas del turno en la granularidad configurada por la empresa. */
-function generarSlots(inicio: string, fin: string, intervaloMin: number): string[] {
+function generarSlots(inicio: string, fin: string): string[] {
   const ini = horaAMinutos(inicio);
   let end = horaAMinutos(fin);
   // Cierre pasada medianoche (p.ej. 20:00 → 01:00): se extiende al día siguiente.
   if (end <= ini) end += 24 * 60;
-  const paso = Math.max(5, intervaloMin);
   const out: string[] = [];
+  // Los huecos van siempre en 00, 15, 30 y 45: si la apertura cae a media hora
+  // rara (p. ej. 13:05) el primer pase se sube al siguiente cuarto.
+  const primero = Math.ceil(ini / RESERVA_SLOT_MIN) * RESERVA_SLOT_MIN;
   // El último slot es la hora de cierre EXCLUIDA: no se sienta a nadie al cerrar.
-  for (let m = ini; m < end; m += paso) out.push(minutosAHHMM(m % (24 * 60)));
+  for (let m = primero; m < end; m += RESERVA_SLOT_MIN) out.push(minutosAHHMM(m % (24 * 60)));
   return out;
 }
 
@@ -143,6 +146,16 @@ export async function getDisponibilidadTurno(input: {
   localId?: string | null;
   /** Al editar, la propia reserva no debe contar como choque. */
   ignoreReservaId?: string | null;
+  /**
+   * Duración de LA reserva que se está creando, en minutos. Si falta se usa la
+   * de la empresa.
+   *
+   * Es lo que decide hasta cuándo ocupa la mesa el grupo nuevo: una comida de
+   * 3 h choca con reservas que una de 1 h no rozaría, así que la disponibilidad
+   * tiene que recalcularse cuando el usuario cambia la duración en el
+   * formulario, no solo con la duración por defecto de la configuración.
+   */
+  duracionMin?: number | null;
 }): Promise<{ ok: true; data: DisponibilidadTurno } | { ok: false; error: string }> {
   try {
     const supabase = await createClient();
@@ -160,8 +173,15 @@ export async function getDisponibilidadTurno(input: {
     ]);
     if (!cfgRes.ok || !cfgRes.data) return { ok: true, data: VACIO };
     const cfg = cfgRes.data;
+    // Manda la duración pedida (la que el usuario ve en el formulario); la de
+    // la empresa solo es el respaldo cuando no viene ninguna.
+    const duracionPedida = Number(input.duracionMin);
     const duracionMin =
-      cfg.duracionReservaMin > 0 ? cfg.duracionReservaMin : DURACION_RESERVA_DEFAULT_MINUTOS;
+      Number.isFinite(duracionPedida) && duracionPedida > 0
+        ? duracionPedida
+        : cfg.duracionReservaMin > 0
+          ? cfg.duracionReservaMin
+          : DURACION_RESERVA_DEFAULT_MINUTOS;
 
     // 1. Horario real del día/turno (excepciones → semanal → general).
     const turnoKey: TurnoKey = input.turno === "CENA" ? "cena" : "comida";
@@ -189,7 +209,7 @@ export async function getDisponibilidadTurno(input: {
         : cfg.generalSlotsInactivosComida
       ).map((s) => s.slice(0, 5)),
     );
-    const horas = generarSlots(horario.inicio, horario.fin, cfg.intervaloReservaMin)
+    const horas = generarSlots(horario.inicio, horario.fin)
       .filter((h) => !inactivos.has(h));
     if (horas.length === 0) return { ok: true, data: { ...VACIO, duracionMin } };
 

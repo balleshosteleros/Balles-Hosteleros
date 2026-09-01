@@ -16,7 +16,9 @@ import { notificarReservaCreada } from "@/lib/email/reservas/notificar-creada";
 import { turnoDeHora } from "@/features/sala/lib/dia-negocio";
 import {
   RESERVA_NOMBRE_MAX_CHARS,
+  RESERVA_COMENTARIO_MAX_CHARS,
   RESERVA_APELLIDOS_MAX_CHARS,
+  MAX_COMENSALES_ENTRADA,
 } from "@/features/sala/data/reservas";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -32,8 +34,11 @@ const inputSchema = z.object({
   email: z.string().email().max(160).optional().nullable(),
   fecha: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   hora: z.string().regex(/^\d{2}:\d{2}(:\d{2})?$/),
-  personas: z.number().int().min(1).max(50),
-  notas: z.string().max(500).optional().nullable(),
+  personas: z.number().int().min(1).max(MAX_COMENSALES_ENTRADA),
+  // Mismo tope que en el back-office: un comentario es un aviso corto, no un
+  // texto libre. Si alguien llama a la action por fuera del formulario, el
+  // servidor lo corta igual.
+  notas: z.string().max(RESERVA_COMENTARIO_MAX_CHARS).optional().nullable(),
   codigo: z.string().min(1).max(64).optional().nullable(),
   ticketProductoId: z.string().guid().optional().nullable(),
   ticketOnly: z.boolean().optional(),
@@ -108,8 +113,8 @@ export async function crearReservaPublicaAction(
     return { ok: false, error: "Indica un teléfono o un email de contacto." };
   }
 
-  // Preferencias del motor web (cierre del día actual, tope personas/hora,
-  // intervalos). Aplicar antes que cualquier otro side-effect.
+  // Motor web: grid de 15 min, cierre del día actual y tope de personas por
+  // hora. Aplicar antes que cualquier otro side-effect.
   const turno = turnoDeHora(data.hora);
   const motor = await validarMotorWebReserva(admin, {
     empresaId: empresa.id as string,

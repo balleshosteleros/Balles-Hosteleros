@@ -5,16 +5,20 @@ import type { SupabaseClient } from "@supabase/supabase-js";
  * (RWG, /reservar/[slug], etc.). NO se aplica a reservas creadas desde el
  * back office (manualmente) ni a walk-ins.
  *
- * Aplica las "Preferencias del motor" definidas en `empresa_reservas_config`:
+ * Aplica el grid fijo de 15 minutos (00, 15, 30 y 45), el tamaño máximo por
+ * reserva de Configuración → Límites (`empresa_reservas_reglas`, métrica
+ * `maxpax`) y lo definido en `empresa_reservas_config`:
  *   - Cierre del motor web (horas de corte para comida y cena).
  *   - Tope de personas en la misma hora / tramo.
- *   - Granularidad de intervalo (rechaza horas que no caen en grid).
  *
  * Devuelve `{ ok: true }` si la reserva puede aceptarse o un mensaje legible
  * para presentar al cliente final cuando se rechaza.
  */
 
+import { RESERVA_SLOT_MIN } from "@/features/sala/data/reservas";
 import { ESTADOS_NO_OCUPANTES, horaAMinutos } from "@/features/sala/lib/reserva-conflicto";
+import { rowToRegla, type ReglaRow } from "@/features/sala/reglas/data/reglas";
+import { resolverValorEfectivo } from "@/features/sala/reglas/lib/resolver";
 
 export interface MotorWebInput {
   empresaId: string;
@@ -56,11 +60,19 @@ export async function validarMotorWebReserva(
   supabase: SupabaseClient,
   input: MotorWebInput,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  // 1) Leer configuración de motor de la empresa.
+  // 1) Grid fijo de 15 minutos: no depende de configuración alguna.
+  if (horaAMinutos(input.hora) % RESERVA_SLOT_MIN !== 0) {
+    return {
+      ok: false,
+      error: `Solo aceptamos reservas en intervalos de ${RESERVA_SLOT_MIN} min. Elige una hora válida.`,
+    };
+  }
+
+  // 2) Leer configuración de motor de la empresa.
   const { data: cfg, error } = await supabase
     .from("empresa_reservas_config")
     .select(
-      "cerrar_motor_web_activo, cerrar_motor_web_comida, cerrar_motor_web_cena, max_personas_hora_activo, max_personas_hora_modo, max_personas_hora_global, max_personas_hora_reglas, intervalo_reserva_min",
+      "cerrar_motor_web_activo, cerrar_motor_web_comida, cerrar_motor_web_cena, max_personas_hora_activo, max_personas_hora_modo, max_personas_hora_global, max_personas_hora_reglas",
     )
     .eq("empresa_id", input.empresaId)
     .maybeSingle<{
@@ -71,7 +83,6 @@ export async function validarMotorWebReserva(
       max_personas_hora_modo: string | null;
       max_personas_hora_global: number | null;
       max_personas_hora_reglas: ReglaTramo[] | null;
-      intervalo_reserva_min: number | null;
     }>();
   if (error) {
     console.error("[motor-web-validar] config:", error);
@@ -82,7 +93,7 @@ export async function validarMotorWebReserva(
 
   const horaMin = horaAMinutos(input.hora);
 
-  // 2) Cierre del motor web (solo si la reserva es para HOY).
+  // 3) Cierre del motor web (solo si la reserva es para HOY).
   if (cfg.cerrar_motor_web_activo && ahoraEsHoy(input.fecha)) {
     const corte = input.turno === "COMIDA"
       ? parseHHMM(cfg.cerrar_motor_web_comida)
@@ -98,16 +109,32 @@ export async function validarMotorWebReserva(
     }
   }
 
-  // 3) Granularidad de intervalo: la hora debe caer en el grid configurado.
-  const intervalo = (cfg.intervalo_reserva_min as number | null) ?? 15;
-  if (intervalo > 0 && horaMin % intervalo !== 0) {
-    return {
-      ok: false,
-      error: `Solo aceptamos reservas en intervalos de ${intervalo} min. Elige una hora válida.`,
-    };
+  // 4) Tamaño máximo por reserva (Configuración → Límites, métrica `maxpax`).
+  //
+  // El desplegable del portal ya ofrece solo tamaños válidos, pero el tope
+  // depende de la fecha y el turno concretos y el cliente los elige después de
+  // decir cuántos son. Se comprueba aquí, que es por donde pasa toda reserva
+  // online, para que no entre un grupo mayor del que la empresa acepta.
+  {
+    const { data: reglasRows } = await supabase
+      .from("empresa_reservas_reglas")
+      .select("*")
+      .eq("empresa_id", input.empresaId)
+      .eq("metrica", "maxpax")
+      .eq("activo", true);
+    const reglas = (reglasRows ?? []).map((r) => rowToRegla(r as ReglaRow));
+    if (reglas.length > 0) {
+      const tope = resolverValorEfectivo(reglas, input.fecha, input.turno, "maxpax");
+      if (tope != null && tope > 0 && input.personas > tope) {
+        return {
+          ok: false,
+          error: `Para grupos de más de ${tope} ${tope === 1 ? "persona" : "personas"} llámanos y lo organizamos contigo.`,
+        };
+      }
+    }
   }
 
-  // 4) Tope de personas en misma hora / tramo.
+  // 5) Tope de personas en misma hora / tramo.
   if (cfg.max_personas_hora_activo) {
     const modo = (cfg.max_personas_hora_modo as string | null) ?? "mismo";
     const reglas: ReglaTramo[] = Array.isArray(cfg.max_personas_hora_reglas)

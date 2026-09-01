@@ -365,7 +365,8 @@ export type EmpresaReservasConfig = SemanaHorarios & {
   valoracionEmailActivo: boolean;
   valoracionEmailHorasDespues: number;
 
-  // Preferencias del motor (panel "Preferencias del motor" en /sala/configuracion).
+  // Comportamiento del motor web y avisos de servicio (final de la pestaña
+  // "Configuración" de Reservas).
   cerrarMotorWebActivo: boolean;
   cerrarMotorWebComida: string | null; // HH:MM
   cerrarMotorWebCena:   string | null; // HH:MM
@@ -378,9 +379,6 @@ export type EmpresaReservasConfig = SemanaHorarios & {
   parpadeoPasadoDuracion: boolean;
   parpadeo0a15:           boolean;
   parpadeo15a30:          boolean;
-
-  intervaloReservaMin: IntervaloReservaMin;
-  ocultarCanceladas:   boolean;
 
 };
 
@@ -395,6 +393,15 @@ export type EmpresaReservasConfig = SemanaHorarios & {
 /** Límite de caracteres de nombre y apellidos en el alta de reserva. */
 export const RESERVA_NOMBRE_MAX_CHARS = 50;
 export const RESERVA_APELLIDOS_MAX_CHARS = 80;
+
+/**
+ * Tope del comentario de una reserva. Equivale a dos frases cortas: lo justo
+ * para un aviso útil ("Alergia al marisco. Vienen con carrito.") sin que se
+ * convierta en un texto que ya no cabe en la lista ni se puede leer de un
+ * vistazo. Rige en TODOS los sitios desde los que se crea o edita una reserva:
+ * alta manual, lista de espera, ficha y portal público.
+ */
+export const RESERVA_COMENTARIO_MAX_CHARS = 140;
 
 /** Modo del tope "número máximo de personas en misma hora". */
 export type MaxPersonasHoraModo = "mismo" | "diferente_hora" | "diferente_tramo";
@@ -417,10 +424,6 @@ export interface MaxPersonasReglaTramo {
   max: number;
 }
 
-/** Granularidad de hueco de reserva ofrecida en el motor web. */
-export type IntervaloReservaMin = 5 | 10 | 15 | 30 | 45 | 60;
-export const INTERVALOS_RESERVA: IntervaloReservaMin[] = [5, 10, 15, 30, 45, 60];
-
 export const CANCELACION_HORAS_MIN = 1;
 export const CANCELACION_HORAS_MAX = 168; // 1 semana
 export const CANCELACION_HORAS_DEFAULT = 6;
@@ -438,6 +441,24 @@ export const CANCELACION_TEXTO_FIJO =
   "Al efectuar la reserva, el cliente proporciona los datos de su tarjeta. " +
   "Se cargará una cantidad en cuenta al cliente en caso de no presentación " +
   "o cancelación de última hora.";
+
+/**
+ * Tope del desplegable de comensales cuando la empresa no ha configurado
+ * ninguna regla de "tamaño máximo por reserva" (métrica `maxpax`).
+ *
+ * No es un límite de negocio, solo evita que el selector se quede sin opciones
+ * en una empresa recién creada: en cuanto se configura el máximo en
+ * Configuración → Reservas → Límites, manda ese valor.
+ */
+export const MAX_COMENSALES_SIN_REGLA = 50;
+
+/**
+ * Tope técnico del campo "personas" en las entradas públicas. No es una regla
+ * de negocio (esa la pone `maxpax` en Configuración → Límites): solo evita que
+ * llegue un número absurdo por la API del portal. La configuración de la
+ * empresa manda siempre por debajo de este techo.
+ */
+export const MAX_COMENSALES_ENTRADA = 200;
 
 /** Límites del campo `duracionReservaMin` (ver migración 20260602160000). */
 export const DURACION_RESERVA_MIN_MINUTOS = 15;
@@ -485,7 +506,11 @@ export const RECONFIRMACION_DIAS_MIN = 1;
 export const RECONFIRMACION_DIAS_MAX = 7;
 export const RECONFIRMACION_DIAS_DEFAULT = 1;
 
-/** Tamaño del slot del indicador genérico de reservas (en minutos). */
+/**
+ * Granularidad fija de los huecos de reserva: 00, 15, 30 y 45. No es
+ * configurable — todo el sistema (motor web, sala, indicadores y validaciones)
+ * trabaja con este grid y no acepta horas intermedias.
+ */
 export const RESERVA_SLOT_MIN = 15;
 
 /**

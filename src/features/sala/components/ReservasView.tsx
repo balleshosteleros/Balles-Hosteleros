@@ -28,8 +28,17 @@ const ConfigReservasView = dynamic(
 import { Settings, Sun, Moon } from "lucide-react";
 import { useSalaTema } from "@/features/sala/hooks/useSalaTema";
 import { EtiquetasPanel } from "@/features/sala/components/reservas/EtiquetasPanel";
+import { franjasSolapan } from "@/features/sala/lib/reserva-conflicto";
+import { esHoraEnCuarto } from "@/features/sala/lib/reserva-cuartos";
+import { SelectorHoraCuartos } from "@/features/sala/components/reservas/SelectorHoraCuartos";
+import {
+  SelectorMesaConAvisos,
+  AvisoAforoMesa,
+  type EstadoMesaParaReserva,
+} from "@/features/sala/components/reservas/SelectorMesaConAvisos";
+import { EditorMesasReserva } from "@/features/sala/components/reservas/EditorMesasReserva";
 import { CalendarioMes } from "@/features/sala/components/reservas/CalendarioMes";
-import { CalendarDays, Grid3X3, Users, LayoutGrid, AlertTriangle, Clock } from "lucide-react";
+import { CalendarDays, Grid3X3, Users, LayoutGrid, AlertTriangle, Clock, Mail, CheckCircle2 } from "lucide-react";
 import {
   SAMPLE_MESAS,
   Mesa, Reserva, EstadoReserva, ZonaSala, TurnoReserva,
@@ -42,12 +51,15 @@ import {
   TIPO_RESERVA_CATEGORIA_LABELS,
   DURACION_RESERVA_MAX_MINUTOS,
   DURACION_RESERVA_MIN_MINUTOS,
+  DURACION_RESERVA_DEFAULT_MINUTOS,
   DURACION_RESERVA_OPCIONES,
   formatearDuracionReserva,
   etiquetaDiasTranscurridos,
   origenLabel,
   RESERVA_NOMBRE_MAX_CHARS,
+  RESERVA_COMENTARIO_MAX_CHARS,
   RESERVA_APELLIDOS_MAX_CHARS,
+  MAX_COMENSALES_SIN_REGLA,
 } from "@/features/sala/data/reservas";
 import { ReservaEstadoBadge, ReservaEstadoDot } from "@/features/sala/components/reservas/ReservaEstadoBadge";
 import {
@@ -61,9 +73,9 @@ import { validarCuponAdminAction } from "@/features/sala/cupones/actions/validar
 import { loadReservasModuleContext } from "@/features/sala/actions/reservas-module-context";
 import {
   createBloqueo,
-  crearBloqueoExcepcion,
   listBloqueoExcepciones,
   listBloqueos,
+  quitarBloqueoMesa,
 } from "@/features/sala/bloqueos/actions/bloqueos-actions";
 import {
   vigenciaAplicaEnFecha,
@@ -88,6 +100,11 @@ import {
   type SlotDisponibilidad,
   type ChoqueReserva,
 } from "@/features/sala/actions/reservas-disponibilidad-actions";
+import {
+  proponerMesaAutomatica,
+  type MesaPropuesta,
+  type MotivoSinPropuesta,
+} from "@/features/sala/actions/reserva-propuesta-mesa-actions";
 import { useReglasSubmodulo } from "@/features/ajustes/hooks/use-reglas-submodulo";
 import { LabelConRegla } from "@/shared/components/forms/LabelConRegla";
 import { listReglasReservas } from "@/features/sala/reglas/actions/reglas-actions";
@@ -117,70 +134,13 @@ import { cn } from "@/lib/utils";
 import { useModoInmersivoActivo } from "@/features/layout/hooks/useModoInmersivoActivo";
 import { useModoInmersivo } from "@/features/layout/contexts/modo-inmersivo-context";
 import { friendlyError } from "@/shared/lib/friendly-errors";
-
-/**
- * Mezcla un hex con blanco para suavizar los pasteles de zona.
- * ratio 0 = original, 1 = blanco. Tolerante a entradas mal formateadas.
- */
-function lightenHex(hex: string, ratio: number): string {
-  const m = /^#?([0-9a-f]{6})$/i.exec(hex);
-  if (!m) return hex;
-  const n = parseInt(m[1], 16);
-  const r = (n >> 16) & 0xff;
-  const g = (n >> 8) & 0xff;
-  const b = n & 0xff;
-  const mix = (c: number) => Math.round(c + (255 - c) * ratio);
-  const out = (mix(r) << 16) | (mix(g) << 8) | mix(b);
-  return `#${out.toString(16).padStart(6, "0")}`;
-}
-
-/**
- * Versión oscura de un pastel de zona.
- *
- * No se puede mezclar el hex con azul marino en RGB: los amarillos y naranjas
- * salían marrones. Se trabaja en HSL para CONSERVAR el matiz de la zona (lo que
- * la identifica de un vistazo) y bajar solo luminosidad y saturación, de modo
- * que el amarillo siga leyéndose como amarillo, pero apagado.
- */
-function zonaOscura(hex: string): string {
-  const m = /^#?([0-9a-f]{6})$/i.exec(hex);
-  if (!m) return hex;
-  const n = parseInt(m[1], 16);
-  const r = ((n >> 16) & 0xff) / 255;
-  const g = ((n >> 8) & 0xff) / 255;
-  const b = (n & 0xff) / 255;
-  const max = Math.max(r, g, b);
-  const min = Math.min(r, g, b);
-  const l = (max + min) / 2;
-  const d = max - min;
-  let h = 0;
-  let sat = 0;
-  if (d !== 0) {
-    sat = d / (1 - Math.abs(2 * l - 1));
-    if (max === r) h = ((g - b) / d) % 6;
-    else if (max === g) h = (b - r) / d + 2;
-    else h = (r - g) / d + 4;
-    h *= 60;
-    if (h < 0) h += 360;
-  }
-  // Matiz intacto; saturación contenida y luminosidad baja para que la mesa
-  // libre sea una superficie tintada sobre el lienzo, no un bloque de color.
-  const satOut = Math.min(sat, 0.42) * 100;
-  const lumOut = 26;
-  return `hsl(${h.toFixed(0)} ${satOut.toFixed(0)}% ${lumOut}%)`;
-}
-
-/** Cuánto aclaramos los pasteles de zona (tirando a blanco, sutil). */
-const ZONA_LIGHTEN = 0.35;
-
-/**
- * Color de fondo de una zona según el tema activo: aclarado hacia blanco en
- * claro, mezclado con azul marino en oscuro. Único punto donde se decide, para
- * que plano, etiquetas y listado por zonas no diverjan.
- */
-function colorZona(hex: string, esOscuro: boolean): string {
-  return esOscuro ? zonaOscura(hex) : lightenHex(hex, ZONA_LIGHTEN);
-}
+// Color de zona: vive en `lib/color-zona` porque lo comparten el plano, el
+// listado por zonas y el salón de reasignación manual de mesas.
+import {
+  colorZona,
+  lightenHex,
+  ZONA_LIGHTEN,
+} from "@/features/sala/lib/color-zona";
 
 /** Rampa pastel arcoíris construida con la paleta canónica de zonas. */
 const LIBRE_RAINBOW = `linear-gradient(135deg, ${COLORES_PASTEL_ZONAS
@@ -410,7 +370,7 @@ function ReservaQuickPopover({
   );
 }
 
-function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, zonasReales, mesas, mesasMeta, localId, getEstadoMesa }: {
+function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, zonasReales, mesas, mesasMeta, localId, empresaId, getEstadoMesa }: {
   fecha: string; turno: TurnoReserva;
   onClose: () => void;
   mesaPreseleccionada?: Mesa | null;
@@ -419,6 +379,8 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
   /** Capacidades reales del catálogo (min/max) para avisar de aforo de mesa. */
   mesasMeta: Map<string, MesaMeta>;
   localId: string;
+  /** Empresa activa: acota la escucha en vivo a sus propias reservas. */
+  empresaId: string | null;
   getEstadoMesa: (m: Mesa) => string;
   onSave: (r: Reserva & {
     tipoCategoria?: TipoReservaCategoria | null;
@@ -445,7 +407,6 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
     /** Si el usuario tocó la duración → guarda override; vacío = default empresa. */
     duracionMinutos: "" as string,
     duracionTouched: false as boolean,
-    notificarEmail: true,
     codigoCupon: "" as string,
   });
   const [cuponValido, setCuponValido] = useState<boolean | null>(null);
@@ -462,6 +423,8 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
     motivo: null,
   });
   const [cargandoSlots, setCargandoSlots] = useState(false);
+  /** Sube cada vez que cambia algo en reservas: obliga a repedir los slots. */
+  const [disponibilidadVersion, setDisponibilidadVersion] = useState(0);
   /**
    * Aviso pendiente de aceptar, con TODOS los motivos de peligro juntos.
    * Mientras esté relleno el guardado espera: el usuario debe confirmar que
@@ -477,6 +440,38 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
   // El formulario no regaña de entrada: los avisos de campos obligatorios solo
   // aparecen cuando el usuario ya ha intentado guardar al menos una vez.
   const [intentoGuardar, setIntentoGuardar] = useState(false);
+  /**
+   * Último paso de toda reserva interna: decidir si además de confirmarla se
+   * avisa al cliente por correo. Se abre cuando ya no queda nada que validar,
+   * y solo si hay email al que escribir (en walk-in o sin email no hay
+   * decisión que tomar, se guarda directo).
+   */
+  const [confirmarEnvio, setConfirmarEnvio] = useState(false);
+  /**
+   * Asignación automática ("— El sistema elige la mesa —").
+   *
+   * El sistema NUNCA asigna a ciegas: propone, y la reserva solo se crea con
+   * esa mesa cuando el usuario acepta expresamente la propuesta. Mientras este
+   * estado está relleno, el guardado espera.
+   *
+   *   propuesta → mesa encontrada: se enseña cuál y dónde está (sala y zona).
+   *   fallo     → no hay mesa posible, con el motivo distinguido:
+   *               SIN_CAPACIDAD deja elegir mesa a mano; el resto, no.
+   */
+  const [propuesta, setPropuesta] = useState<MesaPropuesta | null>(null);
+  const [fallo, setFallo] = useState<{
+    motivo: MotivoSinPropuesta;
+    libresNoAptas: MesaPropuesta[];
+    zonaBuscada: string | null;
+  } | null>(null);
+  const [buscandoMesa, setBuscandoMesa] = useState(false);
+  /**
+   * Código de la mesa aceptada en la propuesta automática cuando no se puede
+   * representar con el `mesaId` del formulario: una unión ("M1+M2") o una mesa
+   * de otra sala que no está en el catálogo cargado en pantalla. Viaja aparte
+   * porque `setForm` no se ha aplicado aún al encadenar desde la propuesta.
+   */
+  const [mesaCodigoAutoRef, setMesaCodigoAuto] = useState<string | null>(null);
 
   // Autocompletado de clientes: cualquiera de los cuatro datos de contacto
   // sirve para buscar, a partir de 5 caracteres escritos.
@@ -505,8 +500,9 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
   }, [form.fecha]);
 
   // Horas del turno con su ocupación real. Se recalcula al cambiar cualquier
-  // dato que altere la respuesta: fecha, turno, zona o nº de comensales (una
-  // mesa de 2 no sirve para 6, así que subir el grupo cambia qué horas caben).
+  // dato que altere la respuesta: fecha, turno, zona, nº de comensales (una
+  // mesa de 2 no sirve para 6, así que subir el grupo cambia qué horas caben)
+  // y DURACIÓN, porque una reserva más larga solapa con más reservas.
   useEffect(() => {
     if (!form.fecha || !form.comensales || form.comensales < 1) {
       setSlots([]);
@@ -521,6 +517,7 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
         personas: form.comensales,
         zona: form.zona || null,
         localId: localId || null,
+        duracionMin: Number(form.duracionMinutos) || null,
       });
       if (cancelado) return;
       if (res.ok) {
@@ -535,7 +532,33 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
       setCargandoSlots(false);
     })();
     return () => { cancelado = true; };
-  }, [form.fecha, form.turno, form.comensales, form.zona, localId]);
+  }, [
+    form.fecha,
+    form.turno,
+    form.comensales,
+    form.zona,
+    form.duracionMinutos,
+    localId,
+    // Cada aviso de la sincronización en vivo fuerza un recálculo: mientras
+    // este formulario está abierto pueden entrar reservas por el portal o por
+    // otro puesto, y las horas y mesas que se ofrecen tienen que ser las de
+    // AHORA, no las de cuando se abrió la ventana.
+    disponibilidadVersion,
+  ]);
+
+  /**
+   * Reservas que entran, cambian o se anulan mientras se rellena este alta.
+   *
+   * No se toca nada de lo escrito: solo se sube un contador que vuelve a pedir
+   * la disponibilidad. Así los ⏰ del desplegable de horas y los iconos de las
+   * mesas se corrigen solos, sin cerrar y reabrir la ventana.
+   */
+  useSincronizacionEnVivo({
+    tablas: ["reservas"],
+    empresaId: empresaId ?? null,
+    onCambio: () => setDisponibilidadVersion((v) => v + 1),
+    margenMs: 200,
+  });
 
   useEffect(() => {
     if (form.esWalkIn || !campoActivo) {
@@ -578,6 +601,21 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
 
   const excedeMaxPax = maxPax != null && form.comensales > maxPax;
   const muestraAvisoPax = paxTouched && excedeMaxPax;
+
+  /**
+   * Tamaños de grupo que ofrece el desplegable de comensales.
+   *
+   * Llega hasta el máximo configurado para ese día y turno. Si una reserva ya
+   * guardada tiene más gente (porque el tope se bajó después, o venía de un
+   * grupo autorizado a mano) su valor se añade igualmente: el desplegable no
+   * puede perder el dato de una reserva existente al abrirla.
+   */
+  const opcionesComensales = useMemo(() => {
+    const tope = maxPax != null && maxPax > 0 ? maxPax : MAX_COMENSALES_SIN_REGLA;
+    const nums = Array.from({ length: tope }, (_, i) => i + 1);
+    if (form.comensales > tope) nums.push(form.comensales);
+    return nums;
+  }, [maxPax, form.comensales]);
 
   // Zonas del desplegable: SIEMPRE se ofrecen todas las zonas reales del local.
   // Antes se filtraban por el plano vigente del día/turno y, si la cascada no
@@ -701,6 +739,23 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
     [mesaBanner, form.comensales, aforoMesa],
   );
 
+  /**
+   * Diagnóstico de CADA mesa para la hora y el grupo actuales: es lo que pinta
+   * ✅ / ⏰ / 👥 en el desplegable. Se recalcula al cambiar hora o comensales,
+   * y `codigosOcupadosAhora` viene del último cálculo de disponibilidad, así
+   * que una reserva que entre por otro sitio se refleja aquí sin reabrir nada.
+   */
+  const estadoPorMesa = useMemo(() => {
+    const out = new Map<string, EstadoMesaParaReserva>();
+    for (const m of mesasSeleccionables) {
+      out.set(m.id, {
+        ocupada: codigosOcupadosAhora.has(m.codigo.toUpperCase()),
+        aforo: aforoMesa(m.id, form.comensales),
+      });
+    }
+    return out;
+  }, [mesasSeleccionables, codigosOcupadosAhora, aforoMesa, form.comensales]);
+
   // Al elegir mesa se fija también su zona: la mesa siempre trae la suya, y así
   // el dato guardado en la reserva y el selector de zona no pueden divergir.
   // Los comensales NO se tocan: son un dato del cliente, no de la mesa (antes
@@ -730,10 +785,6 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
   // fuera: entran sin ficha de cliente porque se atienden en el momento.
   const { esRequerido: reservaRequiere } = useReglasSubmodulo("sala", "reservas");
 
-  // La mesa es obligatoria salvo en walk-in, donde el cliente ya está sentado y
-  // se le asigna sitio en el momento.
-  const faltaMesa = !form.esWalkIn && !form.mesaId;
-
   /**
    * Qué falta por rellenar, en lenguaje del usuario. No bloquea el botón: se
    * enseña solo cuando se intenta guardar, para no recibir al usuario con un
@@ -751,7 +802,10 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
     if (!form.hora) faltan.push("hora");
     if (!form.turno) faltan.push("turno");
     if (!form.comensales || form.comensales < 1) faltan.push("comensales");
-    if (faltaMesa) faltan.push("mesa");
+    // La mesa NO entra aquí: dejarla en "— El sistema elige la mesa —" es una
+    // elección válida, no un campo sin rellenar. Lo que hace el sistema con esa
+    // elección (proponer una mesa y esperar a que se acepte) se resuelve al
+    // guardar, en `handleSave`.
     return faltan;
   }, [
     form.esWalkIn,
@@ -763,7 +817,6 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
     form.hora,
     form.turno,
     form.comensales,
-    faltaMesa,
     reservaRequiere,
   ]);
 
@@ -805,13 +858,23 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
    * Si hay alguno, se abre el aviso y NO se guarda hasta que el usuario acepte.
    */
   const handleSave = async () => {
-    if (guardarBloqueado || comprobandoSolape) return;
+    if (guardarBloqueado || comprobandoSolape || buscandoMesa) return;
     // Aquí es donde el formulario se permite avisar: solo al intentar guardar.
     setIntentoGuardar(true);
     if (camposQueFaltan.length > 0) return;
     const mesa = mesas.find((m) => m.id === (form.mesaId || mesaPreseleccionada?.id));
     if (!mesa) {
-      emitirReserva();
+      // Sin mesa elegida a mano manda la ASIGNACIÓN AUTOMÁTICA: el sistema
+      // busca una mesa válida y la propone. Nunca se crea la reserva con una
+      // mesa que el usuario no haya visto y aceptado.
+      //
+      // Los walk-in quedan fuera: el cliente ya está en la puerta y se le
+      // sienta en el momento, así que no hay nada que proponer por adelantado.
+      if (form.esWalkIn || !localId) {
+        pedirConfirmacion();
+        return;
+      }
+      await buscarMesaAutomatica();
       return;
     }
     const aforo = aforoMesa(mesa.id, form.comensales);
@@ -831,12 +894,120 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
       setAviso({ choques, aforo, mesaCodigo: mesa.codigo, capacidad: mesa.capacidad });
       return;
     }
-    emitirReserva();
+    pedirConfirmacion();
   };
 
-  /** Paso 2: construir y enviar la reserva. Ya sin preguntas. */
-  const emitirReserva = () => {
+  /**
+   * Asignación automática: busca una mesa válida y la PROPONE.
+   *
+   * Válida = admite a este grupo por capacidad Y está libre durante toda la
+   * duración prevista de la reserva, sin solaparse con ninguna otra.
+   *
+   * El ámbito lo decide la zona del formulario:
+   *   - Con zona elegida → solo mesas de esa zona (el sistema no cambia de zona
+   *     por su cuenta).
+   *   - Sin zona         → todas las zonas y salas del local.
+   *
+   * Si no hay ninguna mesa posible NO se asigna nada al azar: se enseña el
+   * motivo real, y solo cuando el problema es de capacidad se ofrece elegir
+   * mesa a mano (que es la única decisión que el local puede tomar ahí).
+   */
+  const buscarMesaAutomatica = async () => {
+    setBuscandoMesa(true);
+    const res = await proponerMesaAutomatica({
+      fecha: form.fecha,
+      hora: form.hora,
+      personas: form.comensales,
+      turno: form.turno,
+      zona: form.zona || null,
+      localId,
+      duracionMin: duracionEfectiva,
+    });
+    setBuscandoMesa(false);
+    if (!res.ok) {
+      toast.error(friendlyError(res.error));
+      return;
+    }
+    if (res.data.encontrada) {
+      setPropuesta(res.data.mesa);
+      return;
+    }
+    setFallo({
+      motivo: res.data.motivo,
+      libresNoAptas: res.data.libresNoAptas,
+      zonaBuscada: res.data.zonaBuscada,
+    });
+  };
+
+  /**
+   * El usuario ACEPTA la mesa propuesta: a partir de aquí la reserva ya lleva
+   * mesa concreta y sigue el camino normal (confirmación de aviso al cliente).
+   *
+   * Una unión ("M1+M2") no tiene `mesaId` de mesa suelta, así que se emite por
+   * código: es lo que se guarda en BD de todas formas.
+   */
+  const aceptarPropuesta = () => {
+    if (!propuesta) return;
+    const elegida = propuesta;
+    setPropuesta(null);
+    // La zona de la reserva pasa a ser la de la mesa aceptada: si se buscó sin
+    // zona, hasta ahora la reserva no tenía ninguna.
+    const zonaFinal = (elegida.zonaNombre || form.zona || "") as ZonaSala | "";
+    if (elegida.mesaId) {
+      const enCatalogo = mesas.find((m) => m.id === elegida.mesaId);
+      if (enCatalogo) {
+        setForm((p) => ({ ...p, mesaId: enCatalogo.id, zona: zonaFinal }));
+        pedirConfirmacion();
+        return;
+      }
+    }
+    // Unión, o mesa fuera del catálogo cargado en pantalla (se buscó en otra
+    // sala): se emite por código, que es lo que entiende el servidor.
+    setForm((p) => ({ ...p, zona: zonaFinal }));
+    pedirConfirmacion(elegida.codigo);
+  };
+
+  /**
+   * El usuario elige a mano una de las mesas libres que NO encajan por
+   * capacidad. Es una decisión deliberada del local ("aquí caben igual"), así
+   * que se acepta sin volver a discutir el aforo: ya se le ha dicho.
+   */
+  const elegirMesaDeFallo = (m: MesaPropuesta) => {
+    setFallo(null);
+    const zonaFinal = (m.zonaNombre || form.zona || "") as ZonaSala | "";
+    if (m.mesaId && mesas.some((x) => x.id === m.mesaId)) {
+      setForm((p) => ({ ...p, mesaId: m.mesaId as string, zona: zonaFinal }));
+      pedirConfirmacion();
+      return;
+    }
+    setForm((p) => ({ ...p, zona: zonaFinal }));
+    pedirConfirmacion(m.codigo);
+  };
+
+  /**
+   * Paso 2: preguntar si se notifica al cliente. Solo tiene sentido cuando hay
+   * un correo al que escribir: sin email (o en walk-in, que ni siquiera tiene
+   * ficha) la reserva se confirma directamente sin preguntar nada.
+   */
+  const pedirConfirmacion = (mesaCodigoAuto?: string | null) => {
     setAviso(null);
+    if (form.esWalkIn || !form.email.trim()) {
+      emitirReserva(false, mesaCodigoAuto);
+      return;
+    }
+    // El código de la mesa aceptada viaja aparte hasta el final: `setForm` no
+    // se ha aplicado todavía cuando se encadena desde `aceptarPropuesta`, así
+    // que leerlo del formulario daría el valor viejo (vacío).
+    setMesaCodigoAuto(mesaCodigoAuto ?? null);
+    setConfirmarEnvio(true);
+  };
+
+  /** Paso 3: construir y enviar la reserva. Ya sin preguntas. */
+  const emitirReserva = (notificarEmail: boolean, mesaCodigoAuto?: string | null) => {
+    setAviso(null);
+    setConfirmarEnvio(false);
+    const codigoAuto = mesaCodigoAuto ?? mesaCodigoAutoRef ?? null;
+    setMesaCodigoAuto(null);
     onSave({
       id: `r-${Date.now()}`,
       cliente: form.esWalkIn ? "" : form.cliente,
@@ -846,6 +1017,10 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
       fecha: form.fecha, hora: form.hora, turno: form.turno,
       comensales: form.comensales, zona: form.zona,
       mesaId: form.mesaId || (mesaPreseleccionada?.id ?? ""),
+      // Mesa aceptada de la propuesta automática que no está en el catálogo de
+      // pantalla (una unión, u otra sala): se manda por código, que es lo que
+      // se guarda en BD.
+      mesaCodigo: codigoAuto ?? undefined,
       estado: form.esWalkIn ? "WALK_IN" : "CONFIRMADA",
       observaciones: form.observaciones,
       tipoCategoria: (form.tipoCategoria || null) as TipoReservaCategoria | null,
@@ -860,7 +1035,7 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
         if (config && duracionEfectiva === config.duracionReservaMin) return null;
         return duracionEfectiva;
       })(),
-      notificarEmail: form.notificarEmail,
+      notificarEmail,
       codigoCupon: form.codigoCupon.trim() ? form.codigoCupon.trim().toUpperCase() : null,
     });
   };
@@ -1061,13 +1236,13 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
               })}
             </select>
           ) : (
-            // Sin horario definido (o fallo al calcularlo): entrada libre, para
-            // no bloquear el alta por un problema de configuración.
-            <Input
-              type="time"
-              className="h-8 text-xs"
+            // Sin horario definido (o fallo al calcularlo) no se bloquea el
+            // alta, pero la hora sigue eligiéndose en cuartos: la cuadrícula es
+            // la regla del sistema, no una consecuencia de tener slots.
+            <SelectorHoraCuartos
               value={form.hora}
-              onChange={(e) => setForm((p) => ({ ...p, hora: e.target.value }))}
+              aviso={horaConflictiva}
+              onChange={(h) => setForm((p) => ({ ...p, hora: h }))}
             />
           )}
           {cargandoSlots ? (
@@ -1098,15 +1273,34 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
         </div>
         <div>
           <Label className="text-xs">Comensales *</Label>
-          <NumberInput
-            min={1}
-            emptyValue={1}
-            decimales={false}
-            className={cn("h-8 text-xs", muestraAvisoPax && "border-amber-500 focus-visible:ring-amber-500")}
-            value={form.comensales}
-            onValueChange={(n) => setForm((p) => ({ ...p, comensales: n }))}
-            onBlur={() => setPaxTouched(true)}
-          />
+          {/* Desplegable, no campo libre: se ofrecen solo los tamaños que la
+              empresa acepta. El tope es el "tamaño máximo por reserva" de
+              Configuración → Límites (mesa o combinación de mesas), el mismo
+              que aplica el portal público. Sin regla configurada se cae al
+              máximo por defecto para no dejar el selector sin opciones. */}
+          <Select
+            value={String(form.comensales)}
+            onValueChange={(v) => {
+              setPaxTouched(true);
+              setForm((p) => ({ ...p, comensales: Number(v) }));
+            }}
+          >
+            <SelectTrigger
+              className={cn(
+                "h-8 text-xs",
+                muestraAvisoPax && "border-amber-500 focus-visible:ring-amber-500",
+              )}
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {opcionesComensales.map((n) => (
+                <SelectItem key={n} value={String(n)}>
+                  {n} {n === 1 ? "persona" : "personas"}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
         <div>
           <Label className="text-xs">
@@ -1169,35 +1363,25 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
         </div>
         <div className="col-span-2 space-y-1">
           <Label className="text-xs">Mesa</Label>
-          {/* Sin zona no hay mesas que ofrecer: la mesa siempre cuelga de una zona. */}
-          <select
+          {/* Sin zona no se listan mesas concretas (la mesa cuelga de una zona),
+              pero el selector NO se bloquea: dejarlo en automático es una
+              elección válida y busca en todas las zonas y salas del local. */}
+          {/* Mismo selector que en la ficha de edición: los indicadores
+              (✅ / ⏰ / 👥) tienen que decir lo mismo al crear y al editar. */}
+          <SelectorMesaConAvisos
             value={form.mesaId}
-            onChange={(e) => elegirMesa(e.target.value)}
-            disabled={!form.zona}
-            className="h-8 text-xs w-full rounded-md border border-input bg-background px-2 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            <option value="">{form.zona ? "— Sin asignar —" : "— Elige zona primero —"}</option>
-            {mesasSeleccionables.map((m) => {
+            onChange={elegirMesa}
+            mesas={mesasSeleccionables}
+            estadoPorMesa={estadoPorMesa}
+            placeholder="— El sistema elige la mesa —"
+            etiquetaEstado={(m) => {
               const est = getEstadoMesa(m);
-              const tag =
-                est === "LIBRE" ? "Libre" :
+              return est === "LIBRE" ? "Libre" :
                 est === "OCUPADA" ? "Sentada" :
                 est === "RESERVADA" ? "Reservada" :
                 est === "BLOQUEADA" ? "Bloqueada" : "";
-              // Dos peligros DISTINTOS, cada uno con su icono, y pueden salir
-              // los dos a la vez:
-              //   ⏰ = a esa hora la mesa ya tiene reserva (se pisaría).
-              //   👥 = el grupo no encaja en la capacidad de la mesa.
-              const pisa = codigosOcupadosAhora.has(m.codigo.toUpperCase());
-              const aforo = aforoMesa(m.id, form.comensales);
-              const avisos = `${pisa ? " ⏰" : ""}${aforo ? " 👥" : ""}`;
-              return (
-                <option key={m.id} value={m.id}>
-                  {m.codigo} · {m.capacidad}p · {tag}{avisos}
-                </option>
-              );
-            })}
-          </select>
+            }}
+          />
           {form.mesaId ? (
             <>
               <p className="text-[10px] text-muted-foreground truncate">
@@ -1214,20 +1398,15 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
               </p>
               {/* 👥 Aviso de AFORO, independiente del de horario: puede salir
                   con la mesa completamente libre. */}
-              {aforoConflictivo && (
-                <p className="flex items-start gap-1 text-[10px] text-rose-700 dark:text-rose-300">
-                  <Users className="mt-0.5 h-3 w-3 shrink-0" />
-                  <span>
-                    {aforoConflictivo.tipo === "excede"
-                      ? `Esta mesa admite máximo ${aforoConflictivo.max} y quieres sentar a ${form.comensales}.`
-                      : `Esta mesa es para mínimo ${aforoConflictivo.min} y solo vienen ${form.comensales}.`}
-                  </span>
-                </p>
-              )}
+              <AvisoAforoMesa aforo={aforoConflictivo} comensales={form.comensales} />
             </>
           ) : !form.zona ? (
+            // Sin zona el sistema busca en TODO el local. Se dice explícitamente
+            // para que quede claro que no es un campo a medio rellenar.
             <p className="text-[10px] text-muted-foreground">
-              Elige antes la zona: las mesas se listan por zona.
+              Al reservar, el sistema buscará una mesa libre para {form.comensales}{" "}
+              {form.comensales === 1 ? "persona" : "personas"} en todas las zonas y salas, y
+              te la propondrá antes de confirmar.
             </p>
           ) : mesasSeleccionables.length === 0 ? (
             // Nunca dejar la lista vacía en silencio: si no hay mesas, se dice por qué.
@@ -1236,18 +1415,8 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
             </p>
           ) : (
             <p className="text-[10px] text-muted-foreground">
-              Sin mesa asignada — el sistema la elegirá al sentar al cliente.
-            </p>
-          )}
-          {/* Leyenda: los iconos no se adivinan. Solo se muestra si en la lista
-              hay al menos una mesa marcada. */}
-          {mesasSeleccionables.some(
-            (m) =>
-              codigosOcupadosAhora.has(m.codigo.toUpperCase()) ||
-              aforoMesa(m.id, form.comensales),
-          ) && (
-            <p className="text-[10px] text-muted-foreground">
-              ⏰ ya reservada a esa hora · 👥 el grupo no encaja en la mesa
+              Al reservar, el sistema buscará una mesa libre en {zonaLabel(form.zona)} y te la
+              propondrá antes de confirmar.
             </p>
           )}
         </div>
@@ -1341,43 +1510,169 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
         )}
       </div>
 
+      {/* El desplegable ya no ofrece grupos por encima del máximo, así que
+          esto solo salta cuando el tamaño venía de antes (una reserva creada
+          con otro tope, o un grupo autorizado a mano) y sigue bloqueando el
+          guardado hasta corregirlo. */}
       {muestraAvisoPax && (
         <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
-          Supera el máximo de {maxPax} pax del turno {form.turno.toLowerCase()} del {form.fecha}.
+          Son {form.comensales} y el máximo por reserva del turno de{" "}
+          {form.turno.toLowerCase()} es {maxPax}. Baja el número o gestiónalo
+          como reserva de grupo.
         </div>
       )}
 
-      <div><Label className="text-xs">Observaciones</Label><Textarea className="text-xs" value={form.observaciones} onChange={e => setForm(p => ({ ...p, observaciones: e.target.value }))} /></div>
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <label
-          className={cn(
-            "flex items-center gap-2 text-xs select-none",
-            (form.esWalkIn || !form.email.trim()) && "opacity-50",
-          )}
-          title={
-            form.esWalkIn
-              ? "No aplica en walk-in"
-              : !form.email.trim()
-                ? "Añade el email del cliente para notificarle"
-                : undefined
-          }
-        >
-          <Checkbox
-            checked={form.notificarEmail}
-            onCheckedChange={(v) =>
-              setForm((p) => ({ ...p, notificarEmail: v === true }))
-            }
-            disabled={form.esWalkIn || !form.email.trim()}
-          />
-          Notificar al cliente por email
-        </label>
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={onClose}>Cancelar</Button>
-          <Button size="sm" onClick={handleSave} disabled={guardarBloqueado || comprobandoSolape}>
-            {comprobandoSolape ? "Comprobando…" : "Reservar"}
-          </Button>
-        </div>
+      <div>
+        <Label className="text-xs">Comentarios</Label>
+        <Textarea
+          className="text-xs"
+          rows={2}
+          maxLength={RESERVA_COMENTARIO_MAX_CHARS}
+          value={form.observaciones}
+          onChange={e => setForm(p => ({ ...p, observaciones: e.target.value.slice(0, RESERVA_COMENTARIO_MAX_CHARS) }))}
+        />
+        <p className="pt-0.5 text-right text-[10px] text-muted-foreground">
+          {form.observaciones.length}/{RESERVA_COMENTARIO_MAX_CHARS}
+        </p>
       </div>
+      {/* El aviso al cliente ya no se decide con una casilla que se pasa por
+          alto: se pregunta al final, en el paso de confirmación. */}
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        <Button variant="outline" size="sm" onClick={onClose}>Cancelar</Button>
+        <Button
+          size="sm"
+          onClick={handleSave}
+          disabled={guardarBloqueado || comprobandoSolape || buscandoMesa}
+        >
+          {buscandoMesa ? "Buscando mesa…" : comprobandoSolape ? "Comprobando…" : "Reservar"}
+        </Button>
+      </div>
+
+      {/* PROPUESTA de la asignación automática. La reserva NO está creada: el
+          sistema enseña qué mesa ha elegido y DÓNDE está (sala y zona), y solo
+          se confirma con ella si el usuario acepta expresamente. El local
+          mantiene siempre la última palabra sobre la mesa. */}
+      <Dialog open={propuesta != null} onOpenChange={(v) => { if (!v) setPropuesta(null); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Check className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+              Mesa propuesta por el sistema
+            </DialogTitle>
+          </DialogHeader>
+          {propuesta && (
+            <div className="space-y-3 text-xs">
+              <p className="text-muted-foreground">
+                Para {form.comensales} {form.comensales === 1 ? "persona" : "personas"} el{" "}
+                {form.fecha} a las {form.hora.slice(0, 5)}, el sistema propone:
+              </p>
+              <div className="rounded-md border border-emerald-500/40 bg-emerald-500/5 px-3 py-2">
+                <div className="text-sm font-semibold">
+                  Mesa {propuesta.codigo}
+                  {propuesta.esUnion && (
+                    <span className="ml-1.5 font-normal text-muted-foreground">
+                      (unión de mesas)
+                    </span>
+                  )}
+                </div>
+                {/* Dónde está: sin ubicación la propuesta no se puede revisar. */}
+                <div className="text-muted-foreground">
+                  {[propuesta.salaNombre, propuesta.zonaNombre].filter(Boolean).join(" · ") ||
+                    "Sin ubicación registrada"}
+                </div>
+                <div className="text-muted-foreground">
+                  Admite de {propuesta.capacidadMin} a {propuesta.capacidadMax}{" "}
+                  {propuesta.capacidadMax === 1 ? "persona" : "personas"}
+                </div>
+              </div>
+              <p className="text-muted-foreground">
+                Está libre durante toda la reserva. Si prefieres otra, cancela y elígela a mano
+                en el desplegable de mesa.
+              </p>
+            </div>
+          )}
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" size="sm" onClick={() => setPropuesta(null)}>
+              Cancelar
+            </Button>
+            <Button size="sm" onClick={aceptarPropuesta}>Aceptar y reservar</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* NO hay mesa posible. El sistema no inventa una asignación: explica el
+          motivo real, que es distinto en cada caso y lleva a una salida
+          distinta. Solo cuando el problema es de CAPACIDAD tiene sentido que el
+          local coloque el grupo a mano, así que solo ahí se ofrecen mesas. */}
+      <Dialog open={fallo != null} onOpenChange={(v) => { if (!v) setFallo(null); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-amber-700 dark:text-amber-300">
+              <AlertTriangle className="h-4 w-4" />
+              No se ha podido asignar mesa automáticamente
+            </DialogTitle>
+          </DialogHeader>
+          {fallo && (
+            <div className="space-y-3 text-xs">
+              {fallo.motivo === "SIN_HUECO" && (
+                <p className="text-muted-foreground">
+                  No hay ninguna mesa libre{" "}
+                  {fallo.zonaBuscada ? `en ${zonaLabel(fallo.zonaBuscada)}` : "en todo el local"}{" "}
+                  el {form.fecha} a las {form.hora.slice(0, 5)} durante{" "}
+                  {formatearDuracionReserva(duracionEfectiva ?? 120)}. Todas están ocupadas por
+                  otra reserva en esa franja: prueba con otra hora, otra duración
+                  {fallo.zonaBuscada ? " u otra zona" : ""}.
+                </p>
+              )}
+              {fallo.motivo === "SIN_MESAS" && (
+                <p className="text-muted-foreground">
+                  {fallo.zonaBuscada
+                    ? `${zonaLabel(fallo.zonaBuscada)} no tiene mesas activas. Elige otra zona o revisa el catálogo en Configuración → Salas.`
+                    : "Este local no tiene mesas activas. Revisa el catálogo en Configuración → Salas."}
+                </p>
+              )}
+              {fallo.motivo === "SIN_CAPACIDAD" && (
+                <>
+                  <p className="text-muted-foreground">
+                    Hay mesas libres a esa hora, pero ninguna es adecuada para{" "}
+                    {form.comensales} {form.comensales === 1 ? "persona" : "personas"}
+                    {fallo.zonaBuscada ? ` en ${zonaLabel(fallo.zonaBuscada)}` : ""}.
+                  </p>
+                  <p className="text-muted-foreground">
+                    Elige tú la mesa de destino: decide el local dónde sentar al grupo.
+                  </p>
+                  <div className="max-h-56 space-y-1.5 overflow-y-auto">
+                    {fallo.libresNoAptas.map((m) => (
+                      <button
+                        type="button"
+                        key={m.codigo}
+                        onClick={() => elegirMesaDeFallo(m)}
+                        className="flex w-full items-center justify-between gap-2 rounded-md border px-3 py-2 text-left hover:bg-muted"
+                      >
+                        <span>
+                          <span className="font-semibold">Mesa {m.codigo}</span>
+                          <span className="block text-[10px] text-muted-foreground">
+                            {[m.salaNombre, m.zonaNombre].filter(Boolean).join(" · ") ||
+                              "Sin ubicación"}
+                          </span>
+                        </span>
+                        <span className="shrink-0 text-[10px] text-muted-foreground">
+                          {m.capacidadMin}–{m.capacidadMax}p
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" size="sm" onClick={() => setFallo(null)}>
+              Cerrar
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Aviso previo a crear: detalla CADA motivo de peligro por separado
           (⏰ horario y 👥 aforo) para que se acepte sabiendo exactamente qué
@@ -1451,7 +1746,47 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
             <Button variant="outline" size="sm" onClick={() => setAviso(null)}>
               Cancelar
             </Button>
-            <Button size="sm" onClick={emitirReserva}>Aceptar y reservar</Button>
+            <Button size="sm" onClick={() => pedirConfirmacion()}>Aceptar y continuar</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Último paso de toda reserva interna: la reserva se confirma en los dos
+          casos; lo único que se elige aquí es si además se avisa al cliente con
+          el mismo correo que recibe cuando reserva desde la web. */}
+      <Dialog open={confirmarEnvio} onOpenChange={(v) => { if (!v) setConfirmarEnvio(false); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Confirmar reserva</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 text-xs">
+            <p className="text-muted-foreground">
+              La reserva de{" "}
+              <span className="font-semibold text-foreground">
+                {[form.cliente, form.apellidos].filter(Boolean).join(" ").trim() || "el cliente"}
+              </span>{" "}
+              para el {form.fecha} a las {form.hora.slice(0, 5)} · {form.comensales}{" "}
+              {form.comensales === 1 ? "persona" : "personas"} quedará confirmada.
+            </p>
+            <p className="text-muted-foreground">
+              Elige si además quieres enviarle el correo de confirmación a{" "}
+              <span className="font-medium text-foreground">{form.email.trim()}</span>.
+            </p>
+          </div>
+          <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5"
+              onClick={() => emitirReserva(false)}
+            >
+              <CheckCircle2 className="h-3.5 w-3.5" />
+              Solo confirmar
+            </Button>
+            <Button size="sm" className="gap-1.5" onClick={() => emitirReserva(true)}>
+              <Mail className="h-3.5 w-3.5" />
+              Notificar y confirmar
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
@@ -1550,11 +1885,12 @@ function NuevaListaEsperaForm({
           </div>
           <div>
             <Label className="text-xs">Hora *</Label>
-            <Input
-              type="time"
-              className="h-8 text-xs"
+            {/* También en cuartos: la lista de espera acaba siendo una reserva
+                y pasa por la misma validación, así que aceptar aquí un 12:07
+                solo servía para que fallase al convertirla. */}
+            <SelectorHoraCuartos
               value={form.horaEstimada}
-              onChange={e => setForm(p => ({ ...p, horaEstimada: e.target.value }))}
+              onChange={(h) => setForm((p) => ({ ...p, horaEstimada: h }))}
             />
           </div>
           <div>
@@ -1631,12 +1967,16 @@ function NuevaListaEsperaForm({
       </div>
 
       <div>
-        <Label className="text-xs">Notas</Label>
+        <Label className="text-xs">Comentarios</Label>
         <Textarea
           className="text-xs min-h-[52px]"
+          maxLength={RESERVA_COMENTARIO_MAX_CHARS}
           value={form.notas}
-          onChange={e => setForm(p => ({ ...p, notas: e.target.value }))}
+          onChange={e => setForm(p => ({ ...p, notas: e.target.value.slice(0, RESERVA_COMENTARIO_MAX_CHARS) }))}
         />
+        <p className="pt-0.5 text-right text-[10px] text-muted-foreground">
+          {form.notas.length}/{RESERVA_COMENTARIO_MAX_CHARS}
+        </p>
       </div>
 
       <div className="flex justify-end gap-2 pt-0.5">
@@ -1771,6 +2111,37 @@ function FiltroEstadosDropdown({
         </div>
       </PopoverContent>
     </Popover>
+  );
+}
+
+/** Indicador global de cabecera en vista mes: personas + mesas de un turno. */
+function KpiTurnoMes({
+  icono,
+  titulo,
+  personas,
+  reservas,
+}: {
+  icono: React.ReactNode;
+  titulo: string;
+  personas: number;
+  reservas: number;
+}) {
+  return (
+    <div
+      className="inline-flex items-center gap-2 h-8 px-2.5 rounded-md border border-input bg-background text-xs font-semibold"
+      title={`${titulo}: ${personas} personas · ${reservas} mesas reservadas`}
+    >
+      {icono}
+      <span className="text-muted-foreground font-medium">{titulo}</span>
+      <span className="inline-flex items-center gap-1">
+        <Users className="h-3.5 w-3.5 text-emerald-500" />
+        <span className="tabular-nums">{personas}</span>
+      </span>
+      <span className="inline-flex items-center gap-1">
+        <LayoutGrid className="h-3.5 w-3.5 text-sky-500" />
+        <span className="tabular-nums">{reservas}</span>
+      </span>
+    </div>
   );
 }
 
@@ -2501,9 +2872,8 @@ export function ReservasView() {
   const [filtroEstados, setFiltroEstados] = useState<EstadoReserva[]>(ESTADOS_RESERVA);
   const [filtroOrigen, setFiltroOrigen] = useState<string>("TODOS");
   const [cfgReservas, setCfgReservas] = useState<EmpresaReservasConfig | null>(null);
-  // El usuario ha tocado el filtro de estados al menos una vez → no aplicamos la
-  // preferencia "ocultar canceladas" automáticamente sobre su selección.
-  const filtroEstadosTouched = useRef(false);
+  /** Reglas de aforo con vigencia (cupo / tamaño máximo por reserva). */
+  const [reglasReservas, setReglasReservas] = useState<EmpresaReservasRegla[]>([]);
   const [tickAhora, setTickAhora] = useState(() => Date.now());
   const [selectedMesa, setSelectedMesa] = useState<Mesa | null>(null);
   const [showNueva, setShowNueva] = useState(false);
@@ -2538,7 +2908,15 @@ export function ReservasView() {
   const [horaEdit, setHoraEdit] = useState("");
   const [guardandoCuando, setGuardandoCuando] = useState(false);
   /** Aviso de peligro: la mesa ya está ocupada en esa franja. */
-  const [avisoOcupada, setAvisoOcupada] = useState<string | null>(null);
+  /**
+   * Aviso de mesa ya ocupada. `forzar` solo viene cuando el cambio se puede
+   * repetir asumiendo el solape (reasignar mesa); en el resto de casos —mover
+   * la hora, alargar la duración— no se ofrece, porque forzarlos pisaría
+   * reservas que ni siquiera se están mirando.
+   */
+  const [avisoOcupada, setAvisoOcupada] = useState<
+    { mensaje: string; forzar?: () => void } | null
+  >(null);
   /** Confirmación de "Bloquear" una mesa para el día y turno en pantalla. */
   const [confirmBloqueo, setConfirmBloqueo] = useState<
     { mesa: Mesa; reservasActivas: number } | null
@@ -2600,7 +2978,12 @@ export function ReservasView() {
     setInmersivoOscuro(esOscuro);
     return () => setInmersivoOscuro(false);
   }, [esOscuro, setInmersivoOscuro]);
-  const [totalesMes, setTotalesMes] = useState<{ personas: number; reservas: number }>({ personas: 0, reservas: 0 });
+  const [totalesMes, setTotalesMes] = useState<{
+    comida: { personas: number; reservas: number };
+    cena: { personas: number; reservas: number };
+    personas: number;
+    reservas: number;
+  }>({ comida: { personas: 0, reservas: 0 }, cena: { personas: 0, reservas: 0 }, personas: 0, reservas: 0 });
   const [locales, setLocales] = useState<LocalMin[]>([]);
   const [localId, setLocalId] = useState<string>("");
   const [salasLocalTodas, setSalasLocalTodas] = useState<SalaConfig[]>([]);
@@ -2829,6 +3212,26 @@ export function ReservasView() {
     setHoraEdit(selectedReserva.hora.slice(0, 5));
   }, [selectedReserva]);
 
+  /**
+   * Tamaños de grupo que ofrece la ficha de edición. Mismo criterio que al
+   * crear: el tope sale de Configuración → Límites para ESA fecha y turno, y
+   * si la reserva ya tiene más gente se le añade su valor para no perderlo.
+   */
+  const opcionesComensalesEdit = useMemo(() => {
+    if (!selectedReserva) return [];
+    const turnoRes =
+      selectedReserva.turno === "CENA" ? "CENA" : "COMIDA";
+    const max = maxpaxEfectivoDesdeReglas(
+      reglasReservas,
+      selectedReserva.fecha,
+      turnoRes,
+    );
+    const tope = max != null && max > 0 ? max : MAX_COMENSALES_SIN_REGLA;
+    const nums = Array.from({ length: tope }, (_, i) => i + 1);
+    if (comensalesEdit > tope) nums.push(comensalesEdit);
+    return nums;
+  }, [selectedReserva, reglasReservas, comensalesEdit]);
+
   // Los campos del cliente se recargan al cambiar de reserva: si no, quedarían
   // los del cliente anterior y se guardarían sobre quien no toca. Se guarda
   // aparte una copia intacta: es a lo que se vuelve si el usuario decide NO
@@ -2876,9 +3279,19 @@ export function ReservasView() {
     tablas: ["reservas", "mesas"],
     empresaId: empresaActual.id,
     onCambio: () => void loadReservas(fecha),
+    // La ficha de reserva NO pausa: es justo donde hace falta el dato fresco.
+    // Sus campos se guardan uno a uno en cuanto se tocan, así que no hay nada
+    // a medio escribir que una recarga pueda tirar, y a cambio los avisos de
+    // mesa (⏰ ocupada) reflejan lo que acaba de entrar sin cerrar la ventana.
+    //
+    // Los formularios de alta sí pausan: ahí hay un borrador entero sin
+    // guardar y perderlo es peor que ver un dato con unos segundos de retraso.
     pausado:
-      showNueva || showListaEspera || !!selectedReserva || !!selectedMesa ||
+      showNueva || showListaEspera || !!selectedMesa ||
       !!confirmEstado || !!confirmBloqueo,
+    // Ráfaga más corta que la de por defecto: en sala las reservas entran unas
+    // detrás de otras y medio segundo de retraso ya se nota al asignar mesa.
+    margenMs: 200,
   });
 
   // Bloqueos del local (Config → Bloqueos). Se cargan al cambiar de local y se
@@ -2908,6 +3321,24 @@ export function ReservasView() {
     };
   }, [localId, posicionesRefresh, bloqueosRefresh]);
 
+  // Un bloqueo puede cambiar desde Configuración → Bloqueos (o desde el plano
+  // de otro compañero) mientras esta pantalla está abierta. Sin esto, el plano
+  // seguía pintando de negro una mesa ya desbloqueada hasta recargar.
+  useSincronizacionEnVivo({
+    tablas: [
+      "empresa_reservas_bloqueos",
+      "empresa_reservas_bloqueos_excepciones",
+    ],
+    empresaId: empresaActual.id,
+    onCambio: () => setBloqueosRefresh((n) => n + 1),
+    // La ficha tampoco pausa aquí: si alguien bloquea una mesa mientras se
+    // edita una reserva, el desplegable tiene que dejar de ofrecerla al
+    // momento — es justo el dato que decide si esa mesa vale o no.
+    pausado:
+      showNueva || showListaEspera || !!selectedMesa ||
+      !!confirmEstado || !!confirmBloqueo,
+  });
+
   const mesasBloqueadasIds = useMemo(() => {
     const ids = new Set<string>();
     if (bloqueosLocal.length === 0) return ids;
@@ -2934,26 +3365,20 @@ export function ReservasView() {
     return ids;
   }, [bloqueosLocal, bloqueoExcepciones, fecha, turno, mesasMeta]);
 
-  // Config de reservas (preferencias del motor: ocultar canceladas, parpadeo,
-  // duración por defecto…). Se recarga al volver al view.
+  // Config de reservas (parpadeo, duración por defecto…). Se recarga al volver
+  // al view.
   useEffect(() => {
     (async () => {
-      const c = await getReservasConfig();
+      const [c, r] = await Promise.all([
+        getReservasConfig(),
+        listReglasReservas(),
+      ]);
       if (c.ok && c.data) setCfgReservas(c.data);
+      // Las reglas de aforo las necesita la ficha de edición para saber cuántas
+      // personas puede ofrecer su desplegable de comensales.
+      if (r.ok) setReglasReservas(r.data);
     })();
   }, []);
-
-  // Si `ocultarCanceladas` está activo y el usuario aún no ha tocado el filtro,
-  // retiramos CANCELADA del filtro inicial. Si lo activa más tarde, también.
-  useEffect(() => {
-    if (!cfgReservas) return;
-    if (filtroEstadosTouched.current) return;
-    setFiltroEstados((prev) =>
-      cfgReservas.ocultarCanceladas
-        ? prev.filter((e) => e !== "CANCELADA")
-        : ESTADOS_RESERVA,
-    );
-  }, [cfgReservas]);
 
   // Tick para reevaluar el parpadeo (se anima por CSS; solo refrescamos la
   // clasificación cada 30 s para mover reservas entre franjas 0-15 / 15-30).
@@ -2964,7 +3389,7 @@ export function ReservasView() {
 
   /**
    * Devuelve clase Tailwind con animación si la reserva entra en alguna de las
-   * franjas configuradas como "parpadeo" (Preferencias del motor). Solo afecta
+   * franjas configuradas como "parpadeo" en Configuración. Solo afecta
    * a reservas vivas del día actual.
    */
   const parpadeoClassPara = useCallback(
@@ -3021,6 +3446,161 @@ export function ReservasView() {
       return id ? { ...r, mesaId: id } : r;
     });
   }, [reservas, mesaIdPorCodigo]);
+
+  /**
+   * La ficha abierta sigue a la lista recargada.
+   *
+   * Con la sincronización en vivo activa mientras la ficha está abierta, los
+   * datos pueden cambiar bajo los pies (otra persona mueve la reserva de mesa,
+   * la cancela, le sube los comensales). Sin esto la ventana seguiría
+   * enseñando la foto de cuando se abrió.
+   *
+   * Solo se reemplaza si de verdad cambió algo de lo que se muestra: hacerlo
+   * en cada recarga reiniciaría los efectos que dependen de `selectedReserva`
+   * y machacaría los campos que se estén editando.
+   */
+  useEffect(() => {
+    if (!selectedReserva) return;
+    const fresca = reservasResueltas.find((r) => r.id === selectedReserva.id);
+    if (!fresca) {
+      // La reserva ya no está en el día que se está mirando: o alguien la ha
+      // borrado, o la ha movido a otra fecha. Seguir enseñando su ficha
+      // invitaría a editar algo que ya no existe donde se cree que está, así
+      // que se cierra y se dice por qué. No se pierde nada: cada campo de esta
+      // ficha se guarda en cuanto se toca.
+      //
+      // Con la lista vacía no se concluye nada: es el hueco entre pedir los
+      // datos y recibirlos, y cerrar ahí la ficha la haría desaparecer sola en
+      // cada recarga.
+      if (reservasResueltas.length === 0) return;
+      setShowDetalleReserva(false);
+      setSelectedReserva(null);
+      toast.info("La reserva que tenías abierta ya no está en este día.");
+      return;
+    }
+    const cambio =
+      fresca.estado !== selectedReserva.estado ||
+      fresca.mesaCodigo !== selectedReserva.mesaCodigo ||
+      fresca.zona !== selectedReserva.zona ||
+      fresca.hora !== selectedReserva.hora ||
+      fresca.fecha !== selectedReserva.fecha ||
+      fresca.comensales !== selectedReserva.comensales ||
+      fresca.duracionMinutos !== selectedReserva.duracionMinutos;
+    if (!cambio) return;
+    setSelectedReserva((prev) => (prev && prev.id === fresca.id ? fresca : prev));
+  }, [reservasResueltas, selectedReserva]);
+
+  /**
+   * Códigos de mesa de la reserva abierta. Una unión graba varias ("M1+M2").
+   */
+  const codigosMesaReservaAbierta = useMemo(() => {
+    const codigo = (selectedReserva?.mesaCodigo ?? "").trim();
+    if (!codigo) return [];
+    return codigo.split("+").map((c) => c.trim().toUpperCase()).filter(Boolean);
+  }, [selectedReserva]);
+
+  /** Una reserva sobre varias mesas no se reasigna con un desplegable simple. */
+  const esReservaUnion = codigosMesaReservaAbierta.length > 1;
+
+  /** Id de la mesa actual (vacío si no tiene, o si es una unión). */
+  const mesaIdReservaAbierta = useMemo(() => {
+    if (esReservaUnion) return "";
+    const codigo = codigosMesaReservaAbierta[0];
+    if (codigo) return mesaIdPorCodigo.get(codigo) ?? "";
+    return selectedReserva?.mesaId ?? "";
+  }, [esReservaUnion, codigosMesaReservaAbierta, mesaIdPorCodigo, selectedReserva]);
+
+  /**
+   * ── CAMBIO DE MESA DESDE LA FICHA ──────────────────────────────────────
+   *
+   * Mesas que se pueden dar a la reserva abierta. Son todas las del local, no
+   * solo las de su zona: mover una reserva de terraza a salón es justo el
+   * cambio que hay que poder hacer desde aquí.
+   */
+  const mesasParaReservaAbierta = useMemo(() => {
+    if (!selectedReserva) return [];
+    // Las mesas bloqueadas a mano para este día y turno no se ofrecen: no es
+    // que choquen con otra reserva, es que no están disponibles, y darlas a
+    // elegir con un ✅ sería mentir. Se salva la que ya tiene la reserva, para
+    // no vaciarle el selector si se bloqueó su mesa después de sentarla.
+    const mesaActual = mesaIdReservaAbierta;
+    return mesas
+      .filter((m) => m.id === mesaActual || !mesasBloqueadasIds.has(m.id))
+      .sort((a, b) =>
+        a.codigo.localeCompare(b.codigo, undefined, { numeric: true }),
+      );
+  }, [mesas, selectedReserva, mesasBloqueadasIds, mesaIdReservaAbierta]);
+
+  /**
+   * Diagnóstico ✅ / ⏰ / 👥 de cada mesa para la reserva abierta.
+   *
+   * Se calcula sobre `reservasResueltas`, que es lo que la sincronización en
+   * vivo mantiene al día: si entra o se cancela una reserva mientras la ficha
+   * está abierta, los iconos cambian solos sin cerrar la ventana.
+   *
+   *   ⏰ solape real de franjas —no "hay algo ese día"—, comparando en minutos
+   *      de jornada para que una cena a las 23:30 y otra a las 00:30 cuenten
+   *      como la misma noche.
+   *   👥 la capacidad del catálogo no encaja con los comensales que se están
+   *      editando ahora mismo (no los guardados): al subir el grupo en el
+   *      desplegable, las mesas que se quedan cortas se marcan al instante.
+   *
+   * La propia reserva se excluye: su mesa actual no puede chocar consigo misma.
+   */
+  const estadoMesasReservaAbierta = useMemo(() => {
+    const out = new Map<string, EstadoMesaParaReserva>();
+    if (!selectedReserva) return out;
+
+    const duracion =
+      selectedReserva.duracionMinutos ??
+      cfgReservas?.duracionReservaMin ??
+      DURACION_RESERVA_DEFAULT_MINUTOS;
+
+    // Códigos de mesa ocupados en la franja que ocuparía esta reserva.
+    const ocupados = new Set<string>();
+    for (const r of reservasResueltas) {
+      if (r.id === selectedReserva.id) continue;
+      if (r.fecha !== fechaEdit) continue;
+      if (ESTADOS_NO_OCUPANTES.includes(r.estado)) continue;
+      const codigo = (r.mesaCodigo ?? "").trim();
+      if (!codigo) continue;
+      const durOtra =
+        typeof r.duracionMinutos === "number" && r.duracionMinutos > 0
+          ? r.duracionMinutos
+          : duracion;
+      if (!franjasSolapan(horaEdit, duracion, r.hora, durOtra)) continue;
+      for (const c of codigo.split("+")) {
+        const limpio = c.trim().toUpperCase();
+        if (limpio) ocupados.add(limpio);
+      }
+    }
+
+    for (const m of mesasParaReservaAbierta) {
+      const meta = mesasMeta.get(m.id);
+      let aforo: EstadoMesaParaReserva["aforo"] = null;
+      if (meta && comensalesEdit > 0) {
+        if (comensalesEdit > meta.capacidadMax) {
+          aforo = { tipo: "excede", min: meta.capacidadMin, max: meta.capacidadMax };
+        } else if (comensalesEdit < meta.capacidadMin) {
+          aforo = { tipo: "insuficiente", min: meta.capacidadMin, max: meta.capacidadMax };
+        }
+      }
+      out.set(m.id, {
+        ocupada: ocupados.has(m.codigo.toUpperCase()),
+        aforo,
+      });
+    }
+    return out;
+  }, [
+    selectedReserva,
+    reservasResueltas,
+    mesasParaReservaAbierta,
+    mesasMeta,
+    cfgReservas,
+    fechaEdit,
+    horaEdit,
+    comensalesEdit,
+  ]);
 
   /**
    * Mesas que hay que resaltar en el plano por el hover de la lista. Se parte
@@ -3083,22 +3663,63 @@ export function ReservasView() {
       return !zonaId || zonasOK.has(zonaId);
     });
   }, [mesas, zonasSalaActual, mesasMeta]);
-  const capacidadTotal = mesasActivas.reduce((s, m) => s + m.capacidad, 0);
-  // Los contadores de arriba van SIEMPRE en función del filtro: si el usuario
-  // desmarca estados, zonas u origen, o busca un cliente, el total refleja lo
-  // que está viendo. Antes se calculaban sobre el turno entero y el número no
-  // se movía al filtrar.
-  // Sobre esa base solo se descuentan los que NO asisten (canceladas/no-show):
-  // una LIBERADA soltó la mesa, pero el cliente vino y comió, así que cuenta.
-  const reservasContables = reservasFiltradas.filter(
-    r => !ESTADOS_NO_ASISTEN.includes(r.estado),
+
+  /**
+   * Mesas del PLANO entero: todas las de todas las zonas de todas las salas que
+   * el plano seleccionado incluye dentro del local activo. Es la base de los
+   * indicadores de arriba, que son globales del plano+local y por tanto NO se
+   * mueven al cambiar de sala ni de zona: solo al cambiar de plano o de local.
+   */
+  const mesasPlano = useMemo(() => {
+    const activas = mesas.filter((m) => m.activa);
+    const salasOK = new Set(salasLocal.map((s) => s.id));
+    const zonasOK = new Set(
+      zonasReales.filter((z) => salasOK.has(z.salaId)).map((z) => z.id),
+    );
+    if (zonasOK.size === 0) return activas;
+    return activas.filter((m) => {
+      const zonaId = mesasMeta.get(m.id)?.zonaId;
+      // Sin metadatos de zona no la escondemos: mejor contarla que perderla.
+      return !zonaId || zonasOK.has(zonaId);
+    });
+  }, [mesas, salasLocal, zonasReales, mesasMeta]);
+
+  const capacidadTotal = mesasPlano.reduce((s, m) => s + m.capacidad, 0);
+
+  /**
+   * Reservas del día y turno que caen dentro del PLANO+LOCAL visible. La carga
+   * trae las reservas de toda la empresa, así que se acotan por mesa: si la
+   * reserva está sentada en una mesa que no pertenece a este plano, es de otro
+   * sitio y no cuenta. Las que aún no tienen mesa asignada sí cuentan: son
+   * reservas del día que están por colocar.
+   */
+  const reservasTurnoPlano = useMemo(() => {
+    const idsPlano = new Set(mesasPlano.map((m) => m.id));
+    return reservasTurno.filter((r) => !r.mesaId || idsPlano.has(r.mesaId));
+  }, [reservasTurno, mesasPlano]);
+
+  /**
+   * Base de los indicadores superiores: TODAS las reservas del plano+local, sin
+   * aplicar los filtros de zona, estado, origen ni búsqueda, porque el
+   * indicador representa el plano completo y no lo que se esté mirando.
+   *
+   * Solo se descuentan las que NO asisten (canceladas y no-show): una LIBERADA
+   * soltó la mesa, pero el cliente vino y comió, así que cuenta.
+   */
+  const reservasContables = useMemo(
+    () => reservasTurnoPlano.filter(r => !ESTADOS_NO_ASISTEN.includes(r.estado)),
+    [reservasTurnoPlano],
   );
   const cubiertosReservados = reservasContables.reduce((s, r) => s + r.comensales, 0);
-  const mesasOcupadas = new Set(
-    reservasFiltradas
-      .filter(r => r.mesaId && !ESTADOS_NO_OCUPANTES.includes(r.estado))
-      .map(r => r.mesaId),
-  ).size;
+  const mesasOcupadas = useMemo(
+    () =>
+      new Set(
+        reservasTurnoPlano
+          .filter(r => r.mesaId && !ESTADOS_NO_OCUPANTES.includes(r.estado))
+          .map(r => r.mesaId),
+      ).size,
+    [reservasTurnoPlano],
+  );
 
   // Índice mesaId → reservas activas del turno. Se rehace solo si cambia `reservasTurno`,
   // evitando un O(N×M) en cada render (antes hacíamos un `.filter()` por cada mesa).
@@ -3150,7 +3771,7 @@ export function ReservasView() {
       // esa mesa mientras tanto. Ese caso se muestra como aviso de peligro
       // persistente (no un toast que se va) porque hay que recolocar a alguien.
       const msg = res.error ?? "Error al actualizar reserva";
-      if (/ya tiene una reserva/i.test(msg)) setAvisoOcupada(msg);
+      if (/ya tiene una reserva/i.test(msg)) setAvisoOcupada({ mensaje: msg });
       else toast.error(msg);
       loadReservas(fecha);
     }
@@ -3190,7 +3811,7 @@ export function ReservasView() {
     } else {
       // Ampliar el tiempo puede pisar a la reserva que entró detrás.
       const msg = res.error ?? "No se pudo guardar el tiempo de mesa";
-      if (/ya tiene una reserva/i.test(msg)) setAvisoOcupada(msg);
+      if (/ya tiene una reserva/i.test(msg)) setAvisoOcupada({ mensaje: msg });
       else toast.error(msg);
     }
   };
@@ -3226,7 +3847,7 @@ export function ReservasView() {
 
     if (!res.ok) {
       const msg = res.error ?? "No se pudo guardar el cambio.";
-      if (/ya tiene una reserva/i.test(msg)) setAvisoOcupada(msg);
+      if (/ya tiene una reserva/i.test(msg)) setAvisoOcupada({ mensaje: msg });
       else toast.error(msg);
       setFechaEdit(selectedReserva?.fecha ?? "");
       setHoraEdit(selectedReserva?.hora.slice(0, 5) ?? "");
@@ -3300,6 +3921,46 @@ export function ReservasView() {
    * campos, y el cambio se propaga a la ficha del cliente y a todas sus
    * reservas: el mismo cliente no puede quedar con dos teléfonos distintos.
    */
+  const guardarMesasReserva = async (
+    id: string,
+    codigoMesas: string,
+    forzar: boolean,
+  ) => {
+    const res = await updateReserva(id, {
+      mesa: codigoMesas,
+      localId: localId || null,
+      forzarSolape: forzar,
+    });
+    if (!res.ok) {
+      const msg = res.error ?? "No se pudieron guardar las mesas.";
+      if (/ya tiene una reserva/i.test(msg)) {
+        // Reasignar mesa SÍ se puede forzar: el usuario ya vio el ⏰ en el
+        // desplegable y aquí se le dice con qué reserva choca. Si acepta, se
+        // repite la misma llamada saltando el bloqueo de solape.
+        setAvisoOcupada({
+          mensaje: msg,
+          forzar: forzar
+            ? undefined
+            : () => void guardarMesasReserva(id, codigoMesas, true),
+        });
+      } else toast.error(msg);
+      return;
+    }
+    toast.success(
+      codigoMesas
+        ? `Mesas de la reserva: ${codigoMesas.split("+").join(" + ")}`
+        : "Reserva sin mesa asignada",
+    );
+    setShowEditorMesas(false);
+    setActividadVersion((v) => v + 1);
+    // Recarga completa: el servidor recalcula la zona a partir de la mesa, y el
+    // plano tiene que repintar tanto las mesas que se sueltan como las nuevas.
+    loadReservas(fecha);
+    setSelectedReserva((prev) =>
+      prev && prev.id === id ? { ...prev, mesaCodigo: codigoMesas } : prev,
+    );
+  };
+
   const guardarDatosCliente = async (id: string) => {
     if (!clienteEdit.nombre.trim()) {
       toast.error("El nombre es obligatorio.");
@@ -3390,6 +4051,25 @@ export function ReservasView() {
     }
   };
 
+  /**
+   * "Abrir salón" desde la ficha: enseña el plano de la sala DONDE ESTÁ la
+   * mesa de la reserva, no la que hubiera en pantalla.
+   *
+   * Un local puede tener varias salas y la ficha se abre desde el listado, que
+   * las mezcla: sin este salto, una reserva de la terraza se editaría sobre el
+   * plano del comedor y sus mesas no aparecerían por ningún lado.
+   */
+  const abrirEditorMesas = (r: Reserva) => {
+    const primerCodigo = (r.mesaCodigo ?? "").split("+")[0]?.trim().toUpperCase();
+    const mesaId = primerCodigo ? mesaIdPorCodigo.get(primerCodigo) : r.mesaId;
+    const zonaId = mesaId ? mesasMeta.get(mesaId)?.zonaId : null;
+    const salaId = zonaId ? zonasReales.find((z) => z.id === zonaId)?.salaId : null;
+    // Sin mesa (o sin poder resolverla) se abre la sala que ya se está viendo:
+    // es donde el usuario está mirando y sigue pudiendo elegir mesa a mano.
+    if (salaId && salaId !== salaActualId) setSalaActualId(salaId);
+    setShowEditorMesas(true);
+  };
+
   // "Nueva" desde el popover de mesa: deja la mesa preseleccionada y abre el
   // formulario de Nueva reserva.
   const abrirNuevaConMesa = (m: Mesa) => {
@@ -3478,7 +4158,7 @@ export function ReservasView() {
       setGuardandoDesplazar(false);
       if (!res.ok) {
         const msg = res.error ?? "No se pudo desplazar la reserva";
-        if (/ya tiene una reserva/i.test(msg)) setAvisoOcupada(msg);
+        if (/ya tiene una reserva/i.test(msg)) setAvisoOcupada({ mensaje: msg });
         else toast.error(msg);
         return;
       }
@@ -3530,22 +4210,31 @@ export function ReservasView() {
     [reservaADesplazar, mesasBloqueadasIds, cfgReservas, aplicarDesplazamiento],
   );
 
+  /**
+   * "Desbloquear" desde el plano. La acción de servidor decide qué hacer con el
+   * bloqueo de fondo: si era puntual de este día para esta mesa lo borra (y así
+   * desaparece también de Configuración → Bloqueos, que antes se quedaba con un
+   * bloqueo fantasma), y si era recurrente lo levanta solo para hoy.
+   */
   const handleQuitarBloqueoMesa = useCallback(
     async (m: Mesa) => {
       if (!localId) return;
-      const turnoExcep: "COMIDA" | "CENA" =
-        turno === "COMIDA" ? "COMIDA" : "CENA";
-      const r = await crearBloqueoExcepcion({
+      const turnoActual: "COMIDA" | "CENA" = turno === "COMIDA" ? "COMIDA" : "CENA";
+      const r = await quitarBloqueoMesa({
         localId,
         fecha,
-        turno: turnoExcep,
+        turno: turnoActual,
         mesaId: m.id,
       });
       if (!r.ok) {
         toast.error(r.error ?? "No se pudo quitar el bloqueo");
         return;
       }
-      toast.success(`Mesa ${m.codigo} desbloqueada solo para hoy (${turnoExcep === "COMIDA" ? "comida" : "cena"})`);
+      toast.success(
+        r.soloHoy
+          ? `Mesa ${m.codigo} desbloqueada solo para este día`
+          : `Mesa ${m.codigo} desbloqueada`,
+      );
       setBloqueosRefresh((n) => n + 1);
     },
     [localId, fecha, turno],
@@ -3584,9 +4273,11 @@ export function ReservasView() {
     >
       {/* TOP BAR — todo en una sola línea: acciones + filtros + turno + sala/zonas + vista + fecha + ajustes */}
       <div className="shrink-0 border-b bg-card px-2 py-1.5 flex items-center gap-1.5 flex-wrap">
-        {/* Acciones: NUEVA · Lista espera · Estados · Buscar — solo en vista día */}
-        {vista === "dia" && (
-        <div className="flex items-center gap-1.5">
+        {/* Acciones: NUEVA · Lista espera · Estados · Buscar — solo en vista día.
+            En vista mes el bloque se oculta pero NO se colapsa: mantiene su
+            hueco para que el resto de controles no cambie de sitio entre
+            pantallas (misma alineación en día y en mes). */}
+        <div className={cn("flex items-center gap-1.5", vista !== "dia" && "invisible pointer-events-none")} aria-hidden={vista !== "dia"} inert={vista !== "dia"}>
           <Dialog
             open={showNueva}
             onOpenChange={(v) => {
@@ -3611,12 +4302,17 @@ export function ReservasView() {
                 mesas={mesas}
                 mesasMeta={mesasMeta}
                 localId={localId}
+                empresaId={empresaActual.id}
                 getEstadoMesa={getMesaEstadoTurno}
                 onClose={() => setShowNueva(false)}
                 onSave={async r => {
                   setReservas(prev => [...prev, r]);
                   setShowNueva(false);
-                  const mesaCodigo = r.mesaId ? mesas.find(m => m.id === r.mesaId)?.codigo : undefined;
+                  // La mesa puede venir por id (elegida en el desplegable) o
+                  // por código (propuesta automática aceptada: unión u otra sala).
+                  const mesaCodigo = r.mesaId
+                    ? mesas.find(m => m.id === r.mesaId)?.codigo
+                    : (r.mesaCodigo ?? undefined);
                   const res = await createReserva({
                     clienteNombre: r.cliente || "WALK IN",
                     clienteApellidos: r.apellidos || undefined,
@@ -3643,12 +4339,15 @@ export function ReservasView() {
                   });
                   setSelectedMesa(null);
                   if (res.ok) {
-                    toast.success("Reserva creada");
                     loadReservas(fecha);
+                    // El correo solo sale si se eligió "Notificar y confirmar":
+                    // en las dos rutas la reserva queda confirmada igual.
                     if (r.notificarEmail && r.email && res.id) {
                       const notif = await notificarReservaCreadaPorEmail(res.id);
-                      if (notif.ok) toast.success("Notificación enviada al cliente");
-                      else toast.error(`No se pudo notificar: ${notif.error ?? "error desconocido"}`);
+                      if (notif.ok) toast.success("Reserva confirmada y cliente notificado");
+                      else toast.error(`Reserva confirmada, pero no se pudo notificar: ${notif.error ?? "error desconocido"}`);
+                    } else {
+                      toast.success("Reserva confirmada");
                     }
                   } else {
                     // Revertir el optimistic update: si el servidor rechaza
@@ -3722,21 +4421,19 @@ export function ReservasView() {
           </Dialog>
           <FiltroEstadosDropdown
             seleccionados={filtroEstados}
-            onChange={(next) => {
-              filtroEstadosTouched.current = true;
-              setFiltroEstados(next);
-            }}
+            onChange={setFiltroEstados}
           />
           <div className="relative w-[150px]">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
             <Input placeholder="Buscar..." className="pl-8 h-8 text-xs" value={busqueda} onChange={e => setBusqueda(e.target.value)} />
           </div>
         </div>
-        )}
 
-        {/* Turno + capacidad — solo en vista día */}
-        {vista === "dia" && (
-        <div className="flex gap-1 items-center">
+        {/* Turno + capacidad — solo en vista día; en mes conserva el hueco.
+            Los dos contadores son GLOBALES del plano y del local: suman todas
+            las zonas de todas las salas, así que no se mueven al cambiar de
+            sala ni de zona, solo al cambiar de plano o de local. */}
+        <div className={cn("flex gap-1 items-center", vista !== "dia" && "invisible pointer-events-none")} aria-hidden={vista !== "dia"} inert={vista !== "dia"}>
           {(["COMIDA", "CENA"] as const).map(t => (
             <Button key={t} size="sm" variant={turno === t ? "default" : "outline"} className={cn("text-xs h-8 px-2.5", turno === t && "font-bold")} onClick={() => setTurno(t)}>
               {t}
@@ -3744,7 +4441,7 @@ export function ReservasView() {
           ))}
           <div
             className="ml-1 inline-flex items-center gap-2.5 h-8 px-2.5 rounded-md border border-input bg-background text-xs font-semibold"
-            title={`${turno === "COMIDA" ? "Comida" : "Cena"} · ${fecha}`}
+            title={`${turno === "COMIDA" ? "Comida" : "Cena"} · ${fecha} · total del plano completo`}
           >
             <span className="inline-flex items-center gap-1.5">
               <Users className="h-3.5 w-3.5 text-muted-foreground" />
@@ -3756,34 +4453,44 @@ export function ReservasView() {
               <LayoutGrid className="h-3.5 w-3.5 text-muted-foreground" />
               <span className="tabular-nums">{mesasOcupadas}</span>
               <span className="text-muted-foreground">/</span>
-              <span className="tabular-nums">{mesasActivas.length}</span>
+              <span className="tabular-nums">{mesasPlano.length}</span>
             </span>
           </div>
         </div>
-        )}
 
-        {/* Selector de Local + Plano + Sala + filtro de Zonas — solo en vista día */}
-        {vista === "dia" && (
-        <div className="flex items-center gap-1.5">
+        {/* Selector de Local + Plano + Sala + filtro de Zonas — solo en vista
+            día; en mes conserva el hueco (los totales del mes son globales y
+            no dependen de local, plano, sala ni zona). */}
+        <div className={cn("flex items-center gap-1.5", vista !== "dia" && "invisible pointer-events-none")} aria-hidden={vista !== "dia"} inert={vista !== "dia"}>
           <FiltroLocalesDropdown locales={locales} localActualId={localId} onSelect={setLocalId} />
           <FiltroPlanosDropdown planos={planosLocal} planoActualId={planoActualId} onSelect={setPlanoActualId} />
           <FiltroSalasDropdown salas={salasLocal} salaActualId={salaActualId} onSelect={setSalaActualId} />
           <FiltroZonasDropdown items={zonaItems} seleccionados={zonaIdsSel} onChange={setZonaIdsSel} />
         </div>
-        )}
 
         <div className="flex items-center gap-1.5">
-          {/* KPI totales del mes (solo en vista mes) */}
+          {/* Indicadores globales del mes (solo en vista mes). Suman TODA la
+              operativa: todos los locales, planos, salas y zonas. */}
           {vista === "mes" && (
-            <div className="hidden md:inline-flex items-center gap-2.5 h-8 px-2.5 rounded-md border border-input bg-background text-xs font-semibold">
-              <span className="inline-flex items-center gap-1.5">
-                <Users className="h-3.5 w-3.5 text-muted-foreground" />
-                <span className="tabular-nums">{totalesMes.personas}</span>
-              </span>
-              <span className="inline-flex items-center gap-1.5">
-                <LayoutGrid className="h-3.5 w-3.5 text-muted-foreground" />
-                <span className="tabular-nums">{totalesMes.reservas}</span>
-              </span>
+            <div className="hidden md:flex items-center gap-1.5">
+              <KpiTurnoMes
+                icono={<Sun className="h-3.5 w-3.5 text-amber-500" />}
+                titulo="Comidas"
+                personas={totalesMes.comida.personas}
+                reservas={totalesMes.comida.reservas}
+              />
+              <KpiTurnoMes
+                icono={<Moon className="h-3.5 w-3.5 text-indigo-400" />}
+                titulo="Cenas"
+                personas={totalesMes.cena.personas}
+                reservas={totalesMes.cena.reservas}
+              />
+              <KpiTurnoMes
+                icono={<CalendarDays className="h-3.5 w-3.5 text-muted-foreground" />}
+                titulo="Mes"
+                personas={totalesMes.personas}
+                reservas={totalesMes.reservas}
+              />
             </div>
           )}
           {/* Toggle vista: icono + texto de la vista OPUESTA — al pulsarlo cambias a ella */}
@@ -3799,7 +4506,9 @@ export function ReservasView() {
           {vista === "mes" ? (
             <div className="flex items-center gap-0.5">
               <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setFecha(addMonths(fecha, -1))}><ChevronLeft className="h-4 w-4" /></Button>
-              <Button variant="outline" size="sm" className="text-xs h-8 w-[130px] justify-center font-medium uppercase px-2.5">{formatMes(fecha)}</Button>
+              {/* Mismo ancho que el selector de día para que las flechas queden
+                  en idéntica posición al cambiar de pantalla. */}
+              <Button variant="outline" size="sm" className="text-xs h-8 w-[150px] justify-center font-medium uppercase px-2.5">{formatMes(fecha)}</Button>
               <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setFecha(addMonths(fecha, 1))}><ChevronRight className="h-4 w-4" /></Button>
             </div>
           ) : (
@@ -3857,6 +4566,10 @@ export function ReservasView() {
           fechaSeleccionada={fecha}
           aforoPorTurno={capacidadTotal}
           hideHeader
+          // Al volver de Configuración este contador sube, y con él se releen
+          // el patrón de apertura y las excepciones: el calendario refleja al
+          // instante cualquier cambio de horarios.
+          refreshKey={posicionesRefresh}
           onTotalesChange={setTotalesMes}
           onDayClick={(iso) => {
             setFecha(iso);
@@ -3916,6 +4629,12 @@ export function ReservasView() {
                         "w-full text-[13px] border-b hover:bg-muted/40 text-left transition-colors",
                         LISTA_GRID,
                         "px-3 py-3",
+                        // Lista de espera: el recuadro ENTERO en azul claro, no
+                        // solo el punto de estado. Se mantiene aunque ya tenga
+                        // mesa asignada, porque hasta que no cambia de estado
+                        // sigue siendo alguien esperando.
+                        r.estado === "LISTA_ESPERA" &&
+                          "bg-sky-500/10 hover:bg-sky-500/15",
                         // El mismo recuadro rojo que marca la seleccion sirve
                         // para el hover: fila y mesa se encienden a la vez.
                         (selectedReserva?.id === r.id || reservaHoverId === r.id) &&
@@ -3969,6 +4688,13 @@ export function ReservasView() {
                         {r.telefono && (
                           <span className="truncate text-[10px] tabular-nums text-muted-foreground">
                             {r.telefono}
+                          </span>
+                        )}
+                        {/* Adelanto del comentario: se lee el principio sin
+                            abrir nada. Si no cabe, se corta con "...". */}
+                        {r.observaciones && r.observaciones.trim() && (
+                          <span className="truncate text-[10px] italic text-muted-foreground/80">
+                            {r.observaciones.trim()}
                           </span>
                         )}
                       </span>
@@ -4264,10 +4990,26 @@ export function ReservasView() {
           setShowDetalleReserva(v);
         }}
       >
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader><DialogTitle>Detalle de reserva</DialogTitle></DialogHeader>
+        {/* Ventana ESTÁTICA: la caja no se mueve ni se estira con el
+            contenido. Antes crecía hacia abajo y había que arrastrarla entera
+            para llegar al estado o a las etiquetas; ahora el marco queda
+            quieto en pantalla y, si algún bloque largo (correos, actividad) no
+            cabe, se desplaza solo ese bloque dentro de su columna. */}
+        <DialogContent className="flex h-[88vh] max-w-5xl flex-col overflow-hidden p-4 gap-3 sm:rounded-lg">
+          <DialogHeader className="shrink-0 pb-1">
+            <DialogTitle className="text-base">Detalle de reserva</DialogTitle>
+          </DialogHeader>
+          {/* El marco NO se desplaza: quien se desplaza, si hace falta, es cada
+              columna por dentro. Con scroll también en el contenedor salían dos
+              barras anidadas y la ventana volvía a "moverse" al usarla.
+
+              En columna en vez de rejilla porque las tres bandas se comportan
+              distinto: el aviso de vinculación y las etiquetas miden lo que
+              ocupan, y las dos columnas se reparten todo lo que sobra. Con
+              filas de rejilla fijas, la banda no declarada (el aviso solo
+              aparece a veces) descuadraba el reparto. */}
           {selectedReserva && (
-            <div className="grid gap-6 text-sm md:grid-cols-2">
+            <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden text-sm">
 
               {/* Vinculación pendiente de revisar: va lo primero y a lo ancho
                   de las dos columnas. Es lo más importante de esta ficha —los
@@ -4284,6 +5026,8 @@ export function ReservasView() {
                 />
               </div>
 
+              {/* Banda central: las dos columnas, que son lo que crece. */}
+              <div className="grid min-h-0 flex-1 gap-3 md:grid-cols-2">
               {/* ── Columna izquierda: la reserva ─────────────────────────
                   Las dos mitades van sobre fondos distintos porque cuentan
                   cosas distintas: a la izquierda lo que le pasa a ESTA reserva
@@ -4291,11 +5035,11 @@ export function ReservasView() {
                   la persona, que sigue existiendo entre reserva y reserva. Sin
                   esa separacion las dos "Etiquetas" y las dos "Actividad" se
                   leian como lo mismo. */}
-              <div className="space-y-3 rounded-lg border bg-muted/25 p-3">
+              <div className="flex min-h-0 flex-col gap-2 overflow-y-auto rounded-lg border bg-muted/25 p-2.5">
                 <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                   Esta reserva
                 </h3>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-2 gap-2">
                   {/* Fecha y hora editables: mover una reserva era el caso
                       más común y no se podía hacer desde aquí. */}
                   <div>
@@ -4317,16 +5061,28 @@ export function ReservasView() {
                     <Label className="text-[10px] text-muted-foreground uppercase tracking-wider">
                       Hora
                     </Label>
-                    <Input
-                      type="time"
-                      className="h-8 text-sm font-medium"
-                      disabled={guardandoCuando}
+                    {/* Cuartos de hora, igual que al crear: aquí se podía
+                        teclear 12:07 y quedaba guardado fuera de la
+                        cuadrícula. Se guarda al elegir, sin esperar al blur:
+                        un desplegable no tiene "terminar de escribir". */}
+                    <SelectorHoraCuartos
                       value={horaEdit}
-                      onChange={(e) => setHoraEdit(e.target.value)}
-                      onBlur={() =>
-                        guardarCuando(selectedReserva.id, "hora", horaEdit)
+                      disabled={guardandoCuando}
+                      onChange={setHoraEdit}
+                      onCommit={(h) =>
+                        guardarCuando(selectedReserva.id, "hora", h)
                       }
                     />
+                    {/* Reserva anterior a esta regla (12:07 y similares): el
+                        minuto sale vacío porque no existe esa opción. No se
+                        toca sola —cambiar la hora de una reserva ajena sin
+                        avisar es peor— pero se dice qué pasa y qué hacer. */}
+                    {!esHoraEnCuarto(horaEdit) && (
+                      <p className="pt-1 text-[10px] text-amber-700 dark:text-amber-300">
+                        Estaba guardada a las {selectedReserva.hora.slice(0, 5)}. Elige
+                        un minuto (:00, :15, :30 o :45) para dejarla en hora válida.
+                      </p>
+                    )}
                   </div>
                   {/* El turno NO se elige: sale de la hora. Se enseña para que
                       se vea en qué mapa cae, pero no es un campo que se toque. */}
@@ -4340,22 +5096,86 @@ export function ReservasView() {
                     <Label className="text-[10px] text-muted-foreground uppercase tracking-wider">
                       Comensales
                     </Label>
-                    <NumberInput
-                      min={1}
-                      emptyValue={1}
-                      decimales={false}
-                      className="h-8 text-sm font-medium"
+                    {/* Desplegable con el tope de Configuración → Límites
+                        ("tamaño máximo por reserva"), igual que al crear: el
+                        campo libre dejaba escribir grupos que la empresa no
+                        acepta. Una reserva que ya tenga más gente conserva su
+                        opción para no perder el dato al abrir la ficha. */}
+                    <Select
+                      value={String(comensalesEdit)}
                       disabled={guardandoComensales}
-                      value={comensalesEdit}
-                      onValueChange={(n) => setComensalesEdit(n)}
-                      onBlur={() =>
-                        guardarComensales(selectedReserva.id, comensalesEdit)
-                      }
-                    />
+                      onValueChange={(v) => {
+                        const n = Number(v);
+                        setComensalesEdit(n);
+                        guardarComensales(selectedReserva.id, n);
+                      }}
+                    >
+                      <SelectTrigger className="h-8 text-sm font-medium">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {opcionesComensalesEdit.map((n) => (
+                          <SelectItem key={n} value={String(n)}>
+                            {n} {n === 1 ? "persona" : "personas"}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                   <Field label="Zona">{zonaLabel(selectedReserva.zona ? String(selectedReserva.zona) : null)}</Field>
-                  <Field label="Mesa">{mesas.find(m => m.id === selectedReserva.mesaId)?.codigo ?? "Sin asignar"}</Field>
+                  {/* Mesa EDITABLE. Antes era solo lectura y para moverla
+                      había que abrir el salón, aunque el cambio fuese "pásala
+                      a la 12". El desplegable trae todas las mesas del local
+                      con su diagnóstico (✅ / ⏰ / 👥), así que se ve cuál
+                      sirve antes de elegirla.
+
+                      Una reserva sobre una UNIÓN ("M1+M2") no se toca desde
+                      aquí: el desplegable da una sola mesa y elegir una
+                      soltaría la otra sin decirlo. Para eso está el salón. */}
+                  <div className="col-span-2">
+                    <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                      Mesa
+                    </Label>
+                    {esReservaUnion ? (
+                      <p className="text-sm font-medium">
+                        {(selectedReserva.mesaCodigo ?? "")
+                          .split("+")
+                          .map((c) => c.trim())
+                          .join(" + ")}{" "}
+                        <span className="text-[10px] font-normal text-muted-foreground">
+                          (unión: cámbiala desde el salón)
+                        </span>
+                      </p>
+                    ) : (
+                      <SelectorMesaConAvisos
+                        value={mesaIdReservaAbierta}
+                        onChange={(mesaId) => {
+                          const m = mesas.find((x) => x.id === mesaId);
+                          guardarMesasReserva(
+                            selectedReserva.id,
+                            m ? m.codigo : "",
+                            false,
+                          );
+                        }}
+                        mesas={mesasParaReservaAbierta}
+                        estadoPorMesa={estadoMesasReservaAbierta}
+                        placeholder="— Sin asignar —"
+                      />
+                    )}
+                  </div>
                 </div>
+                {/* Reasignar mesas a mano: abre el salón con las de la reserva
+                    ya marcadas en rojo y deja añadir o quitar las que haga
+                    falta cuando el grupo crece o mengua. */}
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-8 w-full gap-1.5 text-xs"
+                  onClick={() => abrirEditorMesas(selectedReserva)}
+                >
+                  <MapIcon className="h-3.5 w-3.5" />
+                  Abrir salón (unir mesas)
+                </Button>
                 <div className="flex items-center gap-2">
                   <Label className="text-muted-foreground text-xs">Estado actual</Label>
                   <ReservaEstadoBadge estado={selectedReserva.estado} />
@@ -4395,25 +5215,18 @@ export function ReservasView() {
                       );
                     }
                     const fin = horaMasMinutos(selectedReserva.hora, efectiva);
-                    const def = cfgReservas?.duracionReservaMin;
+                    // Solo la consecuencia práctica: hasta qué hora queda
+                    // ocupada la mesa. Cuál es el valor por defecto de la
+                    // empresa se consulta en la configuración, no hace falta
+                    // repetirlo en cada ficha.
                     return (
-                      <>
-                        <p className="text-[10px] text-muted-foreground">
-                          Ocupa la mesa hasta las {fin}.
-                          {def != null && <span className="align-super">*</span>}
-                        </p>
-                        {def != null && (
-                          <p className="pt-1 text-[10px] text-muted-foreground/80">
-                            <span className="align-super">*</span> Por defecto{" "}
-                            {formatearDuracionReserva(def)}, según lo configurado en
-                            ajustes.
-                          </p>
-                        )}
-                      </>
+                      <p className="text-[10px] text-muted-foreground">
+                        Ocupa la mesa hasta las {fin}.
+                      </p>
                     );
                   })()}
                 </div>
-                {selectedReserva.observaciones && <Field label="Observaciones">{selectedReserva.observaciones}</Field>}
+                {selectedReserva.observaciones && <Field label="Comentarios">{selectedReserva.observaciones}</Field>}
                 {/* Cuándo se PIDIÓ la mesa, que no es cuándo es la reserva: dice
                     con cuánta antelación llegó. Informativo, nunca editable.
                     Se pinta en la zona de la empresa, no en la del navegador de
@@ -4443,20 +5256,6 @@ export function ReservasView() {
                   <ReservaFlagsChips reserva={selectedReserva} insights={selectedInsights} size="md" />
                   <ReservaExternalBadge reserva={selectedReserva} />
                 </div>
-                <div className="pt-2 border-t space-y-1.5">
-                  {/* "de la reserva" en el titulo: el cliente tiene sus PROPIAS
-                      etiquetas en su columna, y sin apellido las dos se leian
-                      como la misma cosa. */}
-                  <Label className="text-muted-foreground text-xs">
-                    Etiquetas de la reserva
-                  </Label>
-                  <EtiquetasPanel
-                    scope="reserva"
-                    entityId={selectedReserva.id}
-                    clienteVinculadoId={selectedReserva.clienteId ?? null}
-                  />
-                </div>
-
                 {/* Correos y actividad de ESTA reserva: viven en la columna de
                     la reserva, que es de lo que hablan. Antes estaban en la del
                     cliente y parecian suyos. */}
@@ -4492,7 +5291,7 @@ export function ReservasView() {
               </div>
 
               {/* ── Columna derecha: el cliente ─────────────────────────── */}
-              <div className="space-y-3 rounded-lg border border-sky-500/25 bg-sky-500/[0.06] p-3">
+              <div className="flex min-h-0 flex-col gap-2 overflow-y-auto rounded-lg border border-sky-500/25 bg-sky-500/[0.06] p-2.5">
                 <h3 className="text-xs font-semibold uppercase tracking-wide text-sky-700 dark:text-sky-300">
                   Ficha del cliente
                 </h3>
@@ -4567,19 +5366,6 @@ export function ReservasView() {
                     reserva. Un walk-in sin ficha no tiene actividad de cliente. */}
                 {selectedReserva.clienteId && (
                   <>
-                    {/* Etiquetas DE LA PERSONA (alergias, VIP, moroso...): le
-                        acompanan en todas sus reservas, a diferencia de las de
-                        la reserva, que valen solo para esa noche. */}
-                    <div className="pt-2 border-t border-sky-500/20 space-y-1.5">
-                      <Label className="text-muted-foreground text-xs">
-                        Etiquetas del cliente
-                      </Label>
-                      <EtiquetasPanel
-                        scope="cliente"
-                        entityId={selectedReserva.clienteId}
-                        clienteVinculadoId={selectedReserva.clienteId}
-                      />
-                    </div>
                     <div className="pt-2 border-t border-sky-500/20">
                       <ActividadCliente
                         key={`${selectedReserva.clienteId}-${actividadVersion}`}
@@ -4590,21 +5376,89 @@ export function ReservasView() {
                 )}
 
               </div>
-
-              {/* Guardar: abajo del todo y a lo ancho de las dos columnas.
-                  `pb-28` por la regla de no tapar el chat flotante. */}
-              <div className="md:col-span-2 flex justify-end border-t pt-4 pb-28">
-                <Button
-                  disabled={guardandoCliente}
-                  onClick={() => guardarDatosCliente(selectedReserva.id)}
-                >
-                  Guardar
-                </Button>
               </div>
+
+              {/* ── Etiquetas, las dos a la misma altura ─────────────────
+                  Antes cada panel colgaba del final de su columna, y como las
+                  columnas no miden lo mismo aparecían a alturas distintas: las
+                  de la reserva a media ventana y las del cliente mucho más
+                  abajo. En su propia banda, fuera de las columnas, quedan
+                  siempre enfrentadas y sus chips se leen en línea. */}
+              <div className="grid shrink-0 gap-3 md:grid-cols-2">
+                <div className="space-y-1.5 rounded-lg border bg-muted/25 p-2.5">
+                  {/* "de la reserva" en el título: el cliente tiene sus PROPIAS
+                      etiquetas al lado, y sin apellido las dos se leían como la
+                      misma cosa. */}
+                  <Label className="text-muted-foreground text-xs">
+                    Etiquetas de la reserva
+                  </Label>
+                  <EtiquetasPanel
+                    scope="reserva"
+                    entityId={selectedReserva.id}
+                    clienteVinculadoId={selectedReserva.clienteId ?? null}
+                  />
+                </div>
+                {/* Etiquetas DE LA PERSONA (alergias, VIP, moroso…): le
+                    acompañan en todas sus reservas, a diferencia de las de la
+                    reserva, que valen solo para esa noche. Un walk-in sin ficha
+                    no tiene ninguna, pero el hueco se mantiene para que el
+                    panel de la izquierda no se descoloque. */}
+                <div className="space-y-1.5 rounded-lg border border-sky-500/25 bg-sky-500/[0.06] p-2.5">
+                  <Label className="text-muted-foreground text-xs">
+                    Etiquetas del cliente
+                  </Label>
+                  {selectedReserva.clienteId ? (
+                    <EtiquetasPanel
+                      scope="cliente"
+                      entityId={selectedReserva.clienteId}
+                      clienteVinculadoId={selectedReserva.clienteId}
+                    />
+                  ) : (
+                    <p className="text-[10px] text-muted-foreground">
+                      Esta reserva no tiene ficha de cliente.
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+          {/* Guardar: fijo al pie de la ventana, fuera del área que se
+              desplaza. Con la caja quieta ya no hay que bajar a buscarlo. */}
+          {selectedReserva && (
+            <div className="flex justify-end border-t pt-3">
+              <Button
+                disabled={guardandoCliente}
+                onClick={() => guardarDatosCliente(selectedReserva.id)}
+              >
+                Guardar
+              </Button>
             </div>
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Salón para reasignar mesas a mano. Se monta solo con la ficha abierta:
+          las mesas y el plano que enseña son los de la sala que hay en pantalla. */}
+      {selectedReserva && (
+        <EditorMesasReserva
+          // Remonta al abrir y al cambiar de reserva: la selección de mesas
+          // siempre empieza en las que la reserva tiene grabadas ahora mismo.
+          key={`${selectedReserva.id}-${showEditorMesas}`}
+          abierto={showEditorMesas}
+          onCerrar={() => setShowEditorMesas(false)}
+          reserva={selectedReserva}
+          mesas={mesasActivas}
+          posiciones={posicionesPlano}
+          mesasMeta={mesasMeta}
+          zonas={zonasSalaActual}
+          decoraciones={decoracionesSalaActual}
+          esOscuro={esOscuro}
+          getReservasMesa={getReservasMesa}
+          onValidar={(codigo, forzar) =>
+            guardarMesasReserva(selectedReserva.id, codigo, forzar)
+          }
+        />
+      )}
 
       {/* Editar los datos de un cliente reescribe SU ficha y todas sus reservas,
           no solo la abierta. Por eso se confirma, y la respuesta es binaria: se
@@ -4793,15 +5647,37 @@ export function ReservasView() {
           </DialogHeader>
           <div className="space-y-2 text-xs">
             <div className="rounded-md border border-amber-500/40 bg-amber-500/5 px-3 py-2">
-              {avisoOcupada}
+              {avisoOcupada?.mensaje}
             </div>
             <p className="text-muted-foreground">
-              No se ha guardado el cambio. Cambia la mesa o la hora de esta reserva, o
-              recoloca antes a la otra.
+              Aún no se ha guardado el cambio. Puedes elegir otra mesa u hora, o
+              seguir adelante: la mesa quedaría ocupada dos veces a la vez.
             </p>
           </div>
-          <div className="flex justify-end">
-            <Button size="sm" onClick={() => setAvisoOcupada(null)}>Entendido</Button>
+          {/* Manda el local, pero informado: el ⏰ ya avisaba en el desplegable
+              y aquí se dice con qué reserva choca. Si aun así compensa (un
+              grupo que se alarga, dos turnos que se solapan diez minutos), se
+              puede forzar en vez de obligar a deshacer el cambio. */}
+          <div className="flex justify-end gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setAvisoOcupada(null)}
+            >
+              Cancelar
+            </Button>
+            {avisoOcupada?.forzar && (
+              <Button
+                size="sm"
+                onClick={() => {
+                  const accion = avisoOcupada.forzar;
+                  setAvisoOcupada(null);
+                  accion?.();
+                }}
+              >
+                Aceptar igualmente
+              </Button>
+            )}
           </div>
         </DialogContent>
       </Dialog>

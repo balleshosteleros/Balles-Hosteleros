@@ -25,7 +25,7 @@ import {
 } from "@/features/sala/actions/reservas-config-actions";
 import { LimitesReglas, type PanelPendienteHandle } from "./LimitesReglas";
 import { HorariosAperturaPanel } from "./HorariosAperturaPanel";
-import { PreferenciasMotorPanelButton } from "./PreferenciasMotorPanel";
+import { MotorWebPanel } from "./MotorWebPanel";
 import { ReglasIntervaloPanel } from "./ReglasIntervaloPanel";
 
 interface ConfigTabReservasProps {
@@ -153,12 +153,9 @@ export function ConfigTabReservas({ onDirtyChange }: ConfigTabReservasProps = {}
             ? "Tienes cambios sin guardar. Si sales ahora, se pierden."
             : "Los cambios de esta pestaña no se guardan hasta que pulses Guardar."}
         </p>
-        <div className="flex items-center gap-2">
-          <PreferenciasMotorPanelButton config={config} onChange={handleConfigChange} />
-          <Button size="sm" onClick={handleGuardar} disabled={!hayCambios || guardando}>
-            Guardar
-          </Button>
-        </div>
+        <Button size="sm" onClick={handleGuardar} disabled={!hayCambios || guardando}>
+          Guardar
+        </Button>
       </div>
 
       <HorariosAperturaPanel
@@ -379,6 +376,9 @@ export function ConfigTabReservas({ onDirtyChange }: ConfigTabReservasProps = {}
         )}
       </div>
 
+      <Separator />
+
+      <MotorWebPanel config={config} onChange={handleConfigChange} />
     </div>
   );
 }

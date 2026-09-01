@@ -22,11 +22,15 @@ import {
   type CamposObligatoriosReserva,
 } from "@/features/sala/lib/reserva-campos-obligatorios";
 import { turnoDeHora } from "@/features/sala/lib/dia-negocio";
+import {
+  RESERVA_SLOT_MIN,
+  MAX_COMENSALES_ENTRADA,
+} from "@/features/sala/data/reservas";
 
 const inputSchema = z.object({
   empresaSlug: z.string().min(1).max(120),
   fecha: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  personas: z.number().int().min(1).max(50),
+  personas: z.number().int().min(1).max(MAX_COMENSALES_ENTRADA),
 });
 
 export type ListarDisponibilidadInput = z.infer<typeof inputSchema>;
@@ -188,7 +192,6 @@ export async function listarDisponibilidadPublicaAction(
   const excepciones = (excRows ?? []) as Record<string, unknown>[];
 
   const dia = DIA_KEY[new Date(`${fecha}T00:00:00`).getDay()];
-  const intervalo = ((cfg.intervalo_reserva_min as number | null) ?? 15) || 15;
 
   // Reservas ya existentes ese día, para descontar aforo.
   const { data: reservasRows } = await admin
@@ -276,8 +279,11 @@ export async function listarDisponibilidadPublicaAction(
     );
 
     const [ini, fin] = intervaloMinutos(ventana.inicio, ventana.fin);
+    // Los huecos van siempre en 00, 15, 30 y 45: si la apertura cae a media
+    // hora rara (p. ej. 13:05) el primer pase se sube al siguiente cuarto.
+    const primero = Math.ceil(ini / RESERVA_SLOT_MIN) * RESERVA_SLOT_MIN;
     // Último pase = fin de servicio. No ofrecemos una hora a la que ya se cierra.
-    for (let m = ini; m < fin; m += intervalo) {
+    for (let m = primero; m < fin; m += RESERVA_SLOT_MIN) {
       const hora = minutosAHora(m);
       if (slotsInactivos.has(hora)) continue;
 

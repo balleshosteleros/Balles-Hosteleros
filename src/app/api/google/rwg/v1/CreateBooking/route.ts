@@ -140,7 +140,7 @@ export const POST = withMetricas("CreateBooking", async (request) => {
   const turno = deducirTurno(hora);
   const personas = data.party_size ?? data.slot.resources?.party_size ?? 2;
 
-  // 3b. Preferencias del motor (cierre web, tope personas/hora, intervalos).
+  // 3b. Motor web: grid de 15 min, cierre del día y tope de personas por hora.
   const motor = await validarMotorWebReserva(admin, {
     empresaId: merchant.empresaId,
     fecha,

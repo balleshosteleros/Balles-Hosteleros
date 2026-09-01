@@ -12,7 +12,6 @@ import {
   type EmpresaReservasConfig,
   type DiaSemanaKey,
   type TurnoKey,
-  type IntervaloReservaMin,
   type MaxPersonasHoraModo,
   type MaxPersonasReglaTramo,
 } from "@/features/sala/data/reservas";
@@ -86,9 +85,6 @@ function rowToConfig(row: Record<string, unknown>): EmpresaReservasConfig {
     parpadeoPasadoDuracion: Boolean(row.parpadeo_pasado_duracion ?? false),
     parpadeo0a15:           Boolean(row.parpadeo_0_15 ?? false),
     parpadeo15a30:          Boolean(row.parpadeo_15_30 ?? false),
-
-    intervaloReservaMin: ((row.intervalo_reserva_min as IntervaloReservaMin | null) ?? 15) as IntervaloReservaMin,
-    ocultarCanceladas:   Boolean(row.ocultar_canceladas ?? false),
   };
   for (const d of DIAS) {
     for (const t of TURNOS) {
@@ -174,8 +170,6 @@ export async function upsertReservasConfig(updates: Partial<EmpresaReservasConfi
     if ("parpadeoPasadoDuracion" in updates) db.parpadeo_pasado_duracion = updates.parpadeoPasadoDuracion;
     if ("parpadeo0a15"           in updates) db.parpadeo_0_15            = updates.parpadeo0a15;
     if ("parpadeo15a30"          in updates) db.parpadeo_15_30           = updates.parpadeo15a30;
-    if ("intervaloReservaMin"    in updates) db.intervalo_reserva_min    = updates.intervaloReservaMin;
-    if ("ocultarCanceladas"      in updates) db.ocultar_canceladas       = updates.ocultarCanceladas;
     for (const d of DIAS) {
       for (const t of TURNOS) {
         const kIni = `${d}_inicio_${t}` as const;

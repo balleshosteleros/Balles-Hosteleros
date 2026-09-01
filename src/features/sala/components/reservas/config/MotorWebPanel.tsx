@@ -3,30 +3,19 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { SelectorHoraCuartos } from "@/features/sala/components/reservas/SelectorHoraCuartos";
 import { NumberInput } from "@/shared/components/NumberInput";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetDescription,
-} from "@/components/ui/sheet";
-import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { Plus, Settings2, Trash2 } from "lucide-react";
+import { Plus, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
-  DURACION_RESERVA_DEFAULT_MINUTOS,
-  DURACION_RESERVA_OPCIONES,
-  formatearDuracionReserva,
-  INTERVALOS_RESERVA,
   MAX_PERSONAS_HORA_MODOS,
   MAX_PERSONAS_HORA_MODO_LABELS,
   type EmpresaReservasConfig,
-  type IntervaloReservaMin,
   type MaxPersonasHoraModo,
   type MaxPersonasReglaTramo,
 } from "@/features/sala/data/reservas";
@@ -52,7 +41,7 @@ function YesNo({
   description?: string;
 }) {
   return (
-    <div className="flex items-start justify-between gap-4">
+    <div className="flex items-start justify-between gap-4 max-w-2xl">
       <div className="flex-1 min-w-0">
         <Label className="text-sm font-medium">{label}</Label>
         {description ? (
@@ -83,46 +72,20 @@ function YesNo({
   );
 }
 
-export function PreferenciasMotorPanelButton({ config, onChange }: Props) {
-  const [open, setOpen] = useState(false);
+/**
+ * Comportamiento del motor web y avisos de servicio. Va al final de la pestaña
+ * "Configuración" de Reservas: no tiene visual propia (ni botón, ni panel
+ * lateral) — se guarda con el botón Guardar de la pestaña.
+ */
+export function MotorWebPanel({ config, onChange }: Props) {
   return (
-    <>
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        onClick={() => setOpen(true)}
-        className="h-8"
-      >
-        <Settings2 className="h-3.5 w-3.5 mr-1.5" />
-        Preferencias del motor
-      </Button>
-      <Sheet open={open} onOpenChange={setOpen}>
-        <SheetContent className="w-full sm:max-w-2xl overflow-y-auto">
-          <SheetHeader>
-            <SheetTitle>Preferencias del motor</SheetTitle>
-            <SheetDescription>
-              Comportamiento general de las reservas y del motor web. Los cambios
-              se guardan automáticamente.
-            </SheetDescription>
-          </SheetHeader>
-
-          <div className="mt-6 space-y-6">
-            <BloqueCerrarMotor   config={config} onChange={onChange} />
-            <Separator />
-            <BloqueMaxPersonas   config={config} onChange={onChange} />
-            <Separator />
-            <BloqueParpadeo      config={config} onChange={onChange} />
-            <Separator />
-            <BloqueDuracionMesa  config={config} onChange={onChange} />
-            <Separator />
-            <BloqueIntervalo     config={config} onChange={onChange} />
-            <Separator />
-            <BloqueOcultarCanceladas config={config} onChange={onChange} />
-          </div>
-        </SheetContent>
-      </Sheet>
-    </>
+    <div className="space-y-6">
+      <BloqueCerrarMotor config={config} onChange={onChange} />
+      <Separator />
+      <BloqueMaxPersonas config={config} onChange={onChange} />
+      <Separator />
+      <BloqueParpadeo    config={config} onChange={onChange} />
+    </div>
   );
 }
 
@@ -134,8 +97,8 @@ function BloqueCerrarMotor({ config, onChange }: Props) {
   return (
     <section className="space-y-3">
       <div>
-        <h5 className="text-sm font-semibold">Cierre del motor web</h5>
-        <p className="text-[11px] text-muted-foreground">
+        <h4 className="text-sm font-semibold">Cierre del motor web</h4>
+        <p className="text-xs text-muted-foreground -mt-0.5">
           Detiene la entrada de reservas online a partir de la hora indicada del día actual,
           separado para comida y cena.
         </p>
@@ -146,7 +109,7 @@ function BloqueCerrarMotor({ config, onChange }: Props) {
         label="Activar cierre del motor web (comida y cena por separado)"
       />
       {activo && (
-        <div className="grid grid-cols-2 gap-3 max-w-md pl-1">
+        <div className="grid grid-cols-2 gap-3 max-w-md">
           <div className="space-y-1.5">
             <Label className="text-xs">Comida — hora de cierre</Label>
             <Input
@@ -200,8 +163,8 @@ function BloqueMaxPersonas({ config, onChange }: Props) {
   return (
     <section className="space-y-3">
       <div>
-        <h5 className="text-sm font-semibold">Tope de personas en la misma hora</h5>
-        <p className="text-[11px] text-muted-foreground">
+        <h4 className="text-sm font-semibold">Tope de personas en la misma hora</h4>
+        <p className="text-xs text-muted-foreground -mt-0.5">
           Limita cuántos comensales pueden reservar en una misma franja. Útil para no saturar la
           cocina al inicio de turno.
         </p>
@@ -212,7 +175,7 @@ function BloqueMaxPersonas({ config, onChange }: Props) {
         label="Activar tope de personas en misma hora"
       />
       {activo && (
-        <div className="space-y-3 pl-1">
+        <div className="space-y-3">
           <div className="space-y-1.5 max-w-md">
             <Label className="text-xs">Modo</Label>
             <Select
@@ -261,22 +224,21 @@ function BloqueMaxPersonas({ config, onChange }: Props) {
                     className="h-8 text-xs"
                   />
                 </div>
+                {/* Cuartos: el tramo se compara con la hora de cada reserva,
+                    así que sus extremos tienen que caer en la misma cuadrícula
+                    para no dejar horas sin tope aplicable. */}
                 <div className="space-y-1">
                   <Label className="text-[11px] text-muted-foreground">Desde</Label>
-                  <Input
-                    type="time"
+                  <SelectorHoraCuartos
                     value={draft.inicio}
-                    onChange={(e) => setDraft({ ...draft, inicio: e.target.value })}
-                    className="h-8 text-xs"
+                    onChange={(h) => setDraft({ ...draft, inicio: h })}
                   />
                 </div>
                 <div className="space-y-1">
                   <Label className="text-[11px] text-muted-foreground">Hasta</Label>
-                  <Input
-                    type="time"
+                  <SelectorHoraCuartos
                     value={draft.fin}
-                    onChange={(e) => setDraft({ ...draft, fin: e.target.value })}
-                    className="h-8 text-xs"
+                    onChange={(h) => setDraft({ ...draft, fin: h })}
                   />
                 </div>
                 <Button type="button" size="sm" variant="outline" onClick={pushRegla} className="h-8">
@@ -323,12 +285,12 @@ function BloqueParpadeo({ config, onChange }: Props) {
   return (
     <section className="space-y-3">
       <div>
-        <h5 className="text-sm font-semibold">Parpadeo de reservas</h5>
-        <p className="text-[11px] text-muted-foreground">
+        <h4 className="text-sm font-semibold">Parpadeo de reservas</h4>
+        <p className="text-xs text-muted-foreground -mt-0.5">
           Resalta visualmente las reservas que requieren atención en la vista de servicio.
         </p>
       </div>
-      <div className="space-y-2.5 pl-1">
+      <div className="space-y-2.5">
         <YesNo
           value={config.parpadeoPasadoDuracion}
           onChange={(v) => onChange({ parpadeoPasadoDuracion: v })}
@@ -348,96 +310,6 @@ function BloqueParpadeo({ config, onChange }: Props) {
           description="Reservas a 15–30 min de su hora prevista."
         />
       </div>
-    </section>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────
-// Bloque: duración por defecto (tiempo medio de servicio por mesa)
-// ─────────────────────────────────────────────────────────────────────
-function BloqueDuracionMesa({ config, onChange }: Props) {
-  return (
-    <section className="space-y-3">
-      <div>
-        <h5 className="text-sm font-semibold">Duración por mesa</h5>
-        <p className="text-[11px] text-muted-foreground">
-          Tiempo medio que una mesa queda ocupada por cada reserva. Es el valor por defecto: en
-          cada reserva concreta puedes ajustarlo manualmente y ese override prevalece.
-        </p>
-      </div>
-      <div className="grid grid-cols-2 gap-3 max-w-md pl-1">
-        <div className="space-y-1.5">
-          <Label className="text-xs">Duración por defecto</Label>
-          <Select
-            value={String(config.duracionReservaMin)}
-            onValueChange={(v) => onChange({ duracionReservaMin: Number(v) })}
-          >
-            <SelectTrigger className="h-8">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {DURACION_RESERVA_OPCIONES.map((o) => (
-                <SelectItem key={o.minutos} value={String(o.minutos)}>
-                  {o.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <p className="text-[10px] text-muted-foreground">
-            De 15 minutos a 6 horas, en tramos de 15. Se guarda solo · por defecto {formatearDuracionReserva(DURACION_RESERVA_DEFAULT_MINUTOS)}.
-          </p>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────
-// Bloque: intervalo entre slots ofrecidos por el motor web
-// ─────────────────────────────────────────────────────────────────────
-function BloqueIntervalo({ config, onChange }: Props) {
-  return (
-    <section className="space-y-3">
-      <div>
-        <h5 className="text-sm font-semibold">Intervalos de reserva</h5>
-        <p className="text-[11px] text-muted-foreground">
-          Granularidad de los huecos ofrecidos al cliente en el motor web.
-        </p>
-      </div>
-      <div className="space-y-1.5 max-w-md pl-1">
-        <Label className="text-xs">Cada</Label>
-        <Select
-          value={String(config.intervaloReservaMin)}
-          onValueChange={(v) => onChange({ intervaloReservaMin: Number(v) as IntervaloReservaMin })}
-        >
-          <SelectTrigger className="h-8 text-xs">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {INTERVALOS_RESERVA.map((m) => (
-              <SelectItem key={m} value={String(m)} className="text-xs">
-                {m} minutos
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-    </section>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────
-// Bloque: ocultar reservas canceladas
-// ─────────────────────────────────────────────────────────────────────
-function BloqueOcultarCanceladas({ config, onChange }: Props) {
-  return (
-    <section className="space-y-3">
-      <YesNo
-        value={config.ocultarCanceladas}
-        onChange={(v) => onChange({ ocultarCanceladas: v })}
-        label="Ocultar reservas canceladas"
-        description="No mostrarlas en la vista de reservas por defecto. Puedes mostrarlas con un filtro."
-      />
     </section>
   );
 }
