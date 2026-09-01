@@ -83,7 +83,9 @@ export async function listReservas(fecha?: string) {
     const { supabase, empresaId } = await getContext();
     const query = supabase
       .from("reservas")
-      .select("*")
+      // Se trae el nombre del producto para el aviso del icono de Ticket: sin
+      // él habría que pedirlo fila a fila desde la interfaz.
+      .select("*, reserva_ticket_productos(nombre)")
       .order("fecha", { ascending: true })
       .order("hora", { ascending: true });
     if (empresaId) query.eq("empresa_id", empresaId);
@@ -160,6 +162,12 @@ export async function createReserva(input: {
   // activo del local con capacidad para los comensales. `localId` es
   // obligatorio cuando se activa.
   asignarAuto?: boolean;
+  /**
+   * El local ha visto el aviso de "esta mesa está bloqueada" y quiere seguir
+   * igualmente. Solo lo manda la pantalla interna de sala: la web pública
+   * nunca lo pone, así que online la mesa bloqueada sigue sin venderse.
+   */
+  forzarMesaBloqueada?: boolean;
   localId?: string | null;
   salaIdFiltro?: string | null;
   zonaIdFiltro?: string | null;
@@ -276,29 +284,52 @@ export async function createReserva(input: {
     // `duracion_reserva_min` configurada por empresa. Si esta reserva llega
     // con override puntual (`duracionMinutos`), se prioriza ese valor.
     if (mesaFinal) {
-      // Bloqueos manuales: si la mesa elegida está bloqueada para la fecha,
-      // rechazamos. Solo aplicable cuando conocemos el local.
+      // Bloqueos manuales.
+      //
+      // El bloqueo vale SOLO para su turno: bloquear la comida no puede tirar
+      // una cena, así que se pregunta por el turno de esta reserva y no por el
+      // día entero.
+      //
+      // Y el bloqueo no es una prohibición para el local: impide que la mesa
+      // se asigne sola o se venda por la web, pero el personal puede usarla si
+      // lo ve necesario. Por eso solo se corta en seco cuando la reserva NO
+      // viene con `forzarMesaBloqueada`: la pantalla de sala pone ese flag
+      // después de enseñar el aviso y de que alguien lo acepte.
       if (input.localId) {
+        const turnoBloqueo =
+          (input.turno ?? "").toUpperCase() === "CENA" ? "CENA" : "COMIDA";
         const bloqueadas = await getMesasBloqueadas(
           supabase as unknown as SupabaseClient,
           {
             empresaId,
             localId: input.localId,
             fechaISO: input.fecha,
+            turno: turnoBloqueo,
           },
         );
         if (bloqueadas.size > 0) {
-          const { data: mesaRow } = await supabase
+          // Una unión ("M1+M2") ocupa varias mesas: basta con que una esté
+          // bloqueada para que la reserva la esté pisando.
+          const codigos = mesaFinal
+            .split("+")
+            .map((c) => c.trim())
+            .filter(Boolean);
+          const { data: mesaRows } = await supabase
             .from("mesas")
-            .select("id")
+            .select("id, codigo")
             .eq("local_id", input.localId)
-            .eq("codigo", mesaFinal)
-            .maybeSingle();
-          const mesaId = (mesaRow?.id as string | undefined) ?? null;
-          if (mesaId && bloqueadas.has(mesaId)) {
+            .in("codigo", codigos);
+          const chocadas = (mesaRows ?? [])
+            .filter((m) => bloqueadas.has(m.id as string))
+            .map((m) => m.codigo as string);
+          if (chocadas.length > 0 && !input.forzarMesaBloqueada) {
             return {
               ok: false,
-              error: `La mesa ${mesaFinal} está bloqueada para ese día. Quita el bloqueo desde Configuración → Bloqueos o elige otra mesa.`,
+              mesaBloqueada: chocadas,
+              error:
+                chocadas.length === 1
+                  ? `La mesa ${chocadas[0]} está bloqueada en este turno.`
+                  : `Las mesas ${chocadas.join(", ")} están bloqueadas en este turno.`,
             };
           }
         }
@@ -583,6 +614,24 @@ export async function updateReserva(
     // el alta y cualquier edición posterior podía sacarla de ella.
     if (updates.hora !== undefined && !esHoraEnCuarto(updates.hora)) {
       return { ok: false, error: MENSAJE_HORA_CUARTO };
+    }
+
+    // Una reserva de Ticket queda congelada en lo que toca al ticket: ni el
+    // tipo de reserva ni el dinero se pueden cambiar a mano. La base de datos
+    // lo impide igualmente; se comprueba aquí para poder dar un mensaje que se
+    // entienda en vez de un error técnico.
+    if (updates.esTicket !== undefined || updates.tipoCategoria !== undefined) {
+      const { data: actualTicket } = await supabase
+        .from("reservas")
+        .select("es_ticket")
+        .eq("id", id)
+        .maybeSingle();
+      if (actualTicket?.es_ticket === true) {
+        return {
+          ok: false,
+          error: "Esta reserva se hizo con un Ticket: su tipo no se puede cambiar.",
+        };
+      }
     }
 
     const dbUpdates: Record<string, unknown> = {
@@ -922,10 +971,11 @@ export async function updateReserva(
     // pasa `notificarCliente`. Idempotente: el mailer no reenvía si ya hay
     // timestamp en la columna de auditoría.
     //
-    // Cada estado tiene su plantilla, y el nombre del tipo de correo ES el del
-    // estado: no hace falta traducir nada. WALK_IN queda fuera porque no es un
-    // estado sino un origen —el cliente entró sin reservar— y no hay a quién
-    // escribirle; si alguna vez llega aquí, `esTipoEstado` lo descarta solo.
+    // Cada estado con plantilla usa el nombre del estado como tipo de correo:
+    // no hace falta traducir nada. Los que no tienen plantilla los descarta
+    // `esTipoEstado` solo: WALK_IN porque es un ORIGEN (el cliente entró sin
+    // reservar) y no hay a quién escribirle, y SENTADA porque al cliente que
+    // acabas de sentar en la mesa no se le manda un correo.
     // No await — un fallo de SMTP no debe romper el UPDATE ya confirmado.
     if (updates.notificarCliente === true && updates.estado) {
       const actor = actorDeSesion(ctx);

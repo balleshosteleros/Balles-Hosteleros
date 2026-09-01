@@ -12,6 +12,8 @@ export type EstadoReserva =
   | "RECONFIRMADA"
   | "NO_RECONFIRMADA"
   | "LISTA_ESPERA"
+  /** El cliente ya está en la mesa. No confundir con WALK_IN, que es el ORIGEN. */
+  | "SENTADA"
   | "LIBERADA"
   | "WALK_IN"
   | "TERMINANDO"
@@ -23,6 +25,7 @@ export const ESTADOS_RESERVA: EstadoReserva[] = [
   "RECONFIRMADA",
   "NO_RECONFIRMADA",
   "LISTA_ESPERA",
+  "SENTADA",
   "LIBERADA",
   "WALK_IN",
   "TERMINANDO",
@@ -66,6 +69,9 @@ export const ESTADOS_NO_ASISTEN: EstadoReserva[] = [
 export const ESTADO_ORDEN_PRIORIDAD: Record<EstadoReserva, number> = {
   CONFIRMADA: 0,
   RECONFIRMADA: 0,
+  // Ya está sentada: es la que de verdad ocupa la mesa ahora mismo, así que va
+  // por delante de la que todavía espera turno.
+  SENTADA: 0,
   LISTA_ESPERA: 1,
   LIBERADA: 2,
   NO_RECONFIRMADA: 3,
@@ -85,6 +91,7 @@ export const ESTADO_BADGE_CLASS: Record<EstadoReserva, string> = {
   RECONFIRMADA:    "bg-sky-600/20 text-sky-400 border-sky-600/40",
   NO_RECONFIRMADA: "bg-amber-600/20 text-amber-400 border-amber-600/40",
   LISTA_ESPERA:    "bg-violet-600/20 text-violet-400 border-violet-600/40",
+  SENTADA:         "bg-green-700/25 text-green-300 border-green-700/50",
   LIBERADA:        "bg-yellow-600/20 text-yellow-300 border-yellow-600/40",
   WALK_IN:         "bg-orange-600/20 text-orange-300 border-orange-600/40",
   TERMINANDO:      "bg-cyan-600/20 text-cyan-300 border-cyan-600/40",
@@ -97,6 +104,7 @@ export const ESTADO_DOT_CLASS: Record<EstadoReserva, string> = {
   RECONFIRMADA:    "bg-sky-500",
   NO_RECONFIRMADA: "bg-amber-500",
   LISTA_ESPERA:    "bg-violet-500",
+  SENTADA:         "bg-green-600",
   LIBERADA:        "bg-yellow-500",
   WALK_IN:         "bg-orange-400",
   TERMINANDO:      "bg-cyan-500",
@@ -159,6 +167,7 @@ export const ESTADO_RESERVA_LABELS: Record<EstadoReserva, string> = {
   RECONFIRMADA:    "Reconfirmada",
   NO_RECONFIRMADA: "No reconfirmada",
   LISTA_ESPERA:    "Lista de espera",
+  SENTADA:         "Sentada",
   LIBERADA:        "Liberada",
   WALK_IN:         "Walk in",
   TERMINANDO:      "Terminando",
@@ -730,6 +739,22 @@ export const SAMPLE_LISTA_ESPERA: ListaEspera[] = [
  * ficha del cliente tienen que leer el canal igual: si cada una lo formatea
  * por su cuenta, la misma reserva sale con dos nombres distintos.
  */
+/**
+ * ¿Es una reserva de alguien que llegó SIN reservar?
+ *
+ * Se mira el ORIGEN, no el estado: un walk-in se sienta (pasa a SENTADA) y
+ * luego termina (TERMINANDO), pero sigue siendo un walk-in toda su vida. Antes
+ * esto se deducía de `estado === "WALK_IN"`, así que al sentarlo dejaba de
+ * reconocerse y su mesa se quedaba sin rótulo: un walk-in no tiene ficha de
+ * cliente, así que no hay nombre que enseñar en su lugar.
+ */
+export function esReservaWalkIn(
+  reserva: Pick<Reserva, "estado" | "origen">,
+): boolean {
+  if (reserva.estado === "WALK_IN") return true;
+  return normalizarOrigen(reserva.origen) === "WALKIN";
+}
+
 export function origenLabel(origen: string | null | undefined): string {
   // Delega en el catálogo de orígenes para que el listado de sala y la
   // analítica rotulen el mismo canal igual. Antes formateaba por su cuenta y
