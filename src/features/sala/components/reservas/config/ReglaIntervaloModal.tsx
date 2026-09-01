@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { SelectorHoraCuartos } from "@/features/sala/components/reservas/SelectorHoraCuartos";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import type { TurnoRegla, VigenciaSpec } from "@/features/sala/reglas/data/reglas";
@@ -122,18 +123,19 @@ export function ReglaIntervaloModal({ open, onOpenChange, metrica, regla, onSave
 
           <div className="space-y-1.5">
             <Label className="text-xs">Horas a aplicar</Label>
+            {/* Cuartos: esta franja se compara con la hora de las reservas,
+                y un tramo que empiece a las 13:07 dejaría fuera reservas que
+                sí deberían contar para el límite. */}
             <div className="flex items-center gap-2">
-              <Input
-                type="time"
+              <SelectorHoraCuartos
                 value={horaInicio}
-                onChange={(e) => setHoraInicio(e.target.value)}
+                onChange={setHoraInicio}
                 className="w-32"
               />
               <span className="text-xs text-muted-foreground">a</span>
-              <Input
-                type="time"
+              <SelectorHoraCuartos
                 value={horaFin}
-                onChange={(e) => setHoraFin(e.target.value)}
+                onChange={setHoraFin}
                 className="w-32"
               />
             </div>
