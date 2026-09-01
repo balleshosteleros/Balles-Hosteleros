@@ -12,8 +12,9 @@ import {
 import { CheckCircle2, ChevronDown, Euro, FileText, Loader2 } from "lucide-react";
 
 function fmtEur(n: number): string {
+  // Siempre con dos decimales: es dinero. Antes 1.366,50 € se pintaba "1.366,5 €".
   return (
-    n.toLocaleString("es-ES", { minimumFractionDigits: 0, maximumFractionDigits: 2 }) +
+    n.toLocaleString("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) +
     " €"
   );
 }
@@ -81,8 +82,17 @@ function PagoCard({ pago, empleadoId }: { pago: PagoAbonado; empleadoId?: string
       setAbriendo(false);
     }
   }
+  const r2 = (n: number) => Math.round(n * 100) / 100;
   // Bruto = nómina neta + SS trabajador + IRPF (lo que la empresa declara).
-  const bruto = Math.round((pago.nomina + pago.ssEmpleado + pago.irpf) * 100) / 100;
+  const bruto = r2(pago.nomina + pago.ssEmpleado + pago.irpf);
+  // Coste real de la empresa = lo que percibe + lo retenido + la SS patronal.
+  const costeEmpresa = r2(pago.total + pago.ssEmpleado + pago.irpf + pago.ssEmpresa);
+  const totalSs = r2(pago.ssEmpleado + pago.ssEmpresa);
+  const hayOtros =
+    pago.complemento > 0 ||
+    pago.horasExtras > 0 ||
+    pago.bonus > 0 ||
+    pago.ajuste !== 0;
 
   return (
     <Card className="overflow-hidden">
@@ -114,30 +124,81 @@ function PagoCard({ pago, empleadoId }: { pago: PagoAbonado; empleadoId?: string
 
       {abierto && (
         <div className="border-t px-4 py-3 bg-muted/20">
+          {/* TU NÓMINA: de lo que la empresa declara hasta lo que te queda. */}
+          <Rotulo texto="Tu nómina" />
           <dl className="text-sm divide-y divide-border/60">
-            <Fila label="Bruto" valor={fmtEur(bruto)} />
+            <Fila label="Salario bruto" valor={fmtEur(bruto)} />
             {pago.ssEmpleado > 0 && (
-              <Fila label="Seguridad Social" valor={`−${fmtEur(pago.ssEmpleado)}`} rojo />
-            )}
-            {pago.irpf > 0 && <Fila label="IRPF" valor={`−${fmtEur(pago.irpf)}`} rojo />}
-            <Fila label="Nómina neta" valor={fmtEur(pago.nomina)} destacado />
-            {pago.complemento > 0 && <Fila label="Complemento" valor={fmtEur(pago.complemento)} />}
-            {pago.complementoMesAnterior > 0 && (
-              <Fila label="Complemento mes anterior" valor={fmtEur(pago.complementoMesAnterior)} />
-            )}
-            {pago.horasExtras > 0 && (
-              <Fila label="Horas extras" valor={fmtEur(pago.horasExtras)} />
-            )}
-            {pago.bonus > 0 && <Fila label="Bonus" valor={fmtEur(pago.bonus)} />}
-            {pago.ajuste !== 0 && (
               <Fila
-                label="Ajuste"
-                valor={`${pago.ajuste > 0 ? "+" : "−"}${fmtEur(Math.abs(pago.ajuste))}`}
-                rojo={pago.ajuste < 0}
+                label="Seguridad Social (tu parte)"
+                valor={`−${fmtEur(pago.ssEmpleado)}`}
+                rojo
               />
             )}
-            <Fila label="Total a percibir" valor={fmtEur(pago.total)} destacado />
+            {pago.irpf > 0 && <Fila label="IRPF (retención)" valor={`−${fmtEur(pago.irpf)}`} rojo />}
+            <Fila label="Nómina neta" valor={fmtEur(pago.nomina)} destacado />
           </dl>
+
+          {/* OTROS CONCEPTOS: solo se pinta el bloque si hay alguno. */}
+          {hayOtros && (
+            <>
+              <Rotulo texto="Otros conceptos" />
+              <dl className="text-sm divide-y divide-border/60">
+                {pago.complemento > 0 && (
+                  <Fila label="Complemento" valor={`+${fmtEur(pago.complemento)}`} />
+                )}
+                {pago.horasExtras > 0 && (
+                  <Fila label="Horas extras" valor={`+${fmtEur(pago.horasExtras)}`} />
+                )}
+                {pago.bonus > 0 && <Fila label="Bonus" valor={`+${fmtEur(pago.bonus)}`} />}
+                {pago.ajuste !== 0 && (
+                  <Fila
+                    label="Ajuste"
+                    valor={`${pago.ajuste > 0 ? "+" : "−"}${fmtEur(Math.abs(pago.ajuste))}`}
+                    rojo={pago.ajuste < 0}
+                  />
+                )}
+              </dl>
+            </>
+          )}
+
+          <div className="mt-2 rounded-lg bg-emerald-500/10 px-3 py-2 flex items-center justify-between">
+            <span className="text-sm font-semibold text-emerald-800 dark:text-emerald-300">
+              Total a percibir
+            </span>
+            <span className="text-base font-bold tabular-nums text-emerald-800 dark:text-emerald-300">
+              {fmtEur(pago.total)}
+            </span>
+          </div>
+
+          {/* LO QUE LE CUESTA A LA EMPRESA: informativo, NO se le descuenta.
+              Se dice explícitamente para que nadie lo lea como un descuento. */}
+          {costeEmpresa > pago.total && (
+            <>
+              <Rotulo texto="Lo que le cuesta a la empresa" />
+              <dl className="text-sm divide-y divide-border/60">
+                <Fila label="Lo que percibes" valor={fmtEur(pago.total)} />
+                {pago.ssEmpleado > 0 && (
+                  <Fila label="Seguridad Social (tu parte)" valor={`+${fmtEur(pago.ssEmpleado)}`} />
+                )}
+                {pago.irpf > 0 && <Fila label="IRPF (a Hacienda)" valor={`+${fmtEur(pago.irpf)}`} />}
+                {pago.ssEmpresa > 0 && (
+                  <Fila
+                    label="Seguridad Social (parte de la empresa)"
+                    valor={`+${fmtEur(pago.ssEmpresa)}`}
+                  />
+                )}
+                <Fila label="Coste total para la empresa" valor={fmtEur(costeEmpresa)} destacado />
+              </dl>
+              {totalSs > 0 && (
+                <p className="mt-1.5 text-[11px] text-muted-foreground leading-snug">
+                  En Seguridad Social se cotizan {fmtEur(totalSs)} en total por ti este mes
+                  ({fmtEur(pago.ssEmpleado)} tuyos y {fmtEur(pago.ssEmpresa)} de la empresa).
+                  Esta parte no se te descuenta de lo que percibes: ya está reflejada arriba.
+                </p>
+              )}
+            </>
+          )}
 
           {pago.nominaPath && (
             <div className="mt-3 flex items-center gap-2">
@@ -161,6 +222,15 @@ function PagoCard({ pago, empleadoId }: { pago: PagoAbonado; empleadoId?: string
         </div>
       )}
     </Card>
+  );
+}
+
+/** Encabezado de sección dentro del desglose. */
+function Rotulo({ texto }: { texto: string }) {
+  return (
+    <p className="mt-3 mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+      {texto}
+    </p>
   );
 }
 

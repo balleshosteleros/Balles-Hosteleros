@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useMemo, useEffect, useCallback, useRef, type ReactNode } from "react";
-import { useRouter } from "next/navigation";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { useSincronizacionEnVivo } from "@/shared/hooks/useSincronizacionEnVivo";
 import { formatHoraEnZona } from "@/features/empresa/lib/zona-horaria";
@@ -11,6 +10,7 @@ import { listFichajes, crearFichajeManual } from "@/features/rrhh/actions/fichaj
 import { listTiposFichaje, type TipoFichajeRow } from "@/features/rrhh/actions/horarios-config-actions";
 import { getEmpleadosActivos } from "@/features/rrhh/actions/empleados-actions";
 import { FichajeDetalleDialog } from "@/features/rrhh/components/fichajes/FichajeDetalleDialog";
+import { ConfiguracionFichajesSheet } from "@/features/rrhh/components/fichajes/ConfiguracionFichajesSheet";
 import { listLocales } from "@/features/ajustes/actions/locales-actions";
 import { TableColumnHeader } from "@/shared/components/TableColumnHeader";
 import { toast } from "sonner";
@@ -105,7 +105,6 @@ function mapDbToFichaje(row: Record<string, unknown>): Fichaje {
 }
 
 export function FichajesView() {
-  const router = useRouter();
   const { empresaActual } = useEmpresa();
   const empresaActivaRef = useRef(empresaActual.id);
   const [fichajes, setFichajes] = useState<Fichaje[]>([]);
@@ -116,6 +115,7 @@ export function FichajesView() {
   const [columnasVisibles, setColumnasVisibles] = useState<ToolbarColumnaVisible>({});
   const [columnasOrden, setColumnasOrden] = useState<string[] | undefined>(undefined);
   const [fichajeModal, setFichajeModal] = useState<Fichaje | null>(null);
+  const [showConfig, setShowConfig] = useState(false);
   const [showNuevo, setShowNuevo] = useState(false);
   const [empleadosOpts, setEmpleadosOpts] = useState<EmpleadoOpcion[]>([]);
   const [manualForm, setManualForm] = useState(initialManualForm());
@@ -460,6 +460,12 @@ export function FichajesView() {
   );
 
 
+  // La configuración del submódulo es una vista a pantalla completa, igual que
+  // en Horarios: no saca al usuario del módulo ni lo manda a Ajustes.
+  if (showConfig) {
+    return <ConfiguracionFichajesSheet onVolver={() => setShowConfig(false)} />;
+  }
+
   return (
     <div className="p-6 space-y-6">
       <SubmoduleToolbar
@@ -484,16 +490,16 @@ export function FichajesView() {
               exportRecords={fichajesFiltrados}
               onSuccess={() => window.location.reload()}
             />
-            {/* Lleva a la configuración REAL (Ajustes → Departamentos → RRHH).
-                Antes abría un diálogo propio de 3 campos que no cargaba ni
-                guardaba nada: se movían los controles y al cerrar se perdía. */}
+            {/* Configuración DEL SUBMÓDULO (engranaje superior derecho), aquí
+                mismo. No lleva a Ajustes generales: son dos niveles distintos y
+                quien gestiona fichajes no tiene por qué tener acceso a Ajustes. */}
             <Button
               size="icon"
               variant="outline"
               className="h-9 w-9"
-              onClick={() => router.push("/ajustes?tab=departamentos")}
-              title="Configuración de fichajes"
-              aria-label="Configuración de fichajes"
+              onClick={() => setShowConfig(true)}
+              title="Configuración"
+              aria-label="Configuración"
             >
               <Settings className="h-4 w-4" strokeWidth={1.75} />
             </Button>

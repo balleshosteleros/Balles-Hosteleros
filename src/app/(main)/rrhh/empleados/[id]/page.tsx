@@ -12,7 +12,6 @@ import {
   GestionEmpleadoCard,
   type GestionEmpleadoCardHandle,
 } from "@/features/rrhh/components/empleados/GestionEmpleadoCard";
-import { SubmoduloPorEmpleadoPlaceholder } from "@/features/rrhh/components/empleados/SubmoduloPorEmpleadoPlaceholder";
 import { FirmasEmpleadoTab } from "@/features/rrhh/components/empleados/FirmasEmpleadoTab";
 import { DocumentosIdentificativosCard } from "@/features/rrhh/components/empleados/DocumentosIdentificativosCard";
 import { InspeccionesEmpleadoTab } from "@/features/rrhh/components/empleados/InspeccionesEmpleadoTab";
@@ -44,8 +43,8 @@ import { cn } from "@/shared/lib/utils";
 import {
   User,
   Fingerprint, Inbox, FileSignature, Calendar, Timer,
-  UserRoundSearch, Gift, Trophy, Euro, Briefcase,
-  GraduationCap, FileQuestion, FileSearch, PackageCheck,
+  Euro, Briefcase,
+  FileQuestion, FileSearch, PackageCheck,
   Save, Loader2,
 } from "lucide-react";
 
@@ -59,12 +58,8 @@ const TOP_TABS = [
   { id: "calendarios",     label: "Calendarios",    icon: Calendar          },
   { id: "horarios",        label: "Horarios",       icon: Timer             },
   { id: "entregas",        label: "Entregas",       icon: PackageCheck      },
-  { id: "reclutamiento",   label: "Reclutamiento",  icon: UserRoundSearch   },
-  { id: "bonus",           label: "Bonus",          icon: Gift              },
-  { id: "points",          label: "Points",         icon: Trophy            },
   { id: "pagos",           label: "Pagos",          icon: Euro              },
   { id: "puestos",         label: "Puestos",        icon: Briefcase         },
-  { id: "formacion",       label: "Formación",      icon: GraduationCap     },
   { id: "cuestionarios",   label: "Cuestionarios",  icon: FileQuestion      },
   { id: "inspecciones",    label: "Inspecciones",   icon: FileSearch        },
 ] as const;
@@ -303,12 +298,6 @@ export default function FichaEmpleadoPage() {
         );
       case "entregas":
         return <EntregasEmpleadoTab empleadoId={empleadoRegistro.id} />;
-      case "reclutamiento":
-        return <SubmoduloPorEmpleadoPlaceholder modulo="Reclutamiento" path="/rrhh/reclutamiento" empleado={empleado} />;
-      case "bonus":
-        return <SubmoduloPorEmpleadoPlaceholder modulo="Bonus" path="/rrhh/bonus" empleado={empleado} />;
-      case "points":
-        return <SubmoduloPorEmpleadoPlaceholder modulo="Points" path="/rrhh/points" empleado={empleado} />;
       case "pagos":
         return <PagosEmpleadoTab empleadoId={empleadoRegistro.id} />;
       case "puestos":
@@ -318,8 +307,6 @@ export default function FichaEmpleadoPage() {
             empleadoNombre={`${empleado.nombre} ${empleado.apellidos}`.trim() || "El empleado"}
           />
         );
-      case "formacion":
-        return <SubmoduloPorEmpleadoPlaceholder modulo="Formación" path="/rrhh/formacion" empleado={empleado} />;
       case "cuestionarios":
         return <CuestionariosEmpleadoTab empleadoId={empleadoRegistro.id} />;
       case "inspecciones":

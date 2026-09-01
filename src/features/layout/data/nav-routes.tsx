@@ -262,7 +262,6 @@ const EXTRA_ROUTES: Record<string, { title: string; icon?: IconType }> = {
   "/marketing/campanas/meta": { title: "CAMPAÑAS — META", icon: Send },
   "/marketing/campanas/sms": { title: "CAMPAÑAS — SMS", icon: MessageSquare },
   "/marketing/campanas/whatsapp": { title: "CAMPAÑAS — WHATSAPP", icon: MessageSquare },
-  "/rrhh/comunicados": { title: "COMUNICADOS", icon: Megaphone },
   "/rrhh/puestos": { title: "PUESTOS", icon: Banknote },
   "/sala/reservas/links": { title: "ENLACES DE RESERVA", icon: Globe },
   "/calidad/auditorias/plantillas": { title: "PLANTILLAS", icon: ClipboardList },

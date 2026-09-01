@@ -430,37 +430,6 @@ export async function createCandidato(input: {
   }
 }
 
-export async function updateCandidato(
-  id: string,
-  input: {
-    nombre?: string;
-    apellidos?: string;
-    email?: string;
-    telefono?: string;
-    dni_nie?: string;
-    vacante_id?: string;
-    cv_url?: string;
-    notas?: string;
-    fase?: string;
-    estado?: string;
-    puntuacion?: number;
-  }
-) {
-  try {
-    const { supabase } = await getContext();
-    const { error } = await supabase
-      .from("candidatos")
-      .update({ ...input, updated_at: new Date().toISOString() })
-      .eq("id", id);
-    if (error) throw error;
-    return { ok: true };
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : "Error desconocido";
-    console.error("[reclutamiento] updateCandidato:", msg);
-    return { ok: false, error: msg };
-  }
-}
-
 // `deleteCandidato` vivía aquí. Se elimina: borraba la candidatura sin ninguna
 // comprobación (ni empleado vinculado, ni siquiera filtro por empresa) y, como
 // server action exportada, seguía siendo invocable aunque ningún botón la

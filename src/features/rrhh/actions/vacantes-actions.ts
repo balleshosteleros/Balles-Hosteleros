@@ -162,49 +162,6 @@ export async function updateVacante(id: string, input: Partial<VacanteInput>) {
   }
 }
 
-export async function deleteVacante(id: string) {
-  try {
-    const { supabase, user } = await getContext();
-    if (!user) return { ok: false, error: "No autenticado" };
-
-    // Protección: una vacante con candidatos NO se puede borrar (se perdería el
-    // histórico del pipeline). Hay que mover o eliminar antes esos candidatos.
-    const { count: candidatos, error: countError } = await supabase
-      .from("candidatos")
-      .select("id", { count: "exact", head: true })
-      .eq("vacante_id", id);
-    if (countError) throw countError;
-    if ((candidatos ?? 0) > 0) {
-      return {
-        ok: false,
-        error:
-          `No se puede borrar: la vacante tiene ${candidatos} candidato(s) en el pipeline. ` +
-          "Muévelos o elimínalos antes de borrar la vacante.",
-      };
-    }
-
-    // El id es PK única; RLS se encarga de la autorización. No filtramos por
-    // empresa_id porque el contexto seleccionado en cliente puede no coincidir
-    // con el `profiles.empresa_id` por defecto.
-    const { data, error } = await supabase
-      .from("vacantes")
-      .delete()
-      .eq("id", id)
-      .select("id");
-
-    if (error) throw error;
-    if (!data || data.length === 0) {
-      return { ok: false, error: "No se encontró la vacante o sin permisos" };
-    }
-    revalidatePath("/rrhh/reclutamiento");
-    return { ok: true };
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : "Error desconocido";
-    console.error("[rrhh] deleteVacante:", msg);
-    return { ok: false, error: msg };
-  }
-}
-
 export async function toggleVisibilidadVacante(id: string, visible: boolean) {
   return updateVacante(id, { visible_publicamente: visible });
 }

@@ -69,6 +69,7 @@ export async function getHorarioPuesto(puestoId: string | null): Promise<{
             .from("puesto_salarios")
             .select("patron_familia_id")
             .eq("puesto_id", puestoId)
+            .eq("empresa_id", empresaId)
             .maybeSingle()
         : Promise.resolve({ data: null }),
       // Familias de patrones ligados a un puesto (legacy) → se excluyen del selector.
@@ -117,10 +118,15 @@ export async function setHorarioPuesto(
     if (!empresaId) return { ok: false, error: "No autenticado" };
 
     // Debe existir la fila de condiciones del puesto para guardar el horario.
+    // Acotado a la empresa ACTIVA: la RLS de `puesto_salarios` autoriza todas
+    // las empresas del usuario, así que sin esto un multiempresa podía escribir
+    // el horario de un puesto de la otra sociedad (y ese horario se hereda al
+    // empleado al contratar).
     const { data: fila } = await supabase
       .from("puesto_salarios")
       .select("id")
       .eq("puesto_id", puestoId)
+      .eq("empresa_id", empresaId)
       .maybeSingle();
     if (!fila?.id) {
       return { ok: false, error: "Configura primero las condiciones del puesto antes de asignarle un horario." };
@@ -141,7 +147,8 @@ export async function setHorarioPuesto(
     const { error } = await supabase
       .from("puesto_salarios")
       .update({ patron_familia_id: familiaId })
-      .eq("id", fila.id);
+      .eq("id", fila.id)
+      .eq("empresa_id", empresaId);
     if (error) throw error;
 
     revalidatePath("/rrhh/puestos");
@@ -167,6 +174,7 @@ async function resolverPatronOficialDelPuesto(
     .from("puesto_salarios")
     .select("patron_familia_id")
     .eq("puesto_id", puestoId)
+    .eq("empresa_id", empresaId)
     .maybeSingle();
 
   const familiaId = (salario?.patron_familia_id as string | null | undefined) ?? null;
@@ -181,11 +189,12 @@ async function resolverPatronOficialDelPuesto(
     if (oficial?.id) return oficial.id as string;
   }
 
-  // Fallback legacy: plantilla propia del puesto.
+  // Fallback legacy: plantilla propia del puesto (de esta empresa).
   const { data: propio } = await supabase
     .from("rrhh_patrones")
     .select("id")
     .eq("puesto_id", puestoId)
+    .eq("empresa_id", empresaId)
     .eq("es_oficial", true)
     .maybeSingle();
   return (propio?.id as string | undefined) ?? null;

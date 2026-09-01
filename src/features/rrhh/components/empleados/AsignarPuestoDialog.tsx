@@ -181,8 +181,8 @@ export function AsignarPuestoDialog({
         { campo: "Puesto", antes: actuales?.puesto ?? "—", despues: puesto.puesto },
         { campo: "Departamento", antes: actuales?.departamento ?? "—", despues: puesto.departamento },
         {
-          campo: "Salario",
-          antes: fmtEur(actuales?.salarioNeto ?? null),
+          campo: "Salario bruto",
+          antes: fmtEur(actuales?.salarioBruto ?? null),
           despues: fmtEur(puesto.salarioBruto),
         },
         { campo: "Jornada", antes: actuales?.jornada || "—", despues: puesto.jornadaContrato || "—" },

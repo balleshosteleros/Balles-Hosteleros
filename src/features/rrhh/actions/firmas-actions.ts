@@ -598,6 +598,59 @@ export async function reenviarFirma(
   }
 }
 
+/**
+ * Cierra un documento pendiente: lo marca expirado e invalida su token y sus
+ * OTP. Es el núcleo de `cancelarFirma`, sin la barrera de permisos, para que
+ * flujos internos que YA validaron al actor (p. ej. borrar una entrega) puedan
+ * cerrar sus actas sin depender del permiso de Firmas del usuario.
+ *
+ * Devuelve el resultado: quien lo llame DEBE comprobarlo antes de borrar nada,
+ * o dejaría vivo un enlace capaz de firmar algo que ya no existe.
+ */
+export async function cancelarFirmaInterno(
+  documentoId: string,
+  empresaId: string,
+  actorUserId?: string | null,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    const admin = createAdminClient();
+    const meta = await getRequestMeta();
+
+    const { data: doc } = await admin
+      .from("firmas_documentos")
+      .select("id, empresa_id, estado")
+      .eq("id", documentoId)
+      .maybeSingle();
+    if (!doc) return { ok: false, error: "Documento no encontrado" };
+    if (doc.empresa_id !== empresaId) return { ok: false, error: "Sin acceso a este documento" };
+    // Ya cerrado (expirado por el cron, cancelado antes): no hay nada que hacer
+    // y NO es un error para quien solo quiere asegurarse de que no queda vivo.
+    if (doc.estado !== "pendiente") return { ok: true };
+
+    await admin
+      .from("firmas_documentos")
+      .update({ estado: "expirado" })
+      .eq("id", documentoId);
+    await admin.from("firmas_tokens").delete().eq("documento_id", documentoId);
+    await admin.from("firmas_otps").delete().eq("documento_id", documentoId);
+
+    await registrarEvento({
+      documentoId,
+      tipo: "expirado",
+      actorUserId: actorUserId ?? null,
+      ip: meta.ip,
+      userAgent: meta.userAgent,
+      metadata: { motivo: "cancelado_interno" },
+    });
+
+    return { ok: true };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Error desconocido";
+    console.error("[firmas] cancelarFirmaInterno:", msg);
+    return { ok: false, error: msg };
+  }
+}
+
 export async function cancelarFirma(
   documentoId: string,
 ): Promise<{ ok: true } | { ok: false; error: string }> {

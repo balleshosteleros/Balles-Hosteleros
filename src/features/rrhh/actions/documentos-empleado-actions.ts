@@ -57,14 +57,18 @@ export async function subirDocumentoEmpleado(input: {
       return { ok: false, error: "Formato no admitido. Sube una imagen (JPG, PNG) o un PDF." };
     }
 
-    const { supabase } = await getAppContext();
+    const { supabase, empresaId } = await getAppContext();
+    if (!empresaId) return { ok: false, error: "No autenticado" };
 
     // La empresa sale de la ficha, no del cliente: así el archivo no puede
-    // acabar en la carpeta de otra empresa.
+    // acabar en la carpeta de otra empresa. Y la ficha debe ser de la empresa
+    // ACTIVA: sin ese filtro se podía adjuntar (y con `upsert` SOBRESCRIBIR) el
+    // DNI o el IBAN de un empleado de la otra sociedad.
     const { data: emp } = await supabase
       .from("empleados")
       .select("id, empresa_id")
       .eq("id", input.empleadoId)
+      .eq("empresa_id", empresaId)
       .maybeSingle();
     if (!emp) return { ok: false, error: "Empleado no encontrado" };
 
@@ -78,7 +82,8 @@ export async function subirDocumentoEmpleado(input: {
     const { error } = await supabase
       .from("empleados")
       .update({ [columna]: path })
-      .eq("id", input.empleadoId);
+      .eq("id", input.empleadoId)
+      .eq("empresa_id", empresaId);
     if (error) return { ok: false, error: error.message };
 
     revalidatePath(`/rrhh/empleados/${input.empleadoId}`);

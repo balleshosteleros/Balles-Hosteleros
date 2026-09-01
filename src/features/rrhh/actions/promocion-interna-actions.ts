@@ -148,7 +148,11 @@ export async function promocionarEmpleado(
   // rellenas (no basta salario o jornada como en la contratación). Se valida en el
   // servidor para que sea imposible saltarse el bloqueo del diálogo.
   const faltan: string[] = [];
-  if (!cond || !((cond.salario_neto ?? 0) > 0)) faltan.push("salario");
+  // El salario del puesto es BRUTO: `salario_neto` está siempre a null desde la
+  // migración que lo separó del bruto, así que validar contra él hacía imposible
+  // promocionar a nadie (y mandaba a rellenar un campo que no existe en el
+  // formulario de Puestos).
+  if (!cond || !((cond.salario_bruto ?? 0) > 0)) faltan.push("salario");
   if (!cond?.jornada_contrato?.trim()) faltan.push("jornada");
   if (!((cond?.horas_semanales ?? 0) > 0)) faltan.push("horas semanales");
   // El tipo de contrato del puesto vive en `puestos.tipo_contrato_defecto`.
@@ -327,7 +331,7 @@ export async function promocionarEmpleado(
         tipoContrato,
         jornada: cond?.jornada_contrato ?? null,
         horasSemanales: cond?.horas_semanales ?? null,
-        salarioNeto: cond?.salario_neto ?? null,
+        salarioBruto: cond?.salario_bruto ?? null,
         marca: await getMarcaEmpresa(empresaId),
       });
       const firma = await crearFirmaInterno({
@@ -417,7 +421,8 @@ export async function getPuestosPrincipalesEmpleados(): Promise<Record<string, s
 export interface CondicionesActualesEmpleado {
   puesto: string | null;
   departamento: string | null;
-  salarioNeto: number | null;
+  /** BRUTO vigente. El neto no se calcula, así que no se compara. */
+  salarioBruto: number | null;
   jornada: string | null;
   horasSemanales: number | null;
   tipoContrato: string | null;
@@ -526,7 +531,7 @@ export async function getCondicionesVigentesEmpleado(
 
   const { data: rows } = await admin
     .from("empleado_condiciones")
-    .select("nivel, salario_neto, jornada_contrato, horas_semanales, tipo_contrato, vigente_hasta, vigente_desde")
+    .select("nivel, salario_bruto, jornada_contrato, horas_semanales, tipo_contrato, vigente_hasta, vigente_desde")
     .eq("empleado_id", empleadoId)
     .order("vigente_desde", { ascending: false, nullsFirst: false })
     .limit(20);
@@ -538,7 +543,7 @@ export async function getCondicionesVigentesEmpleado(
     data: {
       puesto: puestoActual,
       departamento: depto?.nombre ?? null,
-      salarioNeto: (cond?.salario_neto as number | null) ?? null,
+      salarioBruto: (cond?.salario_bruto as number | null) ?? null,
       jornada: (cond?.jornada_contrato as string | null) ?? null,
       horasSemanales: (cond?.horas_semanales as number | null) ?? null,
       tipoContrato: (cond?.tipo_contrato as string | null) ?? null,
@@ -644,7 +649,8 @@ async function leerHorarioOficialPuesto(
 export interface CondicionHistorica {
   puesto: string | null;
   nivel: number | null;
-  salarioNeto: number | null;
+  /** BRUTO. El neto quedó vacío al separarse del bruto. */
+  salarioBruto: number | null;
   jornada: string | null;
   horasSemanales: number | null;
   tipoContrato: string | null;
@@ -680,7 +686,7 @@ export async function getHistorialCondicionesEmpleado(
   const { data: rows } = await admin
     .from("empleado_condiciones")
     .select(
-      "puesto_nombre, nivel, salario_neto, jornada_contrato, horas_semanales, tipo_contrato, motivo, vigente_desde, vigente_hasta",
+      "puesto_nombre, nivel, salario_bruto, jornada_contrato, horas_semanales, tipo_contrato, motivo, vigente_desde, vigente_hasta",
     )
     .eq("empleado_id", empleadoId)
     .eq("empresa_id", empresaId)
@@ -689,7 +695,7 @@ export async function getHistorialCondicionesEmpleado(
   const data: CondicionHistorica[] = (rows ?? []).map((r) => ({
     puesto: (r.puesto_nombre as string | null) ?? null,
     nivel: (r.nivel as number | null) ?? null,
-    salarioNeto: (r.salario_neto as number | null) ?? null,
+    salarioBruto: (r.salario_bruto as number | null) ?? null,
     jornada: (r.jornada_contrato as string | null) ?? null,
     horasSemanales: (r.horas_semanales as number | null) ?? null,
     tipoContrato: (r.tipo_contrato as string | null) ?? null,

@@ -7,7 +7,7 @@ import { getGoogleTokens } from "@/lib/google/api";
  * Body: {
  *   id,
  *   action: "read" | "unread" | "star" | "unstar" | "archive"
- *         | "trash" | "untrash"
+ *         | "trash" | "untrash" | "spam" | "unspam"
  *         | "addLabel" | "removeLabel" | "moveToLabel",
  *   labelId?: string  (requerido para addLabel/removeLabel/moveToLabel)
  * }
@@ -68,6 +68,14 @@ export async function POST(request: Request) {
     case "untrash":
       endpoint = `${baseUrl}/untrash`;
       payload = {};
+      break;
+    // Spam es una etiqueta más para Gmail: marcar mueve fuera de Recibidos,
+    // desmarcar hace el camino inverso (así lo hace Gmail web).
+    case "spam":
+      payload = { addLabelIds: ["SPAM"], removeLabelIds: ["INBOX"] };
+      break;
+    case "unspam":
+      payload = { addLabelIds: ["INBOX"], removeLabelIds: ["SPAM"] };
       break;
     case "addLabel":
       if (!labelId) {

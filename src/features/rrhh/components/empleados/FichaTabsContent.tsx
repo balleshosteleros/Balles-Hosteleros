@@ -270,7 +270,7 @@ export function HorariosTab({
         ) : (
           <>
             <p className="text-sm text-muted-foreground">No hay un patrón real asignado a este empleado.</p>
-            <p className="text-xs text-muted-foreground mt-3">La configuración de horarios sigue pendiente del discovery específico de `TASK-003`.</p>
+            <p className="text-xs text-muted-foreground mt-3">Asígnale un puesto con horario en la pestaña Puestos.</p>
           </>
         )}
       </div>

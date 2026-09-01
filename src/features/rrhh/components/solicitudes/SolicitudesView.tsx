@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useTabQuery } from "@/shared/hooks/use-tab-query";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { formatFechaHoraEnZona } from "@/features/empresa/lib/zona-horaria";
@@ -94,7 +94,13 @@ export function SolicitudesView() {
   const [notas, setNotas] = useState("");
   const [working, setWorking] = useState(false);
 
+  // Guarda la empresa con la que se lanzó la carga: si el usuario cambia de
+  // empresa mientras vuelven los datos, la respuesta vieja se descarta.
+  const empresaCargaRef = useRef(empresaActual.id);
+
   async function load() {
+    const empresaId = empresaActual.id;
+    empresaCargaRef.current = empresaId;
     setLoading(true);
     // Las quejas viven en su propia tabla por confidencialidad, pero para quien
     // las gestiona son un tipo más de solicitud: se listan mezcladas.
@@ -107,14 +113,18 @@ export function SolicitudesView() {
     const todo = [...solicitudes, ...denuncias].sort((a, b) =>
       b.createdAt.localeCompare(a.createdAt),
     );
+    if (empresaCargaRef.current !== empresaId) return;
     setItems(todo);
     setLoading(false);
   }
 
+  // Depende TAMBIÉN de la empresa activa: sin eso, al cambiar de empresa se
+  // seguían viendo (y se podían aprobar) las solicitudes de la anterior.
   useEffect(() => {
+    setItems([]);
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab]);
+  }, [tab, empresaActual.id]);
 
   const acceso = (s: SolicitudPersonal, campo: string): unknown => {
     if (campo === "tipo") return tipoLabel(s.tipo);

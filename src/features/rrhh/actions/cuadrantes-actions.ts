@@ -309,7 +309,8 @@ export async function updateCuadrante(
   input: CuadranteInput,
 ) {
   try {
-    const { supabase } = await getAppContext();
+    const { supabase, empresaId } = await getAppContext();
+    if (!empresaId) return { ok: false, error: "No autenticado" };
 
     const nombre = input.nombre.trim();
     const departamentoIds = Array.from(new Set(input.departamentoIds.filter(Boolean)));
@@ -320,7 +321,10 @@ export async function updateCuadrante(
     const { error } = await supabase
       .from("rrhh_cuadrantes")
       .update({ nombre, local_id: input.localId ?? null })
-      .eq("id", id);
+      // Acotado a la empresa ACTIVA: la RLS autoriza todas las del usuario, así
+      // que sin esto un multiempresa podía renombrar el cuadrante de la otra.
+      .eq("id", id)
+      .eq("empresa_id", empresaId);
     if (error) throw error;
 
     await setDepartamentos(supabase, id, departamentoIds);
@@ -336,8 +340,14 @@ export async function updateCuadrante(
 
 export async function deleteCuadrante(id: string) {
   try {
-    const { supabase } = await getAppContext();
-    const { error } = await supabase.from("rrhh_cuadrantes").delete().eq("id", id);
+    const { supabase, empresaId } = await getAppContext();
+    if (!empresaId) return { ok: false, error: "No autenticado" };
+    // Borrar arrastra en cascada sus departamentos: acotado a la empresa activa.
+    const { error } = await supabase
+      .from("rrhh_cuadrantes")
+      .delete()
+      .eq("id", id)
+      .eq("empresa_id", empresaId);
     if (error) throw error;
     revalidatePath("/rrhh/horarios");
     return { ok: true };

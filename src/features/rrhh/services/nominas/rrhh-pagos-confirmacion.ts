@@ -28,13 +28,11 @@ export interface LiquidacionDetalle {
   mesLabel: string;
   empresaNombre: string;
   fijo: boolean;
-  pago: number;
   nomina: number;
   complemento: number;
   ajuste: number;
   horasExtras: number;
   bonus: number;
-  propinaMantenimiento: number;
   ssEmpleado: number;
   ssEmpresa: number;
   irpf: number;
@@ -127,7 +125,7 @@ export async function detalleLiquidacionPorToken(
   const { data: pago } = await admin
     .from("rrhh_pagos")
     .select(
-      "empleado_nombre, fijo, pago, nomina, complemento, ajuste, horas_extras, bonus, complemento_mes_anterior, ss_empleado, ss_empresa, irpf, total, confirmacion_aceptada_at",
+      "empleado_nombre, fijo, nomina, complemento, ajuste, horas_extras, bonus, ss_empleado, ss_empresa, irpf, total, confirmacion_aceptada_at",
     )
     .eq("id", row.pago_id)
     .maybeSingle();
@@ -144,13 +142,11 @@ export async function detalleLiquidacionPorToken(
       mesLabel: nombreMes(row.periodo),
       empresaNombre: brand?.nombre || "la empresa",
       fijo: Boolean(pago.fijo),
-      pago: Number(pago.pago),
       nomina: Number(pago.nomina),
       complemento: Number(pago.complemento),
       ajuste: Number(pago.ajuste),
       horasExtras: Number(pago.horas_extras),
       bonus: Number(pago.bonus),
-      propinaMantenimiento: Number(pago.complemento_mes_anterior),
       ssEmpleado: Number(pago.ss_empleado),
       ssEmpresa: Number(pago.ss_empresa),
       irpf: Number(pago.irpf),
@@ -231,7 +227,6 @@ function recuadroLiquidacionHtml(d: LiquidacionDetalle): string {
   filas.push(fila("Nómina neta", fmtEur(d.nomina), { destacado: true, separador: true }));
   // Resto de conceptos que se suman a la liquidación.
   if (d.complemento) filas.push(fila("Complemento", fmtEur(d.complemento)));
-  if (d.propinaMantenimiento) filas.push(fila("Complemento mes anterior", fmtEur(d.propinaMantenimiento)));
   if (d.horasExtras) filas.push(fila("Horas extras", fmtEur(d.horasExtras)));
   if (d.bonus) filas.push(fila("Bonus", fmtEur(d.bonus)));
   if (d.ajuste) filas.push(fila("Ajuste", `${d.ajuste > 0 ? "+" : "−"}${fmtEur(Math.abs(d.ajuste))}`, { rojo: d.ajuste < 0 }));

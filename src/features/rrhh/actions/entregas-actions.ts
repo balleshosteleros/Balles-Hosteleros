@@ -14,7 +14,7 @@ import type {
   HitoActa,
 } from "@/features/rrhh/data/entregas";
 import { enviarActaEntregaAFirma } from "@/features/rrhh/services/entregas/enviar-a-firma";
-import { reenviarFirma, cancelarFirma } from "@/features/rrhh/actions/firmas-actions";
+import { reenviarFirma, cancelarFirmaInterno } from "@/features/rrhh/actions/firmas-actions";
 
 /**
  * Entregas de material y uniforme.
@@ -396,7 +396,7 @@ export async function reenviarEntregaAFirma(entregaId: string) {
     // Solo si no hay acta utilizable (nunca se creó, o caducó/se canceló) se
     // genera una nueva. La anterior, si la había, se cierra para que no quede
     // ningún enlace vivo capaz de firmar la misma entrega otra vez.
-    if (row.firma_id) await cancelarFirma(row.firma_id);
+    if (row.firma_id) await cancelarFirmaInterno(row.firma_id, empresaId, userId);
 
     const solicitanteNombre = await nombreUsuarioActual(db, userId);
     const firma = await enviarActaEntregaAFirma({
@@ -613,7 +613,7 @@ export async function darDeBajaPorMerma(entregaId: string, motivo: string) {
  */
 export async function cancelarDevolucion(entregaId: string) {
   try {
-    const { supabase, empresaId } = await getAppContext();
+    const { supabase, empresaId, userId } = await getAppContext();
     if (!empresaId) return { ok: false as const, error: "No autenticado" };
     const db = supabase as unknown as Awaited<ReturnType<typeof createClient>>;
 
@@ -644,7 +644,7 @@ export async function cancelarDevolucion(entregaId: string) {
     // que RRHH ya había anulado.
     const firmaIdViva = (actual as { devolucion_firma_id?: string | null })
       .devolucion_firma_id;
-    if (firmaIdViva) await cancelarFirma(firmaIdViva);
+    if (firmaIdViva) await cancelarFirmaInterno(firmaIdViva, empresaId, userId);
 
     const { error } = await db
       .from("entregas_material")
@@ -673,7 +673,7 @@ export async function cancelarDevolucion(entregaId: string) {
  */
 export async function borrarEntrega(entregaId: string) {
   try {
-    const { supabase, empresaId } = await getAppContext();
+    const { supabase, empresaId, userId } = await getAppContext();
     if (!empresaId) return { ok: false as const, error: "No autenticado" };
     const db = supabase as unknown as Awaited<ReturnType<typeof createClient>>;
 
@@ -696,10 +696,19 @@ export async function borrarEntrega(entregaId: string) {
       };
     }
 
-    // Se cierran sus actas pendientes: borrar la entrega dejando el enlace vivo
-    // permitiría firmar el acta de algo que ya no existe.
-    if (fila.firma_id) await cancelarFirma(fila.firma_id);
-    if (fila.devolucion_firma_id) await cancelarFirma(fila.devolucion_firma_id);
+    // Se cierran sus actas pendientes ANTES de borrar: si no se pudieran cerrar,
+    // borrar la entrega dejaría vivo un enlace capaz de firmar el acta de algo
+    // que ya no existe. Por eso se comprueba el resultado y se aborta.
+    for (const fid of [fila.firma_id, fila.devolucion_firma_id]) {
+      if (!fid) continue;
+      const cierre = await cancelarFirmaInterno(fid, empresaId, userId);
+      if (!cierre.ok) {
+        return {
+          ok: false as const,
+          error: "No se pudo cerrar el acta pendiente de esta entrega, así que no se ha borrado nada.",
+        };
+      }
+    }
 
     const { error } = await db
       .from("entregas_material")

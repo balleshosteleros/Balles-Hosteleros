@@ -429,10 +429,10 @@ export async function updateEmployeeLoginEmail(userId: string, nuevoEmailRaw: st
  *
  * Flujo:
  *   1. Generamos un magic link de tipo "recovery" con admin.generateLink.
- *   2. Si el SMTP global está configurado (SMTP_HOST/USER/PASS en .env), lo
- *      enviamos nosotros vía nodemailer.
+ *   2. Si hay transporte propio configurado (hoy Resend), lo enviamos nosotros
+ *      vía nodemailer.
  *   3. Si no, caemos al envío automático de Supabase (sandbox o el SMTP que
- *      tenga el proyecto), para no romper en entornos sin SMTP configurado.
+ *      tenga el proyecto), para no romper en entornos sin transporte.
  *
  * El enlace lleva a /update-password donde el usuario define su nueva clave.
  */
@@ -688,7 +688,8 @@ export async function deleteEmployee(userId: string) {
   // Por eso, si el empleado tiene datos, se BLOQUEA el borrado: la única vía es
   // marcarlo como Inactivo (desde RRHH → Empleados). Solo se permite descartar
   // altas en borrador sin perfil completado y sin datos.
-  // Misma guarda que `deleteEmpleado` en rrhh/actions/empleados-actions.ts.
+  // El borrado de empleados vive solo aquí: la acción equivalente de RRHH se
+  // retiró por no tener consumidor.
   const { data: emp } = await admin
     .from('empleados')
     .select('id, perfil_completado, user_id')

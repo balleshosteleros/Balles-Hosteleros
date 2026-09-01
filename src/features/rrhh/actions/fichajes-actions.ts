@@ -592,7 +592,13 @@ export async function updateFichaje(
   updates: { notas?: string; estado?: string; incidencia?: string | null }
 ) {
   try {
-    const { supabase } = await getContext();
+    const { supabase, empresaId } = await getContext();
+    if (!empresaId) return { ok: false, error: "No autenticado" };
+    // Editar un fichaje (validarlo, resolver su incidencia) es gestión de RRHH,
+    // igual que el resto de acciones de este fichero: era la única que no pedía
+    // permiso ni acotaba la empresa.
+    await requireAdminFichajes({ empresaIds: [empresaId] });
+
     const { error } = await supabase
       .from("fichajes")
       .update({
@@ -600,7 +606,8 @@ export async function updateFichaje(
         ...(updates.estado !== undefined && { estado: updates.estado }),
         ...(updates.incidencia !== undefined && { incidencia: updates.incidencia }),
       })
-      .eq("id", id);
+      .eq("id", id)
+      .eq("empresa_id", empresaId);
     if (error) throw error;
     return { ok: true };
   } catch (err: unknown) {

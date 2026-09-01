@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useContext, useEffect, useState } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { ArrowLeft, Globe, Plus, RefreshCw, Trash2 } from "lucide-react";
@@ -29,6 +29,7 @@ import {
   listarDominios,
   verificarDominio,
 } from "../../../actions/dominios-actions";
+import { AuthContext } from "@/features/auth/contexts/auth-context";
 import { WizardDominioDialog } from "./WizardDominioDialog";
 import { EstadoDominio } from "./EstadoDominio";
 import type { PaginaWebDominio } from "../../../types";
@@ -40,6 +41,8 @@ interface Props {
 }
 
 export function DominiosPanel({ paginaId, nombrePagina }: Props) {
+  const auth = useContext(AuthContext);
+  const puedeVerAjustes = auth?.puedeVer?.("AJUSTES") ?? false;
   const [dominios, setDominios] = useState<PaginaWebDominio[]>([]);
   const [loading, setLoading] = useState(true);
   const [nuevoOpen, setNuevoOpen] = useState(false);
@@ -119,14 +122,20 @@ export function DominiosPanel({ paginaId, nombrePagina }: Props) {
         </Button>
       </div>
 
+      {/* El atajo a Ajustes solo se ofrece a quien tenga el permiso: sin él la
+          ruta está cerrada y el enlace solo llevaría a un muro. */}
       <p className="text-sm text-muted-foreground">
         La dirección web es de toda la empresa. Puedes gestionarla en{" "}
-        <Link
-          href="/ajustes?tab=departamentos"
-          className="underline underline-offset-2 hover:text-foreground"
-        >
-          Ajustes › Departamentos › Marketing › Página web
-        </Link>
+        {puedeVerAjustes ? (
+          <Link
+            href="/ajustes?tab=departamentos"
+            className="underline underline-offset-2 hover:text-foreground"
+          >
+            Ajustes › Departamentos › Marketing › Página web
+          </Link>
+        ) : (
+          <span className="text-foreground">Ajustes › Departamentos › Marketing › Página web</span>
+        )}
         .
       </p>
 

@@ -27,7 +27,8 @@ export interface AnexoPromocionInput {
   tipoContrato: string | null;
   jornada: string | null;
   horasSemanales: number | null;
-  salarioNeto: number | null;
+  /** BRUTO anual/mensual pactado del puesto. El neto no se calcula. */
+  salarioBruto: number | null;
   /** Logo de la empresa para la cabecera (Ajustes → Imagen de marca). */
   marca?: MarcaEmpresa | null;
 }
@@ -146,7 +147,7 @@ export async function generarAnexoPromocionPDF(
   if (input.tipoContrato) escribirParrafo(`· Tipo de contrato: ${input.tipoContrato}`);
   if (input.jornada) escribirParrafo(`· Jornada: ${input.jornada}`);
   if (input.horasSemanales != null) escribirParrafo(`· Horas semanales: ${input.horasSemanales} h`);
-  escribirParrafo(`· Retribución (neto de referencia): ${eur(input.salarioNeto)}`);
+  escribirParrafo(`· Retribución bruta pactada: ${eur(input.salarioBruto)}`);
   y -= 4;
 
   escribirParrafo(

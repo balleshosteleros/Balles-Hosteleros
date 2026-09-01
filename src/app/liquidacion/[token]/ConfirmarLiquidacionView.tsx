@@ -85,8 +85,6 @@ export function ConfirmarLiquidacionView({ endpoint, detalle }: Props) {
   if (detalle.irpf) filas.push({ label: "IRPF", valor: `−${fmtEur(detalle.irpf)}`, signo: "neg" });
   filas.push({ label: "Nómina neta", valor: fmtEur(detalle.nomina), destacado: true, separador: true });
   if (detalle.complemento) filas.push({ label: "Complemento", valor: fmtEur(detalle.complemento) });
-  if (detalle.propinaMantenimiento)
-    filas.push({ label: "Propina mantenimiento", valor: fmtEur(detalle.propinaMantenimiento) });
   if (detalle.horasExtras) filas.push({ label: "Horas extras", valor: fmtEur(detalle.horasExtras) });
   if (detalle.bonus) filas.push({ label: "Bonus", valor: fmtEur(detalle.bonus) });
   if (detalle.ajuste)

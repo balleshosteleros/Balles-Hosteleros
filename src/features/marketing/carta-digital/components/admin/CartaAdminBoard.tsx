@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useContext, useEffect, useRef, useState, useTransition } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { Button } from "@/shared/components/ui/button";
@@ -25,6 +25,7 @@ import {
   reordenarCategorias,
   reordenarItems,
 } from "../../actions/carta-admin-actions";
+import { AuthContext } from "@/features/auth/contexts/auth-context";
 import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 import { ItemEditorModal } from "./ItemEditorModal";
 import { SlugConfigCard } from "./SlugConfigCard";
@@ -38,6 +39,8 @@ export function CartaAdminBoard({
   data: CartaAdminData;
   baseUrl: string;
 }) {
+  const auth = useContext(AuthContext);
+  const puedeVerAjustes = auth?.puedeVer?.("AJUSTES") ?? false;
   const [nuevaCat, setNuevaCat] = useState("");
   const [pending, startTransition] = useTransition();
   const [editorOpen, setEditorOpen] = useState(false);
@@ -97,15 +100,19 @@ export function CartaAdminBoard({
 
   return (
     <div className="space-y-6 p-4 sm:p-6">
-      <div className="flex justify-end">
-        <Link
-          href="/ajustes?tab=imagen-marca"
-          className="inline-flex items-center gap-1.5 rounded-md border border-stone-300 bg-white px-3 py-1.5 text-sm font-medium text-stone-700 transition hover:border-stone-400 hover:bg-stone-50"
-        >
-          <Palette className="h-4 w-4" />
-          Editar imagen de marca
-        </Link>
-      </div>
+      {/* Solo a quien tenga AJUSTES en su rol: nadie entra ahí sin permiso
+          explícito, así que no se le ofrece el atajo a quien va a chocar. */}
+      {puedeVerAjustes && (
+        <div className="flex justify-end">
+          <Link
+            href="/ajustes?tab=imagen-marca"
+            className="inline-flex items-center gap-1.5 rounded-md border border-stone-300 bg-white px-3 py-1.5 text-sm font-medium text-stone-700 transition hover:border-stone-400 hover:bg-stone-50"
+          >
+            <Palette className="h-4 w-4" />
+            Editar imagen de marca
+          </Link>
+        </div>
+      )}
 
       <div className="grid gap-4 lg:grid-cols-2">
         <SlugConfigCard empresa={data.empresa} baseUrl={baseUrl} />

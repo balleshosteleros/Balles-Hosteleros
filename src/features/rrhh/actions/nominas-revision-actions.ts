@@ -123,18 +123,16 @@ async function recalcularSumaPago(
   // un importe distinto al de su liquidación.
   const { data: prev } = await admin
     .from("rrhh_pagos")
-    .select("pago, complemento, horas_extras, bonus, complemento_mes_anterior, ajuste")
+    .select("complemento, horas_extras, bonus, ajuste")
     .eq("empresa_id", empresaId)
     .eq("empleado_id", empleadoId)
     .eq("periodo", periodo)
     .maybeSingle();
   const total =
-    Number(prev?.pago ?? 0) +
     suma.nomina +
     Number(prev?.complemento ?? 0) +
     Number(prev?.horas_extras ?? 0) +
     Number(prev?.bonus ?? 0) +
-    Number(prev?.complemento_mes_anterior ?? 0) +
     Number(prev?.ajuste ?? 0);
 
   await admin

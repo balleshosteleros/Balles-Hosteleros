@@ -138,6 +138,10 @@ export async function getHistorialEstadoEmpleado(
         "id, accion, fecha_efectiva, motivo, avisos_omitidos, origen, usuario_nombre, created_at",
       )
       .eq("empleado_id", empleadoId)
+      // Solo los movimientos de la empresa ACTIVA: `empresaId` se leía arriba
+      // pero solo servía para la zona horaria, así que a un multiempresa se le
+      // mezclaban las altas y bajas (con sus motivos) de las dos sociedades.
+      .eq("empresa_id", empresaId)
       .order("created_at", { ascending: false });
     if (error) throw error;
 

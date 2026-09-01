@@ -101,7 +101,6 @@ export function NotificacionesGate() {
         { label: "Complemento", value: num(actual.payload.complemento) },
         { label: "Horas extras", value: num(actual.payload.horasExtras) },
         { label: "Bonus", value: num(actual.payload.bonus) },
-        { label: "Propina mantenimiento", value: num(actual.payload.propinaMantenimiento) },
         { label: "Ajuste", value: num(actual.payload.ajuste) },
       ].filter((c) => c.value !== 0)
     : [];

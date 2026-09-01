@@ -179,7 +179,6 @@ function fromGuardado(
     puesto,
     area,
     fijo: g.fijo,
-    pago: g.pago,
     nomina: g.nomina,
     horasReales: g.horasReales,
     horasTrabajadas: g.horasTrabajadas,
@@ -187,7 +186,6 @@ function fromGuardado(
     ajuste: g.ajuste,
     horasExtras: g.horasExtras,
     bonus: g.bonus,
-    propinaMantenimiento: g.propinaMantenimiento,
     ssEmpleado: g.ssEmpleado,
     ssEmpresa: g.ssEmpresa,
     irpf: g.irpf,
@@ -206,7 +204,6 @@ function toGuardado(p: PagoEmpleado): PagoGuardado {
     empleadoId: p.empleadoId.startsWith("ext-") ? null : p.empleadoId,
     empleadoNombre: p.empleadoNombre,
     fijo: p.fijo,
-    pago: p.pago,
     nomina: p.nomina,
     horasReales: p.horasReales,
     horasTrabajadas: p.horasTrabajadas,
@@ -214,7 +211,6 @@ function toGuardado(p: PagoEmpleado): PagoGuardado {
     ajuste: p.ajuste,
     horasExtras: p.horasExtras,
     bonus: p.bonus,
-    propinaMantenimiento: p.propinaMantenimiento,
     ssEmpleado: p.ssEmpleado,
     ssEmpresa: p.ssEmpresa,
     irpf: p.irpf,
@@ -243,7 +239,6 @@ function nuevoPagoVacio(
     puesto,
     area,
     fijo: false,
-    pago: 0,
     nomina: 0,
     horasReales: 0,
     horasTrabajadas: 0,
@@ -251,7 +246,6 @@ function nuevoPagoVacio(
     ajuste: 0,
     horasExtras: 0,
     bonus: 0,
-    propinaMantenimiento: 0,
     ssEmpleado: 0,
     ssEmpresa: 0,
     irpf: 0,
@@ -278,6 +272,8 @@ export function PagosView() {
   // Horas del mes por empleado (teóricas/normales/extras/balance), por rango.
   const [horasPorRango, setHorasPorRango] = useState<Record<string, Map<string, HorasMesRow>>>({});
   const [loading, setLoading] = useState(false);
+  // Motivo por el que la tabla está vacía (sesión caducada, fallo de carga).
+  const [errorCarga, setErrorCarga] = useState<string | null>(null);
   const [showRevision, setShowRevision] = useState(false);
   // empleadoId cuya nómina se está abriendo (para el indicador del icono).
   const [abriendoNomina, setAbriendoNomina] = useState<string | null>(null);
@@ -512,7 +508,17 @@ export function PagosView() {
       esAgregado ? loadPagosRango(meses) : loadPagos(periodo),
     ]);
     setLoading(false);
-    if (!resEmp.ok) return;
+    if (!resEmp.ok) {
+      // Antes esto era un `return` mudo: la tabla se quedaba vacía y no había
+      // forma de distinguir "no hay datos" de "se te ha caducado la sesión".
+      setErrorCarga(
+        resEmp.error === "SESION_CADUCADA"
+          ? "Tu sesión ha caducado. Vuelve a entrar para ver los pagos."
+          : "No se pudieron cargar los empleados. Recarga la página.",
+      );
+      return;
+    }
+    setErrorCarga(null);
 
     // Indexar lo guardado: por empleado (con ficha) y suelto (ex-empleados).
     const guardadosPorEmp = new Map<string, PagoGuardado>();
@@ -1575,6 +1581,12 @@ export function PagosView() {
               </Button>
             </div>
           </div>
+        </div>
+      )}
+
+      {errorCarga && (
+        <div className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-100">
+          {errorCarga}
         </div>
       )}
 

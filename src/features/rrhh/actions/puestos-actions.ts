@@ -243,21 +243,3 @@ export async function listNivelesDePuesto(
     return { ok: false, data: [], error: friendlyError(err, "niveles") };
   }
 }
-
-export async function deletePuestoSalario(id: string) {
-  try {
-    const { supabase, empresaId } = await getContext();
-    if (!empresaId) return { ok: false, error: "No autenticado" };
-    const { error } = await supabase
-      .from("puesto_salarios")
-      .delete()
-      .eq("id", id)
-      .eq("empresa_id", empresaId);
-    if (error) throw error;
-    revalidatePath("/rrhh/puestos");
-    return { ok: true };
-  } catch (err) {
-    console.error("[rrhh] deletePuestoSalario:", err);
-    return { ok: false, error: "No se pudo eliminar" };
-  }
-}

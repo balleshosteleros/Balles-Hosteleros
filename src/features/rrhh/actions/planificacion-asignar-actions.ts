@@ -146,12 +146,16 @@ export async function asignarPatronDia(
 /** Quita una asignación concreta de la rejilla (fila de rrhh_planificacion). */
 export async function quitarAsignacionDia(asignacionId: string) {
   try {
-    const { supabase } = await getAppContext();
+    const { supabase, empresaId } = await getAppContext();
+    if (!empresaId) return { ok: false, error: "No autenticado" };
     if (!asignacionId) return { ok: false, error: "Falta el id" };
+    // Acotado a la empresa activa, como sus hermanas `asignarTurnoDia` y
+    // `asignarPatronDia`: si no, se podían borrar turnos de la otra empresa.
     const { error } = await supabase
       .from("rrhh_planificacion")
       .delete()
-      .eq("id", asignacionId);
+      .eq("id", asignacionId)
+      .eq("empresa_id", empresaId);
     if (error) throw error;
     revalidatePath("/rrhh/horarios");
     return { ok: true };

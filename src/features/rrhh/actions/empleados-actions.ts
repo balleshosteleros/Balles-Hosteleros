@@ -979,63 +979,6 @@ export async function quitarEmpleadoDeEmpresa(input: {
   }
 }
 
-export async function deleteEmpleado(id: string) {
-  try {
-    const { supabase } = await getAppContext();
-
-    // ─── REGLA DURA: no se borra un empleado YA GRABADO ────────────────────
-    // Un empleado con datos (perfil completado, fichajes o turnos) NO se puede
-    // borrar nunca — solo marcar Inactivo (registro legal). De momento el
-    // borrado queda PROHIBIDO para empleados grabados; el ajuste de RRHH que lo
-    // refleja está bloqueado (no editable). Solo se permite descartar un alta
-    // en borrador (sin perfil completado y sin datos).
-    const { data: emp } = await supabase
-      .from("empleados")
-      .select("perfil_completado, user_id")
-      .eq("id", id)
-      .maybeSingle();
-
-    let tieneDatos = Boolean(emp?.perfil_completado);
-    if (!tieneDatos && emp?.user_id) {
-      const [{ count: nFichajes }, { count: nTurnos }, { count: nPatrones }] =
-        await Promise.all([
-          supabase
-            .from("fichajes")
-            .select("id", { count: "exact", head: true })
-            .eq("empleado_id", emp.user_id as string),
-          supabase
-            .from("rrhh_turno_empleados")
-            .select("turno_id", { count: "exact", head: true })
-            .eq("empleado_id", id),
-          supabase
-            .from("rrhh_patron_empleados")
-            .select("patron_id", { count: "exact", head: true })
-            .eq("empleado_id", id),
-        ]);
-      tieneDatos =
-        (nFichajes ?? 0) > 0 || (nTurnos ?? 0) > 0 || (nPatrones ?? 0) > 0;
-    }
-
-    if (tieneDatos) {
-      return {
-        ok: false,
-        error:
-          "No se puede borrar un empleado ya grabado (tiene horarios, turnos o fichajes). Márcalo como Inactivo en su lugar.",
-      };
-    }
-
-    const { error } = await supabase.from("empleados").delete().eq("id", id);
-    if (error) throw error;
-    revalidatePath("/rrhh/empleados");
-    revalidatePath(`/rrhh/empleados/${id}`);
-    return { ok: true };
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : "Error desconocido";
-    console.error("[rrhh] deleteEmpleado:", msg);
-    return { ok: false, error: msg };
-  }
-}
-
 /**
  * Datos que necesita el formulario de "Copiar empleado" para la empresa destino:
  * el estado del emparejado por NOMBRE (departamento/puesto) y las listas para
@@ -1299,11 +1242,18 @@ export async function listDepartamentos() {
  */
 export async function getEmpleadoConPerfil(empleadoId: string) {
   try {
-    const { supabase } = await getAppContext();
+    const { supabase, empresaId } = await getAppContext();
+    if (!empresaId) return { ok: false, error: "No autenticado", data: null };
+    // Acotado a la empresa ACTIVA, como sus vecinas (`listSolicitudesEmpleado`,
+    // `getEmpleadoHorarioActual`). La RLS no basta: autoriza TODAS las empresas
+    // del usuario, no la del selector, así que sin este filtro la ficha de otra
+    // empresa (con DNI, IBAN y nº de SS) se abría por URL desde la empresa
+    // equivocada.
     const { data: emp, error } = await supabase
       .from("empleados")
       .select(`*, departamentos!empleados_departamento_id_fkey(nombre)`)
       .eq("id", empleadoId)
+      .eq("empresa_id", empresaId)
       .maybeSingle();
     if (error) throw error;
     if (!emp) return { ok: false, error: "Empleado no encontrado", data: null };

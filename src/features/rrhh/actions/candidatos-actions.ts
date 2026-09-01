@@ -425,6 +425,7 @@ export async function setCandidatoVisto(id: string, visto: boolean) {
         .eq("id", id)
         .eq("empresa_id", empresaId);
       if (error) throw error;
+      revalidatePath("/rrhh/reclutamiento");
       return { ok: true, vistoAt: ahora };
     }
 
@@ -434,6 +435,7 @@ export async function setCandidatoVisto(id: string, visto: boolean) {
       .eq("id", id)
       .eq("empresa_id", empresaId);
     if (error) throw error;
+    revalidatePath("/rrhh/reclutamiento");
     return { ok: true, vistoAt: null };
   } catch (err: unknown) {
     return { ok: false, error: mensajeError(err) };
@@ -459,6 +461,23 @@ export async function actualizarDatosCandidato(
   try {
     const { supabase, empresaId } = await getContext();
     if (!empresaId) return { ok: false, error: "No autenticado" };
+
+    // Un candidato ya contratado es INMUTABLE, igual que en `eliminarCandidato`
+    // y `moverCandidatoAVacante`: su ficha es el histórico de la relación
+    // laboral y sus datos se gestionan desde la ficha de empleado.
+    const { data: cand } = await supabase
+      .from("candidatos")
+      .select("promovido_at, empleado_id")
+      .eq("id", id)
+      .eq("empresa_id", empresaId)
+      .maybeSingle();
+    if (!cand) return { ok: false, error: "Candidato no encontrado" };
+    if (cand.promovido_at || cand.empleado_id) {
+      return {
+        ok: false,
+        error: "Este candidato ya es empleado: edita sus datos desde su ficha de empleado.",
+      };
+    }
 
     const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
     if ("genero" in input) patch.genero = input.genero || null;

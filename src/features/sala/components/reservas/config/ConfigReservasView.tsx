@@ -17,10 +17,6 @@ import { ComunicacionesPanel } from "./ComunicacionesPanel";
 import { LinksReservaPanel } from "@/features/sala/components/reservas/LinksReservaPanel";
 import { CanalesTab } from "./CanalesTab";
 
-const PLACEHOLDER_TABS = [
-  { value: "horarios", label: "Horarios" },
-] as const;
-
 interface Props {
   onBack: () => void;
 }
@@ -60,18 +56,7 @@ export function ConfigReservasView({ onBack }: Props) {
       case "bloqueos":   return <BloqueosTab />;
       case "comunicaciones": return <ComunicacionesPanel />;
       case "canales":    return <CanalesTab />;
-      default: {
-        const placeholder = PLACEHOLDER_TABS.find((t) => t.value === tab);
-        if (placeholder) {
-          return (
-            <div className="border border-dashed rounded-md p-8 text-center text-sm text-muted-foreground">
-              <p className="font-medium mb-1">{placeholder.label}</p>
-              <p>Próximamente.</p>
-            </div>
-          );
-        }
-        return null;
-      }
+      default:           return null;
     }
   }
 
@@ -97,7 +82,7 @@ export function ConfigReservasView({ onBack }: Props) {
 
       <div className="flex-1 overflow-y-auto p-4">
         <Tabs value={tab} onValueChange={(v) => salirSiProcede(() => setTab(v))}>
-          <TabsList className="grid grid-cols-12 w-full">
+          <TabsList className="grid grid-cols-11 w-full">
             <TabsTrigger value="reservas">Reservas</TabsTrigger>
             <TabsTrigger value="estructura">Estructura</TabsTrigger>
             <TabsTrigger value="orden">Orden</TabsTrigger>
@@ -109,11 +94,6 @@ export function ConfigReservasView({ onBack }: Props) {
             <TabsTrigger value="bloqueos">Bloqueos</TabsTrigger>
             <TabsTrigger value="comunicaciones">Comunicaciones</TabsTrigger>
             <TabsTrigger value="canales">Canales</TabsTrigger>
-            {PLACEHOLDER_TABS.map((t) => (
-              <TabsTrigger key={t.value} value={t.value}>
-                {t.label}
-              </TabsTrigger>
-            ))}
           </TabsList>
         </Tabs>
         <div className="mt-4">{renderTab()}</div>

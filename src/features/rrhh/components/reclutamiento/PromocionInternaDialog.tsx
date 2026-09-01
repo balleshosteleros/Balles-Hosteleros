@@ -297,9 +297,11 @@ export function PromocionInternaDialog({
                   despues: puesto.departamento,
                 },
                 {
-                  campo: "Salario",
-                  // Actual: neto del snapshot (lo que hay guardado). Nuevo: bruto del puesto.
-                  antes: fmtEur(actuales?.salarioNeto ?? null),
+                  campo: "Salario bruto",
+                  // Bruto contra bruto: antes se comparaba el neto guardado (hoy
+                  // siempre vacío) con el bruto del puesto, así que la fila salía
+                  // marcada como "cambia" aunque el salario fuera el mismo.
+                  antes: fmtEur(actuales?.salarioBruto ?? null),
                   despues: fmtEur(puesto.salarioBruto),
                 },
                 {
@@ -360,7 +362,7 @@ export function PromocionInternaDialog({
                 );
               })}
               <p className="border-t border-border bg-muted/20 px-3 py-2 text-[11px] text-muted-foreground">
-                El salario actual se muestra en neto (lo guardado) y el nuevo en bruto del puesto. Al confirmar se copian
+                Al confirmar se copian
                 las condiciones del nuevo puesto y se archiva el histórico anterior. El horario antiguo se cierra el día
                 antes, así que desde el primer día solo rige el nuevo. Las tareas del puesto anterior dejan de aparecerle.
               </p>

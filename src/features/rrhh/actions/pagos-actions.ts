@@ -41,7 +41,12 @@ export interface EmpleadoPagoRow {
 export async function listEmpleadosParaPagos(): Promise<{ ok: boolean; data: EmpleadoPagoRow[]; error?: string }> {
   try {
     const { supabase, empresaId } = await getAppContext();
-    if (!empresaId) return { ok: false, data: [] };
+    // Sin empresa resuelta lo normal es que la sesión haya caducado. Se dice
+    // con todas las letras: antes se devolvía `ok:false` a secas y la pantalla
+    // se quedaba en blanco sin que el usuario pudiera saber por qué.
+    if (!empresaId) {
+      return { ok: false, data: [], error: "SESION_CADUCADA" };
+    }
 
     // AISLAMIENTO ESTRICTO POR EMPRESA. Solo fichas cuya empresa_id es la activa.
     //
@@ -124,7 +129,6 @@ export interface PagoGuardado {
   empleadoId: string | null;
   empleadoNombre: string;
   fijo: boolean;
-  pago: number;
   nomina: number;
   horasReales: number;
   horasTrabajadas: number;
@@ -132,7 +136,6 @@ export interface PagoGuardado {
   ajuste: number;
   horasExtras: number;
   bonus: number;
-  propinaMantenimiento: number;
   ssEmpleado: number;
   ssEmpresa: number;
   irpf: number;
@@ -156,7 +159,6 @@ type PagoDbRow = {
   empleado_id: string | null;
   empleado_nombre: string;
   fijo: boolean;
-  pago: number | string;
   nomina: number | string;
   horas_reales: number | string;
   horas_trabajadas: number | string;
@@ -164,7 +166,6 @@ type PagoDbRow = {
   ajuste: number | string;
   horas_extras: number | string;
   bonus: number | string;
-  complemento_mes_anterior: number | string;
   ss_empleado: number | string;
   ss_empresa: number | string;
   irpf: number | string;
@@ -176,14 +177,13 @@ type PagoDbRow = {
 };
 
 const PAGO_COLS =
-  "empleado_id, empleado_nombre, fijo, pago, nomina, horas_reales, horas_trabajadas, complemento, ajuste, horas_extras, bonus, complemento_mes_anterior, ss_empleado, ss_empresa, irpf, total, pagado, nomina_path, confirmacion_enviada_at, confirmacion_aceptada_at";
+  "empleado_id, empleado_nombre, fijo, nomina, horas_reales, horas_trabajadas, complemento, ajuste, horas_extras, bonus, ss_empleado, ss_empresa, irpf, total, pagado, nomina_path, confirmacion_enviada_at, confirmacion_aceptada_at";
 
 function dbToPago(r: PagoDbRow): PagoGuardado {
   return {
     empleadoId: r.empleado_id,
     empleadoNombre: r.empleado_nombre,
     fijo: r.fijo,
-    pago: Number(r.pago),
     nomina: Number(r.nomina),
     horasReales: Number(r.horas_reales),
     horasTrabajadas: Number(r.horas_trabajadas),
@@ -191,7 +191,6 @@ function dbToPago(r: PagoDbRow): PagoGuardado {
     ajuste: Number(r.ajuste),
     horasExtras: Number(r.horas_extras),
     bonus: Number(r.bonus),
-    propinaMantenimiento: Number(r.complemento_mes_anterior),
     ssEmpleado: Number(r.ss_empleado),
     ssEmpresa: Number(r.ss_empresa),
     irpf: Number(r.irpf),
@@ -285,7 +284,6 @@ export async function savePago(
         empleado_nombre: row.empleadoNombre,
         periodo,
         fijo: row.fijo,
-        pago: row.pago,
         nomina: row.nomina,
         horas_reales: row.horasReales,
         horas_trabajadas: row.horasTrabajadas,
@@ -293,7 +291,6 @@ export async function savePago(
         ajuste: row.ajuste,
         horas_extras: row.horasExtras,
         bonus: row.bonus,
-        complemento_mes_anterior: row.propinaMantenimiento,
         ss_empleado: row.ssEmpleado,
         ss_empresa: row.ssEmpresa,
         irpf: row.irpf,
@@ -339,7 +336,7 @@ export async function enviarConfirmacionesPago(
       .in("empleado_id", ids)
       .is("confirmacion_enviada_at", null)
       .select(
-        "id, empleado_id, empleado_nombre, fijo, pago, nomina, complemento, ajuste, horas_extras, bonus, complemento_mes_anterior, ss_empleado, ss_empresa, irpf, total",
+        "id, empleado_id, empleado_nombre, fijo, nomina, complemento, ajuste, horas_extras, bonus, ss_empleado, ss_empresa, irpf, total",
       );
     if (error) throw error;
     const updated = data ?? [];
@@ -367,14 +364,12 @@ export async function enviarConfirmacionesPago(
             mensaje: "",
             payload: {
               periodo,
-              pago: Number(r.pago),
-              nomina: Number(r.nomina),
+                        nomina: Number(r.nomina),
               complemento: Number(r.complemento),
               ajuste: Number(r.ajuste),
               horasExtras: Number(r.horas_extras),
               bonus: Number(r.bonus),
-              propinaMantenimiento: Number(r.complemento_mes_anterior),
-              total: Number(r.total),
+                        total: Number(r.total),
               textoLiquidar: cfg.textoLiquidar,
               requiereAprobacion: cfg.requiereAprobacion,
             },
@@ -410,14 +405,12 @@ export async function enviarConfirmacionesPago(
               mesLabel,
               empresaNombre,
               fijo: Boolean(r.fijo),
-              pago: Number(r.pago),
-              nomina: Number(r.nomina),
+                        nomina: Number(r.nomina),
               complemento: Number(r.complemento),
               ajuste: Number(r.ajuste),
               horasExtras: Number(r.horas_extras),
               bonus: Number(r.bonus),
-              propinaMantenimiento: Number(r.complemento_mes_anterior),
-              ssEmpleado: Number(r.ss_empleado),
+                        ssEmpleado: Number(r.ss_empleado),
               ssEmpresa: Number(r.ss_empresa),
               irpf: Number(r.irpf),
               total: Number(r.total),
@@ -579,10 +572,10 @@ export interface PagoAbonado {
   periodoLabel: string; // 'junio 2026'
   total: number;        // neto a percibir (lo que recibe)
   nomina: number;       // nómina neta
-  ssEmpleado: number;
+  ssEmpleado: number;   // cotización a cargo del TRABAJADOR (se le descuenta)
+  ssEmpresa: number;    // cotización a cargo de la EMPRESA (no se le descuenta)
   irpf: number;
   complemento: number;
-  complementoMesAnterior: number;
   horasExtras: number;
   bonus: number;
   ajuste: number;
@@ -592,7 +585,7 @@ export interface PagoAbonado {
 }
 
 const PAGO_ABONADO_COLS =
-  "id, periodo, total, nomina, ss_empleado, irpf, complemento, complemento_mes_anterior, " +
+  "id, periodo, total, nomina, ss_empleado, ss_empresa, irpf, complemento, " +
   "horas_extras, bonus, ajuste, pagado_at, nomina_path";
 
 function bdToPagoAbonado(r: Record<string, unknown>, tz: string): PagoAbonado {
@@ -605,9 +598,9 @@ function bdToPagoAbonado(r: Record<string, unknown>, tz: string): PagoAbonado {
     total: Number(r.total),
     nomina: Number(r.nomina),
     ssEmpleado: Number(r.ss_empleado),
+    ssEmpresa: Number(r.ss_empresa),
     irpf: Number(r.irpf),
     complemento: Number(r.complemento),
-    complementoMesAnterior: Number(r.complemento_mes_anterior),
     horasExtras: Number(r.horas_extras),
     bonus: Number(r.bonus),
     ajuste: Number(r.ajuste),
@@ -722,7 +715,6 @@ export async function loadPagosRango(
         });
         continue;
       }
-      prev.pago += p.pago;
       prev.nomina += p.nomina;
       prev.horasReales += p.horasReales;
       prev.horasTrabajadas += p.horasTrabajadas;
@@ -730,7 +722,6 @@ export async function loadPagosRango(
       prev.ajuste += p.ajuste;
       prev.horasExtras += p.horasExtras;
       prev.bonus += p.bonus;
-      prev.propinaMantenimiento += p.propinaMantenimiento;
       prev.ssEmpleado += p.ssEmpleado;
       prev.ssEmpresa += p.ssEmpresa;
       prev.irpf += p.irpf;
@@ -741,9 +732,8 @@ export async function loadPagosRango(
     const r2 = (n: number) => Math.round(n * 100) / 100;
     const filas = [...acc.values()].map((p) => ({
       ...p,
-      pago: r2(p.pago), nomina: r2(p.nomina), complemento: r2(p.complemento),
+      nomina: r2(p.nomina), complemento: r2(p.complemento),
       ajuste: r2(p.ajuste), horasExtras: r2(p.horasExtras), bonus: r2(p.bonus),
-      propinaMantenimiento: r2(p.propinaMantenimiento),
       ssEmpleado: r2(p.ssEmpleado), ssEmpresa: r2(p.ssEmpresa), irpf: r2(p.irpf),
       total: r2(p.total),
       horasReales: r2(p.horasReales), horasTrabajadas: r2(p.horasTrabajadas),

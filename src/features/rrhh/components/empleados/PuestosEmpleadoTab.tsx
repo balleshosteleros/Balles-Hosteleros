@@ -101,7 +101,7 @@ export function PuestosEmpleadoTab({
             </div>
 
             <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-3">
-              <Campo etiqueta="Salario neto" valor={formatoEuro(actual?.salarioNeto)} />
+              <Campo etiqueta="Salario bruto" valor={formatoEuro(actual?.salarioBruto)} />
               <Campo etiqueta="Tipo de contrato" valor={actual?.tipoContrato ?? "—"} />
               <Campo etiqueta="Jornada" valor={actual?.jornada ?? "—"} />
               <Campo
@@ -149,7 +149,7 @@ export function PuestosEmpleadoTab({
               <thead>
                 <tr className="text-left text-muted-foreground border-b">
                   <th className="py-2 pr-4 font-medium">Puesto</th>
-                  <th className="py-2 pr-4 font-medium">Salario neto</th>
+                  <th className="py-2 pr-4 font-medium">Salario bruto</th>
                   <th className="py-2 pr-4 font-medium">Jornada</th>
                   <th className="py-2 pr-4 font-medium">Contrato</th>
                   <th className="py-2 pr-4 font-medium">Vigencia</th>
@@ -169,7 +169,7 @@ export function PuestosEmpleadoTab({
                         )}
                       </span>
                     </td>
-                    <td className="py-2 pr-4">{formatoEuro(h.salarioNeto)}</td>
+                    <td className="py-2 pr-4">{formatoEuro(h.salarioBruto)}</td>
                     <td className="py-2 pr-4">{h.jornada ?? "—"}</td>
                     <td className="py-2 pr-4">{h.tipoContrato ?? "—"}</td>
                     <td className="py-2 pr-4 whitespace-nowrap">

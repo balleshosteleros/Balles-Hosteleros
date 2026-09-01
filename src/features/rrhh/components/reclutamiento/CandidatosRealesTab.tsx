@@ -565,14 +565,22 @@ export function CandidatosRealesTab() {
             ),
           );
           setSelected((prev) => (prev && prev.id === updated.id ? { ...prev, activo: updated.activo ?? true } : prev));
-          // Persiste género/ubicación/disponibilidad editados en la ficha.
-          void actualizarDatosCandidato(updated.id, {
+          // Persiste género/ubicación/disponibilidad editados en la ficha. Se
+          // comprueba el resultado: si falla (p. ej. el candidato ya es
+          // empleado y su ficha es inmutable) hay que decirlo, porque la lista
+          // ya se ha pintado con el cambio.
+          actualizarDatosCandidato(updated.id, {
             genero: updated.genero ?? null,
             ubicacion: updated.ubicacion ?? null,
             disponibilidad: updated.disponibilidad ?? null,
             experiencia_previa: updated.experienciaPrevia ?? null,
             como_nos_conocio: updated.comoNosConocio ?? null,
             carta_presentacion: updated.sobreTi ?? null,
+          }).then((res) => {
+            if (!res.ok) {
+              toast.error(res.error ?? "No se pudieron guardar los datos del candidato");
+              void cargar();
+            }
           });
         }}
         onEliminar={(c) => {

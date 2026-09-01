@@ -63,6 +63,24 @@ export async function GET(request: Request) {
         metadata: { motivo: "plazo_vencido" },
       });
       await admin.from("firmas_tokens").delete().eq("documento_id", docId);
+
+      // Si el acta caducada era de una ENTREGA DE MATERIAL, la entrega tiene
+      // que enterarse: si no, se queda «Pendiente de firma» para siempre (con
+      // sus KPIs inflados) y ya no se puede reenviar. Se marca `rechazada`,
+      // igual que cuando el trabajador rechaza el acta: vuelve a ser accionable
+      // desde RRHH.
+      const marca = { updated_at: new Date().toISOString() };
+      await admin
+        .from("entregas_material")
+        .update({ ...marca, estado: "rechazada" })
+        .eq("firma_id", docId)
+        .eq("estado", "pendiente_firma");
+      await admin
+        .from("entregas_material")
+        .update({ ...marca, devolucion_estado: "rechazada" })
+        .eq("devolucion_firma_id", docId)
+        .in("devolucion_estado", ["pendiente_firma", "merma_pendiente_firma"]);
+
       expirados++;
     } catch (e) {
       console.error("[cron/firmas-expirar] evento:", docId, e);

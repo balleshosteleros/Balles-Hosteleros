@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useContext, useEffect, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, Eye, Globe, Loader2, Sparkles, Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -16,6 +16,7 @@ import { PropiedadesPanel } from "./PropiedadesPanel";
 import { AutosaveIndicator } from "./AutosaveIndicator";
 import { ChatWebPane } from "./ChatWebPane";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
+import { AuthContext } from "@/features/auth/contexts/auth-context";
 
 interface Props {
   paginaId: string;
@@ -23,6 +24,8 @@ interface Props {
 
 export function EditorShell({ paginaId }: Props) {
   const { empresaActual } = useEmpresa();
+  const auth = useContext(AuthContext);
+  const puedeVerAjustes = auth?.puedeVer?.("AJUSTES") ?? false;
   const hydrate = useEditorStore((s) => s.hydrate);
   const reset = useEditorStore((s) => s.reset);
   const nombreStore = useEditorStore((s) => s.nombre);
@@ -215,9 +218,13 @@ export function EditorShell({ paginaId }: Props) {
             Esta página se escribe sola con los datos de la empresa, para que la razón social,
             el CIF y el domicilio digan siempre lo mismo aquí y en Ajustes. Para cambiarla,
             corrige{" "}
-            <Link href="/ajustes" className="underline underline-offset-2 hover:text-foreground">
-              Ajustes → Datos generales
-            </Link>{" "}
+            {puedeVerAjustes ? (
+              <Link href="/ajustes" className="underline underline-offset-2 hover:text-foreground">
+                Ajustes → Datos generales
+              </Link>
+            ) : (
+              <span className="text-foreground">Ajustes → Datos generales</span>
+            )}{" "}
             y vuelve a generarla desde la lista de páginas.
           </p>
         </div>
