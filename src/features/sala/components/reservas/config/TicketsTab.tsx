@@ -25,8 +25,10 @@ import {
   listTicketProductos,
   unarchiveTicketProducto,
 } from "@/features/sala/actions/ticket-productos-actions";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 import { TicketProductoForm } from "./TicketProductoForm";
+import { RevolutConfigPanel } from "./RevolutConfigPanel";
 
 function fmtEuro(n: number, iva: number): string {
   const total = n * (1 + iva / 100);
@@ -35,6 +37,7 @@ function fmtEuro(n: number, iva: number): string {
 
 export function TicketsTab() {
   const { confirm: confirmDelete, dialog: confirmDeleteDialog } = useConfirmDelete();
+  const [subTab, setSubTab] = useState<"productos" | "cobro">("productos");
   const [productos, setProductos] = useState<ReservaTicketProducto[]>([]);
   const [loading, setLoading] = useState(true);
   const [editando, setEditando] = useState<ReservaTicketProducto | null>(null);
@@ -91,6 +94,16 @@ export function TicketsTab() {
   return (
     <div className="space-y-3">
       {confirmDeleteDialog}
+
+      <Tabs value={subTab} onValueChange={(v) => setSubTab(v as "productos" | "cobro")}>
+        <TabsList>
+          <TabsTrigger value="productos">Productos</TabsTrigger>
+          <TabsTrigger value="cobro">Cobro</TabsTrigger>
+        </TabsList>
+      </Tabs>
+
+      {subTab === "cobro" ? <RevolutConfigPanel /> : (
+      <div className="space-y-3">
       <div className="flex items-center justify-between gap-3">
         <Button size="sm" onClick={() => setCreando(true)}>
           <Plus className="h-3.5 w-3.5 mr-1" /> Nuevo
@@ -107,8 +120,8 @@ export function TicketsTab() {
       </div>
 
       <p className="text-xs text-muted-foreground">
-        Productos que el cliente compra al reservar (cenas evento, brunch, cubierto fijo…). El cobro
-        queda pendiente de pasarela: por ahora la reserva se guarda con precio e IVA, sin cargo automático.
+        Productos que el cliente compra por adelantado (cenas evento, brunch, cubierto fijo…).
+        Cada compra genera un código de un solo uso que el cliente canjea al reservar.
       </p>
 
       {loading ? (
@@ -186,6 +199,8 @@ export function TicketsTab() {
             );
           })}
         </div>
+      )}
+      </div>
       )}
 
       <Dialog

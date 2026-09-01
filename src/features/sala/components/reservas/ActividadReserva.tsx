@@ -31,7 +31,7 @@ const CAMPO_LABEL: Record<string, string> = {
   hora: "Hora",
   turno: "Turno",
   duracion_minutos: "Tiempo de mesa",
-  notas: "Observaciones",
+  notas: "Comentarios",
   bloqueada: "Bloqueada",
   vinculacion: "Vinculación de cliente",
 };
@@ -58,6 +58,39 @@ function valorLegible(campo: string, valor: string | null): string {
     default:
       return valor;
   }
+}
+
+/** Códigos de mesa de un valor de historial ("M1+M2" → ["M1","M2"]). */
+function mesasDeValor(valor: string | null): string[] {
+  return (valor ?? "")
+    .split("+")
+    .map((c) => c.trim().toUpperCase())
+    .filter(Boolean);
+}
+
+/**
+ * Qué mesas entraron y cuáles salieron en un cambio de mesa.
+ *
+ * Una reserva que pasa de "M1" a "M1+M2" en el historial se lee como un
+ * cambio de texto, y en sala la pregunta es siempre otra: qué mesa se ha
+ * añadido y cuál se ha quitado. Devuelve null cuando el cambio no se explica
+ * mejor así (un desplazamiento limpio de una mesa a otra, sin nada en común),
+ * y entonces se pinta el tachado normal.
+ */
+function cambioDeMesas(
+  anterior: string | null,
+  nuevo: string | null,
+): { anadidas: string[]; quitadas: string[] } | null {
+  const antes = mesasDeValor(anterior);
+  const despues = mesasDeValor(nuevo);
+  const anadidas = despues.filter((m) => !antes.includes(m));
+  const quitadas = antes.filter((m) => !despues.includes(m));
+  // Sin nada en común es una mudanza, no una unión: "M1 → M4" se entiende
+  // mejor tal cual que como "quitada M1, añadida M4".
+  const comunes = antes.filter((m) => despues.includes(m));
+  if (comunes.length === 0) return null;
+  if (anadidas.length === 0 && quitadas.length === 0) return null;
+  return { anadidas, quitadas };
 }
 
 /** Quién lo hizo. Si no hay persona, de dónde vino el cambio. */
@@ -155,15 +188,55 @@ export function ActividadReserva({ reservaId }: { reservaId: string }) {
                 {a.campo === "vinculacion" ? (
                   <div className="mt-0.5 text-foreground">{a.valorNuevo}</div>
                 ) : (
-                  <div className="mt-0.5 text-muted-foreground">
-                    <span className="line-through">
-                      {valorLegible(a.campo, a.valorAnterior)}
-                    </span>
-                    {" → "}
-                    <span className="font-medium text-foreground">
-                      {valorLegible(a.campo, a.valorNuevo)}
-                    </span>
-                  </div>
+                  (() => {
+                    // Añadir o quitar mesas a una reserva se cuenta con esas
+                    // palabras; el resto de campos, con el tachado de siempre.
+                    const mesas =
+                      a.campo === "mesa"
+                        ? cambioDeMesas(a.valorAnterior, a.valorNuevo)
+                        : null;
+                    if (!mesas) {
+                      return (
+                        <div className="mt-0.5 text-muted-foreground">
+                          <span className="line-through">
+                            {valorLegible(a.campo, a.valorAnterior)}
+                          </span>
+                          {" → "}
+                          <span className="font-medium text-foreground">
+                            {valorLegible(a.campo, a.valorNuevo)}
+                          </span>
+                        </div>
+                      );
+                    }
+                    return (
+                      <div className="mt-0.5 space-y-0.5 text-muted-foreground">
+                        {mesas.anadidas.length > 0 && (
+                          <div>
+                            Se {mesas.anadidas.length === 1 ? "añadió" : "añadieron"}{" "}
+                            {mesas.anadidas.length === 1 ? "la mesa" : "las mesas"}{" "}
+                            <span className="font-medium text-foreground">
+                              {mesas.anadidas.join(", ")}
+                            </span>
+                          </div>
+                        )}
+                        {mesas.quitadas.length > 0 && (
+                          <div>
+                            Se {mesas.quitadas.length === 1 ? "quitó" : "quitaron"}{" "}
+                            {mesas.quitadas.length === 1 ? "la mesa" : "las mesas"}{" "}
+                            <span className="font-medium text-foreground">
+                              {mesas.quitadas.join(", ")}
+                            </span>
+                          </div>
+                        )}
+                        <div className="text-[11px]">
+                          {valorLegible(a.campo, a.valorAnterior)} →{" "}
+                          <span className="font-medium text-foreground">
+                            {valorLegible(a.campo, a.valorNuevo)}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })()
                 )}
                 <div className="mt-0.5 text-muted-foreground">{autor(a)}</div>
               </li>
