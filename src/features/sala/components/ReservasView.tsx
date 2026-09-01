@@ -2934,6 +2934,8 @@ export function ReservasView() {
   const [guardandoDesplazar, setGuardandoDesplazar] = useState(false);
 
   const [showDetalleReserva, setShowDetalleReserva] = useState(false);
+  // Salón para reasignar a mano las mesas de la reserva abierta.
+  const [showEditorMesas, setShowEditorMesas] = useState(false);
   const [selectedInsights, setSelectedInsights] = useState<ClienteInsights | null>(null);
   // Datos del cliente editables en la ficha. Se sincronizan con la reserva
   // seleccionada y solo se persisten al pulsar Guardar.
