@@ -128,9 +128,41 @@ export async function POST(req: Request) {
     const title = (formData.get("title") as string) || "Grabación sin título";
     const duration = parseInt(formData.get("duration") as string) || 0;
     const mimeType = (formData.get("mimeType") as string) || "video/webm";
+    const departamentoIn = ((formData.get("departamento") as string) || "").trim();
 
     if (!file) {
       return NextResponse.json({ error: "Archivo requerido" }, { status: 400 });
+    }
+
+    // Departamento destino, validado contra los accesibles por el usuario. Sin
+    // esto, una grabación que cayera por este camino quedaba sin departamento y
+    // no la veía nadie salvo admin, aunque el usuario sí lo hubiera elegido.
+    const { data: depsData } = await supabase.rpc("bh_departamentos_usuario", {
+      p_empresa: empresaId,
+    });
+    const misDeptos: string[] = Array.isArray(depsData)
+      ? [...new Set((depsData as string[]).filter(Boolean))]
+      : [];
+
+    let departamento = "";
+    if (departamentoIn) {
+      const match = misDeptos.find(
+        (d) => d.toUpperCase() === departamentoIn.toUpperCase(),
+      );
+      if (!match) {
+        return NextResponse.json(
+          { error: "No tienes acceso a ese departamento" },
+          { status: 403 },
+        );
+      }
+      departamento = match;
+    } else if (misDeptos.length === 1) {
+      departamento = misDeptos[0];
+    } else if (misDeptos.length > 1) {
+      return NextResponse.json(
+        { error: "Debes elegir un departamento", needsDepartamento: true },
+        { status: 422 },
+      );
     }
 
     // Cuota POR EMPRESA: cada empresa tiene su propio límite (default 500 GB).
@@ -159,7 +191,11 @@ export async function POST(req: Request) {
     const { client: r2Client, bucket: BUCKET_NAME, publicUrl: PUBLIC_URL } = getR2();
     const fileId = crypto.randomUUID();
     const ext = mimeType.includes("mp4") ? "mp4" : "webm";
-    const r2Key = `empresa_${empresaId}/grabaciones/${fileId}.${ext}`;
+    // Misma carpeta física por departamento que la subida directa.
+    const carpeta = departamento
+      ? departamento.replace(/[^A-Za-z0-9._-]/g, "_")
+      : "_sin_departamento";
+    const r2Key = `empresa_${empresaId}/grabaciones/${carpeta}/${fileId}.${ext}`;
     const buffer = Buffer.from(await file.arrayBuffer());
 
     try {
@@ -191,6 +227,7 @@ export async function POST(req: Request) {
         empresa_id: empresaId,
         owner_user_id: user.id,
         type: "grabacion",
+        departamento: departamento || null,
       })
       .select()
       .single();

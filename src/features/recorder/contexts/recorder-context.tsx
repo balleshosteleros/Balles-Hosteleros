@@ -39,10 +39,11 @@ interface RecorderContextValue {
   toggleOption: (key: keyof RecordOptions) => void;
   setQuality: (quality: RecordOptions["quality"]) => void;
   error: string | null;
+  /** Aviso no bloqueante durante la grabacion (p. ej. sin audio del sistema). */
+  audioWarning: string | null;
   result: RecordingResult | null;
   previewUrl: string | null;
   cameraStream: MediaStream | null;
-  displaySurface: string | null;
   pendingCount: number;
   /** Grabaciones nuevas (visibles para mi rol) que aún no he abierto. */
   newCount: number;
@@ -110,10 +111,10 @@ export function RecorderProvider({ children }: { children: ReactNode }) {
   const [newCount, setNewCount] = useState<number>(0);
   const [options, setOptions] = useState<RecordOptions>(DEFAULT_OPTIONS);
   const [error, setError] = useState<string | null>(null);
+  const [audioWarning, setAudioWarning] = useState<string | null>(null);
   const [result, setResult] = useState<RecordingResult | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
-  const [displaySurface, setDisplaySurface] = useState<string | null>(null);
   const [pendingCount, setPendingCount] = useState<number>(0);
   const [departamentos, setDepartamentos] = useState<string[]>([]);
   const [selectedDepartamento, setSelectedDepartamento] = useState<string | null>(null);
@@ -215,6 +216,71 @@ export function RecorderProvider({ children }: { children: ReactNode }) {
   // quede INCRUSTADA en el vídeo aunque grabes otra ventana o toda la pantalla.
   const canvasStreamRef = useRef<MediaStream | null>(null);
   const compositeRafRef = useRef<number | null>(null);
+  /**
+   * Ids con una subida en vuelo. El reintento automático corre cada 30 s y
+   * también al volver el foco o la conexión: sin este guardia, dos ciclos
+   * solapados subirían el mismo vídeo dos veces (duplicado en la memoria).
+   */
+  const uploadingIdsRef = useRef<Set<string>>(new Set());
+  /** Contexto de audio auxiliar que mide si la pista del sistema trae sonido. */
+  const audioProbeRef = useRef<{ ctx: AudioContext; timer: ReturnType<typeof setInterval> } | null>(
+    null,
+  );
+
+  const detenerVigilanciaAudio = useCallback(() => {
+    if (!audioProbeRef.current) return;
+    clearInterval(audioProbeRef.current.timer);
+    audioProbeRef.current.ctx.close().catch(() => {});
+    audioProbeRef.current = null;
+  }, []);
+
+  /**
+   * Mide el nivel de la pista de audio del sistema durante unos segundos. Si no
+   * se detecta ni un pico, la pista está muda y la voz del interlocutor no se
+   * está grabando: avisamos para que se pueda rehacer la grabación a tiempo en
+   * lugar de descubrirlo al reproducirla.
+   */
+  const vigilarAudioSistemaMudo = useCallback(
+    (stream: MediaStream) => {
+      detenerVigilanciaAudio();
+      try {
+        const Ctx =
+          window.AudioContext ||
+          (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+        const ctx = new Ctx();
+        const analyser = ctx.createAnalyser();
+        analyser.fftSize = 512;
+        ctx.createMediaStreamSource(stream).connect(analyser);
+        const datos = new Uint8Array(analyser.frequencyBinCount);
+
+        let comprobaciones = 0;
+        let huboSonido = false;
+        const timer = setInterval(() => {
+          analyser.getByteTimeDomainData(datos);
+          // 128 es el silencio absoluto en dominio temporal de 8 bits.
+          let pico = 0;
+          for (const v of datos) pico = Math.max(pico, Math.abs(v - 128));
+          if (pico > 2) huboSonido = true;
+
+          comprobaciones += 1;
+          // ~8 s de escucha: margen de sobra para que empiece a hablar alguien.
+          if (huboSonido || comprobaciones >= 16) {
+            if (!huboSonido) {
+              setAudioWarning(
+                "No se está oyendo el sonido del ordenador: la grabación saldría solo con tu micrófono. Si necesitas que se oiga a la otra persona, detén la grabación y vuelve a empezar compartiendo la pestaña de la videollamada con “Compartir audio de la pestaña” marcado.",
+              );
+            }
+            detenerVigilanciaAudio();
+          }
+        }, 500);
+
+        audioProbeRef.current = { ctx, timer };
+      } catch {
+        // Si el navegador no deja analizar, no bloqueamos la grabación.
+      }
+    },
+    [detenerVigilanciaAudio],
+  );
 
   const stopCompositing = useCallback(() => {
     if (compositeRafRef.current != null) {
@@ -231,6 +297,7 @@ export function RecorderProvider({ children }: { children: ReactNode }) {
 
   const stopAllStreams = useCallback(() => {
     stopCompositing();
+    detenerVigilanciaAudio();
     screenStreamRef.current?.getTracks().forEach((t) => t.stop());
     micStreamRef.current?.getTracks().forEach((t) => t.stop());
     cameraStreamRef.current?.getTracks().forEach((t) => t.stop());
@@ -240,8 +307,7 @@ export function RecorderProvider({ children }: { children: ReactNode }) {
     cameraStreamRef.current = null;
     audioContextRef.current = null;
     setCameraStream(null);
-    setDisplaySurface(null);
-  }, [stopCompositing]);
+  }, [stopCompositing, detenerVigilanciaAudio]);
 
   useEffect(() => {
     return () => {
@@ -276,7 +342,15 @@ export function RecorderProvider({ children }: { children: ReactNode }) {
       blob: Blob,
       title: string,
       duration: number,
+      /**
+       * Departamento con el que se grabó. Los reintentos lo pasan explícitamente
+       * para no depender del selector actual, que puede haber cambiado.
+       */
+      departamentoGrabacion?: string,
     ): Promise<{ id: string; url: string; duration: number; file_size: number } | null> => {
+      if (uploadingIdsRef.current.has(pendingId)) return null;
+      uploadingIdsRef.current.add(pendingId);
+
       const mimeType = blob.type || "video/webm";
 
       // Camino preferido: subida directa a R2 con URL firmada. Sube el vídeo sin
@@ -284,7 +358,8 @@ export function RecorderProvider({ children }: { children: ReactNode }) {
       // de Vercel que hacía fallar las grabaciones aunque hubiera conexión.
       // Requiere CORS PUT habilitado en el bucket R2. Si falla (p. ej. CORS aún
       // no aplicado), cae al camino FormData legado más abajo.
-      const departamento = selectedDepartamentoRef.current ?? undefined;
+      const departamento =
+        departamentoGrabacion ?? selectedDepartamentoRef.current ?? undefined;
 
       async function tryDirectUpload(): Promise<{ id: string; url: string; duration: number; file_size: number } | null> {
         const presignRes = await fetch("/api/recordings/presign", {
@@ -300,12 +375,21 @@ export function RecorderProvider({ children }: { children: ReactNode }) {
         const { uploadUrl, r2Key, fileId, departamento: depConfirmado } = await presignRes.json();
         if (!uploadUrl || !r2Key) return null;
 
-        const putRes = await fetch(uploadUrl, {
-          method: "PUT",
-          headers: { "Content-Type": mimeType },
-          body: blob,
-        });
-        if (!putRes.ok) return null; // p. ej. CORS o firma rechazada → fallback
+        // Un bloqueo de CORS no devuelve una respuesta con !ok: hace que fetch
+        // lance TypeError. Sin capturarlo, la excepcion salia de aqui y se
+        // saltaba el fallback, dejando la grabacion pendiente para siempre.
+        let putRes: Response;
+        try {
+          putRes = await fetch(uploadUrl, {
+            method: "PUT",
+            headers: { "Content-Type": mimeType },
+            body: blob,
+          });
+        } catch (putErr) {
+          console.warn("[recorder] PUT directo a R2 falló (CORS o red):", putErr);
+          return null; // → fallback FormData
+        }
+        if (!putRes.ok) return null; // p. ej. firma rechazada → fallback
 
         const res = await fetch("/api/recordings", {
           method: "POST",
@@ -336,6 +420,7 @@ export function RecorderProvider({ children }: { children: ReactNode }) {
         formData.append("title", title);
         formData.append("duration", duration.toString());
         formData.append("mimeType", mimeType);
+        if (departamento) formData.append("departamento", departamento);
         const res = await fetch("/api/recordings", { method: "POST", body: formData });
         if (!res.ok) {
           const text = await res.text().catch(() => "");
@@ -357,6 +442,8 @@ export function RecorderProvider({ children }: { children: ReactNode }) {
         await markRetryFailure(pendingId, msg).catch(() => {});
         await refreshPending();
         return null;
+      } finally {
+        uploadingIdsRef.current.delete(pendingId);
       }
     },
     [refreshPending],
@@ -406,6 +493,7 @@ export function RecorderProvider({ children }: { children: ReactNode }) {
         // Persistir en IndexedDB ANTES de intentar subir.
         // Así, si el upload falla o el usuario cierra la pestaña,
         // el video sigue disponible para reintentar más tarde.
+        const departamentoGrabacion = selectedDepartamentoRef.current ?? undefined;
         try {
           await addPending({
             id: pendingId,
@@ -416,6 +504,7 @@ export function RecorderProvider({ children }: { children: ReactNode }) {
             fileSize: playableBlob.size,
             createdAt: Date.now(),
             retryCount: 0,
+            departamento: departamentoGrabacion,
           });
           await refreshPending();
         } catch (err) {
@@ -425,7 +514,13 @@ export function RecorderProvider({ children }: { children: ReactNode }) {
         }
 
         // Subida en segundo plano. Si tiene éxito, removePending lo borra.
-        const data = await uploadBlob(pendingId, playableBlob, title, duration);
+        const data = await uploadBlob(
+          pendingId,
+          playableBlob,
+          title,
+          duration,
+          departamentoGrabacion,
+        );
         if (data) {
           setResult({
             videoId: data.id,
@@ -555,6 +650,7 @@ export function RecorderProvider({ children }: { children: ReactNode }) {
   const startRecording = useCallback(
     async (title: string) => {
       setError(null);
+      setAudioWarning(null);
       setState("requesting");
       chunksRef.current = [];
 
@@ -564,17 +660,32 @@ export function RecorderProvider({ children }: { children: ReactNode }) {
             ? { width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 30 } }
             : { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 } };
 
+        // Audio del sistema SIN procesado: el navegador aplica por defecto
+        // cancelacion de eco y supresion de ruido pensadas para un microfono.
+        // Sobre el audio de una pestana (la voz del interlocutor en Meet) esas
+        // cadenas la interpretan como "eco" del altavoz y la silencian casi por
+        // completo. Con estas constraints el audio de la pestana llega intacto.
         const screenStream = await navigator.mediaDevices.getDisplayMedia({
           video: videoConstraints,
-          audio: options.includeSystemAudio,
-        });
+          audio: options.includeSystemAudio
+            ? {
+                echoCancellation: false,
+                noiseSuppression: false,
+                autoGainControl: false,
+              }
+            : false,
+          // systemAudio: "include" pide al navegador ofrecer el audio del
+          // sistema en el dialogo de compartir. Sin el, Chrome puede ocultar la
+          // casilla y el audio de la videollamada nunca llega a la grabacion.
+          ...(options.includeSystemAudio ? { systemAudio: "include" } : {}),
+        } as DisplayMediaStreamOptions);
         screenStreamRef.current = screenStream;
 
         const videoTrack = screenStream.getVideoTracks()[0];
         const trackSettings = videoTrack.getSettings() as MediaTrackSettings & {
           displaySurface?: string;
         };
-        setDisplaySurface(trackSettings.displaySurface ?? null);
+        const surface = trackSettings.displaySurface ?? null;
 
         videoTrack.addEventListener("ended", () => {
           if (mediaRecorderRef.current?.state === "recording" || mediaRecorderRef.current?.state === "paused") {
@@ -587,6 +698,19 @@ export function RecorderProvider({ children }: { children: ReactNode }) {
             setState("idle");
           }
         });
+
+        // Si se pidio audio del sistema y el navegador no entrego pista, la voz
+        // del interlocutor (Meet, Zoom...) NO quedara grabada: solo se oiria el
+        // microfono. Pasa cuando se comparte una ventana o toda la pantalla en
+        // macOS, o cuando no se marca "Compartir audio de la pestana".
+        const pistasSistema = screenStream.getAudioTracks();
+        if (options.includeSystemAudio && pistasSistema.length === 0) {
+          setAudioWarning(
+            surface === "browser"
+              ? "Solo se grabará tu micrófono: no marcaste “Compartir audio de la pestaña”. Para que se oiga a la otra persona, detén la grabación y vuelve a empezar marcando esa casilla."
+              : "Solo se grabará tu micrófono. Para que se oiga a la otra persona, detén la grabación y vuelve a empezar eligiendo la pestaña de la videollamada (no la ventana ni la pantalla completa) y marcando “Compartir audio de la pestaña”.",
+          );
+        }
 
         let micStream: MediaStream | null = null;
         if (options.includeMic) {
@@ -715,6 +839,14 @@ export function RecorderProvider({ children }: { children: ReactNode }) {
         }, 500);
 
         setState("recording");
+
+        // La pista de audio del sistema puede existir y venir MUDA (compartir
+        // una ventana en macOS). Se mide ya grabando —no durante la cuenta
+        // atrás, donde el silencio es normal— y si no llega ni un pico se avisa,
+        // para poder rehacer la grabación en vez de descubrirlo al reproducirla.
+        if (options.includeSystemAudio && pistasSistema.length > 0) {
+          vigilarAudioSistemaMudo(new MediaStream([pistasSistema[0]]));
+        }
       } catch (err) {
         countdownCancelRef.current = true;
         setCountdownValue(0);
@@ -729,7 +861,17 @@ export function RecorderProvider({ children }: { children: ReactNode }) {
         stopAllStreams();
       }
     },
-    [options, processRecording, setCountdownValue, setElapsed, setState, stopAllStreams, stopRecording, buildCompositeVideoTracks],
+    [
+      options,
+      processRecording,
+      setCountdownValue,
+      setElapsed,
+      setState,
+      stopAllStreams,
+      stopRecording,
+      buildCompositeVideoTracks,
+      vigilarAudioSistemaMudo,
+    ],
   );
 
   // Nada de avisos del navegador al cerrar: las grabaciones pendientes viven en
@@ -768,7 +910,13 @@ export function RecorderProvider({ children }: { children: ReactNode }) {
         await refreshPending();
         return false;
       }
-      const data = await uploadBlob(rec.id, rec.blob, rec.title, rec.duration);
+      const data = await uploadBlob(
+        rec.id,
+        rec.blob,
+        rec.title,
+        rec.duration,
+        rec.departamento,
+      );
       return !!data;
     },
     [refreshPending, uploadBlob],
@@ -777,7 +925,22 @@ export function RecorderProvider({ children }: { children: ReactNode }) {
   const retryAllPending = useCallback(async () => {
     const all = await listPending();
     for (const rec of all) {
-      await uploadBlob(rec.id, rec.blob, rec.title, rec.duration);
+      await uploadBlob(rec.id, rec.blob, rec.title, rec.duration, rec.departamento);
+    }
+  }, [uploadBlob]);
+
+  /**
+   * Reintento automático de fondo: sube las grabaciones cuyo backoff ya venció.
+   * Es lo que garantiza que una grabación acabe SIEMPRE en la memoria del
+   * software sin que nadie tenga que pulsar nada. Solo salta con conexión.
+   */
+  const retryDuePending = useCallback(async () => {
+    if (typeof navigator !== "undefined" && !navigator.onLine) return;
+    const all = await listPending();
+    const ahora = Date.now();
+    for (const rec of all) {
+      if (rec.nextRetryAt && rec.nextRetryAt > ahora) continue;
+      await uploadBlob(rec.id, rec.blob, rec.title, rec.duration, rec.departamento);
     }
   }, [uploadBlob]);
 
@@ -790,29 +953,43 @@ export function RecorderProvider({ children }: { children: ReactNode }) {
   );
 
   // Al montar: contar pendientes y reintentar subidas si hay red.
+  //
+  // A partir de aquí NADA queda "solo en el ordenador": el reintento corre solo
+  // cada 30 s (respetando el backoff de cada grabación), al volver la conexión y
+  // al recuperar el foco de la pestaña, hasta que el vídeo entra en el servidor.
   useEffect(() => {
     let cancelled = false;
     (async () => {
       const list = await refreshPending();
       if (cancelled || list.length === 0) return;
-      if (typeof navigator === "undefined" || navigator.onLine) {
-        retryAllPending().catch(() => {});
-      }
+      retryAllPending().catch(() => {});
     })();
 
     function handleOnline() {
       retryAllPending().catch(() => {});
     }
+    function handleVisible() {
+      if (document.visibilityState === "visible") {
+        retryDuePending().catch(() => {});
+      }
+    }
+    const iv = setInterval(() => {
+      retryDuePending().catch(() => {});
+    }, 30_000);
+
     if (typeof window !== "undefined") {
       window.addEventListener("online", handleOnline);
+      document.addEventListener("visibilitychange", handleVisible);
     }
     return () => {
       cancelled = true;
+      clearInterval(iv);
       if (typeof window !== "undefined") {
         window.removeEventListener("online", handleOnline);
+        document.removeEventListener("visibilitychange", handleVisible);
       }
     };
-  }, [refreshPending, retryAllPending]);
+  }, [refreshPending, retryAllPending, retryDuePending]);
 
   const reset = useCallback(() => {
     if (previewUrl) URL.revokeObjectURL(previewUrl);
@@ -831,10 +1008,10 @@ export function RecorderProvider({ children }: { children: ReactNode }) {
     toggleOption,
     setQuality,
     error,
+    audioWarning,
     result,
     previewUrl,
     cameraStream,
-    displaySurface,
     pendingCount,
     newCount,
     markRecordingsSeen,

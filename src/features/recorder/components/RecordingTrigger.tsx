@@ -26,11 +26,20 @@ export function RecordingTrigger() {
     <Button
       variant="ghost"
       size="icon"
-      className="relative h-8 w-8"
+      className={cn("relative h-8 w-8", isRecording && "bg-red-50 hover:bg-red-100")}
       onClick={() => setDrawerOpen(true)}
-      title="Grabar pantalla"
+      title={isRecording ? "Grabando — pulsa para detener" : "Grabar pantalla"}
     >
-      <GrabacionIcon className={cn("!h-[18px] !w-[18px]", isRecording ? "text-red-600" : toolTextColor(colorKey))} />
+      {/* Único indicador de que se está grabando: un punto rojo parpadeando en
+          la barra. No se pinta ningún recuadro sobre la página, que hacía creer
+          que solo se capturaba esa zona cuando en realidad se graba entero lo
+          que se haya compartido. */}
+      <GrabacionIcon
+        className={cn(
+          "!h-[18px] !w-[18px]",
+          isRecording ? "text-red-600 animate-pulse" : toolTextColor(colorKey),
+        )}
+      />
 
       {isRecording ? (
         <span className="absolute -top-0.5 -right-0.5 flex h-2.5 w-2.5">

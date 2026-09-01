@@ -51,7 +51,6 @@ import { RecordingTrigger } from "@/features/recorder/components/RecordingTrigge
 import { NotificacionBell } from "@/features/notificaciones/components/NotificacionBell";
 import { PushEscritorioAviso } from "@/features/notificaciones/components/PushEscritorioAviso";
 import { RecordingDrawer } from "@/features/recorder/components/RecordingDrawer";
-import { RecordingOverlay } from "@/features/recorder/components/RecordingOverlay";
 import { CountdownOverlay } from "@/features/recorder/components/CountdownOverlay";
 import { WebcamPip } from "@/features/recorder/components/WebcamPip";
 import { RecorderProvider } from "@/features/recorder/contexts/recorder-context";
@@ -641,7 +640,6 @@ function AppLayoutInterno({ children }: { children: React.ReactNode }) {
       {showUi && <ToolsAvisoPopups />}
       {showUi && <PushEscritorioAviso />}
       <RecordingDrawer />
-      <RecordingOverlay />
       <CountdownOverlay />
       <WebcamPip />
     </MusicaProvider>

@@ -156,6 +156,7 @@ function RecordingContent() {
     options,
     toggleOption,
     error,
+    audioWarning,
     result,
     previewUrl,
     departamentos,
@@ -245,8 +246,8 @@ function RecordingContent() {
             <OptionToggle
               icon={Volume2}
               iconOff={VolumeX}
-              label="Sonido"
-              description="Captura el sonido de tu PC"
+              label="Sonido del ordenador"
+              description="Lo que se oye por los altavoces (videollamadas, vídeos)"
               enabled={options.includeSystemAudio}
               onToggle={() => toggleOption("includeSystemAudio")}
             />
@@ -331,6 +332,13 @@ function RecordingContent() {
               {title.trim() || "Grabación en curso..."}
             </p>
 
+            {audioWarning && (
+              <div className="mb-6 flex gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3">
+                <AlertCircle className="h-4 w-4 shrink-0 text-amber-600" />
+                <p className="text-[11px] leading-snug text-amber-800">{audioWarning}</p>
+              </div>
+            )}
+
             <div className="grid grid-cols-2 gap-3">
               {state === "recording" ? (
                 <Button
@@ -372,23 +380,44 @@ function RecordingContent() {
         <div className="w-20 h-20 bg-primary/10 rounded-3xl flex items-center justify-center mx-auto">
           <Loader2 className="h-10 w-10 text-primary animate-spin" />
         </div>
-        <h3 className="text-xl font-bold">Procesando Video</h3>
+        <h3 className="text-xl font-bold">Procesando vídeo</h3>
         <p className="text-sm text-muted-foreground">
-          Guardando tu grabación de {formatDuration(elapsed)}...
+          Guardando tu grabación de {formatDuration(elapsed)} en el software…
         </p>
       </div>
     );
   }
 
   if (state === "done" && result) {
+    // Mientras el `result` apunta al blob local, la subida al servidor sigue en
+    // curso (o se reintentará sola). Al completarse, el contexto reemplaza el
+    // result por el del servidor y la URL deja de ser blob:.
+    const subiendoAlServidor = result.url.startsWith("blob:");
     return (
       <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-500">
         <div className="text-center space-y-2">
-          <div className="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-4">
-            <CheckCircle2 className="h-8 w-8" />
+          <div
+            className={cn(
+              "w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4",
+              subiendoAlServidor
+                ? "bg-blue-100 text-blue-600"
+                : "bg-green-100 text-green-600",
+            )}
+          >
+            {subiendoAlServidor ? (
+              <Loader2 className="h-8 w-8 animate-spin" />
+            ) : (
+              <CheckCircle2 className="h-8 w-8" />
+            )}
           </div>
-          <h3 className="text-xl font-bold">¡Listo!</h3>
-          <p className="text-sm text-muted-foreground">Grabación completada con éxito</p>
+          <h3 className="text-xl font-bold">
+            {subiendoAlServidor ? "Guardando…" : "¡Listo!"}
+          </h3>
+          <p className="text-sm text-muted-foreground">
+            {subiendoAlServidor
+              ? "Ya puedes verla aquí. Se está guardando en el software; puedes cerrar esto sin perderla."
+              : "Guardada en el software"}
+          </p>
         </div>
 
         {previewUrl && (
@@ -963,8 +992,8 @@ function PendingUploadsList() {
 
   async function handleDelete(id: string) {
     const ok = await confirmDelete({
-      title: "¿Eliminar esta grabación local?",
-      description: "No se podrá recuperar.",
+      title: "¿Eliminar esta grabación?",
+      description: "Todavía no se ha guardado en el software. No se podrá recuperar.",
       confirmLabel: "Eliminar",
     });
     if (!ok) return;
@@ -977,7 +1006,7 @@ function PendingUploadsList() {
         <div className="flex items-center gap-2 min-w-0">
           <AlertCircle className="h-4 w-4 text-amber-600 shrink-0" />
           <p className="text-xs font-semibold text-amber-800 truncate">
-            Pendientes de subida · {pending.length}
+            Subiendo al software · {pending.length}
           </p>
         </div>
         <Button
@@ -997,8 +1026,8 @@ function PendingUploadsList() {
       </div>
 
       <p className="text-[10px] text-amber-700/80 leading-snug">
-        Estas grabaciones están guardadas en tu navegador. Se subirán automáticamente cuando vuelva
-        la conexión, o puedes reintentarlo ahora.
+        Se están subiendo solas a la memoria del software y el intento se repite hasta conseguirlo.
+        No hace falta que hagas nada; si tienes prisa, puedes forzarlo ahora.
       </p>
 
       <div className="space-y-1.5 max-h-[30vh] overflow-y-auto pr-1">
@@ -1022,14 +1051,24 @@ function PendingUploadsList() {
                   {(rec.fileSize / (1024 * 1024)).toFixed(1)} MB
                   {rec.retryCount > 0 ? ` · ${rec.retryCount} intentos` : ""}
                 </p>
+                {rec.lastError && (
+                  <p
+                    className="text-[10px] text-amber-700 truncate"
+                    title={rec.lastError}
+                  >
+                    {rec.lastError.includes("413")
+                      ? "Almacenamiento lleno: libera espacio para que se suba."
+                      : "Sin conexión con el servidor. Se reintenta solo."}
+                  </p>
+                )}
               </div>
               <button
                 type="button"
                 onClick={() => handleRetry(rec.id)}
                 disabled={isBusy}
                 className="p-1.5 rounded hover:bg-amber-100 text-amber-700 disabled:opacity-50"
-                title="Reintentar subida"
-                aria-label="Reintentar subida"
+                title="Subir ahora"
+                aria-label="Subir ahora"
               >
                 {isBusy ? (
                   <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -1050,8 +1089,8 @@ function PendingUploadsList() {
                 type="button"
                 onClick={() => handleDelete(rec.id)}
                 className="p-1.5 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive"
-                title="Eliminar local"
-                aria-label="Eliminar local"
+                title="Eliminar"
+                aria-label="Eliminar"
               >
                 <Trash2 className="h-3.5 w-3.5" />
               </button>
