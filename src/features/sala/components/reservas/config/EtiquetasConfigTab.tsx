@@ -1,23 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label";
-import { Plus, Search } from "lucide-react";
-import { toast } from "sonner";
+import { Search } from "lucide-react";
 import { CategoriaEtiquetasCard } from "./CategoriaEtiquetasCard";
 import {
-  createEtiquetaCategoria,
   listEtiquetaCategorias,
   listEtiquetas,
   type Etiqueta,
@@ -42,9 +31,6 @@ export function EtiquetasConfigTab() {
   const [scope, setScope] = useState<EtiquetaScope>("reserva");
   const [categorias, setCategorias] = useState<EtiquetaCategoria[]>([]);
   const [etiquetas, setEtiquetas] = useState<Etiqueta[]>([]);
-  const [dialogCategoria, setDialogCategoria] = useState(false);
-  const [nuevaCategoria, setNuevaCategoria] = useState("");
-  const [creandoCategoria, setCreandoCategoria] = useState(false);
   const [loading, setLoading] = useState(true);
   const [busqueda, setBusqueda] = useState("");
 
@@ -83,9 +69,9 @@ export function EtiquetasConfigTab() {
   }
 
   /**
-   * Etiquetas que quedaron huérfanas al borrar su grupo. Se listan aparte para
-   * poder editarlas, borrarlas o devolverlas a un grupo: si no, seguirían
-   * asignables en las fichas pero serían invisibles aquí.
+   * Etiquetas heredadas sin grupo (de cuando los grupos eran borrables). Se
+   * listan aparte para poder reubicarlas o borrarlas; con los grupos fijos ya
+   * no se generan nuevas.
    */
   const sueltas = useMemo(() => {
     const q = busqueda.trim().toLowerCase();
@@ -93,25 +79,6 @@ export function EtiquetasConfigTab() {
       .filter((e) => e.scope === scope && e.categoriaId === null)
       .filter((e) => !q || e.nombre.toLowerCase().includes(q));
   }, [etiquetas, scope, busqueda]);
-
-  async function handleCrearCategoria() {
-    const nombre = nuevaCategoria.trim();
-    if (!nombre) return;
-    setCreandoCategoria(true);
-    // El orden se calcula sobre TODAS las categorías del scope, no sobre las
-    // filtradas por la búsqueda: si no, con un filtro activo la nueva categoría
-    // nacía con un orden ya ocupado.
-    const orden = categorias.filter((c) => c.scope === scope).length + 1;
-    const res = await createEtiquetaCategoria({ scope, nombre, orden });
-    setCreandoCategoria(false);
-    if (!res.ok) toast.error(res.error ?? "No se pudo crear");
-    else {
-      toast.success("Categoría creada");
-      setNuevaCategoria("");
-      setDialogCategoria(false);
-      cargar();
-    }
-  }
 
   if (loading) {
     return (
@@ -129,9 +96,9 @@ export function EtiquetasConfigTab() {
     <div className="space-y-4">
       <div className="space-y-2">
         <p className="text-xs text-muted-foreground">
-          Organiza etiquetas en grupos para clasificar reservas y clientes. Las
-          predefinidas vienen de fábrica, pero puedes renombrarlas, editarlas o
-          borrarlas igual que las tuyas.
+          Los grupos son fijos: clasifican reservas y clientes de fábrica y no
+          se crean, renombran ni borran. Dentro de cada uno puedes añadir tus
+          propias etiquetas y editarlas.
         </p>
       </div>
 
@@ -161,51 +128,14 @@ export function EtiquetasConfigTab() {
             className="h-8 pl-7"
           />
         </div>
-        <Button size="sm" onClick={() => { setNuevaCategoria(""); setDialogCategoria(true); }}>
-          <Plus className="h-3.5 w-3.5 mr-1" /> Categoría
-        </Button>
       </div>
-
-      <Dialog open={dialogCategoria} onOpenChange={setDialogCategoria}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle>Nueva categoría</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-1.5">
-            <Label className="text-xs">Nombre</Label>
-            <Input
-              autoFocus
-              className="h-8 text-xs"
-              value={nuevaCategoria}
-              onChange={(e) => setNuevaCategoria(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && nuevaCategoria.trim() && !creandoCategoria) {
-                  handleCrearCategoria();
-                }
-              }}
-            />
-          </div>
-          <DialogFooter>
-            <Button variant="outline" size="sm" onClick={() => setDialogCategoria(false)}>
-              Cancelar
-            </Button>
-            <Button
-              size="sm"
-              onClick={handleCrearCategoria}
-              disabled={!nuevaCategoria.trim() || creandoCategoria}
-            >
-              Crear
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       <div className="space-y-2.5">
         {catsFiltradas.length === 0 && sueltas.length === 0 && (
           <div className="border border-dashed rounded-md p-6 text-center text-xs text-muted-foreground">
             {busqueda
               ? "Sin resultados para la búsqueda."
-              : `Sin grupos de ${scopeActual.label.toLowerCase()}. Crea uno arriba.`}
+              : `Sin grupos de ${scopeActual.label.toLowerCase()}.`}
           </div>
         )}
         {catsFiltradas.map((cat) => (

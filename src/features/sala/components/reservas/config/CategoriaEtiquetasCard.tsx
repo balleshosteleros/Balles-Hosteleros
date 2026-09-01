@@ -9,7 +9,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { Pencil, Plus, Trash2, Check, X } from "lucide-react";
+import { Plus, Trash2, Check, X } from "lucide-react";
 import { toast } from "sonner";
 import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 import { EtiquetaChip } from "./EtiquetaChip";
@@ -17,9 +17,7 @@ import { EmojiPicker } from "./EmojiPicker";
 import {
   createEtiqueta,
   deleteEtiqueta,
-  deleteEtiquetaCategoria,
   updateEtiqueta,
-  updateEtiquetaCategoria,
   type Etiqueta,
   type EtiquetaCategoria,
 } from "@/features/sala/actions/sala-etiquetas-actions";
@@ -42,122 +40,42 @@ export function CategoriaEtiquetasCard({
   categorias,
   onChange,
 }: Props) {
-  const { confirm: confirmDelete, dialog: confirmDeleteDialog } = useConfirmDelete();
-  const [editandoNombre, setEditandoNombre] = useState(false);
-  const [nombreLocal, setNombreLocal] = useState(categoria?.nombre ?? "");
   const [creandoEtiqueta, setCreandoEtiqueta] = useState(false);
   const [editandoEtiqueta, setEditandoEtiqueta] = useState<string | null>(null);
   const scopeEfectivo = categoria?.scope ?? scope ?? "reserva";
 
-  async function handleRenameCategoria() {
-    if (!categoria) return;
-    if (!nombreLocal.trim() || nombreLocal === categoria.nombre) {
-      setEditandoNombre(false);
-      setNombreLocal(categoria.nombre);
-      return;
-    }
-    const res = await updateEtiquetaCategoria(categoria.id, { nombre: nombreLocal });
-    if (!res.ok) {
-      toast.error(res.error ?? "No se pudo renombrar");
-      setNombreLocal(categoria.nombre);
-    } else {
-      onChange();
-    }
-    setEditandoNombre(false);
-  }
-
-  async function handleDeleteCategoria() {
-    if (!categoria) return;
-    const ok = await confirmDelete({
-      title: "Borrar grupo",
-      description:
-        etiquetas.length > 0
-          ? `¿Borrar el grupo "${categoria.nombre}"? Sus ${etiquetas.length} etiquetas quedarán sin grupo, pero no se borran.`
-          : `¿Borrar el grupo "${categoria.nombre}"?`,
-      confirmLabel: "Borrar",
-    });
-    if (!ok) return;
-    const res = await deleteEtiquetaCategoria(categoria.id);
-    if (!res.ok) toast.error(res.error ?? "No se pudo borrar");
-    else {
-      toast.success("Grupo borrado");
-      onChange();
-    }
-  }
-
   return (
     <div className="rounded-md border bg-card">
-      {confirmDeleteDialog}
-      {/* Header de categoría */}
+      {/* Header de categoría — el grupo no se renombra ni se borra: es la
+          clasificación canónica del software. Solo se añaden etiquetas. */}
       <div className="flex items-center justify-between px-3 py-2 border-b">
-        {editandoNombre ? (
-          <div className="flex items-center gap-1 flex-1">
-            <Input
-              autoFocus
-              value={nombreLocal}
-              onChange={(e) => setNombreLocal(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") handleRenameCategoria();
-                if (e.key === "Escape") {
-                  setNombreLocal(categoria?.nombre ?? "");
-                  setEditandoNombre(false);
-                }
-              }}
-              className="h-7 text-sm"
-            />
-            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={handleRenameCategoria}>
-              <Check className="h-3.5 w-3.5" />
-            </Button>
-          </div>
-        ) : (
-          <div className="flex items-center gap-2 flex-1">
-            <h5
-              className={
-                categoria
-                  ? "text-sm font-semibold text-primary"
-                  : "text-sm font-semibold text-muted-foreground"
-              }
-            >
-              {categoria?.nombre ?? "Sin grupo"}
-            </h5>
-            {!categoria && (
-              <span className="text-[10px] text-muted-foreground">
-                asigna un grupo desde cada etiqueta
-              </span>
-            )}
-          </div>
-        )}
+        <div className="flex items-center gap-2 flex-1">
+          <h5
+            className={
+              categoria
+                ? "text-sm font-semibold text-primary"
+                : "text-sm font-semibold text-muted-foreground"
+            }
+          >
+            {categoria?.nombre ?? "Sin grupo"}
+          </h5>
+          {!categoria && (
+            <span className="text-[10px] text-muted-foreground">
+              asigna un grupo desde cada etiqueta
+            </span>
+          )}
+        </div>
         <div className="flex items-center gap-1">
           {categoria && (
-            <>
-              <Button
-                size="icon"
-                variant="ghost"
-                className="h-7 w-7"
-                title="Añadir etiqueta"
-                onClick={() => setCreandoEtiqueta(true)}
-              >
-                <Plus className="h-3.5 w-3.5" />
-              </Button>
-              <Button
-                size="icon"
-                variant="ghost"
-                className="h-7 w-7"
-                title="Renombrar grupo"
-                onClick={() => setEditandoNombre(true)}
-              >
-                <Pencil className="h-3.5 w-3.5" />
-              </Button>
-              <Button
-                size="icon"
-                variant="ghost"
-                className="h-7 w-7 text-destructive hover:text-destructive"
-                title="Borrar grupo"
-                onClick={handleDeleteCategoria}
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-              </Button>
-            </>
+            <Button
+              size="icon"
+              variant="ghost"
+              className="h-7 w-7"
+              title="Añadir etiqueta"
+              onClick={() => setCreandoEtiqueta(true)}
+            >
+              <Plus className="h-3.5 w-3.5" />
+            </Button>
           )}
         </div>
       </div>

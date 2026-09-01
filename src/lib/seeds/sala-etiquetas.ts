@@ -78,20 +78,9 @@ const RESERVA_CATEGORIAS: CategoriaEtiquetaSeed[] = [
     ],
   },
   {
-    nombre: "Servicio Hotelero",
-    scope: "reserva",
-    orden: 4,
-    etiquetas: [
-      { nombre: "Huésped",        emoji: "🛏", color: "#0ea5e9" },
-      { nombre: "Cliente externo", emoji: "👤", color: "#64748b" },
-      { nombre: "Turista",        emoji: "✈", color: "#14b8a6" },
-      { nombre: "Local",          emoji: "📍", color: "#16a34a" },
-    ],
-  },
-  {
     nombre: "Otras",
     scope: "reserva",
-    orden: 5,
+    orden: 4,
     etiquetas: [
       { nombre: "Llegada impuntual",   emoji: "⏰", color: "#f97316" },
       { nombre: "Menú concertado",     emoji: "✅", color: "#10b981" },
