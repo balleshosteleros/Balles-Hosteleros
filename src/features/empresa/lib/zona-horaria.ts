@@ -159,7 +159,15 @@ export function hoyEnZona(tz: string): string {
  * "Ahora" en la zona dada: fecha "YYYY-MM-DD" y minutos del día (0–1439).
  * Reemplaza a `ahoraEnMadrid()` parametrizando la zona.
  */
-export function ahoraEnZona(tz: string): { fecha: string; minutos: number } {
+export function ahoraEnZona(
+  tz: string,
+  /**
+   * Instante a leer. Por defecto "ahora mismo". Se puede pasar uno concreto
+   * para que un componente que refresca por tick derive el valor de ese tick
+   * en vez de leer el reloj por su cuenta durante el render.
+   */
+  instante: Date = new Date(),
+): { fecha: string; minutos: number } {
   const parts = new Intl.DateTimeFormat("en-GB", {
     timeZone: tzSegura(tz),
     year: "numeric",
@@ -168,7 +176,7 @@ export function ahoraEnZona(tz: string): { fecha: string; minutos: number } {
     hour: "2-digit",
     minute: "2-digit",
     hourCycle: "h23",
-  }).formatToParts(new Date());
+  }).formatToParts(instante);
   const get = (t: string) => parts.find((p) => p.type === t)?.value ?? "00";
   const fecha = `${get("year")}-${get("month")}-${get("day")}`;
   const minutos = Number(get("hour")) * 60 + Number(get("minute"));

@@ -1,6 +1,12 @@
 "use client";
 
 import { useState, useTransition, useMemo, useEffect } from "react";
+import { TicketCodigoInput } from "@/features/reservar-publica/components/TicketCodigoInput";
+import type { TicketPublico } from "@/features/reservar-publica/actions/validar-ticket-publico";
+import {
+  horaPermitidaPorTicket,
+  zonaPermitidaPorTicket,
+} from "@/features/sala/lib/validar-ticket-canje";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,6 +21,7 @@ import {
   listarGruposZonasPublica,
   type GrupoZonaPublico,
 } from "@/features/reservar-publica/actions/listar-grupos-zonas-publica";
+import { listarMaxPersonasPublicaAction } from "@/features/reservar-publica/actions/listar-max-personas-publica";
 
 /** Prefijos habituales de la clientela. España primero por ser el caso normal. */
 const PREFIJOS = [
@@ -36,6 +43,7 @@ import type { CamposObligatoriosPublico } from "@/features/reservar-publica/acti
 import {
   RESERVA_NOMBRE_MAX_CHARS,
   RESERVA_APELLIDOS_MAX_CHARS,
+  MAX_COMENSALES_SIN_REGLA,
 } from "@/features/sala/data/reservas";
 import { toast } from "sonner";
 
@@ -50,6 +58,8 @@ interface Props {
   ticketOnly?: boolean;
   /** Si es true, oculta el header con logo (modo iframe / embed). */
   embedded?: boolean;
+  /** Código de Ticket que llega en el enlace del correo de compra. */
+  ticketCodigoInicial?: string | null;
 }
 
 function isHexColor(c: string | null | undefined): c is string {
@@ -78,6 +88,7 @@ export function ReservaPublicaForm({
   productosTicket = [],
   ticketOnly = false,
   embedded = false,
+  ticketCodigoInicial = null,
 }: Props) {
   const [nombre, setNombre] = useState("");
   const [apellidos, setApellidos] = useState("");
@@ -88,6 +99,10 @@ export function ReservaPublicaForm({
   // abiertas (antes se fijaba "21:00" a ciegas y podía no existir ese pase).
   const [hora, setHora] = useState("");
   const [personas, setPersonas] = useState(2);
+  // Tope del desplegable de personas: lo fija la empresa en Configuración →
+  // Límites. Hasta que responde el servidor se usa el fallback, para que el
+  // selector nunca aparezca vacío.
+  const [maxPersonas, setMaxPersonas] = useState(MAX_COMENSALES_SIN_REGLA);
   // Zona elegida por el cliente. Es un GRUPO de zonas ("Sala", "Terraza"), no
   // una zona interna: el cliente no conoce nuestros nombres de sala.
   const [grupoZonaId, setGrupoZonaId] = useState<string>("");
@@ -98,6 +113,9 @@ export function ReservaPublicaForm({
   const [mostrarCodigo, setMostrarCodigo] = useState(false);
   const [cuponValido, setCuponValido] = useState<boolean | null>(null);
   const [ticketProductoId, setTicketProductoId] = useState<string | null>(null);
+  // Canje de un Ticket comprado antes: el código y el ticket ya validado.
+  const [ticketCodigo, setTicketCodigo] = useState(ticketCodigoInicial ?? "");
+  const [ticketCanje, setTicketCanje] = useState<TicketPublico | null>(null);
   const [enviando, startTransition] = useTransition();
   const [exito, setExito] = useState(false);
   const [cuponAplicado, setCuponAplicado] = useState<{ codigo: string; tituloCliente: string } | null>(null);
@@ -122,7 +140,12 @@ export function ReservaPublicaForm({
   const onAccent = isHexColor(colorTexto) ? colorTexto : "#ffffff";
 
   const ticketObligatorio = ticketOnly && productosTicket.length > 0;
-  const ticketValido = !ticketObligatorio || Boolean(ticketProductoId);
+  // Con un código canjeado el ticket ya está cubierto: no hace falta comprar.
+  const ticketValido =
+    !ticketObligatorio || Boolean(ticketProductoId) || Boolean(ticketCanje);
+  // Si escribió un código, tiene que ser válido para poder reservar: un código
+  // a medias o rechazado no puede colarse como reserva normal.
+  const canjeConforme = ticketCodigo.trim().length === 0 || ticketCanje !== null;
   // Mismo criterio que el servidor: la madrugada es cena, no comida.
   const turnoPorHora = useMemo<"COMIDA" | "CENA" | null>(
     () => (hora ? turnoDeHora(hora) : null),
@@ -140,8 +163,59 @@ export function ReservaPublicaForm({
     hora &&
     (!zonaExigida || grupoZonaId.length > 0) &&
     ticketValido &&
+    canjeConforme &&
     aceptaPrivacidad &&
     cuponValido !== false;
+
+  // Filtros que impone el ticket. Se calculan aquí y se reparten a los
+  // selectores: la regla vive en un solo sitio (validar-ticket-canje) y la usan
+  // igual el formulario y el servidor.
+  const filtroHoraTicket = useMemo(() => {
+    if (!ticketCanje) return undefined;
+    const cond = ticketCanje.condiciones;
+    return (h: string) => horaPermitidaPorTicket(cond, h);
+  }, [ticketCanje]);
+
+  const zonasVisibles = useMemo(() => {
+    if (!ticketCanje) return gruposZonas;
+    const cond = ticketCanje.condiciones;
+    return gruposZonas.filter((g) => zonaPermitidaPorTicket(cond, g.id));
+  }, [gruposZonas, ticketCanje]);
+
+  // Si el ticket restringe zonas: la elegida deja de valer se limpia, y cuando
+  // solo queda una posible se selecciona sola (no hay nada que decidir).
+  useEffect(() => {
+    if (!ticketCanje) return;
+    if (grupoZonaId && !zonasVisibles.some((g) => g.id === grupoZonaId)) {
+      setGrupoZonaId("");
+      return;
+    }
+    if (!grupoZonaId && zonasVisibles.length === 1) {
+      setGrupoZonaId(zonasVisibles[0].id);
+    }
+  }, [ticketCanje, zonasVisibles, grupoZonaId]);
+
+  // El ticket manda sobre los comensales cuando el precio es por persona: si
+  // pagó por 2, la reserva es para 2. Evita que entren 4 pagando 2.
+  useEffect(() => {
+    if (ticketCanje?.porPersona) setPersonas(ticketCanje.unidades);
+  }, [ticketCanje]);
+
+  // Tope de personas: se pide una sola vez al abrir el portal. Si el máximo
+  // configurado es menor que lo que el cliente ya tenía elegido, se recorta:
+  // el desplegable no debe quedarse mostrando un valor que ya no ofrece.
+  useEffect(() => {
+    let cancelado = false;
+    (async () => {
+      const max = await listarMaxPersonasPublicaAction({ empresaSlug });
+      if (cancelado) return;
+      setMaxPersonas(max);
+      setPersonas((n) => Math.min(n, max));
+    })();
+    return () => {
+      cancelado = true;
+    };
+  }, [empresaSlug]);
 
   // Zonas disponibles: dependen de fecha, hora y personas, así que se
   // recalculan cada vez que el cliente cambia algo de eso. Una zona sin hueco
@@ -202,10 +276,18 @@ export function ReservaPublicaForm({
       aceptaMarketing,
       codigo: codigo.trim() ? codigo.trim().toUpperCase().replace(/\s+/g, "") : null,
       ticketProductoId: ticketProductoId ?? null,
+      ticketCodigo: ticketCanje ? ticketCanje.codigo : null,
       ticketOnly: ticketOnly && productosTicket.length > 0,
     });
     if (!r.ok) {
       toast.error(r.error);
+      return;
+    }
+    // Si la reserva exige tarjeta, no se le da por cerrada: se lleva al cliente
+    // a ponerla (PRP-082). La reserva ya existe, así que la mesa no se pierde
+    // mientras paga.
+    if (r.tarjetaPendiente?.token) {
+      window.location.href = `/reserva/tarjeta/${r.tarjetaPendiente.token}`;
       return;
     }
     setCuponAplicado(r.cuponAplicado);
@@ -363,7 +445,32 @@ export function ReservaPublicaForm({
           onSubmit={onSubmit}
           className="bg-white sm:rounded-2xl sm:shadow-xl sm:border sm:border-zinc-100 px-5 sm:px-7 pt-2 pb-6 sm:pt-7 sm:pb-7 space-y-5"
         >
-          {productosTicket.length > 0 && (
+          {/* Código de un Ticket ya comprado. Va lo primero porque condiciona
+              todo lo demás: días, horas, turno, zona y número de personas. */}
+          <TicketCodigoInput
+            empresaSlug={empresaSlug}
+            value={ticketCodigo}
+            onChange={(v) => {
+              setTicketCodigo(v);
+              // Un código canjeado sustituye a comprar el ticket ahora y a
+              // cualquier cupón: son formas distintas de pagar lo mismo.
+              if (v) {
+                setTicketProductoId(null);
+                setCodigo("");
+                setMostrarCodigo(false);
+                setCuponValido(null);
+              }
+            }}
+            onResult={setTicketCanje}
+            fecha={fecha}
+            hora={hora}
+            grupoZonaId={grupoZonaId || null}
+            contextoSerial={`${fecha}|${grupoZonaId}`}
+            accent={accent}
+          />
+
+          {/* Comprar el ticket ahora: solo si no viene con un código canjeado. */}
+          {productosTicket.length > 0 && !ticketCanje && (
             <TicketSelector
               productos={productosTicket}
               selectedId={ticketProductoId}
@@ -393,34 +500,37 @@ export function ReservaPublicaForm({
                 <Users className="h-3.5 w-3.5" />
                 Personas *
               </Label>
-              <div className="flex items-center gap-2 mt-1.5 rounded-xl border border-zinc-200 bg-white p-1.5">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="h-11 w-11 sm:h-9 sm:w-9 rounded-lg hover:bg-zinc-100 text-xl"
-                  onClick={() => setPersonas((n) => Math.max(1, n - 1))}
-                  aria-label="Restar persona"
-                >
-                  <span className="leading-none">−</span>
-                </Button>
-                <div className="flex-1 flex items-center justify-center gap-2 text-xl font-bold text-zinc-900 tabular-nums">
-                  {personas}
-                  <span className="text-xs font-medium text-zinc-500 uppercase tracking-wider">
-                    {personas === 1 ? "persona" : "personas"}
-                  </span>
-                </div>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="h-11 w-11 sm:h-9 sm:w-9 rounded-lg hover:bg-zinc-100 text-xl"
-                  onClick={() => setPersonas((n) => Math.min(50, n + 1))}
-                  aria-label="Sumar persona"
-                >
-                  <span className="leading-none">+</span>
-                </Button>
-              </div>
+              {/* Desplegable, no stepper: el cliente ve de un vistazo hasta
+                  cuántos admite el restaurante. El tope sale de Configuración
+                  → Límites (tamaño máximo por reserva, mesa o combinación de
+                  mesas), así que nunca se ofrece un número que se rechazaría. */}
+              <select
+                value={personas}
+                onChange={(e) => setPersonas(Number(e.target.value))}
+                aria-label="Personas"
+                // Con un ticket por persona el número lo fija lo que pagó: si
+                // pudiera subirlo, entrarían más comensales de los abonados.
+                disabled={ticketCanje?.porPersona === true}
+                className="mt-1.5 h-11 w-full min-w-0 max-w-full appearance-none rounded-xl border border-zinc-200 bg-white px-3 text-sm text-zinc-900 disabled:cursor-not-allowed disabled:bg-zinc-50 disabled:text-zinc-500"
+              >
+                {Array.from({ length: maxPersonas }, (_, i) => i + 1).map((n) => (
+                  <option key={n} value={n}>
+                    {n} {n === 1 ? "persona" : "personas"}
+                  </option>
+                ))}
+              </select>
+              {ticketCanje?.porPersona ? (
+                <p className="mt-1.5 text-xs text-zinc-500">
+                  Tu ticket cubre {ticketCanje.unidades}{" "}
+                  {ticketCanje.unidades === 1 ? "persona" : "personas"}.
+                </p>
+              ) : (
+                <p className="mt-1.5 text-xs text-zinc-500">
+                  Para grupos de más de {maxPersonas}{" "}
+                  {maxPersonas === 1 ? "persona" : "personas"}, llámanos y lo
+                  organizamos contigo.
+                </p>
+              )}
             </div>
 
             <div>
@@ -455,6 +565,7 @@ export function ReservaPublicaForm({
                 onSelect={setHora}
                 accent={accent}
                 onObligatoriosChange={setObligatorios}
+                horaPermitida={filtroHoraTicket}
               />
             </div>
           </div>
@@ -462,7 +573,7 @@ export function ReservaPublicaForm({
           {/* Zonas. Solo si la empresa ha activado "exigir zona": si está
               apagado, el cliente no elige y no se le muestra nada. Hace falta
               ademas fecha/hora/personas para saber cuál está llena. */}
-          {zonaExigida && gruposZonas.length > 0 && (
+          {zonaExigida && zonasVisibles.length > 0 && (
             <div>
               <Label htmlFor="zona" className="text-zinc-700 flex items-center gap-1.5 mb-1.5">
                 <MapPin className="h-3.5 w-3.5" />
@@ -478,9 +589,14 @@ export function ReservaPublicaForm({
                 <option value="">
                   {cargandoZonas ? "Comprobando disponibilidad…" : "Seleccione la zona"}
                 </option>
-                {gruposZonas.map((g) => (
+                {/* Mismo criterio de iconos que el selector de mesa del back
+                    office: ✅ cuando la zona vale para ese grupo durante todo
+                    el intervalo pedido, ⏰ cuando ya no le queda sitio a esa
+                    hora. El cliente no elige mesa, así que aquí el diagnóstico
+                    es por zona. */}
+                {zonasVisibles.map((g) => (
                   <option key={g.id} value={g.id} disabled={!g.disponible}>
-                    {g.nombre}
+                    {g.disponible ? "✅" : "⏰"} {g.nombre}
                     {g.disponible ? "" : " (Zona completa)"}
                   </option>
                 ))}

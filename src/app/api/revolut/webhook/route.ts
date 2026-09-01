@@ -11,6 +11,7 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { firmaWebhookValida, estaPagada, type RevolutOrderState } from "@/lib/revolut/merchant";
 import { decrypt } from "@/features/accesos/lib/crypto";
+import { notificarReservaCreada } from "@/lib/email/reservas/notificar-creada";
 import { enviarEmailCompraTicket } from "@/lib/email/tickets/enviar-compra";
 
 export const dynamic = "force-dynamic";
@@ -60,7 +61,18 @@ export async function POST(req: Request) {
     .maybeSingle();
 
   if (!compra) {
-    // Puede ser un cobro ajeno a los tickets. No es un error.
+    // No es un Ticket: puede ser la tarjeta de una reserva (PRP-082).
+    const dePolitica = await procesarPoliticaReserva({
+      admin,
+      orderId,
+      referencia: evento.merchant_order_ext_ref ?? null,
+      tipoEvento: evento.event ?? "",
+      firma,
+      timestamp,
+      cuerpo,
+    });
+    if (dePolitica) return NextResponse.json({ ok: true });
+    // Cobro ajeno a todo lo nuestro. No es un error.
     return NextResponse.json({ ok: true });
   }
 
@@ -147,4 +159,103 @@ export async function POST(req: Request) {
   }
 
   return NextResponse.json({ ok: true });
+}
+
+/**
+ * Tarjeta de una reserva (PRP-082 fase 2).
+ *
+ * La referencia que enviamos al crear la orden dice qué política se estaba
+ * pagando: "garantia:<id>" o "cancelacion:<id>". Con eso se sabe qué columnas
+ * tocar sin tener que adivinarlo.
+ *
+ * Devuelve true si el evento era de una reserva (aunque no hubiera nada que
+ * cambiar), para que quien llama no siga buscando.
+ */
+async function procesarPoliticaReserva(input: {
+  admin: ReturnType<typeof createAdminClient>;
+  orderId: string;
+  referencia: string | null;
+  tipoEvento: string;
+  firma: string;
+  timestamp: string;
+  cuerpo: string;
+}): Promise<boolean> {
+  const { admin, orderId, referencia, tipoEvento } = input;
+
+  const m = /^(garantia|cancelacion):([0-9a-f-]{36})$/.exec(referencia ?? "");
+  const prefijo = m?.[1] as "garantia" | "cancelacion" | undefined;
+
+  const { data: reserva } = await admin
+    .from("reservas")
+    .select("id, empresa_id, garantia_estado, cancelacion_estado")
+    .or(
+      `garantia_revolut_order_id.eq.${orderId},cancelacion_revolut_order_id.eq.${orderId}` +
+        (m ? `,id.eq.${m[2]}` : ""),
+    )
+    .maybeSingle();
+  if (!reserva) return false;
+
+  // La firma se valida con el secreto DE ESA EMPRESA, igual que en los
+  // tickets: sin esto, cualquiera podría marcar una garantía como retenida.
+  const { data: cfg } = await admin
+    .from("empresa_revolut_config")
+    .select("webhook_secret_cifrado")
+    .eq("empresa_id", reserva.empresa_id as string)
+    .maybeSingle();
+  if (!cfg?.webhook_secret_cifrado) return true;
+
+  let secreto: string;
+  try {
+    secreto = decrypt(cfg.webhook_secret_cifrado as string);
+  } catch {
+    return true;
+  }
+  const valida = await firmaWebhookValida({
+    signingSecret: secreto,
+    cabeceraSignature: input.firma,
+    cabeceraTimestamp: input.timestamp,
+    cuerpoCrudo: input.cuerpo,
+  });
+  if (!valida) {
+    console.error("[revolut][webhook] firma inválida (reserva)");
+    return true;
+  }
+
+  const p = prefijo ?? "garantia";
+  const estadoActual = reserva[`${p}_estado`] as string | null;
+  // Un cobro ya hecho no se revierte por un evento que llegue tarde.
+  if (estadoActual === "cobrada") return true;
+
+  if (tipoEvento === "ORDER_AUTHORISED" || tipoEvento === "ORDER_COMPLETED") {
+    // La garantía queda RETENIDA (el dinero está apartado); la cancelación
+    // deja la tarjeta GUARDADA para poder cobrar más adelante.
+    const nuevo = p === "garantia" ? "retenida" : "guardada";
+    if (estadoActual === nuevo) return true;
+    await admin
+      .from("reservas")
+      .update({
+        [`${p}_estado`]: nuevo,
+        [`${p}_${p === "garantia" ? "retenida" : "guardada"}_at`]: new Date().toISOString(),
+      })
+      .eq("id", reserva.id as string);
+    // El alta retuvo la confirmación para no decir "confirmada" mientras el
+    // cliente aún tenía que pagar. Ya ha pagado: se le escribe.
+    //
+    // `notificarReservaCreada` es idempotente (marca `email_confirmacion_at`),
+    // así que no duplica si el cliente ya volvió de Revolut y se envió allí.
+    notificarReservaCreada(reserva.id as string).catch((e) =>
+      console.error("[revolut][webhook] mail CONFIRMACION:", e),
+    );
+    return true;
+  }
+
+  if (tipoEvento === "ORDER_CANCELLED" || tipoEvento === "ORDER_FAILED") {
+    await admin
+      .from("reservas")
+      .update({ [`${p}_estado`]: tipoEvento === "ORDER_FAILED" ? "fallida" : "liberada" })
+      .eq("id", reserva.id as string);
+    return true;
+  }
+
+  return true;
 }

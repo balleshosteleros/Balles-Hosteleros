@@ -56,6 +56,7 @@ import {
   formatearDuracionReserva,
   etiquetaDiasTranscurridos,
   origenLabel,
+  esReservaWalkIn,
   RESERVA_NOMBRE_MAX_CHARS,
   RESERVA_COMENTARIO_MAX_CHARS,
   RESERVA_APELLIDOS_MAX_CHARS,
@@ -300,13 +301,16 @@ function ReservaQuickPopover({
   desdeLista?: boolean;
 }) {
   /**
-   * Estados de servicio, en el orden en que ocurren durante el pase. Los
-   * nombres salen de `ESTADO_RESERVA_LABELS` (WALK_IN se lee "Sentada" y
-   * TERMINANDO "Terminada"): el estado guardado sigue siendo el de siempre.
+   * Estados de servicio, en el orden en que ocurren durante el pase.
+   *
+   * "Sentada" guarda SENTADA. Antes guardaba WALK_IN, y eso estaba mal: WALK_IN
+   * es el ORIGEN de la reserva (cliente que llegó sin reservar), asi que sentar
+   * a un cliente que SI habia reservado le borraba por donde habia entrado
+   * (`updateReserva` fuerza `origen = 'WALKIN'` en ese estado).
    */
   const ESTADOS_SERVICIO: EstadoReserva[] = [
     "CONFIRMADA",
-    "WALK_IN",
+    "SENTADA",
     "TERMINANDO",
     "LIBERADA",
   ];
@@ -2895,7 +2899,7 @@ function PlanoCanvas({
           // que la primera es la que llega antes: es la que se enseña sobre la
           // mesa cuando hay mas de una en el mismo turno.
           const firstR = rs[0];
-          const isWalkIn = firstR?.estado === "WALK_IN";
+          const isWalkIn = firstR ? esReservaWalkIn(firstR) : false;
           const isLibre = estado === "LIBRE";
           const radius = forma === "redonda" ? 9999 : 6;
           // Dos (o mas) reservas en la misma mesa y turno: la mesa se parte con
@@ -4083,7 +4087,13 @@ export function ReservasView() {
     if (mesasBloqueadasIds.has(m.id)) return "BLOQUEADA";
     const rs = reservasActivasPorMesa.get(m.id);
     if (!rs || rs.length === 0) return "LIBRE";
-    if (rs.some(r => r.estado === "WALK_IN")) return "OCUPADA";
+    // OCUPADA = hay gente SENTADA en ella (o terminando). Antes se miraba
+    // WALK_IN, que es el ORIGEN de la reserva: una mesa con un walk-in que
+    // todavia no se habia sentado ya salia ocupada, y una con un cliente
+    // sentado que SI habia reservado salia como si estuviera libre de gente.
+    if (rs.some(r => r.estado === "SENTADA" || r.estado === "TERMINANDO")) {
+      return "OCUPADA";
+    }
     return "RESERVADA";
   };
 
@@ -5289,7 +5299,7 @@ export function ReservasView() {
                             // que llega antes y es la que se enseña en la mesa.
                             const rs = getReservasMesa(m.id);
                             const firstR = rs[0];
-                            const isWalkIn = firstR?.estado === "WALK_IN";
+                            const isWalkIn = firstR ? esReservaWalkIn(firstR) : false;
                             const isLibre = estado === "LIBRE";
                             // Doble servicio en la misma mesa y turno: se parte
                             // con una diagonal, igual que en el plano.

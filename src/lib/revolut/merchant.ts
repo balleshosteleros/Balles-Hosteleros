@@ -28,6 +28,15 @@ export type RevolutOrderState =
   | "CANCELLED"
   | "FAILED";
 
+/** Datos NO sensibles de la tarjeta: sirven para identificarla, no para cobrar. */
+export interface RevolutPaymentMethod {
+  /** Cuatro últimos dígitos. Ojo: Revolut lo llama `last_four`, no `last4`. */
+  last_four?: string;
+  brand?: string;
+  expiry_month?: number;
+  expiry_year?: number;
+}
+
 export interface RevolutOrder {
   id: string;
   /** Token para el widget de pago incrustado. */
@@ -35,6 +44,13 @@ export interface RevolutOrder {
   state: RevolutOrderState;
   /** Página de pago alojada por Revolut. */
   checkout_url?: string;
+  /**
+   * Hasta cuándo se puede capturar una autorización. Lo calcula Revolut según
+   * el comercio y la tarjeta concreta, y MANDA sobre cualquier plazo teórico:
+   * en un restaurante con Visa suelen ser 5 días, con Mastercard hasta 30.
+   */
+  capture_deadline?: string;
+  payments?: Array<{ payment_method?: RevolutPaymentMethod }>;
 }
 
 export interface CrearOrdenInput {
@@ -49,6 +65,14 @@ export interface CrearOrdenInput {
   cliente?: { email?: string; nombre?: string; telefono?: string };
   /** A dónde vuelve el cliente tras pagar. */
   redirectUrl?: string;
+  /**
+   * `false` (por defecto) cobra en el momento: es lo que hace un Ticket.
+   *
+   * `true` RETIENE sin cobrar: el dinero queda bloqueado en la cuenta del
+   * cliente y solo se mueve si alguien captura después. Es lo que necesita una
+   * política de garantía (PRP-082), y lo que hace un hotel al pedir la tarjeta.
+   */
+  retener?: boolean;
 }
 
 /**
@@ -91,11 +115,17 @@ export async function crearOrden(input: CrearOrdenInput): Promise<
   const body: Record<string, unknown> = {
     amount: aCentimos(input.importe),
     currency: input.moneda ?? "EUR",
-    // Se cobra en el momento, no se preautoriza.
-    capture_mode: "automatic",
+    // "automatic" cobra al instante; "manual" solo retiene y deja el cobro
+    // para más tarde (ver `retener`).
+    capture_mode: input.retener ? "manual" : "automatic",
     merchant_order_ext_ref: input.referencia,
     description: input.descripcion,
   };
+  if (input.retener) {
+    // Una preautorización aguanta más días que una autorización normal, que es
+    // justo lo que hace falta para una reserva a varios días vista.
+    body.authorisation_type = "pre_authorisation";
+  }
 
   if (input.cliente?.email) {
     body.customer = {
@@ -148,6 +178,68 @@ export async function obtenerOrden(
     console.error("[revolut] obtenerOrden:", msg);
     return { ok: false, error: msg };
   }
+}
+
+/**
+ * Cobra de verdad una retención: mueve el dinero que estaba bloqueado.
+ *
+ * ⚠️ Solo se puede capturar UNA vez por orden. Si se captura menos del importe
+ * retenido, el resto se libera para siempre y ya no se puede cobrar. Por eso
+ * aquí no se admite importe parcial: se cobra lo retenido, o no se cobra.
+ */
+export async function capturarOrden(
+  secretKey: string,
+  entorno: RevolutEntorno,
+  orderId: string,
+): Promise<{ ok: true; orden: RevolutOrder } | { ok: false; error: string }> {
+  try {
+    const res = await fetch(`${BASE_URL[entorno]}/orders/${orderId}/capture`, {
+      method: "POST",
+      headers: headers(secretKey),
+      cache: "no-store",
+    });
+    if (!res.ok) return { ok: false, error: await leerError(res) };
+    const orden = (await res.json()) as RevolutOrder;
+    return { ok: true, orden };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Error de red";
+    console.error("[revolut] capturarOrden:", msg);
+    return { ok: false, error: msg };
+  }
+}
+
+/**
+ * Suelta una retención sin cobrar nada: el dinero vuelve al cliente de
+ * inmediato, no en los días que tarda una devolución.
+ */
+export async function liberarOrden(
+  secretKey: string,
+  entorno: RevolutEntorno,
+  orderId: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    const res = await fetch(`${BASE_URL[entorno]}/orders/${orderId}/cancel`, {
+      method: "POST",
+      headers: headers(secretKey),
+      cache: "no-store",
+    });
+    if (!res.ok) return { ok: false, error: await leerError(res) };
+    return { ok: true };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Error de red";
+    console.error("[revolut] liberarOrden:", msg);
+    return { ok: false, error: msg };
+  }
+}
+
+/** Los datos de la tarjeta que se pueden enseñar, si Revolut los devolvió. */
+export function tarjetaDeOrden(orden: RevolutOrder): RevolutPaymentMethod | null {
+  return orden.payments?.[0]?.payment_method ?? null;
+}
+
+/** El dinero está RETENIDO, a la espera de que alguien lo capture o lo suelte. */
+export function estaRetenida(state: RevolutOrderState): boolean {
+  return state === "AUTHORISED";
 }
 
 /** El pago está cobrado de verdad. */

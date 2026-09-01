@@ -8,17 +8,16 @@ import {
   Lock,
   Users,
   MessageSquare,
-  Globe,
-  RefreshCw,
   CheckCheck,
   CircleAlert,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import {
-  esOrigenChannelManager,
-  type Reserva,
-  type ClienteInsights,
-} from "@/features/sala/data/reservas";
+import type { Reserva, ClienteInsights } from "@/features/sala/data/reservas";
+
+/** 98 → "98,00 €" (coma decimal). */
+function fmtEuro(n: number): string {
+  return `${n.toFixed(2).replace(".", ",")} €`;
+}
 
 interface Props {
   reserva: Reserva;
@@ -39,9 +38,6 @@ export function ReservaFlagsChips({
 }: Props) {
   const iconSize = size === "sm" ? "h-3.5 w-3.5" : "h-4 w-4";
   const chipSize = size === "sm" ? "h-5 px-1.5" : "h-6 px-2";
-  const origen = reserva.origen ?? "";
-  const isMotorWeb = origen.toLowerCase().includes("web") && !esOrigenChannelManager(origen);
-  const isChannelManager = esOrigenChannelManager(origen);
   const tieneObs = !!reserva.observaciones && reserva.observaciones.trim().length > 0;
   const reconfirmada = !!reserva.reconfirmadaAt;
 
@@ -99,12 +95,9 @@ export function ReservaFlagsChips({
   if (reconfirmada) {
     chips.push({ key: "reconfirmada", label: "Reserva reconfirmada", icon: <CheckCheck className={iconSize} />, cls: "text-teal-500 border-teal-500/40 bg-teal-500/10" });
   }
-  if (isMotorWeb) {
-    chips.push({ key: "web", label: "Reserva web", icon: <Globe className={iconSize} />, cls: "text-blue-500 border-blue-500/40 bg-blue-500/10" });
-  }
-  if (isChannelManager) {
-    chips.push({ key: "channel", label: `Channel manager${origen ? ` · ${origen}` : ""}`, icon: <RefreshCw className={iconSize} />, cls: "text-zinc-600 border-zinc-500/40 bg-zinc-500/10" });
-  }
+  // El ORIGEN de la reserva (web, channel manager…) NO lleva icono: ya tiene
+  // su propia columna en el listado y repetirlo pegado al nombre solo restaba
+  // sitio al dato por el que se busca a la gente en sala.
   if (insights && insights.visitasSinValoracion > 0) {
     chips.push({
       key: "visitas_sin",

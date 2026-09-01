@@ -32,8 +32,8 @@ import {
  *
  * Se listan únicamente CONFIRMADA y RECONFIRMADA. Lo demás no es una mesa
  * asegurada: LISTA_ESPERA es una cola, NO_RECONFIRMADA está en el aire, y
- * WALK_IN/TERMINANDO/LIBERADA describen a alguien que ya está o ya estuvo en
- * la casa, no una visita por venir. Anunciar cualquiera de esas como "próxima
+ * SENTADA/TERMINANDO/LIBERADA describen a alguien que ya está o ya estuvo en
+ * la casa, no una visita por venir (y WALK_IN es que llegó sin reservar). Anunciar cualquiera de esas como "próxima
  * reserva" con su mesa y su zona haría creer a sala que hay sitio guardado.
  */
 const ESTADOS_PROXIMA_RESERVA = ["CONFIRMADA", "RECONFIRMADA"];

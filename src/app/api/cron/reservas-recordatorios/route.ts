@@ -202,6 +202,7 @@ export async function GET(request: Request) {
             "CONFIRMADA",
             "RECONFIRMADA",
             "NO_RECONFIRMADA",
+            "SENTADA",
             "TERMINANDO",
             "LIBERADA",
             "WALK_IN",

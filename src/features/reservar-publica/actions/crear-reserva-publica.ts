@@ -15,6 +15,10 @@ import { getCamposObligatoriosReserva } from "@/features/sala/lib/reserva-campos
 import { notificarReservaCreada } from "@/lib/email/reservas/notificar-creada";
 import { turnoDeHora } from "@/features/sala/lib/dia-negocio";
 import {
+  validarCanjeTicket,
+  TICKET_MOTIVO_LABELS,
+} from "@/features/sala/lib/validar-ticket-canje";
+import {
   calcularPolitica,
   politicaDesdeRow,
   POLITICA_COLUMNAS_SELECT,
@@ -24,6 +28,7 @@ import {
   RESERVA_COMENTARIO_MAX_CHARS,
   RESERVA_APELLIDOS_MAX_CHARS,
   MAX_COMENSALES_ENTRADA,
+  type DiaSemanaKey,
 } from "@/features/sala/data/reservas";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -46,6 +51,8 @@ const inputSchema = z.object({
   notas: z.string().max(RESERVA_COMENTARIO_MAX_CHARS).optional().nullable(),
   codigo: z.string().min(1).max(64).optional().nullable(),
   ticketProductoId: z.string().guid().optional().nullable(),
+  /** Código de un Ticket comprado antes. Se canjea al confirmar la reserva. */
+  ticketCodigo: z.string().regex(/^[A-Z0-9]{6}$/).optional().nullable(),
   ticketOnly: z.boolean().optional(),
   /**
    * Grupo de zonas elegido por el cliente ("Sala", "Terraza Exterior"). La
@@ -79,6 +86,16 @@ export type CrearReservaPublicaResult =
       };
       /** PRP-052: si se aplicó un cupón, código + título visible al cliente. */
       cuponAplicado: { codigo: string; tituloCliente: string } | null;
+      /**
+       * PRP-082: la reserva exige tarjeta. El formulario lleva al cliente al
+       * enlace en vez de darle la reserva por cerrada. `null` = no hace falta.
+       */
+      tarjetaPendiente: {
+        token: string | null;
+        importe: number;
+        /** true = se retiene el importe (garantía); false = solo se guarda. */
+        retiene: boolean;
+      } | null;
     }
   | { ok: false; error: string };
 
@@ -220,6 +237,9 @@ export async function crearReservaPublicaAction(
   let ticketIvaFinal: number | null = null;
   let tipoCategoriaFinal: string | null = null;
   let pagoPendienteFinal = false;
+  /** Compra a canjear cuando el cliente llega con un código ya pagado. */
+  let ticketCompraId: string | null = null;
+  let ticketCodigoFinal: string | null = null;
 
   let linkRequiereTicket = false;
   if (data.origen) {
@@ -234,10 +254,68 @@ export async function crearReservaPublicaAction(
   }
   const ticketObligatorio = data.ticketOnly || linkRequiereTicket;
 
-  if (ticketObligatorio && !data.ticketProductoId) {
+  // ── Canje de un código comprado antes ──────────────────────────
+  //
+  // Aquí el cliente YA pagó: no se cobra nada ni se consume stock (se consumió
+  // al comprar). Solo se valida que el código sirve para lo que está eligiendo
+  // y se marca como usado. Se comprueba todo otra vez en el servidor aunque el
+  // formulario ya lo hiciera: el navegador no es de fiar.
+  if (data.ticketCodigo) {
+    const codigo = data.ticketCodigo.trim().toUpperCase();
+    const { data: compraRow } = await admin
+      .from("reserva_ticket_compras")
+      .select("id, producto_id, estado, canje_hasta, unidades, importe_total, iva")
+      .eq("empresa_id", empresa.id)
+      .eq("codigo", codigo)
+      .maybeSingle();
+    if (!compraRow) {
+      return { ok: false, error: "No encontramos ningún código así. Revísalo y vuelve a intentarlo." };
+    }
+
+    const { data: prodCond } = await admin
+      .from("reserva_ticket_productos")
+      .select("dias_semana, dias_excluidos, turnos, hora_desde, hora_hasta, horas_excluidas, grupo_zona_ids")
+      .eq("id", compraRow.producto_id as string)
+      .maybeSingle();
+
+    const validez = validarCanjeTicket(
+      {
+        estado: compraRow.estado as string,
+        canjeHasta: (compraRow.canje_hasta as string | null) ?? null,
+        unidades: Number(compraRow.unidades),
+      },
+      {
+        diasSemana: (prodCond?.dias_semana as DiaSemanaKey[] | null) ?? [],
+        diasExcluidos: (prodCond?.dias_excluidos as string[] | null) ?? [],
+        turnos: (prodCond?.turnos as ("COMIDA" | "CENA")[] | null) ?? [],
+        horaDesde: (prodCond?.hora_desde as string | null) ?? null,
+        horaHasta: (prodCond?.hora_hasta as string | null) ?? null,
+        horasExcluidas: (prodCond?.horas_excluidas as string[] | null) ?? [],
+        grupoZonaIds: (prodCond?.grupo_zona_ids as string[] | null) ?? [],
+      },
+      { fecha: data.fecha, hora: data.hora.slice(0, 5), grupoZonaId: data.grupoZonaId ?? null },
+    );
+    if (!validez.ok) {
+      return { ok: false, error: TICKET_MOTIVO_LABELS[validez.motivo] };
+    }
+
+    // El ticket manda sobre el número de comensales: se pagó por N personas y
+    // se reserva para N. Si no, entrarían cuatro pagando dos.
+    ticketCompraId = compraRow.id as string;
+    ticketCodigoFinal = codigo;
+    ticketProductoIdFinal = compraRow.producto_id as string;
+    ticketUnidadesFinal = Number(compraRow.unidades);
+    ticketImporteFinal = Number(compraRow.importe_total);
+    ticketIvaFinal = Number(compraRow.iva ?? 0);
+    tipoCategoriaFinal = "ticket";
+    // Ya está cobrado: esta reserva no debe figurar como pendiente de pago.
+    pagoPendienteFinal = false;
+  }
+
+  if (ticketObligatorio && !data.ticketProductoId && !ticketCompraId) {
     return { ok: false, error: "Este enlace solo acepta reservas con ticket y no quedan plazas disponibles. Contacta con el restaurante." };
   }
-  if (data.ticketProductoId) {
+  if (data.ticketProductoId && !ticketCompraId) {
     const bloqueo = await admin
       .from("cliente_ticket_bloqueos")
       .select("id", { head: true, count: "exact" })
@@ -470,7 +548,7 @@ export async function crearReservaPublicaAction(
 
   // Id generado en código para poder disparar el correo sin releer la fila.
   const reservaId = crypto.randomUUID();
-  const { error } = await admin.from("reservas").insert({
+  const { data: filaCreada, error } = await admin.from("reservas").insert({
     id: reservaId,
     empresa_id: empresa.id,
     cliente_id: cliente.id,
@@ -509,12 +587,17 @@ export async function crearReservaPublicaAction(
     garantia_importe: garantia.aplica ? garantia.importe : null,
     tiene_cancelacion: cancelacion.aplica,
     cancelacion_importe: cancelacion.aplica ? cancelacion.importe : null,
+    // Marca la reserva como de Ticket. De esto depende que se envíe el correo
+    // propio de Ticket y que salga el distintivo en el listado del salón.
+    es_ticket: ticketProductoIdFinal !== null,
     ticket_producto_id: ticketProductoIdFinal,
     ticket_unidades: ticketUnidadesFinal,
     ticket_importe: ticketImporteFinal,
     ticket_iva: ticketIvaFinal,
+    ticket_compra_id: ticketCompraId,
+    ticket_codigo: ticketCodigoFinal,
     pago_pendiente: pagoPendienteFinal,
-  });
+  }).select("garantia_token").single();
   if (error) {
     // Sin fila de reserva, el trigger de cancelación nunca devolvería el cupo:
     // hay que soltarlo a mano o el turno quedaría ocupado por una reserva
@@ -522,6 +605,34 @@ export async function crearReservaPublicaAction(
     await liberarCupo();
     console.error("[reservar-publica] insert error:", error);
     return { ok: false, error: "No pudimos crear la reserva" };
+  }
+
+  // ── Marcar el código como USADO ────────────────────────────────
+  //
+  // Va después del insert porque la compra guarda a qué reserva se canjeó. La
+  // función bloquea la fila, así que dos personas usando el mismo código a la
+  // vez no pueden canjearlo las dos: una gana y la otra recibe "ya utilizado".
+  //
+  // Si el canje falla, se deshace la reserva. Dejarla viva significaría regalar
+  // una mesa pagada dos veces.
+  if (ticketCompraId) {
+    const canje = await admin.rpc("canjear_ticket_compra", {
+      p_compra_id: ticketCompraId,
+      p_reserva_id: reservaId,
+    });
+    if (canje.error) {
+      await admin.from("reservas").delete().eq("id", reservaId);
+      await liberarCupo();
+      const msg = canje.error.message ?? "";
+      console.error("[reservar-publica] canjear_ticket_compra:", canje.error);
+      if (msg.includes("YA_UTILIZADO")) {
+        return { ok: false, error: "Este código ya se usó en otra reserva." };
+      }
+      if (msg.includes("CADUCADO")) {
+        return { ok: false, error: "Este código ha caducado." };
+      }
+      return { ok: false, error: "No pudimos validar tu código. Inténtalo de nuevo." };
+    }
   }
 
   await admin.rpc("registrar_visita_cliente_sala", {
@@ -537,9 +648,15 @@ export async function crearReservaPublicaAction(
   // correo falla (SMTP caído, plantilla desactivada), no se puede deshacer la
   // reserva ni tiene sentido mostrarle un error al cliente: se registra en log
   // y el restaurante la ve igualmente en Sala.
-  notificarReservaCreada(reservaId).catch((e) =>
-    console.error("[reservar-publica] mail CONFIRMACION:", e),
-  );
+  // Si la reserva exige tarjeta, el correo de confirmación NO sale todavía:
+  // saldría diciendo "reserva confirmada" mientras al cliente aún le queda
+  // pagar. Se envía cuando la tarjeta queda puesta.
+  const exigeTarjeta = garantia.aplica || cancelacion.aplica;
+  if (!exigeTarjeta) {
+    notificarReservaCreada(reservaId).catch((e) =>
+      console.error("[reservar-publica] mail CONFIRMACION:", e),
+    );
+  }
 
   return {
     ok: true,
@@ -553,6 +670,18 @@ export async function crearReservaPublicaAction(
     },
     cuponAplicado: codigoTexto && cuponTituloCliente
       ? { codigo: codigoTexto, tituloCliente: cuponTituloCliente }
+      : null,
+    /**
+     * Enlace al paso de tarjeta (PRP-082). Relleno solo cuando alguna política
+     * lo exige: el formulario lleva ahí al cliente en vez de darle la reserva
+     * por cerrada.
+     */
+    tarjetaPendiente: exigeTarjeta
+      ? {
+          token: (filaCreada?.garantia_token as string | null) ?? null,
+          importe: garantia.aplica ? garantia.importe : cancelacion.importe,
+          retiene: garantia.aplica,
+        }
       : null,
   };
 }
