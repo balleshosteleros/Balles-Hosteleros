@@ -233,3 +233,30 @@ export function vigenciaToCampos(v: VigenciaSpec): {
 export function jsDayToIsoDow(jsDay: number): DiaIsoDow {
   return (jsDay === 0 ? 7 : jsDay) as DiaIsoDow;
 }
+
+/**
+ * Comprueba que una vigencia está completa antes de guardarla. Devuelve el
+ * error listo para enseñar, o null si es válida.
+ *
+ * Vive aquí y no en cada formulario porque la misma vigencia se rellena desde
+ * cuatro sitios (reglas de aforo, intervalos, planos y bloqueos) y el fallo
+ * tiene que ser el mismo en los cuatro. Sin esto, un "Todos los…" sin día
+ * elegido se guardaba con `dias_semana` a null: una regla que no aplicaba
+ * nunca y que además no daba ninguna pista de por qué.
+ */
+export function validarVigencia(v: VigenciaSpec): string | null {
+  switch (v.modo) {
+    case "todos_los_dia":
+      if (!v.diaSemana) return "Elige el día de la semana";
+      return null;
+    case "rango":
+      if (!v.fechaDesde || !v.fechaHasta) return "Indica fecha desde y hasta";
+      if (v.fechaDesde > v.fechaHasta) return "La fecha de inicio es posterior a la de fin";
+      return null;
+    case "fechas":
+      if (!v.fechas || v.fechas.length === 0) return "Añade al menos una fecha";
+      return null;
+    default:
+      return null;
+  }
+}

@@ -17,6 +17,7 @@ import {
   type ReglaInput,
   type TurnoRegla,
   type VigenciaSpec,
+  validarVigencia,
   reglaToVigencia,
 } from "../data/reglas";
 import { TurnoToggle } from "./TurnoToggle";
@@ -86,6 +87,11 @@ export function ReglaModal({
     const v = Number(valor);
     if (!Number.isFinite(v) || v < 0) {
       toast.error("Indica un número válido.");
+      return;
+    }
+    const errVigencia = validarVigencia(vigencia);
+    if (errVigencia) {
+      toast.error(errVigencia);
       return;
     }
     onSaved({ metrica, valor: v, turno, vigencia });

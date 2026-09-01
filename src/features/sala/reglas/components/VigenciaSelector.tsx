@@ -11,7 +11,6 @@ import {
   type VigenciaSpec,
   DIA_ISO_DOW_LABELS,
   DIAS_ISO_DOW,
-  jsDayToIsoDow,
 } from "../data/reglas";
 
 interface Props {
@@ -26,25 +25,25 @@ interface Props {
 interface ModoOpcion {
   modo: ModoVigencia;
   label: string;
-  /** Si retorna texto el modo se renderiza con ese label dinámico. */
-  dynamicLabel?: () => string;
 }
-
-const TODAY_ISODOW = jsDayToIsoDow(new Date().getDay()) as DiaIsoDow;
 
 /**
  * Selector de vigencia: dos filas — un toggle group con los modos disponibles
  * y, debajo, los inputs específicos según el modo elegido. Sin Popover ni
  * cmdk para evitar conflictos dentro de Dialog.
+ *
+ * El modo semanal se enseña siempre como "Todos los…" y el día se elige en el
+ * desplegable de debajo. Antes el botón venía ya escrito con el día de HOY
+ * ("Todos los martes"), y se leía como si la periodicidad estuviese decidida
+ * cuando aún no se había tocado nada: el que quería "todos los viernes" se
+ * dejaba el martes puesto sin darse cuenta. Una vez elegido el día, el propio
+ * botón lo dice ("Todos los viernes") — que es lo que el usuario quiere leer.
  */
 export function VigenciaSelector({ value, onChange, hideHoy, hideSiempre }: Props) {
   const opciones: ModoOpcion[] = useMemo(() => {
     const arr: ModoOpcion[] = [];
     if (!hideHoy) arr.push({ modo: "hoy", label: "Hoy" });
-    arr.push({
-      modo: "todos_los_dia",
-      label: `Todos los ${DIA_ISO_DOW_LABELS[TODAY_ISODOW].toLowerCase()}`,
-    });
+    arr.push({ modo: "todos_los_dia", label: "Todos los…" });
     if (!hideSiempre) arr.push({ modo: "todos_los_dias", label: "Todos los días" });
     arr.push({ modo: "rango", label: "Entre dos fechas" });
     arr.push({ modo: "fechas", label: "Días específicos" });
@@ -62,7 +61,10 @@ export function VigenciaSelector({ value, onChange, hideHoy, hideSiempre }: Prop
         onChange({ modo: nuevoModo });
         return;
       case "todos_los_dia":
-        onChange({ modo: nuevoModo, diaSemana: value.diaSemana ?? TODAY_ISODOW });
+        // Sin día por defecto: el usuario lo elige en el desplegable. Poner hoy
+        // "por poner algo" es lo que hacía que se guardaran patrones que nadie
+        // había pedido.
+        onChange({ modo: nuevoModo, diaSemana: value.diaSemana });
         return;
       case "rango":
         onChange({
@@ -85,6 +87,11 @@ export function VigenciaSelector({ value, onChange, hideHoy, hideSiempre }: Prop
       <div className="flex flex-wrap gap-1">
         {opciones.map((opt) => {
           const activo = value.modo === opt.modo;
+          // Ya elegido el día, el botón lo dice: "Todos los viernes".
+          const etiqueta =
+            opt.modo === "todos_los_dia" && activo && value.diaSemana
+              ? `Todos los ${DIA_ISO_DOW_LABELS[value.diaSemana].toLowerCase()}`
+              : opt.label;
           return (
             <button
               key={opt.modo}
@@ -97,7 +104,7 @@ export function VigenciaSelector({ value, onChange, hideHoy, hideSiempre }: Prop
                   : "border-input bg-background hover:bg-muted")
               }
             >
-              {opt.label}
+              {etiqueta}
             </button>
           );
         })}
@@ -106,7 +113,7 @@ export function VigenciaSelector({ value, onChange, hideHoy, hideSiempre }: Prop
       {/* Secciones condicionales según el modo */}
       {value.modo === "todos_los_dia" && (
         <SelectorDiaSemana
-          value={value.diaSemana ?? TODAY_ISODOW}
+          value={value.diaSemana}
           onChange={(d) => onChange({ modo: "todos_los_dia", diaSemana: d })}
         />
       )}
@@ -135,17 +142,20 @@ function SelectorDiaSemana({
   value,
   onChange,
 }: {
-  value: DiaIsoDow;
+  value?: DiaIsoDow;
   onChange: (d: DiaIsoDow) => void;
 }) {
   return (
     <div className="space-y-1.5">
       <Label className="text-[11px] text-muted-foreground">Día de la semana</Label>
       <select
-        value={value}
+        value={value ?? ""}
         onChange={(e) => onChange(Number(e.target.value) as DiaIsoDow)}
         className="h-9 text-sm w-full max-w-xs rounded-md border border-input bg-background px-2"
       >
+        <option value="" disabled>
+          Elige un día
+        </option>
         {DIAS_ISO_DOW.map((d) => (
           <option key={d} value={d}>
             {DIA_ISO_DOW_LABELS[d]}

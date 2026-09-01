@@ -32,15 +32,24 @@ import {
   type TurnoRegla,
   type VigenciaSpec,
   DIA_ISO_DOW_LABELS,
+  validarVigencia,
 } from "@/features/sala/reglas/data/reglas";
 import { TurnoToggle } from "@/features/sala/reglas/components/TurnoToggle";
 import { VigenciaSelector } from "@/features/sala/reglas/components/VigenciaSelector";
 import {
   createBloqueo,
   deleteBloqueo,
+  listBloqueoExcepciones,
   listBloqueos,
 } from "@/features/sala/bloqueos/actions/bloqueos-actions";
-import type { ReservaBloqueo } from "@/features/sala/bloqueos/data/bloqueos";
+import {
+  vigenciaAplicaEnFecha,
+  type BloqueoExcepcion,
+  type ReservaBloqueo,
+} from "@/features/sala/bloqueos/data/bloqueos";
+import { useSincronizacionEnVivo } from "@/shared/hooks/useSincronizacionEnVivo";
+import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
+import { hoyEnZonaISO } from "@/shared/lib/timeUtils";
 
 const CANVAS_W = 1200;
 const CANVAS_H = 640;
@@ -114,7 +123,14 @@ export function BloqueosTab() {
   const [aplicando, setAplicando] = useState(false);
 
   const [bloqueos, setBloqueos] = useState<ReservaBloqueo[]>([]);
+  const [excepciones, setExcepciones] = useState<BloqueoExcepcion[]>([]);
   const [cargandoBloqueos, setCargandoBloqueos] = useState(true);
+  const { empresaActual } = useEmpresa();
+  // "Hoy" es el hoy del restaurante, no el del navegador ni el de UTC.
+  const HOY_ISO = useMemo(
+    () => hoyEnZonaISO(empresaActual.zonaHoraria),
+    [empresaActual.zonaHoraria],
+  );
 
   const outerRef = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(1);
@@ -177,14 +193,30 @@ export function BloqueosTab() {
   const cargarBloqueos = useCallback(async () => {
     if (!localId) return;
     setCargandoBloqueos(true);
-    const r = await listBloqueos(localId);
+    const [r, ex] = await Promise.all([
+      listBloqueos(localId),
+      listBloqueoExcepciones(localId),
+    ]);
     setBloqueos(r.ok ? r.data : []);
+    setExcepciones(ex.ok ? ex.data : []);
     setCargandoBloqueos(false);
   }, [localId]);
 
   useEffect(() => {
     cargarBloqueos();
   }, [cargarBloqueos]);
+
+  // El mismo bloqueo se toca desde el plano de /sala/reservas. Sin esto, quien
+  // tuviera esta pestaña abierta seguía viendo un bloqueo que el compañero
+  // acababa de quitar.
+  useSincronizacionEnVivo({
+    tablas: [
+      "empresa_reservas_bloqueos",
+      "empresa_reservas_bloqueos_excepciones",
+    ],
+    empresaId: empresaActual.id,
+    onCambio: () => void cargarBloqueos(),
+  });
 
   // Escalado del canvas al ancho disponible
   useEffect(() => {
@@ -215,14 +247,17 @@ export function BloqueosTab() {
   }, [mesas, zonasSala, posiciones]);
 
   /**
-   * IDs de mesa que tienen al menos un bloqueo activo (cualquier vigencia,
-   * cualquier turno) en este local. Las zonas se expanden a sus mesas. Solo
-   * cuenta para la visualización del plano — la validación real ya la hace el
-   * motor con `getMesasBloqueadas` y la fecha/turno reales.
+   * IDs de mesa bloqueadas HOY en este local. Las zonas se expanden a sus
+   * mesas y se restan las excepciones puntuales, igual que hace el plano de
+   * /sala/reservas: si allí la mesa se ve libre, aquí no puede verse negra.
+   *
+   * Antes se pintaba cualquier mesa que apareciera en cualquier bloqueo, sin
+   * mirar vigencia ni excepciones — una mesa desbloqueada seguía en negro.
    */
   const mesasConBloqueoIds = useMemo(() => {
     const ids = new Set<string>();
     for (const b of bloqueos) {
+      if (!vigenciaAplicaEnFecha(b, HOY_ISO)) continue;
       for (const mid of b.mesaIds) ids.add(mid);
       if (b.zonaIds.length > 0) {
         const setZ = new Set(b.zonaIds);
@@ -231,8 +266,20 @@ export function BloqueosTab() {
         }
       }
     }
+    // Una mesa solo deja de estar bloqueada si está levantada en LOS DOS
+    // turnos: si sigue bloqueada en cena, sigue siendo una mesa bloqueada hoy.
+    const levantadas = new Map<string, Set<string>>();
+    for (const e of excepciones) {
+      if (e.fecha !== HOY_ISO) continue;
+      const set = levantadas.get(e.mesaId) ?? new Set<string>();
+      set.add(e.turno);
+      levantadas.set(e.mesaId, set);
+    }
+    for (const [mesaId, turnos] of levantadas) {
+      if (turnos.has("COMIDA") && turnos.has("CENA")) ids.delete(mesaId);
+    }
     return ids;
-  }, [bloqueos, mesas]);
+  }, [bloqueos, mesas, excepciones]);
 
   function toggleMesa(mesaId: string) {
     setSeleccionMesas((prev) => {
@@ -263,12 +310,9 @@ export function BloqueosTab() {
       toast.error("Selecciona al menos una zona o una mesa");
       return;
     }
-    if (vigencia.modo === "rango" && (!vigencia.fechaDesde || !vigencia.fechaHasta)) {
-      toast.error("Indica fecha desde y hasta");
-      return;
-    }
-    if (vigencia.modo === "fechas" && (vigencia.fechas ?? []).length === 0) {
-      toast.error("Añade al menos una fecha");
+    const errVigencia = validarVigencia(vigencia);
+    if (errVigencia) {
+      toast.error(errVigencia);
       return;
     }
     setAplicando(true);
@@ -672,6 +716,20 @@ export function BloqueosTab() {
               const mesasCodigos = b.mesaIds
                 .map((mid) => mesaPorId.get(mid)?.codigo)
                 .filter(Boolean) as string[];
+              // Un bloqueo recurrente puede estar levantado hoy desde el plano.
+              // Decirlo evita el desconcierto de ver aquí una mesa que allí
+              // aparece libre.
+              const levantadoHoy =
+                vigenciaAplicaEnFecha(b, HOY_ISO) &&
+                b.mesaIds.length > 0 &&
+                b.mesaIds.every((mid) =>
+                  excepciones.some(
+                    (e) =>
+                      e.mesaId === mid &&
+                      e.fecha === HOY_ISO &&
+                      (b.turno === "AMBOS" ? true : e.turno === b.turno),
+                  ),
+                );
               return (
                 <li
                   key={b.id}
@@ -696,6 +754,11 @@ export function BloqueosTab() {
                     )}
                     {b.motivo ? ` · ${b.motivo}` : ""}
                   </span>
+                  {levantadoHoy && (
+                    <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                      Levantado hoy
+                    </span>
+                  )}
                   <Button
                     type="button"
                     variant="ghost"

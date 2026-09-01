@@ -32,6 +32,7 @@ import {
   type TurnoRegla,
   type VigenciaSpec,
   vigenciaToCampos,
+  validarVigencia,
 } from "@/features/sala/reglas/data/reglas";
 import { TurnoToggle } from "@/features/sala/reglas/components/TurnoToggle";
 import { VigenciaSelector } from "@/features/sala/reglas/components/VigenciaSelector";
@@ -410,6 +411,11 @@ function RenombrarPlanoModal({
   async function handleGuardar() {
     if (!plano) return;
     if (!nombre.trim()) return;
+    const errVigencia = validarVigencia(vigencia);
+    if (errVigencia) {
+      toast.error(errVigencia);
+      return;
+    }
     setSaving(true);
     try {
       const campos = vigenciaToCampos(vigencia);

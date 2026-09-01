@@ -37,17 +37,8 @@ import { VigenciaBadge } from "@/features/sala/reglas/components/VigenciaBadge";
 import { resolverValorEfectivo } from "@/features/sala/reglas/lib/resolver";
 import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
+import { hoyEnZonaISO } from "@/shared/lib/timeUtils";
 
-function hoyEnZonaISO(tz: string): string {
-  // Sin librerías: usamos Intl con la zona de la empresa.
-  const fmt = new Intl.DateTimeFormat("sv-SE", {
-    timeZone: tz,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  });
-  return fmt.format(new Date()); // "YYYY-MM-DD"
-}
 
 const DIAS_SEMANA = ["lun", "mar", "mie", "jue", "vie", "sab", "dom"] as const;
 

@@ -38,3 +38,20 @@ export function formatHorasDecimal(horas: number | null | undefined): string {
   const mFinal = m === 60 ? 0 : m;
   return `${hFinal}:${String(mFinal).padStart(2, "0")} h`;
 }
+
+/**
+ * Fecha de HOY (YYYY-MM-DD) en la zona horaria de la empresa.
+ *
+ * En la base de datos todo va en UTC, pero "hoy" es el hoy del restaurante: a
+ * las 00:30 de Madrid en UTC todavía es el día anterior, y un bloqueo de hoy
+ * dejaría de verse. Nunca uses `new Date().toISOString()` para esto.
+ */
+export function hoyEnZonaISO(tz: string): string {
+  // "sv-SE" da directamente el formato YYYY-MM-DD, sin montar la cadena a mano.
+  return new Intl.DateTimeFormat("sv-SE", {
+    timeZone: tz,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
+}

@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import type { TurnoRegla, VigenciaSpec } from "@/features/sala/reglas/data/reglas";
-import { reglaToVigencia } from "@/features/sala/reglas/data/reglas";
+import { reglaToVigencia, validarVigencia } from "@/features/sala/reglas/data/reglas";
 import {
   type EmpresaReservasIntervaloRegla,
   type IntervaloReglaInput,
@@ -75,6 +75,11 @@ export function ReglaIntervaloModal({ open, onOpenChange, metrica, regla, onSave
     }
     if (hi > hf) {
       toast.error("La hora de fin debe ser igual o posterior a la de inicio.");
+      return;
+    }
+    const errVigencia = validarVigencia(vigencia);
+    if (errVigencia) {
+      toast.error(errVigencia);
       return;
     }
     const input: IntervaloReglaInput = {
