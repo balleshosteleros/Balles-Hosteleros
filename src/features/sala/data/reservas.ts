@@ -162,6 +162,11 @@ export function zonaLabel(zona: string | null | undefined): string {
     .replace(/^\p{Ll}/u, (c) => c.toUpperCase());
 }
 
+/**
+ * Como se lee cada estado en sala. El valor guardado no cambia: `TERMINANDO`
+ * se sigue llamando asi en la base de datos, pero en el salon se dice que una
+ * mesa ha TERMINADO, no que esta "terminando".
+ */
 export const ESTADO_RESERVA_LABELS: Record<EstadoReserva, string> = {
   CONFIRMADA:      "Confirmada",
   RECONFIRMADA:    "Reconfirmada",
@@ -170,7 +175,7 @@ export const ESTADO_RESERVA_LABELS: Record<EstadoReserva, string> = {
   SENTADA:         "Sentada",
   LIBERADA:        "Liberada",
   WALK_IN:         "Walk in",
-  TERMINANDO:      "Terminando",
+  TERMINANDO:      "Terminada",
   NO_SHOW:         "No show",
   CANCELADA:       "Cancelada",
 };
