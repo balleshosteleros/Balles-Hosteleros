@@ -6,6 +6,7 @@ import {
   franjasSolapan,
 } from "@/features/sala/lib/reserva-conflicto";
 import { getMesasBloqueadas } from "@/features/sala/bloqueos/lib/mesas-bloqueadas";
+import { turnoDeHora } from "@/features/sala/lib/dia-negocio";
 
 export type AsignacionInput = {
   localId: string;
@@ -267,10 +268,13 @@ export async function asignarMesaAutomatica(
     if (errMesas) throw errMesas;
 
     // Bloqueos manuales (Configuración → Bloqueos): prevalecen sobre el plano.
+    // Se acotan al turno de la hora pedida — un bloqueo cubre su turno y solo
+    // ese, así que bloquear la comida no puede dejar la mesa muerta en la cena.
     const bloqueadas = await getMesasBloqueadas(supabase, {
       empresaId: input.empresaId,
       localId: input.localId,
       fechaISO: input.fecha,
+      turno: turnoDeHora(input.hora),
     });
 
     // Ninguna mesa SUELTA admite ese grupo (caso tipico: 8 personas y la mesa

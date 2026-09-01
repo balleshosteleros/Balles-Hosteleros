@@ -7,6 +7,7 @@ import {
   franjasSolapan,
 } from "@/features/sala/lib/reserva-conflicto";
 import { getMesasBloqueadas } from "@/features/sala/bloqueos/lib/mesas-bloqueadas";
+import { turnoDeHora } from "@/features/sala/lib/dia-negocio";
 import { GRUPO_MAX, GRUPO_MIN } from "@/features/sala/data/capacidad-grupos";
 
 /**
@@ -164,11 +165,13 @@ export async function getCapacidadPorGrupo(params: {
         }
       }
 
-      // Los bloqueos manuales también dejan la mesa fuera de juego.
+      // Los bloqueos manuales también dejan la mesa fuera de juego, pero solo
+      // en su turno. Sin hora concreta no hay turno que mirar y cuentan todos.
       const bloqueadas = await getMesasBloqueadas(supabase, {
         empresaId,
         localId: params.localId,
         fechaISO: fecha,
+        turno: hora ? turnoDeHora(hora) : null,
       });
       for (const m of mesas) if (bloqueadas.has(m.id)) ocupadas.add(m.codigo);
     }

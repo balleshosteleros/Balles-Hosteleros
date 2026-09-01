@@ -5,6 +5,7 @@ import {
   franjasSolapan,
 } from "@/features/sala/lib/reserva-conflicto";
 import { getMesasBloqueadas } from "@/features/sala/bloqueos/lib/mesas-bloqueadas";
+import { turnoDeHora } from "@/features/sala/lib/dia-negocio";
 
 /**
  * Disponibilidad por grupo de zonas para el motor web.
@@ -146,10 +147,13 @@ export async function getGruposZonasDisponibles(
     }
   }
 
+  // El bloqueo vale para SU turno: se acota al de la hora consultada para no
+  // cerrar la cena por haber bloqueado la comida.
   const bloqueadas = await getMesasBloqueadas(supabase, {
     empresaId: params.empresaId,
     localId: params.localId,
     fechaISO: params.fecha,
+    turno: turnoDeHora(params.hora),
   });
   for (const m of mesasRaw ?? []) {
     if (bloqueadas.has(m.id as string)) ocupadas.add(m.codigo as string);
