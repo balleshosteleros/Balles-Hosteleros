@@ -70,6 +70,13 @@ function rowToConfig(row: Record<string, unknown>): EmpresaReservasConfig {
     garantiaDesdePax:                (row.garantia_desde_pax as number) ?? 0,
     garantiaPersonalizarMensaje:     Boolean(row.garantia_personalizar_mensaje ?? false),
     garantiaMensajePersonalizado:    (row.garantia_mensaje_personalizado as string | null) ?? null,
+    garantiaDiasSemana:   Array.isArray(row.garantia_dias_semana)     ? (row.garantia_dias_semana as DiaSemanaKey[]) : [],
+    garantiaFechas:       Array.isArray(row.garantia_fechas)          ? (row.garantia_fechas as string[])            : [],
+    garantiaTurnos:       Array.isArray(row.garantia_turnos)          ? (row.garantia_turnos as string[])            : [],
+    garantiaHoraDesde:    (row.garantia_hora_desde as string | null)  ?? null,
+    garantiaHoraHasta:    (row.garantia_hora_hasta as string | null)  ?? null,
+    garantiaGrupoZonaIds: Array.isArray(row.garantia_grupo_zona_ids)  ? (row.garantia_grupo_zona_ids as string[])    : [],
+    garantiaMesaIds:      Array.isArray(row.garantia_mesa_ids)        ? (row.garantia_mesa_ids as string[])          : [],
     productoPersonalizarMensaje:     Boolean(row.producto_personalizar_mensaje ?? false),
     productoMensajePersonalizado:    (row.producto_mensaje_personalizado as string | null) ?? null,
     reconfirmacionActiva:           Boolean(row.reconfirmacion_activa ?? true),
@@ -167,6 +174,13 @@ export async function upsertReservasConfig(updates: Partial<EmpresaReservasConfi
     if ("garantiaDesdePax"                in updates) db.garantia_desde_pax                = updates.garantiaDesdePax;
     if ("garantiaPersonalizarMensaje"     in updates) db.garantia_personalizar_mensaje     = updates.garantiaPersonalizarMensaje;
     if ("garantiaMensajePersonalizado"    in updates) db.garantia_mensaje_personalizado    = updates.garantiaMensajePersonalizado;
+    if ("garantiaDiasSemana"   in updates) db.garantia_dias_semana    = updates.garantiaDiasSemana   ?? [];
+    if ("garantiaFechas"       in updates) db.garantia_fechas         = updates.garantiaFechas       ?? [];
+    if ("garantiaTurnos"       in updates) db.garantia_turnos         = updates.garantiaTurnos       ?? [];
+    if ("garantiaHoraDesde"    in updates) db.garantia_hora_desde     = updates.garantiaHoraDesde;
+    if ("garantiaHoraHasta"    in updates) db.garantia_hora_hasta     = updates.garantiaHoraHasta;
+    if ("garantiaGrupoZonaIds" in updates) db.garantia_grupo_zona_ids = updates.garantiaGrupoZonaIds ?? [];
+    if ("garantiaMesaIds"      in updates) db.garantia_mesa_ids       = updates.garantiaMesaIds      ?? [];
     if ("productoPersonalizarMensaje"     in updates) db.producto_personalizar_mensaje     = updates.productoPersonalizarMensaje;
     if ("productoMensajePersonalizado"    in updates) db.producto_mensaje_personalizado    = updates.productoMensajePersonalizado;
     if ("reconfirmacionActiva"            in updates) db.reconfirmacion_activa             = updates.reconfirmacionActiva;
@@ -276,7 +290,7 @@ async function barrerReconfirmacionesPendientesPorCambio(
     const ts = new Date(`${r.fecha as string}T${(r.hora as string).slice(0, 5)}:00`);
     const diffMs = ts.getTime() - ahora.getTime();
     if (diffMs > 0 && diffMs < leadMs) {
-      await enviarReservaEmail(r.id as string, "RECONFIRMACION", {
+      await enviarReservaEmail(r.id as string, "RECONFIRMADA", {
         actor: actor ?? { origen: "AUTOMATICO" },
       }).catch((e: unknown) =>
         console.error("[reservas-config] barrido send:", e),

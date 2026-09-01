@@ -10,9 +10,14 @@ import { enviarReservaEmail, type ReservaEmailActor } from "./mailer";
  * público ni el booking server de Google tienen sesión. Aquí se usa el cliente
  * admin, que funciona en los tres casos.
  *
- * Encadena RECONFIRMACION cuando la reserva entra con menos antelación que el
- * lead time configurado y la empresa tiene el envío inmediato activado; si no,
- * la dispara el cron a su hora.
+ * Encadena además, en este orden:
+ *   · POLITICA_CANCELACION / POLITICA_GARANTIA si la reserva queda sujeta a
+ *     ellas. Van en correo aparte porque son un compromiso económico: el
+ *     cliente tiene que poder encontrarlas después sin rebuscar dentro de la
+ *     confirmación.
+ *   · RECONFIRMADA cuando la reserva entra con menos antelación que el lead
+ *     time configurado y la empresa tiene el envío inmediato activado; si no,
+ *     la dispara el cron a su hora.
  *
  * Nunca lanza: un fallo de correo no puede tumbar una reserva ya creada.
  *
@@ -25,18 +30,40 @@ export async function notificarReservaCreada(
 ): Promise<{ ok: boolean; error?: string }> {
   try {
     const actor: ReservaEmailActor = { origen };
-    const res = await enviarReservaEmail(reservaId, "CONFIRMACION", { actor });
-    if (!res.ok) {
-      console.error("[reservas][notificarReservaCreada] CONFIRMACION:", res.error);
-    }
-
     const admin = createAdminClient();
     const { data: r } = await admin
       .from("reservas")
-      .select("empresa_id, fecha, hora")
+      .select(
+        "empresa_id, fecha, hora, tipo_categoria, tiene_garantia, garantia_importe, es_ticket",
+      )
       .eq("id", reservaId)
       .maybeSingle();
+
+    // Una reserva hecha con un ticket ya pagado no es una confirmación
+    // cualquiera: el cliente necesita ver que su compra está aplicada a ESTA
+    // fecha. Por eso tiene su propia plantilla y sustituye a la de confirmada;
+    // mandar las dos sería decirle lo mismo dos veces.
+    const tipoBienvenida = r?.es_ticket === true ? "TICKET_RESERVA" : "CONFIRMADA";
+    const res = await enviarReservaEmail(reservaId, tipoBienvenida, { actor });
+    if (!res.ok) {
+      console.error(`[reservas][notificarReservaCreada] ${tipoBienvenida}:`, res.error);
+    }
+
     if (!r?.fecha || !r?.hora || !r?.empresa_id) return { ok: res.ok };
+
+    // Condiciones económicas, cada una en su correo. Si la plantilla está
+    // pausada por la empresa, el mailer lo corta solo: aquí no hay que
+    // comprobar nada más que si la reserva queda sujeta a ellas.
+    if (r.tipo_categoria === "politica") {
+      await enviarReservaEmail(reservaId, "POLITICA_CANCELACION", { actor }).catch(
+        (e) => console.error("[reservas][notificarReservaCreada] POLITICA_CANCELACION:", e),
+      );
+    }
+    if (r.tiene_garantia === true && Number(r.garantia_importe ?? 0) > 0) {
+      await enviarReservaEmail(reservaId, "POLITICA_GARANTIA", { actor }).catch(
+        (e) => console.error("[reservas][notificarReservaCreada] POLITICA_GARANTIA:", e),
+      );
+    }
 
     const { data: cfg } = await admin
       .from("empresa_reservas_config")
@@ -55,8 +82,8 @@ export async function notificarReservaCreada(
     const diffMs = ts.getTime() - Date.now();
     const leadMs = diasAntes * 24 * 3600 * 1000;
     if (diffMs > 0 && diffMs < leadMs) {
-      await enviarReservaEmail(reservaId, "RECONFIRMACION", { actor }).catch((e) =>
-        console.error("[reservas][notificarReservaCreada] RECONFIRMACION:", e),
+      await enviarReservaEmail(reservaId, "RECONFIRMADA", { actor }).catch((e) =>
+        console.error("[reservas][notificarReservaCreada] RECONFIRMADA:", e),
       );
     }
     return { ok: res.ok };

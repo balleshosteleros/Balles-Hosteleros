@@ -45,9 +45,10 @@ export interface ReservaEmailPlantilla {
 }
 
 /**
- * Lista las 6 plantillas de la empresa activa. Si por algún motivo faltan
- * filas (empresa creada antes de la migración), se devuelven con defaults
- * para no romper la UI; la siguiente edición las creará.
+ * Lista todas las plantillas de la empresa activa: las de ESTADO y las de
+ * POLITICA. Si por algún motivo faltan filas (empresa creada antes de una
+ * migración), se devuelven con defaults para no romper la UI; la siguiente
+ * edición las creará.
  */
 export async function listReservaEmailPlantillas(): Promise<{
   ok: boolean;
@@ -187,12 +188,12 @@ export async function previewReservaEmailPlantilla(input: {
     const [{ data: empresa }, { data: cfg }] = await Promise.all([
       supabase
         .from("empresas")
-        .select("nombre, logo_url, color, datos_generales")
+        .select("nombre, logo_url, isotipo_url, color, color_secundario")
         .eq("id", empresaId)
         .maybeSingle(),
       supabase
         .from("empresa_reservas_config")
-        .select("cancelacion_horas_antes, cancelacion_importe_eur")
+        .select("cancelacion_horas_antes, cancelacion_importe_eur, garantia_importe_eur")
         .eq("empresa_id", empresaId)
         .maybeSingle(),
     ]);
@@ -201,14 +202,9 @@ export async function previewReservaEmailPlantilla(input: {
       tipo: input.tipo,
       empresaNombre: (empresa?.nombre as string | undefined) ?? "",
       logoUrl: (empresa?.logo_url as string | null | undefined) ?? null,
+      isotipoUrl: (empresa?.isotipo_url as string | null | undefined) ?? null,
       colorPrimario: (empresa?.color as string | null | undefined) ?? null,
-      telefono: (() => {
-        const dg = empresa?.datos_generales as
-          | { telefonoPrincipal?: string | null }
-          | null
-          | undefined;
-        return dg?.telefonoPrincipal?.trim() || null;
-      })(),
+      colorSecundario: (empresa?.color_secundario as string | null | undefined) ?? null,
       asuntoOverride: input.asuntoOverride,
       mensajeOverride: input.mensajeOverride,
       config: {
@@ -216,6 +212,8 @@ export async function previewReservaEmailPlantilla(input: {
           (cfg?.cancelacion_horas_antes as number | null | undefined) ?? null,
         cancelacionImporteEur:
           (cfg?.cancelacion_importe_eur as number | null | undefined) ?? null,
+        garantiaImporteEur:
+          (cfg?.garantia_importe_eur as number | null | undefined) ?? null,
       },
     });
     return { ok: true, subject, html };

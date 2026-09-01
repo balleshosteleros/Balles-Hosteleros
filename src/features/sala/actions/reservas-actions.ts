@@ -19,12 +19,21 @@ import {
   getDuracionReservaMin,
   ESTADOS_NO_OCUPANTES,
 } from "@/features/sala/lib/reserva-conflicto";
+import {
+  esHoraEnCuarto,
+  MENSAJE_HORA_CUARTO,
+} from "@/features/sala/lib/reserva-cuartos";
 import type { TipoMesa } from "@/features/sala/planos/data/planos";
+import { RESERVA_COMENTARIO_MAX_CHARS } from "@/features/sala/data/reservas";
 import { friendlyError } from "@/shared/lib/friendly-errors";
 import {
   enviarReservaEmail,
   type ReservaEmailActor,
 } from "@/lib/email/reservas/mailer";
+import {
+  esTipoEstado,
+  type ReservaEmailTipo,
+} from "@/lib/seeds/reserva-email-plantillas";
 async function getContext() {
   const supabase = await createClient();
   const {
@@ -111,6 +120,17 @@ export async function listReservasRango(fechaDesde: string, fechaHasta: string) 
   }
 }
 
+/**
+ * Deja el comentario en el tope acordado (dos frases cortas). Es la última
+ * barrera: los formularios ya limitan, pero cualquier otra vía —importación,
+ * llamada directa— pasa igualmente por aquí.
+ */
+function recortarComentario(valor: string | null | undefined): string | null {
+  const limpio = (valor ?? "").trim();
+  if (!limpio) return null;
+  return limpio.slice(0, RESERVA_COMENTARIO_MAX_CHARS);
+}
+
 export async function createReserva(input: {
   clienteNombre: string;
   clienteApellidos?: string;
@@ -129,7 +149,6 @@ export async function createReserva(input: {
   tarjetaIntroducida?: boolean;
   esTicket?: boolean;
   tipoCategoria?: import("@/features/sala/data/reservas").TipoReservaCategoria | null;
-  politicaCancelacionId?: string | null;
   garantiaImporte?: number | null;
   importePagado?: number | null;
   bloqueada?: boolean;
@@ -154,6 +173,14 @@ export async function createReserva(input: {
   try {
     const { supabase, user, empresaId } = await getContext();
     if (!empresaId) return { ok: false, error: "No autenticado" };
+
+    // La hora tiene que caer en un cuarto (:00, :15, :30, :45). Es la barrera
+    // de verdad: da igual por dónde entre la reserva (back-office, portal,
+    // import), aquí se corta. Una hora fuera de cuadrícula no cae en ninguna
+    // franja y se queda fuera de todos los cálculos de solape y aforo.
+    if (!esHoraEnCuarto(input.hora)) {
+      return { ok: false, error: MENSAJE_HORA_CUARTO };
+    }
 
     // Campos obligatorios. Nombre y apellidos siempre; email y teléfono según
     // lo marcado en Ajustes → Departamentos → Sala → Reservas. Quedan fuera
@@ -450,12 +477,13 @@ export async function createReserva(input: {
       zona: zonaFinal,
       turno: input.turno ?? "COMIDA",
       estado: estadoFinal,
-      notas: input.notas ?? null,
+      // El comentario se corta aquí: da igual desde qué pantalla venga, en la
+      // base de datos nunca entra uno más largo del tope.
+      notas: recortarComentario(input.notas),
       origen: origenFinal,
       tarjeta_introducida: input.tarjetaIntroducida ?? false,
       es_ticket: input.esTicket ?? false,
       tipo_categoria: input.tipoCategoria ?? null,
-      politica_cancelacion_id: input.tipoCategoria === "politica" ? (input.politicaCancelacionId ?? null) : null,
       garantia_importe: input.tipoCategoria === "politica" ? (input.garantiaImporte ?? null) : null,
       importe_pagado: input.tipoCategoria === "cupon" ? (input.importePagado ?? null) : null,
       ticket_producto_id: ticketProductoIdFinal,
@@ -521,7 +549,6 @@ export async function updateReserva(
     tarjetaIntroducida?: boolean;
     esTicket?: boolean;
     tipoCategoria?: import("@/features/sala/data/reservas").TipoReservaCategoria | null;
-    politicaCancelacionId?: string | null;
     garantiaImporte?: number | null;
     importePagado?: number | null;
     bloqueada?: boolean;
@@ -536,11 +563,28 @@ export async function updateReserva(
      * No se persiste: solo decide si sale el correo.
      */
     notificarCliente?: boolean;
+    /**
+     * Salta el bloqueo por solape de mesa. Es la decisión del local: al
+     * reasignar mesas a mano desde la ficha, sala ve el aviso con QUÉ reserva
+     * se pisa y hasta qué hora, y puede seguir adelante si le compensa (juntar
+     * dos mesas para un grupo que ha crecido, aunque una tenga otra reserva
+     * más tarde). Nunca se activa solo: la UI solo lo manda después de que
+     * alguien haya confirmado el aviso.
+     */
+    forzarSolape?: boolean;
   }
 ) {
   try {
     const ctx = await getContext();
     const { supabase, empresaId } = ctx;
+
+    // Mover una reserva tiene la misma regla que crearla: la hora cae en un
+    // cuarto o no se guarda. Sin esto, la cuadrícula solo se respetaba al dar
+    // el alta y cualquier edición posterior podía sacarla de ella.
+    if (updates.hora !== undefined && !esHoraEnCuarto(updates.hora)) {
+      return { ok: false, error: MENSAJE_HORA_CUARTO };
+    }
+
     const dbUpdates: Record<string, unknown> = {
       updated_at: new Date().toISOString(),
     };
@@ -627,11 +671,16 @@ export async function updateReserva(
         // Se ha quitado la mesa: sin mesa no hay zona que deducir.
         dbUpdates.zona = null;
       } else {
+        // Una unión se graba como "M1+M2" y ese texto no es el código de
+        // ninguna mesa: buscarlo tal cual no devolvía fila y la reserva se
+        // quedaba con la zona de la mesa anterior. La zona se resuelve por la
+        // PRIMERA mesa del conjunto, que es a la que se ancla la reserva.
+        const codigoPrincipal = codigoMesa.split("+")[0]?.trim() || codigoMesa;
         const { data: mesaRow } = await supabase
           .from("mesas")
           .select("zonas(nombre)")
           .eq("local_id", updates.localId)
-          .eq("codigo", codigoMesa)
+          .eq("codigo", codigoPrincipal)
           .maybeSingle();
         const z = mesaRow?.zonas as unknown as
           | { nombre?: string }
@@ -645,7 +694,7 @@ export async function updateReserva(
     }
     if (updates.turno !== undefined) dbUpdates.turno = updates.turno;
     if (updates.estado !== undefined) dbUpdates.estado = updates.estado;
-    if (updates.notas !== undefined) dbUpdates.notas = updates.notas;
+    if (updates.notas !== undefined) dbUpdates.notas = recortarComentario(updates.notas);
     if (updates.origen !== undefined) dbUpdates.origen = updates.origen;
     // Si la reserva pasa a WALK_IN, el origen siempre es WALKIN — sobreescribe
     // cualquier valor previo o el que viniera en `updates.origen`.
@@ -658,14 +707,12 @@ export async function updateReserva(
     if (updates.tipoCategoria !== undefined) {
       dbUpdates.tipo_categoria = updates.tipoCategoria;
       if (updates.tipoCategoria !== "politica") {
-        dbUpdates.politica_cancelacion_id = null;
         dbUpdates.garantia_importe = null;
       }
       if (updates.tipoCategoria !== "cupon") {
         dbUpdates.importe_pagado = null;
       }
     }
-    if (updates.politicaCancelacionId !== undefined) dbUpdates.politica_cancelacion_id = updates.politicaCancelacionId;
     if (updates.garantiaImporte !== undefined) dbUpdates.garantia_importe = updates.garantiaImporte;
     if (updates.importePagado !== undefined) dbUpdates.importe_pagado = updates.importePagado;
     if (updates.bloqueada !== undefined) dbUpdates.bloqueada = updates.bloqueada;
@@ -723,7 +770,10 @@ export async function updateReserva(
       updates.hora !== undefined ||
       updates.duracionMinutos !== undefined ||
       revive;
-    if (tocaSlot && empresaId) {
+    // `forzarSolape` no salta la comprobación por comodidad: la salta porque
+    // alguien de sala ya ha visto en pantalla a quién pisa y ha decidido que
+    // se hace igual. Sin esa confirmación previa el bloqueo sigue en pie.
+    if (tocaSlot && empresaId && !updates.forzarSolape) {
       const { data: actual } = await supabase
         .from("reservas")
         .select("fecha, hora, mesa, duracion_minutos")
@@ -866,21 +916,23 @@ export async function updateReserva(
     // Correo al cliente: SOLO si quien llama lo pide expresamente.
     //
     // Cambiar el estado es una valoración del empleado (marca RECONFIRMADA
-    // porque habló por teléfono, CANCELADA porque no vinieron...). Antes el
+    // porque habló con el cliente, CANCELADA porque no vinieron...). Antes el
     // simple cambio de estado disparaba el correo por su cuenta y el cliente
     // recibía avisos que nadie había decidido enviar. Ahora la UI pregunta y
     // pasa `notificarCliente`. Idempotente: el mailer no reenvía si ya hay
     // timestamp en la columna de auditoría.
+    //
+    // Cada estado tiene su plantilla, y el nombre del tipo de correo ES el del
+    // estado: no hace falta traducir nada. WALK_IN queda fuera porque no es un
+    // estado sino un origen —el cliente entró sin reservar— y no hay a quién
+    // escribirle; si alguna vez llega aquí, `esTipoEstado` lo descarta solo.
     // No await — un fallo de SMTP no debe romper el UPDATE ya confirmado.
-    if (updates.notificarCliente === true) {
+    if (updates.notificarCliente === true && updates.estado) {
       const actor = actorDeSesion(ctx);
-      if (updates.estado === "RECONFIRMADA") {
-        enviarReservaEmail(id, "RECONFIRMACION", { actor }).catch((e) =>
-          console.error("[reservas] mail RECONFIRMACION:", e),
-        );
-      } else if (updates.estado === "CANCELADA") {
-        enviarReservaEmail(id, "CANCELACION", { actor }).catch((e) =>
-          console.error("[reservas] mail CANCELACION:", e),
+      const tipoCorreo = updates.estado as ReservaEmailTipo;
+      if (esTipoEstado(tipoCorreo)) {
+        enviarReservaEmail(id, tipoCorreo, { actor }).catch((e) =>
+          console.error(`[reservas] mail ${tipoCorreo}:`, e),
         );
       }
     }
@@ -974,7 +1026,7 @@ export async function deleteReserva(id: string) {
  * Además, si la reserva se crea con MENOS antelación que el lead time
  * configurado (`reconfirmacion_dias_antes`, p. ej. 3 días) y la empresa tiene
  * activado `reconfirmacion_envio_inmediato`, encadena el correo de
- * RECONFIRMACION justo después (fire-and-forget). Para reservas con antelación
+ * RECONFIRMADA justo después (fire-and-forget). Para reservas con antelación
  * >= lead time, la reconfirmación la dispara el cron a la hora programada.
  */
 export async function notificarReservaCreadaPorEmail(reservaId: string) {
@@ -982,18 +1034,45 @@ export async function notificarReservaCreadaPorEmail(reservaId: string) {
   // detrás: su firma va en el histórico de este correo y en el encadenado.
   const ctxActor = await getContext();
   const actor = actorDeSesion(ctxActor);
-  const res = await enviarReservaEmail(reservaId, "CONFIRMACION", { actor });
+
+  // Igual que en el alta desde el portal público: si la reserva se ha hecho con
+  // un ticket ya pagado, su correo de bienvenida es el de Ticket, no el de
+  // confirmada. Enviar los dos le diría lo mismo dos veces.
+  const { data: rTicket } = await ctxActor.supabase
+    .from("reservas")
+    .select("es_ticket")
+    .eq("id", reservaId)
+    .maybeSingle();
+  const tipoBienvenida =
+    rTicket?.es_ticket === true ? "TICKET_RESERVA" : "CONFIRMADA";
+  const res = await enviarReservaEmail(reservaId, tipoBienvenida, { actor });
   if (!res.ok) return { ok: false, error: res.error };
 
-  // Encadenar reconfirmación inmediata si procede. No bloqueamos la respuesta
-  // ni dejamos que un fallo aquí rompa el flujo de creación.
+  // Encadenar las condiciones económicas y la reconfirmación inmediata si
+  // proceden. No bloqueamos la respuesta ni dejamos que un fallo aquí rompa el
+  // flujo de creación.
   try {
     const { supabase } = ctxActor;
     const { data: r } = await supabase
       .from("reservas")
-      .select("empresa_id, fecha, hora")
+      .select("empresa_id, fecha, hora, tipo_categoria, tiene_garantia, garantia_importe")
       .eq("id", reservaId)
       .maybeSingle();
+
+    // Cada compromiso económico va en su propio correo: el cliente tiene que
+    // poder volver a leer las condiciones sin rebuscar dentro de la
+    // confirmación. Si la empresa tiene la plantilla pausada, el mailer corta.
+    if (r?.tipo_categoria === "politica") {
+      enviarReservaEmail(reservaId, "POLITICA_CANCELACION", { actor }).catch((e) =>
+        console.error("[reservas] mail POLITICA_CANCELACION:", e),
+      );
+    }
+    if (r?.tiene_garantia === true && Number(r?.garantia_importe ?? 0) > 0) {
+      enviarReservaEmail(reservaId, "POLITICA_GARANTIA", { actor }).catch((e) =>
+        console.error("[reservas] mail POLITICA_GARANTIA:", e),
+      );
+    }
+
     if (r?.fecha && r?.hora && r?.empresa_id) {
       const { data: cfg } = await supabase
         .from("empresa_reservas_config")
@@ -1019,8 +1098,8 @@ export async function notificarReservaCreadaPorEmail(reservaId: string) {
       const leadMs = diasAntes * 24 * 3600 * 1000;
       const porDebajoDelLead = diffMs > 0 && diffMs < leadMs;
       if (activa && porDebajoDelLead && envioInmediato) {
-        enviarReservaEmail(reservaId, "RECONFIRMACION", { actor }).catch((e) =>
-          console.error("[reservas] mail RECONFIRMACION lt-lead:", e),
+        enviarReservaEmail(reservaId, "RECONFIRMADA", { actor }).catch((e) =>
+          console.error("[reservas] mail RECONFIRMADA lt-lead:", e),
         );
       }
     }
@@ -1033,17 +1112,14 @@ export async function notificarReservaCreadaPorEmail(reservaId: string) {
 /**
  * Envía un correo de un tipo arbitrario para una reserva. Pensado para
  * acciones manuales desde el detalle de la reserva (p.ej. "Reenviar
- * recordatorio") y para tests. Tipos válidos: CONFIRMACION, RECONFIRMACION,
- * RECORDATORIO, CANCELACION, SOLICITUD_VALORACION.
+ * recordatorio") y para tests.
+ *
+ * Admite cualquier tipo salvo TICKET_COMPRA, que no cuelga de una reserva: esa
+ * compra ocurre antes de que exista, y tiene su propio emisor.
  */
 export async function enviarReservaEmailManual(
   reservaId: string,
-  tipo:
-    | "CONFIRMACION"
-    | "RECONFIRMACION"
-    | "RECORDATORIO"
-    | "CANCELACION"
-    | "SOLICITUD_VALORACION",
+  tipo: Exclude<ReservaEmailTipo, "TICKET_COMPRA">,
 ) {
   // `force: true` permite reenvíos manuales aunque ya haya timestamp. Cada
   // reenvío deja su propia línea en el histórico, firmada por quien lo pide.

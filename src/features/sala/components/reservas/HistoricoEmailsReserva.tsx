@@ -15,14 +15,7 @@ import {
   listReservaEmailEnvios,
   type ReservaEmailEnvio,
 } from "@/features/sala/actions/reserva-email-envios-actions";
-
-const TIPO_LABEL: Record<ReservaEmailEnvio["tipo"], string> = {
-  CONFIRMACION: "Confirmación",
-  RECONFIRMACION: "Reconfirmación",
-  RECORDATORIO: "Recordatorio",
-  CANCELACION: "Cancelación",
-  SOLICITUD_VALORACION: "Solicitud de valoración",
-};
+import { RESERVA_EMAIL_TIPO_LABELS } from "@/lib/seeds/reserva-email-plantillas";
 
 /**
  * Quién lo mandó. Cuando hay una persona del software detrás, su nombre; si no,
@@ -112,7 +105,7 @@ export function HistoricoEmailsReserva({ reservaId }: { reservaId: string }) {
             >
               <div className="flex flex-wrap items-baseline justify-between gap-x-2">
                 <span className="font-medium text-foreground">
-                  {TIPO_LABEL[e.tipo]}
+                  {RESERVA_EMAIL_TIPO_LABELS[e.tipo]}
                 </span>
                 <span className="text-muted-foreground">
                   {tz ? formatFechaHoraEnZona(e.enviadoAt, tz) : "—"}

@@ -1,10 +1,23 @@
 /**
  * Mailer genérico del módulo de Reservas.
  *
- * Único punto de entrada para enviar cualquier correo de reserva (confirmación,
- * reconfirmación, recordatorio, cancelación). Lee la plantilla personalizada
- * de la empresa, fusiona con los defaults de fábrica y renderiza un HTML con
- * la imagen de marca (logo + color primario).
+ * Único punto de entrada para TODO correo al cliente de una reserva, sea de la
+ * familia que sea:
+ *
+ *   ESTADO   → uno por cada estado real de la reserva (confirmada, cancelada,
+ *              no presentado, lista de espera…). Walk-in no está: es un origen,
+ *              no un estado, y no hay a quién escribir.
+ *   POLITICA → procesos que no son un cambio de estado: ticket comprado, reserva
+ *              con ticket, condiciones de cancelación, condiciones de garantía,
+ *              y los dos envíos por reloj (recordatorio y valoración).
+ *
+ * Todos comparten el MISMO marco visual —cabecera de marca, tarjeta de datos,
+ * pie— y se diferencian solo en el distintivo, el titular y el cuerpo. Así el
+ * cliente reconoce de un vistazo que el correo es del restaurante, y el texto
+ * le dice exactamente por qué le ha llegado.
+ *
+ * En el cuerpo NO va ningún teléfono ni ninguna dirección de correo: el canal
+ * de vuelta es siempre el enlace de gestión de la reserva.
  *
  * Server-only: usa la admin client para leer datos.
  */
@@ -18,36 +31,87 @@ import {
   RESERVA_EMAIL_TIPO_LABELS,
   type ReservaEmailTipo,
 } from "@/lib/seeds/reserva-email-plantillas";
+import {
+  AVISO_NO_REPLY,
+  colorContraste,
+  envolverEmail,
+  escapeAttr,
+  escapeHtml,
+  fila,
+  formatearFecha,
+  formatearImporte,
+  nl2br,
+  primerNombre,
+  sanitizarHex,
+  sustituir,
+  withAlpha,
+} from "@/lib/email/reservas/estilo";
 
 type Admin = ReturnType<typeof createAdminClient>;
 
+/**
+ * Columna de `reservas` donde se sella el envío. Da la idempotencia: sin ella,
+ * cada vez que alguien vuelva a guardar la reserva en el mismo estado el
+ * cliente recibiría otra vez el mismo aviso.
+ *
+ * TICKET_COMPRA no tiene: ocurre ANTES de que exista la reserva, y su sello
+ * vive en `reserva_ticket_compras.email_compra_at`.
+ */
 const AUDIT_COL: Record<ReservaEmailTipo, string | null> = {
-  CONFIRMACION: "email_confirmacion_at",
-  RECONFIRMACION: "email_reconfirmacion_at",
+  // Por estado
+  CONFIRMADA: "email_confirmacion_at",
+  RECONFIRMADA: "email_reconfirmacion_at",
+  NO_RECONFIRMADA: "email_no_reconfirmada_at",
+  LISTA_ESPERA: "email_lista_espera_at",
+  LIBERADA: "email_liberada_at",
+  TERMINANDO: "email_terminando_at",
+  NO_SHOW: "email_no_show_at",
+  CANCELADA: "email_cancelacion_at",
+  // Por política o proceso
+  TICKET_COMPRA: null,
+  TICKET_RESERVA: "email_ticket_reserva_at",
+  POLITICA_CANCELACION: "email_politica_cancelacion_at",
+  POLITICA_GARANTIA: "email_politica_garantia_at",
   RECORDATORIO: "email_recordatorio_at",
-  CANCELACION: "email_cancelacion_at",
-  POLITICA_AVISO: null, // bloque añadido al de confirmación → sin auditoría propia
-  CUPON_PAGADO: null,
   SOLICITUD_VALORACION: "email_valoracion_at",
 };
 
+/** Titular grande del correo: lo primero que se lee. */
 const HEADLINE_POR_TIPO: Record<ReservaEmailTipo, string> = {
-  CONFIRMACION: "Reserva confirmada",
-  RECONFIRMACION: "Reconfírmanos tu reserva",
+  CONFIRMADA: "Reserva confirmada",
+  RECONFIRMADA: "Reserva reconfirmada",
+  NO_RECONFIRMADA: "Tu reserva está pendiente de confirmar",
+  LISTA_ESPERA: "Estás en lista de espera",
+  LIBERADA: "Tu reserva se ha cerrado",
+  TERMINANDO: "Tu reserva está terminando",
+  NO_SHOW: "No llegaste a venir",
+  CANCELADA: "Reserva cancelada",
+  TICKET_COMPRA: "Compra confirmada",
+  TICKET_RESERVA: "Reserva confirmada",
+  POLITICA_CANCELACION: "Condiciones de cancelación",
+  POLITICA_GARANTIA: "Garantía de tu reserva",
   RECORDATORIO: "Recordatorio de tu reserva",
-  CANCELACION: "Reserva cancelada",
-  POLITICA_AVISO: "Política de cancelación",
-  CUPON_PAGADO: "Pago recibido",
   SOLICITUD_VALORACION: "¿Qué tal fue?",
 };
 
+/**
+ * Distintivo (píldora) sobre el titular. Dice en dos palabras QUÉ es este
+ * correo, que es justo lo que el cliente busca al abrirlo entre otros diez.
+ */
 const BADGE_POR_TIPO: Record<ReservaEmailTipo, string> = {
-  CONFIRMACION: "Reserva confirmada",
-  RECONFIRMACION: "Por confirmar",
+  CONFIRMADA: "Reserva confirmada",
+  RECONFIRMADA: "Reconfirmada",
+  NO_RECONFIRMADA: "Pendiente de confirmar",
+  LISTA_ESPERA: "Lista de espera",
+  LIBERADA: "Reserva cerrada",
+  TERMINANDO: "Terminando",
+  NO_SHOW: "No presentado",
+  CANCELADA: "Cancelada",
+  TICKET_COMPRA: "Compra confirmada",
+  TICKET_RESERVA: "Reserva con ticket",
+  POLITICA_CANCELACION: "Política de cancelación",
+  POLITICA_GARANTIA: "Política de garantía",
   RECORDATORIO: "Recordatorio",
-  CANCELACION: "Cancelada",
-  POLITICA_AVISO: "Política de cancelación",
-  CUPON_PAGADO: "Pago recibido",
   SOLICITUD_VALORACION: "Tu opinión",
 };
 
@@ -57,13 +121,6 @@ type EmpresaRow = {
   isotipo_url: string | null;
   color: string | null;
   color_secundario: string | null;
-  /**
-   * Teléfono público del restaurante (`datos_generales.telefonoPrincipal`).
-   * Es la ÚNICA vía de contacto que se le ofrece al cliente: estos correos
-   * salen desde una dirección no-reply que nadie lee, así que invitarle a
-   * responder sería mandarle a un buzón muerto.
-   */
-  telefono: string | null;
 };
 
 type ReservaRow = {
@@ -75,10 +132,16 @@ type ReservaRow = {
   zona: string | null;
   notas: string | null;
   tipo_categoria: string | null;
+  tiene_garantia: boolean | null;
   garantia_importe: number | null;
   importe_pagado: number | null;
   codigo: string | null;
   codigo_id: string | null;
+  es_ticket: boolean | null;
+  ticket_codigo: string | null;
+  ticket_producto_id: string | null;
+  ticket_unidades: number | null;
+  ticket_importe: number | null;
 };
 
 type ConfigRow = {
@@ -120,8 +183,8 @@ export interface ReservaEmailActor {
  *   NO reenvía y devuelve `{ ok: true, idempotente: true }`.
  * - Si la plantilla está marcada como inactiva por la empresa, devuelve
  *   `{ ok: false, error: "plantilla inactiva" }`.
- * - POLITICA_AVISO y CUPON_PAGADO no se envían como correo aparte: si se llaman
- *   directamente, devuelven error explicativo.
+ * - TICKET_COMPRA no se envía por aquí: ocurre antes de que exista la reserva y
+ *   tiene su propio emisor (`lib/email/tickets/enviar-compra`).
  * - Cada envío efectivo deja una fila en `reserva_email_envios` con el actor
  *   (`options.actor`). Solo se registra lo que SALE: si el correo no llega a
  *   enviarse, no se anota nada.
@@ -131,10 +194,11 @@ export async function enviarReservaEmail(
   tipo: ReservaEmailTipo,
   options: { force?: boolean; actor?: ReservaEmailActor } = {},
 ): Promise<EnviarReservaEmailResult> {
-  if (tipo === "POLITICA_AVISO" || tipo === "CUPON_PAGADO") {
+  if (tipo === "TICKET_COMPRA") {
     return {
       ok: false,
-      error: `El tipo ${tipo} es un bloque del correo de confirmación, no se envía aparte.`,
+      error:
+        "La compra de un ticket ocurre antes de la reserva: se envía desde el emisor de compras, no desde aquí.",
     };
   }
 
@@ -142,7 +206,7 @@ export async function enviarReservaEmail(
   const { data: reservaData, error: errR } = await admin
     .from("reservas")
     .select(
-      "empresa_id, cliente_nombre, cliente_apellidos, cliente_email, fecha, hora, personas, zona, grupo_zona_id, notas, estado, tipo_categoria, garantia_importe, importe_pagado, codigo, codigo_id, cancelacion_token, valoracion_token, vinculacion_estado, vinculacion_motivo, datos_declarados, email_confirmacion_at, email_reconfirmacion_at, email_recordatorio_at, email_cancelacion_at, email_valoracion_at, grupos_zonas(nombre)",
+      "empresa_id, cliente_nombre, cliente_apellidos, cliente_email, fecha, hora, personas, zona, grupo_zona_id, notas, estado, tipo_categoria, tiene_garantia, garantia_importe, importe_pagado, codigo, codigo_id, cancelacion_token, valoracion_token, vinculacion_estado, vinculacion_motivo, datos_declarados, email_confirmacion_at, email_reconfirmacion_at, email_no_reconfirmada_at, email_lista_espera_at, email_liberada_at, email_terminando_at, email_no_show_at, email_politica_cancelacion_at, email_politica_garantia_at, email_recordatorio_at, email_cancelacion_at, email_valoracion_at, email_ticket_reserva_at, es_ticket, ticket_codigo, ticket_producto_id, ticket_unidades, ticket_importe, grupos_zonas(nombre)",
     )
     .eq("id", reservaId)
     .maybeSingle();
@@ -170,10 +234,16 @@ export async function enviarReservaEmail(
     })(),
     notas: (reservaData.notas as string | null) ?? null,
     tipo_categoria: (reservaData.tipo_categoria as string | null) ?? null,
+    tiene_garantia: (reservaData.tiene_garantia as boolean | null) ?? null,
     garantia_importe: (reservaData.garantia_importe as number | null) ?? null,
     importe_pagado: (reservaData.importe_pagado as number | null) ?? null,
     codigo: (reservaData.codigo as string | null) ?? null,
     codigo_id: (reservaData.codigo_id as string | null) ?? null,
+    es_ticket: (reservaData.es_ticket as boolean | null) ?? null,
+    ticket_codigo: (reservaData.ticket_codigo as string | null) ?? null,
+    ticket_producto_id: (reservaData.ticket_producto_id as string | null) ?? null,
+    ticket_unidades: (reservaData.ticket_unidades as number | null) ?? null,
+    ticket_importe: (reservaData.ticket_importe as number | null) ?? null,
   };
 
   const email = (reserva.cliente_email ?? "").trim();
@@ -182,11 +252,20 @@ export async function enviarReservaEmail(
   // Enlace de cancelación: solo en correos de reserva VIVA. En el de
   // cancelación no tiene sentido ofrecer cancelar otra vez, y en el de
   // valoración tampoco: la visita ya ha ocurrido.
+  //
+  // Fuera de los correos en los que cancelar ya no significa nada: la reserva
+  // se canceló, no se presentó, se cerró tras la visita, o se está pidiendo
+  // opinión de algo que ya ocurrió.
+  const SIN_ENLACE_CANCELAR: ReservaEmailTipo[] = [
+    "CANCELADA",
+    "NO_SHOW",
+    "LIBERADA",
+    "TERMINANDO",
+    "SOLICITUD_VALORACION",
+  ];
   const tokenCancelar = (reservaData.cancelacion_token as string | null) ?? null;
   const urlCancelar =
-    tokenCancelar &&
-    tipo !== "CANCELACION" &&
-    tipo !== "SOLICITUD_VALORACION"
+    tokenCancelar && !SIN_ENLACE_CANCELAR.includes(tipo)
       ? `${getSiteUrl()}/cancelar/${tokenCancelar}`
       : null;
 
@@ -300,14 +379,6 @@ export async function enviarReservaEmail(
     color: (empresaData?.color as string | null | undefined) ?? null,
     color_secundario:
       (empresaData?.color_secundario as string | null | undefined) ?? null,
-    telefono: (() => {
-      const dg = empresaData?.datos_generales as
-        | { telefonoPrincipal?: string | null }
-        | null
-        | undefined;
-      const tel = dg?.telefonoPrincipal?.trim();
-      return tel ? tel : null;
-    })(),
   };
 
   const config: ConfigRow = {
@@ -365,64 +436,121 @@ export async function enviarReservaEmail(
   const subject = sustituir(asuntoBase, placeholders) || HEADLINE_POR_TIPO[tipo];
   const mensajeLibre = sustituir(mensajeBase, placeholders);
 
-  // ---- Bloques añadidos (política, cupón) solo en CONFIRMACION ----------------------
+  // ---- Bloques económicos ----------------------------------------------------------
+  //
+  // Cada uno aparece SOLO donde aporta algo:
+  //
+  //   · Las condiciones de cancelación y las de garantía tienen ahora correo
+  //     propio (POLITICA_CANCELACION / POLITICA_GARANTIA), que es donde se
+  //     explican enteras. Se repiten como recordatorio en la confirmación y en
+  //     el recordatorio de la visita, que es cuando al cliente todavía le da
+  //     tiempo a actuar. En una cancelación o un no-show ya no cambian nada.
+  //
+  //   · El ticket se enseña en la confirmación y en su propio correo: el
+  //     cliente pagó por adelantado y necesita ver que su dinero está aplicado
+  //     a ESTA reserva.
   let politicaBloque: { horas: number; importe: number; mensajeExtra: string } | null = null;
-  let cuponBloque: { importeEur: number; mensajeExtra: string } | null = null;
+  let garantiaBloque: { importe: number; mensajeExtra: string } | null = null;
   let cuponCanjeadoBloque: { codigo: string; tituloCliente: string } | null = null;
-  if (tipo === "CONFIRMACION") {
-    if (
+  let ticketBloque:
+    | { codigo: string; producto: string; unidades: number; importe: number; porPersona: boolean }
+    | null = null;
+
+  /** Correos en los que el compromiso económico todavía se puede evitar. */
+  const RECUERDA_CONDICIONES: ReservaEmailTipo[] = [
+    "CONFIRMADA",
+    "RECONFIRMADA",
+    "RECORDATORIO",
+    "TICKET_RESERVA",
+  ];
+  const mostrarCondiciones =
+    RECUERDA_CONDICIONES.includes(tipo) ||
+    tipo === "POLITICA_CANCELACION" ||
+    tipo === "POLITICA_GARANTIA";
+
+  /**
+   * Texto extra que la empresa haya escrito para una política. En su correo
+   * propio el texto ya va en el cuerpo, así que no se repite dentro del bloque.
+   */
+  async function textoExtraPolitica(
+    tipoPol: "POLITICA_CANCELACION" | "POLITICA_GARANTIA",
+  ): Promise<string> {
+    if (tipo === tipoPol) return "";
+    const { data: tpl } = await admin
+      .from("reserva_email_plantillas")
+      .select("mensaje_personalizado")
+      .eq("empresa_id", empresaId)
+      .eq("tipo", tipoPol)
+      .maybeSingle();
+    const seedPol = getReservaEmailPlantillaSeed(tipoPol);
+    return sustituir(
+      (tpl?.mensaje_personalizado as string | null) ?? seedPol?.mensaje_default ?? "",
+      placeholders,
+    );
+  }
+
+  if (mostrarCondiciones) {
+    const sujetaAPolitica =
       reserva.tipo_categoria === "politica" &&
-      config.cancelacion_horas_antes &&
-      config.cancelacion_importe_eur
-    ) {
-      // El texto extra de POLITICA_AVISO viene de la plantilla (personalizada o default)
-      const { data: politicaTpl } = await admin
-        .from("reserva_email_plantillas")
-        .select("mensaje_personalizado")
-        .eq("empresa_id", empresaId)
-        .eq("tipo", "POLITICA_AVISO")
-        .maybeSingle();
-      const seedPol = getReservaEmailPlantillaSeed("POLITICA_AVISO");
-      const mensajeExtra = sustituir(
-        ((politicaTpl?.mensaje_personalizado as string | null) ??
-          seedPol?.mensaje_default ??
-          ""),
-        placeholders,
-      );
+      !!config.cancelacion_horas_antes &&
+      !!config.cancelacion_importe_eur;
+    // En el correo dedicado el bloque se pinta siempre: es su razón de ser.
+    if (sujetaAPolitica || tipo === "POLITICA_CANCELACION") {
       politicaBloque = {
-        horas: config.cancelacion_horas_antes,
-        importe: Number(config.cancelacion_importe_eur),
-        mensajeExtra,
+        horas: config.cancelacion_horas_antes ?? 0,
+        importe: Number(config.cancelacion_importe_eur ?? 0),
+        mensajeExtra: await textoExtraPolitica("POLITICA_CANCELACION"),
       };
     }
-    if (reserva.tipo_categoria === "cupon" && reserva.importe_pagado != null) {
-      const { data: cuponTpl } = await admin
-        .from("reserva_email_plantillas")
-        .select("mensaje_personalizado")
-        .eq("empresa_id", empresaId)
-        .eq("tipo", "CUPON_PAGADO")
-        .maybeSingle();
-      const seedCp = getReservaEmailPlantillaSeed("CUPON_PAGADO");
-      const mensajeExtra = sustituir(
-        ((cuponTpl?.mensaje_personalizado as string | null) ??
-          seedCp?.mensaje_default ??
-          ""),
-        placeholders,
-      );
-      cuponBloque = {
-        importeEur: Number(reserva.importe_pagado),
-        mensajeExtra,
+
+    const sujetaAGarantia =
+      reserva.tiene_garantia === true &&
+      reserva.garantia_importe != null &&
+      reserva.garantia_importe > 0;
+    if (sujetaAGarantia || tipo === "POLITICA_GARANTIA") {
+      garantiaBloque = {
+        importe: Number(reserva.garantia_importe ?? 0),
+        mensajeExtra: await textoExtraPolitica("POLITICA_GARANTIA"),
       };
     }
-    if (reserva.codigo_id && reserva.codigo) {
-      const { data: cuponRow } = await admin
-        .from("reserva_codigos")
-        .select("titulo_interno, titulo_cliente")
-        .eq("id", reserva.codigo_id)
-        .maybeSingle();
-      const titulo = (cuponRow?.titulo_cliente as string | null) ?? (cuponRow?.titulo_interno as string | null) ?? "";
-      cuponCanjeadoBloque = { codigo: reserva.codigo, tituloCliente: titulo };
-    }
+  }
+
+  // Cupón de descuento canjeado: nada que ver con el pago por adelantado, es un
+  // código promocional aplicado. Solo en el correo que estrena la reserva.
+  if (tipo === "CONFIRMADA" && reserva.codigo_id && reserva.codigo) {
+    const { data: cuponRow } = await admin
+      .from("reserva_codigos")
+      .select("titulo_interno, titulo_cliente")
+      .eq("id", reserva.codigo_id)
+      .maybeSingle();
+    const titulo =
+      (cuponRow?.titulo_cliente as string | null) ??
+      (cuponRow?.titulo_interno as string | null) ??
+      "";
+    cuponCanjeadoBloque = { codigo: reserva.codigo, tituloCliente: titulo };
+  }
+
+  // ---- Bloque del Ticket canjeado ---------------------------------------------------
+  //
+  // El cliente ya pagó por adelantado: el correo tiene que enseñarle qué compró
+  // y cuánto pagó, o no sabrá si su dinero está aplicado a esta reserva.
+  if (
+    (tipo === "CONFIRMADA" || tipo === "TICKET_RESERVA") &&
+    reserva.es_ticket &&
+    reserva.ticket_producto_id
+  ) {
+    const { data: prodRow } = await admin
+      .from("reserva_ticket_productos")
+      .select("nombre, modo_precio")
+      .eq("id", reserva.ticket_producto_id)
+      .maybeSingle();
+    ticketBloque = {
+      codigo: (reserva.ticket_codigo as string | null) ?? "",
+      producto: (prodRow?.nombre as string | null) ?? "Ticket",
+      unidades: Number(reserva.ticket_unidades ?? reserva.personas ?? 1),
+      importe: Number(reserva.ticket_importe ?? 0),
+      porPersona: prodRow?.modo_precio === "por_persona",
+    };
   }
 
   // ---- Aviso de vinculación pendiente ----------------------------------------------
@@ -436,7 +564,7 @@ export async function enviarReservaEmail(
   // que el cliente reconozca si es él o no, sin que este correo sirva para
   // averiguar quién hay detrás de un teléfono ajeno.
   const vinculacionAviso: { motivo: "email" | "telefono"; nombreFicha: string } | null =
-    tipo === "CONFIRMACION" && reservaData.vinculacion_estado === "PENDIENTE"
+    tipo === "CONFIRMADA" && reservaData.vinculacion_estado === "PENDIENTE"
       ? {
           motivo:
             (reservaData.vinculacion_motivo as "email" | "telefono" | null) ?? "telefono",
@@ -454,7 +582,6 @@ export async function enviarReservaEmail(
     vinculacionAviso,
     tipo,
     empresa,
-    telefono: empresa.telefono,
     cliente: placeholders.nombre,
     fechaLegible,
     horaLegible,
@@ -463,8 +590,9 @@ export async function enviarReservaEmail(
     observaciones: reserva.notas,
     mensajeLibre,
     politicaBloque,
-    cuponBloque,
+    garantiaBloque,
     cuponCanjeadoBloque,
+    ticketBloque,
     urlCancelar,
     urlValoracion,
   });
@@ -472,7 +600,6 @@ export async function enviarReservaEmail(
     vinculacionAviso,
     tipo,
     empresa: empresa.nombre,
-    telefono: empresa.telefono,
     cliente: placeholders.nombre,
     fechaLegible,
     horaLegible,
@@ -481,8 +608,9 @@ export async function enviarReservaEmail(
     observaciones: reserva.notas,
     mensajeLibre,
     politicaBloque,
-    cuponBloque,
+    garantiaBloque,
     cuponCanjeadoBloque,
+    ticketBloque,
     urlCancelar,
     urlValoracion,
   });
@@ -546,9 +674,6 @@ export async function enviarReservaEmail(
 interface RenderInput {
   tipo: ReservaEmailTipo;
   empresa: EmpresaRow;
-  /** Teléfono del restaurante para el pie. Duplicado de `empresa.telefono`
-   *  porque `renderText` recibe la empresa solo como nombre. */
-  telefono: string | null;
   cliente: string;
   fechaLegible: string;
   horaLegible: string;
@@ -563,8 +688,12 @@ interface RenderInput {
    * exponen el email ni el teléfono del titular.
    */
   vinculacionAviso: { motivo: "email" | "telefono"; nombreFicha: string } | null;
-  cuponBloque: { importeEur: number; mensajeExtra: string } | null;
+  /** Importe retenido en garantía y el texto que la empresa haya añadido. */
+  garantiaBloque: { importe: number; mensajeExtra: string } | null;
   cuponCanjeadoBloque: { codigo: string; tituloCliente: string } | null;
+  ticketBloque:
+    | { codigo: string; producto: string; unidades: number; importe: number; porPersona: boolean }
+    | null;
   /**
    * Enlace para que el cliente cancele solo. Requisito de Google (E2E exige
    * cancelación online) y del restaurante: si cancelar cuesta una llamada, el
@@ -580,17 +709,11 @@ interface RenderInput {
 }
 
 function renderHtml(input: RenderInput): string {
+  // El color de marca lo necesita el CUERPO (bordes, fondos suaves, la hora en
+  // grande). La cabecera con el degradado y el logo la monta `envolverEmail`.
   const primario = sanitizarHex(input.empresa.color) ?? "#0f172a";
-  const primarioOscuro = oscurecerHex(primario, 0.15);
   const textoSobrePrimario = colorContraste(primario);
   const empresaNombre = input.empresa.nombre || "";
-
-  // Prefiere el isotipo (icono) de la empresa; si no hay, el logo completo; si
-  // tampoco, el nombre en texto.
-  const marcaSrc = input.empresa.isotipo_url || input.empresa.logo_url;
-  const cabeceraHtml = marcaSrc
-    ? `<img src="${escapeAttr(marcaSrc)}" alt="${escapeAttr(empresaNombre)}" style="max-height:60px;max-width:220px;display:block;margin:0 auto;" />`
-    : `<div style="font-size:22px;font-weight:700;color:${textoSobrePrimario};letter-spacing:0.2px;">${escapeHtml(empresaNombre)}</div>`;
 
   const filas: string[] = [
     fila("Fecha", input.fechaLegible),
@@ -599,15 +722,28 @@ function renderHtml(input: RenderInput): string {
   ];
   if (input.zona) filas.push(fila("Zona", input.zona));
 
-  // El saludo cambia según el momento: "te esperamos" solo tiene sentido antes
-  // de la visita. En cancelación y en la valoración (que va DESPUÉS de venir)
-  // sería absurdo.
+  // El saludo cambia según el momento. "Te esperamos" solo tiene sentido cuando
+  // la visita todavía va a ocurrir: en una cancelación, un no-show o un aviso
+  // de cambio de estado sería sarcasmo involuntario, y en la valoración —que va
+  // DESPUÉS de venir— directamente un error.
   const nombreCliente = input.cliente ? escapeHtml(input.cliente) : "";
+  const SALUDO_NEUTRO: ReservaEmailTipo[] = [
+    // La compra de un ticket todavía no tiene fecha: no hay visita que esperar.
+    "TICKET_COMPRA",
+    "CANCELADA",
+    "NO_SHOW",
+    "NO_RECONFIRMADA",
+    "LISTA_ESPERA",
+    "LIBERADA",
+    "TERMINANDO",
+    "POLITICA_CANCELACION",
+    "POLITICA_GARANTIA",
+  ];
   const greeting = (() => {
     if (input.tipo === "SOLICITUD_VALORACION") {
       return nombreCliente ? `¡Gracias por venir, ${nombreCliente}!` : "¡Gracias por venir!";
     }
-    if (input.tipo === "CANCELACION") {
+    if (SALUDO_NEUTRO.includes(input.tipo)) {
       return nombreCliente ? `Hola, ${nombreCliente}` : "Hola,";
     }
     return nombreCliente ? `¡Te esperamos, ${nombreCliente}!` : "¡Te esperamos!";
@@ -624,7 +760,7 @@ function renderHtml(input: RenderInput): string {
     ? `<div style="margin-top:14px;padding:14px 16px;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;font-size:13px;color:#78350f;line-height:1.6;">
         <div style="font-weight:700;margin-bottom:4px;">&#9888; Comprueba tus datos</div>
         El ${input.vinculacionAviso.motivo === "email" ? "correo" : "teléfono"} que has indicado ya estaba registrado con otros datos de contacto, así que tu reserva figura a nombre de <strong>${escapeHtml(input.vinculacionAviso.nombreFicha)}</strong>.
-        <div style="margin-top:6px;">Si no es correcto, avísanos al llegar${input.telefono ? ` o llámanos al <strong>${escapeHtml(input.telefono)}</strong>` : ""}.</div>
+        <div style="margin-top:6px;">Si no es correcto, avísanos al llegar y lo corregimos.</div>
       </div>`
     : "";
 
@@ -636,13 +772,36 @@ function renderHtml(input: RenderInput): string {
       </div>`
     : "";
 
+  // Garantía: el importe está RETENIDO, no cobrado. La diferencia es lo único
+  // que le importa al cliente, así que se dice con esas palabras.
+  const bloqueGarantia = input.garantiaBloque
+    ? `<div style="margin-top:14px;padding:14px 16px;background:#fefce8;border:1px solid #fde047;border-radius:8px;font-size:13px;color:#713f12;line-height:1.6;">
+        <div style="font-weight:700;margin-bottom:4px;">Política de garantía</div>
+        Para asegurar tu mesa hemos retenido <strong>${formatearImporte(input.garantiaBloque.importe)} €</strong>. Es una retención, no un cobro: si vienes, se libera.
+        ${input.garantiaBloque.mensajeExtra ? `<div style="margin-top:6px;">${nl2br(escapeHtml(input.garantiaBloque.mensajeExtra))}</div>` : ""}
+      </div>`
+    : "";
+
   // Cancelar en un clic. Va al final y en tono discreto: no queremos empujar a
   // cancelar, pero sí que sea trivial avisar — una mesa liberada a tiempo se
   // revende; un "no show" no.
-  const bloqueCancelar = input.urlCancelar
+  // Con un Ticket ya pagado NO va ningún bloque: el enlace de cancelar en un
+  // clic haría creer al cliente que recupera el dinero, y ofrecerle cambiar la
+  // fecha comprometería al restaurante a algo que no hace. Aquí, silencio.
+  const bloqueCancelar = input.ticketBloque
+    ? ""
+    : input.urlCancelar
     ? `<div style="margin-top:18px;padding-top:16px;border-top:1px solid #e2e8f0;font-size:12px;color:#94a3b8;line-height:1.6;text-align:center;">
-        ¿No puedes venir? Avísanos y liberamos tu mesa:
-        <a href="${input.urlCancelar}" style="color:#64748b;text-decoration:underline;">cancelar mi reserva</a>.
+        ${
+          // En lista de espera todavía no hay mesa asignada: prometer que "la
+          // liberamos" sería hablarle de algo que no tiene.
+          input.tipo === "LISTA_ESPERA"
+            ? "¿Ya no te interesa? Puedes darte de baja de la lista"
+            : "¿No puedes venir? Avísanos y liberamos tu mesa"
+        }:
+        <a href="${input.urlCancelar}" style="color:#64748b;text-decoration:underline;">${
+          input.tipo === "LISTA_ESPERA" ? "salir de la lista de espera" : "cancelar mi reserva"
+        }</a>.
       </div>`
     : "";
 
@@ -688,14 +847,6 @@ function renderHtml(input: RenderInput): string {
       </div>`
     : "";
 
-  const bloqueCupon = input.cuponBloque
-    ? `<div style="margin-top:14px;padding:14px 16px;background:#ecfdf5;border:1px solid #a7f3d0;border-radius:8px;font-size:13px;color:#064e3b;line-height:1.6;">
-        <div style="font-weight:700;margin-bottom:4px;">Pago recibido</div>
-        Ya tienes pagados <strong>${formatearImporte(input.cuponBloque.importeEur)} €</strong> por adelantado. Trae este correo el día de la reserva.
-        ${input.cuponBloque.mensajeExtra ? `<div style="margin-top:6px;">${nl2br(escapeHtml(input.cuponBloque.mensajeExtra))}</div>` : ""}
-      </div>`
-    : "";
-
   const bloqueCuponCanjeado = input.cuponCanjeadoBloque
     ? `<div style="margin-top:14px;padding:14px 16px;background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;font-size:13px;color:#78350f;line-height:1.6;">
         <div style="text-transform:uppercase;font-size:11px;letter-spacing:0.6px;color:#92400e;font-weight:700;">Cupón aplicado</div>
@@ -704,11 +855,34 @@ function renderHtml(input: RenderInput): string {
       </div>`
     : "";
 
+  // Bloque del Ticket. Va justo debajo de los datos de la reserva porque es la
+  // pregunta que el cliente se hace nada más abrir: "¿está aplicado mi pago?".
+  const bloqueTicket = input.ticketBloque
+    ? `<div style="margin-top:14px;padding:16px 18px;background:${withAlpha(primario, 0.05)};border:1px solid ${withAlpha(primario, 0.25)};border-radius:10px;">
+        <div style="text-transform:uppercase;font-size:11px;letter-spacing:0.6px;color:#64748b;font-weight:700;">Reserva con Ticket</div>
+        <div style="margin-top:6px;font-size:15px;font-weight:600;color:#0f172a;">${escapeHtml(input.ticketBloque.producto)}</div>
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin-top:8px;">
+          ${input.ticketBloque.porPersona
+            ? fila(
+                "Importe",
+                `${input.ticketBloque.unidades} ${input.ticketBloque.unidades === 1 ? "persona" : "personas"} × ${formatearImporte(input.ticketBloque.importe / Math.max(1, input.ticketBloque.unidades))} € = ${formatearImporte(input.ticketBloque.importe)} €`,
+              )
+            : fila("Importe pagado", `${formatearImporte(input.ticketBloque.importe)} €`)}
+          ${input.ticketBloque.codigo ? fila("Código", input.ticketBloque.codigo) : ""}
+        </table>
+        <div style="margin-top:8px;font-size:12px;color:#64748b;line-height:1.6;">Ya está pagado. No tienes que abonar nada más por este concepto.</div>
+      </div>`
+    : "";
+
   // En la valoración la visita YA pasó: la hora en grande no aporta y quita
   // protagonismo a lo único que se pide, que son las estrellas. Se deja una
   // línea discreta que sirva de recordatorio de qué visita se está valorando.
   const tarjetaReserva =
-    input.tipo === "SOLICITUD_VALORACION"
+    // En la compra de un ticket todavía no hay reserva: pintar fecha, hora y
+    // zona sería inventarle al cliente una mesa que aún no ha elegido.
+    input.tipo === "TICKET_COMPRA"
+      ? ""
+      : input.tipo === "SOLICITUD_VALORACION"
       ? `<div style="text-align:center;font-size:13px;color:#94a3b8;line-height:1.6;">
           Tu visita del <strong style="color:#64748b;">${escapeHtml(input.fechaLegible)}</strong>${
             input.horaLegible ? ` a las <strong style="color:#64748b;">${escapeHtml(input.horaLegible)}</strong>` : ""
@@ -730,71 +904,46 @@ function renderHtml(input: RenderInput): string {
           </tr>
         </table>`;
 
-  return `<!doctype html>
-<html lang="es">
-  <head>
-    <meta charset="utf-8" />
-    <!-- Sin viewport, algunos Android encogen el correo hasta hacerlo ilegible. -->
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-  </head>
-  <body style="margin:0;padding:0;background:#ffffff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#0f172a;">
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#ffffff;padding:32px 16px;">
-      <tr>
-        <td align="center">
-          <table role="presentation" width="560" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 4px 16px rgba(15,23,42,0.08);">
-            <tr>
-              <td align="center" style="padding:28px 32px;background:linear-gradient(135deg, ${primario} 0%, ${primarioOscuro} 100%);">
-                ${cabeceraHtml}
-              </td>
-            </tr>
-            <tr>
-              <td style="padding:32px 32px 8px 32px;text-align:center;">
-                <div style="display:inline-block;padding:4px 12px;background:${withAlpha(primario, 0.1)};color:${primario};border-radius:9999px;font-size:11px;font-weight:600;letter-spacing:0.5px;text-transform:uppercase;">${BADGE_POR_TIPO[input.tipo]}</div>
-                <h1 style="margin:14px 0 4px 0;font-size:26px;font-weight:700;color:#0f172a;line-height:1.25;">${greeting}</h1>
-                <p style="margin:0;font-size:13px;color:#64748b;">${subtitulo(input.tipo)}</p>
-              </td>
-            </tr>
-            <tr>
-              <td style="padding:20px 32px 8px 32px;">
-                ${tarjetaReserva}
-                ${
-                  input.observaciones
-                    ? `<div style="margin-top:14px;padding:12px 14px;background:#ffffff;border-left:3px solid ${primario};border-radius:6px;">
-                        <div style="font-size:11px;color:#64748b;font-weight:600;letter-spacing:0.4px;text-transform:uppercase;margin-bottom:4px;">Observaciones</div>
-                        <div style="font-size:13px;color:#334155;line-height:1.55;">${escapeHtml(input.observaciones)}</div>
-                      </div>`
-                    : ""
-                }
-                ${
-                  input.mensajeLibre
-                    ? `<div style="margin-top:14px;padding:14px 16px;background:${withAlpha(primario, 0.06)};border-radius:8px;font-size:13px;color:#334155;line-height:1.6;">${nl2br(escapeHtml(input.mensajeLibre))}</div>`
-                    : ""
-                }
-                ${bloqueValoracion}
-                ${bloqueVinculacion}
-                ${bloquePolitica}
-                ${bloqueCupon}
-                ${bloqueCuponCanjeado}
-                ${bloqueCancelar}
-              </td>
-            </tr>
-            <tr>
-              <td style="padding:24px 32px 28px 32px;border-top:1px solid #e2e8f0;">
-                <p style="margin:0;font-size:12px;color:#94a3b8;line-height:1.6;text-align:center;">
-                  ${footerSegunTipo(input.tipo, input.empresa.telefono)}
-                  ${empresaNombre ? `<br/><strong style="color:#475569;">${escapeHtml(empresaNombre)}</strong>` : ""}
-                </p>
-                <p style="margin:10px 0 0 0;font-size:11px;color:#cbd5e1;line-height:1.5;text-align:center;">
-                  ${AVISO_NO_REPLY}
-                </p>
-              </td>
-            </tr>
-          </table>
-        </td>
-      </tr>
-    </table>
-  </body>
-</html>`;
+  // El marco (cabecera de marca, distintivo, titular, pie y aviso de buzón no
+  // atendido) sale de `envolverEmail`, el mismo que usan los correos de compra
+  // de Ticket. Es lo que hace que las dos familias se lean como del mismo
+  // restaurante: si el marco se duplicara aquí, tarde o temprano una se
+  // quedaría atrás.
+  return envolverEmail({
+    empresa: {
+      nombre: empresaNombre,
+      logo_url: input.empresa.logo_url,
+      isotipo_url: input.empresa.isotipo_url,
+      color: input.empresa.color,
+    },
+    badge: BADGE_POR_TIPO[input.tipo],
+    titular: greeting,
+    subtitulo: subtitulo(input.tipo),
+    pie: footerSegunTipo(input.tipo, !!input.urlCancelar),
+    contenido: `
+      ${tarjetaReserva}
+      ${
+        input.observaciones
+          ? `<div style="margin-top:14px;padding:12px 14px;background:#ffffff;border-left:3px solid ${primario};border-radius:6px;">
+              <div style="font-size:11px;color:#64748b;font-weight:600;letter-spacing:0.4px;text-transform:uppercase;margin-bottom:4px;">Comentarios</div>
+              <div style="font-size:13px;color:#334155;line-height:1.55;">${escapeHtml(input.observaciones)}</div>
+            </div>`
+          : ""
+      }
+      ${
+        input.mensajeLibre
+          ? `<div style="margin-top:14px;padding:14px 16px;background:${withAlpha(primario, 0.06)};border-radius:8px;font-size:13px;color:#334155;line-height:1.6;">${nl2br(escapeHtml(input.mensajeLibre))}</div>`
+          : ""
+      }
+      ${bloqueValoracion}
+      ${bloqueVinculacion}
+      ${bloquePolitica}
+      ${bloqueGarantia}
+      ${bloqueCuponCanjeado}
+      ${bloqueTicket}
+      ${bloqueCancelar}
+    `,
+  });
 }
 
 function renderText(input: Omit<RenderInput, "empresa"> & { empresa: string }): string {
@@ -802,18 +951,24 @@ function renderText(input: Omit<RenderInput, "empresa"> & { empresa: string }): 
     `${HEADLINE_POR_TIPO[input.tipo]} · ${input.empresa}`,
     ``,
     `${input.cliente ? `Hola ${input.cliente},` : "Hola,"}`,
-    `- Fecha: ${input.fechaLegible}`,
-    `- Hora: ${input.horaLegible}`,
-    `- Comensales: ${input.personasTxt}`,
   ];
-  if (input.zona) lineas.push(`- Zona: ${input.zona}`);
-  if (input.observaciones) lineas.push(``, `Observaciones: ${input.observaciones}`);
+  // Igual que en el HTML: en la compra de un ticket todavía no hay reserva, así
+  // que no hay fecha ni mesa que listar.
+  if (input.tipo !== "TICKET_COMPRA") {
+    lineas.push(
+      `- Fecha: ${input.fechaLegible}`,
+      `- Hora: ${input.horaLegible}`,
+      `- Comensales: ${input.personasTxt}`,
+    );
+    if (input.zona) lineas.push(`- Zona: ${input.zona}`);
+  }
+  if (input.observaciones) lineas.push(``, `Comentarios: ${input.observaciones}`);
   if (input.mensajeLibre) lineas.push(``, input.mensajeLibre);
   if (input.vinculacionAviso) {
     lineas.push(
       ``,
       `[!] Comprueba tus datos: el ${input.vinculacionAviso.motivo === "email" ? "correo" : "teléfono"} que has indicado ya estaba registrado con otros datos de contacto, así que tu reserva figura a nombre de ${input.vinculacionAviso.nombreFicha}.`,
-      `Si no es correcto, avísanos al llegar${input.telefono ? ` o llámanos al ${input.telefono}` : ""}.`,
+      `Si no es correcto, avísanos al llegar y lo corregimos.`,
     );
   }
   if (input.politicaBloque) {
@@ -823,12 +978,20 @@ function renderText(input: Omit<RenderInput, "empresa"> & { empresa: string }): 
     );
     if (input.politicaBloque.mensajeExtra) lineas.push(input.politicaBloque.mensajeExtra);
   }
-  if (input.cuponBloque) {
-    lineas.push(``, `Pago recibido: ${formatearImporte(input.cuponBloque.importeEur)} €.`);
-    if (input.cuponBloque.mensajeExtra) lineas.push(input.cuponBloque.mensajeExtra);
+  if (input.garantiaBloque) {
+    lineas.push(
+      ``,
+      `Política de garantía: hemos retenido ${formatearImporte(input.garantiaBloque.importe)} € para asegurar tu mesa. Es una retención, no un cobro: si vienes, se libera.`,
+    );
+    if (input.garantiaBloque.mensajeExtra) lineas.push(input.garantiaBloque.mensajeExtra);
   }
   if (input.urlCancelar) {
-    lineas.push(``, `¿No puedes venir? Cancela tu reserva aquí: ${input.urlCancelar}`);
+    lineas.push(
+      ``,
+      input.tipo === "LISTA_ESPERA"
+        ? `¿Ya no te interesa? Sal de la lista de espera aquí: ${input.urlCancelar}`
+        : `¿No puedes venir? Cancela tu reserva aquí: ${input.urlCancelar}`,
+    );
   }
   if (input.urlValoracion) {
     lineas.push(
@@ -837,28 +1000,69 @@ function renderText(input: Omit<RenderInput, "empresa"> & { empresa: string }): 
       ...[1, 2, 3, 4, 5].map((n) => `  ${n} → ${input.urlValoracion}?rating=${n}`),
     );
   }
+  if (input.ticketBloque) {
+    const t = input.ticketBloque;
+    lineas.push(
+      ``,
+      `Reserva con Ticket: ${t.producto}`,
+      t.porPersona
+        ? `${t.unidades} ${t.unidades === 1 ? "persona" : "personas"} x ${formatearImporte(t.importe / Math.max(1, t.unidades))} EUR = ${formatearImporte(t.importe)} EUR`
+        : `Importe pagado: ${formatearImporte(t.importe)} EUR`,
+      t.codigo ? `Código: ${t.codigo}` : "",
+      `Ya está pagado. No tienes que abonar nada más por este concepto.`,
+    );
+  }
+
   if (input.cuponCanjeadoBloque) {
     lineas.push(
       ``,
       `Cupón aplicado: ${input.cuponCanjeadoBloque.codigo} - ${input.cuponCanjeadoBloque.tituloCliente}`,
     );
   }
-  const coletilla = footerSegunTipo(input.tipo, input.telefono, true);
+  const coletilla = footerSegunTipo(input.tipo, !!input.urlCancelar);
   if (coletilla) lineas.push(``, coletilla);
   lineas.push(``, AVISO_NO_REPLY);
   return lineas.join("\n");
 }
 
+/**
+ * Línea bajo el titular: dice en una frase POR QUÉ ha llegado este correo.
+ * Es lo que diferencia un aviso de otro cuando el marco visual es el mismo.
+ */
 function subtitulo(t: ReservaEmailTipo): string {
   switch (t) {
-    case "CONFIRMACION":
+    // ── Estados con sustancia ──────────────────────────────────────────────
+    case "CONFIRMADA":
       return "Gracias por reservar con nosotros.";
-    case "RECONFIRMACION":
-      return "Por favor, confírmanos que mantienes la reserva.";
+    case "RECONFIRMADA":
+      return "Nos has confirmado que vienes.";
+    case "NO_SHOW":
+      return "No pudimos darte la mesa que teníamos guardada.";
+    case "CANCELADA":
+      return "Tu reserva ha sido cancelada.";
+
+    // ── Estados transitorios ───────────────────────────────────────────────
+    //
+    // No piden nada al cliente: solo le dicen que su reserva ha cambiado de
+    // estado. Todos comparten la misma frase a propósito, para que se lean como
+    // lo que son —un aviso de seguimiento— y no como una instrucción.
+    case "NO_RECONFIRMADA":
+    case "LISTA_ESPERA":
+    case "LIBERADA":
+    case "TERMINANDO":
+      return "El estado de tu reserva ha cambiado.";
+
+    // ── Políticas y procesos ───────────────────────────────────────────────
+    case "TICKET_COMPRA":
+      return "Hemos recibido tu pago.";
+    case "TICKET_RESERVA":
+      return "Tu ticket ya está canjeado.";
+    case "POLITICA_CANCELACION":
+      return "Estas son las condiciones que se aplican a tu reserva.";
+    case "POLITICA_GARANTIA":
+      return "Estas son las condiciones de la garantía de tu reserva.";
     case "RECORDATORIO":
       return "Te esperamos pronto.";
-    case "CANCELACION":
-      return "Tu reserva ha sido cancelada.";
     case "SOLICITUD_VALORACION":
       return "";
     default:
@@ -867,59 +1071,33 @@ function subtitulo(t: ReservaEmailTipo): string {
 }
 
 /**
- * Coletilla de contacto del pie.
+ * Coletilla del pie.
  *
- * NUNCA se invita a responder al correo: estos envíos salen desde una
- * dirección no-reply que nadie lee, así que un cliente que conteste se queda
- * esperando una respuesta que no llega (y en el peor caso, cancela creyendo
- * que ya ha avisado). Se le da el TELÉFONO del restaurante, que sí se atiende.
- * Si la empresa no tiene teléfono cargado se omite la frase entera antes que
- * mandarle a un buzón muerto.
+ * Sin teléfonos ni direcciones de correo: estos envíos salen desde un buzón que
+ * nadie lee, y publicar un contacto aquí manda al cliente a hablar con la pared.
+ * La única vía de vuelta que se ofrece es el enlace de gestión de la reserva,
+ * que ya va en su propio bloque — por eso la coletilla solo aparece cuando ese
+ * enlace existe, y solo dice para qué sirve.
  */
-function footerSegunTipo(
-  t: ReservaEmailTipo,
-  telefono: string | null,
-  plain = false,
-): string {
-  const tel = telefono?.trim() || null;
-  // Sin teléfono no hay vía de contacto que ofrecer. El enlace de cancelar,
-  // que va en su propio bloque, sigue cubriendo el caso importante.
-  if (!tel) return "";
-  const telTxt = plain ? tel : telefonoHtml(tel);
-
+function footerSegunTipo(t: ReservaEmailTipo, hayEnlaceGestion: boolean): string {
+  if (!hayEnlaceGestion) return "";
   switch (t) {
-    case "CONFIRMACION":
-      return plain
-        ? `Para cancelar o modificar la reserva, llámanos al ${telTxt}.`
-        : `¿Necesitas cancelar o modificar la reserva? Llámanos al ${telTxt}.`;
-    case "RECONFIRMACION":
-      return plain
-        ? `Para confirmar tu asistencia, llámanos al ${telTxt}.`
-        : `Para confirmar tu asistencia, llámanos al ${telTxt}.`;
+    case "CONFIRMADA":
+    case "RECONFIRMADA":
+    case "TICKET_RESERVA":
+    case "POLITICA_CANCELACION":
+    case "POLITICA_GARANTIA":
+      return "Puedes gestionar tu reserva desde el enlace de arriba.";
     case "RECORDATORIO":
-      return plain
-        ? `Si ya no puedes venir, avísanos en el ${telTxt}.`
-        : `Si finalmente no puedes venir, avísanos en el ${telTxt}.`;
-    case "CANCELACION":
-      return plain
-        ? `Si crees que es un error, llámanos al ${telTxt}.`
-        : `Si crees que es un error, llámanos al ${telTxt} y lo revisamos.`;
-    case "SOLICITUD_VALORACION":
-      // Sin coletilla: el bloque de estrellas ya lo dice todo y cualquier
-      // texto extra debajo resta claridad a la única acción que se pide.
-      return "";
+      return "Si finalmente no puedes venir, avísanos desde el enlace de arriba.";
+    case "NO_RECONFIRMADA":
+    case "LISTA_ESPERA":
+      return "Puedes gestionar tu reserva desde el enlace de arriba.";
     default:
+      // Cancelada, no presentado, liberada, terminando y valoración: la reserva
+      // ya no admite gestión, así que cualquier coletilla sobraría.
       return "";
   }
-}
-
-/**
- * Teléfono como enlace `tel:` — en el móvil, que es donde se lee casi todo el
- * correo, llamar pasa a ser un solo toque.
- */
-function telefonoHtml(tel: string): string {
-  const marcable = tel.replace(/[^\d+]/g, "");
-  return `<a href="tel:${escapeAttr(marcable)}" style="color:#64748b;text-decoration:underline;white-space:nowrap;">${escapeHtml(tel)}</a>`;
 }
 
 /**
@@ -927,101 +1105,15 @@ function telefonoHtml(tel: string): string {
  * la solicitud de valoración: el cliente debe saber que si contesta no le va a
  * leer nadie, ANTES de escribir, no después de esperar respuesta.
  */
-const AVISO_NO_REPLY =
-  "Este mensaje se ha enviado desde una dirección que no admite respuestas: los correos que se envíen aquí no se reciben ni se leen.";
 
 // ────────────────────────────────────────────────────────────────────────────
 // Helpers visuales y de texto
 // ────────────────────────────────────────────────────────────────────────────
 
-function fila(etiqueta: string, valor: string): string {
-  return `<tr>
-    <td style="padding:6px 0;font-size:12px;color:#64748b;width:42%;">${etiqueta}</td>
-    <td style="padding:6px 0;font-size:14px;color:#0f172a;font-weight:600;text-align:right;">${escapeHtml(valor)}</td>
-  </tr>`;
-}
-
-function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
-}
-
-function escapeAttr(s: string): string {
-  return escapeHtml(s);
-}
-
-function nl2br(s: string): string {
-  return s.replace(/\n/g, "<br/>");
-}
-
 function capitalizar(s: string): string {
   if (!s) return s;
   const lower = s.toLowerCase();
   return lower.charAt(0).toUpperCase() + lower.slice(1);
-}
-
-function primerNombre(s: string | null | undefined): string {
-  if (!s) return "";
-  return s.split(" ")[0] || "";
-}
-
-function formatearFecha(iso: string): string {
-  try {
-    const d = new Date(`${iso}T00:00:00`);
-    return d.toLocaleDateString("es-ES", {
-      weekday: "long",
-      day: "numeric",
-      month: "long",
-      year: "numeric",
-    });
-  } catch {
-    return iso;
-  }
-}
-
-function formatearImporte(eur: number): string {
-  return eur.toFixed(2).replace(/\./, ",");
-}
-
-function sustituir(plantilla: string, vars: Record<string, string>): string {
-  return plantilla.replace(/{{\s*(\w+)\s*}}/g, (_, k) => vars[k] ?? "");
-}
-
-function sanitizarHex(v: string | null | undefined): string | null {
-  if (!v) return null;
-  const m = /^#?([0-9a-f]{6})$/i.exec(v.trim());
-  return m ? `#${m[1].toLowerCase()}` : null;
-}
-
-function oscurecerHex(hex: string, ratio: number): string {
-  const n = parseInt(hex.slice(1), 16);
-  const r = (n >> 16) & 0xff;
-  const g = (n >> 8) & 0xff;
-  const b = n & 0xff;
-  const mix = (c: number) => Math.max(0, Math.round(c * (1 - ratio)));
-  const out = (mix(r) << 16) | (mix(g) << 8) | mix(b);
-  return `#${out.toString(16).padStart(6, "0")}`;
-}
-
-function withAlpha(hex: string, alpha: number): string {
-  const n = parseInt(hex.slice(1), 16);
-  const r = (n >> 16) & 0xff;
-  const g = (n >> 8) & 0xff;
-  const b = n & 0xff;
-  return `rgba(${r},${g},${b},${alpha})`;
-}
-
-function colorContraste(hex: string): string {
-  const n = parseInt(hex.slice(1), 16);
-  const r = (n >> 16) & 0xff;
-  const g = (n >> 8) & 0xff;
-  const b = n & 0xff;
-  const lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
-  return lum > 0.62 ? "#0f172a" : "#ffffff";
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -1036,14 +1128,14 @@ export interface PreviewInput {
   logoUrl: string | null;
   isotipoUrl?: string | null;
   colorPrimario: string | null;
-  /** Teléfono público del restaurante: el pie lo enseña como única vía de
-   *  contacto, así que la vista previa debe mostrar el real. */
-  telefono?: string | null;
+  /** Segundo color de Imagen de marca: si falta, la previa no se ve como el real. */
+  colorSecundario?: string | null;
   asuntoOverride: string | null;
   mensajeOverride: string | null;
   config: {
     cancelacionHorasAntes?: number | null;
     cancelacionImporteEur?: number | null;
+    garantiaImporteEur?: number | null;
   };
 }
 
@@ -1070,15 +1162,22 @@ export function previewReservaEmail(input: PreviewInput): {
     placeholders,
   );
 
+  // La vista previa enseña cada bloque económico donde de verdad va a salir, no
+  // en todos: si se pintaran siempre, quien configura las plantillas creería
+  // que sus clientes reciben las condiciones de garantía en el correo de
+  // cancelación.
   const politicaBloque =
-    input.tipo === "CONFIRMACION" &&
-    input.config.cancelacionHorasAntes &&
-    input.config.cancelacionImporteEur
+    input.tipo === "POLITICA_CANCELACION" || input.tipo === "CONFIRMADA"
       ? {
-          horas: input.config.cancelacionHorasAntes,
-          importe: Number(input.config.cancelacionImporteEur),
+          horas: input.config.cancelacionHorasAntes ?? 24,
+          importe: Number(input.config.cancelacionImporteEur ?? 15),
           mensajeExtra: "",
         }
+      : null;
+
+  const garantiaBloque =
+    input.tipo === "POLITICA_GARANTIA"
+      ? { importe: Number(input.config.garantiaImporteEur ?? 20), mensajeExtra: "" }
       : null;
 
   const html = renderHtml({
@@ -1092,10 +1191,8 @@ export function previewReservaEmail(input: PreviewInput): {
       logo_url: input.logoUrl,
       isotipo_url: input.isotipoUrl ?? null,
       color: input.colorPrimario,
-      color_secundario: null,
-      telefono: input.telefono ?? null,
+      color_secundario: input.colorSecundario ?? null,
     },
-    telefono: input.telefono ?? null,
     cliente: placeholders.nombre,
     fechaLegible: placeholders.fecha,
     horaLegible: placeholders.hora,
@@ -1104,14 +1201,26 @@ export function previewReservaEmail(input: PreviewInput): {
     observaciones: null,
     mensajeLibre,
     politicaBloque,
-    cuponBloque: null,
+    garantiaBloque,
     cuponCanjeadoBloque: null,
-    // Vista previa del editor: se enseña el bloque con un enlace de ejemplo
-    // para que el usuario vea cómo le queda al cliente.
-    urlCancelar:
-      input.tipo === "CANCELACION" || input.tipo === "SOLICITUD_VALORACION"
-        ? null
-        : `${getSiteUrl()}/cancelar/ejemplo`,
+    // En la vista previa de los correos de Ticket se enseña un ticket de
+    // ejemplo para que se vea cómo queda el desglose del importe pagado.
+    ticketBloque:
+      input.tipo === "TICKET_RESERVA" || input.tipo === "TICKET_COMPRA"
+        ? { codigo: "AB3K9P", producto: "Cena degustación", unidades: 2, importe: 98, porPersona: true }
+        : null,
+    // Mismo criterio que en el envío real: el enlace de gestión solo aparece
+    // mientras la reserva sigue viva.
+    urlCancelar: [
+      "CANCELADA",
+      "NO_SHOW",
+      "LIBERADA",
+      "TERMINANDO",
+      "SOLICITUD_VALORACION",
+      "TICKET_COMPRA",
+    ].includes(input.tipo)
+      ? null
+      : `${getSiteUrl()}/cancelar/ejemplo`,
     urlValoracion:
       input.tipo === "SOLICITUD_VALORACION"
         ? `${getSiteUrl()}/r/ejemplo`

@@ -180,7 +180,7 @@ export async function cancelarReservaPorToken(
       const { enviarReservaEmail } = await import("@/lib/email/reservas/mailer");
       // Lo cancela el propio cliente desde el enlace de su correo: en el
       // histórico consta como PORTAL_PUBLICO, sin firma de empleado.
-      void enviarReservaEmail(r.id as string, "CANCELACION", {
+      void enviarReservaEmail(r.id as string, "CANCELADA", {
         actor: { origen: "PORTAL_PUBLICO" },
       }).catch((e) =>
         console.error("[cancelar-publica] mail CANCELACION:", e),

@@ -165,7 +165,7 @@ export async function GET(request: Request) {
           tz,
         });
         for (const r of pendientesR) {
-          const res = await enviarReservaEmail(r.id, "RECONFIRMACION", {
+          const res = await enviarReservaEmail(r.id, "RECONFIRMADA", {
             actor: { origen: "AUTOMATICO" },
           });
           if (res.ok) reconfirmacionesOk++;

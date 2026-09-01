@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { getEmpresaActivaForUser } from "@/features/empresa/lib/empresa-server";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import type { ReservaEmailTipo } from "@/lib/seeds/reserva-email-plantillas";
 
 /**
  * Una línea del histórico de correos de una reserva: qué salió, cuándo, a quién
@@ -10,12 +11,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
  */
 export interface ReservaEmailEnvio {
   id: string;
-  tipo:
-    | "CONFIRMACION"
-    | "RECONFIRMACION"
-    | "RECORDATORIO"
-    | "CANCELACION"
-    | "SOLICITUD_VALORACION";
+  /** Tipo del correo que salió. Fuente única: el seed de plantillas. */
+  tipo: ReservaEmailTipo;
   destinatario: string | null;
   asunto: string | null;
   /** Nombre de la persona que lo envió. Null si no hubo persona detrás. */
