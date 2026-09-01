@@ -19,6 +19,7 @@ import {
 import { colorOrigen, labelOrigen, type OrigenBucket } from "@/features/sala/data/origenes";
 import { ESTADOS_RESERVA, ESTADO_RESERVA_LABELS } from "@/features/sala/data/reservas";
 import { CapacidadGruposPanel } from "@/features/sala/components/CapacidadGruposPanel";
+import { ListadoReservasPanel } from "@/features/sala/components/ListadoReservasPanel";
 
 type PieDatum = { name: string; value: number; origen: OrigenBucket };
 
@@ -293,6 +294,18 @@ export function AnaliticaOrigenView() {
           se consulta por día porque responde a "¿me queda hueco hoy?". */}
       <div className="border-t pt-5 mt-1">
         <CapacidadGruposPanel />
+      </div>
+
+      {/* Listado completo de reservas. Comparte el año y el campo de fecha de
+          los quesitos: lo que se ve arriba en gráfica se puede leer aquí fila
+          a fila, filtrar y exportar. */}
+      <div className="border-t pt-5 mt-1">
+        <ListadoReservasPanel
+          desde={`${anio}-01-01`}
+          hasta={`${anio}-12-31`}
+          campoFecha={campoFecha}
+          periodoLabel={`${campoFecha === "fecha" ? "Por día reservado" : "Por fecha de creación"} · ${anio}`}
+        />
       </div>
     </div>
   );

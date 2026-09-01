@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo, type ReactNode } from "react";
+import { useSearchParams } from "next/navigation";
 import { useSincronizacionEnVivo } from "@/shared/hooks/useSincronizacionEnVivo";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -191,6 +192,7 @@ export function ClientesView() {
   const [columnasVisibles, setColumnasVisibles] = useState<ToolbarColumnaVisible>({});
   const [columnasOrden, setColumnasOrden] = useState<string[] | undefined>(undefined);
   const [selectedCliente, setSelectedCliente] = useState<Cliente | null>(null);
+  const searchParams = useSearchParams();
   const [showConfig, setShowConfig] = useState(false);
   const [pagina, setPagina] = useState(1);
 
@@ -326,10 +328,29 @@ export function ClientesView() {
     }
   };
 
-  const abrirFicha = (c: Cliente) => {
+  const abrirFicha = useCallback((c: Cliente) => {
     setSelectedCliente(c);
     setBorrador({ ...c });
-  };
+  }, []);
+
+  /**
+   * Ficha pedida por URL (`?cliente=<id>`). Es como se llega aquí desde el
+   * listado de reservas de la pantalla de Sala al pulsar el nombre: la ficha se
+   * abre sola en cuanto la lista de clientes está cargada, sin que el usuario
+   * tenga que buscar a esa persona en la tabla.
+   */
+  const clientePedido = searchParams?.get("cliente") ?? null;
+  useEffect(() => {
+    if (!clientePedido || clientes.length === 0) return;
+    // Si ya está abierta la que pide la URL no se toca: reabrirla en cada
+    // render tiraría lo que el usuario estuviera escribiendo en la ficha.
+    if (selectedCliente?.id === clientePedido) return;
+    const c = clientes.find((x) => x.id === clientePedido);
+    if (c) abrirFicha(c);
+    // `selectedCliente` queda fuera a propósito: solo hay que reaccionar a que
+    // cambie la URL o a que acaben de llegar los clientes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clientePedido, clientes, abrirFicha]);
 
   const cerrarFicha = () => {
     setSelectedCliente(null);
