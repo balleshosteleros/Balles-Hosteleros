@@ -56,18 +56,13 @@ export default function AuthLayout({
             </Link>
           </nav>
 
-          {/* El correo sale de los datos del titular (fuente única de las
-              legales). No cablear aquí ninguna dirección: el buzón que había
-              antes se eliminó de Workspace y el enlace quedó muerto. */}
-          <div className="flex w-full flex-col items-center justify-between gap-2 sm:flex-row">
-            <span>© {new Date().getFullYear()} Balles Hosteleros</span>
-            <a
-              href={`mailto:${TITULAR.email}`}
-              className="transition-colors hover:text-slate-300"
-            >
-              {TITULAR.email}
-            </a>
-          </div>
+          {/* NINGÚN correo en esta pantalla (decisión de Iván): la dirección de
+              contacto vive solo en el aviso legal, que es donde la LSSI la
+              exige y adonde llega el revisor de Google desde el enlace de
+              arriba. Aquí basta la razón social del titular. */}
+          <span className="text-center">
+            © {new Date().getFullYear()} {TITULAR.razonSocial}
+          </span>
         </footer>
       </div>
 
@@ -85,23 +80,23 @@ export default function AuthLayout({
           }}
         />
 
-        {/* Contenido central: logo + wordmark */}
-        <div className="relative z-10 flex w-full flex-col items-center justify-center px-12">
-          <div className="flex items-center gap-6">
-            <div className="relative h-44 w-44 shrink-0">
-              <Image
-                src="/logo-balles.png"
-                alt="Balles Hosteleros"
-                fill
-                priority
-                className="object-contain"
-              />
-            </div>
-            <div className="h-32 w-px bg-white/30" />
-            <span className="text-sm font-light uppercase tracking-[0.28em] text-blue-200/80">
-              Software de Gestión
-            </span>
-          </div>
+        {/* Contenido central: marca del titular, apilada y centrada.
+            El logo lleva medidas explícitas (no `fill`) para que ocupe lo mismo
+            antes y después de cargar: con `fill` el hueco depende del contenedor
+            y la imagen "aparecía" de distinto tamaño según el entorno. */}
+        <div className="relative z-10 flex w-full flex-col items-center justify-center gap-6 px-12 text-center">
+          <Image
+            src="/logo-balles.png"
+            alt={TITULAR.razonSocial}
+            width={176}
+            height={176}
+            priority
+            className="h-44 w-44 object-contain"
+          />
+          <div className="h-px w-24 bg-white/30" />
+          <span className="text-sm font-light uppercase tracking-[0.28em] text-blue-200/80">
+            Software de Gestión
+          </span>
         </div>
       </div>
     </div>

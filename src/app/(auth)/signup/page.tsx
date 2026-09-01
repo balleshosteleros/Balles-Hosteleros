@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { TITULAR } from '@/app/software/legal/datos-titular'
 
 export default function SignupPage() {
   return (
@@ -11,11 +12,16 @@ export default function SignupPage() {
         </p>
       </div>
 
+      {/* El botón abre el correo, pero la dirección NO se muestra escrita: en
+          las pantallas de acceso no aparece ningún correo a la vista. Sale de
+          los datos del titular (fuente única), nunca cableada aquí. */}
       <a
-        href="mailto:balleshosteleros@gmail.com?subject=Solicitud%20de%20acceso%20a%20Balles%20Hosteleros"
-        className="block w-full rounded-lg bg-blue-600 px-4 py-3 text-center text-sm font-semibold text-white shadow-lg shadow-blue-900/30 transition-all hover:bg-blue-500"
+        href={`mailto:${TITULAR.email}?subject=${encodeURIComponent(
+          'Solicitud de acceso a Balles Hosteleros',
+        )}`}
+        className="flex h-12 w-full items-center justify-center rounded-lg bg-blue-600 px-4 text-center text-sm font-semibold text-white shadow-lg shadow-blue-900/30 transition-all hover:bg-blue-500"
       >
-        Escribir a balleshosteleros@gmail.com
+        Solicitar acceso
       </a>
 
       <p className="text-center text-sm text-slate-400">

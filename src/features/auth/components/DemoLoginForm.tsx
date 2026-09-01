@@ -67,7 +67,7 @@ export function DemoLoginForm() {
             minLength={2}
             autoComplete="name"
             placeholder="Nombre y apellidos"
-            className="block w-full rounded-lg border border-slate-800 bg-slate-900/60 py-3 pl-11 pr-4 text-sm text-white placeholder:text-slate-500 focus:border-blue-500 focus:bg-slate-900 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            className="block h-12 w-full rounded-lg border border-slate-800 bg-slate-900/60 pl-11 pr-4 text-sm text-white placeholder:text-slate-500 focus:border-blue-500 focus:bg-slate-900 focus:outline-none focus:ring-1 focus:ring-blue-500"
           />
         </div>
 
@@ -97,7 +97,7 @@ export function DemoLoginForm() {
             minLength={2}
             autoComplete="organization"
             placeholder="Nombre del restaurante o empresa"
-            className="block w-full rounded-lg border border-slate-800 bg-slate-900/60 py-3 pl-11 pr-4 text-sm text-white placeholder:text-slate-500 focus:border-blue-500 focus:bg-slate-900 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            className="block h-12 w-full rounded-lg border border-slate-800 bg-slate-900/60 pl-11 pr-4 text-sm text-white placeholder:text-slate-500 focus:border-blue-500 focus:bg-slate-900 focus:outline-none focus:ring-1 focus:ring-blue-500"
           />
         </div>
 
@@ -128,7 +128,7 @@ export function DemoLoginForm() {
             placeholder="Correo electrónico"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="block w-full rounded-lg border border-slate-800 bg-slate-900/60 py-3 pl-11 pr-4 text-sm text-white placeholder:text-slate-500 focus:border-blue-500 focus:bg-slate-900 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            className="block h-12 w-full rounded-lg border border-slate-800 bg-slate-900/60 pl-11 pr-4 text-sm text-white placeholder:text-slate-500 focus:border-blue-500 focus:bg-slate-900 focus:outline-none focus:ring-1 focus:ring-blue-500"
           />
         </div>
 
@@ -158,7 +158,7 @@ export function DemoLoginForm() {
             minLength={6}
             autoComplete="tel"
             placeholder="Teléfono"
-            className="block w-full rounded-lg border border-slate-800 bg-slate-900/60 py-3 pl-11 pr-4 text-sm text-white placeholder:text-slate-500 focus:border-blue-500 focus:bg-slate-900 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            className="block h-12 w-full rounded-lg border border-slate-800 bg-slate-900/60 pl-11 pr-4 text-sm text-white placeholder:text-slate-500 focus:border-blue-500 focus:bg-slate-900 focus:outline-none focus:ring-1 focus:ring-blue-500"
           />
         </div>
 
@@ -173,7 +173,7 @@ export function DemoLoginForm() {
         <button
           type="submit"
           disabled={loading}
-          className="w-full rounded-lg bg-blue-600 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-blue-900/30 transition-all hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
+          className="flex h-12 w-full items-center justify-center rounded-lg bg-blue-600 px-4 text-sm font-semibold text-white shadow-lg shadow-blue-900/30 transition-all hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
         >
           {loading ? 'Entrando al demo...' : 'Entrar al demo'}
         </button>
