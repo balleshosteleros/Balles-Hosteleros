@@ -29,7 +29,7 @@ export interface MensajeriaEnvio {
   errorMensaje: string | null;
   costeCents: number;
   usuarioNombre: string | null;
-  origen: "MANUAL" | "AUTOMATICO" | "PORTAL_PUBLICO";
+  origen: "MANUAL" | "AUTOMATICO" | "PORTAL_PUBLICO" | "GOOGLE_RWG";
   enviadoAt: string;
 }
 

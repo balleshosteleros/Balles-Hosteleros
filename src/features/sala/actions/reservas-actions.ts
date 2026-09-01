@@ -30,6 +30,7 @@ import {
   enviarReservaEmail,
   type ReservaEmailActor,
 } from "@/lib/email/reservas/mailer";
+import { enviarAvisoReserva } from "@/lib/mensajeria/reservas";
 import {
   esTipoEstado,
   type ReservaEmailTipo,
@@ -985,6 +986,15 @@ export async function updateReserva(
           console.error(`[reservas] mail ${tipoCorreo}:`, e),
         );
       }
+
+      // Por mensajería solo sale la cancelación: es la que el cliente
+      // necesita ver ya. Del resto de estados se entera al llegar, y un
+      // WhatsApp por cada cambio interno quemaría el canal.
+      if (updates.estado === "CANCELADA") {
+        void enviarAvisoReserva(id, "CANCELACION", { actor }).catch((e) =>
+          console.error("[reservas] whatsapp CANCELACION:", e),
+        );
+      }
     }
 
     return { ok: true };
@@ -1097,6 +1107,12 @@ export async function notificarReservaCreadaPorEmail(reservaId: string) {
     rTicket?.es_ticket === true ? "TICKET_RESERVA" : "CONFIRMADA";
   const res = await enviarReservaEmail(reservaId, tipoBienvenida, { actor });
   if (!res.ok) return { ok: false, error: res.error };
+
+  // WhatsApp además del correo, no en su lugar. Sin await: el correo ya salió y
+  // un fallo aquí no puede hacer que la reserva parezca no confirmada.
+  void enviarAvisoReserva(reservaId, "CONFIRMACION", { actor }).catch((e) =>
+    console.error("[reservas] whatsapp CONFIRMACION:", e),
+  );
 
   // Encadenar las condiciones económicas y la reconfirmación inmediata si
   // proceden. No bloqueamos la respuesta ni dejamos que un fallo aquí rompa el

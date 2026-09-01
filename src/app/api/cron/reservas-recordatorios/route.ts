@@ -26,6 +26,7 @@
 import { NextResponse } from "next/server";
 import { createClient as createServiceClient } from "@supabase/supabase-js";
 import { enviarReservaEmail } from "@/lib/email/reservas/mailer";
+import { enviarAvisoReserva } from "@/lib/mensajeria/reservas";
 import {
   ZONA_HORARIA_FALLBACK,
   zonaLocalAUtcISO,
@@ -104,6 +105,7 @@ export async function GET(request: Request) {
   let reconfirmacionesErr = 0;
   let valoracionesOk = 0;
   let valoracionesErr = 0;
+  let mensajesOk = 0;
 
   for (const c of (configs ?? []) as ConfigEmpresa[]) {
     // Zona horaria de los ajustes de ESTA empresa: las columnas `fecha`/`hora`
@@ -143,6 +145,8 @@ export async function GET(request: Request) {
           });
           if (res.ok) recordatoriosOk++;
           else recordatoriosErr++;
+
+          if (await avisarPorMensajeria(r.id, "RECORDATORIO")) mensajesOk++;
         }
       } catch (e) {
         recordatoriosErr++;
@@ -170,6 +174,8 @@ export async function GET(request: Request) {
           });
           if (res.ok) reconfirmacionesOk++;
           else reconfirmacionesErr++;
+
+          if (await avisarPorMensajeria(r.id, "RECONFIRMACION")) mensajesOk++;
         }
       } catch (e) {
         reconfirmacionesErr++;
@@ -229,7 +235,38 @@ export async function GET(request: Request) {
     recordatorios: { ok: recordatoriosOk, err: recordatoriosErr },
     reconfirmaciones: { ok: reconfirmacionesOk, err: reconfirmacionesErr },
     valoraciones: { ok: valoracionesOk, err: valoracionesErr },
+    // Los mensajes van aparte del correo: aquí solo se cuentan los que
+    // salieron de verdad, no los que no pudieron enviarse (sin saldo, sin
+    // teléfono, canal apagado). Esos no son errores, son el caso normal.
+    mensajes: { ok: mensajesOk },
   });
+}
+
+/**
+ * Aviso por WhatsApp (o SMS de respaldo), además del correo.
+ *
+ * Va SIEMPRE detrás del correo y nunca en su lugar: el correo es la red de
+ * seguridad y no depende de que la empresa tenga saldo, número o los canales
+ * encendidos.
+ *
+ * No poder enviar aquí es el caso normal, no una avería: sin saldo, sin
+ * teléfono o con el canal apagado, se devuelve `false` en silencio. Solo se
+ * traza lo que de verdad se rompió, para no llenar el registro de ruido cada
+ * noche.
+ */
+async function avisarPorMensajeria(
+  reservaId: string,
+  tipo: "RECORDATORIO" | "RECONFIRMACION",
+): Promise<boolean> {
+  try {
+    const res = await enviarAvisoReserva(reservaId, tipo, {
+      actor: { origen: "AUTOMATICO" },
+    });
+    return res.ok;
+  } catch (e) {
+    console.error(`[cron reservas] mensajeria ${tipo} reserva ${reservaId}:`, e);
+    return false;
+  }
 }
 
 async function buscarPendientes(

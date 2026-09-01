@@ -57,9 +57,14 @@ const ESTADO_LABEL: Record<string, string> = {
 
 function autorMensajeria(envio: MensajeriaEnvio): string {
   if (envio.usuarioNombre) return envio.usuarioNombre;
-  return envio.origen === "PORTAL_PUBLICO"
-    ? "Reserva online del cliente"
-    : "Envío automático";
+  switch (envio.origen) {
+    case "PORTAL_PUBLICO":
+      return "Reserva online del cliente";
+    case "GOOGLE_RWG":
+      return "Reserva desde Google";
+    default:
+      return "Envío automático";
+  }
 }
 
 /**

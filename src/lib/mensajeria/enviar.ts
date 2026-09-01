@@ -37,7 +37,9 @@ export type TipoMensaje =
 export interface ActorMensaje {
   usuarioId?: string | null;
   usuarioNombre?: string | null;
-  origen?: "MANUAL" | "AUTOMATICO" | "PORTAL_PUBLICO";
+  /** Mismos orígenes que el histórico de correos: una reserva llegada desde
+   *  Google tiene que constar como tal también aquí. */
+  origen?: "MANUAL" | "AUTOMATICO" | "PORTAL_PUBLICO" | "GOOGLE_RWG";
 }
 
 export type ResultadoMensaje =

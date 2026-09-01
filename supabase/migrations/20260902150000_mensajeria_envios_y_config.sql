@@ -112,8 +112,10 @@ CREATE TABLE IF NOT EXISTS public.mensajeria_envios (
   -- Lo cobrado del monedero. Cero si no llegó a cobrarse.
   coste_cents INT NOT NULL DEFAULT 0 CHECK (coste_cents >= 0),
 
+  -- Mismos orígenes que el histórico de correos: una reserva llegada desde
+  -- Google tiene que constar como tal también aquí.
   origen TEXT NOT NULL DEFAULT 'AUTOMATICO'
-    CHECK (origen IN ('MANUAL','AUTOMATICO','PORTAL_PUBLICO')),
+    CHECK (origen IN ('MANUAL','AUTOMATICO','PORTAL_PUBLICO','GOOGLE_RWG')),
 
   usuario_id     UUID REFERENCES auth.users(id) ON DELETE SET NULL,
   usuario_nombre TEXT,

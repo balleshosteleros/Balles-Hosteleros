@@ -189,6 +189,11 @@ export async function cancelarReservaPorToken(
       console.error("[cancelar-publica] no se pudo cargar el mailer:", e);
     }
 
+    // Aquí NO se manda WhatsApp: el cliente acaba de cancelar él mismo y está
+    // viendo la confirmación en pantalla. Un mensaje contándole lo que acaba
+    // de hacer solo gasta saldo. El WhatsApp de cancelación es para cuando la
+    // cancela el restaurante, y ese sale desde `reservas-actions`.
+
     return { ok: true, data: { cancelada: true } };
   } catch (err) {
     console.error("[cancelar-publica][cancelar]", err);

@@ -249,22 +249,22 @@ dónde, cuándo y si se entregó. Se renombra a `HistoricoComunicaciones`.
 
 ## 10. Fases
 
-**Fase 1 — Monedero.** Tablas de saldo, movimientos y tarifas con RLS. Vista de
+**Fase 1 — Monedero.** ✅ HECHA. Tablas de saldo, movimientos y tarifas con RLS. Vista de
 Ajustes con saldo y extracto. Recarga manual desde admin. Avisos de saldo bajo.
 *Cierra cuando:* se puede abonar saldo a una empresa y verlo en el extracto.
 
-**Fase 2 — Motor de envío.** `src/lib/mensajeria/` con el proveedor
+**Fase 2 — Motor de envío.** ✅ HECHA. `src/lib/mensajeria/` con el proveedor
 intercambiable, el orquestador con reserva y devolución de saldo, tabla de
 envíos y webhook de estado.
 *Cierra cuando:* se envía un WhatsApp de prueba, se descuenta el saldo y consta
 el estado de entrega.
 
-**Fase 3 — Avisos de reserva.** Plantillas registradas en Meta. Enganche al
-cron existente y a la confirmación al reservar. Cadena WhatsApp → SMS → correo.
-Histórico en la ficha.
-*Cierra cuando:* una reserva real genera su WhatsApp con enlace de cancelar
-que funciona.
-*Requiere:* eSIM confirmadas y número aprobado por Meta.
+**Fase 3 — Avisos de reserva.** ✅ HECHA (código). Enganche al cron y a la
+confirmación al reservar. Textos de WhatsApp y SMS. Enlace corto `/c/<codigo>`
+para que el SMS quepa en uno solo. Histórico unificado en la ficha.
+Plantillas documentadas en `docs/plantillas-whatsapp-reservas.md`.
+*Pendiente para que funcione:* dar de alta las 4 plantillas en Meta y poner sus
+identificadores en el entorno; eSIM confirmadas y credenciales de Twilio.
 
 **Fase 4 — Alta autoservicio.** Embedded Signup, creación automática de
 subcuenta, estado de verificación en pantalla, y pasarela propia para que el
@@ -280,9 +280,28 @@ pueden hacer ya.
 
 ---
 
+## 10.bis Hallazgo de la fase 3
+
+Ya existía `src/features/marketing/services/whatsapp-service.ts`: un envío de
+campañas contra **Meta directo**, escrito antes de este PRP. **Nunca ha
+funcionado** — sus variables de entorno están vacías, así que
+`isWhatsAppConfigured()` siempre devuelve false y no ha salido ni un mensaje.
+
+No se ha tocado: borrarlo o migrarlo es trabajo de la fase 5, cuando las
+campañas se hagan de verdad. Entonces habrá que decidir si se unifica con este
+motor (recomendado: un solo camino, un solo sitio donde mirar cuando falle) o
+si las campañas siguen por su lado.
+
+Mientras tanto conviven sin estorbarse: uno manda avisos de reserva y el otro
+está apagado.
+
+---
+
 ## 11. Lo que hace falta de Iván
 
-1. **Confirmar que las eSIM no están usadas en WhatsApp** — bloquea la fase 3
+1. **Confirmar que las eSIM no están usadas en WhatsApp** — bloquea el encendido
 2. **Cuenta de Twilio a nombre de Balles Hosteleros** (no de los restaurantes)
 3. **Validar los precios de venta:** WhatsApp 5 c., SMS 10 c.
-4. **Confirmar con la gestoría** el IVA del saldo prepago (antes de la fase 4)
+4. **Dar de alta las 4 plantillas en Meta** (texto listo en
+   `docs/plantillas-whatsapp-reservas.md`) y pegar sus identificadores
+5. **Confirmar con la gestoría** el IVA del saldo prepago (antes de la fase 4)
