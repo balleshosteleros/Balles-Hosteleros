@@ -334,13 +334,21 @@ function AppLayoutInterno({ children }: { children: React.ReactNode }) {
               </h1>
             )}
             {/*
-              Mini reproductor: ocupa el hueco libre junto al título del módulo,
-              a la izquierda del resto de herramientas. Solo se pinta cuando hay
-              música sonando; el resto del tiempo no existe y ese espacio vuelve
-              a la cabecera.
+              Mini reproductor: pegado a la barra de herramientas (a la
+              izquierda de notificaciones), no al título. El `ml-auto` lo
+              empuja hacia el centro-derecha de la pantalla. Solo se pinta
+              cuando hay música sonando; el resto del tiempo no existe y ese
+              espacio vuelve a la cabecera.
             */}
-            {showUi && <MiniReproductor />}
+            {showUi && <MiniReproductor className="ml-auto mr-2 md:mr-3" />}
 
+            {/*
+              `ml-auto` aquí también: cuando NO hay música el reproductor no se
+              pinta y este bloque es el único que puede empujarse a la derecha.
+              Con el reproductor visible los dos `ml-auto` se reparten el hueco,
+              por eso el reproductor lleva su propio margen a la derecha en vez
+              de depender de esa separación.
+            */}
             <div className="ml-auto flex items-center gap-2 md:gap-3 shrink-0">
               {showUi && (
                 <>

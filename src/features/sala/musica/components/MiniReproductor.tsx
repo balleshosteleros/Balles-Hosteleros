@@ -3,8 +3,8 @@
 /**
  * Mini reproductor de la barra superior.
  *
- * Aparece SOLO cuando hay música sonando, ocupando el hueco libre a la izquierda
- * de la cabecera, junto al resto de herramientas. Es deliberadamente mínimo —
+ * Aparece SOLO cuando hay música sonando, pegado a la izquierda de la barra de
+ * herramientas (notificaciones), no al título del módulo. Es deliberadamente mínimo —
  * anterior, play/pausa, siguiente, título y lista — porque compite por espacio
  * con el nombre del módulo y no debe empujarlo.
  *
@@ -16,9 +16,10 @@
 
 import { Play, Pause, SkipBack, SkipForward, X, Music2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { useMusicaOpcional } from "@/features/sala/musica/contexts/musica-context";
 
-export function MiniReproductor() {
+export function MiniReproductor({ className }: { className?: string }) {
   const musica = useMusicaOpcional();
 
   // Sin proveedor (pantallas públicas) o sin reproducción activa: no ocupa nada.
@@ -28,7 +29,12 @@ export function MiniReproductor() {
   if (!cancionActual) return null;
 
   return (
-    <div className="hidden lg:flex items-center gap-0.5 rounded-full border bg-muted/40 py-1 pl-1.5 pr-1 max-w-[320px] shrink-0">
+    <div
+      className={cn(
+        "hidden lg:flex items-center gap-0.5 rounded-full border bg-muted/40 py-1 pl-1.5 pr-1 max-w-[320px] shrink-0",
+        className,
+      )}
+    >
       <Music2 className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
 
       <Button
