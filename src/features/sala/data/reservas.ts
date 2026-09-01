@@ -223,6 +223,14 @@ export interface Reserva {
   importePagado?: number | null;
   // PRP-051: ticket comprado al reservar.
   ticketProductoId?: string | null;
+  /**
+   * Nombre del producto del ticket, resuelto al listar (`reserva_ticket_productos`).
+   * Se guarda en la reserva para no tener que pedirlo fila a fila desde la
+   * interfaz, que es lo que enseña el aviso del icono de Ticket.
+   */
+  ticketProductoNombre?: string | null;
+  /** Código del ticket que el cliente presenta al llegar. */
+  ticketCodigo?: string | null;
   ticketUnidades?: number | null;
   ticketImporte?: number | null;
   ticketIva?: number | null;
