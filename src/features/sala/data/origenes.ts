@@ -15,6 +15,10 @@
  * Regla operativa: si `estado === "WALK_IN"` el origen es siempre `WALKIN`,
  * tanto en alta como en edición — el restaurante no captó al cliente por
  * ningún canal digital, llegó andando.
+ *
+ * Regla operativa 2: un alta manual de tipo Cliente desde el back-office nace
+ * con `TELEFONO`, que es como entra la inmensa mayoría — pero el usuario puede
+ * cambiarlo, porque también se apunta gente que llama a la puerta o escribe.
  */
 
 /** Clave normalizada de origen. Es `string` a propósito: el catálogo es abierto. */
@@ -100,6 +104,26 @@ const PALETA_EXTRA = [
   "#c2410c", // orange-700
   "#059669", // emerald-600
   "#9333ea", // purple-600
+];
+
+/**
+ * Orígenes que se ofrecen al dar de alta una reserva A MANO desde sala.
+ *
+ * NO es el catálogo cerrado de la columna (que es abierto: por ahí entran las
+ * palabras clave de campaña). Es solo lo que tiene sentido elegir a mano:
+ * canales por los que un cliente contacta con el restaurante. Quedan fuera
+ * `WALKIN` (no se elige: lo fija el propio tipo de reserva) y `WEB`/`GOOGLE`
+ * (los pone el motor de reservas al entrar solas, nadie las teclea).
+ *
+ * El primero es el que sale marcado por defecto.
+ */
+export const ORIGENES_ALTA_MANUAL: readonly string[] = [
+  "TELEFONO",
+  "LOCAL",
+  "WHATSAPP",
+  "EMAIL",
+  "INSTAGRAM",
+  "FACEBOOK",
 ];
 
 /**

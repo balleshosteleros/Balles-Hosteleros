@@ -14,9 +14,9 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
-import { formatFechaHoraEnZona } from "@/features/empresa/lib/zona-horaria";
+import { ahoraEnZona, formatFechaHoraEnZona } from "@/features/empresa/lib/zona-horaria";
 import { useSincronizacionEnVivo } from "@/shared/hooks/useSincronizacionEnVivo";
-import { Plus, Search, ChevronLeft, ChevronRight, ListPlus, ListFilter, Check, Move, Map as MapIcon, List as ListIcon, Ticket } from "lucide-react";
+import { Plus, Search, ChevronLeft, ChevronRight, ListPlus, ListFilter, Check, Move, Map as MapIcon, List as ListIcon, Ticket, Lock } from "lucide-react";
 // Configuración solo se carga cuando el usuario pulsa "Configuración" — fuera del bundle inicial.
 const ConfigReservasView = dynamic(
   () =>
@@ -61,6 +61,7 @@ import {
   RESERVA_APELLIDOS_MAX_CHARS,
   MAX_COMENSALES_SIN_REGLA,
 } from "@/features/sala/data/reservas";
+import { labelOrigen, ORIGENES_ALTA_MANUAL } from "@/features/sala/data/origenes";
 import { ReservaEstadoBadge, ReservaEstadoDot } from "@/features/sala/components/reservas/ReservaEstadoBadge";
 import {
   listReservas,
@@ -71,6 +72,7 @@ import {
 import { CuponInputReserva } from "@/features/sala/cupones/components/CuponInputReserva";
 import { validarCuponAdminAction } from "@/features/sala/cupones/actions/validar-cupon-action";
 import { loadReservasModuleContext } from "@/features/sala/actions/reservas-module-context";
+import { contarReservasPorCliente } from "@/features/sala/actions/reservas-conteo-cliente-actions";
 import {
   createBloqueo,
   listBloqueoExcepciones,
@@ -122,6 +124,8 @@ import type {
   ClienteInsights,
 } from "@/features/sala/data/reservas";
 import { ReservaFlagsChips } from "@/features/sala/components/reservas/ReservaFlagsChips";
+import { ReservaTiempoCelda } from "@/features/sala/components/reservas/ReservaTiempoCelda";
+import { ClienteReservasBadge } from "@/features/sala/components/reservas/ClienteReservasBadge";
 import { ReservaExternalBadge } from "@/features/sala/components/reservas/ReservaExternalBadge";
 import { HistoricoEmailsReserva } from "@/features/sala/components/reservas/HistoricoEmailsReserva";
 import { ActividadReserva } from "@/features/sala/components/reservas/ActividadReserva";
@@ -222,14 +226,17 @@ function addMonths(iso: string, n: number) {
  * estado tiene sitio suficiente para leerse entero sin recortarse.
  */
 /**
- * Rejilla de la lista. El panel mide 460 px, así que el ancho fijo tiene que
- * dejar sitio de verdad al nombre: con columnas más anchas el nombre se
- * quedaba en ~44 px y los datos se pisaban unos a otros. Reparto: hora 50,
- * mesa 62, pax 26, origen 56, estado 86 + 5 huecos de 6 px + 24 de padding =
- * 334 px, y los ~126 restantes son para el nombre.
+ * Rejilla de la lista. El panel mide 620 px: el ancho fijo tiene que dejar
+ * sitio de verdad al nombre, que es por lo que se busca a la gente en sala.
+ * Reparto: hora 50, mesa 62, pax 26, origen 56, estado 86, tiempo 58 + 6
+ * huecos de 6 px + 24 de padding = 398 px, y el resto es para el nombre.
+ *
+ * La columna TIEMPO va la última: es un dato que se mira de reojo (cuánto
+ * falta, cuánto se retrasa, cuánto lleva sentada), no uno que se lea en cada
+ * fila. El ancho extra que necesita se lo cede el plano, que se escala solo.
  */
 const LISTA_GRID =
-  "grid grid-cols-[50px_62px_minmax(0,1fr)_26px_56px_86px] gap-1.5 items-center";
+  "grid grid-cols-[50px_62px_minmax(0,1fr)_26px_56px_86px_58px] gap-1.5 items-center";
 
 function StatusDot({ estado }: { estado: EstadoReserva }) {
   return (
@@ -252,51 +259,76 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 }
 
 // Selector rápido compartido entre la fila de lista y la mesa del plano.
-// Header con info de mesa/reserva, "Nueva" (pre-asociada a la mesa), "Editar"
-// (abre la ficha completa) y 7 acciones rápidas.
+//
+// Reparto de la ventana, de arriba abajo:
+//   · Cabecera — mesa/zona y el CANDADO que saca la mesa del servicio.
+//   · Ficha de la reserva.
+//   · "Editar" + "Desplazar", los dos grandes y al mismo nivel: mover a
+//     alguien de mesa se hace tanto como abrir su ficha.
+//   · Estados de servicio: Confirmada · Sentada · Terminada · Liberada.
+//   · No show y Cancelada, anchos y aparte: son los dos finales que cierran
+//     la reserva sin que el cliente se haya sentado.
+//
+// Crear una reserva NO se hace desde aquí: para eso está el botón "Nuevo" de
+// la cabecera del módulo, que es el único sitio donde se dan de alta.
 function ReservaQuickPopover({
   mesa,
   reserva,
-  onNueva,
   onEditar,
   onCambiarEstado,
   onBloquearMesa,
   onDesplazarReserva,
+  desdeLista = false,
 }: {
   mesa: Mesa | null;
   reserva: Reserva | null;
-  onNueva: () => void;
   onEditar: () => void;
   onCambiarEstado: (id: string, estado: EstadoReserva) => void;
-  /** Bloquea la mesa para la fecha y turno en pantalla. */
-  onBloquearMesa: (m: Mesa) => void;
+  /**
+   * Bloquea para la fecha y turno en pantalla. `mesa` es la mesa concreta que
+   * se pulsó en el plano; desde la lista llega null y entonces se bloquean
+   * TODAS las mesas de la reserva.
+   */
+  onBloquearMesa: (m: Mesa | null, r: Reserva | null) => void;
   /** Abre el selector de mesa destino para mover la reserva. */
   onDesplazarReserva: (r: Reserva) => void;
+  /**
+   * Se ha abierto desde el LISTADO, no pulsando una mesa del plano. Aquí el
+   * usuario no ha señalado ninguna mesa en concreto, así que el candado
+   * bloquea todas las que tenga la reserva.
+   */
+  desdeLista?: boolean;
 }) {
-  type AccionRapida =
-    | { tipo: "estado"; key: string; estado: EstadoReserva; label: string }
-    | { tipo: "accion"; key: string; label: string; onClick: () => void; disabled?: boolean };
-
-  const acciones: AccionRapida[] = [
-    { tipo: "estado", key: "TERMINANDO", estado: "TERMINANDO", label: "Terminando" },
-    { tipo: "estado", key: "LIBERADA", estado: "LIBERADA", label: "Liberada" },
-    { tipo: "estado", key: "CANCELADA", estado: "CANCELADA", label: "Cancelada" },
-    { tipo: "estado", key: "NO_SHOW", estado: "NO_SHOW", label: "No show" },
-    {
-      tipo: "accion",
-      key: "BLOQUEAR",
-      label: "Bloquear",
-      onClick: () => { if (mesa) onBloquearMesa(mesa); },
-      disabled: !mesa,
-    },
-    {
-      tipo: "accion",
-      key: "DESPLAZAR",
-      label: "Desplazar",
-      onClick: () => { if (reserva) onDesplazarReserva(reserva); },
-      disabled: !reserva,
-    },
+  /**
+   * Estados de servicio, en el orden en que ocurren durante el pase. Los
+   * nombres salen de `ESTADO_RESERVA_LABELS` (WALK_IN se lee "Sentada" y
+   * TERMINANDO "Terminada"): el estado guardado sigue siendo el de siempre.
+   */
+  const ESTADOS_SERVICIO: EstadoReserva[] = [
+    "CONFIRMADA",
+    "WALK_IN",
+    "TERMINANDO",
+    "LIBERADA",
   ];
+
+  /** Los dos finales en los que el cliente no llega a comer. */
+  const ESTADOS_FIN: EstadoReserva[] = ["NO_SHOW", "CANCELADA"];
+
+
+  // Desde la lista no hay mesa señalada: el candado va sin mesa concreta y
+  // quien bloquea resuelve todas las de la reserva.
+  const mesaDelCandado = desdeLista ? null : mesa;
+
+  // Hay algo que bloquear siempre que se sepa qué mesa: la pulsada en el
+  // plano, o las que tenga asignadas la reserva abierta desde la lista. Una
+  // reserva sin mesa no se puede bloquear: no hay nada que sacar del servicio.
+  const puedeBloquear = mesaDelCandado != null
+    || (reserva?.mesaCodigo ?? "").trim().length > 0
+    || (reserva?.mesaId ?? "").length > 0;
+
+  const tituloCandado = mesaDelCandado
+    ? `Bloquear la mesa ${mesaDelCandado.codigo} en este turno`
+    : "Bloquear las mesas de esta reserva en este turno";
 
   return (
     <div className="space-y-2">
@@ -304,11 +336,24 @@ function ReservaQuickPopover({
         <h4 className="font-bold text-sm">
           {mesa ? `Mesa ${mesa.codigo}` : "Sin mesa asignada"}
         </h4>
-        {mesa && (
-          <Badge variant="outline" className="text-[10px]">
-            {zonaLabel(mesa.zona ? String(mesa.zona) : null)} · {mesa.capacidad}p
-          </Badge>
-        )}
+        <div className="flex items-center gap-1.5">
+          {mesa && (
+            <Badge variant="outline" className="text-[10px]">
+              {zonaLabel(mesa.zona ? String(mesa.zona) : null)} · {mesa.capacidad}p
+            </Badge>
+          )}
+          <Button
+            size="icon"
+            variant="outline"
+            className="h-7 w-7 shrink-0"
+            disabled={!puedeBloquear}
+            title={tituloCandado}
+            aria-label={tituloCandado}
+            onClick={() => onBloquearMesa(mesaDelCandado, reserva)}
+          >
+            <Lock className="h-3.5 w-3.5" />
+          </Button>
+        </div>
       </div>
       {reserva ? (
         <div className="border rounded-md px-2 py-1.5 space-y-0.5">
@@ -327,43 +372,122 @@ function ReservaQuickPopover({
       ) : (
         <div className="text-xs text-muted-foreground py-1">Mesa libre</div>
       )}
-      <div className="grid grid-cols-2 gap-1">
-        <Button size="sm" className="h-7 text-[11px]" onClick={onNueva}>
-          <Plus className="h-3 w-3 mr-1" />Nueva
-        </Button>
-        <Button
-          size="sm"
-          variant="outline"
-          className="h-7 text-[11px]"
-          disabled={!reserva}
-          onClick={onEditar}
-        >
-          Editar
-        </Button>
-      </div>
       {reserva && (
-        <div className="grid grid-cols-3 gap-1 pt-1 border-t">
-          {acciones.map((a) => (
-            <Button
-              key={a.key}
-              size="sm"
-              variant="outline"
-              className={cn(
-                "h-7 text-[10px] px-1.5 justify-center gap-1",
-                a.tipo === "estado" && reserva.estado === a.estado && "ring-1 ring-primary",
-              )}
-              disabled={a.tipo === "accion" && a.disabled}
-              onClick={() => {
-                if (a.tipo === "estado") onCambiarEstado(reserva.id, a.estado);
-                else a.onClick();
-              }}
-            >
-              {a.tipo === "estado" && <ReservaEstadoDot estado={a.estado} className="w-2 h-2" />}
-              <span className="truncate">{a.label}</span>
+        <>
+          {/* Las dos acciones que se usan a diario, del mismo tamaño: mover
+              una reserva de mesa pesa tanto como abrir su ficha. */}
+          <div className="grid grid-cols-2 gap-1.5">
+            <Button size="sm" variant="outline" className="h-9 text-xs" onClick={onEditar}>
+              Editar
             </Button>
-          ))}
-        </div>
+            <Button
+              size="sm"
+              className="h-9 text-xs"
+              onClick={() => onDesplazarReserva(reserva)}
+            >
+              <Move className="h-3.5 w-3.5 mr-1" />
+              Desplazar
+            </Button>
+          </div>
+          <div className="grid grid-cols-2 gap-1 pt-1 border-t">
+            {ESTADOS_SERVICIO.map((e) => (
+              <Button
+                key={e}
+                size="sm"
+                variant="outline"
+                className={cn(
+                  "h-7 text-[10px] px-1.5 justify-center gap-1",
+                  reserva.estado === e && "ring-1 ring-primary",
+                )}
+                onClick={() => onCambiarEstado(reserva.id, e)}
+              >
+                <ReservaEstadoDot estado={e} className="w-2 h-2" />
+                <span className="truncate">{ESTADO_RESERVA_LABELS[e]}</span>
+              </Button>
+            ))}
+          </div>
+          {/* No show y Cancelada ocupan el ancho entero: son las dos decisiones
+              que cierran la reserva y hay que poder darlas sin buscarlas. */}
+          <div className="grid grid-cols-2 gap-1.5">
+            {ESTADOS_FIN.map((e) => (
+              <Button
+                key={e}
+                size="sm"
+                variant="outline"
+                className={cn(
+                  "h-9 text-xs justify-center gap-1.5",
+                  reserva.estado === e && "ring-1 ring-primary",
+                )}
+                onClick={() => onCambiarEstado(reserva.id, e)}
+              >
+                <ReservaEstadoDot estado={e} className="w-2 h-2" />
+                <span className="truncate">{ESTADO_RESERVA_LABELS[e]}</span>
+              </Button>
+            ))}
+          </div>
+        </>
       )}
+    </div>
+  );
+}
+
+/**
+ * Contenido del popover de una mesa. Normalmente es una sola reserva, pero una
+ * misma mesa puede tener DOS en el mismo turno (doble servicio): entonces se
+ * apilan una debajo de otra, la mas temprana ARRIBA, para que el orden en el
+ * que van a llegar los clientes se lea de arriba abajo sin pensarlo.
+ *
+ * `reservas` llega ya ordenado por hora desde `getReservasMesa`.
+ */
+function MesaReservasPopover({
+  mesa,
+  reservas,
+  onEditar,
+  onCambiarEstado,
+  onBloquearMesa,
+  onDesplazarReserva,
+}: {
+  mesa: Mesa | null;
+  reservas: Reserva[];
+  onEditar: (r: Reserva) => void;
+  onCambiarEstado: (id: string, estado: EstadoReserva) => void;
+  onBloquearMesa: (m: Mesa | null, r: Reserva | null) => void;
+  onDesplazarReserva: (r: Reserva) => void;
+}) {
+  // Una sola reserva (o ninguna): el popover de siempre, sin nada alrededor.
+  if (reservas.length <= 1) {
+    return (
+      <ReservaQuickPopover
+        mesa={mesa}
+        reserva={reservas[0] ?? null}
+        onEditar={() => { if (reservas[0]) onEditar(reservas[0]); }}
+        onCambiarEstado={onCambiarEstado}
+        onBloquearMesa={onBloquearMesa}
+        onDesplazarReserva={onDesplazarReserva}
+      />
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+        {reservas.length} reservas en esta mesa
+      </p>
+      {reservas.map((r, i) => (
+        <div
+          key={r.id}
+          className={cn(i > 0 && "border-t pt-3")}
+        >
+          <ReservaQuickPopover
+            mesa={mesa}
+            reserva={r}
+            onEditar={() => onEditar(r)}
+            onCambiarEstado={onCambiarEstado}
+            onBloquearMesa={onBloquearMesa}
+            onDesplazarReserva={onDesplazarReserva}
+          />
+        </div>
+      ))}
     </div>
   );
 }
@@ -387,6 +511,9 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
     duracionMinutos?: number | null;
     notificarEmail?: boolean;
     codigoCupon?: string | null;
+    origen?: string | null;
+    /** El local aceptó el aviso y sienta igual en una mesa bloqueada. */
+    forzarMesaBloqueada?: boolean;
   }) => void;
 }) {
   const [form, setForm] = useState({
@@ -397,6 +524,10 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
     zona: (mesaPreseleccionada?.zona ?? "") as ZonaSala | "",
     mesaId: (mesaPreseleccionada?.id ?? "") as string,
     observaciones: "", esWalkIn: false,
+    // Un alta desde el back-office entra por teléfono salvo que digan otra
+    // cosa: es como llega la inmensa mayoría. En walk-in no se usa este valor
+    // (lo fija `emitirReserva`), pero se conserva por si vuelve a Cliente.
+    origen: "TELEFONO" as string,
     tipoCategoria: "gratis" as TipoReservaCategoria | "",
     garantiaImporte: "" as string,
     importePagado: "" as string,
@@ -428,6 +559,11 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
   const [aviso, setAviso] = useState<{
     choques: ChoqueReserva[];
     aforo: { tipo: "excede" | "insuficiente"; min: number; max: number } | null;
+    /**
+     * La mesa está bloqueada en este turno. No impide guardar —el local manda—
+     * pero no se pasa de aquí sin que alguien lo lea y lo acepte.
+     */
+    bloqueada: boolean;
     mesaCodigo: string;
     capacidad: number;
   } | null>(null);
@@ -871,6 +1007,9 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
       return;
     }
     const aforo = aforoMesa(mesa.id, form.comensales);
+    // 🔒 BLOQUEO — la mesa está fuera de servicio en este turno. Al local no se
+    // le prohíbe usarla, pero tiene que saberlo antes de sentar a nadie.
+    const bloqueada = getEstadoMesa(mesa) === "BLOQUEADA";
     let choques: ChoqueReserva[] = [];
     if (form.hora) {
       setComprobandoSolape(true);
@@ -883,8 +1022,8 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
       setComprobandoSolape(false);
       if (res.ok) choques = res.data;
     }
-    if (choques.length > 0 || aforo) {
-      setAviso({ choques, aforo, mesaCodigo: mesa.codigo, capacidad: mesa.capacidad });
+    if (choques.length > 0 || aforo || bloqueada) {
+      setAviso({ choques, aforo, bloqueada, mesaCodigo: mesa.codigo, capacidad: mesa.capacidad });
       return;
     }
     pedirConfirmacion();
@@ -1029,6 +1168,18 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
       })(),
       notificarEmail,
       codigoCupon: form.codigoCupon.trim() ? form.codigoCupon.trim().toUpperCase() : null,
+      // Walk-in siempre WALKIN, pase lo que pase en el selector: el cliente
+      // llegó andando. El servidor lo vuelve a forzar, aquí se manda coherente.
+      origen: form.esWalkIn ? "WALKIN" : (form.origen || null),
+      // Si la mesa elegida está bloqueada, se llega aquí solo después de haber
+      // leído y aceptado el aviso: el servidor necesita saberlo para dejar
+      // pasar la reserva en vez de rechazarla como hace con la web.
+      forzarMesaBloqueada: (() => {
+        const id = form.mesaId || mesaPreseleccionada?.id;
+        if (!id) return false;
+        const m = mesas.find((x) => x.id === id);
+        return m ? getEstadoMesa(m) === "BLOQUEADA" : false;
+      })(),
     });
   };
 
@@ -1412,6 +1563,34 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
             </p>
           )}
         </div>
+        {/* Origen: por dónde entró la reserva. Un alta manual nace como
+            "Teléfono", que es como llega la mayoría, pero se puede cambiar
+            porque también se apunta a quien escribe o pregunta en la puerta.
+            En walk-in no se pregunta: el cliente llegó andando y el origen es
+            Walk in, sin discusión — se enseña bloqueado para que quede claro
+            qué se va a guardar. */}
+        <div className="col-span-3">
+          <Label className="text-xs">Origen</Label>
+          {form.esWalkIn ? (
+            <Input
+              className="h-8 text-xs"
+              value={labelOrigen("WALKIN")}
+              readOnly
+              disabled
+              title="Las reservas walk-in siempre se registran con origen Walk in."
+            />
+          ) : (
+            <select
+              value={form.origen}
+              onChange={(e) => setForm((p) => ({ ...p, origen: e.target.value }))}
+              className="h-8 text-xs w-full rounded-md border border-input bg-background px-2"
+            >
+              {ORIGENES_ALTA_MANUAL.map((o) => (
+                <option key={o} value={o}>{labelOrigen(o)}</option>
+              ))}
+            </select>
+          )}
+        </div>
         {/* Las etiquetas se asignan desde la ficha de la reserva, una vez
             creada: ahí van agrupadas y admiten varias a la vez. */}
         <div className="col-span-3">
@@ -1658,11 +1837,17 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-amber-700 dark:text-amber-300">
               <AlertTriangle className="h-4 w-4" />
-              {aviso && aviso.choques.length > 0 && aviso.aforo
-                ? "Dos avisos en esta reserva"
-                : aviso?.aforo
-                  ? "El grupo no encaja en la mesa"
-                  : "Esta mesa ya está reservada"}
+              {(() => {
+                if (!aviso) return "";
+                const motivos =
+                  (aviso.choques.length > 0 ? 1 : 0) +
+                  (aviso.aforo ? 1 : 0) +
+                  (aviso.bloqueada ? 1 : 0);
+                if (motivos > 1) return "Varios avisos en esta reserva";
+                if (aviso.bloqueada) return "Esta mesa está bloqueada";
+                if (aviso.aforo) return "El grupo no encaja en la mesa";
+                return "Esta mesa ya está reservada";
+              })()}
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-3 text-xs">
@@ -1714,6 +1899,29 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
                   {aviso.aforo.tipo === "excede"
                     ? "Puede que no quepan cómodamente."
                     : "Estarás ocupando una mesa mayor de la necesaria."}
+                </p>
+              </div>
+            )}
+
+            {/* 🔒 MOTIVO 3: la mesa está bloqueada en este turno. El bloqueo
+                cierra la mesa a la web y a la asignación automática, pero
+                aquí decide el local: se avisa y se deja seguir. */}
+            {aviso?.bloqueada && (
+              <div className="space-y-2">
+                <p className="flex items-center gap-1.5 font-semibold text-amber-700 dark:text-amber-300">
+                  <Lock className="h-3.5 w-3.5 shrink-0" />
+                  Esta mesa está bloqueada
+                </p>
+                <div className="rounded-md border border-amber-500/40 bg-amber-500/5 px-3 py-2">
+                  <div className="font-semibold">Mesa {aviso.mesaCodigo}</div>
+                  <div className="text-muted-foreground">
+                    Bloqueada el {form.fecha} en{" "}
+                    {form.turno === "COMIDA" ? "comida" : "cena"}.
+                  </div>
+                </div>
+                <p className="text-muted-foreground">
+                  Nadie puede reservarla desde la web mientras siga bloqueada. Si
+                  aun así la necesitas, puedes usarla: la decisión es del local.
                 </p>
               </div>
             )}
@@ -2446,10 +2654,10 @@ function PlanoCanvas({
   selectedMesaId,
   selectedReservaMesaId,
   mesasResaltadasIds,
+  onHoverMesa,
   onSelectMesa,
   getEstadoMesa,
   getReservasMesa,
-  onNueva,
   onEditar,
   onCambiarEstado,
   onBloquearMesa,
@@ -2474,13 +2682,18 @@ function PlanoCanvas({
    * "M1+M2"): se resaltan todas a la vez.
    */
   mesasResaltadasIds: Set<string>;
+  /**
+   * Camino inverso al anterior: avisa de sobre que mesa esta el raton para que
+   * el listado encienda su reserva. `null` al salir de la mesa.
+   */
+  onHoverMesa?: (mesaId: string | null) => void;
   onSelectMesa: (m: Mesa | null) => void;
   getEstadoMesa: (m: Mesa) => string;
   getReservasMesa: (mesaId: string) => Reserva[];
-  onNueva: (m: Mesa) => void;
   onEditar: (r: Reserva) => void;
   onCambiarEstado: (id: string, e: EstadoReserva) => void;
-  onBloquearMesa: (m: Mesa) => void;
+  /** Candado del popover: mesa concreta del plano, o null desde la lista. */
+  onBloquearMesa: (m: Mesa | null, r: Reserva | null) => void;
   onDesplazarReserva: (r: Reserva) => void;
   /** Si la mesa está BLOQUEADA y se pulsa, levanta el bloqueo solo para (fecha, turno). */
   onQuitarBloqueoMesa?: (m: Mesa) => void;
@@ -2678,10 +2891,17 @@ function PlanoCanvas({
           const c = clampPos(pos.x, pos.y, dims.w, dims.h);
           const estado = getEstadoMesa(m);
           const rs = getReservasMesa(m.id);
+          // `getReservasMesa` ya devuelve las reservas ORDENADAS por hora, asi
+          // que la primera es la que llega antes: es la que se enseña sobre la
+          // mesa cuando hay mas de una en el mismo turno.
           const firstR = rs[0];
           const isWalkIn = firstR?.estado === "WALK_IN";
           const isLibre = estado === "LIBRE";
           const radius = forma === "redonda" ? 9999 : 6;
+          // Dos (o mas) reservas en la misma mesa y turno: la mesa se parte con
+          // una linea diagonal para que se vea de un vistazo que ahi hay doble
+          // servicio, sin tener que abrirla.
+          const mesaCompartida = rs.length > 1;
           // En modo mover, la mesa de origen no es un destino válido y las
           // bloqueadas tampoco: se apagan para que se vea dónde SÍ se puede soltar.
           const esOrigenMover = moviendo && reservaMoviendo?.mesaId === m.id;
@@ -2701,6 +2921,8 @@ function PlanoCanvas({
                     moviendo && !destinoInvalido && "cursor-copy ring-2 ring-sky-500 ring-offset-1 hover:ring-4 hover:scale-105 z-10",
                     destinoInvalido && "opacity-40 cursor-not-allowed",
                   )}
+                  onMouseEnter={() => onHoverMesa?.(m.id)}
+                  onMouseLeave={() => onHoverMesa?.(null)}
                   title={
                     moviendo
                       ? esOrigenMover
@@ -2730,9 +2952,32 @@ function PlanoCanvas({
                     onSelectMesa(m);
                   }}
                 >
+                  {/* Mesa con dos reservas en el mismo turno: linea diagonal de
+                      esquina a esquina. Va detras del texto (sin puntero) y en
+                      el color del propio texto, asi se ve igual sobre la mesa
+                      verde ocupada que sobre el pastel de una mesa libre. */}
+                  {mesaCompartida && (
+                    <svg
+                      className="absolute inset-0 h-full w-full pointer-events-none"
+                      viewBox="0 0 100 100"
+                      preserveAspectRatio="none"
+                      aria-hidden="true"
+                    >
+                      <line
+                        x1="0"
+                        y1="100"
+                        x2="100"
+                        y2="0"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        vectorEffect="non-scaling-stroke"
+                        opacity="0.7"
+                      />
+                    </svg>
+                  )}
                   {/* Contra-rotación para mantener el texto legible aunque la mesa esté girada. */}
                   <div
-                    className="flex flex-col items-center justify-center leading-tight pointer-events-none"
+                    className="relative flex flex-col items-center justify-center leading-tight pointer-events-none"
                     style={pos.rotation ? { transform: `rotate(${-pos.rotation}deg)` } : undefined}
                   >
                     <span className="leading-none">{m.codigo}</span>
@@ -2769,11 +3014,10 @@ function PlanoCanvas({
                     </Button>
                   </div>
                 ) : (
-                  <ReservaQuickPopover
+                  <MesaReservasPopover
                     mesa={m}
-                    reserva={rs[0] ?? null}
-                    onNueva={() => onNueva(m)}
-                    onEditar={() => { if (rs[0]) onEditar(rs[0]); }}
+                    reservas={rs}
+                    onEditar={onEditar}
                     onCambiarEstado={onCambiarEstado}
                     onBloquearMesa={onBloquearMesa}
                     onDesplazarReserva={onDesplazarReserva}
@@ -2881,6 +3125,17 @@ export function ReservasView() {
    * sienta esa gente sin tener que hacer clic. Al quitar el raton se apaga todo.
    */
   const [reservaHoverId, setReservaHoverId] = useState<string | null>(null);
+  /**
+   * Mesa sobre la que esta el raton en el plano. Es el camino INVERSO al de
+   * `reservaHoverId`: al pasar por una mesa con reserva se enciende en rojo su
+   * fila en el listado, para encontrarla sin leer la lista entera.
+   */
+  const [mesaHoverId, setMesaHoverId] = useState<string | null>(null);
+  /**
+   * clienteId → veces que ha reservado en esta empresa. Alimenta el recuadro
+   * azul junto al nombre, que solo sale a partir de la segunda reserva.
+   */
+  const [reservasPorCliente, setReservasPorCliente] = useState<Record<string, number>>({});
   const [guardandoDuracion, setGuardandoDuracion] = useState(false);
   // Fecha y hora editables desde la ficha. Cambiar la hora recalcula el turno
   // en el servidor (y con el, en que mapa sale la reserva), asi que aqui solo
@@ -2899,8 +3154,13 @@ export function ReservasView() {
     { mensaje: string; forzar?: () => void } | null
   >(null);
   /** Confirmación de "Bloquear" una mesa para el día y turno en pantalla. */
+  /**
+   * Confirmación del candado. Se guarda una LISTA de mesas porque desde el
+   * listado no hay mesa señalada y se bloquean todas las de la reserva
+   * (una unión "M1+M2" son dos mesas físicas).
+   */
   const [confirmBloqueo, setConfirmBloqueo] = useState<
-    { mesa: Mesa; reservasActivas: number } | null
+    { mesas: Mesa[]; reservasActivas: number } | null
   >(null);
   const [guardandoBloqueo, setGuardandoBloqueo] = useState(false);
   /**
@@ -3251,6 +3511,38 @@ export function ReservasView() {
     loadReservas(fecha);
   }, [fecha, loadReservas]);
 
+  /**
+   * Veces que ha reservado cada cliente del día, para el recuadro azul del
+   * listado. Se pide en lote (una consulta por día, no una por fila) y solo
+   * para los clientes que están en pantalla.
+   */
+  const clienteIdsDelDia = useMemo(() => {
+    const ids = new Set<string>();
+    for (const r of reservas) {
+      if (r.fecha === fecha && r.clienteId) ids.add(r.clienteId);
+    }
+    return Array.from(ids).sort();
+  }, [reservas, fecha]);
+
+  // Clave estable: sin esto el efecto se relanzaría en cada render porque el
+  // array es nuevo cada vez aunque los ids sean los mismos.
+  const clienteIdsKey = clienteIdsDelDia.join(",");
+
+  useEffect(() => {
+    let cancelado = false;
+    if (clienteIdsKey === "") {
+      setReservasPorCliente({});
+      return;
+    }
+    (async () => {
+      const res = await contarReservasPorCliente(clienteIdsKey.split(","));
+      if (!cancelado && res.ok) setReservasPorCliente(res.data);
+    })();
+    return () => {
+      cancelado = true;
+    };
+  }, [clienteIdsKey]);
+
   // Sincronización en vivo: si otra persona crea, mueve o cancela una reserva,
   // el plano y el listado se actualizan solos. Sala es la pantalla donde más
   // manos trabajan a la vez y donde un dato viejo se paga sentando mal una mesa.
@@ -3363,12 +3655,26 @@ export function ReservasView() {
     })();
   }, []);
 
-  // Tick para reevaluar el parpadeo (se anima por CSS; solo refrescamos la
-  // clasificación cada 30 s para mover reservas entre franjas 0-15 / 15-30).
+  // Tick para reevaluar el parpadeo y la columna TIEMPO. El contador se
+  // muestra en horas y minutos (sin segundos), así que refrescar cada 30 s
+  // basta para que el minuto cambie a tiempo sin repintar la lista sin parar.
   useEffect(() => {
     const id = setInterval(() => setTickAhora(Date.now()), 30_000);
     return () => clearInterval(id);
   }, []);
+
+  /**
+   * "Ahora" en la zona de la EMPRESA, no en la del ordenador: la hora de una
+   * reserva es la del restaurante, y el puesto de sala puede estar en otra
+   * zona. Se recalcula con cada tick, y de ahí cuelga toda la columna TIEMPO.
+   */
+  const ahoraEmpresa = useMemo(
+    // `tickAhora` entra de verdad en el calculo (es el instante que se lee),
+    // asi que la dependencia es real: cada tick devuelve un "ahora" nuevo y
+    // con el se repinta la columna TIEMPO.
+    () => ahoraEnZona(empresaActual.zonaHoraria, new Date(tickAhora)),
+    [empresaActual.zonaHoraria, tickAhora],
+  );
 
   /**
    * Devuelve clase Tailwind con animación si la reserva entra en alguna de las
@@ -3590,26 +3896,67 @@ export function ReservasView() {
    * el codigo por "+" porque una union ("M1+M2") ocupa DOS mesas fisicas y las
    * dos tienen que encenderse: `mesaId` solo guarda la primera.
    */
+  /**
+   * TODAS las mesas de una reserva. Una union se guarda como "M1+M2": `mesaId`
+   * solo apunta a la primera, asi que hay que partir el codigo para no dejarse
+   * la mitad del grupo fuera (lo usan el resaltado del plano y el candado).
+   */
+  const mesasIdsDeReserva = useCallback(
+    (r: Reserva | null): Set<string> => {
+      const ids = new Set<string>();
+      if (!r) return ids;
+      const codigos = (r.mesaCodigo ?? "")
+        .split("+")
+        .map((c) => c.trim().toUpperCase())
+        .filter(Boolean);
+      for (const c of codigos) {
+        const id = mesaIdPorCodigo.get(c);
+        if (id) ids.add(id);
+      }
+      // Sin codigo (o sin correspondencia) queda el id ya resuelto de la reserva.
+      if (ids.size === 0 && r.mesaId) ids.add(r.mesaId);
+      return ids;
+    },
+    [mesaIdPorCodigo],
+  );
+
+  /** Igual que el anterior, pero devolviendo las mesas del catalogo. */
+  const mesasDeReserva = useCallback(
+    (r: Reserva | null): Mesa[] => {
+      const ids = mesasIdsDeReserva(r);
+      if (ids.size === 0) return [];
+      return mesas.filter((m) => ids.has(m.id));
+    },
+    [mesasIdsDeReserva, mesas],
+  );
+
   const mesasResaltadasIds = useMemo(() => {
     if (!reservaHoverId) return new Set<string>();
     const r = reservasResueltas.find((x) => x.id === reservaHoverId);
-    if (!r) return new Set<string>();
-    const ids = new Set<string>();
-    const codigos = (r.mesaCodigo ?? "")
-      .split("+")
-      .map((c) => c.trim().toUpperCase())
-      .filter(Boolean);
-    for (const c of codigos) {
-      const id = mesaIdPorCodigo.get(c);
-      if (id) ids.add(id);
-    }
-    // Sin codigo (o sin correspondencia) queda el id ya resuelto de la reserva.
-    if (ids.size === 0 && r.mesaId) ids.add(r.mesaId);
-    return ids;
-  }, [reservaHoverId, reservasResueltas, mesaIdPorCodigo]);
+    return mesasIdsDeReserva(r ?? null);
+  }, [reservaHoverId, reservasResueltas, mesasIdsDeReserva]);
 
+  /**
+   * Camino INVERSO: reservas que se encienden en el listado porque el raton
+   * esta encima de su mesa en el plano. Se reutiliza `mesasIdsDeReserva` para
+   * que una union ("M1+M2") encienda su fila pasando por CUALQUIERA de las dos
+   * mesas, no solo por la primera.
+   */
   const reservasDia = useMemo(() => reservasResueltas.filter(r => r.fecha === fecha), [reservasResueltas, fecha]);
   const reservasTurno = useMemo(() => reservasDia.filter(r => r.turno === turno), [reservasDia, turno]);
+
+  const reservasResaltadasIds = useMemo(() => {
+    const ids = new Set<string>();
+    if (!mesaHoverId) return ids;
+    // Solo el turno que hay en pantalla: es lo unico que enseña el listado, y
+    // asi el resaltado no puede encender la reserva de otro dia o turno que
+    // por casualidad ocupe esa misma mesa.
+    for (const r of reservasTurno) {
+      if (ESTADOS_NO_OCUPANTES.includes(r.estado)) continue;
+      if (mesasIdsDeReserva(r).has(mesaHoverId)) ids.add(r.id);
+    }
+    return ids;
+  }, [mesaHoverId, reservasTurno, mesasIdsDeReserva]);
   const reservasFiltradas = useMemo(() => {
     return reservasTurno.filter(r => {
       const q = busqueda.toLowerCase();
@@ -3709,14 +4056,28 @@ export function ReservasView() {
   const reservasActivasPorMesa = useMemo(() => {
     const map = new Map<string, Reserva[]>();
     for (const r of reservasTurno) {
-      if (!r.mesaId) continue;
       if (ESTADOS_NO_OCUPANTES.includes(r.estado)) continue;
-      const arr = map.get(r.mesaId);
-      if (arr) arr.push(r);
-      else map.set(r.mesaId, [r]);
+      // Se indexa por TODAS las mesas de la reserva, no solo por `mesaId`: en
+      // una union ("M1+M2") la segunda mesa tambien esta ocupada y tiene que
+      // saber quien se sienta en ella.
+      for (const mesaId of mesasIdsDeReserva(r)) {
+        const arr = map.get(mesaId);
+        if (arr) arr.push(r);
+        else map.set(mesaId, [r]);
+      }
+    }
+    // Orden CRONOLOGICO dentro de cada mesa: cuando dos reservas comparten
+    // mesa y turno, la mesa enseña la que llega antes y el popover las lista
+    // de arriba abajo por hora. Todo lo que lee este mapa cuenta con ese orden.
+    for (const arr of map.values()) {
+      arr.sort((a, b) => {
+        const h = a.hora.localeCompare(b.hora);
+        if (h !== 0) return h;
+        return ESTADO_ORDEN_PRIORIDAD[a.estado] - ESTADO_ORDEN_PRIORIDAD[b.estado];
+      });
     }
     return map;
-  }, [reservasTurno]);
+  }, [reservasTurno, mesasIdsDeReserva]);
 
   const getMesaEstadoTurno = (m: Mesa): string => {
     if (mesasBloqueadasIds.has(m.id)) return "BLOQUEADA";
@@ -3728,6 +4089,21 @@ export function ReservasView() {
 
   const getReservasMesa = (mesaId: string): Reserva[] =>
     reservasActivasPorMesa.get(mesaId) ?? [];
+
+  /**
+   * Reservas que COMPARTEN mesa con otra en el mismo turno (doble servicio).
+   * En el plano esa mesa se parte con una diagonal; aqui se marcan sus dos
+   * reservas con el recuadro rojo del listado, para que al leer la lista se
+   * vea que esas dos van a la misma mesa y en que orden llegan.
+   */
+  const reservasCompartenMesaIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const rs of reservasActivasPorMesa.values()) {
+      if (rs.length < 2) continue;
+      for (const r of rs) ids.add(r.id);
+    }
+    return ids;
+  }, [reservasActivasPorMesa]);
 
   /**
    * Aplica el cambio de estado. `notificarCliente` decide si sale el correo:
@@ -4053,13 +4429,6 @@ export function ReservasView() {
     setShowEditorMesas(true);
   };
 
-  // "Nueva" desde el popover de mesa: deja la mesa preseleccionada y abre el
-  // formulario de Nueva reserva.
-  const abrirNuevaConMesa = (m: Mesa) => {
-    setSelectedMesa(m);
-    setShowNueva(true);
-  };
-
   // "Editar" desde el popover: abre la ficha completa de la reserva.
   const abrirDetalleReserva = (r: Reserva) => {
     setSelectedReserva(r);
@@ -4069,17 +4438,33 @@ export function ReservasView() {
   // "Bloquear": deja la mesa fuera de juego solo para el día y turno que hay en
   // pantalla (bloqueo puntual, no recurrente). Si la mesa tiene reservas activas
   // se pide confirmación antes, porque bloquearla la saca del servicio.
-  const pedirBloqueoMesa = (m: Mesa) => {
-    const activas = reservasActivasPorMesa.get(m.id) ?? [];
-    setConfirmBloqueo({ mesa: m, reservasActivas: activas.length });
+  const pedirBloqueoMesa = (m: Mesa | null, r: Reserva | null) => {
+    // Mesa pulsada en el plano → solo esa. Sin mesa (viene del listado) → todas
+    // las que ocupe la reserva, que es lo que el usuario ve como "su sitio".
+    const objetivo = m ? [m] : mesasDeReserva(r);
+    if (objetivo.length === 0) {
+      toast.error("Esta reserva no tiene mesa asignada que bloquear.");
+      return;
+    }
+    const ids = new Set(objetivo.map((x) => x.id));
+    const activas = new Set<string>();
+    for (const id of ids) {
+      for (const res of reservasActivasPorMesa.get(id) ?? []) activas.add(res.id);
+    }
+    setConfirmBloqueo({ mesas: objetivo, reservasActivas: activas.size });
   };
 
-  const bloquearMesaHoy = useCallback(
-    async (m: Mesa) => {
+  /**
+   * Aplica el bloqueo SOLO al turno que hay en pantalla y solo a esta fecha:
+   * bloquear la comida no deja la mesa muerta por la noche.
+   */
+  const bloquearMesasHoy = useCallback(
+    async (objetivo: Mesa[]) => {
       if (!localId) {
         toast.error("Selecciona un local antes de bloquear la mesa.");
         return;
       }
+      if (objetivo.length === 0) return;
       const turnoBloqueo: TurnoRegla = turno === "COMIDA" ? "COMIDA" : "CENA";
       setGuardandoBloqueo(true);
       const res = await createBloqueo({
@@ -4087,7 +4472,7 @@ export function ReservasView() {
         vigencia: { modo: "fechas", fechas: [fecha] },
         turno: turnoBloqueo,
         zonaIds: [],
-        mesaIds: [m.id],
+        mesaIds: objetivo.map((m) => m.id),
         motivo: "Bloqueada desde el plano de reservas",
       });
       setGuardandoBloqueo(false);
@@ -4095,8 +4480,12 @@ export function ReservasView() {
         toast.error(res.error ?? "No se pudo bloquear la mesa");
         return;
       }
+      const codigos = objetivo.map((m) => m.codigo).join(", ");
+      const nombreTurno = turnoBloqueo === "COMIDA" ? "comida" : "cena";
       toast.success(
-        `Mesa ${m.codigo} bloqueada para el ${fecha} (${turnoBloqueo === "COMIDA" ? "comida" : "cena"})`,
+        objetivo.length === 1
+          ? `Mesa ${codigos} bloqueada para el ${fecha} (${nombreTurno})`
+          : `Mesas ${codigos} bloqueadas para el ${fecha} (${nombreTurno})`,
       );
       setConfirmBloqueo(null);
       setBloqueosRefresh((n) => n + 1);
@@ -4318,6 +4707,10 @@ export function ReservasView() {
                     importePagado: r.importePagado ?? null,
                     duracionMinutos: r.duracionMinutos ?? null,
                     codigoCupon: r.codigoCupon ?? null,
+                    origen: r.origen ?? null,
+                    // El formulario ya enseñó el aviso de mesa bloqueada y
+                    // alguien lo aceptó: el servidor deja pasar la reserva.
+                    forzarMesaBloqueada: r.forzarMesaBloqueada ?? false,
                   });
                   setSelectedMesa(null);
                   if (res.ok) {
@@ -4565,11 +4958,11 @@ export function ReservasView() {
         {panelOculto !== "lista" && (
         <div className={cn(
           "border-r flex flex-col bg-card overflow-hidden",
-          // 560 px (antes 460): el nombre y los apellidos del cliente no se
-          // leian enteros y es el dato por el que se busca a la gente en sala.
-          // Lo que crece la lista lo cede el plano, que aguanta bien menos
-          // ancho porque se escala solo.
-          panelOculto === "ninguno" ? "w-[560px] shrink-0" : "flex-1",
+          // 620 px (antes 560): la columna TIEMPO necesita sitio y no puede
+          // comerselo el nombre, que es el dato por el que se busca a la gente
+          // en sala. Lo que crece la lista lo cede el plano, que aguanta bien
+          // menos ancho porque se escala solo al espacio que le queda.
+          panelOculto === "ninguno" ? "w-[620px] shrink-0" : "flex-1",
         )}>
           {(origenesPresentes.length > 0 || filtroOrigen !== "TODOS") && (
             <div className="px-3 py-1.5 border-b flex items-center gap-1.5 text-[10px]">
@@ -4594,6 +4987,7 @@ export function ReservasView() {
             <span className="truncate text-center">Pax</span>
             <span className="truncate">Origen</span>
             <span className="truncate">Estado</span>
+            <span className="truncate text-center">Tiempo</span>
           </div>
           <div className="flex-1 overflow-y-auto">
             {reservasFiltradas.length === 0 && <p className="text-xs text-muted-foreground text-center py-8">Sin reservas para este turno</p>}
@@ -4618,8 +5012,18 @@ export function ReservasView() {
                         r.estado === "LISTA_ESPERA" &&
                           "bg-sky-500/10 hover:bg-sky-500/15",
                         // El mismo recuadro rojo que marca la seleccion sirve
-                        // para el hover: fila y mesa se encienden a la vez.
-                        (selectedReserva?.id === r.id || reservaHoverId === r.id) &&
+                        // para el hover, y funciona en los DOS sentidos: con el
+                        // raton en la fila se enciende su mesa en el plano, y
+                        // con el raton en la mesa se enciende esta fila. Asi se
+                        // localiza el equivalente sin buscarlo a ojo.
+                        // Dos reservas en la misma mesa y turno: las dos van
+                        // recuadradas en rojo, igual que la diagonal las marca
+                        // en el plano. Es un aviso permanente, no un hover.
+                        reservasCompartenMesaIds.has(r.id) &&
+                          "ring-2 ring-red-500 ring-inset",
+                        (selectedReserva?.id === r.id ||
+                          reservaHoverId === r.id ||
+                          reservasResaltadasIds.has(r.id)) &&
                           "ring-2 ring-red-500 ring-inset bg-red-500/5",
                         blink,
                       )}
@@ -4664,6 +5068,12 @@ export function ReservasView() {
                           >
                             {r.cliente || "WALK IN"} {r.apellidos}
                           </span>
+                          {/* Veces que ha reservado: solo a partir de la
+                              segunda, para que la gente nueva no lleve un "1"
+                              que no dice nada. */}
+                          <ClienteReservasBadge
+                            total={r.clienteId ? reservasPorCliente[r.clienteId] : undefined}
+                          />
                           {/* El chip "Cupón <CODIGO>" se pinta dentro de <ReservaFlagsChips />. */}
                           <ReservaFlagsChips reserva={r} className="shrink-0" />
                         </span>
@@ -4685,13 +5095,21 @@ export function ReservasView() {
                         {origenLabel(r.origen)}
                       </span>
                       <StatusDot estado={r.estado} />
+                      {/* TIEMPO: cuenta atrás (verde), retraso (rojo),
+                          ocupación desde la hora de la reserva (azul) o
+                          exceso sobre el tiempo de mesa (rojo con icono). */}
+                      <ReservaTiempoCelda
+                        reserva={r}
+                        ahora={ahoraEmpresa}
+                        duracionEmpresaMin={cfgReservas?.duracionReservaMin}
+                      />
                     </button>
                   </PopoverTrigger>
                   <PopoverContent className="w-72 p-3" side="right" align="start">
                     <ReservaQuickPopover
                       mesa={mesa}
                       reserva={r}
-                      onNueva={() => { if (mesa) abrirNuevaConMesa(mesa); else { setSelectedMesa(null); setShowNueva(true); } }}
+                      desdeLista
                       onEditar={() => abrirDetalleReserva(r)}
                       onCambiarEstado={cambiarEstadoReserva}
                       onBloquearMesa={pedirBloqueoMesa}
@@ -4798,10 +5216,10 @@ export function ReservasView() {
               selectedMesaId={selectedMesa?.id ?? null}
               selectedReservaMesaId={selectedReserva?.mesaId ?? null}
               mesasResaltadasIds={mesasResaltadasIds}
+              onHoverMesa={setMesaHoverId}
               onSelectMesa={handleSelectMesa}
               getEstadoMesa={getMesaEstadoTurno}
               getReservasMesa={getReservasMesa}
-              onNueva={abrirNuevaConMesa}
               onEditar={abrirDetalleReserva}
               onCambiarEstado={cambiarEstadoReserva}
               onBloquearMesa={pedirBloqueoMesa}
@@ -4867,10 +5285,15 @@ export function ReservasView() {
                         <div className="grid gap-2" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(96px, 1fr))" }}>
                           {mesasZona.map((m) => {
                             const estado = getMesaEstadoTurno(m);
+                            // Ya vienen ordenadas por hora: la primera es la
+                            // que llega antes y es la que se enseña en la mesa.
                             const rs = getReservasMesa(m.id);
                             const firstR = rs[0];
                             const isWalkIn = firstR?.estado === "WALK_IN";
                             const isLibre = estado === "LIBRE";
+                            // Doble servicio en la misma mesa y turno: se parte
+                            // con una diagonal, igual que en el plano.
+                            const mesaCompartida = rs.length > 1;
                             // Mismo modo mover que en el plano: con una reserva
                             // "en la mano", el clic elige mesa destino.
                             const moviendoAqui = reservaADesplazar != null;
@@ -4881,8 +5304,10 @@ export function ReservasView() {
                               <Popover key={m.id}>
                                 <PopoverTrigger asChild>
                                   <button
+                                    onMouseEnter={() => setMesaHoverId(m.id)}
+                                    onMouseLeave={() => setMesaHoverId(null)}
                                     className={cn(
-                                      "h-20 rounded-md flex flex-col items-center justify-center text-[11px] font-bold shadow-sm border-2 transition-all cursor-pointer px-1",
+                                      "relative overflow-hidden h-20 rounded-md flex flex-col items-center justify-center text-[11px] font-bold shadow-sm border-2 transition-all cursor-pointer px-1",
                                       mesaBg[estado] ?? "",
                                       isLibre ? "text-foreground border-foreground/40" : "border-white/10",
                                       (selectedReserva?.mesaId === m.id ||
@@ -4902,23 +5327,41 @@ export function ReservasView() {
                                       handleSelectMesa(m);
                                     }}
                                   >
-                                    <span className="leading-none">{m.codigo}</span>
-                                    <span className={cn("text-[9px] font-normal mt-0.5", isLibre ? "text-foreground/70" : "opacity-80")}>
+                                    {mesaCompartida && (
+                                      <svg
+                                        className="absolute inset-0 h-full w-full pointer-events-none"
+                                        viewBox="0 0 100 100"
+                                        preserveAspectRatio="none"
+                                        aria-hidden="true"
+                                      >
+                                        <line
+                                          x1="0"
+                                          y1="100"
+                                          x2="100"
+                                          y2="0"
+                                          stroke="currentColor"
+                                          strokeWidth="2"
+                                          vectorEffect="non-scaling-stroke"
+                                          opacity="0.7"
+                                        />
+                                      </svg>
+                                    )}
+                                    <span className="relative leading-none">{m.codigo}</span>
+                                    <span className={cn("relative text-[9px] font-normal mt-0.5", isLibre ? "text-foreground/70" : "opacity-80")}>
                                       ({m.capacidad}p)
                                     </span>
                                     {firstR && (
-                                      <span className={cn("text-[9px] font-normal mt-1 truncate max-w-full", isLibre ? "text-foreground/80" : "opacity-90")}>
+                                      <span className={cn("relative text-[9px] font-normal mt-1 truncate max-w-full", isLibre ? "text-foreground/80" : "opacity-90")}>
                                         {firstR.hora} {isWalkIn ? "WALK IN" : firstR.cliente}
                                       </span>
                                     )}
                                   </button>
                                 </PopoverTrigger>
                                 <PopoverContent className="w-72 p-3">
-                                  <ReservaQuickPopover
+                                  <MesaReservasPopover
                                     mesa={m}
-                                    reserva={firstR ?? null}
-                                    onNueva={() => abrirNuevaConMesa(m)}
-                                    onEditar={() => { if (firstR) abrirDetalleReserva(firstR); }}
+                                    reservas={rs}
+                                    onEditar={abrirDetalleReserva}
                                     onCambiarEstado={cambiarEstadoReserva}
                                     onBloquearMesa={pedirBloqueoMesa}
                                     onDesplazarReserva={abrirDesplazar}
@@ -5550,24 +5993,39 @@ export function ReservasView() {
         <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle>
-              {confirmBloqueo ? `Bloquear mesa ${confirmBloqueo.mesa.codigo}` : ""}
+              {confirmBloqueo
+                ? confirmBloqueo.mesas.length === 1
+                  ? `Bloquear mesa ${confirmBloqueo.mesas[0].codigo}`
+                  : `Bloquear ${confirmBloqueo.mesas.length} mesas`
+                : ""}
             </DialogTitle>
           </DialogHeader>
           {confirmBloqueo && (
             <div className="space-y-2 text-xs">
+              {confirmBloqueo.mesas.length > 1 && (
+                <p>
+                  Se bloquean todas las mesas de la reserva:{" "}
+                  <span className="font-medium">
+                    {confirmBloqueo.mesas.map((m) => m.codigo).join(", ")}
+                  </span>
+                  .
+                </p>
+              )}
               <p className="text-muted-foreground">
-                La mesa queda fuera de servicio el{" "}
+                {confirmBloqueo.mesas.length === 1 ? "La mesa queda" : "Las mesas quedan"}{" "}
+                fuera de servicio el{" "}
                 <span className="font-medium text-foreground">{fecha}</span> en{" "}
                 <span className="font-medium text-foreground">
                   {turno === "COMIDA" ? "comida" : "cena"}
                 </span>
-                . Los demás días no se tocan.
+                . Los demás turnos y días no se tocan.
               </p>
               {confirmBloqueo.reservasActivas > 0 && (
                 <div className="rounded-md border border-amber-500/40 bg-amber-500/5 px-3 py-2 flex gap-2">
                   <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-600" />
                   <span>
-                    Esta mesa tiene {confirmBloqueo.reservasActivas}{" "}
+                    {confirmBloqueo.mesas.length === 1 ? "Esta mesa tiene" : "Estas mesas tienen"}{" "}
+                    {confirmBloqueo.reservasActivas}{" "}
                     {confirmBloqueo.reservasActivas === 1 ? "reserva" : "reservas"} en este
                     turno. Desplázalas antes o quedarán sobre una mesa bloqueada.
                   </span>
@@ -5584,7 +6042,7 @@ export function ReservasView() {
                 <Button
                   size="sm"
                   disabled={guardandoBloqueo}
-                  onClick={() => bloquearMesaHoy(confirmBloqueo.mesa)}
+                  onClick={() => bloquearMesasHoy(confirmBloqueo.mesas)}
                 >
                   Bloquear
                 </Button>

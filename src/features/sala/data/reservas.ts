@@ -1,3 +1,5 @@
+import { labelOrigen, normalizarOrigen } from "@/features/sala/data/origenes";
+
 export type EstadoMesa = "LIBRE" | "OCUPADA" | "RESERVADA" | "BLOQUEADA";
 
 /**
@@ -721,16 +723,11 @@ export const SAMPLE_LISTA_ESPERA: ListaEspera[] = [
  * por su cuenta, la misma reserva sale con dos nombres distintos.
  */
 export function origenLabel(origen: string | null | undefined): string {
-  if (!origen) return "Manual";
-  // Todo lo que entra por el motor de reservas de la web se lee igual: "Web".
-  // Da igual que venga del enlace pelado o de un enlace de campaña con su
-  // palabra clave — el canal es el mismo y en sala se pregunta por el canal.
-  const clave = origen.toUpperCase();
-  if (clave === "RESERVA_WEB" || clave === "PORTAL_PROPIO" || clave === "WEB") {
-    return "Web";
-  }
-  const limpio = origen.replace(/_/g, " ").toLowerCase();
-  return limpio.charAt(0).toUpperCase() + limpio.slice(1);
+  // Delega en el catálogo de orígenes para que el listado de sala y la
+  // analítica rotulen el mismo canal igual. Antes formateaba por su cuenta y
+  // los orígenes con tilde salían con dos nombres ("Telefono" aquí,
+  // "Teléfono" en la analítica) según la pantalla.
+  return labelOrigen(normalizarOrigen(origen));
 }
 
 /** Milisegundos que tiene un día entero. */
