@@ -94,6 +94,10 @@
     {
       "path": "/api/cron/camaras-retencion",
       "schedule": "30 2 * * *"
+    },
+    {
+      "path": "/api/cron/reservas-cobros-reintento",
+      "schedule": "0 * * * *"
     }
   ]
 }
