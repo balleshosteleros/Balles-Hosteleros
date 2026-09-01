@@ -41,6 +41,7 @@ import {
   VerificacionAccesosProvider,
   useVerificacionAccesos,
 } from "@/features/rrhh/components/useVerificacionAccesos";
+import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import type { AccesoApp } from "@/features/rrhh/data/accesos-apps";
 import { faviconDesdeUrl } from "@/features/rrhh/data/accesos-apps";
 import { useAuth } from "@/features/auth/contexts/auth-context";
@@ -315,27 +316,26 @@ function Buscador({
  * `tieneDatos = null` mientras carga (el botón se deja activo para no parpadear).
  */
 function useTieneAccesos(empresaSlug: string) {
+  const { empresaResuelta } = useEmpresa();
   const [tieneDatos, setTieneDatos] = useState<boolean | null>(null);
   useEffect(() => {
-    if (!empresaSlug) return;
+    // Hasta que la empresa activa NO está resuelta, `empresaSlug` es el default
+    // del primer render, no la empresa del usuario. Preguntar con él devolvía
+    // cero accesos y apagaba el botón en gris hasta que la cookie resolvía: el
+    // cohete salía gris al entrar y "aparecía al rato". Esperamos al slug real.
+    if (!empresaSlug || !empresaResuelta) return;
     let alive = true;
-    // Diferida ~3 s: solo decide si el botón va gris; no debe competir en la cola
-    // de server actions del arranque (que retrasa el menú). El clearTimeout además
-    // coalesce el doble disparo cuando el slug pasa del default al real.
-    const t = setTimeout(() => {
-      listAccesosApps(empresaSlug)
-        .then((rows) => {
-          if (alive) setTieneDatos(rows.some((a) => a.estado === "Activo"));
-        })
-        .catch(() => {
-          if (alive) setTieneDatos(true); // ante error, no bloquear el botón
-        });
-    }, 3000);
+    listAccesosApps(empresaSlug)
+      .then((rows) => {
+        if (alive) setTieneDatos(rows.some((a) => a.estado === "Activo"));
+      })
+      .catch(() => {
+        if (alive) setTieneDatos(true); // ante error, no bloquear el botón
+      });
     return () => {
       alive = false;
-      clearTimeout(t);
     };
-  }, [empresaSlug]);
+  }, [empresaSlug, empresaResuelta]);
   return tieneDatos;
 }
 
@@ -490,6 +490,7 @@ export function AccesosDrawer({
 }) {
   const [open, setOpen] = useState(false);
   const { profile, esAdminPlataforma } = useAuth();
+  const { empresaResuelta } = useEmpresa();
   const miRol = (profile?.rol_label ?? "").trim().toLowerCase();
   const soyDirector = esAdminPlataforma;
 
@@ -497,40 +498,42 @@ export function AccesosDrawer({
   // el candado va activo o gris+deshabilitado. null = cargando (botón activo).
   const [tieneCredenciales, setTieneCredenciales] = useState<boolean | null>(null);
   useEffect(() => {
-    if (!empresaSlug) return;
+    // Mismo motivo que en useTieneAccesos: con la empresa sin resolver se
+    // consultaba el slug por defecto y el candado salía gris al entrar.
+    //
+    // Aquí hace falta ADEMÁS el rol: el filtro de abajo compara `acc.roles`
+    // contra `miRol`, y el perfil llega después del primer render. Con `miRol`
+    // vacío y sin ser director, ninguna credencial casaba → gris igualmente.
+    if (!empresaSlug || !empresaResuelta) return;
+    if (!soyDirector && !miRol) return;
     let alive = true;
-    // Diferida ~3 s por el mismo motivo que useTieneAccesos: fuera de la cola
-    // crítica del arranque (el botón queda activo mientras tanto, null = cargando).
-    const t = setTimeout(() => {
-      listAccesosApps(empresaSlug)
-        .then((rows) => {
-          if (!alive) return;
-          const hay = rows.some((app) =>
-            app.estado === "Activo" &&
-            app.accesos.some((acc) => {
-              // «Acceso con Google» no tiene secreto que revelar, pero sí un
-              // correo con el que entrar: cuenta como credencial mostrable.
-              const tieneSecreto =
-                acc.accesoGoogle ||
-                acc.tieneContrasena ||
-                (acc.datosExtra ?? []).some((d) => d.tiene);
-              if (!tieneSecreto) return false;
-              if (soyDirector) return true;
-              const r = (acc.roles ?? []).map((x) => x.trim().toLowerCase());
-              return r.length > 0 && r.includes(miRol);
-            }),
-          );
-          setTieneCredenciales(hay);
-        })
-        .catch(() => {
-          if (alive) setTieneCredenciales(true);
-        });
-    }, 3000);
+    listAccesosApps(empresaSlug)
+      .then((rows) => {
+        if (!alive) return;
+        const hay = rows.some((app) =>
+          app.estado === "Activo" &&
+          app.accesos.some((acc) => {
+            // «Acceso con Google» no tiene secreto que revelar, pero sí un
+            // correo con el que entrar: cuenta como credencial mostrable.
+            const tieneSecreto =
+              acc.accesoGoogle ||
+              acc.tieneContrasena ||
+              (acc.datosExtra ?? []).some((d) => d.tiene);
+            if (!tieneSecreto) return false;
+            if (soyDirector) return true;
+            const r = (acc.roles ?? []).map((x) => x.trim().toLowerCase());
+            return r.length > 0 && r.includes(miRol);
+          }),
+        );
+        setTieneCredenciales(hay);
+      })
+      .catch(() => {
+        if (alive) setTieneCredenciales(true);
+      });
     return () => {
       alive = false;
-      clearTimeout(t);
     };
-  }, [empresaSlug, miRol, soyDirector]);
+  }, [empresaSlug, empresaResuelta, miRol, soyDirector]);
 
   const { appsFiltradas, loading, busqueda, setBusqueda, q } = useAccesosApps(empresaSlug, open);
 
