@@ -232,6 +232,7 @@ function BloqueMaxPersonas({ config, onChange }: Props) {
                   <SelectorHoraCuartos
                     value={draft.inicio}
                     onChange={(h) => setDraft({ ...draft, inicio: h })}
+                    requerido
                   />
                 </div>
                 <div className="space-y-1">
@@ -239,6 +240,7 @@ function BloqueMaxPersonas({ config, onChange }: Props) {
                   <SelectorHoraCuartos
                     value={draft.fin}
                     onChange={(h) => setDraft({ ...draft, fin: h })}
+                    requerido
                   />
                 </div>
                 <Button type="button" size="sm" variant="outline" onClick={pushRegla} className="h-8">

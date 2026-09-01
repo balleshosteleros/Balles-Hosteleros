@@ -40,6 +40,13 @@ export interface SelectorHoraCuartosProps {
    * solo ofrece esas: fuera del horario de apertura no se sienta a nadie.
    */
   horasPermitidas?: string[];
+  /**
+   * Cuando la hora es obligatoria (un horario de apertura, el extremo de un
+   * tramo), no se ofrece la opción vacía: dejarla en blanco guardaría un
+   * horario sin hora. Por defecto sí se permite, porque al crear una reserva
+   * "sin elegir" es un estado legítimo mientras se rellena el formulario.
+   */
+  requerido?: boolean;
 }
 
 export function SelectorHoraCuartos({
@@ -50,6 +57,7 @@ export function SelectorHoraCuartos({
   aviso,
   className,
   horasPermitidas,
+  requerido = false,
 }: SelectorHoraCuartosProps) {
   const [hh, mm] = useMemo(() => {
     const m = /^(\d{1,2}):(\d{2})/.exec((value ?? "").trim());
@@ -98,7 +106,7 @@ export function SelectorHoraCuartos({
         onChange={(e) => emitir(e.target.value, mm)}
         className={cn(CLASE_SELECT, aviso && "border-amber-500")}
       >
-        <option value="">--</option>
+        {!requerido && <option value="">--</option>}
         {horas.map((h) => (
           <option key={h} value={h}>
             {h}

@@ -594,6 +594,7 @@ export function HorariosAperturaPanel({
               value={inicio}
               onChange={setInicio}
               disabled={cerrado}
+              requerido
               className="w-28"
             />
             <ChevronRight className="h-4 w-4 text-muted-foreground" />
@@ -601,6 +602,7 @@ export function HorariosAperturaPanel({
               value={fin}
               onChange={setFin}
               disabled={cerrado}
+              requerido
               className="w-28"
             />
           </div>

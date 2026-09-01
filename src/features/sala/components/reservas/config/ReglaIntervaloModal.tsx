@@ -130,12 +130,14 @@ export function ReglaIntervaloModal({ open, onOpenChange, metrica, regla, onSave
               <SelectorHoraCuartos
                 value={horaInicio}
                 onChange={setHoraInicio}
+                requerido
                 className="w-32"
               />
               <span className="text-xs text-muted-foreground">a</span>
               <SelectorHoraCuartos
                 value={horaFin}
                 onChange={setHoraFin}
+                requerido
                 className="w-32"
               />
             </div>
