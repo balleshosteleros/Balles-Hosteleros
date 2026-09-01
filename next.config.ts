@@ -104,16 +104,21 @@ const nextConfig: NextConfig = {
           has: [{ type: 'host' as const, value: SOFTWARE_HOST }],
           destination: '/software',
         },
-        // Documentos legales en la raíz del subdominio: `/legal/privacidad` en
-        // vez de `/software/legal/privacidad`.
+        // Documentos legales en la raíz: `/legal/privacidad` en vez de
+        // `/software/legal/privacidad`.
         //
         // Estas URLs cortas son las que están escritas en la Google Auth
         // Platform (pantalla de consentimiento). El revisor las abre SIN cuenta,
         // y hasta ahora devolvían 404: motivo de rechazo directo. Al vivir aquí,
         // el panel de Google no hay que tocarlo.
+        //
+        // SIN filtro de host a propósito: los cuatro enlaces del pie del LOGIN
+        // apuntan a `/legal/...` y el login se sirve desde el dominio de la app
+        // (y desde localhost), no desde el subdominio comercial. Mientras el
+        // rewrite exigía ese host, los cuatro daban 404 en la pantalla de
+        // acceso, que es justo donde Google exige verlos.
         {
           source: '/legal/:documento(privacidad|terminos|cookies|aviso-legal)',
-          has: [{ type: 'host' as const, value: SOFTWARE_HOST }],
           destination: '/software/legal/:documento',
         },
       ],
