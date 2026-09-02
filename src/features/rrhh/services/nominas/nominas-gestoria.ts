@@ -7,9 +7,12 @@ import "server-only";
  * «Enviar ahora» de Ajustes de Pagos y la API pública de subida (resuelve el
  * token, lee las nóminas con IA y las vuelca a `rrhh_pagos`).
  *
- * El enlace es por EMPRESA + MES y MULTI-USO (la gestoría puede subir un PDF con
- * todas las nóminas o varios archivos, en varias tandas). Mismo patrón hash-only
- * que `gestoria_contrato_tokens`: solo se persiste el HMAC del token.
+ * El enlace es PERMANENTE y por EMPRESA: no lleva el mes dentro ni caduca. La
+ * gestoría elige dentro el mes de las nóminas y, aparte, el de los seguros
+ * sociales. Cada mes se entrega DE UNA VEZ: o está subido o no lo está.
+ *
+ * Mismo patrón hash-only que `gestoria_contrato_tokens`: solo se persiste el
+ * HMAC del token.
  */
 
 import { createHash } from "node:crypto";
@@ -265,9 +268,9 @@ export async function enviarSolicitudNominasGestoria(
   const html = `
     <p>Hola,</p>
     <p>Ya podéis subir las <b>nóminas de ${mes}</b> de ${empresaNombre}.</p>
-    <p>Pulsad el botón, <b>elegid ${mes}</b> en el desplegable y adjuntadlas. Podéis subir
-    <b>un único PDF con todas las nóminas</b> (una por página) o varios archivos sueltos, y
-    en <b>varias veces</b> si os viene mejor. Se leen y vuelcan automáticamente al sistema.</p>
+    <p>Pulsad el botón, <b>elegid ${mes}</b> en el desplegable y adjuntadlas. Enviad
+    <b>todas las del mes de una vez</b>: lo normal es un único PDF con todas (una por
+    página). Se leen y vuelcan automáticamente al sistema.</p>
     ${boton}
     <p style="color:#555;font-size:13px">Este enlace es el <b>mismo siempre</b> y no caduca:
     guardadlo. Dentro elegís el mes de las nóminas y, aparte, el de los seguros sociales.</p>
@@ -347,17 +350,6 @@ export async function recordarSolicitudNominasGestoria(
 }
 
 /**
- * ¿Este mes admite todavía nóminas? Dos motivos para decir que no:
- *
- *  1. RRHH ya CONFIRMÓ el mes: es inmutable y no se reabre por este camino.
- * NO se bloquea por que el mes ya tenga nóminas: la gestoría entrega en VARIAS
- * tandas (un PDF por empleado, o el lote partido por tamaño), que es justo lo que
- * el correo y la pantalla le prometen. El volcado ya es seguro para repetir:
- * deduplica por huella SHA-256 del archivo, numera cada documento con `orden`
- * para no pisar los anteriores y respeta los pagos con liquidación ya enviada
- * (ver `procesar-nominas.ts`). Quien cierra el mes es RRHH al confirmarlo.
- */
-/**
  * Mes en curso EN LA ZONA DE LA EMPRESA ('AAAA-MM'). Nunca con la hora del
  * servidor: a fin de mes la diferencia horaria cambiaría el mes.
  */
@@ -369,11 +361,9 @@ export async function mesActualEmpresa(admin: SupabaseClient, empresaId: string)
 /** Un mes tal y como lo ve la gestoría en el desplegable. */
 export interface EstadoMesNominas {
   periodo: string;
-  /** RRHH lo confirmó: inmutable, no admite subidas. */
+  /** Ya entregado: tiene nóminas o RRHH lo confirmó. No admite subidas. */
   cerrado: boolean;
-  /** Ya tiene nóminas, pero sigue abierto: puede añadir más tandas. */
-  tieneNominas: boolean;
-  /** RRHH lo devolvió para corregir. */
+  /** RRHH lo devolvió para corregir: vuelve a estar libre. */
   rechazado: boolean;
 }
 
@@ -420,11 +410,12 @@ export async function estadoMesesNominas(
   }
   const conNominas = new Set((nominasRes.data ?? []).map((r) => r.periodo as string));
 
+  // Un mes O esta subido O no lo esta: basta con que tenga UNA nomina para
+  // darlo por entregado. La entrega es de una vez.
   return periodos.map((periodo) => ({
     periodo,
-    cerrado: porMes.get(periodo)?.confirmado ?? false,
+    cerrado: (porMes.get(periodo)?.confirmado ?? false) || conNominas.has(periodo),
     rechazado: porMes.get(periodo)?.rechazado ?? false,
-    tieneNominas: conNominas.has(periodo),
   }));
 }
 
@@ -453,6 +444,16 @@ export async function validarPeriodoSubida(
   return await mesCerradoParaNominas(admin, empresaId, periodo);
 }
 
+/**
+ * ¿Este mes admite nóminas? No, si ya está entregado. Dos motivos:
+ *
+ *  1. RRHH lo CONFIRMÓ: es inmutable y no se reabre por este camino.
+ *  2. Ya tiene nóminas: un mes se entrega DE UNA VEZ. O está subido o no lo
+ *     está. Para rehacerlo, RRHH devuelve el mes (lo vacía y lo reabre).
+ *
+ * El tope de tamaño se subió a 50 MB justamente para que el archivo de un mes
+ * entre entero y nadie tenga que partir la entrega.
+ */
 async function mesCerradoParaNominas(
   admin: SupabaseClient,
   empresaId: string,
@@ -468,6 +469,24 @@ async function mesCerradoParaNominas(
     return {
       ok: false,
       error: `Las nóminas de ${nombreMes(periodo)} ya están subidas y cerradas: no se pueden volver a subir.`,
+      status: 409,
+    };
+  }
+
+  // Un mes se entrega DE UNA VEZ: o está subido o no lo está, sin término medio.
+  // Con que exista una sola nómina de ese mes, la entrega ya se hizo. Para
+  // rehacerla, RRHH devuelve el mes (lo vacía) y vuelve a quedar libre.
+  const { count } = await admin
+    .from("rrhh_pagos_nominas")
+    .select("id", { count: "exact", head: true })
+    .eq("empresa_id", empresaId)
+    .eq("periodo", periodo);
+  if ((count ?? 0) > 0) {
+    return {
+      ok: false,
+      error:
+        `Las nóminas de ${nombreMes(periodo)} ya están subidas. Si hay que corregirlas, ` +
+        `el departamento de RRHH tiene que devolver el mes para que las subáis de nuevo.`,
       status: 409,
     };
   }
@@ -493,8 +512,8 @@ export async function procesarSubidaNominasGestoria(
     return {
       ok: false,
       error:
-        `El archivo supera ${mb} MB, que es el máximo que la lectura automática procesa de forma fiable. ` +
-        `Divide las nóminas en varios archivos y súbelos por separado.`,
+        `El archivo supera ${mb} MB. Comprímelo o avisa a la empresa: las nóminas ` +
+        `de un mes se entregan en un solo envío.`,
       status: 400,
     };
   }

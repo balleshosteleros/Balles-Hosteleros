@@ -8,12 +8,18 @@
 export const MAX_DOCUMENTO_MB = 50;
 export const MAX_DOCUMENTO_BYTES = MAX_DOCUMENTO_MB * 1024 * 1024;
 
-// Tope del ANÁLISIS por IA de nóminas (lectura con visión), MÁS BAJO que el de
-// documentos: guardar un PDF de 50 MB es viable, pero por encima de esto el modelo
-// no lo procesa de forma fiable. Vive aquí —y no en el servicio, que es
-// `server-only`— para que la pantalla de subida pueda avisar ANTES de subir en vez
-// de que el servidor lo rechace después.
-export const MAX_NOMINAS_MB = 25;
+// Tope del ANÁLISIS por IA de nóminas (lectura con visión). Igualado al de
+// documentos (50 MB), que es el del bucket: el archivo NO se manda entero al
+// modelo, se parte en páginas y cada una va por separado (`extraer-nominas.ts`),
+// así que el peso total no es lo que limita la lectura.
+//
+// Estaba en 25 MB y obligaba a la gestoría a partir el PDF de un mes en varios
+// envíos. Como un mes se entrega de una vez, partirlo ya no es una opción: el
+// archivo del mes tiene que entrar entero.
+//
+// Vive aquí —y no en el servicio, que es `server-only`— para que la pantalla de
+// subida pueda avisar ANTES de subir en vez de que el servidor lo rechace después.
+export const MAX_NOMINAS_MB = MAX_DOCUMENTO_MB;
 export const MAX_NOMINAS_BYTES = MAX_NOMINAS_MB * 1024 * 1024;
 
 // Tope de IMÁGENES sueltas y ficheros ligeros: avatar, logos (app y empresa),

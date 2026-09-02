@@ -18,11 +18,9 @@ interface Props {
 
 export interface EstadoMes {
   periodo: string;
-  /** Confirmado por RRHH: no admite subidas. */
+  /** Ya entregado: no admite subidas. */
   cerrado: boolean;
-  /** Ya tiene nóminas pero sigue abierto: se pueden añadir más. */
-  tieneNominas: boolean;
-  /** Devuelto por RRHH para corregir. */
+  /** Devuelto por RRHH para corregir: vuelve a estar libre. */
   rechazado: boolean;
 }
 
@@ -186,7 +184,7 @@ export function SubirNominasView({ endpoint, empresaNombre, meses, mesSugerido }
     // una subida que el servidor va a rechazar igualmente.
     if (f.size > MAX_NOMINAS_BYTES) {
       setError(
-        `El archivo supera ${MAX_NOMINAS_MB} MB. Divide las nóminas en varios archivos y súbelos por separado.`,
+        `El archivo supera ${MAX_NOMINAS_MB} MB. Comprímelo o avisa a la empresa: las nóminas del mes deben ir en un solo envío.`,
       );
       return;
     }
@@ -258,9 +256,7 @@ export function SubirNominasView({ endpoint, empresaNombre, meses, mesSugerido }
                   ? " · ya entregado"
                   : m.rechazado
                     ? " · devuelto para corregir"
-                    : m.tieneNominas
-                      ? " · entrega empezada"
-                      : ""}
+                    : ""}
               </option>
             ))}
           </select>
@@ -272,15 +268,15 @@ export function SubirNominasView({ endpoint, empresaNombre, meses, mesSugerido }
 
         {mesCerrado ? (
           <div className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-800">
-            Las nóminas de <b>{nombreMesCorto(mesNominas)}</b> ya están subidas y cerradas
-            por la empresa: no se pueden volver a subir. Si hay que corregir algo, pídelo al
-            departamento de RRHH.
+            Las nóminas de <b>{nombreMesCorto(mesNominas)}</b> ya están subidas: no se
+            pueden volver a subir. Si hay que corregir algo, pide al departamento de RRHH
+            que devuelva el mes.
           </div>
         ) : (
           <div className="mt-3 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs text-zinc-700">
-            Se guardarán como nóminas de <b>{nombreMesCorto(mesNominas)}</b>. Si el archivo
-            contiene alguna de otro mes, no se guardará ninguna. Puedes subirlas en
-            <b> varias veces</b>.
+            Se guardarán como nóminas de <b>{nombreMesCorto(mesNominas)}</b>. Adjunta
+            <b> todas las del mes de una vez</b>: si el archivo contiene alguna de otro mes,
+            no se guardará ninguna.
           </div>
         )}
 
