@@ -228,14 +228,20 @@ function InstagramPublico({
                 {/* `object-cover`, no `contain`: la captura es mas alta que
                     la pantalla del mockup, y `contain` la encogia dejando
                     franjas negras arriba y abajo — se veia el movil a medio
-                    encender. `cover` la llena y `object-top` ancla arriba, asi
-                    que lo unico que se recorta es el final de la cuadricula. */}
+                    encender. `cover` la llena de borde a borde.
+
+                    El `-2.6%` de arriba se come la banda negra que toda
+                    captura de iPhone trae ENCIMA de la hora (23px de los 900):
+                    sin recortarla quedaba un hueco negro entre el borde del
+                    cristal y el "18:45", y parecia que la imagen no llegaba
+                    arriba del todo. Anclado arriba, no centrado: lo unico que
+                    se pierde es el final de la cuadricula, no el perfil. */}
                 <img
                   src={captura_url}
                   alt={`Perfil de @${handle} en Instagram`}
                   loading="lazy"
                   decoding="async"
-                  className="h-full w-full object-cover object-top"
+                  className="h-full w-full object-cover [object-position:50%_-2.6%]"
                 />
 
               </a>
