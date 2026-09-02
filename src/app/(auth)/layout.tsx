@@ -59,9 +59,10 @@ export default function AuthLayout({
           {/* NINGÚN correo en esta pantalla (decisión de Iván): la dirección de
               contacto vive solo en el aviso legal, que es donde la LSSI la
               exige y adonde llega el revisor de Google desde el enlace de
-              arriba. Aquí basta la razón social del titular. */}
+              arriba. Aquí va el nombre registrado del software, no la razón
+              social de la sociedad, y el año de inicio de la actividad. */}
           <span className="text-center">
-            © {new Date().getFullYear()} {TITULAR.razonSocial}
+            © {TITULAR.anioInicio}–{new Date().getFullYear()} {TITULAR.nombreRegistrado}
           </span>
         </footer>
       </div>
@@ -80,23 +81,26 @@ export default function AuthLayout({
           }}
         />
 
-        {/* Contenido central: marca del titular, apilada y centrada.
+        {/* Contenido central: logo + wordmark, en horizontal y separados por
+            una línea vertical (así estaba y así se queda).
             El logo lleva medidas explícitas (no `fill`) para que ocupe lo mismo
             antes y después de cargar: con `fill` el hueco depende del contenedor
             y la imagen "aparecía" de distinto tamaño según el entorno. */}
-        <div className="relative z-10 flex w-full flex-col items-center justify-center gap-6 px-12 text-center">
-          <Image
-            src="/logo-balles.png"
-            alt={TITULAR.razonSocial}
-            width={176}
-            height={176}
-            priority
-            className="h-44 w-44 object-contain"
-          />
-          <div className="h-px w-24 bg-white/30" />
-          <span className="text-sm font-light uppercase tracking-[0.28em] text-blue-200/80">
-            Software de Gestión
-          </span>
+        <div className="relative z-10 flex w-full flex-col items-center justify-center px-12">
+          <div className="flex items-center gap-6">
+            <Image
+              src="/logo-balles.png"
+              alt={TITULAR.razonSocial}
+              width={176}
+              height={176}
+              priority
+              className="h-44 w-44 shrink-0 object-contain"
+            />
+            <div className="h-32 w-px bg-white/30" />
+            <span className="text-sm font-light uppercase tracking-[0.28em] text-blue-200/80">
+              Software de Gestión
+            </span>
+          </div>
         </div>
       </div>
     </div>

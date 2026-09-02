@@ -9,6 +9,17 @@
  */
 export const TITULAR = {
   razonSocial: "COMPLEJOS HOSTELEROS GOURMET, S.L.",
+  /**
+   * Nombre comercial registrado del software. Es lo que ve el usuario en las
+   * pantallas de acceso: la razón social solo aparece donde la LSSI la exige
+   * (aviso legal, condiciones), no en el pie del login.
+   */
+  nombreRegistrado: "Balles Hosteleros",
+  /**
+   * Año en que se abrió la marca Balles, para el rango del aviso de
+   * copyright. No es el año de constitución de la sociedad.
+   */
+  anioInicio: 2022,
   cif: "B56558109",
   via: "C/ Arte Plateresco, 3",
   cp: "28905",
