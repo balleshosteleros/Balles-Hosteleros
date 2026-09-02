@@ -29,6 +29,9 @@ import {
   type MesaMetaPlano,
 } from "@/features/sala/components/reservas/plano-mesas-medidas";
 
+/** Aire alrededor del lienzo, descontado al calcular la escala. */
+const PADDING_LIENZO = 8;
+
 /**
  * El plano en modo selección. Es el mismo lienzo de la vista de sala, pero sin
  * popovers ni estados: aquí una mesa solo puede estar elegida o no.
@@ -92,46 +95,54 @@ export function PlanoSeleccionMesas({
   }, [zonas, mesas, posiciones, mesasMeta]);
 
   // El lienzo mide siempre 1200x640 (como el editor de Ajustes) y se reduce
-  // para caber en el ancho que haya, sin pasar de 1: así el salón entra entero
-  // dentro del modal y no hay que arrastrar el plano para ver las mesas del
-  // fondo, que es justo donde suele estar la mesa que se quiere unir.
+  // para caber ENTERO en el hueco que le queda dentro del modal: se mide el
+  // ancho y el alto disponibles y manda el más apretado de los dos. Así el
+  // salón se ve completo de un vistazo, sin desplazar nada, que es justo lo que
+  // hace falta cuando la mesa que se quiere unir está al fondo del comedor.
+  //
+  // OJO con el bucle: el hueco se mide en un contenedor cuyo tamaño NO depende
+  // del lienzo (el lienzo va posicionado en absoluto dentro de él). Si se
+  // midiera un padre que el propio lienzo empuja, cada cambio de escala
+  // dispararía otra medición y el plano se quedaría oscilando sin arrancar.
   const outerRef = useRef<HTMLDivElement>(null);
-  const [scale, setScale] = useState(1);
+  const [scale, setScale] = useState(0);
   useEffect(() => {
     const el = outerRef.current;
     if (!el) return;
     const update = () => {
-      const w = el.clientWidth;
-      if (w <= 0) return;
-      const s = Math.min(w / PLANO_CANVAS_W, 1);
-      setScale(s > 0 ? s : 1);
+      const w = el.clientWidth - PADDING_LIENZO * 2;
+      const h = el.clientHeight - PADDING_LIENZO * 2;
+      if (w <= 0 || h <= 0) return;
+      const s = Math.min(w / PLANO_CANVAS_W, h / PLANO_CANVAS_H, 1);
+      if (s > 0) setScale(s);
     };
     update();
-    const ro = new ResizeObserver(update);
+    const ro = new ResizeObserver(() => {
+      // En el mismo frame que la medición el navegador aún puede reportar
+      // tamaños intermedios del diálogo al abrirse; se difiere al siguiente.
+      requestAnimationFrame(update);
+    });
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
 
   return (
-    <div className="space-y-2">
-      <div ref={outerRef} className="w-full overflow-hidden rounded-lg border bg-muted/20 p-2">
+    <div className="flex min-h-0 flex-1 flex-col gap-2">
+      <div
+        ref={outerRef}
+        className="relative min-h-0 w-full flex-1 overflow-hidden rounded-lg border bg-muted/20"
+      >
         <div
-          style={{
-            width: PLANO_CANVAS_W * scale,
-            height: PLANO_CANVAS_H * scale,
-            position: "relative",
-            margin: "0 auto",
-          }}
-        >
-        <div
-          className="relative origin-top-left"
+          className="absolute origin-center"
           style={{
             width: PLANO_CANVAS_W,
             height: PLANO_CANVAS_H,
-            position: "absolute",
-            top: 0,
-            left: 0,
-            transform: `scale(${scale})`,
+            top: "50%",
+            left: "50%",
+            // Se centra por transform, no por layout: así el lienzo no
+            // participa en el tamaño del contenedor que lo mide.
+            transform: `translate(-50%, -50%) scale(${scale})`,
+            visibility: scale > 0 ? "visible" : "hidden",
           }}
         >
           {decoraciones.map((d) => (
@@ -238,10 +249,9 @@ export function PlanoSeleccionMesas({
             );
           })}
         </div>
-        </div>
       </div>
 
-      <div className="flex flex-wrap items-center justify-center gap-4 text-[10px] text-muted-foreground">
+      <div className="shrink-0 flex flex-wrap items-center justify-center gap-4 text-[10px] text-muted-foreground">
         <span className="flex items-center gap-1.5">
           <span className="h-3 w-3 rounded border-2 border-red-500 ring-2 ring-red-500" />
           En esta reserva

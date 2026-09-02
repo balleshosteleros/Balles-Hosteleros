@@ -184,9 +184,13 @@ export function EditorMesasReserva({
       <Dialog open={abierto} onOpenChange={(v) => { if (!v && !ocupado) onCerrar(); }}>
         {/* El diálogo se pinta en un portal, fuera del contenedor de la vista,
             así que el tema de sala no le llega por herencia: se marca aquí. */}
+        {/* Alto fijo y columna: la cabecera, el resumen y los botones ocupan
+            lo suyo y el plano se queda con TODO el hueco restante, encogiéndose
+            para caber. Así nunca hay que desplazarse dentro del diálogo. */}
         <DialogContent
           className={cn(
-            "max-w-6xl max-h-[92vh] overflow-y-auto",
+            "flex max-w-6xl flex-col overflow-hidden",
+            "h-[92vh] max-h-[92vh]",
             "sala-tema",
             esOscuro && "sala-oscuro",
           )}
@@ -198,9 +202,9 @@ export function EditorMesasReserva({
             </DialogTitle>
           </DialogHeader>
 
-          <div className="space-y-3">
+          <div className="flex min-h-0 flex-1 flex-col gap-3">
             {/* Qué reserva se está tocando y cómo va quedando la selección. */}
-            <div className="rounded-md border bg-muted/30 px-3 py-2 text-xs space-y-1">
+            <div className="shrink-0 rounded-md border bg-muted/30 px-3 py-2 text-xs space-y-1">
               <p>
                 <span className="font-medium text-foreground">
                   {reserva.cliente || "WALK IN"} {reserva.apellidos}
@@ -253,7 +257,7 @@ export function EditorMesasReserva({
             {/* Resumen del cambio: se lee antes de confirmar, con las mismas
                 palabras que después aparecen en la actividad. */}
             {hayCambios && (
-              <div className="rounded-md border border-sky-500/40 bg-sky-500/5 px-3 py-2 text-xs space-y-0.5">
+              <div className="shrink-0 rounded-md border border-sky-500/40 bg-sky-500/5 px-3 py-2 text-xs space-y-0.5">
                 {anadidas.length > 0 && (
                   <p>
                     Se {anadidas.length === 1 ? "añadirá" : "añadirán"}{" "}
@@ -271,8 +275,7 @@ export function EditorMesasReserva({
               </div>
             )}
 
-            {/* `pb-28` por la norma de no tapar el chat flotante. */}
-            <div className="flex items-center justify-end gap-2 border-t pt-3 pb-28">
+            <div className="shrink-0 flex items-center justify-end gap-2 border-t pt-3">
               <Button
                 variant="outline"
                 disabled={ocupado}
