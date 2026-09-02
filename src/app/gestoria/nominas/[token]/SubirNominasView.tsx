@@ -18,8 +18,10 @@ interface Props {
 
 export interface EstadoMes {
   periodo: string;
-  /** Ya entregado: no admite subidas. */
+  /** Confirmado por RRHH: no admite subidas. */
   cerrado: boolean;
+  /** Ya tiene nóminas pero sigue abierto: caben más archivos del mismo mes. */
+  tieneNominas: boolean;
   /** Devuelto por RRHH para corregir: vuelve a estar libre. */
   rechazado: boolean;
 }
@@ -256,7 +258,9 @@ export function SubirNominasView({ endpoint, empresaNombre, meses, mesSugerido }
                   ? " · ya entregado"
                   : m.rechazado
                     ? " · devuelto para corregir"
-                    : ""}
+                    : m.tieneNominas
+                      ? " · entrega empezada"
+                      : ""}
               </option>
             ))}
           </select>
@@ -268,15 +272,16 @@ export function SubirNominasView({ endpoint, empresaNombre, meses, mesSugerido }
 
         {mesCerrado ? (
           <div className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-800">
-            Las nóminas de <b>{nombreMesCorto(mesNominas)}</b> ya están subidas: no se
-            pueden volver a subir. Si hay que corregir algo, pide al departamento de RRHH
-            que devuelva el mes.
+            Las nóminas de <b>{nombreMesCorto(mesNominas)}</b> ya están validadas por la
+            empresa: no se pueden volver a subir. Si hay que corregir algo, pide al
+            departamento de RRHH que devuelva el mes.
           </div>
         ) : (
           <div className="mt-3 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs text-zinc-700">
             Se guardarán como nóminas de <b>{nombreMesCorto(mesNominas)}</b>. Adjunta
-            <b> todas las del mes de una vez</b>: si el archivo contiene alguna de otro mes,
-            no se guardará ninguna.
+            <b> todas las del mes en la misma subida</b>: si el archivo contiene alguna de
+            otro mes, no se guardará ninguna. En cuanto las subas pasan a{" "}
+            <b>recursos humanos para su validación</b>.
           </div>
         )}
 
