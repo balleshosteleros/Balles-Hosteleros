@@ -177,9 +177,10 @@ function InstagramPublico({
           el perfil. Fuera se leían dos veces seguidas. */}
       <div className="relative mx-auto max-w-5xl">
         {/* Foto real de una mano sujetando el móvil, con el perfil montado
-            DENTRO de la pantalla. Las medidas (33%/19% y 37%×58%) son la
-            posición exacta de la pantalla en esta foto: si algún día se cambia
-            la imagen, hay que volver a medirlas o el perfil bailará.
+            DENTRO de la pantalla. Las medidas del recuadro son la posición
+            exacta de la pantalla en esta foto, medida sobre el archivo
+            (760x951: x 254..529, y 208..739): si algún día se cambia la
+            imagen, hay que volver a medirlas o el perfil bailará.
             Foto de Unsplash, libre para uso comercial. */}
         <div className="relative mx-auto mt-14 w-full max-w-[520px]">
           {/* Los bordes ya vienen fundidos a negro EN el propio archivo: hacerlo
@@ -199,7 +200,7 @@ function InstagramPublico({
               real, con sus cuatro cantos curvos. Recortando en angulo recto,
               la captura sobresalia por las esquinas y el montaje cantaba.
               El radio es porcentual para que siga a la foto al escalar. */}
-          <div className="absolute left-[33.4%] top-[17.6%] h-[61.5%] w-[36.4%] overflow-hidden rounded-[10%/5%] bg-black">
+          <div className="absolute left-[33.42%] top-[21.87%] h-[55.94%] w-[36.32%] overflow-hidden rounded-[9%/5.5%] bg-black">
             {captura_url ? (
               /* Captura REAL del perfil dentro de la pantalla. Se muestra tal
                  cual, sin recomponer nada: los seguidores y la cuadrícula son
@@ -214,16 +215,17 @@ function InstagramPublico({
                 aria-label={`Perfil de @${handle} en Instagram`}
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                {/* `object-contain`, no `cover`: una captura de perfil es
-                    estrecha y alta, y `cover` la recortaba por los lados
-                    comiendose el avatar y los contadores. Contenida entra
-                    entera y encaja con la pantalla del movil. */}
+                {/* `object-cover`, no `contain`: la captura es mas alta que
+                    la pantalla del mockup, y `contain` la encogia dejando
+                    franjas negras arriba y abajo — se veia el movil a medio
+                    encender. `cover` la llena y `object-top` ancla arriba, asi
+                    que lo unico que se recorta es el final de la cuadricula. */}
                 <img
                   src={captura_url}
                   alt={`Perfil de @${handle} en Instagram`}
                   loading="lazy"
                   decoding="async"
-                  className="h-full w-full object-contain object-top"
+                  className="h-full w-full object-cover object-top"
                 />
 
               </a>
