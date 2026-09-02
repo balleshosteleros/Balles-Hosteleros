@@ -22,7 +22,11 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getEmpresaActivaForUser } from "@/features/empresa/lib/empresa-server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getCredencialesRevolut } from "@/features/ajustes/actions/revolut-config-actions";
-import { capturarOrden, liberarOrden, crearOrden } from "@/lib/revolut/merchant";
+import {
+  capturarOrden,
+  liberarOrden,
+  cobrarTarjetaGuardada,
+} from "@/lib/revolut/merchant";
 import { enviarReservaEmail } from "@/lib/email/reservas/mailer";
 
 type Result<T = void> =
@@ -49,7 +53,7 @@ async function getCtx() {
 
 /** Columnas que necesita cualquier operación de cobro. */
 const COLS =
-  "id, empresa_id, cliente_nombre, tiene_garantia, garantia_importe, garantia_estado, garantia_revolut_order_id, garantia_capture_deadline, tiene_cancelacion, cancelacion_importe, cancelacion_estado, cancelacion_revolut_order_id, cancelacion_intentos, cobro_perdonado_at";
+  "id, empresa_id, cliente_nombre, tiene_garantia, garantia_importe, garantia_estado, garantia_revolut_order_id, garantia_capture_deadline, tiene_cancelacion, cancelacion_importe, cancelacion_estado, cancelacion_revolut_order_id, cancelacion_customer_id, cancelacion_payment_method_id, cancelacion_intentos, cobro_perdonado_at";
 
 /**
  * Cobra la GARANTÍA: captura el dinero que ya estaba retenido.
@@ -232,14 +236,26 @@ export async function ejecutarCobroCancelacion(
     const maxIntentos = Number(cfg?.cancelacion_reintentos_max ?? 5);
     const reintentaSolo = cfg?.cancelacion_reintento_activo !== false;
 
-    // El cobro va contra la tarjeta que el cliente dejó guardada. Revolut la
-    // reconoce por el mismo cliente de la orden original.
-    const cobro = await crearOrden({
+    // Aquí NO hay dinero retenido: la política de cancelación solo guardó la
+    // tarjeta. Así que se cobra ahora, sin el cliente delante, contra el
+    // método de pago que dejó guardado.
+    const customerId = r.cancelacion_customer_id as string | null;
+    const paymentMethodId = r.cancelacion_payment_method_id as string | null;
+    if (!customerId || !paymentMethodId) {
+      return {
+        ok: false,
+        error: "Esta reserva no tiene tarjeta guardada: pídesela al cliente.",
+      };
+    }
+
+    const cobro = await cobrarTarjetaGuardada({
       secretKey: cred.secretKey,
       entorno: cred.entorno,
       importe,
       referencia: `cobro-cancelacion:${reservaId}:${intentos}`,
       descripcion: "Política de cancelación",
+      customerId,
+      paymentMethodId,
     });
 
     const ahora = new Date();

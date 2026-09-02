@@ -149,7 +149,16 @@ export async function obtenerTarjetaPendiente(
  * pedir dos tarjetas seguidas al mismo cliente sería absurdo.
  */
 export async function iniciarPagoTarjeta(token: string): Promise<
-  Result<{ tokenPago: string; entorno: "produccion" | "pruebas" }>
+  Result<{
+    tokenPago: string;
+    entorno: "produccion" | "pruebas";
+    /**
+     * true = hay que GUARDAR la tarjeta para poder cobrar más adelante
+     * (política de cancelación). false = se está reteniendo el importe
+     * (garantía), y la propia retención ya deja el dinero apartado.
+     */
+    guardarTarjeta: boolean;
+  }>
 > {
   const parsed = tokenSchema.safeParse(token);
   if (!parsed.success) return { ok: false, error: "Enlace no válido." };
@@ -188,6 +197,11 @@ export async function iniciarPagoTarjeta(token: string): Promise<
       return { ok: false, error: "Esta reserva no tiene importe que cobrar." };
     }
 
+    // En la CANCELACIÓN no se mueve ni se aparta dinero: la orden es de 0 € y
+    // sirve solo para que el cliente deje su tarjeta. El importe de verdad se
+    // cobra más tarde, y solo si no se presenta.
+    const importeOrden = retiene ? importe : 0;
+
     const cred = await getCredencialesRevolut(r.empresa_id as string);
     if (!cred) {
       // Sin pasarela no se puede pedir la tarjeta. La reserva sigue en pie: el
@@ -208,7 +222,7 @@ export async function iniciarPagoTarjeta(token: string): Promise<
     const orden = await crearOrden({
       secretKey: cred.secretKey,
       entorno: cred.entorno,
-      importe,
+      importe: importeOrden,
       // La referencia identifica QUÉ política se está pagando: el webhook la
       // usa para saber qué columnas actualizar.
       referencia: `${retiene ? "garantia" : "cancelacion"}:${r.id as string}`,
@@ -223,13 +237,15 @@ export async function iniciarPagoTarjeta(token: string): Promise<
         telefono: (r.cliente_telefono as string | null) ?? undefined,
       },
       redirectUrl: `${getSiteUrl()}/reserva/tarjeta/${parsed.data}?estado=vuelta`,
-      // SIEMPRE retener, nunca cobrar. Ninguna de las dos políticas cobra al
-      // reservar: la garantía retiene el importe, y la cancelación solo quiere
-      // quedarse con la tarjeta para poder cobrar si el cliente no aparece.
+      // Cada política hace lo suyo, y son cosas distintas:
       //
-      // Sin esto, la cancelación creaba una orden de cobro inmediato y al
-      // cliente le salía "Pagar 1 €" — cobrándole de verdad por reservar.
-      retener: true,
+      //   · GARANTÍA    → RETIENE el importe. El dinero queda bloqueado en la
+      //     cuenta del cliente hasta que se presenta.
+      //   · CANCELACIÓN → NO retiene nada. Solo guarda la tarjeta, y el cargo
+      //     se hace después únicamente si el cliente no viene.
+      //
+      // Ninguna de las dos cobra al reservar.
+      retener: retiene,
     });
 
     if (!orden.ok) {
@@ -257,7 +273,10 @@ export async function iniciarPagoTarjeta(token: string): Promise<
       })
       .eq("id", r.id as string);
 
-    return { ok: true, data: { tokenPago, entorno: cred.entorno } };
+    return {
+      ok: true,
+      data: { tokenPago, entorno: cred.entorno, guardarTarjeta: !retiene },
+    };
   } catch (err) {
     console.error("[tarjeta-reserva][iniciar]", err);
     return { ok: false, error: "No pudimos iniciar el pago." };
@@ -315,9 +334,19 @@ export async function confirmarPagoTarjeta(token: string): Promise<
       if (!vale) continue;
 
       const tarjeta = tarjetaDeOrden(res.orden);
+      // Referencias de Revolut para poder cobrar la tarjeta guardada más
+      // adelante. No son datos de la tarjeta: son identificadores.
+      const refsGuardadas =
+        prefijo === "cancelacion"
+          ? {
+              cancelacion_customer_id: res.orden.customer?.id ?? null,
+              cancelacion_payment_method_id: tarjeta?.id ?? null,
+            }
+          : {};
       await admin
         .from("reservas")
         .update({
+          ...refsGuardadas,
           [`${prefijo}_estado`]: prefijo === "garantia" ? "retenida" : "guardada",
           [`${prefijo}_${prefijo === "garantia" ? "retenida" : "guardada"}_at`]:
             new Date().toISOString(),

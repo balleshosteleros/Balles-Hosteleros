@@ -30,6 +30,8 @@ export type RevolutOrderState =
 
 /** Datos NO sensibles de la tarjeta: sirven para identificarla, no para cobrar. */
 export interface RevolutPaymentMethod {
+  /** Referencia del método guardado: con ella se cobra más adelante. */
+  id?: string;
   /** Cuatro últimos dígitos. Ojo: Revolut lo llama `last_four`, no `last4`. */
   last_four?: string;
   brand?: string;
@@ -50,6 +52,8 @@ export interface RevolutOrder {
    * en un restaurante con Visa suelen ser 5 días, con Mastercard hasta 30.
    */
   capture_deadline?: string;
+  /** Cliente en Revolut. Necesario para cobrar una tarjeta guardada. */
+  customer?: { id?: string };
   payments?: Array<{ payment_method?: RevolutPaymentMethod }>;
 }
 
@@ -228,6 +232,60 @@ export async function liberarOrden(
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Error de red";
     console.error("[revolut] liberarOrden:", msg);
+    return { ok: false, error: msg };
+  }
+}
+
+/**
+ * Cobra una tarjeta que el cliente dejó guardada, sin que él esté delante.
+ *
+ * Es lo que hace la política de cancelación cuando alguien no se presenta: no
+ * había dinero retenido, así que hay que ir a por él ahora. Puede fallar —sin
+ * fondos, tarjeta caducada, bloqueada— y por eso se reintenta.
+ *
+ * Son dos pasos: se crea la orden y después se paga con el método guardado.
+ */
+export async function cobrarTarjetaGuardada(input: {
+  secretKey: string;
+  entorno: RevolutEntorno;
+  importe: number;
+  referencia: string;
+  descripcion: string;
+  customerId: string;
+  paymentMethodId: string;
+}): Promise<{ ok: true; orden: RevolutOrder } | { ok: false; error: string }> {
+  const orden = await crearOrden({
+    secretKey: input.secretKey,
+    entorno: input.entorno,
+    importe: input.importe,
+    referencia: input.referencia,
+    descripcion: input.descripcion,
+  });
+  if (!orden.ok) return orden;
+
+  try {
+    const res = await fetch(
+      `${BASE_URL[input.entorno]}/orders/${orden.orden.id}/payments`,
+      {
+        method: "POST",
+        headers: headers(input.secretKey),
+        body: JSON.stringify({
+          saved_payment_method: {
+            type: "card",
+            id: input.paymentMethodId,
+            // Lo lanza el comercio, no el cliente: él no está delante.
+            initiator: "merchant",
+          },
+        }),
+        cache: "no-store",
+      },
+    );
+    if (!res.ok) return { ok: false, error: await leerError(res) };
+    const pagada = (await res.json()) as RevolutOrder;
+    return { ok: true, orden: pagada };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Error de red";
+    console.error("[revolut] cobrarTarjetaGuardada:", msg);
     return { ok: false, error: msg };
   }
 }

@@ -95,6 +95,10 @@ export function TarjetaClient({
         // El código postal no se le pide: la reserva no lo necesita y es un
         // campo más que rellenar para algo que no se le va a cobrar.
         hidePostcodeField: true,
+        // En la política de cancelación la tarjeta se GUARDA para poder
+        // cobrarla si el cliente no viene. En la de garantía no hace falta: el
+        // dinero ya queda retenido.
+        ...(res.data.guardarTarjeta ? { savePaymentMethodFor: "merchant" as const } : {}),
         // Revolut exige que el titular tenga al menos dos palabras. Si la
         // reserva vino sin apellidos, mejor no mandar nada: así el widget lo
         // pide en su propio campo en vez de rechazar un nombre incompleto.
