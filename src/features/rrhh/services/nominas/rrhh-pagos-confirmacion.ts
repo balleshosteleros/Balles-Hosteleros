@@ -20,6 +20,11 @@ import { sendEmail } from "@/lib/email/send";
 import { getSiteUrl } from "@/features/rrhh/services/gestoria/gestoria-contrato";
 import { nombreMes } from "@/features/rrhh/services/nominas/nominas-gestoria";
 import { fetchEmpresaBrand } from "@/lib/email/brand-header";
+import {
+  calcularDesgloseNomina,
+  CONCEPTOS_SS_EMPRESA,
+  type DesgloseNomina,
+} from "@/features/rrhh/lib/desglose-nomina";
 
 /** Datos del mes de un empleado que se muestran en el recuadro del enlace. */
 export interface LiquidacionDetalle {
@@ -87,13 +92,22 @@ export async function crearTokenConfirmacionPago(
   }
 }
 
+/**
+ * Motivo por el que un enlace de liquidación no se puede abrir.
+ *
+ * `used` no es un fallo: el empleado ya confirmó y vuelve a pulsar el enlace
+ * (relee el correo, otro dispositivo…). Se distingue de `not_found` para poder
+ * decírselo con esas palabras en vez de acusar al enlace de no ser válido.
+ */
+export type MotivoTokenLiquidacion = "not_found" | "expired" | "used";
+
 /** Resuelve un token de confirmación (valida hash + expiración). */
 export async function resolverTokenConfirmacionPago(
   admin: SupabaseClient,
   token: string,
 ): Promise<
   | { ok: true; row: { id: string; empresa_id: string; empleado_id: string; periodo: string; pago_id: string; confirmado_en: string | null } }
-  | { ok: false; reason: "not_found" | "expired" }
+  | { ok: false; reason: MotivoTokenLiquidacion; confirmadoEn?: string | null; periodo?: string }
 > {
   const tokenHash = hashToken(token);
   const { data } = await admin
@@ -103,7 +117,18 @@ export async function resolverTokenConfirmacionPago(
     .maybeSingle();
   if (!data) return { ok: false, reason: "not_found" };
   if (!compararToken(token, data.token_hash as string)) return { ok: false, reason: "not_found" };
-  if (new Date(data.expira_en as string).getTime() < Date.now()) return { ok: false, reason: "expired" };
+  // Caducado, pero YA confirmado: no es un enlace muerto, es uno que cumplió su
+  // función. Prevalece "ya usado" sobre "caducado": es lo que le importa saber.
+  if (new Date(data.expira_en as string).getTime() < Date.now()) {
+    return data.confirmado_en
+      ? {
+          ok: false,
+          reason: "used",
+          confirmadoEn: data.confirmado_en as string,
+          periodo: data.periodo as string,
+        }
+      : { ok: false, reason: "expired" };
+  }
   return {
     ok: true,
     row: {
@@ -121,7 +146,10 @@ export async function resolverTokenConfirmacionPago(
 export async function detalleLiquidacionPorToken(
   admin: SupabaseClient,
   row: { empresa_id: string; pago_id: string; periodo: string; confirmado_en: string | null },
-): Promise<{ ok: true; detalle: LiquidacionDetalle } | { ok: false; error: string }> {
+): Promise<
+  | { ok: true; detalle: LiquidacionDetalle }
+  | { ok: false; error: string; reason?: MotivoTokenLiquidacion }
+> {
   const { data: pago } = await admin
     .from("rrhh_pagos")
     .select(
@@ -129,7 +157,14 @@ export async function detalleLiquidacionPorToken(
     )
     .eq("id", row.pago_id)
     .maybeSingle();
-  if (!pago) return { ok: false, error: "Liquidación no encontrada" };
+  // El pago ya no está (el mes se rechazó a la gestoría y se rehízo). Si el
+  // empleado ya había confirmado con este enlace, se le dice eso y no que el
+  // enlace "no es válido": lo usó, y funcionó.
+  if (!pago) {
+    return row.confirmado_en
+      ? { ok: false, reason: "used", error: "Este enlace ya se ha usado." }
+      : { ok: false, error: "Liquidación no encontrada" };
+  }
 
   const brand = await fetchEmpresaBrand(row.empresa_id);
   const marcaUrl = brand?.isotipoUrl || brand?.logoUrl || null;
@@ -201,8 +236,9 @@ export async function confirmarLiquidacionPorToken(
 
 /** Recuadro HTML con el desglose de la liquidación para el cuerpo del correo. */
 function recuadroLiquidacionHtml(d: LiquidacionDetalle): string {
-  // El sistema guarda el NETO; el BRUTO se reconstruye = neto + SS trabajador + IRPF.
-  const bruto = Math.round((d.nomina + d.ssEmpleado + d.irpf) * 100) / 100;
+  // Bruto, retenciones y coste de empresa: mismo cálculo que el portal
+  // "Mis pagos" y la web de confirmación (features/rrhh/lib/desglose-nomina).
+  const g = calcularDesgloseNomina(d);
 
   const fila = (
     label: string,
@@ -221,44 +257,111 @@ function recuadroLiquidacionHtml(d: LiquidacionDetalle): string {
 
   const filas: string[] = [];
   // Bloque nómina: bruto → −SS → −IRPF → = neto.
-  filas.push(fila("Nómina bruta", fmtEur(bruto)));
-  if (d.ssEmpleado) filas.push(fila("Seguridad Social (tu parte)", `−${fmtEur(d.ssEmpleado)}`, { rojo: true }));
-  if (d.irpf) filas.push(fila("IRPF", `−${fmtEur(d.irpf)}`, { rojo: true }));
-  filas.push(fila("Nómina neta", fmtEur(d.nomina), { destacado: true, separador: true }));
+  filas.push(fila("Nómina bruta", fmtEur(g.bruto)));
+  if (g.ssEmpleado) filas.push(fila("Seguridad Social (tu parte)", `−${fmtEur(g.ssEmpleado)}`, { rojo: true }));
+  if (g.irpf) filas.push(fila("IRPF", `−${fmtEur(g.irpf)}`, { rojo: true }));
+  filas.push(fila("Nómina neta", fmtEur(g.neto), { destacado: true, separador: true }));
   // Resto de conceptos que se suman a la liquidación.
   if (d.complemento) filas.push(fila("Complemento", fmtEur(d.complemento)));
   if (d.horasExtras) filas.push(fila("Horas extras", fmtEur(d.horasExtras)));
   if (d.bonus) filas.push(fila("Bonus", fmtEur(d.bonus)));
   if (d.ajuste) filas.push(fila("Ajuste", `${d.ajuste > 0 ? "+" : "−"}${fmtEur(Math.abs(d.ajuste))}`, { rojo: d.ajuste < 0 }));
   filas.push(fila("Total a percibir", fmtEur(d.total), { destacado: true, separador: true }));
-  // Coste para la empresa = total percibido + SS trabajador + IRPF + SS empresa.
-  const costeEmpresa = Math.round((d.total + d.ssEmpleado + d.irpf + d.ssEmpresa) * 100) / 100;
-  if (costeEmpresa !== d.total) {
-    filas.push(
-      `<tr>
-        <td style="padding:2px 0;color:#888;font-size:12px">Coste para la empresa</td>
-        <td style="padding:2px 0;text-align:right;color:#888;font-size:12px">${fmtEur(costeEmpresa)}</td>
-      </tr>`,
-    );
-  }
-
   return `
     <div style="border:1px solid #e5e5e5;border-radius:10px;padding:16px 18px;margin:16px 0;background:#ffffff">
       <table style="width:100%;border-collapse:collapse">${filas.join("")}</table>
+    </div>
+    ${recuadroCosteEmpresaHtml(g)}`;
+}
+
+/**
+ * Recuadro HTML con lo que la empresa paga por el trabajador: su aportación a
+ * la Seguridad Social y el coste total. INFORMATIVO: se dice con todas las
+ * letras que no se le descuenta, para que nadie lo lea como una deducción.
+ * Solo se pinta si hay coste que contar (0 € calculado ≠ dato sin calcular).
+ */
+function recuadroCosteEmpresaHtml(g: DesgloseNomina): string {
+  if (!g.hayCosteEmpresa) return "";
+
+  const fila = (label: string, valor: string, destacado = false) => `
+    <tr>
+      <td style="padding:6px 0;font-size:14px;color:${destacado ? "#111" : "#555"};${destacado ? "border-top:1px solid #e5e5e5;font-weight:700;" : ""}">${label}</td>
+      <td style="padding:6px 0;text-align:right;font-size:14px;color:#111;${destacado ? "border-top:1px solid #e5e5e5;font-weight:700;" : ""}">${valor}</td>
+    </tr>`;
+
+  const pct =
+    g.porcentajeSsEmpresa !== null
+      ? `, y equivale a un ${g.porcentajeSsEmpresa.toLocaleString("es-ES", { maximumFractionDigits: 1 })}% de tu nómina bruta`
+      : "";
+
+  const bloqueSs = g.ssEmpresa
+    ? `
+      <p style="margin:0 0 8px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:#888">
+        Lo que paga la empresa por ti a la Seguridad Social
+      </p>
+      <div style="border:1px solid #bae6fd;background:#f0f9ff;border-radius:8px;padding:12px 14px;margin-bottom:12px">
+        <table style="width:100%;border-collapse:collapse">
+          <tr>
+            <td style="font-size:14px;color:#0c4a6e">Aportación de la empresa</td>
+            <td style="text-align:right;font-size:16px;font-weight:700;color:#0c4a6e">${fmtEur(g.ssEmpresa)}</td>
+          </tr>
+        </table>
+        <p style="margin:6px 0 0;font-size:11px;line-height:1.5;color:#0c4a6e;opacity:.75">
+          Lo paga la empresa <b>además</b> de tu nómina: no sale de tu bolsillo ni se te
+          descuenta. Cubre ${CONCEPTOS_SS_EMPRESA}${pct}.
+        </p>
+      </div>
+      <table style="width:100%;border-collapse:collapse;margin-bottom:14px">
+        ${fila("Seguridad Social (tu parte)", fmtEur(g.ssEmpleado))}
+        ${fila("Seguridad Social (parte de la empresa)", fmtEur(g.ssEmpresa))}
+        ${fila("Total cotizado por ti este mes", fmtEur(g.ssTotal), true)}
+      </table>`
+    : "";
+
+  return `
+    <div style="border:1px solid #e5e5e5;border-radius:10px;padding:16px 18px;margin:16px 0;background:#ffffff">
+      ${bloqueSs}
+      <p style="margin:0 0 4px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:#888">
+        Lo que le cuestas a la empresa
+      </p>
+      <table style="width:100%;border-collapse:collapse">
+        ${fila("Lo que percibes", fmtEur(g.total))}
+        ${g.ssEmpleado ? fila("Seguridad Social (tu parte)", `+${fmtEur(g.ssEmpleado)}`) : ""}
+        ${g.irpf ? fila("IRPF (a Hacienda)", `+${fmtEur(g.irpf)}`) : ""}
+        ${g.ssEmpresa ? fila("Seguridad Social (parte de la empresa)", `+${fmtEur(g.ssEmpresa)}`) : ""}
+        ${fila("Coste total para la empresa", fmtEur(g.costeEmpresa), true)}
+      </table>
+      <p style="margin:8px 0 0;font-size:11px;line-height:1.5;color:#888">
+        Todo el dinero que la empresa desembolsa por ti este mes: lo que cobras, lo que se te
+        retiene y se ingresa en tu nombre, y su propia aportación a la Seguridad Social. Es
+        informativo: no se te descuenta nada de aquí.
+      </p>
     </div>`;
 }
 
-/** Botón HTML «Ver y confirmar» para el correo al empleado. */
+/**
+ * Botón HTML «Ver y confirmar» para el correo al empleado.
+ *
+ * Es el ÚNICO acceso del correo: debajo ya no se repite la URL en texto. Por eso
+ * se envuelve en una tabla, que es lo que Outlook renderiza de forma fiable
+ * (un <div> con padding se le descuadra), y el propio texto va dentro del <a>
+ * para que toda la zona sea pulsable.
+ */
 function botonConfirmarHtml(token: string): string {
   const url = urlConfirmarLiquidacion(token);
   return `
-    <div style="margin:20px 0">
-      <a href="${url}"
-         style="display:inline-block;background:#16a34a;color:#fff;text-decoration:none;
-                padding:12px 22px;border-radius:8px;font-weight:600;font-size:14px">
-        Ver y confirmar mi liquidación
-      </a>
-    </div>`;
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:20px 0">
+      <tr>
+        <td align="center" bgcolor="#16a34a" style="border-radius:8px">
+          <a href="${url}" target="_blank" rel="noopener"
+             style="display:inline-block;background:#16a34a;color:#ffffff;text-decoration:none;
+                    padding:13px 24px;border-radius:8px;font-weight:600;font-size:15px;
+                    font-family:Arial,Helvetica,sans-serif;line-height:1">
+            Ver y confirmar mi liquidación
+          </a>
+        </td>
+      </tr>
+    </table>`;
 }
 
 /**
@@ -301,7 +404,6 @@ export async function enviarCorreoConfirmacionLiquidacion(
     importes son correctos y confírmalo pulsando el botón.</p>
     ${recuadroLiquidacionHtml(d)}
     ${botonConfirmarHtml(tk.token)}
-    <p style="color:#888;font-size:12px">Si el botón no funciona, copia y pega este enlace en tu navegador:<br>${enlace}</p>
     <p style="color:#888;font-size:12px">Enviado automáticamente desde el sistema de ${d.empresaNombre}.</p>`;
   const text =
     `Tu liquidación de ${d.mesLabel} en ${d.empresaNombre}. Total: ${fmtEur(d.total)}. ` +

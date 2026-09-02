@@ -45,8 +45,9 @@ export function MisPagosView() {
         <div className="flex-1 min-w-0">
           <p className="text-sm font-semibold">Tus pagos abonados</p>
           <p className="text-xs text-muted-foreground">
-            Histórico de las liquidaciones que ya se te han abonado, con su fecha
-            e importe percibido.
+            Histórico de las liquidaciones que ya se te han abonado. Abre cualquier
+            mes para ver el desglose: de la nómina bruta a la neta, y lo que paga la
+            empresa por ti a la Seguridad Social.
           </p>
         </div>
         {!cargando && (
@@ -57,8 +58,8 @@ export function MisPagosView() {
       </Card>
 
       {cargando ? (
-        <Card className="p-10 flex items-center justify-center text-muted-foreground">
-          <Loader2 className="h-5 w-5 animate-spin" />
+        <Card className="p-10 flex items-center justify-center gap-2 text-sm text-muted-foreground">
+          <Loader2 className="h-4 w-4 animate-spin" /> Cargando…
         </Card>
       ) : (
         <HistorialPagos pagos={pagos} />

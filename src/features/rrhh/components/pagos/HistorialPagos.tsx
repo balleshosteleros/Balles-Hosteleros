@@ -9,6 +9,10 @@ import {
   getMiNominaUrl,
   getNominaArchivoUrl,
 } from "@/features/rrhh/actions/nominas-archivo-actions";
+import {
+  calcularDesgloseNomina,
+  CONCEPTOS_SS_EMPRESA,
+} from "@/features/rrhh/lib/desglose-nomina";
 import { CheckCircle2, ChevronDown, Euro, FileText, Loader2 } from "lucide-react";
 
 function fmtEur(n: number): string {
@@ -82,12 +86,9 @@ function PagoCard({ pago, empleadoId }: { pago: PagoAbonado; empleadoId?: string
       setAbriendo(false);
     }
   }
-  const r2 = (n: number) => Math.round(n * 100) / 100;
-  // Bruto = nómina neta + SS trabajador + IRPF (lo que la empresa declara).
-  const bruto = r2(pago.nomina + pago.ssEmpleado + pago.irpf);
-  // Coste real de la empresa = lo que percibe + lo retenido + la SS patronal.
-  const costeEmpresa = r2(pago.total + pago.ssEmpleado + pago.irpf + pago.ssEmpresa);
-  const totalSs = r2(pago.ssEmpleado + pago.ssEmpresa);
+  // Bruto, retenciones y coste de empresa: mismo cálculo que el correo y la web
+  // de confirmación (features/rrhh/lib/desglose-nomina).
+  const d = calcularDesgloseNomina(pago);
   const hayOtros =
     pago.complemento > 0 ||
     pago.horasExtras > 0 ||
@@ -124,19 +125,26 @@ function PagoCard({ pago, empleadoId }: { pago: PagoAbonado; empleadoId?: string
 
       {abierto && (
         <div className="border-t px-4 py-3 bg-muted/20">
-          {/* TU NÓMINA: de lo que la empresa declara hasta lo que te queda. */}
+          {/* TU NÓMINA: del bruto (que ya incluye tu SS y tu IRPF) a lo que
+              te queda en el banco, restando una a una las retenciones. */}
           <Rotulo texto="Tu nómina" />
+          {d.totalRetenido > 0 && (
+            <p className="mb-1 text-[11px] text-muted-foreground leading-snug">
+              Tu nómina bruta ya incluye tu Seguridad Social y tu IRPF. Se te descuentan
+              aquí abajo hasta llegar a la nómina neta.
+            </p>
+          )}
           <dl className="text-sm divide-y divide-border/60">
-            <Fila label="Salario bruto" valor={fmtEur(bruto)} />
-            {pago.ssEmpleado > 0 && (
+            <Fila label="Nómina bruta" valor={fmtEur(d.bruto)} />
+            {d.ssEmpleado > 0 && (
               <Fila
                 label="Seguridad Social (tu parte)"
-                valor={`−${fmtEur(pago.ssEmpleado)}`}
+                valor={`−${fmtEur(d.ssEmpleado)}`}
                 rojo
               />
             )}
-            {pago.irpf > 0 && <Fila label="IRPF (retención)" valor={`−${fmtEur(pago.irpf)}`} rojo />}
-            <Fila label="Nómina neta" valor={fmtEur(pago.nomina)} destacado />
+            {d.irpf > 0 && <Fila label="IRPF (retención)" valor={`−${fmtEur(d.irpf)}`} rojo />}
+            <Fila label="Nómina neta" valor={fmtEur(d.neto)} destacado />
           </dl>
 
           {/* OTROS CONCEPTOS: solo se pinta el bloque si hay alguno. */}
@@ -173,30 +181,65 @@ function PagoCard({ pago, empleadoId }: { pago: PagoAbonado; empleadoId?: string
 
           {/* LO QUE LE CUESTA A LA EMPRESA: informativo, NO se le descuenta.
               Se dice explícitamente para que nadie lo lea como un descuento. */}
-          {costeEmpresa > pago.total && (
+          {d.hayCosteEmpresa && (
             <>
-              <Rotulo texto="Lo que le cuesta a la empresa" />
+              {d.ssEmpresa > 0 && (
+                <>
+                  <Rotulo texto="Lo que paga la empresa por ti a la Seguridad Social" />
+                  <div className="rounded-lg border border-sky-200/70 bg-sky-50/70 px-3 py-2.5 dark:border-sky-900/50 dark:bg-sky-950/30">
+                    <div className="flex items-baseline justify-between gap-3">
+                      <span className="text-sm text-sky-900 dark:text-sky-200">
+                        Aportación de la empresa
+                      </span>
+                      <span className="text-base font-bold tabular-nums text-sky-900 dark:text-sky-200">
+                        {fmtEur(d.ssEmpresa)}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-[11px] leading-snug text-sky-900/70 dark:text-sky-200/70">
+                      Esto lo paga la empresa <b>además</b> de tu nómina: no sale de tu
+                      bolsillo ni se te descuenta. Cubre {CONCEPTOS_SS_EMPRESA}
+                      {d.porcentajeSsEmpresa !== null
+                        ? `, y equivale a un ${d.porcentajeSsEmpresa
+                            .toLocaleString("es-ES", { maximumFractionDigits: 1 })}% de tu nómina bruta`
+                        : ""}
+                      .
+                    </p>
+                  </div>
+                  <dl className="mt-2 text-sm divide-y divide-border/60">
+                    <Fila label="Seguridad Social (tu parte)" valor={fmtEur(d.ssEmpleado)} />
+                    <Fila label="Seguridad Social (parte de la empresa)" valor={fmtEur(d.ssEmpresa)} />
+                    <Fila
+                      label="Total cotizado por ti este mes"
+                      valor={fmtEur(d.ssTotal)}
+                      destacado
+                    />
+                  </dl>
+                </>
+              )}
+
+              <Rotulo texto="Lo que le cuestas a la empresa" />
               <dl className="text-sm divide-y divide-border/60">
-                <Fila label="Lo que percibes" valor={fmtEur(pago.total)} />
-                {pago.ssEmpleado > 0 && (
-                  <Fila label="Seguridad Social (tu parte)" valor={`+${fmtEur(pago.ssEmpleado)}`} />
+                <Fila label="Lo que percibes" valor={fmtEur(d.total)} />
+                {d.ssEmpleado > 0 && (
+                  <Fila label="Seguridad Social (tu parte)" valor={`+${fmtEur(d.ssEmpleado)}`} />
                 )}
-                {pago.irpf > 0 && <Fila label="IRPF (a Hacienda)" valor={`+${fmtEur(pago.irpf)}`} />}
-                {pago.ssEmpresa > 0 && (
+                {d.irpf > 0 && <Fila label="IRPF (a Hacienda)" valor={`+${fmtEur(d.irpf)}`} />}
+                {d.ssEmpresa > 0 && (
                   <Fila
                     label="Seguridad Social (parte de la empresa)"
-                    valor={`+${fmtEur(pago.ssEmpresa)}`}
+                    valor={`+${fmtEur(d.ssEmpresa)}`}
                   />
                 )}
-                <Fila label="Coste total para la empresa" valor={fmtEur(costeEmpresa)} destacado />
               </dl>
-              {totalSs > 0 && (
-                <p className="mt-1.5 text-[11px] text-muted-foreground leading-snug">
-                  En Seguridad Social se cotizan {fmtEur(totalSs)} en total por ti este mes
-                  ({fmtEur(pago.ssEmpleado)} tuyos y {fmtEur(pago.ssEmpresa)} de la empresa).
-                  Esta parte no se te descuenta de lo que percibes: ya está reflejada arriba.
-                </p>
-              )}
+              <div className="mt-2 rounded-lg bg-slate-500/10 px-3 py-2 flex items-center justify-between">
+                <span className="text-sm font-semibold">Coste total para la empresa</span>
+                <span className="text-base font-bold tabular-nums">{fmtEur(d.costeEmpresa)}</span>
+              </div>
+              <p className="mt-1.5 text-[11px] text-muted-foreground leading-snug">
+                Todo el dinero que la empresa desembolsa por ti este mes: lo que cobras, lo
+                que se te retiene y se ingresa en tu nombre, y su propia aportación a la
+                Seguridad Social. Es informativo: no se te descuenta nada de aquí.
+              </p>
             </>
           )}
 

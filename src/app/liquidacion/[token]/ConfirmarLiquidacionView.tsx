@@ -3,6 +3,10 @@
 import { useState } from "react";
 import { CheckCircle2, AlertTriangle, Loader2, ShieldCheck } from "lucide-react";
 import type { LiquidacionDetalle } from "@/features/rrhh/services/nominas/rrhh-pagos-confirmacion";
+import {
+  calcularDesgloseNomina,
+  CONCEPTOS_SS_EMPRESA,
+} from "@/features/rrhh/lib/desglose-nomina";
 import { friendlyError } from "@/shared/lib/friendly-errors";
 
 interface Props {
@@ -27,7 +31,10 @@ export function ConfirmarLiquidacionView({ endpoint, detalle }: Props) {
     try {
       const res = await fetch(endpoint, { method: "POST" });
       const json = await res.json();
-      if (json.ok) setConfirmada(true);
+      // "Ya usado" no es un fallo: la liquidación está confirmada igualmente
+      // (p.ej. pestaña abierta desde antes, o ya confirmada desde el portal).
+      // Se muestra la pantalla de éxito, no un error en rojo.
+      if (json.ok || json.reason === "used") setConfirmada(true);
       else setError(json.error ?? "No se pudo confirmar. Inténtalo de nuevo.");
     } catch (err) {
       setError(friendlyError(err, "confirmar"));
@@ -66,12 +73,8 @@ export function ConfirmarLiquidacionView({ endpoint, detalle }: Props) {
   }
 
   // ── Filas del recuadro: desglose bruto → neto y demás conceptos ─────────────
-  // El sistema guarda el NETO; el BRUTO se reconstruye = neto + SS trabajador + IRPF.
-  const bruto = Math.round((detalle.nomina + detalle.ssEmpleado + detalle.irpf) * 100) / 100;
-  // Coste para la empresa = lo que percibe el trabajador (total) + sus retenciones
-  // (SS trabajador + IRPF, que la empresa ingresa a Hacienda/SS) + la SS de empresa.
-  const costeEmpresa =
-    Math.round((detalle.total + detalle.ssEmpleado + detalle.irpf + detalle.ssEmpresa) * 100) / 100;
+  // Mismo cálculo que el portal "Mis pagos" y el correo de liquidación.
+  const d = calcularDesgloseNomina(detalle);
   type Fila = {
     label: string;
     valor: string;
@@ -79,11 +82,11 @@ export function ConfirmarLiquidacionView({ endpoint, detalle }: Props) {
     destacado?: boolean;
     separador?: boolean;
   };
-  const filas: Fila[] = [{ label: "Nómina bruta", valor: fmtEur(bruto) }];
-  if (detalle.ssEmpleado)
-    filas.push({ label: "Seguridad Social (tu parte)", valor: `−${fmtEur(detalle.ssEmpleado)}`, signo: "neg" });
-  if (detalle.irpf) filas.push({ label: "IRPF", valor: `−${fmtEur(detalle.irpf)}`, signo: "neg" });
-  filas.push({ label: "Nómina neta", valor: fmtEur(detalle.nomina), destacado: true, separador: true });
+  const filas: Fila[] = [{ label: "Nómina bruta", valor: fmtEur(d.bruto) }];
+  if (d.ssEmpleado)
+    filas.push({ label: "Seguridad Social (tu parte)", valor: `−${fmtEur(d.ssEmpleado)}`, signo: "neg" });
+  if (d.irpf) filas.push({ label: "IRPF", valor: `−${fmtEur(d.irpf)}`, signo: "neg" });
+  filas.push({ label: "Nómina neta", valor: fmtEur(d.neto), destacado: true, separador: true });
   if (detalle.complemento) filas.push({ label: "Complemento", valor: fmtEur(detalle.complemento) });
   if (detalle.horasExtras) filas.push({ label: "Horas extras", valor: fmtEur(detalle.horasExtras) });
   if (detalle.bonus) filas.push({ label: "Bonus", valor: fmtEur(detalle.bonus) });
@@ -140,15 +143,86 @@ export function ConfirmarLiquidacionView({ endpoint, detalle }: Props) {
                   {fmtEur(detalle.total)}
                 </td>
               </tr>
-              {costeEmpresa !== detalle.total && (
-                <tr>
-                  <td className="pt-1 text-xs text-zinc-500">Coste para la empresa</td>
-                  <td className="pt-1 text-right text-xs tabular-nums text-zinc-500">{fmtEur(costeEmpresa)}</td>
-                </tr>
-              )}
             </tbody>
           </table>
         </div>
+
+        {/* LO QUE PAGA LA EMPRESA POR ÉL: informativo, NO se le descuenta. */}
+        {d.hayCosteEmpresa && (
+          <div className="mt-4 rounded-xl border border-zinc-200 p-4">
+            {d.ssEmpresa > 0 && (
+              <>
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">
+                  Lo que paga la empresa por ti a la Seguridad Social
+                </p>
+                <div className="mt-2 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2.5">
+                  <div className="flex items-baseline justify-between gap-3">
+                    <span className="text-sm text-sky-900">Aportación de la empresa</span>
+                    <span className="text-base font-bold tabular-nums text-sky-900">
+                      {fmtEur(d.ssEmpresa)}
+                    </span>
+                  </div>
+                  <p className="mt-1 text-[11px] leading-snug text-sky-900/70">
+                    Lo paga la empresa <b>además</b> de tu nómina: no sale de tu bolsillo ni se
+                    te descuenta. Cubre {CONCEPTOS_SS_EMPRESA}
+                    {d.porcentajeSsEmpresa !== null
+                      ? `, y equivale a un ${d.porcentajeSsEmpresa.toLocaleString("es-ES", {
+                          maximumFractionDigits: 1,
+                        })}% de tu nómina bruta`
+                      : ""}
+                    .
+                  </p>
+                </div>
+                <table className="mt-3 w-full border-collapse">
+                  <tbody>
+                    <FilaSimple label="Seguridad Social (tu parte)" valor={fmtEur(d.ssEmpleado)} />
+                    <FilaSimple
+                      label="Seguridad Social (parte de la empresa)"
+                      valor={fmtEur(d.ssEmpresa)}
+                    />
+                    <FilaSimple
+                      label="Total cotizado por ti este mes"
+                      valor={fmtEur(d.ssTotal)}
+                      destacado
+                    />
+                  </tbody>
+                </table>
+              </>
+            )}
+
+            <p className="mt-4 text-[11px] font-semibold uppercase tracking-wide text-zinc-500">
+              Lo que le cuestas a la empresa
+            </p>
+            <table className="mt-1 w-full border-collapse">
+              <tbody>
+                <FilaSimple label="Lo que percibes" valor={fmtEur(d.total)} />
+                {d.ssEmpleado > 0 && (
+                  <FilaSimple
+                    label="Seguridad Social (tu parte)"
+                    valor={`+${fmtEur(d.ssEmpleado)}`}
+                  />
+                )}
+                {d.irpf > 0 && <FilaSimple label="IRPF (a Hacienda)" valor={`+${fmtEur(d.irpf)}`} />}
+                {d.ssEmpresa > 0 && (
+                  <FilaSimple
+                    label="Seguridad Social (parte de la empresa)"
+                    valor={`+${fmtEur(d.ssEmpresa)}`}
+                  />
+                )}
+                <FilaSimple
+                  label="Coste total para la empresa"
+                  valor={fmtEur(d.costeEmpresa)}
+                  destacado
+                />
+              </tbody>
+            </table>
+            <p className="mt-1.5 text-[11px] leading-snug text-zinc-500">
+              Todo el dinero que la empresa desembolsa por ti este mes: lo que cobras, lo que se
+              te retiene y se ingresa en tu nombre, y su propia aportación a la Seguridad Social.
+              Es informativo: no se te descuenta nada de aquí.
+            </p>
+          </div>
+        )}
 
         <div className="mt-5 rounded-xl border border-sky-200 bg-sky-50 p-4 text-sm text-sky-900">
           <p>
@@ -178,5 +252,31 @@ export function ConfirmarLiquidacionView({ endpoint, detalle }: Props) {
         </button>
       </div>
     </div>
+  );
+}
+
+/** Fila etiqueta/importe de los recuadros informativos de coste. */
+function FilaSimple({
+  label,
+  valor,
+  destacado,
+}: {
+  label: string;
+  valor: string;
+  destacado?: boolean;
+}) {
+  return (
+    <tr className={destacado ? "border-t border-zinc-200" : ""}>
+      <td className={`py-1.5 text-sm ${destacado ? "font-semibold text-zinc-900" : "text-zinc-600"}`}>
+        {label}
+      </td>
+      <td
+        className={`py-1.5 text-right text-sm tabular-nums ${
+          destacado ? "font-bold text-zinc-900" : "text-zinc-900"
+        }`}
+      >
+        {valor}
+      </td>
+    </tr>
   );
 }

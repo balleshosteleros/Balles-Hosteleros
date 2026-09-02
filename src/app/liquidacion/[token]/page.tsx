@@ -1,10 +1,11 @@
-import { FileX2, Clock } from "lucide-react";
+import { FileX2, Clock, CheckCircle2 } from "lucide-react";
 import { iconsDeEmpresa } from "@/shared/lib/favicon-empresa";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
   resolverTokenConfirmacionPago,
   detalleLiquidacionPorToken,
 } from "@/features/rrhh/services/nominas/rrhh-pagos-confirmacion";
+import { nombreMes } from "@/features/rrhh/services/nominas/nominas-gestoria";
 import { ConfirmarLiquidacionView } from "./ConfirmarLiquidacionView";
 
 export const runtime = "nodejs";
@@ -20,40 +21,40 @@ export default async function ConfirmarLiquidacionPage({
   const res = await resolverTokenConfirmacionPago(admin, token);
 
   if (!res.ok) {
-    const icon =
-      res.reason === "expired" ? (
-        <Clock className="h-10 w-10 text-amber-500" />
-      ) : (
-        <FileX2 className="h-10 w-10 text-rose-500" />
+    if (res.reason === "used") {
+      return (
+        <AvisoEnlace
+          tono="ok"
+          titulo="Este enlace ya se ha usado"
+          mensaje={
+            res.periodo
+              ? `Ya confirmaste tu liquidación de ${nombreMes(res.periodo)}. No hace falta que hagas nada más.`
+              : "Ya confirmaste esta liquidación. No hace falta que hagas nada más."
+          }
+        />
       );
-    const titulo = res.reason === "expired" ? "Enlace caducado" : "Enlace no válido";
-    const mensaje =
-      res.reason === "expired"
-        ? "El enlace ha caducado. Pide a la empresa que te lo reenvíe."
-        : "El enlace no es válido.";
-    return (
-      <div className="min-h-screen bg-zinc-50 flex items-center justify-center p-6">
-        <div className="max-w-md w-full bg-white rounded-2xl border border-zinc-200 shadow-sm p-8 text-center">
-          <div className="flex justify-center mb-3">{icon}</div>
-          <h1 className="text-lg font-semibold text-zinc-900">{titulo}</h1>
-          <p className="mt-2 text-sm text-zinc-600">{mensaje}</p>
-        </div>
-      </div>
+    }
+    return res.reason === "expired" ? (
+      <AvisoEnlace
+        tono="aviso"
+        titulo="Enlace caducado"
+        mensaje="El enlace ha caducado. Pide a la empresa que te lo reenvíe."
+      />
+    ) : (
+      <AvisoEnlace tono="error" titulo="Enlace no válido" mensaje="El enlace no es válido." />
     );
   }
 
   const det = await detalleLiquidacionPorToken(admin, res.row);
   if (!det.ok) {
-    return (
-      <div className="min-h-screen bg-zinc-50 flex items-center justify-center p-6">
-        <div className="max-w-md w-full bg-white rounded-2xl border border-zinc-200 shadow-sm p-8 text-center">
-          <div className="flex justify-center mb-3">
-            <FileX2 className="h-10 w-10 text-rose-500" />
-          </div>
-          <h1 className="text-lg font-semibold text-zinc-900">No disponible</h1>
-          <p className="mt-2 text-sm text-zinc-600">{det.error}</p>
-        </div>
-      </div>
+    return det.reason === "used" ? (
+      <AvisoEnlace
+        tono="ok"
+        titulo="Este enlace ya se ha usado"
+        mensaje="Ya confirmaste esta liquidación. No hace falta que hagas nada más."
+      />
+    ) : (
+      <AvisoEnlace tono="error" titulo="No disponible" mensaje={det.error} />
     );
   }
 
@@ -78,4 +79,39 @@ export async function generateMetadata({
     robots: { index: false, follow: false },
     icons: await iconsDeEmpresa({ id: res.ok ? res.row.empresa_id : "" }),
   };
+}
+
+/**
+ * Pantalla de aviso cuando el enlace no abre la liquidación. El tono separa un
+ * enlace YA USADO (que no es un error: cumplió su función) de uno caducado o
+ * inválido, para no alarmar a quien simplemente vuelve a pulsar su correo.
+ */
+function AvisoEnlace({
+  tono,
+  titulo,
+  mensaje,
+}: {
+  tono: "ok" | "aviso" | "error";
+  titulo: string;
+  mensaje: string;
+}) {
+  const icono =
+    tono === "ok" ? (
+      <CheckCircle2 className="h-10 w-10 text-emerald-600" />
+    ) : tono === "aviso" ? (
+      <Clock className="h-10 w-10 text-amber-500" />
+    ) : (
+      <FileX2 className="h-10 w-10 text-rose-500" />
+    );
+
+  return (
+    <div className="min-h-screen bg-zinc-50 flex items-center justify-center p-6">
+      <div className="max-w-md w-full bg-white rounded-2xl border border-zinc-200 shadow-sm p-8 text-center">
+        <div className="flex justify-center mb-3">{icono}</div>
+        <h1 className="text-lg font-semibold text-zinc-900">{titulo}</h1>
+        <p className="mt-2 text-sm text-zinc-600">{mensaje}</p>
+        <p className="mt-6 text-xs text-zinc-400">Ya puedes cerrar esta ventana.</p>
+      </div>
+    </div>
+  );
 }
