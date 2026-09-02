@@ -3545,13 +3545,20 @@ export function ReservasView() {
       if (res.ok) {
         setReservas(res.data.map(mapDbToReserva));
       } else {
-        toast.error("Error al cargar reservas");
+        toast.error("Error al cargar reservas", { description: res.error });
       }
     } catch (err) {
       if (idPeticion !== peticionReservasRef.current) return;
       toast.error("Error de conexion al cargar reservas", { description: friendlyError(err, "irSiguienteSala") });
     } finally {
-      if (idPeticion === peticionReservasRef.current && !silencioso) setLoading(false);
+      // El indicador se apaga SIEMPRE, sea o no la última petición.
+      //
+      // Antes solo lo apagaba la última, y con dos cargas seguidas —abrir la
+      // pantalla, cambiar de fecha— bastaba con que la segunda terminase
+      // primero para que la pantalla se quedara cargando para siempre. Que una
+      // respuesta vieja no se pinte es correcto; que deje la pantalla colgada,
+      // no.
+      if (!silencioso) setLoading(false);
     }
   }, []);
 
