@@ -74,15 +74,19 @@ export default async function ReservarPublicaPage({
   searchParams,
 }: {
   params: Promise<{ slug: string }>;
-  searchParams: Promise<{ o?: string }>;
+  searchParams: Promise<{ o?: string; ticket?: string }>;
 }) {
   const { slug } = await params;
-  const { o } = await searchParams;
+  const { o, ticket } = await searchParams;
   const empresa = await fetchEmpresaBySlug(slug);
   if (!empresa) notFound();
 
   const origenLimpio = o && /^[A-Z0-9_]+$/.test(o) && o.length <= 32 ? o : null;
   const productosTicket = await fetchProductosTicket(slug, null);
+  // Código que llega desde el correo de compra: se precarga para que el cliente
+  // no tenga que copiarlo a mano.
+  const ticketCodigo =
+    ticket && /^[A-Z0-9]{6}$/.test(ticket.toUpperCase()) ? ticket.toUpperCase() : null;
 
   return (
     <ReservaPublicaForm
@@ -93,6 +97,7 @@ export default async function ReservarPublicaPage({
       colorTexto={empresa.colorTexto}
       origen={origenLimpio}
       productosTicket={productosTicket}
+      ticketCodigoInicial={ticketCodigo}
     />
   );
 }
