@@ -234,6 +234,23 @@ export interface Reserva {
   esTicket?: boolean;
   tipoCategoria?: TipoReservaCategoria | null;
   garantiaImporte?: number | null;
+  // Estado de la tarjeta (PRP-082). Solo lo que la ficha necesita enseñar:
+  // ningún dato con el que se pueda cobrar.
+  tieneGarantia?: boolean;
+  garantiaEstado?: string | null;
+  garantiaTarjetaUltimos4?: string | null;
+  garantiaTarjetaMarca?: string | null;
+  garantiaCaptureDeadline?: string | null;
+  garantiaCobradaAt?: string | null;
+  tieneCancelacion?: boolean;
+  cancelacionImporte?: number | null;
+  cancelacionEstado?: string | null;
+  cancelacionTarjetaUltimos4?: string | null;
+  cancelacionIntentos?: number;
+  cancelacionError?: string | null;
+  cancelacionProximoIntentoAt?: string | null;
+  cancelacionCobradaAt?: string | null;
+  cobroPerdonadoAt?: string | null;
   importePagado?: number | null;
   // PRP-051: ticket comprado al reservar.
   ticketProductoId?: string | null;

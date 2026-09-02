@@ -125,6 +125,8 @@ import type {
   ClienteInsights,
 } from "@/features/sala/data/reservas";
 import { ReservaFlagsChips } from "@/features/sala/components/reservas/ReservaFlagsChips";
+import { AvisoCobrosBanner } from "@/features/sala/components/reservas/AvisoCobrosBanner";
+import { CobroPoliticaBloque } from "@/features/sala/components/reservas/CobroPoliticaBloque";
 import { ReservaTiempoCelda } from "@/features/sala/components/reservas/ReservaTiempoCelda";
 import { ClienteReservasBadge } from "@/features/sala/components/reservas/ClienteReservasBadge";
 import { ReservaExternalBadge } from "@/features/sala/components/reservas/ReservaExternalBadge";
@@ -2203,6 +2205,21 @@ function mapDbToReserva(row: Record<string, unknown>): Reserva {
     esTicket: (row.es_ticket as boolean) ?? false,
     tipoCategoria: (row.tipo_categoria as TipoReservaCategoria | null) ?? null,
     garantiaImporte: (row.garantia_importe as number | null) ?? null,
+    tieneGarantia: Boolean(row.tiene_garantia ?? false),
+    garantiaEstado: (row.garantia_estado as string | null) ?? null,
+    garantiaTarjetaUltimos4: (row.garantia_tarjeta_ultimos4 as string | null) ?? null,
+    garantiaTarjetaMarca: (row.garantia_tarjeta_marca as string | null) ?? null,
+    garantiaCaptureDeadline: (row.garantia_capture_deadline as string | null) ?? null,
+    garantiaCobradaAt: (row.garantia_cobrada_at as string | null) ?? null,
+    tieneCancelacion: Boolean(row.tiene_cancelacion ?? false),
+    cancelacionImporte: (row.cancelacion_importe as number | null) ?? null,
+    cancelacionEstado: (row.cancelacion_estado as string | null) ?? null,
+    cancelacionTarjetaUltimos4: (row.cancelacion_tarjeta_ultimos4 as string | null) ?? null,
+    cancelacionIntentos: (row.cancelacion_intentos as number) ?? 0,
+    cancelacionError: (row.cancelacion_error as string | null) ?? null,
+    cancelacionProximoIntentoAt: (row.cancelacion_proximo_intento_at as string | null) ?? null,
+    cancelacionCobradaAt: (row.cancelacion_cobrada_at as string | null) ?? null,
+    cobroPerdonadoAt: (row.cobro_perdonado_at as string | null) ?? null,
     importePagado: (row.importe_pagado as number | null) ?? null,
     ticketProductoId: (row.ticket_producto_id as string | null) ?? null,
     ticketUnidades: (row.ticket_unidades as number | null) ?? null,
@@ -4653,6 +4670,12 @@ export function ReservasView() {
         esOscuro && "sala-oscuro",
       )}
     >
+      {/* Cobros que necesitan una decisión (PRP-082 §5.6). Si no hay nada
+          pendiente no se pinta nada. */}
+      <div className="shrink-0 px-2 pt-2">
+        <AvisoCobrosBanner />
+      </div>
+
       {/* TOP BAR — todo en una sola línea: acciones + filtros + turno + sala/zonas + vista + fecha + ajustes */}
       <div className="shrink-0 border-b bg-card px-2 py-1.5 flex items-center gap-1.5 flex-wrap">
         {/* Acciones: NUEVA · Lista espera · Estados · Buscar — solo en vista día.
@@ -5474,6 +5497,32 @@ export function ReservasView() {
                 <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                   Esta reserva
                 </h3>
+
+                {/* Tarjeta de la reserva (PRP-082): estado y cobro. Va aquí
+                    arriba porque es dinero, y porque solo aparece cuando la
+                    reserva lleva alguna política. */}
+                <CobroPoliticaBloque
+                  datos={{
+                    reservaId: selectedReserva.id,
+                    tieneGarantia: selectedReserva.tieneGarantia ?? false,
+                    garantiaImporte: selectedReserva.garantiaImporte ?? null,
+                    garantiaEstado: selectedReserva.garantiaEstado ?? null,
+                    garantiaTarjetaUltimos4: selectedReserva.garantiaTarjetaUltimos4 ?? null,
+                    garantiaTarjetaMarca: selectedReserva.garantiaTarjetaMarca ?? null,
+                    garantiaCaptureDeadline: selectedReserva.garantiaCaptureDeadline ?? null,
+                    garantiaCobradaAt: selectedReserva.garantiaCobradaAt ?? null,
+                    tieneCancelacion: selectedReserva.tieneCancelacion ?? false,
+                    cancelacionImporte: selectedReserva.cancelacionImporte ?? null,
+                    cancelacionEstado: selectedReserva.cancelacionEstado ?? null,
+                    cancelacionTarjetaUltimos4: selectedReserva.cancelacionTarjetaUltimos4 ?? null,
+                    cancelacionIntentos: selectedReserva.cancelacionIntentos ?? 0,
+                    cancelacionError: selectedReserva.cancelacionError ?? null,
+                    cancelacionProximoIntentoAt: selectedReserva.cancelacionProximoIntentoAt ?? null,
+                    cancelacionCobradaAt: selectedReserva.cancelacionCobradaAt ?? null,
+                    cobroPerdonadoAt: selectedReserva.cobroPerdonadoAt ?? null,
+                  }}
+                  onCambio={() => void loadReservas(fecha)}
+                />
                 <div className="grid grid-cols-2 gap-2">
                   {/* Fecha y hora editables: mover una reserva era el caso
                       más común y no se podía hacer desde aquí. */}
