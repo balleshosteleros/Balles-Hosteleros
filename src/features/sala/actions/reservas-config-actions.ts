@@ -41,16 +41,27 @@ async function getCtx() {
 const DIAS: DiaSemanaKey[] = ["lun","mar","mie","jue","vie","sab","dom"];
 const TURNOS: TurnoKey[] = ["comida","cena"];
 
+/**
+ * Las horas se guardan como `time` y vuelven con segundos ("13:00:00"), pero
+ * toda la pantalla de configuración trabaja en HH:MM ("13:00"). Sin recortar,
+ * la comparación «¿lo que se ve difiere de lo guardado?» daba SIEMPRE distinto:
+ * el aviso "Cambios sin guardar" no se iba nunca por mucho que se pulsara
+ * Guardar — y sí estaba guardando (Iván, 2-sep).
+ */
+function aHoraCorta(v: unknown): string | null {
+  return typeof v === "string" && v.length >= 5 ? v.slice(0, 5) : null;
+}
+
 function rowToConfig(row: Record<string, unknown>): EmpresaReservasConfig {
   const out: Record<string, unknown> = {
     empresaId: row.empresa_id,
     antelacionMinMinutos: (row.antelacion_min_minutos as number) ?? 0,
     antelacionMaxDias:    (row.antelacion_max_dias as number)    ?? 90,
     duracionReservaMin:   (row.duracion_reserva_min as number)   ?? DURACION_RESERVA_DEFAULT_MINUTOS,
-    generalInicioComida:  (row.general_inicio_comida as string | null) ?? null,
-    generalFinComida:     (row.general_fin_comida    as string | null) ?? null,
-    generalInicioCena:    (row.general_inicio_cena   as string | null) ?? null,
-    generalFinCena:       (row.general_fin_cena      as string | null) ?? null,
+    generalInicioComida:  aHoraCorta(row.general_inicio_comida),
+    generalFinComida:     aHoraCorta(row.general_fin_comida),
+    generalInicioCena:    aHoraCorta(row.general_inicio_cena),
+    generalFinCena:       aHoraCorta(row.general_fin_cena),
     generalCerradoComida: Boolean(row.general_cerrado_comida ?? false),
     generalCerradoCena:   Boolean(row.general_cerrado_cena   ?? false),
     generalSlotsInactivosComida: Array.isArray(row.general_slots_inactivos_comida)
@@ -114,8 +125,8 @@ function rowToConfig(row: Record<string, unknown>): EmpresaReservasConfig {
   };
   for (const d of DIAS) {
     for (const t of TURNOS) {
-      out[`${d}_inicio_${t}`]  = (row[`${d}_inicio_${t}`]  as string | null) ?? null;
-      out[`${d}_fin_${t}`]     = (row[`${d}_fin_${t}`]     as string | null) ?? null;
+      out[`${d}_inicio_${t}`]  = aHoraCorta(row[`${d}_inicio_${t}`]);
+      out[`${d}_fin_${t}`]     = aHoraCorta(row[`${d}_fin_${t}`]);
       out[`${d}_cerrado_${t}`] = (row[`${d}_cerrado_${t}`] as boolean | null) ?? null;
     }
   }
