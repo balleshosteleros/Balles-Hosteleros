@@ -313,6 +313,15 @@ export async function confirmarPagoTarjeta(token: string): Promise<
       confirmada = true;
     }
 
+    // Pagada: deja de ser provisional y pasa a ser una reserva de verdad.
+    // Hasta aquí solo apartaba la mesa; ahora ya sale en la lista de Sala.
+    if (confirmada) {
+      await admin
+        .from("reservas")
+        .update({ provisional_hasta: null })
+        .eq("id", r.id as string);
+    }
+
     // Ahora sí: la reserva está completa, así que sale su confirmación. El
     // alta la retuvo a propósito para no decir "confirmada" mientras al
     // cliente aún le quedaba pagar.

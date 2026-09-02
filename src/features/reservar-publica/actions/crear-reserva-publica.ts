@@ -33,6 +33,15 @@ import {
 } from "@/features/sala/data/reservas";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+/**
+ * Cuánto se le guarda la mesa al cliente mientras introduce su tarjeta.
+ *
+ * Quince minutos: sobra para pagar sin prisa, y no bloquea la mesa toda la
+ * tarde si abandona a mitad. Pasado el plazo, la reserva provisional se borra
+ * sola y la mesa vuelve al cupo.
+ */
+const MINUTOS_PARA_PAGAR = 15;
+
 const inputSchema = z.object({
   empresaSlug: z.string().min(1).max(120),
   origen: z.string().regex(/^[A-Z0-9_]+$/).max(32).nullable().optional(),
@@ -548,6 +557,22 @@ export async function crearReservaPublicaAction(
     ? calcularPolitica(politicaDesdeRow(cfgRow, "cancelacion"), datosPolitica)
     : { aplica: false, importe: 0 };
 
+  const exigeTarjeta = garantia.aplica || cancelacion.aplica;
+
+  // Ventana de la solicitud diferida: por debajo de estos días la tarjeta se
+  // pide ahora; por encima, unos días antes de la reserva (§5.4).
+  const diasHastaReserva = Math.floor(
+    (Date.parse(`${data.fecha}T00:00:00Z`) - Date.now()) / 86_400_000,
+  );
+  // Solo la GARANTÍA se pide en diferido: la cancelación guarda la tarjeta sin
+  // retener nada, y eso no caduca.
+  const garantiaEnDiferido =
+    garantia.aplica && !cancelacion.aplica && diasHastaReserva > diasAntesGarantia;
+
+  // La reserva nace provisional solo si el cliente tiene que pagar AHORA. En
+  // diferido queda firme desde el primer momento: la tarjeta llegará después.
+  const exigeTarjetaAlReservar = exigeTarjeta && !garantiaEnDiferido;
+
   // ────────────────────────────────────────────────────────────────
   // Vinculación pendiente de revisión.
   //
@@ -608,6 +633,12 @@ export async function crearReservaPublicaAction(
     codigo_id: codigoId,
     codigo: codigoTexto,
     tipo_categoria: tipoCategoriaFinal,
+    // Sin tarjeta no hay reserva: mientras el cliente paga, la fila aparta la
+    // mesa pero NO cuenta como reserva del restaurante (no sale en la lista ni
+    // dispara correos). Si no paga, se borra sola y la mesa vuelve al cupo.
+    provisional_hasta: exigeTarjetaAlReservar
+      ? new Date(Date.now() + MINUTOS_PARA_PAGAR * 60_000).toISOString()
+      : null,
     tiene_garantia: garantia.aplica,
     garantia_importe: garantia.aplica ? garantia.importe : null,
     tiene_cancelacion: cancelacion.aplica,
@@ -680,15 +711,6 @@ export async function crearReservaPublicaAction(
   //                    aún le queda pagar. El correo sale cuando la ponga.
   // Tarjeta DESPUÉS  → la reserva está firme y la tarjeta se pedirá unos días
   //                    antes (§5.4), así que se le confirma avisándole de eso.
-  const exigeTarjeta = garantia.aplica || cancelacion.aplica;
-  const diasHastaReserva = Math.floor(
-    (Date.parse(`${data.fecha}T00:00:00Z`) - Date.now()) / 86_400_000,
-  );
-  // Solo la GARANTÍA se pide en diferido: la cancelación guarda la tarjeta sin
-  // retener nada, y eso no caduca.
-  const garantiaEnDiferido =
-    garantia.aplica && !cancelacion.aplica && diasHastaReserva > diasAntesGarantia;
-
   if (!exigeTarjeta) {
     notificarReservaCreada(reservaId).catch((e) =>
       console.error("[reservar-publica] mail CONFIRMACION:", e),

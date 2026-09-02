@@ -116,7 +116,10 @@ export async function listReservas(
       .from("reservas")
       .select(RESERVA_COLUMNAS)
       .order("fecha", { ascending: true })
-      .order("hora", { ascending: true });
+      .order("hora", { ascending: true })
+      // Las provisionales están a medio pagar: apartan la mesa, pero todavía
+      // no son reservas del restaurante y no deben salir en la lista.
+      .is("provisional_hasta", null);
     if (empresaId) query.eq("empresa_id", empresaId);
     if (fecha) query.eq("fecha", fecha);
     const { data, error } = await query;
@@ -140,6 +143,9 @@ export async function listReservasRango(fechaDesde: string, fechaHasta: string) 
       .select("id, fecha, turno, personas, estado, mesa, zona")
       .gte("fecha", fechaDesde)
       .lte("fecha", fechaHasta)
+      // Igual que en el listado del día: una provisional aparta la mesa, pero
+      // todavía no es una reserva que enseñar en el calendario.
+      .is("provisional_hasta", null)
       .order("fecha", { ascending: true });
     if (empresaId) query.eq("empresa_id", empresaId);
     const { data, error } = await query;

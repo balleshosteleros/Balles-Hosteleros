@@ -102,6 +102,10 @@
     {
       "path": "/api/cron/reservas-garantia-tarjeta",
       "schedule": "15 * * * *"
+    },
+    {
+      "path": "/api/cron/reservas-provisionales",
+      "schedule": "*/10 * * * *"
     }
   ]
 }

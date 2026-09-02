@@ -236,6 +236,8 @@ async function procesarPoliticaReserva(input: {
       .update({
         [`${p}_estado`]: nuevo,
         [`${p}_${p === "garantia" ? "retenida" : "guardada"}_at`]: new Date().toISOString(),
+        // Pagada: deja de ser provisional y pasa a ser una reserva de verdad.
+        provisional_hasta: null,
       })
       .eq("id", reserva.id as string);
     // El alta retuvo la confirmación para no decir "confirmada" mientras el
