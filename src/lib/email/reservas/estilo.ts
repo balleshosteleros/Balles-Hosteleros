@@ -126,6 +126,14 @@ export interface EnvolturaInput {
   contenido: string;
   /** Línea del pie, antes del nombre de la empresa. Texto plano. */
   pie: string;
+  /**
+   * Teléfono del restaurante (Ajustes → Empresa). Va junto al aviso de que el
+   * buzón no admite respuestas: si el cliente necesita algo que el correo no
+   * resuelve —cambiar la hora, avisar de una alergia— tiene que poder
+   * llamar. Sin él, el aviso solo dice "no me escribas" y deja al cliente sin
+   * salida.
+   */
+  telefono?: string | null;
 }
 
 /**
@@ -181,7 +189,15 @@ export function envolverEmail(input: EnvolturaInput): string {
                   ${empresaNombre ? `<br/><strong style="color:#475569;">${escapeHtml(empresaNombre)}</strong>` : ""}
                 </p>
                 <p style="margin:10px 0 0 0;font-size:11px;color:#cbd5e1;line-height:1.5;text-align:center;">
-                  ${AVISO_NO_REPLY}
+                  ${AVISO_NO_REPLY}${
+                    input.telefono
+                      ? ` Si necesitas algo, llámanos al <a href="tel:${escapeAttr(
+                          input.telefono.replace(/\s+/g, ""),
+                        )}" style="color:#94a3b8;text-decoration:none;font-weight:600;">${escapeHtml(
+                          input.telefono,
+                        )}</a>.`
+                      : ""
+                  }
                 </p>
               </td>
             </tr>

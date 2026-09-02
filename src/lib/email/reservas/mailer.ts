@@ -130,6 +130,12 @@ type EmpresaRow = {
   isotipo_url: string | null;
   color: string | null;
   color_secundario: string | null;
+  /**
+   * Fijo del restaurante (Ajustes → Empresa → `telefonoPrincipal`). Cada
+   * empresa tiene el suyo: el cliente de BACANAL no puede acabar llamando a
+   * HABANA.
+   */
+  telefono?: string | null;
 };
 
 type ReservaRow = {
@@ -396,6 +402,16 @@ export async function enviarReservaEmail(
     color: (empresaData?.color as string | null | undefined) ?? null,
     color_secundario:
       (empresaData?.color_secundario as string | null | undefined) ?? null,
+    // Fijo del restaurante, de Ajustes → Empresa. Va en el pie para que el
+    // cliente tenga a quién llamar: el correo no admite respuestas.
+    telefono: (() => {
+      const generales = empresaData?.datos_generales as
+        | Record<string, unknown>
+        | null
+        | undefined;
+      const tel = generales?.telefonoPrincipal;
+      return typeof tel === "string" && tel.trim() ? tel.trim() : null;
+    })(),
   };
 
   const config: ConfigRow = {
@@ -618,6 +634,7 @@ export async function enviarReservaEmail(
     vinculacionAviso,
     tipo,
     empresa: empresa.nombre,
+    telefono: empresa.telefono,
     cliente: placeholders.nombre,
     fechaLegible,
     horaLegible,
@@ -947,6 +964,7 @@ function renderHtml(input: RenderInput): string {
       isotipo_url: input.empresa.isotipo_url,
       color: input.empresa.color,
     },
+    telefono: input.empresa.telefono,
     badge: BADGE_POR_TIPO[input.tipo],
     titular: greeting,
     subtitulo: subtitulo(input.tipo),
@@ -978,7 +996,9 @@ function renderHtml(input: RenderInput): string {
   });
 }
 
-function renderText(input: Omit<RenderInput, "empresa"> & { empresa: string }): string {
+function renderText(
+  input: Omit<RenderInput, "empresa"> & { empresa: string; telefono?: string | null },
+): string {
   const lineas = [
     `${HEADLINE_POR_TIPO[input.tipo]} · ${input.empresa}`,
     ``,
@@ -1057,7 +1077,12 @@ function renderText(input: Omit<RenderInput, "empresa"> & { empresa: string }): 
   }
   const coletilla = footerSegunTipo(input.tipo, !!input.urlCancelar);
   if (coletilla) lineas.push(``, coletilla);
-  lineas.push(``, AVISO_NO_REPLY);
+  lineas.push(
+    ``,
+    input.telefono
+      ? `${AVISO_NO_REPLY} Si necesitas algo, llámanos al ${input.telefono}.`
+      : AVISO_NO_REPLY,
+  );
   return lineas.join("\n");
 }
 
@@ -1166,6 +1191,8 @@ export interface PreviewInput {
   colorPrimario: string | null;
   /** Segundo color de Imagen de marca: si falta, la previa no se ve como el real. */
   colorSecundario?: string | null;
+  /** Fijo del restaurante: sale en el pie, así que la previa tiene que enseñarlo. */
+  telefono?: string | null;
   asuntoOverride: string | null;
   mensajeOverride: string | null;
   config: {
@@ -1228,6 +1255,7 @@ export function previewReservaEmail(input: PreviewInput): {
       isotipo_url: input.isotipoUrl ?? null,
       color: input.colorPrimario,
       color_secundario: input.colorSecundario ?? null,
+      telefono: input.telefono ?? null,
     },
     cliente: placeholders.nombre,
     fechaLegible: placeholders.fecha,

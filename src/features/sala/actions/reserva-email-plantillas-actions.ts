@@ -188,7 +188,7 @@ export async function previewReservaEmailPlantilla(input: {
     const [{ data: empresa }, { data: cfg }] = await Promise.all([
       supabase
         .from("empresas")
-        .select("nombre, logo_url, isotipo_url, color, color_secundario")
+        .select("nombre, logo_url, isotipo_url, color, color_secundario, datos_generales")
         .eq("id", empresaId)
         .maybeSingle(),
       supabase
@@ -205,6 +205,13 @@ export async function previewReservaEmailPlantilla(input: {
       isotipoUrl: (empresa?.isotipo_url as string | null | undefined) ?? null,
       colorPrimario: (empresa?.color as string | null | undefined) ?? null,
       colorSecundario: (empresa?.color_secundario as string | null | undefined) ?? null,
+      // El fijo sale en el pie del correo real, así que la previa lo enseña
+      // también: si no, quien edita la plantilla no ve lo que ve el cliente.
+      telefono: (() => {
+        const generales = empresa?.datos_generales as Record<string, unknown> | null | undefined;
+        const tel = generales?.telefonoPrincipal;
+        return typeof tel === "string" && tel.trim() ? tel.trim() : null;
+      })(),
       asuntoOverride: input.asuntoOverride,
       mensajeOverride: input.mensajeOverride,
       config: {
