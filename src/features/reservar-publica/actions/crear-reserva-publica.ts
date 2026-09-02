@@ -13,6 +13,7 @@ import { asignarMesaAutomatica } from "@/features/sala/planos/lib/asignacion-mes
 import { validarMotorWebReserva } from "@/features/sala/lib/motor-web-validar";
 import { getCamposObligatoriosReserva } from "@/features/sala/lib/reserva-campos-obligatorios";
 import { notificarReservaCreada } from "@/lib/email/reservas/notificar-creada";
+import { enviarReservaEmail } from "@/lib/email/reservas/mailer";
 import { turnoDeHora } from "@/features/sala/lib/dia-negocio";
 import {
   validarCanjeTicket,
@@ -507,9 +508,15 @@ export async function crearReservaPublicaAction(
   // ────────────────────────────────────────────────────────────────
   const { data: cfgPoliticas } = await admin
     .from("empresa_reservas_config")
-    .select(POLITICA_COLUMNAS_SELECT)
+    .select(`${POLITICA_COLUMNAS_SELECT}, garantia_dias_antes`)
     .eq("empresa_id", empresa.id)
     .maybeSingle();
+
+  // Ventana de la solicitud diferida: por debajo de estos días, la tarjeta se
+  // pide en el momento; por encima, unos días antes de la reserva (§5.4).
+  const diasAntesGarantia = Number(
+    (cfgPoliticas as Record<string, unknown> | null)?.garantia_dias_antes ?? 4,
+  );
 
   const datosPolitica = {
     personas: data.personas,
@@ -648,14 +655,30 @@ export async function crearReservaPublicaAction(
   // correo falla (SMTP caído, plantilla desactivada), no se puede deshacer la
   // reserva ni tiene sentido mostrarle un error al cliente: se registra en log
   // y el restaurante la ve igualmente en Sala.
-  // Si la reserva exige tarjeta, el correo de confirmación NO sale todavía:
-  // saldría diciendo "reserva confirmada" mientras al cliente aún le queda
-  // pagar. Se envía cuando la tarjeta queda puesta.
+  // ── Correos según lo que le toque hacer al cliente ──────────────────
+  //
+  // Sin tarjeta      → confirmación normal, como siempre.
+  // Tarjeta AHORA    → no se le escribe todavía: diría "confirmada" mientras
+  //                    aún le queda pagar. El correo sale cuando la ponga.
+  // Tarjeta DESPUÉS  → la reserva está firme y la tarjeta se pedirá unos días
+  //                    antes (§5.4), así que se le confirma avisándole de eso.
   const exigeTarjeta = garantia.aplica || cancelacion.aplica;
+  const diasHastaReserva = Math.floor(
+    (Date.parse(`${data.fecha}T00:00:00Z`) - Date.now()) / 86_400_000,
+  );
+  // Solo la GARANTÍA se pide en diferido: la cancelación guarda la tarjeta sin
+  // retener nada, y eso no caduca.
+  const garantiaEnDiferido =
+    garantia.aplica && !cancelacion.aplica && diasHastaReserva > diasAntesGarantia;
+
   if (!exigeTarjeta) {
     notificarReservaCreada(reservaId).catch((e) =>
       console.error("[reservar-publica] mail CONFIRMACION:", e),
     );
+  } else if (garantiaEnDiferido) {
+    enviarReservaEmail(reservaId, "GARANTIA_PENDIENTE", {
+      actor: { origen: "PORTAL_PUBLICO" },
+    }).catch((e) => console.error("[reservar-publica] mail GARANTIA_PENDIENTE:", e));
   }
 
   return {
@@ -676,7 +699,7 @@ export async function crearReservaPublicaAction(
      * lo exige: el formulario lleva ahí al cliente en vez de darle la reserva
      * por cerrada.
      */
-    tarjetaPendiente: exigeTarjeta
+    tarjetaPendiente: exigeTarjeta && !garantiaEnDiferido
       ? {
           token: (filaCreada?.garantia_token as string | null) ?? null,
           importe: garantia.aplica ? garantia.importe : cancelacion.importe,

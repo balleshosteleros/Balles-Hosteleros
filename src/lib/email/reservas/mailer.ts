@@ -72,6 +72,9 @@ const AUDIT_COL: Record<ReservaEmailTipo, string | null> = {
   TICKET_RESERVA: "email_ticket_reserva_at",
   POLITICA_CANCELACION: "email_politica_cancelacion_at",
   POLITICA_GARANTIA: "email_politica_garantia_at",
+  GARANTIA_PENDIENTE: "email_garantia_pendiente_at",
+  GARANTIA_SOLICITUD: "email_garantia_solicitud_at",
+  GARANTIA_CADUCADA: "email_garantia_caducada_at",
   RECORDATORIO: "email_recordatorio_at",
   SOLICITUD_VALORACION: "email_valoracion_at",
 };
@@ -90,6 +93,9 @@ const HEADLINE_POR_TIPO: Record<ReservaEmailTipo, string> = {
   TICKET_RESERVA: "Reserva confirmada",
   POLITICA_CANCELACION: "Condiciones de cancelación",
   POLITICA_GARANTIA: "Garantía de tu reserva",
+  GARANTIA_PENDIENTE: "Reserva confirmada",
+  GARANTIA_SOLICITUD: "Necesitamos tu tarjeta",
+  GARANTIA_CADUCADA: "Reserva cancelada",
   RECORDATORIO: "Recordatorio de tu reserva",
   SOLICITUD_VALORACION: "¿Qué tal fue?",
 };
@@ -111,6 +117,9 @@ const BADGE_POR_TIPO: Record<ReservaEmailTipo, string> = {
   TICKET_RESERVA: "Reserva con ticket",
   POLITICA_CANCELACION: "Política de cancelación",
   POLITICA_GARANTIA: "Política de garantía",
+  GARANTIA_PENDIENTE: "Reserva confirmada",
+  GARANTIA_SOLICITUD: "Falta tu tarjeta",
+  GARANTIA_CADUCADA: "Cancelada",
   RECORDATORIO: "Recordatorio",
   SOLICITUD_VALORACION: "Tu opinión",
 };
@@ -206,7 +215,7 @@ export async function enviarReservaEmail(
   const { data: reservaData, error: errR } = await admin
     .from("reservas")
     .select(
-      "empresa_id, cliente_nombre, cliente_apellidos, cliente_email, fecha, hora, personas, zona, grupo_zona_id, notas, estado, tipo_categoria, tiene_garantia, garantia_importe, importe_pagado, codigo, codigo_id, cancelacion_token, valoracion_token, vinculacion_estado, vinculacion_motivo, datos_declarados, email_confirmacion_at, email_reconfirmacion_at, email_no_reconfirmada_at, email_lista_espera_at, email_liberada_at, email_terminando_at, email_no_show_at, email_politica_cancelacion_at, email_politica_garantia_at, email_recordatorio_at, email_cancelacion_at, email_valoracion_at, email_ticket_reserva_at, es_ticket, ticket_codigo, ticket_producto_id, ticket_unidades, ticket_importe, grupos_zonas(nombre)",
+      "empresa_id, cliente_nombre, cliente_apellidos, cliente_email, fecha, hora, personas, zona, grupo_zona_id, notas, estado, tipo_categoria, tiene_garantia, garantia_importe, importe_pagado, codigo, codigo_id, cancelacion_token, garantia_token, garantia_limite_at, valoracion_token, vinculacion_estado, vinculacion_motivo, datos_declarados, email_confirmacion_at, email_reconfirmacion_at, email_no_reconfirmada_at, email_lista_espera_at, email_liberada_at, email_terminando_at, email_no_show_at, email_politica_cancelacion_at, email_politica_garantia_at, email_recordatorio_at, email_cancelacion_at, email_valoracion_at, email_ticket_reserva_at, es_ticket, ticket_codigo, ticket_producto_id, ticket_unidades, ticket_importe, grupos_zonas(nombre)",
     )
     .eq("id", reservaId)
     .maybeSingle();
@@ -263,6 +272,14 @@ export async function enviarReservaEmail(
     "TERMINANDO",
     "SOLICITUD_VALORACION",
   ];
+  // Enlace donde el cliente pone su tarjeta (PRP-082). Solo se manda en los
+  // correos que se lo piden: en el resto no hay nada que pagar.
+  const tokenGarantia = (reservaData.garantia_token as string | null) ?? null;
+  const urlTarjeta =
+    tokenGarantia && (tipo === "GARANTIA_SOLICITUD" || tipo === "GARANTIA_PENDIENTE")
+      ? `${getSiteUrl()}/reserva/tarjeta/${tokenGarantia}`
+      : null;
+
   const tokenCancelar = (reservaData.cancelacion_token as string | null) ?? null;
   const urlCancelar =
     tokenCancelar && !SIN_ENLACE_CANCELAR.includes(tipo)
@@ -594,6 +611,7 @@ export async function enviarReservaEmail(
     cuponCanjeadoBloque,
     ticketBloque,
     urlCancelar,
+    urlTarjeta,
     urlValoracion,
   });
   const text = renderText({
@@ -612,6 +630,7 @@ export async function enviarReservaEmail(
     cuponCanjeadoBloque,
     ticketBloque,
     urlCancelar,
+    urlTarjeta,
     urlValoracion,
   });
 
@@ -701,6 +720,8 @@ interface RenderInput {
    * Solo en correos de reserva viva; en CANCELACION no tiene sentido.
    */
   urlCancelar: string | null;
+  /** Enlace para poner la tarjeta (PRP-082). Solo en los correos que la piden. */
+  urlTarjeta?: string | null;
   /**
    * Enlace para puntuar la visita (una estrella = un clic). Solo en
    * SOLICITUD_VALORACION.
@@ -788,6 +809,16 @@ function renderHtml(input: RenderInput): string {
   // Con un Ticket ya pagado NO va ningún bloque: el enlace de cancelar en un
   // clic haría creer al cliente que recupera el dinero, y ofrecerle cambiar la
   // fecha comprometería al restaurante a algo que no hace. Aquí, silencio.
+  // La tarjeta es LA acción de este correo: va como botón, no como enlace
+  // escondido en el pie.
+  const bloqueTarjeta = input.urlTarjeta
+    ? `<div style="margin:22px 0 4px;text-align:center;">
+        <a href="${input.urlTarjeta}" style="display:inline-block;background:#0f172a;color:#ffffff;text-decoration:none;font-weight:600;font-size:15px;padding:13px 28px;border-radius:10px;">
+          Introducir tarjeta
+        </a>
+      </div>`
+    : "";
+
   const bloqueCancelar = input.ticketBloque
     ? ""
     : input.urlCancelar
@@ -941,6 +972,7 @@ function renderHtml(input: RenderInput): string {
       ${bloqueGarantia}
       ${bloqueCuponCanjeado}
       ${bloqueTicket}
+      ${bloqueTarjeta}
       ${bloqueCancelar}
     `,
   });
@@ -984,6 +1016,10 @@ function renderText(input: Omit<RenderInput, "empresa"> & { empresa: string }): 
       `Política de garantía: hemos retenido ${formatearImporte(input.garantiaBloque.importe)} € para asegurar tu mesa. Es una retención, no un cobro: si vienes, se libera.`,
     );
     if (input.garantiaBloque.mensajeExtra) lineas.push(input.garantiaBloque.mensajeExtra);
+  }
+  // La tarjeta primero: es la acción que le pide el correo.
+  if (input.urlTarjeta) {
+    lineas.push(``, `Introduce tu tarjeta aquí: ${input.urlTarjeta}`);
   }
   if (input.urlCancelar) {
     lineas.push(

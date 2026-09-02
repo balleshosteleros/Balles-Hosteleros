@@ -52,6 +52,9 @@ export type ReservaEmailTipoPolitica =
   | "TICKET_RESERVA"
   | "POLITICA_CANCELACION"
   | "POLITICA_GARANTIA"
+  | "GARANTIA_PENDIENTE"
+  | "GARANTIA_SOLICITUD"
+  | "GARANTIA_CADUCADA"
   | "RECORDATORIO"
   | "SOLICITUD_VALORACION";
 
@@ -75,6 +78,9 @@ export const RESERVA_EMAIL_TIPOS_POLITICA: ReservaEmailTipoPolitica[] = [
   "TICKET_RESERVA",
   "POLITICA_CANCELACION",
   "POLITICA_GARANTIA",
+  "GARANTIA_PENDIENTE",
+  "GARANTIA_SOLICITUD",
+  "GARANTIA_CADUCADA",
   "RECORDATORIO",
   "SOLICITUD_VALORACION",
 ];
@@ -97,6 +103,9 @@ export const RESERVA_EMAIL_TIPO_FAMILIA: Record<ReservaEmailTipo, ReservaEmailFa
   TICKET_RESERVA: "POLITICA",
   POLITICA_CANCELACION: "POLITICA",
   POLITICA_GARANTIA: "POLITICA",
+  GARANTIA_PENDIENTE: "POLITICA",
+  GARANTIA_SOLICITUD: "POLITICA",
+  GARANTIA_CADUCADA: "POLITICA",
   RECORDATORIO: "POLITICA",
   SOLICITUD_VALORACION: "POLITICA",
 };
@@ -114,6 +123,9 @@ export const RESERVA_EMAIL_TIPO_LABELS: Record<ReservaEmailTipo, string> = {
   TICKET_RESERVA: "Reserva con ticket",
   POLITICA_CANCELACION: "Política de cancelación",
   POLITICA_GARANTIA: "Política de garantía",
+  GARANTIA_PENDIENTE: "Garantía pendiente",
+  GARANTIA_SOLICITUD: "Solicitud de tarjeta",
+  GARANTIA_CADUCADA: "Cancelada sin tarjeta",
   RECORDATORIO: "Recordatorio de la visita",
   SOLICITUD_VALORACION: "Solicitud de valoración",
 };
@@ -161,6 +173,12 @@ export const RESERVA_EMAIL_TIPO_DESCRIPCION: Record<ReservaEmailTipo, string> = 
     "Se envía cuando la reserva queda sujeta a la política de cancelación, con el plazo y el importe.",
   POLITICA_GARANTIA:
     "Se envía cuando la reserva queda sujeta a la política de garantía, con el importe retenido.",
+  GARANTIA_PENDIENTE:
+    "Se envía al reservar con mucha antelación: confirma la mesa y avisa de que la tarjeta se pedirá unos días antes.",
+  GARANTIA_SOLICITUD:
+    "Se envía los días antes que indiques, con el enlace para poner la tarjeta y el plazo que tiene el cliente.",
+  GARANTIA_CADUCADA:
+    "Se envía si el cliente no pone la tarjeta a tiempo y la reserva se cancela.",
   RECORDATORIO:
     "Se envía las horas antes de la reserva que indiques. Recordatorio de cortesía.",
   SOLICITUD_VALORACION:
@@ -257,6 +275,24 @@ export const RESERVA_EMAIL_PLANTILLAS_SEED: ReservaEmailPlantillaSeed[] = [
     asunto_default: "Garantía de tu reserva · {{fecha}} {{hora}}",
     mensaje_default:
       "Para asegurar tu mesa hemos retenido un importe en garantía. Te resumimos las condiciones para que las tengas por escrito.",
+  },
+  {
+    tipo: "GARANTIA_PENDIENTE",
+    asunto_default: "Reserva confirmada · {{fecha}} {{hora}} · {{empresa}}",
+    mensaje_default:
+      "Tu reserva está confirmada. Unos días antes te pediremos una tarjeta en garantía; te avisaremos por correo, así que estate atento.",
+  },
+  {
+    tipo: "GARANTIA_SOLICITUD",
+    asunto_default: "Necesitamos tu tarjeta para tu reserva del {{fecha}}",
+    mensaje_default:
+      "Para mantener tu mesa necesitamos una tarjeta en garantía. No te cobramos nada ahora: el importe se libera cuando te presentes.",
+  },
+  {
+    tipo: "GARANTIA_CADUCADA",
+    asunto_default: "Tu reserva del {{fecha}} se ha cancelado",
+    mensaje_default:
+      "No hemos recibido la tarjeta a tiempo, así que hemos liberado la mesa. Si quieres volver a reservar, estaremos encantados de atenderte.",
   },
   {
     tipo: "RECORDATORIO",
