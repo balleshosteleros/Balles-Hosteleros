@@ -47,7 +47,10 @@ for (const e of EMPRESAS) {
   L.push(`${e.nombre}`, `  [${barraGb}] ${pctGb.toFixed(1)}%`,
     `  ${hechos} de ${e.total} archivos  ·  ${gb} de ${e.totalGb} GB`,
     `  faltan ${faltan} archivos (${(e.totalGb - bytes / 1024 ** 3).toFixed(1)} GB)${faltan === 0 ? "  -- TERMINADO" : ""}`,
-    `  estado: ${imp?.estado ?? (faltan === 0 ? "terminada" : "copiando ahora")}${imp?.fallidos ? `  ·  ${imp.fallidos} no se pudieron traer` : ""}`, "");
+    // El estado se calcula por los archivos que faltan, NO por el campo
+    // `estado` de la tabla: ese se quedó en "terminada" el 29-ago con miles
+    // sin copiar, y leerlo hacía decir "terminada" al 95%.
+    `  estado: ${faltan === 0 ? "TERMINADA" : "copiando ahora"}${imp?.fallidos ? `  ·  ${imp.fallidos} no se pudieron traer` : ""}`, "");
 }
 L.push(faltanTotal === 0
   ? "MIGRACION COMPLETA. Ya puedes borrar lo de Drive."
