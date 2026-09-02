@@ -29,6 +29,28 @@ import { notificarReservaCreada } from "@/lib/email/reservas/notificar-creada";
 
 const tokenSchema = z.string().guid();
 
+/**
+ * Nombre de quien hizo la reserva, no el de la ficha con la que enganchó.
+ *
+ * Cuando el correo coincide con un cliente que ya existía, la reserva muestra
+ * el nombre de la ficha por privacidad, y lo que tecleó quien reservaba se
+ * guarda aparte en `datos_declarados`. Eso está bien para la lista de sala,
+ * pero no para pedir una tarjeta: ahí manda quien está delante de la pantalla.
+ */
+function nombreDeQuienReserva(r: Record<string, unknown>): string | null {
+  const dec = (r.datos_declarados ?? null) as Record<string, unknown> | null;
+  const partes = [
+    (dec?.nombre as string | undefined) ?? (r.cliente_nombre as string | null),
+    (dec?.apellidos as string | undefined) ?? (r.cliente_apellidos as string | null),
+  ];
+  return (
+    partes
+      .filter((x): x is string => typeof x === "string" && x.trim().length > 0)
+      .map((x) => x.trim())
+      .join(" ") || null
+  );
+}
+
 type Result<T> = { ok: true; data: T } | { ok: false; error: string };
 
 export interface TarjetaPendiente {
@@ -70,7 +92,7 @@ export async function obtenerTarjetaPendiente(
     const { data: r } = await admin
       .from("reservas")
       .select(
-        "id, empresa_id, estado, fecha, hora, personas, cliente_nombre, cliente_apellidos, cliente_email, tiene_garantia, garantia_importe, garantia_estado, tiene_cancelacion, cancelacion_importe, cancelacion_estado",
+        "id, empresa_id, estado, fecha, hora, personas, cliente_nombre, cliente_apellidos, cliente_email, datos_declarados, tiene_garantia, garantia_importe, garantia_estado, tiene_cancelacion, cancelacion_importe, cancelacion_estado",
       )
       .eq("garantia_token", parsed.data)
       .maybeSingle();
@@ -108,12 +130,14 @@ export async function obtenerTarjetaPendiente(
         fecha: r.fecha as string,
         hora: (r.hora as string).slice(0, 5),
         personas: (r.personas as number) ?? 1,
-        // Nombre completo: Revolut exige que el titular de la tarjeta tenga al
-        // menos dos palabras, así que el nombre suelto no le vale.
-        clienteNombre:
-          [r.cliente_nombre, r.cliente_apellidos]
-            .filter((x) => typeof x === "string" && x.trim().length > 0)
-            .join(" ") || null,
+        // Nombre de QUIEN RESERVÓ, no el de la ficha con la que enganchó.
+        //
+        // Si el correo coincide con una ficha que ya existía, la reserva
+        // guarda el nombre de esa ficha —para no revelar datos de terceros— y
+        // el que tecleó el cliente queda en `datos_declarados`. Para el
+        // titular de la tarjeta hay que usar ESE: el de la ficha puede ser el
+        // de otra persona, y aquí se le va a pedir su tarjeta.
+        clienteNombre: nombreDeQuienReserva(r),
         clienteEmail: (r.cliente_email as string | null) ?? null,
         garantia: pideGarantia
           ? {
