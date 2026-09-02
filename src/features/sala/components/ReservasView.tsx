@@ -2942,7 +2942,7 @@ function PlanoCanvas({
                     (selectedReservaMesaId === m.id ||
                       selectedMesaId === m.id ||
                       mesasResaltadasIds.has(m.id)) &&
-                      "!border-red-500 ring-2 ring-inset ring-red-500 z-10",
+                      "!border-red-500 outline outline-2 outline-offset-0 outline-red-500 z-20",
                     moviendo && !destinoInvalido && "cursor-copy ring-2 ring-sky-500 ring-offset-1 hover:ring-4 hover:scale-105 z-10",
                     destinoInvalido && "opacity-40 cursor-not-allowed",
                   )}
@@ -5424,7 +5424,7 @@ export function ReservasView() {
                                       (selectedReserva?.mesaId === m.id ||
                                         selectedMesa?.id === m.id ||
                                         mesasResaltadasIds.has(m.id)) &&
-                                        "!border-red-500 ring-2 ring-inset ring-red-500 z-10",
+                                        "!border-red-500 outline outline-2 outline-offset-0 outline-red-500 z-20",
                                       moviendoAqui && !destinoInvalido && "cursor-copy ring-2 ring-sky-500 hover:ring-4 hover:scale-105 z-10",
                                       destinoInvalido && "opacity-40 cursor-not-allowed",
                                     )}
