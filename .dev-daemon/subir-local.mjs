@@ -45,8 +45,15 @@ const OBJETIVOS = [
     carpetaDestino: "841f6718-0020-4a7a-8bca-f8b3994c7991",
     departamento: "MARKETING",
   },
-  // BALLES queda FUERA a propósito: son 587 GB y su cuota son 500, y además
-  // Iván dijo que primero borraría material. Se migrará cuando se decida.
+  {
+    // Iván pidió expresamente migrar los 590 GB enteros y saltarse el tope de
+    // 500 GB: su cuota se subió a 3 TB y la limpieza se hará una vez subido.
+    nombre: "BALLES",
+    empresaId: "eb99bddd-9f49-4348-96ee-37f930c0d5d0",
+    raizLocal: `${HOME}/Library/CloudStorage/GoogleDrive-balleshosteleros@gmail.com/Mi unidad/6.MARKETING `,
+    carpetaDestino: "af338d15-98d8-4a27-8313-52834369603a",
+    departamento: "MARKETING",
+  },
 ];
 
 const PARALELO = Number(process.env.PARALELO ?? 8);
