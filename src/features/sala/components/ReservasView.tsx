@@ -129,6 +129,7 @@ import { ReservaFlagsChips } from "@/features/sala/components/reservas/ReservaFl
 import { AvisoCobrosBanner } from "@/features/sala/components/reservas/AvisoCobrosBanner";
 import { CobroPoliticaBloque } from "@/features/sala/components/reservas/CobroPoliticaBloque";
 import { ReservaTiempoCelda } from "@/features/sala/components/reservas/ReservaTiempoCelda";
+import { calcularTiempoReserva, minutosHastaReserva } from "@/features/sala/lib/reserva-tiempo";
 import { ClienteReservasBadge } from "@/features/sala/components/reservas/ClienteReservasBadge";
 import { ReservaExternalBadge } from "@/features/sala/components/reservas/ReservaExternalBadge";
 import { HistoricoEmailsReserva } from "@/features/sala/components/reservas/HistoricoEmailsReserva";
@@ -2759,6 +2760,8 @@ function PlanoCanvas({
   esOscuro: boolean;
 }) {
   const moviendo = reservaMoviendo != null;
+  // Qué ficha de mesa está abierta (solo una a la vez, y ninguna en modo mover).
+  const [mesaPopoverAbiertaId, setMesaPopoverAbiertaId] = useState<string | null>(null);
   // Mesas con posición x/y conocida.
   // Si la sala tiene zonas en BD: filtra estrictamente por las seleccionadas (zonas=[] => no muestra nada, como espera el usuario al pulsar "Ninguna").
   // Si la sala no tiene zonas en BD (legacy): muestra todas las mesas posicionadas.
@@ -2958,7 +2961,19 @@ function PlanoCanvas({
           const esOrigenMover = moviendo && reservaMoviendo?.mesaId === m.id;
           const destinoInvalido = moviendo && (esOrigenMover || estado === "BLOQUEADA");
           return (
-            <Popover key={m.id}>
+            // Popover CONTROLADO: al pulsar "Desplazar" la reserva queda en la
+            // mano y el plano pasa a modo mover, pero la ficha de la mesa desde
+            // la que se pulsó seguía abierta tapando las mesas destino. Con
+            // `moviendo` forzamos que ninguna esté abierta mientras se mueve, y
+            // el trigger tampoco vuelve a abrirla (el clic es "soltar aquí").
+            <Popover
+              key={m.id}
+              open={moviendo ? false : mesaPopoverAbiertaId === m.id}
+              onOpenChange={(abierto) => {
+                if (moviendo) return;
+                setMesaPopoverAbiertaId(abierto ? m.id : null);
+              }}
+            >
               <PopoverTrigger asChild>
                 <button
                   className={cn(
@@ -3230,6 +3245,8 @@ export function ReservasView() {
     { mesa: Mesa; choques: ChoqueReserva[] } | null
   >(null);
   const [guardandoDesplazar, setGuardandoDesplazar] = useState(false);
+  /** Fila del listado con la ficha rápida abierta (una sola, y ninguna en modo mover). */
+  const [filaPopoverAbiertaId, setFilaPopoverAbiertaId] = useState<string | null>(null);
 
   const [showDetalleReserva, setShowDetalleReserva] = useState(false);
   // Salón para reasignar a mano las mesas de la reserva abierta.
@@ -3763,36 +3780,46 @@ export function ReservasView() {
    * Devuelve clase Tailwind con animación si la reserva entra en alguna de las
    * franjas configuradas como "parpadeo" en Configuración. Solo afecta
    * a reservas vivas del día actual.
+   *
+   * El parpadeo ROJO de la fila entera es una alarma de "se ha pasado", así que
+   * se ata a la MISMA fuente que la columna TIEMPO (`calcularTiempoReserva`) y
+   * solo se enciende cuando el contador está EN NEGATIVO: la reserva pasó su
+   * hora sin sentarse (RETRASO) o la mesa agotó su tiempo (EXCEDIDA). Mientras
+   * el contador está en positivo (aún no ha llegado su hora) la fila no
+   * parpadea en rojo. Antes se calculaba con `Date` del navegador, que en otra
+   * zona horaria daba el rojo con la reserva todavía por llegar.
    */
   const parpadeoClassPara = useCallback(
     (r: Reserva): string | null => {
       if (!cfgReservas) return null;
       if (r.fecha !== fecha) return null;
       if (ESTADOS_NO_OCUPANTES.includes(r.estado)) return null;
-      const ahora = new Date(tickAhora);
-      const hoyISO = ahora.toISOString().split("T")[0];
-      if (r.fecha !== hoyISO) return null;
-      const [hh, mm] = (r.hora ?? "00:00").split(":").map((n) => parseInt(n, 10) || 0);
-      const horaReserva = new Date(ahora);
-      horaReserva.setHours(hh, mm, 0, 0);
-      const deltaMin = (horaReserva.getTime() - ahora.getTime()) / 60_000;
-      const durOverride = typeof r.duracionMinutos === "number" ? r.duracionMinutos : null;
-      const dur = durOverride && durOverride > 0 ? durOverride : cfgReservas.duracionReservaMin;
-      // Pasado tiempo de duración (la reserva debería haber terminado ya).
-      if (cfgReservas.parpadeoPasadoDuracion && deltaMin <= -dur) {
+      if (r.fecha !== ahoraEmpresa.fecha) return null;
+
+      const t = calcularTiempoReserva(r, ahoraEmpresa, cfgReservas.duracionReservaMin);
+
+      // Rojo: SOLO con el tiempo en negativo (pasada la hora o pasado el tiempo
+      // de mesa). Nunca con el contador en positivo.
+      if (cfgReservas.parpadeoPasadoDuracion && t && (t.fase === "RETRASO" || t.fase === "EXCEDIDA")) {
         return "animate-pulse bg-red-500/10";
       }
-      // Próximos 0-15 min.
-      if (cfgReservas.parpadeo0a15 && deltaMin >= 0 && deltaMin <= 15) {
-        return "animate-pulse bg-emerald-500/10";
-      }
-      // Próximos 15-30 min.
-      if (cfgReservas.parpadeo15a30 && deltaMin > 15 && deltaMin <= 30) {
-        return "animate-pulse bg-amber-500/10";
+
+      // Avisos de "está a punto de llegar": siguen mirando lo que falta, y solo
+      // con el contador EN POSITIVO (la hora aún no ha llegado).
+      const restantes = minutosHastaReserva(r, ahoraEmpresa);
+      if (restantes != null && restantes >= 0) {
+        // Próximos 0-15 min.
+        if (cfgReservas.parpadeo0a15 && restantes <= 15) {
+          return "animate-pulse bg-emerald-500/10";
+        }
+        // Próximos 15-30 min.
+        if (cfgReservas.parpadeo15a30 && restantes > 15 && restantes <= 30) {
+          return "animate-pulse bg-amber-500/10";
+        }
       }
       return null;
     },
-    [cfgReservas, fecha, tickAhora],
+    [cfgReservas, fecha, ahoraEmpresa],
   );
 
   // La BD guarda el CÓDIGO de mesa ("R3"), pero toda la UI compara contra el
@@ -4597,6 +4624,9 @@ export function ReservasView() {
   const abrirDesplazar = (r: Reserva) => {
     setReservaADesplazar(r);
     setChoqueDesplazar(null);
+    // La ficha desde la que se ha pulsado se cierra: tapaba el plano y no
+    // dejaba pinchar la mesa destino.
+    setFilaPopoverAbiertaId(null);
     toast.info("Elige en el plano la mesa a la que mueves la reserva.");
   };
 
@@ -5121,7 +5151,16 @@ export function ReservasView() {
               const mesa = mesas.find(m => m.id === r.mesaId) ?? null;
               const blink = parpadeoClassPara(r);
               return (
-                <Popover key={r.id}>
+                // Igual que en el plano: si se pulsa "Desplazar" desde la
+                // lista, esta ficha debe cerrarse para dejar ver el plano.
+                <Popover
+                  key={r.id}
+                  open={reservaADesplazar ? false : filaPopoverAbiertaId === r.id}
+                  onOpenChange={(abierto) => {
+                    if (reservaADesplazar) return;
+                    setFilaPopoverAbiertaId(abierto ? r.id : null);
+                  }}
+                >
                   <PopoverTrigger asChild>
                     <button
                       onClick={() => setSelectedReserva(r)}

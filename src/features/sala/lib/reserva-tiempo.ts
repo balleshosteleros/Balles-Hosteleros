@@ -95,7 +95,7 @@ export function duracionEfectivaReserva(
  * no como Date del navegador: el ordenador de sala puede estar en otra zona y
  * la reserva es siempre la hora del restaurante.
  */
-function minutosHastaReserva(
+export function minutosHastaReserva(
   reserva: Pick<Reserva, "fecha" | "hora">,
   ahora: { fecha: string; minutos: number },
 ): number | null {
