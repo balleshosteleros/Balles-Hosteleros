@@ -59,11 +59,27 @@ export function TarjetaClient({
       setEnviando(false);
       return;
     }
-    window.location.href = res.data.urlPago;
+    // La pasarela no se abre dentro de un iframe: si esta pantalla acabara
+    // incrustada, se salta al marco superior para que el pago ocupe la ventana.
+    if (window.self !== window.top && window.top) {
+      window.top.location.href = res.data.urlPago;
+    } else {
+      window.location.href = res.data.urlPago;
+    }
   }
 
-  const importe = datos.garantia?.importe ?? datos.cancelacion?.importe ?? 0;
+  // Manda la garantía si la reserva lleva las dos: es la más estricta.
+  const politica = datos.garantia ?? datos.cancelacion;
   const esGarantia = datos.garantia !== null;
+  const importe = politica?.importe ?? 0;
+  const horasAntes = politica?.horasAntes ?? 24;
+  // El importe guardado en la reserva YA viene multiplicado si la política es
+  // por comensal, así que aquí solo hay que deshacer la cuenta para poder
+  // enseñarla: "2 € por persona × 6 = 12 €".
+  const porComensal = politica?.porComensal ?? false;
+  const importePorPersona = porComensal && datos.personas > 0
+    ? importe / datos.personas
+    : null;
 
   if (resuelta) {
     return (
@@ -128,21 +144,33 @@ export function TarjetaClient({
         >
           <div className="font-semibold mb-1">
             {esGarantia
-              ? `Se retendrán ${EUR.format(importe)} €`
-              : `Podríamos cobrarte ${EUR.format(importe)} €`}
+              ? "Esta reserva lleva política de garantía"
+              : "Esta reserva lleva política de cancelación"}
           </div>
           <p className="leading-relaxed">
-            {esGarantia ? (
+            Si no te presentas, o cancelas con menos de{" "}
+            <strong>{horasAntes} {horasAntes === 1 ? "hora" : "horas"}</strong> de
+            antelación, se te cargarán{" "}
+            {importePorPersona !== null ? (
               <>
-                El importe queda <strong>retenido</strong>, no cobrado: se libera
-                cuando te presentes en el restaurante. Solo se cobra si no
-                apareces o cancelas fuera de plazo.
+                <strong>{EUR.format(importePorPersona)} €</strong> por cada
+                persona de la reserva:{" "}
+                <strong>
+                  {EUR.format(importePorPersona)} € × {datos.personas} ={" "}
+                  {EUR.format(importe)} €
+                </strong>
+                .
               </>
             ) : (
               <>
-                No te cobramos nada ahora. Guardamos tu tarjeta y{" "}
-                <strong>solo se cobra</strong> si no te presentas o cancelas
-                fuera de plazo.
+                <strong>{EUR.format(importe)} €</strong>.
+              </>
+            )}
+            {esGarantia && (
+              <>
+                {" "}
+                Ese importe se <strong>retiene</strong> ahora, no se cobra: se
+                libera en cuanto te presentes en el restaurante.
               </>
             )}
           </p>

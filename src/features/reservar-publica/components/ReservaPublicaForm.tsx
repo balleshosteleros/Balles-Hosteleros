@@ -287,7 +287,17 @@ export function ReservaPublicaForm({
     // a ponerla (PRP-082). La reserva ya existe, así que la mesa no se pierde
     // mientras paga.
     if (r.tarjetaPendiente?.token) {
-      window.location.href = `/reserva/tarjeta/${r.tarjetaPendiente.token}`;
+      // Fuera del marco: este formulario se incrusta en la web del
+      // restaurante, y la pasarela de pago NO se deja abrir dentro de un
+      // iframe ajeno (es su defensa contra el robo de tarjetas). Si se
+      // navegara aquí dentro, el cliente acabaría viendo "checkout.revolut.com
+      // ha rechazado la conexión" y perdería la reserva.
+      const destino = `/reserva/tarjeta/${r.tarjetaPendiente.token}`;
+      if (window.self !== window.top && window.top) {
+        window.top.location.href = `${window.location.origin}${destino}`;
+      } else {
+        window.location.href = destino;
+      }
       return;
     }
     setCuponAplicado(r.cuponAplicado);

@@ -40,8 +40,13 @@ export interface TarjetaPendiente {
   personas: number;
   clienteNombre: string | null;
   /** Qué política la exige, con su importe. Puede haber las dos. */
-  garantia: { importe: number } | null;
-  cancelacion: { importe: number } | null;
+  /**
+   * Cada política con lo que el cliente necesita saber para decidir: cuánto,
+   * con cuánta antelación puede cancelar sin pagar, y si el importe es por
+   * reserva o por comensal (para poder enseñarle la cuenta hecha).
+   */
+  garantia: { importe: number; horasAntes: number; porComensal: boolean } | null;
+  cancelacion: { importe: number; horasAntes: number; porComensal: boolean } | null;
   /** true cuando ya no hay nada que hacer: la tarjeta ya está puesta. */
   resuelta: boolean;
 }
@@ -79,6 +84,12 @@ export async function obtenerTarjetaPendiente(
       .eq("id", r.empresa_id as string)
       .maybeSingle();
 
+    const { data: cfg } = await admin
+      .from("empresa_reservas_config")
+      .select("cancelacion_horas_antes, garantia_horas_antes, garantia_modo")
+      .eq("empresa_id", r.empresa_id as string)
+      .maybeSingle();
+
     const garantiaHecha = r.garantia_estado === "retenida" || r.garantia_estado === "cobrada";
     const cancelacionHecha =
       r.cancelacion_estado === "guardada" || r.cancelacion_estado === "cobrada";
@@ -97,10 +108,19 @@ export async function obtenerTarjetaPendiente(
         personas: (r.personas as number) ?? 1,
         clienteNombre: (r.cliente_nombre as string | null) ?? null,
         garantia: pideGarantia
-          ? { importe: Number(r.garantia_importe ?? 0) }
+          ? {
+              importe: Number(r.garantia_importe ?? 0),
+              horasAntes: Number(cfg?.garantia_horas_antes ?? 24),
+              porComensal: cfg?.garantia_modo === "comensal",
+            }
           : null,
         cancelacion: pideCancelacion
-          ? { importe: Number(r.cancelacion_importe ?? 0) }
+          ? {
+              importe: Number(r.cancelacion_importe ?? 0),
+              horasAntes: Number(cfg?.cancelacion_horas_antes ?? 24),
+              // La cancelación no tiene modo: su importe es siempre por reserva.
+              porComensal: false,
+            }
           : null,
         resuelta: !pideGarantia && !pideCancelacion,
       },
