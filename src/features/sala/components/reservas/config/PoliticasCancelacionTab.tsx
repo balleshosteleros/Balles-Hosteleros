@@ -14,6 +14,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import {
   CANCELACION_HORAS_MAX,
@@ -45,18 +46,31 @@ const HORAS_OPCIONES = [1, 2, 3, 4, 6, 8, 12, 24, 48, 72] as const;
 export function PoliticasCancelacionTab() {
   const [config, setConfig] = useState<EmpresaReservasConfig | null>(null);
   const [loading, setLoading] = useState(true);
+  /** La configuración no llegó: se avisa y se ofrece reintentar. */
+  const [falloCarga, setFalloCarga] = useState(false);
   const [importeStr, setImporteStr] = useState("");
   const [garantiaImporteStr, setGarantiaImporteStr] = useState("");
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const cargarConfig = useCallback(async () => {
-    const c = await getReservasConfig();
-    if (c.ok && c.data) {
-      setConfig(c.data);
-      setImporteStr(c.data.cancelacionImporteEur.toFixed(2));
-      setGarantiaImporteStr(c.data.garantiaImporteEur.toFixed(2));
+    setLoading(true);
+    setFalloCarga(false);
+    try {
+      const c = await getReservasConfig();
+      if (c.ok && c.data) {
+        setConfig(c.data);
+        setImporteStr(c.data.cancelacionImporteEur.toFixed(2));
+        setGarantiaImporteStr(c.data.garantiaImporteEur.toFixed(2));
+      } else {
+        // Si no se avisa, la pestaña se queda en los recuadros grises para
+        // siempre: `config` sigue a null y nunca se sale de ese estado.
+        setFalloCarga(true);
+      }
+    } catch {
+      setFalloCarga(true);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }, []);
 
   useEffect(() => {
@@ -104,6 +118,19 @@ export function PoliticasCancelacionTab() {
     const redondeado = Math.round(n * 100) / 100;
     opts.setStr(redondeado.toFixed(2));
     if (redondeado !== opts.actual) opts.guardar(redondeado);
+  }
+
+  if (!loading && (falloCarga || !config)) {
+    return (
+      <div className="flex flex-col items-center justify-center gap-3 py-16 text-center">
+        <p className="text-sm text-muted-foreground">
+          No se han podido cargar las políticas de reservas.
+        </p>
+        <Button variant="outline" size="sm" onClick={() => void cargarConfig()}>
+          Reintentar
+        </Button>
+      </div>
+    );
   }
 
   if (loading || !config) {

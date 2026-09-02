@@ -39,6 +39,8 @@ export function ConfigTabReservas({ onDirtyChange }: ConfigTabReservasProps = {}
   /** Solo los campos tocados desde el último guardado: se envían únicamente esos. */
   const [pendiente, setPendiente] = useState<Partial<EmpresaReservasConfig>>({});
   const [loading, setLoading] = useState(true);
+  /** La configuración no llegó: se avisa y se ofrece reintentar. */
+  const [falloCarga, setFalloCarga] = useState(false);
   const [guardando, setGuardando] = useState(false);
   // Los numéricos se editan como texto: si el estado fuera el número, borrar el
   // contenido lo repondría a 0 y al teclear saldría "015" en vez de "15".
@@ -57,14 +59,26 @@ export function ConfigTabReservas({ onDirtyChange }: ConfigTabReservasProps = {}
   const avisarPanelSucio = useCallback(() => setTickPaneles((n) => n + 1), []);
 
   const cargar = useCallback(async () => {
-    const c = await getReservasConfig();
-    if (c.ok && c.data) {
-      setConfig(c.data);
-      setPendiente({});
-      setAntelacionMin(String(c.data.antelacionMinMinutos));
-      setAntelacionMax(String(c.data.antelacionMaxDias));
+    setLoading(true);
+    setFalloCarga(false);
+    try {
+      const c = await getReservasConfig();
+      if (c.ok && c.data) {
+        setConfig(c.data);
+        setPendiente({});
+        setAntelacionMin(String(c.data.antelacionMinMinutos));
+        setAntelacionMax(String(c.data.antelacionMaxDias));
+      } else {
+        // Sin esto la pantalla se quedaba en los recuadros grises PARA SIEMPRE,
+        // sin decir nada: `config` seguía a null y el `if` de abajo no salía
+        // nunca. Parecía que el software se habia colgado.
+        setFalloCarga(true);
+      }
+    } catch {
+      setFalloCarga(true);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }, []);
 
   useEffect(() => {
@@ -127,6 +141,19 @@ export function ConfigTabReservas({ onDirtyChange }: ConfigTabReservasProps = {}
     } finally {
       setGuardando(false);
     }
+  }
+
+  if (!loading && (falloCarga || !config)) {
+    return (
+      <div className="flex flex-col items-center justify-center gap-3 py-16 text-center">
+        <p className="text-sm text-muted-foreground">
+          No se ha podido cargar la configuración de reservas.
+        </p>
+        <Button variant="outline" size="sm" onClick={() => void cargar()}>
+          Reintentar
+        </Button>
+      </div>
+    );
   }
 
   if (loading || !config) {
