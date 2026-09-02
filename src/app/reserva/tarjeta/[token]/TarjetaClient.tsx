@@ -38,7 +38,18 @@ export function TarjetaClient({
    * un marco de Revolut al que esta página no tiene acceso.
    */
   const contenedorTarjeta = useRef<HTMLDivElement | null>(null);
-  const campoRef = useRef<{ submit: () => void; destroy: () => void } | null>(null);
+  /**
+   * Titular de la tarjeta. Revolut exige al menos dos palabras, así que un
+   * nombre suelto no vale: en ese caso se manda vacío y lo pide él en su
+   * propio campo.
+   */
+  const titularValido = (datos.clienteNombre ?? "").trim().includes(" ")
+    ? (datos.clienteNombre ?? "").trim()
+    : null;
+  const campoRef = useRef<{
+    submit: (meta?: Record<string, unknown>) => void;
+    destroy: () => void;
+  } | null>(null);
   const [montandoCampo, setMontandoCampo] = useState(false);
   const [campoListo, setCampoListo] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -102,9 +113,7 @@ export function TarjetaClient({
         // Revolut exige que el titular tenga al menos dos palabras. Si la
         // reserva vino sin apellidos, mejor no mandar nada: así el widget lo
         // pide en su propio campo en vez de rechazar un nombre incompleto.
-        name: (datos.clienteNombre ?? "").trim().includes(" ")
-          ? datos.clienteNombre!.trim()
-          : undefined,
+        name: titularValido ?? undefined,
         email: datos.clienteEmail ?? undefined,
         onSuccess() {
           // El widget avisa, pero no es de fiar: un anuncio bloqueado o una
@@ -134,7 +143,14 @@ export function TarjetaClient({
   function confirmarTarjeta() {
     setEnviando(true);
     setError(null);
-    campoRef.current?.submit();
+    // El titular y el correo se repiten AQUÍ, no solo al montar el campo: el
+    // widget los valida en el envío, y sin ellos rechaza la tarjeta con "el
+    // nombre del titular debe tener al menos dos palabras" aunque se le
+    // hubieran dado antes.
+    campoRef.current?.submit({
+      name: titularValido ?? undefined,
+      email: datos.clienteEmail ?? undefined,
+    });
   }
 
   // React monta los efectos dos veces en desarrollo: sin esto quedarían dos
