@@ -111,10 +111,12 @@ export async function validarMotorWebReserva(
   const { data: cfg, error } = await supabase
     .from("empresa_reservas_config")
     .select(
-      "cerrar_motor_web_activo, cerrar_motor_web_comida, cerrar_motor_web_cena, max_personas_hora_activo, max_personas_hora_modo, max_personas_hora_global, max_personas_hora_reglas",
+      "antelacion_min_minutos, antelacion_max_dias, cerrar_motor_web_activo, cerrar_motor_web_comida, cerrar_motor_web_cena, max_personas_hora_activo, max_personas_hora_modo, max_personas_hora_global, max_personas_hora_reglas",
     )
     .eq("empresa_id", input.empresaId)
     .maybeSingle<{
+      antelacion_min_minutos: number | null;
+      antelacion_max_dias: number | null;
       cerrar_motor_web_activo: boolean | null;
       cerrar_motor_web_comida: string | null;
       cerrar_motor_web_cena: string | null;
@@ -132,7 +134,40 @@ export async function validarMotorWebReserva(
 
   const horaMin = horaAMinutos(input.hora);
 
-  // 4) Cierre del motor web (solo si la reserva es para HOY).
+  // 4) Antelación: ni con demasiado poco margen, ni demasiado lejos.
+  //
+  // Que la hora no haya pasado ya se comprueba arriba, con el instante real de
+  // la reserva (que sabe de cenas que cruzan la medianoche). Aquí van los dos
+  // límites que configura la empresa y que hasta ahora solo se aplicaban al
+  // PINTAR las horas: si el listado fallaba, la página llevaba rato abierta o
+  // alguien tocaba la petición, la reserva entraba igual.
+  const antelacionMin = cfg.antelacion_min_minutos ?? 0;
+  if (
+    antelacionMin > 0 &&
+    instanteReservaMin(input.fecha, input.hora) <
+      instanteDeLecturaMin(hoyEmpresa, minAhoraEmpresa) + antelacionMin
+  ) {
+    return {
+      ok: false,
+      error: `Necesitamos al menos ${antelacionMin} minutos de antelación. Elige una hora más tarde.`,
+    };
+  }
+
+  const maxDias = cfg.antelacion_max_dias ?? 0;
+  if (maxDias > 0) {
+    const diasHasta = Math.round(
+      (Date.parse(`${input.fecha}T00:00:00Z`) - Date.parse(`${hoyEmpresa}T00:00:00Z`)) /
+        86_400_000,
+    );
+    if (diasHasta > maxDias) {
+      return {
+        ok: false,
+        error: `Solo aceptamos reservas con ${maxDias} días de antelación como máximo.`,
+      };
+    }
+  }
+
+  // 5) Cierre del motor web (solo si la reserva es para HOY).
   if (cfg.cerrar_motor_web_activo && input.fecha === hoyEmpresa) {
     const corte = input.turno === "COMIDA"
       ? parseHHMM(cfg.cerrar_motor_web_comida)
