@@ -341,16 +341,36 @@ export function useDailyCounts(): DailyCounts {
   }, [connected, cuentaGoogle, empresaSlug, tzEmpresa, diasAnuncio]);
 
   useEffect(() => {
+    // Los badges solo interesan en la pestaña que se está MIRANDO. Sin esta
+    // guarda, cada pestaña abierta del software repetía las 5 consultas cada
+    // minuto para siempre — de madrugada, con nadie delante. Con varias
+    // pestañas abiertas (lo normal aquí) eso multiplicaba la carga sobre la
+    // base de datos, y como cada consulta tarda segundos, las rondas acababan
+    // solapándose: el arranque de cualquier pantalla competía contra una cola
+    // de conteos de pestañas que nadie está viendo.
+    const visible = () =>
+      typeof document === "undefined" || document.visibilityState === "visible";
+    const fetchSiVisible = () => {
+      if (visible()) fetchCounts();
+    };
+
     // 1ª carga diferida ~2 s (no compite con el arranque). Además, como el efecto se
     // re-ejecuta al cambiar empresaSlug/connected durante la hidratación, el
     // clearTimeout de la limpieza COALESCE esas 2-3 re-ejecuciones en una sola.
-    const firstLoad = setTimeout(fetchCounts, INITIAL_DELAY_MS);
-    const id = setInterval(fetchCounts, REFRESH_MS);
+    const firstLoad = setTimeout(fetchSiVisible, INITIAL_DELAY_MS);
+    const id = setInterval(fetchSiVisible, REFRESH_MS);
+    // Al volver a la pestaña se refresca en el acto: los números que se dejaron
+    // de pedir mientras estaba oculta se ponen al día sin esperar al minuto.
+    const onVisibility = () => {
+      if (visible()) fetchCounts();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
     // Tick local: NO llama a Google, solo vuelve a mirar el reloj sobre los
     // eventos ya descargados. Es lo que hace que el badge vaya bajando (5 → 4 →
     // 3…) a medida que terminan, en vez de quedarse clavado hasta el siguiente
     // refresco de red. Va a 15 s para que el cambio se note casi al instante.
     const tick = setInterval(() => {
+      if (!visible()) return;
       setCounts((prev) => {
         const { events, meetings } = contarVigentes(eventosHoyRef.current);
         if (prev.events === events && prev.meetings === meetings) return prev;
@@ -367,6 +387,7 @@ export function useDailyCounts(): DailyCounts {
       clearTimeout(firstLoad);
       clearInterval(id);
       clearInterval(tick);
+      document.removeEventListener("visibilitychange", onVisibility);
       window.removeEventListener(DAILY_COUNTS_REFRESH_EVENT, onRefresh);
     };
   }, [fetchCounts]);

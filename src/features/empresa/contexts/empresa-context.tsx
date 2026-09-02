@@ -206,13 +206,39 @@ export function EmpresaProvider({ children }: { children: ReactNode }) {
   // sin acceso a nada.
   useEffect(() => {
     let alive = true;
-    Promise.all([
+    // `allSettled`, no `all`: las tres llamadas son independientes y solo la
+    // primera decide QUÉ empresas existen. Con `all`, que fallara cualquiera de
+    // las otras dos (un timeout de la cookie, un hipo de `usuario_empresas`)
+    // tumbaba la hidratación entera y la lista se quedaba en la constante
+    // `EMPRESAS` del código — dos empresas cableadas, sin isotipo y sin la
+    // tercera. Eso es lo que se veía en el selector: no era un problema de
+    // permisos ni de datos, era el fallback disfrazado de lista real.
+    Promise.allSettled([
       listEmpresasCompletas(),
       getEmpresaActivaId(),
       listEmpresasDeUsuario(),
     ])
-      .then(([rows, activaDbId, userEmpresaIds]) => {
+      .then(([rowsRes, activaRes, userEmpresasRes]) => {
         if (!alive) return;
+
+        if (rowsRes.status === "rejected") {
+          // Sin el listado no hay nada que hidratar; los otros dos resultados
+          // por sí solos no permiten construir la lista.
+          throw rowsRes.reason;
+        }
+        const rows = rowsRes.value;
+        // La cookie y los accesos son ACCESORIOS: si fallan, se sigue con el
+        // listado real. Perder la cookie solo significa recaer en localStorage;
+        // perder los accesos, no recortar la lista (`allowed` vacío = sin
+        // filtro), que es justo lo que hace el código de abajo.
+        const activaDbId = activaRes.status === "fulfilled" ? activaRes.value : null;
+        const userEmpresaIds = userEmpresasRes.status === "fulfilled" ? userEmpresasRes.value : [];
+        if (activaRes.status === "rejected") {
+          console.error("[empresa-context] cookie de empresa activa:", activaRes.reason);
+        }
+        if (userEmpresasRes.status === "rejected") {
+          console.error("[empresa-context] accesos del usuario:", userEmpresasRes.reason);
+        }
         // Sin empresas que hidratar nos quedamos con el default, pero la espera
         // TERMINA igual: si no, quien aguarda a `empresaResuelta` se quedaría
         // esperando para siempre (cohete y candado, en gris permanente).
@@ -323,7 +349,13 @@ export function EmpresaProvider({ children }: { children: ReactNode }) {
         });
       })
       .catch((err) => {
-        console.error("[empresa-context] hidratación falló:", err);
+        // Si esto salta, el selector NO está mostrando empresas reales: enseña
+        // la constante `EMPRESAS` del código (HABANA y BACANAL, con iniciales
+        // en vez de isotipo y sin las empresas dadas de alta después).
+        console.error(
+          "[empresa-context] hidratación falló — el selector muestra la lista de respaldo del código, no las empresas reales:",
+          err,
+        );
         // La espera termina también en el error: mejor consultar con el default
         // que dejar la UI que depende de esta señal congelada a medio pintar.
         if (alive) setEmpresaResuelta(true);

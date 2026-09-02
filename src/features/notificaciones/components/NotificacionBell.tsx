@@ -64,10 +64,23 @@ export function NotificacionBell({
     // actions del arranque (retrasa el menú, que es lo crítico).
     const primera = setTimeout(cargar, 2500);
     // Refresco periódico para que las alertas lleguen sin recargar la página.
-    const id = setInterval(cargar, 60_000);
+    // Solo en la pestaña visible: en las que están de fondo el refresco no lo ve
+    // nadie y, multiplicado por las pestañas abiertas, sumaba consultas cada
+    // minuto las 24 horas. Al volver a la pestaña se recarga en el acto, así que
+    // la campana sigue al día.
+    const visible = () =>
+      typeof document === "undefined" || document.visibilityState === "visible";
+    const id = setInterval(() => {
+      if (visible()) cargar();
+    }, 60_000);
+    const onVisibility = () => {
+      if (visible()) cargar();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
     return () => {
       clearTimeout(primera);
       clearInterval(id);
+      document.removeEventListener("visibilitychange", onVisibility);
     };
   }, [cargar]);
 

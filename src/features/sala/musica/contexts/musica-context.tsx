@@ -250,8 +250,23 @@ export function MusicaProvider({ children }: { children: ReactNode }) {
     pantalla abierta a las 12:55 seguiría viendo "Comidas" bloqueada a las 13:05.
   */
   useEffect(() => {
-    const t = setInterval(() => void recargar(), 60_000);
-    return () => clearInterval(t);
+    // Solo mientras la pestaña se está viendo: recargar el catálogo en pestañas
+    // de fondo no cambia nada en pantalla y era una de las consultas más caras
+    // repetidas cada minuto. Al volver se recarga en el acto, que es cuando de
+    // verdad importa que la franja horaria esté al día.
+    const visible = () =>
+      typeof document === "undefined" || document.visibilityState === "visible";
+    const t = setInterval(() => {
+      if (visible()) void recargar();
+    }, 60_000);
+    const onVisibility = () => {
+      if (visible()) void recargar();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      clearInterval(t);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
   }, [recargar]);
 
   // ─── Modo altavoz ─────────────────────────────────────────────────────────
