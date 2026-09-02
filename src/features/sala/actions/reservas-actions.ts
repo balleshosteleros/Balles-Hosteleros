@@ -104,12 +104,13 @@ const RESERVA_COLUMNAS =
   "external_id, external_origen, created_at, duracion_minutos, " +
   "reserva_ticket_productos(nombre)";
 
-/** Fila de reserva tal y como llega de la BD, con las columnas de arriba. */
-export type ReservaRow = Record<string, unknown>;
-
+// OJO: este fichero es "use server". Solo puede EXPORTAR funciones async: un
+// `export type` aquí rompe el módulo entero en producción con
+// «A "use server" file can only export async functions». Por eso la forma de
+// la fila se escribe en línea en la firma, sin exportar ningún tipo.
 export async function listReservas(
   fecha?: string,
-): Promise<{ ok: boolean; data: ReservaRow[]; error?: string }> {
+): Promise<{ ok: boolean; data: Record<string, unknown>[]; error?: string }> {
   try {
     const { supabase, empresaId } = await getContext();
     const query = supabase
@@ -124,7 +125,7 @@ export async function listReservas(
     if (fecha) query.eq("fecha", fecha);
     const { data, error } = await query;
     if (error) throw error;
-    return { ok: true, data: (data ?? []) as unknown as ReservaRow[] };
+    return { ok: true, data: (data ?? []) as unknown as Record<string, unknown>[] };
   } catch (err) {
     console.error("[reservas] listReservas:", err);
     return { ok: false, data: [], error: friendlyError(err, "listReservas") };
