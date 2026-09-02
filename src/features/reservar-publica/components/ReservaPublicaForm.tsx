@@ -187,6 +187,29 @@ export function ReservaPublicaForm({
     aceptaPrivacidad &&
     cuponValido !== false;
 
+  /**
+   * Qué falta por rellenar, en palabras.
+   *
+   * Un botón gris sin explicación deja al cliente mirando la pantalla sin
+   * saber qué le falta —y abandonando la reserva—. Se nombra solo lo primero
+   * que falte, para no soltarle una lista.
+   */
+  const queFalta = ((): string | null => {
+    if (valido) return null;
+    if (!nombre.trim()) return "Escribe tu nombre.";
+    if (!apellidos.trim()) return "Escribe tus apellidos.";
+    if (!fecha) return "Elige el día.";
+    if (!hora) return "Elige la hora.";
+    if (obligatorios.telefono && telefono.trim().length < 5) return "Escribe tu teléfono.";
+    if (obligatorios.email && !email.trim()) return "Escribe tu correo.";
+    if (zonaExigida && !grupoZonaId) return "Elige la zona.";
+    if (!ticketValido) return "Elige uno de los productos disponibles.";
+    if (!canjeConforme) return "El código que has escrito no es válido. Bórralo o corrígelo.";
+    if (cuponValido === false) return "El código promocional no es válido.";
+    if (!aceptaPrivacidad) return "Marca la casilla de la política de privacidad.";
+    return null;
+  })();
+
   // Filtros que impone el ticket. Se calculan aquí y se reparten a los
   // selectores: la regla vive en un solo sitio (validar-ticket-canje) y la usan
   // igual el formulario y el servidor.
@@ -818,6 +841,10 @@ export function ReservaPublicaForm({
           >
             {enviando ? "Enviando..." : "Reservar mesa"}
           </Button>
+
+          {queFalta && (
+            <p className="text-center text-xs text-amber-700 mt-2">{queFalta}</p>
+          )}
         </form>
 
         <footer className="text-center mt-6 text-xs text-zinc-400">

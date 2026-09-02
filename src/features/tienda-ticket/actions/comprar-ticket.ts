@@ -89,7 +89,10 @@ export async function comprarTicketAction(
   // ── 4. Importe real (IVA incluido, como se muestra al cliente) ────
   const precioBase = Number(p.precio);
   const iva = Number(p.iva ?? 0);
-  const precioUnitario = Number((precioBase * (1 + iva / 100)).toFixed(2));
+  // El precio que se escribe en el producto es lo que PAGA el cliente, IVA
+  // incluido: si pone 49 €, se le cobran 49 €. El IVA no se suma encima, se
+  // calcula hacia dentro para la contabilidad (49 € al 10% = 44,55 + 4,45).
+  const precioUnitario = Number(precioBase.toFixed(2));
   const importeTotal = Number((precioUnitario * unidades).toFixed(2));
   const esGratis = p.cobro_modo === "gratis" || importeTotal <= 0;
 

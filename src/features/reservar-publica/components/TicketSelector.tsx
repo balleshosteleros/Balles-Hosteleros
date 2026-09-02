@@ -31,7 +31,8 @@ function disponible(p: ProductoTicketPublico): number | null {
 }
 
 function fmtEuro(n: number, iva: number): string {
-  const total = n * (1 + iva / 100);
+  // El precio del producto YA incluye el IVA: es lo que paga el cliente.
+  const total = n;
   return `${total.toFixed(2)} €`;
 }
 

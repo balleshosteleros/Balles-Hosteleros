@@ -42,7 +42,8 @@ function euros(n: number): string {
 }
 
 function precioConIva(p: ProductoTienda): number {
-  return Number((p.precio * (1 + p.iva / 100)).toFixed(2));
+  // El precio del producto YA incluye el IVA: es lo que paga el cliente.
+  return Number(p.precio.toFixed(2));
 }
 
 function disponibles(p: ProductoTienda): number | null {
