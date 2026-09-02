@@ -17,7 +17,7 @@
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getSiteUrl } from "@/lib/site-url";
-import { getCredencialesRevolut } from "@/features/sala/actions/revolut-config-actions";
+import { getCredencialesRevolut } from "@/features/ajustes/actions/revolut-config-actions";
 import {
   crearOrden,
   obtenerOrden,
