@@ -57,15 +57,18 @@ export function buildTemplateSheets<T>(config: ModuleIO<T>): SheetSpec[] {
   return sheets;
 }
 
-export function downloadTemplate<T>(config: ModuleIO<T>, format: "xlsx" | "csv" = "xlsx"): void {
+export async function downloadTemplate<T>(
+  config: ModuleIO<T>,
+  format: "xlsx" | "csv" = "xlsx",
+): Promise<void> {
   const filename = `plantilla-${config.submodule}.${format}`;
   if (format === "csv") {
     const headers = config.columns.filter((c) => !c.hideInImport).map((c) => c.label);
     const example = config.columns.filter((c) => !c.hideInImport).map((c) => c.example ?? "");
-    downloadCSV([headers, example], filename);
+    await downloadCSV([headers, example], filename);
     return;
   }
-  downloadWorkbook(buildTemplateSheets(config), filename);
+  await downloadWorkbook(buildTemplateSheets(config), filename);
 }
 
 export function buildExportRows<T>(
@@ -115,14 +118,14 @@ export async function downloadExport<T>(
 
   const rows = buildExportRows(config, records);
   if (format === "csv") {
-    downloadCSV(rows, `${base}.csv`);
+    await downloadCSV(rows, `${base}.csv`);
     return;
   }
   if (format === "pdf") {
     printRowsAsPDF(rows, `${base}.pdf`, config.label);
     return;
   }
-  downloadWorkbook([{ name: "Datos", rows }], `${base}.xlsx`);
+  await downloadWorkbook([{ name: "Datos", rows }], `${base}.xlsx`);
 }
 
 function escapeHtml(s: string): string {

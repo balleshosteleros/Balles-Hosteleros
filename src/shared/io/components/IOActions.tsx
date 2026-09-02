@@ -65,7 +65,7 @@ export function IOActions<T>({
       }
 
       const wb = await readWorkbook(file);
-      const rawRows = readRows(wb);
+      const rawRows = await readRows(wb);
       if (rawRows.length === 0) {
         setParseError("El archivo no contiene filas con datos.");
         return;
@@ -105,9 +105,15 @@ export function IOActions<T>({
     }
   }
 
-  function handleDownloadTemplate() {
-    downloadTemplate(config, "xlsx");
-    toast.success("Plantilla descargada");
+  async function handleDownloadTemplate() {
+    // Se espera a que el fichero esté hecho: el aviso de "descargada" salía
+    // antes de tenerlo, y si la generación fallaba nadie se enteraba.
+    try {
+      await downloadTemplate(config, "xlsx");
+      toast.success("Plantilla descargada");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Error al generar la plantilla");
+    }
   }
 
   return (

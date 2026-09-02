@@ -201,6 +201,203 @@ async function turnosAplicablesDia(
   return out;
 }
 
+/**
+ * Igual que `getHorarioDia`, pero para MUCHOS empleados a la vez y un solo día.
+ *
+ * `getHorarioDia` hace 5 consultas por empleado. Llamarla dentro de un bucle
+ * (el cron de reavisos lo hacía cada minuto, empleado a empleado) dispara
+ * 5 × nº de empleados consultas por vuelta: eso saturaba la base de datos y
+ * dejaba sin respuesta al resto del software. Aquí se hacen esas mismas 5
+ * consultas UNA vez, pidiendo los datos de todos los empleados de golpe, y
+ * después se reparte en memoria.
+ *
+ * Devuelve un mapa empleadoId → horario. Los empleados sin turno ese día salen
+ * con `{ tipo: "ninguno" }`.
+ */
+export async function getHorarioDiaLote(
+  supabase: SupabaseClient,
+  empresaId: string,
+  empleadoIds: string[],
+  fechaISO: string,
+): Promise<Map<string, HorarioDia>> {
+  const salida = new Map<string, HorarioDia>();
+  for (const id of empleadoIds) salida.set(id, { tipo: "ninguno" });
+  if (empleadoIds.length === 0) return salida;
+
+  const weekday = indexLunes(fechaISO);
+  const letra = LETRAS_DIA[weekday];
+  // Por empleado: ids de turno que le aplican hoy, separados igual que en
+  // `turnosAplicablesDia` (explícitos mandan; los directos se filtran por día).
+  const explicitosPorEmpleado = new Map<string, Set<string>>();
+  const directosPorEmpleado = new Map<string, Set<string>>();
+  const anotar = (mapa: Map<string, Set<string>>, empId: string, turnoId: string) => {
+    let set = mapa.get(empId);
+    if (!set) { set = new Set(); mapa.set(empId, set); }
+    set.add(turnoId);
+  };
+
+  // Las tres fuentes de turno, cada una en UNA consulta para todos.
+  const [planifRes, directosRes, peRes] = await Promise.all([
+    supabase
+      .from("rrhh_planificacion")
+      .select("empleado_id, turno_id")
+      .eq("empresa_id", empresaId)
+      .eq("fecha", fechaISO)
+      .in("empleado_id", empleadoIds),
+    supabase
+      .from("rrhh_turno_empleados")
+      .select("empleado_id, turno_id")
+      .eq("empresa_id", empresaId)
+      .in("empleado_id", empleadoIds)
+      .lte("vigente_desde", fechaISO)
+      .or(`vigente_hasta.is.null,vigente_hasta.gte.${fechaISO}`),
+    supabase
+      .from("rrhh_patron_empleados")
+      .select("empleado_id, patron_id")
+      .in("empleado_id", empleadoIds)
+      .lte("vigente_desde", fechaISO)
+      .or(`vigente_hasta.is.null,vigente_hasta.gte.${fechaISO}`),
+  ]);
+
+  for (const r of planifRes.data ?? []) {
+    const row = r as { empleado_id?: string | null; turno_id?: string | null };
+    if (row.empleado_id && row.turno_id) anotar(explicitosPorEmpleado, row.empleado_id, row.turno_id);
+  }
+  for (const r of directosRes.data ?? []) {
+    const row = r as { empleado_id?: string | null; turno_id?: string | null };
+    if (row.empleado_id && row.turno_id) anotar(directosPorEmpleado, row.empleado_id, row.turno_id);
+  }
+
+  // Patrones: se resuelven en bloque y la celda del día se reparte a cada
+  // empleado que tenga ese patrón asignado.
+  const patronesPorEmpleado = new Map<string, string[]>();
+  const todosPatronIds = new Set<string>();
+  for (const r of peRes.data ?? []) {
+    const row = r as { empleado_id?: string | null; patron_id?: string | null };
+    if (!row.empleado_id || !row.patron_id) continue;
+    const lista = patronesPorEmpleado.get(row.empleado_id) ?? [];
+    lista.push(row.patron_id);
+    patronesPorEmpleado.set(row.empleado_id, lista);
+    todosPatronIds.add(row.patron_id);
+  }
+
+  if (todosPatronIds.size > 0) {
+    const { data: patrones } = await supabase
+      .from("rrhh_patrones")
+      .select("id")
+      .eq("empresa_id", empresaId)
+      .eq("activo", true)
+      .in("id", Array.from(todosPatronIds))
+      .lte("vigente_desde", fechaISO)
+      .or(`vigente_hasta.is.null,vigente_hasta.gte.${fechaISO}`);
+    const activos = (patrones ?? []).map((p) => (p as { id: string }).id);
+    if (activos.length > 0) {
+      const { data: semanas } = await supabase
+        .from("rrhh_patron_semanas")
+        .select("patron_id, dias")
+        .in("patron_id", activos);
+      // patron_id → turno de HOY según la celda del día de la semana.
+      const turnoDelPatron = new Map<string, string>();
+      for (const s of semanas ?? []) {
+        const row = s as { patron_id?: string | null; dias?: (string | null)[] };
+        const tid = (row.dias ?? [])[weekday];
+        if (row.patron_id && tid) turnoDelPatron.set(row.patron_id, tid);
+      }
+      const activosSet = new Set(activos);
+      for (const [empId, patronIds] of patronesPorEmpleado) {
+        for (const pid of patronIds) {
+          if (!activosSet.has(pid)) continue;
+          const tid = turnoDelPatron.get(pid);
+          if (tid) anotar(explicitosPorEmpleado, empId, tid);
+        }
+      }
+    }
+  }
+
+  // Los turnos en sí: una sola consulta con todos los ids que han salido.
+  const todosTurnoIds = new Set<string>();
+  for (const set of explicitosPorEmpleado.values()) for (const id of set) todosTurnoIds.add(id);
+  for (const set of directosPorEmpleado.values()) for (const id of set) todosTurnoIds.add(id);
+  if (todosTurnoIds.size === 0) return salida;
+
+  const { data: turnos } = await supabase
+    .from("rrhh_turnos")
+    .select("id, tramos, activo, tipo_jornada, flex_horas, flex_horas_dia, flex_modo, dias")
+    .eq("empresa_id", empresaId)
+    .eq("activo", true)
+    .in("id", Array.from(todosTurnoIds));
+
+  const turnoPorId = new Map<string, TurnoAplicable>();
+  for (const t of turnos ?? []) {
+    const row = t as {
+      id: string;
+      tramos?: { inicio?: string; fin?: string }[];
+      tipo_jornada?: string;
+      flex_horas?: Record<string, number> | null;
+      flex_horas_dia?: number | string | null;
+      flex_modo?: string | null;
+      dias?: string[] | null;
+    };
+    const tramos: Tramo[] = [];
+    for (const tr of row.tramos ?? []) {
+      if (tr?.inicio && tr?.fin) tramos.push({ inicio: tr.inicio, fin: tr.fin });
+    }
+    turnoPorId.set(row.id, {
+      id: row.id,
+      tramos,
+      tipoJornada: (row.tipo_jornada as "fijo" | "flexible") ?? "fijo",
+      flexHoras: (row.flex_horas as Record<string, number> | null) ?? {},
+      flexHorasDia: row.flex_horas_dia == null ? null : Number(row.flex_horas_dia),
+      flexModo: (row.flex_modo as "diario" | "semanal") ?? "diario",
+      dias: (row.dias as string[] | null) ?? [],
+    });
+  }
+
+  // Mismo criterio de aplicabilidad y misma preferencia fijo > flexible que
+  // `turnosAplicablesDia` + `getHorarioDia`, pero ya sin tocar la base de datos.
+  for (const empId of empleadoIds) {
+    const explicitos = explicitosPorEmpleado.get(empId) ?? new Set<string>();
+    const directos = directosPorEmpleado.get(empId) ?? new Set<string>();
+    const aplicables: TurnoAplicable[] = [];
+    for (const tid of new Set([...explicitos, ...directos])) {
+      const turno = turnoPorId.get(tid);
+      if (!turno) continue;
+      const aplica =
+        explicitos.has(tid) ||
+        (directos.has(tid) &&
+          (turno.tipoJornada !== "flexible" ||
+            turno.dias.length === 0 ||
+            turno.dias.includes(letra)));
+      if (aplica) aplicables.push(turno);
+    }
+
+    const tramos = aplicables
+      .filter((t) => t.tipoJornada !== "flexible")
+      .flatMap((t) => t.tramos);
+    if (tramos.length > 0) {
+      salida.set(empId, { tipo: "fijo", tramos });
+      continue;
+    }
+    const flex = aplicables.find((t) => t.tipoJornada === "flexible");
+    if (flex) {
+      const objetivoHoras =
+        flex.flexHorasDia != null
+          ? flex.flexHorasDia
+          : flex.flexModo === "semanal"
+            ? Object.values(flex.flexHoras).reduce((a, b) => a + (Number(b) || 0), 0)
+            : Number(flex.flexHoras[letra] ?? 0);
+      salida.set(empId, {
+        tipo: "flexible",
+        modo: flex.flexHorasDia != null ? "diario" : flex.flexModo,
+        objetivoHoras,
+        tramos: [],
+      });
+    }
+  }
+
+  return salida;
+}
+
 export type HorarioDia =
   | { tipo: "ninguno" }
   | { tipo: "fijo"; tramos: Tramo[] }

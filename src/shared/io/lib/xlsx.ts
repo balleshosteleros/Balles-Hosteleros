@@ -1,20 +1,34 @@
-import * as XLSX from "xlsx";
+import type * as XLSXTypes from "xlsx";
 import type { ColumnDef } from "../types";
 import { normalizeHeader } from "./format";
+
+/**
+ * `xlsx` pesa ~200 KB y solo hace falta cuando alguien importa o exporta un
+ * Excel. Importada arriba de forma normal, viajaba en el arranque de TODAS las
+ * pantallas con barra de herramientas — Reservas incluida, que ni siquiera la
+ * ofrece. Se carga la primera vez que se usa de verdad, y el navegador la
+ * guarda para las siguientes.
+ */
+let xlsxPromesa: Promise<typeof XLSXTypes> | null = null;
+function cargarXLSX(): Promise<typeof XLSXTypes> {
+  xlsxPromesa ??= import("xlsx");
+  return xlsxPromesa;
+}
 
 export interface ReadOptions {
   sheetName?: string;
 }
 
-export async function readWorkbook(file: File): Promise<XLSX.WorkBook> {
-  const buffer = await file.arrayBuffer();
+export async function readWorkbook(file: File): Promise<XLSXTypes.WorkBook> {
+  const [XLSX, buffer] = await Promise.all([cargarXLSX(), file.arrayBuffer()]);
   return XLSX.read(buffer, { type: "array", cellDates: true });
 }
 
-export function readRows(
-  workbook: XLSX.WorkBook,
+export async function readRows(
+  workbook: XLSXTypes.WorkBook,
   options: ReadOptions = {}
-): Record<string, unknown>[] {
+): Promise<Record<string, unknown>[]> {
+  const XLSX = await cargarXLSX();
   const sheetName =
     options.sheetName && workbook.Sheets[options.sheetName]
       ? options.sheetName
@@ -56,7 +70,8 @@ export interface SheetSpec {
   columnWidths?: number[];
 }
 
-export function downloadWorkbook(sheets: SheetSpec[], filename: string): void {
+export async function downloadWorkbook(sheets: SheetSpec[], filename: string): Promise<void> {
+  const XLSX = await cargarXLSX();
   const wb = XLSX.utils.book_new();
   for (const spec of sheets) {
     const ws = XLSX.utils.aoa_to_sheet(spec.rows);
@@ -68,7 +83,8 @@ export function downloadWorkbook(sheets: SheetSpec[], filename: string): void {
   XLSX.writeFile(wb, filename, { compression: true });
 }
 
-export function downloadCSV(rows: (string | number | boolean | null | undefined)[][], filename: string): void {
+export async function downloadCSV(rows: (string | number | boolean | null | undefined)[][], filename: string): Promise<void> {
+  const XLSX = await cargarXLSX();
   const ws = XLSX.utils.aoa_to_sheet(rows);
   const csv = XLSX.utils.sheet_to_csv(ws, { FS: ";" });
   const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" });

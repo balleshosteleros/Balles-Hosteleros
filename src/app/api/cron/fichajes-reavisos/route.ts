@@ -12,7 +12,11 @@
 
 import { NextResponse } from "next/server";
 import { createClient as createServiceClient } from "@supabase/supabase-js";
-import { getHorarioDia, hhmmAMinutos } from "@/features/rrhh/utils/horario-empleado";
+import {
+  getHorarioDiaLote,
+  hhmmAMinutos,
+  type HorarioDia,
+} from "@/features/rrhh/utils/horario-empleado";
 import { ahoraEnZona } from "@/features/empresa/lib/zona-horaria";
 import { getZonaHorariaEmpresa } from "@/features/empresa/lib/empresa-server";
 import { sendPushWithClient } from "@/features/mi-panel/mobile/lib/push-server";
@@ -81,23 +85,38 @@ export async function GET(request: Request) {
       .eq("empresa_id", empresaId)
       .not("user_id", "is", null);
 
-    for (const emp of empleados ?? []) {
-      if (emp.estado === "Inactivo") continue;
+    // Horarios de TODOS los empleados activos en UNA tanda de consultas.
+    //
+    // Antes se pedía el horario empleado a empleado dentro del bucle: 5
+    // consultas × nº de empleados, cada minuto del día. Eso mantenía la base de
+    // datos ocupada sin parar y el resto del software se quedaba sin respuesta
+    // (Reservas no cargaba ni el plano ni los locales).
+    const empleadosActivos = (empleados ?? []).filter((e) => e.estado !== "Inactivo");
+    let horariosPorEmpleado = new Map<string, HorarioDia>();
+    try {
+      horariosPorEmpleado = await getHorarioDiaLote(
+        supabase,
+        empresaId,
+        empleadosActivos.map((e) => e.id as string),
+        hoy,
+      );
+    } catch {
+      // Sin horarios no hay a quién avisar en esta empresa: se pasa a la siguiente.
+      continue;
+    }
+
+    for (const emp of empleadosActivos) {
       const userId = emp.user_id as string;
       const empleadoId = emp.id as string;
 
       // Horario de hoy: solo FIJO tiene "hora de entrada" para vigilar.
       let entradaMin: number | null = null;
-      try {
-        const horario = await getHorarioDia(supabase, empresaId, empleadoId, hoy);
-        if (horario.tipo === "fijo" && horario.tramos.length > 0) {
-          const inicios = horario.tramos
-            .map((t) => hhmmAMinutos(t.inicio))
-            .filter((m): m is number => m != null);
-          if (inicios.length) entradaMin = Math.min(...inicios);
-        }
-      } catch {
-        entradaMin = null;
+      const horario = horariosPorEmpleado.get(empleadoId);
+      if (horario && horario.tipo === "fijo" && horario.tramos.length > 0) {
+        const inicios = horario.tramos
+          .map((t) => hhmmAMinutos(t.inicio))
+          .filter((m): m is number => m != null);
+        if (inicios.length) entradaMin = Math.min(...inicios);
       }
       if (entradaMin == null) continue;
 
