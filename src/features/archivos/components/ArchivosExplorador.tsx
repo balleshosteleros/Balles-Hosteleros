@@ -656,16 +656,18 @@ export function ArchivosExplorador({ variante, abierto = true, renderAcciones }:
                 No tienes ningún departamento con archivos disponibles.
               </p>
             ) : (
-              <div className="space-y-1">
+              <div className="space-y-2">
                 {raices.map((c) => (
                   <button
                     key={c.id}
                     onClick={() => setCarpetaId(c.id)}
-                    className="flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-left text-sm hover:bg-muted"
+                    className="group flex w-full items-center gap-3 rounded-xl border border-border/50 bg-card px-3.5 py-3 text-left text-sm shadow-sm transition-all hover:-translate-y-px hover:border-cyan-500/40 hover:shadow-md"
                   >
-                    <Folder className="h-4 w-4 shrink-0 text-cyan-600" />
-                    <span className="truncate">{c.nombre}</span>
-                    <ChevronRight className="ml-auto h-4 w-4 shrink-0 text-muted-foreground" />
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-cyan-500/15 to-cyan-500/5 ring-1 ring-inset ring-cyan-500/20 transition-colors group-hover:from-cyan-500/25 group-hover:to-cyan-500/10">
+                      <Folder className="h-4 w-4 shrink-0 text-cyan-600" />
+                    </span>
+                    <span className="truncate font-medium">{c.nombre}</span>
+                    <ChevronRight className="ml-auto h-4 w-4 shrink-0 text-muted-foreground/60 transition-transform group-hover:translate-x-0.5 group-hover:text-cyan-600" />
                   </button>
                 ))}
               </div>
@@ -674,18 +676,20 @@ export function ArchivosExplorador({ variante, abierto = true, renderAcciones }:
             <>
               {/* Subcarpetas */}
               {subcarpetas.length > 0 && (
-                <div className="mb-4 space-y-1">
+                <div className="mb-4 space-y-2">
                   {subcarpetas.map((c) => (
                     <div
                       key={c.id}
-                      className="group flex items-center gap-2 rounded-md px-3 py-2 text-sm hover:bg-muted"
+                      className="group flex items-center gap-2 rounded-xl border border-border/50 bg-card px-3 py-2.5 text-sm shadow-sm transition-all hover:-translate-y-px hover:border-cyan-500/40 hover:shadow-md"
                     >
                       <button
                         onClick={() => setCarpetaId(c.id)}
                         className="flex min-w-0 flex-1 items-center gap-3 text-left"
                       >
-                        <Folder className="h-4 w-4 shrink-0 text-cyan-600" />
-                        <span className="truncate">{c.nombre}</span>
+                        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-cyan-500/15 to-cyan-500/5 ring-1 ring-inset ring-cyan-500/20 transition-colors group-hover:from-cyan-500/25 group-hover:to-cyan-500/10">
+                          <Folder className="h-4 w-4 shrink-0 text-cyan-600" />
+                        </span>
+                        <span className="truncate font-medium">{c.nombre}</span>
                       </button>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
@@ -748,7 +752,7 @@ export function ArchivosExplorador({ variante, abierto = true, renderAcciones }:
                   {archivos.map((a) => (
                     <div
                       key={a.id}
-                      className="group relative overflow-hidden rounded-xl border border-border/60 bg-card transition-all hover:border-border hover:shadow-md"
+                      className="group relative overflow-hidden rounded-2xl border border-border/40 bg-card shadow-sm ring-1 ring-black/[0.02] transition-all duration-200 hover:-translate-y-0.5 hover:border-cyan-500/30 hover:shadow-lg hover:shadow-cyan-500/5"
                       title={a.nombre}
                     >
                       {/* Menú de acciones del archivo. Va fuera del botón que
@@ -805,7 +809,7 @@ export function ArchivosExplorador({ variante, abierto = true, renderAcciones }:
 
                       <button
                         onClick={() => setVisor(a)}
-                        className="relative block aspect-square w-full overflow-hidden bg-muted/40"
+                        className="relative block aspect-square w-full overflow-hidden bg-gradient-to-br from-muted/50 to-muted/20"
                       >
                       {/*
                           Se pide la miniatura si ya existe O si es una foto
@@ -833,7 +837,7 @@ export function ArchivosExplorador({ variante, abierto = true, renderAcciones }:
                             src={`/api/archivos/ver?id=${a.id}&thumb=1`}
                             alt={a.nombre}
                             loading="lazy"
-                            className="h-full w-full object-cover transition-transform group-hover:scale-105"
+                            className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
                             /*
                              * Si la miniatura no se puede generar (un formato
                              * que el servidor no entienda, un original
@@ -877,7 +881,7 @@ export function ArchivosExplorador({ variante, abierto = true, renderAcciones }:
                           en una carpeta de fotos no se sabía cuál era cuál. */}
                       <button
                         onClick={() => setVisor(a)}
-                        className="block w-full px-2.5 py-2 text-left"
+                        className="block w-full border-t border-border/30 px-3 py-2.5 text-left"
                       >
                         <span className="line-clamp-2 break-all text-xs leading-snug text-foreground/90">
                           {a.nombre}
