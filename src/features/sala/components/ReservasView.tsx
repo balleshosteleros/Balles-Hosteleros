@@ -6,6 +6,7 @@ import dynamic from "next/dynamic";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { NumberInput } from "@/shared/components/NumberInput";
+import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -4952,16 +4953,7 @@ export function ReservasView() {
               <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setFecha(addDays(fecha, -1))}><ChevronLeft className="h-4 w-4" /></Button>
               <Popover open={showDayPicker} onOpenChange={setShowDayPicker}>
                 <PopoverTrigger asChild>
-                  {/* El día lleva su propio indicador: es el botón que se mira
-                      al pulsar las flechas, así que es donde se ve antes que
-                      el día pedido aún está viniendo. */}
                   <Button variant="outline" size="sm" className="relative text-xs h-8 w-[150px] justify-center font-medium uppercase px-2.5">
-                    {loading && (
-                      <span
-                        aria-hidden
-                        className="absolute left-2 h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent opacity-60"
-                      />
-                    )}
                     {formatFecha(fecha)}
                   </Button>
                 </PopoverTrigger>
@@ -5026,6 +5018,20 @@ export function ReservasView() {
       ) : (
       <>
       <div className="flex flex-1 overflow-hidden relative">
+        {/* Indicador de carga ÚNICO y CENTRADO sobre toda la vista: el mismo
+            spinner que el resto del software (`LoadingSpinner`). Antes cada
+            panel pintaba el suyo — lista, plano y la píldora del día —, así que
+            al abrir salían tres ruedas a la vez en tres sitios distintos. */}
+        {loading && (
+          <div
+            role="status"
+            aria-live="polite"
+            aria-label="Cargando"
+            className="absolute inset-0 z-40 flex items-center justify-center pointer-events-none"
+          >
+            <LoadingSpinner size="lg" iconClassName="text-primary" />
+          </div>
+        )}
         {/* LEFT PANEL */}
         {panelOculto !== "lista" && (
         <div className={cn(
@@ -5064,17 +5070,10 @@ export function ReservasView() {
           <div className="relative flex-1 overflow-y-auto">
             {/* Mientras se pide el día, la lista se atenúa y no acepta clics: lo
                 que se ve todavía es del día anterior. Sin esto parecía que la
-                flecha no había hecho nada. */}
+                flecha no había hecho nada. El indicador en sí es ÚNICO y va
+                centrado sobre toda la vista (abajo), no uno por panel. */}
             {loading && (
-              <div className="absolute inset-0 z-20 flex items-start justify-center bg-background/60 pt-10 backdrop-blur-[1px]">
-                <span className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <span
-                    aria-hidden
-                    className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent"
-                  />
-                  Cargando reservas…
-                </span>
-              </div>
+              <div className="absolute inset-0 z-20 bg-background/60 backdrop-blur-[1px]" />
             )}
             {!loading && reservasFiltradas.length === 0 && <p className="text-xs text-muted-foreground text-center py-8">Sin reservas para este turno</p>}
             {reservasFiltradas.map(r => {
@@ -5264,15 +5263,7 @@ export function ReservasView() {
               atenúa y se bloquea. Las mesas que se ven todavía tienen el estado
               del día anterior y sentarían mal a un cliente. */}
           {loading && (
-            <div className="absolute inset-0 z-30 flex items-center justify-center bg-background/50 backdrop-blur-[1px]">
-              <span className="flex items-center gap-2 text-xs text-muted-foreground">
-                <span
-                  aria-hidden
-                  className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent"
-                />
-                Cargando sala…
-              </span>
-            </div>
+            <div className="absolute inset-0 z-30 bg-background/50 backdrop-blur-[1px]" />
           )}
           {/* Toggle pequeño dentro del lienzo: alterna entre vista mapa y vista listado (común a todas las empresas).
              Estilo y posición igualados al botón de configuración del header para quedar visualmente justo debajo. */}
