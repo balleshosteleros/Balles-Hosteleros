@@ -88,11 +88,32 @@ const config: Config = {
           "0%, 100%": { transform: "scale(1)", filter: "brightness(1)" },
           "50%": { transform: "scale(1.025)", filter: "brightness(1.05)" },
         },
+        /* Entrada de la marca del login: las dos piezas llegan desde
+           extremos opuestos y se encuentran en el centro. */
+        "marca-desde-arriba": {
+          from: { opacity: "0", transform: "translateY(-3.5rem)" },
+          to: { opacity: "1", transform: "translateY(0)" },
+        },
+        "marca-desde-abajo": {
+          from: { opacity: "0", transform: "translateY(3.5rem)" },
+          to: { opacity: "1", transform: "translateY(0)" },
+        },
+        /* El separador se abre cuando las dos piezas ya han llegado. */
+        "marca-separador": {
+          from: { opacity: "0", transform: "scaleY(0)" },
+          to: { opacity: "1", transform: "scaleY(1)" },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
         breathing: "breathing 4s ease-in-out infinite",
+        "marca-desde-arriba":
+          "marca-desde-arriba 0.9s cubic-bezier(0.22, 1, 0.36, 1) both",
+        "marca-desde-abajo":
+          "marca-desde-abajo 0.9s cubic-bezier(0.22, 1, 0.36, 1) both",
+        "marca-separador":
+          "marca-separador 0.5s ease-out 0.75s both",
       },
     },
   },

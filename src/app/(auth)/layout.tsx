@@ -83,7 +83,13 @@ export default function AuthLayout({
         />
 
         {/* Contenido central: logo + wordmark, en horizontal y separados por
-            una línea vertical (así estaba y así se queda).
+            una línea vertical.
+            Al entrar, cada pieza llega desde un extremo —el logo cae desde
+            arriba, el texto sube desde abajo— y se encuentran en el centro;
+            el separador se abre después, cuando ya han llegado las dos. La
+            animación es solo de entrada (`both`, sin repetición): no distrae
+            de lo que importa en esta pantalla, que es el formulario.
+
             El logo lleva medidas explícitas (no `fill`) para que ocupe lo mismo
             antes y después de cargar: con `fill` el hueco depende del contenedor
             y la imagen "aparecía" de distinto tamaño según el entorno. */}
@@ -95,10 +101,10 @@ export default function AuthLayout({
               width={176}
               height={176}
               priority
-              className="h-44 w-44 shrink-0 object-contain"
+              className="h-44 w-44 shrink-0 animate-marca-desde-arriba object-contain motion-reduce:animate-none"
             />
-            <div className="h-32 w-px bg-white/30" />
-            <span className="text-sm font-light uppercase tracking-[0.28em] text-blue-200/80">
+            <div className="h-32 w-px animate-marca-separador bg-white/30 motion-reduce:animate-none" />
+            <span className="animate-marca-desde-abajo text-sm font-light uppercase tracking-[0.28em] text-blue-200/80 motion-reduce:animate-none">
               Software de Gestión
             </span>
           </div>
