@@ -1,9 +1,101 @@
 # TAREA para Fernando — Precios de compra de BACANAL (cuando bajes el repo)
 
-> **De:** Iván (vía Claude) · **Fecha:** 2026-06-30 · **Actualizado:** 2026-08-29 · **Prioridad:** media
+> **De:** Iván (vía Claude) · **Fecha:** 2026-06-30 · **Actualizado:** 2026-09-03 · **Prioridad:** media
 > Léelo al hacer `git pull` y reconciliar.
 
 ---
+
+## ✅ RESPUESTA DE IVÁN (03-sep) — tus 3 preguntas del 29-ago, contestadas
+
+> Fernando: aquí van las tres. La 1 no te la contesto como la planteaste — le doy la vuelta,
+> porque creo que el problema de fondo es otro. Léela entera antes de ponerte.
+
+---
+
+### 1. Subida de albaranes — NO empecemos por "meter el albarán a mano". Empecemos por el PEDIDO.
+
+Lo de teclear un albarán a mano lo veo complicado y, sobre todo, creo que es empezar por el
+final. **El albarán casi nunca nace de la nada: nace de un pedido que YA hemos creado en el
+software.** Así que lo que quiero es esto:
+
+**A) Si el pedido existe (el caso normal):**
+- El albarán **se crea automáticamente a partir del pedido**. No lo teclea nadie: ya sabemos
+  qué proveedor es, qué productos, qué cantidades y a qué precio se pidió.
+- El gerente lo que hace es **revisarlo**: marcar qué ha llegado y qué no, y corregir lo que
+  venga distinto. Eso es rápido y no depende de ninguna IA.
+- Además puede **adjuntar la foto del albarán del proveedor** aunque no se escanee. Que quede
+  guardada igual, para que al cerrar el albarán el documento esté ahí lo mismo que cuando se
+  sube con IA. **El papel siempre queda archivado, se lea o no se lea.**
+
+**B) Lo ideal, cuando la IA sí funciona:** hago la foto, la IA lo lee todo y **lo compara
+contra el pedido que yo hice**, y ahí me canta las diferencias: de precio, de cantidad, de lo
+que sea. Eso es lo que quiero de verdad.
+
+**C) Si se sube un albarán SIN pedido previo:** entonces no compara contra nada — coge los
+datos y los muestra. Pero **si esos productos ya tienen precios grabados, sí me hace la
+comprobación de si el precio es correcto o no.**
+
+Con esto, si la IA se cae, el gerente **no se queda bloqueado**: tira del pedido, revisa lo
+que ha llegado y adjunta la foto. La red de seguridad es el pedido, no teclear a mano.
+
+**Sobre la IA (tu opción 2 y 3), lo que sí voto:**
+- **Que se actualicen los modelos solos** cuando Google jubile uno: si es viable y no va a dar
+  error, adelante, me parece bien.
+- **Seguir con la que estamos** (Gemini) me vale: es muy barato o prácticamente nada.
+  **Míralo tú y me dices.**
+- Si hubiera que conectarse a otra, **a poder ser a la IA de Claude, que ya la pagamos y es la
+  mejor.** De Google no pagamos nada y de ChatGPT tampoco: son cuentas gratis. En el software
+  lo que tenemos metido es Gemini, y eso es lo único que se paga, aunque es mínimo —y encima
+  no es por mes, es por una recarga o algo así, que no acabo de entender bien.
+
+> **Aclaración de lo que se paga (lo he mirado):** tienes razón en que no es una cuota
+> mensual. La cuenta de Google es de **pago por uso**: se consume de un saldo/recarga según
+> lo que se gasta, y si no se usa, no se paga. **El gasto real hasta hoy es de céntimos**
+> (agosto: 12 llamadas y unos 9.300 tokens en total; septiembre lleva 2 llamadas). El tope de
+> 5 €/mes que montaste no se acerca ni de lejos. Conclusión: seguimos con Gemini como está.
+
+---
+
+### 2. Qué es una elaboración y cómo quiero que funcione
+
+Una elaboración es cuando **coges productos de compra y de ahí creas un producto nuevo**, que
+se llama **elaboración**. Esos luego sirven para crear los escandallos. Digamos que **es lo
+mismo que un producto de compra, solo que no se compra: se fabrica** a partir de los propios
+productos de compra.
+
+**Cómo trabaja el jefe de cocina:**
+- **Cada semana apunta las elaboraciones que ha hecho y qué cantidad ha sacado de cada una.**
+  Ejemplo: "he hecho una salsa, he cogido 4 productos —tanta cantidad de cada uno— y me ha
+  salido 1 litro de esta elaboración".
+- Ahí se graba, y **se crea un histórico de todo ello**.
+- Donde ya tengamos **la receta de la elaboración creada**, que solo tenga que **elegirla y
+  poner la cantidad que ha preparado**. El sistema ya descuenta de los productos de compra las
+  cantidades **proporcionales** a lo que haya reflejado el jefe de cocina.
+
+**Respuesta directa a tu pregunta 1 (¿lo marca la receta o lo teclea el cocinero?):**
+→ **Lo teclea el cocinero.** Él pone cuánto ha hecho y el sistema descuenta en proporción.
+La receta guardada le ahorra tener que meter los ingredientes uno a uno, pero **la cantidad
+producida la dice él cada vez.**
+
+**Respuesta a tu pregunta 2 (unidad de cada elaborado):**
+→ **Depende de cada una: se elige al crear la plantilla de la elaboración.** No hay una
+respuesta única. Y los productos que la componen se eligen **según la configuración de cada
+producto**.
+
+> ⚠️ **Un punto importante de vocabulario, que esto va a más sitios del software:**
+> **La palabra "raciones" no se usa. No la usamos.**
+> **Las unidades de medida son SOLO 3: LITROS, KILOS y UNIDADES.**
+> Otra cosa distinta son los **formatos de medida**, que son las cantidades en las que se
+> puede comprar un producto (1 litro, 5 litros, …). No mezcles los dos conceptos.
+
+---
+
+### 3. Las 21 recetas con la unidad en conflicto
+
+**Que lo corrija el programa y yo apruebo.** (Tu opción b.)
+
+---
+
 
 ## 🛡️ 29-AGO — SUBIDA DE ALBARANES: DECISIÓN DE IVÁN (cómo blindarla para que NUNCA se bloquee)
 
