@@ -261,15 +261,17 @@ export async function iniciarPagoTarjeta(token: string): Promise<
         telefono: (r.cliente_telefono as string | null) ?? undefined,
       },
       redirectUrl: `${getSiteUrl()}/reserva/tarjeta/${parsed.data}?estado=vuelta`,
-      // Cada política hace lo suyo, y son cosas distintas:
+      // SIEMPRE en modo retención, nunca cobro inmediato.
       //
-      //   · GARANTÍA    → RETIENE el importe. El dinero queda bloqueado en la
+      //   · GARANTÍA    → retiene el importe de verdad: queda bloqueado en la
       //     cuenta del cliente hasta que se presenta.
-      //   · CANCELACIÓN → NO retiene nada. Solo guarda la tarjeta, y el cargo
-      //     se hace después únicamente si el cliente no viene.
+      //   · CANCELACIÓN → la orden es de 0 €, así que no bloquea ni un
+      //     céntimo. El modo retención se usa igualmente porque el de cobro
+      //     con importe cero deja la orden colgada en `pending`, y el cliente
+      //     se queda mirando la pantalla del banco sin que pase nada.
       //
-      // Ninguna de las dos cobra al reservar.
-      retener: retiene,
+      // Ninguna de las dos mueve dinero al reservar.
+      retener: true,
     });
 
     if (!orden.ok) {
