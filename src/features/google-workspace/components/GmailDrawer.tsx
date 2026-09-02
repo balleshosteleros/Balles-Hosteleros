@@ -37,6 +37,12 @@ import {
   MailOpen,
   Mail,
   Minus,
+  Paperclip,
+  Download,
+  FileImage,
+  FileSpreadsheet,
+  FileArchive,
+  File as FileIcon,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -86,6 +92,14 @@ import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 /** Clave del estilo personal de redacción en `usuario_preferencias.prefs`. */
 const PREF_ESTILO_IA = "email.estiloIA";
 
+/** Fichero que viaja con el correo, tal y como lo devuelve la API de Gmail. */
+type Adjunto = {
+  attachmentId: string;
+  nombre: string;
+  mimeType: string;
+  tamano: number;
+};
+
 type MensajeHilo = {
   id: string;
   remitente: string;
@@ -94,6 +108,7 @@ type MensajeHilo = {
   cuerpo: string;
   cuerpoHtml?: string;
   leido: boolean;
+  adjuntos?: Adjunto[];
 };
 
 type Mensaje = {
@@ -112,9 +127,12 @@ type Mensaje = {
   labelIds?: string[];
   /** Nº de mensajes del hilo; Gmail lo pinta junto a los participantes. */
   mensajesCount?: number;
+  /** El hilo trae ficheros adjuntos (Gmail pinta un clip en la fila). */
+  tieneAdjuntos?: boolean;
   /** Para + Cc del último mensaje; los usa "Responder a todos". */
   destinatarios?: string[];
   mensajesHilo?: MensajeHilo[];
+  adjuntos?: Adjunto[];
 };
 
 type CarpetaUsuario = { id: string; nombre: string };
@@ -511,6 +529,7 @@ export function GmailDrawer({ children }: GmailDrawerProps) {
               cuerpo: m.cuerpo,
               cuerpoHtml: m.cuerpoHtml,
               leido: m.leido,
+              adjuntos: m.adjuntos ?? [],
             }),
           );
           const ultimo = mensajesHilo[mensajesHilo.length - 1];
@@ -520,6 +539,7 @@ export function GmailDrawer({ children }: GmailDrawerProps) {
                   ...prev,
                   cuerpo: ultimo.cuerpo,
                   cuerpoHtml: ultimo.cuerpoHtml,
+                  adjuntos: ultimo.adjuntos ?? [],
                   mensajesHilo,
                 }
               : prev,
@@ -532,6 +552,7 @@ export function GmailDrawer({ children }: GmailDrawerProps) {
                   ...prev,
                   cuerpo: data.cuerpo ?? prev.cuerpo,
                   cuerpoHtml: data.cuerpoHtml ?? prev.cuerpoHtml,
+                  adjuntos: data.adjuntos ?? prev.adjuntos ?? [],
                 }
               : prev,
           );
@@ -1834,6 +1855,12 @@ function ListaMensajes({
                           - {m.preview}
                         </span>
                       </p>
+                      {m.tieneAdjuntos && (
+                        <Paperclip
+                          className="h-3.5 w-3.5 shrink-0 text-[#5f6368]"
+                          aria-label="Con archivos adjuntos"
+                        />
+                      )}
                     </div>
 
                     {/* Acciones hover (a la derecha, sustituyen a la fecha) */}
@@ -1948,8 +1975,8 @@ function ListaMensajes({
 interface VistaMensajeProps {
   mensaje: Mensaje;
   onVolver: () => void;
-  onResponder: () => void;
-  onReenviar: () => void;
+  onResponder: (m: Mensaje) => void;
+  onReenviar: (m: Mensaje) => void;
   onEstrella: () => void;
   onArchivar: () => void;
   onPapelera: () => void;
@@ -2058,7 +2085,7 @@ function VistaMensaje({
         <div className="mt-8 flex flex-wrap gap-2">
           <button
             type="button"
-            onClick={onResponder}
+            onClick={() => onResponder(mensaje)}
             className="inline-flex items-center gap-2 rounded-full border border-[#dadce0] bg-white px-6 py-2 text-sm font-medium text-[#202124] hover:bg-[#f8f9fa] hover:shadow-sm transition-all"
           >
             <Reply className="h-4 w-4" />
@@ -2066,7 +2093,7 @@ function VistaMensaje({
           </button>
           <button
             type="button"
-            onClick={onReenviar}
+            onClick={() => onReenviar(mensaje)}
             className="inline-flex items-center gap-2 rounded-full border border-[#dadce0] bg-white px-6 py-2 text-sm font-medium text-[#202124] hover:bg-[#f8f9fa] hover:shadow-sm transition-all"
           >
             <Forward className="h-4 w-4" />
@@ -2107,6 +2134,108 @@ function ListaHilo({
           fotoRemitente={idx === ultimoIdx ? fotoRemitentePrincipal : null}
         />
       ))}
+    </div>
+  );
+}
+
+/** Tamaño legible del fichero, como en Gmail ("2 MB", "348 KB"). */
+function tamanoLegible(bytes: number): string {
+  if (!bytes) return "";
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  const mb = bytes / (1024 * 1024);
+  return `${mb.toFixed(mb < 10 ? 1 : 0).replace(".", ",")} MB`;
+}
+
+function IconoAdjunto({ mimeType, nombre }: { mimeType: string; nombre: string }) {
+  const ext = nombre.split(".").pop()?.toLowerCase() ?? "";
+  const clase = "h-7 w-7";
+  if (mimeType.startsWith("image/")) {
+    return <FileImage className={cn(clase, "text-[#5f6368]")} />;
+  }
+  if (mimeType === "application/pdf" || ext === "pdf") {
+    return <FileText className={cn(clase, "text-[#ea4335]")} />;
+  }
+  if (["xls", "xlsx", "csv"].includes(ext) || mimeType.includes("spreadsheet")) {
+    return <FileSpreadsheet className={cn(clase, "text-[#0f9d58]")} />;
+  }
+  if (["zip", "rar", "7z", "gz"].includes(ext)) {
+    return <FileArchive className={cn(clase, "text-[#5f6368]")} />;
+  }
+  if (["doc", "docx"].includes(ext) || mimeType.includes("word")) {
+    return <FileText className={cn(clase, "text-[#4285f4]")} />;
+  }
+  return <FileIcon className={cn(clase, "text-[#5f6368]")} />;
+}
+
+/** URL de nuestra ruta puente hacia el adjunto de Gmail. */
+function urlAdjunto(messageId: string, a: Adjunto, descargar = false): string {
+  const params = new URLSearchParams({
+    messageId,
+    attachmentId: a.attachmentId,
+    nombre: a.nombre,
+    mimeType: a.mimeType,
+  });
+  if (descargar) params.set("descargar", "1");
+  return `/api/google/gmail/attachment?${params.toString()}`;
+}
+
+/**
+ * Bloque de adjuntos al pie del mensaje, como Gmail: una tarjeta por fichero
+ * con su icono, nombre y peso. Al pulsar se abre en una pestaña nueva y la
+ * flecha lo descarga.
+ */
+function AdjuntosMensaje({
+  messageId,
+  adjuntos,
+}: {
+  messageId: string;
+  adjuntos: Adjunto[];
+}) {
+  if (!adjuntos || adjuntos.length === 0) return null;
+
+  return (
+    <div className="mt-5 border-t border-[#e8eaed] pt-4">
+      <p className="mb-3 flex items-center gap-2 text-sm text-[#5f6368]">
+        <Paperclip className="h-4 w-4" />
+        {adjuntos.length === 1
+          ? "1 archivo adjunto"
+          : `${adjuntos.length} archivos adjuntos`}
+      </p>
+      <div className="flex flex-wrap gap-3">
+        {adjuntos.map((a) => (
+          <div
+            key={a.attachmentId}
+            className="group relative flex w-64 items-center gap-3 rounded-lg border border-[#dadce0] bg-white p-3 transition-shadow hover:shadow-md"
+          >
+            <a
+              href={urlAdjunto(messageId, a)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex min-w-0 flex-1 items-center gap-3"
+              title={a.nombre}
+            >
+              <IconoAdjunto mimeType={a.mimeType} nombre={a.nombre} />
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-sm text-[#202124]">
+                  {a.nombre}
+                </span>
+                <span className="block text-xs text-[#5f6368]">
+                  {tamanoLegible(a.tamano)}
+                </span>
+              </span>
+            </a>
+            <a
+              href={urlAdjunto(messageId, a, true)}
+              download={a.nombre}
+              className="shrink-0 rounded-full p-2 text-[#5f6368] hover:bg-black/5"
+              title="Descargar"
+            >
+              <Download className="h-4 w-4" />
+            </a>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -2152,6 +2281,9 @@ function MensajeHiloItem({
             </span>
           </div>
         </div>
+        {mensaje.adjuntos && mensaje.adjuntos.length > 0 && (
+          <Paperclip className="h-3.5 w-3.5 shrink-0 text-[#5f6368]" />
+        )}
         <span className="text-xs text-[#5f6368] shrink-0 whitespace-nowrap">
           {mensaje.fecha}
         </span>
@@ -2161,7 +2293,20 @@ function MensajeHiloItem({
 
   return (
     <div className="border-b border-[#e8eaed] pb-4 last:border-b-0">
-      <div className="flex items-start gap-3 mb-3">
+      {/* Como Gmail: pulsar la cabecera de un mensaje abierto vuelve a plegarlo. */}
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={() => setExpandido(false)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            setExpandido(false);
+          }
+        }}
+        title="Contraer"
+        className="flex items-start gap-3 mb-3 cursor-pointer rounded-lg px-1 -mx-1 hover:bg-[#f8f9fa]"
+      >
         {fotoRemitente ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
@@ -2186,7 +2331,10 @@ function MensajeHiloItem({
             {mostrarEstrella && (
               <button
                 type="button"
-                onClick={onEstrella}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onEstrella();
+                }}
                 className="ml-auto rounded-full p-1 hover:bg-black/5"
                 title={estrellaActiva ? "Quitar estrella" : "Destacar"}
               >
@@ -2228,6 +2376,8 @@ function MensajeHiloItem({
           (sin contenido)
         </span>
       )}
+
+      <AdjuntosMensaje messageId={mensaje.id} adjuntos={mensaje.adjuntos ?? []} />
     </div>
   );
 }
@@ -2310,6 +2460,8 @@ function BloqueMensajeUnico({
       ) : (
         <Loader2 className="h-4 w-4 animate-spin text-[#5f6368]" />
       )}
+
+      <AdjuntosMensaje messageId={mensaje.id} adjuntos={mensaje.adjuntos ?? []} />
     </>
   );
 }

@@ -9,10 +9,23 @@ type GmailFullMessage = {
   labelIds?: string[];
   payload?: {
     mimeType?: string;
+    filename?: string;
     headers: { name: string; value: string }[];
-    body?: { data?: string };
+    body?: { data?: string; attachmentId?: string; size?: number };
     parts?: GmailFullMessage["payload"][];
   };
+};
+
+/** Fichero que viaja con el correo (lo que Gmail pinta como adjunto). */
+type Adjunto = {
+  attachmentId: string;
+  nombre: string;
+  mimeType: string;
+  tamano: number;
+  /** Content-ID: si lo tiene, la imagen va incrustada en el cuerpo (cid:). */
+  contentId?: string;
+  /** true = imagen del cuerpo (firma, logo), no un fichero de la lista. */
+  incrustado: boolean;
 };
 
 type GmailFullThread = {
@@ -57,6 +70,42 @@ function findAnyBody(payload: GmailFullMessage["payload"]): string {
     }
   }
   return "";
+}
+
+/**
+ * Recorre el árbol de partes y recoge las que son ficheros. Gmail marca un
+ * adjunto con `filename` + `body.attachmentId`; las imágenes incrustadas en el
+ * cuerpo (Content-ID, como los logos de una firma) también vienen con nombre,
+ * así que se descartan para no llenar la lista de logotipos.
+ */
+function recogerAdjuntos(
+  payload: GmailFullMessage["payload"],
+  salida: Adjunto[] = [],
+): Adjunto[] {
+  if (!payload) return salida;
+  const nombre = payload.filename?.trim();
+  const attachmentId = payload.body?.attachmentId;
+  if (nombre && attachmentId) {
+    const cabecera = (name: string) =>
+      payload.headers?.find((h) => h.name.toLowerCase() === name)?.value ?? "";
+    // El Content-ID viene entre <> y así lo referencia el HTML: src="cid:xxx".
+    const contentId = cabecera("content-id").replace(/^<|>$/g, "").trim();
+    const disposition = cabecera("content-disposition").toLowerCase();
+    salida.push({
+      attachmentId,
+      nombre,
+      mimeType: payload.mimeType ?? "application/octet-stream",
+      tamano: payload.body?.size ?? 0,
+      contentId: contentId || undefined,
+      // Gmail no lista los logos de una firma como ficheros adjuntos: los pinta
+      // dentro del cuerpo. Se distinguen por el Content-ID / disposition inline.
+      incrustado: Boolean(contentId) || disposition.includes("inline"),
+    });
+  }
+  if (payload.parts) {
+    for (const p of payload.parts) recogerAdjuntos(p, salida);
+  }
+  return salida;
 }
 
 function header(msg: GmailFullMessage, name: string): string {
@@ -105,10 +154,51 @@ function nombreRemitente(
     : from.email.split("@")[0];
 }
 
+/**
+ * Cambia los `src="cid:xxx"` del cuerpo por la URL de nuestra ruta de adjuntos.
+ * El navegador no sabe resolver `cid:` (apunta a una parte del propio correo),
+ * así que los logos y fotos incrustadas salían como recuadros rotos.
+ */
+function resolverImagenesIncrustadas(
+  html: string,
+  messageId: string,
+  adjuntos: Adjunto[],
+): string {
+  if (!html) return html;
+  const porContentId = new Map(
+    adjuntos.filter((a) => a.contentId).map((a) => [a.contentId as string, a]),
+  );
+  if (porContentId.size === 0) return html;
+
+  return html.replace(
+    /(src\s*=\s*)(["'])cid:([^"']+)\2/gi,
+    (original, prefijo: string, comilla: string, cid: string) => {
+      const limpio = decodeURIComponent(cid.trim()).replace(/^<|>$/g, "");
+      const adj =
+        porContentId.get(limpio) ??
+        // Algunos clientes escriben el cid sin el dominio o con otra caja.
+        [...porContentId.entries()].find(
+          ([k]) =>
+            k.toLowerCase() === limpio.toLowerCase() ||
+            k.split("@")[0].toLowerCase() === limpio.split("@")[0].toLowerCase(),
+        )?.[1];
+      if (!adj) return original;
+      const params = new URLSearchParams({
+        messageId,
+        attachmentId: adj.attachmentId,
+        nombre: adj.nombre,
+        mimeType: adj.mimeType,
+      });
+      return `${prefijo}${comilla}/api/google/gmail/attachment?${params.toString()}${comilla}`;
+    },
+  );
+}
+
 function decodificarMensaje(msg: GmailFullMessage, cuentaPropia = "") {
   const html = findPart(msg.payload, "text/html");
   const text = findPart(msg.payload, "text/plain") || findAnyBody(msg.payload);
   const from = parseFrom(header(msg, "From"));
+  const adjuntos = recogerAdjuntos(msg.payload);
   return {
     id: msg.id,
     threadId: msg.threadId,
@@ -119,7 +209,9 @@ function decodificarMensaje(msg: GmailFullMessage, cuentaPropia = "") {
     leido: !msg.labelIds?.includes("UNREAD"),
     estrella: msg.labelIds?.includes("STARRED") ?? false,
     cuerpo: text || msg.snippet,
-    cuerpoHtml: html,
+    cuerpoHtml: resolverImagenesIncrustadas(html, msg.id, adjuntos),
+    // La lista de ficheros excluye las imágenes del cuerpo, igual que Gmail.
+    adjuntos: adjuntos.filter((a) => !a.incrustado),
   };
 }
 
@@ -167,5 +259,6 @@ export async function GET(request: Request) {
     connected: true,
     cuerpo: decoded.cuerpo,
     cuerpoHtml: decoded.cuerpoHtml,
+    adjuntos: decoded.adjuntos,
   });
 }

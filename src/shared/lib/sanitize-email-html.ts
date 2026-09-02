@@ -30,6 +30,7 @@ const EMAIL_CONFIG = {
     "href", "target", "rel",
     "src", "alt", "title",
     "class", "style", "id",
+    "referrerpolicy", "loading",
     "width", "height",
     "align", "valign",
     "bgcolor", "color", "face", "size",
@@ -50,6 +51,19 @@ function ensureHook() {
     if (node.tagName === "A") {
       node.setAttribute("target", "_blank");
       node.setAttribute("rel", "noopener noreferrer");
+    }
+    if (node.tagName === "IMG") {
+      // Sin esto, muchos servidores de imágenes de correo devuelven 403 al ver
+      // que el referrer no es el suyo, y la foto sale como recuadro roto.
+      node.setAttribute("referrerpolicy", "no-referrer");
+      node.setAttribute("loading", "lazy");
+      // Imágenes servidas por http:// dentro de una página https: el navegador
+      // las bloquea como contenido mixto. Se piden por https, que es lo que
+      // hace Gmail al pasarlas por su proxy.
+      const src = node.getAttribute("src");
+      if (src && src.toLowerCase().startsWith("http://")) {
+        node.setAttribute("src", "https://" + src.slice("http://".length));
+      }
     }
   });
 }

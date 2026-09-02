@@ -256,6 +256,25 @@ export async function GET(request: Request) {
     return NextResponse.json({ connected: true, mensajes: [], nextPageToken: null });
   }
 
+  // 1.b) Qué hilos llevan ficheros. La etiqueta HAS_ATTACHMENT no es fiable
+  // (correos con PDF real llegan sin ella) y `format=metadata` no devuelve las
+  // partes del mensaje, así que se le pregunta a Gmail con su propio operador
+  // `has:attachment` y se cruzan los ids. Es una sola llamada extra.
+  const idsHilo = list.threads.slice(0, maxResults).map((t) => t.id);
+  const conAdjunto = new Set<string>();
+  if (idsHilo.length > 0) {
+    const paramsAdj = new URLSearchParams({
+      maxResults: String(maxResults),
+      q: `${partesQuery.length > 0 ? partesQuery.join(" ") + " " : ""}has:attachment`,
+    });
+    const label = params.get("labelIds");
+    if (label) paramsAdj.set("labelIds", label);
+    const adjRes = await googleFetchAuto<GmailThreadListResponse>(
+      `https://gmail.googleapis.com/gmail/v1/users/me/threads?${paramsAdj.toString()}`,
+    );
+    adjRes.data?.threads?.forEach((t) => conAdjunto.add(t.id));
+  }
+
   // 2) Detalles de cada hilo en paralelo (todos sus mensajes en metadata)
   const detalles = await Promise.all(
     list.threads.slice(0, maxResults).map((t) =>
@@ -312,6 +331,9 @@ export async function GET(request: Request) {
         carpeta,
         labelIds: Array.from(todosLabels),
         mensajesCount: msgs.length,
+        // Clip de la fila: el hilo salió en la consulta `has:attachment`, o
+        // Gmail lo etiquetó (esa etiqueta sola no basta, ver arriba).
+        tieneAdjuntos: conAdjunto.has(t.id) || todosLabels.has("HAS_ATTACHMENT"),
         // Destinatarios del último mensaje: los necesita "Responder a todos"
         // del menú contextual, que sin esto no tendría a quién poner en Cc.
         destinatarios: [
