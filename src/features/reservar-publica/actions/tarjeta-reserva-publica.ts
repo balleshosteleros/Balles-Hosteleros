@@ -141,7 +141,7 @@ export async function obtenerTarjetaPendiente(
  * pedir dos tarjetas seguidas al mismo cliente sería absurdo.
  */
 export async function iniciarPagoTarjeta(token: string): Promise<
-  Result<{ urlPago: string }>
+  Result<{ tokenPago: string; entorno: "produccion" | "pruebas" }>
 > {
   const parsed = tokenSchema.safeParse(token);
   if (!parsed.success) return { ok: false, error: "Enlace no válido." };
@@ -208,7 +208,7 @@ export async function iniciarPagoTarjeta(token: string): Promise<
       // dejando su tarjeta para una reserva.
       descripcion: retiene
         ? `Garantía de reserva · ${nombreEmpresa}`
-        : `Tarjeta para la reserva · ${nombreEmpresa}`,
+        : `Tarjeta de la reserva · ${nombreEmpresa}`,
       cliente: {
         email: (r.cliente_email as string | null) ?? undefined,
         nombre: [r.cliente_nombre, r.cliente_apellidos].filter(Boolean).join(" ") || undefined,
@@ -229,9 +229,12 @@ export async function iniciarPagoTarjeta(token: string): Promise<
       return { ok: false, error: "No se pudo iniciar el pago. Inténtalo de nuevo." };
     }
 
-    const urlPago = orden.orden.checkout_url;
-    if (!urlPago) {
-      return { ok: false, error: "Revolut no devolvió una página de pago." };
+    // El widget se monta con el TOKEN de la orden, no con su página alojada:
+    // así el formulario de tarjeta se pinta en nuestra pantalla, sin el
+    // "Pagar X €" de Revolut ni sus botones de Revolut Pay.
+    const tokenPago = orden.orden.token;
+    if (!tokenPago) {
+      return { ok: false, error: "Revolut no devolvió el pago." };
     }
 
     const prefijo = retiene ? "garantia" : "cancelacion";
@@ -246,7 +249,7 @@ export async function iniciarPagoTarjeta(token: string): Promise<
       })
       .eq("id", r.id as string);
 
-    return { ok: true, data: { urlPago } };
+    return { ok: true, data: { tokenPago, entorno: cred.entorno } };
   } catch (err) {
     console.error("[tarjeta-reserva][iniciar]", err);
     return { ok: false, error: "No pudimos iniciar el pago." };

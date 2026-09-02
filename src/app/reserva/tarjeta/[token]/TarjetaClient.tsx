@@ -8,7 +8,7 @@
  * confirmamos el resultado al volver.
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Loader2, ShieldCheck, CreditCard, CheckCircle2 } from "lucide-react";
 import {
   confirmarPagoTarjeta,
@@ -28,6 +28,19 @@ export function TarjetaClient({
   vuelveDePagar: boolean;
 }) {
   const [enviando, setEnviando] = useState(false);
+  /**
+   * El formulario de tarjeta se monta DENTRO de esta pantalla (widget de
+   * Revolut), no en su página alojada. Así el cliente no ve el "Pagar X €" de
+   * Revolut, ni sus botones de Revolut Pay, ni su publicidad: solo los campos
+   * de la tarjeta y nuestro botón.
+   *
+   * Los números de la tarjeta siguen SIN pasar por nosotros: viven dentro de
+   * un marco de Revolut al que esta página no tiene acceso.
+   */
+  const contenedorTarjeta = useRef<HTMLDivElement | null>(null);
+  const campoRef = useRef<{ submit: () => void; destroy: () => void } | null>(null);
+  const [montandoCampo, setMontandoCampo] = useState(false);
+  const [campoListo, setCampoListo] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Al volver de Revolut hay que preguntarle si el pago salió: el webhook
   // puede tardar, y el cliente vería "pendiente" después de haber pagado.
@@ -50,23 +63,78 @@ export function TarjetaClient({
     if (comprobando) comprobar();
   }, [comprobando, comprobar]);
 
-  async function pagar() {
-    setEnviando(true);
+  /** Abre la orden en Revolut y pinta sus campos de tarjeta aquí dentro. */
+  async function mostrarFormulario() {
+    setMontandoCampo(true);
     setError(null);
+
     const res = await iniciarPagoTarjeta(token);
     if (!res.ok) {
       setError(res.error);
-      setEnviando(false);
+      setMontandoCampo(false);
       return;
     }
-    // La pasarela no se abre dentro de un iframe: si esta pantalla acabara
-    // incrustada, se salta al marco superior para que el pago ocupe la ventana.
-    if (window.self !== window.top && window.top) {
-      window.top.location.href = res.data.urlPago;
-    } else {
-      window.location.href = res.data.urlPago;
+
+    try {
+      const { default: RevolutCheckout } = await import("@revolut/checkout");
+      const instancia = await RevolutCheckout(
+        res.data.tokenPago,
+        res.data.entorno === "pruebas" ? "sandbox" : "prod",
+      );
+
+      const destino = contenedorTarjeta.current;
+      if (!destino) {
+        setError("No pudimos abrir el formulario. Recarga la página.");
+        setMontandoCampo(false);
+        return;
+      }
+
+      campoRef.current = instancia.createCardField({
+        target: destino,
+        locale: "es",
+        // El código postal no se le pide: la reserva no lo necesita y es un
+        // campo más que rellenar para algo que no se le va a cobrar.
+        hidePostcodeField: true,
+        name: datos.clienteNombre ?? undefined,
+        onSuccess() {
+          // El widget avisa, pero no es de fiar: un anuncio bloqueado o una
+          // conexión caída se lo comen. Se comprueba contra Revolut.
+          setCampoListo(false);
+          setComprobando(true);
+        },
+        onError(err: unknown) {
+          setError(
+            err instanceof Error
+              ? `No se pudo validar la tarjeta: ${err.message}`
+              : "No se pudo validar la tarjeta. Revisa los datos e inténtalo de nuevo.",
+          );
+          setEnviando(false);
+        },
+      });
+
+      setCampoListo(true);
+    } catch {
+      setError("No pudimos abrir el formulario de tarjeta. Inténtalo de nuevo.");
+    } finally {
+      setMontandoCampo(false);
     }
   }
+
+  /** Envía la tarjeta que el cliente acaba de teclear. */
+  function confirmarTarjeta() {
+    setEnviando(true);
+    setError(null);
+    campoRef.current?.submit();
+  }
+
+  // React monta los efectos dos veces en desarrollo: sin esto quedarían dos
+  // formularios de tarjeta superpuestos.
+  useEffect(() => {
+    return () => {
+      campoRef.current?.destroy();
+      campoRef.current = null;
+    };
+  }, []);
 
   // Manda la garantía si la reserva lleva las dos: es la más estricta.
   const politica = datos.garantia ?? datos.cancelacion;
@@ -120,7 +188,8 @@ export function TarjetaClient({
           </div>
           <h1 className="text-xl font-bold">Necesitamos tu tarjeta</h1>
           <p className="text-zinc-600 text-sm">
-            Para confirmar tu reserva en {datos.empresaNombre}.
+            Para confirmar tu reserva en {datos.empresaNombre}.{" "}
+            <strong className="text-zinc-900">No se te cobra nada ahora.</strong>
           </p>
         </div>
 
@@ -182,25 +251,51 @@ export function TarjetaClient({
           </div>
         )}
 
-        <button
-          type="button"
-          onClick={pagar}
-          disabled={enviando}
-          className="w-full h-11 rounded-xl bg-zinc-900 text-white font-medium text-sm inline-flex items-center justify-center gap-2 hover:bg-zinc-800 disabled:opacity-60 transition-colors"
-        >
-          {enviando ? (
-            <>
-              <Loader2 className="h-4 w-4 animate-spin" /> Abriendo el pago…
-            </>
-          ) : (
-            <>
-              <CreditCard className="h-4 w-4" /> Introducir tarjeta
-            </>
-          )}
-        </button>
+        {/* Los campos de tarjeta de Revolut, dentro de nuestra pantalla. Se
+            queda vacío hasta que el cliente pulsa el botón de abajo. */}
+        <div
+          ref={contenedorTarjeta}
+          className={campoListo ? "rounded-xl border border-zinc-200 p-3" : "hidden"}
+        />
+
+        {campoListo ? (
+          <button
+            type="button"
+            onClick={confirmarTarjeta}
+            disabled={enviando}
+            className="w-full h-11 rounded-xl bg-zinc-900 text-white font-medium text-sm inline-flex items-center justify-center gap-2 hover:bg-zinc-800 disabled:opacity-60 transition-colors"
+          >
+            {enviando ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" /> Comprobando…
+              </>
+            ) : (
+              <>
+                <ShieldCheck className="h-4 w-4" /> Confirmar reserva
+              </>
+            )}
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={mostrarFormulario}
+            disabled={montandoCampo}
+            className="w-full h-11 rounded-xl bg-zinc-900 text-white font-medium text-sm inline-flex items-center justify-center gap-2 hover:bg-zinc-800 disabled:opacity-60 transition-colors"
+          >
+            {montandoCampo ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" /> Un momento…
+              </>
+            ) : (
+              <>
+                <CreditCard className="h-4 w-4" /> Introducir tarjeta
+              </>
+            )}
+          </button>
+        )}
 
         <p className="text-[11px] text-zinc-500 text-center leading-relaxed">
-          El pago lo gestiona Revolut. Tus datos de tarjeta no pasan por{" "}
+          Los datos de tu tarjeta los recoge Revolut directamente: no pasan por{" "}
           {datos.empresaNombre} ni quedan guardados en esta web.
         </p>
       </div>
