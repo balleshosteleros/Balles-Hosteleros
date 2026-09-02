@@ -446,7 +446,11 @@ export function ReservaPublicaForm({
           className="bg-white sm:rounded-2xl sm:shadow-xl sm:border sm:border-zinc-100 px-5 sm:px-7 pt-2 pb-6 sm:pt-7 sm:pb-7 space-y-5"
         >
           {/* Código de un Ticket ya comprado. Va lo primero porque condiciona
-              todo lo demás: días, horas, turno, zona y número de personas. */}
+              todo lo demás: días, horas, turno, zona y número de personas.
+              Solo aparece si la empresa VENDE tickets: en un restaurante que no
+              los usa, pedir un código que nadie puede tener solo confunde a
+              quien viene a reservar una mesa normal. */}
+          {productosTicket.length > 0 && (
           <TicketCodigoInput
             empresaSlug={empresaSlug}
             value={ticketCodigo}
@@ -468,6 +472,7 @@ export function ReservaPublicaForm({
             contextoSerial={`${fecha}|${grupoZonaId}`}
             accent={accent}
           />
+          )}
 
           {/* Comprar el ticket ahora: solo si no viene con un código canjeado. */}
           {productosTicket.length > 0 && !ticketCanje && (
