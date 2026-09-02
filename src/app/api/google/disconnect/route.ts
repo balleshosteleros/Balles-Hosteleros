@@ -88,9 +88,24 @@ export async function POST(request: Request) {
     return response;
   }
 
-  // Ninguna cuenta del roster sirvió: limpiamos todo (activas + roster).
-  const response = NextResponse.json({ ok: true, removed: email });
+  /*
+    Ninguna de las cuentas restantes ha podido activarse ahora mismo. Eso NO
+    significa que estén revocadas: un corte de red o un 5xx de Google hace que
+    `refreshAccessToken` devuelva null para todas. Antes aquí se guardaba el
+    roster VACÍO, y un fallo pasajero al desconectar una cuenta se llevaba por
+    delante TODAS las demás, también en la base de datos: había que volver a
+    conectarlas una por una.
+
+    Ahora solo se sueltan las cookies de la cuenta activa (la que se acaba de
+    desconectar). El roster conserva las restantes, y la próxima vez que Google
+    responda se reactivan solas desde `/api/google/sync`.
+  */
+  const response = NextResponse.json({
+    ok: true,
+    removed: email,
+    switchedTo: null,
+  });
   clearActive(response);
-  await writeAccountsTo(response.cookies, []);
+  await writeAccountsTo(response.cookies, restantes);
   return response;
 }

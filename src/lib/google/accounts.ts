@@ -161,8 +161,39 @@ export async function readAccounts(): Promise<GoogleAccount[]> {
   const c = await cookies();
   const raw = c.get(ACCOUNTS_COOKIE)?.value;
   const deCookie = safeParse<GoogleAccount[]>(raw, []);
-  if (deCookie.length > 0) return deCookie;
-  return readAccountsFromDb();
+  const deBd = await readAccountsFromDb();
+
+  /*
+    Se FUSIONAN las dos fuentes en lugar de quedarse solo con la cookie.
+
+    La cookie es caché y puede llegar recortada (se escribe en cada respuesta,
+    y cualquier camino que la reescriba con una lista parcial la deja así). Al
+    devolver solo la cookie, el siguiente guardado volcaba esa lista corta
+    ENCIMA de la base de datos y las cuentas que faltaban se perdían de verdad.
+
+    Con la unión, una cuenta solo desaparece cuando se pide desconectarla.
+    La cookie manda en los datos de cada cuenta (es la más reciente); la BD
+    aporta las que la cookie ya no lleva.
+  */
+  const porEmail = new Map<string, GoogleAccount>();
+  for (const cuenta of [...deBd, ...deCookie]) {
+    if (!cuenta?.email) continue;
+    porEmail.set(cuenta.email.toLowerCase(), cuenta);
+  }
+
+  // Se respeta el orden de la cookie (la activa va primera) y detrás las que
+  // solo estaban en BD.
+  const orden = [...deCookie, ...deBd];
+  const vistos = new Set<string>();
+  const fusionadas: GoogleAccount[] = [];
+  for (const cuenta of orden) {
+    const clave = cuenta?.email?.toLowerCase();
+    if (!clave || vistos.has(clave)) continue;
+    vistos.add(clave);
+    const elegida = porEmail.get(clave);
+    if (elegida) fusionadas.push(elegida);
+  }
+  return fusionadas;
 }
 
 function toMeta(accounts: GoogleAccount[]): GoogleAccountMeta[] {

@@ -67,6 +67,7 @@ import {
 } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
+import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
@@ -156,23 +157,6 @@ function construirArbolCarpetas(carpetas: CarpetaUsuario[]): CarpetaNodo[] {
 
   return raiz.hijos;
 }
-
-const MOCK_MENSAJES: Mensaje[] = [
-  {
-    id: "m1",
-    remitente: "Demo · Hermanos Ruiz",
-    email: "pedidos@hruiz.com",
-    asunto: "Subida de precio en aceite de oliva",
-    preview: "Hola Iván, te confirmamos la subida del aceite de oliva 5L…",
-    fecha: "10:23",
-    leido: false,
-    estrella: true,
-    carpeta: "inbox",
-    labelIds: [],
-    cuerpo:
-      "Hola Iván,\n\nEsto es una vista previa de demostración. Conecta tu Google para ver tus correos reales.",
-  },
-];
 
 const CARPETAS = [
   { id: "inbox", label: "Recibidos", icon: Inbox },
@@ -354,9 +338,6 @@ export function GmailDrawer({ children }: GmailDrawerProps) {
     }
   }
 
-  const carpeta =
-    filtro.tipo === "sistema" ? filtro.id : (`label:${filtro.id}` as string);
-
   function construirUrl(pageToken?: string): string {
     const p = new URLSearchParams();
     if (filtro.tipo === "sistema") {
@@ -441,7 +422,30 @@ export function GmailDrawer({ children }: GmailDrawerProps) {
         if (typeof data.signature === "string") setFirmaHtml(data.signature);
       })
       .catch(() => setFirmaHtml(""));
-  }, [connected, abierto]);
+  }, [connected, abierto, userEmail]);
+
+  /**
+   * Al cambiar la cuenta de Google activa, VACIAR la bandeja antes de pedir la
+   * nueva. Sin esto, `mensajesReales` conservaba los correos de la cuenta
+   * anterior y al abrir el panel se veía un instante la bandeja de otra empresa
+   * (correos ajenos) hasta que respondía la petición: cada empresa es un
+   * ecosistema aislado y no debe asomar ni un fotograma de otra.
+   */
+  useEffect(() => {
+    setMensajesReales(null);
+    setSeleccionado(null);
+    setSeleccion(new Set());
+    setCarpetasUsuario([]);
+    setFotosContactos({});
+    setFirmaHtml("");
+    setNextPageToken(null);
+    setPageTokens([]);
+    setPagina(0);
+    setNeedsReauth(false);
+    setFiltro({ tipo: "sistema", id: "inbox" });
+    setBusqueda("");
+    setBusquedaAplicada("");
+  }, [userEmail]);
 
   // Debounce de la búsqueda: espera a que el usuario deje de teclear (~450 ms)
   // antes de consultar Gmail. Al aplicar un término nuevo, reinicia paginación.
@@ -464,7 +468,7 @@ export function GmailDrawer({ children }: GmailDrawerProps) {
     setSeleccion(new Set());
     recargar();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [connected, filtro, abierto, busquedaAplicada]);
+  }, [connected, filtro, abierto, busquedaAplicada, userEmail]);
 
   function irPaginaSiguiente() {
     if (!nextPageToken) return;
@@ -853,20 +857,21 @@ export function GmailDrawer({ children }: GmailDrawerProps) {
 
   // La búsqueda es server-side (consulta todo el buzón en Gmail), así que aquí
   // NO volvemos a filtrar por el término: mostramos lo que devuelve el endpoint.
-  // El filtro por carpeta solo aplica al mock (sin conexión).
-  const fuente = mensajesReales ?? MOCK_MENSAJES;
-  const mensajes =
-    mensajesReales !== null
-      ? fuente
-      : fuente.filter((m) => m.carpeta === carpeta);
+  /**
+   * La bandeja SOLO enseña correos reales. Antes, mientras llegaba la respuesta
+   * de Gmail, se pintaba un correo de ejemplo inventado ("Demo · Hermanos
+   * Ruiz"): al abrir el panel aparecía un correo que no existía y desaparecía
+   * al segundo. Sin datos no se pinta nada; la lista ya enseña la carga.
+   */
+  const mensajes = mensajesReales ?? [];
 
   // Cuenta sobre la PÁGINA cargada (50 hilos), no sobre el buzón entero: si hay
   // más sin leer más abajo, este número se queda corto frente al badge de la
   // barra, que sí pregunta a Gmail. Se marca con "+" para no dar por bueno un
   // número que puede ser parcial.
-  const fuenteNoLeidos = mensajesReales ?? MOCK_MENSAJES;
-  const noLeidos = fuenteNoLeidos.filter((m) => !m.leido).length;
-  const noLeidosParcial = !!nextPageToken && noLeidos === fuenteNoLeidos.length;
+  const noLeidos = mensajes.filter((m) => !m.leido).length;
+  const noLeidosParcial =
+    !!nextPageToken && mensajes.length > 0 && noLeidos === mensajes.length;
 
   const tituloFiltro =
     filtro.tipo === "sistema"
@@ -1706,8 +1711,8 @@ function ListaMensajes({
       {/* Lista compacta */}
       <ul className="flex-1 overflow-y-auto">
         {cargando && mensajes.length === 0 ? (
-          <li className="p-12 text-center">
-            <Loader2 className="mx-auto h-5 w-5 animate-spin text-[#5f6368]" />
+          <li className="p-12">
+            <LoadingSpinner />
           </li>
         ) : mensajes.length === 0 ? (
           <li className="p-12 text-center text-sm text-[#5f6368]">
