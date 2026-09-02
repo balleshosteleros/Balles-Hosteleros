@@ -1162,9 +1162,10 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
       mesaCodigo: codigoAuto ?? undefined,
       estado: form.esWalkIn ? "WALK_IN" : "CONFIRMADA",
       observaciones: form.observaciones,
-      tipoCategoria: (form.tipoCategoria || null) as TipoReservaCategoria | null,
-      garantiaImporte: form.tipoCategoria === "politica" && form.garantiaImporte ? Number(form.garantiaImporte) : null,
-      importePagado: form.tipoCategoria === "cupon" && form.importePagado ? Number(form.importePagado) : null,
+      // Un walk-in es siempre gratis: ni garantía, ni prepago, ni cupón.
+      tipoCategoria: (form.esWalkIn ? "gratis" : form.tipoCategoria || null) as TipoReservaCategoria | null,
+      garantiaImporte: !form.esWalkIn && form.tipoCategoria === "politica" && form.garantiaImporte ? Number(form.garantiaImporte) : null,
+      importePagado: !form.esWalkIn && form.tipoCategoria === "cupon" && form.importePagado ? Number(form.importePagado) : null,
       // Solo enviamos override si el usuario tocó la duración y es distinta del default.
       // Si no tocó nada, dejamos NULL para usar la default empresa (semántica del campo).
       duracionMinutos: (() => {
@@ -1174,7 +1175,7 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
         return duracionEfectiva;
       })(),
       notificarEmail,
-      codigoCupon: form.codigoCupon.trim() ? form.codigoCupon.trim().toUpperCase() : null,
+      codigoCupon: !form.esWalkIn && form.codigoCupon.trim() ? form.codigoCupon.trim().toUpperCase() : null,
       // Walk-in siempre WALKIN, pase lo que pase en el selector: el cliente
       // llegó andando. El servidor lo vuelve a forzar, aquí se manda coherente.
       origen: form.esWalkIn ? "WALKIN" : (form.origen || null),
@@ -1279,7 +1280,22 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
               key={op.label}
               type="button"
               aria-pressed={activo}
-              onClick={() => setForm((p) => ({ ...p, esWalkIn: op.walkIn }))}
+              onClick={() =>
+                setForm((p) => ({
+                  ...p,
+                  esWalkIn: op.walkIn,
+                  // Un walk-in nunca lleva garantía ni cupón: entra andando y
+                  // no ha pagado nada por adelantado. El tipo queda en Gratis.
+                  ...(op.walkIn
+                    ? {
+                        tipoCategoria: "gratis" as TipoReservaCategoria,
+                        garantiaImporte: "",
+                        importePagado: "",
+                        codigoCupon: "",
+                      }
+                    : {}),
+                }))
+              }
               className={cn(
                 "h-8 rounded-md text-xs font-medium transition-colors",
                 activo
@@ -1602,6 +1618,15 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
             creada: ahí van agrupadas y admiten varias a la vez. */}
         <div className="col-span-3">
           <Label className="text-xs">Tipo de reserva</Label>
+          {form.esWalkIn ? (
+            <Input
+              className="h-8 text-xs"
+              value={TIPO_RESERVA_CATEGORIA_LABELS.gratis}
+              readOnly
+              disabled
+              title="Las reservas walk-in son siempre gratis: no hay garantía ni cupón."
+            />
+          ) : (
           <select
             value={form.tipoCategoria}
             onChange={(e) => {
@@ -1625,8 +1650,9 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
             <option value="politica">{TIPO_RESERVA_CATEGORIA_LABELS.politica}</option>
             <option value="cupon">{TIPO_RESERVA_CATEGORIA_LABELS.cupon}</option>
           </select>
+          )}
         </div>
-        {form.tipoCategoria === "politica" && (
+        {!form.esWalkIn && form.tipoCategoria === "politica" && (
           <div>
             <Label className="text-xs">Importe retenido (€)</Label>
             <Input
@@ -1640,7 +1666,7 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
             />
           </div>
         )}
-        {form.tipoCategoria === "cupon" && (
+        {!form.esWalkIn && form.tipoCategoria === "cupon" && (
           <div className="col-span-3">
             <Label className="text-xs">Importe pagado por adelantado (€)</Label>
             <Input
@@ -1655,7 +1681,7 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
           </div>
         )}
         {/* Cupón NO coexiste con 'gratis' ni con 'ticket' (son tipos distintos). */}
-        {form.tipoCategoria !== "gratis" && form.tipoCategoria !== "ticket" && (
+        {!form.esWalkIn && form.tipoCategoria !== "gratis" && form.tipoCategoria !== "ticket" && (
           <div className="col-span-3">
             <CuponInputReserva
               value={form.codigoCupon}
@@ -2942,7 +2968,7 @@ function PlanoCanvas({
                     (selectedReservaMesaId === m.id ||
                       selectedMesaId === m.id ||
                       mesasResaltadasIds.has(m.id)) &&
-                      "!border-red-500 outline outline-2 outline-offset-0 outline-red-500 z-20",
+                      "!border-red-500 ring-2 ring-red-500 z-20",
                     moviendo && !destinoInvalido && "cursor-copy ring-2 ring-sky-500 ring-offset-1 hover:ring-4 hover:scale-105 z-10",
                     destinoInvalido && "opacity-40 cursor-not-allowed",
                   )}
@@ -5424,7 +5450,7 @@ export function ReservasView() {
                                       (selectedReserva?.mesaId === m.id ||
                                         selectedMesa?.id === m.id ||
                                         mesasResaltadasIds.has(m.id)) &&
-                                        "!border-red-500 outline outline-2 outline-offset-0 outline-red-500 z-20",
+                                        "!border-red-500 ring-2 ring-red-500 z-20",
                                       moviendoAqui && !destinoInvalido && "cursor-copy ring-2 ring-sky-500 hover:ring-4 hover:scale-105 z-10",
                                       destinoInvalido && "opacity-40 cursor-not-allowed",
                                     )}

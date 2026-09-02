@@ -169,6 +169,15 @@ function recortarComentario(valor: string | null | undefined): string | null {
   return limpio.slice(0, RESERVA_COMENTARIO_MAX_CHARS);
 }
 
+/**
+ * Texto de un campo opcional: vacío o solo espacios se convierte en NULL.
+ * Sin esto, una cadena vacía viaja a la BD como dato real.
+ */
+function limpiar(v: string | null | undefined): string | null {
+  const s = (v ?? "").trim();
+  return s.length > 0 ? s : null;
+}
+
 export async function createReserva(input: {
   clienteNombre: string;
   clienteApellidos?: string;
@@ -252,12 +261,21 @@ export async function createReserva(input: {
     let clienteExistente = false;
     let camposDistintos: CampoDistinto[] = [];
     let nombreFinal = input.clienteNombre;
-    let apellidosFinal: string | null = input.clienteApellidos ?? null;
-    let telefonoFinal: string | null = input.clienteTelefono ?? null;
-    let emailFinal: string | null = input.clienteEmail ?? null;
+    let apellidosFinal: string | null = limpiar(input.clienteApellidos);
+    // Un contacto vacío se guarda como NULL, nunca como cadena vacía: la BD
+    // exige ficha de cliente en cuanto hay teléfono o email (restricción
+    // `reservas_cliente_vinculado_si_contacto`), y un "" contaba como contacto.
+    // Es lo que tumbaba los walk-in, que llegan sin teléfono ni correo.
+    let telefonoFinal: string | null = limpiar(input.clienteTelefono);
+    let emailFinal: string | null = limpiar(input.clienteEmail);
 
-    const hayContacto = (input.clienteEmail && input.clienteEmail.trim().length > 0)
-      || (input.clienteTelefono && input.clienteTelefono.trim().length >= 5);
+    const hayContacto = emailFinal !== null || (telefonoFinal?.length ?? 0) >= 5;
+    if (!hayContacto) {
+      // Sin ficha de cliente no puede quedar contacto suelto en la reserva: la
+      // BD lo prohíbe. Un teléfono demasiado corto para vincular se descarta.
+      telefonoFinal = null;
+      emailFinal = null;
+    }
     if (hayContacto) {
       const link = await findOrLinkClienteSala(supabase as unknown as SupabaseClient, {
         empresaId,
@@ -584,8 +602,11 @@ export async function createReserva(input: {
       camposDistintos,
     };
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : "Error desconocido";
-    console.error("[reservas] createReserva:", msg);
+    // Los errores de Supabase son objetos planos, no instancias de Error: con
+    // `instanceof Error` a secas todos salían como "Error desconocido" y no
+    // había forma de saber qué había fallado. Ver la misma nota en updateReserva.
+    const msg = mensajeDeError(err) ?? "Error al crear la reserva.";
+    console.error("[reservas] createReserva:", msg, err);
     return { ok: false, error: msg };
   }
 }
