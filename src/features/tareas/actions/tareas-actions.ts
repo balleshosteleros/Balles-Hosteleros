@@ -24,6 +24,7 @@ export interface TareaRow {
   hecha: boolean;
   prioridad: TareaPrioridad;
   tipo: TareaTipo;
+  /** CÓMO se hace: enlace al vídeo/documento heredado del cronograma. */
   link_url: string | null;
   ref_tabla: string | null;
   ref_id: string | null;
@@ -426,6 +427,8 @@ interface CronogramaTareaRow {
   tarea: string;
   resumen: string | null;
   frecuencia: string | null;
+  /** CÓMO se hace: vídeo o documento que lo explica. */
+  video_url: string | null;
   tiempo_requerido: string | null;
   dia_semana: number[] | string | number | null;
   dia_mes: number | null;
@@ -747,7 +750,7 @@ export async function listCronogramasPorRol(rol: string): Promise<Result<Record<
     //  · listar las tareas sin fecha fija (parent_id null + frecuencia OTRO/POR NECESIDAD).
     let query = supabase
       .from("cronogramas_operativos")
-      .select("id, rol, tarea, resumen, frecuencia, parent_id, orden")
+      .select("id, rol, tarea, resumen, frecuencia, video_url, parent_id, orden")
       .ilike("rol", rol.trim());
     // Multi-empresa: limitar a la empresa activa para no mezclar filas de otras empresas.
     const esUuid = empresaId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(empresaId);
@@ -932,6 +935,8 @@ export async function syncTareasCronograma(dateIso?: string, forcedRol?: string)
       hecha: false,
       prioridad: "alta" as TareaPrioridad,
       tipo: "sistema" as TareaTipo,
+      // CÓMO: el vídeo/documento del cronograma viaja con la tarea.
+      link_url: t.video_url ?? null,
       ref_tabla: `cronogramas_operativos:${t.rol}`,
       ref_id: /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(t.id) ? t.id : null,
       created_by: userId,
@@ -1030,6 +1035,8 @@ export async function syncTareasCronogramaRange(dates: string[], forcedRol?: str
             hecha: false,
             prioridad: "alta",
             tipo: "sistema",
+            // CÓMO: el vídeo/documento del cronograma viaja con la tarea.
+            link_url: t.video_url ?? null,
             ref_tabla: `cronogramas_operativos:${t.rol}`,
             ref_id: /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(t.id) ? t.id : null,
             created_by: userId,

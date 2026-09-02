@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Check, RefreshCw, Flame } from "lucide-react";
+import { Check, RefreshCw, Flame, PlayCircle, CalendarClock, Clock } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/shared/lib/utils";
 import {
@@ -42,6 +42,22 @@ function rangoFechas(periodo: Periodo): string[] {
 }
 
 const PERIODO_LABEL: Record<Periodo, string> = { dia: "Día", semana: "Semana", mes: "Mes" };
+
+/** CUÁNDO toca la tarea, en texto corto para la ficha. */
+function cuandoTexto(fecha: string, periodo: Periodo): string {
+  const d = new Date(fecha + "T00:00:00");
+  if (periodo === "dia") return "Hoy";
+  return d.toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "short" });
+}
+
+/** Duración prevista: 90 → "1 h 30 min"; 45 → "45 min". */
+function duracionTexto(min: number | null): string | null {
+  if (!min || min <= 0) return null;
+  const h = Math.floor(min / 60);
+  const m = min % 60;
+  if (h === 0) return `${m} min`;
+  return m === 0 ? `${h} h` : `${h} h ${m} min`;
+}
 
 export function TareasMobile() {
   const [tareas, setTareas] = useState<TareaRow[]>([]);
@@ -187,6 +203,7 @@ export function TareasMobile() {
                         {t.hecha && <Check className="h-3 w-3" strokeWidth={3} />}
                       </span>
                       <span className="min-w-0 flex-1">
+                        {/* QUÉ: la tarea y su detalle */}
                         <span
                           className={cn(
                             "block text-sm font-medium leading-snug",
@@ -196,19 +213,43 @@ export function TareasMobile() {
                           {t.titulo}
                         </span>
                         {t.descripcion && (
-                          <span className="mt-0.5 block line-clamp-2 text-xs text-muted-foreground">
+                          <span className="mt-0.5 block text-xs leading-snug text-muted-foreground">
                             {t.descripcion}
                           </span>
                         )}
-                        {periodo !== "dia" && (
-                          <span className="mt-1 block text-[10px] font-medium text-muted-foreground">
-                            {new Date(t.fecha + "T00:00:00").toLocaleDateString("es-ES", {
-                              weekday: "short",
-                              day: "numeric",
-                              month: "short",
-                            })}
+
+                        {/* CUÁNDO y CÓMO: siempre visibles bajo la tarea */}
+                        <span className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1">
+                          <span className="inline-flex items-center gap-1 text-[11px] font-medium text-muted-foreground">
+                            <CalendarClock className="h-3 w-3 shrink-0" />
+                            {cuandoTexto(t.fecha, periodo)}
                           </span>
-                        )}
+
+                          {duracionTexto(t.duracion_minutos) && (
+                            <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
+                              <Clock className="h-3 w-3 shrink-0" />
+                              {duracionTexto(t.duracion_minutos)}
+                            </span>
+                          )}
+
+                          {t.link_url ? (
+                            <a
+                              href={t.link_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={(e) => e.stopPropagation()}
+                              className="inline-flex items-center gap-1 text-[11px] font-medium text-primary underline-offset-2 hover:underline"
+                            >
+                              <PlayCircle className="h-3 w-3 shrink-0" />
+                              Cómo se hace
+                            </a>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground/60">
+                              <PlayCircle className="h-3 w-3 shrink-0" />
+                              Sin guía
+                            </span>
+                          )}
+                        </span>
                       </span>
                     </button>
                   </li>
