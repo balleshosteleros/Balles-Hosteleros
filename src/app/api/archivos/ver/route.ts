@@ -120,11 +120,17 @@ export async function GET(req: Request) {
         (archivo.tamano_bytes as number) ?? 0,
       )
     ) {
+      // Si generar la miniatura peta (p. ej. `sharp` no carga en el servidor),
+      // NO debe caerse la ruta: sin esto, un fallo del generador dejaba el
+      // archivo sin poder abrirse ni descargarse.
       const generada = await generarMiniaturaMiniaturaKey(
         supabase,
         id,
         archivo.r2_key as string,
-      );
+      ).catch((err) => {
+        console.error("[archivos ver] miniatura:", err);
+        return null;
+      });
       if (generada) {
         return new Response(new Uint8Array(generada), {
           status: 200,

@@ -19,11 +19,10 @@
  * pesado, con su tiempo de función por archivo—, y no compensa: los vídeos ya
  * se distinguen por su icono y su duración.
  *
- * SOLO servidor: importa `sharp`, un binario nativo. Debe usarse únicamente
+ * SOLO servidor: usa `sharp`, un binario nativo. Debe usarse únicamente
  * desde rutas con runtime "nodejs", nunca desde un componente de cliente.
  */
 
-import sharp from "sharp";
 import { getObjectBufferR2, putObjectR2 } from "@/shared/lib/r2";
 
 /** Mismo lado que las miniaturas del navegador: la cuadrícula es idéntica. */
@@ -80,6 +79,17 @@ export async function generarMiniaturaEnServidor(
   miniaturaKey: string,
 ): Promise<Buffer | null> {
   try {
+    // `sharp` se carga AQUÍ, no arriba del fichero.
+    //
+    // Es un binario nativo y en el servidor de producción no llega a cargar
+    // ("Could not load the sharp module... libvips-cpp.so"). Con el import
+    // estático ese fallo tumbaba la ruta ENTERA de servir archivos: un Excel
+    // no se podía ni abrir ni descargar, aunque no tenga nada que ver con
+    // generar miniaturas. Cargándolo solo cuando de verdad se va a redimensionar,
+    // el fallo se queda dentro de este `catch`: la miniatura no sale, y todo
+    // lo demás sigue funcionando.
+    const { default: sharp } = await import("sharp");
+
     const original = await getObjectBufferR2(r2KeyOriginal);
 
     const miniatura = await sharp(original)
