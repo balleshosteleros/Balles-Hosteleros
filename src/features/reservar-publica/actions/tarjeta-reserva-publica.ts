@@ -38,7 +38,9 @@ export interface TarjetaPendiente {
   fecha: string;
   hora: string;
   personas: number;
+  /** Nombre y apellidos juntos: el titular de la tarjeta necesita ambos. */
   clienteNombre: string | null;
+  clienteEmail: string | null;
   /** Qué política la exige, con su importe. Puede haber las dos. */
   /**
    * Cada política con lo que el cliente necesita saber para decidir: cuánto,
@@ -68,7 +70,7 @@ export async function obtenerTarjetaPendiente(
     const { data: r } = await admin
       .from("reservas")
       .select(
-        "id, empresa_id, estado, fecha, hora, personas, cliente_nombre, tiene_garantia, garantia_importe, garantia_estado, tiene_cancelacion, cancelacion_importe, cancelacion_estado",
+        "id, empresa_id, estado, fecha, hora, personas, cliente_nombre, cliente_apellidos, cliente_email, tiene_garantia, garantia_importe, garantia_estado, tiene_cancelacion, cancelacion_importe, cancelacion_estado",
       )
       .eq("garantia_token", parsed.data)
       .maybeSingle();
@@ -106,7 +108,13 @@ export async function obtenerTarjetaPendiente(
         fecha: r.fecha as string,
         hora: (r.hora as string).slice(0, 5),
         personas: (r.personas as number) ?? 1,
-        clienteNombre: (r.cliente_nombre as string | null) ?? null,
+        // Nombre completo: Revolut exige que el titular de la tarjeta tenga al
+        // menos dos palabras, así que el nombre suelto no le vale.
+        clienteNombre:
+          [r.cliente_nombre, r.cliente_apellidos]
+            .filter((x) => typeof x === "string" && x.trim().length > 0)
+            .join(" ") || null,
+        clienteEmail: (r.cliente_email as string | null) ?? null,
         garantia: pideGarantia
           ? {
               importe: Number(r.garantia_importe ?? 0),

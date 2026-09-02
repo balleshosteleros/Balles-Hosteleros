@@ -95,7 +95,13 @@ export function TarjetaClient({
         // El código postal no se le pide: la reserva no lo necesita y es un
         // campo más que rellenar para algo que no se le va a cobrar.
         hidePostcodeField: true,
-        name: datos.clienteNombre ?? undefined,
+        // Revolut exige que el titular tenga al menos dos palabras. Si la
+        // reserva vino sin apellidos, mejor no mandar nada: así el widget lo
+        // pide en su propio campo en vez de rechazar un nombre incompleto.
+        name: (datos.clienteNombre ?? "").trim().includes(" ")
+          ? datos.clienteNombre!.trim()
+          : undefined,
+        email: datos.clienteEmail ?? undefined,
         onSuccess() {
           // El widget avisa, pero no es de fiar: un anuncio bloqueado o una
           // conexión caída se lo comen. Se comprueba contra Revolut.
