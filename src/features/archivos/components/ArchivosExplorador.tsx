@@ -744,11 +744,11 @@ export function ArchivosExplorador({ variante, abierto = true, renderAcciones }:
                   </Button>
                 </div>
               ) : (
-                <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
                   {archivos.map((a) => (
                     <div
                       key={a.id}
-                      className="group relative aspect-square overflow-hidden rounded-md bg-muted"
+                      className="group relative overflow-hidden rounded-xl border border-border/60 bg-card transition-all hover:border-border hover:shadow-md"
                       title={a.nombre}
                     >
                       {/* Menú de acciones del archivo. Va fuera del botón que
@@ -756,7 +756,7 @@ export function ArchivosExplorador({ variante, abierto = true, renderAcciones }:
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <button
-                            className={`absolute right-1 top-1 z-10 rounded bg-black/50 p-1 transition-opacity hover:bg-black/70 data-[state=open]:opacity-100 ${
+                            className={`absolute right-1.5 top-1.5 z-10 rounded-lg bg-background/85 p-1.5 shadow-sm ring-1 ring-border/50 backdrop-blur-sm transition-all hover:bg-background data-[state=open]:opacity-100 ${
                               accionSiempreVisible
                                 ? "opacity-100"
                                 : "opacity-0 group-hover:opacity-100"
@@ -764,7 +764,7 @@ export function ArchivosExplorador({ variante, abierto = true, renderAcciones }:
                             title="Acciones"
                             onClick={(e) => e.stopPropagation()}
                           >
-                            <MoreVertical className="h-3.5 w-3.5 text-white" />
+                            <MoreVertical className="h-3.5 w-3.5 text-foreground/70" />
                           </button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
@@ -805,7 +805,7 @@ export function ArchivosExplorador({ variante, abierto = true, renderAcciones }:
 
                       <button
                         onClick={() => setVisor(a)}
-                        className="block h-full w-full"
+                        className="relative block aspect-square w-full overflow-hidden bg-muted/40"
                       >
                       {/*
                           Se pide la miniatura si ya existe O si es una foto
@@ -845,32 +845,43 @@ export function ArchivosExplorador({ variante, abierto = true, renderAcciones }:
                             }}
                           />
                           {esVideo(a.mime) && (
-                            <span className="absolute inset-0 flex items-center justify-center bg-black/25">
-                              <Play className="h-6 w-6 fill-white text-white" />
+                            <span className="absolute inset-0 flex items-center justify-center bg-gradient-to-t from-black/30 to-transparent">
+                              <span className="rounded-full bg-black/45 p-2 backdrop-blur-sm transition-transform group-hover:scale-110">
+                                <Play className="h-4 w-4 fill-white text-white" />
+                              </span>
                             </span>
                           )}
                         </>
                       ) : (
-                        // Sin miniatura (PDF, hoja de cálculo, ZIP…): icono del
-                        // tipo y el nombre, que aquí es lo único que identifica
-                        // el archivo.
+                        // Sin miniatura (hoja de cálculo, ZIP…): el icono del
+                        // tipo, grande y centrado. El nombre ya no se repite
+                        // aquí: va debajo de la tarjeta, igual para todos.
                         (() => {
                           const Icono = iconoArchivo(a.mime, a.nombre);
                           return (
-                            <span className="flex h-full w-full flex-col items-center justify-center gap-1.5 p-2 text-center">
-                              <Icono className="h-8 w-8 shrink-0 text-muted-foreground" />
-                              <span className="line-clamp-2 break-all text-[10px] leading-tight text-muted-foreground">
-                                {a.nombre}
-                              </span>
+                            <span className="flex h-full w-full items-center justify-center">
+                              <Icono className="h-10 w-10 shrink-0 text-muted-foreground/70" />
                             </span>
                           );
                         })()
                       )}
                         {a.duracionSeg != null && (
-                          <span className="absolute bottom-1 right-1 rounded bg-black/70 px-1 text-[10px] text-white">
+                          <span className="absolute bottom-1.5 right-1.5 rounded-md bg-black/75 px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-white">
                             {formatearDuracion(a.duracionSeg)}
                           </span>
                         )}
+                      </button>
+
+                      {/* El nombre, siempre visible bajo la miniatura: antes
+                          solo se veía en los archivos SIN vista previa, así que
+                          en una carpeta de fotos no se sabía cuál era cuál. */}
+                      <button
+                        onClick={() => setVisor(a)}
+                        className="block w-full px-2.5 py-2 text-left"
+                      >
+                        <span className="line-clamp-2 break-all text-xs leading-snug text-foreground/90">
+                          {a.nombre}
+                        </span>
                       </button>
                     </div>
                   ))}
