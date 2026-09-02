@@ -189,48 +189,72 @@ export function EditorMesasReserva({
             para caber. Así nunca hay que desplazarse dentro del diálogo. */}
         <DialogContent
           className={cn(
-            "flex max-w-6xl flex-col overflow-hidden",
-            "h-[92vh] max-h-[92vh]",
+            // `overflow-hidden` y `max-h` pisan a propósito los del diálogo
+            // base (`overflow-y-auto`, `max-h-[90vh]`): con scroll propio el
+            // plano nunca se encogía —crecía y se desplazaba el diálogo entero,
+            // dejando los botones fuera de la vista.
+            "flex w-[96vw] max-w-6xl flex-col gap-3 overflow-hidden p-4",
+            // El alto lo manda la ventana, no el contenido: el plano es lo
+            // único que crece, y se encoge solo para que quepa todo de una vez.
+            "h-[88svh] max-h-[88svh]",
             "sala-tema",
             esOscuro && "sala-oscuro",
           )}
         >
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Move className="h-4 w-4" />
-              Mesas de la reserva
-            </DialogTitle>
+          {/* Título y acciones en la MISMA fila: el botón de guardar se veía
+              solo tras desplazarse hasta el final del diálogo, y en un plano
+              que ya ocupa toda la pantalla eso obligaba a buscarlo. */}
+          <DialogHeader className="shrink-0 space-y-0">
+            <div className="flex items-center justify-between gap-3 pr-8">
+              <DialogTitle className="flex items-center gap-2 text-base">
+                <Move className="h-4 w-4" />
+                Mesas de la reserva
+              </DialogTitle>
+              <div className="flex shrink-0 items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={ocupado}
+                  onClick={onCerrar}
+                >
+                  Cancelar
+                </Button>
+                <Button size="sm" disabled={ocupado || !hayCambios} onClick={validar}>
+                  {comprobando ? "Comprobando…" : guardando ? "Guardando…" : "Guardar"}
+                </Button>
+              </div>
+            </div>
           </DialogHeader>
 
           <div className="flex min-h-0 flex-1 flex-col gap-3">
             {/* Qué reserva se está tocando y cómo va quedando la selección. */}
-            <div className="shrink-0 rounded-md border bg-muted/30 px-3 py-2 text-xs space-y-1">
-              <p>
-                <span className="font-medium text-foreground">
-                  {reserva.cliente || "WALK IN"} {reserva.apellidos}
-                </span>{" "}
-                · {reserva.hora.slice(0, 5)} · {reserva.comensales} pax
-              </p>
-              <p className="text-muted-foreground">
-                Mesas actuales:{" "}
-                <span className="font-medium text-foreground">
-                  {codigosOriginales.length > 0
-                    ? codigosOriginales.join(" + ")
-                    : "sin asignar"}
+            {/* Todo en una línea: cada párrafo que se añada aquí se lo quita
+                al plano, que es lo que de verdad hay que ver. */}
+            <div className="shrink-0 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-md border bg-muted/30 px-3 py-1.5 text-xs">
+              <span className="font-medium text-foreground">
+                {reserva.cliente || "WALK IN"} {reserva.apellidos}
+              </span>
+              <span className="text-muted-foreground">
+                · {reserva.hora.slice(0, 5)} · {reserva.comensales} pax ·
+              </span>
+              <span className="text-muted-foreground">
+                {codigosOriginales.length > 0
+                  ? codigosOriginales.join(" + ")
+                  : "sin asignar"}
+              </span>
+              {hayCambios && (
+                <span className="text-muted-foreground">
+                  →{" "}
+                  <span className="font-medium text-foreground">
+                    {seleccion.length > 0
+                      ? codigoCompuesto.split("+").join(" + ")
+                      : "sin mesa"}
+                  </span>
                 </span>
-                {hayCambios && (
-                  <>
-                    {" → quedará en "}
-                    <span className="font-medium text-foreground">
-                      {seleccion.length > 0 ? codigoCompuesto.split("+").join(" + ") : "sin mesa"}
-                    </span>
-                  </>
-                )}
-              </p>
-              <p className="text-muted-foreground">
-                Pulsa las mesas para añadirlas o quitarlas. No se cambia nada
-                hasta que pulses Validar.
-              </p>
+              )}
+              <span className="ml-auto text-muted-foreground">
+                Pulsa las mesas para añadirlas o quitarlas.
+              </span>
             </div>
 
             {mesasConPos.length === 0 ? (
@@ -254,39 +278,26 @@ export function EditorMesasReserva({
               />
             )}
 
-            {/* Resumen del cambio: se lee antes de confirmar, con las mismas
-                palabras que después aparecen en la actividad. */}
+            {/* Resumen del cambio, en una sola línea: se lee antes de guardar,
+                con las mismas palabras que luego aparecen en la actividad. */}
             {hayCambios && (
-              <div className="shrink-0 rounded-md border border-sky-500/40 bg-sky-500/5 px-3 py-2 text-xs space-y-0.5">
+              <div className="shrink-0 flex flex-wrap items-center gap-x-3 gap-y-0.5 rounded-md border border-sky-500/40 bg-sky-500/5 px-3 py-1.5 text-xs">
                 {anadidas.length > 0 && (
-                  <p>
+                  <span>
                     Se {anadidas.length === 1 ? "añadirá" : "añadirán"}{" "}
                     {anadidas.length === 1 ? "la mesa" : "las mesas"}{" "}
                     <span className="font-medium">{anadidas.join(", ")}</span>
-                  </p>
+                  </span>
                 )}
                 {quitadas.length > 0 && (
-                  <p>
+                  <span>
                     Se {quitadas.length === 1 ? "quitará" : "quitarán"}{" "}
                     {quitadas.length === 1 ? "la mesa" : "las mesas"}{" "}
                     <span className="font-medium">{quitadas.join(", ")}</span>
-                  </p>
+                  </span>
                 )}
               </div>
             )}
-
-            <div className="shrink-0 flex items-center justify-end gap-2 border-t pt-3">
-              <Button
-                variant="outline"
-                disabled={ocupado}
-                onClick={onCerrar}
-              >
-                Cancelar
-              </Button>
-              <Button disabled={ocupado || !hayCambios} onClick={validar}>
-                {comprobando ? "Comprobando…" : guardando ? "Guardando…" : "Validar"}
-              </Button>
-            </div>
           </div>
         </DialogContent>
       </Dialog>
