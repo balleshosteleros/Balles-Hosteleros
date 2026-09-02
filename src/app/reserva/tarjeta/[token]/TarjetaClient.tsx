@@ -44,6 +44,12 @@ export function TarjetaClient({
   } | null>(null);
   const [montandoCampo, setMontandoCampo] = useState(false);
   const [campoListo, setCampoListo] = useState(false);
+  /**
+   * Titular de la tarjeta, en un campo NUESTRO y ya relleno con el nombre de
+   * la reserva. El cliente solo lo toca si la tarjeta va a otro nombre —su
+   * pareja, la empresa—, que es un caso real y bastante común.
+   */
+  const [titular, setTitular] = useState(datos.clienteNombre ?? "");
   const [error, setError] = useState<string | null>(null);
   // Al volver de Revolut hay que preguntarle si el pago salió: el webhook
   // puede tardar, y el cliente vería "pendiente" después de haber pagado.
@@ -96,7 +102,7 @@ export function TarjetaClient({
         target: destino,
         locale: "es",
         // El código postal no se le pide: la reserva no lo necesita y es un
-        // campo más que rellenar para algo que no se le va a cobrar.
+        // campo más para algo que no se le va a cobrar.
         hidePostcodeField: true,
         // En la política de cancelación la tarjeta se GUARDA para poder
         // cobrarla si el cliente no viene. En la de garantía no hace falta: el
@@ -116,6 +122,11 @@ export function TarjetaClient({
           // conexión caída se lo comen. Se comprueba contra Revolut.
           setCampoListo(false);
           setComprobando(true);
+        },
+        onValidation() {
+          // El cliente está corrigiendo: fuera el error del intento anterior,
+          // que si no se queda en pantalla y parece que sigue fallando.
+          setError(null);
         },
         onError(err: unknown) {
           setError(
@@ -139,8 +150,10 @@ export function TarjetaClient({
   function confirmarTarjeta() {
     setEnviando(true);
     setError(null);
-    // Sin `name`: el titular lo recoge el propio widget en su campo.
-    campoRef.current?.submit({ email: datos.clienteEmail ?? undefined });
+    campoRef.current?.submit({
+      name: titular.trim(),
+      email: datos.clienteEmail ?? undefined,
+    });
   }
 
   // React monta los efectos dos veces en desarrollo: sin esto quedarían dos
@@ -267,18 +280,42 @@ export function TarjetaClient({
           </div>
         )}
 
-        {/* Los campos de tarjeta de Revolut, dentro de nuestra pantalla. Se
-            queda vacío hasta que el cliente pulsa el botón de abajo. */}
-        <div
-          ref={contenedorTarjeta}
-          className={campoListo ? "rounded-xl border border-zinc-200 p-3" : "hidden"}
-        />
+        {/* Titular y campos de tarjeta. Vacío hasta que pulsa el botón. */}
+        <div className={campoListo ? "space-y-3" : "hidden"}>
+          <div>
+            <label
+              htmlFor="titular-tarjeta"
+              className="block text-xs font-medium text-zinc-600 mb-1.5"
+            >
+              Nombre del titular de la tarjeta
+            </label>
+            <input
+              id="titular-tarjeta"
+              type="text"
+              value={titular}
+              onChange={(e) => {
+                setTitular(e.target.value);
+                setError(null);
+              }}
+              placeholder="Nombre y apellidos"
+              autoComplete="cc-name"
+              className="w-full h-11 rounded-xl border border-zinc-200 px-3 text-sm outline-none focus:border-zinc-400"
+            />
+            {titular.trim() !== "" && !titular.trim().includes(" ") && (
+              <p className="mt-1 text-[11px] text-amber-700">
+                Escribe el nombre y el apellido tal y como salen en la tarjeta.
+              </p>
+            )}
+          </div>
+
+          <div ref={contenedorTarjeta} className="rounded-xl border border-zinc-200 p-3" />
+        </div>
 
         {campoListo ? (
           <button
             type="button"
             onClick={confirmarTarjeta}
-            disabled={enviando}
+            disabled={enviando || !titular.trim().includes(" ")}
             className="w-full h-11 rounded-xl bg-zinc-900 text-white font-medium text-sm inline-flex items-center justify-center gap-2 hover:bg-zinc-800 disabled:opacity-60 transition-colors"
           >
             {enviando ? (
