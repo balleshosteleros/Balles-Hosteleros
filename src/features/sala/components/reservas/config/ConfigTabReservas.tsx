@@ -168,18 +168,14 @@ export function ConfigTabReservas({ onDirtyChange }: ConfigTabReservasProps = {}
 
   return (
     <div className="space-y-6 pb-28">
-      {/* Barra de guardado. Pegada arriba para que el botón esté a la vista
-          desde cualquier punto de la pestaña, que es larga. */}
-      <div
-        className={`sticky top-0 z-20 -mx-1 flex items-center justify-between gap-3 border-b px-1 py-2 backdrop-blur ${
-          hayCambios ? "bg-amber-50/95 dark:bg-amber-950/40" : "bg-background/95"
-        }`}
-      >
-        <p className={`text-xs ${hayCambios ? "font-medium text-amber-900 dark:text-amber-200" : "text-muted-foreground"}`}>
-          {hayCambios
-            ? "Tienes cambios sin guardar. Si sales ahora, se pierden."
-            : "Los cambios de esta pestaña no se guardan hasta que pulses Guardar."}
-        </p>
+      {/* Botón de guardar, pegado arriba para tenerlo a mano en una pestaña
+          tan larga. Sin franja ni textos: la barra anterior explicaba en cada
+          carga algo que ya se entiende con ver el botón, y su fondo de color
+          partía la pantalla en dos. Solo se avisa cuando hay algo que perder. */}
+      <div className="sticky top-0 z-20 -mx-1 flex items-center justify-end gap-3 bg-background/95 px-1 py-2 backdrop-blur">
+        {hayCambios && (
+          <span className="text-xs text-muted-foreground">Cambios sin guardar</span>
+        )}
         <Button size="sm" onClick={handleGuardar} disabled={!hayCambios || guardando}>
           Guardar
         </Button>
