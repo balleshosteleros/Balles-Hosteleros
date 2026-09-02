@@ -192,6 +192,29 @@ export function PoliticasCancelacionTab() {
                 cancela a menos de ({config.cancelacionHorasAntes}) horas. Mínimo{" "}
                 {CANCELACION_IMPORTE_MIN.toFixed(2)} €, máximo 2 decimales.
               </p>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs">Se aplica</Label>
+                <Select
+                  value={config.cancelacionModo}
+                  onValueChange={(v) => patchConfig({ cancelacionModo: v as GarantiaModo })}
+                >
+                  <SelectTrigger className="h-8 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {GARANTIA_MODOS.map((m) => (
+                      <SelectItem key={m} value={m} className="text-xs">
+                        {GARANTIA_MODO_LABELS[m]}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <p className="text-[11px] text-muted-foreground md:pt-7">
+                Si eliges &quot;por comensal&quot;, el importe se multiplica por el
+                número de personas de la reserva.
+              </p>
             </div>
 
             <div className="space-y-3">

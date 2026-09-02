@@ -272,13 +272,10 @@ export function politicaDesdeRow(
   };
 }
 
-/**
- * La de cancelación no tiene columna `cancelacion_modo`: su importe es siempre
- * fijo por reserva. Se normaliza aquí para que las dos compartan el tipo.
- */
+/** Columnas que necesita `politicaDesdeRow` para las dos políticas. */
 export const POLITICA_COLUMNAS_SELECT = [
   // Cancelación
-  "cancelacion_activa, cancelacion_importe_eur, cancelacion_horas_antes",
+  "cancelacion_activa, cancelacion_importe_eur, cancelacion_horas_antes, cancelacion_modo",
   "cancelacion_desde_pax, cancelacion_dias_semana, cancelacion_fechas",
   "cancelacion_turnos, cancelacion_hora_desde, cancelacion_hora_hasta",
   "cancelacion_grupo_zona_ids, cancelacion_mesa_ids",

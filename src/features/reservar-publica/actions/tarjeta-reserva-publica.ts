@@ -86,7 +86,7 @@ export async function obtenerTarjetaPendiente(
 
     const { data: cfg } = await admin
       .from("empresa_reservas_config")
-      .select("cancelacion_horas_antes, garantia_horas_antes, garantia_modo")
+      .select("cancelacion_horas_antes, cancelacion_modo, garantia_horas_antes, garantia_modo")
       .eq("empresa_id", r.empresa_id as string)
       .maybeSingle();
 
@@ -118,8 +118,7 @@ export async function obtenerTarjetaPendiente(
           ? {
               importe: Number(r.cancelacion_importe ?? 0),
               horasAntes: Number(cfg?.cancelacion_horas_antes ?? 24),
-              // La cancelación no tiene modo: su importe es siempre por reserva.
-              porComensal: false,
+              porComensal: cfg?.cancelacion_modo === "comensal",
             }
           : null,
         resuelta: !pideGarantia && !pideCancelacion,
@@ -205,16 +204,24 @@ export async function iniciarPagoTarjeta(token: string): Promise<
       // La referencia identifica QUÉ política se está pagando: el webhook la
       // usa para saber qué columnas actualizar.
       referencia: `${retiene ? "garantia" : "cancelacion"}:${r.id as string}`,
+      // Lo que el cliente lee en la pasarela: no está pagando una compra, está
+      // dejando su tarjeta para una reserva.
       descripcion: retiene
         ? `Garantía de reserva · ${nombreEmpresa}`
-        : `Política de cancelación · ${nombreEmpresa}`,
+        : `Tarjeta para la reserva · ${nombreEmpresa}`,
       cliente: {
         email: (r.cliente_email as string | null) ?? undefined,
         nombre: [r.cliente_nombre, r.cliente_apellidos].filter(Boolean).join(" ") || undefined,
         telefono: (r.cliente_telefono as string | null) ?? undefined,
       },
       redirectUrl: `${getSiteUrl()}/reserva/tarjeta/${parsed.data}?estado=vuelta`,
-      retener: retiene,
+      // SIEMPRE retener, nunca cobrar. Ninguna de las dos políticas cobra al
+      // reservar: la garantía retiene el importe, y la cancelación solo quiere
+      // quedarse con la tarjeta para poder cobrar si el cliente no aparece.
+      //
+      // Sin esto, la cancelación creaba una orden de cobro inmediato y al
+      // cliente le salía "Pagar 1 €" — cobrándole de verdad por reservar.
+      retener: true,
     });
 
     if (!orden.ok) {

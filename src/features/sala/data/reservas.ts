@@ -381,6 +381,7 @@ export type EmpresaReservasConfig = SemanaHorarios & {
   cancelacionPersonalizarMensaje: boolean;
   cancelacionMensajePersonalizado: string | null;
   // Condiciones que deciden CUÁNDO se pide tarjeta de cancelación (PRP-082).
+  cancelacionModo: GarantiaModo;   // fijo por reserva o por comensal
   cancelacionDesdePax: number;
   cancelacionDiasSemana: DiaSemanaKey[];
   cancelacionFechas: string[];          // "YYYY-MM-DD"

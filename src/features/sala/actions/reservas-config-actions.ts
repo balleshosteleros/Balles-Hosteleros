@@ -64,6 +64,7 @@ function rowToConfig(row: Record<string, unknown>): EmpresaReservasConfig {
     cancelacionImporteEur:           Number(row.cancelacion_importe_eur ?? CANCELACION_IMPORTE_DEFAULT),
     cancelacionPersonalizarMensaje:  Boolean(row.cancelacion_personalizar_mensaje ?? false),
     cancelacionMensajePersonalizado: (row.cancelacion_mensaje_personalizado as string | null) ?? null,
+    cancelacionModo:          ((row.cancelacion_modo as GarantiaModo | null) ?? "reserva"),
     cancelacionDesdePax:      Number(row.cancelacion_desde_pax ?? 0),
     cancelacionDiasSemana:    Array.isArray(row.cancelacion_dias_semana)    ? (row.cancelacion_dias_semana as DiaSemanaKey[]) : [],
     cancelacionFechas:        Array.isArray(row.cancelacion_fechas)         ? (row.cancelacion_fechas as string[])            : [],
@@ -191,6 +192,7 @@ export async function upsertReservasConfig(updates: Partial<EmpresaReservasConfi
     if ("garantiaGrupoZonaIds" in updates) db.garantia_grupo_zona_ids = updates.garantiaGrupoZonaIds ?? [];
     if ("garantiaMesaIds"      in updates) db.garantia_mesa_ids       = updates.garantiaMesaIds      ?? [];
     if ("garantiaHorasAntes"   in updates) db.garantia_horas_antes    = updates.garantiaHorasAntes;
+    if ("cancelacionModo"          in updates) db.cancelacion_modo           = updates.cancelacionModo;
     if ("cancelacionDesdePax"      in updates) db.cancelacion_desde_pax      = updates.cancelacionDesdePax;
     if ("cancelacionDiasSemana"    in updates) db.cancelacion_dias_semana    = updates.cancelacionDiasSemana   ?? [];
     if ("cancelacionFechas"        in updates) db.cancelacion_fechas         = updates.cancelacionFechas       ?? [];
