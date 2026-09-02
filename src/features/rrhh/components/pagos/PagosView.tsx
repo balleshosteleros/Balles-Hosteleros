@@ -866,6 +866,10 @@ export function PagosView() {
 
   // Cierra el mes: las nóminas quedan inmutables para TODOS los roles y se
   // publican en la carpeta de cada empleado.
+  // `enviarConfirmaciones` se declara mas abajo (const, sin hoisting) y
+  // `confirmarMes` la necesita al encadenar el envio tras confirmar el mes.
+  const enviarConfirmacionesRef = useRef<((ids: string[], etiqueta: string) => Promise<void>) | null>(null);
+
   const confirmarMes = async () => {
     const ok = await confirm({
       title: `Confirmar las nóminas de ${mesLabelNominas}`,
@@ -889,6 +893,24 @@ export function PagosView() {
           ? `Atención: se han cerrado ${res.conIncidencia} nómina${res.conIncidencia === 1 ? "" : "s"} con incidencia sin revisar.`
           : undefined,
     });
+
+    // Confirmado el mes, el paso siguiente es siempre el mismo: mandar las
+    // liquidaciones. Se pregunta aquí para no depender de que alguien se acuerde
+    // de pulsar el botón; si dice que ahora no, el botón sigue estando.
+    const pendientes = pagos.filter((p) => !p.confirmacionEnviadaAt && !p.empleadoId.startsWith("ext-"));
+    if (pendientes.length === 0) return;
+    const enviarYa = await confirm({
+      title: "Enviar liquidaciones",
+      description:
+        `¿Quieres enviar ahora la liquidación de ${mesLabelNominas} a ` +
+        `${pendientes.length === 1 ? "1 empleado" : `${pendientes.length} empleados`}? ` +
+        "Recibirán un correo y su liquidación quedará bloqueada. Si prefieres revisarlas antes, " +
+        "puedes enviarlas después con el botón «Enviar liquidaciones».",
+      confirmLabel: "Enviar ahora",
+      cancelLabel: "Ahora no",
+    });
+    if (!enviarYa) return;
+    await enviarConfirmacionesRef.current?.(pendientes.map((p) => p.empleadoId), "liquidaciones");
   };
 
   // Devuelve el mes a la gestoría con las anomalías que ha escrito RRHH: borra
@@ -1006,6 +1028,7 @@ export function PagosView() {
       };
     });
   };
+  enviarConfirmacionesRef.current = enviarConfirmaciones;
 
   const reabrir = async (p: PagoEmpleado) => {
     const ok = await confirm({
