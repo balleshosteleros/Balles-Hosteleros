@@ -1,6 +1,6 @@
 "use server";
 
-import { createClient } from "@/lib/supabase/server";
+import { createClient, getUsuarioActual } from "@/lib/supabase/server";
 import { getEmpresaActivaForUser } from "@/features/empresa/lib/empresa-server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -29,9 +29,7 @@ export interface ClienteActividad {
 export async function listClienteActividad(clienteId: string) {
   try {
     const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    const user = await getUsuarioActual();
     if (!user) return { ok: false, data: [] as ClienteActividad[] };
     const empresaId = await getEmpresaActivaForUser(
       supabase as unknown as SupabaseClient,

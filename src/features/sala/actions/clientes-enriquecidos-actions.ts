@@ -14,7 +14,7 @@
  * filtro explícito es lo único que impide mezclar locales.
  */
 
-import { createClient } from "@/lib/supabase/server";
+import { createClient, getUsuarioActual } from "@/lib/supabase/server";
 import {
   getEmpresaActivaForUser,
   getZonaHorariaEmpresa,
@@ -169,9 +169,7 @@ export async function listClientesEnriquecidos(): Promise<ClientesEnriquecidosRe
 
   try {
     const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    const user = await getUsuarioActual();
     if (!user) return vacio;
 
     const empresaId = await getEmpresaActivaForUser(

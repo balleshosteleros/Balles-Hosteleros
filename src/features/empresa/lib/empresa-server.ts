@@ -1,4 +1,5 @@
 import "server-only";
+import { cache } from "react";
 import { cookies } from "next/headers";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -13,6 +14,18 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 export async function getEmpresaActivaForUser(
   supabase: SupabaseClient,
   userId: string,
+): Promise<string | null> {
+  // Se cachea por usuario dentro de la MISMA petición: abrir una ficha lanza
+  // varias acciones a la vez (actividad, etiquetas…) y todas resolvían la
+  // empresa por su cuenta, repitiendo las mismas consultas. El cliente de
+  // Supabase no entra en la clave —cambia en cada llamada— pero sí en el
+  // cuerpo, y para un mismo usuario y petición el resultado es idéntico.
+  return resolverEmpresaActiva(userId, supabase);
+}
+
+const resolverEmpresaActiva = cache(async function resolverEmpresaActiva(
+  userId: string,
+  supabase: SupabaseClient,
 ): Promise<string | null> {
   const store = await cookies();
   const cookieEmpresa = store.get(COOKIE_NAME)?.value;
@@ -31,7 +44,7 @@ export async function getEmpresaActivaForUser(
     .eq("user_id", userId)
     .single();
   return (data?.empresa_id as string) ?? null;
-}
+});
 
 /** Zona horaria por defecto cuando la empresa no tiene una configurada. */
 export const ZONA_HORARIA_DEFAULT = "Europe/Madrid";

@@ -11,7 +11,7 @@
  * devuelve nada: una barra fija diciendo "todo bien" solo estorba.
  */
 
-import { createClient } from "@/lib/supabase/server";
+import { createClient, getUsuarioActual } from "@/lib/supabase/server";
 import { getEmpresaActivaForUser } from "@/features/empresa/lib/empresa-server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -44,9 +44,7 @@ const HORAS_AVISO_CADUCIDAD = 24;
 export async function getAvisosCobro(): Promise<ResumenAvisosCobro> {
   try {
     const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    const user = await getUsuarioActual();
     if (!user) return VACIO;
 
     const empresaId = await getEmpresaActivaForUser(

@@ -1,5 +1,6 @@
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
+import { cache } from 'react'
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
@@ -43,3 +44,21 @@ export async function createClient() {
     }
   )
 }
+
+/**
+ * Usuario autenticado, resuelto UNA sola vez por petición.
+ *
+ * `auth.getUser()` valida el token contra el servidor de Supabase, así que es
+ * un viaje de red cada vez que se llama. Abrir una ficha lanza varias acciones
+ * en paralelo —actividad, etiquetas, cobros— y cada una lo repetía por su
+ * cuenta: los viajes se sumaban y la ficha se quedaba en "Cargando…" durante
+ * decenas de segundos. `cache` de React comparte el resultado dentro de la
+ * misma petición, sin guardar nada entre peticiones ni entre usuarios.
+ */
+export const getUsuarioActual = cache(async function getUsuarioActual() {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  return user
+})

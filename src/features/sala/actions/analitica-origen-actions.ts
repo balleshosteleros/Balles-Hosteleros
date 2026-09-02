@@ -1,6 +1,6 @@
 "use server";
 
-import { createClient } from "@/lib/supabase/server";
+import { createClient, getUsuarioActual } from "@/lib/supabase/server";
 import { getEmpresaActivaForUser, getZonaHorariaEmpresa } from "@/features/empresa/lib/empresa-server";
 import { claveDiaEnZona } from "@/features/empresa/lib/zona-horaria";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -83,7 +83,7 @@ function esCompraTicketSinReserva(r: { es_ticket: boolean | null; fecha: string 
 export async function getAniosConReservas(): Promise<number[]> {
   try {
     const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
+    const user = await getUsuarioActual();
     if (!user) return [new Date().getFullYear()];
     const empresaId = await getEmpresaActivaForUser(supabase as unknown as SupabaseClient, user.id);
     if (!empresaId) return [new Date().getFullYear()];
@@ -117,7 +117,7 @@ export async function getOrigenReservas(params: {
   const empty: AnaliticaOrigenResult = { ok: false, anios: [], total: 0, buckets: [] };
   try {
     const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
+    const user = await getUsuarioActual();
     if (!user) return empty;
     const empresaId = await getEmpresaActivaForUser(supabase as unknown as SupabaseClient, user.id);
     if (!empresaId) return empty;

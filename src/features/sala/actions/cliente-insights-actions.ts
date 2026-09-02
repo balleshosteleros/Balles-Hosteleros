@@ -1,6 +1,6 @@
 "use server";
 
-import { createClient } from "@/lib/supabase/server";
+import { createClient, getUsuarioActual } from "@/lib/supabase/server";
 import { getEmpresaActivaForUser } from "@/features/empresa/lib/empresa-server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ClienteInsights } from "@/features/sala/data/reservas";
@@ -37,7 +37,7 @@ export async function getClienteInsights(input: {
 
   try {
     const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
+    const user = await getUsuarioActual();
     if (!user) return fallback;
     const empresaId = await getEmpresaActivaForUser(supabase as unknown as SupabaseClient, user.id);
     if (!empresaId) return fallback;

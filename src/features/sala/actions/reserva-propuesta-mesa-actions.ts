@@ -1,6 +1,6 @@
 "use server";
 
-import { createClient } from "@/lib/supabase/server";
+import { createClient, getUsuarioActual } from "@/lib/supabase/server";
 import { getEmpresaActivaForUser } from "@/features/empresa/lib/empresa-server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getReservasConfig } from "@/features/sala/actions/reservas-config-actions";
@@ -100,9 +100,7 @@ export async function proponerMesaAutomatica(input: {
 }): Promise<{ ok: true; data: PropuestaMesaResultado } | { ok: false; error: string }> {
   try {
     const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    const user = await getUsuarioActual();
     if (!user) return { ok: false, error: "Sesión no válida" };
     const empresaId = await getEmpresaActivaForUser(
       supabase as unknown as SupabaseClient,

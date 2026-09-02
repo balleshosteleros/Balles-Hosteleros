@@ -13,7 +13,7 @@
  * la reserva); esta edita desde la ficha y propaga hacia las reservas.
  */
 
-import { createClient } from "@/lib/supabase/server";
+import { createClient, getUsuarioActual } from "@/lib/supabase/server";
 import {
   getEmpresaActivaForUser,
   getZonaHorariaEmpresa,
@@ -74,9 +74,7 @@ export async function guardarFichaCliente(
     const d = parsed.data;
 
     const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    const user = await getUsuarioActual();
     if (!user) return { ok: false, error: "No autenticado." };
     const empresaId = await getEmpresaActivaForUser(
       supabase as unknown as SupabaseClient,
@@ -221,9 +219,7 @@ export async function recalcularVisitasCliente(
 ): Promise<{ ok: boolean; visitas?: number; error?: string }> {
   try {
     const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    const user = await getUsuarioActual();
     if (!user) return { ok: false, error: "No autenticado." };
     const empresaId = await getEmpresaActivaForUser(
       supabase as unknown as SupabaseClient,

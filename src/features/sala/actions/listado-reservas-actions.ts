@@ -1,6 +1,6 @@
 "use server";
 
-import { createClient } from "@/lib/supabase/server";
+import { createClient, getUsuarioActual } from "@/lib/supabase/server";
 import { getEmpresaActivaForUser } from "@/features/empresa/lib/empresa-server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { friendlyError } from "@/shared/lib/friendly-errors";
@@ -201,9 +201,7 @@ export async function getListadoReservas(params: {
   const vacio: ListadoReservasResult = { ok: false, reservas: [], comprasTicket: [] };
   try {
     const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    const user = await getUsuarioActual();
     if (!user) return { ...vacio, error: "Sin sesión" };
 
     const empresaId = await getEmpresaActivaForUser(
