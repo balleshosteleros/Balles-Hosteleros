@@ -114,7 +114,10 @@
   }
   body {
     @apply bg-background text-foreground;
-    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    /* --font-inter la sirve next/font desde el layout raíz: la fuente viaja
+       con la app y se ve igual en todos los ordenadores. El resto de la lista
+       es solo el respaldo mientras el fichero termina de descargarse. */
+    font-family: var(--font-inter), 'Inter', system-ui, -apple-system, sans-serif;
   }
 }
 
