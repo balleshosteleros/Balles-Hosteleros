@@ -527,8 +527,26 @@ export async function crearReservaPublicaAction(
     mesaId: asign.mesa.id,
   };
   const cfgRow = cfgPoliticas as Record<string, unknown> | null;
-  const garantia = calcularPolitica(politicaDesdeRow(cfgRow, "garantia"), datosPolitica);
-  const cancelacion = calcularPolitica(politicaDesdeRow(cfgRow, "cancelacion"), datosPolitica);
+
+  // Sin pasarela no se puede pedir tarjeta, así que tampoco se marca la
+  // reserva: si se marcara, el cliente acabaría en una pantalla de pago que
+  // no puede completar y perdería la reserva por algo que no es culpa suya.
+  //
+  // Mientras Revolut no esté configurado, las políticas siguen existiendo como
+  // texto en el correo —que es lo que hacían antes— pero no exigen nada.
+  const { data: revolut } = await admin
+    .from("empresa_revolut_config")
+    .select("activo")
+    .eq("empresa_id", empresa.id)
+    .maybeSingle();
+  const puedeCobrar = revolut?.activo === true;
+
+  const garantia = puedeCobrar
+    ? calcularPolitica(politicaDesdeRow(cfgRow, "garantia"), datosPolitica)
+    : { aplica: false, importe: 0 };
+  const cancelacion = puedeCobrar
+    ? calcularPolitica(politicaDesdeRow(cfgRow, "cancelacion"), datosPolitica)
+    : { aplica: false, importe: 0 };
 
   // ────────────────────────────────────────────────────────────────
   // Vinculación pendiente de revisión.
