@@ -177,10 +177,13 @@ function InstagramPublico({
           el perfil. Fuera se leían dos veces seguidas. */}
       <div className="relative mx-auto max-w-5xl">
         {/* Foto real de una mano sujetando el móvil, con el perfil montado
-            DENTRO de la pantalla. Las medidas del recuadro son la posición
-            exacta de la pantalla en esta foto, medida sobre el archivo
-            (760x951: x 254..529, y 208..739): si algún día se cambia la
-            imagen, hay que volver a medirlas o el perfil bailará.
+            DENTRO de la pantalla. Las medidas del recuadro son el CRISTAL de
+            la foto, medido sobre el archivo (760x951: x 254..530, y 142..739).
+            Ojo con el borde de arriba: la Dynamic Island es negra y engaña —
+            el cristal empieza ANTES, en y=142, no donde acaba la muesca. Que
+            la proporción resultante (2,16) coincida con la de una captura de
+            móvil es la señal de que está bien medido. Si se cambia la imagen,
+            hay que volver a medirlo o el perfil bailará.
             Foto de Unsplash, libre para uso comercial. */}
         {/* `aspect-[760/951]` RESERVA el alto de la foto antes de que cargue.
             Sin esto el contenedor medía 0 de alto mientras la imagen (que va
@@ -207,7 +210,7 @@ function InstagramPublico({
               real, con sus cuatro cantos curvos. Recortando en angulo recto,
               la captura sobresalia por las esquinas y el montaje cantaba.
               El radio es porcentual para que siga a la foto al escalar. */}
-          <div className="absolute left-[33.42%] top-[21.87%] h-[55.94%] w-[36.32%] overflow-hidden rounded-[9%/5.5%] bg-black">
+          <div className="absolute left-[33.42%] top-[14.93%] h-[62.88%] w-[36.45%] overflow-hidden rounded-[10%/4.7%] bg-black">
             {captura_url ? (
               /* Captura REAL del perfil dentro de la pantalla. Se muestra tal
                  cual, sin recomponer nada: los seguidores y la cuadrícula son
