@@ -63,6 +63,13 @@ try {
   else L.push(`*** OJO: SIN CARGADOR - bateria ${pct}% ***`,
               "    Si se apaga, la copia se para donde este.");
 } catch {}
+// El historial, en el mismo parte: antes vivia en un segundo fichero y habia
+// que abrir dos ventanas para saber si la copia avanzaba o estaba encallada.
+try {
+  const previas = fs.readFileSync(".dev-daemon/migracion-por-horas.txt", "utf8")
+    .split("\n").filter((l) => /^\d+\/\d+,/.test(l)).slice(-8);
+  if (previas.length) L.push("", "COMO HA IDO, HORA A HORA", ...previas);
+} catch {}
 L.push("", "Si el ordenador se apago o suspendio, la copia se para.",
   "Los archivos siguen tambien en ~/Library/CloudStorage por si acaso.");
 console.log(L.join("\n"));

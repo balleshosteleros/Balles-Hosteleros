@@ -80,6 +80,7 @@ Balles Hosteleros SAAS/
 # Capturas de pantalla (no subir al repo)
 Capturas/
 tsconfig.tsbuildinfo
+tsconfig.*.tsbuildinfo
 
 # Backups y Archivos Temporales
 BACKUP_*/
@@ -116,3 +117,6 @@ docs/fichas-tecnicas/*.xlsx
 
 # Ficheros generados por scripts (textos legales, exports puntuales)
 tmp/
+.tsc-check.log
+.dev-daemon/*.pid
+.dev-daemon/migracion-por-horas.txt
