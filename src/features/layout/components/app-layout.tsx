@@ -340,7 +340,7 @@ function AppLayoutInterno({ children }: { children: React.ReactNode }) {
               cuando hay música sonando; el resto del tiempo no existe y ese
               espacio vuelve a la cabecera.
             */}
-            {showUi && <MiniReproductor className="ml-auto mr-2 md:mr-3" />}
+            {showUi && <MiniReproductor className="ml-auto mr-4 md:mr-6" />}
 
             {/*
               `ml-auto` aquí también: cuando NO hay música el reproductor no se
