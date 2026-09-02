@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { iconsDeEmpresa } from "@/shared/lib/favicon-empresa";
 import type { Viewport } from "next";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { zonaHorariaDeConfig } from "@/features/empresa/lib/empresa-server";
 import { ReservaPublicaForm } from "@/features/reservar-publica/components/ReservaPublicaForm";
 
 export const dynamic = "force-dynamic";
@@ -14,13 +15,15 @@ interface EmpresaMarca {
   color: string | null;
   colorSecundario: string | null;
   colorTexto: string | null;
+  /** Zona horaria del local: decide cuál es "hoy" en el calendario. */
+  zonaHoraria: string;
 }
 
 async function fetchEmpresaBySlug(slug: string): Promise<EmpresaMarca | null> {
   const admin = createAdminClient();
   const { data } = await admin
     .from("empresas")
-    .select("id, nombre, slug, logo_url, color, color_secundario, color_texto")
+    .select("id, nombre, slug, logo_url, color, color_secundario, color_texto, config_operativa")
     .eq("slug", slug)
     .maybeSingle();
   if (!data) return null;
@@ -32,6 +35,7 @@ async function fetchEmpresaBySlug(slug: string): Promise<EmpresaMarca | null> {
     color: (data.color as string | null) ?? null,
     colorSecundario: (data.color_secundario as string | null) ?? null,
     colorTexto: (data.color_texto as string | null) ?? null,
+    zonaHoraria: zonaHorariaDeConfig(data.config_operativa),
   };
 }
 
@@ -95,6 +99,7 @@ export default async function ReservarPublicaPage({
       logoUrl={empresa.logoUrl}
       colorPrimario={empresa.color}
       colorTexto={empresa.colorTexto}
+      zonaHoraria={empresa.zonaHoraria}
       origen={origenLimpio}
       productosTicket={productosTicket}
       ticketCodigoInicial={ticketCodigo}

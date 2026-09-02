@@ -16,6 +16,9 @@ import type { SupabaseClient } from "@supabase/supabase-js";
  */
 
 import { RESERVA_SLOT_MIN } from "@/features/sala/data/reservas";
+import { ahoraEnZona } from "@/features/empresa/lib/zona-horaria";
+import { getZonaHorariaEmpresa } from "@/features/empresa/lib/empresa-server";
+import { fechaCivilDe } from "@/features/sala/lib/dia-negocio";
 import { ESTADOS_NO_OCUPANTES, horaAMinutos } from "@/features/sala/lib/reserva-conflicto";
 import { rowToRegla, type ReglaRow } from "@/features/sala/reglas/data/reglas";
 import { resolverValorEfectivo } from "@/features/sala/reglas/lib/resolver";
@@ -43,17 +46,30 @@ function parseHHMM(s: string | null | undefined): number | null {
   return hh * 60 + mm;
 }
 
-function ahoraEsHoy(fechaISO: string): boolean {
-  const now = new Date();
-  const yyyy = now.getFullYear();
-  const mm = String(now.getMonth() + 1).padStart(2, "0");
-  const dd = String(now.getDate()).padStart(2, "0");
-  return fechaISO === `${yyyy}-${mm}-${dd}`;
+/**
+ * Instante REAL de una reserva, en minutos desde una época común, para poder
+ * compararla con "ahora" sin ambigüedades.
+ *
+ * La fecha de una reserva es su DÍA DE NEGOCIO, no su fecha civil: la cena del
+ * viernes a las 01:30 se guarda como viernes aunque ocurra el sábado. Si se
+ * comparasen a pelo `fecha` y `hora`, esa reserva parecería estar 22 horas en
+ * el pasado y se rechazaría siendo válida. Por eso se pasa antes por
+ * `fechaCivilDe`, que devuelve el día en que de verdad ocurre.
+ */
+function instanteReservaMin(fecha: string, hora: string): number {
+  const civil = fechaCivilDe(fecha, hora);
+  const dias = Math.round(Date.parse(`${civil}T00:00:00Z`) / 86_400_000);
+  return dias * 1440 + (parseHHMM(hora) ?? 0);
 }
 
-function minutosAhora(): number {
-  const now = new Date();
-  return now.getHours() * 60 + now.getMinutes();
+/**
+ * Mismo cálculo para un instante ya leído del reloj de la empresa. Recibe la
+ * lectura en vez de hacerla, para que "ahora" sea el MISMO valor que usa el
+ * resto del validador aunque el minuto cambie a mitad de la comprobación.
+ */
+function instanteDeLecturaMin(fechaCivil: string, minutos: number): number {
+  const dias = Math.round(Date.parse(`${fechaCivil}T00:00:00Z`) / 86_400_000);
+  return dias * 1440 + minutos;
 }
 
 export async function validarMotorWebReserva(
@@ -68,7 +84,30 @@ export async function validarMotorWebReserva(
     };
   }
 
-  // 2) Leer configuración de motor de la empresa.
+  // 2) Nada de reservar para un momento que ya ha pasado.
+  //
+  // No basta con comparar FECHAS: filtrando solo por día, el cliente podía
+  // pedir a las 17:00 una mesa para la comida de las 13:30 de HOY, porque el
+  // día seguía siendo hoy. Se compara el instante completo (fecha + hora), y
+  // en la zona horaria de la EMPRESA: el servidor va en UTC, así que su reloj
+  // no dice qué hora es en el restaurante.
+  //
+  // Va ANTES de leer la configuración a propósito: una empresa sin fila de
+  // `empresa_reservas_config` sale por el `return { ok: true }` de abajo, y el
+  // pasado tiene que estar cerrado para todas.
+  const tz = await getZonaHorariaEmpresa(supabase, input.empresaId);
+  const { fecha: hoyEmpresa, minutos: minAhoraEmpresa } = ahoraEnZona(tz);
+  if (
+    instanteReservaMin(input.fecha, input.hora) <
+    instanteDeLecturaMin(hoyEmpresa, minAhoraEmpresa)
+  ) {
+    return {
+      ok: false,
+      error: "Esa hora ya ha pasado. Elige otra hora disponible.",
+    };
+  }
+
+  // 3) Leer configuración de motor de la empresa.
   const { data: cfg, error } = await supabase
     .from("empresa_reservas_config")
     .select(
@@ -93,12 +132,12 @@ export async function validarMotorWebReserva(
 
   const horaMin = horaAMinutos(input.hora);
 
-  // 3) Cierre del motor web (solo si la reserva es para HOY).
-  if (cfg.cerrar_motor_web_activo && ahoraEsHoy(input.fecha)) {
+  // 4) Cierre del motor web (solo si la reserva es para HOY).
+  if (cfg.cerrar_motor_web_activo && input.fecha === hoyEmpresa) {
     const corte = input.turno === "COMIDA"
       ? parseHHMM(cfg.cerrar_motor_web_comida)
       : parseHHMM(cfg.cerrar_motor_web_cena);
-    if (corte !== null && minutosAhora() >= corte) {
+    if (corte !== null && minAhoraEmpresa >= corte) {
       return {
         ok: false,
         error:
@@ -109,7 +148,7 @@ export async function validarMotorWebReserva(
     }
   }
 
-  // 4) Tamaño máximo por reserva (Configuración → Límites, métrica `maxpax`).
+  // 5) Tamaño máximo por reserva (Configuración → Límites, métrica `maxpax`).
   //
   // El desplegable del portal ya ofrece solo tamaños válidos, pero el tope
   // depende de la fecha y el turno concretos y el cliente los elige después de
@@ -134,7 +173,7 @@ export async function validarMotorWebReserva(
     }
   }
 
-  // 5) Tope de personas en misma hora / tramo.
+  // 6) Tope de personas en misma hora / tramo.
   if (cfg.max_personas_hora_activo) {
     const modo = (cfg.max_personas_hora_modo as string | null) ?? "mismo";
     const reglas: ReglaTramo[] = Array.isArray(cfg.max_personas_hora_reglas)

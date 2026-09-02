@@ -22,6 +22,8 @@ import {
   type CamposObligatoriosReserva,
 } from "@/features/sala/lib/reserva-campos-obligatorios";
 import { turnoDeHora } from "@/features/sala/lib/dia-negocio";
+import { ahoraEnZona } from "@/features/empresa/lib/zona-horaria";
+import { getZonaHorariaEmpresa } from "@/features/empresa/lib/empresa-server";
 import {
   RESERVA_SLOT_MIN,
   MAX_COMENSALES_ENTRADA,
@@ -168,8 +170,13 @@ export async function listarDisponibilidadPublicaAction(
     await getCamposObligatoriosReserva(empresaId);
 
   // Antelación máxima: no dejamos reservar más allá del horizonte configurado.
+  //
+  // "Hoy" y "ahora" son los del RESTAURANTE, no los del servidor: en producción
+  // el proceso va en UTC, así que a las 00:30 de Madrid su reloj marca todavía
+  // el día anterior y se ofrecerían horas ya pasadas.
   const maxDias = (cfg.antelacion_max_dias as number | null) ?? 90;
-  const hoyISO = new Date().toISOString().slice(0, 10);
+  const tz = await getZonaHorariaEmpresa(admin, empresaId);
+  const { fecha: hoyISO, minutos: minAhora } = ahoraEnZona(tz);
   if (fecha < hoyISO) {
     return { ok: true, slots: [], cerrado: true, mensaje: "Esa fecha ya ha pasado.", obligatorios };
   }
@@ -231,9 +238,16 @@ export async function listarDisponibilidadPublicaAction(
       return zonas.length === 0 && mesas.length === 0;
     });
 
-  const ahora = new Date();
   const esHoy = fecha === hoyISO;
-  const minAhora = ahora.getHours() * 60 + ahora.getMinutes();
+  /**
+   * Días entre hoy y la fecha pedida. Sirve para llevar todos los pases a una
+   * misma referencia (minutos desde las 00:00 de HOY) y poder compararlos con
+   * el reloj, incluidos los de la cena que se mete en la madrugada siguiente.
+   */
+  const diasHastaFecha = Math.round(
+    (Date.parse(`${fecha}T00:00:00Z`) - Date.parse(`${hoyISO}T00:00:00Z`)) /
+      86_400_000,
+  );
   const antelacionMin = (cfg.antelacion_min_minutos as number | null) ?? 0;
 
   // Cupo del TURNO (tope total de comensales). Se comprueba aquí y no solo al
@@ -291,8 +305,14 @@ export async function listarDisponibilidadPublicaAction(
       let disponible = true;
       let motivo: string | null = null;
 
-      // Hora ya pasada hoy (o dentro de la antelación mínima).
-      if (esHoy && m < minAhora + antelacionMin) {
+      // Hora ya pasada (o dentro de la antelación mínima).
+      //
+      // `m` puede pasar de 1440 en la cena que cruza medianoche (20:00→02:00):
+      // esos pases son de MAÑANA, así que se les suma el día para compararlos
+      // con el reloj de hoy. Sin esto, las 01:00 valían 1500 y nunca salían
+      // como pasadas, y la madrugada seguía ofreciéndose ya vencida.
+      const minutosDesdeHoy = m + diasHastaFecha * MIN_POR_DIA;
+      if (minutosDesdeHoy < minAhora + antelacionMin) {
         continue;
       }
 

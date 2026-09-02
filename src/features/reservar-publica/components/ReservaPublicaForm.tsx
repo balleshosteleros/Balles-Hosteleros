@@ -60,6 +60,22 @@ interface Props {
   embedded?: boolean;
   /** Código de Ticket que llega en el enlace del correo de compra. */
   ticketCodigoInicial?: string | null;
+  /**
+   * Zona horaria (IANA) del restaurante, resuelta en servidor. El navegador del
+   * cliente puede estar en cualquier parte del mundo: sin esto, "hoy" sería el
+   * suyo y no el del local, y el calendario dejaría elegir un día ya pasado allí.
+   */
+  zonaHoraria: string;
+}
+
+/** Fecha de HOY (YYYY-MM-DD) en el restaurante, no en el navegador del cliente. */
+function hoyEnZona(tz: string): string {
+  return new Intl.DateTimeFormat("sv-SE", {
+    timeZone: tz,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
 }
 
 function isHexColor(c: string | null | undefined): c is string {
@@ -89,12 +105,16 @@ export function ReservaPublicaForm({
   ticketOnly = false,
   embedded = false,
   ticketCodigoInicial = null,
+  zonaHoraria,
 }: Props) {
   const [nombre, setNombre] = useState("");
   const [apellidos, setApellidos] = useState("");
   const [telefono, setTelefono] = useState("");
   const [email, setEmail] = useState("");
-  const [fecha, setFecha] = useState(new Date().toISOString().split("T")[0]);
+  // Se calcula una sola vez: es la misma zona en servidor y en cliente, así que
+  // el valor coincide y no rompe la hidratación.
+  const hoyLocal = useMemo(() => hoyEnZona(zonaHoraria), [zonaHoraria]);
+  const [fecha, setFecha] = useState(hoyLocal);
   // Sin hora por defecto: la elige el cliente entre las que están realmente
   // abiertas (antes se fijaba "21:00" a ciegas y podía no existir ese pase).
   const [hora, setHora] = useState("");
@@ -558,7 +578,7 @@ export function ReservaPublicaForm({
                 type="date"
                 value={fecha}
                 onChange={(e) => setFecha(e.target.value)}
-                min={new Date().toISOString().split("T")[0]}
+                min={hoyLocal}
                 required
                 className="mt-1.5 h-11 w-full min-w-0 max-w-full appearance-none rounded-xl border-zinc-200 bg-white px-3 text-sm"
               />
@@ -698,7 +718,7 @@ export function ReservaPublicaForm({
               type="date"
               value={fechaNacimiento}
               onChange={(e) => setFechaNacimiento(e.target.value)}
-              max={new Date().toISOString().split("T")[0]}
+              max={hoyLocal}
               className="mt-1.5 h-11 w-full min-w-0 appearance-none rounded-xl border-zinc-200 px-3 text-sm"
             />
           </div>

@@ -54,7 +54,18 @@ export async function getZonaHorariaEmpresa(
     .select("config_operativa")
     .eq("id", empresaId)
     .maybeSingle();
-  const cfg = (data?.config_operativa as Record<string, unknown> | null) ?? null;
+  return zonaHorariaDeConfig(data?.config_operativa);
+}
+
+/**
+ * Extrae la zona horaria de un `config_operativa` YA leído.
+ *
+ * Es la misma lectura que hace `getZonaHorariaEmpresa`, separada para quien ya
+ * trae la fila de `empresas` en su propia consulta (p. ej. el portal público,
+ * que carga la marca del restaurante) y no necesita ir a la BD otra vez.
+ */
+export function zonaHorariaDeConfig(config: unknown): string {
+  const cfg = (config as Record<string, unknown> | null) ?? null;
   const tz = cfg && typeof cfg.zonaHoraria === "string" ? cfg.zonaHoraria.trim() : "";
   return tz || ZONA_HORARIA_DEFAULT;
 }
