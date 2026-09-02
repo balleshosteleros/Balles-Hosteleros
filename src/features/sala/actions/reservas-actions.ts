@@ -79,21 +79,49 @@ function actorDeSesion(ctx: {
   };
 }
 
-export async function listReservas(fecha?: string) {
+/**
+ * Columnas que pinta la pantalla de sala. EXPLÍCITAS, no `*`: la tabla tiene 92
+ * y con `*` cada día arrastraba tokens de cobro, textos de error y trazas de
+ * webhooks que no se muestran en ningún sitio. Se trae también el nombre del
+ * producto del ticket, para el aviso del icono, y así no hay que pedirlo fila
+ * a fila desde la interfaz.
+ *
+ * Literal de una sola pieza (no `[].join()`) para que el cliente pueda deducir
+ * el tipo de las filas: troceado, todas salen como `unknown`.
+ */
+const RESERVA_COLUMNAS =
+  "id, fecha, hora, turno, personas, zona, mesa, estado, notas, " +
+  "cliente_id, cliente_nombre, cliente_apellidos, cliente_telefono, cliente_email, " +
+  "vinculacion_estado, origen, tarjeta_introducida, es_ticket, tipo_categoria, " +
+  "tiene_garantia, garantia_importe, garantia_estado, garantia_tarjeta_ultimos4, " +
+  "garantia_tarjeta_marca, garantia_capture_deadline, garantia_cobrada_at, " +
+  "tiene_cancelacion, cancelacion_importe, cancelacion_estado, " +
+  "cancelacion_tarjeta_ultimos4, cancelacion_intentos, cancelacion_error, " +
+  "cancelacion_proximo_intento_at, cancelacion_cobrada_at, cobro_perdonado_at, " +
+  "importe_pagado, pago_pendiente, " +
+  "ticket_producto_id, ticket_unidades, ticket_importe, ticket_iva, ticket_codigo, " +
+  "bloqueada, grupo_id, codigo_id, codigo, reconfirmada_at, " +
+  "external_id, external_origen, created_at, duracion_minutos, " +
+  "reserva_ticket_productos(nombre)";
+
+/** Fila de reserva tal y como llega de la BD, con las columnas de arriba. */
+export type ReservaRow = Record<string, unknown>;
+
+export async function listReservas(
+  fecha?: string,
+): Promise<{ ok: boolean; data: ReservaRow[]; error?: string }> {
   try {
     const { supabase, empresaId } = await getContext();
     const query = supabase
       .from("reservas")
-      // Se trae el nombre del producto para el aviso del icono de Ticket: sin
-      // él habría que pedirlo fila a fila desde la interfaz.
-      .select("*, reserva_ticket_productos(nombre)")
+      .select(RESERVA_COLUMNAS)
       .order("fecha", { ascending: true })
       .order("hora", { ascending: true });
     if (empresaId) query.eq("empresa_id", empresaId);
     if (fecha) query.eq("fecha", fecha);
     const { data, error } = await query;
     if (error) throw error;
-    return { ok: true, data: data ?? [] };
+    return { ok: true, data: (data ?? []) as unknown as ReservaRow[] };
   } catch (err) {
     console.error("[reservas] listReservas:", err);
     return { ok: false, data: [], error: friendlyError(err, "listReservas") };

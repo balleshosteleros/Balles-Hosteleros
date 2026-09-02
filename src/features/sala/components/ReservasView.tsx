@@ -2181,21 +2181,24 @@ function mapDbToReserva(row: Record<string, unknown>): Reserva {
   return {
     id: row.id as string,
     cliente: (row.cliente_nombre as string) ?? "",
-    apellidos: (row.cliente_apellidos as string) ?? (row.apellidos as string) ?? "",
+    apellidos: (row.cliente_apellidos as string) ?? "",
     telefono: (row.cliente_telefono as string) ?? "",
-    email: (row.cliente_email as string) ?? (row.email as string) ?? "",
+    email: (row.cliente_email as string) ?? "",
     fecha: (row.fecha as string) ?? "",
     hora: (row.hora as string) ?? "",
     turno: (row.turno as TurnoReserva) ?? "COMIDA",
-    comensales: (row.personas as number) ?? (row.comensales as number) ?? 0,
+    comensales: (row.personas as number) ?? 0,
     zona: (row.zona as ZonaSala | "") ?? "",
     // OJO: `reservas.mesa` guarda el CÓDIGO ("R3", "M1+M2"), no el UUID.
     // `mesaId` se rellena después, resolviendo el código contra las mesas cargadas
     // (ver `reservasConMesa`). Aquí solo se conserva el código en crudo.
     mesaCodigo: (row.mesa as string) ?? "",
-    mesaId: (row.mesa_id as string) ?? "",
+    // Siempre vacío aquí: la tabla no guarda el UUID de la mesa, solo el código.
+    // Lo rellena `reservasConMesa` resolviendo el código contra las mesas ya
+    // cargadas del plano.
+    mesaId: "",
     estado: (row.estado as EstadoReserva) ?? "CONFIRMADA",
-    observaciones: (row.notas as string) ?? (row.observaciones as string) ?? "",
+    observaciones: (row.notas as string) ?? "",
     clienteId: (row.cliente_id as string | null) ?? null,
     // Enganchó con una ficha existente y los datos no coinciden: hasta que
     // alguien lo revise, el nombre que se ve puede no ser el de quien reservó.
@@ -3085,7 +3088,13 @@ export function ReservasView() {
   const listadoPorSala = ajustes.configOperativa.reservasListadoPorSala ?? false;
   const [mesas, setMesas] = useState<Mesa[]>(SAMPLE_MESAS);
   const [reservas, setReservas] = useState<Reserva[]>([]);
-  const [, setLoading] = useState(true);
+  /**
+   * Está pidiendo las reservas del día al servidor. Se PINTA (barra superior +
+   * velo sobre plano y listado): sin señal, cambiar de día parecía que no había
+   * hecho nada, porque seguía el día anterior en pantalla hasta que llegaba la
+   * respuesta (Iván, 2-sep).
+   */
+  const [loading, setLoading] = useState(true);
   /**
    * Día que se está mirando. Arranca en el `?fecha=` de la URL si lo hay, para
    * que al pinchar una reserva desde la ficha del cliente se abra directamente
@@ -3512,19 +3521,36 @@ export function ReservasView() {
     setDatosClienteOriginales(datos);
   }, [selectedReserva]);
 
-  const loadReservas = useCallback(async (f?: string) => {
-    setLoading(true);
+  /**
+   * Número de la última petición lanzada. Al pasar días con las flechas se
+   * disparan varias seguidas y no siempre vuelven en orden: sin esto, una
+   * respuesta lenta de un día anterior podía pisar a la del día que ya se está
+   * mirando y dejar en pantalla reservas que no son de ese día.
+   */
+  const peticionReservasRef = useRef(0);
+
+  /**
+   * @param silencioso Refresco de fondo (sincronización en vivo). No enciende
+   * el indicador: si lo hiciera, la pantalla parpadearía sola cada vez que
+   * alguien toca una reserva desde otro puesto.
+   */
+  const loadReservas = useCallback(async (f?: string, silencioso = false) => {
+    const idPeticion = ++peticionReservasRef.current;
+    if (!silencioso) setLoading(true);
     try {
       const res = await listReservas(f);
+      // Ha salido otra petición después de esta: su resultado manda.
+      if (idPeticion !== peticionReservasRef.current) return;
       if (res.ok) {
         setReservas(res.data.map(mapDbToReserva));
       } else {
         toast.error("Error al cargar reservas");
       }
     } catch (err) {
+      if (idPeticion !== peticionReservasRef.current) return;
       toast.error("Error de conexion al cargar reservas", { description: friendlyError(err, "irSiguienteSala") });
     } finally {
-      setLoading(false);
+      if (idPeticion === peticionReservasRef.current && !silencioso) setLoading(false);
     }
   }, []);
 
@@ -3574,7 +3600,9 @@ export function ReservasView() {
   useSincronizacionEnVivo({
     tablas: ["reservas", "mesas"],
     empresaId: empresaActual.id,
-    onCambio: () => void loadReservas(fecha),
+    // Silencioso: el refresco de fondo no debe encender el indicador de carga,
+    // o la pantalla parpadearía sola cada vez que otro puesto toca una reserva.
+    onCambio: () => void loadReservas(fecha, true),
     // La ficha de reserva NO pausa: es justo donde hace falta el dato fresco.
     // Sus campos se guardan uno a uno en cuanto se tocan, así que no hay nada
     // a medio escribir que una recarga pueda tirar, y a cambio los avisos de
@@ -4924,7 +4952,18 @@ export function ReservasView() {
               <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setFecha(addDays(fecha, -1))}><ChevronLeft className="h-4 w-4" /></Button>
               <Popover open={showDayPicker} onOpenChange={setShowDayPicker}>
                 <PopoverTrigger asChild>
-                  <Button variant="outline" size="sm" className="text-xs h-8 w-[150px] justify-center font-medium uppercase px-2.5">{formatFecha(fecha)}</Button>
+                  {/* El día lleva su propio indicador: es el botón que se mira
+                      al pulsar las flechas, así que es donde se ve antes que
+                      el día pedido aún está viniendo. */}
+                  <Button variant="outline" size="sm" className="relative text-xs h-8 w-[150px] justify-center font-medium uppercase px-2.5">
+                    {loading && (
+                      <span
+                        aria-hidden
+                        className="absolute left-2 h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent opacity-60"
+                      />
+                    )}
+                    {formatFecha(fecha)}
+                  </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-[320px] p-0" align="center">
                   <CalendarioMes
@@ -5022,8 +5061,22 @@ export function ReservasView() {
             <span className="truncate">Estado</span>
             <span className="truncate text-center">Tiempo</span>
           </div>
-          <div className="flex-1 overflow-y-auto">
-            {reservasFiltradas.length === 0 && <p className="text-xs text-muted-foreground text-center py-8">Sin reservas para este turno</p>}
+          <div className="relative flex-1 overflow-y-auto">
+            {/* Mientras se pide el día, la lista se atenúa y no acepta clics: lo
+                que se ve todavía es del día anterior. Sin esto parecía que la
+                flecha no había hecho nada. */}
+            {loading && (
+              <div className="absolute inset-0 z-20 flex items-start justify-center bg-background/60 pt-10 backdrop-blur-[1px]">
+                <span className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <span
+                    aria-hidden
+                    className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent"
+                  />
+                  Cargando reservas…
+                </span>
+              </div>
+            )}
+            {!loading && reservasFiltradas.length === 0 && <p className="text-xs text-muted-foreground text-center py-8">Sin reservas para este turno</p>}
             {reservasFiltradas.map(r => {
               const mesa = mesas.find(m => m.id === r.mesaId) ?? null;
               const blink = parpadeoClassPara(r);
@@ -5207,6 +5260,20 @@ export function ReservasView() {
         {/* RIGHT PANEL — CANVAS PLANO si vistaPlano === "mapa" y hay intersección posiciones↔mesasActivas; sino, GRID agrupado por zona */}
         {panelOculto !== "mapa" && (
         <div className="relative flex-1 flex flex-col overflow-hidden">
+          {/* Igual que en la lista: mientras llega el día pedido, el plano se
+              atenúa y se bloquea. Las mesas que se ven todavía tienen el estado
+              del día anterior y sentarían mal a un cliente. */}
+          {loading && (
+            <div className="absolute inset-0 z-30 flex items-center justify-center bg-background/50 backdrop-blur-[1px]">
+              <span className="flex items-center gap-2 text-xs text-muted-foreground">
+                <span
+                  aria-hidden
+                  className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent"
+                />
+                Cargando sala…
+              </span>
+            </div>
+          )}
           {/* Toggle pequeño dentro del lienzo: alterna entre vista mapa y vista listado (común a todas las empresas).
              Estilo y posición igualados al botón de configuración del header para quedar visualmente justo debajo. */}
           <Button

@@ -48,22 +48,21 @@ export const reservasIO: ModuleIO<Reserva> = {
   fetchAll: async () => {
     const result = await listReservas();
     if (!result.ok) return [];
-    return (result.data ?? []).map((row) => {
-      const r = row as Record<string, unknown>;
+    return (result.data ?? []).map((r) => {
       return {
         id: String(r.id ?? ""),
         cliente: (r.cliente_nombre as string) ?? "",
-        apellidos: (r.cliente_apellidos as string) ?? (r.apellidos as string) ?? "",
+        apellidos: (r.cliente_apellidos as string) ?? "",
         telefono: (r.cliente_telefono as string) ?? "",
-        email: (r.cliente_email as string) ?? (r.email as string) ?? "",
+        email: (r.cliente_email as string) ?? "",
         fecha: (r.fecha as string) ?? "",
         hora: (r.hora as string) ?? "",
         turno: (r.turno as Reserva["turno"]) ?? "COMIDA",
-        comensales: (r.personas as number) ?? (r.comensales as number) ?? 0,
+        comensales: (r.personas as number) ?? 0,
         zona: (r.zona as Reserva["zona"]) ?? "",
-        mesaId: (r.mesa as string) ?? (r.mesa_id as string) ?? "",
+        mesaId: (r.mesa as string) ?? "",
         estado: (r.estado as Reserva["estado"]) ?? "CONFIRMADA",
-        observaciones: (r.notas as string) ?? (r.observaciones as string) ?? "",
+        observaciones: (r.notas as string) ?? "",
       } as Reserva;
     });
   },
