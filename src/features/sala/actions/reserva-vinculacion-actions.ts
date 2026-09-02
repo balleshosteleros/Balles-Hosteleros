@@ -119,6 +119,65 @@ export async function getVinculacionPendiente(
   }
 }
 
+/**
+ * Cierra las revisiones pendientes de OTRAS reservas del mismo cliente cuyos
+ * datos declarados ya coinciden con la ficha.
+ *
+ * Se llama después de actualizar una ficha: lo que esas reservas pedían revisar
+ * es exactamente lo que se acaba de aplicar, así que el aviso se quedaría
+ * comparando un dato consigo mismo. Las que declaren algo distinto (otra
+ * persona con este teléfono) siguen pendientes, que para eso está la revisión.
+ *
+ * No lanza: es una limpieza. Si falla, el único efecto es que queda un aviso de
+ * más, y eso no debe tumbar la resolución que el usuario ya ha confirmado.
+ */
+async function cerrarRevisionesSinDiferencias(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  empresaId: string,
+  clienteId: string,
+  reservaYaResuelta: string,
+): Promise<void> {
+  try {
+    const { data: fila } = await supabase
+      .from("clientes_sala")
+      .select("nombre, apellidos, email, telefono")
+      .eq("id", clienteId)
+      .maybeSingle();
+    if (!fila) return;
+
+    const { data: pendientes } = await supabase
+      .from("reservas")
+      .select("id, datos_declarados")
+      .eq("cliente_id", clienteId)
+      .eq("empresa_id", empresaId)
+      .eq("vinculacion_estado", "PENDIENTE")
+      .neq("id", reservaYaResuelta);
+    if (!pendientes?.length) return;
+
+    const norm = (v: unknown) => String(v ?? "").trim().toLowerCase();
+    const ficha = fila as Record<string, unknown>;
+    const CAMPOS = ["nombre", "apellidos", "email", "telefono"] as const;
+
+    const resueltas = pendientes
+      .filter((p) => {
+        const d = (p.datos_declarados as DatosDeclaradosReserva | null) ?? {};
+        // Sin nada declarado no hay nada que revisar; con algo declarado, basta
+        // una diferencia real para que siga haciendo falta la revisión humana.
+        return CAMPOS.every((c) => !d[c] || norm(d[c]) === norm(ficha[c]));
+      })
+      .map((p) => p.id as string);
+    if (!resueltas.length) return;
+
+    await supabase
+      .from("reservas")
+      .update({ vinculacion_estado: "ACTUALIZADA", datos_declarados: null })
+      .in("id", resueltas)
+      .eq("empresa_id", empresaId);
+  } catch (err) {
+    console.error("[reservas] cerrarRevisionesSinDiferencias:", err);
+  }
+}
+
 /** Texto legible de lo declarado, para dejarlo escrito en la actividad. */
 function resumirDeclarados(d: DatosDeclaradosReserva): string {
   const partes: string[] = [];
@@ -221,21 +280,46 @@ export async function resolverVinculacion(
         .eq("id", clienteId);
       if (errC) throw errC;
 
-      // El snapshot de ESTA reserva se realinea con la ficha ya actualizada.
-      // Las reservas anteriores conservan el suyo: el histórico no se reescribe.
+      // Las reservas van asociadas a una FICHA: si la ficha cambia de nombre,
+      // cambian todas sus reservas. Si no, el mismo cliente aparecía con dos
+      // nombres distintos en la misma lista según la reserva que se mirase.
+      //
+      // Actualizar solo ésta sería lo correcto si la reserva fuese de otra
+      // persona que usó este teléfono, pero ese caso tiene su propia salida:
+      // SEPARAR, que le hace ficha propia.
+      //
+      // Mismo criterio que `guardarDatosClienteReserva()` al editar desde la
+      // ficha: todas las reservas del cliente, pasadas y futuras.
+      const datosFicha = {
+        cliente_nombre: declarados.nombre ?? r.cliente_nombre,
+        cliente_apellidos: declarados.apellidos ?? r.cliente_apellidos,
+        cliente_email: declarados.email ?? r.cliente_email,
+        cliente_telefono: declarados.telefono ?? r.cliente_telefono,
+      };
+
+      const { error: errTodas } = await supabase
+        .from("reservas")
+        .update({ ...datosFicha, updated_at: new Date().toISOString() })
+        .eq("cliente_id", clienteId)
+        .eq("empresa_id", empresaId);
+      if (errTodas) throw errTodas;
+
       const { error: errR2 } = await supabase
         .from("reservas")
         .update({
-          cliente_nombre: declarados.nombre ?? r.cliente_nombre,
-          cliente_apellidos: declarados.apellidos ?? r.cliente_apellidos,
-          cliente_email: declarados.email ?? r.cliente_email,
-          cliente_telefono: declarados.telefono ?? r.cliente_telefono,
           vinculacion_estado: "ACTUALIZADA",
           datos_declarados: null,
         })
         .eq("id", reservaId)
         .eq("empresa_id", empresaId);
       if (errR2) throw errR2;
+
+      // Otras reservas del cliente pendientes de revisar: la ficha acaba de
+      // ponerse al día, así que las que declaraban justo estos datos ya no
+      // tienen nada que revisar. Dejarlas pendientes obligaría a resolver a
+      // mano el mismo caso una y otra vez, con un aviso que enfrenta un dato
+      // consigo mismo. Las que declaren OTRA cosa siguen pendientes.
+      await cerrarRevisionesSinDiferencias(supabase, empresaId, clienteId, reservaId);
 
       // Actividad del CLIENTE: una línea por campo. Cambiar un email no le
       // pasa a una reserva, le pasa a la persona.

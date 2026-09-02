@@ -2942,7 +2942,7 @@ function PlanoCanvas({
                     (selectedReservaMesaId === m.id ||
                       selectedMesaId === m.id ||
                       mesasResaltadasIds.has(m.id)) &&
-                      "ring-4 ring-red-500 z-10",
+                      "!border-red-500 ring-2 ring-inset ring-red-500 z-10",
                     moviendo && !destinoInvalido && "cursor-copy ring-2 ring-sky-500 ring-offset-1 hover:ring-4 hover:scale-105 z-10",
                     destinoInvalido && "opacity-40 cursor-not-allowed",
                   )}
@@ -3831,7 +3831,15 @@ export function ReservasView() {
       fresca.hora !== selectedReserva.hora ||
       fresca.fecha !== selectedReserva.fecha ||
       fresca.comensales !== selectedReserva.comensales ||
-      fresca.duracionMinutos !== selectedReserva.duracionMinutos;
+      fresca.duracionMinutos !== selectedReserva.duracionMinutos ||
+      // Los datos de la persona también cuentan como cambio: al resolver una
+      // vinculación la ficha pasa a otro nombre y correo, y sin mirarlos aquí
+      // la ficha abierta se quedaba enseñando los datos viejos.
+      fresca.cliente !== selectedReserva.cliente ||
+      fresca.apellidos !== selectedReserva.apellidos ||
+      fresca.telefono !== selectedReserva.telefono ||
+      fresca.email !== selectedReserva.email ||
+      fresca.clienteId !== selectedReserva.clienteId;
     if (!cambio) return;
     setSelectedReserva((prev) => (prev && prev.id === fresca.id ? fresca : prev));
   }, [reservasResueltas, selectedReserva]);
@@ -5149,10 +5157,15 @@ export function ReservasView() {
                               quien reservó. Va delante para que se vea antes
                               que el nombre al que avisa. */}
                           {r.vinculacionPendiente && (
-                            <AlertTriangle
-                              className="size-3.5 shrink-0 text-amber-500"
-                              aria-label="Datos sin revisar"
-                            />
+                            <span
+                              className="flex shrink-0"
+                              title="Enganchó con un cliente que ya existía y los datos no coinciden. Abre la reserva para revisarlo."
+                            >
+                              <AlertTriangle
+                                className="size-3.5 shrink-0 text-amber-500"
+                                aria-label="Datos sin revisar"
+                              />
+                            </span>
                           )}
                           <span
                             className="truncate font-medium"
@@ -5411,7 +5424,7 @@ export function ReservasView() {
                                       (selectedReserva?.mesaId === m.id ||
                                         selectedMesa?.id === m.id ||
                                         mesasResaltadasIds.has(m.id)) &&
-                                        "ring-4 ring-red-500 z-10",
+                                        "!border-red-500 ring-2 ring-inset ring-red-500 z-10",
                                       moviendoAqui && !destinoInvalido && "cursor-copy ring-2 ring-sky-500 hover:ring-4 hover:scale-105 z-10",
                                       destinoInvalido && "opacity-40 cursor-not-allowed",
                                     )}

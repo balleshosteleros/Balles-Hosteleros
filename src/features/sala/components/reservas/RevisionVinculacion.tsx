@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, Check } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
@@ -55,9 +55,30 @@ export function RevisionVinculacion({ reservaId, onResuelto }: Props) {
 
   if (cargando || !datos) return null;
 
+  // El dato que provocó el enganche NO viaja en `declarados` (ahí sólo van los
+  // que difieren), así que la tabla se lo comía justo cuando es el motivo del
+  // aviso: se lee de la ficha y se pinta aparte, como coincidencia.
+  const campoCoincide = datos.motivo === "email" ? "email" : "telefono";
+  const valorCoincide = datos.ficha[campoCoincide];
+
+  // El campo del enganche se pinta arriba como coincidencia; nunca repetido abajo.
+  // Además se descartan los que ya coinciden con la ficha: al resolver otra
+  // reserva del mismo cliente la ficha se pone al día, y lo que aquí quedaba
+  // "pendiente" puede ser ya idéntico. Un aviso que enfrenta un dato consigo
+  // mismo no da nada que revisar.
+  const igualQueLaFicha = (c: "nombre" | "apellidos" | "email" | "telefono") =>
+    (datos.declarados[c] ?? "").trim().toLowerCase() ===
+    (datos.ficha[c] ?? "").trim().toLowerCase();
+
   const campos = (["nombre", "apellidos", "email", "telefono"] as const).filter(
-    (c) => datos.declarados[c],
+    (c) =>
+      datos.declarados[c] &&
+      !(valorCoincide && c === campoCoincide) &&
+      !igualQueLaFicha(c),
   );
+
+  // Ya no queda ninguna diferencia: la revisión se quedó sin objeto.
+  if (campos.length === 0) return null;
 
   function resolver(resolucion: ResolucionVinculacion) {
     startTransition(async () => {
@@ -87,7 +108,9 @@ export function RevisionVinculacion({ reservaId, onResuelto }: Props) {
             Esta reserva se vinculó a un cliente que ya existía
           </p>
           <p className="mt-1 text-xs text-amber-800 dark:text-amber-300/90">
-            Coincidió por {datos.motivo === "email" ? "el correo" : "el teléfono"}, pero
+            Coincidió por {datos.motivo === "email" ? "el correo" : "el teléfono"}
+            {valorCoincide ? " " : ""}
+            {valorCoincide ? <span className="font-medium">{valorCoincide}</span> : null}, pero
             el resto de datos no son los mismos. Revisa si es la misma persona.
           </p>
 
@@ -101,6 +124,22 @@ export function RevisionVinculacion({ reservaId, onResuelto }: Props) {
                 </tr>
               </thead>
               <tbody className="text-amber-900 dark:text-amber-200">
+                {valorCoincide ? (
+                  <tr className="border-t border-amber-200/70 dark:border-amber-800/50">
+                    <td className="py-1 pr-3 text-amber-700 dark:text-amber-400">
+                      {CAMPO_LABEL[campoCoincide]}
+                    </td>
+                    <td className="py-1 pr-3" colSpan={2}>
+                      <span className="inline-flex items-center gap-1.5">
+                        <Check className="size-3.5 shrink-0 text-emerald-600 dark:text-emerald-500" />
+                        <span className="font-medium">{valorCoincide}</span>
+                        <span className="text-amber-700 dark:text-amber-400">
+                          — es el mismo, por esto se vincularon
+                        </span>
+                      </span>
+                    </td>
+                  </tr>
+                ) : null}
                 {campos.map((c) => (
                   <tr key={c} className="border-t border-amber-200/70 dark:border-amber-800/50">
                     <td className="py-1 pr-3 text-amber-700 dark:text-amber-400">

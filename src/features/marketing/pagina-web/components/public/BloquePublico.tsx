@@ -182,7 +182,12 @@ function InstagramPublico({
             (760x951: x 254..529, y 208..739): si algún día se cambia la
             imagen, hay que volver a medirlas o el perfil bailará.
             Foto de Unsplash, libre para uso comercial. */}
-        <div className="relative mx-auto mt-14 w-full max-w-[520px]">
+        {/* `aspect-[760/951]` RESERVA el alto de la foto antes de que cargue.
+            Sin esto el contenedor medía 0 de alto mientras la imagen (que va
+            en `lazy`) no había llegado, y el recuadro de la pantalla —que se
+            posiciona en %— se calculaba sobre cero: el perfil aparecía
+            desbordado fuera del móvil hasta que terminaba la descarga. */}
+        <div className="relative mx-auto mt-14 aspect-[760/951] w-full max-w-[520px]">
           {/* Los bordes ya vienen fundidos a negro EN el propio archivo: hacerlo
               con mask-image dependía del navegador y no siempre se aplicaba. */}
           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -190,9 +195,11 @@ function InstagramPublico({
             src="/mano-movil.jpg"
             alt=""
             aria-hidden
+            width={760}
+            height={951}
             loading="lazy"
             decoding="async"
-            className="w-full select-none"
+            className="h-full w-full select-none"
           />
 
           {/* La pantalla: aquí dentro va el perfil */}
