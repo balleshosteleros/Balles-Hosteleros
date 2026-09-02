@@ -38,14 +38,6 @@ export function TarjetaClient({
    * un marco de Revolut al que esta página no tiene acceso.
    */
   const contenedorTarjeta = useRef<HTMLDivElement | null>(null);
-  /**
-   * Titular de la tarjeta. Revolut exige al menos dos palabras, así que un
-   * nombre suelto no vale: en ese caso se manda vacío y lo pide él en su
-   * propio campo.
-   */
-  const titularValido = (datos.clienteNombre ?? "").trim().includes(" ")
-    ? (datos.clienteNombre ?? "").trim()
-    : null;
   const campoRef = useRef<{
     submit: (meta?: Record<string, unknown>) => void;
     destroy: () => void;
@@ -113,7 +105,11 @@ export function TarjetaClient({
         // Revolut exige que el titular tenga al menos dos palabras. Si la
         // reserva vino sin apellidos, mejor no mandar nada: así el widget lo
         // pide en su propio campo en vez de rechazar un nombre incompleto.
-        name: titularValido ?? undefined,
+        // El titular NO se le manda: al pasárselo rechazaba la tarjeta con "el
+        // nombre del titular debe tener al menos dos palabras", incluso con un
+        // nombre y un apellido correctos. Sin él, el widget añade su propio
+        // campo de titular y lo valida mientras el cliente escribe, que además
+        // es más fiable: la tarjeta puede estar a nombre de otra persona.
         email: datos.clienteEmail ?? undefined,
         onSuccess() {
           // El widget avisa, pero no es de fiar: un anuncio bloqueado o una
@@ -143,14 +139,8 @@ export function TarjetaClient({
   function confirmarTarjeta() {
     setEnviando(true);
     setError(null);
-    // El titular y el correo se repiten AQUÍ, no solo al montar el campo: el
-    // widget los valida en el envío, y sin ellos rechaza la tarjeta con "el
-    // nombre del titular debe tener al menos dos palabras" aunque se le
-    // hubieran dado antes.
-    campoRef.current?.submit({
-      name: titularValido ?? undefined,
-      email: datos.clienteEmail ?? undefined,
-    });
+    // Sin `name`: el titular lo recoge el propio widget en su campo.
+    campoRef.current?.submit({ email: datos.clienteEmail ?? undefined });
   }
 
   // React monta los efectos dos veces en desarrollo: sin esto quedarían dos
