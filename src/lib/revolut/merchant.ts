@@ -247,6 +247,96 @@ export function estaPagada(state: RevolutOrderState): boolean {
   return state === "COMPLETED" || state === "AUTHORISED";
 }
 
+/** Aviso de pagos dado de alta en Revolut. */
+export interface RevolutWebhook {
+  id: string;
+  url: string;
+  events: string[];
+  /** Secreto de firma. Revolut SOLO lo devuelve al crearlo. */
+  signing_secret?: string;
+}
+
+/**
+ * Sucesos a los que nos suscribimos.
+ *
+ * Los dos primeros confirman el cobro y disparan el envío del código; los dos
+ * últimos devuelven el stock cuando alguien empieza a pagar y no termina.
+ */
+export const EVENTOS_WEBHOOK = [
+  "ORDER_COMPLETED",
+  "ORDER_AUTHORISED",
+  "ORDER_CANCELLED",
+  "ORDER_PAYMENT_FAILED",
+] as const;
+
+/** Webhooks ya dados de alta en la cuenta. */
+export async function listarWebhooks(
+  secretKey: string,
+  entorno: RevolutEntorno,
+): Promise<{ ok: true; webhooks: RevolutWebhook[] } | { ok: false; error: string }> {
+  try {
+    const res = await fetch(`${BASE_URL[entorno]}/1.0/webhooks`, {
+      headers: headers(secretKey),
+      cache: "no-store",
+    });
+    if (!res.ok) return { ok: false, error: await leerError(res) };
+    return { ok: true, webhooks: (await res.json()) as RevolutWebhook[] };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Error de red";
+    console.error("[revolut] listarWebhooks:", msg);
+    return { ok: false, error: msg };
+  }
+}
+
+/**
+ * Da de alta el aviso de pagos.
+ *
+ * El panel de Revolut NO permite crear webhooks de la Merchant API a mano, así
+ * que sin esto cada restaurante necesitaría a un técnico. El secreto de firma
+ * solo se devuelve aquí: si se pierde, hay que renovarlo o rehacer el alta.
+ */
+export async function crearWebhook(
+  secretKey: string,
+  entorno: RevolutEntorno,
+  url: string,
+): Promise<{ ok: true; webhook: RevolutWebhook } | { ok: false; error: string }> {
+  try {
+    const res = await fetch(`${BASE_URL[entorno]}/1.0/webhooks`, {
+      method: "POST",
+      headers: headers(secretKey),
+      body: JSON.stringify({ url, events: [...EVENTOS_WEBHOOK] }),
+      cache: "no-store",
+    });
+    if (!res.ok) return { ok: false, error: await leerError(res) };
+    return { ok: true, webhook: (await res.json()) as RevolutWebhook };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Error de red";
+    console.error("[revolut] crearWebhook:", msg);
+    return { ok: false, error: msg };
+  }
+}
+
+/** Da de baja un aviso. Se usa al rehacer uno que apuntaba a otra dirección. */
+export async function borrarWebhook(
+  secretKey: string,
+  entorno: RevolutEntorno,
+  webhookId: string,
+): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const res = await fetch(`${BASE_URL[entorno]}/1.0/webhooks/${webhookId}`, {
+      method: "DELETE",
+      headers: headers(secretKey),
+      cache: "no-store",
+    });
+    if (!res.ok && res.status !== 404) return { ok: false, error: await leerError(res) };
+    return { ok: true };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Error de red";
+    console.error("[revolut] borrarWebhook:", msg);
+    return { ok: false, error: msg };
+  }
+}
+
 /**
  * Comprueba la firma de un webhook de Revolut.
  *

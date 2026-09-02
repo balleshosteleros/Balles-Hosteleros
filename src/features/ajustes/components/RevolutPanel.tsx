@@ -15,11 +15,12 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Check, Copy, Loader2, ShieldCheck } from "lucide-react";
+import { Loader2, ShieldCheck } from "lucide-react";
 import {
   getRevolutConfig,
   guardarRevolutConfig,
   probarRevolutConfig,
+  conectarWebhookRevolut,
   type RevolutConfigVista,
 } from "@/features/ajustes/actions/revolut-config-actions";
 
@@ -28,11 +29,10 @@ export function RevolutPanel() {
   const [cargando, setCargando] = useState(true);
   const [guardando, setGuardando] = useState(false);
   const [probando, setProbando] = useState(false);
-  const [copiado, setCopiado] = useState(false);
+  const [conectando, setConectando] = useState(false);
 
   const [secretKey, setSecretKey] = useState("");
   const [publicKey, setPublicKey] = useState("");
-  const [webhookSecret, setWebhookSecret] = useState("");
 
   const cargar = useCallback(async () => {
     setCargando(true);
@@ -44,29 +44,27 @@ export function RevolutPanel() {
 
   useEffect(() => { void cargar(); }, [cargar]);
 
-  // La URL que hay que pegar en Revolut para que avise de los pagos.
-  const urlWebhook =
-    typeof window !== "undefined" ? `${window.location.origin}/api/revolut/webhook` : "";
-
-  async function copiarWebhook() {
-    await navigator.clipboard.writeText(urlWebhook);
-    setCopiado(true);
-    setTimeout(() => setCopiado(false), 2000);
-  }
 
   async function guardar() {
     setGuardando(true);
     const r = await guardarRevolutConfig({
       secretKey: secretKey.trim() || undefined,
       publicKey: publicKey.trim() || undefined,
-      webhookSecret: webhookSecret.trim() || undefined,
     });
     setGuardando(false);
 
     if (!r.ok) { toast.error(r.error); return; }
     toast.success("Guardado");
     setSecretKey("");
-    setWebhookSecret("");
+    await cargar();
+  }
+
+  async function conectarAviso() {
+    setConectando(true);
+    const r = await conectarWebhookRevolut();
+    setConectando(false);
+    if (!r.ok) { toast.error(r.error); return; }
+    toast.success(r.mensaje);
     await cargar();
   }
 
@@ -143,40 +141,39 @@ export function RevolutPanel() {
         </div>
       </div>
 
-      {/* ── Aviso de pagos ─────────────────────────────────────── */}
-      <div className="space-y-4 rounded-lg border p-4">
-        <div>
-          <h4 className="text-xs font-semibold">Aviso de pagos</h4>
-          <p className="mt-1 text-[11px] text-muted-foreground">
-            Copia esta dirección en Revolut (Configuración → API → Webhooks) para que
-            nos avise cuando un cliente pague. Sin esto, los códigos no se envían.
-          </p>
+      {/* ── Aviso de pagos ─────────────────────────────────────
+          El panel de Revolut NO deja crear esto a mano, así que el botón lo da
+          de alta por el restaurante. Sin este aviso Revolut cobra pero no nos
+          avisa, y el cliente pagaría sin recibir su código. */}
+      <div className="space-y-3 rounded-lg border p-4">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h4 className="text-xs font-semibold">Aviso de pagos</h4>
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              Permite que Revolut nos avise en cuanto un cliente paga. Sin esto,
+              el cobro entra pero el código no se envía.
+            </p>
+          </div>
+          {cfg?.webhookConfigurado && (
+            <Badge variant="default" className="shrink-0">Conectado</Badge>
+          )}
         </div>
 
-        <div className="flex items-center gap-2">
-          <Input readOnly value={urlWebhook} className="font-mono text-xs" />
-          <Button variant="outline" size="sm" onClick={copiarWebhook} className="shrink-0">
-            {copiado ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
-          </Button>
-        </div>
+        <Button
+          variant={cfg?.webhookConfigurado ? "outline" : "default"}
+          onClick={conectarAviso}
+          disabled={conectando || !cfg?.configurado}
+          className="w-full"
+        >
+          {conectando && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+          {cfg?.webhookConfigurado ? "Volver a conectar" : "Conectar aviso de pagos"}
+        </Button>
 
-        <div className="space-y-1.5">
-          <Label htmlFor="rev-hook" className="text-xs">
-            Secreto de firma del webhook
-          </Label>
-          <Input
-            id="rev-hook"
-            type="password"
-            autoComplete="off"
-            placeholder={cfg?.webhookConfigurado ? "Guardado" : "wsk_…"}
-            value={webhookSecret}
-            onChange={(e) => setWebhookSecret(e.target.value)}
-          />
+        {!cfg?.configurado && (
           <p className="text-[11px] text-muted-foreground">
-            Te lo da Revolut al crear el webhook. Sirve para comprobar que los avisos
-            de pago son suyos de verdad.
+            Guarda antes la clave secreta.
           </p>
-        </div>
+        )}
       </div>
 
       {/* ── Activación ─────────────────────────────────────────── */}

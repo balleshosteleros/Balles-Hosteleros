@@ -205,7 +205,15 @@ export async function probarRevolutConfig() {
  * Devuelve las credenciales EN CLARO para uso interno del servidor.
  * No se exporta a componentes de cliente: solo la usan las acciones de cobro.
  */
-export async function getCredencialesRevolut(empresaId: string): Promise<
+export async function getCredencialesRevolut(
+  empresaId: string,
+  /**
+   * `ignorarActivo` sirve para el momento de CONECTAR: ahí el cobro todavía no
+   * está encendido —se enciende justo al terminar—, así que exigirlo impediría
+   * dar de alta el aviso de pagos.
+   */
+  opciones?: { ignorarActivo?: boolean },
+): Promise<
   { secretKey: string; entorno: RevolutEntorno; webhookSecret: string | null } | null
 > {
   const admin = createAdminClient();
@@ -215,7 +223,8 @@ export async function getCredencialesRevolut(empresaId: string): Promise<
     .eq("empresa_id", empresaId)
     .maybeSingle();
 
-  if (error || !data?.secret_key_cifrada || !data.activo) return null;
+  if (error || !data?.secret_key_cifrada) return null;
+  if (!data.activo && !opciones?.ignorarActivo) return null;
 
   try {
     return {
@@ -228,5 +237,87 @@ export async function getCredencialesRevolut(empresaId: string): Promise<
   } catch (err) {
     console.error("[revolut-config] descifrado:", err);
     return null;
+  }
+}
+
+/**
+ * Conecta el aviso de pagos de esta empresa, de una sola vez.
+ *
+ * Es lo que hace que un restaurante nuevo pueda ponerse en marcha solo: el
+ * panel de Revolut NO deja crear webhooks de la Merchant API a mano, así que
+ * sin este botón cada cliente necesitaría a un técnico que lo diera de alta
+ * por programa.
+ *
+ * Si ya había uno apuntando a otra dirección (por ejemplo, de una prueba en
+ * otro dominio), se sustituye: dos avisos activos duplicarían los correos.
+ */
+export async function conectarWebhookRevolut() {
+  try {
+    const { empresaId } = await getCtx();
+    if (!empresaId) return { ok: false as const, error: "Sin empresa activa" };
+
+    const cred = await getCredencialesRevolut(empresaId, { ignorarActivo: true });
+    if (!cred) {
+      return {
+        ok: false as const,
+        error: "Guarda antes la clave secreta de Revolut.",
+      };
+    }
+
+    const { listarWebhooks, crearWebhook, borrarWebhook } = await import(
+      "@/lib/revolut/merchant"
+    );
+    const { getSiteUrl } = await import("@/lib/site-url");
+    const url = `${getSiteUrl()}/api/revolut/webhook`;
+
+    // En local la dirección sería localhost, que Revolut no puede alcanzar:
+    // se avisa en vez de dar de alta un aviso muerto.
+    if (!/^https:\/\//.test(url) || /localhost|127\.0\.0\.1/.test(url)) {
+      return {
+        ok: false as const,
+        error:
+          "Esto solo puede conectarse desde la dirección real del software, no desde una copia local.",
+      };
+    }
+
+    // Se limpian los avisos previos de este mismo software: si el dominio
+    // cambió, el viejo dejaría de funcionar y ensuciaría la cuenta.
+    const previos = await listarWebhooks(cred.secretKey, cred.entorno);
+    if (previos.ok) {
+      for (const w of previos.webhooks) {
+        if (w.url === url || w.url.endsWith("/api/revolut/webhook")) {
+          await borrarWebhook(cred.secretKey, cred.entorno, w.id);
+        }
+      }
+    }
+
+    const creado = await crearWebhook(cred.secretKey, cred.entorno, url);
+    if (!creado.ok) return { ok: false as const, error: creado.error };
+
+    const secreto = creado.webhook.signing_secret;
+    if (!secreto) {
+      return {
+        ok: false as const,
+        error: "Revolut no devolvió el secreto de firma. Inténtalo de nuevo.",
+      };
+    }
+
+    const admin = createAdminClient();
+    const { error } = await admin
+      .from("empresa_revolut_config")
+      .update({
+        webhook_secret_cifrado: encrypt(secreto),
+        webhook_id: creado.webhook.id,
+        activo: true,
+      })
+      .eq("empresa_id", empresaId);
+    if (error) throw error;
+
+    revalidatePath("/ajustes");
+    return { ok: true as const, mensaje: "Cobro conectado y listo para vender." };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Error";
+    console.error("[revolut-config] conectarWebhook:", msg);
+    return { ok: false as const, error: msg };
   }
 }
