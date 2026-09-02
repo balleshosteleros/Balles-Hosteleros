@@ -312,11 +312,12 @@ export async function recordarSolicitudNominasGestoria(
  * ¿Este mes admite todavía nóminas? Dos motivos para decir que no:
  *
  *  1. RRHH ya CONFIRMÓ el mes: es inmutable y no se reabre por este camino.
- *  2. El mes YA TIENE nóminas: cada mes se entrega UNA sola vez. Si hay que
- *     corregirlas, RRHH devuelve el mes a la gestoría — eso borra la entrega y
- *     reabre el enlace, que es la vía prevista para resubir.
- *
- * Sin esto, una segunda subida volcaría encima de lo ya revisado por RRHH.
+ * NO se bloquea por que el mes ya tenga nóminas: la gestoría entrega en VARIAS
+ * tandas (un PDF por empleado, o el lote partido por tamaño), que es justo lo que
+ * el correo y la pantalla le prometen. El volcado ya es seguro para repetir:
+ * deduplica por huella SHA-256 del archivo, numera cada documento con `orden`
+ * para no pisar los anteriores y respeta los pagos con liquidación ya enviada
+ * (ver `procesar-nominas.ts`). Quien cierra el mes es RRHH al confirmarlo.
  */
 async function mesCerradoParaNominas(
   admin: SupabaseClient,
@@ -333,21 +334,6 @@ async function mesCerradoParaNominas(
     return {
       ok: false,
       error: `Las nóminas de ${nombreMes(periodo)} ya están cerradas por la empresa: este mes no admite más subidas.`,
-      status: 409,
-    };
-  }
-
-  const { count } = await admin
-    .from("rrhh_pagos_nominas")
-    .select("id", { count: "exact", head: true })
-    .eq("empresa_id", empresaId)
-    .eq("periodo", periodo);
-  if ((count ?? 0) > 0) {
-    return {
-      ok: false,
-      error:
-        `Las nóminas de ${nombreMes(periodo)} ya se subieron. Si hay que corregirlas, ` +
-        `el departamento de RRHH debe devolver el mes: entonces este enlace vuelve a admitir la entrega completa.`,
       status: 409,
     };
   }

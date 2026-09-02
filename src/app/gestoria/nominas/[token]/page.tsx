@@ -1,4 +1,4 @@
-import { FileX2, Clock } from "lucide-react";
+import { FileX2, Clock, CheckCircle2 } from "lucide-react";
 import { iconsDeEmpresa } from "@/shared/lib/favicon-empresa";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
@@ -20,17 +20,29 @@ export default async function SubirNominasPage({
   const res = await resolverTokenNominasGestoria(admin, token);
 
   if (!res.ok) {
+    // Tres estados distintos, cada uno con su explicación. "Cerrado" no es un
+    // fallo: la entrega se completó y cuadró; decir "no válido" hacía pensar a la
+    // gestoría que el enlace estaba roto.
     const icon =
       res.reason === "expired" ? (
         <Clock className="h-10 w-10 text-amber-500" />
+      ) : res.reason === "cerrado" ? (
+        <CheckCircle2 className="h-10 w-10 text-emerald-500" />
       ) : (
         <FileX2 className="h-10 w-10 text-rose-500" />
       );
-    const titulo = res.reason === "expired" ? "Enlace caducado" : "Enlace no válido";
+    const titulo =
+      res.reason === "expired"
+        ? "Enlace caducado"
+        : res.reason === "cerrado"
+          ? "Nóminas ya recibidas"
+          : "Enlace no válido";
     const mensaje =
       res.reason === "expired"
         ? "El enlace ha caducado. Pide a la empresa que te lo reenvíe."
-        : "El enlace no es válido.";
+        : res.reason === "cerrado"
+          ? "Las nóminas de este mes ya se recibieron y cuadran. Este enlace queda cerrado y no admite más subidas. Si hay que corregir algo, pídelo al departamento de RRHH de la empresa."
+          : "El enlace no es válido.";
     return (
       <div className="min-h-screen bg-zinc-50 flex items-center justify-center p-6">
         <div className="max-w-md w-full bg-white rounded-2xl border border-zinc-200 shadow-sm p-8 text-center">
