@@ -9,6 +9,7 @@ const admin = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_SERVICE_RO
 const EMPRESAS = [
   { nombre: "HABANA", id: "00000000-0000-0000-0000-000000000001", total: 5263 },
   { nombre: "BACANAL", id: "fe2ea3c4-aa28-41ce-a135-bf196ab5dc47", total: 3806 },
+  { nombre: "BALLES", id: "eb99bddd-9f49-4348-96ee-37f930c0d5d0", total: 4217 },
 ];
 const ahora = new Date().toLocaleString("es-ES", { timeZone: "Europe/Madrid" });
 const L = [`COMO VA LA MIGRACION DE MARKETING`, `Actualizado: ${ahora}`, ""];
@@ -23,11 +24,21 @@ for (const e of EMPRESAS) {
   const barra = "#".repeat(Math.round(pct / 2.5)).padEnd(40, ".");
   const { data: imp } = await admin.from("archivos_importaciones")
     .select("estado, fallidos, copiados_bytes").eq("empresa_id", e.id).maybeSingle();
-  const gb = ((Number(imp?.copiados_bytes ?? 0)) / 1024 ** 3).toFixed(1);
+  // Los GB, sumados de los propios documentos: la tabla del importador solo
+  // sabe de lo que vino por la API de Drive, y BALLES se subió desde el disco.
+  let bytes = 0;
+  for (let desde = 0; ; desde += 1000) {
+    const { data: t } = await admin.from("documentos").select("tamano_bytes")
+      .eq("empresa_id", e.id).not("drive_file_id", "is", null).range(desde, desde + 999);
+    const filas = t ?? [];
+    for (const f of filas) bytes += Number(f.tamano_bytes ?? 0);
+    if (filas.length < 1000) break;
+  }
+  const gb = (bytes / 1024 ** 3).toFixed(1);
   L.push(`${e.nombre}`, `  [${barra}] ${pct}%`,
     `  ${hechos} de ${e.total} archivos  (${gb} GB)`,
     `  faltan ${faltan}${faltan === 0 ? "  -- TERMINADO" : ""}`,
-    `  estado: ${imp?.estado ?? "?"}${imp?.fallidos ? `  ·  ${imp.fallidos} no se pudieron traer` : ""}`, "");
+    `  estado: ${imp?.estado ?? (faltan === 0 ? "terminada" : "copiando ahora")}${imp?.fallidos ? `  ·  ${imp.fallidos} no se pudieron traer` : ""}`, "");
 }
 L.push(faltanTotal === 0
   ? "MIGRACION COMPLETA. Ya puedes borrar lo de Drive."
