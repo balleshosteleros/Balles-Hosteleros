@@ -60,9 +60,10 @@ export default function AuthLayout({
               contacto vive solo en el aviso legal, que es donde la LSSI la
               exige y adonde llega el revisor de Google desde el enlace de
               arriba. Aquí va el nombre registrado del software, no la razón
-              social de la sociedad, y el año de inicio de la actividad. */}
+              social de la sociedad, y el año de fundación de la marca: es un
+              año fijo, NO un rango ni el año en curso. */}
           <span className="text-center">
-            © {TITULAR.anioInicio}–{new Date().getFullYear()} {TITULAR.nombreRegistrado}
+            © {TITULAR.anioFundacion} {TITULAR.nombreRegistrado}
           </span>
         </footer>
       </div>

@@ -16,10 +16,11 @@ export const TITULAR = {
    */
   nombreRegistrado: "Balles Hosteleros",
   /**
-   * Año en que se abrió la marca Balles, para el rango del aviso de
-   * copyright. No es el año de constitución de la sociedad.
+   * Año en que se fundó la marca Balles. Es el que sale en el aviso de
+   * copyright, solo y fijo: ni rango ni año en curso. No es el año de
+   * constitución de la sociedad.
    */
-  anioInicio: 2022,
+  anioFundacion: 2022,
   cif: "B56558109",
   via: "C/ Arte Plateresco, 3",
   cp: "28905",
