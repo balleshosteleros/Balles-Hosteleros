@@ -14,36 +14,10 @@ import { getEmpresaActivaForUser } from "@/features/empresa/lib/empresa-server";
 import { encrypt } from "@/features/accesos/lib/crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-export type EstadoAlta =
-  | "SIN_CONECTAR"
-  | "PENDIENTE_VERIFICACION"
-  | "ACTIVO"
-  | "SUSPENDIDO";
-
-/** Tipos de aviso que pueden salir por WhatsApp. La valoración no está: pedir
- *  opinión por WhatsApp quema el canal, y para eso el correo ya funciona. */
-export const TIPOS_AVISO = [
-  "CONFIRMACION",
-  "RECONFIRMACION",
-  "RECORDATORIO",
-  "CANCELACION",
-] as const;
-
-export type TipoAviso = (typeof TIPOS_AVISO)[number];
-
-export const TIPO_AVISO_LABEL: Record<TipoAviso, string> = {
-  CONFIRMACION: "Confirmación al reservar",
-  RECONFIRMACION: "Reconfirmación",
-  RECORDATORIO: "Recordatorio",
-  CANCELACION: "Aviso de cancelación",
-};
-
-export const TIPO_AVISO_DESCRIPCION: Record<TipoAviso, string> = {
-  CONFIRMACION: "Nada más hacer la reserva, con el enlace para cancelar.",
-  RECONFIRMACION: "Los días antes, para que confirme que viene. Es el que más mesas salva.",
-  RECORDATORIO: "El mismo día, unas horas antes.",
-  CANCELACION: "Cuando la reserva se cancela.",
-};
+// El catálogo de avisos y los estados de alta viven en `../lib/avisos`: este
+// archivo es "use server" y ahí solo pueden salir funciones async. Tenerlos
+// aquí tumbaba el módulo de server actions de Reservas entero.
+import type { EstadoAlta, TipoAviso } from "@/features/mensajeria/lib/avisos";
 
 export interface MensajeriaConfigVista {
   estadoAlta: EstadoAlta;

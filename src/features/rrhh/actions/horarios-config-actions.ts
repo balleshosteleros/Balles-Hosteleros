@@ -1,6 +1,10 @@
 "use server";
 
 import { getAppContext } from "@/lib/supabase/get-context";
+// La lista cerrada de subtipos vive en `../lib/subtipos-ausencia`: este archivo
+// es "use server" y ahí solo pueden salir funciones async.
+import type { SubtipoAusencia } from "@/features/rrhh/lib/subtipos-ausencia";
+
 
 async function resolveEmpresaUuid(
   supabase: Awaited<ReturnType<typeof getAppContext>>["supabase"],
@@ -17,20 +21,6 @@ async function resolveEmpresaUuid(
 
 // ─── Types ─────────────────────────────────────────────────────────────
 export type ConteoDias = "naturales" | "laborables";
-
-/**
- * Subtipos de ausencia del sistema: LISTA CERRADA. No se pueden añadir tipos
- * nuevos porque cada uno lleva asociado un comportamiento propio del programa
- * (cupo de vacaciones, parte médico, baja de contrato con firma y preaviso).
- * El admin configura los de aquí: nombre visible, color, límite, `activo`…
- */
-export const SUBTIPOS_AUSENCIA = [
-  "vacaciones",
-  "baja_medica",
-  "permiso",
-  "baja_contrato",
-] as const;
-export type SubtipoAusencia = (typeof SUBTIPOS_AUSENCIA)[number];
 
 export type TipoAusenciaRow = {
   id: string;

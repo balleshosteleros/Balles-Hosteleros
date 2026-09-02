@@ -20,12 +20,14 @@ import { NumberInput } from "@/shared/components/NumberInput";
 import {
   getMensajeriaConfig,
   guardarMensajeriaConfig,
+  type MensajeriaConfigVista,
+} from "@/features/mensajeria/actions/config-actions";
+import {
   TIPOS_AVISO,
   TIPO_AVISO_LABEL,
   TIPO_AVISO_DESCRIPCION,
-  type MensajeriaConfigVista,
   type EstadoAlta,
-} from "@/features/mensajeria/actions/config-actions";
+} from "@/features/mensajeria/lib/avisos";
 import { formatearImporte } from "@/features/mensajeria/data/monedero";
 
 const ESTADO_TEXTO: Record<EstadoAlta, { etiqueta: string; explicacion: string }> = {
