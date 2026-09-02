@@ -7,13 +7,15 @@ for (const l of fs.readFileSync(".env.local", "utf8").split("\n")) {
 }
 const admin = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY);
 const EMPRESAS = [
-  { nombre: "HABANA", id: "00000000-0000-0000-0000-000000000001", total: 5263 },
-  { nombre: "BACANAL", id: "fe2ea3c4-aa28-41ce-a135-bf196ab5dc47", total: 3806 },
-  { nombre: "BALLES", id: "eb99bddd-9f49-4348-96ee-37f930c0d5d0", total: 4217 },
+  { nombre: "HABANA", id: "00000000-0000-0000-0000-000000000001", total: 5263, totalGb: 124.6 },
+  { nombre: "BACANAL", id: "fe2ea3c4-aa28-41ce-a135-bf196ab5dc47", total: 3806, totalGb: 124.2 },
+  { nombre: "BALLES", id: "eb99bddd-9f49-4348-96ee-37f930c0d5d0", total: 4217, totalGb: 589.7 },
 ];
 const ahora = new Date().toLocaleString("es-ES", { timeZone: "Europe/Madrid" });
 const L = [`COMO VA LA MIGRACION DE MARKETING`, `Actualizado: ${ahora}`, ""];
 let faltanTotal = 0;
+let gbHechosTotal = 0;
+let gbTotalTotal = 0;
 for (const e of EMPRESAS) {
   const { count } = await admin.from("documentos").select("id", { count: "exact", head: true })
     .eq("empresa_id", e.id).not("drive_file_id", "is", null);
@@ -35,14 +37,21 @@ for (const e of EMPRESAS) {
     if (filas.length < 1000) break;
   }
   const gb = (bytes / 1024 ** 3).toFixed(1);
-  L.push(`${e.nombre}`, `  [${barra}] ${pct}%`,
-    `  ${hechos} de ${e.total} archivos  (${gb} GB)`,
-    `  faltan ${faltan}${faltan === 0 ? "  -- TERMINADO" : ""}`,
+  gbHechosTotal += bytes / 1024 ** 3;
+  gbTotalTotal += e.totalGb;
+  // El porcentaje va por PESO, no por numero de archivos: mil fotos pequeñas
+  // no son el trabajo; los videos de varios GB si. Por archivos parecia que
+  // BALLES iba por el 58% cuando en tamaño no llegaba al 4%.
+  const pctGb = ((bytes / 1024 ** 3) / e.totalGb) * 100;
+  const barraGb = "#".repeat(Math.round(pctGb / 2.5)).padEnd(40, ".");
+  L.push(`${e.nombre}`, `  [${barraGb}] ${pctGb.toFixed(1)}%`,
+    `  ${hechos} de ${e.total} archivos  ·  ${gb} de ${e.totalGb} GB`,
+    `  faltan ${faltan} archivos (${(e.totalGb - bytes / 1024 ** 3).toFixed(1)} GB)${faltan === 0 ? "  -- TERMINADO" : ""}`,
     `  estado: ${imp?.estado ?? (faltan === 0 ? "terminada" : "copiando ahora")}${imp?.fallidos ? `  ·  ${imp.fallidos} no se pudieron traer` : ""}`, "");
 }
 L.push(faltanTotal === 0
   ? "MIGRACION COMPLETA. Ya puedes borrar lo de Drive."
-  : `Quedan ${faltanTotal} archivos en total.`);
+  : `Quedan ${faltanTotal} archivos en total  ·  ${(gbTotalTotal - gbHechosTotal).toFixed(1)} GB de ${gbTotalTotal.toFixed(1)} GB`);
 // Aviso de bateria: sin corriente el Mac se apaga y la copia se para en seco.
 import { execSync } from "node:child_process";
 try {
