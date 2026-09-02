@@ -11,6 +11,7 @@
  */
 
 import { NextResponse } from "next/server";
+import { notifActiva } from "@/features/notificaciones/actions/notif-interruptores-actions";
 import { createClient as createServiceClient } from "@supabase/supabase-js";
 import {
   getHorarioDiaLote,
@@ -70,8 +71,15 @@ export async function GET(request: Request) {
     const margenAntes = (cfg.popup_margen_antes_min as number | null) ?? 15;
     const margenDespues = (cfg.popup_margen_despues_min as number | null) ?? 15;
     const intervalo = Math.max(1, (cfg.reaviso_intervalo_min as number | null) ?? 5);
-    const reavisoActivo = Boolean(cfg.reaviso_activo);
-    const avisoCambioEmpresa = Boolean(cfg.aviso_cambio_empresa);
+    // Interruptores de Ajustes → Herramientas → Notificaciones: mandan sobre
+    // la config del módulo (si están apagados ahí, no se avisa).
+    const reavisoActivo =
+      Boolean(cfg.reaviso_activo) &&
+      (await notifActiva("fichaje_recordatorio", empresaId));
+    const avisoCambioEmpresa =
+      Boolean(cfg.aviso_cambio_empresa) &&
+      (await notifActiva("fichaje_cambio_empresa", empresaId));
+    if (!reavisoActivo && !avisoCambioEmpresa) continue;
     let empresaNombre = "esta empresa";
     if (avisoCambioEmpresa) {
       const { data: er } = await supabase.from("empresas").select("nombre").eq("id", empresaId).maybeSingle();

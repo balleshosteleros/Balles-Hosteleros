@@ -138,7 +138,7 @@ export async function GET(request: Request) {
           const res = await emitirNotificacion({
             empresaId,
             system: true,
-            tipo: "alerta",
+            tipo: "resena_google",
             titulo: `${nombreEmpresa}: puede que falte alguna reseña de Google`,
             mensaje:
               `Se han recogido ${result.insertadas} reseñas nuevas de una sola vez, que es el máximo que Google deja leer. ` +

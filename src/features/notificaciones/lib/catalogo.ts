@@ -34,7 +34,11 @@ export type TipoNotificacion =
   // Solicitudes de personal: aviso al validador (responsable directo)
   | "solicitud_pendiente"
   // Cambio del correo de acceso (login) del empleado
-  | "cambio_email_acceso";
+  | "cambio_email_acceso"
+  // Tipos propios para poder encenderlos/apagarlos por separado en Ajustes
+  | "firma_pendiente"
+  | "resena_google"
+  | "modelos_aeat";
 
 export interface TipoMeta {
   /** Etiqueta legible (sentence case). */
@@ -193,6 +197,30 @@ export const TIPOS_NOTIFICACION: Record<TipoNotificacion, TipoMeta> = {
     icono: "info",
     color: "text-sky-600",
     badge: "bg-sky-100 text-sky-700",
+    accionLabel: "Visto",
+    requiereAccion: false,
+  },
+  firma_pendiente: {
+    label: "Firma pendiente",
+    icono: "info",
+    color: "text-violet-600",
+    badge: "bg-violet-100 text-violet-700",
+    accionLabel: "Firmar",
+    requiereAccion: true,
+  },
+  resena_google: {
+    label: "Reseña",
+    icono: "alerta",
+    color: "text-amber-600",
+    badge: "bg-amber-100 text-amber-700",
+    accionLabel: "Visto",
+    requiereAccion: false,
+  },
+  modelos_aeat: {
+    label: "Vencimiento",
+    icono: "vencimiento",
+    color: "text-orange-600",
+    badge: "bg-orange-100 text-orange-700",
     accionLabel: "Visto",
     requiereAccion: false,
   },

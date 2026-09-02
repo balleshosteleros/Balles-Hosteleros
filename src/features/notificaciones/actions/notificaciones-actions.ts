@@ -321,6 +321,15 @@ export async function emitirNotificacion(input: EmitirInput): Promise<EmitirResu
     const empresaId = input.empresaId ?? ctx.empresaId;
     if (!empresaId) return { ok: false, destinatarios: 0, creadas: 0 };
 
+    // Interruptor de Ajustes → Herramientas → Notificaciones: si el tipo está
+    // apagado para esta empresa, no se emite nada (ni bandeja ni push).
+    const { notifActiva } = await import(
+      "@/features/notificaciones/actions/notif-interruptores-actions"
+    );
+    if (!(await notifActiva(input.tipo, empresaId))) {
+      return { ok: true, destinatarios: 0, creadas: 0 };
+    }
+
     const useService = input.system === true || !ctx.userId;
     const supabase = (useService
       ? createAdminClient()

@@ -24,6 +24,7 @@
  */
 
 import { NextResponse } from "next/server";
+import { notifActiva } from "@/features/notificaciones/actions/notif-interruptores-actions";
 import { createClient as createServiceClient } from "@supabase/supabase-js";
 import { enviarReservaEmail } from "@/lib/email/reservas/mailer";
 import { enviarAvisoReserva } from "@/lib/mensajeria/reservas";
@@ -120,7 +121,7 @@ export async function GET(request: Request) {
     // ── RECORDATORIO ──────────────────────────────────────────────────────
     // Cada bloque va aislado: un fallo de BD en una empresa no debe impedir que
     // el resto reciba sus correos, pero sí tiene que quedar contado como error.
-    if (c.recordatorio_activo) {
+    if (c.recordatorio_activo && (await notifActiva("reserva_recordatorio", c.empresa_id))) {
       try {
         const horas = c.recordatorio_horas_antes ?? 3;
         const desde = new Date(ahora.getTime() + horas * 3600 * 1000);

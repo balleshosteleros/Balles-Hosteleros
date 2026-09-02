@@ -164,7 +164,7 @@ async function notificarFirmaPendiente(args: {
     const url = `${base}/firmar/${encodeURIComponent(args.token)}`;
     await emitirNotificacion({
       empresaId: args.empresaId,
-      tipo: "info",
+      tipo: "firma_pendiente",
       titulo: "Tienes un documento para firmar",
       mensaje: `«${args.tituloDocumento}» está pendiente de tu firma.`,
       segmento: { tipo: "empleados", empleadoIds: [args.empleadoId] },

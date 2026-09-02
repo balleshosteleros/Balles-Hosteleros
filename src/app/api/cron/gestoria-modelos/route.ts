@@ -139,7 +139,7 @@ export async function GET(request: Request) {
         const res = await emitirNotificacion({
           empresaId,
           system: true,
-          tipo: "vencimiento",
+          tipo: "modelos_aeat",
           titulo: `Presentación ${periodoLabel}: quedan ${cfg.recordatorio_previo_dias} días`,
           mensaje: `${pendientes.length} ${
             pendientes.length === 1 ? "modelo pendiente" : "modelos pendientes"

@@ -10,6 +10,7 @@ import {
 import { TelefonoConfigPanel } from "@/features/ajustes/components/TelefonoConfigPanel";
 import { HoraSecundariaPanel } from "@/features/ajustes/components/HoraSecundariaPanel";
 import { ToolNotifPanel } from "@/features/ajustes/components/ToolNotifPanel";
+import { NotifAutomaticasPanel } from "@/features/notificaciones/components/NotifAutomaticasPanel";
 import { AplicacionesTab } from "@/features/ajustes/components/AplicacionesTab";
 import { EmailRedaccionPanel } from "@/features/ajustes/components/EmailRedaccionPanel";
 import { AccesosTab } from "@/features/ajustes/components/AccesosTab";
@@ -68,11 +69,7 @@ export function HerramientasTab() {
             </AccordionTrigger>
             <AccordionContent>
               {id === "notificaciones" ? (
-                <p className="py-4 text-sm text-muted-foreground">
-                  Los avisos del sistema dirigidos al empleado se gestionan
-                  automáticamente. Próximamente podrás configurar aquí sus
-                  preferencias (silenciar tipos, frecuencia de recordatorio…).
-                </p>
+                <NotifAutomaticasPanel />
               ) : id === "telefono" ? (
                 <div className="space-y-6">
                   <TelefonoConfigPanel />
