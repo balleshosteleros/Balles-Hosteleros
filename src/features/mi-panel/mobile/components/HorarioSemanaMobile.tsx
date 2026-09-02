@@ -13,17 +13,40 @@ function tramosTexto(tramos: { inicio: string; fin: string }[]): string {
   return tramos.map((t) => `${t.inicio}–${t.fin}`).join(" · ");
 }
 
+/** Horas en formato corto español: 7,5 → "7,5 h"; 8 → "8 h". */
+function horasTexto(horas: number): string {
+  const redondeado = Math.round(horas * 100) / 100;
+  return `${redondeado.toString().replace(".", ",")} h`;
+}
+
+/** Horas de unos tramos resolviendo el cruce de medianoche (igual que el motor). */
+function horasDeTramosCliente(tramos: { inicio: string; fin: string }[]): number {
+  let minutos = 0;
+  for (const tr of tramos) {
+    const [hi, mi] = tr.inicio.split(":").map(Number);
+    const [hf, mf] = tr.fin.split(":").map(Number);
+    if ([hi, mi, hf, mf].some((n) => !Number.isFinite(n))) continue;
+    const ini = hi * 60 + mi;
+    let fin = hf * 60 + mf;
+    if (fin <= ini) fin += 1440;
+    minutos += fin - ini;
+  }
+  return minutos / 60;
+}
+
 function DiaRow({ dia }: { dia: DiaHorario }) {
   const { horario, esHoy } = dia;
 
   let icono = <CalendarOff className="h-4 w-4 text-muted-foreground/60" />;
-  let texto = "Libra";
+  let texto = "Libre";
   let textoClase = "text-muted-foreground";
+  let horasDia: number | null = null;
 
   if (horario.tipo === "fijo" && horario.tramos.length > 0) {
     icono = <Clock className="h-4 w-4 text-primary" />;
     texto = tramosTexto(horario.tramos);
     textoClase = "text-foreground font-medium";
+    horasDia = horasDeTramosCliente(horario.tramos);
   } else if (horario.tipo === "flexible") {
     icono = <Hourglass className="h-4 w-4 text-primary" />;
     texto = `${horario.objetivoHoras}h flexibles`;
@@ -59,6 +82,12 @@ function DiaRow({ dia }: { dia: DiaHorario }) {
         <span className="shrink-0">{icono}</span>
         <span className={`truncate text-sm ${textoClase}`}>{texto}</span>
       </div>
+
+      {horasDia != null && (
+        <span className="shrink-0 text-xs font-medium text-muted-foreground">
+          {horasTexto(horasDia)}
+        </span>
+      )}
 
       {esHoy && (
         <span className="shrink-0 rounded-full bg-primary px-2 py-0.5 text-[10px] font-semibold text-primary-foreground">
@@ -114,11 +143,20 @@ export function HorarioSemanaMobile({
           </p>
         </div>
       ) : (
-        <div className="space-y-2">
-          {data.dias.map((d) => (
-            <DiaRow key={d.fecha} dia={d} />
-          ))}
-        </div>
+        <>
+          <div className="space-y-2">
+            {data.dias.map((d) => (
+              <DiaRow key={d.fecha} dia={d} />
+            ))}
+          </div>
+
+          <div className="flex items-center justify-between rounded-2xl border border-border/60 bg-muted/40 px-3.5 py-3">
+            <span className="text-sm font-medium">Total de la semana</span>
+            <span className="text-base font-bold text-primary">
+              {horasTexto(data.totalHoras)}
+            </span>
+          </div>
+        </>
       )}
     </div>
   );

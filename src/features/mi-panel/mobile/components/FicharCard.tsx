@@ -45,6 +45,93 @@ function textoJornada(j: JornadaHoy): { libra: boolean; texto: string } {
   }
 }
 
+/** Minutos del día (0–1439) desde "HH:MM". null si no es válido. */
+function hhmmAMin(hhmm: string): number | null {
+  const m = /^(\d{1,2}):(\d{2})/.exec(hhmm.trim());
+  if (!m) return null;
+  return Number(m[1]) * 60 + Number(m[2]);
+}
+
+/**
+ * Franja del turno de hoy en minutos, resolviendo el cruce de medianoche: el
+ * fin de un turno que acaba de madrugada se expresa como minuto >1440 para que
+ * la barra avance de forma continua.
+ */
+function franjaDelDia(
+  tramos: { inicio: string; fin: string }[],
+): { inicio: number; fin: number; bloques: { desde: number; hasta: number }[] } | null {
+  const bloques: { desde: number; hasta: number }[] = [];
+  for (const tr of tramos) {
+    const ini = hhmmAMin(tr.inicio);
+    let fin = hhmmAMin(tr.fin);
+    if (ini == null || fin == null) continue;
+    if (fin <= ini) fin += 1440;
+    bloques.push({ desde: ini, hasta: fin });
+  }
+  if (bloques.length === 0) return null;
+  const inicio = Math.min(...bloques.map((b) => b.desde));
+  const fin = Math.max(...bloques.map((b) => b.hasta));
+  return { inicio, fin, bloques };
+}
+
+/**
+ * Barra del turno de hoy: pinta la franja horaria prevista y una marca con la
+ * posición actual, para que el empleado vea de un vistazo cuándo le toca fichar
+ * y cuánto lleva de jornada.
+ */
+function BarraTurno({
+  tramos,
+  ahoraMin,
+}: {
+  tramos: { inicio: string; fin: string }[];
+  ahoraMin: number;
+}) {
+  const franja = franjaDelDia(tramos);
+  if (!franja) return null;
+
+  const { inicio, fin, bloques } = franja;
+  const total = fin - inicio;
+  if (total <= 0) return null;
+
+  // La marca de "ahora" también se corrige por medianoche: de madrugada, el
+  // reloj vuelve a 0 pero la jornada sigue siendo la del día anterior.
+  const ahoraAjustado = ahoraMin < inicio ? ahoraMin + 1440 : ahoraMin;
+  const dentro = ahoraAjustado >= inicio && ahoraAjustado <= fin;
+  const pct = dentro ? ((ahoraAjustado - inicio) / total) * 100 : null;
+
+  const etiqueta = (min: number) => {
+    const n = ((Math.round(min) % 1440) + 1440) % 1440;
+    return `${String(Math.floor(n / 60)).padStart(2, "0")}:${String(n % 60).padStart(2, "0")}`;
+  };
+
+  return (
+    <div className="px-4 pb-2 pt-1">
+      <div className="relative h-2 w-full overflow-hidden rounded-full bg-muted">
+        {bloques.map((b) => (
+          <div
+            key={`${b.desde}-${b.hasta}`}
+            className="absolute inset-y-0 rounded-full bg-primary/25"
+            style={{
+              left: `${((b.desde - inicio) / total) * 100}%`,
+              width: `${((b.hasta - b.desde) / total) * 100}%`,
+            }}
+          />
+        ))}
+        {pct !== null && (
+          <div
+            className="absolute inset-y-0 w-0.5 rounded-full bg-primary"
+            style={{ left: `calc(${pct}% - 1px)` }}
+          />
+        )}
+      </div>
+      <div className="mt-1 flex justify-between text-[10px] text-muted-foreground">
+        <span>{etiqueta(inicio)}</span>
+        <span>{etiqueta(fin)}</span>
+      </div>
+    </div>
+  );
+}
+
 interface Props {
   jornadaHoy: JornadaHoy;
 }
@@ -89,6 +176,19 @@ export function FicharCard({ jornadaHoy }: Props) {
     window.addEventListener("focus", onFocus);
     return () => window.removeEventListener("focus", onFocus);
   }, [refetch]);
+
+  // Minuto actual para la marca de la barra del turno. El reloj es un sistema
+  // externo: se consulta en el efecto, nunca durante el render.
+  const [minutoAhora, setMinutoAhora] = useState<number | null>(null);
+  useEffect(() => {
+    const refrescar = () => {
+      const d = new Date();
+      setMinutoAhora(d.getHours() * 60 + d.getMinutes());
+    };
+    refrescar();
+    const i = setInterval(refrescar, 60000);
+    return () => clearInterval(i);
+  }, []);
 
   if (!cargado) {
     return (
@@ -142,6 +242,10 @@ export function FicharCard({ jornadaHoy }: Props) {
           </>
         )}
       </div>
+
+      {jornadaHoy.tipo === "trabaja" && minutoAhora !== null && (
+        <BarraTurno tramos={jornadaHoy.tramos} ahoraMin={minutoAhora} />
+      )}
 
       {fichaje?.horaEntrada && trabajando && (
         <p className="px-4 pb-1 text-xs text-muted-foreground">

@@ -6,6 +6,7 @@ import { getEmpresaActivaForUser, getZonaHorariaEmpresa } from "@/features/empre
 import { ahoraEnZona } from "@/features/empresa/lib/zona-horaria";
 import {
   getHorarioDia,
+  horasDeTramos,
   semanaDeFecha,
   type HorarioDia,
 } from "@/features/rrhh/utils/horario-empleado";
@@ -35,6 +36,32 @@ export interface HorarioSemana {
   lunes: string; // YYYY-MM-DD
   domingo: string; // YYYY-MM-DD
   dias: DiaHorario[];
+  /** Horas previstas en la semana (suma de los tramos fijos + objetivo flexible). */
+  totalHoras: number;
+}
+
+/**
+ * Horas previstas de un día: suma de sus tramos si es fijo, u objetivo si es
+ * flexible diario. El flexible semanal ya expresa el total de la semana, así que
+ * se cuenta una sola vez (en `totalHorasSemana`).
+ */
+function horasDelDia(horario: HorarioDia): number {
+  if (horario.tipo === "fijo") return horasDeTramos(horario.tramos);
+  if (horario.tipo === "flexible" && horario.modo === "diario") {
+    return horario.objetivoHoras;
+  }
+  return 0;
+}
+
+/** Total de horas de la semana. El flexible semanal cuenta una vez, no por día. */
+function totalHorasSemana(dias: DiaHorario[]): number {
+  const flexSemanal = dias.find(
+    (d) => d.horario.tipo === "flexible" && d.horario.modo === "semanal",
+  );
+  if (flexSemanal && flexSemanal.horario.tipo === "flexible") {
+    return flexSemanal.horario.objetivoHoras;
+  }
+  return dias.reduce((suma, d) => suma + horasDelDia(d.horario), 0);
 }
 
 /** Suma `n` días a una fecha "YYYY-MM-DD" (mediodía local para evitar DST). */
@@ -82,6 +109,7 @@ export async function getMobileHorarioSemana(
     lunes,
     domingo,
     dias: diasVacios,
+    totalHoras: 0,
   };
   if (!user) return noDisponible;
 
@@ -109,5 +137,5 @@ export async function getMobileHorarioSemana(
     }),
   );
 
-  return { disponible: true, lunes, domingo, dias };
+  return { disponible: true, lunes, domingo, dias, totalHoras: totalHorasSemana(dias) };
 }

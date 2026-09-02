@@ -460,7 +460,7 @@ export async function getTramosHorarioEmpleado(
 }
 
 /** Horas decimales de una lista de tramos (resuelve cruce de medianoche). */
-function horasDeTramos(tramos: Tramo[]): number {
+export function horasDeTramos(tramos: Tramo[]): number {
   let total = 0;
   for (const tr of tramos) {
     const ini = hhmmAMinutos(tr.inicio);
