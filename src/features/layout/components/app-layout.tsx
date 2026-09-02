@@ -334,24 +334,23 @@ function AppLayoutInterno({ children }: { children: React.ReactNode }) {
               </h1>
             )}
             {/*
-              Mini reproductor: pegado a la barra de herramientas (a la
-              izquierda de notificaciones), no al título. El `ml-auto` lo
-              empuja hacia el centro-derecha de la pantalla. Solo se pinta
-              cuando hay música sonando; el resto del tiempo no existe y ese
-              espacio vuelve a la cabecera.
-            */}
-            {showUi && <MiniReproductor className="ml-auto mr-4 md:mr-6" />}
-
-            {/*
-              `ml-auto` aquí también: cuando NO hay música el reproductor no se
-              pinta y este bloque es el único que puede empujarse a la derecha.
-              Con el reproductor visible los dos `ml-auto` se reparten el hueco,
-              por eso el reproductor lleva su propio margen a la derecha en vez
-              de depender de esa separación.
+              Un solo `ml-auto` en toda la cabecera: el del bloque de la
+              derecha. El mini reproductor va DENTRO de ese bloque, si no los
+              dos `ml-auto` se repartían el hueco sobrante y el reproductor
+              acababa flotando junto al título, con un vacío enorme hasta la
+              barra de herramientas.
             */}
             <div className="ml-auto flex items-center gap-2 md:gap-3 shrink-0">
               {showUi && (
                 <>
+                  {/*
+                    Mini reproductor: pegado a la barra de herramientas, a la
+                    izquierda de notificaciones. Solo se pinta cuando hay música
+                    sonando; el resto del tiempo no existe y ese espacio vuelve
+                    a la cabecera.
+                  */}
+                  <MiniReproductor />
+
                   {/* Integraciones: Google (cuenta + email + calendario + meet) | tareas + chat + llamadas | apps */}
                   <div className="hidden md:flex items-center rounded-full border bg-muted/40 py-1 px-1.5 gap-0.5">
                     {/* Notificaciones — joya de la corona, la primera de la barra */}
