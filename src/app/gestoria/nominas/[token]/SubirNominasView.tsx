@@ -10,9 +10,20 @@ interface Props {
   /** Endpoint POST al que se suben las nóminas. */
   endpoint: string;
   empresaNombre: string;
-  /** Mes de la entrega, 'AAAA-MM': el de las nóminas que pide el enlace. */
+  /** Meses elegibles y su estado. El enlace es permanente: el mes lo elige aquí. */
+  meses: EstadoMes[];
+  /** Mes preseleccionado: el anterior al actual, que es el habitual. */
+  mesSugerido: string;
+}
+
+export interface EstadoMes {
   periodo: string;
-  mesLabel: string;
+  /** Confirmado por RRHH: no admite subidas. */
+  cerrado: boolean;
+  /** Ya tiene nóminas pero sigue abierto: se pueden añadir más. */
+  tieneNominas: boolean;
+  /** Devuelto por RRHH para corregir. */
+  rechazado: boolean;
 }
 
 interface MesIncorrecto {
@@ -106,7 +117,7 @@ function mesesHasta(hasta: string, n = 12): string[] {
   return out;
 }
 
-export function SubirNominasView({ endpoint, empresaNombre, periodo, mesLabel }: Props) {
+export function SubirNominasView({ endpoint, empresaNombre, meses, mesSugerido }: Props) {
   const [file, setFile] = useState<File | null>(null);
   const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -121,8 +132,12 @@ export function SubirNominasView({ endpoint, empresaNombre, periodo, mesLabel }:
   // Mes que se está COTIZANDO en el recibo. Por defecto el anterior al de las
   // nóminas: la Seguridad Social se liquida a mes vencido, así que con las
   // nóminas de agosto llega el TC1 de julio. Es lo normal, no un error.
-  const [mesTc1, setMesTc1] = useState(() => mesAnterior(periodo));
-  const mesesTc1 = mesesHasta(periodo);
+  // Mes de las NÓMINAS que se suben. Antes lo imponía el enlace; ahora se elige.
+  const [mesNominas, setMesNominas] = useState(mesSugerido);
+  const mesActualElegido = meses.find((m) => m.periodo === mesNominas);
+  const mesCerrado = mesActualElegido?.cerrado ?? false;
+  const [mesTc1, setMesTc1] = useState(() => mesAnterior(mesSugerido));
+  const mesesTc1 = mesesHasta(mesSugerido);
   // Cuadre devuelto al subir un TC1: se enseña AL MOMENTO, sin esperar a las
   // nóminas, para que la gestoría sepa ya si el recibo cuadra o falta alguno.
   const [cuadreTc1, setCuadreTc1] = useState<Cuadre | null>(null);
@@ -141,6 +156,7 @@ export function SubirNominasView({ endpoint, empresaNombre, periodo, mesLabel }:
       const fd = new FormData();
       fd.append("archivo", f);
       fd.append("documento", "tc1");
+      fd.append("periodo", mesNominas);
       // A qué mes corresponden estos seguros sociales (lo dice la gestoría).
       fd.append("periodoCotizacion", mesTc1);
       const res = await fetch(endpoint, { method: "POST", body: fd });
@@ -186,6 +202,7 @@ export function SubirNominasView({ endpoint, empresaNombre, periodo, mesLabel }:
       const fd = new FormData();
       fd.append("archivo", file);
       fd.append("documento", "nominas");
+      fd.append("periodo", mesNominas);
       const res = await fetch(endpoint, { method: "POST", body: fd });
       const json = await res.json();
       if (json.ok) {
@@ -216,17 +233,56 @@ export function SubirNominasView({ endpoint, empresaNombre, periodo, mesLabel }:
   return (
     <div className="min-h-screen bg-zinc-50 flex items-center justify-center p-6">
       <div className="max-w-lg w-full bg-white rounded-2xl border border-zinc-200 shadow-sm p-8">
-        <h1 className="text-lg font-semibold text-zinc-900">Subir nóminas de {mesLabel}</h1>
+        <h1 className="text-lg font-semibold text-zinc-900">Subir nóminas</h1>
         <p className="mt-1 text-sm text-zinc-600">
-          {empresaNombre} te pide adjuntar las nóminas de <b>{mesLabel}</b>.
+          {empresaNombre} · elige el mes y adjunta los documentos.
         </p>
 
-        {/* El enlace es de UN mes concreto: dejarlo claro evita que suban las de
-            otro y se rechace el archivo entero. */}
-        <div className="mt-3 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs text-zinc-700">
-          Este enlace sirve <b>solo para las nóminas de {mesLabel}</b>. Si contiene alguna de
-          otro mes, no se guardará ninguna.
+        {/* El enlace ya no lleva el mes dentro: se elige aquí. Es lo primero que
+            se ve porque manda sobre todo lo que se suba debajo. */}
+        <div className="mt-4">
+          <label htmlFor="mes-nominas" className="block text-xs font-medium text-zinc-700">
+            Mes de las nóminas
+          </label>
+          <select
+            id="mes-nominas"
+            value={mesNominas}
+            onChange={(e) => setMesNominas(e.target.value)}
+            disabled={enviando}
+            className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 disabled:opacity-50"
+          >
+            {meses.map((m) => (
+              <option key={m.periodo} value={m.periodo}>
+                {nombreMesCorto(m.periodo)}
+                {m.cerrado
+                  ? " · ya entregado"
+                  : m.rechazado
+                    ? " · devuelto para corregir"
+                    : m.tieneNominas
+                      ? " · entrega empezada"
+                      : ""}
+              </option>
+            ))}
+          </select>
+          <p className="mt-1 text-xs text-zinc-600">
+            Este enlace es <b>permanente</b>: sirve para cualquier mes y no caduca.
+            Guárdalo.
+          </p>
         </div>
+
+        {mesCerrado ? (
+          <div className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-800">
+            Las nóminas de <b>{nombreMesCorto(mesNominas)}</b> ya están subidas y cerradas
+            por la empresa: no se pueden volver a subir. Si hay que corregir algo, pídelo al
+            departamento de RRHH.
+          </div>
+        ) : (
+          <div className="mt-3 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs text-zinc-700">
+            Se guardarán como nóminas de <b>{nombreMesCorto(mesNominas)}</b>. Si el archivo
+            contiene alguna de otro mes, no se guardará ninguna. Puedes subirlas en
+            <b> varias veces</b>.
+          </div>
+        )}
 
         <div className="mt-4 rounded-xl border border-sky-200 bg-sky-50 p-4 text-sm text-sky-900">
           <p className="font-semibold">Hacen falta dos documentos</p>
@@ -293,7 +349,7 @@ export function SubirNominasView({ endpoint, empresaNombre, periodo, mesLabel }:
               {mesesTc1.map((m) => (
                 <option key={m} value={m}>
                   {nombreMesCorto(m)}
-                  {m === mesAnterior(periodo) ? " · lo habitual" : ""}
+                  {m === mesAnterior(mesNominas) ? " · lo habitual" : ""}
                 </option>
               ))}
             </select>
@@ -541,7 +597,7 @@ export function SubirNominasView({ endpoint, empresaNombre, periodo, mesLabel }:
                   {resultado.mesIncorrecto.length === 1 ? "" : "s"} de otro mes
                 </p>
                 <p className="mt-1">
-                  Solo se admiten nóminas de <b>{mesLabel}</b>. Estas pertenecen a otro mes.
+                  Solo se admiten nóminas de <b>{nombreMesCorto(mesNominas)}</b>. Estas pertenecen a otro mes.
                   Quítalas o corrige el mes:
                 </p>
                 <ul className="mt-2 space-y-1 list-disc list-inside">
@@ -627,7 +683,7 @@ export function SubirNominasView({ endpoint, empresaNombre, periodo, mesLabel }:
 
         <button
           onClick={subir}
-          disabled={!file || enviando}
+          disabled={!file || enviando || mesCerrado}
           className="mt-5 w-full inline-flex items-center justify-center gap-2 bg-emerald-600 text-white rounded-lg py-2.5 font-medium disabled:opacity-50 hover:bg-emerald-700 transition"
         >
           {enviando ? <Loader2 className="h-4 w-4 animate-spin" /> : <UploadCloud className="h-4 w-4" />}

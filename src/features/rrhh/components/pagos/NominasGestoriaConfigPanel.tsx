@@ -92,7 +92,7 @@ export function NominasGestoriaConfigPanel() {
       title: `Enviar a la gestoría las nóminas de ${etiquetaMes(mesEnvio)}`,
       description:
         `Se enviará un correo a ${correoGestoria} con un enlace para subir las nóminas de ` +
-        `${etiquetaMes(mesEnvio)}. El enlace caduca en 3 días. ¿Continuar?`,
+        `${etiquetaMes(mesEnvio)}. Es el enlace de siempre: no caduca. ¿Continuar?`,
       confirmLabel: "Enviar correo",
     });
     if (!ok) return;
@@ -104,7 +104,7 @@ export function NominasGestoriaConfigPanel() {
     setEnviando(false);
     if (res.ok) {
       toast.success(`Enlace enviado a la gestoría para las nóminas de ${etiquetaMes(mesEnvio)}.`, {
-        description: "Caduca en 3 días.",
+        description: "Se ha enviado el enlace permanente de la empresa.",
       });
     } else {
       toast.error(res.error ?? "No se pudo enviar el correo.");
@@ -212,7 +212,7 @@ export function NominasGestoriaConfigPanel() {
             onClick={enviarAhora}
             disabled={enviando}
             className="gap-2"
-            title="Envía a la gestoría un enlace nuevo para el mes elegido. Caduca en 3 días."
+            title="Envía a la gestoría el enlace de subida, indicando el mes elegido."
           >
             {enviando ? (
               <><Loader2 className="h-4 w-4 animate-spin" />Enviando…</>

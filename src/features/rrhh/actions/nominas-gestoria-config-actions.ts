@@ -123,12 +123,10 @@ export async function enviarNominasGestoriaAhora(
       periodo = mesSolicitado(anio, mes, Number(dia));
     }
 
-    // Envío MANUAL: el enlace caduca a los 3 días. Es un reenvío puntual (se
-    // olvidaron, caducó el anterior…), no la entrega ordinaria del mes, así que
-    // no tiene por qué quedarse vivo semanas. El automático sigue con su plazo.
-    const res = await enviarSolicitudNominasGestoria(admin, empresaId, periodo, {
-      diasVigencia: 3,
-    });
+    // Manda SIEMPRE el mismo enlace permanente; el mes elegido aquí solo decide
+    // de qué mes habla el correo. Antes este envío creaba un enlace nuevo de 3
+    // días que pisaba el anterior.
+    const res = await enviarSolicitudNominasGestoria(admin, empresaId, periodo);
     return res.ok ? { ok: true, periodo } : { ok: false, error: res.error };
   } catch (err) {
     console.error("[nominas-gestoria] enviarAhora:", err);

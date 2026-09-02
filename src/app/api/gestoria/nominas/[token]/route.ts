@@ -17,8 +17,11 @@ import {
   procesarSubidaNominasGestoria,
   guardarTc1Gestoria,
   cuadrarTc1ConNominas,
-  nombreMes,
+  estadoMesesNominas,
+  validarPeriodoSubida,
+  mesActualEmpresa,
 } from "@/features/rrhh/services/nominas/nominas-gestoria";
+import { mesAnterior } from "@/features/rrhh/lib/nominas-periodos";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -32,9 +35,9 @@ export async function GET(_req: Request, ctx: { params: Promise<{ token: string 
   if (!res.ok) {
     const message =
       res.reason === "expired"
-        ? "Este enlace ha caducado. Cada enlace sirve solo para las nóminas de su mes y vence el día 15 del mes siguiente. Ponte en contacto con el departamento de RRHH de la empresa para que te envíe uno nuevo."
-        : res.reason === "cerrado"
-          ? "Las nóminas de este mes ya se recibieron correctamente. Este enlace queda cerrado: no admite más subidas."
+        ? "Este enlace era de un mes concreto y ha caducado. Pide al departamento de RRHH de la empresa el enlace nuevo, que ya no caduca."
+        : res.reason === "revocado"
+          ? "Este enlace se ha anulado. Pide uno nuevo al departamento de RRHH de la empresa."
           : "Enlace no válido.";
     return NextResponse.json({ ok: false, reason: res.reason, message }, { status: 404 });
   }
@@ -45,11 +48,12 @@ export async function GET(_req: Request, ctx: { params: Promise<{ token: string 
     .eq("id", res.row.empresa_id)
     .maybeSingle();
 
+  const mesActual = await mesActualEmpresa(admin, res.row.empresa_id);
   return NextResponse.json({
     ok: true,
     empresaNombre: (empresa?.nombre as string) ?? "la empresa",
-    periodo: res.row.periodo,
-    mesLabel: nombreMes(res.row.periodo),
+    meses: await estadoMesesNominas(admin, res.row.empresa_id, mesActual),
+    mesSugerido: mesAnterior(mesActual),
   });
 }
 
@@ -62,15 +66,24 @@ export async function POST(req: Request, ctx: { params: Promise<{ token: string 
     if (!res.ok) {
       const message =
         res.reason === "expired"
-          ? "Este enlace ha caducado y ya no admite subidas. Pide uno nuevo al departamento de RRHH de la empresa."
-          : res.reason === "cerrado"
-            ? "Las nóminas de este mes ya se recibieron: este enlace ya no admite subidas."
+          ? "Este enlace era de un mes concreto y ha caducado. Pide al departamento de RRHH de la empresa el enlace nuevo, que ya no caduca."
+          : res.reason === "revocado"
+            ? "Este enlace se ha anulado. Pide uno nuevo al departamento de RRHH de la empresa."
             : "Enlace no válido.";
       return NextResponse.json({ ok: false, error: message }, { status: 404 });
     }
 
     const fd = await req.formData();
     const documento = (fd.get("documento") as string | null) ?? "nominas";
+
+    // El enlace ya NO lleva el mes dentro: lo elige la gestoría. Por eso esta
+    // validación de servidor es la única barrera — nunca fiarse del formulario.
+    const periodo = ((fd.get("periodo") as string | null) ?? "").trim();
+    const mesActual = await mesActualEmpresa(admin, res.row.empresa_id);
+    const malPeriodo = await validarPeriodoSubida(admin, res.row.empresa_id, periodo, mesActual);
+    if (malPeriodo) {
+      return NextResponse.json({ ok: false, error: malPeriodo.error }, { status: malPeriodo.status });
+    }
 
     // TC1 (recibo de cotizaciones): documento de EMPRESA, no de un empleado. Va a
     // su propio sitio y NO pasa por la lectura con IA de nóminas.
@@ -81,11 +94,11 @@ export async function POST(req: Request, ctx: { params: Promise<{ token: string 
       // de agosto llega el TC1 de julio, porque la Seguridad Social se liquida a
       // mes vencido.
       const periodoCotizacion = (fd.get("periodoCotizacion") as string | null) ?? null;
-      const guardado = await guardarTc1Gestoria(admin, res.row, tc1, periodoCotizacion);
+      const guardado = await guardarTc1Gestoria(admin, res.row, periodo, tc1, periodoCotizacion);
       if (!guardado.ok) {
         return NextResponse.json({ ok: false, error: guardado.error }, { status: guardado.status });
       }
-      const cuadre = await cuadrarTc1ConNominas(admin, res.row.empresa_id, res.row.periodo);
+      const cuadre = await cuadrarTc1ConNominas(admin, res.row.empresa_id, periodo);
       return NextResponse.json({
         ok: true,
         documento: "tc1",
@@ -97,7 +110,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ token: string 
     const file = fd.get("archivo") as File | null;
     if (!file) return NextResponse.json({ ok: false, error: "Adjunta las nóminas" }, { status: 400 });
 
-    const result = await procesarSubidaNominasGestoria(admin, res.row, file);
+    const result = await procesarSubidaNominasGestoria(admin, res.row, periodo, file);
     if (!result.ok) return NextResponse.json({ ok: false, error: result.error }, { status: result.status });
 
     const r = result.resultado;
@@ -114,7 +127,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ token: string 
       // El archivo tiene errores → NO se ha subido NADA; hay que corregir y resubir.
       rechazadoTodo: r.rechazadoTodo,
       // Cuadre TC1 ↔ nóminas: null mientras no esté el TC1.
-      cuadre: await cuadrarTc1ConNominas(admin, res.row.empresa_id, res.row.periodo),
+      cuadre: await cuadrarTc1ConNominas(admin, res.row.empresa_id, periodo),
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Error desconocido";

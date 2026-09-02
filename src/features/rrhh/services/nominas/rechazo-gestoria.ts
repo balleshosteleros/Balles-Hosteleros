@@ -22,7 +22,7 @@ import { emitirNotificacion } from "@/features/notificaciones/actions/notificaci
 import { BUCKET_NOMINAS } from "@/features/rrhh/services/nominas/procesar-nominas";
 import {
   correoGestoriaEmpresa,
-  crearTokenNominasGestoria,
+  obtenerOCrearTokenPermanente,
   nombreMes,
   urlSubidaNominas,
 } from "@/features/rrhh/services/nominas/nominas-gestoria";
@@ -173,9 +173,10 @@ async function avisarGestoriaRechazo(
   const { to, cc } = await correoGestoriaEmpresa(admin, empresaId);
   if (!to) return { enviado: false, destino: null, enlace: null };
 
-  // Enlace NUEVO: el anterior pudo quedar cerrado al cuadrar la entrega. Se
-  // regenera para que la gestoría pueda subir de cero sin pedir nada.
-  const tk = await crearTokenNominasGestoria(admin, empresaId, periodo);
+  // El enlace de siempre: es permanente y no hace falta regenerarlo. Al
+  // devolver el mes, `confirmado_en` vuelve a null y ese mes queda otra vez
+  // elegible en el desplegable del portal.
+  const tk = await obtenerOCrearTokenPermanente(admin, empresaId);
   const enlace = tk.ok ? urlSubidaNominas(tk.token) : null;
 
   const mes = nombreMes(periodo);
@@ -194,7 +195,8 @@ async function avisarGestoriaRechazo(
            Volver a subir las nóminas
          </a>
          <p style="color:#888;font-size:12px;margin-top:8px">
-           Subid de nuevo <b>todas</b> las nóminas del mes y sus TC1, ya corregidos.
+           Elegid <b>${mes}</b> en el desplegable y subid de nuevo <b>todas</b> las
+           nóminas de ese mes y sus TC1, ya corregidos.
            Lo anterior se ha eliminado del sistema.
          </p>
        </div>`

@@ -33,6 +33,8 @@ import {
   type ResultadoProceso,
 } from "@/features/rrhh/services/nominas/procesar-nominas";
 import { mesAnterior, esPeriodoValido } from "@/features/rrhh/lib/nominas-periodos";
+import { getZonaHorariaEmpresa } from "@/features/empresa/lib/empresa-server";
+import { hoyEnZona } from "@/features/empresa/lib/zona-horaria";
 
 const MESES = [
   "enero", "febrero", "marzo", "abril", "mayo", "junio",
@@ -99,66 +101,87 @@ export function urlSubidaNominas(token: string): string {
 }
 
 /**
- * Crea (o regenera) el token de subida de nóminas de una empresa para un mes y
- * devuelve el token en claro (para el correo). Un único enlace vigente por
- * empresa+mes (upsert por la restricción única). Caduca al final del mes
- * siguiente para dar margen a la gestoría.
+ * Devuelve el enlace PERMANENTE de subida de nóminas de una empresa, creándolo
+ * la primera vez. Siempre el mismo: no lleva el mes dentro y no caduca.
+ *
+ * A diferencia del anterior `crearTokenNominasGestoria`, NO regenera nada si ya
+ * existe. Aquel generaba un token nuevo en cada aviso y pisaba el anterior, y de
+ * ahí venía el fallo que dejó a HABANA con un enlace de julio en el correo de
+ * agosto. Para rotarlo a propósito está `regenerarTokenNominasGestoria`.
  */
-export async function crearTokenNominasGestoria(
+export async function obtenerOCrearTokenPermanente(
   admin: SupabaseClient,
   empresaId: string,
-  periodo: string,
-  /** Días de vigencia. Si no se indica: hasta el día 15 del mes siguiente. */
-  opts?: { diasVigencia?: number },
 ): Promise<{ ok: true; token: string } | { ok: false; error: string }> {
   try {
-    // Ojo: cada llamada genera un token NUEVO y pisa el anterior (upsert por
-    // empresa+periodo). Por eso el RECORDATORIO no llama aquí: reutiliza el
-    // enlace ya enviado (`reenviarSolicitudNominasGestoria`), para que la
-    // gestoría pueda usar indistintamente el primer correo o el segundo.
-    const token = generarToken();
-    const tokenHash = hashToken(token);
-    // CADUCIDAD: día 15 del mes SIGUIENTE al periodo.
-    //
-    // El enlace no pide credenciales — quien tenga la dirección puede subir —, así
-    // que cuanto menos tiempo viva, mejor. Con el aviso el día 28 y el
-    // recordatorio a los 4 días, quedan ~18 días de margen: de sobra para una
-    // entrega normal, y el enlace no se queda vivo un mes entero.
-    // Antes caducaba al final del mes siguiente (~33 días).
-    const [y, m] = periodo.split("-").map(Number);
-    const expira = opts?.diasVigencia
-      ? new Date(Date.now() + opts.diasVigencia * 86400000).toISOString()
-      : new Date(Date.UTC(y, m, 15, 23, 59, 59)).toISOString();
-
-    const { error } = await admin
+    const { data } = await admin
       .from("nominas_gestoria_tokens")
-      .upsert(
-        {
-          empresa_id: empresaId, periodo, token_hash: tokenHash, token_plano: token,
-          expira_en: expira, enviado_en: new Date().toISOString(),
-          // Un aviso nuevo reabre el enlace y reinicia el recordatorio.
-          cerrado_en: null, recordatorio_enviado_en: null,
-        },
-        { onConflict: "empresa_id,periodo" },
-      );
-    if (error) return { ok: false, error: error.message };
-    return { ok: true, token };
+      .select("token_plano")
+      .eq("empresa_id", empresaId)
+      .is("periodo", null)
+      .maybeSingle();
+    // `token_plano` se guarda en claro a propósito: es lo que permite reenviar
+    // SIEMPRE el mismo enlace en cada recordatorio.
+    if (data?.token_plano) return { ok: true, token: data.token_plano as string };
+
+    return await regenerarTokenNominasGestoria(admin, empresaId);
   } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : "Error creando token de nóminas" };
+    return { ok: false, error: err instanceof Error ? err.message : "Error obteniendo el enlace de nóminas" };
   }
 }
 
 /**
- * Resuelve un token de subida de nóminas. Se puede abrir varias veces (el
- * recordatorio manda el MISMO enlace), pero deja de admitir subidas en cuanto se
- * reciben las nóminas: entonces queda CERRADO.
+ * Genera un enlace permanente NUEVO para la empresa y descarta el anterior.
+ * Es la vía de rotación: si el enlace se filtra o cambia la gestoría, se rota y
+ * el viejo deja de valer al instante.
+ */
+export async function regenerarTokenNominasGestoria(
+  admin: SupabaseClient,
+  empresaId: string,
+): Promise<{ ok: true; token: string } | { ok: false; error: string }> {
+  try {
+    const token = generarToken();
+    const tokenHash = hashToken(token);
+    const { data: existente } = await admin
+      .from("nominas_gestoria_tokens")
+      .select("id")
+      .eq("empresa_id", empresaId)
+      .is("periodo", null)
+      .maybeSingle();
+
+    const fila = {
+      empresa_id: empresaId,
+      periodo: null,
+      token_hash: tokenHash,
+      token_plano: token,
+      expira_en: null,
+      cerrado_en: null,
+      enviado_en: new Date().toISOString(),
+      recordatorio_enviado_en: null,
+    };
+    const { error } = existente?.id
+      ? await admin.from("nominas_gestoria_tokens").update(fila).eq("id", existente.id as string)
+      : await admin.from("nominas_gestoria_tokens").insert(fila);
+    if (error) return { ok: false, error: error.message };
+    return { ok: true, token };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Error creando el enlace de nóminas" };
+  }
+}
+
+/**
+ * Resuelve el enlace de la gestoría. El enlace identifica SOLO a la empresa: el
+ * mes lo elige la gestoría dentro y se valida en cada subida.
+ *
+ * `expira_en` y `cerrado_en` solo aplican a enlaces antiguos (los que llevaban
+ * el mes dentro) y a la revocación manual desde Ajustes.
  */
 export async function resolverTokenNominasGestoria(
   admin: SupabaseClient,
   token: string,
 ): Promise<
-  | { ok: true; row: { id: string; empresa_id: string; periodo: string } }
-  | { ok: false; reason: "not_found" | "expired" | "cerrado" }
+  | { ok: true; row: { id: string; empresa_id: string } }
+  | { ok: false; reason: "not_found" | "expired" | "revocado" }
 > {
   const tokenHash = hashToken(token);
   const { data } = await admin
@@ -168,15 +191,15 @@ export async function resolverTokenNominasGestoria(
     .maybeSingle();
   if (!data) return { ok: false, reason: "not_found" };
   if (!compararToken(token, data.token_hash as string)) return { ok: false, reason: "not_found" };
-  if (new Date(data.expira_en as string).getTime() < Date.now()) return { ok: false, reason: "expired" };
-  if (data.cerrado_en) return { ok: false, reason: "cerrado" };
-  return {
-    ok: true,
-    row: { id: data.id as string, empresa_id: data.empresa_id as string, periodo: data.periodo as string },
-  };
+  if (data.cerrado_en) return { ok: false, reason: "revocado" };
+  // Enlace antiguo atado a un mes: caduca como siempre. Los permanentes tienen
+  // `expira_en` a null y no entran aquí.
+  const expira = data.expira_en as string | null;
+  if (expira && new Date(expira).getTime() < Date.now()) return { ok: false, reason: "expired" };
+  return { ok: true, row: { id: data.id as string, empresa_id: data.empresa_id as string } };
 }
 
-/** Cierra el enlace: las nóminas ya se recibieron y no se admite nada más. */
+/** Revoca el enlace de la empresa: deja de valer de inmediato. */
 export async function cerrarTokenNominasGestoria(
   admin: SupabaseClient,
   tokenId: string,
@@ -214,8 +237,7 @@ export async function enviarSolicitudNominasGestoria(
   admin: SupabaseClient,
   empresaId: string,
   periodo: string,
-  /** `diasVigencia`: caducidad a medida (envío manual). Por defecto, día 15. */
-  opts?: { diasVigencia?: number },
+  // El correo anuncia el MES del que se piden las nóminas; el enlace es el mismo siempre.
 ): Promise<{ ok: boolean; error?: string }> {
   const { data: emp } = await admin
     .from("empresas")
@@ -231,7 +253,9 @@ export async function enviarSolicitudNominasGestoria(
   if (!to) return { ok: false, error: "Falta el correo de la gestoría" };
   const empresaNombre = (emp.nombre as string) ?? "la empresa";
 
-  const tk = await crearTokenNominasGestoria(admin, empresaId, periodo, opts);
+  // SIEMPRE el mismo enlace: no se regenera en cada aviso (era lo que dejaba a
+  // la gestoria con un enlace apuntando al mes equivocado).
+  const tk = await obtenerOCrearTokenPermanente(admin, empresaId);
   if (!tk.ok) return { ok: false, error: tk.error };
 
   const boton = botonSubidaNominasHtml(tk.token);
@@ -241,9 +265,12 @@ export async function enviarSolicitudNominasGestoria(
   const html = `
     <p>Hola,</p>
     <p>Ya podéis subir las <b>nóminas de ${mes}</b> de ${empresaNombre}.</p>
-    <p>Pulsad el botón para adjuntarlas. Podéis subir <b>un único PDF con todas las nóminas</b>
-    (una por página) o varios archivos sueltos. Se leen y vuelcan automáticamente al sistema.</p>
+    <p>Pulsad el botón, <b>elegid ${mes}</b> en el desplegable y adjuntadlas. Podéis subir
+    <b>un único PDF con todas las nóminas</b> (una por página) o varios archivos sueltos, y
+    en <b>varias veces</b> si os viene mejor. Se leen y vuelcan automáticamente al sistema.</p>
     ${boton}
+    <p style="color:#555;font-size:13px">Este enlace es el <b>mismo siempre</b> y no caduca:
+    guardadlo. Dentro elegís el mes de las nóminas y, aparte, el de los seguros sociales.</p>
     <p style="color:#888;font-size:12px">Enviado automáticamente desde el sistema de ${empresaNombre}.</p>`;
   const text = `Ya podéis subir las nóminas de ${mes} de ${empresaNombre}. Súbelas aquí: ${enlace}`;
 
@@ -253,9 +280,9 @@ export async function enviarSolicitudNominasGestoria(
 }
 
 /**
- * RECORDATORIO: reclama las nóminas que no han llegado, con el MISMO enlace del
- * aviso original (no se genera otro, para que valgan los dos correos). Solo tiene
- * sentido si el enlace sigue abierto: si ya subieron, no se molesta a nadie.
+ * RECORDATORIO: reclama las nóminas de un mes que no han llegado. Manda el
+ * enlace permanente de la empresa. Si ese MES ya tiene nóminas o RRHH lo
+ * confirmó, no se molesta a nadie.
  */
 export async function recordarSolicitudNominasGestoria(
   admin: SupabaseClient,
@@ -272,15 +299,26 @@ export async function recordarSolicitudNominasGestoria(
   if (!to) return { ok: false, error: "Falta el correo de la gestoría" };
   const empresaNombre = (emp?.nombre as string) ?? "la empresa";
 
-  // El token del aviso original. No se regenera: sería otro enlace distinto.
+  // El enlace permanente de la empresa: el mismo de siempre.
   const { data: tk } = await admin
     .from("nominas_gestoria_tokens")
-    .select("id, token_plano, cerrado_en, expira_en")
+    .select("id, token_plano, cerrado_en")
     .eq("empresa_id", empresaId)
-    .eq("periodo", periodo)
+    .is("periodo", null)
     .maybeSingle();
   if (!tk) return { ok: true, omitido: "sin_token" };
-  if (tk.cerrado_en) return { ok: true, omitido: "ya_subido" };
+  if (tk.cerrado_en) return { ok: true, omitido: "sin_token" };
+
+  // "Ya subido" ya no lo dice el enlace (es permanente): lo dice el MES. Si ese
+  // mes ya tiene nominas o RRHH lo confirmo, no hay nada que recordar.
+  const yaEntregado = await mesCerradoParaNominas(admin, empresaId, periodo);
+  if (yaEntregado) return { ok: true, omitido: "ya_subido" };
+  const { count: yaHay } = await admin
+    .from("rrhh_pagos_nominas")
+    .select("id", { count: "exact", head: true })
+    .eq("empresa_id", empresaId)
+    .eq("periodo", periodo);
+  if ((yaHay ?? 0) > 0) return { ok: true, omitido: "ya_subido" };
 
   const token = tk.token_plano as string | null;
   if (!token) return { ok: true, omitido: "sin_token" };
@@ -292,7 +330,7 @@ export async function recordarSolicitudNominasGestoria(
   const html = `
     <p>Hola,</p>
     <p>Os recordamos que todavía <b>no hemos recibido las nóminas de ${mes}</b> de ${empresaNombre}.</p>
-    <p>Podéis subirlas con <b>el mismo enlace</b> que os enviamos:</p>
+    <p>Podéis subirlas con <b>el mismo enlace</b> de siempre, eligiendo <b>${mes}</b> en el desplegable:</p>
     ${boton}
     <p>Si ya las habéis enviado por otra vía, avisadnos y no hace falta que hagáis nada.</p>
     <p style="color:#888;font-size:12px">Enviado automáticamente desde el sistema de ${empresaNombre}.</p>`;
@@ -319,6 +357,102 @@ export async function recordarSolicitudNominasGestoria(
  * para no pisar los anteriores y respeta los pagos con liquidación ya enviada
  * (ver `procesar-nominas.ts`). Quien cierra el mes es RRHH al confirmarlo.
  */
+/**
+ * Mes en curso EN LA ZONA DE LA EMPRESA ('AAAA-MM'). Nunca con la hora del
+ * servidor: a fin de mes la diferencia horaria cambiaría el mes.
+ */
+export async function mesActualEmpresa(admin: SupabaseClient, empresaId: string): Promise<string> {
+  const tz = await getZonaHorariaEmpresa(admin, empresaId);
+  return hoyEnZona(tz).slice(0, 7);
+}
+
+/** Un mes tal y como lo ve la gestoría en el desplegable. */
+export interface EstadoMesNominas {
+  periodo: string;
+  /** RRHH lo confirmó: inmutable, no admite subidas. */
+  cerrado: boolean;
+  /** Ya tiene nóminas, pero sigue abierto: puede añadir más tandas. */
+  tieneNominas: boolean;
+  /** RRHH lo devolvió para corregir. */
+  rechazado: boolean;
+}
+
+/** Cuántos meses hacia atrás puede elegir la gestoría. */
+export const MESES_ELEGIBLES_NOMINAS = 18;
+
+/**
+ * Los últimos meses ya terminados y en qué estado está cada uno. Alimenta el
+ * desplegable del portal: sin esto la gestoría elegiría el mes a ciegas.
+ */
+export async function estadoMesesNominas(
+  admin: SupabaseClient,
+  empresaId: string,
+  mesActual: string,
+  n: number = MESES_ELEGIBLES_NOMINAS,
+): Promise<EstadoMesNominas[]> {
+  // Se empieza en el mes ANTERIOR al actual: un mes sin terminar no tiene nóminas.
+  const periodos: string[] = [];
+  let p = mesAnterior(mesActual);
+  for (let i = 0; i < n; i++) {
+    periodos.push(p);
+    p = mesAnterior(p);
+  }
+
+  const [mesesRes, nominasRes] = await Promise.all([
+    admin
+      .from("rrhh_nominas_mes")
+      .select("periodo, confirmado_en, rechazado_en")
+      .eq("empresa_id", empresaId)
+      .in("periodo", periodos),
+    admin
+      .from("rrhh_pagos_nominas")
+      .select("periodo")
+      .eq("empresa_id", empresaId)
+      .in("periodo", periodos),
+  ]);
+
+  const porMes = new Map<string, { confirmado: boolean; rechazado: boolean }>();
+  for (const m of mesesRes.data ?? []) {
+    porMes.set(m.periodo as string, {
+      confirmado: !!m.confirmado_en,
+      rechazado: !!m.rechazado_en,
+    });
+  }
+  const conNominas = new Set((nominasRes.data ?? []).map((r) => r.periodo as string));
+
+  return periodos.map((periodo) => ({
+    periodo,
+    cerrado: porMes.get(periodo)?.confirmado ?? false,
+    rechazado: porMes.get(periodo)?.rechazado ?? false,
+    tieneNominas: conNominas.has(periodo),
+  }));
+}
+
+/**
+ * Valida el mes que manda la gestoría. Con enlace permanente el mes lo elige
+ * ella, así que ESTA es la única barrera: el token ya no acota nada.
+ */
+export async function validarPeriodoSubida(
+  admin: SupabaseClient,
+  empresaId: string,
+  periodo: string,
+  mesActual: string,
+): Promise<{ ok: false; error: string; status: number } | null> {
+  if (!periodo) return { ok: false, error: "Elige el mes al que corresponden.", status: 400 };
+  if (!esPeriodoValido(periodo)) return { ok: false, error: "Mes no válido.", status: 400 };
+  if (periodo >= mesActual) {
+    return { ok: false, error: "Ese mes todavía no ha terminado.", status: 400 };
+  }
+  // Un enlace que no caduca no debe poder escribir en cualquier mes de la
+  // historia: se acota a la misma ventana que ofrece el desplegable.
+  let limite = mesAnterior(mesActual);
+  for (let i = 1; i < MESES_ELEGIBLES_NOMINAS; i++) limite = mesAnterior(limite);
+  if (periodo < limite) {
+    return { ok: false, error: "Ese mes es demasiado antiguo. Avisa a la empresa.", status: 400 };
+  }
+  return await mesCerradoParaNominas(admin, empresaId, periodo);
+}
+
 async function mesCerradoParaNominas(
   admin: SupabaseClient,
   empresaId: string,
@@ -333,7 +467,7 @@ async function mesCerradoParaNominas(
   if (mesRow?.confirmado_en) {
     return {
       ok: false,
-      error: `Las nóminas de ${nombreMes(periodo)} ya están cerradas por la empresa: este mes no admite más subidas.`,
+      error: `Las nóminas de ${nombreMes(periodo)} ya están subidas y cerradas: no se pueden volver a subir.`,
       status: 409,
     };
   }
@@ -349,7 +483,8 @@ async function mesCerradoParaNominas(
  */
 export async function procesarSubidaNominasGestoria(
   admin: SupabaseClient,
-  row: { id: string; empresa_id: string; periodo: string },
+  row: { id: string; empresa_id: string },
+  periodo: string,
   file: File,
 ): Promise<{ ok: true; resultado: ResultadoProceso } | { ok: false; error: string; status: number }> {
   if (!file || file.size === 0) return { ok: false, error: "Adjunta la nómina", status: 400 };
@@ -368,7 +503,7 @@ export async function procesarSubidaNominasGestoria(
 
   // Un mes solo admite UNA entrega de nóminas. Se comprueba ANTES de leer con IA:
   // no tiene sentido gastar la lectura de un archivo que no se va a guardar.
-  const bloqueo = await mesCerradoParaNominas(admin, row.empresa_id, row.periodo);
+  const bloqueo = await mesCerradoParaNominas(admin, row.empresa_id, periodo);
   if (bloqueo) return bloqueo;
 
   const buffer = Buffer.from(await file.arrayBuffer());
@@ -389,7 +524,7 @@ export async function procesarSubidaNominasGestoria(
 
   // Nota: si el mes estaba DEVUELTO a la gestoría, `procesarNominasConAdmin` lo
   // devuelve a BORRADOR por su cuenta (es el punto común de las dos vías de subida).
-  const resultado = await procesarNominasConAdmin(admin, row.empresa_id, nominas, row.periodo);
+  const resultado = await procesarNominasConAdmin(admin, row.empresa_id, nominas, periodo);
 
   // Registrar la subida en el token (trazabilidad + contador). El enlace NO se
   // cierra aquí: hacen falta LOS DOS documentos (nóminas + TC1), y el TC1 puede
@@ -404,20 +539,19 @@ export async function procesarSubidaNominasGestoria(
 
   // ¿Están ya los dos? Entonces se cuadra y se cierra.
   if (resultado.guardadas > 0 && !resultado.rechazadoTodo) {
-    await cerrarSiEstanLosDosDocumentos(admin, row);
   }
 
   // Histórico del documento subido (auditoría por empresa/mes).
   await registrarSubidaHistorico(admin, {
     empresaId: row.empresa_id,
-    periodo: row.periodo,
+    periodo: periodo,
     origen: "gestoria",
     archivoNombre: file.name,
     archivoBytes: file.size,
     resultado,
   });
 
-  await avisarRrhhNominasSubidas(admin, row.empresa_id, row.periodo, resultado);
+  await avisarRrhhNominasSubidas(admin, row.empresa_id, periodo, resultado);
 
   return { ok: true, resultado };
 }
@@ -555,7 +689,8 @@ async function avisarRrhhNominasSubidas(
  */
 export async function guardarTc1Gestoria(
   admin: SupabaseClient,
-  row: { id: string; empresa_id: string; periodo: string },
+  row: { id: string; empresa_id: string },
+  periodo: string,
   file: File,
   /**
    * Mes que se está COTIZANDO en este recibo, elegido por la gestoría. Con las
@@ -580,14 +715,14 @@ export async function guardarTc1Gestoria(
   // la entrega, que es la regla de siempre (Seguridad Social a mes vencido).
   const mesCotizado = esPeriodoValido(periodoCotizacion)
     ? (periodoCotizacion as string)
-    : mesAnterior(row.periodo);
+    : mesAnterior(periodo);
 
   // El mes ya confirmado por RRHH es inmutable: tampoco se le cambia el TC1.
   const { data: mesRow } = await admin
     .from("rrhh_nominas_mes")
     .select("confirmado_en")
     .eq("empresa_id", row.empresa_id)
-    .eq("periodo", row.periodo)
+    .eq("periodo", periodo)
     .maybeSingle();
   if (mesRow?.confirmado_en) {
     return { ok: false, error: "Las nóminas de este mes ya están cerradas por la empresa.", status: 409 };
@@ -599,7 +734,7 @@ export async function guardarTc1Gestoria(
   // un nombre fijo el segundo pisaba al primero. Re-subir el MISMO documento cae
   // en el mismo path, así que tampoco se cuenta dos veces.
   const sha256 = createHash("sha256").update(buffer).digest("hex");
-  const path = `${row.empresa_id}/${row.periodo}/TC1-${sha256.slice(0, 12)}.${ext}`;
+  const path = `${row.empresa_id}/${periodo}/TC1-${sha256.slice(0, 12)}.${ext}`;
   const up = await admin.storage
     .from(BUCKET_NOMINAS)
     .upload(path, buffer, { upsert: true, contentType: file.type });
@@ -613,7 +748,7 @@ export async function guardarTc1Gestoria(
   const { error } = await admin.from("rrhh_nominas_tc1").upsert(
     {
       empresa_id: row.empresa_id,
-      periodo: row.periodo,
+      periodo: periodo,
       path,
       nombre: file.name,
       importe: datos.liquidoTotal,
@@ -629,7 +764,6 @@ export async function guardarTc1Gestoria(
   if (error) return { ok: false, error: error.message, status: 500 };
 
   // Si las nóminas ya estaban, con el TC1 se completa el envío: se cierra.
-  await cerrarSiEstanLosDosDocumentos(admin, row);
   return { ok: true, periodoCotizacion: mesCotizado };
 }
 
@@ -804,38 +938,3 @@ export async function cuadrarTc1ConNominas(
   };
 }
 
-/**
- * Cierra el enlace SOLO cuando la entrega está COMPLETA y CORRECTA:
- *   1) están los dos documentos (nóminas + TC1), y
- *   2) los importes CUADRAN al céntimo.
- *
- * Si no cuadran, el enlace se deja ABIERTO a propósito: es lo que permite a la
- * gestoría corregir y volver a subir sin pedir un enlace nuevo.
- */
-async function cerrarSiEstanLosDosDocumentos(
-  admin: SupabaseClient,
-  row: { id: string; empresa_id: string; periodo: string },
-): Promise<void> {
-  const { count: numTc1 } = await admin
-    .from("rrhh_nominas_tc1")
-    .select("id", { count: "exact", head: true })
-    .eq("empresa_id", row.empresa_id)
-    .eq("periodo", row.periodo);
-  if (!numTc1) return; // falta el TC1: el enlace sigue abierto
-
-  const { count } = await admin
-    .from("rrhh_pagos_nominas")
-    .select("id", { count: "exact", head: true })
-    .eq("empresa_id", row.empresa_id)
-    .eq("periodo", row.periodo);
-  if (!count) return; // faltan las nóminas
-
-  const cuadre = await cuadrarTc1ConNominas(admin, row.empresa_id, row.periodo);
-  if (!cuadre.cuadra) return; // descuadre: abierto para que lo corrijan
-
-  // Un recibo cuyas nóminas todavía no están NO se ha podido comprobar: cerrar
-  // aquí daría por buena una entrega sin contrastar. Se deja abierto.
-  if (cuadre.mesesSinNominas.length > 0) return;
-
-  await cerrarTokenNominasGestoria(admin, row.id);
-}
