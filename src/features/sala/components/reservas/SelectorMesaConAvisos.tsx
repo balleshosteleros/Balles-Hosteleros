@@ -101,7 +101,14 @@ export function SelectorMesaConAvisos({
         {(permitirSinMesa || !value) && <option value="">{placeholder}</option>}
         {mesas.map((m) => {
           const estado = estadoPorMesa.get(m.id) ?? { ocupada: false, aforo: null };
-          const tag = etiquetaEstado?.(m) ?? "";
+          // La etiqueta de la vista ("Libre", "Sentada"…) describe el TURNO
+          // entero, mientras que el ⏰ mira solo la franja que se está
+          // reservando. Cuando la mesa está ocupada en esa franja, decir
+          // "Libre" contradice al icono de al lado: se pone "Reservada", que
+          // es lo que de verdad pasa a esa hora.
+          const etiqueta = etiquetaEstado?.(m) ?? "";
+          const tag =
+            estado.ocupada && etiqueta === "Libre" ? "Reservada" : etiqueta;
           return (
             <option key={m.id} value={m.id}>
               {iconosMesa(estado)} {m.codigo} · {m.capacidad}p{tag ? ` · ${tag}` : ""}

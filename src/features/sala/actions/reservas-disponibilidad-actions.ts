@@ -225,7 +225,7 @@ export async function getDisponibilidadTurno(input: {
     if (errMesas) throw errMesas;
 
     const zonaFiltro = (input.zona ?? "").trim().toUpperCase();
-    const mesasZona = (mesasRows ?? [])
+    const mesasDelLocal = (mesasRows ?? [])
       .map((m) => {
         const z = m.zonas as unknown as { nombre?: string } | { nombre?: string }[] | null;
         const nombre = Array.isArray(z) ? (z[0]?.nombre ?? "") : (z?.nombre ?? "");
@@ -239,7 +239,11 @@ export async function getDisponibilidadTurno(input: {
           capaz: min <= input.personas && max >= input.personas,
         };
       })
-      .filter((m) => m.codigo && (!zonaFiltro || m.zona === zonaFiltro));
+      .filter((m) => m.codigo);
+
+    const mesasZona = mesasDelLocal.filter(
+      (m) => !zonaFiltro || m.zona === zonaFiltro,
+    );
 
     const capaces = mesasZona.filter((m) => m.capaz);
 
@@ -325,6 +329,17 @@ export async function getDisponibilidadTurno(input: {
     const { data: reservasRows, error: errRes } = await resQuery;
     if (errRes) throw errRes;
 
+    // Códigos de mesa que existen EN ESTE LOCAL.
+    //
+    // `reservas` no guarda el local: solo el CÓDIGO de la mesa como texto. Y el
+    // mismo código se repite entre locales (hay un "R1" en el restaurante y
+    // otro "R1" en la coctelería), así que una reserva del R1 de otro local
+    // marcaba ocupado el R1 de este y el diálogo avisaba de que se iba a pisar
+    // una reserva que aquí no existe. Solo cuentan las mesas de este local.
+    const codigosDeEsteLocal = new Set(
+      mesasDelLocal.map((m) => m.codigo.toUpperCase()),
+    );
+
     // Una reserva sobre una unión guarda "M1+M2": ocupa AMBAS mesas por
     // separado, así que se indexa por cada mesa física implicada.
     const ocupacionesPorCodigo = new Map<string, Ocupacion[]>();
@@ -354,6 +369,8 @@ export async function getDisponibilidadTurno(input: {
       for (const parte of codigoRaw.split("+")) {
         const key = parte.trim().toUpperCase();
         if (!key) continue;
+        // Mesa de otro local con el mismo código: no ocupa nada de aquí.
+        if (!codigosDeEsteLocal.has(key)) continue;
         const arr = ocupacionesPorCodigo.get(key);
         if (arr) arr.push(ocupacion);
         else ocupacionesPorCodigo.set(key, [ocupacion]);

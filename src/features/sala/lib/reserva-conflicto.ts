@@ -133,6 +133,12 @@ export async function buscarConflictoMesa(
     mesa: string;
     duracionMin: number;
     ignoreReservaId?: string | null;
+    /**
+     * Local de la mesa. `reservas` solo guarda el CÓDIGO ("R1") como texto, y
+     * ese código se repite entre locales de la misma empresa, así que sin esto
+     * una reserva del "R1" de otro local bloqueaba el "R1" de este.
+     */
+    localId?: string | null;
   },
 ): Promise<{ hora: string; clienteNombre: string | null } | null> {
   // Una reserva sobre una unión se graba como "M1+M2", así que comparar la
@@ -162,9 +168,28 @@ export async function buscarConflictoMesa(
     throw error;
   }
 
+  // Códigos que de verdad existen en este local: descarta las mesas homónimas
+  // de otros locales, que no ocupan nada aquí.
+  let codigosLocal: Set<string> | null = null;
+  if (args.localId) {
+    const { data: mesasRows } = await supabase
+      .from("mesas")
+      .select("codigo")
+      .eq("local_id", args.localId);
+    codigosLocal = new Set(
+      (mesasRows ?? [])
+        .map((m) => ((m.codigo as string | null) ?? "").trim().toUpperCase())
+        .filter(Boolean),
+    );
+  }
+
   for (const r of data ?? []) {
     const mesaOtra = (r.mesa as string | null) ?? "";
-    const mesasOtra = mesaOtra.split("+").map((m) => m.trim().toUpperCase()).filter(Boolean);
+    const mesasOtra = mesaOtra
+      .split("+")
+      .map((m) => m.trim().toUpperCase())
+      .filter(Boolean)
+      .filter((m) => !codigosLocal || codigosLocal.has(m));
     if (!mesasOtra.some((m) => mesasPedidas.has(m))) continue;
 
     const otraHora = (r.hora as string) ?? "";
