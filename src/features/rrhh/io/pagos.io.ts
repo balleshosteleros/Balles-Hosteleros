@@ -20,6 +20,7 @@ const pagoSchema = z.object({
   ssEmpresa: z.number(),
   total: z.number(),
   pagado: z.boolean(),
+  comentario: z.string().nullable(),
 });
 
 const schema = pagoSchema as unknown as RowSchema<PagoEmpleado>;
@@ -48,6 +49,7 @@ export const pagosIO: ModuleIO<PagoEmpleado> = {
     { key: "ssEmpresa", label: "SS Empresa", type: "number" },
     { key: "total", label: "Total", type: "number" },
     { key: "pagado", label: "Pagado", type: "boolean" },
+    { key: "comentario", label: "Comentario" },
     { key: "empleadoId", label: "ID Empleado", hideInImport: true },
   ],
   // El informe exporta el mes seleccionado en la vista: PagosView pasa

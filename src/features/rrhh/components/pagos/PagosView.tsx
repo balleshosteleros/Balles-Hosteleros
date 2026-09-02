@@ -55,6 +55,8 @@ import { Button } from "@/components/ui/button";
 import { NumberInput } from "@/shared/components/NumberInput";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { capitalizeText } from "@/shared/lib/utils";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Edit2, Banknote, Settings, Send, Lock, Unlock, CheckCircle2, Clock, Upload, ReceiptText, AlertTriangle, FileText, ShieldCheck, X, Undo2, Download, Loader2 } from "lucide-react";
 import {
@@ -186,6 +188,7 @@ function fromGuardado(
     ajuste: g.ajuste,
     horasExtras: g.horasExtras,
     bonus: g.bonus,
+    comentario: g.comentario,
     ssEmpleado: g.ssEmpleado,
     ssEmpresa: g.ssEmpresa,
     irpf: g.irpf,
@@ -211,6 +214,7 @@ function toGuardado(p: PagoEmpleado): PagoGuardado {
     ajuste: p.ajuste,
     horasExtras: p.horasExtras,
     bonus: p.bonus,
+    comentario: p.comentario,
     ssEmpleado: p.ssEmpleado,
     ssEmpresa: p.ssEmpresa,
     irpf: p.irpf,
@@ -246,6 +250,7 @@ function nuevoPagoVacio(
     ajuste: 0,
     horasExtras: 0,
     bonus: 0,
+    comentario: null,
     ssEmpleado: 0,
     ssEmpresa: 0,
     irpf: 0,
@@ -1117,6 +1122,7 @@ export function PagosView() {
     { campo: "total", label: "Total" },
     { campo: "pagado", label: "Pagado" },
     { campo: "confirmacion", label: "Confirmación" },
+    { campo: "comentario", label: "Comentario" },
   ];
 
   // Nombres para el filtro de la columna Empleado (todos los del mes, no solo
@@ -1346,6 +1352,20 @@ export function PagosView() {
             </span>
           ) : p.confirmacionEnviadaAt ? (
             <Badge variant="secondary" className="gap-1 border-amber-300 bg-amber-50 text-[10px] text-amber-700"><Clock className="h-3 w-3" />Enviada</Badge>
+          ) : (
+            <span className="text-muted-foreground text-xs">—</span>
+          )}
+        </TableCell>
+      ),
+    },
+    // Nota libre de RRHH. Ultima columna de datos y sin fila de total: un texto
+    // no suma (cae en el fallback de `totalDefs`, como `puesto` o `area`).
+    comentario: {
+      th: th("comentario", "Comentario", "texto", "left", undefined, "min-w-[200px]"),
+      td: (p) => (
+        <TableCell key="comentario" className="max-w-[280px]">
+          {p.comentario ? (
+            <span className="block truncate text-xs" title={p.comentario}>{p.comentario}</span>
           ) : (
             <span className="text-muted-foreground text-xs">—</span>
           )}
@@ -2162,6 +2182,20 @@ function EditForm({ pago, onSave }: { pago: PagoEmpleado; onSave: (d: Partial<Pa
             <NumberInput value={form[c.key] as number} onValueChange={(v) => setForm((prev) => ({ ...prev, [c.key]: v }))} />
           </div>
         ))}
+      </div>
+
+      <div className="space-y-1">
+        <Label className="text-xs">Comentario</Label>
+        <Textarea
+          value={form.comentario ?? ""}
+          onChange={(e) => setForm((prev) => ({ ...prev, comentario: e.target.value || null }))}
+          onBlur={(e) => {
+            const t = e.target.value.trim();
+            setForm((prev) => ({ ...prev, comentario: t ? capitalizeText(t) : null }));
+          }}
+          placeholder="Nota interna sobre este pago (opcional)"
+          className="min-h-[60px] text-sm"
+        />
       </div>
 
       <div className="rounded-lg border bg-muted/40 p-3">

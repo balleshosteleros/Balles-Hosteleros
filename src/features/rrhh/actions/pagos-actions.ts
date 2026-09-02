@@ -15,6 +15,7 @@ import { getZonaHorariaEmpresa } from "@/features/empresa/lib/empresa-server";
 import { formatFechaEnZona } from "@/features/empresa/lib/zona-horaria";
 import type { DetalleNomina } from "@/features/rrhh/data/pagos";
 import { friendlyError } from "@/shared/lib/friendly-errors";
+import { capitalizeText } from "@/shared/lib/utils";
 
 const MESES_PAGOS = [
   "enero", "febrero", "marzo", "abril", "mayo", "junio",
@@ -141,6 +142,7 @@ export interface PagoGuardado {
   irpf: number;
   total: number;
   pagado: boolean;
+  comentario: string | null;
   nominaPath: string | null;
   numNominas: number; // nº de nóminas individuales de ese empleado/mes (para el badge)
   // Las nóminas individuales del mes (ordenadas). Cuando hay 2+, permite abrir el
@@ -171,13 +173,14 @@ type PagoDbRow = {
   irpf: number | string;
   total: number | string;
   pagado: boolean;
+  comentario: string | null;
   nomina_path: string | null;
   confirmacion_enviada_at: string | null;
   confirmacion_aceptada_at: string | null;
 };
 
 const PAGO_COLS =
-  "empleado_id, empleado_nombre, fijo, nomina, horas_reales, horas_trabajadas, complemento, ajuste, horas_extras, bonus, ss_empleado, ss_empresa, irpf, total, pagado, nomina_path, confirmacion_enviada_at, confirmacion_aceptada_at";
+  "empleado_id, empleado_nombre, fijo, nomina, horas_reales, horas_trabajadas, complemento, ajuste, horas_extras, bonus, ss_empleado, ss_empresa, irpf, total, pagado, comentario, nomina_path, confirmacion_enviada_at, confirmacion_aceptada_at";
 
 function dbToPago(r: PagoDbRow): PagoGuardado {
   return {
@@ -196,6 +199,7 @@ function dbToPago(r: PagoDbRow): PagoGuardado {
     irpf: Number(r.irpf),
     total: Number(r.total),
     pagado: r.pagado,
+    comentario: r.comentario ?? null,
     nominaPath: r.nomina_path,
     numNominas: 0,
     avisoInactivo: false,
@@ -296,6 +300,7 @@ export async function savePago(
         irpf: row.irpf,
         total: row.total,
         pagado: row.pagado,
+        comentario: row.comentario?.trim() ? capitalizeText(row.comentario.trim()) : null,
         created_by: userId,
       },
       { onConflict: "empresa_id,empleado_id,periodo" },
@@ -707,6 +712,7 @@ export async function loadPagosRango(
           ...p,
           // En agregado no aplican: son estados de UN mes concreto.
           pagado: false,
+          comentario: null,
           nominaPath: null,
           numNominas: 0,
           avisoInactivo: false,

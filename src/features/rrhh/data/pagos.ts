@@ -58,6 +58,9 @@ export interface PagoEmpleado {
   // acepto desde su app. ISO string o null.
   confirmacionEnviadaAt: string | null;
   confirmacionAceptadaAt: string | null;
+  // Nota libre escrita a mano. Informativa: NO entra en `calcularTotalPago` ni
+  // en ningun total del resumen.
+  comentario: string | null;
 }
 
 export interface ResumenPagos {
