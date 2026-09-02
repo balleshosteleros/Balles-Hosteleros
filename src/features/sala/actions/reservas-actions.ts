@@ -403,6 +403,7 @@ export async function createReserva(input: {
           hora: input.hora,
           mesa: mesaFinal,
           duracionMin,
+          localId: input.localId ?? null,
         },
       );
       if (conflicto) {
@@ -880,11 +881,17 @@ export async function updateReserva(
     // alguien de sala ya ha visto en pantalla a quién pisa y ha decidido que
     // se hace igual. Sin esa confirmación previa el bloqueo sigue en pie.
     if (tocaSlot && empresaId && !updates.forzarSolape) {
-      const { data: actual } = await supabase
-        .from("reservas")
-        .select("fecha, hora, mesa, duracion_minutos")
-        .eq("id", id)
-        .maybeSingle();
+      // Las dos lecturas van en paralelo: la duración por defecto de la empresa
+      // no depende de esta reserva, y encadenarlas doblaba la espera de un
+      // guardado que sala hace con clientes delante.
+      const [{ data: actual }, duracionDefault] = await Promise.all([
+        supabase
+          .from("reservas")
+          .select("fecha, hora, mesa, duracion_minutos")
+          .eq("id", id)
+          .maybeSingle(),
+        getDuracionReservaMin(supabase as unknown as SupabaseClient, empresaId),
+      ]);
       const fechaFinal = (dbUpdates.fecha as string | undefined) ?? (actual?.fecha as string | undefined) ?? null;
       const horaFinal  = (dbUpdates.hora  as string | undefined) ?? (actual?.hora  as string | undefined) ?? null;
       const mesaFinal  = (dbUpdates.mesa  as string | null | undefined) !== undefined
@@ -896,10 +903,6 @@ export async function updateReserva(
         ? (dbUpdates.duracion_minutos as number | null)
         : (actual?.duracion_minutos as number | null | undefined) ?? null;
       if (fechaFinal && horaFinal && mesaFinal) {
-        const duracionDefault = await getDuracionReservaMin(
-          supabase as unknown as SupabaseClient,
-          empresaId,
-        );
         const duracionMin = typeof overrideTrasUpdate === "number" && overrideTrasUpdate > 0
           ? overrideTrasUpdate
           : duracionDefault;
@@ -912,6 +915,7 @@ export async function updateReserva(
             mesa: mesaFinal,
             duracionMin,
             ignoreReservaId: id,
+            localId: updates.localId ?? null,
           },
         );
         if (conflicto) {

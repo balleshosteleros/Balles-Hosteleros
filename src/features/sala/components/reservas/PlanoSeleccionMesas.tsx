@@ -204,6 +204,11 @@ export function PlanoSeleccionMesas({
                 }
                 className={cn(
                   "absolute flex flex-col items-center justify-center overflow-hidden border-2 px-1 text-[11px] font-semibold transition-all cursor-pointer",
+                  // El foco del navegador se quedaba pegado tras pulsar: la
+                  // mesa seguía resaltada como si el ratón estuviera encima,
+                  // y con varias pulsadas no se distinguía cuál estaba elegida.
+                  // Se conserva el anillo SOLO para quien navega con teclado.
+                  "outline-none focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500",
                   // Borde rojo: misma norma visual que la mesa seleccionada en
                   // el plano de la vista de sala.
                   elegida

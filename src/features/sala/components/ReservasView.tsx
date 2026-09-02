@@ -4436,12 +4436,14 @@ export function ReservasView() {
     );
     setShowEditorMesas(false);
     setActividadVersion((v) => v + 1);
-    // Recarga completa: el servidor recalcula la zona a partir de la mesa, y el
-    // plano tiene que repintar tanto las mesas que se sueltan como las nuevas.
-    loadReservas(fecha);
     setSelectedReserva((prev) =>
       prev && prev.id === id ? { ...prev, mesaCodigo: codigoMesas } : prev,
     );
+    // La recarga del día NO se espera: el guardado ya está hecho y confirmado.
+    // Bloquear el diálogo hasta que vuelva el listado entero hacía que asignar
+    // una mesa pareciera lento con clientes esperando en la puerta. El servidor
+    // recalcula la zona y el plano se repinta en cuanto llegue.
+    void loadReservas(fecha);
   };
 
   const guardarDatosCliente = async (id: string) => {
