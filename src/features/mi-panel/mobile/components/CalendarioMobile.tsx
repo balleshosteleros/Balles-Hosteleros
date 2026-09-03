@@ -319,7 +319,7 @@ function DetalleDia({
           <p className="text-xs capitalize text-muted-foreground">{diaSemana}</p>
           {/* Fecha en día/mes/año, como en todo el software */}
           <p className="text-lg font-semibold leading-tight">
-            {dd}/{String(mm).padStart(2, "0")}/{yy}
+            {String(dd).padStart(2, "0")}/{String(mm).padStart(2, "0")}/{yy}
           </p>
         </div>
         <span className={cn("shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold text-white", est.punto)}>
