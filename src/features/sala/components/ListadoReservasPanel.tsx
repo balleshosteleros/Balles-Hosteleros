@@ -804,41 +804,34 @@ const OCULTAS_POR_DEFECTO = new Set([
  * arriba, porque aquí lo importante es que no falte ninguna columna de dinero
  * y eso se comprueba leyendo, no restando.
  */
+/**
+ * Con qué columnas arranca la vista de cobros.
+ *
+ * ⚠️ El ORDEN importa y es el de la tabla: lo que reclama una decisión va
+ * DELANTE. Antes se encendían las 34 columnas de cobro, así que "sin decidir"
+ * y el estado de la cancelación caían fuera de la pantalla, a la derecha del
+ * todo, y una reserva con 4 € pendientes se leía como si no tuviera nada
+ * (Iván, 4-sep). Lo demás sigue estando: se enciende desde el selector de
+ * columnas cuando hace falta.
+ */
 const VISIBLES_COBROS = [
   "cliente",
-  "telefono",
-  "email",
   "fecha",
   "hora",
-  "turno",
   "comensales",
   "estado",
-  "origen",
+  // Lo que hay que decidir, pegado al estado de la reserva.
+  "cobroSinDecidir",
   "tipoCategoria",
-  "importePagado",
-  "pagoPendiente",
-  "tarjetaIntroducida",
-  "tieneGarantia",
-  "garantiaEstado",
-  "garantiaImporte",
-  "garantiaTarjeta",
-  "garantiaCaptureDeadline",
-  "garantiaCobradaAt",
-  "tieneCancelacion",
   "cancelacionEstado",
   "cancelacionImporte",
-  "cancelacionTarjeta",
-  "cancelacionIntentos",
-  "cancelacionProximoIntentoAt",
-  "cancelacionError",
+  "garantiaEstado",
+  "garantiaImporte",
   "cancelacionCobradaAt",
-  "cobroSinDecidir",
-  "politicaIncumplidaAt",
-  "cobroMotivo",
-  "cobroPerdonadoAt",
+  "garantiaCobradaAt",
   "ticket",
-  "ticketCodigo",
-  "cupon",
+  "importePagado",
+  "origen",
 ];
 
 /** Columnas con las que arranca el listado según de dónde se abra. */
