@@ -270,6 +270,10 @@ export interface Reserva {
   ticketCodigo?: string | null;
   ticketUnidades?: number | null;
   ticketImporte?: number | null;
+  /** Cuándo PAGÓ el ticket (no cuándo reservó): vive en la compra. */
+  ticketPagadoAt?: string | null;
+  /** Cuándo usó ese ticket para coger esta mesa. */
+  ticketCanjeadoAt?: string | null;
   ticketIva?: number | null;
   pagoPendiente?: boolean;
   bloqueada?: boolean;

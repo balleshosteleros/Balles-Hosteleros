@@ -105,7 +105,10 @@ const RESERVA_COLUMNAS =
   "ticket_producto_id, ticket_unidades, ticket_importe, ticket_iva, ticket_codigo, " +
   "bloqueada, grupo_id, codigo_id, codigo, reconfirmada_at, " +
   "external_id, external_origen, created_at, duracion_minutos, " +
-  "reserva_ticket_productos(nombre)";
+  "reserva_ticket_productos(nombre), " +
+  // Cuándo pagó el ticket y cuándo lo canjeó por esta mesa. El dinero vive en
+  // la COMPRA, no en la reserva: la reserva solo guarda el importe congelado.
+  "reserva_ticket_compras(pagado_at, canjeado_at, codigo, importe_total, unidades)";
 
 // OJO: este fichero es "use server". Solo puede EXPORTAR funciones async: un
 // `export type` aquí rompe el módulo entero en producción con

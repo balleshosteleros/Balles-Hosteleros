@@ -17,7 +17,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { ahoraEnZona, formatFechaHoraEnZona } from "@/features/empresa/lib/zona-horaria";
 import { useSincronizacionEnVivo } from "@/shared/hooks/useSincronizacionEnVivo";
-import { Plus, Search, ChevronLeft, ChevronRight, ListPlus, ListFilter, Check, Move, Map as MapIcon, List as ListIcon, Ticket, Lock } from "lucide-react";
+import { Plus, Search, ChevronLeft, ChevronRight, ListPlus, ListFilter, Check, Move, Map as MapIcon, List as ListIcon, Lock } from "lucide-react";
 // Configuración solo se carga cuando el usuario pulsa "Configuración" — fuera del bundle inicial.
 const ConfigReservasView = dynamic(
   () =>
@@ -2353,6 +2353,19 @@ function mapDbToReserva(row: Record<string, unknown>): Reserva {
       const p = row.reserva_ticket_productos as unknown as
         | { nombre?: string } | { nombre?: string }[] | null;
       return (Array.isArray(p) ? p[0]?.nombre : p?.nombre) ?? null;
+    })(),
+    // Fechas del pago del ticket. PostgREST devuelve la compra como objeto o
+    // como array de uno según la relación, así que se admiten las dos formas.
+    ...(() => {
+      const c = row.reserva_ticket_compras as unknown as
+        | { pagado_at?: string | null; canjeado_at?: string | null }
+        | { pagado_at?: string | null; canjeado_at?: string | null }[]
+        | null;
+      const compra = Array.isArray(c) ? c[0] : c;
+      return {
+        ticketPagadoAt: compra?.pagado_at ?? null,
+        ticketCanjeadoAt: compra?.canjeado_at ?? null,
+      };
     })(),
     pagoPendiente: (row.pago_pendiente as boolean) ?? false,
     bloqueada: (row.bloqueada as boolean) ?? false,
@@ -6044,10 +6057,10 @@ export function ReservasView() {
                     el código y el dinero quedan congelados desde el canje (lo
                     impide también la base de datos, no solo esta pantalla). */}
                 {selectedReserva.esTicket && (
-                  <div className="rounded-lg border border-red-500/30 bg-red-500/5 p-3">
-                    <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-red-600">
-                      <Ticket className="h-3.5 w-3.5" />
-                      Reserva con Ticket
+                  <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-3">
+                    <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-400">
+                      <Banknote className="h-3.5 w-3.5" />
+                      Reserva pagada
                     </div>
                     <div className="mt-2 space-y-1 text-sm">
                       {selectedReserva.ticketProductoNombre && (
@@ -6066,6 +6079,38 @@ export function ReservasView() {
                           })()}
                         </p>
                       )}
+                      {/* CUÁNDO pagó. No es lo mismo que cuándo reservó: un
+                          ticket se compra semanas antes y se canjea después,
+                          así que sin esta fecha no se sabe de cuándo es el
+                          dinero. Va en la zona de la empresa, no en la del
+                          navegador de quien mira. */}
+                      {selectedReserva.ticketPagadoAt && (
+                        <p className="text-xs text-muted-foreground">
+                          Pagado el{" "}
+                          <span className="font-medium text-foreground">
+                            {formatFechaHoraEnZona(
+                              selectedReserva.ticketPagadoAt,
+                              empresaActual.zonaHoraria,
+                            )}
+                          </span>
+                        </p>
+                      )}
+                      {/* Cuándo usó ese ticket para coger ESTA mesa. Solo se
+                          enseña si es otro día que el del pago: si compró y
+                          reservó de una vez, repetir la fecha no dice nada. */}
+                      {selectedReserva.ticketCanjeadoAt &&
+                        selectedReserva.ticketCanjeadoAt.slice(0, 10) !==
+                          (selectedReserva.ticketPagadoAt ?? "").slice(0, 10) && (
+                          <p className="text-xs text-muted-foreground">
+                            Canjeado el{" "}
+                            <span className="font-medium text-foreground">
+                              {formatFechaHoraEnZona(
+                                selectedReserva.ticketCanjeadoAt,
+                                empresaActual.zonaHoraria,
+                              )}
+                            </span>
+                          </p>
+                        )}
                       {selectedReserva.ticketCodigo && (
                         <p className="font-mono text-xs text-muted-foreground">
                           Código {selectedReserva.ticketCodigo}

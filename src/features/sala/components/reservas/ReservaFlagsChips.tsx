@@ -2,6 +2,7 @@
 
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
+  Banknote,
   CreditCard,
   Ticket,
   Wallet,
@@ -55,21 +56,23 @@ export function ReservaFlagsChips({
     chips.push({ key: "tarjeta", label: "Tarjeta introducida", icon: <CreditCard className={iconSize} />, cls: "text-emerald-500 border-emerald-500/40 bg-emerald-500/10" });
   }
   if (reserva.esTicket) {
-    // Rojo y al lado del nombre: es la marca de que esa mesa ya está pagada.
-    // Al pasar el ratón se ve qué compró y cuánto, sin abrir la ficha.
+    // Un BILLETE al lado del nombre: esa mesa ya está pagada, y se ve de un
+    // vistazo sin abrir la ficha. En verde, igual que en la columna Tipo: es
+    // la reserva que menos riesgo tiene de dejarte tirado.
     const unidades = reserva.ticketUnidades ?? reserva.comensales ?? 1;
     const total = reserva.ticketImporte ?? 0;
     const unitario = unidades > 0 ? total / unidades : total;
     chips.push({
       key: "ticket",
       label: "Reserva con Ticket",
-      icon: <Ticket className={iconSize} />,
-      cls: "text-red-600 border-red-500/40 bg-red-500/10",
+      icon: <Banknote className={iconSize} />,
+      cls: "text-emerald-700 border-emerald-500/40 bg-emerald-500/10",
       tooltip: (
         <span className="block text-left leading-relaxed">
           <span className="block font-medium">
             {reserva.ticketProductoNombre ?? "Reserva con Ticket"}
           </span>
+          <span className="block">Ya pagado</span>
           {total > 0 && (
             <span className="block">
               {unidades > 1
