@@ -9,10 +9,7 @@ import {
   getMiNominaUrl,
   getNominaArchivoUrl,
 } from "@/features/rrhh/actions/nominas-archivo-actions";
-import {
-  calcularDesgloseNomina,
-  CONCEPTOS_SS_EMPRESA,
-} from "@/features/rrhh/lib/desglose-nomina";
+import { calcularDesgloseNomina } from "@/features/rrhh/lib/desglose-nomina";
 import { CheckCircle2, ChevronDown, Euro, FileText, Loader2 } from "lucide-react";
 
 function fmtEur(n: number): string {
@@ -179,68 +176,74 @@ function PagoCard({ pago, empleadoId }: { pago: PagoAbonado; empleadoId?: string
             </span>
           </div>
 
-          {/* LO QUE LE CUESTA A LA EMPRESA: informativo, NO se le descuenta.
-              Se dice explícitamente para que nadie lo lea como un descuento. */}
-          {d.hayCosteEmpresa && (
-            <>
-              {d.ssEmpresa > 0 && (
-                <>
-                  <Rotulo texto="Lo que paga la empresa por ti a la Seguridad Social" />
-                  <div className="rounded-lg border border-sky-200/70 bg-sky-50/70 px-3 py-2.5 dark:border-sky-900/50 dark:bg-sky-950/30">
-                    <div className="flex items-baseline justify-between gap-3">
-                      <span className="text-sm text-sky-900 dark:text-sky-200">
-                        Aportación de la empresa
-                      </span>
-                      <span className="text-base font-bold tabular-nums text-sky-900 dark:text-sky-200">
-                        {fmtEur(d.ssEmpresa)}
-                      </span>
-                    </div>
-                    <p className="mt-1 text-[11px] leading-snug text-sky-900/70 dark:text-sky-200/70">
-                      Esto lo paga la empresa <b>además</b> de tu nómina: no sale de tu
-                      bolsillo ni se te descuenta. Cubre {CONCEPTOS_SS_EMPRESA}
-                      {d.porcentajeSsEmpresa !== null
-                        ? `, y equivale a un ${d.porcentajeSsEmpresa
-                            .toLocaleString("es-ES", { maximumFractionDigits: 1 })}% de tu nómina bruta`
-                        : ""}
-                      .
-                    </p>
-                  </div>
-                  <dl className="mt-2 text-sm divide-y divide-border/60">
-                    <Fila label="Seguridad Social (tu parte)" valor={fmtEur(d.ssEmpleado)} />
-                    <Fila label="Seguridad Social (parte de la empresa)" valor={fmtEur(d.ssEmpresa)} />
-                    <Fila
-                      label="Total cotizado por ti este mes"
-                      valor={fmtEur(d.ssTotal)}
-                      destacado
-                    />
-                  </dl>
-                </>
-              )}
-
-              <Rotulo texto="Lo que le cuestas a la empresa" />
-              <dl className="text-sm divide-y divide-border/60">
-                <Fila label="Lo que percibes" valor={fmtEur(d.total)} />
-                {d.ssEmpleado > 0 && (
-                  <Fila label="Seguridad Social (tu parte)" valor={`+${fmtEur(d.ssEmpleado)}`} />
-                )}
-                {d.irpf > 0 && <Fila label="IRPF (a Hacienda)" valor={`+${fmtEur(d.irpf)}`} />}
-                {d.ssEmpresa > 0 && (
-                  <Fila
-                    label="Seguridad Social (parte de la empresa)"
-                    valor={`+${fmtEur(d.ssEmpresa)}`}
+          {/* RESUMEN COMPACTO debajo de lo que cobra: su IRPF, las dos partes de la
+              Seguridad Social y el coste total. Cada línea lleva al lado, en
+              pequeño, el porcentaje que supone sobre el coste total de la empresa;
+              lo que se le RETIENE va en negativo, porque resta de lo que percibe. */}
+          {d.hayCosteEmpresa && d.reparto && (
+            <div className="mt-2.5 rounded-lg border border-dashed px-3 py-2.5">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                Lo que cuesta tu puesto a la empresa
+              </p>
+              <dl className="mt-1.5 text-[13px]">
+                <FilaPct label="Nómina neta" valor={fmtEur(d.neto)} pct={d.reparto.neto} />
+                {pago.complemento > 0 && (
+                  <FilaPct
+                    label="Complemento"
+                    valor={fmtEur(pago.complemento)}
+                    pct={d.reparto.complemento}
                   />
                 )}
+                {pago.horasExtras > 0 && (
+                  <FilaPct
+                    label="Horas extras"
+                    valor={fmtEur(pago.horasExtras)}
+                    pct={d.reparto.horasExtras}
+                  />
+                )}
+                {pago.bonus > 0 && (
+                  <FilaPct label="Bonus" valor={fmtEur(pago.bonus)} pct={d.reparto.bonus} />
+                )}
+                {pago.ajuste !== 0 && (
+                  <FilaPct
+                    label="Ajuste"
+                    valor={`${pago.ajuste < 0 ? "−" : ""}${fmtEur(Math.abs(pago.ajuste))}`}
+                    pct={d.reparto.ajuste}
+                    rojo={pago.ajuste < 0}
+                  />
+                )}
+                {d.ssEmpleado > 0 && (
+                  <FilaPct
+                    label="Seguridad Social (tu parte)"
+                    valor={fmtEur(d.ssEmpleado)}
+                    pct={d.reparto.ssEmpleado}
+                  />
+                )}
+                {d.irpf > 0 && (
+                  <FilaPct
+                    label="Tu IRPF (a Hacienda)"
+                    valor={fmtEur(d.irpf)}
+                    pct={d.reparto.irpf}
+                  />
+                )}
+                {d.ssEmpresa > 0 && (
+                  <FilaPct
+                    label="Seguridad Social (paga la empresa)"
+                    valor={fmtEur(d.ssEmpresa)}
+                    pct={d.reparto.ssEmpresa}
+                  />
+                )}
+                <div className="mt-1 flex items-baseline justify-between gap-2 border-t pt-1.5">
+                  <dt className="font-semibold">Coste total para la empresa</dt>
+                  <dd className="tabular-nums font-bold">
+                    {fmtEur(d.costeEmpresa)}
+                    <span className="ml-1.5 text-[11px] font-normal text-muted-foreground">
+                      100%
+                    </span>
+                  </dd>
+                </div>
               </dl>
-              <div className="mt-2 rounded-lg bg-slate-500/10 px-3 py-2 flex items-center justify-between">
-                <span className="text-sm font-semibold">Coste total para la empresa</span>
-                <span className="text-base font-bold tabular-nums">{fmtEur(d.costeEmpresa)}</span>
-              </div>
-              <p className="mt-1.5 text-[11px] text-muted-foreground leading-snug">
-                Todo el dinero que la empresa desembolsa por ti este mes: lo que cobras, lo
-                que se te retiene y se ingresa en tu nombre, y su propia aportación a la
-                Seguridad Social. Es informativo: no se te descuenta nada de aquí.
-              </p>
-            </>
+            </div>
           )}
 
           {pago.nominaPath && (
@@ -301,6 +304,44 @@ function Fila({
         )}
       >
         {valor}
+      </dd>
+    </div>
+  );
+}
+
+/**
+ * Fila del resumen de coste: concepto, importe y, en pequeño, el porcentaje que
+ * supone sobre el coste total de la empresa.
+ *
+ * Todos los conceptos van en POSITIVO: aquí no se está restando nada, se está
+ * repartiendo el coste total de la empresa entre sus partes (lo que cobra, lo
+ * que se le retiene y se ingresa en su nombre, y la aportación patronal). Las
+ * retenciones ya se muestran restando arriba, en el bloque de la nómina.
+ *
+ * REGLA: un importe solo se pinta en negativo cuando el dinero va de verdad en
+ * negativo — un ajuste que resta, o una nómina que viene negativa. La Seguridad
+ * Social y el IRPF no son eso: son partes del coste, no devoluciones.
+ */
+function FilaPct({
+  label,
+  valor,
+  pct,
+  rojo,
+}: {
+  label: string;
+  valor: string;
+  pct: number;
+  /** Solo cuando el importe es de verdad negativo (un ajuste que resta). */
+  rojo?: boolean;
+}) {
+  return (
+    <div className="flex items-baseline justify-between gap-2 py-1">
+      <dt className="text-muted-foreground">{label}</dt>
+      <dd className={cn("tabular-nums font-medium", rojo && "text-rose-600")}>
+        {valor}
+        <span className="ml-1.5 text-[11px] font-normal text-muted-foreground">
+          {pct.toLocaleString("es-ES", { maximumFractionDigits: 1 })}%
+        </span>
       </dd>
     </div>
   );
