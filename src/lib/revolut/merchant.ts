@@ -96,6 +96,12 @@ export interface CrearOrdenInput {
   referencia: string;
   descripcion: string;
   cliente?: { email?: string; nombre?: string; telefono?: string };
+  /**
+   * Cliente que YA existe en Revolut. Es imprescindible para cobrar una
+   * tarjeta guardada: sin él Revolut no relaciona el método de pago con nadie
+   * y rechaza el cobro con el código 1022.
+   */
+  clienteId?: string;
   /** A dónde vuelve el cliente tras pagar. */
   redirectUrl?: string;
   /**
@@ -130,10 +136,35 @@ function headers(secretKey: string): HeadersInit {
   };
 }
 
+/**
+ * Códigos de error de Revolut en cristiano.
+ *
+ * Revolut devuelve `{"code": 1022}` a secas, sin mensaje. Ese número acababa
+ * tal cual en la ficha de la reserva, y quien lo leía se lo explicaba como
+ * podía —normalmente "no tiene fondos"—, que casi nunca es lo que pasa. Un
+ * cobro que falla obliga a decidir algo, así que tiene que decir POR QUÉ.
+ */
+const MENSAJES_ERROR: Record<string, string> = {
+  "1000": "La tarjeta ha sido rechazada por el banco.",
+  "1001": "El banco del cliente ha denegado el pago.",
+  "1002": "La tarjeta no admite este tipo de cobro.",
+  "1003": "Tarjeta caducada.",
+  "1004": "Los datos de la tarjeta no son correctos.",
+  "1005": "El banco pide que el cliente autorice el pago.",
+  "1006": "El cliente no tiene saldo suficiente.",
+  "1007": "Se ha superado el límite de la tarjeta.",
+  "1008": "La tarjeta está bloqueada.",
+  "1022": "La tarjeta guardada no se puede cobrar: falta vincularla a su cliente en Revolut.",
+};
+
 async function leerError(res: Response): Promise<string> {
   try {
-    const body = (await res.json()) as { message?: string; code?: string };
-    return body.message ?? body.code ?? `HTTP ${res.status}`;
+    const body = (await res.json()) as { message?: string; code?: string | number };
+    const code = body.code !== undefined ? String(body.code) : null;
+    // El mensaje propio manda; el código solo traduce cuando viene solo.
+    if (body.message) return code ? `${body.message} (${code})` : body.message;
+    if (code) return MENSAJES_ERROR[code] ?? `Revolut rechazó el cobro (código ${code}).`;
+    return `HTTP ${res.status}`;
   } catch {
     return `HTTP ${res.status}`;
   }
@@ -160,7 +191,12 @@ export async function crearOrden(input: CrearOrdenInput): Promise<
     body.authorisation_type = "pre_authorisation";
   }
 
-  if (input.cliente?.email) {
+  // Un cliente ya conocido se referencia por su id; uno nuevo se describe por
+  // sus datos. Mandar las dos cosas a la vez haría que Revolut creara un
+  // cliente duplicado y el cobro volvería a fallar.
+  if (input.clienteId) {
+    body.customer = { id: input.clienteId };
+  } else if (input.cliente?.email) {
     body.customer = {
       email: input.cliente.email,
       ...(input.cliente.nombre ? { full_name: input.cliente.nombre } : {}),
@@ -283,12 +319,17 @@ export async function cobrarTarjetaGuardada(input: {
   customerId: string;
   paymentMethodId: string;
 }): Promise<{ ok: true; orden: RevolutOrder } | { ok: false; error: string }> {
+  // ⚠️ El `clienteId` NO es opcional aquí: la tarjeta guardada pertenece a ese
+  // cliente de Revolut, y sin él la orden no sabe de quién es el método de
+  // pago. Faltaba, y todos los cobros de no-show morían con un 1022 seco que
+  // en la ficha se leía como si el cliente no tuviera fondos.
   const orden = await crearOrden({
     secretKey: input.secretKey,
     entorno: input.entorno,
     importe: input.importe,
     referencia: input.referencia,
     descripcion: input.descripcion,
+    clienteId: input.customerId,
   });
   if (!orden.ok) return orden;
 
