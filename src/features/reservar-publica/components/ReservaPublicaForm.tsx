@@ -582,47 +582,47 @@ export function ReservaPublicaForm({
                 horaPermitida={filtroHoraTicket}
               />
             </div>
-          </div>
 
           {/* Zonas. Solo si la empresa ha activado "exigir zona": si está
-              apagado, el cliente no elige y no se le muestra nada. Hace falta
-              ademas fecha/hora/personas para saber cuál está llena. */}
-          {zonaExigida && zonasVisibles.length > 0 && (
-            <div>
-              <Label htmlFor="zona" className="text-zinc-700 flex items-center gap-1.5 mb-1.5">
-                <MapPin className="h-3.5 w-3.5" />
-                Zonas *
-              </Label>
-              <select
-                id="zona"
-                value={grupoZonaId}
-                onChange={(e) => setGrupoZonaId(e.target.value)}
-                disabled={cargandoZonas}
-                className="w-full h-10 rounded-md border border-zinc-300 bg-white px-3 text-sm text-zinc-900 disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-[var(--brand)]"
-              >
-                <option value="">
-                  {cargandoZonas ? "Comprobando disponibilidad…" : "Seleccione la zona"}
-                </option>
-                {/* Mismo criterio de iconos que el selector de mesa del back
-                    office: ✅ cuando la zona vale para ese grupo durante todo
-                    el intervalo pedido, ⏰ cuando ya no le queda sitio a esa
-                    hora. El cliente no elige mesa, así que aquí el diagnóstico
-                    es por zona. */}
-                {zonasVisibles.map((g) => (
-                  <option key={g.id} value={g.id} disabled={!g.disponible}>
-                    {g.disponible ? "✅" : "⏰"} {g.nombre}
-                    {g.disponible ? "" : " (Zona completa)"}
+                apagado, el cliente no elige y no se le muestra nada. Hace falta
+                ademas fecha/hora/personas para saber cuál está llena. */}
+            {zonaExigida && zonasVisibles.length > 0 && (
+              <div>
+                <Label htmlFor="zona" className="text-zinc-700 flex items-center gap-1.5 mb-1.5">
+                  <MapPin className="h-3.5 w-3.5" />
+                  Zonas *
+                </Label>
+                <select
+                  id="zona"
+                  value={grupoZonaId}
+                  onChange={(e) => setGrupoZonaId(e.target.value)}
+                  disabled={cargandoZonas}
+                  className="w-full h-10 rounded-md border border-zinc-300 bg-white px-3 text-sm text-zinc-900 disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-[var(--brand)]"
+                >
+                  <option value="">
+                    {cargandoZonas ? "Comprobando disponibilidad…" : "Seleccione la zona"}
                   </option>
-                ))}
-              </select>
-              {!cargandoZonas && gruposZonas.every((g) => !g.disponible) && (
-                <p className="mt-1.5 text-xs text-red-600">
-                  No queda sitio para {personas}{" "}
-                  {personas === 1 ? "persona" : "personas"} a esa hora. Prueba con otra hora.
-                </p>
-              )}
-            </div>
-          )}
+                  {/* Mismo criterio de iconos que el selector de mesa del back
+                      office: ✅ cuando la zona vale para ese grupo durante todo
+                      el intervalo pedido, ⏰ cuando ya no le queda sitio a esa
+                      hora. El cliente no elige mesa, así que aquí el diagnóstico
+                      es por zona. */}
+                  {zonasVisibles.map((g) => (
+                    <option key={g.id} value={g.id} disabled={!g.disponible}>
+                      {g.disponible ? "✅" : "⏰"} {g.nombre}
+                      {g.disponible ? "" : " (Zona completa)"}
+                    </option>
+                  ))}
+                </select>
+                {!cargandoZonas && gruposZonas.every((g) => !g.disponible) && (
+                  <p className="mt-1.5 text-xs text-red-600">
+                    No queda sitio para {personas}{" "}
+                    {personas === 1 ? "persona" : "personas"} a esa hora. Prueba con otra hora.
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
 
           {/* Datos de contacto */}
           <div className="grid grid-cols-2 gap-3">

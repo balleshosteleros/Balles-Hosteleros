@@ -233,45 +233,41 @@ export function TarjetaClient({
 
         {/* La diferencia entre las dos políticas importa, y se dice sin rodeos:
             retener no es cobrar. */}
-        <div
-          className={`rounded-xl border p-4 text-sm ${
-            esGarantia
-              ? "border-sky-200 bg-sky-50 text-sky-900"
-              : "border-amber-200 bg-amber-50 text-amber-900"
-          }`}
-        >
-          <div className="font-semibold mb-1">
-            {esGarantia
-              ? "Esta reserva lleva política de garantía"
-              : "Esta reserva lleva política de cancelación"}
+        {/* Lo primero que se lee es la tranquilidad, no la amenaza: el aviso
+            en ámbar parecía un error y echaba para atrás justo cuando hay que
+            dar la tarjeta. Verde con tic para lo que le pasa AHORA (nada), y
+            las condiciones debajo en tono neutro. */}
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+          <div className="flex items-start gap-2.5">
+            <CheckCircle2 className="h-5 w-5 text-emerald-600 shrink-0 mt-0.5" />
+            <div>
+              <p className="font-semibold text-emerald-900 text-sm">
+                No se te cobra nada ahora
+              </p>
+              <p className="text-emerald-800 text-[13px] leading-relaxed mt-0.5">
+                {esGarantia
+                  ? "Se retienen los fondos y se liberan en cuanto llegues al restaurante."
+                  : "Solo guardamos tu tarjeta para confirmar la reserva."}
+              </p>
+            </div>
           </div>
-          <p className="leading-relaxed">
-            Si no te presentas, o cancelas con menos de{" "}
-            <strong>{horasAntes} {horasAntes === 1 ? "hora" : "horas"}</strong> de
-            antelación, se te cargarán{" "}
+
+          <div className="mt-3 pt-3 border-t border-emerald-200/70 text-[13px] text-emerald-900/90 leading-relaxed">
+            Solo se cobraría si no te presentas, o si cancelas con menos de{" "}
+            <strong>
+              {horasAntes} {horasAntes === 1 ? "hora" : "horas"}
+            </strong>{" "}
+            de antelación:{" "}
             {importePorPersona !== null ? (
-              <>
-                <strong>{EUR.format(importePorPersona)} €</strong> por cada
-                persona de la reserva:{" "}
-                <strong>
-                  {EUR.format(importePorPersona)} € × {datos.personas} ={" "}
-                  {EUR.format(importe)} €
-                </strong>
-                .
-              </>
+              <strong>
+                {EUR.format(importePorPersona)} € por persona ={" "}
+                {EUR.format(importe)} €
+              </strong>
             ) : (
-              <>
-                <strong>{EUR.format(importe)} €</strong>.
-              </>
+              <strong>{EUR.format(importe)} €</strong>
             )}
-            {esGarantia && (
-              <>
-                {" "}
-                Ese importe se <strong>retiene</strong> ahora, no se cobra: se
-                libera en cuanto te presentes en el restaurante.
-              </>
-            )}
-          </p>
+            .
+          </div>
         </div>
 
         {error && (
