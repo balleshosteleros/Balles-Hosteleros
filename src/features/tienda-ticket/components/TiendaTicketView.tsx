@@ -7,7 +7,7 @@
  * La reserva la hace después, cuando quiera, con el código que recibe.
  */
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -21,6 +21,8 @@ export interface ProductoTienda {
   precio: number;
   iva: number;
   modoPrecio: "por_persona" | "por_reserva";
+  /** Comensales que cubre cada unidad. 1 = por persona; 2 = paquete para dos. */
+  personasPorUnidad: number;
   cobroModo: "revolut" | "gratis";
   stockModo: "ilimitado" | "limitado";
   stockTotal: number | null;
@@ -60,6 +62,8 @@ export function TiendaTicketView({
   const [productoId, setProductoId] = useState<string | null>(
     productos.length === 1 ? productos[0].id : null,
   );
+  // Arranca en 2 porque lo normal es reservar para dos; con paquetes la unidad
+  // ya son dos personas, así que el valor de partida es 1 (ver efecto abajo).
   const [unidades, setUnidades] = useState(2);
   const [nombre, setNombre] = useState("");
   const [email, setEmail] = useState("");
@@ -74,8 +78,21 @@ export function TiendaTicketView({
   );
 
   const porPersona = producto?.modoPrecio === "por_persona";
+  // Un paquete cubre varias personas (la experiencia se vende de 2 en 2), así
+  // que lo que se pide en el selector son PAQUETES, no comensales.
+  const porPaquete = (producto?.personasPorUnidad ?? 1) > 1;
   const unidadesReales = porPersona ? unidades : 1;
-  const total = producto ? precioConIva(producto) * unidadesReales : 0;
+  const comensales = unidadesReales * (producto?.personasPorUnidad ?? 1);
+  // El precio está POR PERSONA, así que el importe se calcula sobre comensales:
+  // un paquete de 2 a 49 € son 98 €, no 49 €.
+  const total = producto ? precioConIva(producto) * comensales : 0;
+
+  // Un producto por paquetes empieza en 1 paquete (= 2 personas); uno por
+  // persona, en 2, que es la reserva típica. Sin esto, la experiencia abría
+  // pidiendo 2 paquetes, o sea 4 comensales y el doble de dinero.
+  useEffect(() => {
+    setUnidades(porPaquete ? 1 : 2);
+  }, [porPaquete, productoId]);
 
   const valido =
     !!producto &&
@@ -230,7 +247,9 @@ export function TiendaTicketView({
         <div className="mt-6 space-y-4">
           {porPersona && (
             <div className="space-y-1.5">
-              <Label htmlFor="uds" className="text-zinc-700">Personas</Label>
+              <Label htmlFor="uds" className="text-zinc-700">
+                {porPaquete ? "Paquetes" : "Personas"}
+              </Label>
               <Input
                 id="uds"
                 type="number"
@@ -239,6 +258,13 @@ export function TiendaTicketView({
                 value={unidades}
                 onChange={(e) => setUnidades(Math.max(1, Number(e.target.value) || 1))}
               />
+              {porPaquete && (
+                <p className="text-[11px] text-zinc-500">
+                  Cada paquete es para {producto.personasPorUnidad} personas
+                  {" · "}
+                  {comensales} en total.
+                </p>
+              )}
             </div>
           )}
 
@@ -272,9 +298,11 @@ export function TiendaTicketView({
             <div className="rounded-xl border p-4" style={{ borderColor: "#e4e4e7" }}>
               <div className="flex items-center justify-between text-sm text-zinc-600">
                 <span>
-                  {porPersona
-                    ? `${unidades} ${unidades === 1 ? "persona" : "personas"} × ${euros(precioConIva(producto))}`
-                    : producto.nombre}
+                  {!porPersona
+                    ? producto.nombre
+                    : porPaquete
+                      ? `${unidades} ${unidades === 1 ? "paquete" : "paquetes"} (${comensales} personas) × ${euros(precioConIva(producto) * producto.personasPorUnidad)}`
+                      : `${unidades} ${unidades === 1 ? "persona" : "personas"} × ${euros(precioConIva(producto))}`}
                 </span>
                 <span className="text-base font-semibold text-zinc-900">{euros(total)}</span>
               </div>

@@ -61,7 +61,7 @@ export async function comprarTicketAction(
   // ── 2. Producto: el precio SIEMPRE sale de aquí ───────────────────
   const prod = await admin
     .from("reserva_ticket_productos")
-    .select("id, nombre, precio, iva, modo_precio, activo, venta_publica, cobro_modo, stock_modo, stock_total, stock_consumido, validez_dias, canje_hasta")
+    .select("id, nombre, precio, iva, modo_precio, personas_por_unidad, activo, venta_publica, cobro_modo, stock_modo, stock_total, stock_consumido, validez_dias, canje_hasta")
     .eq("id", input.productoId)
     .eq("empresa_id", empresaId)
     .maybeSingle();
@@ -75,7 +75,15 @@ export async function comprarTicketAction(
 
   // ── 3. Stock ──────────────────────────────────────────────────────
   // "por_persona" consume una unidad por comensal; "por_reserva", una sola.
-  const unidades = p.modo_precio === "por_persona" ? input.unidades : 1;
+  //
+  // PAQUETES: cuando el producto cubre varias personas por unidad (la Cena
+  // Experiencia se vende de 2 en 2), lo que llega en `input.unidades` son
+  // PAQUETES. Se guardan siempre COMENSALES, que es lo que después lee el canje
+  // para fijar el tamaño de la reserva; si no, un paquete reservaría para una
+  // sola persona.
+  const personasPorUnidad = Math.max(1, Number(p.personas_por_unidad ?? 1));
+  const unidades =
+    p.modo_precio === "por_persona" ? input.unidades * personasPorUnidad : 1;
   if (p.stock_modo === "limitado" && p.stock_total != null) {
     const libre = Number(p.stock_total) - Number(p.stock_consumido ?? 0);
     if (libre < unidades) {

@@ -41,7 +41,7 @@ async function fetchProductos(empresaId: string): Promise<ProductoTienda[]> {
   const admin = createAdminClient();
   const { data } = await admin
     .from("reserva_ticket_productos")
-    .select("id, nombre, descripcion, precio, iva, modo_precio, cobro_modo, stock_modo, stock_total, stock_consumido, ocultar_al_agotar")
+    .select("id, nombre, descripcion, precio, iva, modo_precio, personas_por_unidad, cobro_modo, stock_modo, stock_total, stock_consumido, ocultar_al_agotar")
     .eq("empresa_id", empresaId)
     .eq("activo", true)
     .eq("venta_publica", true)
@@ -64,6 +64,7 @@ async function fetchProductos(empresaId: string): Promise<ProductoTienda[]> {
       precio: Number(r.precio),
       iva: Number(r.iva ?? 0),
       modoPrecio: r.modo_precio as "por_persona" | "por_reserva",
+      personasPorUnidad: Number(r.personas_por_unidad ?? 1),
       cobroModo: (r.cobro_modo as "revolut" | "gratis") ?? "revolut",
       stockModo: r.stock_modo as "ilimitado" | "limitado",
       stockTotal: (r.stock_total as number | null) ?? null,
