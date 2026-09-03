@@ -9,47 +9,47 @@
     },
     {
       "path": "/api/cron/empresas-purga",
-      "schedule": "0 1 * * *"
+      "schedule": "0 23 * * *"
     },
     {
       "path": "/api/cron/agora-sync",
-      "schedule": "0 8 * * *"
+      "schedule": "0 6 * * *"
     },
     {
       "path": "/api/cron/cerrar-fichajes-huerfanos",
-      "schedule": "10 8 * * *"
+      "schedule": "10 6 * * *"
     },
     {
       "path": "/api/cron/bajas-efectivas",
-      "schedule": "0 5 * * *"
-    },
-    {
-      "path": "/api/points/cron/devengo-diario",
-      "schedule": "55 23 * * *"
-    },
-    {
-      "path": "/api/points/cron/snapshot-periodos",
-      "schedule": "5 0 * * *"
-    },
-    {
-      "path": "/api/cron/psd2-sync",
-      "schedule": "30 6 * * *"
-    },
-    {
-      "path": "/api/cron/firmas-expirar",
       "schedule": "0 3 * * *"
     },
     {
+      "path": "/api/points/cron/devengo-diario",
+      "schedule": "55 21 * * *"
+    },
+    {
+      "path": "/api/points/cron/snapshot-periodos",
+      "schedule": "5 22 * * *"
+    },
+    {
+      "path": "/api/cron/psd2-sync",
+      "schedule": "30 4 * * *"
+    },
+    {
+      "path": "/api/cron/firmas-expirar",
+      "schedule": "0 1 * * *"
+    },
+    {
       "path": "/api/cron/google-resenas-sync",
-      "schedule": "0 7 * * *"
+      "schedule": "0 5 * * *"
     },
     {
       "path": "/api/cron/visita-emails",
-      "schedule": "0 8 * * *"
+      "schedule": "0 6 * * *"
     },
     {
       "path": "/api/cron/google-rwg-feeds",
-      "schedule": "0 4 * * *"
+      "schedule": "0 2 * * *"
     },
     {
       "path": "/api/cron/google-rwg-availability-delta",
@@ -61,39 +61,39 @@
     },
     {
       "path": "/api/cron/reservas-recordatorios",
-      "schedule": "0 8 * * *"
-    },
-    {
-      "path": "/api/cron/vencimientos-alertas",
-      "schedule": "0 7 * * *"
-    },
-    {
-      "path": "/api/cron/cronogramas-alertas",
       "schedule": "0 6 * * *"
     },
     {
+      "path": "/api/cron/vencimientos-alertas",
+      "schedule": "0 5 * * *"
+    },
+    {
+      "path": "/api/cron/cronogramas-alertas",
+      "schedule": "0 4 * * *"
+    },
+    {
       "path": "/api/cron/vacantes-archivar",
-      "schedule": "0 2 * * *"
+      "schedule": "0 0 * * *"
     },
     {
       "path": "/api/cron/gestoria-recordatorio",
-      "schedule": "0 9 * * *"
+      "schedule": "0 7 * * *"
     },
     {
       "path": "/api/cron/prueba-avisos",
-      "schedule": "30 9 * * *"
+      "schedule": "30 7 * * *"
     },
     {
       "path": "/api/cron/nominas-gestoria-envio",
-      "schedule": "0 2 * * *"
+      "schedule": "0 0 * * *"
     },
     {
       "path": "/api/cron/gestoria-modelos",
-      "schedule": "0 10 * * *"
+      "schedule": "0 8 * * *"
     },
     {
       "path": "/api/cron/camaras-retencion",
-      "schedule": "30 2 * * *"
+      "schedule": "30 0 * * *"
     },
     {
       "path": "/api/cron/reservas-cobros-reintento",
@@ -109,7 +109,7 @@
     },
     {
       "path": "/api/cron/comunicados-recurrentes",
-      "schedule": "0 8 * * *"
+      "schedule": "0 6 * * *"
     }
   ]
 }
