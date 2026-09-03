@@ -135,7 +135,7 @@ function PagoCard({ pago, empleadoId }: { pago: PagoAbonado; empleadoId?: string
             <Fila label="Nómina bruta" valor={fmtEur(d.bruto)} />
             {d.ssEmpleado > 0 && (
               <Fila
-                label="Seguridad Social (tu parte)"
+                label="Seguridad Social (trabajador)"
                 valor={`−${fmtEur(d.ssEmpleado)}`}
                 rojo
               />
@@ -214,7 +214,7 @@ function PagoCard({ pago, empleadoId }: { pago: PagoAbonado; empleadoId?: string
                 )}
                 {d.ssEmpleado > 0 && (
                   <FilaPct
-                    label="Seguridad Social (tu parte)"
+                    label="Seguridad Social (trabajador)"
                     valor={fmtEur(d.ssEmpleado)}
                     pct={d.reparto.ssEmpleado}
                   />
@@ -228,7 +228,7 @@ function PagoCard({ pago, empleadoId }: { pago: PagoAbonado; empleadoId?: string
                 )}
                 {d.ssEmpresa > 0 && (
                   <FilaPct
-                    label="Seguridad Social (paga la empresa)"
+                    label="Seguridad Social (empresa)"
                     valor={fmtEur(d.ssEmpresa)}
                     pct={d.reparto.ssEmpresa}
                   />
