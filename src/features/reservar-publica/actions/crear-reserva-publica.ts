@@ -1,6 +1,11 @@
 "use server";
 
 import { z } from "zod";
+import {
+  validarTelefono,
+  validarEmail,
+  validarNombre,
+} from "@/shared/lib/validar-contacto";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
   completarFichaCliente,
@@ -49,10 +54,28 @@ const inputSchema = z.object({
   // Nombre y apellidos son siempre obligatorios. El teléfono y el email se
   // exigen o no según la configuración de cada empresa, así que aquí solo se
   // valida el formato; la obligatoriedad se comprueba abajo, con la config.
-  nombre: z.string().min(1).max(RESERVA_NOMBRE_MAX_CHARS),
+  // El formulario ya valida, pero la action es pública: sin esto, cualquiera
+  // que la llame por fuera puede crear fichas con teléfonos inventados, que es
+  // como se llenó la base de `00000` y `666` en CoverManager.
+  nombre: z
+    .string()
+    .min(1)
+    .max(RESERVA_NOMBRE_MAX_CHARS)
+    .refine((v) => validarNombre(v).ok, "Escribe un nombre real."),
   apellidos: z.string().min(1).max(RESERVA_APELLIDOS_MAX_CHARS),
-  telefono: z.string().max(40).optional().nullable(),
-  email: z.string().email().max(160).optional().nullable(),
+  telefono: z
+    .string()
+    .max(40)
+    .optional()
+    .nullable()
+    .refine((v) => validarTelefono(v, false).ok, "Ese teléfono no es válido."),
+  email: z
+    .string()
+    .email()
+    .max(160)
+    .optional()
+    .nullable()
+    .refine((v) => validarEmail(v, false).ok, "Ese correo no es válido."),
   fecha: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   hora: z.string().regex(/^\d{2}:\d{2}(:\d{2})?$/),
   personas: z.number().int().min(1).max(MAX_COMENSALES_ENTRADA),

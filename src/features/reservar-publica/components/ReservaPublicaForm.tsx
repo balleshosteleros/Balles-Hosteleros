@@ -7,6 +7,11 @@ import {
   horaPermitidaPorTicket,
   zonaPermitidaPorTicket,
 } from "@/features/sala/lib/validar-ticket-canje";
+import {
+  validarTelefono,
+  validarEmail,
+  validarNombre,
+} from "@/shared/lib/validar-contacto";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -180,8 +185,9 @@ export function ReservaPublicaForm({
   const valido =
     nombre.trim().length > 0 &&
     apellidos.trim().length > 0 &&
-    (!obligatorios.telefono || telefono.trim().length >= 5) &&
-    (!obligatorios.email || email.trim().length > 0) &&
+    validarTelefono(telefono, obligatorios.telefono).ok &&
+    validarEmail(email, obligatorios.email).ok &&
+    validarNombre(nombre).ok &&
     personas > 0 &&
     fecha &&
     hora &&
@@ -201,11 +207,17 @@ export function ReservaPublicaForm({
   const queFalta = ((): string | null => {
     if (valido) return null;
     if (!nombre.trim()) return "Escribe tu nombre.";
+    const vNombre = validarNombre(nombre);
+    if (!vNombre.ok) return vNombre.error;
     if (!apellidos.trim()) return "Escribe tus apellidos.";
     if (!fecha) return "Elige el día.";
     if (!hora) return "Elige la hora.";
-    if (obligatorios.telefono && telefono.trim().length < 5) return "Escribe tu teléfono.";
-    if (obligatorios.email && !email.trim()) return "Escribe tu correo.";
+    // El teléfono es la única vía para avisar de un cambio de mesa o una
+    // incidencia: uno inventado deja la reserva incontactable.
+    const vTel = validarTelefono(telefono, obligatorios.telefono);
+    if (!vTel.ok) return vTel.error;
+    const vEmail = validarEmail(email, obligatorios.email);
+    if (!vEmail.ok) return vEmail.error;
     if (zonaExigida && !grupoZonaId) return "Elige la zona.";
     if (!ticketValido) return "Elige uno de los productos disponibles.";
     if (!canjeConforme) return "El código que has escrito no es válido. Bórralo o corrígelo.";

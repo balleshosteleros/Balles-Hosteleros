@@ -6,6 +6,11 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { findOrLinkClienteSala } from "@/features/sala/lib/cliente-link";
 import { friendlyError } from "@/shared/lib/friendly-errors";
 import { leerTodas } from "@/shared/lib/supabase-paginado";
+import {
+  validarTelefono,
+  validarEmail,
+  validarNombre,
+} from "@/shared/lib/validar-contacto";
 
 async function getContext() {
   const supabase = await createClient();
@@ -109,6 +114,15 @@ export async function createCliente(input: {
     const { supabase, empresaId } = await getContext();
     if (!empresaId) return { ok: false, error: "No autenticado" };
 
+    // Un teléfono inventado deja la ficha incontactable y ensucia la búsqueda
+    // por número, que es como se localiza al cliente cuando llama.
+    const vNombre = validarNombre(input.nombre);
+    if (!vNombre.ok) return { ok: false, error: vNombre.error };
+    const vTel = validarTelefono(input.telefono, false);
+    if (!vTel.ok) return { ok: false, error: vTel.error };
+    const vEmail = validarEmail(input.email, false);
+    if (!vEmail.ok) return { ok: false, error: vEmail.error };
+
     // Si hay email o teléfono, usar la RPC de dedup: bloquea duplicados
     // y vincula a la ficha existente si ya existe.
     const hayContacto =
@@ -182,6 +196,21 @@ export async function updateCliente(
   try {
     const { supabase, empresaId } = await getContext();
     if (!empresaId) return { ok: false, error: "No autenticado" };
+
+    // Mismo criterio que en el alta: al editar tampoco se acepta un contacto
+    // inventado.
+    if (input.nombre !== undefined) {
+      const v = validarNombre(input.nombre);
+      if (!v.ok) return { ok: false, error: v.error };
+    }
+    if (input.telefono !== undefined) {
+      const v = validarTelefono(input.telefono, false);
+      if (!v.ok) return { ok: false, error: v.error };
+    }
+    if (input.email !== undefined) {
+      const v = validarEmail(input.email, false);
+      if (!v.ok) return { ok: false, error: v.error };
+    }
 
     // Si cambian email o teléfono, comprobar que no choca con otra ficha existente.
     const tocaContacto = input.email !== undefined || input.telefono !== undefined;
