@@ -20,6 +20,7 @@ import {
   getZonaHorariaEmpresa,
 } from "@/features/empresa/lib/empresa-server";
 import { ahoraEnZona } from "@/features/empresa/lib/zona-horaria";
+import { leerTodas } from "@/shared/lib/supabase-paginado";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   normalizarUmbrales,
@@ -116,7 +117,7 @@ export interface ReservaHistoricoCliente {
   zona: string | null;
   /** COMIDA o CENA: hace falta para abrir el día en el turno correcto. */
   turno: string | null;
-  /** Canal por el que entró (web, Google, manual…). */
+  /** Canal por el que entró (web, Google, teléfono…). */
   origen: string | null;
   /** Lo que pidió esa vez. Es lo que explica una cancelación o un no-show. */
   notas: string | null;
@@ -190,53 +191,61 @@ export async function listClientesEnriquecidos(): Promise<ClientesEnriquecidosRe
     // Universo de clientes de la empresa ACTIVA. Todo lo que llegue después se
     // acota a este conjunto: el aislamiento entre locales lo da este filtro,
     // no la RLS (que solo acota a las empresas del usuario).
-    const { data: clientesEmpresa } = await supabase
-      .from("clientes_sala")
-      .select("id")
-      .eq("empresa_id", empresaId);
-    const idsEmpresa = new Set(
-      (clientesEmpresa ?? []).map((c) => c.id as string),
+    // Por tandas: con más de 1.000 fichas, Supabase recorta en silencio y los
+    // clientes que no entraban se quedaban sin visitas ni etiquetas.
+    const clientesEmpresa = await leerTodas<{ id: string }>(() =>
+      supabase.from("clientes_sala").select("id").eq("empresa_id", empresaId),
     );
+    const idsEmpresa = new Set(clientesEmpresa.map((c) => c.id));
 
+    // Todas por tandas (`leerTodas`): estas tablas crecen sin techo con el uso
+    // diario y el corte mudo de 1.000 filas de Supabase dejaría a los clientes
+    // de las tandas siguientes sin visitas, etiquetas ni reseñas.
     const [
-      resReservas,
-      resEtiquetas,
-      resResenas,
+      filasReservas,
+      filasEtiquetas,
+      filasResenas,
       resConfig,
-      resSolicitudes,
+      filasSolicitudes,
     ] = await Promise.all([
       // Sin filtro de fecha ni de estado: la misma consulta alimenta las dos
       // cosas, que usan criterios distintos (próximas = compromiso de mesa;
       // visitas = asistió). Se reparte abajo, en una sola pasada.
-      supabase
-        .from("reservas")
-        .select(
-          "id, cliente_id, fecha, hora, personas, estado, mesa, zona, turno, origen, notas",
-        )
-        .eq("empresa_id", empresaId)
-        .not("cliente_id", "is", null)
-        .order("fecha", { ascending: true })
-        .order("hora", { ascending: true }),
+      leerTodas(() =>
+        supabase
+          .from("reservas")
+          .select(
+            "id, cliente_id, fecha, hora, personas, estado, mesa, zona, turno, origen, notas",
+          )
+          .eq("empresa_id", empresaId)
+          .not("cliente_id", "is", null)
+          .order("fecha", { ascending: true })
+          .order("hora", { ascending: true }),
+      ),
       // `!inner` es imprescindible: `sala_cliente_etiquetas` NO tiene
       // `empresa_id`, y con un embed normal el filtro sobre la relación no
       // descarta filas — solo deja la relación a null y la asignación de otra
       // empresa llega igualmente. Con inner join el filtro sí acota las filas.
-      supabase
-        .from("sala_cliente_etiquetas")
-        .select(
-          "cliente_id, sala_etiquetas!inner(id, nombre, emoji, color, empresa_id, activo)",
-        )
-        .eq("sala_etiquetas.empresa_id", empresaId),
+      leerTodas(() =>
+        supabase
+          .from("sala_cliente_etiquetas")
+          .select(
+            "cliente_id, sala_etiquetas!inner(id, nombre, emoji, color, empresa_id, activo)",
+          )
+          .eq("sala_etiquetas.empresa_id", empresaId),
+      ),
       // `fecha_reseña` lleva eñe y tilde: hay que entrecomillarla y darle un
       // alias ASCII, o el parser de tipos de supabase-js no sabe leer el select.
-      supabase
-        .from("resenas")
-        .select(
-          'id, cliente_id, reserva_id, rating, rating_comida, rating_servicio, rating_ambiente, comentario, origen, fecha:"fecha_reseña"',
-        )
-        .eq("empresa_id", empresaId)
-        .not("cliente_id", "is", null)
-        .order("fecha_reseña", { ascending: false, nullsFirst: false }),
+      leerTodas(() =>
+        supabase
+          .from("resenas")
+          .select(
+            'id, cliente_id, reserva_id, rating, rating_comida, rating_servicio, rating_ambiente, comentario, origen, fecha:"fecha_reseña"',
+          )
+          .eq("empresa_id", empresaId)
+          .not("cliente_id", "is", null)
+          .order("fecha_reseña", { ascending: false, nullsFirst: false }),
+      ),
       supabase
         .from("empresa_reservas_config")
         .select("clasif_regular_min, clasif_vip_min")
@@ -244,12 +253,14 @@ export async function listClientesEnriquecidos(): Promise<ClientesEnriquecidosRe
         .maybeSingle(),
       // Peticiones de valoración enviadas. No traen `cliente_id`: se atribuyen
       // al cliente a través de la reserva, más abajo.
-      supabase
-        .from("reserva_email_envios")
-        .select("id, reserva_id, enviado_at")
-        .eq("empresa_id", empresaId)
-        .eq("tipo", "SOLICITUD_VALORACION")
-        .order("enviado_at", { ascending: false }),
+      leerTodas(() =>
+        supabase
+          .from("reserva_email_envios")
+          .select("id, reserva_id, enviado_at")
+          .eq("empresa_id", empresaId)
+          .eq("tipo", "SOLICITUD_VALORACION")
+          .order("enviado_at", { ascending: false }),
+      ),
     ]);
 
     const out: Record<string, ClienteEnriquecido> = {};
@@ -276,7 +287,7 @@ export async function listClientesEnriquecidos(): Promise<ClientesEnriquecidosRe
     /** reserva → (cliente, fecha), para atribuir los envíos de valoración. */
     const reservaInfo = new Map<string, { clienteId: string; fecha: string }>();
 
-    for (const r of resReservas.data ?? []) {
+    for (const r of filasReservas) {
       const cid = r.cliente_id as string | null;
       if (!cid) continue;
       const b = bucket(cid);
@@ -325,7 +336,7 @@ export async function listClientesEnriquecidos(): Promise<ClientesEnriquecidosRe
       }
     }
 
-    for (const row of resEtiquetas.data ?? []) {
+    for (const row of filasEtiquetas) {
       const cid = row.cliente_id as string | null;
       const et = row.sala_etiquetas as unknown as Record<string, unknown> | null;
       if (!cid || !et) continue;
@@ -343,7 +354,7 @@ export async function listClientesEnriquecidos(): Promise<ClientesEnriquecidosRe
     /** reserva → reseña, para saber si una petición obtuvo respuesta. */
     const resenaPorReserva = new Map<string, ResenaCliente>();
 
-    for (const r of resResenas.data ?? []) {
+    for (const r of filasResenas) {
       const cid = r.cliente_id as string | null;
       if (!cid) continue;
       const b = bucket(cid);
@@ -368,7 +379,7 @@ export async function listClientesEnriquecidos(): Promise<ClientesEnriquecidosRe
     // Histórico de peticiones. Se atribuye al cliente por la reserva: la tabla
     // de envíos no guarda `cliente_id`, y usar el email del destinatario haría
     // que una corrección posterior del correo desligara el histórico.
-    for (const s of resSolicitudes.data ?? []) {
+    for (const s of filasSolicitudes) {
       const rid = s.reserva_id as string | null;
       if (!rid) continue;
       const info = reservaInfo.get(rid);

@@ -5,6 +5,7 @@ import { getEmpresaActivaForUser } from "@/features/empresa/lib/empresa-server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { findOrLinkClienteSala } from "@/features/sala/lib/cliente-link";
 import { friendlyError } from "@/shared/lib/friendly-errors";
+import { leerTodas } from "@/shared/lib/supabase-paginado";
 
 async function getContext() {
   const supabase = await createClient();
@@ -29,14 +30,17 @@ async function getContext() {
 export async function listClientes() {
   try {
     const { supabase, empresaId } = await getContext();
-    const query = supabase
-      .from("clientes_sala")
-      .select("*")
-      .order("created_at", { ascending: false });
-    if (empresaId) query.eq("empresa_id", empresaId);
-    const { data, error } = await query;
-    if (error) throw error;
-    return { ok: true, data: data ?? [] };
+    // Por tandas: sin paginar, Supabase corta en 1.000 filas sin avisar y el
+    // listado se quedaba en mil clientes con la tabla llena de miles.
+    const data = await leerTodas(() => {
+      const query = supabase
+        .from("clientes_sala")
+        .select("*")
+        .order("created_at", { ascending: false });
+      if (empresaId) query.eq("empresa_id", empresaId);
+      return query;
+    });
+    return { ok: true, data };
   } catch (err) {
     console.error("[clientes] listClientes:", err);
     return { ok: false, data: [], error: friendlyError(err, "listClientes") };
