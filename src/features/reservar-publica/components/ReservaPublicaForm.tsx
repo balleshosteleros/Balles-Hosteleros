@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useTransition, useMemo, useEffect } from "react";
-import { TicketCodigoInput } from "@/features/reservar-publica/components/TicketCodigoInput";
 import type { TicketPublico } from "@/features/reservar-publica/actions/validar-ticket-publico";
 import {
   horaPermitidaPorTicket,
@@ -15,7 +14,7 @@ import { CalendarCheck, Users, Mail, Phone, Calendar, Clock, Ticket, Info, MapPi
 import { crearReservaPublicaAction } from "@/features/reservar-publica/actions/crear-reserva-publica";
 import { validarCuponPublicoAction } from "@/features/reservar-publica/actions/validar-cupon-publico-action";
 import { CuponInputReserva } from "@/features/sala/cupones/components/CuponInputReserva";
-import { TicketSelector, type ProductoTicketPublico } from "@/features/reservar-publica/components/TicketSelector";
+import type { ProductoTicketPublico } from "@/features/reservar-publica/components/TicketSelector";
 import { SelectorDisponibilidad } from "@/features/reservar-publica/components/SelectorDisponibilidad";
 import {
   listarGruposZonasPublica,
@@ -498,55 +497,12 @@ export function ReservaPublicaForm({
           onSubmit={onSubmit}
           className="bg-white sm:rounded-2xl sm:shadow-xl sm:border sm:border-zinc-100 px-5 sm:px-7 pt-2 pb-6 sm:pt-7 sm:pb-7 space-y-5"
         >
-          {/* Código de un Ticket ya comprado. Va lo primero porque condiciona
-              todo lo demás: días, horas, turno, zona y número de personas.
-              Solo aparece si la empresa VENDE tickets: en un restaurante que no
-              los usa, pedir un código que nadie puede tener solo confunde a
-              quien viene a reservar una mesa normal. */}
-          {productosTicket.length > 0 && (
-          <TicketCodigoInput
-            empresaSlug={empresaSlug}
-            value={ticketCodigo}
-            onChange={(v) => {
-              setTicketCodigo(v);
-              // Un código canjeado sustituye a comprar el ticket ahora y a
-              // cualquier cupón: son formas distintas de pagar lo mismo.
-              if (v) {
-                setTicketProductoId(null);
-                setCodigo("");
-                setMostrarCodigo(false);
-                setCuponValido(null);
-              }
-            }}
-            onResult={setTicketCanje}
-            fecha={fecha}
-            hora={hora}
-            grupoZonaId={grupoZonaId || null}
-            contextoSerial={`${fecha}|${grupoZonaId}`}
-            accent={accent}
-          />
-          )}
-
-          {/* Comprar el ticket ahora: solo si no viene con un código canjeado. */}
-          {productosTicket.length > 0 && !ticketCanje && (
-            <TicketSelector
-              productos={productosTicket}
-              selectedId={ticketProductoId}
-              onChange={(id) => {
-                setTicketProductoId(id);
-                // Cupón y ticket son tipos incompatibles: si el cliente elige
-                // ticket, limpiamos cualquier cupón previo del estado.
-                if (id) {
-                  setCodigo("");
-                  setMostrarCodigo(false);
-                  setCuponValido(null);
-                }
-              }}
-              required={ticketObligatorio}
-              accent={accent}
-              onAccent={onAccent}
-            />
-          )}
+          {/* Aquí NO se venden Tickets ni se pide su código: la web es solo
+              para reservar mesa. Los Tickets se compran en su propia tienda, y
+              quien ya tenga uno lo canjea desde el enlace de su correo, que
+              trae el código puesto (`ticketCodigoInicial`). Meter aquí la venta
+              y el canje llenaba el formulario de campos que el 99% de quien
+              entra a reservar no necesita. */}
 
           {/* Bloque "qué reservas": comensales → fecha → hora. Agrupado en un
               panel para separarlo visualmente de los datos de contacto.
