@@ -98,7 +98,6 @@ export function GoogleSignInButton({
   const router = useRouter()
   const gidRef = useRef<GoogleAccountsId | null>(null)
   const nonceRawRef = useRef<string>('')
-  const [ready, setReady] = useState(false)
   const [fallback, setFallback] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -126,6 +125,11 @@ export function GoogleSignInButton({
   // dominio no autorizado…) caemos al flujo OAuth como último recurso.
   const handleClick = useCallback(() => {
     const gid = gidRef.current
+    // Todavia no ha llegado el script de Google (tarda varios segundos en redes
+    // lentas). El boton NO se bloquea por eso — ver `disabled` mas abajo —, asi
+    // que aqui puede entrar sin `gid`: en ese caso vamos directos al acceso
+    // normal de Google. Antes el boton salia gris y con el simbolo de prohibido
+    // durante ~10s nada mas abrir la pantalla, y parecia que no dejaba entrar.
     if (!gid) {
       void handleOAuthFallback()
       return
@@ -211,7 +215,6 @@ export function GoogleSignInButton({
         use_fedcm_for_prompt: true,
       })
       gidRef.current = gid
-      if (!cancelled) setReady(true)
 
       // Mostramos la tarjeta One Tap automáticamente al cargar. Si Google decide
       // no mostrarla (navegador sin FedCM, cooldown por descartes previos,
@@ -277,7 +280,7 @@ export function GoogleSignInButton({
       <button
         type="button"
         onClick={handleClick}
-        disabled={!ready || busy || oauthLoading}
+        disabled={busy || oauthLoading}
         className="flex h-12 w-full items-center justify-center gap-3 rounded-lg bg-white px-4 text-sm font-semibold text-slate-900 shadow-sm transition-all hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
       >
         <svg className="h-5 w-5" viewBox="0 0 24 24">
