@@ -54,6 +54,9 @@ function precioConIva(p: ProductoTienda): number {
   return Number(p.precio.toFixed(2));
 }
 
+/** Cuánta gente puede venir. Una experiencia se compra de dos en dos. */
+const PERSONAS_OPCIONES = [2, 4, 6, 8, 10, 12] as const;
+
 function disponibles(p: ProductoTienda): number | null {
   if (p.stockModo === "ilimitado" || p.stockTotal == null) return null;
   return Math.max(0, p.stockTotal - p.stockConsumido);
@@ -85,21 +88,16 @@ export function TiendaTicketView({
   );
 
   const porPersona = producto?.modoPrecio === "por_persona";
-  // Un paquete cubre varias personas (la experiencia se vende de 2 en 2), así
-  // que lo que se pide en el selector son PAQUETES, no comensales.
-  const porPaquete = (producto?.personasPorUnidad ?? 1) > 1;
-  const unidadesReales = porPersona ? unidades : 1;
-  const comensales = unidadesReales * (producto?.personasPorUnidad ?? 1);
-  // El precio está POR PERSONA, así que el importe se calcula sobre comensales:
-  // un paquete de 2 a 49 € son 98 €, no 49 €.
+  // El desplegable pide PERSONAS, sin más: los "paquetes" obligaban al cliente
+  // a traducir "1 paquete = 2 personas" para saber cuánta gente venía y cuánto
+  // pagaba. Ahora elige 2, 4, 6… y el precio se calcula sobre esa gente.
+  const comensales = porPersona ? unidades : 1;
   const total = producto ? precioConIva(producto) * comensales : 0;
 
-  // Un producto por paquetes empieza en 1 paquete (= 2 personas); uno por
-  // persona, en 2, que es la reserva típica. Sin esto, la experiencia abría
-  // pidiendo 2 paquetes, o sea 4 comensales y el doble de dinero.
+  // Al cambiar de producto se vuelve a la compra típica: dos personas.
   useEffect(() => {
-    setUnidades(porPaquete ? 1 : 2);
-  }, [porPaquete, productoId]);
+    setUnidades(2);
+  }, [productoId]);
 
   const valido =
     !!producto &&
@@ -257,23 +255,23 @@ export function TiendaTicketView({
           {porPersona && (
             <div className="space-y-1.5">
               <Label htmlFor="uds" className="text-zinc-700">
-                {porPaquete ? "Paquetes" : "Personas"}
+                Personas
               </Label>
-              <Input
+              {/* Desplegable de pares en vez de un número libre: una
+                  experiencia se compra para dos, cuatro, seis… Escribir "7" a
+                  mano llevaba a un carrito que la sala no puede sentar. */}
+              <select
                 id="uds"
-                type="number"
-                min={1}
-                max={50}
                 value={unidades}
-                onChange={(e) => setUnidades(Math.max(1, Number(e.target.value) || 1))}
-              />
-              {porPaquete && (
-                <p className="text-[11px] text-zinc-500">
-                  Cada paquete es para {producto.personasPorUnidad} personas
-                  {" · "}
-                  {comensales} en total.
-                </p>
-              )}
+                onChange={(e) => setUnidades(Number(e.target.value))}
+                className="h-11 w-full rounded-xl border border-zinc-200 bg-white px-3 text-sm text-zinc-900 focus:outline-none focus:ring-2 focus:ring-zinc-300"
+              >
+                {PERSONAS_OPCIONES.map((n) => (
+                  <option key={n} value={n}>
+                    {n} personas
+                  </option>
+                ))}
+              </select>
             </div>
           )}
 
@@ -309,9 +307,7 @@ export function TiendaTicketView({
                 <span>
                   {!porPersona
                     ? producto.nombre
-                    : porPaquete
-                      ? `${unidades} ${unidades === 1 ? "paquete" : "paquetes"} (${comensales} personas) × ${euros(precioConIva(producto) * producto.personasPorUnidad)}`
-                      : `${unidades} ${unidades === 1 ? "persona" : "personas"} × ${euros(precioConIva(producto))}`}
+                    : `${unidades} personas × ${euros(precioConIva(producto))}`}
                 </span>
                 <span className="text-base font-semibold text-zinc-900">{euros(total)}</span>
               </div>

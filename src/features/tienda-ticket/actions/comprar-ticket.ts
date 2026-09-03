@@ -76,14 +76,11 @@ export async function comprarTicketAction(
   // ── 3. Stock ──────────────────────────────────────────────────────
   // "por_persona" consume una unidad por comensal; "por_reserva", una sola.
   //
-  // PAQUETES: cuando el producto cubre varias personas por unidad (la Cena
-  // Experiencia se vende de 2 en 2), lo que llega en `input.unidades` son
-  // PAQUETES. Se guardan siempre COMENSALES, que es lo que después lee el canje
-  // para fijar el tamaño de la reserva; si no, un paquete reservaría para una
-  // sola persona.
-  const personasPorUnidad = Math.max(1, Number(p.personas_por_unidad ?? 1));
-  const unidades =
-    p.modo_precio === "por_persona" ? input.unidades * personasPorUnidad : 1;
+  // Lo que llega en `input.unidades` son PERSONAS, tal cual las eligió el
+  // cliente en el desplegable (2, 4, 6…). Antes eran "paquetes" y se
+  // multiplicaban aquí, lo que obligaba al cliente a traducir "1 paquete = 2
+  // personas" y le cobraba el doble de lo que creía.
+  const unidades = p.modo_precio === "por_persona" ? input.unidades : 1;
   if (p.stock_modo === "limitado" && p.stock_total != null) {
     const libre = Number(p.stock_total) - Number(p.stock_consumido ?? 0);
     if (libre < unidades) {
