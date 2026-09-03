@@ -16,16 +16,25 @@
  * tanto en alta como en edición — el restaurante no captó al cliente por
  * ningún canal digital, llegó andando.
  *
- * Regla operativa 2: un alta manual de tipo Cliente desde el back-office nace
- * con `TELEFONO`, que es como entra la inmensa mayoría — pero el usuario puede
+ * Regla operativa 2: un alta de tipo Cliente desde el back-office nace con
+ * `TELEFONO`, que es como entra la inmensa mayoría — pero el usuario puede
  * cambiarlo, porque también se apunta gente que llama a la puerta o escribe.
+ *
+ * Regla operativa 3: "Manual" NO es un origen. Toda reserva entra por un canal
+ * real (teléfono, local, web, redes…) y el alta desde sala obliga a elegirlo.
+ * Una reserva sin `origen` en BD es un dato que falta, no un canal: se rotula
+ * como tal y no se ofrece en ningún selector ni filtro.
  */
 
 /** Clave normalizada de origen. Es `string` a propósito: el catálogo es abierto. */
 export type OrigenBucket = string;
 
-/** Origen que se muestra cuando la reserva no trae `origen` en BD. */
-export const ORIGEN_SIN_DATO = "MANUAL";
+/**
+ * Rótulo para una reserva sin `origen` en BD. No es un canal: es la marca de
+ * que el dato falta (reservas antiguas anteriores a que el origen fuese
+ * obligatorio). Por eso no aparece en selectores ni en filtros.
+ */
+export const ORIGEN_SIN_DATO = "SIN_DATO";
 
 /**
  * Alias de valores crudos que significan lo mismo → clave canónica.
@@ -66,18 +75,18 @@ const LABELS: Record<string, string> = {
   WHATSAPP: "WhatsApp",
   EMAIL: "Email",
   AGORA: "Ágora",
-  [ORIGEN_SIN_DATO]: "Manual",
+  [ORIGEN_SIN_DATO]: "Sin origen",
 };
 
 /**
  * Paleta de los orígenes conocidos: rojo para tráfico físico, verde Google,
- * teal motor web propio, colores de marca en redes, gris para el alta manual.
+ * teal motor web propio, colores de marca en redes, gris para el dato que falta.
  */
 const COLORS: Record<string, string> = {
   WEB: "#0d9488",       // teal-600 — motor web propio
   GOOGLE: "#22c55e",    // green-500 — Reserve with Google
   TELEFONO: "#f59e0b",  // amber-500 — llamada
-  LOCAL: "#3b82f6",     // blue-500 — alta manual en local
+  LOCAL: "#3b82f6",     // blue-500 — se apuntó en el local
   WALKIN: "#ef4444",    // red-500 — cliente andante
   INSTAGRAM: "#ec4899", // pink-500
   FACEBOOK: "#6366f1",  // indigo-500
@@ -107,7 +116,7 @@ const PALETA_EXTRA = [
 ];
 
 /**
- * Orígenes que se ofrecen al dar de alta una reserva A MANO desde sala.
+ * Orígenes que se ofrecen al dar de alta una reserva desde sala.
  *
  * NO es el catálogo cerrado de la columna (que es abierto: por ahí entran las
  * palabras clave de campaña). Es solo lo que tiene sentido elegir a mano:
@@ -117,7 +126,7 @@ const PALETA_EXTRA = [
  *
  * El primero es el que sale marcado por defecto.
  */
-export const ORIGENES_ALTA_MANUAL: readonly string[] = [
+export const ORIGENES_ALTA_SALA: readonly string[] = [
   "TELEFONO",
   "LOCAL",
   "WHATSAPP",
@@ -128,7 +137,7 @@ export const ORIGENES_ALTA_MANUAL: readonly string[] = [
 
 /**
  * Normaliza cualquier string crudo de `reservas.origen` a su clave estable.
- * - null / "" → `MANUAL` (nadie registró canal: se dio de alta a mano)
+ * - null / "" → `SIN_DATO` (reserva antigua sin canal registrado)
  * - Aplica los alias conocidos.
  * - Cualquier otro valor conserva su propia clave en mayúsculas.
  */

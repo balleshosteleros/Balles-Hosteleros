@@ -16,6 +16,7 @@ import {
   liberarGarantia,
   cobrarCancelacion,
   renunciarCobroCancelacion,
+  perdonarCobro,
 } from "@/features/sala/actions/cobro-politicas-actions";
 import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 
@@ -165,8 +166,21 @@ function Cancelacion({
   onCambio?: () => void;
 }) {
   const { confirm, dialog } = useConfirmDelete();
-  const [ocupado, setOcupado] = useState<"cobrar" | "renunciar" | null>(null);
+  const [ocupado, setOcupado] = useState<"cobrar" | "renunciar" | "perdonar" | null>(null);
   const importe = eur(datos.cancelacionImporte);
+
+  async function perdonar() {
+    // No mueve dinero, así que no lleva confirmación de borrado: es una
+    // decisión reversible (se puede cobrar después, mientras la tarjeta valga).
+    setOcupado("perdonar");
+    const res = await perdonarCobro(datos.reservaId);
+    setOcupado(null);
+    if (!res.ok) toast.error(res.error);
+    else {
+      toast.success("No se cobrará");
+      onCambio?.();
+    }
+  }
 
   async function cobrar() {
     const ok = await confirm({
@@ -247,6 +261,11 @@ function Cancelacion({
             <Boton onClick={cobrar} cargando={ocupado === "cobrar"} principal>
               Cobrar
             </Boton>
+            {!datos.cobroPerdonadoAt && (
+              <Boton onClick={perdonar} cargando={ocupado === "perdonar"}>
+                No cobrar
+              </Boton>
+            )}
           </div>
         </>
       ) : (

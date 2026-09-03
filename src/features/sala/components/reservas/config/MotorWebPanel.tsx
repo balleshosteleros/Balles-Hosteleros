@@ -256,7 +256,7 @@ function BloqueMaxPersonas({ config, onChange }: Props) {
                 <ul className="divide-y rounded border max-w-2xl">
                   {reglas.map((r, i) => (
                     <li key={`${r.inicio}-${r.fin}-${i}`} className="flex items-center gap-2 px-3 py-2 text-xs">
-                      <span className="w-16 font-medium tabular-nums">{r.max} pax</span>
+                      <span className="w-16 font-medium tabular-nums">{r.max} per</span>
                       <span className="flex-1 tabular-nums">{r.inicio} → {r.fin}</span>
                       <Button
                         type="button"

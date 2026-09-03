@@ -178,7 +178,7 @@ function FacturaCruda({ f }: { f: MigracionFactura }) {
       >
         {open ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
         <span className="font-medium">{f.numero}</span>
-        <span className="text-muted-foreground">· {fechaCorta(f.fecha)} · {f.comensales} pax · {f.lineas.length} líneas</span>
+        <span className="text-muted-foreground">· {fechaCorta(f.fecha)} · {f.comensales} per · {f.lineas.length} líneas</span>
         <span className="ml-auto font-semibold tabular-nums">{eur(f.total)}</span>
       </button>
       {open && (

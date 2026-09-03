@@ -17,6 +17,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 /** Cada situación que reclama atención, con su urgencia. */
 export type TipoAvisoCobro =
+  | "cobro_sin_decidir"
   | "cobro_pendiente"
   | "cobro_agotado"
   | "retencion_por_caducar"
@@ -58,7 +59,7 @@ export async function getAvisosCobro(): Promise<ResumenAvisosCobro> {
     const { data, error } = await supabase
       .from("reservas")
       .select(
-        "id, fecha, garantia_estado, garantia_capture_deadline, tiene_garantia, cancelacion_estado, cancelacion_proximo_intento_at, cancelacion_intentos, cobro_perdonado_at, garantia_solicitada_at, garantia_limite_at, garantia_cancelada_sin_tarjeta_at",
+        "id, fecha, garantia_estado, garantia_capture_deadline, tiene_garantia, cancelacion_estado, cancelacion_proximo_intento_at, cancelacion_intentos, cancelacion_importe, cobro_perdonado_at, politica_incumplida_at, garantia_solicitada_at, garantia_limite_at, garantia_cancelada_sin_tarjeta_at",
       )
       .eq("empresa_id", empresaId)
       .or("tiene_garantia.eq.true,tiene_cancelacion.eq.true");
@@ -68,6 +69,8 @@ export async function getAvisosCobro(): Promise<ResumenAvisosCobro> {
     const ahora = Date.now();
     const limiteCaducidad = ahora + HORAS_AVISO_CADUCIDAD * 3_600_000;
 
+    const sinDecidir: string[] = [];
+    let importeSinDecidir = 0;
     const cobroPendiente: string[] = [];
     const cobroAgotado: string[] = [];
     const porCaducar: string[] = [];
@@ -78,6 +81,14 @@ export async function getAvisosCobro(): Promise<ResumenAvisosCobro> {
     for (const r of filas) {
       // Una decisión humana cierra el asunto: no se vuelve a avisar.
       if (r.cobro_perdonado_at) continue;
+
+      // Incumplió la política y NADIE ha decidido todavía si se cobra. Antes
+      // esto no se avisaba —solo se miraban los cobros ya FALLIDOS—, así que
+      // un cobro que ni se había intentado era invisible y se perdía.
+      if (r.politica_incumplida_at && r.cancelacion_estado === "guardada") {
+        sinDecidir.push(r.id as string);
+        importeSinDecidir += Number(r.cancelacion_importe ?? 0);
+      }
 
       if (r.cancelacion_estado === "fallida") {
         if (r.cancelacion_proximo_intento_at) cobroPendiente.push(r.id as string);
@@ -116,6 +127,16 @@ export async function getAvisosCobro(): Promise<ResumenAvisosCobro> {
     const avisos: AvisoCobro[] = [];
     const plural = (n: number, uno: string, varios: string) => (n === 1 ? uno : varios);
 
+    if (sinDecidir.length > 0) {
+      const total = importeSinDecidir > 0
+        ? ` (${importeSinDecidir.toFixed(2).replace(".", ",")} €)`
+        : "";
+      avisos.push({
+        tipo: "cobro_sin_decidir",
+        reservaIds: sinDecidir,
+        texto: `${sinDecidir.length} ${plural(sinDecidir.length, "cobro sin decidir", "cobros sin decidir")}${total} — cobra o perdona`,
+      });
+    }
     if (cobroPendiente.length > 0) {
       avisos.push({
         tipo: "cobro_pendiente",

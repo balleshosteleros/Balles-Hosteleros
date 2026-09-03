@@ -63,7 +63,13 @@ import {
   RESERVA_APELLIDOS_MAX_CHARS,
   MAX_COMENSALES_SIN_REGLA,
 } from "@/features/sala/data/reservas";
-import { labelOrigen, ORIGENES_ALTA_MANUAL } from "@/features/sala/data/origenes";
+import { labelOrigen, ORIGENES_ALTA_SALA } from "@/features/sala/data/origenes";
+import {
+  PREFIJOS_TELEFONO,
+  PREFIJO_POR_DEFECTO,
+  separarPrefijo,
+  componerTelefono,
+} from "@/features/sala/data/prefijos-telefono";
 import { ReservaEstadoBadge, ReservaEstadoDot } from "@/features/sala/components/reservas/ReservaEstadoBadge";
 import {
   listReservas,
@@ -234,7 +240,7 @@ function addMonths(iso: string, n: number) {
 /**
  * Rejilla de la lista. El panel mide 620 px: el ancho fijo tiene que dejar
  * sitio de verdad al nombre, que es por lo que se busca a la gente en sala.
- * Reparto: hora 50, mesa 62, pax 26, origen 56, estado 86, tiempo 58 + 6
+ * Reparto: hora 50, mesa 62, per 26, origen 56, estado 86, tiempo 58 + 6
  * huecos de 6 px + 24 de padding = 398 px, y el resto es para el nombre.
  *
  * La columna TIEMPO va la última: es un dato que se mira de reojo (cuánto
@@ -242,7 +248,54 @@ function addMonths(iso: string, n: number) {
  * fila. El ancho extra que necesita se lo cede el plano, que se escala solo.
  */
 const LISTA_GRID =
-  "grid grid-cols-[50px_62px_minmax(0,1fr)_26px_56px_86px_58px] gap-1.5 items-center";
+  "grid grid-cols-[50px_62px_minmax(0,1fr)_26px_56px_74px_86px_58px] gap-1.5 items-center";
+
+/**
+ * Qué condiciones lleva la reserva, en una palabra.
+ *
+ * La categoría guardada (`tipoCategoria`) es la que eligió quien la creó, pero
+ * no siempre está puesta: una reserva de la web nace con política sin que
+ * nadie la etiquete. Así que si falta, se deduce de lo que la reserva tiene de
+ * verdad —ticket, cupón, tarjeta— antes de rendirse y decir "normal".
+ */
+function TipoReservaCelda({ reserva }: { reserva: Reserva }) {
+  const categoria: TipoReservaCategoria | null =
+    reserva.tipoCategoria ??
+    (reserva.esTicket
+      ? "ticket"
+      : reserva.codigo
+        ? "cupon"
+        : reserva.tieneGarantia || reserva.tieneCancelacion
+          ? "politica"
+          : null);
+
+  if (!categoria) {
+    // Una reserva sin condiciones es lo normal: se dice en gris y flojito,
+    // porque no es un dato sobre el que haya que hacer nada.
+    return <span className="min-w-0 truncate text-[11px] text-muted-foreground/50">Normal</span>;
+  }
+
+  // "Política de cancelación" no cabe en una columna: en la lista basta con
+  // "Tarjeta", que es lo que el camarero necesita saber de un vistazo.
+  const texto = categoria === "politica" ? "Tarjeta" : TIPO_RESERVA_CATEGORIA_LABELS[categoria];
+  const color =
+    categoria === "ticket"
+      ? "text-red-600 dark:text-red-400"
+      : categoria === "cupon"
+        ? "text-amber-600 dark:text-amber-400"
+        : categoria === "politica"
+          ? "text-emerald-600 dark:text-emerald-400"
+          : "text-muted-foreground";
+
+  return (
+    <span
+      className={cn("min-w-0 truncate text-[11px] font-medium", color)}
+      title={TIPO_RESERVA_CATEGORIA_LABELS[categoria]}
+    >
+      {texto}
+    </span>
+  );
+}
 
 function StatusDot({ estado }: { estado: EstadoReserva }) {
   return (
@@ -375,7 +428,7 @@ function ReservaQuickPopover({
             </Badge>
           </div>
           <p className="text-[10px] text-muted-foreground">
-            {reserva.hora} · {reserva.comensales} pax
+            {reserva.hora} · {reserva.comensales} per
           </p>
         </div>
       ) : (
@@ -526,7 +579,9 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
   }) => void;
 }) {
   const [form, setForm] = useState({
-    cliente: "", apellidos: "", telefono: "", email: "",
+    // El teléfono se guarda SIEMPRE con prefijo: un número sin él no sirve
+    // para llamar a quien no es del país y además duplica fichas de cliente.
+    cliente: "", apellidos: "", telefonoPrefijo: PREFIJO_POR_DEFECTO, telefono: "", email: "",
     fecha, hora: "", turno,
     // Siempre 2 por defecto: la capacidad de la mesa no dice cuánta gente viene.
     comensales: 2,
@@ -897,7 +952,7 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
   // Al elegir mesa se fija también su zona: la mesa siempre trae la suya, y así
   // el dato guardado en la reserva y el selector de zona no pueden divergir.
   // Los comensales NO se tocan: son un dato del cliente, no de la mesa (antes
-  // se subían a la capacidad de la mesa, convirtiendo 2 pax en 15 al elegir A1).
+  // se subían a la capacidad de la mesa, convirtiendo 2 per en 15 al elegir A1).
   const elegirMesa = (mesaId: string) => {
     const m = mesas.find((x) => x.id === mesaId);
     setForm((p) => ({
@@ -968,7 +1023,10 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
       ...p,
       cliente: c.nombre ?? "",
       apellidos: c.apellidos ?? "",
-      telefono: c.telefono ?? "",
+      // La ficha puede traerlo con prefijo o sin él (números antiguos): se
+      // parte para que el selector y el campo queden coherentes.
+      telefonoPrefijo: separarPrefijo(c.telefono).prefijo,
+      telefono: separarPrefijo(c.telefono).numero,
       email: c.email ?? "",
     }));
     setSugerencias([]);
@@ -1153,7 +1211,7 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
       id: `r-${Date.now()}`,
       cliente: form.esWalkIn ? "" : form.cliente,
       apellidos: form.esWalkIn ? "" : form.apellidos,
-      telefono: form.esWalkIn ? "" : form.telefono,
+      telefono: form.esWalkIn ? "" : componerTelefono(form.telefonoPrefijo, form.telefono),
       email: form.esWalkIn ? "" : form.email,
       fecha: form.fecha, hora: form.hora, turno: form.turno,
       comensales: form.comensales, zona: form.zona,
@@ -1346,13 +1404,28 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
               >
                 Teléfono
               </LabelConRegla>
-              <Input
-                className="h-8 text-xs"
-                value={form.telefono}
-                onFocus={() => setCampoActivo("telefono")}
-                onBlur={() => setTimeout(() => setCampoActivo((c) => (c === "telefono" ? null : c)), 150)}
-                onChange={e => setForm(p => ({ ...p, telefono: e.target.value }))}
-              />
+              {/* Prefijo obligatorio, nunca a mano: si unos números lo llevan
+                  y otros no, el mismo cliente acaba con dos fichas. */}
+              <div className="flex gap-1.5">
+                <select
+                  value={form.telefonoPrefijo}
+                  onChange={e => setForm(p => ({ ...p, telefonoPrefijo: e.target.value }))}
+                  className="h-8 w-[86px] shrink-0 rounded-md border border-input bg-background px-1.5 text-xs"
+                  title={PREFIJOS_TELEFONO.find(x => x.prefijo === form.telefonoPrefijo)?.label ?? ""}
+                >
+                  {PREFIJOS_TELEFONO.map(x => (
+                    <option key={x.prefijo} value={x.prefijo}>{x.flag} {x.prefijo}</option>
+                  ))}
+                </select>
+                <Input
+                  type="tel"
+                  className="h-8 flex-1 text-xs"
+                  value={form.telefono}
+                  onFocus={() => setCampoActivo("telefono")}
+                  onBlur={() => setTimeout(() => setCampoActivo((c) => (c === "telefono" ? null : c)), 150)}
+                  onChange={e => setForm(p => ({ ...p, telefono: e.target.value }))}
+                />
+              </div>
               {renderSugerencias("telefono")}
             </div>
             <div className="relative">
@@ -1426,7 +1499,7 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
               <span>
                 {mesaBanner
                   ? `La mesa ${mesaBanner.codigo} ya tiene reserva a esta hora: se pisará.`
-                  : `Sin mesas libres para ${form.comensales} pax${
+                  : `Sin mesas libres para ${form.comensales} per${
                       form.zona ? ` en ${zonaLabel(form.zona)}` : ""
                     } a esta hora: la reserva pisará otra existente.`}
               </span>
@@ -1588,7 +1661,7 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
             </p>
           )}
         </div>
-        {/* Origen: por dónde entró la reserva. Un alta manual nace como
+        {/* Origen: por dónde entró la reserva. Un alta desde sala nace como
             "Teléfono", que es como llega la mayoría, pero se puede cambiar
             porque también se apunta a quien escribe o pregunta en la puerta.
             En walk-in no se pregunta: el cliente llegó andando y el origen es
@@ -1610,7 +1683,7 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
               onChange={(e) => setForm((p) => ({ ...p, origen: e.target.value }))}
               className="h-8 text-xs w-full rounded-md border border-input bg-background px-2"
             >
-              {ORIGENES_ALTA_MANUAL.map((o) => (
+              {ORIGENES_ALTA_SALA.map((o) => (
                 <option key={o} value={o}>{labelOrigen(o)}</option>
               ))}
             </select>
@@ -1894,7 +1967,7 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
                   Se pisa {aviso.choques.length === 1 ? "una reserva" : `${aviso.choques.length} reservas`}
                 </p>
                 <p className="text-muted-foreground">
-                  Tu reserva de {form.comensales} pax ocupa la mesa {aviso.mesaCodigo} de{" "}
+                  Tu reserva de {form.comensales} per ocupa la mesa {aviso.mesaCodigo} de{" "}
                   {form.hora.slice(0, 5)} a{" "}
                   {horaMasMinutos(form.hora, duracionEfectiva ?? 120)}, y coincide con:
                 </p>
@@ -1905,7 +1978,7 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
                   >
                     <div className="font-semibold">{c.cliente || "Sin nombre"}</div>
                     <div className="text-muted-foreground">
-                      Mesa {c.mesa} · {c.personas} pax · termina a las {c.horaFin}
+                      Mesa {c.mesa} · {c.personas} per · termina a las {c.horaFin}
                     </div>
                   </div>
                 ))}
@@ -2013,19 +2086,6 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
   );
 }
 
-const PAISES_PREFIJO = [
-  { code: "ES", prefijo: "+34", flag: "🇪🇸", label: "ESPAÑA" },
-  { code: "PT", prefijo: "+351", flag: "🇵🇹", label: "PORTUGAL" },
-  { code: "FR", prefijo: "+33", flag: "🇫🇷", label: "FRANCIA" },
-  { code: "IT", prefijo: "+39", flag: "🇮🇹", label: "ITALIA" },
-  { code: "DE", prefijo: "+49", flag: "🇩🇪", label: "ALEMANIA" },
-  { code: "GB", prefijo: "+44", flag: "🇬🇧", label: "REINO UNIDO" },
-  { code: "US", prefijo: "+1", flag: "🇺🇸", label: "ESTADOS UNIDOS" },
-  { code: "MX", prefijo: "+52", flag: "🇲🇽", label: "MÉXICO" },
-  { code: "AR", prefijo: "+54", flag: "🇦🇷", label: "ARGENTINA" },
-  { code: "CO", prefijo: "+57", flag: "🇨🇴", label: "COLOMBIA" },
-];
-
 function NuevaListaEsperaForm({
   fecha,
   turno,
@@ -2043,7 +2103,6 @@ function NuevaListaEsperaForm({
     notas: string;
     nombre: string;
     apellidos: string;
-    paisCode: string;
     prefijo: string;
     telefono: string;
     email: string;
@@ -2057,8 +2116,7 @@ function NuevaListaEsperaForm({
     notas: "",
     nombre: "",
     apellidos: "",
-    paisCode: "ES",
-    prefijo: "+34",
+    prefijo: PREFIJO_POR_DEFECTO,
     telefono: "",
     email: "",
   });
@@ -2079,7 +2137,6 @@ function NuevaListaEsperaForm({
       notas: form.notas,
       nombre: form.nombre,
       apellidos: form.apellidos,
-      paisCode: form.paisCode,
       prefijo: form.prefijo,
       telefono: form.telefono,
       email: form.email,
@@ -2153,16 +2210,13 @@ function NuevaListaEsperaForm({
             <Label className="text-xs">Teléfono</Label>
             <div className="flex gap-1">
               <select
-                value={form.paisCode}
-                onChange={e => {
-                  const p = PAISES_PREFIJO.find(x => x.code === e.target.value);
-                  setForm(prev => ({ ...prev, paisCode: e.target.value, prefijo: p?.prefijo ?? prev.prefijo }));
-                }}
+                value={form.prefijo}
+                onChange={e => setForm(prev => ({ ...prev, prefijo: e.target.value }))}
                 className="h-8 text-xs w-[92px] rounded-md border border-input bg-background px-1.5"
-                title={PAISES_PREFIJO.find(p => p.code === form.paisCode)?.label ?? ""}
+                title={PREFIJOS_TELEFONO.find(x => x.prefijo === form.prefijo)?.label ?? ""}
               >
-                {PAISES_PREFIJO.map(p => (
-                  <option key={p.code} value={p.code}>{p.flag} {p.prefijo}</option>
+                {PREFIJOS_TELEFONO.map(x => (
+                  <option key={x.prefijo} value={x.prefijo}>{x.flag} {x.prefijo}</option>
                 ))}
               </select>
               <Input
@@ -2252,6 +2306,7 @@ function mapDbToReserva(row: Record<string, unknown>): Reserva {
     cancelacionProximoIntentoAt: (row.cancelacion_proximo_intento_at as string | null) ?? null,
     cancelacionCobradaAt: (row.cancelacion_cobrada_at as string | null) ?? null,
     cobroPerdonadoAt: (row.cobro_perdonado_at as string | null) ?? null,
+    politicaIncumplidaAt: (row.politica_incumplida_at as string | null) ?? null,
     importePagado: (row.importe_pagado as number | null) ?? null,
     ticketProductoId: (row.ticket_producto_id as string | null) ?? null,
     ticketUnidades: (row.ticket_unidades as number | null) ?? null,
@@ -2864,7 +2919,7 @@ function PlanoCanvas({
             <span className="font-semibold">
               {reservaMoviendo.cliente || "WALK IN"} {reservaMoviendo.apellidos}
             </span>{" "}
-            · {reservaMoviendo.hora.slice(0, 5)} · {reservaMoviendo.comensales} pax —
+            · {reservaMoviendo.hora.slice(0, 5)} · {reservaMoviendo.comensales} per —
             pulsa la mesa destino en el plano.
           </span>
           <Button
@@ -3167,6 +3222,15 @@ export function ReservasView() {
     if (turnoPedidoValido) setTurno(turnoPedidoValido);
   }, [turnoPedidoValido]);
   const [busqueda, setBusqueda] = useState("");
+  /**
+   * Reservas señaladas desde el aviso de cobros. Manda sobre el resto de
+   * filtros a propósito: un cobro pendiente suele estar CANCELADO, y el filtro
+   * de estados lo tiene oculto, así que sin esto "Ver reservas" no enseñaba
+   * nada y el aviso parecía roto.
+   */
+  const [idsDelAviso, setIdsDelAviso] = useState<string[] | null>(null);
+  /** Sube al cobrar o perdonar para que el aviso se recalcule y la línea desaparezca. */
+  const [refrescoAvisosCobro, setRefrescoAvisosCobro] = useState(0);
   const [filtroEstados, setFiltroEstados] = useState<EstadoReserva[]>(ESTADOS_RESERVA);
   const [filtroOrigen, setFiltroOrigen] = useState<string>("TODOS");
   const [cfgReservas, setCfgReservas] = useState<EmpresaReservasConfig | null>(null);
@@ -4077,21 +4141,26 @@ export function ReservasView() {
     return ids;
   }, [mesaHoverId, reservasTurno, mesasIdsDeReserva]);
   const reservasFiltradas = useMemo(() => {
+    // Señaladas desde el aviso: se enseñan esas y solo esas.
+    if (idsDelAviso && idsDelAviso.length > 0) {
+      const set = new Set(idsDelAviso);
+      return reservasTurno
+        .filter((r) => set.has(r.id))
+        .sort((a, b) => a.hora.localeCompare(b.hora));
+    }
     return reservasTurno.filter(r => {
       const q = busqueda.toLowerCase();
       const matchQ = !q || r.cliente.toLowerCase().includes(q) || r.apellidos.toLowerCase().includes(q) || r.telefono.includes(q);
       const matchZ = zonaCoincide(r.zona);
       const matchE = filtroEstados.includes(r.estado);
-      const matchO = filtroOrigen === "TODOS"
-        || (filtroOrigen === "SIN_ORIGEN" && !r.origen)
-        || r.origen === filtroOrigen;
+      const matchO = filtroOrigen === "TODOS" || r.origen === filtroOrigen;
       return matchQ && matchZ && matchE && matchO;
     }).sort((a, b) => {
       const horaCmp = a.hora.localeCompare(b.hora);
       if (horaCmp !== 0) return horaCmp;
       return ESTADO_ORDEN_PRIORIDAD[a.estado] - ESTADO_ORDEN_PRIORIDAD[b.estado];
     });
-  }, [reservasTurno, busqueda, zonaCoincide, filtroEstados, filtroOrigen]);
+  }, [reservasTurno, busqueda, zonaCoincide, filtroEstados, filtroOrigen, idsDelAviso]);
 
   const origenesPresentes = useMemo(() => {
     const set = new Set<string>();
@@ -4776,7 +4845,19 @@ export function ReservasView() {
       {/* Cobros que necesitan una decisión (PRP-082 §5.6). Si no hay nada
           pendiente no se pinta nada. */}
       <div className="shrink-0 px-2 pt-2">
-        <AvisoCobrosBanner />
+        <AvisoCobrosBanner
+          onVerReservas={setIdsDelAviso}
+          refrescarToken={refrescoAvisosCobro}
+        />
+        {idsDelAviso && idsDelAviso.length > 0 && (
+          <button
+            type="button"
+            onClick={() => setIdsDelAviso(null)}
+            className="mb-2 text-xs text-muted-foreground hover:text-foreground hover:underline"
+          >
+            ← Ver todas las reservas
+          </button>
+        )}
       </div>
 
       {/* TOP BAR — todo en una sola línea: acciones + filtros + turno + sala/zonas + vista + fecha + ajustes */}
@@ -4889,7 +4970,7 @@ export function ReservasView() {
                 turno={turno}
                 onClose={() => setShowListaEspera(false)}
                 onSave={async (data) => {
-                  const telCompleto = data.telefono ? `${data.prefijo} ${data.telefono}`.trim() : "";
+                  const telCompleto = componerTelefono(data.prefijo, data.telefono);
                   const notasFinal = data.notas;
                   const optimista: Reserva = {
                     id: `r-${Date.now()}`,
@@ -5125,7 +5206,6 @@ export function ReservasView() {
                 className="h-6 text-[10px] rounded border bg-background px-1.5"
               >
                 <option value="TODOS">Todos</option>
-                <option value="SIN_ORIGEN">Manual</option>
                 {origenesPresentes.map((o) => (
                   <option key={o} value={o}>{origenLabel(o)}</option>
                 ))}
@@ -5136,8 +5216,9 @@ export function ReservasView() {
             <span className="truncate">Hora</span>
             <span className="truncate">Mesa</span>
             <span className="truncate">Nombre</span>
-            <span className="truncate text-center">Pax</span>
+            <span className="truncate text-center">Per</span>
             <span className="truncate">Origen</span>
+            <span className="truncate">Tipo</span>
             <span className="truncate">Estado</span>
             <span className="truncate text-center">Tiempo</span>
           </div>
@@ -5267,6 +5348,11 @@ export function ReservasView() {
                       <span className="min-w-0 truncate text-[11px] text-muted-foreground" title={origenLabel(r.origen)}>
                         {origenLabel(r.origen)}
                       </span>
+                      {/* TIPO: qué condiciones lleva la reserva (tarjeta,
+                          ticket, cupón). No aparecía en ninguna columna, así
+                          que para saberlo había que abrir la ficha una por
+                          una. */}
+                      <TipoReservaCelda reserva={r} />
                       <StatusDot estado={r.estado} />
                       {/* TIEMPO: cuenta atrás (verde), retraso (rojo),
                           ocupación desde la hora de la reserva (azul) o
@@ -5420,7 +5506,7 @@ export function ReservasView() {
                     <span className="font-semibold">
                       {reservaADesplazar.cliente || "WALK IN"} {reservaADesplazar.apellidos}
                     </span>{" "}
-                    · {reservaADesplazar.hora.slice(0, 5)} · {reservaADesplazar.comensales} pax —
+                    · {reservaADesplazar.hora.slice(0, 5)} · {reservaADesplazar.comensales} per —
                     pulsa la mesa destino.
                   </span>
                   <Button
@@ -5667,7 +5753,12 @@ export function ReservasView() {
                     cancelacionCobradaAt: selectedReserva.cancelacionCobradaAt ?? null,
                     cobroPerdonadoAt: selectedReserva.cobroPerdonadoAt ?? null,
                   }}
-                  onCambio={() => void loadReservas(fecha)}
+                  onCambio={() => {
+                    void loadReservas(fecha);
+                    // El aviso mira la base de datos, no la lista: sin esto la
+                    // línea del cobro seguía ahí después de cobrarlo.
+                    setRefrescoAvisosCobro((n) => n + 1);
+                  }}
                 />
                 <div className="grid grid-cols-2 gap-2">
                   {/* Fecha y hora editables: mover una reserva era el caso
@@ -5998,14 +6089,49 @@ export function ReservasView() {
                   </div>
                   <div className="space-y-1.5">
                     <Label className="text-muted-foreground text-xs">Teléfono</Label>
-                    <Input
-                      type="tel"
-                      className="h-8 text-xs"
-                      value={clienteEdit.telefono}
-                      onChange={(e) =>
-                        setClienteEdit((p) => ({ ...p, telefono: e.target.value }))
-                      }
-                    />
+                    {/* Prefijo y número por separado, pero se guardan juntos en
+                        `telefono`: la ficha no puede quedar con un número al
+                        que luego nadie sabe a qué país llamar. */}
+                    <div className="flex gap-1.5">
+                      <select
+                        value={separarPrefijo(clienteEdit.telefono).prefijo}
+                        onChange={(e) =>
+                          setClienteEdit((p) => ({
+                            ...p,
+                            telefono: componerTelefono(
+                              e.target.value,
+                              separarPrefijo(p.telefono).numero,
+                            ),
+                          }))
+                        }
+                        className="h-8 w-[86px] shrink-0 rounded-md border border-input bg-background px-1.5 text-xs"
+                        title={
+                          PREFIJOS_TELEFONO.find(
+                            (x) => x.prefijo === separarPrefijo(clienteEdit.telefono).prefijo,
+                          )?.label ?? ""
+                        }
+                      >
+                        {PREFIJOS_TELEFONO.map((x) => (
+                          <option key={x.prefijo} value={x.prefijo}>
+                            {x.flag} {x.prefijo}
+                          </option>
+                        ))}
+                      </select>
+                      <Input
+                        type="tel"
+                        className="h-8 flex-1 text-xs"
+                        value={separarPrefijo(clienteEdit.telefono).numero}
+                        onChange={(e) =>
+                          setClienteEdit((p) => ({
+                            ...p,
+                            telefono: componerTelefono(
+                              separarPrefijo(p.telefono).prefijo,
+                              e.target.value,
+                            ),
+                          }))
+                        }
+                      />
+                    </div>
                   </div>
                   <div className="space-y-1.5">
                     <Label className="text-muted-foreground text-xs">Email</Label>
@@ -6278,7 +6404,7 @@ export function ReservasView() {
                 <span className="font-medium text-foreground">
                   {reservaADesplazar.cliente || "WALK IN"} {reservaADesplazar.apellidos}
                 </span>{" "}
-                ({reservaADesplazar.hora.slice(0, 5)} · {reservaADesplazar.comensales} pax) a la
+                ({reservaADesplazar.hora.slice(0, 5)} · {reservaADesplazar.comensales} per) a la
                 mesa <span className="font-medium text-foreground">{choqueDesplazar.mesa.codigo}</span>{" "}
                 pisaría {choqueDesplazar.choques.length === 1 ? "esta reserva" : "estas reservas"}:
               </p>
@@ -6287,7 +6413,7 @@ export function ReservasView() {
                   <div key={c.reservaId} className="px-3 py-2 flex items-center justify-between gap-2">
                     <span className="font-medium truncate">{c.cliente || "WALK IN"}</span>
                     <span className="shrink-0 tabular-nums text-muted-foreground">
-                      {c.horaInicio}–{c.horaFin} · {c.personas} pax · {c.mesa}
+                      {c.horaInicio}–{c.horaFin} · {c.personas} per · {c.mesa}
                     </span>
                   </div>
                 ))}

@@ -583,8 +583,8 @@ export function BloqueosTab() {
                     }}
                     title={
                       bloqueada
-                        ? `${m.codigo} · ${m.capacidadMin}-${m.capacidadMax} pax · Bloqueada`
-                        : `${m.codigo} · ${m.capacidadMin}-${m.capacidadMax} pax`
+                        ? `${m.codigo} · ${m.capacidadMin}-${m.capacidadMax} per · Bloqueada`
+                        : `${m.codigo} · ${m.capacidadMin}-${m.capacidadMax} per`
                     }
                   >
                     <div

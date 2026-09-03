@@ -235,7 +235,7 @@ export function EditorMesasReserva({
                 {reserva.cliente || "WALK IN"} {reserva.apellidos}
               </span>
               <span className="text-muted-foreground">
-                · {reserva.hora.slice(0, 5)} · {reserva.comensales} pax ·
+                · {reserva.hora.slice(0, 5)} · {reserva.comensales} per ·
               </span>
               <span className="text-muted-foreground">
                 {codigosOriginales.length > 0
@@ -332,7 +332,7 @@ export function EditorMesasReserva({
                       {c.cliente || "WALK IN"}
                     </span>
                     <span className="shrink-0 tabular-nums text-muted-foreground">
-                      {c.mesa} · ocupada hasta las {c.horaFin} · {c.personas} pax
+                      {c.mesa} · ocupada hasta las {c.horaFin} · {c.personas} per
                     </span>
                   </div>
                 ))}

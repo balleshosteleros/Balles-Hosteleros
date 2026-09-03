@@ -30,6 +30,10 @@ import {
   type EstadoReserva,
 } from "@/features/sala/data/reservas";
 import { Button } from "@/components/ui/button";
+import {
+  PREFIJOS_TELEFONO,
+  PREFIJO_POR_DEFECTO,
+} from "@/features/sala/data/prefijos-telefono";
 import { Cliente, ClasificacionCliente } from "@/features/sala/data/clientes";
 import { listClientes, createCliente } from "@/features/sala/actions/clientes-actions";
 import { guardarFichaCliente } from "@/features/sala/actions/cliente-ficha-actions";
@@ -780,13 +784,40 @@ export function ClientesView() {
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="cli-telefono">Teléfono</Label>
-                  <Input
-                    id="cli-telefono"
-                    value={borrador.telefono}
-                    onChange={(e) =>
-                      setBorrador({ ...borrador, telefono: e.target.value })
-                    }
-                  />
+                  {/* Prefijo pegado al número y elegido de una lista: antes era
+                      un campo suelto y a mano, así que la mitad de las fichas
+                      se quedaban sin él o con un valor inventado. */}
+                  <div className="flex gap-1.5">
+                    <select
+                      value={borrador.telefonoPrefijo?.trim() || PREFIJO_POR_DEFECTO}
+                      onChange={(e) =>
+                        setBorrador({ ...borrador, telefonoPrefijo: e.target.value })
+                      }
+                      className="h-9 w-[96px] shrink-0 rounded-md border border-input bg-background px-2 text-sm"
+                      title={
+                        PREFIJOS_TELEFONO.find(
+                          (x) =>
+                            x.prefijo ===
+                            (borrador.telefonoPrefijo?.trim() || PREFIJO_POR_DEFECTO),
+                        )?.label ?? ""
+                      }
+                    >
+                      {PREFIJOS_TELEFONO.map((x) => (
+                        <option key={x.prefijo} value={x.prefijo}>
+                          {x.flag} {x.prefijo}
+                        </option>
+                      ))}
+                    </select>
+                    <Input
+                      id="cli-telefono"
+                      type="tel"
+                      className="flex-1"
+                      value={borrador.telefono}
+                      onChange={(e) =>
+                        setBorrador({ ...borrador, telefono: e.target.value })
+                      }
+                    />
+                  </div>
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="cli-email">Email</Label>
@@ -808,17 +839,6 @@ export function ClientesView() {
                     max={new Date().toISOString().split("T")[0]}
                     onChange={(e) =>
                       setBorrador({ ...borrador, fechaNacimiento: e.target.value })
-                    }
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="cli-prefijo">Prefijo</Label>
-                  <Input
-                    id="cli-prefijo"
-                    value={borrador.telefonoPrefijo ?? ""}
-                    placeholder="+34"
-                    onChange={(e) =>
-                      setBorrador({ ...borrador, telefonoPrefijo: e.target.value })
                     }
                   />
                 </div>
@@ -1134,7 +1154,7 @@ export function ClientesView() {
                           <th className="px-2 py-1.5 font-medium">Hora</th>
                           <th className="px-2 py-1.5 font-medium">Estado</th>
                           <th className="px-2 py-1.5 text-right font-medium">
-                            Pax
+                            Per
                           </th>
                           <th className="px-2 py-1.5 font-medium">Mesa</th>
                           <th className="px-2 py-1.5 font-medium">Zona</th>

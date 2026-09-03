@@ -14,6 +14,7 @@ import { asignarMesaAutomatica } from "@/features/sala/planos/lib/asignacion-mes
 import { getMesasBloqueadas } from "@/features/sala/bloqueos/lib/mesas-bloqueadas";
 import { getCamposObligatoriosReserva } from "@/features/sala/lib/reserva-campos-obligatorios";
 import { turnoDeHora } from "@/features/sala/lib/dia-negocio";
+import { tipoDeReserva } from "@/features/sala/lib/tipo-reserva";
 import {
   buscarConflictoMesa,
   getDuracionReservaMin,
@@ -35,6 +36,7 @@ import {
   esTipoEstado,
   type ReservaEmailTipo,
 } from "@/lib/seeds/reserva-email-plantillas";
+import { componerTelefono } from "@/features/sala/data/prefijos-telefono";
 async function getContext() {
   const supabase = await createClient();
   const {
@@ -97,7 +99,7 @@ const RESERVA_COLUMNAS =
   "garantia_tarjeta_marca, garantia_capture_deadline, garantia_cobrada_at, " +
   "tiene_cancelacion, cancelacion_importe, cancelacion_estado, " +
   "cancelacion_tarjeta_ultimos4, cancelacion_intentos, cancelacion_error, " +
-  "cancelacion_proximo_intento_at, cancelacion_cobrada_at, cobro_perdonado_at, " +
+  "cancelacion_proximo_intento_at, cancelacion_cobrada_at, cobro_perdonado_at, politica_incumplida_at, " +
   "importe_pagado, pago_pendiente, " +
   "ticket_producto_id, ticket_unidades, ticket_importe, ticket_iva, ticket_codigo, " +
   "bloqueada, grupo_id, codigo_id, codigo, reconfirmada_at, " +
@@ -293,7 +295,12 @@ export async function createReserva(input: {
       camposDistintos = link.result.camposDistintos;
       nombreFinal = link.result.cliente.nombre;
       apellidosFinal = link.result.cliente.apellidos;
-      telefonoFinal = link.result.cliente.telefono;
+      // La ficha guarda número y prefijo por separado; la reserva lo lleva
+      // entero para que todos los teléfonos del listado se lean igual.
+      telefonoFinal = componerTelefono(
+        link.result.cliente.telefono_prefijo,
+        link.result.cliente.telefono,
+      ) || null;
       emailFinal = link.result.cliente.email;
     }
 
@@ -730,7 +737,13 @@ export async function updateReserva(
         dbUpdates.cliente_id = link.result.cliente.id;
         dbUpdates.cliente_nombre = link.result.cliente.nombre;
         dbUpdates.cliente_apellidos = link.result.cliente.apellidos;
-        dbUpdates.cliente_telefono = link.result.cliente.telefono;
+        // Snapshot con prefijo: la ficha lo guarda aparte, pero en la reserva
+        // va pegado al número. Si no, unas reservas salen con prefijo y otras
+        // sin él, y no hay forma de llamar a los extranjeros.
+        dbUpdates.cliente_telefono = componerTelefono(
+          link.result.cliente.telefono_prefijo,
+          link.result.cliente.telefono,
+        );
         dbUpdates.cliente_email = link.result.cliente.email;
       } else {
         // Sin contacto: walk-in. Quitar vinculación y aceptar nombre tal cual.
@@ -1023,6 +1036,21 @@ export async function updateReserva(
       }
     }
 
+    // Si la reserva se queda sin cliente y llevaba tarjeta, se comprueba si
+    // incumplió el plazo. Solo deja la marca para que el aviso de Sala lo
+    // enseñe: el cobro lo decide una persona en la ficha.
+    if (updates.estado === "CANCELADA" || updates.estado === "NO_SHOW") {
+      try {
+        const { marcarPoliticaIncumplida } = await import(
+          "@/features/sala/lib/marcar-incumplimiento"
+        );
+        const admin = createAdminClient();
+        await marcarPoliticaIncumplida(admin, id, updates.estado);
+      } catch (e) {
+        console.error("[reservas] marcar incumplimiento:", e);
+      }
+    }
+
     // Correo al cliente: SOLO si quien llama lo pide expresamente.
     //
     // Cambiar el estado es una valoración del empleado (marca RECONFIRMADA
@@ -1181,19 +1209,30 @@ export async function notificarReservaCreadaPorEmail(reservaId: string) {
     const { supabase } = ctxActor;
     const { data: r } = await supabase
       .from("reservas")
-      .select("empresa_id, fecha, hora, tipo_categoria, tiene_garantia, garantia_importe")
+      .select(
+        "empresa_id, fecha, hora, es_ticket, tiene_cancelacion, cancelacion_importe, tiene_garantia, garantia_importe",
+      )
       .eq("id", reservaId)
       .maybeSingle();
 
-    // Cada compromiso económico va en su propio correo: el cliente tiene que
+    // El compromiso económico va en su propio correo: el cliente tiene que
     // poder volver a leer las condiciones sin rebuscar dentro de la
-    // confirmación. Si la empresa tiene la plantilla pausada, el mailer corta.
-    if (r?.tipo_categoria === "politica") {
+    // confirmación. Solo puede haber uno, porque los tipos son excluyentes
+    // (ver `lib/tipo-reserva.ts`). Si la empresa tiene la plantilla pausada,
+    // el mailer corta.
+    const tipoReserva = tipoDeReserva({
+      esTicket: r?.es_ticket as boolean | null,
+      tieneGarantia: r?.tiene_garantia as boolean | null,
+      garantiaImporte: r?.garantia_importe as number | null,
+      tieneCancelacion: r?.tiene_cancelacion as boolean | null,
+      cancelacionImporte: r?.cancelacion_importe as number | null,
+    });
+    if (tipoReserva === "cancelacion") {
       enviarReservaEmail(reservaId, "POLITICA_CANCELACION", { actor }).catch((e) =>
         console.error("[reservas] mail POLITICA_CANCELACION:", e),
       );
     }
-    if (r?.tiene_garantia === true && Number(r?.garantia_importe ?? 0) > 0) {
+    if (tipoReserva === "garantia") {
       enviarReservaEmail(reservaId, "POLITICA_GARANTIA", { actor }).catch((e) =>
         console.error("[reservas] mail POLITICA_GARANTIA:", e),
       );

@@ -200,7 +200,7 @@ export function PlanoSeleccionMesas({
                 title={
                   ocupadaPorOtra
                     ? `${m.codigo} · ocupada por ${otras[0].cliente || "WALK IN"} a las ${otras[0].hora.slice(0, 5)}`
-                    : `${m.codigo} · ${meta?.capacidadMin ?? "?"}-${meta?.capacidadMax ?? "?"} pax`
+                    : `${m.codigo} · ${meta?.capacidadMin ?? "?"}-${meta?.capacidadMax ?? "?"} per`
                 }
                 className={cn(
                   "absolute flex flex-col items-center justify-center overflow-hidden border-2 px-1 text-[11px] font-semibold transition-all cursor-pointer",

@@ -101,8 +101,32 @@ export function ReservaFlagsChips({
       extra: reserva.codigo,
     });
   }
-  if (reserva.tipoCategoria === "gratis") {
-    chips.push({ key: "gratis", label: "Reserva gratis", icon: <span className="leading-none">🆓</span>, cls: "text-zinc-600 border-zinc-400/40 bg-zinc-200/40" });
+  // Incumplió la política y el cobro sigue sin decidir: es lo más urgente que
+  // puede tener una reserva, así que va en rojo y pegado al nombre. Desaparece
+  // en cuanto alguien cobra o perdona: un aviso que no se puede apagar deja de
+  // mirarse.
+  if (
+    reserva.politicaIncumplidaAt &&
+    !reserva.cobroPerdonadoAt &&
+    reserva.cancelacionEstado !== "cobrada"
+  ) {
+    const importe = reserva.cancelacionImporte ?? 0;
+    chips.push({
+      key: "cobro_pendiente",
+      label: "Cobro pendiente de decidir",
+      icon: <CircleAlert className={iconSize} />,
+      cls: "text-white border-red-600 bg-red-600 animate-pulse",
+      extra: importe > 0 ? fmtEuro(importe) : undefined,
+      tooltip: (
+        <span className="block text-left leading-relaxed">
+          <span className="block font-medium">Cobro pendiente de decidir</span>
+          <span className="block">
+            Canceló fuera de plazo{importe > 0 ? ` · ${fmtEuro(importe)}` : ""}. Abre la
+            ficha para cobrar o perdonar.
+          </span>
+        </span>
+      ),
+    });
   }
   if (reserva.bloqueada) {
     chips.push({ key: "bloqueada", label: "Reserva bloqueada", icon: <Lock className={iconSize} />, cls: "text-zinc-500 border-zinc-500/40 bg-zinc-500/10" });

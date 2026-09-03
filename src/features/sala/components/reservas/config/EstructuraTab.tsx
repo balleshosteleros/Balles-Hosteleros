@@ -779,7 +779,7 @@ function CombinacionesLista({
                             max={100}
                             titulo="Máximo de personas"
                           />
-                          <span>pax</span>
+                          <span>per</span>
                         </span>
                       </div>
                       <Button

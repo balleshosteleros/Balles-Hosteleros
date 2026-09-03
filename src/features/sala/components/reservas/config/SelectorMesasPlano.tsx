@@ -86,7 +86,7 @@ export function SelectorMesasPlano({
                     title={
                       bloqueada
                         ? `Otra zona (${g.nombre}). Quita las mesas elegidas para cambiar.`
-                        : `${m.codigo} · ${m.capacidadMin}-${m.capacidadMax} pax`
+                        : `${m.codigo} · ${m.capacidadMin}-${m.capacidadMax} per`
                     }
                     className={[
                       "rounded border px-2 h-8 text-xs font-semibold transition-colors",

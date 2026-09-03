@@ -193,6 +193,19 @@ export async function cancelarReservaPorToken(
       console.error("[cancelar-publica] no se pudo cargar el mailer:", e);
     }
 
+    // ¿Canceló fuera de plazo teniendo tarjeta? Se deja constancia para que
+    // Sala lo vea y decida. NO se cobra aquí: cobrar es decisión de una
+    // persona. Sin esta marca el incumplimiento no dejaba rastro y el cobro se
+    // perdía sin que nadie se enterara.
+    try {
+      const { marcarPoliticaIncumplida } = await import(
+        "@/features/sala/lib/marcar-incumplimiento"
+      );
+      await marcarPoliticaIncumplida(admin, r.id as string, "CANCELADA");
+    } catch (e) {
+      console.error("[cancelar-publica] marcar incumplimiento:", e);
+    }
+
     // Aquí NO se manda WhatsApp: el cliente acaba de cancelar él mismo y está
     // viendo la confirmación en pantalla. Un mensaje contándole lo que acaba
     // de hacer solo gasta saldo. El WhatsApp de cancelación es para cuando la

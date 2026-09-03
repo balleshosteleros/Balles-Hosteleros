@@ -115,7 +115,7 @@ function FacturaRow({ f }: { f: FacturaAgora }) {
       >
         <FileText className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
         <span className="font-medium">{f.numero}</span>
-        <span className="text-muted-foreground">· {f.comensales} pax · {f.lineas.length} líneas</span>
+        <span className="text-muted-foreground">· {f.comensales} per · {f.lineas.length} líneas</span>
         <span
           className={`ml-auto tabular-nums font-semibold ${f.total < 0 ? "text-amber-600" : ""}`}
         >

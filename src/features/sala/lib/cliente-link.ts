@@ -7,6 +7,8 @@ export interface ClienteSalaRow {
   apellidos: string | null;
   email: string | null;
   telefono: string | null;
+  /** Prefijo internacional, SIEMPRE aparte del número (ver `prefijos-telefono`). */
+  telefono_prefijo: string | null;
   email_normalizado: string | null;
   telefono_normalizado: string | null;
   clasificacion: string;

@@ -22,6 +22,10 @@ import { ahoraEnZona } from "@/features/empresa/lib/zona-horaria";
 import { registrarCambioDatosCliente } from "@/features/sala/lib/cliente-actividad";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
+import {
+  componerTelefono,
+  PREFIJO_POR_DEFECTO,
+} from "@/features/sala/data/prefijos-telefono";
 
 const Schema = z.object({
   nombre: z.string().trim().min(1, "El nombre es obligatorio.").max(120),
@@ -167,7 +171,12 @@ export async function guardarFichaCliente(
         cliente_nombre: nombre,
         cliente_apellidos: apellidos,
         cliente_email: email,
-        cliente_telefono: telefono,
+        // Con prefijo: la ficha lo guarda en columna aparte, pero el snapshot
+        // de la reserva lleva el teléfono entero, como en el alta desde sala.
+        cliente_telefono: componerTelefono(
+          d.telefonoPrefijo ?? PREFIJO_POR_DEFECTO,
+          telefono,
+        ) || null,
         updated_at: new Date().toISOString(),
       })
       .eq("cliente_id", clienteId)

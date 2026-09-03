@@ -251,6 +251,12 @@ export interface Reserva {
   cancelacionProximoIntentoAt?: string | null;
   cancelacionCobradaAt?: string | null;
   cobroPerdonadoAt?: string | null;
+  /**
+   * Cuándo se canceló (o se marcó no-show) fuera de plazo teniendo política.
+   * Enciende el aviso rojo junto al nombre: hay un cobro que alguien tiene que
+   * decidir, y si nadie lo mira se pierde.
+   */
+  politicaIncumplidaAt?: string | null;
   importePagado?: number | null;
   // PRP-051: ticket comprado al reservar.
   ticketProductoId?: string | null;
@@ -468,7 +474,7 @@ export const RESERVA_APELLIDOS_MAX_CHARS = 80;
  * para un aviso útil ("Alergia al marisco. Vienen con carrito.") sin que se
  * convierta en un texto que ya no cabe en la lista ni se puede leer de un
  * vistazo. Rige en TODOS los sitios desde los que se crea o edita una reserva:
- * alta manual, lista de espera, ficha y portal público.
+ * alta desde sala, lista de espera, ficha y portal público.
  */
 export const RESERVA_COMENTARIO_MAX_CHARS = 140;
 
@@ -756,7 +762,7 @@ export const SAMPLE_LISTA_ESPERA: ListaEspera[] = [
 
 /**
  * Etiqueta legible del canal por el que entró la reserva (PORTAL_PROPIO,
- * GOOGLE_RWG…). Sin origen = alta manual desde el back-office.
+ * GOOGLE_RWG…). Sin origen = reserva antigua sin canal registrado.
  *
  * Vive aquí y no en la vista porque la lista de sala y el histórico de la
  * ficha del cliente tienen que leer el canal igual: si cada una lo formatea
