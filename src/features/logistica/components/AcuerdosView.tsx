@@ -307,7 +307,8 @@ export function AcuerdosView() {
                                 {formatNumero(celda.cantidad)}
                               </button>
                             ) : (
-                              <span className="text-muted-foreground/40">—</span>
+                              // No es "sin dato": sabemos que se compró 0.
+                              <span className="text-muted-foreground">0</span>
                             )}
                           </td>
                         );
@@ -331,7 +332,7 @@ export function AcuerdosView() {
                   <td />
                   {totalesMes.cantidades.map((c, i) => (
                     <td key={i} className="px-2 py-2.5 text-right tabular-nums">
-                      {c > 0 ? formatNumero(c) : <span className="text-muted-foreground/40">—</span>}
+                      {c > 0 ? formatNumero(c) : <span className="text-muted-foreground">0</span>}
                     </td>
                   ))}
                   <td className="px-3 py-2.5 text-right tabular-nums">
@@ -347,7 +348,7 @@ export function AcuerdosView() {
                   <td />
                   {totalesMes.rapeles.map((r, i) => (
                     <td key={i} className="px-2 py-2 text-right tabular-nums">
-                      {r > 0 ? formatEur(r) : "—"}
+                      {r > 0 ? formatEur(r) : formatEur(0)}
                     </td>
                   ))}
                   <td />
