@@ -312,8 +312,11 @@ export async function listFirmas(): Promise<{ ok: true; data: FirmaResumen[] } |
 
     return { ok: true, data: items };
   } catch (err) {
-    const msg = err instanceof Error ? err.message : "Error listando firmas";
-    console.error("[firmas] listFirmas:", msg);
+    const msg =
+      err instanceof Error
+        ? err.message
+        : (err as { message?: string })?.message || JSON.stringify(err);
+    console.error("[firmas] listFirmas:", msg, err);
     return { ok: false, error: msg };
   }
 }

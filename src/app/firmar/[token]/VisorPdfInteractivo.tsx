@@ -31,7 +31,7 @@ type Props = {
   posicionFija?: PosicionFirma | null;
 };
 
-const PAGE_RENDER_WIDTH = 600;
+const PAGE_RENDER_WIDTH_DESKTOP = 600;
 const CANVAS_W = 360;
 const CANVAS_H = 140;
 
@@ -68,10 +68,28 @@ export function VisorPdfInteractivo({ pdfUrl, onConfirm, submitting, posicionFij
 
   const [pos, setPos] = useState<{ pagina: number; xPx: number; yPx: number } | null>(null);
   const [pageGeom, setPageGeom] = useState<Record<number, { top: number; height: number }>>({});
+  const [pageRenderWidth, setPageRenderWidth] = useState(PAGE_RENDER_WIDTH_DESKTOP);
 
   const pagesWrapRef = useRef<HTMLDivElement>(null);
+  const visorContainerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const trazoVacioRef = useRef(true);
+
+  useEffect(() => {
+    const el = visorContainerRef.current;
+    if (!el) return;
+    const medir = () => {
+      // Deja un pequeño margen (16px) para que la página nunca toque el borde
+      // del contenedor con overflow-auto, evitando el scroll horizontal que
+      // aparecía en móvil con el ancho fijo de escritorio.
+      const disponible = el.clientWidth - 16;
+      setPageRenderWidth(Math.max(240, Math.min(PAGE_RENDER_WIDTH_DESKTOP, disponible)));
+    };
+    medir();
+    const ro = new ResizeObserver(medir);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   const setupCanvas = useCallback(() => {
     const c = canvasRef.current;
@@ -130,7 +148,7 @@ export function VisorPdfInteractivo({ pdfUrl, onConfirm, submitting, posicionFij
     if (!g) return;
     setPos({
       pagina: fija.pagina,
-      xPx: fija.xPct * PAGE_RENDER_WIDTH,
+      xPx: fija.xPct * pageRenderWidth,
       yPx: g.top + fija.yPct * g.height,
     });
   }
@@ -146,15 +164,18 @@ export function VisorPdfInteractivo({ pdfUrl, onConfirm, submitting, posicionFij
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-6">
-      <div className="max-h-[760px] overflow-auto bg-white rounded-lg">
-        <div ref={pagesWrapRef} className="relative mx-auto" style={{ width: PAGE_RENDER_WIDTH }}>
+      <div
+        ref={visorContainerRef}
+        className="order-2 lg:order-1 max-h-[45vh] lg:max-h-[760px] overflow-auto bg-white rounded-lg"
+      >
+        <div ref={pagesWrapRef} className="relative mx-auto" style={{ width: pageRenderWidth }}>
           <Document
             file={pdfUrl}
             onLoadSuccess={({ numPages: n }) => setNumPages(n)}
             loading={<div className="py-16 text-center text-sm text-zinc-400">Cargando documento…</div>}
           >
             {Array.from({ length: numPages }, (_, i) => i + 1).map((p) => (
-              <PageWithGeom key={p} pagina={p} onGeom={registerPageGeom} />
+              <PageWithGeom key={p} pagina={p} width={pageRenderWidth} onGeom={registerPageGeom} />
             ))}
           </Document>
 
@@ -164,7 +185,7 @@ export function VisorPdfInteractivo({ pdfUrl, onConfirm, submitting, posicionFij
               style={{
                 left: pos.xPx,
                 top: pos.yPx,
-                width: fija.anchoPct * PAGE_RENDER_WIDTH,
+                width: fija.anchoPct * pageRenderWidth,
                 height: (fija.altoPct ?? 0.06) * (pageGeom[fija.pagina]?.height ?? 0),
               }}
             >
@@ -187,7 +208,7 @@ export function VisorPdfInteractivo({ pdfUrl, onConfirm, submitting, posicionFij
         </div>
       </div>
 
-      <aside className="space-y-5">
+      <aside className="order-1 lg:order-2 space-y-5">
         <div>
           <div className="text-[11px] uppercase tracking-wider text-zinc-400 mb-2">
             1 · Dibuja tu firma
@@ -264,9 +285,11 @@ export function VisorPdfInteractivo({ pdfUrl, onConfirm, submitting, posicionFij
 
 function PageWithGeom({
   pagina,
+  width,
   onGeom,
 }: {
   pagina: number;
+  width: number;
   onGeom: (pagina: number, top: number, height: number) => void;
 }) {
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -277,7 +300,7 @@ function PageWithGeom({
     >
       <Page
         pageNumber={pagina}
-        width={PAGE_RENDER_WIDTH}
+        width={width}
         renderAnnotationLayer={false}
         renderTextLayer={false}
         onRenderSuccess={() => {

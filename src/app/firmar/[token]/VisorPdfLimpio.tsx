@@ -1,16 +1,32 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Document, Page, pdfjs } from "react-pdf";
 import "react-pdf/dist/Page/AnnotationLayer.css";
 import "react-pdf/dist/Page/TextLayer.css";
 
 pdfjs.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
 
-export function VisorPdfLimpio({ pdfUrl, width = 720 }: { pdfUrl: string; width?: number }) {
+export function VisorPdfLimpio({ pdfUrl, width: widthMax = 720 }: { pdfUrl: string; width?: number }) {
   const [numPages, setNumPages] = useState(0);
+  const [width, setWidth] = useState(widthMax);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    // Mide el ancho real disponible: en móvil el contenedor es más estrecho que
+    // `widthMax` (pensado para escritorio) y renderizar a ese ancho fijo forzaba
+    // scroll horizontal dentro del visor.
+    const medir = () => setWidth(Math.max(240, Math.min(widthMax, el.clientWidth)));
+    medir();
+    const ro = new ResizeObserver(medir);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [widthMax]);
+
   return (
-    <div className="w-full flex flex-col items-center bg-white">
+    <div ref={containerRef} className="w-full flex flex-col items-center bg-white">
       <Document
         file={pdfUrl}
         onLoadSuccess={({ numPages: n }) => setNumPages(n)}

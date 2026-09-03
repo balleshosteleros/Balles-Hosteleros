@@ -310,16 +310,16 @@ export function FirmaPublicaView({
           </>
         ) : (
         <>
-        <div>
+        <div className="order-2 lg:order-1">
           <div className="text-sm font-semibold text-zinc-900 mb-3 px-1">
             {documento.titulo}
           </div>
-          <div className="max-h-[760px] overflow-auto rounded-lg bg-white">
+          <div className="max-h-[50vh] lg:max-h-[760px] overflow-auto rounded-lg bg-white">
             <VisorPdfLimpio pdfUrl={documento.pdfUrl} width={640} />
           </div>
         </div>
 
-        <aside className="space-y-4">
+        <aside className="order-1 lg:order-2 space-y-4">
           <Card className="p-5">
             <h2 className="text-sm font-semibold text-zinc-900">Datos del envío</h2>
             <dl className="mt-3 text-sm space-y-2">
