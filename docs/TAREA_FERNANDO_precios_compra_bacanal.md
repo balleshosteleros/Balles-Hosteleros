@@ -204,6 +204,70 @@ descubriste**, viene ya en cada línea de venta) · `UserId` (quién lo vendió)
   identificación de cuánto tabaco entró. Habrá que decidir si el 0,018/0,009 lo pone Ágora o lo pone
   nuestro escandallo del formato.
 
+### 💸 LO QUE ESTO SIGNIFICA PARA EL STOCK: son ventas que nunca se han descontado
+
+**Palabras de Iván: "todo eso son ventas de cosas que hay que descontar cuando se venden".** Y es
+así: cada addin es mercancía que sale del almacén y hoy **no se registra en ningún sitio**.
+
+Desglose real de los mismos 2 días (48 addins en 39 líneas):
+
+| Addin | Veces | Qué es |
+|---|---|---|
+| **Capsula Cafeinada** | 7 | Cada café que se sirve gasta una cápsula |
+| **Patatas fritas** | 5 | Guarnición del entrecot |
+| **Love 66 · White Cake · Huracan · My amor · Big Boy · MissJosy · Fight · Al Kakher Yellow** | 15 | **Tabaco de cachimba** |
+| **Ud. Extra Brioche Ternera · Vieira · Bao-cadillo** | 6 | Suplementos de plato |
+| **Sabor Fresa · Sabor Coco** | 4 | Sabores |
+| **Tonica Nordic · Cocacola** | 2 | **El refresco del combinado** |
+| SEXY GREEN | 3 | (ver aviso de dato sucio) |
+
+**Y toca las tres áreas del negocio**, no solo Habana:
+
+| Tipo de preparación | Addins |
+|---|---|
+| SHISHAS | 23 |
+| COCINA | 11 |
+| BARRA / BARRA1 / BARRA2 | 14 |
+
+> 📌 **Ojo a `Tonica Nordic` y `Cocacola`:** esta mañana concluimos que "Ágora no dice con qué
+> refresco se combinó el destilado". **Sí lo dice — viene como addin.** Rectificado también eso.
+
+**Estimación del agujero:** si el 22 % de las líneas llevan addins, sobre las 10.883 líneas
+registradas son del orden de **2.400 consumos que nunca se han descontado**. Encaja con las 6.300
+unidades sin justificar de tu diagnóstico y con las **Boquillas en −150**.
+
+⚠️ **Consecuencia práctica: activar hoy el descuento de stock daría números falsos.** Descontaría el
+plato pero no su guarnición, el café pero no la cápsula, la shisha pero no el tabaco. El almacén
+seguiría descuadrando y encima parecería que el sistema funciona.
+
+### 🏗️ CÓMO HAY QUE CONSTRUIRLO (esto es lo que de verdad importa)
+
+**Iván lo pone como condición de diseño, y es la parte más importante de esta nota:**
+
+> *"Lo importante es diseñar el software para el futuro, que esto no haya que hacerlo, porque cada
+> restaurante tendrá su casuística. Es vital: si no, no vale para nada hacerlo."*
+
+Es decir: **no se trata de "guardar los Addins de Ágora"**. Eso sería un parche para Habana. Lo que
+hay que construir es la capacidad genérica:
+
+- **Un producto de venta puede llevar complementos**, que se eligen al vender y **descuentan stock
+  según su proporción**.
+- **De dónde viene el dato es un detalle de la integración.** Hoy los manda Ágora en `Addins`;
+  mañana los pondrá el TPV propio. **El modelo de datos no cambia.**
+- **La configuración vive en Balles**, nunca en el TPV — coherente con la decisión 4.
+
+El siguiente restaurante tendrá menús con segundo a elegir, pizzas con extras, cafés con leche
+vegetal, hamburguesas con puntos de cocción. **Si dar de alta un cliente exige tocar código, el
+software no escala.**
+
+Es el mismo criterio que Iván aplicó a los formatos de venta: no hizo "un apaño para el Brugal",
+definió **hasta 5 formatos con nombre libre**, que sirve igual para el Mojito, la shisha o lo que
+venga.
+
+**Regla que queda fijada: ningún restaurante nuevo debería necesitar código.**
+
+---
+
 ### Un aviso de dato sucio
 
 En ese mismo ticket, el segundo addin de la shisha es **`SEXY GREEN` con ratio 1,0 y familia
