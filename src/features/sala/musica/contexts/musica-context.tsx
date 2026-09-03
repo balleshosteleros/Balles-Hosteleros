@@ -47,6 +47,8 @@ import {
   marcarComoReproductor,
   latidoReproductor,
   liberarReproductor,
+  avisarCancionEnCurso,
+  nombreDeUsuario,
 } from "@/features/sala/musica/actions/musica-actions";
 import type {
   ListaMusica,
@@ -64,6 +66,40 @@ const CLAVE_MINI_OCULTO = "bh_musica_mini_oculto";
 /** Cada cuánto el equipo de altavoces avisa de que sigue vivo. */
 const MS_LATIDO = 60_000;
 
+/**
+ * Nombre del equipo, para decir en pantalla por dónde está saliendo la música.
+ *
+ * Antes se guardaban 60 caracteres del `userAgent`, y en pantalla salía
+ * «Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/5…», que no dice
+ * nada a nadie. Con "Mac · Chrome" al menos se distingue de un iPad, que es lo
+ * que hace falta para saber a qué ordenador ir.
+ */
+function nombreEquipoLegible(): string {
+  if (typeof navigator === "undefined") return "Otro equipo";
+  const ua = navigator.userAgent;
+
+  const sistema =
+    /iPhone/.test(ua) ? "iPhone"
+    : /iPad/.test(ua) ? "iPad"
+    : /Android/.test(ua) ? "Android"
+    : /Macintosh|Mac OS X/.test(ua) ? "Mac"
+    : /Windows/.test(ua) ? "Windows"
+    : /Linux/.test(ua) ? "Linux"
+    : "Equipo";
+
+  // El orden importa: Edge y Opera también dicen "Chrome" en su userAgent, y
+  // Chrome dice "Safari". Se comprueban los más específicos primero.
+  const navegador =
+    /Edg\//.test(ua) ? "Edge"
+    : /OPR\//.test(ua) ? "Opera"
+    : /Chrome\//.test(ua) ? "Chrome"
+    : /Firefox\//.test(ua) ? "Firefox"
+    : /Safari\//.test(ua) ? "Safari"
+    : null;
+
+  return navegador ? `${sistema} · ${navegador}` : sistema;
+}
+
 interface MusicaContextValue {
   listas: ListaMusica[];
   biblioteca: Cancion[];
@@ -80,6 +116,10 @@ interface MusicaContextValue {
 
   listaActual: ListaMusica | null;
   cancionActual: Cancion | null;
+  /** Posición de la canción que suena dentro de la lista (para marcarla). */
+  indiceActual: number;
+  /** Salta directamente a una canción concreta de la lista en curso. */
+  irACancion: (indice: number) => Promise<void>;
   reproduciendo: boolean;
   volumen: number;
 
@@ -95,7 +135,12 @@ interface MusicaContextValue {
   activarModoAltavoz: (
     activar: boolean,
     forzar?: boolean,
-  ) => Promise<{ ok: boolean; ocupadoPor?: string }>;
+  ) => Promise<{
+    ok: boolean;
+    ocupadoPor?: string;
+    ocupadoPorUsuario?: string;
+    sonando?: boolean;
+  }>;
 
   reproducirLista: (lista: ListaMusica, indice?: number) => Promise<void>;
   alternarPlay: () => Promise<void>;
@@ -142,6 +187,22 @@ export function MusicaProvider({ children }: { children: ReactNode }) {
   const ultimoSeqRef = useRef(0);
 
   /*
+    Lista, índice y local en refs, para el paso automático de canción.
+
+    El manejador de "ended" se engancha UNA vez al crear el `<audio>` y vive
+    tanto como él. Si leyera `listaActual` del renderizado, se quedaría con la
+    lista que hubiera en ese instante —normalmente ninguna— y al acabar la
+    primera canción no sabría qué poner después. Con refs siempre ve lo vigente.
+  */
+  const listaActualRef = useRef<ListaMusica | null>(null);
+  const indiceRef = useRef(0);
+  const localIdRef = useRef<string | null>(null);
+  /** `sonarCancion` se redefine en cada render; el manejador usa la última. */
+  const sonarCancionRef = useRef<
+    ((lista: ListaMusica, idx: number) => Promise<void>) | null
+  >(null);
+
+  /*
     Volumen: hasta cuándo NO hacer caso a lo que llega de la BD.
 
     Arrastrar la barra escribía el volumen en la base de datos, ese valor volvía
@@ -163,6 +224,17 @@ export function MusicaProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     listasRef.current = listas;
   }, [listas]);
+
+  // Espejos en refs de lo que necesita el paso automático de canción.
+  useEffect(() => {
+    listaActualRef.current = listaActual;
+  }, [listaActual]);
+  useEffect(() => {
+    indiceRef.current = indice;
+  }, [indice]);
+  useEffect(() => {
+    localIdRef.current = localId;
+  }, [localId]);
 
   // ─── Carga de datos ───────────────────────────────────────────────────────
 
@@ -303,13 +375,18 @@ export function MusicaProvider({ children }: { children: ReactNode }) {
       const res = await marcarComoReproductor({
         localId,
         deviceId,
-        deviceNombre: navigator.userAgent.slice(0, 60),
+        deviceNombre: nombreEquipoLegible(),
         forzar,
       });
 
       // Ya hay otro equipo vivo: no se releva sin preguntar.
       if (!res.ok && res.ocupadoPor) {
-        return { ok: false, ocupadoPor: res.ocupadoPor };
+        return {
+          ok: false,
+          ocupadoPor: res.ocupadoPor,
+          ocupadoPorUsuario: res.ocupadoPorUsuario,
+          sonando: res.sonando,
+        };
       }
       if (!res.ok) {
         toast.error(res.error ?? "No se pudo activar este equipo");
@@ -346,6 +423,41 @@ export function MusicaProvider({ children }: { children: ReactNode }) {
       const el = new Audio();
       el.preload = "auto";
       el.volume = volumen / 100;
+
+      /*
+        Encadenado automático: al acabar una canción entra la siguiente, y al
+        final de la lista se vuelve a la primera. La música no debe pararse
+        sola durante el servicio.
+
+        Se engancha AQUÍ, al crear el elemento, y no en un `useEffect`. El
+        efecto se ejecutaba antes de que existiera el `<audio>` (se crea al
+        pulsar Play), salía por `if (!el) return` y solo volvía a intentarlo
+        cuando cambiaba `listaActual`. Resultado: poner otra vez la MISMA lista
+        tras un Stop, o arrancarla desde un móvil, dejaba el `<audio>` sin
+        manejador y la música se paraba después de una sola canción.
+      */
+      el.addEventListener("ended", () => {
+        const lista = listaActualRef.current;
+        if (!lista || lista.canciones.length === 0) return;
+        const siguiente = (indiceRef.current + 1) % lista.canciones.length;
+        indiceRef.current = siguiente;
+        setIndice(siguiente);
+        void sonarCancionRef.current?.(lista, siguiente);
+
+        // El resto de equipos del local no se enteran solos: el paso automático
+        // ocurre dentro de ESTE navegador. Sin el aviso, un móvil usado como
+        // mando seguiría enseñando la canción anterior el resto del servicio.
+        const local = localIdRef.current;
+        if (local) {
+          void avisarCancionEnCurso({
+            localId: local,
+            listaId: lista.id,
+            cancionId: lista.canciones[siguiente]?.id ?? null,
+            indice: siguiente,
+          });
+        }
+      });
+
       audioRef.current = el;
     }
     return audioRef.current;
@@ -424,23 +536,11 @@ export function MusicaProvider({ children }: { children: ReactNode }) {
     [esAltavoz, asegurarAudio, volumen],
   );
 
-  // Al acabar una canción, pasa sola a la siguiente y vuelve a empezar al final
-  // de la lista: la música no debe pararse durante el servicio.
+  // El manejador de "ended" (enganchado al crear el `<audio>`) llama siempre a
+  // la última versión de `sonarCancion` a través de esta referencia.
   useEffect(() => {
-    const el = audioRef.current;
-    if (!el) return;
-    const onEnded = () => {
-      setIndice((prev) => {
-        const lista = listaActual;
-        if (!lista || lista.canciones.length === 0) return prev;
-        const siguiente = (prev + 1) % lista.canciones.length;
-        void sonarCancion(lista, siguiente);
-        return siguiente;
-      });
-    };
-    el.addEventListener("ended", onEnded);
-    return () => el.removeEventListener("ended", onEnded);
-  }, [listaActual, sonarCancion]);
+    sonarCancionRef.current = sonarCancion;
+  }, [sonarCancion]);
 
   // ─── Realtime: el equipo de altavoces obedece las órdenes ─────────────────
 
@@ -468,18 +568,41 @@ export function MusicaProvider({ children }: { children: ReactNode }) {
       setReproduciendo(Boolean(fila.reproduciendo));
       setAltavozNombre((fila.device_nombre as string | null) ?? null);
 
-      // Si otro equipo ha tomado el relevo, este deja de ser altavoz y se calla.
+      /*
+        Si otro equipo ha tomado el relevo, este deja de ser altavoz y se calla.
+
+        Y se AVISA a quien lo estaba usando. Antes la música simplemente paraba:
+        el del local veía el silencio y no tenía forma de saber si se había roto
+        algo, si se había ido internet o si alguien se la había llevado a su
+        ordenador. Ahora se dice qué ha pasado y quién ha sido.
+      */
       const deviceFila = (fila.device_id as string | null) ?? null;
       const miId = getDeviceId();
       if (miId && deviceFila && deviceFila !== miId) {
         setLocalAltavoz((prev) => {
-          if (prev === null) return prev;
+          if (prev === null) return prev; // no era este equipo: nada que avisar
           audioRef.current?.pause();
           try {
             localStorage.removeItem(CLAVE_LOCAL_ALTAVOZ);
           } catch {
             /* sin localStorage */
           }
+
+          const quien = (fila.actualizado_por as string | null) ?? null;
+          void (async () => {
+            const nombre = quien ? await nombreDeUsuario(quien) : null;
+            toast.warning(
+              nombre
+                ? `${nombre} ha pasado la música a su equipo`
+                : "Otro equipo se ha llevado la música",
+              {
+                description:
+                  "Este ordenador ha dejado de reproducir. Si la música tiene que sonar aquí, vuelve a activar «Sonar en este ordenador».",
+                duration: 12_000,
+              },
+            );
+          })();
+
           return null;
         });
       }
@@ -675,6 +798,37 @@ export function MusicaProvider({ children }: { children: ReactNode }) {
   const siguiente = useCallback(() => saltar(1), [saltar]);
   const anterior = useCallback(() => saltar(-1), [saltar]);
 
+  /**
+   * Salta a una canción concreta pinchándola en el listado. Es lo mismo que
+   * "siguiente" pero a un punto elegido, así que reutiliza el mismo camino:
+   * escribe la orden para que la obedezca el equipo de los altavoces, esté
+   * donde esté.
+   */
+  const irACancion = useCallback(
+    async (idx: number) => {
+      if (!listaActual || !localId) return;
+      const total = listaActual.canciones.length;
+      if (total === 0 || idx < 0 || idx >= total) return;
+      if (idx === indice && reproduciendo) return; // ya suena esa
+
+      setIndice(idx);
+      setReproduciendo(true);
+      const res = await enviarComando({
+        localId,
+        comando: "siguiente",
+        listaId: listaActual.id,
+        cancionId: listaActual.canciones[idx]?.id ?? null,
+        indice: idx,
+      });
+      if (!res.ok) {
+        toast.error(res.error ?? "No se pudo cambiar de canción");
+        return;
+      }
+      if (esAltavoz) await sonarCancion(listaActual, idx);
+    },
+    [listaActual, localId, indice, reproduciendo, esAltavoz, sonarCancion],
+  );
+
   const parar = useCallback(async () => {
     if (!localId) return;
     setReproduciendo(false);
@@ -743,6 +897,8 @@ export function MusicaProvider({ children }: { children: ReactNode }) {
         setLocalId,
         listaActual,
         cancionActual,
+        indiceActual: indice,
+        irACancion,
         reproduciendo,
         volumen,
         esAltavoz,

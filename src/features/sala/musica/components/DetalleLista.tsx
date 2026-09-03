@@ -37,15 +37,8 @@ import {
   borrarCancion,
 } from "@/features/sala/musica/actions/musica-actions";
 import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
+import { formatearDuracion } from "@/features/sala/musica/lib/formato";
 import type { ListaMusica, Cancion } from "@/features/sala/musica/types";
-
-/** Segundos → "m:ss". Devuelve "" si no se pudo leer la duración del archivo. */
-function formatearDuracion(seg: number): string {
-  if (!seg || seg <= 0) return "";
-  const m = Math.floor(seg / 60);
-  const s = seg % 60;
-  return `${m}:${String(s).padStart(2, "0")}`;
-}
 
 export function DetalleLista({
   lista,

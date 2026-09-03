@@ -670,6 +670,78 @@ export async function enviarComando(input: {
   }
 }
 
+/**
+ * Nombre de la persona que ha tomado el altavoz, para poder decir quién ha
+ * sido cuando a un equipo se le quita la música.
+ *
+ * Devuelve null en vez de fallar: si no se puede resolver el nombre, el aviso
+ * se da igual en forma genérica — enterarse de que te han quitado la música
+ * importa más que saber quién fue.
+ */
+export async function nombreDeUsuario(userId: string): Promise<string | null> {
+  try {
+    const ctx = await guardVer();
+    if (!ctx.ok || !userId) return null;
+    const { data } = await ctx.supabase
+      .from("usuarios")
+      .select("nombre, apellidos")
+      .eq("id", userId)
+      .maybeSingle();
+    const nombre = [data?.nombre, data?.apellidos].filter(Boolean).join(" ").trim();
+    return nombre || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Avisa de que el altavoz ha pasado SOLO a la siguiente canción.
+ *
+ * No es una orden, es un parte: por eso NO toca `comando_seq` ni `comando`. Si
+ * los tocara, el propio altavoz vería su eco como una orden nueva y volvería a
+ * cargar la canción desde el principio, dejándola en bucle.
+ *
+ * Sin esto, los demás equipos del local (móviles y ordenadores usados como
+ * mando) seguirían mostrando la canción anterior toda la noche, porque el paso
+ * automático ocurre solo dentro del navegador que tiene los altavoces.
+ */
+export async function avisarCancionEnCurso(input: {
+  localId: string;
+  listaId: string;
+  cancionId: string | null;
+  indice: number;
+}) {
+  try {
+    const ctx = await guardVer();
+    if (!ctx.ok) return { ok: false, error: ctx.error };
+    if (!input.localId) return { ok: false, error: "Falta indicar el local" };
+
+    /*
+      Solo se actualiza si la fila sigue en esta lista y es del local de la
+      empresa activa. Así un parte que llega tarde (la canción acabó justo
+      cuando alguien cambiaba de lista) no revive la lista anterior.
+    */
+    const { error } = await ctx.supabase
+      .from("musica_reproductor")
+      .update({
+        cancion_id: input.cancionId,
+        indice: input.indice,
+        reproduciendo: true,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("local_id", input.localId)
+      .eq("empresa_id", ctx.empresaId)
+      .eq("lista_id", input.listaId);
+    if (error) throw error;
+
+    return { ok: true };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "Error desconocido";
+    console.error("[musica] avisarCancionEnCurso:", msg);
+    return { ok: false, error: msg };
+  }
+}
+
 /** Comprueba en servidor que la lista puede sonar ahora mismo. */
 async function listaDisponible(
   supabase: Awaited<ReturnType<typeof getAppContext>>["supabase"],
@@ -724,7 +796,15 @@ export async function marcarComoReproductor(input: {
   deviceId: string;
   deviceNombre: string;
   forzar?: boolean;
-}): Promise<{ ok: boolean; error?: string; ocupadoPor?: string }> {
+}): Promise<{
+  ok: boolean;
+  error?: string;
+  ocupadoPor?: string;
+  /** Quién lo tiene puesto, para poder decirlo por su nombre. */
+  ocupadoPorUsuario?: string;
+  /** ¿Está sonando AHORA? No es lo mismo relevar en silencio que callar la sala. */
+  sonando?: boolean;
+}> {
   try {
     const ctx = await guardVer();
     if (!ctx.ok) return { ok: false, error: ctx.error };
@@ -740,7 +820,7 @@ export async function marcarComoReproductor(input: {
 
     const { data: actual } = await ctx.supabase
       .from("musica_reproductor")
-      .select("device_id, device_nombre, visto_en, reproduciendo")
+      .select("device_id, device_nombre, visto_en, reproduciendo, actualizado_por")
       .eq("local_id", input.localId)
       .maybeSingle();
 
@@ -753,9 +833,23 @@ export async function marcarComoReproductor(input: {
         visto !== null &&
         Date.now() - visto.getTime() < MINUTOS_ALTAVOZ_VIVO * 60_000;
       if (vivo) {
+        // Se dice QUIÉN la tiene puesta, no solo qué ordenador: en un local con
+        // varios equipos iguales, "Mac · Chrome" no identifica a nadie.
+        let quien: string | undefined;
+        if (otro.actualizado_por) {
+          const { data: u } = await ctx.supabase
+            .from("usuarios")
+            .select("nombre, apellidos")
+            .eq("id", otro.actualizado_por as string)
+            .maybeSingle();
+          const nombre = [u?.nombre, u?.apellidos].filter(Boolean).join(" ").trim();
+          if (nombre) quien = nombre;
+        }
         return {
           ok: false,
           ocupadoPor: (otro.device_nombre as string | null) || "Otro equipo",
+          ocupadoPorUsuario: quien,
+          sonando: Boolean(otro.reproduciendo),
         };
       }
       // Sin señal reciente: el equipo que constaba ya no está abierto, así que
