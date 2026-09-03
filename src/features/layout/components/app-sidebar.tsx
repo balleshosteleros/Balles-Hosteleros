@@ -3,6 +3,7 @@
 import { ChevronDown, LayoutDashboard, PanelLeft, Pin, PinOff } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
+import { cn } from "@/lib/utils";
 import { NavLink } from "@/features/layout/components/nav-link";
 import { useAuth } from "@/features/auth/contexts/auth-context";
 import { useViewMode, type ViewMode } from "@/features/layout/contexts/view-mode-context";
@@ -77,7 +78,7 @@ function CollapsibleSection({
   prefix: _prefix,
   items,
   collapsed,
-  linkTo,
+  activo,
   open,
   onOpenChange,
   fase,
@@ -87,7 +88,7 @@ function CollapsibleSection({
   prefix: string;
   items: SubItem[];
   collapsed: boolean;
-  linkTo?: string;
+  activo: boolean;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   fase?: 1 | 2;
@@ -97,32 +98,29 @@ function CollapsibleSection({
       <NavPill text="2ª fase" tone="yellow" />
     ) : null;
 
-  const trigger = linkTo ? (
-    <SidebarMenuButton asChild>
-      <NavLink
-        href={linkTo}
-        end
-        className="hover:bg-sidebar-accent/50 cursor-pointer w-full"
-        activeClassName="bg-sidebar-accent text-sidebar-primary font-semibold"
-      >
-        <Icon className="mr-2 h-4 w-4 shrink-0" />
-        {!collapsed && (
-          <>
-            <span className="text-sm flex-1">{label}</span>
-            {faseBadge}
-            <ChevronDown className="h-3 w-3 ml-1 transition-transform" />
-          </>
-        )}
-      </NavLink>
-    </SidebarMenuButton>
-  ) : (
-    <SidebarMenuButton className="hover:bg-sidebar-accent/50 cursor-pointer w-full">
+  // El encabezado del módulo SOLO despliega; nunca navega. Antes era a la vez
+  // enlace al módulo y disparador del desplegable: como la lista arrancaba
+  // cerrada, el primer clic te sacaba a la página del módulo (vacía en la
+  // mayoría) y había que volver a pulsar para entrar en el submódulo. Ahora un
+  // clic abre la lista y el segundo ya es el submódulo que quieres.
+  const trigger = (
+    <SidebarMenuButton
+      className={cn(
+        "hover:bg-sidebar-accent/50 cursor-pointer w-full",
+        activo && "bg-sidebar-accent text-sidebar-primary font-semibold",
+      )}
+    >
       <Icon className="mr-2 h-4 w-4 shrink-0" />
       {!collapsed && (
         <>
           <span className="text-sm flex-1">{label}</span>
           {faseBadge}
-          <ChevronDown className="h-3 w-3 ml-1 transition-transform" />
+          <ChevronDown
+            className={cn(
+              "h-3 w-3 ml-1 transition-transform",
+              open && "rotate-180",
+            )}
+          />
         </>
       )}
     </SidebarMenuButton>
@@ -211,6 +209,19 @@ export function AppSidebar() {
 
   const activeKey = sections.find((s) => pathname.startsWith(s.prefix))?.key ?? null;
   const [openKey, setOpenKey] = useState<string | null>(activeKey);
+
+  // El desplegable del módulo debe seguir SIEMPRE a la ruta actual. `activeKey`
+  // solo servía de valor inicial, y en ese primer render `sections` aún está
+  // vacía (esperando permisos), así que salía null: al entrar directo en un
+  // submódulo el módulo aparecía cerrado y hacía falta pulsar el encabezado
+  // —que además navega al módulo principal— para ver los submódulos. De ahí el
+  // "tienes que pulsar dos veces". Al resolverse los permisos, o al cambiar de
+  // ruta, abrimos el módulo que corresponde. Solo lo forzamos cuando hay un
+  // módulo activo: en rutas sin módulo respetamos lo que el usuario tuviera
+  // abierto a mano.
+  useEffect(() => {
+    if (activeKey) setOpenKey(activeKey);
+  }, [activeKey]);
 
   // En las páginas hub (Mis Paneles / Mis Departamentos) el sidebar queda fijo
   // expandido — no se auto-colapsa ni se cierra al salir el cursor. Al pulsar
@@ -452,7 +463,7 @@ export function AppSidebar() {
                         prefix={s.prefix}
                         items={s.items}
                         collapsed={collapsed}
-                        linkTo={s.linkTo}
+                        activo={activeKey === s.key}
                         fase={s.fase}
                         open={openKey === s.key}
                         onOpenChange={(isOpen) => setOpenKey(isOpen ? s.key : null)}
