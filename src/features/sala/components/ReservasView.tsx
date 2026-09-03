@@ -141,6 +141,11 @@ import type {
   ClienteInsights,
 } from "@/features/sala/data/reservas";
 import { ReservaFlagsChips } from "@/features/sala/components/reservas/ReservaFlagsChips";
+import {
+  tipoDeReserva,
+  TIPO_RESERVA_LABELS,
+  type TipoReserva,
+} from "@/features/sala/lib/tipo-reserva";
 import { AvisoCobrosBanner } from "@/features/sala/components/reservas/AvisoCobrosBanner";
 import { CobroPoliticaBloque } from "@/features/sala/components/reservas/CobroPoliticaBloque";
 import { ReservaTiempoCelda } from "@/features/sala/components/reservas/ReservaTiempoCelda";
@@ -260,48 +265,53 @@ const LISTA_GRID =
   "grid grid-cols-[50px_62px_minmax(0,1fr)_26px_56px_74px_86px_58px] gap-1.5 items-center";
 
 /**
- * Qué condiciones lleva la reserva, en una palabra.
+ * TIPO de la reserva: cuál de las cuatro es (PRP-082).
  *
- * La categoría guardada (`tipoCategoria`) es la que eligió quien la creó, pero
- * no siempre está puesta: una reserva de la web nace con política sin que
- * nadie la etiquete. Así que si falta, se deduce de lo que la reserva tiene de
- * verdad —ticket, cupón, tarjeta— antes de rendirse y decir "normal".
+ * No se deduce aquí: lo resuelve `tipoDeReserva()`, que es la fuente única y
+ * ya aplica el orden de prioridad (ticket → garantía → cancelación → gratis).
+ * Inventar la cuenta en la celda es justo lo que hacía que cada pantalla
+ * dijera una cosa distinta.
+ *
+ * En la columna se usan etiquetas cortas porque "Política de cancelación" no
+ * cabe; el nombre completo va en el `title`.
  */
+const TIPO_RESERVA_CORTO: Record<TipoReserva, string> = {
+  ticket: "Ticket",
+  garantia: "Garantía",
+  cancelacion: "Cancelación",
+  gratis: "Gratis",
+};
+
+const TIPO_RESERVA_COLOR: Record<TipoReserva, string> = {
+  // Ya pagada: es la única que trae dinero cobrado de antemano.
+  ticket: "text-red-600 dark:text-red-400",
+  // Dinero retenido de verdad.
+  garantia: "text-amber-600 dark:text-amber-400",
+  // Tarjeta guardada, sin dinero apartado.
+  cancelacion: "text-emerald-600 dark:text-emerald-400",
+  // Sin compromiso: en gris, porque no hay nada que vigilar.
+  gratis: "text-muted-foreground",
+};
+
 function TipoReservaCelda({ reserva }: { reserva: Reserva }) {
-  const categoria: TipoReservaCategoria | null =
-    reserva.tipoCategoria ??
-    (reserva.esTicket
-      ? "ticket"
-      : reserva.codigo
-        ? "cupon"
-        : reserva.tieneGarantia || reserva.tieneCancelacion
-          ? "politica"
-          : null);
-
-  if (!categoria) {
-    // Una reserva sin condiciones es lo normal: se dice en gris y flojito,
-    // porque no es un dato sobre el que haya que hacer nada.
-    return <span className="min-w-0 truncate text-[11px] text-muted-foreground/50">Normal</span>;
-  }
-
-  // "Política de cancelación" no cabe en una columna: en la lista basta con
-  // "Tarjeta", que es lo que el camarero necesita saber de un vistazo.
-  const texto = categoria === "politica" ? "Tarjeta" : TIPO_RESERVA_CATEGORIA_LABELS[categoria];
-  const color =
-    categoria === "ticket"
-      ? "text-red-600 dark:text-red-400"
-      : categoria === "cupon"
-        ? "text-amber-600 dark:text-amber-400"
-        : categoria === "politica"
-          ? "text-emerald-600 dark:text-emerald-400"
-          : "text-muted-foreground";
+  const tipo = tipoDeReserva({
+    esTicket: reserva.esTicket,
+    tieneGarantia: reserva.tieneGarantia,
+    garantiaImporte: reserva.garantiaImporte,
+    tieneCancelacion: reserva.tieneCancelacion,
+    cancelacionImporte: reserva.cancelacionImporte,
+  });
 
   return (
     <span
-      className={cn("min-w-0 truncate text-[11px] font-medium", color)}
-      title={TIPO_RESERVA_CATEGORIA_LABELS[categoria]}
+      className={cn(
+        "min-w-0 truncate text-[11px]",
+        tipo === "gratis" ? "" : "font-medium",
+        TIPO_RESERVA_COLOR[tipo],
+      )}
+      title={TIPO_RESERVA_LABELS[tipo]}
     >
-      {texto}
+      {TIPO_RESERVA_CORTO[tipo]}
     </span>
   );
 }
