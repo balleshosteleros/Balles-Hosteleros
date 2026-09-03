@@ -2,6 +2,7 @@
 
 import { useState, useTransition, useMemo, useEffect } from "react";
 import type { TicketPublico } from "@/features/reservar-publica/actions/validar-ticket-publico";
+import { TicketCodigoInput } from "@/features/reservar-publica/components/TicketCodigoInput";
 import {
   horaPermitidaPorTicket,
   zonaPermitidaPorTicket,
@@ -503,6 +504,27 @@ export function ReservaPublicaForm({
               trae el código puesto (`ticketCodigoInicial`). Meter aquí la venta
               y el canje llenaba el formulario de campos que el 99% de quien
               entra a reservar no necesita. */}
+
+          {/* Canje de un Ticket ya comprado. Solo se pinta cuando el cliente
+              llega desde el enlace de su correo (`?ticket=CODIGO`): quien entra
+              a reservar sin haber comprado nada no ve este campo.
+
+              Sin esto, el código del correo no se validaba nunca: `ticketCanje`
+              se quedaba en null, el número de comensales no se fijaba y la
+              reserva salía como si no hubiera pagado. */}
+          {ticketCodigoInicial ? (
+            <TicketCodigoInput
+              empresaSlug={empresaSlug}
+              value={ticketCodigo}
+              onChange={setTicketCodigo}
+              onResult={setTicketCanje}
+              contextoSerial={`${fecha}|${hora}|${grupoZonaId}`}
+              fecha={fecha}
+              hora={hora}
+              grupoZonaId={grupoZonaId || null}
+              accent={accent}
+            />
+          ) : null}
 
           {/* Bloque "qué reservas": comensales → fecha → hora. Agrupado en un
               panel para separarlo visualmente de los datos de contacto.
