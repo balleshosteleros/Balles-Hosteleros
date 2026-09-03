@@ -9,7 +9,13 @@
  */
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { firmaWebhookValida, estaPagada, type RevolutOrderState } from "@/lib/revolut/merchant";
+import {
+  firmaWebhookValida,
+  estaPagada,
+  obtenerOrden,
+  tarjetaDeOrden,
+  type RevolutOrderState,
+} from "@/lib/revolut/merchant";
 import { decrypt } from "@/features/accesos/lib/crypto";
 import { notificarReservaCreada } from "@/lib/email/reservas/notificar-creada";
 import { enviarEmailCompraTicket } from "@/lib/email/tickets/enviar-compra";
@@ -139,7 +145,9 @@ export async function POST(req: Request) {
   }
 
   // ── Pago fallido o cancelado: se devuelve el stock reservado ──────
-  if (tipo === "ORDER_CANCELLED" || tipo === "ORDER_FAILED") {
+  // Revolut manda ORDER_PAYMENT_FAILED (es el evento al que nos suscribimos);
+  // se acepta también ORDER_FAILED por si cambia el nombre.
+  if (tipo === "ORDER_CANCELLED" || tipo === "ORDER_FAILED" || tipo === "ORDER_PAYMENT_FAILED") {
     if (compra.estado === "pendiente") {
       await admin
         .from("reserva_ticket_compras")
@@ -199,7 +207,7 @@ async function procesarPoliticaReserva(input: {
   // tickets: sin esto, cualquiera podría marcar una garantía como retenida.
   const { data: cfg } = await admin
     .from("empresa_revolut_config")
-    .select("webhook_secret_cifrado")
+    .select("webhook_secret_cifrado, secret_key_cifrada, entorno")
     .eq("empresa_id", reserva.empresa_id as string)
     .maybeSingle();
   if (!cfg?.webhook_secret_cifrado) return true;
@@ -231,9 +239,43 @@ async function procesarPoliticaReserva(input: {
     // deja la tarjeta GUARDADA para poder cobrar más adelante.
     const nuevo = p === "garantia" ? "retenida" : "guardada";
     if (estadoActual === nuevo) return true;
+
+    // El aviso no trae la tarjeta, así que se le pregunta a Revolut. Sin estas
+    // referencias (cliente + método guardado) la política de cancelación no
+    // podría cobrar el no-show: quedaría "guardada" sin tarjeta que cobrar.
+    let refs: Record<string, unknown> = {};
+    if (cfg.secret_key_cifrada) {
+      try {
+        const orden = await obtenerOrden(
+          decrypt(cfg.secret_key_cifrada as string),
+          ((cfg.entorno as string) ?? "produccion") as "produccion" | "pruebas",
+          orderId,
+        );
+        if (orden.ok) {
+          const tarjeta = tarjetaDeOrden(orden.orden);
+          refs = {
+            [`${p}_tarjeta_ultimos4`]: tarjeta?.ultimos4 ?? null,
+            [`${p}_tarjeta_marca`]: tarjeta?.marca ?? null,
+            ...(p === "cancelacion"
+              ? {
+                  cancelacion_customer_id: orden.orden.customer?.id ?? null,
+                  cancelacion_payment_method_id: tarjeta?.id ?? null,
+                }
+              : {}),
+            ...(p === "garantia" && orden.orden.capture_deadline
+              ? { garantia_capture_deadline: orden.orden.capture_deadline }
+              : {}),
+          };
+        }
+      } catch (e) {
+        console.error("[revolut][webhook] no se pudo leer la tarjeta:", e);
+      }
+    }
+
     await admin
       .from("reservas")
       .update({
+        ...refs,
         [`${p}_estado`]: nuevo,
         [`${p}_${p === "garantia" ? "retenida" : "guardada"}_at`]: new Date().toISOString(),
         // Pagada: deja de ser provisional y pasa a ser una reserva de verdad.
@@ -251,10 +293,16 @@ async function procesarPoliticaReserva(input: {
     return true;
   }
 
-  if (tipoEvento === "ORDER_CANCELLED" || tipoEvento === "ORDER_FAILED") {
+  if (
+    tipoEvento === "ORDER_CANCELLED" ||
+    tipoEvento === "ORDER_FAILED" ||
+    tipoEvento === "ORDER_PAYMENT_FAILED"
+  ) {
     await admin
       .from("reservas")
-      .update({ [`${p}_estado`]: tipoEvento === "ORDER_FAILED" ? "fallida" : "liberada" })
+      .update({
+        [`${p}_estado`]: tipoEvento === "ORDER_CANCELLED" ? "liberada" : "fallida",
+      })
       .eq("id", reserva.id as string);
     return true;
   }

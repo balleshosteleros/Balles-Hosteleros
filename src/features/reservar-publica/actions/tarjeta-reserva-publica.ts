@@ -376,8 +376,8 @@ export async function confirmarPagoTarjeta(token: string): Promise<
           [`${prefijo}_estado`]: prefijo === "garantia" ? "retenida" : "guardada",
           [`${prefijo}_${prefijo === "garantia" ? "retenida" : "guardada"}_at`]:
             new Date().toISOString(),
-          [`${prefijo}_tarjeta_ultimos4`]: tarjeta?.last_four ?? null,
-          [`${prefijo}_tarjeta_marca`]: tarjeta?.brand ?? null,
+          [`${prefijo}_tarjeta_ultimos4`]: tarjeta?.ultimos4 ?? null,
+          [`${prefijo}_tarjeta_marca`]: tarjeta?.marca ?? null,
           ...(prefijo === "garantia" && res.orden.capture_deadline
             ? { garantia_capture_deadline: res.orden.capture_deadline }
             : {}),

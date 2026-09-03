@@ -19,24 +19,53 @@ const BASE_URL = {
 
 export type RevolutEntorno = keyof typeof BASE_URL;
 
-/** Estados que devuelve Revolut para un pedido. */
+/**
+ * Estados que devuelve Revolut para un pedido.
+ *
+ * ⚠️ Revolut los manda en MINÚSCULAS ("completed", "authorised"), aunque su
+ * documentación los escriba en mayúsculas. Se aceptan las dos formas y se
+ * comparan siempre con `estaPagada`/`estaRetenida`, nunca con `===`: una
+ * comparación directa contra "COMPLETED" no casa nunca y deja el pago como no
+ * confirmado aunque el cliente haya pagado.
+ */
 export type RevolutOrderState =
   | "PENDING"
   | "PROCESSING"
   | "AUTHORISED"
   | "COMPLETED"
   | "CANCELLED"
-  | "FAILED";
+  | "FAILED"
+  | "pending"
+  | "processing"
+  | "authorised"
+  | "completed"
+  | "cancelled"
+  | "failed";
 
-/** Datos NO sensibles de la tarjeta: sirven para identificarla, no para cobrar. */
+/**
+ * Datos NO sensibles de la tarjeta: sirven para identificarla, no para cobrar.
+ *
+ * ⚠️ Revolut usa el prefijo `card_` en la respuesta real (`card_last_four`,
+ * `card_brand`), no `last_four`/`brand`. Se leen con `tarjetaDeOrden`, que ya
+ * normaliza los dos nombres; no se acceden a mano.
+ */
 export interface RevolutPaymentMethod {
   /** Referencia del método guardado: con ella se cobra más adelante. */
   id?: string;
-  /** Cuatro últimos dígitos. Ojo: Revolut lo llama `last_four`, no `last4`. */
+  /** Cuatro últimos dígitos. */
+  card_last_four?: string;
+  card_brand?: string;
+  card_expiry?: string;
+  /** Nombres antiguos, por si alguna versión de la API los devuelve así. */
   last_four?: string;
   brand?: string;
-  expiry_month?: number;
-  expiry_year?: number;
+}
+
+/** La tarjeta ya normalizada, con los nombres que usamos nosotros. */
+export interface TarjetaGuardada {
+  id: string | null;
+  ultimos4: string | null;
+  marca: string | null;
 }
 
 export interface RevolutOrder {
@@ -290,19 +319,42 @@ export async function cobrarTarjetaGuardada(input: {
   }
 }
 
-/** Los datos de la tarjeta que se pueden enseñar, si Revolut los devolvió. */
-export function tarjetaDeOrden(orden: RevolutOrder): RevolutPaymentMethod | null {
-  return orden.payments?.[0]?.payment_method ?? null;
+/**
+ * Los datos de la tarjeta que se pueden enseñar, si Revolut los devolvió.
+ *
+ * Acepta los dos juegos de nombres (`card_last_four` y `last_four`) para no
+ * quedarse a ciegas si la API cambia de forma.
+ */
+export function tarjetaDeOrden(orden: RevolutOrder): TarjetaGuardada | null {
+  const pm = orden.payments?.[0]?.payment_method;
+  if (!pm) return null;
+  return {
+    id: pm.id ?? null,
+    ultimos4: pm.card_last_four ?? pm.last_four ?? null,
+    marca: pm.card_brand ?? pm.brand ?? null,
+  };
+}
+
+/** Revolut manda los estados en minúsculas; se comparan siempre así. */
+function normalizar(state: RevolutOrderState): string {
+  return String(state).toLowerCase();
 }
 
 /** El dinero está RETENIDO, a la espera de que alguien lo capture o lo suelte. */
 export function estaRetenida(state: RevolutOrderState): boolean {
-  return state === "AUTHORISED";
+  return normalizar(state) === "authorised";
 }
 
-/** El pago está cobrado de verdad. */
+/**
+ * El pago está resuelto a favor: cobrado, o autorizado a la espera de captura.
+ *
+ * Una orden de 0 € (la política de cancelación, que solo guarda la tarjeta)
+ * termina en `completed` aunque se pidiera en modo retención: no hay importe
+ * que retener.
+ */
 export function estaPagada(state: RevolutOrderState): boolean {
-  return state === "COMPLETED" || state === "AUTHORISED";
+  const s = normalizar(state);
+  return s === "completed" || s === "authorised";
 }
 
 /** Aviso de pagos dado de alta en Revolut. */
