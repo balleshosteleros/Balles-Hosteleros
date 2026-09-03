@@ -157,13 +157,16 @@ const CAMPOS_CONTACTOS: CampoSubmodulo[] = [
 /**
  * Alta de reserva — formulario interno de sala y portal público del cliente.
  *
- * Nombre, apellidos, fecha, hora, comensales, turno, estado y mesa se exigen
- * SIEMPRE por código (sin ellos no hay reserva que colocar), así que no se
- * listan aquí: aquí solo van los campos que cada empresa decide. La zona no
- * aparece porque se deduce de la mesa elegida.
+ * Nombre, apellidos, TELÉFONO, fecha, hora, comensales, turno, estado y mesa se
+ * exigen SIEMPRE por código (sin ellos no hay reserva que colocar ni cliente al
+ * que llamar), así que no se listan aquí: aquí solo van los campos que cada
+ * empresa decide. La zona no aparece porque se deduce de la mesa elegida.
+ *
+ * El teléfono estuvo aquí como interruptor y se sacó: es el único contacto que
+ * sirve para avisar de un cambio de última hora, así que ninguna empresa puede
+ * apagarlo. El walk-in queda fuera de la regla porque no tiene ficha de cliente.
  */
 const CAMPOS_RESERVAS: CampoSubmodulo[] = [
-  { key: "telefono", label: "Teléfono" },
   { key: "email", label: "Email" },
 ];
 
@@ -237,10 +240,10 @@ export const CATALOGO: ModuloDef[] = [
         key: "reservas",
         label: "Reservas",
         campos: CAMPOS_RESERVAS,
-        // Email y teléfono se exigen de serie en toda empresa: sin ellos no hay
-        // forma de confirmar la reserva ni de avisar al cliente si algo cambia.
+        // El email se exige de serie para poder confirmar la reserva por escrito.
         // Quien quiera aflojarlo lo desmarca en Ajustes → Departamentos → Sala.
-        obligatorios: ["telefono", "email"],
+        // El teléfono NO está aquí: es obligatorio por código, sin interruptor.
+        obligatorios: ["email"],
       },
       placeholder("clientes", "Clientes"),
     ],

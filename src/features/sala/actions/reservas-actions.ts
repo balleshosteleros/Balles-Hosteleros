@@ -26,6 +26,7 @@ import {
 } from "@/features/sala/lib/reserva-cuartos";
 import type { TipoMesa } from "@/features/sala/planos/data/planos";
 import { RESERVA_COMENTARIO_MAX_CHARS } from "@/features/sala/data/reservas";
+import { normalizarOrigen, ORIGEN_SIN_DATO } from "@/features/sala/data/origenes";
 import { friendlyError } from "@/shared/lib/friendly-errors";
 import {
   enviarReservaEmail,
@@ -306,7 +307,15 @@ export async function createReserva(input: {
 
     const estadoFinal = input.estado ?? "CONFIRMADA";
     // Walk-in siempre marca origen = WALKIN (el cliente no vino por canal digital).
-    const origenFinal = estadoFinal === "WALK_IN" ? "WALKIN" : (input.origen ?? null);
+    // Fuera de walk-in el canal es OBLIGATORIO: una reserva sin origen deja la
+    // analítica coja y no se puede reconstruir después. Se normaliza aquí para
+    // que no convivan "telefono" y "TELEFONO" como si fueran canales distintos.
+    const origenFinal = estadoFinal === "WALK_IN"
+      ? "WALKIN"
+      : normalizarOrigen(input.origen);
+    if (origenFinal === ORIGEN_SIN_DATO) {
+      return { ok: false, error: "Indica el origen de la reserva (el canal por el que llegó el cliente)." };
+    }
 
     // Asignación automática de mesa (PRP-048): solo si el llamador lo pide,
     // hay `localId` y la reserva llega sin mesa explícita. Regla de negocio:
@@ -815,7 +824,15 @@ export async function updateReserva(
     if (updates.turno !== undefined) dbUpdates.turno = updates.turno;
     if (updates.estado !== undefined) dbUpdates.estado = updates.estado;
     if (updates.notas !== undefined) dbUpdates.notas = recortarComentario(updates.notas);
-    if (updates.origen !== undefined) dbUpdates.origen = updates.origen;
+    // Igual que en el alta: se guarda la clave normalizada y nunca vacía. Un
+    // update no puede dejar sin canal una reserva que ya lo tenía.
+    if (updates.origen !== undefined) {
+      const norm = normalizarOrigen(updates.origen);
+      if (norm === ORIGEN_SIN_DATO) {
+        return { ok: false, error: "Indica el origen de la reserva (el canal por el que llegó el cliente)." };
+      }
+      dbUpdates.origen = norm;
+    }
     // Si la reserva pasa a WALK_IN, el origen siempre es WALKIN — sobreescribe
     // cualquier valor previo o el que viniera en `updates.origen`.
     if (updates.estado === "WALK_IN") dbUpdates.origen = "WALKIN";

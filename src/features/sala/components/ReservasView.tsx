@@ -63,7 +63,7 @@ import {
   RESERVA_APELLIDOS_MAX_CHARS,
   MAX_COMENSALES_SIN_REGLA,
 } from "@/features/sala/data/reservas";
-import { labelOrigen, ORIGENES_ALTA_SALA } from "@/features/sala/data/origenes";
+import { labelOrigen, normalizarOrigen, ORIGENES_ALTA_SALA } from "@/features/sala/data/origenes";
 import {
   PREFIJOS_TELEFONO,
   PREFIJO_POR_DEFECTO,
@@ -988,8 +988,15 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
     if (!form.esWalkIn) {
       if (!form.cliente.trim()) faltan.push("nombre");
       if (!form.apellidos.trim()) faltan.push("apellidos");
-      if (reservaRequiere("telefono") && !form.telefono.trim()) faltan.push("teléfono");
+      // El teléfono NO se consulta a la configuración: es obligatorio siempre,
+      // como el nombre o la fecha. Es el único contacto que sirve para avisar al
+      // cliente de un cambio de última hora.
+      if (!form.telefono.trim()) faltan.push("teléfono");
       if (reservaRequiere("email") && !form.email.trim()) faltan.push("email");
+      // El canal por el que entra la reserva es un dato obligatorio: sin él la
+      // analítica de origen miente. En walk-in no se pregunta porque lo fija el
+      // propio tipo de reserva (siempre WALKIN).
+      if (!form.origen.trim()) faltan.push("origen");
     }
     if (!form.fecha) faltan.push("fecha");
     if (!form.hora) faltan.push("hora");
@@ -1002,6 +1009,7 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
     return faltan;
   }, [
     form.esWalkIn,
+    form.origen,
     form.cliente,
     form.apellidos,
     form.telefono,
@@ -1238,7 +1246,9 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
       codigoCupon: !form.esWalkIn && form.codigoCupon.trim() ? form.codigoCupon.trim().toUpperCase() : null,
       // Walk-in siempre WALKIN, pase lo que pase en el selector: el cliente
       // llegó andando. El servidor lo vuelve a forzar, aquí se manda coherente.
-      origen: form.esWalkIn ? "WALKIN" : (form.origen || null),
+      // Nunca `null`: el origen es obligatorio y `camposQueFaltan` ya impide
+      // llegar aquí sin él. El fallback es el canal por defecto del alta.
+      origen: form.esWalkIn ? "WALKIN" : (form.origen.trim() || ORIGENES_ALTA_SALA[0]),
       // Si la mesa elegida está bloqueada, se llega aquí solo después de haber
       // leído y aceptado el aviso: el servidor necesita saberlo para dejar
       // pasar la reserva en vez de rechazarla como hace con la web.
@@ -4153,7 +4163,10 @@ export function ReservasView() {
       const matchQ = !q || r.cliente.toLowerCase().includes(q) || r.apellidos.toLowerCase().includes(q) || r.telefono.includes(q);
       const matchZ = zonaCoincide(r.zona);
       const matchE = filtroEstados.includes(r.estado);
-      const matchO = filtroOrigen === "TODOS" || r.origen === filtroOrigen;
+      // Se compara la CLAVE normalizada, no el texto crudo de BD: conviven
+      // filas antiguas con "telefono" y nuevas con "TELEFONO", y el filtro
+      // tiene que cazar las dos con la misma opción.
+      const matchO = filtroOrigen === "TODOS" || normalizarOrigen(r.origen) === filtroOrigen;
       return matchQ && matchZ && matchE && matchO;
     }).sort((a, b) => {
       const horaCmp = a.hora.localeCompare(b.hora);
@@ -4163,9 +4176,12 @@ export function ReservasView() {
   }, [reservasTurno, busqueda, zonaCoincide, filtroEstados, filtroOrigen, idsDelAviso]);
 
   const origenesPresentes = useMemo(() => {
+    // Claves normalizadas, no valores crudos: si no, el mismo canal escrito de
+    // dos formas ofrecía dos opciones idénticas que filtraban media lista cada
+    // una. Se ordena por la etiqueta, que es lo que el usuario lee.
     const set = new Set<string>();
-    reservasDia.forEach(r => { if (r.origen) set.add(r.origen); });
-    return Array.from(set).sort();
+    reservasDia.forEach(r => { if (r.origen) set.add(normalizarOrigen(r.origen)); });
+    return Array.from(set).sort((a, b) => labelOrigen(a).localeCompare(labelOrigen(b), "es"));
   }, [reservasDia]);
 
   // Mesas de la SALA activa: el canvas recibía todas las del local mientras las
@@ -5207,7 +5223,7 @@ export function ReservasView() {
               >
                 <option value="TODOS">Todos</option>
                 {origenesPresentes.map((o) => (
-                  <option key={o} value={o}>{origenLabel(o)}</option>
+                  <option key={o} value={o}>{labelOrigen(o)}</option>
                 ))}
               </select>
             </div>

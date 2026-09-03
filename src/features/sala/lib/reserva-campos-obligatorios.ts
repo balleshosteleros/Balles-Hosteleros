@@ -6,13 +6,21 @@ import {
 } from "@/features/ajustes/lib/reglas-submodulos-catalogo";
 
 /**
- * Campos del alta de reserva que cada empresa decide. Nombre, apellidos, fecha,
- * hora, comensales, turno, estado y mesa se exigen SIEMPRE por código (la zona
- * se deduce de la mesa), así que no aparecen aquí.
+ * Campos del alta de reserva que cada empresa decide. Nombre, apellidos,
+ * TELÉFONO, fecha, hora, comensales, turno, estado y mesa se exigen SIEMPRE por
+ * código (la zona se deduce de la mesa), así que no se configuran.
+ *
+ * El teléfono aparece aquí fijado a `true`, no como interruptor: es el único
+ * contacto que sirve para avisar al cliente de un cambio de última hora.
  */
 export interface CamposObligatoriosReserva {
   email: boolean;
-  telefono: boolean;
+  /**
+   * Siempre `true`. Se mantiene en el tipo (y no se borra de los consumidores)
+   * porque el portal público pinta el asterisco de "campo obligatorio" leyendo
+   * estos flags, y quitarlo dejaría el teléfono sin marcar aunque se exija.
+   */
+  telefono: true;
 }
 
 /**
@@ -32,7 +40,7 @@ export async function getCamposObligatoriosReserva(
   empresaId: string,
 ): Promise<CamposObligatoriosReserva> {
   const submodulo = getSubmodulo("sala", "reservas");
-  if (!submodulo) return { email: false, telefono: false };
+  if (!submodulo) return { email: false, telefono: true };
 
   let regla: ReglaSubmoduloRow | null = null;
   try {
@@ -46,13 +54,14 @@ export async function getCamposObligatoriosReserva(
       .maybeSingle();
     regla = (data as ReglaSubmoduloRow | null) ?? null;
   } catch {
-    // Sin regla guardada se aplican los defaults del catálogo (email y teléfono).
+    // Sin regla guardada se aplican los defaults del catálogo (email).
     regla = null;
   }
 
   const requeridos = camposObligatoriosEfectivos(submodulo, regla);
   return {
     email: requeridos.includes("email"),
-    telefono: requeridos.includes("telefono"),
+    // No se consulta la regla: el teléfono no es configurable.
+    telefono: true,
   };
 }
