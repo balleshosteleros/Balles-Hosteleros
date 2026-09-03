@@ -12,6 +12,7 @@ import { createClient } from "@supabase/supabase-js";
 import { getZonaHorariaEmpresa } from "@/features/empresa/lib/empresa-server";
 import { hoyEnZona, zonaLocalAUtcISO } from "@/features/empresa/lib/zona-horaria";
 import { codigosQueNoComputan, noComputa } from "@/features/rrhh/services/horas/computa-tiempo";
+import { calcularSalidaPrevista } from "@/features/mi-panel/utils/fichaje-multiempresa";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -50,7 +51,7 @@ export async function GET(request: Request) {
 
     const { data: abiertos, error } = await supabase
       .from("fichajes")
-      .select("id, hora_entrada, fecha, tipo")
+      .select("id, hora_entrada, fecha, tipo, empleado_id")
       .eq("empresa_id", empresaId)
       .lt("fecha", hoy)
       .is("hora_salida", null)
@@ -64,16 +65,38 @@ export async function GET(request: Request) {
     const noComputanCodigos = await codigosQueNoComputan(supabase, empresaId);
 
     for (const f of abiertos ?? []) {
-      // La salida se fija al FINAL DE SU PROPIO DÍA, no al momento de ejecutarse
-      // el cron. Antes se ponía `now()`: quien entró a las 20:00 y no fichó salida
-      // quedaba con ~12 h (hasta las 08:00 del día siguiente, cuando corre el
-      // cron), y esas horas infladas son las que suma el cálculo del mes para los
-      // pagos. Además `horas_totales` no se recalculaba nunca.
+      // La salida se fija a la HORA PREVISTA DE FIN DE SU TURNO, no al momento
+      // de ejecutarse el cron (antes `now()`: quien entró a las 20:00 quedaba
+      // con ~12 h infladas, y esas horas son las que suma el cálculo del mes
+      // para los pagos).
+      //
+      // Tampoco vale el final del día natural (23:59): en hostelería el turno
+      // cruza medianoche, así que a quien entraba a las 19:30 y salía a las
+      // 03:00 le recortaba las horas de madrugada — aparecían 4:28 h en vez de
+      // sus 7 h. Solo se cae al fin de día cuando NO hay horario con el que
+      // predecir la salida.
       const entradaIso = f.hora_entrada as string | null;
       if (!entradaIso) continue;
-      const finDeDia = zonaLocalAUtcISO(f.fecha as string, "23:59", tz);
       const entradaMs = new Date(entradaIso).getTime();
-      const salidaMs = Math.max(new Date(finDeDia).getTime(), entradaMs);
+
+      let previstaMs: number | null = null;
+      try {
+        const prevista = await calcularSalidaPrevista(
+          supabase,
+          f.empleado_id as string,
+          f.fecha as string,
+          entradaIso,
+        );
+        if (prevista) previstaMs = prevista.getTime();
+      } catch (e) {
+        console.error("[cron/cerrar-fichajes-huerfanos] salida prevista", f.id, e);
+      }
+
+      const finDeDia = zonaLocalAUtcISO(f.fecha as string, "23:59", tz);
+      const salidaMs = Math.max(
+        previstaMs ?? new Date(finDeDia).getTime(),
+        entradaMs,
+      );
       const horas = noComputa(noComputanCodigos, f.tipo as string | null)
         ? 0
         : Math.round(((salidaMs - entradaMs) / 3600000) * 100) / 100;

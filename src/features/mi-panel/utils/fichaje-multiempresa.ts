@@ -447,9 +447,11 @@ function minutosLocalesDe(d: Date, tz: string = "Europe/Madrid"): number {
  * Salida prevista del empleado el día `fecha`, según su horario UNIFICADO entre
  * empresas:
  *  · FIJO     → fin del último tramo fijo, colocado en la fecha de la entrada.
+ *               Si el turno CRUZA MEDIANOCHE (fin <= inicio, lo normal en
+ *               coctelería: 19:30–03:00) la salida cae en el día siguiente.
  *  · FLEXIBLE → solo si su objetivo es DIARIO: hora de entrada + horas del día.
- * Devuelve `null` si no se puede predecir (sin horario, flexible semanal, o
- * jornada que cruza medianoche, que la cierra el cron de huérfanos).
+ * Devuelve `null` solo si no se puede predecir (sin horario, o flexible
+ * semanal).
  */
 export async function calcularSalidaPrevista(
   client: SupabaseClient,
@@ -476,14 +478,24 @@ export async function calcularSalidaPrevista(
   const entrada = new Date(horaEntradaISO);
   if (ends.length) {
     const entradaMin = Math.min(...starts);
-    const salidaMin = Math.max(...ends);
-    if (salidaMin <= entradaMin) return null; // cruza medianoche → cron de huérfanos
-    // Coloca la salida en la misma fecha local de la entrada, usando la zona de
-    // la empresa del horario (PRP-069; los locales del reparto comparten zona).
+    let salidaMin = Math.max(...ends);
+    // Turno que cruza medianoche (19:30–03:00): el fin pertenece al día
+    // siguiente, así que se le suman 24 h. Antes esto devolvía `null` y el
+    // fichaje acababa en el cron de huérfanos, que lo cortaba a las 23:59 y le
+    // recortaba las horas de madrugada al empleado.
+    if (salidaMin <= entradaMin) salidaMin += 1440;
+    // Coloca la salida tomando como referencia la fecha local de la entrada,
+    // usando la zona de la empresa del horario (PRP-069; los locales del
+    // reparto comparten zona).
     const tz = horarios[0]?.empresaId
       ? await getZonaHorariaEmpresa(client, horarios[0].empresaId)
       : "Europe/Madrid";
-    return new Date(entrada.getTime() + (salidaMin - minutosLocalesDe(entrada, tz)) * 60000);
+    let entradaMinLocal = minutosLocalesDe(entrada, tz);
+    // Si el empleado fichó YA pasada la medianoche (entró a las 00:10 de un
+    // turno que empezó "ayer" a las 22:00), su minuto local va por detrás del
+    // inicio del turno: se normaliza al mismo eje que `salidaMin`.
+    if (entradaMinLocal < entradaMin) entradaMinLocal += 1440;
+    return new Date(entrada.getTime() + (salidaMin - entradaMinLocal) * 60000);
   }
   if (objetivoFlexHoras > 0) {
     return new Date(entrada.getTime() + objetivoFlexHoras * 3600000);

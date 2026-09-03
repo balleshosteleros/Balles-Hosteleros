@@ -86,6 +86,19 @@ export interface DiaCalendario {
   horasFichaje: number;
   ausencia: SolicitudSubtipoAusencia | null;
   trabajoExtra: SolicitudSubtipoTrabajo | null;
+  /**
+   * Horario PREVISTO ese día según los turnos y patrones reales del empleado.
+   * `null` = no se ha resuelto; `trabaja:false` = libra.
+   *
+   * Antes el calendario pintaba una tabla fija escrita en el cliente, igual
+   * para todo el mundo, así que enseñaba turnos que no existían y marcaba como
+   * laborables días que el empleado libraba.
+   */
+  horarioPrevisto: {
+    trabaja: boolean;
+    /** "21:30–02:30", o varios tramos separados por coma. "" si libra. */
+    texto: string;
+  } | null;
 }
 
 export const SUBTIPO_LABEL: Record<SolicitudSubtipo, string> = {

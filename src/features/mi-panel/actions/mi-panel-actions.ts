@@ -57,6 +57,7 @@ import {
   resolverCandidatosPorGeo,
   getHorariosDiaUnificado,
   getMisLocales,
+  getMisFilasEmpleado,
   planificarReparto,
   type TramoEmpresaMin,
 } from "@/features/mi-panel/utils/fichaje-multiempresa";
@@ -129,6 +130,39 @@ function todayISO(): string {
   return new Date().toISOString().split("T")[0];
 }
 
+/**
+ * "Hoy" del EMPLEADO: el día en la zona horaria de su empresa, no el día UTC
+ * del servidor (PRP-069).
+ *
+ * En producción el proceso corre en UTC. En Madrid (UTC+2 en verano) eso
+ * significa que entre las 00:00 y las 02:00 locales el servidor todavía cree
+ * que es el día anterior. En hostelería esa es justo la franja en la que se
+ * ficha: quien entraba a la 01:30 quedaba grabado con la fecha de ayer, y al
+ * recargar su panel el fichaje "de hoy" ya no aparecía — le desaparecía el
+ * botón y no podía fichar la salida.
+ *
+ * Se resuelve con la empresa que se le pase; si no hay ninguna, con la primera
+ * del empleado, y en último caso con la zona por defecto.
+ */
+async function hoyDelEmpleado(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  empresaId: string | null,
+  userId: string,
+): Promise<string> {
+  let empresa = empresaId;
+  if (!empresa) {
+    const { data } = await supabase
+      .from("usuario_empresas")
+      .select("empresa_id")
+      .eq("user_id", userId)
+      .limit(1)
+      .maybeSingle();
+    empresa = (data?.empresa_id as string | undefined) ?? null;
+  }
+  if (!empresa) return hoyEnZona(ZONA_HORARIA_DEFAULT);
+  return hoyEnZona(await getZonaHorariaEmpresa(supabase, empresa));
+}
+
 type GeoInput = { lat: number; lng: number; precision: number } | null;
 
 function monthBounds(anio: number, mes: number) {
@@ -144,28 +178,39 @@ function monthBounds(anio: number, mes: number) {
 
 // Cierra automáticamente fichajes abiertos de días pasados conservando la
 // incidencia en su campo propio. La tabla no admite un estado "incidencia".
-// Se ejecuta solo después de las 8:00 (hora local del servidor)
-// para no interrumpir turnos de noche en curso.
+//
+// Es una RED DE SEGURIDAD, no el cierre normal: solo toca jornadas que llevan
+// abiertas más de un día entero. El cierre a la hora prevista lo hacen los
+// crons (`fichajes-autosalida` y `cerrar-fichajes-huerfanos`).
+//
+// Dos cosas que aquí importan mucho en hostelería:
+//  1. La hora de corte se mide en la zona de la EMPRESA, no con
+//     `now.getHours()` del servidor (UTC en producción): a las 08:00 UTC en
+//     Madrid son las 10:00, y a las 02:00 de Madrid el servidor leía "00:00" y
+//     se saltaba el guardia, cerrando turnos de noche EN CURSO.
+//  2. Nunca se cierra un turno del día anterior que todavía puede estar vivo:
+//     el que entró ayer a las 21:00 sigue trabajando a las 03:00 de hoy. Por eso
+//     el corte es `fecha < ayer`, no `fecha < hoy`.
 async function autoCerrarFichajesHuerfanos(
   supabase: Awaited<ReturnType<typeof createClient>>,
   empresaId: string | null,
   empleadoId: string,
 ): Promise<void> {
-  const now = new Date();
-  if (now.getHours() < 8) return;
   try {
-    // Multi-empresa: si `empresaId` es null se cierran los huérfanos del
-    // empleado en TODAS sus empresas (RLS limita a las suyas). Si se pasa una
-    // empresa concreta, solo esa.
+    const hoy = await hoyDelEmpleado(supabase, empresaId, empleadoId);
+    const now = new Date();
+    // Solo se limpia lo de anteayer hacia atrás: eso ya no es un turno vivo,
+    // sea cual sea la hora a la que se mire.
     let q = supabase
       .from("fichajes")
       .update({
         estado: "completado",
         hora_salida: now.toISOString(),
+        requiere_revision: true,
         incidencia: "Fichaje sin cierre — pendiente de revisión",
       })
       .eq("empleado_id", empleadoId)
-      .lt("fecha", todayISO())
+      .lt("fecha", addDaysISO(hoy, -1))
       .is("hora_salida", null)
       .in("estado", ["trabajando", "pausa"]);
     if (empresaId) q = q.eq("empresa_id", empresaId);
@@ -230,15 +275,30 @@ export async function getMiFichajeHoy(): Promise<{
     // empleado en CUALQUIERA de sus empresas (no la de la cookie), para que el
     // botón de salida aparezca aunque la empresa activa sea otra.
     await autoCerrarFichajesHuerfanos(supabase, null, user.id);
-    const { data, error } = await supabase
+
+    // El día se mide en la zona de la empresa, nunca en UTC: ver
+    // `hoyDelEmpleado`. Con `todayISO()` el turno de madrugada se guardaba y se
+    // buscaba con días distintos y el fichaje "desaparecía" del panel.
+    const hoy = await hoyDelEmpleado(supabase, null, user.id);
+
+    // Se miran hoy Y ayer, y se prefiere SIEMPRE un fichaje que siga abierto.
+    // Un turno de noche empieza un día y termina al siguiente: a las 03:00 el
+    // fichaje que el empleado tiene entre manos es el de ayer. Si solo se
+    // mirara "hoy", quien acaba de madrugada no encontraba su propia jornada
+    // para fichar la salida.
+    const { data: recientes, error } = await supabase
       .from("fichajes")
       .select("*")
       .eq("empleado_id", user.id)
-      .eq("fecha", todayISO())
+      .in("fecha", [hoy, addDaysISO(hoy, -1)])
       .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
+      .limit(10);
     if (error) throw error;
+    const abierto = (recientes ?? []).find(
+      (f) => !f.hora_salida && (f.estado === "trabajando" || f.estado === "pausa"),
+    );
+    const data =
+      abierto ?? (recientes ?? []).find((f) => (f.fecha as string) === hoy) ?? null;
     if (!data) return { ok: true, data: null };
     // La empresa relevante es la del propio fichaje, no la cookie.
     const empresaId = data.empresa_id as string;
@@ -443,7 +503,13 @@ export async function getMiVentanaFichajeHoy(): Promise<VentanaFichajeHoy> {
     // Ventana UNIFICADA: combina los turnos FIJOS de hoy de TODAS sus empresas
     // (p.ej. mañana en una empresa + noche en otra). El pop-up es un aviso; la
     // ventana dura de fichaje la valida el server en `ficharEntradaPersonal`.
-    const horarios = await getHorariosDiaUnificado(supabase, user.id, todayISO());
+    const horarios = await getHorariosDiaUnificado(
+      supabase,
+      user.id,
+      // Día de la empresa, no día UTC: si no, de madrugada se leían los turnos
+      // del día equivocado y el aviso de fichar no saltaba.
+      await hoyDelEmpleado(supabase, cookieEmpresaId, user.id),
+    );
 
     const fijos: { empresaId: string; entradaMin: number; salidaMin: number }[] = [];
     for (const h of horarios) {
@@ -858,13 +924,17 @@ export async function ficharEntradaPersonal(
     }
 
     const ahora = new Date();
+    // La fecha del fichaje es el día en la zona de la EMPRESA en la que se
+    // ficha, no el día UTC del servidor: a la 01:00 de Madrid, UTC todavía va
+    // por el día anterior y el turno de noche quedaba atribuido a ayer.
+    const fechaFichaje = hoyEnZona(await getZonaHorariaEmpresa(supabase, empresaId));
     const { data, error } = await supabase
       .from("fichajes")
       .insert({
         empresa_id: empresaId,
         empleado_id: user.id,
         empleado_nombre: nombre || "Sin nombre",
-        fecha: todayISO(),
+        fecha: fechaFichaje,
         // Oficial (la que cuenta): redondeada al turno si aplica. Real: instante
         // físico del fichaje, siempre, para auditoría en RRHH.
         hora_entrada: horaEntradaOverrideISO ?? ahora.toISOString(),
@@ -1409,15 +1479,17 @@ export async function getMiCalendarioMes(
     if (solicitudesRes.error) throw solicitudesRes.error;
 
     const map = new Map<string, DiaCalendario>();
+    const vacio = (fecha: string): DiaCalendario => ({
+      fecha,
+      fichado: false,
+      horasFichaje: 0,
+      ausencia: null,
+      trabajoExtra: null,
+      horarioPrevisto: null,
+    });
     for (const f of fichajesRes.data ?? []) {
       const fecha = f.fecha as string;
-      const prev = map.get(fecha) ?? {
-        fecha,
-        fichado: false,
-        horasFichaje: 0,
-        ausencia: null,
-        trabajoExtra: null,
-      };
+      const prev = map.get(fecha) ?? vacio(fecha);
       prev.fichado = true;
       // Suma (no sobrescribe): un día puede tener fichajes en 2 empresas.
       prev.horasFichaje += (f.horas_totales as number | null) ?? 0;
@@ -1433,13 +1505,7 @@ export async function getMiCalendarioMes(
       const stop = new Date(Math.min(fin.getTime(), endBound.getTime() - 86400000));
       while (cur.getTime() <= stop.getTime()) {
         const key = cur.toISOString().split("T")[0];
-        const prev = map.get(key) ?? {
-          fecha: key,
-          fichado: false,
-          horasFichaje: 0,
-          ausencia: null,
-          trabajoExtra: null,
-        };
+        const prev = map.get(key) ?? vacio(key);
         if (s.tipo === "ausencia") {
           prev.ausencia = s.subtipo as SolicitudSubtipoAusencia;
         } else if (s.tipo === "trabajo") {
@@ -1447,6 +1513,38 @@ export async function getMiCalendarioMes(
         }
         map.set(key, prev);
         cur.setUTCDate(cur.getUTCDate() + 1);
+      }
+    }
+
+    // Horario PREVISTO de cada día del mes, resuelto con los turnos y patrones
+    // REALES del empleado (motor `getHorarioDia`, el mismo que usa RRHH), en
+    // todas sus empresas. Antes el calendario del empleado pintaba una tabla
+    // fija escrita a mano en el cliente, igual para toda la plantilla: enseñaba
+    // turnos inventados y marcaba "trabaja" días que la persona libraba.
+    const filas = await getMisFilasEmpleado(supabase, user.id);
+    if (filas.length > 0) {
+      const finMes = new Date(hasta + "T00:00:00Z");
+      for (
+        let d = new Date(desde + "T00:00:00Z");
+        d.getTime() < finMes.getTime();
+        d.setUTCDate(d.getUTCDate() + 1)
+      ) {
+        const key = d.toISOString().split("T")[0];
+        const tramos: string[] = [];
+        let trabaja = false;
+        for (const fila of filas) {
+          const h = await getHorarioDia(supabase, fila.empresaId, fila.empleadoId, key);
+          if (h.tipo === "fijo" && h.tramos.length > 0) {
+            trabaja = true;
+            for (const tr of h.tramos) tramos.push(`${tr.inicio}–${tr.fin}`);
+          } else if (h.tipo === "flexible" && h.objetivoHoras > 0) {
+            trabaja = true;
+            tramos.push(`${h.objetivoHoras} h`);
+          }
+        }
+        const prev = map.get(key) ?? vacio(key);
+        prev.horarioPrevisto = { trabaja, texto: tramos.join(", ") };
+        map.set(key, prev);
       }
     }
 

@@ -47,16 +47,6 @@ function ymd(d: Date): string {
   return `${y}-${m}-${dd}`;
 }
 
-const HORARIO_PROVISIONAL: Record<number, { tipo: "trabajo" | "libre"; horario: string }> = {
-  0: { tipo: "trabajo", horario: "10:00–16:00" },
-  1: { tipo: "trabajo", horario: "10:00–16:00" },
-  2: { tipo: "libre", horario: "—" },
-  3: { tipo: "trabajo", horario: "17:00–23:00" },
-  4: { tipo: "trabajo", horario: "13:00–23:30" },
-  5: { tipo: "trabajo", horario: "12:00–23:30" },
-  6: { tipo: "libre", horario: "—" },
-};
-
 type EstadoDia = "vacaciones" | "baja" | "permiso" | "hoy" | "trabajado" | "trabajar" | "libre";
 
 interface DiaInfo {
@@ -69,20 +59,26 @@ function getDiaInfo(fecha: string, info: DiaCalendario | undefined, todayKey: st
   const isToday = fecha === todayKey;
   const isPast = fecha < todayKey;
   const isFuture = fecha > todayKey;
-  const [yy, mm, dd] = fecha.split("-").map(Number);
-  const idx = indexLunes(new Date(yy, mm - 1, dd));
-  const prov = HORARIO_PROVISIONAL[idx];
 
   if (info?.ausencia === "vacaciones") return { estado: "vacaciones", badgeText: "VACAC.", horario: "—" };
   if (info?.ausencia === "baja_medica") return { estado: "baja", badgeText: "BAJA", horario: "—" };
   if (info?.ausencia === "permiso") return { estado: "permiso", badgeText: "PERMISO", horario: "—" };
 
-  const horarioFichado = info?.fichado ? `${formatHorasDecimal(info.horasFichaje)} fichadas` : prov.horario;
+  // Turno REAL del empleado ese día (turnos + patrones), calculado en servidor.
+  // Mientras no llega, no se inventa nada: el día se queda sin horario en vez
+  // de enseñar uno falso.
+  const previsto = info?.horarioPrevisto ?? null;
+  const trabajaPrevisto = previsto?.trabaja ?? false;
+  const textoPrevisto = previsto?.texto ? previsto.texto : "—";
+
+  const horarioFichado = info?.fichado
+    ? `${formatHorasDecimal(info.horasFichaje)} fichadas`
+    : textoPrevisto;
 
   if (isToday) return { estado: "hoy", badgeText: "HOY", horario: horarioFichado };
-  if (info?.fichado || (prov.tipo === "trabajo" && isPast)) return { estado: "trabajado", badgeText: "TRABAJADO", horario: horarioFichado };
-  if (prov.tipo === "trabajo" && isFuture) return { estado: "trabajar", badgeText: "TRABAJAR", horario: prov.horario };
-  return { estado: "libre", badgeText: "LIBRE", horario: prov.horario };
+  if (info?.fichado || (trabajaPrevisto && isPast)) return { estado: "trabajado", badgeText: "TRABAJADO", horario: horarioFichado };
+  if (trabajaPrevisto && isFuture) return { estado: "trabajar", badgeText: "TRABAJAR", horario: textoPrevisto };
+  return { estado: "libre", badgeText: "LIBRE", horario: previsto ? "—" : textoPrevisto };
 }
 
 const TW_CLASSES: Record<EstadoDia, { bg: string; badge: string; horario: string }> = {
