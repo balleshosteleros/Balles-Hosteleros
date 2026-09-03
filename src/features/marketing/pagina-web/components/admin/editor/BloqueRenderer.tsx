@@ -60,6 +60,8 @@ export function BloqueRenderer({ bloque, modo }: Props) {
       );
     case "reservas":
       return <PlaceholderEtiqueta text={`Reservas · modo ${bloque.datos.modo}`} />;
+    case "tickets":
+      return <PlaceholderEtiqueta text={`Tickets · ${bloque.datos.titulo ?? "Experiencias"}`} />;
     case "testimonios":
       return <PlaceholderEtiqueta text={`Testimonios · ${bloque.datos.items.length} reseñas`} />;
     case "cta": {

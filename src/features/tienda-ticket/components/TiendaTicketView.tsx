@@ -36,6 +36,12 @@ interface Props {
   color: string | null;
   colorTexto: string | null;
   productos: ProductoTienda[];
+  /**
+   * Incrustada en la web del restaurante: sin cabecera propia ni márgenes de
+   * página, porque la web ya pone su título y su fondo. Se lee como una
+   * sección más, no como un recuadro pegado encima.
+   */
+  embedded?: boolean;
 }
 
 /** 49 → "49,00 €" (coma decimal, como en toda la aplicación). */
@@ -55,6 +61,7 @@ function disponibles(p: ProductoTienda): number | null {
 
 export function TiendaTicketView({
   empresaSlug, empresaNombre, logoUrl, color, colorTexto, productos,
+  embedded = false,
 }: Props) {
   const acento = color ?? "#18181b";
   const sobreAcento = colorTexto ?? "#ffffff";
@@ -175,15 +182,17 @@ export function TiendaTicketView({
   }
 
   return (
-    <div className="mx-auto max-w-md px-4 py-8">
-      <header className="mb-6 text-center">
-        {logoUrl
-          ? <img src={logoUrl} alt={empresaNombre} className="mx-auto mb-3 h-12 object-contain" />
-          : <h2 className="mb-1 text-lg font-semibold text-zinc-900">{empresaNombre}</h2>}
-        <p className="text-sm text-zinc-600">
-          Compra ahora y reserva tu mesa cuando quieras.
-        </p>
-      </header>
+    <div className={embedded ? "mx-auto max-w-md" : "mx-auto max-w-md px-4 py-8"}>
+      {!embedded && (
+        <header className="mb-6 text-center">
+          {logoUrl
+            ? <img src={logoUrl} alt={empresaNombre} className="mx-auto mb-3 h-12 object-contain" />
+            : <h2 className="mb-1 text-lg font-semibold text-zinc-900">{empresaNombre}</h2>}
+          <p className="text-sm text-zinc-600">
+            Compra ahora y reserva tu mesa cuando quieras.
+          </p>
+        </header>
+      )}
 
       {/* ── Producto ──────────────────────────────────────────── */}
       <div className="space-y-2">

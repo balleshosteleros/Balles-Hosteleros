@@ -17,7 +17,7 @@ import {
   Briefcase,
   Share2,
   type LucideIcon,
-} from "lucide-react";
+  Ticket,} from "lucide-react";
 import type { BloqueTipo } from "../types";
 
 export interface BloqueCatalogoEntrada {
@@ -32,6 +32,7 @@ export const BLOQUES_CATALOGO: BloqueCatalogoEntrada[] = [
   { tipo: "galeria", label: "Galería", descripcion: "Grid de imágenes", icon: ImageIcon },
   { tipo: "menu", label: "Menú", descripcion: "Platos de la carta digital", icon: UtensilsCrossed },
   { tipo: "reservas", label: "Reservas", descripcion: "Formulario / embed Cover", icon: CalendarCheck },
+  { tipo: "tickets", label: "Tickets", descripcion: "Experiencias que se compran y pagan en la web", icon: Ticket },
   { tipo: "testimonios", label: "Testimonios", descripcion: "Reseñas con estrellas", icon: Quote },
   { tipo: "cta", label: "CTA", descripcion: "Llamada a la acción destacada", icon: MousePointerClick },
   { tipo: "formulario", label: "Formulario", descripcion: "Captura de leads", icon: Mail },

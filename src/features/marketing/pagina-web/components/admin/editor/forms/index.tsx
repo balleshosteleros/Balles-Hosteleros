@@ -4,6 +4,7 @@ import type { Bloque } from "../../../../types";
 import { HeroForm } from "./HeroForm";
 import { GaleriaForm } from "./GaleriaForm";
 import { MenuForm } from "./MenuForm";
+import { TicketsForm } from "./TicketsForm";
 import { ReservasForm } from "./ReservasForm";
 import { TestimoniosForm } from "./TestimoniosForm";
 import { CtaForm } from "./CtaForm";
@@ -29,6 +30,8 @@ export function BloqueForm({ bloque }: { bloque: Bloque }) {
       return <MenuForm bloque={bloque} />;
     case "reservas":
       return <ReservasForm bloque={bloque} />;
+    case "tickets":
+      return <TicketsForm bloque={bloque} />;
     case "testimonios":
       return <TestimoniosForm bloque={bloque} />;
     case "cta":

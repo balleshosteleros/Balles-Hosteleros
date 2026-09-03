@@ -13,6 +13,7 @@ export const BLOQUE_TIPOS = [
   "galeria",
   "menu",
   "reservas",
+  "tickets",
   "testimonios",
   "cta",
   "formulario",
@@ -56,6 +57,24 @@ export interface MenuDatos {
   fuente: "carta_items" | "manual";
   categoria_ids?: string[];
   items_manual?: Array<{ nombre: string; precio: number; descripcion?: string }>;
+}
+
+/**
+ * Bloque de Tickets: el cliente compra y paga en la propia web.
+ *
+ * Va APARTE del de reservas, aunque puedan convivir en la misma página: una
+ * cosa es reservar mesa y otra comprar una experiencia por adelantado. Los
+ * productos se configuran en Sala → Reservas → Tickets, y aquí solo se elige
+ * cómo se presentan.
+ */
+export interface TicketsDatos {
+  titulo?: string;
+  subtitulo?: string;
+  /**
+   * Productos a mostrar. Vacío = todos los que estén activos y a la venta,
+   * que es lo normal: así al crear uno nuevo aparece sin tocar la web.
+   */
+  productoIds?: string[];
 }
 
 export interface ReservasDatos {
@@ -160,6 +179,7 @@ export type Bloque =
   | (BloqueBase & { tipo: "galeria"; datos: GaleriaDatos })
   | (BloqueBase & { tipo: "menu"; datos: MenuDatos })
   | (BloqueBase & { tipo: "reservas"; datos: ReservasDatos })
+  | (BloqueBase & { tipo: "tickets"; datos: TicketsDatos })
   | (BloqueBase & { tipo: "testimonios"; datos: TestimoniosDatos })
   | (BloqueBase & { tipo: "cta"; datos: CtaDatos })
   | (BloqueBase & { tipo: "formulario"; datos: FormularioDatos })

@@ -54,6 +54,14 @@ export const menuDatosSchema = z.object({
     .optional(),
 });
 
+export const ticketsDatosSchema = z.object({
+  titulo: z.string().max(120).optional(),
+  subtitulo: z.string().max(240).optional(),
+  // Vacío = todos los productos activos. Se guardan ids, no nombres: un
+  // producto puede cambiar de nombre sin que la web deje de encontrarlo.
+  productoIds: z.array(z.string()).optional(),
+});
+
 export const reservasDatosSchema = z.object({
   // Títulos opcionales: sin ellos el bloque pinta un genérico ("Reservas"), que
   // no permitía replicar el copy real de cada web ("Reserva aquí tu experiencia
@@ -230,6 +238,7 @@ export const datosSchemaPorTipo = {
   galeria: galeriaDatosSchema,
   menu: menuDatosSchema,
   reservas: reservasDatosSchema,
+  tickets: ticketsDatosSchema,
   testimonios: testimoniosDatosSchema,
   cta: ctaDatosSchema,
   formulario: formularioDatosSchema,
@@ -250,6 +259,7 @@ export const bloqueSchema = z.discriminatedUnion("tipo", [
   bloqueBaseSchema.extend({ tipo: z.literal("galeria"), datos: galeriaDatosSchema }),
   bloqueBaseSchema.extend({ tipo: z.literal("menu"), datos: menuDatosSchema }),
   bloqueBaseSchema.extend({ tipo: z.literal("reservas"), datos: reservasDatosSchema }),
+  bloqueBaseSchema.extend({ tipo: z.literal("tickets"), datos: ticketsDatosSchema }),
   bloqueBaseSchema.extend({ tipo: z.literal("testimonios"), datos: testimoniosDatosSchema }),
   bloqueBaseSchema.extend({ tipo: z.literal("cta"), datos: ctaDatosSchema }),
   bloqueBaseSchema.extend({ tipo: z.literal("formulario"), datos: formularioDatosSchema }),

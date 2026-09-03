@@ -33,6 +33,17 @@ export function crearBloqueDefault(tipo: BloqueTipo, orden: number): Bloque {
         tipo,
         datos: { modo: "formulario_propio", campos: ["nombre", "email", "telefono", "personas", "fecha"] },
       };
+    case "tickets":
+      // Sin `productoIds`: se enseñan todos los activos, así al crear un
+      // producto nuevo aparece en la web sin tener que volver aquí.
+      return {
+        ...base,
+        tipo,
+        datos: {
+          titulo: "Nuestras experiencias",
+          subtitulo: "Cómpralas ahora y reserva tu día cuando quieras.",
+        },
+      };
     case "testimonios":
       return { ...base, tipo, datos: { items: [] } };
     case "cta":

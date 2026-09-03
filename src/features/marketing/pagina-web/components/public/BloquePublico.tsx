@@ -32,6 +32,8 @@ export function BloquePublico({
       return <MenuPublico bloque={bloque} />;
     case "reservas":
       return <ReservasPublico bloque={bloque} contexto={contexto} />;
+    case "tickets":
+      return <TicketsPublico bloque={bloque} contexto={contexto} />;
     case "testimonios":
       return <TestimoniosPublico bloque={bloque} />;
     case "cta":
@@ -1061,6 +1063,60 @@ function MenuPublico({ bloque }: { bloque: Extract<Bloque, { tipo: "menu" }> }) 
           );
         })
       )}
+    </section>
+  );
+}
+
+/**
+ * Tickets: experiencias que se compran y se pagan en la propia web.
+ *
+ * Va aparte del bloque de reservas —una cosa es reservar mesa y otra comprar
+ * por adelantado—, aunque los dos pueden convivir en la misma página. Los
+ * productos se configuran en Sala → Reservas → Tickets y aquí solo se eligen
+ * el título y el subtítulo.
+ */
+function TicketsPublico({
+  bloque,
+  contexto,
+}: {
+  bloque: Extract<Bloque, { tipo: "tickets" }>;
+  contexto?: PaginaContexto;
+}) {
+  const slug = contexto?.empresaSlug ?? null;
+
+  return (
+    <section className="relative overflow-hidden px-4 py-20 md:py-28" id="tickets">
+      <div className="relative mx-auto max-w-4xl text-center">
+        <span
+          className="mx-auto mb-6 block h-px w-14"
+          style={{ backgroundColor: "var(--pw-primario)" }}
+        />
+        <h2 className="pw-h2 font-extrabold">
+          {bloque.datos.titulo ?? "Experiencias"}
+        </h2>
+        {bloque.datos.subtitulo ? (
+          <p className="mx-auto mt-5 max-w-2xl text-base opacity-75 md:text-lg">
+            {bloque.datos.subtitulo}
+          </p>
+        ) : null}
+
+        {slug ? (
+          <div className="relative mt-12">
+            <div
+              aria-hidden
+              className="pointer-events-none absolute -inset-6 rounded-[44px] opacity-[0.18] blur-3xl"
+              style={{ backgroundColor: "var(--pw-primario)" }}
+            />
+            <div className="relative overflow-hidden rounded-[32px] border border-white/60 bg-white/95 p-4 shadow-2xl backdrop-blur md:p-6">
+              <IframeAutoAlto src={`/comprar/${slug}/embed`} titulo="Comprar experiencia" />
+            </div>
+          </div>
+        ) : (
+          <p className="mt-8 text-sm opacity-60">
+            (Configura el slug de la empresa para activar la venta)
+          </p>
+        )}
+      </div>
     </section>
   );
 }
