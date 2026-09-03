@@ -26,7 +26,16 @@ const ConfigReservasView = dynamic(
     ),
   { ssr: false },
 );
-import { Settings, Sun, Moon } from "lucide-react";
+// Igual que Configuración: la vista de cobros solo se descarga al pulsar el
+// botón del billete, no en cada apertura del calendario.
+const CobrosReservasView = dynamic(
+  () =>
+    import("@/features/sala/components/reservas/CobrosReservasView").then(
+      (m) => m.CobrosReservasView,
+    ),
+  { ssr: false },
+);
+import { Settings, Sun, Moon, Banknote } from "lucide-react";
 import { useSalaTema } from "@/features/sala/hooks/useSalaTema";
 import { EtiquetasPanel } from "@/features/sala/components/reservas/EtiquetasPanel";
 import { franjasSolapan } from "@/features/sala/lib/reserva-conflicto";
@@ -3353,6 +3362,8 @@ export function ReservasView() {
   const [vista, setVista] = useState<"dia" | "mes">("dia");
   const [showDayPicker, setShowDayPicker] = useState(false);
   const [showConfig, setShowConfig] = useState(false);
+  // Vista de dinero (políticas de cancelación, garantías y tickets).
+  const [showCobros, setShowCobros] = useState(false);
   // BARRA SUPERIOR REPLEGADA. Reservas se mira durante todo el servicio y la
   // barra de herramientas del software no se usa en ese rato: ocupa alto y su
   // fondo claro rompe el tema oscuro del plano. Se repliega SOLO en la vista
@@ -3361,7 +3372,7 @@ export function ReservasView() {
   //
   // Para recuperarla basta acercar el cursor al menú lateral: el menú ya se
   // expande solo por hover, y la barra acompaña ese mismo gesto.
-  useModoInmersivoActivo(!showConfig);
+  useModoInmersivoActivo(!showConfig && !showCobros);
   const { inmersivo, setInmersivoOscuro } = useModoInmersivo();
   // Se avisa al chrome del software (menu lateral) de que esta vista va en
   // oscuro, para que su borde derecho no se quede con el gris claro del tema
@@ -4827,6 +4838,19 @@ export function ReservasView() {
     [localId, fecha, turno],
   );
 
+  if (showCobros) {
+    return (
+      <div
+        className={cn(
+          "sala-tema flex flex-col h-full min-h-0 overflow-hidden",
+          esOscuro && "sala-oscuro",
+        )}
+      >
+        <CobrosReservasView onBack={() => setShowCobros(false)} />
+      </div>
+    );
+  }
+
   if (showConfig) {
     return (
       <div
@@ -5157,6 +5181,16 @@ export function ReservasView() {
             aria-pressed={esOscuro}
           >
             {esOscuro ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+          </Button>
+          <Button
+            variant="outline"
+            size="icon"
+            className="h-8 w-8"
+            onClick={() => setShowCobros(true)}
+            title="Cobros, garantías y tickets"
+            aria-label="Cobros, garantías y tickets"
+          >
+            <Banknote className="h-4 w-4" />
           </Button>
           <Button
             variant="outline"

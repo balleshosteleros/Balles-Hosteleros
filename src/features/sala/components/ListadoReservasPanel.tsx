@@ -11,6 +11,8 @@ import { RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { formatEur, formatNumero } from "@/shared/lib/numero";
+import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
+import { formatFechaEnZona, formatHoraEnZona } from "@/features/empresa/lib/zona-horaria";
 import {
   SubmoduleToolbar,
   aplicarFiltrosToolbar,
@@ -65,13 +67,89 @@ interface ColumnaDef {
   bloqueada?: boolean;
   /** Valor crudo con el que se filtra, se ordena y se exporta. */
   valor: (f: ListadoReservaRow) => unknown;
-  /** Cómo se pinta en la tabla. Por defecto, el valor tal cual. */
-  celda?: (f: ListadoReservaRow) => ReactNode;
+  /**
+   * Cómo se pinta en la tabla. Por defecto, el valor tal cual.
+   *
+   * `ahora` es la marca de tiempo con la que se pintó la tabla, para las celdas
+   * que comparan contra el presente (un plazo vencido). Se pasa en lugar de
+   * preguntar la hora dentro de la celda: así toda la tabla juzga los plazos
+   * con el mismo instante y no cambia de aspecto entre renders.
+   */
+  celda?: (f: ListadoReservaRow, ctx: { ahora: number; tz: string }) => ReactNode;
 }
 
 /** Marca de sí/no. En blanco cuando no aplica, para no ensuciar la tabla. */
 function Si({ v }: { v: boolean }) {
   return v ? <span>Sí</span> : <span className="text-muted-foreground">—</span>;
+}
+
+/**
+ * Cómo se lee cada estado de cobro y de qué color se pinta.
+ *
+ * El color no decora: dice si hay algo que hacer. Verde es dinero cobrado o
+ * asunto cerrado; ámbar es "está esperando a alguien"; rojo es que algo falló y
+ * hay que mirarlo; gris es que ya no aplica.
+ */
+const ESTADO_COBRO: Record<string, { label: string; clase: string }> = {
+  pendiente: {
+    label: "Pendiente",
+    clase: "border-amber-600/40 bg-amber-600/15 text-amber-700 dark:text-amber-400",
+  },
+  solicitada: {
+    label: "Solicitada",
+    clase: "border-amber-600/40 bg-amber-600/15 text-amber-700 dark:text-amber-400",
+  },
+  retenida: {
+    label: "Retenida",
+    clase: "border-sky-600/40 bg-sky-600/15 text-sky-700 dark:text-sky-400",
+  },
+  guardada: {
+    label: "Tarjeta guardada",
+    clase: "border-sky-600/40 bg-sky-600/15 text-sky-700 dark:text-sky-400",
+  },
+  cobrada: {
+    label: "Cobrada",
+    clase: "border-emerald-600/40 bg-emerald-600/15 text-emerald-700 dark:text-emerald-400",
+  },
+  liberada: {
+    label: "Liberada",
+    clase: "border-muted-foreground/30 bg-muted text-muted-foreground",
+  },
+  caducada: {
+    label: "Caducada",
+    clase: "border-muted-foreground/30 bg-muted text-muted-foreground",
+  },
+  perdonada: {
+    label: "Perdonada",
+    clase: "border-muted-foreground/30 bg-muted text-muted-foreground",
+  },
+  fallida: {
+    label: "Fallida",
+    clase: "border-red-600/40 bg-red-600/15 text-red-700 dark:text-red-400",
+  },
+  error: {
+    label: "Error",
+    clase: "border-red-600/40 bg-red-600/15 text-red-700 dark:text-red-400",
+  },
+};
+
+/** Etiqueta de un estado de cobro. Un estado desconocido se enseña tal cual. */
+function estadoCobroLabel(estado: string): string {
+  if (!estado) return "";
+  return ESTADO_COBRO[estado]?.label ?? estado;
+}
+
+function EstadoCobro({ estado }: { estado: string }) {
+  if (!estado) return <span className="text-muted-foreground">—</span>;
+  const def = ESTADO_COBRO[estado];
+  return (
+    <Badge
+      variant="outline"
+      className={cn("font-normal", def?.clase ?? "border-muted-foreground/30 bg-muted")}
+    >
+      {def?.label ?? estado}
+    </Badge>
+  );
 }
 
 /** Fecha ISO (YYYY-MM-DD) a dd/mm/aaaa, sin tocar zonas horarias. */
@@ -81,11 +159,19 @@ function fechaCorta(iso: string): string {
   return `${d}/${m}/${a}`;
 }
 
-/** Marca de tiempo a "dd/mm/aaaa hh:mm". */
-function marcaTiempo(iso: string): string {
+/**
+ * Marca de tiempo a "dd/mm/aaaa hh:mm" en la zona horaria de la empresa.
+ *
+ * La base de datos guarda estos instantes en UTC. Cortar el texto ISO a pelo
+ * enseñaría la hora de Greenwich: una garantía retenida a las 00:30 de Madrid
+ * aparecería como del día anterior, y con eso se decide si un plazo de cobro
+ * está vencido. Se convierte de verdad, con la zona de la empresa.
+ */
+function marcaTiempo(iso: string, tz: string): string {
   if (!iso) return "";
-  const fecha = fechaCorta(iso);
-  const hora = iso.length >= 16 ? iso.slice(11, 16) : "";
+  const fecha = formatFechaEnZona(iso, tz);
+  if (!fecha) return "";
+  const hora = formatHoraEnZona(iso, tz);
   return hora ? `${fecha} ${hora}` : fecha;
 }
 
@@ -308,7 +394,7 @@ const COLUMNAS: ColumnaDef[] = [
     filtro: "fecha",
     ordenable: true,
     valor: (f) => f.ticketPagadoAt.slice(0, 10),
-    celda: (f) => marcaTiempo(f.ticketPagadoAt),
+    celda: (f, { tz }) => marcaTiempo(f.ticketPagadoAt, tz),
   },
 
   // ── Dinero y compromiso ────────────────────────────────────────────
@@ -335,23 +421,6 @@ const COLUMNAS: ColumnaDef[] = [
     celda: (f) => formatEur(f.importePagado),
   },
   {
-    campo: "tieneGarantia",
-    label: "Con garantía",
-    filtro: "booleano",
-    align: "center",
-    valor: (f) => f.tieneGarantia,
-    celda: (f) => <Si v={f.tieneGarantia} />,
-  },
-  {
-    campo: "garantiaImporte",
-    label: "Importe garantía",
-    filtro: "numero",
-    ordenable: true,
-    align: "right",
-    valor: (f) => f.garantiaImporte,
-    celda: (f) => formatEur(f.garantiaImporte),
-  },
-  {
     campo: "tarjetaIntroducida",
     label: "Tarjeta",
     filtro: "booleano",
@@ -366,6 +435,194 @@ const COLUMNAS: ColumnaDef[] = [
     align: "center",
     valor: (f) => f.pagoPendiente,
     celda: (f) => <Si v={f.pagoPendiente} />,
+  },
+
+  // ── Garantía ───────────────────────────────────────────────────────
+  {
+    campo: "tieneGarantia",
+    label: "Con garantía",
+    filtro: "booleano",
+    align: "center",
+    valor: (f) => f.tieneGarantia,
+    celda: (f) => <Si v={f.tieneGarantia} />,
+  },
+  {
+    campo: "garantiaEstado",
+    label: "Estado garantía",
+    filtro: "lista",
+    // Solo se ofrecen los estados que de verdad hay en pantalla: una lista con
+    // los diez posibles obligaría a buscar el que existe entre los que no.
+    opciones: (fs) => valoresDe(fs, (f) => estadoCobroLabel(f.garantiaEstado)),
+    valor: (f) => estadoCobroLabel(f.garantiaEstado),
+    celda: (f) => <EstadoCobro estado={f.garantiaEstado} />,
+  },
+  {
+    campo: "garantiaImporte",
+    label: "Importe garantía",
+    filtro: "numero",
+    ordenable: true,
+    align: "right",
+    valor: (f) => f.garantiaImporte,
+    celda: (f) => formatEur(f.garantiaImporte),
+  },
+  {
+    campo: "garantiaTarjeta",
+    label: "Tarjeta garantía",
+    filtro: "texto",
+    valor: (f) => f.garantiaTarjeta,
+  },
+  {
+    campo: "garantiaSolicitadaAt",
+    label: "Garantía solicitada",
+    filtro: "fecha",
+    ordenable: true,
+    valor: (f) => f.garantiaSolicitadaAt.slice(0, 10),
+    celda: (f, { tz }) => marcaTiempo(f.garantiaSolicitadaAt, tz),
+  },
+  {
+    campo: "garantiaRetenidaAt",
+    label: "Garantía retenida",
+    filtro: "fecha",
+    ordenable: true,
+    valor: (f) => f.garantiaRetenidaAt.slice(0, 10),
+    celda: (f, { tz }) => marcaTiempo(f.garantiaRetenidaAt, tz),
+  },
+  {
+    campo: "garantiaCobradaAt",
+    label: "Garantía cobrada",
+    filtro: "fecha",
+    ordenable: true,
+    valor: (f) => f.garantiaCobradaAt.slice(0, 10),
+    celda: (f, { tz }) => marcaTiempo(f.garantiaCobradaAt, tz),
+  },
+  {
+    campo: "garantiaCaptureDeadline",
+    label: "Cobrar antes de",
+    filtro: "fecha",
+    ordenable: true,
+    // Fecha con dientes: pasado ese día el banco suelta el dinero y la garantía
+    // ya no se puede cobrar, así que se avisa en rojo mientras siga retenida.
+    // El "ahora" llega desde fuera (`AHORA`) y no de un `Date.now()` aquí: si
+    // cada render preguntara la hora, la misma fila podría cambiar de color sin
+    // que nada haya cambiado en los datos.
+    valor: (f) => f.garantiaCaptureDeadline.slice(0, 10),
+    celda: (f, { ahora, tz }) => {
+      if (!f.garantiaCaptureDeadline) return "";
+      const urgente =
+        f.garantiaEstado === "retenida" && Date.parse(f.garantiaCaptureDeadline) < ahora;
+      return (
+        <span className={cn(urgente && "font-medium text-red-600 dark:text-red-400")}>
+          {marcaTiempo(f.garantiaCaptureDeadline, tz)}
+        </span>
+      );
+    },
+  },
+  {
+    campo: "garantiaLimiteAt",
+    label: "Límite garantía",
+    filtro: "fecha",
+    valor: (f) => f.garantiaLimiteAt.slice(0, 10),
+    celda: (f, { tz }) => marcaTiempo(f.garantiaLimiteAt, tz),
+  },
+
+  // ── Política de cancelación ────────────────────────────────────────
+  {
+    campo: "tieneCancelacion",
+    label: "Con cancelación",
+    filtro: "booleano",
+    align: "center",
+    valor: (f) => f.tieneCancelacion,
+    celda: (f) => <Si v={f.tieneCancelacion} />,
+  },
+  {
+    campo: "cancelacionEstado",
+    label: "Estado cancelación",
+    filtro: "lista",
+    opciones: (fs) => valoresDe(fs, (f) => estadoCobroLabel(f.cancelacionEstado)),
+    valor: (f) => estadoCobroLabel(f.cancelacionEstado),
+    celda: (f) => <EstadoCobro estado={f.cancelacionEstado} />,
+  },
+  {
+    campo: "cancelacionImporte",
+    label: "Importe cancelación",
+    filtro: "numero",
+    ordenable: true,
+    align: "right",
+    valor: (f) => f.cancelacionImporte,
+    celda: (f) => formatEur(f.cancelacionImporte),
+  },
+  {
+    campo: "cancelacionTarjeta",
+    label: "Tarjeta cancelación",
+    filtro: "texto",
+    valor: (f) => f.cancelacionTarjeta,
+  },
+  {
+    campo: "cancelacionGuardadaAt",
+    label: "Tarjeta guardada el",
+    filtro: "fecha",
+    valor: (f) => f.cancelacionGuardadaAt.slice(0, 10),
+    celda: (f, { tz }) => marcaTiempo(f.cancelacionGuardadaAt, tz),
+  },
+  {
+    campo: "cancelacionCobradaAt",
+    label: "Cancelación cobrada",
+    filtro: "fecha",
+    ordenable: true,
+    valor: (f) => f.cancelacionCobradaAt.slice(0, 10),
+    celda: (f, { tz }) => marcaTiempo(f.cancelacionCobradaAt, tz),
+  },
+  {
+    campo: "cancelacionIntentos",
+    label: "Intentos de cobro",
+    filtro: "numero",
+    ordenable: true,
+    align: "right",
+    valor: (f) => f.cancelacionIntentos,
+    celda: (f) => formatNumero(f.cancelacionIntentos),
+  },
+  {
+    campo: "cancelacionUltimoIntentoAt",
+    label: "Último intento",
+    filtro: "fecha",
+    valor: (f) => f.cancelacionUltimoIntentoAt.slice(0, 10),
+    celda: (f, { tz }) => marcaTiempo(f.cancelacionUltimoIntentoAt, tz),
+  },
+  {
+    campo: "cancelacionProximoIntentoAt",
+    label: "Próximo intento",
+    filtro: "fecha",
+    ordenable: true,
+    valor: (f) => f.cancelacionProximoIntentoAt.slice(0, 10),
+    celda: (f, { tz }) => marcaTiempo(f.cancelacionProximoIntentoAt, tz),
+  },
+  {
+    campo: "cancelacionError",
+    label: "Motivo del fallo",
+    filtro: "texto",
+    valor: (f) => f.cancelacionError,
+    celda: (f) =>
+      f.cancelacionError ? (
+        <span className="text-red-600 dark:text-red-400">{f.cancelacionError}</span>
+      ) : (
+        ""
+      ),
+  },
+
+  // ── Decisión sobre el cobro ────────────────────────────────────────
+  {
+    campo: "cobroMotivo",
+    label: "Motivo del cobro",
+    filtro: "lista",
+    opciones: (fs) => valoresDe(fs, (f) => f.cobroMotivo),
+    valor: (f) => f.cobroMotivo,
+  },
+  {
+    campo: "cobroPerdonadoAt",
+    label: "Perdonado el",
+    filtro: "fecha",
+    valor: (f) => f.cobroPerdonadoAt.slice(0, 10),
+    celda: (f, { tz }) => marcaTiempo(f.cobroPerdonadoAt, tz),
   },
 
   // ── Cupón ──────────────────────────────────────────────────────────
@@ -385,14 +642,14 @@ const COLUMNAS: ColumnaDef[] = [
     filtro: "fecha",
     ordenable: true,
     valor: (f) => f.createdAt.slice(0, 10),
-    celda: (f) => marcaTiempo(f.createdAt),
+    celda: (f, { tz }) => marcaTiempo(f.createdAt, tz),
   },
   {
     campo: "reconfirmadaAt",
     label: "Reconfirmada el",
     filtro: "fecha",
     valor: (f) => f.reconfirmadaAt.slice(0, 10),
-    celda: (f) => marcaTiempo(f.reconfirmadaAt),
+    celda: (f, { tz }) => marcaTiempo(f.reconfirmadaAt, tz),
   },
   {
     campo: "bloqueada",
@@ -422,39 +679,46 @@ const COLUMNAS: ColumnaDef[] = [
     label: "Email confirmación",
     filtro: "fecha",
     valor: (f) => f.emailConfirmacionAt.slice(0, 10),
-    celda: (f) => marcaTiempo(f.emailConfirmacionAt),
+    celda: (f, { tz }) => marcaTiempo(f.emailConfirmacionAt, tz),
   },
   {
     campo: "emailReconfirmacionAt",
     label: "Email reconfirmación",
     filtro: "fecha",
     valor: (f) => f.emailReconfirmacionAt.slice(0, 10),
-    celda: (f) => marcaTiempo(f.emailReconfirmacionAt),
+    celda: (f, { tz }) => marcaTiempo(f.emailReconfirmacionAt, tz),
   },
   {
     campo: "emailRecordatorioAt",
     label: "Email recordatorio",
     filtro: "fecha",
     valor: (f) => f.emailRecordatorioAt.slice(0, 10),
-    celda: (f) => marcaTiempo(f.emailRecordatorioAt),
+    celda: (f, { tz }) => marcaTiempo(f.emailRecordatorioAt, tz),
   },
   {
     campo: "emailCancelacionAt",
     label: "Email cancelación",
     filtro: "fecha",
     valor: (f) => f.emailCancelacionAt.slice(0, 10),
-    celda: (f) => marcaTiempo(f.emailCancelacionAt),
+    celda: (f, { tz }) => marcaTiempo(f.emailCancelacionAt, tz),
   },
   {
     campo: "emailValoracionAt",
     label: "Email valoración",
     filtro: "fecha",
     valor: (f) => f.emailValoracionAt.slice(0, 10),
-    celda: (f) => marcaTiempo(f.emailValoracionAt),
+    celda: (f, { tz }) => marcaTiempo(f.emailValoracionAt, tz),
   },
 ];
 
-/** Columnas que arrancan ocultas: el listado abre legible, no con 40 columnas. */
+/**
+ * Desde dónde se abre el listado. No cambia los datos: cambia con qué columnas
+ * arranca, porque quien viene de Analítica quiere leer reservas y quien viene
+ * del botón de cobros quiere leer dinero.
+ */
+export type ListadoEnfoque = "general" | "cobros";
+
+/** Columnas que arrancan ocultas: el listado abre legible, no con 50 columnas. */
 const OCULTAS_POR_DEFECTO = new Set([
   "clienteUltimaVisita",
   "duracionMinutos",
@@ -464,7 +728,26 @@ const OCULTAS_POR_DEFECTO = new Set([
   "ticketIva",
   "ticketCanjeHasta",
   "ticketPagadoAt",
+  "garantiaEstado",
   "garantiaImporte",
+  "garantiaTarjeta",
+  "garantiaSolicitadaAt",
+  "garantiaRetenidaAt",
+  "garantiaCobradaAt",
+  "garantiaCaptureDeadline",
+  "garantiaLimiteAt",
+  "tieneCancelacion",
+  "cancelacionEstado",
+  "cancelacionImporte",
+  "cancelacionTarjeta",
+  "cancelacionGuardadaAt",
+  "cancelacionCobradaAt",
+  "cancelacionIntentos",
+  "cancelacionUltimoIntentoAt",
+  "cancelacionProximoIntentoAt",
+  "cancelacionError",
+  "cobroMotivo",
+  "cobroPerdonadoAt",
   "tarjetaIntroducida",
   "pagoPendiente",
   "cupon",
@@ -480,6 +763,94 @@ const OCULTAS_POR_DEFECTO = new Set([
   "emailCancelacionAt",
   "emailValoracionAt",
 ]);
+
+/**
+ * Con qué se abre la vista de cobros: quién es, cuándo viene y todo el dinero.
+ *
+ * Se declara en positivo (lo que SE VE) y no como excepciones a la lista de
+ * arriba, porque aquí lo importante es que no falte ninguna columna de dinero
+ * y eso se comprueba leyendo, no restando.
+ */
+const VISIBLES_COBROS = [
+  "cliente",
+  "telefono",
+  "email",
+  "fecha",
+  "hora",
+  "turno",
+  "comensales",
+  "estado",
+  "origen",
+  "tipoCategoria",
+  "importePagado",
+  "pagoPendiente",
+  "tarjetaIntroducida",
+  "tieneGarantia",
+  "garantiaEstado",
+  "garantiaImporte",
+  "garantiaTarjeta",
+  "garantiaCaptureDeadline",
+  "garantiaCobradaAt",
+  "tieneCancelacion",
+  "cancelacionEstado",
+  "cancelacionImporte",
+  "cancelacionTarjeta",
+  "cancelacionIntentos",
+  "cancelacionProximoIntentoAt",
+  "cancelacionError",
+  "cancelacionCobradaAt",
+  "cobroMotivo",
+  "cobroPerdonadoAt",
+  "ticket",
+  "ticketCodigo",
+  "cupon",
+];
+
+/** Columnas con las que arranca el listado según de dónde se abra. */
+function visiblesIniciales(enfoque: ListadoEnfoque): ToolbarColumnaVisible {
+  const visibles: ToolbarColumnaVisible = {};
+  if (enfoque === "cobros") {
+    const set = new Set(VISIBLES_COBROS);
+    for (const c of COLUMNAS) visibles[c.campo] = set.has(c.campo);
+    return visibles;
+  }
+  for (const c of COLUMNAS) visibles[c.campo] = !OCULTAS_POR_DEFECTO.has(c.campo);
+  return visibles;
+}
+
+/**
+ * Una cifra del resumen de dinero.
+ *
+ * El importe manda (es lo que se viene a mirar) y debajo va en pequeño a cuántas
+ * reservas corresponde, para que un número grande nunca quede sin contexto.
+ */
+function TarjetaImporte({
+  titulo,
+  importe,
+  detalle,
+  tono = "neutro",
+}: {
+  titulo: string;
+  importe: number;
+  detalle?: string;
+  tono?: "neutro" | "bien" | "espera" | "mal";
+}) {
+  const tonos = {
+    neutro: "text-foreground",
+    bien: "text-emerald-600 dark:text-emerald-400",
+    espera: "text-sky-600 dark:text-sky-400",
+    mal: "text-red-600 dark:text-red-400",
+  } as const;
+  return (
+    <Card className="p-3">
+      <p className="text-xs text-muted-foreground">{titulo}</p>
+      <p className={cn("mt-0.5 text-lg font-semibold tabular-nums", tonos[tono])}>
+        {formatEur(importe)}
+      </p>
+      {detalle && <p className="mt-0.5 text-xs text-muted-foreground">{detalle}</p>}
+    </Card>
+  );
+}
 
 /** Acceso genérico a un campo por su nombre de columna. */
 const VALOR_POR_CAMPO = new Map(COLUMNAS.map((c) => [c.campo, c.valor]));
@@ -503,12 +874,22 @@ export function ListadoReservasPanel({
   hasta,
   campoFecha,
   periodoLabel,
+  enfoque = "general",
+  comprasTicketPorDefecto = false,
 }: {
   desde: string;
   hasta: string;
   campoFecha: "fecha" | "created_at";
   /** Qué periodo se está mirando, para el título y el nombre del informe. */
   periodoLabel: string;
+  /** Con qué columnas arranca la tabla. */
+  enfoque?: ListadoEnfoque;
+  /**
+   * Arrancar con las compras de ticket sin canjear ya incluidas. En la vista de
+   * cobros sí interesan de entrada: son dinero cobrado que todavía no se ha
+   * consumido, justo lo que se viene a controlar aquí.
+   */
+  comprasTicketPorDefecto?: boolean;
 }) {
   const [reservas, setReservas] = useState<ListadoReservaRow[]>([]);
   const [comprasTicket, setComprasTicket] = useState<ListadoReservaRow[]>([]);
@@ -517,18 +898,28 @@ export function ListadoReservasPanel({
    * por defecto: son compras, no reservas, y mezclarlas sin pedirlo falsearía la
    * lectura del listado.
    */
-  const [verComprasTicket, setVerComprasTicket] = useState(false);
+  const [verComprasTicket, setVerComprasTicket] = useState(comprasTicketPorDefecto);
   const [busqueda, setBusqueda] = useState("");
   const [filtros, setFiltros] = useState<ToolbarFiltroActivo[]>([]);
   const [orden, setOrden] = useState<ToolbarOrdenActivo | null>(null);
-  const [columnasVisibles, setColumnasVisibles] = useState<ToolbarColumnaVisible>(() => {
-    const inicial: ToolbarColumnaVisible = {};
-    for (const c of COLUMNAS) inicial[c.campo] = !OCULTAS_POR_DEFECTO.has(c.campo);
-    return inicial;
-  });
+  const [columnasVisibles, setColumnasVisibles] = useState<ToolbarColumnaVisible>(() =>
+    visiblesIniciales(enfoque),
+  );
   const [columnasOrden, setColumnasOrden] = useState<string[] | undefined>(undefined);
   const [pagina, setPagina] = useState(1);
   const [pending, startTransition] = useTransition();
+  /**
+   * Instante con el que se juzgan los plazos de la tabla.
+   *
+   * Se fija al cargar los datos y no en cada render: así todas las filas miden
+   * su plazo contra el mismo momento, y una fila no puede cambiar de color por
+   * un repintado cualquiera. Al recargar se vuelve a poner al día.
+   */
+  const [ahora, setAhora] = useState(() => Date.now());
+  // Las horas de cobro se pintan en la zona de la empresa, no en la del
+  // navegador: quien mira los cobros desde fuera de España vería otro día.
+  const { empresaActual } = useEmpresa();
+  const tz = empresaActual.zonaHoraria;
 
   const recargar = () => {
     startTransition(async () => {
@@ -544,6 +935,7 @@ export function ListadoReservasPanel({
       }
       setReservas(res.reservas);
       setComprasTicket(res.comprasTicket);
+      setAhora(Date.now());
     });
   };
 
@@ -596,6 +988,81 @@ export function ListadoReservasPanel({
   const totalReservas = filtradas.filter((f) => !f.esCompraTicket).length;
   const totalCompras = filtradas.filter((f) => f.esCompraTicket).length;
 
+  /**
+   * Resumen de dinero de lo que hay AHORA en pantalla (después de filtrar).
+   *
+   * Se calcula sobre `filtradas` y no sobre todo el periodo a propósito: si el
+   * usuario filtra por "garantía retenida", los totales tienen que hablar de esa
+   * selección, que es justo la pregunta que estaba haciendo.
+   *
+   * Cada bloque separa lo COBRADO (dinero que ya está en la cuenta) de lo que
+   * sigue EN EL AIRE (retenido o esperando), porque son dos realidades distintas
+   * y sumarlas daría una cifra que no existe en ningún sitio.
+   */
+  const resumen = useMemo(() => {
+    let garantiaRetenida = 0;
+    let garantiaRetenidaN = 0;
+    let garantiaCobrada = 0;
+    let garantiaCobradaN = 0;
+    let garantiaPendienteN = 0;
+    let cancelacionCobrada = 0;
+    let cancelacionCobradaN = 0;
+    let cancelacionFallidaN = 0;
+    let cancelacionPendienteN = 0;
+    let ticketCobrado = 0;
+    let ticketSinCanjearN = 0;
+    let pagado = 0;
+
+    for (const f of filtradas) {
+      if (f.garantiaEstado === "retenida") {
+        garantiaRetenida += f.garantiaImporte ?? 0;
+        garantiaRetenidaN += 1;
+      }
+      if (f.garantiaEstado === "cobrada") {
+        garantiaCobrada += f.garantiaImporte ?? 0;
+        garantiaCobradaN += 1;
+      }
+      if (f.garantiaEstado === "pendiente" || f.garantiaEstado === "solicitada") {
+        garantiaPendienteN += 1;
+      }
+
+      if (f.cancelacionEstado === "cobrada") {
+        cancelacionCobrada += f.cancelacionImporte ?? 0;
+        cancelacionCobradaN += 1;
+      }
+      if (f.cancelacionEstado === "fallida" || f.cancelacionEstado === "error") {
+        cancelacionFallidaN += 1;
+      }
+      if (f.cancelacionEstado === "pendiente" || f.cancelacionEstado === "guardada") {
+        cancelacionPendienteN += 1;
+      }
+
+      if (f.esTicket) {
+        ticketCobrado += f.ticketImporte ?? 0;
+        if (f.esCompraTicket) ticketSinCanjearN += 1;
+      }
+
+      // El importe pagado de una compra sin canjear ya se cuenta como ticket:
+      // volver a sumarlo aquí lo contaría dos veces.
+      if (!f.esCompraTicket) pagado += f.importePagado ?? 0;
+    }
+
+    return {
+      garantiaRetenida,
+      garantiaRetenidaN,
+      garantiaCobrada,
+      garantiaCobradaN,
+      garantiaPendienteN,
+      cancelacionCobrada,
+      cancelacionCobradaN,
+      cancelacionFallidaN,
+      cancelacionPendienteN,
+      ticketCobrado,
+      ticketSinCanjearN,
+      pagado,
+    };
+  }, [filtradas]);
+
   const columnasDef: ToolbarColumna[] = useMemo(
     () =>
       COLUMNAS.map((c) => ({
@@ -616,11 +1083,14 @@ export function ListadoReservasPanel({
 
   const defPorCampo = useMemo(() => new Map(COLUMNAS.map((c) => [c.campo, c])), []);
 
+
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h2 className="text-lg font-semibold">Listado de reservas</h2>
+          <h2 className="text-lg font-semibold">
+            {enfoque === "cobros" ? "Cobros, garantías y tickets" : "Listado de reservas"}
+          </h2>
           <p className="text-xs text-muted-foreground">
             {periodoLabel} ·{" "}
             <span className="font-medium text-foreground">
@@ -660,6 +1130,47 @@ export function ListadoReservasPanel({
         </div>
       </div>
 
+      {/* Resumen de dinero: solo en la vista de cobros. En Analítica sobraría,
+          porque allí la pregunta es de dónde vienen las reservas, no cuánto
+          dinero hay retenido. */}
+      {enfoque === "cobros" && (
+        <div className="grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-5">
+          <TarjetaImporte
+            titulo="Garantías retenidas"
+            importe={resumen.garantiaRetenida}
+            detalle={`${formatNumero(resumen.garantiaRetenidaN)} ${resumen.garantiaRetenidaN === 1 ? "reserva" : "reservas"}${resumen.garantiaPendienteN > 0 ? ` · ${formatNumero(resumen.garantiaPendienteN)} sin tarjeta` : ""}`}
+            tono="espera"
+          />
+          <TarjetaImporte
+            titulo="Garantías cobradas"
+            importe={resumen.garantiaCobrada}
+            detalle={`${formatNumero(resumen.garantiaCobradaN)} ${resumen.garantiaCobradaN === 1 ? "reserva" : "reservas"}`}
+            tono="bien"
+          />
+          <TarjetaImporte
+            titulo="Cancelaciones cobradas"
+            importe={resumen.cancelacionCobrada}
+            detalle={`${formatNumero(resumen.cancelacionCobradaN)} cobradas${resumen.cancelacionFallidaN > 0 ? ` · ${formatNumero(resumen.cancelacionFallidaN)} fallidas` : ""}`}
+            tono={resumen.cancelacionFallidaN > 0 ? "mal" : "bien"}
+          />
+          <TarjetaImporte
+            titulo="Tickets vendidos"
+            importe={resumen.ticketCobrado}
+            detalle={
+              resumen.ticketSinCanjearN > 0
+                ? `${formatNumero(resumen.ticketSinCanjearN)} sin canjear`
+                : "Todos canjeados"
+            }
+            tono="bien"
+          />
+          <TarjetaImporte
+            titulo="Pagado en reservas"
+            importe={resumen.pagado}
+            detalle={`${formatNumero(totalReservas)} ${totalReservas === 1 ? "reserva" : "reservas"}`}
+          />
+        </div>
+      )}
+
       <SubmoduleToolbar
         busqueda={busqueda}
         onBusquedaChange={setBusqueda}
@@ -672,7 +1183,9 @@ export function ListadoReservasPanel({
         onColumnasVisiblesChange={setColumnasVisibles}
         columnasOrden={columnasOrden}
         onColumnasOrdenChange={setColumnasOrden}
-        viewKey="sala/listado-reservas"
+        // Cada enfoque guarda SUS columnas: quien deja la vista de cobros con
+        // el dinero desplegado no debe encontrárselo al abrir Analítica.
+        viewKey={enfoque === "cobros" ? "sala/listado-cobros" : "sala/listado-reservas"}
         extraDerecha={
           // El informe sale con EXACTAMENTE lo que hay en pantalla: mismas filas
           // tras los filtros y mismas columnas visibles, en su mismo orden.
@@ -729,7 +1242,9 @@ export function ListadoReservasPanel({
                   {columnasRender.map((col) => {
                     const def = defPorCampo.get(col.campo);
                     if (!def) return null;
-                    const contenido = def.celda ? def.celda(f) : String(def.valor(f) ?? "");
+                    const contenido = def.celda
+                      ? def.celda(f, { ahora, tz })
+                      : String(def.valor(f) ?? "");
                     const vacio =
                       contenido === "" || contenido === null || contenido === undefined;
 

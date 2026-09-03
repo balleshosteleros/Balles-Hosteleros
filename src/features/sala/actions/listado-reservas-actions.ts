@@ -56,10 +56,38 @@ export interface ListadoReservaRow {
   // --- Dinero y compromiso ---
   tipoCategoria: string;
   tarjetaIntroducida: boolean;
-  tieneGarantia: boolean;
-  garantiaImporte: number | null;
   importePagado: number | null;
   pagoPendiente: boolean;
+
+  // --- Garantía (dinero retenido en la tarjeta antes de venir) ---
+  tieneGarantia: boolean;
+  garantiaImporte: number | null;
+  /** "pendiente" | "retenida" | "cobrada" | "liberada" | "caducada" | … */
+  garantiaEstado: string;
+  garantiaTarjeta: string;
+  garantiaSolicitadaAt: string;
+  garantiaRetenidaAt: string;
+  garantiaCobradaAt: string;
+  /** Último día que el banco deja capturar la retención. */
+  garantiaCaptureDeadline: string;
+  garantiaLimiteAt: string;
+
+  // --- Política de cancelación (cobro contra tarjeta guardada) ---
+  tieneCancelacion: boolean;
+  cancelacionImporte: number | null;
+  /** "pendiente" | "guardada" | "cobrada" | "fallida" | "perdonada" | … */
+  cancelacionEstado: string;
+  cancelacionTarjeta: string;
+  cancelacionGuardadaAt: string;
+  cancelacionCobradaAt: string;
+  cancelacionIntentos: number | null;
+  cancelacionUltimoIntentoAt: string;
+  cancelacionProximoIntentoAt: string;
+  cancelacionError: string;
+
+  // --- Decisión humana sobre el cobro ---
+  cobroMotivo: string;
+  cobroPerdonadoAt: string;
 
   // --- Ticket ---
   esTicket: boolean;
@@ -115,6 +143,14 @@ function s(v: unknown): string {
   return v == null ? "" : String(v);
 }
 
+/** "VISA ·6688" — la tarjeta como la reconoce el cliente, sin exponer nada más. */
+function tarjeta(marca: unknown, ultimos4: unknown): string {
+  const m = s(marca).toUpperCase();
+  const u = s(ultimos4);
+  if (!m && !u) return "";
+  return [m, u ? `\u00b7${u}` : ""].filter(Boolean).join(" ");
+}
+
 function num(v: unknown): number | null {
   if (v == null || v === "") return null;
   const n = Number(v);
@@ -144,10 +180,29 @@ function filaBase(): ListadoReservaRow {
     observaciones: "",
     tipoCategoria: "",
     tarjetaIntroducida: false,
-    tieneGarantia: false,
-    garantiaImporte: null,
     importePagado: null,
     pagoPendiente: false,
+    tieneGarantia: false,
+    garantiaImporte: null,
+    garantiaEstado: "",
+    garantiaTarjeta: "",
+    garantiaSolicitadaAt: "",
+    garantiaRetenidaAt: "",
+    garantiaCobradaAt: "",
+    garantiaCaptureDeadline: "",
+    garantiaLimiteAt: "",
+    tieneCancelacion: false,
+    cancelacionImporte: null,
+    cancelacionEstado: "",
+    cancelacionTarjeta: "",
+    cancelacionGuardadaAt: "",
+    cancelacionCobradaAt: "",
+    cancelacionIntentos: null,
+    cancelacionUltimoIntentoAt: "",
+    cancelacionProximoIntentoAt: "",
+    cancelacionError: "",
+    cobroMotivo: "",
+    cobroPerdonadoAt: "",
     esTicket: false,
     ticketProducto: "",
     ticketUnidades: null,
@@ -364,10 +419,32 @@ export async function getListadoReservas(params: {
 
         tipoCategoria: s(r.tipo_categoria),
         tarjetaIntroducida: Boolean(r.tarjeta_introducida),
-        tieneGarantia: Boolean(r.tiene_garantia),
-        garantiaImporte: num(r.garantia_importe),
         importePagado: num(r.importe_pagado),
         pagoPendiente: Boolean(r.pago_pendiente),
+
+        tieneGarantia: Boolean(r.tiene_garantia),
+        garantiaImporte: num(r.garantia_importe),
+        garantiaEstado: s(r.garantia_estado),
+        garantiaTarjeta: tarjeta(r.garantia_tarjeta_marca, r.garantia_tarjeta_ultimos4),
+        garantiaSolicitadaAt: s(r.garantia_solicitada_at),
+        garantiaRetenidaAt: s(r.garantia_retenida_at),
+        garantiaCobradaAt: s(r.garantia_cobrada_at),
+        garantiaCaptureDeadline: s(r.garantia_capture_deadline),
+        garantiaLimiteAt: s(r.garantia_limite_at),
+
+        tieneCancelacion: Boolean(r.tiene_cancelacion),
+        cancelacionImporte: num(r.cancelacion_importe),
+        cancelacionEstado: s(r.cancelacion_estado),
+        cancelacionTarjeta: tarjeta(r.cancelacion_tarjeta_marca, r.cancelacion_tarjeta_ultimos4),
+        cancelacionGuardadaAt: s(r.cancelacion_guardada_at),
+        cancelacionCobradaAt: s(r.cancelacion_cobrada_at),
+        cancelacionIntentos: num(r.cancelacion_intentos),
+        cancelacionUltimoIntentoAt: s(r.cancelacion_ultimo_intento_at),
+        cancelacionProximoIntentoAt: s(r.cancelacion_proximo_intento_at),
+        cancelacionError: s(r.cancelacion_error),
+
+        cobroMotivo: s(r.cobro_motivo),
+        cobroPerdonadoAt: s(r.cobro_perdonado_at),
 
         esTicket: Boolean(r.es_ticket),
         ticketProducto: ticketsMap.get(s(r.ticket_producto_id)) ?? "",
