@@ -24,20 +24,10 @@ import {
 import { listarMaxPersonasPublicaAction } from "@/features/reservar-publica/actions/listar-max-personas-publica";
 
 /** Prefijos habituales de la clientela. España primero por ser el caso normal. */
-const PREFIJOS = [
-  { code: "+34", flag: "🇪🇸" },
-  { code: "+351", flag: "🇵🇹" },
-  { code: "+33", flag: "🇫🇷" },
-  { code: "+44", flag: "🇬🇧" },
-  { code: "+49", flag: "🇩🇪" },
-  { code: "+39", flag: "🇮🇹" },
-  { code: "+1", flag: "🇺🇸" },
-  { code: "+52", flag: "🇲🇽" },
-  { code: "+54", flag: "🇦🇷" },
-  { code: "+31", flag: "🇳🇱" },
-  { code: "+41", flag: "🇨🇭" },
-  { code: "+212", flag: "🇲🇦" },
-] as const;
+import {
+  PREFIJOS_TELEFONO,
+  PREFIJO_POR_DEFECTO,
+} from "@/features/sala/data/prefijos-telefono";
 import { turnoDeHora } from "@/features/sala/lib/dia-negocio";
 import type { CamposObligatoriosPublico } from "@/features/reservar-publica/actions/listar-disponibilidad-publica";
 import {
@@ -147,7 +137,7 @@ export function ReservaPublicaForm({
   // consentimiento forzado.
   const [aceptaMarketing, setAceptaMarketing] = useState(false);
   const [fechaNacimiento, setFechaNacimiento] = useState("");
-  const [telefonoPrefijo, setTelefonoPrefijo] = useState("+34");
+  const [telefonoPrefijo, setTelefonoPrefijo] = useState(PREFIJO_POR_DEFECTO);
   // Campos que esta empresa exige además de los fijos. Arranca con el default
   // del catálogo (email y teléfono) para que el asterisco no parpadee mientras
   // llega la respuesta del servidor, que es quien manda.
@@ -166,6 +156,20 @@ export function ReservaPublicaForm({
   // Si escribió un código, tiene que ser válido para poder reservar: un código
   // a medias o rechazado no puede colarse como reserva normal.
   const canjeConforme = ticketCodigo.trim().length === 0 || ticketCanje !== null;
+
+  // Comensales que se ofrecen. Un ticket vendido por paquetes (la Cena
+  // Experiencia va de 2 en 2) solo admite múltiplos de su tamaño: ofrecer 3 en
+  // un producto para parejas deja una plaza sin pagar y una mesa descuadrada.
+  const pasoPersonas = ticketCanje?.porPersona
+    ? Math.max(1, ticketCanje.personasPorUnidad)
+    : 1;
+  const opcionesPersonas = useMemo(() => {
+    const out: number[] = [];
+    for (let n = pasoPersonas; n <= maxPersonas; n += pasoPersonas) out.push(n);
+    // Con un tope menor que el paquete, al menos se ofrece el paquete entero:
+    // un desplegable vacío bloquearía la reserva sin explicar por qué.
+    return out.length > 0 ? out : [pasoPersonas];
+  }, [pasoPersonas, maxPersonas]);
   // Mismo criterio que el servidor: la madrugada es cena, no comida.
   const turnoPorHora = useMemo<"COMIDA" | "CENA" | null>(
     () => (hora ? turnoDeHora(hora) : null),
@@ -549,7 +553,7 @@ export function ReservaPublicaForm({
                 disabled={ticketCanje?.porPersona === true}
                 className="mt-1.5 h-11 w-full min-w-0 max-w-full appearance-none rounded-xl border border-zinc-200 bg-white px-3 text-sm text-zinc-900 disabled:cursor-not-allowed disabled:bg-zinc-50 disabled:text-zinc-500"
               >
-                {Array.from({ length: maxPersonas }, (_, i) => i + 1).map((n) => (
+                {opcionesPersonas.map((n) => (
                   <option key={n} value={n}>
                     {n} {n === 1 ? "persona" : "personas"}
                   </option>
@@ -689,9 +693,9 @@ export function ReservaPublicaForm({
                 aria-label="Prefijo del país"
                 className="h-12 sm:h-11 w-28 shrink-0 rounded-xl border border-zinc-200 bg-white px-2 text-base sm:text-sm"
               >
-                {PREFIJOS.map((p) => (
-                  <option key={p.code} value={p.code}>
-                    {p.flag} {p.code}
+                {PREFIJOS_TELEFONO.map((p) => (
+                  <option key={p.prefijo} value={p.prefijo} title={p.label}>
+                    {p.flag} {p.prefijo}
                   </option>
                 ))}
               </select>

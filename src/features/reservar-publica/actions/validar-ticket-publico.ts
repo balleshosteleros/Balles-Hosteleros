@@ -28,6 +28,12 @@ export interface TicketPublico {
   unidades: number;
   importeTotal: number;
   porPersona: boolean;
+  /**
+   * Comensales que trae cada unidad vendida. La Cena Experiencia se vende de
+   * 2 en 2, así que el selector de la reserva debe saltar de 2 en 2: nunca
+   * puede quedar una mesa de 3 con un producto pensado para parejas.
+   */
+  personasPorUnidad: number;
   canjeHasta: string | null;
   condiciones: TicketCondiciones;
   /** Resumen legible de las condiciones, ya montado. */
@@ -73,7 +79,7 @@ export async function validarTicketPublicoAction(args: {
 
   const { data: prod } = await admin
     .from("reserva_ticket_productos")
-    .select("nombre, modo_precio, dias_semana, dias_excluidos, turnos, hora_desde, hora_hasta, horas_excluidas, grupo_zona_ids")
+    .select("nombre, modo_precio, personas_por_unidad, dias_semana, dias_excluidos, turnos, hora_desde, hora_hasta, horas_excluidas, grupo_zona_ids")
     .eq("id", compra.producto_id as string)
     .maybeSingle();
   if (!prod) return fallo("NO_EXISTE");
@@ -128,6 +134,7 @@ export async function validarTicketPublicoAction(args: {
       unidades: Number(compra.unidades),
       importeTotal: Number(compra.importe_total),
       porPersona: prod.modo_precio === "por_persona",
+      personasPorUnidad: Math.max(1, Number(prod.personas_por_unidad ?? 1)),
       canjeHasta: (compra.canje_hasta as string | null) ?? null,
       condiciones,
       resumen: describirCondiciones(condiciones, nombresZonas),
