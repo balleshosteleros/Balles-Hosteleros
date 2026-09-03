@@ -1,0 +1,180 @@
+﻿ESTADO;Ingrediente en la ficha;Producto de compra propuesto;Medida;Precio;Fiabilidad;Nº fichas;Aparece en
+AUTOMATICO;tomate cherry;Tomate Cherry;Kilogramos;4,99;1.0;1;CEVICHE THAI
+AUTOMATICO;corvina;Corvina;Kilogramos;12,43;1.0;2;CEVICHE THAI, CURRY ROJO DE VERDURAS Y CORVIN
+AUTOMATICO;choclo;Choclo;Kilogramos;3,90;1.0;1;CEVICHE THAI
+AUTOMATICO;Alcachofa confitada;Alcachofa confitada;Unidades;20,15;1.0;1;ALCACHOFAS CON HUEVO CODORNIZ
+AUTOMATICO;Huevo de codorniz;Huevo de codorniz;Unidades;1,96;1.0;1;ALCACHOFAS CON HUEVO CODORNIZ
+AUTOMATICO;Base de arroz de pescado;Base de arroz de pescado;Kilogramos;;1.0;1;ARROZ DE SEÑORET
+AUTOMATICO;sepia;Sepia;Kilogramos;;1.0;1;ARROZ DE SEÑORET
+AUTOMATICO;cola de gamba pelada;Gamba cola pelada 50/70;Kilogramos;8,39;1.0;2;ARROZ DE SEÑORET, ARROZ NERO
+AUTOMATICO;Base de arroz  negro;Base de arroz negro;Kilogramos;;1.0;1;ARROZ NERO
+AUTOMATICO;calamar;Calamar;Kilogramos;;1.0;1;ARROZ NERO
+AUTOMATICO;Base de arroz  de carne;Base de arroz de carne;Kilogramos;87,00;1.0;1;ARROZ DE SECRETO
+AUTOMATICO;coliflor;Coliflor;Kilogramos;3,90;1.0;1;CURRY ROJO DE VERDURAS Y CORVIN
+AUTOMATICO;brocoli;Brocoli;Kilogramos;;1.0;1;CURRY ROJO DE VERDURAS Y CORVIN
+AUTOMATICO;tirabeques;Tirabeques;Kilogramos;;1.0;1;CURRY ROJO DE VERDURAS Y CORVIN
+AUTOMATICO;salmón;Salmón;Kilogramos;8,35;1.0;1;TARTAR DE SALMON
+AUTOMATICO;sésamo negro;Sésamo negro;Kilogramos;;1.0;1;TARTAR DE SALMON
+AUTOMATICO;Salsa de mostaza y miel;Salsa de mostaza y miel;Unidades;;1.0;1;FINGERS DE POLLO
+AUTOMATICO;Canonigos;Canonigos;Unidades;1,50;1.0;1;ENSALADA DE BURRATA
+AUTOMATICO;Rúcula;Rucula;Unidades;1,50;1.0;1;ENSALADA DE BURRATA
+AUTOMATICO;Tomate cherry;Tomate Cherry;Kilogramos;4,99;1.0;1;ENSALADA DE BURRATA
+AUTOMATICO;Furikake;Furikake;Unidades;;1.0;1;VIEIRAS FLAMBEADAS
+AUTOMATICO;Lechuga romana;Lechuga romana;Unidades;0,99;1.0;1;CAZON EN ADOBO 
+AUTOMATICO;Gyozas vegetales;Gyozas vegetales;Unidades;5,84;1.0;1;GYOZAS VEGETALES
+AUTOMATICO;Salsa barbacoa;Salsa barbacoa;Unidades;5,77;1.0;2;COSTILLAS BBQ, COSTILLAS A BAJA TEMPERATURA
+AUTOMATICO;Oreja de cerdo en adobo;Oreja de cerdo en adobo;Kilogramos;14,65;1.0;1;BAO-CADILLO DE OREJA
+AUTOMATICO;Queso de cabra;Queso de cabra;Kilogramos;9,75;1.0;1;BURGER BACANAL 2.0
+AUTOMATICO;QUESO CURADO;Queso curado;Kilogramos;;1.0;1;BURGUER BALLES 
+AUTOMATICO;RUCULA;Rucula;Unidades;1,50;1.0;1;BURGUER BALLES 
+AUTOMATICO;Carrillera de Ternera;Carrillera de ternera;Kilogramos;;1.0;1;BRIOCHE MELOSO DE TERNERA
+AUTOMATICO;Helado de Vainilla;Helado de vainilla;Unidades;6,18;1.0;1;TORRIJA 
+AUTOMATICO;Tarta de queso;Tarta de queso;Unidades;;1.0;1;TARTA DE QUESO
+AUTOMATICO;HELADO DE VAINILLA;Helado de vainilla;Unidades;6,18;1.0;1;COULANT DE CHOCOLATE
+AUTOMATICO;Cebolla;Cebolla;Kilogramos;0,79;1.0;6;RAGOUT DE SETAS, PICO DE GALLO, CARRILLERA PARA BRIOCHE, PATATA POCHADA
+AUTOMATICO;Patata lavada;Patata lavada;Kilogramos;0,89;1.0;1;ENSALADILLA RUSA
+AUTOMATICO;Zanahoria;Zanahoria;Unidades;2,74;1.0;4;ENSALADILLA RUSA, CARRILLERA PARA BRIOCHE, CALDO DE POLLO, CALDO DE MARISCO
+AUTOMATICO;Huevo;Huevo;Unidades;27,26;1.0;1;ENSALADILLA RUSA
+AUTOMATICO;Mayonesa;Mayonesa;Unidades;19,46;1.0;1;ENSALADILLA RUSA
+AUTOMATICO;Aguacate;Aguacate;Kilogramos;5,90;1.0;1;GUACAMOLE
+AUTOMATICO;Tomate rama;Tomate Rama;Kilogramos;;1.0;1;PICO DE GALLO
+AUTOMATICO;Cilantro;Cilantro;Unidades;1,50;1.0;2;PICO DE GALLO, CURRY ROJO
+AUTOMATICO;Orejones;Orejones;Kilogramos;17,37;1.0;1;PICADA MEDITERRANEA
+AUTOMATICO;Aceite de oliva;Aceite de oliva 0,4;Unidades;18,57;1.0;1;PICADA MEDITERRANEA
+AUTOMATICO;Coliflor;Coliflor;Kilogramos;3,90;1.0;2;COLIFLOR COCIDA, CREMA DE COLIFLOR Y PATATA
+AUTOMATICO;Aceite girasol alto oleico;Aceite de girasol alto oleico;Unidades;51,50;1.0;1;PATATA POCHADA
+AUTOMATICO;Panko;Panko;Kilogramos;;1.0;1;FINGERS DE POLLO
+AUTOMATICO;Pasta de ají amarillo;Pasta ají amarillo;Unidades;3,06;1.0;1; MAYONESA DE AJÍ AMARILLO
+AUTOMATICO;Albahaca;Albahaca;Kilogramos;1,99;1.0;1;CURRY ROJO
+AUTOMATICO;salsa barbacoa;Salsa barbacoa;Unidades;5,77;1.0;1;BARBACOA ASIATICA
+AUTOMATICO;Azúcar;Azucar;Kilogramos;;1.0;2;ESPUMA DE TIRAMISÚ, INFUSIÓN DE TORRIJAS
+AUTOMATICO;Leche;Leche;Unidades;9,28;1.0;1;INFUSIÓN DE TORRIJAS
+AUTOMATICO;Canela en rama;Canela Rama;Unidades;;1.0;1;INFUSIÓN DE TORRIJAS
+AUTOMATICO;Mango;Mango;Kilogramos;4,99;1.0;1;SALSA DE CURRYMANGO
+AUTOMATICO;secrero de cerdo;Secreto de cerdo;Kilogramos;5,41;0.94;1;ARROZ DE SECRETO
+AUTOMATICO;Tomates cherrys;Tomate Cherry;Kilogramos;4,99;0.93;1;TOMATES CHERRY ASADOS
+AUTOMATICO;Pan brioche;Pan briocht;Unidades;37,27;0.91;2;BRIOCHE MELOSO DE TERNERA, TORRIJA
+AUTOMATICO;Pan Brioche;Pan briocht;Unidades;37,27;0.91;1;TORRIJA 
+AUTOMATICO;Huevos;Huevo;Unidades;27,26;0.91;2;HUEVOS A BAJA TEMPERATURA , TORRIJA
+AUTOMATICO;Lima;Limas;Kilogramos;3,99;0.89;1;GYOZAS VEGETALES
+AUTOMATICO;Pasta tartufata;Salsa tartufata;Unidades;14,10;0.87;2;RAGOUT DE SETAS, MAYONESA DE TRUFA
+AUTOMATICO;Carrilleras de vaca;Carrillada de vaca;Kilogramos;15,90;0.86;1;CARRILLERA PARA BRIOCHE
+AUTOMATICO;cebolla morada;Cebolla;Kilogramos;0,79;0.86;1;CEVICHE THAI
+AUTOMATICO;huevos fritos;Huevo;Unidades;27,26;0.86;1;CEVICHE THAI
+AUTOMATICO;JAMON;Jamon de cebo iberico 50% loncheado;Unidades;6,88;0.86;1;JAMON
+AUTOMATICO;PAN;Pan briocht;Unidades;37,27;0.86;1;JAMON
+AUTOMATICO;cola de rape;Cola de rape 80/150;Unidades;;0.86;2;ARROZ DE SEÑORET, ARROZ NERO
+AUTOMATICO;Huevos fritos;Huevo;Unidades;27,26;0.86;2;HUEVOS ROTOS CON JAMON,  HUEVOS ROTOS CON JAMON INFANTI
+AUTOMATICO;Croquetas de jamón;Croquetas de jamon con panko;Unidades;49,20;0.86;1;CROQUETAS DE JAMON
+AUTOMATICO;Nata;Nata para montar 35%;Unidades;5,86;0.86;6;FALSO RISSOTTO DE SETAS, RAGOUT DE SETAS, CURRY ROJO, ESPUMA DE TIRAMISÚ
+AUTOMATICO;Patata;Patata Agria;Kilogramos;0,80;0.86;3; HUEVOS ROTOS CON JAMON INFANTI, PATATA POCHADA, CREMA DE COLIFLOR Y PATATA
+AUTOMATICO;Salsa Barbacoa asiatica;Salsa barbacoa;Unidades;5,77;0.86;1;GYOZAS VEGETALES
+AUTOMATICO;Queso;Queso Burratina;Unidades;11,00;0.86;1;CACHOPO
+AUTOMATICO;Cebolla caramelizada;Cebolla;Kilogramos;0,79;0.86;1;BURGER BACANAL 2.0
+AUTOMATICO;Mango confitado;Mango;Kilogramos;4,99;0.86;1;GYOZAS DE POLLO
+AUTOMATICO;Sesamo;Sésamo negro;Kilogramos;;0.86;1;GYOZAS DE POLLO
+AUTOMATICO;Sal;Sal Fina;Unidades;;0.86;2;RAGOUT DE SETAS, ESPUMA DE YEMA
+AUTOMATICO;Panceta adobada para torreznos;Panceta adobada;Kilogramos;12,50;0.86;1;TORREZNOS
+AUTOMATICO;sal;Sal Fina;Unidades;;0.86;1;GUACAMOLE
+AUTOMATICO;Aceite de girasol;Aceite de girasol alto oleico;Unidades;51,50;0.86;1;ALITAS DE POLLO
+AUTOMATICO;Cebolla morada;Cebolla;Kilogramos;0,79;0.86;1;CEBOLLA ENCURTIDA
+AUTOMATICO;Bacon en tiras;Bacon;Unidades;6,32;0.86;1;BACON FRITO
+AUTOMATICO;Huevo y panko;Huevo;Unidades;27,26;0.86;1;CACHOPO
+AUTOMATICO;Mayonesa hellmans;Mayonesa;Unidades;19,46;0.86;5;MAYONESA DE KIMCHI, MAYONESA DE TRUFA, MAYONESA DE CHIPOTLE,  MAYONESA DE AJÍ AMARILLO
+AUTOMATICO;Cebollino picado;Cebollino;Kilogramos;1,99;0.86;1;SALSA RANCHERA VEGANA
+AUTOMATICO;Agua;Aguacate;Kilogramos;5,90;0.86;1;ESPUMA DE YEMA
+AUTOMATICO;Filete de ternera para cachopo;Filete de vaca para cachopo;Kilogramos;20,00;0.84;1;CACHOPO
+AUTOMATICO;Patata frita;Patata Agria;Kilogramos;0,80;0.83;1;HUEVOS ROTOS CON JAMON
+AUTOMATICO;tomate rallado;Tomate Rama;Kilogramos;;0.8;1;JAMON
+AUTOMATICO;Salsa brava;Salsa barbacoa;Unidades;5,77;0.8;1;BAO-CADILLO DE OREJA
+AUTOMATICO;PATATA FRITAS;Patata Agria;Kilogramos;0,80;0.8;1;LOMO BAJO DE FRIZONA 
+AUTOMATICO;Pechugas de pollo;Filete pechuga de pollo;Kilogramos;7,05;0.8;1;FINGERS DE POLLO
+AUTOMATICO;Aceite de oliva suave;Aceite de oliva 0,4;Unidades;18,57;0.8;3;ACEITE DE PIMENTON, ACEITE DE ALBAHACA, CHIMICHURRI
+REVISAR;Pan bao;Pan gua bao;Unidades;7,21;0.78;1;BAO-CADILLO DE OREJA
+REVISAR;Entraña de vaca;Entrecot de vaca;Kilogramos;28,90;0.77;1;ENTRAÑA CON CHIMICHURRI
+REVISAR;Queso mezcla curado;Queso curado;Kilogramos;;0.77;1;CACHOPO
+REVISAR;Pasta puntalette;Puntalette;Unidades;2,15;0.77;1;FALSO RISSOTTO DE SETAS
+REVISAR;Patatas fritas;Patata Agria;Kilogramos;0,80;0.77;5;FINGERS POLLO INFANTIL , ENTRAÑA CON CHIMICHURRI, CACHOPO, COSTILLAS BBQ
+REVISAR;Hamburgesa angus;Hamburguesa artesana angus ( 200 gr);Unidades;16,50;0.76;1;BURGER BACANAL 2.0
+REVISAR;HAMBURGESA ANGUS;Hamburguesa artesana angus ( 200 gr);Unidades;16,50;0.76;1;BURGUER BALLES 
+REVISAR;Tartufata;Salsa tartufata;Unidades;14,10;0.75;1;FALSO RISSOTTO DE SETAS
+REVISAR;Cazón en adobo;Cazon Adobo enharinado;Kilogramos;7,97;0.75;1;CAZON EN ADOBO 
+REVISAR;Gyozas de pollo;Gyozas pollo y verduras;Unidades;5,84;0.75;1;GYOZAS DE POLLO
+REVISAR;Carcasas de pollo;Alitas de pollo;Unidades;4,88;0.75;1;CALDO DE POLLO
+REVISAR;Zumo de limón;Zumo concentrado de limón;Unidades;6,05;0.75;1;SALSA RANCHERA VEGANA
+REVISAR;Salsa chimichurri;Preparado chimichurri;Unidades;3,54;0.74;1;TOMATES CHERRY ASADOS
+REVISAR;PIMIENTOS;Pimiento Rojo;Kilogramos;2,50;0.73;1;TOMAHAWACK
+REVISAR;Tomate seco;Tomate Pera;Kilogramos;1,50;0.73;1;ENSALADA DE BURRATA
+REVISAR;Especias de chimichurri;Preparado chimichurri;Unidades;3,54;0.73;1;CHIMICHURRI
+REVISAR;Alas de pollo frescas;Alitas de pollo;Unidades;4,88;0.72;1;ALITAS DE POLLO
+REVISAR;Cebollina picado;Cebollino;Kilogramos;1,99;0.72;1;ENSALADILLA RUSA
+REVISAR;Base de galleta de café;Base de arroz de carne;Kilogramos;87,00;0.71;1;TIRAMISÚ
+REVISAR;PIMIENTO DE PADRON;Pimiento Rojo;Kilogramos;2,50;0.71;1;LOMO BAJO DE FRIZONA 
+REVISAR;Paleta de cerdo iberica;Aguja de cerdo fresca;Kilogramos;;0.68;1;CACHOPO
+REVISAR;Costillas de cerdo;Tiras de costillas de cerdo frescas;Kilogramos;7,90;0.68;1;COSTILLAS A BAJA TEMPERATURA
+REVISAR;Emulsión de ají amarillo;Pasta ají amarillo;Unidades;3,06;0.67;1;ALCACHOFAS CON HUEVO CODORNIZ
+REVISAR;PATATAS;Platanos;Kilogramos;;0.67;1;TOMAHAWACK
+REVISAR;Costilla de cerdo;Secreto de cerdo;Kilogramos;5,41;0.67;1;COSTILLAS BBQ
+REVISAR;LOMO DE VACA;Lomo de merluza;Kilogramos;15,54;0.67;1;LOMO BAJO DE FRIZONA 
+REVISAR;pimentón de la vera;Pimiento Verde;Kilogramos;1,99;0.67;1;ACEITE DE PIMENTON
+REVISAR;Salsa Mayonesa trufada;Salsa tartufata;Unidades;14,10;0.65;1;BURGER BACANAL 2.0
+REVISAR;crema de aguacate;Aguacate;Kilogramos;5,90;0.64;1;TARTAR DE SALMON
+REVISAR;Burrata;Queso Burratina;Unidades;11,00;0.64;1;ENSALADA DE BURRATA
+REVISAR;Sal y pimienta;Sal Fina;Unidades;;0.64;3;CARRILLERA PARA BRIOCHE, CREMA DE COLIFLOR Y PATATA, COSTILLAS A BAJA TEMPERATURA
+REVISAR;sal y pimienta;Sal Fina;Unidades;;0.64;1;FINGERS DE POLLO
+REVISAR;Mayo de ají;Mayonesa;Unidades;19,46;0.63;1;ALITAS BBQ ASIATICA
+REVISAR;Vieiras;Vieira media;Kilogramos;16,23;0.63;1;VIEIRAS FLAMBEADAS
+REVISAR;Base de galleta;Base de arroz de paella;Unidades;87,00;0.63;1;TARTA DE QUESO
+REVISAR;wakame;Ensalada wakame;Kilogramos;9,31;0.62;1;TARTAR DE SALMON
+REVISAR;Wakame;Ensalada wakame;Kilogramos;9,31;0.62;1;CAZON EN ADOBO 
+REVISAR;Jamon Iberico;Jamon de cebo iberico 50% loncheado;Unidades;6,88;0.62;1;CACHOPO
+REVISAR;PANCETA TORRENOZ;Azucar Moreno;Kilogramos;2,41;0.62;1;BURGUER BALLES 
+REVISAR;Queso mascarpone;Queso cheddar;Kilogramos;;0.62;1;ESPUMA DE TIRAMISÚ
+REVISAR;Espinas de pescado;Base de arroz de pescado;Kilogramos;;0.62;1;CALDO DE MARISCO
+REVISAR;Ensaladilla;Ensalada wakame;Kilogramos;9,31;0.62;1;ENSALADILLA RUSA
+REVISAR;aliño para tartar;Pimiento para freír;Unidades;6,88;0.61;1;TARTAR DE SALMON
+REVISAR;salsa de soja;Salsa de mostaza y miel;Unidades;;0.61;1;BARBACOA ASIATICA
+REVISAR;Huevas de tobiko;Huevo de codorniz;Unidades;1,96;0.61;1;ENSALADILLA RUSA
+REVISAR;Gajo de Lima;Ajo Piel;Kilogramos;;0.6;1;VIEIRAS FLAMBEADAS
+REVISAR;Ajo en polvo;Ajo Piel;Kilogramos;;0.6;1;SALSA RANCHERA VEGANA
+REVISAR;Zumo de lima;Zumo concentrado de limón;Unidades;6,05;0.59;3;GUACAMOLE, PICO DE GALLO, CEBOLLA ENCURTIDA
+REVISAR;Humo de leña;Lomo de merluza;Kilogramos;15,54;0.59;1;BRIOCHE MELOSO DE TERNERA
+REVISAR;Piel de limón;Papel de arroz;Unidades;2,41;0.59;1;INFUSIÓN DE TORRIJAS
+REVISAR;Base de espuma de tiramisú;Base de arroz de carne;Kilogramos;87,00;0.58;1;TIRAMISÚ
+REVISAR;Salsa Mayonesa de trufa;Salsa tartufata;Unidades;14,10;0.58;1;BRIOCHE MELOSO DE TERNERA
+REVISAR;Pasta de curry rojo;Base de arroz negro;Kilogramos;;0.58;1;CURRY ROJO
+REVISAR;Puré de patata;Queso de cabra;Kilogramos;9,75;0.57;1;ALCACHOFAS CON HUEVO CODORNIZ
+REVISAR;polvo de jamón;Papel de arroz;Unidades;2,41;0.57;1;ALCACHOFAS CON HUEVO CODORNIZ
+REVISAR;Salsa de curry;Papel de arroz;Unidades;2,41;0.57;1;GYOZAS DE POLLO
+REVISAR;Ñoras;Zanahoria;Unidades;2,74;0.57;1;CALDO DE POLLO
+REVISAR;Chipotles en adobo;Chile rojo;Unidades;2,17;0.57;1;MAYONESA DE CHIPOTLE
+REVISAR;Salsa Infusionada;Salsa tartufata;Unidades;14,10;0.56;1;TORRIJA 
+REVISAR;TOMAHACK;Tomahawk de aguja;Kilogramos;20,90;0.56;1;TOMAHAWACK
+REVISAR;Jamon Paleta de cebo;Carne picada de vaca;Kilogramos;11,14;0.55;2;HUEVOS ROTOS CON JAMON,  HUEVOS ROTOS CON JAMON INFANTI
+REVISAR;Salsa Mayo kimchi;Salsa de mostaza y miel;Unidades;;0.55;2;VIEIRAS FLAMBEADAS, CAZON EN ADOBO 
+NO EXISTE;salsa de curry rojo;(¿Papel de arroz?);Unidades;2,41;0.55;1;CURRY ROJO DE VERDURAS Y CORVIN
+NO EXISTE;Pasas;(¿Fresas?);Kilogramos;;0.55;1;PICADA MEDITERRANEA
+NO EXISTE;puerro;(¿Huevo?);Unidades;27,26;0.55;1;CALDO DE POLLO
+NO EXISTE;Gamba arrocera;(¿Albahaca?);Kilogramos;1,99;0.55;1;CALDO DE MARISCO
+NO EXISTE;Puerro;(¿Huevo?);Unidades;27,26;0.55;1;CALDO DE MARISCO
+NO EXISTE;PAN HIGH POTATO;(¿Pan gua bao?);Unidades;7,21;0.54;1;BURGUER BALLES 
+NO EXISTE;Migas de atun;(¿Yema de huevo?);Unidades;11,18;0.54;1;ENSALADILLA RUSA
+NO EXISTE;Salsa kimchi;(¿Salsa barbacoa?);Unidades;5,77;0.54;1;MAYONESA DE KIMCHI
+NO EXISTE;salsa kimchi;(¿Salsa barbacoa?);Unidades;5,77;0.54;1;BARBACOA ASIATICA
+NO EXISTE;Infusion para torrijas;(¿Pimiento para freír?);Unidades;6,88;0.54;1;TORRIJA
+NO EXISTE;Ali oli de lima;(¿Alitas de pollo?);Unidades;4,88;0.53;1;ARROZ NERO
+NO EXISTE;Curry en polvo;(¿Fingers de pollo?);Unidades;8,67;0.53;2;FINGERS DE POLLO, SALSA DE CURRYMANGO
+NO EXISTE;Café soluble;(¿Cebolla?);Kilogramos;0,79;0.53;1;ESPUMA DE TIRAMISÚ
+NO EXISTE;Pan HIGHT POTATO;(¿Pan briocht?);Unidades;37,27;0.52;1;BURGER BACANAL 2.0
+NO EXISTE;Mix de setas congeladas;(¿Tiras de costillas de cerdo frescas?);Kilogramos;7,90;0.52;1;RAGOUT DE SETAS
+NO EXISTE;Proespuma caliente;(¿Capsula Cafeinada?);Unidades;;0.51;1;ESPUMA DE YEMA
+NO EXISTE;COULANT DE CHOCOLATE;(¿Cola de rape 80/150?);Unidades;;0.51;1;COULANT DE CHOCOLATE
+NO EXISTE;Torrezno;(¿Orejones?);Kilogramos;17,37;0.5;1;TORREZNOS
+NO EXISTE;Bbq asiatica;(¿Albahaca?);Kilogramos;1,99;0.5;1;ALITAS BBQ ASIATICA
+NO EXISTE;Polvo de cacahuete;(¿Queso de cabra?);Kilogramos;9,75;0.5;1;ALITAS BBQ ASIATICA
+NO EXISTE;Vino tinto;(¿Champiñón laminado?);Unidades;5,01;0.5;1;CARRILLERA PARA BRIOCHE
+NO EXISTE;Yema pasteurizada;(¿Tomate Rama?);Kilogramos;;0.5;1;ESPUMA DE YEMA
+NO EXISTE;Yema pasteuriza;(¿Yema de huevo?);Unidades;11,18;0.5;1;ESPUMA DE TIRAMISÚ
+NO EXISTE;Polvo de aceituna negra;(¿Helado de vainilla?);Unidades;6,18;0.49;1;ENSALADILLA RUSA
+NO EXISTE;SALSA MAYONESA DE CHIPOTLE;(¿Alitas de pollo?);Unidades;4,88;0.49;1;BURGUER BALLES 
+NO EXISTE;Yogurt griego;(¿Tomate frito?);Unidades;6,82;0.48;1;FINGERS DE POLLO

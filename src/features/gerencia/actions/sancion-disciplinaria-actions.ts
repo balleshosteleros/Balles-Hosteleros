@@ -92,7 +92,7 @@ export async function crearSancionDisciplinaria(
 
     const { data: emp, error: empErr } = await admin
       .from("empleados")
-      .select("id, nombre, apellidos, dni_nie, puesto, email_empresa, email_personal, empresa_id, estado, departamentos ( nombre )")
+      .select("id, nombre, apellidos, dni_nie, puesto, email_empresa, email_personal, empresa_id, estado, departamentos!empleados_departamento_id_fkey ( nombre )")
       .eq("id", empleadoId)
       .maybeSingle();
     if (empErr || !emp) return { ok: false, error: "Trabajador no encontrado" };
@@ -286,7 +286,7 @@ export async function listSancionesDisciplinarias(): Promise<
       .from("firmas_documentos")
       .select(`
         id, estado, empleado_id, enviado_en, expira_en, firmado_en,
-        empleados!firmas_documentos_empleado_id_fkey ( nombre, apellidos, departamentos ( nombre ) )
+        empleados!firmas_documentos_empleado_id_fkey ( nombre, apellidos, departamentos!empleados_departamento_id_fkey ( nombre ) )
       `)
       .eq("empresa_id", empresaId)
       .eq("tipo", TIPO_DOC)

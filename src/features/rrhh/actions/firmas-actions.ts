@@ -194,7 +194,7 @@ export async function listFirmasPorEmpleado(
         id, titulo, tipo, modalidad, validez, estado,
         empleado_id, enviado_por, enviado_en, expira_en, firmado_en,
         ip_firma, sha256_original, sha256_acta, reenviado_count, decision_reconocimiento,
-        empleados!firmas_documentos_empleado_id_fkey ( id, nombre, apellidos, departamentos ( nombre ) )
+        empleados!firmas_documentos_empleado_id_fkey ( id, nombre, apellidos, departamentos!empleados_departamento_id_fkey ( nombre ) )
       `)
       .eq("empresa_id", empresaId)
       .eq("empleado_id", empleadoId)
@@ -247,7 +247,7 @@ export async function listFirmas(): Promise<{ ok: true; data: FirmaResumen[] } |
         id, titulo, tipo, modalidad, validez, estado,
         empleado_id, enviado_por, enviado_en, expira_en, firmado_en,
         ip_firma, sha256_original, sha256_acta, reenviado_count, decision_reconocimiento,
-        empleados!firmas_documentos_empleado_id_fkey ( id, nombre, apellidos, departamentos ( nombre ) )
+        empleados!firmas_documentos_empleado_id_fkey ( id, nombre, apellidos, departamentos!empleados_departamento_id_fkey ( nombre ) )
       `)
       .eq("empresa_id", empresaId)
       .order("enviado_en", { ascending: false });

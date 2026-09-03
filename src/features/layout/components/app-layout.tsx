@@ -32,6 +32,8 @@ import {
   GmailDrawer,
   CalendarDrawer,
   MeetDrawer,
+  DriveDrawer,
+  DriveIcon,
   TareasDrawer,
   ChatDrawer,
   TelefonoDrawer,
@@ -385,6 +387,17 @@ function AppLayoutInterno({ children }: { children: React.ReactNode }) {
                         <NavBadge count={ajustes.notificaciones.calendario.badgeActivo ? counts.events : 0} color={HERRAMIENTA.calendario.colorKey} />
                       </Button>
                     </CalendarDrawer>
+
+                    {/* Archivos — espejo en vivo de Google Drive (PRP-084) */}
+                    <DriveDrawer>
+                      <Button
+                        variant="ghost" size="icon"
+                        className="relative h-8 w-8"
+                        title="Archivos"
+                      >
+                        <DriveIcon className="!h-[18px] !w-[18px]" />
+                      </Button>
+                    </DriveDrawer>
 
                     {/* Google Meet */}
                     <MeetDrawer>
