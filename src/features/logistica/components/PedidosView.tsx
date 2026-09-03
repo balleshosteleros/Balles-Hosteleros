@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect, useCallback, type ReactNode } from "react";
 import { useSincronizacionEnVivo } from "@/shared/hooks/useSincronizacionEnVivo";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { hoyEnZona } from "@/features/empresa/lib/zona-horaria";
 import {
@@ -141,7 +141,12 @@ export function PedidosView() {
   // Asistente de albaranes por foto: diálogo de subida + id a abrir en detalle al crear
   // (mismo mecanismo que facturaIdToOpen: la lista se recarga y al llegar el dato se abre).
   const [subirAlbaranOpen, setSubirAlbaranOpen] = useState(false);
-  const [albaranIdToOpen, setAlbaranIdToOpen] = useState<string | null>(null);
+  // Se inicializa con ?albaran=<id> para que un acceso directo desde otro
+  // submódulo (p.ej. Acuerdos) abra ese albarán en cuanto la lista lo traiga.
+  const searchParams = useSearchParams();
+  const [albaranIdToOpen, setAlbaranIdToOpen] = useState<string | null>(
+    () => searchParams.get("albaran"),
+  );
 
   const loadPedidos = useCallback(async () => {
     setLoading(true);
