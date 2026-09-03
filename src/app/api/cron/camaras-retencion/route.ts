@@ -1,9 +1,9 @@
 /**
- * Cron: retención rodante de 30 días para grabaciones de CÁMARAS.
+ * Cron: retención rodante de 15 días para grabaciones de CÁMARAS.
  *
  * Cada día borra los clips de `camara_grabaciones` cuyo `inicio` tenga más de
- * 30 días: primero el objeto en R2, luego la fila. Así el almacenamiento no
- * crece sin fin (el día 31 se va cayendo el día 1) y la cuota por empresa se
+ * 15 días: primero el objeto en R2, luego la fila. Así el almacenamiento no
+ * crece sin fin (el día 16 se va cayendo el día 1) y la cuota por empresa se
  * libera sola.
  *
  * IMPORTANTE: SOLO afecta a `camara_grabaciones`. Las grabaciones de pantalla,
@@ -20,7 +20,7 @@ import { deleteObjectR2 } from "@/shared/lib/r2";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-const RETENCION_DIAS = 30;
+const RETENCION_DIAS = 15;
 // Techo de borrados por ejecución: evita timeouts si hay mucho acumulado; el
 // resto se limpia en la siguiente pasada diaria.
 const MAX_POR_EJECUCION = 2000;

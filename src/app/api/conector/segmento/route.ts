@@ -1,7 +1,7 @@
 /**
  * POST /api/conector/segmento — el grabador/cámara sube un clip de vídeo a R2.
  *
- * Arquitectura B (videovigilancia cloud): el vídeo REAL de 30 días vive en
+ * Arquitectura B (videovigilancia cloud): el vídeo REAL de 15 días vive en
  * NUESTRO Cloudflare R2, no en el grabador. El grabador es solo la tubería:
  * captura clips (segmentos MP4 de ~1 min) y los empuja aquí por conexión de
  * SALIDA. El software rebobina leyendo R2, nunca se conecta al grabador.
