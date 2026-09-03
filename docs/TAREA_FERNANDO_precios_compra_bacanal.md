@@ -97,6 +97,167 @@ producto**.
 ---
 
 
+## 🍽️ 03-SEP — IVÁN ESTÁ METIENDO LOS ESCANDALLOS Y LAS ELABORACIONES (aviso para no pisarnos)
+
+> **Fernando: esto es un aviso de trabajo en curso, no un encargo.** Iván ha entregado sus fichas
+> técnicas y se están cargando desde esta terminal. Te lo contamos para que sepas qué se está
+> tocando y no dupliquemos esfuerzo. **No hemos tocado código: solo datos de catálogo.**
+
+### Lo que ha entregado Iván
+
+| Documento | Contenido |
+|---|---|
+| FICHAS TÉCNICAS - PRODUCTO | **60 platos de BACANAL** (215 líneas de ingrediente) + fotos |
+| FICHAS TÉCNICAS - ELABORACIONES | **38 elaboraciones de BACANAL** (113 líneas) |
+| FICHAS TÉCNICAS - PRODUCTO (1) | **15 cócteles de HABANA** (60 líneas) |
+| RECETARIO | Los cócteles de Habana otra vez, en 10 hojas (autor, sin alcohol, zumos, milkshakes, frappés) |
+| CONTROL ACUERDOS 2024/25/26 | Acuerdos con proveedores (Pernod, Coca-Cola, Damm, Makro, Diageo) |
+
+**Tu pregunta del 26-ago ("¿quién se sienta una tarde con la lista de 10?") queda cerrada:** ya
+estaban hechas, solo había que cargarlas.
+
+### Decisiones de modelo que ha tomado al hilo
+
+1. **El modo de preparación NO va en el escandallo ni en la elaboración.** Va en la **ficha
+   técnica** (`escandallos.pasos`, `elaboracion`, `tiempo_preparacion`, `partida`,
+   `presentacion_mesa`, `menaje`…), que ya existe en la tabla y está vacía. La separación es:
+   escandallo = composición y coste · ficha técnica = cómo se hace.
+2. **Los PREBACH son elaboraciones.** El recetario trae los cócteles de dos formas: ingrediente a
+   ingrediente, o como `PREBACH BOOM BOOM 21 CL`. Es la mezcla base ya preparada, y las cantidades
+   cuadran exactas (6+3+3+3+6 = 21 cl). Se montan como elaboración y el cóctel apunta a ella.
+3. **Los siropes NO son elaboración: son producto de compra.** Son los **Oxefruit de BELMONTE**
+   (12,21 €/ud). El "sour" es **Pulco**. Los zumos son bricks de **MAKRO/DITHER**.
+
+### ⚠️ Diferencias entre los dos documentos de Habana (apuntadas, criterio aplicado)
+
+No son el mismo dato. Con el Boom-Boom:
+
+| | FICHAS TÉCNICAS | RECETARIO |
+|---|---|---|
+| Ron | **1 cl** → 0,06 L | **6 CL** |
+| Sirope plátano | 0,5 cl → 0,03 L | 3 CL |
+| **Zumo de piña** | ❌ **no aparece** | ✅ 6 CL |
+
+- **La columna CL de las fichas técnicas está mal rellenada**: dice `1` donde el propio cálculo usa
+  `6`. El recetario coincide con el cálculo real.
+- **Al Boom-Boom le falta un ingrediente** en la ficha técnica, así que **su coste está mal
+  calculado**.
+
+**Criterio adoptado (Iván: "pon lo que veas mejor"):** manda el **RECETARIO** en cantidades e
+ingredientes; las fichas técnicas aportan coste, alérgenos y fotos. Si un ingrediente aparece solo
+en uno de los dos, entra igual.
+
+### 🧹 Limpieza de catálogo hecha hoy (3 fusiones, sin pérdida de datos)
+
+Al cruzar los ingredientes con el catálogo aparecieron fichas duplicadas de la migración de junio.
+En cada fusión se trasladó **stock, movimientos, histórico de precios y escandallos** a la ficha
+buena **antes** de borrar la vacía:
+
+| Se queda | Se borró | Se conservó |
+|---|---|---|
+| **Cebolla** (BACANAL) | Cebolla blanca | 1,45 kg de stock + 1 movimiento + 4 precios |
+| **Cebolla roja** (BACANAL) | Cebolla Roja | 1,27 kg + 1 movimiento + `agora_id` 2441 |
+| **Pulco** (HABANA) | Sour | — (ninguna tenía datos) |
+
+**Ojo con esto, que es tuyo de interés:** la "Cebolla Roja" duplicada **ya tenía una nota de fusión
+del 14-ago** pero se quedó con el `agora_id`, así que Ágora apuntaba a una ficha vacía mientras el
+stock estaba en la otra. **La fusión anterior quedó a medias.**
+
+### 🔎 Quedan 6 duplicados más del mismo patrón (sin tocar, pendientes)
+
+| Producto | Empresa | Ficha activa tiene | Inactiva tiene |
+|---|---|---|---|
+| Zanahoria | BACANAL | 3 precios, 1 escandallo | `agora_id` 2465, **1 escandallo** |
+| Patata lavada | BACANAL | 3 precios | `agora_id` 2439 |
+| Leche condensada | BACANAL | 1 precio | `agora_id` 2519 |
+| Lechuga romana | BACANAL | **2 kg**, 1 mov, 4 precios, 1 escandallo | `agora_id` 2466, **1 escandallo** |
+| Yema de huevo | BACANAL | 3 precios | — |
+| Clear Little Mix | HABANA | **3 ud**, 1 mov, 4 precios | `agora_id` 1843 |
+
+**Lo grave son Zanahoria y Lechuga romana: tienen escandallos apuntando a LAS DOS fichas.** Cuando
+se active el descuento de stock, unos platos descontarán de una y otros de otra, y el stock no
+cuadrará nunca. Esto **no lo arregla que Ágora desaparezca**: es un duplicado interno.
+
+### 📌 Iván: "en compras Ágora no pinta nada"
+
+Decisión suya, y los datos la respaldan: **de 10.883 líneas de ticket, CERO apuntan a un producto de
+compra**. Sin embargo **554 de los 668 productos de compra tienen `agora_id`**.
+
+Su planteamiento es que en Ágora dejarán de vivir los productos de compra: **solo vivirán los de
+venta**. Así que ese campo sobra en las fichas de compra.
+
+⚠️ **No se ha tocado, y se te consulta antes:** tu importador de catálogo vincula por `agora_id`, y
+borrarlo de las 554 fichas de compra te rompería ese trabajo. **Dinos cómo lo quieres hacer.**
+
+### 📊 Estado del escandallo en los 25 productos más vendidos
+
+Solo **3 de 25** tienen escandallo real. El resto no tiene nada, o tiene el "espejo 1:1" de la
+migración que no dice qué lleva dentro:
+
+| Producto | Ventas | Escandallo |
+|---|---|---|
+| Brugal | 425 | espejo 1:1 |
+| **Shisha 1 Sabor** | **419** | ❌ nada |
+| **Mojito Habanero** | **351** | ❌ nada |
+| **Sex On Habana** | 277 | ❌ nada |
+| **Coco Colado** | 264 | ❌ nada |
+| **Shisha 2 Sabor** | 235 | ❌ nada |
+| **Tortilla trufada** | 218 | ❌ nada |
+| Brioche meloso | 159 | ✅ 4 líneas + ficha |
+| Entraña con chimichurri | 159 | ✅ 3 líneas + ficha |
+
+Las **shishas suman 654 ventas** y siguen sin escandallo — es lo que más factura de Habana, y tú ya
+dijiste que son dos líneas: tabaco y carbón.
+
+### 🚬 Las shishas: por qué no descuentan (y por qué no se arregla solo con el escandallo)
+
+Las shishas son **lo que más factura de Habana: 654 ventas** (419 de 1 sabor + 235 de 2 sabores, a
+15,50 €). Hoy **no descuentan absolutamente nada**. Y no basta con escribir el escandallo, porque hay
+dos problemas encima:
+
+**1. Ágora no manda el sabor.** Solo manda `Shisha 1 Sabor` / `Shisha 2 Sabor` con su
+`sale_format_id` (1454/1455). **Nunca dice qué tabaco se usó.** Los 24 sabores existen como
+productos de compra en HABANA (Big Boy, White Cake, Sexy Sheba, Hawai, Catton Candy, Love 66,
+Mango Tango…) pero nada los conecta con la venta.
+
+> **Y ojo, que esto es más gordo de lo que parece:** pasa igual con las bebidas. Un ticket real trae
+> `Jaggermaister · formato "Comb Jaggermeister" · 9,95 €` en una sola línea. **Ágora tampoco dice con
+> qué refresco se combinó.** En la bebida el refresco es barato y no duele; en la shisha el tabaco es
+> el coste principal.
+
+**Solución de Iván:** al vender se elige el producto y **después el sabor**, como un añadido que
+descuenta pero no cambia el precio. No existe en BD (no hay tablas de añadidos/modificadores) y
+**solo funcionará con TPV propio**, porque Ágora no manda ese dato. Encaja con el `AskForAddins` que
+ya identificaste en agosto.
+
+**2. No hay ni un albarán de estanco.** Revisadas las 400+ líneas de los **44 albaranes de HABANA**
+(Belmon Drink, Belmonte, Dither, Coca-Cola, Krittikali, Bigger, Mahou, Disbesa, Sedox, Procubitos,
+On Drink): **ningún tabaco en ninguna**. Por eso los 24 tabacos **no tienen proveedor ni precio**, y
+su stock es 0 salvo cuatro con restos del volcado de junio (White Cake 0,371 · Catton Candy 0,332 ·
+Sexy Sheba 0,237 · Hawai 0,177) — todos con **cero movimientos**, que confirma que no vienen de
+ninguna compra. **Boquillas está en −150**, el negativo más grande de tu lista.
+
+**Iván ha escrito hoy a gerencia de Habana** pidiendo que suban los albaranes del estanco. Hasta
+entonces, el escandallo de la shisha funcionará pero **con coste cero**.
+
+**Iván pasará el escandallo de las shishas** (gramos de tabaco, carbones, papel film).
+
+### ❓ Pendiente que ni Iván ni nosotros podemos resolver: el litraje del Oxefruit
+
+**Ningún sitio del sistema guarda el tamaño del envase.** Revisados los 4 albaranes de BELMONTE con
+Oxefruit (ALB-2026-001, 005, 009, 028): el proveedor los factura por unidad a 12,21 € y los llama
+`OXEFRUIT PREMIUM MARACUYA` sin indicar litros. Referencias de Belmonte: U63 plátano · U53 mango ·
+U52 melón · U51 sandía · U50 piña · U11 coco · S12 maracuyá.
+
+Iván apunta a **0,70 L**, pero sin confirmar. **Importa mucho:** si son 0,70 y ponemos 1 L (o al
+revés), cada cóctel descontaría un 43 % de más o de menos. Si lo tienes a mano en una factura de
+Belmonte, dilo.
+
+Esto conecta con el agujero que ya señalaste: **`unidad_uso` está vacío en los 693 productos**. Es
+la pieza que falta para que los escandallos de bebida calculen bien.
+
+---
+
 ## 🛡️ 29-AGO — SUBIDA DE ALBARANES: DECISIÓN DE IVÁN (cómo blindarla para que NUNCA se bloquee)
 
 > **Decisión para Iván.** El error de hoy ya está arreglado; esto es para que no vuelva a dejar
