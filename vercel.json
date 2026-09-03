@@ -106,6 +106,10 @@
     {
       "path": "/api/cron/reservas-provisionales",
       "schedule": "*/10 * * * *"
+    },
+    {
+      "path": "/api/cron/comunicados-recurrentes",
+      "schedule": "0 8 * * *"
     }
   ]
 }
