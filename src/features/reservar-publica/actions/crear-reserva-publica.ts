@@ -550,12 +550,27 @@ export async function crearReservaPublicaAction(
     .maybeSingle();
   const puedeCobrar = revolut?.activo === true;
 
-  const garantia = puedeCobrar
+  // Una reserva es UNA de estas cosas, nunca dos (ver `lib/tipo-reserva.ts`):
+  //
+  //   · TICKET apaga las dos políticas: el cliente ya ha pagado por adelantado,
+  //     así que no se le puede pedir además una tarjeta. Sin esto, quien compra
+  //     su ticket acababa en la pantalla de pago pidiéndole la tarjeta encima.
+  //   · Si las condiciones de garantía y cancelación se solapan, gana la
+  //     GARANTÍA: es la más estricta y es lo que el cliente acaba pagando, así
+  //     el correo de condiciones nunca contradice al cobro. Antes se guardaban
+  //     las dos y el cliente recibía dos correos con condiciones distintas.
+  const yaPagado = ticketProductoIdFinal !== null;
+  const puedePedirTarjeta = puedeCobrar && !yaPagado;
+
+  const garantia = puedePedirTarjeta
     ? calcularPolitica(politicaDesdeRow(cfgRow, "garantia"), datosPolitica)
     : { aplica: false, importe: 0 };
-  const cancelacion = puedeCobrar
+  const cancelacionBruta = puedePedirTarjeta
     ? calcularPolitica(politicaDesdeRow(cfgRow, "cancelacion"), datosPolitica)
     : { aplica: false, importe: 0 };
+  const cancelacion = garantia.aplica
+    ? { aplica: false, importe: 0 }
+    : cancelacionBruta;
 
   const exigeTarjeta = garantia.aplica || cancelacion.aplica;
 

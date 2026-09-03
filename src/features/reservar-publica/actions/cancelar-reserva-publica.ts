@@ -63,7 +63,7 @@ export async function obtenerReservaPorToken(
     const { data: r } = await admin
       .from("reservas")
       .select(
-        "id, empresa_id, estado, fecha, hora, personas, cliente_nombre",
+        "id, empresa_id, estado, fecha, hora, personas, cliente_nombre, tiene_cancelacion, cancelacion_importe",
       )
       .eq("cancelacion_token", parsed.data)
       .maybeSingle();
@@ -75,11 +75,11 @@ export async function obtenerReservaPorToken(
       .eq("id", r.empresa_id as string)
       .maybeSingle();
 
-    // La política de cancelación es la general de la empresa (Configuración →
-    // Reservas → Políticas). Si está apagada, no hay aviso de cargo.
+    // De la configuración general solo necesitamos el plazo de aviso: si la
+    // reserva lleva política y cuánto ya viene congelado en la propia reserva.
     const { data: cfg } = await admin
       .from("empresa_reservas_config")
-      .select("cancelacion_activa, cancelacion_horas_antes, cancelacion_importe_eur")
+      .select("cancelacion_horas_antes")
       .eq("empresa_id", r.empresa_id as string)
       .maybeSingle();
 
@@ -109,6 +109,10 @@ export async function obtenerReservaPorToken(
         motivoBloqueo: motivo,
         avisoPolitica: calcularAvisoPolitica(
           cfg,
+          {
+            tieneCancelacion: r.tiene_cancelacion === true,
+            importe: Number(r.cancelacion_importe ?? 0),
+          },
           r.fecha as string,
           r.hora as string,
           tz,
@@ -253,21 +257,32 @@ function motivoNoCancelable(
 }
 
 /**
- * Si la empresa tiene política de cancelación activa y el cliente cancela
- * dentro de la ventana de cargo, se avisa ANTES de confirmar. No cobramos
- * aquí: solo informamos, que es lo que el cliente aceptó al reservar.
+ * Aviso de cargo antes de confirmar la cancelación. No cobramos aquí: solo
+ * informamos de lo que el cliente aceptó al reservar.
+ *
+ * El aviso sale SOLO si ESTA reserva lleva política de cancelación, no si la
+ * empresa la tiene activa: las condiciones (mínimo de comensales, días, turnos,
+ * zonas…) se evalúan al crear la reserva y el resultado queda congelado en
+ * `tiene_cancelacion` / `cancelacion_importe`. Mirar la configuración general
+ * hacía que una mesa de 2 —a la que nunca se le pidió tarjeta— viera un aviso
+ * de cargo que no le corresponde.
+ *
+ * El plazo de horas sí se lee de la configuración: es el único dato que no se
+ * congela en la reserva.
  */
 function calcularAvisoPolitica(
   config: Record<string, unknown> | null,
+  reserva: { tieneCancelacion: boolean; importe: number },
   fecha: string,
   hora: string,
   tz: string,
 ): { horas: number; importe: number } | null {
-  if (!config) return null;
-  if (config.cancelacion_activa === false) return null;
-  const horas = Number(config.cancelacion_horas_antes ?? 0);
-  const importe = Number(config.cancelacion_importe_eur ?? 0);
-  if (!(horas > 0) || !(importe > 0)) return null;
+  if (!reserva.tieneCancelacion) return null;
+  const importe = Number(reserva.importe ?? 0);
+  if (!(importe > 0)) return null;
+
+  const horas = Number(config?.cancelacion_horas_antes ?? 0);
+  if (!(horas > 0)) return null;
 
   // Misma corrección que en `esPasada`: con la zona del servidor el cálculo se
   // desviaba 1-2 h y el aviso de cargo se mostraba (o se omitía) cuando no tocaba.
