@@ -278,6 +278,10 @@ async function procesarPoliticaReserva(input: {
         ...refs,
         [`${p}_estado`]: nuevo,
         [`${p}_${p === "garantia" ? "retenida" : "guardada"}_at`]: new Date().toISOString(),
+        // El cliente ha puesto su tarjeta de verdad. Sin esto la reserva se
+        // quedaba con "Tarjeta: No" aunque hubiera dinero retenido o una
+        // tarjeta guardada, que es justo lo contrario de lo que pasó.
+        tarjeta_introducida: true,
         // Pagada: deja de ser provisional y pasa a ser una reserva de verdad.
         provisional_hasta: null,
       })

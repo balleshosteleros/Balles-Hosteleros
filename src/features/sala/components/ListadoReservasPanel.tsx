@@ -611,6 +611,35 @@ const COLUMNAS: ColumnaDef[] = [
 
   // ── Decisión sobre el cobro ────────────────────────────────────────
   {
+    campo: "cobroSinDecidir",
+    label: "Sin decidir",
+    filtro: "booleano",
+    align: "center",
+    // La columna que de verdad importa: dinero que se puede cobrar y que nadie
+    // ha cobrado ni perdonado. Va en rojo porque es lo único de esta tabla que
+    // reclama que alguien haga algo.
+    valor: (f) => f.cobroSinDecidir,
+    celda: (f) =>
+      f.cobroSinDecidir ? (
+        <Badge
+          variant="outline"
+          className="border-red-600/40 bg-red-600/15 font-normal text-red-700 dark:text-red-400"
+        >
+          Sin decidir
+        </Badge>
+      ) : (
+        <span className="text-muted-foreground">—</span>
+      ),
+  },
+  {
+    campo: "politicaIncumplidaAt",
+    label: "Incumplió el",
+    filtro: "fecha",
+    ordenable: true,
+    valor: (f) => f.politicaIncumplidaAt.slice(0, 10),
+    celda: (f, { tz }) => marcaTiempo(f.politicaIncumplidaAt, tz),
+  },
+  {
     campo: "cobroMotivo",
     label: "Motivo del cobro",
     filtro: "lista",
@@ -746,6 +775,10 @@ const OCULTAS_POR_DEFECTO = new Set([
   "cancelacionUltimoIntentoAt",
   "cancelacionProximoIntentoAt",
   "cancelacionError",
+  "cobroSinDecidir",
+  "politicaIncumplidaAt",
+  "cobroSinDecidir",
+  "politicaIncumplidaAt",
   "cobroMotivo",
   "cobroPerdonadoAt",
   "tarjetaIntroducida",
@@ -799,6 +832,8 @@ const VISIBLES_COBROS = [
   "cancelacionProximoIntentoAt",
   "cancelacionError",
   "cancelacionCobradaAt",
+  "cobroSinDecidir",
+  "politicaIncumplidaAt",
   "cobroMotivo",
   "cobroPerdonadoAt",
   "ticket",
@@ -1012,6 +1047,9 @@ export function ListadoReservasPanel({
     let ticketCobrado = 0;
     let ticketSinCanjearN = 0;
     let pagado = 0;
+    // Dinero que se PUEDE cobrar y que nadie ha cobrado ni perdonado.
+    let sinDecidir = 0;
+    let sinDecidirN = 0;
 
     for (const f of filtradas) {
       if (f.garantiaEstado === "retenida") {
@@ -1042,6 +1080,16 @@ export function ListadoReservasPanel({
         if (f.esCompraTicket) ticketSinCanjearN += 1;
       }
 
+      if (f.cobroSinDecidir) {
+        // Se cobra lo que haya apartado: la garantía retenida o, si no, el
+        // importe de la política de cancelación.
+        sinDecidir +=
+          f.garantiaEstado === "retenida"
+            ? f.garantiaImporte ?? 0
+            : f.cancelacionImporte ?? 0;
+        sinDecidirN += 1;
+      }
+
       // El importe pagado de una compra sin canjear ya se cuenta como ticket:
       // volver a sumarlo aquí lo contaría dos veces.
       if (!f.esCompraTicket) pagado += f.importePagado ?? 0;
@@ -1060,6 +1108,8 @@ export function ListadoReservasPanel({
       ticketCobrado,
       ticketSinCanjearN,
       pagado,
+      sinDecidir,
+      sinDecidirN,
     };
   }, [filtradas]);
 
@@ -1134,7 +1184,18 @@ export function ListadoReservasPanel({
           porque allí la pregunta es de dónde vienen las reservas, no cuánto
           dinero hay retenido. */}
       {enfoque === "cobros" && (
-        <div className="grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-5">
+        <div className="grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-6">
+          {/* Lo primero, porque es lo único que reclama que alguien decida. */}
+          <TarjetaImporte
+            titulo="Pendiente de decidir"
+            importe={resumen.sinDecidir}
+            detalle={
+              resumen.sinDecidirN > 0
+                ? `${formatNumero(resumen.sinDecidirN)} ${resumen.sinDecidirN === 1 ? "reserva" : "reservas"} sin cobrar ni perdonar`
+                : "Nada pendiente"
+            }
+            tono={resumen.sinDecidirN > 0 ? "mal" : "neutro"}
+          />
           <TarjetaImporte
             titulo="Garantías retenidas"
             importe={resumen.garantiaRetenida}

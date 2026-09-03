@@ -84,6 +84,8 @@ export const listadoReservasIO: ModuleIO<ListadoReservaRow> = {
     { key: "cancelacionProximoIntentoAt", label: "Próximo intento" },
     { key: "cancelacionError", label: "Motivo del fallo" },
 
+    { key: "cobroSinDecidir", label: "Sin decidir", type: "boolean" },
+    { key: "politicaIncumplidaAt", label: "Incumplió el" },
     { key: "cobroMotivo", label: "Motivo del cobro" },
     { key: "cobroPerdonadoAt", label: "Perdonado el" },
 

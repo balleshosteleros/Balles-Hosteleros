@@ -88,6 +88,14 @@ export interface ListadoReservaRow {
   // --- Decisión humana sobre el cobro ---
   cobroMotivo: string;
   cobroPerdonadoAt: string;
+  /** Cuándo el cliente incumplió la política (canceló tarde o no vino). */
+  politicaIncumplidaAt: string;
+  /**
+   * `true` si hay dinero que cobrar y NADIE ha decidido todavía: el cliente
+   * incumplió, la tarjeta está guardada y ni se ha cobrado ni se ha perdonado.
+   * Es la única fila que reclama una acción humana.
+   */
+  cobroSinDecidir: boolean;
 
   // --- Ticket ---
   esTicket: boolean;
@@ -203,6 +211,8 @@ function filaBase(): ListadoReservaRow {
     cancelacionError: "",
     cobroMotivo: "",
     cobroPerdonadoAt: "",
+    politicaIncumplidaAt: "",
+    cobroSinDecidir: false,
     esTicket: false,
     ticketProducto: "",
     ticketUnidades: null,
@@ -445,6 +455,13 @@ export async function getListadoReservas(params: {
 
         cobroMotivo: s(r.cobro_motivo),
         cobroPerdonadoAt: s(r.cobro_perdonado_at),
+        politicaIncumplidaAt: s(r.politica_incumplida_at),
+        // Mismo criterio que el aviso de la barra (PRP-082 §5.6): incumplió,
+        // hay tarjeta guardada y nadie ha cobrado ni perdonado todavía.
+        cobroSinDecidir:
+          Boolean(r.politica_incumplida_at) &&
+          !r.cobro_perdonado_at &&
+          (r.cancelacion_estado === "guardada" || r.garantia_estado === "retenida"),
 
         esTicket: Boolean(r.es_ticket),
         ticketProducto: ticketsMap.get(s(r.ticket_producto_id)) ?? "",

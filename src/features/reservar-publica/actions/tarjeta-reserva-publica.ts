@@ -378,6 +378,9 @@ export async function confirmarPagoTarjeta(token: string): Promise<
             new Date().toISOString(),
           [`${prefijo}_tarjeta_ultimos4`]: tarjeta?.ultimos4 ?? null,
           [`${prefijo}_tarjeta_marca`]: tarjeta?.marca ?? null,
+          // El cliente ha puesto su tarjeta: que la reserva lo diga. Sin esto
+          // la ficha enseñaba "Tarjeta: No" con el dinero ya retenido.
+          tarjeta_introducida: true,
           ...(prefijo === "garantia" && res.orden.capture_deadline
             ? { garantia_capture_deadline: res.orden.capture_deadline }
             : {}),
