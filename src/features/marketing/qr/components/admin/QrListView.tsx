@@ -308,6 +308,7 @@ export function QrListView() {
       <QrDescargaDialog
         qr={verQr}
         url={verQr ? urlDe(verQr) : ""}
+        nombreEmpresa={empresaActual?.nombre ?? ""}
         open={verQr !== null}
         onOpenChange={(v) => {
           if (!v) setVerQr(null);

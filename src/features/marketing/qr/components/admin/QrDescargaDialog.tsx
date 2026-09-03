@@ -30,11 +30,13 @@ const LADO_PNG = 2000;
 export function QrDescargaDialog({
   qr,
   url,
+  nombreEmpresa,
   open,
   onOpenChange,
 }: {
   qr: CodigoQr | null;
   url: string;
+  nombreEmpresa?: string;
   open: boolean;
   onOpenChange: (v: boolean) => void;
 }) {
@@ -43,7 +45,8 @@ export function QrDescargaDialog({
 
   if (!qr) return null;
 
-  const nombreArchivo = `qr-${qr.codigo}-${slug(qr.nombre)}`;
+  const prefijoEmpresa = nombreEmpresa ? `${slug(nombreEmpresa)}-` : "";
+  const nombreArchivo = `qr-${prefijoEmpresa}${qr.codigo}-${slug(qr.nombre)}`;
 
   async function copiarEnlace() {
     try {
