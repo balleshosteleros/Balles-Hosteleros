@@ -1053,7 +1053,7 @@ export async function updateReserva(
       }
     }
 
-    // Si la reserva se queda sin cliente y llevaba tarjeta, se comprueba si
+    // Si el cliente no asiste (cancela o no se presenta) y llevaba tarjeta, se comprueba si
     // incumplió el plazo. Solo deja la marca para que el aviso de Sala lo
     // enseñe: el cobro lo decide una persona en la ficha.
     if (updates.estado === "CANCELADA" || updates.estado === "NO_SHOW") {

@@ -12,9 +12,9 @@ import "server-only";
  * CANCELADA con la tarjeta guardada y el aviso de Sala —que solo miraba cobros
  * FALLIDOS— no veía nada. El cobro se perdía sin que nadie se enterara.
  *
- * Lo llaman los TRES caminos por los que una reserva se queda sin cliente:
- * la cancelación pública por enlace, el cambio de estado desde Sala y el
- * no-show. Vive aparte para que los tres decidan igual.
+ * Lo llaman los TRES caminos por los que el cliente no llega a sentarse: la
+ * cancelación pública por enlace, el cambio de estado desde Sala y el no-show.
+ * Vive aparte para que los tres decidan igual.
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -28,7 +28,7 @@ import {
   zonaLocalAUtcISO,
 } from "@/features/empresa/lib/zona-horaria";
 
-/** Estados en los que la reserva se queda sin cliente y procede valorar cobro. */
+/** Estados en los que el cliente no asiste y procede valorar el cobro. */
 export type EstadoSinCliente = "CANCELADA" | "NO_SHOW";
 
 /**
