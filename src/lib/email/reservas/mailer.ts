@@ -26,6 +26,7 @@ import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendEmail } from "@/lib/email/send";
 import { getSiteUrl } from "@/lib/site-url";
+import { tipoDeReserva } from "@/features/sala/lib/tipo-reserva";
 import {
   getReservaEmailPlantillaSeed,
   RESERVA_EMAIL_TIPO_LABELS,
@@ -149,6 +150,8 @@ type ReservaRow = {
   tipo_categoria: string | null;
   tiene_garantia: boolean | null;
   garantia_importe: number | null;
+  tiene_cancelacion: boolean | null;
+  cancelacion_importe: number | null;
   importe_pagado: number | null;
   codigo: string | null;
   codigo_id: string | null;
@@ -221,7 +224,7 @@ export async function enviarReservaEmail(
   const { data: reservaData, error: errR } = await admin
     .from("reservas")
     .select(
-      "empresa_id, cliente_nombre, cliente_apellidos, cliente_email, fecha, hora, personas, zona, grupo_zona_id, notas, estado, tipo_categoria, tiene_garantia, garantia_importe, importe_pagado, codigo, codigo_id, cancelacion_token, garantia_token, garantia_limite_at, valoracion_token, vinculacion_estado, vinculacion_motivo, datos_declarados, email_confirmacion_at, email_reconfirmacion_at, email_no_reconfirmada_at, email_lista_espera_at, email_liberada_at, email_terminando_at, email_no_show_at, email_politica_cancelacion_at, email_politica_garantia_at, email_recordatorio_at, email_cancelacion_at, email_valoracion_at, email_ticket_reserva_at, es_ticket, ticket_codigo, ticket_producto_id, ticket_unidades, ticket_importe, grupos_zonas(nombre)",
+      "empresa_id, cliente_nombre, cliente_apellidos, cliente_email, fecha, hora, personas, zona, grupo_zona_id, notas, estado, tipo_categoria, tiene_garantia, garantia_importe, tiene_cancelacion, cancelacion_importe, importe_pagado, codigo, codigo_id, cancelacion_token, garantia_token, garantia_limite_at, valoracion_token, vinculacion_estado, vinculacion_motivo, datos_declarados, email_confirmacion_at, email_reconfirmacion_at, email_no_reconfirmada_at, email_lista_espera_at, email_liberada_at, email_terminando_at, email_no_show_at, email_politica_cancelacion_at, email_politica_garantia_at, email_recordatorio_at, email_cancelacion_at, email_valoracion_at, email_ticket_reserva_at, es_ticket, ticket_codigo, ticket_producto_id, ticket_unidades, ticket_importe, grupos_zonas(nombre)",
     )
     .eq("id", reservaId)
     .maybeSingle();
@@ -251,6 +254,8 @@ export async function enviarReservaEmail(
     tipo_categoria: (reservaData.tipo_categoria as string | null) ?? null,
     tiene_garantia: (reservaData.tiene_garantia as boolean | null) ?? null,
     garantia_importe: (reservaData.garantia_importe as number | null) ?? null,
+    tiene_cancelacion: (reservaData.tiene_cancelacion as boolean | null) ?? null,
+    cancelacion_importe: (reservaData.cancelacion_importe as number | null) ?? null,
     importe_pagado: (reservaData.importe_pagado as number | null) ?? null,
     codigo: (reservaData.codigo as string | null) ?? null,
     codigo_id: (reservaData.codigo_id as string | null) ?? null,
@@ -523,24 +528,31 @@ export async function enviarReservaEmail(
   }
 
   if (mostrarCondiciones) {
-    const sujetaAPolitica =
-      reserva.tipo_categoria === "politica" &&
-      !!config.cancelacion_horas_antes &&
-      !!config.cancelacion_importe_eur;
+    // El tipo de la reserva decide qué bloque se pinta, y solo puede ser uno:
+    // cancelación y garantía son excluyentes (ver `lib/tipo-reserva.ts`).
+    const tipoReserva = tipoDeReserva({
+      esTicket: reserva.es_ticket,
+      tieneGarantia: reserva.tiene_garantia,
+      garantiaImporte: reserva.garantia_importe,
+      tieneCancelacion: reserva.tiene_cancelacion,
+      cancelacionImporte: reserva.cancelacion_importe,
+    });
+
     // En el correo dedicado el bloque se pinta siempre: es su razón de ser.
-    if (sujetaAPolitica || tipo === "POLITICA_CANCELACION") {
+    if (tipoReserva === "cancelacion" || tipo === "POLITICA_CANCELACION") {
       politicaBloque = {
         horas: config.cancelacion_horas_antes ?? 0,
-        importe: Number(config.cancelacion_importe_eur ?? 0),
+        // El importe sale de la RESERVA, no de la configuración actual: es el
+        // que el cliente aceptó. Si mañana cambia la tarifa, su correo no puede
+        // decirle una cifra distinta de la que se le prometió.
+        importe:
+          Number(reserva.cancelacion_importe ?? 0) ||
+          Number(config.cancelacion_importe_eur ?? 0),
         mensajeExtra: await textoExtraPolitica("POLITICA_CANCELACION"),
       };
     }
 
-    const sujetaAGarantia =
-      reserva.tiene_garantia === true &&
-      reserva.garantia_importe != null &&
-      reserva.garantia_importe > 0;
-    if (sujetaAGarantia || tipo === "POLITICA_GARANTIA") {
+    if (tipoReserva === "garantia" || tipo === "POLITICA_GARANTIA") {
       garantiaBloque = {
         importe: Number(reserva.garantia_importe ?? 0),
         mensajeExtra: await textoExtraPolitica("POLITICA_GARANTIA"),
@@ -1229,8 +1241,12 @@ export function previewReservaEmail(input: PreviewInput): {
   // en todos: si se pintaran siempre, quien configura las plantillas creería
   // que sus clientes reciben las condiciones de garantía en el correo de
   // cancelación.
+  //
+  // "Confirmada" NO lleva bloque: la reciben los cuatro tipos de reserva y la
+  // mayoría son gratis. Pintarlo aquí hacía creer que todos los clientes ven
+  // unas condiciones que solo ve una parte.
   const politicaBloque =
-    input.tipo === "POLITICA_CANCELACION" || input.tipo === "CONFIRMADA"
+    input.tipo === "POLITICA_CANCELACION"
       ? {
           horas: input.config.cancelacionHorasAntes ?? 24,
           importe: Number(input.config.cancelacionImporteEur ?? 15),

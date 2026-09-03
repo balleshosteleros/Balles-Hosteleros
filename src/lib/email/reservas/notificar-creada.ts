@@ -1,5 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { enviarReservaEmail, type ReservaEmailActor } from "./mailer";
+import { tipoDeReserva } from "@/features/sala/lib/tipo-reserva";
 
 /**
  * Correo de confirmación de una reserva recién creada, sea cual sea su origen:
@@ -34,7 +35,7 @@ export async function notificarReservaCreada(
     const { data: r } = await admin
       .from("reservas")
       .select(
-        "empresa_id, fecha, hora, tipo_categoria, tiene_garantia, garantia_importe, es_ticket",
+        "empresa_id, fecha, hora, tiene_cancelacion, cancelacion_importe, tiene_garantia, garantia_importe, es_ticket",
       )
       .eq("id", reservaId)
       .maybeSingle();
@@ -51,15 +52,25 @@ export async function notificarReservaCreada(
 
     if (!r?.fecha || !r?.hora || !r?.empresa_id) return { ok: res.ok };
 
-    // Condiciones económicas, cada una en su correo. Si la plantilla está
-    // pausada por la empresa, el mailer lo corta solo: aquí no hay que
-    // comprobar nada más que si la reserva queda sujeta a ellas.
-    if (r.tipo_categoria === "politica") {
+    // Condiciones económicas. El tipo decide cuál se manda, y solo puede ser
+    // una: son excluyentes. Antes esto preguntaba por la etiqueta manual
+    // `tipo_categoria`, que el alta de la web nunca rellenaba, así que un
+    // cliente al que SÍ se le podía cobrar no recibía sus condiciones por
+    // escrito. Si la plantilla está pausada por la empresa, el mailer lo corta
+    // solo: aquí solo se decide a qué queda sujeta la reserva.
+    const tipo = tipoDeReserva({
+      esTicket: r.es_ticket as boolean | null,
+      tieneGarantia: r.tiene_garantia as boolean | null,
+      garantiaImporte: r.garantia_importe as number | null,
+      tieneCancelacion: r.tiene_cancelacion as boolean | null,
+      cancelacionImporte: r.cancelacion_importe as number | null,
+    });
+    if (tipo === "cancelacion") {
       await enviarReservaEmail(reservaId, "POLITICA_CANCELACION", { actor }).catch(
         (e) => console.error("[reservas][notificarReservaCreada] POLITICA_CANCELACION:", e),
       );
     }
-    if (r.tiene_garantia === true && Number(r.garantia_importe ?? 0) > 0) {
+    if (tipo === "garantia") {
       await enviarReservaEmail(reservaId, "POLITICA_GARANTIA", { actor }).catch(
         (e) => console.error("[reservas][notificarReservaCreada] POLITICA_GARANTIA:", e),
       );

@@ -32,6 +32,7 @@ import {
   type DiaSemanaKey,
 } from "@/features/sala/data/reservas";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { componerTelefono } from "@/features/sala/data/prefijos-telefono";
 
 /**
  * Cuánto se le guarda la mesa al cliente mientras introduce su tarjeta.
@@ -620,7 +621,12 @@ export async function crearReservaPublicaAction(
     // Snapshot de la reserva = datos canónicos de la ficha (los originales mandan).
     cliente_nombre: cliente.nombre,
     cliente_apellidos: cliente.apellidos,
-    cliente_telefono: cliente.telefono,
+    // Con prefijo: en la ficha van en columnas separadas, pero el snapshot de
+    // la reserva lleva el teléfono completo, igual que el alta desde sala.
+    cliente_telefono: componerTelefono(
+      data.telefonoPrefijo ?? cliente.telefono_prefijo,
+      cliente.telefono,
+    ),
     // Excepción: el correo de confirmación tiene que llegarle a QUIEN ha
     // reservado, no al titular de la ficha. Si enganchó por teléfono y aportó
     // otro email, ése es su buzón; mandarlo al de la ficha avisaría a alguien
