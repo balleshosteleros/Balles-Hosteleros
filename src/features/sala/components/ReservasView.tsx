@@ -282,14 +282,21 @@ const TIPO_RESERVA_CORTO: Record<TipoReserva, string> = {
   gratis: "Gratis",
 };
 
+/**
+ * El color mide el RIESGO DE QUE TE DEJEN TIRADO, no el tipo de cobro:
+ *
+ *   · Ticket (verde)      → ya pagó. Si no viene, el dinero está cobrado.
+ *   · Garantía (naranja)  → el importe está retenido: se cobra seguro, pero
+ *                           la retención caduca y hay que capturarla a tiempo.
+ *   · Cancelación (rojo)  → solo hay una tarjeta guardada. Es la única en la
+ *                           que el cobro puede fallar (sin fondos, caducada),
+ *                           así que es la que más te puede dejar tirado.
+ *   · Gratis (gris)       → sin compromiso: si no viene, no hay nada.
+ */
 const TIPO_RESERVA_COLOR: Record<TipoReserva, string> = {
-  // Ya pagada: es la única que trae dinero cobrado de antemano.
-  ticket: "text-red-600 dark:text-red-400",
-  // Dinero retenido de verdad.
-  garantia: "text-amber-600 dark:text-amber-400",
-  // Tarjeta guardada, sin dinero apartado.
-  cancelacion: "text-emerald-600 dark:text-emerald-400",
-  // Sin compromiso: en gris, porque no hay nada que vigilar.
+  ticket: "text-emerald-600 dark:text-emerald-400",
+  garantia: "text-orange-600 dark:text-orange-400",
+  cancelacion: "text-red-600 dark:text-red-400",
   gratis: "text-muted-foreground",
 };
 
