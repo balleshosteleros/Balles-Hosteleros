@@ -97,6 +97,121 @@ producto**.
 ---
 
 
+## 🚨 03-SEP — MUY IMPORTANTE: ÁGORA SÍ MANDA LOS SABORES Y LOS COMPLEMENTOS. LOS ESTAMOS TIRANDO
+
+> **Fernando: esto es lo más importante de todo lo de hoy.** Rectifica dos cosas que dábamos por
+> ciertas (nosotros los primeros) y desbloquea el descuento de stock de las shishas sin esperar al
+> TPV propio. **No hemos tocado código: es tu terreno y te lo pasamos entero.**
+
+### El hallazgo
+
+Consultando la API de Ágora **en vivo** (solo lectura) para ver qué manda de verdad en un ticket con
+shisha, aparece esto en el día 30-ago:
+
+```json
+{
+  "ProductId": 1315, "ProductName": "Shisha 2 Sabor",
+  "SaleFormatId": 1455, "Quantity": 1.0, "UnitPrice": 15.5,
+  "PreparationTypeName": "SHISHAS", "FamilyId": 162, "FamilyName": "HABANA",
+  "Addins": [
+    { "ProductId": 2280, "ProductName": "Huracan",     "SaleFormatRatio": 0.009 },
+    { "ProductId": 2624, "ProductName": "SEXY GREEN",  "SaleFormatRatio": 1.0   }
+  ]
+}
+```
+
+**El sabor del tabaco viene en un campo `Addins`, con su ProductId y su ratio.** Y ese 0,009 es
+exactamente el que Iván tiene configurado en Ágora para "2 sabores" (cada tabaco descuenta la mitad
+de los 0,018 de una cazoleta).
+
+**Nos equivocamos los dos:** dimos por hecho que Ágora no mandaba el sabor porque miramos lo que hay
+guardado en `pos_ticket_lineas`, no lo que devuelve la API. El dato llega desde el principio.
+
+### Por qué no llegaba: DOS fallos encadenados
+
+**1. 🔴 El endpoint del sincronizador de stock está MAL.**
+
+`agora-ventas-sync.ts:168` llama a:
+```
+/api/export/tickets?businessDay=YYYY-MM-DD     →  devuelve SIEMPRE {"Tickets": []}
+```
+
+El bueno es el que usa la ingesta (`agora-ventas-ingesta.ts:60`):
+```
+/api/export/?business-day=YYYY-MM-DD&filter=Invoices   →  129-235 KB de ventas reales
+```
+
+Probado con 10 fechas de junio a septiembre y 4 formatos de fecha distintos: **el primero devuelve
+vacío siempre, con HTTP 200**. No da error, así que no salta ninguna alarma — simplemente
+`descontarStockPorVentasAgora()` concluye "sin ventas registradas" todos los días y se va a dormir.
+
+**2. 🟠 La ingesta solo lee 9 de los 78 campos que manda Ágora.**
+
+El tipo `AgoraLine` (`agora-ventas-ingesta.ts:167`) declara ProductId, ProductName, Quantity,
+UnitPrice, VatRate, DiscountRate y los tres SaleFormat*. **Todo lo demás se descarta al insertar**,
+incluido `Addins`.
+
+Es el mismo patrón del `ProductId` que ya te comentamos: el dato llega, pero no se guarda.
+
+### Alcance real (medido en 2 días, 30-ago y 01-sep)
+
+| | |
+|---|---|
+| Líneas de venta | 176 |
+| **Líneas CON `Addins`** | **39 (22 %)** |
+| Addins totales | 48 |
+
+**Y no son solo shishas.** Ejemplos reales de esos dos días:
+
+| Producto vendido | Addin |
+|---|---|
+| Shisha 2 Sabor | `Huracan` (0,009) + `SEXY GREEN` (1,0) |
+| Entrecot Lomo bajo frisona | `Patatas fritas` |
+| Cafe Cortado | `Capsula Cafeinada` |
+| Cafe con Leche | `Capsula Cafeinada` |
+| Brioche meloso de ternera | `Ud. Extra Brioche Ternera` |
+| Vieiras con salsa kimchi | `Ud. Extra Vieira` |
+
+Esto explica dos cosas que teníamos abiertas:
+- **Las "Ud. Extra ..." que marcaste como "no son productos, son suplementos de línea del TPV"**
+  (25-ago): efectivamente lo son, y **llegan como Addins**. No hay que descartarlas: hay que
+  guardarlas como línea de añadido.
+- **Las cápsulas de café** no se descontaban de ninguna manera. Ahora se puede.
+
+### Otros campos útiles que se están tirando
+
+`PreparationTypeName` (SHISHAS, COCINA...) · `FamilyId`/`FamilyName` (**el filtro por local que
+descubriste**, viene ya en cada línea de venta) · `UserId` (quién lo vendió) · `Offers` ·
+`Discounts` · `ProductCostPrice` · `Notes` · `Location` · `Pos`.
+
+### Lo que hay que hacer (es tuyo, no lo tocamos)
+
+1. **Arreglar el endpoint de `agora-ventas-sync.ts`** para que apunte al mismo que la ingesta. Sin
+   esto, el descuento de stock por ventas **nunca se dispara**, aunque se active.
+2. **Guardar los `Addins`** al ingerir: tabla de líneas de añadido con `producto_id`,
+   `sale_format_id` y `ratio`, colgando de `pos_ticket_lineas`.
+3. **Que el descuento los aplique**: hoy solo mira la composición del producto principal.
+
+### Lo que esto cambia de lo que hablamos esta mañana
+
+- **Las shishas SÍ pueden descontar el tabaco correcto desde ya.** No hace falta esperar al TPV
+  propio ni construir la pantalla de añadidos: el dato ya viene.
+- **El escandallo fijo de las dos shishas ya está montado** (papel film 0,008 ud · boquillas 3 ud ·
+  carbón 0,080 kg, con el carbón corregido de "ud" a Kilogramos). Solo falta enganchar el tabaco por
+  `Addins`.
+- ⚠️ **Ojo con la decisión de Iván de ignorar `sale_format_ratio`**: el ratio del **producto
+  principal** se sigue ignorando (lo dice nuestro escandallo), pero el del **addin** es la
+  identificación de cuánto tabaco entró. Habrá que decidir si el 0,018/0,009 lo pone Ágora o lo pone
+  nuestro escandallo del formato.
+
+### Un aviso de dato sucio
+
+En ese mismo ticket, el segundo addin de la shisha es **`SEXY GREEN` con ratio 1,0 y familia
+`HABA/BACA`** — eso es un cóctel, no un sabor de tabaco. O es un error de quien picó la comanda, o
+el TPV permite meter cualquier cosa como addin. Conviene mirarlo antes de descontar a ciegas.
+
+---
+
 ## 🍽️ 03-SEP — IVÁN ESTÁ METIENDO LOS ESCANDALLOS Y LAS ELABORACIONES (aviso para no pisarnos)
 
 > **Fernando: esto es un aviso de trabajo en curso, no un encargo.** Iván ha entregado sus fichas
