@@ -2,6 +2,7 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import type { Escandallo, CategoriaEscandallo } from "../data/escandallos";
 import { calcularMargen } from "../data/escandallos";
+import { formatearFechaEs } from "@/shared/lib/fecha";
 
 export async function generarDossierPDF(escandallos: Escandallo[], categorias: CategoriaEscandallo[], empresaNombre: string) {
   const doc = new jsPDF({
@@ -28,7 +29,7 @@ export async function generarDossierPDF(escandallos: Escandallo[], categorias: C
     doc.setFontSize(10);
     doc.setFont("helvetica", "normal");
     doc.text(empresaNombre.toUpperCase(), 15, 30);
-    doc.text(`FECHA ACTUALIZACIÓN: ${escandallo.fechaActualizacion || new Date().toISOString().slice(0, 10)}`, pageWidth - 15, 30, { align: "right" });
+    doc.text(`FECHA ACTUALIZACIÓN: ${formatearFechaEs(escandallo.fechaActualizacion || new Date().toISOString().slice(0, 10))}`, pageWidth - 15, 30, { align: "right" });
 
     // Main Content
     let currentY = 50;

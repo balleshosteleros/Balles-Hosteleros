@@ -12,6 +12,7 @@ import type { FichajeEmpleadoResumen } from "@/features/rrhh/actions/fichajes-ac
 import type { EmpleadoHorarioActual } from "@/features/rrhh/actions/empleados-actions";
 import type { SolicitudPersonal } from "@/features/mi-panel/types";
 import { ESTADO_COLOR, ESTADO_LABEL, SUBTIPO_LABEL } from "@/features/mi-panel/types";
+import { formatearFechaEs } from "@/shared/lib/fecha";
 
 function EmptyState({ icon: Icon, texto }: { icon: React.ElementType; texto: string }) {
   return (
@@ -199,8 +200,8 @@ export function ContratosTab({ ficha }: { ficha: FichaEmpleado }) {
               {ficha.contratos.map((c) => (
                 <TableRow key={c.id}>
                   <TableCell className="font-medium">{c.tipo}</TableCell>
-                  <TableCell>{c.fechaInicio}</TableCell>
-                  <TableCell>{c.fechaFin}</TableCell>
+                  <TableCell>{formatearFechaEs(c.fechaInicio)}</TableCell>
+                  <TableCell>{formatearFechaEs(c.fechaFin)}</TableCell>
                   <TableCell><Badge variant={c.estado === "Vigente" ? "default" : "secondary"}>{c.estado}</Badge></TableCell>
                 </TableRow>
               ))}
@@ -231,7 +232,7 @@ export function DocumentosTab({ ficha }: { ficha: FichaEmpleado }) {
                 <TableRow key={d.id}>
                   <TableCell className="font-medium">{d.nombre}</TableCell>
                   <TableCell>{d.tipo}</TableCell>
-                  <TableCell>{d.fecha}</TableCell>
+                  <TableCell>{formatearFechaEs(d.fecha)}</TableCell>
                 </TableRow>
               ))}
             </TableBody>
@@ -295,7 +296,7 @@ export function EvaluacionesTab({ ficha }: { ficha: FichaEmpleado }) {
             <TableBody>
               {ficha.evaluaciones.map((ev) => (
                 <TableRow key={ev.id}>
-                  <TableCell>{ev.fecha}</TableCell>
+                  <TableCell>{formatearFechaEs(ev.fecha)}</TableCell>
                   <TableCell>{ev.tipo}</TableCell>
                   <TableCell><Badge variant="secondary">{ev.resultado}</Badge></TableCell>
                   <TableCell>{ev.evaluador}</TableCell>

@@ -29,6 +29,7 @@ import {
   listMisNominas,
   getMiNominaUrl,
 } from "@/features/rrhh/actions/nominas-archivo-actions";
+import { formatearFechaEs } from "@/shared/lib/fecha";
 
 /** Una nómina publicada, para la carpeta "Nóminas". */
 interface MiNomina {
@@ -122,7 +123,7 @@ function FilaDocumento({ doc }: { doc: DocumentoEmpleado }) {
       <div className="min-w-0 flex-1">
         <p className="text-sm font-medium truncate">{doc.nombre}</p>
         <p className="text-xs text-muted-foreground">
-          {doc.fecha}
+          {formatearFechaEs(doc.fecha)}
           {doc.tamanoBytes ? ` · ${tamanoLegible(doc.tamanoBytes)}` : ""}
         </p>
       </div>

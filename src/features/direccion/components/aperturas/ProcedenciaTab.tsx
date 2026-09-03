@@ -10,6 +10,7 @@ import { Plus, Pencil, Trash2 } from "lucide-react";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
 import { LineaProcedencia, ORIGENES_CAPITAL } from "@/features/direccion/data/aperturas";
 import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
+import { formatearFechaEs } from "@/shared/lib/fecha";
 
 const COLORS = ["hsl(210 70% 55%)", "hsl(150 60% 45%)", "hsl(40 90% 55%)", "hsl(340 65% 55%)", "hsl(270 60% 55%)", "hsl(20 80% 55%)", "hsl(180 60% 45%)", "hsl(0 60% 55%)"];
 
@@ -124,7 +125,7 @@ export function ProcedenciaTab({ lineas, onChange, readOnly = false }: Props) {
               <tbody>
                 {lineas.map(l => (
                   <tr key={l.id} className="border-b hover:bg-muted/30">
-                    <td className="p-2.5">{l.fecha}</td>
+                    <td className="p-2.5">{formatearFechaEs(l.fecha)}</td>
                     <td className="p-2.5"><Badge variant="outline" className="text-xs">{l.origen}</Badge></td>
                     <td className="p-2.5">{l.entidad}</td>
                     <td className="p-2.5">{l.destino}</td>

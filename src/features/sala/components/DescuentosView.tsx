@@ -31,6 +31,7 @@ import {
 import { toast } from "sonner";
 import { IOActions } from "@/shared/io";
 import { descuentosIO } from "@/features/sala/io/descuentos.io";
+import { formatearFechaEs } from "@/shared/lib/fecha";
 
 const allResultados: Record<string, ResultadoMensual[]> = {};
 function getResultados(id: string) { if (!allResultados[id]) allResultados[id] = buildDefaultResultados(); return allResultados[id]; }
@@ -369,8 +370,8 @@ export function DescuentosView() {
                   <div><p className="font-medium mb-1">A tener en cuenta</p><p className="text-muted-foreground">{detalle.tenerEnCuenta || "—"}</p></div>
                   <div><p className="font-medium mb-1">Observaciones</p><p className="text-muted-foreground">{detalle.observaciones || "—"}</p></div>
                   <div className="flex gap-6 text-xs text-muted-foreground pt-2 border-t">
-                    <span>Creado: {detalle.fechaCreacion}</span>
-                    <span>Actualizado: {detalle.ultimaActualizacion}</span>
+                    <span>Creado: {formatearFechaEs(detalle.fechaCreacion)}</span>
+                    <span>Actualizado: {formatearFechaEs(detalle.ultimaActualizacion)}</span>
                     <span>Por: {detalle.creadoPor}</span>
                   </div>
                 </div>

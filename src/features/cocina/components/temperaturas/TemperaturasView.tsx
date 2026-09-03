@@ -35,6 +35,7 @@ import {
 import { TableColumnHeader } from "@/shared/components/TableColumnHeader";
 import { ResizableColumnsProvider } from "@/shared/components/ResizableColumns";
 import { friendlyError } from "@/shared/lib/friendly-errors";
+import { formatearFechaEs } from "@/shared/lib/fecha";
 
 const TIPOS: TipoEquipo[] = ["NEVERA", "CONGELADOR", "CÁMARA", "BOTELLERO", "OTRO"];
 
@@ -391,7 +392,7 @@ export default function TemperaturasView({ area, equiposIniciales, registrosInic
                 <p className="font-medium mb-2">Últimos registros</p>
                 {registros.filter(r => r.equipoId === selectedEquipo.id).sort((a, b) => `${b.fecha}${b.hora}`.localeCompare(`${a.fecha}${a.hora}`)).slice(0, 5).map(r => (
                   <div key={r.id} className="flex items-center gap-2 text-xs py-1">
-                    <span>{r.fecha} {r.hora}</span>
+                    <span>{formatearFechaEs(r.fecha)} {r.hora}</span>
                     <span className="font-mono font-semibold">{r.temperatura}°C</span>
                     <Badge variant="outline" className={r.estado === "OK" ? "bg-green-50 text-green-700 border-green-300" : "bg-red-50 text-red-700 border-red-300"}>{r.estado}</Badge>
                     <span className="text-muted-foreground">{r.empleado}</span>

@@ -1,4 +1,5 @@
 import { Clock3, FileWarning } from "lucide-react";
+import { formatearFechaEs } from "@/shared/lib/fecha";
 
 export interface AlbaranEnRevisionRow {
   id: string;
@@ -42,7 +43,7 @@ export function AlbaranesEnRevision({ albaranes }: { albaranes: AlbaranEnRevisio
               <p className="truncate font-semibold leading-tight">{a.proveedor}</p>
               <p className="truncate text-xs text-muted-foreground">
                 {a.numero}
-                {a.fecha ? ` · ${a.fecha}` : ""}
+                {a.fecha ? ` · ${formatearFechaEs(a.fecha)}` : ""}
                 {a.incompleto ? " · falta una página: hazle foto y súbela" : " · se resuelve desde el ordenador"}
               </p>
             </div>

@@ -57,6 +57,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { IOActions } from "@/shared/io";
 import { cierresIO } from "@/features/gerencia/io/cierres.io";
 import { getEmpleadosActivos, type EmpleadoActivo } from "@/features/rrhh/actions/empleados-actions";
+import { formatearFechaEs } from "@/shared/lib/fecha";
 
 // Tipos de movimiento del submódulo (el selector de arriba del modal).
 const TIPOS_MOVIMIENTO: { value: CierreTipo; label: string }[] = [
@@ -392,7 +393,7 @@ export function CierresView() {
     for (const c of posteriores) {
       run = Math.round((run + importeEfectivo(c)) * 100) / 100;
       if (run < 0) {
-        return `Este movimiento cuadra en su fecha, pero dejaría el acumulado en ${fmtEuro(run)} el ${c.fecha}, `
+        return `Este movimiento cuadra en su fecha, pero dejaría el acumulado en ${fmtEuro(run)} el ${formatearFechaEs(c.fecha)}, `
           + `y el efectivo acumulado nunca puede quedar por debajo de cero. Revisa la fecha o el importe.`;
       }
     }

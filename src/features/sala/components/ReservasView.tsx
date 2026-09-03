@@ -148,6 +148,7 @@ import {
   lightenHex,
   ZONA_LIGHTEN,
 } from "@/features/sala/lib/color-zona";
+import { formatearFechaEs } from "@/shared/lib/fecha";
 
 /** Rampa pastel arcoíris construida con la paleta canónica de zonas. */
 const LIBRE_RAINBOW = `linear-gradient(135deg, ${COLORES_PASTEL_ZONAS
@@ -1753,7 +1754,7 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
             <div className="space-y-3 text-xs">
               <p className="text-muted-foreground">
                 Para {form.comensales} {form.comensales === 1 ? "persona" : "personas"} el{" "}
-                {form.fecha} a las {form.hora.slice(0, 5)}, el sistema propone:
+                {formatearFechaEs(form.fecha)} a las {form.hora.slice(0, 5)}, el sistema propone:
               </p>
               <div className="rounded-md border border-emerald-500/40 bg-emerald-500/5 px-3 py-2">
                 <div className="text-sm font-semibold">
@@ -1807,7 +1808,7 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
                 <p className="text-muted-foreground">
                   No hay ninguna mesa libre{" "}
                   {fallo.zonaBuscada ? `en ${zonaLabel(fallo.zonaBuscada)}` : "en todo el local"}{" "}
-                  el {form.fecha} a las {form.hora.slice(0, 5)} durante{" "}
+                  el {formatearFechaEs(form.fecha)} a las {form.hora.slice(0, 5)} durante{" "}
                   {formatearDuracionReserva(duracionEfectiva ?? 120)}. Todas están ocupadas por
                   otra reserva en esa franja: prueba con otra hora, otra duración
                   {fallo.zonaBuscada ? " u otra zona" : ""}.
@@ -1949,7 +1950,7 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
                 <div className="rounded-md border border-amber-500/40 bg-amber-500/5 px-3 py-2">
                   <div className="font-semibold">Mesa {aviso.mesaCodigo}</div>
                   <div className="text-muted-foreground">
-                    Bloqueada el {form.fecha} en{" "}
+                    Bloqueada el {formatearFechaEs(form.fecha)} en{" "}
                     {form.turno === "COMIDA" ? "comida" : "cena"}.
                   </div>
                 </div>
@@ -1983,7 +1984,7 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
               <span className="font-semibold text-foreground">
                 {[form.cliente, form.apellidos].filter(Boolean).join(" ").trim() || "el cliente"}
               </span>{" "}
-              para el {form.fecha} a las {form.hora.slice(0, 5)} · {form.comensales}{" "}
+              para el {formatearFechaEs(form.fecha)} a las {form.hora.slice(0, 5)} · {form.comensales}{" "}
               {form.comensales === 1 ? "persona" : "personas"} quedará confirmada.
             </p>
             <p className="text-muted-foreground">
@@ -4610,8 +4611,8 @@ export function ReservasView() {
       const nombreTurno = turnoBloqueo === "COMIDA" ? "comida" : "cena";
       toast.success(
         objetivo.length === 1
-          ? `Mesa ${codigos} bloqueada para el ${fecha} (${nombreTurno})`
-          : `Mesas ${codigos} bloqueadas para el ${fecha} (${nombreTurno})`,
+          ? `Mesa ${codigos} bloqueada para el ${formatearFechaEs(fecha)} (${nombreTurno})`
+          : `Mesas ${codigos} bloqueadas para el ${formatearFechaEs(fecha)} (${nombreTurno})`,
       );
       setConfirmBloqueo(null);
       setBloqueosRefresh((n) => n + 1);

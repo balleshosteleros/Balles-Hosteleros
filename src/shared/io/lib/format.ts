@@ -66,13 +66,23 @@ export function formatBoolean(val: unknown): string {
   return "";
 }
 
+/**
+ * Fecha para la HOJA que ve el usuario: siempre dd/mm/aaaa.
+ *
+ * `parseDate` (arriba) acepta ese mismo formato al importar, así que exportar
+ * en español no rompe el ida y vuelta exportar → editar en Excel → importar.
+ */
 export function formatDate(val: unknown): string {
   if (!val) return "";
-  if (val instanceof Date) {
-    if (Number.isNaN(val.getTime())) return "";
-    return val.toISOString().slice(0, 10);
-  }
-  return String(val);
+  const iso =
+    val instanceof Date
+      ? Number.isNaN(val.getTime())
+        ? null
+        : val.toISOString().slice(0, 10)
+      : parseDate(val);
+  if (!iso) return val instanceof Date ? "" : String(val);
+  const [a, m, d] = iso.split("-");
+  return `${d}/${m}/${a}`;
 }
 
 export function formatArray(val: unknown, separator = ", "): string {

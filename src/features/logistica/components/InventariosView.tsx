@@ -48,6 +48,7 @@ import { toast } from "sonner";
 import InventarioModal from "@/features/logistica/components/inventarios/InventarioModal";
 import DetalleInventario from "@/features/logistica/components/inventarios/DetalleInventario";
 import InventarioConfigView from "@/features/logistica/components/inventarios/InventarioConfigView";
+import { formatearFechaEs } from "@/shared/lib/fecha";
 
 export function InventariosView() {
   const pathname = usePathname();
@@ -364,7 +365,7 @@ export function InventariosView() {
       ),
       td: (inv) => (
         <td key="fecha" className="px-3 py-2.5 font-semibold text-foreground whitespace-nowrap">
-          {inv.fecha}
+          {formatearFechaEs(inv.fecha)}
         </td>
       ),
     },

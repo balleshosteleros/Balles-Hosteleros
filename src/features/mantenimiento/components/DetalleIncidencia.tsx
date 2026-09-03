@@ -17,6 +17,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Clock, Plus, User, CalendarDays, MessageSquare } from "lucide-react";
+import { formatearFechaEs } from "@/shared/lib/fecha";
 
 interface Props {
   open: boolean;
@@ -112,7 +113,7 @@ export function DetalleIncidencia({ open, onClose, item, onAddActualizacion, abr
               <p className="text-xs font-bold text-muted-foreground">Cambios de estado</p>
               {historialEstados.map((h) => (
                 <p key={h.id} className="text-xs text-foreground">
-                  <span className="text-muted-foreground">{h.fecha.slice(0, 10)}</span>{" "}
+                  <span className="text-muted-foreground">{formatearFechaEs(h.fecha)}</span>{" "}
                   {h.estado_anterior ? `${h.estado_anterior} → ` : "Alta: "}
                   <strong>{h.estado_nuevo}</strong>
                   {h.cambiado_por_nombre && (

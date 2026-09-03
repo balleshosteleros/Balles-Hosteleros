@@ -34,6 +34,7 @@ import {
 import { TableColumnHeader } from "@/shared/components/TableColumnHeader";
 import { ResizableColumnsProvider } from "@/shared/components/ResizableColumns";
 import { friendlyError } from "@/shared/lib/friendly-errors";
+import { formatearFechaEs } from "@/shared/lib/fecha";
 
 type Vista = "kanban" | "tabla" | "calendario";
 
@@ -128,7 +129,7 @@ export function NuevasRecetasView() {
     fecha: {
       th: <TableColumnHeader key="fecha" label="Fecha" campo="fecha" />,
       td: (r) => (
-        <td key="fecha" className="px-4 py-2 text-muted-foreground">{r.created_at.slice(0, 10)}</td>
+        <td key="fecha" className="px-4 py-2 text-muted-foreground">{formatearFechaEs(r.created_at)}</td>
       ),
     },
   };

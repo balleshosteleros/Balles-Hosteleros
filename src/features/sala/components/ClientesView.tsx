@@ -61,6 +61,7 @@ import { TableColumnHeader } from "@/shared/components/TableColumnHeader";
 import { IOActions } from "@/shared/io";
 import { clientesIO } from "@/features/sala/io/clientes.io";
 import { friendlyError } from "@/shared/lib/friendly-errors";
+import { formatearFechaEs } from "@/shared/lib/fecha";
 
 /** Filas por hoja en la tabla de clientes. */
 const POR_PAGINA = 50;
@@ -119,7 +120,7 @@ function fechaCorta(fecha: string, hora: string): string {
     const txt = d.toLocaleDateString("es-ES", { day: "numeric", month: "short" });
     return hora ? `${txt} · ${hora}` : txt;
   } catch {
-    return `${fecha} ${hora}`.trim();
+    return `${formatearFechaEs(fecha)} ${hora}`.trim();
   }
 }
 

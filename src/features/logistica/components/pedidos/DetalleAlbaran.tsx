@@ -27,6 +27,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
+import { formatearFechaEs } from "@/shared/lib/fecha";
 
 interface Props {
   albaran: Albaran;
@@ -50,7 +51,7 @@ type LineaConOrigen = Albaran["lineas"][number] & {
 export function DetalleAlbaran({ albaran, pedidoOrigen, zonaHoraria, onBack, onEntregar, onDelete, onGenerarFactura, onConfirmadoRevision }: Props) {
   const totales = calcularTotalesLineas(albaran.lineas);
   const diaReparto = pedidoOrigen?.fechaEntrega
-    ? `${pedidoOrigen.fechaEntrega}${diaSemanaDeFechaISO(pedidoOrigen.fechaEntrega) ? ` · ${diaSemanaDeFechaISO(pedidoOrigen.fechaEntrega)}` : ""}`
+    ? `${formatearFechaEs(pedidoOrigen.fechaEntrega)}${diaSemanaDeFechaISO(pedidoOrigen.fechaEntrega) ? ` · ${diaSemanaDeFechaISO(pedidoOrigen.fechaEntrega)}` : ""}`
     : "";
   const horaReparto = formatoHoraReparto(pedidoOrigen?.horaEntrega, pedidoOrigen?.horaEntregaHasta);
   const canEntregar = albaran.estado === "Pendiente";        // recepción → suma stock

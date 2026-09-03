@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { PackageCheck, ChevronRight, Inbox } from "lucide-react";
 import { formatEur } from "@/shared/lib/numero";
+import { formatearFechaEs } from "@/shared/lib/fecha";
 
 export interface PedidoPorRecibir {
   id: string;
@@ -42,7 +43,7 @@ export function RecepcionInbox({ pedidos }: { pedidos: PedidoPorRecibir[] }) {
               <p className="truncate font-semibold leading-tight">{p.proveedor}</p>
               <p className="truncate text-xs text-muted-foreground">
                 {p.referencia}
-                {p.fechaEntrega ? ` · entrega ${p.fechaEntrega}` : ""} · {formatEur(p.total)}
+                {p.fechaEntrega ? ` · entrega ${formatearFechaEs(p.fechaEntrega)}` : ""} · {formatEur(p.total)}
               </p>
             </div>
             <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" />

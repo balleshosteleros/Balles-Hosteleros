@@ -11,6 +11,7 @@ import { Plus, Pencil, Trash2 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import { LineaAmortizacion, TIPOS_AMORTIZACION, MESES, TRIMESTRES } from "@/features/direccion/data/aperturas";
 import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
+import { formatearFechaEs } from "@/shared/lib/fecha";
 
 function fmt(n: number) { return n.toLocaleString("es-ES", { maximumFractionDigits: 2 }); }
 
@@ -55,7 +56,7 @@ export function AmortizacionTab({ lineas, onChange, readOnly = false }: Props) {
     const ok = await confirmDelete({
       title: "¿Borrar este registro de amortización?",
       description: linea
-        ? `Se eliminará el registro de ${linea.fecha} (${linea.tipo}). Esta acción no se puede deshacer.`
+        ? `Se eliminará el registro de ${formatearFechaEs(linea.fecha)} (${linea.tipo}). Esta acción no se puede deshacer.`
         : "Esta acción no se puede deshacer.",
     });
     if (!ok) return;
@@ -119,7 +120,7 @@ export function AmortizacionTab({ lineas, onChange, readOnly = false }: Props) {
               <tbody>
                 {lineas.map(l => (
                   <tr key={l.id} className="border-b hover:bg-muted/30">
-                    <td className="p-2 whitespace-nowrap">{l.fecha}</td>
+                    <td className="p-2 whitespace-nowrap">{formatearFechaEs(l.fecha)}</td>
                     <td className="p-2">{l.ano}</td>
                     <td className="p-2"><Badge variant="outline" className="text-xs">{l.trimestre}</Badge></td>
                     <td className="p-2">{l.mes}</td>

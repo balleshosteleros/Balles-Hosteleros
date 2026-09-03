@@ -15,7 +15,7 @@ export const generarReportePDF = (proceso: ProcesoJuridico) => {
     doc.setFontSize(10);
     doc.setTextColor(100, 100, 100);
     doc.text(`ID: ${proceso.id}`, 14, 28);
-    doc.text(`Generado el: ${new Date().toLocaleString()}`, 14, 34);
+    doc.text(`Generado el: ${new Date().toLocaleString("es-ES", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}`, 14, 34);
     doc.line(14, 36, pageWidth - 14, 36);
 
     // General Info Section
@@ -117,7 +117,7 @@ export const descargarDocumentoReal = async (url: string, nombre: string) => {
       doc.setFontSize(12);
       doc.text(`Nombre: ${nombre}`, 14, 35);
       doc.text("Este es un documento de muestra del sistema.", 14, 45);
-      doc.text(`Fecha: ${new Date().toLocaleDateString()}`, 14, 55);
+      doc.text(`Fecha: ${new Date().toLocaleDateString("es-ES", { day: "2-digit", month: "2-digit", year: "numeric" })}`, 14, 55);
       doc.save(`${nombre.replace(/\.[^/.]+$/, "")}_MOCK.pdf`);
       return;
     } catch (err) {

@@ -25,6 +25,7 @@ import { useSubirAlbaran } from "@/features/logistica/hooks/use-subir-albaran";
 import { ProveedorCombobox } from "@/features/logistica/components/productos/ProveedorCombobox";
 import { MesaIncidenciasDialog } from "@/features/logistica/components/albaranes/MesaIncidenciasDialog";
 import { formatNumero } from "@/shared/lib/numero";
+import { formatearFechaEs } from "@/shared/lib/fecha";
 
 interface Props {
   open: boolean;
@@ -267,7 +268,7 @@ export function SubirAlbaranDialog({ open, onOpenChange, onCreado }: Props) {
                 <p className="text-sm font-medium text-orange-800 dark:text-orange-300">
                   Posible duplicado: ya existe el albarán {duplicado.numero} de {duplicado.proveedorNombre}
                   {duplicado.numeroProveedor ? ` (nº proveedor ${duplicado.numeroProveedor})` : ""} con fecha{" "}
-                  {duplicado.fecha}.
+                  {formatearFechaEs(duplicado.fecha)}.
                 </p>
                 <p className="text-xs text-orange-700 dark:text-orange-400">
                   Si es el mismo papel, no lo registres otra vez. Si de verdad es otro documento, explica

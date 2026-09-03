@@ -6,6 +6,7 @@ import { Search, ArrowLeftRight, Settings } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { SAMPLE_CONCILIACION } from "@/features/contabilidad/data/contabilidad";
 import { SubmoduleToolbar } from "@/shared/components/SubmoduleToolbar";
+import { formatearFechaEs } from "@/shared/lib/fecha";
 
 const TABS = [{ id: "PENDIENTE", label: "Para conciliar" }, { id: "CONCILIADA", label: "Conciliadas" }];
 
@@ -61,13 +62,13 @@ export function ConciliacionView() {
             {filtrados.map(c => (
               <tr key={c.id} className="border-b hover:bg-muted/30 transition-colors">
                 <td className="py-3"><p className="font-semibold">{c.transaccion}</p><p className="text-[10px] text-muted-foreground">{c.banco}</p></td>
-                <td className="py-3 text-muted-foreground">{c.fecha}</td>
+                <td className="py-3 text-muted-foreground">{formatearFechaEs(c.fecha)}</td>
                 <td className={cn("py-3 text-right font-mono font-semibold", c.importe >= 0 ? "text-emerald-600" : "")}>{c.importe.toLocaleString("es-ES", { minimumFractionDigits: 2 })} €</td>
                 <td className="py-3"></td>
                 <td className="py-3">
                   <div className="flex items-center gap-1 text-muted-foreground text-xs"><Search className="h-3 w-3" />Asociar facturas</div>
                 </td>
-                <td className="py-3 text-muted-foreground">{c.emision || ""}</td>
+                <td className="py-3 text-muted-foreground">{formatearFechaEs(c.emision) || ""}</td>
                 <td className="py-3 text-right">
                   <Button variant="outline" size="sm" className="text-xs h-7">Conciliar sin factura</Button>
                 </td>

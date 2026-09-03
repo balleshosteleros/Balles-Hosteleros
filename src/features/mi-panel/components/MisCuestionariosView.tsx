@@ -25,6 +25,7 @@ import {
   ClipboardCheck, Clock, Award, ArrowLeft, CheckCircle2, XCircle,
   AlertCircle, Inbox, Trophy, GraduationCap, BookOpen, ListChecks,
 } from "lucide-react";
+import { formatearFechaEs } from "@/shared/lib/fecha";
 
 const ICONO_CATEGORIA = {
   evaluacion: Award,
@@ -94,7 +95,7 @@ function ListadoMisCuestionarios({
                           </span>
                           {c.fechaCierre && (
                             <span className="flex items-center gap-1 text-amber-600">
-                              <AlertCircle className="h-3 w-3" />Cierra: {c.fechaCierre}
+                              <AlertCircle className="h-3 w-3" />Cierra: {formatearFechaEs(c.fechaCierre)}
                             </span>
                           )}
                         </div>
@@ -126,7 +127,7 @@ function ListadoMisCuestionarios({
                       <div className="flex-1 min-w-0">
                         <h3 className="font-medium text-foreground">{c.nombre}</h3>
                         <p className="text-xs text-muted-foreground mt-0.5">
-                          Realizado el {respuesta.fecha} · {respuesta.duracionMin} min
+                          Realizado el {formatearFechaEs(respuesta.fecha)} · {respuesta.duracionMin} min
                         </p>
                         <div className="flex items-center gap-3 mt-3">
                           <div className="flex-1 max-w-[200px]">

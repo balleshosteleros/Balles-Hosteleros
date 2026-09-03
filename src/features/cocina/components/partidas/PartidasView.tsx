@@ -27,6 +27,7 @@ import {
   type ToolbarFiltroActivo,
 } from "@/shared/components/SubmoduleToolbar";
 import { TableColumnHeader } from "@/shared/components/TableColumnHeader";
+import { formatearFechaEs } from "@/shared/lib/fecha";
 
 // ─── Config list editor (reused pattern) ────────────────────────
 function ConfigListEditor({ title, items, onAdd, onRemove }: { title: string; items: string[]; onAdd: (v: string) => void; onRemove: (i: number) => void }) {
@@ -110,7 +111,7 @@ function PartidaDetail({ partida, onBack, empleados, config }: {
             <span>Área: <strong>{partida.area}</strong></span>
             <EstadoBadge estado={partida.estado} />
             {creadorName && <span>Creador: <strong>{creadorName.nombre} {creadorName.apellidos}</strong></span>}
-            <span>Actualizado: {partida.fechaActualizacion}</span>
+            <span>Actualizado: {formatearFechaEs(partida.fechaActualizacion)}</span>
           </div>
         </div>
       </div>

@@ -15,6 +15,7 @@ import { Clock, Plus, User, CalendarDays, MessageSquare, FileText, Download, Upl
 import { toast } from "sonner";
 import { listDocumentosByProceso, uploadDocumentoJuridico, deleteDocumentoJuridico } from "@/features/juridico/actions/documentos-actions";
 import { MAX_DOCUMENTO_MB, MAX_DOCUMENTO_BYTES } from "@/shared/lib/documentos";
+import { formatearFechaEs } from "@/shared/lib/fecha";
 
 interface Props {
   open: boolean;
@@ -44,7 +45,7 @@ function DocumentosList({ docs, label, icon: Icon, onRemove }: { docs: Documento
               <Badge variant="outline" className="text-[9px] px-1 py-0">{d.categoria}</Badge>
               {d.subidoPor && <span>{d.subidoPor}</span>}
               {d.subidoPor && <span>·</span>}
-              <span>{d.fechaSubida}</span>
+              <span>{formatearFechaEs(d.fechaSubida)}</span>
             </div>
           </div>
           {d.url && d.url !== "#" && (

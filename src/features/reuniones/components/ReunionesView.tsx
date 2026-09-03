@@ -33,6 +33,7 @@ import {
   createReunion,
   updateReunion,
 } from "@/features/reuniones/actions/reuniones-actions";
+import { formatearFechaEs } from "@/shared/lib/fecha";
 
 type Reunion = {
   id: string;
@@ -236,7 +237,7 @@ export function ReunionesView() {
                     </h3>
                     <div className="mt-1 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
                       <span className="flex items-center gap-1">
-                        <Calendar className="h-3 w-3" /> {r.fecha}
+                        <Calendar className="h-3 w-3" /> {formatearFechaEs(r.fecha)}
                       </span>
                       <span className="flex items-center gap-1">
                         <Clock className="h-3 w-3" /> {r.duracion}
@@ -336,7 +337,7 @@ export function ReunionesView() {
               <DialogTitle>{detalle.titulo}</DialogTitle>
               <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
                 <span className="flex items-center gap-1">
-                  <Calendar className="h-3 w-3" /> {detalle.fecha}
+                  <Calendar className="h-3 w-3" /> {formatearFechaEs(detalle.fecha)}
                 </span>
                 <span className="flex items-center gap-1">
                   <Clock className="h-3 w-3" /> {detalle.duracion}

@@ -9,6 +9,7 @@ import { CalendarDays, List } from "lucide-react";
 import { CalendarRangeToggle, CalendarRangeNav } from "@/shared/components/calendar/CalendarRangeToggle";
 import { useCalendarRange, type CalendarRangeMode } from "@/shared/components/calendar/calendar-range";
 import { cn } from "@/lib/utils";
+import { formatearFechaEs } from "@/shared/lib/fecha";
 
 const ALL = "__ALL__";
 const DIAS_SHORT = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
@@ -193,7 +194,7 @@ export function CalendarioView({ onSelect }: Props) {
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium truncate text-foreground">{it.titulo}</p>
                       <p className="text-xs text-muted-foreground">
-                        {it.fecha} · {it.hora}
+                        {formatearFechaEs(it.fecha)} · {it.hora}
                         {it.tipo === "evento" && " · Evento"}
                         {redInfo && ` · ${redInfo.label}`}
                       </p>

@@ -130,6 +130,7 @@ import {
 } from "@/features/rrhh/actions/candidatos-actions";
 import { enviarReclutamientoFaseEmail } from "@/features/rrhh/actions/reclutamiento-email-plantillas-actions";
 import { toast } from "sonner";
+import { formatearFechaEs } from "@/shared/lib/fecha";
 
 interface CandidatoDetailModalProps {
   open: boolean;
@@ -705,7 +706,7 @@ function CandidatoSidebar({
           )}
         </div>
         <p className="text-xs text-muted-foreground mt-0.5">
-          Inscrito el {candidato.fechaInscripcionFull || candidato.fechaInscripcion}
+          Inscrito el {candidato.fechaInscripcionFull || formatearFechaEs(candidato.fechaInscripcion)}
         </p>
       </div>
 
@@ -1529,7 +1530,7 @@ function ActividadTab({
                 {FASES_PRINCIPALES[faseEntrada].label} / {ESTADOS_CONFIG[estadoEntrada].label}
               </span>
               <span className="mx-1">·</span>
-              {candidato.fechaInscripcionFull || candidato.fechaInscripcion}
+              {candidato.fechaInscripcionFull || formatearFechaEs(candidato.fechaInscripcion)}
               {candidato.canal && (
                 <>
                   <span className="mx-1">·</span>

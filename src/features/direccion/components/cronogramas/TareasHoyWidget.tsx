@@ -16,6 +16,7 @@ import { toast } from "sonner";
 import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { formatFechaEnZona } from "@/features/empresa/lib/zona-horaria";
+import { formatearFechaEs } from "@/shared/lib/fecha";
 
 function daysAgo(iso: string): number {
   const [y, m, d] = iso.split("-").map(Number);
@@ -183,7 +184,7 @@ export function TareasHoyWidget() {
                     <div className="flex-1 min-w-0 cursor-pointer" onClick={() => setDetalle(ejec)}>
                       <div className="text-sm">{ejec.tarea?.tarea}</div>
                       <div className="text-xs text-muted-foreground mt-0.5">
-                        Hace {diasAtras} {diasAtras === 1 ? "día" : "días"} · {ejec.fecha_programada}
+                        Hace {diasAtras} {diasAtras === 1 ? "día" : "días"} · {formatearFechaEs(ejec.fecha_programada)}
                       </div>
                     </div>
                   </div>

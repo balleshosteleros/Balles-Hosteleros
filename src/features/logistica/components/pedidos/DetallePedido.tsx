@@ -6,6 +6,7 @@ import { EstadoPedidoBadge } from "./BadgesPedido";
 import { calcularTotalesLineas, evaluarReparto, describirReparto, formatoHoraReparto, type Pedido, type Albaran } from "@/features/logistica/data/pedidos";
 import { ArrowLeft, FileText, MessageCircle, AlertTriangle, PackageCheck, Mail } from "lucide-react";
 import { formatFechaHoraEnZona } from "@/features/empresa/lib/zona-horaria";
+import { formatearFechaEs } from "@/shared/lib/fecha";
 
 interface Props {
   pedido: Pedido;
@@ -74,7 +75,7 @@ export function DetallePedido({ pedido, albaran, zonaHoraria, onBack, onConfirma
             <div>
               <span className="text-muted-foreground text-xs block">Día de reparto</span>
               <span className={`font-medium ${reparto.fueraDia ? "text-red-600 dark:text-red-400" : ""}`}>
-                {pedido.fechaEntrega ? `${pedido.fechaEntrega}${reparto.diaSemana ? ` · ${reparto.diaSemana}` : ""}` : "—"}
+                {pedido.fechaEntrega ? `${formatearFechaEs(pedido.fechaEntrega)}${reparto.diaSemana ? ` · ${reparto.diaSemana}` : ""}` : "—"}
               </span>
             </div>
             <div>

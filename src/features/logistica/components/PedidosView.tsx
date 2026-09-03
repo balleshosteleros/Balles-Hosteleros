@@ -56,6 +56,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { formatearFechaEs } from "@/shared/lib/fecha";
 
 
 function mapDbLinea(l: Record<string, unknown>, idx: number): import("@/features/logistica/data/pedidos").LineaPedido {
@@ -549,7 +550,7 @@ export function PedidosView() {
       ),
       td: (p) => (
         <td key="fecha" className="px-3 py-2.5 text-xs whitespace-nowrap">
-          {p.fecha}
+          {formatearFechaEs(p.fecha)}
         </td>
       ),
     },
@@ -949,7 +950,7 @@ export function PedidosView() {
                                 case "fecha":
                                   return (
                                     <td key={c.campo} className="px-3 py-2.5 text-xs whitespace-nowrap">
-                                      {a.fecha}
+                                      {formatearFechaEs(a.fecha)}
                                     </td>
                                   );
                                 case "estado":

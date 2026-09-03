@@ -19,9 +19,10 @@ import {
   type MigracionEstado,
   type MigracionFactura,
 } from "@/features/sala/actions/agora-migracion-actions";
+import { formatearFechaEs } from "@/shared/lib/fecha";
 
 const eur = (n: number) => `${(n ?? 0).toFixed(2)} €`;
-const fechaCorta = (iso: string | null) => (iso ? iso.slice(0, 10) : "—");
+const fechaCorta = (iso: string | null) => (iso ? formatearFechaEs(iso) : "—");
 function hoyIso() {
   return new Date().toISOString().slice(0, 10);
 }

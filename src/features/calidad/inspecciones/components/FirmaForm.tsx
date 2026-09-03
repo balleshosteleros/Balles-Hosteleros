@@ -99,7 +99,7 @@ export function FirmaForm({ qrToken, ctx, empresa }: FirmaFormProps) {
             Inspección #{success.envio.numero_secuencial ?? "—"}
             {success.envio.local_nombre ? ` · ${success.envio.local_nombre}` : ""}
             {success.envio.fecha_inspeccion
-              ? ` · ${new Date(success.envio.fecha_inspeccion).toLocaleString()}`
+              ? ` · ${new Date(success.envio.fecha_inspeccion).toLocaleString("es-ES", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}`
               : ""}
           </p>
           <div

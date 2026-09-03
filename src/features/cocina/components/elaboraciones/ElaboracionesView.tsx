@@ -34,6 +34,7 @@ import {
 } from "@/shared/components/SubmoduleToolbar";
 import { TableColumnHeader } from "@/shared/components/TableColumnHeader";
 import { ResizableColumnsProvider } from "@/shared/components/ResizableColumns";
+import { formatearFechaEs } from "@/shared/lib/fecha";
 
 type ProductoElab = { id: string; nombre: string; unidad: string };
 
@@ -300,7 +301,7 @@ export function ElaboracionesView() {
     },
     fecha: {
       th: <TableColumnHeader key="fecha" label="Producción" />,
-      td: (r) => <td key="fecha" className="px-4 py-3 text-muted-foreground">{r.fecha}</td>,
+      td: (r) => <td key="fecha" className="px-4 py-3 text-muted-foreground">{formatearFechaEs(r.fecha)}</td>,
     },
     caducidad: {
       th: <TableColumnHeader key="caducidad" label="Caducidad" />,
@@ -311,7 +312,7 @@ export function ElaboracionesView() {
         return (
           <td key="caducidad" className="px-4 py-3">
             <span className={vencida ? "text-destructive font-semibold" : pronto ? "text-amber-600 font-semibold" : "text-foreground"}>
-              {r.fechaCaducidad}
+              {formatearFechaEs(r.fechaCaducidad)}
             </span>
           </td>
         );

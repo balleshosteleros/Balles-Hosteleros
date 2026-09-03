@@ -18,6 +18,7 @@ import {
 } from "../actions/compra-actions";
 import type { Compra } from "../types";
 import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
+import { formatearFechaEs } from "@/shared/lib/fecha";
 
 interface Props {
   recetaId: string;
@@ -170,7 +171,7 @@ export function CompraTab({ recetaId }: Props) {
                   {nombreProveedor(c)}
                   {c.cantidad ? ` · ${c.cantidad} ${c.unidad}` : ""}
                   {c.precio_propuesto ? ` · ${formatEur(c.precio_propuesto)}` : ""}
-                  {c.fecha_recepcion_prevista ? ` · recibe ${c.fecha_recepcion_prevista}` : ""}
+                  {c.fecha_recepcion_prevista ? ` · recibe ${formatearFechaEs(c.fecha_recepcion_prevista)}` : ""}
                 </p>
                 {c.notas && <p className="text-xs text-muted-foreground italic mt-1">{c.notas}</p>}
               </div>
