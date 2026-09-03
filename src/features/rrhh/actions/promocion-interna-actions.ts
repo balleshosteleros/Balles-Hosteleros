@@ -349,7 +349,7 @@ export async function promocionarEmpleado(
         preferirEmailPersonal: true,
         // Hueco medido por el propio generador: el anexo puede ocupar más de una
         // página según las condiciones, así que no se asume la 1.
-        posicionFirmaDefault: anexo.posicionFirma,
+        posicionFirmaDefault: [anexo.posicionFirma],
       });
       anexoEnviado = firma.ok;
       if (firma.ok && promocionId) {

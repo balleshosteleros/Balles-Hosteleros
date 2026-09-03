@@ -176,7 +176,7 @@ export async function enviarActaEntregaAFirma(
       // Documento personal: a su correo, no al corporativo (que pierde al salir).
       preferirEmailPersonal: true,
       // El generador calculó el hueco exacto, así que la firma va ya colocada.
-      posicionFirmaDefault: acta.posicionFirma,
+      posicionFirmaDefault: [acta.posicionFirma],
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Error desconocido";

@@ -141,7 +141,7 @@ export async function crearSancionDisciplinaria(
     } catch {
       ultimaPagina = 1;
     }
-    const posicionFirmaDefault = { pagina: ultimaPagina, ...SANCION_FIRMA_LAYOUT };
+    const posicionFirmaDefault = [{ pagina: ultimaPagina, ...SANCION_FIRMA_LAYOUT }];
 
     const titulo = `Sanción disciplinaria — ${empleadoNombre || "Trabajador/a"}`;
     const ahora = new Date();

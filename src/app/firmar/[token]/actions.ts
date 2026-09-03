@@ -88,14 +88,14 @@ export type AbrirDocumentoResult =
         observaciones: string | null;
         empleado: { nombre: string; emailEnmascarado: string | null };
         empresa: { nombre: string; logoUrl: string | null };
-        /** Hueco de firma detectado en el documento. El firmante no lo elige. */
-        posicionFirmaDefault: {
+        /** Huecos de firma detectados en el documento. El firmante no los elige. */
+        posicionFirmaDefault: Array<{
           pagina: number;
           xPct: number;
           yPct: number;
           anchoPct: number;
           altoPct?: number;
-        } | null;
+        }> | null;
         /** Zona horaria de la empresa, para mostrar fechas al firmante (PRP-069). */
         zonaHoraria: string;
         enviadoPor: string;
@@ -198,13 +198,13 @@ export async function abrirDocumento(token: string): Promise<AbrirDocumentoResul
           logoUrl: ((empresa?.isotipo_url as string | null) || (empresa?.logo_url as string | null)) ?? null,
         },
         posicionFirmaDefault:
-          (doc.posicion_firma_default as {
+          (doc.posicion_firma_default as Array<{
             pagina: number;
             xPct: number;
             yPct: number;
             anchoPct: number;
             altoPct?: number;
-          } | null) ?? null,
+          }> | null) ?? null,
         zonaHoraria:
           ((empresa?.config_operativa as Record<string, unknown> | null)?.zonaHoraria as string | undefined)?.trim() ||
           "Europe/Madrid",
@@ -424,7 +424,7 @@ export type PosicionFirma = {
 export type FirmarDocumentoInput = {
   token: string;
   trazoFirmaBase64?: string | null;
-  posicionFirma?: PosicionFirma | null;
+  posicionFirma?: PosicionFirma[] | null;
   /**
    * Solo para el RECONOCIMIENTO MÉDICO: qué eligió el trabajador. Es obligatorio
    * en ese documento — su realización es voluntaria y debe constar la decisión.
@@ -537,7 +537,7 @@ export async function firmarDocumento(input: FirmarDocumentoInput): Promise<Firm
       if (!input.trazoFirmaBase64) {
         return { ok: false, error: "Falta el trazo de firma manuscrita" };
       }
-      if (!input.posicionFirma) {
+      if (!input.posicionFirma || input.posicionFirma.length === 0) {
         return { ok: false, error: "Falta la posición de la firma sobre el documento" };
       }
       const b64 = input.trazoFirmaBase64.replace(/^data:image\/png;base64,/, "");
@@ -622,7 +622,7 @@ export async function firmarDocumento(input: FirmarDocumentoInput): Promise<Firm
     // solo se usa como respaldo en documentos antiguos, que se emitieron sin
     // hueco guardado.
     const posicionServidor =
-      (doc.posicion_firma_default as PosicionFirma | null) ?? input.posicionFirma ?? null;
+      (doc.posicion_firma_default as PosicionFirma[] | null) ?? input.posicionFirma ?? null;
 
     const firmadoBytes = await aplicarFirmaYConcatenar(
       originalBytes,

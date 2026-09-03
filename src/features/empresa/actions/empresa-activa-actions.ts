@@ -47,6 +47,15 @@ export async function setEmpresaActiva(
     maxAge: COOKIE_MAX_AGE,
   });
 
+  // Red de seguridad para cuando la cookie no llega a tiempo o se pierde: el
+  // fallback de `getEmpresaActivaForUser` lee `usuarios.empresa_id`, así que lo
+  // mantenemos en la ÚLTIMA empresa confirmada en vez de dejarlo fijo en la de
+  // alta. Solo si ya pertenece a esa empresa (evita tocar la fila si el fallback
+  // fue por `usuarios.empresa_id` mismo, sin `usuario_empresas`).
+  if (linked) {
+    await supabase.from("usuarios").update({ empresa_id: empresaId }).eq("user_id", user.id);
+  }
+
   return { ok: true };
 }
 

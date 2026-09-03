@@ -229,12 +229,12 @@ export function FirmaPublicaView({
     toast.success("Documento firmado correctamente");
   }
 
-  async function ejecutarFirmaManuscrita(data: { trazoBase64: string; posicion: PosicionFirma }) {
+  async function ejecutarFirmaManuscrita(data: { trazoBase64: string; posiciones: PosicionFirma[] }) {
     setFirmando(true);
     const res = await firmarDocumento({
       token,
       trazoFirmaBase64: data.trazoBase64,
-      posicionFirma: data.posicion,
+      posicionFirma: data.posiciones,
       decisionReconocimiento: esReconocimiento ? decision : null,
     });
     setFirmando(false);
@@ -305,7 +305,7 @@ export function FirmaPublicaView({
               pdfUrl={documento.pdfUrl}
               onConfirm={ejecutarFirmaManuscrita}
               submitting={firmando}
-              posicionFija={documento.posicionFirmaDefault}
+              posicionesFijas={documento.posicionFirmaDefault}
             />
           </>
         ) : (

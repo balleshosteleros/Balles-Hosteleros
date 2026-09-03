@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useState, ReactNode, useCallback, useEffect, useRef, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import { Incidencia, SAMPLE_DATA } from "@/features/empresa/data/mantenimiento";
 import { AjustesEmpresa, buildDefaultAjustes, DatosGenerales, ConfigOperativa, mergeNotificaciones } from "@/features/ajustes/data/ajustes";
 import { getLogoUrls, getIsotipoUrls } from "@/features/empresa/actions/logo-actions";
@@ -466,6 +467,26 @@ export function EmpresaProvider({ children }: { children: ReactNode }) {
   // los permisos del usuario en la nueva empresa. Si no se pasa, solo se
   // refresca la vista actual.
   const handleSetEmpresaId = useCallback((id: string, destino?: string | null) => {
+    const idAnterior = empresaId;
+    // Revierte el cambio visual y de cliente si el servidor no confirma la
+    // cookie: sin esto, el selector se quedaba mostrando la empresa nueva
+    // aunque `bh_empresa_activa` no se hubiera actualizado, y los módulos que
+    // dependen solo de la cookie (p. ej. listado de Firmas) seguían leyendo
+    // la empresa anterior sin ningún aviso.
+    const revertir = () => {
+      setEmpresaId(idAnterior);
+      if (typeof window !== "undefined") {
+        try {
+          window.localStorage.setItem(EMPRESA_ACTIVA_SLUG_KEY, idAnterior);
+        } catch {
+          // ignore
+        }
+      }
+      const empresaPrevia = empresasList.find((e) => e.id === idAnterior);
+      if (empresaPrevia?.dbId) setEmpresaActivaCliente(empresaPrevia.dbId);
+      toast.error("No se pudo cambiar de empresa. Inténtalo de nuevo.");
+    };
+
     setEmpresaId(id);
     // Persistimos el slug elegido para que sobreviva a una pérdida de cookie.
     if (typeof window !== "undefined") {
@@ -486,6 +507,7 @@ export function EmpresaProvider({ children }: { children: ReactNode }) {
       .then((res) => {
         if (!res.ok) {
           hideLoading();
+          revertir();
           return;
         }
         startTransition(() => {
@@ -508,8 +530,9 @@ export function EmpresaProvider({ children }: { children: ReactNode }) {
       .catch((err) => {
         console.error("[empresa-context] setEmpresaActiva:", err);
         hideLoading();
+        revertir();
       });
-  }, [empresasList, router, showLoading, hideLoading]);
+  }, [empresaId, empresasList, router, showLoading, hideLoading]);
 
   return (
     <EmpresaContext.Provider

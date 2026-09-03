@@ -380,10 +380,14 @@ export async function crearFirma(formData: FormData): Promise<CrearFirmaResult> 
 
     // Dónde va la firma. Antes esto quedaba a null y el visor la estampaba en el
     // centro de la página 1, tapando el documento y obligando al empleado a
-    // colocarla a mano. Ahora se localiza el hueco real (texto → IA → pie del
-    // documento) y el empleado solo dibuja el trazo.
+    // colocarla a mano. Ahora se localizan TODOS los huecos reales del documento
+    // (texto → IA → pie de la última página) y el empleado dibuja un solo trazo
+    // que se estampa en cada uno de ellos.
+    const huecosDetectados = await detectarHuecoFirma(pdfBuffer);
     const posicionFirmaDefault =
-      (await detectarHuecoFirma(pdfBuffer)) ?? huecoFirmaPorDefecto(await contarPaginas(pdfBuffer));
+      huecosDetectados.length > 0
+        ? huecosDetectados
+        : [await huecoFirmaPorDefecto(pdfBuffer, await contarPaginas(pdfBuffer))];
 
     const ahora = new Date();
     const expira = new Date(ahora.getTime() + plazoDias * 86_400_000);

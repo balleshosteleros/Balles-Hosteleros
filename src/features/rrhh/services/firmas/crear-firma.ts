@@ -60,18 +60,19 @@ export interface CrearFirmaInternoInput {
   emailAsunto?: string | null;
   emailIntro?: string | null;
   /**
-   * Posición por defecto de la firma (PRP-070): { pagina, xPct, yPct, anchoPct }.
-   * Si se pasa, la pantalla de firma coloca la firma YA POSICIONADA y FIJA (el
+   * Posiciones por defecto de la firma (PRP-070): array de { pagina, xPct, yPct,
+   * anchoPct }, una por cada hueco detectado en el documento. Si se pasa, la
+   * pantalla de firma coloca la firma YA POSICIONADA y FIJA en cada una (el
    * candidato no la arrastra). Null = el candidato la coloca a mano (compat).
    */
-  posicionFirmaDefault?: {
+  posicionFirmaDefault?: Array<{
     pagina: number;
     xPct: number;
     yPct: number;
     anchoPct: number;
     /** Alto del hueco, para que el trazo lo llene sin invadir el texto vecino. */
     altoPct?: number;
-  } | null;
+  }> | null;
   /**
    * Solo para el RECONOCIMIENTO MÉDICO: posición de las casillas SÍ/NO dentro del
    * PDF, para poder estampar la que elija el trabajador al firmar. El documento es

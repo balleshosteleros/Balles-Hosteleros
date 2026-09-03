@@ -252,7 +252,7 @@ export async function iniciarContratacion(
       // Hueco medido por el propio generador: el cuerpo del contrato es
       // configurable, así que "Firmado:" puede caer en cualquier página y a
       // cualquier altura. El candidato no coloca nada.
-      posicionFirmaDefault: contratoInterno.posicionFirma,
+      posicionFirmaDefault: [contratoInterno.posicionFirma],
     });
     contratoInternoEnviado = firma.ok;
 
@@ -328,7 +328,7 @@ export async function iniciarContratacion(
       emailIntro: tplRecon?.cuerpo ?? null,
       // Hueco medido por el propio generador (el cuerpo es configurable, así que
       // la zona "Firmado" puede caer en cualquier página).
-      posicionFirmaDefault: posicionFirma,
+      posicionFirmaDefault: [posicionFirma],
       // Dónde van las casillas SÍ/NO, para marcar la elegida al firmar.
       casillasReconocimiento: casillas,
     });

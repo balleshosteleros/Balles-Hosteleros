@@ -130,7 +130,7 @@ export async function enviarCartaBajaEmpresa(input: {
       enviadoPorNombre: input.enviadoPorNombre,
       // Documento personal: al correo personal del trabajador si lo tiene.
       preferirEmailPersonal: true,
-      posicionFirmaDefault: carta.posicionFirma,
+      posicionFirmaDefault: [carta.posicionFirma],
     });
 
     if (!firma.ok) return { ok: false, error: firma.error };

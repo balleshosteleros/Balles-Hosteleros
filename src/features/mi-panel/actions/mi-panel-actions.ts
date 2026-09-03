@@ -3031,7 +3031,7 @@ async function onBajaContratoCreada(args: {
       // Firma colocada AUTOMÁTICAMENTE sobre la zona "Firma del trabajador":
       // el propio generador del PDF calculó la posición exacta del hueco, así
       // que queda centrada sin ajustar coordenadas a ojo. El empleado no arrastra.
-      posicionFirmaDefault: posicionFirma,
+      posicionFirmaDefault: posicionFirma ? [posicionFirma] : null,
     });
     if (!firma.ok) {
       console.error("[mi-panel] baja_contrato: firma no creada:", firma.error);

@@ -1,21 +1,25 @@
 /**
- * Detección automática del hueco de firma en un PDF.
+ * Detección automática del/de los hueco(s) de firma en un PDF.
  *
  * Problema que resuelve: cuando la empresa sube un PDF a mano, nadie sabía en
  * qué punto del papel debía ir el trazo, así que se estampaba en el centro
- * geométrico de la página 1 y tapaba el documento. Aquí se localiza el sitio
- * real y se mide el hueco disponible, sin que el empleado elija nada.
+ * geométrico de la página 1 y tapaba el documento. Aquí se localizan TODOS los
+ * sitios reales (un documento puede pedir firma en varias páginas o varias
+ * casillas) y se mide el hueco disponible en cada uno, sin que el empleado
+ * elija nada.
  *
  * Estrategia en dos pasos:
  *   1. TEXTO (rápido, gratis, determinista) — se buscan los anclajes habituales
  *      de un documento laboral ("Firma del trabajador", "Fdo.", "Conforme"…) con
- *      sus coordenadas reales, y se mide el blanco que queda debajo.
+ *      sus coordenadas reales, y se mide el blanco que queda debajo. Se
+ *      acumulan TODOS los anclajes válidos, no solo el primero.
  *   2. GEMINI (respaldo) — solo si el PDF no tiene capa de texto (escaneado) o
  *      ningún anclaje reconocible. Se le manda el PDF y devuelve la caja en
  *      porcentajes.
  *
- * Si ambos fallan se devuelve null y el llamador aplica su propio suelo; nunca
- * se lanza excepción, porque un fallo de detección no puede tumbar un envío.
+ * Si ambos fallan se devuelve una lista vacía y el llamador aplica su propio
+ * suelo; nunca se lanza excepción, porque un fallo de detección no puede
+ * tumbar un envío.
  */
 import type { Schema } from "@google/generative-ai";
 import { geminiJSON } from "@/lib/ia/gemini";
@@ -115,111 +119,158 @@ async function extraerItems(
   }
 }
 
+/** Separación mínima (en % de alto de página) para tratar dos anclajes de la
+ * misma página como sitios de firma DISTINTOS y no como el mismo detectado
+ * dos veces (p. ej. "Firma:" y "Fdo." pegados en la misma línea). */
+const SEPARACION_MIN_PCT = 0.04;
+
 /**
- * Busca el anclaje de firma y mide el blanco que queda debajo.
+ * Mide el hueco en blanco que queda bajo un anclaje concreto, dentro de su
+ * columna, sin invadir el texto (nombre, DNI, etc.) que haya debajo.
+ */
+function medirHueco(
+  ancla: ItemTexto,
+  items: ItemTexto[],
+  ancho: number,
+  alto: number,
+): { techoY: number; sueloY: number } {
+  const techoY = ancla.y - ancla.alto * 0.4;
+  // Suelo: lo primero que haya dibujado por debajo, en la misma columna. Si no
+  // hay nada, el margen inferior de la página. Esto es lo que impide que la
+  // firma invada el nombre y el DNI que suelen ir bajo el hueco.
+  const columnaIzq = ancla.x - ancho * 0.05;
+  const columnaDer = ancla.x + ancho * ANCHO_PCT_DEFECTO + ancho * 0.05;
+  let sueloY = alto * 0.06;
+  for (const it of items) {
+    if (it === ancla) continue;
+    if (it.y >= techoY) continue;
+    const dentroColumna = it.x + 1 >= columnaIzq && it.x <= columnaDer;
+    if (!dentroColumna) continue;
+    // El borde superior del texto de abajo marca el límite del hueco.
+    const bordeSuperior = it.y + it.alto;
+    if (bordeSuperior > sueloY) sueloY = bordeSuperior;
+  }
+  return { techoY, sueloY };
+}
+
+/**
+ * Busca TODOS los anclajes de firma del documento y mide el blanco que queda
+ * debajo de cada uno. Un mismo documento puede pedir firma en varias páginas
+ * o varias casillas de la misma página (p. ej. contrato + anexo de RGPD).
  *
- * Se recorre de la última página a la primera: en un documento laboral la firma
- * está al final, y un "Fdo." de la cabecera no debe ganarle al del pie.
+ * Se recorre de la última página a la primera: en un documento laboral la
+ * firma principal suele estar al final, así que queda primera en la lista
+ * (el llamador la usa para calcular altura por defecto de un solo trazo).
  */
 function detectarPorTexto(
   paginas: Array<{ items: ItemTexto[]; ancho: number; alto: number }>,
-): HuecoFirma | null {
+): HuecoFirma[] {
+  const huecos: HuecoFirma[] = [];
+
   for (let idx = paginas.length - 1; idx >= 0; idx--) {
     const { items, ancho, alto } = paginas[idx];
     if (items.length === 0) continue;
 
-    let mejor: { item: ItemTexto; peso: number } | null = null;
+    // Candidatos de esta página: cada item que matchee algún anclaje, con su peso.
+    const candidatos: Array<{ item: ItemTexto; peso: number }> = [];
     for (const item of items) {
       for (const { re, peso } of ANCLAJES) {
         if (!re.test(item.texto)) continue;
-        // A igual peso gana el que esté más abajo (y menor = más cerca del pie).
-        if (!mejor || peso > mejor.peso || (peso === mejor.peso && item.y < mejor.item.y)) {
-          mejor = { item, peso };
-        }
+        candidatos.push({ item, peso });
         break;
       }
     }
-    if (!mejor) continue;
+    if (candidatos.length === 0) continue;
 
-    const ancla = mejor.item;
-    // Techo del hueco: justo debajo de la línea del anclaje.
-    const techoY = ancla.y - ancla.alto * 0.4;
+    // Se procesan de mayor a menor peso; a igual peso, el más cercano al pie
+    // primero. Cada candidato aceptado "reserva" su franja vertical para que
+    // un anclaje de menor peso muy cercano (p. ej. "Firma" dentro de "Firma
+    // del trabajador") no genere un segundo hueco duplicado sobre el mismo sitio.
+    candidatos.sort((a, b) => b.peso - a.peso || a.item.y - b.item.y);
+    const yaCubierto: number[] = [];
 
-    // Suelo: lo primero que haya dibujado por debajo, en la misma columna. Si no
-    // hay nada, el margen inferior de la página. Esto es lo que impide que la
-    // firma invada el nombre y el DNI que suelen ir bajo el hueco.
-    const columnaIzq = ancla.x - ancho * 0.05;
-    const columnaDer = ancla.x + ancho * ANCHO_PCT_DEFECTO + ancho * 0.05;
-    let sueloY = alto * 0.06;
-    for (const it of items) {
-      if (it === ancla) continue;
-      if (it.y >= techoY) continue;
-      const dentroColumna = it.x + 1 >= columnaIzq && it.x <= columnaDer;
-      if (!dentroColumna) continue;
-      // El borde superior del texto de abajo marca el límite del hueco.
-      const bordeSuperior = it.y + it.alto;
-      if (bordeSuperior > sueloY) sueloY = bordeSuperior;
+    for (const { item: ancla } of candidatos) {
+      const yPctAncla = alto > 0 ? ancla.y / alto : 0;
+      const duplicado = yaCubierto.some(
+        (y) => Math.abs(y - yPctAncla) < SEPARACION_MIN_PCT,
+      );
+      if (duplicado) continue;
+
+      const { techoY, sueloY } = medirHueco(ancla, items, ancho, alto);
+      const huecoPt = techoY - sueloY;
+      if (huecoPt < alto * ALTO_PCT_MIN) continue; // hueco irreal, siguiente candidato
+
+      yaCubierto.push(yPctAncla);
+      const altoPct = Math.min(huecoPt / alto, ALTO_PCT_MAX);
+      huecos.push({
+        pagina: idx + 1,
+        xPct: Math.max(0, ancla.x / ancho),
+        // yPct con origen ARRIBA-izquierda, que es lo que espera el estampador.
+        yPct: Math.max(0, Math.min(1, (alto - techoY) / alto)),
+        anchoPct: Math.min(ANCHO_PCT_DEFECTO, 1 - ancla.x / ancho),
+        altoPct,
+        origen: "texto",
+      });
     }
-
-    const huecoPt = techoY - sueloY;
-    if (huecoPt < alto * ALTO_PCT_MIN) continue; // hueco irreal, seguimos buscando
-
-    const altoPct = Math.min(huecoPt / alto, ALTO_PCT_MAX);
-    return {
-      pagina: idx + 1,
-      xPct: Math.max(0, ancla.x / ancho),
-      // yPct con origen ARRIBA-izquierda, que es lo que espera el estampador.
-      yPct: Math.max(0, Math.min(1, (alto - techoY) / alto)),
-      anchoPct: Math.min(ANCHO_PCT_DEFECTO, 1 - ancla.x / ancho),
-      altoPct,
-      origen: "texto",
-    };
   }
-  return null;
+  return huecos;
 }
 
 const ESQUEMA_IA: Schema = {
   type: "object",
   properties: {
-    encontrado: { type: "boolean" },
-    pagina: { type: "integer" },
-    xPct: { type: "number" },
-    yPct: { type: "number" },
-    anchoPct: { type: "number" },
-    altoPct: { type: "number" },
+    huecos: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          pagina: { type: "integer" },
+          xPct: { type: "number" },
+          yPct: { type: "number" },
+          anchoPct: { type: "number" },
+          altoPct: { type: "number" },
+        },
+        required: ["pagina", "xPct", "yPct", "anchoPct", "altoPct"],
+      },
+    },
   },
-  required: ["encontrado", "pagina", "xPct", "yPct", "anchoPct", "altoPct"],
+  required: ["huecos"],
 } as unknown as Schema;
 
 /**
  * Respaldo con Gemini para PDFs escaneados o sin anclaje textual. Gemini lee el
- * PDF de forma nativa, así que no hace falta rasterizar la página.
+ * PDF de forma nativa, así que no hace falta rasterizar la página. Devuelve
+ * TODOS los sitios de firma del trabajador que encuentre, no solo uno.
  */
-async function detectarConIA(pdf: Buffer): Promise<HuecoFirma | null> {
+async function detectarConIA(pdf: Buffer): Promise<HuecoFirma[]> {
   try {
     const { data } = await geminiJSON<{
-      encontrado: boolean;
-      pagina: number;
-      xPct: number;
-      yPct: number;
-      anchoPct: number;
-      altoPct: number;
+      huecos: Array<{
+        pagina: number;
+        xPct: number;
+        yPct: number;
+        anchoPct: number;
+        altoPct: number;
+      }>;
     }>(
       [
-        "Analiza este documento laboral y localiza el ESPACIO EN BLANCO donde debe",
-        "estamparse la firma manuscrita DEL TRABAJADOR (no la de la empresa).",
+        "Analiza este documento laboral y localiza TODOS los ESPACIOS EN BLANCO donde",
+        "debe estamparse la firma manuscrita DEL TRABAJADOR (no la de la empresa).",
+        "Un mismo documento puede pedir firma en varias páginas o varias casillas",
+        "(p. ej. el contrato y un anexo de protección de datos): devuélvelas todas.",
         "",
         "Busca etiquetas como 'Firma del trabajador', 'Fdo.', 'El trabajador',",
         "'Recibí conforme'. La firma va en el blanco JUSTO DEBAJO de esa etiqueta.",
         "",
-        "Devuelve la caja en porcentajes de 0 a 1 sobre el tamaño de la página, con",
-        "ORIGEN ARRIBA-IZQUIERDA (yPct=0 es el borde superior del papel).",
+        "Para cada hueco, devuelve la caja en porcentajes de 0 a 1 sobre el tamaño de",
+        "esa página, con ORIGEN ARRIBA-IZQUIERDA (yPct=0 es el borde superior del papel).",
         "- xPct/yPct: esquina superior izquierda de la caja.",
         "- anchoPct: entre 0.2 y 0.4 normalmente.",
         "- altoPct: alto del blanco disponible, entre 0.03 y 0.09.",
         "",
-        "La caja NO debe solaparse con ningún texto impreso. Si hay varias firmas,",
-        "elige la del trabajador/empleado. Si no localizas ninguna, encontrado=false.",
+        "Cada caja NO debe solaparse con ningún texto impreso (nombre, DNI, fecha…).",
+        "Ignora las firmas de la empresa/representante. Si no localizas ninguna,",
+        "devuelve huecos como lista vacía.",
       ].join("\n"),
       {
         responseSchema: ESQUEMA_IA,
@@ -228,22 +279,22 @@ async function detectarConIA(pdf: Buffer): Promise<HuecoFirma | null> {
       },
     );
 
-    if (!data?.encontrado) return null;
-    const pagina = Math.max(1, Math.round(data.pagina || 1));
-    const xPct = clamp(data.xPct, 0, 0.9);
-    const yPct = clamp(data.yPct, 0, 0.97);
-    return {
-      pagina,
-      xPct,
-      yPct,
-      anchoPct: clamp(data.anchoPct || ANCHO_PCT_DEFECTO, 0.15, 1 - xPct),
-      altoPct: clamp(data.altoPct || 0.06, ALTO_PCT_MIN, ALTO_PCT_MAX),
-      origen: "ia",
-    };
+    if (!data?.huecos?.length) return [];
+    return data.huecos.map((h) => {
+      const xPct = clamp(h.xPct, 0, 0.9);
+      return {
+        pagina: Math.max(1, Math.round(h.pagina || 1)),
+        xPct,
+        yPct: clamp(h.yPct, 0, 0.97),
+        anchoPct: clamp(h.anchoPct || ANCHO_PCT_DEFECTO, 0.15, 1 - xPct),
+        altoPct: clamp(h.altoPct || 0.06, ALTO_PCT_MIN, ALTO_PCT_MAX),
+        origen: "ia" as const,
+      };
+    });
   } catch (err) {
     // Sin key, sin cuota o error de red: no es motivo para bloquear el envío.
     console.error("[firmas] detectarConIA:", err);
-    return null;
+    return [];
   }
 }
 
@@ -253,16 +304,17 @@ function clamp(n: number, min: number, max: number): number {
 }
 
 /**
- * Punto de entrada: dónde va la firma en este PDF.
+ * Punto de entrada: dónde va la firma (o firmas) en este PDF.
  *
- * Devuelve null solo si ni el texto ni la IA logran ubicarla; en ese caso el
- * llamador debe usar `huecoFirmaPorDefecto()`, nunca el centro de la página.
+ * Devuelve lista vacía solo si ni el texto ni la IA logran ubicar ningún
+ * hueco; en ese caso el llamador debe usar `huecoFirmaPorDefecto()`, nunca el
+ * centro de la página.
  */
-export async function detectarHuecoFirma(pdf: Buffer): Promise<HuecoFirma | null> {
+export async function detectarHuecoFirma(pdf: Buffer): Promise<HuecoFirma[]> {
   const extraido = await extraerItems(pdf);
   if (extraido) {
     const porTexto = detectarPorTexto(extraido.paginas);
-    if (porTexto) return porTexto;
+    if (porTexto.length > 0) return porTexto;
   }
   return detectarConIA(pdf);
 }
@@ -279,17 +331,60 @@ export async function contarPaginas(pdf: Buffer): Promise<number> {
 }
 
 /**
- * Suelo cuando no se detecta nada: pie de la ÚLTIMA página, que es donde se
- * firma por convención. Nunca el centro del documento, que es lo que tapaba el
- * texto.
+ * Suelo cuando no se detecta ningún anclaje: pie de la ÚLTIMA página, que es
+ * donde se firma por convención. Nunca el centro del documento, que es lo que
+ * tapaba el texto.
+ *
+ * Antes esta coordenada fija (yPct=0.82) se usaba a ciegas, y en documentos
+ * cuyo bloque de nombre/DNI cae justo ahí, la firma lo tapaba. Ahora, si el
+ * PDF tiene capa de texto legible, se comprueba que la caja no invada ningún
+ * texto real de la página; si invade, se sube el suelo hasta el hueco en
+ * blanco más cercano por encima. Si el PDF no tiene texto (escaneado), se
+ * mantiene la coordenada fija sin más remedio.
  */
-export function huecoFirmaPorDefecto(numPaginas: number): HuecoFirma {
-  return {
-    pagina: Math.max(1, numPaginas),
+export async function huecoFirmaPorDefecto(pdf: Buffer, numPaginas: number): Promise<HuecoFirma> {
+  const pagina = Math.max(1, numPaginas);
+  const base = {
+    pagina,
     xPct: 0.1,
-    yPct: 0.82,
     anchoPct: ANCHO_PCT_DEFECTO,
     altoPct: 0.06,
-    origen: "fallback",
+    origen: "fallback" as const,
   };
+
+  const extraido = await extraerItems(pdf);
+  const pag = extraido?.paginas[pagina - 1];
+  if (!pag || pag.items.length === 0) {
+    return { ...base, yPct: 0.82 };
+  }
+
+  const { items, ancho, alto } = pag;
+  const columnaIzq = base.xPct * ancho - ancho * 0.05;
+  const columnaDer = base.xPct * ancho + ancho * ANCHO_PCT_DEFECTO + ancho * 0.05;
+  const alturaHuecoPt = base.altoPct * alto;
+
+  // Suelo fijo de partida: 18% desde abajo (yPct=0.82 con origen arriba).
+  let techoY = alto * (1 - 0.82);
+  let sueloY = techoY - alturaHuecoPt;
+
+  // Si ese hueco de partida invade texto de la columna, se sube por encima del
+  // bloque de texto más alto que lo pise, dejando el mismo margen que usa la
+  // detección por anclaje.
+  const invasores = items.filter((it) => {
+    const dentroColumna = it.x + 1 >= columnaIzq && it.x <= columnaDer;
+    if (!dentroColumna) return false;
+    const itTop = it.y + it.alto;
+    // Se solapa si el texto tiene parte entre sueloY y techoY.
+    return itTop > sueloY && it.y < techoY;
+  });
+  if (invasores.length > 0) {
+    const bordeSuperiorMasAlto = Math.max(...invasores.map((it) => it.y + it.alto));
+    sueloY = bordeSuperiorMasAlto;
+    techoY = sueloY + alturaHuecoPt;
+  }
+
+  const yPct = Math.max(0, Math.min(1, (alto - techoY) / alto));
+  const huecoPt = techoY - sueloY;
+  const altoPct = huecoPt > 0 ? Math.min(huecoPt / alto, ALTO_PCT_MAX) : base.altoPct;
+  return { ...base, yPct, altoPct };
 }

@@ -21,14 +21,15 @@ export type PosicionFirma = {
 
 type Props = {
   pdfUrl: string;
-  onConfirm: (data: { trazoBase64: string; posicion: PosicionFirma }) => void;
+  onConfirm: (data: { trazoBase64: string; posiciones: PosicionFirma[] }) => void;
   submitting?: boolean;
   /**
-   * Posición donde va la firma, detectada en el servidor. El empleado NUNCA la
-   * elige: solo dibuja el trazo. Si falta (documentos emitidos antes de la
-   * detección automática) se cae al pie de la página, nunca al centro.
+   * Posiciones donde va la firma, detectadas en el servidor. El empleado NUNCA
+   * las elige: solo dibuja el trazo una vez y se estampa en todas. Si faltan
+   * (documentos emitidos antes de la detección automática) se cae al pie de
+   * la página, nunca al centro.
    */
-  posicionFija?: PosicionFirma | null;
+  posicionesFijas?: PosicionFirma[] | null;
 };
 
 const PAGE_RENDER_WIDTH_DESKTOP = 600;
@@ -53,8 +54,8 @@ function detectarMovil(): boolean {
   return /Mobi|Android|iPhone|iPad|iPod/i.test(ua) || coarsePointer;
 }
 
-export function VisorPdfInteractivo({ pdfUrl, onConfirm, submitting, posicionFija }: Props) {
-  const fija = posicionFija ?? POSICION_SUELO;
+export function VisorPdfInteractivo({ pdfUrl, onConfirm, submitting, posicionesFijas }: Props) {
+  const fijaArray = posicionesFijas && posicionesFijas.length > 0 ? posicionesFijas : [POSICION_SUELO];
   const [numPages, setNumPages] = useState(0);
   const [trazoPng, setTrazoPng] = useState<string | null>(null);
   const [aplicada, setAplicada] = useState(false);
@@ -66,7 +67,9 @@ export function VisorPdfInteractivo({ pdfUrl, onConfirm, submitting, posicionFij
     setShareUrl(window.location.href);
   }, []);
 
-  const [pos, setPos] = useState<{ pagina: number; xPx: number; yPx: number } | null>(null);
+  const [posiciones, setPosiciones] = useState<Array<{ pagina: number; xPx: number; yPx: number }> | null>(
+    null,
+  );
   const [pageGeom, setPageGeom] = useState<Record<number, { top: number; height: number }>>({});
   const [pageRenderWidth, setPageRenderWidth] = useState(PAGE_RENDER_WIDTH_DESKTOP);
 
@@ -134,28 +137,30 @@ export function VisorPdfInteractivo({ pdfUrl, onConfirm, submitting, posicionFij
     setupCanvas();
     setTrazoPng(null);
     setAplicada(false);
-    setPos(null);
+    setPosiciones(null);
   }
   function aplicar() {
     if (trazoVacioRef.current) return;
     const png = canvasRef.current!.toDataURL("image/png");
     setTrazoPng(png);
     setAplicada(true);
-    // La firma va SIEMPRE al hueco detectado en el servidor. La previsualización
-    // reproduce el mismo encaje que hará el estampador del PDF: se escala al
-    // mayor tamaño que quepa en la caja conservando la proporción del trazo.
-    const g = pageGeom[fija.pagina];
-    if (!g) return;
-    setPos({
-      pagina: fija.pagina,
-      xPx: fija.xPct * pageRenderWidth,
-      yPx: g.top + fija.yPct * g.height,
-    });
+    // La firma va SIEMPRE a los huecos detectados en el servidor. El trazo se
+    // dibuja una sola vez y se previsualiza en TODAS las posiciones a la vez,
+    // con el mismo encaje que hará el estampador del PDF.
+    const calculadas = fijaArray
+      .map((f) => {
+        const g = pageGeom[f.pagina];
+        if (!g) return null;
+        return { pagina: f.pagina, xPx: f.xPct * pageRenderWidth, yPx: g.top + f.yPct * g.height };
+      })
+      .filter((p): p is { pagina: number; xPx: number; yPx: number } => p !== null);
+    if (calculadas.length === 0) return;
+    setPosiciones(calculadas);
   }
 
   function confirmar() {
     if (!trazoPng) return;
-    onConfirm({ trazoBase64: trazoPng, posicion: fija });
+    onConfirm({ trazoBase64: trazoPng, posiciones: fijaArray });
   }
 
   const registerPageGeom = useCallback((pagina: number, top: number, height: number) => {
@@ -179,32 +184,41 @@ export function VisorPdfInteractivo({ pdfUrl, onConfirm, submitting, posicionFij
             ))}
           </Document>
 
-          {aplicada && trazoPng && pos && (
-            <div
-              className="absolute pointer-events-none"
-              style={{
-                left: pos.xPx,
-                top: pos.yPx,
-                width: fija.anchoPct * pageRenderWidth,
-                height: (fija.altoPct ?? 0.06) * (pageGeom[fija.pagina]?.height ?? 0),
-              }}
-            >
-              <img
-                src={trazoPng}
-                alt="firma"
-                draggable={false}
-                className="w-full h-full object-contain"
-              />
-              <button
-                type="button"
-                onClick={limpiar}
-                className="absolute -top-2.5 -right-2.5 bg-white border border-zinc-200 rounded-full p-1 shadow-sm hover:shadow pointer-events-auto"
-                title="Borrar y volver a dibujar"
-              >
-                <X className="h-3 w-3 text-zinc-500" />
-              </button>
-            </div>
-          )}
+          {aplicada &&
+            trazoPng &&
+            posiciones &&
+            posiciones.map((pos, i) => {
+              const f = fijaArray[i];
+              return (
+                <div
+                  key={`${pos.pagina}-${i}`}
+                  className="absolute pointer-events-none"
+                  style={{
+                    left: pos.xPx,
+                    top: pos.yPx,
+                    width: f.anchoPct * pageRenderWidth,
+                    height: (f.altoPct ?? 0.06) * (pageGeom[f.pagina]?.height ?? 0),
+                  }}
+                >
+                  <img
+                    src={trazoPng}
+                    alt="firma"
+                    draggable={false}
+                    className="w-full h-full object-contain"
+                  />
+                  {i === 0 && (
+                    <button
+                      type="button"
+                      onClick={limpiar}
+                      className="absolute -top-2.5 -right-2.5 bg-white border border-zinc-200 rounded-full p-1 shadow-sm hover:shadow pointer-events-auto"
+                      title="Borrar y volver a dibujar"
+                    >
+                      <X className="h-3 w-3 text-zinc-500" />
+                    </button>
+                  )}
+                </div>
+              );
+            })}
         </div>
       </div>
 
@@ -241,9 +255,12 @@ export function VisorPdfInteractivo({ pdfUrl, onConfirm, submitting, posicionFij
             2 · Revisa y firma
           </div>
           <p className="text-xs text-zinc-500 leading-relaxed">
-            Tu firma se coloca sola en el espacio reservado del documento
-            {numPages > 1 ? `, en la página ${fija.pagina}` : ""}. Compruébala en
-            el documento y pulsa firmar.
+            {fijaArray.length > 1
+              ? `Tu firma se coloca sola en los ${fijaArray.length} espacios reservados del documento.`
+              : `Tu firma se coloca sola en el espacio reservado del documento${
+                  numPages > 1 ? `, en la página ${fijaArray[0].pagina}` : ""
+                }.`}{" "}
+            Compruébala en el documento y pulsa firmar.
           </p>
         </div>
 
@@ -272,7 +289,7 @@ export function VisorPdfInteractivo({ pdfUrl, onConfirm, submitting, posicionFij
         <Button
           variant="primary"
           onClick={confirmar}
-          disabled={!aplicada || !pos || !!submitting}
+          disabled={!aplicada || !posiciones || !!submitting}
           className="w-full"
         >
           <CheckCircle2 className="h-4 w-4 mr-1.5" />
