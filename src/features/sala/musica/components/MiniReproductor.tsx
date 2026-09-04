@@ -14,6 +14,7 @@
  * reproducción nueva desde Sala → Música.
  */
 
+import { useRouter } from "next/navigation";
 import { Play, Pause, SkipBack, SkipForward, X, Music2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -21,6 +22,7 @@ import { useMusicaOpcional } from "@/features/sala/musica/contexts/musica-contex
 
 export function MiniReproductor({ className }: { className?: string }) {
   const musica = useMusicaOpcional();
+  const router = useRouter();
 
   // Sin proveedor (pantallas públicas) o sin reproducción activa: no ocupa nada.
   if (!musica || !musica.miniVisible) return null;
@@ -35,8 +37,6 @@ export function MiniReproductor({ className }: { className?: string }) {
         className,
       )}
     >
-      <Music2 className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
-
       <Button
         variant="ghost"
         size="icon"
@@ -89,6 +89,24 @@ export function MiniReproductor({ className }: { className?: string }) {
           </p>
         )}
       </div>
+
+      {/*
+        Ir a Música. Va aquí, pegado a la canción, y no suelto en la barra:
+        antes había dos notas musicales a la vista —la de la izquierda, que solo
+        decora, y un botón aparte— y no se distinguía cuál llevaba a alguna
+        parte. Junto al título se entiende sin pensarlo: para ver lo que suena,
+        se pulsa lo que suena.
+      */}
+      <Button
+        variant="ghost"
+        size="icon"
+        className="h-6 w-6 shrink-0 text-muted-foreground hover:text-foreground"
+        onClick={() => router.push("/sala/musica")}
+        title="Ir a Música"
+        aria-label="Ir a Música"
+      >
+        <Music2 className="!h-3.5 !w-3.5" />
+      </Button>
 
       <Button
         variant="ghost"

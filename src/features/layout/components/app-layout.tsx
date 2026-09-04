@@ -14,9 +14,7 @@ import {
   Settings,
   Building2,
   ArrowLeft,
-  Music2,
 } from "lucide-react";
-import Link from "next/link";
 import { getRouteMeta, allSections } from "@/features/layout/data/nav-routes";
 import { useEffect, useState, useContext, useRef, useCallback } from "react";
 import {
@@ -354,34 +352,6 @@ function AppLayoutInterno({ children }: { children: React.ReactNode }) {
                     a la cabecera.
                   */}
                   <MiniReproductor />
-
-                  {/*
-                    Música: entrada directa al submódulo, junto al reproductor.
-                    Va FUERA de la píldora de herramientas a propósito: esa
-                    píldora es el catálogo de herramientas del software, y la
-                    música es un submódulo de Sala, no una herramienta.
-
-                    El mini reproductor de al lado solo aparece cuando YA suena
-                    algo; este botón es lo que hace falta cuando no suena nada,
-                    o para cambiar de lista a media cena sin ir a buscarlo al
-                    menú desde la pantalla en la que se esté.
-
-                    Solo a quien tiene SALA: es el único que puede entrar en
-                    Música, y a los demás les llevaría a una puerta cerrada.
-                  */}
-                  {puedeVer("SALA") && (
-                    <Button
-                      asChild
-                      variant="ghost"
-                      size="icon"
-                      className="hidden md:inline-flex h-8 w-8 shrink-0 rounded-full border bg-muted/40"
-                      title="Música"
-                    >
-                      <Link href="/sala/musica" aria-label="Música">
-                        <Music2 className="!h-[18px] !w-[18px] text-emerald-600" />
-                      </Link>
-                    </Button>
-                  )}
 
                   {/* Integraciones: Google (cuenta + email + calendario + meet) | tareas + chat + llamadas | apps */}
                   <div className="hidden md:flex items-center rounded-full border bg-muted/40 py-1 px-1.5 gap-0.5">
