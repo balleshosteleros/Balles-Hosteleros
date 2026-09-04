@@ -45,6 +45,19 @@ function euros(n: number): string {
   return `${n.toFixed(2).replace(".", ",")} €`;
 }
 
+/**
+ * Motivos que NO invalidan el código: es bueno, pero el día, la hora o la zona
+ * elegidos no entran en su experiencia. Se avisan donde se comete el error, no
+ * en el campo del código.
+ */
+const MOTIVOS_DE_CONTEXTO = [
+  "DIA_NO_PERMITIDO",
+  "FECHA_EXCLUIDA",
+  "TURNO_NO_PERMITIDO",
+  "HORA_NO_PERMITIDA",
+  "ZONA_NO_PERMITIDA",
+] as const as readonly string[];
+
 export function TicketCodigoInput({
   empresaSlug, value, onChange, onResult, contextoSerial,
   fecha, hora, grupoZonaId, disabled = false, accent,
@@ -93,6 +106,16 @@ export function TicketCodigoInput({
       if (cancelado) return;
 
       if (r.ok) {
+        setEstado({ kind: "ok", ticket: r.ticket });
+        onResultRef.current(r.ticket);
+      } else if (MOTIVOS_DE_CONTEXTO.includes(r.motivo) && r.ticket) {
+        // El código es BUENO: lo que no encaja es el día, la hora o la zona
+        // que ha elegido. Se le avisa donde cometió el error —bajo la fecha o
+        // el selector— y aquí no se le marca nada, que si no lee "código no
+        // válido" y cree que compró mal.
+        //
+        // El ticket se mantiene, además, para que sus condiciones sigan
+        // filtrando horas y zonas mientras corrige.
         setEstado({ kind: "ok", ticket: r.ticket });
         onResultRef.current(r.ticket);
       } else {

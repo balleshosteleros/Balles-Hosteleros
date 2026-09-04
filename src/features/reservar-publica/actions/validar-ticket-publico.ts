@@ -42,7 +42,18 @@ export interface TicketPublico {
 
 export type ValidarTicketResult =
   | { ok: true; ticket: TicketPublico }
-  | { ok: false; motivo: TicketMotivoInvalidez; mensaje: string };
+  | {
+      ok: false;
+      motivo: TicketMotivoInvalidez;
+      mensaje: string;
+      /**
+       * El ticket, cuando el código es BUENO y lo que falla es el día, la hora
+       * o la zona elegidos. Se devuelve para que el formulario siga filtrando
+       * con sus condiciones mientras el cliente corrige, y para no marcarle el
+       * código como erróneo cuando no lo es.
+       */
+      ticket?: TicketPublico;
+    };
 
 export async function validarTicketPublicoAction(args: {
   empresaSlug: string;
@@ -107,8 +118,6 @@ export async function validarTicketPublicoAction(args: {
       grupoZonaId: args.grupoZonaId ?? null,
     },
   );
-  if (!r.ok) return fallo(r.motivo);
-
   // Nombres de las zonas permitidas, para poder decírselo al cliente en
   // castellano en vez de enseñarle identificadores.
   let nombresZonas: Map<string, string> | undefined;
@@ -126,18 +135,23 @@ export async function validarTicketPublicoAction(args: {
 
   const { describirCondiciones } = await import("@/features/sala/lib/validar-ticket-canje");
 
-  return {
-    ok: true,
-    ticket: {
-      codigo,
-      producto: (prod.nombre as string) ?? "Ticket",
-      unidades: Number(compra.unidades),
-      importeTotal: Number(compra.importe_total),
-      porPersona: prod.modo_precio === "por_persona",
-      personasPorUnidad: Math.max(1, Number(prod.personas_por_unidad ?? 1)),
-      canjeHasta: (compra.canje_hasta as string | null) ?? null,
-      condiciones,
-      resumen: describirCondiciones(condiciones, nombresZonas),
-    },
+  const ticket: TicketPublico = {
+    codigo,
+    producto: (prod.nombre as string) ?? "Ticket",
+    unidades: Number(compra.unidades),
+    importeTotal: Number(compra.importe_total),
+    porPersona: prod.modo_precio === "por_persona",
+    personasPorUnidad: Math.max(1, Number(prod.personas_por_unidad ?? 1)),
+    canjeHasta: (compra.canje_hasta as string | null) ?? null,
+    condiciones,
+    resumen: describirCondiciones(condiciones, nombresZonas),
   };
+
+  if (!r.ok) {
+    // El ticket viaja igualmente: si lo que falla es el día o la hora, el
+    // formulario lo necesita para seguir filtrando mientras el cliente corrige.
+    return { ...fallo(r.motivo), ticket };
+  }
+
+  return { ok: true, ticket };
 }
