@@ -25,10 +25,25 @@ const SOFTWARE_HOST =
 // estática resuelta en el routing de Vercel, ANTES del middleware, así que el
 // rewrite a `/sitio-publico` del proxy no llegaba a ejecutarse y salía la app (login).
 // Debe coincidir con `hostsPreviewWeb()` en hostname-resolver.ts.
-const PREVIEW_WEB_HOSTS = (process.env.PAGINAS_WEB_PREVIEW_HOSTS ?? '')
-  .split(',')
-  .map((h) => h.trim().toLowerCase())
-  .filter(Boolean)
+// Dominios REALES de las webs de empresa. Van en el código y no solo en la
+// variable de entorno porque `/` se resuelve en el routing de Vercel ANTES del
+// proxy: si el host no está aquí, Vercel sirve la app (login) y el rewrite a
+// `/sitio-publico` nunca llega a ejecutarse. Un fallo de configuración dejaría
+// la web pública del cliente enseñando el panel interno.
+const WEB_HOSTS_FIJOS = [
+  'bacanalmadrid.com',
+  'www.bacanalmadrid.com',
+  'grupohabana.es',
+  'www.grupohabana.es',
+]
+
+const PREVIEW_WEB_HOSTS = Array.from(
+  new Set(
+    [...(process.env.PAGINAS_WEB_PREVIEW_HOSTS ?? '').split(','), ...WEB_HOSTS_FIJOS]
+      .map((h) => h.trim().toLowerCase())
+      .filter(Boolean)
+  )
+)
 
 const nextConfig: NextConfig = {
   // Probar la app desde el MÓVIL contra el localhost del Mac.

@@ -293,12 +293,28 @@ export function esHostQr(rawHost: string): boolean {
  * Se configura por entorno (coma separada) para no tener que tocar código al
  * añadir una web nueva.
  */
+/**
+ * Dominios REALES de webs de empresa. Duplicados en `next.config.ts`
+ * (`WEB_HOSTS_FIJOS`) y fijados en código a propósito: si dependieran solo de la
+ * variable de entorno, un despiste de configuración haría que el dominio público
+ * del cliente sirviera la app (login) en vez de su web.
+ */
+const WEB_HOSTS_FIJOS = [
+  "bacanalmadrid.com",
+  "www.bacanalmadrid.com",
+  "grupohabana.es",
+  "www.grupohabana.es",
+];
+
 export function hostsPreviewWeb(): string[] {
   const env = process.env.PAGINAS_WEB_PREVIEW_HOSTS ?? "";
-  return env
-    .split(",")
-    .map((h) => normalizarHost(h))
-    .filter(Boolean);
+  return Array.from(
+    new Set(
+      [...env.split(","), ...WEB_HOSTS_FIJOS]
+        .map((h) => normalizarHost(h))
+        .filter(Boolean)
+    )
+  );
 }
 
 export function esHostPreviewWeb(rawHost: string): boolean {
