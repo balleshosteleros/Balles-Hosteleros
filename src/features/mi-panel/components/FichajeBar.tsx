@@ -270,11 +270,22 @@ export function FichajeBar({
     });
   })();
 
-  // Texto de ayuda cuando el botón no está disponible.
-  const horaEntradaPrevista =
-    ventana?.entradaMin != null
-      ? `${String(Math.floor(ventana.entradaMin / 60)).padStart(2, "0")}:${String(ventana.entradaMin % 60).padStart(2, "0")}`
-      : null;
+  // Texto de ayuda cuando el botón no está disponible: la PRÓXIMA entrada que
+  // le queda hoy. En turno partido, por la tarde debe anunciar la hora de la
+  // tarde, no la de la mañana que ya pasó.
+  const horaEntradaPrevista = (() => {
+    if (!ventana) return null;
+    const inicios = ventana.entradasMin.length
+      ? ventana.entradasMin
+      : ventana.entradaMin != null
+        ? [ventana.entradaMin]
+        : [];
+    if (inicios.length === 0) return null;
+    const { minutos } = ahoraEnZona(ventana.zonaHoraria);
+    const proxima = inicios.find((m) => m + ventana.margenDespuesMin >= minutos) ?? null;
+    if (proxima == null) return null;
+    return `${String(Math.floor(proxima / 60)).padStart(2, "0")}:${String(proxima % 60).padStart(2, "0")}`;
+  })();
 
   const esTeletrabajo = !!fichaje?.modoTeletrabajo;
   let estadoLabel = "Sin fichar";
@@ -349,8 +360,8 @@ export function FichajeBar({
           {sinFichar && !puedeFicharAhora && !loading && (
             <span className="text-sm text-muted-foreground">
               {horaEntradaPrevista
-                ? `Podrás fichar a partir de las ${horaEntradaPrevista}`
-                : "Ahora no puedes fichar"}
+                ? `Podrás fichar a partir de las ${horaEntradaPrevista}. Si necesitas registrar horas fuera de ese momento, pídelo por solicitud.`
+                : "Ahora no puedes fichar. Si necesitas registrar estas horas, pídelo por solicitud."}
             </span>
           )}
           {trabajando && (
