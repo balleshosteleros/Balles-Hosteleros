@@ -1,26 +1,22 @@
 "use client";
 
 import { useMemo, useState, useEffect } from "react";
-import Link from "next/link";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { useAuth } from "@/features/auth/contexts/auth-context";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { type PuestoSalarial } from "@/features/rrhh/data/puestos";
 import { listPuestosEmpresa } from "@/features/rrhh/actions/puestos-actions";
-import { getBonusPorEmpresa, PERIODICIDAD_LABEL, type Bonus } from "@/features/rrhh/data/bonus";
+import { getMisCondicionesContrato, type MisCondicionesContrato } from "@/features/mi-panel/actions/mis-condiciones-actions";
 import {
   Calendar,
   CalendarCheck,
   FileSignature,
   ClipboardCheck,
   ClipboardX,
-  Gift,
   Wallet,
   Coins,
   PiggyBank,
-  UserCog,
 } from "lucide-react";
 
 const eur = (n: number) =>
@@ -55,50 +51,17 @@ function parseDiasVacaciones(texto: string): number {
 interface DatosGenerales {
   vacacionesAno: number;
   vacacionesRestantes: number;
-  fechaAlta: string;
+  /** ISO o null: null se pinta como «—», nunca un valor inventado. */
+  fechaAlta: string | null;
   fechaBaja: string | null;
-  tipoContrato: "Indefinido" | "Temporal";
+  tipoJornada: string | null;
 }
 
-function getBonusAplicables(
-  bonus: Bonus[],
-  puesto: PuestoSalarial | null,
-  roles: string[],
-): Bonus[] {
-  const norm = (s: string) => s.toLowerCase().trim();
-  const candidatos = new Set<string>();
-  if (puesto) {
-    candidatos.add(norm(puesto.puesto));
-    candidatos.add(norm(puesto.departamento));
-  }
-  roles.forEach((r) => candidatos.add(norm(r)));
-
-  return bonus
-    .filter((b) => b.estado === "activo")
-    .filter((b) => {
-      const { tipo, ids } = b.destinatarios;
-      if (tipo === "todos") return true;
-      if (tipo === "empleados") return false;
-      return ids.some((id) => {
-        const n = norm(id);
-        for (const c of candidatos) {
-          if (!c) continue;
-          if (c.includes(n) || n.includes(c)) return true;
-        }
-        return false;
-      });
-    });
-}
-
-function getDatosGenerales(puesto: PuestoSalarial | null): DatosGenerales {
-  const total = puesto ? parseDiasVacaciones(puesto.vacaciones) : 30;
-  return {
-    vacacionesAno: total,
-    vacacionesRestantes: Math.max(0, total - 8),
-    fechaAlta: "Pendiente de configurar",
-    fechaBaja: null,
-    tipoContrato: "Indefinido",
-  };
+/** dd/mm/aaaa, o «—» si el dato aún no consta en su ficha. */
+function fmtFecha(iso: string | null): string {
+  if (!iso) return "—";
+  const [a, m, d] = iso.split("-");
+  return a && m && d ? `${d}/${m}/${a}` : "—";
 }
 
 export function MisCondicionesView() {
@@ -119,34 +82,30 @@ export function MisCondicionesView() {
     [puestos, nombreCompleto, email, roles],
   );
 
-  const generales = useMemo(() => getDatosGenerales(puesto), [puesto]);
-  const bonusAplicables = useMemo(
-    () => getBonusAplicables(getBonusPorEmpresa(empresaActual.id), puesto, roles),
-    [empresaActual.id, puesto, roles],
-  );
+  const [contrato, setContrato] = useState<MisCondicionesContrato | null>(null);
+  useEffect(() => {
+    let activo = true;
+    getMisCondicionesContrato().then((res) => {
+      if (activo) setContrato(res.data);
+    });
+    return () => { activo = false; };
+  }, [empresaActual.id]);
+
+  // Mientras carga se muestran los días de la empresa por defecto, nunca un
+  // saldo inventado: los valores reales llegan con la ficha del empleado.
+  const generales: DatosGenerales = {
+    vacacionesAno: contrato?.vacacionesAno ?? (puesto ? parseDiasVacaciones(puesto.vacaciones) : 30),
+    vacacionesRestantes: contrato?.vacacionesRestantes ?? 0,
+    fechaAlta: contrato?.fechaAlta ?? null,
+    fechaBaja: contrato?.fechaBaja ?? null,
+    tipoJornada: contrato?.tipoJornada ?? null,
+  };
 
   return (
     <div className="p-4 md:p-6 max-w-4xl mx-auto space-y-5">
-      <Card className="p-4 md:p-5 flex items-center gap-4 border-dashed">
-        <div className="h-10 w-10 rounded-md bg-primary/10 text-primary flex items-center justify-center">
-          <UserCog className="h-5 w-5" />
-        </div>
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-semibold">Tus datos personales</p>
-          <p className="text-xs text-muted-foreground">
-            DNI, IBAN, dirección, contacto de emergencia y demás se gestionan en
-            Datos personales.
-          </p>
-        </div>
-        <Button asChild size="sm" variant="outline">
-          <Link href="/mi-panel/datos-personales">Ir a Datos personales</Link>
-        </Button>
-      </Card>
-
       <GeneralesCard datos={generales} />
       <SalarioCard puesto={puesto} />
       <HorarioCard puesto={puesto} />
-      <BonusAplicablesCard bonus={bonusAplicables} />
     </div>
   );
 }
@@ -167,22 +126,24 @@ function GeneralesCard({ datos }: { datos: DatosGenerales }) {
     },
     {
       label: "Fecha de alta",
-      value: datos.fechaAlta,
+      value: fmtFecha(datos.fechaAlta),
       icon: ClipboardCheck,
       tone: "text-amber-600 bg-amber-500/10",
     },
     {
+      // Solo se rellena al pasar a offboarding desde Reclutamiento. Hasta
+      // entonces, un guion: el empleado sigue de alta.
       label: "Fecha de baja",
-      value: datos.fechaBaja ?? "—",
+      value: fmtFecha(datos.fechaBaja),
       icon: ClipboardX,
       tone: "text-rose-600 bg-rose-500/10",
     },
     {
-      label: "Tipo de contrato",
-      value: datos.tipoContrato,
+      label: "Jornada",
+      value: datos.tipoJornada ?? "—",
       icon: FileSignature,
       tone: "text-violet-600 bg-violet-500/10",
-      badge: true,
+      badge: !!datos.tipoJornada,
     },
   ];
 
@@ -206,7 +167,7 @@ function GeneralesCard({ datos }: { datos: DatosGenerales }) {
                 {it.badge ? (
                   <Badge
                     className={
-                      it.value === "Indefinido"
+                      it.value === "Completa"
                         ? "bg-emerald-100 text-emerald-700 border-0"
                         : "bg-amber-100 text-amber-700 border-0"
                     }
@@ -343,51 +304,6 @@ function HorarioCard({ puesto }: { puesto: PuestoSalarial | null }) {
           <p className="text-lg font-bold mt-0.5">{puesto.jornadaContrato}</p>
         </div>
       </div>
-    </Card>
-  );
-}
-
-function BonusAplicablesCard({ bonus }: { bonus: Bonus[] }) {
-  return (
-    <Card className="p-4 md:p-5">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-          Bonus
-        </h3>
-        <Badge variant="secondary" className="bg-amber-100 text-amber-700 border-0">
-          {bonus.length} bonus
-        </Badge>
-      </div>
-
-      {bonus.length === 0 ? (
-        <p className="text-sm text-muted-foreground text-center py-6">
-          No hay bonus activos que afecten a tu puesto.
-        </p>
-      ) : (
-        <ul className="grid sm:grid-cols-2 gap-3">
-          {bonus.map((b) => (
-            <li
-              key={b.id}
-              className="flex items-start gap-3 rounded-lg border p-3"
-            >
-              <div className="h-10 w-10 rounded-lg flex items-center justify-center text-amber-600 bg-amber-500/10 shrink-0">
-                <Gift className="h-5 w-5" />
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <p className="text-sm font-semibold truncate">{b.nombre}</p>
-                  <Badge variant="secondary" className="bg-stone-100 text-stone-700 border-0 text-[10px]">
-                    {PERIODICIDAD_LABEL[b.periodicidad]}
-                  </Badge>
-                </div>
-                <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
-                  {b.descripcion}
-                </p>
-              </div>
-            </li>
-          ))}
-        </ul>
-      )}
     </Card>
   );
 }
