@@ -71,8 +71,6 @@ const AUDIT_COL: Record<ReservaEmailTipo, string | null> = {
   // Por política o proceso
   TICKET_COMPRA: null,
   TICKET_RESERVA: "email_ticket_reserva_at",
-  POLITICA_CANCELACION: "email_politica_cancelacion_at",
-  POLITICA_GARANTIA: "email_politica_garantia_at",
   GARANTIA_PENDIENTE: "email_garantia_pendiente_at",
   GARANTIA_SOLICITUD: "email_garantia_solicitud_at",
   GARANTIA_CADUCADA: "email_garantia_caducada_at",
@@ -92,8 +90,6 @@ const HEADLINE_POR_TIPO: Record<ReservaEmailTipo, string> = {
   CANCELADA: "Reserva cancelada",
   TICKET_COMPRA: "Compra confirmada",
   TICKET_RESERVA: "Reserva confirmada",
-  POLITICA_CANCELACION: "Condiciones de cancelación",
-  POLITICA_GARANTIA: "Garantía de tu reserva",
   GARANTIA_PENDIENTE: "Reserva confirmada",
   GARANTIA_SOLICITUD: "Necesitamos tu tarjeta",
   GARANTIA_CADUCADA: "Reserva cancelada",
@@ -118,8 +114,6 @@ const BADGE_POR_TIPO: Record<ReservaEmailTipo, string> = {
   // El cliente no distingue "tipos de reserva": ha reservado y su mesa está
   // confirmada, igual que cualquier otra. El ticket es asunto interno.
   TICKET_RESERVA: "Reserva confirmada",
-  POLITICA_CANCELACION: "Política de cancelación",
-  POLITICA_GARANTIA: "Política de garantía",
   GARANTIA_PENDIENTE: "Reserva confirmada",
   GARANTIA_SOLICITUD: "Falta tu tarjeta",
   GARANTIA_CADUCADA: "Cancelada",
@@ -480,17 +474,15 @@ export async function enviarReservaEmail(
   //
   // Cada uno aparece SOLO donde aporta algo:
   //
-  //   · Las condiciones de cancelación y las de garantía tienen ahora correo
-  //     propio (POLITICA_CANCELACION / POLITICA_GARANTIA), que es donde se
-  //     explican enteras. Se repiten como recordatorio en la confirmación y en
-  //     el recordatorio de la visita, que es cuando al cliente todavía le da
-  //     tiempo a actuar. En una cancelación o un no-show ya no cambian nada.
+  //   · Las condiciones de cancelación y las de garantía viven DENTRO de los
+  //     correos de la reserva: no tienen correo propio, porque mandar uno
+  //     aparte era decirle lo mismo dos veces al mismo cliente.
   //
   //   · El ticket se enseña en la confirmación y en su propio correo: el
   //     cliente pagó por adelantado y necesita ver que su dinero está aplicado
   //     a ESTA reserva.
-  let politicaBloque: { horas: number; importe: number; mensajeExtra: string } | null = null;
-  let garantiaBloque: { importe: number; mensajeExtra: string } | null = null;
+  let politicaBloque: { horas: number; importe: number } | null = null;
+  let garantiaBloque: { importe: number } | null = null;
   let cuponCanjeadoBloque: { codigo: string; tituloCliente: string } | null = null;
   let ticketBloque:
     | { codigo: string; producto: string; unidades: number; importe: number; porPersona: boolean }
@@ -514,31 +506,7 @@ export async function enviarReservaEmail(
     "CANCELADA",
     "NO_SHOW",
   ];
-  const mostrarCondiciones =
-    RECUERDA_CONDICIONES.includes(tipo) ||
-    tipo === "POLITICA_CANCELACION" ||
-    tipo === "POLITICA_GARANTIA";
-
-  /**
-   * Texto extra que la empresa haya escrito para una política. En su correo
-   * propio el texto ya va en el cuerpo, así que no se repite dentro del bloque.
-   */
-  async function textoExtraPolitica(
-    tipoPol: "POLITICA_CANCELACION" | "POLITICA_GARANTIA",
-  ): Promise<string> {
-    if (tipo === tipoPol) return "";
-    const { data: tpl } = await admin
-      .from("reserva_email_plantillas")
-      .select("mensaje_personalizado")
-      .eq("empresa_id", empresaId)
-      .eq("tipo", tipoPol)
-      .maybeSingle();
-    const seedPol = getReservaEmailPlantillaSeed(tipoPol);
-    return sustituir(
-      (tpl?.mensaje_personalizado as string | null) ?? seedPol?.mensaje_default ?? "",
-      placeholders,
-    );
-  }
+  const mostrarCondiciones = RECUERDA_CONDICIONES.includes(tipo);
 
   if (mostrarCondiciones) {
     // El tipo de la reserva decide qué bloque se pinta, y solo puede ser uno:
@@ -552,7 +520,7 @@ export async function enviarReservaEmail(
     });
 
     // En el correo dedicado el bloque se pinta siempre: es su razón de ser.
-    if (tipoReserva === "cancelacion" || tipo === "POLITICA_CANCELACION") {
+    if (tipoReserva === "cancelacion") {
       politicaBloque = {
         horas: config.cancelacion_horas_antes ?? 0,
         // El importe sale de la RESERVA, no de la configuración actual: es el
@@ -561,14 +529,12 @@ export async function enviarReservaEmail(
         importe:
           Number(reserva.cancelacion_importe ?? 0) ||
           Number(config.cancelacion_importe_eur ?? 0),
-        mensajeExtra: await textoExtraPolitica("POLITICA_CANCELACION"),
       };
     }
 
-    if (tipoReserva === "garantia" || tipo === "POLITICA_GARANTIA") {
+    if (tipoReserva === "garantia") {
       garantiaBloque = {
         importe: Number(reserva.garantia_importe ?? 0),
-        mensajeExtra: await textoExtraPolitica("POLITICA_GARANTIA"),
       };
     }
   }
@@ -742,7 +708,7 @@ interface RenderInput {
   zona: string | null;
   observaciones: string | null;
   mensajeLibre: string;
-  politicaBloque: { horas: number; importe: number; mensajeExtra: string } | null;
+  politicaBloque: { horas: number; importe: number } | null;
   /**
    * La reserva enganchó con una ficha existente y los datos no coinciden.
    * `nombreFicha` va abreviado (nombre + inicial del apellido): nunca se
@@ -750,7 +716,7 @@ interface RenderInput {
    */
   vinculacionAviso: { motivo: "email" | "telefono"; nombreFicha: string } | null;
   /** Importe retenido en garantía y el texto que la empresa haya añadido. */
-  garantiaBloque: { importe: number; mensajeExtra: string } | null;
+  garantiaBloque: { importe: number } | null;
   cuponCanjeadoBloque: { codigo: string; tituloCliente: string } | null;
   ticketBloque:
     | { codigo: string; producto: string; unidades: number; importe: number; porPersona: boolean }
@@ -799,8 +765,6 @@ function renderHtml(input: RenderInput): string {
     "LISTA_ESPERA",
     "LIBERADA",
     "TERMINANDO",
-    "POLITICA_CANCELACION",
-    "POLITICA_GARANTIA",
   ];
   const greeting = (() => {
     if (input.tipo === "SOLICITUD_VALORACION") {
@@ -831,7 +795,6 @@ function renderHtml(input: RenderInput): string {
     ? `<div style="margin-top:14px;padding:14px 16px;background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;font-size:13px;color:#7c2d12;line-height:1.6;">
         <div style="font-weight:700;margin-bottom:4px;">Política de cancelación</div>
         Cancelaciones con menos de <strong>${input.politicaBloque.horas} h</strong> de antelación o no presentación: se cobrará <strong>${formatearImporte(input.politicaBloque.importe)} €</strong>.
-        ${input.politicaBloque.mensajeExtra ? `<div style="margin-top:6px;">${nl2br(escapeHtml(input.politicaBloque.mensajeExtra))}</div>` : ""}
       </div>`
     : "";
 
@@ -841,7 +804,6 @@ function renderHtml(input: RenderInput): string {
     ? `<div style="margin-top:14px;padding:14px 16px;background:#fefce8;border:1px solid #fde047;border-radius:8px;font-size:13px;color:#713f12;line-height:1.6;">
         <div style="font-weight:700;margin-bottom:4px;">Política de garantía</div>
         Para asegurar tu mesa hemos retenido <strong>${formatearImporte(input.garantiaBloque.importe)} €</strong>. Es una retención, no un cobro: si vienes, se libera.
-        ${input.garantiaBloque.mensajeExtra ? `<div style="margin-top:6px;">${nl2br(escapeHtml(input.garantiaBloque.mensajeExtra))}</div>` : ""}
       </div>`
     : "";
 
@@ -1053,14 +1015,12 @@ function renderText(
       ``,
       `Política de cancelación: ${input.politicaBloque.horas} h de antelación, ${formatearImporte(input.politicaBloque.importe)} € si no.`,
     );
-    if (input.politicaBloque.mensajeExtra) lineas.push(input.politicaBloque.mensajeExtra);
   }
   if (input.garantiaBloque) {
     lineas.push(
       ``,
       `Política de garantía: hemos retenido ${formatearImporte(input.garantiaBloque.importe)} € para asegurar tu mesa. Es una retención, no un cobro: si vienes, se libera.`,
     );
-    if (input.garantiaBloque.mensajeExtra) lineas.push(input.garantiaBloque.mensajeExtra);
   }
   // La tarjeta primero: es la acción que le pide el correo.
   if (input.urlTarjeta) {
@@ -1143,10 +1103,6 @@ function subtitulo(t: ReservaEmailTipo): string {
       return "Hemos recibido tu pago.";
     case "TICKET_RESERVA":
       return "Tu ticket ya está canjeado.";
-    case "POLITICA_CANCELACION":
-      return "Estas son las condiciones que se aplican a tu reserva.";
-    case "POLITICA_GARANTIA":
-      return "Estas son las condiciones de la garantía de tu reserva.";
     case "RECORDATORIO":
       return "Te esperamos pronto.";
     case "SOLICITUD_VALORACION":
@@ -1171,8 +1127,6 @@ function footerSegunTipo(t: ReservaEmailTipo, hayEnlaceGestion: boolean): string
     case "CONFIRMADA":
     case "RECONFIRMADA":
     case "TICKET_RESERVA":
-    case "POLITICA_CANCELACION":
-    case "POLITICA_GARANTIA":
       return "Puedes gestionar tu reserva desde el enlace de arriba.";
     case "RECORDATORIO":
       return "Si finalmente no puedes venir, avísanos desde el enlace de arriba.";
@@ -1280,19 +1234,16 @@ export function previewReservaEmail(input: PreviewInput): {
   const conCondiciones = LLEVA_CONDICIONES.includes(input.tipo);
 
   const politicaBloque =
-    input.tipo === "POLITICA_CANCELACION" ||
-    (conCondiciones && tipoReserva === "cancelacion")
+    conCondiciones && tipoReserva === "cancelacion"
       ? {
           horas: input.config.cancelacionHorasAntes ?? 24,
           importe: Number(input.config.cancelacionImporteEur ?? 15),
-          mensajeExtra: "",
         }
       : null;
 
   const garantiaBloque =
-    input.tipo === "POLITICA_GARANTIA" ||
-    (conCondiciones && tipoReserva === "garantia")
-      ? { importe: Number(input.config.garantiaImporteEur ?? 20), mensajeExtra: "" }
+    conCondiciones && tipoReserva === "garantia"
+      ? { importe: Number(input.config.garantiaImporteEur ?? 20) }
       : null;
 
   const html = renderHtml({

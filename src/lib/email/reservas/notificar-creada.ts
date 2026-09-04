@@ -11,10 +11,6 @@ import { enviarReservaEmail, type ReservaEmailActor } from "./mailer";
  * admin, que funciona en los tres casos.
  *
  * Encadena además, en este orden:
- *   · POLITICA_CANCELACION / POLITICA_GARANTIA si la reserva queda sujeta a
- *     ellas. Van en correo aparte porque son un compromiso económico: el
- *     cliente tiene que poder encontrarlas después sin rebuscar dentro de la
- *     confirmación.
  *   · RECONFIRMADA cuando la reserva entra con menos antelación que el lead
  *     time configurado y la empresa tiene el envío inmediato activado; si no,
  *     la dispara el cron a su hora.

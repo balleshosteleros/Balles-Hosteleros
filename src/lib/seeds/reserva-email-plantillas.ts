@@ -17,8 +17,11 @@
  *            reservar y no hay a quién escribir.
  *
  * POLITICA → un correo por proceso que NO es un cambio de estado: la compra de
- *            un producto Ticket, la reserva hecha con ese Ticket, y el aviso de
- *            cada una de las dos políticas económicas (cancelación y garantía).
+ *            un producto Ticket, la reserva hecha con ese Ticket, y los avisos
+ *            del ciclo de la tarjeta en garantía.
+ *
+ *            Las condiciones económicas NO tienen correo propio: viven dentro
+ *            de la confirmación de la reserva, que es la que el cliente guarda.
  *
  * Placeholders disponibles en asunto y mensaje:
  *   {{nombre}}        → nombre del cliente
@@ -50,8 +53,6 @@ export type ReservaEmailTipoEstado =
 export type ReservaEmailTipoPolitica =
   | "TICKET_COMPRA"
   | "TICKET_RESERVA"
-  | "POLITICA_CANCELACION"
-  | "POLITICA_GARANTIA"
   | "GARANTIA_PENDIENTE"
   | "GARANTIA_SOLICITUD"
   | "GARANTIA_CADUCADA"
@@ -76,8 +77,6 @@ export const RESERVA_EMAIL_TIPOS_ESTADO: ReservaEmailTipoEstado[] = [
 export const RESERVA_EMAIL_TIPOS_POLITICA: ReservaEmailTipoPolitica[] = [
   "TICKET_COMPRA",
   "TICKET_RESERVA",
-  "POLITICA_CANCELACION",
-  "POLITICA_GARANTIA",
   "GARANTIA_PENDIENTE",
   "GARANTIA_SOLICITUD",
   "GARANTIA_CADUCADA",
@@ -101,8 +100,6 @@ export const RESERVA_EMAIL_TIPO_FAMILIA: Record<ReservaEmailTipo, ReservaEmailFa
   CANCELADA: "ESTADO",
   TICKET_COMPRA: "POLITICA",
   TICKET_RESERVA: "POLITICA",
-  POLITICA_CANCELACION: "POLITICA",
-  POLITICA_GARANTIA: "POLITICA",
   GARANTIA_PENDIENTE: "POLITICA",
   GARANTIA_SOLICITUD: "POLITICA",
   GARANTIA_CADUCADA: "POLITICA",
@@ -121,8 +118,6 @@ export const RESERVA_EMAIL_TIPO_LABELS: Record<ReservaEmailTipo, string> = {
   CANCELADA: "Reserva cancelada",
   TICKET_COMPRA: "Compra de ticket",
   TICKET_RESERVA: "Reserva confirmada (ticket)",
-  POLITICA_CANCELACION: "Política de cancelación",
-  POLITICA_GARANTIA: "Política de garantía",
   GARANTIA_PENDIENTE: "Garantía pendiente",
   GARANTIA_SOLICITUD: "Solicitud de tarjeta",
   GARANTIA_CADUCADA: "Cancelada sin tarjeta",
@@ -169,10 +164,6 @@ export const RESERVA_EMAIL_TIPO_DESCRIPCION: Record<ReservaEmailTipo, string> = 
     "Se envía al completarse el pago de un producto Ticket, antes de que exista reserva.",
   TICKET_RESERVA:
     "Se envía al crear la reserva asociada a un Ticket ya comprado.",
-  POLITICA_CANCELACION:
-    "Se envía cuando la reserva queda sujeta a la política de cancelación, con el plazo y el importe.",
-  POLITICA_GARANTIA:
-    "Se envía cuando la reserva queda sujeta a la política de garantía, con el importe retenido.",
   GARANTIA_PENDIENTE:
     "Se envía al reservar con mucha antelación: confirma la mesa y avisa de que la tarjeta se pedirá unos días antes.",
   GARANTIA_SOLICITUD:
@@ -263,18 +254,6 @@ export const RESERVA_EMAIL_PLANTILLAS_SEED: ReservaEmailPlantillaSeed[] = [
     asunto_default: "Reserva confirmada · {{fecha}} {{hora}} · {{empresa}}",
     mensaje_default:
       "Tu ticket ya tiene fecha y hora. Estos son los datos de tu reserva.",
-  },
-  {
-    tipo: "POLITICA_CANCELACION",
-    asunto_default: "Condiciones de cancelación de tu reserva · {{fecha}}",
-    mensaje_default:
-      "Tu reserva está sujeta a nuestra política de cancelación. Te resumimos las condiciones para que las tengas por escrito.",
-  },
-  {
-    tipo: "POLITICA_GARANTIA",
-    asunto_default: "Garantía de tu reserva · {{fecha}} {{hora}}",
-    mensaje_default:
-      "Para asegurar tu mesa hemos retenido un importe en garantía. Te resumimos las condiciones para que las tengas por escrito.",
   },
   {
     tipo: "GARANTIA_PENDIENTE",

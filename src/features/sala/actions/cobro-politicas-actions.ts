@@ -27,7 +27,6 @@ import {
   liberarOrden,
   cobrarTarjetaGuardada,
 } from "@/lib/revolut/merchant";
-import { enviarReservaEmail } from "@/lib/email/reservas/mailer";
 
 type Result<T = void> =
   | ({ ok: true } & (T extends void ? Record<string, never> : T))
@@ -115,10 +114,11 @@ export async function cobrarGarantia(reservaId: string): Promise<Result> {
       })
       .eq("id", reservaId);
 
-    // El correo sale AHORA, con el dinero ya movido: nunca antes (§5.7).
-    enviarReservaEmail(reservaId, "POLITICA_GARANTIA", {
-      actor: { usuarioId, origen: "MANUAL" },
-    }).catch((e) => console.error("[cobro-politicas] mail garantía:", e));
+    // Sin correo: las condiciones ya se le dieron por escrito en la
+    // confirmación de la reserva, y el aviso de que no se presentó o de que
+    // canceló salió en su correo de estado. Mandar aquí la plantilla de
+    // condiciones le repetía por tercera vez lo mismo, y encima después de
+    // haberle cobrado.
 
     revalidatePath("/sala/reservas");
     return { ok: true } as Result;
@@ -422,10 +422,8 @@ export async function ejecutarCobroCancelacion(
       })
       .eq("id", reservaId);
 
-    // Ahora sí: el dinero se movió, así que se le cuenta al cliente.
-    enviarReservaEmail(reservaId, "POLITICA_CANCELACION", {
-      actor: { usuarioId, origen: "MANUAL" },
-    }).catch((e) => console.error("[cobro-politicas] mail cancelación:", e));
+    // Sin correo, por lo mismo que en la garantía: las condiciones viven en la
+    // confirmación de la reserva.
 
     revalidatePath("/sala/reservas");
     return { ok: true } as Result;
