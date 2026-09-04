@@ -69,7 +69,7 @@
     },
     {
       "path": "/api/cron/reservas-recordatorios",
-      "schedule": "0 8 * * *"
+      "schedule": "0 * * * *"
     },
     {
       "path": "/api/cron/vencimientos-alertas",

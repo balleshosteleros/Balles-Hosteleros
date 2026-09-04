@@ -365,9 +365,38 @@ export function ConfigTabReservas({ onDirtyChange }: ConfigTabReservasProps = {}
                   </SelectContent>
                 </Select>
                 <p className="text-[10px] text-muted-foreground">
-                  El correo se envía a la misma hora de la reserva. El mínimo
-                  de antelación es 24 h, por eso la opción más cercana es
-                  1 día antes.
+                  El mínimo de antelación es 24 h, por eso la opción más
+                  cercana es 1 día antes.
+                </p>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs" htmlFor="reconf-hora-envio">
+                  A qué hora
+                </Label>
+                <Select
+                  value={config.reconfirmacionHoraEnvio}
+                  onValueChange={(v) =>
+                    handleConfigChange({ reconfirmacionHoraEnvio: v })
+                  }
+                >
+                  <SelectTrigger className="h-8" id="reconf-hora-envio">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Array.from({ length: 24 }, (_, h) => {
+                      const hh = `${String(h).padStart(2, "0")}:00`;
+                      return (
+                        <SelectItem key={hh} value={hh}>
+                          {hh}
+                        </SelectItem>
+                      );
+                    })}
+                  </SelectContent>
+                </Select>
+                <p className="text-[10px] text-muted-foreground">
+                  Hora del restaurante. Se respeta todo el año: el cambio de
+                  hora de octubre y marzo no la mueve.
                 </p>
               </div>
             </div>

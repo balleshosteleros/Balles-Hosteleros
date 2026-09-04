@@ -1,0 +1,59 @@
+name: Cron Reservas (reconfirmación y recordatorios) — disparador externo
+
+# POR QUÉ EXISTE (2026-09-05):
+# Los cron jobs de Vercel (vercel.json) NO se disparan de forma fiable en el plan
+# actual: el plan Hobby permite 2 crons y en vercel.json hay 30. Se saltan días y
+# corren a horas dispersas. Mismo problema y mismo patrón que
+# .github/workflows/agora-sync-cron.yml, que lleva funcionando desde junio.
+#
+# Este workflow llama al MISMO endpoint CADA HORA desde GitHub Actions. El
+# endpoint decide por sí solo a quién le toca: cada empresa tiene su hora de
+# envío en SU hora local (empresa_reservas_config.reconfirmacion_hora_envio) y
+# solo dispara en la pasada que cae en esa hora. Por eso hace falta que pase
+# cada hora aunque el correo salga una vez al día.
+#
+# Es idempotente (email_reconfirmacion_at impide el correo doble), así que
+# convive con el cron de Vercel sin duplicar nada.
+
+on:
+  schedule:
+    # Cada hora, en el minuto 12: hora no-redonda para esquivar el pico de
+    # Actions, que es cuando más se retrasan los disparos.
+    - cron: "12 * * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: reservas-recordatorios-cron
+  cancel-in-progress: false
+
+jobs:
+  disparar:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Llamar al cron de correos de reservas
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          if [ -z "$CRON_SECRET" ]; then
+            echo "::error::Falta el secret CRON_SECRET en el repositorio (Settings → Secrets → Actions)."
+            exit 1
+          fi
+          URL="https://sistema.balleshosteleros.com/api/cron/reservas-recordatorios"
+          echo "Llamando a: $URL"
+          CODE=$(curl -sS -o /tmp/resp.json -w "%{http_code}" --max-time 290 \
+            -H "Authorization: Bearer ${CRON_SECRET}" "$URL" || echo "000")
+          echo "HTTP $CODE"
+          echo "----- respuesta -----"
+          head -c 6000 /tmp/resp.json || true
+          echo
+          if [ "$CODE" = "401" ]; then
+            echo "::error::401 No autorizado — el CRON_SECRET de GitHub no coincide con el de Vercel."
+            exit 1
+          fi
+          if [ "$CODE" != "200" ] && [ "$CODE" != "207" ]; then
+            echo "::error::El cron devolvió HTTP $CODE"
+            exit 1
+          fi
+          echo "OK ($CODE)"

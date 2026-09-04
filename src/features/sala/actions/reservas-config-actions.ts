@@ -10,6 +10,7 @@ import {
   DURACION_RESERVA_DEFAULT_MINUTOS,
   GARANTIA_IMPORTE_DEFAULT,
   RECONFIRMACION_DIAS_DEFAULT,
+  RECONFIRMACION_HORA_DEFAULT,
   type EmpresaReservasConfig,
   type DiaSemanaKey,
   type TurnoKey,
@@ -102,6 +103,7 @@ function rowToConfig(row: Record<string, unknown>): EmpresaReservasConfig {
     productoMensajePersonalizado:    (row.producto_mensaje_personalizado as string | null) ?? null,
     reconfirmacionActiva:           Boolean(row.reconfirmacion_activa ?? true),
     reconfirmacionDiasAntes:        (row.reconfirmacion_dias_antes as number) ?? RECONFIRMACION_DIAS_DEFAULT,
+    reconfirmacionHoraEnvio:        (row.reconfirmacion_hora_envio as string) || RECONFIRMACION_HORA_DEFAULT,
     reconfirmacionEnvioInmediato:   Boolean(row.reconfirmacion_envio_inmediato ?? false),
     recordatorioActivo:             Boolean(row.recordatorio_activo ?? false),
     recordatorioHorasAntes:         (row.recordatorio_horas_antes as number) ?? 3,
@@ -219,6 +221,7 @@ export async function upsertReservasConfig(updates: Partial<EmpresaReservasConfi
     if ("productoMensajePersonalizado"    in updates) db.producto_mensaje_personalizado    = updates.productoMensajePersonalizado;
     if ("reconfirmacionActiva"            in updates) db.reconfirmacion_activa             = updates.reconfirmacionActiva;
     if ("reconfirmacionDiasAntes"         in updates) db.reconfirmacion_dias_antes         = updates.reconfirmacionDiasAntes;
+    if ("reconfirmacionHoraEnvio"         in updates) db.reconfirmacion_hora_envio         = updates.reconfirmacionHoraEnvio;
     if ("reconfirmacionEnvioInmediato"    in updates) db.reconfirmacion_envio_inmediato    = updates.reconfirmacionEnvioInmediato;
     if ("recordatorioActivo"              in updates) db.recordatorio_activo               = updates.recordatorioActivo;
     if ("recordatorioHorasAntes"          in updates) db.recordatorio_horas_antes          = updates.recordatorioHorasAntes;

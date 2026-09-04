@@ -2,19 +2,20 @@
  * Cron: envío de correos automáticos del módulo Reservas — RECORDATORIO,
  * RECONFIRMACIÓN y SOLICITUD DE VALORACIÓN.
  *
- * Se ejecuta UNA VEZ AL DÍA, a las 10:00 de Madrid (`0 8 * * *` en vercel.json,
- * que va en UTC), y por cada empresa con la opción activa:
+ * Se ejecuta CADA HORA y no decide nada por sí mismo: la hora de envío la pone
+ * cada empresa en SU hora local, y el cron solo dispara en la pasada que cae en
+ * esa hora. Así "a las 10:00" son las 10:00 en enero y en julio, sin que el
+ * cambio de hora lo mueva. Por cada empresa con la opción activa:
  *
  * 1. RECORDATORIO (config: empresa_reservas_config.recordatorio_activo +
  *    recordatorio_horas_antes): busca reservas de la próxima ventana de
  *    [horas_antes, horas_antes + 1] horas que sigan vivas (no canceladas,
  *    no no-show, no completadas, no liberadas) y aún no tengan
- *    email_recordatorio_at. Las envía y marca el timestamp.
- *    OJO: con el cron diario esta ventana de 1 h solo acierta si la reserva
- *    cae justo a esa hora. Hoy las tres empresas lo tienen apagado; si alguna
- *    lo enciende, hay que pasar el cron a horario o ensanchar la ventana.
+ *    email_recordatorio_at. Las envía y marca el timestamp. Al correr cada
+ *    hora, esta ventana de 1 h vuelve a ser la correcta.
  *
- * 2. RECONFIRMACIÓN (config: reconfirmacion_activa + reconfirmacion_dias_antes):
+ * 2. RECONFIRMACIÓN (config: reconfirmacion_activa + reconfirmacion_dias_antes
+ *    + reconfirmacion_hora_envio, esta última en hora LOCAL de la empresa):
  *    si la empresa tiene la reconfirmación activa, barre el DÍA ENTERO que
  *    cae a N días vista y avisa a las reservas en estado CONFIRMADA. Solo se
  *    envía si no se envió ya (idempotente vía email_reconfirmacion_at). Si la
@@ -37,6 +38,7 @@ import { enviarReservaEmail } from "@/lib/email/reservas/mailer";
 import { enviarAvisoReserva } from "@/lib/mensajeria/reservas";
 import {
   ZONA_HORARIA_FALLBACK,
+  minutosDiaEnZona,
   zonaLocalAUtcISO,
 } from "@/features/empresa/lib/zona-horaria";
 
@@ -50,6 +52,18 @@ function tzDeEmpresa(configOperativa: unknown): string {
   const cfg = (configOperativa as Record<string, unknown> | null) ?? null;
   const tz = cfg && typeof cfg.zonaHoraria === "string" ? cfg.zonaHoraria.trim() : "";
   return tz || ZONA_HORARIA_FALLBACK;
+}
+
+/** Hora de envío de la empresa ("HH:MM") en minutos desde medianoche. */
+const HORA_ENVIO_POR_DEFECTO = 10 * 60; // 10:00, hora del restaurante
+
+function horaEnvioDeConfig(valor: string | null | undefined): number {
+  const m = /^(\d{1,2}):(\d{2})/.exec((valor ?? "").trim());
+  if (!m) return HORA_ENVIO_POR_DEFECTO;
+  const h = Number(m[1]);
+  const min = Number(m[2]);
+  if (h > 23 || min > 59) return HORA_ENVIO_POR_DEFECTO;
+  return h * 60 + min;
 }
 
 /** Día civil "AAAA-MM-DD" de un instante, en la zona de la empresa. */
@@ -68,6 +82,8 @@ interface ConfigEmpresa {
   recordatorio_horas_antes: number;
   reconfirmacion_activa: boolean;
   reconfirmacion_dias_antes: number;
+  /** Hora local de la empresa ("HH:MM") a la que sale la reconfirmación. */
+  reconfirmacion_hora_envio: string | null;
   valoracion_email_activo: boolean;
   valoracion_email_horas_despues: number;
 }
@@ -99,7 +115,7 @@ export async function GET(request: Request) {
   const { data: configs, error: errCfg } = await supabase
     .from("empresa_reservas_config")
     .select(
-      "empresa_id, recordatorio_activo, recordatorio_horas_antes, reconfirmacion_activa, reconfirmacion_dias_antes, valoracion_email_activo, valoracion_email_horas_despues",
+      "empresa_id, recordatorio_activo, recordatorio_horas_antes, reconfirmacion_activa, reconfirmacion_dias_antes, reconfirmacion_hora_envio, valoracion_email_activo, valoracion_email_horas_despues",
     );
   if (errCfg) {
     return NextResponse.json({ ok: false, error: errCfg.message }, { status: 500 });
@@ -166,17 +182,40 @@ export async function GET(request: Request) {
     if (c.reconfirmacion_activa) {
       try {
         const diasAntes = c.reconfirmacion_dias_antes ?? 1;
-        // Ventana de 24 h, no de 1 h: este cron corre UNA VEZ AL DÍA (a las
-        // 10:00 de Madrid). Con una ventana de una hora solo entraban las
-        // reservas de las 10:00-11:00 del día objetivo — es decir, ninguna, y
-        // por eso no salió NUNCA una sola reconfirmación. Al barrer el día
-        // entero, a las 10:00 se avisa a todos los clientes del día siguiente,
-        // coman a las 14:00 o cenen a las 23:00.
+
+        // La hora la manda la EMPRESA, no el reloj del servidor. El cron pasa
+        // varias veces y solo dispara en la pasada que cae en la hora local
+        // del restaurante (`reconfirmacion_hora_envio`, 10:00 por defecto).
+        // Así el correo sale a las 10:00 de verdad en enero y en julio: si la
+        // hora la fijara el cron en UTC, el cambio de hora la movería sola.
+        // Antes de su hora no se envía nada: el resto de pasadas del día se
+        // van de vacío y la reserva creada esta tarde espera a mañana.
+        //
+        // Pasada su hora sí se envía, aunque la pasada llegue tarde. Ceñirlo a
+        // la ventana exacta [10:00, 11:00) parecía más limpio, pero GitHub
+        // Actions se retrasa en horas punta y un retraso de 48 min habría
+        // perdido el envío del día ENTERO, que es justo el fallo que veníamos
+        // de arreglar. Enviar tarde es mucho mejor que no enviar, y
+        // `email_reconfirmacion_at` impide que salga dos veces.
+        const horaEnvio = horaEnvioDeConfig(c.reconfirmacion_hora_envio);
+        if (minutosDiaEnZona(ahora, tz) < horaEnvio) {
+          continue;
+        }
+
+        // Día civil objetivo en la zona de la empresa, y su día entero como
+        // ventana. Antes esto era una ventana de UNA HORA y por eso no salió
+        // NUNCA una sola reconfirmación: solo habría acertado con reservas a
+        // las 6 de la mañana. Barriendo el día completo entran todos los
+        // clientes, coman a las 14:00 o cenen a las 23:00.
         //
         // Reenviar no es riesgo: `email_reconfirmacion_at` garantiza un solo
         // correo por reserva, y el filtro `is(auditCol, null)` descarta las ya
         // avisadas.
-        const desdeR = new Date(ahora.getTime() + diasAntes * 24 * 3600 * 1000);
+        const diaObjetivo = diaEnZona(
+          new Date(ahora.getTime() + diasAntes * 24 * 3600 * 1000),
+          tz,
+        );
+        const desdeR = new Date(zonaLocalAUtcISO(diaObjetivo, "00:00", tz));
         const hastaR = new Date(desdeR.getTime() + 24 * 60 * 60 * 1000);
         const pendientesR = await buscarPendientes(supabase, {
           empresaId: c.empresa_id,

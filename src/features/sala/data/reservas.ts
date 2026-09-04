@@ -437,6 +437,8 @@ export type EmpresaReservasConfig = SemanaHorarios & {
   //       · `reconfirmacionEnvioInmediato = false` → no envía reconfirmación.
   reconfirmacionActiva: boolean;
   reconfirmacionDiasAntes: number;
+  /** Hora LOCAL del restaurante ("HH:MM") a la que sale la reconfirmación. */
+  reconfirmacionHoraEnvio: string;
   reconfirmacionEnvioInmediato: boolean;
   // Recordatorio automático por correo (X horas antes de la reserva).
   recordatorioActivo: boolean;
@@ -625,6 +627,8 @@ export const DURACION_RESERVA_OPCIONES: { minutos: number; label: string }[] =
 export const RECONFIRMACION_DIAS_MIN = 1;
 export const RECONFIRMACION_DIAS_MAX = 7;
 export const RECONFIRMACION_DIAS_DEFAULT = 1;
+/** Hora local del restaurante a la que sale la reconfirmación por defecto. */
+export const RECONFIRMACION_HORA_DEFAULT = "10:00";
 
 /**
  * Granularidad fija de los huecos de reserva: 00, 15, 30 y 45. No es
