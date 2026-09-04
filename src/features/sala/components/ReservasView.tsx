@@ -148,7 +148,10 @@ import type {
   EmpresaReservasConfig,
   ClienteInsights,
 } from "@/features/sala/data/reservas";
-import { ReservaFlagsChips } from "@/features/sala/components/reservas/ReservaFlagsChips";
+import {
+  ReservaFlagsChips,
+  type ReservaDuplicada,
+} from "@/features/sala/components/reservas/ReservaFlagsChips";
 import {
   tipoDeReserva,
   TIPO_RESERVA_LABELS,
@@ -4705,6 +4708,65 @@ export function ReservasView() {
   }, [reservasActivasPorMesa]);
 
   /**
+   * Reservas DUPLICADAS: el mismo cliente tiene otra reserva a menos de 24
+   * horas de esta. No se impide crearlas —a veces son dos mesas de verdad—,
+   * pero se marcan TODAS las implicadas con un aviso de peligro que dice qué
+   * día y a qué hora está la otra, para que sala lo mire y decida.
+   *
+   * POR QUÉ hace falta: el caso real es alguien que se equivoca al reservar
+   * por la web (pone 3 personas, se da cuenta, vuelve a reservar poniendo 4)
+   * y no sabe cancelar la primera. Quedan dos mesas bloqueadas para una sola
+   * comida y nadie se entera hasta que llega la noche.
+   *
+   * POR QUÉ 24 horas y no "el mismo día": una reserva a las 23:00 y otra al
+   * día siguiente a las 00:30 son días distintos de calendario y sin embargo
+   * están a hora y media. El criterio es la distancia real entre las dos.
+   *
+   * Se agrupa por ficha de cliente, y si no la hay, por teléfono normalizado:
+   * una reserva de teléfono puede no tener ficha enganchada todavía.
+   *
+   * Se ignoran las que ya no ocupan mesa (canceladas, no-show, liberadas): si
+   * la primera está cancelada ya no hay nada que avisar.
+   */
+  const duplicadasPorReserva = useMemo(() => {
+    // Sobre TODAS las reservas cargadas, no solo las del día en pantalla: una
+    // a las 23:00 y otra al día siguiente a las 00:30 están a hora y media y
+    // filtrando por día no se verían la una a la otra.
+    const porCliente = new Map<string, Reserva[]>();
+    for (const r of reservasResueltas) {
+      if (ESTADOS_NO_OCUPANTES.includes(r.estado)) continue;
+      const clave =
+        r.clienteId ?? (r.telefono ? `tel:${r.telefono.replace(/\D/g, "")}` : null);
+      if (!clave) continue;
+      const arr = porCliente.get(clave);
+      if (arr) arr.push(r);
+      else porCliente.set(clave, [r]);
+    }
+
+    /** Reserva → instante, para medir la distancia entre dos. */
+    const instante = (r: Reserva): number =>
+      new Date(`${r.fecha}T${r.hora.slice(0, 5)}:00`).getTime();
+    const VENTANA_MS = 24 * 60 * 60 * 1000;
+
+    const out = new Map<string, ReservaDuplicada[]>();
+    for (const rs of porCliente.values()) {
+      if (rs.length < 2) continue;
+      for (const r of rs) {
+        const cercanas = rs
+          .filter(
+            (o) =>
+              o.id !== r.id &&
+              Math.abs(instante(o) - instante(r)) < VENTANA_MS,
+          )
+          .sort((a, b) => instante(a) - instante(b))
+          .map((o) => ({ id: o.id, fecha: o.fecha, hora: o.hora }));
+        if (cercanas.length > 0) out.set(r.id, cercanas);
+      }
+    }
+    return out;
+  }, [reservasResueltas]);
+
+  /**
    * Aplica el cambio de estado. `notificarCliente` decide si sale el correo:
    * cambiar de estado es criterio del empleado, así que por defecto NO se
    * notifica a nadie (antes el servidor enviaba el correo por su cuenta).
@@ -5756,7 +5818,11 @@ export function ReservasView() {
                             total={r.clienteId ? reservasPorCliente[r.clienteId] : undefined}
                           />
                           {/* El chip "Cupón <CODIGO>" se pinta dentro de <ReservaFlagsChips />. */}
-                          <ReservaFlagsChips reserva={r} className="shrink-0" />
+                          <ReservaFlagsChips
+                            reserva={r}
+                            duplicadas={duplicadasPorReserva.get(r.id)}
+                            className="shrink-0"
+                          />
                         </span>
                         {r.telefono && (
                           <span className="flex min-w-0 items-center gap-1 text-[10px] text-muted-foreground">
@@ -6532,7 +6598,12 @@ export function ReservasView() {
                   </div>
                 )}
                 <div className="flex flex-wrap items-center gap-2">
-                  <ReservaFlagsChips reserva={selectedReserva} insights={selectedInsights} size="md" />
+                  <ReservaFlagsChips
+                    reserva={selectedReserva}
+                    insights={selectedInsights}
+                    duplicadas={duplicadasPorReserva.get(selectedReserva.id)}
+                    size="md"
+                  />
                   <ReservaExternalBadge reserva={selectedReserva} />
                 </div>
                 {/* Correos y actividad de ESTA reserva: viven en la columna de

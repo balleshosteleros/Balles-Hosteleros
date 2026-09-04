@@ -11,6 +11,7 @@ import {
   MessageSquare,
   CheckCheck,
   CircleAlert,
+  TriangleAlert,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Reserva, ClienteInsights } from "@/features/sala/data/reservas";
@@ -20,11 +21,39 @@ function fmtEuro(n: number): string {
   return `${n.toFixed(2).replace(".", ",")} €`;
 }
 
+/**
+ * "2026-09-04" + "22:30" → "4/9/2026 a las 22:30".
+ *
+ * Se parte la cadena en vez de usar `new Date`: la fecha de una reserva es un
+ * día de calendario, y construir un Date la pasaría por la zona horaria del
+ * navegador, que puede restarle un día al del restaurante.
+ */
+function fechaHoraLarga(fecha: string, hora: string): string {
+  const [a, m, d] = fecha.split("-");
+  if (!a || !m || !d) return `${fecha} ${hora}`;
+  return `${Number(d)}/${Number(m)}/${a} a las ${hora.slice(0, 5)}`;
+}
+
 interface Props {
   reserva: Reserva;
   insights?: ClienteInsights | null;
   className?: string;
   size?: "sm" | "md";
+  /**
+   * Las OTRAS reservas del mismo cliente que caen a menos de 24 horas de esta.
+   * Vacío o sin pasar = no hay duplicado. Lo decide la vista, que es la única
+   * que ve el calendario entero; aquí solo se pinta el aviso.
+   */
+  duplicadas?: ReservaDuplicada[];
+}
+
+/** Una reserva del mismo cliente próxima en el tiempo, para el aviso. */
+export interface ReservaDuplicada {
+  id: string;
+  /** YYYY-MM-DD. */
+  fecha: string;
+  /** HH:MM. */
+  hora: string;
 }
 
 /**
@@ -36,6 +65,7 @@ export function ReservaFlagsChips({
   insights,
   className,
   size = "sm",
+  duplicadas,
 }: Props) {
   const iconSize = size === "sm" ? "h-3.5 w-3.5" : "h-4 w-4";
   const chipSize = size === "sm" ? "h-5 px-1.5" : "h-6 px-2";
@@ -52,6 +82,36 @@ export function ReservaFlagsChips({
     tooltip?: React.ReactNode;
   }> = [];
 
+  // DUPLICADA: el mismo cliente tiene otra reserva a menos de 24 horas de
+  // esta. Va la PRIMERA y en rojo porque es lo único de la fila que puede
+  // significar una mesa bloqueada de más: el caso típico es alguien que se
+  // equivoca reservando por la web, vuelve a reservar bien y no cancela la
+  // primera. No se impide crearla (a veces son dos mesas de verdad), pero las
+  // dos quedan marcadas para que sala lo mire y decida.
+  if (duplicadas && duplicadas.length > 0) {
+    chips.push({
+      key: "duplicada",
+      label: "Reserva duplicada",
+      icon: <TriangleAlert className={iconSize} />,
+      cls: "text-white border-red-600 bg-red-600",
+      extra: "Duplicada",
+      tooltip: (
+        <span className="block text-left leading-relaxed">
+          <span className="block font-medium">Reserva duplicada</span>
+          <span className="block">
+            {duplicadas.length > 1
+              ? "El mismo cliente tiene estas otras reservas:"
+              : "El mismo cliente tiene otra reserva:"}
+          </span>
+          {duplicadas.map((d) => (
+            <span key={d.id} className="block">
+              {fechaHoraLarga(d.fecha, d.hora)}
+            </span>
+          ))}
+        </span>
+      ),
+    });
+  }
   if (reserva.tarjetaIntroducida) {
     chips.push({ key: "tarjeta", label: "Tarjeta introducida", icon: <CreditCard className={iconSize} />, cls: "text-emerald-500 border-emerald-500/40 bg-emerald-500/10" });
   }
