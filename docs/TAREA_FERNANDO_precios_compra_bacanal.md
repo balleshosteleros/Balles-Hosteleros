@@ -5,6 +5,77 @@
 
 ---
 
+## ✅ 04-SEP — LOS COMPLEMENTOS YA SE GUARDAN (y una lista de altas para Iván)
+
+> **1 tarea de catálogo para Iván.** El resto es información. Nada que programar por
+> vuestra parte.
+
+Vuestro hallazgo era correcto y ya está resuelto de raíz. Resumen de lo hecho hoy:
+
+### 1. El descuento ya no llama a Ágora (vuestro bug del endpoint)
+
+Lo comprobamos en vivo: el endpoint que usaba el sincronizador devuelve **siempre**
+`{"Tickets":[]}` con "HTTP 200 correcto" — 22 bytes, frente a los 235 KB de ventas reales
+del endpoint bueno el mismo día. Al no dar error, nadie se enteraba.
+
+En vez de cambiarle la dirección, **hemos retirado ese camino entero**: el bueno ya existía
+y ya hacía lo correcto (lee de las ventas ya guardadas, con historial y sin duplicar). Un
+solo sitio de donde salen los datos. De paso se retiró un motor de descuento viejo que
+escribía las existencias a pelo, sin dejar rastro en el historial.
+
+### 2. Los complementos se capturan (y descontarán) — construido genérico, como pediste
+
+Cada línea de venta puede llevar **complementos que consumen almacén**: el sabor del tabaco,
+la cápsula del café, la guarnición del entrecot, el refresco del combinado, los "Ud. Extra…".
+
+Está montado como **capacidad general**, no como un apaño para Habana: *un producto de venta
+lleva complementos que descuentan según su proporción*. Que hoy los mande Ágora y mañana el
+TPV propio es un detalle; el modelo no cambia. **Un restaurante nuevo no necesita código.**
+
+Verificado con los días 30-ago y 01-sep: **48 complementos capturados**, exactamente los que
+habíais contado. Y confirma vuestra lectura del ratio: `Love 66` aparece con **0,018 y 0,009**
+según sea cazoleta entera o media. Ese matiz se guarda.
+
+⚠️ **El descuento sigue APAGADO a propósito.** Esto captura el dato y deja el motor listo;
+encenderlo es una decisión aparte que necesita además los escandallos cargados.
+
+### 3. 🙋 LO QUE NECESITAMOS DE IVÁN: dar de alta estos productos
+
+De los 48 complementos, **24 no se pueden descontar porque el producto no existe en Balles**
+(o no está enlazado con Ágora). Son casi todos **tabacos de cachimba**:
+
+| Producto (como lo llama Ágora) | id Ágora | Empresa |
+|---|---|---|
+| Huracan · Love 66 · My amor · Big Boy · Fight · Kafayayo · MissJosy · Skimo Watermelon · Al Kakher Yellow | 2280, 1337, 1667, 1319, 1696, 1666, 2295, 2158, 2592 | HABANA |
+| Ud. Extra Brioche Ternera · Ud. Extra Vieira · Ud. Extra Bao-cadillo | 1915, 1911, 1914 | BACANAL |
+
+**Mientras no estén dados de alta, ese tabaco no se descuenta de ningún sitio.** Los que sí
+están (White Cake, Hawai, Cápsula Cafeinada, Patatas fritas, Cocacola, Tónica Nordic, Fanta,
+Sabor Fresa/Coco) ya quedan listos.
+
+> Nota: el dato queda **guardado igualmente** aunque el producto no exista, así que en cuanto
+> los deis de alta se enlazan solos. No se pierde nada por el camino — es la misma lección del
+> `ProductId` de agosto.
+
+### 4. ⚠️ El dato sucio que avisasteis: confirmado
+
+**`SEXY GREEN`** (un cóctel, con familia `HABA/BACA` y ratio 1,0) sigue apareciendo **como
+sabor de una shisha**, 3 veces en dos días. Lo guardamos tal cual —no filtramos: si el TPV
+deja meterlo, el hecho es que se metió—, pero **conviene mirar por qué se pica así en comanda**,
+porque el día que se encienda el descuento eso restaría un cóctel del almacén cada vez.
+
+### 5. Otras dos cosas cerradas hoy
+
+- **Los 7 duplicados de catálogo, fusionados** (eran 7, no 6: apareció también *Mix Goma Pica*
+  en Habana). Zanahoria y Lechuga romana ya tienen su escandallo, su `agora_id` y su precio en
+  la MISMA ficha. **Ojo al detalle:** el precio de proveedor preferido estaba en la ficha
+  muerta, así que el coste de esas dos recetas se venía calculando mal. También arreglado.
+- **Estamos recuperando el histórico**: re-procesando los días desde el 17-jun para capturar
+  hacia atrás los complementos que se tiraron. De regalo, eso recupera también las **288 líneas
+  viejas sin `ProductId`** por las que preguntabais el 28-ago.
+
+---
+
 ## ✅ RESPUESTA DE IVÁN (03-sep) — tus 3 preguntas del 29-ago, contestadas
 
 > Fernando: aquí van las tres. La 1 no te la contesto como la planteaste — le doy la vuelta,
