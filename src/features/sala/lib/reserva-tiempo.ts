@@ -39,6 +39,21 @@ export interface TiempoReserva {
 export const TIEMPO_ANTELACION_MINUTOS = 3 * 60;
 
 /**
+ * Tope del contador cuando ya va en rojo (retraso o mesa excedida).
+ *
+ * Seis horas: es lo máximo que una reserva puede estar de verdad en la mesa.
+ * A partir de ahí el número no cuenta nada real —nadie come seis horas ni
+ * llega con seis horas de retraso—, solo dice que nadie cerró esa reserva.
+ *
+ * Sin tope no paraba NUNCA: una reserva de 2023 a la que nadie tocó el estado
+ * seguía contando, y en pantalla salían más de 30.000 horas.
+ *
+ * Al llegar al tope el contador se queda fijo y se marca con "+" delante, para
+ * que se vea que es un techo y no la cifra exacta.
+ */
+export const TIEMPO_TOPE_ROJO_MINUTOS = 6 * 60;
+
+/**
  * Estados en los que el cliente YA ESTÁ EN LA MESA: a partir de aquí el
  * contador deja de contar retraso y pasa a contar ocupación.
  *
@@ -133,14 +148,19 @@ export function calcularTiempoReserva(
     const ocupados = Math.max(0, -restantes);
     if (ocupados >= duracion) {
       const exceso = ocupados - duracion;
+      const topado = exceso > TIEMPO_TOPE_ROJO_MINUTOS;
       return {
         fase: "EXCEDIDA",
-        texto: formatearHHMM(ocupados),
+        texto: topado
+          ? `+${formatearHHMM(duracion + TIEMPO_TOPE_ROJO_MINUTOS)}`
+          : formatearHHMM(ocupados),
         minutosExceso: exceso,
         detalle:
           exceso === 0
             ? `La mesa ha cumplido su tiempo previsto (${formatearDuracionNatural(duracion)}).`
-            : `Lleva ${formatearDuracionNatural(exceso)} de exceso sobre el tiempo previsto (${formatearDuracionNatural(duracion)}).`,
+            : topado
+              ? `Lleva ${formatearDuracionNatural(exceso)} de exceso sobre el tiempo previsto (${formatearDuracionNatural(duracion)}). El contador se para a las ${formatearDuracionNatural(TIEMPO_TOPE_ROJO_MINUTOS)}: seguramente nadie cerró esta reserva.`
+              : `Lleva ${formatearDuracionNatural(exceso)} de exceso sobre el tiempo previsto (${formatearDuracionNatural(duracion)}).`,
       };
     }
     return {
@@ -164,14 +184,19 @@ export function calcularTiempoReserva(
 
   // Pasó la hora y el cliente no se ha sentado: retraso.
   const retraso = -restantes;
+  const retrasoTopado = retraso > TIEMPO_TOPE_ROJO_MINUTOS;
   return {
     fase: "RETRASO",
-    texto: formatearHHMM(retraso),
+    texto: retrasoTopado
+      ? `+${formatearHHMM(TIEMPO_TOPE_ROJO_MINUTOS)}`
+      : formatearHHMM(retraso),
     minutosExceso: 0,
     detalle:
       retraso === 0
         ? "Es la hora de la reserva y el cliente aún no ha llegado."
-        : `El cliente lleva ${formatearDuracionNatural(retraso)} de retraso.`,
+        : retrasoTopado
+          ? `Pasaron ${formatearDuracionNatural(retraso)} de su hora. El contador se para a las ${formatearDuracionNatural(TIEMPO_TOPE_ROJO_MINUTOS)}: seguramente nadie cerró esta reserva.`
+          : `El cliente lleva ${formatearDuracionNatural(retraso)} de retraso.`,
   };
 }
 
