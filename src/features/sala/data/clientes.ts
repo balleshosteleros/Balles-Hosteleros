@@ -20,7 +20,6 @@ export interface Cliente {
   /** Se pide al reservar por web. Vacío si el cliente no lo dio. */
   fechaNacimiento?: string;
   /** Prefijo internacional; el número va en `telefono`. */
-  telefonoPrefijo?: string;
   /** Consentimiento para comunicaciones comerciales (RGPD). */
   aceptaMarketing?: boolean;
 }

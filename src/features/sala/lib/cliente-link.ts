@@ -7,8 +7,6 @@ export interface ClienteSalaRow {
   apellidos: string | null;
   email: string | null;
   telefono: string | null;
-  /** Prefijo internacional, SIEMPRE aparte del número (ver `prefijos-telefono`). */
-  telefono_prefijo: string | null;
   email_normalizado: string | null;
   telefono_normalizado: string | null;
   clasificacion: string;
@@ -130,7 +128,6 @@ export async function completarFichaCliente(
   clienteId: string,
   datos: {
     fechaNacimiento?: string | null;
-    telefonoPrefijo?: string | null;
     aceptaMarketing?: boolean;
     origen?: string | null;
   },
@@ -138,7 +135,7 @@ export async function completarFichaCliente(
   try {
     const { data: actual } = await supabase
       .from("clientes_sala")
-      .select("fecha_nacimiento, telefono_prefijo, acepta_marketing_email")
+      .select("fecha_nacimiento, acepta_marketing_email")
       .eq("id", clienteId)
       .maybeSingle();
 
@@ -146,14 +143,6 @@ export async function completarFichaCliente(
 
     if (datos.fechaNacimiento && !actual?.fecha_nacimiento) {
       patch.fecha_nacimiento = datos.fechaNacimiento;
-    }
-    // El prefijo nace con "+34" por defecto, así que "tiene valor" no significa
-    // que el cliente lo haya elegido: si sigue siendo el de fábrica, se pisa
-    // con el que acaba de indicar. Un cliente portugués no puede quedarse con
-    // un prefijo español.
-    const prefijoEsDefault = !actual?.telefono_prefijo || actual.telefono_prefijo === "+34";
-    if (datos.telefonoPrefijo && prefijoEsDefault) {
-      patch.telefono_prefijo = datos.telefonoPrefijo;
     }
     if (datos.aceptaMarketing && !actual?.acepta_marketing_email) {
       patch.acepta_marketing_email = true;

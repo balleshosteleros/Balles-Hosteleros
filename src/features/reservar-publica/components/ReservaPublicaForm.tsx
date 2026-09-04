@@ -32,6 +32,7 @@ import { listarMaxPersonasPublicaAction } from "@/features/reservar-publica/acti
 import {
   PREFIJOS_TELEFONO,
   PREFIJO_POR_DEFECTO,
+  componerTelefono,
 } from "@/features/sala/data/prefijos-telefono";
 import { turnoDeHora } from "@/features/sala/lib/dia-negocio";
 import type { CamposObligatoriosPublico } from "@/features/reservar-publica/actions/listar-disponibilidad-publica";
@@ -324,14 +325,14 @@ export function ReservaPublicaForm({
       origen,
       nombre: nombre.trim(),
       apellidos: apellidos.trim(),
-      telefono: telefono.trim() || null,
+      // Entero, con el prefijo dentro: es un solo campo.
+      telefono: componerTelefono(telefonoPrefijo, telefono) || null,
       email: email.trim() || null,
       fecha,
       hora,
       personas,
       grupoZonaId: grupoZonaId || null,
       fechaNacimiento: fechaNacimiento || null,
-      telefonoPrefijo: telefono.trim() ? telefonoPrefijo : null,
       aceptaMarketing,
       codigo: codigo.trim() ? codigo.trim().toUpperCase().replace(/\s+/g, "") : null,
       ticketProductoId: ticketProductoId ?? null,

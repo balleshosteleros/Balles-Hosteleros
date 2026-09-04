@@ -33,7 +33,8 @@ import {
 import { Button } from "@/components/ui/button";
 import {
   PREFIJOS_TELEFONO,
-  PREFIJO_POR_DEFECTO,
+  separarPrefijo,
+  componerTelefono,
 } from "@/features/sala/data/prefijos-telefono";
 import { Cliente, ClasificacionCliente } from "@/features/sala/data/clientes";
 import { listClientes } from "@/features/sala/actions/clientes-actions";
@@ -114,7 +115,6 @@ function mapDbToCliente(row: Record<string, unknown>): Cliente {
     observaciones: (row.observaciones as string) ?? "",
     notasInternas: (row.notas_internas as string) ?? "",
     fechaNacimiento: (row.fecha_nacimiento as string) ?? "",
-    telefonoPrefijo: (row.telefono_prefijo as string) ?? "",
     aceptaMarketing: (row.acepta_marketing_email as boolean) ?? false,
   };
 }
@@ -373,7 +373,6 @@ export function ClientesView() {
         observaciones: borrador.observaciones,
         notasInternas: borrador.notasInternas,
         fechaNacimiento: borrador.fechaNacimiento || null,
-        telefonoPrefijo: borrador.telefonoPrefijo || null,
         aceptaMarketing: borrador.aceptaMarketing ?? false,
       });
       if (!res.ok) {
@@ -814,16 +813,20 @@ export function ClientesView() {
                         se quedaban sin él o con un valor inventado. */}
                     <div className="flex gap-1.5">
                       <select
-                        value={borrador.telefonoPrefijo?.trim() || PREFIJO_POR_DEFECTO}
+                        value={separarPrefijo(borrador.telefono).prefijo}
                         onChange={(e) =>
-                          setBorrador({ ...borrador, telefonoPrefijo: e.target.value })
+                          setBorrador({
+                            ...borrador,
+                            telefono: componerTelefono(
+                              e.target.value,
+                              separarPrefijo(borrador.telefono).numero,
+                            ),
+                          })
                         }
                         className="h-9 w-[96px] shrink-0 rounded-md border border-input bg-background px-2 text-sm"
                         title={
                           PREFIJOS_TELEFONO.find(
-                            (x) =>
-                              x.prefijo ===
-                              (borrador.telefonoPrefijo?.trim() || PREFIJO_POR_DEFECTO),
+                            (x) => x.prefijo === separarPrefijo(borrador.telefono).prefijo,
                           )?.label ?? ""
                         }
                       >
@@ -837,9 +840,15 @@ export function ClientesView() {
                         id="cli-telefono"
                         type="tel"
                         className="flex-1"
-                        value={borrador.telefono}
+                        value={separarPrefijo(borrador.telefono).numero}
                         onChange={(e) =>
-                          setBorrador({ ...borrador, telefono: e.target.value })
+                          setBorrador({
+                            ...borrador,
+                            telefono: componerTelefono(
+                              separarPrefijo(borrador.telefono).prefijo,
+                              e.target.value,
+                            ),
+                          })
                         }
                       />
                     </div>

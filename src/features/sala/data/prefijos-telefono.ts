@@ -11,6 +11,12 @@
  * el portal público y otra en sala— con países diferentes: el cliente podía
  * elegir Marruecos en la web y luego el staff no encontraba ese prefijo al
  * editarle la ficha.
+ *
+ * IMPORTANTE — el teléfono se guarda en UN SOLO campo, con el prefijo dentro
+ * ("+34 612345678"). No hay columna de prefijo aparte: tenerlo partido obligaba
+ * a recomponerlo en cada pantalla y bastaba con que un sitio se olvidara para
+ * que unos clientes salieran con prefijo y otros no. El selector solo sirve
+ * para ESCRIBIRLO cómodo; lo que viaja y se guarda es el número entero.
  */
 
 export interface PrefijoTelefono {

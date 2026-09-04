@@ -22,10 +22,6 @@ import { ahoraEnZona } from "@/features/empresa/lib/zona-horaria";
 import { registrarCambioDatosCliente } from "@/features/sala/lib/cliente-actividad";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
-import {
-  componerTelefono,
-  PREFIJO_POR_DEFECTO,
-} from "@/features/sala/data/prefijos-telefono";
 
 const Schema = z.object({
   nombre: z.string().trim().min(1, "El nombre es obligatorio.").max(120),
@@ -48,7 +44,6 @@ const Schema = z.object({
     .regex(/^\d{4}-\d{2}-\d{2}$/, "La fecha de nacimiento no es válida.")
     .nullable()
     .optional(),
-  telefonoPrefijo: z.string().trim().max(8).nullable().optional(),
   aceptaMarketing: z.boolean().optional(),
 });
 
@@ -146,9 +141,6 @@ export async function guardarFichaCliente(
         ...(d.fechaNacimiento !== undefined
           ? { fecha_nacimiento: d.fechaNacimiento || null }
           : {}),
-        ...(d.telefonoPrefijo !== undefined
-          ? { telefono_prefijo: d.telefonoPrefijo || null }
-          : {}),
         // Aquí sí se puede RETIRAR el consentimiento: si el cliente lo pide por
         // teléfono, alguien tiene que poder desmarcarlo.
         ...(d.aceptaMarketing !== undefined
@@ -171,12 +163,7 @@ export async function guardarFichaCliente(
         cliente_nombre: nombre,
         cliente_apellidos: apellidos,
         cliente_email: email,
-        // Con prefijo: la ficha lo guarda en columna aparte, pero el snapshot
-        // de la reserva lleva el teléfono entero, como en el alta desde sala.
-        cliente_telefono: componerTelefono(
-          d.telefonoPrefijo ?? PREFIJO_POR_DEFECTO,
-          telefono,
-        ) || null,
+        cliente_telefono: telefono,
         updated_at: new Date().toISOString(),
       })
       .eq("cliente_id", clienteId)

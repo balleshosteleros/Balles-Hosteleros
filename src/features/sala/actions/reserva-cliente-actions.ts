@@ -4,7 +4,6 @@ import { createClient } from "@/lib/supabase/server";
 import { getEmpresaActivaForUser } from "@/features/empresa/lib/empresa-server";
 import { registrarCambioDatosCliente } from "@/features/sala/lib/cliente-actividad";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { componerTelefono, separarPrefijo } from "@/features/sala/data/prefijos-telefono";
 
 async function getCtx() {
   const supabase = await createClient();
@@ -64,17 +63,9 @@ export async function guardarDatosClienteReserva(
     if (!nombre) return { ok: false, error: "El nombre es obligatorio." };
     const apellidos = datos.apellidos.trim() || null;
     const email = datos.email.trim() || null;
-    // El formulario manda el teléfono COMPLETO ("+34 612…"). En la ficha va
-    // partido —número y prefijo en columnas distintas, que es como lo tiene
-    // BD— y en la reserva entero, que es lo que se lee y se marca desde sala.
-    const telefonoCompleto = componerTelefono(
-      separarPrefijo(datos.telefono).prefijo,
-      separarPrefijo(datos.telefono).numero,
-    ) || null;
-    const telefono = telefonoCompleto;
-    const { prefijo: telefonoPrefijo, numero: telefonoNumero } = separarPrefijo(
-      datos.telefono,
-    );
+    // El teléfono va entero, con el prefijo dentro: es un solo campo, aquí y
+    // en la ficha del cliente.
+    const telefono = datos.telefono.trim() || null;
 
     // El filtro por empresa es imprescindible: la RLS acota a las empresas del
     // usuario, no a la ACTIVA (mismo motivo que en el resto de reservas).
@@ -102,13 +93,7 @@ export async function guardarDatosClienteReserva(
     if (clienteId) {
       const { error } = await supabase
         .from("clientes_sala")
-        .update({
-          nombre,
-          apellidos,
-          email,
-          telefono: telefonoNumero || null,
-          telefono_prefijo: telefonoNumero ? telefonoPrefijo : null,
-        })
+        .update({ nombre, apellidos, email, telefono })
         .eq("id", clienteId)
         .eq("empresa_id", empresaId);
       if (error) throw error;

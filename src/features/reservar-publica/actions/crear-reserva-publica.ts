@@ -37,7 +37,6 @@ import {
   type DiaSemanaKey,
 } from "@/features/sala/data/reservas";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { componerTelefono } from "@/features/sala/data/prefijos-telefono";
 
 /**
  * Cuánto se le guarda la mesa al cliente mientras introduce su tarjeta.
@@ -100,7 +99,6 @@ const inputSchema = z.object({
     .regex(/^\d{4}-\d{2}-\d{2}$/)
     .optional()
     .nullable(),
-  telefonoPrefijo: z.string().max(8).optional().nullable(),
   /** Consentimiento para comunicaciones comerciales (RGPD: nunca premarcado). */
   aceptaMarketing: z.boolean().optional(),
 });
@@ -253,7 +251,6 @@ export async function crearReservaPublicaAction(
   // Datos extra de la ficha: rellenan huecos, nunca pisan lo que ya hubiera.
   await completarFichaCliente(admin as unknown as SupabaseClient, cliente.id, {
     fechaNacimiento: data.fechaNacimiento ?? null,
-    telefonoPrefijo: data.telefonoPrefijo ?? null,
     aceptaMarketing: data.aceptaMarketing ?? false,
     origen: data.origen ?? "RESERVA_WEB",
   });
@@ -644,12 +641,7 @@ export async function crearReservaPublicaAction(
     // Snapshot de la reserva = datos canónicos de la ficha (los originales mandan).
     cliente_nombre: cliente.nombre,
     cliente_apellidos: cliente.apellidos,
-    // Con prefijo: en la ficha van en columnas separadas, pero el snapshot de
-    // la reserva lleva el teléfono completo, igual que el alta desde sala.
-    cliente_telefono: componerTelefono(
-      data.telefonoPrefijo ?? cliente.telefono_prefijo,
-      cliente.telefono,
-    ),
+    cliente_telefono: cliente.telefono,
     // Excepción: el correo de confirmación tiene que llegarle a QUIEN ha
     // reservado, no al titular de la ficha. Si enganchó por teléfono y aportó
     // otro email, ése es su buzón; mandarlo al de la ficha avisaría a alguien
