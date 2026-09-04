@@ -427,3 +427,85 @@ export async function listEtiquetasEfectivasReserva(
     return { ok: false, data: [] as EtiquetaConOrigen[] };
   }
 }
+
+/**
+ * Etiquetas efectivas de MUCHAS reservas a la vez, para pintar la columna
+ * "Etiquetas" de la lista del servicio.
+ *
+ * Existe `listEtiquetasEfectivasReserva`, pero es de UNA reserva y hace dos
+ * consultas: en una lista de 40 reservas serían 80 viajes a la BD cada vez que
+ * se cambia de día. Aquí van dos consultas para todo el día, se crucen las
+ * reservas que se crucen.
+ *
+ * Devuelve un mapa reservaId → etiquetas, con las de la reserva y las que
+ * hereda de la ficha del cliente juntas y sin repetir, igual que la ficha.
+ */
+export async function listEtiquetasEfectivasDeReservas(
+  reservas: { id: string; clienteId: string | null }[],
+): Promise<{ ok: boolean; data: Record<string, EtiquetaConOrigen[]> }> {
+  try {
+    if (reservas.length === 0) return { ok: true, data: {} };
+    const { supabase } = await getCtx();
+
+    const reservaIds = reservas.map((r) => r.id);
+    const clienteIds = Array.from(
+      new Set(reservas.map((r) => r.clienteId).filter((c): c is string => !!c)),
+    );
+
+    const [resReserva, resCliente] = await Promise.all([
+      supabase
+        .from("sala_reserva_etiquetas")
+        .select("reserva_id, sala_etiquetas(*)")
+        .in("reserva_id", reservaIds),
+      clienteIds.length > 0
+        ? supabase
+            .from("sala_cliente_etiquetas")
+            .select("cliente_id, sala_etiquetas(*)")
+            .in("cliente_id", clienteIds)
+        : Promise.resolve({ data: [], error: null }),
+    ]);
+    if (resReserva.error) throw resReserva.error;
+    if (resCliente.error) throw resCliente.error;
+
+    // Etiquetas del cliente, indexadas por ficha: una misma ficha puede tener
+    // varias reservas en el mismo día y las hereda en todas.
+    const porCliente = new Map<string, Etiqueta[]>();
+    for (const row of (resCliente.data ?? []) as Record<string, unknown>[]) {
+      const et = row.sala_etiquetas as Record<string, unknown> | null;
+      if (!et) continue;
+      const cid = row.cliente_id as string;
+      const lista = porCliente.get(cid) ?? [];
+      lista.push(rowToEtiqueta(et));
+      porCliente.set(cid, lista);
+    }
+
+    const porReserva = new Map<string, Etiqueta[]>();
+    for (const row of (resReserva.data ?? []) as Record<string, unknown>[]) {
+      const et = row.sala_etiquetas as Record<string, unknown> | null;
+      if (!et) continue;
+      const rid = row.reserva_id as string;
+      const lista = porReserva.get(rid) ?? [];
+      lista.push(rowToEtiqueta(et));
+      porReserva.set(rid, lista);
+    }
+
+    const out: Record<string, EtiquetaConOrigen[]> = {};
+    for (const r of reservas) {
+      const map = new Map<string, EtiquetaConOrigen>();
+      // Mismo orden de prioridad que en la ficha: primero las heredadas del
+      // cliente, y encima las de la reserva, que son las que se pueden quitar
+      // desde esta reserva concreta.
+      for (const e of r.clienteId ? porCliente.get(r.clienteId) ?? [] : []) {
+        map.set(e.id, { ...e, origen: "cliente" });
+      }
+      for (const e of porReserva.get(r.id) ?? []) {
+        map.set(e.id, { ...e, origen: "reserva" });
+      }
+      if (map.size > 0) out[r.id] = Array.from(map.values());
+    }
+    return { ok: true, data: out };
+  } catch (err) {
+    console.error("[sala-etiquetas] efectivasDeReservas:", err);
+    return { ok: false, data: {} };
+  }
+}
