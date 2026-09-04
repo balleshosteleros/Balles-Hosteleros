@@ -39,9 +39,18 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   // (a 32px las letras no se leen). Vale para cualquier empresa futura.
   const logo = match.isotipo_url;
 
+  // URL canónica SIN `www`. El dominio responde por las dos vías (con y sin),
+  // y para Google eso son dos webs distintas con el mismo contenido: reparte la
+  // fuerza entre ambas y decide por su cuenta cuál enseñar. El canónico le dice
+  // cuál es la buena, que es la que el restaurante pone en sus carteles.
+  const hostCanonico = match.hostname.replace(/^www\./, "");
+  const rutaCanonica = slugDeParams(slug);
+  const canonical = `https://${hostCanonico}${rutaCanonica ? `/${rutaCanonica}` : "/"}`;
+
   return {
     title: match.seo?.title ?? `${match.nombre_empresa} — ${match.nombre_pagina}`,
     description: match.seo?.description,
+    alternates: { canonical },
     manifest: "/sitio-publico/manifest-web",
     applicationName: match.nombre_empresa,
     appleWebApp: {
@@ -54,6 +63,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
       ? { icon: logo, shortcut: logo, apple: logo }
       : undefined,
     openGraph: {
+      url: canonical,
       title: match.seo?.title,
       description: match.seo?.description,
       images: match.seo?.og_image ? [{ url: match.seo.og_image }] : undefined,
