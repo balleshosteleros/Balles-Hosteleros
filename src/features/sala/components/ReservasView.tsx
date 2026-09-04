@@ -1401,7 +1401,7 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
               className={cn(
                 "h-8 rounded-md text-xs font-medium transition-colors",
                 activo
-                  ? "bg-background text-foreground shadow-sm"
+                  ? "bg-blue-600 text-white shadow-sm hover:bg-blue-600"
                   : "text-muted-foreground hover:text-foreground",
               )}
             >
@@ -2909,7 +2909,11 @@ function PlanoCanvas({
       const w = el.clientWidth;
       const h = el.clientHeight;
       if (w <= 0 || h <= 0) return;
-      const s = Math.min(w / PLANO_CANVAS_W, h / PLANO_CANVAS_H, 1);
+      // Se aprovecha todo el hueco: el lienzo es mas ancho que alto, asi que en
+      // pantallas anchas mandaba el alto y quedaban franjas muertas a los lados.
+      // El tope de 1.6 evita que en un monitor muy grande las mesas se vean
+      // desproporcionadas respecto al texto que llevan dentro.
+      const s = Math.min(w / PLANO_CANVAS_W, h / PLANO_CANVAS_H, 1.6);
       setScale(s > 0 ? s : 1);
     };
     update();
