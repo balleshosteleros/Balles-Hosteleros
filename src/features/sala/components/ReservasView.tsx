@@ -369,12 +369,19 @@ function ReservaQuickPopover({
   onCambiarEstado,
   onBloquearMesa,
   onDesplazarReserva,
+  onWalkIn,
   desdeLista = false,
 }: {
   mesa: Mesa | null;
   reserva: Reserva | null;
   onEditar: () => void;
   onCambiarEstado: (id: string, estado: EstadoReserva) => void;
+  /**
+   * Sentar a alguien que llega sin reservar en esta mesa. Solo se ofrece con la
+   * mesa libre y desde el plano: es el gesto de sala más frecuente y antes no
+   * tenía sitio en la interfaz (encargados, 4-sep-2026).
+   */
+  onWalkIn?: (m: Mesa) => void;
   /**
    * Bloquea para la fecha y turno en pantalla. `mesa` es la mesa concreta que
    * se pulsó en el plano; desde la lista llega null y entonces se bloquean
@@ -464,7 +471,19 @@ function ReservaQuickPopover({
           </p>
         </div>
       ) : (
-        <div className="text-xs text-muted-foreground py-1">Mesa libre</div>
+        <div className="space-y-2">
+          <div className="text-xs text-muted-foreground py-1">Mesa libre</div>
+          {mesa && onWalkIn && (
+            <Button
+              size="sm"
+              className="h-9 w-full text-xs"
+              onClick={() => onWalkIn(mesa)}
+            >
+              <Plus className="h-3.5 w-3.5 mr-1" />
+              Sentar walk-in
+            </Button>
+          )}
+        </div>
       )}
       {reserva && (
         <>
@@ -540,6 +559,7 @@ function MesaReservasPopover({
   onCambiarEstado,
   onBloquearMesa,
   onDesplazarReserva,
+  onWalkIn,
 }: {
   mesa: Mesa | null;
   reservas: Reserva[];
@@ -547,6 +567,7 @@ function MesaReservasPopover({
   onCambiarEstado: (id: string, estado: EstadoReserva) => void;
   onBloquearMesa: (m: Mesa | null, r: Reserva | null) => void;
   onDesplazarReserva: (r: Reserva) => void;
+  onWalkIn?: (m: Mesa) => void;
 }) {
   // Una sola reserva (o ninguna): el popover de siempre, sin nada alrededor.
   if (reservas.length <= 1) {
@@ -558,6 +579,7 @@ function MesaReservasPopover({
         onCambiarEstado={onCambiarEstado}
         onBloquearMesa={onBloquearMesa}
         onDesplazarReserva={onDesplazarReserva}
+        onWalkIn={onWalkIn}
       />
     );
   }
@@ -586,10 +608,12 @@ function MesaReservasPopover({
   );
 }
 
-function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, zonasReales, mesas, mesasMeta, localId, empresaId, getEstadoMesa }: {
+function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, iniciarComoWalkIn = false, zonasReales, mesas, mesasMeta, localId, empresaId, getEstadoMesa }: {
   fecha: string; turno: TurnoReserva;
   onClose: () => void;
   mesaPreseleccionada?: Mesa | null;
+  /** Abre el formulario ya en modo walk-in (viene de "Sentar walk-in" en el plano). */
+  iniciarComoWalkIn?: boolean;
   zonasReales: ZonaReal[];
   mesas: Mesa[];
   /** Capacidades reales del catálogo (min/max) para avisar de aforo de mesa. */
@@ -619,7 +643,7 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
     comensales: 2,
     zona: (mesaPreseleccionada?.zona ?? "") as ZonaSala | "",
     mesaId: (mesaPreseleccionada?.id ?? "") as string,
-    observaciones: "", esWalkIn: false,
+    observaciones: "", esWalkIn: iniciarComoWalkIn,
     // Un alta desde el back-office entra por teléfono salvo que digan otra
     // cosa: es como llega la inmensa mayoría. En walk-in no se usa este valor
     // (lo fija `emitirReserva`), pero se conserva por si vuelve a Cliente.
@@ -2834,6 +2858,7 @@ function PlanoCanvas({
   onBloquearMesa,
   onDesplazarReserva,
   onQuitarBloqueoMesa,
+  onWalkIn,
   reservaMoviendo,
   onElegirDestino,
   onCancelarMover,
@@ -2868,6 +2893,8 @@ function PlanoCanvas({
   onDesplazarReserva: (r: Reserva) => void;
   /** Si la mesa está BLOQUEADA y se pulsa, levanta el bloqueo solo para (fecha, turno). */
   onQuitarBloqueoMesa?: (m: Mesa) => void;
+  /** Alta rápida de walk-in sobre una mesa libre del plano. */
+  onWalkIn?: (m: Mesa) => void;
   /**
    * Reserva "en la mano" tras pulsar Desplazar. Mientras no sea null, el plano
    * está en modo mover: el popover no se abre y el clic elige la mesa destino.
@@ -3210,6 +3237,10 @@ function PlanoCanvas({
                     onCambiarEstado={onCambiarEstado}
                     onBloquearMesa={onBloquearMesa}
                     onDesplazarReserva={onDesplazarReserva}
+                    onWalkIn={(mesa) => {
+                      setMesaPopoverAbiertaId(null);
+                      onWalkIn?.(mesa);
+                    }}
                   />
                 )}
               </PopoverContent>
@@ -3306,6 +3337,13 @@ export function ReservasView() {
   const [tickAhora, setTickAhora] = useState(() => Date.now());
   const [selectedMesa, setSelectedMesa] = useState<Mesa | null>(null);
   const [showNueva, setShowNueva] = useState(false);
+  /**
+   * El alta se abrió con "Sentar walk-in" desde una mesa del plano: el
+   * formulario arranca ya en modo walk-in y no hay que acordarse de pulsar la
+   * pestaña. Se limpia al cerrar para que el botón "Nueva" de la barra siga
+   * dando de alta un cliente normal.
+   */
+  const [nuevaComoWalkIn, setNuevaComoWalkIn] = useState(false);
   const [showListaEspera, setShowListaEspera] = useState(false);
   const [selectedReserva, setSelectedReserva] = useState<Reserva | null>(null);
   /** Cambio de estado pendiente de decidir si se avisa al cliente por correo. */
@@ -4682,6 +4720,17 @@ export function ReservasView() {
   };
 
   /**
+   * "Sentar walk-in" desde una mesa libre del plano: abre el alta con esa mesa
+   * puesta y el formulario ya en modo walk-in, que es como se dan de alta los
+   * clientes que llegan sin reservar.
+   */
+  const abrirWalkInEnMesa = (m: Mesa) => {
+    setSelectedMesa(m);
+    setNuevaComoWalkIn(true);
+    setShowNueva(true);
+  };
+
+  /**
    * "Abrir salón" desde la ficha: enseña el plano de la sala DONDE ESTÁ la
    * mesa de la reserva, no la que hubiera en pantalla.
    *
@@ -4961,11 +5010,20 @@ export function ReservasView() {
               setShowNueva(v);
               // Al cerrar manualmente, limpiamos la mesa preseleccionada para
               // que el siguiente "Nueva" desde la toolbar no la arrastre.
-              if (!v) setSelectedMesa(null);
+              if (!v) {
+                setSelectedMesa(null);
+                setNuevaComoWalkIn(false);
+              }
             }}
           >
             <DialogTrigger asChild>
-              <Button size="sm" className="text-xs h-8 gap-1.5 px-2.5" onClick={() => setSelectedMesa(null)}><Plus className="h-3.5 w-3.5" />Nueva</Button>
+              <Button
+                size="sm"
+                className="text-xs h-8 gap-1.5 px-2.5"
+                onClick={() => { setSelectedMesa(null); setNuevaComoWalkIn(false); }}
+              >
+                <Plus className="h-3.5 w-3.5" />Nueva
+              </Button>
             </DialogTrigger>
             {/* Ancho generoso y contenido en 3 columnas: la reserva se rellena
                 entera sin tener que bajar por el diálogo. */}
@@ -4975,6 +5033,7 @@ export function ReservasView() {
                 fecha={fecha}
                 turno={turno}
                 mesaPreseleccionada={selectedMesa}
+                iniciarComoWalkIn={nuevaComoWalkIn}
                 zonasReales={zonasReales}
                 mesas={mesas}
                 mesasMeta={mesasMeta}
@@ -5018,6 +5077,7 @@ export function ReservasView() {
                     forzarMesaBloqueada: r.forzarMesaBloqueada ?? false,
                   });
                   setSelectedMesa(null);
+                  setNuevaComoWalkIn(false);
                   if (res.ok) {
                     loadReservas(fecha);
                     // El correo solo sale si se eligió "Notificar y confirmar":
@@ -5593,6 +5653,7 @@ export function ReservasView() {
               onBloquearMesa={pedirBloqueoMesa}
               onDesplazarReserva={abrirDesplazar}
               onQuitarBloqueoMesa={handleQuitarBloqueoMesa}
+              onWalkIn={abrirWalkInEnMesa}
               reservaMoviendo={reservaADesplazar}
               onElegirDestino={elegirMesaDestino}
               onCancelarMover={cancelarDesplazar}

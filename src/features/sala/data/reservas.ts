@@ -94,7 +94,10 @@ export const ESTADO_BADGE_CLASS: Record<EstadoReserva, string> = {
   SENTADA:         "bg-green-700/25 text-green-300 border-green-700/50",
   LIBERADA:        "bg-yellow-600/20 text-yellow-300 border-yellow-600/40",
   WALK_IN:         "bg-orange-600/20 text-orange-300 border-orange-600/40",
-  TERMINANDO:      "bg-cyan-600/20 text-cyan-300 border-cyan-600/40",
+  // Gris pizarra a propósito: "terminada" es el final del servicio y no debe
+  // competir visualmente con los estados vivos. Antes era cyan y en sala se
+  // confundía con el azul de RECONFIRMADA.
+  TERMINANDO:      "bg-slate-600/25 text-slate-300 border-slate-500/40",
   NO_SHOW:         "bg-red-600/20 text-red-400 border-red-600/40",
   CANCELADA:       "bg-red-900/20 text-red-500 border-red-800/40",
 };
@@ -107,7 +110,7 @@ export const ESTADO_DOT_CLASS: Record<EstadoReserva, string> = {
   SENTADA:         "bg-green-600",
   LIBERADA:        "bg-yellow-500",
   WALK_IN:         "bg-orange-400",
-  TERMINANDO:      "bg-cyan-500",
+  TERMINANDO:      "bg-slate-400",
   NO_SHOW:         "bg-red-500",
   CANCELADA:       "bg-red-800",
 };
