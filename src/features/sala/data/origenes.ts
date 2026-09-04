@@ -119,21 +119,20 @@ const PALETA_EXTRA = [
  * Orígenes que se ofrecen al dar de alta una reserva desde sala.
  *
  * NO es el catálogo cerrado de la columna (que es abierto: por ahí entran las
- * palabras clave de campaña). Es solo lo que tiene sentido elegir a mano:
- * canales por los que un cliente contacta con el restaurante. Quedan fuera
- * `WALKIN` (no se elige: lo fija el propio tipo de reserva) y `WEB`/`GOOGLE`
- * (los pone el motor de reservas al entrar solas, nadie las teclea).
+ * palabras clave de campaña). Es solo lo que tiene sentido elegir a mano.
+ * Quedan fuera `WALKIN` (no se elige: lo fija el propio tipo de reserva) y
+ * `WEB`/`GOOGLE` (los pone el motor de reservas al entrar solas).
+ *
+ * Hoy solo hay uno: el alta desde sala es la reserva que coge el personal por
+ * TELÉFONO. WhatsApp, Instagram, Facebook y email no son canales de reserva
+ * todavía —no hay por dónde entren—, así que ofrecerlos solo llevaría a
+ * marcar un origen que no ha ocurrido y a ensuciar la analítica de canales.
+ * Cuando alguno se abra de verdad, se añade aquí y el campo vuelve a ser un
+ * desplegable solo.
  *
  * El primero es el que sale marcado por defecto.
  */
-export const ORIGENES_ALTA_SALA: readonly string[] = [
-  "TELEFONO",
-  "LOCAL",
-  "WHATSAPP",
-  "EMAIL",
-  "INSTAGRAM",
-  "FACEBOOK",
-];
+export const ORIGENES_ALTA_SALA: readonly string[] = ["TELEFONO"];
 
 /**
  * Normaliza cualquier string crudo de `reservas.origen` a su clave estable.

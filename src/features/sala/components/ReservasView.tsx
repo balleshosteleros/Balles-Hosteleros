@@ -1709,13 +1709,21 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
             qué se va a guardar. */}
         <div className="col-span-3">
           <Label className="text-xs">Origen</Label>
-          {form.esWalkIn ? (
+          {/* Con un solo origen disponible el campo se muestra fijo, igual que
+              en walk-in: un desplegable de una opción solo invita a abrirlo
+              para no encontrar nada. Si mañana se abre otro canal en
+              `ORIGENES_ALTA_SALA`, vuelve a ser un selector. */}
+          {form.esWalkIn || ORIGENES_ALTA_SALA.length === 1 ? (
             <Input
               className="h-8 text-xs"
-              value={labelOrigen("WALKIN")}
+              value={labelOrigen(form.esWalkIn ? "WALKIN" : ORIGENES_ALTA_SALA[0])}
               readOnly
               disabled
-              title="Las reservas walk-in siempre se registran con origen Walk in."
+              title={
+                form.esWalkIn
+                  ? "Las reservas walk-in siempre se registran con origen Walk in."
+                  : "Las reservas que se dan de alta aquí entran por teléfono."
+              }
             />
           ) : (
             <select
