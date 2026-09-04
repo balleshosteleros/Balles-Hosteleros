@@ -50,6 +50,9 @@ interface DiaInfo {
   horario: string;
 }
 
+/** Un día sin horario se explica igual siempre, sea hoy o no. */
+const TEXTO_SIN_HORARIO = "Sin horario asignado";
+
 function getDiaInfo(fecha: string, info: DiaCalendario | undefined, todayKey: string): DiaInfo {
   const isToday = fecha === todayKey;
   const isPast = fecha < todayKey;
@@ -66,12 +69,15 @@ function getDiaInfo(fecha: string, info: DiaCalendario | undefined, todayKey: st
   const trabajaPrevisto = previsto?.trabaja ?? false;
   const textoPrevisto = previsto?.texto ? previsto.texto : "—";
 
-  // Hoy sigue marcándose en amarillo aunque no haya turno —ubicarse en el mes
-  // es útil—, pero entonces el texto lo dice en vez de dejar una raya muda.
-  const textoHoy = !previsto && !info?.fichado ? "Sin horario asignado" : textoPrevisto;
+  // Un día sin horario dice LO MISMO sea hoy o cualquier otro: el dato es el
+  // mismo, y cambiar el texto según la fecha solo confunde. Hoy conserva su
+  // color amarillo (ubicarse en el mes es útil), pero no su propio vocabulario.
+  const sinHorario = !previsto && !info?.fichado;
   const horarioFichado = info?.fichado
     ? `${formatHorasDecimal(info.horasFichaje)} fichadas`
-    : textoHoy;
+    : sinHorario
+      ? TEXTO_SIN_HORARIO
+      : textoPrevisto;
 
   if (isToday) return { estado: "hoy", badgeText: "Hoy", horario: horarioFichado };
   if (info?.fichado || (trabajaPrevisto && isPast)) return { estado: "trabajado", badgeText: "Trabajado", horario: horarioFichado };
@@ -79,8 +85,8 @@ function getDiaInfo(fecha: string, info: DiaCalendario | undefined, todayKey: st
   // Día fuera de toda vigencia de horario: no se afirma que libras. Que a
   // nadie le hayan asignado horario (o que su asignación ya terminara) no es
   // un día libre, y pintarlo igual que uno sería inventárselo.
-  if (!previsto) return { estado: "sinDato", badgeText: "Sin horario", horario: "Sin horario asignado" };
-  return { estado: "libre", badgeText: "Libre", horario: "No trabajas" };
+  if (!previsto) return { estado: "sinDato", badgeText: "Sin horario", horario: TEXTO_SIN_HORARIO };
+  return { estado: "libre", badgeText: "Libre", horario: "—" };
 }
 
 /**
@@ -263,11 +269,17 @@ export function CalendarioMobile() {
                   <span className={cn("text-base font-semibold leading-none", est.numero)}>
                     {c.dia}
                   </span>
+                  {/* Festivo y víspera van en NEUTRO, nunca en color: el color
+                      de un día dice su estado (trabajas, libras, vacaciones…) y
+                      meter aquí otro color competía con eso —el rosa del
+                      festivo era ademas el mismo que el de baja médica—. El
+                      festivo es el círculo relleno; la víspera, solo el
+                      contorno. */}
                   {festivo && (
                     <span
                       className={cn(
-                        "absolute right-1 top-1 h-1.5 w-1.5 rounded-full",
-                        festivo.tipo === "festivo" ? "bg-rose-500" : "bg-sky-500",
+                        "absolute right-1 top-1 h-1.5 w-1.5 rounded-full border border-slate-500",
+                        festivo.tipo === "festivo" ? "bg-slate-500" : "bg-transparent",
                       )}
                     />
                   )}
@@ -308,11 +320,11 @@ export function CalendarioMobile() {
             </div>
           ))}
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-rose-500" />
+            <span className="h-2.5 w-2.5 shrink-0 rounded-full border border-slate-500 bg-slate-500" />
             Festivo
           </div>
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-sky-500" />
+            <span className="h-2.5 w-2.5 shrink-0 rounded-full border border-slate-500 bg-transparent" />
             Víspera festivo
           </div>
         </div>
@@ -352,8 +364,9 @@ function DetalleDia({
         </span>
       </div>
 
-      {/* En vacaciones, baja o permiso no hay turno que enseñar: la etiqueta ya
-          lo dice todo y una raya suelta debajo solo estorba. */}
+      {/* Vacaciones, baja, permiso o día libre: no hay turno que enseñar. La
+          etiqueta ya lo dice todo, y repetirlo con otras palabras debajo (o
+          dejar una raya suelta) solo estorba. */}
       {di.horario !== "—" && (
         <p className={cn("mt-3 text-base font-medium", est.texto)}>{di.horario}</p>
       )}
@@ -365,8 +378,8 @@ function DetalleDia({
       {festivo && (
         <div className="mt-3 flex items-start gap-2 border-t border-black/5 pt-3">
           {festivo.tipo === "festivo"
-            ? <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-rose-500" />
-            : <Info className="mt-0.5 h-4 w-4 shrink-0 text-sky-500" />}
+            ? <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-slate-500" />
+            : <Info className="mt-0.5 h-4 w-4 shrink-0 text-slate-500" />}
           <div className="min-w-0 text-sm">
             <p className="font-medium">
               {festivo.tipo === "festivo" ? festivo.festivo.nombre : `Víspera de ${festivo.festivo.nombre}`}
