@@ -88,6 +88,8 @@ export interface EstadoReproductor {
   deviceNombre: string | null;
   /** Última señal de vida del equipo de altavoces (ISO). */
   vistoEn: string | null;
+  /** Si true, al acabar una canción entra otra al azar. */
+  aleatorio: boolean;
 }
 
 export type ComandoReproductor =
@@ -96,7 +98,8 @@ export type ComandoReproductor =
   | "siguiente"
   | "anterior"
   | "stop"
-  | "volumen";
+  | "volumen"
+  | "aleatorio";
 
 /** Uso y tope de almacenamiento de música de la empresa. */
 export interface UsoMusica {

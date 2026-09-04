@@ -67,6 +67,29 @@ const CLAVE_MINI_OCULTO = "bh_musica_mini_oculto";
 const MS_LATIDO = 60_000;
 
 /**
+ * Reparto al azar de las canciones que quedan por sonar (Fisher-Yates).
+ *
+ * `yaSonando` se EXCLUYE del reparto, no solo se aparta de la primera
+ * posición. Es la diferencia entre un aleatorio bueno y uno que parece
+ * estropeado: si la canción en curso siguiera dentro, volvería a salir a mitad
+ * de vuelta y otra se quedaría sin sonar en todo el servicio.
+ *
+ * Devuelve n-1 índices (todos menos el que suena), o el único que hay si la
+ * lista tiene una sola canción.
+ */
+function barajarIndices(n: number, yaSonando: number | null): number[] {
+  const arr = Array.from({ length: n }, (_, i) => i).filter(
+    (i) => i !== yaSonando,
+  );
+  if (arr.length === 0) return [0]; // lista de una sola canción: se repite
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
+/**
  * Nombre del equipo, para decir en pantalla por dónde está saliendo la música.
  *
  * Antes se guardaban 60 caracteres del `userAgent`, y en pantalla salía
@@ -122,6 +145,9 @@ interface MusicaContextValue {
   irACancion: (indice: number) => Promise<void>;
   reproduciendo: boolean;
   volumen: number;
+  /** Si está puesto, al acabar una canción entra otra al azar. */
+  aleatorio: boolean;
+  alternarAleatorio: () => Promise<void>;
 
   /** ¿Este navegador es el altavoz DEL LOCAL seleccionado? */
   esAltavoz: boolean;
@@ -173,6 +199,7 @@ export function MusicaProvider({ children }: { children: ReactNode }) {
   const [indice, setIndice] = useState(0);
   const [reproduciendo, setReproduciendo] = useState(false);
   const [volumen, setVolumen] = useState(70);
+  const [aleatorio, setAleatorio] = useState(false);
   const [localAltavoz, setLocalAltavoz] = useState<string | null>(null);
   const [altavozNombre, setAltavozNombre] = useState<string | null>(null);
   const [miniCerrado, setMiniCerrado] = useState(false);
@@ -197,6 +224,18 @@ export function MusicaProvider({ children }: { children: ReactNode }) {
   const listaActualRef = useRef<ListaMusica | null>(null);
   const indiceRef = useRef(0);
   const localIdRef = useRef<string | null>(null);
+  const aleatorioRef = useRef(false);
+
+  /*
+    Orden de reproducción cuando el aleatorio está puesto.
+
+    NO se sortea una canción cada vez: con 100 temas, el azar puro repite unas y
+    deja otras sin sonar en toda la noche, y de vez en cuando pone dos veces
+    seguidas la misma. Se baraja la lista entera y se recorre; al terminar, se
+    vuelve a barajar. Así suenan las 100 antes de repetir ninguna.
+  */
+  const barajaRef = useRef<number[]>([]);
+  const barajaPosRef = useRef(0);
   /** `sonarCancion` se redefine en cada render; el manejador usa la última. */
   const sonarCancionRef = useRef<
     ((lista: ListaMusica, idx: number) => Promise<void>) | null
@@ -235,6 +274,9 @@ export function MusicaProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     localIdRef.current = localId;
   }, [localId]);
+  useEffect(() => {
+    aleatorioRef.current = aleatorio;
+  }, [aleatorio]);
 
   // ─── Carga de datos ───────────────────────────────────────────────────────
 
@@ -416,7 +458,93 @@ export function MusicaProvider({ children }: { children: ReactNode }) {
     return () => clearInterval(t);
   }, [esAltavoz, localId]);
 
+  /*
+    Impide que el ordenador de los altavoces se duerma mientras hay música.
+
+    El equipo del local se deja abierto todo el servicio y casi siempre en
+    segundo plano (el camarero está en Reservas). Al suspenderse el Mac, la
+    música se corta en seco y nadie sabe por qué: hay que ir hasta el ordenador,
+    despertarlo y volver a darle a Play en plena cena.
+
+    El bloqueo se pide SOLO mientras se está reproduciendo de verdad y se suelta
+    al parar, para no dejar una pantalla encendida toda la noche sin motivo. El
+    navegador lo retira solo al ocultar la pestaña, así que se vuelve a pedir
+    cuando reaparece.
+  */
+  useEffect(() => {
+    if (!esAltavoz || !reproduciendo) return;
+    if (typeof navigator === "undefined" || !("wakeLock" in navigator)) return;
+
+    let lock: WakeLockSentinel | null = null;
+    let cancelado = false;
+
+    const pedir = async () => {
+      // Pedirlo con la pestaña oculta lanza excepción: se espera a que vuelva.
+      if (document.visibilityState !== "visible") return;
+      try {
+        lock = await navigator.wakeLock.request("screen");
+      } catch {
+        // Sin permiso o no soportado: la música suena igual, solo se pierde la
+        // garantía de que el equipo no se duerma.
+      }
+    };
+
+    const alVolver = () => {
+      if (!cancelado && document.visibilityState === "visible" && !lock) {
+        void pedir();
+      }
+    };
+
+    void pedir();
+    document.addEventListener("visibilitychange", alVolver);
+
+    return () => {
+      cancelado = true;
+      document.removeEventListener("visibilitychange", alVolver);
+      void lock?.release().catch(() => {});
+    };
+  }, [esAltavoz, reproduciendo]);
+
   // ─── Audio real (solo en el equipo de altavoces) ──────────────────────────
+
+  /**
+   * Qué canción toca después de la actual: la siguiente del disco, o la
+   * siguiente de la baraja si el aleatorio está puesto.
+   *
+   * Es una función normal y no un `useCallback` porque la llama el manejador de
+   * "ended", que vive tanto como el `<audio>`: solo lee refs, así que no puede
+   * quedarse con valores viejos.
+   */
+  const siguienteIndice = (total: number): number => {
+    if (total <= 1) return 0;
+
+    if (!aleatorioRef.current) {
+      return (indiceRef.current + 1) % total;
+    }
+
+    /*
+      Baraja nueva (lista recién puesta, canción elegida a mano, o le han
+      añadido temas mientras sonaba). Reparte las que quedan por sonar y
+      devuelve la primera SIN avanzar la posición: avanzar aquí se saltaría una
+      canción en cada vuelta.
+
+      El reparto tiene `total - 1` entradas porque excluye la que ya suena.
+    */
+    if (barajaRef.current.length !== total - 1) {
+      barajaRef.current = barajarIndices(total, indiceRef.current);
+      barajaPosRef.current = 0;
+      return barajaRef.current[0] ?? 0;
+    }
+
+    barajaPosRef.current++;
+    if (barajaPosRef.current >= barajaRef.current.length) {
+      // Sonaron todas: se reparten de nuevo, dejando fuera la que acaba de
+      // sonar para que la vuelta no empiece repitiéndola.
+      barajaRef.current = barajarIndices(total, indiceRef.current);
+      barajaPosRef.current = 0;
+    }
+    return barajaRef.current[barajaPosRef.current] ?? 0;
+  };
 
   const asegurarAudio = useCallback((): HTMLAudioElement => {
     if (!audioRef.current) {
@@ -439,7 +567,7 @@ export function MusicaProvider({ children }: { children: ReactNode }) {
       el.addEventListener("ended", () => {
         const lista = listaActualRef.current;
         if (!lista || lista.canciones.length === 0) return;
-        const siguiente = (indiceRef.current + 1) % lista.canciones.length;
+        const siguiente = siguienteIndice(lista.canciones.length);
         indiceRef.current = siguiente;
         setIndice(siguiente);
         void sonarCancionRef.current?.(lista, siguiente);
@@ -566,6 +694,8 @@ export function MusicaProvider({ children }: { children: ReactNode }) {
       // propio eco volviendo y la barra saltaría mientras la arrastra.
       if (Date.now() >= volumenLocalHastaRef.current) setVolumen(vol);
       setReproduciendo(Boolean(fila.reproduciendo));
+      // El aleatorio es del local: si lo cambian desde otro equipo, se refleja.
+      setAleatorio(Boolean(fila.aleatorio));
       setAltavozNombre((fila.device_nombre as string | null) ?? null);
 
       /*
@@ -689,6 +819,7 @@ export function MusicaProvider({ children }: { children: ReactNode }) {
       setIndice(e.indice);
       setVolumen(e.volumen);
       setReproduciendo(e.reproduciendo);
+      setAleatorio(e.aleatorio);
       setAltavozNombre(e.deviceNombre);
       const lista = listasRef.current.find((l) => l.id === e.listaId) ?? null;
       setListaActual(lista);
@@ -698,7 +829,7 @@ export function MusicaProvider({ children }: { children: ReactNode }) {
   // ─── Órdenes (las manda cualquiera, incluido el propio altavoz) ───────────
 
   const reproducirLista = useCallback(
-    async (lista: ListaMusica, idxInicial = 0) => {
+    async (lista: ListaMusica, idxInicialPedido?: number) => {
       if (!localId) {
         // Con los locales ya cargados esto solo pasa si la empresa no tiene
         // ninguno dado de alta. Se dice QUÉ hacer: un "elige el local" a secas
@@ -718,6 +849,22 @@ export function MusicaProvider({ children }: { children: ReactNode }) {
         toast.error("Esta lista todavía no tiene canciones");
         return;
       }
+
+      /*
+        Con el aleatorio puesto, dar a Reproducir empieza por una canción al
+        azar, no siempre por la primera: si no, cada servicio arrancaría con el
+        mismo tema y el aleatorio solo se notaría a partir de la segunda.
+
+        Pinchar una canción concreta del listado SÍ manda: ahí el usuario ha
+        elegido, y se respeta aunque el aleatorio esté puesto.
+      */
+      let idxInicial = idxInicialPedido ?? 0;
+      if (idxInicialPedido === undefined && aleatorioRef.current) {
+        idxInicial = Math.floor(Math.random() * lista.canciones.length);
+      }
+      // La baraja se rehace en la próxima canción, ya excluyendo esta.
+      barajaRef.current = [];
+      barajaPosRef.current = 0;
 
       // Se pinta ya (sin esperar al servidor) para que el botón responda al
       // instante; si el servidor rechaza, se revierte con el aviso.
@@ -797,6 +944,31 @@ export function MusicaProvider({ children }: { children: ReactNode }) {
 
   const siguiente = useCallback(() => saltar(1), [saltar]);
   const anterior = useCallback(() => saltar(-1), [saltar]);
+
+  /**
+   * Pone o quita el aleatorio. Se guarda por local, así que si el encargado lo
+   * activa desde su móvil, el ordenador de los altavoces lo respeta.
+   *
+   * No cambia la canción que está sonando: solo afecta a la SIGUIENTE. Cortar
+   * la música a media canción por tocar un ajuste sería lo último que se espera.
+   */
+  const alternarAleatorio = useCallback(async () => {
+    if (!localId) return;
+    const nuevo = !aleatorio;
+
+    setAleatorio(nuevo);
+    aleatorioRef.current = nuevo;
+    // La baraja anterior ya no vale: se rehace en la próxima canción.
+    barajaRef.current = [];
+    barajaPosRef.current = 0;
+
+    const res = await enviarComando({ localId, comando: "aleatorio", aleatorio: nuevo });
+    if (!res.ok) {
+      setAleatorio(!nuevo);
+      aleatorioRef.current = !nuevo;
+      toast.error(res.error ?? "No se pudo cambiar el modo aleatorio");
+    }
+  }, [localId, aleatorio]);
 
   /**
    * Salta a una canción concreta pinchándola en el listado. Es lo mismo que
@@ -899,6 +1071,8 @@ export function MusicaProvider({ children }: { children: ReactNode }) {
         cancionActual,
         indiceActual: indice,
         irACancion,
+        aleatorio,
+        alternarAleatorio,
         reproduciendo,
         volumen,
         esAltavoz,

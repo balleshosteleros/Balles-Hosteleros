@@ -13,7 +13,7 @@
  */
 
 import { useState, useRef, useEffect } from "react";
-import { Play, Pause, SkipBack, SkipForward, Square, Volume2, VolumeX, Speaker, Store, ListMusic, Volume1 } from "lucide-react";
+import { Play, Pause, SkipBack, SkipForward, Square, Volume2, VolumeX, Speaker, Store, ListMusic, Volume1, Shuffle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Slider } from "@/components/ui/slider";
@@ -48,6 +48,8 @@ export function ReproductorPrincipal() {
     cancionActual,
     indiceActual,
     irACancion,
+    aleatorio,
+    alternarAleatorio,
     reproduciendo,
     volumen,
     esAltavoz,
@@ -207,6 +209,24 @@ export function ReproductorPrincipal() {
               aria-label="Parar"
             >
               <Square className="h-4 w-4" />
+            </Button>
+
+            {/*
+              Aleatorio. Con un disco de 100 temas sonando a diario, el orden
+              fijo hace que el equipo se sepa la lista de memoria en una semana.
+              No corta la canción en curso: solo cambia cuál entra después.
+            */}
+            <Button
+              variant={aleatorio ? "secondary" : "outline"}
+              size="icon"
+              className={`h-9 w-9 ${aleatorio ? "text-primary" : ""}`}
+              onClick={() => void alternarAleatorio()}
+              disabled={!hayMusica}
+              title={aleatorio ? "Aleatorio puesto: quitar" : "Poner aleatorio"}
+              aria-label="Modo aleatorio"
+              aria-pressed={aleatorio}
+            >
+              <Shuffle className="h-4 w-4" />
             </Button>
 
             <Button

@@ -595,6 +595,7 @@ function mapEstado(d: Record<string, unknown>): EstadoReproductor {
     deviceId: (d.device_id as string | null) ?? null,
     deviceNombre: (d.device_nombre as string | null) ?? null,
     vistoEn: (d.visto_en as string | null) ?? null,
+    aleatorio: Boolean(d.aleatorio),
   };
 }
 
@@ -613,6 +614,7 @@ export async function enviarComando(input: {
   cancionId?: string | null;
   indice?: number;
   volumen?: number;
+  aleatorio?: boolean;
 }) {
   try {
     const ctx = await guardVer();
@@ -654,6 +656,7 @@ export async function enviarComando(input: {
     if (input.volumen !== undefined) {
       patch.volumen = Math.max(0, Math.min(100, Math.round(input.volumen)));
     }
+    if (input.aleatorio !== undefined) patch.aleatorio = Boolean(input.aleatorio);
     if (input.comando === "play") patch.reproduciendo = true;
     if (input.comando === "pause" || input.comando === "stop") patch.reproduciendo = false;
 
