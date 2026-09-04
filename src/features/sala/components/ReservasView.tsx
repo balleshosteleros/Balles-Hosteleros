@@ -1355,9 +1355,16 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
       codigoCupon: !sinCobro && form.codigoCupon.trim() ? form.codigoCupon.trim().toUpperCase() : null,
       // Walk-in siempre WALKIN, pase lo que pase en el selector: el cliente
       // llegó andando. El servidor lo vuelve a forzar, aquí se manda coherente.
+      // La lista de espera va igual: su origen ES "Lista de espera", el mismo
+      // nombre que su estado, porque es a la vez por dónde entró y en qué
+      // situación está.
       // Nunca `null`: el origen es obligatorio y `camposQueFaltan` ya impide
       // llegar aquí sin él. El fallback es el canal por defecto del alta.
-      origen: esWalkIn ? "WALKIN" : (form.origen.trim() || ORIGENES_ALTA_SALA[0]),
+      origen: esWalkIn
+        ? "WALKIN"
+        : esListaEspera
+          ? "LISTA_ESPERA"
+          : (form.origen.trim() || ORIGENES_ALTA_SALA[0]),
       // Si la mesa elegida está bloqueada, se llega aquí solo después de haber
       // leído y aceptado el aviso: el servidor necesita saberlo para dejar
       // pasar la reserva en vez de rechazarla como hace con la web.
@@ -1831,17 +1838,19 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
               en walk-in: un desplegable de una opción solo invita a abrirlo
               para no encontrar nada. Si mañana se abre otro canal en
               `ORIGENES_ALTA_SALA`, vuelve a ser un selector. */}
-          {esWalkIn || ORIGENES_ALTA_SALA.length === 1 ? (
+          {esWalkIn || esListaEspera || ORIGENES_ALTA_SALA.length === 1 ? (
             <Input
               className="h-8 text-xs"
-              value={labelOrigen(esWalkIn ? "WALKIN" : ORIGENES_ALTA_SALA[0])}
+              value={labelOrigen(
+                esWalkIn ? "WALKIN" : esListaEspera ? "LISTA_ESPERA" : ORIGENES_ALTA_SALA[0],
+              )}
               readOnly
               disabled
               title={
                 esWalkIn
                   ? "Las reservas walk-in siempre se registran con origen Walk in."
                   : esListaEspera
-                    ? "Quien se apunta a la lista de espera está en la puerta: se registra como Teléfono."
+                    ? "La lista de espera se registra con origen Lista de espera, igual que su estado."
                     : "Las reservas que se dan de alta aquí entran por teléfono."
               }
             />
@@ -5043,7 +5052,7 @@ export function ReservasView() {
                 mesas={mesas}
                 mesasMeta={mesasMeta}
                 localId={localId}
-                empresaId={empresaActual.id}
+                empresaId={empresaActual.dbId ?? null}
                 getEstadoMesa={getMesaEstadoTurno}
                 onClose={() => setShowNueva(false)}
                 onSave={async r => {
