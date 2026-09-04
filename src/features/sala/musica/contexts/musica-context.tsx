@@ -707,7 +707,32 @@ export function MusicaProvider({ children }: { children: ReactNode }) {
         ordenador. Ahora se dice qué ha pasado y quién ha sido.
       */
       const deviceFila = (fila.device_id as string | null) ?? null;
+      const filaLocalId = (fila.local_id as string | null) ?? null;
       const miId = getDeviceId();
+
+      /*
+        Quién es el altavoz lo dice la BD, no el localStorage.
+
+        Antes esto se leía solo de localStorage y las dos versiones se podían
+        separar: si la marca se perdía (otra pestaña, limpieza del navegador,
+        un relevo que se deshizo) la BD seguía diciendo que este equipo era el
+        altavoz —y la música SONABA aquí—, pero la pantalla se creía un mando y
+        avisaba de que "sale por otro ordenador (Mac · Chrome)", nombrando a
+        este mismo equipo. Si la fila dice que el altavoz somos nosotros, se
+        recupera la marca y la pantalla vuelve a contar lo que de verdad pasa.
+      */
+      if (miId && deviceFila && filaLocalId && deviceFila === miId) {
+        setLocalAltavoz((prev) => {
+          if (prev === filaLocalId) return prev;
+          try {
+            localStorage.setItem(CLAVE_LOCAL_ALTAVOZ, filaLocalId);
+          } catch {
+            /* sin localStorage: el modo dura solo esta sesión */
+          }
+          return filaLocalId;
+        });
+      }
+
       if (miId && deviceFila && deviceFila !== miId) {
         setLocalAltavoz((prev) => {
           if (prev === null) return prev; // no era este equipo: nada que avisar
@@ -821,6 +846,26 @@ export function MusicaProvider({ children }: { children: ReactNode }) {
       setReproduciendo(e.reproduciendo);
       setAleatorio(e.aleatorio);
       setAltavozNombre(e.deviceNombre);
+
+      /*
+        Al abrir la página, quién es el altavoz también lo dice la BD.
+
+        Sin esto, un equipo que SÍ está sonando pero perdió la marca del
+        navegador se pintaba como mando hasta que llegara el siguiente evento
+        de realtime —y si nadie tocaba nada, no llegaba nunca—, así que el
+        aviso de "sale por otro ordenador" se quedaba fijo señalándose a sí
+        mismo.
+      */
+      const miId = getDeviceId();
+      if (miId && e.deviceId && e.deviceId === miId) {
+        setLocalAltavoz(localId);
+        try {
+          localStorage.setItem(CLAVE_LOCAL_ALTAVOZ, localId);
+        } catch {
+          /* sin localStorage: el modo dura solo esta sesión */
+        }
+      }
+
       const lista = listasRef.current.find((l) => l.id === e.listaId) ?? null;
       setListaActual(lista);
     })();
