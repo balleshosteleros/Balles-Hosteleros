@@ -709,20 +709,41 @@ export async function updateReserva(
       return { ok: false, error: MENSAJE_HORA_CUARTO };
     }
 
-    // Una reserva de Ticket queda congelada en lo que toca al ticket: ni el
-    // tipo de reserva ni el dinero se pueden cambiar a mano. La base de datos
-    // lo impide igualmente; se comprueba aquí para poder dar un mensaje que se
-    // entienda en vez de un error técnico.
-    if (updates.esTicket !== undefined || updates.tipoCategoria !== undefined) {
-      const { data: actualTicket } = await supabase
+    // ── El tipo de reserva queda congelado al crearla ─────────────────────
+    //
+    // El tipo (gratis / cancelación / garantía / ticket) es lo que el cliente
+    // aceptó por escrito en su correo, y en garantía y ticket hay ademas
+    // dinero suyo de por medio: retenido en el banco, o ya cobrado.
+    //
+    // Cambiándolo a mano se podía pasar una garantía a "gratis", y el código
+    // ponía `garantia_importe = null` mientras el banco seguía reteniendo el
+    // dinero: la reserva dejaba de saber cuánto tenía apartado, así que nadie
+    // podía devolverlo ni cobrarlo, y el cliente se quedaba con un correo cuyas
+    // condiciones ya no se correspondían con nada.
+    //
+    // Para cambiar de tipo, el flujo es el normal: se cancela —aplicando su
+    // política, que para eso está— y se hace una reserva nueva.
+    if (
+      updates.esTicket !== undefined ||
+      updates.tipoCategoria !== undefined ||
+      updates.garantiaImporte !== undefined
+    ) {
+      const { data: actualTipo } = await supabase
         .from("reservas")
-        .select("es_ticket")
+        .select("es_ticket, tiene_garantia, tiene_cancelacion")
         .eq("id", id)
         .maybeSingle();
-      if (actualTicket?.es_ticket === true) {
+      if (actualTipo?.es_ticket === true) {
         return {
           ok: false,
           error: "Esta reserva se hizo con un Ticket: su tipo no se puede cambiar.",
+        };
+      }
+      if (actualTipo?.tiene_garantia === true || actualTipo?.tiene_cancelacion === true) {
+        return {
+          ok: false,
+          error:
+            "Esta reserva tiene un compromiso económico con el cliente y su tipo no se puede cambiar. Si hace falta, cancélala —se aplicará su política— y crea una reserva nueva.",
         };
       }
     }
@@ -851,14 +872,9 @@ export async function updateReserva(
     if (updates.estado === "WALK_IN") dbUpdates.origen = "WALKIN";
     if (updates.tarjetaIntroducida !== undefined) dbUpdates.tarjeta_introducida = updates.tarjetaIntroducida;
     if (updates.esTicket !== undefined) dbUpdates.es_ticket = updates.esTicket;
-    // tipoCategoria gobierna política/garantía/importe pagado: al cambiar de
-    // categoría limpiamos los campos que dejan de aplicar para evitar datos
-    // huérfanos (p. ej. politica + garantía en una reserva GRATIS).
+
     if (updates.tipoCategoria !== undefined) {
       dbUpdates.tipo_categoria = updates.tipoCategoria;
-      if (updates.tipoCategoria !== "politica") {
-        dbUpdates.garantia_importe = null;
-      }
       if (updates.tipoCategoria !== "cupon") {
         dbUpdates.importe_pagado = null;
       }
