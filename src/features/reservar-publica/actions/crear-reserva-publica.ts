@@ -37,6 +37,7 @@ import {
   type DiaSemanaKey,
 } from "@/features/sala/data/reservas";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { normalizarNombre } from "@/shared/lib/normalizar-nombre";
 
 /**
  * Cuánto se le guarda la mesa al cliente mientras introduce su tarjeta.
@@ -60,8 +61,13 @@ const inputSchema = z.object({
     .string()
     .min(1)
     .max(RESERVA_NOMBRE_MAX_CHARS)
-    .refine((v) => validarNombre(v).ok, "Escribe un nombre real."),
-  apellidos: z.string().min(1).max(RESERVA_APELLIDOS_MAX_CHARS),
+    .refine((v) => validarNombre(v).ok, "Escribe un nombre real.")
+    .transform(normalizarNombre),
+  apellidos: z
+    .string()
+    .min(1)
+    .max(RESERVA_APELLIDOS_MAX_CHARS)
+    .transform(normalizarNombre),
   telefono: z
     .string()
     .max(40)

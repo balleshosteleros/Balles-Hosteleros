@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { normalizarNombre, normalizarNombreOrNull } from "@/shared/lib/normalizar-nombre";
 
 export interface ClienteSalaRow {
   id: string;
@@ -60,9 +61,9 @@ export function construirDatosDeclarados(
   formulario: { nombre: string; apellidos?: string | null; email?: string | null; telefono?: string | null },
 ): DatosDeclarados | null {
   const out: DatosDeclarados = {};
-  if (camposDistintos.includes("nombre")) out.nombre = formulario.nombre.trim();
+  if (camposDistintos.includes("nombre")) out.nombre = normalizarNombre(formulario.nombre);
   if (camposDistintos.includes("apellidos") && formulario.apellidos?.trim()) {
-    out.apellidos = formulario.apellidos.trim();
+    out.apellidos = normalizarNombre(formulario.apellidos);
   }
   if (camposDistintos.includes("email") && formulario.email?.trim()) {
     out.email = formulario.email.trim();
@@ -93,8 +94,8 @@ export async function findOrLinkClienteSala(
 ): Promise<{ ok: true; result: FindOrLinkClienteResult } | { ok: false; error: string }> {
   const { data, error } = await supabase.rpc("find_or_link_cliente_sala", {
     p_empresa_id: input.empresaId,
-    p_nombre: input.nombre,
-    p_apellidos: input.apellidos ?? null,
+    p_nombre: normalizarNombre(input.nombre),
+    p_apellidos: normalizarNombreOrNull(input.apellidos),
     p_email: input.email ?? null,
     p_telefono: input.telefono ?? null,
   });

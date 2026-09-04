@@ -32,6 +32,7 @@ import type { TipoMesa } from "@/features/sala/planos/data/planos";
 import { RESERVA_COMENTARIO_MAX_CHARS } from "@/features/sala/data/reservas";
 import { normalizarOrigen, ORIGEN_SIN_DATO } from "@/features/sala/data/origenes";
 import { friendlyError } from "@/shared/lib/friendly-errors";
+import { normalizarNombre, normalizarNombreOrNull } from "@/shared/lib/normalizar-nombre";
 import {
   enviarReservaEmail,
   type ReservaEmailActor,
@@ -287,8 +288,8 @@ export async function createReserva(input: {
     let clienteId: string | null = null;
     let clienteExistente = false;
     let camposDistintos: CampoDistinto[] = [];
-    let nombreFinal = input.clienteNombre;
-    let apellidosFinal: string | null = limpiar(input.clienteApellidos);
+    let nombreFinal = normalizarNombre(input.clienteNombre);
+    let apellidosFinal: string | null = normalizarNombreOrNull(input.clienteApellidos);
     // Un contacto vacío se guarda como NULL, nunca como cadena vacía: la BD
     // exige ficha de cliente en cuanto hay teléfono o email (restricción
     // `reservas_cliente_vinculado_si_contacto`), y un "" contaba como contacto.
@@ -791,8 +792,10 @@ export async function updateReserva(
       } else {
         // Sin contacto: walk-in. Quitar vinculación y aceptar nombre tal cual.
         dbUpdates.cliente_id = null;
-        if (updates.clienteNombre !== undefined) dbUpdates.cliente_nombre = updates.clienteNombre;
-        if (updates.clienteApellidos !== undefined) dbUpdates.cliente_apellidos = updates.clienteApellidos;
+        if (updates.clienteNombre !== undefined)
+          dbUpdates.cliente_nombre = normalizarNombre(updates.clienteNombre);
+        if (updates.clienteApellidos !== undefined)
+          dbUpdates.cliente_apellidos = normalizarNombreOrNull(updates.clienteApellidos);
         dbUpdates.cliente_email = null;
         dbUpdates.cliente_telefono = null;
       }
@@ -805,8 +808,10 @@ export async function updateReserva(
         .maybeSingle();
       const vinculada = !!actual?.cliente_id;
       if (!vinculada) {
-        if (updates.clienteNombre !== undefined) dbUpdates.cliente_nombre = updates.clienteNombre;
-        if (updates.clienteApellidos !== undefined) dbUpdates.cliente_apellidos = updates.clienteApellidos;
+        if (updates.clienteNombre !== undefined)
+          dbUpdates.cliente_nombre = normalizarNombre(updates.clienteNombre);
+        if (updates.clienteApellidos !== undefined)
+          dbUpdates.cliente_apellidos = normalizarNombreOrNull(updates.clienteApellidos);
       }
     }
     if (updates.fecha !== undefined) dbUpdates.fecha = updates.fecha;

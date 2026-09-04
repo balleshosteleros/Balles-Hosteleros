@@ -23,10 +23,16 @@ import { registrarCambioDatosCliente } from "@/features/sala/lib/cliente-activid
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import { validarTelefono } from "@/shared/lib/validar-contacto";
+import { normalizarNombre } from "@/shared/lib/normalizar-nombre";
 
 const Schema = z.object({
-  nombre: z.string().trim().min(1, "El nombre es obligatorio.").max(120),
-  apellidos: z.string().trim().max(120).default(""),
+  nombre: z
+    .string()
+    .trim()
+    .min(1, "El nombre es obligatorio.")
+    .max(120)
+    .transform(normalizarNombre),
+  apellidos: z.string().trim().max(120).default("").transform(normalizarNombre),
   telefono: z.string().trim().max(40).default(""),
   email: z
     .string()

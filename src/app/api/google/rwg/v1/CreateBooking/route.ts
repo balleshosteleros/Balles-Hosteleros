@@ -13,6 +13,7 @@ import { validarMotorWebReserva } from "@/features/sala/lib/motor-web-validar";
 import { notificarReservaCreada } from "@/lib/email/reservas/notificar-creada";
 import { turnoDeHora } from "@/features/sala/lib/dia-negocio";
 import { asignarMesaAutomatica } from "@/features/sala/planos/lib/asignacion-mesa";
+import { normalizarNombre, normalizarNombreOrNull } from "@/shared/lib/normalizar-nombre";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -249,8 +250,8 @@ export const POST = withMetricas("CreateBooking", async (request) => {
   const { error: insertErr } = await admin.from("reservas").insert({
     id: reservaId,
     empresa_id: merchant.empresaId,
-    cliente_nombre: data.user_information.given_name ?? "Cliente",
-    cliente_apellidos: data.user_information.family_name ?? null,
+    cliente_nombre: normalizarNombre(data.user_information.given_name) || "Cliente",
+    cliente_apellidos: normalizarNombreOrNull(data.user_information.family_name),
     cliente_telefono: data.user_information.telephone ?? null,
     cliente_email: data.user_information.email ?? null,
     cliente_id: cliente.id,

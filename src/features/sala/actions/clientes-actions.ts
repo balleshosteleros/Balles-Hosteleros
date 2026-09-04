@@ -11,6 +11,7 @@ import {
   validarEmail,
   validarNombre,
 } from "@/shared/lib/validar-contacto";
+import { normalizarNombre, normalizarNombreOrNull } from "@/shared/lib/normalizar-nombre";
 
 async function getContext() {
   const supabase = await createClient();
@@ -175,6 +176,11 @@ export async function updateCliente(
       .from("clientes_sala")
       .update({
         ...input,
+        // Un nombre, un formato: la regla vale también para este update genérico.
+        ...(input.nombre !== undefined ? { nombre: normalizarNombre(input.nombre) } : {}),
+        ...(input.apellidos !== undefined
+          ? { apellidos: normalizarNombreOrNull(input.apellidos) }
+          : {}),
         updated_at: new Date().toISOString(),
       })
       .eq("id", id);

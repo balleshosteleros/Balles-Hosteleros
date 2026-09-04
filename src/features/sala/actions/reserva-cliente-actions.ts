@@ -5,6 +5,7 @@ import { getEmpresaActivaForUser } from "@/features/empresa/lib/empresa-server";
 import { registrarCambioDatosCliente } from "@/features/sala/lib/cliente-actividad";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { validarTelefono } from "@/shared/lib/validar-contacto";
+import { normalizarNombre, normalizarNombreOrNull } from "@/shared/lib/normalizar-nombre";
 
 async function getCtx() {
   const supabase = await createClient();
@@ -60,9 +61,9 @@ export async function guardarDatosClienteReserva(
     const { supabase, empresaId } = ctx;
     if (!empresaId) return { ok: false, error: "Sin empresa activa." };
 
-    const nombre = datos.nombre.trim();
+    const nombre = normalizarNombre(datos.nombre);
     if (!nombre) return { ok: false, error: "El nombre es obligatorio." };
-    const apellidos = datos.apellidos.trim() || null;
+    const apellidos = normalizarNombreOrNull(datos.apellidos);
     const email = datos.email.trim() || null;
     // El teléfono va entero, con el prefijo dentro: es un solo campo, aquí y
     // en la ficha del cliente. Se valida en el SERVIDOR, no solo en el

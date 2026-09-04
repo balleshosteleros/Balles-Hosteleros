@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getEmpresaActivaForUser } from "@/features/empresa/lib/empresa-server";
 import { registrarCambioDatosCliente } from "@/features/sala/lib/cliente-actividad";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { normalizarNombre, normalizarNombreOrNull } from "@/shared/lib/normalizar-nombre";
 
 /**
  * Resolución de una reserva vinculada a un cliente que ya existía.
@@ -269,8 +270,8 @@ export async function resolverVinculacion(
         .maybeSingle();
 
       const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
-      if (declarados.nombre) patch.nombre = declarados.nombre;
-      if (declarados.apellidos) patch.apellidos = declarados.apellidos;
+      if (declarados.nombre) patch.nombre = normalizarNombre(declarados.nombre);
+      if (declarados.apellidos) patch.apellidos = normalizarNombre(declarados.apellidos);
       if (declarados.email) patch.email = declarados.email;
       if (declarados.telefono) patch.telefono = declarados.telefono;
 
@@ -366,13 +367,13 @@ export async function resolverVinculacion(
       return { ok: false, error: "No hay datos nuevos con los que crear una ficha." };
     }
 
-    const nuevoNombre = declarados.nombre ?? (r.cliente_nombre as string);
+    const nuevoNombre = normalizarNombre(declarados.nombre ?? (r.cliente_nombre as string));
     const { data: nuevo, error: errN } = await supabase
       .from("clientes_sala")
       .insert({
         empresa_id: empresaId,
         nombre: nuevoNombre,
-        apellidos: declarados.apellidos ?? null,
+        apellidos: normalizarNombreOrNull(declarados.apellidos),
         email: declarados.email ?? null,
         // El teléfono sólo viaja a la ficha nueva si es distinto del que
         // provocó el enganche. Si el enganche FUE por teléfono, ese número es
