@@ -110,7 +110,7 @@ export const RESERVA_EMAIL_TIPO_FAMILIA: Record<ReservaEmailTipo, ReservaEmailFa
 export const RESERVA_EMAIL_TIPO_LABELS: Record<ReservaEmailTipo, string> = {
   CONFIRMADA: "Reserva confirmada",
   RECONFIRMADA: "Confirma tu reserva",
-  NO_RECONFIRMADA: "Pendiente de reconfirmar",
+  NO_RECONFIRMADA: "No reconfirmada",
   LISTA_ESPERA: "En lista de espera",
   LIBERADA: "Mesa liberada",
   TERMINANDO: "Terminando",
