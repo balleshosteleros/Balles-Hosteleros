@@ -102,7 +102,17 @@ const nextConfig: NextConfig = {
             destination: '/sitio-publico',
           },
           {
-            source: '/:ruta((?!sitio-publico|_next/|api/|favicon|robots|sitemap)[^/.]+)',
+            // `carta|reservar|empleo|comprar` quedan FUERA a propósito: son
+            // portales del software que se sirven en el dominio del cliente sin
+            // repetir su nombre (`bacanalmadrid.com/carta`). El proxy les pone
+            // el slug de la empresa dueña del dominio.
+            //
+            // Sin esta exclusión este rewrite se los llevaba al CMS, que buscaba
+            // una página con slug "carta", no la encontraba y devolvía 404. Y no
+            // se puede arreglar solo en el proxy: este rewrite se resuelve en el
+            // routing de Vercel ANTES, así que el proxy no llegaba a ejecutarse.
+            source:
+              '/:ruta((?!sitio-publico|_next/|api/|favicon|robots|sitemap|carta|reservar|empleo|comprar)[^/.]+)',
             has: [{ type: 'host' as const, value: host }],
             destination: '/sitio-publico/:ruta',
           },
