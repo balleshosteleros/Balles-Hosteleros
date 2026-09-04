@@ -26,7 +26,7 @@ export function ClienteReservasBadge({
         "[.sala-oscuro_&]:text-blue-300",
         className,
       )}
-      title={`Ha reservado ${total} veces`}
+      title={`Ha venido ${total} veces`}
     >
       {total}
     </span>
