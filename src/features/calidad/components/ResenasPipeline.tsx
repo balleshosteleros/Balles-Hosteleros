@@ -89,6 +89,7 @@ import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 import { useGlobalLoadingSync } from "@/shared/hooks/use-global-loading-sync";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { friendlyError } from "@/shared/lib/friendly-errors";
+import { ResenasAnaliticaPanel } from "@/features/calidad/components/ResenasAnaliticaPanel";
 
 // ─── Filtro de período ────────────────────────────────────────
 type PeriodoResenas = "todo" | "semana" | "mes" | "personalizado";
@@ -126,12 +127,38 @@ function rangoFromPeriodo(
   }
 }
 
+/** Primer y último día de un mes "AAAA-MM", en ISO. */
+function rangoDeMes(mes: string): { from: string; to: string } {
+  const [a, m] = mes.split("-").map(Number);
+  const ultimo = new Date(Date.UTC(a, m, 0)).getUTCDate();
+  return {
+    from: `${mes}-01`,
+    to: `${mes}-${String(ultimo).padStart(2, "0")}`,
+  };
+}
+
 export function ResenasPipeline() {
   const [resenas, setResenas] = useState<Resena[]>([]);
   const [info, setInfo] = useState<EmpresaPlaceInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [busqueda, setBusqueda] = useState("");
   const [periodo, setPeriodo] = useState<PeriodoResenas>("todo");
+  // Mes señalado en la gráfica de arriba. Filtra el pipeline reutilizando el
+  // periodo "personalizado" que ya existía, en vez de añadir un filtro paralelo
+  // que habría que mantener sincronizado con el otro.
+  const [mesGrafica, setMesGrafica] = useState<string | null>(null);
+
+  function seleccionarMesGrafica(mes: string | null) {
+    setMesGrafica(mes);
+    if (!mes) {
+      setPeriodo("todo");
+      return;
+    }
+    const { from, to } = rangoDeMes(mes);
+    setCustomFrom(from);
+    setCustomTo(to);
+    setPeriodo("personalizado");
+  }
   const [customFrom, setCustomFrom] = useState<string>(shiftIso(todayIso(), -6));
   const [customTo, setCustomTo] = useState<string>(todayIso());
   const [draggingId, setDraggingId] = useState<string | null>(null);
@@ -425,13 +452,21 @@ export function ResenasPipeline() {
         }
       />
 
+      <ResenasAnaliticaPanel
+        mesSeleccionado={mesGrafica}
+        onSeleccionarMes={seleccionarMesGrafica}
+      />
+
       <FiltroPeriodo
         periodo={periodo}
         customFrom={customFrom}
         customTo={customTo}
-        onPeriodoChange={setPeriodo}
-        onCustomFromChange={setCustomFrom}
-        onCustomToChange={setCustomTo}
+        // Tocar el filtro a mano deshace la selección de la gráfica: si no, el
+        // aviso de "estás viendo agosto" seguía puesto mientras la lista ya
+        // enseñaba otra cosa.
+        onPeriodoChange={(p) => { setMesGrafica(null); setPeriodo(p); }}
+        onCustomFromChange={(v) => { setMesGrafica(null); setCustomFrom(v); }}
+        onCustomToChange={(v) => { setMesGrafica(null); setCustomTo(v); }}
       />
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
