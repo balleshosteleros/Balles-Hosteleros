@@ -2,7 +2,6 @@ import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import type { User } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
 import { esHostPrincipal, esHostQr } from '@/features/marketing/pagina-web/services/hostname-resolver'
-import { PORTALES_SIN_SLUG, slugsDeDominio } from '@/features/marketing/pagina-web/services/slugs-de-dominio'
 import { LANDING_PATH } from '@/features/auth/lib/role-redirect'
 import { checkProfileGuard } from '@/features/auth/lib/profile-guard'
 import {
@@ -169,31 +168,6 @@ export async function updateSession(
   if (rawHost && !esHostPrincipal(rawHost)) {
     const pathname = request.nextUrl.pathname
     const isAsset = /\.[a-z0-9]+$/i.test(pathname) || pathname.startsWith('/api/') || pathname.startsWith('/_next/')
-
-    // Portales SIN slug en el dominio del cliente: `bacanalmadrid.com/carta`
-    // en vez de `.../carta/bacanal`. El dominio ya dice de qué empresa es, así
-    // que repetir el nombre solo alarga la URL — y esa URL es la que acaba
-    // impresa en el QR de la mesa.
-    //
-    // Es GENÉRICO: en cuanto un dominio queda VERIFICADO, sus portales
-    // responden en él. No hay que dar de alta nada por empresa ni por ruta.
-    if (!isAsset) {
-      const portal = PORTALES_SIN_SLUG.find((p) => pathname === p.ruta || pathname === `${p.ruta}/`)
-      if (portal) {
-        const slugs = await slugsDeDominio(rawHost)
-        const slug = slugs ? portal.slug(slugs) : null
-        console.log('[portal-sin-slug]', JSON.stringify({ rawHost, pathname, haySlugs: !!slugs, slug }))
-        // Sin slug (p.ej. empresa sin carta publicada) se deja pasar tal cual:
-        // la propia ruta enseña su "no encontrado", que dice más que un login.
-        if (slug) {
-          const target = request.nextUrl.clone()
-          target.pathname = `${portal.ruta}/${slug}`
-          const res = NextResponse.rewrite(target)
-          res.headers.set('x-paginas-web-host', rawHost)
-          return { response: res, user: null }
-        }
-      }
-    }
 
     if (!isAsset && !esRutaPublicaDeCliente(pathname)) {
       const target = request.nextUrl.clone()

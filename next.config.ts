@@ -45,6 +45,92 @@ const PREVIEW_WEB_HOSTS = Array.from(
   )
 )
 
+/**
+ * Portales públicos que se sirven en el dominio del cliente sin su slug.
+ *
+ * POR QUÉ AQUÍ Y NO EN EL PROXY:
+ * En producción los dominios de cliente los reescribe ESTE archivo, en el
+ * routing de Vercel, que corre ANTES del proxy. Un rewrite puesto en el proxy
+ * no llegaba a ejecutarse nunca y `/carta` acababa en un 404.
+ *
+ * El mapeo dominio→slug se resuelve en BUILD, una sola vez: en cada petición no
+ * hay ninguna consulta. Como contrapartida, conectar un dominio nuevo entra con
+ * el siguiente despliegue —- que es justo cuando Vercel activa su certificado.
+ *
+ * Si la consulta falla (BD caída durante el build), se devuelve lista vacía: la
+ * web del cliente sigue funcionando y los portales siguen accesibles con su
+ * slug, que es como estaban antes.
+ */
+const PORTALES = [
+  { ruta: 'carta', campo: 'carta_slug' },
+  { ruta: 'empleo', campo: 'empleo_slug' },
+  { ruta: 'reservar', campo: 'slug' },
+  { ruta: 'comprar', campo: 'slug' },
+] as const
+
+async function portalesSinSlug() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY
+  if (!url || !key) return []
+
+  try {
+    const { createClient } = await import('@supabase/supabase-js')
+    const db = createClient(url, key, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    })
+
+    const { data: doms } = await db
+      .from('paginas_web_dominios')
+      .select('hostname, pagina_id')
+      .eq('estado', 'VERIFICADO')
+    if (!doms?.length) return []
+
+    const { data: pags } = await db
+      .from('paginas_web')
+      .select('id, empresa_id')
+      .in('id', [...new Set(doms.map((d) => d.pagina_id))])
+    if (!pags?.length) return []
+
+    const empresaDePagina = new Map(pags.map((p) => [p.id, p.empresa_id]))
+
+    const { data: emps } = await db
+      .from('empresas')
+      .select('id, carta_slug, empleo_slug, slug')
+      .in('id', [...new Set(pags.map((p) => p.empresa_id))])
+    if (!emps?.length) return []
+
+    const empresaPorId = new Map(emps.map((e) => [e.id, e]))
+
+    const reglas: Array<{
+      source: string
+      has: Array<{ type: 'host'; value: string }>
+      destination: string
+    }> = []
+
+    for (const dom of doms) {
+      const empresaId = empresaDePagina.get(dom.pagina_id)
+      const empresa = empresaId ? empresaPorId.get(empresaId) : null
+      if (!empresa) continue
+
+      for (const portal of PORTALES) {
+        const slug =
+          (empresa as Record<string, string | null>)[portal.campo] ?? empresa.slug
+        if (!slug) continue
+        reglas.push({
+          source: `/${portal.ruta}`,
+          has: [{ type: 'host', value: dom.hostname }],
+          destination: `/${portal.ruta}/${slug}`,
+        })
+      }
+    }
+
+    return reglas
+  } catch (err) {
+    console.error('[next.config] portalesSinSlug:', err)
+    return []
+  }
+}
+
 const nextConfig: NextConfig = {
   // Probar la app desde el MÓVIL contra el localhost del Mac.
   //
@@ -95,6 +181,10 @@ const nextConfig: NextConfig = {
       // y "/" existe siempre —es la home de la app—, así que ganaba ella y el
       // subdominio seguía mostrando el login en vez de la web del restaurante.
       beforeFiles: [
+        // Portales del software servidos en el dominio del cliente SIN repetir
+        // su nombre: `bacanalmadrid.com/carta` en vez de `.../carta/bacanal`.
+        // Esa es la URL que acaba impresa en el QR de la mesa.
+        ...(await portalesSinSlug()),
         ...PREVIEW_WEB_HOSTS.flatMap((host) => [
           {
             source: '/',
@@ -102,15 +192,9 @@ const nextConfig: NextConfig = {
             destination: '/sitio-publico',
           },
           {
-            // `carta|reservar|empleo|comprar` quedan FUERA a propósito: son
-            // portales del software que se sirven en el dominio del cliente sin
-            // repetir su nombre (`bacanalmadrid.com/carta`). El proxy les pone
-            // el slug de la empresa dueña del dominio.
-            //
-            // Sin esta exclusión este rewrite se los llevaba al CMS, que buscaba
-            // una página con slug "carta", no la encontraba y devolvía 404. Y no
-            // se puede arreglar solo en el proxy: este rewrite se resuelve en el
-            // routing de Vercel ANTES, así que el proxy no llegaba a ejecutarse.
+            // `carta|reservar|empleo|comprar` quedan FUERA: son portales del
+            // software, no páginas del CMS. Los sirve `portalesSinSlug()` justo
+            // arriba, que les pone el slug de la empresa dueña del dominio.
             source:
               '/:ruta((?!sitio-publico|_next/|api/|favicon|robots|sitemap|carta|reservar|empleo|comprar)[^/.]+)',
             has: [{ type: 'host' as const, value: host }],
