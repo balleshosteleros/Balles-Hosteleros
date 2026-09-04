@@ -125,7 +125,24 @@ export interface FacturaAgora {
   subtotal: number | null;
   iva_total: number | null;
   total: number | null;
-  lineas: { id: string; nombre: string | null; cantidad: number; precio_unitario: number | null }[];
+  lineas: {
+    id: string;
+    nombre: string | null;
+    cantidad: number;
+    precio_unitario: number | null;
+    /**
+     * Complementos de la línea (sabor del tabaco, cápsula, guarnición, refresco del
+     * combinado). Consumen almacén aunque no tengan precio propio, así que se ven aquí:
+     * si no, el historial diría que un café gastó solo café.
+     */
+    complementos: {
+      id: string;
+      nombre: string | null;
+      ratio: number;
+      /** false = no existe el producto en Balles → ese consumo no se descuenta. */
+      enlazado: boolean;
+    }[];
+  }[];
 }
 
 /** Histórico de movimientos de un producto, filtrable por rango de fechas. RLS por empresa. */
@@ -171,6 +188,26 @@ export async function getFacturaAgora(
       .eq("ticket_id", ticketId)
       .order("created_at", { ascending: true });
 
+    // Complementos de esas líneas, para colgarlos debajo de la suya.
+    const lineaIds = (lineas ?? []).map((l) => l.id as string);
+    const complementosPorLinea = new Map<string, FacturaAgora["lineas"][number]["complementos"]>();
+    if (lineaIds.length > 0) {
+      const { data: addins } = await supabase
+        .from("pos_ticket_linea_addins")
+        .select("id, linea_id, nombre, ratio, producto_id")
+        .in("linea_id", lineaIds);
+      for (const a of addins ?? []) {
+        const arr = complementosPorLinea.get(a.linea_id as string) ?? [];
+        arr.push({
+          id: a.id as string,
+          nombre: (a.nombre as string) ?? null,
+          ratio: Number(a.ratio ?? 1),
+          enlazado: a.producto_id != null,
+        });
+        complementosPorLinea.set(a.linea_id as string, arr);
+      }
+    }
+
     return {
       ok: true,
       data: {
@@ -188,6 +225,7 @@ export async function getFacturaAgora(
           nombre: (l.nombre as string) ?? null,
           cantidad: Number(l.cantidad ?? 0),
           precio_unitario: (l.precio_unitario as number) ?? null,
+          complementos: complementosPorLinea.get(l.id as string) ?? [],
         })),
       },
     };

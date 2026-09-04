@@ -104,18 +104,30 @@ Ingrediente (tipo='compra', con precio_unitario y unidad)
 
 ### 5.3 Sincronización Ágora POS → Stock
 
+**Un solo origen de verdad: `pos_ticket_lineas`.** El descuento NO llama a la API del TPV;
+lee lo que la ingesta diaria dejó en la base de datos. (Antes había un segundo camino que
+pedía los tickets a Ágora por su cuenta: apuntaba a un endpoint que devolvía siempre vacío
+con HTTP 200, así que no descontaba nunca y no daba error. Retirado el 03-sep.)
+
 ```
 Ágora POS (servidor Windows del partner)
-  → API: GET /api/export/tickets?businessDay=YYYYMMDD
-  → agora-ventas-sync.ts → parse tickets → líneas vendidas
-  → match por agora_id en tabla productos
-  → Si tiene escandallo: restar ingredientes proporcionales × merma
-  → Si tipo='compra' sin escandallo: restar directamente de stock
-  → stock.cantidad_actual -= consumo
+  → API: GET /api/export/?business-day=YYYY-MM-DD&filter=Invoices
+  → agora-ventas-ingesta.ts → pos_tickets + pos_ticket_lineas
+                              + pos_ticket_linea_addins (complementos)
+  ↓ (solo si empresas.stock_descuento_desde cubre el día)
+  → agora-descuento-dia.ts → por ticket: revertir + descontarStockPorTicket
+  → Si tiene escandallo: un movimiento por ingrediente × merma ÷ factor_conversion
+  → Si tipo='compra' sin escandallo: 1:1 sobre sí mismo
+  → Complementos: cantidad_línea × ratio, resueltos igual que una línea
+  → todo vía KARDEX (stock_movimientos); stock.cantidad_actual es saldo materializado
 ```
 
-**Cron automático:** todos los días a las 08:00 vía `/api/cron/agora-sync`
-**Manual:** botón en panel logística → `syncVentasYDescontarStockAction()`
+**Cron automático:** todos los días vía `/api/cron/agora-sync` (ingesta + descuento gated).
+**Manual:** reproceso de un día desde `sincronizarDiaAgora` (mismo camino, revierte antes).
+
+> ⚠️ El descuento está **apagado a propósito** mientras `empresas.stock_descuento_desde` sea
+> NULL: encenderlo antes de tener los escandallos y los complementos enlazados daría números
+> falsos (descontaría el plato pero no su guarnición, el café pero no su cápsula).
 
 **Regla de seguridad Ágora:** ante error de conexión o fallo → detener, mostrar error exacto, pedir aprobación antes de actuar.
 

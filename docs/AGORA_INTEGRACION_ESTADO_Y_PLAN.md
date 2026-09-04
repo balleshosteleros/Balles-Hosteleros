@@ -150,7 +150,7 @@ El otro dev (vía su agente) ejecutó una **migración total del catálogo** con
 - **Resultado actual:** BACANAL **495** productos · HABANA **472**, todos con `agora_id` y `observaciones='Importado de Agora 2026-06-10'`. Stock: **151 (Bacanal) + 145 (Habana)** filas (solo `tipo=compra` con existencias en Ágora). Almacenes usados: **4→Bacanal, 1→Habana**; Getafe (3), Alcorcón (5) y "almacen 2" siguen fuera.
 - **Recetas:** las 208 filas reales de `producto_composicion` (multi-ingrediente) se borraron en cascada; se recrearon **203 triviales 1:1** (venta→compra de los `ambos`, cantidad 1, merma 0). Las recetas reales antiguas **no están en la BD**: el comentario del script menciona "backup Bacanal en `backup_agora`", pero **esa tabla no existe en ningún schema** (verificado vía Management API el 10-jun) → si hay backup, es externo al proyecto (preguntar al otro dev dónde lo guardó).
 - **Consecuencias:** la sección "EJECUTADO 09-06" de arriba queda como historia. **NO volver a ejecutar `sync-bacanal.mjs`**: crearía productos fuera de la curación del Excel y pisaría su formato de stock. Su script usa env **`AGORA_API_URL` / `AGORA_API_TOKEN`** (≠ de los `AGORA_POS_*` propuestos aquí — unificar nombres al portar a la app).
-- **Sigue abierto:** (1) ~~recurrencia~~ → ✅ **RESUELTA en código (2026-06-10, commit `e43411d`)**, ver sección siguiente; falta solo la config en Vercel; (2) sedes **Getafe/Alcorcón/almacén 2**; (3) **food-cost real** (recetas multi-ingrediente); (4) el código heredado ventas→descuento sigue **superado** y sin retirar (`agora-sync.ts` y `agora-ventas-sync.ts` ya no tienen consumidores reales).
+- **Sigue abierto:** (1) ~~recurrencia~~ → ✅ **RESUELTA en código (2026-06-10, commit `e43411d`)**, ver sección siguiente; falta solo la config en Vercel; (2) sedes **Getafe/Alcorcón/almacén 2**; (3) **food-cost real** (recetas multi-ingrediente); (4) ~~el código heredado ventas→descuento sigue superado y sin retirar~~ → ✅ **RETIRADO el 2026-09-03** (`7bc8ef53`): `agora-ventas-sync.ts` borrado entero junto con su action muerta y el motor legacy `descontarStockPorVentas`. Queda `agora-sync.ts` (catálogo), aún superado.
 
 ### ✅ RECURRENCIA implementada — espejo de stock en la app (2026-06-10, `e43411d`)
 
@@ -293,8 +293,8 @@ curl -X POST http://habanabacanaliictpv.ddns.me:8984/api/hub/generate-data/ -H '
 |---|---|
 | `src/features/logistica/types/agora.ts` | Schemas Zod (`agoraVentaRawSchema`), tipos, `validarLoteAgora()` |
 | `src/features/logistica/services/agora-sync.ts` | **Flujo A — Sync de catálogo**: fetch → validar → upsert en `productos` por `agora_id`. Reintentos backoff. |
-| `src/features/logistica/services/agora-ventas-sync.ts` | **Flujo B — Ventas→stock**: fetch tickets del día → mapear `agora_id`→`producto_id` → descontar stock |
-| `src/features/logistica/actions/agora-actions.ts` | Server actions: `syncVentasAgoraAction`, `getLastSyncLog`, `getSyncLogHistory`, `syncVentasYDescontarStockAction` |
+| ~~`src/features/logistica/services/agora-ventas-sync.ts`~~ | **BORRADO (03-sep)**. Su endpoint devolvía siempre `{"Tickets":[]}` con HTTP 200. Sustituido por: ingesta → `pos_ticket_lineas` → `agora-descuento-dia.ts` → `descontarStockPorTicket` |
+| `src/features/logistica/actions/agora-actions.ts` | Server actions: `syncVentasAgoraAction`, `getLastSyncLog`, `getSyncLogHistory` (`syncVentasYDescontarStockAction` retirada el 03-sep: era código muerto) |
 | `src/features/logistica/components/AgoraSyncStatus.tsx` | UI: estado del último sync + botón "Sincronizar" + diálogo Regla de Seguridad |
 | `src/app/api/cron/agora-sync/route.ts` | Cron (Vercel, diario 08:00) que dispara el Flujo B; fail-closed con `CRON_SECRET` |
 | `supabase/migrations/016_agora_sync_log.sql` | Tabla `agora_sync_log` (auditoría de cada sync) + RLS por empresa |
@@ -310,13 +310,33 @@ curl -X POST http://habanabacanaliictpv.ddns.me:8984/api/hub/generate-data/ -H '
 
 ---
 
-## 3. Cómo funciona hoy (3 caminos)
+## 3. Cómo funciona hoy
 
-1. **Botón "Sincronizar" (UI)** → `syncVentasAgoraAction` → `syncVentasAgora` (Flujo A, catálogo). Hace `fetch(AGORA_API_URL)` esperando un **array plano** `{agora_id, nombre, categoria, precio_venta}`.
-2. **Cron 08:00** → `descontarStockPorVentasAgora` (Flujo B). Hace `GET {AGORA_API_URL}/api/export/tickets?businessDay=YYYYMMDD` con header `api-token`, espera `{ "Tickets": [{ "Lines": [{ProductId, Quantity}] }] }`.
-3. **`syncVentasYDescontarStockAction` (manual)** → existe en `agora-actions.ts` pero **NO está referenciado por ninguna UI** → hoy es código muerto (solo correría el cron).
+> Reescrito el 2026-09-04. Antes había **dos caminos** de ventas→stock; uno estaba roto en
+> silencio. Ahora hay **uno solo**, y su origen de verdad es la base de datos, no la API del TPV.
 
-El descuento real lo hace `descontarStockPorVentas(supabase, {empresaId, lineas, signo})`: por cada línea, si el producto de venta tiene escandallo descuenta cada ingrediente `cantidad × cantidadEscandallo × (1 + merma%)`; producto de compra sin escandallo, 1:1; venta sin escandallo, se omite. **No tiene guardia anti-doble-descuento** en el camino Ágora (el camino POS sí, vía flag `stock_descontado` en `pos_tickets`).
+1. **Botón "Sincronizar" (UI)** → `syncVentasAgoraAction` → espejo de stock (Flujo A, catálogo).
+2. **Cron diario** (`/api/cron/agora-sync`, y reproceso manual con `?fecha=`):
+   1. `ingerirVentasAgoraDia` → `GET /api/export/?business-day=YYYY-MM-DD&filter=Invoices` →
+      escribe `pos_tickets`, `pos_ticket_lineas` y **`pos_ticket_linea_addins`** (complementos).
+   2. `descontarDiaSiCorte` (`services/agora-descuento-dia.ts`) → **solo si**
+      `empresas.stock_descuento_desde` cubre el día. Por ticket: revertir movimientos previos y
+      `descontarStockPorTicket`.
+3. **Reproceso manual de un día** (`sincronizarDiaAgora`, UI de sala) → mismo camino, incluida
+   la reversión previa. Antes re-ingería sin revertir: con el descuento activo habría dejado
+   movimientos huérfanos (la ingesta recrea las líneas con ids nuevos).
+
+El descuento lo hace **`descontarStockPorTicket`**, siempre por el KARDEX: con escandallo, un
+movimiento por ingrediente (`cantidad × receta × (1+merma%) ÷ factor_conversion`); producto de
+compra sin escandallo, 1:1; venta sin escandallo, se omite. Los **complementos** consumen
+`cantidad_línea × ratio` y se resuelven igual que una línea, con `origen_linea_id` propio (el
+índice único del kardex haría colisionar plato y complemento si compartieran línea).
+
+Idempotencia: flag `pos_tickets.stock_descontado` + índice único `(origen_linea_id, producto_id)`.
+
+⚠️ **Hoy el descuento está APAGADO a propósito** (`stock_descuento_desde` NULL) y hay 0
+movimientos `pos_ticket` en el kardex. Encenderlo requiere: escandallos cargados y los
+complementos huérfanos dados de alta (16 productos, casi todos tabaco de cachimba).
 
 ---
 
@@ -395,15 +415,23 @@ Cotejando el código con la sección **"Integración mediante API HTTP"** de la 
 - Mantener el Zod, alimentándolo desde el objeto ya normalizado (el `Id` numérico de Ágora encaja con el regex `^\d+$`).
 - Resultado: el botón "Sincronizar" de la UI pasa a traer el catálogo real.
 
-### Fase D — Corregir Flujo B (ventas→stock, `agora-ventas-sync.ts`)
+### Fase D — ✅ HECHA (03-sep) — Corregir Flujo B (ventas→stock)
+> Resuelta **retirando** el flujo, no arreglándolo: el camino bueno (ingesta → `pos_ticket_lineas` → kardex) ya existía. La idempotencia vía `POST /api/doc/processed` quedó innecesaria: la dan el flag `stock_descontado` y el índice único del kardex.
+
+<details><summary>Plan original (queda como referencia)</summary>
+
 - **Endpoint:** de `/api/export/tickets?businessDay=` a **`GET /api/export/?business-day=YYYY-MM-DD&filter=<lo que el cliente considere "venta">`** (probablemente `Invoices`; confirmar en Fase A si son `Invoices`, `DeliveryNotes` o ambos).
 - **Fecha:** formato ISO con guiones y el cron debe pedir **ayer** (cierre del día anterior), no hoy.
 - **Parser:** navegar `{Invoices:[{Items|Lines:[{ProductId/Reference, Quantity}]}]}` según la muestra real de Fase A. Reaprovechar la lógica de agregación por `agora_id` ya existente.
 - **Idempotencia (crítico):** tras un descuento OK, `POST /api/doc/processed` con las series+números procesados y pedir el export con `include-processed=false` (default). Así Ágora no reexporta lo ya consumido y se evita el doble descuento en re-ejecuciones. Defensa adicional: registrar GlobalId/serie-número en `agora_sync_log`.
 - **Mapeo de ids:** verificar que `Product.Id` de Ágora == los `agora_id` ya sembrados (los 74 hardcodeados tipo "1833" en `data-productos-venta.ts`). Si no coinciden, **re-sembrar el catálogo** desde Fase C para alinear.
 
-### Fase E — Limpieza y coherencia
-- `syncVentasYDescontarStockAction`: o se le da un **botón manual** en logística ("Procesar ventas del día", supervisado, cumpliendo la Regla de Seguridad) o se elimina como código muerto.
+</details>
+
+### Fase E — Limpieza y coherencia (parcialmente hecha)
+> ✅ `syncVentasYDescontarStockAction` **eliminada** como código muerto (03-sep).
+
+- ~~`syncVentasYDescontarStockAction`: botón manual o eliminarla~~ → eliminada (ver arriba). El reproceso manual de un día ya existe y es seguro: `sincronizarDiaAgora` desde la UI de sala.
 - Migración 016 tiene columnas `error_message` y `sales_data` sin usar: aprovechar `sales_data` para guardar el payload crudo (oro puro para depurar formato real).
 
 ### Fase F — Validación

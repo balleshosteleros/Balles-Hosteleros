@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { getFacturaAgora, type FacturaAgora } from "@/features/logistica/actions/kardex-actions";
 import { formatEur } from "@/shared/lib/numero";
@@ -61,11 +61,33 @@ export function FacturaAgoraInline({ ticketId }: { ticketId: string }) {
         </thead>
         <tbody>
           {factura.lineas.map((l) => (
-            <tr key={l.id} className="border-t border-border/50">
-              <td className="py-1">{l.nombre ?? "—"}</td>
-              <td className="py-1 text-right tabular-nums">{l.cantidad}</td>
-              <td className="py-1 text-right tabular-nums">{eur(l.precio_unitario)}</td>
-            </tr>
+            <Fragment key={l.id}>
+              <tr className="border-t border-border/50">
+                <td className="py-1">{l.nombre ?? "—"}</td>
+                <td className="py-1 text-right tabular-nums">{l.cantidad}</td>
+                <td className="py-1 text-right tabular-nums">{eur(l.precio_unitario)}</td>
+              </tr>
+              {/* Complementos: no llevan precio propio (van dentro del de la línea), pero
+                  SÍ consumen almacén. Se muestran para que el historial no mienta. */}
+              {l.complementos.map((c) => (
+                <tr key={c.id} className="text-muted-foreground">
+                  <td className="py-0.5 pl-4">
+                    <span className="mr-1 opacity-60">+</span>
+                    {c.nombre ?? "—"}
+                    {!c.enlazado && (
+                      <span
+                        className="ml-1.5 text-amber-600"
+                        title="No existe este producto en Balles, así que su consumo no se descuenta. Hay que darlo de alta."
+                      >
+                        ⚠ sin dar de alta
+                      </span>
+                    )}
+                  </td>
+                  <td className="py-0.5 text-right tabular-nums">×{c.ratio}</td>
+                  <td className="py-0.5" />
+                </tr>
+              ))}
+            </Fragment>
           ))}
         </tbody>
       </table>
