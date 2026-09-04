@@ -194,7 +194,7 @@ export const RESERVA_EMAIL_PLANTILLAS_SEED: ReservaEmailPlantillaSeed[] = [
   // ── Estados ──────────────────────────────────────────────────────────────
   {
     tipo: "CONFIRMADA",
-    asunto_default: "Reserva confirmada · {{fecha}} {{hora}} · {{empresa}}",
+    asunto_default: "Reserva confirmada · {{empresa}}",
     mensaje_default: "",
   },
   {
@@ -202,43 +202,43 @@ export const RESERVA_EMAIL_PLANTILLAS_SEED: ReservaEmailPlantillaSeed[] = [
     // nada. "Gracias por confirmarnos que vienes" agradecía algo que aún no
     // había pasado, y el correo ni siquiera llevaba con qué hacerlo.
     tipo: "RECONFIRMADA",
-    asunto_default: "¿Nos confirmas tu reserva del {{fecha}}? · {{empresa}}",
+    asunto_default: "Reconfirma tu reserva de hoy · {{empresa}}",
     mensaje_default:
       "Se acerca la hora de tu reserva. ¿Nos confirmas que vienes? Con un clic nos ayudas a tener tu mesa lista.",
   },
   {
     tipo: "NO_RECONFIRMADA",
-    asunto_default: "No hemos podido confirmar tu reserva del {{fecha}}",
+    asunto_default: "No hemos podido confirmar tu reserva · {{empresa}}",
     mensaje_default:
       "No llegamos a recibir tu confirmación, así que tu reserva figura como no reconfirmada. Sigue en pie con los datos que ves aquí abajo: si vas a venir, llámanos y la dejamos lista.",
   },
   {
     tipo: "LISTA_ESPERA",
-    asunto_default: "Tu reserva del {{fecha}} está en lista de espera",
+    asunto_default: "Tu reserva está en lista de espera · {{empresa}}",
     mensaje_default:
       "Tu reserva ha pasado a lista de espera. Te escribiremos en cuanto tengamos una mesa para ti.",
   },
   {
     tipo: "LIBERADA",
-    asunto_default: "Tu reserva del {{fecha}} se ha cerrado",
+    asunto_default: "Tu reserva se ha cerrado · {{empresa}}",
     mensaje_default:
       "Tu reserva ha pasado a cerrada: la mesa ya está libre. Gracias por tu visita.",
   },
   {
     tipo: "TERMINANDO",
-    asunto_default: "Tu reserva del {{fecha}} está terminando",
+    asunto_default: "Tu reserva está terminando · {{empresa}}",
     mensaje_default:
       "Tu reserva ha pasado al estado terminando. No tienes que hacer nada.",
   },
   {
     tipo: "NO_SHOW",
-    asunto_default: "No pudimos atenderte el {{fecha}} · {{empresa}}",
+    asunto_default: "No pudimos atenderte · {{empresa}}",
     mensaje_default:
       "Te esperábamos y no llegaste a venir, así que hemos marcado la reserva como no presentada. Si crees que ha sido un error, avísanos y lo revisamos.",
   },
   {
     tipo: "CANCELADA",
-    asunto_default: "Reserva cancelada · {{fecha}} {{hora}} · {{empresa}}",
+    asunto_default: "Reserva cancelada · {{empresa}}",
     mensaje_default:
       "Hemos cancelado tu reserva. Si crees que es un error, avísanos y lo revisamos.",
   },
@@ -254,25 +254,25 @@ export const RESERVA_EMAIL_PLANTILLAS_SEED: ReservaEmailPlantillaSeed[] = [
   },
   {
     tipo: "TICKET_RESERVA",
-    asunto_default: "Reserva confirmada · {{fecha}} {{hora}} · {{empresa}}",
+    asunto_default: "Reserva confirmada · {{empresa}}",
     mensaje_default:
       "Tu ticket ya tiene fecha y hora. Estos son los datos de tu reserva.",
   },
   {
     tipo: "GARANTIA_PENDIENTE",
-    asunto_default: "Reserva confirmada · {{fecha}} {{hora}} · {{empresa}}",
+    asunto_default: "Reserva confirmada · {{empresa}}",
     mensaje_default:
       "Tu reserva está confirmada. Unos días antes te pediremos una tarjeta en garantía; te avisaremos por correo, así que estate atento.",
   },
   {
     tipo: "GARANTIA_SOLICITUD",
-    asunto_default: "Necesitamos tu tarjeta para tu reserva del {{fecha}}",
+    asunto_default: "Necesitamos tu tarjeta para tu reserva · {{empresa}}",
     mensaje_default:
       "Para mantener tu mesa necesitamos una tarjeta en garantía. No te cobramos nada ahora: el importe se libera cuando te presentes.",
   },
   {
     tipo: "GARANTIA_CADUCADA",
-    asunto_default: "Tu reserva del {{fecha}} se ha cancelado",
+    asunto_default: "Tu reserva se ha cancelado · {{empresa}}",
     mensaje_default:
       "No hemos recibido la tarjeta a tiempo, así que hemos liberado la mesa. Si quieres volver a reservar, estaremos encantados de atenderte.",
   },
