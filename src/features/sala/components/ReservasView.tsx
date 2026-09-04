@@ -111,6 +111,7 @@ import {
 import {
   COLORES_PASTEL_ZONAS,
   type Sala as SalaConfig,
+  type LocalMin,
   type Zona as ZonaReal,
   type Plano as PlanoConfig,
   type PlanoMesaPosicion,
@@ -2609,6 +2610,68 @@ function FiltroSalasDropdown({
   );
 }
 
+function FiltroLocalesDropdown({
+  locales,
+  localActualId,
+  onSelect,
+}: {
+  locales: LocalMin[];
+  localActualId: string;
+  onSelect: (id: string) => void;
+}) {
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button size="sm" variant="outline" className="text-xs h-8 gap-1.5 px-2.5">
+          <ListFilter className="h-3.5 w-3.5" />
+          Locales
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-64 p-2" align="start">
+        <div className="flex items-center justify-between px-1 pb-1.5 mb-1.5 border-b">
+          <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+            Locales
+          </span>
+        </div>
+        <div className="max-h-[300px] overflow-y-auto space-y-0.5">
+          {locales.length === 0 ? (
+            <p className="px-2 py-3 text-xs text-muted-foreground italic text-center">
+              No hay locales
+            </p>
+          ) : (
+            locales.map((l) => {
+              const checked = l.id === localActualId;
+              return (
+                <button
+                  key={l.id}
+                  type="button"
+                  onClick={() => onSelect(l.id)}
+                  className={cn(
+                    "w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs hover:bg-muted transition-colors text-left",
+                    checked && "bg-muted/60",
+                  )}
+                >
+                  <span
+                    className={cn(
+                      "w-4 h-4 rounded border flex items-center justify-center shrink-0",
+                      checked
+                        ? "bg-primary border-primary text-primary-foreground"
+                        : "border-border",
+                    )}
+                  >
+                    {checked && <Check className="h-3 w-3" />}
+                  </span>
+                  <span className="truncate flex-1">{l.nombre}</span>
+                </button>
+              );
+            })
+          )}
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 function FiltroPlanosDropdown({
   planos,
   planoActualId,
@@ -3495,6 +3558,7 @@ export function ReservasView() {
   const [salasLocalTodas, setSalasLocalTodas] = useState<SalaConfig[]>([]);
   const [salaActualId, setSalaActualId] = useState<string>("");
   const [navDirSala, setNavDirSala] = useState<1 | -1>(1);
+  const [locales, setLocales] = useState<LocalMin[]>([]);
   const [planosLocal, setPlanosLocal] = useState<PlanoConfig[]>([]);
   const [planoActualId, setPlanoActualId] = useState<string>("");
   const [planoSalas, setPlanoSalas] = useState<Record<string, string[]>>({});
@@ -3557,6 +3621,7 @@ export function ReservasView() {
         // cuente como un cambio pendiente y vuelva a pedirlo todo.
         localCargadoRef.current = `${empresaActual.id}|${d.localId}|${posicionesRefresh}`;
       }
+      setLocales(d.locales);
       setSalasLocalTodas(d.salas);
       const salaPrincipal = d.salas.find((s) => s.esPrincipal) ?? d.salas[0];
       setSalaActualId(salaPrincipal?.id ?? "");
@@ -5247,10 +5312,6 @@ export function ReservasView() {
                 }} />
             </DialogContent>
           </Dialog>
-          <FiltroEstadosDropdown
-            seleccionados={filtroEstados}
-            onChange={setFiltroEstados}
-          />
           {(origenesPresentes.length > 0 || filtroOrigen !== "TODOS") && (
             <FiltroOrigenDropdown
               valor={filtroOrigen}
@@ -5258,6 +5319,10 @@ export function ReservasView() {
               onChange={setFiltroOrigen}
             />
           )}
+          <FiltroEstadosDropdown
+            seleccionados={filtroEstados}
+            onChange={setFiltroEstados}
+          />
           <div className="relative w-[130px]">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
             <Input placeholder="Buscar..." className="pl-8 h-8 text-xs" value={busqueda} onChange={e => setBusqueda(e.target.value)} />
@@ -5293,30 +5358,41 @@ export function ReservasView() {
           </div>
         </div>
 
-        {/* Selector de Local + Plano + Sala + filtro de Zonas — solo en vista
-            día; en mes conserva el hueco (los totales del mes son globales y
-            no dependen de local, plano, sala ni zona).
-            Estos mandan sobre el PLANO, no sobre la lista, así que arrancan
-            en la vertical exacta donde arranca el plano: la lista mide 760 px
-            fijos, y `pl-[760px]` sobre un bloque que ocupa el ancho entero
-            deja el primer botón justo en su borde. Con un margen suelto no
-            valía: la barra envuelve, y el margen se sumaba a lo que hubiera
-            delante en esa fila, así que el grupo caía donde tocara.
-            Con el plano a pantalla completa no hay lista de la que separarse
-            y vuelven al principio. */}
+        {/* SEGUNDA FILA de la barra: los mandos del PLANO (planos, salas,
+            zonas) y los de la FECHA (día/mes y el navegador de fechas).
+            Van juntos en un solo bloque que ocupa el ancho entero y arranca
+            con `pl-[760px]`, la anchura de la lista: así la fila entera cae en
+            la vertical donde empieza el plano, que es sobre lo que mandan.
+
+            Tienen que ir en el MISMO bloque. Separados, el primero se llevaba
+            la fila entera y empujaba la fecha a una tercera fila pegada al
+            borde izquierdo. Y con un margen suelto tampoco valía: la barra
+            envuelve, y el margen se suma a lo que haya delante en esa fila, no
+            al borde de la pantalla.
+
+            Con el plano a pantalla completa no hay lista de la que separarse y
+            vuelven al principio. */}
         <div
           className={cn(
             "flex items-center gap-1.5",
             panelOculto === "ninguno" && "w-full pl-[760px]",
-            vista !== "dia" && "invisible pointer-events-none",
           )}
-          aria-hidden={vista !== "dia"}
-          inert={vista !== "dia"}
         >
-          <FiltroPlanosDropdown planos={planosLocal} planoActualId={planoActualId} onSelect={setPlanoActualId} />
-          <FiltroSalasDropdown salas={salasLocal} salaActualId={salaActualId} onSelect={setSalaActualId} />
-          <FiltroZonasDropdown items={zonaItems} seleccionados={zonaIdsSel} onChange={setZonaIdsSel} />
-        </div>
+          {/* Solo en vista día; en mes conservan el hueco (los totales del mes
+              son globales y no dependen de plano, sala ni zona). */}
+          <div
+            className={cn(
+              "flex items-center gap-1.5",
+              vista !== "dia" && "invisible pointer-events-none",
+            )}
+            aria-hidden={vista !== "dia"}
+            inert={vista !== "dia"}
+          >
+            <FiltroLocalesDropdown locales={locales} localActualId={localId} onSelect={setLocalId} />
+            <FiltroPlanosDropdown planos={planosLocal} planoActualId={planoActualId} onSelect={setPlanoActualId} />
+            <FiltroSalasDropdown salas={salasLocal} salaActualId={salaActualId} onSelect={setSalaActualId} />
+            <FiltroZonasDropdown items={zonaItems} seleccionados={zonaIdsSel} onChange={setZonaIdsSel} />
+          </div>
 
         <div className="flex items-center gap-1.5">
           {/* Indicadores globales del mes (solo en vista mes). Suman TODA la
@@ -5386,6 +5462,7 @@ export function ReservasView() {
               <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setFecha(addDays(fecha, 1))}><ChevronRight className="h-4 w-4" /></Button>
             </div>
           )}
+          </div>
         </div>
 
         <div className="ml-auto flex items-center gap-1.5">
