@@ -15,6 +15,7 @@ import {
   finalizarPausaPersonal,
   getMiConfigFichaje,
   getMiFichajeHoy,
+  getMiVentanaFichajeHoy,
   getTiposFichajeDisponibles,
   iniciarPausaPersonal,
   type ModoFichaje,
@@ -24,7 +25,7 @@ import { obtenerPosicionActual } from "@/features/rrhh/utils/geo";
 import { fichajeColorDot } from "@/features/rrhh/data/fichajes";
 import type { MiFichajeHoy } from "@/features/mi-panel/types";
 import { formatHorasDecimal } from "@/shared/lib/timeUtils";
-import { formatHoraEnZona } from "@/features/empresa/lib/zona-horaria";
+import { formatHoraEnZona, ahoraEnZona } from "@/features/empresa/lib/zona-horaria";
 
 // Hora en la zona horaria de la empresa del fichaje (PRP-069).
 function formatHora(iso: string | null, tz: string): string {
@@ -63,6 +64,16 @@ export function FichajeBar({
   const [tipoElegido, setTipoElegido] = useState<string | undefined>(undefined);
   // Id del fichaje cuyo autocierre ya se disparó: evita el bucle refresh→efecto.
   const autocierreHechoRef = useRef<string | null>(null);
+  // Ventana de fichaje de hoy (turno + cortesía configurada en Ajustes). Fuera
+  // de ella el servidor rechaza el fichaje, así que aquí NO se ofrece el botón.
+  const [ventana, setVentana] = useState<{
+    tieneHorario: boolean;
+    entradaMin: number | null;
+    margenAntesMin: number;
+    margenDespuesMin: number;
+    permitirFueraHorario: boolean;
+    zonaHoraria: string;
+  } | null>(null);
 
   async function refresh() {
     const res = await getMiFichajeHoy();
@@ -77,6 +88,18 @@ export function FichajeBar({
     });
     getTiposFichajeDisponibles().then((res) => {
       if (res.ok) setTiposDisponibles(res.data);
+    });
+    getMiVentanaFichajeHoy().then((v) => {
+      if (v.ok) {
+        setVentana({
+          tieneHorario: v.tieneHorario,
+          entradaMin: v.entradaMin,
+          margenAntesMin: v.margenAntesMin,
+          margenDespuesMin: v.margenDespuesMin,
+          permitirFueraHorario: v.permitirFueraHorario,
+          zonaHoraria: v.zonaHoraria,
+        });
+      }
     });
   }, []);
 
@@ -218,6 +241,33 @@ export function FichajeBar({
 
   void tick; // forzar render del cronómetro
 
+  // ¿Puede fichar entrada AHORA? Solo dentro de su ventana: desde
+  // `margenAntesMin` antes de la hora del turno hasta `margenDespuesMin`
+  // después, tal y como esté configurado en Ajustes → RRHH → Fichajes (5 y 10
+  // hoy, pero manda SIEMPRE el ajuste, no un número escrito aquí).
+  //
+  // Fuera de esa ventana el servidor rechaza el fichaje, así que enseñar el
+  // botón solo servía para que el empleado lo pulsara y se llevara un error.
+  // Con "permitir fuera de horario" activado, o sin turno resuelto, se muestra
+  // como hasta ahora y decide el servidor.
+  const puedeFicharAhora = (() => {
+    if (!ventana) return true; // aún cargando: no se oculta nada
+    if (ventana.permitirFueraHorario) return true;
+    if (!ventana.tieneHorario || ventana.entradaMin == null) return true;
+    const { minutos } = ahoraEnZona(ventana.zonaHoraria);
+    const desde = ventana.entradaMin - ventana.margenAntesMin;
+    const hasta = ventana.entradaMin + ventana.margenDespuesMin;
+    // El turno de noche cruza medianoche: se prueba también ±24 h.
+    const dentro = (m: number) => m >= desde && m <= hasta;
+    return dentro(minutos) || dentro(minutos + 1440) || dentro(minutos - 1440);
+  })();
+
+  // Texto de ayuda cuando el botón no está disponible.
+  const horaEntradaPrevista =
+    ventana?.entradaMin != null
+      ? `${String(Math.floor(ventana.entradaMin / 60)).padStart(2, "0")}:${String(ventana.entradaMin % 60).padStart(2, "0")}`
+      : null;
+
   const esTeletrabajo = !!fichaje?.modoTeletrabajo;
   let estadoLabel = "Sin fichar";
   let estadoColor = "bg-slate-100 text-slate-700 border-slate-200";
@@ -277,7 +327,7 @@ export function FichajeBar({
 
         {/* Accesos de fichaje */}
         <div className="flex flex-wrap items-center gap-2">
-          {sinFichar && (
+          {sinFichar && puedeFicharAhora && (
             <Button
               size="lg"
               disabled={loading || working}
@@ -287,6 +337,13 @@ export function FichajeBar({
               {working ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <LogIn className="mr-2 h-5 w-5" />}
               Fichar entrada
             </Button>
+          )}
+          {sinFichar && !puedeFicharAhora && !loading && (
+            <span className="text-sm text-muted-foreground">
+              {horaEntradaPrevista
+                ? `Podrás fichar a partir de las ${horaEntradaPrevista}`
+                : "Ahora no puedes fichar"}
+            </span>
           )}
           {trabajando && (
             <>

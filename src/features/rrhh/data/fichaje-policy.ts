@@ -32,12 +32,15 @@ export interface FichajePolicy {
 }
 
 export const FICHAJE_POLICY_DEFAULT: FichajePolicy = {
+  // Cortesía de 5 minutos ANTES y DESPUÉS de la hora de entrada del turno, y en
+  // ambos casos se registra la hora del turno (redondeo). Fuera de esa ventana
+  // no se puede fichar: el botón no aparece.
   permitirAntes: true,
-  margenAntesMin: 15,
+  margenAntesMin: 5,
   permitirDespues: true,
-  margenDespuesMin: 15,
+  margenDespuesMin: 5,
   redondearAntes: true,
-  redondearDespues: false,
+  redondearDespues: true,
   popupMargenAntesMin: 15,
   popupMargenDespuesMin: 15,
   permitirFueraHorario: false,

@@ -448,6 +448,15 @@ export interface VentanaFichajeHoy {
   /** Config del aviso (pop-up) de fichar — Ajustes RRHH → Fichajes. */
   popupMargenAntesMin: number;
   popupMargenDespuesMin: number;
+  /**
+   * Cortesía REAL para fichar (Ajustes RRHH → Fichajes), distinta de la del
+   * pop-up: cuántos minutos antes y después de la hora de entrada se permite
+   * fichar. Fuera de esa ventana el servidor rechaza el fichaje, así que la app
+   * no debe ofrecer el botón. `permitirFueraHorario` lo deja siempre abierto.
+   */
+  margenAntesMin: number;
+  margenDespuesMin: number;
+  permitirFueraHorario: boolean;
   avisoSonido: boolean;
   avisoVibracion: boolean;
   reavisoActivo: boolean;
@@ -471,7 +480,11 @@ async function leerPopupConfig(
   avisoVibracion: boolean;
   reavisoActivo: boolean;
   reavisoIntervaloMin: number;
+  margenAntesMin: number;
+  margenDespuesMin: number;
+  permitirFueraHorario: boolean;
 }> {
+  // Sin empresa no se conoce la cortesía: 0 minutos, no se inventa ninguna.
   const def = {
     popupMargenAntesMin: 15,
     popupMargenDespuesMin: 15,
@@ -479,12 +492,15 @@ async function leerPopupConfig(
     avisoVibracion: false,
     reavisoActivo: false,
     reavisoIntervaloMin: 5,
+    margenAntesMin: 0,
+    margenDespuesMin: 0,
+    permitirFueraHorario: false,
   };
   if (!empresaId) return def;
   const { data: cfg } = await supabase
     .from("empresa_fichajes_config")
     .select(
-      "popup_margen_antes_min, popup_margen_despues_min, aviso_sonido, aviso_vibracion, reaviso_activo, reaviso_intervalo_min",
+      "popup_margen_antes_min, popup_margen_despues_min, aviso_sonido, aviso_vibracion, reaviso_activo, reaviso_intervalo_min, permitir_antes, margen_antes_min, permitir_despues, margen_despues_min, permitir_fuera_horario",
     )
     .eq("empresa_id", empresaId)
     .maybeSingle();
@@ -495,6 +511,10 @@ async function leerPopupConfig(
     avisoVibracion: !!cfg?.aviso_vibracion,
     reavisoActivo: !!cfg?.reaviso_activo,
     reavisoIntervaloMin: (cfg?.reaviso_intervalo_min as number | null) ?? 5,
+    // Cortesía real para fichar. Si el permiso está apagado, margen 0.
+    margenAntesMin: cfg?.permitir_antes ? ((cfg.margen_antes_min as number | null) ?? 0) : 0,
+    margenDespuesMin: cfg?.permitir_despues ? ((cfg.margen_despues_min as number | null) ?? 0) : 0,
+    permitirFueraHorario: !!cfg?.permitir_fuera_horario,
   };
 }
 
@@ -510,6 +530,9 @@ export async function getMiVentanaFichajeHoy(): Promise<VentanaFichajeHoy> {
     avisoVibracion: false,
     reavisoActivo: false,
     reavisoIntervaloMin: 5,
+    margenAntesMin: 0,
+    margenDespuesMin: 0,
+    permitirFueraHorario: false,
     zonaHoraria: ZONA_HORARIA_DEFAULT,
   };
   try {
@@ -783,8 +806,11 @@ async function evaluarEntradaFichaje(
         const permitirDespues = cfg ? !!cfg.permitir_despues : false;
         const margenAntes = permitirAntes ? ((cfg?.margen_antes_min as number) ?? 0) : 0;
         const margenDespues = permitirDespues ? ((cfg?.margen_despues_min as number) ?? 0) : 0;
+        // Redondeo a la hora del turno dentro de la cortesía, en los DOS
+        // sentidos: llegar 3 min antes o 3 min tarde cuenta desde la hora de
+        // entrada. Fuera de la ventana no se ficha (se corta más arriba).
         const redondearAntes = cfg ? !!cfg.redondear_antes : true;
-        const redondearDespues = cfg ? !!cfg.redondear_despues : false;
+        const redondearDespues = cfg ? !!cfg.redondear_despues : true;
 
         const inicios = tramos
           .map((t) => hhmmAMinutos(t.inicio))
