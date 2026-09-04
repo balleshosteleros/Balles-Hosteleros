@@ -11,7 +11,7 @@
 // para poder usarse desde server actions sin violar las reglas de "use server".
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { distanciaMetros } from "@/features/rrhh/utils/geo";
+import { distanciaMetros, esPrecisionInsuficiente } from "@/features/rrhh/utils/geo";
 import { getHorarioDia, hhmmAMinutos, type HorarioDia } from "@/features/rrhh/utils/horario-empleado";
 import { minutosDiaEnZona } from "@/features/empresa/lib/zona-horaria";
 import { getZonaHorariaEmpresa } from "@/features/empresa/lib/empresa-server";
@@ -140,7 +140,7 @@ export type PresenciaGeo =
 export async function resolverPresenciaPorGeo(
   supabase: SupabaseClient,
   userId: string,
-  geo: { lat: number; lng: number },
+  geo: { lat: number; lng: number; precision?: number },
   filas?: FilaEmpleadoEmpresa[],
 ): Promise<PresenciaGeo> {
   const locales = await getMisLocales(supabase, userId, filas);
@@ -172,6 +172,15 @@ export async function resolverPresenciaPorGeo(
       ok: false,
       sinUbicacion: true,
       error: "Tus locales no tienen ubicación configurada. Avisa a tu responsable.",
+    };
+  }
+  // Una lectura de ±1000 m (móvil con ubicación "aproximada" o sin GPS real) no
+  // permite afirmar que el empleado NO está en el local: el fallo es del
+  // dispositivo. Decirle "acércate al local" es acusarle en falso.
+  if (esPrecisionInsuficiente(geo.precision)) {
+    return {
+      ok: false,
+      error: `Tu móvil no está dando bien tu ubicación (se equivoca en ${Math.round(geo.precision as number)} m). Entra en los Ajustes del móvil, busca Ubicación, y actívala en modo Preciso. Luego vuelve a intentarlo.`,
     };
   }
   if (!mejor) {
@@ -223,7 +232,7 @@ export type PresenciaCandidatos =
 export async function resolverCandidatosPorGeo(
   supabase: SupabaseClient,
   userId: string,
-  geo: { lat: number; lng: number },
+  geo: { lat: number; lng: number; precision?: number },
   filas?: FilaEmpleadoEmpresa[],
 ): Promise<PresenciaCandidatos> {
   const locales = await getMisLocales(supabase, userId, filas);
@@ -261,6 +270,15 @@ export async function resolverCandidatosPorGeo(
       ok: false,
       sinUbicacion: true,
       error: "Tus locales no tienen ubicación configurada. Avisa a tu responsable.",
+    };
+  }
+  // Una lectura de ±1000 m (móvil con ubicación "aproximada" o sin GPS real) no
+  // permite afirmar que el empleado NO está en el local: el fallo es del
+  // dispositivo. Decirle "acércate al local" es acusarle en falso.
+  if (esPrecisionInsuficiente(geo.precision)) {
+    return {
+      ok: false,
+      error: `Tu móvil no está dando bien tu ubicación (se equivoca en ${Math.round(geo.precision as number)} m). Entra en los Ajustes del móvil, busca Ubicación, y actívala en modo Preciso. Luego vuelve a intentarlo.`,
     };
   }
   if (dentro.length === 0) {

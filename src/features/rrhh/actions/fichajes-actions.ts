@@ -2,7 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { distanciaMetros } from "@/features/rrhh/utils/geo";
+import { distanciaMetros, esPrecisionInsuficiente } from "@/features/rrhh/utils/geo";
 import { getEmpresaActivaId } from "@/features/empresa/actions/empresa-activa-actions";
 import { calcularSalidaPrevista, cerrarConReparto } from "@/features/mi-panel/utils/fichaje-multiempresa";
 import { getRolContext } from "@/features/auth/actions/permisos-actions";
@@ -327,6 +327,16 @@ export async function ficharEntrada(geo: GeoInput) {
             "Tu local no tiene ubicación configurada. Avisa a tu responsable.",
         };
       }
+      // Antes de comparar distancias hay que fiarse de la lectura: una posición
+      // de ±1000 m (móvil con ubicación "aproximada" o sin GPS) no dice nada
+      // sobre si el empleado está en el local, y acusarle de estar lejos es
+      // falso. El problema es del dispositivo, y el mensaje debe decirlo.
+      if (esPrecisionInsuficiente(geo.precision)) {
+        return {
+          ok: false,
+          error: `Tu móvil no está dando bien tu ubicación (se equivoca en ${Math.round(geo.precision)} m). Entra en los Ajustes del móvil, busca Ubicación, y actívala en modo Preciso. Luego vuelve a intentarlo.`,
+        };
+      }
       const dist = distanciaMetros(geo.lat, geo.lng, local.lat, local.lng);
       if (dist > local.radio_metros) {
         return {
@@ -400,6 +410,12 @@ export async function ficharSalida(fichajeId: string, geo: GeoInput) {
         .eq("id", fichaje.local_id)
         .single();
       if (local && local.lat != null && local.lng != null) {
+        if (esPrecisionInsuficiente(geo.precision)) {
+          return {
+            ok: false,
+            error: `Tu móvil no está dando bien tu ubicación (se equivoca en ${Math.round(geo.precision)} m). Entra en los Ajustes del móvil, busca Ubicación, y actívala en modo Preciso. Luego vuelve a intentarlo.`,
+          };
+        }
         const dist = distanciaMetros(geo.lat, geo.lng, local.lat, local.lng);
         if (dist > local.radio_metros) {
           return {
