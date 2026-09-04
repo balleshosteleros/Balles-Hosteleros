@@ -5,7 +5,6 @@ import { useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { NumberInput } from "@/shared/components/NumberInput";
 import { LoadingSpinner } from "@/shared/components/LoadingSpinner";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -17,7 +16,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { ahoraEnZona, formatFechaHoraEnZona } from "@/features/empresa/lib/zona-horaria";
 import { useSincronizacionEnVivo } from "@/shared/hooks/useSincronizacionEnVivo";
-import { Plus, Search, ChevronLeft, ChevronRight, ListPlus, ListFilter, Check, Move, Map as MapIcon, List as ListIcon, Lock } from "lucide-react";
+import { Plus, Search, ChevronLeft, ChevronRight, ListFilter, Check, Move, Map as MapIcon, List as ListIcon, Lock } from "lucide-react";
 // Configuración solo se carga cuando el usuario pulsa "Configuración" — fuera del bundle inicial.
 const ConfigReservasView = dynamic(
   () =>
@@ -980,10 +979,14 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
   // Sin mesa elegida se mantiene la lectura de zona: no queda ningún hueco
   // limpio para ese grupo.
   const horaConflictiva = useMemo(() => {
+    // La lista de espera no tiene conflicto posible: se apunta a alguien
+    // precisamente porque a esa hora no hay mesa. Marcarlo en ámbar sería
+    // avisar de lo que se está haciendo a propósito.
+    if (esListaEspera) return false;
     if (!slotElegido) return false;
     if (mesaBanner) return mesaOcupadaEn(slotElegido, mesaBanner.codigo);
     return !slotElegido.hayMesaLibre;
-  }, [slotElegido, mesaBanner, mesaOcupadaEn]);
+  }, [esListaEspera, slotElegido, mesaBanner, mesaOcupadaEn]);
 
   /**
    * Peligro por AFORO (👥): el grupo no encaja en la capacidad de la mesa.
@@ -1605,9 +1608,14 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
               {slots.map((s) => {
                 // ⏰ = peligro de HORARIO. El aforo no depende de la hora, así
                 // que aquí nunca sale 👥.
-                const pisa = mesaBanner
-                  ? mesaOcupadaEn(s, mesaBanner.codigo)
-                  : !s.hayMesaLibre;
+                // En lista de espera no se marca nada: apuntarse es justamente
+                // para una hora SIN mesa libre, así que el ⏰ saldría en casi
+                // todas y avisaría de lo que ya se da por hecho.
+                const pisa = esListaEspera
+                  ? false
+                  : mesaBanner
+                    ? mesaOcupadaEn(s, mesaBanner.codigo)
+                    : !s.hayMesaLibre;
                 return (
                   <option key={s.hora} value={s.hora}>
                     {s.hora}{pisa ? "  ⏰" : ""}
@@ -2246,180 +2254,6 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
           </div>
         </DialogContent>
       </Dialog>
-    </div>
-  );
-}
-
-function NuevaListaEsperaForm({
-  fecha,
-  turno,
-  onClose,
-  onSave,
-}: {
-  fecha: string;
-  turno: TurnoReserva;
-  onClose: () => void;
-  onSave: (input: {
-    fecha: string;
-    horaEstimada: string;
-    turno: TurnoReserva;
-    personas: number;
-    notas: string;
-    nombre: string;
-    apellidos: string;
-    prefijo: string;
-    telefono: string;
-    email: string;
-  }) => void;
-}) {
-  const horaDefault = turno === "CENA" ? "21:00" : "14:00";
-  const [form, setForm] = useState({
-    fecha,
-    horaEstimada: horaDefault,
-    personas: 2,
-    notas: "",
-    nombre: "",
-    apellidos: "",
-    prefijo: PREFIJO_POR_DEFECTO,
-    telefono: "",
-    email: "",
-  });
-
-  const guardarBloqueado =
-    !form.nombre.trim() || !form.personas || form.personas < 1 || !form.horaEstimada;
-
-  const handleSave = () => {
-    if (guardarBloqueado) return;
-    const [hh] = form.horaEstimada.split(":");
-    const hour = Number(hh);
-    const turnoDerivado: TurnoReserva = hour >= 17 ? "CENA" : "COMIDA";
-    onSave({
-      fecha: form.fecha,
-      horaEstimada: form.horaEstimada,
-      turno: turnoDerivado,
-      personas: form.personas,
-      notas: form.notas,
-      nombre: form.nombre,
-      apellidos: form.apellidos,
-      prefijo: form.prefijo,
-      telefono: form.telefono,
-      email: form.email,
-    });
-  };
-
-  return (
-    <div className="space-y-2.5">
-      <div className="rounded-md bg-muted/30 px-3 py-2">
-        <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-1.5">
-          Datos de la lista de espera
-        </p>
-        <div className="grid grid-cols-3 gap-2">
-          <div>
-            <Label className="text-xs">Día *</Label>
-            <Input
-              type="date"
-              className="h-8 text-xs"
-              value={form.fecha}
-              onChange={e => setForm(p => ({ ...p, fecha: e.target.value }))}
-            />
-          </div>
-          <div>
-            <Label className="text-xs">Hora *</Label>
-            {/* También en cuartos: la lista de espera acaba siendo una reserva
-                y pasa por la misma validación, así que aceptar aquí un 12:07
-                solo servía para que fallase al convertirla. */}
-            <SelectorHoraCuartos
-              value={form.horaEstimada}
-              onChange={(h) => setForm((p) => ({ ...p, horaEstimada: h }))}
-            />
-          </div>
-          <div>
-            <Label className="text-xs">Personas *</Label>
-            <NumberInput
-              min={1}
-              emptyValue={1}
-              decimales={false}
-              className="h-8 text-xs"
-              value={form.personas}
-              onValueChange={n => setForm(p => ({ ...p, personas: n }))}
-            />
-          </div>
-        </div>
-      </div>
-
-      <div className="rounded-md bg-muted/30 px-3 py-2">
-        <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-1.5">
-          Datos del cliente
-        </p>
-        <div className="space-y-2">
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <Label className="text-xs">Nombre *</Label>
-              <Input
-                className="h-8 text-xs"
-                value={form.nombre}
-                onChange={e => setForm(p => ({ ...p, nombre: e.target.value }))}
-              />
-            </div>
-            <div>
-              <Label className="text-xs">Apellidos</Label>
-              <Input
-                className="h-8 text-xs"
-                value={form.apellidos}
-                onChange={e => setForm(p => ({ ...p, apellidos: e.target.value }))}
-              />
-            </div>
-          </div>
-          <div>
-            <Label className="text-xs">Teléfono</Label>
-            <div className="flex gap-1">
-              <select
-                value={form.prefijo}
-                onChange={e => setForm(prev => ({ ...prev, prefijo: e.target.value }))}
-                className="h-8 text-xs w-[92px] rounded-md border border-input bg-background px-1.5"
-                title={PREFIJOS_TELEFONO.find(x => x.prefijo === form.prefijo)?.label ?? ""}
-              >
-                {PREFIJOS_TELEFONO.map(x => (
-                  <option key={x.prefijo} value={x.prefijo}>{x.flag} {x.prefijo}</option>
-                ))}
-              </select>
-              <Input
-                type="tel"
-                className="h-8 text-xs flex-1"
-                value={form.telefono}
-                onChange={e => setForm(p => ({ ...p, telefono: e.target.value }))}
-              />
-            </div>
-          </div>
-          <div>
-            <Label className="text-xs">Email</Label>
-            <Input
-              type="email"
-              className="h-8 text-xs"
-              value={form.email}
-              onChange={e => setForm(p => ({ ...p, email: e.target.value }))}
-            />
-          </div>
-        </div>
-      </div>
-
-      <div>
-        <Label className="text-xs">Comentarios</Label>
-        <Textarea
-          className="text-xs min-h-[52px]"
-          maxLength={RESERVA_COMENTARIO_MAX_CHARS}
-          value={form.notas}
-          onChange={e => setForm(p => ({ ...p, notas: e.target.value.slice(0, RESERVA_COMENTARIO_MAX_CHARS) }))}
-        />
-        <p className="pt-0.5 text-right text-[10px] text-muted-foreground">
-          {form.notas.length}/{RESERVA_COMENTARIO_MAX_CHARS}
-        </p>
-      </div>
-
-      <div className="flex justify-end gap-2 pt-0.5">
-        <Button variant="outline" size="sm" onClick={onClose}>Cancelar</Button>
-        <Button size="sm" onClick={handleSave} disabled={guardarBloqueado}>Guardar</Button>
-      </div>
     </div>
   );
 }
