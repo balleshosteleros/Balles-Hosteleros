@@ -3,6 +3,7 @@
 import { createClient, getUsuarioActual } from "@/lib/supabase/server";
 import { getEmpresaActivaForUser, getZonaHorariaEmpresa } from "@/features/empresa/lib/empresa-server";
 import { claveDiaEnZona } from "@/features/empresa/lib/zona-horaria";
+import { leerTodas } from "@/shared/lib/supabase-paginado";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { normalizarOrigen, type OrigenBucket } from "@/features/sala/data/origenes";
 import { ESTADOS_RESERVA, type EstadoReserva } from "@/features/sala/data/reservas";
@@ -125,41 +126,46 @@ export async function getOrigenReservas(params: {
     const tz = await getZonaHorariaEmpresa(supabase as unknown as SupabaseClient, empresaId);
     const porCreacion = params.campoFecha === "created_at";
 
-    let query = supabase
-      .from("reservas")
-      .select("origen, estado, fecha, created_at, es_ticket")
-      .eq("empresa_id", empresaId);
-
-    if (porCreacion) {
-      // `created_at` es un instante UTC. El año que pide el usuario es el año
-      // NATURAL de la empresa, así que el rango se abre un día por cada lado y
-      // el recorte fino se hace luego ya con la fecha traducida a su zona: si
-      // filtrásemos en UTC, las reservas creadas la noche del 31-dic o del
-      // 1-ene caerían en el año contrario.
-      query = query
-        .gte("created_at", `${params.anio - 1}-12-31T00:00:00Z`)
-        .lte("created_at", `${params.anio + 1}-01-01T23:59:59Z`);
-    } else {
-      // `fecha` es un `date`: el día natural ya está resuelto, se filtra directo.
-      query = query
-        .gte("fecha", `${params.anio}-01-01`)
-        .lte("fecha", `${params.anio}-12-31`);
-    }
-
     const estadoFiltro = params.estado ?? "TODOS";
-    if (estadoFiltro !== "TODOS") {
-      query = query.eq("estado", estadoFiltro);
-    }
 
-    const { data, error } = await query;
-    if (error) throw error;
-    const rows = (data ?? []) as Array<{
+    // Por tandas: sin paginar, Supabase corta en 1.000 filas SIN avisar, y los
+    // años con más movimiento pasan de 10.000. La analítica salía recortada y
+    // no había forma de notarlo mirando la pantalla.
+    const rows = await leerTodas<{
       origen: string | null;
       estado: string | null;
       fecha: string | null;
       created_at: string | null;
       es_ticket: boolean | null;
-    }>;
+    }>(() => {
+      let query = supabase
+        .from("reservas")
+        .select("origen, estado, fecha, created_at, es_ticket")
+        .eq("empresa_id", empresaId);
+
+      if (porCreacion) {
+        // `created_at` es un instante UTC. El año que pide el usuario es el año
+        // NATURAL de la empresa, así que el rango se abre un día por cada lado y
+        // el recorte fino se hace luego ya con la fecha traducida a su zona: si
+        // filtrásemos en UTC, las reservas creadas la noche del 31-dic o del
+        // 1-ene caerían en el año contrario.
+        query = query
+          .gte("created_at", `${params.anio - 1}-12-31T00:00:00Z`)
+          .lte("created_at", `${params.anio + 1}-01-01T23:59:59Z`)
+          .order("created_at", { ascending: true });
+      } else {
+        // `fecha` es un `date`: el día natural ya está resuelto, se filtra directo.
+        query = query
+          .gte("fecha", `${params.anio}-01-01`)
+          .lte("fecha", `${params.anio}-12-31`)
+          .order("fecha", { ascending: true });
+      }
+
+      if (estadoFiltro !== "TODOS") {
+        query = query.eq("estado", estadoFiltro);
+      }
+      return query;
+    });
 
     // El canal sale del ORIGEN y de nada más. "Walk in" llegó a existir como
     // estado y se contabilizaba desde ahí; era frágil, porque en cuanto se

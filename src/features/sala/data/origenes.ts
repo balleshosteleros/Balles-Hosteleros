@@ -65,12 +65,14 @@ const ALIAS: Record<string, string> = {
   // Canales heredados de CoverManager (migración 2022-2026). Cover rotulaba
   // "terceros" a lo que entraba por portales externos: en nuestro caso solo
   // estaba conectado Google, así que se leen como GOOGLE y no como un canal
-  // aparte. `SALA` es la reserva que apuntó el personal en el propio local.
+  // aparte. `SALA` es la que apuntó el personal desde el propio programa:
+  // en los informes del grupo eso siempre se ha llamado TELÉFONO, que es como
+  // entra (alguien llama y el personal la escribe).
   TERCEROS: "GOOGLE",
   // La app movil de Cover era otra forma de reservar por internet: se lee
   // como WEB, igual que el navegador. Ese canal muere con Cover.
   APP: "WEB",
-  SALA: "LOCAL",
+  SALA: "TELEFONO",
   // Grafias sueltas del prescriptor que escribia el personal en Cover.
   CAMPAÑA: "CAMPANA",
   "GOOGLE ORGÁNICO": "GOOGLE_ORGANICO",
@@ -86,7 +88,6 @@ const LABELS: Record<string, string> = {
   WEB: "Web",
   GOOGLE: "Google",
   TELEFONO: "Teléfono",
-  LOCAL: "Local",
   WALKIN: "Walk in",
   INSTAGRAM: "Instagram",
   FACEBOOK: "Facebook",
@@ -117,8 +118,7 @@ const LABELS: Record<string, string> = {
 const COLORS: Record<string, string> = {
   WEB: "#0d9488",       // teal-600 — motor web propio
   GOOGLE: "#22c55e",    // green-500 — Reserve with Google
-  TELEFONO: "#f59e0b",  // amber-500 — llamada
-  LOCAL: "#3b82f6",     // blue-500 — se apuntó en el local
+  TELEFONO: "#f59e0b",  // amber-500 — llamada que apunta el personal
   WALKIN: "#ef4444",    // red-500 — cliente andante
   INSTAGRAM: "#ec4899", // pink-500
   FACEBOOK: "#6366f1",  // indigo-500
