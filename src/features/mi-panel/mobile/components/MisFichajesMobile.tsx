@@ -240,6 +240,11 @@ export function MisFichajesMobile() {
                               >
                                 {ESTADO_LABEL[estado] ?? estado}
                               </span>
+                              {t.porSolicitud && (
+                                <span className="rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-sky-700 dark:bg-sky-950/60 dark:text-sky-200">
+                                  Por solicitud
+                                </span>
+                              )}
                             </div>
                             {t.incidencia && (
                               <div className="mt-2 flex items-start gap-1.5 rounded-lg bg-rose-100/60 p-2 text-xs text-rose-900 dark:bg-rose-950/40 dark:text-rose-100">

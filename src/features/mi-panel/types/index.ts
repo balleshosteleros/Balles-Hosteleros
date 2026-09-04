@@ -78,6 +78,12 @@ export interface MiFichajeHoy {
    * suya. Fallback "Europe/Madrid". Ver PRP-069.
    */
   zonaHoraria: string;
+  /**
+   * true si este fichaje nació de una solicitud aprobada (día trabajado u horas
+   * extras) en vez de fichar el empleado en el local. La app lo etiqueta para
+   * que se vea de un vistazo por qué existe ese registro.
+   */
+  porSolicitud: boolean;
 }
 
 export interface DiaCalendario {

@@ -352,7 +352,9 @@ export async function ficharEntrada(geo: GeoInput) {
         empleado_id: user.id,
         empleado_nombre: nombre ?? "Sin nombre",
         fecha: hoyEnZona(tzEmpresa),
-        hora_entrada: new Date().toISOString(),
+        // Al minuto, sin segundos: los fichajes se cuentan al minuto y esos
+        // segundos se restaban del total de horas del empleado.
+        hora_entrada: (() => { const d = new Date(); d.setSeconds(0, 0); return d.toISOString(); })(),
         estado: "trabajando",
         local_id: empleado.local_id,
         lat_entrada: geo?.lat ?? null,

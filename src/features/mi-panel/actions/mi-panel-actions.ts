@@ -132,6 +132,20 @@ function todayISO(): string {
 }
 
 /**
+ * "Ahora" al MINUTO, sin segundos.
+ *
+ * Los fichajes se cuentan al minuto: nadie ficha "a las 19:30 y 23 segundos".
+ * Guardar los segundos hacía que una jornada de 19:30 a 00:30 saliera 4,99 h en
+ * vez de 5, porque esos segundos se restaban del total. Al empleado le faltaba
+ * un minuto de trabajo por haber tardado unos segundos en pulsar el botón.
+ */
+function ahoraAlMinuto(): Date {
+  const d = new Date();
+  d.setSeconds(0, 0);
+  return d;
+}
+
+/**
  * "Hoy" del EMPLEADO: el día en la zona horaria de su empresa, no el día UTC
  * del servidor (PRP-069).
  *
@@ -398,6 +412,7 @@ export async function getMiFichajeHoy(): Promise<{
         estado: (registro.estado as string | null) ?? "pendiente",
         incidencia: (registro.incidencia as string | null) ?? null,
         modoTeletrabajo: Boolean(registro.modo_teletrabajo),
+        porSolicitud: Boolean(registro.solicitud_id),
         local: (registro.centro as string | null) ?? null,
         flexible,
         flexModo,
@@ -791,10 +806,23 @@ async function evaluarEntradaFichaje(
 
         const llegaAntes = ahoraMin < startMin;
         const llegaDespues = ahoraMin > startMin;
-        if ((llegaAntes && redondearAntes) || (llegaDespues && redondearDespues)) {
-          horaEntradaOverrideISO = new Date(
-            Date.now() - (ahoraMin - startMin) * 60000,
-          ).toISOString();
+        // Fichar DENTRO del minuto de entrada es llegar a la hora: la hora
+        // oficial es la del turno, en punto.
+        //
+        // El cálculo va en minutos enteros, así que quien ficha a las 19:30:23
+        // de un turno de 19:30 no cuenta ni como antes ni como después y no
+        // entraba a redondear. Pero el instante SÍ guardaba los 23 segundos, y
+        // al restar entrada de salida salían 4,99 h en vez de las 5 h que
+        // trabajó: los segundos sueltos le comían tiempo al empleado.
+        const enElMinutoDeEntrada = ahoraMin === startMin;
+        if (
+          enElMinutoDeEntrada ||
+          (llegaAntes && redondearAntes) ||
+          (llegaDespues && redondearDespues)
+        ) {
+          const entrada = new Date(Date.now() - (ahoraMin - startMin) * 60000);
+          entrada.setSeconds(0, 0); // a la hora en punto, sin segundos sueltos
+          horaEntradaOverrideISO = entrada.toISOString();
         }
       }
     }
@@ -932,7 +960,7 @@ export async function ficharEntradaPersonal(
       horaEntradaOverrideISO = elegido.horaEntradaOverrideISO;
     }
 
-    const ahora = new Date();
+    const ahora = ahoraAlMinuto();
     // La fecha del fichaje es el día en la zona de la EMPRESA en la que se
     // ficha, no el día UTC del servidor: a la 01:00 de Madrid, UTC todavía va
     // por el día anterior y el turno de noche quedaba atribuido a ayer.
@@ -1008,7 +1036,7 @@ export async function ficharSalidaPersonal(fichajeId: string, geo?: GeoInput) {
       }
     }
 
-    const ahora = new Date();
+    const ahora = ahoraAlMinuto();
     if (!fichaje.hora_entrada) {
       // Sin hora de entrada no hay nada que repartir ni cronometrar.
       const { error } = await supabase
@@ -1232,7 +1260,7 @@ export async function paralizarFichajePersonal(
       }
     }
 
-    const ahora = new Date();
+    const ahora = ahoraAlMinuto();
     let horasTotales = 0;
     if (fichaje?.hora_entrada) {
       const entrada = new Date(fichaje.hora_entrada as string);
@@ -1345,6 +1373,7 @@ export async function listarMisFichajes(limite = 60): Promise<{
         estado: (f.estado as string | null) ?? "pendiente",
         incidencia: (f.incidencia as string | null) ?? null,
         modoTeletrabajo: Boolean(f.modo_teletrabajo),
+        porSolicitud: Boolean(f.solicitud_id),
         local: (f.centro as string | null) ?? null,
         flexible: false,
         flexModo: null,

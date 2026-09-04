@@ -148,6 +148,15 @@ export function MisFichajesView() {
                         >
                           {estadoVista}
                         </Badge>
+                        {f.porSolicitud && (
+                          <Badge
+                            variant="outline"
+                            className="text-[10px] bg-sky-100 text-sky-700 border-sky-200"
+                            title="Este fichaje se creó al aprobarse una solicitud"
+                          >
+                            Por solicitud
+                          </Badge>
+                        )}
                       </div>
                     </td>
                   </tr>
