@@ -178,8 +178,12 @@ export async function enviarConfirmacionesCover(ids: string[]): Promise<{
         continue;
       }
 
+      // AUTOMATICO, no MANUAL: la confirmación la manda el sistema en bloque,
+      // no una persona reserva por reserva. Con MANUAL el histórico de la ficha
+      // decía "enviado por (sin persona)", que no significa nada para quien lo
+      // lee (Iván, 4-sep).
       const res = await enviarReservaEmail(r.id as string, "CONFIRMADA", {
-        actor: { origen: "MANUAL" },
+        actor: { origen: "AUTOMATICO" },
       });
       resultados.push({
         id: r.id as string,
