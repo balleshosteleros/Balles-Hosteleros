@@ -2873,12 +2873,17 @@ function PlanoCanvas({
       const w = el.clientWidth;
       const h = el.clientHeight;
       if (w <= 0 || h <= 0) return;
-      // Se aprovecha todo el hueco: el lienzo es mas ancho que alto, asi que en
-      // pantallas anchas mandaba el alto y quedaban franjas muertas a los lados.
-      // El tope de 2 es el mismo que admite el editor de Ajustes: asi el plano
-      // se ve aqui tan grande como se dibujo alli, sin que las mesas queden
-      // desproporcionadas respecto al texto que llevan dentro.
-      const s = Math.min(w / PLANO_CANVAS_W, h / PLANO_CANVAS_H, 2);
+      // SIN TOPE: el plano llena todo el hueco que haya. El marco del editor es
+      // el tamaño de la sala y no cambia, asi que lo unico que decide como de
+      // grandes se ven las mesas es como de grandes se dibujaron DENTRO de ese
+      // marco. Aqui solo se estira ese mismo marco hasta ocupar la pantalla:
+      // en un monitor grande se ve grande, en un portatil mas pequeño, pero
+      // siempre entero y siempre en la misma proporcion.
+      //
+      // Antes habia un tope (1.6, luego 2) que dejaba franjas muertas alrededor
+      // en las pantallas del salon: el plano se veia pequeño aunque hubiera
+      // sitio de sobra.
+      const s = Math.min(w / PLANO_CANVAS_W, h / PLANO_CANVAS_H);
       setScale(s > 0 ? s : 1);
     };
     update();

@@ -16,6 +16,8 @@ import {
   Circle,
   DoorOpen,
   Flower2,
+  Maximize2,
+  Minimize2,
   Minus,
   RectangleHorizontal,
   RotateCcw,
@@ -838,6 +840,66 @@ export function SalaPlanoEditor({ sala, zonas, mesas, onBack }: Props) {
     });
   }
 
+  /**
+   * Agranda (o encoge) TODO el plano a la vez: mesas y decoraciones crecen el
+   * mismo porcentaje y se separan en la misma proporción, así que el dibujo no
+   * se deforma — es como acercar la cámara.
+   *
+   * Es lo que de verdad hace que en el servicio las mesas se vean más grandes:
+   * el marco de la sala NO cambia, así que lo único que decide el tamaño con el
+   * que sala ve una mesa es cómo de grande está dibujada aquí dentro. Agrandar
+   * mesa por mesa era inviable con 30 mesas.
+   *
+   * Se escala respecto al CENTRO del marco para que el plano no se escape hacia
+   * una esquina, y se frena cuando algo tocaría el borde: lo que saliera del
+   * marco dejaría de verse en sala.
+   */
+  function handleEscalarPlano(factor: number) {
+    const cx = CANVAS_W / 2;
+    const cy = CANVAS_H / 2;
+
+    const nuevasMesas = new Map(posiciones);
+    const nuevasDecos = new Map(decoraciones);
+
+    // Primera pasada: se calcula todo y se comprueba que quepa. Si algo se
+    // saliera, no se toca nada — mejor no hacer nada que dejar mesas fuera.
+    for (const [id, pos] of posiciones) {
+      const forma = formaDe(id);
+      const dims = getMesaDims(forma, pos);
+      const w = dims.w * factor;
+      const h = dims.h * factor;
+      const x = cx + (pos.x - cx) * factor;
+      const y = cy + (pos.y - cy) * factor;
+      if (w < MIN_MESA_SIZE || x < 0 || y < 0 || x + w > CANVAS_W || y + h > CANVAS_H) return;
+      nuevasMesas.set(id, { ...pos, x, y, width: w, height: h });
+    }
+
+    for (const [id, d] of decoraciones) {
+      const w = d.width * factor;
+      const h = d.height * factor;
+      const x = cx + (d.x - cx) * factor;
+      const y = cy + (d.y - cy) * factor;
+      if (w < MIN_DECO_SIZE || x < 0 || y < 0 || x + w > CANVAS_W || y + h > CANVAS_H) return;
+      nuevasDecos.set(id, { ...d, x, y, width: w, height: h });
+    }
+
+    setPosiciones(nuevasMesas);
+    setDecoraciones(nuevasDecos);
+    setPendingMesaUpserts((prev) => {
+      const next = new Set(prev);
+      for (const id of nuevasMesas.keys()) next.add(id);
+      return next;
+    });
+    setPendingDecoUpdates((prev) => {
+      const next = new Set(prev);
+      for (const id of nuevasDecos.keys()) {
+        // Una decoración recién creada ya viaja en su propio "create".
+        if (!pendingDecoCreates.has(id)) next.add(id);
+      }
+      return next;
+    });
+  }
+
   function handleCambiarForma(mesaId: string, nueva: FormaMesa) {
     setFormas((prev) => {
       const next = new Map(prev);
@@ -1107,10 +1169,41 @@ export function SalaPlanoEditor({ sala, zonas, mesas, onBack }: Props) {
           )}
         </div>
         <div className="flex items-center gap-2">
+          {/* Tamaño del dibujo: esto SÍ se guarda y es lo que hace que en el
+              servicio las mesas se vean más grandes o más pequeñas. */}
+          <div className="flex items-center gap-0.5 rounded-md border p-0.5">
+            <span className="pl-1.5 pr-0.5 text-[11px] text-muted-foreground">
+              Mesas
+            </span>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-6 w-6"
+              title="Encoger todas las mesas del plano"
+              aria-label="Encoger todas las mesas"
+              onClick={() => handleEscalarPlano(1 / 1.1)}
+            >
+              <Minimize2 className="h-3.5 w-3.5" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-6 w-6"
+              title="Agrandar todas las mesas del plano (se verán más grandes en sala)"
+              aria-label="Agrandar todas las mesas"
+              onClick={() => handleEscalarPlano(1.1)}
+            >
+              <Maximize2 className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+
           {/* Zoom: solo cambia lo que se ve AQUÍ para colocar con precisión. El
               plano que verá sala es siempre el marco entero, se mire como se
               mire. */}
           <div className="flex items-center gap-0.5 rounded-md border p-0.5">
+            <span className="pl-1.5 pr-0.5 text-[11px] text-muted-foreground">
+              Ver
+            </span>
             <Button
               variant="ghost"
               size="icon"
@@ -1524,7 +1617,8 @@ export function SalaPlanoEditor({ sala, zonas, mesas, onBack }: Props) {
                   whiteSpace: "nowrap",
                 }}
               >
-                Esto es lo que se ve en sala · lo de fuera no se verá
+                Tamaño de la sala · cuanto más grandes las mesas aquí dentro,
+                más grandes se verán en el servicio
               </div>
               {/* Decoraciones — siempre debajo de las mesas */}
               {Array.from(decoraciones.values()).map((d) => {
