@@ -99,6 +99,8 @@ export async function GET(request: Request) {
           facturas: r.facturas,
           lineas: r.lineas,
           lineas_sin_producto: r.sinProducto,
+          addins: r.addins,
+          addins_sin_producto: r.addinsSinProducto,
           stock: desc,
           ventas_dia: ventasDia,
         },

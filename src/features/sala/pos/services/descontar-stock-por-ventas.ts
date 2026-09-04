@@ -119,9 +119,33 @@ export async function descontarStockPorTicket(
     sale_format_ratio: number | null;
   }[];
 
+  // COMPLEMENTOS de cada línea (sabor de la shisha, cápsula del café, guarnición,
+  // refresco del combinado). Son mercancía que sale del almacén igual que la línea
+  // principal: si no se descuentan, se descuenta el plato pero no su guarnición y el
+  // almacén descuadra pareciendo que el sistema funciona.
+  const { data: addinsDb } = await supabase
+    .from("pos_ticket_linea_addins")
+    .select("id, linea_id, producto_id, nombre, ratio")
+    .in("linea_id", lineas.length > 0 ? lineas.map((l) => l.id) : ["00000000-0000-0000-0000-000000000000"]);
+
+  const addins = (addinsDb ?? []) as {
+    id: string;
+    linea_id: string;
+    producto_id: string | null;
+    nombre: string | null;
+    ratio: number | null;
+  }[];
+  const cantidadPorLinea = new Map(lineas.map((l) => [l.id, Number(l.cantidad ?? 0)]));
+
   // Tipo + agora_id de cada producto vendido. El agora_id enlaza el producto de VENTA
   // con su producto de COMPRA (mismo agora_id) = el que lleva el stock. PRP-057.
-  const productoIds = Array.from(new Set(lineas.map((l) => l.producto_id)));
+  // Incluye los productos de los complementos: se resuelven igual que una línea.
+  const productoIds = Array.from(
+    new Set([
+      ...lineas.map((l) => l.producto_id),
+      ...addins.map((a) => a.producto_id).filter(Boolean) as string[],
+    ]),
+  );
   const tipoById = new Map<string, string>();
   const agoraById = new Map<string, string | null>();
   const agoraIds = new Set<string>();
@@ -202,69 +226,122 @@ export async function descontarStockPorTicket(
   let lineasOmitidas = 0;
   let ingredientesAfectados = 0;
 
+  /**
+   * Aplica el consumo de UN concepto vendido (una línea o uno de sus complementos).
+   * Es la misma álgebra para los dos: con escandallo se expanden los ingredientes,
+   * sin él se descuenta el producto de compra 1:1. Se comparte a propósito — dos
+   * copias divergirían en semanas.
+   *
+   * `origenLineaId` identifica el consumo en el kardex y por eso cada complemento
+   * lleva el SUYO (su propia fila), no el de su línea padre: el índice único
+   * (origen_linea_id, producto_id) haría colisionar un plato y un complemento que
+   * consuman el mismo producto.
+   */
+  const aplicarConsumo = async (args: {
+    productoId: string;
+    baseQty: number;
+    origenLineaId: string;
+    motivo: string;
+    etiqueta: string;
+  }): Promise<{ movimientos: number; omitido: boolean }> => {
+    const comp = compByVenta.get(args.productoId);
+    if (comp && comp.length > 0) {
+      let n = 0;
+      for (const ing of comp) {
+        const factor = factorById.get(ing.ingrediente_id) ?? 1;
+        // cantidad del escandallo (unidad de uso) → formato de compra (÷ factor)
+        const consumo = (args.baseQty * ing.cantidad * (1 + ing.merma_pct / 100)) / factor;
+        if (consumo <= 0) continue;
+        await registrarMovimiento({
+          empresaId: ticket.empresa_id,
+          productoId: ing.ingrediente_id,
+          tipo: "salida",
+          cantidad: consumo,
+          referencia,
+          documentoTipo: "pos_ticket",
+          documentoId: ticketId,
+          origenLineaId: args.origenLineaId,
+          motivo: args.motivo,
+          fecha,
+        });
+        n++;
+      }
+      return { movimientos: n, omitido: false };
+    }
+    // SIN escandallo (bebida/1:1): descontar el producto base de compra.
+    const agoraId = agoraById.get(args.productoId) ?? null;
+    const targetId =
+      tipoById.get(args.productoId) === "compra"
+        ? args.productoId
+        : agoraId
+          ? compraByAgora.get(agoraId) ?? null
+          : null;
+    if (!targetId) {
+      errores.push(`${args.etiqueta} sin escandallo ni producto de compra equivalente — omitido.`);
+      return { movimientos: 0, omitido: true };
+    }
+    if (args.baseQty <= 0) return { movimientos: 0, omitido: false };
+    await registrarMovimiento({
+      empresaId: ticket.empresa_id,
+      productoId: targetId,
+      tipo: "salida",
+      cantidad: args.baseQty,
+      referencia,
+      documentoTipo: "pos_ticket",
+      documentoId: ticketId,
+      origenLineaId: args.origenLineaId,
+      motivo: args.motivo,
+      fecha,
+    });
+    return { movimientos: 1, omitido: false };
+  };
+
   for (const l of lineas) {
     const cant = Number(l.cantidad ?? 0);
     // Ágora da el formato de venta: consumo en unidades base = cantidad × ratio.
     const ratio = Number(l.sale_format_ratio ?? 1) || 1;
     const baseQty = cant * ratio;
     const motivo = `Venta: ${l.nombre ?? ""}`.trim();
-    const comp = compByVenta.get(l.producto_id);
     try {
-      if (comp && comp.length > 0) {
-        // Producto COMPUESTO (plato/cóctel): el escandallo de Balles define los ingredientes.
-        for (const ing of comp) {
-          const factor = factorById.get(ing.ingrediente_id) ?? 1;
-          // cantidad del escandallo (unidad de uso) → formato de compra (÷ factor)
-          const consumo = (baseQty * ing.cantidad * (1 + ing.merma_pct / 100)) / factor;
-          if (consumo <= 0) continue;
-          await registrarMovimiento({
-            empresaId: ticket.empresa_id,
-            productoId: ing.ingrediente_id,
-            tipo: "salida",
-            cantidad: consumo,
-            referencia,
-            documentoTipo: "pos_ticket",
-            documentoId: ticketId,
-            origenLineaId: l.id,
-            motivo,
-            fecha,
-          });
-          ingredientesAfectados++;
-        }
-        lineasProcesadas++;
-      } else {
-        // SIN escandallo (bebida/1:1): descontar el producto base de compra por el ratio.
-        const agoraId = agoraById.get(l.producto_id) ?? null;
-        const targetId =
-          tipoById.get(l.producto_id) === "compra"
-            ? l.producto_id
-            : agoraId
-              ? compraByAgora.get(agoraId) ?? null
-              : null;
-        if (!targetId) {
-          lineasOmitidas++;
-          errores.push(`"${l.nombre}" sin escandallo ni producto de compra equivalente — omitido.`);
-          continue;
-        }
-        if (baseQty > 0) {
-          await registrarMovimiento({
-            empresaId: ticket.empresa_id,
-            productoId: targetId,
-            tipo: "salida",
-            cantidad: baseQty,
-            referencia,
-            documentoTipo: "pos_ticket",
-            documentoId: ticketId,
-            origenLineaId: l.id,
-            motivo,
-            fecha,
-          });
-          ingredientesAfectados++;
-        }
-        lineasProcesadas++;
-      }
+      const r = await aplicarConsumo({
+        productoId: l.producto_id,
+        baseQty,
+        origenLineaId: l.id,
+        motivo,
+        etiqueta: `"${l.nombre}"`,
+      });
+      ingredientesAfectados += r.movimientos;
+      if (r.omitido) lineasOmitidas++;
+      else lineasProcesadas++;
     } catch (e) {
       errores.push(`Error en línea "${l.nombre}": ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
+
+  // ─── Complementos ────────────────────────────────────────────────────────
+  // Consumen en proporción a la línea que los lleva: 1 shisha × ratio 0,009 = 0,009 kg
+  // de ese tabaco. HOY el ratio lo dicta el TPV, que es el único sitio donde ese dato
+  // existe. Cuando se construyan los formatos de venta (DECISIÓN 6-BIS), la
+  // configuración de Balles pasará a mandar y este ratio quedará como respaldo.
+  for (const a of addins) {
+    if (!a.producto_id) {
+      // Llegó un complemento que no casa con ningún producto de Balles: se avisa en
+      // vez de tragárselo, porque su consumo se está perdiendo.
+      errores.push(`Complemento "${a.nombre}" sin producto enlazado — no se descuenta.`);
+      continue;
+    }
+    const baseQty = (cantidadPorLinea.get(a.linea_id) ?? 0) * (Number(a.ratio ?? 1) || 1);
+    try {
+      const r = await aplicarConsumo({
+        productoId: a.producto_id,
+        baseQty,
+        origenLineaId: a.id,
+        motivo: `Venta (complemento): ${a.nombre ?? ""}`.trim(),
+        etiqueta: `Complemento "${a.nombre}"`,
+      });
+      ingredientesAfectados += r.movimientos;
+    } catch (e) {
+      errores.push(`Error en complemento "${a.nombre}": ${e instanceof Error ? e.message : String(e)}`);
     }
   }
 

@@ -168,7 +168,10 @@ export async function sincronizarDiaAgora(
       total_records: r.facturas,
       ok_records: r.facturas,
       error_records: 0,
-      sales_data: { dia, facturas: r.facturas, lineas: r.lineas, lineas_sin_producto: r.sinProducto, manual: true, stock },
+      sales_data: {
+        dia, facturas: r.facturas, lineas: r.lineas, lineas_sin_producto: r.sinProducto,
+        addins: r.addins, addins_sin_producto: r.addinsSinProducto, manual: true, stock,
+      },
     });
     return { ok: true, facturas: r.facturas, lineas: r.lineas, sinProducto: r.sinProducto };
   } catch (err) {

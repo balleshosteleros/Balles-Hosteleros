@@ -11,6 +11,7 @@
  * El precio de venta lo manda Ágora (en Balles está bloqueado); aquí NO se toca
  * coste ni stock (viven en Balles).
  */
+import { randomUUID } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 /** Mapa empresa_id → Workplace.Id de Ágora. */
@@ -41,7 +42,15 @@ async function agoraGet(path: string, conexion: AgoraConexion): Promise<unknown>
   return r.json();
 }
 
-export type IngestaResultado = { facturas: number; lineas: number; sinProducto: number };
+export type IngestaResultado = {
+  facturas: number;
+  lineas: number;
+  sinProducto: number;
+  /** Complementos capturados (sabor de shisha, cápsula de café, guarnición…). */
+  addins: number;
+  /** De esos, los que no casan con ningún producto de Balles (hay que darlos de alta). */
+  addinsSinProducto: number;
+};
 
 /**
  * Ingiere las facturas de Ágora de un business-day para una empresa.
@@ -63,7 +72,7 @@ export async function ingerirVentasAgoraDia(
     Invoices?: AgoraInvoice[];
   };
   const propias = (payload.Invoices ?? []).filter((f) => f.Workplace?.Id === workplaceId);
-  if (propias.length === 0) return { facturas: 0, lineas: 0, sinProducto: 0 };
+  if (propias.length === 0) return { facturas: 0, lineas: 0, sinProducto: 0, addins: 0, addinsSinProducto: 0 };
 
   // Tickets
   const ticketRows = propias.map((f) => {
@@ -103,10 +112,15 @@ export async function ingerirVentasAgoraDia(
     if (error) throw error;
   }
 
-  // Resolver producto_id (prefiere venta) para los ProductId del día
+  // Resolver producto_id (prefiere venta) para los ProductId del día.
+  // Incluye los de los COMPLEMENTOS (`Addins`): son mercancía que sale del almacén
+  // igual que la línea principal, así que necesitan su producto resuelto.
   const productIds = new Set<string>();
   for (const f of propias) for (const it of f.InvoiceItems ?? []) for (const ln of it.Lines ?? []) {
     if (ln.ProductId != null) productIds.add(String(ln.ProductId));
+    for (const ad of ln.Addins ?? []) {
+      if (ad.ProductId != null) productIds.add(String(ad.ProductId));
+    }
   }
   const prodMap = new Map<string, string>();
   if (productIds.size > 0) {
@@ -124,7 +138,9 @@ export async function ingerirVentasAgoraDia(
 
   // Insertar líneas
   let sinProducto = 0;
+  let addinsSinProducto = 0;
   const lineaRows: Record<string, unknown>[] = [];
+  const addinRows: Record<string, unknown>[] = [];
   for (const f of propias) {
     const ticketId = idPorNumero.get(`AG-${f.Serie}-${f.Number}`);
     if (!ticketId) continue;
@@ -133,7 +149,29 @@ export async function ingerirVentasAgoraDia(
         if (ln.ProductId == null) continue;
         const pid = prodMap.get(String(ln.ProductId)) ?? null;
         if (!pid) sinProducto++;
+        // El id se genera aquí para poder colgar los complementos de su línea en la
+        // misma pasada, sin depender del orden en que la BD devuelva el insert.
+        const lineaId = randomUUID();
+
+        // COMPLEMENTOS de esta línea: el sabor del tabaco, la cápsula del café, la
+        // guarnición… Se guardan TAL CUAL llegan, incluso los que no casan con un
+        // producto (hay comandas con cosas raras picadas como complemento). Filtrar
+        // aquí sería perder el hecho: qué se descuenta se decide al descontar.
+        for (const ad of ln.Addins ?? []) {
+          const apid = ad.ProductId != null ? prodMap.get(String(ad.ProductId)) ?? null : null;
+          if (!apid) addinsSinProducto++;
+          addinRows.push({
+            empresa_id: empresaId,
+            linea_id: lineaId,
+            producto_id: apid,
+            agora_product_id: ad.ProductId ?? null,
+            nombre: ad.ProductName ?? `Ágora ${ad.ProductId ?? "?"}`,
+            ratio: toNum(ad.SaleFormatRatio) || 1,
+          });
+        }
+
         lineaRows.push({
+          id: lineaId,
           ticket_id: ticketId,
           producto_id: pid,
           // El identificador de Ágora se guarda SIEMPRE, encuentre o no el producto.
@@ -160,7 +198,20 @@ export async function ingerirVentasAgoraDia(
     if (error) throw error;
   }
 
-  return { facturas: ticketRows.length, lineas: lineaRows.length, sinProducto };
+  // Los complementos van DESPUÉS de sus líneas (FK) y no necesitan borrado propio:
+  // el delete de líneas de arriba los arrastra por ON DELETE CASCADE.
+  for (let i = 0; i < addinRows.length; i += 500) {
+    const { error } = await supabase.from("pos_ticket_linea_addins").insert(addinRows.slice(i, i + 500));
+    if (error) throw error;
+  }
+
+  return {
+    facturas: ticketRows.length,
+    lineas: lineaRows.length,
+    sinProducto,
+    addins: addinRows.length,
+    addinsSinProducto,
+  };
 }
 
 // ─── Tipos mínimos del payload de Ágora ───────────────────────────────────
@@ -173,6 +224,14 @@ type AgoraLine = {
   DiscountRate?: number;
   SaleFormatId?: number | null;
   SaleFormatName?: string;
+  SaleFormatRatio?: number;
+  /** Complementos de la línea (sabor, guarnición, cápsula, refresco del combinado). */
+  Addins?: AgoraAddin[];
+};
+type AgoraAddin = {
+  ProductId?: number | null;
+  ProductName?: string;
+  /** Proporción consumida por unidad de la línea padre (0,009 = media cazoleta). */
   SaleFormatRatio?: number;
 };
 type AgoraInvoiceItem = { Guests?: number; Lines?: AgoraLine[] };
