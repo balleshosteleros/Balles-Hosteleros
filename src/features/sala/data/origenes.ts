@@ -61,6 +61,13 @@ const ALIAS: Record<string, string> = {
   FB: "FACEBOOK",
   GOOGLE_RWG: "GOOGLE",
   "RESERVE WITH GOOGLE": "GOOGLE",
+  // Canales heredados de CoverManager (migración 2022-2026). Cover rotulaba
+  // "terceros" a lo que entraba por portales externos: en nuestro caso solo
+  // estaba conectado Google, así que se leen como GOOGLE y no como un canal
+  // aparte. `SALA` es la reserva que apuntó el personal en el propio local.
+  TERCEROS: "GOOGLE",
+  APP: "APP",
+  SALA: "LOCAL",
 };
 
 /** Etiquetas de los orígenes conocidos. El resto se rotula desde su propia clave. */
@@ -75,6 +82,8 @@ const LABELS: Record<string, string> = {
   WHATSAPP: "WhatsApp",
   EMAIL: "Email",
   AGORA: "Ágora",
+  APP: "App",
+  LISTA_ESPERA: "Lista de espera",
   [ORIGEN_SIN_DATO]: "Sin origen",
 };
 
@@ -93,6 +102,8 @@ const COLORS: Record<string, string> = {
   WHATSAPP: "#16a34a",  // green-600
   EMAIL: "#0ea5e9",     // sky-500
   AGORA: "#a855f7",     // purple-500
+  APP: "#14b8a6",       // teal-500 — app móvil de CoverManager
+  LISTA_ESPERA: "#7c3aed", // violet-600 — entró desde la lista de espera
   [ORIGEN_SIN_DATO]: "#94a3b8", // slate-400
 };
 
