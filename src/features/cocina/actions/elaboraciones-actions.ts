@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { getAppContext } from "@/lib/supabase/get-context";
 import { friendlyError } from "@/shared/lib/friendly-errors";
 
@@ -124,11 +125,37 @@ export async function updateElaboracion(
   }
 }
 
+/**
+ * Qué se va a descontar del almacén si se confirma. Se enseña ANTES de confirmar: si el
+ * rendimiento de la receta está mal, se ve en pantalla en vez de descuadrar en silencio.
+ */
+export async function previsualizarElaboracionAction(id: string) {
+  try {
+    const { empresaId } = await getAppContext();
+    if (!empresaId) return { ok: false, error: "No autenticado" };
+    const { previsualizarElaboracion } = await import("@/features/cocina/services/elaboracion-kardex");
+    return await previsualizarElaboracion(id);
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "Error desconocido";
+    console.error("[elaboraciones] previsualizarElaboracion:", msg);
+    return { ok: false, error: msg };
+  }
+}
+
+/**
+ * Confirmar = descontar los ingredientes y dar de alta lo elaborado, TODO por el kardex.
+ * Antes lo hacía una función de base de datos que fallaba al arrancar, se saltaba el
+ * historial y solo sumaba el elaborado sin restar nada (PRP-080 / migración 20260904200000).
+ */
 export async function confirmarElaboracion(id: string) {
   try {
-    const { supabase } = await getAppContext();
-    const { error } = await supabase.rpc("confirmar_elaboracion", { p_elab_id: id });
-    if (error) throw error;
+    const { empresaId } = await getAppContext();
+    if (!empresaId) return { ok: false, error: "No autenticado" };
+    const { confirmarElaboracionKardex } = await import("@/features/cocina/services/elaboracion-kardex");
+    const r = await confirmarElaboracionKardex(id);
+    if (!r.ok) return { ok: false, error: r.error };
+    revalidatePath("/cocina/elaboraciones");
+    revalidatePath("/logistica/stock");
     return { ok: true };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : "Error desconocido";
@@ -139,9 +166,13 @@ export async function confirmarElaboracion(id: string) {
 
 export async function revertirElaboracion(id: string) {
   try {
-    const { supabase } = await getAppContext();
-    const { error } = await supabase.rpc("revertir_elaboracion", { p_elab_id: id });
-    if (error) throw error;
+    const { empresaId } = await getAppContext();
+    if (!empresaId) return { ok: false, error: "No autenticado" };
+    const { revertirElaboracionKardex } = await import("@/features/cocina/services/elaboracion-kardex");
+    const r = await revertirElaboracionKardex(id);
+    if (!r.ok) return { ok: false, error: r.error };
+    revalidatePath("/cocina/elaboraciones");
+    revalidatePath("/logistica/stock");
     return { ok: true };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : "Error desconocido";

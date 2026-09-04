@@ -2,7 +2,7 @@
 // Capitalización sentence case (memoria feedback_capitalizacion_textos_ui).
 
 export type TipoMovimiento = "entrada" | "salida";
-export type DocumentoTipo = "albaran" | "pos_ticket" | "inventario" | "merma" | "ajuste";
+export type DocumentoTipo = "albaran" | "pos_ticket" | "inventario" | "merma" | "ajuste" | "elaboracion";
 
 export interface StockMovimiento {
   id: string;
@@ -37,6 +37,7 @@ export const DOCUMENTO_TIPO_LABEL: Record<DocumentoTipo, string> = {
   inventario: "Inventario",
   merma: "Merma",
   ajuste: "Ajuste",
+  elaboracion: "Elaboración",
 };
 
 export function signoDeTipo(tipo: TipoMovimiento): 1 | -1 {

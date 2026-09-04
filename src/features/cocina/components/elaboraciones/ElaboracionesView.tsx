@@ -11,6 +11,7 @@ import {
   deleteElaboracion,
   confirmarElaboracion,
   revertirElaboracion,
+  previsualizarElaboracionAction,
 } from "@/features/cocina/actions/elaboraciones-actions";
 import { ESTADO_ELABORACION_COLOR, ESTADO_ELABORACION_LABEL, type EstadoElaboracion } from "@/features/logistica/data/elaboraciones";
 import { Badge } from "@/components/ui/badge";
@@ -232,6 +233,8 @@ export function ElaboracionesView() {
   useEffect(() => { load(); }, [load]);
 
   const [search, setSearch] = useState("");
+  const [confirmando, setConfirmando] = useState<string | null>(null);
+  const [prevision, setPrevision] = useState<{ id: string; datos: PrevisionUI } | null>(null);
   const [filtros, setFiltros] = useState<ToolbarFiltroActivo[]>([]);
   const [columnasVisibles, setColumnasVisibles] = useState<ToolbarColumnaVisible>({});
   const [columnasOrden, setColumnasOrden] = useState<string[] | undefined>(undefined);
@@ -256,9 +259,25 @@ export function ElaboracionesView() {
     return lista;
   }, [rows, search, filtros]);
 
+  /**
+   * Confirmar descuenta ingredientes de verdad, así que primero se enseña QUÉ se va a
+   * gastar. Si el rendimiento de la receta está mal declarado, el cocinero lo ve aquí
+   * («¿4 kg de tomate para 1 litro de salsa?») en vez de descubrirlo al descuadrar.
+   */
   const handleConfirm = async (id: string) => {
+    setConfirmando(id);
+    const prev = await previsualizarElaboracionAction(id);
+    setConfirmando(null);
+    if (!prev.ok) { toast.error(prev.error ?? "No se puede confirmar"); return; }
+    setPrevision({ id, datos: prev as PrevisionUI });
+  };
+
+  const confirmarDeVerdad = async () => {
+    if (!prevision) return;
+    const id = prevision.id;
+    setPrevision(null);
     const res = await confirmarElaboracion(id);
-    if (res.ok) { toast.success("Confirmada — sumada al stock"); load(); }
+    if (res.ok) { toast.success("Confirmada — ingredientes descontados y elaborado dado de alta"); load(); }
     else toast.error(res.error ?? "Error al confirmar");
   };
 
@@ -392,7 +411,7 @@ export function ElaboracionesView() {
                     <div className="flex gap-1">
                       {r.estado !== "confirmado" && r.estado !== "archivado" && (
                         <>
-                          <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => handleConfirm(r.id)} title="Confirmar y sumar a stock">
+                          <Button size="icon" variant="ghost" className="h-7 w-7" disabled={confirmando === r.id} onClick={() => handleConfirm(r.id)} title="Confirmar: descuenta los ingredientes y da de alta lo elaborado">
                             <Check className="h-3.5 w-3.5 text-emerald-600" />
                           </Button>
                           <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => { setEditing(r); setModalOpen(true); }} title="Editar">
@@ -429,6 +448,58 @@ export function ElaboracionesView() {
           existing={editing}
         />
       )}
+
+      <Dialog open={!!prevision} onOpenChange={(o) => { if (!o) setPrevision(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Confirmar elaboración</DialogTitle>
+          </DialogHeader>
+          {prevision && (
+            <div className="space-y-3 text-sm">
+              <p className="text-muted-foreground">
+                Se dará de alta{" "}
+                <strong className="text-foreground">
+                  {prevision.datos.cantidadProducida} {prevision.datos.producto?.medida ?? ""} de{" "}
+                  {prevision.datos.producto?.nombre}
+                </strong>{" "}
+                y se descontará del almacén:
+              </p>
+              <ul className="divide-y rounded-md border">
+                {prevision.datos.consumo.map((c) => (
+                  <li key={c.productoId} className="flex justify-between px-3 py-1.5">
+                    <span>{c.nombre}</span>
+                    <span className="tabular-nums text-muted-foreground">
+                      −{c.cantidad.toLocaleString("es-ES", { maximumFractionDigits: 3 })} {c.medida ?? ""}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              {prevision.datos.rinde !== 1 && (
+                <p className="text-xs text-muted-foreground">
+                  La receta está escrita para {prevision.datos.rinde} · se aplica ×
+                  {prevision.datos.factor.toLocaleString("es-ES", { maximumFractionDigits: 3 })}
+                </p>
+              )}
+              <p className="text-xs text-muted-foreground">
+                Repasa las cantidades: si no cuadran, revisa el escandallo antes de confirmar.
+              </p>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPrevision(null)}>Cancelar</Button>
+            <Button onClick={confirmarDeVerdad}>Confirmar y descontar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
+
+/** Lo que devuelve la previsualización, para pintarlo en el diálogo. */
+type PrevisionUI = {
+  producto: { id: string; nombre: string; medida: string | null } | null;
+  cantidadProducida: number;
+  rinde: number;
+  factor: number;
+  consumo: { productoId: string; nombre: string; cantidad: number; medida: string | null }[];
+};
