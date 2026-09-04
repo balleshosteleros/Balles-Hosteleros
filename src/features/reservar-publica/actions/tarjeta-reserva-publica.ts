@@ -92,14 +92,36 @@ export async function obtenerTarjetaPendiente(
     const { data: r } = await admin
       .from("reservas")
       .select(
-        "id, empresa_id, estado, fecha, hora, personas, cliente_nombre, cliente_apellidos, cliente_email, datos_declarados, tiene_garantia, garantia_importe, garantia_estado, tiene_cancelacion, cancelacion_importe, cancelacion_estado",
+        "id, empresa_id, estado, fecha, hora, personas, cliente_nombre, cliente_apellidos, cliente_email, datos_declarados, tiene_garantia, garantia_importe, garantia_estado, garantia_limite_at, tiene_cancelacion, cancelacion_importe, cancelacion_estado",
       )
       .eq("garantia_token", parsed.data)
       .maybeSingle();
     if (!r) return { ok: false, error: "No encontramos esa reserva." };
 
-    if (r.estado === "CANCELADA") {
-      return { ok: false, error: "Esta reserva ya está cancelada." };
+    // Estados en los que ya no tiene sentido pedir una tarjeta: la mesa ya no
+    // existe o el servicio terminó. Sin esto, un cliente que abría el enlace
+    // del correo días después se encontraba un formulario de pago para una
+    // reserva que ya no estaba en pie.
+    const SIN_TARJETA: Record<string, string> = {
+      CANCELADA: "Esta reserva ya está cancelada.",
+      NO_SHOW: "Esta reserva se marcó como no presentada. Si crees que es un error, llama al restaurante.",
+      LIBERADA: "Esta reserva ya no está activa.",
+      TERMINANDO: "Tu reserva ya está en curso: no hace falta que hagas nada.",
+      SENTADA: "Ya estás en la mesa: no hace falta que hagas nada.",
+      WALK_IN: "Ya estás en la mesa: no hace falta que hagas nada.",
+    };
+    const bloqueo = SIN_TARJETA[r.estado as string];
+    if (bloqueo) return { ok: false, error: bloqueo };
+
+    // El plazo para poner la tarjeta ya venció. El cron lo recoge en su
+    // siguiente vuelta, pero entre medias el enlace seguía aceptando pagos por
+    // una mesa que estaba a punto de liberarse.
+    const limite = r.garantia_limite_at as string | null;
+    if (limite && Date.parse(limite) < Date.now() && !r.garantia_estado) {
+      return {
+        ok: false,
+        error: "El plazo para confirmar tu tarjeta ha terminado. Si quieres mantener la mesa, llama al restaurante.",
+      };
     }
 
     const { data: emp } = await admin

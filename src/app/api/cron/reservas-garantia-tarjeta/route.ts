@@ -53,12 +53,20 @@ export async function GET(request: Request) {
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
   );
 
+  // Sin filtrar por `garantia_activa`: las reservas que YA nacieron con
+  // garantía siguen teniendo un compromiso vivo aunque la empresa apague la
+  // política después. Si se filtraba aquí, esas reservas se quedaban con
+  // `tiene_garantia` puesto y sin que nadie les pidiera nunca la tarjeta: al
+  // cliente se le decía por correo que tenía un importe retenido que en
+  // realidad no existía, y si no aparecía no se le podía cobrar.
+  //
+  // Apagar la política deja de aplicarla a las reservas NUEVAS, que es lo que
+  // se espera de un interruptor; no borra lo ya comprometido.
   const { data: configs, error: errCfg } = await supabase
     .from("empresa_reservas_config")
     .select(
       "empresa_id, garantia_activa, garantia_dias_antes, garantia_horas_limite, garantia_cancelar_si_falta",
-    )
-    .eq("garantia_activa", true);
+    );
 
   if (errCfg) {
     console.error("[cron][garantia-tarjeta] configs:", errCfg);
