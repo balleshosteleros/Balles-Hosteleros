@@ -111,7 +111,6 @@ import {
 import {
   COLORES_PASTEL_ZONAS,
   type Sala as SalaConfig,
-  type LocalMin,
   type Zona as ZonaReal,
   type Plano as PlanoConfig,
   type PlanoMesaPosicion,
@@ -225,19 +224,20 @@ interface MesaMeta {
 // no romper los call sites que ya leen `reservaColor[r.estado]`.
 const reservaColor = ESTADO_BADGE_CLASS;
 
-const MESES_ES = [
-  "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
-  "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
+/** Mes en tres letras: "4 SEPTIEMBRE 2026" ocupaba media barra él solo. */
+const MESES_ES_CORTOS = [
+  "ene", "feb", "mar", "abr", "may", "jun",
+  "jul", "ago", "sep", "oct", "nov", "dic",
 ];
 
 function formatFecha(iso: string) {
   const d = new Date(iso + "T12:00:00");
-  return `${d.getDate()} ${MESES_ES[d.getMonth()]} ${d.getFullYear()}`;
+  return `${d.getDate()} ${MESES_ES_CORTOS[d.getMonth()]} ${d.getFullYear()}`;
 }
 
 function formatMes(iso: string) {
   const d = new Date(iso + "T12:00:00");
-  return `${MESES_ES[d.getMonth()]} ${d.getFullYear()}`;
+  return `${MESES_ES_CORTOS[d.getMonth()]} ${d.getFullYear()}`;
 }
 
 function addDays(iso: string, n: number) {
@@ -2609,68 +2609,6 @@ function FiltroSalasDropdown({
   );
 }
 
-function FiltroLocalesDropdown({
-  locales,
-  localActualId,
-  onSelect,
-}: {
-  locales: LocalMin[];
-  localActualId: string;
-  onSelect: (id: string) => void;
-}) {
-  return (
-    <Popover>
-      <PopoverTrigger asChild>
-        <Button size="sm" variant="outline" className="text-xs h-8 gap-1.5 px-2.5">
-          <ListFilter className="h-3.5 w-3.5" />
-          Locales
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent className="w-64 p-2" align="start">
-        <div className="flex items-center justify-between px-1 pb-1.5 mb-1.5 border-b">
-          <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-            Locales
-          </span>
-        </div>
-        <div className="max-h-[300px] overflow-y-auto space-y-0.5">
-          {locales.length === 0 ? (
-            <p className="px-2 py-3 text-xs text-muted-foreground italic text-center">
-              No hay locales
-            </p>
-          ) : (
-            locales.map((l) => {
-              const checked = l.id === localActualId;
-              return (
-                <button
-                  key={l.id}
-                  type="button"
-                  onClick={() => onSelect(l.id)}
-                  className={cn(
-                    "w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs hover:bg-muted transition-colors text-left",
-                    checked && "bg-muted/60",
-                  )}
-                >
-                  <span
-                    className={cn(
-                      "w-4 h-4 rounded border flex items-center justify-center shrink-0",
-                      checked
-                        ? "bg-primary border-primary text-primary-foreground"
-                        : "border-border",
-                    )}
-                  >
-                    {checked && <Check className="h-3 w-3" />}
-                  </span>
-                  <span className="truncate flex-1">{l.nombre}</span>
-                </button>
-              );
-            })
-          )}
-        </div>
-      </PopoverContent>
-    </Popover>
-  );
-}
-
 function FiltroPlanosDropdown({
   planos,
   planoActualId,
@@ -3554,7 +3492,6 @@ export function ReservasView() {
     personas: number;
     reservas: number;
   }>({ comida: { personas: 0, reservas: 0 }, cena: { personas: 0, reservas: 0 }, personas: 0, reservas: 0 });
-  const [locales, setLocales] = useState<LocalMin[]>([]);
   const [localId, setLocalId] = useState<string>("");
   const [salasLocalTodas, setSalasLocalTodas] = useState<SalaConfig[]>([]);
   const [salaActualId, setSalaActualId] = useState<string>("");
@@ -3614,7 +3551,6 @@ export function ReservasView() {
       // Cargado: a partir de aquí, el `setLocalId` de abajo ya no relanza nada.
       localCargadoRef.current = `${empresaActual.id}|${localId || ""}|${posicionesRefresh}`;
       const d = ctx.data;
-      setLocales(d.locales);
       if (!localId) {
         setLocalId(d.localId);
         // El primer arranque entra sin local y el servidor elige el primero.
@@ -5374,10 +5310,22 @@ export function ReservasView() {
           aria-hidden={vista !== "dia"}
           inert={vista !== "dia"}
         >
-          <FiltroLocalesDropdown locales={locales} localActualId={localId} onSelect={setLocalId} />
           <FiltroPlanosDropdown planos={planosLocal} planoActualId={planoActualId} onSelect={setPlanoActualId} />
           <FiltroSalasDropdown salas={salasLocal} salaActualId={salaActualId} onSelect={setSalaActualId} />
           <FiltroZonasDropdown items={zonaItems} seleccionados={zonaIdsSel} onChange={setZonaIdsSel} />
+          {/* La música se lleva desde la misma pantalla en la que se está
+              durante el servicio: si suena algo que no toca, se cambia sin
+              salir de reservas ni ir a buscarlo al menú. */}
+          <Button
+            variant="outline"
+            size="sm"
+            className="text-xs h-8 gap-1.5 px-2.5"
+            onClick={() => router.push("/sala/musica")}
+            title="Música"
+          >
+            <Music className="h-3.5 w-3.5" />
+            Música
+          </Button>
         </div>
 
         <div className="flex items-center gap-1.5">
@@ -5471,19 +5419,6 @@ export function ReservasView() {
             aria-label="Cobros, garantías y tickets"
           >
             <Banknote className="h-4 w-4" />
-          </Button>
-          {/* La música se lleva desde la misma pantalla en la que se está
-              durante el servicio: si suena algo que no toca, se cambia sin
-              salir de reservas ni ir a buscarlo al menú. */}
-          <Button
-            variant="outline"
-            size="icon"
-            className="h-8 w-8"
-            onClick={() => router.push("/sala/musica")}
-            title="Música"
-            aria-label="Música"
-          >
-            <Music className="h-4 w-4" />
           </Button>
           <Button
             variant="outline"
