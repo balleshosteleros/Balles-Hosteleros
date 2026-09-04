@@ -5,6 +5,58 @@
 
 ---
 
+## 📊 04-SEP (cierre) — HISTÓRICO RECUPERADO: 3.575 complementos · 16 altas pendientes
+
+> **Actualiza la nota de abajo con los números reales.** La lista de altas para Iván ahora
+> está completa (antes salía de 2 días de muestra; esta es de todo el histórico).
+
+Terminado el reproceso de los **79 días** desde el 17-jun. Sin ningún error, y **sin tocar el
+almacén** (0 movimientos de venta en el historial: el descuento sigue apagado).
+
+| | Antes | Ahora |
+|---|---|---|
+| Complementos guardados | **0** | **3.575** |
+| Sin producto enlazado | — | 758 (**solo 16 productos distintos**) |
+| Líneas de venta sin identificar | 288 sin remedio | **332, ya con su id de Ágora** (enlazables) |
+| Irrecuperables | — | **4** |
+
+Las **288 líneas huérfanas** por las que preguntabais el 28-ago **quedan recuperadas**: ya
+llevan su identificador, así que se enlazan solas en cuanto exista el producto.
+
+### 🙋 LAS 16 ALTAS QUE HACEN FALTA (lista completa, por impacto)
+
+Con dar de alta estas 16 fichas se resuelve el **100 %** de los complementos que hoy no se
+pueden descontar. Casi todo es **tabaco de cachimba**:
+
+| Producto (nombre en Ágora) | id Ágora | Veces | Empresa |
+|---|---|---|---|
+| Love 66 | 1337 | 124 | HABANA |
+| Blue Yellow | 1343 | 91 | HABANA |
+| My amor | 1667 | 91 | HABANA |
+| Big Boy | 1319 | 66 | HABANA |
+| Kafayayo | 1666 | 55 | HABANA |
+| Huracan | 2280 | 52 | HABANA |
+| MissJosy | 2295 | 43 | HABANA |
+| Skimo Watermelon | 2158 | 43 | HABANA |
+| Al Kakher Yellow | 2592 | 34 | HABANA |
+| Fight | 1696 | 34 | HABANA |
+| Chao Bella | 2292 | 20 | HABANA |
+| Ud. Extra Brioche Ternera | 1915 | 32 | BACANAL |
+| Ud. Extra Vieira | 1911 | 26 | BACANAL |
+| Ud. Extra Bao-cadillo | 1914 | 16 | BACANAL |
+| Ud. Extra Alcachofa | 2611 | 3 | BACANAL |
+| **SEXY GREEN** | 2624 | 28 | HABANA |
+
+**Todos los tabacos vienen con ratio 0,009 y 0,018** — media cazoleta y cazoleta entera,
+exactamente vuestra configuración de "1 sabor / 2 sabores". El sistema ya lo distingue.
+
+⚠️ **`SEXY GREEN` está en la lista pero NO lo deis de alta como tabaco**: es un cóctel, y
+aparece **28 veces** picado como sabor de shisha. Eso ya no es un despiste suelto, es una
+costumbre: **merece la pena mirar cómo se está picando en comanda**, porque el día que se
+encienda el descuento restaría un cóctel del almacén cada vez.
+
+---
+
 ## ✅ 04-SEP — LOS COMPLEMENTOS YA SE GUARDAN (y una lista de altas para Iván)
 
 > **1 tarea de catálogo para Iván.** El resto es información. Nada que programar por
