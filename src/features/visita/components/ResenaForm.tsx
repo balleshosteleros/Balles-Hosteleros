@@ -75,16 +75,16 @@ export function ResenaForm({
   // a la estrella única, que se pregunta siempre.
   const desglose = desglosado && (campos.cocina || campos.servicio || campos.ambiente);
   // La nota que llega del correo es la valoración GENERAL de la experiencia.
-  // En modo desglosado se usa como punto de partida de las tres categorías:
-  // así el cliente ve reflejado el clic que ya hizo y solo corrige lo que
-  // difiera, en vez de empezar de cero.
+  // La estrella que pulsó en el correo rellena SOLO la comida, que es lo que
+  // se le preguntó allí. Servicio y ambiente empiezan vacíos.
+  //
+  // Antes se copiaba la misma nota a las tres: el cliente que pulsaba 4 llegaba
+  // aquí con servicio y ambiente ya puntuados a 4 sin haber dicho nada, y no
+  // había forma de distinguir lo que él había valorado de lo que le habíamos
+  // rellenado nosotros. Enviaba tres notas creyendo haber dado una.
   const [comida, setComida] = useState<number>(ratingInicial ?? 0);
-  const [servicio, setServicio] = useState<number>(
-    desglose ? (ratingInicial ?? 0) : 0,
-  );
-  const [ambiente, setAmbiente] = useState<number>(
-    desglose ? (ratingInicial ?? 0) : 0,
-  );
+  const [servicio, setServicio] = useState<number>(0);
+  const [ambiente, setAmbiente] = useState<number>(0);
   const [comentario, setComentario] = useState("");
   const [enviando, setEnviando] = useState(false);
   // Si ya se valoró con este enlace, se entra directamente en la pantalla de
@@ -202,7 +202,7 @@ export function ResenaForm({
           </h2>
           <p className="mt-1 text-center text-sm text-gray-600">
             {desglose
-              ? "Ajusta lo que quieras y envía."
+              ? "Pulsa las estrellas para puntuar."
               : "Tu opinión nos ayuda a mejorar."}
           </p>
 

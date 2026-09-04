@@ -75,6 +75,25 @@ function horaEnvioDeConfig(valor: string | null | undefined): number {
   return h * 60 + min;
 }
 
+/**
+ * ¿Es la hora de enviar de esta empresa?
+ *
+ * La ventana es de DOS horas, no de una: el cron pasa cada hora, así que una
+ * sola pasada bastaría, pero GitHub Actions se retrasa en horas punta y un
+ * retraso de más de una hora habría perdido el envío del día entero. Dos horas
+ * absorben ese retraso sin llegar a convertirse en "de las 10:00 en adelante",
+ * que era el problema: con `>= hora` cualquier pasada de la tarde enviaba, y una
+ * reserva creada a las 20:00 para mañana recibía su correo a los minutos en vez
+ * de a las 10:00 del día siguiente.
+ */
+const VENTANA_ENVIO_MIN = 120;
+
+function esSuHora(minutosAhora: number, horaEnvio: number): boolean {
+  return (
+    minutosAhora >= horaEnvio && minutosAhora < horaEnvio + VENTANA_ENVIO_MIN
+  );
+}
+
 /** Día civil "AAAA-MM-DD" de un instante, en la zona de la empresa. */
 function diaEnZona(d: Date, tz: string): string {
   return new Intl.DateTimeFormat("en-CA", {
@@ -207,7 +226,7 @@ export async function GET(request: Request) {
         // de arreglar. Enviar tarde es mucho mejor que no enviar, y
         // `email_reconfirmacion_at` impide que salga dos veces.
         const horaEnvio = horaEnvioDeConfig(c.reconfirmacion_hora_envio);
-        if (minutosDiaEnZona(ahora, tz) < horaEnvio) {
+        if (!esSuHora(minutosDiaEnZona(ahora, tz), horaEnvio)) {
           continue;
         }
 
@@ -275,7 +294,7 @@ export async function GET(request: Request) {
         // cron pasando cada hora, la petición salía a cualquier hora — a las
         // 3 de la madrugada al que cenó anteayer.
         const horaEnvioV = horaEnvioDeConfig(c.reconfirmacion_hora_envio);
-        if (minutosDiaEnZona(ahora, tz) < horaEnvioV) {
+        if (!esSuHora(minutosDiaEnZona(ahora, tz), horaEnvioV)) {
           continue;
         }
 
