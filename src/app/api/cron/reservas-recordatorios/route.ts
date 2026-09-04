@@ -46,6 +46,10 @@ import {
   minutosDiaEnZona,
   zonaLocalAUtcISO,
 } from "@/features/empresa/lib/zona-horaria";
+import {
+  ESTADOS_RESERVA,
+  ESTADOS_NO_ASISTEN,
+} from "@/features/sala/data/reservas";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -314,17 +318,17 @@ export async function GET(request: Request) {
           empresaId: c.empresa_id,
           desde: desdeV,
           hasta: hastaV,
-          // Solo a quien vino. Cancelada, no-show y lista de espera quedan
-          // fuera: preguntar "¿qué tal fue?" a quien no se sentó es peor que
-          // no preguntar nada.
-          estados: [
-            "CONFIRMADA",
-            "RECONFIRMADA",
-            "NO_RECONFIRMADA",
-            "SENTADA",
-            "TERMINANDO",
-            "LIBERADA",
-          ],
+          // A TODO el que asistió, sin mirar el tipo de reserva ni el origen:
+          // el que entró sin reservar y acabó sentado comió lo mismo que el
+          // que reservó por la web, y su opinión vale igual.
+          //
+          // La lista NO se escribe a mano: son todos los estados menos los que
+          // de verdad no asisten (cancelada y no-show), que es la misma fuente
+          // que usan los totales de Sala. Escrita a mano se quedaba corta y
+          // cada estado nuevo nacía sin valoración sin que nadie se enterara.
+          estados: ESTADOS_RESERVA.filter(
+            (e) => !ESTADOS_NO_ASISTEN.includes(e),
+          ),
           auditCol: "email_valoracion_at",
           tz,
         });

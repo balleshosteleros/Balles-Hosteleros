@@ -27,6 +27,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { sendEmail } from "@/lib/email/send";
 import { getSiteUrl } from "@/lib/site-url";
 import { tipoDeReserva } from "@/features/sala/lib/tipo-reserva";
+import { ESTADOS_NO_ASISTEN } from "@/features/sala/data/reservas";
 import {
   getReservaEmailPlantillaSeed,
   RESERVA_EMAIL_TIPO_LABELS,
@@ -326,8 +327,14 @@ export async function enviarReservaEmail(
     // Pedir opinión de algo que aún no ha pasado —o que no llegó a pasar— es
     // absurdo para quien lo recibe. Se comprueba aquí y no en quien llama
     // porque el envío manual usa `force` y se saltaría cualquier guarda previa.
+    //
+    // Solo quedan fuera los que de VERDAD no asistieron, la misma fuente que
+    // usan los totales de Sala. LIBERADA estaba en esta lista y no debía: es
+    // justo el cliente que vino, comió y ya ha soltado la mesa —el que mejor
+    // puede contar qué tal fue—, y el cron se lo buscaba para que esta guarda
+    // lo descartara uno a uno. Nadie con mesa liberada recibió nunca el correo.
     const estado = (reservaData.estado as string | null) ?? "";
-    if (["CANCELADA", "NO_SHOW", "LIBERADA"].includes(estado)) {
+    if ((ESTADOS_NO_ASISTEN as readonly string[]).includes(estado)) {
       return {
         ok: false,
         error: "No se pide valoración de una reserva cancelada o no presentada.",
