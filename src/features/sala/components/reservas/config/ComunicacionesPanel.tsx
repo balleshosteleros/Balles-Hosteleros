@@ -59,7 +59,6 @@ import {
 import type { EmpresaReservasConfig } from "@/features/sala/data/reservas";
 import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 import { CanalesMensajeriaPanel } from "@/features/mensajeria/components/CanalesMensajeriaPanel";
-import { EnvioCoverPanel } from "./EnvioCoverPanel";
 import { cn } from "@/lib/utils";
 
 const HORAS_RECORDATORIO: number[] = [1, 2, 3, 4, 6, 8, 12, 24, 48];
@@ -230,10 +229,6 @@ export function ComunicacionesPanel() {
   return (
     <div className="space-y-6">
       {confirmResetDialog}
-
-      {/* Puente TEMPORAL de la migración de CoverManager: desaparece solo
-          cuando ya no queda ninguna de aquellas reservas por venir. */}
-      <EnvioCoverPanel />
 
       {/* WhatsApp y SMS van primero: es el canal que el cliente lee de verdad,
           y el correo es el que queda siempre por debajo como red de seguridad. */}

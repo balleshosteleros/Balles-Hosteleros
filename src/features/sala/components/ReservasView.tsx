@@ -608,12 +608,25 @@ function MesaReservasPopover({
   );
 }
 
-function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, iniciarComoWalkIn = false, zonasReales, mesas, mesasMeta, localId, empresaId, getEstadoMesa }: {
+/**
+ * Las tres formas de dar de alta a un cliente desde sala. Es UN solo
+ * formulario con tres modos, no tres pantallas: cambian los datos que se
+ * piden y el estado con el que nace, pero el resto (fecha, hora, personas,
+ * zona, notas) es común.
+ *
+ * - `CLIENTE`: la reserva normal. Alguien llama y reserva para más tarde.
+ * - `WALKIN`: llegó sin reservar y se sienta ya. No hay ficha de cliente.
+ * - `LISTA_ESPERA`: híbrido. Está en la puerta como el walk-in, pero no hay
+ *   mesa libre: se le apunta con sus datos y se le avisa cuando la haya.
+ */
+type TipoAltaReserva = "CLIENTE" | "WALKIN" | "LISTA_ESPERA";
+
+function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, tipoAltaInicial = "CLIENTE", zonasReales, mesas, mesasMeta, localId, empresaId, getEstadoMesa }: {
   fecha: string; turno: TurnoReserva;
   onClose: () => void;
   mesaPreseleccionada?: Mesa | null;
-  /** Abre el formulario ya en modo walk-in (viene de "Sentar walk-in" en el plano). */
-  iniciarComoWalkIn?: boolean;
+  /** Abre el formulario ya en un modo concreto (viene de "Sentar walk-in" en el plano). */
+  tipoAltaInicial?: TipoAltaReserva;
   zonasReales: ZonaReal[];
   mesas: Mesa[];
   /** Capacidades reales del catálogo (min/max) para avisar de aforo de mesa. */
@@ -643,7 +656,7 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
     comensales: 2,
     zona: (mesaPreseleccionada?.zona ?? "") as ZonaSala | "",
     mesaId: (mesaPreseleccionada?.id ?? "") as string,
-    observaciones: "", esWalkIn: iniciarComoWalkIn,
+    observaciones: "", tipoAlta: tipoAltaInicial as TipoAltaReserva,
     // Un alta desde el back-office entra por teléfono salvo que digan otra
     // cosa: es como llega la inmensa mayoría. En walk-in no se usa este valor
     // (lo fija `emitirReserva`), pero se conserva por si vuelve a Cliente.
@@ -656,6 +669,26 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
     duracionTouched: false as boolean,
     codigoCupon: "" as string,
   });
+  /**
+   * Walk-in puro: el cliente ya está sentado y no deja datos. Es lo único que
+   * apaga los campos de la ficha y el cobro.
+   *
+   * La lista de espera NO entra aquí: sí pide nombre y teléfono, porque el
+   * sentido de apuntarse es que te avisen cuando haya mesa.
+   */
+  const esWalkIn = form.tipoAlta === "WALKIN";
+  /**
+   * Lista de espera: aún no hay mesa. Se apunta al cliente y se le asigna
+   * cuando alguna quede libre, así que aquí no se elige mesa ni se comprueba
+   * si choca con otra reserva — no ocupa nada todavía.
+   */
+  const esListaEspera = form.tipoAlta === "LISTA_ESPERA";
+  /**
+   * Ni garantía, ni prepago, ni cupón. El walk-in ya está sentado y la lista
+   * de espera todavía no tiene mesa: en ninguno de los dos hay nada que
+   * garantizar ni que cobrar por adelantado.
+   */
+  const sinCobro = esWalkIn || esListaEspera;
   const [cuponValido, setCuponValido] = useState<boolean | null>(null);
   const [config, setConfig] = useState<EmpresaReservasConfig | null>(null);
   const [reglas, setReglas] = useState<EmpresaReservasRegla[]>([]);
@@ -810,7 +843,7 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
   });
 
   useEffect(() => {
-    if (form.esWalkIn || !campoActivo) {
+    if (esWalkIn || !campoActivo) {
       setSugerencias([]);
       return;
     }
@@ -841,7 +874,7 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
       cancelado = true;
       clearTimeout(handle);
     };
-  }, [form.cliente, form.apellidos, form.telefono, form.email, form.esWalkIn, campoActivo]);
+  }, [form.cliente, form.apellidos, form.telefono, form.email, esWalkIn, campoActivo]);
 
   const maxPax = useMemo(
     () => maxpaxEfectivoDesdeReglas(reglas, form.fecha, form.turno),
@@ -1041,17 +1074,23 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
    */
   const camposQueFaltan = useMemo(() => {
     const faltan: string[] = [];
-    if (!form.esWalkIn) {
+    if (!esWalkIn) {
       if (!form.cliente.trim()) faltan.push("nombre");
-      if (!form.apellidos.trim()) faltan.push("apellidos");
       // El teléfono NO se consulta a la configuración: es obligatorio siempre,
       // como el nombre o la fecha. Es el único contacto que sirve para avisar al
-      // cliente de un cambio de última hora.
+      // cliente de un cambio de última hora — y en la lista de espera es LA
+      // razón de apuntarse: sin número no hay forma de avisar de que hay mesa.
       if (!form.telefono.trim()) faltan.push("teléfono");
+    }
+    // Apellidos, email y origen solo se exigen en la reserva normal. Quien
+    // espera en la puerta deja el nombre y el móvil y poco más: pedirle la
+    // ficha entera mientras hace cola es lo que llevaba a inventarse datos.
+    if (form.tipoAlta === "CLIENTE") {
+      if (!form.apellidos.trim()) faltan.push("apellidos");
       if (reservaRequiere("email") && !form.email.trim()) faltan.push("email");
       // El canal por el que entra la reserva es un dato obligatorio: sin él la
-      // analítica de origen miente. En walk-in no se pregunta porque lo fija el
-      // propio tipo de reserva (siempre WALKIN).
+      // analítica de origen miente. No se pregunta ni en walk-in ni en lista de
+      // espera porque lo fija el propio tipo de alta.
       if (!form.origen.trim()) faltan.push("origen");
     }
     if (!form.fecha) faltan.push("fecha");
@@ -1064,7 +1103,8 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
     // guardar, en `handleSave`.
     return faltan;
   }, [
-    form.esWalkIn,
+    esWalkIn,
+    form.tipoAlta,
     form.origen,
     form.cliente,
     form.apellidos,
@@ -1122,6 +1162,13 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
     // Aquí es donde el formulario se permite avisar: solo al intentar guardar.
     setIntentoGuardar(true);
     if (camposQueFaltan.length > 0) return;
+    // La lista de espera se guarda directa: no hay mesa que buscar, ni choque
+    // que comprobar, ni aforo que validar. Precisamente se apunta a alguien
+    // porque AHORA no hay mesa; la asignación llega después, cuando se libere.
+    if (esListaEspera) {
+      pedirConfirmacion();
+      return;
+    }
     const mesa = mesas.find((m) => m.id === (form.mesaId || mesaPreseleccionada?.id));
     if (!mesa) {
       // Sin mesa elegida a mano manda la ASIGNACIÓN AUTOMÁTICA: el sistema
@@ -1130,7 +1177,7 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
       //
       // Los walk-in quedan fuera: el cliente ya está en la puerta y se le
       // sienta en el momento, así que no hay nada que proponer por adelantado.
-      if (form.esWalkIn || !localId) {
+      if (esWalkIn || !localId) {
         pedirConfirmacion();
         return;
       }
@@ -1254,7 +1301,7 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
    */
   const pedirConfirmacion = (mesaCodigoAuto?: string | null) => {
     setAviso(null);
-    if (form.esWalkIn || !form.email.trim()) {
+    if (esWalkIn || !form.email.trim()) {
       emitirReserva(false, mesaCodigoAuto);
       return;
     }
@@ -1273,23 +1320,26 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
     setMesaCodigoAuto(null);
     onSave({
       id: `r-${Date.now()}`,
-      cliente: form.esWalkIn ? "" : form.cliente,
-      apellidos: form.esWalkIn ? "" : form.apellidos,
-      telefono: form.esWalkIn ? "" : componerTelefono(form.telefonoPrefijo, form.telefono),
-      email: form.esWalkIn ? "" : form.email,
+      cliente: esWalkIn ? "" : form.cliente,
+      apellidos: esWalkIn ? "" : form.apellidos,
+      telefono: esWalkIn ? "" : componerTelefono(form.telefonoPrefijo, form.telefono),
+      email: esWalkIn ? "" : form.email,
       fecha: form.fecha, hora: form.hora, turno: form.turno,
       comensales: form.comensales, zona: form.zona,
-      mesaId: form.mesaId || (mesaPreseleccionada?.id ?? ""),
+      // La lista de espera no lleva mesa: se apunta al cliente y se le asigna
+      // una cuando quede libre. Mandar mesa aquí la ocuparía sin haberla dado.
+      mesaId: esListaEspera ? "" : (form.mesaId || (mesaPreseleccionada?.id ?? "")),
       // Mesa aceptada de la propuesta automática que no está en el catálogo de
       // pantalla (una unión, u otra sala): se manda por código, que es lo que
       // se guarda en BD.
-      mesaCodigo: codigoAuto ?? undefined,
-      estado: form.esWalkIn ? "WALK_IN" : "CONFIRMADA",
+      mesaCodigo: esListaEspera ? undefined : (codigoAuto ?? undefined),
+      estado: esWalkIn ? "WALK_IN" : esListaEspera ? "LISTA_ESPERA" : "CONFIRMADA",
       observaciones: form.observaciones,
-      // Un walk-in es siempre gratis: ni garantía, ni prepago, ni cupón.
-      tipoCategoria: (form.esWalkIn ? "gratis" : form.tipoCategoria || null) as TipoReservaCategoria | null,
-      garantiaImporte: !form.esWalkIn && form.tipoCategoria === "politica" && form.garantiaImporte ? Number(form.garantiaImporte) : null,
-      importePagado: !form.esWalkIn && form.tipoCategoria === "cupon" && form.importePagado ? Number(form.importePagado) : null,
+      // Un walk-in es siempre gratis: ni garantía, ni prepago, ni cupón. La
+      // lista de espera tampoco cobra: todavía no hay mesa que garantizar.
+      tipoCategoria: (sinCobro ? "gratis" : form.tipoCategoria || null) as TipoReservaCategoria | null,
+      garantiaImporte: !sinCobro && form.tipoCategoria === "politica" && form.garantiaImporte ? Number(form.garantiaImporte) : null,
+      importePagado: !sinCobro && form.tipoCategoria === "cupon" && form.importePagado ? Number(form.importePagado) : null,
       // Solo enviamos override si el usuario tocó la duración y es distinta del default.
       // Si no tocó nada, dejamos NULL para usar la default empresa (semántica del campo).
       duracionMinutos: (() => {
@@ -1299,12 +1349,12 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
         return duracionEfectiva;
       })(),
       notificarEmail,
-      codigoCupon: !form.esWalkIn && form.codigoCupon.trim() ? form.codigoCupon.trim().toUpperCase() : null,
+      codigoCupon: !sinCobro && form.codigoCupon.trim() ? form.codigoCupon.trim().toUpperCase() : null,
       // Walk-in siempre WALKIN, pase lo que pase en el selector: el cliente
       // llegó andando. El servidor lo vuelve a forzar, aquí se manda coherente.
       // Nunca `null`: el origen es obligatorio y `camposQueFaltan` ya impide
       // llegar aquí sin él. El fallback es el canal por defecto del alta.
-      origen: form.esWalkIn ? "WALKIN" : (form.origen.trim() || ORIGENES_ALTA_SALA[0]),
+      origen: esWalkIn ? "WALKIN" : (form.origen.trim() || ORIGENES_ALTA_SALA[0]),
       // Si la mesa elegida está bloqueada, se llega aquí solo después de haber
       // leído y aceptado el aviso: el servidor necesita saberlo para dejar
       // pasar la reserva en vez de rechazarla como hace con la web.
@@ -1318,7 +1368,7 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
   };
 
   const renderSugerencias = (campo: CampoBusqueda) => {
-    if (campoActivo !== campo || form.esWalkIn) return null;
+    if (campoActivo !== campo || esWalkIn) return null;
     if (sugerencias.length === 0 && !buscando) return null;
     return (
       <div className="absolute left-0 right-0 top-full z-30 mt-1 max-h-56 overflow-y-auto rounded-md border bg-popover text-popover-foreground shadow-md">
@@ -1357,6 +1407,18 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
     );
   };
 
+  /**
+   * En walk-in los datos del cliente se ocultan, pero su hueco se queda: la
+   * rejilla no se recompone y ningún campo cambia de sitio al saltar de una
+   * pestaña a otra. `invisible` los borra de la vista sin sacarlos del flujo, e
+   * `inert` los saca del tabulador y de los lectores de pantalla, que si no
+   * seguirían encontrando cuatro campos que ya no existen para el usuario.
+   */
+  const camposClienteOcultos = esWalkIn ? "invisible" : undefined;
+  const propsClienteOculto = esWalkIn
+    ? ({ inert: "", "aria-hidden": true } as Record<string, unknown>)
+    : {};
+
   return (
     <div className="space-y-2">
       {/* El banner refleja la mesa REALMENTE seleccionada en el formulario, no la
@@ -1393,26 +1455,29 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
           </span>
         </div>
       )}
-      {/* Selector cliente / walk-in: una sola pastilla con dos mitades, para que
-          se vea de un vistazo cuál de los dos está activo. */}
-      <div className="grid w-full max-w-xs grid-cols-2 gap-1 rounded-lg border bg-muted/60 p-1">
+      {/* Las tres formas de dar de alta, en una sola pastilla de tres tercios:
+          la reserva normal, el que llegó sin reservar y el que espera mesa.
+          Se ve de un vistazo cuál está activo sin desplegar nada. */}
+      <div className="grid w-full max-w-md grid-cols-3 gap-1 rounded-lg border bg-muted/60 p-1">
         {[
-          { walkIn: false, label: "Cliente" },
-          { walkIn: true, label: "Walk-in" },
+          { tipo: "CLIENTE" as const, label: "Cliente" },
+          { tipo: "WALKIN" as const, label: "Walk-in" },
+          { tipo: "LISTA_ESPERA" as const, label: "Lista de espera" },
         ].map((op) => {
-          const activo = form.esWalkIn === op.walkIn;
+          const activo = form.tipoAlta === op.tipo;
           return (
             <button
-              key={op.label}
+              key={op.tipo}
               type="button"
               aria-pressed={activo}
               onClick={() =>
                 setForm((p) => ({
                   ...p,
-                  esWalkIn: op.walkIn,
-                  // Un walk-in nunca lleva garantía ni cupón: entra andando y
-                  // no ha pagado nada por adelantado. El tipo queda en Gratis.
-                  ...(op.walkIn
+                  tipoAlta: op.tipo,
+                  // Ni el walk-in ni la lista de espera llevan garantía ni
+                  // cupón: uno ya está sentado y el otro aún no tiene mesa.
+                  // El tipo queda en Gratis.
+                  ...(op.tipo !== "CLIENTE"
                     ? {
                         tipoCategoria: "gratis" as TipoReservaCategoria,
                         garantiaImporte: "",
@@ -1420,6 +1485,10 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
                         codigoCupon: "",
                       }
                     : {}),
+                  // La lista de espera no ocupa mesa: si venía una elegida (o
+                  // preseleccionada desde el plano) se suelta, para no dejarla
+                  // pillada por alguien que todavía está esperando.
+                  ...(op.tipo === "LISTA_ESPERA" ? { mesaId: "" } : {}),
                 }))
               }
               className={cn(
@@ -1435,85 +1504,89 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
         })}
       </div>
       <div className="grid grid-cols-3 gap-x-3 gap-y-2">
-        {!form.esWalkIn && (
-          <>
-            <div className="relative">
-              <Label className="text-xs">Nombre *</Label>
-              <Input
-                className="h-8 text-xs"
-                maxLength={RESERVA_NOMBRE_MAX_CHARS}
-                value={form.cliente}
-                onFocus={() => setCampoActivo("cliente")}
-                onBlur={() => setTimeout(() => setCampoActivo((c) => (c === "cliente" ? null : c)), 150)}
-                onChange={e => setForm(p => ({ ...p, cliente: e.target.value }))}
-              />
-              {renderSugerencias("cliente")}
-            </div>
-            <div className="relative">
-              <Label className="text-xs">Apellidos *</Label>
-              <Input
-                className="h-8 text-xs"
-                maxLength={RESERVA_APELLIDOS_MAX_CHARS}
-                value={form.apellidos}
-                onFocus={() => setCampoActivo("apellidos")}
-                onBlur={() => setTimeout(() => setCampoActivo((c) => (c === "apellidos" ? null : c)), 150)}
-                onChange={e => setForm(p => ({ ...p, apellidos: e.target.value }))}
-              />
-              {renderSugerencias("apellidos")}
-            </div>
-            <div className="relative">
-              <LabelConRegla
-                moduloKey="sala"
-                submoduloKey="reservas"
-                campoKey="telefono"
-                className="text-xs"
+        {/* Los cuatro campos del cliente NO se descuelgan de la rejilla en
+            walk-in: se quedan en su sitio, invisibles. Si se quitaran del todo,
+            fecha, hora, turno y todo lo de abajo saltarían dos filas hacia
+            arriba al cambiar de pestaña, y quien está dando de alta con gente
+            en la puerta tendría que volver a buscar cada campo. Así lo único
+            que pasa al pulsar Walk-in es que los datos del cliente desaparecen:
+            nada más se mueve. Van ocultos de verdad (`invisible` + `inert`), no
+            solo despintados: un hueco vacío no se lee ni se tabula. */}
+        <div className={cn("relative", camposClienteOcultos)} {...propsClienteOculto}>
+            <Label className="text-xs">Nombre *</Label>
+            <Input
+              className="h-8 text-xs"
+              maxLength={RESERVA_NOMBRE_MAX_CHARS}
+              value={form.cliente}
+              onFocus={() => setCampoActivo("cliente")}
+              onBlur={() => setTimeout(() => setCampoActivo((c) => (c === "cliente" ? null : c)), 150)}
+              onChange={e => setForm(p => ({ ...p, cliente: e.target.value }))}
+            />
+            {renderSugerencias("cliente")}
+        </div>
+        <div className={cn("relative", camposClienteOcultos)} {...propsClienteOculto}>
+            <Label className="text-xs">Apellidos *</Label>
+            <Input
+              className="h-8 text-xs"
+              maxLength={RESERVA_APELLIDOS_MAX_CHARS}
+              value={form.apellidos}
+              onFocus={() => setCampoActivo("apellidos")}
+              onBlur={() => setTimeout(() => setCampoActivo((c) => (c === "apellidos" ? null : c)), 150)}
+              onChange={e => setForm(p => ({ ...p, apellidos: e.target.value }))}
+            />
+            {renderSugerencias("apellidos")}
+        </div>
+        <div className={cn("relative", camposClienteOcultos)} {...propsClienteOculto}>
+            <LabelConRegla
+              moduloKey="sala"
+              submoduloKey="reservas"
+              campoKey="telefono"
+              className="text-xs"
+            >
+              Teléfono
+            </LabelConRegla>
+            {/* Prefijo obligatorio, nunca a mano: si unos números lo llevan
+                y otros no, el mismo cliente acaba con dos fichas. */}
+            <div className="flex gap-1.5">
+              <select
+                value={form.telefonoPrefijo}
+                onChange={e => setForm(p => ({ ...p, telefonoPrefijo: e.target.value }))}
+                className="h-8 w-[86px] shrink-0 rounded-md border border-input bg-background px-1.5 text-xs"
+                title={PREFIJOS_TELEFONO.find(x => x.prefijo === form.telefonoPrefijo)?.label ?? ""}
               >
-                Teléfono
-              </LabelConRegla>
-              {/* Prefijo obligatorio, nunca a mano: si unos números lo llevan
-                  y otros no, el mismo cliente acaba con dos fichas. */}
-              <div className="flex gap-1.5">
-                <select
-                  value={form.telefonoPrefijo}
-                  onChange={e => setForm(p => ({ ...p, telefonoPrefijo: e.target.value }))}
-                  className="h-8 w-[86px] shrink-0 rounded-md border border-input bg-background px-1.5 text-xs"
-                  title={PREFIJOS_TELEFONO.find(x => x.prefijo === form.telefonoPrefijo)?.label ?? ""}
-                >
-                  {PREFIJOS_TELEFONO.map(x => (
-                    <option key={x.prefijo} value={x.prefijo}>{x.flag} {x.prefijo}</option>
-                  ))}
-                </select>
-                <Input
-                  type="tel"
-                  className="h-8 flex-1 text-xs"
-                  value={form.telefono}
-                  onFocus={() => setCampoActivo("telefono")}
-                  onBlur={() => setTimeout(() => setCampoActivo((c) => (c === "telefono" ? null : c)), 150)}
-                  onChange={e => setForm(p => ({ ...p, telefono: e.target.value }))}
-                />
-              </div>
-              {renderSugerencias("telefono")}
-            </div>
-            <div className="relative">
-              <LabelConRegla
-                moduloKey="sala"
-                submoduloKey="reservas"
-                campoKey="email"
-                className="text-xs"
-              >
-                Email
-              </LabelConRegla>
+                {PREFIJOS_TELEFONO.map(x => (
+                  <option key={x.prefijo} value={x.prefijo}>{x.flag} {x.prefijo}</option>
+                ))}
+              </select>
               <Input
-                className="h-8 text-xs"
-                value={form.email}
-                onFocus={() => setCampoActivo("email")}
-                onBlur={() => setTimeout(() => setCampoActivo((c) => (c === "email" ? null : c)), 150)}
-                onChange={e => setForm(p => ({ ...p, email: e.target.value }))}
+                type="tel"
+                className="h-8 flex-1 text-xs"
+                value={form.telefono}
+                onFocus={() => setCampoActivo("telefono")}
+                onBlur={() => setTimeout(() => setCampoActivo((c) => (c === "telefono" ? null : c)), 150)}
+                onChange={e => setForm(p => ({ ...p, telefono: e.target.value }))}
               />
-              {renderSugerencias("email")}
             </div>
-          </>
-        )}
+            {renderSugerencias("telefono")}
+        </div>
+        <div className={cn("relative", camposClienteOcultos)} {...propsClienteOculto}>
+            <LabelConRegla
+              moduloKey="sala"
+              submoduloKey="reservas"
+              campoKey="email"
+              className="text-xs"
+            >
+              Email
+            </LabelConRegla>
+            <Input
+              className="h-8 text-xs"
+              value={form.email}
+              onFocus={() => setCampoActivo("email")}
+              onBlur={() => setTimeout(() => setCampoActivo((c) => (c === "email" ? null : c)), 150)}
+              onChange={e => setForm(p => ({ ...p, email: e.target.value }))}
+            />
+            {renderSugerencias("email")}
+        </div>
         <div><Label className="text-xs">Fecha *</Label><Input type="date" className="h-8 text-xs" value={form.fecha} onChange={e => setForm(p => ({ ...p, fecha: e.target.value }))} /></div>
         {/* Hora: solo las del horario real del turno. El ⚠ de cada hora sigue a
             la MESA elegida si la hay (esa mesa está pillada a esa hora); si aún
@@ -1670,6 +1743,15 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
         </div>
         <div className="col-span-2 space-y-1">
           <Label className="text-xs">Mesa</Label>
+          {/* En lista de espera no se elige mesa: se apunta al cliente porque
+              justamente NO hay ninguna libre. Se dice en su sitio en vez de
+              esconder el campo, para que no parezca que falta algo. */}
+          {esListaEspera ? (
+            <p className="text-[10px] text-muted-foreground">
+              Sin mesa: se le asigna una cuando quede libre.
+            </p>
+          ) : (
+          <>
           {/* Sin zona no se listan mesas concretas (la mesa cuelga de una zona),
               pero el selector NO se bloquea: dejarlo en automático es una
               elección válida y busca en todas las zonas y salas del local. */}
@@ -1726,6 +1808,8 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
               propondrá antes de confirmar.
             </p>
           )}
+          </>
+          )}
         </div>
         {/* Origen: por dónde entró la reserva. Un alta desde sala nace como
             "Teléfono", que es como llega la mayoría, pero se puede cambiar
@@ -1739,16 +1823,18 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
               en walk-in: un desplegable de una opción solo invita a abrirlo
               para no encontrar nada. Si mañana se abre otro canal en
               `ORIGENES_ALTA_SALA`, vuelve a ser un selector. */}
-          {form.esWalkIn || ORIGENES_ALTA_SALA.length === 1 ? (
+          {esWalkIn || ORIGENES_ALTA_SALA.length === 1 ? (
             <Input
               className="h-8 text-xs"
-              value={labelOrigen(form.esWalkIn ? "WALKIN" : ORIGENES_ALTA_SALA[0])}
+              value={labelOrigen(esWalkIn ? "WALKIN" : ORIGENES_ALTA_SALA[0])}
               readOnly
               disabled
               title={
-                form.esWalkIn
+                esWalkIn
                   ? "Las reservas walk-in siempre se registran con origen Walk in."
-                  : "Las reservas que se dan de alta aquí entran por teléfono."
+                  : esListaEspera
+                    ? "Quien se apunta a la lista de espera está en la puerta: se registra como Teléfono."
+                    : "Las reservas que se dan de alta aquí entran por teléfono."
               }
             />
           ) : (
@@ -1767,13 +1853,17 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
             creada: ahí van agrupadas y admiten varias a la vez. */}
         <div className="col-span-3">
           <Label className="text-xs">Tipo de reserva</Label>
-          {form.esWalkIn ? (
+          {sinCobro ? (
             <Input
               className="h-8 text-xs"
               value={TIPO_RESERVA_CATEGORIA_LABELS.gratis}
               readOnly
               disabled
-              title="Las reservas walk-in son siempre gratis: no hay garantía ni cupón."
+              title={
+                esWalkIn
+                  ? "Las reservas walk-in son siempre gratis: no hay garantía ni cupón."
+                  : "La lista de espera no cobra nada: todavía no hay mesa que garantizar."
+              }
             />
           ) : (
           <select
@@ -1801,7 +1891,7 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
           </select>
           )}
         </div>
-        {!form.esWalkIn && form.tipoCategoria === "politica" && (
+        {!sinCobro && form.tipoCategoria === "politica" && (
           <div>
             <Label className="text-xs">Importe retenido (€)</Label>
             <Input
@@ -1815,7 +1905,7 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
             />
           </div>
         )}
-        {!form.esWalkIn && form.tipoCategoria === "cupon" && (
+        {!sinCobro && form.tipoCategoria === "cupon" && (
           <div className="col-span-3">
             <Label className="text-xs">Importe pagado por adelantado (€)</Label>
             <Input
@@ -1830,7 +1920,7 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
           </div>
         )}
         {/* Cupón NO coexiste con 'gratis' ni con 'ticket' (son tipos distintos). */}
-        {!form.esWalkIn && form.tipoCategoria !== "gratis" && form.tipoCategoria !== "ticket" && (
+        {!sinCobro && form.tipoCategoria !== "gratis" && form.tipoCategoria !== "ticket" && (
           <div className="col-span-3">
             <CuponInputReserva
               value={form.codigoCupon}
@@ -3345,7 +3435,6 @@ export function ReservasView() {
    * dando de alta un cliente normal.
    */
   const [nuevaComoWalkIn, setNuevaComoWalkIn] = useState(false);
-  const [showListaEspera, setShowListaEspera] = useState(false);
   const [selectedReserva, setSelectedReserva] = useState<Reserva | null>(null);
   /** Cambio de estado pendiente de decidir si se avisa al cliente por correo. */
   const [confirmEstado, setConfirmEstado] = useState<
@@ -3434,6 +3523,15 @@ export function ReservasView() {
     nombre: "", apellidos: "", telefono: "", email: "",
   });
   const [guardandoCliente, setGuardandoCliente] = useState(false);
+  /**
+   * Comentario DE ESTA RESERVA, editable desde su ficha. Antes solo se pintaba
+   * si venía escrito del alta: quien atendía el teléfono con la reserva ya
+   * hecha ("son celíacos", "llegan media hora tarde") no tenía dónde apuntarlo.
+   * Es del día concreto, no de la persona: lo que le acompaña siempre —alergias,
+   * manías, VIP— va en las observaciones de su ficha de cliente.
+   */
+  const [comentarioEdit, setComentarioEdit] = useState("");
+  const [guardandoComentario, setGuardandoComentario] = useState(false);
   /**
    * Confirmación al editar los datos de un cliente que ya tiene ficha. Editar
    * aquí reescribe SU ficha y todas sus reservas, así que no puede pasar de
@@ -3736,6 +3834,7 @@ export function ReservasView() {
     };
     setClienteEdit(datos);
     setDatosClienteOriginales(datos);
+    setComentarioEdit(selectedReserva.observaciones ?? "");
   }, [selectedReserva]);
 
   /**
@@ -3835,7 +3934,7 @@ export function ReservasView() {
     // Los formularios de alta sí pausan: ahí hay un borrador entero sin
     // guardar y perderlo es peor que ver un dato con unos segundos de retraso.
     pausado:
-      showNueva || showListaEspera || !!selectedMesa ||
+      showNueva || !!selectedMesa ||
       !!confirmEstado || !!confirmBloqueo,
     // Ráfaga más corta que la de por defecto: en sala las reservas entran unas
     // detrás de otras y medio segundo de retraso ya se nota al asignar mesa.
@@ -3883,7 +3982,7 @@ export function ReservasView() {
     // edita una reserva, el desplegable tiene que dejar de ofrecerla al
     // momento — es justo el dato que decide si esa mesa vale o no.
     pausado:
-      showNueva || showListaEspera || !!selectedMesa ||
+      showNueva || !!selectedMesa ||
       !!confirmEstado || !!confirmBloqueo,
   });
 
@@ -4484,6 +4583,36 @@ export function ReservasView() {
   };
 
   /**
+   * Guarda el comentario de la reserva. Se dispara al salir del campo, igual
+   * que el resto de la ficha: no hay un botón propio porque el comentario no
+   * es un formulario aparte, es un dato más de la reserva. Si no ha cambiado
+   * nada no se llama al servidor.
+   */
+  const guardarComentario = async (id: string) => {
+    const valor = comentarioEdit.slice(0, RESERVA_COMENTARIO_MAX_CHARS).trim();
+    const actual = (selectedReserva?.observaciones ?? "").trim();
+    if (valor === actual) return;
+
+    setGuardandoComentario(true);
+    const res = await updateReserva(id, { notas: valor });
+    setGuardandoComentario(false);
+
+    if (!res.ok) {
+      toast.error(res.error ?? "No se pudo guardar el comentario.");
+      setComentarioEdit(actual);
+      return;
+    }
+    toast.success(valor ? "Comentario guardado" : "Comentario borrado");
+    setComentarioEdit(valor);
+    setActividadVersion((v) => v + 1);
+    setSelectedReserva((prev) =>
+      prev && prev.id === id ? { ...prev, observaciones: valor } : prev,
+    );
+    // El comentario también se lee en la lista del día, así que se recarga.
+    loadReservas(fecha);
+  };
+
+  /**
    * Cambia el cuándo de la reserva: fecha u hora. El turno lo recalcula el
    * servidor a partir de la hora, así que al pasar una reserva de las 14:00 a
    * las 21:00 deja de salir en el mapa de comida y aparece en el de cena sola.
@@ -5034,7 +5163,7 @@ export function ReservasView() {
                 fecha={fecha}
                 turno={turno}
                 mesaPreseleccionada={selectedMesa}
-                iniciarComoWalkIn={nuevaComoWalkIn}
+                tipoAltaInicial={nuevaComoWalkIn ? "WALKIN" : "CLIENTE"}
                 zonasReales={zonasReales}
                 mesas={mesas}
                 mesasMeta={mesasMeta}
@@ -5098,66 +5227,6 @@ export function ReservasView() {
                     toast.error(res.error ?? "Error al crear reserva");
                   }
                 }} />
-            </DialogContent>
-          </Dialog>
-          <Dialog open={showListaEspera} onOpenChange={setShowListaEspera}>
-            <DialogTrigger asChild>
-              <Button
-                size="icon"
-                variant="outline"
-                className="h-8 w-8 shrink-0"
-                title="Añadir a lista de espera"
-                aria-label="Añadir a lista de espera"
-              >
-                <ListPlus className="h-3.5 w-3.5" />
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-md">
-              <DialogHeader><DialogTitle>Añadir a lista de espera</DialogTitle></DialogHeader>
-              <NuevaListaEsperaForm
-                fecha={fecha}
-                turno={turno}
-                onClose={() => setShowListaEspera(false)}
-                onSave={async (data) => {
-                  const telCompleto = componerTelefono(data.prefijo, data.telefono);
-                  const notasFinal = data.notas;
-                  const optimista: Reserva = {
-                    id: `r-${Date.now()}`,
-                    cliente: data.nombre,
-                    apellidos: data.apellidos,
-                    telefono: telCompleto,
-                    email: data.email,
-                    fecha: data.fecha,
-                    hora: data.horaEstimada,
-                    turno: data.turno,
-                    comensales: data.personas,
-                    zona: "",
-                    mesaId: "",
-                    estado: "LISTA_ESPERA",
-                    observaciones: notasFinal,
-                  };
-                  setReservas(prev => [...prev, optimista]);
-                  setShowListaEspera(false);
-                  const res = await createReserva({
-                    clienteNombre: data.nombre,
-                    clienteApellidos: data.apellidos || undefined,
-                    clienteTelefono: telCompleto || undefined,
-                    clienteEmail: data.email || undefined,
-                    fecha: data.fecha,
-                    hora: data.horaEstimada,
-                    personas: data.personas,
-                    turno: data.turno,
-                    estado: "LISTA_ESPERA",
-                    notas: notasFinal || undefined,
-                  });
-                  if (res.ok) { toast.success("Añadido a lista de espera"); loadReservas(fecha); }
-                  else {
-                    // Revertir el optimista: si falla, la fila no debe quedarse.
-                    setReservas(prev => prev.filter(x => x.id !== optimista.id));
-                    toast.error(res.error ?? "Error al guardar");
-                  }
-                }}
-              />
             </DialogContent>
           </Dialog>
           <FiltroEstadosDropdown
@@ -6113,7 +6182,30 @@ export function ReservasView() {
                     );
                   })()}
                 </div>
-                {selectedReserva.observaciones && <Field label="Comentarios">{selectedReserva.observaciones}</Field>}
+                {/* Comentario de ESTA reserva, editable: lo que se sabe hoy de
+                    esta mesa concreta. Se guarda al salir del campo, como el
+                    resto de la ficha. Lo que acompaña siempre a la persona
+                    —alergias, manías— va en las observaciones de su ficha de
+                    cliente, no aquí. */}
+                <div className="space-y-1.5">
+                  <Label className="text-muted-foreground text-xs">Comentarios</Label>
+                  <Textarea
+                    className="text-xs"
+                    rows={2}
+                    maxLength={RESERVA_COMENTARIO_MAX_CHARS}
+                    disabled={guardandoComentario}
+                    value={comentarioEdit}
+                    onChange={(e) =>
+                      setComentarioEdit(
+                        e.target.value.slice(0, RESERVA_COMENTARIO_MAX_CHARS),
+                      )
+                    }
+                    onBlur={() => void guardarComentario(selectedReserva.id)}
+                  />
+                  <p className="text-right text-[10px] text-muted-foreground">
+                    {comentarioEdit.length}/{RESERVA_COMENTARIO_MAX_CHARS}
+                  </p>
+                </div>
                 {/* Cuándo se PIDIÓ la mesa, que no es cuándo es la reserva: dice
                     con cuánta antelación llegó. Informativo, nunca editable.
                     Se pinta en la zona de la empresa, no en la del navegador de
