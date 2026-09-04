@@ -57,7 +57,7 @@ const DEFAULT: ReclutamientoConfigNotif = {
   contrato_interno_plantilla: null,
   reconocimiento_medico_plantilla: null,
   prueba_duracion_dias: 30,
-  prueba_aviso_dias: 10,
+  prueba_aviso_dias: 7,
   prueba_aviso_canal: "ambos",
   prueba_aviso_activo: true,
 };
@@ -116,7 +116,7 @@ export async function getReclutamientoConfigPorEmpresa(
       contrato_interno_plantilla: (data.contrato_interno_plantilla as string | null) ?? null,
       reconocimiento_medico_plantilla: (data.reconocimiento_medico_plantilla as string | null) ?? null,
       prueba_duracion_dias: data.prueba_duracion_dias ?? 30,
-      prueba_aviso_dias: data.prueba_aviso_dias ?? 10,
+      prueba_aviso_dias: data.prueba_aviso_dias ?? 7,
       prueba_aviso_canal: (data.prueba_aviso_canal as string) ?? "ambos",
       prueba_aviso_activo: data.prueba_aviso_activo ?? true,
     };

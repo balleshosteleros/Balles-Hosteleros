@@ -31,6 +31,12 @@ export type TipoNotificacion =
   | "gestoria_contrato_firmado"
   // Nueva incorporación: recordatorio editable a RRHH al dar el alta de contrato
   | "nueva_incorporacion"
+  // Periodo de prueba: recordatorio periódico, última llamada para desistir,
+  // validaciones pendientes y cierre del periodo
+  | "prueba_aviso"
+  | "prueba_ultima_llamada"
+  | "prueba_evaluacion"
+  | "prueba_cierre"
   // Solicitudes de personal: aviso al validador (responsable directo)
   | "solicitud_pendiente"
   // Cambio del correo de acceso (login) del empleado
@@ -183,6 +189,40 @@ export const TIPOS_NOTIFICACION: Record<TipoNotificacion, TipoMeta> = {
     badge: "bg-violet-100 text-violet-700",
     accionLabel: "Visto",
     requiereAccion: false,
+  },
+  prueba_aviso: {
+    label: "Periodo de prueba",
+    icono: "recordatorio",
+    color: "text-violet-600",
+    badge: "bg-violet-100 text-violet-700",
+    accionLabel: "Visto",
+    requiereAccion: false,
+  },
+  // Última llamada para desistir: si se deja pasar, el contrato se consolida.
+  // Es el único del grupo que exige acción, y va en rojo para que destaque.
+  prueba_ultima_llamada: {
+    label: "Último día para desistir",
+    icono: "alerta",
+    color: "text-red-600",
+    badge: "bg-red-100 text-red-700",
+    accionLabel: "Decidir",
+    requiereAccion: true,
+  },
+  prueba_evaluacion: {
+    label: "Validación pendiente",
+    icono: "recordatorio",
+    color: "text-amber-600",
+    badge: "bg-amber-100 text-amber-700",
+    accionLabel: "Puntuar",
+    requiereAccion: true,
+  },
+  prueba_cierre: {
+    label: "Cierre del periodo de prueba",
+    icono: "alerta",
+    color: "text-amber-600",
+    badge: "bg-amber-100 text-amber-700",
+    accionLabel: "Decidir",
+    requiereAccion: true,
   },
   solicitud_pendiente: {
     label: "Solicitud",

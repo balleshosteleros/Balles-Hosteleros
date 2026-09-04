@@ -149,7 +149,13 @@ export const NOTIFICACIONES_AUTOMATICAS: GrupoNotif[] = [
       {
         tipo: "prueba_aviso",
         label: "Aviso de periodo de prueba",
-        cuando: "Se acerca el fin del periodo de prueba",
+        cuando: "Cada tantos días desde el primer día de contrato",
+        destinatario: "Administración",
+      },
+      {
+        tipo: "prueba_ultima_llamada",
+        label: "Último día para desistir",
+        cuando: "La víspera de que termine el periodo de prueba",
         destinatario: "Administración",
       },
       {

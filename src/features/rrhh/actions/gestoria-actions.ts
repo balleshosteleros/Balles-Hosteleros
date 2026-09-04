@@ -260,7 +260,7 @@ const ONBOARDING_DEFAULT: ReclutamientoConfigOnboarding = {
   contrato_interno_plantilla: "",
   reconocimiento_medico_plantilla: "",
   prueba_duracion_dias: 30,
-  prueba_aviso_dias: 10,
+  prueba_aviso_dias: 7,
   prueba_aviso_canal: "ambos",
   prueba_aviso_activo: true,
   prueba_evaluaciones_num: 3,
@@ -287,7 +287,7 @@ export async function getReclutamientoConfigOnboarding(): Promise<{ ok: boolean;
         contrato_interno_plantilla: (data?.contrato_interno_plantilla as string | null) ?? "",
         reconocimiento_medico_plantilla: (data?.reconocimiento_medico_plantilla as string | null) ?? "",
         prueba_duracion_dias: (data?.prueba_duracion_dias as number | null) ?? 30,
-        prueba_aviso_dias: (data?.prueba_aviso_dias as number | null) ?? 10,
+        prueba_aviso_dias: (data?.prueba_aviso_dias as number | null) ?? 7,
         prueba_aviso_canal: normalizarCanal(data?.prueba_aviso_canal),
         prueba_aviso_activo: (data?.prueba_aviso_activo as boolean | null) ?? true,
         prueba_evaluaciones_num: Number(data?.prueba_evaluaciones_num ?? 3),
@@ -305,7 +305,7 @@ export async function saveReclutamientoConfigOnboarding(input: ReclutamientoConf
     const { supabase, empresaId } = await getCtx();
     if (!empresaId) return { ok: false, error: "No autenticado" };
     const dur = Math.max(1, Math.min(365, Math.round(Number(input.prueba_duracion_dias) || 30)));
-    const aviso = Math.max(1, Math.min(dur, Math.round(Number(input.prueba_aviso_dias) || 10)));
+    const aviso = Math.max(1, Math.min(dur, Math.round(Number(input.prueba_aviso_dias) || 7)));
     const numEval = Math.max(1, Math.min(5, Math.round(Number(input.prueba_evaluaciones_num) || 3)));
     const corteRaw = Number(input.prueba_nota_corte);
     const corte = Math.round(Math.max(0, Math.min(10, Number.isFinite(corteRaw) ? corteRaw : 6)) * 10) / 10;

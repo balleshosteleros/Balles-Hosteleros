@@ -9,11 +9,23 @@ export const runtime = "nodejs";
 /**
  * Aviso automático a RRHH durante el periodo de prueba (PRP-070).
  *
- * Para cada candidato en estado `prueba` cuya entrada en la fase fue hace ≥ N
- * días (`prueba_aviso_dias`), emite un aviso a RRHH (notificación in-app y/o
- * email, según `prueba_aviso_canal`) indicando días transcurridos y restantes
- * sobre `prueba_duracion_dias`. Idempotente: `dedupeKey` por candidato + fecha
- * de inicio del periodo evita reenvíos.
+ * Los días se cuentan desde el PRIMER DÍA DE CONTRATO: la `fecha_inicio` del
+ * periodo abierto en `empleado_periodo_prueba` manda, y solo si no hay periodo
+ * se recurre a `fase_actualizada_at` del candidato.
+ *
+ * Para cada candidato en estado `prueba` emite, según `prueba_aviso_canal`
+ * (notificación in-app y/o email):
+ *
+ *  - Un RECORDATORIO cada `prueba_aviso_dias` días (7 por defecto → días 7, 14,
+ *    21 y 28 de un periodo de 30), con días transcurridos y restantes.
+ *  - Una ÚLTIMA LLAMADA la víspera del fin (día 29 de 30): es el último día para
+ *    desistir del periodo de prueba antes de que el contrato se consolide.
+ *
+ * El día del fin no se avisa aquí; lo cubre `prueba_cierre` en
+ * `avisarHitosYCierre`, para no solapar dos correos casi iguales.
+ *
+ * Idempotente: la `dedupeKey` incluye el hito, así que cada aviso se emite una
+ * sola vez aunque el cron corra varias veces el mismo día.
  */
 export async function GET(request: Request) {
   const cronSecret = process.env.CRON_SECRET;
@@ -37,7 +49,7 @@ export async function GET(request: Request) {
     if (c.prueba_aviso_activo === false) continue;
     porEmpresa.set(c.empresa_id as string, {
       duracion: (c.prueba_duracion_dias as number) ?? 30,
-      avisoDias: (c.prueba_aviso_dias as number) ?? 10,
+      avisoDias: (c.prueba_aviso_dias as number) ?? 7,
       canal: (c.prueba_aviso_canal as string) ?? "ambos",
     });
   }
@@ -51,6 +63,31 @@ export async function GET(request: Request) {
     .select("id, empresa_id, nombre, apellidos, empleado_id, fase_actualizada_at")
     .eq("estado", "prueba");
 
+  // El periodo de prueba REAL manda: su `fecha_inicio` es el primer día de
+  // contrato, que es desde donde se cuentan los días. `fase_actualizada_at`
+  // (cuándo se movió la ficha de fase) solo se usa si no hay periodo abierto,
+  // porque puede ser muy posterior al alta y falsearía la cuenta.
+  const idsCand = (enPrueba ?? []).map((c) => c.id as string);
+  const inicioPorCandidato = new Map<string, { inicio: string; duracion: number }>();
+  if (idsCand.length > 0) {
+    const { data: periodos } = await admin
+      .from("empleado_periodo_prueba")
+      .select("candidato_id, fecha_inicio, duracion_dias")
+      .eq("decision", "pendiente")
+      .in("candidato_id", idsCand);
+    for (const p of (periodos ?? []) as Array<{
+      candidato_id: string | null;
+      fecha_inicio: string;
+      duracion_dias: number | null;
+    }>) {
+      if (!p.candidato_id) continue;
+      inicioPorCandidato.set(p.candidato_id, {
+        inicio: p.fecha_inicio,
+        duracion: Number(p.duracion_dias ?? 0),
+      });
+    }
+  }
+
   const ahora = Date.now();
   let avisos = 0;
 
@@ -59,46 +96,109 @@ export async function GET(request: Request) {
     const cfg = porEmpresa.get(empresaId);
     if (!cfg) continue;
 
-    const inicioIso = cand.fase_actualizada_at as string | null;
+    // Fecha de contrato del periodo abierto; si no lo hay, el cambio de fase.
+    const periodo = inicioPorCandidato.get(cand.id as string);
+    const inicioIso = periodo?.inicio ?? (cand.fase_actualizada_at as string | null);
     if (!inicioIso) continue;
-    const inicio = new Date(inicioIso).getTime();
+    // Las fechas del periodo son DATE (sin hora): se anclan a mediodía para que
+    // el cálculo de días no baile por zona horaria ni por el cambio de hora.
+    const inicio = new Date(
+      inicioIso.length === 10 ? `${inicioIso}T12:00:00Z` : inicioIso,
+    ).getTime();
+    // La duración del periodo abierto prevalece sobre la config actual: si
+    // alguien cambia el ajuste a mitad, el trabajador conserva la suya.
+    const duracion = periodo?.duracion && periodo.duracion > 0 ? periodo.duracion : cfg.duracion;
     const diasTranscurridos = Math.floor((ahora - inicio) / 86_400_000);
-    if (diasTranscurridos < cfg.avisoDias) continue;
+    // Dos avisos distintos salen de aquí:
+    //
+    //  1. RECORDATORIO periódico, cada `avisoDias` días (con umbral 7 y periodo
+    //     de 30 → días 7, 14, 21 y 28). No se emite en el último día ni después:
+    //     el cierre lo cubre `prueba_cierre` y no queremos correos solapados.
+    //  2. ÚLTIMA LLAMADA, la víspera del fin (día 29 de 30). Es el último día
+    //     hábil para desistir del periodo de prueba: si se deja pasar, el
+    //     contrato queda consolidado. Por eso va aparte del recordatorio.
+    //
+    // La víspera manda: si un hito cayera ese mismo día, se emite solo la
+    // última llamada, que es la que exige acción inmediata.
+    //
+    // El hito NO se compara con el día exacto de hoy sino con el último múltiplo
+    // ya vencido: si el cron no corrió el día justo (caída, deploy, timeout), el
+    // aviso se recupera al día siguiente en vez de perderse para siempre. La
+    // `dedupeKey` lleva ese número de hito, así que sigue emitiéndose una sola
+    // vez y no se reenvía en los días intermedios.
+    const esUltimaLlamada = diasTranscurridos === duracion - 1;
+    const hitoVencido =
+      diasTranscurridos > 0
+        ? Math.min(
+            Math.floor(diasTranscurridos / cfg.avisoDias) * cfg.avisoDias,
+            // Nunca un hito que pise la víspera ni el cierre.
+            Math.floor((duracion - 2) / cfg.avisoDias) * cfg.avisoDias,
+          )
+        : 0;
+    const esHito = !esUltimaLlamada && hitoVencido > 0 && diasTranscurridos < duracion - 1;
+    if (!esUltimaLlamada && !esHito) continue;
 
-    const diasRestantes = Math.max(0, cfg.duracion - diasTranscurridos);
+    // Los textos del recordatorio hablan del hito alcanzado, no del día suelto
+    // en que el cron logró emitirlo (que puede ser uno o dos días más tarde).
+    const diasHito = esUltimaLlamada ? diasTranscurridos : hitoVencido;
+    const diasRestantes = Math.max(0, duracion - diasHito);
     const nombre = `${cand.nombre ?? ""} ${cand.apellidos ?? ""}`.trim() || "El trabajador";
     const fechaInicio = new Date(inicio).toLocaleDateString("es-ES", { timeZone: "Europe/Madrid", day: "2-digit", month: "2-digit", year: "numeric" });
-    const fechaFin = new Date(inicio + cfg.duracion * 86_400_000).toLocaleDateString("es-ES", { timeZone: "Europe/Madrid", day: "2-digit", month: "2-digit", year: "numeric" });
-    // Una sola alerta por candidato y periodo (fecha de inicio en la clave).
-    const dedupeKey = `prueba_aviso:${cand.id}:${inicioIso.slice(0, 10)}`;
+    const fechaFin = new Date(inicio + duracion * 86_400_000).toLocaleDateString("es-ES", { timeZone: "Europe/Madrid", day: "2-digit", month: "2-digit", year: "numeric" });
+    // Una sola alerta por candidato, periodo y HITO: los días transcurridos
+    // entran en la clave para que el aviso del día 14 no se descarte como
+    // duplicado del día 7, y a la vez el cron pueda correr varias veces el
+    // mismo día sin repetir el mismo hito.
+    const dedupeKey = esUltimaLlamada
+      ? `prueba_ultima_llamada:${cand.id}:${inicioIso.slice(0, 10)}`
+      : `prueba_aviso:${cand.id}:${inicioIso.slice(0, 10)}:${diasHito}`;
 
-    const mensaje =
-      `${nombre} lleva ${diasTranscurridos} días en periodo de prueba. ` +
-      `Le quedan ${diasRestantes} días para finalizar el periodo configurado (${cfg.duracion} días, ` +
-      `inicio ${fechaInicio}, fin previsto ${fechaFin}). Revisa su evolución antes de confirmar su continuidad.`;
+    const titulo = esUltimaLlamada
+      ? `Último día para desistir: ${nombre}`
+      : `Periodo de prueba: ${nombre} (${diasHito} días)`;
+
+    const mensaje = esUltimaLlamada
+      ? `Hoy es el ÚLTIMO día para dar de baja a ${nombre} dentro del periodo de prueba, ` +
+        `que termina mañana ${fechaFin} (${duracion} días desde el ${fechaInicio}). ` +
+        `Si no se comunica el desistimiento hoy, el contrato queda consolidado. ` +
+        `Decide su continuidad desde su ficha.`
+      : `${nombre} lleva ${diasHito} días en periodo de prueba. ` +
+        `Le quedan ${diasRestantes} días para finalizar el periodo configurado (${duracion} días, ` +
+        `inicio ${fechaInicio}, fin previsto ${fechaFin}). Revisa su evolución antes de confirmar su continuidad.`;
 
     const canal = cfg.canal;
 
-    // Notificación in-app (canal "notificacion" o "ambos").
-    if (canal === "notificacion" || canal === "ambos") {
-      try {
-        await emitirNotificacion({
-          empresaId,
-          system: true,
-          tipo: "prueba_aviso",
-          titulo: `Periodo de prueba: ${nombre} (${diasTranscurridos} días)`,
-          mensaje,
-          segmento: { tipo: "area", area: "ADMINISTRATIVA" },
-          refTabla: cand.empleado_id ? "empleados" : "candidatos",
-          refId: (cand.empleado_id as string | null) ?? (cand.id as string),
-          accionUrl: "/rrhh/reclutamiento",
-          dedupeKey,
-        });
-        avisos++;
-      } catch (e) {
-        console.error("[cron/prueba-avisos] notificacion:", e);
-      }
+    // La notificación in-app es también el REGISTRO del hito: su `dedupe_key`
+    // tiene índice único, así que `creadas > 0` solo la primera vez que se emite
+    // este hito. El email se cuelga de ese resultado para no reenviarse a diario
+    // (antes se mandaba sin comprobar nada, y de ahí el correo repetido).
+    // Se emite siempre, incluso con canal "email": ahí no se notifica a nadie
+    // (`push: false` y sin destinatarios visibles no aplica), pero deja la marca
+    // que hace idempotente al correo.
+    let primeraVez = false;
+    try {
+      const res = await emitirNotificacion({
+        empresaId,
+        system: true,
+        tipo: esUltimaLlamada ? "prueba_ultima_llamada" : "prueba_aviso",
+        titulo,
+        mensaje,
+        segmento: { tipo: "area", area: "ADMINISTRATIVA" },
+        refTabla: cand.empleado_id ? "empleados" : "candidatos",
+        refId: (cand.empleado_id as string | null) ?? (cand.id as string),
+        accionUrl: "/rrhh/reclutamiento",
+        dedupeKey,
+        // Con canal "email" el aviso viaja por correo: no se duplica en el móvil.
+        push: canal !== "email",
+      });
+      primeraVez = res.creadas > 0;
+      if (primeraVez && canal !== "email") avisos++;
+    } catch (e) {
+      console.error("[cron/prueba-avisos] notificacion:", e);
     }
+
+    // Hito ya avisado en una ejecución anterior: nada que reenviar.
+    if (!primeraVez) continue;
 
     // Email a RRHH (canal "email" o "ambos").
     if (canal === "email" || canal === "ambos") {
@@ -120,9 +220,9 @@ export async function GET(request: Request) {
         const vars: Record<string, string> = {
           candidato_nombre_completo: nombre,
           empresa_nombre: empresaNombre,
-          prueba_dias_transcurridos: String(diasTranscurridos),
+          prueba_dias_transcurridos: String(diasHito),
           prueba_dias_restantes: String(diasRestantes),
-          prueba_duracion_dias: String(cfg.duracion),
+          prueba_duracion_dias: String(duracion),
           prueba_fecha_inicio: fechaInicio,
           prueba_fecha_fin: fechaFin,
         };
@@ -143,7 +243,16 @@ export async function GET(request: Request) {
         let subject: string;
         let html: string;
         let text: string;
-        if (tpl) {
+        if (esUltimaLlamada) {
+          // La última llamada NO usa la plantilla editable del recordatorio: su
+          // texto es otro (urgencia y consecuencia legal) y no debe poder
+          // suavizarse sin querer editando la plantilla del aviso periódico.
+          subject = `Último día para desistir del periodo de prueba de ${nombre} · ${empresaNombre}`;
+          html = `
+          <p>${mensaje}</p>
+          <p style="color:#888;font-size:12px">Enviado automáticamente desde el sistema de ${empresaNombre}.</p>`;
+          text = mensaje;
+        } else if (tpl) {
           subject = tpl.asunto;
           html = cuerpoOnboardingAHtml(tpl.cuerpo);
           text = tpl.cuerpo;
@@ -203,7 +312,15 @@ function nombreDe(p: FilaAviso): string {
 async function avisarHitosYCierre(
   admin: ReturnType<typeof createAdminClient>,
 ): Promise<number> {
-  const hoy = new Date().toISOString().slice(0, 10);
+  // Fecha de HOY en Madrid, no en UTC: las fechas del periodo son días de
+  // calendario español y `toISOString()` daría el día equivocado si el cron se
+  // adelantara a la medianoche local.
+  const hoy = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Madrid",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
   let emitidos = 0;
 
   const { data: periodos } = await admin

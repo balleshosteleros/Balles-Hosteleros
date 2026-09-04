@@ -174,7 +174,7 @@ export const OnboardingPruebaConfig = forwardRef<
 
         <div className={cn("flex items-center gap-2", !avisoActivo && "opacity-50")}>
           <Label htmlFor="prueba-aviso-dias" className="text-sm text-foreground">
-            Avisar a RRHH cuando hayan pasado
+            Avisar a RRHH cada
           </Label>
           <NumberInput
             id="prueba-aviso-dias"
@@ -191,6 +191,12 @@ export const OnboardingPruebaConfig = forwardRef<
           />
           <span className="text-sm text-muted-foreground">día(s)</span>
         </div>
+        <p className="text-xs text-muted-foreground -mt-2">
+          El recordatorio se repite cada tantos días desde el primer día de contrato
+          (cada 7 en un periodo de 30 → días 7, 14, 21 y 28). La víspera del final RRHH
+          recibe además un último aviso: es el último día para dar de baja al trabajador
+          dentro del periodo de prueba.
+        </p>
 
         {/* Canal del aviso */}
         <div className={cn("space-y-1.5", !avisoActivo && "opacity-50")}>
