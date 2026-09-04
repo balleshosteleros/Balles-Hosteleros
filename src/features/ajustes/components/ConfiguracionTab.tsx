@@ -1,4 +1,4 @@
-import { forwardRef, useImperativeHandle, useState } from "react";
+import { forwardRef, useImperativeHandle, useRef, useState } from "react";
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -9,6 +9,8 @@ import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 import { type DatosGenerales, type ConfigOperativa } from "@/features/ajustes/data/ajustes";
+import { COMUNIDADES_AUTONOMAS } from "@/features/rrhh/actions/festivos-types";
+import { regenerarFestivos } from "@/features/rrhh/actions/festivos-actions";
 import { saveEmpresaAjustes } from "@/features/empresa/actions/empresas-actions";
 
 function Field({ label, value, onChange, type = "text", placeholder = "", ayuda = "" }: {
@@ -33,6 +35,9 @@ export const ConfiguracionTab = forwardRef<ConfiguracionTabHandle, { hideSaveBut
   const d = ajustes.datosGenerales;
   const c = ajustes.configOperativa;
   const [savingConfig, setSavingConfig] = useState(false);
+  // Comunidad con la que se cargó la pantalla, para saber al guardar si ha
+  // cambiado y hay que rehacer los festivos.
+  const comunidadInicial = useRef(ajustes.configOperativa.comunidadAutonoma ?? "");
 
   const setD = (k: keyof DatosGenerales, v: string) =>
     setAjustes((prev) => ({ ...prev, datosGenerales: { ...prev.datosGenerales, [k]: v } }));
@@ -57,6 +62,28 @@ export const ConfiguracionTab = forwardRef<ConfiguracionTabHandle, { hideSaveBut
       if (nombreComercial && nombreComercial !== empresaActual.nombre) {
         updateEmpresa(empresaActual.id, { nombre: nombreComercial });
       }
+
+      // Cambiar la comunidad autónoma no basta con guardarla: los festivos ya
+      // están escritos en la BD y se generan una sola vez, así que sin esto la
+      // empresa seguiría enseñando a sus empleados los festivos de la comunidad
+      // anterior. Se rehacen el año en curso y el siguiente (los que el
+      // calendario del empleado puede llegar a mirar). Los festivos LOCALES,
+      // que se añaden a mano, no se tocan.
+      if (comunidadInicial.current !== (c.comunidadAutonoma ?? "")) {
+        const anio = new Date().getFullYear();
+        const hechos = await Promise.all([
+          regenerarFestivos(anio),
+          regenerarFestivos(anio + 1),
+        ]);
+        comunidadInicial.current = c.comunidadAutonoma ?? "";
+        if (hechos.some((r) => !r.ok)) {
+          toast.warning("Configuración guardada, pero los festivos no se han podido actualizar");
+          return;
+        }
+        toast.success("Configuración guardada y festivos actualizados");
+        return;
+      }
+
       toast.success("Configuración guardada correctamente");
     } catch (e: unknown) {
       console.error("[ConfiguracionTab] save:", e);
@@ -160,6 +187,25 @@ export const ConfiguracionTab = forwardRef<ConfiguracionTabHandle, { hideSaveBut
                 <SelectItem value="America/New_York">America/New_York</SelectItem>
               </SelectContent>
             </Select>
+          </div>
+          <div>
+            <Label className="text-xs font-bold">Comunidad autónoma</Label>
+            <Select
+              value={c.comunidadAutonoma ?? ""}
+              onValueChange={(v) => setC("comunidadAutonoma", v)}
+            >
+              <SelectTrigger className="mt-1">
+                <SelectValue placeholder="Sin definir" />
+              </SelectTrigger>
+              <SelectContent>
+                {COMUNIDADES_AUTONOMAS.map((com) => (
+                  <SelectItem key={com} value={com}>{com}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              Decide los festivos autonómicos que ven los empleados en su calendario.
+            </p>
           </div>
           <div>
             <Label className="text-xs font-bold">Formato de fecha</Label>
