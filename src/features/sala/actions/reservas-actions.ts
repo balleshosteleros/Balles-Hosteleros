@@ -111,7 +111,13 @@ const RESERVA_COLUMNAS =
   "reserva_ticket_productos(nombre), " +
   // Cuándo pagó el ticket y cuándo lo canjeó por esta mesa. El dinero vive en
   // la COMPRA, no en la reserva: la reserva solo guarda el importe congelado.
-  "reserva_ticket_compras(pagado_at, canjeado_at, codigo, importe_total, unidades)";
+  //
+  // Hay DOS caminos entre `reservas` y `reserva_ticket_compras` (la compra
+  // apunta a la reserva, y la reserva apunta a su compra), así que hay que
+  // nombrar la clave: sin ella PostgREST no sabe cuál usar y tumba la consulta
+  // entera (PGRST201). La buena es `ticket_compra_id`: la compra concreta que
+  // se canjeó en esta reserva.
+  "reserva_ticket_compras!reservas_ticket_compra_id_fkey(pagado_at, canjeado_at, codigo, importe_total, unidades)";
 
 // OJO: este fichero es "use server". Solo puede EXPORTAR funciones async: un
 // `export type` aquí rompe el módulo entero en producción con
