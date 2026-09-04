@@ -214,7 +214,9 @@ export function BloqueosTab() {
       "empresa_reservas_bloqueos",
       "empresa_reservas_bloqueos_excepciones",
     ],
-    empresaId: empresaActual.id,
+    // El filtro compara contra la columna `empresa_id` (UUID): con el slug
+    // ("habana") no casaba ninguna fila y esta vista no se enteraba de nada.
+    empresaId: empresaActual.dbId ?? null,
     onCambio: () => void cargarBloqueos(),
   });
 

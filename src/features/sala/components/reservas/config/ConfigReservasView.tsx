@@ -1,22 +1,36 @@
 "use client";
 
 import { useCallback, useState } from "react";
+import dynamic from "next/dynamic";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ArrowLeft } from "lucide-react";
 import { useConfirmSalida } from "@/shared/components/ConfirmSalidaDialog";
-import { ConfigTabReservas } from "./ConfigTabReservas";
-import { TicketsTab } from "./TicketsTab";
-import { EtiquetasConfigTab } from "./EtiquetasConfigTab";
-import { EstructuraTab } from "./EstructuraTab";
-import { OrdenAsignacionTab } from "./OrdenAsignacionTab";
-import { GruposZonasTab } from "./GruposZonasTab";
-import { PoliticasCancelacionTab } from "./PoliticasCancelacionTab";
-import { BloqueosTab } from "@/features/sala/bloqueos/components/BloqueosTab";
-import { ComunicacionesPanel } from "./ComunicacionesPanel";
-import { LinksReservaPanel } from "@/features/sala/components/reservas/LinksReservaPanel";
-import { CanalesTab } from "./CanalesTab";
-import { MonederoPanel } from "@/features/mensajeria/components/MonederoPanel";
+// Cada pestaña se descarga SOLO al abrirla.
+//
+// Antes se importaban las doce de golpe: aunque en pantalla se pintara una
+// sola, el navegador tenía que bajarse y procesar el código de todas —incluido
+// el editor de planos, que es con diferencia lo más pesado del módulo— antes de
+// enseñar nada. Por eso Configuración tardaba tanto en abrir y parecía colgada.
+// Ahora entra al momento y cada pestaña trae lo suyo cuando se pulsa.
+const CargandoPanel = () => (
+  <div className="flex items-center justify-center py-16">
+    <div className="h-8 w-8 animate-spin rounded-full border-2 border-muted-foreground/30 border-t-muted-foreground" />
+  </div>
+);
+
+const ConfigTabReservas = dynamic(() => import("./ConfigTabReservas").then((m) => m.ConfigTabReservas), { loading: CargandoPanel });
+const TicketsTab = dynamic(() => import("./TicketsTab").then((m) => m.TicketsTab), { loading: CargandoPanel });
+const EtiquetasConfigTab = dynamic(() => import("./EtiquetasConfigTab").then((m) => m.EtiquetasConfigTab), { loading: CargandoPanel });
+const EstructuraTab = dynamic(() => import("./EstructuraTab").then((m) => m.EstructuraTab), { loading: CargandoPanel });
+const OrdenAsignacionTab = dynamic(() => import("./OrdenAsignacionTab").then((m) => m.OrdenAsignacionTab), { loading: CargandoPanel });
+const GruposZonasTab = dynamic(() => import("./GruposZonasTab").then((m) => m.GruposZonasTab), { loading: CargandoPanel });
+const PoliticasCancelacionTab = dynamic(() => import("./PoliticasCancelacionTab").then((m) => m.PoliticasCancelacionTab), { loading: CargandoPanel });
+const BloqueosTab = dynamic(() => import("@/features/sala/bloqueos/components/BloqueosTab").then((m) => m.BloqueosTab), { loading: CargandoPanel });
+const ComunicacionesPanel = dynamic(() => import("./ComunicacionesPanel").then((m) => m.ComunicacionesPanel), { loading: CargandoPanel });
+const LinksReservaPanel = dynamic(() => import("@/features/sala/components/reservas/LinksReservaPanel").then((m) => m.LinksReservaPanel), { loading: CargandoPanel });
+const CanalesTab = dynamic(() => import("./CanalesTab").then((m) => m.CanalesTab), { loading: CargandoPanel });
+const MonederoPanel = dynamic(() => import("@/features/mensajeria/components/MonederoPanel").then((m) => m.MonederoPanel), { loading: CargandoPanel });
 
 interface Props {
   onBack: () => void;

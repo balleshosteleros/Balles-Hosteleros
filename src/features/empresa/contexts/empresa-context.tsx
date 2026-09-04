@@ -171,6 +171,7 @@ export function EmpresaProvider({ children }: { children: ReactNode }) {
   const [, startTransition] = useTransition();
   const showLoading = useGlobalLoading((s) => s.show);
   const hideLoading = useGlobalLoading((s) => s.hide);
+  const marcarCambioEmpresa = useGlobalLoading((s) => s.marcarCambioEmpresa);
   const [empresasList, setEmpresasList] = useState<Empresa[]>(EMPRESAS);
   const [empresaId, setEmpresaId] = useState(EMPRESAS[0].id);
   // `empresaId` arranca en el default de la lista, no en la empresa del usuario.
@@ -503,6 +504,10 @@ export function EmpresaProvider({ children }: { children: ReactNode }) {
     // o las primeras consultas saldrían pidiendo la anterior.
     setEmpresaActivaCliente(empresa.dbId);
     showLoading("Cambiando de empresa…");
+    // Aviso a las vistas lentas (Sala/Reservas): lo que hay en pantalla es de
+    // la empresa anterior. Quien sepa recargarse mantendrá el recuadro de carga
+    // hasta tener sus propios datos, en vez de destaparse a los 900 ms.
+    marcarCambioEmpresa();
     setEmpresaActiva(empresa.dbId)
       .then((res) => {
         if (!res.ok) {
@@ -532,7 +537,7 @@ export function EmpresaProvider({ children }: { children: ReactNode }) {
         hideLoading();
         revertir();
       });
-  }, [empresaId, empresasList, router, showLoading, hideLoading]);
+  }, [empresaId, empresasList, router, showLoading, hideLoading, marcarCambioEmpresa]);
 
   return (
     <EmpresaContext.Provider

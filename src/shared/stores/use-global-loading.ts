@@ -10,12 +10,25 @@ interface GlobalLoadingState {
   hide: () => void;
   reset: () => void;
   wrap: <T>(promise: Promise<T>, message?: string) => Promise<T>;
+  /**
+   * Sube cada vez que se cambia de empresa. Una vista que tarde en recargarse
+   * (Reservas) mira este número: si subió desde la última vez que lo vio, sabe
+   * que está pintando datos de la empresa ANTERIOR y mantiene el recuadro de
+   * carga hasta tener los suyos. Antes el recuadro se quitaba con un temporizador
+   * fijo de 900 ms —siempre demasiado corto para Sala—, así que se podía pulsar
+   * sobre las reservas del restaurante anterior.
+   */
+  cambioEmpresaSeq: number;
+  marcarCambioEmpresa: () => void;
 }
 
 export const useGlobalLoading = create<GlobalLoadingState>((set, get) => ({
   count: 0,
   message: null,
   isLoading: false,
+  cambioEmpresaSeq: 0,
+  marcarCambioEmpresa: () =>
+    set((s) => ({ cambioEmpresaSeq: s.cambioEmpresaSeq + 1 })),
   show: (message) =>
     set((s) => ({
       count: s.count + 1,

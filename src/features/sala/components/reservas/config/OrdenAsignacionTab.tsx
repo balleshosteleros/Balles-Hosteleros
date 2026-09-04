@@ -37,14 +37,6 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 
-import { listLocalesEmpresa } from "@/features/sala/planos/actions/locales-actions";
-import { listPlanos } from "@/features/sala/planos/actions/planos-actions";
-import { listMesas } from "@/features/sala/planos/actions/mesas-actions";
-import { listZonas } from "@/features/sala/planos/actions/zonas-actions";
-import {
-  listCombinaciones,
-  listComponentesTodas,
-} from "@/features/sala/planos/actions/combinaciones-actions";
 import {
   guardarOrdenAsignacion,
   limpiarOrdenAsignacion,
@@ -56,7 +48,8 @@ import {
   COMENSALES_MAX,
   COMENSALES_MIN,
 } from "@/features/sala/data/capacidad-grupos";
-import type { Mesa, Plano, Zona } from "@/features/sala/planos/data/planos";
+import type { Mesa, Plano } from "@/features/sala/planos/data/planos";
+import { loadOrdenContext } from "@/features/sala/actions/estructura-context";
 
 interface Local {
   id: string;
@@ -103,67 +96,51 @@ export function OrdenAsignacionTab() {
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
 
-  useEffect(() => {
-    (async () => {
-      const r = await listLocalesEmpresa();
-      if (r.ok && r.data.length > 0) {
-        setLocales(r.data);
-        setLocalId((prev) => prev || r.data[0].id);
-      }
-      setLoading(false);
-    })();
-  }, []);
-
-  /** Mesas, zonas, combinaciones y planos del local. */
-  const cargarLocal = useCallback(async (id: string) => {
-    if (!id) return;
+  /**
+   * Carga TODO de una vez: locales, datos del local y el orden del plano.
+   *
+   * Antes eran tres esperas encadenadas, cada una aguardando a la anterior, y
+   * la pestaña se quedaba en blanco durante las tres. Ahora ese encadenado
+   * ocurre dentro del servidor y aquí sólo se espera una vez.
+   */
+  const cargarTodo = useCallback(async (lid?: string, pid?: string) => {
     setLoading(true);
-    const [p, m, z, c, comp] = await Promise.all([
-      listPlanos(id),
-      listMesas(id),
-      listZonas(id),
-      listCombinaciones(id),
-      listComponentesTodas(id),
-    ]);
+    try {
+      const { data } = await loadOrdenContext(lid || undefined, pid || undefined);
+      setLocales(data.locales);
+      setLocalId(data.localId);
+      setPlanos(data.planos);
+      setPlanoId(data.planoId);
 
-    if (p.ok) {
-      setPlanos(p.data);
-      const principal = p.data.find((x) => x.esPrincipal && x.activo) ?? p.data[0];
-      setPlanoId(principal?.id ?? "");
-    }
+      const zonaNombre = new Map<string, string>();
+      for (const zz of data.zonas) zonaNombre.set(zz.id, zz.nombre);
 
-    const zonaNombre = new Map<string, string>();
-    if (z.ok) for (const zz of z.data) zonaNombre.set(zz.id, zz.nombre);
+      const mesasList: Mesa[] = data.mesas;
+      const opcs: Opcion[] = [];
 
-    const mesasList: Mesa[] = m.ok ? m.data : [];
-    const opcs: Opcion[] = [];
+      for (const mm of mesasList) {
+        if (!mm.activa) continue;
+        opcs.push({
+          clave: mm.id,
+          mesaId: mm.id,
+          combinacionId: null,
+          codigo: mm.codigo,
+          zonaNombre: zonaNombre.get(mm.zonaId) ?? "",
+          capacidadMin: mm.capacidadMin,
+          capacidadMax: mm.capacidadMax,
+          esCombinacion: false,
+        });
+      }
 
-    for (const mm of mesasList) {
-      if (!mm.activa) continue;
-      opcs.push({
-        clave: mm.id,
-        mesaId: mm.id,
-        combinacionId: null,
-        codigo: mm.codigo,
-        zonaNombre: zonaNombre.get(mm.zonaId) ?? "",
-        capacidadMin: mm.capacidadMin,
-        capacidadMax: mm.capacidadMax,
-        esCombinacion: false,
-      });
-    }
-
-    if (c.ok) {
       // La zona de la combinación puede venir por zona_id o por sus mesas.
       const zonaDeCombi = new Map<string, string>();
-      if (comp.ok) {
-        const zonaDeMesa = new Map(mesasList.map((x) => [x.id, x.zonaId]));
-        for (const cc of comp.data) {
-          if (zonaDeCombi.has(cc.combinacionId)) continue;
-          const zid = zonaDeMesa.get(cc.mesaId);
-          if (zid) zonaDeCombi.set(cc.combinacionId, zonaNombre.get(zid) ?? "");
-        }
+      const zonaDeMesa = new Map(mesasList.map((x) => [x.id, x.zonaId]));
+      for (const cc of data.componentes) {
+        if (zonaDeCombi.has(cc.combinacionId)) continue;
+        const zid = zonaDeMesa.get(cc.mesaId);
+        if (zid) zonaDeCombi.set(cc.combinacionId, zonaNombre.get(zid) ?? "");
       }
-      for (const cb of c.data) {
+      for (const cb of data.combinaciones) {
         if (!cb.activa) continue;
         opcs.push({
           clave: `c:${cb.id}`,
@@ -179,17 +156,25 @@ export function OrdenAsignacionTab() {
           esCombinacion: true,
         });
       }
-    }
 
-    setOpciones(opcs);
-    setLoading(false);
+      setOpciones(opcs);
+
+      const mapa: Record<number, string[]> = {};
+      for (const [n, destinos] of Object.entries(data.orden)) {
+        mapa[Number(n)] = destinos.map(claveDe);
+      }
+      setOrden(mapa);
+      setOrdenGuardado(mapa);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => {
-    if (localId) cargarLocal(localId);
-  }, [localId, cargarLocal]);
+    cargarTodo();
+  }, [cargarTodo]);
 
-  /** Orden completo del plano: los 20 tamaños de una sola consulta. */
+  /** Sólo el orden, al cambiar de plano dentro del mismo local. */
   const cargarOrden = useCallback(async (pid: string) => {
     if (!pid) return;
     const r = await listOrdenCompleto(pid);
@@ -203,10 +188,6 @@ export function OrdenAsignacionTab() {
     setOrden(mapa);
     setOrdenGuardado(mapa);
   }, []);
-
-  useEffect(() => {
-    if (planoId) cargarOrden(planoId);
-  }, [planoId, cargarOrden]);
 
   const porClave = useMemo(() => {
     const m = new Map<string, Opcion>();
@@ -322,7 +303,7 @@ export function OrdenAsignacionTab() {
         {locales.length > 1 && (
           <div className="space-y-1">
             <label className="text-xs font-medium text-muted-foreground">Local</label>
-            <Select value={localId} onValueChange={setLocalId}>
+            <Select value={localId} onValueChange={(v) => cargarTodo(v)}>
               <SelectTrigger className="w-56 h-9">
                 <SelectValue />
               </SelectTrigger>
@@ -339,7 +320,7 @@ export function OrdenAsignacionTab() {
         {planos.length > 1 && (
           <div className="space-y-1">
             <label className="text-xs font-medium text-muted-foreground">Plano</label>
-            <Select value={planoId} onValueChange={setPlanoId}>
+            <Select value={planoId} onValueChange={(v) => { setPlanoId(v); cargarOrden(v); }}>
               <SelectTrigger className="w-56 h-9">
                 <SelectValue />
               </SelectTrigger>

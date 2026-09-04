@@ -27,20 +27,15 @@ import {
 } from "@/components/ui/select";
 import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
 
-import { listLocalesEmpresa } from "@/features/sala/planos/actions/locales-actions";
-import { listZonas } from "@/features/sala/planos/actions/zonas-actions";
-import { listMesas } from "@/features/sala/planos/actions/mesas-actions";
 import {
   createGrupoZona,
   deleteGrupoZona,
-  getExigirZonaCliente,
-  listGruposZonas,
   setExigirZonaCliente,
   updateGrupoZona,
   type GrupoZona,
 } from "@/features/sala/planos/actions/grupos-zonas-actions";
-import { getEmpresaActivaId } from "@/features/empresa/actions/empresa-activa-actions";
 import type { Mesa, Zona } from "@/features/sala/planos/data/planos";
+import { loadZonasClienteContext } from "@/features/sala/actions/estructura-context";
 
 interface Local {
   id: string;
@@ -65,33 +60,32 @@ export function GruposZonasTab() {
 
   const { confirm, dialog } = useConfirmDelete();
 
-  useEffect(() => {
-    (async () => {
-      const [l, e] = await Promise.all([listLocalesEmpresa(), getEmpresaActivaId()]);
-      if (l.ok && l.data.length > 0) {
-        setLocales(l.data);
-        setLocalId((prev) => prev || l.data[0].id);
-      }
-      if (e) {
-        setEmpresaId(e);
-        const cfg = await getExigirZonaCliente(e);
-        if (cfg.ok) setExigir(cfg.data);
-      }
+  /**
+   * Carga TODO de una vez, en un solo viaje al servidor.
+   *
+   * Antes eran tres esperas encadenadas —locales y empresa, luego el ajuste de
+   * "exigir zona", y sólo entonces zonas, mesas y grupos— con la pantalla en
+   * blanco mientras tanto. Ahora ese encadenado ocurre dentro del servidor.
+   */
+  const cargar = useCallback(async (id?: string) => {
+    setLoading(true);
+    try {
+      const { data } = await loadZonasClienteContext(id || undefined);
+      setLocales(data.locales);
+      setLocalId(data.localId);
+      setEmpresaId(data.empresaId ?? "");
+      setExigir(data.exigir);
+      setZonas(data.zonas);
+      setMesas(data.mesas);
+      setPublicas(data.publicas);
+    } finally {
       setLoading(false);
-    })();
-  }, []);
-
-  const cargar = useCallback(async (id: string) => {
-    if (!id) return;
-    const [z, m, p] = await Promise.all([listZonas(id), listMesas(id), listGruposZonas(id)]);
-    if (z.ok) setZonas(z.data);
-    if (m.ok) setMesas(m.data);
-    if (p.ok) setPublicas(p.data);
+    }
   }, []);
 
   useEffect(() => {
-    if (localId) cargar(localId);
-  }, [localId, cargar]);
+    cargar();
+  }, [cargar]);
 
   /** Cuántas mesas activas tiene cada zona interna. */
   const mesasPorZona = useMemo(() => {
@@ -229,7 +223,7 @@ export function GruposZonasTab() {
         {locales.length > 1 && (
           <div className="space-y-1">
             <Label className="text-xs text-muted-foreground">Local</Label>
-            <Select value={localId} onValueChange={setLocalId}>
+            <Select value={localId} onValueChange={(v) => cargar(v)}>
               <SelectTrigger className="w-56 h-9">
                 <SelectValue />
               </SelectTrigger>

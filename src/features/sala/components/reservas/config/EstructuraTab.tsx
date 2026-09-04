@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -17,24 +17,21 @@ import {
   type Sala,
   type Zona,
 } from "@/features/sala/planos/data/planos";
-import { listLocalesEmpresa } from "@/features/sala/planos/actions/locales-actions";
-import { listSalas, createSala, deleteSala, setSalaPrincipal, updateSala } from "@/features/sala/planos/actions/salas-actions";
+import { createSala, deleteSala, setSalaPrincipal, updateSala } from "@/features/sala/planos/actions/salas-actions";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { listZonas } from "@/features/sala/planos/actions/zonas-actions";
-import { listMesas } from "@/features/sala/planos/actions/mesas-actions";
-import { listCombinaciones, updateCombinacion } from "@/features/sala/planos/actions/combinaciones-actions";
-import { listPlanosConSalas } from "@/features/sala/planos/actions/planos-actions";
+import { updateCombinacion } from "@/features/sala/planos/actions/combinaciones-actions";
 import { ZonaConfigModal } from "./ZonaConfigModal";
 import { MesaConfigModal } from "./MesaConfigModal";
 import { CombinacionConfigModal } from "./CombinacionConfigModal";
 import { PlanosTab } from "./PlanosTab";
 import { SalaPlanoEditor } from "./SalaPlanoEditor";
 import { useConfirmDelete } from "@/shared/components/ConfirmDeleteDialog";
+import { loadEstructuraContext } from "@/features/sala/actions/estructura-context";
 
 export function EstructuraTab() {
   const { confirm: confirmDelete, dialog: confirmDeleteDialog } = useConfirmDelete();
@@ -58,41 +55,37 @@ export function EstructuraTab() {
   const [combinacionEdit, setCombinacionEdit] = useState<MesaCombinacion | null>(null);
   const [combinacionModalOpen, setCombinacionModalOpen] = useState(false);
 
-  const cargarTodo = useCallback(async (id: string) => {
+  /**
+   * Carga TODO de una vez (locales incluidos) y en un solo viaje al servidor.
+   *
+   * Antes eran dos esperas encadenadas —locales primero, el resto después— y
+   * la pestaña se quedaba en blanco durante las dos. Ahora ese encadenado
+   * ocurre dentro del servidor y aquí sólo se espera una vez.
+   */
+  const cargarTodo = useCallback(async (id?: string) => {
     setLoading(true);
-    const [s, z, m, c, pcs] = await Promise.all([
-      listSalas(id),
-      listZonas(id),
-      listMesas(id),
-      listCombinaciones(id),
-      listPlanosConSalas(id),
-    ]);
-    if (s.ok) setSalas(s.data);
-    if (z.ok) setZonas(z.data);
-    if (m.ok) setMesas(m.data);
-    if (c.ok) setCombinaciones(c.data);
-    setPlanos(pcs.data.planos);
-    const mapa = new Map<string, Set<string>>();
-    for (const [pid, sids] of pcs.data.salasPorPlano) {
-      mapa.set(pid, new Set(sids));
-    }
-    setSalasPorPlano(mapa);
-    setLoading(false);
-  }, []);
-
-  useEffect(() => {
-    (async () => {
-      const r = await listLocalesEmpresa();
-      if (r.ok) {
-        setLocales(r.data);
-        if (r.data.length > 0) setLocalId(r.data[0].id);
+    try {
+      const { data } = await loadEstructuraContext(id || undefined);
+      setLocales(data.locales);
+      setLocalId(data.localId);
+      setSalas(data.salas);
+      setZonas(data.zonas);
+      setMesas(data.mesas);
+      setCombinaciones(data.combinaciones);
+      setPlanos(data.planos);
+      const mapa = new Map<string, Set<string>>();
+      for (const [pid, sids] of Object.entries(data.salasPorPlano)) {
+        mapa.set(pid, new Set(sids));
       }
-    })();
+      setSalasPorPlano(mapa);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => {
-    if (localId) cargarTodo(localId);
-  }, [localId, cargarTodo]);
+    cargarTodo();
+  }, [cargarTodo]);
 
   async function handleBorrarSala(s: Sala) {
     const ok = await confirmDelete({
@@ -130,12 +123,40 @@ export function EstructuraTab() {
     }
   }
 
+  // Zonas y mesas agrupadas UNA vez, no recorriendo la lista entera por cada
+  // sala y por cada zona que se pinta. Con 16 zonas y 100 mesas eso eran miles
+  // de vueltas en cada repintado —y se repinta al abrir un modal, al escribir,
+  // al tocar cualquier cosa—, que es parte de por qué esta pestaña se quedaba
+  // colgada.
+  const zonasPorSala = useMemo(() => {
+    const m = new Map<string, Zona[]>();
+    for (const z of zonas) {
+      const arr = m.get(z.salaId);
+      if (arr) arr.push(z);
+      else m.set(z.salaId, [z]);
+    }
+    return m;
+  }, [zonas]);
+
+  const mesasPorZona = useMemo(() => {
+    const m = new Map<string, Mesa[]>();
+    for (const mesa of mesas) {
+      const arr = m.get(mesa.zonaId);
+      if (arr) arr.push(mesa);
+      else m.set(mesa.zonaId, [mesa]);
+    }
+    return m;
+  }, [mesas]);
+
+  const SIN_ZONAS: Zona[] = [];
+  const SIN_MESAS: Mesa[] = [];
+
   function zonasDeSala(salaId: string): Zona[] {
-    return zonas.filter((z) => z.salaId === salaId);
+    return zonasPorSala.get(salaId) ?? SIN_ZONAS;
   }
 
   function mesasDeZona(zonaId: string): Mesa[] {
-    return mesas.filter((m) => m.zonaId === zonaId);
+    return mesasPorZona.get(zonaId) ?? SIN_MESAS;
   }
 
   if (salaEnEdicionPlano) {
@@ -160,7 +181,7 @@ export function EstructuraTab() {
           <Label className="text-xs">Local</Label>
           <select
             value={localId}
-            onChange={(e) => setLocalId(e.target.value)}
+            onChange={(e) => cargarTodo(e.target.value)}
             className="h-9 text-sm w-full rounded-md border border-input bg-background px-2"
           >
             {locales.map((l) => (
@@ -689,25 +710,36 @@ function CombinacionesLista({
   const [abiertas, setAbiertas] = useState<Set<string>>(new Set());
 
   const q = busqueda.trim().toUpperCase();
-  /** El código es "TE5+TE6": se parte para no dar por buena una coincidencia
-   *  parcial (buscar "TE1" no debe sacar TE10 ni TE19). */
-  const coincide = (c: MesaCombinacion) =>
-    !q || c.codigo.split("+").some((cod) => cod.trim().toUpperCase() === q);
 
-  const filtradas = combinaciones.filter(coincide);
-  const zonaDe = (id: string | null) => zonas.find((z) => z.id === id);
-  const nombreZona = (id: string | null) => zonaDe(id)?.nombre ?? "Sin zona";
+  // Zona por id, para no recorrer la lista de zonas por cada combinación.
+  const zonaPorId = useMemo(() => {
+    const m = new Map<string, Zona>();
+    for (const z of zonas) m.set(z.id, z);
+    return m;
+  }, [zonas]);
 
-  const grupos = new Map<string, { color: string | null; lista: MesaCombinacion[] }>();
-  for (const c of filtradas) {
-    const k = nombreZona(c.zonaId);
-    const actual = grupos.get(k);
-    grupos.set(k, {
-      color: actual?.color ?? zonaDe(c.zonaId)?.colorPastel ?? null,
-      lista: [...(actual?.lista ?? []), c],
-    });
-  }
-  const ordenados = [...grupos.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+  // Todo el agrupado se rehacía en CADA pulsación de tecla de la búsqueda, y
+  // además copiaba la lista entera de la zona por cada combinación que metía
+  // (`lista: [...anterior, c]`), que crece al cuadrado. Ahora se calcula solo
+  // cuando cambian las combinaciones, las zonas o lo buscado, y se añade con
+  // `push` en vez de copiar.
+  const ordenados = useMemo(() => {
+    /** El código es "TE5+TE6": se parte para no dar por buena una coincidencia
+     *  parcial (buscar "TE1" no debe sacar TE10 ni TE19). */
+    const coincide = (c: MesaCombinacion) =>
+      !q || c.codigo.split("+").some((cod) => cod.trim().toUpperCase() === q);
+
+    const grupos = new Map<string, { color: string | null; lista: MesaCombinacion[] }>();
+    for (const c of combinaciones) {
+      if (!coincide(c)) continue;
+      const zona = c.zonaId ? zonaPorId.get(c.zonaId) : undefined;
+      const k = zona?.nombre ?? "Sin zona";
+      const actual = grupos.get(k);
+      if (actual) actual.lista.push(c);
+      else grupos.set(k, { color: zona?.colorPastel ?? null, lista: [c] });
+    }
+    return [...grupos.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+  }, [combinaciones, zonaPorId, q]);
 
   function alternar(zona: string) {
     setAbiertas((prev) => {
@@ -727,7 +759,7 @@ function CombinacionesLista({
         className="h-9 text-sm"
       />
 
-      {filtradas.length === 0 ? (
+      {ordenados.length === 0 ? (
         <p className="text-xs text-muted-foreground italic py-2">
           Ninguna combinación incluye la mesa «{busqueda.trim()}».
         </p>
