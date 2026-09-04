@@ -445,6 +445,122 @@ export async function getHorarioDia(
 }
 
 /**
+ * Días del rango en los que el empleado TIENE horario asignado, mire o no
+ * turno ese día concreto.
+ *
+ * `getHorarioDia` devuelve 'ninguno' en dos situaciones que no significan lo
+ * mismo: el empleado libra ese día (tiene horario, pero ese día no le toca) y
+ * el empleado no tiene horario puesto (nadie se lo ha asignado, o su
+ * asignación ya terminó). Quien pinta un calendario necesita distinguirlas:
+ * "libre" es una afirmación sobre tu jornada, "sin horario" es la ausencia del
+ * dato. La diferencia está en la VIGENCIA de la asignación, no en el turno del
+ * día — por eso se mira aquí y no en `getHorarioDia`.
+ *
+ * Devuelve el conjunto de fechas ISO cubiertas, para poder preguntar día a día.
+ * Así un contrato que acaba el día 15 da "libre" hasta el 15 y "sin horario"
+ * del 16 en adelante, dentro del mismo mes.
+ */
+export async function getDiasConHorarioAsignado(
+  supabase: SupabaseClient,
+  empresaId: string,
+  empleadoId: string,
+  desdeISO: string,
+  hastaISO: string,
+): Promise<Set<string>> {
+  // Intervalos [desde, hasta] de cada fuente que puede dar horario. `hasta`
+  // null = sin fecha de fin (sigue vigente).
+  const intervalos: { desde: string; hasta: string | null }[] = [];
+
+  const solapa = (desde: string, hasta: string | null) =>
+    desde <= hastaISO && (hasta === null || hasta >= desdeISO);
+
+  // a) Asignación directa de turno.
+  const { data: directos } = await supabase
+    .from("rrhh_turno_empleados")
+    .select("vigente_desde, vigente_hasta")
+    .eq("empresa_id", empresaId)
+    .eq("empleado_id", empleadoId);
+  for (const d of directos ?? []) {
+    const r = d as { vigente_desde?: string | null; vigente_hasta?: string | null };
+    if (!r.vigente_desde) continue;
+    const hasta = r.vigente_hasta ?? null;
+    // Intervalo imposible (fin anterior al inicio): no cubre ningún día. Los
+    // hay en datos reales, y darlos por buenos pintaría de "libre" un mes que
+    // en realidad no tiene horario.
+    if (hasta !== null && hasta < r.vigente_desde) continue;
+    if (solapa(r.vigente_desde, hasta)) {
+      intervalos.push({ desde: r.vigente_desde, hasta });
+    }
+  }
+
+  // b) Patrón semanal: cuenta la vigencia de la asignación al empleado Y la del
+  //    propio patrón (el más restrictivo de los dos manda).
+  const { data: pe } = await supabase
+    .from("rrhh_patron_empleados")
+    .select("patron_id, vigente_desde, vigente_hasta")
+    .eq("empleado_id", empleadoId);
+  const asignaciones = (pe ?? []).filter((r) =>
+    Boolean((r as { patron_id?: string | null }).patron_id),
+  ) as { patron_id: string; vigente_desde?: string | null; vigente_hasta?: string | null }[];
+
+  if (asignaciones.length > 0) {
+    const { data: patrones } = await supabase
+      .from("rrhh_patrones")
+      .select("id, vigente_desde, vigente_hasta")
+      .eq("empresa_id", empresaId)
+      .eq("activo", true)
+      .in("id", asignaciones.map((a) => a.patron_id));
+    const vigenciaPatron = new Map(
+      (patrones ?? []).map((p) => {
+        const r = p as { id: string; vigente_desde?: string | null; vigente_hasta?: string | null };
+        return [r.id, { desde: r.vigente_desde ?? null, hasta: r.vigente_hasta ?? null }];
+      }),
+    );
+    for (const a of asignaciones) {
+      const patron = vigenciaPatron.get(a.patron_id);
+      if (!patron) continue; // patrón inactivo o de otra empresa
+      // Intersección de las dos vigencias.
+      const desde = [a.vigente_desde, patron.desde].filter(Boolean).sort().pop() ?? null;
+      const hastas = [a.vigente_hasta, patron.hasta].filter(Boolean).sort();
+      const hasta = hastas.length > 0 ? hastas[0]! : null;
+      if (!desde) continue;
+      if (hasta !== null && hasta < desde) continue; // vigencias que no se tocan
+      if (solapa(desde, hasta)) intervalos.push({ desde, hasta });
+    }
+  }
+
+  // c) Planificación concreta: cada fecha planificada cubre ese día por sí sola.
+  const { data: planif } = await supabase
+    .from("rrhh_planificacion")
+    .select("fecha")
+    .eq("empresa_id", empresaId)
+    .eq("empleado_id", empleadoId)
+    .gte("fecha", desdeISO)
+    .lte("fecha", hastaISO);
+
+  const out = new Set<string>();
+  for (const p of planif ?? []) {
+    const f = (p as { fecha?: string | null }).fecha;
+    if (f) out.add(f);
+  }
+
+  if (intervalos.length > 0) {
+    for (
+      let d = new Date(desdeISO + "T00:00:00Z");
+      d.toISOString().split("T")[0] <= hastaISO;
+      d.setUTCDate(d.getUTCDate() + 1)
+    ) {
+      const key = d.toISOString().split("T")[0];
+      if (intervalos.some((i) => i.desde <= key && (i.hasta === null || i.hasta >= key))) {
+        out.add(key);
+      }
+    }
+  }
+
+  return out;
+}
+
+/**
  * Tramos previstos del empleado en la fecha dada. Devuelve [] si el empleado
  * NO tiene horario fijo ese día (los flexibles no tienen tramos). Se mantiene
  * para los consumidores que solo necesitan la ventana horaria.

@@ -49,6 +49,7 @@ import {
 import { horasSegunTipo } from "@/features/rrhh/services/horas/computa-tiempo";
 import {
   getHorarioDia,
+  getDiasConHorarioAsignado,
   semanaDeFecha,
   hhmmAMinutos,
   minutosAHHMM,
@@ -1532,20 +1533,34 @@ export async function getMiCalendarioMes(
     const filas = await getMisFilasEmpleado(supabase, user.id);
     if (filas.length > 0) {
       const finMes = new Date(hasta + "T00:00:00Z");
-      // Se resuelve el mes entero antes de escribir nada: "libra este día" y
-      // "no tiene horario asignado" son cosas distintas, y el motor devuelve
-      // 'ninguno' en los dos casos. La diferencia solo se ve mirando el mes
-      // completo — si NINGÚN día tiene turno, es que no hay horario puesto, y
-      // entonces el calendario debe decir "sin turno" en vez de afirmar que
-      // el empleado libra todos los días.
-      const previstoPorDia = new Map<string, { trabaja: boolean; texto: string }>();
-      let algunDiaConTurno = false;
+      // "Libra este día" y "no tiene horario asignado" son cosas distintas, y
+      // el motor devuelve 'ninguno' en los dos casos. La diferencia está en la
+      // VIGENCIA de la asignación, y se mira DÍA A DÍA: un contrato que acaba
+      // el 15 da "libre" hasta el 15 y "sin horario" del 16 en adelante, dentro
+      // del mismo mes.
+      const ultimoDia = new Date(finMes.getTime() - 86400000).toISOString().split("T")[0];
+      const cubiertos = new Set<string>();
+      for (const fila of filas) {
+        const dias = await getDiasConHorarioAsignado(
+          supabase,
+          fila.empresaId,
+          fila.empleadoId,
+          desde,
+          ultimoDia,
+        );
+        for (const d of dias) cubiertos.add(d);
+      }
+
       for (
         let d = new Date(desde + "T00:00:00Z");
         d.getTime() < finMes.getTime();
         d.setUTCDate(d.getUTCDate() + 1)
       ) {
         const key = d.toISOString().split("T")[0];
+        // Día fuera de toda vigencia: no se afirma nada. `horarioPrevisto` se
+        // queda en null y el calendario lo pinta como "sin horario".
+        if (!cubiertos.has(key)) continue;
+
         const tramos: string[] = [];
         let trabaja = false;
         for (const fila of filas) {
@@ -1558,17 +1573,9 @@ export async function getMiCalendarioMes(
             tramos.push(`${h.objetivoHoras} h`);
           }
         }
-        if (trabaja) algunDiaConTurno = true;
-        previstoPorDia.set(key, { trabaja, texto: tramos.join(", ") });
-      }
-      // Sin un solo turno en todo el mes no se afirma nada: `horarioPrevisto`
-      // se queda en null y cada día sale como "sin turno".
-      if (algunDiaConTurno) {
-        for (const [key, previsto] of previstoPorDia) {
-          const prev = map.get(key) ?? vacio(key);
-          prev.horarioPrevisto = previsto;
-          map.set(key, prev);
-        }
+        const prev = map.get(key) ?? vacio(key);
+        prev.horarioPrevisto = { trabaja, texto: tramos.join(", ") };
+        map.set(key, prev);
       }
     }
 

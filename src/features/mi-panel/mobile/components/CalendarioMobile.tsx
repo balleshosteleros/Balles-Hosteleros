@@ -68,7 +68,7 @@ function getDiaInfo(fecha: string, info: DiaCalendario | undefined, todayKey: st
 
   // Hoy sigue marcándose en amarillo aunque no haya turno —ubicarse en el mes
   // es útil—, pero entonces el texto lo dice en vez de dejar una raya muda.
-  const textoHoy = !previsto && !info?.fichado ? "Sin turno asignado" : textoPrevisto;
+  const textoHoy = !previsto && !info?.fichado ? "Sin horario asignado" : textoPrevisto;
   const horarioFichado = info?.fichado
     ? `${formatHorasDecimal(info.horasFichaje)} fichadas`
     : textoHoy;
@@ -76,9 +76,10 @@ function getDiaInfo(fecha: string, info: DiaCalendario | undefined, todayKey: st
   if (isToday) return { estado: "hoy", badgeText: "Hoy", horario: horarioFichado };
   if (info?.fichado || (trabajaPrevisto && isPast)) return { estado: "trabajado", badgeText: "Trabajado", horario: horarioFichado };
   if (trabajaPrevisto && isFuture) return { estado: "trabajar", badgeText: "Trabajar", horario: textoPrevisto };
-  // Sin turno cargado no se afirma que libras: un cuadrante aún sin publicar
-  // no es un día libre, y pintarlo igual que uno sería inventárselo.
-  if (!previsto) return { estado: "sinDato", badgeText: "Sin turno", horario: "Aún sin publicar" };
+  // Día fuera de toda vigencia de horario: no se afirma que libras. Que a
+  // nadie le hayan asignado horario (o que su asignación ya terminara) no es
+  // un día libre, y pintarlo igual que uno sería inventárselo.
+  if (!previsto) return { estado: "sinDato", badgeText: "Sin horario", horario: "Sin horario asignado" };
   return { estado: "libre", badgeText: "Libre", horario: "—" };
 }
 
@@ -105,7 +106,7 @@ const LEYENDA: { estado: EstadoDia; texto: string }[] = [
   { estado: "vacaciones", texto: "Vacaciones" },
   { estado: "baja", texto: "Baja médica" },
   { estado: "permiso", texto: "Permiso" },
-  { estado: "sinDato", texto: "Sin turno" },
+  { estado: "sinDato", texto: "Sin horario" },
 ];
 
 export function CalendarioMobile() {
@@ -277,7 +278,7 @@ export function CalendarioMobile() {
         <div className="grid grid-cols-2 gap-x-3 gap-y-2">
           {LEYENDA.map((l) => (
             <div key={l.estado} className="flex items-center gap-2 text-xs text-muted-foreground">
-              {/* "Sin turno" se dibuja como el propio día: recuadro vacío a
+              {/* "Sin horario" se dibuja como el propio día: recuadro vacío a
                   rayas. Con un cuadradito gris más se confundía con "Libre",
                   que es justo lo contrario (ahí SÍ sabemos que no trabajas). */}
               {l.estado === "sinDato" ? (
