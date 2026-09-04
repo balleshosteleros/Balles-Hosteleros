@@ -3,16 +3,67 @@
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import type { Sala } from "@/features/sala/planos/data/planos";
+import { PLANO_CANVAS_H, PLANO_CANVAS_W } from "@/features/sala/planos/data/planos";
 
 function rowToSala(r: Record<string, unknown>): Sala {
+  // El encuadre solo cuenta si están las cuatro medidas: media fila (por
+  // ejemplo un guardado a medias) valdría un recuadro con ancho 0, y el
+  // servicio se quedaría sin plano. Con null se ve el lienzo entero.
+  const x = r.encuadre_x as number | null;
+  const y = r.encuadre_y as number | null;
+  const w = r.encuadre_w as number | null;
+  const h = r.encuadre_h as number | null;
+  const encuadreCompleto =
+    x != null && y != null && w != null && h != null && w > 0 && h > 0;
+
   return {
     id: r.id as string,
     localId: r.local_id as string,
     nombre: r.nombre as string,
     orden: (r.orden as number) ?? 0,
     esPrincipal: (r.es_principal as boolean) ?? false,
+    encuadre: encuadreCompleto ? { x, y, width: w, height: h } : null,
     createdAt: r.created_at as string,
   };
+}
+
+/**
+ * Guarda el recuadro rojo del editor: el trozo del plano que se verá en el
+ * servicio. Se recorta a los límites del lienzo para que un arrastre pasado de
+ * borde no guarde un encuadre imposible.
+ */
+export async function setSalaEncuadre(
+  salaId: string,
+  encuadre: { x: number; y: number; width: number; height: number } | null,
+) {
+  try {
+    const supabase = await createClient();
+
+    let valores: Record<string, number | null> = {
+      encuadre_x: null,
+      encuadre_y: null,
+      encuadre_w: null,
+      encuadre_h: null,
+    };
+
+    if (encuadre) {
+      const x = Math.max(0, Math.min(PLANO_CANVAS_W - 1, Math.round(encuadre.x)));
+      const y = Math.max(0, Math.min(PLANO_CANVAS_H - 1, Math.round(encuadre.y)));
+      const width = Math.max(1, Math.min(PLANO_CANVAS_W - x, Math.round(encuadre.width)));
+      const height = Math.max(1, Math.min(PLANO_CANVAS_H - y, Math.round(encuadre.height)));
+      valores = { encuadre_x: x, encuadre_y: y, encuadre_w: width, encuadre_h: height };
+    }
+
+    const { error } = await supabase.from("salas").update(valores).eq("id", salaId);
+    if (error) throw error;
+
+    revalidatePath("/sala/reservas");
+    return { ok: true };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "Error desconocido";
+    console.error("[salas] setSalaEncuadre:", msg);
+    return { ok: false, error: msg };
+  }
 }
 
 export async function listSalas(localId: string) {

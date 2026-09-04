@@ -53,13 +53,38 @@ export const COLORES_PASTEL_COMBINACIONES = [
   "#C084FC", // lila
 ];
 
+/**
+ * Tamaño del lienzo sobre el que se guardan TODAS las coordenadas del plano
+ * (mesas, etiquetas de zona y decoración). El editor de Ajustes y la vista de
+ * servicio tienen que coincidir en estas medidas: si no, las mesas del borde
+ * saldrían desplazadas o recortadas en una de las dos pantallas.
+ */
+export const PLANO_CANVAS_W = 1200;
+export const PLANO_CANVAS_H = 640;
+
 export interface Sala {
   id: string;
   localId: string;
   nombre: string;
   orden: number;
   esPrincipal: boolean;
+  /**
+   * Recuadro del lienzo (1200x640) que se ve en el servicio, encuadrado a mano
+   * en el editor. El servicio escala SOLO este trozo para llenar la pantalla:
+   * apretándolo alrededor de las mesas, se ven mucho más grandes.
+   *
+   * `null` = sin encuadrar todavía → se ve el lienzo entero, como siempre.
+   */
+  encuadre: PlanoEncuadre | null;
   createdAt: string;
+}
+
+/** Recuadro visible del plano, en coordenadas del lienzo 1200x640. */
+export interface PlanoEncuadre {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
 }
 
 export interface Zona {

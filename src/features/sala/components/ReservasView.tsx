@@ -110,6 +110,7 @@ import {
   type Zona as ZonaReal,
   type Plano as PlanoConfig,
   type PlanoMesaPosicion,
+  type PlanoEncuadre,
   type SalaDecoracion,
   type FormaMesa,
 } from "@/features/sala/planos/data/planos";
@@ -2800,6 +2801,7 @@ function PlanoCanvas({
   onElegirDestino,
   onCancelarMover,
   esOscuro,
+  encuadre,
 }: {
   mesas: Mesa[];
   posiciones: Map<string, PlanoMesaPosicion>;
@@ -2841,6 +2843,11 @@ function PlanoCanvas({
   onCancelarMover?: () => void;
   /** Tema activo de la vista: decide si los pasteles de zona se aclaran u oscurecen. */
   esOscuro: boolean;
+  /**
+   * Trozo del lienzo que hay que ampliar, encuadrado a mano en el editor con
+   * el recuadro rojo. `null` = sin encuadrar → se ve el lienzo entero.
+   */
+  encuadre?: PlanoEncuadre | null;
 }) {
   const moviendo = reservaMoviendo != null;
   // Qué ficha de mesa está abierta (solo una a la vez, y ninguna en modo mover).
@@ -2866,6 +2873,28 @@ function PlanoCanvas({
   // Ajustes y las mesas del borde se fueran fuera del lienzo.
   const outerRef = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(1);
+
+  // Recuadro del lienzo que hay que ampliar. Sin encuadre guardado se usa el
+  // lienzo entero, que es como se veia antes de existir esta funcion.
+  const vista = useMemo(() => {
+    const e = encuadre;
+    if (!e) return { x: 0, y: 0, width: PLANO_CANVAS_W, height: PLANO_CANVAS_H };
+    // Se recorta al lienzo por si quedara un encuadre viejo mas grande que el
+    // plano: asi nunca se amplia aire que no existe.
+    // El minimo de 200 es el mismo que impone el editor: sin el, un encuadre
+    // corrupto de pocos pixeles ampliaria una mesa hasta llenar la pantalla y
+    // el plano quedaria inservible.
+    const MIN = 200;
+    const x = Math.max(0, Math.min(PLANO_CANVAS_W - MIN, e.x));
+    const y = Math.max(0, Math.min(PLANO_CANVAS_H - MIN, e.y));
+    return {
+      x,
+      y,
+      width: Math.max(MIN, Math.min(PLANO_CANVAS_W - x, e.width)),
+      height: Math.max(MIN, Math.min(PLANO_CANVAS_H - y, e.height)),
+    };
+  }, [encuadre]);
+
   useEffect(() => {
     const el = outerRef.current;
     if (!el) return;
@@ -2883,14 +2912,19 @@ function PlanoCanvas({
       // Antes habia un tope (1.6, luego 2) que dejaba franjas muertas alrededor
       // en las pantallas del salon: el plano se veia pequeño aunque hubiera
       // sitio de sobra.
-      const s = Math.min(w / PLANO_CANVAS_W, h / PLANO_CANVAS_H);
+      // Se escala el RECUADRO encuadrado, no el lienzo entero. Antes se
+      // ampliaba el lienzo completo y, como las mesas rara vez lo llenan, el
+      // hueco vacio se ampliaba con ellas: el plano se veia pequeno en el
+      // centro con franjas muertas alrededor. Ahora manda el encuadre, asi que
+      // apretandolo en el editor las mesas llegan hasta los bordes.
+      const s = Math.min(w / vista.width, h / vista.height);
       setScale(s > 0 ? s : 1);
     };
     update();
     const ro = new ResizeObserver(update);
     ro.observe(el);
     return () => ro.disconnect();
-  }, []);
+  }, [vista.width, vista.height]);
 
   // Encuadra una posición dentro del lienzo estándar (mismas bounds que el editor).
   // Recibe las dimensiones reales de la mesa para que las rectangulares no se
@@ -2980,9 +3014,12 @@ function PlanoCanvas({
       >
       <div
         style={{
-          width: PLANO_CANVAS_W * scale,
-          height: PLANO_CANVAS_H * scale,
+          // La ventana mide el ENCUADRE ampliado, no el lienzo entero: lo que
+          // quede fuera del recuadro rojo no se ve (overflow hidden).
+          width: vista.width * scale,
+          height: vista.height * scale,
           position: "relative",
+          overflow: "hidden",
         }}
       >
       <div
@@ -2993,7 +3030,11 @@ function PlanoCanvas({
           position: "absolute",
           top: 0,
           left: 0,
-          transform: `scale(${scale})`,
+          // Primero se corre el lienzo para dejar la esquina del encuadre en el
+          // origen, y luego se amplia. El orden importa: al aplicarse de
+          // derecha a izquierda, el desplazamiento va en coordenadas del
+          // lienzo sin escalar, que es como estan guardadas las mesas.
+          transform: `scale(${scale}) translate(${-vista.x}px, ${-vista.y}px)`,
           transformOrigin: "0 0",
         }}
       >
@@ -3576,6 +3617,17 @@ export function ReservasView() {
     if (salasLocal.some((s) => s.id === salaActualId)) return;
     setSalaActualId(salasLocal[0]!.id);
   }, [salasLocal, salaActualId]);
+
+  /**
+   * Encuadre de la sala activa: el recuadro rojo del editor. Decide cuánto del
+   * plano llena la pantalla del servicio. `null` = sin encuadrar → lienzo entero.
+   * Se busca en TODAS las salas del local (no en las filtradas) para que el
+   * encuadre no se pierda al filtrar por zonas.
+   */
+  const encuadreSalaActual = useMemo(
+    () => salasLocalTodas.find((s) => s.id === salaActualId)?.encuadre ?? null,
+    [salasLocalTodas, salaActualId],
+  );
 
   // Índice de la sala activa + siguiente sala en la dirección actual.
   // Cuando estamos en un extremo, la flecha invierte su sentido para indicar el final.
@@ -5617,6 +5669,7 @@ export function ReservasView() {
           )}
           {vistaPlano === "mapa" ? (
             <PlanoCanvas
+              encuadre={encuadreSalaActual}
               mesas={mesasActivas}
               posiciones={posicionesPlano}
               mesasMeta={mesasMeta}

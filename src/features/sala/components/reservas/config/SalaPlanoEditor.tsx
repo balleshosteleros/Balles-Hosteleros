@@ -38,6 +38,7 @@ import type {
   FormaMesa,
   Mesa,
   MesaPosicion,
+  PlanoEncuadre,
   Sala,
   SalaDecoracion,
   TipoDecoracion,
@@ -60,6 +61,7 @@ import {
   updateSalaDecoracion,
 } from "@/features/sala/planos/actions/sala-decoraciones-actions";
 import { updateZona } from "@/features/sala/planos/actions/zonas-actions";
+import { setSalaEncuadre } from "@/features/sala/planos/actions/salas-actions";
 
 const MESA_SIZE = 60;
 const MESA_RECT_W = 84;
@@ -133,10 +135,56 @@ type DragState =
       zonaId: string;
       offsetX: number;
       offsetY: number;
+    }
+  | {
+      /** Mover el recuadro rojo entero (lo que se verá en el servicio). */
+      kind: "encuadre";
+      offsetX: number;
+      offsetY: number;
+    }
+  | {
+      /** Estirar el recuadro rojo por una de sus esquinas o lados. */
+      kind: "encuadre-resize";
+      handle: EncuadreHandle;
+      startMouseX: number;
+      startMouseY: number;
+      startX: number;
+      startY: number;
+      startW: number;
+      startH: number;
     };
+
+/** Tiradores del recuadro rojo: 4 esquinas + 4 lados. */
+type EncuadreHandle = "nw" | "ne" | "sw" | "se" | "n" | "s" | "w" | "e";
 
 const MIN_MESA_SIZE = 36;
 const MIN_DECO_SIZE = 16;
+/**
+ * Lo más pequeño que se puede apretar el recuadro rojo. Por debajo de esto el
+ * encuadre dejaría de ser útil (una sola mesa llenando la pantalla) y además
+ * sería fácil perderlo de vista al arrastrar.
+ */
+const MIN_ENCUADRE = 200;
+
+/**
+ * Tiradores del recuadro rojo. Se centran sobre el borde (offset -7 = mitad de
+ * los 14px del tirador) para que se agarren igual de bien desde fuera y desde
+ * dentro del recuadro.
+ */
+const ENCUADRE_HANDLES: {
+  handle: EncuadreHandle;
+  style: React.CSSProperties;
+  cursor: string;
+}[] = [
+  { handle: "nw", style: { left: -7, top: -7 }, cursor: "nwse-resize" },
+  { handle: "ne", style: { right: -7, top: -7 }, cursor: "nesw-resize" },
+  { handle: "sw", style: { left: -7, bottom: -7 }, cursor: "nesw-resize" },
+  { handle: "se", style: { right: -7, bottom: -7 }, cursor: "nwse-resize" },
+  { handle: "n", style: { left: "50%", top: -7, marginLeft: -7 }, cursor: "ns-resize" },
+  { handle: "s", style: { left: "50%", bottom: -7, marginLeft: -7 }, cursor: "ns-resize" },
+  { handle: "w", style: { top: "50%", left: -7, marginTop: -7 }, cursor: "ew-resize" },
+  { handle: "e", style: { top: "50%", right: -7, marginTop: -7 }, cursor: "ew-resize" },
+];
 
 /** Decoraciones agrupadas para la paleta. */
 const DECO_GRUPOS: { titulo: string; tipos: TipoDecoracion[] }[] = [
@@ -292,6 +340,18 @@ export function SalaPlanoEditor({ sala, zonas, mesas, onBack }: Props) {
   const [pendingZonaLabels, setPendingZonaLabels] = useState<Set<string>>(new Set());
   const [saving, setSaving] = useState(false);
   const [exitDialogOpen, setExitDialogOpen] = useState(false);
+  /**
+   * Recuadro rojo: el trozo del plano que se ve en el servicio. Se arrastra y
+   * se estira aquí, y el servicio lo amplía hasta llenar la pantalla — cuanto
+   * más apretado esté alrededor de las mesas, más grandes se ven allí.
+   *
+   * Arranca con lo que hay guardado en la sala; si nunca se ha encuadrado, con
+   * el lienzo entero, que es exactamente como se veía hasta ahora.
+   */
+  const [encuadre, setEncuadre] = useState<PlanoEncuadre>(
+    sala.encuadre ?? { x: 0, y: 0, width: CANVAS_W, height: CANVAS_H },
+  );
+  const [encuadreSucio, setEncuadreSucio] = useState(false);
   const outerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
   /**
@@ -320,7 +380,8 @@ export function SalaPlanoEditor({ sala, zonas, mesas, onBack }: Props) {
     pendingDecoCreates.size > 0 ||
     pendingDecoUpdates.size > 0 ||
     pendingDecoRemovals.size > 0 ||
-    pendingZonaLabels.size > 0;
+    pendingZonaLabels.size > 0 ||
+    encuadreSucio;
 
   useEffect(() => {
     const el = outerRef.current;
@@ -528,6 +589,54 @@ export function SalaPlanoEditor({ sala, zonas, mesas, onBack }: Props) {
     const mouseX = (e.clientX - rect.left) / scale;
     const mouseY = (e.clientY - rect.top) / scale;
 
+    // Recuadro rojo: mover el encuadre entero sin dejar que se salga del lienzo.
+    if (drag.kind === "encuadre") {
+      const x = mouseX - drag.offsetX;
+      const y = mouseY - drag.offsetY;
+      setEncuadre((prev) => ({
+        ...prev,
+        x: Math.max(0, Math.min(CANVAS_W - prev.width, x)),
+        y: Math.max(0, Math.min(CANVAS_H - prev.height, y)),
+      }));
+      setEncuadreSucio(true);
+      return;
+    }
+
+    // Recuadro rojo: estirar por un tirador. Cada borde se mueve por su lado y
+    // se frena tanto en el borde del lienzo como en el tamaño mínimo, para que
+    // el recuadro no se invierta ni desaparezca al pasarse de largo.
+    if (drag.kind === "encuadre-resize") {
+      const dx = mouseX - drag.startMouseX;
+      const dy = mouseY - drag.startMouseY;
+      const h = drag.handle;
+
+      let x = drag.startX;
+      let y = drag.startY;
+      let w = drag.startW;
+      let alto = drag.startH;
+
+      if (h === "w" || h === "nw" || h === "sw") {
+        const derecha = drag.startX + drag.startW;
+        x = Math.max(0, Math.min(derecha - MIN_ENCUADRE, drag.startX + dx));
+        w = derecha - x;
+      }
+      if (h === "e" || h === "ne" || h === "se") {
+        w = Math.max(MIN_ENCUADRE, Math.min(CANVAS_W - drag.startX, drag.startW + dx));
+      }
+      if (h === "n" || h === "nw" || h === "ne") {
+        const abajo = drag.startY + drag.startH;
+        y = Math.max(0, Math.min(abajo - MIN_ENCUADRE, drag.startY + dy));
+        alto = abajo - y;
+      }
+      if (h === "s" || h === "sw" || h === "se") {
+        alto = Math.max(MIN_ENCUADRE, Math.min(CANVAS_H - drag.startY, drag.startH + dy));
+      }
+
+      setEncuadre({ x, y, width: w, height: alto });
+      setEncuadreSucio(true);
+      return;
+    }
+
     if (drag.kind === "mesa") {
       const x = mouseX - drag.offsetX;
       const y = mouseY - drag.offsetY;
@@ -669,6 +778,14 @@ export function SalaPlanoEditor({ sala, zonas, mesas, onBack }: Props) {
 
   function handlePointerUp(e: React.PointerEvent) {
     if (!drag) return;
+
+    // El recuadro rojo ya quedó actualizado durante el arrastre y se persiste
+    // con el botón Guardar, así que aquí solo hay que soltar.
+    if (drag.kind === "encuadre" || drag.kind === "encuadre-resize") {
+      setDrag(null);
+      return;
+    }
+
     const rect = canvasRef.current?.getBoundingClientRect();
     if (!rect) {
       setDrag(null);
@@ -854,6 +971,52 @@ export function SalaPlanoEditor({ sala, zonas, mesas, onBack }: Props) {
    * una esquina, y se frena cuando algo tocaría el borde: lo que saliera del
    * marco dejaría de verse en sala.
    */
+  /**
+   * Aprieta el recuadro rojo alrededor de lo que hay dibujado (mesas,
+   * decoración y etiquetas de zona), con un margen de respiro. Cuanto menos
+   * vacío quede dentro, más grandes se ven las mesas en el servicio.
+   */
+  function handleCenirEncuadre() {
+    const MARGEN = 24;
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+
+    const abarcar = (x: number, y: number, w: number, h: number) => {
+      if (x < minX) minX = x;
+      if (y < minY) minY = y;
+      if (x + w > maxX) maxX = x + w;
+      if (y + h > maxY) maxY = y + h;
+    };
+
+    for (const [id, pos] of posiciones) {
+      const dims = getMesaDims(formaDe(id), pos);
+      abarcar(pos.x, pos.y, dims.w, dims.h);
+    }
+    for (const d of decoraciones.values()) {
+      abarcar(d.x, d.y, d.width, d.height);
+    }
+    for (const z of zonas) {
+      const pos = getZonaLabelPos(z.id);
+      if (pos) abarcar(pos.x, pos.y, zonaLabelWidth(z.nombre), ZONA_LABEL_H);
+    }
+
+    if (minX === Infinity) {
+      toast.error("Coloca alguna mesa en el plano antes de ceñir el encuadre");
+      return;
+    }
+
+    const x = Math.max(0, minX - MARGEN);
+    const y = Math.max(0, minY - MARGEN);
+    // El mínimo evita que un plano con dos mesas deje un encuadre diminuto.
+    const width = Math.max(MIN_ENCUADRE, Math.min(CANVAS_W - x, maxX - x + MARGEN));
+    const height = Math.max(MIN_ENCUADRE, Math.min(CANVAS_H - y, maxY - y + MARGEN));
+
+    setEncuadre({ x, y, width, height });
+    setEncuadreSucio(true);
+  }
+
   function handleEscalarPlano(factor: number) {
     const cx = CANVAS_W / 2;
     const cy = CANVAS_H / 2;
@@ -1102,6 +1265,24 @@ export function SalaPlanoEditor({ sala, zonas, mesas, onBack }: Props) {
       }
     }
 
+    // 7) Encuadre: el recuadro rojo que decide cuánto se ve en el servicio.
+    //    Si abarca el lienzo entero se guarda como "sin encuadrar" (null), que
+    //    es el comportamiento de siempre y evita dejar filas a medias en BD.
+    let encuadreFalla = false;
+    if (encuadreSucio) {
+      const esLienzoEntero =
+        encuadre.x <= 0 &&
+        encuadre.y <= 0 &&
+        encuadre.width >= CANVAS_W &&
+        encuadre.height >= CANVAS_H;
+      const res = await setSalaEncuadre(sala.id, esLienzoEntero ? null : encuadre);
+      if (!res.ok) {
+        errCount++;
+        encuadreFalla = true;
+      }
+    }
+    setEncuadreSucio(encuadreFalla);
+
     setPendingMesaUpserts(failedMesaUpserts);
     setPendingMesaRemovals(failedMesaRemovals);
     setPendingFormas(failedFormas);
@@ -1194,6 +1375,36 @@ export function SalaPlanoEditor({ sala, zonas, mesas, onBack }: Props) {
               onClick={() => handleEscalarPlano(1.1)}
             >
               <Maximize2 className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+
+          {/* Encuadre rojo: qué trozo del plano llega al servicio. Ceñir lo
+              aprieta a las mesas colocadas (se ven lo más grandes posible);
+              Todo lo devuelve al plano entero. */}
+          <div className="flex items-center gap-0.5 rounded-md border border-red-600/40 p-0.5">
+            <span className="pl-1.5 pr-0.5 text-[11px] text-red-600 dark:text-red-400">
+              Encuadre
+            </span>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 px-1.5 text-[11px]"
+              title="Ajustar el recuadro rojo a las mesas colocadas: en el servicio se verán lo más grandes posible"
+              onClick={handleCenirEncuadre}
+            >
+              Ceñir
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 px-1.5 text-[11px]"
+              title="Llevar el recuadro rojo a los bordes: se ve el plano entero"
+              onClick={() => {
+                setEncuadre({ x: 0, y: 0, width: CANVAS_W, height: CANVAS_H });
+                setEncuadreSucio(true);
+              }}
+            >
+              Todo
             </Button>
           </div>
 
@@ -1796,6 +2007,97 @@ export function SalaPlanoEditor({ sala, zonas, mesas, onBack }: Props) {
                   scale={scale}
                 />
               )}
+
+              {/* RECUADRO ROJO: el trozo que se ve en el servicio.
+                  Va encima de todo para poder cogerlo siempre, pero sin tapar
+                  las mesas: solo el borde y los tiradores capturan el ratón,
+                  el interior deja pasar los clics para seguir colocando mesas. */}
+              <div
+                className="absolute"
+                style={{
+                  left: encuadre.x,
+                  top: encuadre.y,
+                  width: encuadre.width,
+                  height: encuadre.height,
+                  border: "3px solid #dc2626",
+                  boxSizing: "border-box",
+                  pointerEvents: "none",
+                  zIndex: 40,
+                }}
+              >
+                {/* Rótulo: sin él, el recuadro rojo no se explica solo. */}
+                <div
+                  style={{
+                    position: "absolute",
+                    top: -22,
+                    left: -3,
+                    fontSize: 11,
+                    fontWeight: 600,
+                    color: "#dc2626",
+                    whiteSpace: "nowrap",
+                    pointerEvents: "none",
+                  }}
+                >
+                  Lo que se ve en el servicio · arrástralo o estíralo hasta los bordes
+                </div>
+
+                {/* Franja para mover el recuadro entero: el propio borde. */}
+                <div
+                  onPointerDown={(e) => {
+                    e.stopPropagation();
+                    const rect = canvasRef.current?.getBoundingClientRect();
+                    if (!rect) return;
+                    setDrag({
+                      kind: "encuadre",
+                      offsetX: (e.clientX - rect.left) / scale - encuadre.x,
+                      offsetY: (e.clientY - rect.top) / scale - encuadre.y,
+                    });
+                  }}
+                  style={{
+                    position: "absolute",
+                    inset: -8,
+                    // Solo el marco de 16px de grosor es agarrable; el hueco
+                    // central se recorta para que las mesas sigan accesibles.
+                    clipPath:
+                      "polygon(0 0, 100% 0, 100% 100%, 0 100%, 0 0, 16px 16px, 16px calc(100% - 16px), calc(100% - 16px) calc(100% - 16px), calc(100% - 16px) 16px, 16px 16px)",
+                    pointerEvents: "auto",
+                    cursor: "move",
+                  }}
+                />
+
+                {/* Tiradores: 4 esquinas y 4 lados. */}
+                {ENCUADRE_HANDLES.map(({ handle, style, cursor }) => (
+                  <div
+                    key={handle}
+                    onPointerDown={(e) => {
+                      e.stopPropagation();
+                      const rect = canvasRef.current?.getBoundingClientRect();
+                      if (!rect) return;
+                      setDrag({
+                        kind: "encuadre-resize",
+                        handle,
+                        startMouseX: (e.clientX - rect.left) / scale,
+                        startMouseY: (e.clientY - rect.top) / scale,
+                        startX: encuadre.x,
+                        startY: encuadre.y,
+                        startW: encuadre.width,
+                        startH: encuadre.height,
+                      });
+                    }}
+                    style={{
+                      position: "absolute",
+                      width: 14,
+                      height: 14,
+                      background: "#fff",
+                      border: "3px solid #dc2626",
+                      borderRadius: 3,
+                      pointerEvents: "auto",
+                      cursor,
+                      ...style,
+                    }}
+                  />
+                ))}
+              </div>
             </div>
           </div>
         </div>
