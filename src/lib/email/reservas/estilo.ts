@@ -118,6 +118,13 @@ export interface EnvolturaInput {
   empresa: MarcaEmpresa;
   /** Etiqueta pequeña de la cabecera (ej. "Compra confirmada"). */
   badge: string;
+  /**
+   * Pinta el distintivo en rojo en vez de en el color de marca. Para los
+   * correos que traen una mala noticia —cancelada, no presentado—: con el
+   * dorado de la casa se leían igual que una confirmación, y el cliente no
+   * distinguía de un vistazo que su mesa ya no está.
+   */
+  badgeAviso?: boolean;
   /** Titular grande. */
   titular: string;
   /** Línea bajo el titular. */
@@ -172,7 +179,7 @@ export function envolverEmail(input: EnvolturaInput): string {
             </tr>
             <tr>
               <td style="padding:32px 32px 8px 32px;text-align:center;">
-                <div style="display:inline-block;padding:4px 12px;background:${withAlpha(primario, 0.1)};color:${primario};border-radius:9999px;font-size:11px;font-weight:600;letter-spacing:0.5px;text-transform:uppercase;">${escapeHtml(input.badge)}</div>
+                <div style="display:inline-block;padding:4px 12px;background:${input.badgeAviso ? "#FBE9E7" : withAlpha(primario, 0.1)};color:${input.badgeAviso ? "#B3261E" : primario};border-radius:9999px;font-size:11px;font-weight:600;letter-spacing:0.5px;text-transform:uppercase;">${escapeHtml(input.badge)}</div>
                 <h1 style="margin:14px 0 4px 0;font-size:26px;font-weight:700;color:#0f172a;line-height:1.25;">${escapeHtml(input.titular)}</h1>
                 <p style="margin:0;font-size:13px;color:#64748b;">${escapeHtml(input.subtitulo)}</p>
               </td>

@@ -78,6 +78,17 @@ const AUDIT_COL: Record<ReservaEmailTipo, string | null> = {
   SOLICITUD_VALORACION: "email_valoracion_at",
 };
 
+/**
+ * Correos que traen una mala noticia: la mesa ya no está. Su distintivo va en
+ * rojo, no en el color de la casa, para que se distinga de un vistazo de una
+ * confirmación.
+ */
+const BADGE_AVISO: ReservaEmailTipo[] = [
+  "CANCELADA",
+  "NO_SHOW",
+  "GARANTIA_CADUCADA",
+];
+
 /** Titular grande del correo: lo primero que se lee. */
 const HEADLINE_POR_TIPO: Record<ReservaEmailTipo, string> = {
   CONFIRMADA: "Reserva confirmada",
@@ -160,6 +171,7 @@ type ReservaRow = {
 
 type ConfigRow = {
   cancelacion_horas_antes: number | null;
+  garantia_horas_antes: number | null;
   cancelacion_importe_eur: number | null;
   cancelacion_personalizar_mensaje: boolean | null;
   cancelacion_mensaje_personalizado: string | null;
@@ -384,7 +396,7 @@ export async function enviarReservaEmail(
       admin
         .from("empresa_reservas_config")
         .select(
-          "cancelacion_horas_antes, cancelacion_importe_eur, cancelacion_personalizar_mensaje, cancelacion_mensaje_personalizado",
+          "cancelacion_horas_antes, garantia_horas_antes, cancelacion_importe_eur, cancelacion_personalizar_mensaje, cancelacion_mensaje_personalizado",
         )
         .eq("empresa_id", empresaId)
         .maybeSingle(),
@@ -419,6 +431,8 @@ export async function enviarReservaEmail(
     cancelacion_horas_antes:
       (configData?.cancelacion_horas_antes as number | null | undefined) ??
       null,
+    garantia_horas_antes:
+      (configData?.garantia_horas_antes as number | null | undefined) ?? null,
     cancelacion_importe_eur:
       (configData?.cancelacion_importe_eur as number | null | undefined) ??
       null,
@@ -482,7 +496,7 @@ export async function enviarReservaEmail(
   //     cliente pagó por adelantado y necesita ver que su dinero está aplicado
   //     a ESTA reserva.
   let politicaBloque: { horas: number; importe: number } | null = null;
-  let garantiaBloque: { importe: number } | null = null;
+  let garantiaBloque: { importe: number; horas: number } | null = null;
   let cuponCanjeadoBloque: { codigo: string; tituloCliente: string } | null = null;
   let ticketBloque:
     | { codigo: string; producto: string; unidades: number; importe: number; porPersona: boolean }
@@ -535,6 +549,7 @@ export async function enviarReservaEmail(
     if (tipoReserva === "garantia") {
       garantiaBloque = {
         importe: Number(reserva.garantia_importe ?? 0),
+        horas: config.garantia_horas_antes ?? 0,
       };
     }
   }
@@ -716,7 +731,7 @@ interface RenderInput {
    */
   vinculacionAviso: { motivo: "email" | "telefono"; nombreFicha: string } | null;
   /** Importe retenido en garantía y el texto que la empresa haya añadido. */
-  garantiaBloque: { importe: number } | null;
+  garantiaBloque: { importe: number; horas: number } | null;
   cuponCanjeadoBloque: { codigo: string; tituloCliente: string } | null;
   ticketBloque:
     | { codigo: string; producto: string; unidades: number; importe: number; porPersona: boolean }
@@ -803,7 +818,11 @@ function renderHtml(input: RenderInput): string {
   const bloqueGarantia = input.garantiaBloque
     ? `<div style="margin-top:14px;padding:14px 16px;background:#fefce8;border:1px solid #fde047;border-radius:8px;font-size:13px;color:#713f12;line-height:1.6;">
         <div style="font-weight:700;margin-bottom:4px;">Política de garantía</div>
-        Para asegurar tu mesa hemos retenido <strong>${formatearImporte(input.garantiaBloque.importe)} €</strong>. Es una retención, no un cobro: si vienes, se libera.
+        Para asegurar tu mesa hemos retenido <strong>${formatearImporte(input.garantiaBloque.importe)} €</strong>. Es una retención, no un cobro: si vienes, se libera.${
+          input.garantiaBloque.horas > 0
+            ? ` Si no puedes venir, cancela con al menos <strong>${input.garantiaBloque.horas} h</strong> de antelación y te devolvemos el importe íntegro.`
+            : ""
+        }
       </div>`
     : "";
 
@@ -953,6 +972,7 @@ function renderHtml(input: RenderInput): string {
     },
     telefono: input.empresa.telefono,
     badge: BADGE_POR_TIPO[input.tipo],
+    badgeAviso: BADGE_AVISO.includes(input.tipo),
     titular: greeting,
     subtitulo: subtitulo(input.tipo),
     pie: footerSegunTipo(input.tipo, !!input.urlCancelar),
@@ -1019,7 +1039,11 @@ function renderText(
   if (input.garantiaBloque) {
     lineas.push(
       ``,
-      `Política de garantía: hemos retenido ${formatearImporte(input.garantiaBloque.importe)} € para asegurar tu mesa. Es una retención, no un cobro: si vienes, se libera.`,
+      `Política de garantía: hemos retenido ${formatearImporte(input.garantiaBloque.importe)} € para asegurar tu mesa. Es una retención, no un cobro: si vienes, se libera.${
+        input.garantiaBloque.horas > 0
+          ? ` Si no puedes venir, cancela con al menos ${input.garantiaBloque.horas} h de antelación y te devolvemos el importe íntegro.`
+          : ""
+      }`,
     );
   }
   // La tarjeta primero: es la acción que le pide el correo.
@@ -1176,6 +1200,7 @@ export interface PreviewInput {
   mensajeOverride: string | null;
   config: {
     cancelacionHorasAntes?: number | null;
+    garantiaHorasAntes?: number | null;
     cancelacionImporteEur?: number | null;
     garantiaImporteEur?: number | null;
   };
@@ -1243,7 +1268,10 @@ export function previewReservaEmail(input: PreviewInput): {
 
   const garantiaBloque =
     conCondiciones && tipoReserva === "garantia"
-      ? { importe: Number(input.config.garantiaImporteEur ?? 20) }
+      ? {
+          importe: Number(input.config.garantiaImporteEur ?? 20),
+          horas: input.config.garantiaHorasAntes ?? 24,
+        }
       : null;
 
   const html = renderHtml({
