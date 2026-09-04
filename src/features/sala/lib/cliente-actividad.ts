@@ -80,3 +80,47 @@ export async function registrarCambioDatosCliente(
     console.error("[clientes] actividad:", msg);
   }
 }
+
+/**
+ * Anota en la actividad del CLIENTE que se revisó una reserva suya que llegó
+ * con datos distintos a los de su ficha, y en qué quedó.
+ *
+ * POR QUÉ va aquí y no solo en la reserva: quien intentó reservar con otro
+ * nombre o con otro correo es la PERSONA. Si la decisión se guarda únicamente
+ * en la reserva, la ficha del cliente se ve vacía —"todavía no se han cambiado
+ * los datos de este cliente"— justo cuando lo que se quiere saber es que ese
+ * cliente ya vino con otros datos y qué se decidió. Con "conservar" además no
+ * cambia ningún dato, así que sin esta línea no queda rastro ninguno en el
+ * cliente.
+ *
+ * Nunca lanza: la resolución ya está aplicada, y un fallo al registrarla no
+ * debe deshacerla.
+ */
+export async function registrarRevisionCliente(
+  supabase: SupabaseClient,
+  params: {
+    empresaId: string;
+    clienteId: string;
+    /** Qué se decidió, ya redactado para leerse en sala. */
+    texto: string;
+    usuarioId: string | null;
+    usuarioNombre: string | null;
+  },
+): Promise<void> {
+  try {
+    const { error } = await supabase.from("cliente_historial").insert({
+      empresa_id: params.empresaId,
+      cliente_id: params.clienteId,
+      campo: "revision",
+      valor_anterior: null,
+      valor_nuevo: params.texto,
+      usuario_id: params.usuarioId,
+      usuario_nombre: params.usuarioNombre,
+      origen: "MANUAL",
+    });
+    if (error) console.error("[clientes] actividad revisión:", error.message);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Error desconocido";
+    console.error("[clientes] actividad revisión:", msg);
+  }
+}

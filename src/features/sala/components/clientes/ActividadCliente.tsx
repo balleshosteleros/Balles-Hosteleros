@@ -22,6 +22,7 @@ const CAMPO_LABEL: Record<string, string> = {
   apellidos: "Apellidos",
   email: "Email",
   telefono: "Teléfono",
+  revision: "Revisión de datos",
 };
 
 /**
@@ -111,6 +112,27 @@ export function ActividadCliente({ clienteId }: { clienteId: string }) {
           <ul className="space-y-1.5">
             {filas.map((a) => {
               const avisa = CAMPOS_AVISO.has(a.campo);
+              // Una revisión no es un "de X a Y": es una decisión escrita. Se
+              // pinta como frase, que es como se lee.
+              if (a.campo === "revision") {
+                return (
+                  <li
+                    key={a.id}
+                    className="rounded-md border border-border/60 bg-muted/30 px-2.5 py-2 text-xs"
+                  >
+                    <div className="flex flex-wrap items-baseline justify-between gap-x-2">
+                      <span className="font-medium text-foreground">
+                        {CAMPO_LABEL.revision}
+                      </span>
+                      <span className="text-muted-foreground">
+                        {tz ? formatFechaHoraEnZona(a.createdAt, tz) : "—"}
+                      </span>
+                    </div>
+                    <div className="mt-0.5 text-foreground">{a.valorNuevo}</div>
+                    <div className="mt-0.5 text-muted-foreground">{autor(a)}</div>
+                  </li>
+                );
+              }
               return (
                 <li
                   key={a.id}

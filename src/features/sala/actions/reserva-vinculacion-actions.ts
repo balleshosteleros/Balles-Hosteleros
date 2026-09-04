@@ -3,7 +3,10 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getEmpresaActivaForUser } from "@/features/empresa/lib/empresa-server";
-import { registrarCambioDatosCliente } from "@/features/sala/lib/cliente-actividad";
+import {
+  registrarCambioDatosCliente,
+  registrarRevisionCliente,
+} from "@/features/sala/lib/cliente-actividad";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { normalizarNombre, normalizarNombreOrNull } from "@/shared/lib/normalizar-nombre";
 
@@ -231,6 +234,22 @@ export async function resolverVinculacion(
       if (error) console.error("[reservas] actividad vinculación:", error.message);
     };
 
+    /**
+     * La misma decisión, en la actividad del CLIENTE. Va aparte de la de la
+     * reserva a propósito: quien vino con otros datos es la persona, y es en su
+     * ficha donde se busca después.
+     */
+    const anotarCliente = async (id: string | null, texto: string) => {
+      if (!id) return;
+      await registrarRevisionCliente(supabase as unknown as SupabaseClient, {
+        empresaId,
+        clienteId: id,
+        texto,
+        usuarioId,
+        usuarioNombre: nombre,
+      });
+    };
+
     // ── CONSERVAR ─────────────────────────────────────────────────────────
     // La ficha manda. Se descarta lo declarado, pero queda escrito qué se
     // descartó: si mañana alguien pregunta por qué la reserva salió a otro
@@ -249,10 +268,12 @@ export async function resolverVinculacion(
       if (error) throw error;
 
       const resumen = resumirDeclarados(declarados);
+      const txtConservar = `Reservó con otros datos${resumen ? `: ${resumen}` : ""}. Coincidió por ${motivoTxt} y se decidió conservar los de la ficha.`;
       await anotarReserva(
         "vinculacion",
         `Se conservan los datos de la ficha. Coincidió por ${motivoTxt}.${resumen ? ` Se descartó: ${resumen}.` : ""}`,
       );
+      await anotarCliente(clienteId, txtConservar);
       revalidatePath("/sala/reservas");
       return { ok: true };
     }
@@ -350,6 +371,10 @@ export async function resolverVinculacion(
         "vinculacion",
         `Se actualizó la ficha del cliente con los datos de esta reserva. Coincidió por ${motivoTxt}.`,
       );
+      await anotarCliente(
+        clienteId,
+        `Reservó con otros datos. Coincidió por ${motivoTxt} y se decidió actualizar la ficha con los nuevos.`,
+      );
       revalidatePath("/sala/reservas");
       revalidatePath("/sala/clientes");
       return { ok: true };
@@ -420,6 +445,17 @@ export async function resolverVinculacion(
     await anotarReserva(
       "vinculacion",
       `Era otro cliente: se creó ficha propia para ${resumirDeclarados(declarados) || nuevoNombre} y la reserva pasó a ella. Había coincidido por ${motivoTxt}.`,
+    );
+    // Se anota en las DOS fichas: la original pierde una reserva que parecía
+    // suya, y la nueva nace de esta decisión. Sin la primera línea, en la ficha
+    // original la reserva desaparece sin explicación.
+    await anotarCliente(
+      clienteId,
+      `Una reserva suya era de otra persona (${resumirDeclarados(declarados) || nuevoNombre}). Había coincidido por ${motivoTxt}; se le hizo ficha propia y la reserva pasó a ella.`,
+    );
+    await anotarCliente(
+      nuevo.id as string,
+      `Ficha creada al revisar una reserva que había coincidido por ${motivoTxt} con ${r.cliente_nombre ?? "otro cliente"}. Se confirmó que era otra persona.`,
     );
     revalidatePath("/sala/reservas");
     revalidatePath("/sala/clientes");

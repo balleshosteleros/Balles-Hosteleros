@@ -153,16 +153,19 @@ export function RevisionVinculacion({ reservaId, onResuelto }: Props) {
             </table>
           </div>
 
+          {/* El orden no es decorativo: conservar la ficha es lo que más se
+              elige —el cliente escribe su nombre de otra forma, no cambia de
+              persona—, así que va primera y destacada. */}
           <div className="mt-3.5 flex flex-wrap gap-2">
+            <Button size="sm" disabled={enviando} onClick={() => resolver("CONSERVAR")}>
+              Conservar original
+            </Button>
             <Button
               size="sm"
               variant="outline"
               disabled={enviando}
-              onClick={() => resolver("CONSERVAR")}
+              onClick={() => resolver("ACTUALIZAR")}
             >
-              Conservar original
-            </Button>
-            <Button size="sm" disabled={enviando} onClick={() => resolver("ACTUALIZAR")}>
               Actualizar datos
             </Button>
             <Button
