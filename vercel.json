@@ -16,6 +16,14 @@
       "schedule": "0 6 * * *"
     },
     {
+      "path": "/api/cron/fichajes-reavisos",
+      "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/fichajes-autosalida",
+      "schedule": "*/15 * * * *"
+    },
+    {
       "path": "/api/cron/cerrar-fichajes-huerfanos",
       "schedule": "10 6 * * *"
     },
