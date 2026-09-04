@@ -80,7 +80,7 @@ function getDiaInfo(fecha: string, info: DiaCalendario | undefined, todayKey: st
   // nadie le hayan asignado horario (o que su asignación ya terminara) no es
   // un día libre, y pintarlo igual que uno sería inventárselo.
   if (!previsto) return { estado: "sinDato", badgeText: "Sin horario", horario: "Sin horario asignado" };
-  return { estado: "libre", badgeText: "Libre", horario: "—" };
+  return { estado: "libre", badgeText: "Libre", horario: "No trabajas" };
 }
 
 /**
@@ -352,7 +352,11 @@ function DetalleDia({
         </span>
       </div>
 
-      <p className={cn("mt-3 text-base font-medium", est.texto)}>{di.horario}</p>
+      {/* En vacaciones, baja o permiso no hay turno que enseñar: la etiqueta ya
+          lo dice todo y una raya suelta debajo solo estorba. */}
+      {di.horario !== "—" && (
+        <p className={cn("mt-3 text-base font-medium", est.texto)}>{di.horario}</p>
+      )}
 
       {info?.trabajoExtra === "horas_extras" && (
         <p className="mt-1.5 text-sm font-medium text-amber-700">Con horas extras</p>
