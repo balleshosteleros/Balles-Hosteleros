@@ -12,6 +12,19 @@ export type CartaAdminData = {
 
 export type FamiliaCarta = "comida" | "bebida" | "otros";
 
+/**
+ * Apartado del primer nivel de la carta. Son tres como máximo: más opciones
+ * aquí convierten la elección en otra lista que leer, que es lo que esta
+ * pantalla venía a evitar. El nombre y el orden los decide cada empresa
+ * (BACANAL abre por comida; HABANA, que es coctelería, por bebida).
+ */
+export type CartaFamilia = {
+  clave: FamiliaCarta;
+  nombre: string;
+  orden: number;
+  visible: boolean;
+};
+
 export type CartaCategoria = {
   id: string;
   empresa_id: string;
@@ -91,6 +104,7 @@ export type CartaEmpresaPublica = {
 /** Carta completa lista para render público. */
 export type CartaPublica = {
   empresa: CartaEmpresaPublica;
+  familias: CartaFamilia[];
   categorias: Array<CartaCategoria & { items: CartaItem[] }>;
   destacados: CartaItem[];
 };

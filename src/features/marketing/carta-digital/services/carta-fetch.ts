@@ -12,6 +12,7 @@ import type {
   EstiloCards,
   ModoCarta,
   Alergeno,
+  CartaFamilia,
 } from "../types";
 
 /**
@@ -208,7 +209,7 @@ export async function fetchCartaPorSlug(slug: string): Promise<CartaPublica | nu
       carta_modo: (empresa.carta_modo as ModoCarta | null) ?? null,
     };
 
-    const [categoriasRes, itemsRes] = await Promise.all([
+    const [categoriasRes, itemsRes, familiasRes] = await Promise.all([
       supabase
         .from("carta_categorias")
         .select("*")
@@ -218,6 +219,12 @@ export async function fetchCartaPorSlug(slug: string): Promise<CartaPublica | nu
       supabase
         .from("carta_items")
         .select("*")
+        .eq("empresa_id", empresa.id)
+        .eq("visible", true)
+        .order("orden", { ascending: true }),
+      supabase
+        .from("carta_familias")
+        .select("clave, nombre, orden, visible")
         .eq("empresa_id", empresa.id)
         .eq("visible", true)
         .order("orden", { ascending: true }),
@@ -268,7 +275,16 @@ export async function fetchCartaPorSlug(slug: string): Promise<CartaPublica | nu
       }));
     const destacados = items.filter((i) => i.destacado);
 
-    return { empresa: empresaPub, categorias, destacados };
+    const familias: CartaFamilia[] =
+      ((familiasRes.data ?? []) as CartaFamilia[]).length > 0
+        ? (familiasRes.data as CartaFamilia[])
+        : [
+            { clave: "comida", nombre: "Comida", orden: 1, visible: true },
+            { clave: "bebida", nombre: "Bebida", orden: 2, visible: true },
+            { clave: "otros", nombre: "Otros", orden: 3, visible: true },
+          ];
+
+    return { empresa: empresaPub, familias, categorias, destacados };
   } catch (err) {
     console.error("[carta-fetch] fatal:", err);
     return null;

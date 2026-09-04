@@ -22,7 +22,15 @@ export function CartaPublicaShell({ carta }: { carta: CartaPublica }) {
 
   const deviceId = useDeviceId();
   // Familia activa: la carta se navega primero por COMIDA / BEBIDA.
-  const [familia, setFamilia] = useState<FamiliaCarta>("comida");
+  // Arranca por el primer apartado configurado: HABANA es coctelería y abre
+  // por BEBIDA, no por comida.
+  const familiasCfg = useMemo(
+    () => [...(carta.familias ?? [])].sort((a, b) => a.orden - b.orden),
+    [carta.familias],
+  );
+  const [familia, setFamilia] = useState<FamiliaCarta>(
+    familiasCfg[0]?.clave ?? "comida",
+  );
   const [activeCat, setActiveCat] = useState<string | null>(carta.categorias[0]?.id ?? null);
   const [openItem, setOpenItem] = useState<CartaItem | null>(null);
   const [likedSet, setLikedSet] = useState<Set<string>>(new Set());
@@ -121,6 +129,7 @@ export function CartaPublicaShell({ carta }: { carta: CartaPublica }) {
               activeId={activeCat}
               onSelect={handleSelectCategoria}
               familia={familia}
+              familiasCfg={familiasCfg}
               onFamilia={(f) => {
                 setFamilia(f);
                 // Al cambiar de familia el ancla anterior ya no existe: se

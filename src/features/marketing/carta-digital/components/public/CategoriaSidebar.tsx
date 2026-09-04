@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef } from "react";
-import type { CartaCategoria, CartaItem, FamiliaCarta } from "../../types";
+import type { CartaCategoria, CartaItem, CartaFamilia, FamiliaCarta } from "../../types";
 
 type CategoriaConItems = CartaCategoria & { items: CartaItem[] };
 
@@ -24,12 +24,15 @@ export function CategoriaSidebar({
   onSelect,
   familia,
   onFamilia,
+  familiasCfg,
 }: {
   categorias: CategoriaConItems[];
   activeId: string | null;
   onSelect: (id: string) => void;
   familia: FamiliaCarta;
   onFamilia: (f: FamiliaCarta) => void;
+  /** Apartados configurados en Ajustes: nombre y orden los pone la empresa. */
+  familiasCfg: CartaFamilia[];
 }) {
   const navRef = useRef<HTMLUListElement | null>(null);
 
@@ -42,10 +45,13 @@ export function CategoriaSidebar({
 
   // Solo se ofrecen las familias que esta carta usa: un local sin shishas no
   // debe enseñar un botón "Otros" vacío.
-  const familias = useMemo(() => {
-    const orden: FamiliaCarta[] = ["comida", "bebida", "otros"];
-    return orden.filter((f) => categorias.some((c) => (c.familia ?? "comida") === f));
-  }, [categorias]);
+  const familias = useMemo(
+    () =>
+      [...familiasCfg]
+        .sort((a, b) => a.orden - b.orden)
+        .filter((f) => categorias.some((c) => (c.familia ?? "comida") === f.clave)),
+    [categorias, familiasCfg],
+  );
 
   // Auto-scroll del item activo en la sidebar (mobile + desktop scroll si overflow).
   useEffect(() => {
@@ -54,31 +60,25 @@ export function CategoriaSidebar({
     if (el) el.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
   }, [activeId]);
 
-  const ETIQUETA: Record<FamiliaCarta, string> = {
-    comida: "Comida",
-    bebida: "Bebida",
-    otros: "Otros",
-  };
-
   const selectorFamilia = familias.length > 1 ? (
     <div
       className="flex gap-1 rounded-full p-1"
       style={{ backgroundColor: "color-mix(in srgb, var(--carta-superficie-enfasis) 70%, transparent)" }}
     >
       {familias.map((f) => {
-        const on = familia === f;
+        const on = familia === f.clave;
         return (
           <button
-            key={f}
+            key={f.clave}
             type="button"
-            onClick={() => onFamilia(f)}
+            onClick={() => onFamilia(f.clave)}
             className="min-w-0 flex-1 whitespace-nowrap rounded-full px-2.5 py-2 text-center text-[10.5px] font-semibold uppercase tracking-[0.1em] transition-all sm:px-3"
             style={{
               backgroundColor: on ? "var(--carta-primario)" : "transparent",
               color: on ? "var(--carta-sobre-marca)" : "var(--carta-texto-tenue)",
             }}
           >
-            {ETIQUETA[f]}
+            {f.nombre}
           </button>
         );
       })}

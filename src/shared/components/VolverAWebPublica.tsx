@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, Home } from "lucide-react";
+import { Home } from "lucide-react";
 import { useEffect, useState } from "react";
 
 /**
@@ -64,16 +64,14 @@ export function VolverAWebPublica({
 
   if (modo === "oculto") return null;
 
-  // El texto NO puede ser siempre "Volver": a la carta y al portal de empleo se
-  // entra tambien por el QR de la mesa o por el enlace de una oferta, sin haber
-  // pasado por la web. A quien llega asi, "volver" le suena a un sitio en el
-  // que no ha estado. Neutro en ambos casos: "Atras" cuando de verdad hay una
-  // pagina anterior, y el nombre de a donde lleva cuando no la hay.
-  const texto = etiqueta ?? (modo === "atras" ? "Atrás" : "Ir a la web");
+  // Siempre "Ir a la web", venga uno de donde venga: es a donde lleva el botón,
+  // y con "Atrás" el mismo control cambiaba de nombre según cómo se hubiera
+  // entrado —QR de la mesa o menú de la web—, que es justo lo que despista.
+  const texto = etiqueta ?? "Ir a la web";
 
-  // El icono acompana al texto: flecha cuando de verdad se retrocede, casa
-  // cuando lo que hay es un salto a la web (no se "vuelve" a donde no se estuvo).
-  const Icono = modo === "atras" ? ArrowLeft : Home;
+  // La casa acompaña siempre al texto por el mismo motivo: el destino es el
+  // mismo aunque por dentro se resuelva con `history.back()`.
+  const Icono = Home;
 
   const contenido = (
     <>
