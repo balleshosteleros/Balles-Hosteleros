@@ -71,6 +71,14 @@ const ALIAS: Record<string, string> = {
   // como WEB, igual que el navegador. Ese canal muere con Cover.
   APP: "WEB",
   SALA: "LOCAL",
+  // Grafias sueltas del prescriptor que escribia el personal en Cover.
+  CAMPAÑA: "CAMPANA",
+  "GOOGLE ORGÁNICO": "GOOGLE_ORGANICO",
+  "INSTAGRAM ORGÁNICO": "INSTAGRAM_ORGANICO",
+  GOOGLEADDS: "GOOGLE_ADS",
+  GOOGLEADS: "GOOGLE_ADS",
+  INSTAGRAMHISTORIAS: "INSTAGRAM",
+  FIDELIZACIÓN: "FIDELIZACION",
 };
 
 /** Etiquetas de los orígenes conocidos. El resto se rotula desde su propia clave. */
@@ -86,6 +94,19 @@ const LABELS: Record<string, string> = {
   EMAIL: "Email",
   AGORA: "Ágora",
   LISTA_ESPERA: "Lista de espera",
+  // Canales que traia el prescriptor de CoverManager (2022-2026). Google e
+  // Instagram van separados en pago y organico a proposito: es lo que permite
+  // ver que trae la publicidad frente a lo que llega solo.
+  GOOGLE_ORGANICO: "Google orgánico",
+  GOOGLE_ADS: "Google Ads",
+  INSTAGRAM_ORGANICO: "Instagram orgánico",
+  MARKETING: "Marketing",
+  CAMPANA: "Campaña",
+  CALIDAD: "Calidad",
+  FIDELIZACION: "Fidelización",
+  EXPERIENCIA: "Experiencia",
+  TIKTOK: "TikTok",
+  SMS: "SMS",
   [ORIGEN_SIN_DATO]: "Sin origen",
 };
 
@@ -105,6 +126,18 @@ const COLORS: Record<string, string> = {
   EMAIL: "#0ea5e9",     // sky-500
   AGORA: "#a855f7",     // purple-500
   LISTA_ESPERA: "#7c3aed", // violet-600 — entró desde la lista de espera
+  // Mismo tono de familia que su canal de pago, un paso mas claro, para que
+  // "Google" y "Google organico" se lean juntos de un vistazo en la grafica.
+  GOOGLE_ORGANICO: "#86efac",   // green-300
+  GOOGLE_ADS: "#15803d",        // green-700
+  INSTAGRAM_ORGANICO: "#f9a8d4",// pink-300
+  MARKETING: "#f43f5e",         // rose-500
+  CAMPANA: "#fb923c",           // orange-400
+  CALIDAD: "#64748b",           // slate-500
+  FIDELIZACION: "#14b8a6",      // teal-500
+  EXPERIENCIA: "#8b5cf6",       // violet-500
+  TIKTOK: "#0f172a",            // slate-900 — negro de marca
+  SMS: "#38bdf8",               // sky-400
   [ORIGEN_SIN_DATO]: "#94a3b8", // slate-400
 };
 
