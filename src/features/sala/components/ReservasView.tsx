@@ -278,10 +278,10 @@ function addMonths(iso: string, n: number) {
  * los dos, bastaba con tocar uno para que los botones dejaran de caer donde
  * empieza el plano.
  *
- * 700 px: por debajo, con las nueve columnas, el nombre empieza a cortarse, y
- * el nombre es justo por lo que se busca a la gente en sala.
+ * 740 px: con nueve columnas, por debajo de esto el nombre se corta, y el
+ * nombre es justo por lo que se busca a la gente en sala.
  */
-const LISTA_ANCHO_PX = 700;
+const LISTA_ANCHO_PX = 740;
 
 const LISTA_GRID =
   // Hora · Mesa · Nombre · Per · Origen · Tipo · Estado · Etiquetas · Tiempo.
@@ -289,10 +289,9 @@ const LISTA_GRID =
   // a media palabra; el resto del ancho se lo queda el NOMBRE, que es el dato
   // por el que se busca a la gente en sala.
   //
-  // Etiquetas va con ancho propio y generoso: son avisos que hay que leer de
-  // un vistazo mientras se sirve ("alérgico", "cumpleaños", "VIP"), y
-  // apretadas contra el resto no se leen.
-  "grid grid-cols-[50px_62px_minmax(0,1fr)_26px_72px_92px_86px_minmax(96px,132px)_58px] gap-1.5 items-center";
+  // Etiquetas se queda con lo justo: son avisos cortos ("alérgico", "VIP") y
+  // el ancho que no necesitan se lo lleva el NOMBRE, que se estaba cortando.
+  "grid grid-cols-[50px_62px_minmax(0,1fr)_26px_72px_92px_86px_minmax(64px,88px)_58px] gap-1.5 items-center";
 
 /**
  * TIPO de la reserva: cuál de las cuatro es (PRP-082).
@@ -5374,31 +5373,12 @@ export function ReservasView() {
 
         {/* SEGUNDA FILA de la barra: los mandos del PLANO (planos, salas,
             zonas) y los de la FECHA (día/mes y el navegador de fechas).
-            Van juntos en un solo bloque que ocupa el ancho entero y arranca
-            con un relleno igual a la anchura de la lista: así la fila entera
-            cae en la vertical donde empieza el plano, que es sobre lo que
-            mandan. El relleno va en estilo y no en clase porque Tailwind no
-            admite un valor calculado.
+            Van juntos en un solo bloque para que no se separen al envolver.
 
-            Tienen que ir en el MISMO bloque. Separados, el primero se llevaba
-            la fila entera y empujaba la fecha a una tercera fila pegada al
-            borde izquierdo. Y con un margen suelto tampoco valía: la barra
-            envuelve, y el margen se suma a lo que haya delante en esa fila, no
-            al borde de la pantalla.
-
-            Con el plano a pantalla completa no hay lista de la que separarse y
-            vuelven al principio. */}
-        <div
-          className={cn(
-            "flex items-center gap-1.5",
-            panelOculto === "ninguno" && "w-full",
-          )}
-          style={
-            panelOculto === "ninguno"
-              ? { paddingLeft: LISTA_ANCHO_PX }
-              : undefined
-          }
-        >
+            Ya NO se les da el ancho entero ni un relleno hasta el plano: eso
+            los mandaba a una fila para ellos solos y partía la barra en dos.
+            Cabe todo en una línea, que es como se lee de un vistazo. */}
+        <div className="flex items-center gap-1.5">
           {/* Solo en vista día; en mes conservan el hueco (los totales del mes
               son globales y no dependen de plano, sala ni zona). */}
           <div
@@ -5487,17 +5467,6 @@ export function ReservasView() {
         </div>
 
         <div className="ml-auto flex items-center gap-1.5">
-          <Button
-            variant="outline"
-            size="icon"
-            className="h-8 w-8"
-            onClick={alternarTema}
-            title={esOscuro ? "Cambiar a vista clara" : "Cambiar a vista oscura"}
-            aria-label={esOscuro ? "Cambiar a vista clara" : "Cambiar a vista oscura"}
-            aria-pressed={esOscuro}
-          >
-            {esOscuro ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-          </Button>
           <Button
             variant="outline"
             size="icon"
@@ -5819,22 +5788,37 @@ export function ReservasView() {
           {loading && (
             <div className="absolute inset-0 z-30 bg-background/50 backdrop-blur-[1px]" />
           )}
-          {/* Toggle pequeño dentro del lienzo: alterna entre vista mapa y vista listado (común a todas las empresas).
-             Estilo y posición igualados al botón de configuración del header para quedar visualmente justo debajo. */}
-          <Button
-            variant="outline"
-            size="icon"
-            className="absolute right-3 top-3 z-20 h-8 w-8 bg-background/90 backdrop-blur"
-            onClick={() => setVistaPlano((v) => (v === "mapa" ? "listado" : "mapa"))}
-            title={vistaPlano === "mapa" ? "Ver zonas en listado" : "Ver mapa de la sala"}
-            aria-label={vistaPlano === "mapa" ? "Ver zonas en listado" : "Ver mapa de la sala"}
-          >
-            {vistaPlano === "mapa" ? (
-              <ListIcon className="h-4 w-4" />
-            ) : (
-              <MapIcon className="h-4 w-4" />
-            )}
-          </Button>
+          {/* Los dos mandos de CÓMO SE VE el plano, juntos en su esquina:
+              mapa/listado y claro/oscuro. El tema estaba arriba entre los
+              ajustes del módulo, pero no configura nada —solo cambia lo que se
+              ve— y allí ocupaba sitio en una barra que no daba más de sí. */}
+          <div className="absolute right-3 top-3 z-20 flex items-center gap-1.5">
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-8 w-8 bg-background/90 backdrop-blur"
+              onClick={() => setVistaPlano((v) => (v === "mapa" ? "listado" : "mapa"))}
+              title={vistaPlano === "mapa" ? "Ver zonas en listado" : "Ver mapa de la sala"}
+              aria-label={vistaPlano === "mapa" ? "Ver zonas en listado" : "Ver mapa de la sala"}
+            >
+              {vistaPlano === "mapa" ? (
+                <ListIcon className="h-4 w-4" />
+              ) : (
+                <MapIcon className="h-4 w-4" />
+              )}
+            </Button>
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-8 w-8 bg-background/90 backdrop-blur"
+              onClick={alternarTema}
+              title={esOscuro ? "Cambiar a vista clara" : "Cambiar a vista oscura"}
+              aria-label={esOscuro ? "Cambiar a vista clara" : "Cambiar a vista oscura"}
+              aria-pressed={esOscuro}
+            >
+              {esOscuro ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+            </Button>
+          </div>
           {salasLocal.length >= 2 && siguienteSala && (
             <button
               type="button"
