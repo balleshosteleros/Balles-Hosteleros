@@ -4,6 +4,7 @@ import { getAppContext } from "@/lib/supabase/get-context";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { ingerirVentasAgoraDia } from "@/features/logistica/services/agora-ventas-ingesta";
 import { getAgoraCredenciales } from "@/features/logistica/services/agora-credenciales";
+import { descontarDiaSiCorte } from "@/features/logistica/services/agora-descuento-dia";
 
 // "Tripas" de la migración de Ágora: estado, log de sincronizaciones y facturas crudas. PRP-057.
 
@@ -156,13 +157,18 @@ export async function sincronizarDiaAgora(
       return { ok: false, error: "La empresa activa no tiene Ágora configurado. Ve a Ajustes → Integraciones." };
     }
     const r = await ingerirVentasAgoraDia(admin, empresaId, dia, conexion);
+    // Mismo camino que el cron: la ingesta borra y recrea las líneas del día con ids
+    // NUEVOS, así que hay que revertir el kardex antes de volver a descontar. Sin esto,
+    // el reproceso manual dejaría movimientos huérfanos y duplicaría el descuento.
+    // Hoy es inerte (sin `empresas.stock_descuento_desde` no toca nada).
+    const stock = await descontarDiaSiCorte(admin, empresaId, dia);
     await admin.from("agora_sync_log").insert({
       empresa_id: empresaId,
       status: "ok",
       total_records: r.facturas,
       ok_records: r.facturas,
       error_records: 0,
-      sales_data: { dia, facturas: r.facturas, lineas: r.lineas, lineas_sin_producto: r.sinProducto, manual: true },
+      sales_data: { dia, facturas: r.facturas, lineas: r.lineas, lineas_sin_producto: r.sinProducto, manual: true, stock },
     });
     return { ok: true, facturas: r.facturas, lineas: r.lineas, sinProducto: r.sinProducto };
   } catch (err) {
