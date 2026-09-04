@@ -262,6 +262,7 @@ export function ClientesView() {
   const acceso = useCallback(
     (c: Cliente, campo: string): unknown => {
       if (campo === "clasificacion") return clasifDe(c);
+      if (campo === "reservas") return extraDe(c.id).historico.length;
       if (campo === "visitas") return extraDe(c.id).visitas;
       if (campo === "ultimaVisita") return extraDe(c.id).ultimaVisita ?? "";
       // Nombre completo: la columna pinta nombre + apellidos, así que filtrar
@@ -412,6 +413,7 @@ export function ClientesView() {
     { campo: "etiquetas", label: "Etiquetas" },
     { campo: "proximas", label: "Próximas reservas" },
     { campo: "resenas", label: "Nota media" },
+    { campo: "reservas", label: "Reservas" },
     { campo: "visitas", label: "Visitas" },
     { campo: "ultimaVisita", label: "Última visita" },
     { campo: "observaciones", label: "Observaciones" },
@@ -623,6 +625,26 @@ export function ClientesView() {
           </td>
         );
       },
+    },
+    reservas: {
+      th: (
+        <TableColumnHeader
+          key="reservas"
+          label="Reservas"
+          campo="reservas"
+          filtroTipo="numero"
+          filtros={filtros}
+          onFiltrosChange={setFiltros}
+          ordenable
+          orden={orden}
+          onOrdenChange={setOrden}
+        />
+      ),
+      // Todas sus reservas, sin filtrar por estado ni por fecha: es el total
+      // de veces que ha reservado, venga o no.
+      td: (c) => (
+        <td key="reservas" className="p-3">{extraDe(c.id).historico.length}</td>
+      ),
     },
     visitas: {
       th: (
@@ -948,6 +970,18 @@ export function ClientesView() {
                   no campos que se guarden: por eso se muestran, no se editan.
                 */}
                 <div className="grid grid-cols-2 gap-3">
+                  {/*
+                    Reservas: TODAS las que ha hecho, sea cual sea su estado
+                    (futuras, canceladas, no-show incluidas). Es el dato que
+                    responde "¿cuántas veces ha reservado?", distinto de las
+                    visitas, que solo cuentan las que acabó cumpliendo. Sin él,
+                    una ficha recién creada con dos reservas para esta noche
+                    salía con un 0 que parecía un fallo.
+                  */}
+                  <div>
+                    <Label className="text-muted-foreground">Reservas</Label>
+                    <p>{fichaExtra.historico.length}</p>
+                  </div>
                   <div>
                     {/*
                       "Ya vino": las reservas PASADAS a las que asistió. El
