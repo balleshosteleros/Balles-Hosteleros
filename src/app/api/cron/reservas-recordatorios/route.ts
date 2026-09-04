@@ -270,13 +270,23 @@ export async function GET(request: Request) {
     // para todas sus reservas por igual.
     if (c.valoracion_email_activo) {
       try {
+        // Misma hora que la reconfirmación y por el mismo motivo: la fija la
+        // EMPRESA en su hora local, no el reloj del servidor. Sin esto, con el
+        // cron pasando cada hora, la petición salía a cualquier hora — a las
+        // 3 de la madrugada al que cenó anteayer.
+        const horaEnvioV = horaEnvioDeConfig(c.reconfirmacion_hora_envio);
+        if (minutosDiaEnZona(ahora, tz) < horaEnvioV) {
+          continue;
+        }
+
         const horasDespues = c.valoracion_email_horas_despues ?? 24;
         const hastaV = new Date(ahora.getTime() - horasDespues * 3600 * 1000);
-        // Ventana de 24 h hacia atrás, no de 1 h: este cron corre UNA VEZ AL
-        // DÍA (vercel.json), así que una ventana de una hora dejaría fuera el
-        // 96% de las reservas y no se les pediría valoración nunca. Reenviar
-        // no es riesgo: `email_valoracion_at` garantiza un solo correo por
-        // reserva, y el filtro `is(auditCol, null)` descarta las ya avisadas.
+        // Ventana de 24 h hacia atrás, no de 1 h: el envío ocurre UNA VEZ AL
+        // DÍA (a la hora de la empresa), así que una ventana de una hora
+        // dejaría fuera el 96% de las reservas y no se les pediría valoración
+        // nunca. Reenviar no es riesgo: `email_valoracion_at` garantiza un solo
+        // correo por reserva, y el filtro `is(auditCol, null)` descarta las ya
+        // avisadas.
         const desdeV = new Date(hastaV.getTime() - 24 * 60 * 60 * 1000);
         const pendientesV = await buscarPendientes(supabase, {
           empresaId: c.empresa_id,
