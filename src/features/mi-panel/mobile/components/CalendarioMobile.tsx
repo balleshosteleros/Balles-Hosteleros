@@ -42,19 +42,7 @@ function ymd(d: Date): string {
   return `${y}-${m}-${dd}`;
 }
 
-// Mismo horario provisional que la vista de ordenador, hasta que el módulo de
-// cuadrantes alimente esta pantalla con los turnos reales.
-const HORARIO_PROVISIONAL: Record<number, { tipo: "trabajo" | "libre"; horario: string }> = {
-  0: { tipo: "trabajo", horario: "10:00–16:00" },
-  1: { tipo: "trabajo", horario: "10:00–16:00" },
-  2: { tipo: "libre", horario: "—" },
-  3: { tipo: "trabajo", horario: "17:00–23:00" },
-  4: { tipo: "trabajo", horario: "13:00–23:30" },
-  5: { tipo: "trabajo", horario: "12:00–23:30" },
-  6: { tipo: "libre", horario: "—" },
-};
-
-type EstadoDia = "vacaciones" | "baja" | "permiso" | "hoy" | "trabajado" | "trabajar" | "libre";
+type EstadoDia = "vacaciones" | "baja" | "permiso" | "hoy" | "trabajado" | "trabajar" | "libre" | "sinDato";
 
 interface DiaInfo {
   estado: EstadoDia;
@@ -66,20 +54,29 @@ function getDiaInfo(fecha: string, info: DiaCalendario | undefined, todayKey: st
   const isToday = fecha === todayKey;
   const isPast = fecha < todayKey;
   const isFuture = fecha > todayKey;
-  const [yy, mm, dd] = fecha.split("-").map(Number);
-  const idx = indexLunes(new Date(yy, mm - 1, dd));
-  const prov = HORARIO_PROVISIONAL[idx];
 
   if (info?.ausencia === "vacaciones") return { estado: "vacaciones", badgeText: "Vacaciones", horario: "—" };
   if (info?.ausencia === "baja_medica") return { estado: "baja", badgeText: "Baja médica", horario: "—" };
   if (info?.ausencia === "permiso") return { estado: "permiso", badgeText: "Permiso", horario: "—" };
 
-  const horarioFichado = info?.fichado ? `${formatHorasDecimal(info.horasFichaje)} fichadas` : prov.horario;
+  // Turno REAL del empleado ese día (turnos + patrones), calculado en servidor.
+  // Mientras no llega, no se inventa nada: el día se queda sin horario en vez
+  // de enseñar uno falso.
+  const previsto = info?.horarioPrevisto ?? null;
+  const trabajaPrevisto = previsto?.trabaja ?? false;
+  const textoPrevisto = previsto?.texto ? previsto.texto : "—";
+
+  const horarioFichado = info?.fichado
+    ? `${formatHorasDecimal(info.horasFichaje)} fichadas`
+    : textoPrevisto;
 
   if (isToday) return { estado: "hoy", badgeText: "Hoy", horario: horarioFichado };
-  if (info?.fichado || (prov.tipo === "trabajo" && isPast)) return { estado: "trabajado", badgeText: "Trabajado", horario: horarioFichado };
-  if (prov.tipo === "trabajo" && isFuture) return { estado: "trabajar", badgeText: "Trabajar", horario: prov.horario };
-  return { estado: "libre", badgeText: "Libre", horario: prov.horario };
+  if (info?.fichado || (trabajaPrevisto && isPast)) return { estado: "trabajado", badgeText: "Trabajado", horario: horarioFichado };
+  if (trabajaPrevisto && isFuture) return { estado: "trabajar", badgeText: "Trabajar", horario: textoPrevisto };
+  // Sin turno cargado no se afirma que libras: un cuadrante aún sin publicar
+  // no es un día libre, y pintarlo igual que uno sería inventárselo.
+  if (!previsto) return { estado: "sinDato", badgeText: "Sin turno", horario: "Aún sin publicar" };
+  return { estado: "libre", badgeText: "Libre", horario: "—" };
 }
 
 /**
@@ -94,6 +91,7 @@ const ESTILOS: Record<EstadoDia, { celda: string; numero: string; punto: string;
   trabajado:  { celda: "bg-emerald-50 border-emerald-200", numero: "text-emerald-900", punto: "bg-emerald-500", texto: "text-emerald-700" },
   trabajar:   { celda: "bg-orange-50 border-orange-200",   numero: "text-orange-900",  punto: "bg-orange-500",  texto: "text-orange-700" },
   libre:      { celda: "bg-slate-50 border-slate-200",     numero: "text-slate-500",   punto: "bg-slate-400",   texto: "text-slate-500" },
+  sinDato:    { celda: "bg-white border-dashed border-slate-300", numero: "text-slate-400", punto: "bg-slate-300", texto: "text-slate-400" },
 };
 
 const LEYENDA: { estado: EstadoDia; texto: string }[] = [
@@ -104,6 +102,7 @@ const LEYENDA: { estado: EstadoDia; texto: string }[] = [
   { estado: "vacaciones", texto: "Vacaciones" },
   { estado: "baja", texto: "Baja médica" },
   { estado: "permiso", texto: "Permiso" },
+  { estado: "sinDato", texto: "Sin turno" },
 ];
 
 export function CalendarioMobile() {
@@ -285,12 +284,9 @@ export function CalendarioMobile() {
           </div>
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-sky-500" />
-            Víspera
+            Víspera festivo
           </div>
         </div>
-        <p className="mt-3 border-t border-border/60 pt-2 text-xs italic text-muted-foreground">
-          Horario provisional
-        </p>
       </div>
     </div>
   );

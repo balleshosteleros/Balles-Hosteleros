@@ -755,10 +755,18 @@ async function evaluarEntradaFichaje(
           .select("*")
           .eq("empresa_id", empresaId)
           .maybeSingle();
-        const permitirAntes = cfg ? !!cfg.permitir_antes : true;
-        const permitirDespues = cfg ? !!cfg.permitir_despues : true;
-        const margenAntes = permitirAntes ? ((cfg?.margen_antes_min as number) ?? 15) : 0;
-        const margenDespues = permitirDespues ? ((cfg?.margen_despues_min as number) ?? 15) : 0;
+        // Márgenes de cortesía: SIEMPRE los de la empresa. Si no tiene
+        // configuración, el margen es 0 — no se inventa uno.
+        //
+        // Antes, a falta de fila se aplicaba `?? 15`: HABANA no tenía
+        // configuración y el sistema dejaba fichar hasta 15 minutos tarde
+        // cuando en la empresa la cortesía pactada era de 5. Un margen que
+        // nadie configuró y que no se veía por ningún sitio: se coló un
+        // fichaje a las 09:10 de un turno que empezaba a las 09:00.
+        const permitirAntes = cfg ? !!cfg.permitir_antes : false;
+        const permitirDespues = cfg ? !!cfg.permitir_despues : false;
+        const margenAntes = permitirAntes ? ((cfg?.margen_antes_min as number) ?? 0) : 0;
+        const margenDespues = permitirDespues ? ((cfg?.margen_despues_min as number) ?? 0) : 0;
         const redondearAntes = cfg ? !!cfg.redondear_antes : true;
         const redondearDespues = cfg ? !!cfg.redondear_despues : false;
 
