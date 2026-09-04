@@ -33,6 +33,7 @@ export async function getClienteInsights(input: {
     otrosLocalesGrupo: 0,
     noShows: 0,
     canceladas: 0,
+    reservasTotal: 0,
   };
 
   try {
@@ -126,6 +127,9 @@ export async function getClienteInsights(input: {
     // o se le pide garantía.
     let noShows = 0;
     let canceladas = 0;
+    // Total de reservas: sin filtrar por estado ni por fecha. Responde "cuántas
+    // veces ha reservado", que no es lo mismo que cuántas veces ha venido.
+    let reservasTotal = 0;
     // Se usa el `clienteId` RESUELTO, no el de entrada: cuando la reserva se
     // identifica por teléfono o email (sin ficha enlazada todavía), el de
     // entrada viene vacío y el historial de plantones salía siempre a cero,
@@ -147,6 +151,13 @@ export async function getClienteInsights(input: {
       ]);
       noShows = resNo.count ?? 0;
       canceladas = resCan.count ?? 0;
+
+      const { count: totalCount } = await supabase
+        .from("reservas")
+        .select("id", { count: "exact", head: true })
+        .eq("empresa_id", empresaId)
+        .eq("cliente_id", clienteId);
+      reservasTotal = totalCount ?? 0;
     }
 
     return {
@@ -157,6 +168,7 @@ export async function getClienteInsights(input: {
       otrosLocalesGrupo,
       noShows,
       canceladas,
+      reservasTotal,
     };
   } catch (err) {
     console.error("[cliente-insights] get:", err);

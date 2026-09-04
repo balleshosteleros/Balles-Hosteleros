@@ -5018,6 +5018,14 @@ export function ReservasView() {
       toast.error("El nombre es obligatorio.");
       return;
     }
+    // Los apellidos también: una ficha con solo el nombre de pila no sirve para
+    // encontrar a nadie en una lista de cientos de clientes, y es justo lo que
+    // llenó la base heredada de "Maria" y "Jose" sueltos, imposibles de
+    // distinguir. Se exige aquí y en el servidor, igual que al dar de alta.
+    if (!clienteEdit.apellidos.trim()) {
+      toast.error("Los apellidos son obligatorios.");
+      return;
+    }
     // Antes de tocar nada: si los datos difieren de los que tenía la ficha, se
     // pregunta. La respuesta es binaria — se cambia la ficha o se restaura.
     const original = datosClienteOriginales;
@@ -6244,6 +6252,7 @@ export function ReservasView() {
                 <RevisionVinculacion
                   key={`${selectedReserva.id}-${actividadVersion}`}
                   reservaId={selectedReserva.id}
+                  pendiente={selectedReserva.vinculacionPendiente}
                   onResuelto={() => {
                     setActividadVersion((v) => v + 1);
                     void loadReservas(fecha);
@@ -6648,8 +6657,12 @@ export function ReservasView() {
 
                 {/* Fiabilidad de un vistazo: si falla mucho, se decide aquí si
                     se le guarda la mesa. */}
-                <div className="grid grid-cols-3 gap-2 rounded-md border bg-muted/30 p-2.5">
+                <div className="grid grid-cols-4 gap-2 rounded-md border bg-muted/30 p-2.5">
                   {[
+                    // "Reservas" va primero: es el total del que salen las
+                    // demás cifras. Visitas son las que cumplió, y no-shows y
+                    // canceladas, las que no.
+                    { valor: selectedInsights?.reservasTotal ?? 0, label: "Reservas" },
                     { valor: selectedInsights?.visitasTotal ?? 0, label: "Visitas" },
                     { valor: selectedInsights?.noShows ?? 0, label: "No shows" },
                     { valor: selectedInsights?.canceladas ?? 0, label: "Canceladas" },

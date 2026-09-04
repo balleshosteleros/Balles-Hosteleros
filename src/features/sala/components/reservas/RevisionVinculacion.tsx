@@ -16,6 +16,14 @@ interface Props {
   reservaId: string;
   /** Para que la vista de la reserva se recargue tras resolver. */
   onResuelto?: () => void;
+  /**
+   * La reserva viene marcada como pendiente de revisar. Solo sirve para saber
+   * si hay que reservar el hueco mientras se cargan los datos: sin esto, o no
+   * se pinta nada (y abrir la reserva no explica el triángulo de la fila), o
+   * se pinta un "comprobando" en todas las reservas, que no tienen nada que
+   * revisar. Lo que se acaba enseñando lo decide siempre el servidor.
+   */
+  pendiente?: boolean;
 }
 
 /** Nombre del campo tal y como se lee en sala. */
@@ -34,7 +42,7 @@ const CAMPO_LABEL: Record<string, string> = {
  * el sistema no puede saber si el móvil compartido es de la misma persona o de
  * su pareja.
  */
-export function RevisionVinculacion({ reservaId, onResuelto }: Props) {
+export function RevisionVinculacion({ reservaId, onResuelto, pendiente }: Props) {
   const [datos, setDatos] = useState<VinculacionPendiente | null>(null);
   const [cargando, setCargando] = useState(true);
   const [enviando, startTransition] = useTransition();
@@ -53,7 +61,19 @@ export function RevisionVinculacion({ reservaId, onResuelto }: Props) {
     };
   }, [reservaId]);
 
-  if (cargando || !datos) return null;
+  // Mientras carga se reserva el sitio con un aviso neutro, en vez de no
+  // pintar nada: la fila lleva el triángulo de "datos sin revisar", y abrir la
+  // reserva y no ver nada donde debería estar la explicación hace pensar que
+  // el aviso es un fallo. Ocupa el mismo hueco que ocupará el recuadro.
+  if (cargando) {
+    if (!pendiente) return null;
+    return (
+      <div className="rounded-lg border border-dashed border-amber-300 bg-amber-50/50 p-4 text-sm text-amber-800 dark:border-amber-800/60 dark:bg-amber-950/20 dark:text-amber-300/90">
+        Comprobando los datos del cliente…
+      </div>
+    );
+  }
+  if (!datos) return null;
 
   // El dato que provocó el enganche NO viaja en `declarados` (ahí sólo van los
   // que difieren), así que la tabla se lo comía justo cuando es el motivo del

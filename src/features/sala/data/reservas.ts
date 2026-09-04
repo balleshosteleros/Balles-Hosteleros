@@ -311,6 +311,13 @@ export interface ClienteInsights {
   noShows: number;
   /** Reservas que canceló él mismo. */
   canceladas: number;
+  /**
+   * TODAS las reservas que ha hecho en esta empresa, sea cual sea su estado y
+   * aunque aún no haya venido. Distinto de `visitasTotal`, que solo cuenta las
+   * que acabó cumpliendo: un cliente que reserva mucho y viene poco se lee
+   * justamente en la diferencia entre las dos cifras.
+   */
+  reservasTotal: number;
 }
 
 /** Convención para detectar reservas creadas por un Channel Manager. */

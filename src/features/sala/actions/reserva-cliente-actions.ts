@@ -64,6 +64,9 @@ export async function guardarDatosClienteReserva(
     const nombre = normalizarNombre(datos.nombre);
     if (!nombre) return { ok: false, error: "El nombre es obligatorio." };
     const apellidos = normalizarNombreOrNull(datos.apellidos);
+    // Obligatorios, igual que en el alta: sin apellidos la ficha no identifica
+    // a nadie. Se comprueba en SERVIDOR porque el formulario se puede saltar.
+    if (!apellidos) return { ok: false, error: "Los apellidos son obligatorios." };
     const email = datos.email.trim() || null;
     // El teléfono va entero, con el prefijo dentro: es un solo campo, aquí y
     // en la ficha del cliente. Se valida en el SERVIDOR, no solo en el
