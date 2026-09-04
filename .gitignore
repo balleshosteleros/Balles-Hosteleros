@@ -120,3 +120,6 @@ tmp/
 .tsc-check.log
 .dev-daemon/*.pid
 .dev-daemon/migracion-por-horas.txt
+
+# Credenciales del relay FTP (en claro — NUNCA versionar)
+ftp-relay/CREDENCIALES.local.md

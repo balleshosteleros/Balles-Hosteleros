@@ -92,7 +92,7 @@ const BADGE_AVISO: ReservaEmailTipo[] = [
 /** Titular grande del correo: lo primero que se lee. */
 const HEADLINE_POR_TIPO: Record<ReservaEmailTipo, string> = {
   CONFIRMADA: "Reserva confirmada",
-  RECONFIRMADA: "Reserva reconfirmada",
+  RECONFIRMADA: "¿Nos confirmas tu reserva?",
   NO_RECONFIRMADA: "Tu reserva está pendiente de confirmar",
   LISTA_ESPERA: "Estás en lista de espera",
   LIBERADA: "Tu reserva se ha cerrado",
@@ -114,8 +114,8 @@ const HEADLINE_POR_TIPO: Record<ReservaEmailTipo, string> = {
  */
 const BADGE_POR_TIPO: Record<ReservaEmailTipo, string> = {
   CONFIRMADA: "Reserva confirmada",
-  RECONFIRMADA: "Reconfirmada",
-  NO_RECONFIRMADA: "Pendiente de confirmar",
+  RECONFIRMADA: "Confirma tu reserva",
+  NO_RECONFIRMADA: "Sin confirmar",
   LISTA_ESPERA: "Lista de espera",
   LIBERADA: "Reserva cerrada",
   TERMINANDO: "Terminando",
@@ -232,7 +232,7 @@ export async function enviarReservaEmail(
   const { data: reservaData, error: errR } = await admin
     .from("reservas")
     .select(
-      "empresa_id, cliente_nombre, cliente_apellidos, cliente_email, fecha, hora, personas, zona, grupo_zona_id, notas, estado, tipo_categoria, tiene_garantia, garantia_importe, tiene_cancelacion, cancelacion_importe, importe_pagado, codigo, codigo_id, cancelacion_token, garantia_token, garantia_limite_at, valoracion_token, vinculacion_estado, vinculacion_motivo, datos_declarados, email_confirmacion_at, email_reconfirmacion_at, email_no_reconfirmada_at, email_lista_espera_at, email_liberada_at, email_terminando_at, email_no_show_at, email_politica_cancelacion_at, email_politica_garantia_at, email_recordatorio_at, email_cancelacion_at, email_valoracion_at, email_ticket_reserva_at, es_ticket, ticket_codigo, ticket_producto_id, ticket_unidades, ticket_importe, grupos_zonas(nombre)",
+      "empresa_id, cliente_nombre, cliente_apellidos, cliente_email, fecha, hora, personas, zona, grupo_zona_id, notas, estado, tipo_categoria, tiene_garantia, garantia_importe, tiene_cancelacion, cancelacion_importe, importe_pagado, codigo, codigo_id, cancelacion_token, reconfirmacion_token, garantia_token, garantia_limite_at, valoracion_token, vinculacion_estado, vinculacion_motivo, datos_declarados, email_confirmacion_at, email_reconfirmacion_at, email_no_reconfirmada_at, email_lista_espera_at, email_liberada_at, email_terminando_at, email_no_show_at, email_politica_cancelacion_at, email_politica_garantia_at, email_recordatorio_at, email_cancelacion_at, email_valoracion_at, email_ticket_reserva_at, es_ticket, ticket_codigo, ticket_producto_id, ticket_unidades, ticket_importe, grupos_zonas(nombre)",
     )
     .eq("id", reservaId)
     .maybeSingle();
@@ -285,6 +285,10 @@ export async function enviarReservaEmail(
   // se canceló, no se presentó, se cerró tras la visita, o se está pidiendo
   // opinión de algo que ya ocurrió.
   const SIN_ENLACE_CANCELAR: ReservaEmailTipo[] = [
+    // La reconfirmación ya lleva su propio "No podré ir", que cancela igual.
+    // Dejar además el enlace del pie daba dos caminos para lo mismo en el
+    // mismo correo, y el del pie se saltaba la pregunta de confirmación.
+    "RECONFIRMADA",
     "CANCELADA",
     "NO_SHOW",
     "LIBERADA",
@@ -298,6 +302,23 @@ export async function enviarReservaEmail(
     tokenGarantia && (tipo === "GARANTIA_SOLICITUD" || tipo === "GARANTIA_PENDIENTE")
       ? `${getSiteUrl()}/reserva/tarjeta/${tokenGarantia}`
       : null;
+
+  // Enlace de reconfirmación: la ACCIÓN que se le pide al cliente en este
+  // correo. Sin él, el aviso le daba por confirmada una visita que nunca había
+  // confirmado, y el estado RECONFIRMADA no lo activaba nadie.
+  let urlReconfirmar: string | null = null;
+  if (tipo === "RECONFIRMADA") {
+    let token = (reservaData.reconfirmacion_token as string | null) ?? null;
+    if (!token) {
+      token = crypto.randomUUID().replace(/-/g, "");
+      const { error: errTok } = await admin
+        .from("reservas")
+        .update({ reconfirmacion_token: token })
+        .eq("id", reservaId);
+      if (errTok) return { ok: false, error: errTok.message };
+    }
+    urlReconfirmar = `${getSiteUrl()}/reconfirmar/${token}`;
+  }
 
   const tokenCancelar = (reservaData.cancelacion_token as string | null) ?? null;
   const urlCancelar =
@@ -633,6 +654,7 @@ export async function enviarReservaEmail(
     cuponCanjeadoBloque,
     ticketBloque,
     urlCancelar,
+    urlReconfirmar,
     urlTarjeta,
     urlValoracion,
   });
@@ -653,6 +675,7 @@ export async function enviarReservaEmail(
     cuponCanjeadoBloque,
     ticketBloque,
     urlCancelar,
+    urlReconfirmar,
     urlTarjeta,
     urlValoracion,
   });
@@ -743,6 +766,7 @@ interface RenderInput {
    * Solo en correos de reserva viva; en CANCELACION no tiene sentido.
    */
   urlCancelar: string | null;
+  urlReconfirmar: string | null;
   /** Enlace para poner la tarjeta (PRP-082). Solo en los correos que la piden. */
   urlTarjeta?: string | null;
   /**
@@ -838,6 +862,25 @@ function renderHtml(input: RenderInput): string {
     ? `<div style="margin:22px 0 4px;text-align:center;">
         <a href="${input.urlTarjeta}" style="display:inline-block;background:#0f172a;color:#ffffff;text-decoration:none;font-weight:600;font-size:15px;padding:13px 28px;border-radius:10px;">
           Introducir tarjeta
+        </a>
+      </div>`
+    : "";
+
+  // Los DOS botones de la reconfirmación. Es la única acción de este correo, así
+  // que van arriba y como botones de verdad, no como enlace escondido en el pie.
+  //
+  // "No podré ir" pesa visualmente menos que "Sí, confirmo" (borde en vez de
+  // relleno) porque son acciones de peso distinto, no dos opciones simétricas:
+  // el sí es lo que el restaurante espera, y el no es la salida honesta para
+  // quien ya sabe que no viene. Las dos llevan a una página que pide confirmar
+  // antes de tocar nada — un clic accidental desde el correo no cancela una mesa.
+  const bloqueReconfirmar = input.urlReconfirmar
+    ? `<div style="margin:22px 0 4px;text-align:center;">
+        <a href="${input.urlReconfirmar}?r=si" style="display:inline-block;background:#0f172a;color:#ffffff;text-decoration:none;font-weight:600;font-size:15px;padding:13px 28px;border-radius:10px;margin:0 4px 8px;">
+          Sí, confirmo que voy
+        </a>
+        <a href="${input.urlReconfirmar}?r=no" style="display:inline-block;background:#ffffff;color:#475569;text-decoration:none;font-weight:600;font-size:15px;padding:12px 26px;border:1px solid #cbd5e1;border-radius:10px;margin:0 4px 8px;">
+          No podré ir
         </a>
       </div>`
     : "";
@@ -998,6 +1041,7 @@ function renderHtml(input: RenderInput): string {
       ${bloqueCuponCanjeado}
       ${bloqueTicket}
       ${bloqueTarjeta}
+      ${bloqueReconfirmar}
       ${bloqueCancelar}
     `,
   });
@@ -1058,6 +1102,14 @@ function renderText(
         : `¿No puedes venir? Cancela tu reserva aquí: ${input.urlCancelar}`,
     );
   }
+  if (input.urlReconfirmar) {
+    lineas.push(
+      ``,
+      `¿Nos confirmas que vienes?`,
+      `  Sí, confirmo que voy: ${input.urlReconfirmar}?r=si`,
+      `  No podré ir:          ${input.urlReconfirmar}?r=no`,
+    );
+  }
   if (input.urlValoracion) {
     lineas.push(
       ``,
@@ -1105,7 +1157,10 @@ function subtitulo(t: ReservaEmailTipo): string {
     case "CONFIRMADA":
       return "Gracias por reservar con nosotros.";
     case "RECONFIRMADA":
-      return "Nos has confirmado que vienes.";
+      // PIDE, no da por hecho: este correo sale ANTES de que el cliente toque
+      // nada. Decirle "nos has confirmado que vienes" afirmaba algo que no
+      // había pasado, y encima el correo no llevaba con qué hacerlo.
+      return "¿Nos confirmas que vienes?";
     case "NO_SHOW":
       return "No pudimos darte la mesa que teníamos guardada.";
     case "CANCELADA":
@@ -1116,7 +1171,11 @@ function subtitulo(t: ReservaEmailTipo): string {
     // No piden nada al cliente: solo le dicen que su reserva ha cambiado de
     // estado. Todos comparten la misma frase a propósito, para que se lean como
     // lo que son —un aviso de seguimiento— y no como una instrucción.
+    // Que se entienda POR QUÉ recibe este correo: "el estado ha cambiado" no le
+    // dice al cliente lo único que importa, que su mesa ya no está guardada.
     case "NO_RECONFIRMADA":
+      return "No hemos podido confirmar tu reserva.";
+
     case "LISTA_ESPERA":
     case "LIBERADA":
     case "TERMINANDO":
@@ -1316,6 +1375,9 @@ export function previewReservaEmail(input: PreviewInput): {
     // Mismo criterio que en el envío real: el enlace de gestión solo aparece
     // mientras la reserva sigue viva.
     urlCancelar: [
+      // Mismos tipos que en el envío real: la reconfirmación lleva su propio
+      // "No podré ir", así que aquí tampoco se pinta el enlace del pie.
+      "RECONFIRMADA",
       "CANCELADA",
       "NO_SHOW",
       "LIBERADA",
@@ -1325,6 +1387,10 @@ export function previewReservaEmail(input: PreviewInput): {
     ].includes(input.tipo)
       ? null
       : `${getSiteUrl()}/cancelar/ejemplo`,
+    urlReconfirmar:
+      input.tipo === "RECONFIRMADA"
+        ? `${getSiteUrl()}/reconfirmar/ejemplo`
+        : null,
     urlValoracion:
       input.tipo === "SOLICITUD_VALORACION"
         ? `${getSiteUrl()}/r/ejemplo`
