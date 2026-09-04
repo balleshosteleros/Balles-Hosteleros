@@ -33,7 +33,14 @@ const inputSchema = z.object({
 export type ComprarTicketInput = z.input<typeof inputSchema>;
 
 export type ComprarTicketResult =
-  | { ok: true; modo: "pago"; urlPago: string; compraId: string }
+  | {
+      ok: true;
+      modo: "pago";
+      /** Token del widget: la tarjeta se teclea en NUESTRA pantalla. */
+      tokenPago: string;
+      entorno: "produccion" | "pruebas";
+      compraId: string;
+    }
   | { ok: true; modo: "gratis"; codigo: string; compraId: string }
   | { ok: false; error: string };
 
@@ -219,13 +226,16 @@ export async function comprarTicketAction(
     })
     .eq("id", compraId);
 
-  const urlPago = orden.orden.checkout_url;
-  if (!urlPago) {
+  // El TOKEN, no la página alojada de Revolut: el formulario de tarjeta se
+  // monta dentro de nuestra pantalla, igual que en las políticas de reserva.
+  // Su página traía el "Pagar X €", los botones de Revolut Pay y su publicidad.
+  const tokenPago = orden.orden.token;
+  if (!tokenPago) {
     await liberarStock();
     await admin.from("reserva_ticket_compras")
       .update({ estado: "fallida" }).eq("id", compraId);
     return { ok: false, error: "Revolut no devolvió una página de pago." };
   }
 
-  return { ok: true, modo: "pago", urlPago, compraId };
+  return { ok: true, modo: "pago", tokenPago, entorno: cred.entorno, compraId };
 }

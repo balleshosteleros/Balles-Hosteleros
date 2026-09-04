@@ -7,7 +7,7 @@
  * La reserva la hace después, cuando quiera, con el código que recibe.
  */
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -75,6 +75,18 @@ export function TiendaTicketView({
   // Arranca en 2 porque lo normal es reservar para dos; con paquetes la unidad
   // ya son dos personas, así que el valor de partida es 1 (ver efecto abajo).
   const [unidades, setUnidades] = useState(2);
+  /**
+   * El formulario de tarjeta se monta DENTRO de esta pantalla, igual que en
+   * las políticas de reserva. La página alojada de Revolut traía su "Pagar
+   * X €", los botones de Revolut Pay y su publicidad, y sacaba al cliente de
+   * la web del restaurante en mitad de la compra.
+   */
+  const contenedorTarjeta = useRef<HTMLDivElement | null>(null);
+  const campoRef = useRef<{
+    submit: (meta?: Record<string, unknown>) => void;
+    destroy: () => void;
+  } | null>(null);
+  const [campoListo, setCampoListo] = useState(false);
   const [nombre, setNombre] = useState("");
   const [email, setEmail] = useState("");
   const [telefono, setTelefono] = useState("");
@@ -126,14 +138,57 @@ export function TiendaTicketView({
     }
 
     if (r.modo === "pago") {
-      // Se sale del sitio hacia la página de pago de Revolut.
-      window.location.href = r.urlPago;
+      try {
+        const { default: RevolutCheckout } = await import("@revolut/checkout");
+        const instancia = await RevolutCheckout(
+          r.tokenPago,
+          r.entorno === "pruebas" ? "sandbox" : "prod",
+        );
+        const destino = contenedorTarjeta.current;
+        if (!destino) {
+          setError("No pudimos abrir el formulario. Recarga la página.");
+          setEnviando(false);
+          return;
+        }
+        campoRef.current = instancia.createCardField({
+          target: destino,
+          locale: "es",
+          hidePostcodeField: true,
+          email: email.trim(),
+          onSuccess() {
+            // Pagado: se le lleva a su código y sus instrucciones.
+            window.location.href = `/comprar/${empresaSlug}/gracias?compra=${r.compraId}`;
+          },
+          onValidation() {
+            setError(null);
+          },
+          onError(err: unknown) {
+            setError(
+              err instanceof Error
+                ? `No se pudo validar la tarjeta: ${err.message}`
+                : "No se pudo validar la tarjeta. Revisa los datos.",
+            );
+            setEnviando(false);
+          },
+        });
+        setCampoListo(true);
+      } catch {
+        setError("No pudimos abrir el formulario de tarjeta. Inténtalo de nuevo.");
+      }
+      setEnviando(false);
       return;
     }
 
     setCodigoGratis(r.codigo);
     setEnviando(false);
   }
+
+  useEffect(() => {
+    return () => {
+      campoRef.current?.destroy();
+      campoRef.current = null;
+    };
+  }, []);
 
   // ── Producto gratuito: el código se enseña al momento ──────────────
   if (codigoGratis) {
@@ -319,15 +374,35 @@ export function TiendaTicketView({
             <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>
           )}
 
-          <Button
-            onClick={comprar}
-            disabled={!valido || enviando}
-            className="h-11 w-full text-sm font-semibold"
-            style={{ background: acento, color: sobreAcento }}
-          >
-            {enviando && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            {producto.cobroModo === "gratis" ? "Conseguir código" : `Pagar ${euros(total)}`}
-          </Button>
+          {/* Campos de tarjeta de Revolut, dentro de nuestra pantalla. Vacío
+              hasta que el cliente pulsa el botón de arriba. */}
+          <div className={campoListo ? "rounded-xl border border-zinc-200 p-3" : "hidden"} ref={contenedorTarjeta} />
+
+          {campoListo ? (
+            <Button
+              onClick={() => {
+                setEnviando(true);
+                setError(null);
+                campoRef.current?.submit({ name: nombre.trim(), email: email.trim() });
+              }}
+              disabled={enviando}
+              className="h-11 w-full text-sm font-semibold"
+              style={{ background: acento, color: sobreAcento }}
+            >
+              {enviando && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Confirmar pago de {euros(total)}
+            </Button>
+          ) : (
+            <Button
+              onClick={comprar}
+              disabled={!valido || enviando}
+              className="h-11 w-full text-sm font-semibold"
+              style={{ background: acento, color: sobreAcento }}
+            >
+              {enviando && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {producto.cobroModo === "gratis" ? "Conseguir código" : `Pagar ${euros(total)}`}
+            </Button>
+          )}
 
           <p className="text-center text-[11px] text-zinc-500">
             {producto.cobroModo === "gratis"
