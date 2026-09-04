@@ -136,8 +136,6 @@ export async function GET(request: Request) {
   let recordatoriosErr = 0;
   let reconfirmacionesOk = 0;
   let reconfirmacionesErr = 0;
-  let noReconfirmadasOk = 0;
-  let noReconfirmadasErr = 0;
   let valoracionesOk = 0;
   let valoracionesErr = 0;
   let mensajesOk = 0;
@@ -240,69 +238,29 @@ export async function GET(request: Request) {
           const res = await enviarReservaEmail(r.id, "RECONFIRMADA", {
             actor: { origen: "AUTOMATICO" },
           });
-          if (res.ok) reconfirmacionesOk++;
-          else reconfirmacionesErr++;
+          if (res.ok) {
+            reconfirmacionesOk++;
+            // Pedida la reconfirmación, la reserva deja de ser una CONFIRMADA
+            // cualquiera: pasa a NO_RECONFIRMADA, que es "se le pidió y aún no
+            // ha contestado". Sin esto, en Sala se veían igual las que estaban
+            // esperando respuesta y las que ni se habían preguntado.
+            //
+            // Vuelve a CONFIRMADA nunca: o el cliente responde que sí
+            // (RECONFIRMADA), o dice que no (CANCELADA), o se queda así.
+            await supabase
+              .from("reservas")
+              .update({ estado: "NO_RECONFIRMADA", updated_at: new Date().toISOString() })
+              .eq("id", r.id)
+              // Solo si sigue CONFIRMADA: entre el envío y esto, Sala puede
+              // haberla sentado o cancelado y pisarlo sería peor.
+              .eq("estado", "CONFIRMADA");
+          } else reconfirmacionesErr++;
 
           if (await avisarPorMensajeria(r.id, "RECONFIRMACION")) mensajesOk++;
         }
       } catch (e) {
         reconfirmacionesErr++;
         console.error(`[cron reservas] reconfirmacion empresa ${c.empresa_id}:`, e);
-      }
-
-      // ── SIN RESPUESTA → NO RECONFIRMADA ─────────────────────────────────
-      // Va FUERA del filtro de la hora de envío, y a propósito: se le pidió
-      // reconfirmar y no contestó, así que acaba dejando de ser una CONFIRMADA
-      // cualquiera. Sala tiene que verlo como lo que es —"sin confirmar"— y no
-      // mezclado con quien sí respondió.
-      //
-      // Pero NO al dar su hora: se espera a que el día esté CERRADO. En pleno
-      // servicio nadie va cambiando estados, así que marcar a las 14:01 a un
-      // cliente de las 14:00 lo habría etiquetado de "no reconfirmado" con él
-      // sentado a la mesa. El estado real de esa reserva lo pone Sala (SENTADA,
-      // NO_SHOW…) durante el turno; esto solo recoge lo que quedó sin tocar.
-      //
-      // Solo toca reservas a las que SE LES PIDIÓ (email_reconfirmacion_at no
-      // nulo): marcar a quien nunca recibió el correo sería culparle de no
-      // responder algo que no se le preguntó.
-      //
-      // No manda correo: el aviso NO_RECONFIRMADA se envía desde Sala cuando
-      // una persona decide qué hacer con la mesa. Aquí solo se refleja el
-      // estado real.
-      try {
-        const ahoraISO = new Date().toISOString();
-        const hoyEmpresa = diaEnZona(ahora, tz);
-        const { data: sinRespuesta } = await supabase
-          .from("reservas")
-          .select("id, fecha, hora")
-          .eq("empresa_id", c.empresa_id)
-          .eq("estado", "CONFIRMADA")
-          .not("email_reconfirmacion_at", "is", null)
-          .lt("fecha", hoyEmpresa)
-          .limit(MAX_POR_TIRADA);
-
-        // Solo reservas de días YA CERRADOS: su fecha es anterior al día de
-        // hoy en la empresa. Una reserva de hoy nunca se toca, por tarde que
-        // sea — el servicio puede seguir en marcha.
-        const vencidas = (sinRespuesta ?? []).filter(
-          (r) => (r.fecha as string) < hoyEmpresa,
-        );
-
-        for (const r of vencidas) {
-          const { error } = await supabase
-            .from("reservas")
-            .update({ estado: "NO_RECONFIRMADA", updated_at: ahoraISO })
-            .eq("id", r.id as string)
-            // Solo si SIGUE confirmada: entre la lectura y el update, Sala
-            // puede haberla sentado o cancelado, y pisarlo sería peor que no
-            // marcar nada.
-            .eq("estado", "CONFIRMADA");
-          if (error) noReconfirmadasErr++;
-          else noReconfirmadasOk++;
-        }
-      } catch (e) {
-        noReconfirmadasErr++;
-        console.error(`[cron reservas] no-reconfirmadas empresa ${c.empresa_id}:`, e);
       }
     }
 
@@ -356,7 +314,6 @@ export async function GET(request: Request) {
     ok: true,
     recordatorios: { ok: recordatoriosOk, err: recordatoriosErr },
     reconfirmaciones: { ok: reconfirmacionesOk, err: reconfirmacionesErr },
-    noReconfirmadas: { ok: noReconfirmadasOk, err: noReconfirmadasErr },
     valoraciones: { ok: valoracionesOk, err: valoracionesErr },
     // Los mensajes van aparte del correo: aquí solo se cuentan los que
     // salieron de verdad, no los que no pudieron enviarse (sin saldo, sin
