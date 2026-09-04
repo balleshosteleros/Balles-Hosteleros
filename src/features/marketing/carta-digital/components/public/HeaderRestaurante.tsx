@@ -84,73 +84,50 @@ export function HeaderRestaurante({ empresa }: { empresa: CartaEmpresaPublica })
             Va como marca centrada, con ancho acotado y esquinas redondeadas,
             para que el blanco se lea como una placa y no como un hueco. */}
         <div className="relative z-10 flex h-full flex-col items-center justify-center px-6 text-center">
-          {empresa.carta_hero_url ? (
-            <>
-              <h1 className="sr-only">{empresa.nombre}</h1>
+          {/* SIEMPRE el isotipo, nunca el logotipo ni la imagen de cabecera:
+              el logotipo lleva el nombre dentro y se duplicaba con el título,
+              y la imagen de cabecera cambiaba la carta de una empresa a otra.
+              Va grande y con halo difuminado detrás —no sobre un disco negro,
+              que recortaba la marca en un círculo ajeno a ella—. El nombre
+              queda para lectores de pantalla: la marca ya se reconoce sola. */}
+          <h1 className="sr-only">{empresa.nombre}</h1>
+
+          {marcaUrl ? (
+            <span aria-hidden className="relative flex items-center justify-center">
+              {/* Halo: separa el isotipo del fondo sin encerrarlo en una forma. */}
               <span
-                aria-hidden
-                className="relative block h-[54%] w-auto max-w-[min(78vw,340px)] overflow-hidden rounded-2xl shadow-[0_10px_40px_rgba(0,0,0,0.45)] transition-transform duration-100 ease-out will-change-transform"
+                className="pointer-events-none absolute h-[190px] w-[190px] rounded-full blur-[38px] sm:h-[250px] sm:w-[250px]"
                 style={{
-                  aspectRatio: "1 / 1",
-                  transform: `translateY(${heroParallax * 0.35}px)`,
-                  border: "1px solid color-mix(in srgb, var(--carta-acento) 40%, transparent)",
+                  background:
+                    "radial-gradient(circle, color-mix(in srgb, var(--carta-acento) 55%, transparent) 0%, transparent 68%)",
+                  opacity: 0.75,
                 }}
-              >
-                <Image
-                  src={empresa.carta_hero_url}
-                  alt=""
-                  fill
-                  priority
-                  sizes="(max-width: 640px) 78vw, 340px"
-                  className="object-contain"
-                />
-              </span>
-            </>
+              />
+              {/* El PNG es negro con alfa: se tiñe del color de marca. */}
+              <span
+                className="relative h-[132px] w-[132px] sm:h-[168px] sm:w-[168px]"
+                style={{
+                  backgroundColor: "var(--carta-acento)",
+                  WebkitMaskImage: `url(${marcaUrl})`,
+                  maskImage: `url(${marcaUrl})`,
+                  WebkitMaskRepeat: "no-repeat",
+                  maskRepeat: "no-repeat",
+                  WebkitMaskPosition: "center",
+                  maskPosition: "center",
+                  WebkitMaskSize: "contain",
+                  maskSize: "contain",
+                  filter: "drop-shadow(0 6px 22px rgba(0,0,0,0.55))",
+                }}
+              />
+            </span>
           ) : (
-            <>
-              {marcaUrl ? (
-                // ISOTIPO, no logotipo: el logotipo lleva el nombre dentro y
-                // se duplicaba con el <h1> justo debajo. Y va sobre un disco
-                // claro sólido —no un cristal translúcido— porque un isotipo
-                // dorado sobre un hero dorado desaparecía por completo.
-                // Isotipo DORADO sobre disco NEGRO. Dorado a secas sobre el
-                // hero —que también es dorado— volvía a desaparecer: el color
-                // de marca necesita el negro detrás para leerse. El PNG es
-                // negro con alfa, así que el trazo se tiñe con `mask-image`.
-                <span
-                  aria-hidden
-                  className="mb-4 flex h-[76px] w-[76px] items-center justify-center rounded-full shadow-[0_6px_26px_rgba(0,0,0,0.5)] sm:h-[90px] sm:w-[90px]"
-                  style={{
-                    backgroundColor: "#0B0B0B",
-                    border: "1px solid color-mix(in srgb, var(--carta-acento) 45%, transparent)",
-                  }}
-                >
-                  <span
-                    className="h-[58%] w-[58%]"
-                    style={{
-                      backgroundColor: "var(--carta-acento)",
-                      WebkitMaskImage: `url(${marcaUrl})`,
-                      maskImage: `url(${marcaUrl})`,
-                      WebkitMaskRepeat: "no-repeat",
-                      maskRepeat: "no-repeat",
-                      WebkitMaskPosition: "center",
-                      maskPosition: "center",
-                      WebkitMaskSize: "contain",
-                      maskSize: "contain",
-                    }}
-                  />
-                </span>
-              ) : null}
-
-              <h1
-                className="text-4xl font-light tracking-[0.08em] text-white drop-shadow-lg sm:text-6xl"
-                style={{ fontFamily: "var(--carta-fuente-titulos)", letterSpacing: "0.06em" }}
-              >
-                {empresa.nombre}
-              </h1>
-            </>
+            <h1
+              className="text-4xl font-light tracking-[0.08em] text-white drop-shadow-lg sm:text-6xl"
+              style={{ fontFamily: "var(--carta-fuente-titulos)", letterSpacing: "0.06em" }}
+            >
+              {empresa.nombre}
+            </h1>
           )}
-
 
           {empresa.carta_descripcion ? (
             <p className="mt-3 max-w-xl text-sm font-light italic leading-relaxed text-white/85 drop-shadow sm:text-base">

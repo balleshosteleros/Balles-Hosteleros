@@ -72,7 +72,7 @@ export function CategoriaSidebar({
             key={f}
             type="button"
             onClick={() => onFamilia(f)}
-            className="flex-1 whitespace-nowrap rounded-full px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.18em] transition-all"
+            className="min-w-0 flex-1 whitespace-nowrap rounded-full px-2.5 py-2 text-center text-[10.5px] font-semibold uppercase tracking-[0.1em] transition-all sm:px-3"
             style={{
               backgroundColor: on ? "var(--carta-primario)" : "transparent",
               color: on ? "var(--carta-sobre-marca)" : "var(--carta-texto-tenue)",
