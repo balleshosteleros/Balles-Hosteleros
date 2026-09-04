@@ -119,8 +119,10 @@ export function CalendarioMobile() {
   const [dias, setDias] = useState<DiaCalendario[]>([]);
   const [loading, setLoading] = useState(true);
   const [seleccion, setSeleccion] = useState<string | null>(todayKey);
+  // Sube cada vez que hay que volver a preguntar al servidor.
+  const [recarga, setRecarga] = useState(0);
 
-  const { festivoEnFecha } = useFestivos(mesActual.getFullYear());
+  const { festivoEnFecha } = useFestivos(mesActual.getFullYear(), recarga);
 
   const anio = mesActual.getFullYear();
   const mes = mesActual.getMonth() + 1;
@@ -134,7 +136,23 @@ export function CalendarioMobile() {
       setLoading(false);
     });
     return () => { cancel = true; };
-  }, [anio, mes]);
+  }, [anio, mes, recarga]);
+
+  // El calendario lo cambian OTROS mientras el empleado no mira: RRHH le aprueba
+  // una baja o unas vacaciones, o se añade un festivo nuevo. En la app instalada
+  // esta pantalla se queda en memoria días enteros, así que sin esto seguiría
+  // enseñando lo de la última vez. Al volver a ella se vuelve a preguntar.
+  useEffect(() => {
+    const alVolver = () => {
+      if (document.visibilityState === "visible") setRecarga((n) => n + 1);
+    };
+    document.addEventListener("visibilitychange", alVolver);
+    window.addEventListener("focus", alVolver);
+    return () => {
+      document.removeEventListener("visibilitychange", alVolver);
+      window.removeEventListener("focus", alVolver);
+    };
+  }, []);
 
   const map = useMemo(() => {
     const m = new Map<string, DiaCalendario>();

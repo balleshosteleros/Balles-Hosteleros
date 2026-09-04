@@ -34,7 +34,7 @@ function sumarDiaISO(iso: string): string {
  * firma que el mock anterior. Carga el año dado y los adyacentes (±1) para que
  * las vísperas y la navegación entre años funcionen sin recargas.
  */
-export function useFestivos(anioBase: number) {
+export function useFestivos(anioBase: number, recargaKey: number = 0) {
   const { empresaActual, ajustes } = useEmpresa();
   const empresaKey = empresaActual?.dbId ?? "";
   const comunidad = ajustes?.configOperativa?.comunidadAutonoma ?? "";
@@ -58,7 +58,10 @@ export function useFestivos(anioBase: number) {
     return () => {
       alive = false;
     };
-  }, [empresaKey, anioBase]);
+    // `recargaKey` la sube quien consume el hook para volver a preguntar sin
+    // cambiar de año: un festivo nuevo puesto por RRHH debe aparecer sin tener
+    // que cerrar y reabrir la app.
+  }, [empresaKey, anioBase, recargaKey]);
 
   const porFecha = useMemo(() => {
     const m = new Map<string, FestivoBD>();
