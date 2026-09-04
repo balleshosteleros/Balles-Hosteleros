@@ -94,13 +94,17 @@ export function HeaderRestaurante({ empresa }: { empresa: CartaEmpresaPublica })
 
           {marcaUrl ? (
             <span aria-hidden className="relative flex items-center justify-center">
-              {/* Halo: separa el isotipo del fondo sin encerrarlo en una forma. */}
+              {/* Halo: separa el isotipo del fondo sin encerrarlo en una forma.
+                  Va poco difuminado y tirando a blanco —no al color de marca a
+                  secas— porque un halo del mismo tono que el isotipo lo diluía
+                  en vez de recortarlo. El blanco da el contraste; el acento,
+                  solo el matiz. */}
               <span
-                className="pointer-events-none absolute h-[190px] w-[190px] rounded-full blur-[38px] sm:h-[250px] sm:w-[250px]"
+                className="pointer-events-none absolute h-[210px] w-[210px] rounded-full blur-[22px] sm:h-[270px] sm:w-[270px]"
                 style={{
                   background:
-                    "radial-gradient(circle, color-mix(in srgb, var(--carta-acento) 55%, transparent) 0%, transparent 68%)",
-                  opacity: 0.75,
+                    "radial-gradient(circle, rgba(255,255,255,0.55) 0%, color-mix(in srgb, var(--carta-acento) 45%, transparent) 42%, transparent 72%)",
+                  opacity: 0.85,
                 }}
               />
               {/* El PNG es negro con alfa: se tiñe del color de marca. */}
