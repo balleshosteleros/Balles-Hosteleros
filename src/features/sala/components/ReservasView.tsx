@@ -78,7 +78,9 @@ import {
   PREFIJO_POR_DEFECTO,
   separarPrefijo,
   componerTelefono,
+  paisDeTelefono,
 } from "@/features/sala/data/prefijos-telefono";
+import { BanderaTelefono } from "@/features/sala/components/clientes/BanderaTelefono";
 import { ReservaEstadoBadge, ReservaEstadoDot } from "@/features/sala/components/reservas/ReservaEstadoBadge";
 import {
   listReservas,
@@ -5424,8 +5426,13 @@ export function ReservasView() {
                           <ReservaFlagsChips reserva={r} className="shrink-0" />
                         </span>
                         {r.telefono && (
-                          <span className="truncate text-[10px] tabular-nums text-muted-foreground">
-                            {r.telefono}
+                          <span className="flex min-w-0 items-center gap-1 text-[10px] text-muted-foreground">
+                            {/* Bandera del país: de un vistazo se ve quién es
+                                de fuera antes de coger el teléfono. Solo se
+                                pinta si el prefijo está catalogado — mejor sin
+                                bandera que con la del país equivocado. */}
+                            <BanderaTelefono telefono={r.telefono} />
+                            <span className="truncate tabular-nums">{r.telefono}</span>
                           </span>
                         )}
                         {/* Adelanto del comentario: se lee el principio sin
@@ -6212,10 +6219,16 @@ export function ReservasView() {
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <Label className="text-muted-foreground text-xs">Teléfono</Label>
-                    {/* Prefijo y número por separado, pero se guardan juntos en
-                        `telefono`: la ficha no puede quedar con un número al
-                        que luego nadie sabe a qué país llamar. */}
+                    <Label className="flex items-center gap-1.5 text-muted-foreground text-xs">
+                      Teléfono
+                      {/* País del número, con su bandera: lo primero que hay
+                          que saber antes de llamar a alguien. */}
+                      <BanderaTelefono telefono={clienteEdit.telefono} conNombre />
+                    </Label>
+                    {/* El prefijo se elige de la lista y el número se escribe
+                        al lado, pero se guardan juntos: la ficha no puede
+                        quedar con un número al que nadie sabe a qué país
+                        llamar. */}
                     <div className="flex gap-1.5">
                       <select
                         value={separarPrefijo(clienteEdit.telefono).prefijo}

@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getEmpresaActivaForUser } from "@/features/empresa/lib/empresa-server";
 import { registrarCambioDatosCliente } from "@/features/sala/lib/cliente-actividad";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { validarTelefono } from "@/shared/lib/validar-contacto";
 
 async function getCtx() {
   const supabase = await createClient();
@@ -64,8 +65,13 @@ export async function guardarDatosClienteReserva(
     const apellidos = datos.apellidos.trim() || null;
     const email = datos.email.trim() || null;
     // El teléfono va entero, con el prefijo dentro: es un solo campo, aquí y
-    // en la ficha del cliente.
+    // en la ficha del cliente. Se valida en el SERVIDOR, no solo en el
+    // formulario: es lo que impide que se repita lo de CoverManager, donde
+    // entraron miles de números sin país y ya no hubo forma de saber de dónde
+    // era cada uno.
     const telefono = datos.telefono.trim() || null;
+    const validez = validarTelefono(telefono, false);
+    if (!validez.ok) return { ok: false, error: validez.error };
 
     // El filtro por empresa es imprescindible: la RLS acota a las empresas del
     // usuario, no a la ACTIVA (mismo motivo que en el resto de reservas).

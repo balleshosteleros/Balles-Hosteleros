@@ -22,6 +22,7 @@ import { ahoraEnZona } from "@/features/empresa/lib/zona-horaria";
 import { registrarCambioDatosCliente } from "@/features/sala/lib/cliente-actividad";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
+import { validarTelefono } from "@/shared/lib/validar-contacto";
 
 const Schema = z.object({
   nombre: z.string().trim().min(1, "El nombre es obligatorio.").max(120),
@@ -85,6 +86,11 @@ export async function guardarFichaCliente(
     const apellidos = d.apellidos || null;
     const email = d.email || null;
     const telefono = d.telefono || null;
+    // Validación en el SERVIDOR: ninguna vía de alta puede colar un número sin
+    // país, que es exactamente lo que dejó los datos de CoverManager con miles
+    // de clientes marcados como españoles sin serlo.
+    const validez = validarTelefono(telefono, false);
+    if (!validez.ok) return { ok: false, error: validez.error };
 
     // La ficha tiene que seguir siendo única por contacto: si el email o el
     // teléfono ya están en OTRA ficha, se aborta en vez de crear un duplicado

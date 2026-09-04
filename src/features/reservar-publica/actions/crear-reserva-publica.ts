@@ -163,6 +163,13 @@ export async function crearReservaPublicaAction(
   }
   // Sin teléfono ni email no hay forma de avisar al cliente ni de vincular su
   // ficha (la BD exige cliente_id cuando hay contacto), así que pedimos uno.
+  // El teléfono que llega ya trae el prefijo (lo compone el formulario). Se
+  // vuelve a comprobar aquí porque el servidor no puede fiarse del navegador:
+  // un número sin país es un cliente al que luego no se puede llamar.
+  const validezTel = validarTelefono(data.telefono, exigeTelefono);
+  if (!validezTel.ok) {
+    return { ok: false, error: validezTel.error };
+  }
   if (!(data.telefono ?? "").trim() && !(data.email ?? "").trim()) {
     return { ok: false, error: "Indica un teléfono o un email de contacto." };
   }

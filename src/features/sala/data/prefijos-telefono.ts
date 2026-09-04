@@ -27,21 +27,58 @@ export interface PrefijoTelefono {
   label: string;
 }
 
-/** El primero es el que sale por defecto. */
+/**
+ * El primero es el que sale por defecto. El orden es el de uso real en los
+ * restaurantes: primero España, después los países de donde vienen de verdad
+ * los clientes según el histórico (Reino Unido, Francia, Portugal e Italia
+ * copan los extranjeros), y al final el resto por continente.
+ */
 export const PREFIJOS_TELEFONO: readonly PrefijoTelefono[] = [
-  { prefijo: "+34",  flag: "🇪🇸", label: "España" },
-  { prefijo: "+351", flag: "🇵🇹", label: "Portugal" },
-  { prefijo: "+33",  flag: "🇫🇷", label: "Francia" },
-  { prefijo: "+39",  flag: "🇮🇹", label: "Italia" },
-  { prefijo: "+49",  flag: "🇩🇪", label: "Alemania" },
-  { prefijo: "+44",  flag: "🇬🇧", label: "Reino Unido" },
-  { prefijo: "+31",  flag: "🇳🇱", label: "Países Bajos" },
-  { prefijo: "+41",  flag: "🇨🇭", label: "Suiza" },
-  { prefijo: "+212", flag: "🇲🇦", label: "Marruecos" },
-  { prefijo: "+1",   flag: "🇺🇸", label: "Estados Unidos" },
-  { prefijo: "+52",  flag: "🇲🇽", label: "México" },
-  { prefijo: "+54",  flag: "🇦🇷", label: "Argentina" },
-  { prefijo: "+57",  flag: "🇨🇴", label: "Colombia" },
+  { prefijo: "+34",   flag: "🇪🇸", label: "España" },
+  // Los que más aparecen entre los clientes de fuera.
+  { prefijo: "+44",   flag: "🇬🇧", label: "Reino Unido" },
+  { prefijo: "+33",   flag: "🇫🇷", label: "Francia" },
+  { prefijo: "+351",  flag: "🇵🇹", label: "Portugal" },
+  { prefijo: "+39",   flag: "🇮🇹", label: "Italia" },
+  { prefijo: "+49",   flag: "🇩🇪", label: "Alemania" },
+  { prefijo: "+31",   flag: "🇳🇱", label: "Países Bajos" },
+  // Resto de Europa.
+  { prefijo: "+32",   flag: "🇧🇪", label: "Bélgica" },
+  { prefijo: "+41",   flag: "🇨🇭", label: "Suiza" },
+  { prefijo: "+353",  flag: "🇮🇪", label: "Irlanda" },
+  { prefijo: "+45",   flag: "🇩🇰", label: "Dinamarca" },
+  { prefijo: "+46",   flag: "🇸🇪", label: "Suecia" },
+  { prefijo: "+47",   flag: "🇳🇴", label: "Noruega" },
+  { prefijo: "+43",   flag: "🇦🇹", label: "Austria" },
+  { prefijo: "+48",   flag: "🇵🇱", label: "Polonia" },
+  { prefijo: "+40",   flag: "🇷🇴", label: "Rumanía" },
+  { prefijo: "+359",  flag: "🇧🇬", label: "Bulgaria" },
+  { prefijo: "+30",   flag: "🇬🇷", label: "Grecia" },
+  { prefijo: "+352",  flag: "🇱🇺", label: "Luxemburgo" },
+  { prefijo: "+356",  flag: "🇲🇹", label: "Malta" },
+  { prefijo: "+380",  flag: "🇺🇦", label: "Ucrania" },
+  // América.
+  { prefijo: "+1",    flag: "🇺🇸", label: "Estados Unidos / Canadá" },
+  { prefijo: "+52",   flag: "🇲🇽", label: "México" },
+  { prefijo: "+54",   flag: "🇦🇷", label: "Argentina" },
+  { prefijo: "+57",   flag: "🇨🇴", label: "Colombia" },
+  { prefijo: "+55",   flag: "🇧🇷", label: "Brasil" },
+  { prefijo: "+51",   flag: "🇵🇪", label: "Perú" },
+  { prefijo: "+56",   flag: "🇨🇱", label: "Chile" },
+  { prefijo: "+58",   flag: "🇻🇪", label: "Venezuela" },
+  { prefijo: "+593",  flag: "🇪🇨", label: "Ecuador" },
+  { prefijo: "+506",  flag: "🇨🇷", label: "Costa Rica" },
+  { prefijo: "+502",  flag: "🇬🇹", label: "Guatemala" },
+  { prefijo: "+1809", flag: "🇩🇴", label: "República Dominicana" },
+  // África, Asia y Oriente Medio.
+  { prefijo: "+212",  flag: "🇲🇦", label: "Marruecos" },
+  { prefijo: "+225",  flag: "🇨🇮", label: "Costa de Marfil" },
+  { prefijo: "+290",  flag: "🇸🇭", label: "Santa Elena" },
+  { prefijo: "+972",  flag: "🇮🇱", label: "Israel" },
+  { prefijo: "+971",  flag: "🇦🇪", label: "Emiratos Árabes Unidos" },
+  { prefijo: "+86",   flag: "🇨🇳", label: "China" },
+  { prefijo: "+81",   flag: "🇯🇵", label: "Japón" },
+  { prefijo: "+61",   flag: "🇦🇺", label: "Australia" },
 ];
 
 /** Prefijo que sale marcado si no hay otro. */
@@ -88,3 +125,25 @@ export function componerTelefono(
   const p = (prefijo ?? PREFIJO_POR_DEFECTO).trim() || PREFIJO_POR_DEFECTO;
   return `${p} ${n}`;
 }
+
+/**
+ * Bandera y país de un teléfono ya guardado, para enseñarlo junto al número.
+ *
+ * De un vistazo se ve que un cliente es de fuera, que es justo lo que antes no
+ * se sabía: todos parecían españoles. Si el prefijo no está en el catálogo
+ * —una campaña o un país nuevo— se devuelve sin bandera en vez de inventar
+ * una: mejor no decir nada que decir el país equivocado.
+ */
+export function paisDeTelefono(
+  telefono: string | null | undefined,
+): PrefijoTelefono | null {
+  const limpio = (telefono ?? "").trim();
+  if (!limpio.startsWith("+")) return null;
+
+  // De más largo a más corto: "+1" es prefijo de "+1809" y se lo comería.
+  const ordenados = [...PREFIJOS_TELEFONO].sort(
+    (a, b) => b.prefijo.length - a.prefijo.length,
+  );
+  return ordenados.find((p) => limpio.startsWith(p.prefijo)) ?? null;
+}
+

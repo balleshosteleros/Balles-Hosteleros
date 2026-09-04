@@ -36,6 +36,7 @@ import {
   separarPrefijo,
   componerTelefono,
 } from "@/features/sala/data/prefijos-telefono";
+import { BanderaTelefono } from "@/features/sala/components/clientes/BanderaTelefono";
 import { Cliente, ClasificacionCliente } from "@/features/sala/data/clientes";
 import { listClientes } from "@/features/sala/actions/clientes-actions";
 import { guardarFichaCliente } from "@/features/sala/actions/cliente-ficha-actions";
@@ -431,7 +432,19 @@ export function ClientesView() {
           onFiltrosChange={setFiltros}
         />
       ),
-      td: (c) => <td key="telefono" className="p-3">{c.telefono || "—"}</td>,
+      td: (c) => (
+        <td key="telefono" className="p-3">
+          {c.telefono ? (
+            <span className="inline-flex items-center gap-1.5">
+              {/* Bandera del país: de un vistazo se ve quién es de fuera. */}
+              <BanderaTelefono telefono={c.telefono} />
+              <span className="tabular-nums">{c.telefono}</span>
+            </span>
+          ) : (
+            "—"
+          )}
+        </td>
+      ),
     },
     email: {
       th: (
@@ -807,7 +820,12 @@ export function ClientesView() {
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <Label htmlFor="cli-telefono">Teléfono</Label>
+                    <Label htmlFor="cli-telefono" className="flex items-center gap-1.5">
+                    Teléfono
+                    {/* País del número: lo primero que hay que saber antes de
+                        llamar o mandar un WhatsApp. */}
+                    <BanderaTelefono telefono={borrador.telefono} conNombre />
+                  </Label>
                     {/* Prefijo pegado al número y elegido de una lista: antes era
                         un campo suelto y a mano, así que la mitad de las fichas
                         se quedaban sin él o con un valor inventado. */}

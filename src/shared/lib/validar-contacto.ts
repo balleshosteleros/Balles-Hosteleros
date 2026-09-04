@@ -8,10 +8,17 @@
  * localizar cuando llama, y encima ensucia la búsqueda por número.
  *
  * Aquí vive el criterio único, y se aplica en los tres orígenes por los que
- * nace un cliente: WEB (motor de reservas), los de alta manual desde sala
- * (TELEFONO, LOCAL, WHATSAPP, EMAIL, INSTAGRAM, FACEBOOK) y la importación
- * por archivo. Ver `sala/data/origenes.ts`. Si mañana entra un canal nuevo,
- * valida también ahí.
+ * nace un cliente: WEB (motor de reservas), los de alta desde sala (TELEFONO,
+ * LOCAL, WHATSAPP, EMAIL, INSTAGRAM, FACEBOOK) y la importación por archivo.
+ * Ver `sala/data/origenes.ts`. Si mañana entra un canal nuevo, valida también
+ * ahí.
+ *
+ * LA OTRA LECCIÓN DE COVERMANAGER: su sistema aceptaba el número SIN saber de
+ * qué país era y lo daba por local. Así, 18.800 clientes quedaron marcados
+ * como españoles y más de cien de ellos eran de fuera — imposible llamarles, e
+ * imposible arreglarlo después, porque un móvil francés escrito sin su 0 es
+ * idéntico a uno español. El país solo se sabe en el momento en que el cliente
+ * lo da, así que aquí el prefijo es OBLIGATORIO: sin él no se guarda.
  */
 
 /** Teléfono en solo dígitos, sin prefijo español ni separadores. */
@@ -49,6 +56,15 @@ export function validarTelefono(
   const bruto = (valor ?? "").trim();
   if (!bruto) {
     return obligatorio ? { ok: false, error: "Escribe un teléfono." } : { ok: true };
+  }
+
+  // Sin prefijo no se guarda: es lo único que impide repetir el agujero de
+  // CoverManager, donde todo número huérfano acabó dado por español.
+  if (!/^\s*(\+|00)\d/.test(bruto)) {
+    return {
+      ok: false,
+      error: "Falta el prefijo del país. Elígelo en la lista de al lado.",
+    };
   }
 
   const internacional = /^\s*(\+|00)/.test(bruto) && !/^\s*(\+34|0034)/.test(bruto);
