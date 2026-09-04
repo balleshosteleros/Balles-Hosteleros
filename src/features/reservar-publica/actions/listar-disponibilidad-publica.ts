@@ -21,7 +21,11 @@ import {
   getCamposObligatoriosReserva,
   type CamposObligatoriosReserva,
 } from "@/features/sala/lib/reserva-campos-obligatorios";
-import { turnoDeHora } from "@/features/sala/lib/dia-negocio";
+import {
+  diaNegocioDe,
+  fechaCivilDe,
+  turnoDeHora,
+} from "@/features/sala/lib/dia-negocio";
 import { ahoraEnZona } from "@/features/empresa/lib/zona-horaria";
 import { getZonaHorariaEmpresa } from "@/features/empresa/lib/empresa-server";
 import {
@@ -200,14 +204,25 @@ export async function listarDisponibilidadPublicaAction(
 
   const dia = DIA_KEY[new Date(`${fecha}T00:00:00`).getDay()];
 
-  // Reservas ya existentes ese día, para descontar aforo.
+  // Reservas ya existentes en ese SERVICIO, para descontar aforo.
+  //
+  // El servicio de una noche se guarda en DOS días de calendario: la cena del
+  // jueves ocupa el jueves de 20:00 a 23:45 y el viernes de 00:00 a 02:00. Por
+  // eso se piden los dos días y se descarta lo que no pertenece a este
+  // servicio; mirando solo `fecha` la madrugada quedaba sin contar y el portal
+  // ofrecía como libres mesas que ya estaban dadas.
+  const manana = fechaCivilDe(fecha, "00:00");
   const { data: reservasRows } = await admin
     .from("reservas")
-    .select("personas, hora, estado")
+    .select("personas, hora, estado, fecha")
     .eq("empresa_id", empresaId)
-    .eq("fecha", fecha)
+    .in("fecha", [fecha, manana])
     .not("estado", "in", `(${ESTADOS_NO_OCUPANTES.join(",")})`);
-  const reservas = (reservasRows ?? []) as { personas: number; hora: string }[];
+  const reservas = ((reservasRows ?? []) as {
+    personas: number;
+    hora: string;
+    fecha: string;
+  }[]).filter((r) => diaNegocioDe(r.fecha, r.hora ?? "") === fecha);
 
   // Bloqueos de sala vigentes esa fecha (cierres puntuales, privatizaciones).
   // Solo cierran el turno cuando bloquean el local ENTERO: un bloqueo de mesas

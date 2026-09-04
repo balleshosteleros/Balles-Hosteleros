@@ -150,6 +150,7 @@ export function ReservaPublicaForm({
   // llega la respuesta del servidor, que es quien manda.
   const [obligatorios, setObligatorios] = useState<CamposObligatoriosPublico>({
     email: true,
+    fechaNacimiento: true,
     telefono: true,
   });
 
@@ -210,6 +211,7 @@ export function ReservaPublicaForm({
     apellidos.trim().length > 0 &&
     validarTelefono(telefonoCompleto, obligatorios.telefono).ok &&
     validarEmail(email, obligatorios.email).ok &&
+    (!obligatorios.fechaNacimiento || fechaNacimiento.trim().length > 0) &&
     validarNombre(nombre).ok &&
     personas > 0 &&
     fecha &&
@@ -242,6 +244,8 @@ export function ReservaPublicaForm({
     if (!vTel.ok) return vTel.error;
     const vEmail = validarEmail(email, obligatorios.email);
     if (!vEmail.ok) return vEmail.error;
+    if (obligatorios.fechaNacimiento && !fechaNacimiento.trim())
+      return "Escribe tu fecha de nacimiento.";
     if (zonaExigida && !grupoZonaId) return "Elige la zona.";
     if (!ticketValido) return "Elige uno de los productos disponibles.";
     if (fechaFueraDelTicket) return "Tu experiencia no se puede usar ese día. Elige otra fecha.";
@@ -758,13 +762,14 @@ export function ReservaPublicaForm({
           <div>
             <Label htmlFor="nacimiento" className="text-zinc-700 flex items-center gap-1.5">
               <Calendar className="h-3.5 w-3.5" />
-              Fecha de nacimiento
+              Fecha de nacimiento{obligatorios.fechaNacimiento ? " *" : ""}
             </Label>
             <Input
               id="nacimiento"
               type="date"
               value={fechaNacimiento}
               onChange={(e) => setFechaNacimiento(e.target.value)}
+              required={obligatorios.fechaNacimiento}
               max={hoyLocal}
               className="mt-1.5 h-11 w-full min-w-0 appearance-none rounded-xl border-zinc-200 px-3 text-sm"
             />

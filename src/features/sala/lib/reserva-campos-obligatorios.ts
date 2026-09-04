@@ -15,6 +15,8 @@ import {
  */
 export interface CamposObligatoriosReserva {
   email: boolean;
+  /** Fecha de nacimiento del cliente. Configurable por empresa. */
+  fechaNacimiento: boolean;
   /**
    * Siempre `true`. Se mantiene en el tipo (y no se borra de los consumidores)
    * porque el portal público pinta el asterisco de "campo obligatorio" leyendo
@@ -40,7 +42,7 @@ export async function getCamposObligatoriosReserva(
   empresaId: string,
 ): Promise<CamposObligatoriosReserva> {
   const submodulo = getSubmodulo("sala", "reservas");
-  if (!submodulo) return { email: false, telefono: true };
+  if (!submodulo) return { email: false, fechaNacimiento: false, telefono: true };
 
   let regla: ReglaSubmoduloRow | null = null;
   try {
@@ -61,6 +63,7 @@ export async function getCamposObligatoriosReserva(
   const requeridos = camposObligatoriosEfectivos(submodulo, regla);
   return {
     email: requeridos.includes("email"),
+    fechaNacimiento: requeridos.includes("fechaNacimiento"),
     // No se consulta la regla: el teléfono no es configurable.
     telefono: true,
   };

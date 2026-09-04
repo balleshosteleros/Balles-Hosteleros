@@ -24,6 +24,17 @@ import {
   type SlotPublico,
   type CamposObligatoriosPublico,
 } from "@/features/reservar-publica/actions/listar-disponibilidad-publica";
+import { HORA_CORTE_DIA_NEGOCIO } from "@/features/sala/lib/dia-negocio";
+
+/**
+ * true si esa hora cae en la madrugada, que pertenece al servicio de la noche
+ * anterior. Mismo criterio que el resto del software (`dia-negocio.ts`): el
+ * día no cambia a medianoche, cambia a las 06:00.
+ */
+function esMadrugada(hora: string): boolean {
+  const h = parseInt(hora.slice(0, 2), 10);
+  return !Number.isNaN(h) && h < HORA_CORTE_DIA_NEGOCIO;
+}
 
 interface Props {
   empresaSlug: string;
@@ -156,6 +167,19 @@ export function SelectorDisponibilidad({
                   className="tabular-nums"
                 >
                   {s.hora}
+                  {/*
+                    La cena cruza la medianoche: tras las 23:45 la lista sigue
+                    en 00:00, 00:15… y el número "se da la vuelta". Está bien
+                    ordenada, pero leída de corrido parece descolocada, y el
+                    cliente no sabe si esas horas son de esta noche o de la
+                    anterior. Con la coletilla se lee de un vistazo que son la
+                    madrugada siguiente, que es la misma noche de servicio.
+                  */}
+                  {esMadrugada(s.hora) ? (
+                    <span className="ml-2 text-xs text-zinc-500">
+                      (madrugada)
+                    </span>
+                  ) : null}
                   {!s.disponible ? (
                     <span className="ml-2 text-xs text-zinc-400">
                       {s.motivo ?? "Completo"}

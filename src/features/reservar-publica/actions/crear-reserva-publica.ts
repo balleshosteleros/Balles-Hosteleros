@@ -19,7 +19,7 @@ import { validarMotorWebReserva } from "@/features/sala/lib/motor-web-validar";
 import { getCamposObligatoriosReserva } from "@/features/sala/lib/reserva-campos-obligatorios";
 import { notificarReservaCreada } from "@/lib/email/reservas/notificar-creada";
 import { enviarReservaEmail } from "@/lib/email/reservas/mailer";
-import { turnoDeHora } from "@/features/sala/lib/dia-negocio";
+import { fechaCivilDe, turnoDeHora } from "@/features/sala/lib/dia-negocio";
 import {
   validarCanjeTicket,
   TICKET_MOTIVO_LABELS,
@@ -159,13 +159,19 @@ export async function crearReservaPublicaAction(
   // Campos obligatorios configurables por empresa (email / teléfono), marcados
   // en Ajustes → Departamentos → Sala → Reservas. Se comprueba en servidor: el
   // navegador puede saltarse el `required` del formulario.
-  const { email: exigeEmail, telefono: exigeTelefono } =
-    await getCamposObligatoriosReserva(empresa.id as string);
+  const {
+    email: exigeEmail,
+    telefono: exigeTelefono,
+    fechaNacimiento: exigeFechaNacimiento,
+  } = await getCamposObligatoriosReserva(empresa.id as string);
   if (exigeTelefono && (data.telefono ?? "").trim().length < 5) {
     return { ok: false, error: "El teléfono es obligatorio." };
   }
   if (exigeEmail && !(data.email ?? "").trim()) {
     return { ok: false, error: "El email es obligatorio." };
+  }
+  if (exigeFechaNacimiento && !(data.fechaNacimiento ?? "").trim()) {
+    return { ok: false, error: "La fecha de nacimiento es obligatoria." };
   }
   // Sin teléfono ni email no hay forma de avisar al cliente ni de vincular su
   // ficha (la BD exige cliente_id cuando hay contacto), así que pedimos uno.
@@ -180,12 +186,25 @@ export async function crearReservaPublicaAction(
     return { ok: false, error: "Indica un teléfono o un email de contacto." };
   }
 
+  // La fecha que llega es el DÍA DE SERVICIO que eligió el cliente ("quiero
+  // venir el jueves"). Si la hora es de madrugada, el día real de calendario
+  // es el siguiente: la noche del jueves a las 00:30 ocurre de hecho el
+  // viernes. Es la regla de `dia-negocio.ts` — el día no cambia a medianoche,
+  // cambia a las 06:00 — y aquí no se estaba aplicando al guardar.
+  //
+  // Sin esto, quien elegía "jueves" + "00:00" acababa con una reserva en la
+  // madrugada del jueves, es decir la noche ANTERIOR y ya pasada: aparecía en
+  // sala como vencida desde hacía horas y nadie la esperaba esa noche.
+  //
+  // A partir de aquí se usa SIEMPRE `fechaReserva`, nunca `data.fecha`.
+  const fechaReserva = fechaCivilDe(data.fecha, data.hora);
+
   // Motor web: grid de 15 min, cierre del día actual y tope de personas por
   // hora. Aplicar antes que cualquier otro side-effect.
   const turno = turnoDeHora(data.hora);
   const motor = await validarMotorWebReserva(admin, {
     empresaId: empresa.id as string,
-    fecha: data.fecha,
+    fecha: fechaReserva,
     hora: data.hora,
     personas: data.personas,
     turno,
@@ -207,7 +226,7 @@ export async function crearReservaPublicaAction(
     const { data: vRows, error: vErr } = await admin.rpc("validar_cupon", {
       p_empresa_id: empresa.id,
       p_codigo: norm,
-      p_fecha: data.fecha,
+      p_fecha: fechaReserva,
       p_turno: turno,
     });
     if (vErr) {
@@ -337,7 +356,7 @@ export async function crearReservaPublicaAction(
         horasExcluidas: (prodCond?.horas_excluidas as string[] | null) ?? [],
         grupoZonaIds: (prodCond?.grupo_zona_ids as string[] | null) ?? [],
       },
-      { fecha: data.fecha, hora: data.hora.slice(0, 5), grupoZonaId: data.grupoZonaId ?? null },
+      { fecha: fechaReserva, hora: data.hora.slice(0, 5), grupoZonaId: data.grupoZonaId ?? null },
     );
     if (!validez.ok) {
       return { ok: false, error: TICKET_MOTIVO_LABELS[validez.motivo] };
@@ -436,7 +455,7 @@ export async function crearReservaPublicaAction(
   // las mismas plazas.
   const { data: cupoOk, error: errCupo } = await admin.rpc("try_reservar_slot", {
     p_empresa_id: empresa.id,
-    p_fecha: data.fecha,
+    p_fecha: fechaReserva,
     p_turno: turno,
     p_personas: data.personas,
   });
@@ -449,7 +468,7 @@ export async function crearReservaPublicaAction(
     // del turno están igual de llenas.
     return {
       ok: false,
-      error: `Lo sentimos, ya no quedan mesas libres para ${turno === "COMIDA" ? "la comida" : "la cena"} del ${data.fecha}.`,
+      error: `Lo sentimos, ya no quedan mesas libres para ${turno === "COMIDA" ? "la comida" : "la cena"} del ${fechaReserva}.`,
     };
   }
 
@@ -458,7 +477,7 @@ export async function crearReservaPublicaAction(
     try {
       await admin.rpc("liberar_slot_manual", {
         p_empresa_id: empresa.id,
-        p_fecha: data.fecha,
+        p_fecha: fechaReserva,
         p_turno: turno,
         p_personas: data.personas,
       });
@@ -511,7 +530,7 @@ export async function crearReservaPublicaAction(
   const asign = await asignarMesaAutomatica(admin as unknown as SupabaseClient, {
     localId: local.id as string,
     empresaId: empresa.id,
-    fecha: data.fecha,
+    fecha: fechaReserva,
     hora: data.hora,
     personas: data.personas,
     zonaIds: zonaIdsPermitidas,
@@ -533,7 +552,7 @@ export async function crearReservaPublicaAction(
       ok: false,
       // Aquí sí es de ESA hora concreta (faltan mesas, no cupo), así que probar
       // otra hora es un consejo útil.
-      error: `Lo sentimos, no quedan mesas libres para ${data.personas} ${data.personas === 1 ? "persona" : "personas"} el ${data.fecha} a las ${data.hora.slice(0, 5)}. Prueba con otra hora.`,
+      error: `Lo sentimos, no quedan mesas libres para ${data.personas} ${data.personas === 1 ? "persona" : "personas"} el ${fechaReserva} a las ${data.hora.slice(0, 5)}. Prueba con otra hora.`,
     };
   }
   const mesaFinal: string = asign.mesa.codigo;
@@ -563,7 +582,7 @@ export async function crearReservaPublicaAction(
 
   const datosPolitica = {
     personas: data.personas,
-    fecha: data.fecha,
+    fecha: fechaReserva,
     hora: data.hora,
     turno,
     grupoZonaId: grupoZonaIdFinal,
@@ -611,7 +630,7 @@ export async function crearReservaPublicaAction(
   // Ventana de la solicitud diferida: por debajo de estos días la tarjeta se
   // pide ahora; por encima, unos días antes de la reserva (§5.4).
   const diasHastaReserva = Math.floor(
-    (Date.parse(`${data.fecha}T00:00:00Z`) - Date.now()) / 86_400_000,
+    (Date.parse(`${fechaReserva}T00:00:00Z`) - Date.now()) / 86_400_000,
   );
   // Solo la GARANTÍA se pide en diferido: la cancelación guarda la tarjeta sin
   // retener nada, y eso no caduca.
@@ -663,7 +682,7 @@ export async function crearReservaPublicaAction(
     datos_declarados: datosDeclarados,
     vinculacion_motivo: motivoVinculacion,
     vinculacion_estado: hayQueRevisar ? "PENDIENTE" : null,
-    fecha: data.fecha,
+    fecha: fechaReserva,
     hora: data.hora,
     personas: data.personas,
     mesa: mesaFinal,
@@ -742,7 +761,7 @@ export async function crearReservaPublicaAction(
 
   await admin.rpc("registrar_visita_cliente_sala", {
     p_cliente_id: cliente.id,
-    p_fecha: data.fecha,
+    p_fecha: fechaReserva,
   });
 
   // Correo de confirmación. La reserva web se acepta al momento (o se rechaza

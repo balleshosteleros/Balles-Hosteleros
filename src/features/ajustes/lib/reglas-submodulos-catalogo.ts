@@ -168,6 +168,7 @@ const CAMPOS_CONTACTOS: CampoSubmodulo[] = [
  */
 const CAMPOS_RESERVAS: CampoSubmodulo[] = [
   { key: "email", label: "Email" },
+  { key: "fechaNacimiento", label: "Fecha de nacimiento" },
 ];
 
 const CAMPOS_NUEVAS_RECETAS: CampoSubmodulo[] = [
@@ -241,9 +242,11 @@ export const CATALOGO: ModuloDef[] = [
         label: "Reservas",
         campos: CAMPOS_RESERVAS,
         // El email se exige de serie para poder confirmar la reserva por escrito.
-        // Quien quiera aflojarlo lo desmarca en Ajustes → Departamentos → Sala.
+        // La fecha de nacimiento, para saber a quién felicitar y poder cumplir
+        // el mínimo de edad. Quien quiera aflojarlos los desmarca en Ajustes →
+        // Departamentos → Sala.
         // El teléfono NO está aquí: es obligatorio por código, sin interruptor.
-        obligatorios: ["email"],
+        obligatorios: ["email", "fechaNacimiento"],
       },
       placeholder("clientes", "Clientes"),
     ],
