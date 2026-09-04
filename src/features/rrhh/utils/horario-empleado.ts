@@ -4,11 +4,11 @@
 //   • patrones semanales           (rrhh_patron_empleados → rrhh_patrones →
 //                                    rrhh_patron_semanas.dias[díaSemana] → turno)
 //
-// Política conservadora de rotación: como los patrones no están anclados a una
-// fecha de inicio, si el empleado trabaja ese día de la semana en CUALQUIER
-// semana del patrón se considera que tiene horario ese día (se prefiere permitir
-// a bloquear de más). El cruce de medianoche se resuelve en quien consume los
-// tramos, no aquí.
+// Patrones ROTATIVOS: un patrón puede tener varias semanas que se van
+// alternando (semana 1, semana 2, vuelta a la 1…). La que toca se calcula
+// contando las semanas transcurridas desde `vigente_desde` del patrón. Con una
+// sola semana, todas las semanas son esa. El cruce de medianoche se resuelve en
+// quien consume los tramos, no aquí.
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { ahoraEnZona } from "@/features/empresa/lib/zona-horaria";
@@ -39,6 +39,42 @@ function indexLunes(fechaISO: string): number {
   // Mediodía local para evitar saltos por DST/zona.
   const d = new Date(`${fechaISO}T12:00:00`);
   return (d.getDay() + 6) % 7;
+}
+
+/** Lunes de la semana de una fecha, a mediodía (inmune a DST). */
+function lunesDe(fechaISO: string): Date {
+  const d = new Date(`${fechaISO}T12:00:00`);
+  d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+  return d;
+}
+
+/**
+ * Cuál de las semanas del patrón rige en `fechaISO`, contando desde el arranque
+ * del patrón y rotando.
+ *
+ * Un patrón de 2 semanas alterna: la primera semana rige la semana 1, la
+ * siguiente la semana 2, la siguiente vuelve a la 1. Con UNA sola semana,
+ * todas las semanas son esa.
+ *
+ * Se cuenta en semanas COMPLETAS entre el lunes del arranque y el lunes de la
+ * fecha, para que la rotación cambie el lunes y no a mitad de semana.
+ *
+ * Antes no se elegía ninguna: se miraban TODAS las semanas a la vez y bastaba
+ * que se trabajara ese día en cualquiera de ellas. Con eso, un patrón rotativo
+ * marcaba como laborables días que el empleado libraba — RRHH decía "libra" y
+ * su app decía "trabaja".
+ */
+function semanaQueRige(
+  fechaISO: string,
+  vigenteDesde: string | null,
+  totalSemanas: number,
+): number {
+  if (totalSemanas <= 1) return 0;
+  if (!vigenteDesde) return 0;
+  const inicio = lunesDe(vigenteDesde).getTime();
+  const actual = lunesDe(fechaISO).getTime();
+  const semanas = Math.floor((actual - inicio) / 604800000); // 7 días en ms
+  return ((semanas % totalSemanas) + totalSemanas) % totalSemanas;
 }
 
 /**
@@ -125,21 +161,38 @@ async function turnosAplicablesDia(
   if (patronIds.length > 0) {
     const { data: patrones } = await supabase
       .from("rrhh_patrones")
-      .select("id")
+      .select("id, vigente_desde")
       .eq("empresa_id", empresaId)
       .eq("activo", true)
       .in("id", patronIds)
       .lte("vigente_desde", fechaISO)
       .or(`vigente_hasta.is.null,vigente_hasta.gte.${fechaISO}`);
-    const activos = (patrones ?? []).map((p) => (p as { id: string }).id);
+    const activos = (patrones ?? []) as { id: string; vigente_desde: string | null }[];
     if (activos.length > 0) {
       const { data: semanas } = await supabase
         .from("rrhh_patron_semanas")
-        .select("patron_id, dias")
-        .in("patron_id", activos);
+        .select("patron_id, orden, dias")
+        .in(
+          "patron_id",
+          activos.map((p) => p.id),
+        )
+        .order("orden", { ascending: true });
+
+      // Semanas de cada patrón, en su orden de rotación.
+      const porPatron = new Map<string, (string | null)[][]>();
       for (const s of semanas ?? []) {
-        const dias = ((s as { dias?: (string | null)[] }).dias ?? []) as (string | null)[];
-        const tid = dias[weekday];
+        const row = s as { patron_id: string; dias?: (string | null)[] };
+        const lista = porPatron.get(row.patron_id) ?? [];
+        lista.push((row.dias ?? []) as (string | null)[]);
+        porPatron.set(row.patron_id, lista);
+      }
+
+      // De cada patrón se aplica SOLO la semana que rige hoy, no todas.
+      for (const patron of activos) {
+        const lista = porPatron.get(patron.id);
+        if (!lista || lista.length === 0) continue;
+        const idx = semanaQueRige(fechaISO, patron.vigente_desde, lista.length);
+        const tid = lista[idx]?.[weekday];
         if (tid) idsExplicitos.add(tid);
       }
     }
@@ -284,24 +337,41 @@ export async function getHorarioDiaLote(
   if (todosPatronIds.size > 0) {
     const { data: patrones } = await supabase
       .from("rrhh_patrones")
-      .select("id")
+      .select("id, vigente_desde")
       .eq("empresa_id", empresaId)
       .eq("activo", true)
       .in("id", Array.from(todosPatronIds))
       .lte("vigente_desde", fechaISO)
       .or(`vigente_hasta.is.null,vigente_hasta.gte.${fechaISO}`);
-    const activos = (patrones ?? []).map((p) => (p as { id: string }).id);
+    const activosRows = (patrones ?? []) as { id: string; vigente_desde: string | null }[];
+    const activos = activosRows.map((p) => p.id);
     if (activos.length > 0) {
       const { data: semanas } = await supabase
         .from("rrhh_patron_semanas")
-        .select("patron_id, dias")
-        .in("patron_id", activos);
-      // patron_id → turno de HOY según la celda del día de la semana.
-      const turnoDelPatron = new Map<string, string>();
+        .select("patron_id, orden, dias")
+        .in("patron_id", activos)
+        .order("orden", { ascending: true });
+
+      // Semanas de cada patrón, en su orden de rotación.
+      const semanasPorPatron = new Map<string, (string | null)[][]>();
       for (const s of semanas ?? []) {
         const row = s as { patron_id?: string | null; dias?: (string | null)[] };
-        const tid = (row.dias ?? [])[weekday];
-        if (row.patron_id && tid) turnoDelPatron.set(row.patron_id, tid);
+        if (!row.patron_id) continue;
+        const lista = semanasPorPatron.get(row.patron_id) ?? [];
+        lista.push((row.dias ?? []) as (string | null)[]);
+        semanasPorPatron.set(row.patron_id, lista);
+      }
+
+      // patron_id → turno de HOY, tomando SOLO la semana que rige hoy. Antes se
+      // recorrían todas y se quedaba con la última, así que un patrón rotativo
+      // daba el turno de una semana que no tocaba.
+      const turnoDelPatron = new Map<string, string>();
+      for (const patron of activosRows) {
+        const lista = semanasPorPatron.get(patron.id);
+        if (!lista || lista.length === 0) continue;
+        const idx = semanaQueRige(fechaISO, patron.vigente_desde, lista.length);
+        const tid = lista[idx]?.[weekday];
+        if (tid) turnoDelPatron.set(patron.id, tid);
       }
       const activosSet = new Set(activos);
       for (const [empId, patronIds] of patronesPorEmpleado) {
@@ -684,14 +754,28 @@ export async function resolverHorarioResumen(
     if (activos.length > 0) {
       const { data: semanas } = await supabase
         .from("rrhh_patron_semanas")
-        .select("patron_id, dias")
-        .in("patron_id", activos);
-      const turnoDiaPorPatron = new Map<string, Set<string>>();
+        .select("patron_id, orden, dias")
+        .in("patron_id", activos)
+        .order("orden", { ascending: true });
+
+      // Semanas de cada patrón, en su orden de rotación.
+      const semanasPorPatron = new Map<string, (string | null)[][]>();
       for (const s of semanas ?? []) {
         const pid = (s as { patron_id: string }).patron_id;
-        const dias = ((s as { dias?: (string | null)[] }).dias ?? []) as (string | null)[];
-        const tid = dias[weekday];
-        if (tid) (turnoDiaPorPatron.get(pid) ?? turnoDiaPorPatron.set(pid, new Set<string>()).get(pid)!).add(tid);
+        const lista = semanasPorPatron.get(pid) ?? [];
+        lista.push(((s as { dias?: (string | null)[] }).dias ?? []) as (string | null)[]);
+        semanasPorPatron.set(pid, lista);
+      }
+
+      // Turno de HOY de cada patrón: SOLO el de la semana que rige. Antes se
+      // juntaban los turnos de TODAS las semanas en un mismo conjunto, así que
+      // un patrón rotativo devolvía turnos de semanas que no tocaban.
+      const turnoDiaPorPatron = new Map<string, Set<string>>();
+      for (const [pid, lista] of semanasPorPatron) {
+        if (lista.length === 0) continue;
+        const idx = semanaQueRige(hoyISO, patronInfo.get(pid)?.vigenteDesde ?? null, lista.length);
+        const tid = lista[idx]?.[weekday];
+        if (tid) turnoDiaPorPatron.set(pid, new Set<string>([tid]));
       }
       for (const r of pe ?? []) {
         const eid = (r as { empleado_id?: string }).empleado_id;
