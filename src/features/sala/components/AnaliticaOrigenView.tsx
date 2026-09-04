@@ -19,6 +19,7 @@ import {
 import { colorOrigen, labelOrigen, type OrigenBucket } from "@/features/sala/data/origenes";
 import { ESTADOS_RESERVA, ESTADO_RESERVA_LABELS } from "@/features/sala/data/reservas";
 import { CapacidadGruposPanel } from "@/features/sala/components/CapacidadGruposPanel";
+import { TendenciaCanalesPanel } from "@/features/sala/components/TendenciaCanalesPanel";
 import { ListadoReservasPanel } from "@/features/sala/components/ListadoReservasPanel";
 
 type PieDatum = { name: string; value: number; origen: OrigenBucket };
@@ -288,6 +289,13 @@ export function AnaliticaOrigenView() {
             </Card>
           );
         })}
+      </div>
+
+      {/* Tendencia por canal: el eje aquí es el TIEMPO CORRIDO (2022→hoy), no
+          los meses de un año comparados entre sí como en la rejilla de arriba.
+          Responde a otra pregunta: qué canal sube y cuál baja. */}
+      <div className="border-t pt-5 mt-1">
+        <TendenciaCanalesPanel campoFecha={campoFecha} estado={estado} />
       </div>
 
       {/* Capacidad por tamaño de grupo: independiente de los filtros de arriba,
