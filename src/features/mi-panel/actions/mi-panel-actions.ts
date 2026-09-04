@@ -450,10 +450,10 @@ export interface VentanaFichajeHoy {
   tieneHorario: boolean;
   entradaMin: number | null;
   /**
-   * TURNO PARTIDO: inicio de CADA tramo del día (mañana y tarde), ordenados.
-   * Cada uno abre su propia ventana de cortesía, así que el botón de fichar
-   * vuelve a aparecer para el turno de la tarde. `entradaMin` sigue siendo el
-   * primero del día, para el resto de usos.
+   * TURNO PARTIDO: inicio de CADA tramo del día, ordenados (los que haya: dos,
+   * tres…). Cada uno abre su propia ventana de cortesía, así que el botón de
+   * fichar vuelve a aparecer en cada tramo. `entradaMin` sigue siendo el primero
+   * del día, para el resto de usos.
    */
   entradasMin: number[];
   salidaMin: number | null;
@@ -830,11 +830,11 @@ async function evaluarEntradaFichaje(
         const redondearAntes = cfg ? !!cfg.redondear_antes : true;
         const redondearDespues = cfg ? !!cfg.redondear_despues : true;
 
-        // TURNO PARTIDO: el día puede tener VARIOS tramos (mañana y tarde). Cada
-        // tramo abre su propia ventana de cortesía, así que al volver por la
-        // tarde se puede fichar otra vez igual que por la mañana. Antes solo se
-        // miraba el primer tramo del día (`Math.min`) y la vuelta de la tarde
-        // se rechazaba por "fuera de hora".
+        // TURNO PARTIDO: el día puede tener N tramos (dos, tres o los que haya).
+        // CADA tramo abre su propia ventana de cortesía, así que se registra una
+        // entrada manual por tramo, todas con la misma cortesía. Antes solo se
+        // miraba el primer tramo del día (`Math.min`) y cualquier vuelta
+        // posterior se rechazaba por "fuera de hora".
         const inicios = tramos
           .map((t) => hhmmAMinutos(t.inicio))
           .filter((m): m is number => m != null)

@@ -446,8 +446,12 @@ function minutosLocalesDe(d: Date, tz: string = "Europe/Madrid"): number {
 /**
  * Salida prevista del empleado el día `fecha`, según su horario UNIFICADO entre
  * empresas:
- *  · FIJO     → fin del último tramo fijo, colocado en la fecha de la entrada.
- *               Si el turno CRUZA MEDIANOCHE (fin <= inicio, lo normal en
+ *  · FIJO     → fin del tramo EN CURSO (aquel en el que cae su entrada),
+ *               encadenando los tramos que van seguidos sin hueco. Con turno
+ *               PARTIDO (N tramos: 2, 3 o los que haya) cada tramo tiene su
+ *               propia salida, así que la jornada se cierra al final del que
+ *               está trabajando y NO se le cuenta el descanso intermedio.
+ *               Si el tramo CRUZA MEDIANOCHE (fin <= inicio, lo normal en
  *               coctelería: 19:30–03:00) la salida cae en el día siguiente.
  *  · FLEXIBLE → solo si su objetivo es DIARIO: hora de entrada + horas del día.
  * Devuelve `null` solo si no se puede predecir (sin horario, o flexible
@@ -460,30 +464,33 @@ export async function calcularSalidaPrevista(
   horaEntradaISO: string,
 ): Promise<Date | null> {
   const horarios = await getHorariosDiaUnificado(client, userId, fecha);
-  const starts: number[] = [];
-  const ends: number[] = [];
+  // Tramos fijos del día, como pares inicio/fin: con turno PARTIDO hay N (dos,
+  // tres o los que haya) y cada uno acaba a su hora.
+  const tramos: { ini: number; fin: number }[] = [];
   let objetivoFlexHoras = 0;
   for (const h of horarios) {
     if (h.horario.tipo === "fijo") {
       for (const tr of h.horario.tramos) {
         const s = hhmmAMinutos(tr.inicio);
         const e = hhmmAMinutos(tr.fin);
-        if (s != null) starts.push(s);
-        if (e != null) ends.push(e);
+        if (s != null && e != null) tramos.push({ ini: s, fin: e });
       }
     } else if (h.horario.tipo === "flexible" && h.horario.modo === "diario") {
       objetivoFlexHoras = Math.max(objetivoFlexHoras, h.horario.objetivoHoras || 0);
     }
   }
   const entrada = new Date(horaEntradaISO);
-  if (ends.length) {
-    const entradaMin = Math.min(...starts);
-    let salidaMin = Math.max(...ends);
-    // Turno que cruza medianoche (19:30–03:00): el fin pertenece al día
-    // siguiente, así que se le suman 24 h. Antes esto devolvía `null` y el
-    // fichaje acababa en el cron de huérfanos, que lo cortaba a las 23:59 y le
-    // recortaba las horas de madrugada al empleado.
-    if (salidaMin <= entradaMin) salidaMin += 1440;
+  if (tramos.length) {
+    const entradaMin = Math.min(...tramos.map((t) => t.ini));
+    // Eje continuo: un tramo que cruza medianoche (19:30–03:00) acaba "mañana",
+    // y un tramo que empieza antes que el primero del día también se normaliza.
+    const norm = tramos
+      .map(({ ini, fin }) => {
+        const i = ini < entradaMin ? ini + 1440 : ini;
+        return { ini: i, fin: fin <= ini ? fin + 1440 + (i - ini) : fin + (i - ini) };
+      })
+      .sort((a, b) => a.ini - b.ini);
+
     // Coloca la salida tomando como referencia la fecha local de la entrada,
     // usando la zona de la empresa del horario (PRP-069; los locales del
     // reparto comparten zona).
@@ -493,8 +500,29 @@ export async function calcularSalidaPrevista(
     let entradaMinLocal = minutosLocalesDe(entrada, tz);
     // Si el empleado fichó YA pasada la medianoche (entró a las 00:10 de un
     // turno que empezó "ayer" a las 22:00), su minuto local va por detrás del
-    // inicio del turno: se normaliza al mismo eje que `salidaMin`.
-    if (entradaMinLocal < entradaMin) entradaMinLocal += 1440;
+    // inicio del turno: se normaliza al mismo eje.
+    //
+    // El margen de 120 min evita confundir eso con quien ficha unos minutos
+    // ANTES de su primer tramo (cortesía: entra 12:27 de un turno de 12:30). Sin
+    // él se le sumaban 24 h y la salida prevista saltaba al último tramo del
+    // día, juntándole los dos turnos del partido en uno solo.
+    if (entradaMinLocal < entradaMin - 120) entradaMinLocal += 1440;
+
+    // Tramo EN CURSO: aquel que contiene la entrada; si fichó antes de empezar
+    // (dentro de la cortesía), el primero que aún no ha terminado.
+    let idx = norm.findIndex((t) => entradaMinLocal >= t.ini && entradaMinLocal <= t.fin);
+    if (idx === -1) idx = norm.findIndex((t) => t.fin >= entradaMinLocal);
+    if (idx === -1) idx = norm.length - 1;
+
+    // Tramos SEGUIDOS (sin hueco) se encadenan: son una sola jornada continua y
+    // no se corta entre ellos. En cuanto hay hueco de descanso, ahí acaba: esa
+    // es la salida automática de ESTE tramo, y al volver ficha entrada de nuevo.
+    let salidaMin = norm[idx].fin;
+    for (let i = idx + 1; i < norm.length; i++) {
+      if (norm[i].ini > salidaMin) break; // hueco real → aquí se cierra
+      salidaMin = Math.max(salidaMin, norm[i].fin);
+    }
+
     return new Date(entrada.getTime() + (salidaMin - entradaMinLocal) * 60000);
   }
   if (objetivoFlexHoras > 0) {

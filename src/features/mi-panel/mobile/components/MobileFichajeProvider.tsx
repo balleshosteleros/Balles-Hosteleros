@@ -23,7 +23,7 @@ const POSPONER_MS = 5 * 60 * 1000;
 interface Ventana {
   tieneHorario: boolean;
   entradaMin: number | null;
-  /** Inicio de cada tramo del día: en turno partido, mañana y tarde. */
+  /** Inicio de CADA tramo del día: en turno partido, los N que haya. */
   entradasMin: number[];
   salidaMin: number | null;
   popupMargenAntesMin: number;
@@ -51,7 +51,7 @@ function calcularDebe(
   let debeEntrada = false;
   let debeSalida = false;
   if (tiene) {
-    // TURNO PARTIDO: hay que avisar en CADA entrada del día (mañana y tarde),
+    // TURNO PARTIDO: hay que avisar en CADA entrada del día (las que haya),
     // no solo en la primera.
     const inicios =
       ventana?.entradasMin?.length

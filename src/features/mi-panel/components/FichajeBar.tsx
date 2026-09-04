@@ -69,7 +69,7 @@ export function FichajeBar({
   const [ventana, setVentana] = useState<{
     tieneHorario: boolean;
     entradaMin: number | null;
-    /** Inicio de cada tramo del día: en turno partido, mañana y tarde. */
+    /** Inicio de CADA tramo del día: en turno partido, los N que haya. */
     entradasMin: number[];
     margenAntesMin: number;
     margenDespuesMin: number;
@@ -258,8 +258,8 @@ export function FichajeBar({
     if (ventana.permitirFueraHorario) return true;
     if (!ventana.tieneHorario || ventana.entradaMin == null) return true;
     const { minutos } = ahoraEnZona(ventana.zonaHoraria);
-    // TURNO PARTIDO: cada tramo del día (mañana y tarde) abre su propia ventana
-    // de cortesía, así que al volver por la tarde el botón aparece otra vez.
+    // TURNO PARTIDO: cada tramo del día abre su propia ventana de cortesía, así
+    // que el botón vuelve a aparecer en cada vuelta, sean dos tramos o diez.
     const inicios = ventana.entradasMin.length ? ventana.entradasMin : [ventana.entradaMin];
     // El turno de noche cruza medianoche: se prueba también ±24 h.
     return inicios.some((ini) => {
@@ -271,8 +271,8 @@ export function FichajeBar({
   })();
 
   // Texto de ayuda cuando el botón no está disponible: la PRÓXIMA entrada que
-  // le queda hoy. En turno partido, por la tarde debe anunciar la hora de la
-  // tarde, no la de la mañana que ya pasó.
+  // le queda hoy. En turno partido debe anunciar el siguiente tramo, no uno ya
+  // pasado.
   const horaEntradaPrevista = (() => {
     if (!ventana) return null;
     const inicios = ventana.entradasMin.length
