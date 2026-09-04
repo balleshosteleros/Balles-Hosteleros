@@ -1,4 +1,4 @@
-import { VentasView } from "@/features/sala/components/VentasView";
+import { VentasView } from "@/features/gerencia/components/VentasView";
 
 export const dynamic = "force-dynamic";
 

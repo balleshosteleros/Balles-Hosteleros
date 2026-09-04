@@ -47,16 +47,16 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { getVentasDashboard } from "@/features/sala/actions/ventas-actions";
-import { AgoraExtraccionesPanel } from "@/features/sala/components/AgoraExtraccionesPanel";
-import { MigracionAgoraDialog } from "@/features/sala/components/MigracionAgoraDialog";
+import { getVentasDashboard } from "@/features/gerencia/actions/ventas-actions";
+import { AgoraExtraccionesPanel } from "@/features/gerencia/components/AgoraExtraccionesPanel";
+import { MigracionAgoraDialog } from "@/features/gerencia/components/MigracionAgoraDialog";
 import type {
   VentasDashboard,
   VentasPreset,
   MenuClass,
   VentaProducto,
-} from "@/features/sala/types/ventas";
-import { MENU_CLASS_LABEL, MENU_CLASS_HINT } from "@/features/sala/types/ventas";
+} from "@/features/gerencia/types/ventas";
+import { MENU_CLASS_LABEL, MENU_CLASS_HINT } from "@/features/gerencia/types/ventas";
 
 // ─── Helpers ────────────────────────────────────────────────────
 const fmtEUR = (v: number) =>

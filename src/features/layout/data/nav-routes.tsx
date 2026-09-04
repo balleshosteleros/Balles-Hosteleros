@@ -110,7 +110,6 @@ export const salaSubs: SubItem[] = [
   { title: "PUNTO DE VENTA", url: "/sala/pos", icon: CreditCard },
   { title: "TARIFAS", url: "/sala/tarifas", icon: Tag },
   { title: "DESCUENTOS", url: "/sala/descuentos", icon: PercentDiamond },
-  { title: "VENTAS", url: "/sala/ventas", icon: TrendingUp },
   { title: "RESERVAS", url: "/sala/reservas", icon: BookOpen },
   { title: "CUPONES", url: "/sala/cupones", icon: Gift },
   { title: "CLIENTES", url: "/sala/clientes", icon: Contact },
@@ -138,6 +137,7 @@ export const logisticaSubs: SubItem[] = [
 ];
 
 export const gerenciaSubs: SubItem[] = [
+  { title: "VENTAS", url: "/gerencia/ventas", icon: TrendingUp },
   { title: "MANTENIMIENTO", url: "/gerencia/mantenimiento", icon: Wrench },
   { title: "VENCIMIENTOS", url: "/gerencia/vencimientos", icon: CalendarDays },
   { title: "CIERRES", url: "/gerencia/cierres", icon: Wallet },

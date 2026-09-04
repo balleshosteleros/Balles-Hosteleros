@@ -1,6 +1,6 @@
 /**
  * Cron diario: ingiere las ventas del día anterior de Ágora POS hacia
- * pos_tickets / pos_ticket_lineas (visibles en /sala/ventas) y recalcula el
+ * pos_tickets / pos_ticket_lineas (visibles en /gerencia/ventas) y recalcula el
  * precio de venta medio ponderado. PRP-056.
  *
  * Configurado en vercel.json (tras el cierre de caja). Fail-closed con CRON_SECRET.

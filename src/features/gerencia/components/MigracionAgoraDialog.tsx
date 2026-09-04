@@ -18,7 +18,7 @@ import {
   sincronizarDiaAgora,
   type MigracionEstado,
   type MigracionFactura,
-} from "@/features/sala/actions/agora-migracion-actions";
+} from "@/features/gerencia/actions/agora-migracion-actions";
 import { formatearFechaEs } from "@/shared/lib/fecha";
 
 const eur = (n: number) => `${(n ?? 0).toFixed(2)} €`;

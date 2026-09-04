@@ -463,7 +463,7 @@ Cotejando el código con la sección **"Integración mediante API HTTP"** de la 
 
 > Sesión lado Fernando (solo lectura sobre BD/Ágora + un cron en GitHub Actions; **no se tocó `src/`**). El «Estado» del encabezado (06-10) queda **superado** por esto.
 
-**Estado real hoy.** El colaborador construyó encima la **ingesta de ventas** (PRP-056/057/058) y un **conector multi-tenant** (PRP-059): las credenciales de Ágora ya no son env globales, viven **cifradas por empresa en BD** (`empresas.agora_activo` + `agora_api_*`), con fallback a env. Habana (Workplace 1) y Bacanal (Workplace 4) activas. Las **ventas Ágora→Balles fluyen a diario** a `pos_tickets`/`pos_ticket_lineas` (visibles en /sala/ventas) y el kardex descuenta por receta.
+**Estado real hoy.** El colaborador construyó encima la **ingesta de ventas** (PRP-056/057/058) y un **conector multi-tenant** (PRP-059): las credenciales de Ágora ya no son env globales, viven **cifradas por empresa en BD** (`empresas.agora_activo` + `agora_api_*`), con fallback a env. Habana (Workplace 1) y Bacanal (Workplace 4) activas. Las **ventas Ágora→Balles fluyen a diario** a `pos_tickets`/`pos_ticket_lineas` (visibles en /gerencia/ventas) y el kardex descuenta por receta.
 
 **Hecho esta sesión:**
 - **Cron de ventas arreglado.** Vercel **no dispara fiable** los crons (plan Hobby, 16 crons en `vercel.json`, horas dispersas; se saltó el 22-23). Montado un **disparador externo en GitHub Actions** (`.github/workflows/agora-sync-cron.yml`, 09:37 UTC, `CRON_SECRET` en GitHub Secrets). Recuperados a mano los días 21-22 que faltaban (**44 facturas**). Commit `dea4201`.

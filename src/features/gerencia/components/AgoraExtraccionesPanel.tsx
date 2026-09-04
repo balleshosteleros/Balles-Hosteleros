@@ -9,7 +9,7 @@ import {
   getFacturasAgoraDia,
   type ExtraccionDia,
   type FacturaAgora,
-} from "@/features/sala/actions/agora-extracciones-actions";
+} from "@/features/gerencia/actions/agora-extracciones-actions";
 
 const eur = (n: number) => `${n.toFixed(2)} €`;
 
