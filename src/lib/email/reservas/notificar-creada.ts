@@ -1,4 +1,8 @@
 import { createAdminClient } from "@/lib/supabase/admin";
+import {
+  ZONA_HORARIA_FALLBACK,
+  zonaLocalAUtcISO,
+} from "@/features/empresa/lib/zona-horaria";
 import { enviarReservaEmail, type ReservaEmailActor } from "./mailer";
 
 /**
@@ -65,7 +69,29 @@ export async function notificarReservaCreada(
     if (!activa || !envioInmediato) return { ok: res.ok };
 
     const diasAntes = (cfg?.reconfirmacion_dias_antes as number | null) ?? 1;
-    const ts = new Date(`${r.fecha as string}T${(r.hora as string).slice(0, 5)}:00`);
+
+    // `fecha`/`hora` son hora local del RESTAURANTE, no del servidor: sin la
+    // zona de la empresa, `new Date("...T21:00:00")` se interpretaba en la del
+    // proceso (UTC en Vercel) y el cálculo se iba dos horas, justo las que
+    // deciden si una reserva del borde entra o no en el envío inmediato.
+    const { data: emp } = await admin
+      .from("empresas")
+      .select("config_operativa")
+      .eq("id", r.empresa_id as string)
+      .maybeSingle();
+    const cfgOp = (emp?.config_operativa as Record<string, unknown> | null) ?? null;
+    const tzEmpresa =
+      cfgOp && typeof cfgOp.zonaHoraria === "string" && cfgOp.zonaHoraria.trim()
+        ? cfgOp.zonaHoraria.trim()
+        : ZONA_HORARIA_FALLBACK;
+
+    const ts = new Date(
+      zonaLocalAUtcISO(
+        r.fecha as string,
+        (r.hora as string).slice(0, 5),
+        tzEmpresa,
+      ),
+    );
     const diffMs = ts.getTime() - Date.now();
     const leadMs = diasAntes * 24 * 3600 * 1000;
     if (diffMs > 0 && diffMs < leadMs) {
