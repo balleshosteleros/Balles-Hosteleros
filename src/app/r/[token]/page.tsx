@@ -47,6 +47,7 @@ export default async function ResenaPage({
         redirigir5EstrellasGoogle={data.empresa.redirigir5EstrellasGoogle}
         googleReviewUrl={data.empresa.googleReviewUrl}
         desglosado={data.lead.origen === "reserva"}
+        campos={data.campos}
         yaRespondio={data.lead.yaRespondio}
       />
     </main>

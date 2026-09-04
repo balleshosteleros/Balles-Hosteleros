@@ -29,6 +29,16 @@ export type ResenaPagina = {
     /** De dónde vino el token: decide si se piden las tres valoraciones. */
     origen: "carta" | "reserva";
   };
+  /**
+   * Qué se le pregunta a este cliente. Cada empresa decide lo que valora en
+   * Reservas → Configuración → Comunicaciones: HABANA, por ejemplo, no
+   * pregunta por la cocina. La nota general se pide siempre y por eso no está.
+   */
+  campos: {
+    cocina: boolean;
+    servicio: boolean;
+    ambiente: boolean;
+  };
 };
 
 export async function fetchResenaPagina(
@@ -91,6 +101,16 @@ export async function fetchResenaPagina(
       .eq("empresa_id", empresa.id)
       .maybeSingle();
 
+    // Qué preguntas enseña la encuesta. Solo aplica a la valoración de una
+    // reserva: el QR de la carta pide únicamente la nota general.
+    const { data: cfgReservas } = await supabase
+      .from("empresa_reservas_config")
+      .select(
+        "valoracion_pide_cocina, valoracion_pide_servicio, valoracion_pide_ambiente",
+      )
+      .eq("empresa_id", empresa.id)
+      .maybeSingle();
+
     // ¿Ya respondió? Buscamos reseñas con external_id = token (lo guardamos
     // así al insertar la reseña pública para evitar duplicados).
     const { count } = await supabase
@@ -113,6 +133,13 @@ export async function fetchResenaPagina(
         nombre: lead.nombre ?? "",
         yaRespondio: (count ?? 0) > 0,
         origen: lead.origen,
+      },
+      // Sin fila de configuración se preguntan las tres, que es como funcionaba
+      // antes de poder elegir.
+      campos: {
+        cocina: cfgReservas?.valoracion_pide_cocina ?? true,
+        servicio: cfgReservas?.valoracion_pide_servicio ?? true,
+        ambiente: cfgReservas?.valoracion_pide_ambiente ?? true,
       },
     };
   } catch (err) {

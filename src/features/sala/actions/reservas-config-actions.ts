@@ -107,6 +107,9 @@ function rowToConfig(row: Record<string, unknown>): EmpresaReservasConfig {
     recordatorioHorasAntes:         (row.recordatorio_horas_antes as number) ?? 3,
     valoracionEmailActivo:          Boolean(row.valoracion_email_activo ?? true),
     valoracionEmailHorasDespues:    (row.valoracion_email_horas_despues as number) ?? 24,
+    valoracionPideCocina:           Boolean(row.valoracion_pide_cocina ?? true),
+    valoracionPideServicio:         Boolean(row.valoracion_pide_servicio ?? true),
+    valoracionPideAmbiente:         Boolean(row.valoracion_pide_ambiente ?? true),
 
     cerrarMotorWebActivo:  Boolean(row.cerrar_motor_web_activo ?? false),
     cerrarMotorWebComida:  (row.cerrar_motor_web_comida as string | null) ?? null,
@@ -221,6 +224,9 @@ export async function upsertReservasConfig(updates: Partial<EmpresaReservasConfi
     if ("recordatorioHorasAntes"          in updates) db.recordatorio_horas_antes          = updates.recordatorioHorasAntes;
     if ("valoracionEmailActivo"           in updates) db.valoracion_email_activo           = updates.valoracionEmailActivo;
     if ("valoracionEmailHorasDespues"     in updates) db.valoracion_email_horas_despues    = updates.valoracionEmailHorasDespues;
+    if ("valoracionPideCocina"            in updates) db.valoracion_pide_cocina            = updates.valoracionPideCocina;
+    if ("valoracionPideServicio"          in updates) db.valoracion_pide_servicio          = updates.valoracionPideServicio;
+    if ("valoracionPideAmbiente"          in updates) db.valoracion_pide_ambiente          = updates.valoracionPideAmbiente;
     if ("cerrarMotorWebActivo"  in updates) db.cerrar_motor_web_activo  = updates.cerrarMotorWebActivo;
     if ("cerrarMotorWebComida"  in updates) db.cerrar_motor_web_comida  = updates.cerrarMotorWebComida;
     if ("cerrarMotorWebCena"    in updates) db.cerrar_motor_web_cena    = updates.cerrarMotorWebCena;

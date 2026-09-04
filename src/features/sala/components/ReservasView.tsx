@@ -262,7 +262,11 @@ function addMonths(iso: string, n: number) {
  * fila. El ancho extra que necesita se lo cede el plano, que se escala solo.
  */
 const LISTA_GRID =
-  "grid grid-cols-[50px_62px_minmax(0,1fr)_26px_56px_74px_86px_58px] gap-1.5 items-center";
+  // Hora · Mesa · Nombre · Per · Origen · Tipo · Estado · Tiempo.
+  // Origen y Tipo suben porque "Cancelación" y los origenes largos se cortaban
+  // a media palabra; el resto del ancho se lo queda el NOMBRE, que es el dato
+  // por el que se busca a la gente en sala.
+  "grid grid-cols-[50px_62px_minmax(0,1fr)_26px_72px_92px_86px_58px] gap-1.5 items-center";
 
 /**
  * TIPO de la reserva: cuál de las cuatro es (PRP-082).
@@ -5271,11 +5275,11 @@ export function ReservasView() {
         {panelOculto !== "lista" && (
         <div className={cn(
           "border-r flex flex-col bg-card overflow-hidden",
-          // 620 px (antes 560): la columna TIEMPO necesita sitio y no puede
-          // comerselo el nombre, que es el dato por el que se busca a la gente
-          // en sala. Lo que crece la lista lo cede el plano, que aguanta bien
-          // menos ancho porque se escala solo al espacio que le queda.
-          panelOculto === "ninguno" ? "w-[620px] shrink-0" : "flex-1",
+          // 760 px (antes 620): con la columna TIPO ya no cabian los datos y el
+          // nombre se cortaba, que es justo por lo que se busca a la gente en
+          // sala. Lo que crece la lista lo cede el plano SOLO a lo ancho: se
+          // escala solo al espacio que le queda y mantiene su alto entero.
+          panelOculto === "ninguno" ? "w-[760px] shrink-0" : "flex-1",
         )}>
           {(origenesPresentes.length > 0 || filtroOrigen !== "TODOS") && (
             <div className="px-3 py-1.5 border-b flex items-center gap-1.5 text-[10px]">

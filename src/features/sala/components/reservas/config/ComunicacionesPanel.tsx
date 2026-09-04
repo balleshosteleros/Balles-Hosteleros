@@ -80,6 +80,20 @@ const HORAS_VALORACION: { valor: number; etiqueta: string }[] = [
   { valor: 168, etiqueta: "1 semana" },
 ];
 
+/**
+ * Qué puede preguntar la encuesta de valoración. Cada empresa enciende solo lo
+ * que valora: HABANA, por ejemplo, nunca ha puntuado la cocina. La nota general
+ * no está aquí porque se pregunta siempre.
+ */
+const VALORACION_CAMPOS = [
+  { clave: "valoracionPideCocina",   etiqueta: "Cocina" },
+  { clave: "valoracionPideServicio", etiqueta: "Servicio" },
+  { clave: "valoracionPideAmbiente", etiqueta: "Ambiente" },
+] as const satisfies readonly {
+  clave: keyof EmpresaReservasConfig;
+  etiqueta: string;
+}[];
+
 export function ComunicacionesPanel() {
   const { confirm: confirmReset, dialog: confirmResetDialog } = useConfirmDelete();
   const [plantillas, setPlantillas] = useState<ReservaEmailPlantilla[]>([]);
@@ -418,6 +432,32 @@ export function ComunicacionesPanel() {
                       Solo se pide valoración a quien vino y dejó su email, una
                       sola vez por reserva.
                     </p>
+
+                    <div className="pt-1 space-y-2 border-t border-border">
+                      <Label className="text-xs pt-2 block">
+                        Qué se le pregunta al cliente
+                      </Label>
+                      {VALORACION_CAMPOS.map((campo) => (
+                        <div
+                          key={campo.clave}
+                          className="flex items-center justify-between gap-2"
+                        >
+                          <Label className="text-xs text-muted-foreground font-normal">
+                            {campo.etiqueta}
+                          </Label>
+                          <Switch
+                            checked={config[campo.clave]}
+                            onCheckedChange={(v) =>
+                              actualizarRecordatorio({ [campo.clave]: v })
+                            }
+                          />
+                        </div>
+                      ))}
+                      <p className="text-[11px] text-muted-foreground leading-relaxed">
+                        Lo que apagues aquí deja de aparecer en la encuesta. La
+                        nota general se pregunta siempre.
+                      </p>
+                    </div>
                   </>
                 )}
               </div>

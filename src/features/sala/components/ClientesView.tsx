@@ -18,6 +18,7 @@ import { ClienteBloqueoTicketBanner } from "@/features/sala/components/clientes/
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import Link from "next/link";
 import { Settings, Star } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -197,6 +198,8 @@ export function ClientesView() {
   const [columnasVisibles, setColumnasVisibles] = useState<ToolbarColumnaVisible>({});
   const [columnasOrden, setColumnasOrden] = useState<string[] | undefined>(undefined);
   const [selectedCliente, setSelectedCliente] = useState<Cliente | null>(null);
+  /** Pestaña abierta de la ficha. Siempre se entra por los datos. */
+  const [tabFicha, setTabFicha] = useState<"datos" | "valoraciones">("datos");
   const searchParams = useSearchParams();
   const [showConfig, setShowConfig] = useState(false);
   const [pagina, setPagina] = useState(1);
@@ -360,6 +363,8 @@ export function ClientesView() {
   const cerrarFicha = () => {
     setSelectedCliente(null);
     setBorrador(null);
+    // Si no, la siguiente ficha se abriría en la pestaña que dejó la anterior.
+    setTabFicha("datos");
     // Las etiquetas se guardan solas mientras la ficha está abierta; al cerrar
     // se recarga para que la tabla refleje lo que se haya tocado.
     loadClientes();
@@ -760,487 +765,564 @@ export function ClientesView() {
           {borrador && (
             <div className="space-y-4 text-sm">
               <ClienteBloqueoTicketBanner clienteId={borrador.id} />
+              {/*
+                La ficha se lee en dos partes: los DATOS del cliente y lo que ha
+                valorado. Antes era una sola columna larguísima y las valoraciones
+                quedaban enterradas bajo el histórico de reservas.
+              */}
+              <Tabs
+                value={tabFicha}
+                onValueChange={(v) => setTabFicha(v as "datos" | "valoraciones")}
+              >
+                <TabsList className="grid w-full grid-cols-2">
+                  <TabsTrigger value="datos">Datos</TabsTrigger>
+                  <TabsTrigger value="valoraciones">
+                    Valoraciones
+                    {fichaExtra.resenas.length > 0 && (
+                      <span className="ml-1.5 text-xs text-muted-foreground">
+                        {fichaExtra.resenas.length}
+                      </span>
+                    )}
+                  </TabsTrigger>
+                </TabsList>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                  <Label htmlFor="cli-nombre">Nombre</Label>
-                  <Input
-                    id="cli-nombre"
-                    value={borrador.nombre}
-                    onChange={(e) =>
-                      setBorrador({ ...borrador, nombre: e.target.value })
-                    }
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="cli-apellidos">Apellidos</Label>
-                  <Input
-                    id="cli-apellidos"
-                    value={borrador.apellidos}
-                    onChange={(e) =>
-                      setBorrador({ ...borrador, apellidos: e.target.value })
-                    }
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="cli-telefono">Teléfono</Label>
-                  {/* Prefijo pegado al número y elegido de una lista: antes era
-                      un campo suelto y a mano, así que la mitad de las fichas
-                      se quedaban sin él o con un valor inventado. */}
-                  <div className="flex gap-1.5">
-                    <select
-                      value={borrador.telefonoPrefijo?.trim() || PREFIJO_POR_DEFECTO}
-                      onChange={(e) =>
-                        setBorrador({ ...borrador, telefonoPrefijo: e.target.value })
-                      }
-                      className="h-9 w-[96px] shrink-0 rounded-md border border-input bg-background px-2 text-sm"
-                      title={
-                        PREFIJOS_TELEFONO.find(
-                          (x) =>
-                            x.prefijo ===
-                            (borrador.telefonoPrefijo?.trim() || PREFIJO_POR_DEFECTO),
-                        )?.label ?? ""
-                      }
-                    >
-                      {PREFIJOS_TELEFONO.map((x) => (
-                        <option key={x.prefijo} value={x.prefijo}>
-                          {x.flag} {x.prefijo}
-                        </option>
-                      ))}
-                    </select>
+                <TabsContent value="datos" className="mt-4 space-y-4">
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="cli-nombre">Nombre</Label>
                     <Input
-                      id="cli-telefono"
-                      type="tel"
-                      className="flex-1"
-                      value={borrador.telefono}
+                      id="cli-nombre"
+                      value={borrador.nombre}
                       onChange={(e) =>
-                        setBorrador({ ...borrador, telefono: e.target.value })
+                        setBorrador({ ...borrador, nombre: e.target.value })
+                      }
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="cli-apellidos">Apellidos</Label>
+                    <Input
+                      id="cli-apellidos"
+                      value={borrador.apellidos}
+                      onChange={(e) =>
+                        setBorrador({ ...borrador, apellidos: e.target.value })
+                      }
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="cli-telefono">Teléfono</Label>
+                    {/* Prefijo pegado al número y elegido de una lista: antes era
+                        un campo suelto y a mano, así que la mitad de las fichas
+                        se quedaban sin él o con un valor inventado. */}
+                    <div className="flex gap-1.5">
+                      <select
+                        value={borrador.telefonoPrefijo?.trim() || PREFIJO_POR_DEFECTO}
+                        onChange={(e) =>
+                          setBorrador({ ...borrador, telefonoPrefijo: e.target.value })
+                        }
+                        className="h-9 w-[96px] shrink-0 rounded-md border border-input bg-background px-2 text-sm"
+                        title={
+                          PREFIJOS_TELEFONO.find(
+                            (x) =>
+                              x.prefijo ===
+                              (borrador.telefonoPrefijo?.trim() || PREFIJO_POR_DEFECTO),
+                          )?.label ?? ""
+                        }
+                      >
+                        {PREFIJOS_TELEFONO.map((x) => (
+                          <option key={x.prefijo} value={x.prefijo}>
+                            {x.flag} {x.prefijo}
+                          </option>
+                        ))}
+                      </select>
+                      <Input
+                        id="cli-telefono"
+                        type="tel"
+                        className="flex-1"
+                        value={borrador.telefono}
+                        onChange={(e) =>
+                          setBorrador({ ...borrador, telefono: e.target.value })
+                        }
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="cli-email">Email</Label>
+                    <Input
+                      id="cli-email"
+                      type="email"
+                      value={borrador.email}
+                      onChange={(e) =>
+                        setBorrador({ ...borrador, email: e.target.value })
+                      }
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="cli-nacimiento">Fecha de nacimiento</Label>
+                    <Input
+                      id="cli-nacimiento"
+                      type="date"
+                      value={borrador.fechaNacimiento ?? ""}
+                      max={new Date().toISOString().split("T")[0]}
+                      onChange={(e) =>
+                        setBorrador({ ...borrador, fechaNacimiento: e.target.value })
                       }
                     />
                   </div>
                 </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="cli-email">Email</Label>
-                  <Input
-                    id="cli-email"
-                    type="email"
-                    value={borrador.email}
+
+                {/* Consentimiento comercial: lo da el cliente al reservar, pero
+                    se puede retirar desde aquí si lo pide por teléfono. */}
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={borrador.aceptaMarketing ?? false}
                     onChange={(e) =>
-                      setBorrador({ ...borrador, email: e.target.value })
+                      setBorrador({ ...borrador, aceptaMarketing: e.target.checked })
                     }
                   />
-                </div>
+                  <span>Acepta recibir comunicaciones comerciales</span>
+                </label>
+
+                {/*
+                  Clasificación: dato CALCULADO por visitas, no editable. Antes se
+                  podía fijar a mano y acababa diciendo lo que hubiera puesto el
+                  último que tocó la ficha, no lo mismo para todos.
+                */}
                 <div className="space-y-1.5">
-                  <Label htmlFor="cli-nacimiento">Fecha de nacimiento</Label>
-                  <Input
-                    id="cli-nacimiento"
-                    type="date"
-                    value={borrador.fechaNacimiento ?? ""}
-                    max={new Date().toISOString().split("T")[0]}
-                    onChange={(e) =>
-                      setBorrador({ ...borrador, fechaNacimiento: e.target.value })
-                    }
-                  />
-                </div>
-              </div>
-
-              {/* Consentimiento comercial: lo da el cliente al reservar, pero
-                  se puede retirar desde aquí si lo pide por teléfono. */}
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={borrador.aceptaMarketing ?? false}
-                  onChange={(e) =>
-                    setBorrador({ ...borrador, aceptaMarketing: e.target.checked })
-                  }
-                />
-                <span>Acepta recibir comunicaciones comerciales</span>
-              </label>
-
-              {/*
-                Clasificación: dato CALCULADO por visitas, no editable. Antes se
-                podía fijar a mano y acababa diciendo lo que hubiera puesto el
-                último que tocó la ficha, no lo mismo para todos.
-              */}
-              <div className="space-y-1.5">
-                <Label className="text-muted-foreground">Clasificación</Label>
-                <div>
-                  <Badge
-                    className={clasificacionBadge[clasifFicha]}
-                    variant="outline"
-                  >
-                    {clasifFicha}
-                  </Badge>
-                </div>
-              </div>
-
-              {/*
-                Visitas y última visita son datos CALCULADOS de las reservas,
-                no campos que se guarden: por eso se muestran, no se editan.
-              */}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  {/*
-                    "Ya vino": las reservas PASADAS a las que asistió. El
-                    recuadro de estados cuenta todas, incluidas las futuras, así
-                    que 5 confirmadas pueden ser 4 visitas + 1 por venir. Sin
-                    esta aclaración en el título, la diferencia parece un fallo.
-                  */}
-                  <Label className="text-muted-foreground">
-                    Visitas (ya vino)
-                  </Label>
-                  <p>{fichaExtra.visitas}</p>
-                </div>
-                <div>
-                  <Label className="text-muted-foreground">Última visita</Label>
-                  <p>
-                    {fichaExtra.ultimaVisita
-                      ? fechaLarga(fichaExtra.ultimaVisita)
-                      : "—"}
-                  </p>
-                </div>
-              </div>
-
-              {/*
-                Resumen de comportamiento: de sus N reservas, cuántas en cada
-                estado. Es la lectura rápida de si un cliente cancela mucho o
-                no se presenta, sin tener que contar la lista a mano.
-              */}
-              <div className="pt-2 border-t space-y-1.5">
-                <Label className="text-muted-foreground">
-                  Reservas por estado (todas, también las futuras)
-                </Label>
-                {fichaExtra.historico.length === 0 ? (
-                  <p className="text-muted-foreground">Sin reservas todavía.</p>
-                ) : (
-                  <div className="flex flex-wrap gap-2">
-                    {ESTADOS_RESERVA.filter(
-                      (e) => (fichaExtra.porEstado[e] ?? 0) > 0,
-                    ).map((e) => (
-                      <span
-                        key={e}
-                        className="inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs"
-                      >
-                        <span className={cn("h-2 w-2 rounded-full", ESTADO_DOT_CLASS[e])} />
-                        <span className="text-muted-foreground">
-                          {ESTADO_RESERVA_LABELS[e]}
-                        </span>
-                        <span className="font-medium">
-                          {fichaExtra.porEstado[e]}
-                        </span>
-                      </span>
-                    ))}
+                  <Label className="text-muted-foreground">Clasificación</Label>
+                  <div>
+                    <Badge
+                      className={clasificacionBadge[clasifFicha]}
+                      variant="outline"
+                    >
+                      {clasifFicha}
+                    </Badge>
                   </div>
-                )}
-              </div>
+                </div>
 
-              {/* Próximas reservas del cliente */}
-              <div className="pt-2 border-t space-y-1.5">
-                <Label className="text-muted-foreground">Próximas reservas</Label>
-                {fichaExtra.proximas.length === 0 ? (
-                  <p className="text-muted-foreground">Sin reservas próximas.</p>
-                ) : (
-                  <ul className="space-y-1">
-                    {fichaExtra.proximas.map((r) => (
-                      <li key={r.id}>
-                        <Link
-                          href={enlaceReserva(r.fecha, r.turno)}
-                          className="flex items-center justify-between gap-3 rounded-md border px-3 py-2 hover:bg-muted/40 transition-colors"
-                        >
-                          <span>
-                            <span className="font-medium">{fechaLarga(r.fecha)}</span>
-                            <span className="text-muted-foreground"> · {r.hora}</span>
-                          </span>
-                          <span className="shrink-0 text-muted-foreground text-xs">
-                            {r.personas} {r.personas === 1 ? "persona" : "personas"}
-                            {r.zona ? ` · ${r.zona}` : ""}
-                            {r.mesa ? ` · Mesa ${r.mesa}` : ""}
-                          </span>
-                        </Link>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-
-              {/*
-                Puntuaciones que este cliente nos ha dado por correo tras su
-                visita. No tiene nada que ver con las reseñas públicas de
-                Google, que son anónimas y no se pueden atribuir a una ficha.
-              */}
-              <div className="pt-2 border-t space-y-1.5">
-                <Label className="text-muted-foreground">Nota media</Label>
-                {fichaExtra.resenas.length === 0 ? (
-                  <p className="text-muted-foreground">
-                    Todavía no ha puntuado ninguna visita.
-                  </p>
-                ) : (
-                  <div className="space-y-2">
-                    {fichaExtra.ratingMedio !== null && (
-                      <div className="flex items-center gap-2">
-                        <Estrellas nota={fichaExtra.ratingMedio} size={15} />
+                {/*
+                  Visitas y última visita son datos CALCULADOS de las reservas,
+                  no campos que se guarden: por eso se muestran, no se editan.
+                */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    {/*
+                      "Ya vino": las reservas PASADAS a las que asistió. El
+                      recuadro de estados cuenta todas, incluidas las futuras, así
+                      que 5 confirmadas pueden ser 4 visitas + 1 por venir. Sin
+                      esta aclaración en el título, la diferencia parece un fallo.
+                    */}
+                    <Label className="text-muted-foreground">
+                      Visitas (ya vino)
+                    </Label>
+                    <p>{fichaExtra.visitas}</p>
+                  </div>
+                  <div>
+                    <Label className="text-muted-foreground">Última visita</Label>
+                    <p>
+                      {fichaExtra.ultimaVisita
+                        ? fechaLarga(fichaExtra.ultimaVisita)
+                        : "—"}
+                    </p>
+                  </div>
+                  {/*
+                    La nota que nos ha puesto, resumida. El detalle de cada
+                    valoración vive en su pestaña: aquí solo se ve cómo nos
+                    valora y se entra a leerlo.
+                  */}
+                  <div>
+                    <Label className="text-muted-foreground">Nota media</Label>
+                    {fichaExtra.ratingMedio === null ? (
+                      <p className="text-muted-foreground">Sin valoraciones</p>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setTabFicha("valoraciones")}
+                        className="flex items-center gap-1.5 text-left hover:underline"
+                      >
+                        <Estrellas nota={fichaExtra.ratingMedio} size={13} />
                         <span className="font-medium">
                           {formatNota(fichaExtra.ratingMedio)}
                         </span>
                         <span className="text-xs text-muted-foreground">
-                          media de {fichaExtra.resenas.length}{" "}
-                          {fichaExtra.resenas.length === 1
-                            ? "valoración"
-                            : "valoraciones"}
+                          ({fichaExtra.resenas.length})
                         </span>
-                      </div>
+                      </button>
                     )}
+                  </div>
+                </div>
+
+                {/*
+                  Resumen de comportamiento: de sus N reservas, cuántas en cada
+                  estado. Es la lectura rápida de si un cliente cancela mucho o
+                  no se presenta, sin tener que contar la lista a mano.
+                */}
+                <div className="pt-2 border-t space-y-1.5">
+                  <Label className="text-muted-foreground">
+                    Reservas por estado (todas, también las futuras)
+                  </Label>
+                  {fichaExtra.historico.length === 0 ? (
+                    <p className="text-muted-foreground">Sin reservas todavía.</p>
+                  ) : (
+                    <div className="flex flex-wrap gap-2">
+                      {ESTADOS_RESERVA.filter(
+                        (e) => (fichaExtra.porEstado[e] ?? 0) > 0,
+                      ).map((e) => (
+                        <span
+                          key={e}
+                          className="inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs"
+                        >
+                          <span className={cn("h-2 w-2 rounded-full", ESTADO_DOT_CLASS[e])} />
+                          <span className="text-muted-foreground">
+                            {ESTADO_RESERVA_LABELS[e]}
+                          </span>
+                          <span className="font-medium">
+                            {fichaExtra.porEstado[e]}
+                          </span>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Próximas reservas del cliente */}
+                <div className="pt-2 border-t space-y-1.5">
+                  <Label className="text-muted-foreground">Próximas reservas</Label>
+                  {fichaExtra.proximas.length === 0 ? (
+                    <p className="text-muted-foreground">Sin reservas próximas.</p>
+                  ) : (
                     <ul className="space-y-1">
-                      {fichaExtra.resenas.map((r) => {
-                        // La nota de la valoración es la media de su desglose,
-                        // igual que en el histórico y en la columna de la lista.
-                        const nota = notaValoracion(r);
-                        return (
-                        <li key={r.id} className="rounded-md border px-3 py-2">
-                          <div className="flex items-center gap-2">
-                            {nota !== null && (
-                              <>
-                                <Estrellas nota={nota} />
-                                <span className="font-medium">
-                                  {formatNota(nota)}
-                                </span>
-                              </>
-                            )}
-                            <span className="text-xs text-muted-foreground">
-                              {formatFechaEnZona(r.fecha, zonaHoraria)}
+                      {fichaExtra.proximas.map((r) => (
+                        <li key={r.id}>
+                          <Link
+                            href={enlaceReserva(r.fecha, r.turno)}
+                            className="flex items-center justify-between gap-3 rounded-md border px-3 py-2 hover:bg-muted/40 transition-colors"
+                          >
+                            <span>
+                              <span className="font-medium">{fechaLarga(r.fecha)}</span>
+                              <span className="text-muted-foreground"> · {r.hora}</span>
                             </span>
-                          </div>
-                          {/* Desglose: dice QUÉ falló, no solo cuánto. */}
-                          {(r.comida !== null ||
-                            r.servicio !== null ||
-                            r.ambiente !== null) && (
-                            <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1">
-                              {([
-                                ["Comida", r.comida],
-                                ["Servicio", r.servicio],
-                                ["Ambiente", r.ambiente],
-                              ] as const).map(([etiqueta, notaCat]) =>
-                                notaCat === null ? null : (
-                                  <span
-                                    key={etiqueta}
-                                    className="inline-flex items-center gap-1 text-xs"
-                                  >
-                                    <span className="text-muted-foreground">
-                                      {etiqueta}
-                                    </span>
-                                    <Estrellas nota={notaCat} size={11} />
-                                  </span>
-                                ),
-                              )}
-                            </div>
-                          )}
-                          {r.comentario && (
-                            <p className="mt-1 text-muted-foreground">
-                              {r.comentario}
-                            </p>
-                          )}
+                            <span className="shrink-0 text-muted-foreground text-xs">
+                              {r.personas} {r.personas === 1 ? "persona" : "personas"}
+                              {r.zona ? ` · ${r.zona}` : ""}
+                              {r.mesa ? ` · Mesa ${r.mesa}` : ""}
+                            </span>
+                          </Link>
                         </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label htmlFor="cli-observaciones">Observaciones</Label>
+                  <Textarea
+                    id="cli-observaciones"
+                    rows={2}
+                    value={borrador.observaciones}
+                    onChange={(e) =>
+                      setBorrador({ ...borrador, observaciones: e.target.value })
+                    }
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="cli-notas">Notas internas</Label>
+                  <Textarea
+                    id="cli-notas"
+                    rows={2}
+                    value={borrador.notasInternas}
+                    onChange={(e) =>
+                      setBorrador({ ...borrador, notasInternas: e.target.value })
+                    }
+                  />
+                </div>
+
+                {/*
+                  Histórico de reservas: TODAS, en cualquier estado, de la más
+                  reciente a la más antigua. En columnas y no en una línea de
+                  texto corrida porque así se lee en vertical — se ve de un
+                  vistazo cuántas canceló o en qué canal reserva siempre.
+
+                  Cada fila lleva al día de esa reserva en el plano de sala
+                  (`/sala/reservas?fecha=…`), que es donde se ve en su mesa y en
+                  su contexto.
+                */}
+                <div className="pt-2 border-t space-y-1.5">
+                  <Label className="text-muted-foreground">
+                    Histórico de reservas
+                    {fichaExtra.historico.length > 0 && (
+                      <span className="ml-1.5 font-normal">
+                        ({fichaExtra.historico.length})
+                      </span>
+                    )}
+                  </Label>
+                  {fichaExtra.historico.length === 0 ? (
+                    <p className="text-muted-foreground">Sin reservas todavía.</p>
+                  ) : (
+                    /*
+                      Alto acotado con scroll propio: un cliente habitual acumula
+                      cientos de reservas y sin tope empujan fuera de pantalla lo
+                      que hay debajo (etiquetas, botón de guardar).
+                    */
+                    <div className="max-h-72 overflow-y-auto rounded-md border">
+                      <table className="w-full text-xs">
+                        <thead className="sticky top-0 z-10 bg-muted/60 backdrop-blur-sm">
+                          <tr className="text-left text-muted-foreground">
+                            <th className="px-2 py-1.5 font-medium">Fecha</th>
+                            <th className="px-2 py-1.5 font-medium">Hora</th>
+                            <th className="px-2 py-1.5 font-medium">Estado</th>
+                            <th className="px-2 py-1.5 text-right font-medium">
+                              Per
+                            </th>
+                            <th className="px-2 py-1.5 font-medium">Mesa</th>
+                            <th className="px-2 py-1.5 font-medium">Zona</th>
+                            <th className="px-2 py-1.5 font-medium">Canal</th>
+                            <th className="px-2 py-1.5 font-medium">Notas</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {fichaExtra.historico.map((r) => (
+                            <tr
+                              key={r.id}
+                              className="border-t hover:bg-muted/40 transition-colors"
+                            >
+                              {/*
+                                El enlace va dentro de la primera celda: envolver
+                                el <tr> entero en un <a> no es HTML válido dentro
+                                de una tabla y el navegador lo saca de sitio.
+                              */}
+                              <td className="px-2 py-1.5 whitespace-nowrap">
+                                <Link
+                                  href={enlaceReserva(r.fecha, r.turno)}
+                                  className="font-medium hover:underline"
+                                >
+                                  {fechaConAnio(r.fecha)}
+                                </Link>
+                              </td>
+                              <td className="px-2 py-1.5 whitespace-nowrap text-muted-foreground">
+                                {r.hora || "—"}
+                              </td>
+                              <td className="px-2 py-1.5 whitespace-nowrap">
+                                <span className="flex items-center gap-1.5">
+                                  <span
+                                    className={cn(
+                                      "h-2 w-2 shrink-0 rounded-full",
+                                      ESTADO_DOT_CLASS[r.estado as EstadoReserva],
+                                    )}
+                                  />
+                                  {ESTADO_RESERVA_LABELS[
+                                    r.estado as EstadoReserva
+                                  ] ?? r.estado}
+                                </span>
+                              </td>
+                              <td className="px-2 py-1.5 text-right tabular-nums">
+                                {r.personas || "—"}
+                              </td>
+                              <td className="px-2 py-1.5 whitespace-nowrap text-muted-foreground">
+                                {r.mesa || "—"}
+                              </td>
+                              <td className="px-2 py-1.5 whitespace-nowrap text-muted-foreground">
+                                {zonaLabel(r.zona)}
+                              </td>
+                              <td className="px-2 py-1.5 whitespace-nowrap text-muted-foreground">
+                                {origenLabel(r.origen)}
+                              </td>
+                              <td
+                                className="max-w-[16rem] truncate px-2 py-1.5 text-muted-foreground"
+                                title={r.notas ?? undefined}
+                              >
+                                {r.notas || "—"}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+
+                <div className="pt-2 border-t space-y-1.5">
+                  <Label className="text-muted-foreground">Etiquetas</Label>
+                  {/*
+                    Las etiquetas se guardan solas al pulsarlas, así que aquí NO
+                    se recarga la lista: hacerlo con la ficha abierta dejaría el
+                    borrador con datos viejos y al Guardar se pisarían las
+                    correcciones que otra persona haya hecho entretanto. La lista
+                    se refresca al cerrar la ficha.
+                  */}
+                  <EtiquetasPanel scope="cliente" entityId={borrador.id} />
+                </div>
+
+                {/* Actividad DEL CLIENTE: los cambios de sus datos de contacto,
+                    se hayan hecho aquí o desde cualquiera de sus reservas. La
+                    actividad de cada reserva va en su propia ficha. */}
+                <div className="pt-2 border-t">
+                  <ActividadCliente clienteId={borrador.id} />
+                </div>
+                </TabsContent>
+
+                <TabsContent value="valoraciones" className="mt-4 space-y-4">
+                {/*
+                  Puntuaciones que este cliente nos ha dado por correo tras su
+                  visita. No tiene nada que ver con las reseñas públicas de
+                  Google, que son anónimas y no se pueden atribuir a una ficha.
+                */}
+                <div className="space-y-1.5">
+                  <Label className="text-muted-foreground">Nota media</Label>
+                  {fichaExtra.resenas.length === 0 ? (
+                    <p className="text-muted-foreground">
+                      Todavía no ha puntuado ninguna visita.
+                    </p>
+                  ) : (
+                    <div className="space-y-2">
+                      {fichaExtra.ratingMedio !== null && (
+                        <div className="flex items-center gap-2">
+                          <Estrellas nota={fichaExtra.ratingMedio} size={15} />
+                          <span className="font-medium">
+                            {formatNota(fichaExtra.ratingMedio)}
+                          </span>
+                          <span className="text-xs text-muted-foreground">
+                            media de {fichaExtra.resenas.length}{" "}
+                            {fichaExtra.resenas.length === 1
+                              ? "valoración"
+                              : "valoraciones"}
+                          </span>
+                        </div>
+                      )}
+                      <ul className="space-y-1">
+                        {fichaExtra.resenas.map((r) => {
+                          // La nota de la valoración es la media de su desglose,
+                          // igual que en el histórico y en la columna de la lista.
+                          const nota = notaValoracion(r);
+                          const tieneDetalle =
+                            r.comida !== null ||
+                            r.servicio !== null ||
+                            r.ambiente !== null ||
+                            Boolean(r.comentario);
+                          return (
+                          <li key={r.id}>
+                            {/*
+                              Cada valoración se despliega: en la lista solo se
+                              ve la nota y la fecha, y se abre la que interese.
+                              Un cliente con veinte visitas llenaba la pestaña
+                              entera de texto.
+                            */}
+                            <details className="group rounded-md border px-3 py-2">
+                              <summary
+                                className={cn(
+                                  "flex items-center gap-2",
+                                  tieneDetalle
+                                    ? "cursor-pointer"
+                                    : "cursor-default list-none",
+                                )}
+                              >
+                                {nota !== null && (
+                                  <>
+                                    <Estrellas nota={nota} />
+                                    <span className="font-medium">
+                                      {formatNota(nota)}
+                                    </span>
+                                  </>
+                                )}
+                                <span className="text-xs text-muted-foreground">
+                                  {formatFechaEnZona(r.fecha, zonaHoraria)}
+                                </span>
+                                {tieneDetalle && (
+                                  <span className="ml-auto text-xs text-muted-foreground group-open:hidden">
+                                    Ver detalle
+                                  </span>
+                                )}
+                              </summary>
+                              {/* Desglose: dice QUÉ falló, no solo cuánto. */}
+                              {(r.comida !== null ||
+                                r.servicio !== null ||
+                                r.ambiente !== null) && (
+                                <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1">
+                                  {([
+                                    ["Comida", r.comida],
+                                    ["Servicio", r.servicio],
+                                    ["Ambiente", r.ambiente],
+                                  ] as const).map(([etiqueta, notaCat]) =>
+                                    notaCat === null ? null : (
+                                      <span
+                                        key={etiqueta}
+                                        className="inline-flex items-center gap-1 text-xs"
+                                      >
+                                        <span className="text-muted-foreground">
+                                          {etiqueta}
+                                        </span>
+                                        <Estrellas nota={notaCat} size={11} />
+                                      </span>
+                                    ),
+                                  )}
+                                </div>
+                              )}
+                              {r.comentario && (
+                                <p className="mt-1 text-muted-foreground">
+                                  {r.comentario}
+                                </p>
+                              )}
+                            </details>
+                          </li>
+                          );
+                        })}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+
+                {/*
+                  Histórico de peticiones: cuándo se le pidió opinión y si
+                  contestó. Sin esto, un cliente al que se le ha pedido cinco
+                  veces sin respuesta se ve igual que uno al que no se le pidió
+                  nunca.
+                */}
+                <div className="pt-2 border-t space-y-1.5">
+                  <Label className="text-muted-foreground">
+                    Valoraciones solicitadas
+                  </Label>
+                  {fichaExtra.valoracionesSolicitadas.length === 0 ? (
+                    <p className="text-muted-foreground">
+                      Todavía no se le ha pedido ninguna valoración.
+                    </p>
+                  ) : (
+                    <ul className="space-y-1">
+                      {fichaExtra.valoracionesSolicitadas.map((v) => {
+                        const media = notaValoracion(v.resena);
+                        return (
+                          <li
+                            key={v.id}
+                            className="flex items-center justify-between gap-3 rounded-md border px-3 py-2"
+                          >
+                            <span className="text-xs text-muted-foreground">
+                              Enviada el{" "}
+                              {formatFechaEnZona(v.enviadoAt, zonaHoraria)}
+                              {v.fechaVisita
+                                ? ` · visita del ${fechaLarga(v.fechaVisita)}`
+                                : ""}
+                            </span>
+                            {media === null ? (
+                              <span className="shrink-0 text-xs text-muted-foreground">
+                                No ha contestado
+                              </span>
+                            ) : (
+                              <span className="inline-flex shrink-0 items-center gap-1.5">
+                                <Estrellas nota={media} />
+                                <span className="font-medium">
+                                  {formatNota(media)}
+                                </span>
+                              </span>
+                            )}
+                          </li>
                         );
                       })}
                     </ul>
-                  </div>
-                )}
-              </div>
-
-              {/*
-                Histórico de peticiones: cuándo se le pidió opinión y si
-                contestó. Sin esto, un cliente al que se le ha pedido cinco
-                veces sin respuesta se ve igual que uno al que no se le pidió
-                nunca.
-              */}
-              <div className="pt-2 border-t space-y-1.5">
-                <Label className="text-muted-foreground">
-                  Valoraciones solicitadas
-                </Label>
-                {fichaExtra.valoracionesSolicitadas.length === 0 ? (
-                  <p className="text-muted-foreground">
-                    Todavía no se le ha pedido ninguna valoración.
-                  </p>
-                ) : (
-                  <ul className="space-y-1">
-                    {fichaExtra.valoracionesSolicitadas.map((v) => {
-                      const media = notaValoracion(v.resena);
-                      return (
-                        <li
-                          key={v.id}
-                          className="flex items-center justify-between gap-3 rounded-md border px-3 py-2"
-                        >
-                          <span className="text-xs text-muted-foreground">
-                            Enviada el{" "}
-                            {formatFechaEnZona(v.enviadoAt, zonaHoraria)}
-                            {v.fechaVisita
-                              ? ` · visita del ${fechaLarga(v.fechaVisita)}`
-                              : ""}
-                          </span>
-                          {media === null ? (
-                            <span className="shrink-0 text-xs text-muted-foreground">
-                              No ha contestado
-                            </span>
-                          ) : (
-                            <span className="inline-flex shrink-0 items-center gap-1.5">
-                              <Estrellas nota={media} />
-                              <span className="font-medium">
-                                {formatNota(media)}
-                              </span>
-                            </span>
-                          )}
-                        </li>
-                      );
-                    })}
-                  </ul>
-                )}
-              </div>
-
-              <div className="space-y-1.5">
-                <Label htmlFor="cli-observaciones">Observaciones</Label>
-                <Textarea
-                  id="cli-observaciones"
-                  rows={2}
-                  value={borrador.observaciones}
-                  onChange={(e) =>
-                    setBorrador({ ...borrador, observaciones: e.target.value })
-                  }
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="cli-notas">Notas internas</Label>
-                <Textarea
-                  id="cli-notas"
-                  rows={2}
-                  value={borrador.notasInternas}
-                  onChange={(e) =>
-                    setBorrador({ ...borrador, notasInternas: e.target.value })
-                  }
-                />
-              </div>
-
-              {/*
-                Histórico de reservas: TODAS, en cualquier estado, de la más
-                reciente a la más antigua. En columnas y no en una línea de
-                texto corrida porque así se lee en vertical — se ve de un
-                vistazo cuántas canceló o en qué canal reserva siempre.
-
-                Cada fila lleva al día de esa reserva en el plano de sala
-                (`/sala/reservas?fecha=…`), que es donde se ve en su mesa y en
-                su contexto.
-              */}
-              <div className="pt-2 border-t space-y-1.5">
-                <Label className="text-muted-foreground">
-                  Histórico de reservas
-                  {fichaExtra.historico.length > 0 && (
-                    <span className="ml-1.5 font-normal">
-                      ({fichaExtra.historico.length})
-                    </span>
                   )}
-                </Label>
-                {fichaExtra.historico.length === 0 ? (
-                  <p className="text-muted-foreground">Sin reservas todavía.</p>
-                ) : (
-                  /*
-                    Alto acotado con scroll propio: un cliente habitual acumula
-                    cientos de reservas y sin tope empujan fuera de pantalla lo
-                    que hay debajo (etiquetas, botón de guardar).
-                  */
-                  <div className="max-h-72 overflow-y-auto rounded-md border">
-                    <table className="w-full text-xs">
-                      <thead className="sticky top-0 z-10 bg-muted/60 backdrop-blur-sm">
-                        <tr className="text-left text-muted-foreground">
-                          <th className="px-2 py-1.5 font-medium">Fecha</th>
-                          <th className="px-2 py-1.5 font-medium">Hora</th>
-                          <th className="px-2 py-1.5 font-medium">Estado</th>
-                          <th className="px-2 py-1.5 text-right font-medium">
-                            Per
-                          </th>
-                          <th className="px-2 py-1.5 font-medium">Mesa</th>
-                          <th className="px-2 py-1.5 font-medium">Zona</th>
-                          <th className="px-2 py-1.5 font-medium">Canal</th>
-                          <th className="px-2 py-1.5 font-medium">Notas</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {fichaExtra.historico.map((r) => (
-                          <tr
-                            key={r.id}
-                            className="border-t hover:bg-muted/40 transition-colors"
-                          >
-                            {/*
-                              El enlace va dentro de la primera celda: envolver
-                              el <tr> entero en un <a> no es HTML válido dentro
-                              de una tabla y el navegador lo saca de sitio.
-                            */}
-                            <td className="px-2 py-1.5 whitespace-nowrap">
-                              <Link
-                                href={enlaceReserva(r.fecha, r.turno)}
-                                className="font-medium hover:underline"
-                              >
-                                {fechaConAnio(r.fecha)}
-                              </Link>
-                            </td>
-                            <td className="px-2 py-1.5 whitespace-nowrap text-muted-foreground">
-                              {r.hora || "—"}
-                            </td>
-                            <td className="px-2 py-1.5 whitespace-nowrap">
-                              <span className="flex items-center gap-1.5">
-                                <span
-                                  className={cn(
-                                    "h-2 w-2 shrink-0 rounded-full",
-                                    ESTADO_DOT_CLASS[r.estado as EstadoReserva],
-                                  )}
-                                />
-                                {ESTADO_RESERVA_LABELS[
-                                  r.estado as EstadoReserva
-                                ] ?? r.estado}
-                              </span>
-                            </td>
-                            <td className="px-2 py-1.5 text-right tabular-nums">
-                              {r.personas || "—"}
-                            </td>
-                            <td className="px-2 py-1.5 whitespace-nowrap text-muted-foreground">
-                              {r.mesa || "—"}
-                            </td>
-                            <td className="px-2 py-1.5 whitespace-nowrap text-muted-foreground">
-                              {zonaLabel(r.zona)}
-                            </td>
-                            <td className="px-2 py-1.5 whitespace-nowrap text-muted-foreground">
-                              {origenLabel(r.origen)}
-                            </td>
-                            <td
-                              className="max-w-[16rem] truncate px-2 py-1.5 text-muted-foreground"
-                              title={r.notas ?? undefined}
-                            >
-                              {r.notas || "—"}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
+                </div>
 
-              <div className="pt-2 border-t space-y-1.5">
-                <Label className="text-muted-foreground">Etiquetas</Label>
-                {/*
-                  Las etiquetas se guardan solas al pulsarlas, así que aquí NO
-                  se recarga la lista: hacerlo con la ficha abierta dejaría el
-                  borrador con datos viejos y al Guardar se pisarían las
-                  correcciones que otra persona haya hecho entretanto. La lista
-                  se refresca al cerrar la ficha.
-                */}
-                <EtiquetasPanel scope="cliente" entityId={borrador.id} />
-              </div>
-
-              {/* Actividad DEL CLIENTE: los cambios de sus datos de contacto,
-                  se hayan hecho aquí o desde cualquiera de sus reservas. La
-                  actividad de cada reserva va en su propia ficha. */}
-              <div className="pt-2 border-t">
-                <ActividadCliente clienteId={borrador.id} />
-              </div>
+                </TabsContent>
+              </Tabs>
             </div>
           )}
           <DialogFooter>

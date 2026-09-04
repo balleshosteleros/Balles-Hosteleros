@@ -33,8 +33,14 @@ type Props = {
   ratingInicial: number | null;
   redirigir5EstrellasGoogle: boolean;
   googleReviewUrl: string | null;
-  /** true = token de reserva: se piden las tres valoraciones. */
+  /** true = token de reserva: se piden las valoraciones por separado. */
   desglosado?: boolean;
+  /**
+   * Qué preguntas enseña la encuesta, según lo que cada empresa haya activado
+   * en Reservas → Configuración → Comunicaciones. Solo aplica en modo
+   * desglosado. Si se apagan todas, queda la nota general de siempre.
+   */
+  campos?: { cocina: boolean; servicio: boolean; ambiente: boolean };
   /**
    * true = con este enlace ya se valoró antes. Se enseña el agradecimiento en
    * vez del formulario: solo se admite una valoración por visita, y dejar el
@@ -62,18 +68,22 @@ export function ResenaForm({
   redirigir5EstrellasGoogle,
   googleReviewUrl,
   desglosado = false,
+  campos = { cocina: true, servicio: true, ambiente: true },
   yaRespondio = false,
 }: Props) {
+  // Si la empresa apagó todas las preguntas, no hay nada que desglosar: se cae
+  // a la estrella única, que se pregunta siempre.
+  const desglose = desglosado && (campos.cocina || campos.servicio || campos.ambiente);
   // La nota que llega del correo es la valoración GENERAL de la experiencia.
   // En modo desglosado se usa como punto de partida de las tres categorías:
   // así el cliente ve reflejado el clic que ya hizo y solo corrige lo que
   // difiera, en vez de empezar de cero.
   const [comida, setComida] = useState<number>(ratingInicial ?? 0);
   const [servicio, setServicio] = useState<number>(
-    desglosado ? (ratingInicial ?? 0) : 0,
+    desglose ? (ratingInicial ?? 0) : 0,
   );
   const [ambiente, setAmbiente] = useState<number>(
-    desglosado ? (ratingInicial ?? 0) : 0,
+    desglose ? (ratingInicial ?? 0) : 0,
   );
   const [comentario, setComentario] = useState("");
   const [enviando, setEnviando] = useState(false);
@@ -84,8 +94,20 @@ export function ResenaForm({
 
   const color = colorPrimario || "#0ea5e9";
 
-  /** Nota global: media de lo que haya puntuado. Es la que decide Google. */
-  const notas = [comida, servicio, ambiente].filter((n) => n > 0);
+  /**
+   * Nota global: media de lo que haya puntuado. Es la que decide Google.
+   * Solo entran las preguntas que la empresa enseña: una nota apagada podría
+   * conservar un valor de arranque y falsear la media.
+   */
+  const notas = (
+    desglose
+      ? [
+          campos.cocina ? comida : 0,
+          campos.servicio ? servicio : 0,
+          campos.ambiente ? ambiente : 0,
+        ]
+      : [comida]
+  ).filter((n) => n > 0);
   const media =
     notas.length > 0
       ? Math.round(notas.reduce((a, b) => a + b, 0) / notas.length)
@@ -106,11 +128,11 @@ export function ResenaForm({
           token,
           rating: media,
           comentario: comentario.trim(),
-          ...(desglosado
+          ...(desglose
             ? {
-                ratingComida: comida || undefined,
-                ratingServicio: servicio || undefined,
-                ratingAmbiente: ambiente || undefined,
+                ratingComida: (campos.cocina && comida) || undefined,
+                ratingServicio: (campos.servicio && servicio) || undefined,
+                ratingAmbiente: (campos.ambiente && ambiente) || undefined,
               }
             : {}),
         }),
@@ -179,16 +201,22 @@ export function ResenaForm({
             {nombreLead ? `Hola ${nombreLead}, ` : ""}¿qué tal lo pasaste?
           </h2>
           <p className="mt-1 text-center text-sm text-gray-600">
-            {desglosado
+            {desglose
               ? "Ajusta lo que quieras y envía."
               : "Tu opinión nos ayuda a mejorar."}
           </p>
 
-          {desglosado ? (
+          {desglose ? (
             <div className="mt-6 space-y-4">
-              <FilaEstrellas label="Comida" valor={comida} onChange={setComida} color={color} />
-              <FilaEstrellas label="Servicio" valor={servicio} onChange={setServicio} color={color} />
-              <FilaEstrellas label="Ambiente" valor={ambiente} onChange={setAmbiente} color={color} />
+              {campos.cocina && (
+                <FilaEstrellas label="Comida" valor={comida} onChange={setComida} color={color} />
+              )}
+              {campos.servicio && (
+                <FilaEstrellas label="Servicio" valor={servicio} onChange={setServicio} color={color} />
+              )}
+              {campos.ambiente && (
+                <FilaEstrellas label="Ambiente" valor={ambiente} onChange={setAmbiente} color={color} />
+              )}
             </div>
           ) : (
             <>
