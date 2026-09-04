@@ -3438,16 +3438,40 @@ export function ReservasView() {
   // posiciones del plano activo, etiquetas de reserva) en una sola server action
   // que internamente paraleliza con Promise.all. Reemplaza 6 useEffects en
   // cascada por uno solo: ~6 round-trips secuenciales → ~1 RTT efectivo.
+  //
+  // OJO con `localId`: este efecto lo LEE y además lo ESCRIBE (`setLocalId` en
+  // el primer arranque, cuando aún está vacío). Al estar en las dependencias,
+  // esa escritura lo volvía a disparar y la carga completa —las 6 consultas—
+  // se hacía DOS veces seguidas en cada entrada a Reservas: el doble de espera
+  // y, de propina, todos los cálculos derivados (mesas, plano, disponibilidad)
+  // repetidos. Guardamos el local ya cargado en una ref y salimos si no ha
+  // cambiado de verdad: el efecto sigue reaccionando al cambio de local que
+  // hace el usuario en el desplegable, pero no a su propia escritura.
+  //
+  // La huella lleva empresa y `posicionesRefresh` además del local: así un
+  // cambio de empresa o un guardado del plano SÍ recargan, y sólo se descarta
+  // la repetición que provoca el propio `setLocalId`.
+  const localCargadoRef = useRef<string | null>(null);
+  const huellaCarga = `${empresaActual.id}|${localId || ""}|${posicionesRefresh}`;
   useEffect(() => {
+    if (localCargadoRef.current === huellaCarga) return;
     let cancelled = false;
     (async () => {
       // Si ya hay localId seleccionado (el usuario cambió de local en el
       // dropdown), lo pasamos como override; si no, se elige el primero.
       const ctx = await loadReservasModuleContext(localId || undefined);
       if (cancelled) return;
+      // Cargado: a partir de aquí, el `setLocalId` de abajo ya no relanza nada.
+      localCargadoRef.current = `${empresaActual.id}|${localId || ""}|${posicionesRefresh}`;
       const d = ctx.data;
       setLocales(d.locales);
-      if (!localId) setLocalId(d.localId);
+      if (!localId) {
+        setLocalId(d.localId);
+        // El primer arranque entra sin local y el servidor elige el primero.
+        // Anotamos ESE local como cargado para que la escritura de arriba no
+        // cuente como un cambio pendiente y vuelva a pedirlo todo.
+        localCargadoRef.current = `${empresaActual.id}|${d.localId}|${posicionesRefresh}`;
+      }
       setSalasLocalTodas(d.salas);
       const salaPrincipal = d.salas.find((s) => s.esPrincipal) ?? d.salas[0];
       setSalaActualId(salaPrincipal?.id ?? "");
@@ -3495,7 +3519,7 @@ export function ReservasView() {
       setDecoracionesPlano(d.decoraciones);
     })();
     return () => { cancelled = true; };
-  }, [empresaActual.id, localId, posicionesRefresh]);
+  }, [empresaActual.id, localId, posicionesRefresh, huellaCarga]);
 
   // Salas que muestra el plano SELECCIONADO en el filtro de planos. Un plano es
   // un conjunto de salas activas (`planoSalas`), así que elegir plano restringe
@@ -3754,9 +3778,14 @@ export function ReservasView() {
   // Se PAUSA mientras hay un diálogo abierto (nueva reserva, ficha, bloqueo…):
   // refrescar bajo los pies mientras rellenas un formulario perdería lo escrito.
   // Los cambios que lleguen entre medias se aplican al cerrar.
+  // El filtro va contra la COLUMNA `empresa_id`, que es un UUID: hay que
+  // mandar `dbId`, no el slug ("habana"). Con el slug el filtro no casaba con
+  // ninguna fila y la sincronización en vivo de Reservas no saltaba nunca —en
+  // silencio, porque el fallo no da error. `mesas` no tiene `empresa_id`, así
+  // que se vigila aparte y sin filtro (cuelga del local, no de la empresa).
   useSincronizacionEnVivo({
-    tablas: ["reservas", "mesas"],
-    empresaId: empresaActual.id,
+    tablas: ["reservas"],
+    empresaId: empresaActual.dbId ?? null,
     // Silencioso: el refresco de fondo no debe encender el indicador de carga,
     // o la pantalla parpadearía sola cada vez que otro puesto toca una reserva.
     onCambio: () => void loadReservas(fecha, true),
@@ -3810,7 +3839,8 @@ export function ReservasView() {
       "empresa_reservas_bloqueos",
       "empresa_reservas_bloqueos_excepciones",
     ],
-    empresaId: empresaActual.id,
+    // UUID, no slug: mismo motivo que en la suscripción de reservas.
+    empresaId: empresaActual.dbId ?? null,
     onCambio: () => setBloqueosRefresh((n) => n + 1),
     // La ficha tampoco pausa aquí: si alguien bloquea una mesa mientras se
     // edita una reserva, el desplegable tiene que dejar de ofrecerla al
@@ -3937,6 +3967,17 @@ export function ReservasView() {
   const mesaIdPorCodigo = useMemo(() => {
     const m = new Map<string, string>();
     for (const mesa of mesas) m.set(mesa.codigo.toUpperCase(), mesa.id);
+    return m;
+  }, [mesas]);
+
+  // Mesa por su id, para no recorrer las 100 mesas por cada fila del listado.
+  // La lista hacía `mesas.find(...)` dentro del `map` de reservas: en un día
+  // lleno eso son miles de comparaciones, y se repetían enteras cada vez que el
+  // ratón pasaba por una fila y cada 30 s con el tick del reloj. Con el mapa,
+  // cada fila resuelve su mesa de una.
+  const mesaPorId = useMemo(() => {
+    const m = new Map<string, Mesa>();
+    for (const mesa of mesas) m.set(mesa.id, mesa);
     return m;
   }, [mesas]);
 
@@ -5011,7 +5052,7 @@ export function ReservasView() {
                   // La mesa puede venir por id (elegida en el desplegable) o
                   // por código (propuesta automática aceptada: unión u otra sala).
                   const mesaCodigo = r.mesaId
-                    ? mesas.find(m => m.id === r.mesaId)?.codigo
+                    ? mesaPorId.get(r.mesaId)?.codigo
                     : (r.mesaCodigo ?? undefined);
                   const res = await createReserva({
                     clienteNombre: r.cliente || "WALK IN",
@@ -5294,7 +5335,7 @@ export function ReservasView() {
             )}
             {!loading && reservasFiltradas.length === 0 && <p className="text-xs text-muted-foreground text-center py-8">Sin reservas para este turno</p>}
             {reservasFiltradas.map(r => {
-              const mesa = mesas.find(m => m.id === r.mesaId) ?? null;
+              const mesa = (r.mesaId ? mesaPorId.get(r.mesaId) : undefined) ?? null;
               const blink = parpadeoClassPara(r);
               return (
                 // Igual que en el plano: si se pulsa "Desplazar" desde la
