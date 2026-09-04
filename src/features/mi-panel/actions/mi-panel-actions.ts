@@ -1532,6 +1532,14 @@ export async function getMiCalendarioMes(
     const filas = await getMisFilasEmpleado(supabase, user.id);
     if (filas.length > 0) {
       const finMes = new Date(hasta + "T00:00:00Z");
+      // Se resuelve el mes entero antes de escribir nada: "libra este día" y
+      // "no tiene horario asignado" son cosas distintas, y el motor devuelve
+      // 'ninguno' en los dos casos. La diferencia solo se ve mirando el mes
+      // completo — si NINGÚN día tiene turno, es que no hay horario puesto, y
+      // entonces el calendario debe decir "sin turno" en vez de afirmar que
+      // el empleado libra todos los días.
+      const previstoPorDia = new Map<string, { trabaja: boolean; texto: string }>();
+      let algunDiaConTurno = false;
       for (
         let d = new Date(desde + "T00:00:00Z");
         d.getTime() < finMes.getTime();
@@ -1550,9 +1558,17 @@ export async function getMiCalendarioMes(
             tramos.push(`${h.objetivoHoras} h`);
           }
         }
-        const prev = map.get(key) ?? vacio(key);
-        prev.horarioPrevisto = { trabaja, texto: tramos.join(", ") };
-        map.set(key, prev);
+        if (trabaja) algunDiaConTurno = true;
+        previstoPorDia.set(key, { trabaja, texto: tramos.join(", ") });
+      }
+      // Sin un solo turno en todo el mes no se afirma nada: `horarioPrevisto`
+      // se queda en null y cada día sale como "sin turno".
+      if (algunDiaConTurno) {
+        for (const [key, previsto] of previstoPorDia) {
+          const prev = map.get(key) ?? vacio(key);
+          prev.horarioPrevisto = previsto;
+          map.set(key, prev);
+        }
       }
     }
 

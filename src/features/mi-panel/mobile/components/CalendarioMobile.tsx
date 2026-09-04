@@ -66,9 +66,12 @@ function getDiaInfo(fecha: string, info: DiaCalendario | undefined, todayKey: st
   const trabajaPrevisto = previsto?.trabaja ?? false;
   const textoPrevisto = previsto?.texto ? previsto.texto : "—";
 
+  // Hoy sigue marcándose en amarillo aunque no haya turno —ubicarse en el mes
+  // es útil—, pero entonces el texto lo dice en vez de dejar una raya muda.
+  const textoHoy = !previsto && !info?.fichado ? "Sin turno asignado" : textoPrevisto;
   const horarioFichado = info?.fichado
     ? `${formatHorasDecimal(info.horasFichaje)} fichadas`
-    : textoPrevisto;
+    : textoHoy;
 
   if (isToday) return { estado: "hoy", badgeText: "Hoy", horario: horarioFichado };
   if (info?.fichado || (trabajaPrevisto && isPast)) return { estado: "trabajado", badgeText: "Trabajado", horario: horarioFichado };
@@ -274,7 +277,14 @@ export function CalendarioMobile() {
         <div className="grid grid-cols-2 gap-x-3 gap-y-2">
           {LEYENDA.map((l) => (
             <div key={l.estado} className="flex items-center gap-2 text-xs text-muted-foreground">
-              <span className={cn("h-2.5 w-2.5 shrink-0 rounded-sm", ESTILOS[l.estado].punto)} />
+              {/* "Sin turno" se dibuja como el propio día: recuadro vacío a
+                  rayas. Con un cuadradito gris más se confundía con "Libre",
+                  que es justo lo contrario (ahí SÍ sabemos que no trabajas). */}
+              {l.estado === "sinDato" ? (
+                <span className="h-2.5 w-2.5 shrink-0 rounded-sm border border-dashed border-slate-400 bg-transparent" />
+              ) : (
+                <span className={cn("h-2.5 w-2.5 shrink-0 rounded-sm", ESTILOS[l.estado].punto)} />
+              )}
               {l.texto}
             </div>
           ))}
