@@ -112,6 +112,20 @@
   * {
     @apply border-border;
   }
+  /*
+    Letra un punto más grande en TODO el software.
+
+    Tailwind mide sus tamaños (text-xs, text-sm, text-base...) en `rem`, o sea
+    en múltiplos de esta raíz: subirla de los 16 px que trae el navegador a 17
+    sube de golpe las ~6.000 clases de texto de la app, sin tocarlas una a una
+    ni descuadrar los espaciados, que crecen en la misma proporción.
+
+    No se toca `body`: ahí el tamaño no lo heredan las clases de Tailwind y
+    todo se habría quedado igual.
+  */
+  html {
+    font-size: 17px;
+  }
   body {
     @apply bg-background text-foreground;
     /* --font-inter la sirve next/font desde el layout raíz: la fuente viaja
