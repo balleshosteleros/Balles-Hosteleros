@@ -303,6 +303,13 @@ export function SalaPlanoEditor({ sala, zonas, mesas, onBack }: Props) {
    */
   const [zoomManual, setZoomManual] = useState<number | null>(null);
   const [escalaEncaje, setEscalaEncaje] = useState(1);
+  /**
+   * Arrastre del propio plano (mano) cuando está ampliado y no cabe entero.
+   * Guarda dónde se empezó a arrastrar y cuánto estaba desplazado entonces,
+   * para mover el scroll el mismo trecho que el ratón.
+   */
+  const panRef = useRef<{ x: number; y: number; left: number; top: number } | null>(null);
+  const [paneando, setPaneando] = useState(false);
 
   const isDirty =
     pendingMesaUpserts.size > 0 ||
@@ -320,7 +327,9 @@ export function SalaPlanoEditor({ sala, zonas, mesas, onBack }: Props) {
       const w = el.clientWidth;
       const h = el.clientHeight;
       if (w <= 0 || h <= 0) return;
-      const s = Math.min(w / CANVAS_W, h / CANVAS_H, 1);
+      // Se descuentan los 28px del rótulo del marco y un margen de respiro:
+      // sin esto el lienzo encajado quedaba cortado por abajo.
+      const s = Math.min(w / CANVAS_W, (h - 36) / CANVAS_H, 1);
       setEscalaEncaje(s > 0 ? s : 1);
     };
     update();
@@ -1158,7 +1167,8 @@ export function SalaPlanoEditor({ sala, zonas, mesas, onBack }: Props) {
         </div>
       </header>
 
-      <div className="grid grid-cols-[280px_1fr] gap-3" style={{ height: CANVAS_H }}>
+      {/* +36 px: el hueco del rótulo que corona el marco del plano. */}
+      <div className="grid grid-cols-[280px_1fr] gap-3" style={{ height: CANVAS_H + 36 }}>
         <aside className="border rounded-md overflow-y-auto p-3 space-y-4 bg-card">
           <section className="space-y-2">
             <p className="text-[11px] uppercase tracking-wider text-muted-foreground">
@@ -1425,10 +1435,37 @@ export function SalaPlanoEditor({ sala, zonas, mesas, onBack }: Props) {
             // llegar a cualquier esquina del plano.
             zoomManual === null ? "overflow-hidden" : "overflow-auto justify-start items-start",
           )}
-          style={{ height: CANVAS_H }}
-          onPointerMove={handlePointerMove}
-          onPointerUp={handlePointerUp}
-          onPointerLeave={handlePointerUp}
+          style={{ height: CANVAS_H + 36, cursor: paneando ? "grabbing" : undefined }}
+          onPointerDown={(e) => {
+            // Arrastrar el plano solo cuando está ampliado y el clic cae en el
+            // fondo (no sobre una mesa, que tiene su propio arrastre).
+            if (zoomManual === null) return;
+            if (e.target !== e.currentTarget && !(e.target as HTMLElement).dataset.fondoPlano) return;
+            const el = outerRef.current;
+            if (!el) return;
+            panRef.current = { x: e.clientX, y: e.clientY, left: el.scrollLeft, top: el.scrollTop };
+            setPaneando(true);
+          }}
+          onPointerMove={(e) => {
+            const pan = panRef.current;
+            const el = outerRef.current;
+            if (pan && el) {
+              el.scrollLeft = pan.left - (e.clientX - pan.x);
+              el.scrollTop = pan.top - (e.clientY - pan.y);
+              return;
+            }
+            handlePointerMove(e);
+          }}
+          onPointerUp={(e) => {
+            panRef.current = null;
+            setPaneando(false);
+            handlePointerUp(e);
+          }}
+          onPointerLeave={(e) => {
+            panRef.current = null;
+            setPaneando(false);
+            handlePointerUp(e);
+          }}
           onClick={() => {
             setMesaSeleccionada(null);
             setDecoSeleccionada(null);
@@ -1436,10 +1473,14 @@ export function SalaPlanoEditor({ sala, zonas, mesas, onBack }: Props) {
           }}
         >
           <div
+            data-fondo-plano="1"
             style={{
               width: CANVAS_W * scale,
               height: CANVAS_H * scale,
               position: "relative",
+              // Sitio alrededor del lienzo: arriba para el rótulo, y a los
+              // lados para que el marco se vea entero al desplazarse.
+              margin: zoomManual === null ? "28px 0 0 0" : "32px 24px 24px 24px",
             }}
           >
             <div
@@ -1459,12 +1500,32 @@ export function SalaPlanoEditor({ sala, zonas, mesas, onBack }: Props) {
                 // Marco de lo que se ve luego en Reservas: el plano es
                 // EXACTAMENTE este rectángulo. Lo que se salga de aquí no se
                 // verá en el servicio, así que tiene que estar a la vista
-                // mientras se colocan las mesas.
-                outline: "2px solid hsl(var(--primary))",
-                outlineOffset: "-1px",
-                boxShadow: "0 0 0 9999px hsl(var(--muted) / 0.35)",
+                // mientras se colocan las mesas. El borde va POR FUERA
+                // (outline) para no comerse píxeles del lienzo, y la sombra
+                // gigante apaga todo lo que queda alrededor.
+                outline: "3px solid hsl(var(--primary))",
+                boxShadow: "0 0 0 9999px hsl(var(--foreground) / 0.10)",
               }}
             >
+              {/* Rótulo del marco: sin él hay que adivinar qué es el recuadro.
+                  Va fuera del área útil (arriba a la izquierda) y no captura
+                  el ratón para no estorbar al colocar mesas. */}
+              <div
+                aria-hidden
+                style={{
+                  position: "absolute",
+                  top: -26,
+                  left: 0,
+                  fontSize: 12,
+                  fontWeight: 600,
+                  letterSpacing: "0.02em",
+                  color: "hsl(var(--primary))",
+                  pointerEvents: "none",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                Esto es lo que se ve en sala · lo de fuera no se verá
+              </div>
               {/* Decoraciones — siempre debajo de las mesas */}
               {Array.from(decoraciones.values()).map((d) => {
                 const sel = decoSeleccionada === d.id;
