@@ -19,3 +19,8 @@ comment on column carta_categorias.destacada is 'Dietas especiales (celiacos, ve
 comment on column carta_categorias.dias_semana is 'Dias en que se muestra (1=lunes..7=domingo). NULL = todos.';
 comment on column carta_categorias.hora_desde is 'Hora de inicio de visibilidad. NULL = sin restriccion.';
 comment on column carta_categorias.hora_hasta is 'Hora de fin de visibilidad. NULL = sin restriccion.';
+
+-- Tercera familia: shishas y vapers no son ni comida ni bebida.
+alter table carta_categorias drop constraint if exists carta_categorias_familia_check;
+alter table carta_categorias add constraint carta_categorias_familia_check
+  check (familia in ('comida','bebida','otros'));

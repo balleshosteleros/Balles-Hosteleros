@@ -143,6 +143,24 @@ export function CartaPublicaShell({ carta }: { carta: CartaPublica }) {
           </div>
         </div>
 
+        {/* Firma del software, igual que en la web pública: discreta, al final
+            del todo y sin logo. La carta es del restaurante; esto solo dice
+            quién la mueve por detrás. */}
+        <footer
+          className="mx-auto max-w-6xl px-4 pb-10 pt-2 text-center text-[11px] sm:px-6"
+          style={{ color: "var(--carta-texto-tenue)" }}
+        >
+          Tecnología por{" "}
+          <a
+            href="https://software.balleshosteleros.com"
+            target="_blank"
+            rel="noreferrer noopener"
+            className="font-medium underline-offset-2 transition-opacity hover:underline hover:opacity-90"
+          >
+            Software Balles Hosteleros
+          </a>
+        </footer>
+
         <FiltroAlergenos
           excluidos={filtroExcluidos}
           onChange={setFiltroExcluidos}

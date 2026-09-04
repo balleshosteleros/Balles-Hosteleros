@@ -13,9 +13,10 @@ type CategoriaConItems = CartaCategoria & { items: CartaItem[] };
  * que uno se hace primero— y debajo solo aparecen las categorías de esa
  * familia, que caben de un vistazo.
  *
- * Las dietas especiales (celíacos, veganos, niños) llevan un botón con filete
- * lateral y fondo propio: quien las necesita las localiza sin leer la lista
- * entera, y para el resto de comensales pasan desapercibidas.
+ * Las dietas especiales (celíacos, veganos, niños) van juntas al final y se
+ * separan del resto con un filete fino y un punto: lo justo para encontrarlas
+ * de un vistazo. Recuadrarlas las convertía en un reclamo, y no lo son: son
+ * una respuesta para quien ya viene buscándolas.
  */
 export function CategoriaSidebar({
   categorias,
@@ -39,10 +40,12 @@ export function CategoriaSidebar({
     [categorias, familia],
   );
 
-  const hayBebida = useMemo(
-    () => categorias.some((c) => c.familia === "bebida"),
-    [categorias],
-  );
+  // Solo se ofrecen las familias que esta carta usa: un local sin shishas no
+  // debe enseñar un botón "Otros" vacío.
+  const familias = useMemo(() => {
+    const orden: FamiliaCarta[] = ["comida", "bebida", "otros"];
+    return orden.filter((f) => categorias.some((c) => (c.familia ?? "comida") === f));
+  }, [categorias]);
 
   // Auto-scroll del item activo en la sidebar (mobile + desktop scroll si overflow).
   useEffect(() => {
@@ -51,12 +54,18 @@ export function CategoriaSidebar({
     if (el) el.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
   }, [activeId]);
 
-  const selectorFamilia = hayBebida ? (
+  const ETIQUETA: Record<FamiliaCarta, string> = {
+    comida: "Comida",
+    bebida: "Bebida",
+    otros: "Otros",
+  };
+
+  const selectorFamilia = familias.length > 1 ? (
     <div
       className="flex gap-1 rounded-full p-1"
       style={{ backgroundColor: "color-mix(in srgb, var(--carta-superficie-enfasis) 70%, transparent)" }}
     >
-      {(["comida", "bebida"] as const).map((f) => {
+      {familias.map((f) => {
         const on = familia === f;
         return (
           <button
@@ -69,7 +78,7 @@ export function CategoriaSidebar({
               color: on ? "var(--carta-sobre-marca)" : "var(--carta-texto-tenue)",
             }}
           >
-            {f === "comida" ? "Comida" : "Bebida"}
+            {ETIQUETA[f]}
           </button>
         );
       })}
@@ -99,20 +108,18 @@ export function CategoriaSidebar({
                   type="button"
                   data-cat={c.id}
                   onClick={() => onSelect(c.id)}
-                  className={`relative inline-flex shrink-0 items-center whitespace-nowrap px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.18em] transition ${
-                    c.destacada ? "rounded-full" : ""
-                  }`}
+                  className="relative inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.18em] transition"
                   style={{
                     color: active ? "var(--carta-primario)" : "var(--carta-texto-tenue)",
-                    // Dietas especiales: fondo tenue de acento, siempre visible.
-                    backgroundColor: c.destacada
-                      ? "color-mix(in srgb, var(--carta-acento) 14%, transparent)"
-                      : "transparent",
-                    border: c.destacada
-                      ? "1px solid color-mix(in srgb, var(--carta-acento) 42%, transparent)"
-                      : "1px solid transparent",
                   }}
                 >
+                  {c.destacada ? (
+                    <span
+                      aria-hidden
+                      className="inline-block h-1 w-1 rounded-full"
+                      style={{ backgroundColor: "var(--carta-acento)", opacity: 0.75 }}
+                    />
+                  ) : null}
                   {c.nombre}
                   {!c.destacada ? (
                     <span
@@ -139,26 +146,22 @@ export function CategoriaSidebar({
                   <button
                     type="button"
                     onClick={() => onSelect(c.id)}
-                    className={`group relative flex w-full items-center gap-2 py-2 pl-4 pr-3 text-left text-[12px] font-semibold uppercase tracking-[0.16em] transition-all ${
-                      c.destacada ? "rounded-lg" : "rounded-md"
-                    }`}
+                    className="group relative flex w-full items-center gap-2 rounded-md py-2 pl-4 pr-3 text-left text-[12px] font-semibold uppercase tracking-[0.16em] transition-all"
                     style={{
                       color: active ? "var(--carta-primario)" : "var(--carta-texto-tenue)",
                       backgroundColor: active
                         ? "color-mix(in srgb, var(--carta-primario) 8%, transparent)"
-                        : c.destacada
-                          ? "color-mix(in srgb, var(--carta-acento) 10%, transparent)"
-                          : "transparent",
-                      border: c.destacada
-                        ? "1px solid color-mix(in srgb, var(--carta-acento) 38%, transparent)"
-                        : "1px solid transparent",
+                        : "transparent",
                     }}
                   >
+                    {/* Filete izquierdo: marca el activo y, en tono de acento,
+                        distingue las dietas sin recuadrarlas. */}
                     <span
                       className="absolute left-0 top-1/2 h-5 -translate-y-1/2 rounded-r-full transition-all"
                       style={{
-                        width: active ? 3 : 0,
-                        backgroundColor: "var(--carta-primario)",
+                        width: active ? 3 : c.destacada ? 2 : 0,
+                        backgroundColor: active ? "var(--carta-primario)" : "var(--carta-acento)",
+                        opacity: active ? 1 : 0.55,
                       }}
                     />
                     <span className="truncate">{c.nombre}</span>

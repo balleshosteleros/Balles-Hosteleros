@@ -10,7 +10,7 @@ export type CartaAdminData = {
   items: CartaItem[];
 };
 
-export type FamiliaCarta = "comida" | "bebida";
+export type FamiliaCarta = "comida" | "bebida" | "otros";
 
 export type CartaCategoria = {
   id: string;
@@ -19,7 +19,7 @@ export type CartaCategoria = {
   descripcion: string | null;
   orden: number;
   visible: boolean;
-  /** COMIDA o BEBIDA: la carta se navega primero por familia. */
+  /** COMIDA, BEBIDA u OTROS (shishas, vapers): primer nivel de la carta. */
   familia: FamiliaCarta | null;
   /** Dietas especiales (celíacos, veganos, niños): botón con estilo propio. */
   destacada: boolean;
