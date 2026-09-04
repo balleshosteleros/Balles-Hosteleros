@@ -152,10 +152,12 @@ export function ReconfirmarClient({
       {/* Los dos botones, siempre los dos: quien llega desde "No podré ir" y se
           arrepiente puede confirmar sin volver al correo, y al revés. El orden
           y el peso visual no cambian con la intención — mover el botón bajo el
-          dedo del cliente es la forma de que pulse lo que no quería. */}
+          dedo del cliente es la forma de que pulse lo que no quería. Verde y
+          rojo, los mismos colores que en el correo: el cliente reconoce el
+          botón que acaba de pulsar y no duda de si ha llegado al sitio bueno. */}
       <div className="space-y-2">
         <Button
-          className="w-full"
+          className="w-full bg-green-600 hover:bg-green-700 text-white"
           size="lg"
           onClick={onConfirmar}
           disabled={enviando}
@@ -163,9 +165,8 @@ export function ReconfirmarClient({
           Sí, confirmo que voy
         </Button>
         <Button
-          className="w-full"
+          className="w-full bg-red-600 hover:bg-red-700 text-white"
           size="lg"
-          variant="outline"
           onClick={onRechazar}
           disabled={enviando}
         >

@@ -204,7 +204,7 @@ export const RESERVA_EMAIL_PLANTILLAS_SEED: ReservaEmailPlantillaSeed[] = [
     tipo: "RECONFIRMADA",
     asunto_default: "¿Nos confirmas tu reserva del {{fecha}}? · {{empresa}}",
     mensaje_default:
-      "Se acerca la fecha de tu reserva. ¿Nos confirmas que vienes? Con un clic nos ayudas a tener tu mesa lista.",
+      "Se acerca la hora de tu reserva. ¿Nos confirmas que vienes? Con un clic nos ayudas a tener tu mesa lista.",
   },
   {
     tipo: "NO_RECONFIRMADA",

@@ -869,17 +869,17 @@ function renderHtml(input: RenderInput): string {
   // Los DOS botones de la reconfirmación. Es la única acción de este correo, así
   // que van arriba y como botones de verdad, no como enlace escondido en el pie.
   //
-  // "No podré ir" pesa visualmente menos que "Sí, confirmo" (borde en vez de
-  // relleno) porque son acciones de peso distinto, no dos opciones simétricas:
-  // el sí es lo que el restaurante espera, y el no es la salida honesta para
-  // quien ya sabe que no viene. Las dos llevan a una página que pide confirmar
+  // Van en VERDE y ROJO, los dos rellenos y del mismo tamaño: el cliente lee el
+  // correo en el móvil y en dos segundos, y el color le dice qué es cada botón
+  // sin tener que leerlo. Un "No podré ir" en gris claro se confundía con el
+  // fondo y había que buscarlo. Las dos llevan a una página que pide confirmar
   // antes de tocar nada — un clic accidental desde el correo no cancela una mesa.
   const bloqueReconfirmar = input.urlReconfirmar
     ? `<div style="margin:22px 0 4px;text-align:center;">
-        <a href="${input.urlReconfirmar}?r=si" style="display:inline-block;background:#0f172a;color:#ffffff;text-decoration:none;font-weight:600;font-size:15px;padding:13px 28px;border-radius:10px;margin:0 4px 8px;">
+        <a href="${input.urlReconfirmar}?r=si" style="display:inline-block;background:#16a34a;color:#ffffff;text-decoration:none;font-weight:700;font-size:15px;padding:13px 28px;border-radius:10px;margin:0 4px 8px;">
           Sí, confirmo que voy
         </a>
-        <a href="${input.urlReconfirmar}?r=no" style="display:inline-block;background:#ffffff;color:#475569;text-decoration:none;font-weight:600;font-size:15px;padding:12px 26px;border:1px solid #cbd5e1;border-radius:10px;margin:0 4px 8px;">
+        <a href="${input.urlReconfirmar}?r=no" style="display:inline-block;background:#dc2626;color:#ffffff;text-decoration:none;font-weight:700;font-size:15px;padding:13px 28px;border-radius:10px;margin:0 4px 8px;">
           No podré ir
         </a>
       </div>`
