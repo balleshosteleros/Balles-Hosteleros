@@ -392,7 +392,13 @@ export function ClientesView() {
         return;
       }
       toast.success("Ficha guardada");
-      cerrarFicha();
+      // Guardar cierra y devuelve al plano: se entra aquí desde Sala para
+      // arreglar un dato del cliente, y lo que se quiere después es volver a
+      // las mesas, no quedarse en la tabla de clientes ni tener que buscar la X.
+      setSelectedCliente(null);
+      setBorrador(null);
+      setTabFicha("datos");
+      router.push("/sala/reservas");
     } finally {
       setGuardando(false);
     }
