@@ -449,6 +449,13 @@ export interface VentanaFichajeHoy {
   ok: boolean;
   tieneHorario: boolean;
   entradaMin: number | null;
+  /**
+   * TURNO PARTIDO: inicio de CADA tramo del día (mañana y tarde), ordenados.
+   * Cada uno abre su propia ventana de cortesía, así que el botón de fichar
+   * vuelve a aparecer para el turno de la tarde. `entradaMin` sigue siendo el
+   * primero del día, para el resto de usos.
+   */
+  entradasMin: number[];
   salidaMin: number | null;
   cruzaMedianoche: boolean;
   /** Config del aviso (pop-up) de fichar — Ajustes RRHH → Fichajes. */
@@ -528,6 +535,7 @@ export async function getMiVentanaFichajeHoy(): Promise<VentanaFichajeHoy> {
   const base = {
     tieneHorario: false,
     entradaMin: null as number | null,
+    entradasMin: [] as number[],
     salidaMin: null as number | null,
     cruzaMedianoche: false,
     popupMargenAntesMin: 15,
@@ -583,11 +591,15 @@ export async function getMiVentanaFichajeHoy(): Promise<VentanaFichajeHoy> {
     // Entrada prevista = el primer tramo del día; salida = el último.
     const entradaMin = Math.min(...fijos.map((f) => f.entradaMin));
     const salidaMin = Math.max(...fijos.map((f) => f.salidaMin));
+    // Todos los inicios del día, sin repetir: en turno partido son dos (o más)
+    // y cada uno abre su ventana de cortesía.
+    const entradasMin = [...new Set(fijos.map((f) => f.entradaMin))].sort((a, b) => a - b);
 
     return {
       ok: true,
       tieneHorario: true,
       entradaMin,
+      entradasMin,
       salidaMin,
       cruzaMedianoche: salidaMin <= entradaMin,
       ...popup,
@@ -818,21 +830,32 @@ async function evaluarEntradaFichaje(
         const redondearAntes = cfg ? !!cfg.redondear_antes : true;
         const redondearDespues = cfg ? !!cfg.redondear_despues : true;
 
+        // TURNO PARTIDO: el día puede tener VARIOS tramos (mañana y tarde). Cada
+        // tramo abre su propia ventana de cortesía, así que al volver por la
+        // tarde se puede fichar otra vez igual que por la mañana. Antes solo se
+        // miraba el primer tramo del día (`Math.min`) y la vuelta de la tarde
+        // se rechazaba por "fuera de hora".
         const inicios = tramos
           .map((t) => hhmmAMinutos(t.inicio))
-          .filter((m): m is number => m != null);
-        const startMin = inicios.length ? Math.min(...inicios) : 0;
-        const lower = startMin - margenAntes;
-        const upper = startMin + margenDespues;
-        const enVentana = (m: number) => m >= lower && m <= upper;
-        const dentro =
-          enVentana(ahoraMin) || enVentana(ahoraMin + 1440) || enVentana(ahoraMin - 1440);
+          .filter((m): m is number => m != null)
+          .sort((a, b) => a - b);
+        // Tramo cuya ventana de cortesía contiene el "ahora" (se prueba también
+        // ±24 h por el cruce de medianoche). Si no hay ninguno, no se ficha.
+        const startMin =
+          inicios.find((ini) =>
+            [ahoraMin, ahoraMin + 1440, ahoraMin - 1440].some(
+              (m) => m >= ini - margenAntes && m <= ini + margenDespues,
+            ),
+          ) ?? null;
 
-        if (!dentro) {
+        if (startMin == null) {
+          const listaHoras = inicios.map((m) => minutosAHHMM(m)).join(" y ");
           return {
             ok: false,
             fueraDeHora: true,
-            error: `No se te permite fichar: estás fuera de hora. Tu turno empieza a las ${minutosAHHMM(startMin)}. Si necesitas registrar estas horas, puedes pedir que las validen.`,
+            error: `No se te permite fichar: estás fuera de hora. ${
+              inicios.length > 1 ? `Tus turnos empiezan a las ${listaHoras}` : `Tu turno empieza a las ${listaHoras}`
+            }. Si necesitas registrar estas horas, puedes pedir que las validen.`,
           };
         }
 

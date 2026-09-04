@@ -69,6 +69,8 @@ export function FichajeBar({
   const [ventana, setVentana] = useState<{
     tieneHorario: boolean;
     entradaMin: number | null;
+    /** Inicio de cada tramo del día: en turno partido, mañana y tarde. */
+    entradasMin: number[];
     margenAntesMin: number;
     margenDespuesMin: number;
     permitirFueraHorario: boolean;
@@ -94,6 +96,7 @@ export function FichajeBar({
         setVentana({
           tieneHorario: v.tieneHorario,
           entradaMin: v.entradaMin,
+          entradasMin: v.entradasMin,
           margenAntesMin: v.margenAntesMin,
           margenDespuesMin: v.margenDespuesMin,
           permitirFueraHorario: v.permitirFueraHorario,
@@ -255,11 +258,16 @@ export function FichajeBar({
     if (ventana.permitirFueraHorario) return true;
     if (!ventana.tieneHorario || ventana.entradaMin == null) return true;
     const { minutos } = ahoraEnZona(ventana.zonaHoraria);
-    const desde = ventana.entradaMin - ventana.margenAntesMin;
-    const hasta = ventana.entradaMin + ventana.margenDespuesMin;
+    // TURNO PARTIDO: cada tramo del día (mañana y tarde) abre su propia ventana
+    // de cortesía, así que al volver por la tarde el botón aparece otra vez.
+    const inicios = ventana.entradasMin.length ? ventana.entradasMin : [ventana.entradaMin];
     // El turno de noche cruza medianoche: se prueba también ±24 h.
-    const dentro = (m: number) => m >= desde && m <= hasta;
-    return dentro(minutos) || dentro(minutos + 1440) || dentro(minutos - 1440);
+    return inicios.some((ini) => {
+      const desde = ini - ventana.margenAntesMin;
+      const hasta = ini + ventana.margenDespuesMin;
+      const dentro = (m: number) => m >= desde && m <= hasta;
+      return dentro(minutos) || dentro(minutos + 1440) || dentro(minutos - 1440);
+    });
   })();
 
   // Texto de ayuda cuando el botón no está disponible.

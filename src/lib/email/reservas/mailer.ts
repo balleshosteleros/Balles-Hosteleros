@@ -64,8 +64,6 @@ const AUDIT_COL: Record<ReservaEmailTipo, string | null> = {
   RECONFIRMADA: "email_reconfirmacion_at",
   NO_RECONFIRMADA: "email_no_reconfirmada_at",
   LISTA_ESPERA: "email_lista_espera_at",
-  LIBERADA: "email_liberada_at",
-  TERMINANDO: "email_terminando_at",
   NO_SHOW: "email_no_show_at",
   CANCELADA: "email_cancelacion_at",
   // Por política o proceso
@@ -95,8 +93,6 @@ const HEADLINE_POR_TIPO: Record<ReservaEmailTipo, string> = {
   RECONFIRMADA: "¿Nos confirmas tu reserva?",
   NO_RECONFIRMADA: "Tu reserva está pendiente de confirmar",
   LISTA_ESPERA: "Estás en lista de espera",
-  LIBERADA: "Tu reserva se ha cerrado",
-  TERMINANDO: "Tu reserva está terminando",
   NO_SHOW: "No llegaste a venir",
   CANCELADA: "Reserva cancelada",
   TICKET_COMPRA: "Compra confirmada",
@@ -117,8 +113,6 @@ const BADGE_POR_TIPO: Record<ReservaEmailTipo, string> = {
   RECONFIRMADA: "Confirma tu reserva",
   NO_RECONFIRMADA: "Sin confirmar",
   LISTA_ESPERA: "Lista de espera",
-  LIBERADA: "Reserva cerrada",
-  TERMINANDO: "Terminando",
   NO_SHOW: "No presentado",
   CANCELADA: "Cancelada",
   TICKET_COMPRA: "Compra confirmada",
@@ -232,7 +226,7 @@ export async function enviarReservaEmail(
   const { data: reservaData, error: errR } = await admin
     .from("reservas")
     .select(
-      "empresa_id, cliente_nombre, cliente_apellidos, cliente_email, fecha, hora, personas, zona, grupo_zona_id, notas, estado, tipo_categoria, tiene_garantia, garantia_importe, tiene_cancelacion, cancelacion_importe, importe_pagado, codigo, codigo_id, cancelacion_token, reconfirmacion_token, garantia_token, garantia_limite_at, valoracion_token, vinculacion_estado, vinculacion_motivo, datos_declarados, email_confirmacion_at, email_reconfirmacion_at, email_no_reconfirmada_at, email_lista_espera_at, email_liberada_at, email_terminando_at, email_no_show_at, email_politica_cancelacion_at, email_politica_garantia_at, email_recordatorio_at, email_cancelacion_at, email_valoracion_at, email_ticket_reserva_at, es_ticket, ticket_codigo, ticket_producto_id, ticket_unidades, ticket_importe, grupos_zonas(nombre)",
+      "empresa_id, cliente_nombre, cliente_apellidos, cliente_email, fecha, hora, personas, zona, grupo_zona_id, notas, estado, tipo_categoria, tiene_garantia, garantia_importe, tiene_cancelacion, cancelacion_importe, importe_pagado, codigo, codigo_id, cancelacion_token, reconfirmacion_token, garantia_token, garantia_limite_at, valoracion_token, vinculacion_estado, vinculacion_motivo, datos_declarados, email_confirmacion_at, email_reconfirmacion_at, email_no_reconfirmada_at, email_lista_espera_at, email_no_show_at, email_politica_cancelacion_at, email_politica_garantia_at, email_recordatorio_at, email_cancelacion_at, email_valoracion_at, email_ticket_reserva_at, es_ticket, ticket_codigo, ticket_producto_id, ticket_unidades, ticket_importe, grupos_zonas(nombre)",
     )
     .eq("id", reservaId)
     .maybeSingle();
@@ -291,8 +285,6 @@ export async function enviarReservaEmail(
     "RECONFIRMADA",
     "CANCELADA",
     "NO_SHOW",
-    "LIBERADA",
-    "TERMINANDO",
     "SOLICITUD_VALORACION",
   ];
   // Enlace donde el cliente pone su tarjeta (PRP-082). Solo se manda en los
@@ -802,8 +794,6 @@ function renderHtml(input: RenderInput): string {
     "NO_SHOW",
     "NO_RECONFIRMADA",
     "LISTA_ESPERA",
-    "LIBERADA",
-    "TERMINANDO",
   ];
   const greeting = (() => {
     if (input.tipo === "SOLICITUD_VALORACION") {
@@ -1177,8 +1167,6 @@ function subtitulo(t: ReservaEmailTipo): string {
       return "No hemos podido confirmar tu reserva.";
 
     case "LISTA_ESPERA":
-    case "LIBERADA":
-    case "TERMINANDO":
       return "El estado de tu reserva ha cambiado.";
 
     // ── Políticas y procesos ───────────────────────────────────────────────
@@ -1380,8 +1368,6 @@ export function previewReservaEmail(input: PreviewInput): {
       "RECONFIRMADA",
       "CANCELADA",
       "NO_SHOW",
-      "LIBERADA",
-      "TERMINANDO",
       "SOLICITUD_VALORACION",
       "TICKET_COMPRA",
     ].includes(input.tipo)

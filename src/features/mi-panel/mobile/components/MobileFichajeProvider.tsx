@@ -23,6 +23,8 @@ const POSPONER_MS = 5 * 60 * 1000;
 interface Ventana {
   tieneHorario: boolean;
   entradaMin: number | null;
+  /** Inicio de cada tramo del día: en turno partido, mañana y tarde. */
+  entradasMin: number[];
   salidaMin: number | null;
   popupMargenAntesMin: number;
   popupMargenDespuesMin: number;
@@ -49,10 +51,17 @@ function calcularDebe(
   let debeEntrada = false;
   let debeSalida = false;
   if (tiene) {
+    // TURNO PARTIDO: hay que avisar en CADA entrada del día (mañana y tarde),
+    // no solo en la primera.
+    const inicios =
+      ventana?.entradasMin?.length
+        ? ventana.entradasMin
+        : ventana?.entradaMin != null
+          ? [ventana.entradaMin]
+          : [];
     debeEntrada =
       estado === "sin-fichar" &&
-      ventana?.entradaMin != null &&
-      dentroVentana(nowMin, ventana.entradaMin, mAntes, mDespues);
+      inicios.some((ini) => dentroVentana(nowMin, ini, mAntes, mDespues));
     debeSalida =
       trabajando &&
       ventana?.salidaMin != null &&
@@ -133,6 +142,7 @@ export function MobileFichajeProvider() {
         setVentana({
           tieneHorario: v.tieneHorario,
           entradaMin: v.entradaMin,
+          entradasMin: v.entradasMin,
           salidaMin: v.salidaMin,
           popupMargenAntesMin: v.popupMargenAntesMin,
           popupMargenDespuesMin: v.popupMargenDespuesMin,

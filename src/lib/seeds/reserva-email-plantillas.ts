@@ -38,8 +38,6 @@ export type ReservaEmailTipoEstado =
   | "RECONFIRMADA"
   | "NO_RECONFIRMADA"
   | "LISTA_ESPERA"
-  | "LIBERADA"
-  | "TERMINANDO"
   | "NO_SHOW"
   | "CANCELADA";
 
@@ -68,8 +66,6 @@ export const RESERVA_EMAIL_TIPOS_ESTADO: ReservaEmailTipoEstado[] = [
   "RECONFIRMADA",
   "NO_RECONFIRMADA",
   "LISTA_ESPERA",
-  "LIBERADA",
-  "TERMINANDO",
   "NO_SHOW",
   "CANCELADA",
 ];
@@ -94,8 +90,6 @@ export const RESERVA_EMAIL_TIPO_FAMILIA: Record<ReservaEmailTipo, ReservaEmailFa
   RECONFIRMADA: "ESTADO",
   NO_RECONFIRMADA: "ESTADO",
   LISTA_ESPERA: "ESTADO",
-  LIBERADA: "ESTADO",
-  TERMINANDO: "ESTADO",
   NO_SHOW: "ESTADO",
   CANCELADA: "ESTADO",
   TICKET_COMPRA: "POLITICA",
@@ -112,8 +106,6 @@ export const RESERVA_EMAIL_TIPO_LABELS: Record<ReservaEmailTipo, string> = {
   RECONFIRMADA: "Confirma tu reserva",
   NO_RECONFIRMADA: "No reconfirmada",
   LISTA_ESPERA: "En lista de espera",
-  LIBERADA: "Mesa liberada",
-  TERMINANDO: "Terminando",
   NO_SHOW: "No presentado",
   CANCELADA: "Reserva cancelada",
   TICKET_COMPRA: "Compra de ticket",
@@ -138,8 +130,6 @@ export const RESERVA_EMAIL_ESTADO_TRANSITORIO: Record<ReservaEmailTipoEstado, bo
   RECONFIRMADA: false,
   NO_RECONFIRMADA: true,
   LISTA_ESPERA: true,
-  LIBERADA: true,
-  TERMINANDO: true,
   NO_SHOW: false,
   CANCELADA: false,
 };
@@ -153,10 +143,6 @@ export const RESERVA_EMAIL_TIPO_DESCRIPCION: Record<ReservaEmailTipo, string> = 
     "Se envía cuando la reserva queda pendiente de reconfirmar. Aviso de cambio de estado.",
   LISTA_ESPERA:
     "Se envía cuando la reserva entra en lista de espera. Aviso de cambio de estado.",
-  LIBERADA:
-    "Se envía cuando la mesa queda liberada tras la visita. Aviso de cambio de estado.",
-  TERMINANDO:
-    "Se envía cuando la mesa entra en la fase final del servicio. Aviso de cambio de estado.",
   NO_SHOW:
     "Se envía cuando la reserva se marca como no presentada porque el cliente no acudió.",
   CANCELADA: "Se envía cuando la reserva pasa al estado cancelada.",
@@ -217,18 +203,6 @@ export const RESERVA_EMAIL_PLANTILLAS_SEED: ReservaEmailPlantillaSeed[] = [
     asunto_default: "Tu reserva está en lista de espera · {{empresa}}",
     mensaje_default:
       "Tu reserva ha pasado a lista de espera. Te escribiremos en cuanto tengamos una mesa para ti.",
-  },
-  {
-    tipo: "LIBERADA",
-    asunto_default: "Tu reserva se ha cerrado · {{empresa}}",
-    mensaje_default:
-      "Tu reserva ha pasado a cerrada: la mesa ya está libre. Gracias por tu visita.",
-  },
-  {
-    tipo: "TERMINANDO",
-    asunto_default: "Tu reserva está terminando · {{empresa}}",
-    mensaje_default:
-      "Tu reserva ha pasado al estado terminando. No tienes que hacer nada.",
   },
   {
     tipo: "NO_SHOW",
