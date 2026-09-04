@@ -23,8 +23,13 @@ import {
   type ResultadoEnvioCover,
 } from "@/features/sala/actions/reservas-cover-envio-actions";
 import { formatearFechaEs } from "@/shared/lib/fecha";
+import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 
 export function EnvioCoverPanel() {
+  // El panel enseña SOLO las reservas de la empresa activa. Sin esto la lista
+  // se quedaba con las de la empresa con la que se abrió la pantalla: al
+  // cambiar a Habana se seguían viendo las de Bacanal (Iván, 4-sep).
+  const { empresaActual, empresaResuelta } = useEmpresa();
   const [filas, setFilas] = useState<ReservaCoverPendiente[]>([]);
   const [cargando, setCargando] = useState(true);
   const [enviando, setEnviando] = useState(false);
@@ -46,11 +51,20 @@ export function EnvioCoverPanel() {
   }, []);
 
   useEffect(() => {
-    // La primera carga se lanza fuera del render: el estado se toca cuando
-    // responde el servidor, no de forma síncrona dentro del efecto.
-    const t = setTimeout(() => void cargar(), 0);
+    // Hasta que la empresa activa no está resuelta, `empresaActual` es la por
+    // defecto: consultar ahí devuelve las reservas de otra empresa.
+    if (!empresaResuelta) return;
+    // Fuera del render: el estado se toca cuando responde el servidor, no de
+    // forma síncrona dentro del efecto. Se limpia también el resultado del
+    // envío anterior, que es de la empresa que estuviera activa entonces.
+    const t = setTimeout(() => {
+      setResultados(null);
+      void cargar();
+    }, 0);
     return () => clearTimeout(t);
-  }, [cargar]);
+    // `empresaActual.id` en las dependencias: cambiar de empresa recarga la
+    // lista con las suyas.
+  }, [cargar, empresaResuelta, empresaActual.id]);
 
   const pendientes = filas.filter((r) => !r.yaEnviado);
   const enviados = filas.filter((r) => r.yaEnviado);
