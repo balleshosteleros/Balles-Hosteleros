@@ -41,7 +41,6 @@ import {
   esTipoEstado,
   type ReservaEmailTipo,
 } from "@/lib/seeds/reserva-email-plantillas";
-import { componerTelefono } from "@/features/sala/data/prefijos-telefono";
 async function getContext() {
   const supabase = await createClient();
   const {
@@ -219,8 +218,9 @@ export async function createReserva(input: {
   asignarAuto?: boolean;
   /**
    * El local ha visto el aviso de "esta mesa está bloqueada" y quiere seguir
-   * igualmente. Solo lo manda la pantalla interna de sala: la web pública
-   * nunca lo pone, así que online la mesa bloqueada sigue sin venderse.
+   * igualmente. Solo lo manda la pantalla interna de sala: las reservas de
+   * origen WEB y GOOGLE nunca lo ponen, así que online la mesa bloqueada
+   * sigue sin venderse.
    */
   forzarMesaBloqueada?: boolean;
   localId?: string | null;
@@ -314,12 +314,7 @@ export async function createReserva(input: {
       camposDistintos = link.result.camposDistintos;
       nombreFinal = link.result.cliente.nombre;
       apellidosFinal = link.result.cliente.apellidos;
-      // La ficha guarda número y prefijo por separado; la reserva lo lleva
-      // entero para que todos los teléfonos del listado se lean igual.
-      telefonoFinal = componerTelefono(
-        link.result.cliente.telefono_prefijo,
-        link.result.cliente.telefono,
-      ) || null;
+      telefonoFinal = link.result.cliente.telefono;
       emailFinal = link.result.cliente.email;
     }
 
@@ -764,13 +759,7 @@ export async function updateReserva(
         dbUpdates.cliente_id = link.result.cliente.id;
         dbUpdates.cliente_nombre = link.result.cliente.nombre;
         dbUpdates.cliente_apellidos = link.result.cliente.apellidos;
-        // Snapshot con prefijo: la ficha lo guarda aparte, pero en la reserva
-        // va pegado al número. Si no, unas reservas salen con prefijo y otras
-        // sin él, y no hay forma de llamar a los extranjeros.
-        dbUpdates.cliente_telefono = componerTelefono(
-          link.result.cliente.telefono_prefijo,
-          link.result.cliente.telefono,
-        );
+        dbUpdates.cliente_telefono = link.result.cliente.telefono;
         dbUpdates.cliente_email = link.result.cliente.email;
       } else {
         // Sin contacto: walk-in. Quitar vinculación y aceptar nombre tal cual.

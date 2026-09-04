@@ -7,7 +7,11 @@
  * que valía cualquier cosa. Un cliente con un teléfono falso no se puede
  * localizar cuando llama, y encima ensucia la búsqueda por número.
  *
- * Aquí vive el criterio único. Úsalo en TODA alta o edición de cliente.
+ * Aquí vive el criterio único, y se aplica en los tres orígenes por los que
+ * nace un cliente: WEB (motor de reservas), los de alta manual desde sala
+ * (TELEFONO, LOCAL, WHATSAPP, EMAIL, INSTAGRAM, FACEBOOK) y la importación
+ * por archivo. Ver `sala/data/origenes.ts`. Si mañana entra un canal nuevo,
+ * valida también ahí.
  */
 
 /** Teléfono en solo dígitos, sin prefijo español ni separadores. */
