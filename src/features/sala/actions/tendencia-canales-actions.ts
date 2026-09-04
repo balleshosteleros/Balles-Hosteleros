@@ -45,6 +45,11 @@ export type TendenciaCanalesResult = {
   ok: boolean;
   /** Serie temporal completa, de más antiguo a más reciente. */
   puntos: PuntoTendencia[];
+  /**
+   * Rótulos de los dos periodos que compara `variacion`. Son el último periodo
+   * CERRADO y el anterior — nunca el que está en curso, que saldría a medias.
+   */
+  comparacion: { actual: string; previo: string } | null;
   /** Totales del rango entero, de mayor a menor. */
   resumen: CanalResumen[];
   total: number;
@@ -93,7 +98,9 @@ export async function getTendenciaCanales(params: {
   campoFecha: CampoFecha;
   estado?: FiltroEstado;
 }): Promise<TendenciaCanalesResult> {
-  const empty: TendenciaCanalesResult = { ok: false, puntos: [], resumen: [], total: 0, anios: [] };
+  const empty: TendenciaCanalesResult = {
+    ok: false, puntos: [], resumen: [], total: 0, anios: [], comparacion: null,
+  };
   try {
     const supabase = await createClient();
     const user = await getUsuarioActual();
@@ -176,10 +183,21 @@ export async function getTendenciaCanales(params: {
         return { key, label: b.label, total: t, porCanal };
       });
 
-    // Variación del último periodo frente al anterior. Se miran los dos últimos
-    // puntos de la serie: es la lectura de "¿esto va a más o a menos?".
-    const ultimo = puntos.at(-1);
-    const previo = puntos.at(-2);
+    // Variación del último periodo CERRADO frente al anterior.
+    //
+    // Nunca contra el periodo en curso ni contra los futuros: la serie llega
+    // hasta la última reserva anotada, que puede ser de dentro de dos meses.
+    // Comparar septiembre (a medias) u octubre (con una reserva suelta) contra
+    // el mes completo anterior daba "-97%" en todos los canales y parecía un
+    // desplome cuando lo único que pasa es que ese periodo aún no ha ocurrido.
+    const hoy = new Date();
+    const claveHoy = periodoDe(
+      `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, "0")}-01`,
+      params.periodo,
+    )?.key;
+    const cerrados = claveHoy ? puntos.filter((p) => p.key < claveHoy) : puntos;
+    const ultimo = cerrados.at(-1);
+    const previo = cerrados.at(-2);
 
     const resumen: CanalResumen[] = Array.from(totales.entries())
       .map(([canal, n]) => {
@@ -187,7 +205,14 @@ export async function getTendenciaCanales(params: {
         const b = ultimo?.porCanal[canal] ?? 0;
         // Sin periodo anterior, o viniendo de cero, un porcentaje no dice nada:
         // "subió un 100%" de 0 a 1 reserva engaña más que informa.
-        const variacion = previo && a > 0 ? Math.round(((b - a) / a) * 100) : null;
+        //
+        // Y con una base ridícula tampoco: walk-in pasó de 1 reserva en 2024 a
+        // 1.811 en 2025 y salía "+181.000%", que no es crecimiento sino que
+        // antes no se registraban. Por debajo de 5 reservas en el periodo
+        // anterior no hay porcentaje que signifique algo.
+        const BASE_MINIMA = 5;
+        const variacion =
+          previo && a >= BASE_MINIMA ? Math.round(((b - a) / a) * 100) : null;
         return {
           canal,
           label: canal,
@@ -220,7 +245,11 @@ export async function getTendenciaCanales(params: {
     const anios: number[] = [];
     for (let y = yFin; y >= yIni; y--) anios.push(y);
 
-    return { ok: true, puntos, resumen, total, anios };
+    const comparacion = ultimo && previo
+      ? { actual: ultimo.label, previo: previo.label }
+      : null;
+
+    return { ok: true, puntos, resumen, total, anios, comparacion };
   } catch (err) {
     console.error("[tendencia-canales] getTendenciaCanales:", err);
     return empty;

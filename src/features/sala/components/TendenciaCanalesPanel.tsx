@@ -23,8 +23,18 @@ import { cn } from "@/lib/utils";
 const LINEAS_VISIBLES = 6;
 
 function Flecha({ v }: { v: number | null }) {
-  // Sin periodo anterior con el que comparar no se inventa una tendencia.
-  if (v === null) return <span className="text-muted-foreground">—</span>;
+  // Sin periodo anterior, o con una base demasiado pequeña, no se inventa una
+  // tendencia: el guion dice "aquí no hay nada que comparar".
+  if (v === null) {
+    return (
+      <span
+        className="text-muted-foreground"
+        title="Sin datos suficientes en el periodo anterior para calcular una tendencia"
+      >
+        —
+      </span>
+    );
+  }
   if (v === 0) {
     return (
       <span className="inline-flex items-center gap-1 text-muted-foreground">
@@ -119,7 +129,7 @@ export function TendenciaCanalesPanel({
   };
 
   const total = data?.total ?? 0;
-  const ultimoLabel = data?.puntos.at(-1)?.label ?? "";
+  const comparacion = data?.comparacion ?? null;
 
   const tooltipStyle = {
     background: "hsl(var(--popover))",
@@ -239,7 +249,9 @@ export function TendenciaCanalesPanel({
           <div className="border-b px-4 py-2.5">
             <div className="text-sm font-semibold">Todos los canales</div>
             <div className="text-xs text-muted-foreground">
-              La variación compara {ultimoLabel || "el último periodo"} con el anterior
+              {comparacion
+                ? `La tendencia compara ${comparacion.actual} con ${comparacion.previo}`
+                : "Sin periodo cerrado con el que comparar todavía"}
             </div>
           </div>
           <div className="max-h-[420px] overflow-auto">
