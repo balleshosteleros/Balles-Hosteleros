@@ -10,10 +10,14 @@ name: Cron Ágora (ventas) — disparador externo
 # Este workflow llama al MISMO endpoint a hora fija desde GitHub Actions. Es
 # idempotente, así que convive con el cron de Vercel sin duplicar nada.
 #
-# ⚠️ Iván / equipo: esto SOLO cubre el cron de Ágora. Los otros 15 crons siguen sin
-# disparador fiable. Ver .claude/memory/project/crons_vercel_no_se_disparan.md y
-# docs/AGORA_INTEGRACION_ESTADO_Y_PLAN.md. Arreglo de fondo = Vercel Pro o ampliar
-# este workflow a los 16 endpoints (y vaciar "crons" en vercel.json para no duplicar).
+# ACTUALIZACIÓN 5-sep-2026: medido con datos reales, los crons de Vercel YA corren
+# de forma fiable (agora-sync: 29 de los últimos 30 días a su hora). El problema de
+# junio ya no está, así que NO hace falta ampliar esto a los demás endpoints ni
+# pasar a Vercel Pro por este motivo.
+#
+# Este workflow se MANTIENE a propósito como red de seguridad: el 27-ago-2026 el
+# cron de Vercel no corrió por la mañana y fue este disparador el que salvó el día.
+# Es idempotente, así que no duplica nada.
 
 on:
   schedule:

@@ -252,9 +252,15 @@ export async function GET(request: Request) {
 
       // ── SIN RESPUESTA → NO RECONFIRMADA ─────────────────────────────────
       // Va FUERA del filtro de la hora de envío, y a propósito: se le pidió
-      // reconfirmar y no contestó, así que en cuanto pasa la hora de su
-      // reserva deja de ser una CONFIRMADA cualquiera. Sala tiene que verlo
-      // como lo que es —"sin confirmar"— y no mezclado con quien sí respondió.
+      // reconfirmar y no contestó, así que acaba dejando de ser una CONFIRMADA
+      // cualquiera. Sala tiene que verlo como lo que es —"sin confirmar"— y no
+      // mezclado con quien sí respondió.
+      //
+      // Pero NO al dar su hora: se espera a que el día esté CERRADO. En pleno
+      // servicio nadie va cambiando estados, así que marcar a las 14:01 a un
+      // cliente de las 14:00 lo habría etiquetado de "no reconfirmado" con él
+      // sentado a la mesa. El estado real de esa reserva lo pone Sala (SENTADA,
+      // NO_SHOW…) durante el turno; esto solo recoge lo que quedó sin tocar.
       //
       // Solo toca reservas a las que SE LES PIDIÓ (email_reconfirmacion_at no
       // nulo): marcar a quien nunca recibió el correo sería culparle de no
@@ -272,15 +278,15 @@ export async function GET(request: Request) {
           .eq("empresa_id", c.empresa_id)
           .eq("estado", "CONFIRMADA")
           .not("email_reconfirmacion_at", "is", null)
-          .lte("fecha", hoyEmpresa)
+          .lt("fecha", hoyEmpresa)
           .limit(MAX_POR_TIRADA);
 
-        const vencidas = (sinRespuesta ?? []).filter((r) => {
-          const ts = new Date(
-            zonaLocalAUtcISO(r.fecha as string, (r.hora as string).slice(0, 5), tz),
-          );
-          return ts.getTime() <= ahora.getTime();
-        });
+        // Solo reservas de días YA CERRADOS: su fecha es anterior al día de
+        // hoy en la empresa. Una reserva de hoy nunca se toca, por tarde que
+        // sea — el servicio puede seguir en marcha.
+        const vencidas = (sinRespuesta ?? []).filter(
+          (r) => (r.fecha as string) < hoyEmpresa,
+        );
 
         for (const r of vencidas) {
           const { error } = await supabase

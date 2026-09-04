@@ -1,19 +1,19 @@
 name: Cron Reservas (reconfirmación y recordatorios) — disparador externo
 
 # POR QUÉ EXISTE (2026-09-05):
-# Los cron jobs de Vercel (vercel.json) NO se disparan de forma fiable en el plan
-# actual: el plan Hobby permite 2 crons y en vercel.json hay 30. Se saltan días y
-# corren a horas dispersas. Mismo problema y mismo patrón que
-# .github/workflows/agora-sync-cron.yml, que lleva funcionando desde junio.
+# Red de seguridad, igual que .github/workflows/agora-sync-cron.yml.
+#
+# Los crons de Vercel SÍ corren de forma fiable (medido el 5-sep-2026: agora-sync
+# acertó 29 de los últimos 30 días), pero ese día 30 existió: el 27-ago-2026 el
+# cron matinal no corrió y fue el disparador de Actions el que salvó la jornada.
+# Como esto son correos a clientes que solo salen una vez, se mantiene el doble
+# disparo. Es idempotente (email_reconfirmacion_at), así que nadie recibe dos.
 #
 # Este workflow llama al MISMO endpoint CADA HORA desde GitHub Actions. El
 # endpoint decide por sí solo a quién le toca: cada empresa tiene su hora de
 # envío en SU hora local (empresa_reservas_config.reconfirmacion_hora_envio) y
 # solo dispara en la pasada que cae en esa hora. Por eso hace falta que pase
 # cada hora aunque el correo salga una vez al día.
-#
-# Es idempotente (email_reconfirmacion_at impide el correo doble), así que
-# convive con el cron de Vercel sin duplicar nada.
 
 on:
   schedule:
