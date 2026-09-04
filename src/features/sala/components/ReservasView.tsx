@@ -5491,11 +5491,10 @@ export function ReservasView() {
                         </span>
                         {r.telefono && (
                           <span className="flex min-w-0 items-center gap-1 text-[10px] text-muted-foreground">
-                            {/* Bandera del país: de un vistazo se ve quién es
-                                de fuera antes de coger el teléfono. Solo se
-                                pinta si el prefijo está catalogado — mejor sin
-                                bandera que con la del país equivocado. */}
-                            <BanderaTelefono telefono={r.telefono} />
+                            {/* Sin bandera de país: en el listado del turno
+                                ensuciaba la línea y no aporta nada para
+                                trabajar la reserva. El prefijo ya va en el
+                                propio número. */}
                             <span className="truncate tabular-nums">{r.telefono}</span>
                           </span>
                         )}
