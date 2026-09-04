@@ -36,7 +36,7 @@ import {
   PREFIJO_POR_DEFECTO,
 } from "@/features/sala/data/prefijos-telefono";
 import { Cliente, ClasificacionCliente } from "@/features/sala/data/clientes";
-import { listClientes, createCliente } from "@/features/sala/actions/clientes-actions";
+import { listClientes } from "@/features/sala/actions/clientes-actions";
 import { guardarFichaCliente } from "@/features/sala/actions/cliente-ficha-actions";
 import { ActividadCliente } from "@/features/sala/components/clientes/ActividadCliente";
 import { HistorialVisitasCliente } from "@/features/sala/components/clientes/HistorialVisitasCliente";
@@ -326,16 +326,6 @@ export function ClientesView() {
     }
     return Array.from(set).sort((a, b) => a.localeCompare(b, "es"));
   }, [enriquecidos]);
-
-  const handleNuevo = async () => {
-    const res = await createCliente({ nombre: "Nuevo cliente" });
-    if (res.ok) {
-      toast.success("Cliente creado");
-      loadClientes();
-    } else {
-      toast.error(res.error ?? "Error al crear cliente");
-    }
-  };
 
   const abrirFicha = useCallback((c: Cliente) => {
     setSelectedCliente(c);
@@ -679,7 +669,6 @@ export function ClientesView() {
         busqueda={busqueda}
         onBusquedaChange={setBusqueda}
         placeholderBusqueda="Buscar"
-        onNuevo={handleNuevo}
         filtros={filtros}
         onFiltrosChange={setFiltros}
         columnas={columnasDef}
