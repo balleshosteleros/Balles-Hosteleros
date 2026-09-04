@@ -6,16 +6,20 @@ export type EstadoMesa = "LIBRE" | "OCUPADA" | "RESERVADA" | "BLOQUEADA";
  * 9 estados canónicos de una reserva — fuente única para toda la app.
  * NO_SHOW / NO_RECONFIRMADA / LISTA_ESPERA usan guion bajo (BD); la app traduce
  * los labels al castellano natural.
+ *
+ * "Walk in" NO está aquí y nunca debió estarlo: es un ORIGEN (el cliente llegó
+ * sin reservar), no una situación de la reserva. Quien entra andando nace
+ * CONFIRMADA como cualquiera y se le marca SENTADA al sentarlo; lo que le
+ * distingue es `origen = WALKIN`, que le acompaña toda su vida.
  */
 export type EstadoReserva =
   | "CONFIRMADA"
   | "RECONFIRMADA"
   | "NO_RECONFIRMADA"
   | "LISTA_ESPERA"
-  /** El cliente ya está en la mesa. No confundir con WALK_IN, que es el ORIGEN. */
+  /** El cliente ya está en la mesa. Lo alcanza cualquier reserva, venga de donde venga. */
   | "SENTADA"
   | "LIBERADA"
-  | "WALK_IN"
   | "TERMINANDO"
   | "NO_SHOW"
   | "CANCELADA";
@@ -27,7 +31,6 @@ export const ESTADOS_RESERVA: EstadoReserva[] = [
   "LISTA_ESPERA",
   "SENTADA",
   "LIBERADA",
-  "WALK_IN",
   "TERMINANDO",
   "NO_SHOW",
   "CANCELADA",
@@ -75,7 +78,6 @@ export const ESTADO_ORDEN_PRIORIDAD: Record<EstadoReserva, number> = {
   LISTA_ESPERA: 1,
   LIBERADA: 2,
   NO_RECONFIRMADA: 3,
-  WALK_IN: 3,
   TERMINANDO: 3,
   NO_SHOW: 3,
   CANCELADA: 3,
@@ -93,7 +95,6 @@ export const ESTADO_BADGE_CLASS: Record<EstadoReserva, string> = {
   LISTA_ESPERA:    "bg-violet-600/20 text-violet-400 border-violet-600/40",
   SENTADA:         "bg-green-700/25 text-green-300 border-green-700/50",
   LIBERADA:        "bg-yellow-600/20 text-yellow-300 border-yellow-600/40",
-  WALK_IN:         "bg-orange-600/20 text-orange-300 border-orange-600/40",
   // Fucsia: es el unico tono que no choca con ningun otro estado. Antes era
   // cyan y en sala se confundia con el azul de RECONFIRMADA; el gris que se
   // probo despues no gustaba. Aqui no hay duda posible de un vistazo.
@@ -109,7 +110,6 @@ export const ESTADO_DOT_CLASS: Record<EstadoReserva, string> = {
   LISTA_ESPERA:    "bg-violet-500",
   SENTADA:         "bg-green-600",
   LIBERADA:        "bg-yellow-500",
-  WALK_IN:         "bg-orange-400",
   TERMINANDO:      "bg-fuchsia-500",
   NO_SHOW:         "bg-red-500",
   CANCELADA:       "bg-red-800",
@@ -177,7 +177,6 @@ export const ESTADO_RESERVA_LABELS: Record<EstadoReserva, string> = {
   LISTA_ESPERA:    "Lista de espera",
   SENTADA:         "Sentada",
   LIBERADA:        "Liberada",
-  WALK_IN:         "Walk in",
   TERMINANDO:      "Terminada",
   NO_SHOW:         "No show",
   CANCELADA:       "Cancelada",
@@ -690,21 +689,7 @@ export interface ReservaAdjunto {
   createdAt: string;
 }
 
-export interface ListaEspera {
-  id: string;
-  cliente: string;
-  telefono: string;
-  comensales: number;
-  zona: ZonaSala | "";
-  hora: string;
-  fecha: string;
-  observaciones: string;
-  estado: "ESPERANDO" | "ASIGNADO" | "CANCELADO";
-}
-
 // --- SAMPLE DATA ---
-const hoy = "2026-04-07";
-
 export const SAMPLE_MESAS: Mesa[] = [
   // SALA
   { id: "s1", codigo: "A1", numero: 1, zona: "SALA", capacidad: 6, tipo: "MESA", estado: "LIBRE", x: 72, y: 6, ancho: 5, alto: 6, combinable: true, activa: true },
@@ -751,26 +736,6 @@ export const SAMPLE_MESAS: Mesa[] = [
   { id: "p2", codigo: "R2T", numero: 37, zona: "PRIVADO", capacidad: 4, tipo: "RESERVADO", estado: "LIBRE", x: 68, y: 72, ancho: 7, alto: 7, combinable: false, activa: true },
 ];
 
-export const SAMPLE_RESERVAS: Reserva[] = [
-  { id: "r1", cliente: "María", apellidos: "García López", telefono: "612345678", email: "maria@email.com", fecha: hoy, hora: "14:00", turno: "COMIDA", comensales: 4, zona: "SALA", mesaId: "s2", estado: "CONFIRMADA", observaciones: "Cumpleaños" },
-  { id: "r2", cliente: "Carlos", apellidos: "López Ruiz", telefono: "698765432", email: "carlos@email.com", fecha: hoy, hora: "21:00", turno: "CENA", comensales: 2, zona: "TERRAZA_EXTERIOR", mesaId: "te1", estado: "NO_RECONFIRMADA", observaciones: "" },
-  { id: "r3", cliente: "Ana", apellidos: "Martínez Sanz", telefono: "655443322", email: "ana@email.com", fecha: "2026-04-08", hora: "14:30", turno: "COMIDA", comensales: 6, zona: "SALA", mesaId: "s12", estado: "CONFIRMADA", observaciones: "Alergia frutos secos" },
-  { id: "r4", cliente: "Pedro", apellidos: "Ruiz Fernández", telefono: "633221100", email: "pedro@email.com", fecha: hoy, hora: "21:30", turno: "CENA", comensales: 8, zona: "PRIVADO", mesaId: "p1", estado: "CONFIRMADA", observaciones: "Cena de empresa" },
-  { id: "r5", cliente: "Laura", apellidos: "Fernández Gil", telefono: "677889900", email: "", fecha: hoy, hora: "14:00", turno: "COMIDA", comensales: 2, zona: "", mesaId: "", estado: "NO_RECONFIRMADA", observaciones: "" },
-  { id: "r6", cliente: "Lorena", apellidos: "Melchor", telefono: "611223344", email: "", fecha: hoy, hora: "23:30", turno: "CENA", comensales: 7, zona: "TERRAZA_INTERIOR", mesaId: "ti1", estado: "CONFIRMADA", observaciones: "" },
-  { id: "r7", cliente: "Lorena", apellidos: "Melchor", telefono: "611223344", email: "", fecha: hoy, hora: "23:30", turno: "CENA", comensales: 7, zona: "TERRAZA_INTERIOR", mesaId: "ti2", estado: "CONFIRMADA", observaciones: "" },
-  { id: "r8", cliente: "Alejandra", apellidos: "Camargo", telefono: "622334455", email: "", fecha: hoy, hora: "20:15", turno: "CENA", comensales: 2, zona: "SALA", mesaId: "v1", estado: "WALK_IN", observaciones: "" },
-  { id: "r9", cliente: "Jonas", apellidos: "Mamba", telefono: "644556677", email: "", fecha: hoy, hora: "00:30", turno: "CENA", comensales: 4, zona: "SALA", mesaId: "s10", estado: "WALK_IN", observaciones: "" },
-  { id: "r10", cliente: "Carlos", apellidos: "Gil García", telefono: "655667788", email: "", fecha: hoy, hora: "00:30", turno: "CENA", comensales: 4, zona: "SALA", mesaId: "s9", estado: "WALK_IN", observaciones: "" },
-  { id: "r11", cliente: "", apellidos: "", telefono: "", email: "", fecha: hoy, hora: "20:00", turno: "CENA", comensales: 2, zona: "SALA", mesaId: "s4", estado: "WALK_IN", observaciones: "" },
-  { id: "r12", cliente: "", apellidos: "", telefono: "", email: "", fecha: hoy, hora: "20:00", turno: "CENA", comensales: 4, zona: "SALA", mesaId: "s7", estado: "WALK_IN", observaciones: "" },
-  { id: "r13", cliente: "", apellidos: "", telefono: "", email: "", fecha: hoy, hora: "20:00", turno: "CENA", comensales: 3, zona: "TERRAZA_INTERIOR", mesaId: "ti6", estado: "WALK_IN", observaciones: "" },
-];
-
-export const SAMPLE_LISTA_ESPERA: ListaEspera[] = [
-  { id: "le1", cliente: "Raúl Gómez", telefono: "611222333", comensales: 4, zona: "SALA", hora: "21:00", fecha: hoy, observaciones: "Prefiere interior", estado: "ESPERANDO" },
-  { id: "le2", cliente: "Marta Díaz", telefono: "622333444", comensales: 2, zona: "", hora: "21:30", fecha: hoy, observaciones: "", estado: "ESPERANDO" },
-];
 
 /**
  * Etiqueta legible del canal por el que entró la reserva (PORTAL_PROPIO,
@@ -783,16 +748,14 @@ export const SAMPLE_LISTA_ESPERA: ListaEspera[] = [
 /**
  * ¿Es una reserva de alguien que llegó SIN reservar?
  *
- * Se mira el ORIGEN, no el estado: un walk-in se sienta (pasa a SENTADA) y
- * luego termina (TERMINANDO), pero sigue siendo un walk-in toda su vida. Antes
- * esto se deducía de `estado === "WALK_IN"`, así que al sentarlo dejaba de
- * reconocerse y su mesa se quedaba sin rótulo: un walk-in no tiene ficha de
- * cliente, así que no hay nombre que enseñar en su lugar.
+ * Se mira el ORIGEN, que es lo único que lo dice: un walk-in se sienta (pasa a
+ * SENTADA) y luego termina (TERMINANDO), pero sigue siendo un walk-in toda su
+ * vida. "Walk in" llegó a existir como estado y era un error —se perdía en
+ * cuanto lo sentabas—, así que ya no se consulta.
  */
 export function esReservaWalkIn(
-  reserva: Pick<Reserva, "estado" | "origen">,
+  reserva: Pick<Reserva, "origen">,
 ): boolean {
-  if (reserva.estado === "WALK_IN") return true;
   return normalizarOrigen(reserva.origen) === "WALKIN";
 }
 

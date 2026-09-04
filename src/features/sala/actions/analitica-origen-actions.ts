@@ -161,13 +161,11 @@ export async function getOrigenReservas(params: {
       es_ticket: boolean | null;
     }>;
 
-    // Estado WALK_IN siempre se contabiliza como origen WALKIN (la fuente de
-    // verdad es el estado: la BD puede no tener `origen` poblado en reservas
-    // antiguas y el cliente llegó andando, sin canal digital de por medio).
-    const resolverOrigen = (r: { origen: string | null; estado: string | null }): OrigenBucket => {
-      if (r.estado === "WALK_IN") return "WALKIN";
-      return normalizarOrigen(r.origen);
-    };
+    // El canal sale del ORIGEN y de nada más. "Walk in" llegó a existir como
+    // estado y se contabilizaba desde ahí; era frágil, porque en cuanto se
+    // sentaba al cliente el estado cambiaba y la reserva se iba a otro canal.
+    const resolverOrigen = (r: { origen: string | null }): OrigenBucket =>
+      normalizarOrigen(r.origen);
 
     type Acumulado = Map<OrigenBucket, number>;
     const buckets = new Map<string, { label: string; counts: Acumulado }>();

@@ -255,11 +255,16 @@ export async function createReserva(input: {
     // Campos obligatorios. Nombre y apellidos siempre; email y teléfono según
     // lo marcado en Ajustes → Departamentos → Sala → Reservas.
     //
-    // Solo queda fuera WALK_IN: llega sin avisar y se le sienta en el momento,
-    // así que no hay a quién pedirle el teléfono. LISTA_ESPERA sí lo exige: es
-    // una reserva normal en otro estado —lo único que no pide es mesa—, y el
-    // teléfono es justo lo que hace falta para avisar cuando se libera una.
-    if (input.estado !== "WALK_IN") {
+    // Solo queda fuera el WALK-IN, y se reconoce por el ORIGEN, no por el
+    // estado: llega sin avisar y se le sienta en el momento, así que no hay a
+    // quién pedirle el teléfono. Un walk-in nace CONFIRMADA como cualquier
+    // otra reserva —"Walk in" nunca fue un estado, sino por dónde entró—, así
+    // que mirar el estado aquí le exigía una ficha que no tiene.
+    //
+    // La lista de espera SÍ los exige: es una reserva normal en otro estado
+    // —lo único que no pide es mesa—, y el teléfono es justo lo que hace falta
+    // para avisar cuando se libera una.
+    if (normalizarOrigen(input.origen) !== "WALKIN") {
       const exige = await getCamposObligatoriosReserva(empresaId);
       if (!input.clienteNombre?.trim()) {
         return { ok: false, error: "El nombre del cliente es obligatorio." };
@@ -326,13 +331,13 @@ export async function createReserva(input: {
     }
 
     const estadoFinal = input.estado ?? "CONFIRMADA";
-    // Walk-in siempre marca origen = WALKIN (el cliente no vino por canal digital).
-    // Fuera de walk-in el canal es OBLIGATORIO: una reserva sin origen deja la
-    // analítica coja y no se puede reconstruir después. Se normaliza aquí para
-    // que no convivan "telefono" y "TELEFONO" como si fueran canales distintos.
-    const origenFinal = estadoFinal === "WALK_IN"
-      ? "WALKIN"
-      : normalizarOrigen(input.origen);
+    // El canal es OBLIGATORIO: una reserva sin origen deja la analítica coja y
+    // no se puede reconstruir después. Se normaliza para que no convivan
+    // "telefono" y "TELEFONO" como si fueran canales distintos.
+    //
+    // El walk-in ya viene con `origen = WALKIN` desde el formulario: no se
+    // deduce del estado, porque su estado es CONFIRMADA como el de todas.
+    const origenFinal = normalizarOrigen(input.origen);
     if (origenFinal === ORIGEN_SIN_DATO) {
       return { ok: false, error: "Indica el origen de la reserva (el canal por el que llegó el cliente)." };
     }
@@ -872,9 +877,6 @@ export async function updateReserva(
       }
       dbUpdates.origen = norm;
     }
-    // Si la reserva pasa a WALK_IN, el origen siempre es WALKIN — sobreescribe
-    // cualquier valor previo o el que viniera en `updates.origen`.
-    if (updates.estado === "WALK_IN") dbUpdates.origen = "WALKIN";
     if (updates.tarjetaIntroducida !== undefined) dbUpdates.tarjeta_introducida = updates.tarjetaIntroducida;
     if (updates.esTicket !== undefined) dbUpdates.es_ticket = updates.esTicket;
 

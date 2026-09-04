@@ -16,6 +16,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { useEmpresa } from "@/features/empresa/contexts/empresa-context";
 import { ahoraEnZona, formatFechaHoraEnZona } from "@/features/empresa/lib/zona-horaria";
 import { useSincronizacionEnVivo } from "@/shared/hooks/useSincronizacionEnVivo";
+import { useBloqueoCambioEmpresa } from "@/shared/hooks/useBloqueoCambioEmpresa";
 import { Plus, Search, ChevronLeft, ChevronRight, ListFilter, Check, Move, Map as MapIcon, List as ListIcon, Lock } from "lucide-react";
 // Configuración solo se carga cuando el usuario pulsa "Configuración" — fuera del bundle inicial.
 const ConfigReservasView = dynamic(
@@ -1336,7 +1337,10 @@ function NuevaReservaForm({ fecha, turno, onClose, onSave, mesaPreseleccionada, 
       // pantalla (una unión, u otra sala): se manda por código, que es lo que
       // se guarda en BD.
       mesaCodigo: esListaEspera ? undefined : (codigoAuto ?? undefined),
-      estado: esWalkIn ? "WALK_IN" : esListaEspera ? "LISTA_ESPERA" : "CONFIRMADA",
+      // WALK_IN no es un estado, es el ORIGEN: quien llega sin reservar nace
+      // CONFIRMADA como cualquiera y se le marca SENTADA al sentarlo. Lo que
+      // lo distingue es el origen, que le acompaña toda su vida.
+      estado: esListaEspera ? "LISTA_ESPERA" : "CONFIRMADA",
       observaciones: form.observaciones,
       // Un walk-in es siempre gratis: ni garantía, ni prepago, ni cupón. La
       // lista de espera tampoco cobra: todavía no hay mesa que garantizar.
@@ -3226,6 +3230,17 @@ export function ReservasView() {
    */
   const [loading, setLoading] = useState(true);
   /**
+   * Contexto del módulo (locales, salas, planos, zonas, mesas) todavía en vuelo.
+   * Va aparte de `loading` —que es el de las reservas del día— porque el
+   * recuadro que bloquea la pantalla al cambiar de empresa debe esperar a las
+   * DOS cosas: sin mesas ni plano la pantalla no se puede usar, aunque la lista
+   * de reservas ya haya llegado.
+   */
+  const [cargandoContexto, setCargandoContexto] = useState(true);
+  // Al cambiar de empresa la pantalla queda tapada y sin poder pulsarse hasta
+  // que ESTA vista tiene los datos de la empresa nueva —no 900 ms y a ciegas—.
+  useBloqueoCambioEmpresa(loading || cargandoContexto);
+  /**
    * Día que se está mirando. Arranca en el `?fecha=` de la URL si lo hay, para
    * que al pinchar una reserva desde la ficha del cliente se abra directamente
    * ese día en el plano en vez de hoy.
@@ -3465,7 +3480,9 @@ export function ReservasView() {
   useEffect(() => {
     if (localCargadoRef.current === huellaCarga) return;
     let cancelled = false;
+    setCargandoContexto(true);
     (async () => {
+      try {
       // Si ya hay localId seleccionado (el usuario cambió de local en el
       // dropdown), lo pasamos como override; si no, se elige el primero.
       const ctx = await loadReservasModuleContext(localId || undefined);
@@ -3526,6 +3543,11 @@ export function ReservasView() {
       for (const p of d.posiciones) next.set(p.mesaId, p);
       setPosicionesPlano(next);
       setDecoracionesPlano(d.decoraciones);
+      } finally {
+        // Pase lo que pase se suelta la carga: si un fallo la dejara puesta, el
+        // recuadro de "Cambiando de empresa…" no se quitaría nunca.
+        if (!cancelled) setCargandoContexto(false);
+      }
     })();
     return () => { cancelled = true; };
   }, [empresaActual.id, localId, posicionesRefresh, huellaCarga]);

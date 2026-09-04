@@ -256,7 +256,6 @@ function motivoNoCancelable(
     case "NO_SHOW":
       return "Esta reserva no se puede cancelar porque se ha marcado como no presentada. Si crees que es un error, llama al restaurante.";
     case "SENTADA":
-    case "WALK_IN":
     case "TERMINANDO":
       return "Esta reserva no se puede cancelar porque la mesa ya está sentada.";
     case "LIBERADA":

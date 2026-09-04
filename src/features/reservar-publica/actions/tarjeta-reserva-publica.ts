@@ -108,7 +108,6 @@ export async function obtenerTarjetaPendiente(
       LIBERADA: "Esta reserva ya no está activa.",
       TERMINANDO: "Tu reserva ya está en curso: no hace falta que hagas nada.",
       SENTADA: "Ya estás en la mesa: no hace falta que hagas nada.",
-      WALK_IN: "Ya estás en la mesa: no hace falta que hagas nada.",
     };
     const bloqueo = SIN_TARJETA[r.estado as string];
     if (bloqueo) return { ok: false, error: bloqueo };

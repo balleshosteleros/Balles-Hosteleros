@@ -12,9 +12,10 @@
  * origen "TIKTOK" o con la palabra clave "NAVIDAD", aparece en la analítica
  * con su nombre propio y siempre del mismo color, sin desplegar nada.
  *
- * Regla operativa: si `estado === "WALK_IN"` el origen es siempre `WALKIN`,
- * tanto en alta como en edición — el restaurante no captó al cliente por
- * ningún canal digital, llegó andando.
+ * Regla operativa: quien llega sin reservar se marca con origen `WALKIN` — el
+ * restaurante no le captó por ningún canal digital, llegó andando. "Walk in"
+ * es SIEMPRE un origen: como estado no existe, porque se perdía en cuanto se
+ * sentaba al cliente.
  *
  * Regla operativa 2: un alta de tipo Cliente desde el back-office nace con
  * `TELEFONO`, que es como entra la inmensa mayoría — pero el usuario puede

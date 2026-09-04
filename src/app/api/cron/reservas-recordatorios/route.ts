@@ -2,19 +2,26 @@
  * Cron: envío de correos automáticos del módulo Reservas — RECORDATORIO,
  * RECONFIRMACIÓN y SOLICITUD DE VALORACIÓN.
  *
- * Se ejecuta cada hora (vercel.json) y por cada empresa con la opción activa:
+ * Se ejecuta UNA VEZ AL DÍA, a las 10:00 de Madrid (`0 8 * * *` en vercel.json,
+ * que va en UTC), y por cada empresa con la opción activa:
  *
  * 1. RECORDATORIO (config: empresa_reservas_config.recordatorio_activo +
  *    recordatorio_horas_antes): busca reservas de la próxima ventana de
  *    [horas_antes, horas_antes + 1] horas que sigan vivas (no canceladas,
  *    no no-show, no completadas, no liberadas) y aún no tengan
  *    email_recordatorio_at. Las envía y marca el timestamp.
+ *    OJO: con el cron diario esta ventana de 1 h solo acierta si la reserva
+ *    cae justo a esa hora. Hoy las tres empresas lo tienen apagado; si alguna
+ *    lo enciende, hay que pasar el cron a horario o ensanchar la ventana.
  *
  * 2. RECONFIRMACIÓN (config: reconfirmacion_activa + reconfirmacion_dias_antes):
- *    si la empresa tiene la reconfirmación activa, busca reservas a
- *    [N días, N días + 1 hora] de la actual en estado CONFIRMADA. Solo se
+ *    si la empresa tiene la reconfirmación activa, barre el DÍA ENTERO que
+ *    cae a N días vista y avisa a las reservas en estado CONFIRMADA. Solo se
  *    envía si no se envió ya (idempotente vía email_reconfirmacion_at). Si la
  *    empresa tiene `reconfirmacion_activa = false`, no se envía nada.
+ *    Quien reserva DESPUÉS de que pase el cron (menos de N días de antelación)
+ *    no lo coge esta tirada: a ése le llega en el acto al reservar, vía
+ *    `reconfirmacion_envio_inmediato` en notificar-creada.ts.
  *
  * El mailer genérico ya implementa la idempotencia por columna de auditoría,
  * pero pre-filtramos en SQL para no tirar millones de queries en empresas con
@@ -159,8 +166,18 @@ export async function GET(request: Request) {
     if (c.reconfirmacion_activa) {
       try {
         const diasAntes = c.reconfirmacion_dias_antes ?? 1;
+        // Ventana de 24 h, no de 1 h: este cron corre UNA VEZ AL DÍA (a las
+        // 10:00 de Madrid). Con una ventana de una hora solo entraban las
+        // reservas de las 10:00-11:00 del día objetivo — es decir, ninguna, y
+        // por eso no salió NUNCA una sola reconfirmación. Al barrer el día
+        // entero, a las 10:00 se avisa a todos los clientes del día siguiente,
+        // coman a las 14:00 o cenen a las 23:00.
+        //
+        // Reenviar no es riesgo: `email_reconfirmacion_at` garantiza un solo
+        // correo por reserva, y el filtro `is(auditCol, null)` descarta las ya
+        // avisadas.
         const desdeR = new Date(ahora.getTime() + diasAntes * 24 * 3600 * 1000);
-        const hastaR = new Date(desdeR.getTime() + 60 * 60 * 1000);
+        const hastaR = new Date(desdeR.getTime() + 24 * 60 * 60 * 1000);
         const pendientesR = await buscarPendientes(supabase, {
           empresaId: c.empresa_id,
           desde: desdeR,
@@ -212,7 +229,6 @@ export async function GET(request: Request) {
             "SENTADA",
             "TERMINANDO",
             "LIBERADA",
-            "WALK_IN",
           ],
           auditCol: "email_valoracion_at",
           tz,
