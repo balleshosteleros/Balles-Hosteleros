@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo, useEffect, useCallback, useRef } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -35,7 +35,7 @@ const CobrosReservasView = dynamic(
     ),
   { ssr: false },
 );
-import { Settings, Sun, Moon, Banknote } from "lucide-react";
+import { Settings, Sun, Moon, Banknote, Music } from "lucide-react";
 import { useSalaTema } from "@/features/sala/hooks/useSalaTema";
 import { EtiquetasPanel } from "@/features/sala/components/reservas/EtiquetasPanel";
 import { franjasSolapan } from "@/features/sala/lib/reserva-conflicto";
@@ -3336,6 +3336,7 @@ function PlanoCanvas({
 export function ReservasView() {
   const { empresaActual, ajustes } = useEmpresa();
   const searchParams = useSearchParams();
+  const router = useRouter();
   // Tema visual SOLO de esta vista (claro / oscuro azul marino). No toca el
   // resto del software, que sigue siendo de tema claro.
   const { esOscuro, alternarTema } = useSalaTema();
@@ -5470,6 +5471,19 @@ export function ReservasView() {
             aria-label="Cobros, garantías y tickets"
           >
             <Banknote className="h-4 w-4" />
+          </Button>
+          {/* La música se lleva desde la misma pantalla en la que se está
+              durante el servicio: si suena algo que no toca, se cambia sin
+              salir de reservas ni ir a buscarlo al menú. */}
+          <Button
+            variant="outline"
+            size="icon"
+            className="h-8 w-8"
+            onClick={() => router.push("/sala/musica")}
+            title="Música"
+            aria-label="Música"
+          >
+            <Music className="h-4 w-4" />
           </Button>
           <Button
             variant="outline"
