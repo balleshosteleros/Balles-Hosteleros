@@ -24,9 +24,12 @@ const sansDefault = Inter({
   display: "swap",
 });
 
+// OJO: sin `icons` ni `title` aquí. Este layout envuelve a `page.tsx`, que ya
+// resuelve AMBOS por empresa (`iconsDeUrl()` con su isotipo, y "Carta · <empresa>").
+// Declararlos también aquí los dejaba compitiendo en la cascada de metadata de
+// Next, y la carta de un restaurante podía salir en la pestaña con el icono del
+// software —el de Balles Hosteleros— en vez del suyo.
 export const metadata: Metadata = {
-  title: "Carta Digital",
-  description: "Consulta la carta del restaurante",
   robots: { index: true, follow: false },
 };
 
