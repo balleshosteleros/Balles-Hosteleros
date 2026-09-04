@@ -132,12 +132,18 @@ function todayISO(): string {
 }
 
 /**
- * "Ahora" al MINUTO, sin segundos.
+ * "Ahora" al MINUTO, sin segundos. Solo para las horas OFICIALES.
  *
  * Los fichajes se cuentan al minuto: nadie ficha "a las 19:30 y 23 segundos".
  * Guardar los segundos hacía que una jornada de 19:30 a 00:30 saliera 4,99 h en
  * vez de 5, porque esos segundos se restaban del total. Al empleado le faltaba
  * un minuto de trabajo por haber tardado unos segundos en pulsar el botón.
+ *
+ * OJO: las horas REALES (`hora_entrada_real` / `hora_salida_real`) NO se truncan
+ * nunca — guardan el instante EXACTO en que se pulsó el botón, al segundo. No se
+ * muestran en pantalla (ahí se ve la oficial, ya redondeada al turno), pero son
+ * el registro de auditoría y se explotarán más adelante: puntualidad real,
+ * reclamaciones, inspección. Truncarlas sería perder precisión para siempre.
  */
 function ahoraAlMinuto(): Date {
   const d = new Date();
@@ -987,6 +993,9 @@ export async function ficharEntradaPersonal(
     }
 
     const ahora = ahoraAlMinuto();
+    // Instante EXACTO del botón, con segundos: es el registro de auditoría y no
+    // se trunca nunca (se explotará más adelante: puntualidad real, inspección).
+    const instanteReal = new Date();
     // La fecha del fichaje es el día en la zona de la EMPRESA en la que se
     // ficha, no el día UTC del servidor: a la 01:00 de Madrid, UTC todavía va
     // por el día anterior y el turno de noche quedaba atribuido a ayer.
@@ -1001,7 +1010,7 @@ export async function ficharEntradaPersonal(
         // Oficial (la que cuenta): redondeada al turno si aplica. Real: instante
         // físico del fichaje, siempre, para auditoría en RRHH.
         hora_entrada: horaEntradaOverrideISO ?? ahora.toISOString(),
-        hora_entrada_real: ahora.toISOString(),
+        hora_entrada_real: instanteReal.toISOString(),
         estado: "trabajando",
         local_id: localElegidoId,
         lat_entrada: geo?.lat ?? null,
@@ -1062,14 +1071,18 @@ export async function ficharSalidaPersonal(fichajeId: string, geo?: GeoInput) {
       }
     }
 
+    // La SALIDA no se redondea: si el empleado pulsa el botón, esa hora es la
+    // que vale y la que cuenta (decisión de Iván). Se guarda al minuto como
+    // oficial y con los segundos exactos como registro real.
     const ahora = ahoraAlMinuto();
+    const instanteReal = new Date();
     if (!fichaje.hora_entrada) {
       // Sin hora de entrada no hay nada que repartir ni cronometrar.
       const { error } = await supabase
         .from("fichajes")
         .update({
           hora_salida: ahora.toISOString(),
-          hora_salida_real: ahora.toISOString(),
+          hora_salida_real: instanteReal.toISOString(),
           horas_totales: 0,
           estado: "completado",
           lat_salida: geo?.lat ?? null,
@@ -1124,7 +1137,7 @@ export async function ficharSalidaPersonal(fichajeId: string, geo?: GeoInput) {
         .from("fichajes")
         .update({
           hora_salida: ahora.toISOString(),
-          hora_salida_real: ahora.toISOString(),
+          hora_salida_real: instanteReal.toISOString(),
           horas_totales: horasTotales,
           estado: "completado",
           lat_salida: geo?.lat ?? null,
@@ -1185,7 +1198,7 @@ export async function ficharSalidaPersonal(fichajeId: string, geo?: GeoInput) {
             local_id: localSeg.id,
             centro: localSeg.nombre,
             hora_salida: finISO,
-            hora_salida_real: esUltimo ? ahora.toISOString() : null,
+            hora_salida_real: esUltimo ? instanteReal.toISOString() : null,
             horas_totales: horasSeg,
             estado: "completado",
             sesion_id: sesionId,
@@ -1211,7 +1224,7 @@ export async function ficharSalidaPersonal(fichajeId: string, geo?: GeoInput) {
           hora_entrada: isoDeMin(seg.inicioMin),
           hora_entrada_real: null,
           hora_salida: finISO,
-          hora_salida_real: esUltimo ? ahora.toISOString() : null,
+          hora_salida_real: esUltimo ? instanteReal.toISOString() : null,
           horas_totales: horasSeg,
           estado: "completado",
           local_id: localSeg.id,
