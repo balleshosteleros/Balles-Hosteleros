@@ -1,7 +1,10 @@
 /**
  * Cron endpoint: cierra automáticamente fichajes que quedaron abiertos
- * (sin hora_salida) en días anteriores y deja la incidencia en su campo
- * propio. La tabla `fichajes` no admite un estado "incidencia".
+ * (sin hora_salida) en días anteriores, a la hora de FIN DE SU TURNO.
+ *
+ * Ese cierre se da por bueno: es un fichaje normal, sin revisión ni incidencia.
+ * Solo se marca para revisar cuando no hay horario con el que saber la hora y
+ * hay que estimarla.
  *
  * Se ejecuta a las 08:00 UTC (configurado en vercel.json).
  * Solo acepta llamadas con header `Authorization: Bearer ${CRON_SECRET}`.
@@ -101,15 +104,21 @@ export async function GET(request: Request) {
         ? 0
         : Math.round(((salidaMs - entradaMs) / 3600000) * 100) / 100;
 
+      // Si el sistema SABE la hora de fin del turno, el cierre se da por bueno:
+      // es un fichaje normal, sin revisión ni incidencia (el único rastro de que
+      // no se fichó salida es `hora_salida_real = null`). Solo se marca para
+      // revisar cuando NO hay horario con el que saberla y hay que estimar.
+      const sabemosLaHora = previstaMs != null;
       const { error: upErr } = await supabase
         .from("fichajes")
         .update({
           estado: "completado",
           hora_salida: new Date(salidaMs).toISOString(),
           horas_totales: horas,
-          requiere_revision: true,
-          incidencia:
-            "Cerrado automáticamente: no se fichó la salida. Horas estimadas hasta el fin del día — revisar.",
+          requiere_revision: !sabemosLaHora,
+          incidencia: sabemosLaHora
+            ? null
+            : "Cerrado automáticamente: no se fichó la salida y no hay horario para calcularla — revisar.",
         })
         .eq("id", f.id as string);
       if (upErr) {

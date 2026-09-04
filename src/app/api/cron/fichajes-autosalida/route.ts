@@ -3,8 +3,9 @@
  *
  * Para empresas con `auto_salida_activa`, cierra las jornadas de horario FIJO
  * que siguen abiertas pasada su hora de salida prevista + margen. Pone la salida
- * OFICIAL en la hora prevista, deja `hora_salida_real = null` (no fichó) y marca
- * `requiere_revision`. No toca flexibles, ni jornadas ya cerradas, ni la
+ * OFICIAL en la hora prevista y deja `hora_salida_real = null` (no fichó). El
+ * cierre se da por BUENO: es un fichaje normal, sin revisión ni incidencia — ese
+ * hueco en la hora real es el único rastro. No toca flexibles, ni jornadas ya cerradas, ni la
  * paralización (esas ya tienen hora_salida). Los huérfanos de días anteriores
  * los sigue cerrando su propio cron.
  *
