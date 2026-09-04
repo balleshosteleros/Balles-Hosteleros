@@ -270,6 +270,19 @@ function addMonths(iso: string, n: number) {
  * falta, cuánto se retrasa, cuánto lleva sentada), no uno que se lea en cada
  * fila. El ancho extra que necesita se lo cede el plano, que se escala solo.
  */
+/**
+ * Ancho de la lista de reservas cuando se ve junto al plano.
+ *
+ * Manda en DOS sitios —el propio panel y el relleno que coloca los botones de
+ * arriba sobre el plano—, así que vive aquí una sola vez: escrito a mano en
+ * los dos, bastaba con tocar uno para que los botones dejaran de caer donde
+ * empieza el plano.
+ *
+ * 700 px: por debajo, con las nueve columnas, el nombre empieza a cortarse, y
+ * el nombre es justo por lo que se busca a la gente en sala.
+ */
+const LISTA_ANCHO_PX = 700;
+
 const LISTA_GRID =
   // Hora · Mesa · Nombre · Per · Origen · Tipo · Estado · Etiquetas · Tiempo.
   // Origen y Tipo suben porque "Cancelación" y los origenes largos se cortaban
@@ -5312,13 +5325,14 @@ export function ReservasView() {
                 }} />
             </DialogContent>
           </Dialog>
-          {(origenesPresentes.length > 0 || filtroOrigen !== "TODOS") && (
-            <FiltroOrigenDropdown
-              valor={filtroOrigen}
-              origenes={origenesPresentes}
-              onChange={setFiltroOrigen}
-            />
-          )}
+          {/* Siempre visible, como Estados. Antes se escondía en los días sin
+              reservas con origen: el botón desaparecía y reaparecía solo,
+              moviendo de sitio a todos los de al lado al cambiar de día. */}
+          <FiltroOrigenDropdown
+            valor={filtroOrigen}
+            origenes={origenesPresentes}
+            onChange={setFiltroOrigen}
+          />
           <FiltroEstadosDropdown
             seleccionados={filtroEstados}
             onChange={setFiltroEstados}
@@ -5361,8 +5375,10 @@ export function ReservasView() {
         {/* SEGUNDA FILA de la barra: los mandos del PLANO (planos, salas,
             zonas) y los de la FECHA (día/mes y el navegador de fechas).
             Van juntos en un solo bloque que ocupa el ancho entero y arranca
-            con `pl-[760px]`, la anchura de la lista: así la fila entera cae en
-            la vertical donde empieza el plano, que es sobre lo que mandan.
+            con un relleno igual a la anchura de la lista: así la fila entera
+            cae en la vertical donde empieza el plano, que es sobre lo que
+            mandan. El relleno va en estilo y no en clase porque Tailwind no
+            admite un valor calculado.
 
             Tienen que ir en el MISMO bloque. Separados, el primero se llevaba
             la fila entera y empujaba la fecha a una tercera fila pegada al
@@ -5375,8 +5391,13 @@ export function ReservasView() {
         <div
           className={cn(
             "flex items-center gap-1.5",
-            panelOculto === "ninguno" && "w-full pl-[760px]",
+            panelOculto === "ninguno" && "w-full",
           )}
+          style={
+            panelOculto === "ninguno"
+              ? { paddingLeft: LISTA_ANCHO_PX }
+              : undefined
+          }
         >
           {/* Solo en vista día; en mes conservan el hueco (los totales del mes
               son globales y no dependen de plano, sala ni zona). */}
@@ -5536,12 +5557,15 @@ export function ReservasView() {
         {panelOculto !== "lista" && (
         <div className={cn(
           "border-r flex flex-col bg-card overflow-hidden",
-          // 760 px (antes 620): con la columna TIPO ya no cabian los datos y el
-          // nombre se cortaba, que es justo por lo que se busca a la gente en
-          // sala. Lo que crece la lista lo cede el plano SOLO a lo ancho: se
-          // escala solo al espacio que le queda y mantiene su alto entero.
-          panelOculto === "ninguno" ? "w-[760px] shrink-0" : "flex-1",
-        )}>
+          // El ancho sale de LISTA_ANCHO_PX, que es el mismo que coloca los
+          // botones de arriba sobre el plano. Lo que crece la lista lo cede el
+          // plano SOLO a lo ancho: se escala solo al espacio que le queda y
+          // mantiene su alto entero.
+          panelOculto === "ninguno" ? "shrink-0" : "flex-1",
+        )}
+        style={
+          panelOculto === "ninguno" ? { width: LISTA_ANCHO_PX } : undefined
+        }>
           <div className={cn(LISTA_GRID, "px-3 py-2 text-[10px] font-semibold text-muted-foreground border-b bg-muted/30 uppercase tracking-wider")}>
             <span className="truncate">Hora</span>
             <span className="truncate">Mesa</span>
