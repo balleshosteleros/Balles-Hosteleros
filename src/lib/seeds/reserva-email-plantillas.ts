@@ -120,7 +120,7 @@ export const RESERVA_EMAIL_TIPO_LABELS: Record<ReservaEmailTipo, string> = {
   NO_SHOW: "No presentado",
   CANCELADA: "Reserva cancelada",
   TICKET_COMPRA: "Compra de ticket",
-  TICKET_RESERVA: "Reserva con ticket",
+  TICKET_RESERVA: "Reserva confirmada (ticket)",
   POLITICA_CANCELACION: "Política de cancelación",
   POLITICA_GARANTIA: "Política de garantía",
   GARANTIA_PENDIENTE: "Garantía pendiente",
@@ -260,7 +260,7 @@ export const RESERVA_EMAIL_PLANTILLAS_SEED: ReservaEmailPlantillaSeed[] = [
   },
   {
     tipo: "TICKET_RESERVA",
-    asunto_default: "Reserva confirmada con tu ticket · {{fecha}} {{hora}}",
+    asunto_default: "Reserva confirmada · {{fecha}} {{hora}} · {{empresa}}",
     mensaje_default:
       "Tu ticket ya tiene fecha y hora. Estos son los datos de tu reserva.",
   },

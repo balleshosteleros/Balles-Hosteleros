@@ -115,7 +115,9 @@ const BADGE_POR_TIPO: Record<ReservaEmailTipo, string> = {
   NO_SHOW: "No presentado",
   CANCELADA: "Cancelada",
   TICKET_COMPRA: "Compra confirmada",
-  TICKET_RESERVA: "Reserva con ticket",
+  // El cliente no distingue "tipos de reserva": ha reservado y su mesa está
+  // confirmada, igual que cualquier otra. El ticket es asunto interno.
+  TICKET_RESERVA: "Reserva confirmada",
   POLITICA_CANCELACION: "Política de cancelación",
   POLITICA_GARANTIA: "Política de garantía",
   GARANTIA_PENDIENTE: "Reserva confirmada",
@@ -494,12 +496,23 @@ export async function enviarReservaEmail(
     | { codigo: string; producto: string; unidades: number; importe: number; porPersona: boolean }
     | null = null;
 
-  /** Correos en los que el compromiso económico todavía se puede evitar. */
+  /**
+   * Correos que llevan el compromiso económico, por dos motivos distintos:
+   *
+   *   · Antes de la visita (confirmada, reconfirmada, recordatorio) el cliente
+   *     todavía está a tiempo de evitarlo, así que tiene que verlo.
+   *   · Al cancelar o no presentarse es justo cuando se decide si se le cobra.
+   *     Callarlo ahí dejaba al cliente sin saber a qué atenerse en el único
+   *     momento en que el importe pasa de ser una advertencia a un cargo.
+   */
   const RECUERDA_CONDICIONES: ReservaEmailTipo[] = [
     "CONFIRMADA",
     "RECONFIRMADA",
     "RECORDATORIO",
     "TICKET_RESERVA",
+    "GARANTIA_PENDIENTE",
+    "CANCELADA",
+    "NO_SHOW",
   ];
   const mostrarCondiciones =
     RECUERDA_CONDICIONES.includes(tipo) ||
@@ -1212,6 +1225,13 @@ export interface PreviewInput {
     cancelacionImporteEur?: number | null;
     garantiaImporteEur?: number | null;
   };
+  /**
+   * Tipo de reserva que se quiere previsualizar. El mismo correo cambia de
+   * contenido según a qué esté sujeta la reserva: "Reserva confirmada" lleva
+   * el plazo y el importe si hay política, y no lleva nada si es gratis.
+   * Por defecto "gratis", que es el caso mayoritario.
+   */
+  tipoReserva?: "gratis" | "cancelacion" | "garantia" | "ticket";
 }
 
 export function previewReservaEmail(input: PreviewInput): {
@@ -1245,8 +1265,23 @@ export function previewReservaEmail(input: PreviewInput): {
   // "Confirmada" NO lleva bloque: la reciben los cuatro tipos de reserva y la
   // mayoría son gratis. Pintarlo aquí hacía creer que todos los clientes ven
   // unas condiciones que solo ve una parte.
+  // Los mismos correos que en el envío real: los que el cliente puede recibir
+  // sujeto a una política llevan su bloque, y el resto no.
+  const LLEVA_CONDICIONES: ReservaEmailTipo[] = [
+    "CONFIRMADA",
+    "RECONFIRMADA",
+    "RECORDATORIO",
+    "TICKET_RESERVA",
+    "GARANTIA_PENDIENTE",
+    "CANCELADA",
+    "NO_SHOW",
+  ];
+  const tipoReserva = input.tipoReserva ?? "gratis";
+  const conCondiciones = LLEVA_CONDICIONES.includes(input.tipo);
+
   const politicaBloque =
-    input.tipo === "POLITICA_CANCELACION"
+    input.tipo === "POLITICA_CANCELACION" ||
+    (conCondiciones && tipoReserva === "cancelacion")
       ? {
           horas: input.config.cancelacionHorasAntes ?? 24,
           importe: Number(input.config.cancelacionImporteEur ?? 15),
@@ -1255,7 +1290,8 @@ export function previewReservaEmail(input: PreviewInput): {
       : null;
 
   const garantiaBloque =
-    input.tipo === "POLITICA_GARANTIA"
+    input.tipo === "POLITICA_GARANTIA" ||
+    (conCondiciones && tipoReserva === "garantia")
       ? { importe: Number(input.config.garantiaImporteEur ?? 20), mensajeExtra: "" }
       : null;
 

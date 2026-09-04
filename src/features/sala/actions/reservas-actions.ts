@@ -19,7 +19,6 @@ import { asignarMesaAutomatica } from "@/features/sala/planos/lib/asignacion-mes
 import { getMesasBloqueadas } from "@/features/sala/bloqueos/lib/mesas-bloqueadas";
 import { getCamposObligatoriosReserva } from "@/features/sala/lib/reserva-campos-obligatorios";
 import { turnoDeHora } from "@/features/sala/lib/dia-negocio";
-import { tipoDeReserva } from "@/features/sala/lib/tipo-reserva";
 import {
   buscarConflictoMesa,
   getDuracionReservaMin,
@@ -1246,33 +1245,14 @@ export async function notificarReservaCreadaPorEmail(reservaId: string) {
     const { data: r } = await supabase
       .from("reservas")
       .select(
-        "empresa_id, fecha, hora, es_ticket, tiene_cancelacion, cancelacion_importe, tiene_garantia, garantia_importe",
+        "empresa_id, fecha, hora",
       )
       .eq("id", reservaId)
       .maybeSingle();
 
-    // El compromiso económico va en su propio correo: el cliente tiene que
-    // poder volver a leer las condiciones sin rebuscar dentro de la
-    // confirmación. Solo puede haber uno, porque los tipos son excluyentes
-    // (ver `lib/tipo-reserva.ts`). Si la empresa tiene la plantilla pausada,
-    // el mailer corta.
-    const tipoReserva = tipoDeReserva({
-      esTicket: r?.es_ticket as boolean | null,
-      tieneGarantia: r?.tiene_garantia as boolean | null,
-      garantiaImporte: r?.garantia_importe as number | null,
-      tieneCancelacion: r?.tiene_cancelacion as boolean | null,
-      cancelacionImporte: r?.cancelacion_importe as number | null,
-    });
-    if (tipoReserva === "cancelacion") {
-      enviarReservaEmail(reservaId, "POLITICA_CANCELACION", { actor }).catch((e) =>
-        console.error("[reservas] mail POLITICA_CANCELACION:", e),
-      );
-    }
-    if (tipoReserva === "garantia") {
-      enviarReservaEmail(reservaId, "POLITICA_GARANTIA", { actor }).catch((e) =>
-        console.error("[reservas] mail POLITICA_GARANTIA:", e),
-      );
-    }
+    // Las condiciones económicas NO van en correo aparte: el plazo y el importe
+    // ya salen dentro de la confirmación, que es el correo que el cliente
+    // guarda. Un segundo correo repetía lo mismo al mismo cliente.
 
     if (r?.fecha && r?.hora && r?.empresa_id) {
       const { data: cfg } = await supabase
