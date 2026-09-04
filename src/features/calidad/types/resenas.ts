@@ -10,6 +10,12 @@ export type OrigenResena =
   | "qr"
   | "carta"
   | "google"
+  // Las dos que faltaban, y son las que más filas tienen: "encuesta" son las
+  // 2.611 valoraciones traídas de CoverManager y "reserva" las que llegan por
+  // el correo posterior a la visita. La base de datos siempre las aceptó; el
+  // tipo no las conocía, así que en Calidad su origen salía en blanco.
+  | "encuesta"
+  | "reserva"
   | "otro";
 
 // ─── Seguimiento de calidad ───────────────────────────────────
@@ -368,5 +374,7 @@ export const ORIGEN_LABEL: Record<OrigenResena, string> = {
   qr: "QR en mesa",
   carta: "Carta digital",
   google: "Google",
+  encuesta: "Encuesta",
+  reserva: "Tras la reserva",
   otro: "Otro",
 };
