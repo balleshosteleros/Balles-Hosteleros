@@ -26,6 +26,8 @@ import {
   Tag,
   Trash2,
   Trees,
+  ZoomIn,
+  ZoomOut,
 } from "lucide-react";
 import { DECO_DEFAULTS, DecoBody } from "@/features/sala/planos/components/DecoBody";
 import { toast } from "sonner";
@@ -275,7 +277,6 @@ export function SalaPlanoEditor({ sala, zonas, mesas, onBack }: Props) {
   const [mesaSeleccionada, setMesaSeleccionada] = useState<string | null>(null);
   const [decoSeleccionada, setDecoSeleccionada] = useState<string | null>(null);
   const [zonaLabelSeleccionada, setZonaLabelSeleccionada] = useState<string | null>(null);
-  const [scale, setScale] = useState(1);
   /**
    * Operaciones pendientes de guardar. Toda interacción del usuario alimenta estos
    * sets en lugar de llamar al servidor — el persist se dispara solo al pulsar Guardar.
@@ -291,6 +292,17 @@ export function SalaPlanoEditor({ sala, zonas, mesas, onBack }: Props) {
   const [exitDialogOpen, setExitDialogOpen] = useState(false);
   const outerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
+  /**
+   * Zoom del editor. `null` = encajar: el plano entero cabe en el hueco, que es
+   * como se abre siempre. Un número es el zoom que ha elegido la persona para
+   * acercarse a colocar mesas con precisión.
+   *
+   * El lienzo NO cambia de tamaño con el zoom: sigue siendo el mismo 1200x640
+   * que se ve luego en Reservas. Acercarse solo agranda lo que se ve aquí; lo
+   * que quede fuera del marco tampoco se verá en el servicio.
+   */
+  const [zoomManual, setZoomManual] = useState<number | null>(null);
+  const [escalaEncaje, setEscalaEncaje] = useState(1);
 
   const isDirty =
     pendingMesaUpserts.size > 0 ||
@@ -309,13 +321,16 @@ export function SalaPlanoEditor({ sala, zonas, mesas, onBack }: Props) {
       const h = el.clientHeight;
       if (w <= 0 || h <= 0) return;
       const s = Math.min(w / CANVAS_W, h / CANVAS_H, 1);
-      setScale(s > 0 ? s : 1);
+      setEscalaEncaje(s > 0 ? s : 1);
     };
     update();
     const ro = new ResizeObserver(update);
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
+
+  // Con zoom manual manda ese valor; si no, el plano entero encaja en el hueco.
+  const scale = zoomManual ?? escalaEncaje;
 
   const zonasSala = useMemo(
     () => zonas.filter((z) => z.salaId === sala.id),
@@ -1083,6 +1098,50 @@ export function SalaPlanoEditor({ sala, zonas, mesas, onBack }: Props) {
           )}
         </div>
         <div className="flex items-center gap-2">
+          {/* Zoom: solo cambia lo que se ve AQUÍ para colocar con precisión. El
+              plano que verá sala es siempre el marco entero, se mire como se
+              mire. */}
+          <div className="flex items-center gap-0.5 rounded-md border p-0.5">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-6 w-6"
+              title="Alejar"
+              aria-label="Alejar"
+              disabled={scale <= 0.35}
+              onClick={() =>
+                setZoomManual(Math.max(0.35, Number((scale - 0.1).toFixed(2))))
+              }
+            >
+              <ZoomOut className="h-3.5 w-3.5" />
+            </Button>
+            <span className="w-10 text-center text-[11px] tabular-nums text-muted-foreground">
+              {Math.round(scale * 100)}%
+            </span>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-6 w-6"
+              title="Acercar"
+              aria-label="Acercar"
+              disabled={scale >= 2}
+              onClick={() =>
+                setZoomManual(Math.min(2, Number((scale + 0.1).toFixed(2))))
+              }
+            >
+              <ZoomIn className="h-3.5 w-3.5" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 px-1.5 text-[11px]"
+              title="Ver el plano entero, como se verá en sala"
+              disabled={zoomManual === null}
+              onClick={() => setZoomManual(null)}
+            >
+              Encajar
+            </Button>
+          </div>
           {isDirty && !saving && (
             <span className="rounded bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-900 dark:bg-amber-950/50 dark:text-amber-200">
               Cambios sin guardar
@@ -1360,7 +1419,12 @@ export function SalaPlanoEditor({ sala, zonas, mesas, onBack }: Props) {
 
         <div
           ref={outerRef}
-          className="border rounded-md overflow-hidden bg-muted/20 relative flex items-center justify-center"
+          className={cn(
+            "border rounded-md bg-muted/20 relative flex items-center justify-center",
+            // Encajado no hay nada que desplazar; ampliado sí, para poder
+            // llegar a cualquier esquina del plano.
+            zoomManual === null ? "overflow-hidden" : "overflow-auto justify-start items-start",
+          )}
           style={{ height: CANVAS_H }}
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
@@ -1380,7 +1444,7 @@ export function SalaPlanoEditor({ sala, zonas, mesas, onBack }: Props) {
           >
             <div
               ref={canvasRef}
-              className="relative"
+              className="relative bg-background"
               style={{
                 width: CANVAS_W,
                 height: CANVAS_H,
@@ -1392,6 +1456,13 @@ export function SalaPlanoEditor({ sala, zonas, mesas, onBack }: Props) {
                 backgroundImage:
                   "linear-gradient(rgba(0,0,0,0.06) 1px, transparent 1px), linear-gradient(90deg, rgba(0,0,0,0.06) 1px, transparent 1px)",
                 backgroundSize: "40px 40px",
+                // Marco de lo que se ve luego en Reservas: el plano es
+                // EXACTAMENTE este rectángulo. Lo que se salga de aquí no se
+                // verá en el servicio, así que tiene que estar a la vista
+                // mientras se colocan las mesas.
+                outline: "2px solid hsl(var(--primary))",
+                outlineOffset: "-1px",
+                boxShadow: "0 0 0 9999px hsl(var(--muted) / 0.35)",
               }}
             >
               {/* Decoraciones — siempre debajo de las mesas */}

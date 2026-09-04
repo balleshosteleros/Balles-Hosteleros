@@ -2938,9 +2938,10 @@ function PlanoCanvas({
       if (w <= 0 || h <= 0) return;
       // Se aprovecha todo el hueco: el lienzo es mas ancho que alto, asi que en
       // pantallas anchas mandaba el alto y quedaban franjas muertas a los lados.
-      // El tope de 1.6 evita que en un monitor muy grande las mesas se vean
+      // El tope de 2 es el mismo que admite el editor de Ajustes: asi el plano
+      // se ve aqui tan grande como se dibujo alli, sin que las mesas queden
       // desproporcionadas respecto al texto que llevan dentro.
-      const s = Math.min(w / PLANO_CANVAS_W, h / PLANO_CANVAS_H, 1.6);
+      const s = Math.min(w / PLANO_CANVAS_W, h / PLANO_CANVAS_H, 2);
       setScale(s > 0 ? s : 1);
     };
     update();
@@ -5491,11 +5492,13 @@ export function ReservasView() {
                         </span>
                         {r.telefono && (
                           <span className="flex min-w-0 items-center gap-1 text-[10px] text-muted-foreground">
-                            {/* Sin bandera de país: en el listado del turno
-                                ensuciaba la línea y no aporta nada para
-                                trabajar la reserva. El prefijo ya va en el
-                                propio número. */}
-                            <span className="truncate tabular-nums">{r.telefono}</span>
+                            {/* Solo el número, sin bandera y sin prefijo: en el
+                                listado del turno ensuciaban la línea. El país y
+                                el prefijo se ven en la ficha del cliente, que es
+                                donde se miran antes de llamar. */}
+                            <span className="truncate tabular-nums">
+                              {separarPrefijo(r.telefono).numero || r.telefono}
+                            </span>
                           </span>
                         )}
                         {/* Adelanto del comentario: se lee el principio sin
