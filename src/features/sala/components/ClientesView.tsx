@@ -39,6 +39,7 @@ import { Cliente, ClasificacionCliente } from "@/features/sala/data/clientes";
 import { listClientes, createCliente } from "@/features/sala/actions/clientes-actions";
 import { guardarFichaCliente } from "@/features/sala/actions/cliente-ficha-actions";
 import { ActividadCliente } from "@/features/sala/components/clientes/ActividadCliente";
+import { HistorialVisitasCliente } from "@/features/sala/components/clientes/HistorialVisitasCliente";
 import {
   listClientesEnriquecidos,
   type ClienteEnriquecido,
@@ -199,7 +200,7 @@ export function ClientesView() {
   const [columnasOrden, setColumnasOrden] = useState<string[] | undefined>(undefined);
   const [selectedCliente, setSelectedCliente] = useState<Cliente | null>(null);
   /** Pestaña abierta de la ficha. Siempre se entra por los datos. */
-  const [tabFicha, setTabFicha] = useState<"datos" | "valoraciones">("datos");
+  const [tabFicha, setTabFicha] = useState<"datos" | "visitas" | "valoraciones">("datos");
   const searchParams = useSearchParams();
   const [showConfig, setShowConfig] = useState(false);
   const [pagina, setPagina] = useState(1);
@@ -772,10 +773,18 @@ export function ClientesView() {
               */}
               <Tabs
                 value={tabFicha}
-                onValueChange={(v) => setTabFicha(v as "datos" | "valoraciones")}
+                onValueChange={(v) => setTabFicha(v as "datos" | "visitas" | "valoraciones")}
               >
-                <TabsList className="grid w-full grid-cols-2">
+                <TabsList className="grid w-full grid-cols-3">
                   <TabsTrigger value="datos">Datos</TabsTrigger>
+                  <TabsTrigger value="visitas">
+                    Reservas
+                    {borrador.visitas > 0 && (
+                      <span className="ml-1.5 text-xs text-muted-foreground">
+                        {borrador.visitas}
+                      </span>
+                    )}
+                  </TabsTrigger>
                   <TabsTrigger value="valoraciones">
                     Valoraciones
                     {fichaExtra.resenas.length > 0 && (
@@ -1160,6 +1169,16 @@ export function ClientesView() {
                 <div className="pt-2 border-t">
                   <ActividadCliente clienteId={borrador.id} />
                 </div>
+                </TabsContent>
+
+                <TabsContent value="visitas" className="mt-4 space-y-4">
+                {/*
+                  Todas las veces que ha reservado, con lo que pasó de verdad:
+                  si vino, si canceló o si dejó la mesa vacía. Incluye el
+                  histórico traído de CoverManager, que son reservas que nunca
+                  existieron en este sistema.
+                */}
+                <HistorialVisitasCliente clienteId={borrador.id} zonaHoraria={zonaHoraria} />
                 </TabsContent>
 
                 <TabsContent value="valoraciones" className="mt-4 space-y-4">
