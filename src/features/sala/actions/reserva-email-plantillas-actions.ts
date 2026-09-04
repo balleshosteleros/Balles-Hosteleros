@@ -193,7 +193,9 @@ export async function previewReservaEmailPlantilla(input: {
         .maybeSingle(),
       supabase
         .from("empresa_reservas_config")
-        .select("cancelacion_horas_antes, cancelacion_importe_eur, garantia_importe_eur")
+        .select(
+          "cancelacion_horas_antes, cancelacion_importe_eur, garantia_horas_antes, garantia_importe_eur",
+        )
         .eq("empresa_id", empresaId)
         .maybeSingle(),
     ]);
@@ -217,6 +219,8 @@ export async function previewReservaEmailPlantilla(input: {
       config: {
         cancelacionHorasAntes:
           (cfg?.cancelacion_horas_antes as number | null | undefined) ?? null,
+        garantiaHorasAntes:
+          (cfg?.garantia_horas_antes as number | null | undefined) ?? null,
         cancelacionImporteEur:
           (cfg?.cancelacion_importe_eur as number | null | undefined) ?? null,
         garantiaImporteEur:

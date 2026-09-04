@@ -1258,19 +1258,28 @@ export function previewReservaEmail(input: PreviewInput): {
   const tipoReserva = input.tipoReserva ?? "gratis";
   const conCondiciones = LLEVA_CONDICIONES.includes(input.tipo);
 
+  // El plazo y el importe salen SIEMPRE de la configuración de la política de
+  // la empresa, nunca de un valor escrito aquí: una previa con cifras
+  // inventadas le enseña a quien edita la plantilla unas condiciones que sus
+  // clientes no van a recibir. Si la política no está configurada todavía, el
+  // bloque no se pinta —que es justo lo que verá el cliente.
   const politicaBloque =
-    conCondiciones && tipoReserva === "cancelacion"
+    conCondiciones &&
+    tipoReserva === "cancelacion" &&
+    Number(input.config.cancelacionImporteEur ?? 0) > 0
       ? {
-          horas: input.config.cancelacionHorasAntes ?? 24,
-          importe: Number(input.config.cancelacionImporteEur ?? 15),
+          horas: Number(input.config.cancelacionHorasAntes ?? 0),
+          importe: Number(input.config.cancelacionImporteEur),
         }
       : null;
 
   const garantiaBloque =
-    conCondiciones && tipoReserva === "garantia"
+    conCondiciones &&
+    tipoReserva === "garantia" &&
+    Number(input.config.garantiaImporteEur ?? 0) > 0
       ? {
-          importe: Number(input.config.garantiaImporteEur ?? 20),
-          horas: input.config.garantiaHorasAntes ?? 24,
+          importe: Number(input.config.garantiaImporteEur),
+          horas: Number(input.config.garantiaHorasAntes ?? 0),
         }
       : null;
 
