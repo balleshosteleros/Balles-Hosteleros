@@ -5,6 +5,76 @@
 
 ---
 
+## 🍳 04-SEP — ELABORACIONES ARREGLADAS · faltan tus recetas y una regla que decidir
+
+> **1 tarea + 1 decisión para Iván.** El módulo ya funciona como pediste, pero **está
+> parado hasta que carguéis los escandallos de las elaboraciones**.
+
+Hecho lo que os contamos el 29-ago: Elaboraciones ya no está rota y trabaja como describiste.
+
+### Lo que estaba mal (peor de lo que os dijimos)
+
+Al abrirlo en producción tenía **tres fallos a la vez**, no uno:
+
+1. **Fallaba al confirmar**, siempre. Leía una columna de producto renombrada en junio.
+2. **Se saltaba el historial de almacén**: escribía las existencias directamente, sin dejar
+   movimiento ni rastro de quién ni por qué.
+3. **Solo sumaba el producto elaborado y no descontaba los ingredientes.** Cada confirmación
+   habría inflado el almacén con mercancía de la nada.
+
+No se notó porque **no se ha usado nunca**. Las dos funciones ni siquiera estaban en nuestro
+repositorio: vivían solo en el servidor. Ya no existen.
+
+### Cómo funciona ahora (tu descripción, tal cual)
+
+El jefe de cocina **elige la elaboración y teclea cuánto le ha salido**. Al confirmar:
+
+- se **descuentan los ingredientes en proporción** a lo que dice haber hecho,
+- se **da de alta el elaborado** con su coste real (lo que costaron los ingredientes),
+- todo queda en el **historial de almacén**, y se puede volver a borrador deshaciéndolo entero.
+
+**Y antes de confirmar se enseña lo que se va a gastar**, en una lista. Nos pareció
+importante: si una receta está mal escrita, el cocinero lo ve ahí *("¿4 kg de tomate para 1
+litro de salsa?")* en vez de descubrirlo cuando el almacén ya no cuadre.
+
+**Regla aplicada, la misma que en ventas:** si el producto no tiene escandallo, **no se puede
+confirmar**. Sin receta no se sabe qué gasta, y confirmar solo sumaría — que es justo el fallo
+que arrastraba.
+
+### 🙋 1) LO QUE FALTA: vuestras recetas de elaboración
+
+El 3-sep dijisteis que estabais cargando **38 elaboraciones de BACANAL**. **No han llegado**:
+en producción siguen los 22 escandallos de antes, y **ninguno de los 21 productos de
+elaboración tiene receta**.
+
+**El mecanismo está listo y esperando.** En cuanto carguéis los escandallos, funciona.
+
+### ❓ 2) DECISIÓN: ¿cuánto rinde cada receta?
+
+Es la única pieza que nos falta definir con vosotros, y cambia los números:
+
+> Cuando escribís la receta de una elaboración —"lleva tanto de esto y tanto de aquello"—,
+> **¿esas cantidades son para UNA unidad (1 kg / 1 litro) o para una tanda entera?**
+
+- Si son **por unidad**: no hay que hacer nada, es lo que asume el sistema hoy.
+- Si son **por tanda** (p. ej. "con esto salen 5 litros"), hay que **declarar ese 5** en la
+  receta, en el campo de rendimiento. Si no, el sistema descontaría **5 veces de menos**.
+
+Nuestra recomendación: **escribidlas por tanda y declarad el rendimiento**, que es como se
+piensa en cocina ("de esta olla salen 5 litros"). Pero decidid vosotros y lo dejamos fijado.
+
+> Mientras tanto no hay riesgo de estropear nada: sin recetas cargadas no se puede confirmar
+> ninguna elaboración, y la lista de previsualización enseña las cantidades antes de aceptar.
+
+### 📌 Recordatorio de lo que sigue en vuestro tejado
+
+- **Las 16 altas de producto** (los tabacos de cachimba y los "Ud. Extra…") — sin ellas, ese
+  consumo no se descuenta aunque encendamos el descuento.
+- **Los escandallos** de platos, cócteles y elaboraciones.
+- Y mirar lo del **`SEXY GREEN`** picado como sabor de shisha (28 veces).
+
+---
+
 ## 📊 04-SEP (cierre) — HISTÓRICO RECUPERADO: 3.575 complementos · 16 altas pendientes
 
 > **Actualiza la nota de abajo con los números reales.** La lista de altas para Iván ahora
