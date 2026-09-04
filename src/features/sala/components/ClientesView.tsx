@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo, type ReactNode } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useSincronizacionEnVivo } from "@/shared/hooks/useSincronizacionEnVivo";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -203,6 +203,7 @@ export function ClientesView() {
   /** Pestaña abierta de la ficha. Siempre se entra por los datos. */
   const [tabFicha, setTabFicha] = useState<"datos" | "visitas" | "valoraciones">("datos");
   const searchParams = useSearchParams();
+  const router = useRouter();
   const [showConfig, setShowConfig] = useState(false);
   const [pagina, setPagina] = useState(1);
 
@@ -352,15 +353,25 @@ export function ClientesView() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clientePedido, clientes, abrirFicha]);
 
-  const cerrarFicha = () => {
+  const cerrarFicha = useCallback(() => {
     setSelectedCliente(null);
     setBorrador(null);
     // Si no, la siguiente ficha se abriría en la pestaña que dejó la anterior.
     setTabFicha("datos");
+    // Se llega aquí desde Sala con `?cliente=<id>`. Si el parámetro se queda en
+    // la URL, el efecto que abre la ficha pedida vuelve a dispararse y la
+    // reabre: cerrarla resultaba imposible. Se limpia para que cerrar sea
+    // cerrar de verdad.
+    if (searchParams?.get("cliente")) {
+      const params = new URLSearchParams(searchParams.toString());
+      params.delete("cliente");
+      const qs = params.toString();
+      router.replace(qs ? `/sala/clientes?${qs}` : "/sala/clientes", { scroll: false });
+    }
     // Las etiquetas se guardan solas mientras la ficha está abierta; al cerrar
     // se recarga para que la tabla refleje lo que se haya tocado.
     loadClientes();
-  };
+  }, [searchParams, router, loadClientes]);
 
   const handleGuardarFicha = async () => {
     if (!borrador) return;
