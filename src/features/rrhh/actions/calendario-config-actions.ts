@@ -86,3 +86,80 @@ export async function setDiasVacacionesAnio(
     return { ok: false, error: msg };
   }
 }
+
+/**
+ * Comunidad autónoma de la empresa: es lo que decide qué festivos autonómicos
+ * ven sus empleados en el calendario. Vive en `config_operativa`, que es donde
+ * la lee la función SQL que genera los festivos.
+ */
+export async function getComunidadAutonoma(
+  empresaId: string,
+): Promise<{ ok: boolean; comunidad: string; error?: string }> {
+  try {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from("empresas")
+      .select("config_operativa")
+      .eq("id", empresaId)
+      .maybeSingle();
+    if (error) throw error;
+    const co = (data?.config_operativa as Record<string, unknown> | null) ?? {};
+    const bruto = co.comunidadAutonoma;
+    return { ok: true, comunidad: typeof bruto === "string" ? bruto : "" };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Error desconocido";
+    console.error("[calendario-config] getComunidad:", msg);
+    return { ok: false, comunidad: "", error: msg };
+  }
+}
+
+/**
+ * Guarda la comunidad autónoma y REHACE los festivos del año en curso y del
+ * siguiente.
+ *
+ * Los festivos se generan una sola vez y quedan escritos en la BD, así que
+ * guardar la comunidad sin regenerar dejaría a la empresa enseñando los de la
+ * comunidad anterior. Los festivos locales (origen 'manual') no se tocan: los
+ * pone RRHH a mano y no dependen de la comunidad.
+ */
+export async function setComunidadAutonoma(
+  empresaId: string,
+  comunidad: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const valor = comunidad.trim();
+  if (!valor) return { ok: false, error: "Elige una comunidad autónoma" };
+  try {
+    const supabase = await createClient();
+    // Se conserva el resto de `config_operativa` (moneda, zona horaria…).
+    const { data: actual, error: errLee } = await supabase
+      .from("empresas")
+      .select("config_operativa")
+      .eq("id", empresaId)
+      .maybeSingle();
+    if (errLee) throw errLee;
+
+    const co = (actual?.config_operativa as Record<string, unknown> | null) ?? {};
+    const { error } = await supabase
+      .from("empresas")
+      .update({ config_operativa: { ...co, comunidadAutonoma: valor } })
+      .eq("id", empresaId);
+    if (error) throw error;
+
+    const anio = new Date().getFullYear();
+    for (const a of [anio, anio + 1]) {
+      const { error: errGen } = await supabase.rpc("generar_festivos_empresa", {
+        p_empresa: empresaId,
+        p_anio: a,
+      });
+      if (errGen) throw errGen;
+    }
+
+    revalidatePath("/rrhh/calendarios");
+    revalidatePath("/mi-panel");
+    return { ok: true };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Error desconocido";
+    console.error("[calendario-config] setComunidad:", msg);
+    return { ok: false, error: msg };
+  }
+}

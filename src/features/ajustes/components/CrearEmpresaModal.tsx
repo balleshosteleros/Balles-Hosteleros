@@ -16,6 +16,7 @@ import { setEmpresaActiva } from "@/features/empresa/actions/empresa-activa-acti
 import { useRouter } from "next/navigation";
 import type { DatosGenerales, ConfigOperativa } from "@/features/ajustes/data/ajustes";
 import { ESTILO_EMAIL_IA_POR_DEFECTO } from "@/features/ajustes/data/ajustes";
+import { comunidadDeProvincia } from "@/features/rrhh/actions/festivos-types";
 
 // El alta replica EXACTAMENTE la vista de Ajustes → Empresa (ConfiguracionTab):
 // mismas tarjetas, mismos campos y mismo layout. Las iniciales y el color del
@@ -208,6 +209,10 @@ export function CrearEmpresaModal({ open, onOpenChange }: { open: boolean; onOpe
 
       const configOperativa: Partial<ConfigOperativa> = {
         moneda: form.moneda,
+        // La comunidad sale de la provincia que se acaba de escribir, para que
+        // la empresa tenga sus festivos autonómicos desde el primer día sin que
+        // nadie se acuerde de configurarla. Se cambia en RRHH → Calendarios.
+        comunidadAutonoma: comunidadDeProvincia(form.provincia),
         idioma: form.idioma,
         zonaHoraria: form.zonaHoraria,
         formatoFecha: form.formatoFecha,

@@ -13,9 +13,13 @@ import {
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { NumberInput } from "@/shared/components/NumberInput";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { COMUNIDADES_AUTONOMAS } from "@/features/rrhh/actions/festivos-types";
 import {
   getDiasVacacionesAnio,
   setDiasVacacionesAnio,
+  getComunidadAutonoma,
+  setComunidadAutonoma,
 } from "@/features/rrhh/actions/calendario-config-actions";
 
 /**
@@ -35,14 +39,22 @@ export function ConfigCalendarioDialog({
   onOpenChange: (v: boolean) => void;
 }) {
   const [dias, setDias] = useState<number | null>(null);
+  const [comunidad, setComunidad] = useState("");
+  // La de partida, para saber al guardar si hay que rehacer los festivos.
+  const [comunidadInicial, setComunidadInicial] = useState("");
   const [cargando, setCargando] = useState(false);
   const [pending, startTransition] = useTransition();
 
   useEffect(() => {
     if (!open) return;
     setCargando(true);
-    getDiasVacacionesAnio(empresaId).then((res) => {
-      setDias(res.dias);
+    Promise.all([
+      getDiasVacacionesAnio(empresaId),
+      getComunidadAutonoma(empresaId),
+    ]).then(([resDias, resCom]) => {
+      setDias(resDias.dias);
+      setComunidad(resCom.comunidad);
+      setComunidadInicial(resCom.comunidad);
       setCargando(false);
     });
   }, [open, empresaId]);
@@ -54,12 +66,25 @@ export function ConfigCalendarioDialog({
     }
     startTransition(async () => {
       const res = await setDiasVacacionesAnio(empresaId, Math.round(dias));
-      if (res.ok) {
-        toast.success("Guardado");
-        onOpenChange(false);
-      } else {
+      if (!res.ok) {
         toast.error(res.error ?? "No se pudo guardar");
+        return;
       }
+      // Solo se rehacen los festivos si la comunidad ha cambiado de verdad:
+      // regenerar por costumbre borraría y reescribiría festivos sin motivo.
+      if (comunidad && comunidad !== comunidadInicial) {
+        const resCom = await setComunidadAutonoma(empresaId, comunidad);
+        if (!resCom.ok) {
+          toast.error(resCom.error ?? "No se pudo guardar la comunidad autónoma");
+          return;
+        }
+        setComunidadInicial(comunidad);
+        toast.success("Guardado. Festivos actualizados");
+        onOpenChange(false);
+        return;
+      }
+      toast.success("Guardado");
+      onOpenChange(false);
     });
   }
 
@@ -88,6 +113,29 @@ export function ConfigCalendarioDialog({
           <p className="text-[11px] text-muted-foreground">
             Los días que le corresponden a cada empleado por año completo. De
             aquí sale el saldo que ven en su panel y RRHH en la ficha.
+          </p>
+        </div>
+
+        <div className="space-y-1.5 py-2">
+          <Label htmlFor="comunidad">Comunidad autónoma</Label>
+          <Select
+            value={comunidad}
+            onValueChange={setComunidad}
+            disabled={cargando || pending}
+          >
+            <SelectTrigger id="comunidad" className="w-full">
+              <SelectValue placeholder="Elige una comunidad" />
+            </SelectTrigger>
+            <SelectContent>
+              {COMUNIDADES_AUTONOMAS.map((com) => (
+                <SelectItem key={com} value={com}>{com}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="text-[11px] text-muted-foreground">
+            Decide los festivos autonómicos que ven los empleados. Al cambiarla
+            se rehacen los festivos de este año y del siguiente; los locales,
+            que añades tú, se conservan.
           </p>
         </div>
 
