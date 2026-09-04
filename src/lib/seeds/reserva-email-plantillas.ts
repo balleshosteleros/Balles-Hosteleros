@@ -109,7 +109,7 @@ export const RESERVA_EMAIL_TIPO_FAMILIA: Record<ReservaEmailTipo, ReservaEmailFa
 
 export const RESERVA_EMAIL_TIPO_LABELS: Record<ReservaEmailTipo, string> = {
   CONFIRMADA: "Reserva confirmada",
-  RECONFIRMADA: "Reserva reconfirmada",
+  RECONFIRMADA: "Confirma tu reserva",
   NO_RECONFIRMADA: "Pendiente de reconfirmar",
   LISTA_ESPERA: "En lista de espera",
   LIBERADA: "Mesa liberada",
@@ -198,16 +198,19 @@ export const RESERVA_EMAIL_PLANTILLAS_SEED: ReservaEmailPlantillaSeed[] = [
     mensaje_default: "",
   },
   {
+    // PIDE, no da por hecho: este correo sale ANTES de que el cliente toque
+    // nada. "Gracias por confirmarnos que vienes" agradecía algo que aún no
+    // había pasado, y el correo ni siquiera llevaba con qué hacerlo.
     tipo: "RECONFIRMADA",
-    asunto_default: "Reserva reconfirmada · {{fecha}} {{hora}} · {{empresa}}",
+    asunto_default: "¿Nos confirmas tu reserva del {{fecha}}? · {{empresa}}",
     mensaje_default:
-      "Gracias por confirmarnos que vienes. Tu mesa queda reservada tal y como la ves aquí abajo.",
+      "Tu reserva es el {{fecha}} a las {{hora}}. ¿Nos confirmas que vienes? Con un clic nos ayudas a tener la mesa lista.",
   },
   {
     tipo: "NO_RECONFIRMADA",
-    asunto_default: "Tu reserva del {{fecha}} está pendiente de confirmar",
+    asunto_default: "No hemos podido confirmar tu reserva del {{fecha}}",
     mensaje_default:
-      "Tu reserva ha pasado a estar pendiente de confirmar. Sigue en pie con los datos que ves aquí abajo.",
+      "No llegamos a recibir tu confirmación, así que tu reserva figura como no reconfirmada. Sigue en pie con los datos que ves aquí abajo: si vas a venir, llámanos y la dejamos lista.",
   },
   {
     tipo: "LISTA_ESPERA",
