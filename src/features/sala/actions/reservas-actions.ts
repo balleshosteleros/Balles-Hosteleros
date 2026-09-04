@@ -1,6 +1,11 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import {
+  validarTelefono,
+  validarEmail,
+  validarNombre,
+} from "@/shared/lib/validar-contacto";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 import {
@@ -259,6 +264,14 @@ export async function createReserva(input: {
       if (exige.email && !input.clienteEmail?.trim()) {
         return { ok: false, error: "El email es obligatorio." };
       }
+      // Además de estar, el contacto tiene que servir: un `00000` deja la
+      // reserva incontactable igual que si no hubiera teléfono.
+      const vNombre = validarNombre(input.clienteNombre);
+      if (!vNombre.ok) return { ok: false, error: vNombre.error };
+      const vTel = validarTelefono(input.clienteTelefono, exige.telefono);
+      if (!vTel.ok) return { ok: false, error: vTel.error };
+      const vEmail = validarEmail(input.clienteEmail, exige.email);
+      if (!vEmail.ok) return { ok: false, error: vEmail.error };
     }
 
     // Si hay email o teléfono, vincular/crear ficha de cliente.
