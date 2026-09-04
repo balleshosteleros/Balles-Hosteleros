@@ -2459,26 +2459,25 @@ function FiltroEstadosDropdown({
 }
 
 /**
- * Filtro de ORIGEN. Mismo botón y mismo desplegable que Estados: estaba como
- * un `select` gris en una franja aparte encima de la lista, con otra letra y
- * otra altura, y esa franja robaba una fila de reservas a la pantalla.
- *
- * Aquí es de selección ÚNICA (o un origen, o todos), así que la marca es
- * redonda y no cuadrada: el cuadrado promete que se pueden marcar varios.
+ * Filtro de ORIGEN. Mismo botón, mismo desplegable y mismo funcionamiento que
+ * Estados: selección MÚLTIPLE con "Todos · Ninguno" y casillas cuadradas. Antes
+ * era de selección única (o uno, o todos), así que no se podían ver dos
+ * orígenes a la vez y se comportaba distinto que el filtro de al lado.
  */
 function FiltroOrigenDropdown({
-  valor,
+  ocultos,
   origenes,
   onChange,
 }: {
-  valor: string;
+  /** Orígenes DESMARCADOS. Lo que no está aquí se ve. */
+  ocultos: string[];
   origenes: string[];
-  onChange: (v: string) => void;
+  onChange: (v: string[]) => void;
 }) {
-  const opciones = [
-    { valor: "TODOS", label: "Todos" },
-    ...origenes.map((o) => ({ valor: o, label: labelOrigen(o) })),
-  ];
+  const toggle = (o: string) => {
+    onChange(ocultos.includes(o) ? ocultos.filter((x) => x !== o) : [...ocultos, o]);
+  };
+
   return (
     <Popover>
       <PopoverTrigger asChild>
@@ -2492,15 +2491,32 @@ function FiltroOrigenDropdown({
           <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
             Origen
           </span>
+          <div className="flex gap-1">
+            <button
+              type="button"
+              onClick={() => onChange([])}
+              className="text-[10px] text-primary hover:underline"
+            >
+              Todos
+            </button>
+            <span className="text-[10px] text-muted-foreground">·</span>
+            <button
+              type="button"
+              onClick={() => onChange(origenes)}
+              className="text-[10px] text-muted-foreground hover:underline"
+            >
+              Ninguno
+            </button>
+          </div>
         </div>
         <div className="max-h-[300px] overflow-y-auto space-y-0.5">
-          {opciones.map((o) => {
-            const checked = valor === o.valor;
+          {origenes.map((o) => {
+            const checked = !ocultos.includes(o);
             return (
               <button
-                key={o.valor}
+                key={o}
                 type="button"
-                onClick={() => onChange(o.valor)}
+                onClick={() => toggle(o)}
                 className={cn(
                   "w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs hover:bg-muted transition-colors text-left",
                   checked && "bg-muted/60",
@@ -2508,7 +2524,7 @@ function FiltroOrigenDropdown({
               >
                 <span
                   className={cn(
-                    "w-4 h-4 rounded-full border flex items-center justify-center shrink-0",
+                    "w-4 h-4 rounded border flex items-center justify-center shrink-0",
                     checked
                       ? "bg-primary border-primary text-primary-foreground"
                       : "border-border",
@@ -2516,7 +2532,7 @@ function FiltroOrigenDropdown({
                 >
                   {checked && <Check className="h-3 w-3" />}
                 </span>
-                <span className="truncate">{o.label}</span>
+                <span className="truncate">{labelOrigen(o)}</span>
               </button>
             );
           })}
@@ -3415,7 +3431,11 @@ export function ReservasView() {
   /** Sube al cobrar o perdonar para que el aviso se recalcule y la línea desaparezca. */
   const [refrescoAvisosCobro, setRefrescoAvisosCobro] = useState(0);
   const [filtroEstados, setFiltroEstados] = useState<EstadoReserva[]>(ESTADOS_RESERVA);
-  const [filtroOrigen, setFiltroOrigen] = useState<string>("TODOS");
+  // Orígenes DESMARCADOS. Se guarda lo oculto y no lo visible porque el catálogo
+  // de orígenes es ABIERTO: Marketing crea campañas nuevas sin tocar código, y
+  // con una lista de "marcados" cualquier origen nuevo nacería invisible y sus
+  // reservas desaparecerían del listado sin que nadie entienda por qué.
+  const [origenesOcultos, setOrigenesOcultos] = useState<string[]>([]);
   const [cfgReservas, setCfgReservas] = useState<EmpresaReservasConfig | null>(null);
   /** Reglas de aforo con vigencia (cupo / tamaño máximo por reserva). */
   const [reglasReservas, setReglasReservas] = useState<EmpresaReservasRegla[]>([]);
@@ -4458,14 +4478,14 @@ export function ReservasView() {
       // Se compara la CLAVE normalizada, no el texto crudo de BD: conviven
       // filas antiguas con "telefono" y nuevas con "TELEFONO", y el filtro
       // tiene que cazar las dos con la misma opción.
-      const matchO = filtroOrigen === "TODOS" || normalizarOrigen(r.origen) === filtroOrigen;
+      const matchO = !origenesOcultos.includes(normalizarOrigen(r.origen));
       return matchQ && matchZ && matchE && matchO;
     }).sort((a, b) => {
       const horaCmp = a.hora.localeCompare(b.hora);
       if (horaCmp !== 0) return horaCmp;
       return ESTADO_ORDEN_PRIORIDAD[a.estado] - ESTADO_ORDEN_PRIORIDAD[b.estado];
     });
-  }, [reservasTurno, busqueda, zonaCoincide, filtroEstados, filtroOrigen, idsDelAviso]);
+  }, [reservasTurno, busqueda, zonaCoincide, filtroEstados, origenesOcultos, idsDelAviso]);
 
   const origenesPresentes = useMemo(() => {
     // Claves normalizadas, no valores crudos: si no, el mismo canal escrito de
@@ -5328,9 +5348,9 @@ export function ReservasView() {
               reservas con origen: el botón desaparecía y reaparecía solo,
               moviendo de sitio a todos los de al lado al cambiar de día. */}
           <FiltroOrigenDropdown
-            valor={filtroOrigen}
+            ocultos={origenesOcultos}
             origenes={origenesPresentes}
-            onChange={setFiltroOrigen}
+            onChange={setOrigenesOcultos}
           />
           <FiltroEstadosDropdown
             seleccionados={filtroEstados}
@@ -5377,8 +5397,14 @@ export function ReservasView() {
 
             Ya NO se les da el ancho entero ni un relleno hasta el plano: eso
             los mandaba a una fila para ellos solos y partía la barra en dos.
-            Cabe todo en una línea, que es como se lee de un vistazo. */}
-        <div className="flex items-center gap-1.5">
+            Cabe todo en una línea, que es como se lee de un vistazo.
+
+            `ml-auto` los empuja todo lo que da la barra sin partirla: se comen
+            el hueco libre y quedan lo más a la derecha posible, arrimados al
+            plano, que es sobre lo que mandan. El `ml-auto` va AQUÍ y no en el
+            bloque de los ajustes (que lo tenía): con uno en cada sitio los dos
+            se repartían el hueco a medias y este se quedaba a mitad de camino. */}
+        <div className="ml-auto flex items-center gap-1.5">
           {/* Solo en vista día; en mes conservan el hueco (los totales del mes
               son globales y no dependen de plano, sala ni zona). */}
           <div
@@ -5466,7 +5492,7 @@ export function ReservasView() {
           </div>
         </div>
 
-        <div className="ml-auto flex items-center gap-1.5">
+        <div className="flex items-center gap-1.5">
           <Button
             variant="outline"
             size="icon"
