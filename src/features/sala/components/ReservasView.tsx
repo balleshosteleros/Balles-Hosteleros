@@ -2883,6 +2883,74 @@ function getPlanoMesaDims(forma: FormaMesa, pos?: PlanoMesaPosicion | null) {
 const PLANO_CANVAS_W = 1200;
 const PLANO_CANVAS_H = 640;
 
+/**
+ * Aire que se deja alrededor de las mesas al encuadrar solo, en píxeles del
+ * lienzo. Sin nada de margen las mesas del borde quedarían pegadas al filo de
+ * la pantalla y las etiquetas de zona se cortarían.
+ */
+const ENCUADRE_AUTO_MARGEN = 40;
+
+/**
+ * Recuadro que ocupan de verdad las mesas de una sala, para ampliarlo hasta
+ * llenar la pantalla cuando nadie ha dibujado un encuadre en el editor.
+ *
+ * El lienzo mide 1200x640 pero las mesas rara vez lo llenan: suelen ocupar una
+ * franja y dejar la mitad del alto vacío. Ampliando el lienzo entero se
+ * ampliaba también ese vacío, y el plano quedaba pequeño en el centro con
+ * franjas muertas. Midiendo dónde están las mesas, el plano crece hasta donde
+ * da la pantalla.
+ *
+ * Entran también las decoraciones (barra, aseos, tabiques): forman parte del
+ * dibujo de la sala y dejarlas fuera las cortaría por la mitad.
+ */
+function encuadreAutomatico(
+  mesas: Mesa[],
+  posiciones: Map<string, PlanoMesaPosicion>,
+  mesasMeta: Map<string, MesaMeta>,
+  decoraciones: SalaDecoracion[],
+): { x: number; y: number; width: number; height: number } {
+  const lienzoEntero = { x: 0, y: 0, width: PLANO_CANVAS_W, height: PLANO_CANVAS_H };
+
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+
+  const sumar = (x: number, y: number, w: number, h: number) => {
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+    minX = Math.min(minX, x);
+    minY = Math.min(minY, y);
+    maxX = Math.max(maxX, x + w);
+    maxY = Math.max(maxY, y + h);
+  };
+
+  for (const m of mesas) {
+    const pos = posiciones.get(m.id);
+    if (!pos) continue;
+    const forma = mesasMeta.get(m.id)?.forma ?? "cuadrada";
+    const { w, h } = getPlanoMesaDims(forma, pos);
+    sumar(Number(pos.x), Number(pos.y), w, h);
+  }
+  for (const d of decoraciones) {
+    sumar(Number(d.x), Number(d.y), Number(d.width), Number(d.height));
+  }
+
+  // Sala sin nada colocado: no hay qué encuadrar y se deja el lienzo entero.
+  if (!Number.isFinite(minX) || !Number.isFinite(maxX)) return lienzoEntero;
+
+  const x = Math.max(0, minX - ENCUADRE_AUTO_MARGEN);
+  const y = Math.max(0, minY - ENCUADRE_AUTO_MARGEN);
+  const width = Math.min(PLANO_CANVAS_W - x, maxX - x + ENCUADRE_AUTO_MARGEN);
+  const height = Math.min(PLANO_CANVAS_H - y, maxY - y + ENCUADRE_AUTO_MARGEN);
+
+  // Un recuadro diminuto (una sala con una sola mesa) ampliaría esa mesa hasta
+  // llenar la pantalla. El mismo mínimo que impone el editor.
+  const MIN = 200;
+  if (width < MIN || height < MIN) return lienzoEntero;
+
+  return { x, y, width, height };
+}
+
 function PlanoCanvas({
   mesas,
   posiciones,
@@ -2980,11 +3048,20 @@ function PlanoCanvas({
   const outerRef = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(1);
 
-  // Recuadro del lienzo que hay que ampliar. Sin encuadre guardado se usa el
-  // lienzo entero, que es como se veia antes de existir esta funcion.
+  // Recuadro del lienzo que hay que ampliar.
+  //
+  // Sin encuadre guardado NO se coge el lienzo entero: las mesas rara vez lo
+  // llenan —normalmente ocupan una franja— y ampliar el lienzo completo
+  // ampliaba también todo ese aire vacío, así que el plano se veía pequeño en
+  // el centro de la pantalla con franjas muertas enormes arriba y abajo. Y
+  // ninguna sala tiene encuadre guardado, así que le pasaba a todas.
+  //
+  // En su lugar se calcula solo: se mide dónde están de verdad las mesas (con
+  // sus etiquetas de zona y las decoraciones) y se amplía ese recuadro. El
+  // encuadre dibujado a mano en el editor sigue mandando cuando existe.
   const vista = useMemo(() => {
     const e = encuadre;
-    if (!e) return { x: 0, y: 0, width: PLANO_CANVAS_W, height: PLANO_CANVAS_H };
+    if (!e) return encuadreAutomatico(mesasConPos, posiciones, mesasMeta, decoraciones);
     // Se recorta al lienzo por si quedara un encuadre viejo mas grande que el
     // plano: asi nunca se amplia aire que no existe.
     // El minimo de 200 es el mismo que impone el editor: sin el, un encuadre
@@ -2999,7 +3076,7 @@ function PlanoCanvas({
       width: Math.max(MIN, Math.min(PLANO_CANVAS_W - x, e.width)),
       height: Math.max(MIN, Math.min(PLANO_CANVAS_H - y, e.height)),
     };
-  }, [encuadre]);
+  }, [encuadre, mesasConPos, posiciones, mesasMeta, decoraciones]);
 
   useEffect(() => {
     const el = outerRef.current;
