@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo, useEffect, useCallback, useRef } from "react";
-import { useSearchParams, useRouter } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -35,7 +35,7 @@ const CobrosReservasView = dynamic(
     ),
   { ssr: false },
 );
-import { Settings, Sun, Moon, Banknote, Music } from "lucide-react";
+import { Settings, Sun, Moon, Banknote } from "lucide-react";
 import { useSalaTema } from "@/features/sala/hooks/useSalaTema";
 import { EtiquetasPanel } from "@/features/sala/components/reservas/EtiquetasPanel";
 import { franjasSolapan } from "@/features/sala/lib/reserva-conflicto";
@@ -3274,7 +3274,6 @@ function PlanoCanvas({
 export function ReservasView() {
   const { empresaActual, ajustes } = useEmpresa();
   const searchParams = useSearchParams();
-  const router = useRouter();
   // Tema visual SOLO de esta vista (claro / oscuro azul marino). No toca el
   // resto del software, que sigue siendo de tema claro.
   const { esOscuro, alternarTema } = useSalaTema();
@@ -5259,7 +5258,7 @@ export function ReservasView() {
               onChange={setFiltroOrigen}
             />
           )}
-          <div className="relative w-[150px]">
+          <div className="relative w-[130px]">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
             <Input placeholder="Buscar..." className="pl-8 h-8 text-xs" value={busqueda} onChange={e => setBusqueda(e.target.value)} />
           </div>
@@ -5297,14 +5296,18 @@ export function ReservasView() {
         {/* Selector de Local + Plano + Sala + filtro de Zonas — solo en vista
             día; en mes conserva el hueco (los totales del mes son globales y
             no dependen de local, plano, sala ni zona).
-            Estos cuatro mandan sobre el PLANO, no sobre la lista, así que
-            arrancan en la vertical donde arranca el plano (la lista mide 760
-            px fijos) en vez de en el borde izquierdo. Con el plano a pantalla
-            completa no hay lista de la que separarse y van al principio. */}
+            Estos mandan sobre el PLANO, no sobre la lista, así que arrancan
+            en la vertical exacta donde arranca el plano: la lista mide 760 px
+            fijos, y `pl-[760px]` sobre un bloque que ocupa el ancho entero
+            deja el primer botón justo en su borde. Con un margen suelto no
+            valía: la barra envuelve, y el margen se sumaba a lo que hubiera
+            delante en esa fila, así que el grupo caía donde tocara.
+            Con el plano a pantalla completa no hay lista de la que separarse
+            y vuelven al principio. */}
         <div
           className={cn(
             "flex items-center gap-1.5",
-            panelOculto === "ninguno" && "ml-[760px]",
+            panelOculto === "ninguno" && "w-full pl-[760px]",
             vista !== "dia" && "invisible pointer-events-none",
           )}
           aria-hidden={vista !== "dia"}
@@ -5313,19 +5316,6 @@ export function ReservasView() {
           <FiltroPlanosDropdown planos={planosLocal} planoActualId={planoActualId} onSelect={setPlanoActualId} />
           <FiltroSalasDropdown salas={salasLocal} salaActualId={salaActualId} onSelect={setSalaActualId} />
           <FiltroZonasDropdown items={zonaItems} seleccionados={zonaIdsSel} onChange={setZonaIdsSel} />
-          {/* La música se lleva desde la misma pantalla en la que se está
-              durante el servicio: si suena algo que no toca, se cambia sin
-              salir de reservas ni ir a buscarlo al menú. */}
-          <Button
-            variant="outline"
-            size="sm"
-            className="text-xs h-8 gap-1.5 px-2.5"
-            onClick={() => router.push("/sala/musica")}
-            title="Música"
-          >
-            <Music className="h-3.5 w-3.5" />
-            Música
-          </Button>
         </div>
 
         <div className="flex items-center gap-1.5">
@@ -5368,7 +5358,7 @@ export function ReservasView() {
               <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setFecha(addMonths(fecha, -1))}><ChevronLeft className="h-4 w-4" /></Button>
               {/* Mismo ancho que el selector de día para que las flechas queden
                   en idéntica posición al cambiar de pantalla. */}
-              <Button variant="outline" size="sm" className="text-xs h-8 w-[150px] justify-center font-medium uppercase px-2.5">{formatMes(fecha)}</Button>
+              <Button variant="outline" size="sm" className="text-xs h-8 w-[110px] justify-center font-medium uppercase px-2.5">{formatMes(fecha)}</Button>
               <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setFecha(addMonths(fecha, 1))}><ChevronRight className="h-4 w-4" /></Button>
             </div>
           ) : (
@@ -5376,7 +5366,7 @@ export function ReservasView() {
               <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setFecha(addDays(fecha, -1))}><ChevronLeft className="h-4 w-4" /></Button>
               <Popover open={showDayPicker} onOpenChange={setShowDayPicker}>
                 <PopoverTrigger asChild>
-                  <Button variant="outline" size="sm" className="relative text-xs h-8 w-[150px] justify-center font-medium uppercase px-2.5">
+                  <Button variant="outline" size="sm" className="relative text-xs h-8 w-[110px] justify-center font-medium uppercase px-2.5">
                     {formatFecha(fecha)}
                   </Button>
                 </PopoverTrigger>
